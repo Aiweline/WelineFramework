@@ -1,136 +1,136 @@
-operation_id 长度不能超过 64 字符,operation_id length cannot exceed 64 characters
-迁移检查：共 %{count} 个激活模块,Migration check: %{count} active modules total
-迁移检查进度 %{i}/%{total} · %{module} · 已用 %{sec}s,Migration check progress %{i}/%{total} · %{module} · elapsed %{sec}s
-▶ %{module}：%{count} 个待执行迁移,▶ %{module}: %{count} pending migrations
-模块 %{1} 数据库版本游标 %{2} 高于目标代码版本 %{3}，已阻止继续升级,"Module %{1} database version cursor %{2} is higher than target code version %{3}, preventing further upgrade"
-模块 %{module} 迁移执行异常: %{error},Module %{module} migration execution error: %{error}
-迁移检查完成：共 %{total} · 空闲 %{idle}（无待执行 %{none} / 已执行跳过 %{skip}）· 执行 %{work} 模块 %{migrations} 条 · 游标延后 %{defer} · 失败 %{failed} · 耗时 %{sec}s,Migration check done: %{total} total · idle %{idle} (none pending %{none} / executed skip %{skip}) · run %{work} modules %{migrations} rows · cursor defer %{defer} · failed %{failed} · took %{sec}s
-所有迁移执行成功,All migrations succeeded
-迁移返回失败状态: %{1},Migration returns failure status: %{1}
-模块 %{1} 升级 %{2} -> %{3}，执行 %{4} 个迁移,"Module %{1} upgrades %{2} -> %{3}, performs %{4} migrations"
-迁移完成: 成功 %{1}，失败 %{2},"Migration completed: %{1} succeeded, %{2} failed"
-模块升级迁移失败: %{1},Module upgrade migration failed: %{1}
-数据库管理,Database management
-数据写入成功,Data written successfully
-删除操作需要确认短语 I_UNDERSTAND_THE_RISK,The delete operation requires the confirmation phrase I_UNDERSTAND_THE_RISK
-删除成功,Deletion successful
-请提供 csv_content 参数,Please provide the csv_content parameter
-导入完成,Import Complete
-SQL 执行成功,SQL execution successful
-请上传 SQL 文件,Please upload SQL file
-只能上传 .sql 文件,Only .sql files can be uploaded
-SQL 导入备份已生成,SQL import backup generated
-SQL 导入备份已下载,SQL import backup downloaded
-SQL 导入执行成功,SQL import executed successfully
-结构删除类操作需要确认短语 I_UNDERSTAND_THE_RISK,Structural deletion operations require confirmation phrase I_UNDERSTAND_THE_RISK
-未知结构操作: %{1},Unknown structure operation: %{1}
-结构变更成功,Structure change successful
+﻿"operation_id 长度不能超过 64 字符","operation_id length cannot exceed 64 characters"
+"迁移检查：共 %{count} 个激活模块","Migration check: %{count} active modules total"
+"迁移检查进度 %{i}/%{total} · %{module} · 已用 %{sec}s","Migration check progress %{i}/%{total} · %{module} · elapsed %{sec}s"
+"▶ %{module}：%{count} 个待执行迁移","▶ %{module}: %{count} pending migrations"
+"模块 %{1} 数据库版本游标 %{2} 高于目标代码版本 %{3}，已阻止继续升级","Module %{1} database version cursor %{2} is higher than target code version %{3}, preventing further upgrade"
+"模块 %{module} 迁移执行异常: %{error}","Module %{module} migration execution error: %{error}"
+"迁移检查完成：共 %{total} · 空闲 %{idle}（无待执行 %{none} / 已执行跳过 %{skip}）· 执行 %{work} 模块 %{migrations} 条 · 游标延后 %{defer} · 失败 %{failed} · 耗时 %{sec}s","Migration check done: %{total} total · idle %{idle} (none pending %{none} / executed skip %{skip}) · run %{work} modules %{migrations} rows · cursor defer %{defer} · failed %{failed} · took %{sec}s"
+所有迁移执行成功,"All migrations succeeded"
+"迁移返回失败状态: %{1}","Migration returns failure status: %{1}"
+"模块 %{1} 升级 %{2} -> %{3}，执行 %{4} 个迁移","Module %{1} upgrades %{2} -> %{3}, performs %{4} migrations"
+"迁移完成: 成功 %{1}，失败 %{2}","Migration completed: %{1} succeeded, %{2} failed"
+"模块升级迁移失败: %{1}","Module upgrade migration failed: %{1}"
+数据库管理,"Database management"
+数据写入成功,"Data written successfully"
+"删除操作需要确认短语 I_UNDERSTAND_THE_RISK","The delete operation requires the confirmation phrase I_UNDERSTAND_THE_RISK"
+删除成功,"Deletion successful"
+"请提供 csv_content 参数","Please provide the csv_content parameter"
+导入完成,"Import Complete"
+"SQL 执行成功","SQL execution successful"
+"请上传 SQL 文件","Please upload SQL file"
+"只能上传 .sql 文件","Only .sql files can be uploaded"
+"SQL 导入备份已生成","SQL import backup generated"
+"SQL 导入备份已下载","SQL import backup downloaded"
+"SQL 导入执行成功","SQL import executed successfully"
+"结构删除类操作需要确认短语 I_UNDERSTAND_THE_RISK","Structural deletion operations require confirmation phrase I_UNDERSTAND_THE_RISK"
+"未知结构操作: %{1}","Unknown structure operation: %{1}"
+结构变更成功,"Structure change successful"
 settings,settings
-类 phpMyAdmin 数据库管理入口,Class phpMyAdmin database management entrance
-数据库管理总览,Database management overview
+"类 phpMyAdmin 数据库管理入口","Class phpMyAdmin database management entrance"
+数据库管理总览,"Database management overview"
 grid,grid
-数据库管理总览与操作入口,Database management overview and operation entrance
-数据库只读浏览,Database read-only browsing
+数据库管理总览与操作入口,"Database management overview and operation entrance"
+数据库只读浏览,"Database read-only browsing"
 search,search
-数据库元数据与行数据查看,Database metadata and row data viewing
-查看数据表,View datasheet
+数据库元数据与行数据查看,"Database metadata and row data viewing"
+查看数据表,"View datasheet"
 table,table
-查看指定数据库数据表列表,View the specified database table list
-查看表结构,View table structure
-查看字段索引与建表语句,View field indexes and table creation statements
-查看表数据,View table data
+查看指定数据库数据表列表,"View the specified database table list"
+查看表结构,"View table structure"
+查看字段索引与建表语句,"View field indexes and table creation statements"
+查看表数据,"View table data"
 eye,eye
-按分页查看表数据,View table data by page
-写入数据,Write data
+按分页查看表数据,"View table data by page"
+写入数据,"Write data"
 edit,edit
-新增与更新数据行,Add and update data rows
-删除数据,Delete data
+新增与更新数据行,"Add and update data rows"
+删除数据,"Delete data"
 trash,trash
-删除表数据（高风险）,Delete table data (high risk)
-导出 CSV,Export CSV
+删除表数据（高风险）,"Delete table data (high risk)"
+"导出 CSV","Export CSV"
 file,file
-导出当前表 CSV 数据,Export current table CSV data
-导入 CSV,Import CSV
+"导出当前表 CSV 数据","Export current table CSV data"
+"导入 CSV","Import CSV"
 database,database
-导入 CSV 到数据表,Import CSV into data table
-执行 SQL 语句,Execute SQL statement
+"导入 CSV 到数据表","Import CSV into data table"
+"执行 SQL 语句","Execute SQL statement"
 play,play
-受控执行 SQL（需写确认）,Controlled execution of SQL (requires write confirmation)
-准备 SQL 文件导入,Prepare SQL files for import
+"受控执行 SQL（需写确认）","Controlled execution of SQL (requires write confirmation)"
+"准备 SQL 文件导入","Prepare SQL files for import"
 arrow-up,arrow-up
-上传 SQL、生成备份并暂存导入任务,"Upload SQL, generate backups, and stage import tasks"
-下载 SQL 导入前备份,Download SQL pre-import backup
+"上传 SQL、生成备份并暂存导入任务","Upload SQL, generate backups, and stage import tasks"
+"下载 SQL 导入前备份","Download SQL pre-import backup"
 download,download
-下载 SQL 导入前生成的备份文件,Download the backup file generated before SQL import
-执行 SQL 文件导入,Execute SQL file import
-在已下载备份后执行 SQL 文件导入,Perform SQL file import after backup has been downloaded
-结构管理,Structure management
-字段索引视图结构管理,Field index view structure management
+"下载 SQL 导入前生成的备份文件","Download the backup file generated before SQL import"
+"执行 SQL 文件导入","Execute SQL file import"
+"在已下载备份后执行 SQL 文件导入","Perform SQL file import after backup has been downloaded"
+结构管理,"Structure management"
+字段索引视图结构管理,"Field index view structure management"
 数据库,Database
-当前数据表,Current data table
-已选数据库,Selected database
-审计日志,Audit log
-数据浏览,Data browsing
-SQL 控制台,SQL console
-SQL 导入,SQL import
+当前数据表,"Current data table"
+已选数据库,"Selected database"
+审计日志,"Audit log"
+数据浏览,"Data browsing"
+"SQL 控制台","SQL console"
+"SQL 导入","SQL import"
 模块,Module
-数据表,Data table
-查看结构,View Structure
-行数据,Row Data
-默认读取前 20 行，可用于快速检查表数据。,"The first 20 rows are read by default, which can be used to quickly check table data."
-请先选择数据库与数据表,Please select a database and table first
-结构信息,Structure information
+数据表,"Data table"
+查看结构,"View Structure"
+行数据,"Row Data"
+"默认读取前 20 行，可用于快速检查表数据。","The first 20 rows are read by default, which can be used to quickly check table data."
+请先选择数据库与数据表,"Please select a database and table first"
+结构信息,"Structure information"
 字段、索引、外键和建表语句。,"Fields, indexes, foreign keys and table creation statements."
-选择数据表后自动展示结构,Automatically displays the structure after selecting the data table.
-SELECT 可直接执行；写操作需要确认。,SELECT can be executed directly; writes require confirmation.
-SQL 语句,SQL statement
-确认执行写操作,Confirm execute write operation
-高危确认短语,High-risk confirmation phrase
-执行 SQL,Execute SQL
-写操作会进入审计日志；高危操作必须输入确认短语。,Write operations will be entered into the audit log; high-risk operations must enter a confirmation phrase.
-执行结果,Execution result
+选择数据表后自动展示结构,"Automatically displays the structure after selecting the data table."
+"SELECT 可直接执行；写操作需要确认。","SELECT can be executed directly; writes require confirmation."
+"SQL 语句","SQL statement"
+确认执行写操作,"Confirm execute write operation"
+高危确认短语,"High-risk confirmation phrase"
+"执行 SQL","Execute SQL"
+写操作会进入审计日志；高危操作必须输入确认短语。,"Write operations will be entered into the audit log; high-risk operations must enter a confirmation phrase."
+执行结果,"Execution result"
 返回分析、影响行数与查询结果。,"Returns analysis, number of affected rows, and query results."
-SQL 文件导入,SQL file import
-系统会先生成受影响数据表备份，再允许导入。,The system will first generate a backup of the affected data tables before allowing the import.
-SQL 文件,SQL file
-上传并生成备份,Upload and generate backup
-下载备份,Download backup
-已下载并保存备份文件,Backup file downloaded and saved
-导入确认短语,Import confirmation phrase
-执行 SQL 导入,Perform SQL import
-导入检查结果,Import inspection results
+"SQL 文件导入","SQL file import"
+系统会先生成受影响数据表备份，再允许导入。,"The system will first generate a backup of the affected data tables before allowing the import."
+"SQL 文件","SQL file"
+上传并生成备份,"Upload and generate backup"
+下载备份,"Download backup"
+已下载并保存备份文件,"Backup file downloaded and saved"
+导入确认短语,"Import confirmation phrase"
+"执行 SQL 导入","Perform SQL import"
+导入检查结果,"Import inspection results"
 展示备份文件、目标表和安全检查结果。,"Display backup files, target tables, and security check results."
-请选择 .sql 文件上传，系统会先备份受影响数据表并下载备份。,Please select .sql file upload. The system will first back up the affected data table and download the backup.
-最近 50 条数据库后台操作记录。,The latest 50 database background operation records.
-所有模块,All modules
-搜索模块名称,Search for module name.
+"请选择 .sql 文件上传，系统会先备份受影响数据表并下载备份。","Please select .sql file upload. The system will first back up the affected data table and download the backup."
+"最近 50 条数据库后台操作记录。","The latest 50 database background operation records."
+所有模块,"All modules"
+搜索模块名称,"Search for module name."
 主题请求模块未加载，请刷新页面后重试,"The theme request module is not loaded, please refresh the page and try again"
-请选择 .sql 文件,Please select a .sql file
-当前数据表暂无可显示数据,There is no data to display in the current data table.
-当前数据库没有可浏览的数据表,There are no browsable data tables in the current database
+"请选择 .sql 文件","Please select a .sql file"
+当前数据表暂无可显示数据,"There is no data to display in the current data table."
+当前数据库没有可浏览的数据表,"There are no browsable data tables in the current database"
 加载中...,loading...
-加载失败,Loading failed
-行数据已加载,row data loaded
-结构信息已加载,Structure information has been loaded
-正在上传 SQL 并生成备份...,Uploading SQL and generating backup...
-下载备份：,Download backup:
-请先上传 SQL 并下载备份,Please upload the SQL and download the backup first
-正在执行 SQL 导入...,Executing SQL import...
-正在执行 SQL...,Executing SQL...
-操作成功,Operation successful
-操作失败,Operation failed
-总行数,Total number of rows
-当前显示,Currently showing
+加载失败,"Loading failed"
+行数据已加载,"row data loaded"
+结构信息已加载,"Structure information has been loaded"
+"正在上传 SQL 并生成备份...","Uploading SQL and generating backup..."
+下载备份：,"Download backup:"
+"请先上传 SQL 并下载备份","Please upload the SQL and download the backup first"
+"正在执行 SQL 导入...","Executing SQL import..."
+"正在执行 SQL...","Executing SQL..."
+操作成功,"Operation successful"
+操作失败,"Operation failed"
+总行数,"Total number of rows"
+当前显示,"Currently showing"
 字段,Field
 索引,Index.
-外键,Foreign key.
-建表语句,Table creation statement.
+外键,"Foreign key."
+建表语句,"Table creation statement."
 无,None
-字段名,Field name.
+字段名,"Field name."
 类型,Type
 长度,Length.
 可空,Nullable.
-默认值,Default value
+默认值,"Default value"
 注释,Comment.
 名称,Name
 定义,Definition.
@@ -138,347 +138,347 @@ SQL 文件,SQL file
 列,Column.
 引用,Reference
 刷新,refresh
-缺少版本 %{1} 的精确代码制品,Missing exact code artifact for version %{1}
-模块名或目标版本无效,Invalid module name or target version
-运行基础模块 %{1} 不允许在 ModuleManager 内回滚，请交由 Weline_Deploy 执行整站版本回滚,Running basic module %{1} does not allow rollback in ModuleManager. Please let Weline_Deploy perform rollback of the entire site version.
-模块未激活或缺少权威 etc/module.php: %{1},Module is not activated or is missing authority etc/module.php: %{1}
-目标版本 %{1} 必须低于当前版本 %{2},Target version %{1} must be lower than current version %{2}
-级联计划涉及运行基础模块 %{1}，请交由 Weline_Deploy 执行整站回滚,"The cascade plan involves running the basic module %{1}, please let Weline_Deploy perform the rollback of the entire site"
-级联模块缺少当前 manifest: %{1},The cascading module is missing the current manifest: %{1}
-目标制品不可用,The target article is not available
-级联候选制品不可用,Cascade candidate product is not available
-制品 manifest 无法读取: %{1},Product manifest cannot be read: %{1}
-制品身份校验失败: %{1} %{2},Product identity verification failed: %{1} %{2}
-无法找到不高于当前版本的最高兼容级联组合,Unable to find the highest compatible cascading combination that is no higher than the current version
-模块 %{1} 缺少目标代码制品,Module %{1} is missing object code artifacts
-回滚操作人不能为空,Rollback operator cannot be empty
-回滚计划不存在: %{1},Rollback plan does not exist: %{1}
-回滚计划已启动或不可再次执行,The rollback plan has been started or cannot be executed again
+"缺少版本 %{1} 的精确代码制品","Missing exact code artifact for version %{1}"
+模块名或目标版本无效,"Invalid module name or target version"
+"运行基础模块 %{1} 不允许在 ModuleManager 内回滚，请交由 Weline_Deploy 执行整站版本回滚","Running basic module %{1} does not allow rollback in ModuleManager. Please let Weline_Deploy perform rollback of the entire site version."
+"模块未激活或缺少权威 etc/module.php: %{1}","Module is not activated or is missing authority etc/module.php: %{1}"
+"目标版本 %{1} 必须低于当前版本 %{2}","Target version %{1} must be lower than current version %{2}"
+"级联计划涉及运行基础模块 %{1}，请交由 Weline_Deploy 执行整站回滚","The cascade plan involves running the basic module %{1}, please let Weline_Deploy perform the rollback of the entire site"
+"级联模块缺少当前 manifest: %{1}","The cascading module is missing the current manifest: %{1}"
+目标制品不可用,"The target article is not available"
+级联候选制品不可用,"Cascade candidate product is not available"
+"制品 manifest 无法读取: %{1}","Product manifest cannot be read: %{1}"
+"制品身份校验失败: %{1} %{2}","Product identity verification failed: %{1} %{2}"
+无法找到不高于当前版本的最高兼容级联组合,"Unable to find the highest compatible cascading combination that is no higher than the current version"
+"模块 %{1} 缺少目标代码制品","Module %{1} is missing object code artifacts"
+回滚操作人不能为空,"Rollback operator cannot be empty"
+"回滚计划不存在: %{1}","Rollback plan does not exist: %{1}"
+回滚计划已启动或不可再次执行,"The rollback plan has been started or cannot be executed again"
 回滚计划校验失败，请重新预检,"Rollback plan verification failed, please pre-check again"
 回滚计划已过期，请重新预检,"The rollback plan has expired, please precheck again"
-回滚计划存在阻断项，禁止启动,The rollback plan has blocking items and is prohibited from starting.
-模块 %{1} 状态在预检后已漂移,Module %{1} status has drifted after preflight
-模块 %{1} 目标制品在预检后已变化,Module %{1} Target artifact changed after preflight
-模块 %{1} 的迁移或 Schema 反向链在预检后已失效,Migration or Schema backlink for module %{1} has expired after preflight
-模块 %{1} 的迁移或 Schema 计划在预检后已变化,The migration or Schema plan for module %{1} has changed since preflight
-无法启动独立回滚 worker,Unable to start standalone rollback worker
-回滚任务不存在: %{1},Rollback task does not exist: %{1}
-模块代码路径不存在: %{1},Module code path does not exist: %{1}
-模块代码身份与注册名不一致: %{1},The module code identity is inconsistent with the registered name: %{1}
-模块 %{1} 不在可原子切换的 app/code 路径下,Module %{1} is not in the app/code path that can be switched atomically
-模块 %{1} 的代码、注册或数据库版本基线不完整,"Incomplete code, registration, or database version baseline for module %{1}"
-模块 %{1} 状态漂移：代码 %{2}，注册 %{3}，数据库 %{4},"Module %{1} status drift: code %{2}, registration %{3}, database %{4}"
-无法创建回滚锁目录,Unable to create rollback lock directory
-无法创建回滚启动锁,Unable to create rollback startup lock
-另一个模块回滚启动请求正在处理,Another module rollback start request is being processed
-已有模块回滚或人工恢复任务未结束,Existing module rollback or manual recovery task has not ended
-模块 %{1} 存在无法验证版本归属的历史 Schema 记录 #%{2} (legacy_unverified),Module %{1} has historical Schema records whose version ownership cannot be verified #%{2} (legacy_unverified)
-模块 %{1} Schema 记录 #%{2} 校验和不一致,Module %{1} Schema record #%{2} checksum is inconsistent
-模块 %{1} Schema 记录 #%{2} 缺少反向 DDL,Module %{1} Schema record #%{2} is missing reverse DDL
-模块 %{1} 的 Schema checkpoint 无法验证：%{2},Schema checkpoint for module %{1} cannot be verified: %{2}
-模块 %{1} 当前版本 %{2} 缺少 Schema checkpoint,Module %{1} Current version %{2} Missing Schema checkpoint
-模块 %{1} 目标版本 %{2} 缺少 Schema checkpoint,Module %{1} Target version %{2} Missing Schema checkpoint
-模块 %{1} 两个版本的 Schema checkpoint 一致，无需执行 DDL,The Schema checkpoints of the two versions of module %{1} are consistent and there is no need to execute DDL.
-待回滚 Schema 记录状态已变化: #%{1},Schema record status to be rolled back has changed: #%{1}
-Schema 记录 #%{1} 缺少列名,Schema record #%{1} missing column name
-Schema 补偿记录不存在: #%{1},Schema compensation record does not exist: #%{1}
-Schema 补偿记录状态或 operation_id 已变化: #%{1},Schema compensation record status or operation_id changed: #%{1}
-Table %{1} structure compensation failed,Table %{1} structure compensation failed
-Table %{1} data compensation failed,Table %{1} data compensation failed
-Table %{1} chunk compensation failed,Table %{1} chunk compensation failed
-模块 %{1} Schema 记录 #%{2} 缺少版本批次或表信息,Module %{1} Schema record #%{2} is missing version batch or table information
-模块 %{1} Schema 记录 #%{2} 缺少有效的前后指纹,Module %{1} Schema record #%{2} is missing a valid before and after fingerprint.
-模块 %{1} 批次 %{2} 的表 %{3} 指纹不一致,Table %{3} of module %{1} batch %{2} has inconsistent fingerprints
-模块 %{1} Schema 反向链在 %{2}/%{3}/%{4} 断裂,Module %{1} Schema reverse chain is broken at %{2}/%{3}/%{4}
-模块 %{1} 的 Schema 反向链无法重建目标 checkpoint（差异表：%{2}）,The Schema reverse chain of module %{1} cannot reconstruct the target checkpoint (difference table: %{2})
-Schema 记录 #%{1} 校验和不一致,Schema record #%{1} checksum is inconsistent
-Schema 计划记录状态或 operation_id 已变化: #%{1},Schema plan record status or operation_id changed: #%{1}
-Schema 计划记录校验和已变化: #%{1},Schema plan record checksum changed: #%{1}
-模块 %{1} 的代码切换路径无效,Invalid code switching path for module %{1}
-模块 %{1} 切换前的制品校验失败,Module %{1} product verification failed before switching
-无法备份模块当前代码: %{1},Unable to backup module current code: %{1}
-无法原子切换模块代码: %{1},Unable to atomically switch module code: %{1}
-模块 %{1} 的原代码快照不存在,The original code snapshot of module %{1} does not exist
-模块 %{1} 的原代码快照路径不匹配,The original code snapshot path of module %{1} does not match
-无法移出模块 %{1} 的失败代码,Failure code for module %{1} cannot be moved out
-无法恢复模块 %{1} 的原代码,Unable to restore original code of module %{1}
-模块 %{1} 的待清理快照路径不匹配,The snapshot paths to be cleaned up in module %{1} do not match
-无法进入系统维护状态,Unable to enter system maintenance state
-无法恢复系统维护状态,Unable to restore system maintenance status
-启用 WLS 维护模式,Enable WLS maintenance mode
-禁用 WLS 维护模式,Disable WLS maintenance mode
-WLS 代码重载,WLS code reloading
-无法创建 Schema 只读检查脚本,Unable to create Schema read-only check script
-Schema 只读检查执行失败: %{1},Schema read-only check execution failed: %{1}
-Schema 只读检查未返回可验证结果,Schema read-only check did not return verifiable results
-无法创建模块激活脚本,Unable to create module activation script
-模块注册、路由或命令刷新失败: %{1},"Module registration, routing or command refresh failed: %{1}"
-%{1}未在全部 WLS 实例上完成: %{2},%{1} is not completed on all WLS instances: %{2}
-Weline_Server 已启用但未发布运行时部署控制能力，请先执行 framework:compile,"Weline_Server has enabled but not released the runtime deployment control capability, please execute framework:compile first"
-命令参数不能为空,Command parameters cannot be empty
-无法启动模块回滚子进程,Unable to start module rollback child process
-命令执行失败: %{1},Command execution failed: %{1}
-无法创建回滚运行时目录,Unable to create rollback runtime directory
-拒绝删除非受管回滚运行时脚本: %{1},Refuse to delete unmanaged rollback runtime script: %{1}
-无法清理模块回滚运行时脚本: %{1},Unable to clean module rollback runtime script: %{1}
-模块代码目录不在可原子切换的 app/code 路径下: %{1},The module code directory is not under the app/code path that can be atomically switched: %{1}
-拒绝访问非受管模块回滚目录: %{1},Denied access to unmanaged module rollback directory: %{1}
-无法创建代码暂存目录: %{1},Unable to create code staging directory: %{1}
-模块代码不允许符号链接: %{1},Symbolic links are not allowed in module code: %{1}
-复制代码文件失败: %{1},Failed to copy code file: %{1}
-迁移文件不存在: %{1},Migration file not found: %{1}
-迁移类必须实现MigrationInterface接口,Migration class must implement MigrationInterface
-迁移前置条件验证失败,Migration prerequisite validation failed
-迁移依赖未满足,Migration dependencies not satisfied
-无法记录迁移运行状态,Unable to log migration run status
-迁移执行失败,Migration execution failed
-迁移升级成功: %{1},Migration upgrade successful: %{1}
-迁移升级失败: %{1},Migration upgrade failed: %{1}
-已禁止独立迁移回滚；请通过 ModuleRollbackManagerInterface 创建联动回滚任务,Independent migration rollback is disabled; please create a linked rollback task through ModuleRollbackManagerInterface
-联动回滚缺少精确 migration_id,Linked rollback lacks precise migration_id
-迁移回滚备份策略在预检后已变化: %{1},Migration rollback backup policy changed after preflight: %{1}
-迁移回滚失败,Migration rollback failed
-迁移回滚成功: %{1},Migration rollback successful: %{1}
-迁移回滚失败: %{1},Migration rollback failed: %{1}
-已禁止独立迁移卸载；请通过 ModuleRollbackManagerInterface 创建带原子备份的联动回滚任务,Independent migration uninstallation is prohibited; please create a linked rollback task with atomic backup through ModuleRollbackManagerInterface
-迁移文件未声明可加载类: %{1},The migration file does not declare a loadable class: %{1}
-迁移类必须实现 MigrationInterface: %{1},Migration classes must implement MigrationInterface: %{1}
-依赖迁移未安装: %{1},Dependent migration not installed: %{1}
-modify_table 迁移必须声明受影响的 exact physical tables,modify_table migration must declare the exact physical tables affected
-迁移声明 requiresBackup=true，但未提供可执行的 table/column 备份策略,"Migration statement requiresBackup=true, but no executable table/column backup strategy is provided"
-列备份策略必须声明至少一个字段,Column backup policy must declare at least one field
-迁移备份完成 (migration_id: %{1}),Migration backup completed (migration_id: %{1})
-正在恢复迁移备份 (migration_id: %{1})...,Restoring migration backup (migration_id: %{1})...
-恢复迁移备份失败: #%{1},Failed to restore migration backup: #%{1}
+回滚计划存在阻断项，禁止启动,"The rollback plan has blocking items and is prohibited from starting."
+"模块 %{1} 状态在预检后已漂移","Module %{1} status has drifted after preflight"
+"模块 %{1} 目标制品在预检后已变化","Module %{1} Target artifact changed after preflight"
+"模块 %{1} 的迁移或 Schema 反向链在预检后已失效","Migration or Schema backlink for module %{1} has expired after preflight"
+"模块 %{1} 的迁移或 Schema 计划在预检后已变化","The migration or Schema plan for module %{1} has changed since preflight"
+"无法启动独立回滚 worker","Unable to start standalone rollback worker"
+"回滚任务不存在: %{1}","Rollback task does not exist: %{1}"
+"模块代码路径不存在: %{1}","Module code path does not exist: %{1}"
+"模块代码身份与注册名不一致: %{1}","The module code identity is inconsistent with the registered name: %{1}"
+"模块 %{1} 不在可原子切换的 app/code 路径下","Module %{1} is not in the app/code path that can be switched atomically"
+"模块 %{1} 的代码、注册或数据库版本基线不完整","Incomplete code, registration, or database version baseline for module %{1}"
+"模块 %{1} 状态漂移：代码 %{2}，注册 %{3}，数据库 %{4}","Module %{1} status drift: code %{2}, registration %{3}, database %{4}"
+无法创建回滚锁目录,"Unable to create rollback lock directory"
+无法创建回滚启动锁,"Unable to create rollback startup lock"
+另一个模块回滚启动请求正在处理,"Another module rollback start request is being processed"
+已有模块回滚或人工恢复任务未结束,"Existing module rollback or manual recovery task has not ended"
+"模块 %{1} 存在无法验证版本归属的历史 Schema 记录 #%{2} (legacy_unverified)","Module %{1} has historical Schema records whose version ownership cannot be verified #%{2} (legacy_unverified)"
+"模块 %{1} Schema 记录 #%{2} 校验和不一致","Module %{1} Schema record #%{2} checksum is inconsistent"
+"模块 %{1} Schema 记录 #%{2} 缺少反向 DDL","Module %{1} Schema record #%{2} is missing reverse DDL"
+"模块 %{1} 的 Schema checkpoint 无法验证：%{2}","Schema checkpoint for module %{1} cannot be verified: %{2}"
+"模块 %{1} 当前版本 %{2} 缺少 Schema checkpoint","Module %{1} Current version %{2} Missing Schema checkpoint"
+"模块 %{1} 目标版本 %{2} 缺少 Schema checkpoint","Module %{1} Target version %{2} Missing Schema checkpoint"
+"模块 %{1} 两个版本的 Schema checkpoint 一致，无需执行 DDL","The Schema checkpoints of the two versions of module %{1} are consistent and there is no need to execute DDL."
+"待回滚 Schema 记录状态已变化: #%{1}","Schema record status to be rolled back has changed: #%{1}"
+"Schema 记录 #%{1} 缺少列名","Schema record #%{1} missing column name"
+"Schema 补偿记录不存在: #%{1}","Schema compensation record does not exist: #%{1}"
+"Schema 补偿记录状态或 operation_id 已变化: #%{1}","Schema compensation record status or operation_id changed: #%{1}"
+"Table %{1} structure compensation failed","Table %{1} structure compensation failed"
+"Table %{1} data compensation failed","Table %{1} data compensation failed"
+"Table %{1} chunk compensation failed","Table %{1} chunk compensation failed"
+"模块 %{1} Schema 记录 #%{2} 缺少版本批次或表信息","Module %{1} Schema record #%{2} is missing version batch or table information"
+"模块 %{1} Schema 记录 #%{2} 缺少有效的前后指纹","Module %{1} Schema record #%{2} is missing a valid before and after fingerprint."
+"模块 %{1} 批次 %{2} 的表 %{3} 指纹不一致","Table %{3} of module %{1} batch %{2} has inconsistent fingerprints"
+"模块 %{1} Schema 反向链在 %{2}/%{3}/%{4} 断裂","Module %{1} Schema reverse chain is broken at %{2}/%{3}/%{4}"
+"模块 %{1} 的 Schema 反向链无法重建目标 checkpoint（差异表：%{2}）","The Schema reverse chain of module %{1} cannot reconstruct the target checkpoint (difference table: %{2})"
+"Schema 记录 #%{1} 校验和不一致","Schema record #%{1} checksum is inconsistent"
+"Schema 计划记录状态或 operation_id 已变化: #%{1}","Schema plan record status or operation_id changed: #%{1}"
+"Schema 计划记录校验和已变化: #%{1}","Schema plan record checksum changed: #%{1}"
+"模块 %{1} 的代码切换路径无效","Invalid code switching path for module %{1}"
+"模块 %{1} 切换前的制品校验失败","Module %{1} product verification failed before switching"
+"无法备份模块当前代码: %{1}","Unable to backup module current code: %{1}"
+"无法原子切换模块代码: %{1}","Unable to atomically switch module code: %{1}"
+"模块 %{1} 的原代码快照不存在","The original code snapshot of module %{1} does not exist"
+"模块 %{1} 的原代码快照路径不匹配","The original code snapshot path of module %{1} does not match"
+"无法移出模块 %{1} 的失败代码","Failure code for module %{1} cannot be moved out"
+"无法恢复模块 %{1} 的原代码","Unable to restore original code of module %{1}"
+"模块 %{1} 的待清理快照路径不匹配","The snapshot paths to be cleaned up in module %{1} do not match"
+无法进入系统维护状态,"Unable to enter system maintenance state"
+无法恢复系统维护状态,"Unable to restore system maintenance status"
+"启用 WLS 维护模式","Enable WLS maintenance mode"
+"禁用 WLS 维护模式","Disable WLS maintenance mode"
+"WLS 代码重载","WLS code reloading"
+"无法创建 Schema 只读检查脚本","Unable to create Schema read-only check script"
+"Schema 只读检查执行失败: %{1}","Schema read-only check execution failed: %{1}"
+"Schema 只读检查未返回可验证结果","Schema read-only check did not return verifiable results"
+无法创建模块激活脚本,"Unable to create module activation script"
+"模块注册、路由或命令刷新失败: %{1}","Module registration, routing or command refresh failed: %{1}"
+"%{1}未在全部 WLS 实例上完成: %{2}","%{1} is not completed on all WLS instances: %{2}"
+"Weline_Server 已启用但未发布运行时部署控制能力，请先执行 framework:compile","Weline_Server has enabled but not released the runtime deployment control capability, please execute framework:compile first"
+命令参数不能为空,"Command parameters cannot be empty"
+无法启动模块回滚子进程,"Unable to start module rollback child process"
+"命令执行失败: %{1}","Command execution failed: %{1}"
+无法创建回滚运行时目录,"Unable to create rollback runtime directory"
+"拒绝删除非受管回滚运行时脚本: %{1}","Refuse to delete unmanaged rollback runtime script: %{1}"
+"无法清理模块回滚运行时脚本: %{1}","Unable to clean module rollback runtime script: %{1}"
+"模块代码目录不在可原子切换的 app/code 路径下: %{1}","The module code directory is not under the app/code path that can be atomically switched: %{1}"
+"拒绝访问非受管模块回滚目录: %{1}","Denied access to unmanaged module rollback directory: %{1}"
+"无法创建代码暂存目录: %{1}","Unable to create code staging directory: %{1}"
+"模块代码不允许符号链接: %{1}","Symbolic links are not allowed in module code: %{1}"
+"复制代码文件失败: %{1}","Failed to copy code file: %{1}"
+"迁移文件不存在: %{1}","Migration file not found: %{1}"
+迁移类必须实现MigrationInterface接口,"Migration class must implement MigrationInterface"
+迁移前置条件验证失败,"Migration prerequisite validation failed"
+迁移依赖未满足,"Migration dependencies not satisfied"
+无法记录迁移运行状态,"Unable to log migration run status"
+迁移执行失败,"Migration execution failed"
+"迁移升级成功: %{1}","Migration upgrade successful: %{1}"
+"迁移升级失败: %{1}","Migration upgrade failed: %{1}"
+"已禁止独立迁移回滚；请通过 ModuleRollbackManagerInterface 创建联动回滚任务","Independent migration rollback is disabled; please create a linked rollback task through ModuleRollbackManagerInterface"
+"联动回滚缺少精确 migration_id","Linked rollback lacks precise migration_id"
+"迁移回滚备份策略在预检后已变化: %{1}","Migration rollback backup policy changed after preflight: %{1}"
+迁移回滚失败,"Migration rollback failed"
+"迁移回滚成功: %{1}","Migration rollback successful: %{1}"
+"迁移回滚失败: %{1}","Migration rollback failed: %{1}"
+"已禁止独立迁移卸载；请通过 ModuleRollbackManagerInterface 创建带原子备份的联动回滚任务","Independent migration uninstallation is prohibited; please create a linked rollback task with atomic backup through ModuleRollbackManagerInterface"
+"迁移文件未声明可加载类: %{1}","The migration file does not declare a loadable class: %{1}"
+"迁移类必须实现 MigrationInterface: %{1}","Migration classes must implement MigrationInterface: %{1}"
+"依赖迁移未安装: %{1}","Dependent migration not installed: %{1}"
+"modify_table 迁移必须声明受影响的 exact physical tables","modify_table migration must declare the exact physical tables affected"
+"迁移声明 requiresBackup=true，但未提供可执行的 table/column 备份策略","Migration statement requiresBackup=true, but no executable table/column backup strategy is provided"
+列备份策略必须声明至少一个字段,"Column backup policy must declare at least one field"
+"迁移备份完成 (migration_id: %{1})","Migration backup completed (migration_id: %{1})"
+"正在恢复迁移备份 (migration_id: %{1})...","Restoring migration backup (migration_id: %{1})..."
+"恢复迁移备份失败: #%{1}","Failed to restore migration backup: #%{1}"
 "迁移回滚备份完成 (migration_id: %{1}, operation_id: %{2})","Migration rollback backup completed (migration_id: %{1}, operation_id: %{2})"
-迁移 %{1} 的历史回滚备份对应不同校验和，禁止自动恢复,The historical rollback backup of migrated %{1} corresponds to different checksums and automatic recovery is prohibited.
-回滚列备份 #%{1} 缺少字段名,Rollback column backup #%{1} missing field name
-迁移 %{1} 重新升级后有 %{2} 个备份冲突，已记录且未覆盖现值,"Migration %{1} has %{2} backup conflicts after re-upgrade, logged and not overwriting present value"
-迁移未实现 RollbackBackupStrategyInterface,Migration does not implement RollbackBackupStrategyInterface
-未知回滚备份策略: %{1},Unknown rollback backup policy: %{1}
-回滚备份策略必须声明 reason,The rollback backup policy must state reason
-回滚备份策略必须声明至少一个表,The rollback backup policy must declare at least one table
-column 回滚备份策略必须声明至少一个字段,The column rollback backup policy must declare at least one field
-未知正向备份类型: %{1},Unknown forward backup type: %{1}
-缺少正向 %{1} 备份,Missing forward %{1} backup
-迁移记录缺少校验和，禁止自动回滚: %{1},"Migration record lacks checksum, automatic rollback is prohibited: %{1}"
-迁移文件校验和不一致，禁止自动回滚: %{1},Migration file checksums are inconsistent and automatic rollback is prohibited: %{1}
-迁移计划记录状态、文件或 operation_id 已变化: #%{1},"Migration plan record status, file, or operation_id changed: #%{1}"
-迁移计划记录校验和已变化或缺失: #%{1},Migration plan record checksum changed or missing: #%{1}
-未找到版本 %{1} 的迁移文件,Migration files not found for version %{1}
-执行迁移: %{1},Executing migration: %{1}
-回滚迁移: %{1},Rolling back migration: %{1}
-卸载迁移: %{1},Uninstalling migration: %{1}
-模块 %{1} 当前版本不存在,Module %{1} current version not found
-当前版本 %{1} 不高于目标版本 %{2},Current version %{1} is not higher than target version %{2}
-没有需要回滚的迁移,No migrations to rollback
-预演模式 - 以下迁移将被回滚:,Dry-run mode - following migrations will be rolled back:
-已禁止独立数据库回滚；请通过 ModuleRollbackManagerInterface 创建代码与数据库联动回滚任务,Independent database rollback is prohibited; please create code and database linkage rollback tasks through ModuleRollbackManagerInterface
-跨版本回滚失败: %{1},Cross-version rollback failed: %{1}
-迁移缺少 installed 记录: %{1},Migration missing installed record: %{1}
-迁移文件缺失: %{1},Migration file missing: %{1}
-迁移 %{1} 无法自动回滚：%{2},Migration %{1} cannot be automatically rolled back: %{2}
-迁移 %{1} 的已安装依赖缺失: %{2},Migrate the installed dependencies of %{1} missing: %{2}
-目标范围外的已安装迁移 %{1} 仍依赖待回滚迁移 %{2},Installed migration %{1} outside target scope still depends on pending rollback migration %{2}
+"迁移 %{1} 的历史回滚备份对应不同校验和，禁止自动恢复","The historical rollback backup of migrated %{1} corresponds to different checksums and automatic recovery is prohibited."
+"回滚列备份 #%{1} 缺少字段名","Rollback column backup #%{1} missing field name"
+"迁移 %{1} 重新升级后有 %{2} 个备份冲突，已记录且未覆盖现值","Migration %{1} has %{2} backup conflicts after re-upgrade, logged and not overwriting present value"
+"迁移未实现 RollbackBackupStrategyInterface","Migration does not implement RollbackBackupStrategyInterface"
+"未知回滚备份策略: %{1}","Unknown rollback backup policy: %{1}"
+"回滚备份策略必须声明 reason","The rollback backup policy must state reason"
+回滚备份策略必须声明至少一个表,"The rollback backup policy must declare at least one table"
+"column 回滚备份策略必须声明至少一个字段","The column rollback backup policy must declare at least one field"
+"未知正向备份类型: %{1}","Unknown forward backup type: %{1}"
+"缺少正向 %{1} 备份","Missing forward %{1} backup"
+"迁移记录缺少校验和，禁止自动回滚: %{1}","Migration record lacks checksum, automatic rollback is prohibited: %{1}"
+"迁移文件校验和不一致，禁止自动回滚: %{1}","Migration file checksums are inconsistent and automatic rollback is prohibited: %{1}"
+"迁移计划记录状态、文件或 operation_id 已变化: #%{1}","Migration plan record status, file, or operation_id changed: #%{1}"
+"迁移计划记录校验和已变化或缺失: #%{1}","Migration plan record checksum changed or missing: #%{1}"
+"未找到版本 %{1} 的迁移文件","Migration files not found for version %{1}"
+"执行迁移: %{1}","Executing migration: %{1}"
+"回滚迁移: %{1}","Rolling back migration: %{1}"
+"卸载迁移: %{1}","Uninstalling migration: %{1}"
+"模块 %{1} 当前版本不存在","Module %{1} current version not found"
+"当前版本 %{1} 不高于目标版本 %{2}","Current version %{1} is not higher than target version %{2}"
+没有需要回滚的迁移,"No migrations to rollback"
+"预演模式 - 以下迁移将被回滚:","Dry-run mode - following migrations will be rolled back:"
+"已禁止独立数据库回滚；请通过 ModuleRollbackManagerInterface 创建代码与数据库联动回滚任务","Independent database rollback is prohibited; please create code and database linkage rollback tasks through ModuleRollbackManagerInterface"
+"跨版本回滚失败: %{1}","Cross-version rollback failed: %{1}"
+"迁移缺少 installed 记录: %{1}","Migration missing installed record: %{1}"
+"迁移文件缺失: %{1}","Migration file missing: %{1}"
+"迁移 %{1} 无法自动回滚：%{2}","Migration %{1} cannot be automatically rolled back: %{2}"
+"迁移 %{1} 的已安装依赖缺失: %{2}","Migrate the installed dependencies of %{1} missing: %{2}"
+"目标范围外的已安装迁移 %{1} 仍依赖待回滚迁移 %{2}","Installed migration %{1} outside target scope still depends on pending rollback migration %{2}"
 待回滚迁移依赖图存在循环，无法生成安全反向顺序,"There is a cycle in the migration dependency graph to be rolled back, and a safe reverse sequence cannot be generated."
-联动回滚任务缺少 operation_id,Linked rollback task is missing operation_id
-迁移记录状态已变化: #%{1},Migration record status has changed: #%{1}
-回滚迁移 %{1} 失败,Failed to rollback migration %{1}
-正向补偿迁移 %{1} 失败,Forward compensation migration %{1} failed
-operation_id 无效,operation_id is invalid
-模块 %{1} 没有已安装的迁移,Module %{1} has no installed migrations
-迁移 %{1} 存在反向依赖，无法回滚,Migration %{1} has reverse dependencies and cannot be rolled back
-成功回滚 %{1} 个迁移,Successfully rolled back %{1} migrations
-回滚失败: %{1},Rollback failed: %{1}
-迁移 %{1} 依赖于 %{2}，请先回滚依赖方,"Migration %{1} depends on %{2}, please rollback dependent first"
-代码快照失败: %{1},Code snapshot failed: %{1}
-目标代码的 Schema 只读检查仍产生 %{1} 项差异，代码与数据库不一致,"The Schema read-only check of the target code still produces %{1} differences, and the code is inconsistent with the database"
-回滚失败且自动补偿未完成，系统将保持维护状态。恢复命令: %{1},"If the rollback fails and automatic compensation is not completed, the system will remain in maintenance status. Recovery command: %{1}"
-自动补偿已完成，但 operation_id 绑定释放失败，可安全重试,"Automatic compensation completed, but operation_id binding release failed, safe to try again"
-人工恢复日志不完整,Manual recovery log is incomplete
-人工恢复已完成补偿，但 operation_id 绑定释放失败,"Manual recovery has completed compensation, but operation_id binding release failed"
-补偿后 Schema 仍存在 %{1} 项差异,"After compensation, Schema still has %{1} differences"
-无法创建模块回滚执行锁,Unable to create module rollback execution lock
-已有另一个模块回滚任务在执行,Another module rollback task is already executing
-回滚任务状态不允许当前操作,Rollback task status does not allow the current operation
-回滚任务计划损坏,Rollback task plan is corrupted
-回滚任务计划哈希校验失败,Rollback task plan hash verification failed
-模块 %{1} 目标代码或注册版本验证失败：代码 %{2}，注册 %{3}，目标 %{4},"Module %{1} Target code or registered version verification failed: code %{2}, registered %{3}, target %{4}"
-模块 %{1} 最终数据库版本游标验证失败,Module %{1} Final database version cursor validation failed
-回滚任务模块明细不完整,Rollback task module details are incomplete
-模块 %{1} 在 worker 执行前发生版本漂移,Module %{1} version drifts before worker execution
-模块 %{1} 的目标制品在 worker 执行前已变化,The target artifact of module %{1} changed before the worker was executed
-模块 %{1} 的完整反向链在 worker 执行前已失效,The complete reverse chain of module %{1} expired before the worker was executed
-模块 %{1} 的反向链在 worker 执行前已变化,The reverse chain of module %{1} changed before the worker was executed
-写操作需要二次确认后才能执行,Write operations require a second confirmation before execution
-高危 SQL 必须输入确认短语 I_UNDERSTAND_THE_RISK,High-risk SQL must enter confirmation phrase I_UNDERSTAND_THE_RISK
-新增数据不能为空,Added data cannot be empty
-更新操作必须提供主键与数据,Update operation must provide primary key and data
-删除操作必须提供条件,A condition must be provided for the delete operation
-CSV 内容为空或格式不正确,CSV content is empty or incorrectly formatted
-第 %{1} 行列数不匹配,Row and column count mismatch for row %{1}
-第 %{1} 行导入失败: %{2},Import failed for row %{1}: %{2}
-非法标识符 %{1}: %{2},Invalid identifier %{1}: %{2}
-索引字段不能为空,Index field cannot be empty
-视图语句必须以 SELECT 开头,View statements must start with SELECT
-数据库结构操作执行失败,Database structure operation execution failed
-SQL 文件内容不能为空,SQL file content cannot be empty
-SQL 文件不能超过 25MB,SQL file cannot exceed 25MB
-SQL 导入暂不允许 DDL/权限类高危语句：%{1},SQL import does not allow high-risk DDL/permission statements: %{1}
-SQL 导入暂不允许动态 EXECUTE 语句,SQL import does not currently allow dynamic EXECUTE statements
-无法识别 SQL 将修改的数据表，已拒绝导入,The data table to be modified by SQL cannot be recognized and the import has been rejected.
-SQL 引用了不存在的数据表：%{1},SQL references a non-existent data table: %{1}
-该 SQL 导入任务已经执行过,This SQL import task has already been executed
-必须先下载备份文件，然后才能执行导入,The backup file must be downloaded before the import can be performed
-请确认备份文件已下载到本地,Please confirm that the backup file has been downloaded locally
-SQL 导入必须输入确认短语 %{1},SQL import must enter confirmation phrase %{1}
-暂存 SQL 文件不存在,The staging SQL file does not exist
-暂存 SQL 文件校验失败,Temporary SQL file verification failed
-SQL 导入前安全检查失败,SQL pre-import security check failed
-备份文件不存在,Backup file does not exist
-SQL 导入任务不存在,SQL import task does not exist
-SQL 导入任务清单损坏,SQL import task list is corrupted
-无法创建备份文件,Unable to create backup file
-SQL 文件包含非法空字节,SQL file contains illegal null bytes
-非法导入令牌,Illegal import of token
-模块 %{1} 版本更新为 %{2},Module %{1} version updated to %{2}
-更新模块版本失败: %{1},Failed to update module version: %{1}
-模块 %{1} 的运行时版本 %{2} 不是有效语义版本,The runtime version %{2} of module %{1} is not a valid semantic version
-模块 %{1} 数据库版本游标 %{2} 高于代码版本 %{3}，已阻止继续升级,"Module %{1} database version cursor %{2} is higher than code version %{3}, preventing further upgrade"
-无法刷新模块 %{1} 的数据库版本游标,Unable to refresh database version cursor for module %{1}
-无法建立模块 %{1} 的数据库版本基线,Unable to establish database version baseline for module %{1}
-已禁止单独修改模块数据库版本；请使用 ModuleRollbackManagerInterface 执行联动回滚,It is prohibited to modify the module database version independently; please use ModuleRollbackManagerInterface to perform linked rollback
-模块 %{1} 版本游标已漂移：计划 %{2}，实际 %{3},"Module %{1} version cursor drifted: planned %{2}, actual %{3}"
-无法提交模块 %{1} 的回滚版本游标,Unable to commit rollback version cursor for module %{1}
-模块 %{1} 补偿版本游标已漂移：预期 %{2}，实际 %{3},"Module %{1} comp version cursor drifted: expected %{2}, actual %{3}"
-无法恢复模块 %{1} 的版本游标,Unable to restore version cursor for module %{1}
-当前版本 %{1} 已经是最新或更高版本,Current version %{1} is already latest or higher
-模块 %{1} 版本已升级: %{2} -> %{3},Module %{1} version upgraded: %{2} -> %{3}
-记录版本历史失败: %{1},Failed to record version history: %{1}
-不可用,Not available
-本地没有模块 %{1} 版本 %{2} 的不可变快照,There is no immutable snapshot of module %{1} version %{2} locally.
-模块目录不存在: %{1},Module directory does not exist: %{1}
-模块制品目录不存在: %{1},Module product directory does not exist: %{1}
-已有不可变快照校验失败: %{1} %{2},An existing immutable snapshot failed to verify: %{1} %{2}
-模块快照目录不完整，禁止覆盖: %{1},The module snapshot directory is incomplete and overwriting is prohibited: %{1}
-模块代码快照校验失败: %{1},Module code snapshot verification failed: %{1}
-无法写入模块快照 manifest: %{1},Unable to write module snapshot manifest: %{1}
-无法提交模块代码快照: %{1},Unable to submit module code snapshot: %{1}
-模块快照提交后验证失败: %{1} %{2},Verification failed after module snapshot submission: %{1} %{2}
-模块制品缺少 etc/module.php: %{1},Module artifact is missing etc/module.php: %{1}
-模块制品身份或版本不匹配: %{1} %{2},Module artifact identity or version mismatch: %{1} %{2}
-非法制品路径片段,Illegal product path fragment
-模块制品不允许包含符号链接: %{1},Module artifacts are not allowed to contain symlinks: %{1}
-无法创建制品目录: %{1},Unable to create product catalog: %{1}
-复制模块制品失败: %{1},Failed to copy module artifacts: %{1}
-拒绝删除非受管模块制品临时目录: %{1},Refuse to delete unmanaged module artifact temporary directory: %{1}
-请指定 --operation-id,Please specify --operation-id
-执行持久化模块代码与数据库联动回滚任务,Execute persistence module code and database linkage rollback tasks
-回滚任务 ID,Rollback task ID
-重试人工恢复补偿,Retry manual recovery compensation
+"联动回滚任务缺少 operation_id","Linked rollback task is missing operation_id"
+"迁移记录状态已变化: #%{1}","Migration record status has changed: #%{1}"
+"回滚迁移 %{1} 失败","Failed to rollback migration %{1}"
+"正向补偿迁移 %{1} 失败","Forward compensation migration %{1} failed"
+"operation_id 无效","operation_id is invalid"
+"模块 %{1} 没有已安装的迁移","Module %{1} has no installed migrations"
+"迁移 %{1} 存在反向依赖，无法回滚","Migration %{1} has reverse dependencies and cannot be rolled back"
+"成功回滚 %{1} 个迁移","Successfully rolled back %{1} migrations"
+"回滚失败: %{1}","Rollback failed: %{1}"
+"迁移 %{1} 依赖于 %{2}，请先回滚依赖方","Migration %{1} depends on %{2}, please rollback dependent first"
+"代码快照失败: %{1}","Code snapshot failed: %{1}"
+"目标代码的 Schema 只读检查仍产生 %{1} 项差异，代码与数据库不一致","The Schema read-only check of the target code still produces %{1} differences, and the code is inconsistent with the database"
+"回滚失败且自动补偿未完成，系统将保持维护状态。恢复命令: %{1}","If the rollback fails and automatic compensation is not completed, the system will remain in maintenance status. Recovery command: %{1}"
+"自动补偿已完成，但 operation_id 绑定释放失败，可安全重试","Automatic compensation completed, but operation_id binding release failed, safe to try again"
+人工恢复日志不完整,"Manual recovery log is incomplete"
+"人工恢复已完成补偿，但 operation_id 绑定释放失败","Manual recovery has completed compensation, but operation_id binding release failed"
+"补偿后 Schema 仍存在 %{1} 项差异","After compensation, Schema still has %{1} differences"
+无法创建模块回滚执行锁,"Unable to create module rollback execution lock"
+已有另一个模块回滚任务在执行,"Another module rollback task is already executing"
+回滚任务状态不允许当前操作,"Rollback task status does not allow the current operation"
+回滚任务计划损坏,"Rollback task plan is corrupted"
+回滚任务计划哈希校验失败,"Rollback task plan hash verification failed"
+"模块 %{1} 目标代码或注册版本验证失败：代码 %{2}，注册 %{3}，目标 %{4}","Module %{1} Target code or registered version verification failed: code %{2}, registered %{3}, target %{4}"
+"模块 %{1} 最终数据库版本游标验证失败","Module %{1} Final database version cursor validation failed"
+回滚任务模块明细不完整,"Rollback task module details are incomplete"
+"模块 %{1} 在 worker 执行前发生版本漂移","Module %{1} version drifts before worker execution"
+"模块 %{1} 的目标制品在 worker 执行前已变化","The target artifact of module %{1} changed before the worker was executed"
+"模块 %{1} 的完整反向链在 worker 执行前已失效","The complete reverse chain of module %{1} expired before the worker was executed"
+"模块 %{1} 的反向链在 worker 执行前已变化","The reverse chain of module %{1} changed before the worker was executed"
+写操作需要二次确认后才能执行,"Write operations require a second confirmation before execution"
+"高危 SQL 必须输入确认短语 I_UNDERSTAND_THE_RISK","High-risk SQL must enter confirmation phrase I_UNDERSTAND_THE_RISK"
+新增数据不能为空,"Added data cannot be empty"
+更新操作必须提供主键与数据,"Update operation must provide primary key and data"
+删除操作必须提供条件,"A condition must be provided for the delete operation"
+"CSV 内容为空或格式不正确","CSV content is empty or incorrectly formatted"
+"第 %{1} 行列数不匹配","Row and column count mismatch for row %{1}"
+"第 %{1} 行导入失败: %{2}","Import failed for row %{1}: %{2}"
+"非法标识符 %{1}: %{2}","Invalid identifier %{1}: %{2}"
+索引字段不能为空,"Index field cannot be empty"
+"视图语句必须以 SELECT 开头","View statements must start with SELECT"
+数据库结构操作执行失败,"Database structure operation execution failed"
+"SQL 文件内容不能为空","SQL file content cannot be empty"
+"SQL 文件不能超过 25MB","SQL file cannot exceed 25MB"
+"SQL 导入暂不允许 DDL/权限类高危语句：%{1}","SQL import does not allow high-risk DDL/permission statements: %{1}"
+"SQL 导入暂不允许动态 EXECUTE 语句","SQL import does not currently allow dynamic EXECUTE statements"
+"无法识别 SQL 将修改的数据表，已拒绝导入","The data table to be modified by SQL cannot be recognized and the import has been rejected."
+"SQL 引用了不存在的数据表：%{1}","SQL references a non-existent data table: %{1}"
+"该 SQL 导入任务已经执行过","This SQL import task has already been executed"
+必须先下载备份文件，然后才能执行导入,"The backup file must be downloaded before the import can be performed"
+请确认备份文件已下载到本地,"Please confirm that the backup file has been downloaded locally"
+"SQL 导入必须输入确认短语 %{1}","SQL import must enter confirmation phrase %{1}"
+"暂存 SQL 文件不存在","The staging SQL file does not exist"
+"暂存 SQL 文件校验失败","Temporary SQL file verification failed"
+"SQL 导入前安全检查失败","SQL pre-import security check failed"
+备份文件不存在,"Backup file does not exist"
+"SQL 导入任务不存在","SQL import task does not exist"
+"SQL 导入任务清单损坏","SQL import task list is corrupted"
+无法创建备份文件,"Unable to create backup file"
+"SQL 文件包含非法空字节","SQL file contains illegal null bytes"
+非法导入令牌,"Illegal import of token"
+"模块 %{1} 版本更新为 %{2}","Module %{1} version updated to %{2}"
+"更新模块版本失败: %{1}","Failed to update module version: %{1}"
+"模块 %{1} 的运行时版本 %{2} 不是有效语义版本","The runtime version %{2} of module %{1} is not a valid semantic version"
+"模块 %{1} 数据库版本游标 %{2} 高于代码版本 %{3}，已阻止继续升级","Module %{1} database version cursor %{2} is higher than code version %{3}, preventing further upgrade"
+"无法刷新模块 %{1} 的数据库版本游标","Unable to refresh database version cursor for module %{1}"
+"无法建立模块 %{1} 的数据库版本基线","Unable to establish database version baseline for module %{1}"
+"已禁止单独修改模块数据库版本；请使用 ModuleRollbackManagerInterface 执行联动回滚","It is prohibited to modify the module database version independently; please use ModuleRollbackManagerInterface to perform linked rollback"
+"模块 %{1} 版本游标已漂移：计划 %{2}，实际 %{3}","Module %{1} version cursor drifted: planned %{2}, actual %{3}"
+"无法提交模块 %{1} 的回滚版本游标","Unable to commit rollback version cursor for module %{1}"
+"模块 %{1} 补偿版本游标已漂移：预期 %{2}，实际 %{3}","Module %{1} comp version cursor drifted: expected %{2}, actual %{3}"
+"无法恢复模块 %{1} 的版本游标","Unable to restore version cursor for module %{1}"
+"当前版本 %{1} 已经是最新或更高版本","Current version %{1} is already latest or higher"
+"模块 %{1} 版本已升级: %{2} -> %{3}","Module %{1} version upgraded: %{2} -> %{3}"
+"记录版本历史失败: %{1}","Failed to record version history: %{1}"
+不可用,"Not available"
+"本地没有模块 %{1} 版本 %{2} 的不可变快照","There is no immutable snapshot of module %{1} version %{2} locally."
+"模块目录不存在: %{1}","Module directory does not exist: %{1}"
+"模块制品目录不存在: %{1}","Module product directory does not exist: %{1}"
+"已有不可变快照校验失败: %{1} %{2}","An existing immutable snapshot failed to verify: %{1} %{2}"
+"模块快照目录不完整，禁止覆盖: %{1}","The module snapshot directory is incomplete and overwriting is prohibited: %{1}"
+"模块代码快照校验失败: %{1}","Module code snapshot verification failed: %{1}"
+"无法写入模块快照 manifest: %{1}","Unable to write module snapshot manifest: %{1}"
+"无法提交模块代码快照: %{1}","Unable to submit module code snapshot: %{1}"
+"模块快照提交后验证失败: %{1} %{2}","Verification failed after module snapshot submission: %{1} %{2}"
+"模块制品缺少 etc/module.php: %{1}","Module artifact is missing etc/module.php: %{1}"
+"模块制品身份或版本不匹配: %{1} %{2}","Module artifact identity or version mismatch: %{1} %{2}"
+非法制品路径片段,"Illegal product path fragment"
+"模块制品不允许包含符号链接: %{1}","Module artifacts are not allowed to contain symlinks: %{1}"
+"无法创建制品目录: %{1}","Unable to create product catalog: %{1}"
+"复制模块制品失败: %{1}","Failed to copy module artifacts: %{1}"
+"拒绝删除非受管模块制品临时目录: %{1}","Refuse to delete unmanaged module artifact temporary directory: %{1}"
+"请指定 --operation-id","Please specify --operation-id"
+执行持久化模块代码与数据库联动回滚任务,"Execute persistence module code and database linkage rollback tasks"
+"回滚任务 ID","Rollback task ID"
+重试人工恢复补偿,"Retry manual recovery compensation"
 "请指定 --module=ModuleName 或 --tables=table1,table2","Please specify --module=ModuleName or --tables=table1,table2"
-手动表备份: %{1},Manual table backup: %{1}
-创建备份记录失败,Failed to create backup record
-备份表 %{1} 失败: %{2},Backup table %{1} failed: %{2}
-手动备份完成 (migration_id: %{1})，已备份表: %{2},"Manual backup completed (migration_id: %{1}), backed up tables: %{2}"
-未找到迁移文件: %{1},Migration file not found: %{1}
-迁移类不存在: %{1},Migration class not found: %{1}
-迁移类未实现 MigrationInterface,Migration class does not implement MigrationInterface
-迁移脚本 %{1} 未要求备份 (requiresBackup=false),Migration script %{1} does not require backup (requiresBackup=false)
-预备份: %{1},Pre-backup: %{1}
-迁移文件备份完成 (migration_id: %{1}),Migration file backup completed (migration_id: %{1})
-模块 %{1} 没有待执行的迁移,Module %{1} has no pending migrations
-已备份: %{1} (migration_id: %{2}),Backed up: %{1} (migration_id: %{2})
-模块 %{1} 没有需要备份的迁移,Module %{1} has no migrations to back up
-共备份 %{1} 个迁移,Backed up %{1} migrations
-数据库迁移备份命令,Database migration backup command
-模块名称,Module name
-迁移文件名（可选）,Migration file name (optional)
+"手动表备份: %{1}","Manual table backup: %{1}"
+创建备份记录失败,"Failed to create backup record"
+"备份表 %{1} 失败: %{2}","Backup table %{1} failed: %{2}"
+"手动备份完成 (migration_id: %{1})，已备份表: %{2}","Manual backup completed (migration_id: %{1}), backed up tables: %{2}"
+"未找到迁移文件: %{1}","Migration file not found: %{1}"
+"迁移类不存在: %{1}","Migration class not found: %{1}"
+"迁移类未实现 MigrationInterface","Migration class does not implement MigrationInterface"
+"迁移脚本 %{1} 未要求备份 (requiresBackup=false)","Migration script %{1} does not require backup (requiresBackup=false)"
+"预备份: %{1}","Pre-backup: %{1}"
+"迁移文件备份完成 (migration_id: %{1})","Migration file backup completed (migration_id: %{1})"
+"模块 %{1} 没有待执行的迁移","Module %{1} has no pending migrations"
+"已备份: %{1} (migration_id: %{2})","Backed up: %{1} (migration_id: %{2})"
+"模块 %{1} 没有需要备份的迁移","Module %{1} has no migrations to back up"
+"共备份 %{1} 个迁移","Backed up %{1} migrations"
+数据库迁移备份命令,"Database migration backup command"
+模块名称,"Module name"
+迁移文件名（可选）,"Migration file name (optional)"
 手动备份的表名列表，逗号分隔（可选）,"List of table names for manual backup, comma-separated (optional)"
-显示帮助信息,Show help information
-请指定模块名称: --module=ModuleName,Please specify module name: --module=ModuleName
-开始回滚最近 %{1} 个迁移: %{2},Starting rollback of last %{1} migrations: %{2}
-(预演模式),(dry-run mode)
-回滚完成，共 %{1} 个迁移,"Rollback completed, %{1} migrations total"
-开始跨版本回滚: %{1} -> %{2},Starting cross-version rollback: %{1} -> %{2}
-跨版本回滚完成: %{1} -> %{2},Cross-version rollback completed: %{1} -> %{2}
-请指定版本号: --version=1.0.0，或使用 --to-version/--steps 参数,"Please specify version: --version=1.0.0, or use --to-version/--steps parameter"
-开始回滚迁移: %{1} -> 版本 %{2},Starting migration rollback: %{1} -> version %{2}
--> 文件 %{1},-> File %{1}
-迁移回滚完成,Migration rollback completed
-数据库迁移回滚命令,Database migration rollback command
-模块名称 (必需),Module name (required)
-回滚指定版本的迁移,Rollback migrations of specified version
-指定迁移文件名 (可选),Specified migration file name (optional)
-跨版本回滚：从当前版本回滚到目标版本,Cross-version rollback: from current version to target version
-回滚最近 N 个迁移,Rollback last N migrations
+显示帮助信息,"Show help information"
+"请指定模块名称: --module=ModuleName","Please specify module name: --module=ModuleName"
+"开始回滚最近 %{1} 个迁移: %{2}","Starting rollback of last %{1} migrations: %{2}"
+(预演模式),"(dry-run mode)"
+"回滚完成，共 %{1} 个迁移","Rollback completed, %{1} migrations total"
+"开始跨版本回滚: %{1} -> %{2}","Starting cross-version rollback: %{1} -> %{2}"
+"跨版本回滚完成: %{1} -> %{2}","Cross-version rollback completed: %{1} -> %{2}"
+"请指定版本号: --version=1.0.0，或使用 --to-version/--steps 参数","Please specify version: --version=1.0.0, or use --to-version/--steps parameter"
+"开始回滚迁移: %{1} -> 版本 %{2}","Starting migration rollback: %{1} -> version %{2}"
+"-> 文件 %{1}","-> File %{1}"
+迁移回滚完成,"Migration rollback completed"
+数据库迁移回滚命令,"Database migration rollback command"
+"模块名称 (必需)","Module name (required)"
+回滚指定版本的迁移,"Rollback migrations of specified version"
+"指定迁移文件名 (可选)","Specified migration file name (optional)"
+跨版本回滚：从当前版本回滚到目标版本,"Cross-version rollback: from current version to target version"
+"回滚最近 N 个迁移","Rollback last N migrations"
 预演模式，只显示将执行的操作,"Dry-run mode, only show operations to be executed"
-请指定版本号: --version=1.0.0,Please specify version: --version=1.0.0
-开始升级迁移: %{1} -> 版本 %{2},Starting upgrade migration: %{1} -> version %{2}
-迁移升级完成,Migration upgrade completed
-迁移升级失败,Migration upgrade failed
-数据库迁移升级命令,Database migration upgrade command
-版本号 (必需),Version Number (Required)
-迁移文件名 (可选),Migration file name (optional)
-开始卸载迁移: %{1} -> 版本 %{2},Starting uninstall migration: %{1} -> version %{2}
-迁移卸载完成,Migration uninstall completed
-迁移卸载失败,Migration uninstall failed
-数据库迁移卸载命令,Database migration uninstall command
-查询模块迁移状态: %{1} -> 版本 %{2},Query module migration status: %{1} -> version %{2}
-=== 版本 %{1} 的迁移文件 ===,=== Migration files for version %{1} ===
-○ %{1} - 待检查状态,○ %{1} - pending status check
-查询模块迁移状态: %{1},Query module migration status: %{1}
-=== 迁移统计 ===,=== Migration Statistics ===
-总迁移数: %{1},Total migrations: %{1}
-已安装: %{1},Installed: %{1}
-待执行: %{1},Pending: %{1}
-失败: %{1},Failed: %{1}
-=== 已安装的迁移 ===,=== Installed Migrations ===
-✓ %{1} - %{2},✓ %{1} - %{2}
-=== 待执行的迁移 ===,=== Pending Migrations ===
-○ %{1} - 待执行,○ %{1} - pending
-发现 %{1} 个失败的迁移，请检查日志,"Found %{1} failed migrations, please check logs"
+"请指定版本号: --version=1.0.0","Please specify version: --version=1.0.0"
+"开始升级迁移: %{1} -> 版本 %{2}","Starting upgrade migration: %{1} -> version %{2}"
+迁移升级完成,"Migration upgrade completed"
+迁移升级失败,"Migration upgrade failed"
+数据库迁移升级命令,"Database migration upgrade command"
+"版本号 (必需)","Version Number (Required)"
+"迁移文件名 (可选)","Migration file name (optional)"
+"开始卸载迁移: %{1} -> 版本 %{2}","Starting uninstall migration: %{1} -> version %{2}"
+迁移卸载完成,"Migration uninstall completed"
+迁移卸载失败,"Migration uninstall failed"
+数据库迁移卸载命令,"Database migration uninstall command"
+"查询模块迁移状态: %{1} -> 版本 %{2}","Query module migration status: %{1} -> version %{2}"
+"=== 版本 %{1} 的迁移文件 ===","=== Migration files for version %{1} ==="
+"○ %{1} - 待检查状态","○ %{1} - pending status check"
+"查询模块迁移状态: %{1}","Query module migration status: %{1}"
+"=== 迁移统计 ===","=== Migration Statistics ==="
+"总迁移数: %{1}","Total migrations: %{1}"
+"已安装: %{1}","Installed: %{1}"
+"待执行: %{1}","Pending: %{1}"
+"失败: %{1}","Failed: %{1}"
+"=== 已安装的迁移 ===","=== Installed Migrations ==="
+"✓ %{1} - %{2}","✓ %{1} - %{2}"
+"=== 待执行的迁移 ===","=== Pending Migrations ==="
+"○ %{1} - 待执行","○ %{1} - pending"
+"发现 %{1} 个失败的迁移，请检查日志","Found %{1} failed migrations, please check logs"
 已安装,Installed
-已回滚,Rolled back
+已回滚,"Rolled back"
 失败,Failed
 待执行,Pending
-数据库迁移状态查询命令,Database migration status query command
-版本号 (可选),Version number (optional)
-请指定 --backup-id=N 或 --migration-id=N,Please specify --backup-id=N or --migration-id=N
-正在恢复备份 (backup_id: %{1})...,Restoring backup (backup_id: %{1})...
-备份恢复完成 (backup_id: %{1}),Backup restore completed (backup_id: %{1})
-备份恢复失败 (backup_id: %{1}),Backup restore failed (backup_id: %{1})
-未找到迁移 %{1} 关联的备份记录,Backup record associated with migration %{1} not found
-正在恢复迁移 %{1} 的 %{2} 条备份...,Restoring %{2} backups of migration %{1}...
-恢复完成: 成功 %{1}，失败 %{2},"Restore complete: Success %{1}, Failed %{2}"
-数据库迁移备份恢复命令,Database migration backup restore command
-备份记录 ID（恢复单条备份）,Backup record ID (restore single backup)
-迁移记录 ID（恢复该迁移的所有备份）,Migration record ID (restore all backups for this migration)
-迁移检查 [%{i}/%{total}] %{module},Migration check [%{i}/%{total}] %{module}
-迁移检查完成：共 %{total} · 空闲 %{idle}（无待执行 %{none} / 已执行跳过 %{skip}）· 执行 %{work} 模块 %{migrations} 条 · 游标延后 %{defer} · 失败 %{failed},Migration check done: %{total} total · idle %{idle} (none pending %{none} / executed skip %{skip}) · run %{work} modules %{migrations} rows · cursor defer %{defer} · failed %{failed}
-加载数据,Loading data
+数据库迁移状态查询命令,"Database migration status query command"
+"版本号 (可选)","Version number (optional)"
+"请指定 --backup-id=N 或 --migration-id=N","Please specify --backup-id=N or --migration-id=N"
+"正在恢复备份 (backup_id: %{1})...","Restoring backup (backup_id: %{1})..."
+"备份恢复完成 (backup_id: %{1})","Backup restore completed (backup_id: %{1})"
+"备份恢复失败 (backup_id: %{1})","Backup restore failed (backup_id: %{1})"
+"未找到迁移 %{1} 关联的备份记录","Backup record associated with migration %{1} not found"
+"正在恢复迁移 %{1} 的 %{2} 条备份...","Restoring %{2} backups of migration %{1}..."
+"恢复完成: 成功 %{1}，失败 %{2}","Restore complete: Success %{1}, Failed %{2}"
+数据库迁移备份恢复命令,"Database migration backup restore command"
+"备份记录 ID（恢复单条备份）","Backup record ID (restore single backup)"
+"迁移记录 ID（恢复该迁移的所有备份）","Migration record ID (restore all backups for this migration)"
+"迁移检查 [%{i}/%{total}] %{module}","Migration check [%{i}/%{total}] %{module}"
+"迁移检查完成：共 %{total} · 空闲 %{idle}（无待执行 %{none} / 已执行跳过 %{skip}）· 执行 %{work} 模块 %{migrations} 条 · 游标延后 %{defer} · 失败 %{failed}","Migration check done: %{total} total · idle %{idle} (none pending %{none} / executed skip %{skip}) · run %{work} modules %{migrations} rows · cursor defer %{defer} · failed %{failed}"
+加载数据,"Loading data"
 点击“查看结构”加载字段和索引,"Click ""View Structure"" to load fields and indexes"
 """operation_id 长度不能超过 64 字符""","""operation_id cannot be longer than 64 characters"""
-mdi mdi-database-cog-outline,mdi mdi-database-cog-outline
-mdi mdi-view-dashboard-outline,mdi mdi-view-dashboard-outline
-mdi mdi-database-search,mdi mdi-database-search
-mdi mdi-table,mdi mdi-table
-mdi mdi-table-search,mdi mdi-table-search
-mdi mdi-table-eye,mdi mdi-table-eye
-mdi mdi-content-save-edit,mdi mdi-content-save-edit
-mdi mdi-delete-alert-outline,mdi mdi-delete-alert-outline
-mdi mdi-file-delimited-outline,mdi mdi-file-delimited-outline
-mdi mdi-database-import-outline,mdi mdi-database-import-outline
-mdi mdi-play-network-outline,mdi mdi-play-network-outline
-mdi mdi-database-arrow-up-outline,mdi mdi-database-arrow-up-outline
-mdi mdi-download-lock-outline,mdi mdi-download-lock-outline
-mdi mdi-database-edit-outline,mdi mdi-database-edit-outline
-无法备份表 %{1} 的结构,Unable to backup structure of table %{1}
-表 %{1} 结构或数据补偿失败,Table %{1} Structure or data compensation failed
-未找到已安装迁移记录: %{1},Installed migration record not found: %{1}
-迁移记录不存在: %{1},Migration record not found: %{1}
-迁移卸载成功: %{1},Migration uninstall successful: %{1}
-迁移卸载失败: %{1},Migration uninstall failed: %{1}
-回滚前无法备份表 %{1} 的结构,Unable to back up the structure of table %{1} before rollback
+"mdi mdi-database-cog-outline","mdi mdi-database-cog-outline"
+"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
+"mdi mdi-database-search","mdi mdi-database-search"
+"mdi mdi-table","mdi mdi-table"
+"mdi mdi-table-search","mdi mdi-table-search"
+"mdi mdi-table-eye","mdi mdi-table-eye"
+"mdi mdi-content-save-edit","mdi mdi-content-save-edit"
+"mdi mdi-delete-alert-outline","mdi mdi-delete-alert-outline"
+"mdi mdi-file-delimited-outline","mdi mdi-file-delimited-outline"
+"mdi mdi-database-import-outline","mdi mdi-database-import-outline"
+"mdi mdi-play-network-outline","mdi mdi-play-network-outline"
+"mdi mdi-database-arrow-up-outline","mdi mdi-database-arrow-up-outline"
+"mdi mdi-download-lock-outline","mdi mdi-download-lock-outline"
+"mdi mdi-database-edit-outline","mdi mdi-database-edit-outline"
+"无法备份表 %{1} 的结构","Unable to backup structure of table %{1}"
+"表 %{1} 结构或数据补偿失败","Table %{1} Structure or data compensation failed"
+"未找到已安装迁移记录: %{1}","Installed migration record not found: %{1}"
+"迁移记录不存在: %{1}","Migration record not found: %{1}"
+"迁移卸载成功: %{1}","Migration uninstall successful: %{1}"
+"迁移卸载失败: %{1}","Migration uninstall failed: %{1}"
+"回滚前无法备份表 %{1} 的结构","Unable to back up the structure of table %{1} before rollback"
 """迁移返回失败状态: %{1}""","""Migration returned failure status: %{1}"""
 总览,Overview

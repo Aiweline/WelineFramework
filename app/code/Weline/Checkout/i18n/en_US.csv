@@ -1,651 +1,656 @@
-结账数据验证前,Before Checkout Validation
+﻿结账数据验证前,"Before Checkout Validation"
 在验证结账数据之前触发，允许其他模块修改验证数据或执行预处理操作。,"Triggered before validating checkout data, allowing other modules to modify validation data or perform preprocessing operations."
-结账数据验证后,After Checkout Validation
+结账数据验证后,"After Checkout Validation"
 在验证结账数据之后触发，允许其他模块根据验证结果执行后续操作。,"Triggered after validating checkout data, allowing other modules to perform follow-up operations based on validation results."
-计算订单总额前,Before Calculate Totals
+计算订单总额前,"Before Calculate Totals"
 在计算订单总额之前触发，允许其他模块修改计算参数（运费、税费、折扣等）。,"Triggered before calculating order totals, allowing other modules to modify calculation parameters (shipping, tax, discount, etc.)."
-计算订单总额后,After Calculate Totals
+计算订单总额后,"After Calculate Totals"
 在计算订单总额之后触发，允许其他模块修改计算结果或执行后续操作。,"Triggered after calculating order totals, allowing other modules to modify calculation results or perform follow-up operations."
-运费报价覆盖,Shipping quote override
-freezeAndQuote 在本站 Shipping 报价成功后触发；Observer 按货源 Provider 策略改写运费。失败策略由各供应商配置（回退本站 / 阻断结账）。,Fires after freezeAndQuote succeeds with local Shipping quotes; Observer rewrites freight by source Provider policy. Failure policy is per supplier (fall back to local / block checkout).
-配送方式列表富集,Shipping method list enrichment
-listQuoteOptions 结果映射为结账 methods 后触发；Observer 可改写 amount_minor。,Fires after listQuoteOptions results are mapped to checkout methods; Observer may rewrite amount_minor.
-冻结报价富集,Frozen quote enrichment
-freezeAndQuote 生成基础 payload 后触发；Observer 可回写 b2b_credit 等扩展字段。支付模块不得注入额度。,Fires after freezeAndQuote builds the base payload; Observer may write back extensions such as b2b_credit. Payment modules must not inject credit limits.
-会话资产折扣应用,Session asset discount application
-submit 前触发；Observer 钳制抵扣并写入 type_payload。支付仅 SPI 策略，不写结账金额。,Fires before submit; Observer clamps deductions and writes type_payload. Payment is SPI policy only and must not write checkout amounts.
-创建订单前,Before creating order
+运费报价覆盖,"Shipping quote override"
+"freezeAndQuote 在本站 Shipping 报价成功后触发；Observer 按货源 Provider 策略改写运费。失败策略由各供应商配置（回退本站 / 阻断结账）。","Fires after freezeAndQuote succeeds with local Shipping quotes; Observer rewrites freight by source Provider policy. Failure policy is per supplier (fall back to local / block checkout)."
+配送方式列表富集,"Shipping method list enrichment"
+"listQuoteOptions 结果映射为结账 methods 后触发；Observer 可改写 amount_minor。","Fires after listQuoteOptions results are mapped to checkout methods; Observer may rewrite amount_minor."
+冻结报价富集,"Frozen quote enrichment"
+"freezeAndQuote 生成基础 payload 后触发；Observer 可回写 b2b_credit 等扩展字段。支付模块不得注入额度。","Fires after freezeAndQuote builds the base payload; Observer may write back extensions such as b2b_credit. Payment modules must not inject credit limits."
+会话资产折扣应用,"Session asset discount application"
+"submit 前触发；Observer 钳制抵扣并写入 type_payload。支付仅 SPI 策略，不写结账金额。","Fires before submit; Observer clamps deductions and writes type_payload. Payment is SPI policy only and must not write checkout amounts."
+创建订单前,"Before creating order"
 在创建订单之前触发，允许其他模块修改订单数据、验证库存、应用优惠券等。,"Triggered before creating an order, allowing other modules to modify order data, verify inventory, apply coupons, etc."
-创建订单后,After creating order
+创建订单后,"After creating order"
 在创建订单之后触发，允许其他模块执行后续操作，如扣减库存、发送通知、发起支付等。,"Triggered after creating an order, allowing other modules to perform subsequent operations such as reducing inventory, sending notifications, initiating payments, etc."
-旧结账订单写入前置门禁,Legacy checkout order writer preflight gate
-在旧 Checkout 订单写入路径验证与事务开始前同步触发，允许切换模块拒绝旧 writer。,Synchronously fires before legacy Checkout order validation and transaction start so a cutover module can reject the old writer.
-结账身份解析前,Before Checkout Identity Resolution
+旧结账订单写入前置门禁,"Legacy checkout order writer preflight gate"
+"在旧 Checkout 订单写入路径验证与事务开始前同步触发，允许切换模块拒绝旧 writer。","Synchronously fires before legacy Checkout order validation and transaction start so a cutover module can reject the old writer."
+结账身份解析前,"Before Checkout Identity Resolution"
 在标准化账户结账/匿名结账选择之前触发，允许模块调整身份上下文。,"Triggered before normalizing account or guest checkout selection, allowing modules to adjust identity context."
-结账身份解析后,After Checkout Identity Resolution
+结账身份解析后,"After Checkout Identity Resolution"
 在标准化账户结账/匿名结账选择之后触发，允许模块补充或覆盖身份结果。,"Triggered after normalizing account or guest checkout selection, allowing modules to supplement or override identity results."
-匿名结账验证前,Before Guest Checkout Validation
+匿名结账验证前,"Before Guest Checkout Validation"
 在匿名结账邮箱和上下文验证之前触发，允许模块加入额外验证输入。,"Triggered before validating guest checkout email and context, allowing modules to add extra validation input."
-匿名结账验证后,After Guest Checkout Validation
+匿名结账验证后,"After Guest Checkout Validation"
 在匿名结账邮箱和上下文验证之后触发，允许模块追加错误或执行通过后的处理。,"Triggered after validating guest checkout email and context, allowing modules to append errors or run post-validation handling."
-订单加载前,Before Order Load
+订单加载前,"Before Order Load"
 在加载订单数据之前触发，允许其他模块执行预处理操作。,"Triggered before loading order data, allowing other modules to perform preprocessing operations."
-订单加载后,After Order Load
+订单加载后,"After Order Load"
 在加载订单数据之后触发，允许其他模块修改订单数据或执行后续操作。,"Triggered after loading order data, allowing other modules to modify order data or perform follow-up operations."
-订单状态变更前,Before Order Status Change
+订单状态变更前,"Before Order Status Change"
 在订单状态变更之前触发，允许其他模块验证状态变更是否允许或执行预处理操作。,"Triggered before order status change, allowing other modules to verify if status change is allowed or perform preprocessing operations."
-订单状态变更后,After Order Status Change
+订单状态变更后,"After Order Status Change"
 在订单状态变更之后触发，允许其他模块根据状态变化执行相应操作，如发送通知、更新库存等。,"Triggered after order status change, allowing other modules to perform corresponding operations based on status changes, such as sending notifications, updating inventory, etc."
-订单取消前,Before Order Cancel
+订单取消前,"Before Order Cancel"
 在取消订单之前触发，允许其他模块验证是否可以取消或执行预处理操作。,"Triggered before canceling order, allowing other modules to verify if cancellation is allowed or perform preprocessing operations."
-订单取消后,After Order Cancel
+订单取消后,"After Order Cancel"
 在取消订单之后触发，允许其他模块执行后续操作，如恢复库存、处理退款、发送通知等。,"Triggered after canceling order, allowing other modules to perform follow-up operations, such as restoring inventory, processing refunds, sending notifications, etc."
-订单完成,Order completed
+订单完成,"Order completed"
 当订单状态变更为已完成时触发，允许其他模块执行完成后的操作，如增加积分、发送通知等。,"Triggered when the order status changes to completed, allowing other modules to perform post-completion actions such as adding points or sending notifications."
-订单取消,Cancel order
+订单取消,"Cancel order"
 当订单被取消时触发，允许其他模块执行取消后的操作，如恢复库存、处理退款等。,"Triggered when the order is canceled, allowing other modules to perform post-cancellation actions such as restoring inventory or processing refunds."
-订单退款,Order Refund
+订单退款,"Order Refund"
 当订单被退款时触发，允许其他模块执行退款后的操作，如更新账户余额、发送通知等。,"Triggered when the order is refunded, allowing other modules to perform post-refund actions such as updating account balances or sending notifications."
-支付验证前,Before Payment Validation
+支付验证前,"Before Payment Validation"
 在验证支付数据之前触发，允许其他模块修改验证数据或执行预处理操作。,"Triggered before validating payment data, allowing other modules to modify validation data or perform preprocessing operations."
-支付验证后,After Payment Validation
+支付验证后,"After Payment Validation"
 在验证支付数据之后触发，允许其他模块根据验证结果执行后续操作。,"Triggered after validating payment data, allowing other modules to perform follow-up operations based on validation results."
-支付处理前,Before Payment Processing
+支付处理前,"Before Payment Processing"
 在支付处理之前触发，允许其他模块准备支付参数、选择支付网关、验证支付限额等。,"Triggered before payment processing, allowing other modules to prepare payment parameters, select payment gateway, verify payment limits, etc."
-支付处理后,After Payment Processing
+支付处理后,"After Payment Processing"
 在支付处理之后触发，允许其他模块执行实际的支付逻辑，如调用支付网关API、创建支付订单等。,"Triggered after payment processing, allowing other modules to execute actual payment logic, such as calling payment gateway API, creating payment orders, etc."
-支付回调前,Before Payment Callback
+支付回调前,"Before Payment Callback"
 在处理支付回调之前触发，允许其他模块验证回调签名或执行预处理操作。,"Triggered before processing payment callback, allowing other modules to verify callback signature or perform preprocessing operations."
-支付回调后,After Payment Callback
+支付回调后,"After Payment Callback"
 在处理支付回调之后触发，允许其他模块验证支付结果、更新订单状态、处理退款等。,"Triggered after processing payment callback, allowing other modules to verify payment results, update order status, process refunds, etc."
-支付成功,Payment Success
+支付成功,"Payment Success"
 当支付成功时触发，允许其他模块执行成功后的操作，如更新订单状态、发送通知、增加积分等。,"Triggered when payment succeeds, allowing other modules to perform post-success operations, such as updating order status, sending notifications, adding points, etc."
-支付失败,Payment Failed
+支付失败,"Payment Failed"
 当支付失败时触发，允许其他模块执行失败后的操作，如记录日志、发送通知、释放库存等。,"Triggered when payment fails, allowing other modules to perform post-failure operations, such as logging, sending notifications, releasing inventory, etc."
-结账接口不支持该操作：%{1},Checkout does not support operation: %{1}
-购物车币种与当前请求币种不一致,The shopping cart currency is inconsistent with the current request currency
-结账报价失败,Checkout quote failed
-改址参数不完整,Incomplete address-change parameters
-无权修改该订单地址,Not allowed to change this order address
-订单不存在,Order does not exist
-改址失败,Address change failed
-支付恢复凭据不完整，请重新进入结账流程。,Payment recovery details are incomplete. Please restart checkout.
-支付重试幂等键长度须为 1..128。,The payment retry idempotency key must be 1 to 128 characters.
-找不到可恢复的支付状态，请从订单列表继续。,No recoverable payment state was found. Please continue from your order list.
+结账接口不支持该操作：%{1},"Checkout does not support operation: %{1}"
+购物车币种与当前请求币种不一致,"The shopping cart currency is inconsistent with the current request currency"
+结账报价失败,"Checkout quote failed"
+改址参数不完整,"Incomplete address-change parameters"
+无权修改该订单地址,"Not allowed to change this order address"
+订单不存在,"Order does not exist"
+改址失败,"Address change failed"
+支付恢复凭据不完整，请重新进入结账流程。,"Payment recovery details are incomplete. Please restart checkout."
+"支付重试幂等键长度须为 1..128。","The payment retry idempotency key must be 1 to 128 characters."
+找不到可恢复的支付状态，请从订单列表继续。,"No recoverable payment state was found. Please continue from your order list."
 无法声明该支付重试，请从订单列表重试。,"Unable to declare this payment retry, please try again from the order list."
-无法恢复该支付，请从订单列表重试。,This payment cannot be resumed. Please retry from your order list.
+无法恢复该支付，请从订单列表重试。,"This payment cannot be resumed. Please retry from your order list."
 订单已创建，但支付未完成。请重试支付。,"Your order was created, but payment was not completed. Please retry payment."
 订单已创建，但暂时无法恢复支付，请联系支持。,"Your order was created, but payment recovery is temporarily unavailable. Please contact support."
-购物车中有不可结算的商品，请移除后重试,Cart has items that cannot be checked out; remove them and retry
-暂无法结账,Checkout is temporarily unavailable
-结账信息已加载,Checkout data loaded
+购物车中有不可结算的商品，请移除后重试,"Cart has items that cannot be checked out; remove them and retry"
+暂无法结账,"Checkout is temporarily unavailable"
+结账信息已加载,"Checkout data loaded"
 购物车为空，请先加入商品。,"The shopping cart is empty, please add products first."
-暂无可用支付方式。,No payment methods available yet.
-配送信息已加载,Delivery information loaded
-配送信息加载失败，请稍后重试或手动填写地址。,Failed to load delivery information. Please try again later or enter the address manually.
-选择国家/地址,Select country/address
-验证码已就绪,CAPTCHA is ready
-收货地址组件暂不可用,Shipping address component temporarily unavailable
-收货地址,Shipping address
-选择收货地址,Select shipping address
-收货地址组件加载失败，请稍后重试。,Failed to load shipping address component; please try again later.
-收货地址已就绪,Shipping address ready
-配送国家已更新,Shipping country updated
-配送地址已选择,Shipping address selected
-验证码校验失败，请重试。,Captcha verification failed. Please try again.
-配送地址已保存,Shipping address saved
-结账地址簿已清空,Checkout address book cleared
-客户端折扣金额被拒绝，请使用结账优惠券。,Client discount amount was rejected. Please use a checkout coupon.
-请补全收货信息并选择配送和支付方式。,Please complete the delivery information and select the delivery and payment method.
-该商品暂不可售。,This product is currently unavailable for sale.
-当前收货地址暂不可配送，请更换地址后再下单。,This delivery address cannot be shipped to. Please choose another address before placing the order.
-所选配送方式不可用，请重新选择配送方式。,The selected shipping method is unavailable. Please choose another shipping method.
-订单创建成功,Order created successfully
-免邮,Free shipping
-前台结账,Storefront checkout
-结账遗弃信号,Checkout abandonment signal
-只读 quoted 结账会话事实，供营销挽回使用（无遗弃 TTL、无触达）。,"Read-only quoted checkout session facts for marketing recovery (no abandonment TTL, no outreach)."
-列出未过期 quoted 结账会话供营销挽回,List non-expired quoted checkout sessions for marketing recovery
-发信前再验结账会话是否仍为 quoted 且可达,Re-check that the checkout session is still quoted and reachable before sending
-按 customer_id 或 cart_key 判断是否存在未过期 quoted 结账会话（供购物车挽回去重）,Check whether a non-expired quoted checkout session exists by customer_id or cart_key (for cart-recovery dedupe)
-结账页面头部之前,Before Checkout Page Head
-在渲染结账页面的 <head> 标签之前触发，允许其他模块在头部开始处注入内容（如CSS、JavaScript等）。,"Triggered before rendering the <head> tag of the checkout page, allowing other modules to inject content at the beginning of the head (such as CSS, JavaScript, etc.)."
-结账页面头部之后,After Checkout Page Head
-在渲染结账页面的 <head> 标签之后触发，允许其他模块在头部结束处注入内容。,"Triggered after rendering the <head> tag of the checkout page, allowing other modules to inject content at the end of the head."
-结账页面内容之前,Before Checkout Page Content
+请先加入商品后再选择支付方式。,"Add items to your cart before choosing a payment method."
+暂无可用支付方式。,"No payment methods available yet."
+配送信息已加载,"Delivery information loaded"
+配送信息加载失败，请稍后重试或手动填写地址。,"Failed to load delivery information. Please try again later or enter the address manually."
+选择国家/地址,"Select country/address"
+验证码已就绪,"CAPTCHA is ready"
+收货地址组件暂不可用,"Shipping address component temporarily unavailable"
+收货地址,"Shipping address"
+选择收货地址,"Select shipping address"
+收货地址组件加载失败，请稍后重试。,"Failed to load shipping address component; please try again later."
+收货地址已就绪,"Shipping address ready"
+配送国家已更新,"Shipping country updated"
+配送地址已选择,"Shipping address selected"
+验证码校验失败，请重试。,"Captcha verification failed. Please try again."
+配送地址已保存,"Shipping address saved"
+结账地址簿已清空,"Checkout address book cleared"
+客户端折扣金额被拒绝，请使用结账优惠券。,"Client discount amount was rejected. Please use a checkout coupon."
+请补全收货信息并选择配送和支付方式。,"Please complete the delivery information and select the delivery and payment method."
+该商品暂不可售。,"This product is currently unavailable for sale."
+当前收货地址暂不可配送，请更换地址后再下单。,"This delivery address cannot be shipped to. Please choose another address before placing the order."
+所选配送方式不可用，请重新选择配送方式。,"The selected shipping method is unavailable. Please choose another shipping method."
+订单创建成功,"Order created successfully"
+免邮,"Free shipping"
+前台结账,"Storefront checkout"
+结账遗弃信号,"Checkout abandonment signal"
+"只读 quoted 结账会话事实，供营销挽回使用（无遗弃 TTL、无触达）。","Read-only quoted checkout session facts for marketing recovery (no abandonment TTL, no outreach)."
+"列出未过期 quoted 结账会话供营销挽回","List non-expired quoted checkout sessions for marketing recovery"
+"发信前再验结账会话是否仍为 quoted 且可达","Re-check that the checkout session is still quoted and reachable before sending"
+"按 customer_id 或 cart_key 判断是否存在未过期 quoted 结账会话（供购物车挽回去重）","Check whether a non-expired quoted checkout session exists by customer_id or cart_key (for cart-recovery dedupe)"
+结账页面头部之前,"Before Checkout Page Head"
+"在渲染结账页面的 <head> 标签之前触发，允许其他模块在头部开始处注入内容（如CSS、JavaScript等）。","Triggered before rendering the <head> tag of the checkout page, allowing other modules to inject content at the beginning of the head (such as CSS, JavaScript, etc.)."
+结账页面头部之后,"After Checkout Page Head"
+"在渲染结账页面的 <head> 标签之后触发，允许其他模块在头部结束处注入内容。","Triggered after rendering the <head> tag of the checkout page, allowing other modules to inject content at the end of the head."
+结账页面内容之前,"Before Checkout Page Content"
 在渲染结账页面的主要内容之前触发，允许其他模块在内容开始处注入内容（如横幅、提示信息等）。,"Triggered before rendering the main content of the checkout page, allowing other modules to inject content at the beginning of the content (such as banners, tips, etc.)."
-结账页面内容之后,After Checkout Page Content
+结账页面内容之后,"After Checkout Page Content"
 在渲染结账页面的主要内容之后触发，允许其他模块在内容结束处注入内容（如推荐商品、优惠信息等）。,"Triggered after rendering the main content of the checkout page, allowing other modules to inject content at the end of the content (such as recommended products, promotional information, etc.)."
-结账表单之前,Before Checkout Form
+结账表单之前,"Before Checkout Form"
 在渲染结账表单之前触发，允许其他模块在表单开始处注入内容（如优惠券输入框、促销信息等）。,"Triggered before rendering the checkout form, allowing other modules to inject content at the beginning of the form (such as coupon input boxes, promotional information, etc.)."
-结账表单之后,After Checkout Form
+结账表单之后,"After Checkout Form"
 在渲染结账表单之后触发，允许其他模块在表单结束处注入内容（如支付方式选择、额外信息等）。,"Triggered after rendering the checkout form, allowing other modules to inject content at the end of the form (such as payment method selection, additional information, etc.)."
-结账身份选择之前,Before Checkout Identity Selection
+结账身份选择之前,"Before Checkout Identity Selection"
 在默认一页式结账的账户/匿名身份选择区块之前触发，允许模块注入登录、会员权益或风控提示。,"Triggered before the account or guest identity selector in the default one-page checkout, allowing modules to inject sign-in, membership benefit, or fraud-control notices."
-配送弹窗快速添加地址,Quick-add address in delivery popup
-Header 配送地址弹窗中的快速添加地址表单；由地址/配送模块实现。未实现时不显示添加能力。,Quick-add address form in the header delivery popup; implemented by address/shipping modules. Hidden when unimplemented.
-结账身份选项之前,Before Checkout Identity Options
+配送弹窗快速添加地址,"Quick-add address in delivery popup"
+"Header 配送地址弹窗中的快速添加地址表单；由地址/配送模块实现。未实现时不显示添加能力。","Quick-add address form in the header delivery popup; implemented by address/shipping modules. Hidden when unimplemented."
+结账身份选项之前,"Before Checkout Identity Options"
 在账户结账与匿名结账选项列表之前触发，允许模块增加说明或调整选择体验。,"Triggered before the account and guest checkout option list, allowing modules to add guidance or adjust the selection experience."
-结账身份选项之后,After Checkout Identity Options
+结账身份选项之后,"After Checkout Identity Options"
 在账户结账与匿名结账选项列表之后触发，允许模块补充匿名结账说明、协议或风险提示。,"Triggered after the account and guest checkout option list, allowing modules to add guest checkout guidance, agreements, or risk notices."
-结账身份选择之后,After Checkout Identity Selection
+结账身份选择之后,"After Checkout Identity Selection"
 在默认一页式结账的账户/匿名身份选择区块之后触发，允许模块注入后续上下文或客户端扩展。,"Triggered after the account or guest identity selector in the default one-page checkout, allowing modules to inject follow-up context or client extensions."
-结账通知渠道偏好,Checkout Notification Channel Preferences
-在结账身份选择后注入本次订单通知渠道选择，由通知模块通过 Hook 提供具体内容。,Injects the notification channel selector for this order after checkout identity selection; the notification module provides concrete content through the hook.
-支付方式选择区域之前,Before Payment Methods Selection
+结账通知渠道偏好,"Checkout Notification Channel Preferences"
+"在结账身份选择后注入本次订单通知渠道选择，由通知模块通过 Hook 提供具体内容。","Injects the notification channel selector for this order after checkout identity selection; the notification module provides concrete content through the hook."
+支付方式选择区域之前,"Before Payment Methods Selection"
 在渲染支付方式选择区域之前触发，允许支付模块在支付方式选择区域开始处注入内容。,"Triggered before rendering the payment methods selection area, allowing payment modules to inject content at the beginning of the payment methods selection area."
-支付方式选择区域之后,After Payment Methods Selection
+支付方式选择区域之后,"After Payment Methods Selection"
 在渲染支付方式选择区域之后触发，允许支付模块在支付方式选择区域结束处注入内容。,"Triggered after rendering the payment methods selection area, allowing payment modules to inject content at the end of the payment methods selection area."
-结账配送方式区域之前,Before Checkout Shipping Methods Area
+结账配送方式区域之前,"Before Checkout Shipping Methods Area"
 在默认一页式结账的配送方式区域之前触发，允许配送模块注入提示、限制或扩展内容。,"Triggered before the shipping methods area in the default one-page checkout, allowing shipping modules to inject notices, restrictions, or extensions."
-结账配送方式区域之后,After Checkout Shipping Methods Area
+结账配送方式区域之后,"After Checkout Shipping Methods Area"
 在默认一页式结账的配送方式区域之后触发，允许配送模块注入补充说明或扩展内容。,"Triggered after the shipping methods area in the default one-page checkout, allowing shipping modules to inject supplemental guidance or extensions."
-结账配送方式列表,Checkout Shipping Method List
-渲染默认一页式结账中的配送方式列表；具体电商模块通过该 hook 提供数据化实现。,Renders the shipping method list in the default one-page checkout; concrete commerce modules provide the data-driven implementation through this hook.
-结账支付方式列表,Checkout Payment Method List
-渲染默认一页式结账中的支付方式列表；支付模块通过该 hook 将支付方式放入结账布局。,Renders the payment method list in the default one-page checkout; payment modules place payment methods into the checkout layout through this hook.
-结账支付方式详情,Checkout Payment Method Details
+结账配送方式列表,"Checkout Shipping Method List"
+"渲染默认一页式结账中的配送方式列表；具体电商模块通过该 hook 提供数据化实现。","Renders the shipping method list in the default one-page checkout; concrete commerce modules provide the data-driven implementation through this hook."
+结账支付方式列表,"Checkout Payment Method List"
+"渲染默认一页式结账中的支付方式列表；支付模块通过该 hook 将支付方式放入结账布局。","Renders the payment method list in the default one-page checkout; payment modules place payment methods into the checkout layout through this hook."
+结账支付方式详情,"Checkout Payment Method Details"
 渲染所选支付方式的补充说明、重定向提示或线下支付指引。,"Renders supplemental guidance, redirect notices, or offline payment instructions for the selected payment method."
-结账商品行列表,Checkout item line list
-服务端渲染结账摘要中的商品行；禁止前端 JS createElement 拼商品 DOM（P2E-003）。,The server renders the product rows in the checkout summary; front-end JS createElement is prohibited from constructing the product DOM (P2E-003).
-结账确认区域之前,Before Checkout Review Area
+结账商品行列表,"Checkout item line list"
+"服务端渲染结账摘要中的商品行；禁止前端 JS createElement 拼商品 DOM（P2E-003）。","The server renders the product rows in the checkout summary; front-end JS createElement is prohibited from constructing the product DOM (P2E-003)."
+结账确认区域之前,"Before Checkout Review Area"
 在提交订单确认区域之前触发，用于促销、风控、协议或校验提示扩展。,"Triggered before the place-order review area for promotion, fraud-control, agreement, or validation notice extensions."
-结账确认区域之后,After Checkout Review Area
-在提交订单确认区域之后触发，用于补充说明或转化追踪扩展。,Triggered after the place-order review area for supplemental guidance or conversion tracking extensions.
-提交订单按钮之前,Before Place Order Button
+结账确认区域之后,"After Checkout Review Area"
+在提交订单确认区域之后触发，用于补充说明或转化追踪扩展。,"Triggered after the place-order review area for supplemental guidance or conversion tracking extensions."
+提交订单按钮之前,"Before Place Order Button"
 在默认提交订单按钮之前触发，允许模块追加校验提示或替换性操作入口。,"Triggered before the default place order button, allowing modules to append validation notices or alternative action entries."
-提交订单按钮之后,After Place Order Button
+提交订单按钮之后,"After Place Order Button"
 在默认提交订单按钮之后触发，允许模块追加支付协议、风控或分析埋点内容。,"Triggered after the default place order button, allowing modules to append payment agreements, fraud-control content, or analytics tracking."
-结账摘要之前,Before Checkout Summary
-在订单摘要卡片标题之前触发。,Triggered before the order summary card title.
-结账摘要之后,After Checkout Summary
-在订单摘要卡片底部触发。,Triggered at the bottom of the order summary card.
-结账金额行之前,Before Checkout Amount Rows
-在订单摘要金额明细行之前触发。,Triggered before the amount detail rows in the order summary.
-结账金额行之后,After Checkout Amount Rows
-在订单摘要金额明细行之后触发。,Triggered after the amount detail rows in the order summary.
-商品小计之前,Before Product Subtotal
-在商品小计行数值之前触发。,Triggered before the product subtotal row value.
-商品小计之后,After Product Subtotal
-在商品小计行数值之后触发。,Triggered after the product subtotal row value.
-运费行之前,Before Shipping Row
-在运费行数值之前触发。,Triggered before the shipping row value.
-运费行之后,After Shipping Row
-在运费行数值之后触发。,Triggered after the shipping row value.
-税费行之前,Before Tax Row
-在税费行数值之前触发。,Triggered before the tax row value.
-税费行之后,After Tax Row
-在税费行数值之后触发。,Triggered after the tax row value.
-优惠行之前,Before Discount Row
-在优惠行数值之前触发。,Triggered before the discount row value.
-优惠行之后,After Discount Row
-在优惠行数值之后触发。,Triggered after the discount row value.
-应付合计之前,Before Payable Total
-在应付合计行数值之前触发。,Triggered before the payable total row value.
-应付合计之后,After Payable Total
-在应付合计行数值之后触发。,Triggered after the payable total row value.
-订单列表内容之前,Before Order List Content
+结账摘要之前,"Before Checkout Summary"
+在订单摘要卡片标题之前触发。,"Triggered before the order summary card title."
+结账摘要之后,"After Checkout Summary"
+在订单摘要卡片底部触发。,"Triggered at the bottom of the order summary card."
+结账金额行之前,"Before Checkout Amount Rows"
+在订单摘要金额明细行之前触发。,"Triggered before the amount detail rows in the order summary."
+结账金额行之后,"After Checkout Amount Rows"
+在订单摘要金额明细行之后触发。,"Triggered after the amount detail rows in the order summary."
+商品小计之前,"Before Product Subtotal"
+在商品小计行数值之前触发。,"Triggered before the product subtotal row value."
+商品小计之后,"After Product Subtotal"
+在商品小计行数值之后触发。,"Triggered after the product subtotal row value."
+运费行之前,"Before Shipping Row"
+在运费行数值之前触发。,"Triggered before the shipping row value."
+运费行之后,"After Shipping Row"
+在运费行数值之后触发。,"Triggered after the shipping row value."
+税费行之前,"Before Tax Row"
+在税费行数值之前触发。,"Triggered before the tax row value."
+税费行之后,"After Tax Row"
+在税费行数值之后触发。,"Triggered after the tax row value."
+优惠行之前,"Before Discount Row"
+在优惠行数值之前触发。,"Triggered before the discount row value."
+优惠行之后,"After Discount Row"
+在优惠行数值之后触发。,"Triggered after the discount row value."
+应付合计之前,"Before Payable Total"
+在应付合计行数值之前触发。,"Triggered before the payable total row value."
+应付合计之后,"After Payable Total"
+在应付合计行数值之后触发。,"Triggered after the payable total row value."
+订单列表内容之前,"Before Order List Content"
 在渲染订单列表页面内容之前触发，允许其他模块在订单列表开始处注入内容（如筛选器、统计信息等）。,"Triggered before rendering the order list page content, allowing other modules to inject content at the beginning of the order list (such as filters, statistics, etc.)."
-订单列表内容之后,After Order List Content
+订单列表内容之后,"After Order List Content"
 在渲染订单列表页面内容之后触发，允许其他模块在订单列表结束处注入内容。,"Triggered after rendering the order list page content, allowing other modules to inject content at the end of the order list."
-订单详情内容之前,Before Order Detail Content
+订单详情内容之前,"Before Order Detail Content"
 在渲染订单详情页面内容之前触发，允许其他模块在订单详情开始处注入内容（如订单状态提示、操作按钮等）。,"Triggered before rendering the order detail page content, allowing other modules to inject content at the beginning of the order detail (such as order status tips, action buttons, etc.)."
-订单详情内容之后,After Order Detail Content
+订单详情内容之后,"After Order Detail Content"
 在渲染订单详情页面内容之后触发，允许其他模块在订单详情结束处注入内容（如相关推荐、评价入口等）。,"Triggered after rendering the order detail page content, allowing other modules to inject content at the end of the order detail (such as related recommendations, review entry, etc.)."
-后台订单列表筛选器,Backend Order List Filters
+后台订单列表筛选器,"Backend Order List Filters"
 在后台订单列表页面的筛选器区域注入内容，允许其他模块添加自定义筛选条件。,"Inject content into the filter area of the backend order list page, allowing other modules to add custom filter conditions."
-后台订单详情页之前,Before Backend Order Detail Page
+后台订单详情页之前,"Before Backend Order Detail Page"
 在后台订单详情页面内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。,"Inject content before the backend order detail page content, allowing other modules to add custom content at the top of the order detail page."
-后台订单详情页之后,After Backend Order Detail Page
+后台订单详情页之后,"After Backend Order Detail Page"
 在后台订单详情页面内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after the backend order detail page content, allowing other modules to add custom content at the bottom of the order detail page."
 结账,Checkout
-无效的请求方法,Invalid request method
-请先登录,Please login first
-无权操作此订单,No permission to operate this order
-订单已取消,Order cancelled
-取消订单失败：%{1},Failed to cancel order: %{1}
-确认收货地址、配送方式和支付信息后即可提交订单。,Review your shipping and payment details
-订单创建失败：%{1},Order creation failed: %{1}
-支付处理成功,Payment processed successfully
-支付处理失败：%{1},Payment processing failed: %{1}
-确认并付款,Confirm and pay
+确认收货地址、配送方式和支付信息后即可提交订单。,"Review your shipping and payment details"
+无效的请求方法,"Invalid request method"
+请先登录,"Please login first"
+无权操作此订单,"No permission to operate this order"
+订单已取消,"Order cancelled"
+取消订单失败：%{1},"Failed to cancel order: %{1}"
+订单创建失败：%{1},"Order creation failed: %{1}"
+支付处理成功,"Payment processed successfully"
+支付处理失败：%{1},"Payment processing failed: %{1}"
+确认并付款,"Confirm and pay"
 该兼容入口已停用，请从订单管理更新状态,"This compatible portal has been deactivated, please update the status from order management"
-订单管理,Order Management
+订单管理,"Order Management"
 cart,cart
-查看订单列表,View order list
+查看订单列表,"View order list"
 list,list
-查看订单详情,View Order Details
+查看订单详情,"View Order Details"
 eye,eye
-更新订单状态,Update order status
+更新订单状态,"Update order status"
 edit,edit
-结账工作台,Checkout desk
+结账工作台,"Checkout desk"
 clock,clock
-结账会话与诊断,Checkout Sessions and Diagnostics
-结账会话,Checkout session
-查看真实结账冻结会话,View real checkout freeze sessions
-结账诊断,Checkout diagnostics
+结账会话与诊断,"Checkout Sessions and Diagnostics"
+结账会话,"Checkout session"
+查看真实结账冻结会话,"View real checkout freeze sessions"
+结账诊断,"Checkout diagnostics"
 circle,circle
-查看结账会话状态和过期诊断,View checkout session status and expiration diagnostics
-支付已取消,Payment cancelled
-结账成功,Checkout Successful
-订单已支付,Order has been paid
-订单尚未完成,Order not completed
+查看结账会话状态和过期诊断,"View checkout session status and expiration diagnostics"
+支付已取消,"Payment cancelled"
+结账成功,"Checkout Successful"
+订单已支付,"Order has been paid"
+订单尚未完成,"Order not completed"
 本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。,"This checkout did not create a valid order and will not charge again on this page. Return to the cart to review items, or visit the help center for payment and shipping issues."
 待处理,Pending
 处理中,Processing
 已完成,Completed
 已取消,Cancelled
 已退款,Refunded
-待支付,Pending Payment
+待支付,"Pending Payment"
 已支付,Paid
-待发货,Pending Shipment
+待发货,"Pending Shipment"
 已发货,Shipped
 已送达,Delivered
 成功,Success
 失败,Failed
-状态待确认,Status awaiting confirmation
-订单中心,Order Center
-订单详情,Order Details
-返回我的订单,Return to my order
-订单信息,Order Information
-订单号,Order Number
-订单状态,Order Status
-订单标识,Order ID
-订单商品,Order items
-暂无商品明细,No product details yet
-订单商品明细,Order product details
-产品名称,Product Name
+状态待确认,"Status awaiting confirmation"
+订单中心,"Order Center"
+订单详情,"Order Details"
+返回我的订单,"Return to my order"
+订单信息,"Order Information"
+订单号,"Order Number"
+订单状态,"Order Status"
+订单标识,"Order ID"
+订单商品,"Order items"
+暂无商品明细,"No product details yet"
+订单商品明细,"Order product details"
+产品名称,"Product Name"
 SKU,SKU
 数量,Quantity
-单价,Unit Price
+单价,"Unit Price"
 小计,Subtotal
-未命名商品,Unnamed product
-费用明细,Cost Details
+未命名商品,"Unnamed product"
+费用明细,"Cost Details"
 商品小计,Subtotal
-运费,Shipping Fee
+运费,"Shipping Fee"
 税费,Tax
-订单总额,Total Amount
-我的订单,My Orders
-暂无订单,No Orders
-支付状态,Payment Status
-创建时间,Created Time
-查看详情,View Details
-取消订单,Cancel Order
-确定要取消此订单吗？,Are you sure you want to cancel this order?
-确定取消,Confirm cancellation
-保留订单,reserve order
+订单总额,"Total Amount"
+我的订单,"My Orders"
+暂无订单,"No Orders"
+支付状态,"Payment Status"
+创建时间,"Created Time"
+查看详情,"View Details"
+取消订单,"Cancel Order"
+确定要取消此订单吗？,"Are you sure you want to cancel this order?"
+确定取消,"Confirm cancellation"
+保留订单,"reserve order"
 取消订单失败，请稍后重试,"Failed to cancel order, please try again later"
 优惠,Discount
-该支付此前已取消，无需再次操作。,This payment was already cancelled. No further action is needed.
-本次支付未完成，订单尚未付款。可继续支付或稍后再试。,This payment was not completed and the order is unpaid. You can continue to pay or try again later.
-该笔订单已完成扣款，无需再次付款。,This order has already been charged. No further payment is needed.
-感谢您的订购！,Thank you for your order!
+该支付此前已取消，无需再次操作。,"This payment was already cancelled. No further action is needed."
+本次支付未完成，订单尚未付款。可继续支付或稍后再试。,"This payment was not completed and the order is unpaid. You can continue to pay or try again later."
+该笔订单已完成扣款，无需再次付款。,"This order has already been charged. No further payment is needed."
+感谢您的订购！,"Thank you for your order!"
 您的订单已支付成功，我们正在为您准备发货。,"Your order has been successfully paid for, and we are preparing for shipment."
-确认信息将发送至,The confirmation information will be sent to
-配送地址,Delivery address
-结账地址,Checkout address
-与配送地址相同,Same as shipping address
-配送方式,Shipping Method
-预计 2–5 个工作日内发货,Expected to ship within 2–5 business days
-订单操作,Order actions
-继续支付,Continue payment
-返回购物车,Back to cart
-继续购物,continue shopping
-正在加载结账信息...,Loading checkout information...
-正在更新配送方式...,Updating shipping method...
+确认信息将发送至,"The confirmation information will be sent to"
+配送地址,"Delivery address"
+结账地址,"Checkout address"
+与配送地址相同,"Same as shipping address"
+配送方式,"Shipping Method"
+"预计 2–5 个工作日内发货","Expected to ship within 2–5 business days"
+订单操作,"Order actions"
+继续支付,"Continue payment"
+返回购物车,"Back to cart"
+继续购物,"continue shopping"
+正在加载结账信息...,"Loading checkout information..."
+正在更新配送方式...,"Updating shipping method..."
 结账信息加载失败，请稍后重试。,"Checkout information failed to load, please try again later."
-提交订单,Submit order
-正在提交订单...,Submitting order...
-订单已创建，正在继续支付。,Order created. Continuing to payment.
-订单已创建，支付仍在处理中。,Your order was created and payment is still processing.
+提交订单,"Submit order"
+正在提交订单...,"Submitting order..."
+订单已创建，正在继续支付。,"Order created. Continuing to payment."
+订单已创建，支付仍在处理中。,"Your order was created and payment is still processing."
 订单已创建，但支付未完成。您可以重试支付，不会重复下单。,"Your order was created, but payment was not completed. You can retry without creating another order."
-重试支付,Retry payment
-正在继续支付未完成订单,Continuing payment for an unfinished order
-正在继续支付未完成订单。,Continuing payment for an unfinished order.
-请补全收货信息后再支付。,Please complete your shipping details before paying.
-正在继续支付...,Continuing payment...
-正在重试支付...,Retrying payment...
-订单编号,Order reference
-Weline.Api 尚未就绪，请刷新页面后重试。,"Weline.Api is not ready yet, please refresh the page and try again."
-无法恢复购物车会话，请刷新页面后重试。,Unable to restore the cart session. Please refresh the page and try again.
-查看规格图,View option image
+重试支付,"Retry payment"
+正在继续支付未完成订单,"Continuing payment for an unfinished order"
+正在继续支付未完成订单。,"Continuing payment for an unfinished order."
+请补全收货信息后再支付。,"Please complete your shipping details before paying."
+正在继续支付...,"Continuing payment..."
+正在重试支付...,"Retrying payment..."
+订单编号,"Order reference"
+"Weline.Api 尚未就绪，请刷新页面后重试。","Weline.Api is not ready yet, please refresh the page and try again."
+无法恢复购物车会话，请刷新页面后重试。,"Unable to restore the cart session. Please refresh the page and try again."
+购物车会话尚未对齐，请刷新后重试。若仍看到空车，请返回购物车确认商品。,"Your cart session is not aligned yet. Please refresh and try again. If the cart still looks empty, return to the cart to confirm your items."
+查看规格图,"View option image"
 关闭,Close
-切换结账,Switch checkout
-安全结账,Secure checkout
+切换结账,"Switch checkout"
+安全结账,"Secure checkout"
 零售,Retail
-暂时无法结账,Unable to checkout at the moment
-购物车是空的,Shopping cart is empty
+暂时无法结账,"Unable to checkout at the moment"
+购物车是空的,"Shopping cart is empty"
 先选择需要采购的商品，再回来完成配送与支付。,"First select the products you want to purchase, then come back to complete delivery and payment."
-返回选购,Return to shopping
-查看购物车,View cart
-订单已创建,Order created
-支付状态待确认,Payment status pending confirmation
-快捷支付,Express checkout
-收货信息,Receiving information
-结账收货地址,Checkout shipping address
-结账税号,Checkout tax ID
-正在加载配送方式...,Loading shipping methods...
-支付方式,Payment Method
-正在加载支付方式...,Loading payment methods...
-订单摘要,Order summary
-关税与税费（预估）,Duties & taxes (estimate)
-应付合计,Total payable
-优惠与留言,Discounts and notes
-结账优惠券,Checkout coupon
-结账订单留言,Checkout order note
-结账批发信用,Checkout wholesale credit
-结账帮我付,Checkout pay-for-me
-本次应付定金,Deposit due now
+返回选购,"Return to shopping"
+查看购物车,"View cart"
+订单已创建,"Order created"
+支付状态待确认,"Payment status pending confirmation"
+快捷支付,"Express checkout"
+收货信息,"Receiving information"
+结账收货地址,"Checkout shipping address"
+结账税号,"Checkout tax ID"
+正在加载配送方式...,"Loading shipping methods..."
+支付方式,"Payment Method"
+正在加载支付方式...,"Loading payment methods..."
+订单摘要,"Order summary"
+优惠与留言,"Discounts and notes"
+结账优惠券,"Checkout coupon"
+结账订单留言,"Checkout order note"
+结账批发信用,"Checkout wholesale credit"
+关税与税费（预估）,"Duties & taxes (estimate)"
+支付方式优惠,"Payment method discount"
+应付合计,"Total payable"
+结账帮我付,"Checkout pay-for-me"
+本次应付定金,"Deposit due now"
 购物车中有不可结算的商品，请返回购物车移除后重试,"Cart has items that cannot be checked out; return to the cart, remove them, and retry"
 请确认收货信息、配送方式和支付方式。,"Please confirm the delivery information, delivery method and payment method."
-错误代码,Error code
-重试结算,Retry checkout
-返回结账,Return to checkout
-查看帮助中心,View help center
-该笔快捷支付已完成扣款,This express payment has already been charged
-尚未扣款，确认后向支付商收款,Not charged yet; capture with the payment provider after confirmation
-该笔订单已支付，无需再次确认,This order is already paid; no further confirmation needed
-支付已完成，可返回首页或查看账户订单。,Payment complete. Return home or view account orders.
-查看订单,View order
-返回首页,Back to home
-请确认收货地址；不对可更换或新增,Confirm the shipping address; replace or add one if it is wrong
-请补全信息,Please complete the required information
+错误代码,"Error code"
+重试结算,"Retry checkout"
+返回结账,"Return to checkout"
+查看帮助中心,"View help center"
+该笔快捷支付已完成扣款,"This express payment has already been charged"
+尚未扣款，确认后向支付商收款,"Not charged yet; capture with the payment provider after confirmation"
+该笔订单已支付，无需再次确认,"This order is already paid; no further confirmation needed"
+支付已完成，可返回首页或查看账户订单。,"Payment complete. Return home or view account orders."
+查看订单,"View order"
+返回首页,"Back to home"
+请确认收货地址；不对可更换或新增,"Confirm the shipping address; replace or add one if it is wrong"
+请补全信息,"Please complete the required information"
 电话,Telephone
 邮箱,Mail
-该地区暂不支持配送,Shipping is not available for this region
-应付,Amount due
+该地区暂不支持配送,"Shipping is not available for this region"
+应付,"Amount due"
 取消,Cancel
-China,China
-国家/地区,Country/Region
-搜索国家/地区,Search country/region
-自动定位,Auto-detect
-当前国家暂无地址，可直接快速新增。,No addresses for this country yet. You can add one quickly.
-当前国家暂无地址。,No addresses for the current country.
+当前国家暂无地址，可直接快速新增。,"No addresses for this country yet. You can add one quickly."
+当前国家暂无地址。,"No addresses for the current country."
 匿名,Guest
-已登录地址,Saved address
-国家已切换,Country updated
-地址已保存并应用,Address saved and applied
-地址保存失败,Failed to save address
-加载失败,Failed to load
-地址已应用到结账,Address applied to checkout
-地址选择失败,Failed to select address
-国家切换失败,Failed to switch country
-自动定位不可用，请手动选择国家并完善地址。,Auto-detect is unavailable. Please select a country and complete the address.
-自动定位可用位置，但反查地址服务不可用，请手动完善地址并保存。,Location found
-自动定位反查地址失败，请手动完善地址并保存。,Reverse geocoding failed. Please complete and save the address.
-定位完成，但当前未启用地址添加模块。,Location completed
-定位完成，已自动选择国家/省市区，请补全收货人信息并保存。,Location applied. Country/region cascade selected. Please complete recipient details and save.
-自动定位失败，请手动选择国家并完善地址。,Auto-detect failed. Please select a country and complete the address.
+已登录地址,"Saved address"
+国家已切换,"Country updated"
+地址已保存并应用,"Address saved and applied"
+地址保存失败,"Failed to save address"
+加载失败,"Failed to load"
+地址已应用到结账,"Address applied to checkout"
+地址选择失败,"Failed to select address"
+国家切换失败,"Failed to switch country"
+自动定位不可用，请手动选择国家并完善地址。,"Auto-detect is unavailable. Please select a country and complete the address."
+自动定位可用位置，但反查地址服务不可用，请手动完善地址并保存。,"Location found"
+自动定位反查地址失败，请手动完善地址并保存。,"Reverse geocoding failed. Please complete and save the address."
+定位完成，但当前未启用地址添加模块。,"Location completed"
+定位完成，已自动选择国家/省市区，请补全收货人信息并保存。,"Location applied. Country/region cascade selected. Please complete recipient details and save."
+自动定位失败，请手动选择国家并完善地址。,"Auto-detect failed. Please select a country and complete the address."
 全部,All
-请输入订单号,Please enter order number
+请输入订单号,"Please enter order number"
 搜索,Search
-客户ID,Customer ID
+客户ID,"Customer ID"
 操作,Actions
 查看,View
-配送状态,Shipping Status
-订单项,Order Items
-总价,Total Price
+配送状态,"Shipping Status"
+订单项,"Order Items"
+总价,"Total Price"
 折扣,Discount
-返回列表,Back to List
-订单确认,Order confirmation
-订单提交成功！,Order submitted successfully!
-订单号：,Order number:
+返回列表,"Back to List"
+订单确认,"Order confirmation"
+订单提交成功！,"Order submitted successfully!"
+订单号：,"Order number:"
 这里是单页结账的表单区域。接入结账模块后，会替换为真实地址、配送、支付和确认步骤。,"This is the single-page checkout form area. After the checkout module is connected, it will be replaced with real address, shipping, payment, and confirmation steps."
-联系信息与收货地址,Contact details and shipping address
-支付与订单确认,Payment and order confirmation
-摘要 slot，可由结账模块写入真实商品行与金额。,Summary slot; the checkout module can write real line items and amounts.
+联系信息与收货地址,"Contact details and shipping address"
+支付与订单确认,"Payment and order confirmation"
+"摘要 slot，可由结账模块写入真实商品行与金额。","Summary slot; the checkout module can write real line items and amounts."
 商品,Items
 配送,Shipping
 合计,Total
-错误代码：,Error code:
-正在前往结账...,Proceeding to checkout...
-结账准备失败,Checkout preparation failed
-立即结账,Proceed to checkout
-订单列表,order list
-订单号关键词,Order number keyword
-全部状态,All status
-全部支付状态,All payment status
+错误代码：,"Error code:"
+正在前往结账...,"Proceeding to checkout..."
+结账准备失败,"Checkout preparation failed"
+立即结账,"Proceed to checkout"
+订单列表,"order list"
+订单号关键词,"Order number keyword"
+全部状态,"All status"
+全部支付状态,"All payment status"
 状态,state
 金额,Amount
-第 %{1} / %{2} 页，共 %{3} 条,"Page %{1} / %{2}, total %{3} items"
-选配中,Choosing options
+"第 %{1} / %{2} 页，共 %{3} 条","Page %{1} / %{2}, total %{3} items"
+选配中,"Choosing options"
 正在提交,Submitting
 已下单,Ordered
-看买家卡在哪一步：缺重量、缺汇率或地址还送不到。技术码收在明细里。,See where shoppers got stuck. Technical codes stay in the details.
-结账进度,Checkout progress
-全部进度,All progress
-结账来源,Checkout source
-全部来源,All sources
+看买家卡在哪一步：缺重量、缺汇率或地址还送不到。技术码收在明细里。,"See where shoppers got stuck. Technical codes stay in the details."
+结账进度,"Checkout progress"
+全部进度,"All progress"
+结账来源,"Checkout source"
+全部来源,"All sources"
 未标记,Unmarked
-只看卡住的结账,Only stuck checkouts
+只看卡住的结账,"Only stuck checkouts"
 筛选,filter
 来源,Source
 问题,Issue
 去向,Destination
 进度,Progress
-发生时间,Occurred at
+发生时间,"Occurred at"
 货币,currency
 凭证,Reference
-还没有结账记录,No checkout records yet
+还没有结账记录,"No checkout records yet"
 正常,OK
-去向未记录,Destination not recorded
+去向未记录,"Destination not recorded"
 卡住了,Stuck
-没有异常,No issue
+没有异常,"No issue"
 货号,SKU
 重量,Weight
-技术明细,Technical details
+技术明细,"Technical details"
 看当前样本里各进度有多少、哪些快过期。只读统计，不改数据。卡住原因请到「结账会话」看。,"See how many sessions are in each progress state and which are near expiry. Read-only stats; does not change data. For stuck reasons, open “Checkout sessions”."
-打开结账会话,Open checkout sessions
-进度样本,Progress sample
-最近会话,recent conversations
-按创建时间倒序；同凭证只显示一条,Newest first by creation time; one row per credential
+打开结账会话,"Open checkout sessions"
+进度样本,"Progress sample"
+最近会话,"recent conversations"
+按创建时间倒序；同凭证只显示一条,"Newest first by creation time; one row per credential"
 创建,Created
 有效期,Expires
-暂无可诊断会话,No diagnostic sessions available yet
+暂无可诊断会话,"No diagnostic sessions available yet"
 已过期,Expired
 未知,Unknown
-未设过期,No expiry set
-还剩 %{1} 分钟,%{1} minutes left
-还剩 %{1} 小时,%{1} hours left
-还剩 %{1} 天,%{1} days left
-商品缺少重量,Item is missing weight
-缺少运费汇率,Shipping FX rate missing
-该地址暂无配送,No shipping to this address
-购物车不可结算,Cart cannot be checked out
-冻结报价失败,Could not freeze quote
-提交订单失败,Could not submit order
-目录没填重量，补上后买家才能算出运费。,Catalog weight is missing. Fill it in so shipping can be quoted.
+未设过期,"No expiry set"
+"还剩 %{1} 分钟","%{1} minutes left"
+"还剩 %{1} 小时","%{1} hours left"
+"还剩 %{1} 天","%{1} days left"
+商品缺少重量,"Item is missing weight"
+缺少运费汇率,"Shipping FX rate missing"
+该地址暂无配送,"No shipping to this address"
+购物车不可结算,"Cart cannot be checked out"
+冻结报价失败,"Could not freeze quote"
+提交订单失败,"Could not submit order"
+目录没填重量，补上后买家才能算出运费。,"Catalog weight is missing. Fill it in so shipping can be quoted."
 运费汇率还没配好，先补汇率再让买家重试。,"Shipping FX is missing. Add the rate, then ask the shopper to retry."
-这个地址目前送不到，核对配送范围或请买家改地址。,This address cannot be shipped to yet. Check coverage or ask the shopper to change it.
-购物车被拦住了，先处理拦截原因再让买家继续。,The cart is blocked. Clear the blocker before the shopper continues.
-报价没冻住，让买家刷新结账页再试。,The quote did not freeze. Ask the shopper to refresh checkout.
-订单没提交成功，打开技术明细或请买家重试。,The order did not submit. Open technical details or ask the shopper to retry.
-未填写,Not filled in
-该商品已不存在或已下架，请从购物车移除,This product no longer exists or is delisted; please remove it from the cart
-该商品暂不可售，请从购物车移除或稍后再试,This product is temporarily unavailable; remove it from the cart or try again later
-展开简介,Show more
-收起,Show less
-暂无可用配送方式。,There are currently no shipping methods available.
-暂无可用支付方式,No payment methods available
-暂无可用配送方式,No shipping methods available
-订单无法取消,Order cannot be cancelled
-订单ID不能为空,Order ID cannot be empty
-支付方式不能为空,Payment method cannot be empty
-支付金额无效,Payment amount is invalid
-Order %{1},Order %{1}
-Checkout order %{1},Checkout order %{1}
-续付凭据不完整,Incomplete continue-pay credential
-无权继续支付该订单,Not allowed to continue paying this order
-结账会话不可用于继续支付,Checkout session cannot be used for continue-pay
-订单不存在或不可用,Order does not exist or is unavailable
-订单已不可继续支付,Order can no longer continue payment
-订单商品信息暂不可用。,Order item information is temporarily unavailable.
-批发快捷支付请使用完整结账,Wholesale express checkout requires full checkout
-请选择支付方式,Please select a payment method
-购物车为空,Cart is empty
+这个地址目前送不到，核对配送范围或请买家改地址。,"This address cannot be shipped to yet. Check coverage or ask the shopper to change it."
+购物车被拦住了，先处理拦截原因再让买家继续。,"The cart is blocked. Clear the blocker before the shopper continues."
+报价没冻住，让买家刷新结账页再试。,"The quote did not freeze. Ask the shopper to refresh checkout."
+订单没提交成功，打开技术明细或请买家重试。,"The order did not submit. Open technical details or ask the shopper to retry."
+未填写,"Not filled in"
+该商品已不存在或已下架，请从购物车移除,"This product no longer exists or is delisted; please remove it from the cart"
+该商品暂不可售，请从购物车移除或稍后再试,"This product is temporarily unavailable; remove it from the cart or try again later"
+展开简介,"Show more"
+收起,"Show less"
+暂无可用配送方式。,"There are currently no shipping methods available."
+暂无可用支付方式,"No payment methods available"
+暂无可用配送方式,"No shipping methods available"
+订单无法取消,"Order cannot be cancelled"
+订单ID不能为空,"Order ID cannot be empty"
+支付方式不能为空,"Payment method cannot be empty"
+支付金额无效,"Payment amount is invalid"
+"Order %{1}","Order %{1}"
+"Checkout order %{1}","Checkout order %{1}"
+续付凭据不完整,"Incomplete continue-pay credential"
+无权继续支付该订单,"Not allowed to continue paying this order"
+结账会话不可用于继续支付,"Checkout session cannot be used for continue-pay"
+订单不存在或不可用,"Order does not exist or is unavailable"
+订单已不可继续支付,"Order can no longer continue payment"
+订单商品信息暂不可用。,"Order item information is temporarily unavailable."
+批发快捷支付请使用完整结账,"Wholesale express checkout requires full checkout"
+请选择支付方式,"Please select a payment method"
+购物车为空,"Cart is empty"
 当前地区暂无可用配送，请调整地址后重试或使用完整结账,"No shipping available for this region; adjust the address and retry, or use full checkout"
-无法冻结结账报价,Unable to freeze checkout quote
-报价令牌缺失,Quote token missing
-快捷支付下单失败,Express checkout order failed
-请在支付商窗口完成授权,Please complete authorization in the payment provider window
-商品暂不可售,Product temporarily unavailable
-无法更新订单金额,Unable to update order amount
-无法定位支付交易上下文,Unable to locate payment transaction context
-确认扣款未完成，请重试或改用完整结账,Capture confirmation incomplete; retry or switch to full checkout
-确认成功,Confirmed successfully
-已取消快捷支付,Express checkout cancelled
-该笔订单已支付,This order is already paid
-缺少支付单号,Missing payment reference
-找不到快捷支付订单,Express checkout order not found
-快捷支付单尚未创建，请返回商品页重试,Express checkout order not created yet; return to the product page and retry
-无法解析支付单号,Unable to parse payment reference
-交易不存在,Transaction does not exist
-无权查看该支付,Not allowed to view this payment
-客户ID不能为空,Customer ID cannot be empty
-订单项不能为空,Order items cannot be empty
-订单项 %{1} 的产品ID不能为空,Product ID of order item %{1} cannot be empty
-订单项 %{1} 的数量必须大于0,Quantity of order item %{1} must be greater than 0
-订单项 %{1} 的价格无效,Price of order item %{1} is invalid
-订单项 %{1} 暂不可售,Line item %{1} is currently unavailable for sale
-收货地址不能为空,Shipping address cannot be empty
-混合业务订单,Mixed business orders
-多个不能共同收取运费的法务主体，当前阶段禁止结账,Multiple legal entities that cannot jointly collect freight are prohibited from settling accounts at this stage.
-匿名结账需要填写有效邮箱。,Guest checkout requires a valid email address.
-结账行不能为空,Checkout line cannot be empty
-结账币种缺失,Checkout currency missing
+无法冻结结账报价,"Unable to freeze checkout quote"
+报价令牌缺失,"Quote token missing"
+快捷支付下单失败,"Express checkout order failed"
+请在支付商窗口完成授权,"Please complete authorization in the payment provider window"
+商品暂不可售,"Product temporarily unavailable"
+无法更新订单金额,"Unable to update order amount"
+无法定位支付交易上下文,"Unable to locate payment transaction context"
+确认扣款未完成，请重试或改用完整结账,"Capture confirmation incomplete; retry or switch to full checkout"
+确认成功,"Confirmed successfully"
+已取消快捷支付,"Express checkout cancelled"
+该笔订单已支付,"This order is already paid"
+缺少支付单号,"Missing payment reference"
+找不到快捷支付订单,"Express checkout order not found"
+快捷支付单尚未创建，请返回商品页重试,"Express checkout order not created yet; return to the product page and retry"
+无法解析支付单号,"Unable to parse payment reference"
+交易不存在,"Transaction does not exist"
+无权查看该支付,"Not allowed to view this payment"
+客户ID不能为空,"Customer ID cannot be empty"
+订单项不能为空,"Order items cannot be empty"
+"订单项 %{1} 的产品ID不能为空","Product ID of order item %{1} cannot be empty"
+"订单项 %{1} 的数量必须大于0","Quantity of order item %{1} must be greater than 0"
+"订单项 %{1} 的价格无效","Price of order item %{1} is invalid"
+"订单项 %{1} 暂不可售","Line item %{1} is currently unavailable for sale"
+收货地址不能为空,"Shipping address cannot be empty"
+混合业务订单,"Mixed business orders"
+多个不能共同收取运费的法务主体，当前阶段禁止结账,"Multiple legal entities that cannot jointly collect freight are prohibited from settling accounts at this stage."
+匿名结账需要填写有效邮箱。,"Guest checkout requires a valid email address."
+结账行不能为空,"Checkout line cannot be empty"
+结账币种缺失,"Checkout currency missing"
 运费配置版本已变更，请重新报价确认,"The freight configuration version has changed, please re-quote and confirm."
-运费报价已被篡改，请重新选择配送方案,Shipping quote was tampered with; select a shipping option again
-货源运费暂不可用，请稍后重试,Source shipping is temporarily unavailable; please try again later
-quote_token 不能为空,quote_token cannot be empty
-idempotency_key 长度须为 1..128,idempotency_key length must be 1..128
-报价会话不存在或已失效,The quote session does not exist or has expired
-报价会话已由其它幂等键提交,The quote session has been submitted by another idempotent key
+运费报价已被篡改，请重新选择配送方案,"Shipping quote was tampered with; select a shipping option again"
+货源运费暂不可用，请稍后重试,"Source shipping is temporarily unavailable; please try again later"
+"quote_token 不能为空","quote_token cannot be empty"
+"idempotency_key 长度须为 1..128","idempotency_key length must be 1..128"
+报价会话不存在或已失效,"The quote session does not exist or has expired"
+报价会话已由其它幂等键提交,"The quote session has been submitted by another idempotent key"
 报价会话正在提交，请使用相同幂等键重试,"Quote session is being submitted, please try again using the same idempotent key"
-当前登录身份与报价会话不一致,The current login identity is inconsistent with the quotation session
+当前登录身份与报价会话不一致,"The current login identity is inconsistent with the quotation session"
 配置版本已变更，请重新报价确认,"The configuration version has changed, please re-quote for confirmation."
-需配送商品缺少可预占的 Offer ID,The product that needs to be delivered lacks the offer ID that can be reserved.
-买方税号校验未通过，请检查税号格式,Buyer tax ID validation failed; check the tax ID format
-客户端金额字段被拒绝：%{1},Client amount field rejected: %{1}
-客户端交易事实字段被拒绝：%{1},Client transaction fact field rejected: %{1}
-库存能力不可用，结账已阻断,Inventory capacity is unavailable and checkout is blocked
-已提交报价会话缺少冻结结果,Submitted quote session is missing frozen results
-批发结账禁止优惠与券,Wholesale checkout disallows discounts and coupons
-折扣报价已失效，请重新报价确认,Discount quote expired. Please requote to confirm.
-当前支付方式「%{1}」不支持已选优惠方式：%{2},Payment method “%{1}” does not support the selected discount method: %{2}
-已支付订单不可修改,Paid orders cannot be modified
-请选择国家/地区,Please select a country/region
-请选择配送地址,Please select a shipping address
-地址不存在,Address not found
-当前地址暂不可配送，请更换收货地址。,This address cannot be shipped to. Please choose another delivery address.
-该地址所在地区暂不支持配送（禁运）。,This address is in an embargoed area and cannot be shipped to.
-本地测试支付,Local test payment
-仅用于本地开发验证，不会产生真实扣款。,For local development verification only; no real charge is made.
-货到付款,Cash on delivery
-万能结账,Universal checkout
-快捷购买,Express buy
-找朋友代付,Ask a friend to pay
-收货地 %{1} 本身通常可送达时，原因一般不在国家。,"When destination %{1} is normally deliverable, the cause is usually not the country."
-暂时无法计算运费,Unable to calculate shipping right now
+"需配送商品缺少可预占的 Offer ID","The product that needs to be delivered lacks the offer ID that can be reserved."
+买方税号校验未通过，请检查税号格式,"Buyer tax ID validation failed; check the tax ID format"
+客户端金额字段被拒绝：%{1},"Client amount field rejected: %{1}"
+客户端交易事实字段被拒绝：%{1},"Client transaction fact field rejected: %{1}"
+库存能力不可用，结账已阻断,"Inventory capacity is unavailable and checkout is blocked"
+已提交报价会话缺少冻结结果,"Submitted quote session is missing frozen results"
+批发结账禁止优惠与券,"Wholesale checkout disallows discounts and coupons"
+折扣报价已失效，请重新报价确认,"Discount quote expired. Please requote to confirm."
+当前支付方式「%{1}」不支持已选优惠方式：%{2},"Payment method “%{1}” does not support the selected discount method: %{2}"
+已支付订单不可修改,"Paid orders cannot be modified"
+请选择国家/地区,"Please select a country/region"
+请选择配送地址,"Please select a shipping address"
+地址不存在,"Address not found"
+当前地址暂不可配送，请更换收货地址。,"This address cannot be shipped to. Please choose another delivery address."
+该地址所在地区暂不支持配送（禁运）。,"This address is in an embargoed area and cannot be shipped to."
+本地测试支付,"Local test payment"
+仅用于本地开发验证，不会产生真实扣款。,"For local development verification only; no real charge is made."
+货到付款,"Cash on delivery"
+万能结账,"Universal checkout"
+快捷购买,"Express buy"
+找朋友代付,"Ask a friend to pay"
+"收货地 %{1} 本身通常可送达时，原因一般不在国家。","When destination %{1} is normally deliverable, the cause is usually not the country."
+暂时无法计算运费,"Unable to calculate shipping right now"
 购物车中有商品缺少重量，国际运费需按重量计算，因此目前无法报价。请联系客服协助补全商品重量后再结账。,"Some items in your cart are missing weight. International shipping is calculated by weight, so we cannot quote yet. Please contact support to complete product weights before checkout."
 需配送的商品缺少长宽高尺寸，体积重量无法计算。请联系客服补全尺寸后再试。,"Shippable items are missing length/width/height, so dimensional weight cannot be calculated. Please contact support to complete dimensions and try again."
-超出可配送重量,Exceeds shippable weight
+超出可配送重量,"Exceeds shippable weight"
 订单计费重量超过当前配送方案上限。请减少件数、拆成多笔订单，或联系客服改用重货方案。,"The chargeable weight exceeds the limit for current shipping options. Please reduce quantity, split into multiple orders, or contact support for heavy-cargo options."
-当前结账币种暂时无法换算运费。请切换币种，或联系客服协助处理。,Shipping cannot be converted for the current checkout currency. Please switch currency or contact support.
-当前地址暂无可用配送,No shipping available for this address
+当前结账币种暂时无法换算运费。请切换币种，或联系客服协助处理。,"Shipping cannot be converted for the current checkout currency. Please switch currency or contact support."
+当前地址暂无可用配送,"No shipping available for this address"
 收货地址暂未匹配到可用的配送服务。请确认国家或地区是否正确，或联系客服确认是否可送达。,"No shipping service matched this address. Please confirm the country or region, or contact support about delivery coverage."
-当前收货国家：%{1}。,Current destination country: %{1}.
+当前收货国家：%{1}。,"Current destination country: %{1}."
 系统暂未返回可用的配送方案。请确认收货地址与商品信息，或联系客服了解具体原因（常见如商品缺重量/尺寸，或目的地限制）。,"No shipping options were returned. Please confirm the shipping address and product details, or contact support (common causes: missing weight/dimensions, or destination restrictions)."
-本次支付未完成，订单尚未付款。可返回结账重新选择支付方式。,This payment was not completed and the order is unpaid. Return to checkout to choose another payment method.
-结算结果,Checkout result
-订单提交失败,Order submission failed
+China,China
+国家/地区,Country/Region
+搜索国家/地区,"Search country/region"
+自动定位,Auto-detect
+本次支付未完成，订单尚未付款。可返回结账重新选择支付方式。,"This payment was not completed and the order is unpaid. Return to checkout to choose another payment method."
+结算结果,"Checkout result"
+订单提交失败,"Order submission failed"
 很抱歉，您的订单提交失败，请稍后重试。,"Sorry, your order could not be submitted. Please try again later."
-重试提交,Retry submit
-联系客服,Contact support
+重试提交,"Retry submit"
+联系客服,"Contact support"
 温馨提示：,Tips:
-请检查您的网络连接是否正常,Please check that your network connection is working
-请确认您的支付信息是否正确,Please confirm that your payment details are correct
+请检查您的网络连接是否正常,"Please check that your network connection is working"
+请确认您的支付信息是否正确,"Please confirm that your payment details are correct"
 如问题持续存在，请联系客服寻求帮助,"If the problem persists, contact support for help"
-已取消成功,Cancelled successfully
-该支付已取消，无需再次操作。,This payment is already cancelled. No further action is needed.
-支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。,Payment cancelled successfully. The order is not paid yet. You can return to checkout and choose a payment method again.
-返回订单列表,Back to Order List
+已取消成功,"Cancelled successfully"
+该支付已取消，无需再次操作。,"This payment is already cancelled. No further action is needed."
+支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。,"Payment cancelled successfully. The order is not paid yet. You can return to checkout and choose a payment method again."
+返回订单列表,"Back to Order List"
 当前地址下所选配送方案不可用，请调整收货地址或商品，或联系客服协助处理。,"No shipping options are available for this address. Please change the address or items, or contact support."
-当前币种缺少运费汇率，部分配送暂不可用。请切换币种或联系客服协助处理。,Shipping is temporarily unavailable because a freight FX rate is missing. Please switch currency or contact customer service.
+当前币种缺少运费汇率，部分配送暂不可用。请切换币种或联系客服协助处理。,"Shipping is temporarily unavailable because a freight FX rate is missing. Please switch currency or contact customer service."
 购物车商品缺少重量，无法计算运费。请联系客服协助处理后再试。,"Cart items are missing weight, so shipping cannot be calculated. Please contact customer service for help."
-货到付款手续费,Cash on delivery fee
-批发定金,Wholesale deposit
-批发信用抵扣,Wholesale credit applied
-还剩 %d 分钟,%d minutes left
-还剩 %d 小时,%d hours left
-还剩 %d 天,%d days left
+货到付款手续费,"Cash on delivery fee"
+批发定金,"Wholesale deposit"
+批发信用抵扣,"Wholesale credit applied"
+"还剩 %d 分钟","%d minutes left"
+"还剩 %d 小时","%d hours left"
+"还剩 %d 天","%d days left"
 统计来自当前结账会话样本，不执行迁移或写操作。,"Statistics are from a sample of the current checkout session, no migration or write operations were performed."
-Quote Token,Quote Token
-过期时间,Expiration time
+"Quote Token","Quote Token"
+过期时间,"Expiration time"
 中国,China
-美国,United States
-英国,United Kingdom
+美国,"United States"
+英国,"United Kingdom"
 澳大利亚,Australia
 加拿大,Canada
 日本,Japan
-韩国,South Korea
+韩国,"South Korea"
 德国,Germany
 法国,France
-沙特阿拉伯,Saudi Arabia
-阿联酋,United Arab Emirates
-仅异常,Errors only
-会话 ID,Session ID
-错误码,Error code
-错误时间,Error time
-配置版本,Configuration version
-暂无结账会话,No checkout session yet
-当前异常快照,Current error snapshot
-暂无异常快照,No error snapshot
-freezeAndQuote 在本站 Shipping 报价成功后触发；Observer 可按货源试算改写 amount_minor / packages。试算失败软降级为本站运费，不阻断结账。,Fires after freezeAndQuote succeeds with local Shipping quotes; Observer may rewrite amount_minor / packages from source trial quotes. Trial failures soft-fall back to local shipping without blocking checkout.
+沙特阿拉伯,"Saudi Arabia"
+阿联酋,"United Arab Emirates"
+仅异常,"Errors only"
+"会话 ID","Session ID"
+错误码,"Error code"
+错误时间,"Error time"
+配置版本,"Configuration version"
+暂无结账会话,"No checkout session yet"
+当前异常快照,"Current error snapshot"
+暂无异常快照,"No error snapshot"
+"freezeAndQuote 在本站 Shipping 报价成功后触发；Observer 可按货源试算改写 amount_minor / packages。试算失败软降级为本站运费，不阻断结账。","Fires after freezeAndQuote succeeds with local Shipping quotes; Observer may rewrite amount_minor / packages from source trial quotes. Trial failures soft-fall back to local shipping without blocking checkout."
 收货地址（支付商带回，只读）,"Shipping address (from payment provider, read-only)"
-缺少交易号,Missing transaction ID
-支付交易不存在,Payment transaction does not exist
-当前交易不是待确认的快捷支付,Current transaction is not a pending express-payment confirmation
-更新订单失败,Failed to update order
-请补全必要联系信息,Please complete the required contact information
-支付方式不可用,Payment method unavailable
-确认收款失败，请重试,Capture confirmation failed; please retry
-当前支付方式不支持已选优惠方式：%{1},The selected payment method does not support the chosen discount: %{1}
-预计 %{1}-%{2} 天,Estimated %{1}-%{2} days
-立即购买,Buy Now
-感谢您的购买！您的订单已成功创建。,Thank you for your purchase! Your order has been created successfully.
+缺少交易号,"Missing transaction ID"
+支付交易不存在,"Payment transaction does not exist"
+当前交易不是待确认的快捷支付,"Current transaction is not a pending express-payment confirmation"
+更新订单失败,"Failed to update order"
+请补全必要联系信息,"Please complete the required contact information"
+支付方式不可用,"Payment method unavailable"
+确认收款失败，请重试,"Capture confirmation failed; please retry"
+当前支付方式不支持已选优惠方式：%{1},"The selected payment method does not support the chosen discount: %{1}"
+"预计 %{1}-%{2} 天","Estimated %{1}-%{2} days"
+立即购买,"Buy Now"
+感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
 收货人,consignee
-国家/地区代码,Country code
+国家/地区代码,"Country code"
 省/州,Province/State
 城市,City
-详细地址,Detailed address
-邮编,post code
-配送至,Ship to
-快速添加地址,Quick add address
-保存并使用,Save and use
-定位能力不可用,Location services unavailable
-自动定位失败,Automatic location failed
-已使用自动定位地址,Using automatically detected address
-订单已创建，正在打开结果页面。,The order has been created and the results page is opening.
-订单已创建。,The order has been created.
-当前请求没有可结账的 Storefront Scope,There is no Storefront Scope available for checkout for the current request
-参数不完整,Incomplete parameters
-订单状态更新成功,Order status updated successfully
-更新失败：%{1},Update failed: %{1}
-提交订单并支付,Submit order and pay
-订单已创建，正在前往支付页面。,The order has been created and you are heading to the payment page.
-订单已创建，支付正在处理中。,The order has been created and payment is being processed.
-您已取消本次支付，订单尚未完成付款。可返回结账页重新选择支付方式。,You cancelled this payment. The order is not paid yet. You can return to checkout and try again.
+详细地址,"Detailed address"
+邮编,"post code"
+配送至,"Ship to"
+快速添加地址,"Quick add address"
+保存并使用,"Save and use"
+定位能力不可用,"Location services unavailable"
+自动定位失败,"Automatic location failed"
+已使用自动定位地址,"Using automatically detected address"
+订单已创建，正在打开结果页面。,"The order has been created and the results page is opening."
+订单已创建。,"The order has been created."
+"当前请求没有可结账的 Storefront Scope","There is no Storefront Scope available for checkout for the current request"
+参数不完整,"Incomplete parameters"
+订单状态更新成功,"Order status updated successfully"
+更新失败：%{1},"Update failed: %{1}"
+提交订单并支付,"Submit order and pay"
+订单已创建，正在前往支付页面。,"The order has been created and you are heading to the payment page."
+订单已创建，支付正在处理中。,"The order has been created and payment is being processed."
+您已取消本次支付，订单尚未完成付款。可返回结账页重新选择支付方式。,"You cancelled this payment. The order is not paid yet. You can return to checkout and try again."
 系统暂未返回可用的配送方案。请确认收货地址，或联系客服了解具体原因。,"No shipping options were returned. Please confirm the shipping address, or contact support for details."
 购物车中有商品缺少重量，国际运费需按重量计算，因此目前无法报价。请联系客服协助后再结账。,"Some cart items are missing weight. International shipping requires weight, so we cannot quote yet. Please contact support before checkout."
-运费不含关税与税费,Shipping excludes duties and taxes
-运费已含卖家预估关税（可能另行列示）,Shipping includes seller-estimated duties (may be shown separately)
-送达时可能另收关税,Duties may be collected on delivery
-中东非洲,Middle East & Africa
-亚太,Asia Pacific
+运费不含关税与税费,"Shipping excludes duties and taxes"
+运费已含卖家预估关税（可能另行列示）,"Shipping includes seller-estimated duties (may be shown separately)"
+送达时可能另收关税,"Duties may be collected on delivery"
+中东非洲,"Middle East & Africa"
+亚太,"Asia Pacific"
 美洲,Americas
 欧洲,Europe
 大洋洲,Oceania
-拉美,Latin America
-港澳台,HK / Macau / Taiwan
-其他可达市场,Other reachable markets
-国内标快,Domestic Express
+拉美,"Latin America"
+港澳台,"HK / Macau / Taiwan"
+其他可达市场,"Other reachable markets"
+国内标快,"Domestic Express"
+国内重货,"Domestic heavy freight"
+国际重货,"International heavy freight"

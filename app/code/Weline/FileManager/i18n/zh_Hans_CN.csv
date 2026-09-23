@@ -1,47 +1,47 @@
-已选文件:,已选文件:
+﻿已选文件:,已选文件:
 点击下载,点击下载
-file-image 节点缺少类型化 usage。,file-image 节点缺少类型化 usage。
-图片运行时解析缺少显式 ScopeIdentity。,图片运行时解析缺少显式 ScopeIdentity。
+"file-image 节点缺少类型化 usage。","file-image 节点缺少类型化 usage。"
+"图片运行时解析缺少显式 ScopeIdentity。","图片运行时解析缺少显式 ScopeIdentity。"
 图片语境语言与当前布局语言不一致。,图片语境语言与当前布局语言不一致。
-所指定的文件管理器不存在! 文件管理器名：%{1},所指定的文件管理器不存在! 文件管理器名：%{1}
-使用：%{1} 文件管理器代替。,使用：%{1} 文件管理器代替。
+"所指定的文件管理器不存在! 文件管理器名：%{1}","所指定的文件管理器不存在! 文件管理器名：%{1}"
+"使用：%{1} 文件管理器代替。","使用：%{1} 文件管理器代替。"
 未找到可用的文件管理器实现。,未找到可用的文件管理器实现。
 文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。,文件管理器标签不能包含</file-manager>标签。只能使用<file-manager/>标签。
 缺少目标ID。文档：%{1},缺少目标ID。文档：%{1}
 "缺少目标ID。请使用ID选择器，例如：target=""#id""。文档：%{1}","缺少目标ID。请使用ID选择器，例如：target=""#id""。文档：%{1}"
-FileAsset 哈希回填读取到无效数据。,FileAsset 哈希回填读取到无效数据。
-FileAsset 哈希回填无数据进展。,FileAsset 哈希回填无数据进展。
-FileAsset 旧数据无效，升级已停止。,FileAsset 旧数据无效，升级已停止。
-FileAsset 旧存储身份无效，升级已停止。,FileAsset 旧存储身份无效，升级已停止。
-FileAsset 旧数据存在重复存储对象身份，升级已停止。,FileAsset 旧数据存在重复存储对象身份，升级已停止。
-FileAsset 存储身份哈希回填校验失败。,FileAsset 存储身份哈希回填校验失败。
-FileAsset 旧数据超过安全升级上限。,FileAsset 旧数据超过安全升级上限。
-FileAsset 旧数据预检无数据进展。,FileAsset 旧数据预检无数据进展。
+"FileAsset 哈希回填读取到无效数据。","FileAsset 哈希回填读取到无效数据。"
+"FileAsset 哈希回填无数据进展。","FileAsset 哈希回填无数据进展。"
+"FileAsset 旧数据无效，升级已停止。","FileAsset 旧数据无效，升级已停止。"
+"FileAsset 旧存储身份无效，升级已停止。","FileAsset 旧存储身份无效，升级已停止。"
+"FileAsset 旧数据存在重复存储对象身份，升级已停止。","FileAsset 旧数据存在重复存储对象身份，升级已停止。"
+"FileAsset 存储身份哈希回填校验失败。","FileAsset 存储身份哈希回填校验失败。"
+"FileAsset 旧数据超过安全升级上限。","FileAsset 旧数据超过安全升级上限。"
+"FileAsset 旧数据预检无数据进展。","FileAsset 旧数据预检无数据进展。"
 无法读取旧媒体文件：%{1},无法读取旧媒体文件：%{1}
 无法计算旧媒体文件校验值：%{1},无法计算旧媒体文件校验值：%{1}
 旧媒体文件校验连续无数据进展：%{1},旧媒体文件校验连续无数据进展：%{1}
-FileManager MediaReference Observer 只接受 v1 契约,FileManager MediaReference Observer 只接受 v1 契约
+"FileManager MediaReference Observer 只接受 v1 契约","FileManager MediaReference Observer 只接受 v1 契约"
 媒体引用身份,媒体引用身份
 link,link
 绑定/卸载媒体引用与按范围清理,绑定/卸载媒体引用与按范围清理
-WLS 文件管理器,WLS 文件管理器
-WLS 文件管理器源码回收：%{1},WLS 文件管理器源码回收：%{1}
-WLS source archive: %{1},WLS 源码归档：%{1}
-WLS source directory archive: %{1},WLS 源码目录归档：%{1}
-WLS source selection archive: %{1},WLS 源码多选归档：%{1}
+"WLS 文件管理器","WLS 文件管理器"
+"WLS 文件管理器源码回收：%{1}","WLS 文件管理器源码回收：%{1}"
+"WLS source archive: %{1}","WLS 源码归档：%{1}"
+"WLS source directory archive: %{1}","WLS 源码目录归档：%{1}"
+"WLS source selection archive: %{1}","WLS 源码多选归档：%{1}"
 文件不可读取。,文件不可读取。
 文件超过下载大小限制。,文件超过下载大小限制。
-WLS 文件管理器压缩：%{1},WLS 文件管理器压缩：%{1}
-WLS 文件管理器回收：%{1},WLS 文件管理器回收：%{1}
+"WLS 文件管理器压缩：%{1}","WLS 文件管理器压缩：%{1}"
+"WLS 文件管理器回收：%{1}","WLS 文件管理器回收：%{1}"
 项目根目录,项目根目录
-当前 Weline 项目的根目录。后续文件列表、上传和删除都必须受路径白名单约束。,当前 Weline 项目的根目录。后续文件列表、上传和删除都必须受路径白名单约束。
-Panel Instance Root,面板实例根
-Resolved from the WLS Panel managed project registry; the root is read-only and child var/pub roots are write-gated separately.,由 WLS 小组管理的项目注册表解决；根是只读的，子 var/pub 根是单独写门控的。
-Current Weline project root; directory browsing is restricted to approved root cards.,当前Weline项目根；目录浏览仅限于批准的根卡。
-Child Project var,子项目变量
-"Child project runtime files; controlled writes require ACL, confirmation, extension checks, and operation audit logs.",子项目运行时文件；受控写入需要 ACL、确认、扩展检查和操作审核日志。
-Child Project pub,儿童项目酒吧
-"Child project public assets root; controlled writes require ACL, confirmation, extension checks, and operation audit logs.",子项目公共资产根；受控写入需要 ACL、确认、扩展检查和操作审核日志。
+"当前 Weline 项目的根目录。后续文件列表、上传和删除都必须受路径白名单约束。","当前 Weline 项目的根目录。后续文件列表、上传和删除都必须受路径白名单约束。"
+"Panel Instance Root",面板实例根
+"Resolved from the WLS Panel managed project registry; the root is read-only and child var/pub roots are write-gated separately.","由 WLS 小组管理的项目注册表解决；根是只读的，子 var/pub 根是单独写门控的。"
+"Current Weline project root; directory browsing is restricted to approved root cards.",当前Weline项目根；目录浏览仅限于批准的根卡。
+"Child Project var",子项目变量
+"Child project runtime files; controlled writes require ACL, confirmation, extension checks, and operation audit logs.","子项目运行时文件；受控写入需要 ACL、确认、扩展检查和操作审核日志。"
+"Child Project pub",儿童项目酒吧
+"Child project public assets root; controlled writes require ACL, confirmation, extension checks, and operation audit logs.","子项目公共资产根；受控写入需要 ACL、确认、扩展检查和操作审核日志。"
 模块目录,模块目录
 框架模块源码目录，仅作为只读路径上下文展示。,框架模块源码目录，仅作为只读路径上下文展示。
 运行时目录,运行时目录
@@ -73,31 +73,31 @@ Child Project pub,儿童项目酒吧
 源码改名需要提供不同的新名称。,源码改名需要提供不同的新名称。
 源码编辑只允许修改已存在文件。,源码编辑只允许修改已存在文件。
 目标源码文件已存在。,目标源码文件已存在。
-源码回收仅允许小于 128 KB 的单个源码文件。,源码回收仅允许小于 128 KB 的单个源码文件。
-Source policy does not allow the selected root.,源码策略不允许所选根目录。
-Source file name or extension is not allowed.,源码文件名或扩展名不被允许。
-Source directory is invalid or outside the selected root.,源码目录无效或不在所选根目录内。
-Source path is protected by policy.,源码路径受策略保护。
-Source archive requires an existing readable file.,源码归档需要一个已存在且可读的文件。
-Source archive only allows one source file smaller than 128 KB.,源码归档仅允许小于 128 KB 的单个源码文件。
-Source directory name is invalid.,源码目录名称无效。
-Source archive requires an existing readable directory.,源码归档需要一个已存在且可读的目录。
-Source selection is invalid.,源码多选条目无效。
-Source selection requires existing readable entries.,源码多选归档需要已存在且可读的条目。
-Source archive only allows source files smaller than 128 KB.,源码归档仅允许小于 128 KB 的源码文件。
-文本内容超过 128 KB 或包含二进制空字节。,文本内容超过 128 KB 或包含二进制空字节。
-No writable root is available.,没有可写的根可用。
-Selected root is read-only.,选定的根目录是只读的。
-File path is invalid or outside the selected root.,文件路径无效或位于所选根目录之外。
-Target parent directory is not writable.,目标父目录不可写。
-File uploaded.,文件已上传。
-Entry renamed.,条目已重命名。
-Entry deleted.,条目已删除。
-Directory tree deleted.,目录树已删除。
-Archive created.,归档已创建。
-Large-file compression queue created.,大文件压缩队列已创建。
-Recoverable trash queue created.,可恢复回收队列已创建。
-Trash entry restored.,回收条目已恢复。
+"源码回收仅允许小于 128 KB 的单个源码文件。","源码回收仅允许小于 128 KB 的单个源码文件。"
+"Source policy does not allow the selected root.",源码策略不允许所选根目录。
+"Source file name or extension is not allowed.",源码文件名或扩展名不被允许。
+"Source directory is invalid or outside the selected root.",源码目录无效或不在所选根目录内。
+"Source path is protected by policy.",源码路径受策略保护。
+"Source archive requires an existing readable file.",源码归档需要一个已存在且可读的文件。
+"Source archive only allows one source file smaller than 128 KB.","源码归档仅允许小于 128 KB 的单个源码文件。"
+"Source directory name is invalid.",源码目录名称无效。
+"Source archive requires an existing readable directory.",源码归档需要一个已存在且可读的目录。
+"Source selection is invalid.",源码多选条目无效。
+"Source selection requires existing readable entries.",源码多选归档需要已存在且可读的条目。
+"Source archive only allows source files smaller than 128 KB.","源码归档仅允许小于 128 KB 的源码文件。"
+"文本内容超过 128 KB 或包含二进制空字节。","文本内容超过 128 KB 或包含二进制空字节。"
+"No writable root is available.",没有可写的根可用。
+"Selected root is read-only.",选定的根目录是只读的。
+"File path is invalid or outside the selected root.",文件路径无效或位于所选根目录之外。
+"Target parent directory is not writable.",目标父目录不可写。
+"File uploaded.",文件已上传。
+"Entry renamed.",条目已重命名。
+"Entry deleted.",条目已删除。
+"Directory tree deleted.",目录树已删除。
+"Archive created.",归档已创建。
+"Large-file compression queue created.",大文件压缩队列已创建。
+"Recoverable trash queue created.",可恢复回收队列已创建。
+"Trash entry restored.",回收条目已恢复。
 回收条目已永久清理。,回收条目已永久清理。
 路径策略已保存。,路径策略已保存。
 路径策略已恢复默认继承。,路径策略已恢复默认继承。
@@ -107,20 +107,20 @@ Trash entry restored.,回收条目已恢复。
 源码文件已创建。,源码文件已创建。
 源码文件已重命名。,源码文件已重命名。
 源码文件已移入可恢复回收站。,源码文件已移入可恢复回收站。
-Source archive queue created.,源码归档队列已创建。
-Source directory archive queue created.,源码目录归档队列已创建。
-Source selection archive queue created.,源码多选归档队列已创建。
-Upload file,上传文件
-Rename entry,重命名条目
-Delete entry,删除条目
-Delete directory tree,删除目录树
-Compress entry,压缩条目
-Queued compression,队列压缩
-Queued trash move,队列回收移动
-Restore trash entry,恢复回收条目
-Purge trash entry,永久清理回收条目
-Save path policy,保存路径策略
-Reset path policy,恢复路径策略
+"Source archive queue created.",源码归档队列已创建。
+"Source directory archive queue created.",源码目录归档队列已创建。
+"Source selection archive queue created.",源码多选归档队列已创建。
+"Upload file",上传文件
+"Rename entry",重命名条目
+"Delete entry",删除条目
+"Delete directory tree",删除目录树
+"Compress entry",压缩条目
+"Queued compression",队列压缩
+"Queued trash move",队列回收移动
+"Restore trash entry",恢复回收条目
+"Purge trash entry",永久清理回收条目
+"Save path policy",保存路径策略
+"Reset path policy",恢复路径策略
 创建目录,创建目录
 保存文本,保存文本
 保存源码,保存源码
@@ -128,65 +128,65 @@ Reset path policy,恢复路径策略
 重命名源码文件,重命名源码文件
 回收源码文件,回收源码文件
 队列回收源码文件,队列回收源码文件
-Queued source archive,队列归档源码文件
-Queued source directory archive,队列归档源码目录
-Queued source selection archive,队列归档源码多选项
+"Queued source archive",队列归档源码文件
+"Queued source directory archive",队列归档源码目录
+"Queued source selection archive",队列归档源码多选项
 成功,成功
 已拒绝,已拒绝
 失败,失败
-Upload file name or extension is not allowed.,上传文件名或扩展名不在允许范围内。
-No valid uploaded file was detected.,未检测到有效上传文件。
-Uploaded file must be larger than 0 B and no larger than 5 MB.,上传文件必须大于 0 B 且不超过 5 MB。
-Target file or directory does not exist.,目标文件或目录不存在。
-Uploaded file could not be saved.,上传文件保存失败。
-Rename operation failed.,重命名操作失败。
-Deleting a root directory is not allowed.,不允许删除根目录。
-This directory is not empty. Enable recursive delete and type DELETE_TREE to delete it.,此目录非空。请启用递归删除并输入 DELETE_TREE 后再删除。
-Recursive directory delete requires enabling recursive delete and typing DELETE_TREE.,递归目录删除需要启用递归删除并输入 DELETE_TREE。
-Directory tree contains too many entries for recursive delete.,目录树条目数超过递归删除限制。
-Directory tree exceeds the 10 MB recursive delete limit.,目录树超过 10 MB 递归删除限制。
-Symbolic links cannot be deleted from the panel.,面板不允许删除符号链接。
-Delete operation failed.,删除操作失败。
-Compressing a root directory is not allowed.,不允许压缩根目录。
-Archive name must be a safe .zip file name.,归档名称必须是安全的 .zip 文件名。
-Archive target already exists.,归档目标已存在。
-Large-file compression queue could not be created.,大文件压缩队列创建失败。
-A pending or running queue already targets this archive.,已有等待或运行中的队列指向此归档。
-Large-file queue status could not be loaded.,大文件队列状态加载失败。
-A pending or running queue already targets this trash move.,已有等待或运行中的队列指向此回收移动。
-Root entries and existing trash entries cannot be queued for trash.,根目录条目和已有回收条目不能再次入队回收。
-Symbolic links cannot be moved to trash from the panel.,面板不支持将符号链接移动到回收站。
-Trash source contains too many entries for this stage.,回收源包含的条目数量超过当前阶段限制。
-Trash source exceeds the 512 MB queue limit.,回收源超过 512 MB 队列限制。
-Trash directory could not be created.,无法创建回收目录。
-Trash directory is not writable.,回收目录不可写。
-Trash target already exists.,回收目标已存在。
-Trash move failed.,回收移动失败。
-Trash source could not be scanned.,无法扫描回收源。
-Trash entry does not exist.,回收条目不存在。
-Trash entry is outside the recoverable trash directory.,回收条目不在可恢复回收目录内。
-Trash queue record is invalid.,回收队列记录无效。
-Trash queue is not complete yet.,回收队列尚未完成。
-Restore target already exists.,恢复目标已存在。
-Trash entry could not be restored.,回收条目无法恢复。
-永久清理前请勾选确认并输入 PURGE_TRASH。,永久清理前请勾选确认并输入 PURGE_TRASH。
-不能永久清理整个 .wls-trash 根目录。,不能永久清理整个 .wls-trash 根目录。
+"Upload file name or extension is not allowed.",上传文件名或扩展名不在允许范围内。
+"No valid uploaded file was detected.",未检测到有效上传文件。
+"Uploaded file must be larger than 0 B and no larger than 5 MB.","上传文件必须大于 0 B 且不超过 5 MB。"
+"Target file or directory does not exist.",目标文件或目录不存在。
+"Uploaded file could not be saved.",上传文件保存失败。
+"Rename operation failed.",重命名操作失败。
+"Deleting a root directory is not allowed.",不允许删除根目录。
+"This directory is not empty. Enable recursive delete and type DELETE_TREE to delete it.","此目录非空。请启用递归删除并输入 DELETE_TREE 后再删除。"
+"Recursive directory delete requires enabling recursive delete and typing DELETE_TREE.","递归目录删除需要启用递归删除并输入 DELETE_TREE。"
+"Directory tree contains too many entries for recursive delete.",目录树条目数超过递归删除限制。
+"Directory tree exceeds the 10 MB recursive delete limit.","目录树超过 10 MB 递归删除限制。"
+"Symbolic links cannot be deleted from the panel.",面板不允许删除符号链接。
+"Delete operation failed.",删除操作失败。
+"Compressing a root directory is not allowed.",不允许压缩根目录。
+"Archive name must be a safe .zip file name.","归档名称必须是安全的 .zip 文件名。"
+"Archive target already exists.",归档目标已存在。
+"Large-file compression queue could not be created.",大文件压缩队列创建失败。
+"A pending or running queue already targets this archive.",已有等待或运行中的队列指向此归档。
+"Large-file queue status could not be loaded.",大文件队列状态加载失败。
+"A pending or running queue already targets this trash move.",已有等待或运行中的队列指向此回收移动。
+"Root entries and existing trash entries cannot be queued for trash.",根目录条目和已有回收条目不能再次入队回收。
+"Symbolic links cannot be moved to trash from the panel.",面板不支持将符号链接移动到回收站。
+"Trash source contains too many entries for this stage.",回收源包含的条目数量超过当前阶段限制。
+"Trash source exceeds the 512 MB queue limit.","回收源超过 512 MB 队列限制。"
+"Trash directory could not be created.",无法创建回收目录。
+"Trash directory is not writable.",回收目录不可写。
+"Trash target already exists.",回收目标已存在。
+"Trash move failed.",回收移动失败。
+"Trash source could not be scanned.",无法扫描回收源。
+"Trash entry does not exist.",回收条目不存在。
+"Trash entry is outside the recoverable trash directory.",回收条目不在可恢复回收目录内。
+"Trash queue record is invalid.",回收队列记录无效。
+"Trash queue is not complete yet.",回收队列尚未完成。
+"Restore target already exists.",恢复目标已存在。
+"Trash entry could not be restored.",回收条目无法恢复。
+"永久清理前请勾选确认并输入 PURGE_TRASH。","永久清理前请勾选确认并输入 PURGE_TRASH。"
+"不能永久清理整个 .wls-trash 根目录。","不能永久清理整个 .wls-trash 根目录。"
 回收条目永久清理失败。,回收条目永久清理失败。
 回收条目已清理，但队列审计状态更新失败。,回收条目已清理，但队列审计状态更新失败。
 源码回收队列已创建。,源码回收队列已创建。
 已有待处理或运行中的源码回收队列。,已有待处理或运行中的源码回收队列。
-PHP ZipArchive extension is not available.,PHP ZipArchive 扩展不可用。
-Target file or directory is not readable.,目标文件或目录不可读。
-Symbolic links cannot be compressed from the panel.,面板不允许压缩符号链接。
-Archive source contains too many entries for this stage.,归档源条目数超过当前阶段限制。
-Archive source exceeds the 10 MB compression limit.,归档源超过 10 MB 压缩限制。
-Archive could not be created.,归档创建失败。
-保存路径策略前请勾选确认并输入 SAVE_PATH_POLICY。,保存路径策略前请勾选确认并输入 SAVE_PATH_POLICY。
+"PHP ZipArchive extension is not available.","PHP ZipArchive 扩展不可用。"
+"Target file or directory is not readable.",目标文件或目录不可读。
+"Symbolic links cannot be compressed from the panel.",面板不允许压缩符号链接。
+"Archive source contains too many entries for this stage.",归档源条目数超过当前阶段限制。
+"Archive source exceeds the 10 MB compression limit.","归档源超过 10 MB 压缩限制。"
+"Archive could not be created.",归档创建失败。
+"保存路径策略前请勾选确认并输入 SAVE_PATH_POLICY。","保存路径策略前请勾选确认并输入 SAVE_PATH_POLICY。"
 路径策略包含不支持的写入根目录。,路径策略包含不支持的写入根目录。
 路径策略包含不支持的源码编辑根目录。,路径策略包含不支持的源码编辑根目录。
 启用源码编辑时至少选择一个源码根目录。,启用源码编辑时至少选择一个源码根目录。
 路径策略写入失败。,路径策略写入失败。
-恢复默认路径策略前请勾选确认并输入 RESET_PATH_POLICY。,恢复默认路径策略前请勾选确认并输入 RESET_PATH_POLICY。
+"恢复默认路径策略前请勾选确认并输入 RESET_PATH_POLICY。","恢复默认路径策略前请勾选确认并输入 RESET_PATH_POLICY。"
 路径策略恢复默认失败。,路径策略恢复默认失败。
 请求方式错误。,请求方式错误。
 请先完成写入确认。,请先完成写入确认。
@@ -195,12 +195,12 @@ Archive could not be created.,归档创建失败。
 目标已存在。,目标已存在。
 目标文件已存在，请勾选覆盖确认。,目标文件已存在，请勾选覆盖确认。
 文件系统写入失败。,文件系统写入失败。
-A pending or running queue already targets this source directory archive.,已有待处理或运行中的源码目录归档队列。
-A pending or running queue already targets this source selection archive.,已有待处理或运行中的源码多选归档队列。
-Source selection archive accepts up to 20 entries.,源码多选归档最多接受 20 个条目。
-Source directory archive exceeds the 10 MB source queue limit.,源码目录归档超过 10 MB 队列限制。
-Queued source trash move,队列回收源码文件
-Queue operation,队列操作
+"A pending or running queue already targets this source directory archive.",已有待处理或运行中的源码目录归档队列。
+"A pending or running queue already targets this source selection archive.",已有待处理或运行中的源码多选归档队列。
+"Source selection archive accepts up to 20 entries.","源码多选归档最多接受 20 个条目。"
+"Source directory archive exceeds the 10 MB source queue limit.","源码目录归档超过 10 MB 队列限制。"
+"Queued source trash move",队列回收源码文件
+"Queue operation",队列操作
 Pending,等待中
 Running,运行中
 Done,已完成
@@ -212,115 +212,115 @@ Stopped,已停止
 已永久清理,已永久清理
 回收项不可用,回收项不可用
 队列失败,队列失败
-"Project context is resolved; guarded writes can target child project var/pub when those directories exist, are writable, and are enabled by the path policy.",项目上下文已解析；当子项目 var/pub 存在、可写且被路径策略启用时，受控写入可以指向子项目。
-Local context only; guarded writes target the current panel instance var/pub roots and can be narrowed by the path policy.,仅本地上下文；受控写入指向当前面板实例 var/pub 根，并可通过路径策略收窄。
+"Project context is resolved; guarded writes can target child project var/pub when those directories exist, are writable, and are enabled by the path policy.","项目上下文已解析；当子项目 var/pub 存在、可写且被路径策略启用时，受控写入可以指向子项目。"
+"Local context only; guarded writes target the current panel instance var/pub roots and can be narrowed by the path policy.","仅本地上下文；受控写入指向当前面板实例 var/pub 根，并可通过路径策略收窄。"
 路径白名单,路径白名单
 策略受控,策略受控
 文件浏览,文件浏览
 已启用,已启用
-目录列表、文本预览和受限下载已开放，下载仍限制在 20 MB 内。,目录列表、文本预览和受限下载已开放，下载仍限制在 20 MB 内。
-Change Operations,变更操作
+"目录列表、文本预览和受限下载已开放，下载仍限制在 20 MB 内。","目录列表、文本预览和受限下载已开放，下载仍限制在 20 MB 内。"
+"Change Operations",变更操作
 Guarded,守卫
-"Directory creation, small text saves, guarded uploads, same-folder rename, file, empty-directory, bounded recursive directory delete, bounded ZIP compression, and queued large ZIP compression require ACL, confirmation, and operation logs.",目录创建、小文本保存、受控上传、同目录重命名、文件、空目录、受限递归目录删除、受限 ZIP 压缩和队列化大型 ZIP 压缩都需要 ACL、确认和操作日志。
+"Directory creation, small text saves, guarded uploads, same-folder rename, file, empty-directory, bounded recursive directory delete, bounded ZIP compression, and queued large ZIP compression require ACL, confirmation, and operation logs.","目录创建、小文本保存、受控上传、同目录重命名、文件、空目录、受限递归目录删除、受限 ZIP 压缩和队列化大型 ZIP 压缩都需要 ACL、确认和操作日志。"
 settings,设置
-WLS 面板文件管理器入口,WLS 面板文件管理器入口
-查看 WLS 文件管理器,查看 WLS 文件管理器
+"WLS 面板文件管理器入口","WLS 面板文件管理器入口"
+"查看 WLS 文件管理器","查看 WLS 文件管理器"
 folder,文件夹
-查看 WLS 面板文件管理器,查看 WLS 面板文件管理器
-View WLS File Roots,查看 WLS 文件根目录
-View WLS Panel file roots,查看 WLS 面板文件根
-View WLS File Browser,查看 WLS 文件浏览器
+"查看 WLS 面板文件管理器","查看 WLS 面板文件管理器"
+"View WLS File Roots","查看 WLS 文件根目录"
+"View WLS Panel file roots","查看 WLS 面板文件根"
+"View WLS File Browser","查看 WLS 文件浏览器"
 tree,树
-View WLS Panel file browser,查看WLS面板文件浏览器
-View WLS File Policy,查看 WLS 文件策略
+"View WLS Panel file browser",查看WLS面板文件浏览器
+"View WLS File Policy","查看 WLS 文件策略"
 edit,编辑
-View WLS Panel file path policy,查看 WLS 面板文件路径策略
-View WLS File Write Operations,查看 WLS 文件写入操作
-View WLS Panel file write operations,查看WLS Panel文件写入操作
-View WLS File Queue,查看 WLS 文件队列
+"View WLS Panel file path policy","查看 WLS 面板文件路径策略"
+"View WLS File Write Operations","查看 WLS 文件写入操作"
+"View WLS Panel file write operations","查看WLS Panel文件写入操作"
+"View WLS File Queue","查看 WLS 文件队列"
 clock,钟
-View WLS Panel file queue operations,查看WLS面板文件队列操作
-View WLS File Operation Log,查看WLS文件操作日志
-View WLS Panel file operation log,查看WLS Panel文件操作日志
-View WLS File Capabilities,查看 WLS 文件功能
+"View WLS Panel file queue operations",查看WLS面板文件队列操作
+"View WLS File Operation Log",查看WLS文件操作日志
+"View WLS Panel file operation log","查看WLS Panel文件操作日志"
+"View WLS File Capabilities","查看 WLS 文件功能"
 puzzle,谜
-View WLS Panel file capabilities,查看 WLS 面板文件功能
-受控写入 WLS 文件,受控写入 WLS 文件
+"View WLS Panel file capabilities","查看 WLS 面板文件功能"
+"受控写入 WLS 文件","受控写入 WLS 文件"
 创建目录和保存小文本文件,创建目录和保存小文本文件
 plus,加
 创建受控源码文件,创建受控源码文件
 重命名受控源码文件,重命名受控源码文件
-受控回收 WLS 源码文件,受控回收 WLS 源码文件
+"受控回收 WLS 源码文件","受控回收 WLS 源码文件"
 trash,trash
 将受控源码文件移动到可恢复回收站,将受控源码文件移动到可恢复回收站
-队列回收 WLS 源码文件,队列回收 WLS 源码文件
+"队列回收 WLS 源码文件","队列回收 WLS 源码文件"
 将受控源码文件通过队列移动到可恢复回收站,将受控源码文件通过队列移动到可恢复回收站
-Queue WLS source file archive,队列WLS源文件存档
+"Queue WLS source file archive",队列WLS源文件存档
 arrow-down,向下箭头
-Archive one controlled source file through queue,通过队列归档一个受控源文件
-Queue WLS source directory archive,队列 WLS 源目录存档
-Archive one controlled source directory through queue,通过队列归档一个受控源目录
-Queue WLS source selection archive,队列 WLS 源选择存档
+"Archive one controlled source file through queue",通过队列归档一个受控源文件
+"Queue WLS source directory archive","队列 WLS 源目录存档"
+"Archive one controlled source directory through queue",通过队列归档一个受控源目录
+"Queue WLS source selection archive","队列 WLS 源选择存档"
 check,查看
-Archive selected controlled source entries through queue,通过队列归档选定的受控源条目
-下载 WLS 文件,下载 WLS 文件
+"Archive selected controlled source entries through queue",通过队列归档选定的受控源条目
+"下载 WLS 文件","下载 WLS 文件"
 download,下载
-下载 WLS 面板文件管理器文件,下载 WLS 面板文件管理器文件
-Controlled WLS file write,受控WLS文件写入
+"下载 WLS 面板文件管理器文件","下载 WLS 面板文件管理器文件"
+"Controlled WLS file write",受控WLS文件写入
 upload,上传
-Upload controlled WLS files,上传受控 WLS 文件
+"Upload controlled WLS files","上传受控 WLS 文件"
 box,盒子
-Rename controlled WLS files,重命名受控 WLS 文件
-Delete controlled WLS files,删除受控 WLS 文件
-Create guarded WLS ZIP archives,创建受保护的 WLS ZIP 存档
-Queue WLS large ZIP archive,队列 WLS 大型 ZIP 存档
-Create queued WLS file archives,创建排队的 WLS 文件存档
-Queue recoverable WLS trash move,队列可恢复 WLS 垃圾移动
-Move controlled WLS files to recoverable trash through queue,通过队列将受控 WLS 文件移至可恢复垃圾
-Restore WLS trash queue entry,恢复 WLS 垃圾队列条目
+"Rename controlled WLS files","重命名受控 WLS 文件"
+"Delete controlled WLS files","删除受控 WLS 文件"
+"Create guarded WLS ZIP archives","创建受保护的 WLS ZIP 存档"
+"Queue WLS large ZIP archive","队列 WLS 大型 ZIP 存档"
+"Create queued WLS file archives","创建排队的 WLS 文件存档"
+"Queue recoverable WLS trash move","队列可恢复 WLS 垃圾移动"
+"Move controlled WLS files to recoverable trash through queue","通过队列将受控 WLS 文件移至可恢复垃圾"
+"Restore WLS trash queue entry","恢复 WLS 垃圾队列条目"
 history,历史
-Restore a recoverable WLS file queue entry,恢复可恢复的 WLS 文件队列条目
-Purge WLS trash queue entry,清除 WLS 垃圾队列条目
-Permanently purge a queue-created WLS trash entry,永久清除队列创建的 WLS 垃圾条目
-保存 WLS 文件路径策略,保存 WLS 文件路径策略
-保存 WLS 面板文件管理器的项目级路径策略,保存 WLS 面板文件管理器的项目级路径策略
-恢复 WLS 文件路径默认策略,恢复 WLS 文件路径默认策略
+"Restore a recoverable WLS file queue entry","恢复可恢复的 WLS 文件队列条目"
+"Purge WLS trash queue entry","清除 WLS 垃圾队列条目"
+"Permanently purge a queue-created WLS trash entry","永久清除队列创建的 WLS 垃圾条目"
+"保存 WLS 文件路径策略","保存 WLS 文件路径策略"
+"保存 WLS 面板文件管理器的项目级路径策略","保存 WLS 面板文件管理器的项目级路径策略"
+"恢复 WLS 文件路径默认策略","恢复 WLS 文件路径默认策略"
 refresh,刷新
-恢复 WLS 面板文件管理器的项目级路径默认继承策略,恢复 WLS 面板文件管理器的项目级路径默认继承策略
-当前未配置可用的 Weline 文件管理器，请在后台文件管理器配置中选择 weline_media。,当前未配置可用的 Weline 文件管理器，请在后台文件管理器配置中选择 weline_media。
+"恢复 WLS 面板文件管理器的项目级路径默认继承策略","恢复 WLS 面板文件管理器的项目级路径默认继承策略"
+"当前未配置可用的 Weline 文件管理器，请在后台文件管理器配置中选择 weline_media。","当前未配置可用的 Weline 文件管理器，请在后台文件管理器配置中选择 weline_media。"
 文件资源引用数据无效。,文件资源引用数据无效。
 文件资源基础元数据无效。,文件资源基础元数据无效。
 文件资源可见性无效。,文件资源可见性无效。
 文件资源生命周期无效。,文件资源生命周期无效。
 文件资源扩展元数据超过长度限制。,文件资源扩展元数据超过长度限制。
-文件资源扩展元数据 JSON 无效。,文件资源扩展元数据 JSON 无效。
+"文件资源扩展元数据 JSON 无效。","文件资源扩展元数据 JSON 无效。"
 资源语言元数据无效。,资源语言元数据无效。
 资源翻译状态无效。,资源翻译状态无效。
 资源翻译来源无效。,资源翻译来源无效。
-审核通过的资源语言必须填写名称、默认 alt 和描述。,审核通过的资源语言必须填写名称、默认 alt 和描述。
+"审核通过的资源语言必须填写名称、默认 alt 和描述。","审核通过的资源语言必须填写名称、默认 alt 和描述。"
 预览,预览
 暂无缩略图,暂无缩略图
 关闭,关闭
-子项目 var/pub 受控写入,子项目 var/pub 受控写入
+"子项目 var/pub 受控写入","子项目 var/pub 受控写入"
 子项目路径待校验,子项目路径待校验
-当前实例 var/pub 受控写入,当前实例 var/pub 受控写入
-All actions,全部动作
-Create directory,创建目录
-Save text,保存文本
-Save source,保存源码
-Create source file,创建源码文件
-Rename source file,重命名源码文件
-Trash source file,回收源码文件
-All results,全部结果
+"当前实例 var/pub 受控写入","当前实例 var/pub 受控写入"
+"All actions",全部动作
+"Create directory",创建目录
+"Save text",保存文本
+"Save source",保存源码
+"Create source file",创建源码文件
+"Rename source file",重命名源码文件
+"Trash source file",回收源码文件
+"All results",全部结果
 Success,成功
 Denied,已拒绝
 Failed,失败
-All roots,全部根目录
+"All roots",全部根目录
 Policy,策略
-WLS 文件管理器导航,WLS 文件管理器导航
-WLS Panel Plugin,WLS 面板插件
+"WLS 文件管理器导航","WLS 文件管理器导航"
+"WLS Panel Plugin","WLS 面板插件"
 文件管理器,文件管理器
-WLS 面板,WLS 面板
+"WLS 面板","WLS 面板"
 路径,路径
 浏览,浏览
 策略,策略
@@ -332,12 +332,12 @@ WLS 面板,WLS 面板
 深色,深色
 浅色,浅色
 切换明暗色,切换明暗色
-WLS 独立面板插件,WLS 独立面板插件
-当前版本提供目录浏览、文本预览、受限下载，以及 var/pub 根目录内的目录创建、小文本保存、受控上传、同目录重命名、删除、受限压缩和队列化大文件压缩。,当前版本提供目录浏览、文本预览、受限下载，以及 var/pub 根目录内的目录创建、小文本保存、受控上传、同目录重命名、删除、受限压缩和队列化大文件压缩。
+"WLS 独立面板插件","WLS 独立面板插件"
+"当前版本提供目录浏览、文本预览、受限下载，以及 var/pub 根目录内的目录创建、小文本保存、受控上传、同目录重命名、删除、受限压缩和队列化大文件压缩。","当前版本提供目录浏览、文本预览、受限下载，以及 var/pub 根目录内的目录创建、小文本保存、受控上传、同目录重命名、删除、受限压缩和队列化大文件压缩。"
 项目后台,项目后台
-返回 WLS,返回 WLS
+"返回 WLS","返回 WLS"
 项目上下文,项目上下文
-项目 ID,项目 ID
+"项目 ID","项目 ID"
 当前项目,当前项目
 域名,域名
 未指定,未指定
@@ -348,10 +348,10 @@ WLS 独立面板插件,WLS 独立面板插件
 路径摘要,路径摘要
 暂无路径信息,暂无路径信息
 项目级写入根策略,项目级写入根策略
-保存后立即影响本页面所有受控写入动作；项目真实路径仍只在服务端解析，不通过 URL 或表单回传。,保存后立即影响本页面所有受控写入动作；项目真实路径仍只在服务端解析，不通过 URL 或表单回传。
+"保存后立即影响本页面所有受控写入动作；项目真实路径仍只在服务端解析，不通过 URL 或表单回传。","保存后立即影响本页面所有受控写入动作；项目真实路径仍只在服务端解析，不通过 URL 或表单回传。"
 已保存策略,已保存策略
 默认继承,默认继承
-Path policy summary,路径策略摘要
+"Path policy summary",路径策略摘要
 策略键,策略键
 启用根,启用根
 全部只读,全部只读
@@ -361,11 +361,11 @@ Path policy summary,路径策略摘要
 未保存,未保存
 当前上下文没有可配置的受控写入根。,当前上下文没有可配置的受控写入根。
 允许源码编辑策略,允许源码编辑策略
-仅允许编辑已存在且小于 128 KB 的源码文件；新建、同目录改名和单文件回收需使用独立 SOURCE_CREATE_FILE / SOURCE_RENAME / SOURCE_TRASH 表单，不会开放上传、硬删除或队列操作。,仅允许编辑已存在且小于 128 KB 的源码文件；新建、同目录改名和单文件回收需使用独立 SOURCE_CREATE_FILE / SOURCE_RENAME / SOURCE_TRASH 表单，不会开放上传、硬删除或队列操作。
+"仅允许编辑已存在且小于 128 KB 的源码文件；新建、同目录改名和单文件回收需使用独立 SOURCE_CREATE_FILE / SOURCE_RENAME / SOURCE_TRASH 表单，不会开放上传、硬删除或队列操作。","仅允许编辑已存在且小于 128 KB 的源码文件；新建、同目录改名和单文件回收需使用独立 SOURCE_CREATE_FILE / SOURCE_RENAME / SOURCE_TRASH 表单，不会开放上传、硬删除或队列操作。"
 源码扩展名,源码扩展名
 当前上下文没有可配置的源码根。,当前上下文没有可配置的源码根。
 策略备注,策略备注
-例如：仅允许子项目 var 写入，pub 由发布流程接管。,例如：仅允许子项目 var 写入，pub 由发布流程接管。
+"例如：仅允许子项目 var 写入，pub 由发布流程接管。","例如：仅允许子项目 var 写入，pub 由发布流程接管。"
 备注只用于面板审计说明，不参与路径计算。,备注只用于面板审计说明，不参与路径计算。
 我确认立即更新此项目的文件写入根策略。,我确认立即更新此项目的文件写入根策略。
 确认短语,确认短语
@@ -387,7 +387,7 @@ Path policy summary,路径策略摘要
 未选择可预览文件。,未选择可预览文件。
 编辑此文本,编辑此文本
 当前预览文件不能直接编辑：%{1},当前预览文件不能直接编辑：%{1}
-预览内容已截断，仅显示前 64 KB。,预览内容已截断，仅显示前 64 KB。
+"预览内容已截断，仅显示前 64 KB。","预览内容已截断，仅显示前 64 KB。"
 名称,名称
 类型,类型
 大小,大小
@@ -399,11 +399,11 @@ Path policy summary,路径策略摘要
 可读,可读
 不可读,不可读
 下载,下载
-已显示前 200 项，继续收窄目录查看剩余内容。,已显示前 200 项，继续收窄目录查看剩余内容。
+"已显示前 200 项，继续收窄目录查看剩余内容。","已显示前 200 项，继续收窄目录查看剩余内容。"
 此目录暂无可显示文件。,此目录暂无可显示文件。
 受控写入,受控写入
 第一阶段写入能力,第一阶段写入能力
-Ordinary writes stay on var/pub roots. Source roots require source policy and dedicated source actions.,普通写入仅限 var/pub 根目录。源码根目录需要源码策略和专用源码操作。
+"Ordinary writes stay on var/pub roots. Source roots require source policy and dedicated source actions.","普通写入仅限 var/pub 根目录。源码根目录需要源码策略和专用源码操作。"
 源码编辑可用,源码编辑可用
 当前根目录可写,当前根目录可写
 当前根目录只读,当前根目录只读
@@ -415,16 +415,16 @@ Ordinary writes stay on var/pub roots. Source roots require source policy and de
 我确认在当前允许根目录内创建这个目录。,我确认在当前允许根目录内创建这个目录。
 保存小文本,保存小文本
 源码策略,源码策略
-128 KB,128 KB
+"128 KB","128 KB"
 已载入预览文件：%{1},已载入预览文件：%{1}
-保存源码前仍需要勾选确认并输入 SAVE_SOURCE。,保存源码前仍需要勾选确认并输入 SAVE_SOURCE。
-保存前仍需要勾选确认并输入 SAVE_TEXT。,保存前仍需要勾选确认并输入 SAVE_TEXT。
+"保存源码前仍需要勾选确认并输入 SAVE_SOURCE。","保存源码前仍需要勾选确认并输入 SAVE_SOURCE。"
+"保存前仍需要勾选确认并输入 SAVE_TEXT。","保存前仍需要勾选确认并输入 SAVE_TEXT。"
 文件名,文件名
 写入相对目录,写入相对目录
 文本内容,文本内容
 未修改,未修改
 已修改,已修改
-超过 128 KB,超过 128 KB
+"超过 128 KB","超过 128 KB"
 光标,光标
 文本编辑器工具,文本编辑器工具
 自动换行,自动换行
@@ -434,108 +434,108 @@ Ordinary writes stay on var/pub roots. Source roots require source policy and de
 行,行
 字符,字符
 字节,字节
-源码编辑仅允许保存已存在的 php、phtml、js、ts、vue、css、scss、html、xml、json、md 等小源码文件。,源码编辑仅允许保存已存在的 php、phtml、js、ts、vue、css、scss、html、xml、json、md 等小源码文件。
-只允许保存 txt、md、json、csv、xml、yaml、yml、ini、conf、log、css 等文本文件。,只允许保存 txt、md、json、csv、xml、yaml、yml、ini、conf、log、css 等文本文件。
+"源码编辑仅允许保存已存在的 php、phtml、js、ts、vue、css、scss、html、xml、json、md 等小源码文件。","源码编辑仅允许保存已存在的 php、phtml、js、ts、vue、css、scss、html、xml、json、md 等小源码文件。"
+"只允许保存 txt、md、json、csv、xml、yaml、yml、ini、conf、log、css 等文本文件。","只允许保存 txt、md、json、csv、xml、yaml、yml、ini、conf、log、css 等文本文件。"
 如果文件已存在，允许覆盖。,如果文件已存在，允许覆盖。
 我确认这个写入目标位于当前允许根目录内。,我确认这个写入目标位于当前允许根目录内。
-5 MB,5 MB
+"5 MB","5 MB"
 File,文件
-Allowed upload extensions,允许上传扩展名
-Allow overwrite when a file with the same name already exists.,同名文件已存在时允许覆盖。
-I confirm this upload target is inside the current allowlisted root.,我确认上传目标位于当前允许根目录内。
-Confirmation phrase,确认短语
-Same folder,同目录
-Relative path,相对路径
-Use the relative path shown in the file list.,使用文件列表中显示的相对路径。
-New name,新名称
-I confirm this rename stays inside the same allowlisted folder.,我确认重命名操作保持在同一个允许目录内。
-Bounded ZIP,受限 ZIP
-Compress a file or directory into a sibling ZIP archive.,将文件或目录压缩为同级 ZIP 归档。
-Archive name,归档名称
-Limits: 200 entries and 10 MB source data. Existing archives are not overwritten.,限制：200 个条目且源数据不超过 10 MB。已有归档不会被覆盖。
-I confirm this archive stays inside the same allowlisted folder.,我确认归档会保留在同一个允许目录内。
-Bounded delete,受限删除
-I understand this delete cannot be undone from the panel.,我了解此删除无法从面板内撤销。
-Allow bounded recursive directory delete for this target.,允许对此目标执行受限递归目录删除。
+"Allowed upload extensions",允许上传扩展名
+"Allow overwrite when a file with the same name already exists.",同名文件已存在时允许覆盖。
+"I confirm this upload target is inside the current allowlisted root.",我确认上传目标位于当前允许根目录内。
+"Confirmation phrase",确认短语
+"Same folder",同目录
+"Relative path",相对路径
+"Use the relative path shown in the file list.",使用文件列表中显示的相对路径。
+"New name",新名称
+"I confirm this rename stays inside the same allowlisted folder.",我确认重命名操作保持在同一个允许目录内。
+"Bounded ZIP","受限 ZIP"
+"Compress a file or directory into a sibling ZIP archive.","将文件或目录压缩为同级 ZIP 归档。"
+"Archive name",归档名称
+"Limits: 200 entries and 10 MB source data. Existing archives are not overwritten.","限制：200 个条目且源数据不超过 10 MB。已有归档不会被覆盖。"
+"I confirm this archive stays inside the same allowlisted folder.",我确认归档会保留在同一个允许目录内。
+"Bounded delete",受限删除
+"I understand this delete cannot be undone from the panel.",我了解此删除无法从面板内撤销。
+"Allow bounded recursive directory delete for this target.",允许对此目标执行受限递归目录删除。
 大文件队列,大文件队列
-Large ZIP compression and recoverable trash moves are queued through Weline Queue so WLS requests stay responsive. Workers re-check root boundaries before writing or moving files.,大型 ZIP 压缩和可恢复回收移动都通过 Weline Queue 入队执行，让 WLS 请求保持响应。Worker 写入或移动文件前会重新检查根目录边界。
+"Large ZIP compression and recoverable trash moves are queued through Weline Queue so WLS requests stay responsive. Workers re-check root boundaries before writing or moving files.","大型 ZIP 压缩和可恢复回收移动都通过 Weline Queue 入队执行，让 WLS 请求保持响应。Worker 写入或移动文件前会重新检查根目录边界。"
 当前根目录可入队,当前根目录可入队
-Queue Summary,队列摘要
+"Queue Summary",队列摘要
 Shown,展示
 回收历史,回收历史
 可恢复回收,可恢复回收
-Queue ZIP compression,队列 ZIP 压缩
+"Queue ZIP compression","队列 ZIP 压缩"
 Async,异步
-Use this for larger folders or files that should not be compressed inside a browser request.,用于不适合在浏览器请求内直接压缩的大目录或大文件。
-Queued limits: 2000 entries and 512 MB source data. The worker refuses symlinks and path escapes.,队列限制：2000 个条目、源数据 512 MB。Worker 会拒绝符号链接和路径逃逸。
-I confirm this queued archive should be written into the same allowlisted folder.,我确认此队列归档应写入同一个白名单目录。
-Create queue,创建队列
-Source policy,来源政策
-Source file name,源码文件名
+"Use this for larger folders or files that should not be compressed inside a browser request.",用于不适合在浏览器请求内直接压缩的大目录或大文件。
+"Queued limits: 2000 entries and 512 MB source data. The worker refuses symlinks and path escapes.","队列限制：2000 个条目、源数据 512 MB。Worker 会拒绝符号链接和路径逃逸。"
+"I confirm this queued archive should be written into the same allowlisted folder.",我确认此队列归档应写入同一个白名单目录。
+"Create queue",创建队列
+"Source policy",来源政策
+"Source file name",源码文件名
 "Creates one new file in the current source-policy root. Directories, uploads, renames, deletes, and queue operations stay disabled for source roots.",在当前源码策略根目录内创建一个新文件。目录、上传、重命名、删除和队列操作仍对源码根目录禁用。
-Initial content,初始内容
-Optional. Max 128 KB; binary content is rejected.,可选。最大 128 KB；会拒绝二进制内容。
-Allowed source extensions,允许的源码扩展名
-I confirm this new source file belongs in the current source-policy root.,我确认这个新源码文件属于当前源码策略根目录。
-Current source file name,当前源码文件名
+"Initial content",初始内容
+"Optional. Max 128 KB; binary content is rejected.","可选。最大 128 KB；会拒绝二进制内容。"
+"Allowed source extensions",允许的源码扩展名
+"I confirm this new source file belongs in the current source-policy root.",我确认这个新源码文件属于当前源码策略根目录。
+"Current source file name",当前源码文件名
 "Renames one existing file in the current source-policy directory. Cross-folder moves, overwrites, deletes, uploads, and queue operations stay disabled for source roots.",只重命名当前源码策略目录中的一个已存在文件。跨目录移动、覆盖、删除、上传和队列操作仍对源码根目录禁用。
-New source file name,新源码文件名
-I confirm this rename stays inside the current source-policy root.,我确认此次改名保持在当前源码策略根目录内。
+"New source file name",新源码文件名
+"I confirm this rename stays inside the current source-policy root.",我确认此次改名保持在当前源码策略根目录内。
 Recoverable,可恢复
-"Moves one existing source-policy file into the same root .wls-trash folder. Directories, hard delete, purge, and broad source queues stay disabled.",将一个已存在的源码策略文件移动到同一根目录的 .wls-trash 文件夹。目录、硬删除、永久清理和宽泛源码队列仍保持禁用。
+"Moves one existing source-policy file into the same root .wls-trash folder. Directories, hard delete, purge, and broad source queues stay disabled.","将一个已存在的源码策略文件移动到同一根目录的 .wls-trash 文件夹。目录、硬删除、永久清理和宽泛源码队列仍保持禁用。"
 "I confirm this source file should be moved into recoverable trash, not permanently deleted.",我确认此源码文件应移动到可恢复回收站，而不是永久删除。
-Queue source trash,队列回收源码
-Source queue,源码队列
-"Queues one existing source-policy file into recoverable .wls-trash. Single file only, max 128 KB; directories, purge, hard delete, upload, and broad source queues stay disabled.",将一个已存在的源码策略文件加入可恢复 .wls-trash 队列。仅限单文件，最大 128 KB；目录、永久清理、硬删除、上传和宽泛源码队列仍保持禁用。
+"Queue source trash",队列回收源码
+"Source queue",源码队列
+"Queues one existing source-policy file into recoverable .wls-trash. Single file only, max 128 KB; directories, purge, hard delete, upload, and broad source queues stay disabled.","将一个已存在的源码策略文件加入可恢复 .wls-trash 队列。仅限单文件，最大 128 KB；目录、永久清理、硬删除、上传和宽泛源码队列仍保持禁用。"
 "I confirm this source file should be queued for recoverable trash, not permanently deleted.",我确认此源码文件应加入可恢复回收队列，而不是永久删除。
-Create source trash queue,创建源码回收队列
-Queue source archive,队列归档源码
+"Create source trash queue",创建源码回收队列
+"Queue source archive",队列归档源码
 Read-only,只读
-"Queues one existing source-policy file into a server-side archive under var/wls-panel/file-manager/source-archives. Single file only, max 128 KB; directories, source-root zip writes, upload, delete, and overwrite stay disabled.",将一个已存在的源码策略文件加入服务端归档队列，归档写入 var/wls-panel/file-manager/source-archives。仅限单文件，最大 128 KB；目录、源码根目录旁写 zip、上传、删除和覆盖仍保持禁用。
-I confirm this source file should be archived through a read-only queue.,我确认此源码文件应通过只读队列归档。
-Create source archive queue,创建源码归档队列
-Queue source directory archive,队列归档源码目录
-Source directory name,源码目录名称
-Queues one existing source-policy child directory into a server-side archive under var/wls-panel/file-manager/source-archives. Max 200 entries and 10 MB; the source tree is only read by the worker.,将一个已存在的源码策略子目录加入只读归档队列，归档产物保存到 var/wls-panel/file-manager/source-archives。最多 200 个条目、10 MB；worker 只读取源码树。
-I confirm this source directory should be archived through a read-only queue.,我确认通过只读队列归档这个源码目录。
-Create source directory archive queue,创建源码目录归档队列
-Queue source selection archive,队列归档源码多选项
-Source entry names,源码条目名称
-"Queues up to 20 files or child directories from the current source-policy directory into one read-only archive under var/wls-panel/file-manager/source-archives. Max 200 archived entries and 10 MB; no source-root ZIP writes, upload, delete, or overwrite.",将当前源码策略目录内最多 20 个文件或子目录加入一个只读归档队列，归档产物写入 var/wls-panel/file-manager/source-archives。最多 200 个归档条目和 10 MB；不允许在源码根目录旁写 ZIP、上传、删除或覆盖。
-I confirm these selected source entries should be archived through a read-only queue.,我确认这些选中的源码条目应通过只读队列归档。
-Create source selection archive queue,创建源码多选归档队列
-Queue recoverable trash,队列化可恢复回收
-Moves the target into the same root .wls-trash folder. Completed jobs can be restored from the recent queue list while the original path is still free.,将目标移动到同一根目录下的 .wls-trash 文件夹。完成的任务只要原始路径仍空闲，就可以从最近队列列表恢复。
+"Queues one existing source-policy file into a server-side archive under var/wls-panel/file-manager/source-archives. Single file only, max 128 KB; directories, source-root zip writes, upload, delete, and overwrite stay disabled.","将一个已存在的源码策略文件加入服务端归档队列，归档写入 var/wls-panel/file-manager/source-archives。仅限单文件，最大 128 KB；目录、源码根目录旁写 zip、上传、删除和覆盖仍保持禁用。"
+"I confirm this source file should be archived through a read-only queue.",我确认此源码文件应通过只读队列归档。
+"Create source archive queue",创建源码归档队列
+"Queue source directory archive",队列归档源码目录
+"Source directory name",源码目录名称
+"Queues one existing source-policy child directory into a server-side archive under var/wls-panel/file-manager/source-archives. Max 200 entries and 10 MB; the source tree is only read by the worker.","将一个已存在的源码策略子目录加入只读归档队列，归档产物保存到 var/wls-panel/file-manager/source-archives。最多 200 个条目、10 MB；worker 只读取源码树。"
+"I confirm this source directory should be archived through a read-only queue.",我确认通过只读队列归档这个源码目录。
+"Create source directory archive queue",创建源码目录归档队列
+"Queue source selection archive",队列归档源码多选项
+"Source entry names",源码条目名称
+"Queues up to 20 files or child directories from the current source-policy directory into one read-only archive under var/wls-panel/file-manager/source-archives. Max 200 archived entries and 10 MB; no source-root ZIP writes, upload, delete, or overwrite.","将当前源码策略目录内最多 20 个文件或子目录加入一个只读归档队列，归档产物写入 var/wls-panel/file-manager/source-archives。最多 200 个归档条目和 10 MB；不允许在源码根目录旁写 ZIP、上传、删除或覆盖。"
+"I confirm these selected source entries should be archived through a read-only queue.",我确认这些选中的源码条目应通过只读队列归档。
+"Create source selection archive queue",创建源码多选归档队列
+"Queue recoverable trash",队列化可恢复回收
+"Moves the target into the same root .wls-trash folder. Completed jobs can be restored from the recent queue list while the original path is still free.","将目标移动到同一根目录下的 .wls-trash 文件夹。完成的任务只要原始路径仍空闲，就可以从最近队列列表恢复。"
 "I confirm this target should be moved into recoverable trash, not permanently deleted.",我确认此目标应移动到可恢复回收站，而不是永久删除。
-Create recoverable queue,创建可恢复队列
-Recent queue jobs,最近队列任务
-Latest 10,最近 10 条
+"Create recoverable queue",创建可恢复队列
+"Recent queue jobs",最近队列任务
+"Latest 10","最近 10 条"
 Source,来源
 Target,目标
 Start,开始
 End,结束
 Restore,恢复
-No queued large-file operations yet.,暂无大文件队列操作。
-Latest 30,最近 30 条
-Only queue-created trash entries are listed here. Restore remains available only while the original path is still free and the .wls-trash entry exists. Permanent purge requires explicit PURGE_TRASH confirmation.,这里只显示通过队列创建的回收条目。只有原始路径仍空闲且 .wls-trash 条目存在时才允许恢复。永久清理需要显式输入 PURGE_TRASH 确认。
+"No queued large-file operations yet.",暂无大文件队列操作。
+"Latest 30","最近 30 条"
+"Only queue-created trash entries are listed here. Restore remains available only while the original path is still free and the .wls-trash entry exists. Permanent purge requires explicit PURGE_TRASH confirmation.","这里只显示通过队列创建的回收条目。只有原始路径仍空闲且 .wls-trash 条目存在时才允许恢复。永久清理需要显式输入 PURGE_TRASH 确认。"
 Trash,回收位置
 Purged,已清理
 我确认永久删除此回收条目。,我确认永久删除此回收条目。
 永久清理,永久清理
 暂无可恢复回收历史。,暂无可恢复回收历史。
-Operation Logs,操作日志
-Audit Summary,审计概览
+"Operation Logs",操作日志
+"Audit Summary",审计概览
 Scanned,扫描
-Audit Filters,审计筛选
+"Audit Filters",审计筛选
 Action,动作
 Result,结果
 Root,根目录
 Keyword,关键词
-"Path, target, domain, or IP",路径、目标、域名或 IP
-Filter Logs,筛选日志
-Reset Filters,重置筛选
+"Path, target, domain, or IP","路径、目标、域名或 IP"
+"Filter Logs",筛选日志
+"Reset Filters",重置筛选
 Latest,最新
-No matching file operation logs.,没有匹配的文件操作日志。
+"No matching file operation logs.",没有匹配的文件操作日志。
 暂无文件操作日志。,暂无文件操作日志。
 能力阶段,能力阶段
 processed=%{1},processed=%{1}
@@ -545,52 +545,52 @@ errors=%{1},errors=%{1}
 AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定时任务,AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定时任务
 已续队下一批,已续队下一批
 next_offset=%{1},next_offset=%{1}
-WLS 文件管理器大文件操作,WLS 文件管理器大文件操作
-由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。,由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。
-WLS 文件队列内容无效。,WLS 文件队列内容无效。
-WLS source directory archive queue payload is invalid.,WLS 源码目录归档队列内容无效。
-WLS source archive queue payload is invalid.,WLS 源码归档队列内容无效。
-WLS source selection archive queue payload is invalid.,WLS 源码多选归档队列内容无效。
-WLS 源码文件队列内容无效。,WLS 源码文件队列内容无效。
-WLS 文件管理器队列压缩开始：%{1},WLS 文件管理器队列压缩开始：%{1}
-WLS 文件管理器队列压缩失败：%{1},WLS 文件管理器队列压缩失败：%{1}
-WLS 文件管理器队列压缩完成：%{1}（%{2} 个条目，%{3} 字节）。,WLS 文件管理器队列压缩完成：%{1}（%{2} 个条目，%{3} 字节）。
-WLS source archive queue started: %{1},WLS 源码归档队列开始：%{1}
-WLS source archive queue failed: %{1},WLS 源码归档队列失败：%{1}
-"WLS source archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)",WLS 源码归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）
-WLS source directory archive queue started: %{1},WLS 源码目录归档队列开始：%{1}
-WLS source directory archive queue failed: %{1},WLS 源码目录归档队列失败：%{1}
-"WLS source directory archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)",WLS 源码目录归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）
-WLS source selection archive queue started: %{1},WLS 源码多选归档队列开始：%{1}
-WLS source selection archive queue failed: %{1},WLS 源码多选归档队列失败：%{1}
-"WLS source selection archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)",WLS 源码多选归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）
-WLS 文件管理器队列回收开始：%{1},WLS 文件管理器队列回收开始：%{1}
-WLS 文件管理器队列回收失败：%{1},WLS 文件管理器队列回收失败：%{1}
-WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。,WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。
+"WLS 文件管理器大文件操作","WLS 文件管理器大文件操作"
+"由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。","由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。"
+"WLS 文件队列内容无效。","WLS 文件队列内容无效。"
+"WLS source directory archive queue payload is invalid.","WLS 源码目录归档队列内容无效。"
+"WLS source archive queue payload is invalid.","WLS 源码归档队列内容无效。"
+"WLS source selection archive queue payload is invalid.","WLS 源码多选归档队列内容无效。"
+"WLS 源码文件队列内容无效。","WLS 源码文件队列内容无效。"
+"WLS 文件管理器队列压缩开始：%{1}","WLS 文件管理器队列压缩开始：%{1}"
+"WLS 文件管理器队列压缩失败：%{1}","WLS 文件管理器队列压缩失败：%{1}"
+"WLS 文件管理器队列压缩完成：%{1}（%{2} 个条目，%{3} 字节）。","WLS 文件管理器队列压缩完成：%{1}（%{2} 个条目，%{3} 字节）。"
+"WLS source archive queue started: %{1}","WLS 源码归档队列开始：%{1}"
+"WLS source archive queue failed: %{1}","WLS 源码归档队列失败：%{1}"
+"WLS source archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS 源码归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）"
+"WLS source directory archive queue started: %{1}","WLS 源码目录归档队列开始：%{1}"
+"WLS source directory archive queue failed: %{1}","WLS 源码目录归档队列失败：%{1}"
+"WLS source directory archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS 源码目录归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）"
+"WLS source selection archive queue started: %{1}","WLS 源码多选归档队列开始：%{1}"
+"WLS source selection archive queue failed: %{1}","WLS 源码多选归档队列失败：%{1}"
+"WLS source selection archive queue completed: %{1} -> %{2} (%{3} entries, %{4} bytes)","WLS 源码多选归档队列完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节）"
+"WLS 文件管理器队列回收开始：%{1}","WLS 文件管理器队列回收开始：%{1}"
+"WLS 文件管理器队列回收失败：%{1}","WLS 文件管理器队列回收失败：%{1}"
+"WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。","WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字节，可恢复）。"
 已解析图片结果无效。,已解析图片结果无效。
 图片使用数据版本或身份无效。,图片使用数据版本或身份无效。
-图片 alt 状态无效。,图片 alt 状态无效。
+"图片 alt 状态无效。","图片 alt 状态无效。"
 图片加载策略无效。,图片加载策略无效。
 图片响应式宽度数量或唯一性无效。,图片响应式宽度数量或唯一性无效。
 图片响应式宽度无效。,图片响应式宽度无效。
-图片文本或响应式 sizes 超过长度限制。,图片文本或响应式 sizes 超过长度限制。
-装饰图片的 alt 必须为空。,装饰图片的 alt 必须为空。
-图片 UI 宽高必须成对设置。,图片 UI 宽高必须成对设置。
-图片 UI 宽高无效。,图片 UI 宽高无效。
-图片宽高比格式无效，请使用如 16/9 或 16:9。,图片宽高比格式无效，请使用如 16/9 或 16:9。
+"图片文本或响应式 sizes 超过长度限制。","图片文本或响应式 sizes 超过长度限制。"
+"装饰图片的 alt 必须为空。","装饰图片的 alt 必须为空。"
+"图片 UI 宽高必须成对设置。","图片 UI 宽高必须成对设置。"
+"图片 UI 宽高无效。","图片 UI 宽高无效。"
+"图片宽高比格式无效，请使用如 16/9 或 16:9。","图片宽高比格式无效，请使用如 16/9 或 16:9。"
 图片宽高比数值无效。,图片宽高比数值无效。
-图片 UI 尺寸字段无效：%{1},图片 UI 尺寸字段无效：%{1}
+"图片 UI 尺寸字段无效：%{1}","图片 UI 尺寸字段无效：%{1}"
 图片语境语言与发布语言不一致。,图片语境语言与发布语言不一致。
-图片 alt 尚未审核确认。,图片 alt 尚未审核确认。
-信息图片必须填写 alt。,信息图片必须填写 alt。
+"图片 alt 尚未审核确认。","图片 alt 尚未审核确认。"
+"信息图片必须填写 alt。","信息图片必须填写 alt。"
 图片使用数据布尔字段无效：%{1},图片使用数据布尔字段无效：%{1}
 文件访问上下文无效。,文件访问上下文无效。
 文件访问上下文角色无效。,文件访问上下文角色无效。
-建议尺寸：%{1} × %{2} px,建议尺寸：%{1} × %{2} px
+"建议尺寸：%{1} × %{2} px","建议尺寸：%{1} × %{2} px"
 推荐比例：%{1},推荐比例：%{1}
 源语言元数据缺失，无法补缺翻译。,源语言元数据缺失，无法补缺翻译。
-语言 %{1} 翻译失败或 AI 翻译不可用。,语言 %{1} 翻译失败或 AI 翻译不可用。
-语言 %{1} 翻译结果为空。,语言 %{1} 翻译结果为空。
+"语言 %{1} 翻译失败或 AI 翻译不可用。","语言 %{1} 翻译失败或 AI 翻译不可用。"
+"语言 %{1} 翻译结果为空。","语言 %{1} 翻译结果为空。"
 上传源必须是流。,上传源必须是流。
 目标文件已存在，禁止覆盖。,目标文件已存在，禁止覆盖。
 文件资源上传必须从根边界使用写意图事务。,文件资源上传必须从根边界使用写意图事务。
@@ -609,13 +609,13 @@ WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字
 读取存储对象时连续无数据进展。,读取存储对象时连续无数据进展。
 存储磁盘可见性配置无效。,存储磁盘可见性配置无效。
 文件资源可见性必须与所选磁盘可见性一致。,文件资源可见性必须与所选磁盘可见性一致。
-私有存储 URL 适配器未提供不可缓存的临时 URL。,私有存储 URL 适配器未提供不可缓存的临时 URL。
+"私有存储 URL 适配器未提供不可缓存的临时 URL。","私有存储 URL 适配器未提供不可缓存的临时 URL。"
 私有文件必须配置有效访问策略。,私有文件必须配置有效访问策略。
 私有文件访问策略列表无效或超过限制。,私有文件访问策略列表无效或超过限制。
 私有文件访问策略不能为空。,私有文件访问策略不能为空。
 文件图片语言必须与当前请求语言一致。,文件图片语言必须与当前请求语言一致。
 图片语境语言与当前请求语言不一致。,图片语境语言与当前请求语言不一致。
-文件图片渲染缺少显式 ScopeIdentity。,文件图片渲染缺少显式 ScopeIdentity。
+"文件图片渲染缺少显式 ScopeIdentity。","文件图片渲染缺少显式 ScopeIdentity。"
 源文件与目标文件不能相同。,源文件与目标文件不能相同。
 源文件资源已删除，不能移动。,源文件资源已删除，不能移动。
 文件移动补偿清理目标对象失败。,文件移动补偿清理目标对象失败。
@@ -644,7 +644,7 @@ WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字
 目录移动补偿恢复源目录失败。,目录移动补偿恢复源目录失败。
 目录移动补偿遇到越界对象。,目录移动补偿遇到越界对象。
 目录移动补偿清理目标目录失败。,目录移动补偿清理目标目录失败。
-资源 ID 不能为空。,资源 ID 不能为空。
+"资源 ID 不能为空。","资源 ID 不能为空。"
 文件资源不存在。,文件资源不存在。
 文件资源缺少精确语言元数据：%{1},文件资源缺少精确语言元数据：%{1}
 公开发布的页面不能引用私有文件资源。,公开发布的页面不能引用私有文件资源。
@@ -658,12 +658,12 @@ WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字
 当前访问上下文不允许管理私有文件资源。,当前访问上下文不允许管理私有文件资源。
 当前上下文无权读取私有文件资源。,当前上下文无权读取私有文件资源。
 文件访问策略版本已更新，请刷新访问上下文。,文件访问策略版本已更新，请刷新访问上下文。
-当前 Scope 无权读取私有文件资源。,当前 Scope 无权读取私有文件资源。
+"当前 Scope 无权读取私有文件资源。","当前 Scope 无权读取私有文件资源。"
 当前角色无权读取私有文件资源。,当前角色无权读取私有文件资源。
 私有文件访问策略无效。,私有文件访问策略无效。
 私有文件访问策略列表超过限制。,私有文件访问策略列表超过限制。
 存储磁盘仍被文件资源引用，不能删除。,存储磁盘仍被文件资源引用，不能删除。
-文件资源多语言 AI 补缺翻译,文件资源多语言 AI 补缺翻译
+"文件资源多语言 AI 补缺翻译","文件资源多语言 AI 补缺翻译"
 源码编辑默认关闭,源码编辑默认关闭
 源码编辑策略允许,源码编辑策略允许
 源码编辑策略禁用,源码编辑策略禁用
@@ -674,39 +674,39 @@ WLS 文件管理器队列回收完成：%{1} -> %{2}（%{3} 个条目，%{4} 字
 当前项目路径策略已禁用此根目录写入。,当前项目路径策略已禁用此根目录写入。
 策略允许,策略允许
 当前项目路径策略允许此根目录受控写入。,当前项目路径策略允许此根目录受控写入。
-存储对象尚未建立 FileAsset，不能访问。,存储对象尚未建立 FileAsset，不能访问。
+"存储对象尚未建立 FileAsset，不能访问。","存储对象尚未建立 FileAsset，不能访问。"
 上传失败，且已写入文件无法自动回收，请立即人工清理。,上传失败，且已写入文件无法自动回收，请立即人工清理。
 文件资源修订版本无效。,文件资源修订版本无效。
 资源身份与当前存储对象不匹配。,资源身份与当前存储对象不匹配。
 文件资源元数据保存必须位于写意图事务内。,文件资源元数据保存必须位于写意图事务内。
 私有文件资源缺少既有访问策略。,私有文件资源缺少既有访问策略。
 资源元数据更新不能修改私有访问策略。,资源元数据更新不能修改私有访问策略。
-资源引用 owner 身份无效。,资源引用 owner 身份无效。
+"资源引用 owner 身份无效。","资源引用 owner 身份无效。"
 单个业务版本的文件资源引用数量超过限制。,单个业务版本的文件资源引用数量超过限制。
 文件资源引用写入必须位于写意图事务内。,文件资源引用写入必须位于写意图事务内。
 引用的文件资源不可用。,引用的文件资源不可用。
 引用的文件资源不存在。,引用的文件资源不存在。
-文件布局仅索引模式必须指定完整 owner 身份。,文件布局仅索引模式必须指定完整 owner 身份。
-文件布局校验缺少显式 ScopeIdentity 或 locale_code。,文件布局校验缺少显式 ScopeIdentity 或 locale_code。
-Theme 布局内容超过文件校验上限。,Theme 布局内容超过文件校验上限。
-文件资源 AI 自动翻译未启用，cron 已跳过,文件资源 AI 自动翻译未启用，cron 已跳过
-文件资源 AI 翻译未入队（未启用、无缺口或已有待运行任务），耗时 %{1} 秒,文件资源 AI 翻译未入队（未启用、无缺口或已有待运行任务），耗时 %{1} 秒
-文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒,文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒
-图片 usage JSON 无效。,图片 usage JSON 无效。
-文件资源 AI 翻译未入队（未启用或已有待运行任务），耗时 %{1} 秒,文件资源 AI 翻译未入队（未启用或已有待运行任务），耗时 %{1} 秒
+"文件布局仅索引模式必须指定完整 owner 身份。","文件布局仅索引模式必须指定完整 owner 身份。"
+"文件布局校验缺少显式 ScopeIdentity 或 locale_code。","文件布局校验缺少显式 ScopeIdentity 或 locale_code。"
+"Theme 布局内容超过文件校验上限。","Theme 布局内容超过文件校验上限。"
+"文件资源 AI 自动翻译未启用，cron 已跳过","文件资源 AI 自动翻译未启用，cron 已跳过"
+"文件资源 AI 翻译未入队（未启用、无缺口或已有待运行任务），耗时 %{1} 秒","文件资源 AI 翻译未入队（未启用、无缺口或已有待运行任务），耗时 %{1} 秒"
+"文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒","文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒"
+"图片 usage JSON 无效。","图片 usage JSON 无效。"
+"文件资源 AI 翻译未入队（未启用或已有待运行任务），耗时 %{1} 秒","文件资源 AI 翻译未入队（未启用或已有待运行任务），耗时 %{1} 秒"
 无法读取上传源以计算校验值。,无法读取上传源以计算校验值。
 读取上传源时连续无数据进展。,读取上传源时连续无数据进展。
 上传源无法恢复到原始读取位置。,上传源无法恢复到原始读取位置。
-私有图片变体 URL 必须不可共享缓存且带过期时间。,私有图片变体 URL 必须不可共享缓存且带过期时间。
+"私有图片变体 URL 必须不可共享缓存且带过期时间。","私有图片变体 URL 必须不可共享缓存且带过期时间。"
 允许的文件类型：,允许的文件类型：
 允许的文件大小：,允许的文件大小：
-mdi mdi-folder-outline,mdi mdi-文件夹大纲
-mdi mdi-file-tree-outline,mdi mdi-file-tree-outline
-mdi mdi-shield-edit-outline,mdi mdi-shield-编辑大纲
-mdi mdi-file-edit-outline,mdi mdi 文件编辑大纲
-mdi mdi-progress-clock,MDI MDI 进度时钟
-mdi mdi-clipboard-text-clock-outline,mdi mdi-剪贴板-文本-时钟-大纲
-mdi mdi-puzzle-outline,MDI MDI-拼图大纲
+"mdi mdi-folder-outline","mdi mdi-文件夹大纲"
+"mdi mdi-file-tree-outline","mdi mdi-file-tree-outline"
+"mdi mdi-shield-edit-outline","mdi mdi-shield-编辑大纲"
+"mdi mdi-file-edit-outline","mdi mdi 文件编辑大纲"
+"mdi mdi-progress-clock","MDI MDI 进度时钟"
+"mdi mdi-clipboard-text-clock-outline","mdi mdi-剪贴板-文本-时钟-大纲"
+"mdi mdi-puzzle-outline","MDI MDI-拼图大纲"
 私有文件元数据修改缺少访问上下文。,私有文件元数据修改缺少访问上下文。
 私有文件详情读取缺少访问上下文。,私有文件详情读取缺少访问上下文。
 私有文件上传缺少访问上下文。,私有文件上传缺少访问上下文。

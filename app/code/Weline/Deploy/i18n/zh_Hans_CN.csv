@@ -1,4 +1,4 @@
-请指定分支。,请指定分支。
+﻿请指定分支。,请指定分支。
 请求方式错误。,请求方式错误。
 发布参数不完整。,发布参数不完整。
 请先确认发布操作。,请先确认发布操作。
@@ -10,7 +10,7 @@ circle,圆圈
 发布控制、历史与核心更新,发布控制、历史与核心更新
 发布控制,发布控制
 refresh,刷新
-查看 Git 历史并手动发布,查看 Git 历史并手动发布
+"查看 Git 历史并手动发布","查看 Git 历史并手动发布"
 执行发布,执行发布
 从发布控制触发部署,从发布控制触发部署
 请求方式错误,请求方式错误
@@ -18,7 +18,7 @@ refresh,刷新
 部署配置保存失败：%{1},部署配置保存失败：%{1}
 当前站点请求域名,当前站点请求域名
 部署配置,部署配置
-管理部署仓库、Webhook 与缓存清理配置,管理部署仓库、Webhook 与缓存清理配置
+"管理部署仓库、Webhook 与缓存清理配置","管理部署仓库、Webhook 与缓存清理配置"
 查看部署配置,查看部署配置
 查看部署信息配置,查看部署信息配置
 保存部署配置,保存部署配置
@@ -29,11 +29,11 @@ save,节省
 备份编号：%{1},备份编号：%{1}
 核心更新失败。,核心更新失败。
 核心更新,核心更新
-Web 执行框架核心更新,Web 执行框架核心更新
+"Web 执行框架核心更新","Web 执行框架核心更新"
 执行核心更新,执行核心更新
-执行 update:core 命令,执行 update:core 命令
+"执行 update:core 命令","执行 update:core 命令"
 请先勾选确认框后再执行回滚。,请先勾选确认框后再执行回滚。
-缺少发布记录 ID。,缺少发布记录 ID。
+"缺少发布记录 ID。","缺少发布记录 ID。"
 发布记录不存在。,发布记录不存在。
 只能回滚成功的发布记录。,只能回滚成功的发布记录。
 当前版本无需回滚。,当前版本无需回滚。
@@ -49,43 +49,43 @@ history,历史
 回滚发布版本,回滚发布版本
 store,店铺
 从历史记录回滚版本,从历史记录回滚版本
-WLS 部署发布,WLS 部署发布
-项目发布 Profile 保存失败。,项目发布 Profile 保存失败。
+"WLS 部署发布","WLS 部署发布"
+"项目发布 Profile 保存失败。","项目发布 Profile 保存失败。"
 发布预检存在阻断项，请先修正标红项。,发布预检存在阻断项，请先修正标红项。
-请输入需要回放的 Webhook Ref。,请输入需要回放的 Webhook Ref。
-Invalid request method.,请求方法无效。
-Please enter a Git ref for the manual release.,请输入手动发布的 Git ref。
-Please enter a Git ref for the manual release plan.,请输入手动发布计划的 Git ref。
+"请输入需要回放的 Webhook Ref。","请输入需要回放的 Webhook Ref。"
+"Invalid request method.",请求方法无效。
+"Please enter a Git ref for the manual release.","请输入手动发布的 Git ref。"
+"Please enter a Git ref for the manual release plan.","请输入手动发布计划的 Git ref。"
 "Release preflight has blocking items, so the manual release was not executed.",发布预检存在阻断项，未执行手动发布。
 "Release preflight has blocking items, so the manual plan was not built.",发布预检存在阻断项，未生成手动发布计划。
-Confirm the manual release before running it.,请先勾选确认框后再执行发布。
-Manual release failed.,手动发布失败。
+"Confirm the manual release before running it.",请先勾选确认框后再执行发布。
+"Manual release failed.",手动发布失败。
 发布预检存在阻断项，不能执行回滚。,发布预检存在阻断项，不能执行回滚。
-当前项目 Profile 未配置回滚参考。,当前项目 Profile 未配置回滚参考。
+"当前项目 Profile 未配置回滚参考。","当前项目 Profile 未配置回滚参考。"
 当前项目发布记录,当前项目发布记录
 当前域名发布记录,当前域名发布记录
 全局发布记录,全局发布记录
-未选择子项目，显示 WLS 主项目发布历史。,未选择子项目，显示 WLS 主项目发布历史。
-Tag 发布策略,Tag 发布策略
+"未选择子项目，显示 WLS 主项目发布历史。","未选择子项目，显示 WLS 主项目发布历史。"
+"Tag 发布策略","Tag 发布策略"
 默认启用,默认启用
 已调整,已调整
-默认仅响应 tag push；需要分支发布时必须在 Deploy 配置中显式开启。,默认仅响应 tag push；需要分支发布时必须在 Deploy 配置中显式开启。
-Webhook 随机路径,Webhook 随机路径
+"默认仅响应 tag push；需要分支发布时必须在 Deploy 配置中显式开启。","默认仅响应 tag push；需要分支发布时必须在 Deploy 配置中显式开启。"
+"Webhook 随机路径","Webhook 随机路径"
 已生成,已生成
 待生成,待生成
-公网入口使用 ~wh~ 随机路径和密钥鉴权，由 ModuleRouter 转入发布控制器。,公网入口使用 ~wh~ 随机路径和密钥鉴权，由 ModuleRouter 转入发布控制器。
+"公网入口使用 ~wh~ 随机路径和密钥鉴权，由 ModuleRouter 转入发布控制器。","公网入口使用 ~wh~ 随机路径和密钥鉴权，由 ModuleRouter 转入发布控制器。"
 子项目发布档案,子项目发布档案
 已启用,已启用
 已保存,已保存
 继承全局,继承全局
-当前项目已有独立发布 Profile，后续 webhook/manual release 会按项目上下文读取。,当前项目已有独立发布 Profile，后续 webhook/manual release 会按项目上下文读取。
-当前项目暂未保存独立 Profile，发布能力继续读取全局 Deploy 配置。,当前项目暂未保存独立 Profile，发布能力继续读取全局 Deploy 配置。
+"当前项目已有独立发布 Profile，后续 webhook/manual release 会按项目上下文读取。","当前项目已有独立发布 Profile，后续 webhook/manual release 会按项目上下文读取。"
+"当前项目暂未保存独立 Profile，发布能力继续读取全局 Deploy 配置。","当前项目暂未保存独立 Profile，发布能力继续读取全局 Deploy 配置。"
 发布日志,发布日志
 已接入,已接入
-Webhook 与命令发布共用发布历史服务，面板可直接查看最近发布状态。,Webhook 与命令发布共用发布历史服务，面板可直接查看最近发布状态。
-仅分支 Push,仅分支 Push
-分支 + Tag 都生效,分支 + Tag 都生效
-仅 Tag Push,仅标签推送
+"Webhook 与命令发布共用发布历史服务，面板可直接查看最近发布状态。","Webhook 与命令发布共用发布历史服务，面板可直接查看最近发布状态。"
+"仅分支 Push","仅分支 Push"
+"分支 + Tag 都生效","分支 + Tag 都生效"
+"仅 Tag Push",仅标签推送
 成功,成功
 失败,失败
 运行中,运行中
@@ -94,172 +94,172 @@ Webhook 与命令发布共用发布历史服务，面板可直接查看最近发
 会触发发布,会触发发布
 不会触发,不会触发
 待回放,待回放
-Plan ready,计划已就绪
-Policy skipped,策略已跳过
-Waiting for ref,等待 ref
-Current WLS project root,当前 WLS 项目根目录
+"Plan ready",计划已就绪
+"Policy skipped",策略已跳过
+"Waiting for ref","等待 ref"
+"Current WLS project root","当前 WLS 项目根目录"
 Enabled,启用
 Disabled,已禁用
 "Enabled, command not configured",已启用，但未配置命令
-No execution plan yet,暂无执行计划
-Enter a matching tag or branch ref to preview the manual release path.,输入匹配的 tag 或分支 ref 以预览手动发布路径。
-"Fetch tags from %{1}, then checkout tag %{2}.",从 %{1} 拉取 tags，然后 checkout tag %{2}。
-"Fetch %{1}, then %{2} branch %{3}.",从 %{1} 拉取，然后以 %{2} 模式更新分支 %{3}。
-Preflight gate,预检门禁
+"No execution plan yet",暂无执行计划
+"Enter a matching tag or branch ref to preview the manual release path.","输入匹配的 tag 或分支 ref 以预览手动发布路径。"
+"Fetch tags from %{1}, then checkout tag %{2}.","从 %{1} 拉取 tags，然后 checkout tag %{2}。"
+"Fetch %{1}, then %{2} branch %{3}.","从 %{1} 拉取，然后以 %{2} 模式更新分支 %{3}。"
+"Preflight gate",预检门禁
 Backup,备份
-Create a deploy backup before Git changes.,Git 变更前创建部署备份。
-Git update,Git 更新
+"Create a deploy backup before Git changes.","Git 变更前创建部署备份。"
+"Git update","Git 更新"
 Composer,作曲家
-"Composer is enabled, but no command is configured yet.",已启用 Composer，但尚未配置命令。
-Composer is disabled for this project.,该项目未启用 Composer。
-Post deploy,部署后命令
-No post-deploy command is configured.,尚未配置部署后命令。
-Runtime stamp and reload,运行时版本戳与重载
-"A real release would write current.json, sync env release metadata, record project-scoped history, dispatch release_after, and reload WLS.",真实发布会写入 current.json，同步 env 发布元数据，记录项目级历史，派发 release_after，并重载 WLS。
-Execution gate,执行门禁
-Build Plan stays read-only. Run Release requires explicit confirmation and re-runs the preflight and trigger policy before execution.,Build Plan 保持只读；Run Release 需要显式确认，并会在执行前重新检查预检结果和触发策略。
-Manual release ref contains unsupported shell control characters.,手动发布 ref 包含不支持的 shell 控制字符。
-Manual release ref is outside the WLS allowlist.,手动发布 ref 不在 WLS 白名单内。
+"Composer is enabled, but no command is configured yet.","已启用 Composer，但尚未配置命令。"
+"Composer is disabled for this project.","该项目未启用 Composer。"
+"Post deploy",部署后命令
+"No post-deploy command is configured.",尚未配置部署后命令。
+"Runtime stamp and reload",运行时版本戳与重载
+"A real release would write current.json, sync env release metadata, record project-scoped history, dispatch release_after, and reload WLS.","真实发布会写入 current.json，同步 env 发布元数据，记录项目级历史，派发 release_after，并重载 WLS。"
+"Execution gate",执行门禁
+"Build Plan stays read-only. Run Release requires explicit confirmation and re-runs the preflight and trigger policy before execution.","Build Plan 保持只读；Run Release 需要显式确认，并会在执行前重新检查预检结果和触发策略。"
+"Manual release ref contains unsupported shell control characters.","手动发布 ref 包含不支持的 shell 控制字符。"
+"Manual release ref is outside the WLS allowlist.","手动发布 ref 不在 WLS 白名单内。"
 策略命中，会进入发布流程。,策略命中，会进入发布流程。
-当前为仅 Tag Push，分支事件会被跳过。,当前为仅 Tag Push，分支事件会被跳过。
-当前为仅分支 Push，Tag 事件会被跳过。,当前为仅分支 Push，Tag 事件会被跳过。
-分支与 Webhook 分支过滤不匹配。,分支与 Webhook 分支过滤不匹配。
-Tag 不符合配置的前缀过滤。,Tag 不符合配置的前缀过滤。
-Ref 不是可识别的分支或 Tag。,Ref 不是可识别的分支或 Tag。
+"当前为仅 Tag Push，分支事件会被跳过。","当前为仅 Tag Push，分支事件会被跳过。"
+"当前为仅分支 Push，Tag 事件会被跳过。","当前为仅分支 Push，Tag 事件会被跳过。"
+"分支与 Webhook 分支过滤不匹配。","分支与 Webhook 分支过滤不匹配。"
+"Tag 不符合配置的前缀过滤。","Tag 不符合配置的前缀过滤。"
+"Ref 不是可识别的分支或 Tag。","Ref 不是可识别的分支或 Tag。"
 暂无回放结果。,暂无回放结果。
-项目发布 Profile 已保存。,项目发布 Profile 已保存。
+"项目发布 Profile 已保存。","项目发布 Profile 已保存。"
 发布预检已完成，未执行真实发布。,发布预检已完成，未执行真实发布。
-Webhook 回放预检已完成，未执行真实发布。,Webhook 回放预检已完成，未执行真实发布。
+"Webhook 回放预检已完成，未执行真实发布。","Webhook 回放预检已完成，未执行真实发布。"
 项目回滚已完成。,项目回滚已完成。
-Manual release plan is ready; no release was executed.,手动发布计划已就绪，未执行真实发布。
-Manual release plan was skipped by the current trigger policy; no release was executed.,当前触发策略跳过了手动发布计划，未执行真实发布。
-Manual release completed.,手动发布已完成。
-Manual release was skipped by the current trigger policy; no release was executed.,当前触发策略跳过了手动发布，未执行真实发布。
-WLS 面板部署发布入口,WLS 面板部署发布入口
-查看 WLS 部署发布,查看 WLS 部署发布
-查看 WLS 面板部署发布,查看 WLS 面板部署发布
-View WLS Deploy Overview,查看 WLS 部署概述
+"Manual release plan is ready; no release was executed.",手动发布计划已就绪，未执行真实发布。
+"Manual release plan was skipped by the current trigger policy; no release was executed.",当前触发策略跳过了手动发布计划，未执行真实发布。
+"Manual release completed.",手动发布已完成。
+"Manual release was skipped by the current trigger policy; no release was executed.",当前触发策略跳过了手动发布，未执行真实发布。
+"WLS 面板部署发布入口","WLS 面板部署发布入口"
+"查看 WLS 部署发布","查看 WLS 部署发布"
+"查看 WLS 面板部署发布","查看 WLS 面板部署发布"
+"View WLS Deploy Overview","查看 WLS 部署概述"
 grid,网格
-View WLS Panel deploy overview,查看 WLS 面板部署概述
-View WLS Deploy Release Path,查看 WLS 部署发布路径
+"View WLS Panel deploy overview","查看 WLS 面板部署概述"
+"View WLS Deploy Release Path","查看 WLS 部署发布路径"
 branch,分支
-View WLS Panel deploy release path,查看WLS面板部署发布路径
-View WLS Deploy Configuration,查看 WLS 部署配置
+"View WLS Panel deploy release path",查看WLS面板部署发布路径
+"View WLS Deploy Configuration","查看 WLS 部署配置"
 settings,设置
-View WLS Panel deploy configuration,查看 WLS 面板部署配置
-View WLS Deploy Project Profile,查看 WLS 部署项目配置文件
+"View WLS Panel deploy configuration","查看 WLS 面板部署配置"
+"View WLS Deploy Project Profile","查看 WLS 部署项目配置文件"
 edit,编辑
-View WLS Panel deploy project profile,查看 WLS Panel 部署项目配置文件
-View WLS Deploy Preflight,查看 WLS 部署预检
+"View WLS Panel deploy project profile","查看 WLS Panel 部署项目配置文件"
+"View WLS Deploy Preflight","查看 WLS 部署预检"
 check,查看
-View WLS Panel deploy preflight,查看 WLS 面板部署预检
-View WLS Deploy Webhooks,查看 WLS 部署 Webhook
-View WLS Panel deploy webhooks,查看 WLS 面板部署 webhook
-View WLS Deploy Releases,查看 WLS 部署版本
-View WLS Panel deploy releases,查看 WLS Panel 部署版本
-View WLS Deploy Manual Plan,查看 WLS 部署手动计划
+"View WLS Panel deploy preflight","查看 WLS 面板部署预检"
+"View WLS Deploy Webhooks","查看 WLS 部署 Webhook"
+"View WLS Panel deploy webhooks","查看 WLS 面板部署 webhook"
+"View WLS Deploy Releases","查看 WLS 部署版本"
+"View WLS Panel deploy releases","查看 WLS Panel 部署版本"
+"View WLS Deploy Manual Plan","查看 WLS 部署手动计划"
 list,列表
-View WLS Panel deploy manual plan,查看 WLS Panel 部署手动计划
-保存 WLS 项目发布 Profile,保存 WLS 项目发布 Profile
-保存 WLS 面板项目发布 Profile,保存 WLS 面板项目发布 Profile
-执行 WLS 项目发布预检,执行 WLS 项目发布预检
-执行 WLS 面板项目发布预检,执行 WLS 面板项目发布预检
-回放 WLS 发布 Webhook,回放 WLS 发布 Webhook
-回放 WLS 面板 Webhook 触发策略,回放 WLS 面板 Webhook 触发策略
-执行 WLS 项目发布回滚,执行 WLS 项目发布回滚
-执行 WLS 面板项目发布回滚,执行 WLS 面板项目发布回滚
-Build WLS manual release plan,构建WLS手动发布计划
-Build read-only WLS Panel manual release execution plan,构建只读WLS Panel手动发布执行计划
-Run WLS project rollback,运行 WLS 项目回滚
-Run WLS Panel project rollback,运行 WLS Panel 项目回滚
+"View WLS Panel deploy manual plan","查看 WLS Panel 部署手动计划"
+"保存 WLS 项目发布 Profile","保存 WLS 项目发布 Profile"
+"保存 WLS 面板项目发布 Profile","保存 WLS 面板项目发布 Profile"
+"执行 WLS 项目发布预检","执行 WLS 项目发布预检"
+"执行 WLS 面板项目发布预检","执行 WLS 面板项目发布预检"
+"回放 WLS 发布 Webhook","回放 WLS 发布 Webhook"
+"回放 WLS 面板 Webhook 触发策略","回放 WLS 面板 Webhook 触发策略"
+"执行 WLS 项目发布回滚","执行 WLS 项目发布回滚"
+"执行 WLS 面板项目发布回滚","执行 WLS 面板项目发布回滚"
+"Build WLS manual release plan",构建WLS手动发布计划
+"Build read-only WLS Panel manual release execution plan","构建只读WLS Panel手动发布执行计划"
+"Run WLS project rollback","运行 WLS 项目回滚"
+"Run WLS Panel project rollback","运行 WLS Panel 项目回滚"
 项目仓库地址不合法。,项目仓库地址不合法。
-Webhook 密钥包含不允许的控制字符。,Webhook 密钥包含不允许的控制字符。
+"Webhook 密钥包含不允许的控制字符。","Webhook 密钥包含不允许的控制字符。"
 已配置，留空表示不修改,已配置，留空表示不修改
 未配置,未配置
 立即复制,立即复制
-后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。,后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。
+"后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。","后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。"
 项目仓库,项目仓库
 项目仓库地址,项目仓库地址
 项目分支,项目分支
-Git Remote 名称,Git Remote 名称
+"Git Remote 名称","Git Remote 名称"
 项目仓库用户名,项目仓库用户名
-项目仓库 Token,项目仓库 Token
+"项目仓库 Token","项目仓库 Token"
 部署行为,部署行为
 部署根目录,部署根目录
-Git 更新模式,Git 更新模式
-Composer 命令,作曲家命令
+"Git 更新模式","Git 更新模式"
+"Composer 命令",作曲家命令
 部署后命令,部署后命令
 允许覆盖本地改动,允许覆盖本地改动
 允许切换分支,允许切换分支
-更新 Submodule,更新子模块
-运行 Composer,运行作曲家
+"更新 Submodule",更新子模块
+"运行 Composer",运行作曲家
 核心仓库,核心仓库
 核心仓库地址,核心仓库地址
 核心默认分支,核心默认分支
 核心仓库用户名,核心仓库用户名
-核心仓库 Token,核心仓库 Token
+"核心仓库 Token","核心仓库 Token"
 Webhook,网络钩子
-当前站点域名可直接用于 Webhook；请将下方完整地址复制到 Gitee/GitHub 仓库 Webhook 配置。,当前站点域名可直接用于 Webhook；请将下方完整地址复制到 Gitee/GitHub 仓库 Webhook 配置。
+"当前站点域名可直接用于 Webhook；请将下方完整地址复制到 Gitee/GitHub 仓库 Webhook 配置。","当前站点域名可直接用于 Webhook；请将下方完整地址复制到 Gitee/GitHub 仓库 Webhook 配置。"
 域名来源：%{1},域名来源：%{1}
-尚未生成 Webhook 路径。首次生成：,尚未生成 Webhook 路径。首次生成：
+"尚未生成 Webhook 路径。首次生成：","尚未生成 Webhook 路径。首次生成："
 ；仅轮换路径：,；仅轮换路径：
-Webhook 公网地址（复制到 Git 平台）,Webhook 公网地址（复制到 Git 平台）
-尚未生成，请执行 deploy:webhook:setup,尚未生成，请执行 deploy:webhook:setup
-Webhook 入口挂在站点根域名下，不跟随后台路径前缀；版本探测地址为同路径后加 /version。,Webhook 入口挂在站点根域名下，不跟随后台路径前缀；版本探测地址为同路径后加 /version。
+"Webhook 公网地址（复制到 Git 平台）","Webhook 公网地址（复制到 Git 平台）"
+"尚未生成，请执行 deploy:webhook:setup","尚未生成，请执行 deploy:webhook:setup"
+"Webhook 入口挂在站点根域名下，不跟随后台路径前缀；版本探测地址为同路径后加 /version。","Webhook 入口挂在站点根域名下，不跟随后台路径前缀；版本探测地址为同路径后加 /version。"
 版本探测地址,版本探测地址
-Webhook 随机路径（只读）,Webhook 随机路径（只读）
-Webhook 密钥,Webhook 密钥
-即 webhook_secret；留空保存表示不修改已有密钥。,即 webhook_secret；留空保存表示不修改已有密钥。
-Bash 命令,Bash 命令
-Webhook 配置引导,Webhook 配置引导
-Git 平台 Webhook URL 使用上方「Webhook 公网地址」；Secret/密码与「Webhook 密钥」相同。,Git 平台 Webhook URL 使用上方「Webhook 公网地址」；Secret/密码与「Webhook 密钥」相同。
+"Webhook 随机路径（只读）","Webhook 随机路径（只读）"
+"Webhook 密钥","Webhook 密钥"
+"即 webhook_secret；留空保存表示不修改已有密钥。","即 webhook_secret；留空保存表示不修改已有密钥。"
+"Bash 命令","Bash 命令"
+"Webhook 配置引导","Webhook 配置引导"
+"Git 平台 Webhook URL 使用上方「Webhook 公网地址」；Secret/密码与「Webhook 密钥」相同。","Git 平台 Webhook URL 使用上方「Webhook 公网地址」；Secret/密码与「Webhook 密钥」相同。"
 其他平台,其他平台
-第 1 步：进入 Gitee 仓库设置,第 1 步：进入 Gitee 仓库设置
-打开 Gitee 仓库页面，点击顶部「管理」,打开 Gitee 仓库页面，点击顶部「管理」
-左侧菜单找到「WebHooks」，点击「添加 WebHook」,左侧菜单找到「WebHooks」，点击「添加 WebHook」
-第 2 步：填写 Webhook 信息,第 2 步：填写 Webhook 信息
+"第 1 步：进入 Gitee 仓库设置","第 1 步：进入 Gitee 仓库设置"
+"打开 Gitee 仓库页面，点击顶部「管理」","打开 Gitee 仓库页面，点击顶部「管理」"
+"左侧菜单找到「WebHooks」，点击「添加 WebHook」","左侧菜单找到「WebHooks」，点击「添加 WebHook」"
+"第 2 步：填写 Webhook 信息","第 2 步：填写 Webhook 信息"
 密码,密码
-填写上方「Webhook 密钥」中保存的值,填写上方「Webhook 密钥」中保存的值
+"填写上方「Webhook 密钥」中保存的值","填写上方「Webhook 密钥」中保存的值"
 触发事件,触发事件
 勾选「Push」,勾选「推」
 数据格式,数据格式
-第 3 步：验证,第 3 步：验证
+"第 3 步：验证","第 3 步：验证"
 "返回 {""ok"":true} 即表示 Webhook 入口正常。","返回 {""ok"":true} 即表示 Webhook 入口正常。"
-第 1 步：进入 GitHub 仓库设置,第 1 步：进入 GitHub 仓库设置
-打开 GitHub 仓库页面，点击「Settings」,打开 GitHub 仓库页面，点击「Settings」
-左侧菜单找到「Webhooks」，点击「Add webhook」,左侧菜单找到「Webhooks」，点击「Add webhook」
-选择「Just the push event」,选择「仅推送事件」
-支持的 Webhook 协议,支持的 Webhook 协议
-本系统兼容标准 Webhook 协议，支持以下鉴权方式：,本系统兼容标准 Webhook 协议，支持以下鉴权方式：
-通用 HTTP Bearer Token,通用 HTTP 承载令牌
-URL 参数传递,URL 参数传递
-Gitee 专用（自动识别）,Gitee 专用（自动识别）
-GitHub 专用（HMAC-SHA256）,GitHub专用（HMAC-SHA256）
-Payload 要求,有效载荷要求
-请求体为 JSON 格式，必须包含 <code>ref</code> 字段：,请求体为 JSON 格式，必须包含 <code>ref</code> 字段：
-Nginx 反代示例（WLS）,Nginx 反代示例（WLS）
-Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。,Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。
+"第 1 步：进入 GitHub 仓库设置","第 1 步：进入 GitHub 仓库设置"
+"打开 GitHub 仓库页面，点击「Settings」","打开 GitHub 仓库页面，点击「Settings」"
+"左侧菜单找到「Webhooks」，点击「Add webhook」","左侧菜单找到「Webhooks」，点击「Add webhook」"
+"选择「Just the push event」",选择「仅推送事件」
+"支持的 Webhook 协议","支持的 Webhook 协议"
+"本系统兼容标准 Webhook 协议，支持以下鉴权方式：","本系统兼容标准 Webhook 协议，支持以下鉴权方式："
+"通用 HTTP Bearer Token","通用 HTTP 承载令牌"
+"URL 参数传递","URL 参数传递"
+"Gitee 专用（自动识别）","Gitee 专用（自动识别）"
+"GitHub 专用（HMAC-SHA256）",GitHub专用（HMAC-SHA256）
+"Payload 要求",有效载荷要求
+"请求体为 JSON 格式，必须包含 <code>ref</code> 字段：","请求体为 JSON 格式，必须包含 <code>ref</code> 字段："
+"Nginx 反代示例（WLS）","Nginx 反代示例（WLS）"
+"Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。","Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。"
 手动测试,手动测试
-默认仅 Tag Push：分支测试会返回 trigger_mode_tag_only；选择分支或两者都生效后，branch_mismatch 表示分支不匹配。,默认仅 Tag Push：分支测试会返回 trigger_mode_tag_only；选择分支或两者都生效后，branch_mismatch 表示分支不匹配。
+"默认仅 Tag Push：分支测试会返回 trigger_mode_tag_only；选择分支或两者都生效后，branch_mismatch 表示分支不匹配。","默认仅 Tag Push：分支测试会返回 trigger_mode_tag_only；选择分支或两者都生效后，branch_mismatch 表示分支不匹配。"
 触发模式,触发模式
 部署触发方式,部署触发方式
-默认仅 Tag Push；只有明确选择分支模式或两者都生效时才响应分支 push。,默认仅 Tag Push；只有明确选择分支模式或两者都生效时才响应分支 push。
+"默认仅 Tag Push；只有明确选择分支模式或两者都生效时才响应分支 push。","默认仅 Tag Push；只有明确选择分支模式或两者都生效时才响应分支 push。"
 分支过滤,分支过滤
-留空匹配所有分支；填写后仅该分支的 push 触发部署,留空匹配所有分支；填写后仅该分支的 push 触发部署
-Tag 前缀过滤,Tag 前缀过滤
-留空匹配所有 tag；填写后仅匹配此前缀的 tag 触发部署,留空匹配所有 tag；填写后仅匹配此前缀的 tag 触发部署
-发布探测 Token,发布探测 Token
-访问 Webhook 路径后加 /version?token=xxx 可查看详细版本信息,访问 Webhook 路径后加 /version?token=xxx 可查看详细版本信息
+"留空匹配所有分支；填写后仅该分支的 push 触发部署","留空匹配所有分支；填写后仅该分支的 push 触发部署"
+"Tag 前缀过滤","Tag 前缀过滤"
+"留空匹配所有 tag；填写后仅匹配此前缀的 tag 触发部署","留空匹配所有 tag；填写后仅匹配此前缀的 tag 触发部署"
+"发布探测 Token","发布探测 Token"
+"访问 Webhook 路径后加 /version?token=xxx 可查看详细版本信息","访问 Webhook 路径后加 /version?token=xxx 可查看详细版本信息"
 版本策略,版本策略
-分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。,分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。
-Git 平台配置提示,Git 平台配置提示
-「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。,「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。
-默认「Just the push event」已包含分支和 tag push，无需额外配置。,默认「Just the push event」已包含分支和 tag push，无需额外配置。
+"分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。","分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。"
+"Git 平台配置提示","Git 平台配置提示"
+"「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。","「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。"
+"默认「Just the push event」已包含分支和 tag push，无需额外配置。","默认「Just the push event」已包含分支和 tag push，无需额外配置。"
 测试：,测试：
 Cloudflare,云耀
 启用缓存清理,启用缓存清理
-Cloudflare Zone ID,Cloudflare 区域 ID
-Cloudflare API Token,Cloudflare API 令牌
+"Cloudflare Zone ID","Cloudflare 区域 ID"
+"Cloudflare API Token","Cloudflare API 令牌"
 保存配置,保存配置
 已复制,已复制
 当前版本,当前版本
@@ -291,31 +291,31 @@ tag,标签
 项目密钥,项目密钥
 全局密钥,全局密钥
 已配置,已配置
-当前 WLS,当前 WLS
+"当前 WLS","当前 WLS"
 域名上下文,域名上下文
 本机面板,本机面板
 已保存未启用,已保存未启用
-当前 WLS 主项目,当前 WLS 主项目
-WLS 部署导航,WLS 部署导航
-WLS 插件面板,WLS 插件面板
+"当前 WLS 主项目","当前 WLS 主项目"
+"WLS 部署导航","WLS 部署导航"
+"WLS 插件面板","WLS 插件面板"
 部署发布,部署发布
 部署发布菜单,部署发布菜单
 总览,总览
 发布路径,发布路径
 配置摘要,配置摘要
-项目 Profile,项目简介
+"项目 Profile",项目简介
 发布预检,发布预检
-Webhook 回放,Webhook 回放
+"Webhook 回放","Webhook 回放"
 发布记录,发布记录
 插件商城,插件商城
-Manual Plan,手动计划
+"Manual Plan",手动计划
 深色,深色
 浅色,浅色
 切换明暗色,切换明暗色
-返回 WLS Panel,返回 WLS 面板
-WLS 独立插件,WLS 独立插件
-集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。,集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。
-打开 Deploy 配置,打开 Deploy 配置
+"返回 WLS Panel","返回 WLS 面板"
+"WLS 独立插件","WLS 独立插件"
+"集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。","集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。"
+"打开 Deploy 配置","打开 Deploy 配置"
 完整发布历史,完整发布历史
 项目后台,项目后台
 项目上下文,项目上下文
@@ -324,117 +324,117 @@ WLS 独立插件,WLS 独立插件
 未指定,未指定
 由项目卡片安全透传,由项目卡片安全透传
 操作,操作
-来自 WLS capability 链接,来自 WLS capability 链接
+"来自 WLS capability 链接","来自 WLS capability 链接"
 触发策略,触发策略
 默认保守发布策略,默认保守发布策略
 项目发布路径,项目发布路径
-从项目卡片进入后，Profile、Webhook 回放、Manual Plan 和发布记录会共享同一组 WLS 项目上下文。,从项目卡片进入后，Profile、Webhook 回放、Manual Plan 和发布记录会共享同一组 WLS 项目上下文。
-发布 Profile,发布简介
+"从项目卡片进入后，Profile、Webhook 回放、Manual Plan 和发布记录会共享同一组 WLS 项目上下文。","从项目卡片进入后，Profile、Webhook 回放、Manual Plan 和发布记录会共享同一组 WLS 项目上下文。"
+"发布 Profile",发布简介
 继承全局配置,继承全局配置
-配置 Profile,配置简介
+"配置 Profile",配置简介
 触发与计划,触发与计划
 默认示例：%{1},默认示例：%{1}
-%{1} 条,%{1} 条
+"%{1} 条","%{1} 条"
 查看当前范围,查看当前范围
-真实发布成功后会记录 profile_key、project_id、domain 与 project_type；当前页面按这组上下文刷新发布历史。,真实发布成功后会记录 profile_key、project_id、domain 与 project_type；当前页面按这组上下文刷新发布历史。
-项目发布 Profile,项目发布 Profile
-为当前 WLS 项目保存独立仓库、Tag 策略、回滚参考和发布命令；保存后仍由后续发布动作显式触发。,为当前 WLS 项目保存独立仓库、Tag 策略、回滚参考和发布命令；保存后仍由后续发布动作显式触发。
-启用项目 Profile,启用项目 Profile
+"真实发布成功后会记录 profile_key、project_id、domain 与 project_type；当前页面按这组上下文刷新发布历史。","真实发布成功后会记录 profile_key、project_id、domain 与 project_type；当前页面按这组上下文刷新发布历史。"
+"项目发布 Profile","项目发布 Profile"
+"为当前 WLS 项目保存独立仓库、Tag 策略、回滚参考和发布命令；保存后仍由后续发布动作显式触发。","为当前 WLS 项目保存独立仓库、Tag 策略、回滚参考和发布命令；保存后仍由后续发布动作显式触发。"
+"启用项目 Profile","启用项目 Profile"
 发布前备份,发布前备份
-Tag 前缀,Tag 前缀
-例如 v,例如 v
-Webhook 分支过滤,Webhook 分支过滤
-项目 Webhook 密钥,项目 Webhook 密钥
+"Tag 前缀","Tag 前缀"
+"例如 v","例如 v"
+"Webhook 分支过滤","Webhook 分支过滤"
+"项目 Webhook 密钥","项目 Webhook 密钥"
 当前验签来源,当前验签来源
 命令白名单,命令白名单
-Composer 示例,作曲家示例
+"Composer 示例",作曲家示例
 部署后命令示例,部署后命令示例
 回滚参考,回滚参考
 回滚示例,回滚示例
 说明,说明
 记录该项目发布注意事项,记录该项目发布注意事项
-发布 Profile 会被后续 webhook/manual release 按项目上下文读取；当前按钮只保存配置。,发布 Profile 会被后续 webhook/manual release 按项目上下文读取；当前按钮只保存配置。
-保存 Profile,保存简介
-仅检查当前项目发布配置、触发策略和命令白名单，不执行 Git、文件写入或服务重载。,仅检查当前项目发布配置、触发策略和命令白名单，不执行 Git、文件写入或服务重载。
+"发布 Profile 会被后续 webhook/manual release 按项目上下文读取；当前按钮只保存配置。","发布 Profile 会被后续 webhook/manual release 按项目上下文读取；当前按钮只保存配置。"
+"保存 Profile",保存简介
+"仅检查当前项目发布配置、触发策略和命令白名单，不执行 Git、文件写入或服务重载。","仅检查当前项目发布配置、触发策略和命令白名单，不执行 Git、文件写入或服务重载。"
 执行预检,执行预检
 暂无预检结果。,暂无预检结果。
-Rollback Action,回滚动作
-"Only the saved Profile rollback reference is used, and it runs inside the selected project context.",仅使用已保存的 Profile 回滚参考，并在选中项目上下文内执行。
-Not configured,未配置
-Rollback Version,回滚版本
-Release ID,发布 ID
+"Rollback Action",回滚动作
+"Only the saved Profile rollback reference is used, and it runs inside the selected project context.","仅使用已保存的 Profile 回滚参考，并在选中项目上下文内执行。"
+"Not configured",未配置
+"Rollback Version",回滚版本
+"Release ID","发布 ID"
 Ref,参考号
-Confirm rollback in the selected project context,确认在选中项目上下文内执行回滚
-Run Rollback,执行回滚
-Webhook 回放预检,Webhook 回放预检
-输入 webhook payload.ref，复用当前项目 Tag/Branch 策略，只判断是否会触发发布。,输入 webhook payload.ref，复用当前项目 Tag/Branch 策略，只判断是否会触发发布。
-Webhook Ref,Webhook 参考
+"Confirm rollback in the selected project context",确认在选中项目上下文内执行回滚
+"Run Rollback",执行回滚
+"Webhook 回放预检","Webhook 回放预检"
+"输入 webhook payload.ref，复用当前项目 Tag/Branch 策略，只判断是否会触发发布。","输入 webhook payload.ref，复用当前项目 Tag/Branch 策略，只判断是否会触发发布。"
+"Webhook Ref","Webhook 参考"
 回放预检,回放预检
 回放示例,回放示例
-Tag 示例,Tag 示例
+"Tag 示例","Tag 示例"
 分支示例,分支示例
 判断结果,判断结果
 发布版本,发布版本
-Git Checkout,git 签出
+"Git Checkout","git 签出"
 原因,原因
-还没有回放结果；可以先用 Tag 示例确认默认 tag-only 策略。,还没有回放结果；可以先用 Tag 示例确认默认 tag-only 策略。
-Manual Release Plan,手动发布计划
+"还没有回放结果；可以先用 Tag 示例确认默认 tag-only 策略。","还没有回放结果；可以先用 Tag 示例确认默认 tag-only 策略。"
+"Manual Release Plan",手动发布计划
 "Preview the exact project-scoped release path, then run it only after explicit confirmation. The server re-checks preflight and trigger policy before execution.",先预览精确的项目级发布路径，确认后再执行；服务端会在执行前重新检查预检结果和触发策略。
-Manual release ref,手动发布 ref
-Raw tag names are interpreted as tag refs in tag mode; explicit refs/tags/* and refs/heads/* are preferred.,在 tag 模式下，裸 tag 名会按 tag ref 处理；建议优先使用明确的 refs/tags/* 或 refs/heads/*。
-Build Plan,构建计划
-Manual release examples,手动发布示例
-Tag sample,Tag 示例
-Branch sample,分支示例
-"I understand this will run Git, write release metadata, record history, and reload WLS for the selected project context.",我确认这会在选中项目上下文中执行 Git、写入发布元数据、记录历史并重载 WLS。
-Run Release,执行发布
-Plan status,计划状态
+"Manual release ref","手动发布 ref"
+"Raw tag names are interpreted as tag refs in tag mode; explicit refs/tags/* and refs/heads/* are preferred.","在 tag 模式下，裸 tag 名会按 tag ref 处理；建议优先使用明确的 refs/tags/* 或 refs/heads/*。"
+"Build Plan",构建计划
+"Manual release examples",手动发布示例
+"Tag sample","Tag 示例"
+"Branch sample",分支示例
+"I understand this will run Git, write release metadata, record history, and reload WLS for the selected project context.","我确认这会在选中项目上下文中执行 Git、写入发布元数据、记录历史并重载 WLS。"
+"Run Release",执行发布
+"Plan status",计划状态
 Type,类型
-Deploy version,发布版本
-Git checkout,git 结账
+"Deploy version",发布版本
+"Git checkout","git 结账"
 Profile,轮廓
-Deploy root,部署根目录
-Remote / mode,Remote / 模式
+"Deploy root",部署根目录
+"Remote / mode","Remote / 模式"
 Reason,原因
-No manual release plan yet. Build a tag plan first to verify the selected project Profile and trigger policy.,暂无手动发布计划。请先构建 tag 计划，以验证选中项目 Profile 和触发策略。
+"No manual release plan yet. Build a tag plan first to verify the selected project Profile and trigger policy.","暂无手动发布计划。请先构建 tag 计划，以验证选中项目 Profile 和触发策略。"
 planned,已计划
 pending,等待中
 敏感字段只显示是否配置，不显示原值。,敏感字段只显示是否配置，不显示原值。
-Webhook 已生成,Webhook 已生成
-Webhook 待生成,Webhook 待生成
+"Webhook 已生成","Webhook 已生成"
+"Webhook 待生成","Webhook 待生成"
 仓库地址,仓库地址
-分支 / Remote,分支/远程
-Webhook 路径,Webhook 路径
+"分支 / Remote",分支/远程
+"Webhook 路径","Webhook 路径"
 未生成,未生成
-Tag 前缀 / 分支过滤,Tag 前缀 / 分支过滤
-全部 Tag,全部 Tag
+"Tag 前缀 / 分支过滤","Tag 前缀 / 分支过滤"
+"全部 Tag","全部 Tag"
 全部分支,全部分支
 密钥状态,密钥状态
-仓库 Token,仓库代币
+"仓库 Token",仓库代币
 后置能力,后置能力
 启用,启用
 关闭,关闭
 命令,命令
 当前运行版本,当前运行版本
-读取 var/deploy/current.json，不触发发布动作。,读取 var/deploy/current.json，不触发发布动作。
+"读取 var/deploy/current.json，不触发发布动作。","读取 var/deploy/current.json，不触发发布动作。"
 已发布,已发布
 暂无版本,暂无版本
 引用,引用
 提交,提交
 发布时间,发布时间
-尚未发布过；完成一次 deploy:release 或合法 Tag Webhook 后会在这里显示当前版本。,尚未发布过；完成一次 deploy:release 或合法 Tag Webhook 后会在这里显示当前版本。
+"尚未发布过；完成一次 deploy:release 或合法 Tag Webhook 后会在这里显示当前版本。","尚未发布过；完成一次 deploy:release 或合法 Tag Webhook 后会在这里显示当前版本。"
 能力阶段,能力阶段
-仅显示当前 WLS 项目最近 12 条发布历史，失败记录保留错误摘要。,仅显示当前 WLS 项目最近 12 条发布历史，失败记录保留错误摘要。
-显示 WLS 主项目最近 12 条发布历史，失败记录保留错误摘要。,显示 WLS 主项目最近 12 条发布历史，失败记录保留错误摘要。
+"仅显示当前 WLS 项目最近 12 条发布历史，失败记录保留错误摘要。","仅显示当前 WLS 项目最近 12 条发布历史，失败记录保留错误摘要。"
+"显示 WLS 主项目最近 12 条发布历史，失败记录保留错误摘要。","显示 WLS 主项目最近 12 条发布历史，失败记录保留错误摘要。"
 查看完整列表,查看完整列表
 发布历史暂不可用：%{1},发布历史暂不可用：%{1}
 耗时未知,耗时未知
-当前项目暂无发布记录。完成一次项目上下文发布或 Tag Webhook 后会写入这里。,当前项目暂无发布记录。完成一次项目上下文发布或 Tag Webhook 后会写入这里。
-暂无发布记录。完成一次命令发布或 Tag Webhook 后会写入发布历史。,暂无发布记录。完成一次命令发布或 Tag Webhook 后会写入发布历史。
+"当前项目暂无发布记录。完成一次项目上下文发布或 Tag Webhook 后会写入这里。","当前项目暂无发布记录。完成一次项目上下文发布或 Tag Webhook 后会写入这里。"
+"暂无发布记录。完成一次命令发布或 Tag Webhook 后会写入发布历史。","暂无发布记录。完成一次命令发布或 Tag Webhook 后会写入发布历史。"
 等价于命令,等价于命令
-不会覆盖 env.php、.env、dev/deploy/.config 及业务模块目录。,不会覆盖 env.php、.env、dev/deploy/.config 及业务模块目录。
+"不会覆盖 env.php、.env、dev/deploy/.config 及业务模块目录。","不会覆盖 env.php、.env、dev/deploy/.config 及业务模块目录。"
 正式站执行前将自动整站备份。,正式站执行前将自动整站备份。
-未配置，将使用默认 GitHub/Gitee 仓库,未配置，将使用默认 GitHub/Gitee 仓库
+"未配置，将使用默认 GitHub/Gitee 仓库","未配置，将使用默认 GitHub/Gitee 仓库"
 默认分支,默认分支
 受保护路径,受保护路径
 更新分支,更新分支
@@ -444,10 +444,10 @@ Tag 前缀 / 分支过滤,Tag 前缀 / 分支过滤
 执行中...,执行中...
 请先在部署配置中填写项目仓库信息。,请先在部署配置中填写项目仓库信息。
 前往部署配置,前往部署配置
-正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。,正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。
+"正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。","正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。"
 查看分支,查看分支
 刷新提交,刷新提交
-刷新 Tags,刷新标签
+"刷新 Tags",刷新标签
 分支提交,分支提交
 作者,作者
 确认发布,确认发布
@@ -461,77 +461,77 @@ Tag 前缀 / 分支过滤,Tag 前缀 / 分支过滤
 加载提交失败,加载提交失败
 更旧,更旧
 发布,发布
-加载 Tags 中...,加载 Tags 中...
-加载 Tags 失败,加载 Tags 失败
-发布 commit,发布提交
-发布 tag,发布 tag
+"加载 Tags 中...","加载 Tags 中..."
+"加载 Tags 失败","加载 Tags 失败"
+"发布 commit",发布提交
+"发布 tag","发布 tag"
 发布执行中...,发布执行中...
 发布成功,发布成功
 发布失败,发布失败
 部署根目录不存在，无法创建备份。,部署根目录不存在，无法创建备份。
 无法创建备份目录。,无法创建备份目录。
 整站备份失败：未生成归档文件。,整站备份失败：未生成归档文件。
-PowerShell 备份失败。,PowerShell 备份失败。
-tar 备份失败：%{1},tar 备份失败：%{1}
+"PowerShell 备份失败。","PowerShell 备份失败。"
+"tar 备份失败：%{1}","tar 备份失败：%{1}"
 无法创建目录：%{1},无法创建目录：%{1}
-无法生成 SSH 密钥，请确认服务器已安装 ssh-keygen。,无法生成 SSH 密钥，请确认服务器已安装 ssh-keygen。
-命令行 --base-url,命令行 --base-url
-运行环境 website_url,运行环境 website_url
-环境配置 %{1},环境配置 %{1}
-app/etc/env.php website_url,应用程序/etc/env.php website_url
-app/etc/env.php website.url,app/etc/env.php website.url
-网站管理默认站点 URL,网站管理默认站点 URL
-推荐：Bearer 鉴权（GitHub / 通用 HTTP 客户端）,推荐：Bearer 鉴权（GitHub / 通用 HTTP 客户端）
-兼容：X-Webhook-Token 请求头（与部分平台密码字段等价）,兼容：X-Webhook-Token 请求头（与部分平台密码字段等价）
-兼容：URL 查询参数 token,兼容：URL 查询参数 token
+"无法生成 SSH 密钥，请确认服务器已安装 ssh-keygen。","无法生成 SSH 密钥，请确认服务器已安装 ssh-keygen。"
+"命令行 --base-url","命令行 --base-url"
+"运行环境 website_url","运行环境 website_url"
+"环境配置 %{1}","环境配置 %{1}"
+"app/etc/env.php website_url","应用程序/etc/env.php website_url"
+"app/etc/env.php website.url","app/etc/env.php website.url"
+"网站管理默认站点 URL","网站管理默认站点 URL"
+"推荐：Bearer 鉴权（GitHub / 通用 HTTP 客户端）","推荐：Bearer 鉴权（GitHub / 通用 HTTP 客户端）"
+"兼容：X-Webhook-Token 请求头（与部分平台密码字段等价）","兼容：X-Webhook-Token 请求头（与部分平台密码字段等价）"
+"兼容：URL 查询参数 token","兼容：URL 查询参数 token"
 健康检查（GET，无需密钥）,健康检查（GET，无需密钥）
-【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。,【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。
-【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。,【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。
-【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。,【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。
-【4】Git 平台 Webhook URL（复制到仓库配置）：%{1},【4】Git 平台 Webhook URL（复制到仓库配置）：%{1}
-【4】未能自动推断站点域名，请追加 --base-url=https://你的域名 后重新运行以输出完整部署地址与 curl。,【4】未能自动推断站点域名，请追加 --base-url=https://你的域名 后重新运行以输出完整部署地址与 curl。
-【5】仅在专用部署目录测试 curl，避免误触发开发机上的未提交代码。,【5】仅在专用部署目录测试 curl，避免误触发开发机上的未提交代码。
-【6】本次已生成新的 Webhook 密钥并写入后台配置，请同步更新 Git 平台 Webhook 中的密钥。,【6】本次已生成新的 Webhook 密钥并写入后台配置，请同步更新 Git 平台 Webhook 中的密钥。
-【7】部署 SSH 公钥：将公钥添加到 Git 平台「部署公钥 / Deploy Key」（只读即可），服务器私钥位于 %{1}（勿提交 Git）。,【7】部署 SSH 公钥：将公钥添加到 Git 平台「部署公钥 / Deploy Key」（只读即可），服务器私钥位于 %{1}（勿提交 Git）。
-【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。,【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。
+"【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。","【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。"
+"【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。","【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。"
+"【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。","【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。"
+"【4】Git 平台 Webhook URL（复制到仓库配置）：%{1}","【4】Git 平台 Webhook URL（复制到仓库配置）：%{1}"
+"【4】未能自动推断站点域名，请追加 --base-url=https://你的域名 后重新运行以输出完整部署地址与 curl。","【4】未能自动推断站点域名，请追加 --base-url=https://你的域名 后重新运行以输出完整部署地址与 curl。"
+"【5】仅在专用部署目录测试 curl，避免误触发开发机上的未提交代码。","【5】仅在专用部署目录测试 curl，避免误触发开发机上的未提交代码。"
+"【6】本次已生成新的 Webhook 密钥并写入后台配置，请同步更新 Git 平台 Webhook 中的密钥。","【6】本次已生成新的 Webhook 密钥并写入后台配置，请同步更新 Git 平台 Webhook 中的密钥。"
+"【7】部署 SSH 公钥：将公钥添加到 Git 平台「部署公钥 / Deploy Key」（只读即可），服务器私钥位于 %{1}（勿提交 Git）。","【7】部署 SSH 公钥：将公钥添加到 Git 平台「部署公钥 / Deploy Key」（只读即可），服务器私钥位于 %{1}（勿提交 Git）。"
+"【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。","【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。"
 无法创建部署版本目录：%{1},无法创建部署版本目录：%{1}
 无法写入部署版本文件,无法写入部署版本文件
 分支名称无效。,分支名称无效。
-Git restore commit cannot be empty.,Git 恢复提交不能为空。
-Git working directory does not exist: %{1},Git 工作目录不存在：%{1}
-Git process could not be opened.,无法启动 Git 进程。
+"Git restore commit cannot be empty.","Git 恢复提交不能为空。"
+"Git working directory does not exist: %{1}","Git 工作目录不存在：%{1}"
+"Git process could not be opened.","无法启动 Git 进程。"
 开始发布：%{1},开始发布：%{1}
 备份中...,备份中...
-Git 更新中...,Git 更新中...
+"Git 更新中...","Git 更新中..."
 执行后置命令...,执行后置命令...
 版本戳已写入：%{1},版本戳已写入：%{1}
 重载服务...,重载服务...
 发布失败：%{1},发布失败：%{1}
-Rollback reference cannot be empty.,回滚参考不能为空。
+"Rollback reference cannot be empty.",回滚参考不能为空。
 开始回滚：%{1},开始回滚：%{1}
 回滚前备份中...,回滚前备份中...
-Git 回滚中...,Git 回滚中...
+"Git 回滚中...","Git 回滚中..."
 回滚版本已写入：%{1},回滚版本已写入：%{1}
 回滚失败：%{1},回滚失败：%{1}
 开发环境跳过发布失败自动回滚。,开发环境跳过发布失败自动回滚。
-发布失败，正在自动回滚到 %{1}...,发布失败，正在自动回滚到 %{1}...
+"发布失败，正在自动回滚到 %{1}...","发布失败，正在自动回滚到 %{1}..."
 自动回滚后服务重载失败：%{1},自动回滚后服务重载失败：%{1}
-已自动回滚到发布前版本 %{1},已自动回滚到发布前版本 %{1}
+"已自动回滚到发布前版本 %{1}","已自动回滚到发布前版本 %{1}"
 自动回滚失败：%{1},自动回滚失败：%{1}
 部署根目录包含不允许的控制字符。,部署根目录包含不允许的控制字符。
 部署根目录必须是绝对路径：%{1},部署根目录必须是绝对路径：%{1}
 部署根目录不存在：%{1},部署根目录不存在：%{1}
 无法创建发布保护快照目录。,无法创建发布保护快照目录。
-部署后命令失败（exit %{1}）：%{2},部署后命令失败（exit %{1}）：%{2}
-Profile 来源,简介来源
-当前发布会优先读取该项目的独立 Profile。,当前发布会优先读取该项目的独立 Profile。
-该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。,该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。
-当前项目尚未保存独立 Profile，发布会使用全局 Deploy 配置。,当前项目尚未保存独立 Profile，发布会使用全局 Deploy 配置。
+"部署后命令失败（exit %{1}）：%{2}","部署后命令失败（exit %{1}）：%{2}"
+"Profile 来源",简介来源
+"当前发布会优先读取该项目的独立 Profile。","当前发布会优先读取该项目的独立 Profile。"
+"该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。","该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。"
+"当前项目尚未保存独立 Profile，发布会使用全局 Deploy 配置。","当前项目尚未保存独立 Profile，发布会使用全局 Deploy 配置。"
 仓库配置,仓库配置
 缺少仓库,缺少仓库
 必须配置项目仓库地址后才能执行发布。,必须配置项目仓库地址后才能执行发布。
 地址不合法,地址不合法
-项目仓库地址只支持 http(s)、ssh:// 或 git@host:path.git 形式。,项目仓库地址只支持 http(s)、ssh:// 或 git@host:path.git 形式。
+"项目仓库地址只支持 http(s)、ssh:// 或 git@host:path.git 形式。","项目仓库地址只支持 http(s)、ssh:// 或 git@host:path.git 形式。"
 仓库地址格式可被发布服务识别。,仓库地址格式可被发布服务识别。
 部署目录,部署目录
 未设置部署根目录；后续发布会回退到当前运行项目目录。,未设置部署根目录；后续发布会回退到当前运行项目目录。
@@ -540,341 +540,343 @@ Profile 来源,简介来源
 部署根目录已填写；预检不访问文件系统，也不会创建目录。,部署根目录已填写；预检不访问文件系统，也不会创建目录。
 不支持,不支持
 部署触发模式不在允许列表内。,部署触发模式不在允许列表内。
-默认保守策略已生效，分支 Push 不会触发发布。,默认保守策略已生效，分支 Push 不会触发发布。
-当前项目显式允许分支发布，请确认 Git 平台事件和分支过滤符合预期。,当前项目显式允许分支发布，请确认 Git 平台事件和分支过滤符合预期。
-Webhook 入口,Webhook 入口
-随机路径已生成，当前项目会使用独立 Webhook 密钥验签。,随机路径已生成，当前项目会使用独立 Webhook 密钥验签。
-尚未生成随机 Webhook 路径；请先执行 deploy:webhook:setup。,尚未生成随机 Webhook 路径；请先执行 deploy:webhook:setup。
+"默认保守策略已生效，分支 Push 不会触发发布。","默认保守策略已生效，分支 Push 不会触发发布。"
+"当前项目显式允许分支发布，请确认 Git 平台事件和分支过滤符合预期。","当前项目显式允许分支发布，请确认 Git 平台事件和分支过滤符合预期。"
+"Webhook 入口","Webhook 入口"
+"随机路径已生成，当前项目会使用独立 Webhook 密钥验签。","随机路径已生成，当前项目会使用独立 Webhook 密钥验签。"
+"尚未生成随机 Webhook 路径；请先执行 deploy:webhook:setup。","尚未生成随机 Webhook 路径；请先执行 deploy:webhook:setup。"
 路径需轮换,路径需轮换
-Webhook 路径不是 ~wh~ 随机路径，建议使用 deploy:webhook:setup --rotate-path 轮换。,Webhook 路径不是 ~wh~ 随机路径，建议使用 deploy:webhook:setup --rotate-path 轮换。
+"Webhook 路径不是 ~wh~ 随机路径，建议使用 deploy:webhook:setup --rotate-path 轮换。","Webhook 路径不是 ~wh~ 随机路径，建议使用 deploy:webhook:setup --rotate-path 轮换。"
 密钥未配置,密钥未配置
-Webhook 路径已生成，但访问密钥为空；请生成或保存 webhook_secret。,Webhook 路径已生成，但访问密钥为空；请生成或保存 webhook_secret。
+"Webhook 路径已生成，但访问密钥为空；请生成或保存 webhook_secret。","Webhook 路径已生成，但访问密钥为空；请生成或保存 webhook_secret。"
 已就绪,已就绪
 随机路径和访问密钥均已配置。,随机路径和访问密钥均已配置。
 需修正,需修正
-Composer 命令为空,Composer 命令为空
-已开启 Composer，但未配置 composer install 命令。,已开启 Composer，但未配置 composer install 命令。
+"Composer 命令为空","Composer 命令为空"
+"已开启 Composer，但未配置 composer install 命令。","已开启 Composer，但未配置 composer install 命令。"
 通过,通过
-Composer 与部署后命令均符合 WLS 发布命令白名单。,Composer 与部署后命令均符合 WLS 发布命令白名单。
+"Composer 与部署后命令均符合 WLS 发布命令白名单。","Composer 与部署后命令均符合 WLS 发布命令白名单。"
 回滚策略,回滚策略
 回滚参考为空；后续不会展示可执行回滚动作。,回滚参考为空；后续不会展示可执行回滚动作。
 需要修正,需要修正
-Tag 回滚,Tag 回滚
-回滚引用已通过 WLS 白名单，将只在当前项目 Profile 下作为后续显式回滚动作的目标。,回滚引用已通过 WLS 白名单，将只在当前项目 Profile 下作为后续显式回滚动作的目标。
+"Tag 回滚","Tag 回滚"
+"回滚引用已通过 WLS 白名单，将只在当前项目 Profile 下作为后续显式回滚动作的目标。","回滚引用已通过 WLS 白名单，将只在当前项目 Profile 下作为后续显式回滚动作的目标。"
 提交回滚,提交回滚
 分支回滚,分支回滚
-回滚参考已通过白名单，但 commit/branch 回滚需要后续显式动作再次确认。,回滚参考已通过白名单，但 commit/branch 回滚需要后续显式动作再次确认。
+"回滚参考已通过白名单，但 commit/branch 回滚需要后续显式动作再次确认。","回滚参考已通过白名单，但 commit/branch 回滚需要后续显式动作再次确认。"
 存在阻断项,存在阻断项
 可进入发布流程,可进入发布流程
-Composer 命令只允许 composer install。,Composer 命令只允许 composer install。
-Composer 命令包含未允许的参数：%{1},Composer 命令包含未允许的参数：%{1}
+"Composer 命令只允许 composer install。","Composer 命令只允许 composer install。"
+"Composer 命令包含未允许的参数：%{1}","Composer 命令包含未允许的参数：%{1}"
 部署后命令包含空命令片段。,部署后命令包含空命令片段。
-回滚参考包含不允许的 shell 控制字符。,回滚参考包含不允许的 shell 控制字符。
-回滚参考不能以短横线开头，也不能包含 ..、// 或 @{。,回滚参考不能以短横线开头，也不能包含 ..、// 或 @{。
+"回滚参考包含不允许的 shell 控制字符。","回滚参考包含不允许的 shell 控制字符。"
+"回滚参考不能以短横线开头，也不能包含 ..、// 或 @{。","回滚参考不能以短横线开头，也不能包含 ..、// 或 @{。"
 回滚参考不能以点号或斜杠结尾。,回滚参考不能以点号或斜杠结尾。
-回滚参考格式不在 WLS 白名单内。,回滚参考格式不在 WLS 白名单内。
-回滚参考仅支持 tag、refs/tags/name、refs/heads/name 或 7-40 位 commit SHA；禁止 shell 控制字符。,回滚参考仅支持 tag、refs/tags/name、refs/heads/name 或 7-40 位 commit SHA；禁止 shell 控制字符。
-禁止管道、重定向、分号、单独 &、引号、命令替换和任意脚本路径。,禁止管道、重定向、分号、单独 &、引号、命令替换和任意脚本路径。
-部署后命令未在 WLS 维护命令白名单内：%{1},部署后命令未在 WLS 维护命令白名单内：%{1}
+"回滚参考格式不在 WLS 白名单内。","回滚参考格式不在 WLS 白名单内。"
+"回滚参考仅支持 tag、refs/tags/name、refs/heads/name 或 7-40 位 commit SHA；禁止 shell 控制字符。","回滚参考仅支持 tag、refs/tags/name、refs/heads/name 或 7-40 位 commit SHA；禁止 shell 控制字符。"
+"禁止管道、重定向、分号、单独 &、引号、命令替换和任意脚本路径。","禁止管道、重定向、分号、单独 &、引号、命令替换和任意脚本路径。"
+"部署后命令未在 WLS 维护命令白名单内：%{1}","部署后命令未在 WLS 维护命令白名单内：%{1}"
 部署后命令包含未允许的参数：%{1},部署后命令包含未允许的参数：%{1}
-命令包含不允许的 shell 控制字符。,命令包含不允许的 shell 控制字符。
+"命令包含不允许的 shell 控制字符。","命令包含不允许的 shell 控制字符。"
 命令包含不允许的命令替换表达式。,命令包含不允许的命令替换表达式。
-命令包含不允许的 & 控制符。,命令包含不允许的 & 控制符。
-从 Git 仓库恢复框架核心文件,从 Git 仓库恢复框架核心文件
+"命令包含不允许的 & 控制符。","命令包含不允许的 & 控制符。"
+"从 Git 仓库恢复框架核心文件","从 Git 仓库恢复框架核心文件"
 框架核心文件恢复,框架核心文件恢复
-步骤 1/4：检查 Git 仓库...,步骤 1/4：检查 Git 仓库...
+"步骤 1/4：检查 Git 仓库...","步骤 1/4：检查 Git 仓库..."
 目标分支：%{1},目标分支：%{1}
-步骤 2/4：拉取最新代码...,步骤 2/4：拉取最新代码...
-步骤 3/4：恢复核心文件...,步骤 3/4：恢复核心文件...
-步骤 4/4：清理缓存...,步骤 4/4：清理缓存...
-✓✓✓ 核心文件恢复完成！✓✓✓,✓✓✓ 核心文件恢复完成！✓✓✓
-错误：当前目录不是 Git 仓库,错误：当前目录不是 Git 仓库
-✓ 检测到 Git 仓库,✓ 检测到 Git 仓库
-⚠ 将强制覆盖所有更改,⚠ 将强制覆盖所有更改
-执行: %{1},执行: %{1}
-命令执行返回码: %{1},命令执行返回码: %{1}
-✓ 代码拉取完成,✓ 代码拉取完成
-恢复: %{1},恢复: %{1}
-✓ %{1},✓ %{1}
-⚠ %{1} 恢复失败,⚠ %{1} 恢复失败
-✓ %{1} 已存在,✓ %{1} 已存在
-✓ 共恢复 %{1} 个路径,✓ 共恢复 %{1} 个路径
-清理: %{1},清理: %{1}
-✓ 缓存清理完成,✓ 缓存清理完成
-从核心仓库增量更新框架代码（仅 Weline 模块与必要核心路径；不触碰业务代码）,从核心仓库增量更新框架代码（仅 Weline 模块与必要核心路径；不触碰业务代码）
-从 Git 仓库增量更新框架核心代码,从 Git 仓库增量更新框架核心代码
-可直接指定分支，如：master；也可使用 -b/--branch,可直接指定分支，如：master；也可使用 -b/--branch
+"步骤 2/4：拉取最新代码...","步骤 2/4：拉取最新代码..."
+"步骤 3/4：恢复核心文件...","步骤 3/4：恢复核心文件..."
+"步骤 4/4：清理缓存...","步骤 4/4：清理缓存..."
+"✓✓✓ 核心文件恢复完成！✓✓✓","✓✓✓ 核心文件恢复完成！✓✓✓"
+"错误：当前目录不是 Git 仓库","错误：当前目录不是 Git 仓库"
+"✓ 检测到 Git 仓库","✓ 检测到 Git 仓库"
+"⚠ 将强制覆盖所有更改","⚠ 将强制覆盖所有更改"
+"执行: %{1}","执行: %{1}"
+"命令执行返回码: %{1}","命令执行返回码: %{1}"
+"✓ 代码拉取完成","✓ 代码拉取完成"
+"恢复: %{1}","恢复: %{1}"
+"✓ %{1}","✓ %{1}"
+"⚠ %{1} 恢复失败","⚠ %{1} 恢复失败"
+"✓ %{1} 已存在","✓ %{1} 已存在"
+"✓ 共恢复 %{1} 个路径","✓ 共恢复 %{1} 个路径"
+"清理: %{1}","清理: %{1}"
+"✓ 缓存清理完成","✓ 缓存清理完成"
+"从核心仓库增量更新框架代码（仅 Weline 模块与必要核心路径；不触碰业务代码）","从核心仓库增量更新框架代码（仅 Weline 模块与必要核心路径；不触碰业务代码）"
+"从 Git 仓库增量更新框架核心代码","从 Git 仓库增量更新框架核心代码"
+"可直接指定分支，如：master；也可使用 -b/--branch","可直接指定分支，如：master；也可使用 -b/--branch"
 "指定分支（未配置默认分支时必填，如：main, master, dev）","指定分支（未配置默认分支时必填，如：main, master, dev）"
-指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）,指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）
-未指定仓库时：GitHub 可达则对比 GitHub/Gitee 同分支 tip；一致时优先 GitHub，不一致时选用 Gitee 以免拉到落后镜像；GitHub 不可达则用 Gitee。增量更新会把缓存 origin 切到本次选用仓库,未指定仓库时：GitHub 可达则对比 GitHub/Gitee 同分支 tip；一致时优先 GitHub，不一致时选用 Gitee 以免拉到落后镜像；GitHub 不可达则用 Gitee。增量更新会把缓存 origin 切到本次选用仓库
-仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换,仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换
-旧缓存 HEAD 只用于检测「项目本地核心是否相对上次同步被私改」；检测通过后必须把缓存仓更新到线上最新 tip，再按旧基线→新 tip 的 diff（并补缺失）同步到项目。绝不能用旧缓存内容当作本次更新源,旧缓存 HEAD 只用于检测「项目本地核心是否相对上次同步被私改」；检测通过后必须把缓存仓更新到线上最新 tip，再按旧基线→新 tip 的 diff（并补缺失）同步到项目。绝不能用旧缓存内容当作本次更新源
-默认先对比旧基线做冲突检测，再 git fetch 线上最新；仅把相对旧基线有变更的核心文件覆盖到项目，另补本地缺失文件；已存在但内容不同的本地核心不因与新 tip hash 不一致而被误回刷（私改应由冲突检测拦截）,默认先对比旧基线做冲突检测，再 git fetch 线上最新；仅把相对旧基线有变更的核心文件覆盖到项目，另补本地缺失文件；已存在但内容不同的本地核心不因与新 tip hash 不一致而被误回刷（私改应由冲突检测拦截）
-仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内,仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内
-只对比「本地核心文件」与 tmp/core-update 缓存仓上次同步的核心 commit；绝不读取业务项目 git status。本地核心相对该基线有私改才拒绝；-f 强制覆盖。业务模块改动完全忽略,只对比「本地核心文件」与 tmp/core-update 缓存仓上次同步的核心 commit；绝不读取业务项目 git status。本地核心相对该基线有私改才拒绝；-f 强制覆盖。业务模块改动完全忽略
-仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件；成功后缓存仓 HEAD 即成为下次对比基线,仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件；成功后缓存仓 HEAD 即成为下次对比基线
-不会拷贝 app/code/Aiweline、GuoLaiRen、WeShop；这些由目标项目自行管理,不会拷贝 app/code/Aiweline、GuoLaiRen、WeShop；这些由目标项目自行管理
-使用自定义仓库（需先配置 .env 或 env.php）,使用自定义仓库（需先配置 .env 或 env.php）
-框架核心代码更新（强制模式 - 完整重新下载并覆盖）,框架核心代码更新（强制模式 - 完整重新下载并覆盖）
-框架核心代码更新（增量模式 - 基于 Git diff 更新变化文件）,框架核心代码更新（增量模式 - 基于 Git diff 更新变化文件）
-步骤 1/7：检查 Git...,步骤 1/7：检查 Git...
-步骤 2/7：验证参数...,步骤 2/7：验证参数...
+"指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）","指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）"
+"未指定仓库时：GitHub 可达则对比 GitHub/Gitee 同分支 tip；一致时优先 GitHub，不一致时选用 Gitee 以免拉到落后镜像；GitHub 不可达则用 Gitee。增量更新会把缓存 origin 切到本次选用仓库","未指定仓库时：GitHub 可达则对比 GitHub/Gitee 同分支 tip；一致时优先 GitHub，不一致时选用 Gitee 以免拉到落后镜像；GitHub 不可达则用 Gitee。增量更新会把缓存 origin 切到本次选用仓库"
+"仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换","仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换"
+"旧缓存 HEAD 只用于检测「项目本地核心是否相对上次同步被私改」；检测通过后必须把缓存仓更新到线上最新 tip，再按旧基线→新 tip 的 diff（并补缺失）同步到项目。绝不能用旧缓存内容当作本次更新源","旧缓存 HEAD 只用于检测「项目本地核心是否相对上次同步被私改」；检测通过后必须把缓存仓更新到线上最新 tip，再按旧基线→新 tip 的 diff（并补缺失）同步到项目。绝不能用旧缓存内容当作本次更新源"
+"默认先对比旧基线做冲突检测，再 git fetch 线上最新；仅把相对旧基线有变更的核心文件覆盖到项目，另补本地缺失文件；已存在但内容不同的本地核心不因与新 tip hash 不一致而被误回刷（私改应由冲突检测拦截）","默认先对比旧基线做冲突检测，再 git fetch 线上最新；仅把相对旧基线有变更的核心文件覆盖到项目，另补本地缺失文件；已存在但内容不同的本地核心不因与新 tip hash 不一致而被误回刷（私改应由冲突检测拦截）"
+"仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内","仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内"
+"只对比「本地核心文件」与 tmp/core-update 缓存仓上次同步的核心 commit；绝不读取业务项目 git status。本地核心相对该基线有私改才拒绝；-f 强制覆盖。业务模块改动完全忽略","只对比「本地核心文件」与 tmp/core-update 缓存仓上次同步的核心 commit；绝不读取业务项目 git status。本地核心相对该基线有私改才拒绝；-f 强制覆盖。业务模块改动完全忽略"
+"仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件；成功后缓存仓 HEAD 即成为下次对比基线","仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件；成功后缓存仓 HEAD 即成为下次对比基线"
+"不会拷贝 app/code/Aiweline、GuoLaiRen、WeShop；这些由目标项目自行管理","不会拷贝 app/code/Aiweline、GuoLaiRen、WeShop；这些由目标项目自行管理"
+"使用自定义仓库（需先配置 .env 或 env.php）","使用自定义仓库（需先配置 .env 或 env.php）"
+"框架核心代码更新（强制模式 - 完整重新下载并覆盖）","框架核心代码更新（强制模式 - 完整重新下载并覆盖）"
+"框架核心代码更新（增量模式 - 基于 Git diff 更新变化文件）","框架核心代码更新（增量模式 - 基于 Git diff 更新变化文件）"
+"步骤 1/7：检查 Git...","步骤 1/7：检查 Git..."
+"步骤 2/7：验证参数...","步骤 2/7：验证参数..."
 仓库：%{1},仓库：%{1}
 备用仓库：%{1},备用仓库：%{1}
 分支：%{1},分支：%{1}
 标签：%{1},标签：%{1}
 更新模式：%{1},更新模式：%{1}
-步骤 3/7：准备临时目录...,步骤 3/7：准备临时目录...
-步骤 4/7：检查本地核心是否相对上次同步有改动...,步骤 4/7：检查本地核心是否相对上次同步有改动...
-步骤 5/7：下载框架代码（线上最新）...,步骤 5/7：下载框架代码（线上最新）...
-步骤 6/7：更新核心文件...,步骤 6/7：更新核心文件...
-步骤 7/7：完成处理...,步骤 7/7：完成处理...
-保留缓存目录：当前 HEAD 仅作为下次冲突检测基线,保留缓存目录：当前 HEAD 仅作为下次冲突检测基线
-✓ 缓存目录：%{1},✓ 缓存目录：%{1}
-✓✓✓ 框架核心更新完成！✓✓✓,✓✓✓ 框架核心更新完成！✓✓✓
+"步骤 3/7：准备临时目录...","步骤 3/7：准备临时目录..."
+"步骤 4/7：检查本地核心是否相对上次同步有改动...","步骤 4/7：检查本地核心是否相对上次同步有改动..."
+"步骤 5/7：下载框架代码（线上最新）...","步骤 5/7：下载框架代码（线上最新）..."
+"步骤 6/7：更新核心文件...","步骤 6/7：更新核心文件..."
+"步骤 7/7：完成处理...","步骤 7/7：完成处理..."
+"保留缓存目录：当前 HEAD 仅作为下次冲突检测基线","保留缓存目录：当前 HEAD 仅作为下次冲突检测基线"
+"✓ 缓存目录：%{1}","✓ 缓存目录：%{1}"
+"✓✓✓ 框架核心更新完成！✓✓✓","✓✓✓ 框架核心更新完成！✓✓✓"
 更新统计：,更新统计：
-- 新增文件：%{1} 个,- 新增文件：%{1} 个
-- 更新文件：%{1} 个,- 更新文件：%{1} 个
-- 删除文件：%{1} 个,- 删除文件：%{1} 个
-- 跳过文件：%{1} 个（受保护或排除的文件）,- 跳过文件：%{1} 个（受保护或排除的文件）
-✓ 下次冲突检测基线已更新为缓存仓 commit %{1}（仅用于判断本地核心是否被私改；下次更新仍会先拉线上最新 tip）,✓ 下次冲突检测基线已更新为缓存仓 commit %{1}（仅用于判断本地核心是否被私改；下次更新仍会先拉线上最新 tip）
-本次核心已更新到最新 commit：,本次核心已更新到最新 commit：
+"- 新增文件：%{1} 个","- 新增文件：%{1} 个"
+"- 更新文件：%{1} 个","- 更新文件：%{1} 个"
+"- 删除文件：%{1} 个","- 删除文件：%{1} 个"
+"- 跳过文件：%{1} 个（受保护或排除的文件）","- 跳过文件：%{1} 个（受保护或排除的文件）"
+"✓ 下次冲突检测基线已更新为缓存仓 commit %{1}（仅用于判断本地核心是否被私改；下次更新仍会先拉线上最新 tip）","✓ 下次冲突检测基线已更新为缓存仓 commit %{1}（仅用于判断本地核心是否被私改；下次更新仍会先拉线上最新 tip）"
+"本次核心已更新到最新 commit：","本次核心已更新到最新 commit："
 commit：%{1}（%{2}）,提交：%{1}（%{2}）
 作者：%{1},作者：%{1}
 时间：%{1},时间：%{1}
 标题：%{1},标题：%{1}
 内容：,内容：
-错误：未检测到 Git,错误：未检测到 Git
-✓ Git 检查通过,✓ Git 检查通过
-⚠ 已显式启用 -f/--force，跳过本地核心冲突保护（将强制覆盖核心文件）,⚠ 已显式启用 -f/--force，跳过本地核心冲突保护（将强制覆盖核心文件）
-首次核心更新（尚无上次同步 commit），跳过本地核心冲突检查,首次核心更新（尚无上次同步 commit），跳过本地核心冲突检查
-冲突检测基线（旧）：核心缓存仓 commit %{1}——仅用于判断本地核心是否被私改，不会作为本次更新源,冲突检测基线（旧）：核心缓存仓 commit %{1}——仅用于判断本地核心是否被私改，不会作为本次更新源
-✓ 本地核心与上次同步 commit %{1} 一致，可直接更新,✓ 本地核心与上次同步 commit %{1} 一致，可直接更新
-✓ 本地核心与上次同步内容一致，可直接更新,✓ 本地核心与上次同步内容一致，可直接更新
-检测到 %{1} 个核心文件相对上次同步核心 commit%{2} 有本地私自修改，已拒绝更新,检测到 %{1} 个核心文件相对上次同步核心 commit%{2} 有本地私自修改，已拒绝更新
-……另有 %{1} 项未显示,……另有 %{1} 项未显示
-以上仅为核心路径相对缓存仓的内容差异，与业务模块 git 无关,以上仅为核心路径相对缓存仓的内容差异，与业务模块 git 无关
-检测 GitHub 连通性（ping github.com）...,检测 GitHub 连通性（ping github.com）...
-GitHub 不可达，使用 Gitee 镜像仓库,GitHub 不可达，使用 Gitee 镜像仓库
-✓ GitHub 可达,✓ GitHub 可达
-未能探测双源 tip，回退优先 GitHub,未能探测双源 tip，回退优先 GitHub
-GitHub tip 探测失败，使用 Gitee,GitHub tip 探测失败，使用 Gitee
-Gitee tip 探测失败，使用 GitHub,Gitee tip 探测失败，使用 GitHub
-✓ GitHub/Gitee %{1} tip 一致（%{2}），优先 GitHub,✓ GitHub/Gitee %{1} tip 一致（%{2}），优先 GitHub
+"错误：未检测到 Git","错误：未检测到 Git"
+"✓ Git 检查通过","✓ Git 检查通过"
+"⚠ 已显式启用 -f/--force，跳过本地核心冲突保护（将强制覆盖核心文件）","⚠ 已显式启用 -f/--force，跳过本地核心冲突保护（将强制覆盖核心文件）"
+"首次核心更新（尚无上次同步 commit），跳过本地核心冲突检查","首次核心更新（尚无上次同步 commit），跳过本地核心冲突检查"
+"冲突检测基线（旧）：核心缓存仓 commit %{1}——仅用于判断本地核心是否被私改，不会作为本次更新源","冲突检测基线（旧）：核心缓存仓 commit %{1}——仅用于判断本地核心是否被私改，不会作为本次更新源"
+"✓ 本地核心与上次同步 commit %{1} 一致，可直接更新","✓ 本地核心与上次同步 commit %{1} 一致，可直接更新"
+"✓ 本地核心与上次同步内容一致，可直接更新","✓ 本地核心与上次同步内容一致，可直接更新"
+"检测到 %{1} 个核心文件相对上次同步核心 commit%{2} 有本地私自修改，已拒绝更新","检测到 %{1} 个核心文件相对上次同步核心 commit%{2} 有本地私自修改，已拒绝更新"
+"……另有 %{1} 项未显示","……另有 %{1} 项未显示"
+"以上仅为核心路径相对缓存仓的内容差异，与业务模块 git 无关","以上仅为核心路径相对缓存仓的内容差异，与业务模块 git 无关"
+"检测 GitHub 连通性（ping github.com）...","检测 GitHub 连通性（ping github.com）..."
+"GitHub 不可达，使用 Gitee 镜像仓库","GitHub 不可达，使用 Gitee 镜像仓库"
+"✓ GitHub 可达","✓ GitHub 可达"
+"未能探测双源 tip，回退优先 GitHub","未能探测双源 tip，回退优先 GitHub"
+"GitHub tip 探测失败，使用 Gitee","GitHub tip 探测失败，使用 Gitee"
+"Gitee tip 探测失败，使用 GitHub","Gitee tip 探测失败，使用 GitHub"
+"✓ GitHub/Gitee %{1} tip 一致（%{2}），优先 GitHub","✓ GitHub/Gitee %{1} tip 一致（%{2}），优先 GitHub"
 "⚠ GitHub 与 Gitee 的 %{1} tip 不一致（GitHub=%{2}, Gitee=%{3}），选用 Gitee 以免拉到落后镜像","⚠ GitHub 与 Gitee 的 %{1} tip 不一致（GitHub=%{2}, Gitee=%{3}），选用 Gitee 以免拉到落后镜像"
-缓存仓已添加 origin：%{1},缓存仓已添加 origin：%{1}
-缓存仓 origin 为 %{1}，切换为本次选用仓库 %{2},缓存仓 origin 为 %{1}，切换为本次选用仓库 %{2}
-切换 origin 失败，继续使用原远程,切换 origin 失败，继续使用原远程
-GitHub ping 未响应，但 HTTPS 端口可达,GitHub ping 未响应，但 HTTPS 端口可达
-错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default,错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default
+"缓存仓已添加 origin：%{1}","缓存仓已添加 origin：%{1}"
+"缓存仓 origin 为 %{1}，切换为本次选用仓库 %{2}","缓存仓 origin 为 %{1}，切换为本次选用仓库 %{2}"
+"切换 origin 失败，继续使用原远程","切换 origin 失败，继续使用原远程"
+"GitHub ping 未响应，但 HTTPS 端口可达","GitHub ping 未响应，但 HTTPS 端口可达"
+"错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default","错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default"
 强制模式：删除旧缓存目录...,强制模式：删除旧缓存目录...
-✓ 创建新缓存目录：%{1},✓ 创建新缓存目录：%{1}
-✓ 使用现有缓存目录：%{1},✓ 使用现有缓存目录：%{1}
-冲突检测已通过：旧缓存仅作基线，开始拉取线上最新 tip...,冲突检测已通过：旧缓存仅作基线，开始拉取线上最新 tip...
-旧基线 commit %{1}（只用于冲突检测与 diff；更新源是线上最新）,旧基线 commit %{1}（只用于冲突检测与 diff；更新源是线上最新）
-fetch 失败，切换备用仓库：%{1},fetch 失败，切换备用仓库：%{1}
-fetch 失败，尝试切换仓库并重新克隆...,fetch 失败，尝试切换仓库并重新克隆...
+"✓ 创建新缓存目录：%{1}","✓ 创建新缓存目录：%{1}"
+"✓ 使用现有缓存目录：%{1}","✓ 使用现有缓存目录：%{1}"
+"冲突检测已通过：旧缓存仅作基线，开始拉取线上最新 tip...","冲突检测已通过：旧缓存仅作基线，开始拉取线上最新 tip..."
+"旧基线 commit %{1}（只用于冲突检测与 diff；更新源是线上最新）","旧基线 commit %{1}（只用于冲突检测与 diff；更新源是线上最新）"
+"fetch 失败，切换备用仓库：%{1}","fetch 失败，切换备用仓库：%{1}"
+"fetch 失败，尝试切换仓库并重新克隆...","fetch 失败，尝试切换仓库并重新克隆..."
 获取标签...,获取标签...
-旧基线 → 线上 tip 变更文件：%{1} 个,旧基线 → 线上 tip 变更文件：%{1} 个
-标签不存在: %{1},标签不存在: %{1}
-✓ 已切换到标签 %{1},✓ 已切换到标签 %{1}
-将缓存仓重置到线上分支 %{1} 最新 tip...,将缓存仓重置到线上分支 %{1} 最新 tip...
-分支不存在: %{1},分支不存在: %{1}
+"旧基线 → 线上 tip 变更文件：%{1} 个","旧基线 → 线上 tip 变更文件：%{1} 个"
+"标签不存在: %{1}","标签不存在: %{1}"
+"✓ 已切换到标签 %{1}","✓ 已切换到标签 %{1}"
+"将缓存仓重置到线上分支 %{1} 最新 tip...","将缓存仓重置到线上分支 %{1} 最新 tip..."
+"分支不存在: %{1}","分支不存在: %{1}"
 重置失败，尝试切换仓库并重新克隆...,重置失败，尝试切换仓库并重新克隆...
-✓ 缓存仓已从旧基线前进到线上最新 tip %{1}（分支 %{2}）,✓ 缓存仓已从旧基线前进到线上最新 tip %{1}（分支 %{2}）
-无法获取 Git diff，将使用全量更新,无法获取 Git diff，将使用全量更新
+"✓ 缓存仓已从旧基线前进到线上最新 tip %{1}（分支 %{2}）","✓ 缓存仓已从旧基线前进到线上最新 tip %{1}（分支 %{2}）"
+"无法获取 Git diff，将使用全量更新","无法获取 Git diff，将使用全量更新"
 完整克隆仓库...,完整克隆仓库...
 主仓库失败，尝试备用仓库：%{1},主仓库失败，尝试备用仓库：%{1}
 所有仓库均无法克隆或初始化,所有仓库均无法克隆或初始化
 克隆仓库：%{1},克隆仓库：%{1}
 克隆失败，尝试初始化仓库...,克隆失败，尝试初始化仓库...
-拉取标签 %{1}...,拉取标签 %{1}...
-拉取分支 %{1}...,拉取分支 %{1}...
-✓ 仓库初始化成功,✓ 仓库初始化成功
-✓ 仓库克隆成功,✓ 仓库克隆成功
-切换到标签 %{1}...,切换到标签 %{1}...
+"拉取标签 %{1}...","拉取标签 %{1}..."
+"拉取分支 %{1}...","拉取分支 %{1}..."
+"✓ 仓库初始化成功","✓ 仓库初始化成功"
+"✓ 仓库克隆成功","✓ 仓库克隆成功"
+"切换到标签 %{1}...","切换到标签 %{1}..."
 最新提交：%{1},最新提交：%{1}
 同步目录：%{1},同步目录：%{1}
 完全覆盖模式：更新所有文件...,完全覆盖模式：更新所有文件...
-增量模式：Git 变更覆盖 + 仅补本地缺失文件...,增量模式：Git 变更覆盖 + 仅补本地缺失文件...
-✓ 已是最新版本，无需更新文件,✓ 已是最新版本，无需更新文件
-⚠ vendor 目录未更新，保留现有依赖包,⚠ vendor 目录未更新，保留现有依赖包
+"增量模式：Git 变更覆盖 + 仅补本地缺失文件...","增量模式：Git 变更覆盖 + 仅补本地缺失文件..."
+"✓ 已是最新版本，无需更新文件","✓ 已是最新版本，无需更新文件"
+"⚠ vendor 目录未更新，保留现有依赖包","⚠ vendor 目录未更新，保留现有依赖包"
 未检测到核心文件变化，跳过反射工厂刷新,未检测到核心文件变化，跳过反射工厂刷新
 刷新反射元数据与编译工厂...,刷新反射元数据与编译工厂...
 反射工厂刷新完成,反射工厂刷新完成
-✓ 处理了 %{1} 个变化的文件,✓ 处理了 %{1} 个变化的文件
-补缺：同步 %{1} 个本地缺失的核心文件,补缺：同步 %{1} 个本地缺失的核心文件
-拷贝 %{1}...,拷贝 %{1}...
+"✓ 处理了 %{1} 个变化的文件","✓ 处理了 %{1} 个变化的文件"
+"补缺：同步 %{1} 个本地缺失的核心文件","补缺：同步 %{1} 个本地缺失的核心文件"
+"拷贝 %{1}...","拷贝 %{1}..."
 跳过受保护文件：%{1},跳过受保护文件：%{1}
-⚠ %{1} 处理失败,⚠ %{1} 处理失败
-⚠ 源路径不存在: %{1},⚠ 源路径不存在: %{1}
-✓ 共处理 %{1} 个路径,✓ 共处理 %{1} 个路径
-⚠ 跳过 %{1} 个路径,⚠ 跳过 %{1} 个路径
-生成或更新框架 Webhook 访问密钥，并输出 curl 测试命令与部署关联指引,生成或更新框架 Webhook 访问密钥，并输出 curl 测试命令与部署关联指引
---force 将重新生成 Webhook 密钥与随机公网路径，须同步更新 Git 平台。,--force 将重新生成 Webhook 密钥与随机公网路径，须同步更新 Git 平台。
---rotate-path 将重新生成随机公网路径，须同步更新 Git 平台 Webhook URL。,--rotate-path 将重新生成随机公网路径，须同步更新 Git 平台 Webhook URL。
-添加 -y 跳过确认。,添加 -y 跳过确认。
+"⚠ %{1} 处理失败","⚠ %{1} 处理失败"
+"⚠ 源路径不存在: %{1}","⚠ 源路径不存在: %{1}"
+"✓ 共处理 %{1} 个路径","✓ 共处理 %{1} 个路径"
+"⚠ 跳过 %{1} 个路径","⚠ 跳过 %{1} 个路径"
+"生成或更新框架 Webhook 访问密钥，并输出 curl 测试命令与部署关联指引","生成或更新框架 Webhook 访问密钥，并输出 curl 测试命令与部署关联指引"
+"--force 将重新生成 Webhook 密钥与随机公网路径，须同步更新 Git 平台。","--force 将重新生成 Webhook 密钥与随机公网路径，须同步更新 Git 平台。"
+"--rotate-path 将重新生成随机公网路径，须同步更新 Git 平台 Webhook URL。","--rotate-path 将重新生成随机公网路径，须同步更新 Git 平台 Webhook URL。"
+"添加 -y 跳过确认。","添加 -y 跳过确认。"
 是否继续？,是否继续？
-Weline 部署 Webhook 关联助手,Weline 部署 Webhook 关联助手
-已生成新的随机 Webhook 公网路径。,已生成新的随机 Webhook 公网路径。
-沿用后台已有 Webhook 路径（使用 --rotate-path 或 --force 可重新生成）。,沿用后台已有 Webhook 路径（使用 --rotate-path 或 --force 可重新生成）。
-已生成 Webhook 公网路径。,已生成 Webhook 公网路径。
-已生成新的 Webhook 访问密钥。,已生成新的 Webhook 访问密钥。
-沿用后台已有 Webhook 密钥（使用 --force 可重新生成）。,沿用后台已有 Webhook 密钥（使用 --force 可重新生成）。
-已生成 Webhook 访问密钥。,已生成 Webhook 访问密钥。
-随机 Webhook 公网路径已保存到后台部署配置。,随机 Webhook 公网路径已保存到后台部署配置。
-Webhook 路径保存失败。,Webhook 路径保存失败。
-密钥已保存到后台「部署配置 > Webhook 密钥」。,密钥已保存到后台「部署配置 > Webhook 密钥」。
+"Weline 部署 Webhook 关联助手","Weline 部署 Webhook 关联助手"
+"已生成新的随机 Webhook 公网路径。","已生成新的随机 Webhook 公网路径。"
+"沿用后台已有 Webhook 路径（使用 --rotate-path 或 --force 可重新生成）。","沿用后台已有 Webhook 路径（使用 --rotate-path 或 --force 可重新生成）。"
+"已生成 Webhook 公网路径。","已生成 Webhook 公网路径。"
+"已生成新的 Webhook 访问密钥。","已生成新的 Webhook 访问密钥。"
+"沿用后台已有 Webhook 密钥（使用 --force 可重新生成）。","沿用后台已有 Webhook 密钥（使用 --force 可重新生成）。"
+"已生成 Webhook 访问密钥。","已生成 Webhook 访问密钥。"
+"随机 Webhook 公网路径已保存到后台部署配置。","随机 Webhook 公网路径已保存到后台部署配置。"
+"Webhook 路径保存失败。","Webhook 路径保存失败。"
+"密钥已保存到后台「部署配置 > Webhook 密钥」。","密钥已保存到后台「部署配置 > Webhook 密钥」。"
 密钥保存失败，请手动写入后台部署配置。,密钥保存失败，请手动写入后台部署配置。
 --no-save：未写入后台配置，请自行保存下方密钥与路径。,--no-save：未写入后台配置，请自行保存下方密钥与路径。
-Webhook 公网路径（随机，~wh~ 前缀）,Webhook 公网路径（随机，~wh~ 前缀）
-Git 平台 Webhook 部署地址（完整 URL）,Git 平台 Webhook 部署地址（完整 URL）
-站点根 URL 来源：%{1},站点根 URL 来源：%{1}
+"Webhook 公网路径（随机，~wh~ 前缀）","Webhook 公网路径（随机，~wh~ 前缀）"
+"Git 平台 Webhook 部署地址（完整 URL）","Git 平台 Webhook 部署地址（完整 URL）"
+"站点根 URL 来源：%{1}","站点根 URL 来源：%{1}"
 相对路径（需自行拼接域名）：/%{1},相对路径（需自行拼接域名）：/%{1}
-版本探测 URL,版本探测 URL
-Webhook 访问密钥（webhook_secret）,Webhook 访问密钥（webhook_secret）
-部署 SSH 密钥,部署 SSH 密钥
-SSH 密钥生成失败。,SSH 密钥生成失败。
-SSH 密钥对已生成。,SSH 密钥对已生成。
-沿用已有 SSH 密钥（使用 --ssh-force 可重新生成）。,沿用已有 SSH 密钥（使用 --ssh-force 可重新生成）。
+"版本探测 URL","版本探测 URL"
+"Webhook 访问密钥（webhook_secret）","Webhook 访问密钥（webhook_secret）"
+"部署 SSH 密钥","部署 SSH 密钥"
+"SSH 密钥生成失败。","SSH 密钥生成失败。"
+"SSH 密钥对已生成。","SSH 密钥对已生成。"
+"沿用已有 SSH 密钥（使用 --ssh-force 可重新生成）。","沿用已有 SSH 密钥（使用 --ssh-force 可重新生成）。"
 私钥：%{1},私钥：%{1}
 公钥：%{1},公钥：%{1}
-curl 测试命令（专用部署环境执行）,curl 测试命令（专用部署环境执行）
-无法生成 curl 示例：缺少完整 Webhook URL。,无法生成 curl 示例：缺少完整 Webhook URL。
+"curl 测试命令（专用部署环境执行）","curl 测试命令（专用部署环境执行）"
+"无法生成 curl 示例：缺少完整 Webhook URL。","无法生成 curl 示例：缺少完整 Webhook URL。"
 配置指引,配置指引
 完成。,完成。
-从 Git 仓库拉取代码并更新部署项目,从 Git 仓库拉取代码并更新部署项目
-Git 部署开始...,Git 部署开始...
-步骤 1/5：读取配置文件...,步骤 1/5：读取配置文件...
-错误：无法读取 .env 配置文件或配置为空！,错误：无法读取 .env 配置文件或配置为空！
-请创建 .env 文件，或从 .env.sample 复制模板并修改配置。,请创建 .env 文件，或从 .env.sample 复制模板并修改配置。
-✓ 配置文件读取成功,✓ 配置文件读取成功
-步骤 2/5：验证配置...,步骤 2/5：验证配置...
-✓ 配置验证通过,✓ 配置验证通过
-步骤 3/5：备份当前项目...,步骤 3/5：备份当前项目...
-✓ 项目备份完成,✓ 项目备份完成
-⚠ 跳过备份步骤,⚠ 跳过备份步骤
-步骤 4/5：执行 Git 拉取更新...,步骤 4/5：执行 Git 拉取更新...
-✓ Git 更新完成,✓ Git 更新完成
-步骤 5/5：执行部署后清理...,步骤 5/5：执行部署后清理...
-✓ 清理完成,✓ 清理完成
-✓✓✓ 部署完成！✓✓✓,✓✓✓ 部署完成！✓✓✓
-.env 文件不存在：%{1},.env 文件不存在：%{1}
+"从 Git 仓库拉取代码并更新部署项目","从 Git 仓库拉取代码并更新部署项目"
+"Git 部署开始...","Git 部署开始..."
+"步骤 1/5：读取配置文件...","步骤 1/5：读取配置文件..."
+"错误：无法读取 .env 配置文件或配置为空！","错误：无法读取 .env 配置文件或配置为空！"
+"请创建 .env 文件，或从 .env.sample 复制模板并修改配置。","请创建 .env 文件，或从 .env.sample 复制模板并修改配置。"
+"✓ 配置文件读取成功","✓ 配置文件读取成功"
+"步骤 2/5：验证配置...","步骤 2/5：验证配置..."
+"✓ 配置验证通过","✓ 配置验证通过"
+"步骤 3/5：备份当前项目...","步骤 3/5：备份当前项目..."
+"✓ 项目备份完成","✓ 项目备份完成"
+"⚠ 跳过备份步骤","⚠ 跳过备份步骤"
+"步骤 4/5：执行 Git 拉取更新...","步骤 4/5：执行 Git 拉取更新..."
+"✓ Git 更新完成","✓ Git 更新完成"
+"步骤 5/5：执行部署后清理...","步骤 5/5：执行部署后清理..."
+"✓ 清理完成","✓ 清理完成"
+"✓✓✓ 部署完成！✓✓✓","✓✓✓ 部署完成！✓✓✓"
+".env 文件不存在：%{1}",".env 文件不存在：%{1}"
 缺少必需配置项：%{1},缺少必需配置项：%{1}
 仓库地址：%{1},仓库地址：%{1}
 用户名：%{1},用户名：%{1}
 备份目录：%{1},备份目录：%{1}
 当前平台：%{1},当前平台：%{1}
 无法创建压缩备份，将仅创建记录文件,无法创建压缩备份，将仅创建记录文件
-错误：系统未检测到 Git！,错误：系统未检测到 Git！
-请先安装 Git 后才能使用此功能。,请先安装 Git 后才能使用此功能。
+"错误：系统未检测到 Git！","错误：系统未检测到 Git！"
+"请先安装 Git 后才能使用此功能。","请先安装 Git 后才能使用此功能。"
 安装方法：,安装方法：
-Windows 系统：,Windows 系统：
-1. 访问 https://git-scm.com/download/win,1.访问https://git-scm.com/download/win
-2. 下载并安装 Git for Windows,2. 下载并安装 Git for Windows
-3. 安装完成后重启终端,3. 安装完成后重启终端
-Linux 系统：,Linux 系统：
-Ubuntu/Debian: sudo apt-get install git,Ubuntu/Debian: sudo apt-get install git
-CentOS/RHEL: sudo yum install git,CentOS/RHEL：sudo yum install git
-Fedora: sudo dnf install git,Fedora：sudo dnf 安装 git
-macOS 系统：,macOS 系统：
-brew install git,酿造安装git
-或者访问 https://git-scm.com/download/mac,或者访问 https://git-scm.com/download/mac
-初始化 Git 仓库...,初始化 Git 仓库...
+"Windows 系统：","Windows 系统："
+"1. 访问 https://git-scm.com/download/win",1.访问https://git-scm.com/download/win
+"2. 下载并安装 Git for Windows","2. 下载并安装 Git for Windows"
+"3. 安装完成后重启终端","3. 安装完成后重启终端"
+"Linux 系统：","Linux 系统："
+"Ubuntu/Debian: sudo apt-get install git","Ubuntu/Debian: sudo apt-get install git"
+"CentOS/RHEL: sudo yum install git","CentOS/RHEL：sudo yum install git"
+"Fedora: sudo dnf install git","Fedora：sudo dnf 安装 git"
+"macOS 系统：","macOS 系统："
+"brew install git",酿造安装git
+"或者访问 https://git-scm.com/download/mac","或者访问 https://git-scm.com/download/mac"
+"初始化 Git 仓库...","初始化 Git 仓库..."
 当前分支：%{1},当前分支：%{1}
 无法获取当前分支信息,无法获取当前分支信息
-从 %{1} 分支拉取更新...,从 %{1} 分支拉取更新...
-⚠ 强制模式：将丢弃本地修改,⚠ 强制模式：将丢弃本地修改
-Git 拉取失败：%{1},Git 拉取失败：%{1}
-提示：如果有本地修改冲突，可以使用 --force 参数强制更新,提示：如果有本地修改冲突，可以使用 --force 参数强制更新
-✓ Git 操作完成,✓ Git 操作完成
+"从 %{1} 分支拉取更新...","从 %{1} 分支拉取更新..."
+"⚠ 强制模式：将丢弃本地修改","⚠ 强制模式：将丢弃本地修改"
+"Git 拉取失败：%{1}","Git 拉取失败：%{1}"
+"提示：如果有本地修改冲突，可以使用 --force 参数强制更新","提示：如果有本地修改冲突，可以使用 --force 参数强制更新"
+"✓ Git 操作完成","✓ Git 操作完成"
 已清理缓存目录,已清理缓存目录
-使用 PowerShell 创建备份...,使用 PowerShell 创建备份...
-✓ PowerShell 备份创建成功,✓ PowerShell 备份创建成功
-PowerShell 备份失败,PowerShell 备份失败
+"使用 PowerShell 创建备份...","使用 PowerShell 创建备份..."
+"✓ PowerShell 备份创建成功","✓ PowerShell 备份创建成功"
+"PowerShell 备份失败","PowerShell 备份失败"
 检测可用的备份工具...,检测可用的备份工具...
-使用 tar 创建备份...,使用 tar 创建备份...
-使用 zip 创建备份...,使用 zip 创建备份...
-✓ tar 备份创建成功,✓ tar 备份创建成功
-tar 备份失败,tar 备份失败
-✓ zip 备份创建成功,✓ zip 备份创建成功
-zip 备份失败,zip 备份失败
+"使用 tar 创建备份...","使用 tar 创建备份..."
+"使用 zip 创建备份...","使用 zip 创建备份..."
+"✓ tar 备份创建成功","✓ tar 备份创建成功"
+"tar 备份失败","tar 备份失败"
+"✓ zip 备份创建成功","✓ zip 备份创建成功"
+"zip 备份失败","zip 备份失败"
 查看当前部署版本,查看当前部署版本
 当前部署版本,当前部署版本
 版本：%{1},版本：%{1}
-发布 ID：%{1},发布 ID：%{1}
-ref 类型：%{1},ref 类型：%{1}
+"发布 ID：%{1}","发布 ID：%{1}"
+"ref 类型：%{1}","ref 类型：%{1}"
 commit：%{1},提交：%{1}
 tag：%{1},标签：%{1}
-Worker ID：%{1},工号：%{1}
+"Worker ID：%{1}",工号：%{1}
 部署时间：%{1},部署时间：%{1}
 部署模式：%{1},部署模式：%{1}
 最近发布历史,最近发布历史
-等待指定版本生效（用于 CI 门禁）,等待指定版本生效（用于 CI 门禁）
-缺少 --expect 参数,缺少 --expect 参数
-等待版本：%{1}（超时 %{2} 秒）,等待版本：%{1}（超时 %{2} 秒）
-版本已生效：%{1}（第 %{2} 次检测）,版本已生效：%{1}（第 %{2} 次检测）
-第 %{1} 次检测：当前 %{2}，期望 %{3},第 %{1} 次检测：当前 %{2}，期望 %{3}
-超时：版本 %{1} 未在 %{2} 秒内生效,超时：版本 %{1} 未在 %{2} 秒内生效
-按项目根 deploy.env-map.php 扭转 SystemConfig（无文件则跳过）,按项目根 deploy.env-map.php 扭转 SystemConfig（无文件则跳过）
+"等待指定版本生效（用于 CI 门禁）","等待指定版本生效（用于 CI 门禁）"
+"缺少 --expect 参数","缺少 --expect 参数"
+"等待版本：%{1}（超时 %{2} 秒）","等待版本：%{1}（超时 %{2} 秒）"
+"版本已生效：%{1}（第 %{2} 次检测）","版本已生效：%{1}（第 %{2} 次检测）"
+"第 %{1} 次检测：当前 %{2}，期望 %{3}","第 %{1} 次检测：当前 %{2}，期望 %{3}"
+"超时：版本 %{1} 未在 %{2} 秒内生效","超时：版本 %{1} 未在 %{2} 秒内生效"
+"按项目根 deploy.env-map.php 扭转 SystemConfig（无文件则跳过）","按项目根 deploy.env-map.php 扭转 SystemConfig（无文件则跳过）"
 状态：%{1}（%{2}）,状态：%{1}（%{2}）
 档位：%{1},档位：%{1}
 映射文件：%{1},映射文件：%{1}
 未找到映射文件，已跳过。,未找到映射文件，已跳过。
-完整发布：Git 更新 + 后置命令 + 写版本戳 + reload,完整发布：Git 更新 + 后置命令 + 写版本戳 + reload
+"完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","完整发布：Git 更新 + 后置命令 + 写版本戳 + reload"
 生成不执行发布的机器可读部署计划,生成不执行发布的机器可读部署计划
 部署环境映射文件必须返回数组。,部署环境映射文件必须返回数组。
-部署环境映射 schema 必须为 %{1}。,部署环境映射 schema 必须为 %{1}。
-部署环境映射 rules 必须为数组。,部署环境映射 rules 必须为数组。
-规则 #%{1} 不是数组。,规则 #%{1} 不是数组。
-规则 #%{1} 缺少 module/key/scopes/values_by_level。,规则 #%{1} 缺少 module/key/scopes/values_by_level。
-规则 #%{1} area 无效。,规则 #%{1} area 无效。
-规则 #%{1} 档位 %{2} 的值必须是标量。,规则 #%{1} 档位 %{2} 的值必须是标量。
-规则 #%{1} 含非字符串 scope。,规则 #%{1} 含非字符串 scope。
-写入 %{1} @ %{2} 失败：%{3},写入 %{1} @ %{2} 失败：%{3}
-写入 %{1} @ %{2} 返回失败。,写入 %{1} @ %{2} 返回失败。
-deploy-env-map 不支持 scopes=*，请显式列出 storage scope。,deploy-env-map 不支持 scopes=*，请显式列出 storage scope。
-非法 scope：%{1}（需 global 或三段 storage scope）。,非法 scope：%{1}（需 global 或三段 storage scope）。
-mdi mdi-rocket-launch-outline,MDI MDI 火箭发射大纲
-mdi mdi-update,MDI MDI 更新
-mdi mdi-rocket-launch,mdi mdi-rocket-launch
-mdi mdi-view-dashboard-outline,MDI MDI-视图-仪表板-大纲
-mdi mdi-source-branch-sync,mdi mdi-源分支-同步
-mdi mdi-tune-variant,mdi mdi-tune-variant
-mdi mdi-clipboard-edit-outline,mdi mdi-clipboard-edit-outline
-mdi mdi-shield-check-outline,MDI MDI 屏蔽检查大纲
-mdi mdi-replay,MDI MDI 重放
-mdi mdi-history,MDI MDI 历史
-mdi mdi-clipboard-list-outline,mdi mdi-剪贴板-列表-大纲
-mdi mdi-content-save,MDI MDI 内容保存
-mdi mdi-shield-check,mdi mdi 屏蔽检查
-mdi mdi-restore,MDI MDI 恢复
-mdi mdi-source-branch,MDI MDI 源分支
-从 Git 仓库增量更新框架核心代码（只更新变化的文件）,从 Git 仓库增量更新框架核心代码（只更新变化的文件）
-未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像,未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像
+"部署环境映射 schema 必须为 %{1}。","部署环境映射 schema 必须为 %{1}。"
+"部署环境映射 rules 必须为数组。","部署环境映射 rules 必须为数组。"
+"规则 #%{1} 不是数组。","规则 #%{1} 不是数组。"
+"规则 #%{1} 缺少 module/key/scopes/values_by_level。","规则 #%{1} 缺少 module/key/scopes/values_by_level。"
+"规则 #%{1} area 无效。","规则 #%{1} area 无效。"
+"规则 #%{1} 档位 %{2} 的值必须是标量。","规则 #%{1} 档位 %{2} 的值必须是标量。"
+"规则 #%{1} 含非字符串 scope。","规则 #%{1} 含非字符串 scope。"
+"写入 %{1} @ %{2} 失败：%{3}","写入 %{1} @ %{2} 失败：%{3}"
+"写入 %{1} @ %{2} 返回失败。","写入 %{1} @ %{2} 返回失败。"
+"deploy-env-map 不支持 scopes=*，请显式列出 storage scope。","deploy-env-map 不支持 scopes=*，请显式列出 storage scope。"
+"非法 scope：%{1}（需 global 或三段 storage scope）。","非法 scope：%{1}（需 global 或三段 storage scope）。"
+"mdi mdi-rocket-launch-outline","MDI MDI 火箭发射大纲"
+"mdi mdi-update","MDI MDI 更新"
+"mdi mdi-rocket-launch","mdi mdi-rocket-launch"
+"mdi mdi-view-dashboard-outline","MDI MDI-视图-仪表板-大纲"
+"mdi mdi-source-branch-sync","mdi mdi-源分支-同步"
+"mdi mdi-tune-variant","mdi mdi-tune-variant"
+"mdi mdi-clipboard-edit-outline","mdi mdi-clipboard-edit-outline"
+"mdi mdi-shield-check-outline","MDI MDI 屏蔽检查大纲"
+"mdi mdi-replay","MDI MDI 重放"
+"mdi mdi-history","MDI MDI 历史"
+"mdi mdi-clipboard-list-outline","mdi mdi-剪贴板-列表-大纲"
+"mdi mdi-content-save","MDI MDI 内容保存"
+"mdi mdi-shield-check","mdi mdi 屏蔽检查"
+"mdi mdi-restore","MDI MDI 恢复"
+"mdi mdi-source-branch","MDI MDI 源分支"
+"从 Git 仓库增量更新框架核心代码（只更新变化的文件）","从 Git 仓库增量更新框架核心代码（只更新变化的文件）"
+"未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像","未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像"
 默认检测当前项目全部已跟踪、未跟踪和子模块变更；存在未提交变更时拒绝更新,默认检测当前项目全部已跟踪、未跟踪和子模块变更；存在未提交变更时拒绝更新
-仅显式使用 -f/--force 时跳过工作区保护，删除缓存并重新克隆后覆盖目标目录,仅显式使用 -f/--force 时跳过工作区保护，删除缓存并重新克隆后覆盖目标目录
-核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理,核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理
-步骤 1/6：检查 Git...,步骤 1/6：检查 Git...
-步骤 2/6：验证参数...,步骤 2/6：验证参数...
-步骤 3/6：准备临时目录...,步骤 3/6：准备临时目录...
-步骤 4/6：下载框架代码...,步骤 4/6：下载框架代码...
-步骤 5/6：更新核心文件...,步骤 5/6：更新核心文件...
-步骤 6/6：完成处理...,步骤 6/6：完成处理...
+"仅显式使用 -f/--force 时跳过工作区保护，删除缓存并重新克隆后覆盖目标目录","仅显式使用 -f/--force 时跳过工作区保护，删除缓存并重新克隆后覆盖目标目录"
+"核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理","核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理"
+"步骤 1/6：检查 Git...","步骤 1/6：检查 Git..."
+"步骤 2/6：验证参数...","步骤 2/6：验证参数..."
+"步骤 3/6：准备临时目录...","步骤 3/6：准备临时目录..."
+"步骤 4/6：下载框架代码...","步骤 4/6：下载框架代码..."
+"步骤 5/6：更新核心文件...","步骤 5/6：更新核心文件..."
+"步骤 6/6：完成处理...","步骤 6/6：完成处理..."
 保留缓存目录用于下次增量更新,保留缓存目录用于下次增量更新
-⚠ 已显式启用 -f/--force，跳过本地未提交变更保护,⚠ 已显式启用 -f/--force，跳过本地未提交变更保护
-当前项目不是 Git 工作区，跳过未提交变更检查,当前项目不是 Git 工作区，跳过未提交变更检查
+"⚠ 已显式启用 -f/--force，跳过本地未提交变更保护","⚠ 已显式启用 -f/--force，跳过本地未提交变更保护"
+"当前项目不是 Git 工作区，跳过未提交变更检查","当前项目不是 Git 工作区，跳过未提交变更检查"
 错误：无法确认当前项目工作区是否干净，已安全取消核心更新,错误：无法确认当前项目工作区是否干净，已安全取消核心更新
-如确认允许覆盖本地变更，请显式使用 -f/--force,如确认允许覆盖本地变更，请显式使用 -f/--force
-✓ 当前项目工作区干净,✓ 当前项目工作区干净
-检测到 %{1} 项未提交的本地变更，已拒绝更新核心,检测到 %{1} 项未提交的本地变更，已拒绝更新核心
-✓ GitHub 可达，使用 GitHub 仓库,✓ GitHub 可达，使用 GitHub 仓库
-增量更新：检测到现有仓库缓存，使用 git fetch 拉取变更...,增量更新：检测到现有仓库缓存，使用 git fetch 拉取变更...
-检测到 %{1} 个变化的文件,检测到 %{1} 个变化的文件
-重置到远程分支 %{1} 最新...,重置到远程分支 %{1} 最新...
-✓ 已更新到分支 %{1} 最新版本,✓ 已更新到分支 %{1} 最新版本
-增量模式：Git 变更 + 内容不一致文件同步...,增量模式：Git 变更 + 内容不一致文件同步...
-刷新：覆盖 %{1} 个内容与源不一致的核心文件,刷新：覆盖 %{1} 个内容与源不一致的核心文件
+"如确认允许覆盖本地变更，请显式使用 -f/--force","如确认允许覆盖本地变更，请显式使用 -f/--force"
+"✓ 当前项目工作区干净","✓ 当前项目工作区干净"
+"检测到 %{1} 项未提交的本地变更，已拒绝更新核心","检测到 %{1} 项未提交的本地变更，已拒绝更新核心"
+"✓ GitHub 可达，使用 GitHub 仓库","✓ GitHub 可达，使用 GitHub 仓库"
+"增量更新：检测到现有仓库缓存，使用 git fetch 拉取变更...","增量更新：检测到现有仓库缓存，使用 git fetch 拉取变更..."
+"检测到 %{1} 个变化的文件","检测到 %{1} 个变化的文件"
+"重置到远程分支 %{1} 最新...","重置到远程分支 %{1} 最新..."
+"✓ 已更新到分支 %{1} 最新版本","✓ 已更新到分支 %{1} 最新版本"
+"增量模式：Git 变更 + 内容不一致文件同步...","增量模式：Git 变更 + 内容不一致文件同步..."
+"刷新：覆盖 %{1} 个内容与源不一致的核心文件","刷新：覆盖 %{1} 个内容与源不一致的核心文件"
 "返回 {""""""""ok"""""""":true} 即表示 Webhook 入口正常。""""""","返回 {""""""""ok"""""""":true} 即表示 Webhook 入口正常。"""""""
 "返回 {""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。""""""""""""""""""""""""""""""","返回 {""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。"""""""""""""""""""""""""""""""
 "返回 {""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""","返回 {""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+"返回 {""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""","返回 {""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+"返回 {""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""","返回 {""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""ok"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""":true} 即表示 Webhook 入口正常。"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""

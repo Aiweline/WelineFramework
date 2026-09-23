@@ -1,4 +1,4 @@
-万能分类后台 Resource 不支持操作：%{1},万能分类后台 Resource 不支持操作：%{1}
+﻿"万能分类后台 Resource 不支持操作：%{1}","万能分类后台 Resource 不支持操作：%{1}"
 万能分类后台,万能分类后台
 维护分类树、保存、删除与拖拽排序。,维护分类树、保存、删除与拖拽排序。
 读取分类详情,读取分类详情
@@ -9,7 +9,7 @@
 保存展示选择,保存展示选择
 页面下发的对象授权版本；提交前必须保持一致,页面下发的对象授权版本；提交前必须保持一致
 万能分类,万能分类
-Catalog hub facade for multi-space category trees.,Catalog hub facade for multi-space category trees.
+"Catalog hub facade for multi-space category trees.","Catalog hub facade for multi-space category trees."
 id属性不能为空,id属性不能为空
 未找到匹配分类,未找到匹配分类
 移除,移除
@@ -20,7 +20,7 @@ id属性不能为空,id属性不能为空
 作为顶级分类,作为顶级分类
 新建并选中,新建并选中
 请输入分类名称,请输入分类名称
-缺少 Website，无法新建分类,缺少 Website，无法新建分类
+"缺少 Website，无法新建分类","缺少 Website，无法新建分类"
 分类新建失败,分类新建失败
 分类已创建,分类已创建
 未选择分类,未选择分类
@@ -34,11 +34,11 @@ id属性不能为空,id属性不能为空
 分类顺序已保存,分类顺序已保存
 分类不存在,分类不存在
 加载删除产品清单失败,加载删除产品清单失败
-website_id 必须是非负整数,website_id 必须是非负整数
+"website_id 必须是非负整数","website_id 必须是非负整数"
 tree,tree
 维护多空间分类树,维护多空间分类树
 save,save
-保存 Store/Channel 分类展示选择,保存 Store/Channel 分类展示选择
+"保存 Store/Channel 分类展示选择","保存 Store/Channel 分类展示选择"
 保存分类结构,保存分类结构
 trash,trash
 删除分类结构,删除分类结构
@@ -46,13 +46,13 @@ trash,trash
 查看分类,查看分类
 查看分类详情,查看分类详情
 列出分类子树挂载产品供删除勾选,列出分类子树挂载产品供删除勾选
-Google 产品分类,Google 产品分类
-已入队 AI 翻译,已入队 AI 翻译
-已入队 AI 翻译（队列 #%{1}）,已入队 AI 翻译（队列 #%{1}）
-只读 Google 分类参照与 AI 译名,只读 Google 分类参照与 AI 译名
-Google 分类 AI 翻译,Google 分类 AI 翻译
+"Google 产品分类","Google 产品分类"
+"已入队 AI 翻译","已入队 AI 翻译"
+"已入队 AI 翻译（队列 #%{1}）","已入队 AI 翻译（队列 #%{1}）"
+"只读 Google 分类参照与 AI 译名","只读 Google 分类参照与 AI 译名"
+"Google 分类 AI 翻译","Google 分类 AI 翻译"
 language,language
-入队 Google 分类 AI 翻译,入队 Google 分类 AI 翻译
+"入队 Google 分类 AI 翻译","入队 Google 分类 AI 翻译"
 调整分类,调整分类
 批量调整分类,批量调整分类
 操作方式,操作方式
@@ -63,27 +63,27 @@ language,language
 正在加载分类…,正在加载分类…
 取消,取消
 应用,应用
-只读参照树；不可删改结构。可对译名发起 AI 批量翻译。,只读参照树；不可删改结构。可对译名发起 AI 批量翻译。
-共 %{1} 条,共 %{1} 条
-版本 %{1},版本 %{1}
-Google 分类操作,Google 分类操作
-搜索 Google ID / 英文名,搜索 Google ID / 英文名
+"只读参照树；不可删改结构。可对译名发起 AI 批量翻译。","只读参照树；不可删改结构。可对译名发起 AI 批量翻译。"
+"共 %{1} 条","共 %{1} 条"
+"版本 %{1}","版本 %{1}"
+"Google 分类操作","Google 分类操作"
+"搜索 Google ID / 英文名","搜索 Google ID / 英文名"
 搜索,搜索
 返回万能分类,返回万能分类
 搜索结果,搜索结果
 只读树,只读树
 分类路径,分类路径
 全部分类,全部分类
-暂无 Google 分类数据,暂无 Google 分类数据
+"暂无 Google 分类数据","暂无 Google 分类数据"
 展开子分类,展开子分类
-译名与 AI,译名与 AI
-请从左侧选择一条 Google 分类,请从左侧选择一条 Google 分类
-深度 %{1},深度 %{1}
-将入队词典键 google_taxonomy.{id} 的 AI 翻译任务。,将入队词典键 google_taxonomy.{id} 的 AI 翻译任务。
+"译名与 AI","译名与 AI"
+"请从左侧选择一条 Google 分类","请从左侧选择一条 Google 分类"
+"深度 %{1}","深度 %{1}"
+"将入队词典键 google_taxonomy.{id} 的 AI 翻译任务。","将入队词典键 google_taxonomy.{id} 的 AI 翻译任务。"
 目标语言,目标语言
-一键 AI 翻译,一键 AI 翻译
-确认入队 Google 分类 AI 翻译？任务可在离开页面后继续。,确认入队 Google 分类 AI 翻译？任务可在离开页面后继续。
-AI 翻译,AI 翻译
+"一键 AI 翻译","一键 AI 翻译"
+"确认入队 Google 分类 AI 翻译？任务可在离开页面后继续。","确认入队 Google 分类 AI 翻译？任务可在离开页面后继续。"
+"AI 翻译","AI 翻译"
 空间,空间
 范围,范围
 Website,Website
@@ -99,7 +99,7 @@ Channel,Channel
 仅解绑,仅解绑
 全选,全选
 全选独占,全选独占
-将物理删除 %{n} 个产品,将物理删除 %{n} 个产品
+"将物理删除 %{n} 个产品","将物理删除 %{n} 个产品"
 确认删除,确认删除
 分类删除失败,分类删除失败
 加载可删除产品清单失败,加载可删除产品清单失败
@@ -107,10 +107,10 @@ Channel,Channel
 挂靠为子分类,挂靠为子分类
 插入到上方,插入到上方
 插入到下方,插入到下方
-分类图标过大（上限 %{1} KB）,分类图标过大（上限 %{1} KB）
-分类 Banner 过大（上限 %{1} KB）,分类 Banner 过大（上限 %{1} KB）
-Website 范围维护分类结构；左侧树形列表支持拖拽排序与挂靠,Website 范围维护分类结构；左侧树形列表支持拖拽排序与挂靠
-Store/Channel 范围配置展示选择；结构仅在 Website 维护,Store/Channel 范围配置展示选择；结构仅在 Website 维护
+"分类图标过大（上限 %{1} KB）","分类图标过大（上限 %{1} KB）"
+"分类 Banner 过大（上限 %{1} KB）","分类 Banner 过大（上限 %{1} KB）"
+"Website 范围维护分类结构；左侧树形列表支持拖拽排序与挂靠","Website 范围维护分类结构；左侧树形列表支持拖拽排序与挂靠"
+"Store/Channel 范围配置展示选择；结构仅在 Website 维护","Store/Channel 范围配置展示选择；结构仅在 Website 维护"
 分类筛选,分类筛选
 产品分类,产品分类
 分类管理操作,分类管理操作
@@ -122,77 +122,77 @@ Store/Channel 范围配置展示选择；结构仅在 Website 维护,Store/Chann
 编辑分类,编辑分类
 分类信息,分类信息
 展示配置,展示配置
-结构仅在 Website 维护。此处勾选本 Store/Channel 要展示的分类。,结构仅在 Website 维护。此处勾选本 Store/Channel 要展示的分类。
+"结构仅在 Website 维护。此处勾选本 Store/Channel 要展示的分类。","结构仅在 Website 维护。此处勾选本 Store/Channel 要展示的分类。"
 暂无可配置分类,暂无可配置分类
 保存展示,保存展示
 请从左侧选择分类，或添加一个新分类,请从左侧选择分类，或添加一个新分类
 多语言,多语言
 分类名称,分类名称
 保存后可翻译多语言,保存后可翻译多语言
-分类 Code,分类 Code
-URL 路径片段，仅小写字母、数字和连字符；保存后路径会随之更新,URL 路径片段，仅小写字母、数字和连字符；保存后路径会随之更新
-根据父分类与 Code 自动生成；子分类路径会随父级变化,根据父分类与 Code 自动生成；子分类路径会随父级变化
+"分类 Code","分类 Code"
+"URL 路径片段，仅小写字母、数字和连字符；保存后路径会随之更新","URL 路径片段，仅小写字母、数字和连字符；保存后路径会随之更新"
+"根据父分类与 Code 自动生成；子分类路径会随父级变化","根据父分类与 Code 自动生成；子分类路径会随父级变化"
 父分类,父分类
 顶级分类,顶级分类
 启用分类,启用分类
 分类图标,分类图标
 选择图标,选择图标
 清除,清除
-用于前台分类列表/网格；建议 %{1}×%{2}，尽量数 KB 内，上限 %{3} KB,用于前台分类列表/网格；建议 %{1}×%{2}，尽量数 KB 内，上限 %{3} KB
-分类 Banner,分类 Banner
-选择 Banner,选择 Banner
-分类详情页横幅（亚马逊风格）；建议 %{1}×%{2}，上限 %{3} KB,分类详情页横幅（亚马逊风格）；建议 %{1}×%{2}，上限 %{3} KB
+"用于前台分类列表/网格；建议 %{1}×%{2}，尽量数 KB 内，上限 %{3} KB","用于前台分类列表/网格；建议 %{1}×%{2}，尽量数 KB 内，上限 %{3} KB"
+"分类 Banner","分类 Banner"
+"选择 Banner","选择 Banner"
+"分类详情页横幅（亚马逊风格）；建议 %{1}×%{2}，上限 %{3} KB","分类详情页横幅（亚马逊风格）；建议 %{1}×%{2}，上限 %{3} KB"
 分类摘要,分类摘要
 一句话介绍，用于列表或详情简介,一句话介绍，用于列表或详情简介
 分类描述,分类描述
 详情页完整描述,详情页完整描述
-Google Taxonomy ID,Google Taxonomy ID
+"Google Taxonomy ID","Google Taxonomy ID"
 查阅参照树,查阅参照树
-Website 结构映射；填写官方 Google 分类 ID（只读参照，不可在此改结构）。,Website 结构映射；填写官方 Google 分类 ID（只读参照，不可在此改结构）。
+"Website 结构映射；填写官方 Google 分类 ID（只读参照，不可在此改结构）。","Website 结构映射；填写官方 Google 分类 ID（只读参照，不可在此改结构）。"
 删除,删除
 保存,保存
 媒体库,媒体库
-未找到 Google 官方分类文件：%{1},未找到 Google 官方分类文件：%{1}
-Google 分类文件读取失败,Google 分类文件读取失败
-Google 分类文件为空或格式无效,Google 分类文件为空或格式无效
+"未找到 Google 官方分类文件：%{1}","未找到 Google 官方分类文件：%{1}"
+"Google 分类文件读取失败","Google 分类文件读取失败"
+"Google 分类文件为空或格式无效","Google 分类文件为空或格式无效"
 未注册的分类空间：%{1},未注册的分类空间：%{1}
-分类空间 space 不能为空,分类空间 space 不能为空
+"分类空间 space 不能为空","分类空间 space 不能为空"
 分类接口不支持该操作：%{1},分类接口不支持该操作：%{1}
 分类图标地址过长,分类图标地址过长
-分类 Banner 地址过长,分类 Banner 地址过长
-分类摘要过长（最多 %{1} 字）,分类摘要过长（最多 %{1} 字）
+"分类 Banner 地址过长","分类 Banner 地址过长"
+"分类摘要过长（最多 %{1} 字）","分类摘要过长（最多 %{1} 字）"
 分类描述过长,分类描述过长
-%{1}文件过大（上限 %{2} KB）,%{1}文件过大（上限 %{2} KB）
-分类结构只能在 Website 范围维护,分类结构只能在 Website 范围维护
-展示选择只能在 Store/Channel 范围配置,展示选择只能在 Store/Channel 范围配置
+"%{1}文件过大（上限 %{2} KB）","%{1}文件过大（上限 %{2} KB）"
+"分类结构只能在 Website 范围维护","分类结构只能在 Website 范围维护"
+"展示选择只能在 Store/Channel 范围配置","展示选择只能在 Store/Channel 范围配置"
 目标语言不能为空,目标语言不能为空
-Google 分类 AI 翻译 %{1},Google 分类 AI 翻译 %{1}
+"Google 分类 AI 翻译 %{1}","Google 分类 AI 翻译 %{1}"
 来源,来源
-"""万能分类后台 Resource 不支持操作：%{1}""",万能分类后台 Resource 不支持操作：%{1}
+"""万能分类后台 Resource 不支持操作：%{1}""","万能分类后台 Resource 不支持操作：%{1}"
 多语言翻译,多语言翻译
-Universal Catalog,万能分类
-Product Categories,产品分类
-Failed to load categories: %{1},分类读取失败：%{1}
-Unregistered catalog space: %{1},未注册的分类空间：%{1}
-Catalog space cannot be empty,分类空间 space 不能为空
-Catalog operation not supported: %{1},分类接口不支持该操作：%{1}
-Category structure can only be maintained at website scope,分类结构只能在 Website 范围维护
-Display selection can only be configured at store/channel scope,展示选择只能在 Store/Channel 范围配置
-Category saved,分类已保存
-Failed to save category,分类保存失败
-Category deleted,分类已删除
-Failed to delete category,分类删除失败
-Category order saved,分类顺序已保存
-Failed to reorder categories,分类排序失败
-Category not found,分类不存在
-website_id must be a non-negative integer,website_id 必须是非负整数
-Catalog admin resource does not support operation: %{1},万能分类后台 Resource 不支持操作：%{1}
-Read category details,读取分类详情
-Save category,保存分类
-Delete category,删除分类
-Reorder categories by drag and drop,拖拽排序分类
+"Universal Catalog",万能分类
+"Product Categories",产品分类
+"Failed to load categories: %{1}",分类读取失败：%{1}
+"Unregistered catalog space: %{1}",未注册的分类空间：%{1}
+"Catalog space cannot be empty","分类空间 space 不能为空"
+"Catalog operation not supported: %{1}",分类接口不支持该操作：%{1}
+"Category structure can only be maintained at website scope","分类结构只能在 Website 范围维护"
+"Display selection can only be configured at store/channel scope","展示选择只能在 Store/Channel 范围配置"
+"Category saved",分类已保存
+"Failed to save category",分类保存失败
+"Category deleted",分类已删除
+"Failed to delete category",分类删除失败
+"Category order saved",分类顺序已保存
+"Failed to reorder categories",分类排序失败
+"Category not found",分类不存在
+"website_id must be a non-negative integer","website_id 必须是非负整数"
+"Catalog admin resource does not support operation: %{1}","万能分类后台 Resource 不支持操作：%{1}"
+"Read category details",读取分类详情
+"Save category",保存分类
+"Delete category",删除分类
+"Reorder categories by drag and drop",拖拽排序分类
 "Maintain category tree, save, delete, and drag reorder.",维护分类树、保存、删除与拖拽排序。
-无效的 Google Taxonomy ID：%{1},无效的 Google Taxonomy ID：%{1}
+"无效的 Google Taxonomy ID：%{1}","无效的 Google Taxonomy ID：%{1}"
 google_taxonomy.1,动物与宠物用品
 google_taxonomy.2,宠物用品
 google_taxonomy.3,狗用品
@@ -209,4 +209,4 @@ google_taxonomy.469,家居与园艺
 google_taxonomy.536,厨房与餐饮
 google_taxonomy.783,媒体
 google_taxonomy.784,图书
-请执行 php bin/w setup:upgrade 导入官方分类库。,请执行 php bin/w setup:upgrade 导入官方分类库。
+"请执行 php bin/w setup:upgrade 导入官方分类库。","请执行 php bin/w setup:upgrade 导入官方分类库。"

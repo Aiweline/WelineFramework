@@ -1,123 +1,124 @@
-FAQ,FAQ
-帮助中心 sitemap URL 提供器,Help center sitemap URL provider
-Weline_Faq: before_schema_diff_commit — FaqItemScopeKeyHealer,Weline_Faq: before_schema_diff_commit — FaqItemScopeKeyHealer
-FAQ 配置,FAQ settings
-商品详情 FAQ 范围配置（SystemConfig）,Product detail FAQ scope config (SystemConfig)
-查看 FAQ 配置,View FAQ settings
-打开系统配置中的商品 FAQ,Open product FAQ in system config
-FAQ 条目不存在。,FAQ entry not found.
-FAQ 条目已保存。,FAQ entry saved.
-FAQ 条目已删除。,FAQ entry deleted.
-FAQ 条目,FAQ entry
-管理万能 FAQ 条目,Manage universal FAQ entries
-FAQ 条目列表,FAQ entry list
-查看 FAQ 条目,View FAQ entries
-编辑 FAQ 条目,Edit FAQ entry
-新建或编辑 FAQ 条目,Create or edit FAQ entry
-保存 FAQ 条目,Save FAQ entry
-删除 FAQ 条目,Delete FAQ entry
-无法创建帮助页面（CMS 不可用）。,Cannot create help page (CMS unavailable).
-帮助草稿已创建，可打开可视化编辑器完善内容。,Help draft created; open the visual editor to refine content.
-帮助页面不存在。,Help page not found.
-该页面不属于帮助中心。,This page is not part of the help center.
-帮助中心页面,Help center page
+﻿FAQ,FAQ
+"帮助中心 sitemap URL 提供器","Help center sitemap URL provider"
+"Weline_Faq: before_schema_diff_commit — FaqItemScopeKeyHealer","Weline_Faq: before_schema_diff_commit — FaqItemScopeKeyHealer"
+"FAQ 配置","FAQ settings"
+"商品详情 FAQ 范围配置（SystemConfig）","Product detail FAQ scope config (SystemConfig)"
+"查看 FAQ 配置","View FAQ settings"
+"打开系统配置中的商品 FAQ","Open product FAQ in system config"
+"FAQ 条目不存在。","FAQ entry not found."
+"FAQ 条目已保存。","FAQ entry saved."
+"FAQ 条目已删除。","FAQ entry deleted."
+"FAQ 条目","FAQ entry"
+"管理万能 FAQ 条目","Manage universal FAQ entries"
+"FAQ 条目列表","FAQ entry list"
+"查看 FAQ 条目","View FAQ entries"
+"编辑 FAQ 条目","Edit FAQ entry"
+"新建或编辑 FAQ 条目","Create or edit FAQ entry"
+"保存 FAQ 条目","Save FAQ entry"
+"删除 FAQ 条目","Delete FAQ entry"
+"无法创建帮助页面（CMS 不可用）。","Cannot create help page (CMS unavailable)."
+帮助草稿已创建，可打开可视化编辑器完善内容。,"Help draft created; open the visual editor to refine content."
+帮助页面不存在。,"Help page not found."
+该页面不属于帮助中心。,"This page is not part of the help center."
+帮助中心页面,"Help center page"
 faq-circle,faq-circle
-管理帮助中心 CMS 页面,Manage help center CMS pages
-帮助页面列表,Help page list
+"管理帮助中心 CMS 页面","Manage help center CMS pages"
+帮助页面列表,"Help page list"
 list,list
-查看帮助中心页面,View help center pages
-新建帮助页面,New help page
+查看帮助中心页面,"View help center pages"
+新建帮助页面,"New help page"
 plus,plus
-创建帮助中心草稿页,Create help center draft page
-编辑帮助页面,Edit help page
+创建帮助中心草稿页,"Create help center draft page"
+编辑帮助页面,"Edit help page"
 edit,edit
-编辑帮助中心页面,Edit help center page
-此帮助文章暂无正文，请在帮助中心后台使用可视化编辑器完善。,This help article has no body yet; refine it with the visual editor in help center admin.
-返回帮助中心,Back to the Help Center
-暂无常见问题。,No FAQs yet.
+编辑帮助中心页面,"Edit help center page"
+此帮助文章暂无正文，请在帮助中心后台使用可视化编辑器完善。,"This help article has no body yet; refine it with the visual editor in help center admin."
+返回帮助中心,"Back to the Help Center"
+暂无常见问题。,"No FAQs yet."
 站点,Site
 店铺,Store
 渠道,Channel
-本商品,This product
+本商品,"This product"
 草稿,Draft
 已发布,Published
 已禁用,Disabled
 网站,Website
-全部网站,All websites
+全部网站,"All websites"
 搜索,Search
-搜索标题/slug,Search title/slug
+搜索标题/slug,"Search title/slug"
 状态,Status
-全部状态,All Statuses
+全部状态,"All Statuses"
 筛选,Filter
-清空,Clear all
-暂无网站,No websites
-请先在 Websites 模块配置站点，然后再管理帮助中心页面。,"Configure sites in the Websites module first, then manage help center pages."
+清空,"Clear all"
+暂无网站,"No websites"
+"请先在 Websites 模块配置站点，然后再管理帮助中心页面。","Configure sites in the Websites module first, then manage help center pages."
 文章,Article
-在此网站新建,Create on this site
-该网站暂无帮助文章,No help articles on this site
-新建后可在可视化编辑器中编排 faq 布局内容。,"After creating, arrange faq layout content in the visual editor."
+在此网站新建,"Create on this site"
+该网站暂无帮助文章,"No help articles on this site"
+"新建后可在可视化编辑器中编排 faq 布局内容。","After creating, arrange faq layout content in the visual editor."
 ID,ID
 标题,Title
-公开路径,Public path
+公开路径,"Public path"
 操作,Actions
 管理,Manage
-可视化编辑,Visual editor
-CMS 字段,CMS field
-返回该网站列表,Back to this site list
-帮助页面,Help page
+可视化编辑,"Visual editor"
+"CMS 字段","CMS field"
+返回该网站列表,"Back to this site list"
+帮助页面,"Help page"
 Slug,Slug
-打开可视化编辑器（faq 布局）,Open visual editor (faq layout)
-CMS 字段编辑（标题/发布/多语言）,CMS field edit (title/publish/i18n)
-可视化编辑锁定 layout_type=faq；标题、slug、发布状态与多语言请在 CMS 字段编辑中修改。,"Visual editor locks layout_type=faq; edit title, slug, publish status and i18n in CMS field editor."
-共 %{1} 条。,%{1} items total.
-新建,Create new
+"打开可视化编辑器（faq 布局）","Open visual editor (faq layout)"
+"CMS 字段编辑（标题/发布/多语言）","CMS field edit (title/publish/i18n)"
+"可视化编辑锁定 layout_type=faq；标题、slug、发布状态与多语言请在 CMS 字段编辑中修改。","Visual editor locks layout_type=faq; edit title, slug, publish status and i18n in CMS field editor."
+"共 %{1} 条。","%{1} items total."
+新建,"Create new"
 类型,Type
-全部类型,All Types
+全部类型,"All Types"
 启用,Enable
 禁用,Disable.
-搜索问题 / UUID,Search question / UUID
-暂无 FAQ 条目,No FAQ entries
-为站点或商品等实体添加问答，前台部件即可展示。,Add Q&A for site or product entities; storefront widgets can display them.
-实体 UUID,Entity UUID
+"搜索问题 / UUID","Search question / UUID"
+"暂无 FAQ 条目","No FAQ entries"
+为站点或商品等实体添加问答，前台部件即可展示。,"Add Q&A for site or product entities; storefront widgets can display them."
+"实体 UUID","Entity UUID"
 问题,Issue
 排序,Sort
 编辑,Edit
-确认删除？,Confirm delete?
+确认删除？,"Confirm delete?"
 删除,Delete
-返回列表,Back to list
-新建 FAQ 条目,New FAQ entry
-全局（0）,Global (0)
-语言代码,Language code
-留空表示适用于全部语言。,Leave blank to apply to all languages.
-店铺 code,Store code
-空=网站层,Empty = website level
-渠道 code,Channel code
-空=店铺/网站层,Empty = store/website level
-与 Websites 店铺/渠道 code 对齐；填渠道时必须同时填店铺。下级禁用同一 faq_key = 抑制上级该条。,"Aligned with Websites store/channel codes; when filling channel, store is required. Child disabling the same faq_key suppresses the parent entry."
-实体 UUID / 模板 pack,Entity UUID / template pack
-type=template 时填写 pack 编码（retail 等）。,"When type=template, fill pack code (retail, etc.)."
-FAQ Key,FAQ Key
-同类型+实体内跨范围继承的稳定键；留空则由问题自动生成。,Stable key inherited across scopes within type+entity; blank auto-generates from question.
+返回列表,"Back to list"
+"新建 FAQ 条目","New FAQ entry"
+全局（0）,"Global (0)"
+语言代码,"Language code"
+留空表示适用于全部语言。,"Leave blank to apply to all languages."
+"店铺 code","Store code"
+空=网站层,"Empty = website level"
+"渠道 code","Channel code"
+空=店铺/网站层,"Empty = store/website level"
+"与 Websites 店铺/渠道 code 对齐；填渠道时必须同时填店铺。下级禁用同一 faq_key = 抑制上级该条。","Aligned with Websites store/channel codes; when filling channel, store is required. Child disabling the same faq_key suppresses the parent entry."
+"实体 UUID / 模板 pack","Entity UUID / template pack"
+"type=template 时填写 pack 编码（retail 等）。","When type=template, fill pack code (retail, etc.)."
+"FAQ Key","FAQ Key"
+同类型+实体内跨范围继承的稳定键；留空则由问题自动生成。,"Stable key inherited across scopes within type+entity; blank auto-generates from question."
 答案,Answer
 保存,Save
 取消,Cancel
-FAQ 页面编码无效。,Invalid FAQ page code.
-FAQ 页面 slug 无效。,Invalid FAQ page slug.
-类型与实体 UUID 不能为空。,Type and entity UUID required.
-问题与答案不能为空。,Question and answer required.
+"FAQ 页面编码无效。","Invalid FAQ page code."
+"FAQ 页面 slug 无效。","Invalid FAQ page slug."
+"类型与实体 UUID 不能为空。","Type and entity UUID required."
+问题与答案不能为空。,"Question and answer required."
 填写渠道时必须同时指定店铺。,"When filling channel, store must also be specified."
-无法解析 FAQ 实体：%{1}/%{2},Cannot resolve FAQ entity: %{1}/%{2}
-FAQ ID 无效。,Invalid FAQ ID.
-FaqItemScopeKeyHealer: skip (%{1}),FaqItemScopeKeyHealer: skip (%{1})
-FaqItemScopeKeyHealer: no rows,FaqItemScopeKeyHealer: no rows
-FaqItemScopeKeyHealer: faq_id=%{1} %{2},FaqItemScopeKeyHealer: faq_id=%{1} %{2}
-FaqItemScopeKeyHealer: updated=%{1},FaqItemScopeKeyHealer: updated=%{1}
-FAQ 类型编码无效。,Invalid FAQ type code.
-FAQ 类型不存在或尚未注册：%{1},FAQ type missing or unregistered: %{1}
-帮助中心 | 订单物流退换与支付指南,"Help Center | Orders, Shipping, Returns and Payments"
+"无法解析 FAQ 实体：%{1}/%{2}","Cannot resolve FAQ entity: %{1}/%{2}"
+"FAQ ID 无效。","Invalid FAQ ID."
+"FaqItemScopeKeyHealer: skip (%{1})","FaqItemScopeKeyHealer: skip (%{1})"
+"FaqItemScopeKeyHealer: no rows","FaqItemScopeKeyHealer: no rows"
+"FaqItemScopeKeyHealer: faq_id=%{1} %{2}","FaqItemScopeKeyHealer: faq_id=%{1} %{2}"
+"FaqItemScopeKeyHealer: updated=%{1}","FaqItemScopeKeyHealer: updated=%{1}"
+"FAQ 类型编码无效。","Invalid FAQ type code."
+"FAQ 类型不存在或尚未注册：%{1}","FAQ type missing or unregistered: %{1}"
+"帮助中心 | 订单物流退换与支付指南","Help Center | Orders, Shipping, Returns and Payments"
 查找订单进度、物流配送、退换货、支付发票与账户问题的自助指南，快速解决汉服购物常见疑问，支持中英文浏览。,"Self-service guides for order tracking, shipping, returns, payments, invoices, and account issues—quick answers for Hanfu shopping, with multilingual browsing."
-帮助中心分享预览图,Help Center share preview image
-帮助文章,Help article
+帮助中心分享预览图,"Help Center share preview image"
+帮助文章,"Help article"
 FAQ/常见问题,FAQ
-帮助中心,Help Center
+帮助中心,"Help Center"
 常问问题,FAQ
+本站订单不提供包邮，运费以结算页为准。,"We do not offer free shipping. Shipping charges are shown at checkout."

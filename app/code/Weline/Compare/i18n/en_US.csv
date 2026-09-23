@@ -1,18 +1,18 @@
-对比接口不支持操作：%{1},Compare operation not supported: %{1}
-商品对比,Product Compare
+﻿对比接口不支持操作：%{1},"Compare operation not supported: %{1}"
+商品对比,"Product Compare"
 对比栏、对比页与快速查看弹窗数据接口。,"Comparison column, comparison page, and quick view pop-up data interfaces."
-快速查看,Quick View
+快速查看,"Quick View"
 关闭,Close
 加载中…,Loading...
 对比,Comparison
 移除,Remove
-对比栏,Comparison column.
-清空,Clear all
-开始对比,Start comparing.
-已选 %{1} / %{2} 件,Selected %{1} out of %{2} items.
-加载对比商品…,Loading compare products…
-对比栏暂无商品,No products in compare bar
-去逛逛,Go explore.
+对比栏,"Comparison column."
+清空,"Clear all"
+开始对比,"Start comparing."
+"已选 %{1} / %{2} 件","Selected %{1} out of %{2} items."
+加载对比商品…,"Loading compare products…"
+对比栏暂无商品,"No products in compare bar"
+去逛逛,"Go explore."
 属性,Attribute
 图片,Image
 价格,Price
@@ -20,55 +20,55 @@
 SKU,SKU
 规格参数,Specifications
 操作,Actions
-加载对比数据失败，请稍后重试,Failed to load compare data; please retry later
-无效的商品 ID,Invalid product ID
-该商品已在对比栏,Already in compare bar
-对比栏已满（最多 %{1} 件）,Compare bar is full (max %{1} items)
-已加入对比,Added to compare
-已从对比栏移除,Removed from compare bar
-对比栏已清空,Compare bar cleared
-无法加载商品预览,Unable to load product preview
-商品类型,Product Type
-属性集,Attribute set
+加载对比数据失败，请稍后重试,"Failed to load compare data; please retry later"
+"无效的商品 ID","Invalid product ID"
+该商品已在对比栏,"Already in compare bar"
+"对比栏已满（最多 %{1} 件）","Compare bar is full (max %{1} items)"
+已加入对比,"Added to compare"
+已从对比栏移除,"Removed from compare bar"
+对比栏已清空,"Compare bar cleared"
+无法加载商品预览,"Unable to load product preview"
+商品类型,"Product Type"
+属性集,"Attribute set"
 品牌,Brand
 型号,Model
 颜色,Color
-存储容量,Storage capacity
+存储容量,"Storage capacity"
 处理器,Processor
-电池容量,Battery capacity
-充电规格,Charging specifications.
-网络制式,Network standard.
-适用面积,Applicable area
-滤芯类型,Filter element type.
+电池容量,"Battery capacity"
+充电规格,"Charging specifications."
+网络制式,"Network standard."
+适用面积,"Applicable area"
+滤芯类型,"Filter element type."
 功率,Power
 噪音,Noise
-智能控制,Intelligent control
-连接方式,Connection methods.
-接口数量,Number of interfaces
-PD 供电,PD power supply
-兼容设备,Compatible devices
+智能控制,"Intelligent control"
+连接方式,"Connection methods."
+接口数量,"Number of interfaces"
+"PD 供电","PD power supply"
+兼容设备,"Compatible devices"
 DPI,DPI
-续航时间,Battery life.
+续航时间,"Battery life."
 吸力,Suction.
 重量,Weight
 容量,Capacity
 香型,Fragrance
 材质,Material
 尺寸,Size
-甲醛 CADR,Formaldehyde CADR
-开锁方式,Unlocking method.
+"甲醛 CADR","Formaldehyde CADR"
+开锁方式,"Unlocking method."
 配件,Accessory
-适用面料,Applicable fabrics.
-保质期,Expiration date
-保养说明,Maintenance instructions.
-质保(月),Warranty (months)
+适用面料,"Applicable fabrics."
+保质期,"Expiration date"
+保养说明,"Maintenance instructions."
+质保(月),"Warranty (months)"
 系列,Series
 发动机,Engine
 排量,Displacement
-最大功率,Max power
-最大扭矩,Max torque
-座高,Seat height
-离地间隙,Ground clearance
-油箱容量,Fuel tank capacity
-整备质量,Curb weight
+最大功率,"Max power"
+最大扭矩,"Max torque"
+座高,"Seat height"
+离地间隙,"Ground clearance"
+油箱容量,"Fuel tank capacity"
+整备质量,"Curb weight"
 轮胎,Tire

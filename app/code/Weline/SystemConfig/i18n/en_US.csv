@@ -1,245 +1,245 @@
-配置读取,Configuration read
+﻿配置读取,"Configuration read"
 当系统配置被读取时触发，允许其他模块拦截或修改配置值。,"Triggered when the system configuration is read, allowing other modules to intercept or modify configuration values."
-配置设置前,Before configuration settings
+配置设置前,"Before configuration settings"
 在配置写入数据库前触发，允许其他模块验证或修改配置值。,"Triggered before configuration is written to the database, allowing other modules to validate or modify configuration values."
-配置设置后,After configuration settings
-在配置成功写入数据库后触发，通知其他模块配置已变更。Server 模块监听此事件以感知配置变化。,"Triggered after configuration is successfully written to the database, notifying other modules that the configuration has changed. The Server module listens for this event to detect configuration changes."
-SystemConfig query provider does not support: %{1},SystemConfig query provider does not support: %{1}
-System config query,System config query
+配置设置后,"After configuration settings"
+"在配置成功写入数据库后触发，通知其他模块配置已变更。Server 模块监听此事件以感知配置变化。","Triggered after configuration is successfully written to the database, notifying other modules that the configuration has changed. The Server module listens for this event to detect configuration changes."
+"SystemConfig query provider does not support: %{1}","SystemConfig query provider does not support: %{1}"
+"System config query","System config query"
 "Provides scope-aware system config read, write, version, and rollback operations.","Provides scope-aware system config read, write, version, and rollback operations."
 "Get a resolved config value, or a field object when return_type=field.","Get a resolved config value, or a field object when return_type=field."
-Get a resolved config value with source and fallback metadata.,Get a resolved config value with source and fallback metadata.
+"Get a resolved config value with source and fallback metadata.","Get a resolved config value with source and fallback metadata."
 "Get resolved config values for a module, or field objects when return_type=fields.","Get resolved config values for a module, or field objects when return_type=fields."
-Preview normalized scope and fallback scopes.,Preview normalized scope and fallback scopes.
-List SystemConfig templates registered through Extends.,List SystemConfig templates registered through Extends.
-Parse one SystemConfig PHTML template without executing it.,Parse one SystemConfig PHTML template without executing it.
-List modules that provide SystemConfig templates.,List modules that provide SystemConfig templates.
-Build the SystemConfig template tree by module and area.,Build the SystemConfig template tree by module and area.
-Save a template-backed config batch after field whitelist validation.,Save a template-backed config batch after field whitelist validation.
-Precheck whether a template-backed config version can rollback without mutation.,Precheck whether a template-backed config version can rollback without mutation.
-Rollback a template-backed config version after rollback precheck.,Rollback a template-backed config version after rollback precheck.
-Set a global compatibility config value.,Set a global compatibility config value.
-Delete one scoped value so resolution inherits from fallback scopes.,Delete one scoped value so resolution inherits from fallback scopes.
-Rollback a scoped config version batch.,Rollback a scoped config version batch.
-List scoped config version batches.,List scoped config version batches.
-Get one scoped config version detail with sensitive values masked.,Get one scoped config version detail with sensitive values masked.
-Preview lower-scope rows affected by locking one config key.,Preview lower-scope rows affected by locking one config key.
-Lock one config key at the explicit target scope.,Lock one config key at the explicit target scope.
-Unlock one config key at the explicit target scope.,Unlock one config key at the explicit target scope.
-Preview suppressed lower-scope rows without mutation.,Preview suppressed lower-scope rows without mutation.
-Restore selected suppressed rows after replay authorization.,Restore selected suppressed rows after replay authorization.
-Discard selected suppressed rows after replay authorization.,Discard selected suppressed rows after replay authorization.
-Register a reviewed Scope security-header candidate before activating the exact same values.,Register a reviewed Scope security-header candidate before activating the exact same values.
-Export one explicitly authorized scope as an encrypted configuration envelope.,Export one explicitly authorized scope as an encrypted configuration envelope.
-Decrypt and validate configuration envelope metadata without mutation.,Decrypt and validate configuration envelope metadata without mutation.
-Import an encrypted configuration envelope after versioned submit authorization.,Import an encrypted configuration envelope after versioned submit authorization.
-value|field|array; default value keeps compatibility.,value|field|array; default value keeps compatibility.
-Limit field metadata lookup to one template code when return_type=field.,Limit field metadata lookup to one template code when return_type=field.
-map|fields; default map keeps compatibility.,map|fields; default map keeps compatibility.
-Limit field metadata lookup to one template code when return_type=fields.,Limit field metadata lookup to one template code when return_type=fields.
+"Preview normalized scope and fallback scopes.","Preview normalized scope and fallback scopes."
+"List SystemConfig templates registered through Extends.","List SystemConfig templates registered through Extends."
+"Parse one SystemConfig PHTML template without executing it.","Parse one SystemConfig PHTML template without executing it."
+"List modules that provide SystemConfig templates.","List modules that provide SystemConfig templates."
+"Build the SystemConfig template tree by module and area.","Build the SystemConfig template tree by module and area."
+"Save a template-backed config batch after field whitelist validation.","Save a template-backed config batch after field whitelist validation."
+"Precheck whether a template-backed config version can rollback without mutation.","Precheck whether a template-backed config version can rollback without mutation."
+"Rollback a template-backed config version after rollback precheck.","Rollback a template-backed config version after rollback precheck."
+"Set a global compatibility config value.","Set a global compatibility config value."
+"Delete one scoped value so resolution inherits from fallback scopes.","Delete one scoped value so resolution inherits from fallback scopes."
+"Rollback a scoped config version batch.","Rollback a scoped config version batch."
+"List scoped config version batches.","List scoped config version batches."
+"Get one scoped config version detail with sensitive values masked.","Get one scoped config version detail with sensitive values masked."
+"Preview lower-scope rows affected by locking one config key.","Preview lower-scope rows affected by locking one config key."
+"Lock one config key at the explicit target scope.","Lock one config key at the explicit target scope."
+"Unlock one config key at the explicit target scope.","Unlock one config key at the explicit target scope."
+"Preview suppressed lower-scope rows without mutation.","Preview suppressed lower-scope rows without mutation."
+"Restore selected suppressed rows after replay authorization.","Restore selected suppressed rows after replay authorization."
+"Discard selected suppressed rows after replay authorization.","Discard selected suppressed rows after replay authorization."
+"Register a reviewed Scope security-header candidate before activating the exact same values.","Register a reviewed Scope security-header candidate before activating the exact same values."
+"Export one explicitly authorized scope as an encrypted configuration envelope.","Export one explicitly authorized scope as an encrypted configuration envelope."
+"Decrypt and validate configuration envelope metadata without mutation.","Decrypt and validate configuration envelope metadata without mutation."
+"Import an encrypted configuration envelope after versioned submit authorization.","Import an encrypted configuration envelope after versioned submit authorization."
+"value|field|array; default value keeps compatibility.","value|field|array; default value keeps compatibility."
+"Limit field metadata lookup to one template code when return_type=field.","Limit field metadata lookup to one template code when return_type=field."
+"map|fields; default map keeps compatibility.","map|fields; default map keeps compatibility."
+"Limit field metadata lookup to one template code when return_type=fields.","Limit field metadata lookup to one template code when return_type=fields."
 backend|frontend,backend|frontend
-完整三段 scope；写操作与 target_scope 二选一,Complete three-segment scope; choose one between write operation and target_scope
-显式写目标；禁止依赖 Session,Explicitly write target; disable reliance on Session
+"完整三段 scope；写操作与 target_scope 二选一","Complete three-segment scope; choose one between write operation and target_scope"
+"显式写目标；禁止依赖 Session","Explicitly write target; disable reliance on Session"
 "Optional value type for serialization (e.g. bool, int, string).","Optional value type for serialization (e.g. bool, int, string)."
-预览/读取时返回的对象授权版本；提交前必须保持一致,The authorized version of the object returned when previewing/reading; must be consistent before submission
-配置项,Config items
+预览/读取时返回的对象授权版本；提交前必须保持一致,"The authorized version of the object returned when previewing/reading; must be consistent before submission"
+配置项,"Config items"
 后台,Backstage
-前台,front desk
-统一配置中心,Unified configuration center
+前台,"front desk"
+统一配置中心,"Unified configuration center"
 跨站请求被拒绝，配置未写入。,"Cross-site request rejected, configuration not written."
-TargetScope 无效，配置未写入。,"TargetScope is invalid, configuration was not written."
-配置已回滚,Config rolled back
-回滚批次 %{1},Rollback batch %{1}
-配置回滚预检失败，当前配置未改变。,The configuration rollback precheck failed and the current configuration has not changed.
-锁操作已完成：%{1},Lock operation completed: %{1}
-锁操作失败,Lock operation failed
-Google OAuth JSON 无法识别：%{1},Google OAuth JSON could not be recognized: %{1}
-没有检测到配置变更，未创建新版本。,No configuration changes detected; a new version was not created.
-未保存,Not saved
-配置已保存,Configuration saved
-版本已写入,Version recorded
+"TargetScope 无效，配置未写入。","TargetScope is invalid, configuration was not written."
+配置已回滚,"Config rolled back"
+"回滚批次 %{1}","Rollback batch %{1}"
+配置回滚预检失败，当前配置未改变。,"The configuration rollback precheck failed and the current configuration has not changed."
+锁操作已完成：%{1},"Lock operation completed: %{1}"
+锁操作失败,"Lock operation failed"
+"Google OAuth JSON 无法识别：%{1}","Google OAuth JSON could not be recognized: %{1}"
+没有检测到配置变更，未创建新版本。,"No configuration changes detected; a new version was not created."
+未保存,"Not saved"
+配置已保存,"Configuration saved"
+版本已写入,"Version recorded"
 版本冲突，请刷新后重试。,"Version conflict, please refresh and try again."
-配置保存失败，当前配置未改变。,The configuration failed to save and the current configuration has not changed.
-保存敏感配置需要重新输入登录密码。,Saving sensitive configuration requires re-entering the login password.
-无法验证当前管理员身份。,Unable to verify current administrator identity.
-密码验证失败（当前账号：%{1}）。二次校验与后台登录使用同一套 password_verify；请确认输入的就是该账号密码。若登录页用同一密码也无法登录，请重置密码后再保存。,"Password verification failed (account: %{1}). Sensitive reauth uses the same password_verify as backend login. If the same password also fails on the login page, reset the password before saving."
+配置保存失败，当前配置未改变。,"The configuration failed to save and the current configuration has not changed."
+保存敏感配置需要重新输入登录密码。,"Saving sensitive configuration requires re-entering the login password."
+无法验证当前管理员身份。,"Unable to verify current administrator identity."
+"密码验证失败（当前账号：%{1}）。二次校验与后台登录使用同一套 password_verify；请确认输入的就是该账号密码。若登录页用同一密码也无法登录，请重置密码后再保存。","Password verification failed (account: %{1}). Sensitive reauth uses the same password_verify as backend login. If the same password also fails on the login page, reset the password before saving."
 密码验证失败，敏感配置未写入。二次校验与后台登录相同；若登录页也无法用该密码登录，请重置后再试。,"Password verification failed; sensitive configuration was not written. Reauth matches backend login; if login also rejects this password, reset it and retry."
 circle,circle
-查看统一配置中心,View the unified configuration center
-保存统一配置,Save unified configuration
+查看统一配置中心,"View the unified configuration center"
+保存统一配置,"Save unified configuration"
 save,save
-配置回滚预检,Configure rollback preflight
+配置回滚预检,"Configure rollback preflight"
 warning,warning
 保存配置失败，已回滚本次批次。%{1},"Failed to save configuration, this batch has been rolled back. %{1}"
-回滚配置版本 %{1},Rollback configuration version %{1}
-回滚配置失败，已恢复本次回滚前状态。%{1},The configuration rollback failed and the state before this rollback has been restored. %{1}
-当前 system_config 表尚未升级，不能保存非全局 scope 配置。,The current system_config table has not been upgraded and non-global scope configuration cannot be saved.
-配置保存失败,Failed to save configuration
+"回滚配置版本 %{1}","Rollback configuration version %{1}"
+回滚配置失败，已恢复本次回滚前状态。%{1},"The configuration rollback failed and the state before this rollback has been restored. %{1}"
+"当前 system_config 表尚未升级，不能保存非全局 scope 配置。","The current system_config table has not been upgraded and non-global scope configuration cannot be saved."
+配置保存失败,"Failed to save configuration"
 管理,Manage
-没有这个字段,Field not found
-前往统一配置中心修改,Open unified config center
-可搜索多选标签；保存为逗号分隔值,Searchable multi-select tags; saved comma-separated
-素材目录,Asset directory
+没有这个字段,"Field not found"
+前往统一配置中心修改,"Open unified config center"
+可搜索多选标签；保存为逗号分隔值,"Searchable multi-select tags; saved comma-separated"
+素材目录,"Asset directory"
 沙盒,Sandbox
 生产,Production
 关闭为%{1}，开启为%{2},"Off is %{1}, on is %{2}"
-请选择或搜索...,Please select or search...
-搜索并多选...,Search and multi-select...
-选择图片,Choose image
-选择文件,Choose file
-图片路径或 URL,Image path or URL
-文件路径或 URL,File path or URL
-系统管理,System Management
-系统配置,System Configuration
-按模块、区域与 Scope 管理全站配置项,"Manage site-wide configuration by module, area, and scope"
+请选择或搜索...,"Please select or search..."
+搜索并多选...,"Search and multi-select..."
+选择图片,"Choose image"
+选择文件,"Choose file"
+"图片路径或 URL","Image path or URL"
+"文件路径或 URL","File path or URL"
+系统管理,"System Management"
+系统配置,"System Configuration"
+"按模块、区域与 Scope 管理全站配置项","Manage site-wide configuration by module, area, and scope"
 模板,template
 字段,Field
-适配入口,Adaptation entrance
-版本管理,Version management
-当前筛选范围内的最近配置版本，可预检后回滚,Recent config versions in the current filter; rollback after precheck
-当前筛选下暂无配置版本,No config versions for the current filter
+适配入口,"Adaptation entrance"
+版本管理,"Version management"
+当前筛选范围内的最近配置版本，可预检后回滚,"Recent config versions in the current filter; rollback after precheck"
+当前筛选下暂无配置版本,"No config versions for the current filter"
 模块,module
 操作,operate
 状态,state
 时间,time
 回滚,rollback
-不可回滚,No rollback
-定位当前项,Locate current item
-返回引导,Back to guide
-筛选与搜索,Filters and search
+不可回滚,"No rollback"
+定位当前项,"Locate current item"
+返回引导,"Back to guide"
+筛选与搜索,"Filters and search"
 区域,area
 Website,Website
 Store,Store
 Channel,Channel
 Locale,Locale
 搜索,search
-配置内容,Configuration content
-在当前 Scope 下编辑模块模板、字段与适配入口,"Edit module templates, fields, and adapters within the current Scope."
-没有找到配置模板,Configuration template not found
-没有匹配的配置项,No matching configuration items found.
-显式提交到,Explicitly commit to
-Global 为全站基线配置；未在 Website / Store / Channel 覆盖的站点将继承此处保存值。,Global is the site-wide baseline; websites without Website/Store/Channel overrides inherit values saved here.
+配置内容,"Configuration content"
+"在当前 Scope 下编辑模块模板、字段与适配入口","Edit module templates, fields, and adapters within the current Scope."
+没有找到配置模板,"Configuration template not found"
+没有匹配的配置项,"No matching configuration items found."
+显式提交到,"Explicitly commit to"
+"Global 为全站基线配置；未在 Website / Store / Channel 覆盖的站点将继承此处保存值。","Global is the site-wide baseline; websites without Website/Store/Channel overrides inherit values saved here."
 复制,Copy
-当前范围,Current scope
-保存值,Save value
+当前范围,"Current scope"
+保存值,"Save value"
 继承,inherit
 覆盖,cover
 已锁定,locked
 已压制,Suppressed
-默认值,default value
-使用主题国家选择器搜索添加；保存为逗号分隔国家码,Use the theme country selector to search and add; save as comma-separated country codes
-可搜索多选；保存为逗号分隔值,Search and multi-select; save as comma-separated values
+默认值,"default value"
+使用主题国家选择器搜索添加；保存为逗号分隔国家码,"Use the theme country selector to search and add; save as comma-separated country codes"
+可搜索多选；保存为逗号分隔值,"Search and multi-select; save as comma-separated values"
 删除,Delete
-添加覆盖,Add overlay
+添加覆盖,"Add overlay"
 可搜索添加国家（同行多国共享供应商）；或点「添加覆盖」分多行。须国家与供应商齐套后再保存,"Search and add countries (multiple on one row share a provider), or use Add Override for separate rows. Country and provider both required before save"
-可搜索选择语言；留空则使用当前网站默认语言,Select the language you want to search by; leave blank to use the default language of the current website.
-选择后立即解析填入下方 Client ID / Secret；文件内容不落库，仍需点保存,"After selection, the content will be parsed and filled into the Client ID/Secret fields below; the file content will not be stored, and you still need to click 'Save'."
-敏感配置确认密码,Confirm password for sensitive configuration
-保存配置,Save configuration
-修改密码类敏感配置时，须填写当前登录管理员的后台密码再保存（不是 Google API Key / Client Secret）,"When changing password-type secrets, enter the current admin backend login password before saving (not a Google API Key / Client Secret)."
-引导定位,Guide navigation
-全部模块,All modules
-搜索模块名称,Search module name
-Global（全部站点）,Global (all sites)
-搜索站点名称或编码,Search site name or code
-Website 层,Website level
-搜索 Store,Search Store
-Store 层,Store level
-搜索 Channel,Search Channel
+可搜索选择语言；留空则使用当前网站默认语言,"Select the language you want to search by; leave blank to use the default language of the current website."
+"选择后立即解析填入下方 Client ID / Secret；文件内容不落库，仍需点保存","After selection, the content will be parsed and filled into the Client ID/Secret fields below; the file content will not be stored, and you still need to click 'Save'."
+敏感配置确认密码,"Confirm password for sensitive configuration"
+保存配置,"Save configuration"
+"修改密码类敏感配置时，须填写当前登录管理员的后台密码再保存（不是 Google API Key / Client Secret）","When changing password-type secrets, enter the current admin backend login password before saving (not a Google API Key / Client Secret)."
+引导定位,"Guide navigation"
+全部模块,"All modules"
+搜索模块名称,"Search module name"
+Global（全部站点）,"Global (all sites)"
+搜索站点名称或编码,"Search site name or code"
+"Website 层","Website level"
+"搜索 Store","Search Store"
+"Store 层","Store level"
+"搜索 Channel","Search Channel"
 default,default
-搜索语言或代码...,Search language or code...
+搜索语言或代码...,"Search language or code..."
 打开,Open
-未找到引导配置项，请确认已选中对应模块。,Guide target was not found. Make sure the matching module is selected.
-当前：%{1},Current: %{1}
-同页,Same page
+未找到引导配置项，请确认已选中对应模块。,"Guide target was not found. Make sure the matching module is selected."
+当前：%{1},"Current: %{1}"
+同页,"Same page"
 跳转,Navigate
-未找到,Not found
-当前定位,Current target
-引导目标,Guide target
+未找到,"Not found"
+当前定位,"Current target"
+引导目标,"Guide target"
 收起,Collapse
 展开,Expand
-引导步骤 %{1},Guide step %{1}
-配置引导,Configuration guide
-配置或字段,configuration or field
-OAuth Return URL（须原样登记到第三方 App）,OAuth Return URL (must be registered exactly as is in the third-party app)
+"引导步骤 %{1}","Guide step %{1}"
+配置引导,"Configuration guide"
+配置或字段,"configuration or field"
+"OAuth Return URL（须原样登记到第三方 App）","OAuth Return URL (must be registered exactly as is in the third-party app)"
 已连接,Connected
 详细说明,Details
-已配置，留空则保持不变,Configured. Leave blank to keep the current value.
-腾讯云验证码,Tencent Cloud verification code
-本地图形验证码,Local image verification code
-选择或搜索供应商...,Select or search for a vendor...
-保存原因,Reason for saving
-修改敏感项必填：当前后台登录密码（不是 API Key）,Required when changing secrets: current backend login password (not an API Key)
+已配置，留空则保持不变,"Configured. Leave blank to keep the current value."
+腾讯云验证码,"Tencent Cloud verification code"
+本地图形验证码,"Local image verification code"
+选择或搜索供应商...,"Select or search for a vendor..."
+保存原因,"Reason for saving"
+"修改敏感项必填：当前后台登录密码（不是 API Key）","Required when changing secrets: current backend login password (not an API Key)"
 定位,Locate
 Global（全部网站、店铺和渠道）,"Global (all websites, stores, and channels)"
-网站：%{1},Website: %{1}
-店铺：%{1},Store: %{1}
-店铺：%{1} / %{2},Store: %{1} / %{2}
-渠道：%{1},Channel: %{1}
-渠道：%{1} / %{2} / %{3},Channel: %{1} / %{2} / %{3}
-已导入 Google OAuth 并保存,Imported Google OAuth and saved
-版本批次 %{1},Version batch %{1}
-等 %{1} 项,(%{1} total)
-已刷新缓存：%{1},Cache refreshed: %{1}
-已清理配置快照约 %{1} 项（变更 %{2} 个字段）,Cleared about %{1} config snapshot keys (%{2} fields changed)
-已清理配置快照约 %{1} 项,Cleared about %{1} config snapshot keys
-已清理本模块配置请求缓存,Module request config cache cleared
+网站：%{1},"Website: %{1}"
+店铺：%{1},"Store: %{1}"
+"店铺：%{1} / %{2}","Store: %{1} / %{2}"
+渠道：%{1},"Channel: %{1}"
+"渠道：%{1} / %{2} / %{3}","Channel: %{1} / %{2} / %{3}"
+"已导入 Google OAuth 并保存","Imported Google OAuth and saved"
+"版本批次 %{1}","Version batch %{1}"
+"等 %{1} 项","(%{1} total)"
+已刷新缓存：%{1},"Cache refreshed: %{1}"
+"已清理配置快照约 %{1} 项（变更 %{2} 个字段）","Cleared about %{1} config snapshot keys (%{2} fields changed)"
+"已清理配置快照约 %{1} 项","Cleared about %{1} config snapshot keys"
+已清理本模块配置请求缓存,"Module request config cache cleared"
 人机验证,Captcha
 登录认证,Sign-in
-店面配置,Storefront config
+店面配置,"Storefront config"
 主题,Theme
 价格,Price
-配置嵌入自定义模板不存在：%{1},Embedded custom template not found: %{1}
-配置嵌入默认模板缺失。,Embedded default template is missing.
-配置嵌入标签缺少 module 属性。,Config embed tag requires the module attribute.
-无权查看该配置。请联系上级管理员授予对象 Scope 的 VIEW 权限（当前范围：%{1}）。,No permission to view this config. Ask an admin to grant object-scope VIEW (current scope: %{1}).
-无权查看该配置。需要对象 Scope 动作 VIEW；当前范围 %{1}。请联系上级管理员授权。,No permission to view this config. Requires object-scope VIEW for %{1}. Contact an admin.
-配置嵌入分组不存在或为空：%{1},Embedded group does not exist or is empty: %{1}
-模块 %{1} 在区域 %{2} 下没有已声明的配置字段。,Module %{1} has no declared configuration fields under region %{2}.
-没有这个字段：未在配置模板中声明，无法修改。,This field is not declared in any config template and cannot be edited.
-敏感配置请在统一配置中心修改（需二次鉴权）。,Edit sensitive config in the unified config center (re-auth required).
-当前 URL 范围不允许修改此字段（字段 scope=%{1}，当前=%{2}）。,"The current URL scope does not allow modification of this field (field scope=%{1}, current=%{2})."
-无权修改该配置。需要对象 Scope 动作 UPDATE；当前范围 %{1}。请联系上级管理员授权。,No permission to edit this config. Requires object-scope UPDATE for %{1}. Contact an admin.
-存在未在配置模板声明的字段。,There are fields that are not declared in the configuration template.
-配置校验失败，当前配置未改变。,Configuration verification failed and the current configuration has not changed.
-没有需要保存的配置。,There are no configurations to save.
-配置模板不存在或未通过 Extends 注册。,The configuration template does not exist or is not registered with Extends.
-当前字段不允许保存到所选 scope。,The current field is not allowed to be saved to the selected scope.
-此字段不能为空。,This field cannot be empty.
-字段值不在允许选项内。,Field value is not among allowed options.
-当前无 Extends CSP 应用默认。模块可在 extends/module/Weline_Framework/Security/Csp/ 贡献 source；贡献后将强制放行且不可被 Scope 覆盖。,No Extends CSP app defaults currently. Modules may contribute sources under extends/module/Weline_Framework/Security/Csp/; after contributing they force-allow and cannot be overridden by Scope.
-应用默认 CSP（不可覆盖）,Application default CSP (immutable)
-用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*],Usage: scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]
-MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）,MIG-P1B configuration Scope migration: preflight/apply/verify/rollback (apply must --database=mig_clone_*)
+配置嵌入自定义模板不存在：%{1},"Embedded custom template not found: %{1}"
+配置嵌入默认模板缺失。,"Embedded default template is missing."
+"配置嵌入标签缺少 module 属性。","Config embed tag requires the module attribute."
+"无权查看该配置。请联系上级管理员授予对象 Scope 的 VIEW 权限（当前范围：%{1}）。","No permission to view this config. Ask an admin to grant object-scope VIEW (current scope: %{1})."
+"无权查看该配置。需要对象 Scope 动作 VIEW；当前范围 %{1}。请联系上级管理员授权。","No permission to view this config. Requires object-scope VIEW for %{1}. Contact an admin."
+配置嵌入分组不存在或为空：%{1},"Embedded group does not exist or is empty: %{1}"
+"模块 %{1} 在区域 %{2} 下没有已声明的配置字段。","Module %{1} has no declared configuration fields under region %{2}."
+没有这个字段：未在配置模板中声明，无法修改。,"This field is not declared in any config template and cannot be edited."
+敏感配置请在统一配置中心修改（需二次鉴权）。,"Edit sensitive config in the unified config center (re-auth required)."
+"当前 URL 范围不允许修改此字段（字段 scope=%{1}，当前=%{2}）。","The current URL scope does not allow modification of this field (field scope=%{1}, current=%{2})."
+"无权修改该配置。需要对象 Scope 动作 UPDATE；当前范围 %{1}。请联系上级管理员授权。","No permission to edit this config. Requires object-scope UPDATE for %{1}. Contact an admin."
+存在未在配置模板声明的字段。,"There are fields that are not declared in the configuration template."
+配置校验失败，当前配置未改变。,"Configuration verification failed and the current configuration has not changed."
+没有需要保存的配置。,"There are no configurations to save."
+"配置模板不存在或未通过 Extends 注册。","The configuration template does not exist or is not registered with Extends."
+"当前字段不允许保存到所选 scope。","The current field is not allowed to be saved to the selected scope."
+此字段不能为空。,"This field cannot be empty."
+字段值不在允许选项内。,"Field value is not among allowed options."
+"当前无 Extends CSP 应用默认。模块可在 extends/module/Weline_Framework/Security/Csp/ 贡献 source；贡献后将强制放行且不可被 Scope 覆盖。","No Extends CSP app defaults currently. Modules may contribute sources under extends/module/Weline_Framework/Security/Csp/; after contributing they force-allow and cannot be overridden by Scope."
+"应用默认 CSP（不可覆盖）","Application default CSP (immutable)"
+"用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]","Usage: scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]"
+"MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1B configuration Scope migration: preflight/apply/verify/rollback (apply must --database=mig_clone_*)"
+所有模块,"All modules"
 正式,Official
-沙箱,Sandbox environment
-所有模块,All modules
-Set one scoped config value and create a version batch.,Set one scoped config value and create a version batch.
+沙箱,"Sandbox environment"
+"Set one scoped config value and create a version batch.","Set one scoped config value and create a version batch."
 配置已回滚，回滚批次：%{1},"Configuration has been rolled back, rollback batch: %{1}"
 配置已保存，版本批次：%{1},"Configuration saved, version batch: %{1}"
-已从 Google OAuth JSON 导入 Client ID/Secret，并保存配置（版本批次：%{1}）,Client ID/Secret imported from Google OAuth JSON and configuration saved (version batch: %{1})
-已清理相关缓存：命名空间 %{1} 已 bump；%{2} 池删除约 %{3} 个键（变更字段 %{4} 个）。,Related cache cleared: namespaces %{1} bumped; ~%{3} keys deleted from %{2} pools (%{4} changed fields).
-已清理相关缓存：命名空间 %{1} 已 bump。,Related cache cleared: namespaces %{1} bumped.
-已清理相关缓存：%{1} 池删除约 %{2} 个键。,Related cache cleared: ~%{2} keys deleted from %{1} pools.
-已清理本模块配置请求缓存。,Module request config cache cleared.
-等 %{1} 个,and %{1} more
-国家用主题地址选择器搜索（每行一国）；供应商用可搜索选择器；须同时选齐后再保存,Countries use theme address search (one per row); providers use searchable select; both required before save
-密码验证失败，敏感配置未写入。,Password verification failed and sensitive configuration was not written.
-上传/修改 OAuth Secret 后，须在此填写后台登录密码再保存,"After uploading/modifying the OAuth Secret, you must enter the backend login password and save."
-改 Secret 必填：后台登录密码,The following Secret is required: backend login password.
-Global 层不可执行此操作，请先选择 Website / Store / Channel。,Global users cannot perform this action. Please select a Website / Store / Channel first.
-敏感配置：重新输入登录密码,Sensitive configuration: Re-enter login password
-当前值,current value
+"已从 Google OAuth JSON 导入 Client ID/Secret，并保存配置（版本批次：%{1}）","Client ID/Secret imported from Google OAuth JSON and configuration saved (version batch: %{1})"
+"已清理相关缓存：命名空间 %{1} 已 bump；%{2} 池删除约 %{3} 个键（变更字段 %{4} 个）。","Related cache cleared: namespaces %{1} bumped; ~%{3} keys deleted from %{2} pools (%{4} changed fields)."
+"已清理相关缓存：命名空间 %{1} 已 bump。","Related cache cleared: namespaces %{1} bumped."
+"已清理相关缓存：%{1} 池删除约 %{2} 个键。","Related cache cleared: ~%{2} keys deleted from %{1} pools."
+已清理本模块配置请求缓存。,"Module request config cache cleared."
+"等 %{1} 个","and %{1} more"
+国家用主题地址选择器搜索（每行一国）；供应商用可搜索选择器；须同时选齐后再保存,"Countries use theme address search (one per row); providers use searchable select; both required before save"
+密码验证失败，敏感配置未写入。,"Password verification failed and sensitive configuration was not written."
+"上传/修改 OAuth Secret 后，须在此填写后台登录密码再保存","After uploading/modifying the OAuth Secret, you must enter the backend login password and save."
+"改 Secret 必填：后台登录密码","The following Secret is required: backend login password."
+"Global 层不可执行此操作，请先选择 Website / Store / Channel。","Global users cannot perform this action. Please select a Website / Store / Channel first."
+敏感配置：重新输入登录密码,"Sensitive configuration: Re-enter login password"
+当前值,"current value"
 Scope,Scope
-点击选择语言（可多选）,Click to select language (multiple selection)
-点击选择语言,Click to select language
+点击选择语言（可多选）,"Click to select language (multiple selection)"
+点击选择语言,"Click to select language"
 搜索国家、语言或代码...,"Search for a country, language, or code..."
 已支持,Supported
-清空选择,Clear selection
-当前 TargetScope,Current TargetScope
-写操作只使用表单显式 TargetScope，不信任 Cookie。,Write operations only use form explicit TargetScope and do not trust cookies.
-回落链,retracement chain
+清空选择,"Clear selection"
+"当前 TargetScope","Current TargetScope"
+"写操作只使用表单显式 TargetScope，不信任 Cookie。","Write operations only use form explicit TargetScope and do not trust cookies."
+回落链,"retracement chain"
 重新授权,Re-authorize
-密码验证失败（当前账号：%{1}）。请确认填写的是该账号的后台登录密码，不是 API Key。,"Password verification failed (account: %{1}). Enter that account's backend login password, not an API Key."
+"密码验证失败（当前账号：%{1}）。请确认填写的是该账号的后台登录密码，不是 API Key。","Password verification failed (account: %{1}). Enter that account's backend login password, not an API Key."
 密码验证失败（当前账号：%{1}）。敏感配置二次校验使用与后台登录相同的密码；若你通过「记住我」保持登录，而密码登录已失败，请先退出后台并用正确密码重新登录，或重置该账号密码后再保存。,"Password verification failed (account: %{1}). Sensitive save uses the same password as backend login. If you stayed signed in via Remember me but password login already fails, sign out and log in with the correct password, or reset that account password before saving."
 密码验证失败，敏感配置未写入。若通过「记住我」保持登录，请退出后重新登录或重置密码后再试。,"Password verification failed; sensitive configuration was not written. If you stayed signed in via Remember me, sign out and log in again, or reset the password and retry."
