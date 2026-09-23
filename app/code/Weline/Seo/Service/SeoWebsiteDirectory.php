@@ -324,21 +324,46 @@ class SeoWebsiteDirectory
             return $url;
         }
 
-        $parts = parse_url($url);
-        if (!is_array($parts)) {
-            return $url;
-        }
-        $path = (string)($parts['path'] ?? '');
-        if ($path === '') {
-            $path = '/';
-        }
-
-        return $publicBaseUrl . ($path === '/' ? '' : $path);
+        return $this->swapOriginKeepingPath($url, $publicBaseUrl);
     }
 
     /**
-     * Rewrite loopback <loc> origins inside sitemap XML to the live public base.
-     * Used when serving files that were generated under the localhost placeholder.
+     * Align a URL onto the live public origin when it is loopback or same-host
+     * (scheme/port may differ — e.g. configured https://host vs request https://host:9555).
+     * Different hosts are left unchanged so same-origin validation still rejects them.
+     */
+    public function rewriteToPublicOriginUrl(string $url, string $publicBaseUrl): string
+    {
+        $url = trim($url);
+        $publicBaseUrl = rtrim(trim($publicBaseUrl), '/');
+        if ($url === '' || $publicBaseUrl === '') {
+            return $url;
+        }
+        if ($this->isLoopbackBaseUrl($publicBaseUrl)) {
+            return $url;
+        }
+        if ($this->isLoopbackBaseUrl($url)) {
+            return $this->swapOriginKeepingPath($url, $publicBaseUrl);
+        }
+
+        $urlParts = parse_url($url);
+        $baseParts = parse_url($publicBaseUrl);
+        if (!is_array($urlParts) || !is_array($baseParts)) {
+            return $url;
+        }
+        $urlHost = strtolower((string)($urlParts['host'] ?? ''));
+        $baseHost = strtolower((string)($baseParts['host'] ?? ''));
+        if ($urlHost === '' || $baseHost === '' || $urlHost !== $baseHost) {
+            return $url;
+        }
+
+        return $this->swapOriginKeepingPath($url, $publicBaseUrl);
+    }
+
+    /**
+     * Rewrite loopback / same-host <loc> origins inside sitemap XML to the live public base.
+     * Used when serving files generated under localhost or a portless configured origin
+     * while the crawler hits the live project Host+port.
      */
     public function rewriteLoopbackOriginsInXml(string $xml, string $publicBaseUrl): string
     {
@@ -351,7 +376,53 @@ class SeoWebsiteDirectory
             '#(<loc>)([^<]*)(</loc>)#i',
             function (array $matches) use ($publicBaseUrl): string {
                 $loc = html_entity_decode(trim($matches[2]), ENT_XML1 | ENT_QUOTES, 'UTF-8');
-                $next = $this->rewriteLoopbackPublicUrl($loc, $publicBaseUrl);
+                $next = $this->rewriteToPublicOriginUrl($loc, $publicBaseUrl);
+                return $matches[1]
+                    . htmlspecialchars($next, ENT_XML1 | ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                    . $matches[3];
+            },
+            $xml,
+        );
+
+        return is_string($rewritten) ? $rewritten : $xml;
+    }
+
+    private function swapOriginKeepingPath(string $url, string $publicBaseUrl): string
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return $url;
+        }
+        $path = (string)($parts['path'] ?? '');
+        if ($path === '') {
+            $path = '/';
+        }
+        $query = isset($parts['query']) ? '?' . $parts['query'] : '';
+
+        return $publicBaseUrl . ($path === '/' ? '' : $path) . $query;
+    }
+
+    /**
+     * Rewrite every absolute http(s) <loc> onto the live public base (keep path).
+     * Used when serving /sitemaps/{code}/… on a Host that is not the file's
+     * original origin (e.g. inspecting another website's canonical index on the
+     * project entry Host). Same-host / loopback cases reuse {@see rewriteToPublicOriginUrl}.
+     */
+    public function rewriteAllOriginsInXml(string $xml, string $publicBaseUrl): string
+    {
+        $publicBaseUrl = rtrim(trim($publicBaseUrl), '/');
+        if ($xml === '' || $publicBaseUrl === '' || $this->isLoopbackBaseUrl($publicBaseUrl)) {
+            return $xml;
+        }
+
+        $rewritten = preg_replace_callback(
+            '#(<loc>)([^<]*)(</loc>)#i',
+            function (array $matches) use ($publicBaseUrl): string {
+                $loc = html_entity_decode(trim($matches[2]), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+                if (!preg_match('#^https?://#i', $loc)) {
+                    return $matches[0];
+                }
+                $next = $this->swapOriginKeepingPath($loc, $publicBaseUrl);
                 return $matches[1]
                     . htmlspecialchars($next, ENT_XML1 | ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
                     . $matches[3];

@@ -48,7 +48,7 @@ class SeoAccount extends Model
     public const schema_fields_IS_ACTIVE = 'is_active';
     #[Col('int', 1, nullable: false, default: 1, comment: '是否启用URL定时推送')]
     public const schema_fields_ENABLE_CRON_PUSH_URLS = 'enable_cron_push_urls';
-    #[Col('int', 1, nullable: false, default: 0, comment: '是否启用Sitemap定时提交')]
+    #[Col('int', 1, nullable: false, default: 1, comment: '是否启用Sitemap定时提交')]
     public const schema_fields_ENABLE_CRON_SITEMAP = 'enable_cron_sitemap';
     #[Col('datetime', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';

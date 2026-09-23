@@ -659,6 +659,32 @@
         });
     }
 
+    function readAccountBoundWebsiteIds(form) {
+        var api = window.WelineWebsiteSelect && window.WelineWebsiteSelect.seo_account_bound_websites;
+        var values = [];
+        if (api && typeof api.getValues === 'function') {
+            values = api.getValues();
+        }
+        if (!values || !values.length) {
+            var hidden = document.getElementById('seo_account_bound_websites_value')
+                || (form && form.querySelector('[data-seo-account-website-bindings] [data-website-select-value]'))
+                || (form && form.querySelector('[name="website_ids"]'));
+            if (hidden && String(hidden.value || '').trim() !== '') {
+                values = String(hidden.value).split(',');
+            }
+        }
+        var ids = [];
+        var seen = {};
+        (values || []).forEach(function (raw) {
+            // website_id=0 是默认站，禁止用 !id / empty 过滤
+            var id = Number.parseInt(String(raw == null ? '' : raw).trim(), 10);
+            if (!Number.isInteger(id) || id < 0 || seen[id]) return;
+            seen[id] = true;
+            ids.push(id);
+        });
+        return ids;
+    }
+
     function initAccountForm(root) {
         var form = root.querySelector('[data-seo-account-form]');
         if (!form || form.dataset.seoFormInitialized === '1') return;
@@ -729,6 +755,9 @@
             payload.is_active = form.querySelector('[name="is_active"]:checked') ? 1 : 0;
             payload.enable_cron_push_urls = !!form.querySelector('[name="enable_cron_push_urls"]:checked');
             payload.enable_cron_sitemap = !!form.querySelector('[name="enable_cron_sitemap"]:checked');
+            if (!isVerify) {
+                payload.website_ids = readAccountBoundWebsiteIds(form);
+            }
             if (!String(payload.config_json || '').trim()) delete payload.config_json;
             if (button) {
                 button.dataset.loadingLabel = isVerify
@@ -748,6 +777,20 @@
                 var helpUrl = '';
                 if (data) {
                     helpUrl = String(data.help_url || (data.data && data.data.help_url) || '').trim();
+                }
+                if (ok && !isVerify && Object.prototype.hasOwnProperty.call(payload, 'website_ids')) {
+                    var bound = data && data.data && Array.isArray(data.data.bound_website_ids)
+                        ? data.data.bound_website_ids
+                        : null;
+                    if (bound) {
+                        var expected = (payload.website_ids || []).map(function (id) { return Number(id); }).sort().join(',');
+                        var actual = bound.map(function (id) { return Number(id); }).sort().join(',');
+                        if (expected !== actual) {
+                            ok = false;
+                            resultMessage = message(root, 'bindMismatch')
+                                || '账户已保存，但站点绑定未同步成功，请重试保存。';
+                        }
+                    }
                 }
                 showAccountFeedback(ok ? 'success' : 'error', resultMessage, {
                     modal: isVerify && !ok,

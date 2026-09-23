@@ -53,7 +53,7 @@ final class LayoutSeoFallbackContractTest extends TestCase
     {
         $fallback = SeoPageProfileBag::extractLayoutFallbackFromMeta([
             'name' => '水墨汉服商城首页',
-            'title' => '长安汉服 · Hanfu Atelier',
+            'title' => '长安汉服',
             'meta_title' => '运营自定义首页标题',
             'meta_description' => '运营自定义首页描述',
             'robots' => 'index,follow',

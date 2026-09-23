@@ -156,16 +156,40 @@ class HeadRenderer
 
     private function defaultContentCategory(string $pageType): string
     {
-        return match ($this->normalizePageType($pageType)) {
+        $normalized = $this->normalizePageType($pageType);
+        // 法律/政策页别名 → content-category=legal；page-type meta 仍保持 Theme 事实（如 policy）
+        if ($this->isLegalContentCategoryAlias($normalized)) {
+            return 'legal';
+        }
+
+        return match ($normalized) {
             'home' => 'framework',
             'product' => 'product',
             'category', 'tag_collection', 'collection', 'products' => 'collection',
             'search', 'search_results' => 'search',
             'blog_post', 'post', 'article', 'news', 'news_article' => 'article',
             'contact' => 'contact',
-            'legal' => 'legal',
             default => '',
         };
+    }
+
+    /**
+     * 政策/法律页 page_type 别名（normalize 后：空格与连字符已变为下划线）。
+     */
+    private function isLegalContentCategoryAlias(string $normalizedPageType): bool
+    {
+        return in_array($normalizedPageType, [
+            'policy',
+            'privacy',
+            'accessibility',
+            'cookie',
+            'shipping',
+            'refund',
+            'disclaimer',
+            'term_condition',
+            'terms',
+            'legal',
+        ], true);
     }
 
     private function readTemplateData($template, string $key): string
@@ -668,7 +692,7 @@ HTML;
 
     private function withPanelAssetVersion(string $url): string
     {
-        $version = '20260915-about-breadcrumb-1';
+        $version = '20260922-a11y-completeness-1';
         $jsPath = dirname(__DIR__, 2) . '/view/statics/seo-inspector/inspector.js';
         if (is_file($jsPath)) {
             $mtime = (int)@filemtime($jsPath);
@@ -849,6 +873,20 @@ HTML;
             $logo = $this->absoluteUrl((string) $organization['logo'], $url !== '' ? $url : $siteUrl);
             if ($logo !== '') {
                 $graph[0]['logo'] = $logo;
+            }
+        }
+        if (!empty($organization['alternateName'])) {
+            $alternate = $organization['alternateName'];
+            if (is_string($alternate) && trim($alternate) !== '') {
+                $graph[0]['alternateName'] = trim($alternate);
+            } elseif (is_array($alternate)) {
+                $names = array_values(array_filter(array_map(
+                    static fn ($item): string => trim((string) $item),
+                    $alternate
+                )));
+                if ($names !== []) {
+                    $graph[0]['alternateName'] = count($names) === 1 ? $names[0] : $names;
+                }
             }
         }
         if (!empty($organization['sameAs']) && is_array($organization['sameAs'])) {

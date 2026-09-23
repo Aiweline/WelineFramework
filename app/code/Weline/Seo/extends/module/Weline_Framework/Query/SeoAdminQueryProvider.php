@@ -107,6 +107,7 @@ final class SeoAdminQueryProvider implements QueryProviderInterface
                 'is_active' => ['type' => 'int', 'min' => 0, 'max' => 1],
                 'enable_cron_push_urls' => ['type' => 'bool'],
                 'enable_cron_sitemap' => ['type' => 'bool'],
+                'website_ids' => ['type' => 'list', 'max_items' => 500],
                 'config' => ['type' => 'map', 'max_items' => 100],
                 'config_json' => ['type' => 'string', 'max_length' => 50000],
                 'config_action' => ['type' => 'string', 'max_length' => 10],
