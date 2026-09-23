@@ -12,6 +12,7 @@ use Weline\Theme\Service\ThemeComponentRenderer;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeLayoutScopeNormalizer;
 use Weline\Theme\Service\ThemePlaceableRegistry;
+use Weline\Theme\Taglib\Slot;
 
 /**
  * Runtime widget render for baked entity phtml call sites.
@@ -28,6 +29,16 @@ final class ThemeLayoutEntityWidgetRenderer
     ) {
     }
 
+    public static function requestNodeKey(string $uid, string $source, int $themeId, string $scope, string $version, string $locale): string
+    {
+        return 'theme.layout_entity.node.' . hash('sha256', json_encode([$uid, $source, $themeId, $scope, $version, $locale], JSON_THROW_ON_ERROR));
+    }
+
+    public function renderBound(string $nodeUid, string $source, EntityRenderBinding $binding): string
+    {
+        return $this->render($nodeUid, $source, $binding->themeId, $binding->scope, $binding->cacheKey(), $binding);
+    }
+
     /**
      * @param string $configSource page|chrome
      * @param string $versionKey chrome: theme_version_id; page: identity_key/structure_or_release
@@ -38,6 +49,7 @@ final class ThemeLayoutEntityWidgetRenderer
         int $themeId,
         string $scopeKey,
         string $versionKey,
+        ?EntityRenderBinding $binding = null,
     ): string {
         $nodeUid = \strtolower(\trim($nodeUid));
         $configSource = $configSource === 'chrome' ? 'chrome' : 'page';
@@ -45,22 +57,29 @@ final class ThemeLayoutEntityWidgetRenderer
             return '<!-- theme-layout-entity:invalid-widget-call -->';
         }
 
-        $primed = RequestContext::get('theme.layout_entity.node.' . $nodeUid);
+        // Belt-and-suspenders with ThemeComponentRenderer: entity bake + required overlay
+        // may render the same container twice in one request (product-info nested slots).
+        Slot::clearRegisteredSlots();
+
+        $requestKey = self::requestNodeKey($nodeUid, $configSource, $themeId, $scopeKey, $versionKey, \Weline\Theme\Helper\WidgetI18n::storefrontLocale());
+        $primed = RequestContext::get($requestKey);
         $entry = \is_array($primed) && $primed !== []
             ? $primed
-            : $this->configStore->readNodeConfig(
+            : ($binding !== null
+                ? ($this->configStore->readBoundConfig($binding)[$nodeUid] ?? [])
+                : $this->configStore->readNodeConfig(
                 $configSource,
                 $nodeUid,
                 $themeId,
                 $scopeKey,
                 $versionKey,
-            );
+            ));
         if ($entry === []) {
             return '<!-- theme-layout-entity:missing-config:' . \htmlspecialchars($nodeUid, \ENT_QUOTES) . ' -->';
         }
 
         // Primed page-config may be param-only (legacy bake). Hydrate identity from structure.
-        if ($configSource === 'page' && $this->configStore->needsStructureHydration($entry)) {
+        if ($binding === null && $configSource === 'page' && $this->configStore->needsStructureHydration($entry)) {
             $entry = $this->configStore->hydratePageNodeFromStructure(
                 $entry,
                 $nodeUid,
@@ -68,7 +87,7 @@ final class ThemeLayoutEntityWidgetRenderer
                 $scopeKey,
                 $versionKey,
             );
-            RequestContext::set('theme.layout_entity.node.' . $nodeUid, $entry);
+            RequestContext::set($requestKey, $entry);
         }
 
         if (\array_key_exists('is_active', $entry) && empty($entry['is_active'])) {
@@ -83,6 +102,10 @@ final class ThemeLayoutEntityWidgetRenderer
         $config = \is_array($entry['config'] ?? null) ? $entry['config'] : $entry;
         if (isset($config['config']) && \is_array($config['config'])) {
             $config = $config['config'];
+        }
+
+        foreach (['layout_source', 'source', 'source_position'] as $assetKey) {
+            if (isset($entry[$assetKey]) && $entry[$assetKey] !== '') { $config['_' . $assetKey] = $entry[$assetKey]; }
         }
 
         if ($module === '' || $code === '') {

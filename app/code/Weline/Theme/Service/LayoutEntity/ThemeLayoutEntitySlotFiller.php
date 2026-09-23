@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\LayoutEntity;
 
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Service\SharedChromeService;
 use Weline\Theme\Service\SlotBoundaryMarkers;
 use Weline\Theme\Service\SlotBoundaryScanner;
 use Weline\Theme\Service\SlotRendererService;
+use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 use Weline\Theme\Service\ThemeRuntimeLayoutResolver;
 
 /**
@@ -29,7 +32,107 @@ final class ThemeLayoutEntitySlotFiller
         private readonly SharedChromeService $sharedChrome,
         private readonly ThemeRuntimeLayoutResolver $layoutResolver,
         private readonly ScopeHierarchyInterface $scopes,
+        private readonly ?StorefrontScopeHotCache $hotCache = null,
     ) {
+    }
+
+    /**
+     * wave8-8s5: render published solidified whole-shell for the slot host.
+     * Prefer shell.phtml (chrome+page bake). Never call chrome_slot_projection HotCache
+     * or injectChrome on this path — regeneration belongs to publish / injection-collect bake.
+     * Editor/preview/bake still use {@see fill()} / materialize heavy paths.
+     *
+     * @return array{page_html:string,chrome_by_slot:array<string,string>}|null
+     */
+    public function renderPublishedSolidifiedFragments(
+        int $themeId,
+        string $pageType,
+        string $area = 'frontend',
+    ): ?array {
+        if ($themeId < 1 || \trim($pageType) === '') {
+            return null;
+        }
+
+        $this->resolveRequestedPreviewEntity($themeId, $pageType, $area);
+        $scope = $this->resolveScope();
+        $resolved = $this->resolvePageEntityLocation($themeId, $scope, $pageType, $area, true);
+        if ($resolved === null) {
+            return null;
+        }
+
+        $pageScope = $resolved['scope'];
+        $identityKey = $resolved['identity_key'];
+        $structureOrRelease = $resolved['structure_or_release'];
+        $binding = $this->readPageBinding($themeId, $pageScope, $identityKey, $structureOrRelease);
+        $paths = $this->paths;
+        ThemeLayoutStorefrontHeadAssets::rememberPointer([
+            'theme_id' => $themeId,
+            'scope' => $pageScope,
+            'identity_key' => $identityKey,
+            'structure_or_release' => $structureOrRelease,
+            'binding' => $binding,
+        ]);
+        $shellPhtml = $paths->shellPhtml($themeId, $pageScope, $identityKey, $structureOrRelease);
+        $phtml = $binding?->templatePath ?? $paths->pagePhtml($themeId, $pageScope, $identityKey, $structureOrRelease);
+        $shellPhtml = $binding?->shellPath ?: $shellPhtml;
+
+        $this->primeLocaleConfigs(
+            $themeId,
+            $pageType,
+            ThemeLayout::STATUS_PUBLISHED,
+            $area,
+            $pageScope,
+            $identityKey,
+            $structureOrRelease,
+            $binding,
+        );
+
+        // Prefer whole-shell include (header/chrome already baked in).
+        if (\is_file($shellPhtml)) {
+            $pageHtml = $this->includeEntityPhtml($shellPhtml, $binding);
+            $chromeBySlot = $this->extractChromeInnersFromBakedHtml($pageHtml);
+            if ($binding !== null) {
+                // A page can inherit its structure from a parent while chrome has
+                // request-scope overlays. Compose only already compiled chrome.
+                $chromeBySlot = $this->buildChromeSlotProjection($themeId, $scope, false);
+                return ['page_html' => $pageHtml, 'chrome_by_slot' => $chromeBySlot];
+            }
+            // wave9-9s4: many "whole-shell" bakes are page-slot only (list-filters /
+            // homepage-*), so chrome_by_slot is empty and heal graft is a no-op.
+            // Fall back to published chrome.phtml disk bake (禁 storefront_chrome Policy).
+            if ($chromeBySlot === []) {
+                $chromeHtml = $this->loadPublishedChromeBakeHtmlDirect($themeId, $pageScope !== '' ? $pageScope : $scope);
+                if ($chromeHtml === '') {
+                    $chromeHtml = $this->loadPublishedChromeBakeHtmlDirect($themeId, $scope);
+                }
+                if ($chromeHtml !== '') {
+                    $chromeBySlot = $this->extractChromeInnersFromBakedHtml($chromeHtml);
+                }
+            }
+
+            return [
+                'page_html' => $pageHtml,
+                'chrome_by_slot' => $chromeBySlot,
+            ];
+        }
+
+        if (!\is_file($phtml)) {
+            return null;
+        }
+
+        // Legacy published page without shell yet: include page + chrome.phtml disk bake
+        // (no chrome_slot_projection Policy / remember).
+        $pageHtml = $this->includeEntityPhtml($phtml, $binding);
+        $chromeHtml = $this->loadPublishedChromeBakeHtmlDirect($themeId, $scope);
+        if ($chromeHtml !== '') {
+            $pageHtml = $chromeHtml . $pageHtml;
+        }
+        $chromeBySlot = $this->extractChromeInnersFromBakedHtml($chromeHtml !== '' ? $chromeHtml : $pageHtml);
+
+        return [
+            'page_html' => $pageHtml,
+            'chrome_by_slot' => $chromeBySlot,
+        ];
     }
 
     /**
@@ -48,26 +151,48 @@ final class ThemeLayoutEntitySlotFiller
             throw new \RuntimeException('theme_layout_entity_fill_invalid');
         }
 
+        $versionPreview = $this->resolveRequestedPreviewEntity($themeId, $pageType, $area);
+        $preview = $status === ThemeLayout::STATUS_DRAFT || $versionPreview !== null;
+        $needsSafetyNet = !$preview
+            && ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html);
+        // wave8-8s5: published solidified shells skip fill; leftover required placeholders
+        // / incomplete chrome (wave9-9s2) are the narrow safety-net exception.
+        if (!$preview && !$needsSafetyNet) {
+            return $html;
+        }
+
+        $hasReactiveMarkers = \str_contains($html, 'data-wslot')
+            || \str_contains($html, 'widget-slot-area');
+        if (!$hasReactiveMarkers && !$needsSafetyNet) {
+            return $html;
+        }
+
         $scope = $this->resolveScope();
-        $preview = $status === ThemeLayout::STATUS_DRAFT;
-        // Chrome first so a later page-entity miss can still keep header/footer
-        // when the caller soft-degrades (LayoutSlotRenderer DEV path).
-        // Do not abort page-slot fill when chrome is unpublished/missing — category
-        // filters and other content widgets must still render from page entities.
-        try {
-            $html = $this->injectChromeSlots($html, $themeId, $scope, $preview);
-            $html = $this->fillNestedChromeExtensionSlots($html, $themeId, $scope, $preview);
-        } catch (\Throwable $chromeError) {
-            if (\function_exists('w_log_warning')) {
-                \w_log_warning(
-                    'theme_layout_entity_chrome_soft_skip: ' . $chromeError->getMessage(),
-                    [
-                        'theme_id' => $themeId,
-                        'scope' => $scope,
-                        'page_type' => $pageType,
-                    ],
-                    'theme_layout_entity',
-                );
+        // wave8-8s5: do not injectChrome on published safety-net (禁 storefront_chrome 布局再生).
+        // Live injectChrome walks ancestor scopes and can OOM (footer-container ≈270MB).
+        // Incomplete shells heal via chrome.rendered snapshot splice below / nested fill.
+        if ($preview) {
+            try {
+                $html = $this->injectChromeSlots($html, $themeId, $scope, $preview);
+                $html = $this->fillNestedChromeExtensionSlots($html, $themeId, $scope, $preview);
+            } catch (\Throwable $chromeError) {
+                if (\function_exists('w_log_warning')) {
+                    \w_log_warning(
+                        'theme_layout_entity_chrome_soft_skip: ' . $chromeError->getMessage(),
+                        [
+                            'theme_id' => $themeId,
+                            'scope' => $scope,
+                            'page_type' => $pageType,
+                        ],
+                        'theme_layout_entity',
+                    );
+                }
+            }
+        } elseif ($needsSafetyNet) {
+            try {
+                $html = $this->fillNestedChromeExtensionSlots($html, $themeId, $scope, false);
+            } catch (\Throwable) {
+                // soft — healPublishedPlaceholderShell may retry
             }
         }
 
@@ -80,18 +205,36 @@ final class ThemeLayoutEntitySlotFiller
             $published,
         );
         if ($resolved === null) {
-            // Entity missing: still 有部件必入声明槽 against the page shell — never append('') which
-            // cannot see slot destinations and would silently skip all required fills.
-            return \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
-                ->append($html, $themeId, $pageType, $status, $scope, 'required', null);
+            // 布局固化与默认注入 §3.1: 无固化模板 → 当前主题运行期动态固化（仍 merge 无卸载默认注入）。
+            $solidified = $this->tryDynamicSolidifyMissingPage($themeId, $scope, $pageType, $area, $status);
+            if ($solidified !== null) {
+                $resolved = $solidified;
+            } else {
+                // Soft safety-net only when dynamic solidify cannot run.
+                return \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
+                    ->append($html, $themeId, $pageType, $status, $scope, 'required', null);
+            }
         }
 
         $pageScope = $resolved['scope'];
         $identityKey = $resolved['identity_key'];
         $structureOrRelease = $resolved['structure_or_release'];
-        $phtml = $this->paths->pagePhtml($themeId, $pageScope, $identityKey, $structureOrRelease);
+        $binding = $this->readPageBinding($themeId, $pageScope, $identityKey, $structureOrRelease);
+        $phtml = $binding?->templatePath ?? $this->paths->pagePhtml($themeId, $pageScope, $identityKey, $structureOrRelease);
         if (!\is_file($phtml)) {
-            throw new \RuntimeException('theme_layout_entity_phtml_missing: ' . $phtml);
+            $rebuilt = $this->tryRematerializeMissingPhtml(
+                $themeId,
+                $pageScope,
+                $identityKey,
+                $structureOrRelease,
+                $pageType,
+            );
+            if ($rebuilt !== '' && \is_file($rebuilt)) {
+                $binding = $this->readPageBinding($themeId, $pageScope, $identityKey, $structureOrRelease);
+                $phtml = $binding?->templatePath ?? $rebuilt;
+            } else {
+                throw new \RuntimeException('theme_layout_entity_phtml_missing: ' . $phtml);
+            }
         }
 
         $this->primeLocaleConfigs(
@@ -102,9 +245,17 @@ final class ThemeLayoutEntitySlotFiller
             $pageScope,
             $identityKey,
             $structureOrRelease,
+            $binding,
         );
 
-        $rendered = $this->includeEntityPhtml($phtml);
+        ThemeLayoutStorefrontHeadAssets::rememberPointer([
+            'theme_id' => $themeId, 'scope' => $pageScope, 'identity_key' => $identityKey,
+            'structure_or_release' => $structureOrRelease, 'binding' => $binding,
+        ]);
+        $rendered = $this->includeEntityPhtml($phtml, $binding);
+        if ($binding !== null) {
+            return $this->spliceSolidifiedSlots($html, $rendered);
+        }
         $structurePath = $this->paths->pageStructureJson($themeId, $pageScope, $identityKey, $structureOrRelease);
         $rendered = \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
             ->append(
@@ -152,22 +303,11 @@ final class ThemeLayoutEntitySlotFiller
         }
 
         try {
-            /** @var \Weline\Theme\Service\ThemeComponentCatalog $catalog */
-            $catalog = \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Theme\Service\ThemeComponentCatalog::class,
+            /** @var \Weline\Widget\Service\DefaultInjectionPlanRepository $plans */
+            $plans = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Widget\Service\DefaultInjectionPlanRepository::class,
             );
-            $declarations = [];
-            foreach ($catalog->getDefinitions('frontend', null) as $definition) {
-                if (!\is_object($definition)) {
-                    continue;
-                }
-                $declarations[] = [
-                    'module' => (string)($definition->module ?? ''),
-                    'type' => (string)($definition->type ?? ''),
-                    'code' => (string)($definition->code ?? ''),
-                    'default_injections' => $definition->defaultInjections ?? [],
-                ];
-            }
+            $declarations = $plans->listDeclarations('frontend');
             foreach (RequiredDefaultInjectionContract::requiredTargets($declarations, $pageType) as $target) {
                 $slotId = \trim((string)($target['slot_id'] ?? ''));
                 if ($slotId === '') {
@@ -246,9 +386,481 @@ final class ThemeLayoutEntitySlotFiller
         if ($html === '' || $themeId < 1 || \trim($pageType) === '') {
             return $html;
         }
+        // required-default-always-present: published / solidified / complete chrome must NOT
+        // hard no-op required overlay. Only user_deleted@{versionId} omits plan items
+        // (inside RequiredDefaultInjectionStorefrontOverlay). Bake may still embed widgets;
+        // overlay is identity XOR + empty-slot fill, not a published skip gate.
 
         return \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
             ->append($html, $themeId, $pageType, $status, $scope, 'required', null);
+    }
+
+    /**
+     * Bake-time finalize for chrome.rendered snapshots (wave8-8s5 固化完备).
+     * chrome.phtml emits flat @weline-slot projections with real widgets, while
+     * footer-container nested theme-published-slot may still hold missing-config
+     * stubs. Promote longest non-blank marker inners into blank published slots
+     * before the durable snapshot is written — storefront zero-fill must not
+     * re-run Overlay at controller/runtime.
+     */
+    public function finalizePublishedChromeRenderedHtml(string $html, int $themeId = 0, bool $structureComplete = false): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+        // 输入是chrome模板本身，所有已渲染边界均来自写侧筛选的chrome节点。
+        $slotIds = $this->chromeSlotIdsFromRenderedHtml($html, true);
+        if ($slotIds !== []) {
+            // Prefer longest non-blank @weline-slot inner across duplicates.
+            $html = $this->composeChromeSlotTree($html, $slotIds);
+        }
+
+        $chromeBySlot = [];
+        foreach ($slotIds as $slotId) {
+            $inner = $this->boundaryScanner->extractSlotInner($html, $slotId);
+            if ($inner === null || $this->isBlankChromeInner($inner)) {
+                // Prefer longest non-blank marker duplicate when extract picked a stub.
+                $best = '';
+                foreach ($this->extractAllSlotInners($html, $slotId) as $candidate) {
+                    if ($this->isBlankChromeInner($candidate)) {
+                        continue;
+                    }
+                    if (\strlen($candidate) > \strlen($best)) {
+                        $best = $candidate;
+                    }
+                }
+                if ($best === '') {
+                    continue;
+                }
+                $inner = $best;
+            }
+            $chromeBySlot[$slotId] = $inner;
+        }
+        foreach ($chromeBySlot as $slotId => $inner) {
+            // Marker extractSlotInnerForPresence may HIT the good projection and
+            // skip spliceChromeSlotsFromBake — still replace blank theme-published-slot
+            // attribute wrappers in the footer-container DOM.
+            $html = $this->replaceBlankAttributeSlotInners($html, $slotId, $inner);
+        }
+        if ($chromeBySlot !== []) {
+            $html = $this->spliceChromeSlotsFromBake($html, $chromeBySlot);
+        }
+
+        // 新结构已在写侧纳入必装部件；这里只组合已渲染槽，不再查当前版本补结构。
+        if ($themeId > 0 && !$structureComplete) {
+            $html = $this->fillRequiredDefaultsOnShell(
+                $html, $themeId, ThemeLayout::PAGE_TYPE_HOME, ThemeLayout::STATUS_PUBLISHED,
+            );
+        }
+
+        if ($slotIds !== []) {
+            $html = '<!--@weline-chrome-slots:' . implode(',', $slotIds) . '-->' . $html;
+        }
+        return $html;
+    }
+
+    /**
+     * Replace blank data-slot-id / theme-published-slot wrappers for $slotId.
+     * Does not touch non-blank regions (incl. good @weline-slot projections).
+     */
+    private function replaceBlankAttributeSlotInners(string $html, string $slotId, string $inner): string
+    {
+        $slotId = \strtolower(\trim($slotId));
+        $inner = (string)$inner;
+        if ($html === '' || $slotId === '' || \trim($inner) === '') {
+            return $html;
+        }
+
+        $pattern = '/(<div\b[^>]*\bdata-slot-id="'
+            . \preg_quote($slotId, '/')
+            . '"[^>]*>)(.*?)(<\/div>)/is';
+        $replaced = \preg_replace_callback(
+            $pattern,
+            function (array $m) use ($inner): string {
+                $existing = (string)($m[2] ?? '');
+                if (!$this->isBlankChromeInner($existing)) {
+                    return (string)$m[0];
+                }
+
+                return (string)$m[1] . $inner . (string)$m[3];
+            },
+            $html,
+        );
+
+        return \is_string($replaced) ? $replaced : $html;
+    }
+
+    /**
+     * wave9-9s6: durable chrome.rendered.* splice without prime / fill / include.
+     * LayoutSlot calls this before prime so empty footer--shell can solidify into
+     * +skip_fill_solidified (≪100ms) when a snapshot exists (incl. global theme fallback).
+     */
+    public function prefillPublishedChromeFromRenderedSnapshot(string $html, int $themeId): string
+    {
+        if ($html === '' || $themeId < 1) {
+            return $html;
+        }
+        if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
+            return $html;
+        }
+
+        try {
+            $fromDisk = $this->chromeSlotProjectionFromRenderedSnapshot($themeId, $this->resolveScope());
+            if ($fromDisk === []) {
+                $fallbackThemeId = $this->resolveGlobalActiveThemeId();
+                if ($fallbackThemeId > 0 && $fallbackThemeId !== $themeId) {
+                    $fromDisk = $this->chromeSlotProjectionFromRenderedSnapshot(
+                        $fallbackThemeId,
+                        $this->resolveScope(),
+                    );
+                }
+            }
+            if ($fromDisk !== []) {
+                $html = $this->spliceChromeSlotsFromBake($html, $fromDisk);
+            }
+        } catch (\Throwable) {
+            // soft
+        }
+
+        return $html;
+    }
+
+    /**
+     * wave8-8s5+safety / wave9-9s2: heal published shells that are incomplete
+     * (placeholders, empty chrome/required slots, missing header signals).
+     * Order: fill(splice) → required overlay → project solidified fragments
+     * → splice chrome_by_slot / nested chrome extensions from disk bake.
+     * Runtime heal is a safety net; lasting fix = rebake shell on publish/injection-collect.
+     */
+    public function healPublishedPlaceholderShell(
+        string $html,
+        int $themeId,
+        string $pageType,
+        string $area = 'frontend',
+    ): string {
+        if ($html === '' || $themeId < 1 || \trim($pageType) === '') {
+            return $html;
+        }
+        if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
+            return $html;
+        }
+
+        // Prefer durable chrome.rendered.* snapshot BEFORE live fill/include —
+        // empty footer shells with header already present are the common path;
+        // live footer-container render peaks ~270MB and OOMs default 256MB workers.
+        try {
+            $fromDisk = $this->chromeSlotProjectionFromRenderedSnapshot($themeId, $this->resolveScope());
+            // Frontend area may resolve to Default while Global/website chrome lives on
+            // another theme (hanfu) — try global active when leaf theme has no snapshot.
+            if ($fromDisk === []) {
+                $fallbackThemeId = $this->resolveGlobalActiveThemeId();
+                if ($fallbackThemeId > 0 && $fallbackThemeId !== $themeId) {
+                    $fromDisk = $this->chromeSlotProjectionFromRenderedSnapshot(
+                        $fallbackThemeId,
+                        $this->resolveScope(),
+                    );
+                }
+            }
+            if ($fromDisk !== []) {
+                $html = $this->spliceChromeSlotsFromBake($html, $fromDisk);
+            }
+        } catch (\Throwable) {
+            // soft
+        }
+        if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
+            return $html;
+        }
+
+        try {
+            $html = $this->fill($html, $themeId, $pageType, ThemeLayout::STATUS_PUBLISHED, $area);
+        } catch (\Throwable) {
+            // soft — overlay / fragment projection below
+        }
+        if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
+            return $html;
+        }
+
+        try {
+            $html = $this->fillRequiredDefaultsOnShell(
+                $html,
+                $themeId,
+                $pageType,
+                ThemeLayout::STATUS_PUBLISHED,
+            );
+        } catch (\Throwable) {
+            // soft
+        }
+        if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
+            return $html;
+        }
+
+        $chromeBySlot = [];
+        try {
+            $fragments = $this->renderPublishedSolidifiedFragments($themeId, $pageType, $area);
+            $pageHtml = \is_array($fragments) ? (string)($fragments['page_html'] ?? '') : '';
+            if ($pageHtml !== '') {
+                $html = $this->spliceSolidifiedSlots($html, $pageHtml);
+            }
+            $rawChrome = \is_array($fragments) ? ($fragments['chrome_by_slot'] ?? []) : [];
+            if (\is_array($rawChrome)) {
+                foreach ($rawChrome as $slotId => $inner) {
+                    if (\is_string($slotId) && \is_string($inner) && \trim($inner) !== '') {
+                        $chromeBySlot[$slotId] = $inner;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // soft
+        }
+        // wave9-9s4: fragments may still leave chrome_by_slot empty (page-only shell).
+        if ($chromeBySlot === []) {
+            try {
+                $chromeHtml = $this->loadPublishedChromeBakeHtmlDirect($themeId, $this->resolveScope());
+                if ($chromeHtml !== '') {
+                    $chromeBySlot = $this->extractChromeInnersFromBakedHtml($chromeHtml);
+                }
+            } catch (\Throwable) {
+                // soft
+            }
+        }
+        if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
+            return $html;
+        }
+
+        try {
+            $html = $this->spliceChromeSlotsFromBake($html, $chromeBySlot);
+        } catch (\Throwable) {
+            // soft
+        }
+        if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
+            return $html;
+        }
+
+        // Nested chrome extensions from published payload (disk), not storefront_chrome Policy.
+        try {
+            $html = $this->fillNestedChromeExtensionSlots(
+                $html,
+                $themeId,
+                $this->resolveScope(),
+                false,
+            );
+        } catch (\Throwable) {
+            // soft
+        }
+
+        return $html;
+    }
+
+    /**
+     * Load chrome.rendered.{locale}.html for published chrome and extract slot inners.
+     * Never includes chrome.phtml (avoids Phrase/parser OOM on heavy footer-container).
+     *
+     * @return array<string, string>
+     */
+    private function chromeSlotProjectionFromRenderedSnapshot(int $themeId, string $scope): array
+    {
+        if ($themeId < 1 || \trim($scope) === '') {
+            return [];
+        }
+        try {
+            $pointer = \Weline\Framework\Manager\ObjectManager::getInstance(
+                ThemeLayoutEntityPointerResolver::class,
+            )->resolvePublishedChrome($themeId, $scope);
+            // Leaf storefront scopes often resolve to default.*; website chrome snapshot
+            // may live only under the published ancestor — climb when leaf has no file.
+            if ((!is_array($pointer) || (string)($pointer['path'] ?? '') === '' || !\is_file((string)($pointer['path'] ?? '')))
+                && $scope !== 'default.__website__.default'
+            ) {
+                $pointer = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    ThemeLayoutEntityPointerResolver::class,
+                )->resolvePublishedChrome($themeId, 'default.__website__.default');
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+        $path = \is_array($pointer) ? (string)($pointer['path'] ?? '') : '';
+        if ($path === '' || !\is_file($path)) {
+            return [];
+        }
+        $dir = \dirname($path);
+        $locale = '';
+        try {
+            $locale = \trim((string)\Weline\Theme\Helper\WidgetI18n::storefrontLocale());
+        } catch (\Throwable) {
+            $locale = '';
+        }
+        if ($locale === '' || \preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $locale) !== 1) {
+            $locale = 'zh_Hans_CN';
+        }
+        $candidates = [
+            $dir . \DIRECTORY_SEPARATOR . 'chrome.rendered.' . $locale . '.html',
+        ];
+        // Never fall back to another locale's snapshot (en_US→zh froze 「Ship to」).
+        // Legacy locale-agnostic file only when no per-locale snapshot exists.
+        $legacy = $dir . \DIRECTORY_SEPARATOR . 'chrome.rendered.html';
+        if (\is_file($legacy)) {
+            $candidates[] = $legacy;
+        }
+        $html = '';
+        foreach ($candidates as $candidate) {
+            if (\is_file($candidate)) {
+                $html = (string)@\file_get_contents($candidate);
+                if ($html !== '') {
+                    // Reject English delivery label in non-en locale snapshots.
+                    if ($locale !== 'en_US' && $locale !== 'en_GB' && !\str_starts_with($locale, 'en_')
+                        && \str_contains($html, 'delivery-line-1">Ship to')
+                    ) {
+                        $html = '';
+                        if (\str_ends_with($candidate, 'chrome.rendered.' . $locale . '.html')) {
+                            @\unlink($candidate);
+                        }
+                        continue;
+                    }
+                    break;
+                }
+            }
+        }
+        if ($html === '') {
+            return [];
+        }
+
+        $best = [];
+        if (\preg_match_all('/<!--@weline-slot:([\w.-]+)-->/', $html, $matches) > 0) {
+            foreach (\array_unique($matches[1]) as $slotId) {
+                $slotId = \strtolower(\trim((string)$slotId));
+                if ($slotId === '') {
+                    continue;
+                }
+                try {
+                    if (!$this->sharedChrome->isChromeSlot($slotId)) {
+                        continue;
+                    }
+                } catch (\Throwable) {
+                    continue;
+                }
+                $inner = $this->boundaryScanner->extractSlotInner($html, $slotId);
+                if ($inner === null || $this->isBlankChromeInner($inner)) {
+                    continue;
+                }
+                $best[$slotId] = $inner;
+            }
+        }
+
+        return $best;
+    }
+
+    /**
+     * wave9-9s2: project non-empty chrome bake inners into empty chrome destinations.
+     * Does not call injectChrome / chrome_slot_projection / storefront_chrome Policy.
+     *
+     * @param array<string, string> $chromeBySlot
+     */
+    private function spliceChromeSlotsFromBake(string $html, array $chromeBySlot): string
+    {
+        if ($html === '' || $chromeBySlot === []) {
+            return $html;
+        }
+
+        foreach ($chromeBySlot as $slotId => $inner) {
+            $slotId = \strtolower(\trim((string)$slotId));
+            $inner = (string)$inner;
+            if ($slotId === '' || \trim($inner) === '') {
+                continue;
+            }
+            try {
+                if (!$this->sharedChrome->isChromeSlot($slotId)) {
+                    continue;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+
+            $existing = $this->extractSlotInnerForPresence($html, $slotId);
+            if ($existing !== null && !$this->isBlankChromeInner($existing) && \trim(\strip_tags($existing)) !== '') {
+                continue;
+            }
+
+            $regions = $this->boundaryScanner->enumerateRegions($html, $slotId);
+            if ($regions === []) {
+                // Published zero-fill strips <!--@weline-slot:*--> markers; still replace
+                // theme-published-slot / data-slot-id wrappers when present.
+                $bounds = $this->boundaryScanner->findSlotWrapperBounds($html, $slotId);
+                if (\is_array($bounds)) {
+                    $regions = [$bounds];
+                }
+            }
+            if ($regions === []) {
+                // wave9-9s3: showHeader/showFooter off left zero chrome destinations —
+                // splice cannot fill what is absent. Graft published wrappers so
+                // outbound still carries footer / header-nav-extensions / delivery.
+                $html = $this->graftMissingChromePublishedSlot($html, $slotId, $inner);
+                continue;
+            }
+            \usort(
+                $regions,
+                static fn(array $a, array $b): int => ((int)($b['inner_start'] ?? 0) <=> (int)($a['inner_start'] ?? 0)),
+            );
+            foreach ($regions as $region) {
+                if (!\is_array($region)) {
+                    continue;
+                }
+                $start = (int)($region['inner_start'] ?? -1);
+                $end = (int)($region['inner_end'] ?? -1);
+                if ($start < 0 || $end < $start) {
+                    continue;
+                }
+                $html = \substr($html, 0, $start) . $inner . \substr($html, $end);
+            }
+        }
+
+        return $html;
+    }
+
+    /**
+     * Insert a published chrome slot wrapper when the live shell has no destination
+     * region for that slotId (Partials chrome gated off). Prefer before <main for
+     * header/delivery, after </main> for footer*.
+     */
+    private function graftMissingChromePublishedSlot(string $html, string $slotId, string $inner): string
+    {
+        if ($html === '' || $slotId === '' || \trim($inner) === '') {
+            return $html;
+        }
+        if (\str_contains($html, 'data-slot-id="' . $slotId . '"')
+            || \str_contains($html, "data-slot-id='" . $slotId . "'")
+        ) {
+            return $html;
+        }
+
+        $wrapper = '<!--@weline-slot:' . $slotId . '-->'
+            . '<div class="theme-published-slot" data-slot-id="' . \htmlspecialchars($slotId, \ENT_QUOTES | \ENT_HTML5, 'UTF-8') . '">'
+            . $inner
+            . '</div>'
+            . '<!--@/weline-slot:' . $slotId . '-->';
+
+        $preferBeforeMain = $slotId === 'delivery'
+            || $slotId === 'header'
+            || \str_starts_with($slotId, 'header-');
+        if ($preferBeforeMain) {
+            if (\preg_match('/<main\b[^>]*>/i', $html, $m, \PREG_OFFSET_CAPTURE) === 1) {
+                $pos = (int)$m[0][1];
+
+                return \substr($html, 0, $pos) . $wrapper . \substr($html, $pos);
+            }
+            if (\preg_match('/<div[^>]*\bweline-page-wrapper\b[^>]*>/i', $html, $m, \PREG_OFFSET_CAPTURE) === 1) {
+                $pos = (int)$m[0][1] + \strlen($m[0][0]);
+
+                return \substr($html, 0, $pos) . $wrapper . \substr($html, $pos);
+            }
+        }
+
+        if (\preg_match('/<\/main>/i', $html, $m, \PREG_OFFSET_CAPTURE) === 1) {
+            $pos = (int)$m[0][1] + \strlen($m[0][0]);
+
+            return \substr($html, 0, $pos) . $wrapper . \substr($html, $pos);
+        }
+
+        return $html . $wrapper;
     }
 
     /**
@@ -282,6 +894,7 @@ final class ThemeLayoutEntitySlotFiller
 
     /**
      * Soft path for LayoutSlotRenderer when page entity fill fails: still inject chrome.
+     * wave8-8s5: published storefront ($preview=false) is a no-op — chrome already in shell bake.
      */
     public function fillChromeOnly(
         string $html,
@@ -291,6 +904,9 @@ final class ThemeLayoutEntitySlotFiller
     ): string {
         unset($area);
         if ($html === '' || $themeId < 1) {
+            return $html;
+        }
+        if (!$preview) {
             return $html;
         }
 
@@ -314,6 +930,11 @@ final class ThemeLayoutEntitySlotFiller
         bool $preview,
     ): string {
         if ($html === '' || $themeId < 1) {
+            return $html;
+        }
+
+        $boundChrome = RequestContext::get('theme.layout_entity.rendered_chrome_binding');
+        if ($boundChrome instanceof EntityRenderBinding && $boundChrome->themeId === $themeId) {
             return $html;
         }
 
@@ -486,57 +1107,11 @@ final class ThemeLayoutEntitySlotFiller
         // Channel (or other leaf) chrome may only bake a subset of slots (e.g. only
         // footer-extras). Walk ancestors and keep the nearest non-blank inner per
         // slot so header-nav-extensions / footer-about-links still receive Blog widgets.
-        $chromeByScope = [];
-        $slotIds = SharedChromeService::CHROME_SLOTS;
-        $lastError = null;
-        foreach ($this->scopeFallbackChain($scope) as $candidateScope) {
-            try {
-                $candidateHtml = $this->chrome->renderCurrent($themeId, $candidateScope, null, $preview);
-            } catch (\Throwable $e) {
-                $lastError = $e;
-                continue;
-            }
-            if ($candidateHtml === '') {
-                continue;
-            }
-            $chromeByScope[$candidateScope] = $candidateHtml;
-            if (\preg_match_all('/<!--@weline-slot:([\w.-]+)-->/', $candidateHtml, $matches) > 0) {
-                foreach ($matches[1] as $slotId) {
-                    $slotId = (string)$slotId;
-                    if ($this->sharedChrome->isChromeSlot($slotId) && !\in_array($slotId, $slotIds, true)) {
-                        $slotIds[] = $slotId;
-                    }
-                }
-            }
-        }
-        if ($chromeByScope === []) {
-            if ($lastError instanceof \Throwable) {
-                throw new \RuntimeException(
-                    'theme_layout_entity_chrome_fill_failed: ' . $lastError->getMessage(),
-                    0,
-                    $lastError,
-                );
-            }
-
+        $bestInnerBySlot = $preview
+            ? $this->buildChromeSlotProjection($themeId, $scope, true)
+            : $this->rememberPublishedChromeSlotProjection($themeId, $scope);
+        if ($bestInnerBySlot === []) {
             return $html;
-        }
-
-        $bestInnerBySlot = [];
-        foreach ($this->scopeFallbackChain($scope) as $candidateScope) {
-            if (!isset($chromeByScope[$candidateScope])) {
-                continue;
-            }
-            $chromeHtml = $this->composeChromeSlotTree($chromeByScope[$candidateScope], $slotIds);
-            foreach ($slotIds as $slotId) {
-                if (isset($bestInnerBySlot[$slotId])) {
-                    continue;
-                }
-                $inner = $this->boundaryScanner->extractSlotInner($chromeHtml, $slotId);
-                if ($inner === null || $this->isBlankChromeInner($inner)) {
-                    continue;
-                }
-                $bestInnerBySlot[$slotId] = $inner;
-            }
         }
 
         // Nested chrome slots are siblings in chrome.phtml while the page shell
@@ -549,12 +1124,197 @@ final class ThemeLayoutEntitySlotFiller
         return $html;
     }
 
+    /**
+     * wave8-8c6/8c8: prime chrome slot projection HotCache for deferred warmup.
+     * When chrome bake is missing, fail-open remember [] under the live logical key
+     * so near-virgin probes HIT and skip the ~650ms builder (not a fake FPC HIT).
+     * Locale comes from StorefrontCacheKeyContext (same as Policy vary), not WidgetI18n alone.
+     *
+     * P5-O1: prefer {@see rememberHonestEmptyChromeSlotProjection()} on known chrome_rendered
+     * miss — this method still may buildChromeSlotProjection (heavy). Do not call it from
+     * bag-prime miss short-path.
+     */
+    public function primePublishedChromeSlotProjectionHotCache(int $themeId, ?string $scope = null): bool
+    {
+        if ($themeId < 1) {
+            return false;
+        }
+        $scope = \trim((string)($scope ?? $this->resolveScope()));
+        if ($scope === '') {
+            $scope = 'default.default.default';
+        }
+        $hotCache = $this->resolveHotCache();
+        if (!$hotCache instanceof StorefrontScopeHotCache) {
+            return false;
+        }
+        $logicalKey = $this->chromeSlotProjectionLogicalKey($themeId, $scope);
+        $policy = StorefrontThemeCacheCoordinator::publishedChromeSlotProjectionPolicy();
+        try {
+            $this->rememberPublishedChromeSlotProjection($themeId, $scope);
+        } catch (\Throwable) {
+            // Chrome bake missing / render hard-fail: still publish empty projection.
+            $hotCache->rememberPolicy($policy, $logicalKey, static fn(): array => []);
+        }
+
+        return $hotCache->peekPolicy($policy, $logicalKey) !== null;
+    }
+
+    /**
+     * P5-O1 / architect msg-5: honest miss marker for chrome_slot_projection.
+     * Remembers [] under the live logical key WITHOUT buildChromeSlotProjection /
+     * renderCurrent (禁空烧重投影). Not an FPC HIT; never claims page warm.
+     */
+    public function rememberHonestEmptyChromeSlotProjection(int $themeId, ?string $scope = null): bool
+    {
+        if ($themeId < 1) {
+            return false;
+        }
+        $scope = \trim((string)($scope ?? $this->resolveScope()));
+        if ($scope === '') {
+            $scope = 'default.__store__.__channel__';
+        }
+        $hotCache = $this->resolveHotCache();
+        if (!$hotCache instanceof StorefrontScopeHotCache) {
+            return false;
+        }
+        $logicalKey = $this->chromeSlotProjectionLogicalKey($themeId, $scope);
+        $policy = StorefrontThemeCacheCoordinator::publishedChromeSlotProjectionPolicy();
+        try {
+            $peeked = $hotCache->peekPolicy($policy, $logicalKey);
+            if (\is_array($peeked)) {
+                return true;
+            }
+            $hotCache->rememberPolicy($policy, $logicalKey, static fn(): array => []);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $hotCache->peekPolicy($policy, $logicalKey) !== null;
+    }
+
+    /**
+     * @return array<string, string> slotId => non-blank chrome inner HTML
+     */
+    private function rememberPublishedChromeSlotProjection(int $themeId, string $scope): array
+    {
+        $hotCache = $this->resolveHotCache();
+        if (!$hotCache instanceof StorefrontScopeHotCache) {
+            return $this->buildChromeSlotProjection($themeId, $scope, false);
+        }
+
+        $logicalKey = $this->chromeSlotProjectionLogicalKey($themeId, $scope);
+        $policy = StorefrontThemeCacheCoordinator::publishedChromeSlotProjectionPolicy();
+        // Same-request secondary injectChromeSlots must HIT Policy (wave7-7s).
+        $peeked = $hotCache->peekPolicy($policy, $logicalKey);
+        if (\is_array($peeked)) {
+            return $peeked;
+        }
+        $cached = $hotCache->rememberPolicy(
+            $policy,
+            $logicalKey,
+            fn(): array => $this->buildChromeSlotProjection($themeId, $scope, false),
+        );
+
+        return \is_array($cached) ? $cached : [];
+    }
+
+    private function chromeSlotProjectionLogicalKey(int $themeId, string $scope): string
+    {
+        $locale = '';
+        try {
+            $ctx = \Weline\Framework\Cache\StorefrontCacheKeyContext::current();
+            if ($ctx instanceof \Weline\Framework\Cache\StorefrontCacheKeyContext) {
+                $locale = \trim((string)$ctx->lang);
+            }
+        } catch (\Throwable) {
+            $locale = '';
+        }
+        if ($locale === '') {
+            $locale = \trim((string)WidgetI18n::storefrontLocale());
+        }
+        if ($locale === '') {
+            $locale = 'zh_Hans_CN';
+        }
+
+        return 'chrome.slot.projection.v3|' . $themeId . '|' . \trim($scope) . '|' . $locale;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function buildChromeSlotProjection(int $themeId, string $scope, bool $preview): array
+    {
+        $chromeByScope = [];
+        $renderedBindings = [];
+        $lastError = null;
+        foreach ($this->scopeFallbackChain($scope) as $candidateScope) {
+            try {
+                $candidateHtml = $this->chrome->renderCurrent($themeId, $candidateScope, null, $preview);
+            } catch (\Throwable $e) {
+                $lastError = $e;
+                continue;
+            }
+            if ($candidateHtml === '') {
+                continue;
+            }
+            $chromeByScope[$candidateScope] = $candidateHtml;
+            $renderedBinding = RequestContext::get('theme.layout_entity.rendered_chrome_binding');
+            if ($renderedBinding instanceof EntityRenderBinding && $renderedBinding->themeId === $themeId) {
+                $renderedBindings[$renderedBinding->cacheKey()] = $renderedBinding;
+            }
+        }
+        if ($chromeByScope === []) {
+            if ($lastError instanceof \Throwable) {
+                throw new \RuntimeException(
+                    'theme_layout_entity_chrome_fill_failed: ' . $lastError->getMessage(),
+                    0,
+                    $lastError,
+                );
+            }
+
+            return [];
+        }
+
+        RequestContext::set('theme.layout_entity.rendered_chrome_bindings', array_values($renderedBindings));
+        return $this->projectRenderedChromeScopes($chromeByScope);
+    }
+
+    /** @param array<string,string> $chromeByScope Nearest scope first. */
+    private function projectRenderedChromeScopes(array $chromeByScope): array
+    {
+        $slotIds = SharedChromeService::CHROME_SLOTS;
+        foreach ($chromeByScope as $chromeHtml) {
+            foreach ($this->chromeSlotIdsFromRenderedHtml($chromeHtml, true) as $slotId) {
+                if (!in_array($slotId, $slotIds, true)) {
+                    $slotIds[] = $slotId;
+                }
+            }
+        }
+        $bestInnerBySlot = [];
+        foreach ($chromeByScope as $chromeHtml) {
+            $chromeHtml = $this->composeChromeSlotTree($chromeHtml, $slotIds);
+            foreach ($slotIds as $slotId) {
+                if (isset($bestInnerBySlot[$slotId])) {
+                    continue;
+                }
+                $inner = $this->boundaryScanner->extractSlotInner($chromeHtml, $slotId);
+                if ($inner === null || $this->isBlankChromeInner($inner)) {
+                    continue;
+                }
+                $bestInnerBySlot[$slotId] = $inner;
+            }
+        }
+
+        return $bestInnerBySlot;
+    }
+
     private function isBlankChromeInner(string $inner): bool
     {
-        $trim = \trim($inner);
-        if ($trim === '') {
+        // Align with published blank scan: missing-config comments are blank.
+        if (ThemeLayoutEntityPublishedSlotHost::isEffectivelyBlankSlotInner($inner)) {
             return true;
         }
+        $trim = \trim($inner);
         // Empty entity wrapper with no rendered widgets.
         if (\preg_match(
             '/^<div\b[^>]*\btheme-layout-entity-slot\b[^>]*>\s*<\/div>$/is',
@@ -817,8 +1577,50 @@ final class ThemeLayoutEntitySlotFiller
         \Weline\Framework\Phrase\Parser::prefetchGlobalDictionaryModules($list);
     }
 
+    public function resolveRequestedPreviewEntity(int $themeId, string $pageType, string $area): ?array
+    {
+        $service = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\PreviewContextService::class);
+        if (!$service->isEditorThemeRequest() && !$service->hasAuthoritativePreviewContext()) {
+            return null;
+        }
+        $context = $service->getCurrentContext();
+        if ((int)($context['version_id'] ?? 0) < 1 || (int)($context['frontend_theme_id'] ?? 0) < 1) {
+            return null;
+        }
+        $scope = (string)($context['scope'] ?? $this->resolveScope());
+        $identity = $this->entityIdentityForScope($scope);
+        $identity['layout_option'] = (string)($context['layout_option'] ?? $identity['layout_option']);
+        $key = 'theme.layout_entity.preview_selection.' . hash('sha256', json_encode([$themeId, $pageType, $area, $identity, (int)$context['version_id']], JSON_THROW_ON_ERROR));
+        $resolved = RequestContext::get($key);
+        if (!is_array($resolved)) {
+            $resolved = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeVersionPreviewResolver::class)
+                ->resolve($themeId, $pageType, $area, $identity, (int)$context['version_id']);
+            RequestContext::set($key, $resolved);
+        }
+        if (empty($resolved['resolved'])) {
+            throw new \RuntimeException('theme_layout_entity_preview_version_missing: ' . (string)($resolved['reason'] ?? 'unknown'));
+        }
+        RequestContext::set('theme.layout_entity.preview_entity', $resolved);
+        return $resolved;
+    }
+
+    private function entityIdentityForScope(string $scope): array
+    {
+        $installed = RequestContext::get(\Weline\Theme\Api\Layout\LayoutIdentity::REQUEST_CONTEXT_KEY);
+        $identity = $installed instanceof \Weline\Theme\Api\Layout\LayoutIdentity
+            ? $installed->toArray()
+            : ['layout_option' => 'default', 'target_type' => 'global', 'target_id' => 0];
+        $identity['scope'] = $scope;
+        $identity['locale_code'] = 'default';
+        return $identity;
+    }
+
     private function resolveScope(): string
     {
+        $installed = RequestContext::get(\Weline\Theme\Api\Layout\LayoutIdentity::REQUEST_CONTEXT_KEY);
+        if ($installed instanceof \Weline\Theme\Api\Layout\LayoutIdentity) {
+            return $installed->scope;
+        }
         try {
             if (RequestContext::isInitialized()) {
                 $identity = RequestContext::scopeIdentity();
@@ -833,6 +1635,24 @@ final class ThemeLayoutEntitySlotFiller
         return 'default.default.default';
     }
 
+    private function resolveGlobalActiveThemeId(): int
+    {
+        try {
+            $theme = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Model\WelineTheme::class,
+            );
+            $theme->clearData()->clearQuery()->getActiveTheme(null);
+            $id = (int)$theme->getId();
+            if ($id > 0) {
+                return $id;
+            }
+        } catch (\Throwable) {
+            // soft
+        }
+
+        return 0;
+    }
+
     /**
      * @return array{identity_hash:string,release_id:?int}
      */
@@ -844,13 +1664,7 @@ final class ThemeLayoutEntitySlotFiller
     ): array {
         $scope = $scope ?? $this->resolveScope();
         try {
-            $context = $this->layoutResolver->buildContext($themeId, $pageType, $area, [
-                'layout_option' => 'default',
-                'scope' => $scope,
-                'target_type' => 'global',
-                'target_id' => 0,
-                'locale_code' => 'default',
-            ]);
+            $context = $this->layoutResolver->buildContext($themeId, $pageType, $area, $this->entityIdentityForScope($scope));
 
             $releaseId = null;
             try {
@@ -888,6 +1702,127 @@ final class ThemeLayoutEntitySlotFiller
     }
 
     /**
+     * 布局固化与默认注入 §3.1: no entity bake → dynamic solidify active theme page.
+     *
+     * @return array{scope:string,identity_key:string,structure_or_release:string}|null
+     */
+    private function tryDynamicSolidifyMissingPage(
+        int $themeId,
+        string $scope,
+        string $pageType,
+        string $area,
+        string $status,
+    ): ?array {
+        if ($status !== ThemeLayout::STATUS_PUBLISHED || $themeId < 1 || \trim($pageType) === '') {
+            return null;
+        }
+        try {
+            $identity = $this->resolveEditorIdentity($themeId, $pageType, $area, $scope);
+            $identityHash = (string)($identity['identity_hash'] ?? '');
+            $releaseId = isset($identity['release_id']) ? (int)$identity['release_id'] : null;
+            if ($releaseId !== null && $releaseId < 1) {
+                $releaseId = null;
+            }
+            $nodes = $this->loadNodesForDynamicSolidify($themeId, $pageType);
+            /** @var ThemeLayoutEntityBakeCoordinator $bake */
+            $bake = \Weline\Framework\Manager\ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class);
+            $path = $bake->dynamicSolidifyPublishedPage(
+                $themeId,
+                $scope,
+                $identityHash,
+                $pageType,
+                $nodes,
+                $releaseId,
+                (string)$this->entityIdentityForScope($scope)['layout_option'],
+                $area,
+            );
+            if ($path === '' || !\is_file($path)) {
+                return null;
+            }
+
+            return $this->resolvePageEntityLocationUncached($themeId, $scope, $pageType, $area, true);
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning(
+                    'theme_layout_entity_dynamic_solidify_soft: ' . $e->getMessage(),
+                    ['theme_id' => $themeId, 'page_type' => $pageType],
+                    'theme_layout_entity',
+                );
+            }
+
+            return null;
+        }
+    }
+
+    private function tryRematerializeMissingPhtml(
+        int $themeId,
+        string $pageScope,
+        string $identityKey,
+        string $structureOrRelease,
+        string $pageType,
+    ): string {
+        if (preg_match('/^r[1-9][0-9]*$/D', $structureOrRelease) !== 1) {
+            return '';
+        }
+        try {
+            /** @var ThemeLayoutEntityBakeCoordinator $bake */
+            $bake = \Weline\Framework\Manager\ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class);
+
+            return $bake->rematerializePublishedPageAt(
+                $themeId,
+                $pageScope,
+                $identityKey,
+                $structureOrRelease,
+                $pageType,
+            );
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function loadNodesForDynamicSolidify(int $themeId, string $pageType): array
+    {
+        try {
+            /** @var \Weline\Theme\Service\ThemeLayoutService $layouts */
+            $layouts = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\ThemeLayoutService::class,
+            );
+            $layout = $layouts->getPublishedLayout($themeId, $pageType);
+            if (!\is_array($layout) || $layout === []) {
+                return [];
+            }
+            $nodes = [];
+            foreach ($layout as $area => $areaData) {
+                $widgets = \is_array($areaData) ? ($areaData['widgets'] ?? []) : [];
+                if (!\is_array($widgets)) {
+                    continue;
+                }
+                foreach ($widgets as $widget) {
+                    if (!\is_array($widget)) {
+                        continue;
+                    }
+                    $uid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
+                    if ($uid === '') {
+                        continue;
+                    }
+                    if (\trim((string)($widget['area'] ?? '')) === '') {
+                        $widget['area'] = (string)$area;
+                    }
+                    $widget['node_uid'] = $uid;
+                    $nodes[$uid] = $widget;
+                }
+            }
+
+            return $nodes;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Resolve the solidified layout.phtml. Published and draft both load a file.
      * current.json is written at structural bake; workspace is only a one-time fallback
      * for pages baked before that pointer existed.
@@ -895,6 +1830,63 @@ final class ThemeLayoutEntitySlotFiller
      * @return array{scope:string,identity_key:string,structure_or_release:string}|null
      */
     private function resolvePageEntityLocation(
+        int $themeId,
+        string $scope,
+        string $pageType,
+        string $area,
+        bool $published,
+    ): ?array {
+        $previewEntity = RequestContext::get('theme.layout_entity.preview_entity');
+        if (is_array($previewEntity) && (int)($previewEntity['theme_id'] ?? 0) === $themeId) {
+            return ['scope' => (string)$previewEntity['scope'], 'identity_key' => (string)$previewEntity['identity_key'], 'structure_or_release' => (string)$previewEntity['entity_key']];
+        }
+        if ($published) {
+            return $this->rememberPublishedPageEntityLocation($themeId, $scope, $pageType, $area);
+        }
+
+        return $this->resolvePageEntityLocationUncached($themeId, $scope, $pageType, $area, false);
+    }
+
+    /**
+     * @return array{scope:string,identity_key:string,structure_or_release:string}|null
+     */
+    private function rememberPublishedPageEntityLocation(
+        int $themeId,
+        string $scope,
+        string $pageType,
+        string $area,
+    ): ?array {
+        $hotCache = $this->resolveHotCache();
+        if (!$hotCache instanceof StorefrontScopeHotCache) {
+            return $this->resolvePageEntityLocationUncached($themeId, $scope, $pageType, $area, true);
+        }
+
+        $logicalKey = 'page.location.v1|' . $themeId . '|' . \trim($scope)
+            . '|' . \strtolower(\trim($pageType)) . '|' . \strtolower(\trim($area))
+            . '|' . hash('sha256', json_encode($this->entityIdentityForScope($scope), JSON_THROW_ON_ERROR));
+        $cached = $hotCache->rememberPolicy(
+            StorefrontThemeCacheCoordinator::publishedPageEntityLocationPolicy(),
+            $logicalKey,
+            fn(): array => $this->resolvePageEntityLocationUncached($themeId, $scope, $pageType, $area, true) ?? [],
+        );
+        if (!\is_array($cached) || $cached === []) {
+            return null;
+        }
+        if (!isset($cached['scope'], $cached['identity_key'], $cached['structure_or_release'])) {
+            return null;
+        }
+
+        return [
+            'scope' => (string)$cached['scope'],
+            'identity_key' => (string)$cached['identity_key'],
+            'structure_or_release' => (string)$cached['structure_or_release'],
+        ];
+    }
+
+    /**
+     * @return array{scope:string,identity_key:string,structure_or_release:string}|null
+     */
+    private function resolvePageEntityLocationUncached(
         int $themeId,
         string $scope,
         string $pageType,
@@ -965,18 +1957,27 @@ final class ThemeLayoutEntitySlotFiller
     private function identityKeyForScope(int $themeId, string $pageType, string $area, string $scope): string
     {
         try {
-            $context = $this->layoutResolver->buildContext($themeId, $pageType, $area, [
-                'layout_option' => 'default',
-                'scope' => $scope,
-                'target_type' => 'global',
-                'target_id' => 0,
-                'locale_code' => 'default',
-            ]);
+            $context = $this->layoutResolver->buildContext($themeId, $pageType, $area, $this->entityIdentityForScope($scope));
 
             return $this->paths->identityKey($context->identityHash());
         } catch (\Throwable) {
             return $this->paths->identityKey(\hash('sha256', $pageType . '|' . $scope));
         }
+    }
+
+    private function readPageBinding(int $themeId, string $scope, string $identityKey, string $entityKey): ?EntityRenderBinding
+    {
+        $key = 'theme.layout_entity.page_binding.' . hash('sha256', json_encode([$themeId, $scope, $identityKey, $entityKey], JSON_THROW_ON_ERROR));
+        $cached = RequestContext::get($key);
+        if ($cached instanceof EntityRenderBinding) {
+            return $cached;
+        }
+        $binding = \Weline\Framework\Manager\ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)
+            ->readPageBinding($themeId, $scope, $identityKey, $entityKey);
+        if ($binding !== null) {
+            RequestContext::set($key, $binding);
+        }
+        return $binding;
     }
 
     private function readPageCurrent(int $themeId, string $scope, string $identityKey, bool $published): ?string
@@ -995,8 +1996,7 @@ final class ThemeLayoutEntitySlotFiller
             if ($segment === '') {
                 continue;
             }
-            $phtml = $this->paths->pagePhtml($themeId, $scope, $identityKey, $segment);
-            if ($this->pagePhtmlHasSlots($phtml)) {
+            if (preg_match($published ? '/^r[1-9][0-9]*$/D' : '/^(?:[dr][1-9][0-9]*|s[a-f0-9]+)$/D', $segment) === 1) {
                 return $segment;
             }
         }
@@ -1048,42 +2048,8 @@ final class ThemeLayoutEntitySlotFiller
         string $identityKey,
         bool $published,
     ): ?string {
-        if ($published) {
-            return null;
-        }
-        $dir = $this->paths->pageIdentityDir($themeId, $scope, $identityKey);
-        if (!\is_dir($dir)) {
-            return null;
-        }
-        $draft = [];
-        $releases = [];
-        $entries = \scandir($dir) ?: [];
-        foreach ($entries as $name) {
-            if ($name === '.' || $name === '..' || $name === 'current.json') {
-                continue;
-            }
-            $phtml = $dir . $name . \DIRECTORY_SEPARATOR . 'layout.phtml';
-            if (!$this->pagePhtmlHasSlots($phtml)) {
-                continue;
-            }
-            if (\str_starts_with($name, 's')) {
-                $draft[] = $name;
-            }
-            if (\preg_match('/^r(\d+)$/', $name, $matches) === 1) {
-                $releases[(int)$matches[1]] = $name;
-            }
-        }
-        if ($draft !== []) {
-            \rsort($draft, \SORT_STRING);
-
-            return $draft[0];
-        }
-        if ($releases === []) {
-            return null;
-        }
-        \krsort($releases, \SORT_NUMERIC);
-
-        return \reset($releases) ?: null;
+        // 没有权威指针时不能按目录排序猜测草稿或发布版本。
+        return null;
     }
 
     private function pagePhtmlHasSlots(string $path): bool
@@ -1096,20 +2062,95 @@ final class ThemeLayoutEntitySlotFiller
         return $src !== '' && \str_contains($src, SlotBoundaryMarkers::OPEN_PREFIX);
     }
 
-    private function includeEntityPhtml(string $path): string
+    private function includeEntityPhtml(string $path, ?EntityRenderBinding $entityBinding = null): string
     {
-        \ob_start();
+        \Weline\Framework\Runtime\FiberOutputBuffer::beginCapture();
         try {
             include $path;
-            $html = (string)\ob_get_clean();
+            $html = (string)\Weline\Framework\Runtime\FiberOutputBuffer::endCapture();
         } catch (\Throwable $e) {
-            if (\ob_get_level() > 0) {
-                \ob_end_clean();
-            }
+            \Weline\Framework\Runtime\FiberOutputBuffer::discardCapture();
             throw new \RuntimeException('theme_layout_entity_include_failed: ' . $e->getMessage(), 0, $e);
         }
 
         return $html;
+    }
+
+    /**
+     * wave8-8s5: load published chrome bake from disk (chrome.phtml / rendered snapshot).
+     * Does NOT touch chrome_slot_projection HotCache Policy.
+     */
+    private function loadPublishedChromeBakeHtmlDirect(int $themeId, string $scope): string
+    {
+        try {
+            $scope = \trim($scope);
+            if ($themeId < 1 || $scope === '') {
+                return '';
+            }
+            // Prefer ThemeLayoutEntityChrome::renderCurrent → chrome.rendered.{locale}
+            // (finalized nested footer-*-links). Never raw-include chrome.phtml injectors.
+            return $this->chrome->renderCurrent($themeId, $scope, null, false);
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * @return array<string, string> chrome slotId => inner HTML from already-baked markup
+     */
+    private function chromeSlotIdsFromRenderedHtml(string $html, bool $chromeOnly = false): array
+    {
+        $slots = [];
+        if (preg_match_all('/<!--@weline-chrome-slots:([\w.,-]+)-->/', $html, $ownership) > 0) {
+            foreach ($ownership[1] as $list) {
+                foreach (explode(',', $list) as $slot) {
+                    $slots[strtolower($slot)] = true;
+                }
+            }
+        }
+        if (preg_match_all('/<!--@weline-slot:([\w.-]+)-->/', $html, $markers) > 0) {
+            foreach ($markers[1] as $slot) {
+                $slot = strtolower($slot);
+                if ($chromeOnly || $this->sharedChrome->isChromeSlot($slot)) {
+                    $slots[$slot] = true;
+                }
+            }
+        }
+        return array_keys($slots);
+    }
+
+    private function extractChromeInnersFromBakedHtml(string $html): array
+    {
+        if ($html === '' || !\str_contains($html, '<!--@weline-slot:')) {
+            return [];
+        }
+        $out = [];
+        foreach (SharedChromeService::CHROME_SLOTS as $slotId) {
+            $slotId = \strtolower(\trim((string)$slotId));
+            if ($slotId === '') {
+                continue;
+            }
+            try {
+                $inner = $this->boundaryScanner->extractSlotInner($html, $slotId, false, true);
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($inner === null || \trim($inner) === '') {
+                continue;
+            }
+            $out[$slotId] = $inner;
+        }
+        foreach ($this->chromeSlotIdsFromRenderedHtml($html) as $slotId) {
+            if (isset($out[$slotId])) {
+                continue;
+            }
+            $inner = $this->boundaryScanner->extractSlotInner($html, $slotId, false, true);
+            if ($inner !== null && trim($inner) !== '') {
+                $out[$slotId] = $inner;
+            }
+        }
+
+        return $out;
     }
 
     private function spliceSolidifiedSlots(string $html, string $rendered): string
@@ -1143,14 +2184,34 @@ final class ThemeLayoutEntitySlotFiller
             // Homepage shell nests homepage-hero/promo/videos under content. Entity
             // layout emits those as sibling top-level slots; a full content replace
             // would wipe nested markers (and any already-spliced children).
-            // Always preserve when the shell still carries any homepage-* open marker,
+            // Policy/terms nest policy-*-content + layout-built hero/sections the same way.
+            // Always preserve when the shell still carries protected nested layout body,
             // even if the entity leaf omitted that slot id from $ordered.
-            if ($slotId === 'content' && $this->shellContentCarriesHomepageNestedSlots($html)) {
+            if ($slotId === 'content' && $this->shellContentCarriesProtectedNestedLayout($html)) {
                 $html = $this->mergeParentSlotPreservingNested($html, $slotId, $inner, $ordered);
                 continue;
             }
             if ($this->shellSlotInnerHasProtectedNestedSlots($html, $slotId, $ordered)) {
                 $html = $this->mergeParentSlotPreservingNested($html, $slotId, $inner, $ordered);
+                continue;
+            }
+            // Safety-net: replace every matching region (data-wslot / data-slot-id / markers).
+            if (ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
+                $regions = $this->boundaryScanner->enumerateRegions($html, $slotId);
+                if ($regions !== []) {
+                    \usort(
+                        $regions,
+                        static fn(array $a, array $b): int => ((int)($b['region_start'] ?? 0) <=> (int)($a['region_start'] ?? 0)),
+                    );
+                    foreach ($regions as $region) {
+                        if (!\is_array($region)) {
+                            continue;
+                        }
+                        $html = $this->boundaryScanner->replaceWrapperInner($html, $region, $inner);
+                    }
+                    continue;
+                }
+                $html = $this->replaceAllSlotInners($html, $slotId, $inner);
                 continue;
             }
             $html = $this->replaceSlotInner($html, $slotId, $inner);
@@ -1261,6 +2322,32 @@ final class ThemeLayoutEntitySlotFiller
     }
 
     /**
+     * True when content still carries nested homepage-* / policy-* / terms layout body.
+     * Used as a hard guard so sparse content widgets (newsletter-popup / trust-badges)
+     * cannot erase the slot tree before children are spliced.
+     */
+    private function shellContentCarriesProtectedNestedLayout(string $html): bool
+    {
+        if ($this->shellContentCarriesHomepageNestedSlots($html)) {
+            return true;
+        }
+        $shellInner = $this->boundaryScanner->extractSlotInner($html, 'content', false, true);
+        if ($shellInner === null || $shellInner === '') {
+            return false;
+        }
+        if (\preg_match('/<!--@weline-slot:(?:policy-|terms)/', $shellInner) === 1) {
+            return true;
+        }
+        if (\preg_match('/\bdata-slot-id\s*=\s*(["\'])(?:policy-|terms)/', $shellInner) === 1) {
+            return true;
+        }
+
+        return \str_contains($shellInner, 'amazon-policy__')
+            || \str_contains($shellInner, 'amazon-terms__')
+            || \str_contains($shellInner, 'policy-main');
+    }
+
+    /**
      * True when homepage content still carries nested homepage-* slot opens.
      * Used as a hard guard so sparse content widgets (trust-badges/store-music)
      * cannot erase the slot tree before children are spliced.
@@ -1306,9 +2393,10 @@ final class ThemeLayoutEntitySlotFiller
         string $pageScope,
         string $identityKey,
         string $structureOrRelease,
+        ?EntityRenderBinding $binding = null,
     ): void {
         try {
-            $configByUid = $this->configStore->readPageConfig(
+            $configByUid = $binding !== null ? $this->configStore->readBoundConfig($binding) : $this->configStore->readPageConfig(
                 $themeId,
                 $pageScope,
                 $identityKey,
@@ -1329,7 +2417,7 @@ final class ThemeLayoutEntitySlotFiller
             if ($uid === '') {
                 continue;
             }
-            if ($this->configStore->needsStructureHydration($node)) {
+            if ($binding === null && $this->configStore->needsStructureHydration($node)) {
                 $configByUid[$uid] = $this->configStore->hydratePageNodeFromStructure(
                     $node,
                     $uid,
@@ -1368,12 +2456,7 @@ final class ThemeLayoutEntitySlotFiller
                 $pageType,
                 $status,
                 $area,
-                [
-                    'layout_option' => 'default',
-                    'scope' => $overlayScope,
-                    'target_type' => 'global',
-                    'target_id' => 0,
-                ],
+$this->entityIdentityForScope($overlayScope),
             );
         } catch (\Throwable) {
             $layout = $layout;
@@ -1392,7 +2475,7 @@ final class ThemeLayoutEntitySlotFiller
                 }
                 $uid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
                 if ($uid !== '') {
-                    RequestContext::set('theme.layout_entity.node.' . $uid, $widget);
+                    RequestContext::set(ThemeLayoutEntityWidgetRenderer::requestNodeKey($uid, 'page', $themeId, $binding?->scope ?? $this->paths->scopeKey($pageScope), $binding?->cacheKey() ?? $versionKey, WidgetI18n::storefrontLocale()), $widget);
                 }
             }
         }
@@ -1454,5 +2537,19 @@ final class ThemeLayoutEntitySlotFiller
         }
 
         return $candidate;
+    }
+
+    private function resolveHotCache(): ?StorefrontScopeHotCache
+    {
+        if ($this->hotCache instanceof StorefrontScopeHotCache) {
+            return $this->hotCache;
+        }
+        try {
+            $resolved = \Weline\Framework\Manager\ObjectManager::getInstance(StorefrontScopeHotCache::class);
+
+            return $resolved instanceof StorefrontScopeHotCache ? $resolved : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

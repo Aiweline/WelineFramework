@@ -9,6 +9,7 @@ use Weline\Framework\View\Template;
 use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Taglib\Slot;
 
 class ThemeComponentRenderer
 {
@@ -21,6 +22,12 @@ class ThemeComponentRenderer
 
     public function render(ThemeComponentDefinition $definition, array $instanceConfig = [], ?WelineTheme $theme = null, array $context = []): string
     {
+        // REQ-THEME-0016 / required-default-all-layouts: entity + overlay paths also
+        // re-render container widgets (product-info → product-selling-mode). A request-wide
+        // Slot registry would throw duplicate id on the second pass (unknown:0 via
+        // renderRuntimeTag). Mirror SlotRendererService::doRenderWidget.
+        Slot::clearRegisteredSlots();
+
         $area = $definition->area ?: ((string)($context['area'] ?? 'frontend'));
         $config = $this->mergeConfig($definition, $instanceConfig, $theme, $area);
         $config = $this->exposeThemeComponentConfigAsMeta($definition, $config);
@@ -31,13 +38,16 @@ class ThemeComponentRenderer
         $config['theme_component_meta'] = $definition->meta;
 
         $renderable = $this->renderableResolver->resolve($definition, $config);
+        $assets = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer::class)->render(
+            array_merge($definition->meta, $definition->toWidgetArray()), $config, (string)$renderable->templatePath,
+        );
 
         if ($renderable->isTemplateContent()) {
-            return $this->runtimeTemplateMaterializer->renderContent((string)$renderable->templateContent, $config);
+            return $this->runtimeTemplateMaterializer->renderContent((string)$renderable->templateContent, $config) . $assets;
         }
 
         if ($renderable->isBlockClass()) {
-            return $this->renderBlock($renderable->blockClass, $config);
+            return $this->renderBlock($renderable->blockClass, $config) . $assets;
         }
 
         $templatePath = (string)$renderable->templatePath;
@@ -46,13 +56,13 @@ class ThemeComponentRenderer
         }
 
         if (is_file($templatePath)) {
-            return $this->runtimeTemplateMaterializer->renderFile($templatePath, $config);
+            return $this->runtimeTemplateMaterializer->renderFile($templatePath, $config) . $assets;
         }
 
         $this->template->unsetData();
         $html = $this->template->fetchHtml($templatePath, $config);
 
-        return is_string($html) ? $html : '';
+        return (is_string($html) ? $html : '') . $assets;
     }
 
     public function mergeConfig(ThemeComponentDefinition $definition, array $instanceConfig = [], ?WelineTheme $theme = null, string $area = 'frontend'): array

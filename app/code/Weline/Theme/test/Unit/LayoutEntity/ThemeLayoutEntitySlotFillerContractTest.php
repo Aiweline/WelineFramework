@@ -29,6 +29,7 @@ final class ThemeLayoutEntitySlotFillerContractTest extends TestCase
         self::assertStringContainsString('function fillNestedChromeExtensionSlots', $src);
         self::assertStringContainsString('scopeFallbackChain', $src);
         self::assertStringContainsString('isBlankChromeInner', $src);
+        self::assertStringContainsString('isEffectivelyBlankSlotInner', $src);
         self::assertStringContainsString('chromeByScope', $src);
         // Storefront must read workspace published_release_id (never hardcode null).
         self::assertStringContainsString('schema_fields_PUBLISHED_RELEASE_ID', $src);
@@ -42,12 +43,13 @@ final class ThemeLayoutEntitySlotFillerContractTest extends TestCase
         self::assertStringContainsString('NEVER sort by slot-id name/length', $src);
         self::assertStringNotContainsString('orderChromeSlotsForInjection', $src);
         self::assertStringNotContainsString('strlen($b) <=> strlen($a)', $src);
-        // Nested homepage-* under content must survive entity content splice
+        // Nested homepage-* / policy-* under content must survive entity content splice
         // and keep shell document order (hero before later sections).
         self::assertStringContainsString('mergeParentSlotPreservingNested', $src);
         self::assertStringContainsString('shellSlotInnerHasProtectedNestedSlots', $src);
         self::assertStringContainsString('shellContentCarriesHomepageNestedSlots', $src);
-        self::assertStringContainsString("slotId === 'content' && \$this->shellContentCarriesHomepageNestedSlots", $src);
+        self::assertStringContainsString('shellContentCarriesProtectedNestedLayout', $src);
+        self::assertStringContainsString("slotId === 'content' && \$this->shellContentCarriesProtectedNestedLayout", $src);
         self::assertStringContainsString('keep shell nested slot document order', $src);
         self::assertStringContainsString('$entityInner . $shellInner', $src);
         // Hard-cut: published is r{id} only — delete scandir / s* / older-r* fishing.

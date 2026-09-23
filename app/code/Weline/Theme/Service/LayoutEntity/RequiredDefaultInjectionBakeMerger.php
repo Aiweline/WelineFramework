@@ -23,20 +23,30 @@ final class RequiredDefaultInjectionBakeMerger
      * @param array<string|int, mixed> $nodes Flat node map (uid => node)
      * @return array<string, array<string, mixed>>
      */
-    public function mergeIntoNodes(array $nodes, int $themeId, string $pageType): array
+    public function mergeIntoNodes(array $nodes, int $themeId, string $pageType, ?int $versionId = null, array $changes = [], ?array $omissionsOverride = null, string $layoutOption = 'default'): array
     {
         $pageType = \trim($pageType);
         if ($themeId < 1 || $pageType === '') {
             return $this->normalizeNodeMap($nodes);
         }
 
+        foreach ($changes as &$change) {
+            $change['before'] = $this->injectionsForLayoutOption($change['before'] ?? [], $layoutOption);
+            $change['after'] = $this->injectionsForLayoutOption($change['after'] ?? [], $layoutOption);
+        }
+        unset($change);
+        $nodes = $this->removeRetiredAutomaticNodes($this->normalizeNodeMap($nodes), $pageType, $changes);
         $bySlot = $this->nodesToBySlot($nodes);
         $declarations = $this->loadDeclarations();
+        foreach ($declarations as &$declaration) {
+            $declaration['default_injections'] = $this->injectionsForLayoutOption($declaration['default_injections'] ?? [], $layoutOption);
+        }
+        unset($declaration);
         if ($declarations === []) {
             return $this->normalizeNodeMap($nodes);
         }
 
-        $omissions = $this->omissionsFor($themeId, $pageType);
+        $omissions = $omissionsOverride ?? $this->omissionsFor($themeId, $pageType, $versionId);
         $mergedSlots = RequiredDefaultInjectionContract::merge(
             $bySlot,
             $pageType,
@@ -44,7 +54,105 @@ final class RequiredDefaultInjectionBakeMerger
             $omissions,
         );
 
-        return $this->bySlotToNodes($mergedSlots);
+        $merged = $this->bySlotToNodes($mergedSlots);
+        foreach ($merged as $uid => &$node) {
+            if (!isset($nodes[$uid])) {
+                $node['source'] = 'default_injection';
+            }
+        }
+        unset($node);
+        return $merged;
+    }
+
+    public function injectionsForLayoutOption(array $injections, string $layoutOption): array
+    {
+        $items = $injections === [] || array_is_list($injections) ? $injections : [$injections];
+        $out = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) { continue; }
+            $option = trim((string)($item['layout_option'] ?? 'default')) ?: 'default';
+            if ($option !== '*' && $option !== $layoutOption) { continue; }
+            // Contract sees an already selected option; keep its legacy default-only API stable.
+            $item['layout_option'] = 'default';
+            $out[] = $item;
+        }
+        return $out;
+    }
+
+    /** Removing a declaration must never delete a manually installed instance. */
+    public function unresolvedRetiredNodes(array $nodes, string $pageType, array $changes): array
+    {
+        $unresolved = [];
+        foreach ($changes as $change) {
+            if (($change['before'] ?? []) === ($change['after'] ?? [])) {
+                continue;
+            }
+            $identity = $change['widget_identity'] ?? [];
+            $declaration = ['module' => $identity['module'] ?? '', 'type' => $identity['type'] ?? '', 'code' => $identity['code'] ?? ''];
+            $old = RequiredDefaultInjectionContract::requiredTargets([
+                $declaration + ['default_injections' => $change['before'] ?? []],
+            ], $pageType);
+            foreach ($old as $target) {
+                foreach ($nodes as $uid => $node) {
+                    if (!is_array($node) || trim((string)($node['source'] ?? $node['config']['_source'] ?? '')) !== '') {
+                        continue;
+                    }
+                    if (($node['slot_id'] ?? '') === $target['slot_id']
+                        && ($node['widget_module'] ?? '') === $target['widget_module']
+                        && ($node['widget_code'] ?? '') === $target['widget_code']) {
+                        $unresolved[(string)$uid] = $target + [
+                            'node_uid' => (string)($node['node_uid'] ?? $uid),
+                            'reason' => 'automatic_ownership_unknown',
+                        ];
+                    }
+                }
+            }
+        }
+        return array_values($unresolved);
+    }
+
+    /** Removing a declaration must never delete a manually installed instance. */
+    public function removeRetiredAutomaticNodes(array $nodes, string $pageType, array $changes): array
+    {
+        foreach ($changes as $change) {
+            if (($change['before'] ?? []) === ($change['after'] ?? [])) {
+                continue;
+            }
+            $identity = $change['widget_identity'] ?? [];
+            $declaration = ['module' => $identity['module'] ?? '', 'type' => $identity['type'] ?? '', 'code' => $identity['code'] ?? ''];
+            $old = RequiredDefaultInjectionContract::requiredTargets([
+                $declaration + ['default_injections' => $change['before'] ?? []],
+            ], $pageType);
+            $new = RequiredDefaultInjectionContract::requiredInjections([
+                $declaration + ['default_injections' => $change['after'] ?? []],
+            ], $pageType);
+            foreach ($old as $retired) {
+                foreach ($nodes as $uid => $node) {
+                    if (!is_array($node) || !in_array($node['source'] ?? $node['config']['_source'] ?? '', ['auto', 'default_injection'], true)) {
+                        continue;
+                    }
+                    if (($node['slot_id'] ?? '') === $retired['slot_id']
+                        && ($node['widget_module'] ?? '') === $retired['widget_module']
+                        && ($node['widget_code'] ?? '') === $retired['widget_code']) {
+                        $replacement = null;
+                        foreach ($new as $candidate) {
+                            if ($replacement === null || $candidate['slot_id'] === $retired['slot_id']) {
+                                $replacement = $candidate['node'];
+                            }
+                        }
+                        if ($replacement === null) {
+                            unset($nodes[$uid]);
+                        } else {
+                            // Preserve instance/config while updating only declaration-owned structure.
+                            foreach (['slot_id', 'area', 'sort_order'] as $field) {
+                                $nodes[$uid][$field] = $replacement[$field];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return $nodes;
     }
 
     /**
@@ -118,12 +226,14 @@ final class RequiredDefaultInjectionBakeMerger
     /**
      * @return list<array<string, mixed>>
      */
-    private function omissionsFor(int $themeId, string $pageType): array
+    private function omissionsFor(int $themeId, string $pageType, ?int $versionId = null): array
     {
         try {
             /** @var ThemePublishedVersionRuntimeResolver $versions */
-            $versions = ObjectManager::getInstance(ThemePublishedVersionRuntimeResolver::class);
-            $versionId = (int)($versions->resolve($themeId, $pageType)['themePublishedVersionId'] ?? 0);
+            if ($versionId === null) {
+                $versions = ObjectManager::getInstance(ThemePublishedVersionRuntimeResolver::class);
+                $versionId = (int)($versions->resolve($themeId, $pageType)['themePublishedVersionId'] ?? 0);
+            }
             /** @var WidgetDefaultInjectionService $injections */
             $injections = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
 

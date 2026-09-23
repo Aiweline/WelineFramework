@@ -24,6 +24,36 @@ use Weline\Theme\Observer\ControllerFetchFileBefore;
 
 final class ThemeRuntimeCacheCleaner
 {
+    /** 布局绑定更新只推进 Theme 展示依赖，不清编译模板、路由或其它业务缓存池。 */
+    public function clearLayoutEntityCaches(?int $themeId = null, ?string $scope = null): void
+    {
+        $paths = ObjectManager::getInstance(NamespacePath::class);
+        $identity = $scope !== null && $scope !== ''
+            ? ObjectManager::getInstance(\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class)
+                ->fromStorageScope($scope, true)
+            : null;
+        $namespace = $identity instanceof ScopeIdentity
+            ? $this->scopeThemeNamespace($paths, $identity)
+            : $paths->global('storefront', ['theme']);
+        ObjectManager::getInstance(NamespaceGenerationInterface::class)->bump($namespace);
+        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+        FullPageCacheCoordinator::clearProcessCache();
+    }
+
+    private static function purgeLayoutEntityPublishedProjectionHotCachePool(): void
+    {
+        if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
+            return;
+        }
+        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+        try {
+            ObjectManager::getInstance(CacheManager::class)
+                ->pool(StorefrontThemeCacheCoordinator::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL)
+                ->clear();
+        } catch (\Throwable) {
+        }
+    }
+
     /**
      * Full theme-related invalidation for publish / resource_changed.
      * Clears theme namespace generations (all recorded theme scopes), WLS FPC,
@@ -122,6 +152,9 @@ final class ThemeRuntimeCacheCleaner
         });
         $this->runStep($result, 'published_layout_structure_hot_cache', static function (): void {
             self::purgePublishedLayoutStructureHotCachePool();
+        });
+        $this->runStep($result, 'layout_entity_published_projection_hot_cache', static function (): void {
+            self::purgeLayoutEntityPublishedProjectionHotCachePool();
         });
         foreach ($this->themeCacheServices() as $step => $serviceClass) {
             $this->runStep($result, $step, static function () use ($serviceClass): void {
@@ -277,6 +310,9 @@ final class ThemeRuntimeCacheCleaner
 
         $this->runStep($result, 'published_layout_structure_hot_cache', static function (): void {
             self::purgePublishedLayoutStructureHotCachePool();
+        });
+        $this->runStep($result, 'layout_entity_published_projection_hot_cache', static function (): void {
+            self::purgeLayoutEntityPublishedProjectionHotCachePool();
         });
 
         $this->runStep($result, 'runtime_cache_broadcast', function (): void {

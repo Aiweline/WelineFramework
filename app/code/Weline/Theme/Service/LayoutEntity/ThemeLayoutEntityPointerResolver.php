@@ -10,14 +10,12 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Service\ThemeScopeVersionService;
 
 /**
- * Cheap chrome/page entity pointers. Process static cache + optional HotCache.
+ * Cheap chrome/page entity pointers via CachePolicy HotCache only.
  * Never loads full workspace payloads; never keys on RequestContext::getId().
+ * wave6-6s: removed parallel process static — rememberPolicy is the sole bag.
  */
 final class ThemeLayoutEntityPointerResolver
 {
-    /** @var array<string, array<string, mixed>|null> */
-    private static array $processCache = [];
-
     public function __construct(
         private readonly ThemeScopeVersionService $scopeVersions,
         private readonly ThemeLayoutEntityPaths $paths,
@@ -80,6 +78,9 @@ final class ThemeLayoutEntityPointerResolver
             $identityKey = $this->paths->identityKey($identityHash);
             $structureOrRelease = $this->paths->pageStructureOrRelease($structureKey, $published, $releaseId);
             $path = $this->paths->pagePhtml($themeId, $scope, $identityKey, $structureOrRelease);
+            $binding = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)
+                ->readPageBinding($themeId, $scope, $identityKey, $structureOrRelease);
+            $path = $binding?->templatePath ?? $path;
             if (!\is_file($path)) {
                 return null;
             }
@@ -102,10 +103,12 @@ final class ThemeLayoutEntityPointerResolver
         bool $published,
     ): void {
         $logicalKey = $this->chromeKey($themeId, $scope, $published);
-        self::$processCache[$logicalKey] = [
+        $value = [
             'version_id' => $versionId,
             'path' => $path,
+            'scope' => $scope,
         ];
+        $this->warm($logicalKey, $value);
     }
 
     public function rememberPagePointer(
@@ -120,19 +123,15 @@ final class ThemeLayoutEntityPointerResolver
         $logicalKey = 'page|' . $themeId . '|' . \trim($scope) . '|'
             . \strtolower(\trim($identityHash)) . '|' . \strtolower(\trim($structureKey))
             . '|' . ($published ? '1' : '0') . '|' . (int)($releaseId ?? 0);
-        self::$processCache[$logicalKey] = [
+        $this->warm($logicalKey, [
             'path' => $path,
             'structure_key' => $structureKey,
-        ];
+        ]);
     }
 
     public function invalidateChrome(int $themeId, string $scope): void
     {
         $scope = \trim($scope);
-        unset(
-            self::$processCache[$this->chromeKey($themeId, $scope, true)],
-            self::$processCache[$this->chromeKey($themeId, $scope, false)],
-        );
         $hotCache = $this->resolveHotCache();
         if ($hotCache instanceof StorefrontScopeHotCache) {
             try {
@@ -155,12 +154,23 @@ final class ThemeLayoutEntityPointerResolver
         $logicalKey = 'page|' . $themeId . '|' . \trim($scope) . '|'
             . \strtolower(\trim($identityHash)) . '|' . \strtolower(\trim($structureKey))
             . '|' . ($published ? '1' : '0') . '|' . (int)($releaseId ?? 0);
-        unset(self::$processCache[$logicalKey]);
+        $hotCache = $this->resolveHotCache();
+        if ($hotCache instanceof StorefrontScopeHotCache) {
+            try {
+                $hotCache->forgetPolicy(self::pointerCachePolicy(), $logicalKey);
+            } catch (\Throwable) {
+            }
+        }
     }
 
+    /**
+     * @deprecated wave6-6s Policy-only; kept for callers that expect a reset hook.
+     */
     public static function clearProcessCache(): void
     {
-        self::$processCache = [];
+        if (\class_exists(StorefrontScopeHotCache::class)) {
+            StorefrontScopeHotCache::resetProcessCache();
+        }
     }
 
     /**
@@ -178,6 +188,9 @@ final class ThemeLayoutEntityPointerResolver
                 return null;
             }
             $path = $this->paths->chromePhtml($themeId, $version->getScope(), $version->getVersionId());
+            $binding = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)
+                ->readChromeBinding($themeId, $version->getScope(), $version->getVersionId());
+            $path = $binding?->templatePath ?? $path;
             if (!\is_file($path)) {
                 return null;
             }
@@ -185,6 +198,7 @@ final class ThemeLayoutEntityPointerResolver
             return [
                 'version_id' => $version->getVersionId(),
                 'path' => $path,
+                'scope' => $version->getScope(),
             ];
         });
     }
@@ -201,10 +215,6 @@ final class ThemeLayoutEntityPointerResolver
      */
     private function remember(string $logicalKey, callable $builder): mixed
     {
-        if (\array_key_exists($logicalKey, self::$processCache)) {
-            return self::$processCache[$logicalKey];
-        }
-
         $hotCache = $this->resolveHotCache();
         if ($hotCache instanceof StorefrontScopeHotCache) {
             $value = $hotCache->rememberPolicy(
@@ -214,13 +224,32 @@ final class ThemeLayoutEntityPointerResolver
                     return $builder();
                 },
             );
-        } else {
-            $value = $builder();
+
+            return \is_array($value) ? $value : null;
         }
 
-        self::$processCache[$logicalKey] = \is_array($value) ? $value : null;
+        $value = $builder();
 
-        return self::$processCache[$logicalKey];
+        return \is_array($value) ? $value : null;
+    }
+
+    /**
+     * @param array<string, mixed> $value
+     */
+    private function warm(string $logicalKey, array $value): void
+    {
+        $hotCache = $this->resolveHotCache();
+        if (!$hotCache instanceof StorefrontScopeHotCache) {
+            return;
+        }
+        try {
+            $hotCache->rememberPolicy(
+                self::pointerCachePolicy(),
+                $logicalKey,
+                static fn(): array => $value,
+            );
+        } catch (\Throwable) {
+        }
     }
 
     private function resolveHotCache(): ?StorefrontScopeHotCache
