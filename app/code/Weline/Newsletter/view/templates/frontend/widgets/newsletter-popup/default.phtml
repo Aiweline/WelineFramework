@@ -1,13 +1,14 @@
 <?php
 /**
- * 订阅弹窗部件（Weline_Newsletter 拥有 · 古风信封信笺 WebP 壳）
- * 仅半透明蒙版 + 真透明 WebP 信封信笺；表单叠在信笺书写区。
+ * @widget.source {Weline_Newsletter::css/widgets/widget-newsletter-popup-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
+ * 订阅弹窗部件（Weline_Newsletter 拥有 · 古风宣纸信笺）
+ * 半透明蒙版 + 实心宣纸信笺 WebP（非红包信封）；表单叠写于笺面。
  *
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {newsletter-popup}
  * @widget.name {订阅弹窗}
- * @widget.description {全站邮件订阅弹窗（信封信笺 PNG）；cookie_days 默认 14。}
+ * @widget.description {全站邮件订阅弹窗（古风信笺）；cookie_days 默认 14。}
  * @widget.type {newsletter}
  * @widget.area {frontend}
  * @widget.position {["content"]}
@@ -15,11 +16,12 @@
  *
  * @param title {default="订阅获取优惠",type="string",label="标题"}
  * @param description {default="订阅我们的邮件，立即获得10%折扣码！",type="string",label="描述"}
- * @param image {default="",type="media_image",label="信笺信封图",description="可选自定义整图（建议透明 WebP）；空则用模块默认信封信笺壳"}
+ * @param image {default="",type="media_image",label="信笺图",description="可选自定义宣纸信笺（建议透明 WebP）；空则用模块默认古风信笺"}
  * @param button_text {default="立即订阅",type="string",label="按钮文字"}
- * @param trigger {default="delay",type="select",label="触发方式",options={delay:"延迟显示",scroll:"滚动触发",exit:"退出意图"}}
- * @param delay_seconds {default=5,type="number",label="延迟秒数"}
- * @param scroll_percent {default=50,type="number",label="滚动百分比"}
+ * @param trigger {default="deferred",type="select",label="触发方式",options={deferred:"组合延后",delay:"延迟显示",scroll:"滚动触发",exit:"退出意图"}}
+ * @param delay_seconds {default=15,type="number",label="延迟秒数"}
+ * @param scroll_percent {default=40,type="number",label="滚动百分比"}
+ * @param min_open_seconds {default=3,type="number",label="最早弹出秒数"}
  * @param show_once {default=true,type="bool",label="仅显示一次"}
  * @param cookie_days {default=14,type="number",label="Cookie 天数"}
  */
@@ -35,19 +37,39 @@ $description = __((string)($this->getData('description') ?: '订阅我们的邮�
 $image = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('image') ?? '');
 $buttonText = __((string)($this->getData('button_text') ?: '立即订阅'));
 $emailPlaceholder = __('请输入您的邮箱');
-$trigger = $this->getData('trigger') ?? 'delay';
-$delaySeconds = (int)($this->getData('delay_seconds') ?? 5);
-$scrollPercent = (int)($this->getData('scroll_percent') ?? 50);
+$trigger = (string)($this->getData('trigger') ?? 'deferred');
+$delaySeconds = (int)($this->getData('delay_seconds') ?? 15);
+$scrollPercent = (int)($this->getData('scroll_percent') ?? 40);
+$minOpenSeconds = (int)($this->getData('min_open_seconds') ?? 3);
 $showOnce = (bool)($this->getData('show_once') ?? true);
 $cookieDays = (int)($this->getData('cookie_days') ?? 14);
 if ($cookieDays < 1) {
     $cookieDays = 14;
 }
+if ($delaySeconds < 1) {
+    $delaySeconds = 15;
+}
+if ($scrollPercent < 1) {
+    $scrollPercent = 40;
+}
+if ($minOpenSeconds < 0) {
+    $minOpenSeconds = 3;
+}
+/* WO-HP-P2-06：短 delay 单触发升级为组合延后，禁止首访首屏立即弹 */
+if ($trigger === 'delay' && $delaySeconds < 15) {
+    $trigger = 'deferred';
+    $delaySeconds = 15;
+    if ($scrollPercent < 40) {
+        $scrollPercent = 40;
+    }
+}
+if ($trigger === '' || $trigger === 'auto') {
+    $trigger = 'deferred';
+}
 
 $shellUrl = $image !== ''
     ? $image
-    : '/Weline/Newsletter/view/statics/images/newsletter-letter-envelope-shell.webp';
-/* 信笺区主文案：与参考稿一致，优先用描述作抬头 */
+    : '/Weline/Newsletter/view/statics/images/newsletter-xinjian-gufeng.webp';
 $headline = $description !== '' ? $description : $title;
 
 $isEditorPreview = $this->getData('_editor_preview')
@@ -74,10 +96,11 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
          data-trigger="<?= $esc((string)$trigger) ?>"
          data-delay="<?= $esc((string)($delaySeconds * 1000)) ?>"
          data-scroll="<?= $esc((string)$scrollPercent) ?>"
+         data-min-open="<?= $esc((string)($minOpenSeconds * 1000)) ?>"
          data-show-once="<?= $showOnce ? 'true' : 'false' ?>"
          data-cookie-days="<?= $esc((string)$cookieDays) ?>"
          data-weline-load="newsletterSubscribe"
-         style="<?= $esc($rootStyle) ?>">
+         data-widget-style="<?= $esc($rootStyle) ?>">
 
     <div class="popup-overlay"></div>
 
@@ -147,275 +170,3 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
     </div>
 </section>
 
-<style>
-.<?= $wc ?> {
-    position: fixed;
-    inset: 0;
-    z-index: 99999;
-    /* 闭合/过渡态禁止拦截滚轮与点击，避免「看不见弹层却卡死页面」 */
-    pointer-events: none;
-}
-
-.<?= $wc ?>.is-open {
-    pointer-events: auto;
-}
-
-.<?= $wc ?> .popup-overlay {
-    position: absolute;
-    inset: 0;
-    background: color-mix(in srgb, var(--weline-theme-overlay) 72%, transparent);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.45s ease;
-}
-
-.<?= $wc ?>.is-open .popup-overlay {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.<?= $wc ?> .popup-stage {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -46%) scale(0.94);
-    box-sizing: border-box;
-    width: min(22rem, 92vw);
-    max-width: min(22rem, 92vw);
-    background: transparent;
-    opacity: 0;
-    pointer-events: none;
-    transition:
-        transform 0.75s cubic-bezier(0.22, 1, 0.36, 1),
-        opacity 0.45s ease;
-}
-
-.<?= $wc ?>.is-open .popup-stage {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.<?= $wc ?> .popup-close {
-    position: absolute;
-    top: 0.25rem;
-    right: 0.25rem;
-    width: var(--size-control-sm, 2rem);
-    height: var(--size-control-sm, 2rem);
-    background: color-mix(in srgb, var(--weline-theme-surface-raised) 90%, transparent);
-    border: 1px solid color-mix(in srgb, var(--weline-theme-border) 50%, transparent);
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 20;
-    transition: all var(--weline-theme-transition-base);
-    color: var(--weline-theme-text-muted);
-    box-shadow: var(--weline-theme-shadow-sm);
-}
-
-.<?= $wc ?> .popup-close:hover {
-    color: var(--weline-theme-text);
-    background: var(--weline-theme-surface-raised);
-}
-
-.<?= $wc ?> .popup-close-icon {
-    display: block;
-    line-height: 1;
-}
-
-.<?= $wc ?> .letter-shell {
-    position: relative;
-    width: 100%;
-    line-height: 0;
-    background: transparent;
-}
-
-/* 宣纸实心垫层：整块书写区不透底，字永远可读 */
-.<?= $wc ?> .letter-shell::before {
-    content: '';
-    position: absolute;
-    left: 15%;
-    right: 15%;
-    top: 6%;
-    bottom: 30%;
-    z-index: 0;
-    background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-xs, 0.2rem);
-    box-shadow: var(--weline-theme-shadow-sm);
-}
-
-.<?= $wc ?> .letter-shell__art {
-    position: relative;
-    z-index: 1;
-    display: block;
-    width: 100%;
-    height: auto;
-    pointer-events: none;
-    user-select: none;
-    background: transparent;
-}
-
-/* 表单叠在信笺书写区；纸面不透明底保证字可读（图外透明、纸内实心） */
-.<?= $wc ?> .letter-shell__form {
-    position: absolute;
-    left: 16%;
-    right: 16%;
-    top: 9%;
-    bottom: 32%;
-    z-index: 2;
-    box-sizing: border-box;
-    padding: var(--weline-space-4) var(--weline-space-3) var(--weline-space-3);
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: var(--weline-space-3);
-    overflow: auto;
-    line-height: normal;
-    background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-xs, 0.2rem);
-    opacity: 0;
-    transform: translateY(12%);
-    transition:
-        opacity 0.5s ease 0.18s,
-        transform 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.12s;
-}
-
-.<?= $wc ?>.is-open .letter-shell__form {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-.<?= $wc ?> .popup-title {
-    font-size: var(--weline-font-size-lg);
-    font-weight: 700;
-    margin: 0;
-    color: var(--weline-theme-text);
-    letter-spacing: 0.04em;
-    line-height: 1.45;
-}
-
-.<?= $wc ?> .popup-form {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--weline-space-3);
-}
-
-.<?= $wc ?> .popup-input {
-    width: 100%;
-    background: var(--weline-theme-surface-raised);
-}
-
-.<?= $wc ?> .newsletter-topics {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--weline-space-4);
-    font-size: var(--weline-font-size-sm);
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .newsletter-topic {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--weline-space-2);
-    cursor: pointer;
-}
-
-.<?= $wc ?> .newsletter-topic input[type="checkbox"] {
-    accent-color: var(--weline-theme-primary);
-    width: 1rem;
-    height: 1rem;
-    margin: 0;
-}
-
-.<?= $wc ?> .popup-cta {
-    display: flex;
-    justify-content: center;
-}
-
-.<?= $wc ?> .popup-submit {
-    inline-size: 100%;
-    width: 100%;
-    max-inline-size: none;
-}
-
-.<?= $wc ?> .popup-note {
-    font-size: var(--weline-font-size-xs);
-    color: var(--weline-theme-text-muted);
-    margin: 0;
-}
-
-.<?= $wc ?> .newsletter-success {
-    margin-top: var(--weline-space-2);
-    padding: var(--weline-space-3);
-    border-radius: var(--weline-radius-sm);
-    background: color-mix(in srgb, var(--weline-theme-surface-raised) 82%, transparent);
-    color: var(--weline-theme-text);
-    line-height: 1.4;
-}
-
-.<?= $wc ?>.editor-preview-mode,
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    position: relative !important;
-    display: block !important;
-    background: transparent !important;
-    height: auto;
-}
-
-.<?= $wc ?>.editor-preview-mode .popup-overlay,
-.widget-preview-canvas .<?= $wc ?> .popup-overlay,
-.<?= $wc ?>.is-preview .popup-overlay {
-    display: none !important;
-}
-
-.<?= $wc ?>.editor-preview-mode .popup-stage,
-.widget-preview-canvas .<?= $wc ?> .popup-stage,
-.<?= $wc ?>.is-preview .popup-stage {
-    position: relative !important;
-    top: auto !important;
-    left: auto !important;
-    transform: none !important;
-    opacity: 1 !important;
-    width: min(22rem, 100%) !important;
-    max-width: min(22rem, 100%) !important;
-    margin: 0 auto !important;
-}
-
-.<?= $wc ?>.editor-preview-mode .popup-close,
-.widget-preview-canvas .<?= $wc ?> .popup-close,
-.<?= $wc ?>.is-preview .popup-close {
-    display: none !important;
-}
-
-.<?= $wc ?>.editor-preview-mode .letter-shell__form,
-.widget-preview-canvas .<?= $wc ?> .letter-shell__form,
-.<?= $wc ?>.is-preview .letter-shell__form {
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
-}
-
-@media (max-width: 480px) {
-    .<?= $wc ?> .popup-stage {
-        width: min(20rem, 94vw);
-        max-width: min(20rem, 94vw);
-    }
-
-    .<?= $wc ?> .letter-shell__form {
-        left: 12%;
-        right: 12%;
-        top: 9%;
-        bottom: 28%;
-        padding-inline: var(--weline-space-1);
-    }
-
-    .<?= $wc ?> .popup-title {
-        font-size: var(--weline-font-size-md);
-    }
-}
-</style>

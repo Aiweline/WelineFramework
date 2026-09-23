@@ -28,14 +28,22 @@
 .w-store-music {
   position: fixed;
   left: max(0.85rem, env(safe-area-inset-left));
+  /* heading-lift：与货架 H2 等左对齐标题撞层时由脚本抬高，避免挡字 */
+  --w-store-music-heading-lift: 0px;
   bottom: calc(
     max(0.95rem, env(safe-area-inset-bottom, 0px))
     + var(--weline-product-sticky-purchase-clearance, 0px)
+    + var(--w-store-music-heading-lift, 0px)
   );
   z-index: var(--w-store-music-z-widget);
   font-family: var(--font-body, var(--weline-theme-font-body, system-ui, sans-serif));
   color: var(--w-store-music-ink);
   transition: bottom var(--weline-motion-normal, 0.2s) ease;
+}
+
+/* 避让抬升中关闭 transition，避免量测低估导致仍挡字 */
+.w-store-music.is-heading-clear {
+  transition: none;
 }
 
 .w-store-music__shell,

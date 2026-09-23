@@ -40,7 +40,7 @@ return [
             'required' => true,
             'reason' => '店面默认进店音乐浮层；恢复原始布局后 required 回填',
             'config' => [
-                'enabled' => true,
+                'enabled' => false,
                 'tracks' => $defaultTracks,
                 'delay_seconds' => 3,
                 'try_autoplay' => true,
@@ -52,10 +52,10 @@ return [
         ]],
         'params' => [
             'enabled' => [
-                'default' => true,
+                'default' => false,
                 'type' => 'bool',
                 'label' => '启用进店音乐',
-                'description' => '关闭后前台不再展示进店音乐浮层；需至少一首曲目才会显示。',
+                'description' => '关闭后前台不再展示进店音乐浮层；需至少一首曲目才会显示。默认关闭。',
                 'group' => 'basic',
                 'i18n' => false,
             ],

@@ -1,5 +1,12 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
+/**
+ * @widget.code {mini-cart-coupon}
+ * @widget.name {迷你购物车优惠券}
+ * @widget.type {content}
+ * @widget.source {Weline_Marketing::css/widgets/checkout-coupon.css,Weline_Marketing::css/widgets/mini-cart-coupon.css}
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
 $rawTitle = trim((string)($this->getData('title') ?? ''));
 $title = $rawTitle !== '' ? (string)__($rawTitle) : (string)__('优惠券');
 $compact = (bool)($this->getData('compact') ?? true);
@@ -48,6 +55,5 @@ $compact = (bool)($this->getData('compact') ?? true);
         <p class="w-marketing-checkout-coupon__message" data-marketing-coupon-message aria-live="polite"></p>
     </div>
 </div>
-<link rel="stylesheet" href="@static(Weline_Marketing::css/widgets/checkout-coupon.css)?v=20260908-coupon-type1">
-<link rel="stylesheet" href="@static(Weline_Marketing::css/widgets/mini-cart-coupon.css)?v=20260908-coupon-type1">
+<?php // CSS 经 @widget.source bake→head ?>
 <?php // checkoutCoupon：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

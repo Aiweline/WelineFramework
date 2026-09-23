@@ -56,9 +56,12 @@ final class NewsletterMailSender
         }
 
         try {
-            w_query('smtp', 'send', $params);
+            $result = w_query('smtp', 'send', $params);
+            if (\is_array($result)) {
+                return !empty($result['success']);
+            }
 
-            return true;
+            return (bool)$result;
         } catch (\Throwable) {
             return false;
         }

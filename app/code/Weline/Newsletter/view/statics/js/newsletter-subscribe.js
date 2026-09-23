@@ -188,23 +188,62 @@
             return;
         }
 
-        var trigger = root.getAttribute('data-trigger') || 'delay';
-        var delay = parseInt(root.getAttribute('data-delay') || '5000', 10);
-        var scrollPercent = parseInt(root.getAttribute('data-scroll') || '50', 10);
+        var trigger = root.getAttribute('data-trigger') || 'deferred';
+        var delay = parseInt(root.getAttribute('data-delay') || '15000', 10);
+        var scrollPercent = parseInt(root.getAttribute('data-scroll') || '40', 10);
+        var minOpenMs = parseInt(root.getAttribute('data-min-open') || '3000', 10);
         var showOnce = root.getAttribute('data-show-once') !== 'false';
         var cookieDays = parseInt(root.getAttribute('data-cookie-days') || '14', 10);
         if (!cookieDays || cookieDays < 1) {
             cookieDays = 14;
         }
+        if (!delay || delay < 0) {
+            delay = 15000;
+        }
+        if (!scrollPercent || scrollPercent < 1) {
+            scrollPercent = 40;
+        }
+        if (!minOpenMs || minOpenMs < 0) {
+            minOpenMs = 3000;
+        }
+        /* 旧站 delay<15s：升级为组合延后，禁止首访首屏立即弹 */
+        if (trigger === 'delay' && delay < 15000) {
+            trigger = 'deferred';
+            delay = 15000;
+            if (scrollPercent < 40) {
+                scrollPercent = 40;
+            }
+        }
         /* cookie 用稳定 widget-code，避免 data-uid 重建后 show_once 失效反复弹锁滚动 */
         var cookieKey = root.getAttribute('data-widget-code') || root.getAttribute('data-uid') || 'popup';
         var cookieName = 'weline-newsletter-popup-shown-' + cookieKey;
+        /* 验收/预览：?newsletter_popup=1 跳过 show_once cookie，并尽快弹出 */
+        var forcePreview = false;
+        try {
+            forcePreview = /(?:^|[?&])newsletter_popup=1(?:&|$)/.test(String(window.location.search || ''));
+        } catch (eForce) {
+            forcePreview = false;
+        }
+        if (forcePreview) {
+            showOnce = false;
+            try {
+                document.cookie = cookieName + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+            } catch (eClear) { /* ignore */ }
+        }
         var isOpen = false;
         var closeTimer = null;
+        var fired = false;
+        var pageReadyAt = Date.now();
+        var pendingOpenTimer = null;
 
         function showPopup() {
-            if (isOpen) {
+            if (isOpen || fired) {
                 return;
+            }
+            fired = true;
+            if (pendingOpenTimer) {
+                window.clearTimeout(pendingOpenTimer);
+                pendingOpenTimer = null;
             }
             if (closeTimer) {
                 window.clearTimeout(closeTimer);
@@ -226,6 +265,24 @@
             if (showOnce) {
                 setCookie(cookieName, '1', cookieDays);
             }
+        }
+
+        /* 首屏硬门槛：任意触发源在 minOpenMs 内不得弹（验收：首访 3s 内不弹） */
+        function requestShow() {
+            if (fired || isOpen) {
+                return;
+            }
+            var elapsed = Date.now() - pageReadyAt;
+            if (elapsed < minOpenMs) {
+                if (!pendingOpenTimer) {
+                    pendingOpenTimer = window.setTimeout(function () {
+                        pendingOpenTimer = null;
+                        showPopup();
+                    }, minOpenMs - elapsed);
+                }
+                return;
+            }
+            showPopup();
         }
 
         function hidePopup() {
@@ -260,31 +317,56 @@
             forceClosePopup(root);
         }
 
-        if (trigger === 'delay') {
-            setTimeout(showPopup, delay);
-        } else if (trigger === 'scroll') {
-            var triggered = false;
+        function bindScrollTrigger() {
             window.addEventListener('scroll', function () {
-                if (triggered) {
+                if (fired) {
                     return;
                 }
                 var scrolled = (window.scrollY / Math.max(1, document.body.scrollHeight - window.innerHeight)) * 100;
                 if (scrolled >= scrollPercent) {
-                    triggered = true;
-                    showPopup();
+                    requestShow();
                 }
             }, {passive: true});
-        } else if (trigger === 'exit' || trigger === 'exit-intent') {
-            var exitTriggered = false;
+        }
+
+        function bindExitTrigger() {
             document.addEventListener('mouseout', function (e) {
-                if (exitTriggered) {
+                if (fired) {
                     return;
                 }
                 if (e.clientY <= 0) {
-                    exitTriggered = true;
-                    showPopup();
+                    requestShow();
                 }
             });
+        }
+
+        function bindDelayTrigger() {
+            window.setTimeout(requestShow, delay);
+        }
+
+        var isDeferred = trigger === 'deferred'
+            || trigger === 'combined'
+            || trigger === 'smart';
+
+        if (forcePreview) {
+            /* 强制预览：仅等待最早弹出门槛后打开，便于验收看信笺 */
+            window.setTimeout(requestShow, Math.min(minOpenMs, 1200));
+        } else if (isDeferred) {
+            /* 滚动约 40% / 停留约 15s / 退出意向 — OR 组合 */
+            bindDelayTrigger();
+            bindScrollTrigger();
+            bindExitTrigger();
+        } else if (trigger === 'delay') {
+            bindDelayTrigger();
+        } else if (trigger === 'scroll') {
+            bindScrollTrigger();
+        } else if (trigger === 'exit' || trigger === 'exit-intent') {
+            bindExitTrigger();
+        } else {
+            /* 未知触发：回退组合延后 */
+            bindDelayTrigger();
+            bindScrollTrigger();
+            bindExitTrigger();
         }
 
         var closeBtn = root.querySelector('.popup-close');
