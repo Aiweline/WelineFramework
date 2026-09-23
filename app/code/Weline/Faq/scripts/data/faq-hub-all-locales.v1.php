@@ -34,7 +34,7 @@ return array (
     4 => 
     array (
       'q' => 'كيف أطلب إرجاعًا أو استبدالًا؟',
-      'a' => 'اقرأ سياسة الإرجاع للمدد وقواعد الفئات، ثم قدّم ما بعد البيع من طلباتي مع الأدلة. مسؤولية الشحن تختلف بين عيوب الجودة وتغيير الرأي.',
+      'a' => 'عند مشاكل الجودة أو إرسال خاطئ/ناقص أو تلف الشحن يمكن طلب المساعدة مع الطلب وأدلة واضحة. بعد الشحن يصعب عادة الإرجاع لأسباب شخصية. بخلاف بعض المنصات، يركز دعمنا على الجودة ودقة الشحن. راجع سياسة الإرجاع.',
     ),
     5 => 
     array (
@@ -120,7 +120,7 @@ return array (
     4 => 
     array (
       'q' => 'কীভাবে রিটার্ন বা এক্সচেঞ্জ অনুরোধ করব?',
-      'a' => 'রিটার্ন পলিসির সময়সীমা ও ক্যাটাগরি নিয়ম পড়ুন, তারপর আমার অর্ডার থেকে প্রমাণসহ আফটার-সেলস জমা দিন। মানগতুটি ও মতপরিবর্তনে শিপিং দায় ভিন্ন।',
+      'a' => 'মান, ভুল/অসম্পূর্ণ পাঠান বা শিপিং ক্ষতিতে অর্ডার ও স্পষ্ট প্রমাণসহ সহায়তা চান। পাঠানোর পর ব্যক্তিগত রিটার্ন সাধারণত কঠিন। কিছু প্ল্যাটফর্মের চেয়ে ফোকাস মান ও শিপিং নির্ভুলতা। রিটার্ন নীতি দেখুন।',
     ),
     5 => 
     array (
@@ -378,7 +378,7 @@ return array (
     4 => 
     array (
       'q' => 'How do I request a return or exchange?',
-      'a' => 'Read the Returns Policy for windows and category rules, then submit after-sales from My Orders with supporting evidence. Shipping responsibility differs for quality issues vs change-of-mind.',
+      'a' => 'If you encounter quality issues, wrong/missing items, or shipping damage, you may request help with your order details and clear evidence. After dispatch, returns for personal reasons are usually difficult to arrange. Unlike no-reason returns on some platforms, our after-sales focus is product quality and shipping accuracy. See the Returns Policy.',
     ),
     5 => 
     array (
@@ -421,7 +421,7 @@ return array (
     4 => 
     array (
       'q' => 'How do I request a return or exchange?',
-      'a' => 'Read the Returns Policy for windows and category rules, then submit after-sales from My Orders with supporting evidence. Shipping responsibility differs for quality issues vs change-of-mind.',
+      'a' => 'If you encounter quality issues, wrong/missing items, or shipping damage, you may request help with your order details and clear evidence. After dispatch, returns for personal reasons are usually difficult to arrange. Unlike no-reason returns on some platforms, our after-sales focus is product quality and shipping accuracy. See the Returns Policy.',
     ),
     5 => 
     array (
@@ -464,7 +464,7 @@ return array (
     4 => 
     array (
       'q' => '¿Cómo solicito una devolución o cambio?',
-      'a' => 'Lee la Política de devoluciones (plazos y categorías), luego envía posventa desde Mis pedidos con pruebas. La responsabilidad del envío cambia entre defectos y cambio de opinión.',
+      'a' => 'Si hay problemas de calidad, envío incorrecto/faltante o daño de transporte, puede pedir ayuda con el pedido y pruebas claras. Tras el envío, las devoluciones personales suelen ser difíciles. A diferencia de algunas plataformas, nuestro foco es calidad y exactitud del envío. Ver Política de devoluciones.',
     ),
     5 => 
     array (
@@ -507,7 +507,7 @@ return array (
     4 => 
     array (
       'q' => '¿Cómo solicito una devolución o cambio?',
-      'a' => 'Lee la Política de devoluciones (plazos y categorías), luego envía posventa desde Mis pedidos con pruebas. La responsabilidad del envío cambia entre defectos y cambio de opinión.',
+      'a' => 'Si hay problemas de calidad, envío incorrecto/faltante o daño de transporte, puede pedir ayuda con el pedido y pruebas claras. Tras el envío, las devoluciones personales suelen ser difíciles. A diferencia de algunas plataformas, nuestro foco es calidad y exactitud del envío. Ver Política de devoluciones.',
     ),
     5 => 
     array (
@@ -636,7 +636,7 @@ return array (
     4 => 
     array (
       'q' => 'Comment demander un retour ou un échange ?',
-      'a' => 'Lisez la Politique de retours (délais et catégories), puis soumettez l’après-vente depuis Mes commandes avec preuves. La responsabilité d’expédition diffère selon défaut ou changement d’avis.',
+      'a' => 'En cas de problème de qualité, d’envoi erroné/manquant ou de dommage de transport, demandez de l’aide avec la commande et des preuves claires. Après expédition, un retour pour motif personnel est généralement difficile. Contrairement aux retours sans motif de certaines plateformes, notre SAV se concentre sur la qualité et l’exactitude d’envoi. Voir la Politique de retours.',
     ),
     5 => 
     array (
@@ -679,7 +679,7 @@ return array (
     4 => 
     array (
       'q' => 'Comment demander un retour ou un échange ?',
-      'a' => 'Lisez la Politique de retours (délais et catégories), puis soumettez l’après-vente depuis Mes commandes avec preuves. La responsabilité d’expédition diffère selon défaut ou changement d’avis.',
+      'a' => 'En cas de problème de qualité, d’envoi erroné/manquant ou de dommage de transport, demandez de l’aide avec la commande et des preuves claires. Après expédition, un retour pour motif personnel est généralement difficile. Contrairement aux retours sans motif de certaines plateformes, notre SAV se concentre sur la qualité et l’exactitude d’envoi. Voir la Politique de retours.',
     ),
     5 => 
     array (
@@ -765,7 +765,7 @@ return array (
     4 => 
     array (
       'q' => 'रिटर्न या एक्सचेंज कैसे अनुरोध करूँ?',
-      'a' => 'रिटर्न नीति में अवधि और श्रेणी नियम पढ़ें, फिर मेरे ऑर्डर से साक्ष्य सहित आफ्टर-सेल्स जमा करें। गुणवत्ता दोष और मन-परिवर्तन में शिपिंग जिम्मेदारी अलग होती है।',
+      'a' => 'गुणवत्ता, गलत/अधूरी डिलीवरी या शिपिंग क्षति पर ऑर्डर व स्पष्ट प्रमाण के साथ सहायता माँगें। भेजने के बाद व्यक्तिगत रिटर्न आमतौर पर कठिन। कुछ प्लेटफ़ॉर्म से अलग फोकस गुणवत्ता व शिपिंग सटीकता। रिटर्न नीति देखें।',
     ),
     5 => 
     array (
@@ -894,7 +894,7 @@ return array (
     4 => 
     array (
       'q' => 'Bagaimana meminta retur atau penukaran?',
-      'a' => 'Baca Kebijakan Retur untuk jendela dan aturan kategori, lalu kirim after-sales dari Pesanan Saya beserta bukti. Tanggung jawab ongkir berbeda untuk cacat kualitas vs berubah pikiran.',
+      'a' => 'Jika ada masalah kualitas, kiriman salah/kurang, atau kerusakan pengiriman, ajukan bantuan dengan pesanan dan bukti jelas. Setelah dikirim, retur pribadi biasanya sulit. Berbeda dari beberapa platform, fokus kami kualitas dan ketepatan pengiriman. Lihat Kebijakan Retur.',
     ),
     5 => 
     array (
@@ -1281,7 +1281,7 @@ return array (
     4 => 
     array (
       'q' => 'Como solicitar devolução ou troca?',
-      'a' => 'Leia a Política de devoluções (prazos e categorias), depois envie pós-venda em Meus pedidos com evidências. A responsabilidade do frete muda entre defeito e desistência.',
+      'a' => 'Se houver problemas de qualidade, envio errado/faltante ou dano de transporte, peça ajuda com o pedido e provas claras. Após o envio, devoluções pessoais costumam ser difíceis. Diferente de algumas plataformas, nosso foco é qualidade e precisão do envio. Ver Política de devoluções.',
     ),
     5 => 
     array (
@@ -1324,7 +1324,7 @@ return array (
     4 => 
     array (
       'q' => 'Como solicitar devolução ou troca?',
-      'a' => 'Leia a Política de devoluções (prazos e categorias), depois envie pós-venda em As minhas encomendas com evidências. A responsabilidade do portes muda entre defeito e desistência.',
+      'a' => 'Se houver problemas de qualidade, envio errado/faltante ou dano de transporte, peça ajuda com o pedido e provas claras. Após o envio, devoluções pessoais costumam ser difíceis. Diferente de algumas plataformas, nosso foco é qualidade e precisão do envio. Ver Política de devoluções.',
     ),
     5 => 
     array (
@@ -1668,7 +1668,7 @@ return array (
     4 => 
     array (
       'q' => 'واپسی یا تبادلے کی درخواست کیسے کروں؟',
-      'a' => 'واپسی پالیسی میں مدت اور زمرہ قواعد پڑھیں، پھر میرے آرڈرز سے ثبوت سمیت بعد از فروخت جمع کروائیں۔ معیار کی خرابی اور رائے تبدیلی میں شپنگ ذمہ داری مختلف ہے۔',
+      'a' => 'معیار، غلط/نامکمل ترسیل یا شپنگ نقصان پر آرڈر اور واضح ثبوت کے ساتھ مدد مانگیں۔ بھیجنے کے بعد ذاتی واپسی عموماً مشکل۔ کچھ پلیٹ فارمز سے مختلف فوکس معیار و شپنگ درستگی۔ واپسی پالیسی دیکھیں۔',
     ),
     5 => 
     array (
@@ -1711,7 +1711,7 @@ return array (
     4 => 
     array (
       'q' => '如何申请退换货？',
-      'a' => '请先阅读「退换政策」确认期限与品类要求，再在「我的订单」提交售后并上传凭证。质量问题与个人原因的运费承担规则不同，详见政策页。',
+      'a' => '若遇到质量问题、错发漏发或运输损坏，可凭订单与清晰凭证申请协助。发出后因个人原因申请退换通常难以安排。与部分平台的无理由退货不同，我们的售后重心是质量与发货准确性。详见「退换政策」。',
     ),
     5 => 
     array (
