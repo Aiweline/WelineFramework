@@ -19,6 +19,11 @@
 # Theme preview screenshots (ThemePreviewGenerator) — runtime cache, never commit
 /pub/theme_previews/**
 
+# Agent/browser QA screenshot dumps under team channel dirs — local only, never commit
+**/doc/**/channel/**/*-qa-shots/
+**/doc/**/channel/**/qa-shots/
+**/sitewide-click-qa-shots/
+
 # Accidental cwd-relative writes when HOME was polluted to a site URL
 /http:
 /https:
