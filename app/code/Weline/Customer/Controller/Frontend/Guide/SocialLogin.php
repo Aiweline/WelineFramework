@@ -40,7 +40,7 @@ final class SocialLogin extends FrontendController
         $this->assign('social_login_guide_page_type', 'hub');
         $this->assign('showSidebar', true);
 
-        return (string) $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/index.phtml');
+        return (string) $this->fetch('Weline_Customer::templates/frontend/guide/social-login/index.phtml');
     }
 
     public function view(): string

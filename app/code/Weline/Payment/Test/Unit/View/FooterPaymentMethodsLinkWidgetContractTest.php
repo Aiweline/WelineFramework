@@ -17,7 +17,7 @@ final class FooterPaymentMethodsLinkWidgetContractTest extends TestCase
         $widget = $widgets['footer-payment-methods-link'];
         self::assertSame('footer-payment-account-links', $widget['slot'] ?? null);
         self::assertSame(
-            'Weline_Payment::templates/frontend/widgets/footer-payment-methods-link.phtml',
+            'Weline_Payment::templates/Frontend/widgets/footer-payment-methods-link.phtml',
             $widget['template'] ?? null
         );
         $injection = $widget['default_injections'][0] ?? [];
