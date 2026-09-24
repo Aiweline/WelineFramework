@@ -71,22 +71,20 @@ final class HeaderCommerceData
         $label = $label !== '' ? $label : '全部商品';
         $url = $url !== '' && $url !== '#' ? $url : '/products';
 
+        // Request memo only. Nav items carry absolute URLs from
+        // StorefrontAllMenuCategoryTreeService::materializeUrls(); a shared
+        // HotCache bag keyed without origin would leak warmup Host
+        // (e.g. 127.0.0.1:9510) into public Nginx responses. The category
+        // tree service already shares origin-free relative routes.
         $requestKey = ($include ? 'all1' : 'all0')
             . '|' . $label
-            . '|' . $url;
-        $sharedKey = 'theme.header.category_nav.v1.'
-            . self::storefrontLocaleSegment()
-            . '.'
-            . ($include ? 'all1' : 'all0')
-            . '.'
-            . \substr(\sha1($label . '|' . $url), 0, 12);
+            . '|' . $url
+            . '|' . self::requestOriginSegment();
 
         $resolved = self::rememberRequestMemo(
             'theme.header.category_nav',
             $requestKey,
             static fn(): array => self::resolveCategoryNavItemsUncached($include, $label, $url),
-            StorefrontThemeCacheCoordinator::headerNavigationPolicy(),
-            $sharedKey,
         );
 
         return \is_array($resolved) ? $resolved : [
@@ -94,6 +92,62 @@ final class HeaderCommerceData
             'source' => 'error',
             'is_demo' => false,
         ];
+    }
+
+    /**
+     * Browser-visible origin for request-local memos that embed absolute hrefs.
+     * Prefer website_url host; fall back to HTTP_HOST + scheme.
+     */
+    private static function requestOriginSegment(): string
+    {
+        $websiteUrl = '';
+        try {
+            $websiteUrl = \trim((string)\Weline\Framework\Env\WelineEnv::get('website_url', ''));
+        } catch (\Throwable) {
+            $websiteUrl = '';
+        }
+        if ($websiteUrl === '') {
+            try {
+                $websiteUrl = \trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_URL', ''));
+            } catch (\Throwable) {
+                $websiteUrl = '';
+            }
+        }
+        if ($websiteUrl !== '' && \str_contains($websiteUrl, '://')) {
+            $parts = \parse_url($websiteUrl);
+            if (\is_array($parts)) {
+                $scheme = \strtolower(\trim((string)($parts['scheme'] ?? '')));
+                $host = \strtolower(\trim((string)($parts['host'] ?? '')));
+                $port = isset($parts['port']) ? (int)$parts['port'] : 0;
+                if ($scheme !== '' && $host !== '') {
+                    $default = ($scheme === 'https') ? 443 : 80;
+                    $authority = $host . ($port > 0 && $port !== $default ? ':' . $port : '');
+
+                    return $scheme . ':' . $authority;
+                }
+            }
+        }
+
+        $scheme = 'http';
+        try {
+            $scheme = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::get('request.scheme', 'http'))) ?: 'http';
+        } catch (\Throwable) {
+            $scheme = 'http';
+        }
+        $host = '';
+        try {
+            $host = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::get('server.http_host', '')));
+        } catch (\Throwable) {
+            $host = '';
+        }
+        if ($host === '') {
+            $host = \strtolower(\trim((string)(
+                \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '')
+                ?: ($_SERVER['HTTP_HOST'] ?? '')
+            )));
+        }
+
+        return ($scheme !== '' ? $scheme : 'http') . ':' . ($host !== '' ? $host : 'unknown');
     }
 
     /**
@@ -150,22 +204,6 @@ final class HeaderCommerceData
                 'is_demo' => false,
             ];
         }
-    }
-
-    private static function storefrontLocaleSegment(): string
-    {
-        try {
-            $locale = \trim(\str_replace('-', '_', (string)\Weline\Framework\App\State::getLangLocal()));
-        } catch (\Throwable) {
-            $locale = '';
-        }
-        $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-        $pathLocale = WidgetI18n::localeFromRequestUri($requestUri);
-        if ($pathLocale !== null) {
-            $locale = $pathLocale;
-        }
-
-        return $locale !== '' ? $locale : 'zh_Hans_CN';
     }
 
     /**
@@ -551,7 +589,10 @@ final class HeaderCommerceData
                     // The header is a storefront surface. Restrict provider
                     // discovery to frontend types so backend-only providers do
                     // not build their scopes during every cold page render.
-                    $types = $registry->listTypes(area: 'frontend');
+                    // Keep withScopes=true: type-dropdown flies out category
+                    // children (禁拆壳). Scope projection must reuse catalog
+                    // tree read model (ProductSearchCategoryScopeService).
+                    $types = $registry->listTypes(true, 'frontend');
                     if ($types !== []) {
                         return $types;
                     }
@@ -568,7 +609,8 @@ final class HeaderCommerceData
                 ];
             },
             StorefrontThemeCacheCoordinator::headerSearchTypesPolicy(),
-            'theme.header.search_types.v1',
+            // v2: scoped frontend types (category children) restored after flat v1.
+            'theme.header.search_types.v2',
         );
     }
 
