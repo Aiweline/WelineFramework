@@ -23,9 +23,10 @@ use Weline\Widget\Service\WidgetRuntimeTemplateRenderer;
 
 /**
  * w:widget 标签实现
- * 
- * 用于在模板中渲染部件
- * 
+ *
+ * 编译期只产出 slot↔widget 关系壳（{@see renderRuntimeInline}），
+ * 店面执行模板时再 hydrate HTML；禁止把渲染结果烘焙进 com_*.phtml。
+ *
  * 使用示例：
  * <w:widget type="header" name="default" />
  * <w:widget type="header" name="default" params='{"title":"我的网站"}' />
@@ -149,14 +150,6 @@ class Widget implements TaglibInterface
                     return "<!-- Widget 错误: 未找到部件 {$type}/{$name} -->";
                 }
 
-                // 合并默认参数
-                $widgetParams = $widget['params'] ?? [];
-                foreach ($widgetParams as $paramName => $paramConfig) {
-                    if (!isset($params[$paramName])) {
-                        $params[$paramName] = $paramConfig['default'] ?? null;
-                    }
-                }
-
                 foreach (['layout-source' => '_layout_source', 'source' => '_source'] as $attribute => $key) {
                     if (isset($attributes[$attribute])) { $params[$key] = (string)$attributes[$attribute]; }
                 }
@@ -164,22 +157,29 @@ class Widget implements TaglibInterface
                     $params['_source_position'] = (string)($attributes['source-postion'] ?? $attributes['source-position']);
                 }
 
-                // 渲染部件
-                $html = self::renderWidget($widget, $params, $blockClass, $template);
-                $assetRenderer = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer::class);
-                $html = $assetRenderer->wrap($html, $assetRenderer->render($widget, $params, (string)$template));
-
-                // 如果有 ID，包裹容器（用于编辑模式）
-                if (!empty($widgetId)) {
-                    $html = self::wrapWidgetContainer($html, $widgetId, $type, $name, $params);
-                }
-
                 $module = $moduleAttr !== '' ? $moduleAttr : (string)($widget['module'] ?? '');
                 if ($templateRef === '') {
                     $templateRef = self::buildTemplateRef($type, $code !== '' ? $code : $name, $module, $params);
                 }
 
-                return self::wrapTemplateInlineWidget($html, $templateRef, $type, $code !== '' ? $code : $name, $module, $params);
+                // 固化/Taglib 编译只写入 slot↔widget 关系壳，禁止把某次请求的渲染 HTML
+                // 烘焙进 view/tpl com_*.phtml。HTML 一律在店面执行模板时 hydrate。
+                // 规格只携带标签显式参数；注册表默认值在运行时再合并。
+                $spec = [
+                    'type' => $type,
+                    'name' => $name,
+                    'code' => $code !== '' ? $code : $name,
+                    'module' => $module,
+                    'params' => $params,
+                    'template_ref' => $templateRef,
+                    'block_class' => (string)$blockClass,
+                    'template' => (string)$template,
+                    'widget_id' => (string)$widgetId,
+                ];
+
+                return '<?= \\Weline\\Widget\\Taglib\\Widget::renderRuntimeInline('
+                    . var_export($spec, true)
+                    . ') ?>';
             } catch (\Throwable $e) {
                 w_log_error("Widget 标签渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
                 return "<!-- Widget 错误: " . htmlspecialchars($e->getMessage()) . " -->";
@@ -292,7 +292,85 @@ class Widget implements TaglibInterface
             && !str_contains($html, 'data-w-challenge-token')
             && !str_contains($html, 'name="redirect_url"')
             && !str_contains($html, 'data-social-quick')
-            && !str_contains($html, 'data-w-auth-return');
+            && !str_contains($html, 'data-w-auth-return')
+            && !str_contains($html, 'data-product-id=')
+            && !str_contains($html, 'product-native-detail');
+    }
+
+    /**
+     * Taglib 编译期唯一产物：运行时关系壳。布局固化 / view/tpl 只记录 slot↔widget
+     * 身份与显式参数，不得烘焙任何请求态 HTML。
+     *
+     * @param array{
+     *   type?:string,
+     *   name?:string,
+     *   code?:string,
+     *   module?:string,
+     *   params?:array<string,mixed>,
+     *   template_ref?:string,
+     *   block_class?:string,
+     *   template?:string,
+     *   widget_id?:string
+     * } $spec
+     */
+    public static function renderRuntimeInline(array $spec): string
+    {
+        $type = trim((string)($spec['type'] ?? ''));
+        $name = trim((string)($spec['name'] ?? ''));
+        $code = trim((string)($spec['code'] ?? $name));
+        if ($type === '' || $name === '') {
+            return '<!-- Widget 错误: runtime inline 缺少 type/name -->';
+        }
+
+        try {
+            /** @var WidgetData $widgetData */
+            $widgetData = ObjectManager::getInstance(WidgetData::class);
+            $widget = $widgetData->getWidget($type, $name);
+            if (!$widget) {
+                return '<!-- Widget 错误: 未找到部件 ' . htmlspecialchars($type . '/' . $name, ENT_QUOTES, 'UTF-8') . ' -->';
+            }
+
+            $params = is_array($spec['params'] ?? null) ? $spec['params'] : [];
+            $widgetParams = $widget['params'] ?? [];
+            foreach ($widgetParams as $paramName => $paramConfig) {
+                if (!isset($params[$paramName])) {
+                    $params[$paramName] = is_array($paramConfig) ? ($paramConfig['default'] ?? null) : null;
+                }
+            }
+
+            $blockClass = (string)($spec['block_class'] ?? '');
+            $template = (string)($spec['template'] ?? '');
+            $html = self::renderWidget($widget, $params, $blockClass, $template);
+            $assetRenderer = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer::class);
+            $html = $assetRenderer->wrap($html, $assetRenderer->render($widget, $params, $template));
+
+            $widgetId = trim((string)($spec['widget_id'] ?? ''));
+            if ($widgetId !== '') {
+                $html = self::wrapWidgetContainer($html, $widgetId, $type, $name, $params);
+            }
+
+            $module = trim((string)($spec['module'] ?? ($widget['module'] ?? '')));
+            $templateRef = trim((string)($spec['template_ref'] ?? ''));
+            if ($templateRef === '') {
+                $templateRef = self::buildTemplateRef($type, $code !== '' ? $code : $name, $module, $params);
+            }
+
+            return self::wrapTemplateInlineWidget($html, $templateRef, $type, $code !== '' ? $code : $name, $module, $params);
+        } catch (\Throwable $e) {
+            w_log_error('Widget runtime inline 渲染错误: ' . $e->getMessage(), [], 'WidgetTaglib');
+
+            return '<!-- Widget 错误: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . ' -->';
+        }
+    }
+
+    /**
+     * @deprecated Use {@see renderRuntimeInline()}; kept as a thin alias for already-compiled templates.
+     *
+     * @param array<string, mixed> $spec
+     */
+    public static function renderDeferredInline(array $spec): string
+    {
+        return self::renderRuntimeInline($spec);
     }
 
     /**
