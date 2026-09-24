@@ -378,7 +378,7 @@ final class GuidanceWorkflowCatalog
                 ], 'notes' => [
                     'MANDATORY (engineering_team_for_new_requirements): parent itself picks the mode. Simple → 监工, user-facing lines start with 监工:. Complex → parent chooses team mode and seats; parent utters ONLY Team:项目经理:; ONE_SEAT_ONE_AGENT—each seat is a real host subagent (forbid parent roleplay); PEER_TALK_VIA_CHANNEL—seats talk via channel/{thread}.md + resume peers (forbid forged multi-seat dialogue); relay Team:架构师: only from real subagent reports. Content-ops exempt.',
                     'Parent is 项目经理: SESSION bookkeeper + plan-lifecycle owner + switchboard (DoD check; NOT code-review substitute). Framework first + dual_track_all: each triggered specialty seat has 施工 + 合规复审 (事件/扩展点/Taglib/UI/i18n…). Fail → rework before acceptance.',
-                    'SESSION (requirement_session_dashboard + pm_plan_lifecycle): create doc/开发/session/{slug}.md (template requirement-session.md) at kickoff; ONLY PM edits; seat deliveries require notify_pm→PM DoD check→update SESSION; deps-satisfied seats may parallel; findings open plan_ids until test+PM recheck; gaps non-empty forbid claiming done.',
+                    'SESSION (requirement_session_dashboard + pm_plan_lifecycle): create dev/session/{slug}.md (template requirement-session.md) at kickoff—FORBID module doc/session (module_doc_forbids_ephemeral_work_artifacts); ONLY PM edits; seat deliveries require notify_pm→PM DoD check→update SESSION; deps-satisfied seats may parallel; findings open plan_ids until test+PM recheck; gaps non-empty forbid claiming done.',
                     'FLOW (team_flow_on_contracts): after 立项会, 对齐冻结会 (测试主持) freezes executable UC + contracts.md + deps.md before tech finalization/build. Wake-on-deps concurrency. Forbid designing main-path use cases after development. Acceptance EXECUTES frozen UC only.',
                     'UI in_scope HARD ORDER (ui_prototype_gate_before_test): staff 原型+前端+主题+UI; components.md; insufficient → 原型∥UI real peer talk → component-negotiate.md. After specialty review: UI+原型 review development (acceptance-ui/acceptance-prototype) with reject→PM resume development subagent; BOTH pass BEFORE Tester e2e/WB execution; Tester pass → PM 汇审 → only then user report—e2e green does not waive.',
                     'Parallel subagents only when files/extension points do not overlap and contracts+UC are frozen; start only seats whose deps are satisfied.',
@@ -386,7 +386,7 @@ final class GuidanceWorkflowCatalog
                     'FINDINGS WAKE PM (findings_wake_pm): specialty seats that FIND problems MUST immediately escalate to 项目经理 (@项目经理：请立刻组队解决 + notify_pm)—NO Issue task list. 项目经理 MUST same-turn open channel, resume/staff seats, open SESSION plan_id, meet and resolve. FORBID backlog lists or user-only essays without escalate.',
                     'ISSUER OWNS ACCEPTANCE (requirement_issuer_owns_acceptance): after escalate/dev_ask issuer MUST stay waiting_acceptance (FORBID hands-off closed); PM MUST resume issuer on progress milestones with progress report + @发起席：请验收进度; issuer MUST Read SESSION/PM report and write issuer_acceptance; FORBID 汇审 without issuer_acceptance=pass.',
                     'ISSUER OWNS ACCEPTANCE (requirement_issuer_owns_acceptance): after escalate/dev_ask issuer MUST stay waiting_acceptance (FORBID hands-off closed); PM MUST resume issuer on progress milestones with progress report + @发起席：请验收进度; issuer MUST Read SESSION/PM report and write issuer_acceptance; FORBID 汇审 without issuer_acceptance=pass.',
-                    'Minutes: owning-module doc/开发/session/{slug}.md + doc/开发/team/{slug}/ (roster.md, channel/, surfaces.md, components.md, contracts.md, deps.md, align-freeze, {seat}-review). Subagent closed is not delivery. get_skill(engineering_team|weline-engineering-team).',
+                    'Minutes: repository-root dev/session/{slug}.md + dev/team/{slug}/ (roster.md, channel/, surfaces.md, components.md, contracts.md, deps.md, align-freeze, {seat}-review). FORBID writing these under module doc/. Subagent closed is not delivery. get_skill(engineering_team|weline-engineering-team).',
                     'SEAT_SKILL_MIRRORS (hard): every staffed seat gets base skeleton + engineering_team_bundle.seat_skill_mirrors.{seat} increment; seat MUST get_skill/Read its mcp_skill_ids and authoritative_docs (e.g. 前端→frontend_development+Taglib; 事件→event_extension; 后端→module guide+upgrade gate) before coding—forbid generic-skeleton-only.',
                 ]],
                 ['id' => 'extension_point', 'label' => '扩展点选型', 'docs' => [
@@ -1328,11 +1328,12 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'escalate_then_meet', 'summary' => '跨轨或硬规则问题 result=escalate，专题会经通道互聊表态同意/异议/否决'],
                 ['id' => 'findings_wake_pm', 'summary' => '发现问题立刻 escalate 拉起项目经理当场组队解决并落 SESSION 计划项；不用 Issue 任务列表积压'],
                 ['id' => 'requirement_issuer_owns_acceptance', 'summary' => '发起方 escalate 后须 waiting_acceptance 盯验收；读 PM 进度写 issuer_acceptance；禁甩手；缺签收禁汇审'],
-                ['id' => 'requirement_session_dashboard', 'summary' => '立项建 doc/开发/session/{slug}.md 总控；仅 PM 维护；无 SESSION 禁施工；未完成清单非空禁宣称完成'],
+                ['id' => 'requirement_session_dashboard', 'summary' => '立项建 dev/session/{slug}.md 总控（禁入模块 doc/）；仅 PM 维护；无 SESSION 禁施工；未完成清单非空禁宣称完成'],
                 ['id' => 'pm_plan_lifecycle', 'summary' => 'PM 计划生命周期：审缺口→派人→监控→notify_pm DoD 检查→测后复检→关计划项；deps 可并行；返工记 SESSION 循环'],
                 ['id' => 'seat_closed_reports_related_web_urls', 'summary' => '席位 result=closed 回报必须填 related_web_urls；PM 汇审后向用户汇报须写「交付地址」汇总各席+测试探活地址（见 feature_delivery_urls / closeout_delivery_reminder）；纯逻辑写 N/A'],
                 ['id' => 'stop_on_architecture_conflict', 'summary' => '无人能拍板或重大架构矛盾：停工汇报，确认前禁止 PHP/phtml/CSS'],
-                ['id' => 'persist_team_minutes', 'summary' => '总控落盘 session/{slug}.md；明细落盘 team/{slug}/（含 roster+channel）；子智能体 closed 不是交付'],
+                ['id' => 'persist_team_minutes', 'summary' => '总控落盘 dev/session/{slug}.md；明细落盘 dev/team/{slug}/（含 roster+channel）；禁止写入模块 doc/；子智能体 closed 不是交付'],
+                ['id' => 'module_doc_forbids_ephemeral_work_artifacts', 'summary' => '一次性/临时工作资料禁入模块 doc/；SESSION/team/scratch 写仓库根 dev/'],
             ],
             'verification_commands' => [
                 'test -f dev/ai-command/ai/工程团队.md',
@@ -1422,7 +1423,7 @@ final class GuidanceWorkflowCatalog
                     'On findings or finalized「要开发什么」from 电商顾问/性能检查/提示词优化/安全: escalate immediately with @项目经理：请立刻组队解决; PM same-turn staffs seats (findings_wake_pm)',
                     'After escalate: issuer stays waiting_acceptance; PM resumes issuer on milestones; issuer writes issuer_acceptance; FORBID 汇审 without pass (requirement_issuer_owns_acceptance)',
                     'Seat closed reports include related_web_urls; after PM 汇审 user completion report includes 交付地址 summarizing seat related_web_urls + tester probed URLs (feature_delivery_urls)',
-                    'On major architecture contradiction: write doc/开发/team/{slug}/stop-work.md and wait',
+                    'On major architecture contradiction: write dev/team/{slug}/stop-work.md and wait',
                 ],
             ],
         ];

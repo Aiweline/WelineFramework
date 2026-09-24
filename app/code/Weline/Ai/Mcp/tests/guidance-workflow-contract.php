@@ -728,7 +728,7 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), '停工')
             && str_contains((string) ($rule['summary'] ?? ''), 'simple')
             && str_contains((string) ($rule['summary'] ?? ''), '产品优化')
-            && str_contains((string) ($rule['summary'] ?? ''), 'doc/开发/team/')
+            && str_contains((string) ($rule['summary'] ?? ''), 'dev/team/')
             && str_contains((string) ($rule['summary'] ?? ''), 'Team:架构师:')
             && str_contains((string) ($rule['summary'] ?? ''), 'Team:项目经理:')
             && str_contains((string) ($rule['summary'] ?? ''), 'ONE_SEAT_ONE_AGENT')
@@ -740,7 +740,8 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'FRAMEWORK FIRST')
             && str_contains((string) ($rule['summary'] ?? ''), '扩展点')
             && str_contains((string) ($rule['summary'] ?? ''), 'component-negotiate.md')
-            && str_contains((string) ($rule['summary'] ?? ''), 'SEAT_SKILL_MIRRORS')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'SEAT_SKILL_MIRRORS')
+            && str_contains((string) ($rule['summary'] ?? ''), 'module_doc_forbids_ephemeral_work_artifacts')),
         false,
     ),
     'hard_constraints include findings_wake_pm' => array_reduce(

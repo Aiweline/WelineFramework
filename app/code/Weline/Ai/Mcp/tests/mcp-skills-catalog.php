@@ -150,7 +150,10 @@ skillCheck(in_array('requirement_issuer_owns_acceptance', is_array($teamBundle['
 skillCheck(($teamBundle['peer_talk']['result_waiting_acceptance'] ?? '') === 'waiting_acceptance', 'engineering team peer_talk waiting_acceptance');
 skillCheck(in_array('requirement_session_dashboard', is_array($teamBundle['principles'] ?? null) ? $teamBundle['principles'] : [], true), 'engineering team principle requirement_session_dashboard');
 skillCheck(in_array('pm_plan_lifecycle', is_array($teamBundle['principles'] ?? null) ? $teamBundle['principles'] : [], true), 'engineering team principle pm_plan_lifecycle');
-skillCheck(($teamBundle['session_path'] ?? '') === 'doc/开发/session/{slug}.md', 'engineering team session_path');
+skillCheck(($teamBundle['session_path'] ?? '') === 'dev/session/{slug}.md', 'engineering team session_path');
+skillCheck(($teamBundle['minutes_dir'] ?? '') === 'dev/team/{slug}/', 'engineering team minutes_dir');
+skillCheck(($teamBundle['peer_talk']['channel_dir'] ?? '') === 'dev/team/{slug}/channel/', 'engineering team peer_talk channel_dir');
+skillCheck(($teamBundle['peer_talk']['roster_path'] ?? '') === 'dev/team/{slug}/roster.md', 'engineering team peer_talk roster_path');
 skillCheck(str_contains((string) ($teamBundle['session_template'] ?? ''), 'requirement-session.md'), 'engineering team session_template');
 skillCheck(in_array('closeout_related_web_urls', is_array($teamBundle['principles'] ?? null) ? $teamBundle['principles'] : [], true), 'engineering team principle closeout_related_web_urls');
 skillCheck(in_array('ui_and_prototype_review_pass', is_array($teamBundle['acceptance_gate_order'] ?? null) ? $teamBundle['acceptance_gate_order'] : [], true), 'engineering team acceptance_gate_order includes ui_and_prototype_review_pass');
@@ -411,7 +414,7 @@ skillCheck(str_contains($teamCmd, 'seat_skill_mirrors'), 'engineering team comma
 skillCheck(str_contains($teamCmd, 'findings_wake_pm') || str_contains($teamCmd, '直接拉起项目经理') || str_contains($teamCmd, '请立刻组队解决'), 'engineering team command mentions findings_wake_pm');
 skillCheck(str_contains($teamCmd, 'requirement_issuer_owns_acceptance') || str_contains($teamCmd, 'waiting_acceptance') || str_contains($teamCmd, '甩手掌柜'), 'engineering team command mentions requirement_issuer_owns_acceptance');
 skillCheck(str_contains($teamCmd, 'issuer_acceptance'), 'engineering team command mentions issuer_acceptance');
-skillCheck(str_contains($teamCmd, 'requirement_session_dashboard') || str_contains($teamCmd, 'doc/开发/session/'), 'engineering team command mentions SESSION path');
+skillCheck(str_contains($teamCmd, 'requirement_session_dashboard') || str_contains($teamCmd, 'dev/session/'), 'engineering team command mentions SESSION path');
 skillCheck(str_contains($teamCmd, 'pm_plan_lifecycle') || str_contains($teamCmd, '计划生命周期'), 'engineering team command mentions pm_plan_lifecycle');
 skillCheck(str_contains($teamCmd, 'notify_pm'), 'engineering team command requires notify_pm');
 $sessionTplPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/templates/requirement-session.md';
