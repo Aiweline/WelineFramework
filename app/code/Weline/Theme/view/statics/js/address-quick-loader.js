@@ -2,19 +2,25 @@
     'use strict';
 
     var moduleName = 'themeAddressQuick';
-    var modulePath = 'Weline_Theme::js/address-quick.js';
-    var fallbackUrl = '/Weline/Theme/view/statics/js/address-quick.js?v=20260911-aq1';
+    var modulePath = 'Weline_Theme::js/address-quick.js?v=20260924-no-dev-fallback1';
 
-    (function inheritLoaderVersion() {
-        var cur = document.currentScript && document.currentScript.src;
-        if (!cur) return;
-        var qPos = cur.indexOf('?');
-        if (qPos === -1) return;
-        var q = cur.slice(qPos);
-        if (fallbackUrl.indexOf('?') === -1) {
-            fallbackUrl += q;
+    function resolveQuickUrl() {
+        var loader = window.Weline && window.Weline.loader;
+        if (loader && typeof loader.resolveStaticPath === 'function') {
+            var resolved = loader.resolveStaticPath(modulePath);
+            if (resolved) {
+                return resolved;
+            }
         }
-    })();
+        var cur = document.currentScript && document.currentScript.src;
+        if (cur) {
+            var sibling = cur.replace(/\/address-quick-loader\.js(\?.*)?$/i, '/address-quick.js$1');
+            if (sibling !== cur) {
+                return sibling;
+            }
+        }
+        return '';
+    }
 
     function bootLoadedModule() {
         if (window.WelineThemeAddressQuick && typeof window.WelineThemeAddressQuick.boot === 'function') {
@@ -32,8 +38,12 @@
             existing.addEventListener('load', bootLoadedModule);
             return;
         }
+        var url = resolveQuickUrl();
+        if (!url) {
+            return;
+        }
         var s = document.createElement('script');
-        s.src = fallbackUrl;
+        s.src = url;
         s.defer = true;
         s.setAttribute('data-w-address-quick-src', '1');
         s.addEventListener('load', bootLoadedModule);

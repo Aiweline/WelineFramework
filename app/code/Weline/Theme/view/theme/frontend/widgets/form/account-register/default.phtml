@@ -62,6 +62,18 @@ if ($overlayOpacity > 0.9) {
 }
 
 $promoEyebrowRaw = trim((string)($this->getData('promo_eyebrow') ?? 'Weline Account'));
+$promoEyebrowSite = '';
+if ($promoEyebrowRaw === '' || $promoEyebrowRaw === 'Weline Account') {
+    try {
+        /** @var \Weline\Theme\Helper\SiteBrand $siteBrand */
+        $siteBrand = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
+        $siteName = trim($siteBrand->resolveFrontendSiteName());
+        if ($siteName !== '' && !$siteBrand->isGenericBrandPlaceholder($siteName)) {
+            $promoEyebrowSite = $siteName;
+        }
+    } catch (\Throwable) {
+    }
+}
 $promoTitleRaw = trim((string)($this->getData('promo_title') ?? '加入我们'));
 $promoSubtitleRaw = trim((string)($this->getData('promo_subtitle') ?? '创建账户，同步订单与优惠'));
 $promoTrustRaw = trim((string)($this->getData('promo_trust') ?? '安全注册 · 隐私受保护'));
@@ -110,7 +122,9 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     </div>
 
     <div class="account-login-widget__rail" aria-label="<?= $esc((string)__('注册品牌文案')) ?>">
-        <?php if ($promoEyebrowRaw === 'Weline Account'): ?>
+        <?php if ($promoEyebrowSite !== ''): ?>
+            <p class="account-login-widget__eyebrow"><?= $esc($promoEyebrowSite) ?></p>
+        <?php elseif ($promoEyebrowRaw === 'Weline Account'): ?>
             <p class="account-login-widget__eyebrow"><lang>Weline Account</lang></p>
         <?php elseif ($promoEyebrow !== ''): ?>
             <p class="account-login-widget__eyebrow"><?= $esc($promoEyebrow) ?></p>

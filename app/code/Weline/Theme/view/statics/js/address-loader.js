@@ -2,22 +2,27 @@
     'use strict';
 
     var moduleName = 'themeAddress';
-    var modulePath = 'Weline_Theme::js/address.js';
-    // Keep an explicit bust token so country-only/global fixes are not stuck behind a sticky inherited query.
-    var fallbackUrl = '/Weline/Theme/view/statics/js/address.js?v=20260921-keep-postal2';
+    // Bust token lives on Module:: path so PROD resolveStaticPath / flat publish picks it up.
+    var modulePath = 'Weline_Theme::js/address.js?v=20260924-no-dev-fallback1';
 
-    (function inheritLoaderVersion() {
-        var cur = document.currentScript && document.currentScript.src;
-        if (!cur) return;
-        var qPos = cur.indexOf('?');
-        if (qPos === -1) return;
-        var q = cur.slice(qPos);
-        // Prefer the newer explicit bust above; only inherit when fallback has no query yet.
-        if (fallbackUrl.indexOf('?') === -1) {
-            fallbackUrl += q;
+    function resolveAddressUrl() {
+        var loader = window.Weline && window.Weline.loader;
+        if (loader && typeof loader.resolveStaticPath === 'function') {
+            var resolved = loader.resolveStaticPath(modulePath);
+            if (resolved) {
+                return resolved;
+            }
         }
-    })();
-
+        // Sibling of this loader script (same published tree) — never DEV /Weline/*/view/statics/.
+        var cur = document.currentScript && document.currentScript.src;
+        if (cur) {
+            var sibling = cur.replace(/\/address-loader\.js(\?.*)?$/i, '/address.js$1');
+            if (sibling !== cur) {
+                return sibling;
+            }
+        }
+        return '';
+    }
 
     function bootLoadedModule() {
         if (window.WelineThemeAddress && typeof window.WelineThemeAddress.boot === 'function') {
@@ -33,9 +38,13 @@
         if (window.WelineThemeAddressLoading) {
             return;
         }
+        var url = resolveAddressUrl();
+        if (!url) {
+            return;
+        }
         window.WelineThemeAddressLoading = true;
         var script = document.createElement('script');
-        script.src = fallbackUrl;
+        script.src = url;
         script.async = true;
         script.onload = bootLoadedModule;
         script.onerror = function () {
@@ -67,9 +76,6 @@
         return;
     }
     window.WelineThemeAddressDeclared = true;
-    // 禁运打标修复期：强制走带 bust 的直链，避免 sticky _weline_dev 长期命中旧闭包。
-    directLoad();
-    return;
 
     var attempts = 0;
     (function waitForThemeLoader() {

@@ -13,6 +13,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\Console\Deploy\Upgrade;
+use Weline\Framework\Deploy\DeployFpcInvalidation;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Console\Setup\Di\Compile;
@@ -132,15 +133,26 @@ class Set extends CommandAbstract
                 $this->printer->note('正在执行静态资源部署...');
                 /**@var $deploy_upgrade Upgrade */
                 $deploy_upgrade = ObjectManager::getInstance(Upgrade::class);
-                $deploy_upgrade->execute();
-                
+                // Mode\Set 末尾走强失效（bump+purge）；Upgrade 内跳过日常 bump，避免双跑。
+                $deploy_upgrade->execute([], [Upgrade::DATA_SKIP_INVALIDATION => true]);
+
+                /** @var DeployFpcInvalidation $fpcInvalidation */
+                $fpcInvalidation = ObjectManager::getInstance(DeployFpcInvalidation::class);
+                $invalidation = $fpcInvalidation->afterModeSetProd();
+                $this->printer->note(__(
+                    '部署呈现世代已失效（stamp=%{stamp}，purge_fpc_all=1）',
+                    ['stamp' => $invalidation['stamp']]
+                ));
+
                 // 派发事件，通知其他模块部署模式已切换到prod
                 // 其他模块可以监听此事件执行相应的操作（如生成加密token等）
+                // 事件场 deploy_version = Deploy 模块版本（≠ current.json stamp；见 C-STAMP）
                 /** @var EventsManager $eventManager */
                 $eventManager = ObjectManager::getInstance(EventsManager::class);
                 $eventData = new \Weline\Framework\DataObject\DataObject([
                     'mode' => $type,
                     'deploy_version' => $this->getDeployModuleVersion(),
+                    'deploy_stamp' => $invalidation['stamp'],
                     'printer' => $this->printer
                 ]);
                 $eventManager->dispatch('Weline_Framework_Deploy_Mode_Set::prod_after', $eventData);
@@ -154,11 +166,27 @@ class Set extends CommandAbstract
                 $this->printer->note('(￢_￢) ->：允许的部署模式：dev/prod');
                 return;
         }
-        if (Env::getInstance()->setConfig('deploy', $type)) {
+        if ($this->persistDeployMode($type)) {
             $this->printer->success('（●´∀｀）♪ 当前部署模式：' . $type);
         } else {
             $this->printer->error('╮(๑•́ ₃•̀๑)╭ 部署模式设置错误：' . $type);
         }
+    }
+
+    /**
+     * 持久化部署模式：权威键 system.deploy（与 App DEV/PROD、mode:show 同源）。
+     * 同步顶层 deploy，兼容仍读 getConfig('deploy') 的历史读者。
+     */
+    public function persistDeployMode(string $type): bool
+    {
+        if ($type !== 'dev' && $type !== 'prod') {
+            return false;
+        }
+        $env = Env::getInstance();
+        $okSystem = $env->setConfig('system.deploy', $type);
+        $okLegacy = $env->setConfig('deploy', $type);
+
+        return $okSystem && $okLegacy;
     }
 
     /**

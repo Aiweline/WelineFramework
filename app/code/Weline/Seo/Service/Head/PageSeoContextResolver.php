@@ -87,7 +87,7 @@ class PageSeoContextResolver
         ]);
         // Keep layout name only for diagnostics; do not leak into public <title>.
         unset($layoutName);
-
+        $title = $this->translateHanTitle((string) $title);
         $description = $this->normalizeDescription($this->firstNonEmpty([
             $this->read($seo, ['description', 'meta_description']),
             $this->readTemplate($template, 'meta_description'),
@@ -525,6 +525,26 @@ class PageSeoContextResolver
         }
 
         return (string) __($text);
+    }
+
+    /**
+     * Layout/controller default titles are Chinese sources (「商品列表」); render them in the storefront locale.
+     */
+    private function translateHanTitle(string $title): string
+    {
+        $title = trim($title);
+        if ($title === ''
+            || preg_match('/[\x{4E00}-\x{9FFF}]/u', $title) !== 1
+            || !class_exists(\Weline\Theme\Helper\WidgetI18n::class)
+        ) {
+            return $title;
+        }
+        try {
+            $translated = trim(\Weline\Theme\Helper\WidgetI18n::label($title));
+            return $translated !== '' ? $translated : $title;
+        } catch (\Throwable) {
+            return $title;
+        }
     }
 
     private function normalizeDescription(mixed $description): string

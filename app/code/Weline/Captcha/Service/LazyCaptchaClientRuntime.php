@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Captcha\Service;
 
-use Weline\Framework\DataObject\DataInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
 
 /**
@@ -16,7 +16,7 @@ final class LazyCaptchaClientRuntime
 {
     public const REQUEST_INJECTED_KEY = 'captcha.client_runtime.injected';
 
-    public const SCRIPT_SOURCE = 'Weline_Captcha::js/captcha-lazy.js?v=20260915-script-exec1';
+    public const SCRIPT_SOURCE = 'Weline_Captcha::js/captcha-lazy.js?v=20260924-no-dev-fallback1';
 
     public const STYLESHEET_SOURCE = 'Weline_Captcha::css/captcha-local.css?v=20260910-google-ready1';
 
@@ -64,8 +64,8 @@ final class LazyCaptchaClientRuntime
         } catch (\Throwable) {
         }
 
-        // Match storefront module static URL shape used by Theme/Currency assets.
-        return '/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260915-script-exec1';
+        // Never emit DEV-shaped /Weline/*/view/statics/ fallbacks (PROD 404).
+        return '';
     }
 
     public static function resolveStylesheetUrl(): string
@@ -80,6 +80,6 @@ final class LazyCaptchaClientRuntime
         } catch (\Throwable) {
         }
 
-        return '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260910-google-ready1';
+        return '';
     }
 }

@@ -95,6 +95,47 @@ if ($__skip_pixel_bootstrap) {
     return;
 }
 
+// Header storefront-pixel-bootstrap already dumped config + scheduled pixel.js.
+// Skip the ~40KB duplicate visitorTrackingConfig; keep event-chains + picker/monitor.
+// Chrome is often assembled after body-end, so OB/wasEmitted may be late — also skip when
+// this layout has required default_injection for storefront-pixel-bootstrap.
+$__header_pixel_emitted = \Weline\Visitor\Service\PixelBootstrapHtmlService::wasEmittedThisRequest();
+if (!$__header_pixel_emitted) {
+    try {
+        $__ob = \ob_get_contents();
+        if (\is_string($__ob) && \str_contains($__ob, 'data-weline-pixel-bootstrap=')) {
+            $__header_pixel_emitted = true;
+        }
+    } catch (\Throwable) {
+    }
+}
+if (!$__header_pixel_emitted) {
+    try {
+        $__layout_type = \strtolower(\trim((string)(\Weline\Framework\Runtime\RequestContext::get(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_LAYOUT_TYPE
+        ) ?? '')));
+        $__required_pixel_pages = ['homepage', 'product', 'products', 'category', 'cart', 'checkout'];
+        foreach ($__required_pixel_pages as $__page) {
+            if ($__layout_type === $__page || \str_starts_with($__layout_type, $__page . '.') || \str_starts_with($__layout_type, $__page . '/')) {
+                $__header_pixel_emitted = true;
+                break;
+            }
+        }
+    } catch (\Throwable) {
+    }
+}
+if ($__header_pixel_emitted) {
+    \Weline\Visitor\Service\PixelBootstrapHtmlService::markEmittedThisRequest();
+    $__event_chains_script_url = htmlspecialchars(
+        (string) $this->fetchTagSource('statics', 'Weline_Visitor::js/pixel-event-chains.js'),
+        ENT_QUOTES | ENT_SUBSTITUTE,
+        'UTF-8'
+    );
+    ?>
+<script src="<?= $__event_chains_script_url ?>" defer></script>
+    <?php
+} else {
+
 $__visitor_tracking_config = [
     'module' => 'Weline_Visitor',
     'pixel' => ['enabled' => true],
@@ -470,6 +511,7 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
 </script>
 <?php
 }
+} // else: !$__header_pixel_emitted
 
 // 事件拾取浮层：URL / cookie 会话时注入；并始终挂轻量 bootstrap（sessionStorage 跨页续活）
 $__wpp_q = (string)($this->request->getGet('weline_pixel_picker') ?? '');

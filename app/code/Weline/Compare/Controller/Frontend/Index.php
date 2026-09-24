@@ -17,6 +17,11 @@ final class Index extends FrontendController
         $this->request->setGet('page_type', 'compare');
         $this->request->setGet('theme_page_title', (string)__('商品对比'));
         $this->assign('page_title', (string)__('商品对比'));
+        $this->assign('seo', [
+            'page_type' => 'compare',
+            'title' => (string)__('商品对比'),
+            'robots' => 'noindex,follow',
+        ]);
 
         return (string)$this->fetch('Weline_Compare::templates/frontend/compare/index.phtml');
     }

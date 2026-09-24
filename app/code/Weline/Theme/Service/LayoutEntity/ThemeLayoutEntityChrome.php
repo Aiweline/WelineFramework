@@ -77,6 +77,8 @@ final class ThemeLayoutEntityChrome
                 $logicalKey,
             );
             if (\is_string($cached) && $cached !== '' && !$this->isEnglishPoisonedNonEnChrome($cached, $locale)) {
+                $this->noteVisitorPixelBootstrapIfPresent($cached);
+
                 return $cached;
             }
         }
@@ -87,6 +89,7 @@ final class ThemeLayoutEntityChrome
         if ($html !== '' && $hotCache instanceof StorefrontScopeHotCache) {
             $this->queuePublishedChromePolicySeed($hotCache, $logicalKey, $html);
         }
+        $this->noteVisitorPixelBootstrapIfPresent($html);
 
         return $html;
     }
@@ -625,6 +628,24 @@ final class ThemeLayoutEntityChrome
             return $resolved instanceof StorefrontScopeHotCache ? $resolved : null;
         } catch (\Throwable) {
             return null;
+        }
+    }
+
+    /**
+     * Cached chrome may already embed Visitor pixel bootstrap HTML without calling
+     * PixelBootstrapHtmlService::render this request — mark so body-end skips the ~40KB dup.
+     */
+    private function noteVisitorPixelBootstrapIfPresent(string $html): void
+    {
+        if ($html === '' || !\str_contains($html, 'data-weline-pixel-bootstrap=')) {
+            return;
+        }
+        if (!\class_exists(\Weline\Visitor\Service\PixelBootstrapHtmlService::class)) {
+            return;
+        }
+        try {
+            \Weline\Visitor\Service\PixelBootstrapHtmlService::markEmittedThisRequest();
+        } catch (\Throwable) {
         }
     }
 }

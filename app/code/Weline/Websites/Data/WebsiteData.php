@@ -22,6 +22,8 @@ use Weline\Websites\Model\WebsiteLanguage;
 class WebsiteData
 {
     private const STATE_KEY = 'websites.website_data.state.v1';
+    /** Request-scoped LocalDescription rows keyed by website_id (Fiber-safe). */
+    private const LOCAL_ROWS_BAG_KEY = 'websites.website_local_rows.v1';
     private const SHARED_CACHE_TTL = 300;
     private const SHARED_SNAPSHOT_BY_ID_PREFIX = 'websites.snapshot.by_id.v1.';
     private const SHARED_SNAPSHOT_BY_CODE_PREFIX = 'websites.snapshot.by_code.v1.';
@@ -97,6 +99,7 @@ class WebsiteData
     public static function resetRequestState(): void
     {
         RequestContext::remove(self::STATE_KEY);
+        RequestContext::remove(self::LOCAL_ROWS_BAG_KEY);
     }
 
     /**
@@ -299,11 +302,6 @@ class WebsiteData
         return $description !== '' ? $description : null;
     }
 
-    /**
-     * @var array<string, string>
-     */
-    private static array $localizedFieldCache = [];
-
     private static function resolveLocalizedField(int $websiteId, string $field): ?string
     {
         $locale = '';
@@ -325,37 +323,14 @@ class WebsiteData
             return null;
         }
         $locale = trim($locale);
-
-        $cacheKey = $websiteId . "\0" . $locale . "\0" . $field;
-        if (array_key_exists($cacheKey, self::$localizedFieldCache)) {
-            $cached = self::$localizedFieldCache[$cacheKey];
-
-            return $cached !== '' ? $cached : null;
-        }
-
-        try {
-            /** @var WebsiteLocalDescription $local */
-            $local = ObjectManager::getInstance(WebsiteLocalDescription::class);
-            $items = $local->reset()
-                ->where(WebsiteLocalDescription::schema_fields_ID, $websiteId)
-                ->where(WebsiteLocalDescription::schema_fields_local_code, $locale)
-                ->select()
-                ->fetch()
-                ->getItems();
-            foreach ($items as $item) {
-                if (!$item instanceof WebsiteLocalDescription) {
-                    continue;
-                }
-                $value = trim((string)$item->getData($field));
-                self::$localizedFieldCache[$cacheKey] = $value;
-
-                return $value !== '' ? $value : null;
+        foreach (self::loadLocalRowsOnce($websiteId) as $row) {
+            if (($row['local_code'] ?? '') !== $locale) {
+                continue;
             }
-        } catch (\Throwable) {
-            // Fall back to main table.
-        }
+            $value = trim((string)($row[$field] ?? ''));
 
-        self::$localizedFieldCache[$cacheKey] = '';
+            return $value !== '' ? $value : null;
+        }
 
         return null;
     }
@@ -368,6 +343,53 @@ class WebsiteData
         if ($websiteId < 0) {
             return [];
         }
+        $names = [];
+        foreach (self::loadLocalRowsOnce($websiteId) as $row) {
+            $value = trim((string)($row[WebsiteLocalDescription::schema_fields_NAME] ?? ''));
+            if ($value !== '') {
+                $names[] = $value;
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * Load all LocalDescription rows for a website once per request (RequestContext bag).
+     * SeoHead / seo::body / seo::footer previously each hit `WHERE website_id=?` separately.
+     *
+     * @return list<array{local_code: string, name: string, description: string}>
+     */
+    private static function loadLocalRowsOnce(int $websiteId): array
+    {
+        if ($websiteId < 0) {
+            return [];
+        }
+
+        $bag = RequestContext::get(self::LOCAL_ROWS_BAG_KEY);
+        if (!\is_array($bag)) {
+            $bag = [];
+        }
+        $idKey = (string)$websiteId;
+        if (\array_key_exists($idKey, $bag) && \is_array($bag[$idKey])) {
+            /** @var list<array{local_code: string, name: string, description: string}> $hit */
+            $hit = $bag[$idKey];
+
+            return $hit;
+        }
+
+        $rows = self::fetchLocalRowsFromDb($websiteId);
+        $bag[$idKey] = $rows;
+        RequestContext::set(self::LOCAL_ROWS_BAG_KEY, $bag);
+
+        return $rows;
+    }
+
+    /**
+     * @return list<array{local_code: string, name: string, description: string}>
+     */
+    private static function fetchLocalRowsFromDb(int $websiteId): array
+    {
         try {
             /** @var WebsiteLocalDescription $local */
             $local = ObjectManager::getInstance(WebsiteLocalDescription::class);
@@ -376,18 +398,23 @@ class WebsiteData
                 ->select()
                 ->fetch()
                 ->getItems();
-            $names = [];
+            $rows = [];
             foreach ($items as $item) {
                 if (!$item instanceof WebsiteLocalDescription) {
                     continue;
                 }
-                $value = trim((string)$item->getData(WebsiteLocalDescription::schema_fields_NAME));
-                if ($value !== '') {
-                    $names[] = $value;
-                }
+                $rows[] = [
+                    'local_code' => trim((string)$item->getData(WebsiteLocalDescription::schema_fields_local_code)),
+                    WebsiteLocalDescription::schema_fields_NAME => trim(
+                        (string)$item->getData(WebsiteLocalDescription::schema_fields_NAME)
+                    ),
+                    WebsiteLocalDescription::schema_fields_DESCRIPTION => trim(
+                        (string)$item->getData(WebsiteLocalDescription::schema_fields_DESCRIPTION)
+                    ),
+                ];
             }
 
-            return $names;
+            return $rows;
         } catch (\Throwable) {
             return [];
         }

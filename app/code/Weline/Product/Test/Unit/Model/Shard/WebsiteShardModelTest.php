@@ -47,7 +47,7 @@ final class WebsiteShardModelTest extends TestCase
 
     public function testSchemaVersionFourEntities(): void
     {
-        self::assertSame('4.9.0', ProductShardSchemaCatalog::SCHEMA_VERSION);
+        self::assertSame('4.10.0', ProductShardSchemaCatalog::SCHEMA_VERSION);
         self::assertContains('attribute_value', ProductShardSchemaCatalog::ENTITIES);
         self::assertContains('store_offer', ProductShardSchemaCatalog::ENTITIES);
         $catalog = new ProductShardSchemaCatalog();

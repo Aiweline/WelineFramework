@@ -40,4 +40,25 @@ final class LazyCaptchaClientRuntimeHostMarkupContractTest extends TestCase
         );
         self::assertStringContainsString("enterprise.js?render=' . \\rawurlencode(\$siteKey)", $source);
     }
+
+    public function testLazyRuntimeResolvesViaFetchTagSourceWithoutDevFallback(): void
+    {
+        $path = \dirname(__DIR__, 3) . '/Service/LazyCaptchaClientRuntime.php';
+        $source = (string)\file_get_contents($path);
+        self::assertStringContainsString('Weline\\Framework\\View\\Data\\DataInterface', $source);
+        self::assertStringContainsString('fetchTagSource(DataInterface::dir_type_STATICS', $source);
+        self::assertStringContainsString("Weline_Captcha::js/captcha-lazy.js", $source);
+        self::assertStringContainsString("Weline_Captcha::css/captcha-local.css", $source);
+        self::assertStringNotContainsString('/Weline/Captcha/view/statics/', $source);
+        self::assertStringNotContainsString('Weline\\Framework\\DataObject\\DataInterface', $source);
+        // Failure path must return empty string (onceScriptHtml skips empty).
+        self::assertMatchesRegularExpression(
+            '/function resolveScriptUrl\(\)[\s\S]*?return \'\'/',
+            $source
+        );
+        self::assertMatchesRegularExpression(
+            '/function resolveStylesheetUrl\(\)[\s\S]*?return \'\'/',
+            $source
+        );
+    }
 }

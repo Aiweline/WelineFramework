@@ -36,7 +36,7 @@ class Index extends FrontendController
         $this->assign('seo', [
             'page_type' => 'cart',
             'title' => WidgetI18n::label('购物车'),
-            'description' => WidgetI18n::label('查看已选汉服商品、调整规格数量并进入结算。'),
+            'description' => WidgetI18n::label('查看已选商品、调整规格数量并进入结算。'),
             'robots' => 'noindex,follow',
         ]);
         $this->assign('cart', $cart);

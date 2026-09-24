@@ -44,10 +44,12 @@ final class CodexInvoker
             ],
             'unavailable_reason' => $error,
             // Nested MCP planner only; host Cursor↔Codex CLI work split is independent
-            // (HardConstraintsCatalog::hostCodexDelegation / host_delegate_explore_plan_review_to_codex_cli).
+            // (HardConstraintsCatalog::hostCodexDelegation / host_delegate_explore_plan_review_to_codex_cli;
+            // host shell delegation is user opt-in only—CLI presence alone does not auto-delegate).
             'purpose' => 'nested_mcp_planner',
             'host_delegation_policy' => 'host_delegate_explore_plan_review_to_codex_cli',
             'host_delegation_independent' => true,
+            'host_delegation_opt_in_only' => true,
         ];
     }
 

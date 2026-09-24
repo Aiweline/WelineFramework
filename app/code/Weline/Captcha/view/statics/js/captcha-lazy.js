@@ -23,7 +23,7 @@
 
     var DEFAULT_ROUTE = 'weline_captcha/frontend/challenge';
     var STYLESHEET_ID = 'weline-captcha-local-styles';
-    var STYLESHEET_FALLBACK = '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260910-google-ready1';
+    var STYLESHEET_MODULE = 'Weline_Captcha::css/captcha-local.css?v=20260910-google-ready1';
     var FETCH_TIMEOUT_MS = 8000;
     var OBSERVE_OPTIONS = {
         childList: true,
@@ -124,18 +124,27 @@
                 return css;
             }
         }
-        return STYLESHEET_FALLBACK;
+        var loader = w.Weline && w.Weline.loader;
+        if (loader && typeof loader.resolveStaticPath === 'function') {
+            return loader.resolveStaticPath(STYLESHEET_MODULE);
+        }
+        // Prefer empty over DEV-shaped /Weline/*/view/statics/ (PROD 404).
+        return '';
     }
 
     function ensureStylesheet() {
         if (d.getElementById(STYLESHEET_ID)) {
             return;
         }
+        var href = resolveStylesheetUrl();
+        if (!href) {
+            return;
+        }
         withObserverPaused(function () {
             var link = d.createElement('link');
             link.id = STYLESHEET_ID;
             link.rel = 'stylesheet';
-            link.href = resolveStylesheetUrl();
+            link.href = href;
             d.head.appendChild(link);
         });
     }

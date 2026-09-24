@@ -3494,8 +3494,10 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $orchestratorEpoch,
         $orchestratorLaunchId
     );
-    $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerSslControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, &$kernel, $isMaintenanceWorker, $isGatewayFallbackWorker, &$gatewayFallbackListenerState, &$gatewayFallbackListenerDraining, &$gatewayFallbackDrainAcknowledged, &$gatewayFallbackDrainTransition, &$gatewayFallbackUndrainTransition, &$gatewayFallbackRetiredTransitions, $gatewayFallbackExpectedTransitionIdentity, &$activeFibers, $fiberScheduler, &$activeRequests, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, &$sslCert, &$sslKey, $cryptoMethod, $instanceName, $listenerHost, $wlsRuntimeTopology, &$cacheClearEpoch, $maintenanceDrainState, $wlsHttp3Enabled, $wlsHttp3Mode, $wlsHttp3ExpectedNativeDigest, $wlsHttp3RouteSlot, $wlsHttp3RouteCount, $wlsHttp3RouteOwnerEpoch, $wlsHttp3RouteGeneration, $wlsHttp3RouteNamespace, $wlsHttp3RouteEligible, $orchestratorEpoch, $orchestratorLaunchId, $orchestratorSlotId, $orchestratorLeaseId, $orchestratorGeneration, &$http3Runtime, &$http3ActivationId, &$http3RouteActivationReceiptSent, &$http3AvailabilityEpoch, &$http3AvailabilityRouteEpoch, &$http3AvailabilitySignature, &$http3AvailabilityEnabled, $wlsTlsSessionCacheRuntime, &$servingManifestRoutes, &$servingManifestHttpRoutes, &$servingManifestPath, &$servingManifestGeneration, &$servingManifestDigest, &$servingManifestReloadError, $servingInstanceGeneration, $servingCertificateTrustProfile, $masterPid, &$connections, &$connectionPeerIps, &$requestBuffers, &$connectionLastActivity, &$requestLogged, &$writeBuffers, &$writableConnections, &$writeZeroProgress, &$connectionProtocols, &$connectionSniHosts, &$connectionPlaintextHosts, &$http2ConnectionAdapters, &$http2PendingRequests, &$pendingPeek, &$pendingPeekStartTimes, &$pendingHandshakes, &$postHandshakeReadPending, &$pendingClose, &$handshakeStartTimes, &$longLivedConnections): void {
+    $sslCertReloadDeferral = new \Weline\Server\Service\Runtime\SslCertReloadDeferral();
+    /** @var null|callable(array): void $controlMessageConsumer */
+    $controlMessageConsumer = null;
+    $controlMessageConsumer = static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, &$kernel, $isMaintenanceWorker, $isGatewayFallbackWorker, &$gatewayFallbackListenerState, &$gatewayFallbackListenerDraining, &$gatewayFallbackDrainAcknowledged, &$gatewayFallbackDrainTransition, &$gatewayFallbackUndrainTransition, &$gatewayFallbackRetiredTransitions, $gatewayFallbackExpectedTransitionIdentity, &$activeFibers, $fiberScheduler, &$activeRequests, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, &$sslCert, &$sslKey, $cryptoMethod, $instanceName, $listenerHost, $wlsRuntimeTopology, &$cacheClearEpoch, $maintenanceDrainState, $wlsHttp3Enabled, $wlsHttp3Mode, $wlsHttp3ExpectedNativeDigest, $wlsHttp3RouteSlot, $wlsHttp3RouteCount, $wlsHttp3RouteOwnerEpoch, $wlsHttp3RouteGeneration, $wlsHttp3RouteNamespace, $wlsHttp3RouteEligible, $orchestratorEpoch, $orchestratorLaunchId, $orchestratorSlotId, $orchestratorLeaseId, $orchestratorGeneration, &$http3Runtime, &$http3ActivationId, &$http3RouteActivationReceiptSent, &$http3AvailabilityEpoch, &$http3AvailabilityRouteEpoch, &$http3AvailabilitySignature, &$http3AvailabilityEnabled, $wlsTlsSessionCacheRuntime, &$servingManifestRoutes, &$servingManifestHttpRoutes, &$servingManifestPath, &$servingManifestGeneration, &$servingManifestDigest, &$servingManifestReloadError, $servingInstanceGeneration, $servingCertificateTrustProfile, $masterPid, &$connections, &$connectionPeerIps, &$requestBuffers, &$connectionLastActivity, &$requestLogged, &$writeBuffers, &$writableConnections, &$writeZeroProgress, &$connectionProtocols, &$connectionSniHosts, &$connectionPlaintextHosts, &$http2ConnectionAdapters, &$http2PendingRequests, &$pendingPeek, &$pendingPeekStartTimes, &$pendingHandshakes, &$postHandshakeReadPending, &$pendingClose, &$handshakeStartTimes, &$longLivedConnections, &$sslCertReloadDeferral): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -3939,6 +3941,11 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_SSL_CERT_RELOAD:
+                    // Do not run the multi-hundred-ms TLS fence on the IPC readable
+                    // path while HTTP Fibers are active; Master ACK budget is ~8s.
+                    if ($sslCertReloadDeferral->offerWhileBusy($msg, $activeRequests > 0)) {
+                        break;
+                    }
                     \clearstatcache(true);
                     $reloadOperationId = \strtolower(\trim((string)($msg['operation_id'] ?? '')));
                     $expectedManifestGeneration = (int)($msg['expected_manifest_generation'] ?? 0);
@@ -4552,7 +4559,9 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     WlsLogger::info_("收到 shutdown 命令，准备退出");
                     break;
             }
-        },
+        };
+    $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerSslControlHandler(
+        $controlMessageConsumer,
         static function () use (&$ipcClient, $wlsWorkerExitTrace, &$shouldExit, &$ipcDraining, &$ipcReceivedShutdown): void {
             $wlsWorkerExitTrace('ipc_unexpected_disconnect', 'control_client_disconnected', [
                 'should_exit' => (bool)$shouldExit,
@@ -4786,6 +4795,9 @@ $connections = [];
 $connectionPeerIps = [];
 $requestCount = 0;
 $activeRequests = 0; // 正在处理的请求数
+\Weline\Framework\Runtime\SchedulerSystem::setForegroundBusyProbe(static function () use (&$activeRequests): bool {
+    return $activeRequests > 0;
+});
 $requestBuffers = [];
 $connectionLastActivity = []; // 连接最后活动时间（用于超时清理）
 $connectionLastProgress = []; // 真实响应进度（写出字节 / H2 pending 下降），写停滞用此时钟
@@ -5432,6 +5444,12 @@ while (true) {
         $wlsTlsSessionCacheRuntime->maintain(0.005, $tlsSessionCacheTokenReloadDue);
     }
 
+    if ($activeRequests === 0
+        && \is_callable($controlMessageConsumer)
+        && ($deferredSslCertReload = $sslCertReloadDeferral->takeWhenIdle(false)) !== null
+    ) {
+        $controlMessageConsumer($deferredSslCertReload);
+    }
     // ========== Homepage keep-warm (idle, low priority) ==========
     $homepageMemoryPressure = $maxMemoryBytes > 0
         && \memory_get_usage(true) >= (int)($maxMemoryBytes * 0.70);
@@ -6928,6 +6946,12 @@ while (true) {
         if ($ipcClient) {
             $ipcClient->handleReadable();
         }
+    }
+    if ($activeRequests === 0
+        && \is_callable($controlMessageConsumer)
+        && ($deferredSslCertReload = $sslCertReloadDeferral->takeWhenIdle(false)) !== null
+    ) {
+        $controlMessageConsumer($deferredSslCertReload);
     }
     if ($ipcSocket && \in_array($ipcSocket, $write, true) && $ipcClient) {
         $ipcClient->handleWritable();

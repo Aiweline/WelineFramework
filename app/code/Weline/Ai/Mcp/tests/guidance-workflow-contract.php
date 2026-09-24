@@ -610,6 +610,8 @@ $checks = [
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'host_delegate_explore_plan_review_to_codex_cli'
+            && str_contains((string) ($rule['summary'] ?? ''), 'OPT-IN')
+            && str_contains((string) ($rule['summary'] ?? ''), 'did NOT mention Codex')
             && str_contains((string) ($rule['summary'] ?? ''), 'codex exec')
             && str_contains((string) ($rule['summary'] ?? ''), 'codex review')
             && str_contains((string) ($rule['summary'] ?? ''), 'Cursor')
@@ -634,12 +636,20 @@ $checks = [
         $fallbackWhen = $delegation['fallback']['when'] ?? [];
         $pkgDelegation = $hardConstraintsPackage['host_codex_delegation'] ?? null;
         $visible = $delegation['user_visible_status'] ?? null;
+        $optIn = $delegation['opt_in'] ?? null;
 
         return ($delegation['schema_version'] ?? '') === 'host-codex-delegation.v1'
             && ($delegation['policy_id'] ?? '') === 'host_delegate_explore_plan_review_to_codex_cli'
+            && ($delegation['enabled_when'] ?? '') === 'user_explicitly_mentions_codex_and_codex_cli_available_and_host_is_not_codex'
             && ($delegation['independent_of_nested_planner'] ?? false) === true
             && ($delegation['native_codex_recursion_guard']['when_host_is_codex'] ?? '') === 'do_not_spawn_nested_codex'
             && ($delegation['model_policy']['model_argument_forbidden'] ?? false) === true
+            && is_array($optIn)
+            && ($optIn['required'] ?? false) === true
+            && ($optIn['forbid_auto_delegate_on_cli_presence_alone'] ?? false) === true
+            && ($optIn['gate'] ?? '') === 'user_message_mentions_codex'
+            && is_array($optIn['trigger_tokens'] ?? null)
+            && in_array('Codex', $optIn['trigger_tokens'], true)
             && is_array($sections)
             && $sections === ['背景', '方案', '细节']
             && str_contains($planTpl, 'read-only')

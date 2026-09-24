@@ -518,6 +518,7 @@ pending,pending
 开始发布：%{1},"Starting release: %{1}"
 备份中...,"Backing up..."
 "Git 更新中...","Updating Git..."
+"POST_DEPLOY 为空，默认执行 setup:upgrade 以达静态铺平…","POST_DEPLOY 为空，默认执行 setup:upgrade 以达静态铺平…"
 执行后置命令...,"Running post-deploy commands..."
 版本戳已写入：%{1},"Version stamp written: %{1}"
 重载服务...,"Reloading server..."

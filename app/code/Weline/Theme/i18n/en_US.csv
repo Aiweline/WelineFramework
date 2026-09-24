@@ -597,6 +597,9 @@
 "正在推送主题预览 CDN 绕过规则…","Pushing theme-preview CDN bypass rules…"
 "主题预览 CDN 绕过规则推送完成","Theme-preview CDN bypass rules push completed"
 "主题预览 CDN 规则推送跳过：%{msg}","Theme-preview CDN rules push skipped: %{msg}"
+正在删除主题布局固化磁盘产物（theme-layout-entities）…,正在删除主题布局固化磁盘产物（theme-layout-entities）…
+"主题布局固化磁盘已清理：删除节点 %{count}","主题布局固化磁盘已清理：删除节点 %{count}"
+主题布局固化失效后的店面缓存清理完成,主题布局固化失效后的店面缓存清理完成
 "开始发布前台 404 静态页（website×locale，Fiber 协作）…","Publishing storefront 404 static pages (website×locale, Fiber coop)…"
 "前台 404 静态页发布完成：共 %{count} 个快照","Storefront 404 static publish completed: %{count} snapshots"
 "前台 404 静态页发布失败：%{msg}","Storefront 404 static publish failed: %{msg}"
@@ -1041,67 +1044,6 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
-查看更多,"View more"
-商品,Products
-查看规格图,"View spec images"
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-购物车是空的,"Shopping cart is empty"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-继续购物,"Continue shopping"
-小计,Subtotal
-去结算,"Proceed to Checkout"
-正在前往结算...,"Proceeding to checkout..."
-查看购物车,"View cart"
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-"还差 %1 包邮","You're %1 away from free shipping"
-已享包邮,"You've unlocked free shipping"
-关闭通知,"Close notification"
-抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
-您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
-请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
-SORRY,SORRY
-前往首页继续购物,"Continue shopping on the home page"
-返回上一页,"Go back"
-推荐产品,"Recommended product"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
-官方社交媒体,"Official social media"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-件商品,"items of goods"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
-天,Day(s)
-面包屑,"bread crumbs"
-全部商品,"Shop All"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1118,6 +1060,11 @@ SORRY,SORRY
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -1136,6 +1083,13 @@ SORRY,SORRY
 栅格内容,"Raster content"
 末页,"Last page"
 指南,Guide
+抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
+您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
+请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
+SORRY,SORRY
+前往首页继续购物,"Continue shopping on the home page"
+返回上一页,"Go back"
+推荐产品,"Recommended product"
 问答,Q&A
 7×24,24/7
 服务暂时不可用,"Service temporarily unavailable"
@@ -1152,6 +1106,10 @@ ERROR,ERROR
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
 联系询价,联系询价
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 展开搜索,"Expand search"
 我的,mine
@@ -1164,12 +1122,16 @@ ERROR,ERROR
 语言,language
 货币,currency
 关闭菜单,"Close menu"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
 搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
 导航菜单,"Navigation menu"
 我的账户,"My account"
 我的收藏,"My Favorites"
@@ -1179,8 +1141,12 @@ Weline,Weline
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
+购物车是空的,"Shopping cart is empty"
 去购物,"Go Shopping"
 删除,delete
+小计,Subtotal
+查看购物车,"View cart"
+去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1206,6 +1172,8 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1247,6 +1215,7 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
+件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1257,6 +1226,10 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1274,9 +1247,15 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
+查看更多,"View more"
+距离结束,"Ends in"
 精选轮播,"Featured Carousel"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
+官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1296,7 +1275,26 @@ Logo,Logo
 请使用微信扫描二维码分享,"Please scan the QR code with WeChat to share"
 上一条,Previous
 下一条,Next
+全部商品,"Shop All"
 面包屑导航,Breadcrumbs
+商品,Products
+查看规格图,"View spec images"
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+继续购物,"Continue shopping"
+正在前往结算...,"Proceeding to checkout..."
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+"还差 %1 包邮","You're %1 away from free shipping"
+已享包邮,"You've unlocked free shipping"
+关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
@@ -1311,6 +1309,10 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1713,7 +1715,7 @@ AI目录加载失败,"AI directory loading failed"
 "Theme 布局节点不属于当前编辑上下文。","The Theme layout node does not belong to the current editor context."
 "Theme 布局写入必须位于写意图事务内。","Theme layout writes must run inside a write-intent transaction."
 政策页面,"Policy Page"
-道记,道记
+道记,"Dao Notes"
 无为空间,"Wu Wei Sanctuary"
 选购,Shop
 道家居服,"Daoist Lounge Wear"
@@ -2350,6 +2352,7 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 汉服分类展示图,"Hanfu category showcase image"
 开始搬迁文件...,"Start moving files..."
 更新主题文件！,"Update theme file!"

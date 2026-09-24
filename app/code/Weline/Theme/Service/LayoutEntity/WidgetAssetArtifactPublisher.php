@@ -22,6 +22,38 @@ class WidgetAssetArtifactPublisher
             && (!str_starts_with(strtolower($asset['tag']), '<script') || preg_match('/\sdefer(?:\s|=|>)/i', $asset['tag']));
     }
 
+    /**
+     * Cold Worker latch: one shared MGET for all module_source asset keys before canMerge/publish.
+     *
+     * @param list<array<string, mixed>> $assets
+     */
+    public function prefetchSources(array $assets): void
+    {
+        $keys = [];
+        foreach ($assets as $asset) {
+            if (!\is_array($asset)) {
+                continue;
+            }
+            $path = $this->resolveModuleSourcePath($asset);
+            if ($path === null) {
+                continue;
+            }
+            $keys[] = 'widget-source-v3|' . $path . '|' . filemtime($path) . '|' . filesize($path);
+        }
+        $keys = array_values(array_unique($keys));
+        if ($keys === []) {
+            return;
+        }
+        try {
+            ObjectManager::getInstance(StorefrontScopeHotCache::class)->prefetchPolicy(
+                $this->sourceCachePolicy(),
+                $keys,
+            );
+        } catch (\Throwable) {
+            // Fail-open: per-asset rememberPolicy still works.
+        }
+    }
+
     public function publish(array $assets, bool $minify): ?string
     {
         try {
@@ -67,36 +99,74 @@ class WidgetAssetArtifactPublisher
         ), hash('sha256', $stamp), static fn(): string => hash('sha256', implode('|', array_map('hash_file', array_fill(0, count($files), 'sha256'), $files))));
     }
 
-    private function source(array $asset): ?array
+    private function sourceCachePolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'theme.widget_asset_source',
+            pool: StorefrontThemeCacheCoordinator::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL,
+            scope: 'global',
+            dependencies: ['global/storefront/theme'],
+            freshTtlSeconds: 3600,
+            staleTtlSeconds: 3600,
+        );
+    }
+
+    /** @return non-empty-string|null Absolute statics path when module_source is relocatable. */
+    private function resolveModuleSourcePath(array $asset): ?string
     {
         $moduleSource = (string)($asset['module_source'] ?? '');
-        if (!preg_match('/^([A-Za-z][A-Za-z0-9]*_[A-Za-z][A-Za-z0-9]*)::(.+)$/', $moduleSource, $match)) { return null; }
+        if (!preg_match('/^([A-Za-z][A-Za-z0-9]*_[A-Za-z][A-Za-z0-9]*)::(.+)$/', $moduleSource, $match)) {
+            return null;
+        }
         $relative = str_replace('\\', '/', $match[2]);
-        if (in_array('..', explode('/', $relative), true)) { return null; }
+        if (in_array('..', explode('/', $relative), true)) {
+            return null;
+        }
         $module = Env::getInstance()->getModuleList()[$match[1]] ?? null;
-        if (!is_array($module)) { return null; }
+        if (!is_array($module)) {
+            return null;
+        }
         $path = rtrim($module['base_path'], '/\\') . '/view/statics/' . ltrim(preg_replace('~^statics/~', '', $relative), '/');
-        if (!is_file($path)) { return null; }
+        if (!is_file($path)) {
+            return null;
+        }
+
+        return $path;
+    }
+
+    private function source(array $asset): ?array
+    {
+        $path = $this->resolveModuleSourcePath($asset);
+        if ($path === null) {
+            return null;
+        }
         $type = $asset['type'] ?? (str_starts_with(strtolower($asset['tag']), '<link') ? 'css' : 'js');
         $tag = $asset['tag'];
-        if (preg_match('/\b(?:integrity|async|nomodule)\b|\btype=["\']module["\']/i', $tag)) { return null; }
+        if (preg_match('/\b(?:integrity|async|nomodule)\b|\btype=["\']module["\']/i', $tag)) {
+            return null;
+        }
         // Source metadata is cheap on warm requests; content/minification is behind the framework hot cache.
         $key = 'widget-source-v3|' . $path . '|' . filemtime($path) . '|' . filesize($path);
         $builder = static function () use ($path, $type): ?array {
             $content = file_get_contents($path);
-            if (!is_string($content)) { return null; }
+            if (!is_string($content)) {
+                return null;
+            }
             $relocatable = $type === 'css'
                 ? !preg_match('/@(?:import|namespace)\b/i', $content)
                 : !preg_match('/\b(?:import\s*(?:\(|\.|[\w{*])|export\s|document\s*\.\s*currentScript\b)/', $content);
             // A script-level strict directive must not change the mode of a neighbouring file.
             $leading = preg_replace('~\A(?:\s+|/\*.*?\*/|//[^\n]*\n)+~s', '', $content) ?? $content;
             $mergeable = $type !== 'js' || self::isIsolatedJavaScript($leading);
+
             return ['content' => $content, 'hash' => hash('sha256', $content), 'relocatable' => $relocatable, 'mergeable' => $mergeable];
         };
-        return ObjectManager::getInstance(StorefrontScopeHotCache::class)->rememberPolicy(new CachePolicy(
-            resource: 'theme.widget_asset_source', pool: StorefrontThemeCacheCoordinator::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL,
-            scope: 'global', dependencies: ['global/storefront/theme'], freshTtlSeconds: 3600, staleTtlSeconds: 3600,
-        ), $key, $builder);
+
+        return ObjectManager::getInstance(StorefrontScopeHotCache::class)->rememberPolicy(
+            $this->sourceCachePolicy(),
+            $key,
+            $builder,
+        );
     }
 
     /** Recognize complete generated callback/IIFE statements; uncertain syntax remains a separate file. */

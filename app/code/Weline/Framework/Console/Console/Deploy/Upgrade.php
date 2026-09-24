@@ -14,6 +14,7 @@ use Weline\Framework\App\System;
 use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Deploy\DeployFpcInvalidation;
 use Weline\Framework\Deploy\FlatStaticRuntimeFilesProviderInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -23,10 +24,16 @@ class Upgrade extends CommandAbstract
 {
     public const EVENT_STATIC_ASSET_TRANSFORM = 'Weline_Framework_Deploy::static_asset_transform';
 
+    /** execute() $data：Mode\Set 已负责强失效时跳过日常 bump。 */
+    public const DATA_SKIP_INVALIDATION = 'skip_invalidation';
+
     /**
      * @var System
      */
     private System $system;
+
+    /** 本轮是否写入了与目标不同的静态字节（树变更）。 */
+    private bool $treeChanged = false;
 
     public function __construct(
         System $system,
@@ -37,6 +44,9 @@ class Upgrade extends CommandAbstract
 
     public function execute(array $args = [], array $data = [])
     {
+        $this->treeChanged = false;
+        $skipInvalidation = !empty($data[self::DATA_SKIP_INVALIDATION]);
+
         $modules    = Env::getInstance()->getActiveModules();
         $theme      = Env::getInstance()->getConfig('theme', Env::default_theme_DATA);
         $staticRoot = PUB . 'static';
@@ -115,6 +125,17 @@ class Upgrade extends CommandAbstract
         $this->publishFlatStaticRuntimeFiles($modules);
         $normalizePermissions($staticRoot);
         $this->printer->success('静态文件部署完毕！');
+
+        if (!$skipInvalidation) {
+            /** @var DeployFpcInvalidation $invalidation */
+            $invalidation = ObjectManager::getInstance(DeployFpcInvalidation::class);
+            $result = $invalidation->afterUpgrade($this->treeChanged);
+            if (!empty($result['skipped'])) {
+                $this->printer->note(__('静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）'));
+            } else {
+                $this->printer->note(__('已 bump global/storefront/deploy（日常 Upgrade 优先 bump）'));
+            }
+        }
     }
 
     /**
@@ -314,8 +335,12 @@ class Upgrade extends CommandAbstract
         $extension = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
         $raw = @file_get_contents($sourcePath);
         if ($raw === false) {
+            $existed = is_file($targetPath);
             if (!@copy($sourcePath, $targetPath)) {
                 throw new \RuntimeException('Unable to publish static asset: ' . $sourcePath);
+            }
+            if (!$existed) {
+                $this->treeChanged = true;
             }
 
             return;
@@ -338,9 +363,16 @@ class Upgrade extends CommandAbstract
         }
 
         $content = (string)$payload->getData('content');
+        if (is_file($targetPath)) {
+            $existing = @file_get_contents($targetPath);
+            if ($existing !== false && $existing === $content) {
+                return;
+            }
+        }
         if (@file_put_contents($targetPath, $content) === false) {
             throw new \RuntimeException('Unable to write static asset: ' . $targetPath);
         }
+        $this->treeChanged = true;
     }
 
     public function tip(): string

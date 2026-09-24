@@ -123,11 +123,14 @@ class DeployOrchestratorService
                 $deployVersion = $this->gitService->getShortCommit($deployRoot) ?: ($versionHint ?? 'unknown');
             }
 
-            $postDeployCommand = (string)($config['POST_DEPLOY_COMMAND'] ?? '');
-            if ($postDeployCommand !== '') {
-                $log(__('执行后置命令...'));
-                $this->execCommand($postDeployCommand, $deployRoot);
+            // R1：空 POST_DEPLOY 不得跳过 Upgrade；默认 setup:upgrade（!DEV → SetupUpgradeAfterDeployStatic）
+            $postDeployCommand = trim((string)($config['POST_DEPLOY_COMMAND'] ?? ''));
+            if ($postDeployCommand === '') {
+                $postDeployCommand = 'php bin/w setup:upgrade';
+                $log(__('POST_DEPLOY 为空，默认执行 setup:upgrade 以达静态铺平…'));
             }
+            $log(__('执行后置命令...'));
+            $this->execCommand($postDeployCommand, $deployRoot);
 
             $workerBuildId = $this->runtimeService->generateWorkerBuildId();
             $deployModeInfo = $this->resolveDeployModeInfo();

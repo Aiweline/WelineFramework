@@ -355,6 +355,67 @@ class CachePool implements CachePoolInterface, RemembererInterface
         return $result;
     }
 
+    /**
+     * Batch read for HotCache policy envelopes (same physical keys as getCustom).
+     *
+     * @param list<string>|array<int|string, string> $keys
+     * @return array<string, mixed>
+     */
+    public function getMultipleCustom(
+        array $keys,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false,
+    ): array {
+        if ($keys === []) {
+            return [];
+        }
+
+        if (!$this->enabled) {
+            $result = [];
+            foreach ($keys as $key) {
+                $this->misses++;
+                $result[(string)$key] = null;
+            }
+
+            return $result;
+        }
+
+        if ($this->adapter instanceof BatchCacheAdapterInterface) {
+            $logicalKeys = [];
+            $physicalKeys = [];
+            foreach ($keys as $key) {
+                $logical = (string)$key;
+                $logicalKeys[] = $logical;
+                $physicalKeys[] = $this->buildCustomKey($logical, $website, $lang, $currency);
+            }
+
+            $physicalValues = $this->adapter->getMultiple($physicalKeys);
+            $result = [];
+            foreach ($logicalKeys as $index => $logical) {
+                $physical = $physicalKeys[$index];
+                $value = \array_key_exists($physical, $physicalValues)
+                    ? $physicalValues[$physical]
+                    : null;
+                if ($value === null) {
+                    $this->misses++;
+                } else {
+                    $this->hits++;
+                }
+                $result[$logical] = $value;
+            }
+
+            return $result;
+        }
+
+        $result = [];
+        foreach ($keys as $key) {
+            $result[(string)$key] = $this->getCustom((string)$key, $website, $lang, $currency);
+        }
+
+        return $result;
+    }
+
     public function setMultiple(array $values, int $ttl = 0): bool
     {
         if (!$this->enabled) {

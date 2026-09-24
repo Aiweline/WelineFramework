@@ -1284,6 +1284,13 @@ class ControllerFetchFileBefore implements ObserverInterface
             return;
         }
         try {
+            // Entity/controller SEO titles (product name, category name) outrank layout default titles.
+            $publishedTitle = trim((string)(\Weline\Seo\Service\Head\SeoPageProfileBag::pull()['title'] ?? ''));
+            $templateSeo = $template->getData('seo');
+            $templateSeoTitle = is_array($templateSeo) ? trim((string)($templateSeo['title'] ?? '')) : '';
+            if ($publishedTitle !== '' || $templateSeoTitle !== '') {
+                return;
+            }
             $title = trim((string)$template->getData('title'));
             if ($title === '' || $this->isModuleDefaultTitle($title, $request)) {
                 foreach (['controller_title', 'title', 'meta_title'] as $key) {

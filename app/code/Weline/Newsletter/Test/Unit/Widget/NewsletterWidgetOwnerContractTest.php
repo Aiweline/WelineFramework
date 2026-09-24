@@ -79,6 +79,13 @@ final class NewsletterWidgetOwnerContractTest extends TestCase
         self::assertStringContainsString('data-testid="newsletter-subscribe-success"', $popup);
         self::assertStringContainsString('data-testid="newsletter-letter-sheet"', $popup);
         self::assertStringContainsString('newsletter-xinjian-gufeng.webp', $popup);
+        self::assertStringContainsString(
+            "Weline_Newsletter::images/newsletter-xinjian-gufeng.webp",
+            $popup
+        );
+        self::assertStringContainsString('fetchTagSource', $popup);
+        self::assertStringContainsString('dir_type_STATICS', $popup);
+        self::assertStringNotContainsString('/Weline/Newsletter/view/statics/', $popup);
         self::assertStringNotContainsString('newsletter-popup-mist-bg', $popup);
         self::assertStringNotContainsString('newsletter-letter-envelope-shell', $popup);
         self::assertStringContainsString('letter-shell', $popup);
