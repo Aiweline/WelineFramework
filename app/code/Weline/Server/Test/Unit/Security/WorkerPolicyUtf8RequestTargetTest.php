@@ -125,4 +125,58 @@ final class WorkerPolicyUtf8RequestTargetTest extends TestCase
             'loopback request_shape must not shared_ban the site, got: ' . $home->reason
         );
     }
+
+    /** T-OBS-1: deny defaults to X-WLS-Deny-Reason + Digest. */
+    public function testDenyResponseIncludesDenyReasonAndDigestByDefault(): void
+    {
+        $previous = \getenv('WLS_POLICY_EXPOSE_DENY_REASON');
+        \putenv('WLS_POLICY_EXPOSE_DENY_REASON');
+        try {
+            WorkerPolicyKernel::reset();
+            $kernel = WorkerPolicyKernel::instance();
+            $raw = "GET /%ef%bc%5f HTTP/1.1\r\nHost: p05113ef3.test.weline.com:9555\r\n\r\n";
+            $decision = $kernel->evaluate($raw, '203.0.113.201');
+            self::assertFalse($decision->allowed);
+            self::assertNotSame('', (string)$decision->reason);
+            self::assertIsString($decision->response);
+            self::assertStringContainsString('X-WLS-Policy-Digest:', (string)$decision->response);
+            self::assertStringContainsString('X-WLS-Deny-Reason:', (string)$decision->response);
+            self::assertStringContainsString(
+                'X-WLS-Deny-Reason: ' . $decision->reason,
+                (string)$decision->response,
+            );
+            self::assertStringNotContainsString('X-WLS-Policy-Reason:', (string)$decision->response);
+        } finally {
+            WorkerPolicyKernel::reset();
+            if ($previous === false) {
+                \putenv('WLS_POLICY_EXPOSE_DENY_REASON');
+            } else {
+                \putenv('WLS_POLICY_EXPOSE_DENY_REASON=' . $previous);
+            }
+        }
+    }
+
+    /** T-OBS-2: expose_deny_reason=false hides Deny-Reason header. */
+    public function testDenyResponseHidesDenyReasonWhenOptOut(): void
+    {
+        $previous = \getenv('WLS_POLICY_EXPOSE_DENY_REASON');
+        \putenv('WLS_POLICY_EXPOSE_DENY_REASON=0');
+        try {
+            WorkerPolicyKernel::reset();
+            $kernel = WorkerPolicyKernel::instance();
+            $raw = "GET /%ef%bc%5f HTTP/1.1\r\nHost: p05113ef3.test.weline.com:9555\r\n\r\n";
+            $decision = $kernel->evaluate($raw, '203.0.113.202');
+            self::assertFalse($decision->allowed);
+            self::assertStringContainsString('X-WLS-Policy-Digest:', (string)$decision->response);
+            self::assertStringNotContainsString('X-WLS-Deny-Reason:', (string)$decision->response);
+            self::assertStringNotContainsString('X-WLS-Policy-Reason:', (string)$decision->response);
+        } finally {
+            WorkerPolicyKernel::reset();
+            if ($previous === false) {
+                \putenv('WLS_POLICY_EXPOSE_DENY_REASON');
+            } else {
+                \putenv('WLS_POLICY_EXPOSE_DENY_REASON=' . $previous);
+            }
+        }
+    }
 }

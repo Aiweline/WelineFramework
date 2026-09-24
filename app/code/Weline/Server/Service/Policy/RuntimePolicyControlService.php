@@ -233,6 +233,22 @@ final class RuntimePolicyControlService
                 $fields[$key] = (string)$value;
             }
         }
+        $extra = $config['extra_allowed_hosts'] ?? null;
+        if (\is_array($extra)) {
+            $hosts = [];
+            foreach ($extra as $item) {
+                if (\is_scalar($item)) {
+                    $host = \strtolower(\trim((string)$item));
+                    if ($host !== '') {
+                        $hosts[$host] = true;
+                    }
+                }
+            }
+            if ($hosts !== []) {
+                $fields['extra_allowed_hosts'] = \array_keys($hosts);
+            }
+        }
+
         return $fields;
     }
 

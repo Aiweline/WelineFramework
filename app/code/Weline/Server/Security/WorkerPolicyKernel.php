@@ -134,6 +134,9 @@ final class WorkerPolicyKernel
     /** Empty for Direct and explicit compatibility/diagnostic Dispatcher transports. */
     private string $gatewayBackendToken = '';
 
+    /** Cached gate for X-WLS-Deny-Reason on deny responses (default on). */
+    private ?bool $exposeDenyReasonHeader = null;
+
     private function __construct(
         private readonly string $instanceName,
         private readonly string $topology,
@@ -1917,11 +1920,40 @@ final class WorkerPolicyKernel
             503 => 'Service Unavailable',
             default => 'Rejected',
         };
+        $host = '';
+        $headersIn = \is_array($parsed['headers'] ?? null) ? $parsed['headers'] : [];
+        foreach (['host', 'x-forwarded-host'] as $headerName) {
+            $candidate = \trim((string)($headersIn[$headerName] ?? ''));
+            if ($candidate !== '') {
+                $host = $candidate;
+                break;
+            }
+        }
+        @\error_log(\json_encode([
+            'channel' => 'wls.policy.deny',
+            'reason' => $reason,
+            'status' => $status,
+            'digest' => $this->loadedDigest,
+            'host' => $host,
+            'peer' => $clientIp,
+            'trusted_proxy' => $trustedProxy,
+            'method' => (string)($parsed['method'] ?? 'GET'),
+            'path' => (string)($parsed['path'] ?? '/'),
+            'instance' => $this->instanceName,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: (
+            '[wls.policy.deny] reason=' . $reason
+            . ' digest=' . $this->loadedDigest
+            . ' peer=' . $clientIp
+            . ' host=' . $host
+        ));
         $body = $reasonPhrase;
         $headers = "Content-Type: text/plain; charset=utf-8\r\n"
             . 'Content-Length: ' . \strlen($body) . "\r\n"
             . "Connection: close\r\n"
             . 'X-WLS-Policy-Digest: ' . $this->loadedDigest . "\r\n";
+        if ($this->shouldExposeDenyReasonHeader()) {
+            $headers .= 'X-WLS-Deny-Reason: ' . $this->sanitizeDenyReasonHeader($reason) . "\r\n";
+        }
         if ($status === 429) {
             $headers .= "Retry-After: 1\r\n";
         }
@@ -1932,13 +1964,62 @@ final class WorkerPolicyKernel
             (string)($parsed['protocol'] ?? 'HTTP/1.1'),
             (string)($parsed['target'] ?? '/'),
             (string)($parsed['path'] ?? '/'),
-            \is_array($parsed['headers'] ?? null) ? $parsed['headers'] : [],
+            $headersIn,
             (string)($parsed['body'] ?? ''),
             $response,
             $reason,
             $this->loadedDigest,
             $trustedProxy,
         );
+    }
+
+    /**
+     * Default ON: P0 showed digest-only 403s were misread as Host Guard.
+     * Opt-out: wls.policy.expose_deny_reason=false or WLS_POLICY_EXPOSE_DENY_REASON=0.
+     */
+    private function shouldExposeDenyReasonHeader(): bool
+    {
+        if ($this->exposeDenyReasonHeader !== null) {
+            return $this->exposeDenyReasonHeader;
+        }
+        $envFlag = \strtolower(\trim((string)\getenv('WLS_POLICY_EXPOSE_DENY_REASON')));
+        if ($envFlag === '0' || $envFlag === 'false' || $envFlag === 'no' || $envFlag === 'off') {
+            return $this->exposeDenyReasonHeader = false;
+        }
+        if ($envFlag === '1' || $envFlag === 'true' || $envFlag === 'yes' || $envFlag === 'on') {
+            return $this->exposeDenyReasonHeader = true;
+        }
+        try {
+            $envConfig = Env::getInstance()->getConfig();
+            $wls = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+            $policy = \is_array($wls['policy'] ?? null) ? $wls['policy'] : [];
+            if (\array_key_exists('expose_deny_reason', $policy)) {
+                $flag = $policy['expose_deny_reason'];
+                $this->exposeDenyReasonHeader = !($flag === false
+                    || $flag === 0
+                    || $flag === '0'
+                    || $flag === 'false'
+                    || $flag === 'off'
+                    || $flag === 'no');
+            } else {
+                $this->exposeDenyReasonHeader = true;
+            }
+        } catch (\Throwable) {
+            $this->exposeDenyReasonHeader = true;
+        }
+
+        return $this->exposeDenyReasonHeader;
+    }
+
+    private function sanitizeDenyReasonHeader(string $reason): string
+    {
+        $reason = \trim($reason);
+        $reason = \preg_replace('/[\r\n\x00]+/', '', $reason) ?? '';
+        if ($reason === '') {
+            return 'denied';
+        }
+
+        return \substr($reason, 0, 200);
     }
     /**
      * Policy action maintenance_response: framework maintenance HTML/JSON, never bare text.
