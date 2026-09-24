@@ -364,6 +364,7 @@ component 负责：
 - **硬规则（同模块 XOR，禁止运行时去重补丁）**：同一模块下，布局/宿主已用标签内嵌某部件 ↔ **禁止**再在该部件 JSON 写 `default_injections`（二选一，否则会重复出现两个）。布局已提供 → 清空 JSON 并标 `placement=layout`；走注入 → 布局只留空 `<w:slot>` + `placement=injection`。禁止用页级 presence / 槽内 count 等运行时「只留一份」打补丁。门禁：`php bin/w frontend:check-required-injection-sibling-fetch`（`setup:upgrade` 致命）。
 - **硬规则（跨模块禁布局互调 · 只走 JSON）**：不同模块之间 **禁止**在布局/partial 里互相 `<w:widget>` / `fetch` 调用对方部件；外国部件**只能**经拥有模块的 JSON `default_injections`（应用部件默认注入）+ 空槽进入。门禁：`php bin/w frontend:check-theme-layout-widgets`。
 - **硬规则（默认注入 · 固化进布局模板 · 必须记住）**：JSON 应用部件默认注入在**固化布局模板**时写入；只要目标槽存在且无 `user_deleted@{versionId}`，就必须固化进去——**与主题是否激活、主题版本无关**。唯一省略=人工卸载。店面遗漏默认部件 → **固化方案/触发出问题**，不是「可选 overlay」。无固化模板时：对**当前激活主题**运行期动态固化；已有模板：仅主题**新增/移除**部件再固化；插件安装/变更 JSON 默认注入：重固化**所有主题**下涉及的对应布局。权威：[布局固化与默认注入.md](../布局固化与默认注入.md)。MCP：`required_default_always_present_without_user_deleted`；短规格：`doc/开发/spec/required-default-always-present.md`。
+- **硬规则（固化 = 关系模板 · 非渲染快照）**：编译/固化只把 slot 与部件对准坑位并写入可执行 phtml **模板**；**禁止**把某次请求的部件 HTML 烘焙进 `com_*.phtml` / 实体 `layout.phtml`。所有合法 `<w:widget>` Taglib 编译唯一产物为 `<?= Widget::renderRuntimeInline([...]) ?>`，店面执行模板时 hydrate。**禁止**按部件 code / placement / page_layouts 维护「延期渲染」白名单。`chrome.rendered.{locale}.html` 边界见权威文 §3.0。
 - **工程团队**：部件相关施工/复审分配给专席 **部件开发工程师**（MCP `widget_development` / `工程团队.md`）。
 - `position` / `page_layouts` / `slot` / `supports` 表示部件允许出现的位置和协议
 - `default_injections`：跨模块开箱进槽的**唯一合法路径**（经布局固化写入模板）；同模块若已布局内嵌则不得再写
