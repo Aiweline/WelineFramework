@@ -698,7 +698,32 @@
             if (!modulePath || typeof modulePath !== 'string') {
                 return modulePath;
             }
-            if (modulePath.indexOf('http://') === 0 || modulePath.indexOf('https://') === 0 || modulePath.charAt(0) === '/') {
+            if (modulePath.indexOf('http://') === 0 || modulePath.indexOf('https://') === 0) {
+                return modulePath;
+            }
+            // 纠偏：历史 compile 在 DEV 烤死的 /Vendor/Module/view/statics/... 绝对路径。
+            // 生产主机上若原样请求会 404，导致 currency/i18n/wishlist 等模块装不上。
+            if (modulePath.charAt(0) === '/') {
+                const bakedDev = modulePath.match(/^\/([^\/]+)\/([^\/]+)\/view\/statics\/(.+)$/);
+                if (bakedDev) {
+                    const vendorName = bakedDev[1];
+                    const moduleNamePart = bakedDev[2];
+                    let filePath = bakedDev[3];
+                    let querySuffix = '';
+                    const queryPos = filePath.indexOf('?');
+                    if (queryPos !== -1) {
+                        querySuffix = filePath.slice(queryPos);
+                        filePath = filePath.slice(0, queryPos);
+                    }
+                    const isDevHost = runtimeConfig.debug ||
+                        window.DEV ||
+                        window.location.hostname === 'localhost' ||
+                        window.location.hostname === '127.0.0.1';
+                    if (isDevHost) {
+                        return modulePath;
+                    }
+                    return `/static/${vendorName}/${moduleNamePart}/${filePath}${querySuffix}`;
+                }
                 return modulePath;
             }
             if (modulePath.indexOf('::') === -1) {

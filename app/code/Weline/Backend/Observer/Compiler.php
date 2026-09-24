@@ -278,58 +278,39 @@ class Compiler implements \Weline\Framework\Event\ObserverInterface
                 }
                 
                 // 解析模块路径格式：Weline_Module::path/to/file.js
+                // 硬：保留 Module::，禁止按本机 DEV 烤死绝对 URL（同 Frontend Compiler）。
                 if (strpos($path, '::') !== false) {
                     $parts = explode('::', $path, 2);
                     if (count($parts) === 2) {
                         $moduleNamePart = trim($parts[0]);
                         $filePath = trim($parts[1], '/');
-                        
-                        // 获取模块信息
+                        $logicalPath = $moduleNamePart . '::' . $filePath;
+
                         $modules = \Weline\Framework\App\Env::getInstance()->getModuleList();
                         if (isset($modules[$moduleNamePart])) {
                             $module = $modules[$moduleNamePart];
                             $basePath = $module['base_path'] ?? '';
-                            
+
                             if ($basePath && is_string($basePath)) {
-                                // 计算 origin_path（相对于项目根目录）
                                 $basePathNormalized = str_replace('\\', '/', rtrim($basePath, '/\\'));
                                 $projectRootNormalized = str_replace('\\', '/', rtrim(BP, '/\\'));
                                 $originPath = str_replace($projectRootNormalized . '/', '', $basePathNormalized) . '/view/statics/' . $filePath;
-                                
-                                // 转换模块名为 URL 格式（Weline_Module -> Weline/Module）
-                                $moduleParts = explode('_', $moduleNamePart, 2);
-                                $vendorName = $moduleParts[0];
-                                $moduleNameUrl = isset($moduleParts[1]) ? $moduleParts[1] : '';
-                                
-                                // 根据环境生成 URL
-                                $isDev = defined('DEV') && DEV;
-                                if ($isDev) {
-                                    // 开发模式：/Weline/Backend/view/statics/js/theme.js
-                                    $urlPath = '/' . $vendorName . '/' . $moduleNameUrl . '/view/statics/' . $filePath;
-                                } else {
-                                    // 生产模式：/static/Weline/Backend/js/theme.js
-                                    $urlPath = '/static/' . $vendorName . '/' . $moduleNameUrl . '/' . $filePath;
-                                }
-                                
-                                $pathsArray[] = $urlPath;
+
+                                $pathsArray[] = $logicalPath;
                                 $originPaths[] = $originPath;
                             } else {
-                                // 无法获取模块信息，保持原路径
-                                $pathsArray[] = $path;
+                                $pathsArray[] = $logicalPath;
                                 $originPaths[] = null;
                             }
                         } else {
-                            // 模块不存在，保持原路径
-                            $pathsArray[] = $path;
+                            $pathsArray[] = $logicalPath;
                             $originPaths[] = null;
                         }
                     } else {
-                        // 格式不正确，保持原路径
                         $pathsArray[] = $path;
                         $originPaths[] = null;
                     }
                 } else {
-                    // 不是模块路径格式，保持原路径
                     $pathsArray[] = $path;
                     $originPaths[] = null;
                 }
