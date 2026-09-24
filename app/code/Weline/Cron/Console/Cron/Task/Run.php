@@ -20,6 +20,7 @@ use Weline\Cron\Helper\Process;
 use Weline\Cron\Model\CronTask;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
+use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
 use Weline\Framework\Console\CommandResult;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -27,6 +28,7 @@ use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Phrase\DatabaseFreeTranslator;
 use Weline\Framework\Setup\Lock\SetupDatabaseAccessLock;
 use Weline\Framework\System\OS\Win;
+use Weline\SystemConfig\Model\SystemConfig;
 
 
 class Run implements CommandInterface
@@ -186,6 +188,7 @@ class Run implements CommandInterface
             }
             /**@var CronTaskInterface $instance */
             $instance = ObjectManager::getInstance($class);
+            $this->warmupBackgroundProcessCaches($task);
             $sseManual = $manualSse;
             if ($sseManual) {
                 $this->printing->note((string) __('【后台手动运行】%{1} 开始执行…', [$executeName]));
@@ -1198,6 +1201,41 @@ class Run implements CommandInterface
             if (\defined('STDERR')) {
                 @\fflush(\STDERR);
             }
+        }
+    }
+
+    /**
+     * Process-entry warmup: module SystemConfig maps + NamespaceVersion hash IN.
+     * Keeps cron child bodies off per-key config / per-hash generation storms.
+     */
+    private function warmupBackgroundProcessCaches(CronTask $task): void
+    {
+        $modules = ['Weline_Cron', 'Weline_SystemConfig'];
+        $module = trim((string)$task->getData(CronTask::schema_fields_MODULE));
+        if ($module === '') {
+            $class = (string)$task->getData(CronTask::schema_fields_CLASS);
+            if (\preg_match('/^Weline\\\\([^\\\\]+)\\\\/', $class, $matches) === 1) {
+                $module = 'Weline_' . $matches[1];
+            }
+        }
+        if ($module !== '') {
+            $modules[] = $module;
+        }
+        try {
+            ObjectManager::getInstance(SystemConfig::class)
+                ->warmupModuleMaps($modules);
+        } catch (\Throwable) {
+            // Config warmup is best-effort; task body still runs.
+        }
+        try {
+            ObjectManager::getInstance(NamespaceGenerationRepository::class)
+                ->prefetchProcessVector([
+                    'global/websites-registry',
+                    'global/storefront/deploy',
+                    'website/default',
+                ]);
+        } catch (\Throwable) {
+            // Namespace prefetch is best-effort.
         }
     }
 

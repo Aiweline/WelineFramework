@@ -13,7 +13,7 @@
  * @widget.page_layouts {["product"]}
  * @widget.slot {product-you-may-like}
  * @widget.supports {["layout-product-you-may-like","layout-product-related-products","you-may-like"]}
- * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-you-may-like", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认猜你喜欢槽", "config":{"title":"猜你喜欢","limit":8,"columns":"4","layout":"grid"} }]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-you-may-like", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认猜你喜欢槽", "config":{"title":"猜你喜欢","limit":8,"columns":"4","layout":"grid","lazy_load":true} }]}
  *
  * @widget.source {Weline_Product::css/widgets/you-may-like.css,Weline_Product::css/frontend/product-card.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param title {default="猜你喜欢",type="string",label="标题"}
@@ -28,6 +28,7 @@
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Service\ProductCardRenderer;
+use Weline\Product\Service\StorefrontPdpShelfDeferral;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\WidgetI18n;
@@ -75,11 +76,16 @@ if ($excludeProductId <= 0) {
     }
 }
 
+$editorPreview = $isPreviewMode || (bool)($this->getData('editor_mode') ?? false);
+$deferCards = StorefrontPdpShelfDeferral::shouldDeferCardAssembly($editorPreview);
+
 $products = [];
 try {
-    $editorPreview = $isPreviewMode || (bool)($this->getData('editor_mode') ?? false);
     if ($editorPreview && $excludeProductId <= 0) {
         $products = \Weline\Theme\Helper\ThemeDemoCatalog::products($limit, 33);
+    } elseif ($deferCards) {
+        // WS4 cold path: required slot stays; hydrate via BinQuery youMayLikeCards.
+        $products = [];
     } else {
         $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
             ->youMayLikeCards($excludeProductId, $limit);
@@ -88,8 +94,44 @@ try {
     $products = [];
 }
 
-if ($products === [] && ($isPreviewMode || (bool)($this->getData('editor_mode') ?? false))) {
+if ($products === [] && $editorPreview) {
     $products = \Weline\Theme\Helper\ThemeDemoCatalog::products($limit, 33);
+}
+
+if ($deferCards) {
+    ?>
+<section class="<?= $esc($wc) ?> weline-product-you-may-like<?= $isPreviewMode ? ' is-preview' : '' ?> is-deferred"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-testid="you-may-like-deferred"
+         data-weline-load="youMayLike"
+         data-weline-hydrate="1"
+         data-pdp-lazy-shell="1"
+         data-hydrate-provider="product_storefront"
+         data-hydrate-operation="youMayLikeCards"
+         data-exclude-product-id="<?= (int)$excludeProductId ?>"
+         data-limit="<?= (int)max(1, min(8, $limit)) ?>"
+         data-layout="<?= $esc($layout) ?>"
+         data-columns="<?= $esc($columns) ?>"
+         aria-busy="true">
+    <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
+    <header class="wym-header">
+        <h2 class="wym-title"><?= $esc($widgetTitle) ?></h2>
+        <p class="wym-subtitle"><?= $esc($widgetSubtitle) ?></p>
+    </header>
+    <div class="wym-stage is-skeleton" data-wym-hydrate-root data-wym-stage>
+        <div class="wym-viewport" data-wym-viewport>
+            <div class="wym-track columns-<?= $esc($columns) ?> layout-<?= $esc($layout) ?> is-skeleton" data-wym-track data-pdp-lazy-track>
+                <?php for ($i = 0, $n = \Weline\Theme\Helper\PdpRecommendationLazyShell::skeletonCount((int)max(1, min(8, $limit)), 8); $i < $n; $i++): ?>
+                    <div class="wym-card wym-card--skeleton" aria-hidden="true"></div>
+                <?php endfor; ?>
+            </div>
+        </div>
+    </div>
+</section>
+    <?php
+    return;
 }
 
 foreach ($products as &$product) {

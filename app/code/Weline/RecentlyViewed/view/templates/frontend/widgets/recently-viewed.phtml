@@ -12,7 +12,7 @@
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-product-recently-viewed","layout-product-sidebar","layout-products-recommendations","layout-search-recommendations","recently-viewed"]}
- * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-recently-viewed", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认最近浏览槽", "config":{"title":"最近浏览","limit":6,"columns":"6","layout":"carousel"} }]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-recently-viewed", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认最近浏览槽", "config":{"title":"最近浏览","limit":6,"columns":"6","layout":"carousel","lazy_load":true} }]}
  *
  * @widget.source {Weline_RecentlyViewed::css/widgets/recently-viewed.css,Weline_Product::css/frontend/product-card.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param title {default="最近浏览",type="string",label="标题"}
@@ -28,6 +28,7 @@
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\StorefrontPdpShelfDeferral;
 use Weline\RecentlyViewed\Service\RecentlyViewedService;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\WidgetI18n;
@@ -79,17 +80,58 @@ if ($excludeProductId <= 0) {
     }
 }
 
+$deferCards = StorefrontPdpShelfDeferral::shouldDeferCardAssembly($isPreviewMode);
+
 $products = [];
 try {
     // cards() → product_storefront/cardsByProductIds (targeted; no per-id live).
     if ($isPreviewMode) {
         $products = \Weline\Theme\Helper\ThemeDemoCatalog::products($limit, 7);
+    } elseif ($deferCards) {
+        // WS4 cold path: required slot stays; hydrate via BinQuery recentlyViewedCards / cardsByProductIds.
+        $products = [];
     } else {
         $products = ObjectManager::getInstance(RecentlyViewedService::class)
             ->cards($limit, $excludeProductId);
     }
 } catch (\Throwable) {
     $products = [];
+}
+
+if ($deferCards) {
+    ?>
+<section class="<?= $esc($wc) ?> weline-recently-viewed<?= $isPreviewMode ? ' is-preview' : '' ?> is-deferred"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-testid="recently-viewed-deferred"
+         data-weline-load="recentlyViewed"
+         data-weline-hydrate="1"
+         data-pdp-lazy-shell="1"
+         data-hydrate-provider="product_storefront"
+         data-hydrate-operation="recentlyViewedCards"
+         data-exclude-product-id="<?= (int)$excludeProductId ?>"
+         data-limit="<?= (int)$limit ?>"
+         data-layout="<?= $esc($layout) ?>"
+         data-columns="<?= $esc($columns) ?>"
+         aria-busy="true">
+    <?= \Weline\Product\Service\ProductCardRenderer::emitStylesheetLinkOnce() ?>
+    <header class="wrv-header">
+        <h2 class="wrv-title"><?= $esc($widgetTitle) ?></h2>
+        <p class="wrv-subtitle"><?= $esc(WidgetI18n::label('Based on your recent browsing')) ?></p>
+    </header>
+    <div class="wrv-stage is-skeleton" data-wrv-hydrate-root data-wrv-stage>
+        <div class="wrv-viewport" data-wrv-viewport>
+            <div class="wrv-track columns-<?= $esc($columns) ?> layout-<?= $esc($layout) ?> is-skeleton" data-wrv-track data-pdp-lazy-track>
+                <?php for ($i = 0, $n = \Weline\Theme\Helper\PdpRecommendationLazyShell::skeletonCount($limit, 6); $i < $n; $i++): ?>
+                    <div class="wrv-card wrv-card--skeleton" aria-hidden="true"></div>
+                <?php endfor; ?>
+            </div>
+        </div>
+    </div>
+</section>
+    <?php
+    return;
 }
 
 foreach ($products as &$product) {

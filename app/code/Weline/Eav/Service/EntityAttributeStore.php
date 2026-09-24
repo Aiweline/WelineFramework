@@ -18,6 +18,8 @@ use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Eav\Model\EavAttribute\Type\Value;
 use Weline\Eav\Model\EavEntity;
+use Weline\Framework\Cache\CachePolicy;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface as DdlTableInterface;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Setup\Db\ModelSetup;
@@ -628,9 +630,10 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface, Scope
                 EavScopeColumns::SCOPE_KIND,
             ]);
 
-            return \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
-            )->rememberForRequest('eav.value_table.scope_columns', $key, static function () use ($table, $connector): bool {
+            /** @var StorefrontScopeHotCache $hotCache */
+            $hotCache = \Weline\Framework\Manager\ObjectManager::getInstance(StorefrontScopeHotCache::class);
+
+            $probe = static function () use ($table, $connector): bool {
                 // MySQL getTable() may return `db`.`tbl`; strip schema + quotes or information_schema misses.
                 $bare = \str_replace(['"', '`'], '', \preg_replace('/^.*\./', '', $table) ?? $table);
                 $sql = "SELECT 1 FROM information_schema.columns WHERE table_name = "
@@ -640,7 +643,33 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface, Scope
                 $result = $connector->query($sql)->fetch();
 
                 return !empty($result);
-            });
+            };
+
+            return (bool)$hotCache->rememberForRequest(
+                'eav.value_table.scope_columns',
+                $key,
+                static function () use ($hotCache, $key, $probe): bool {
+                    try {
+                        $cached = $hotCache->rememberPolicy(
+                            new CachePolicy(
+                                resource: 'eav.value_table.scope_columns',
+                                pool: 'eav',
+                                scope: 'global',
+                                dependencies: ['global/storefront/eav'],
+                                freshTtlSeconds: 3600,
+                                staleTtlSeconds: 86400,
+                            ),
+                            $key,
+                            $probe,
+                        );
+
+                        return (bool)$cached;
+                    } catch (\Throwable) {
+                        // CacheManager / generation unavailable: keep request memo + live probe.
+                        return $probe();
+                    }
+                },
+            );
         } catch (\Throwable) {
             return false;
         }

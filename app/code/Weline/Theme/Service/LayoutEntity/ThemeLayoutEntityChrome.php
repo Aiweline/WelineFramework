@@ -55,13 +55,36 @@ final class ThemeLayoutEntityChrome
         ?int $themeVersionId = null,
         bool $preview = false,
     ): string {
-        $source = $this->resolveRenderSource($themeId, $scope, $themeVersionId, $preview);
+        return (string)\Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            \Weline\Theme\Service\ThemeLayoutBudgetPhases::L1_CHROME,
+            function () use ($themeId, $scope, $themeVersionId, $preview): string {
+                return $this->renderCurrentInner($themeId, $scope, $themeVersionId, $preview);
+            },
+        );
+    }
+
+    /**
+     * @throws \RuntimeException when chrome entity is missing
+     */
+    private function renderCurrentInner(
+        int $themeId,
+        string $scope,
+        ?int $themeVersionId = null,
+        bool $preview = false,
+    ): string {
+        $source = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'theme.chrome.resolve',
+            fn(): array => $this->resolveRenderSource($themeId, $scope, $themeVersionId, $preview),
+        );
         $path = $source['path'];
         $binding = $source['binding'];
         $preview = $source['preview'];
         // Preview/draft always renders live so editors see unpublished chrome nodes.
         if ($preview) {
-            $html = $this->includeChromePhtml($path, $binding);
+            $html = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                'theme.chrome.render',
+                fn(): string => $this->includeChromePhtml($path, $binding),
+            );
             return $binding !== null
                 ? $this->finalizeChromeRendered($html, $themeId, true)
                 : $html;
@@ -85,7 +108,10 @@ final class ThemeLayoutEntityChrome
 
         // First-cold critical path: durable disk snapshot (or include) — no sync
         // shared_write of multi-scope chrome HTML into HotCache (6s→msg-38 regression).
-        $html = $this->loadOrRenderPublished($path, $binding);
+        $html = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'theme.chrome.render',
+            fn(): string => $this->loadOrRenderPublished($path, $binding),
+        );
         if ($html !== '' && $hotCache instanceof StorefrontScopeHotCache) {
             $this->queuePublishedChromePolicySeed($hotCache, $logicalKey, $html);
         }

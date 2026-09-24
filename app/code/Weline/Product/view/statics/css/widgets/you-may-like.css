@@ -179,3 +179,22 @@
     font-size: 1.15rem;
   }
 }
+
+/* WS4 cold-path lazy shell skeleton (theme tokens only) */
+.weline-product-you-may-like.is-deferred .wym-card--skeleton {
+  min-height: 14rem;
+  border-radius: var(--weline-theme-radius-md, var(--radius-md, 0.5rem));
+  background: linear-gradient(
+    90deg,
+    var(--weline-theme-surface-subtle, var(--color-surface-subtle, #f7f8f8)) 0%,
+    var(--weline-theme-surface, var(--color-surface, #fff)) 50%,
+    var(--weline-theme-surface-subtle, var(--color-surface-subtle, #f7f8f8)) 100%
+  );
+  background-size: 200% 100%;
+  animation: wym-skeleton-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes wym-skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+

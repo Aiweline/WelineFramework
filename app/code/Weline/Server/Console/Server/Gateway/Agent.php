@@ -562,6 +562,11 @@ final class Agent extends CommandAbstract
                         try {
                             $certificateRetirementReplay = $certificateRetirements
                                 ->pendingRetirementIntents($now + 0.25);
+                            if ($certificateRetirementReplay === []) {
+                                $retirementReplayBackoff->noteEmptyQueue();
+                            } else {
+                                $retirementReplayBackoff->notePendingQueue();
+                            }
                         } catch (\Throwable $throwable) {
                             WlsLogger::error_(
                                 '[WlsGatewayAgent] certificate retirement replay state rejected: '
@@ -1260,6 +1265,9 @@ final class Agent extends CommandAbstract
         $lastLaunchFailureLogAt = 0.0;
         $retirementStore = new ProjectCertificateGenerationStore();
         $retirementReplayBackoff = new CertificateRetirementReplayBackoff();
+        /** @var array<string,array<string,mixed>>|null */
+        $pendingProbeCache = null;
+        $pendingProbeCacheUntil = 0.0;
         try {
             while (!$shutdown) {
                 $now = $this->monotonicNow();
@@ -1283,6 +1291,9 @@ final class Agent extends CommandAbstract
                         (bool)($retirementPayload['deferred'] ?? false),
                         ($result['ok'] ?? false) === true,
                     );
+                    // Worker may have advanced intents; drop the probe cache.
+                    $pendingProbeCache = null;
+                    $pendingProbeCacheUntil = 0.0;
                     if (($result['ok'] ?? false) !== true) {
                         WlsLogger::warning_(
                             '[WlsCertificateRetirementAgent] replay remains pending: '
@@ -1299,22 +1310,36 @@ final class Agent extends CommandAbstract
                 ) {
                     $lastReplayProbeAt = $now;
                     try {
-                        $pendingRetirements = $retirementStore
-                            ->pendingRetirementIntents($now + 0.25);
-                        if ($pendingRetirements !== []
-                            && \count($this->deferredDesiredStateReap)
+                        if ($pendingProbeCache !== null && $now < $pendingProbeCacheUntil) {
+                            $pendingRetirements = $pendingProbeCache;
+                        } else {
+                            $pendingRetirements = $retirementStore
+                                ->pendingRetirementIntents($now + 0.25);
+                            $pendingProbeCache = $pendingRetirements;
+                            $pendingProbeCacheUntil = $now
+                                + $retirementReplayBackoff->probeCacheTtlSeconds();
+                        }
+                        if ($pendingRetirements === []) {
+                            // Empty queue: stretch idle backoff; never spawn.
+                            $retirementReplayBackoff->noteEmptyQueue();
+                        } else {
+                            $retirementReplayBackoff->notePendingQueue();
+                            if (\count($this->deferredDesiredStateReap)
                                 < self::DEFERRED_REAP_MAXIMUM
-                        ) {
-                            $desiredStateJob = $this->startDesiredStateJob(
-                                'retirements',
-                                $instanceName,
-                                $now,
-                                $masterLeaseFile,
-                                $masterPid,
-                                $masterEpoch,
-                                $parentCredential,
-                                $parentSlotId,
-                            );
+                            ) {
+                                $desiredStateJob = $this->startDesiredStateJob(
+                                    'retirements',
+                                    $instanceName,
+                                    $now,
+                                    $masterLeaseFile,
+                                    $masterPid,
+                                    $masterEpoch,
+                                    $parentCredential,
+                                    $parentSlotId,
+                                );
+                                $pendingProbeCache = null;
+                                $pendingProbeCacheUntil = 0.0;
+                            }
                         }
                     } catch (\Throwable $throwable) {
                         if ($lastLaunchFailureLogAt <= 0.0

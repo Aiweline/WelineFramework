@@ -6,15 +6,20 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\Cache\CachePolicy;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * Scope-hot HTML fragments for storefront header navigation (mega menu + sidebar tree).
+ *
+ * Search type dropdown: shared snapshot is the stable tree only — selected type /
+ * category / facade stay request-local (WS2 fragment gate).
  */
 final class StorefrontHeaderNavFragmentCache
 {
     private const CACHE_POOL = 'weline_theme_storefront_header_nav';
     private const FRESH_TTL_SECONDS = 3600;
     private const STALE_TTL_SECONDS = 86400;
+    private const SEARCH_DROPDOWN_REQUEST_MEMO_PREFIX = 'theme.header.search_type_dropdown.req.';
 
     /**
      * Rendered navigation is a channel resource: the category tree may differ
@@ -100,6 +105,49 @@ final class StorefrontHeaderNavFragmentCache
         return \is_string($html) ? $html : '';
     }
 
+    /**
+     * Stable search-type tree HTML (no request selected state).
+     * Callers apply selection / facade after HIT — forbid dirty selected HTML in the bag.
+     *
+     * Same-request: builder runs ≤1 via RequestContext memo (HotCache Policy still shared).
+     *
+     * @param list<array<string, mixed>> $types
+     */
+    public function rememberSearchTypeDropdown(
+        string $menuId,
+        array $types,
+        callable $builder,
+    ): string {
+        $logicalKey = $this->searchTypeDropdownLogicalKey($menuId, $types);
+        $memoKey = self::SEARCH_DROPDOWN_REQUEST_MEMO_PREFIX . $logicalKey;
+        try {
+            $memo = RequestContext::get($memoKey);
+            if (\is_string($memo) && $memo !== '') {
+                return $memo;
+            }
+        } catch (\Throwable) {
+            // RequestContext may be unavailable in CLI unit probes.
+        }
+
+        $html = $this->hotCache->rememberPolicy(
+            StorefrontThemeCacheCoordinator::headerSearchTypesPolicy(),
+            $logicalKey,
+            static function () use ($builder): string {
+                $rendered = $builder();
+                return \is_string($rendered) ? $rendered : '';
+            },
+        );
+        $html = \is_string($html) ? $html : '';
+        if ($html !== '') {
+            try {
+                RequestContext::set($memoKey, $html);
+            } catch (\Throwable) {
+            }
+        }
+
+        return $html;
+    }
+
     public function invalidateWebsite(int $websiteId): void
     {
         $this->hotCache->purgeProcessCacheForLogicalKey('theme.header.');
@@ -160,6 +208,61 @@ final class StorefrontHeaderNavFragmentCache
             . ($showBannerWithChildren ? 'banner1' : 'banner0')
             . '.'
             . $this->navListFingerprint($items);
+    }
+
+    /**
+     * v2: website/locale/origin/menu + catalog tree fingerprint only.
+     * Selected type / category_id MUST NOT enter the shared key (WS2 fragment gate).
+     *
+     * @param list<array<string, mixed>> $types
+     */
+    public function searchTypeDropdownLogicalKey(
+        string $menuId,
+        array $types,
+    ): string {
+        $menuId = \trim($menuId);
+        if ($menuId === '') {
+            $menuId = 'header-search-type-menu';
+        }
+        $menuSlug = \preg_replace('/[^a-z0-9_-]+/i', '-', \strtolower($menuId)) ?: 'menu';
+
+        return \sprintf(
+            'theme.header.search_type_dropdown.v2.%s.%s.%s.%s',
+            $this->storefrontLocaleSegment(),
+            $this->requestOriginSegment(),
+            $menuSlug,
+            $this->searchTypesFingerprint($types),
+        );
+    }
+
+    /**
+     * @param list<array<string, mixed>> $types
+     */
+    private function searchTypesFingerprint(array $types): string
+    {
+        $parts = [];
+        $walk = static function (array $nodes, int $depth) use (&$walk, &$parts): void {
+            foreach ($nodes as $node) {
+                if (!\is_array($node)) {
+                    continue;
+                }
+                $params = \is_array($node['params'] ?? null) ? $node['params'] : [];
+                $parts[] = (string)($node['code'] ?? '')
+                    . '|'
+                    . (string)($node['label'] ?? '')
+                    . '|'
+                    . (string)($params['category_id'] ?? '')
+                    . '|d'
+                    . $depth;
+                $children = \is_array($node['children'] ?? null) ? $node['children'] : [];
+                if ($children !== [] && $depth < 4) {
+                    $walk($children, $depth + 1);
+                }
+            }
+        };
+        $walk($types, 0);
+
+        return \substr(\sha1(\implode("\n", $parts)), 0, 16);
     }
 
     private function storefrontLocaleSegment(): string

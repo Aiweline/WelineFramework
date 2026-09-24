@@ -1104,24 +1104,30 @@ final class ThemeLayoutEntitySlotFiller
 
     private function injectChromeSlots(string $html, int $themeId, string $scope, bool $preview): string
     {
-        // Channel (or other leaf) chrome may only bake a subset of slots (e.g. only
-        // footer-extras). Walk ancestors and keep the nearest non-blank inner per
-        // slot so header-nav-extensions / footer-about-links still receive Blog widgets.
-        $bestInnerBySlot = $preview
-            ? $this->buildChromeSlotProjection($themeId, $scope, true)
-            : $this->rememberPublishedChromeSlotProjection($themeId, $scope);
-        if ($bestInnerBySlot === []) {
-            return $html;
-        }
+        return (string)\Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            \Weline\Theme\Service\ThemeLayoutBudgetPhases::L1_CHROME,
+            function () use ($html, $themeId, $scope, $preview): string {
+                // Channel (or other leaf) chrome may only bake a subset of slots (e.g. only
+                // footer-extras). Walk ancestors and keep the nearest non-blank inner per
+                // slot so header-nav-extensions / footer-about-links still receive Blog widgets.
+                $bestInnerBySlot = $preview
+                    ? $this->buildChromeSlotProjection($themeId, $scope, true)
+                    : $this->rememberPublishedChromeSlotProjection($themeId, $scope);
+                if ($bestInnerBySlot === []) {
+                    return $html;
+                }
 
-        // Nested chrome slots are siblings in chrome.phtml while the page shell
-        // keeps markers under header/footer. Fill by shell layout position only
-        // (deeper first, then document order) — never by slot-id name/length.
-        foreach ($this->orderSlotsByShellLayout($html, \array_keys($bestInnerBySlot)) as $slotId) {
-            $html = $this->replaceSlotInner($html, $slotId, $bestInnerBySlot[$slotId]);
-        }
+                // Nested chrome slots are siblings in chrome.phtml while the page shell
+                // keeps markers under header/footer. Fill by shell layout position only
+                // (deeper first, then document order) — never by slot-id name/length.
+                foreach ($this->orderSlotsByShellLayout($html, \array_keys($bestInnerBySlot)) as $slotId) {
+                    $html = $this->replaceSlotInner($html, $slotId, $bestInnerBySlot[$slotId]);
+                }
 
-        return $html;
+                return $html;
+            },
+            ['theme_id' => $themeId, 'scope' => $scope, 'preview' => $preview],
+        );
     }
 
     /**
