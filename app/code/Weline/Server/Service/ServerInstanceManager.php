@@ -408,6 +408,49 @@ class ServerInstanceManager
         return $this->purgeForcedInstanceArtifacts($name);
     }
 
+    /**
+     * Detect live presence that would make `forceCleanupInstance()` refuse, even
+     * when IPC `isInstanceRunning()` and `ServerInstanceInfo::isMasterRunning()`
+     * are false (busy control plane, or Master cmdline without `--launch-id`).
+     *
+     * Used by `server:start -clean -f` so it always runs `server:stop -f` first
+     * when a live lease, tracked PID, control port, or held lifecycle/start
+     * flock still belongs to this instance.
+     */
+    public function hasForceCleanBlockingPresence(string $name): bool
+    {
+        self::assertGatewayEndpointName($name);
+
+        $rawData = null;
+        try {
+            $rawData = $this->getRawInstanceData($name);
+        } catch (\Throwable) {
+            $rawData = null;
+        }
+
+        if (\is_array($rawData) && $this->hasTrackedRunningProcess($name, $rawData, null)) {
+            return true;
+        }
+
+        try {
+            if ($this->isInstanceIpcControllable($name)) {
+                return true;
+            }
+        } catch (\Throwable) {
+            // Port probes may fail closed; continue with lock checks.
+        }
+
+        $lifecyclePath = ServerLifecycleOperationLock::pathForInstance($name);
+        $startPath = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
+        if (VerifiedPersistentFileLock::isHeld($lifecyclePath) === true
+            || VerifiedPersistentFileLock::isHeld($startPath) === true
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+
     private function shouldPurgeStoppedInstanceRecord(array $rawData): bool
     {
         $lifecycleState = (string)($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');

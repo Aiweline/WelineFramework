@@ -353,6 +353,7 @@ final class ServerInstanceManagerCleanupTransactionTest extends TestCase
         [$process, $pipes] = $this->holdLockInChildProcess($lockPath);
         try {
             self::assertTrue(VerifiedPersistentFileLock::isHeld($lockPath));
+            self::assertTrue($manager->hasForceCleanBlockingPresence($name));
             self::assertFalse($manager->forceCleanupInstance($name));
             self::assertFileExists($manager->getInstanceFile($name));
         } finally {
@@ -362,6 +363,15 @@ final class ServerInstanceManagerCleanupTransactionTest extends TestCase
             @\fclose($pipes[2]);
             @\proc_close($process);
         }
+    }
+
+    public function testHasForceCleanBlockingPresenceIsFalseForStoppedOfflineEndpoint(): void
+    {
+        $name = $this->newInstanceName('force-offline');
+        $this->writeEndpoint($name, $this->stoppedEndpoint($name, 52, 5_200));
+        $manager = $this->manager();
+
+        self::assertFalse($manager->hasForceCleanBlockingPresence($name));
     }
 
     private function manager(): ServerInstanceManager

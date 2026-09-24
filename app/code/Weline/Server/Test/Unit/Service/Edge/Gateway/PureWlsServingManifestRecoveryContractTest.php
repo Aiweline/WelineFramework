@@ -115,6 +115,7 @@ final class PureWlsServingManifestRecoveryContractTest extends TestCase
         $forcedClean = $this->methodSource(Start::class, 'prepareForcedCleanStart');
         self::assertStringContainsString('forceCleanupInstance', $forcedClean);
         self::assertStringContainsString('stopExistingServer', $forcedClean);
+        self::assertStringContainsString('hasForceCleanBlockingPresence', $forcedClean);
 
         $help = $this->methodSource(Start::class, 'help');
         self::assertStringContainsString("'-clean, --clean'", $help);

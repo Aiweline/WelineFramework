@@ -10185,7 +10185,19 @@ class Start extends CommandAbstract
                     $needsStop = true;
                 }
             } catch (\Throwable) {
-                // Corrupt endpoint: continue to forced artifact retirement.
+                // Corrupt endpoint: continue with presence / lock probes.
+            }
+        }
+        // IPC 超时或 Master 命令行无 --launch-id 时，isInstanceRunning /
+        // isMasterRunning 会假阴性；仍须先 stop -f，否则 forceCleanup 会因
+        // 存活租约、受管 PID 或 lifecycle/start flock 直接失败。
+        if (!$needsStop) {
+            try {
+                if ($instanceManager->hasForceCleanBlockingPresence($instanceName)) {
+                    $needsStop = true;
+                }
+            } catch (\Throwable) {
+                $needsStop = true;
             }
         }
 

@@ -1041,11 +1041,19 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-指南,Guide
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
+查看更多,"View more"
 商品,Products
 查看规格图,"View spec images"
 减少数量,"Decrease quantity"
@@ -1068,42 +1076,7 @@ FAQ/常见问题,FAQ
 "还差 %1 包邮","You're %1 away from free shipping"
 已享包邮,"You've unlocked free shipping"
 关闭通知,"Close notification"
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-查看更多,"View more"
-全部商品,"Shop All"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 面包屑,"bread crumbs"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
-官方社交媒体,"Official social media"
-抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
-您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
-请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
-SORRY,SORRY
-前往首页继续购物,"Continue shopping on the home page"
-返回上一页,"Go back"
-推荐产品,"Recommended product"
-7×24,24/7
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-件商品,"items of goods"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
-天,Day(s)
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1137,7 +1110,16 @@ SORRY,SORRY
 表单操作,"Form operations"
 栅格内容,"Raster content"
 末页,"Last page"
+指南,Guide
+抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
+您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
+请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
+SORRY,SORRY
+前往首页继续购物,"Continue shopping on the home page"
+返回上一页,"Go back"
+推荐产品,"Recommended product"
 问答,Q&A
+7×24,24/7
 服务暂时不可用,"Service temporarily unavailable"
 我们正在处理问题，请稍后再试。,"We are working on the issue; please try again later."
 您可以返回首页继续浏览，或稍后刷新本页。,"You can return home to keep browsing, or refresh this page later."
@@ -1206,6 +1188,8 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1247,6 +1231,7 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
+件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1257,6 +1242,10 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1274,9 +1263,14 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
+距离结束,"Ends in"
 精选轮播,"Featured Carousel"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
+官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1296,6 +1290,7 @@ Logo,Logo
 请使用微信扫描二维码分享,"Please scan the QR code with WeChat to share"
 上一条,Previous
 下一条,Next
+全部商品,"Shop All"
 面包屑导航,Breadcrumbs
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
@@ -1311,6 +1306,10 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -2346,6 +2345,7 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 汉服分类展示图,"Hanfu category showcase image"
 开始搬迁文件...,"Start moving files..."
 更新主题文件！,"Update theme file!"

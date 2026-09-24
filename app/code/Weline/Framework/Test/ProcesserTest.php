@@ -1330,6 +1330,36 @@ class ProcesserTest extends TestCore
         ], $filtered);
     }
 
+    public function testLaunchIdMatchesCommandLineAllowsMasterWithoutLaunchIdAdvertisement(): void
+    {
+        $masterCmd = 'weline-wls-master --name=weline-wls-master-default-p05113ef3';
+        $indexedLaunchId = '8971979f2f7d5fcea0943c7689b3a977';
+
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'launchIdMatchesCommandLine',
+            [$masterCmd, $indexedLaunchId],
+        ));
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'launchIdMatchesCommandLine',
+            [$masterCmd, ''],
+        ));
+
+        $workerCmd = 'php worker.php --name=weline-wls-worker-default-1'
+            . ' --launch-id=0123456789abcdef0123456789abcdef';
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'launchIdMatchesCommandLine',
+            [$workerCmd, '0123456789abcdef0123456789abcdef'],
+        ));
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'launchIdMatchesCommandLine',
+            [$workerCmd, 'fedcba9876543210fedcba9876543210'],
+        ));
+    }
+
     private function invokePrivateStatic(string $class, string $method, array $args): mixed
     {
         $ref = new \ReflectionMethod($class, $method);
