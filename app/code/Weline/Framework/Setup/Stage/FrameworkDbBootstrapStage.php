@@ -219,6 +219,34 @@ class FrameworkDbBootstrapStage extends AbstractStage
                 $connector->query($sql)->fetch();
             }
         }
+        $this->widenMysqlBackupDataColumn($connector, $backupsTable, $cols);
+    }
+
+    /**
+     * MySQL TEXT caps at 64KB; schema-diff commit writes table/chunk snapshots
+     * into backup_data before it would reach this table's own ALTER, so the
+     * widening must happen here.
+     *
+     * @param list<array<string, mixed>> $cols
+     */
+    private function widenMysqlBackupDataColumn(ConnectorInterface $connector, string $backupsTable, array $cols): void
+    {
+        if (strtolower((string)$connector->getConfigProvider()->getDbType()) !== 'mysql') {
+            return;
+        }
+        foreach ($cols as $col) {
+            if (strcasecmp((string)($col['name'] ?? ''), MigrationBackup::schema_fields_BACKUP_DATA) !== 0) {
+                continue;
+            }
+            if (!in_array(strtolower((string)($col['type'] ?? '')), ['tinytext', 'text', 'mediumtext'], true)) {
+                return;
+            }
+            $connector->query(
+                'ALTER TABLE ' . $connector->formatTableName($backupsTable)
+                . " MODIFY `backup_data` LONGTEXT NULL COMMENT 'Backup Data'"
+            )->fetch();
+            return;
+        }
     }
 
     /**

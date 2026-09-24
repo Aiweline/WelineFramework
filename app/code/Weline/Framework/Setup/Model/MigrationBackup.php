@@ -27,7 +27,7 @@ class MigrationBackup extends Model implements ModelInterface
     public const schema_fields_MIGRATION_ID = 'migration_id';
     #[Col(type: 'varchar', length: 255, nullable: false, comment: 'Table Name')]
     public const schema_fields_TABLE_NAME = 'table_name';
-    #[Col(type: 'text', nullable: true, comment: 'Backup Data')]
+    #[Col(type: 'longtext', nullable: true, comment: 'Backup Data')]
     public const schema_fields_BACKUP_DATA = 'backup_data';
     #[Col(type: 'varchar', length: 50, nullable: false, comment: 'Backup Type')]
     public const schema_fields_BACKUP_TYPE = 'backup_type';
