@@ -52,7 +52,7 @@ class RateTemplate extends AbstractModel
     public const schema_fields_VOLUME_RATE = 'volume_rate';
     #[Col('decimal', '10,2', comment: '每件费用')]
     public const schema_fields_QUANTITY_RATE = 'quantity_rate';
-    #[Col('text', comment: '混合模式配置JSON')]
+    #[Col('longtext', comment: '混合模式配置JSON')]
     public const schema_fields_MIXED_CONFIG = 'mixed_config';
     #[Col('text', comment: 'Shopify式阶梯 JSON [{min,max,price}]')]
     public const schema_fields_RATE_BRACKETS = 'rate_brackets';
