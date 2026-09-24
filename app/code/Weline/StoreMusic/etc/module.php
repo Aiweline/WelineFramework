@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_StoreMusic',
-    'version' => '1.1.57',
+    'version' => '1.1.58',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Backend' => '*',
@@ -17,5 +17,8 @@ return [
         'Weline_MediaManager' => '*',
         'Weline_Consent' => '*',
         'Weline_Websites' => '*',
+    ],
+    'provides' => [
+        'deploy.flat_static.Weline_StoreMusic' => \Weline\StoreMusic\Api\Deploy\FlatStaticRuntimeFilesProvider::class,
     ],
 ];
