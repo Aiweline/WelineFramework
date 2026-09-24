@@ -98,6 +98,26 @@ final class SchemaDiffEngineTest extends TestCase
         self::assertNotSame([], (new SchemaDiffEngine())->diff($declared, $actual, 'mysql'));
     }
 
+    public function testMysqlTextFamilyNeverNarrowsWiderPhysicalColumn(): void
+    {
+        $table = static fn (string $type): TableSchema => new TableSchema(
+            tableName: 'demo',
+            comment: '',
+            columns: [new ColumnDefinition('payload', $type, null, true, false, false, null, 'Payload')],
+            indexes: [],
+            foreignKeys: [],
+            modelClass: null,
+        );
+        $engine = new SchemaDiffEngine();
+
+        self::assertSame([], $engine->diff($table('text'), $table('longtext'), 'mysql'));
+        self::assertSame([], $engine->diff($table('blob'), $table('mediumblob'), 'mysql'));
+        $widen = $engine->diff($table('longtext'), $table('text'), 'mysql');
+        self::assertCount(1, $widen);
+        self::assertSame(SchemaDiffOp::KIND_MODIFY_COLUMN, $widen[0]->kind);
+        self::assertNotSame([], $engine->diff($table('varchar'), $table('longtext'), 'mysql'));
+    }
+
     public function testSqliteTableCommentDoesNotCreatePermanentDiff(): void
     {
         $declared = new TableSchema(
