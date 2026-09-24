@@ -84,7 +84,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 ### 3b. 工程团队（复杂才自己选 team）
 
 - **硬门槛（`engineering_team_for_new_requirements`）**：父会话自己选模式，不必等用户开口。简单走监工，每句 `监工:`。复杂自己进入 team；**父会话仅 `Team:项目经理:`**；其余席位必须是**真实子智能体**（`one_seat_one_agent`），禁止父会话换前缀扮演。席间经 `channel/{thread}.md` + resume **互聊**（`peer_talk_via_channel`）；项目经理 = **SESSION 记账 + 计划生命周期主人 + 交换机**（DoD 检查，不替代专席技术复审）。转述子智能体结论时才出现 `Team:架构师:` 等前缀。细则 [工程团队](../../../../../dev/ai-command/ai/工程团队.md)。
-- **需求会话总控（`requirement_session_dashboard`）**：立项即建归属模块 `doc/开发/session/{slug}.md`（与 spec 同 slug；模板 [requirement-session.md](../../../../../dev/ai-command/ai/templates/requirement-session.md)）。集中阶段、计划项进度、未完成清单、审查索引、交付通知日志；仅 PM/监工维护。无 SESSION 不得施工；未完成清单非「无」不得宣称完成。
+- **需求会话总控（`requirement_session_dashboard`）**：立项即建仓库根 `dev/session/{slug}.md`（与归属模块 `doc/开发/spec/{slug}.md` 同 slug；模板 [requirement-session.md](../../../../../dev/ai-command/ai/templates/requirement-session.md)）。集中阶段、计划项进度、未完成清单、审查索引、交付通知日志；仅 PM/监工维护。**禁止**写入模块 `doc/`（`module_doc_forbids_ephemeral_work_artifacts`）。无 SESSION 不得施工；未完成清单非「无」不得宣称完成。
 - **项目经理计划生命周期（`pm_plan_lifecycle`）**：审缺口→派人→监控→席位交付必 `notify_pm`→PM DoD 检查并更新 SESSION→按 deps 唤醒（已满足 deps 可并行）→等测试通知→PM 复检→关计划项；发现须开子 `plan_id` 跟到测试+复检闭环；返工记 SESSION 再拉人循环；全部 closed + 汇审通过才汇报。
 - **席位专项技能镜（`seat_skill_mirrors`）**：每席子智能体提示 = 通用骨架 + 该席增量；开工前必须 `get_skill` / Read 本席 MCP 技能与权威文档（如前端→`frontend_development`+Taglib/Theme；事件→`event_extension`；**数据分析→`visitor_data_analytics`+技能引用`frontend_development`+`taglib_ui_control`+像素指南（整模块 Visitor 含本模块 event.xml/像素桥接；≠通用事件席·禁产品混岗；GTM/GA4 互斥+去重+字典/链）**；**API→`api_sdk_development`+API接口开发规范+BinQuery Provider开发指南**；**支付→`payment_development`+payment-shell+provider-development（改完必拉测试席真浏览器过触及支付全流程）**；**性能检查→`performance_check`+统一缓存范围与性能优化（设计检查+开发后复审；框架约束内）**；**电商顾问→`ecommerce_advisor`+电商顾问.md（禁写码；联网政策；合并原合规）**；后端→模块开发指南+升版门禁）。禁止只发通用骨架。MCP：`engineering_team_bundle.seat_skill_mirrors`。框架专席含 **API**（只做 REST **或** BinQuery/QueryProvider；归属模块落盘；站内业务走 BinQuery，对外走 REST；见 `api_rest_in_owning_module`）、**支付开发工程师**（万能支付壳/对接/退款/Webhook；见 `payment_engineer_for_payment_work`；**`payment_browser_e2e_closed_loop`：改完拉 `Team:测试:` 真 Browser 过方法全流程才过手**；指令 [支付开发.md](../../../../../dev/ai-command/ai/支付开发.md)）、**数据分析**（`Weline_Visitor` 整模块/像素/报表；见 `analytics_engineer_for_visitor_work`；须前端技能引用）、**性能检查工程师**（热路径/缓存设计检查与开发后复审；见 `performance_engineer_for_design_and_review`；指令 [性能检查.md](../../../../../dev/ai-command/ai/性能检查.md)）与 **电商顾问**（见 `ecommerce_advisor_for_commerce`；指令 [电商顾问.md](../../../../../dev/ai-command/ai/电商顾问.md)）。
 - **框架优先**：需求 / 设计 / 施工 / 复审先映射框架机制与组件，再谈业务补丁。
@@ -97,7 +97,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **并发**：仅 team 模式，且文件或扩展点不重叠、**contracts + UC 已冻结**、本席依赖已满足，才多个子智能体。
 - **上报与停工**：跨轨或硬规则问题必须上报并开会（通道互聊）。无人能拍板或重大架构矛盾 → 停工汇报，确认前禁止改 PHP / 模板 / CSS。停工句也要带 `Team:项目经理:`。
 - **发现问题拉起项目经理（`findings_wake_pm`）**：专席一找出问题立刻 escalate + `@项目经理：请立刻组队解决`；项目经理同回合组队解决并落 SESSION 计划项；**不用** Issue 任务列表。
-- **纪要**：仅 team 模式写入 `doc/开发/team/{slug}/`（含 `roster.md` / `channel/` / `surfaces.md` / `components.md` / `contracts.md` / `deps.md` / `{席位}-review.md`）。子智能体回报完成不是交付；进度以 SESSION 为准。
+- **纪要**：仅 team 模式写入 `dev/team/{slug}/`（含 `roster.md` / `channel/` / `surfaces.md` / `components.md` / `contracts.md` / `deps.md` / `{席位}-review.md`）。**禁止**写入模块 `doc/开发/team/`。子智能体回报完成不是交付；进度以 SESSION 为准。
 
 ### 4. 实现
 
@@ -175,7 +175,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 ### 7. 收口
 
-- **SESSION 闭环（硬门槛，`requirement_session_dashboard` + `pm_plan_lifecycle`）**：宣称完成前对照 `doc/开发/session/{slug}.md`——全部计划项 `closed`、未完成清单为「无」、交付通知日志含测试与 PM 复检、汇审通过；否则只能报「代码已改，SESSION/计划未闭环」。
+- **SESSION 闭环（硬门槛，`requirement_session_dashboard` + `pm_plan_lifecycle`）**：宣称完成前对照 `dev/session/{slug}.md`——全部计划项 `closed`、未完成清单为「无」、交付通知日志含测试与 PM 复检、汇审通过；否则只能报「代码已改，SESSION/计划未闭环」。
 - **规划 + TDD（工程行为）**：先完成需求拆解与 ≥1 `unit` 验收项；红→绿→实际跑测 PASS evidence 才算完。
 - **自行验证（硬门槛，`agent_self_verify_before_done`）**：实现后须亲自跑 UT/RT/WB（按表面）；acceptance 无 evidence 不得标 passed，亦不得宣称完成。
 - **计划 / todo 诚实收口（硬门槛，`plan_todo_evidence_closeout`）**：多 todo 计划不得在未逐项举证时宣称「已完成 / done / 主链路完成」。每个 todo 须有可复核证据（代码路径、DB 行数/表状态、命令输出、Browser）。部分完成必须明确报告「部分完成」并附**未完成清单**；同步写入归属模块 `doc/开发日志.md` 与 SESSION（禁止把 Cursor todo 无证据标为 completed）。虚报完成属硬违规。
@@ -201,7 +201,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 | 0 | **必须** `prepare_project`（工程任务；刷新 hard_constraints） |
 | 1–2 | 按需 `resolve_task_context`、`search_project_knowledge`、`get_indexed_document` |
 | 3 | 工程计划自检（需求/架构/验收项记录于任务笔记或模块文档）；非简单需求按 [工程团队](../../../../../dev/ai-command/ai/工程团队.md) 编制 |
-| 3b | `get_skill(engineering_team)`；纪要 `doc/开发/team/{slug}/`；停工则等用户确认 |
+| 3b | `get_skill(engineering_team)`；纪要 `dev/team/{slug}/`；停工则等用户确认 |
 | 3–4 | **宿主原生编辑**（按需 MCP 只读检索） |
 | 部署计划 | 宿主直接调用 `Weline_Deploy` CLI / 运维文档（MCP 不再提供 deploy 工具） |
 | MCP 未挂载 | 宿主 Read `AI硬规则索引.md` 与原生编辑；不得假装已遵守 MCP |

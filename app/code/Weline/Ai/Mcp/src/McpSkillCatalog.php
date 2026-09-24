@@ -118,8 +118,8 @@ final class McpSkillCatalog
                 'command_path' => 'dev/ai-command/ai/工程团队.md',
                 'parent_role' => '项目经理',
                 'exempt' => ['plan_complexity=simple', 'content_ops_skills_skip_mcp'],
-                'minutes_dir' => 'doc/开发/team/{slug}/',
-                'session_path' => 'doc/开发/session/{slug}.md',
+                'minutes_dir' => 'dev/team/{slug}/',
+                'session_path' => 'dev/session/{slug}.md',
                 'session_template' => 'dev/ai-command/ai/templates/requirement-session.md',
                 'minutes_extra' => [
                     'roster.md',
@@ -170,8 +170,8 @@ final class McpSkillCatalog
                 'component_negotiate' => ['原型', 'UI', '主题开发工程师'],
                 'one_seat_one_agent' => true,
                 'peer_talk' => [
-                    'channel_dir' => 'doc/开发/team/{slug}/channel/',
-                    'roster_path' => 'doc/开发/team/{slug}/roster.md',
+                    'channel_dir' => 'dev/team/{slug}/channel/',
+                    'roster_path' => 'dev/team/{slug}/roster.md',
                     'pm_role' => 'switchboard',
                     'result_waiting_peer' => 'waiting_peer',
                     'result_waiting_acceptance' => 'waiting_acceptance',
@@ -582,7 +582,7 @@ final class McpSkillCatalog
                     ],
                     'must_query_scope' => 'SESSION 记账/计划生命周期/DoD 检查/编制波次/通道交换机/停工与汇审；不抢施工文件；不替代专席技术复审',
                     'prompt_increment' => '你是项目经理：SESSION 唯一记账人 + 计划生命周期主人 + 交换机。职责：审规划缺口→派人→监控→收交付做 DoD/契约/证据/范围检查→等测试过关→再复检→返工记 SESSION 再拉人→全部计划项 closed + 汇审通过才汇报。禁止扮演其它席位写码/签收；禁止替代架构/专席合规/代码级复审。拉起子智能体时必须粘贴通用骨架 + 该席 seat_skill_mirrors 增量；登记 roster agent_id。\n'
-                        . 'HARD（requirement_session_dashboard）：立项即维护 doc/开发/session/{slug}.md（模板 requirement-session.md）；仅本席可改 SESSION；未完成清单非「无」禁止宣称完成。\n'
+                        . 'HARD（requirement_session_dashboard）：立项即维护 dev/session/{slug}.md（模板 requirement-session.md；禁止写入模块 doc/）；仅本席可改 SESSION；未完成清单非「无」禁止宣称完成。\n'
                         . 'HARD（pm_plan_lifecycle / notify_pm）：席位每次 closed|escalate|waiting_peer|waiting_acceptance 必通知本席；同回合 DoD 检查并更新 SESSION（计划项/交付通知日志）；发现 escalate 必须开 SESSION 子 plan_id（登记 issuer_seat + issuer_acceptance=pending），未测试+复检+发起方签收禁止 closed；deps 已满足席可并行，记账不全球串行。\n'
                         . 'HARD（ui_prototype_gate_before_test · acceptance_gate_order）：UI in_scope 时硬顺序 specialty_reviews_pass → ui_and_prototype_review_pass → tester_execution_pass → pm_huishen_pass → user_report_allowed；禁止测试与 UI/原型并行抢跑；UI/原型 fail 须 resume 开发子智能体再审；测试 pass 后本席汇审通过才可向用户汇报。\n'
                         . 'HARD（findings_wake_pm）：收到专席 escalate（含电商顾问「要开发什么」dev_ask）后同回合立刻开 channel、拉起/resume 相关席位开会并安排施工解决——不用 Issue 任务列表积压；必须落 SESSION 计划项；禁止只转述发现却不组队。'

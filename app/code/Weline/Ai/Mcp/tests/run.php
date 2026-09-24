@@ -814,6 +814,24 @@ try {
             && str_contains($contentOpsSkip, '新建文章'),
         'content_ops_skills_skip_mcp forbids MCP on content-ops skills',
     );
+    $ephemeralDocRule = '';
+    foreach (HardConstraintsCatalog::mcpOperationalRules() as $rule) {
+        if (($rule['id'] ?? '') === 'module_doc_forbids_ephemeral_work_artifacts') {
+            $ephemeralDocRule = (string) ($rule['summary'] ?? '');
+            break;
+        }
+    }
+    check(
+        str_contains($ephemeralDocRule, 'dev/session')
+            && str_contains($ephemeralDocRule, 'dev/team')
+            && str_contains($ephemeralDocRule, 'FORBIDDEN')
+            && str_contains($ephemeralDocRule, 'app/code/*/doc/'),
+        'module_doc_forbids_ephemeral_work_artifacts routes temp work to dev/',
+    );
+    check(
+        str_contains(HardConstraintsCatalog::mcpInstructions(), 'module_doc_forbids_ephemeral_work_artifacts'),
+        'mcp instructions mention module_doc_forbids_ephemeral_work_artifacts',
+    );
     check(
         str_contains(HardConstraintsCatalog::mcpInstructions(), 'content_ops_skills_skip_mcp'),
         'mcp instructions mention content_ops_skills_skip_mcp',
