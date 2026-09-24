@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_CustomerService',
-    "version" => '1.3.84',
+    "version" => '1.3.85',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Customer' => '*',

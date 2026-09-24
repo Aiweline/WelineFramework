@@ -9,7 +9,7 @@ return [
         'type' => 'footer',
         'code' => 'footer-currency-rates-link',
         'area' => 'frontend',
-        'template' => 'Weline_Currency::templates/frontend/widgets/footer-currency-rates-link.phtml',
+        'template' => 'Weline_Currency::templates/Frontend/widgets/footer-currency-rates-link.phtml',
         'page_layouts' => ['*'],
         'position' => ['footer'],
         'slot' => 'footer-payment-account-links',

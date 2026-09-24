@@ -446,6 +446,26 @@ final class DatabaseAstCompilerRegressionTest extends TestCase
         $this->assertStringContainsString('DERIVED', $sql);
     }
 
+    /**
+     * @dataProvider adapterQueryProvider
+     */
+    public function testAdapterHavingEmitsSingleHavingKeyword(string $queryClass): void
+    {
+        /** @var MysqlAdapterTestQuery|PgsqlAdapterTestQuery|SqliteAdapterTestQuery $query */
+        $query = new $queryClass();
+        $query->table('offers')
+            ->fields(['product_id', 'representative_offer_id' => 'MIN(offer_id)'])
+            ->group('product_id')
+            ->having('MIN(offer_id) > 0')
+            ->order('representative_offer_id', 'ASC')
+            ->limit(96)
+            ->select();
+
+        $sql = strtoupper($query->sql);
+        $this->assertSame(1, substr_count($sql, 'HAVING'), $query->sql);
+        $this->assertMatchesRegularExpression('/GROUP BY .*PRODUCT_ID.* HAVING MIN\(.*OFFER_ID.*\) > 0/', $sql);
+    }
+
     public function testSqliteTableCommentIsAnExplicitNoOp(): void
     {
         $reflection = new ReflectionClass(SqliteConnector::class);

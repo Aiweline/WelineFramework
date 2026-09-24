@@ -18,7 +18,7 @@ final class FooterContactServiceLinkWidgetContractTest extends TestCase
         self::assertSame(['*'], $widget['page_layouts'] ?? null);
         self::assertSame('footer-help-links', $widget['slot'] ?? null);
         self::assertSame(
-            'Weline_CustomerService::templates/frontend/widgets/footer-contact-service-link.phtml',
+            'Weline_CustomerService::templates/Frontend/widgets/footer-contact-service-link.phtml',
             $widget['template'] ?? null
         );
         $injection = $widget['default_injections'][0] ?? [];
