@@ -112,11 +112,12 @@ class RouterRunBefore implements ObserverInterface
         }
         # 匹配媒介资源
         if (str_starts_with($path, '/pub/media/')) {
-            $file_path = $this->resolveExistingFileInRoot(BP . '/pub/media', \substr($decodedPath, \strlen('/pub/media/')));
-            if ($file_path !== null && is_file($file_path)) {
+            $relative = \substr($decodedPath, \strlen('/pub/media/'));
+            $resolved = $this->resolveMediaRelativeWithRasterFallback($relative);
+            if ($resolved !== null) {
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
-                $core->StaticFile($decodedPath, true);
+                $core->StaticFile('/pub/media/' . \ltrim($resolved, '/'), true);
             }
         }
         // /media/{relative} → pub/media/{relative}（音频/附件等非 /media/image|/media/file 直链）
@@ -126,11 +127,11 @@ class RouterRunBefore implements ObserverInterface
             && !str_starts_with($path, '/media/backend/')
         ) {
             $relative = \substr($decodedPath, \strlen('/media/'));
-            $file_path = $this->resolveExistingFileInRoot(BP . '/pub/media', $relative);
-            if ($file_path !== null && is_file($file_path)) {
+            $resolved = $this->resolveMediaRelativeWithRasterFallback($relative);
+            if ($resolved !== null) {
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
-                $core->StaticFile('/pub/media/' . \ltrim($relative, '/'), true);
+                $core->StaticFile('/pub/media/' . \ltrim($resolved, '/'), true);
             }
         }
         // 跳过解析 
@@ -172,6 +173,33 @@ class RouterRunBefore implements ObserverInterface
         }
 
         return $this->isPathInsideRoot($real, $rootReal) ? $real : null;
+    }
+
+    /**
+     * Exact media hit, or sibling .webp when jpg/png/gif was batch-converted.
+     * Returns web-relative path under pub/media (forward slashes) or null.
+     */
+    private function resolveMediaRelativeWithRasterFallback(string $relative): ?string
+    {
+        $relative = \ltrim(\str_replace('\\', '/', $relative), '/');
+        if ($relative === '' || \str_contains($relative, '..')) {
+            return null;
+        }
+        $filePath = $this->resolveExistingFileInRoot(BP . '/pub/media', $relative);
+        if ($filePath !== null) {
+            return $relative;
+        }
+        $info = \pathinfo($relative);
+        $ext = \strtolower((string)($info['extension'] ?? ''));
+        $stem = (string)($info['filename'] ?? '');
+        if ($stem === '' || !\in_array($ext, ['jpg', 'jpeg', 'png', 'gif'], true)) {
+            return null;
+        }
+        $dir = (string)($info['dirname'] ?? '.');
+        $webpRel = ($dir === '.' || $dir === '') ? ($stem . '.webp') : ($dir . '/' . $stem . '.webp');
+        $webpPath = $this->resolveExistingFileInRoot(BP . '/pub/media', $webpRel);
+
+        return $webpPath !== null ? $webpRel : null;
     }
 
     private function isPathInsideRoot(string $path, string $root): bool

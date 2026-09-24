@@ -172,12 +172,20 @@ final class ReviewMediaService
             ->where(ReviewMedia::schema_fields_STATUS, ReviewMedia::STATUS_ATTACHED)
             ->order(ReviewMedia::schema_fields_ID, 'ASC')
             ->select()->fetchArray();
-        return array_map(fn(array $row): array => [
-            'kind' => (string)($row[ReviewMedia::schema_fields_MEDIA_KIND] ?? ''),
-            'url' => '/media/' . $this->encodePath((string)($row[ReviewMedia::schema_fields_PATH] ?? '')),
-            'mime_type' => (string)($row[ReviewMedia::schema_fields_MIME_TYPE] ?? ''),
-            'name' => (string)($row[ReviewMedia::schema_fields_ORIGINAL_NAME] ?? ''),
-        ], $rows);
+        return array_map(function (array $row): array {
+            $path = $this->preferExistingRelativePath((string)($row[ReviewMedia::schema_fields_PATH] ?? ''));
+            $mime = (string)($row[ReviewMedia::schema_fields_MIME_TYPE] ?? '');
+            if (str_ends_with(strtolower($path), '.webp') && $mime !== '' && !str_contains($mime, 'webp')) {
+                $mime = 'image/webp';
+            }
+
+            return [
+                'kind' => (string)($row[ReviewMedia::schema_fields_MEDIA_KIND] ?? ''),
+                'url' => '/media/' . $this->encodePath($path),
+                'mime_type' => $mime,
+                'name' => (string)($row[ReviewMedia::schema_fields_ORIGINAL_NAME] ?? ''),
+            ];
+        }, $rows);
     }
 
     private function plainFilename(string $name): string
@@ -190,5 +198,35 @@ final class ReviewMediaService
     private function encodePath(string $path): string
     {
         return implode('/', array_map('rawurlencode', array_filter(explode('/', trim($path, '/')), 'strlen')));
+    }
+
+    /**
+     * Batch webp migration may leave DB path as .jpg while disk has sibling .webp.
+     */
+    private function preferExistingRelativePath(string $relativePath): string
+    {
+        $relativePath = trim(str_replace('\\', '/', $relativePath), '/');
+        if ($relativePath === '' || str_contains($relativePath, '..')) {
+            return $relativePath;
+        }
+        $mediaRoot = rtrim((string)PUB, '/\\') . DIRECTORY_SEPARATOR . 'media';
+        $abs = $mediaRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+        if (is_file($abs)) {
+            return $relativePath;
+        }
+        $info = pathinfo($relativePath);
+        $ext = strtolower((string)($info['extension'] ?? ''));
+        $stem = (string)($info['filename'] ?? '');
+        if ($stem === '' || !in_array($ext, ['jpg', 'jpeg', 'png', 'gif'], true)) {
+            return $relativePath;
+        }
+        $dir = (string)($info['dirname'] ?? '.');
+        $webpRel = ($dir === '.' || $dir === '') ? ($stem . '.webp') : ($dir . '/' . $stem . '.webp');
+        $webpAbs = $mediaRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $webpRel);
+        if (is_file($webpAbs)) {
+            return $webpRel;
+        }
+
+        return $relativePath;
     }
 }

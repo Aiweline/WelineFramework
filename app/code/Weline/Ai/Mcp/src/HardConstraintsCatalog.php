@@ -236,6 +236,7 @@ SH;
             . 'requirement_issuer_owns_acceptance: escalate/dev_ask 发起席须 waiting_acceptance 盯验收（读 PM 进度写 issuer_acceptance；禁甩手；缺签收禁汇审）. '
             . 'ui_skill_decision; 有图(web_ui)→视觉UI+原型必上(prototype+frontend-design+weline-theme-development; complex team seats 原型+UI+前端+主题). '
             . 'requirement_acceptance_always; closeout 汇审; TDD; delivery URLs. '
+            . 'generated_images_prefer_webp: AI/host 生图默认落盘 WebP（output_format=webp；返回 png/jpg 须转码后再交付）；仅用户明示/确需非 WebP alpha/favicon·ico 才留 PNG. '
             . 'After MCP use prefix Weline：; content[0] is the call receipt. '
             . 'session_learning_knowledge_conflict_gate: classify durable user rules as knowledge vs one-off requirements; '
             . 'obey validated learning; on conflict with prior knowledge STOP+report for user decision.';
@@ -684,6 +685,11 @@ SH;
                 'id' => 'media_reference_identity_protocol',
                 'summary' => 'MANDATORY: Media occupancy identity follows MediaReferenceIdentity.v1. Build ONLY via w_scope(scope?, type, code, other?) (PHP) or window.w_scope (JS)—never hand-paste identity_path or synthesize scope~sku. scope: segments are storage_scope only; sku:/theme:/brand: are identity only. Unbind uses type+scope+code AND. resource.scope on resource_changed is OPTIONAL (auto from request/Ambient; CLI must pass). Swap/clear image = unbind refs only, never delete files; physical delete goes to trash. Common pick: file-manager tag calls w_scope; visual editor sets explicit identity on the tag (instance). Authoritative: FileManager media-reference-identity-protocol.md + skill media-reference-identity.',
                 'doc' => 'app/code/Weline/FileManager/doc/media-reference-identity-protocol.md',
+            ],
+            [
+                'id' => 'generated_images_prefer_webp',
+                'summary' => 'MANDATORY for AI/host image generation deliverables (Cursor GenerateImage, MediaManager AI draw, product/theme/banner/hero/marketing rasters, image pipeline outpaint exports, agent-authored pub/media or design assets): DEFAULT final on-disk format is WebP (.webp, image/webp). Prefer requesting output_format=webp from providers; if the tool returns PNG/JPEG, convert before delivery (cwebp / Pillow / GD imagewebp) and update any DB/path refs to .webp. Keep PNG only when (1) user explicitly asks for PNG, (2) true alpha transparency is required AND the consumer cannot take WebP alpha (rare—WebP alpha is preferred when supported), or (3) favicon/.ico / platform-mandated PNG. FORBID shipping large JPG/PNG as the lasting storefront/media deliverable “because the generator defaulted to PNG”. Aligns with MediaManager AiDrawService + AiService defaults.',
+                'doc' => 'app/code/Weline/Product/doc/ai/skills/ecommerce-detail-suite/companions/weline-image-pipeline.md',
             ],
             [
                 'id' => 'chapter_ut_rt_wb_dl',

@@ -147,8 +147,10 @@ final class WishlistService
     private function resolveValidEntries(): array
     {
         $entries = [];
-        foreach ($this->store->listIds() as $productId) {
-            $snapshot = $this->snapshots->resolve($productId);
+        $ids = $this->store->listIds();
+        $snapshots = $this->snapshots->resolveMany($ids);
+        foreach ($ids as $productId) {
+            $snapshot = $snapshots[$productId] ?? null;
             if ($snapshot !== null) {
                 $entries[] = [
                     'product_id' => $productId,

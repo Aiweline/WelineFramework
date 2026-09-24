@@ -19,7 +19,7 @@ use Weline\Product\Model\ProductIdentityRegistry;
 /**
  * Global Product and Offer identity source. Website catalog facts never live here.
  */
-final class ProductIdentityV2Service implements ProductIdentityV2ResolverInterface
+final class ProductIdentityV2Service implements ProductIdentityV2ResolverInterface, \Weline\Product\Api\ProductIdentityV2BatchOffersInterface
 {
     /** @var (\Closure(): ProductIdentityRegistry)|null */
     private readonly mixed $productRegistryFactory;
@@ -700,6 +700,23 @@ final class ProductIdentityV2Service implements ProductIdentityV2ResolverInterfa
             fn (array $row): OfferIdentityV2 => $this->toOfferIdentityRow($row),
             $query->select()->fetchArray(),
         );
+    }
+
+    /** @return array<string, list<OfferIdentityV2>> */
+    public function listOffersByProductUuids(array $uuids): array
+    {
+        $out = [];
+        foreach (array_chunk($this->normalizeUuidList($uuids), 500) as $chunk) {
+            $rows = $this->newOfferRegistry()->clear()
+                ->where(OfferIdentityRegistry::schema_fields_PRODUCT_UUID, $chunk, 'IN')
+                ->where(OfferIdentityRegistry::schema_fields_STATUS, OfferIdentityRegistry::STATUS_ACTIVE)
+                ->select()->fetchArray();
+            foreach ($rows as $row) {
+                $offer = $this->toOfferIdentityRow($row);
+                $out[$offer->globalProductUuid][] = $offer;
+            }
+        }
+        return $out;
     }
 
     /**

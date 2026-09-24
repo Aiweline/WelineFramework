@@ -33,6 +33,9 @@ final class NewsletterWidgetOwnerContractTest extends TestCase
         self::assertSame('footer-above', $finj['slot'] ?? null);
         self::assertSame('content', $finj['area'] ?? null);
         self::assertTrue((bool)($finj['required'] ?? false));
+        self::assertTrue((bool)(($finj['config']['enable_popup'] ?? false)));
+        self::assertSame('deferred', (string)(($finj['config']['popup_trigger'] ?? '')));
+        self::assertTrue((bool)(($footer['params']['enable_popup']['default'] ?? false)));
 
         $popup = $widgets['newsletter-popup'] ?? [];
         self::assertSame('newsletter-popup', $popup['code'] ?? null);
@@ -42,16 +45,8 @@ final class NewsletterWidgetOwnerContractTest extends TestCase
         self::assertSame(15, (int)(($popup['params']['delay_seconds']['default'] ?? 0)));
         self::assertSame(40, (int)(($popup['params']['scroll_percent']['default'] ?? 0)));
         self::assertSame(3, (int)(($popup['params']['min_open_seconds']['default'] ?? 0)));
-        $pinj = $popup['default_injections'][0] ?? [];
-        self::assertSame('homepage', $pinj['layout_type'] ?? null);
-        self::assertSame('content', $pinj['slot'] ?? null);
-        self::assertSame('content', $pinj['area'] ?? null);
-        self::assertTrue((bool)($pinj['required'] ?? false));
-        self::assertGreaterThanOrEqual(900, (int)($pinj['sort_order'] ?? 0));
-        self::assertSame('deferred', (string)(($pinj['config']['trigger'] ?? '')));
-        self::assertSame(15, (int)(($pinj['config']['delay_seconds'] ?? 0)));
-        self::assertSame(40, (int)(($pinj['config']['scroll_percent'] ?? 0)));
-        self::assertSame(3, (int)(($pinj['config']['min_open_seconds'] ?? 0)));
+        // XOR：弹窗由 footer-newsletter enable_popup 内嵌，禁止再 required 注入 content。
+        self::assertSame([], $popup['default_injections'] ?? null);
 
         self::assertArrayHasKey('sidebar-newsletter', $widgets);
     }
@@ -72,7 +67,12 @@ final class NewsletterWidgetOwnerContractTest extends TestCase
         self::assertStringContainsString('checked', $footer);
         self::assertStringContainsString('可随时退订', $footer);
         self::assertStringContainsString("@url{'newsletter/subscribe'}", $footer);
-        self::assertStringNotContainsString('fetch(', $footer);
+        self::assertStringContainsString('enable_popup', $footer);
+        self::assertStringContainsString(
+            "Weline_Newsletter::templates/frontend/widgets/newsletter-popup/default.phtml",
+            $footer
+        );
+        self::assertStringContainsString('->fetch(', $footer);
 
         self::assertStringContainsString('data-testid="newsletter-popup"', $popup);
         self::assertStringContainsString('data-testid="newsletter-popup-form"', $popup);
@@ -90,18 +90,24 @@ final class NewsletterWidgetOwnerContractTest extends TestCase
         self::assertStringContainsString("getData('scroll_percent') ?? 40", $popup);
         self::assertStringContainsString('可随时退订', $popup);
         self::assertStringContainsString('data-weline-load="newsletterSubscribe"', $popup);
-        self::assertStringContainsString('pointer-events: none', $popup);
-        self::assertStringContainsString('.is-open', $popup);
+        self::assertStringContainsString('is-open', $popup);
+        $popupCss = (string)file_get_contents(dirname(__DIR__, 3) . '/view/statics/css/widgets/widget-newsletter-popup-default.css');
+        self::assertStringContainsString('pointer-events', $popupCss);
+        self::assertStringContainsString('.is-open', $popupCss);
     }
 
     public function testSubscribeJsGuardsScrollLockAndStableCookie(): void
     {
         $js = (string)file_get_contents(dirname(__DIR__, 3) . '/view/statics/js/newsletter-subscribe.js');
         self::assertStringContainsString('data-newsletter-popup-bound', $js);
+        self::assertStringContainsString('mountPopupToBody', $js);
+        self::assertStringContainsString('data-newsletter-popup-mounted', $js);
         self::assertStringContainsString('data-newsletter-scroll-lock', $js);
         self::assertStringContainsString('unlockNewsletterScroll', $js);
         self::assertStringContainsString("data-widget-code", $js);
         self::assertStringContainsString('weline-newsletter-popup-shown-', $js);
+        self::assertStringContainsString('cookieSiteKey', $js);
+        self::assertStringContainsString('cookiePath', $js);
         /* 关闭时立即解锁，禁止仅靠 420ms 延时才清 overflow */
         self::assertMatchesRegularExpression(
             '/function hidePopup\\(\\)[\\s\\S]*?unlockNewsletterScroll\\(\\)[\\s\\S]*?setTimeout/',

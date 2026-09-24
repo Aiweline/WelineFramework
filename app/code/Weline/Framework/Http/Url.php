@@ -775,9 +775,13 @@ class Url implements UrlInterface
             $urls[$key] = $this->buildFrontendUrl($path);
         }
         if ($urls !== [] && Env::get('seo')) {
+            // Structured payload: array dispatch merges keys at the Event root
+            // (EventsManager), so a flat URL list never reaches getData('data').
+            // Observers (SeoUrlGenerateRewriteBatch) expect ['data' => list|map].
             $prefetchUrls = array_map(self::removeExtraDoubleSlashes(...), $urls);
+            $prefetchEvent = ['data' => $prefetchUrls];
             $eventManager = ObjectManager::getInstance(EventsManager::class);
-            $eventManager->dispatch('Weline_Framework_Url::url_generate_rewrite_prefetch', $prefetchUrls);
+            $eventManager->dispatch('Weline_Framework_Url::url_generate_rewrite_prefetch', $prefetchEvent);
         }
         foreach ($urls as $key => $url) {
             $urls[$key] = $this->extractedUrl($params, $merge_url_params, $url);

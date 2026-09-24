@@ -255,10 +255,17 @@ final class FooterDefaultLinksHelper
     }
 
     /**
+     * Brand-scoped social defaults. Chang'an Hanfu profiles only apply to the Hanfu
+     * website family — never to DaoCharms / other merchant sites (cross-brand sameAs FAIL).
+     *
      * @return list<array{name:string,icon:string,url:string}>
      */
-    public static function defaultSocialItems(): array
+    public static function defaultSocialItems(?string $websiteCode = null): array
     {
+        if (!self::allowsHanfuSocialDefaults($websiteCode)) {
+            return [];
+        }
+
         // Official Chang'an Hanfu profiles (ops-registered 2026-09-22). Keep http(s)
         // so Organization.sameAs / footer launch readiness emit actionable Trust signals — never `#`.
         return [
@@ -267,6 +274,48 @@ final class FooterDefaultLinksHelper
             ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/changanhanfu/'],
             ['name' => 'TikTok', 'icon' => 'fab fa-tiktok', 'url' => 'https://www.tiktok.com/@changanhanfu_hq'],
         ];
+    }
+
+    /**
+     * Hanfu social defaults are for Website code `default` (长安汉服) and *hanfu* codes only.
+     * DaoCharms and other codes return empty until merchant configures their own profiles.
+     */
+    public static function allowsHanfuSocialDefaults(?string $websiteCode = null): bool
+    {
+        $code = strtolower(trim($websiteCode ?? self::resolveWebsiteCode()));
+        if ($code === 'daocharms') {
+            return false;
+        }
+
+        return $code === '' || $code === 'default' || str_contains($code, 'hanfu');
+    }
+
+    private static function resolveWebsiteCode(): string
+    {
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+                $code = strtolower(trim(
+                    (string)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteCode()
+                ));
+                if ($code !== '') {
+                    return $code;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return 'default';
+    }
+
+    /**
+     * Actionable social rows only — no brand default substitution.
+     * Use when merchant config is authoritative (e.g. SEO sameAs extract from layout).
+     *
+     * @return list<array{name:string,icon:string,url:string}>
+     */
+    public static function actionableSocialItems(mixed $raw): array
+    {
+        return self::filterActionableSocialItems(self::decodeList($raw));
     }
 
     /**
@@ -322,10 +371,10 @@ final class FooterDefaultLinksHelper
      *
      * @return list<string>
      */
-    public static function defaultSameAsUrls(): array
+    public static function defaultSameAsUrls(?string $websiteCode = null): array
     {
         $urls = [];
-        foreach (self::defaultSocialItems() as $item) {
+        foreach (self::defaultSocialItems($websiteCode) as $item) {
             $url = trim((string)($item['url'] ?? ''));
             if ($url !== '') {
                 $urls[] = $url;

@@ -44,7 +44,11 @@
     width: 100%;
     max-width: var(--weline-layout-content-max-width);
     margin: 0 auto;
-    padding: 0 var(--weline-layout-content-padding-inline);
+    /* 视口≈版心时 content-padding 归零会贴边；保留 gutter 地板 */
+    padding: 0 max(
+        var(--weline-layout-content-padding-inline, 0px),
+        var(--spacing-container-padding, var(--weline-space-5, 1.25rem))
+    );
     box-sizing: border-box;
 }
 

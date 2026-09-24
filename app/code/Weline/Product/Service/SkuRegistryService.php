@@ -20,7 +20,7 @@ use Weline\Product\Model\SkuRegistry;
  * Concurrent claims rely on UNIQUE(sku) + request_hash compare; never creates
  * orphan shard/Store rows (DDL/projection are outside this service).
  */
-final class SkuRegistryService implements ProductIdentityResolverInterface
+final class SkuRegistryService implements \Weline\Product\Api\ProductIdentityBatchResolverInterface
 {
     private const MAX_CAS_ATTEMPTS = 8;
 
@@ -225,6 +225,43 @@ final class SkuRegistryService implements ProductIdentityResolverInterface
             ->find()
             ->fetch();
         return $row->getId() ? $this->toIdentity($row) : null;
+    }
+
+    public function resolveByOfferUuids(array $uuids): array
+    {
+        return $this->resolveByUuidField($uuids, SkuRegistry::schema_fields_GLOBAL_OFFER_UUID);
+    }
+
+    public function resolveByProductUuids(array $uuids): array
+    {
+        return $this->resolveByUuidField($uuids, SkuRegistry::schema_fields_GLOBAL_PRODUCT_UUID);
+    }
+
+    /** @return array<string, ProductIdentity> */
+    private function resolveByUuidField(array $uuids, string $field): array
+    {
+        $uuids = array_values(array_unique(array_filter(array_map('trim', $uuids),
+            static fn(string $uuid): bool => $uuid !== '')));
+        $out = [];
+        foreach (array_chunk($uuids, 500) as $chunk) {
+            $rows = $this->newRegistry()->clear()->where($field, $chunk, 'IN')
+                ->where(SkuRegistry::schema_fields_STATUS, SkuRegistry::STATUS_ACTIVE)
+                ->select()->fetchArray();
+            foreach ($rows as $row) {
+                $key = (string)$row[$field];
+                if (!isset($out[$key])) {
+                    $out[$key] = new ProductIdentity(
+                        registryId: (int)$row[SkuRegistry::schema_fields_ID],
+                        sku: (string)$row[SkuRegistry::schema_fields_SKU],
+                        globalProductUuid: (string)$row[SkuRegistry::schema_fields_GLOBAL_PRODUCT_UUID],
+                        globalOfferUuid: (string)$row[SkuRegistry::schema_fields_GLOBAL_OFFER_UUID],
+                        requestHash: (string)$row[SkuRegistry::schema_fields_REQUEST_HASH],
+                        refCount: (int)$row[SkuRegistry::schema_fields_REF_COUNT],
+                    );
+                }
+            }
+        }
+        return $out;
     }
 
     public function incrementRefCount(int $registryId): int

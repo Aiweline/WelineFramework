@@ -4336,24 +4336,7 @@ HTML;
     private function shouldBypassWidgetOutputCacheForTemplatePerfOverlay(): bool
     {
         try {
-            if (RequestContext::get('view.template.overlay') === true) {
-                return true;
-            }
-        } catch (\Throwable) {
-        }
-
-        try {
-            if ((bool)Env::get('wls.performance.template_render_overlay_enabled', false)) {
-                return true;
-            }
-        } catch (\Throwable) {
-        }
-
-        try {
-            /** @var \Weline\Framework\Http\Request $request */
-            $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
-            $flag = (string)($request->getGet('wls_tpl_perf') ?? $request->getParam('wls_tpl_perf') ?? '');
-            return $flag === '1' || \strtolower($flag) === 'true';
+            return RequestLifecycleTrace::isTemplatePerfOverlayRequested();
         } catch (\Throwable) {
             return false;
         }

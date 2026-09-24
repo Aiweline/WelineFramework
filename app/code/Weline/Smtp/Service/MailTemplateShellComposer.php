@@ -155,7 +155,7 @@ class MailTemplateShellComposer
     private function loadShellRaw(string $locale, string $storageScope = ''): string
     {
         $locale = trim($locale) !== '' ? trim($locale) : 'zh_Hans_CN';
-        $phtml = $this->resolveShellPhtmlPath();
+        $phtml = $this->resolveShellPhtmlPath($storageScope);
         if (is_file($phtml)) {
             $raw = @file_get_contents($phtml);
             if (is_string($raw) && $raw !== '') {
@@ -193,8 +193,10 @@ class MailTemplateShellComposer
      * 模块默认 shell + Theme 设计主题覆盖（与店面 templates 同一套继承）：
      * app/code/Weline/Smtp/view/email/shell.phtml
      * → app/design/{Vendor}/{theme}/Weline_Smtp/email/shell.phtml
+     *
+     * 优先按邮件 storage_scope 的已发布 theme_binding 解析（daocharms 站勿吃全局 hanfu）。
      */
-    private function resolveShellPhtmlPath(): string
+    private function resolveShellPhtmlPath(string $storageScope = ''): string
     {
         $modulePath = dirname(__DIR__) . '/view/email/shell.phtml';
         try {
@@ -203,10 +205,8 @@ class MailTemplateShellComposer
             ) {
                 return $modulePath;
             }
-            /** @var \Weline\Theme\Model\WelineTheme $theme */
-            $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
-            $theme->clearData()->clearQuery()->getActiveTheme('frontend');
-            if (!$theme->getId()) {
+            $theme = $this->resolveMailTheme($storageScope);
+            if (!$theme || !$theme->getId()) {
                 return $modulePath;
             }
             /** @var \Weline\Theme\Service\ThemeDirectoryResolver $resolver */
@@ -219,6 +219,43 @@ class MailTemplateShellComposer
         }
 
         return $modulePath;
+    }
+
+    private function resolveMailTheme(string $storageScope): ?\Weline\Theme\Model\WelineTheme
+    {
+        $storageScope = trim($storageScope);
+        try {
+            if ($storageScope !== '' && class_exists(\Weline\Theme\Service\ThemeContextService::class)) {
+                /** @var \Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface $hierarchy */
+                $hierarchy = ObjectManager::getInstance(\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class);
+                $identity = $hierarchy->fromStorageScope($storageScope, true);
+                if ($identity) {
+                    /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
+                    $themeContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+                    $scoped = $themeContext->resolveThemeForScope('frontend', $identity);
+                    $scopedId = $scoped ? (int)$scoped->getId() : 0;
+                    if ($scopedId > 0) {
+                        /** @var \Weline\Theme\Model\WelineTheme $fresh */
+                        $fresh = clone ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+                        $fresh->clearData()->clearQuery()->load($scopedId);
+                        if ($fresh->getId()) {
+                            return $fresh;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            /** @var \Weline\Theme\Model\WelineTheme $theme */
+            $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+            $theme->clearData()->clearQuery()->getActiveTheme('frontend');
+
+            return $theme->getId() ? clone $theme : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function applyShellRegionOverrides(string $shell, string $storageScope, string $locale = ''): string

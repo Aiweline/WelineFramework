@@ -1076,10 +1076,17 @@ NEW,NEW
 "还差 %1 包邮","You're %1 away from free shipping"
 已享包邮,"You've unlocked free shipping"
 关闭通知,"Close notification"
-全部商品,"Shop All"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-面包屑,"bread crumbs"
-内容标题,"Section title"
+抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
+您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
+请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
+SORRY,SORRY
+前往首页继续购物,"Continue shopping on the home page"
+返回上一页,"Go back"
+推荐产品,"Recommended product"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
+官方社交媒体,"Official social media"
 视频,Video
 您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 件商品,"items of goods"
@@ -1092,6 +1099,9 @@ NEW,NEW
 第%d张,"Slide %d"
 剩余,Remaining
 天,Day(s)
+面包屑,"bread crumbs"
+全部商品,"Shop All"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1126,13 +1136,6 @@ NEW,NEW
 栅格内容,"Raster content"
 末页,"Last page"
 指南,Guide
-抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
-您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
-请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
-SORRY,SORRY
-前往首页继续购物,"Continue shopping on the home page"
-返回上一页,"Go back"
-推荐产品,"Recommended product"
 问答,Q&A
 7×24,24/7
 服务暂时不可用,"Service temporarily unavailable"
@@ -1254,6 +1257,7 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
+内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
@@ -1271,12 +1275,8 @@ Weline,Weline
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
 精选轮播,"Featured Carousel"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
-官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -2541,7 +2541,7 @@ Category,Category
 筛选,filter
 "分类筛选区域 - 由 Filters 部件默认注入","Category filter area — default-injected by the Filters widget"
 "分类产品区域 - 展示该分类下的产品","Category Product Area - Display products under this category"
-筛选条件,"Screening criteria"
+筛选条件,Filters
 关闭筛选,"Close filter"
 "Scheduled category layout","Scheduled category layout"
 "分类导航 slot，可由分类模块或导航部件接管。","Classification navigation slot can be taken over by classification module or navigation component."
@@ -4007,6 +4007,7 @@ Chiffon,Chiffon
 "满 $49 包邮 · 新品上架","Free shipping over $49 · New curated styles"
 "云裳汉服 · 满 ¥299 包邮 · 形制精选上新","Free shipping over $49 · New curated styles"
 "长安汉服 · 满 ¥299 包邮 · 形制精选上新","Free shipping over $49 · New curated styles"
+"长安汉服 · 形制精选上新","Chang'an Hanfu · Curated new styles"
 "欢迎光临！满 ¥299 包邮 · 新客首单立减","Welcome! Free shipping over $49 · New customer discount"
 登录并保存订单,"Sign in and save your order"
 立即订阅,"Subscribe now"
@@ -4427,3 +4428,47 @@ Chiffon,Chiffon
 现已可购,"Available now"
 五分钟仪式,"Five-minute ritual"
 安全提示,Safety
+通过表单联系我们,"Contact us via the form"
+请通过本页表单留言。订单问题请附上订单号与下单邮箱。,"Contact us via the form on this page. For order questions, include your order number and purchase email."
+请优先通过本页表单留言，我们会通过您使用的渠道回复。,"Please prefer the form on this page; we reply through the channel you used."
+也可使用结账页或订单确认信中的客服邮箱。,"You can also use the support email shown at checkout or in your order confirmation."
+如何联系,"How to reach us"
+请尽量提供完整背景，也可直接写信至公示客服邮箱。,"Share enough context, or email the published support address directly."
+"请通过下列联系方式反馈，并附上页面 URL 与问题描述。","Contact us using the details below. Include the page URL and a description of the issue."
+无障碍联系,"Accessibility contact"
+联系邮箱,Email
+隐私邮箱,"Privacy email"
+为日常，留一寸静。,"Keep a quiet inch for the day."
+见佩戴之物,"See what to wear"
+一隅安静,"A quiet corner"
+走进这一角,"Enter this corner"
+松身之物,"Things that loosen the body"
+看居家形制,"See lounge forms"
+几道关于日常节奏的短问，帮你找到更贴身的物件。,"A few short questions about your daily rhythm — to find what fits you quietly."
+从此刻开始,"Begin from here"
+道家意象,"Daoist motifs"
+八方各有其位。,"Each direction keeps its place."
+八卦定方，不争先——器物安静地标出方位，心亦可有所归。,"The eight trigrams settle the directions without rushing — a quiet mark for where the mind can return."
+见八卦形制,"See Bagua forms"
+八卦意象,"Bagua motif"
+五行流转，各安其位。,"Five phases turn; each finds its place."
+金木水火土如四季更迭——不求功效传说，只留材质与节奏的平衡感。,"Metal, wood, water, fire, earth like seasons turning — not claims of power, only balance of material and rhythm."
+见五行之物,"See Five-Phase pieces"
+五行意象,"Five-Phase motif"
+轮播控制,"Carousel controls"
+"第 1 张","Slide 1"
+"第 2 张","Slide 2"
+"第 3 张","Slide 3"
+乾,Qian
+兑,Dui
+离,Li
+震,Zhen
+巽,Xun
+坎,Kan
+艮,Gen
+坤,Kun
+金,Metal
+木,Wood
+水,Water
+火,Fire
+土,Earth

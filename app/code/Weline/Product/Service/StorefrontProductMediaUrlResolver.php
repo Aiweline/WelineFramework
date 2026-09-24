@@ -55,8 +55,24 @@ final class StorefrontProductMediaUrlResolver
         return $this->resolveMedia($offer, $scope, $locale, false);
     }
 
+    /**
+     * @param list<array<string, mixed>> $offers
+     * @return list<array<string, mixed>>
+     */
+    public function resolveListingOffers(array $offers, ScopeIdentity $scope, string $locale): array
+    {
+        $this->primeReferenceCache($offers, $scope, $locale, false);
+
+        return array_values(array_map(
+            fn(array $offer): array => $this->resolveListingOffer($offer, $scope, $locale),
+            $offers,
+        ));
+    }
+
     private function resolveMedia(array $offer, ScopeIdentity $scope, string $locale, bool $includeDescription): array
     {
+        $this->primeReferenceCache([$offer], $scope, $locale, $includeDescription);
+
         $resolvedByReference = [];
         $resolve = function (string $reference) use (&$resolvedByReference, $scope, $locale): string {
             $reference = trim($reference);
@@ -218,10 +234,103 @@ final class StorefrontProductMediaUrlResolver
      */
     public function resolveOffers(array $offers, ScopeIdentity $scope, string $locale): array
     {
+        $this->primeReferenceCache($offers, $scope, $locale, true);
+
         return array_values(array_map(
             fn(array $offer): array => $this->resolveOffer($offer, $scope, $locale),
             $offers,
         ));
+    }
+
+    /**
+     * Batch-resolve asset:// references once before per-offer resolveReference loops.
+     *
+     * @param list<array<string, mixed>> $offers
+     */
+    private function primeReferenceCache(array $offers, ScopeIdentity $scope, string $locale, bool $includeDescription): void
+    {
+        $references = [];
+        foreach ($offers as $offer) {
+            if (!\is_array($offer)) {
+                continue;
+            }
+            foreach ($this->collectAssetReferences($offer, $includeDescription) as $reference) {
+                $references[$reference] = $reference;
+            }
+        }
+        if ($references === []) {
+            return;
+        }
+        $this->resolveReferences($references, $scope, $locale);
+    }
+
+    /**
+     * @param array<string, mixed> $offer
+     * @return list<string>
+     */
+    private function collectAssetReferences(array $offer, bool $includeDescription): array
+    {
+        $out = [];
+        $push = static function (string $reference) use (&$out): void {
+            $reference = \trim($reference);
+            if ($reference !== '' && \str_starts_with(\strtolower($reference), self::ASSET_PREFIX)) {
+                $out[$reference] = $reference;
+            }
+        };
+
+        $push((string)($offer['image'] ?? ''));
+        foreach ((array)($offer['images'] ?? []) as $reference) {
+            $push((string)$reference);
+        }
+
+        $variantAxes = $offer['variant_axes'] ?? null;
+        if (\is_array($variantAxes)) {
+            foreach ($variantAxes as $axis) {
+                if (!\is_array($axis) || !\is_array($axis['options'] ?? null)) {
+                    continue;
+                }
+                foreach ($axis['options'] as $option) {
+                    if (!\is_array($option)) {
+                        continue;
+                    }
+                    $push((string)($option['swatch_image'] ?? ''));
+                    foreach ((array)($option['gallery_images'] ?? []) as $reference) {
+                        $push((string)$reference);
+                    }
+                    foreach (\is_array($option['gallery_by_color'] ?? null) ? $option['gallery_by_color'] : [] as $gallery) {
+                        foreach ((array)$gallery as $reference) {
+                            $push((string)$reference);
+                        }
+                    }
+                }
+            }
+        }
+
+        foreach (\is_array($offer['videos'] ?? null) ? $offer['videos'] : [] as $video) {
+            if (!\is_array($video)) {
+                continue;
+            }
+            $push((string)($video['embed_url'] ?? $video['src'] ?? ''));
+            $push((string)($video['path'] ?? ''));
+            $assetId = \strtolower(\trim((string)($video['asset_id'] ?? '')));
+            if ($assetId !== '') {
+                $push(self::ASSET_PREFIX . $assetId);
+            }
+            $push((string)($video['poster'] ?? $video['poster_url'] ?? ''));
+        }
+
+        if ($includeDescription) {
+            $html = (string)($offer['description'] ?? '');
+            if ($html !== '' && \str_contains($html, self::ASSET_PREFIX)) {
+                if (\preg_match_all('#asset://[0-9a-f-]{36}#i', $html, $matches) > 0) {
+                    foreach ($matches[0] as $reference) {
+                        $push((string)$reference);
+                    }
+                }
+            }
+        }
+
+        return \array_values($out);
     }
 
     public function resolveReference(string $reference, ScopeIdentity $scope, string $locale): string

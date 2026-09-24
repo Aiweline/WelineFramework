@@ -83,6 +83,8 @@ class RequestLifecycleTrace
     private const REDACTED_AUTH_SQL = '[REDACTED: authentication persistence statement]';
     private const PANEL_TRACE_COOKIE = 'w_weline_trace_panel';
     private const PANEL_TRACE_PAYLOAD = 'on';
+    private const PANEL_TPL_PERF_COOKIE = 'w_weline_tpl_perf';
+    private const PANEL_TPL_PERF_PAYLOAD = 'on';
 
     private static bool $stateManagerRegistered = false;
 
@@ -250,10 +252,15 @@ class RequestLifecycleTrace
     }
 
     /**
-     * `wls_tpl_perf=1` 诊断：允许无面板 Cookie 也记录 DB/WLS span，供模板旁路拆分 db/php。
+     * 模板旁路耗时徽标：面板 token 签发的签名 cookie、env、RequestContext，或 query `wls_tpl_perf=1`。
+     * 面板开关路径须经 DeveloperWorkspace `trace/tpl-perf`（PanelAccessService）武装 cookie。
      */
     public static function isTemplatePerfOverlayRequested(): bool
     {
+        if (self::isPanelTplPerfArmed()) {
+            return true;
+        }
+
         try {
             if (\class_exists(RequestContext::class, false)
                 && RequestContext::isInitialized()
@@ -472,6 +479,140 @@ class RequestLifecycleTrace
         $salt = \defined('BP') ? (string)BP : __DIR__;
 
         return \hash('sha256', $salt . '|request_lifecycle_trace_panel');
+    }
+
+    public static function panelTplPerfCookieName(): string
+    {
+        return self::PANEL_TPL_PERF_COOKIE;
+    }
+
+    public static function isPanelTplPerfArmed(): bool
+    {
+        return self::isValidPanelTplPerfCookie(self::readPanelTplPerfCookieValue());
+    }
+
+    /** Install tpl-perf overlay cookie into the current process (tests / same-request). */
+    public static function installPanelTplPerfOn(): void
+    {
+        $_COOKIE[self::PANEL_TPL_PERF_COOKIE] = self::buildPanelTplPerfCookieValue();
+    }
+
+    public static function clearPanelTplPerf(): void
+    {
+        unset($_COOKIE[self::PANEL_TPL_PERF_COOKIE]);
+    }
+
+    /**
+     * @param object{setCookie?: callable} $response
+     */
+    public static function issuePanelTplPerfCookie(object $response, bool $enabled): void
+    {
+        if ($enabled) {
+            $value = self::buildPanelTplPerfCookieValue();
+            $_COOKIE[self::PANEL_TPL_PERF_COOKIE] = $value;
+            if (\method_exists($response, 'setCookie')) {
+                $response->setCookie(
+                    self::PANEL_TPL_PERF_COOKIE,
+                    $value,
+                    0,
+                    '/',
+                    '',
+                    self::isSecureRequest(),
+                    true,
+                    'Lax'
+                );
+            }
+
+            return;
+        }
+
+        self::clearPanelTplPerf();
+        if (\method_exists($response, 'setCookie')) {
+            $response->setCookie(
+                self::PANEL_TPL_PERF_COOKIE,
+                '',
+                \time() - 3600,
+                '/',
+                '',
+                self::isSecureRequest(),
+                true,
+                'Lax'
+            );
+        }
+    }
+
+    public static function buildPanelTplPerfCookieValue(): string
+    {
+        $signature = \hash_hmac('sha256', self::PANEL_TPL_PERF_PAYLOAD, self::panelTplPerfSigningKey());
+
+        return self::base64UrlEncode(self::PANEL_TPL_PERF_PAYLOAD . '.' . $signature);
+    }
+
+    public static function isValidPanelTplPerfCookie(string $cookieValue): bool
+    {
+        if ($cookieValue === '') {
+            return false;
+        }
+
+        $decoded = self::base64UrlDecode($cookieValue);
+        if ($decoded === '') {
+            return false;
+        }
+
+        $parts = \explode('.', $decoded, 2);
+        if (\count($parts) !== 2) {
+            return false;
+        }
+
+        [$payload, $signature] = $parts;
+        if ($payload !== self::PANEL_TPL_PERF_PAYLOAD || $signature === '') {
+            return false;
+        }
+
+        $expected = \hash_hmac('sha256', self::PANEL_TPL_PERF_PAYLOAD, self::panelTplPerfSigningKey());
+
+        return \hash_equals($expected, $signature);
+    }
+
+    private static function readPanelTplPerfCookieValue(): string
+    {
+        if (\class_exists(\Weline\Framework\Http\Cookie::class, false)) {
+            $fromHelper = \Weline\Framework\Http\Cookie::get(self::PANEL_TPL_PERF_COOKIE, '');
+            if (\is_scalar($fromHelper) && (string)$fromHelper !== '') {
+                return (string)$fromHelper;
+            }
+        }
+
+        $fromServer = '';
+        if (\class_exists(WelineEnv::class, false)) {
+            $fromServer = (string)WelineEnv::server('HTTP_COOKIE', '');
+        }
+        if ($fromServer === '' && isset($_SERVER['HTTP_COOKIE'])) {
+            $fromServer = (string)$_SERVER['HTTP_COOKIE'];
+        }
+        if ($fromServer !== '') {
+            foreach (\explode(';', $fromServer) as $pair) {
+                $pair = \trim($pair);
+                if ($pair === '' || !\str_contains($pair, '=')) {
+                    continue;
+                }
+                [$name, $value] = \explode('=', $pair, 2);
+                if (\trim($name) === self::PANEL_TPL_PERF_COOKIE) {
+                    return \rawurldecode(\trim($value));
+                }
+            }
+        }
+
+        return isset($_COOKIE[self::PANEL_TPL_PERF_COOKIE])
+            ? (string)$_COOKIE[self::PANEL_TPL_PERF_COOKIE]
+            : '';
+    }
+
+    private static function panelTplPerfSigningKey(): string
+    {
+        $salt = \defined('BP') ? (string)BP : __DIR__;
+
+        return \hash('sha256', $salt . '|request_lifecycle_tpl_perf_panel');
     }
 
     private static function isSecureRequest(): bool

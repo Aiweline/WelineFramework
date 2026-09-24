@@ -92,4 +92,25 @@ final class ThemeLayoutEntitySlotFillerContractTest extends TestCase
         self::assertStringContainsString('resolveLivePreviewContext', $src);
         self::assertStringNotContainsString('debug-e44d3b.log', $src);
     }
+
+    /**
+     * DaoCharms W158 P-filters：published 指针只认 rN；非法 published:d0 不得进店面 fragments。
+     */
+    public function testReadPageCurrentPublishedPointerAcceptsOnlyReleaseKeys(): void
+    {
+        $path = \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php';
+        self::assertFileExists($path);
+        $src = (string)\file_get_contents($path);
+
+        $fnStart = \strpos($src, 'function readPageCurrent');
+        self::assertNotFalse($fnStart);
+        $fnEnd = \strpos($src, 'function rememberPageCurrent', $fnStart);
+        self::assertNotFalse($fnEnd);
+        $body = \substr($src, $fnStart, $fnEnd - $fnStart);
+
+        self::assertStringContainsString('/^r[1-9][0-9]*$/D', $body);
+        self::assertStringContainsString("\$keys = \$published ? ['published'] : ['draft', 'published']", $body);
+        // published 三元左侧必须是 rN 门禁（拒 d0）。
+        self::assertStringContainsString("preg_match(\$published ? '/^r[1-9][0-9]*\$/D'", $body);
+    }
 }

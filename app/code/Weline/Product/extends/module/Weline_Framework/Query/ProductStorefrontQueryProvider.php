@@ -10,6 +10,7 @@ use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Product\Api\ProductQuoteRequestSubmitInterface;
 use Weline\Product\Model\Shard\Media;
 use Weline\Product\Repository\MediaRepository;
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Product\Service\StorefrontCatalogViewService;
 
 /**
@@ -29,6 +30,8 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'searchPublishedOffers' => $this->searchPublishedOffers($params),
+            'cardsByProductIds' => $this->cardsByProductIds($params),
+            'liveOffersByProductIds' => $this->liveOffersByProductIds($params),
             'submitQuoteRequest' => $this->submitQuoteRequest($params),
             default => throw new \InvalidArgumentException((string)__(
                 'Product Storefront 接口不支持操作：%{1}',
@@ -61,6 +64,33 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
                     'summary' => 'Search and normalize current-scope published Product offers',
                 ],
                 [
+                    'name' => 'cardsByProductIds',
+                    'frontend' => false,
+                    'external' => false,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => [
+                        ['name' => 'product_ids', 'type' => 'array', 'required' => true],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 24],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Batch storefront cards for explicit product IDs (targeted catalog; no live N+1)',
+                ],
+                [
+                    'name' => 'liveOffersByProductIds',
+                    'frontend' => false,
+                    'external' => false,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 4,
+                    'params' => [
+                        ['name' => 'product_ids', 'type' => 'array', 'required' => true],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => '按当前范围批量读取实时商品首个已发布 Offer，以商品 ID 为键；每批最多 100 个商品',
+                ],
+                [
                     'name' => 'submitQuoteRequest',
                     'frontend' => true,
                     'external' => false,
@@ -78,6 +108,123 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
                 ],
             ],
         ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function liveOffersByProductIds(array $params): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map(
+            'intval', is_array($params['product_ids'] ?? null) ? $params['product_ids'] : [],
+        ), static fn(int $id): bool => $id > 0)));
+        $byId = [];
+        foreach (array_chunk($ids, 100) as $batch) {
+            foreach ($this->livePublishedOffers($batch) as $offer) {
+                $id = (int)($offer['product_id'] ?? 0);
+                if (in_array($id, $batch, true) && !isset($byId[$id])) {
+                    $byId[$id] = $offer;
+                }
+            }
+        }
+        return $byId;
+    }
+
+    /** @return list<array<string, mixed>> */
+    protected function livePublishedOffers(array $productIds): array
+    {
+        return ObjectManager::getInstance(StorefrontCatalogViewService::class)
+            ->livePublishedOffersForProductIds($productIds);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return list<array<string, mixed>>
+     */
+    private function cardsByProductIds(array $params): array
+    {
+        $rawIds = $params['product_ids'] ?? [];
+        if (!\is_array($rawIds)) {
+            $rawIds = [];
+        }
+        $orderedIds = [];
+        foreach ($rawIds as $rawId) {
+            $productId = max(0, (int)$rawId);
+            if ($productId <= 0 || isset($orderedIds[$productId])) {
+                continue;
+            }
+            $orderedIds[$productId] = $productId;
+        }
+        $orderedIds = \array_values($orderedIds);
+        $limit = max(1, min(24, (int)($params['limit'] ?? \count($orderedIds))));
+        if ($orderedIds === []) {
+            return [];
+        }
+        $orderedIds = \array_slice($orderedIds, 0, $limit);
+
+        $offersByProductId = [];
+        foreach ($this->targetedPublishedOffers($orderedIds) as $offer) {
+            if (!\is_array($offer)) {
+                continue;
+            }
+            $productId = max(0, (int)($offer['product_id'] ?? 0));
+            if ($productId <= 0 || isset($offersByProductId[$productId])) {
+                continue;
+            }
+            $offersByProductId[$productId] = $this->normalizeOfferSlug($offer);
+        }
+
+        $cards = [];
+        foreach ($orderedIds as $productId) {
+            $offer = $offersByProductId[$productId] ?? null;
+            if (!\is_array($offer)) {
+                continue;
+            }
+            $card = $this->renderCard($offer, \count($cards));
+            if ((int)($card['id'] ?? 0) <= 0) {
+                continue;
+            }
+            $cards[] = $card;
+            if (\count($cards) >= $limit) {
+                break;
+            }
+        }
+
+        return $cards;
+    }
+
+    /**
+     * @param array<string, mixed> $offer
+     * @return array<string, mixed>
+     */
+    protected function renderCard(array $offer, int $index): array
+    {
+        return ProductCardRenderer::fromStorefrontOffer($offer, $index);
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @return list<array<string, mixed>>
+     */
+    protected function targetedPublishedOffers(array $productIds): array
+    {
+        return ObjectManager::getInstance(StorefrontCatalogViewService::class)
+            ->publishedOffersForProductIds($productIds, max(\count($productIds), 1), false);
+    }
+
+    /**
+     * @param array<string, mixed> $offer
+     * @return array<string, mixed>
+     */
+    private function normalizeOfferSlug(array $offer): array
+    {
+        $slug = \strtolower(\trim((string)($offer['slug'] ?? '')));
+        if ($slug === '') {
+            $slug = \strtolower(\trim((string)($offer['source_slug'] ?? '')));
+        }
+        if ($slug !== '' && \preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) === 1) {
+            $offer['slug'] = $slug;
+        }
+
+        return $offer;
     }
 
     /**

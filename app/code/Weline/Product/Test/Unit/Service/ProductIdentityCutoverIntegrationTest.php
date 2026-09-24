@@ -93,6 +93,9 @@ final class ProductIdentityCutoverIntegrationTest extends TestCase
             $first = $legacy->claimLocked('SKU-CUTOVER-1', str_repeat('a1', 64));
             self::assertSame(ProductIdentityCutoverPolicyInterface::MODE_LEGACY, $cutover->mode());
 
+            self::assertTrue(method_exists($resolver, 'resolveByOfferUuids'));
+            self::assertSame($first->toArray(), $resolver->resolveByOfferUuids([$first->globalOfferUuid])[$first->globalOfferUuid]->toArray());
+
             $applied = $migration->migrate(false);
             self::assertTrue($applied['ok']);
             self::assertSame(1, $applied['created_products']);
@@ -131,6 +134,16 @@ final class ProductIdentityCutoverIntegrationTest extends TestCase
                 $first->sku,
                 $resolver->resolveByOfferUuid($first->globalOfferUuid)?->sku,
             );
+
+            self::assertSame($resolver->resolveByOfferUuid($first->globalOfferUuid)?->toArray(),
+                $resolver->resolveByOfferUuids([$first->globalOfferUuid])[$first->globalOfferUuid]->toArray());
+            self::assertSame($resolver->resolveByProductUuid($first->globalProductUuid)?->toArray(),
+                $resolver->resolveByProductUuids([$first->globalProductUuid])[$first->globalProductUuid]->toArray());
+            $upper = strtoupper($first->globalOfferUuid);
+            self::assertSame($resolver->resolveByOfferUuid($upper)?->toArray(),
+                $resolver->resolveByOfferUuids([$upper])[$upper]->toArray());
+            self::assertSame([], $resolver->resolveByOfferUuids([]));
+            self::assertSame([], $resolver->resolveByProductUuids([]));
 
             foreach ([
                 static fn () => $legacy->claimLocked('SKU-BLOCKED', str_repeat('b2', 64)),

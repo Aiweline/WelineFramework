@@ -16,6 +16,8 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Runtime\StorefrontNavigationScope;
 use Weline\Framework\Runtime\StorefrontScopeInstallerInterface;
+use Weline\Framework\Runtime\StorefrontWebsiteContext;
+use Weline\Framework\Runtime\StorefrontWebsiteContextResolverInterface;
 use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
 use Weline\Framework\Service\Query\Value\FrontendWorkerScopeBinding;
 
@@ -102,6 +104,102 @@ final class CartScopeResolverTest extends TestCase
             }
             if (\is_object($previousInstaller)) {
                 ObjectManager::setInstance(CartScopeResolverTestStorefrontInstaller::class, $previousInstaller);
+            }
+            @\unlink($registryFile);
+        }
+    }
+
+    public function testServerInstallerPrefersWorkerStorefrontPathnameWhenScopeKernelIsOff(): void
+    {
+        $trusted = ScopeIdentity::channel(
+            158,
+            'daocharms',
+            'default',
+            'default',
+            ScopeIdentity::MODE_NORMAL,
+        );
+        $installer = new CartScopeResolverTestStorefrontInstaller(
+            new StorefrontNavigationScope($trusted, '/product/demo'),
+        );
+        $websiteResolver = new CartScopeResolverTestWebsiteContextResolver(
+            new StorefrontWebsiteContext(
+                158,
+                'daocharms',
+                'DaoCharms',
+                'https://shop.example/daocharms',
+                'USD',
+                'en_US',
+                'UTC',
+            ),
+        );
+        $registryFile = \tempnam(\sys_get_temp_dir(), 'weline-cart-provider-');
+        self::assertIsString($registryFile);
+        self::assertNotFalse(\file_put_contents(
+            $registryFile,
+            "<?php\n\nreturn " . \var_export([
+                'format' => ModuleRegistryCompiler::FORMAT_VERSION,
+                'order' => ['Weline_Cart_Test'],
+                'modules' => [
+                    'Weline_Cart_Test' => [
+                        'provides' => [
+                            StorefrontScopeInstallerInterface::class
+                                => CartScopeResolverTestStorefrontInstaller::class,
+                            StorefrontWebsiteContextResolverInterface::class
+                                => CartScopeResolverTestWebsiteContextResolver::class,
+                        ],
+                    ],
+                ],
+            ], true) . ";\n",
+        ));
+
+        $previousRuntimeResolver = ObjectManager::_getInstance(RuntimeProviderResolver::class);
+        $previousInstaller = ObjectManager::_getInstance(CartScopeResolverTestStorefrontInstaller::class);
+        $previousWebsiteResolver = ObjectManager::_getInstance(CartScopeResolverTestWebsiteContextResolver::class);
+        $runtimeResolver = new RuntimeProviderResolver(new ServiceProviderRegistry($registryFile));
+        ObjectManager::setInstance(RuntimeProviderResolver::class, $runtimeResolver);
+        ObjectManager::setInstance(CartScopeResolverTestStorefrontInstaller::class, $installer);
+        ObjectManager::setInstance(CartScopeResolverTestWebsiteContextResolver::class, $websiteResolver);
+        Context::enter(new Context([
+            'input' => [
+                'server' => [
+                    'HTTP_HOST' => 'shop.example',
+                    // Worker script Referer must not win over document pathname.
+                    'HTTP_REFERER' => 'https://shop.example/Weline/Frontend/view/statics/js/weline-api-worker.js',
+                ],
+                'scheme' => 'https',
+                'host' => 'shop.example',
+            ],
+        ]));
+        RequestContext::set(
+            FrontendWorkerExecutionContext::STOREFRONT_PATHNAME_CONTEXT_KEY,
+            '/daocharms/en_US/product/demo',
+        );
+
+        try {
+            self::assertSame(
+                $trusted->canonicalKey(),
+                (new CartScopeResolver())->fromParams([])->canonicalKey(),
+            );
+            self::assertSame(
+                'https://shop.example/daocharms/en_US/product/demo',
+                $installer->requestedUri,
+            );
+        } finally {
+            Context::leave();
+            ObjectManager::removeInstance(RuntimeProviderResolver::class);
+            ObjectManager::removeInstance(CartScopeResolverTestStorefrontInstaller::class);
+            ObjectManager::removeInstance(CartScopeResolverTestWebsiteContextResolver::class);
+            if (\is_object($previousRuntimeResolver)) {
+                ObjectManager::setInstance(RuntimeProviderResolver::class, $previousRuntimeResolver);
+            }
+            if (\is_object($previousInstaller)) {
+                ObjectManager::setInstance(CartScopeResolverTestStorefrontInstaller::class, $previousInstaller);
+            }
+            if (\is_object($previousWebsiteResolver)) {
+                ObjectManager::setInstance(
+                    CartScopeResolverTestWebsiteContextResolver::class,
+                    $previousWebsiteResolver,
+                );
             }
             @\unlink($registryFile);
         }
@@ -293,5 +391,31 @@ final class CartScopeResolverTestStorefrontInstaller implements StorefrontScopeI
     {
         $this->requestedUri = $fullUri;
         return $this->navigationScope;
+    }
+}
+
+final class CartScopeResolverTestWebsiteContextResolver implements StorefrontWebsiteContextResolverInterface
+{
+    public string $requestedUri = '';
+
+    public function __construct(
+        private readonly ?StorefrontWebsiteContext $context,
+    ) {
+    }
+
+    public function resolveWebsiteContext(string $fullUri): ?StorefrontWebsiteContext
+    {
+        $this->requestedUri = $fullUri;
+        if (!$this->context instanceof StorefrontWebsiteContext) {
+            return null;
+        }
+        // Only treat URLs under the mounted Website path as a match (worker
+        // script Referer on the shared Host must not count as DaoCharms).
+        $mountPath = (string)(\parse_url($this->context->url, PHP_URL_PATH) ?? '');
+        if ($mountPath !== '' && $mountPath !== '/' && !\str_contains($fullUri, $mountPath)) {
+            return null;
+        }
+
+        return $this->context;
     }
 }

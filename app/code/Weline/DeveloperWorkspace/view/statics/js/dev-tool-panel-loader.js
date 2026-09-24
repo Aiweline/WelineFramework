@@ -81,6 +81,9 @@
     var restoreAttempted = false;
     var panelStateKey = 'dev-panel-state';
     var settingTraceRecording = false;
+    var settingTplPerfOverlay = false;
+    var tplPerfQueryKey = 'wls_tpl_perf';
+    var tplPerfStateKey = 'weline.dev.tpl_perf_overlay';
 
     window.__WELINE_PANEL_CONFIG__ = Object.assign({}, window.__WELINE_PANEL_CONFIG__ || {}, {
         apiBase: apiBase,
@@ -477,6 +480,99 @@
         });
     }
 
+    function readTplPerfPreference() {
+        try {
+            if (!window.localStorage) {
+                return false;
+            }
+            return window.localStorage.getItem(tplPerfStateKey) === '1';
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function writeTplPerfPreference(enabled) {
+        try {
+            if (!window.localStorage) {
+                return;
+            }
+            if (enabled) {
+                window.localStorage.setItem(tplPerfStateKey, '1');
+            } else {
+                window.localStorage.removeItem(tplPerfStateKey);
+            }
+        } catch (error) {
+            // Ignore storage failures; cookie + URL still drive the request.
+        }
+    }
+
+    function currentUrlHasTplPerfQuery() {
+        try {
+            return new URL(window.location.href).searchParams.get(tplPerfQueryKey) === '1';
+        } catch (error) {
+            return /(?:^|[?&])wls_tpl_perf=(?:1|true)(?:&|$)/i.test(String(window.location.search || ''));
+        }
+    }
+
+    function buildTplPerfNavigationUrl(enabled) {
+        var url = new URL(window.location.href);
+        if (enabled) {
+            url.searchParams.set(tplPerfQueryKey, '1');
+        } else {
+            url.searchParams.delete(tplPerfQueryKey);
+        }
+        return url.toString();
+    }
+
+    /**
+     * Panel-token-gated template timing overlay: issue signed cookie then sync `wls_tpl_perf` query.
+     */
+    function setTplPerfOverlay(enabled, options) {
+        options = options || {};
+        var nextEnabled = !!enabled;
+        var reload = options.reload !== false;
+        if (settingTplPerfOverlay) {
+            return Promise.resolve(null);
+        }
+        settingTplPerfOverlay = true;
+        return requestAuthorization().then(function (allowed) {
+            if (!allowed) {
+                return null;
+            }
+            return apiFetch('trace/tpl-perf', {
+                method: 'POST',
+                body: { enabled: nextEnabled }
+            }).then(function (result) {
+                writeTplPerfPreference(nextEnabled);
+                var nextUrl = buildTplPerfNavigationUrl(nextEnabled);
+                var urlChanged = nextUrl !== window.location.href;
+                if (!reload) {
+                    if (urlChanged && window.history && typeof window.history.replaceState === 'function') {
+                        window.history.replaceState(window.history.state, '', nextUrl);
+                    }
+                    return result;
+                }
+                if (urlChanged || currentUrlHasTplPerfQuery() !== nextEnabled) {
+                    window.location.assign(nextUrl);
+                    return result;
+                }
+                window.location.reload();
+                return result;
+            });
+        }).catch(function (error) {
+            if (window.console && console.warn) {
+                console.warn('[WelinePanel] template perf overlay switch failed:', error);
+            }
+            return null;
+        }).finally(function () {
+            settingTplPerfOverlay = false;
+        });
+    }
+
+    function isTplPerfOverlayPreferred() {
+        return readTplPerfPreference() || currentUrlHasTplPerfQuery();
+    }
+
     function openLoadedPanel() {
         var panel = document.getElementById('dev-tool-panel');
         if (!panel) {
@@ -486,6 +582,11 @@
             window.DevToolPanel.toggle();
         }
         setTraceRecording(true);
+        if (readTplPerfPreference() && !currentUrlHasTplPerfQuery()) {
+            setTplPerfOverlay(true, { reload: true });
+        } else if (readTplPerfPreference()) {
+            setTplPerfOverlay(true, { reload: false });
+        }
         return window.WelinePanel;
     }
 
@@ -750,6 +851,8 @@
         api.open = openPanel;
         api.activateTab = activateTab;
         api.setTraceRecording = setTraceRecording;
+        api.setTplPerfOverlay = setTplPerfOverlay;
+        api.isTplPerfOverlayPreferred = isTplPerfOverlayPreferred;
         api.report = buildReport;
         api.publish = publishReport;
         api.apiUrl = apiUrl;

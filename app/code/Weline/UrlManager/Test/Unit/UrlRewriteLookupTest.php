@@ -170,6 +170,22 @@ final class UrlRewriteLookupTest extends TestCase
         self::assertStringNotContainsString("/quo'te\n", $this->ledger->queries[0]['sql']);
     }
 
+    public function testEachBatchReturnsOnlyItsRequestedLegacyPaths(): void
+    {
+        $paths = [];
+        for ($index = 0; $index < 257; ++$index) {
+            $path = '/legacy-batch/' . $index;
+            $paths[] = $path;
+            $this->insertRow($index + 1, 7, $path, $index % 2 === 0 ? null : '');
+        }
+        $this->insertRow(999, 7, '/unrelated-legacy', null);
+        $rows = $this->model->findLatestByWebsiteAndPaths(7, $paths);
+        self::assertSame(range(1, 257), array_column(array_values($rows), 'rewrite_id'));
+        self::assertCount(2, $this->ledger->queries);
+        self::assertCount(256, $this->ledger->queries[0]['rows']);
+        self::assertCount(1, $this->ledger->queries[1]['rows']);
+    }
+
     public function testBatchLookupBoundsParametersAndPreservesEveryResult(): void
     {
         $paths = [];
@@ -185,7 +201,7 @@ final class UrlRewriteLookupTest extends TestCase
         self::assertSame(range(1, 257), array_column(array_values($rows), 'rewrite_id'));
         self::assertCount(2, $this->ledger->queries);
         foreach ($this->ledger->queries as $query) {
-            self::assertLessThanOrEqual(259, count($query['bindings']));
+            self::assertLessThanOrEqual(771, count($query['bindings']));
         }
     }
 

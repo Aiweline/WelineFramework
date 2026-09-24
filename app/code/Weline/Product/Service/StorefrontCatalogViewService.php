@@ -594,6 +594,32 @@ final class StorefrontCatalogViewService
     }
 
     /**
+     * 批量读取实时商品数据；只在当前请求复用，不使用共享目录快照。
+     * @param list<int> $productIds
+     * @return list<array<string, mixed>>
+     */
+    public function livePublishedOffersForProductIds(array $productIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0)));
+        if ($ids === []) {
+            return [];
+        }
+        $scope = $this->currentScope();
+        $websiteId = max(0, (int)$scope->websiteId);
+        $requestKey = serialize([
+            $ids, $scope->canonicalKey(), max(0, RequestContext::getWelineStoreId()),
+            strtoupper(trim(RequestContext::getWelineUserCurrency())),
+            trim((string)RequestContext::getWelineUserLang()),
+        ]);
+        $rows = $this->hotCache->rememberForRequest(
+            'product.live_offers_batch', $requestKey,
+            fn(): array => $this->buildPublishedOffers($websiteId, $scope, $ids),
+        );
+        return $this->materializeCampaignUrls($rows);
+    }
+
+    /**
      * Published offers with fresh stock/sellability from Cart snapshot resolver.
      *
      * Bypasses {@see rememberPublishedOffers()} hot cache so CDN-cached pages can
@@ -1090,6 +1116,7 @@ final class StorefrontCatalogViewService
                 'offers' => count($rows),
             ]);
         }
+        $projectedRows = [];
         foreach ($rows as $index => $row) {
             $productId = (int)($row['product_id'] ?? 0);
             $itemStartedAt = hrtime(true);
@@ -1114,14 +1141,32 @@ final class StorefrontCatalogViewService
                 );
             }
             $fieldProjectionMs += (hrtime(true) - $itemStartedAt) / 1e6;
-            $itemStartedAt = hrtime(true);
-            $rows[$index] = !$includeMedia
-                ? $projected
-                : ($representativeOnly
-                    ? $this->mediaUrls->resolveListingOffer($projected, $scope, $locale)
-                    : $this->mediaUrls->resolveOffer($projected, $scope, $locale));
-            $mediaProjectionMs += (hrtime(true) - $itemStartedAt) / 1e6;
+            $projectedRows[$index] = is_array($projected) ? $projected : $row;
         }
+
+        $itemStartedAt = hrtime(true);
+        if ($includeMedia) {
+            $mediaOffers = array_values(array_filter(
+                $projectedRows,
+                static fn(mixed $row): bool => is_array($row),
+            ));
+            /** @var list<array<string, mixed>> $mediaOffers */
+            $resolvedMedia = $representativeOnly
+                ? $this->mediaUrls->resolveListingOffers($mediaOffers, $scope, $locale)
+                : $this->mediaUrls->resolveOffers($mediaOffers, $scope, $locale);
+            $resolvedIndex = 0;
+            foreach ($projectedRows as $index => $projected) {
+                if (!is_array($projected)) {
+                    $rows[$index] = $projected;
+                    continue;
+                }
+                $rows[$index] = $resolvedMedia[$resolvedIndex] ?? $projected;
+                $resolvedIndex++;
+            }
+        } else {
+            $rows = $projectedRows;
+        }
+        $mediaProjectionMs += (hrtime(true) - $itemStartedAt) / 1e6;
         RequestLifecycleTrace::recordPhase('product.catalog.projection', (hrtime(true) - $phaseStartedAt) / 1e6, [
             'products' => count($rows), 'listing' => $representativeOnly,
             'fields_ms' => round($fieldProjectionMs, 2), 'media_ms' => round($mediaProjectionMs, 2),
@@ -1218,13 +1263,30 @@ final class StorefrontCatalogViewService
      */
     private function materializeCampaignUrls(array $rows): array
     {
+        $routes = [];
+        foreach ($rows as $row) {
+            $route = trim((string)($row['_campaign_frontend_route'] ?? ''));
+            if ($route !== '') {
+                $routes[$route] = $route;
+            }
+            foreach ($row['eligible_campaigns'] ?? [] as $campaign) {
+                $route = trim((string)($campaign['frontend_route'] ?? ''));
+                if ($route !== '') {
+                    $routes[$route] = $route;
+                }
+            }
+        }
         $environment = null;
-        $resolve = function (string $route) use (&$environment): string {
+        $batchUrls = null;
+        $resolve = function (string $route) use (&$environment, &$batchUrls, $routes): string {
             $environment ??= \Weline\Framework\Cache\KeyBuilder::environmentHash();
             return $this->hotCache->rememberForRequest(
                 'product.campaign.frontend_url',
                 serialize([$environment, $route]),
-                static fn(): string => ObjectManager::getInstance(\Weline\Framework\Http\Url::class)->getFrontendUrl($route),
+                static function () use ($route, $routes, &$batchUrls): string {
+                    $batchUrls ??= ObjectManager::getInstance(\Weline\Framework\Http\Url::class)->getFrontendUrls($routes);
+                    return $batchUrls[$route];
+                },
             );
         };
         foreach ($rows as $index => $row) {
@@ -1450,36 +1512,78 @@ final class StorefrontCatalogViewService
                         }
                     }
                 }
-                foreach ($candidateProductIds as $productId) {
-                    $offers = $this->livePublishedOffersForProduct($productId);
-                    if ($offers === []) {
-                        continue;
-                    }
-                    if (\strtolower(\trim((string)($offers[0]['slug'] ?? ''))) === $slug) {
-                        return $offers;
-                    }
-                }
+                // Resolve the matching published product once via targeted batch,
+                // then run a single live projection for the PDP main chain only.
+                $candidateIds = \array_values($candidateProductIds);
+                $matchedProductId = $this->matchPublishedProductIdBySlug($candidateIds, $slug);
 
                 // ASCII SKU fallback: products without EAV slug still publish as /product/{sku-slug}.
-                $skuProductId = $this->findPublishedProductIdByPublicSkuSlug($websiteId, $slug);
-                if ($skuProductId > 0) {
-                    $offers = $this->livePublishedOffersForProduct($skuProductId);
-                    if ($offers !== [] && \strtolower(\trim((string)($offers[0]['slug'] ?? ''))) === $slug) {
-                        return $offers;
-                    }
+                if ($matchedProductId <= 0) {
+                    $matchedProductId = $this->findPublishedProductIdByPublicSkuSlug($websiteId, $slug);
                 }
 
                 // Compatibility fallback for legacy projections that predate product slug EAV rows.
-                foreach ($this->publishedOffers(200) as $offer) {
-                    if (\strtolower(\trim((string)($offer['slug'] ?? ''))) !== $slug) {
-                        continue;
+                if ($matchedProductId <= 0) {
+                    foreach ($this->publishedOffers(200) as $offer) {
+                        if (\strtolower(\trim((string)($offer['slug'] ?? ''))) !== $slug) {
+                            continue;
+                        }
+                        $matchedProductId = max(0, (int)($offer['product_id'] ?? 0));
+                        break;
                     }
-                    return $this->publishedOffersForProduct((int)($offer['product_id'] ?? 0));
                 }
 
-                return [];
+                if ($matchedProductId <= 0) {
+                    return [];
+                }
+
+                return $this->livePublishedOffersForProduct($matchedProductId);
             }
         );
+    }
+
+    /**
+     * Pick the published product id whose storefront slug matches, using one
+     * targeted catalog batch (no per-candidate live_request).
+     *
+     * @param list<int> $candidateIds
+     */
+    private function matchPublishedProductIdBySlug(array $candidateIds, string $slug): int
+    {
+        $candidateIds = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $candidateIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        if ($candidateIds === []) {
+            return 0;
+        }
+
+        return $this->firstProductIdMatchingSlug(
+            $this->publishedOffersForProductIds($candidateIds, \count($candidateIds), false),
+            $slug,
+        );
+    }
+
+    /**
+     * @param list<array<string, mixed>> $offers
+     */
+    private function firstProductIdMatchingSlug(array $offers, string $slug): int
+    {
+        $slug = \strtolower(\trim($slug));
+        foreach ($offers as $offer) {
+            if (!\is_array($offer)) {
+                continue;
+            }
+            $offerSlug = \strtolower(\trim((string)($offer['slug'] ?? '')));
+            if ($offerSlug === '') {
+                $offerSlug = \strtolower(\trim((string)($offer['source_slug'] ?? '')));
+            }
+            if ($offerSlug === $slug) {
+                return max(0, (int)($offer['product_id'] ?? 0));
+            }
+        }
+
+        return 0;
     }
 
     private function findPublishedProductIdByPublicSkuSlug(int $websiteId, string $slug): int
