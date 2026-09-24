@@ -1076,7 +1076,22 @@ NEW,NEW
 "还差 %1 包邮","You're %1 away from free shipping"
 已享包邮,"You've unlocked free shipping"
 关闭通知,"Close notification"
+全部商品,"Shop All"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 面包屑,"bread crumbs"
+内容标题,"Section title"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+件商品,"items of goods"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1188,8 +1203,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1231,7 +1244,6 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1242,11 +1254,6 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
-内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
@@ -1263,7 +1270,6 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-距离结束,"Ends in"
 精选轮播,"Featured Carousel"
 回到顶部,"Back to top"
 站点偏好,"Site preferences"
@@ -1290,7 +1296,6 @@ Logo,Logo
 请使用微信扫描二维码分享,"Please scan the QR code with WeChat to share"
 上一条,Previous
 下一条,Next
-全部商品,"Shop All"
 面包屑导航,Breadcrumbs
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
@@ -1306,10 +1311,6 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1712,6 +1713,10 @@ AI目录加载失败,"AI directory loading failed"
 "Theme 布局节点不属于当前编辑上下文。","The Theme layout node does not belong to the current editor context."
 "Theme 布局写入必须位于写意图事务内。","Theme layout writes must run inside a write-intent transaction."
 政策页面,"Policy Page"
+道记,道记
+无为空间,"Wu Wei Sanctuary"
+选购,Shop
+道家居服,"Daoist Lounge Wear"
 测试页,"Test Page"
 "-- 选择主题 --","-- Select Theme --"
 （已启用）,(enabled)
@@ -2345,7 +2350,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 汉服分类展示图,"Hanfu category showcase image"
 开始搬迁文件...,"Start moving files..."
 更新主题文件！,"Update theme file!"
@@ -4413,3 +4417,13 @@ Chiffon,Chiffon
 如何保养商品？,"How do I care for products?"
 请按商品页洗护说明护理；精致刺绣或特殊面料建议轻柔手洗或专业干洗。,"Follow the care guide on the product page; delicate embroidery or specialty fabrics prefer gentle hand wash or professional dry cleaning."
 未穿用且吊牌完整的商品可按退换政策申请；定制款与特殊品类规则以政策页为准。,"Unworn items with tags intact can follow the returns policy; custom and special categories follow the policy page."
+了解空间仪式,"Learn the sanctuary ritual"
+了解居服方向,"See lounge direction"
+选购可佩戴吊坠,"Shop wearable pendants"
+浏览全部集合,"Browse collections"
+后续波次,"Later wave"
+"第二期 · 尚未开售","Phase 2 · Not for sale yet"
+"第三期 · 尚未开售","Phase 3 · Not for sale yet"
+现已可购,"Available now"
+五分钟仪式,"Five-minute ritual"
+安全提示,Safety
