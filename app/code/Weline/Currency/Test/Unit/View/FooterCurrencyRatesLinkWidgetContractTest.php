@@ -17,7 +17,7 @@ final class FooterCurrencyRatesLinkWidgetContractTest extends TestCase
         $widget = $widgets['footer-currency-rates-link'];
         self::assertSame('footer-payment-account-links', $widget['slot'] ?? null);
         self::assertSame(
-            'Weline_Currency::templates/frontend/widgets/footer-currency-rates-link.phtml',
+            'Weline_Currency::templates/Frontend/widgets/footer-currency-rates-link.phtml',
             $widget['template'] ?? null
         );
         $injection = $widget['default_injections'][0] ?? [];

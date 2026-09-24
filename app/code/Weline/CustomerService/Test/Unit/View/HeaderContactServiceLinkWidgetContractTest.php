@@ -18,7 +18,7 @@ final class HeaderContactServiceLinkWidgetContractTest extends TestCase
         self::assertSame(['*'], $widget['page_layouts'] ?? null);
         self::assertSame('header-nav-extensions', $widget['slot'] ?? null);
         self::assertSame(
-            'Weline_CustomerService::templates/frontend/widgets/header-contact-service-link.phtml',
+            'Weline_CustomerService::templates/Frontend/widgets/header-contact-service-link.phtml',
             $widget['template'] ?? null
         );
         $injection = $widget['default_injections'][0] ?? [];

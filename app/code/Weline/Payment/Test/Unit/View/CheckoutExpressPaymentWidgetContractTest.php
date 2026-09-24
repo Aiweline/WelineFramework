@@ -17,7 +17,7 @@ final class CheckoutExpressPaymentWidgetContractTest extends TestCase
         $widget = $widgets['checkout-express-payment'];
         self::assertSame('checkout-express-payment', $widget['slot'] ?? null);
         self::assertSame(
-            'Weline_Payment::templates/frontend/widgets/checkout-express-payment.phtml',
+            'Weline_Payment::templates/Frontend/widgets/checkout-express-payment.phtml',
             $widget['template'] ?? null
         );
         self::assertTrue((bool)($widget['params']['enabled']['default'] ?? false));

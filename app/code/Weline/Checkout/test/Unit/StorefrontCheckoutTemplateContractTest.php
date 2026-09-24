@@ -239,7 +239,7 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('isContinuePayMode()', $template);
         self::assertStringContainsString('function checkoutCartType()', $template);
         self::assertStringContainsString('cart_type: checkoutCartType()', $template);
-        self::assertStringNotContainsString('Weline_Payment::templates/frontend/widgets/checkout-express-payment.phtml', $template);
+        self::assertStringNotContainsString('Weline_Payment::templates/Frontend/widgets/checkout-express-payment.phtml', $template);
 
         $formPos = strpos($template, 'data-checkout-form');
         $mainPos = strpos($template, 'class="weline-checkout__main"');

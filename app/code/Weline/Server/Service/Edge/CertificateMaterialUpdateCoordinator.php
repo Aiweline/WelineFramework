@@ -761,6 +761,7 @@ final class CertificateMaterialUpdateCoordinator
                     }
 
                     $nativeLiveProofDigests = [];
+                    $refreshFailuresByInstance = [];
                     if ($liveNativeProofTargets !== []) {
                         $refresh = $this->refreshNativeTlsProofs(
                             \array_keys($liveNativeProofTargets),
@@ -788,6 +789,14 @@ final class CertificateMaterialUpdateCoordinator
                         }
                         foreach ($refresh['failures'] as $refreshFailure) {
                             $runtimeConvergenceFailures[] = $refreshFailure;
+                            if (\preg_match(
+                                '/\\Anative TLS final generation proof (.+): (.+)\\z/s',
+                                (string)$refreshFailure,
+                                $failureParts,
+                            ) === 1) {
+                                $refreshFailuresByInstance[(string)$failureParts[1]]
+                                    = (string)$failureParts[2];
+                            }
                         }
                     }
 
@@ -796,18 +805,68 @@ final class CertificateMaterialUpdateCoordinator
                         $nativeLiveProofDigests,
                     );
                     if ($missingLiveNativeProofs !== []) {
-                        $quarantine = $this->quarantineNativeTlsFaces(
-                            \array_keys($missingLiveNativeProofs),
-                            $revokedDomains,
-                            $deadlineMonotonic,
-                            $liveNativeProofTargets,
-                        );
-                        foreach ($quarantine['proofs'] as $instanceName => $proofDigest) {
-                            $nativeLiveProofDigests[(string)$instanceName]
-                                = (string)$proofDigest;
+                        // Sticky TLS quarantine freezes Worker spawn until an
+                        // operator full-generation restart. Re-quarantining an
+                        // already-empty or already-quarantined face (typical when
+                        // reload fails with worker_ack_incomplete / population
+                        // change) creates a restart↔retirement death spiral.
+                        // Accept existing containment, and defer transient empty
+                        // data-plane reload failures instead of withdrawing
+                        // admission again.
+                        $quarantineTargets = [];
+                        foreach ($missingLiveNativeProofs as $instanceName => $endpoint) {
+                            $instanceName = (string)$instanceName;
+                            if (!\is_array($endpoint)) {
+                                $unclosedNativeGenerations[$instanceName] = true;
+                                $runtimeConvergenceFailures[] = 'native TLS live containment '
+                                    . $instanceName . ': endpoint is malformed';
+                                continue;
+                            }
+                            if ($this->nativeTlsFaceAlreadyQuarantined($endpoint)) {
+                                $gateway = \is_array($endpoint['gateway'] ?? null)
+                                    ? $endpoint['gateway']
+                                    : [];
+                                $nativeLiveProofDigests[$instanceName] = \hash(
+                                    'sha256',
+                                    GatewayClient::canonicalJson([
+                                        'method' => 'already_quarantined',
+                                        'endpoint_digest' => \hash(
+                                            'sha256',
+                                            GatewayClient::canonicalJson($endpoint),
+                                        ),
+                                        'quarantine' => $gateway['tls_serving_quarantine'] ?? null,
+                                    ]),
+                                );
+                                continue;
+                            }
+                            $failureMessage = (string)(
+                                $refreshFailuresByInstance[$instanceName] ?? ''
+                            );
+                            if ($failureMessage === '') {
+                                $failureMessage = 'reload proof missing after live native refresh';
+                            }
+                            if ($this->nativeTlsReloadFailureIsDeferrable($failureMessage)) {
+                                $unclosedNativeGenerations[$instanceName] = true;
+                                $runtimeConvergenceFailures[] = 'native TLS live containment deferred '
+                                    . $instanceName . ': ' . $failureMessage;
+                                continue;
+                            }
+                            $quarantineTargets[$instanceName] = $endpoint;
                         }
-                        foreach ($quarantine['failures'] as $containmentFailure) {
-                            $runtimeConvergenceFailures[] = $containmentFailure;
+                        if ($quarantineTargets !== []) {
+                            $quarantine = $this->quarantineNativeTlsFaces(
+                                \array_keys($quarantineTargets),
+                                $revokedDomains,
+                                $deadlineMonotonic,
+                                $quarantineTargets,
+                            );
+                            foreach ($quarantine['proofs'] as $instanceName => $proofDigest) {
+                                $nativeLiveProofDigests[(string)$instanceName]
+                                    = (string)$proofDigest;
+                            }
+                            foreach ($quarantine['failures'] as $containmentFailure) {
+                                $runtimeConvergenceFailures[] = $containmentFailure;
+                            }
                         }
                     }
 
@@ -1271,6 +1330,77 @@ final class CertificateMaterialUpdateCoordinator
         }
         \ksort($proofs, SORT_STRING);
         return ['proofs' => $proofs, 'failures' => $failures];
+    }
+
+    /**
+     * Sticky quarantine already withdrew TLS admission for this Master fence.
+     * Re-issuing quarantine only refreshes the marker and keeps Worker spawn frozen.
+     *
+     * @param array<string,mixed> $endpoint
+     */
+    private function nativeTlsFaceAlreadyQuarantined(array $endpoint): bool
+    {
+        $gateway = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+        $quarantine = $gateway['tls_serving_quarantine'] ?? null;
+        if (!\is_array($quarantine)) {
+            return false;
+        }
+        $schema = \strtolower(\trim((string)($quarantine['schema'] ?? '')));
+        $operationId = \strtolower(\trim((string)($quarantine['operation_id'] ?? '')));
+        $reason = \trim((string)($quarantine['reason'] ?? ''));
+
+        return \hash_equals('wls-tls-serving-quarantine/1', $schema)
+            && \preg_match('/\A[a-f0-9]{32}\z/D', $operationId) === 1
+            && $reason !== '';
+    }
+
+    /**
+     * Reload failures that already imply an empty, racing, or otherwise
+     * unacknowledged data plane must not trigger sticky quarantine; retirement
+     * stays pending and retries after Workers are restored.
+     *
+     * Any failed refreshNativeTlsProofs attempt is treated as deferrable here:
+     * the missing-proof path previously quarantined on every incomplete ACK and
+     * froze Worker spawn until an operator full-generation restart.
+     */
+    private function nativeTlsReloadFailureIsDeferrable(string $failureMessage): bool
+    {
+        $failureMessage = \strtolower(\trim($failureMessage));
+        if ($failureMessage === '') {
+            return false;
+        }
+        foreach ([
+            'worker_ack_incomplete',
+            'tls_worker_population_changed',
+            'ipc_disconnected',
+            'control_plane_busy',
+            'no ready worker',
+            'no ready workers',
+            'acked=0',
+            'eligible_workers',
+            'worker population',
+            'acknowledgement is incomplete',
+            'reload acknowledgement',
+            'ssl_cert_reload',
+            'certificate reload',
+            'timed out',
+            'timeout',
+            'lease is not authoritative',
+            'publication fence is incomplete',
+            'endpoint identity is invalid',
+        ] as $needle) {
+            if (\str_contains($failureMessage, $needle)) {
+                return true;
+            }
+        }
+
+        // Default: a failed live reload proof is a retry/defer signal, not a
+        // sticky admission withdrawal. Security containment for still-serving
+        // revoked material remains available via already_quarantined acceptance
+        // and other explicit quarantine entry points.
+        return true;
     }
 
     /**

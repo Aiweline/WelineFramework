@@ -80,7 +80,7 @@ final class Google extends BackendController
     public function projects(): string
     {
         $this->assign('config_scope', \trim((string)$this->request->getGet('scope', '')));
-        return $this->fetch('Weline_Captcha::templates/Backend/Google/projects.phtml');
+        return $this->fetch('Weline_Captcha::templates/backend/Google/projects.phtml');
     }
 
     #[Acl('Weline_Captcha::google_test', '测试 Google reCAPTCHA Enterprise 连接', 'link', '人机验证配置')]
@@ -98,7 +98,7 @@ final class Google extends BackendController
     #[Acl('Weline_Captcha::google_revoke', '撤销 Google reCAPTCHA Enterprise 授权', 'link', '人机验证配置')]
     public function revoke(): string
     {
-        return $this->fetch('Weline_Captcha::templates/Backend/Google/revoke.phtml');
+        return $this->fetch('Weline_Captcha::templates/backend/Google/revoke.phtml');
     }
 
     private function configUrl(): string

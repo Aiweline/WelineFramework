@@ -96,6 +96,8 @@ class ServiceOrchestrator
     private const CONTROL_OPERATION_STATE_FAILED = 'failed';
     private const CONTROL_OPERATION_STATE_CANCELLED = 'cancelled';
     private const READY_CONFIRM_TIMEOUT_SEC = ControlMessage::READY_CONFIRM_TIMEOUT_SEC;
+    private const RUNTIME_POLICY_FAILED_RETRY_SEC = 30.0;
+    private const RUNTIME_POLICY_STORE_RECONCILE_SEC = 10.0;
     private const MIN_READY_TIMER_POLL_USEC = 1000;
     private const HOST_MEMORY_PRESSURE_COORDINATION_RETRY_SECONDS = 30.0;
     private const NGINX_UPSTREAM_DRAIN_SAFETY_MARGIN_SEC = 5.0;
@@ -495,6 +497,8 @@ class ServiceOrchestrator
     private string $containerRegistryDigest = '';
     private string $runtimePolicyState = 'uninitialized';
     private string $runtimePolicyError = '';
+    private float $runtimePolicyFailedAt = 0.0;
+    private float $runtimePolicyStoreReconciledAt = 0.0;
     /** @var array<int, array<string, mixed>> READY held until PREPARE proves the process gate is closed. */
     private array $runtimePolicyPendingReady = [];
 
@@ -17285,6 +17289,9 @@ class ServiceOrchestrator
                     '[Orchestrator] Dispatcher READY policy rejected: reported='
                     . $reportedDigest . ', expected=' . $expectedDigest
                 );
+                if ($readyRejection === 'policy_digest_mismatch') {
+                    $this->reconcileRuntimePolicyStoreAfterReadyMismatch();
+                }
                 return;
             }
             $instance->setMeta('policy_digest', $reportedDigest);
@@ -17514,6 +17521,9 @@ class ServiceOrchestrator
                     . ', http3_reason=' . ($http3ReadinessRejection !== '' ? $http3ReadinessRejection : 'ready_or_disabled')
                     . ', namespace_reason=' . ($namespaceReadinessRejection !== '' ? $namespaceReadinessRejection : 'ready_or_optional')
                 );
+                if ($readyRejection === 'policy_digest_mismatch') {
+                    $this->reconcileRuntimePolicyStoreAfterReadyMismatch();
+                }
                 return;
             }
             $instance->setMeta('readiness_protocol_version', (int)($msg['readiness_protocol_version'] ?? 0));
@@ -31249,14 +31259,22 @@ class ServiceOrchestrator
 
     private function ensureRuntimePolicyPublished(): void
     {
-        if ($this->context === null
-            || $this->runtimePolicyTransition !== null
-            || $this->runtimePolicyState === 'failed'
-        ) {
+        if ($this->context === null || $this->runtimePolicyTransition !== null) {
             return;
         }
+        if ($this->runtimePolicyState === 'failed') {
+            // A permanent failed latch rejects every replacement child against a
+            // digest the store may no longer serve, until a full restart.
+            if (self::monotonicSeconds() - $this->runtimePolicyFailedAt < self::RUNTIME_POLICY_FAILED_RETRY_SEC) {
+                return;
+            }
+            WlsLogger::warning_(
+                '[Orchestrator] 运行时策略 failed 冷却结束，重新对齐存储: ' . $this->runtimePolicyError
+            );
+            $this->runtimePolicyState = 'active';
+        }
         try {
-            $store = new RuntimePolicyStore();
+            $store = $this->createRuntimePolicyStore();
             $bundle = $store->staged($this->context->instanceName);
             $activeBundle = null;
             if ($bundle === null) {
@@ -31276,20 +31294,7 @@ class ServiceOrchestrator
                 return;
             }
             if ($bundle === null) {
-                $topology = $this->context->getEffectiveTopology()->value;
-                if (!\in_array($topology, ['direct', 'dispatcher'], true)) {
-                    $topology = 'both';
-                }
-                $bundle = (new RuntimePolicyCompiler())->compile(
-                    $topology,
-                    ['instance' => $this->context->instanceName],
-                    [],
-                    [
-                        'host' => $this->context->host,
-                        'public_host' => $this->context->publicHost ?: $this->context->host,
-                        'ssl_domain' => $this->context->publicHost ?: $this->context->host,
-                    ],
-                );
+                $bundle = $this->compileRuntimePolicyForContext();
                 $store->stage($this->context->instanceName, $bundle);
             }
             if ($this->runtimePolicyPublishedDigest !== ''
@@ -31299,10 +31304,114 @@ class ServiceOrchestrator
             }
             $this->startRuntimePolicyTransition($bundle, false);
         } catch (\Throwable $throwable) {
-            $this->runtimePolicyState = 'failed';
-            $this->runtimePolicyError = $throwable->getMessage();
+            $this->markRuntimePolicyFailed($throwable->getMessage());
             WlsLogger::error_('[Orchestrator] 运行时策略初始发布失败: ' . $throwable->getMessage());
         }
+    }
+
+    private function compileRuntimePolicyForContext(): RuntimePolicyBundle
+    {
+        if ($this->context === null) {
+            throw new \RuntimeException('Runtime policy compilation requires an initialized context.');
+        }
+        $topology = $this->context->getEffectiveTopology()->value;
+        if (!\in_array($topology, ['direct', 'dispatcher'], true)) {
+            $topology = 'both';
+        }
+
+        return (new RuntimePolicyCompiler())->compile(
+            $topology,
+            ['instance' => $this->context->instanceName],
+            [],
+            [
+                'host' => $this->context->host,
+                'public_host' => $this->context->publicHost ?: $this->context->host,
+                'ssl_domain' => $this->context->publicHost ?: $this->context->host,
+            ],
+        );
+    }
+
+    protected function createRuntimePolicyStore(): RuntimePolicyStore
+    {
+        return new RuntimePolicyStore();
+    }
+
+    private function markRuntimePolicyFailed(string $error): void
+    {
+        $this->runtimePolicyState = 'failed';
+        $this->runtimePolicyError = $error;
+        $this->runtimePolicyFailedAt = self::monotonicSeconds();
+    }
+
+    /**
+     * Children boot from the store's active bundle and fall back to a
+     * context-less compile when it is missing or fails integrity. When READY
+     * digests keep diverging, restore the store to what this Master serves (or
+     * adopt a valid newer active bundle through the normal transition) instead
+     * of rejecting every replacement until a full-generation restart.
+     */
+    private function reconcileRuntimePolicyStoreAfterReadyMismatch(): void
+    {
+        if ($this->context === null || $this->runtimePolicyTransition !== null) {
+            return;
+        }
+        $now = self::monotonicSeconds();
+        if ($now - $this->runtimePolicyStoreReconciledAt < self::RUNTIME_POLICY_STORE_RECONCILE_SEC) {
+            return;
+        }
+        $this->runtimePolicyStoreReconciledAt = $now;
+
+        $instanceName = $this->context->instanceName;
+        $published = \strtolower(\trim($this->runtimePolicyPublishedDigest));
+        $store = $this->createRuntimePolicyStore();
+        $active = null;
+        $storeError = '';
+        try {
+            $active = $store->active($instanceName);
+        } catch (\Throwable $throwable) {
+            $storeError = $throwable->getMessage();
+        }
+
+        if ($active !== null && $published !== '' && \hash_equals($published, $active->digest)) {
+            return;
+        }
+
+        try {
+            if ($active === null) {
+                $bundle = $this->compileRuntimePolicyForContext();
+                if ($published !== '' && \hash_equals($published, $bundle->digest)) {
+                    $store->save($instanceName, $bundle);
+                    $store->activate($instanceName, $bundle->digest);
+                    WlsLogger::warning_(
+                        '[Orchestrator] 运行时策略存储缺失/损坏，已按 Master 当前摘要恢复: digest=' . $published
+                        . ($storeError !== '' ? ', error=' . $storeError : '')
+                    );
+                    if ($this->runtimePolicyState === 'failed') {
+                        $this->runtimePolicyState = 'active';
+                        $this->runtimePolicyError = '';
+                    }
+                    return;
+                }
+                $store->stage($instanceName, $bundle);
+                WlsLogger::warning_(
+                    '[Orchestrator] 运行时策略存储缺失/损坏，重编译摘要与 Master 不同，走发布过渡: '
+                    . $published . ' -> ' . $bundle->digest
+                );
+            } else {
+                WlsLogger::warning_(
+                    '[Orchestrator] 运行时策略存储 active 与 Master 不一致，走发布过渡: '
+                    . $published . ' -> ' . $active->digest
+                );
+            }
+        } catch (\Throwable $throwable) {
+            WlsLogger::error_('[Orchestrator] 运行时策略存储对账失败: ' . $throwable->getMessage());
+            return;
+        }
+
+        if ($this->runtimePolicyState === 'failed') {
+            $this->runtimePolicyFailedAt = 0.0;
+        }
+        $this->ensureRuntimePolicyPublished();
     }
 
     private function startRuntimePolicyTransition(RuntimePolicyBundle $bundle, bool $rollback): void
@@ -31646,8 +31755,7 @@ class ServiceOrchestrator
         }
         $failure = (string)($transition['failure_error'] ?? $this->runtimePolicyError);
         $this->runtimePolicyTransition = null;
-        $this->runtimePolicyState = 'failed';
-        $this->runtimePolicyError = $failure;
+        $this->markRuntimePolicyFailed($failure);
         WlsLogger::error_('[IPC] Runtime policy transition aborted safely: ' . $failure);
     }
 

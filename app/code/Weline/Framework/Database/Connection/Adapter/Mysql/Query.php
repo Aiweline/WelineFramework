@@ -207,12 +207,6 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         return $this;
     }
 
-    public function having(string $having): QueryInterface
-    {
-        $this->having = 'having ' . $having;
-        return $this;
-    }
-
     public function additional(string $additional_sql): QueryInterface
     {
         $this->additional_sql = $additional_sql;

@@ -57,6 +57,10 @@ final class CertificateMaterialUpdateCoordinatorTest extends TestCase
             $source,
         );
         self::assertStringContainsString('quarantineNativeTlsFaces(', $source);
+        self::assertStringContainsString('nativeTlsFaceAlreadyQuarantined(', $source);
+        self::assertStringContainsString('nativeTlsReloadFailureIsDeferrable(', $source);
+        self::assertStringContainsString("'already_quarantined'", $source);
+        self::assertStringContainsString('native TLS live containment deferred ', $source);
         self::assertStringContainsString('explicitPureWlsServingEndpoint(', $source);
         self::assertStringContainsString(
             'fallbackWlsIsServing('

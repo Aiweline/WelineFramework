@@ -3,8 +3,8 @@
 $entry = (array) ($this->getData('social_login_guide_entry') ?? []);
 $guideRoute = (string) ($entry['guide_route'] ?? '');
 ?>
-<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/shell-open.phtml'); ?>
-<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/sidebar.phtml'); ?>
+<?php echo $this->fetch('Weline_Customer::templates/frontend/guide/social-login/partials/shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Customer::templates/frontend/guide/social-login/partials/sidebar.phtml'); ?>
 
 <article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="social-login-policy-google" weline-code="customer.social_login.policy.google">
     <header class="amazon-payment-guide-article__header">
@@ -55,4 +55,4 @@ $guideRoute = (string) ($entry['guide_route'] ?? '');
         </footer>
     <?php endif; ?>
 </article>
-<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/shell-close.phtml'); ?>
+<?php echo $this->fetch('Weline_Customer::templates/frontend/guide/social-login/partials/shell-close.phtml'); ?>
