@@ -2006,6 +2006,7 @@ Webroot：%{1},网站根目录：%{1}
 "托管 Nginx：%{1}","托管 Nginx：%{1}"
 "托管 Nginx 停止失败：%{1}","托管 Nginx 停止失败：%{1}"
 "托管 Nginx 停止异常：%{1}","托管 Nginx 停止异常：%{1}"
+"强制停止：中止占用生命周期锁的同实例后台任务（purpose=%{1}, pid=%{2}）。","强制停止：中止占用生命周期锁的同实例后台任务（purpose=%{1}, pid=%{2}）。"
 "macOS --win: 已关闭本实例 %{1} 个观察窗口","macOS --win: 已关闭本实例 %{1} 个观察窗口"
 "已中止残留清理：请先修复托管 Nginx 停止故障，或显式使用强制停止。","已中止残留清理：请先修复托管 Nginx 停止故障，或显式使用强制停止。"
 "实例 [%{1}] 不存在","实例 [%{1}] 不存在"
@@ -2884,6 +2885,7 @@ Previous：%{1},上一篇：%{1}
 无法证明受管代次时拒绝发送任何终止信号,无法证明受管代次时拒绝发送任何终止信号
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","已退役：console:server:start 不再启动 PHP 内置 Web Server。"
 "已退役：PHP 内置 Web Server 启动入口","已退役：PHP 内置 Web Server 启动入口"
+强制停止：中止占用生命周期锁的同实例后台任务（purpose=%{1},pid=%{2}）。
 "已回收子进程 PID %{1} (%{2})","已回收子进程 PID %{1} (%{2})"
 "Session Server stop was not confirmed; runtime identity was retained for retry/repair.",未确认会话服务器停止；保留运行时身份以进行重试/修复。
 "Memory Service stop was not confirmed; runtime identity was retained for retry/repair.",未确认内存服务停止；保留运行时身份以进行重试/修复。
