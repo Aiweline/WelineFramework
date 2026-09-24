@@ -379,9 +379,9 @@ foreach ($required_functions as $func) {
 
 echo "\n检查必需扩展:\n";
 $required_extensions = [
-    'pdo', 'pdo_mysql', 'json', 'curl', 'gd', 
+    'pdo', 'pdo_mysql', 'json', 'curl', 'gd',
     'zip', 'mbstring', 'fileinfo', 'exif',
-    'dom', 'simplexml', 'libxml', 'iconv'
+    'dom', 'simplexml', 'libxml', 'iconv', 'zlib'
 ];
 
 foreach ($required_extensions as $ext) {
