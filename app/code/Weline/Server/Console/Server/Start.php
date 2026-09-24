@@ -240,6 +240,14 @@ class Start extends CommandAbstract
     private bool $wlsChildProcessesMayExist = false;
 
     /**
+     * Disk identity captured before start mutates/persists config.
+     * Used to roll back a poisoned public_host after required maintenance sync fails.
+     *
+     * @var array{host?:string,public_host?:string,ssl_domain?:string,public_origin?:string}|null
+     */
+    private ?array $preStartServingIdentitySnapshot = null;
+
+    /**
      * Exact process-birth authority for the detached Master created by this
      * launcher. It is never reconstructed from a port or name-prefix scan.
      *
@@ -412,6 +420,9 @@ class Start extends CommandAbstract
             . ' -clean';
         $runtimeResolver = new RuntimeStrategyResolver();
         try {
+            $this->capturePreStartServingIdentity(
+                $this->loadSavedInstanceConfig($instanceName),
+            );
             $config = $this->getServerConfig($instanceName, $args);
             $runtimeResolver->resolveTopologyIntent($config, $args);
         } catch (\RuntimeException $exception) {
@@ -1097,7 +1108,8 @@ class Start extends CommandAbstract
             'public_host' => (string)($config['public_host'] ?? $host),
         ]);
         try {
-            $publicHost = $this->resolveCertificateHost($config, (string)$host);
+            $certificateHost = $this->resolveCertificateHost($config, (string)$host);
+            $publicHost = $this->resolvePersistPublicHost($config, $certificateHost);
         } catch (\Throwable $exception) {
             $this->printer->error(__('WLS 公开 Host 规范化失败：%{1}', [
                 $exception->getMessage(),
@@ -1930,7 +1942,17 @@ class Start extends CommandAbstract
             } else {
                 $this->printer->warning(__('检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空...'));
                 $this->beginRestartMaintenanceTransaction($instanceName);
-                $this->enableMaintenanceMode($instanceName);
+                try {
+                    $this->enableMaintenanceMode($instanceName);
+                } catch (\Throwable $maintenanceException) {
+                    $this->restorePreStartServingIdentityIfNeeded($instanceName);
+                    $this->rollbackRestartMaintenanceTransactionIfPending();
+                    $this->printer->error(__(
+                        '开启维护模式同步失败：%{1}',
+                        [\substr($maintenanceException->getMessage(), 0, 512)],
+                    ));
+                    return 1;
+                }
                 $maintenanceEnabledByUs = true;
                 $this->printer->success(__('全部 READY Worker 已完成维护门禁与请求排水，开始切换...'));
                 
@@ -2565,12 +2587,21 @@ class Start extends CommandAbstract
             }
             // 关闭由本次启动流程引入的维护态：仅在新 Master 全部就绪后才关，避免空窗。
             if ($this->restartMaintenanceSnapshot !== null) {
-                $this->finalizeMaintenanceModeAfterStartup(
-                    $instanceName,
-                    $maintenanceEnabledByUs,
-                    $maintenanceResetAfterForceSwitch,
-                    $startupCompleted
-                );
+                try {
+                    $this->finalizeMaintenanceModeAfterStartup(
+                        $instanceName,
+                        $maintenanceEnabledByUs,
+                        $maintenanceResetAfterForceSwitch,
+                        $startupCompleted
+                    );
+                } catch (\Throwable $maintenanceException) {
+                    $this->restorePreStartServingIdentityIfNeeded($instanceName);
+                    $this->printer->error(__(
+                        '启动收尾维护同步失败：%{1}',
+                        [\substr($maintenanceException->getMessage(), 0, 512)],
+                    ));
+                    return 1;
+                }
             }
             $this->finalizeBackgroundStartupOutput(
                 $startupCompleted,
@@ -3716,18 +3747,27 @@ class Start extends CommandAbstract
             }
 
             if ($startupCompleted) {
+                // Workers are READY: mark handoff BEFORE required maintenance
+                // finalize. A sync timeout must fail the CLI (exit ≠0) without
+                // orphan-killing a healthy Master that already accepted traffic.
+                $this->wlsStartupProcessHandoffDone = true;
                 // During a full restart Nginx is already stopped, so restoring
                 // the pre-restart maintenance state here cannot expose WLS
                 // publicly. It must happen before the Nginx health/protocol
                 // transaction, otherwise Dispatcher still routes the probes to
                 // the temporary maintenance Worker instead of the READY
                 // business generation.
-                $this->finalizeMaintenanceModeAfterStartup(
-                    $instanceName,
-                    $maintenanceEnabledByUs,
-                    $maintenanceResetAfterForceSwitch,
-                    true,
-                );
+                try {
+                    $this->finalizeMaintenanceModeAfterStartup(
+                        $instanceName,
+                        $maintenanceEnabledByUs,
+                        $maintenanceResetAfterForceSwitch,
+                        true,
+                    );
+                } catch (\Throwable $maintenanceException) {
+                    $this->restorePreStartServingIdentityIfNeeded($instanceName);
+                    throw $maintenanceException;
+                }
                 $readyEndpoint = \is_array($readyResult['data'] ?? null)
                     ? $readyResult['data']
                     : $this->readBackgroundStartupData($instanceFile);
@@ -5605,10 +5645,22 @@ class Start extends CommandAbstract
         $savedRestartHost = \is_array($savedConfig)
             ? \trim((string)($savedConfig['host'] ?? ''))
             : '';
-        if ($restartRequested
-            && $savedRestartHost !== ''
-            && !$this->shouldUseDefaultHostFallback($savedRestartHost)
-        ) {
+        $savedRestartPublicHost = \is_array($savedConfig)
+            ? \trim((string)($savedConfig['public_host'] ?? ''))
+            : '';
+        $savedRestartSslDomain = \is_array($savedConfig)
+            ? \trim((string)($savedConfig['ssl_domain'] ?? ''))
+            : '';
+        // Edge loopback bind (host=127.0.0.1) with an explicit public identity is
+        // a first-class topology; do not skip identity reuse just because the
+        // bind host alone would trigger default-host fallback.
+        $restartPreservesEdgeIdentity = $savedRestartHost !== ''
+            && (
+                !$this->shouldUseDefaultHostFallback($savedRestartHost)
+                || $this->isUsablePublicHost($savedRestartPublicHost)
+                || $this->isUsablePublicHost($savedRestartSslDomain)
+            );
+        if ($restartRequested && $restartPreservesEdgeIdentity) {
             // A rolling restart must keep the serving identity of the running
             // instance unless the CLI explicitly replaces it below. Letting a
             // global env default replace these fields makes the active native
@@ -5619,6 +5671,12 @@ class Start extends CommandAbstract
                 ) {
                     $config[$identityKey] = $savedConfig[$identityKey];
                 }
+            }
+            $savedExtraHosts = $this->normalizeExtraAllowedHostsList(
+                $savedConfig['extra_allowed_hosts'] ?? null,
+            );
+            if ($savedExtraHosts !== []) {
+                $config['extra_allowed_hosts'] = $savedExtraHosts;
             }
         }
         if ($savedPortExplicit) {
@@ -5680,12 +5738,20 @@ class Start extends CommandAbstract
         }
 
         // 如果 env 配置中的 host 是 127.0.0.1 或旧格式域名，恢复为项目唯一域名（避免多项目 SSL 证书冲突）
+        // 例外：loopback listen + 已有可用 public_host/ssl_domain = 合法边缘拓扑（Nginx TLS → 127.0.0.1:WLS），
+        // 不得把 host 改写成 p{hash}.*.weline.* 从而污染后续 public_host。
         $envHost = $config['host'] ?? '';
         if ($this->shouldUseDefaultHostFallback((string)$envHost)) {
-            $config['host'] = $this->getDefaultHost();
-            // 同时清理 ssl_domain，让它使用新的 host
-            if ($this->shouldUseDefaultHostFallback((string)($config['ssl_domain'] ?? ''))) {
-                unset($config['ssl_domain']);
+            $hasUsablePublicIdentity = $this->isUsablePublicHost((string)($config['public_host'] ?? ''))
+                || $this->isUsablePublicHost((string)($config['ssl_domain'] ?? ''));
+            $keepLoopbackEdgeBind = $hasUsablePublicIdentity
+                && $this->isLoopbackLikeHost((string)$envHost);
+            if (!$keepLoopbackEdgeBind) {
+                $config['host'] = $this->getDefaultHost();
+                // 同时清理 ssl_domain，让它使用新的 host
+                if ($this->shouldUseDefaultHostFallback((string)($config['ssl_domain'] ?? ''))) {
+                    unset($config['ssl_domain']);
+                }
             }
         }
 
@@ -5704,8 +5770,15 @@ class Start extends CommandAbstract
             $previousHost = $savedHost !== '' ? $savedHost : $normalizedHost;
             $previousPublicHost = \trim((string)($config['public_host'] ?? ''));
             $previousPublicOrigin = \trim((string)($config['public_origin'] ?? ''));
+            // Usable public_host that differs from bind host is never "derived"
+            // from listen (e.g. host=127.0.0.1 + public_host=www.…). Loopback /
+            // 0.0.0.0 equality with a public name is also not treated as derived.
             $publicHostWasDerived = $previousPublicHost === ''
-                || ($previousHost !== '' && \strcasecmp($previousPublicHost, $previousHost) === 0);
+                || (
+                    $previousHost !== ''
+                    && \strcasecmp($previousPublicHost, $previousHost) === 0
+                    && !$this->isUsablePublicHost($previousPublicHost)
+                );
             $publicOriginParts = $previousPublicOrigin !== '' ? \parse_url($previousPublicOrigin) : false;
             $previousPublicOriginHost = \is_array($publicOriginParts)
                 ? \trim((string)($publicOriginParts['host'] ?? ''))
@@ -5714,14 +5787,22 @@ class Start extends CommandAbstract
                 || ($previousPublicOriginHost !== ''
                     && (($previousHost !== '' && \strcasecmp($previousPublicOriginHost, $previousHost) === 0)
                         || ($previousPublicHost !== ''
-                            && \strcasecmp($previousPublicOriginHost, $previousPublicHost) === 0)));
+                            && \strcasecmp($previousPublicOriginHost, $previousPublicHost) === 0))
+                    && !$this->isUsablePublicHost($previousPublicOriginHost));
 
             $newHost = \trim((string)$args['host']);
             $config['host'] = $newHost;
             if ($publicHostWasDerived) {
-                $config['public_host'] = $newHost;
+                // Never persist loopback / wildcard as public_host.
+                if ($this->isUsablePublicHost($newHost)) {
+                    $config['public_host'] = $newHost;
+                } elseif ($this->isUsablePublicHost($previousPublicHost)) {
+                    $config['public_host'] = $previousPublicHost;
+                } else {
+                    unset($config['public_host']);
+                }
             }
-            if ($publicHostWasDerived && $publicOriginWasDerived) {
+            if ($publicHostWasDerived && $publicOriginWasDerived && $this->isUsablePublicHost($newHost)) {
                 $publicScheme = (($config['no_ssl'] ?? false) === true
                     || (($config['https'] ?? true) === false))
                     ? 'http'
@@ -8178,15 +8259,25 @@ class Start extends CommandAbstract
         if ($host === '') {
             throw new \RuntimeException('Certificate host is invalid after IDNA normalization.');
         }
-        if (!$this->isWildcardBindHost($host)) {
-            return $host;
-        }
 
+        // Prefer an explicit usable public identity over the listen/bind host.
+        // Edge topologies bind 127.0.0.1 while public_host remains www.… .
         $publicHost = $this->normalizeCertificateDomainCandidate(
             (string)($config['public_host'] ?? ''),
         );
         if ($this->isUsablePublicHost($publicHost)) {
             return $publicHost;
+        }
+
+        $sslDomain = $this->normalizeCertificateDomainCandidate(
+            (string)($config['ssl_domain'] ?? ''),
+        );
+        if ($this->isUsablePublicHost($sslDomain)) {
+            return $sslDomain;
+        }
+
+        if (!$this->isWildcardBindHost($host) && !$this->isLoopbackLikeHost($host)) {
+            return $host;
         }
 
         $defaultProjectHost = $this->normalizeCertificateDomainCandidate($this->getDefaultHost());
@@ -8195,6 +8286,137 @@ class Start extends CommandAbstract
         }
 
         return 'localhost';
+    }
+
+    /**
+     * Persistable public Host for Host Guard / policy compile.
+     * Never writes loopback or wildcard bind addresses into public_host.
+     *
+     * @param array<string, mixed> $config
+     */
+    protected function resolvePersistPublicHost(array $config, string $certificateHost): string
+    {
+        $existing = $this->normalizeCertificateDomainCandidate(
+            (string)($config['public_host'] ?? ''),
+        );
+        if ($this->isUsablePublicHost($existing)) {
+            return $existing;
+        }
+
+        $certificateHost = $this->normalizeCertificateDomainCandidate($certificateHost);
+        if ($this->isUsablePublicHost($certificateHost)) {
+            return $certificateHost;
+        }
+
+        $sslDomain = $this->normalizeCertificateDomainCandidate(
+            (string)($config['ssl_domain'] ?? ''),
+        );
+        if ($this->isUsablePublicHost($sslDomain)) {
+            return $sslDomain;
+        }
+
+        $defaultProjectHost = $this->normalizeCertificateDomainCandidate($this->getDefaultHost());
+        if ($this->isUsablePublicHost($defaultProjectHost)) {
+            return $defaultProjectHost;
+        }
+
+        throw new \RuntimeException(
+            'Unable to resolve a usable public_host; loopback listen requires an explicit public_host or ssl_domain.',
+        );
+    }
+
+    /**
+     * @param array<string, mixed>|null $savedConfig
+     */
+    protected function capturePreStartServingIdentity(?array $savedConfig): void
+    {
+        if (!\is_array($savedConfig) || $savedConfig === []) {
+            $this->preStartServingIdentitySnapshot = null;
+            return;
+        }
+        $publicHost = \trim((string)($savedConfig['public_host'] ?? ''));
+        if (!$this->isUsablePublicHost($publicHost)) {
+            $this->preStartServingIdentitySnapshot = null;
+            return;
+        }
+        $snapshot = [
+            'public_host' => $publicHost,
+        ];
+        foreach (['host', 'ssl_domain', 'public_origin'] as $key) {
+            if (\array_key_exists($key, $savedConfig) && \is_string($savedConfig[$key])) {
+                $value = \trim($savedConfig[$key]);
+                if ($value !== '') {
+                    $snapshot[$key] = $value;
+                }
+            }
+        }
+        $extraHosts = $this->normalizeExtraAllowedHostsList(
+            $savedConfig['extra_allowed_hosts'] ?? null,
+        );
+        if ($extraHosts !== []) {
+            $snapshot['extra_allowed_hosts'] = $extraHosts;
+        }
+        $this->preStartServingIdentitySnapshot = $snapshot;
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function normalizeExtraAllowedHostsList(mixed $extra): array
+    {
+        if (!\is_array($extra)) {
+            return [];
+        }
+        $hosts = [];
+        foreach ($extra as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $host = \strtolower(\trim((string)$item));
+            if ($host === '' || $this->isLoopbackLikeHost($host) || $this->isWildcardBindHost($host)) {
+                continue;
+            }
+            $hosts[$host] = true;
+        }
+
+        return \array_keys($hosts);
+    }
+
+    /**
+     * Roll back poisoned serving identity after a required maintenance sync failure.
+     */
+    protected function restorePreStartServingIdentityIfNeeded(string $instanceName): bool
+    {
+        $snapshot = $this->preStartServingIdentitySnapshot;
+        if ($snapshot === null || $snapshot === []) {
+            return false;
+        }
+        try {
+            (new \Weline\Server\Service\Edge\Gateway\SavedInstanceConfigStore(
+                $this->getInstanceConfigDir(),
+            ))->update(
+                $instanceName,
+                static function (array $existing) use ($snapshot): array {
+                    $next = $existing;
+                    foreach ($snapshot as $key => $value) {
+                        $next[$key] = $value;
+                    }
+                    return [$next, true];
+                },
+                deadlineMonotonic: $this->startupListenerStateDeadline(),
+            );
+            $this->printer->warning(__(
+                '维护同步失败：已回滚实例 [%{1}] 的 public_host/ssl_domain 至启动前快照，避免落盘坏 Host Guard。',
+                [$instanceName],
+            ));
+            return true;
+        } catch (\Throwable $throwable) {
+            $this->printer->error(__(
+                '维护同步失败且无法回滚 public_host 快照：%{1}',
+                [\substr($throwable->getMessage(), 0, 512)],
+            ));
+            return false;
+        }
     }
 
     /**
@@ -12161,6 +12383,12 @@ class Start extends CommandAbstract
                 $savedConfig[$key] = $config[$key];
             }
         }
+        $extraAllowedHosts = $this->normalizeExtraAllowedHostsList(
+            $config['extra_allowed_hosts'] ?? null,
+        );
+        if ($extraAllowedHosts !== []) {
+            $savedConfig['extra_allowed_hosts'] = $extraAllowedHosts;
+        }
         $requestedPort = (int)($config['requested_port'] ?? 0);
         if ($requestedPort < 1 || $requestedPort > 65535) {
             // Compatibility for callers predating explicit desired-port
@@ -12267,6 +12495,27 @@ class Start extends CommandAbstract
                     if (\array_key_exists('worker_count_requested', $existingSavedConfig)) {
                         $next['worker_count_requested'] =
                             $existingSavedConfig['worker_count_requested'];
+                    }
+                }
+                // Never drop a non-empty extra_allowed_hosts list when start
+                // forgot to carry it (loopback --host used to wipe cabinet JSON).
+                if (!\array_key_exists('extra_allowed_hosts', $next)
+                    || !\is_array($next['extra_allowed_hosts'])
+                    || $next['extra_allowed_hosts'] === []
+                ) {
+                    $existingExtra = [];
+                    if (\is_array($existingSavedConfig['extra_allowed_hosts'] ?? null)) {
+                        foreach ($existingSavedConfig['extra_allowed_hosts'] as $item) {
+                            if (\is_scalar($item)) {
+                                $host = \strtolower(\trim((string)$item));
+                                if ($host !== '') {
+                                    $existingExtra[$host] = true;
+                                }
+                            }
+                        }
+                    }
+                    if ($existingExtra !== []) {
+                        $next['extra_allowed_hosts'] = \array_keys($existingExtra);
                     }
                 }
                 $next['saved_at'] = $savedAt;

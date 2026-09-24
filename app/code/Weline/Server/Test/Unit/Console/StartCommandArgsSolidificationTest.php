@@ -709,7 +709,8 @@ final class StartCommandArgsSolidificationTest extends TestCase
         );
         $sslService->method('hasValidLocalCertificate')->with('shop.dev')->willReturn(false);
         $sslService->expects(self::never())->method('replayPendingCertificateRetirements');
-        $sslService->expects(self::once())->method('ensureCertificateStorageReady');
+        // Pure WLS public hosts fail closed before PostgreSQL certificate restore.
+        $sslService->expects(self::never())->method('ensureCertificateStorageReady');
         $sslService->expects(self::never())->method('generateSelfSignedCertificate');
 
         $result = (new StartConfigProbe(null, [], $sslService))->ensureSslResult('wls-public-dev', [
@@ -837,7 +838,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame(1, $probe->localCaTrustCalls);
     }
 
-    public function testPureWlsMissingCertificateAttemptsPostgresqlRestoreBeforeFailingClosed(): void
+    public function testPureWlsMissingCertificateFailsClosedWithoutPostgresqlRestore(): void
     {
         $sslService = $this->createMock(SslCertificateService::class);
         $sslService->method('needsSelfSignedCertificate')->willReturn(false);
@@ -846,7 +847,8 @@ final class StartCommandArgsSolidificationTest extends TestCase
         );
         $sslService->method('hasValidLocalCertificate')->willReturn(false);
         $sslService->expects(self::never())->method('replayPendingCertificateRetirements');
-        $sslService->expects(self::once())->method('ensureCertificateStorageReady');
+        // Public pure-WLS hosts reject implicit self-sign before storage/ORM restore.
+        $sslService->expects(self::never())->method('ensureCertificateStorageReady');
 
         $result = (new StartConfigProbe(null, [], $sslService))->ensureSslResult('wls-no-cert', [
             'host' => 'shop.example.com',
@@ -1355,12 +1357,208 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame(60.0, $windows);
     }
 
+    /** T-PH-1: loopback bind + usable public_host must not fall back to project local host. */
+    public function testEdgeLoopbackKeepsUsablePublicHostWithoutCliHost(): void
+    {
+        $start = $this->createProbe([
+            'host' => '127.0.0.1',
+            'public_host' => 'www.changanhanfu.com',
+            'ssl_domain' => 'www.changanhanfu.com',
+            'extra_allowed_hosts' => ['www.changanhanfu.com', 'changanhanfu.com'],
+            'edge_mode' => 'wls',
+        ]);
+        $config = $start->resolveConfig('default', [
+            'edge' => 'wls',
+            'no-ssl' => true,
+            'p' => 9510,
+        ]);
+
+        self::assertSame('127.0.0.1', (string)($config['host'] ?? ''));
+        self::assertSame('www.changanhanfu.com', (string)($config['public_host'] ?? ''));
+        self::assertSame('www.changanhanfu.com', (string)($config['ssl_domain'] ?? ''));
+        self::assertSame(
+            ['www.changanhanfu.com', 'changanhanfu.com'],
+            \array_values((array)($config['extra_allowed_hosts'] ?? [])),
+        );
+        self::assertStringNotContainsString('weline.localhost', (string)($config['public_host'] ?? ''));
+        self::assertStringNotContainsString('test.weline.com', (string)($config['public_host'] ?? ''));
+
+        $solidified = $start->solidifyPublicHost($config, (string)$config['host']);
+        self::assertSame('www.changanhanfu.com', (string)($solidified['public_host'] ?? ''));
+    }
+
+    /** T-PH-2: --host=127.0.0.1 must not drag public_host / extra_allowed_hosts / public_origin. */
+    public function testCliLoopbackHostDoesNotOverwriteUsablePublicIdentity(): void
+    {
+        $start = $this->createProbe([
+            'host' => '127.0.0.1',
+            'public_host' => 'www.changanhanfu.com',
+            'ssl_domain' => 'www.changanhanfu.com',
+            'public_origin' => 'https://www.changanhanfu.com',
+            'extra_allowed_hosts' => ['www.changanhanfu.com', 'changanhanfu.com'],
+            'edge_mode' => 'wls',
+        ]);
+        $config = $start->resolveConfig('default', [
+            'host' => '127.0.0.1',
+            'r' => true,
+            'edge' => 'wls',
+            'no-ssl' => true,
+            'p' => 9510,
+        ]);
+
+        self::assertSame('127.0.0.1', (string)($config['host'] ?? ''));
+        self::assertSame('www.changanhanfu.com', (string)($config['public_host'] ?? ''));
+        self::assertSame('https://www.changanhanfu.com', (string)($config['public_origin'] ?? ''));
+        self::assertSame(
+            ['www.changanhanfu.com', 'changanhanfu.com'],
+            \array_values((array)($config['extra_allowed_hosts'] ?? [])),
+        );
+
+        $solidified = $start->solidifyPublicHost($config, '127.0.0.1');
+        self::assertSame('www.changanhanfu.com', (string)($solidified['public_host'] ?? ''));
+        self::assertSame(
+            'www.changanhanfu.com',
+            $start->resolveCertificateDomain($solidified, '127.0.0.1'),
+        );
+    }
+
+    /** T-PH-3: empty public_host + loopback host must not persist 127.0.0.1 as public_host. */
+    public function testEmptyPublicHostWithLoopbackFillsUsableProjectHostNotLoopback(): void
+    {
+        $start = $this->createProbe([
+            'host' => '127.0.0.1',
+            'edge_mode' => 'wls',
+        ]);
+        $config = $start->resolveConfig('default', [
+            'edge' => 'wls',
+            'no-ssl' => true,
+            'p' => 9510,
+        ]);
+        $solidified = $start->solidifyPublicHost($config, (string)($config['host'] ?? '127.0.0.1'));
+
+        self::assertNotSame('127.0.0.1', (string)($solidified['public_host'] ?? ''));
+        self::assertNotSame('::1', (string)($solidified['public_host'] ?? ''));
+        self::assertNotSame('0.0.0.0', (string)($solidified['public_host'] ?? ''));
+        self::assertTrue($start->publicHostIsUsable((string)($solidified['public_host'] ?? '')));
+    }
+
+    /** T-FC: READY handoff is marked before required maintenance finalize (no orphan kill). */
+    public function testMaintenanceFinalizeHandoffIsMarkedBeforeRequiredSync(): void
+    {
+        $method = new \ReflectionMethod(Start::class, 'startMasterInBackground');
+        $lines = \file((string)$method->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        $handoffAt = \strpos($source, '$this->wlsStartupProcessHandoffDone = true;');
+        $finalizeAt = \strpos($source, 'finalizeMaintenanceModeAfterStartup(');
+        $restoreAt = \strpos($source, 'restorePreStartServingIdentityIfNeeded(');
+
+        self::assertIsInt($handoffAt);
+        self::assertIsInt($finalizeAt);
+        self::assertIsInt($restoreAt);
+        self::assertLessThan(
+            $finalizeAt,
+            $handoffAt,
+            'Handoff must be marked before finalize so sync failure does not orphan-kill READY Master.',
+        );
+        self::assertGreaterThan(
+            $finalizeAt,
+            $restoreAt,
+            'Sync failure path must restore pre-start public_host snapshot.',
+        );
+    }
+
+    /** T-PH-5: saveInstanceConfig round-trip keeps non-empty extra_allowed_hosts. */
+    public function testSaveInstanceConfigPersistsExtraAllowedHosts(): void
+    {
+        $base = \rtrim((string)\Weline\Framework\App\Env::VAR_DIR, '/\\')
+            . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'config';
+        $dir = $base . DIRECTORY_SEPARATOR
+            . 'ut-extra-hosts-' . \str_replace('.', '', \uniqid('', true));
+        \mkdir($dir, 0700, true);
+        try {
+            $probe = new StartDiskConfigProbe($dir);
+            $probe->saveConfig('hanfu-extra', [], [
+                'host' => '127.0.0.1',
+                'public_host' => 'www.changanhanfu.com',
+                'ssl_domain' => 'www.changanhanfu.com',
+                'extra_allowed_hosts' => ['www.changanhanfu.com', 'changanhanfu.com'],
+                'port' => 9510,
+                'requested_port' => 9510,
+                'port_explicit' => true,
+                'edge_mode' => 'wls',
+                'edge' => ['mode' => 'wls'],
+            ]);
+            $loaded = $probe->loadConfig('hanfu-extra');
+            self::assertIsArray($loaded);
+            self::assertSame(
+                ['www.changanhanfu.com', 'changanhanfu.com'],
+                \array_values((array)($loaded['extra_allowed_hosts'] ?? [])),
+            );
+
+            // Second save without carrying the key must not wipe the cabinet list.
+            $probe->saveConfig('hanfu-extra', [], [
+                'host' => '127.0.0.1',
+                'public_host' => 'www.changanhanfu.com',
+                'ssl_domain' => 'www.changanhanfu.com',
+                'port' => 9510,
+                'requested_port' => 9510,
+                'port_explicit' => true,
+                'edge_mode' => 'wls',
+                'edge' => ['mode' => 'wls'],
+            ]);
+            $reloaded = $probe->loadConfig('hanfu-extra');
+            self::assertIsArray($reloaded);
+            self::assertSame(
+                ['www.changanhanfu.com', 'changanhanfu.com'],
+                \array_values((array)($reloaded['extra_allowed_hosts'] ?? [])),
+            );
+        } finally {
+            foreach ((array)@\scandir($dir) as $leaf) {
+                if ($leaf === '.' || $leaf === '..') {
+                    continue;
+                }
+                @\unlink($dir . DIRECTORY_SEPARATOR . $leaf);
+            }
+            @\rmdir($dir);
+        }
+    }
+
     private function createProbe(?array $savedConfig = null, array $envConfig = []): StartConfigProbe
     {
         $sslServiceMock = $this->createMock(SslCertificateService::class);
         ObjectManager::setInstance(SslCertificateService::class, $sslServiceMock);
 
         return new StartConfigProbe($savedConfig, $envConfig);
+    }
+}
+
+final class StartDiskConfigProbe extends Start
+{
+    public function __construct(private readonly string $configDir)
+    {
+    }
+
+    /** @param array<string,mixed> $args @param array<string,mixed> $config */
+    public function saveConfig(string $instanceName, array $args, array $config): void
+    {
+        $this->saveInstanceConfig($instanceName, $args, $config);
+    }
+
+    /** @return array<string,mixed>|null */
+    public function loadConfig(string $instanceName): ?array
+    {
+        return $this->loadSavedInstanceConfig($instanceName);
+    }
+
+    protected function getInstanceConfigDir(): string
+    {
+        return $this->configDir;
     }
 }
 
@@ -1473,6 +1671,25 @@ final class StartConfigProbe extends Start
     public function resolveCertificateDomain(array $config, string $host): string
     {
         return $this->resolveCertificateHost($config, $host);
+    }
+
+    /**
+     * Mirror start-path solidification of certificate vs persist public_host.
+     *
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    public function solidifyPublicHost(array $config, string $host): array
+    {
+        $certificateHost = $this->resolveCertificateHost($config, $host);
+        $config['public_host'] = $this->resolvePersistPublicHost($config, $certificateHost);
+
+        return $config;
+    }
+
+    public function publicHostIsUsable(string $host): bool
+    {
+        return $this->isUsablePublicHost($host);
     }
 
     public function shouldPersistCertificateSource(

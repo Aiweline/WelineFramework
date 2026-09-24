@@ -520,6 +520,7 @@ final class RuntimePolicyCompiler
             foreach (['host', 'ssl_domain', 'public_host'] as $key) {
                 $candidates[] = $wls[$key] ?? null;
             }
+            $this->appendExtraAllowedHostCandidates($candidates, $wls['extra_allowed_hosts'] ?? null);
             foreach ((array)($wls['servers'] ?? []) as $server) {
                 if (!\is_array($server)) {
                     continue;
@@ -527,6 +528,10 @@ final class RuntimePolicyCompiler
                 foreach (['host', 'ssl_domain', 'public_host'] as $key) {
                     $candidates[] = $server[$key] ?? null;
                 }
+                $this->appendExtraAllowedHostCandidates(
+                    $candidates,
+                    $server['extra_allowed_hosts'] ?? null,
+                );
             }
         }
 
@@ -603,8 +608,9 @@ final class RuntimePolicyCompiler
                 return true;
             }
         }
+        $extra = $this->normalizeExtraAllowedHosts($compileContext['extra_allowed_hosts'] ?? null);
 
-        return false;
+        return $extra !== [];
     }
 
     /**
@@ -624,10 +630,45 @@ final class RuntimePolicyCompiler
                 $hosts[$host] = true;
             }
         }
+        foreach ($this->normalizeExtraAllowedHosts($compileContext['extra_allowed_hosts'] ?? null) as $host) {
+            $hosts[$host] = true;
+        }
 
         $hosts = \array_keys($hosts);
         \sort($hosts, \SORT_STRING);
         return $hosts;
+    }
+
+    /**
+     * @param list<mixed> $candidates
+     */
+    private function appendExtraAllowedHostCandidates(array &$candidates, mixed $extra): void
+    {
+        foreach ($this->normalizeExtraAllowedHosts($extra) as $host) {
+            $candidates[] = $host;
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeExtraAllowedHosts(mixed $extra): array
+    {
+        if (!\is_array($extra)) {
+            return [];
+        }
+        $hosts = [];
+        foreach ($extra as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $host = $this->normalizeConfiguredHost((string)$item);
+            if ($host !== '') {
+                $hosts[$host] = true;
+            }
+        }
+
+        return \array_keys($hosts);
     }
 
     private function normalizeConfiguredHost(string $host): string
