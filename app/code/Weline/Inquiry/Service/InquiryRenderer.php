@@ -358,8 +358,8 @@ JS;
     }
 
     /**
-     * Resolve storefront static URL via fetchTagSource (PROD /static/{theme}/…).
-     * Never emit DEV-shaped /Weline/*/view/statics/ fallbacks.
+     * Resolve storefront static URL via fetchTagSource (PROD /static/theme/...).
+     * Never emit DEV-shaped /Weline/Module/view/statics/ fallbacks.
      */
     private function addressAssetUrl(string $moduleSource): string
     {
