@@ -12169,11 +12169,10 @@ POWERSHELL;
                 }
             }
 
-            if ($expectedLaunchId !== '') {
-                $actualLaunchId = self::extractCommandLineArg($cmdLine, 'launch-id');
-                if ($actualLaunchId === '' || $actualLaunchId !== $expectedLaunchId) {
-                    return false;
-                }
+            if ($expectedLaunchId !== ''
+                && !self::launchIdMatchesCommandLine($cmdLine, $expectedLaunchId)
+            ) {
+                return false;
             }
 
             return true;
@@ -12183,6 +12182,30 @@ POWERSHELL;
         // 无法读取当前 OS 命令行时，历史索引只能作为诊断线索，不能证明当前 PID 仍属于 Weline。
         // 返回 false 保证停止/清理流程绝不向身份未知的进程发送信号。
         return false;
+    }
+
+    /**
+     * Compare an indexed launch_id against the live OS command line.
+     *
+     * Roles such as Master publish `--name=` without `--launch-id=`. A historical
+     * pid-index launch_id must not veto a live name match when the OS command
+     * never advertised a launch-id. When the command does advertise one, it must
+     * equal the expected value exactly.
+     */
+    private static function launchIdMatchesCommandLine(
+        string $cmdLine,
+        string $expectedLaunchId
+    ): bool {
+        if ($expectedLaunchId === '') {
+            return true;
+        }
+
+        $actualLaunchId = self::extractCommandLineArg($cmdLine, 'launch-id');
+        if ($actualLaunchId === '') {
+            return true;
+        }
+
+        return \hash_equals($expectedLaunchId, $actualLaunchId);
     }
 
     private static function doesRecordedPidIdentityAllowOperation(int $pid, array $record): bool
