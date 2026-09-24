@@ -262,6 +262,17 @@ final class SchemaDiffEngine
         if ($declaredType === $actualType) {
             return true;
         }
+        // MySQL TEXT/BLOB 家族容量递增；物理列不小于声明时 MODIFY 只会截断现存数据（Data too long）。
+        foreach ([
+            ['tinytext', 'text', 'mediumtext', 'longtext'],
+            ['tinyblob', 'blob', 'mediumblob', 'longblob'],
+        ] as $family) {
+            $declaredRank = array_search($declaredType, $family, true);
+            $actualRank = array_search($actualType, $family, true);
+            if ($declaredRank !== false && $actualRank !== false) {
+                return $actualRank >= $declaredRank;
+            }
+        }
         if ($databaseType !== 'sqlite'
             || !$declared->primaryKey
             || !$declared->autoIncrement
