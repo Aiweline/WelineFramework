@@ -147,7 +147,7 @@
 
 **本席新增/复核编号**：QA-10～QA-17（QA-11 为 QA-02 复核升级说明；QA-17 为 QA-05 补证）。  
 **本席问题条数（新增独立项）**：**8**（QA-10～17）；其中复核升格不另计重复根因。  
-**截图目录**：`app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/sitewide-click-qa-shots/`
+**截图目录**（本地生成、已 `.gitignore`，勿提交）：`channel/sitewide-click-qa-shots/`
 
 ### 本席覆盖页面列表
 | 区域 | 页面/动作 | 结果摘要 |
