@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Weline\RecentlyViewed\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
-use Weline\Product\Service\ProductCardRenderer;
 use Weline\RecentlyViewed\Service\RecentlyViewedSessionStore;
 use Weline\RecentlyViewed\Service\RecentlyViewedService;
 
@@ -50,79 +48,73 @@ final class RecentlyViewedServiceTest extends TestCase
 
         self::assertSame([10, 20], $service->listIds(6));
         self::assertSame([20], $service->listIds(6, 10));
+        self::assertCount(2, $service->listIds(24), 'listIds clamps to 6');
     }
 
-    public function testNormalizeOfferSlugPrefersSlugOverNumericProductId(): void
+    public function testCardsUsesSingleQueryProviderBatchWithoutLiveNPlusOne(): void
     {
-        $service = new RecentlyViewedService(new RecentlyViewedSessionStore());
-        $normalize = new ReflectionMethod(RecentlyViewedService::class, 'normalizeOfferSlug');
-        $normalize->setAccessible(true);
+        $store = new class extends RecentlyViewedSessionStore {
+            public function listIds(): array
+            {
+                return [11, 22, 33, 44, 55, 66, 77];
+            }
+        };
 
-        $withSlug = $normalize->invoke($service, [
-            'product_id' => 113,
-            'name' => 'Demo',
-            'slug' => 'hanfu-demo-slug',
-            'unit_price_minor' => 12800,
-            'currency' => 'USD',
-        ]);
-        $cardWithSlug = ProductCardRenderer::fromStorefrontOffer($withSlug, 0);
-        self::assertSame('hanfu-demo-slug', $cardWithSlug['slug'] ?? null);
-        self::assertStringContainsString('product/hanfu-demo-slug', (string)($cardWithSlug['url'] ?? ''));
-        self::assertStringNotContainsString('product/113', (string)($cardWithSlug['url'] ?? ''));
-        self::assertSame('USD', $cardWithSlug['currency'] ?? null);
+        $service = new class ($store) extends RecentlyViewedService {
+            public int $calls = 0;
 
-        $fromSourceSlug = $normalize->invoke($service, [
-            'product_id' => 117,
-            'name' => 'Source',
-            'source_slug' => 'from-source-slug',
-            'unit_price_minor' => 9900,
-            'currency' => 'EUR',
-        ]);
-        $cardFromSource = ProductCardRenderer::fromStorefrontOffer($fromSourceSlug, 0);
-        self::assertSame('from-source-slug', $cardFromSource['slug'] ?? null);
-        self::assertStringContainsString('product/from-source-slug', (string)($cardFromSource['url'] ?? ''));
-        self::assertSame('EUR', $cardFromSource['currency'] ?? null);
+            /** @var list<int> */
+            public array $lastIds = [];
 
-        $fallback = $normalize->invoke($service, [
-            'product_id' => 99,
-            'name' => 'No slug',
-            'unit_price_minor' => 100,
-            'currency' => 'USD',
-        ]);
-        $cardFallback = ProductCardRenderer::fromStorefrontOffer($fallback, 0);
-        self::assertSame('', $cardFallback['slug'] ?? null);
-        self::assertStringContainsString('product/99', (string)($cardFallback['url'] ?? ''));
+            public int $lastLimit = 0;
+
+            protected function queryStorefrontCards(array $productIds, int $limit): mixed
+            {
+                $this->calls++;
+                $this->lastIds = $productIds;
+                $this->lastLimit = $limit;
+
+                return [
+                    [
+                        'id' => 11,
+                        'product_id' => 11,
+                        'name' => 'A',
+                        'slug' => 'a-slug',
+                        'currency' => 'USD',
+                        'price' => 10.0,
+                    ],
+                    [
+                        'id' => 22,
+                        'product_id' => 22,
+                        'name' => 'B',
+                        'slug' => 'b-slug',
+                        'currency' => 'USD',
+                        'price' => 20.0,
+                    ],
+                ];
+            }
+        };
+
+        $cards = $service->cards(6);
+        self::assertSame(1, $service->calls);
+        self::assertSame(6, $service->lastLimit);
+        self::assertSame([11, 22, 33, 44, 55, 66], $service->lastIds);
+        self::assertCount(2, $cards);
+        self::assertSame(11, (int)($cards[0]['id'] ?? 0));
+        self::assertSame('USD', $cards[0]['currency'] ?? null);
+
+        $path = dirname(__DIR__, 3) . '/Service/RecentlyViewedService.php';
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('cardsByProductIds', $source);
+        self::assertStringNotContainsString('->livePublishedOffersForProduct(', $source);
+        self::assertStringNotContainsString('foreach ($ids as $lookupId)', $source);
     }
 
-    public function testCardMappingKeepsOfferCurrencyNotDefaultCny(): void
-    {
-        $service = new RecentlyViewedService(new RecentlyViewedSessionStore());
-        $normalize = new ReflectionMethod(RecentlyViewedService::class, 'normalizeOfferSlug');
-        $normalize->setAccessible(true);
-
-        $offer = $normalize->invoke($service, [
-            'product_id' => 42,
-            'name' => 'USD priced hanfu',
-            'slug' => 'usd-priced-hanfu',
-            'unit_price_minor' => 2750,
-            'currency' => 'USD',
-            'sellable' => true,
-            'global_offer_uuid' => 'offer-usd-42',
-        ]);
-        $card = ProductCardRenderer::fromStorefrontOffer($offer, 0);
-
-        self::assertSame('USD', $card['currency'] ?? null);
-        self::assertSame(27.5, (float)($card['price'] ?? 0));
-        self::assertNotSame('CNY', $card['currency'] ?? 'CNY');
-    }
-
-    public function testServiceSourceUsesFromStorefrontOffer(): void
+    public function testServiceSourceRoutesThroughProductStorefrontQuery(): void
     {
         $path = dirname(__DIR__, 3) . '/Service/RecentlyViewedService.php';
-        self::assertFileExists($path);
         $source = (string)file_get_contents($path);
-        self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $source);
-        self::assertStringContainsString('normalizeOfferSlug', $source);
-        self::assertStringNotContainsString('private function mapOffer', $source);
+        self::assertStringContainsString("w_query('product_storefront', 'cardsByProductIds'", $source);
+        self::assertStringContainsString('min(6, $limit)', $source);
     }
 }

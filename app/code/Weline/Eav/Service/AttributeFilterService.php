@@ -133,42 +133,31 @@ class AttributeFilterService
             return array_values(array_map('intval', $entityIds));
         }
 
-        $filteredIds = array_values(array_map('intval', $entityIds));
-        $matchedIdsByFilter = [];
-
-        foreach ($filters as $attributeCode => $values) {
-            if ($values === [] || $values === '' || $values === null) {
-                continue;
-            }
-
-            if (!is_array($values)) {
-                $values = [$values];
-            }
-
-            $attribute = $this->getAttribute($entity, (string) $attributeCode);
-            if (!$attribute || !$attribute->getId()) {
-                continue;
-            }
-
-            $matchedIds = $this->getEntitiesByAttributeValues($attribute, $filteredIds, $values);
-
-            if (strtoupper($logic) === 'AND') {
-                $filteredIds = $matchedIds;
-                if ($filteredIds === []) {
-                    break;
-                }
-            } else {
-                $matchedIdsByFilter[] = $matchedIds;
+        $codes = [];
+        foreach ($filters as $code => $values) {
+            if ($values !== [] && $values !== '' && $values !== null) {
+                $codes[] = (string)$code;
             }
         }
-
-        if (strtoupper($logic) === 'OR' && $matchedIdsByFilter !== []) {
-            $allMatchedIds = array_merge(...$matchedIdsByFilter);
-            $filteredIds = array_values(array_unique(array_intersect(
-                array_values(array_map('intval', $entityIds)),
-                array_map('intval', $allMatchedIds)
-            )));
+        $attributes = [];
+        if ($codes !== []) {
+            foreach ($this->getEntityAttributes($entity, $codes, false, false, null) as $attribute) {
+                $attributes[$attribute->getCode()] ??= $attribute;
+            }
         }
+        $ordered = [];
+        foreach ($filters as $code => $values) {
+            if ($values === [] || $values === '' || $values === null || $attributes === []) {
+                continue;
+            }
+            // A DB collation may match a differently cased caller code.
+            $attribute = $attributes[$code] ?? $this->getAttribute($entity, (string)$code);
+            if (!$attribute || $this->resolveAttributeId($attribute) <= 0) {
+                continue;
+            }
+            $ordered[] = ['attribute' => $attribute, 'values' => is_array($values) ? $values : [$values]];
+        }
+        $filteredIds = $this->filterAttributeMatches($ordered, $entityIds, $logic);
 
         $eventData = [
             'entity_code' => $entityCode,
@@ -179,6 +168,72 @@ class AttributeFilterService
         $this->eventsManager->dispatch('Weline_Eav::attribute_filter_apply', $eventData);
 
         return $filteredIds;
+    }
+
+    /** Execute contiguous physical-table groups, retaining AND short-circuit between groups. */
+    private function filterAttributeMatches(array $filters, array $entityIds, string $logic): array
+    {
+        $original = array_values(array_map('intval', $entityIds));
+        $filtered = $original;
+        $union = [];
+        $hasMatches = false;
+        $logic = strtoupper($logic);
+        $offset = 0;
+        while ($offset < count($filters)) {
+            $first = $filters[$offset]['attribute'];
+            $model = clone $first->w_getValueModel();
+            $key = $this->valueModelIdentity($model);
+            $group = [];
+            $seenIds = [];
+            do {
+                $seenIds[$this->resolveAttributeId($filters[$offset]['attribute'])] = true;
+                $group[] = $filters[$offset++];
+            } while ($offset < count($filters)
+                && !isset($seenIds[$this->resolveAttributeId($filters[$offset]['attribute'])])
+                && $this->valueModelIdentity($filters[$offset]['attribute']->w_getValueModel()) === $key);
+
+            $model->reset();
+            // Index-oriented condition reordering would split the OR arms below.
+            $query = $model->getQuery();
+            $query->_index_sort_keys = [];
+            $query->fields(['attribute_id', 'entity_id'])->group('attribute_id, entity_id');
+            foreach ($group as $filter) {
+                $query->where('attribute_id', $this->resolveAttributeId($filter['attribute']))
+                    ->where('entity_id', $filtered, 'in')
+                    ->where('value', array_values(array_map('strval', $filter['values'])), 'in', 'OR');
+            }
+            $matches = [];
+            foreach ($query->select()->fetchArray() as $row) {
+                $matches[(int)$row['attribute_id']][] = (int)$row['entity_id'];
+            }
+            foreach ($group as $filter) {
+                $matched = array_values(array_unique($matches[$this->resolveAttributeId($filter['attribute'])] ?? []));
+                $hasMatches = true;
+                if ($logic === 'AND') {
+                    $filtered = array_values(array_intersect($matched, $filtered));
+                    if ($filtered === []) {
+                        return [];
+                    }
+                } else {
+                    $union = array_merge($union, $matched);
+                }
+            }
+        }
+        return $logic === 'OR' && $hasMatches
+            ? array_values(array_unique(array_intersect($original, $union)))
+            : $filtered;
+    }
+
+    private function valueModelIdentity(object $model): string
+    {
+        $config = $model->getConnection()->getConnector()->getConfigProvider();
+        return serialize([
+            get_class($model), $model->getTable(),
+            $config->getDbType(), $config->getHostName(), $config->getHostPort(),
+            $config->getDatabase(),
+            method_exists($config, 'getData') ? (string)$config->getData('path') : '',
+            $config->getUsername(),
+        ]);
     }
 
     /**

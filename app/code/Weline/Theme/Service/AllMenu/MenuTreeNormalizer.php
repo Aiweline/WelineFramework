@@ -68,6 +68,29 @@ final class MenuTreeNormalizer
      */
     public function toNavItems(array $tree): array
     {
+        $urls = [];
+        $this->collectMenuUrls($tree, $urls);
+        return $this->buildNavItems($tree, $this->localizeUrls($urls));
+    }
+
+    /** 整棵菜单一次收集，子菜单不另开批次。 */
+    private function collectMenuUrls(array $tree, array &$urls): void
+    {
+        foreach ($tree as $node) {
+            if (!is_array($node)) {
+                continue;
+            }
+            $url = (string)($node['url'] ?? '#');
+            $urls[$url] = $url;
+            if (is_array($node['children'] ?? null)) {
+                $this->collectMenuUrls($node['children'], $urls);
+            }
+        }
+    }
+
+    /** 沿原顺序输出显示字段，只复用已批量生成的地址。 */
+    private function buildNavItems(array $tree, array $localizedUrls): array
+    {
         $out = [];
         foreach ($tree as $node) {
             if (!is_array($node)) {
@@ -75,7 +98,7 @@ final class MenuTreeNormalizer
             }
             $item = [
                 'text' => $this->resolveDisplayName($node),
-                'url' => $this->localizeUrl((string)($node['url'] ?? '#')),
+                'url' => $localizedUrls[(string)($node['url'] ?? '#')],
             ];
             $nodeId = trim((string)($node['id'] ?? $node['category_id'] ?? $node['code'] ?? ''));
             if ($nodeId !== '') {
@@ -113,7 +136,7 @@ final class MenuTreeNormalizer
             }
             $children = $node['children'] ?? [];
             if (is_array($children) && $children !== []) {
-                $item['children'] = $this->toNavItems($children);
+                $item['children'] = $this->buildNavItems($children, $localizedUrls);
             }
             $out[] = $item;
         }
@@ -246,9 +269,54 @@ final class MenuTreeNormalizer
      */
     public function localizeUrl(string $url): string
     {
+        $route = $this->frontendRoute($url);
+        return $route === null ? (trim($url) !== '' ? trim($url) : '#') : $this->frontendUrl($route);
+    }
+
+    /** 批量生成去重的相对路由；外链及占位地址不进入 URL 构造器。 */
+    private function localizeUrls(array $urls): array
+    {
+        $localized = [];
+        $routes = [];
+        $routesByUrl = [];
+        foreach ($urls as $key => $url) {
+            $route = $this->frontendRoute($url);
+            if ($route === null) {
+                $localized[$key] = trim($url) !== '' ? trim($url) : '#';
+                continue;
+            }
+            $routesByUrl[$key] = $route;
+            $routes[$route] = ltrim($route, '/');
+        }
+        if ($routes === []) {
+            return $localized;
+        }
+        try {
+            $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            $resolved = $request->getUrlBuilder()->getFrontendUrls($routes);
+        } catch (\Throwable) {
+            try {
+                $resolved = ObjectManager::getInstance(Url::class)->getFrontendUrls($routes);
+            } catch (\Throwable) {
+                // 批次异常时保留原逐项容错，避免一个异常地址使整棵菜单消失。
+                $resolved = [];
+                foreach ($routes as $route => $_) {
+                    $resolved[$route] = $this->frontendUrl((string)$route);
+                }
+            }
+        }
+        foreach ($routesByUrl as $key => $route) {
+            $localized[$key] = $resolved[$route];
+        }
+        return $localized;
+    }
+
+    /** 单条与批量共用现有语言、货币前缀剥离语义。 */
+    private function frontendRoute(string $url): ?string
+    {
         $url = trim($url);
         if ($url === '' || $url === '#') {
-            return $url !== '' ? $url : '#';
+            return null;
         }
         if (
             preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $url) === 1
@@ -256,12 +324,12 @@ final class MenuTreeNormalizer
             || str_starts_with($url, 'tel:')
             || str_starts_with($url, 'javascript:')
         ) {
-            return $url;
+            return null;
         }
 
         $path = ltrim($url, '/');
         if ($path === '') {
-            return $this->frontendUrl('/');
+            return '/';
         }
 
         $segments = array_values(array_filter(explode('/', $path), static fn(string $s): bool => $s !== ''));
@@ -285,7 +353,7 @@ final class MenuTreeNormalizer
 
         $route = implode('/', $segments);
 
-        return $this->frontendUrl($route !== '' ? $route : '/');
+        return $route !== '' ? $route : '/';
     }
 
     private function frontendUrl(string $route): string

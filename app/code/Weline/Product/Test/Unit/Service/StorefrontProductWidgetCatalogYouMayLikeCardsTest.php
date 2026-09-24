@@ -24,7 +24,13 @@ final class StorefrontProductWidgetCatalogYouMayLikeCardsTest extends TestCase
         );
         self::assertStringContainsString('function youMayLikeCards(int $excludeProductId = 0, int $limit = 8)', $source);
         self::assertStringContainsString('sameCategoryCompanionOffers', $source);
+        self::assertStringContainsString('selectShelfCardsFromOffers', $source);
         self::assertStringContainsString('Related / you-may-like fill: preserve Hanfu-first ordering', $source);
-        self::assertStringContainsString('$fallbackProductId', $source);
+        self::assertStringContainsString('min(8, $limit)', $source);
+        self::assertStringContainsString('count($bundle) >= 4', $source);
+        self::assertStringNotContainsString(
+            'publishedOfferSummaries(max(($limit - count($cards))',
+            $source,
+        );
     }
 }

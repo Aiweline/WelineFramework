@@ -41,8 +41,13 @@ moduleDescribe(test, MODULE, '请求链路面板开闭计划链路', () => {
         noHeartbeat: !loader.includes('TRACE_LEASE_HEARTBEAT'),
         unitCoverage: unit.includes('testPanelOpenEnablesTraceAndCloseDisables')
           && unit.includes('testEnvRequestTraceConfigDoesNotEnableWithoutPanel'),
+        tplPerf: runtime.includes('w_weline_tpl_perf')
+          && traceApi.includes('postTplPerf')
+          && loader.includes('setTplPerfOverlay')
+          && panel.includes('toggle-tpl-perf')
+          && unit.includes('testPanelTplPerfCookieArmsTemplateOverlayWithoutQuery'),
       };
-      result.ok = result.gate && result.api && result.openClose && result.noHeartbeat && result.unitCoverage;
+      result.ok = result.gate && result.api && result.openClose && result.noHeartbeat && result.unitCoverage && result.tplPerf;
       expect(result.ok, JSON.stringify(result)).toBe(true);
     },
   );

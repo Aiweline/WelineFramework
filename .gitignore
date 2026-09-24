@@ -208,3 +208,8 @@ tests/e2e/.smoke-publish-last.log
 # Per-website local ops vault (credentials / brand assets; never commit)
 # 例：websites/changanhanfu.com/
 /websites/
+
+# Site-specific design themes (local only; owned by websites/*/ vault docs)
+# 长安汉服 → hanfu；DaoCharms → daocharms。勿入库。
+/app/design/Weline/hanfu/
+/app/design/Weline/daocharms/

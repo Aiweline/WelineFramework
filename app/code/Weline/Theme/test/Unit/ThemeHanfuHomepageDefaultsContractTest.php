@@ -165,7 +165,7 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
         self::assertStringContainsString('"variant":"looks"', $homepage);
         self::assertStringContainsString('"title":"买家秀"', $homepage);
         self::assertStringContainsString('"cta_link":"/product/543#product-reviews"', $homepage);
-        self::assertStringContainsString('detail-03-c2e91b039ebb.jpg', $homepage);
+        self::assertStringContainsString('detail-03-c2e91b039ebb.webp', $homepage);
         self::assertStringNotContainsString('"items":[]', $homepage);
         self::assertStringNotContainsString('穿后感言', $homepage);
         self::assertStringContainsString('<w:widget type="testimonial" name="testimonials"', $homepage);

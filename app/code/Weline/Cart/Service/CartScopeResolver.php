@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Cart\Service;
 
 use Weline\Cart\Api\CartScopeResolverInterface;
+use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestAuthority;
@@ -12,6 +13,8 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Runtime\StorefrontScopeInstallerInterface;
+use Weline\Framework\Runtime\StorefrontWebsiteContext;
+use Weline\Framework\Runtime\StorefrontWebsiteContextResolverInterface;
 use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
 use Weline\Framework\Service\Query\Value\FrontendWorkerScopeBinding;
 
@@ -213,9 +216,130 @@ final class CartScopeResolver implements CartScopeResolverInterface
                 return null;
             }
 
-            return $installer->installNavigationScope($scheme . '://' . $authority . '/')->identity;
+            // QueryBin defers storefront Scope install and its URI is always the
+            // fixed /api/framework/query-bin path. With Scope-kernel OFF there is
+            // no Worker binding, so Host-root (`/`) would resolve the default
+            // website on a shared Host and miss path-mounted catalogs (e.g.
+            // /daocharms → website 158). Prefer a same-origin document Referer
+            // that actually matches a Website mount; fall back to Host root.
+            $navigationUri = $this->navigationUriForInstaller($scheme, $authority);
+
+            return $installer->installNavigationScope($navigationUri)->identity;
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Pick the navigation URL used to install Channel Scope when QueryBin has
+     * no Worker Scope binding.
+     */
+    private function navigationUriForInstaller(string $scheme, string $authority): string
+    {
+        $fallback = $scheme . '://' . $authority . '/';
+
+        // Prefer Worker-signed document pathname. Dedicated Worker fetch Referer
+        // is the worker script URL (not the PDP), so HTTP_REFERER alone cannot
+        // recover path mounts like /daocharms.
+        $fromWorker = $this->workerStorefrontNavigationUri($scheme, $authority);
+        if ($fromWorker !== null && $this->websiteContextMatches($fromWorker)) {
+            return $fromWorker;
+        }
+
+        $referer = $this->sameSiteStorefrontRefererUri($scheme, $authority);
+        if ($referer !== null && $this->websiteContextMatches($referer)) {
+            return $referer;
+        }
+
+        return $fallback;
+    }
+
+    private function workerStorefrontNavigationUri(string $scheme, string $authority): ?string
+    {
+        $pathname = RequestContext::get(
+            FrontendWorkerExecutionContext::STOREFRONT_PATHNAME_CONTEXT_KEY,
+        );
+        if (!\is_string($pathname)) {
+            return null;
+        }
+        $pathname = \trim($pathname);
+        if ($pathname === '' || !\str_starts_with($pathname, '/') || \str_contains($pathname, '://')) {
+            return null;
+        }
+
+        return $scheme . '://' . $authority . $pathname;
+    }
+
+    private function websiteContextMatches(string $navigationUri): bool
+    {
+        try {
+            $websiteResolver = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(StorefrontWebsiteContextResolverInterface::class);
+            if (!$websiteResolver instanceof StorefrontWebsiteContextResolverInterface) {
+                return false;
+            }
+            return $websiteResolver->resolveWebsiteContext($navigationUri) instanceof StorefrontWebsiteContext;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Same-origin document Referer suitable for Website path-mount detection.
+     * Cross-origin and QueryBin self-referers are rejected.
+     */
+    private function sameSiteStorefrontRefererUri(string $scheme, string $authority): ?string
+    {
+        $context = Context::getCurrent();
+        if (!$context instanceof Context) {
+            return null;
+        }
+        $raw = \trim((string)$context->server('HTTP_REFERER', ''));
+        if ($raw === '' || \strlen($raw) > 2048) {
+            return null;
+        }
+
+        try {
+            $parts = \parse_url($raw);
+        } catch (\ValueError) {
+            return null;
+        }
+        if (!\is_array($parts)) {
+            return null;
+        }
+
+        $refScheme = \strtolower(\trim((string)($parts['scheme'] ?? '')));
+        if ($refScheme !== $scheme) {
+            return null;
+        }
+
+        $host = \trim((string)($parts['host'] ?? ''));
+        if ($host === '') {
+            return null;
+        }
+        $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
+        $refAuthority = RequestAuthority::canonicalize($host . $port);
+        if ($refAuthority === '' || !\hash_equals($authority, $refAuthority)) {
+            return null;
+        }
+
+        $path = (string)($parts['path'] ?? '/');
+        if ($path === '') {
+            $path = '/';
+        }
+        $normalizedPath = \strtolower('/' . \ltrim($path, '/'));
+        if ($normalizedPath === '/api/framework/query-bin'
+            || $normalizedPath === '/framework/query-bin'
+            || \str_contains($normalizedPath, '/query-bin')) {
+            return null;
+        }
+
+        $uri = $scheme . '://' . $authority . $path;
+        $query = (string)($parts['query'] ?? '');
+        if ($query !== '') {
+            $uri .= '?' . $query;
+        }
+
+        return $uri;
     }
 }

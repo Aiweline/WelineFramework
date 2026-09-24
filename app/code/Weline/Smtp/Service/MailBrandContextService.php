@@ -136,11 +136,14 @@ class MailBrandContextService
         }
         $storeName = $names['store_name'];
         $channelName = $names['channel_name'];
-        // 非中文邮件：店铺名若仍含汉字，优先用该语种站名作展示品牌，避免壳头/主题露中文
-        $brandDisplay = $storeName !== '' ? $storeName : $siteName;
+        // 展示品牌：站名优先于「…默认店铺」占位店名
+        $brandDisplay = $siteName !== '' ? $siteName : $storeName;
+        if ($storeName !== '' && preg_match('/默认店铺|Default\s+Store/iu', $storeName) !== 1) {
+            $brandDisplay = $storeName !== '' ? $storeName : $siteName;
+        }
         if ($locale !== '' && !$this->isChineseLocale($locale)
             && $websiteLocal['name'] !== ''
-            && ($storeName === '' || preg_match('/[\x{4e00}-\x{9fff}]/u', $storeName) === 1)
+            && ($brandDisplay === '' || preg_match('/[\x{4e00}-\x{9fff}]/u', $brandDisplay) === 1)
         ) {
             $brandDisplay = $websiteLocal['name'];
         }
@@ -153,6 +156,10 @@ class MailBrandContextService
         if ($websiteLocal['description'] !== '') {
             $description = $websiteLocal['description'];
         }
+        if (trim((string)($names['site_description'] ?? '')) !== '') {
+            // Website 实体简介优先于默认站联系信息（避免 daocharms 吃到汉服简介）
+            $description = trim((string)$names['site_description']);
+        }
         if ($description === '') {
             $description = '官方商城客户服务';
         }
@@ -161,8 +168,9 @@ class MailBrandContextService
         if ($logoUrl !== '') {
             $alt = htmlspecialchars($brandDisplay !== '' ? $brandDisplay : $siteName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             $src = htmlspecialchars($logoUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $logoImg = '<img src="' . $src . '" alt="' . $alt . '" width="160" border="0" '
-                . 'style="display:block;border:0;outline:none;text-decoration:none;height:auto;max-width:160px;">';
+            // 邮件头标：克制高度，保留字标清晰度（DaoCharms 黄铜阴阳 + 字标）
+            $logoImg = '<img src="' . $src . '" alt="' . $alt . '" width="168" height="81" border="0" '
+                . 'style="display:block;border:0;outline:none;text-decoration:none;height:auto;max-width:168px;max-height:52px;width:auto;">';
         }
 
         $palette = $this->resolvePalette($storageScope);
@@ -281,7 +289,7 @@ class MailBrandContextService
     private function loadThemeColorHexMap(string $storageScope): array
     {
         $map = [];
-        $themeRoot = $this->themeFrontendRoot();
+        $themeRoot = $this->themeFrontendRoot($storageScope);
         if ($themeRoot === '') {
             return $map;
         }
@@ -292,6 +300,8 @@ class MailBrandContextService
         $disk = $this->resolveActiveColorDisk($storageScope);
         $candidates = array_values(array_unique(array_filter([
             $disk,
+            'daocharms-ritual',
+            'hanfu-paper',
             'ink',
             'default',
         ])));
@@ -307,9 +317,38 @@ class MailBrandContextService
         return $map;
     }
 
-    private function themeFrontendRoot(): string
+    private function themeFrontendRoot(string $storageScope = ''): string
     {
-        // 优先激活 design/模块主题 frontend（如 app/design/Weline/hanfu/frontend），再回落 Theme 模块默认盘
+        // 优先邮件 storage_scope 的已发布 design 主题（daocharms 站勿吃全局 hanfu）
+        try {
+            $theme = $this->resolveThemeForMailScope($storageScope);
+            if ($theme && $theme->getId()) {
+                $rel = trim(str_replace('\\', '/', (string)$theme->getData('path')));
+                // getPath() 可能已是绝对 design 路径
+                $absPath = rtrim((string)$theme->getPath(), '/\\');
+                foreach ([
+                    $absPath . '/frontend',
+                    $absPath !== '' && str_ends_with($absPath, '/frontend') ? $absPath : '',
+                ] as $candidate) {
+                    if ($candidate !== '' && is_dir($candidate)) {
+                        return $candidate;
+                    }
+                }
+                if ($rel !== '' && !str_contains($rel, '..') && preg_match('#^[A-Za-z0-9_./-]+$#', $rel) === 1) {
+                    $design = rtrim((string)BP, '/\\') . '/app/design/' . $rel . '/frontend';
+                    if (is_dir($design)) {
+                        return $design;
+                    }
+                    $moduleTheme = rtrim((string)BP, '/\\') . '/app/code/' . $rel . '/view/theme/frontend';
+                    if (is_dir($moduleTheme)) {
+                        return $moduleTheme;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        // 回落：激活 design/模块主题 frontend
         try {
             if (class_exists(\Weline\Theme\Model\WelineTheme::class)) {
                 /** @var \Weline\Theme\Model\WelineTheme $theme */
@@ -343,8 +382,44 @@ class MailBrandContextService
         return '';
     }
 
+    private function resolveThemeForMailScope(string $storageScope): ?\Weline\Theme\Model\WelineTheme
+    {
+        $storageScope = trim($storageScope);
+        if ($storageScope === '') {
+            return null;
+        }
+        try {
+            if (!class_exists(\Weline\Theme\Service\ThemeContextService::class)
+            ) {
+                return null;
+            }
+            /** @var \Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface $hierarchy */
+            $hierarchy = ObjectManager::getInstance(\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class);
+            $identity = $hierarchy->fromStorageScope($storageScope, true);
+            if (!$identity) {
+                return null;
+            }
+            /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+
+            return $themeContext->resolveThemeForScope('frontend', $identity);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     private function resolveActiveColorDisk(string $storageScope): string
     {
+        // 邮件 scope 绑定的 design 主题品牌叶优先（daocharms-ritual / hanfu-paper），勿被全局前台色盘盖掉
+        $themeRoot = $this->themeFrontendRoot($storageScope);
+        if ($themeRoot !== '') {
+            foreach (['daocharms-ritual', 'hanfu-paper', 'ink', 'default'] as $candidate) {
+                if (is_file($themeRoot . '/colors/_' . $candidate . '.css')) {
+                    return $candidate;
+                }
+            }
+        }
+
         try {
             if (class_exists(\Weline\Theme\Helper\ThemeData::class)) {
                 $cfg = \Weline\Theme\Helper\ThemeData::getColorConfig('frontend', 'default');
@@ -355,16 +430,6 @@ class MailBrandContextService
                 }
             }
         } catch (\Throwable) {
-        }
-
-        // 激活 design 主题若带品牌叶（如 hanfu-paper），优先于模块 ink 默认
-        $themeRoot = $this->themeFrontendRoot();
-        if ($themeRoot !== '') {
-            foreach (['hanfu-paper', 'ink', 'default'] as $candidate) {
-                if (is_file($themeRoot . '/colors/_' . $candidate . '.css')) {
-                    return $candidate;
-                }
-            }
         }
 
         // 前台品牌叶默认 ink（朱砂/宣纸），与 ThemeColorMode 契约一致
@@ -768,6 +833,7 @@ class MailBrandContextService
             'store_name' => '',
             'channel_name' => '',
             'site_url' => '',
+            'site_description' => '',
             'website_id' => -1,
         ];
         $scope = trim($storageScope) !== '' ? trim($storageScope) : SystemConfig::SCOPE_GLOBAL;
@@ -787,6 +853,7 @@ class MailBrandContextService
             $row = $website->clear()->where(Website::schema_fields_CODE, $websiteCode)->find()->fetch();
             if ($row && $row->getId() !== null && $row->getId() !== '') {
                 $out['site_name'] = trim((string)$row->getData(Website::schema_fields_NAME));
+                $out['site_description'] = trim((string)$row->getData(Website::schema_fields_DESCRIPTION));
                 $websiteId = (int)$row->getData(Website::schema_fields_ID);
                 $out['website_id'] = $websiteId;
                 $fallbackUrl = $this->normalizeAbsoluteUrl((string)$row->getData(Website::schema_fields_URL));
@@ -842,6 +909,10 @@ class MailBrandContextService
         $path = $this->resolvePublishedBrandLogoPath($storageScope);
         if ($path === '') {
             $path = $this->resolveBackendConfiguredLogoPath();
+        }
+        if ($path === '') {
+            // 站柜磁盘品牌标：pub/media/websites/{code}/default/brand/*logo*.png（邮件优先 PNG）
+            $path = $this->resolveWebsiteDiskBrandLogoPath($storageScope);
         }
         if ($path === '' || $this->isThemePackageDefaultLogo($path)) {
             return '';
@@ -969,6 +1040,49 @@ class MailBrandContextService
                 }
             }
         } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
+    /**
+     * 站柜磁盘品牌标回落（appearance 未发布时）：
+     * pub/media/websites/{websiteCode}/default/brand/*logo*.png
+     * 邮件客户端优先 PNG（避免 webp）。
+     */
+    private function resolveWebsiteDiskBrandLogoPath(string $storageScope): string
+    {
+        $websiteCode = 'default';
+        if (preg_match('/^([a-z0-9_-]+)\./i', trim($storageScope), $m) === 1) {
+            $websiteCode = strtolower((string)$m[1]);
+        }
+        if ($websiteCode === '' || str_starts_with($websiteCode, '__')) {
+            $websiteCode = 'default';
+        }
+        $baseRel = 'websites/' . $websiteCode . '/default/brand';
+        $dir = BP . '/pub/media/' . $baseRel;
+        if (!is_dir($dir)) {
+            return '';
+        }
+        $preferred = [
+            $websiteCode . '-logo-v1.png',
+            $websiteCode . '-logo.png',
+            'logo-light.png',
+            'logo_dark.png',
+            'logo.png',
+            $websiteCode . '-logo-v1.webp',
+            $websiteCode . '-logo.webp',
+        ];
+        foreach ($preferred as $name) {
+            $abs = $dir . '/' . $name;
+            if (is_file($abs)) {
+                return '/pub/media/' . $baseRel . '/' . $name;
+            }
+        }
+        $pngs = glob($dir . '/*logo*.png') ?: [];
+        sort($pngs);
+        if ($pngs !== []) {
+            return '/pub/media/' . $baseRel . '/' . basename((string)$pngs[0]);
         }
 
         return '';
@@ -1377,6 +1491,20 @@ class MailBrandContextService
         }
         if ($base === '') {
             return $path;
+        }
+
+        $pathNorm = '/' . ltrim(str_replace('\\', '/', $path), '/');
+        // /pub/media、/media 挂在站点 origin，勿拼进 website path 前缀（如 /daocharms）
+        if (str_starts_with($pathNorm, '/pub/media/') || str_starts_with($pathNorm, '/media/')) {
+            $parts = parse_url($base);
+            if (is_array($parts) && !empty($parts['scheme']) && !empty($parts['host'])) {
+                $origin = $parts['scheme'] . '://' . $parts['host'];
+                if (!empty($parts['port'])) {
+                    $origin .= ':' . $parts['port'];
+                }
+
+                return $origin . $pathNorm;
+            }
         }
 
         return rtrim($base, '/') . '/' . ltrim($path, '/');

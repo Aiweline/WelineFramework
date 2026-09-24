@@ -29,6 +29,7 @@ class DeveloperWorkspaceAdminQueryProvider implements QueryProviderInterface
         'routes/search' => ['method' => 'GET', 'class' => Routes::class, 'action' => 'getSearch'],
         'trace' => ['method' => 'GET', 'class' => Trace::class, 'action' => 'getIndex'],
         'trace/panel' => ['method' => 'POST', 'class' => Trace::class, 'action' => 'postPanel'],
+        'trace/tpl-perf' => ['method' => 'POST', 'class' => Trace::class, 'action' => 'postTplPerf'],
         'db/explain' => ['method' => 'POST', 'class' => Db::class, 'action' => 'postExplain'],
         'seo/crawl/start' => ['method' => 'POST', 'class' => Crawl::class, 'action' => 'postStart'],
         'seo/crawl/result' => ['method' => 'GET', 'class' => Crawl::class, 'action' => 'getResult'],

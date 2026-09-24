@@ -319,7 +319,9 @@ final class StorefrontCategoryTreeIndex
             $row['summary'] = (string)($summaries[$id] ?? '');
             $row['description'] = (string)($descriptions[$id] ?? '');
             $path = \trim((string)($row['path'] ?? ''));
-            $row['url'] = $categoryUrls[$path] ?? $this->categoryUrl($path);
+            // Never fall back to per-path getFrontendUrl (N+1 rewrite). Missing
+            // batch keys use a deterministic route string without DB.
+            $row['url'] = $categoryUrls[$path] ?? $this->categoryUrlWithoutLookup($path);
         }
         unset($row);
 
@@ -335,7 +337,7 @@ final class StorefrontCategoryTreeIndex
                 $row['summary'] = (string)($summaries[$categoryId] ?? '');
                 $row['description'] = (string)($descriptions[$categoryId] ?? '');
                 $path = \trim((string)($row['path'] ?? ''));
-                $row['url'] = $categoryUrls[$path] ?? $this->categoryUrl($path);
+                $row['url'] = $categoryUrls[$path] ?? $this->categoryUrlWithoutLookup($path);
             }
         }
         unset($children, $row);
@@ -343,10 +345,14 @@ final class StorefrontCategoryTreeIndex
         return $index;
     }
 
-    private function categoryUrl(string $path): string
+    /**
+     * Deterministic category route when batch URL map misses a path.
+     * Must not call Url::getFrontendUrl (per-path rewrite N+1).
+     */
+    private function categoryUrlWithoutLookup(string $path): string
     {
         $path = \trim(\str_replace('\\', '/', $path), '/');
 
-        return $this->url->getFrontendUrl($path !== '' ? 'category/' . $path : 'categories');
+        return '/' . ($path !== '' ? 'category/' . $path : 'categories');
     }
 }

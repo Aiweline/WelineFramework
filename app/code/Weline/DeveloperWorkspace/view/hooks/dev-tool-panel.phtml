@@ -1717,6 +1717,55 @@ $apiDocsUrl = '/dev/tool/docs/api';
         line-height: 1.45;
     }
 
+    #dev-tool-panel .dev-tool-tpl-perf-switch {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 10px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 8px;
+        background: rgba(248, 250, 252, 0.9);
+    }
+
+    #dev-tool-panel .dev-tool-tpl-perf-switch-copy {
+        min-width: 0;
+    }
+
+    #dev-tool-panel .dev-tool-tpl-perf-switch-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #0f172a;
+    }
+
+    #dev-tool-panel .dev-tool-tpl-perf-switch-hint {
+        margin-top: 2px;
+        font-size: 11px;
+        line-height: 1.4;
+        color: #64748b;
+    }
+
+    #dev-tool-panel .dev-tool-tpl-perf-switch-btn {
+        flex: 0 0 auto;
+        height: 28px;
+        min-width: 54px;
+        border-radius: 999px;
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0 10px;
+    }
+
+    #dev-tool-panel .dev-tool-tpl-perf-switch-btn.is-on {
+        border-color: #0f172a;
+        background: #0f172a;
+        color: #fff;
+    }
+
     #dev-tool-panel .dev-tool-performance-total {
         display: flex;
         flex-direction: column;
@@ -3576,6 +3625,9 @@ const DevToolPanel = (function() {
                 break;
             case 'retry-doc-api':
                 retryDocApi();
+                break;
+            case 'toggle-tpl-perf':
+                toggleTplPerfOverlay(actionEl);
                 break;
         }
     }
@@ -6317,6 +6369,56 @@ const DevToolPanel = (function() {
         return escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
 
+    function isTplPerfOverlayOn() {
+        if (window.WelinePanel && typeof window.WelinePanel.isTplPerfOverlayPreferred === 'function') {
+            return !!window.WelinePanel.isTplPerfOverlayPreferred();
+        }
+        try {
+            return new URL(window.location.href).searchParams.get('wls_tpl_perf') === '1';
+        } catch (error) {
+            return /(?:^|[?&])wls_tpl_perf=(?:1|true)(?:&|$)/i.test(String(window.location.search || ''));
+        }
+    }
+
+    function buildTplPerfSwitchHtml() {
+        var on = isTplPerfOverlayOn();
+        var html = '<div class="dev-tool-tpl-perf-switch">';
+        html += '<div class="dev-tool-tpl-perf-switch-copy">';
+        html += '<div class="dev-tool-tpl-perf-switch-title">模板耗时徽标</div>';
+        html += '<div class="dev-tool-tpl-perf-switch-hint">需面板 Token；开启后签发签名 Cookie，并为当前页补上 wls_tpl_perf=1，在部件旁显示 timing。</div>';
+        html += '</div>';
+        html += '<button type="button" class="dev-tool-tpl-perf-switch-btn' + (on ? ' is-on' : '') + '" data-dev-tool-action="toggle-tpl-perf" aria-pressed="' + (on ? 'true' : 'false') + '">';
+        html += on ? '已开' : '开启';
+        html += '</button>';
+        html += '</div>';
+        return html;
+    }
+
+    function toggleTplPerfOverlay(button) {
+        var nextEnabled = !(button && button.classList.contains('is-on'));
+        if (button) {
+            button.disabled = true;
+            button.textContent = nextEnabled ? '开启中…' : '关闭中…';
+        }
+        if (!(window.WelinePanel && typeof window.WelinePanel.setTplPerfOverlay === 'function')) {
+            if (button) {
+                button.disabled = false;
+                button.textContent = isTplPerfOverlayOn() ? '已开' : '开启';
+            }
+            return;
+        }
+        window.WelinePanel.setTplPerfOverlay(nextEnabled).then(function (result) {
+            if (!button || result == null && nextEnabled) {
+                return;
+            }
+            // Reload usually navigates away; keep UI consistent if it does not.
+            button.disabled = false;
+            button.classList.toggle('is-on', nextEnabled);
+            button.setAttribute('aria-pressed', nextEnabled ? 'true' : 'false');
+            button.textContent = nextEnabled ? '已开' : '开启';
+        });
+    }
+
     function sanitizeDocHref(value) {
         const textarea = document.createElement('textarea');
         textarea.innerHTML = value == null ? '' : String(value);
@@ -6426,6 +6528,7 @@ const DevToolPanel = (function() {
             html += '<div class="dev-tool-performance-kicker"><w:icon name="home" size="sm"></w:icon> 实时性能</div>';
             html += '<div class="dev-tool-performance-title">页面加载性能</div>';
             html += '<div class="dev-tool-performance-subtitle">按浏览器 Performance Timing 拆分网络、DOM 和渲染阶段，阶段条越长越值得优先查看。</div>';
+            html += buildTplPerfSwitchHtml();
             html += '</div>';
             html += '<div class="dev-tool-performance-total">';
             html += '<div class="dev-tool-performance-total-value">' + escapeHtml(formatTime(pageTotal)) + '</div>';
@@ -6484,6 +6587,7 @@ const DevToolPanel = (function() {
             var performanceUnavailableMessage = timing && timing.staleNavigation
                 ? '当前页面通过登录跳转或局部导航进入，浏览器 Navigation Timing 属于上一文档；请刷新当前页获取准确数据。'
                 : '性能 API 不可用，无法读取页面加载阶段。';
+            html += buildTplPerfSwitchHtml();
             html += '<div class="dev-tool-performance-panel">';
             html += '<div class="dev-tool-performance-panel-body">';
             html += '<div class="dev-tool-performance-empty">' + escapeHtml(performanceUnavailableMessage) + '</div>';

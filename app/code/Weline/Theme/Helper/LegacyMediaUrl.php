@@ -10,10 +10,16 @@ namespace Weline\Theme\Helper;
  * New Theme/CMS data must use a typed file-image value. This helper exists
  * only so legacy rows can be rendered without turning an HTML-escaped value
  * into executable URL/CSS syntax.
+ *
+ * Also remaps local /media|/pub/media raster URLs when the stored extension
+ * (jpg/png/…) was converted on disk to a sibling .webp (batch webp migration).
  */
 final class LegacyMediaUrl
 {
     private const MAX_BYTES = 8192;
+
+    /** @var list<string> */
+    private const RASTER_FALLBACK_FROM = ['jpg', 'jpeg', 'png', 'gif'];
 
     public static function sanitize(mixed $value, bool $forCss = false): string
     {
@@ -40,7 +46,7 @@ final class LegacyMediaUrl
             return $forCss ? '' : $url;
         }
         if (str_starts_with($url, '/')) {
-            return $url;
+            return self::preferExistingLocalRaster($url);
         }
 
         $parts = parse_url($url);
@@ -66,5 +72,64 @@ final class LegacyMediaUrl
         }
 
         return $url;
+    }
+
+    /**
+     * If /media/… or /pub/media/… points at a missing jpg/png/gif but a sibling
+     * .webp exists on disk, rewrite the URL extension so storefront <img> loads.
+     */
+    public static function preferExistingLocalRaster(string $url): string
+    {
+        $url = trim($url);
+        $prefix = '';
+        $relative = '';
+        if (str_starts_with($url, '/pub/media/')) {
+            $prefix = '/pub/media/';
+            $relative = substr($url, strlen('/pub/media/'));
+        } elseif (str_starts_with($url, '/media/')) {
+            $prefix = '/media/';
+            $relative = substr($url, strlen('/media/'));
+        } else {
+            return $url;
+        }
+
+        $relative = rawurldecode($relative);
+        if ($relative === ''
+            || str_contains($relative, '..')
+            || str_contains($relative, '\\')
+            || preg_match('/[\x00-\x1F\x7F]/', $relative) === 1
+        ) {
+            return $url;
+        }
+
+        $pubRoot = rtrim((string)(defined('PUB') ? PUB : (defined('BP') ? BP . '/pub/' : '')), '/\\');
+        if ($pubRoot === '') {
+            return $url;
+        }
+        $mediaRoot = $pubRoot . DIRECTORY_SEPARATOR . 'media';
+        $abs = $mediaRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+        if (is_file($abs)) {
+            return $url;
+        }
+
+        $info = pathinfo($relative);
+        $ext = strtolower((string)($info['extension'] ?? ''));
+        $stem = (string)($info['filename'] ?? '');
+        if ($stem === '' || !in_array($ext, self::RASTER_FALLBACK_FROM, true)) {
+            return $url;
+        }
+        $dir = (string)($info['dirname'] ?? '.');
+        $webpRel = ($dir === '.' || $dir === '') ? ($stem . '.webp') : ($dir . '/' . $stem . '.webp');
+        $webpAbs = $mediaRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $webpRel);
+        if (!is_file($webpAbs)) {
+            return $url;
+        }
+
+        $encoded = implode('/', array_map('rawurlencode', array_values(array_filter(
+            explode('/', $webpRel),
+            static fn (string $part): bool => $part !== ''
+        ))));
+
+        return $prefix . $encoded;
     }
 }

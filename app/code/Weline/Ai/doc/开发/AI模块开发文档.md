@@ -125,7 +125,7 @@ php bin/w ai:default-model:manage --action=validate
 |------|------|
 | `requested_transparent_background` | 调用方是否请求透明背景 |
 | `native_transparent_background` | 当前供应商/模型是否按原生透明背景参数生成 |
-| `output_format` | 目标输出格式，品牌身份资产只允许 `png` 或 `webp`，默认 `png` |
+| `output_format` | 目标输出格式，品牌身份资产只允许 `png` 或 `webp`，**默认 `webp`** |
 | `identity_asset` | 是否为品牌身份资产 |
 | `identity_asset_role` | `logo` 或 `icon`，默认 `logo`，可通过 `identity_asset_role`、`asset_role`、`usage` 等参数推断 |
 | `native_transparency_error` | 原生透明参数失败时保留的真实供应商错误文本，成功或未尝试时为空 |

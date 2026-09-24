@@ -19,6 +19,7 @@ $localize = static fn (mixed $value, string $default = '', array $args = []): st
 );
 $types = $search_types ?? HeaderCommerceData::resolveSearchTypes();
 $types = is_array($types) ? $types : [];
+HeaderCommerceData::prefetchSearchTypeLabels($types);
 if ($types === []) {
     $types = [['code' => 'all', 'label' => $localize('', '全部'), 'children' => []]];
 }

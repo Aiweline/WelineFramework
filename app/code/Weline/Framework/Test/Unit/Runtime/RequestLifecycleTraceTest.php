@@ -17,6 +17,7 @@ class RequestLifecycleTraceTest extends TestCase
     {
         unset($_SERVER['HTTP_X_WELINE_REQUEST_ID'], $_SERVER['HTTP_X_REQUEST_ID']);
         RequestLifecycleTrace::clearPanelTrace();
+        RequestLifecycleTrace::clearPanelTplPerf();
         Context::leave();
         Runtime::resetModeCache();
         RequestLifecycleTrace::reset();
@@ -145,6 +146,39 @@ class RequestLifecycleTraceTest extends TestCase
         $_COOKIE[RequestLifecycleTrace::panelTraceCookieName()] = 'not-a-valid-panel-cookie';
         self::assertFalse(RequestLifecycleTrace::isPanelTraceArmed());
         self::assertFalse(RequestLifecycleTrace::isEnabled());
+    }
+
+    public function testPanelTplPerfCookieArmsTemplateOverlayWithoutQuery(): void
+    {
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        RequestLifecycleTrace::clearPanelTplPerf();
+        self::assertFalse(RequestLifecycleTrace::isPanelTplPerfArmed());
+        self::assertFalse(RequestLifecycleTrace::isTemplatePerfOverlayRequested());
+
+        RequestLifecycleTrace::installPanelTplPerfOn();
+        self::assertTrue(RequestLifecycleTrace::isPanelTplPerfArmed());
+        self::assertTrue(RequestLifecycleTrace::isTemplatePerfOverlayRequested());
+
+        RequestLifecycleTrace::clearPanelTplPerf();
+        RequestLifecycleTrace::reset();
+        Context::leave();
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        self::assertFalse(RequestLifecycleTrace::isPanelTplPerfArmed());
+    }
+
+    public function testForgedPanelTplPerfCookieIsRejected(): void
+    {
+        Context::enter(new Context([
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+        RequestLifecycleTrace::clearPanelTplPerf();
+        $_COOKIE[RequestLifecycleTrace::panelTplPerfCookieName()] = 'forged-tpl-perf';
+        self::assertFalse(RequestLifecycleTrace::isPanelTplPerfArmed());
+        self::assertFalse(RequestLifecycleTrace::isTemplatePerfOverlayRequested());
     }
 
     public function testWlsControlPlaneWithoutRequestContextStaysDisabledEvenWhenDebugIsOn(): void
