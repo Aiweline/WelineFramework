@@ -36,6 +36,7 @@ return [
         'xsl',    // XML 转换 / 部分依赖
         'zip',
         'bcmath',
+        'zlib', // gzdecode：公开运价种子 .json.gz、HTTP/备份压缩等
         'pdo_pgsql', // PostgreSQL 支持；使用 pgsql 时须安装（apt-get install php-pgsql / yum install php-pgsql）
         'pdo_mysql', // MySQL 支持；使用 mysql 时须安装
     ],

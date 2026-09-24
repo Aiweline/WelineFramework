@@ -39,7 +39,7 @@ final class PublicTariffTableCompilerTest extends TestCase
     }
     public function testOfficialSnapshotGoldenAndWeightBoundaries(): void
     {
-        $data=json_decode(file_get_contents(dirname(__DIR__,3).'/data/public-tariff/standard-20260923.json'),true,512,JSON_THROW_ON_ERROR);
+        $data=\Weline\Shipping\Service\PublicTariffSeedService::loadOfficialSnapshot();
         $compiler=new PublicTariffTableCompiler();
         foreach (['US'=>'1622.97','CA'=>'1622.97','JP'=>'1167.72','DE'=>'1761.82','GB'=>'1761.82','AU'=>'1402.88'] as $cc=>$price) {
             self::assertSame($price,$compiler->quote($data['countries'][$cc]['mixed_config']['public_tariff']['offers'],1)['retail_cny']);
@@ -62,7 +62,7 @@ final class PublicTariffTableCompilerTest extends TestCase
 
     public function testRuntimeTailAndDimensionWeightUseAuditedRates(): void
     {
-        $data=json_decode(file_get_contents(dirname(__DIR__,3).'/data/public-tariff/standard-20260923.json'),true,512,JSON_THROW_ON_ERROR)['countries']['US'];
+        $data=\Weline\Shipping\Service\PublicTariffSeedService::loadOfficialSnapshot()['countries']['US'];
         $tpl=new RateTemplate();
         $tpl->setData(['is_active'=>1,'calculation_type'=>'weight_table','max_weight_kg'=>null,'rate_brackets'=>json_encode($data['brackets']),'mixed_config'=>json_encode($data['mixed_config'])]);
         $calc=new RateCalculationService($this->createMock(\Weline\Framework\Manager\ObjectManager::class));
