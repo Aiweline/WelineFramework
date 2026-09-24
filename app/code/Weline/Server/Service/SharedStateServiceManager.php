@@ -1721,7 +1721,11 @@ class SharedStateServiceManager
                 'foreground' => $frontend,
                 'enableLog' => true,
                 'childOwnsPid' => true,
-                'masterOwned' => !\extension_loaded('FFI'),
+                // Shared Session/Memory must outlive server:shared:start and any
+                // short-lived ensure CLI. masterOwned=true registers a Processer
+                // shutdown reap that SIGTERMs children when the parent PHP exits
+                // (Linux without FFI used that path and killed sidecars within ~1s).
+                'masterOwned' => false,
                 'isolateParentHandles' => \defined('IS_WIN') && IS_WIN,
                 'windowsArgv' => $argv,
                 'cwd' => $workingDir,

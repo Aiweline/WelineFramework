@@ -724,6 +724,8 @@ final class SharedStateServiceManagerTest extends TestCase
             $config = $manager->buildConfigForTest($base);
             self::assertTrue($config['enableLog']);
             self::assertTrue($config['childOwnsPid']);
+            // Shared sidecars must not be Master-owned: CLI exit must not SIGTERM them.
+            self::assertFalse($config['masterOwned']);
             self::assertFalse($config['foreground']);
             if (\defined('IS_WIN') && IS_WIN) {
                 self::assertArrayHasKey('stdoutLogFile', $config);
