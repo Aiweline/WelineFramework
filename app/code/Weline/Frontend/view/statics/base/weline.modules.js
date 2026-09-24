@@ -21,52 +21,52 @@
         },
         siteBlocks: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/site-blocks.js"],
-            paths: ["/Weline/Theme/view/statics/js/widgets/site-blocks.js"],
+            paths: ["Weline_Theme::js/widgets/site-blocks.js"],
             globalVar: "WelineSiteBlocks",
             async: true
         },
         videoCarousel: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/video-carousel.js"],
-            paths: ["/Weline/Theme/view/statics/js/widgets/video-carousel.js"],
+            paths: ["Weline_Theme::js/widgets/video-carousel.js"],
             globalVar: "WelineVideoCarousel",
             async: true,
             description: "首页/店面视频轮播切换与关联商品 dialog"
         },
         miniCartExtras: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js?v=20260914-skip-empty-tabs1"],
-            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js?v=20260914-skip-empty-tabs1"],
+            paths: ["Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20260914-skip-empty-tabs1"],
             globalVar: "WelineMiniCartExtras",
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260923-ops02-zero-price"],
-            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260923-ops02-zero-price"],
+            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20260923-ops02-zero-price"],
             globalVar: "WelineMiniCartIcon",
             description: "迷你购物车图标与抽屉"
         },
         headerSearch: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/header-search.js"],
-            paths: ["/Weline/Theme/view/statics/js/widgets/header-search.js"],
+            paths: ["Weline_Theme::js/widgets/header-search.js"],
             globalVar: null,
             description: "页头搜索框与分类子菜单"
         },
         storefrontImageFallback: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/storefront-image-fallback.js"],
-            paths: ["/Weline/Theme/view/statics/js/storefront-image-fallback.js"],
+            paths: ["Weline_Theme::js/storefront-image-fallback.js"],
             globalVar: null,
             load: "defer",
             description: "店面图片占位回退"
         },
         storefrontShopperToast: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/storefront-shopper-toast.js"],
-            paths: ["/Weline/Theme/view/statics/js/storefront-shopper-toast.js"],
+            paths: ["Weline_Theme::js/storefront-shopper-toast.js"],
             globalVar: null,
             load: "defer",
             description: "店面购物者 Toast 区域"
         },
         footerSocialFloat: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/footer-social-float.js"],
-            paths: ["/Weline/Theme/view/statics/js/widgets/footer-social-float.js"],
+            paths: ["Weline_Theme::js/widgets/footer-social-float.js"],
             globalVar: "WelineFooterSocialFloat",
             async: true,
             description: "页脚侧边悬浮社媒贴边收起"
