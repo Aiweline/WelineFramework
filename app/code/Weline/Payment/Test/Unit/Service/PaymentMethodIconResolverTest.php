@@ -19,7 +19,11 @@ final class PaymentMethodIconResolverTest extends TestCase
             'title' => 'Fake',
         ]);
 
-        self::assertSame('/Weline/Payment/view/statics/img/payment/fake-card.svg', $display['icon_url']);
+        $url = (string) ($display['icon_url'] ?? '');
+        self::assertNotSame('', $url);
+        self::assertStringStartsWith('/static/', $url);
+        self::assertDoesNotMatchRegularExpression('#^/Weline/Payment/view/statics/#', $url);
+        self::assertStringContainsString('fake-card.svg', $url);
         self::assertSame('provider', $display['icon_source']);
     }
 

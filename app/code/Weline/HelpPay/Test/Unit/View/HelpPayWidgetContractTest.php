@@ -317,7 +317,9 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertFileExists($base . '/view/statics/css/helppay-share.css');
         $js = (string) file_get_contents($base . '/view/statics/js/helppay-share.js');
         self::assertStringContainsString('data-helppay-share-css', $js);
-        self::assertStringContainsString('/Weline/HelpPay/view/statics/css/helppay-share.css', $js);
+        self::assertStringContainsString('Weline_HelpPay::css/helppay-share.css', $js);
+        self::assertStringContainsString('resolveStaticPath', $js);
+        self::assertStringNotContainsString('/Weline/HelpPay/view/statics/css/helppay-share.css', $js);
         self::assertStringContainsString('onHelpPayDelegatedClick', $js);
         self::assertStringContainsString('friend_help_pay_link_ready', $js);
         self::assertStringContainsString('selection_share_link_ready', $js);

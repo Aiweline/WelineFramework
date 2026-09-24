@@ -338,8 +338,8 @@
             description: "商品详情/加购弹窗分销分享（等账户会话后异步水合）"
         },
         helpPayShare: {
-            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260917-buybox-flow-auto1"],
-            paths: ["Weline_HelpPay::js/helppay-share.js?v=20260917-buybox-flow-auto1"],
+            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260925-no-dev-css1"],
+            paths: ["Weline_HelpPay::js/helppay-share.js?v=20260925-no-dev-css1"],
             globalVar: "WelineModules.helpPayShare",
             load: "defer",
             description: "帮我付 / 纯分享 / 快捷购买 / 商品找朋友代付：规则确认、出链双形态复制（样式由脚本注入主题 Token CSS）"

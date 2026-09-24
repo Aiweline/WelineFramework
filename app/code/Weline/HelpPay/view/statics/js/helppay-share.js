@@ -5,8 +5,33 @@
 (function (w, d) {
   'use strict';
 
+  function resolveShareCssHref() {
+    // Bust token on Module:: so PROD resolveStaticPath / flat publish picks it up.
+    var modulePath = 'Weline_HelpPay::css/helppay-share.css?v=20260925-no-dev-css1';
+    var loader = w.Weline && w.Weline.loader;
+    if (loader && typeof loader.resolveStaticPath === 'function') {
+      var resolved = loader.resolveStaticPath(modulePath);
+      if (resolved) {
+        return resolved;
+      }
+    }
+    // Sibling of this script in the same published tree — never DEV /Weline/*/view/statics/.
+    var cur = d.currentScript && d.currentScript.src;
+    if (cur) {
+      var sibling = cur.replace(/\/(?:frontend\/)?js\/helppay-share\.js(\?.*)?$/i, '/css/helppay-share.css$1');
+      if (sibling !== cur) {
+        return sibling;
+      }
+      sibling = cur.replace(/\/js\/helppay-share\.js(\?.*)?$/i, '/css/helppay-share.css$1');
+      if (sibling !== cur) {
+        return sibling;
+      }
+    }
+    return '/static/Weline/HelpPay/css/helppay-share.css?v=20260925-no-dev-css1';
+  }
+
   function ensureShareCss() {
-    var href = '/Weline/HelpPay/view/statics/css/helppay-share.css?v=20260920-pdp-buybox-breathe3';
+    var href = resolveShareCssHref();
     var existing = d.querySelector('link[data-helppay-share-css]');
     if (existing) {
       if (existing.getAttribute('href') !== href) {
