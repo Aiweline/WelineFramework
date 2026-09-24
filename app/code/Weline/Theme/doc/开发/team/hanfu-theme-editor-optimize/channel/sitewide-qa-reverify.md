@@ -3,7 +3,7 @@
 - **席位**：Team:测试/汇审  
 - **日期**：2026-09-23  
 - **入口**：`https://p05113ef3.test.weline.com:9555/`（已 curl 探活 HTTPS 200；HTTP→HTTPS 308）  
-- **截图目录**：`channel/sitewide-click-qa-shots/reverify/`  
+- **截图目录**（本地、已 gitignore）：`channel/sitewide-click-qa-shots/reverify/`  
 - **方法**：点开/导航后立即截图；记录页面可见错误；禁止假绿  
 - **Browser 门禁**：`Network.setCacheDisabled(true)` + `navigator.webdriver` 抹除；非抢占后台  
 - **说明**：Cursor `ide-browser` 本回合建 tab 即蒸发，改用本机 Chrome CDP + puppeteer-core 同等门禁复验；收口已结束本机调试 Chrome 进程。原始机读：`reverify-raw-part2.json`（及首轮 stdout）
