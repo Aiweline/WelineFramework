@@ -28,4 +28,21 @@ class FrontendRuntimeThemeVersionContractTest extends TestCore
         self::assertStringContainsString('frontendAssetVersion', $src);
         self::assertStringContainsString("'assetVersion' => \$frontendAssetVersion", $src);
     }
+
+    /**
+     * E1：PROD 下 deployVersion 不得粘滞字面 `dev`（与 current.json 对齐；缺/粘滞时文档化守卫 `prod`）。
+     */
+    public function testHeaderProdDeployVersionRejectsStickyDev(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/blocks/header/base.phtml';
+        self::assertFileExists($path);
+        $src = (string)file_get_contents($path);
+
+        self::assertStringContainsString("BP . 'var/deploy/current.json'", $src);
+        self::assertStringContainsString("\$deployMeta['deploy_version']", $src);
+        self::assertStringContainsString('PROD 禁止沿用粘滞的 deploy_version=dev', $src);
+        self::assertStringContainsString("strcasecmp(\$deployVersion, 'dev') === 0", $src);
+        self::assertStringContainsString("\$deployVersion = 'prod';", $src);
+        self::assertStringContainsString("'/static/Weline/Frontend/base/weline.modules.js'", $src);
+    }
 }

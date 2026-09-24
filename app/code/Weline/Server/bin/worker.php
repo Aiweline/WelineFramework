@@ -1832,6 +1832,9 @@ $writeZeroProgress = [];
 $pendingClose = [];
 $requestCount = 0;
 $activeRequests = 0; // 正在处理的请求数
+\Weline\Framework\Runtime\SchedulerSystem::setForegroundBusyProbe(static function () use (&$activeRequests): bool {
+    return $activeRequests > 0;
+});
 $requestBuffers = [];
 $connectionLastActivity = []; // 连接最后活动时间（用于超时清理）
 $requestLogged = []; // 记录已输出日志的连接（前端模式使用）

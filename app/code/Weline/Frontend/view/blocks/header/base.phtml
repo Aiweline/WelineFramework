@@ -65,8 +65,24 @@ $i18nWords = \Weline\Frontend\Helper\FrontendRuntimeI18nDictionary::filterForCli
     is_array($i18nWords) ? $i18nWords : []
 );
 $deployMeta = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
-$deployVersion = is_array($deployMeta) ? (string)($deployMeta['deploy_version'] ?? 'dev') : 'dev';
-$workerBuildId = is_array($deployMeta) ? (string)($deployMeta['worker_build_id'] ?? 'dev') : 'dev';
+$deployVersion = is_array($deployMeta) ? (string)($deployMeta['deploy_version'] ?? '') : '';
+$workerBuildId = is_array($deployMeta) ? (string)($deployMeta['worker_build_id'] ?? '') : '';
+// PROD 禁止沿用粘滞的 deploy_version=dev（会把 FPC 钉死在旧 ?v=dev-* 与烤死的 DEV 模块路径上）。
+if (DEV) {
+    if ($deployVersion === '') {
+        $deployVersion = 'dev';
+    }
+    if ($workerBuildId === '') {
+        $workerBuildId = 'dev';
+    }
+} else {
+    if ($deployVersion === '' || strcasecmp($deployVersion, 'dev') === 0) {
+        $deployVersion = 'prod';
+    }
+    if ($workerBuildId === '' || strcasecmp($workerBuildId, 'dev') === 0) {
+        $workerBuildId = 'prod';
+    }
+}
 $themePublishedVersionId = '';
 $themePublishedVersion = '';
 try {

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Product\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Product\Service\StorefrontCatalogSurfaceResolver;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Product\Service\StorefrontSeoListingFacts;
 
@@ -13,12 +15,22 @@ final class NewArrivals extends FrontendController
     public function __construct(
         private readonly StorefrontProductWidgetCatalog $widgetCatalog,
         private readonly StorefrontSeoListingFacts $listingFacts = new StorefrontSeoListingFacts(),
+        private readonly StorefrontCatalogSurfaceResolver $surfaceResolver = new StorefrontCatalogSurfaceResolver(),
     ) {
     }
 
     public function index(): string
     {
         $title = (string)__('新品上架');
+        $websiteCode = (string)RequestContext::getWelineWebsiteCode();
+        if ($this->surfaceResolver->hasWebsiteCopy($websiteCode)) {
+            $surface = $this->surfaceResolver->resolve(
+                '/new-arrivals',
+                (string)RequestContext::getWelineUserLang(),
+                $websiteCode,
+            );
+            $this->assign('storefront_new_arrivals_lede', (string)($surface['lede'] ?? ''));
+        }
 
         $this->layoutType = 'products';
         $this->request->setGet('page_type', 'products');

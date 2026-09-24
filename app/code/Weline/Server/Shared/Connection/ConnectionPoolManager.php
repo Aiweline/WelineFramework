@@ -566,6 +566,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             $serviceType !== '' ? $serviceType : null,
             (bool)($this->options['log_pool_lifecycle'] ?? true),
             (string)($this->options['token_authority_instance'] ?? '') ?: null,
+            \max(0.0, (float)($this->options['sync_await_window_sec'] ?? PooledConnection::DEFAULT_SYNC_AWAIT_WINDOW_SEC)),
         );
     }
 

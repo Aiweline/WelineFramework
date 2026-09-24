@@ -12,7 +12,7 @@ final class ShippingProfileBindingContractTest extends TestCase
 {
     public function testOfferSchemaIncludesShippingProfileCode(): void
     {
-        self::assertSame('4.9.0', ProductShardSchemaCatalog::SCHEMA_VERSION);
+        self::assertSame('4.10.0', ProductShardSchemaCatalog::SCHEMA_VERSION);
         self::assertSame('shipping_profile_code', Offer::schema_fields_SHIPPING_PROFILE_CODE);
         self::assertSame('shipping_hazard_class', Offer::schema_fields_SHIPPING_HAZARD_CLASS);
         $catalog = new ProductShardSchemaCatalog();

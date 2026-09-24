@@ -152,6 +152,78 @@ final class StorefrontScopeHotCache
         return $entry['payload'];
     }
 
+    /**
+     * Prime L1 from one shared getMultiple for many policy logical keys (cold Worker latch).
+     * Subsequent rememberPolicy hits L1 and skips per-key storefront.cache.shared_read.
+     *
+     * @param list<string>|array<int|string, string> $logicalKeys
+     */
+    public function prefetchPolicy(CachePolicy|string $policy, array $logicalKeys): int
+    {
+        $policy = $this->resolvePolicy($policy);
+        if (!KeyBuilder::policyAllowsSharedCache($policy)) {
+            return 0;
+        }
+        $freshTtl = max(1, $policy->freshTtlSeconds);
+        $staleTtl = max($freshTtl, $policy->staleTtlSeconds);
+        /** @var array<string, string> $toFetch scopedKey => processKey */
+        $toFetch = [];
+        foreach ($logicalKeys as $logicalKey) {
+            $logicalKey = trim((string)$logicalKey);
+            if ($logicalKey === '') {
+                continue;
+            }
+            $scopedKey = $this->policyKey($policy, $logicalKey);
+            if ($scopedKey === null) {
+                continue;
+            }
+            $processKey = $policy->pool . '|' . $scopedKey;
+            $entry = self::$processCache[$processKey] ?? null;
+            if (\is_array($entry)) {
+                $status = $this->entryStatus($entry);
+                if ($status === 'fresh' || $status === 'stale') {
+                    continue;
+                }
+                unset(self::$processCache[$processKey]);
+            }
+            $toFetch[$scopedKey] = $processKey;
+        }
+        if ($toFetch === []) {
+            return 0;
+        }
+
+        $pool = $this->pool($policy->pool);
+        $phaseMeta = [
+            'pool' => $policy->pool,
+            'resource' => $policy->resource,
+            'scope' => $policy->scope,
+            'batch' => true,
+            'keys' => \count($toFetch),
+            'custom_dimensions' => true,
+        ];
+        $cachedMap = RequestLifecycleTrace::measurePhase(
+            'storefront.cache.shared_read_batch',
+            fn(): array => $this->readSharedMultiple($pool, array_keys($toFetch), true),
+            $phaseMeta,
+        );
+        $primed = 0;
+        foreach ($toFetch as $scopedKey => $processKey) {
+            $cached = $cachedMap[$scopedKey] ?? null;
+            if (!\is_array($cached) || !\array_key_exists('payload', $cached)) {
+                continue;
+            }
+            $entry = $this->normalizeEnvelope($cached, $freshTtl, $staleTtl);
+            $status = $this->entryStatus($entry);
+            if ($status !== 'fresh' && $status !== 'stale') {
+                continue;
+            }
+            $this->storeProcessEntry($processKey, $entry);
+            ++$primed;
+        }
+
+        return $primed;
+    }
+
     private function resolvePolicy(CachePolicy|string $policy): CachePolicy
     {
         $manager = $this->cacheManager ?? ObjectManager::getInstance(CacheManager::class);
@@ -523,6 +595,35 @@ final class StorefrontScopeHotCache
     private function readShared(CachePoolInterface $pool, string $key, bool $explicitDimensions): mixed
     {
         return $explicitDimensions ? $pool->getCustom($key) : $pool->get($key);
+    }
+
+    /**
+     * @param list<string> $keys
+     * @return array<string, mixed>
+     */
+    private function readSharedMultiple(CachePoolInterface $pool, array $keys, bool $explicitDimensions): array
+    {
+        if ($keys === []) {
+            return [];
+        }
+        if ($explicitDimensions && \method_exists($pool, 'getMultipleCustom')) {
+            /** @var array<string, mixed> $values */
+            $values = $pool->getMultipleCustom($keys);
+
+            return $values;
+        }
+        if (!$explicitDimensions && \method_exists($pool, 'getMultiple')) {
+            /** @var array<string, mixed> $values */
+            $values = $pool->getMultiple($keys);
+
+            return $values;
+        }
+        $values = [];
+        foreach ($keys as $key) {
+            $values[$key] = $this->readShared($pool, $key, $explicitDimensions);
+        }
+
+        return $values;
     }
 
     private function writeShared(CachePoolInterface $pool, string $key, array $entry, int $ttl, bool $explicitDimensions): void

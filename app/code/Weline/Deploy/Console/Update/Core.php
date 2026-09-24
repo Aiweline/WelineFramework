@@ -137,12 +137,14 @@ class Core extends CommandAbstract
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
                 '排除目录' => __('不会拷贝 app/code/Aiweline、GuoLaiRen、WeShop；这些由目标项目自行管理'),
                 '保护文件' => 'app/etc/env.php、modules.php、module_dependencies.php、.env、dev/deploy/.config 等已存在时不覆盖',
+                '生产后续' => __('core:update 不算静态发布完成；生产环境须再执行 php bin/w setup:upgrade（!DEV 触发 Deploy\\Upgrade）或显式 php bin/w deploy:upgrade'),
             ],
             [
                 '增量更新到最新' => 'php bin/w core:update master  （或 update:core -b master）',
                 '强制完整更新' => 'php bin/w update:core -b main -f',
                 '指定标签' => 'php bin/w update:core -b main -t v1.0.0',
                 __('使用自定义仓库（需先配置 .env 或 env.php）') => 'php bin/w update:core -b master',
+                '生产补静态铺平' => 'php bin/w setup:upgrade   # 或 php bin/w deploy:upgrade',
             ],
             'php bin/w core:update <分支名> 或 php bin/w update:core -b <分支名>'
         );
@@ -217,6 +219,10 @@ class Core extends CommandAbstract
         $this->printer->success('═══════════════════════════════════════════════════════════════');
         $this->printer->success(__('✓✓✓ 框架核心更新完成！✓✓✓'));
         $this->printer->success('═══════════════════════════════════════════════════════════════');
+        $this->printer->note('');
+        $this->printer->warning(__(
+            '提醒：core:update 不算生产静态发布完成。请再执行 php bin/w setup:upgrade（或 deploy:upgrade）以达 Deploy\\Upgrade 双树铺平与 FPC deploy 世代。'
+        ));
         $this->printer->note('');
         
         // 显示更新统计

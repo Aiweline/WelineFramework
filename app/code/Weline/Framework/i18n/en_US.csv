@@ -589,6 +589,8 @@ end,end
 WelineFramework,WelineFramework
 请先登录,"Please log in first"
 未登录或登录已过期,"Not logged in or session expired"
+无法创建部署版本目录：%{1},无法创建部署版本目录：%{1}
+无法写入部署版本文件,无法写入部署版本文件
 "警告：无法创建翻译文件 %{file}","Warning: unable to create translation file %{file}"
 "警告：无法写入翻译文件 %{file}","Warning: unable to write translation file %{file}"
 "警告：无法写入语言文件 %{file}","Warning: unable to write language file %{file}"
@@ -2341,6 +2343,7 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 编译运行时索引,"Compile runtime index"
 "当前部署模式为prod(生产模式)，请谨慎操作！你确认要切换到 %{1} 模式么？","The current deployment mode is prod (production mode). Please proceed with caution! Are you sure you want to switch to %{1} mode?"
 已为您取消操作！,"Operation has been canceled for you!"
+部署呈现世代已失效（stamp=%{stamp}，purge_fpc_all=1）,部署呈现世代已失效（stamp=%{stamp}，purge_fpc_all=1）
 请指定设置类型:,"Please specify the setting type:"
 请指定设置类型：%{1},"Please specify the setting type: %{1}"
 错误的设置类型：%{1},"Invalid set type: %{1}"
@@ -2348,6 +2351,8 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 "类型 %{1} 的值仅接受：0或1","The value of type %{1} only accepts: 0 or 1"
 "类型 %{1} 设置为：%{1}","Type %{1} is set to: %{1}"
 设置静态文件是否末尾添加随机字符，以保证浏览器不缓存文件而得到实时响应修改。接受值：0或1,"Set whether to append random characters at the end of static files to prevent browser caching and ensure real-time response to modifications. Accepted values: 0 or 1"
+"静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）","静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）"
+"已 bump global/storefront/deploy（日常 Upgrade 优先 bump）","已 bump global/storefront/deploy（日常 Upgrade 优先 bump）"
 "必须提供 --task-id。","--task-id is required."
 未找到可恢复任务。,"No resumable task found."
 查看可恢复后台任务的持久状态,"View the persistent state of resumeable background tasks"

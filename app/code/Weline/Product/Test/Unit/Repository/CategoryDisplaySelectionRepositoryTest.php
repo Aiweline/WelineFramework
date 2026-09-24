@@ -36,6 +36,6 @@ final class CategoryDisplaySelectionRepositoryTest extends TestCase
         self::assertStringContainsString("'category_display_selection'", $key);
         self::assertStringContainsString("'category_display_selection' => new TableSchema", $schema);
         self::assertStringContainsString('uk_store_channel_category', $schema);
-        self::assertStringContainsString("SCHEMA_VERSION = '4.9.0'", $schema);
+        self::assertStringContainsString("SCHEMA_VERSION = '4.10.0'", $schema);
     }
 }

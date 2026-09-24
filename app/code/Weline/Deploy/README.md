@@ -80,6 +80,19 @@ php bin/w deploy:build
 |------|---------------------|
 | 分支 push | Git commit 短 SHA（如 `a3f5c2d`） |
 | Tag push | tag 名（如 `v2.4.1`） |
+| `deploy:mode:set prod` | `DeployFpcInvalidation` 写出 `var/deploy/current.json`（非 sticky `dev`） |
+
+## 生产触发完备（R1）
+
+| 入口 | 是否达 `Deploy\Upgrade` |
+|------|-------------------------|
+| `deploy:mode:set prod` | 是（内联） |
+| `setup:upgrade`（!DEV） | 是（`SetupUpgradeAfterDeployStatic`） |
+| `deploy:upgrade` | 是（直接） |
+| `deploy:release` / Orchestrator | **是**：空 `POST_DEPLOY` 默认 `php bin/w setup:upgrade`；白名单亦允许 `deploy:upgrade` |
+| `core:update` | **否** — 完成后须再跑 `setup:upgrade` 或 `deploy:upgrade` |
+
+发布成功后 `release_after` 经 `DeployFpcInvalidation` bump `global/storefront/deploy`（禁 Observer 内拷贝静态）。
 
 ## 触发模式
 

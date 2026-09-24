@@ -24,6 +24,12 @@ class SchedulerSystem
     private static bool $ioWaitEnabled = false;
     /** @var null|callable(string, array): void */
     private static $waitDispatcher = null;
+    private const BACKGROUND_PARK_SLICE_MS = 10;
+    /** @var null|callable(): bool */
+    private static $foregroundBusyProbe = null;
+    private static int $backgroundMaxParkMs = 500;
+    /** @var \WeakMap<\Fiber, true>|null */
+    private static ?\WeakMap $backgroundFibers = null;
     /**
      * Scheduler frames hidden while a nested local Fiber pool is active.
      *
@@ -224,11 +230,15 @@ class SchedulerSystem
      * Suspend the current Fiber until $stream is readable, or fall back to a
      * bounded stream_select when I/O await is unavailable.
      *
+     * $syncWindowSec: poll synchronously for this long before suspending. Sub-millisecond
+     * local RPCs then never yield; a yielded Fiber waits behind every other Fiber's
+     * CPU slice on this Worker, which turns a 0.05 ms reply into hundreds of ms.
+     *
      * @param resource $stream
      */
-    public static function awaitReadable(mixed $stream, float $timeoutSec): bool
+    public static function awaitReadable(mixed $stream, float $timeoutSec, float $syncWindowSec = 0.0): bool
     {
-        return self::awaitSocket($stream, false, $timeoutSec);
+        return self::awaitSocket($stream, false, $timeoutSec, $syncWindowSec);
     }
 
     /**
@@ -237,21 +247,28 @@ class SchedulerSystem
      *
      * @param resource $stream
      */
-    public static function awaitWritable(mixed $stream, float $timeoutSec): bool
+    public static function awaitWritable(mixed $stream, float $timeoutSec, float $syncWindowSec = 0.0): bool
     {
-        return self::awaitSocket($stream, true, $timeoutSec);
+        return self::awaitSocket($stream, true, $timeoutSec, $syncWindowSec);
     }
 
     /**
      * @param resource $stream
      */
-    private static function awaitSocket(mixed $stream, bool $writable, float $timeoutSec): bool
+    private static function awaitSocket(mixed $stream, bool $writable, float $timeoutSec, float $syncWindowSec = 0.0): bool
     {
         if (!\is_resource($stream)) {
             return false;
         }
 
         $timeoutSec = \max(0.0, $timeoutSec);
+        if ($syncWindowSec > 0.0 && self::$schedulerActive && self::$ioWaitEnabled && \Fiber::getCurrent()) {
+            $windowStartNs = \hrtime(true);
+            if (self::selectOnce($stream, $writable, \min($syncWindowSec, $timeoutSec))) {
+                return true;
+            }
+            $timeoutSec = \max(0.0, $timeoutSec - (\hrtime(true) - $windowStartNs) / 1_000_000_000);
+        }
         // Core I/O must not autoload request tracing outside an already traced request.
         if (!\class_exists(RequestLifecycleTrace::class, false) || !RequestLifecycleTrace::isEnabled()) {
             if (!self::$schedulerActive || !self::$ioWaitEnabled || !\Fiber::getCurrent()) {
@@ -480,6 +497,60 @@ class SchedulerSystem
      * WLS 下挂起当前 Fiber 并注册 0 延迟定时器，下一轮事件循环自动 resume；
      * FPM/CLI 下无操作（因为没有其他 Fiber 需要处理）。
      */
+    /**
+     * Worker loops report whether foreground requests are in flight. Background
+     * Fibers (warmup / keep-warm renders) then park at yield points instead of
+     * round-robining with requests, bounded by $maxParkMs per yield.
+     *
+     * @param null|callable(): bool $probe
+     */
+    public static function setForegroundBusyProbe(?callable $probe, int $maxParkMs = 500): void
+    {
+        self::$foregroundBusyProbe = $probe;
+        self::$backgroundMaxParkMs = \max(1, $maxParkMs);
+    }
+
+    public static function markCurrentFiberBackground(): void
+    {
+        $fiber = \Fiber::getCurrent();
+        if (!$fiber instanceof \Fiber) {
+            return;
+        }
+        self::$backgroundFibers ??= new \WeakMap();
+        self::$backgroundFibers[$fiber] = true;
+    }
+
+    public static function isCurrentFiberBackground(): bool
+    {
+        $fiber = \Fiber::getCurrent();
+
+        return $fiber instanceof \Fiber && isset(self::$backgroundFibers[$fiber]);
+    }
+
+    /** @return bool true when the Fiber already yielded while parked */
+    private static function parkBackgroundFiberWhileForegroundBusy(): bool
+    {
+        $probe = self::$foregroundBusyProbe;
+        if ($probe === null || !self::isCurrentFiberBackground()) {
+            return false;
+        }
+        $parked = false;
+        $deadlineNs = \hrtime(true) + self::$backgroundMaxParkMs * 1_000_000;
+        while (\hrtime(true) < $deadlineNs) {
+            try {
+                if (!$probe()) {
+                    break;
+                }
+            } catch (\Throwable) {
+                break;
+            }
+            self::yieldDelay(self::BACKGROUND_PARK_SLICE_MS);
+            $parked = true;
+        }
+
+        return $parked;
+    }
+
     public static function yield(): void
     {
         // A generator may temporarily return from a nested local Fiber pool to
@@ -492,12 +563,29 @@ class SchedulerSystem
         if (!self::$schedulerActive || !\Fiber::getCurrent()) {
             return;
         }
+        if (self::parkBackgroundFiberWhileForegroundBusy()) {
+            return;
+        }
         if (!self::prepareCurrentFiberForSuspend()) {
             return;
         }
 
+        if (!\class_exists(RequestLifecycleTrace::class, false) || !RequestLifecycleTrace::isEnabled()) {
+            self::dispatchWait('yield', []);
+            self::suspendCurrentFiber();
+            return;
+        }
+        $startNs = \hrtime(true);
         self::dispatchWait('yield', []);
         self::suspendCurrentFiber();
+        $durationMs = (\hrtime(true) - $startNs) / 1_000_000;
+        if ($durationMs >= 5.0) {
+            try {
+                RequestLifecycleTrace::recordSpan('runtime.yield.wait', $durationMs, 'runtime');
+            } catch (\Throwable) {
+                // Observability must not change yield semantics.
+            }
+        }
     }
 
     /**

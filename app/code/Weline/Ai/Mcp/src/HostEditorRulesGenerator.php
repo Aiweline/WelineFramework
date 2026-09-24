@@ -48,7 +48,7 @@ alwaysApply: true
 1. 确认 MCP `weline_project_intelligence` 可用；否则先跑 ensure。
 2. **本会话第一次动手前**必须调用 `prepare_project(repository=仓库绝对路径, client_session_id=稳定会话ID)`。
 3. **阅读并遵守**返回的 `agent_guidance.hard_constraints`，再开始宿主原生编辑。
-4. 读 `agent_guidance.host_codex_delegation`（`host_delegate_explore_plan_review_to_codex_cli`）：Cursor 且 Codex CLI 可用时，委派探索 / 三节详细计划 / 编码后审查给 Codex（默认最新模型，禁 `-m`）；**启动任何委派 `codex` 前必须对用户聊天明示「Codex 正在工作：{阶段}…」**，完成后写「Codex 已完成」，回退写「Codex 不可用，已回退宿主：{原因}」——禁止静默委派。Plan Mode 只承载 Codex 计划，不另写第二套笼统计划；Cursor 只按计划编码。Codex 原生宿主禁止嵌套再调 `codex`。CLI 不可用才回退宿主自身规划并记原因。内容运营与闲聊豁免。
+4. 读 `agent_guidance.host_codex_delegation`（`host_delegate_explore_plan_review_to_codex_cli`）：**默认不委派 Codex**——用户本回合未提及 Codex/codex/Codex CLI 时，宿主自行探索/计划/审查，禁止因 CLI 存在而自动跑 `codex`。仅当用户显式提及 Codex 且 CLI 可用时，才委派探索 / 三节详细计划 / 编码后审查给 Codex（默认最新模型，禁 `-m`）；**启动任何委派 `codex` 前必须对用户聊天明示「Codex 正在工作：{阶段}…」**，完成后写「Codex 已完成」，回退写「Codex 不可用，已回退宿主：{原因}」——禁止静默委派。Opt-in 时 Plan Mode 只承载 Codex 计划，不另写第二套笼统计划；Cursor 只按该计划编码。Codex 原生宿主禁止嵌套再调 `codex`。Opt-in 但 CLI 不可用则回退宿主自身规划并记原因。内容运营与闲聊豁免。
 5. **上下文丢失自愈**：本回合若已看不到 `hard_constraints` / MCP 引导被压缩或摘要丢掉，工程任务须**重新** `prepare_project`，不得凭记忆编造规则。
 6. 按需：`resolve_task_context` / `resolve_skill` / `get_skill`（检索仍可按需，**prepare 不可跳**）。
 7. MCP 挂不上：用宿主 Read 打开 `AI硬规则索引.md` 继续；不得编造规则，不得假装已遵守 MCP。

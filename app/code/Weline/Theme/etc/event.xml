@@ -179,6 +179,12 @@
                   disabled="false"
                   shared="true"
                   sort="250"/>
+        <!-- After Widget registry refresh (sort=50) and Theme static publish (≤250): drop stale bake disks -->
+        <observer name="Weline_Theme::setup_upgrade_purge_layout_entities"
+                  instance="Weline\Theme\Observer\SetupUpgradeAfterPurgeLayoutEntities"
+                  disabled="false"
+                  shared="true"
+                  sort="300"/>
     </event>
 
     <event name="Weline_Widget::widget_install_after">

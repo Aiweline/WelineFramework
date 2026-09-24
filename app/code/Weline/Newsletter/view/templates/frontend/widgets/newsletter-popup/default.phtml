@@ -26,6 +26,7 @@
  * @param cookie_days {default=14,type="number",label="Cookie 天数"}
  */
 
+use Weline\Framework\View\Data\DataInterface;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('newsletter-popup');
@@ -69,7 +70,10 @@ if ($trigger === '' || $trigger === 'auto') {
 
 $shellUrl = $image !== ''
     ? $image
-    : '/Weline/Newsletter/view/statics/images/newsletter-xinjian-gufeng.webp';
+    : (string)$this->fetchTagSource(
+        DataInterface::dir_type_STATICS,
+        'Weline_Newsletter::images/newsletter-xinjian-gufeng.webp'
+    );
 $headline = $description !== '' ? $description : $title;
 
 $isEditorPreview = $this->getData('_editor_preview')

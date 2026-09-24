@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Weline\Visitor\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * 生成前台访客像素引导 HTML（配置 + pixel.js 懒加载）。
@@ -22,10 +24,24 @@ use Weline\Framework\Manager\ObjectManager;
 class PixelBootstrapHtmlService
 {
     private const PIXEL_SCRIPT_VERSION = '20260923-list-select1';
+    /** Request-scoped: header widget already emitted bootstrap HTML this request. */
+    public const EMITTED_REQUEST_KEY = 'visitor.pixel_bootstrap_html.emitted.v1';
 
     public function __construct(
         private readonly VisitorTrackingConfig $trackingConfig
     ) {
+    }
+
+    public static function wasEmittedThisRequest(): bool
+    {
+        return Context::hasCurrent() && (bool)RequestContext::get(self::EMITTED_REQUEST_KEY);
+    }
+
+    public static function markEmittedThisRequest(): void
+    {
+        if (Context::hasCurrent()) {
+            RequestContext::set(self::EMITTED_REQUEST_KEY, true);
+        }
     }
 
     /**
@@ -62,7 +78,14 @@ class PixelBootstrapHtmlService
             return '';
         }
 
-        return $this->renderPixelBootstrap($config, $pixelName, $eager);
+        // Always emit when asked: early-return on wasEmitted caused empty chrome shells when
+        // a cached chrome peek marked the request before a live chrome.phtml include.
+        $html = $this->renderPixelBootstrap($config, $pixelName, $eager);
+        if ($html !== '') {
+            self::markEmittedThisRequest();
+        }
+
+        return $html;
     }
 
     /**

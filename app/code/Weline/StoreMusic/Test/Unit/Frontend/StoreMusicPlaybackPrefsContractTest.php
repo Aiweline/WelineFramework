@@ -60,6 +60,9 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('visibility hidden ≠ leave page', $js);
         self::assertStringContainsString('hardSilenceMedia', $js);
         self::assertStringContainsString("addEventListener('pagehide'", $js);
+        self::assertStringNotContainsString("addEventListener('unload'", $js);
+        self::assertStringContainsString("addEventListener('beforeunload'", $js);
+        self::assertStringContainsString("addEventListener('freeze'", $js);
         self::assertStringContainsString('canRefuseYield', $js);
         self::assertStringContainsString('silenceForOtherTab', $js);
         self::assertStringContainsString('force_stop', $js);

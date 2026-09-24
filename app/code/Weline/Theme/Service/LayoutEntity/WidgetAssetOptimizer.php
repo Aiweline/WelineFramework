@@ -9,6 +9,7 @@ final class WidgetAssetOptimizer
 
     public function transform(array $assets, array $options): array
     {
+        $this->publisher->prefetchSources($assets);
         $streams = [];
         foreach (array_values($assets) as $index => $asset) {
             $asset['_order'] = $index;

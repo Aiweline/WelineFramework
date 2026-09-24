@@ -19,6 +19,9 @@ use Weline\Server\Shared\Contract\PooledConnectionInterface;
  */
 class PooledConnection implements PooledConnectionInterface
 {
+    /** Local shared-state replies are ~0.05 ms (p99 ~0.1 ms); longer waits yield to the Worker. */
+    public const DEFAULT_SYNC_AWAIT_WINDOW_SEC = 0.002;
+
     private static function monotonicSeconds(): float
     {
         return \hrtime(true) / 1_000_000_000;
@@ -52,6 +55,7 @@ class PooledConnection implements PooledConnectionInterface
         ?string $serviceType = null,
         private readonly bool $logLifecycleDetails = true,
         private readonly ?string $tokenAuthorityInstance = null,
+        private readonly float $syncAwaitWindowSec = self::DEFAULT_SYNC_AWAIT_WINDOW_SEC,
     ) {
         $this->connectTimeout = \max(0.001, $connectTimeout);
         $this->timeout = \max(0.001, $timeout);
@@ -505,7 +509,7 @@ class PooledConnection implements PooledConnectionInterface
         if ($remaining <= 0) {
             return false;
         }
-        return SchedulerSystem::awaitWritable($this->socket, $remaining);
+        return SchedulerSystem::awaitWritable($this->socket, $remaining, $this->syncAwaitWindowSec);
     }
 
     private function awaitReadable(float $deadline): bool
@@ -517,7 +521,7 @@ class PooledConnection implements PooledConnectionInterface
         if ($remaining <= 0) {
             return false;
         }
-        return SchedulerSystem::awaitReadable($this->socket, $remaining);
+        return SchedulerSystem::awaitReadable($this->socket, $remaining, $this->syncAwaitWindowSec);
     }
 
     private function assertSocketConnected(): bool

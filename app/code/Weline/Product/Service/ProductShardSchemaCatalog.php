@@ -15,8 +15,8 @@ use Weline\Product\Model\ProductShardKey;
  */
 final class ProductShardSchemaCatalog
 {
-    /** Schema generation for overlay/cleared/COW, media CAS, brand/supplier images. */
-    public const SCHEMA_VERSION = '4.9.0';
+    /** Schema generation for overlay/cleared/COW, media CAS, brand/supplier images, attribute lookup indexes. */
+    public const SCHEMA_VERSION = '4.10.0';
 
     /** @var list<string> */
     public const ENTITIES = ProductShardKey::ENTITY_CODES;
@@ -272,6 +272,10 @@ final class ProductShardSchemaCatalog
                         ['store_id', 'entity_type', 'entity_id', 'attribute_code', 'locale'],
                         'UNIQUE',
                     ),
+                    // store_id is 0 for nearly every row, so the unique key cannot serve entity or reverse lookups.
+                    new IndexDefinition('idx_entity_attr', ['entity_type', 'entity_id', 'attribute_code']),
+                    // value_text stays out: unbounded text exceeds btree entry limits.
+                    new IndexDefinition('idx_attr_store', ['entity_type', 'attribute_code', 'store_id']),
                 ],
             ),
             'price' => new TableSchema(

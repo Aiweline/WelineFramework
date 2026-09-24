@@ -186,6 +186,50 @@ class NamespaceScopedCachePool implements NamespaceScopedCachePoolInterface
         return $values;
     }
 
+    /**
+     * Policy HotCache path uses getCustom; batch must use the same decoration.
+     *
+     * @param list<string>|array<int|string, string> $keys
+     * @return array<string, mixed>
+     */
+    public function getMultipleCustom(
+        array $keys,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false,
+    ): array {
+        if ($keys === []) {
+            return [];
+        }
+        if (!\method_exists($this->pool, 'getMultipleCustom')) {
+            $values = [];
+            foreach ($keys as $key) {
+                $logical = self::assertLogicalKey($key);
+                $values[$logical] = $this->getCustom($logical, $website, $lang, $currency);
+            }
+
+            return $values;
+        }
+        $scopedByLogical = [];
+        foreach ($keys as $key) {
+            $logical = self::assertLogicalKey($key);
+            $scopedByLogical[$logical] = $this->decorateKey($logical);
+        }
+        /** @var array<string, mixed> $scopedValues */
+        $scopedValues = $this->pool->getMultipleCustom(
+            array_values($scopedByLogical),
+            $website,
+            $lang,
+            $currency,
+        );
+        $values = [];
+        foreach ($scopedByLogical as $logical => $scoped) {
+            $values[$logical] = $scopedValues[$scoped] ?? null;
+        }
+
+        return $values;
+    }
+
     public function setMultiple(array $values, int $ttl = 0): bool
     {
         if ($values === []) {

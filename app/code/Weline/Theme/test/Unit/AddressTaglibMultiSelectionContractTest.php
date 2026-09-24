@@ -137,7 +137,10 @@ final class AddressTaglibMultiSelectionContractTest extends TestCore
         // Lookup may match outward prefix; never chop user-typed full postal in the input.
         self::assertStringContainsString('Never replace user input with catalog postal', $js);
         self::assertStringContainsString('group.pendingPostalCode = postal', $js);
-        self::assertStringContainsString('20260921-keep-postal2', (string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/js/address-loader.js'));
+        $loader = (string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/js/address-loader.js');
+        self::assertStringContainsString('Weline_Theme::js/address.js', $loader);
+        self::assertStringContainsString('resolveStaticPath', $loader);
+        self::assertStringNotContainsString('/Weline/Theme/view/statics/', $loader);
         $doc = html_entity_decode(\Weline\Theme\Taglib\Address::document(), ENT_QUOTES, 'UTF-8');
         self::assertStringContainsString('postal-lookup', $doc);
     }

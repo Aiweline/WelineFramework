@@ -35,6 +35,7 @@ use Weline\Server\Service\MasterLeaseManager;
 use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateRenewalIntentStore;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
+use Weline\Server\Service\Edge\Gateway\CertificateRetirementReplayBackoff;
 use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
 use Weline\Server\Service\MasterChildCredentialStore;
 use Weline\Server\Service\ServerInstanceManager;
@@ -268,6 +269,7 @@ final class Agent extends CommandAbstract
         $lastDesiredStateLaunchFailureLogAt = 0.0;
         $lastCertificateReplayAt = 0.0;
         $lastCertificateRetirementProbeAt = 0.0;
+        $retirementReplayBackoff = new CertificateRetirementReplayBackoff();
         $status = [];
         $lastAuthenticatedStatus = [];
         $routePublication = self::emptyRoutePublicationObservation();
@@ -336,6 +338,16 @@ final class Agent extends CommandAbstract
                     $now,
                 );
                 if (\is_array($desiredStateResult)) {
+                    if ((string)($desiredStateResult['action'] ?? '') === 'retirements') {
+                        $retirementPayload = \is_array($desiredStateResult['retirements'] ?? null)
+                            ? $desiredStateResult['retirements']
+                            : [];
+                        $retirementReplayBackoff->noteResult(
+                            (int)($retirementPayload['completed'] ?? 0),
+                            (bool)($retirementPayload['deferred'] ?? false),
+                            ($desiredStateResult['ok'] ?? false) === true,
+                        );
+                    }
                     $registration = \is_array($desiredStateResult['registration'] ?? null)
                         ? $desiredStateResult['registration']
                         : null;
@@ -544,7 +556,7 @@ final class Agent extends CommandAbstract
                     }
                     if ($lastCertificateRetirementProbeAt <= 0.0
                         || $now - $lastCertificateRetirementProbeAt
-                            >= self::HEARTBEAT_SECONDS
+                            >= $retirementReplayBackoff->intervalSeconds()
                     ) {
                         $lastCertificateRetirementProbeAt = $now;
                         try {
@@ -1134,9 +1146,7 @@ final class Agent extends CommandAbstract
                 ) {
                     $desiredStateAction = '';
                     if ($certificateRetirementReplay !== []
-                        && ($lastCertificateReplayAt <= 0.0
-                            || $now - $lastCertificateReplayAt
-                                >= self::HEARTBEAT_SECONDS)
+                        && $retirementReplayBackoff->isDue($now, $lastCertificateReplayAt)
                     ) {
                         // Retirement can use the Controller-independent Native
                         // guardian and therefore must not wait for ordinary
@@ -1249,6 +1259,7 @@ final class Agent extends CommandAbstract
         $lastReplayProbeAt = 0.0;
         $lastLaunchFailureLogAt = 0.0;
         $retirementStore = new ProjectCertificateGenerationStore();
+        $retirementReplayBackoff = new CertificateRetirementReplayBackoff();
         try {
             while (!$shutdown) {
                 $now = $this->monotonicNow();
@@ -1263,19 +1274,28 @@ final class Agent extends CommandAbstract
                     break;
                 }
                 $result = $this->pollDesiredStateJob($desiredStateJob, $now);
-                if (\is_array($result) && ($result['ok'] ?? false) !== true) {
-                    WlsLogger::warning_(
-                        '[WlsCertificateRetirementAgent] replay remains pending: '
-                            . GatewayBoundedText::singleLine(
-                                (string)($result['error']['message'] ?? 'worker failed'),
-                                1024,
-                                'certificate retirement worker failed',
-                            )
+                if (\is_array($result)) {
+                    $retirementPayload = \is_array($result['retirements'] ?? null)
+                        ? $result['retirements']
+                        : [];
+                    $retirementReplayBackoff->noteResult(
+                        (int)($retirementPayload['completed'] ?? 0),
+                        (bool)($retirementPayload['deferred'] ?? false),
+                        ($result['ok'] ?? false) === true,
                     );
+                    if (($result['ok'] ?? false) !== true) {
+                        WlsLogger::warning_(
+                            '[WlsCertificateRetirementAgent] replay remains pending: '
+                                . GatewayBoundedText::singleLine(
+                                    (string)($result['error']['message'] ?? 'worker failed'),
+                                    1024,
+                                    'certificate retirement worker failed',
+                                )
+                        );
+                    }
                 }
                 if ($desiredStateJob === null
-                    && ($lastReplayProbeAt <= 0.0
-                        || $now - $lastReplayProbeAt >= self::HEARTBEAT_SECONDS)
+                    && $retirementReplayBackoff->isDue($now, $lastReplayProbeAt)
                 ) {
                     $lastReplayProbeAt = $now;
                     try {
@@ -1401,6 +1421,11 @@ final class Agent extends CommandAbstract
                         8,
                         $mutationDeadline,
                     );
+                $result['retirements'] = [
+                    'attempted' => (int)($retirements['attempted'] ?? 0),
+                    'completed' => (int)($retirements['completed'] ?? 0),
+                    'deferred' => (bool)($retirements['deferred'] ?? false),
+                ];
                 $result['mutation_action'] = (int)$retirements['completed'] > 0
                     ? 'retirements'
                     : 'none';

@@ -838,15 +838,19 @@ try {
     );
     check(
         str_contains(HardConstraintsCatalog::mcpInstructions(), 'host_codex_delegation')
+            && str_contains(HardConstraintsCatalog::mcpInstructions(), 'OPT-IN')
             && str_contains(HardConstraintsCatalog::mcpInstructions(), 'nested codex'),
-        'mcp instructions mention host Codex CLI delegation and native recursion guard',
+        'mcp instructions mention host Codex CLI delegation opt-in and native recursion guard',
     );
     $hostDelegation = HardConstraintsCatalog::hostCodexDelegation();
     check(
         ($hostDelegation['policy_id'] ?? '') === 'host_delegate_explore_plan_review_to_codex_cli'
+            && ($hostDelegation['enabled_when'] ?? '') === 'user_explicitly_mentions_codex_and_codex_cli_available_and_host_is_not_codex'
+            && ($hostDelegation['opt_in']['required'] ?? false) === true
+            && ($hostDelegation['opt_in']['forbid_auto_delegate_on_cli_presence_alone'] ?? false) === true
             && ($hostDelegation['independent_of_nested_planner'] ?? false) === true
             && is_array(HardConstraintsCatalog::package()['host_codex_delegation'] ?? null),
-        'package exposes host_codex_delegation structured policy',
+        'package exposes host_codex_delegation structured policy with user opt-in gate',
     );
     check(
         ($hostDelegation['user_visible_status']['required'] ?? false) === true

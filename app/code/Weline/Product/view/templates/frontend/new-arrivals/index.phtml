@@ -51,7 +51,8 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
             <?php endif; ?>
         </div>
         <p class="new-arrivals-page__lede">
-            <?= $escape(__('甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。')) ?>
+            <?php $lede = trim((string)($this->getData('storefront_new_arrivals_lede') ?? '')); ?>
+            <?= $escape($lede !== '' ? $lede : __('甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。')) ?>
         </p>
         <p class="new-arrivals-page__count" data-testid="storefront-new-arrivals-count">
             <?= $escape(__('共 %{1} 件新品', [$count])) ?>
@@ -59,7 +60,7 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
     </header>
 
     <?php if ($items !== []): ?>
-        <div class="new-arrivals-page__grid" role="list" aria-label="<?= $escape(__('新品汉服')) ?>">
+        <div class="new-arrivals-page__grid" role="list" aria-label="<?= $escape($pageTitle) ?>">
             <?php foreach ($items as $index => $item): ?>
                 <?php
                 if (!is_array($item)) {
