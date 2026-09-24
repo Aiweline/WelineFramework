@@ -528,10 +528,68 @@ class StoreMusicSettings
             $value = substr($value, strlen('pub/media/'));
         }
         if (str_starts_with($value, 'media/')) {
-            return '/' . $value;
+            return self::preferExistingMediaUrl('/' . $value);
         }
 
-        return '/media/' . ltrim($value, '/');
+        return self::preferExistingMediaUrl('/media/' . ltrim($value, '/'));
+    }
+
+    /**
+     * Prefer an on-disk media path when the configured URL extension is missing
+     * (e.g. playlist .m4a while only .mp3 was uploaded).
+     */
+    public static function preferExistingMediaUrl(string $publicUrl): string
+    {
+        $publicUrl = trim($publicUrl);
+        if ($publicUrl === '' || preg_match('~^https?://~i', $publicUrl) === 1) {
+            return $publicUrl;
+        }
+        if (!str_starts_with($publicUrl, '/media/')) {
+            return $publicUrl;
+        }
+        $relative = ltrim(substr($publicUrl, strlen('/media/')), '/');
+        if ($relative === '' || !defined('BP')) {
+            return $publicUrl;
+        }
+        $mediaRoot = rtrim((string) BP, '/\\') . '/pub/media';
+        $primary = $mediaRoot . '/' . $relative;
+        if (is_file($primary) && filesize($primary) > 1024) {
+            return $publicUrl;
+        }
+        $pathInfo = pathinfo($relative);
+        $dir = isset($pathInfo['dirname']) && $pathInfo['dirname'] !== '.' ? $pathInfo['dirname'] . '/' : '';
+        $stem = (string) ($pathInfo['filename'] ?? '');
+        if ($stem === '') {
+            return $publicUrl;
+        }
+        $currentExt = strtolower((string) ($pathInfo['extension'] ?? ''));
+        $candidates = ['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac'];
+        foreach ($candidates as $ext) {
+            if ($ext === $currentExt) {
+                continue;
+            }
+            $candidateRel = $dir . $stem . '.' . $ext;
+            $candidateAbs = $mediaRoot . '/' . $candidateRel;
+            if (is_file($candidateAbs) && filesize($candidateAbs) > 1024) {
+                return '/media/' . $candidateRel;
+            }
+        }
+        // Fall back to any existing sibling file even if tiny (stops hard 404).
+        if (is_file($primary)) {
+            return $publicUrl;
+        }
+        foreach ($candidates as $ext) {
+            if ($ext === $currentExt) {
+                continue;
+            }
+            $candidateRel = $dir . $stem . '.' . $ext;
+            $candidateAbs = $mediaRoot . '/' . $candidateRel;
+            if (is_file($candidateAbs)) {
+                return '/media/' . $candidateRel;
+            }
+        }
+
+        return $publicUrl;
     }
 
     public static function titleFromUrl(string $url): string

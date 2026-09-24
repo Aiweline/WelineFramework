@@ -66,10 +66,14 @@ final class PaymentMethodIconResolver
                 return '';
             }
 
-            return '/' . str_replace('_', '/', $module) . '/view/statics/' . $relative;
+            return $this->resolveModuleStaticUrl($module, $relative);
         }
 
         if (str_starts_with($value, '/')) {
+            if (preg_match('#^/([^/]+)/([^/]+)/view/statics/(.+)$#', $value, $m) === 1) {
+                return $this->resolveModuleStaticUrl($m[1] . '_' . $m[2], $m[3]);
+            }
+
             return $value;
         }
 
@@ -94,6 +98,27 @@ final class PaymentMethodIconResolver
         }
 
         return '/pub/media/' . $relative;
+    }
+
+    private function resolveModuleStaticUrl(string $module, string $relative): string
+    {
+        $modulePath = $module . '::' . ltrim($relative, '/');
+        try {
+            /** @var \Weline\Framework\View\Template $template */
+            $template = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\View\Template::class);
+            $url = trim((string) $template->fetchTagSource(
+                \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
+                $modulePath
+            ));
+            if ($url !== '') {
+                return $url;
+            }
+        } catch (\Throwable) {
+            // Soft: fall through to flat PROD-safe URL.
+        }
+
+        // Never emit DEV-shaped /Vendor/Module/view/statics/ (PROD 404).
+        return '/static/' . str_replace('_', '/', $module) . '/' . ltrim($relative, '/');
     }
 
     /**

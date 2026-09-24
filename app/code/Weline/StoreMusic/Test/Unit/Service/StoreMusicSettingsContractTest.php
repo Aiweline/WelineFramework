@@ -133,6 +133,13 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertSame('/media/store-music/b.mp3', $parsed[1]['url']);
         self::assertSame('b', $parsed[1]['title']);
         self::assertSame([], $parsed[1]['intro']);
+        self::assertSame(
+            '/media/missing.m4a',
+            StoreMusicSettings::preferExistingMediaUrl('/media/missing.m4a')
+        );
+        self::assertStringContainsString('preferExistingMediaUrl', (string) file_get_contents(
+            dirname(__DIR__, 3) . '/Service/StoreMusicSettings.php'
+        ));
     }
 
     public function testIntroLocaleMapNormalizeAndResolve(): void
