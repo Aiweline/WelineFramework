@@ -165,7 +165,7 @@ class Stop extends CommandAbstract
         }
 
         $instanceName = $instanceNames[0];
-        if (!$this->acquireStopLock($instanceName)) {
+        if (!$this->acquireStopLock($instanceName, self::STOP_LOCK_TIMEOUT, $force)) {
             $this->printer->warning(__('该实例的启动、停止、重载或清理任务正在处理中，请稍后再试。'));
             $this->printer->note(__('若锁文件长期存在，请确认停止任务是否已结束后再重试。'));
             return;
@@ -328,23 +328,43 @@ class Stop extends CommandAbstract
         return \trim((string) $prefix);
     }
 
-    protected function acquireStopLock(string $instanceName, int $timeout = self::STOP_LOCK_TIMEOUT): bool
-    {
+    protected function acquireStopLock(
+        string $instanceName,
+        int $timeout = self::STOP_LOCK_TIMEOUT,
+        bool $force = false,
+    ): bool {
         if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceName) !== 1) {
             return false;
         }
         if ($this->lifecycleOperationLock !== null) {
             return false;
         }
+        if ($this->tryAcquireStopLockHandles($instanceName, (float)$timeout)) {
+            return true;
+        }
+        if (!$force) {
+            return false;
+        }
+        // -f：先中止占用 lifecycle flock 的同实例后台任务（如卡死的
+        // certificate_retirement_replay gateway agent），再重试取锁。
+        if (!$this->preemptSameInstanceLifecycleLockHolder($instanceName)) {
+            return false;
+        }
+
+        return $this->tryAcquireStopLockHandles($instanceName, \min(3.0, (float)$timeout));
+    }
+
+    private function tryAcquireStopLockHandles(string $instanceName, float $timeout): bool
+    {
         $lifecycleLock = new ServerLifecycleOperationLock();
-        if (!$lifecycleLock->acquire($instanceName, 'stop', (float)$timeout)) {
+        if (!$lifecycleLock->acquire($instanceName, 'stop', $timeout)) {
             return false;
         }
         $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
         $this->stopLockFile = $lockDir . 'stop_' . $instanceName . '.lock';
         $handle = VerifiedPersistentFileLock::acquire(
             $this->stopLockFile,
-            (float)$timeout,
+            $timeout,
             static fn(): array => [
                 'pid' => \getmypid(),
                 'instance' => $instanceName,
@@ -367,6 +387,101 @@ class Stop extends CommandAbstract
         $this->stopLockHandle = $handle;
 
         return true;
+    }
+
+    /**
+     * Under stop -f, terminate a same-instance background holder of the
+     * lifecycle flock so the stop transaction can enter. Never preempts
+     * another operator start/stop/reload/force-clean/stale-cleanup.
+     */
+    private function preemptSameInstanceLifecycleLockHolder(string $instanceName): bool
+    {
+        $path = ServerLifecycleOperationLock::pathForInstance($instanceName);
+        if (VerifiedPersistentFileLock::isHeld($path) !== true) {
+            return true;
+        }
+        $payload = $this->readLifecycleLockPayload($path);
+        if ($payload === null) {
+            return false;
+        }
+        if ((string)($payload['instance'] ?? '') !== $instanceName) {
+            return false;
+        }
+        $purpose = \strtolower(\trim((string)($payload['purpose'] ?? '')));
+        if ($purpose === ''
+            || \in_array($purpose, [
+                'start',
+                'stop',
+                'reload',
+                'force-clean',
+                'stale-cleanup',
+            ], true)
+        ) {
+            return false;
+        }
+        $pid = (int)($payload['pid'] ?? 0);
+        if ($pid <= 0 || $pid === (int)\getmypid()) {
+            return false;
+        }
+        $cmdLine = '';
+        try {
+            $cmdLine = Processer::getProcessCommandLine($pid, true);
+        } catch (\Throwable) {
+            $cmdLine = '';
+        }
+        if ($cmdLine === ''
+            || (!\str_contains($cmdLine, '--instance-name=' . $instanceName)
+                && !\str_contains($cmdLine, '--bootstrap-instance=' . $instanceName))
+        ) {
+            return false;
+        }
+        if (!\str_contains($cmdLine, 'server:gateway:agent')
+            && !\str_contains($cmdLine, 'bin/w ')
+            && !\str_contains($cmdLine, 'bin/w')
+        ) {
+            return false;
+        }
+
+        $this->printer->warning(__(
+            '强制停止：中止占用生命周期锁的同实例后台任务（purpose=%{1}, pid=%{2}）。',
+            [$purpose, $pid],
+        ));
+        Processer::killProcessTreeByPid($pid, true);
+
+        $deadline = \microtime(true) + 3.0;
+        do {
+            $held = VerifiedPersistentFileLock::isHeld($path);
+            if ($held === false) {
+                return true;
+            }
+            if ($held === null) {
+                break;
+            }
+            SchedulerSystem::usleep(50_000);
+        } while (\microtime(true) < $deadline);
+
+        return VerifiedPersistentFileLock::isHeld($path) === false;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function readLifecycleLockPayload(string $path): ?array
+    {
+        if ($path === '' || \str_contains($path, "\0") || !\is_file($path) || \is_link($path)) {
+            return null;
+        }
+        $raw = @\file_get_contents($path);
+        if (!\is_string($raw) || $raw === '' || \strlen($raw) > 16_384) {
+            return null;
+        }
+        try {
+            $decoded = \json_decode($raw, true, 32, \JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return \is_array($decoded) ? $decoded : null;
     }
 
     protected function releaseStopLock(): void
@@ -3890,7 +4005,7 @@ class Stop extends CommandAbstract
             echo "\n";
             foreach ($instances as $name) {
                 $this->printer->note(__('正在停止实例 [%{1}]...', [$name]));
-                if (!$this->acquireStopLock($name)) {
+                if (!$this->acquireStopLock($name, self::STOP_LOCK_TIMEOUT, $force)) {
                     $this->printer->warning(__('实例 [%{1}] 正在被其他生命周期任务处理，已跳过。', [$name]));
                     continue;
                 }
@@ -3929,7 +4044,7 @@ class Stop extends CommandAbstract
         $totalInstances = \count($instanceNames);
         foreach ($instanceNames as $index => $name) {
             $this->printer->note(__('进度 [%{1}/%{2}] 正在停止实例 [%{3}]...', [$index + 1, $totalInstances, $name]));
-            if (!$this->acquireStopLock($name)) {
+            if (!$this->acquireStopLock($name, self::STOP_LOCK_TIMEOUT, $force)) {
                 $this->printer->warning(__('实例 [%{1}] 正在被其他生命周期任务处理，已跳过。', [$name]));
                 continue;
             }
@@ -3968,7 +4083,7 @@ class Stop extends CommandAbstract
         $totalInstances = \count($instances);
         foreach ($instances as $index => $name) {
             $this->printer->note(__('进度 [%{1}/%{2}] 正在停止实例 [%{3}]...', [$index + 1, $totalInstances, $name]));
-            if (!$this->acquireStopLock($name)) {
+            if (!$this->acquireStopLock($name, self::STOP_LOCK_TIMEOUT, $force)) {
                 $this->printer->warning(__('实例 [%{1}] 正在被其他生命周期任务处理，已跳过。', [$name]));
                 continue;
             }
