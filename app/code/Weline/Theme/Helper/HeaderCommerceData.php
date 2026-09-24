@@ -13,15 +13,41 @@ use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 
 /**
  * 页头商务数据：优先 Query 真实数据；仅在无数据/不可用时回落主题演示默认值。
+ * Demo 热搜按当前 website code 分流，禁止 DaoCharms 等非汉服站回落马面裙/明制汉服。
  */
 final class HeaderCommerceData
 {
     /**
      * @return list<string>
      */
-    public static function defaultHotWords(): array
+    public static function defaultHotWords(?string $websiteCode = null): array
     {
-        return ['马面裙', '明制汉服', '宋制汉服', '齐胸襦裙', '汉服配饰'];
+        $code = \strtolower(\trim($websiteCode ?? self::resolveWebsiteCode()));
+        if ($code === 'daocharms') {
+            return self::daocharmsDefaultHotWords();
+        }
+
+        return self::hanfuDefaultHotWords();
+    }
+
+    /**
+     * Default-website / Hanfu storefront demo keywords (Chinese sources).
+     *
+     * @return list<string>
+     */
+    public static function hanfuDefaultHotWords(): array
+    {
+        return ['马面裙', '明制汉服', '宋制汉服', '齐胸襦裙', '披帛'];
+    }
+
+    /**
+     * DaoCharms ritual-pendant storefront demo keywords (Chinese sources).
+     *
+     * @return list<string>
+     */
+    public static function daocharmsDefaultHotWords(): array
+    {
+        return ['黑曜石', '阴阳', '八卦', '平安扣', '玉石'];
     }
 
     /**
@@ -42,7 +68,100 @@ final class HeaderCommerceData
             : AllMenuTreeRegistry::allProductsEnabled();
         $label = trim((string)($options['all_products_label'] ?? AllMenuTreeRegistry::allProductsLabel()));
         $url = trim((string)($options['all_products_url'] ?? AllMenuTreeRegistry::allProductsUrl()));
+        $label = $label !== '' ? $label : '全部商品';
+        $url = $url !== '' && $url !== '#' ? $url : '/products';
 
+        // Request memo only. Nav items carry absolute URLs from
+        // StorefrontAllMenuCategoryTreeService::materializeUrls(); a shared
+        // HotCache bag keyed without origin would leak warmup Host
+        // (e.g. 127.0.0.1:9510) into public Nginx responses. The category
+        // tree service already shares origin-free relative routes.
+        $requestKey = ($include ? 'all1' : 'all0')
+            . '|' . $label
+            . '|' . $url
+            . '|' . self::requestOriginSegment();
+
+        $resolved = self::rememberRequestMemo(
+            'theme.header.category_nav',
+            $requestKey,
+            static fn(): array => self::resolveCategoryNavItemsUncached($include, $label, $url),
+        );
+
+        return \is_array($resolved) ? $resolved : [
+            'items' => self::maybePrependAllProductsItem([], $include, $label, $url),
+            'source' => 'error',
+            'is_demo' => false,
+        ];
+    }
+
+    /**
+     * Browser-visible origin for request-local memos that embed absolute hrefs.
+     * Prefer website_url host; fall back to HTTP_HOST + scheme.
+     */
+    private static function requestOriginSegment(): string
+    {
+        $websiteUrl = '';
+        try {
+            $websiteUrl = \trim((string)\Weline\Framework\Env\WelineEnv::get('website_url', ''));
+        } catch (\Throwable) {
+            $websiteUrl = '';
+        }
+        if ($websiteUrl === '') {
+            try {
+                $websiteUrl = \trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_URL', ''));
+            } catch (\Throwable) {
+                $websiteUrl = '';
+            }
+        }
+        if ($websiteUrl !== '' && \str_contains($websiteUrl, '://')) {
+            $parts = \parse_url($websiteUrl);
+            if (\is_array($parts)) {
+                $scheme = \strtolower(\trim((string)($parts['scheme'] ?? '')));
+                $host = \strtolower(\trim((string)($parts['host'] ?? '')));
+                $port = isset($parts['port']) ? (int)$parts['port'] : 0;
+                if ($scheme !== '' && $host !== '') {
+                    $default = ($scheme === 'https') ? 443 : 80;
+                    $authority = $host . ($port > 0 && $port !== $default ? ':' . $port : '');
+
+                    return $scheme . ':' . $authority;
+                }
+            }
+        }
+
+        $scheme = 'http';
+        try {
+            $scheme = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::get('request.scheme', 'http'))) ?: 'http';
+        } catch (\Throwable) {
+            $scheme = 'http';
+        }
+        $host = '';
+        try {
+            $host = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::get('server.http_host', '')));
+        } catch (\Throwable) {
+            $host = '';
+        }
+        if ($host === '') {
+            $host = \strtolower(\trim((string)(
+                \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '')
+                ?: ($_SERVER['HTTP_HOST'] ?? '')
+            )));
+        }
+
+        return ($scheme !== '' ? $scheme : 'http') . ':' . ($host !== '' ? $host : 'unknown');
+    }
+
+    /**
+     * @return array{
+     *   items:list<array<string,mixed>>,
+     *   source:string,
+     *   is_demo:bool
+     * }
+     */
+    private static function resolveCategoryNavItemsUncached(
+        bool $include,
+        string $label,
+        string $url,
+    ): array {
         try {
             if (!\class_exists(\Weline\Product\Service\StorefrontAllMenuCategoryTreeService::class)) {
                 return [
@@ -85,6 +204,47 @@ final class HeaderCommerceData
                 'is_demo' => false,
             ];
         }
+    }
+
+    /**
+     * Storefront category names already resolved from category locale rows.
+     * Callers must not run these labels through WidgetI18n / __().
+     *
+     * @return array<string, string> path code (women, sets, …) => display name
+     */
+    public static function categoryDisplayNamesByCode(): array
+    {
+        $names = [];
+        $walk = static function (array $items) use (&$walk, &$names): void {
+            foreach ($items as $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                $url = (string)($item['url'] ?? '');
+                $path = \parse_url($url, \PHP_URL_PATH);
+                $path = \is_string($path) && $path !== '' ? $path : $url;
+                // Use ~ delimiter: # inside [^/?#] would end a #-delimited pattern early
+                // and yield "Unknown modifier ']'".
+                if (\preg_match('~(?:^|/)category/([^/?#]+)/?$~', $path, $matches) === 1) {
+                    $code = \rawurldecode((string)$matches[1]);
+                    $text = \trim((string)($item['text'] ?? $item['name'] ?? ''));
+                    if ($code !== '' && $text !== '') {
+                        $names[$code] = $text;
+                    }
+                }
+                $children = $item['children'] ?? [];
+                if (\is_array($children) && $children !== []) {
+                    $walk($children);
+                }
+            }
+        };
+        $resolved = self::resolveCategoryNavItems(['include_all_products' => false]);
+        $items = $resolved['items'] ?? [];
+        if (\is_array($items)) {
+            $walk($items);
+        }
+
+        return $names;
     }
 
     /**
@@ -155,6 +315,23 @@ final class HeaderCommerceData
         }
 
         return 0;
+    }
+
+    private static function resolveWebsiteCode(): string
+    {
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+                $code = \strtolower(\trim(
+                    (string)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteCode()
+                ));
+                if ($code !== '') {
+                    return $code;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return 'default';
     }
 
     /**
@@ -245,13 +422,18 @@ final class HeaderCommerceData
                         return self::demoCartSummary();
                     }
 
+                    // WO-BUILD-HOME-ZERO：空车禁预格式化 $0.00 / ¥0.00（真小计由 JS 水合）
+                    $formatted = $isEmpty
+                        ? ''
+                        : self::formatMoney($subtotal, $currency);
+
                     return [
                         'available' => true,
                         'is_demo' => false,
                         'is_empty' => $isEmpty,
                         'cart_count' => $count,
-                        'subtotal' => $subtotal,
-                        'subtotal_formatted' => self::formatMoney($subtotal, $currency),
+                        'subtotal' => $isEmpty ? 0.0 : $subtotal,
+                        'subtotal_formatted' => $formatted,
                         'currency' => $currency,
                         'items' => $items,
                     ];
@@ -271,7 +453,8 @@ final class HeaderCommerceData
             'is_empty' => true,
             'cart_count' => 0,
             'subtotal' => 0.0,
-            'subtotal_formatted' => self::formatMoney(0, 'CNY'),
+            // WO-BUILD-HOME-ZERO：空车共享摘要不得带 $0.00 价签噪声
+            'subtotal_formatted' => '',
             'currency' => 'CNY',
             'items' => [],
         ];
@@ -343,6 +526,10 @@ final class HeaderCommerceData
 
     public static function formatMoney(float $amount, string $currency = 'CNY'): string
     {
+        if (class_exists(\Weline\Currency\Helper\CurrencySymbol::class)) {
+            return \Weline\Currency\Helper\CurrencySymbol::formatAmount($amount, $currency);
+        }
+
         $currency = strtoupper(trim($currency));
         $symbol = match ($currency) {
             'USD' => '$',
@@ -402,7 +589,10 @@ final class HeaderCommerceData
                     // The header is a storefront surface. Restrict provider
                     // discovery to frontend types so backend-only providers do
                     // not build their scopes during every cold page render.
-                    $types = $registry->listTypes(area: 'frontend');
+                    // Keep withScopes=true: type-dropdown flies out category
+                    // children (禁拆壳). Scope projection must reuse catalog
+                    // tree read model (ProductSearchCategoryScopeService).
+                    $types = $registry->listTypes(true, 'frontend');
                     if ($types !== []) {
                         return $types;
                     }
@@ -419,7 +609,8 @@ final class HeaderCommerceData
                 ];
             },
             StorefrontThemeCacheCoordinator::headerSearchTypesPolicy(),
-            'theme.header.search_types.v1',
+            // v2: scoped frontend types (category children) restored after flat v1.
+            'theme.header.search_types.v2',
         );
     }
 

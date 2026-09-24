@@ -17,9 +17,14 @@ final class HeaderCommerceDataTest extends TestCase
     }
     public function testDefaultHotWordsAreNonEmpty(): void
     {
-        $words = HeaderCommerceData::defaultHotWords();
+        $words = HeaderCommerceData::defaultHotWords('default');
         self::assertNotEmpty($words);
-        self::assertContains('iPhone', $words);
+        self::assertContains('马面裙', $words);
+
+        $dao = HeaderCommerceData::defaultHotWords('daocharms');
+        self::assertNotEmpty($dao);
+        self::assertContains('黑曜石', $dao);
+        self::assertNotContains('马面裙', $dao);
     }
 
     public function testRepeatedHeaderQueriesUseRequestMemo(): void
@@ -32,8 +37,12 @@ final class HeaderCommerceDataTest extends TestCase
         self::assertStringContainsString("theme.header.hot_words", $source);
         self::assertStringContainsString("theme.header.search_types", $source);
         self::assertStringContainsString('headerSearchTypesPolicy', $source);
-        self::assertStringContainsString('theme.header.search_types.v1', $source);
-        self::assertStringContainsString("listTypes(area: 'frontend')", $source);
+        self::assertStringContainsString('theme.header.search_types.v2', $source);
+        self::assertStringContainsString('theme.header.category_nav', $source);
+        self::assertStringContainsString('requestOriginSegment', $source);
+        // Absolute nav URLs must stay request-local — never share without origin.
+        self::assertStringNotContainsString('theme.header.category_nav.v1.', $source);
+        self::assertStringContainsString("listTypes(true, 'frontend')", $source);
         self::assertStringContainsString('RequestLifecycleTrace::measurePhase', $source);
     }
 
@@ -41,6 +50,8 @@ final class HeaderCommerceDataTest extends TestCase
     {
         self::assertSame('¥12.50', HeaderCommerceData::formatMoney(12.5, 'CNY'));
         self::assertSame('$12.50', HeaderCommerceData::formatMoney(12.5, 'USD'));
+        self::assertSame('£12.50', HeaderCommerceData::formatMoney(12.5, 'GBP'));
+        self::assertStringNotContainsString('USD', HeaderCommerceData::formatMoney(12.5, 'USD'));
     }
 
     public function testDemoCartSummaryProvidesObservableChrome(): void
@@ -50,6 +61,20 @@ final class HeaderCommerceDataTest extends TestCase
         self::assertFalse($demo['is_empty']);
         self::assertGreaterThan(0, $demo['cart_count']);
         self::assertNotSame('', $demo['subtotal_formatted']);
+    }
+
+    public function testEmptyLiveCartSummaryOmitsZeroPriceNoise(): void
+    {
+        // WO-BUILD-HOME-ZERO：空车摘要不得预格式化 $0.00 / ¥0.00
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 2) . '/Helper/HeaderCommerceData.php'
+        );
+        self::assertStringContainsString("'subtotal_formatted' => ''", $source);
+        self::assertStringNotContainsString(
+            "self::formatMoney(0, 'CNY')",
+            $source,
+            'Empty cart must not formatMoney(0) into $0.00/¥0.00 noise'
+        );
     }
 
     public function testResolveCategoryNavItemsContractShape(): void
@@ -114,8 +139,9 @@ final class HeaderCommerceDataTest extends TestCase
         self::assertStringContainsString('AllMenuTreeRegistry::hasPublished()', $src);
         // Live path must not force demo factory when catalog is available.
         self::assertMatchesRegularExpression(
-            '/empty\(\$navItems\).*resolveCategoryNavItems/s',
+            '/\$sidebarSource === \[\][\s\S]*resolveCategoryNavItems/s',
             $src
         );
+        self::assertStringNotContainsString('static $defaultNavItems', $src);
     }
 }

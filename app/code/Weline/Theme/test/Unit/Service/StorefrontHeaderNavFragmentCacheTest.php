@@ -37,8 +37,8 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
             ],
         ]);
 
-        self::assertStringContainsString('theme.header.mega_panel.v4.zh_Hans_CN.top.', $top);
-        self::assertStringContainsString('theme.header.mega_panel.v4.zh_Hans_CN.drawer.', $drawer);
+        self::assertStringContainsString('theme.header.mega_panel.v8.zh_Hans_CN.', $top);
+        self::assertStringContainsString('theme.header.mega_panel.v8.zh_Hans_CN.', $drawer);
         self::assertStringContainsString('.banner1.', $top);
         self::assertStringContainsString('.banner0.', $bannerOff);
         self::assertNotSame($top, $drawer);
@@ -57,8 +57,50 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
             ['text' => 'B', 'url' => '/b', 'children' => []],
         ]);
 
-        self::assertStringStartsWith('theme.header.sidebar_nav.', $first);
+        self::assertStringStartsWith('theme.header.sidebar_nav.v8.', $first);
         self::assertNotSame($first, $second);
+    }
+
+    public function testHorizontalNavLogicalKeyVariesByBannerAndList(): void
+    {
+        $service = $this->service();
+        $items = [
+            ['text' => 'A', 'url' => '/a', 'children' => [['text' => 'A1', 'url' => '/a1']]],
+        ];
+
+        $bannerOn = $service->horizontalNavLogicalKey($items, true);
+        $bannerOff = $service->horizontalNavLogicalKey($items, false);
+        $other = $service->horizontalNavLogicalKey([
+            ['text' => 'B', 'url' => '/b', 'children' => []],
+        ], true);
+
+        self::assertStringStartsWith('theme.header.horizontal_nav.v2.', $bannerOn);
+        self::assertStringContainsString('.banner1.', $bannerOn);
+        self::assertStringContainsString('.banner0.', $bannerOff);
+        self::assertNotSame($bannerOn, $bannerOff);
+        self::assertNotSame($bannerOn, $other);
+    }
+
+    public function testHorizontalNavLogicalKeyVariesByRequestOrigin(): void
+    {
+        $service = $this->service();
+        $items = [
+            ['text' => 'A', 'url' => '/category/women', 'children' => []],
+        ];
+
+        \Weline\Framework\Env\WelineEnv::set('website_url', 'https://www.changanhanfu.com/', 'unit');
+        \Weline\Framework\Env\WelineEnv::set('server.http_host', 'www.changanhanfu.com', 'unit');
+        \Weline\Framework\Env\WelineEnv::set('request.scheme', 'https', 'unit');
+        $public = $service->horizontalNavLogicalKey($items, true);
+
+        \Weline\Framework\Env\WelineEnv::set('website_url', 'http://127.0.0.1:9510/', 'unit');
+        \Weline\Framework\Env\WelineEnv::set('server.http_host', '127.0.0.1:9510', 'unit');
+        \Weline\Framework\Env\WelineEnv::set('request.scheme', 'http', 'unit');
+        $loopback = $service->horizontalNavLogicalKey($items, true);
+
+        self::assertNotSame($public, $loopback);
+        self::assertStringContainsString('www.changanhanfu.com', $public);
+        self::assertStringContainsString('127.0.0.1', $loopback);
     }
 
     public function testNavigationPolicyUsesChannelScopeAndLocalizedVariants(): void
@@ -77,11 +119,24 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
 
         self::assertSame('theme.storefront_chrome', $policy->resource);
         self::assertSame(StorefrontThemeCacheCoordinator::STOREFRONT_CHROME_POOL, $policy->pool);
-        self::assertSame('channel', $policy->scope);
+        // wave8-8c8: website scope so deferred bag-prime and probes share L1/L2.
+        self::assertSame('website', $policy->scope);
         self::assertSame(['currency', 'lang'], $policy->vary);
         self::assertSame(['catalog', 'config', 'global/i18n', 'theme'], $policy->dependencies);
         self::assertSame(45, $policy->freshTtlSeconds);
         self::assertSame(600, $policy->staleTtlSeconds);
+    }
+
+    public function testPublishedLayoutStructurePolicyIsChannelScopedStructureOnly(): void
+    {
+        $policy = StorefrontThemeCacheCoordinator::publishedLayoutStructurePolicy();
+
+        self::assertSame('theme.layout.published', $policy->resource);
+        self::assertSame(StorefrontThemeCacheCoordinator::PUBLISHED_LAYOUT_STRUCTURE_POOL, $policy->pool);
+        self::assertSame('channel', $policy->scope);
+        self::assertSame([], $policy->vary);
+        self::assertSame(['theme'], $policy->dependencies);
+        self::assertSame(0, $policy->staleTtlSeconds);
     }
 
     public function testHeaderSearchTypesUseAChannelLocalizedPolicy(): void
@@ -93,6 +148,6 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
         self::assertSame('channel', $policy->scope);
         // Labels need lang; search types carry no prices — currency must stay out.
         self::assertSame(['lang'], $policy->vary);
-        self::assertSame(['config', 'global/i18n'], $policy->dependencies);
+        self::assertSame(['catalog', 'config', 'global/i18n'], $policy->dependencies);
     }
 }
