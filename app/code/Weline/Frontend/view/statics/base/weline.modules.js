@@ -357,7 +357,7 @@
             description: "顶栏收藏角标水合（SSR 游客空角标）"
         },
         storeMusic: {
-            paths: ["Weline_StoreMusic::js/store-music.js?v=20260917-storemusic-speccenter2"],
+            paths: ["Weline_StoreMusic::js/store-music.js?v=20260924-no-unload1"],
             globalVar: "WelineStoreMusic",
             load: "defer",
             description: "进店音乐"
