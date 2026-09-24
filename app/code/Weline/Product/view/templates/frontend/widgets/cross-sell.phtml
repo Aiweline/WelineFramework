@@ -12,7 +12,7 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["product","cart"]}
  * @widget.supports {["layout-product-cross-sell","layout-cart-recommendations","cross-sell"]}
- * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-cross-sell", "area":"content", "sort_order":3, "required":true, "reason":"商品详情默认搭配推荐槽", "config":{"title":"经常一起购买","limit":3,"show_add_all_button":true,"show_total_price":true} }]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-cross-sell", "area":"content", "sort_order":3, "required":true, "reason":"商品详情默认搭配推荐槽", "config":{"title":"经常一起购买","limit":3,"show_add_all_button":true,"show_total_price":true,"lazy_load":true} }]}
  *
  * @widget.source {Weline_Product::css/widgets/cross-sell.css}
  * @param title {default="经常一起购买",type="string",label="标题"}
@@ -26,6 +26,7 @@
 
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\StorefrontPdpShelfDeferral;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\WidgetI18n;
@@ -62,12 +63,17 @@ if ($seedProductId <= 0) {
     }
 }
 
+$editorPreview = $isPreviewMode || (bool)($this->getData('editor_mode') ?? false);
+$deferCards = StorefrontPdpShelfDeferral::shouldDeferCardAssembly($editorPreview);
+
 $products = [];
 try {
-    $editorPreview = $isPreviewMode || (bool)($this->getData('editor_mode') ?? false);
     // No PDP seed in theme-editor product-layout preview: skip cold catalog
     // rebuild (bundleCards → relatedCards → publishedOffers).
     if ($editorPreview && $seedProductId <= 0) {
+        $products = [];
+    } elseif ($deferCards) {
+        // WS4 cold path: keep required slot DOM; hydrate via BinQuery bundleCards.
         $products = [];
     } else {
         $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
@@ -75,6 +81,31 @@ try {
     }
 } catch (\Throwable) {
     $products = [];
+}
+
+if ($deferCards) {
+    ?>
+<section class="<?= $esc($wc) ?> weline-product-fbt<?= $isPreviewMode ? ' is-preview' : '' ?> is-deferred"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-testid="cross-sell-deferred"
+         data-weline-load="crossSell"
+         data-weline-hydrate="1"
+         data-pdp-lazy-shell="1"
+         data-hydrate-provider="product_storefront"
+         data-hydrate-operation="bundleCards"
+         data-seed-product-id="<?= (int)$seedProductId ?>"
+         data-companion-limit="<?= (int)max(1, min(3, $companionLimit)) ?>"
+         aria-busy="true">
+    <header class="wpf-header">
+        <h2 class="wpf-title"><?= $esc($widgetTitle) ?></h2>
+        <p class="wpf-subtitle"><?= $esc((string)__('Buy these items together')) ?></p>
+    </header>
+    <div class="wpf-body is-skeleton" data-wpf-hydrate-root></div>
+</section>
+    <?php
+    return;
 }
 
 foreach ($products as &$product) {

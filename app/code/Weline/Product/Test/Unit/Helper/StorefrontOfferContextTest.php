@@ -35,6 +35,11 @@ final class StorefrontOfferContextTest extends TestCase
             StorefrontOfferResolver::rememberResolvedOffer($offer);
             $template = (new \ReflectionClass(Template::class))->newInstanceWithoutConstructor();
             self::assertSame($offer, StorefrontOfferResolver::resolve($template));
+            self::assertSame($offer, StorefrontOfferResolver::currentOffer());
+            self::assertSame(
+                $offer,
+                \Weline\Framework\Runtime\RequestContext::get(StorefrontOfferResolver::REQUEST_SEED_KEY),
+            );
         } catch (\Throwable $error) {
             self::fail('An already resolved offer must render without another dependency: ' . $error->getMessage());
         }

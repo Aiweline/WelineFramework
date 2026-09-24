@@ -218,3 +218,23 @@
     transform: none;
   }
 }
+
+/* WS4 cold-path lazy shell skeleton (theme tokens only) */
+.weline-recently-viewed.is-deferred .wrv-card--skeleton {
+  flex: 0 0 calc((100% - 1.5rem) / 4);
+  min-height: 12rem;
+  border-radius: var(--weline-theme-radius-md, var(--radius-md, 0.5rem));
+  background: linear-gradient(
+    90deg,
+    var(--weline-theme-surface-subtle, #f7f8f8) 0%,
+    var(--weline-theme-surface-raised, #fff) 50%,
+    var(--weline-theme-surface-subtle, #f7f8f8) 100%
+  );
+  background-size: 200% 100%;
+  animation: wrv-skeleton-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes wrv-skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+

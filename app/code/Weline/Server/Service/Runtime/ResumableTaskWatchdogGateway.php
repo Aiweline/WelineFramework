@@ -23,7 +23,22 @@ final class ResumableTaskWatchdogGateway implements RuntimeWatchdogGatewayInterf
 
     public function dueSubjects(DateTimeImmutable $now, int $limit): iterable
     {
-        foreach ($this->store->watchdogCandidates($limit) as $row) {
+        $candidates = $this->store->watchdogCandidates($limit);
+        $leaseProbeIds = [];
+        foreach ($candidates as $row) {
+            $policy = ResumableTaskPolicyHydrator::fromArray((array)($row['policy'] ?? []));
+            if ($policy->requiresClientLease()) {
+                $taskId = (string)($row['task_id'] ?? '');
+                if ($taskId !== '') {
+                    $leaseProbeIds[] = $taskId;
+                }
+            }
+        }
+        $activeLeases = $leaseProbeIds === []
+            ? []
+            : $this->store->hasActiveLeasesForTaskIds($leaseProbeIds, $now->getTimestamp());
+
+        foreach ($candidates as $row) {
             $generation = (int)$row['fencing_generation'];
             if ($generation < 1) {
                 continue;
@@ -49,7 +64,7 @@ final class ResumableTaskWatchdogGateway implements RuntimeWatchdogGatewayInterf
             $policy = ResumableTaskPolicyHydrator::fromArray((array)($row['policy'] ?? []));
             $requiresClientLease = $policy->requiresClientLease();
             $hasActiveClientLease = $requiresClientLease
-                && $this->store->hasActiveLeases($taskId, $now->getTimestamp());
+                && (($activeLeases[$taskId] ?? false) === true);
             $status = (string)$row['status'];
             $stopRequested = $status === 'cancel_requested' || !empty($row['recovery_stop_requested']);
             $leaseReleased = !empty($row['runner_lease_released']);

@@ -273,19 +273,25 @@ class ControllerFetchFileAfter implements ObserverInterface
 
     private function renderContentTemplate(Template $template, string $contentTemplate, string $fallbackContent): string
     {
-        if ($fallbackContent !== '') {
-            return $fallbackContent;
-        }
+        return (string)RequestLifecycleTrace::measurePhase(
+            \Weline\Theme\Service\ThemeLayoutBudgetPhases::L4_PAGE_BODY,
+            function () use ($template, $contentTemplate, $fallbackContent): string {
+                if ($fallbackContent !== '') {
+                    return $fallbackContent;
+                }
 
-        try {
-            $rendered = (string)$template->fetch($contentTemplate);
-            if ($rendered !== '') {
-                return $rendered;
-            }
-        } catch (\Throwable) {
-        }
+                try {
+                    $rendered = (string)$template->fetch($contentTemplate);
+                    if ($rendered !== '') {
+                        return $rendered;
+                    }
+                } catch (\Throwable) {
+                }
 
-        return $fallbackContent;
+                return $fallbackContent;
+            },
+            ['content_template' => $contentTemplate],
+        );
     }
 
     /**

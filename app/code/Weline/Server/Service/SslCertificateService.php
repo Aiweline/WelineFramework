@@ -151,6 +151,14 @@ class SslCertificateService
     protected ?SslCertificate $certModel = null;
 
     /**
+     * One retirement-replay batch: cert_id => hydrated row (null = absent).
+     * Primed with a single IN query; cleared when the batch ends.
+     *
+     * @var array<int, SslCertificate|null>|null
+     */
+    private ?array $retirementCertBatchById = null;
+
+    /**
      * 证书表首次启动兜底只需每进程执行一次。
      */
     protected static bool $certificateStorageReady = false;
@@ -10360,14 +10368,75 @@ CNF;
         throw new \RuntimeException('Certificate retirement exceeded its bounded stage count.');
     }
 
+    /**
+     * Prefetch cert rows for one replay batch with a single `cert_id IN (...)`.
+     *
+     * @param array<string,array<string,mixed>> $intents
+     */
+    private function primeRetirementCertificateBatch(array $intents): void
+    {
+        $ids = [];
+        foreach ($intents as $intent) {
+            if (!\is_array($intent)) {
+                continue;
+            }
+            $certId = (int)($intent['certificate_id'] ?? 0);
+            if ($certId > 0) {
+                $ids[$certId] = $certId;
+            }
+        }
+        $this->retirementCertBatchById = [];
+        if ($ids === []) {
+            return;
+        }
+        $rows = ObjectManager::getInstance(SslCertificate::class, [], false)
+            ->clear()
+            ->reset()
+            ->where(SslCertificate::schema_fields_ID, \array_values($ids), 'IN')
+            ->select()
+            ->fetchArray();
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $certId = (int)($row[SslCertificate::schema_fields_ID] ?? 0);
+            if ($certId < 1) {
+                continue;
+            }
+            $model = ObjectManager::getInstance(SslCertificate::class, [], false);
+            $model->setData($row);
+            $this->retirementCertBatchById[$certId] = $model;
+        }
+        foreach ($ids as $certId) {
+            if (!\array_key_exists($certId, $this->retirementCertBatchById)) {
+                $this->retirementCertBatchById[$certId] = null;
+            }
+        }
+    }
+
+    private function loadRetirementCertificate(int $certId): ?SslCertificate
+    {
+        if ($certId < 1) {
+            return null;
+        }
+        if ($this->retirementCertBatchById !== null
+            && \array_key_exists($certId, $this->retirementCertBatchById)
+        ) {
+            return $this->retirementCertBatchById[$certId];
+        }
+        $record = ObjectManager::getInstance(SslCertificate::class, [], false);
+        $record->load($certId);
+
+        return $record->getCertId() ? $record : null;
+    }
+
     /** @param array<string,mixed> $intent */
     private function commitCertificateRetirementDatabaseFact(array $intent): string
     {
         $domain = (string)$intent['domain'];
         $certId = (int)($intent['certificate_id'] ?? 0);
-        $record = ObjectManager::getInstance(SslCertificate::class, [], false);
-        $record->load($certId);
-        if (!$record->getCertId()) {
+        $record = $this->loadRetirementCertificate($certId);
+        if ($record === null || !$record->getCertId()) {
             if (\hash_equals(
                 ProjectCertificateGenerationStore::RETIREMENT_OPERATION_DELETE,
                 (string)($intent['operation'] ?? ''),
@@ -10438,9 +10507,8 @@ CNF;
     private function deleteCertificateRetirementDatabaseRow(array $intent): string
     {
         $certId = (int)($intent['certificate_id'] ?? 0);
-        $record = ObjectManager::getInstance(SslCertificate::class, [], false);
-        $record->load($certId);
-        if (!$record->getCertId()) {
+        $record = $this->loadRetirementCertificate($certId);
+        if ($record === null || !$record->getCertId()) {
             return 'already_absent';
         }
         if (!\hash_equals(
@@ -11513,63 +11581,68 @@ CNF;
                     $maximumIntents,
                     $deadline,
                 );
-                $attempted = 0;
-                $completed = 0;
-                $failures = [];
-                foreach ($pending as $domain => $intent) {
-                    if ($deadline - (\hrtime(true) / 1_000_000_000) < 0.25) {
-                        break;
-                    }
-                    ++$attempted;
-                    try {
-                        $result = $this->resumeCertificateRetirementIntent(
-                            $intent,
-                            $deadline,
-                        );
-                        if (($result['success'] ?? false) === true
-                            || \hash_equals(
-                                'retirement_superseded',
-                                (string)($result['phase'] ?? ''),
-                            )
-                        ) {
-                            ++$completed;
+                $this->primeRetirementCertificateBatch($pending);
+                try {
+                    $attempted = 0;
+                    $completed = 0;
+                    $failures = [];
+                    foreach ($pending as $domain => $intent) {
+                        if ($deadline - (\hrtime(true) / 1_000_000_000) < 0.25) {
+                            break;
                         }
-                    } catch (\Throwable $throwable) {
-                        $failures[] = (string)$domain . ': '
-                            . \Weline\Server\Service\Edge\Gateway\GatewayBoundedText::singleLine(
-                                $throwable->getMessage(),
-                                2048,
-                                'certificate retirement replay failed',
-                            );
-                    } finally {
+                        ++$attempted;
                         try {
-                            $store->advanceRetirementReplayCursor($intent, $deadline);
-                        } catch (\Throwable $cursorError) {
-                            $failures[] = (string)$domain . ': replay cursor: '
+                            $result = $this->resumeCertificateRetirementIntent(
+                                $intent,
+                                $deadline,
+                            );
+                            if (($result['success'] ?? false) === true
+                                || \hash_equals(
+                                    'retirement_superseded',
+                                    (string)($result['phase'] ?? ''),
+                                )
+                            ) {
+                                ++$completed;
+                            }
+                        } catch (\Throwable $throwable) {
+                            $failures[] = (string)$domain . ': '
                                 . \Weline\Server\Service\Edge\Gateway\GatewayBoundedText::singleLine(
-                                    $cursorError->getMessage(),
-                                    1024,
-                                    'certificate retirement cursor update failed',
+                                    $throwable->getMessage(),
+                                    2048,
+                                    'certificate retirement replay failed',
                                 );
+                        } finally {
+                            try {
+                                $store->advanceRetirementReplayCursor($intent, $deadline);
+                            } catch (\Throwable $cursorError) {
+                                $failures[] = (string)$domain . ': replay cursor: '
+                                    . \Weline\Server\Service\Edge\Gateway\GatewayBoundedText::singleLine(
+                                        $cursorError->getMessage(),
+                                        1024,
+                                        'certificate retirement cursor update failed',
+                                    );
+                            }
                         }
                     }
+                    if ($failures !== []) {
+                        throw new \RuntimeException(
+                            \Weline\Server\Service\Edge\Gateway\GatewayBoundedText::singleLine(
+                                \implode('; ', $failures),
+                                4096,
+                                'Certificate retirement replay did not converge.',
+                            ),
+                        );
+                    }
+                    return [
+                        'attempted' => $attempted,
+                        'completed' => $completed,
+                        'failures' => [],
+                        'deferred' => $attempted < \count($pending)
+                            || \count($pending) >= $maximumIntents,
+                    ];
+                } finally {
+                    $this->retirementCertBatchById = null;
                 }
-                if ($failures !== []) {
-                    throw new \RuntimeException(
-                        \Weline\Server\Service\Edge\Gateway\GatewayBoundedText::singleLine(
-                            \implode('; ', $failures),
-                            4096,
-                            'Certificate retirement replay did not converge.',
-                        ),
-                    );
-                }
-                return [
-                    'attempted' => $attempted,
-                    'completed' => $completed,
-                    'failures' => [],
-                    'deferred' => $attempted < \count($pending)
-                        || \count($pending) >= $maximumIntents,
-                ];
             }, $deadline);
         } catch (\RuntimeException $throwable) {
             if (\hash_equals(

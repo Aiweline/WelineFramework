@@ -5,6 +5,8 @@ namespace Weline\I18n\Taglib;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
+use Weline\Framework\Cache\CachePolicy;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Env\WelineEnv;
@@ -25,7 +27,8 @@ use Weline\SystemConfig\Api\ConfigReader;
 class LanguageSwitcher implements TaglibInterface
 {
     private const SWITCHER_HTML_CACHE_TTL = 60.0;
-    private const SWITCHER_LANGUAGE_CACHE_TTL = 300.0;
+    /** Stable language-directory HotCache resource (no path / DOM id). */
+    public const CATALOG_CACHE_RESOURCE = 'i18n.language_switcher.catalog';
     /** Bumped when storefront switcher DOM contract changes (chrome partial cache key). */
     public const SWITCHER_MARKUP_VERSION = 'component-26-trigger-flag-ssr';
     public const TAG_NAME = 'i18n:switcher';
@@ -34,11 +37,6 @@ class LanguageSwitcher implements TaglibInterface
      * @var array<string, array{expires: float, html: string}>
      */
     private static array $htmlCache = [];
-
-    /**
-     * @var array<string, array{expires: float, languages: array}>
-     */
-    private static array $languageCache = [];
 
     /**
      * @var array<string, array<string, string>>
@@ -51,9 +49,21 @@ class LanguageSwitcher implements TaglibInterface
     public static function clearProcessCaches(): void
     {
         self::$htmlCache = [];
-        self::$languageCache = [];
         self::$chromeDictionaryCache = [];
         InlineSvgIdUniquifier::resetSequence();
+    }
+
+    /** Shared HotCache policy for the stable switcher language directory. */
+    public static function catalogCachePolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: self::CATALOG_CACHE_RESOURCE,
+            pool: 'i18n',
+            scope: 'website',
+            dependencies: ['global/i18n'],
+            freshTtlSeconds: 300,
+            staleTtlSeconds: 1800,
+        );
     }
 
     public static function name(): string
@@ -565,25 +575,31 @@ class LanguageSwitcher implements TaglibInterface
     }
 
     /**
+     * Stable language directory only — never includes current URL / DOM instance ids.
+     * Request memo + shared HotCache; path-bound HTML stays on the request shell ($htmlCache).
+     *
      * @return array<string, array<string, mixed>>
      */
     private static function buildLanguagesFromScope(LocaleCatalogScope $scope, string $displayLocale): array
     {
         $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : $scope->displayLocale;
-        $cacheKey = DictionaryCacheNamespace::cacheKey($scope->mode . ':' . $scope->websiteId . '|' . $displayLocale . '|' . \implode(',', $scope->codes));
-        $now = \microtime(true);
-        if (isset(DictionaryCacheNamespace::localCache(self::$languageCache, 512)[$cacheKey]) && DictionaryCacheNamespace::localCache(self::$languageCache, 512)[$cacheKey]['expires'] >= $now) {
-            return DictionaryCacheNamespace::localCache(self::$languageCache, 512)[$cacheKey]['languages'];
-        }
-        unset(DictionaryCacheNamespace::localCache(self::$languageCache, 512)[$cacheKey]);
+        $logicalKey = $scope->mode . ':' . $scope->websiteId . '|' . $displayLocale . '|' . \implode(',', $scope->codes);
+        $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+        $languages = $hotCache->rememberForRequest(
+            self::CATALOG_CACHE_RESOURCE,
+            $logicalKey,
+            static function () use ($hotCache, $logicalKey, $scope, $displayLocale): array {
+                $cached = $hotCache->rememberPolicy(
+                    self::catalogCachePolicy(),
+                    $logicalKey,
+                    static fn (): array => self::buildLanguagesFromCodes($scope->codes, $displayLocale),
+                );
 
-        $languages = self::buildLanguagesFromCodes($scope->codes, $displayLocale);
-        DictionaryCacheNamespace::localCache(self::$languageCache, 512)[$cacheKey] = [
-            'expires' => $now + self::SWITCHER_LANGUAGE_CACHE_TTL,
-            'languages' => $languages,
-        ];
+                return \is_array($cached) ? $cached : [];
+            },
+        );
 
-        return $languages;
+        return \is_array($languages) ? $languages : [];
     }
 
     /**

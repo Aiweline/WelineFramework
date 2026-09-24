@@ -801,6 +801,7 @@ dev=true,开发=真
 错误信息：%{1},错误信息：%{1}
 堆栈跟踪：,堆栈跟踪：
 可用的模块列表：,可用的模块列表：
+"StorefrontRenderContext.locale_catalog 必须含 active/installed 列表","StorefrontRenderContext.locale_catalog 必须含 active/installed 列表"
 "WLS 下载临时文件清理失败。","WLS 下载临时文件清理失败。"
 "SSE 会话已失效，请重新登录后重试。","SSE 会话已失效，请重新登录后重试。"
 "当前账号无权限执行该 SSE 操作。","当前账号无权限执行该 SSE 操作。"
@@ -808,6 +809,7 @@ dev=true,开发=真
 站点导航上下文服务暂不可用,站点导航上下文服务暂不可用
 "SSE 请求被终止。","SSE 请求被终止。"
 "SSE 请求失败。","SSE 请求失败。"
+"StorefrontRenderContext 尚未安装（袋键 storefront.render_context.v1）","StorefrontRenderContext 尚未安装（袋键 storefront.render_context.v1）"
 "当前请求的 ScopeIdentity 已冻结，禁止二次改写","当前请求的 ScopeIdentity 已冻结，禁止二次改写"
 "Provider %{1} 未实现 %{2}","Provider %{1} 未实现 %{2}"
 "无效的模块语义版本: %{1}","无效的模块语义版本: %{1}"

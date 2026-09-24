@@ -381,6 +381,10 @@ class WebsiteData
         $rows = self::fetchLocalRowsFromDb($websiteId);
         $bag[$idKey] = $rows;
         RequestContext::set(self::LOCAL_ROWS_BAG_KEY, $bag);
+        // Project into storefront.render_context.v1 when Installer already ran (no parallel bag).
+        if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
+            \Weline\Framework\Runtime\StorefrontRenderContextReader::mergeWebsiteLocal($rows);
+        }
 
         return $rows;
     }

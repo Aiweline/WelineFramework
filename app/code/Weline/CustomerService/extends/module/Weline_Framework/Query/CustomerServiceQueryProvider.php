@@ -11,6 +11,7 @@ use Weline\CustomerService\Service\ChatMediaUploader;
 use Weline\CustomerService\Service\ChatService;
 use Weline\CustomerService\Service\CustomerServiceSettings;
 use Weline\CustomerService\Service\EmailBindingService;
+use Weline\CustomerService\Service\WidgetTranslationService;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
@@ -42,6 +43,7 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
             'setLanguage' => $this->setLanguage($params),
             'serviceStatus' => $this->serviceStatus(),
             'sendVerification' => $this->sendVerification($params),
+            'widgetTranslations' => $this->widgetTranslations($params),
             'adminRequest' => $this->adminRequest($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Unsupported customer service provider operation: %{1}', $operation)
@@ -444,6 +446,46 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
             : ObjectManager::getInstance(CustomerServiceSettings::class)->defaultCustomerLocale();
     }
 
+    /**
+     * Batch widget chrome dictionaries — loaded on first chat open (not SSR body-end).
+     *
+     * @param array<string,mixed> $params
+     * @return array{success:bool,data:array{translations:array<string,array<string,string>>}}
+     */
+    private function widgetTranslations(array $params): array
+    {
+        /** @var WidgetTranslationService $service */
+        $service = ObjectManager::getInstance(WidgetTranslationService::class);
+        $allowed = [];
+        foreach ($service->getSupportedLocales() as $localeConfig) {
+            $code = trim((string)($localeConfig['code'] ?? ''));
+            if ($code !== '') {
+                $allowed[$code] = true;
+            }
+        }
+
+        $raw = trim((string)($params['locales'] ?? ''));
+        $codes = [];
+        if ($raw !== '') {
+            foreach (preg_split('/[\s,]+/', $raw) ?: [] as $piece) {
+                $code = trim(str_replace('-', '_', (string)$piece));
+                if ($code !== '' && isset($allowed[$code])) {
+                    $codes[$code] = true;
+                }
+            }
+        }
+        if ($codes === []) {
+            $codes = $allowed;
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'translations' => $service->getWidgetTranslationsForLocales(array_keys($codes)),
+            ],
+        ];
+    }
+
     public function getDescriptor(): array
     {
         return [
@@ -538,6 +580,19 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                     'params' => [],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Customer service availability',
+                ],
+                [
+                    'name' => 'widgetTranslations',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 2,
+                    'cache_ttl' => 300,
+                    'params' => [
+                        'locales' => ['type' => 'string', 'required' => false, 'max_length' => 512],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Batch customer-service widget chrome dictionaries',
                 ],
                 [
                     'name' => 'sendVerification',

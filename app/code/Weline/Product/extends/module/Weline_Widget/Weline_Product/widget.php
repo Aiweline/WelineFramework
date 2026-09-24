@@ -149,6 +149,7 @@ return [
                 'limit' => 8,
                 'columns' => '4',
                 'layout' => 'grid',
+                'lazy_load' => true,
             ],
         ]],
         'params' => [
@@ -231,6 +232,7 @@ return [
                     'limit' => 3,
                     'show_add_all_button' => true,
                     'show_total_price' => true,
+                    'lazy_load' => true,
                 ],
             ],
             [

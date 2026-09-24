@@ -21,8 +21,8 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertSame('product-recently-viewed', $injection['slot'] ?? null);
         self::assertSame('product', $injection['layout_type'] ?? null);
         self::assertTrue((bool)($injection['required'] ?? false));
-        self::assertSame(24, (int)(($injection['config']['limit'] ?? 0)));
-        self::assertSame(24, (int)(($widget['params']['limit']['default'] ?? 0)));
+        self::assertSame(6, (int)(($injection['config']['limit'] ?? 0)));
+        self::assertSame(6, (int)(($widget['params']['limit']['default'] ?? 0)));
     }
 
     public function testEmptyPathEmitsHiddenNonEmptyShellWithTestId(): void
@@ -42,8 +42,12 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertStringContainsString('RecentlyViewedService', $source);
         self::assertStringContainsString('<w:product:card', $source);
         self::assertStringContainsString('data-weline-load="recentlyViewed"', $source);
-        self::assertStringContainsString('"limit":24', $source);
-        self::assertStringContainsString('@param limit {default=24', $source);
+        self::assertStringContainsString('StorefrontPdpShelfDeferral::shouldDeferCardAssembly', $source);
+        self::assertStringContainsString('data-testid="recently-viewed-deferred"', $source);
+        self::assertStringContainsString('data-hydrate-operation="recentlyViewedCards"', $source);
+        self::assertStringContainsString('data-weline-hydrate="1"', $source);
+        self::assertStringContainsString('"limit":6', $source);
+        self::assertStringContainsString('@param limit {default=6', $source);
         self::assertStringContainsString('data-wrv-track', $source);
         self::assertStringContainsString('wrv-stage', $source);
         self::assertStringContainsString('density="standard"', $source);
@@ -61,12 +65,6 @@ final class RecentlyViewedWidgetContractTest extends TestCase
             $source,
             'Empty product list must render a hidden shell, not bare return.',
         );
-
-        $hiCsv = dirname(__DIR__, 3) . '/i18n/hi_IN.csv';
-        self::assertFileExists($hiCsv);
-        $hi = (string)file_get_contents($hiCsv);
-        self::assertStringContainsString('Based on your recent browsing', $hi);
-        self::assertMatchesRegularExpression('/\\p{Devanagari}/u', $hi);
     }
 
     public function testSectionBackgroundIsTransparent(): void

@@ -2,14 +2,20 @@
 /**
  * 搜索类型下拉（自研 w-menu，禁止原生 select）。
  * 顶层：全部 + 各 SearchProvider；有子集树的类型向右飞出多级菜单（≤3 级）。
+ * P11：页内一次 SVG sprite + 节点 <use>，禁止每节点内联完整 check/chevron。
+ * WS2：stable_fragment=true 时不写选中态（共享快照）；选中由 HeaderNavFragment 请求本地套壳。
+ * WS2 结构瘦身：叶子 data-display-label 与 data-label 相同时省略前者；树节点紧凑输出。
  *
  * @var list<array{code:string,label:string,children?:list<array<string,mixed>>}> $search_types
  * @var string $selected_type
  * @var int $selected_category_id
  * @var string $menu_id
+ * @var bool $stable_fragment
  */
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\HeaderCommerceData;
 use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Service\Ui\IconRegistry;
 
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $localize = static fn (mixed $value, string $default = '', array $args = []): string => WidgetI18n::label(
@@ -24,11 +30,12 @@ if ($types === []) {
     $types = [['code' => 'all', 'label' => $localize('', '全部'), 'children' => []]];
 }
 
-$selectedType = trim((string)($selected_type ?? 'all'));
+$stableFragment = !empty($stable_fragment);
+$selectedType = $stableFragment ? 'all' : trim((string)($selected_type ?? 'all'));
 if ($selectedType === '') {
     $selectedType = 'all';
 }
-$selectedCategoryId = (int)($selected_category_id ?? 0);
+$selectedCategoryId = $stableFragment ? 0 : (int)($selected_category_id ?? 0);
 
 $findCategoryLabel = static function (array $nodes, int $categoryId) use (&$findCategoryLabel, $localize): ?string {
     foreach ($nodes as $node) {
@@ -52,28 +59,29 @@ $findCategoryLabel = static function (array $nodes, int $categoryId) use (&$find
 };
 
 $selectedLabel = $localize('', '全部');
-foreach ($types as $row) {
-    if (!is_array($row)) {
-        continue;
-    }
-    $typeCode = (string)($row['code'] ?? '');
-    if ($typeCode !== $selectedType) {
-        continue;
-    }
-    $typeLabel = $localize($row['label'] ?? $typeCode, $typeCode);
-    if ($typeLabel === '') {
-        $typeLabel = $typeCode;
-    }
-    if ($selectedCategoryId > 0) {
-        $nested = $findCategoryLabel((array)($row['children'] ?? []), $selectedCategoryId);
-        if ($nested !== null && $nested !== '') {
-            // Facade: Product:健身器材 / 商品:健身器材
-            $selectedLabel = $typeLabel . ':' . $nested;
-            break;
+if (!$stableFragment) {
+    foreach ($types as $row) {
+        if (!is_array($row)) {
+            continue;
         }
+        $typeCode = (string)($row['code'] ?? '');
+        if ($typeCode !== $selectedType) {
+            continue;
+        }
+        $typeLabel = $localize($row['label'] ?? $typeCode, $typeCode);
+        if ($typeLabel === '') {
+            $typeLabel = $typeCode;
+        }
+        if ($selectedCategoryId > 0) {
+            $nested = $findCategoryLabel((array)($row['children'] ?? []), $selectedCategoryId);
+            if ($nested !== null && $nested !== '') {
+                $selectedLabel = $typeLabel . ':' . $nested;
+                break;
+            }
+        }
+        $selectedLabel = $typeLabel;
+        break;
     }
-    $selectedLabel = $typeLabel;
-    break;
 }
 
 $menuId = trim((string)($menu_id ?? ''));
@@ -81,7 +89,27 @@ if ($menuId === '') {
     $menuId = 'header-search-type-menu';
 }
 
+/** @var IconRegistry $iconRegistry */
+$iconRegistry = ObjectManager::getInstance(IconRegistry::class);
+$iconSpritePrefix = $menuId . '-ico';
+$iconSpriteHtml = $iconRegistry->localSprite($iconSpritePrefix, ['check', 'chevron-right', 'chevron-down']);
+$iconUse = static function (string $name, string $size = 'sm') use ($iconRegistry, $iconSpritePrefix): string {
+    return $iconRegistry->renderUse($iconSpritePrefix . '-' . $name, $size, '', '', $name);
+};
+
+$dataLabelAttrs = static function (string $label, string $displayLabel) use ($esc): string {
+    $out = ' data-label="' . $esc($label) . '"';
+    // WS2：叶子 display≡label 时省略 data-display-label（JS 回退 data-label）。
+    if ($displayLabel !== '' && $displayLabel !== $label) {
+        $out .= ' data-display-label="' . $esc($displayLabel) . '"';
+    }
+
+    return $out;
+};
+
 /**
+ * Compact tree markup (WS2 structure slim) — no indent/newlines between nodes.
+ *
  * @param list<array<string,mixed>> $nodes
  */
 $renderScopeTree = static function (
@@ -89,8 +117,11 @@ $renderScopeTree = static function (
     string $typeCode,
     string $typeLabel,
     int $selectedCategoryId,
+    bool $stableFragment,
     callable $esc,
     callable $localize,
+    callable $iconUse,
+    callable $dataLabelAttrs,
 ) use (&$renderScopeTree): void {
     foreach ($nodes as $node) {
         if (!is_array($node)) {
@@ -104,52 +135,19 @@ $renderScopeTree = static function (
         $categoryId = (int)($params['category_id'] ?? 0);
         $children = is_array($node['children'] ?? null) ? $node['children'] : [];
         $hasChildren = $children !== [];
-        $isActive = $categoryId > 0 && $categoryId === $selectedCategoryId;
+        $isActive = !$stableFragment && $categoryId > 0 && $categoryId === $selectedCategoryId;
         $displayLabel = $typeLabel !== '' ? ($typeLabel . ':' . $nodeLabel) : $nodeLabel;
-        ?>
-        <div class="search-type-node<?= $hasChildren ? ' has-children' : '' ?>"
-             data-search-type-node
-             data-state="closed">
-            <button type="button"
-                    class="w-menu__item search-type-option search-category-option<?= $hasChildren ? ' search-type-option--branch' : '' ?><?= $isActive ? ' is-active' : '' ?>"
-                    role="option"
-                    data-search-type-option
-                    <?= $hasChildren ? 'data-search-type-branch' : '' ?>
-                    data-value="<?= $esc($typeCode) ?>"
-                    data-label="<?= $esc($nodeLabel) ?>"
-                    data-display-label="<?= $esc($displayLabel) ?>"
-                    data-category-id="<?= $categoryId > 0 ? $esc((string)$categoryId) : '' ?>"
-                    aria-selected="<?= $isActive ? 'true' : 'false' ?>"
-                    <?= $hasChildren ? 'aria-haspopup="true" aria-expanded="false"' : '' ?>>
-                <span class="search-type-option-label"><?= $esc($nodeLabel) ?></span>
-                <?php if ($hasChildren): ?>
-                    <span class="search-type-option-chevron" aria-hidden="true">
-                        <w:icon name="chevron-right" size="xs"></w:icon>
-                    </span>
-                <?php else: ?>
-                    <span class="search-type-option-check" aria-hidden="true">
-                        <w:icon name="check" size="sm"></w:icon>
-                    </span>
-                <?php endif; ?>
-            </button>
-            <?php if ($hasChildren): ?>
-                <div class="search-type-submenu search-type-menu"
-                     data-search-type-submenu
-                     role="group"
-                     hidden>
-                    <?php $renderScopeTree($children, $typeCode, $typeLabel, $selectedCategoryId, $esc, $localize); ?>
-                </div>
-            <?php endif; ?>
-        </div>
-        <?php
+        ?><div class="search-type-node<?= $hasChildren ? ' has-children' : '' ?>" data-search-type-node data-state="closed"><button type="button" class="w-menu__item search-type-option search-category-option<?= $hasChildren ? ' search-type-option--branch' : '' ?><?= $isActive ? ' is-active' : '' ?>" role="option" data-search-type-option<?= $hasChildren ? ' data-search-type-branch' : '' ?> data-value="<?= $esc($typeCode) ?>"<?= $dataLabelAttrs($nodeLabel, $displayLabel) ?> data-category-id="<?= $categoryId > 0 ? $esc((string)$categoryId) : '' ?>" aria-selected="<?= $isActive ? 'true' : 'false' ?>"<?= $hasChildren ? ' aria-haspopup="true" aria-expanded="false"' : '' ?>><span class="search-type-option-label"><?= $esc($nodeLabel) ?></span><?php if ($hasChildren): ?><span class="search-type-option-chevron" aria-hidden="true"><?= $iconUse('chevron-right', 'xs') ?></span><?php else: ?><span class="search-type-option-check" aria-hidden="true"><?= $iconUse('check', 'sm') ?></span><?php endif; ?></button><?php if ($hasChildren): ?><div class="search-type-submenu search-type-menu" data-search-type-submenu role="group" hidden><?php $renderScopeTree($children, $typeCode, $typeLabel, $selectedCategoryId, $stableFragment, $esc, $localize, $iconUse, $dataLabelAttrs); ?></div><?php endif; ?></div><?php
     }
 };
 ?>
+<?= $iconSpriteHtml ?>
 <div class="search-type-dropdown search-category-dropdown w-menu-root"
      data-w-component="menu"
      data-w-placement="bottom-start"
      data-w-anchor-mode="element"
-     data-state="closed">
+     data-state="closed"
+     data-search-tree-stable="<?= $stableFragment ? '1' : '0' ?>">
     <input type="hidden"
            name="type"
            value="<?= $esc($selectedType) ?>"
@@ -167,7 +165,7 @@ $renderScopeTree = static function (
             aria-controls="<?= $esc($menuId) ?>"
             title="<?= $esc($localize('搜索类型')) ?>">
         <span class="search-type-label search-category-label"><?= $esc($selectedLabel) ?></span>
-        <w:icon name="chevron-down" size="xs"></w:icon>
+        <?= $iconUse('chevron-down', 'xs') ?>
     </button>
     <div class="w-menu search-type-menu search-category-menu"
          id="<?= $esc($menuId) ?>"
@@ -176,9 +174,7 @@ $renderScopeTree = static function (
          aria-labelledby="<?= $esc($menuId) ?>-trigger"
          data-state="closed"
          hidden
-         aria-hidden="true">
-        <?php foreach ($types as $row): ?>
-            <?php
+         aria-hidden="true"><?php foreach ($types as $row):
             if (!is_array($row)) {
                 continue;
             }
@@ -189,65 +185,14 @@ $renderScopeTree = static function (
             $label = $localize($row['label'] ?? $code, $code);
             $children = is_array($row['children'] ?? null) ? $row['children'] : [];
             $hasChildren = $children !== [];
-            $isActive = $code === $selectedType && $selectedCategoryId <= 0;
+            $isActive = !$stableFragment && $code === $selectedType && $selectedCategoryId <= 0;
             $typeAllLabel = $code === 'all'
                 ? $label
                 : $localize('全部%{1}', '', [$label]);
-            ?>
-            <?php if (!$hasChildren): ?>
-                <button type="button"
-                        class="w-menu__item search-type-option search-category-option<?= $isActive ? ' is-active' : '' ?>"
-                        role="option"
-                        data-search-type-option
-                        data-value="<?= $esc($code) ?>"
-                        data-label="<?= $esc($label) ?>"
-                        data-display-label="<?= $esc($label) ?>"
-                        data-category-id=""
-                        aria-selected="<?= $isActive ? 'true' : 'false' ?>">
-                    <span class="search-type-option-label"><?= $esc($label) ?></span>
-                    <span class="search-type-option-check" aria-hidden="true">
-                        <w:icon name="check" size="sm"></w:icon>
-                    </span>
-                </button>
-            <?php else: ?>
-                <div class="search-type-node has-children<?= $code === $selectedType ? ' is-open' : '' ?>"
-                     data-search-type-node
-                     data-value="<?= $esc($code) ?>"
-                     data-state="<?= $code === $selectedType ? 'open' : 'closed' ?>">
-                    <button type="button"
-                            class="w-menu__item search-type-option search-type-option--branch search-category-option<?= $isActive ? ' is-active' : '' ?>"
-                            data-search-type-branch
-                            data-value="<?= $esc($code) ?>"
-                            data-label="<?= $esc($label) ?>"
-                            aria-haspopup="true"
-                            aria-expanded="<?= $code === $selectedType ? 'true' : 'false' ?>">
-                        <span class="search-type-option-label"><?= $esc($label) ?></span>
-                        <span class="search-type-option-chevron" aria-hidden="true">
-                            <w:icon name="chevron-right" size="xs"></w:icon>
-                        </span>
-                    </button>
-                    <div class="search-type-submenu search-type-menu"
-                         data-search-type-submenu
-                         role="group"
-                         <?= $code === $selectedType ? '' : 'hidden' ?>>
-                        <button type="button"
-                                class="w-menu__item search-type-option search-category-option<?= $isActive ? ' is-active' : '' ?>"
-                                role="option"
-                                data-search-type-option
-                                data-value="<?= $esc($code) ?>"
-                                data-label="<?= $esc($typeAllLabel) ?>"
-                                data-display-label="<?= $esc($label) ?>"
-                                data-category-id=""
-                                aria-selected="<?= $isActive ? 'true' : 'false' ?>">
-                            <span class="search-type-option-label"><?= $esc($typeAllLabel) ?></span>
-                            <span class="search-type-option-check" aria-hidden="true">
-                                <w:icon name="check" size="sm"></w:icon>
-                            </span>
-                        </button>
-                        <?php $renderScopeTree($children, $code, $label, $selectedCategoryId, $esc, $localize); ?>
-                    </div>
-                </div>
-            <?php endif; ?>
-        <?php endforeach; ?>
-    </div>
+            if (!$hasChildren):
+                ?><button type="button" class="w-menu__item search-type-option search-category-option<?= $isActive ? ' is-active' : '' ?>" role="option" data-search-type-option data-value="<?= $esc($code) ?>"<?= $dataLabelAttrs($label, $label) ?> data-category-id="" aria-selected="<?= $isActive ? 'true' : 'false' ?>"><span class="search-type-option-label"><?= $esc($label) ?></span><span class="search-type-option-check" aria-hidden="true"><?= $iconUse('check', 'sm') ?></span></button><?php
+            else:
+                ?><div class="search-type-node has-children" data-search-type-node data-value="<?= $esc($code) ?>" data-state="closed"><button type="button" class="w-menu__item search-type-option search-type-option--branch search-category-option<?= $isActive ? ' is-active' : '' ?>" data-search-type-branch data-value="<?= $esc($code) ?>" data-label="<?= $esc($label) ?>" aria-haspopup="true" aria-expanded="false"><span class="search-type-option-label"><?= $esc($label) ?></span><span class="search-type-option-chevron" aria-hidden="true"><?= $iconUse('chevron-right', 'xs') ?></span></button><div class="search-type-submenu search-type-menu" data-search-type-submenu role="group" hidden><button type="button" class="w-menu__item search-type-option search-category-option<?= $isActive ? ' is-active' : '' ?>" role="option" data-search-type-option data-value="<?= $esc($code) ?>"<?= $dataLabelAttrs($typeAllLabel, $label) ?> data-category-id="" aria-selected="<?= $isActive ? 'true' : 'false' ?>"><span class="search-type-option-label"><?= $esc($typeAllLabel) ?></span><span class="search-type-option-check" aria-hidden="true"><?= $iconUse('check', 'sm') ?></span></button><?php $renderScopeTree($children, $code, $label, $selectedCategoryId, $stableFragment, $esc, $localize, $iconUse, $dataLabelAttrs); ?></div></div><?php
+            endif;
+        endforeach; ?></div>
 </div>
