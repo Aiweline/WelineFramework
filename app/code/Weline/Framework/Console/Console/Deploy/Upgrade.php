@@ -93,12 +93,16 @@ class Upgrade extends CommandAbstract
             }
 
             if (is_dir($staticSource)) {
+                // Theme overlay（主题域 / theme-namespaced URL）；保留不回归。
                 $staticTarget = $staticRoot . DS . $theme['path'] . DS . $moduleViewDir
                     . DS . DataInterface::dir_type_STATICS;
                 if (!is_dir($staticTarget) && !mkdir($staticTarget, 0775, true) && !is_dir($staticTarget)) {
                     throw new \RuntimeException('Unable to create module static directory: ' . $staticTarget);
                 }
                 $this->recursiveCopy($staticSource, $staticTarget);
+
+                // PROD Module:: / resolveStaticPath 扁平树：整树铺到 pub/static/{Vendor}/{Module}/。
+                $this->publishModuleFlatStatics((string)$name, $staticSource, $staticRoot);
             }
 
             if (is_dir($themeSource)) {
@@ -107,6 +111,7 @@ class Upgrade extends CommandAbstract
             }
         }
 
+        // Provider 白名单降级为补充/兼容路径：与整树幂等双写，不再承担防 404 主路径。
         $this->publishFlatStaticRuntimeFiles($modules);
         $normalizePermissions($staticRoot);
         $this->printer->success('静态文件部署完毕！');
@@ -148,6 +153,44 @@ class Upgrade extends CommandAbstract
         return $published;
     }
 
+    /**
+     * 将模块 view/statics 整树扁平铺到 pub/static/{Vendor}/{Module}/（相对 statics 根）。
+     * 与 PROD resolveStaticPath / Module:: 约定对齐；无 statics 目录时 no-op。
+     */
+    private function publishModuleFlatStatics(string $moduleName, string $staticsSource, string $staticRoot): void
+    {
+        if (!is_dir($staticsSource)) {
+            return;
+        }
+
+        $flatTarget = $this->resolveFlatStaticModuleRoot($moduleName, $staticRoot);
+        if ($flatTarget === null) {
+            return;
+        }
+
+        if (!is_dir($flatTarget) && !mkdir($flatTarget, 0775, true) && !is_dir($flatTarget)) {
+            throw new \RuntimeException('Unable to create module flat static directory: ' . $flatTarget);
+        }
+
+        $this->recursiveCopy($staticsSource, $flatTarget);
+    }
+
+    /**
+     * Vendor_Module → {staticRoot}/{Vendor}/{Module}；非法名返回 null（不污染 static 根）。
+     */
+    private function resolveFlatStaticModuleRoot(string $moduleName, string $staticRoot): ?string
+    {
+        $moduleParts = explode('_', $moduleName, 2);
+        if (count($moduleParts) !== 2 || $moduleParts[0] === '' || $moduleParts[1] === '') {
+            return null;
+        }
+
+        return rtrim($staticRoot, '\\/') . \DS . $moduleParts[0] . \DS . $moduleParts[1];
+    }
+
+    /**
+     * 兼容桥：deploy.flat_static.* Provider 白名单文件幂等写入扁平树（可降级为补充路径）。
+     */
     private function publishFlatStaticRuntimeFiles(array $modules): void
     {
         foreach ($this->flatStaticRuntimeFiles() as $moduleName => $relativeFiles) {
@@ -202,15 +245,12 @@ class Upgrade extends CommandAbstract
             return;
         }
 
-        $moduleParts = explode('_', $moduleName, 2);
-        if (count($moduleParts) !== 2 || $moduleParts[0] === '' || $moduleParts[1] === '') {
+        $flatRoot = $this->resolveFlatStaticModuleRoot($moduleName, PUB . 'static');
+        if ($flatRoot === null) {
             return;
         }
 
-        $targetFile = PUB . 'static' . DS
-            . $moduleParts[0] . DS
-            . $moduleParts[1] . DS
-            . str_replace(['/', '\\'], DS, $relativeFile);
+        $targetFile = $flatRoot . DS . str_replace(['/', '\\'], DS, $relativeFile);
         $targetDir = dirname($targetFile);
         if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
             return;
