@@ -23,6 +23,12 @@
 **/doc/**/channel/**/*-qa-shots/
 **/doc/**/channel/**/qa-shots/
 **/sitewide-click-qa-shots/
+# Browser acceptance / page preview dumps in docs — local only, never commit
+**/doc/**/evidence/
+**/doc/**/meetings/evidence/
+**/doc/**/page-previews/
+**/doc/**/live-shots/
+**/doc/**/wireframes/effects/
 
 # Accidental cwd-relative writes when HOME was polluted to a site URL
 /http:
