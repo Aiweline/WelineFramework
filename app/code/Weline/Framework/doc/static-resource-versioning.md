@@ -2,6 +2,10 @@
 
 `@static(...)`、`<css>` 与 `<js>` 继续是模块静态资源的唯一模板入口。
 
+## PROD 扁平部署（overlay 与 flat 双树）
+
+`deploy:upgrade` 对每个活跃模块的 `view/statics`：**主题 overlay** 仍铺到 `pub/static/{theme.path}/…/view/statics/…`；同时**整树扁平**铺到 `pub/static/{Vendor}/{Module}/…`，与 PROD `Module::` / `resolveStaticPath`（无 theme、无 `view/statics` 段）对齐。既有 `deploy.flat_static.*` Provider 仅为可选补充/兼容，不再是防 404 主路径。
+
 ## Taglib callback 例外（常见 404 坑）
 
 `@static(...)` **只在 `.phtml` 编译期 AST 中解析**。Taglib `callback()` / `runtime_callback()` 返回的 HTML 字符串**不会**二次解析其中的 `@static`；裸写会导致浏览器请求 `.../@static(Module::css/foo.css)` 并 404。
