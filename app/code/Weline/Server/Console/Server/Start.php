@@ -3439,21 +3439,47 @@ class Start extends CommandAbstract
                     $processIdentity,
                 );
             } elseif ($inheritedDescriptors !== []) {
-                $command = \implode(' ', \array_map('escapeshellarg', $argv));
-                $spawnResults = Processer::batchCreate([
-                    'wls-master-startup-handoff' => [
-                        'command' => $command,
-                        'argv' => $argv,
-                        'cwd' => BP,
-                        'block' => false,
-                        'foreground' => false,
-                        'enableLog' => null,
-                        'childOwnsPid' => true,
-                        'masterOwned' => false,
-                        'inheritDescriptors' => $inheritedDescriptors,
-                    ],
-                ]);
-                $spawnedMasterPid = (int)($spawnResults['wls-master-startup-handoff'] ?? 0);
+                // Inherited-FD handoff needs the FFI-backed Unix batch launcher.
+                // Production PHP builds often omit FFI; falling back keeps Master
+                // startable via createDetachedPhpArgv after releasing the sockets.
+                $ffiReady = \extension_loaded('FFI') && \class_exists(\FFI::class, false);
+                $spawnedMasterPid = 0;
+                if ($ffiReady) {
+                    try {
+                        $command = \implode(' ', \array_map('escapeshellarg', $argv));
+                        $spawnResults = Processer::batchCreate([
+                            'wls-master-startup-handoff' => [
+                                'command' => $command,
+                                'argv' => $argv,
+                                'cwd' => BP,
+                                'block' => false,
+                                'foreground' => false,
+                                'enableLog' => null,
+                                'childOwnsPid' => true,
+                                'masterOwned' => false,
+                                'inheritDescriptors' => $inheritedDescriptors,
+                            ],
+                        ]);
+                        $spawnedMasterPid = (int)($spawnResults['wls-master-startup-handoff'] ?? 0);
+                    } catch (\RuntimeException $throwable) {
+                        if (!\str_contains(
+                            $throwable->getMessage(),
+                            'Unix batch process creation is unavailable'
+                        )) {
+                            throw $throwable;
+                        }
+                        $spawnedMasterPid = 0;
+                    }
+                }
+                if ($spawnedMasterPid <= 0) {
+                    $this->closeStartupListenerCopies();
+                    $spawnedMasterPid = Processer::createDetachedPhpArgv(
+                        $argv,
+                        BP,
+                        $processIdentity,
+                        null
+                    );
+                }
                 if ($spawnedMasterPid <= 0) {
                     throw new \RuntimeException(
                         'POSIX Master inherited-listener launcher did not return a child PID.'

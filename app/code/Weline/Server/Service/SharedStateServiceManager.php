@@ -1660,6 +1660,22 @@ class SharedStateServiceManager
             return $pids;
         }
 
+        // POSIX: always detach (fork+setsid / out-of-process helper). Do NOT use
+        // masterOwned proc_open — CLI shutdown reaps those with SIGTERM, and
+        // masterOwned=false requires FFI which production PHP often lacks.
+        if (!(\defined('IS_WIN') && IS_WIN)) {
+            $pids = [];
+            foreach ($definitions as $definition) {
+                $role = (string)($definition['role'] ?? '');
+                $pid = $this->launchSharedServiceProcess($definition, $requesterInstanceName, false);
+                if ($pid <= 0) {
+                    throw new \RuntimeException($this->buildSharedSpawnFailureMessage($definition));
+                }
+                $pids[$role] = $pid;
+            }
+            return $pids;
+        }
+
         $commands = [];
         foreach ($definitions as $definition) {
             $command = $this->buildLaunchCommand($definition, $requesterInstanceName);
@@ -1721,10 +1737,8 @@ class SharedStateServiceManager
                 'foreground' => $frontend,
                 'enableLog' => true,
                 'childOwnsPid' => true,
-                // Shared Session/Memory must outlive server:shared:start and any
-                // short-lived ensure CLI. masterOwned=true registers a Processer
-                // shutdown reap that SIGTERMs children when the parent PHP exits
-                // (Linux without FFI used that path and killed sidecars within ~1s).
+                // Windows WMI path only. POSIX shared sidecars use createDetachedPhpArgv
+                // (see launchSharedServiceProcess) so CLI exit never SIGTERMs them.
                 'masterOwned' => false,
                 'isolateParentHandles' => \defined('IS_WIN') && IS_WIN,
                 'windowsArgv' => $argv,
@@ -1759,6 +1773,27 @@ class SharedStateServiceManager
         if ($logInstanceName === '') {
             $logInstanceName = 'default';
         }
+
+        // POSIX: detach so Session/Memory outlive server:shared:start / ensure CLI.
+        // Never use masterOwned proc_open here — shutdown reap kills sidecars in ~1s
+        // on Linux without FFI (and masterOwned=false cannot launch without FFI).
+        if (!(\defined('IS_WIN') && IS_WIN) && !$frontend) {
+            $logConfig = WlsLogService::getProcessLaunchLogConfig(
+                processName: $processName,
+                instanceName: $logInstanceName,
+                enableLog: true
+            );
+            $outputLog = (string)($logConfig['outputLogFile'] ?? '');
+            return Processer::createDetachedPhpArgv(
+                $argv,
+                $command->getWorkingDir(),
+                $registryIdentity,
+                true,
+                $outputLog !== '' ? $outputLog : null,
+                $outputLog !== '' ? $outputLog : null
+            );
+        }
+
         $pids = Processer::batchCreate([
             'shared-service' => $this->buildSharedProcessBatchConfig(
                 $registryIdentity,
