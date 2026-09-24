@@ -19,11 +19,19 @@ use Weline\Framework\Runtime\Resumable\Runner\RuntimeRunnerProcessSupervisorInte
  */
 final class RuntimeTaskWatchdog
 {
+    private bool $shutdownDrain = false;
+
     public function __construct(
         private readonly RuntimeWatchdogGatewayInterface $gateway,
         private readonly RuntimeRunnerProcessSupervisorInterface $supervisor,
         private readonly RuntimeRunnerProcessLauncherInterface $launcher,
     ) {
+    }
+
+    /** Cooperative WLS shutdown: stop Runners without launching recovery. */
+    public function beginShutdownDrain(): void
+    {
+        $this->shutdownDrain = true;
     }
 
     public function tick(?DateTimeImmutable $now = null, int $limit = 100): RuntimeWatchdogReport
@@ -40,6 +48,12 @@ final class RuntimeTaskWatchdog
             $report->inspected++;
             $probe = $this->resolveProbe($subject);
             $this->gateway->recordProcessProbe($subject, $probe, $now);
+
+            if ($this->shutdownDrain && !$subject->stopRequested && !$subject->recoveryStopRequested) {
+                $this->gateway->requestRecoveryStop($subject, 'wls_shutdown', $now);
+                $report->recoveryStopsRequested++;
+                continue;
+            }
 
             if ($subject->allClientLeasesExpired && !$subject->stopRequested) {
                 $this->gateway->requestCooperativeStop($subject, 'client_lease_expired', $now);
@@ -60,7 +74,7 @@ final class RuntimeTaskWatchdog
             // An exited process can be discovered before the heartbeat lease
             // expires. Recover it only when the durable task adapter confirms
             // the task is still eligible and atomically advances its fence.
-            if ($probe->allowsRecovery() && $subject->recoveryEligible) {
+            if (!$this->shutdownDrain && $probe->allowsRecovery() && $subject->recoveryEligible) {
                 $this->launchRecovery($subject, $now, $report);
             }
         }
@@ -133,6 +147,9 @@ final class RuntimeTaskWatchdog
         DateTimeImmutable $now,
         RuntimeWatchdogReport $report,
     ): void {
+        if ($this->shutdownDrain) {
+            return;
+        }
         $command = $this->gateway->claimRecovery($subject, $now);
         if ($command === null) {
             // A concurrent watchdog or a manual action won the CAS. This is a

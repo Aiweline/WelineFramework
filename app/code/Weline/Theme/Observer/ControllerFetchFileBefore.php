@@ -28,6 +28,7 @@ use Weline\Theme\Helper\ThemeModeResolver;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewContextService;
+use Weline\Theme\Service\Storefront\StorefrontRenderContextBag;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeMetaIdentityService;
 use Weline\Theme\Service\ThemePageTypeResolver;
@@ -294,7 +295,13 @@ class ControllerFetchFileBefore implements ObserverInterface
         $allowPreviewTheme = !$isBackendRequest
             || $editorArea === 'frontend'
             || ($editorArea === 'backend' && $isThemeEditorPreviewRoute);
-        $theme = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.context', fn() => $this->resolveThemeForLayout($area, $allowPreviewTheme));
+        $theme = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            \Weline\Theme\Service\ThemeLayoutBudgetPhases::L0_CONTEXT,
+            fn() => \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                'theme.layout.context',
+                fn() => $this->resolveThemeForLayout($area, $allowPreviewTheme),
+            ),
+        );
 
         // 如果没有指定 layoutType，使用默认值（确保布局信息始终存在）
         $originalLayoutType = $layoutType;
@@ -645,6 +652,10 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // get() 方法用于获取 .value 格式的配置值，对于非 .value 格式会调用 MetaData::get()
                 // MetaData::get() 会返回 MetaData 对象，创建对象时会进行数据库查询，可能导致阻塞
                 // getMeta() 方法从性能缓存中读取，不会触发额外的数据库查询
+                // WS1: layout path consumes storefront.render_context.v1 —
+                // theme_meta via ThemeData::getMeta; website_table_snapshot via Bag
+                // (fill remains Installer/Websites; Theme never installs a parallel bag).
+                StorefrontRenderContextBag::websiteTableSnapshot();
                 $themeMetaDataObj = ThemeData::getMeta("theme.{$area}.layouts.{$layoutType}");
                 if ($themeMetaDataObj && !empty($themeMetaDataObj['meta_data'])) {
                     // 合并 meta_data 中的配置值到 metaData

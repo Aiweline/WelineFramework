@@ -6,6 +6,7 @@ namespace Weline\Product\Helper;
 
 use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\View\Template;
 use Weline\Product\Service\StorefrontCatalogViewService;
 
@@ -15,24 +16,46 @@ use Weline\Product\Service\StorefrontCatalogViewService;
  *
  * Identity comes from request Context (`input.query.id` / `slug`) after Router/Detail
  * resolve once — do not re-parse public URLs here.
+ *
+ * Seed projection is dual-written to Fiber-safe {@see RequestContext} bag
+ * {@see self::REQUEST_SEED_KEY} so `bundleCards` / shelves reuse the PDP offer
+ * without a second `publishedOffersForProductIds([$seed])`.
  */
 final class StorefrontOfferResolver
 {
     private const CONTEXT_OFFER_KEY = 'product.storefront.resolved_offer';
 
+    /** RequestContext projection (WS4); parallel to legacy Context key, not a second authority. */
+    public const REQUEST_SEED_KEY = 'product.pdp_seed_offer.v1';
+
     /** Carry the selected PDP projection to independent slot templates in this request. */
     public static function rememberResolvedOffer(array $offer): void
     {
-        if (Context::hasCurrent()) {
-            Context::current()->set(self::CONTEXT_OFFER_KEY, $offer);
+        if (!Context::hasCurrent()) {
+            return;
         }
+        Context::current()->set(self::CONTEXT_OFFER_KEY, $offer);
+        RequestContext::set(self::REQUEST_SEED_KEY, $offer);
+        // Mirror legacy key into RequestContext storage for Fiber-safe reads.
+        RequestContext::set(self::CONTEXT_OFFER_KEY, $offer);
     }
 
     /** @return array<string, mixed> */
     public static function currentOffer(): array
     {
+        if (Context::hasCurrent()) {
+            $fromSeed = RequestContext::get(self::REQUEST_SEED_KEY);
+            if (\is_array($fromSeed) && $fromSeed !== []) {
+                return $fromSeed;
+            }
+            $fromRc = RequestContext::get(self::CONTEXT_OFFER_KEY);
+            if (\is_array($fromRc) && $fromRc !== []) {
+                return $fromRc;
+            }
+        }
         $offer = Context::getCurrent()?->get(self::CONTEXT_OFFER_KEY);
-        return is_array($offer) ? $offer : [];
+
+        return \is_array($offer) ? $offer : [];
     }
 
     /**

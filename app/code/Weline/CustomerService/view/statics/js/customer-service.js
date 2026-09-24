@@ -301,9 +301,43 @@ const CustomerServiceWidget = (function() {
         return customerServiceApiPromise;
     }
 
+    function hasLoadedWidgetTranslations() {
+        const bag = config.widgetTranslations;
+        return !!(bag && typeof bag === 'object' && !Array.isArray(bag) && Object.keys(bag).length > 0);
+    }
+
+    /**
+     * P10: dictionaries are not SSR'd into body-end; batch-load on first open / language change.
+     */
+    async function ensureWidgetTranslations(force) {
+        if (!force && hasLoadedWidgetTranslations()) {
+            return true;
+        }
+        if (widgetTranslationsLoadPromise && !force) {
+            return widgetTranslationsLoadPromise;
+        }
+        widgetTranslationsLoadPromise = (async function () {
+            try {
+                const data = await (await getCustomerServiceApi()).widgetTranslations({}, {silent: true});
+                if (data && data.success && data.data && data.data.translations
+                    && typeof data.data.translations === 'object') {
+                    config.widgetTranslations = data.data.translations;
+                    updateWidgetLocaleText();
+                    return true;
+                }
+            } catch (error) {
+                console.error('[CustomerService] widget translations load failed', error);
+            }
+            widgetTranslationsLoadPromise = null;
+            return false;
+        })();
+        return widgetTranslationsLoadPromise;
+    }
+
     let sessionInitializationPromise = null;
     let guestBindPromptShown = false;
     let customerServiceApiPromise = null;
+    let widgetTranslationsLoadPromise = null;
     let miniCartStateObserver = null;
     let widgetControlsBound = false;
     
@@ -1014,6 +1048,7 @@ const CustomerServiceWidget = (function() {
             chatWindow.style.display = 'flex';
             chatButton.style.display = 'none';
             widget?.classList.add('is-open');
+            await ensureWidgetTranslations(false);
             await activateChat();
             await markChatReadFromServer();
         }
@@ -2701,6 +2736,7 @@ const CustomerServiceWidget = (function() {
     async function changeLanguage(locale) {
         state.locale = locale;
         saveState();
+        await ensureWidgetTranslations(false);
         updateWidgetLocaleText();
 
         const sessionReady = await ensureSessionReady();

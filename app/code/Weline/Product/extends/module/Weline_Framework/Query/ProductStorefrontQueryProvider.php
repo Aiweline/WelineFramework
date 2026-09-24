@@ -31,6 +31,9 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'searchPublishedOffers' => $this->searchPublishedOffers($params),
             'cardsByProductIds' => $this->cardsByProductIds($params),
+            'bundleCards' => $this->bundleCards($params),
+            'youMayLikeCards' => $this->youMayLikeCards($params),
+            'recentlyViewedCards' => $this->recentlyViewedCards($params),
             'liveOffersByProductIds' => $this->liveOffersByProductIds($params),
             'submitQuoteRequest' => $this->submitQuoteRequest($params),
             default => throw new \InvalidArgumentException((string)__(
@@ -65,8 +68,9 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'cardsByProductIds',
-                    'frontend' => false,
+                    'frontend' => true,
                     'external' => false,
+                    'auth' => 'any',
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 3,
@@ -75,7 +79,52 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
                         ['name' => 'limit', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 24],
                     ],
                     'returns' => ['type' => 'array'],
-                    'summary' => 'Batch storefront cards for explicit product IDs (targeted catalog; no live N+1)',
+                    'summary' => 'Batch storefront cards for explicit product IDs (targeted catalog; no live N+1); BinQuery hydrate',
+                ],
+                [
+                    'name' => 'bundleCards',
+                    'frontend' => true,
+                    'external' => false,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 4,
+                    'params' => [
+                        ['name' => 'seed_product_id', 'type' => 'int', 'required' => true, 'min' => 1],
+                        ['name' => 'companion_limit', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 3],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'PDP cross-sell bundle (seed + same-category companions); batch only',
+                ],
+                [
+                    'name' => 'youMayLikeCards',
+                    'frontend' => true,
+                    'external' => false,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 4,
+                    'params' => [
+                        ['name' => 'exclude_product_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 8],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'PDP you-may-like cards (same-category companions batch)',
+                ],
+                [
+                    'name' => 'recentlyViewedCards',
+                    'frontend' => true,
+                    'external' => false,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => [
+                        ['name' => 'limit', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 6],
+                        ['name' => 'exclude_product_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Recently-viewed cards via cookie MRU → cardsByProductIds batch (no live N+1)',
                 ],
                 [
                     'name' => 'liveOffersByProductIds',
@@ -108,6 +157,57 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
                 ],
             ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return list<array<string, mixed>>
+     */
+    private function bundleCards(array $params): array
+    {
+        $seedProductId = max(0, (int)($params['seed_product_id'] ?? 0));
+        $companionLimit = max(1, min(3, (int)($params['companion_limit'] ?? 3)));
+        if ($seedProductId <= 0) {
+            return [];
+        }
+
+        return ObjectManager::getInstance(\Weline\Product\Service\StorefrontProductWidgetCatalog::class)
+            ->bundleCards($seedProductId, $companionLimit);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return list<array<string, mixed>>
+     */
+    private function youMayLikeCards(array $params): array
+    {
+        $excludeProductId = max(0, (int)($params['exclude_product_id'] ?? 0));
+        $limit = max(1, min(8, (int)($params['limit'] ?? 8)));
+
+        return ObjectManager::getInstance(\Weline\Product\Service\StorefrontProductWidgetCatalog::class)
+            ->youMayLikeCards($excludeProductId, $limit);
+    }
+
+    /**
+     * Soft-depends on Weline_RecentlyViewed; empty when module unavailable.
+     *
+     * @param array<string, mixed> $params
+     * @return list<array<string, mixed>>
+     */
+    private function recentlyViewedCards(array $params): array
+    {
+        $limit = max(1, min(6, (int)($params['limit'] ?? 6)));
+        $excludeProductId = max(0, (int)($params['exclude_product_id'] ?? 0));
+        if (!\class_exists(\Weline\RecentlyViewed\Service\RecentlyViewedService::class)) {
+            return [];
+        }
+
+        try {
+            return ObjectManager::getInstance(\Weline\RecentlyViewed\Service\RecentlyViewedService::class)
+                ->cards($limit, $excludeProductId);
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /** @return array<int, array<string, mixed>> */

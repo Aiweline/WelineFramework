@@ -96,7 +96,7 @@ final class EntityAttributeScopeColumnCacheTest extends TestCase
         $this->newRequest();
         self::assertFalse($this->probe($model));
         self::assertFalse($this->probe($model));
-        self::assertCount(3, $db->reads, 'The next request refreshes the schema fact.');
+        self::assertCount(3, $db->reads, 'The next request refreshes the schema fact when shared policy is unavailable.');
 
         Context::leave();
         $cache = new StorefrontScopeHotCache();
@@ -104,6 +104,15 @@ final class EntityAttributeScopeColumnCacheTest extends TestCase
         self::assertFalse($this->probe($model));
         self::assertFalse($this->probe($model));
         self::assertCount(5, $db->reads, 'CLI without a request context must keep querying.');
+    }
+
+    public function testScopeColumnProbePrefersSharedHotCachePolicyWhenAvailable(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/EntityAttributeStore.php');
+        self::assertStringContainsString("resource: 'eav.value_table.scope_columns'", $src);
+        self::assertStringContainsString("pool: 'eav'", $src);
+        self::assertStringContainsString('global/storefront/eav', $src);
+        self::assertStringContainsString('rememberPolicy', $src);
     }
 
     private function newRequest(): void

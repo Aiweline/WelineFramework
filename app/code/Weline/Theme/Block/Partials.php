@@ -1428,13 +1428,24 @@ class Partials extends Block
             return $this->traceCall(
                 $tracePrefix . '::fetch_html',
                 fn() => RequestLifecycleTrace::measurePhase(
-                    'theme.partials.fetch.' . match ($type) {
-                        'header' => 'header',
-                        'head' => 'head',
-                        'footer' => 'footer',
-                        default => 'other',
-                    },
-                    fn() => $this->fetchCachedPartialHtml($path, $data, $area, $type, $defaultOption),
+                    $type === 'header'
+                        ? \Weline\Theme\Service\ThemeLayoutBudgetPhases::L2_HEADER
+                        : ('theme.partials.fetch.' . match ($type) {
+                            'head' => 'head',
+                            'footer' => 'footer',
+                            default => 'other',
+                        }),
+                    fn() => $type === 'header'
+                        ? RequestLifecycleTrace::measurePhase(
+                            'theme.header.bar',
+                            fn() => RequestLifecycleTrace::measurePhase(
+                                'theme.partials.fetch.header',
+                                fn() => $this->fetchCachedPartialHtml($path, $data, $area, $type, $defaultOption),
+                                ['partial_type' => $type],
+                            ),
+                            ['partial_type' => $type],
+                        )
+                        : $this->fetchCachedPartialHtml($path, $data, $area, $type, $defaultOption),
                     ['partial_type' => $type],
                 )
             );

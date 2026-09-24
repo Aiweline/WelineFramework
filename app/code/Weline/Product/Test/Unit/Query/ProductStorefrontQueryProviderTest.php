@@ -27,13 +27,30 @@ final class ProductStorefrontQueryProviderTest extends TestCase
             }
         }
         self::assertNotNull($cardsOp);
-        self::assertFalse($cardsOp['frontend']);
+        self::assertTrue($cardsOp['frontend']);
         self::assertFalse($cardsOp['external']);
+        self::assertSame('any', $cardsOp['auth'] ?? null);
         self::assertSame('read', $cardsOp['mode']);
         self::assertSame(
             ['product_ids', 'limit'],
             array_column($cardsOp['params'], 'name'),
         );
+
+        self::assertContains('bundleCards', $names);
+        self::assertContains('youMayLikeCards', $names);
+        self::assertContains('recentlyViewedCards', $names);
+        foreach (['bundleCards', 'youMayLikeCards', 'recentlyViewedCards'] as $opName) {
+            $op = null;
+            foreach ($descriptor['operations'] as $operation) {
+                if (($operation['name'] ?? '') === $opName) {
+                    $op = $operation;
+                    break;
+                }
+            }
+            self::assertNotNull($op, $opName);
+            self::assertTrue($op['frontend'], $opName . ' must be BinQuery frontend');
+            self::assertSame('any', $op['auth'] ?? null, $opName);
+        }
     }
 
     public function testCardsByProductIdsPreservesOrderDedupesAndSkipsMissing(): void

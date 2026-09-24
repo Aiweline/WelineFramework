@@ -10,9 +10,11 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
+use Weline\Framework\Cache\CachePolicy;
 use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -31,6 +33,7 @@ use Weline\Meta\Api\MetadataRepositoryInterface;
 use Weline\Meta\Api\ParamDefinitionNormalizerInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewThemeScopeService;
+use Weline\Theme\Service\Storefront\StorefrontRenderContextBag;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Widget\Api\Param\ParamDefinition;
 
@@ -997,6 +1000,13 @@ class ThemeData
         if (isset($state->performanceCache[$cacheKey])) {
             return $state->performanceCache[$cacheKey];
         }
+
+        // WS1: prefer bag theme_meta before MetaList / w_meta.
+        $fromBag = StorefrontRenderContextBag::themeMetaIdentify($identify);
+        if (\is_array($fromBag) && $fromBag !== []) {
+            $state->performanceCache[$cacheKey] = $fromBag;
+            return $fromBag;
+        }
         
         // 解析 identify 提取 area 和 type
         // 格式：theme.{area}.{type}.{rest}
@@ -1815,27 +1825,70 @@ class ThemeData
             return $state->performanceCache[$cacheKey];
         }
 
+        // WS1: bag theme_meta list wins over HotCache / w_meta when Installer filled it.
+        $fromBag = StorefrontRenderContextBag::themeMetaList($area, $type);
+        if (\is_array($fromBag)) {
+            $state->performanceCache[$cacheKey] = $fromBag;
+            self::setRuntimeCache($cacheKey, $fromBag);
+            return $fromBag;
+        }
+
         [$runtimeHit, $runtimeValue] = self::getRuntimeCache($cacheKey);
         if ($runtimeHit && is_array($runtimeValue)) {
             $state->performanceCache[$cacheKey] = $runtimeValue;
             return $runtimeValue;
         }
-        
+
         try {
-            $records = self::metadataRepository()->search(new MetadataSearch(
-                namespace: 'theme',
-                identifyPrefix: "theme.{$area}.{$type}.",
-            ));
-            $result = [];
-            foreach ($records as $record) {
-                if (!$record instanceof MetadataRecord) {
-                    continue;
-                }
-                $result[] = self::metadataRecordToArray($record);
+            /** @var StorefrontScopeHotCache $hotCache */
+            $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+            $result = $hotCache->rememberForRequest(
+                'theme.meta_list',
+                $cacheKey,
+                static function () use ($hotCache, $cacheKey, $area, $type): array {
+                    $load = static function () use ($area, $type): array {
+                        $records = self::metadataRepository()->search(new MetadataSearch(
+                            namespace: 'theme',
+                            identifyPrefix: "theme.{$area}.{$type}.",
+                        ));
+                        $rows = [];
+                        foreach ($records as $record) {
+                            if (!$record instanceof MetadataRecord) {
+                                continue;
+                            }
+                            $rows[] = self::metadataRecordToArray($record);
+                        }
+
+                        return $rows;
+                    };
+                    try {
+                        $cached = $hotCache->rememberPolicy(
+                            new CachePolicy(
+                                resource: 'theme.meta_list',
+                                pool: 'theme',
+                                scope: 'global',
+                                dependencies: ['global/storefront/theme'],
+                                freshTtlSeconds: 300,
+                                staleTtlSeconds: 1800,
+                            ),
+                            $cacheKey,
+                            $load,
+                        );
+
+                        return \is_array($cached) ? $cached : [];
+                    } catch (\Throwable) {
+                        return $load();
+                    }
+                },
+            );
+            if (!\is_array($result)) {
+                $result = [];
             }
-            
+
             $state->performanceCache[$cacheKey] = $result;
             self::setRuntimeCache($cacheKey, $result);
+            // WS1: Installer leaves theme_meta null — lazy-merge loaded list into the bag.
+            StorefrontRenderContextBag::mergeThemeMetaList($area, $type, $result);
             return $result;
         } catch (\Throwable) {
             return [];

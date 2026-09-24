@@ -19,6 +19,8 @@ final class CrossSellEmptyShellContractTest extends TestCase
         self::assertStringContainsString('data-testid="cross-sell-empty"', $source);
         self::assertStringContainsString('hidden', $source);
         self::assertStringContainsString('aria-hidden="true"', $source);
+        self::assertStringContainsString('data-testid="cross-sell-deferred"', $source);
+        self::assertStringContainsString('StorefrontPdpShelfDeferral::shouldDeferCardAssembly', $source);
         self::assertStringNotContainsString(
             "if (count(\$products) < 2) {\n    return;\n}",
             $source,

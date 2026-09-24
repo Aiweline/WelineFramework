@@ -363,13 +363,17 @@ final class GatewayFallbackProviderTest extends TestCase
             $loop->getStartLine() - 1,
             $loop->getEndLine() - $loop->getStartLine() + 1,
         ));
-        self::assertStringContainsString('self::HEARTBEAT_SECONDS', $loopSource);
+        self::assertStringContainsString('CertificateRetirementReplayBackoff', $loopSource);
+        self::assertStringContainsString('noteEmptyQueue()', $loopSource);
+        self::assertStringContainsString('notePendingQueue()', $loopSource);
+        self::assertStringContainsString('probeCacheTtlSeconds()', $loopSource);
         self::assertStringContainsString(
             'pendingRetirementIntents($now + 0.25)',
             $loopSource,
         );
         self::assertStringContainsString("'retirements'", $loopSource);
         self::assertStringContainsString('startDesiredStateJob(', $loopSource);
+        self::assertStringNotContainsString('self::HEARTBEAT_SECONDS', $loopSource);
 
         $worker = new \ReflectionMethod(Agent::class, 'executeDesiredStateWorker');
         $workerSource = \implode('', \array_slice(

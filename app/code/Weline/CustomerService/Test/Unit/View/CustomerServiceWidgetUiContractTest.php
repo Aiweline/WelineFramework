@@ -13,9 +13,27 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
         $content = (string) file_get_contents($hookFile);
 
-        $this->assertStringContainsString('omitClientDictionaries', $content);
-        $this->assertStringContainsString('StaticErrorPagePublisher::CTX_PUBLISHING', $content);
+        // P10: dictionaries never SSR into body-end (open-time Query batch instead).
         $this->assertStringContainsString('new \\stdClass()', $content);
+        $this->assertStringContainsString('dictionaries load on first chat open', $content);
+        $this->assertStringNotContainsString('getWidgetTranslationsForLocales', $content);
+        $this->assertStringNotContainsString('omitClientDictionaries', $content);
+    }
+
+    public function testBodyEndKeepsSlimConfigWithoutEmbeddedDictionaries(): void
+    {
+        $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+        $content = (string) file_get_contents($hookFile);
+        $js = (string) file_get_contents(dirname(__DIR__, 3) . '/view/statics/js/customer-service.js');
+        $provider = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/CustomerServiceQueryProvider.php'
+        );
+
+        $this->assertStringContainsString('widgetTranslations: <?= json_encode($widgetTranslations', $content);
+        $this->assertStringContainsString('ensureWidgetTranslations', $js);
+        $this->assertStringContainsString('widgetTranslations({}, {silent: true})', $js);
+        $this->assertStringContainsString("'name' => 'widgetTranslations'", $provider);
+        $this->assertStringContainsString("'widgetTranslations' => \$this->widgetTranslations(\$params)", $provider);
     }
 
     public function testFrontendWidgetUsesWelineFormControls(): void

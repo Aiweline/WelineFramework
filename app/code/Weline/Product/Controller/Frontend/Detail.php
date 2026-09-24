@@ -14,6 +14,7 @@ use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Service\ProductStorefrontBreadcrumbBuilder;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontEavLabelResolver;
+use Weline\Product\Service\StorefrontPdpShelfDeferral;
 use Weline\Product\Service\StorefrontVariantSelectionService;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Service\ProductLayoutCacheBustService;
@@ -219,6 +220,8 @@ final class Detail extends FrontendController
         $this->assign('storefront_offer', $displayOffer);
         $this->assign('storefront_offers', $offers);
         StorefrontOfferResolver::rememberResolvedOffer($displayOffer);
+        // WS4 cold path: defer companion/recently-viewed SSR card assembly; hydrate via BinQuery.
+        StorefrontPdpShelfDeferral::enableForRequest();
         $this->carryResolvedIdentity(
             max(0, (int)($displayOffer['product_id'] ?? $productIdForLabels)),
             $canonicalSlug !== '' ? $canonicalSlug : $slug,

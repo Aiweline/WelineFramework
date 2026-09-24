@@ -832,13 +832,94 @@ final class ResumableTaskStore
 
     public function hasActiveLeases(string $taskId, ?int $now = null): bool
     {
+        $taskId = trim($taskId);
+        if ($taskId === '') {
+            return false;
+        }
+
+        return ($this->hasActiveLeasesForTaskIds([$taskId], $now)[$taskId] ?? false) === true;
+    }
+
+    /**
+     * One `task_id IN (...)` lease probe for a watchdog tick.
+     *
+     * @param list<string>|array<int|string, string> $taskIds
+     * @return array<string, bool> task_id => has active lease
+     */
+    public function hasActiveLeasesForTaskIds(array $taskIds, ?int $now = null): array
+    {
+        $normalized = [];
+        foreach ($taskIds as $taskId) {
+            $taskId = trim((string)$taskId);
+            if ($taskId === '') {
+                continue;
+            }
+            $normalized[$taskId] = false;
+        }
+        if ($normalized === []) {
+            return [];
+        }
         $rows = $this->newLeaseModel()
-            ->where(ResumableTaskLease::schema_fields_TASK_ID, $taskId)
-            ->where(ResumableTaskLease::schema_fields_EXPIRES_AT, date('Y-m-d H:i:s', $now ?? time()), '>')
-            ->limit(1)
+            ->fields(ResumableTaskLease::schema_fields_TASK_ID)
+            ->where(ResumableTaskLease::schema_fields_TASK_ID, array_keys($normalized), 'IN')
+            ->where(
+                ResumableTaskLease::schema_fields_EXPIRES_AT,
+                date('Y-m-d H:i:s', $now ?? time()),
+                '>',
+            )
             ->select()
             ->fetchArray();
-        return is_array($rows) && $rows !== [];
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $taskId = trim((string)($row[ResumableTaskLease::schema_fields_TASK_ID] ?? ''));
+            if ($taskId !== '' && array_key_exists($taskId, $normalized)) {
+                $normalized[$taskId] = true;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Batch-load non-terminal (or any) tasks by id for watchdog / recovery paths.
+     *
+     * @param list<string>|array<int|string, string> $taskIds
+     * @return array<string, array<string,mixed>> task_id => task row
+     */
+    public function findTasksByIds(array $taskIds): array
+    {
+        $normalized = [];
+        foreach ($taskIds as $taskId) {
+            $taskId = trim((string)$taskId);
+            if ($taskId === '') {
+                continue;
+            }
+            $normalized[$taskId] = true;
+        }
+        if ($normalized === []) {
+            return [];
+        }
+        $rows = $this->newTaskModel()
+            ->where(ResumableTask::schema_fields_TASK_ID, array_keys($normalized), 'IN')
+            ->select()
+            ->fetchArray();
+        $tasks = [];
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $task = $this->newTaskModel();
+            $task->setData($row);
+            $taskRow = $this->taskRow($task);
+            $id = (string)($taskRow['task_id'] ?? '');
+            if ($id !== '') {
+                $tasks[$id] = $taskRow;
+            }
+        }
+
+        return $tasks;
     }
 
     /**

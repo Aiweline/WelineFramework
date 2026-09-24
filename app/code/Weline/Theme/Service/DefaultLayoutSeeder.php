@@ -324,6 +324,7 @@ class DefaultLayoutSeeder
                         'limit' => 8,
                         'columns' => 4,
                         'layout' => 'grid',
+                        'lazy_load' => true,
                     ],
                     'sort_order' => 0,
                 ],
@@ -336,8 +337,9 @@ class DefaultLayoutSeeder
                     'widget_type' => 'product',
                     'config' => [
                         'title' => '最近浏览',
-                        'limit' => 24,
+                        'limit' => 6,
                         'columns' => 4,
+                        'lazy_load' => true,
                     ],
                     'sort_order' => 1,
                 ],

@@ -52,27 +52,9 @@ $storefrontLocale = WidgetI18n::localeFromRequestUri($requestUriForLocale)
     ?? WidgetI18n::localeFromRequestUri((string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? '')));
 $currentLocale = $storefrontLocale
     ?: (State::getLangLocal() ?: $defaultCustomerLocale);
-// Static 404/maintenance snapshots are already SSR'd per locale — do not embed
-// multi-locale client dictionaries (would bloat pub/errors and is unused).
-$omitClientDictionaries = \Weline\Framework\Runtime\RequestContext::get(
-    \Weline\Framework\Http\StaticErrorPagePublisher::CTX_PUBLISHING,
-    false
-) === true;
-if ($omitClientDictionaries) {
-    // Prefer {} over [] so clients treat it as a locale map, not a list.
-    $widgetTranslations = new \stdClass();
-} else {
-    $widgetLocaleCodes = array_column($supportedLocales, 'code');
-    $widgetLocaleCodes[] = $currentLocale;
-    $widgetLocaleCodes[] = $defaultCustomerLocale;
-    $widgetLocaleCodes[] = 'zh_Hans_CN';
-    if ($storefrontLocale !== null) {
-        $widgetLocaleCodes[] = $storefrontLocale;
-    }
-    $widgetTranslations = $widgetTranslationService->getWidgetTranslationsForLocales(
-        array_values(array_unique($widgetLocaleCodes))
-    );
-}
+// P10: keep body-end config slim — dictionaries load on first chat open via Query.
+// Prefer {} over [] so clients treat it as a locale map, not a list.
+$widgetTranslations = new \stdClass();
 $cs = static fn (string $source): string => WidgetI18n::label($source);
 
 $customerServiceModule = Env::getInstance()->getModuleList()['Weline_CustomerService'] ?? [];

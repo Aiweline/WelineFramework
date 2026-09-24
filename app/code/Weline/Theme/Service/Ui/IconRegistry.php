@@ -172,6 +172,85 @@ final class IconRegistry
         );
     }
 
+    /** Inner path markup for one registered icon (safe for <symbol>). */
+    public function pathMarkup(string $name): string
+    {
+        $name = $this->has($name) ? $name : 'circle';
+
+        return self::ICONS[$name];
+    }
+
+    /**
+     * Page-local hidden sprite for repeated icons (search type dropdown etc.).
+     * Prefer over inlining full SVG per node; pair with {@see renderUse()}.
+     *
+     * @param list<string> $names
+     */
+    public function localSprite(string $idPrefix, array $names): string
+    {
+        $idPrefix = trim($idPrefix);
+        if ($idPrefix === '' || preg_match('/^[A-Za-z][A-Za-z0-9:_-]{0,120}$/', $idPrefix) !== 1) {
+            $idPrefix = 'w-icon-local';
+        }
+        $symbols = [];
+        $seen = [];
+        foreach ($names as $name) {
+            $name = trim((string)$name);
+            if ($name === '' || isset($seen[$name])) {
+                continue;
+            }
+            $seen[$name] = true;
+            $safeName = $this->has($name) ? $name : 'circle';
+            $id = htmlspecialchars($idPrefix . '-' . $safeName, ENT_QUOTES, 'UTF-8');
+            $symbols[] = sprintf(
+                '<symbol id="%s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">%s</symbol>',
+                $id,
+                self::ICONS[$safeName],
+            );
+        }
+        if ($symbols === []) {
+            return '';
+        }
+
+        return '<svg xmlns="http://www.w3.org/2000/svg" hidden aria-hidden="true" class="w-icon-local-sprite">'
+            . implode('', $symbols)
+            . '</svg>';
+    }
+
+    /** Reference a local sprite symbol via <use href="#id"> (no external sprite URL). */
+    public function renderUse(string $symbolId, string $size = 'md', string $label = '', string $class = '', string $dataIcon = ''): string
+    {
+        $symbolId = trim($symbolId);
+        if ($symbolId === '' || preg_match('/^[A-Za-z][A-Za-z0-9:_-]{0,160}$/', $symbolId) !== 1) {
+            return $this->render($dataIcon !== '' ? $dataIcon : 'circle', $size, $label, $class);
+        }
+        $size = in_array($size, ['xs', 'sm', 'md', 'lg', 'xl'], true) ? $size : 'md';
+        $classes = ['w-icon'];
+        foreach (preg_split('/\s+/', trim($class)) ?: [] as $token) {
+            if ($token !== '' && preg_match('/^w-[a-z0-9_-]+$/', $token) === 1) {
+                $classes[] = $token;
+            }
+        }
+        $classAttr = htmlspecialchars(implode(' ', array_unique($classes)), ENT_QUOTES, 'UTF-8');
+        $label = trim($label);
+        $accessibility = $label === ''
+            ? 'aria-hidden="true"'
+            : 'role="img" aria-label="' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '"';
+        $dataIconAttr = $dataIcon !== ''
+            ? ' data-icon="' . htmlspecialchars($dataIcon, ENT_QUOTES, 'UTF-8') . '"'
+            : '';
+        $href = htmlspecialchars('#' . $symbolId, ENT_QUOTES, 'UTF-8');
+
+        return sprintf(
+            '<svg class="%s" data-size="%s"%s %s viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="%s"/></svg>',
+            $classAttr,
+            $size,
+            $dataIconAttr,
+            $accessibility,
+            $href,
+        );
+    }
+
     public function sprite(): string
     {
         $symbols = [];

@@ -29,6 +29,9 @@ use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\Storefront\StorefrontRenderContextBag;
+use Weline\Theme\Service\ThemeLayoutBudgetPhases;
+use Weline\Theme\Service\ThemePdpBudgetPhases;
 use Weline\Theme\Taglib\Slot;
 use Weline\Widget\Api\WidgetRegistryInterface;
 use Weline\Widget\Api\Rendering\RuntimeTemplateRendererInterface;
@@ -165,9 +168,18 @@ class SlotRendererService
         string $area = 'frontend'
     ): string
     {
-        return $this->traceCall(
-            'slot_renderer::processSlots',
-            fn() => $this->doProcessSlots($html, $themeId, $pageType, $status, $area)
+        return RequestLifecycleTrace::measurePhase(
+            ThemeLayoutBudgetPhases::L3_SLOTS,
+            fn() => $this->traceCall(
+                'slot_renderer::processSlots',
+                fn() => $this->doProcessSlots($html, $themeId, $pageType, $status, $area)
+            ),
+            [
+                'theme_id' => $themeId,
+                'page_type' => $pageType,
+                'status' => $status,
+                'area' => $area,
+            ],
         );
     }
 
@@ -1460,7 +1472,7 @@ class SlotRendererService
         if ($isExclusive && $layoutWidgets !== []) {
             $widgetsHtml = $this->traceCall(
                 'slot_renderer::renderExclusiveSlot::' . \substr($slotId, 0, 80),
-                fn() => $this->renderSlotWidgets($layoutWidgets),
+                fn() => $this->renderSlotWidgets($layoutWidgets, $slotId),
                 [
                     'slot_id' => $slotId,
                     'widgets' => \count($layoutWidgets),
@@ -1564,7 +1576,7 @@ class SlotRendererService
         } else {
             $widgetsHtml = $this->traceCall(
                 'slot_renderer::renderSlotWidgets::' . \substr($slotId, 0, 80),
-                fn() => $this->renderSlotWidgets($layoutWidgets),
+                fn() => $this->renderSlotWidgets($layoutWidgets, $slotId),
                 [
                     'slot_id' => $slotId,
                     'widgets' => \count($layoutWidgets),
@@ -2938,25 +2950,37 @@ class SlotRendererService
     }
 
     /**
-     * 渲染插槽中的所有部件
+     * 渲染插槽中的所有部件（PDP 槽挂 UC-pdp-cold 相位，能挂则挂）。
      */
-    private function renderSlotWidgets(array $widgets): string
+    private function renderSlotWidgets(array $widgets, string $slotId = ''): string
     {
-        return RequestLifecycleTrace::measurePhase(
-            'theme.slots.widgets.regular',
-            function () use ($widgets): string {
-                $html = '';
-
-                foreach ($widgets as $widget) {
-                    $widgetHtml = $this->renderWidget($widget);
-                    if ($widgetHtml) {
-                        $html .= $widgetHtml;
+        $render = function () use ($widgets, $slotId): string {
+            return (string)RequestLifecycleTrace::measurePhase(
+                'theme.slots.widgets.regular',
+                function () use ($widgets): string {
+                    $html = '';
+                    foreach ($widgets as $widget) {
+                        $widgetHtml = $this->renderWidget($widget);
+                        if ($widgetHtml) {
+                            $html .= $widgetHtml;
+                        }
                     }
-                }
 
-                return $html;
-            },
-            ['widgets' => \count($widgets)],
+                    return $html;
+                },
+                ['widgets' => \count($widgets), 'slot_id' => $slotId],
+            );
+        };
+
+        $phase = ThemePdpBudgetPhases::forSlot($slotId);
+        if ($phase === null) {
+            return $render();
+        }
+
+        return (string)RequestLifecycleTrace::measurePhase(
+            $phase,
+            $render,
+            ['slot_id' => $slotId, 'widgets' => \count($widgets)],
         );
     }
 
@@ -4041,6 +4065,8 @@ HTML;
 
     /**
      * 在首个部件 unsetData 前冻结页面上下文，供后续部件 config 回注。
+     * WS1：合并 storefront.render_context.v1（website/locale/currency/maintenance/theme_meta）；
+     * 购物车/用户会话/PDP offer 仍由 Template 键与产品主权提供，不进主题袋主权。
      */
     private function capturePageRenderContext(): void
     {
@@ -4066,6 +4092,14 @@ HTML;
                 continue;
             }
             $snapshot[$key] = $value;
+        }
+        foreach (StorefrontRenderContextBag::captureFields() as $key => $value) {
+            if ($value === null || $value === '' || $value === []) {
+                continue;
+            }
+            if (!\array_key_exists($key, $snapshot)) {
+                $snapshot[$key] = $value;
+            }
         }
         $this->pageRenderContext = $snapshot;
     }

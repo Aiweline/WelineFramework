@@ -732,6 +732,7 @@ final class StorefrontProductWidgetCatalog
 
         $seed = null;
         if ($seedProductId > 0) {
+            // Prefer PDP seed from RequestContext / Context (WS4) — avoid re-query publishedOffers.
             $contextOffer = StorefrontOfferResolver::currentOffer();
             if ((int)($contextOffer['product_id'] ?? 0) === $seedProductId) {
                 $seed = $this->mapOffer($contextOffer, 0);

@@ -117,7 +117,7 @@ $this->assign('meta', $meta);
                     multiple="true"
                     position="content"
                     class="product-detail-layout__content-root-slot">
-            <main class="product-detail-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-detail-main" data-layout="product-detail">
+            <main class="product-detail-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-detail-main" data-layout="product-detail" data-pdp-budget-phase="pdp.main">
                 <div class="product-detail-layout__container">
                     <div class="product-detail-layout__wrapper">
                         <!-- ========== 产品主内容区域 ========== -->
@@ -227,7 +227,7 @@ $this->assign('meta', $meta);
 
             <!-- ========== 相关产品推荐区域（相关/热销/搭配；默认关闭，不含猜你喜欢/最近浏览） ========== -->
             <if condition="meta.showRelatedProducts">
-                <section class="product-detail-layout__related" weline-code="theme.product.section_2">
+                <section class="product-detail-layout__related" weline-code="theme.product.section_2" data-pdp-budget-phase="pdp.related_stack">
                     <div class="product-detail-layout__related-container">
                         <w:hook>Weline_Theme::frontend::layouts::product::related-before</w:hook>
                         <w:hook>Weline_Theme::frontend::layouts::product::recommendations-content<else/>
@@ -267,7 +267,7 @@ $this->assign('meta', $meta);
             </if>
 
             <!-- ========== 猜你喜欢 / 最近浏览（常显；部件经 default_injections 注入，禁止布局内嵌 w:widget） ========== -->
-            <section class="product-detail-layout__personalization" weline-code="theme.product.section_personalization">
+            <section class="product-detail-layout__personalization" weline-code="theme.product.section_personalization" data-pdp-budget-phase="pdp.personalization">
                 <div class="product-detail-layout__personalization-container">
                     <w:hook>Weline_Theme::frontend::layouts::product::personalization-before</w:hook>
                     <div class="product-detail-layout__personalization-stack">

@@ -150,4 +150,43 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
         self::assertSame(['lang'], $policy->vary);
         self::assertSame(['catalog', 'config', 'global/i18n'], $policy->dependencies);
     }
+
+    public function testSearchTypeDropdownLogicalKeyExcludesSelectionState(): void
+    {
+        $service = $this->service();
+        $types = [
+            ['code' => 'all', 'label' => '全部', 'children' => []],
+            ['code' => 'product', 'label' => '商品', 'children' => [
+                ['code' => 'product:1', 'label' => 'A', 'params' => ['category_id' => 1], 'children' => []],
+            ]],
+        ];
+        $key = $service->searchTypeDropdownLogicalKey('header-search-panel-type-menu', $types);
+        self::assertStringStartsWith('theme.header.search_type_dropdown.v2.', $key);
+        // v2: locale + origin + menuSlug + fingerprint — origin may contain dots/ports.
+        self::assertMatchesRegularExpression(
+            '/^theme\.header\.search_type_dropdown\.v2\..+\.[a-f0-9]{16}$/',
+            $key,
+        );
+        self::assertStringNotContainsString('.v1.', $key);
+
+        $sameTree = $service->searchTypeDropdownLogicalKey('header-search-panel-type-menu', $types);
+        self::assertSame($key, $sameTree);
+
+        $otherTree = $service->searchTypeDropdownLogicalKey('header-search-panel-type-menu', [
+            ['code' => 'all', 'label' => '全部', 'children' => []],
+            ['code' => 'article', 'label' => '文章', 'children' => []],
+        ]);
+        self::assertNotSame($key, $otherTree);
+
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/view/theme/frontend/partials/search/header-bar.phtml');
+        self::assertStringContainsString('fetchSearchTypeDropdown', $src);
+        $cacheSrc = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/StorefrontHeaderNavFragmentCache.php');
+        self::assertStringContainsString('function rememberSearchTypeDropdown', $cacheSrc);
+        self::assertStringContainsString('headerSearchTypesPolicy()', $cacheSrc);
+        self::assertStringContainsString('search_type_dropdown.v2.', $cacheSrc);
+        self::assertStringContainsString('SEARCH_DROPDOWN_REQUEST_MEMO_PREFIX', $cacheSrc);
+        $helperSrc = (string)file_get_contents(dirname(__DIR__, 3) . '/Helper/HeaderNavFragment.php');
+        self::assertStringContainsString('stable_fragment', $helperSrc);
+        self::assertStringContainsString('applySearchTypeDropdownSelection', $helperSrc);
+    }
 }

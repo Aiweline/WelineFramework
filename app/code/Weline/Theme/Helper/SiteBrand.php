@@ -9,6 +9,7 @@ use Weline\FileManager\Api\Image as ImageHelper;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
+use Weline\Theme\Service\Storefront\StorefrontRenderContextBag;
 use Weline\Theme\Service\ThemeBrandResolver;
 
 /**
@@ -242,6 +243,11 @@ class SiteBrand
     private function resolveWebsiteDisplayName(): string
     {
         return $this->rememberRequest('theme.site_brand.website_name', 'current', static function (): string {
+            // WS1: prefer storefront.render_context.v1 website_local; fallback WebsiteData.
+            $fromBag = StorefrontRenderContextBag::websiteLocalName();
+            if ($fromBag !== null && $fromBag !== '') {
+                return $fromBag;
+            }
             try {
                 if (!class_exists(\Weline\Websites\Data\WebsiteData::class)) {
                     return '';
@@ -257,6 +263,10 @@ class SiteBrand
     private function resolveWebsiteDescription(): string
     {
         return $this->rememberRequest('theme.site_brand.website_description', 'current', static function (): string {
+            $fromBag = StorefrontRenderContextBag::websiteLocalDescription();
+            if ($fromBag !== null && $fromBag !== '') {
+                return $fromBag;
+            }
             try {
                 if (!class_exists(\Weline\Websites\Data\WebsiteData::class)) {
                     return '';

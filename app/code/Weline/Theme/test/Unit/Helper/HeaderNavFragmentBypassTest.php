@@ -31,5 +31,7 @@ final class HeaderNavFragmentBypassTest extends TestCase
         self::assertStringContainsString("'theme.header.horizontal.cache'", $source);
         self::assertStringContainsString("'theme.header.horizontal.render'", $source);
         self::assertStringContainsString('rememberCategoriesHorizontalNav', $source);
+        self::assertStringContainsString('fetchSearchTypeDropdown', $source);
+        self::assertStringContainsString("'theme.header.search_types'", $source);
     }
 }

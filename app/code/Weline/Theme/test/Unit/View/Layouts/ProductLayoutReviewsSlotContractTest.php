@@ -8,9 +8,14 @@ use PHPUnit\Framework\TestCase;
 
 final class ProductLayoutReviewsSlotContractTest extends TestCase
 {
+    private function productLayoutPath(): string
+    {
+        return dirname(__DIR__, 5) . '/Product/view/theme/frontend/layouts/product/default.phtml';
+    }
+
     public function testProductLayoutProvidesReviewsContainerWithoutHardcodedWidget(): void
     {
-        $path = dirname(__DIR__, 4) . '/view/theme/frontend/layouts/product/default.phtml';
+        $path = $this->productLayoutPath();
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('id="product-reviews"', $source);
@@ -24,19 +29,23 @@ final class ProductLayoutReviewsSlotContractTest extends TestCase
 
     public function testProductLayoutProvidesMainInfoSlotWithoutHardcodedWidget(): void
     {
-        $path = dirname(__DIR__, 4) . '/view/theme/frontend/layouts/product/default.phtml';
+        $path = $this->productLayoutPath();
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('id="product-main"', $source);
         self::assertStringContainsString('accept="layout-product-main,product-gallery,product-info,product-options,add-to-cart,product-detail"', $source);
         self::assertStringContainsString('product-detail-layout__preview-mock', $source);
         self::assertStringNotContainsString('condition="contentTemplate"', $source);
         self::assertStringNotContainsString('$contentTemplate', $source);
-        self::assertDoesNotMatchRegularExpression('/<w:widget[^>]*(product-info|name="product-info")/i', $source);
+        // placement=layout：权威布局内嵌 product-info；禁止再靠 required injection 叠第二份。
+        self::assertMatchesRegularExpression(
+            '/<w:widget[^>]*type="product"[^>]*name="product-info"/i',
+            $source,
+        );
     }
 
     public function testProductLayoutRelatedRecommendationsDefaultOffWithoutBestsellersFallback(): void
     {
-        $path = dirname(__DIR__, 4) . '/view/theme/frontend/layouts/product/default.phtml';
+        $path = $this->productLayoutPath();
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('showRelatedProducts {default=false', $source);
         self::assertStringContainsString('$showRelatedProducts = $coerceBool($meta[\'showRelatedProducts\']', $source);
@@ -48,7 +57,8 @@ final class ProductLayoutReviewsSlotContractTest extends TestCase
 
     public function testProductLayoutAlwaysShowsYouMayLikeAndRecentlyViewedSlotsOutsideRelatedGate(): void
     {
-        $path = dirname(__DIR__, 4) . '/view/theme/frontend/layouts/product/default.phtml';
+        $path = $this->productLayoutPath();
+        self::assertFileExists($path);
         $source = (string)file_get_contents($path);
 
         self::assertStringContainsString('id="product-you-may-like"', $source);
@@ -58,6 +68,9 @@ final class ProductLayoutReviewsSlotContractTest extends TestCase
         self::assertStringContainsString('product-detail-layout__personalization', $source);
         self::assertStringContainsString('.product-detail-layout__personalization-container', $source);
         self::assertStringContainsString('--weline-layout-content-max-width', $source);
+        self::assertStringContainsString('data-pdp-budget-phase="pdp.personalization"', $source);
+        self::assertStringContainsString('data-pdp-budget-phase="pdp.related_stack"', $source);
+        self::assertStringContainsString('data-pdp-budget-phase="pdp.main"', $source);
         self::assertDoesNotMatchRegularExpression(
             '/<w:widget[^>]*(you-may-like|recently-viewed)/i',
             $source,

@@ -9,6 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\I18n\Api\Translation\TranslationResolverInterface;
 use Weline\I18n\Api\Translation\BatchTranslationResolverInterface;
+use Weline\Theme\Service\Storefront\StorefrontRenderContextBag;
 
 /**
  * 主题部件文案：布局配置里存的是中文源串，渲染时按当前语言解析（含 Weline_Theme 语言包回退）。
@@ -235,6 +236,12 @@ final class WidgetI18n
         $pathLocale = self::localeFromRequestUri($requestUri);
         if ($pathLocale !== null) {
             return $pathLocale;
+        }
+
+        // WS1: prefer bag locale (chrome / Phrase) after path override; before lagging RC.
+        $bagLocale = StorefrontRenderContextBag::locale();
+        if ($bagLocale !== null) {
+            return $bagLocale;
         }
 
         try {

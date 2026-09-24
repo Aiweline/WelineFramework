@@ -71,6 +71,48 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
         );
     }
 
+    /**
+     * Cron / CLI entry: one `namespace_hash IN (...)` read that seeds the
+     * process snapshot so later resolveVector hits skip per-hash loops.
+     *
+     * @param list<string>|array<int|string, string> $namespaces
+     * @return array{authority_clock:int,generations:array<string,int>}
+     */
+    public function prefetchProcessVector(array $namespaces): array
+    {
+        $requested = [];
+        foreach ($namespaces as $namespace) {
+            $namespace = trim((string)$namespace);
+            if ($namespace === '') {
+                continue;
+            }
+            $requested[] = $namespace;
+        }
+        $ancestors = $requested === []
+            ? [NamespacePath::AUTHORITY_CLOCK]
+            : $this->path->expandAncestors($requested);
+        $hashes = array_values(array_unique(array_merge(
+            [NamespacePath::AUTHORITY_CLOCK],
+            $ancestors,
+        )));
+        $stored = $this->readStoredRows($hashes);
+        $authorityClock = max(0, (int)($stored[NamespacePath::AUTHORITY_CLOCK] ?? 0));
+        $generations = [];
+        foreach ($ancestors as $namespace) {
+            if ($namespace === NamespacePath::AUTHORITY_CLOCK) {
+                continue;
+            }
+            $generations[$namespace] = max(0, (int)($stored[$namespace] ?? 0));
+        }
+        ksort($generations, SORT_STRING);
+        $this->snapshot->replaceProcessSnapshot($authorityClock, $generations);
+
+        return [
+            'authority_clock' => $authorityClock,
+            'generations' => $generations,
+        ];
+    }
+
     /** @param list<string> $namespaces */
     public function fingerprint(array $namespaces): string
     {

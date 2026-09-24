@@ -21,6 +21,8 @@ use Weline\Server\Service\Runtime\WorkerProcessLease;
 final class Watch extends CommandAbstract
 {
     private const TICK_MILLISECONDS = 1_000;
+    /** Empty-candidate idle backoff upper bound (lease safety). */
+    private const IDLE_TICK_MAX_MILLISECONDS = 15_000;
     private const SHUTDOWN_DRAIN_SECONDS = 30;
 
     public function __construct(
@@ -46,6 +48,7 @@ final class Watch extends CommandAbstract
         $ownerId = 'runtime-watchdog-' . (getmypid() ?: 0) . '-' . bin2hex(random_bytes(8));
         $shutdown = false;
         $drainStartedAt = null;
+        $idleDelayMs = self::TICK_MILLISECONDS;
         $this->registerSignalHandlers($shutdown);
         [$kernel, $masterGuard] = $this->connectToWlsMaster($args, $shutdown);
 
@@ -68,19 +71,28 @@ final class Watch extends CommandAbstract
 
                 $this->heartbeat->beat($ownerId, $instanceName);
                 try {
-                    $this->watchdog->tick();
+                    $report = $this->watchdog->tick();
+                    if ($report->inspected > 0) {
+                        $idleDelayMs = self::TICK_MILLISECONDS;
+                    } else {
+                        $idleDelayMs = min(
+                            self::IDLE_TICK_MAX_MILLISECONDS,
+                            max(self::TICK_MILLISECONDS, $idleDelayMs * 2),
+                        );
+                    }
                 } catch (\Throwable $throwable) {
                     WlsLogger::error_(
                         'Runtime Watchdog tick failed: '
                         . mb_substr($throwable->getMessage(), 0, 512)
                     );
+                    $idleDelayMs = self::TICK_MILLISECONDS;
                 }
 
                 if ($drainStartedAt !== null
                     && self::monotonicSeconds() >= $drainStartedAt + self::SHUTDOWN_DRAIN_SECONDS) {
                     return;
                 }
-                SchedulerSystem::yieldDelay(self::TICK_MILLISECONDS);
+                SchedulerSystem::yieldDelay($idleDelayMs);
             }
         } finally {
             // Avoid a close-triggered reconnect while this command is exiting.

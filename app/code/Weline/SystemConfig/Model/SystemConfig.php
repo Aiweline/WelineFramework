@@ -285,6 +285,34 @@ class SystemConfig extends \Weline\Framework\Database\Model
         return $configMap;
     }
 
+    /**
+     * Warm process/request module config maps at cron / CLI entry so later
+     * getConfig() hits the module snapshot instead of per-key exact rows.
+     *
+     * @param list<string>|array<int|string, string> $modules
+     */
+    public function warmupModuleMaps(
+        array $modules,
+        ?string $scope = null,
+        ?string $locale = null,
+    ): int {
+        $warmed = 0;
+        $seen = [];
+        foreach ($modules as $module) {
+            $module = trim((string)$module);
+            if ($module === '' || isset($seen[$module])) {
+                continue;
+            }
+            $seen[$module] = true;
+            foreach ([self::area_BACKEND, self::area_FRONTEND] as $area) {
+                $this->getConfigMapByModule($module, $area, $scope, $locale);
+            }
+            ++$warmed;
+        }
+
+        return $warmed;
+    }
+
     public function getConfig(
         string $key,
         string $module,

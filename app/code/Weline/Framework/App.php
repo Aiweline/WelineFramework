@@ -15,6 +15,7 @@ use Weline\Framework\App\Helper;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\StorefrontCacheKeyContext;
 use Weline\Framework\Cache\StorefrontCacheKeyContextResolver;
+use Weline\Framework\Runtime\StorefrontRenderContextInstaller;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
@@ -484,6 +485,14 @@ class App
         $markApplyUrlStep('storefront_cache_key_context', [
             'cacheable' => $cacheKeyContext->cacheable,
             'failure_code' => $cacheKeyContext->failureCode,
+        ]);
+
+        // WS1: render facts bag — parallel to cache-key fingerprint; ScopeIdentity frozen above.
+        $renderContext = ObjectManager::getInstance(StorefrontRenderContextInstaller::class)->installOnce();
+        $markApplyUrlStep('storefront_render_context', [
+            'complete' => $renderContext->complete,
+            'failure_code' => $renderContext->failureCode,
+            'bag_key' => \Weline\Framework\Runtime\StorefrontRenderContext::BAG_KEY,
         ]);
 
         $shouldDispatchUrlParsedAfter = (PROD || Runtime::isPersistent()) && !WelineEnv::get('is_backend', false);

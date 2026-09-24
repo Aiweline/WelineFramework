@@ -9,6 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Search\Service\SearchProviderRegistry;
 use Weline\Theme\Service\AllMenu\AllMenuTreeRegistry;
+use Weline\Theme\Service\Storefront\StorefrontRenderContextBag;
 use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 
 /**
@@ -300,6 +301,11 @@ final class HeaderCommerceData
 
     private static function resolveWebsiteId(): int
     {
+        // WS1: bag website_id is authoritative when Installer has frozen the request.
+        $fromBag = StorefrontRenderContextBag::websiteId();
+        if ($fromBag !== null) {
+            return $fromBag;
+        }
         try {
             if (\class_exists(\Weline\Websites\Service\WebsiteAclGrantService::class)) {
                 /** @var \Weline\Websites\Service\WebsiteAclGrantService $grants */
@@ -319,6 +325,10 @@ final class HeaderCommerceData
 
     private static function resolveWebsiteCode(): string
     {
+        $fromBag = StorefrontRenderContextBag::websiteCode();
+        if ($fromBag !== null && $fromBag !== '') {
+            return $fromBag;
+        }
         try {
             if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
                 $code = \strtolower(\trim(
