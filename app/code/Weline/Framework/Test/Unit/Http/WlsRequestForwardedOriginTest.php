@@ -211,6 +211,44 @@ final class WlsRequestForwardedOriginTest extends TestCase
         self::assertSame('https://shop.example.test/customer/account/logout', $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null);
     }
 
+    public function testTrustedProxyRestoresPublicHostFromXForwardedHostWhenWireHostIsLoopback(): void
+    {
+        $request = $this->createRequest(
+            "Host: 127.0.0.1:9510\r\n"
+            . "X-Forwarded-Host: www.changanhanfu.com\r\n"
+            . "X-Forwarded-Proto: https\r\n"
+            . "X-Forwarded-Port: 443\r\n",
+            [
+                'WLS_PORT' => 9510,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+            ],
+        );
+
+        self::assertTrue($request->isSecure());
+        self::assertSame('www.changanhanfu.com', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('443', $_SERVER['SERVER_PORT'] ?? null);
+        self::assertSame('https://www.changanhanfu.com/customer/account/logout', $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null);
+        self::assertSame('https://www.changanhanfu.com', $request->getBaseHost());
+    }
+
+    public function testTrustedProxyIgnoresXForwardedHostWhenWireHostIsAlreadyPublic(): void
+    {
+        $request = $this->createRequest(
+            "Host: www.changanhanfu.com\r\n"
+            . "X-Forwarded-Host: 127.0.0.1:9510\r\n"
+            . "X-Forwarded-Proto: https\r\n"
+            . "X-Forwarded-Port: 443\r\n",
+            [
+                'WLS_PORT' => 9510,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+            ],
+        );
+
+        self::assertTrue($request->isSecure());
+        self::assertSame('www.changanhanfu.com', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('https://www.changanhanfu.com/customer/account/logout', $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null);
+    }
+
     public function testExplicitHttpSchemeIsNotPromotedByEnvHttps(): void
     {
         $request = $this->createRequest(

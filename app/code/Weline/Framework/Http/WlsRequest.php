@@ -272,6 +272,37 @@ class WlsRequest extends Request
     }
 
     /**
+     * True when the wire Host authority is loopback / unspecified and may be
+     * replaced by a trusted X-Forwarded-Host from Nginx (or similar).
+     */
+    private static function isLoopbackOrUnspecifiedHostAuthority(string $hostHeader): bool
+    {
+        $parsed = self::parseHostAuthority($hostHeader);
+        if ($parsed === null) {
+            $hostOnly = \strtolower(\trim(\explode(':', $hostHeader, 2)[0]));
+        } else {
+            $hostOnly = \strtolower($parsed['host']);
+        }
+        if ($hostOnly === '') {
+            return false;
+        }
+        if (\in_array($hostOnly, ['localhost', '0.0.0.0', '::', '*'], true)) {
+            return true;
+        }
+        if ($hostOnly === '::1') {
+            return true;
+        }
+        if (\filter_var($hostOnly, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            return \str_starts_with($hostOnly, '127.');
+        }
+        if (\filter_var($hostOnly, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            return $hostOnly === '::1' || \str_starts_with($hostOnly, '::ffff:127.');
+        }
+
+        return false;
+    }
+
+    /**
      * Public listen port for a direct WLS client connection when Host omits it.
      *
      * Local browsers often hit `*.test.weline.com` via 127.0.0.1 and are therefore
@@ -533,7 +564,22 @@ class WlsRequest extends Request
             $realIp = $headers['CF-Connecting-IP'] ?? ($headers['Weline-Real-Ip'] ?? '');
             $isHttps = ($originalScheme === 'https' || $originalSsl === 'on');
         } else {
-            // 受信代理可提供 scheme/client 事实，但不得二次改写 Host authority。
+            // Trusted reverse proxies (Nginx → loopback WLS) may keep the
+            // upstream Host as 127.0.0.1:worker while placing the browser
+            // authority in X-Forwarded-Host. Only rewrite when the wire Host
+            // itself is loopback/internal so a client cannot inject Host via
+            // X-Forwarded-Host on a public wire Host.
+            if ($trustForwardedHeaders && self::isLoopbackOrUnspecifiedHostAuthority($originalHost)) {
+                $forwardedHost = \trim(\explode(',', (string)(
+                    $headers['X-Forwarded-Host']
+                    ?? $headers['x-forwarded-host']
+                    ?? ''
+                ), 2)[0]);
+                if ($forwardedHost !== '' && self::parseHostAuthority($forwardedHost) !== null) {
+                    $originalHost = $forwardedHost;
+                }
+            }
+            // 受信代理可提供 scheme/client 事实，但不得二次改写非回环 Host authority。
             $forwardedProto = $trustForwardedHeaders
                 ? \strtolower(\trim(\explode(',', $headers['X-Forwarded-Proto'] ?? '', 2)[0]))
                 : '';
