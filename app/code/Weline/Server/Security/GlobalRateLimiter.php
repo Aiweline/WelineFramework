@@ -89,6 +89,9 @@ final class GlobalRateLimiter
         if ($instanceName === '' || $ip === '' || $expiresAt <= \time()) {
             return false;
         }
+        if (self::isLoopbackIp($ip)) {
+            return false;
+        }
         if ($expectedInstanceName !== '' && !\hash_equals($expectedInstanceName, $instanceName)) {
             return false;
         }
@@ -100,6 +103,12 @@ final class GlobalRateLimiter
     public function isBanned(string $ip): bool
     {
         if ($ip === '') {
+            return false;
+        }
+        $ip = self::normalizeIp($ip);
+        if ($ip === '' || self::isLoopbackIp($ip)) {
+            // Existing loopback ban keys are inert: Nginx→WLS peer is always
+            // 127.0.0.0/8 or ::1; banning it 403s the whole site.
             return false;
         }
         // Authoritative ban expiries are epoch seconds because they survive
@@ -150,7 +159,7 @@ final class GlobalRateLimiter
             return;
         }
         $ip = self::normalizeIp($ip);
-        if ($ip === '') {
+        if ($ip === '' || self::isLoopbackIp($ip)) {
             return;
         }
         $expiresAt = \time() + \max(1, $ttl);
@@ -432,5 +441,29 @@ final class GlobalRateLimiter
             return '';
         }
         return (string)\inet_ntop($packed);
+    }
+
+    /**
+     * 127.0.0.0/8 and ::1 must never enter shared_ban — Nginx proxy_pass peers
+     * are loopback, so a loopback ban 403s every public request.
+     */
+    public static function isLoopbackIp(string $ip): bool
+    {
+        $ip = self::normalizeIp($ip);
+        if ($ip === '') {
+            return false;
+        }
+        if ($ip === '::1') {
+            return true;
+        }
+        if (\str_starts_with($ip, '127.')) {
+            return true;
+        }
+        // IPv4-mapped ::ffff:127.x.x.x
+        if (\str_starts_with($ip, '::ffff:127.')) {
+            return true;
+        }
+
+        return false;
     }
 }
