@@ -1,9 +1,9 @@
 # 需求会话总控（SESSION）模板
 
-> 复制到归属模块 `doc/开发/session/{feature-slug}.md`。  
+> 复制到仓库根 `dev/session/{feature-slug}.md`（**禁止**写入任何模块 `doc/`）。  
 > **仅项目经理（或监工兼任）维护本文**；专席禁止改 SESSION。  
-> 明细仍在 `doc/开发/spec/{slug}.md` 与 `doc/开发/team/{slug}/`；本文只做总控索引 + 计划项生命周期。  
-> 权威：`dev/ai-command/ai/工程团队.md`；硬规则 `requirement_session_dashboard` / `pm_plan_lifecycle` / `requirement_issuer_owns_acceptance`。
+> 耐久规格仍在归属模块 `doc/开发/spec/{slug}.md`；临时明细在 `dev/team/{slug}/`；本文只做总控索引 + 计划项生命周期。  
+> 权威：`dev/ai-command/ai/工程团队.md`；硬规则 `requirement_session_dashboard` / `pm_plan_lifecycle` / `requirement_issuer_owns_acceptance` / `module_doc_forbids_ephemeral_work_artifacts`。
 
 ---
 slug: {feature-slug}
@@ -13,8 +13,8 @@ wave: clarifying # clarifying|align_freeze|tech_scheme|construction|specialty_re
 status: open # open | blocked | closed
 updated: YYYY-MM-DD
 last_checked_by: 项目经理
-spec_path: ../spec/{feature-slug}.md
-team_path: ../team/{feature-slug}/ # 监工可写 N/A
+spec_path: app/code/Weline_Example/doc/开发/spec/{feature-slug}.md
+team_path: dev/team/{feature-slug}/ # 监工可写 N/A
 ---
 
 ## 当前阶段
