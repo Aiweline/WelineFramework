@@ -417,6 +417,9 @@ $connections = [];
 $nextConnectionId = 0;
 $requestCount = 0;
 $activeRequests = 0;
+\Weline\Framework\Runtime\SchedulerSystem::setForegroundBusyProbe(static function () use (&$activeRequests): bool {
+    return $activeRequests > 0;
+});
 $maintenanceDrainState = new \Weline\Server\Service\Runtime\WorkerMaintenanceDrainState($isMaintenanceWorker);
 $waitingForAck = $controlPort > 0 || $supervisorEnabled;
 $maxMemoryBytes = wlsMemoryLimitToBytes($wlsMemoryLimit);

@@ -249,6 +249,134 @@ final class ThemeLayoutEntityPaths
         return $this->chromeDir($themeId, $scope, $versionId) . 'binding.json';
     }
 
+    /**
+     * Delete the entire layout-entity bake tree under var/runtime/theme-layout-entities/.
+     * Used on setup:upgrade so storefront dynamicSolidify rebuilds from current source templates
+     * (never rematerialize stale DB structure as the upgrade recovery path).
+     *
+     * Missing root is idempotent success (returns 0). Unsafe paths throw.
+     *
+     * @return int Number of filesystem nodes deleted (files + directories)
+     */
+    public function purgeAllEntities(): int
+    {
+        return $this->purgeEntityTree($this->root());
+    }
+
+    /**
+     * Delete one absolute entity-root directory after safety checks.
+     * Production callers use {@see purgeAllEntities()}; tests may pass a sibling
+     * `…/var/…/theme-layout-entities` tree under BP.
+     *
+     * @return int Number of filesystem nodes deleted (files + directories)
+     */
+    public function purgeEntityTree(string $absoluteDirectory): int
+    {
+        $absoluteDirectory = \rtrim(\str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, \trim($absoluteDirectory)), "/\\");
+        if ($absoluteDirectory === '') {
+            throw new \InvalidArgumentException('theme_layout_entity_purge_empty_path');
+        }
+
+        if (!\is_dir($absoluteDirectory) && !\is_link($absoluteDirectory)) {
+            return 0;
+        }
+
+        $resolved = $this->assertPurgeableEntityRoot($absoluteDirectory);
+        return $this->deleteTreeRecursive($resolved);
+    }
+
+    /**
+     * @return string Realpath of a purgeable entity root
+     */
+    public function assertPurgeableEntityRoot(string $absoluteDirectory): string
+    {
+        $bp = \realpath((string)BP);
+        if ($bp === false) {
+            throw new \RuntimeException('theme_layout_entity_purge_bp_unresolved');
+        }
+
+        $varRoot = \realpath($bp . \DIRECTORY_SEPARATOR . 'var');
+        if ($varRoot === false || !\is_dir($varRoot)) {
+            throw new \RuntimeException('theme_layout_entity_purge_var_unresolved');
+        }
+
+        $resolved = \realpath($absoluteDirectory);
+        if ($resolved === false) {
+            throw new \RuntimeException('theme_layout_entity_purge_path_unresolved');
+        }
+
+        if (\is_link($absoluteDirectory)) {
+            throw new \RuntimeException('theme_layout_entity_purge_symlink_root_forbidden');
+        }
+
+        $varPrefix = \strtolower(\rtrim(\str_replace('\\', '/', $varRoot), '/') . '/');
+        $resolvedNorm = \strtolower(\str_replace('\\', '/', $resolved));
+        if ($resolvedNorm === \rtrim($varPrefix, '/')
+            || $resolvedNorm === \strtolower(\str_replace('\\', '/', $bp))
+            || !\str_starts_with($resolvedNorm . '/', $varPrefix)
+        ) {
+            throw new \RuntimeException('theme_layout_entity_purge_outside_var');
+        }
+
+        if (\basename($resolved) !== self::ROOT_SEGMENT) {
+            throw new \RuntimeException('theme_layout_entity_purge_basename_mismatch');
+        }
+
+        $expectedProduction = \realpath($this->root());
+        if ($expectedProduction !== false && $resolved === $expectedProduction) {
+            return $resolved;
+        }
+
+        // Allow unit-test sibling trees under BP/var/**/theme-layout-entities only.
+        if (!\str_starts_with($resolvedNorm . '/', $varPrefix)) {
+            throw new \RuntimeException('theme_layout_entity_purge_outside_var');
+        }
+
+        return $resolved;
+    }
+
+    private function deleteTreeRecursive(string $resolvedRoot): int
+    {
+        $deleted = 0;
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($resolvedRoot, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            $path = $item->getPathname();
+            $real = \realpath($path) ?: $path;
+            $rootNorm = \strtolower(\rtrim(\str_replace('\\', '/', $resolvedRoot), '/') . '/');
+            $realNorm = \strtolower(\str_replace('\\', '/', $real));
+            if ($realNorm !== \rtrim($rootNorm, '/') && !\str_starts_with($realNorm . '/', $rootNorm)) {
+                throw new \RuntimeException('theme_layout_entity_purge_escape:' . $path);
+            }
+            if ($item->isLink()) {
+                if (!@\unlink($path)) {
+                    throw new \RuntimeException('theme_layout_entity_purge_unlink_failed:' . $path);
+                }
+                ++$deleted;
+                continue;
+            }
+            if ($item->isDir()) {
+                if (!@\rmdir($path)) {
+                    throw new \RuntimeException('theme_layout_entity_purge_rmdir_failed:' . $path);
+                }
+                ++$deleted;
+                continue;
+            }
+            if (!@\unlink($path)) {
+                throw new \RuntimeException('theme_layout_entity_purge_unlink_failed:' . $path);
+            }
+            ++$deleted;
+        }
+
+        if (!@\rmdir($resolvedRoot)) {
+            throw new \RuntimeException('theme_layout_entity_purge_rmdir_root_failed:' . $resolvedRoot);
+        }
+
+        return $deleted + 1;
+    }
+
     private function normalizePathSegment(string $segment, string $fallback): string
     {
         $segment = \trim($segment);

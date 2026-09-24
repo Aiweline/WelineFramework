@@ -1342,7 +1342,8 @@
             self.tearDownForLeave(ev && ev.type ? String(ev.type) : 'leave');
         };
         // Capture phase: Cursor/Electron guest teardown may skip bubble listeners.
-        // Prefer pagehide; beforeunload/unload are backup for hosts that skip pagehide.
+        // Prefer pagehide; beforeunload + freeze + orphanWatch cover hosts that skip pagehide.
+        // Do NOT register `unload` — Permissions-Policy / bfcache forbid it (console violation).
         global.addEventListener('pagehide', onLeave, true);
         global.addEventListener('beforeunload', function (ev) {
             // beforeunload is not bfcache-safe — snapshot + latch; pagehide does teardown.
@@ -1369,12 +1370,6 @@
                 }
             } catch (eBefore) {
                 // ignore
-            }
-        }, true);
-        global.addEventListener('unload', function (ev) {
-            self.saveProgress();
-            if (self._docAlive) {
-                self.tearDownForLeave('unload');
             }
         }, true);
         if (typeof document.addEventListener === 'function') {

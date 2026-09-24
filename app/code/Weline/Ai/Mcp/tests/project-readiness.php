@@ -208,11 +208,14 @@ try {
     readinessCheck(
         ($hostCodexDelegation['schema_version'] ?? '') === 'host-codex-delegation.v1'
             && ($hostCodexDelegation['policy_id'] ?? '') === 'host_delegate_explore_plan_review_to_codex_cli'
+            && ($hostCodexDelegation['enabled_when'] ?? '') === 'user_explicitly_mentions_codex_and_codex_cli_available_and_host_is_not_codex'
+            && ($hostCodexDelegation['opt_in']['required'] ?? false) === true
+            && ($hostCodexDelegation['opt_in']['forbid_auto_delegate_on_cli_presence_alone'] ?? false) === true
             && ($hostCodexDelegation['independent_of_nested_planner'] ?? false) === true
             && ($hostCodexDelegation['native_codex_recursion_guard']['when_host_is_codex'] ?? '') === 'do_not_spawn_nested_codex'
             && ($hostCodexDelegation['model_policy']['model_argument_forbidden'] ?? false) === true
             && in_array('knowledge.codex.enabled', $hostCodexDelegation['independent_of'] ?? [], true),
-        'host_codex_delegation schema/policy/recursion/decouple fields',
+        'host_codex_delegation schema/policy/opt-in/recursion/decouple fields',
     );
     readinessCheck(
         ($hostCodexDelegation['user_visible_status']['required'] ?? false) === true

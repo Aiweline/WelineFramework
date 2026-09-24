@@ -29,6 +29,7 @@ final class ThemeLayoutEntityPathsContractTest extends TestCase
         self::assertStringContainsString("'structure.json'", $src);
         self::assertStringContainsString('function scopeKey', $src);
         self::assertStringContainsString('function identityKey', $src);
+        self::assertStringContainsString('function purgeAllEntities', $src);
         self::assertStringContainsString('sha1', $src);
         self::assertStringContainsString('substr($identityHash, 0, 16)', $src);
         // Sentinels like __channel__ must keep trailing underscores in disk keys.

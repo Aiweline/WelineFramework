@@ -1152,6 +1152,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         $this->homepageKeepWarmRunning = true;
+        SchedulerSystem::markCurrentFiberBackground();
         $startedAt = \microtime(true);
         $host = ($this->homepageCacheFullUri !== ''
             ? $this->normalizeInternalWarmupHost($this->homepageCacheFullUri)
@@ -1214,6 +1215,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     public function runDeferredWorkerBootstrapWarmup(): void
     {
+        SchedulerSystem::markCurrentFiberBackground();
         $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
         $roleCanRunGeneralDeferred = $this->roleCanRunDeferredWorkerBootstrap($role);
 

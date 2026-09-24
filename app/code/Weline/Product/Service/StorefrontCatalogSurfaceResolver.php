@@ -315,6 +315,11 @@ final class StorefrontCatalogSurfaceResolver
         ];
     }
 
+    public function hasWebsiteCopy(string $websiteCode = ''): bool
+    {
+        return $this->normalizeWebsiteCode($websiteCode) === 'daocharms';
+    }
+
     private function normalizeWebsiteCode(string $websiteCode): string
     {
         $code = strtolower(trim($websiteCode));

@@ -23,15 +23,18 @@ $checks['coldstart mdc forbids hand-writing rules to remember guidance'] = str_c
     && str_contains($mdc, '.cursor/rules');
 $checks['coldstart mdc points host_codex_delegation'] = str_contains($mdc, 'host_codex_delegation')
     && str_contains($mdc, 'host_delegate_explore_plan_review_to_codex_cli');
-$checks['coldstart mdc delegates explore plan review to Codex'] = str_contains($mdc, '委派探索')
-    && str_contains($mdc, 'Plan Mode 只承载 Codex 计划')
-    && str_contains($mdc, '只按计划编码');
+$checks['coldstart mdc Codex delegation is opt-in'] = str_contains($mdc, '默认不委派 Codex')
+    && str_contains($mdc, '未提及')
+    && str_contains($mdc, '禁止因 CLI 存在而自动跑');
+$checks['coldstart mdc delegates explore plan review to Codex when opted in'] = str_contains($mdc, '委派探索')
+    && str_contains($mdc, 'Opt-in 时 Plan Mode 只承载 Codex 计划')
+    && str_contains($mdc, '只按该计划编码');
 $checks['coldstart mdc requires Codex-working user-visible announce'] = str_contains($mdc, 'Codex 正在工作')
     && str_contains($mdc, '禁止静默委派');
 $checks['coldstart mdc forbids nested Codex recursion'] = str_contains($mdc, '禁止嵌套再调')
     || str_contains($mdc, 'Codex 原生宿主禁止嵌套');
 $checks['coldstart mdc notes content-ops exemption and CLI fallback'] = str_contains($mdc, '内容运营')
-    && str_contains($mdc, 'CLI 不可用才回退');
+    && str_contains($mdc, 'CLI 不可用则回退');
 
 $tmpRoot = sys_get_temp_dir() . '/weline-host-editor-rules-' . bin2hex(random_bytes(4));
 mkdir($tmpRoot, 0775, true);
