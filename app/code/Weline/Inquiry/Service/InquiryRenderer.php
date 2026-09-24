@@ -6,14 +6,18 @@ namespace Weline\Inquiry\Service;
 
 use Weline\Captcha\Service\LazyCaptchaClientRuntime;
 use Weline\Framework\App\State;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
+use Weline\Framework\View\Data\DataInterface;
+use Weline\Framework\View\Template;
 use Weline\Inquiry\Api\InquiryRendererInterface;
 use Weline\SystemConfig\Api\ConfigReader;
 
 final class InquiryRenderer implements InquiryRendererInterface
 {
-    private const ADDRESS_SCRIPT = '/Weline/Theme/view/statics/js/address.js?v=20260907-district-single2';
-    private const ADDRESS_LOADER = '/Weline/Theme/view/statics/js/address-loader.js?v=20260907-district-single2';
+    private const ADDRESS_SCRIPT_SOURCE = 'Weline_Theme::js/address.js';
+    private const ADDRESS_LOADER_SOURCE = 'Weline_Theme::js/address-loader.js';
+    private const ADDRESS_ASSET_BUST = '20260907-district-single2';
 
     public function __construct(private readonly ConfigReader $config) {}
 
@@ -78,9 +82,10 @@ final class InquiryRenderer implements InquiryRendererInterface
             'selector' => preg_match('/^[#.][A-Za-z][A-Za-z0-9_:-]{0,127}$/', $selector) ? $selector : '',
             'allowJs' => $this->trustedJsAllowed(),
             'customJs' => $customJs,
-            'addressLoader' => self::ADDRESS_LOADER,
-            'addressScript' => self::ADDRESS_SCRIPT,
+            'addressLoader' => $this->addressAssetUrl(self::ADDRESS_LOADER_SOURCE),
+            'addressScript' => $this->addressAssetUrl(self::ADDRESS_SCRIPT_SOURCE),
             'addressSourceUrl' => (string)w_url('/shipping/frontend/region/list'),
+
             'captchaEnabled' => $this->captchaEnabled(),
             'captchaModule' => 'captchaLazy',
             'captchaModulePath' => $this->captchaEnabled() ? LazyCaptchaClientRuntime::resolveScriptUrl() : '',
@@ -133,8 +138,10 @@ function ensureAddressLoader(onReady){
     return;
   }
   // Always inject a cache-busted address.js so sticky deploy assetVersion cannot keep an old module.
+  // Never fall back to DEV-shaped /Weline/*/view/statics/ (PROD 404).
+  if(!c.addressScript){return;}
   var s=document.createElement("script");
-  s.src=c.addressScript||"/Weline/Theme/view/statics/js/address.js?v=20260907-district-single2";
+  s.src=c.addressScript;
   s.defer=true;
   s.setAttribute("data-inquiry-address-direct","1");
   s.setAttribute("data-no-extract","true");
@@ -348,5 +355,25 @@ JS;
         }
 
         return str_replace('-', '_', $locale);
+    }
+
+    /**
+     * Resolve storefront static URL via fetchTagSource (PROD /static/{theme}/…).
+     * Never emit DEV-shaped /Weline/*/view/statics/ fallbacks.
+     */
+    private function addressAssetUrl(string $moduleSource): string
+    {
+        try {
+            /** @var Template $template */
+            $template = ObjectManager::getInstance(Template::class);
+            $url = trim((string)$template->fetchTagSource(DataInterface::dir_type_STATICS, $moduleSource));
+            if ($url === '') {
+                return '';
+            }
+            $bust = self::ADDRESS_ASSET_BUST;
+            return $url . (str_contains($url, '?') ? '&' : '?') . 'v=' . $bust;
+        } catch (\Throwable) {
+            return '';
+        }
     }
 }
