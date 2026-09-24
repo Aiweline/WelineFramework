@@ -1,6 +1,6 @@
 <?php
 /**
- * @widget.source {Weline_Newsletter::css/widgets/widget-footer-newsletter-default.css}
+ * @widget.source {Weline_Newsletter::css/widgets/widget-footer-newsletter-default.css,Weline_Newsletter::css/widgets/widget-newsletter-popup-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * 页脚邮件订阅部件（Weline_Newsletter 拥有）
  * Variant A：全宽条带 + 版心两列（文案 | 表单），高对比主题色，禁止依赖父级 primary 底。
  *
@@ -8,7 +8,7 @@
  *
  * @widget.code {footer-newsletter}
  * @widget.name {页脚订阅}
- * @widget.description {邮件订阅表单；经 required default_injections 注入 footer-above 槽。}
+ * @widget.description {邮件订阅表单；经 required default_injections 注入 footer-above；enable_popup 默认同渲弹窗。}
  * @widget.type {newsletter}
  * @widget.area {frontend}
  * @widget.position {["content"]}
@@ -22,6 +22,12 @@
  * @param placeholder {default="请输入您的邮箱地址",type="string",label="占位符"}
  * @param button_text {default="订阅",type="string",label="按钮文字"}
  * @param layout {default="horizontal",type="select",label="布局",options={horizontal:"横向",vertical:"纵向"}}
+ * @param enable_popup {default=true,type="bool",label="开启订阅弹窗",description="与本页脚条同启；关闭则不渲染 newsletter-popup"}
+ * @param popup_trigger {default="deferred",type="select",label="弹窗触发",options={deferred:"组合延后",delay:"延迟",scroll:"滚动",exit:"退出意向"}}
+ * @param popup_delay_seconds {default=15,type="number",label="弹窗延迟秒数"}
+ * @param popup_scroll_percent {default=40,type="number",label="弹窗滚动百分比"}
+ * @param popup_min_open_seconds {default=3,type="number",label="弹窗最早弹出秒数"}
+ * @param popup_cookie_days {default=14,type="number",label="弹窗 Cookie 天数"}
  */
 
 use Weline\Theme\Helper\WidgetUiScope;
@@ -36,6 +42,7 @@ $description = __((string)($this->getData('description') ?: '获取最新的优�
 $placeholder = __((string)($this->getData('placeholder') ?: '请输入您的邮箱地址'));
 $buttonText = __((string)($this->getData('button_text') ?: '订阅'));
 $layout = $this->getData('layout') ?? 'horizontal';
+$enablePopup = filter_var($this->getData('enable_popup') ?? true, FILTER_VALIDATE_BOOLEAN);
 ?>
 
 <section class="<?= $esc($wc) ?> layout-<?= $esc((string)$layout) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
@@ -47,6 +54,7 @@ $layout = $this->getData('layout') ?? 'horizontal';
          data-newsletter-kind="footer"
          data-source-surface="footer"
          data-testid="newsletter-footer"
+         data-enable-popup="<?= $enablePopup ? 'true' : 'false' ?>"
          data-weline-load="newsletterSubscribe">
     <div class="newsletter-band">
         <div class="newsletter-content">
@@ -105,4 +113,15 @@ $layout = $this->getData('layout') ?? 'horizontal';
         </div>
     </div>
 </section>
+<?php if ($enablePopup): ?>
+<?= $this->fetch('Weline_Newsletter::templates/frontend/widgets/newsletter-popup/default.phtml', [
+    'preview_mode' => $isPreviewMode,
+    'trigger' => (string)($this->getData('popup_trigger') ?? 'deferred'),
+    'delay_seconds' => (int)($this->getData('popup_delay_seconds') ?? 15),
+    'scroll_percent' => (int)($this->getData('popup_scroll_percent') ?? 40),
+    'min_open_seconds' => (int)($this->getData('popup_min_open_seconds') ?? 3),
+    'cookie_days' => (int)($this->getData('popup_cookie_days') ?? 14),
+    'show_once' => true,
+]) ?>
+<?php endif; ?>
 

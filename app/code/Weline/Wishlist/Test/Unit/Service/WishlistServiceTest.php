@@ -34,6 +34,14 @@ final class WishlistServiceTest extends TestCase
             }
         };
         $snapshots = new class extends \Weline\Wishlist\Service\ProductCardSnapshotResolver {
+            public function resolveMany(array $ids): array
+            {
+                $out = [];
+                foreach ($ids as $id) {
+                    if (($row = $this->resolve($id)) !== null) { $out[$id] = $row; }
+                }
+                return $out;
+            }
             public function resolve(int $productId): ?array
             {
                 return $productId > 0 ? ['product_id' => $productId, 'name' => 'Demo'] : null;
@@ -76,6 +84,14 @@ final class WishlistServiceTest extends TestCase
             }
         };
         $snapshots = new class extends \Weline\Wishlist\Service\ProductCardSnapshotResolver {
+            public function resolveMany(array $ids): array
+            {
+                $out = [];
+                foreach ($ids as $id) {
+                    if (($row = $this->resolve($id)) !== null) { $out[$id] = $row; }
+                }
+                return $out;
+            }
             public function resolve(int $productId): ?array
             {
                 return $productId === 20

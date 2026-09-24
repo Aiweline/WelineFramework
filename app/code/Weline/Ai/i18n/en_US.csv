@@ -878,7 +878,7 @@ API密钥将被加密存储,"API keys will be stored encrypted"
 列表精简,"List Compact"
 个模型,"A model"
 批量测试,"Batch testing"
-筛选条件,"Screening criteria"
+筛选条件,Filters
 模型列表,"Model list"
 "暂无已选择模型，请点击“选择模型”，选择供应商和模型后填写 API Key 保存。","No model selected. Please click ""Select Model"", choose a provider and model, then fill in the API Key and save."
 复制,copy

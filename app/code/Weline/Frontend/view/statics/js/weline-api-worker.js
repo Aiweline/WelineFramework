@@ -271,6 +271,12 @@
         if (config.currency) {
             context.currency = config.currency;
         }
+        // Document path (not Worker script Referer). QueryBin uses this when
+        // Scope-kernel is off so path-mounted sites like /daocharms resolve.
+        const pathname = String(config.pathname || config.path || '').trim();
+        if (pathname.charAt(0) === '/' && pathname.indexOf('://') === -1) {
+            context.pathname = pathname.length > 1024 ? pathname.slice(0, 1024) : pathname;
+        }
         if (Object.keys(context).length > 0) {
             payload.context = context;
         }

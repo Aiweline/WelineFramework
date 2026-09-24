@@ -128,7 +128,7 @@ final class StorefrontThemeCacheCoordinator
             pool: self::HEADER_NAV_POOL,
             scope: 'channel',
             vary: ['lang'],
-            dependencies: ['config', 'global/i18n'],
+            dependencies: ['catalog', 'config', 'global/i18n'],
             freshTtlSeconds: 3600,
             staleTtlSeconds: 86400,
         );

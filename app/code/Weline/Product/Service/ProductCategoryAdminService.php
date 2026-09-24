@@ -156,16 +156,18 @@ final class ProductCategoryAdminService
         $keeperId = $matches[0];
         $removed = [];
         foreach (array_slice($matches, 1) as $duplicateId) {
-            foreach ($this->categories->listSiblings($websiteId, $duplicateId) as $childRow) {
+            $children = $this->categories->listSiblings($websiteId, $duplicateId);
+            $childNames = $this->categoryAttributes->readNameMap(
+                $websiteId,
+                array_column($children, Category::schema_fields_ID),
+                $locale,
+            );
+            foreach ($children as $childRow) {
                 $childId = (int)($childRow[Category::schema_fields_ID] ?? 0);
                 if ($childId <= 0) {
                     continue;
                 }
-                $childName = trim((string)($this->categoryAttributes->readNameMap(
-                    $websiteId,
-                    [$childId],
-                    $locale,
-                )[$childId] ?? ''));
+                $childName = trim((string)($childNames[$childId] ?? ''));
                 if ($childName === '') {
                     $childName = $this->displayNameFromPath((string)($childRow[Category::schema_fields_PATH] ?? ''));
                 }

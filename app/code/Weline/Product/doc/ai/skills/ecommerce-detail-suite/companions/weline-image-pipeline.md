@@ -184,6 +184,20 @@ Step H  replaceContent；复扫至 0 BAD（含窄竖、糊、假垫边）
 
 ---
 
+## 6.5 交付格式（默认 WebP · 严重）
+
+对齐 MCP 硬规则 **`generated_images_prefer_webp`**：
+
+| 默认 | 例外（才允许 PNG/JPG） |
+|------|------------------------|
+| 终态落盘 **`.webp`**（`pub/media` / 主题 assets / Banner·Hero·主图） | 用户**明示**要 PNG/JPG |
+| 生图工具若返回 PNG/JPEG → **转码 WebP 后再交付** | 确需非 WebP 透明通道的消费端（极少；WebP alpha 优先） |
+| MediaManager AI 画图默认 `output_format=webp` | favicon / `.ico` / 平台硬性 PNG |
+
+禁止把大体积 PNG/JPG 当作店面长期交付物「因为生成器默认是 PNG」。
+
+---
+
 ## 7. 详情图
 
 同清晰/禁令；**不强制**主图 AR。  

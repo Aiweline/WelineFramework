@@ -120,6 +120,55 @@ final class ProductCategoryAttributeServiceTest extends TestCase
         self::assertSame(2, $ledger->attributeReads);
     }
 
+    public function testDedupeBatchesChildNamesAndPreservesMoveDeleteOrder(): void
+    {
+        [$admin, , $ledger, $pdo] = $this->presentationFixture();
+        // 隔离写边界：原服务只移除 final 并改测试类名，所有读取与去重代码保持原样。
+        $source = file_get_contents(dirname(__DIR__, 3) . '/Service/ProductCategoryAdminService.php');
+        $source = str_replace('final class ProductCategoryAdminService', 'class CategoryDedupeReadHarness', $source);
+        if (!class_exists('Weline\\Product\\Service\\CategoryDedupeReadHarness', false)) {
+            eval(substr($source, strpos($source, 'declare(')));
+        }
+        $probe = new class extends \Weline\Product\Service\CategoryDedupeReadHarness {
+            public array $writes = [];
+            public function __construct() {}
+            public function save(int $websiteId, int $categoryId, int $parentId, string $name, string $status,
+                string $code = '', string $locale = '', ?string $googleTaxonomyId = null, ?string $image = null,
+                ?string $banner = null, ?string $summary = null, ?string $description = null): array {
+                $this->writes[] = ['save', $categoryId, $parentId, $name, $code];
+                return [];
+            }
+            public function delete(int $websiteId, int $categoryId, array $selectedProductIds = []): void {
+                $this->writes[] = ['delete', $categoryId];
+            }
+        };
+        foreach (['categories', 'categoryAttributes'] as $field) {
+            $value = (new \ReflectionProperty($admin, $field))->getValue($admin);
+            (new \ReflectionProperty('Weline\\Product\\Service\\CategoryDedupeReadHarness', $field))->setValue($probe, $value);
+        }
+        $pdo->exec("UPDATE category_attributes SET value_text = 'Same' WHERE attribute_code = 'name'");
+        $pdo->exec("INSERT INTO category_attributes VALUES ('category',2,0,'name','en_US','string','Same','explicit',0,0)");
+        $pdo->exec("INSERT INTO category_rows VALUES (3,2,'/child-first',1,'active'),(4,2,'/fallback-child',2,'active'),(5,1,'/keep-one',1,'active'),(6,1,'/keep-two',2,'active'),(7,1,'/keep-three',3,'active'),(8,0,'/empty-duplicate',3,'active')");
+        $pdo->exec("INSERT INTO category_attributes VALUES ('category',3,0,'name','en_US','string','Child name','explicit',0,0),('category',8,0,'name','en_US','string','Same','explicit',0,0)");
+        self::assertSame([2, 8], $probe->dedupeSiblingsByLocalizedName(0, 0, 'Same', 'en_US'));
+        self::assertSame([
+            ['save', 3, 1, 'Child name', 'child-first'],
+            ['save', 4, 1, 'fallback child', 'fallback-child'],
+            ['delete', 2], ['delete', 8],
+        ], $probe->writes);
+        self::assertSame(2, $ledger->attributeReads, 'One sibling-name read plus one children batch; empty children do not query.');
+        self::assertSame([1, 1, 1, 2, 8, 3], $ledger->fetchedEntities);
+    }
+
+    public function testPresentationOnlyFetchesRequestedAttributeCodes(): void
+    {
+        [, $attributes, $ledger] = $this->presentationFixture();
+        $maps = $attributes->readPresentationMaps(0, [1], 'en_US');
+        self::assertSame('English name', $maps['name'][1]);
+        self::assertSame(1, $ledger->attributeReads);
+        self::assertSame(['banner', 'description', 'image', 'name', 'name', 'name', 'summary'], $ledger->fetchedCodes);
+    }
+
     /** Real repositories and query execution; only connection and shard readiness use a private fixture. */
     private function presentationFixture(): array
     {
@@ -141,7 +190,7 @@ final class ProductCategoryAttributeServiceTest extends TestCase
         ] as [$code, $locale, $value, $cleared]) {
             $insert->execute([ProductCategoryAttributeService::ENTITY_TYPE, $code, $locale, 'string', $value, $cleared ? 'cleared' : 'explicit', $cleared]);
         }
-        $ledger = (object)['attributeReads' => 0];
+        $ledger = (object)['attributeReads' => 0, 'fetchedCodes' => [], 'fetchedEntities' => []];
         $registry = new class extends \Weline\Product\Model\ProductShardRegistry {
             public function __construct() {}
             public function isReady(int $websiteId): bool { return true; }
@@ -161,6 +210,16 @@ final class ProductCategoryAttributeServiceTest extends TestCase
                         $this->fields = 'main_table.*';
                     }
                     public function getLink(): \PDO { return $this->database; }
+                    public function fetchIterator(string $model_class = '', int $batchSize = 1): \Generator
+                    {
+                        foreach (parent::fetchIterator($model_class, $batchSize) as $key => $row) {
+                            if (is_array($row) && isset($row['attribute_code'])) {
+                                $this->ledger->fetchedCodes[] = $row['attribute_code'];
+                                $this->ledger->fetchedEntities[] = (int)$row['entity_id'];
+                            }
+                            yield $key => $row;
+                        }
+                    }
                     protected function preparePgsql(string $sql, array $options = []): \PDOStatement|false
                     {
                         if (str_contains($sql, 'category_attributes')) {

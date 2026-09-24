@@ -42,6 +42,30 @@ class Trace extends DevToolRestController
         ]);
     }
 
+    /**
+     * POST /dev/tool/rest/v1/trace/tpl-perf — arm/disarm template render timing overlay (panel token gated).
+     * Body: { "enabled": true|false }
+     * Armed requests show page badges; clients should also append query `wls_tpl_perf=1`.
+     */
+    public function postTplPerf()
+    {
+        if (!$this->isAllowed()) {
+            return $this->error('dev tool template perf overlay switch is not allowed', [], 403);
+        }
+
+        $enabled = $this->resolvePanelEnabledFlag();
+        RequestLifecycleTrace::issuePanelTplPerfCookie($this->request->getResponse(), $enabled);
+        if ($enabled) {
+            RequestLifecycleTrace::armTemplatePerfOverlayIfRequested();
+        }
+
+        return $this->success($enabled ? 'template perf overlay armed' : 'template perf overlay disarmed', [
+            'enabled' => $enabled,
+            'cookie' => RequestLifecycleTrace::panelTplPerfCookieName(),
+            'query' => 'wls_tpl_perf',
+        ]);
+    }
+
     private function resolvePanelEnabledFlag(): bool
     {
         $body = $this->request->getBodyParams(true);

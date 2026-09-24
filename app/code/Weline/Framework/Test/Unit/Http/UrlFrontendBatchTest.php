@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Test\Unit\Http;
 
+\defined('BP') || \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
+require_once BP . 'app/bootstrap.php';
+
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Weline\Framework\App\Env;
@@ -111,12 +114,14 @@ final class UrlFrontendBatchTest extends TestCase
         self::assertSame(array_keys($paths), array_keys($actual));
         self::assertSame($actual[8], $actual['duplicate']);
         self::assertSame([
-            'category' => 'https://fixture.test/shop/en_US/category/men?from=nav',
-            8 => 'https://fixture.test/shop/en_US/product/item',
-            'duplicate' => 'https://fixture.test/shop/en_US/product/item',
-            'external' => 'https://external.test/path?outside=1',
-            'wildcard' => 'https://fixture.test/shop/en_US/catalog/view',
-            'current' => 'https://fixture.test/shop/en_US/current?existing=1',
+            'data' => [
+                'category' => 'https://fixture.test/shop/en_US/category/men?from=nav',
+                8 => 'https://fixture.test/shop/en_US/product/item',
+                'duplicate' => 'https://fixture.test/shop/en_US/product/item',
+                'external' => 'https://external.test/path?outside=1',
+                'wildcard' => 'https://fixture.test/shop/en_US/catalog/view',
+                'current' => 'https://fixture.test/shop/en_US/current?existing=1',
+            ],
         ], $this->events->calls[0]['data']);
         $names = array_column($this->events->calls, 'name');
         self::assertSame(UrlFrontendBatchEventsSpy::PREFETCH, $names[0]);

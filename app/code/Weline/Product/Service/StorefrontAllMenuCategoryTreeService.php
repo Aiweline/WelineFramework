@@ -89,15 +89,44 @@ final class StorefrontAllMenuCategoryTreeService
      */
     private function materializeUrls(array $tree): array
     {
-        foreach ($tree as $index => $node) {
-            $node['url'] = $this->url->getFrontendUrl((string)$node['url']);
-            if ($node['children'] !== []) {
-                $node['children'] = $this->materializeUrls($node['children']);
+        $routes = [];
+        $collect = function (array $nodes) use (&$collect, &$routes): void {
+            foreach ($nodes as $node) {
+                if (!\is_array($node)) {
+                    continue;
+                }
+                $route = \trim((string)($node['url'] ?? ''));
+                if ($route !== '') {
+                    $routes[$route] = $route;
+                }
+                $children = $node['children'] ?? [];
+                if (\is_array($children) && $children !== []) {
+                    $collect($children);
+                }
             }
-            $tree[$index] = $node;
-        }
+        };
+        $collect($tree);
+        $resolved = $routes === [] ? [] : $this->url->getFrontendUrls($routes);
 
-        return $tree;
+        $apply = function (array $nodes) use (&$apply, $resolved): array {
+            foreach ($nodes as $index => $node) {
+                if (!\is_array($node)) {
+                    continue;
+                }
+                $route = \trim((string)($node['url'] ?? ''));
+                // Batch miss: keep deterministic relative path (no per-node rewrite DB).
+                $node['url'] = $resolved[$route] ?? ('/' . \ltrim($route, '/'));
+                $children = $node['children'] ?? [];
+                if (\is_array($children) && $children !== []) {
+                    $node['children'] = $apply($children);
+                }
+                $nodes[$index] = $node;
+            }
+
+            return $nodes;
+        };
+
+        return $apply($tree);
     }
 
     public function invalidate(int $websiteId): void

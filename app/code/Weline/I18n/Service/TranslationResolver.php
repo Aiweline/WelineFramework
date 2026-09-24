@@ -11,8 +11,9 @@ use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\I18n\Api\Scope\PhraseScopeValue;
 use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 use Weline\I18n\Api\Translation\TranslationResolverInterface;
+use Weline\I18n\Api\Translation\BatchTranslationResolverInterface;
 
-final class TranslationResolver implements TranslationResolverInterface
+final class TranslationResolver implements BatchTranslationResolverInterface
 {
     /** @var array<string, array<string, string>> */
     private array $moduleWords = [];
@@ -30,18 +31,9 @@ final class TranslationResolver implements TranslationResolverInterface
             return '';
         }
 
-        foreach (\array_values(\array_unique($preferredModules)) as $moduleName) {
-            $words = $this->moduleWords((string)$moduleName, $localeCode);
-            if (!isset($words[$source]) || $words[$source] === '') {
-                continue;
-            }
-            $translated = $words[$source];
-            // Latin identity (Hanfu,Hanfu) is an explicit same-text translation.
-            // CJK identity in a non-zh locale is an untranslated collect placeholder
-            // and must not mask later modules or the public dictionary.
-            if ($this->isUsableModuleTranslation($source, $translated, $localeCode)) {
-                return $translated;
-            }
+        $moduleTranslation = $this->moduleTranslation($source, $localeCode, $preferredModules);
+        if ($moduleTranslation !== null) {
+            return $moduleTranslation;
         }
 
         $dictionary = $this->getDictionaryRepository();
@@ -61,6 +53,49 @@ final class TranslationResolver implements TranslationResolverInterface
         // Prefer explicit locale lookup over global __(), which can follow a lagging
         // RequestContext/KeyBuilder language and reverse-translate EN display strings.
         return $source;
+    }
+
+    /** 先按原模块优先级解析，再将剩余词按 200 条一组交给词典仓库。 */
+    public function translateMany(array $sources, string $localeCode, array $preferredModules = []): array
+    {
+        $result = [];
+        $missing = [];
+        foreach ($sources as $source) {
+            $source = trim((string)$source);
+            if ($source === '' || array_key_exists($source, $result)) {
+                continue;
+            }
+            $translated = $this->moduleTranslation($source, $localeCode, $preferredModules);
+            $result[$source] = $translated ?? $source;
+            if ($translated === null) {
+                $missing[] = $source;
+            }
+        }
+        if ($missing === [] || ($dictionary = $this->getDictionaryRepository()) === null) {
+            return $result;
+        }
+        foreach (array_chunk($missing, 200) as $batch) {
+            $entries = $dictionary->getEntries($batch, $localeCode);
+            foreach ($batch as $source) {
+                $translated = trim((string)($entries[$source]->translation ?? ''));
+                if ($translated !== '') {
+                    $result[$source] = $translated;
+                }
+            }
+        }
+        return $result;
+    }
+
+    /** 单条和批量共享 CSV 优先级及非中文语言的中文占位判断。 */
+    private function moduleTranslation(string $source, string $localeCode, array $preferredModules): ?string
+    {
+        foreach (array_values(array_unique($preferredModules)) as $moduleName) {
+            $words = $this->moduleWords((string)$moduleName, $localeCode);
+            if (isset($words[$source]) && $this->isUsableModuleTranslation($source, $words[$source], $localeCode)) {
+                return $words[$source];
+            }
+        }
+        return null;
     }
 
     public function reset(): void

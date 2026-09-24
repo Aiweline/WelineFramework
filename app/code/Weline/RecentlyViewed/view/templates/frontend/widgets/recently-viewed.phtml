@@ -12,11 +12,11 @@
  * @widget.position {["content", "sidebar"]}
  * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-product-recently-viewed","layout-product-sidebar","layout-products-recommendations","layout-search-recommendations","recently-viewed"]}
- * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-recently-viewed", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认最近浏览槽", "config":{"title":"最近浏览","limit":24,"columns":"6","layout":"carousel"} }]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-recently-viewed", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认最近浏览槽", "config":{"title":"最近浏览","limit":6,"columns":"6","layout":"carousel"} }]}
  *
  * @widget.source {Weline_RecentlyViewed::css/widgets/recently-viewed.css,Weline_Product::css/frontend/product-card.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
  * @param title {default="最近浏览",type="string",label="标题"}
- * @param limit {default=24,type="number",label="显示数量"}
+ * @param limit {default=6,type="number",label="显示数量"}
  * @param columns {default="6",type="select",label="每行列数",options={3:"3列",4:"4列",5:"5列",6:"6列"}}
  * @param layout {default="carousel",type="select",label="布局方式",options={grid:"网格",carousel:"轮播"}}
  * @param show_price {default=true,type="bool",label="显示价格"}
@@ -44,7 +44,7 @@ if (preg_match('/^Weline_[A-Za-z0-9_]+$/', $titleSource)) {
     $titleSource = '最近浏览';
 }
 $widgetTitle = WidgetI18n::label($titleSource, '最近浏览');
-$limit = max(1, min(24, (int)($this->getData('limit') ?? 24)));
+$limit = max(1, min(6, (int)($this->getData('limit') ?? 6)));
 $columns = (string)($this->getData('columns') ?? '6');
 $layout = (string)($this->getData('layout') ?? 'carousel');
 $showPrice = (bool)($this->getData('show_price') ?? true);
@@ -81,9 +81,7 @@ if ($excludeProductId <= 0) {
 
 $products = [];
 try {
-    // Editor / theme-preview: cookie MRU may still hold real product ids, and
-    // cards() → publishedOffersForProductIds() cold-builds the full catalog.
-    // Prefer demo cards so the product-layout iframe cannot stall.
+    // cards() → product_storefront/cardsByProductIds (targeted; no per-id live).
     if ($isPreviewMode) {
         $products = \Weline\Theme\Helper\ThemeDemoCatalog::products($limit, 7);
     } else {

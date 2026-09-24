@@ -225,23 +225,19 @@ final class ReviewService implements ReviewSeoFactsInterface
         $type = $this->types->get($typeCode);
         $inputToEntityUuid = [];
         $entityUuidSet = [];
+        $inputs = [];
         foreach ($externalEntityUuids as $raw) {
             $raw = trim((string)$raw);
-            if ($raw === '' || isset($inputToEntityUuid[$raw])) {
-                continue;
-            }
-            $entity = $type->resolveEntity($raw);
-            if ($entity === null) {
-                $inputToEntityUuid[$raw] = null;
-                continue;
-            }
+            if ($raw !== '') { $inputs[$raw] = $raw; }
+        }
+        $entities = $type instanceof \Weline\Review\Api\BatchReviewTypeProviderInterface
+            ? $type->resolveEntities(array_values($inputs))
+            : null;
+        foreach ($inputs as $raw) {
+            $entity = $entities !== null ? ($entities[$raw] ?? null) : $type->resolveEntity($raw);
             $entityUuid = trim((string)($entity['entity_uuid'] ?? ''));
-            if ($entityUuid === '') {
-                $inputToEntityUuid[$raw] = null;
-                continue;
-            }
-            $inputToEntityUuid[$raw] = $entityUuid;
-            $entityUuidSet[$entityUuid] = true;
+            $inputToEntityUuid[$raw] = $entityUuid !== '' ? $entityUuid : null;
+            if ($entityUuid !== '') { $entityUuidSet[$entityUuid] = true; }
         }
 
         $empty = ['review_count' => 0, 'average_rating' => 0.0];

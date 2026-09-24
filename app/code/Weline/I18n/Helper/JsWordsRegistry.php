@@ -62,7 +62,9 @@ class JsWordsRegistry
      */
     public static function getWordsWithTranslations(): array
     {
-        $translations = Parser::getWords();
+        // Prefer request-used translations. Parser::getWords() materializes the
+        // full global dictionary (DB storm on cold storefront head).
+        $translations = Parser::getUsedWordsWithTranslations();
         $result = [];
 
         foreach (self::$words as $word) {

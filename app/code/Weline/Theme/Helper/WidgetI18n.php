@@ -8,6 +8,7 @@ use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\I18n\Api\Translation\TranslationResolverInterface;
+use Weline\I18n\Api\Translation\BatchTranslationResolverInterface;
 
 /**
  * 主题部件文案：布局配置里存的是中文源串，渲染时按当前语言解析（含 Weline_Theme 语言包回退）。
@@ -17,6 +18,27 @@ final class WidgetI18n
     private const REQUEST_MEMO_KEY = 'theme.widget_i18n.memo';
 
     private const REQUEST_MEMO_LIMIT = 512;
+
+    private const PREFERRED_MODULES = [
+        'Weline_Theme',
+        'Weline_I18n',
+        'Weline_Blog',
+        'Weline_Review',
+        'Weline_Product',
+        'Weline_Shipping',
+        'Weline_Checkout',
+        'Weline_B2B',
+        'Weline_HelpPay',
+        'Weline_Cart',
+        'Weline_CustomerService',
+        'Weline_Promotion',
+        'Weline_Affiliate',
+        'Weline_StoreMusic',
+        'Weline_RecentlyViewed',
+        'Weline_Faq',
+        'WeShop_Product',
+        'WeShop_Catalog',
+    ];
 
     /**
      * First-path-segment locales that must win over a lagging RequestContext.
@@ -41,6 +63,50 @@ final class WidgetI18n
         return self::resolveStorefrontLocale();
     }
 
+    /** 已知文案集合先批量解析，后续 label() 保持原有输出及参数替换。 */
+    public static function prefetchLabels(array $sources): void
+    {
+        if (!RequestContext::isInitialized()) {
+            return;
+        }
+        $lang = self::resolveStorefrontLocale();
+        $pending = [];
+        $words = [];
+        foreach ($sources as $source) {
+            $source = trim((string)$source);
+            if ($source === '' || self::hasRequestMemo(self::requestMemoKey($source, $lang, []))) {
+                continue;
+            }
+            $pending[$source] = $source;
+            $words[$source] = $source;
+            if (preg_match('/^[a-z]/', $source) === 1) {
+                $words[ucfirst($source)] = ucfirst($source);
+            }
+        }
+        if ($pending === []) {
+            return;
+        }
+        $resolver = ObjectManager::getInstance(TranslationResolverInterface::class);
+        if (!$resolver instanceof BatchTranslationResolverInterface) {
+            return;
+        }
+        $translations = $resolver->translateMany(array_values($words), $lang, self::PREFERRED_MODULES);
+        foreach ($pending as $source) {
+            $translated = $translations[$source] ?? $source;
+            if ($translated === $source && preg_match('/^[a-z]/', $source) === 1) {
+                $alias = ucfirst($source);
+                $aliasTranslation = $translations[$alias] ?? $alias;
+                if ($aliasTranslation !== '' && $aliasTranslation !== $alias) {
+                    $translated = $aliasTranslation;
+                }
+            }
+            if ($translated === '' || \Weline\Framework\View\Helper\EmbeddedPageTitle::isInternalIdentifier($translated)) {
+                $translated = \Weline\Framework\View\Helper\EmbeddedPageTitle::isInternalIdentifier($source) ? '' : $source;
+            }
+            self::setRequestMemo(self::requestMemoKey($source, $lang, []), $translated);
+        }
+    }
+
     /**
      * Resolve configured/default storefront copy and expand framework-style positional placeholders.
      *
@@ -59,38 +125,25 @@ final class WidgetI18n
             return self::getRequestMemo($memoKey);
         }
 
-        /** @var TranslationResolverInterface $resolver */
-        $resolver = ObjectManager::getInstance(TranslationResolverInterface::class);
-        $preferredModules = [
-            'Weline_Theme',
-            'Weline_I18n',
-            'Weline_Blog',
-            'Weline_Review',
-            'Weline_Product',
-            'Weline_Shipping',
-            'Weline_Checkout',
-            'Weline_B2B',
-            'Weline_HelpPay',
-            'Weline_Cart',
-            'Weline_CustomerService',
-            'Weline_Promotion',
-            'Weline_Affiliate',
-            'Weline_StoreMusic',
-            'Weline_RecentlyViewed',
-            'Weline_Faq',
-            'WeShop_Product',
-            'WeShop_Catalog',
-        ];
-        $translated = $resolver->translate(
-            $key,
-            $lang,
-            $preferredModules,
-        );
-        if ($translated === $key && preg_match('/^[a-z]/', $key) === 1) {
-            $titleCaseAlias = ucfirst($key);
-            $aliasTranslation = $resolver->translate($titleCaseAlias, $lang, $preferredModules);
-            if ($aliasTranslation !== '' && $aliasTranslation !== $titleCaseAlias) {
-                $translated = $aliasTranslation;
+        $baseMemoKey = self::requestMemoKey($key, $lang, []);
+        if ($args !== [] && self::hasRequestMemo($baseMemoKey)) {
+            $translated = self::getRequestMemo($baseMemoKey);
+        } else {
+
+            /** @var TranslationResolverInterface $resolver */
+            $resolver = ObjectManager::getInstance(TranslationResolverInterface::class);
+            $preferredModules = self::PREFERRED_MODULES;
+            $translated = $resolver->translate(
+                $key,
+                $lang,
+                $preferredModules,
+            );
+            if ($translated === $key && preg_match('/^[a-z]/', $key) === 1) {
+                $titleCaseAlias = ucfirst($key);
+                $aliasTranslation = $resolver->translate($titleCaseAlias, $lang, $preferredModules);
+                if ($aliasTranslation !== '' && $aliasTranslation !== $titleCaseAlias) {
+                    $translated = $aliasTranslation;
+                }
             }
         }
 

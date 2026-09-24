@@ -622,6 +622,42 @@ class QueryBin extends FrontendRestController
         if ($currency !== '') {
             RequestContext::setWelineUserCurrency($currency);
         }
+
+        $pathname = $this->normalizeWorkerStorefrontPathname(
+            $context['pathname'] ?? $context['path'] ?? ''
+        );
+        if ($pathname !== '') {
+            RequestContext::set(
+                FrontendWorkerExecutionContext::STOREFRONT_PATHNAME_CONTEXT_KEY,
+                $pathname,
+            );
+        }
+    }
+
+    /**
+     * Same-origin document path from Worker config (window.location.pathname).
+     * Rejects absolute URLs and QueryBin self-paths; used for path-mount Scope.
+     */
+    private function normalizeWorkerStorefrontPathname(mixed $value): string
+    {
+        $pathname = \trim((string)$value);
+        if ($pathname === '' || \strlen($pathname) > 1024) {
+            return '';
+        }
+        if (!\str_starts_with($pathname, '/') || \str_contains($pathname, '://')) {
+            return '';
+        }
+        if (\str_contains($pathname, "\0") || \str_contains($pathname, '\\')) {
+            return '';
+        }
+        $normalized = \strtolower('/' . \ltrim($pathname, '/'));
+        if ($normalized === '/api/framework/query-bin'
+            || $normalized === '/framework/query-bin'
+            || \str_contains($normalized, '/query-bin')) {
+            return '';
+        }
+
+        return $pathname;
     }
 
     private function normalizeWorkerLanguage(mixed $value): string

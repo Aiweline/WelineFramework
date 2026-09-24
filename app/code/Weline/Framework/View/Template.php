@@ -1748,8 +1748,9 @@ class Template extends DataObject
         $dbPart = \sprintf('db %sms(%dq)', \number_format($io['db_duration_ms'], 1, '.', ''), $io['db_span_count']);
         $wlsPart = \sprintf('wls %sms(%d)', \number_format($io['wls_duration_ms'], 1, '.', ''), $io['wls_span_count']);
         $phpPart = \sprintf('php %sms', \number_format($io['php_ms'], 1, '.', ''));
+        $bytesLabel = $this->formatTemplatePerfBytes($bytes);
         $badge = \sprintf(
-            '<div class="wls-tpl-perf" data-wls-tpl-file="%s" data-wls-tpl-ms="%s" data-wls-tpl-db-ms="%s" data-wls-tpl-php-ms="%s" data-wls-tpl-wls-ms="%s" data-wls-tpl-db-q="%d" data-wls-tpl-bytes="%d" style="position:relative;z-index:2147483000;display:inline-block;margin:2px 0;padding:2px 8px;border-radius:4px;background:%s;color:#fff;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;box-shadow:0 1px 4px rgba(0,0,0,.25);max-width:100%%;word-break:break-all;">⏱ %s · total %sms · %s · %s · %s · %sB</div>',
+            '<div class="wls-tpl-perf" data-wls-tpl-file="%s" data-wls-tpl-ms="%s" data-wls-tpl-db-ms="%s" data-wls-tpl-php-ms="%s" data-wls-tpl-wls-ms="%s" data-wls-tpl-db-q="%d" data-wls-tpl-bytes="%d" style="position:relative;z-index:2147483000;display:inline-block;margin:2px 0;padding:2px 8px;border-radius:4px;background:%s;color:#fff;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;box-shadow:0 1px 4px rgba(0,0,0,.25);max-width:100%%;word-break:break-all;">⏱ %s · total %sms · %s · %s · %s · %s</div>',
             \htmlspecialchars($path, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars(\number_format($totalMs, 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars(\number_format($io['db_duration_ms'], 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
@@ -1763,7 +1764,7 @@ class Template extends DataObject
             \htmlspecialchars($dbPart, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars($wlsPart, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars($phpPart, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
-            \number_format($bytes)
+            \htmlspecialchars($bytesLabel, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
         );
 
         // 完整文档：插到 <body> 后，避免破坏 doctype/head。
@@ -1778,6 +1779,24 @@ class Template extends DataObject
         }
 
         return $badge . $html;
+    }
+
+    /**
+     * 徽标可读体积：B / KB / MB（1024 进制；data-wls-tpl-bytes 仍保留原始字节）。
+     */
+    private function formatTemplatePerfBytes(int $bytes): string
+    {
+        if ($bytes < 0) {
+            $bytes = 0;
+        }
+        if ($bytes < 1024) {
+            return $bytes . ' B';
+        }
+        if ($bytes < 1024 * 1024) {
+            return \rtrim(\rtrim(\number_format($bytes / 1024, 1, '.', ''), '0'), '.') . ' KB';
+        }
+
+        return \rtrim(\rtrim(\number_format($bytes / (1024 * 1024), 2, '.', ''), '0'), '.') . ' MB';
     }
 
     /**

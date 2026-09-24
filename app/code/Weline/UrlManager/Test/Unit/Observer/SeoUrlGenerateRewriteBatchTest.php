@@ -140,6 +140,61 @@ final class SeoUrlGenerateRewriteBatchTest extends TestCase
         ]);
     }
 
+    public function testNewRequestAfterSharedExpiryReloadsPositiveAndNegativeResults(): void
+    {
+        $model = new BatchRewriteLookupFixture();
+        $model->rows = ['category/expiry-hit' => ['rewrite' => 'old']];
+        $cache = $this->createMock(CachePoolInterface::class);
+        $cache->expects(self::exactly(2))->method('getMultiple')->willReturn([]);
+        $cache->method('setMultiple')->willReturn(true);
+        $observer = $this->observer($model, $cache);
+        $urls = ['https://batch.example.test/category/expiry-hit', 'https://batch.example.test/category/expiry-miss'];
+        $observer->prefetch($urls);
+        RequestContext::cleanup();
+        $this->setUp();
+        $model->rows = ['category/expiry-hit' => ['rewrite' => 'new'], 'category/expiry-miss' => ['rewrite' => 'created']];
+        $observer->prefetch($urls);
+        self::assertCount(2, $model->calls);
+        foreach (['new', 'created'] as $index => $target) {
+            $event = new Event(['data' => $urls[$index]]);
+            $observer->execute($event);
+            self::assertSame('https://batch.example.test/' . $target, $event->getData('data'));
+        }
+    }
+
+    public function testInvalidationDiscardsOnlyOwnedRequestResults(): void
+    {
+        $model = new BatchRewriteLookupFixture();
+        $cache = $this->createMock(CachePoolInterface::class);
+        $cache->method('getMultiple')->willReturn([]);
+        $cache->method('setMultiple')->willReturn(true);
+        $observer = $this->observer($model, $cache);
+        $url = 'https://batch.example.test/category/invalidate-miss';
+        $observer->prefetch([$url]);
+        RequestContext::set('unrelated.cache', 'keep');
+        $model->rows = ['category/invalidate-miss' => ['rewrite' => 'created-after-miss']];
+        SeoUrlGenerateRewrite::invalidateCaches();
+        $observer->prefetch([$url]);
+        self::assertCount(2, $model->calls);
+        $event = new Event(['data' => $url]);
+        $observer->execute($event);
+        self::assertSame('https://batch.example.test/created-after-miss', $event->getData('data'));
+        self::assertSame('keep', RequestContext::get('unrelated.cache'));
+    }
+
+    public function testSingleColdEventResolvesPrimaryAndFallbackInOneBatch(): void
+    {
+        $model = new BatchRewriteLookupFixture();
+        $model->rows = ['category/single-cold' => ['rewrite' => 'fallback']];
+        $cache = $this->createMock(CachePoolInterface::class);
+        $cache->method('set')->willReturn(true);
+        $observer = $this->observer($model, $cache);
+        $event = new Event(['data' => 'https://batch.example.test/en_US/category/single-cold?x=1']);
+        $observer->execute($event);
+        self::assertSame('https://batch.example.test/en_US/fallback?x=1', $event->getData('data'));
+        self::assertSame([[7, ['en_us/category/single-cold', 'category/single-cold']]], $model->calls);
+    }
+
     private function observer(BatchRewriteLookupFixture $model, CachePoolInterface $cache): SeoUrlGenerateRewrite
     {
         $observer = new SeoUrlGenerateRewrite($model);
@@ -158,7 +213,8 @@ final class BatchRewriteLookupFixture extends UrlRewrite
 
     public function findLatestByWebsiteAndPath(int $websiteId, string $path): ?array
     {
-        throw new \RuntimeException('A prefetched URL must reuse the request context.');
+        $this->calls[] = [$websiteId, [$path]];
+        return $this->rows[$path] ?? null;
     }
 
     public function findLatestByWebsiteAndPaths(int $websiteId, array $paths): array

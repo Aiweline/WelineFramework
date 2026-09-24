@@ -219,6 +219,35 @@ class AttributeFilterServiceTest extends TestCase
         ];
     }
 
+    public function testFilterBatchKeepsPairedPredicatesAndShortCircuitsAcrossTables(): void
+    {
+        $service = new AttributeFilterService($this->createMock(EventsManager::class));
+        $pdo = new \PDO('sqlite::memory:');
+        $pdo->exec('CREATE TABLE typed_values (attribute_id INTEGER, entity_id INTEGER, value TEXT COLLATE NOCASE)');
+        $pdo->exec("INSERT INTO typed_values VALUES (8,1,'red'),(9,1,'M'),(8,2,'M'),(9,2,'red'),(8,3,'RED'),(9,3,'M'),(8,4,'0'),(9,4,''),(8,99,'red'),(9,99,'M')");
+        $queries = (object)['sql' => []];
+        $a = $this->batchAttribute(8, 'color', $this->batchValueModel($pdo, $queries, 'typed_values'));
+        $b = $this->batchAttribute(9, 'size', $this->batchValueModel($pdo, $queries, 'typed_values'));
+        $filters = [['attribute' => $a, 'values' => ['red']], ['attribute' => $b, 'values' => ['M']]];
+        $old = [3,2,1,1,4];
+        foreach ($filters as $filter) {
+            $old = $this->invokePrivate($service, 'getEntitiesByAttributeValues', [$filter['attribute'], $old, $filter['values']]);
+        }
+        self::assertCount(2, $queries->sql);
+        $queries->sql = [];
+        $actual = $this->invokePrivate($service, 'filterAttributeMatches', [$filters, [3,2,1,1,4], 'AND']);
+        self::assertEqualsCanonicalizing($old, $actual);
+        self::assertEqualsCanonicalizing([1,3], $actual);
+        self::assertCount(1, $queries->sql);
+        self::assertSame([3,1], $this->invokePrivate($service, 'filterAttributeMatches', [$filters, [3,2,1,1,4], 'OR']));
+        self::assertSame([4], $this->invokePrivate($service, 'filterAttributeMatches', [[['attribute'=>$a,'values'=>[0]], ['attribute'=>$b,'values'=>[null]]], [1,2,3,4], 'AND']));
+        self::assertSame([2,2,1], $this->invokePrivate($service, 'filterAttributeMatches', [[], [2,2,1], 'AND']));
+        $missing = $this->batchAttribute(10, 'missing', $this->batchValueModel($pdo, $queries, 'missing_table'));
+        $queries->sql = [];
+        self::assertSame([], $this->invokePrivate($service, 'filterAttributeMatches', [[['attribute'=>$a,'values'=>['absent']], ['attribute'=>$missing,'values'=>['anything']]], [1,2], 'AND']));
+        self::assertCount(1, $queries->sql, 'The later physical table must not be queried after an empty AND result.');
+    }
+
     private function batchValueModel(\PDO $pdo, object $queries, string $table, string $database = 'first'): AttributeValueModel
     {
         $config = new \Weline\Framework\Database\DbManager\ConfigProvider([
@@ -239,6 +268,29 @@ class AttributeFilterServiceTest extends TestCase
             public function __construct(private \PDO $pdo, private object $queries, private string $physicalTable, private object $fixtureConnection) {}
             public function getTable(string $table = ''): string { return $this->physicalTable; }
             public function getConnection() { return $this->fixtureConnection; }
+            public function getQuery(bool $keep_condition = true): \Weline\Framework\Database\Connection\Api\Sql\QueryInterface
+            {
+                $query = new class($this->pdo, $this->queries) extends \Weline\Framework\Database\Connection\Adapter\Sqlite\Query {
+                    private ?\PDOStatement $fixtureStatement = null;
+                    public function __construct(private \PDO $pdo, private object $queries) { parent::__construct(); }
+                    public function getLink(): \PDO { return $this->pdo; }
+                    public function select(string $fields = ''): \Weline\Framework\Database\Connection\Api\Sql\QueryInterface
+                    {
+                        $this->reorderWhereByIndexes();
+                        $this->buildAst('select');
+                        $compiled = (new \Weline\Framework\Database\Compiler\SqliteCompiler())->compile($this->getAst());
+                        $this->queries->sql[] = $compiled->sql;
+                        $this->fixtureStatement = $this->pdo->prepare($compiled->sql);
+                        $this->fixtureStatement->execute($compiled->bindings);
+                        return $this;
+                    }
+                    public function fetchArray(): array { return $this->fixtureStatement->fetchAll(\PDO::FETCH_ASSOC); }
+                };
+                $query->table($this->physicalTable);
+                $query->_index_sort_keys = ['attribute_id', 'entity_id'];
+                return $query;
+            }
+
             public function reset(): static
             {
                 $this->selectedFields = $this->conditions = $this->groups = [];
@@ -252,23 +304,21 @@ class AttributeFilterServiceTest extends TestCase
             }
             public function where(array|string $field, mixed $value = null, string $condition = '=', string $where_logic = 'AND', string $array_where_logic_type = 'AND'): static
             {
-                if (strtoupper($condition) === 'IS NOT NULL') {
-                    $this->conditions[] = $field . ' IS NOT NULL';
-                } elseif (strtolower($condition) === 'in') {
-                    $this->conditions[] = $field . ' IN (' . implode(',', array_map(fn($item): string => $this->pdo->quote((string)$item), $value)) . ')';
-                } else {
-                    $this->conditions[] = $field . ' ' . $condition . ' ' . $this->pdo->quote((string)$value);
-                }
+                $this->conditions[] = [$field, $condition, $value, $where_logic];
                 return $this;
             }
             public function group(string $fields): static { $this->groups[] = $fields; return $this; }
             public function select(string $fields = ''): static
             {
-                $sql = 'SELECT ' . ($fields !== '' ? $fields : implode(',', $this->selectedFields))
-                    . ' FROM ' . $this->physicalTable . ' WHERE ' . implode(' AND ', $this->conditions)
-                    . ' GROUP BY ' . implode(',', $this->groups);
+                $compiled = (new \Weline\Framework\Database\Compiler\SqliteCompiler())->compile([
+                    'action' => 'select', 'from' => ['table'=>$this->physicalTable, 'alias'=>'main_table'],
+                    'select' => ['fields'=>preg_replace('/^DISTINCT /', '', $fields !== '' ? $fields : implode(',', $this->selectedFields))],
+                    'where'=>$this->conditions, 'group'=>implode(',', $this->groups),
+                ]);
+                $sql = str_replace('SELECT ', 'SELECT DISTINCT ', $compiled->sql);
                 $this->queries->sql[] = $sql;
-                $this->statement = $this->pdo->query($sql);
+                $this->statement = $this->pdo->prepare($sql);
+                $this->statement->execute($compiled->bindings);
                 return $this;
             }
             public function fetchArray(): array { return $this->statement->fetchAll(\PDO::FETCH_ASSOC); }

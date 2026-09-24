@@ -15,6 +15,11 @@ final class SeoUrlGenerateRewriteBatch implements ObserverInterface
 
     public function execute(Event &$event): void
     {
-        $this->rewrite->prefetch($event->getData('data'));
+        $urls = $event->getData('data');
+        if (!\is_array($urls) || $urls === []) {
+            return;
+        }
+        /** @var array<array-key, string> $urls */
+        $this->rewrite->prefetch($urls);
     }
 }

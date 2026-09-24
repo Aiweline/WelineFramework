@@ -20,5 +20,8 @@ final class StorefrontCategoryTreeIndexLocalizedNameContractTest extends TestCas
         self::assertStringContainsString('rememberForRequest', $source);
         self::assertStringContainsString("'storefront.category_tree.urls'", $source);
         self::assertStringContainsString("['categories' => \\count(\$index['by_id'])]", $source);
+        self::assertStringContainsString('categoryUrlWithoutLookup', $source);
+        self::assertStringNotContainsString('function categoryUrl(string $path)', $source);
+        self::assertStringNotContainsString('getFrontendUrl(', $source);
     }
 }

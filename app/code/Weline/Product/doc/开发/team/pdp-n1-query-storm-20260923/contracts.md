@@ -1,7 +1,8 @@
 # contracts — pdp-n1-query-storm-20260923
 
-status: **aligned_frozen**（机制 + UC 意图已冻；**施工未派**）  
+status: **in_progress**（O1–O4 合入+加深；冷门禁 ≤150 未完全达标，见验收）  
 frozen_at: 2026-09-23T23:55+08 · by:项目经理  
+updated: 2026-09-24 · 施工宿主合入 O1–O4；加深 rewrite prefetch 载荷 / header flat types / media batch / JsWords  
 权威：`spec/pdp-n1-query-storm-20260923.md` · `surfaces.md`（architect_joint=true · O1–O5）· `meetings/探查-code-loci.md` · `meetings/电商顾问-stance.md`
 
 ---
@@ -39,12 +40,12 @@ frozen_at: 2026-09-23T23:55+08 · by:项目经理
 
 | plan_id | 内容 | 负责人席 | issuer_seat | deps | 状态 |
 |---------|------|----------|-------------|------|------|
-| C-O1 | live_request 单次 + catalog 复用 | 后端·Product | 性能检查工程师 | surfaces O1 · 探查 live_request | **queued** |
-| C-O2 | PDP 预取协调器 + 推荐三件套批量 + EAV bulk + RV QueryProvider | 后端·Product（+RecentlyViewed 协同） | 性能检查工程师 | O1 · 探查 RV/yml/xsell · stance 卡数 | **queued** |
-| C-O3 | category_tree.urls 批量 + CachePolicy | 后端·Product | 性能检查工程师 | O3 · 探查 category_tree | **queued** |
-| C-O4 | header / type-dropdown Policy（禁拆壳） | 主题/前端（+Search 协同） | 性能检查工程师 | O4 · 探查 header/搜索 | **queued** |
-| C-O5 | 验收样本冷暖分述 + e2e/trace 门禁 | 测试·性能 | 性能检查工程师 | O5 · UC-1/8 | **queued** |
-| C-OPS | 店面 ops_acceptance | 电商顾问 | 电商顾问 | UC-10；C-O* 合入后 | **blocked_until_impl** |
+| C-O1 | live_request 单次 + catalog 复用 | 后端·Product | 性能检查工程师 | surfaces O1 · 探查 live_request | **done** |
+| C-O2 | PDP 预取协调器 + 推荐三件套批量 + EAV bulk + RV QueryProvider | 后端·Product（+RecentlyViewed 协同） | 性能检查工程师 | O1 · 探查 RV/yml/xsell · stance 卡数 | **done**（RV+限卡+禁 summary 填空；媒体 asset 批量 prime） |
+| C-O3 | category_tree.urls 批量 + CachePolicy | 后端·Product | 性能检查工程师 | O3 · 探查 category_tree | **done**（封死逐 path；`getFrontendUrls` prefetch 载荷 `['data'=>…]`；菜单 `getFrontendUrls` 一批；冷样本 cat_urls≈0） |
+| C-O4 | header / type-dropdown Policy（禁拆壳） | 主题/前端（+Search 协同） | 性能检查工程师 | O4 · 探查 header/搜索 | **done**（保留 `listTypes(true)`+children；Policy key `search_types.v2`+catalog 依赖；禁拆壳） |
+| C-O5 | 验收样本冷暖分述 + e2e/trace 门禁 | 测试·性能 | 性能检查工程师 | O5 · UC-1/8 | **partial**（UT 齐；冷 FPC MISS：`db_span≈249` / `db_ms≈117～125`；`db_ms` 近门禁，`db_span` 仍＞150；基线 666～936） |
+| C-OPS | 店面 ops_acceptance | 电商顾问 | 电商顾问 | UC-10；C-O* 合入后 | **blocked_until_ops** |
 
 **禁**：未 PM 派工私自 reload / 大改；拆 chrome；平行袋；假 HIT。
 

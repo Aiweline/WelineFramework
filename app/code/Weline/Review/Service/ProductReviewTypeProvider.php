@@ -9,7 +9,7 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Product\Api\ProductIdentityResolverInterface;
 use Weline\Review\Api\ReviewTypeProviderInterface;
 
-final class ProductReviewTypeProvider implements ReviewTypeProviderInterface
+final class ProductReviewTypeProvider implements \Weline\Review\Api\BatchReviewTypeProviderInterface
 {
     public function typeCode(): string
     {
@@ -36,6 +36,43 @@ final class ProductReviewTypeProvider implements ReviewTypeProviderInterface
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    public function resolveEntities(array $uuids): array
+    {
+        $uuids = array_values(array_unique(array_filter(array_map('trim', $uuids),
+            static fn(string $uuid): bool => $uuid !== '')));
+        if ($uuids === []) { return []; }
+        $out = array_fill_keys($uuids, null);
+        try {
+            $resolver = ObjectManager::getInstance(RuntimeProviderResolver::class)->resolve(ProductIdentityResolverInterface::class);
+            if (!$resolver instanceof \Weline\Product\Api\ProductIdentityBatchResolverInterface) {
+                // 仅不支持批量契约的第三方 provider 保留单条兼容。
+                foreach ($uuids as $uuid) { $out[$uuid] = $this->resolveEntity($uuid); }
+                return $out;
+            }
+            $identities = $resolver->resolveByOfferUuids($uuids);
+            $missing = array_values(array_filter($uuids,
+                static fn(string $uuid): bool => !isset($identities[$uuid])));
+            foreach ($identities as $uuid => $identity) {
+                if (array_key_exists($uuid, $out)) {
+                    $out[$uuid] = ['entity_id' => $identity->registryId, 'entity_uuid' => $identity->globalProductUuid];
+                }
+            }
+            if ($missing !== []) {
+                $identities = $resolver->resolveByProductUuids($missing);
+            } else {
+                $identities = [];
+            }
+            foreach ($identities as $uuid => $identity) {
+                if (array_key_exists($uuid, $out)) {
+                    $out[$uuid] = ['entity_id' => $identity->registryId, 'entity_uuid' => $identity->globalProductUuid];
+                }
+            }
+        } catch (\Throwable) {
+            // 与单条解析一致，暂时不可读时不发布评论统计。
+        }
+        return $out;
     }
 
     public function fields(): array

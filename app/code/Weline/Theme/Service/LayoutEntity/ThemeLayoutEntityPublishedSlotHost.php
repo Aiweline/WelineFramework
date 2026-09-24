@@ -68,7 +68,7 @@ final class ThemeLayoutEntityPublishedSlotHost
     /**
      * wave9-9s6: which gate branch forces safety-net (observability for zero_runtime_fill).
      *
-     * @return 'none'|'slot_placeholder'|'filter_data_placeholder'|'missing_chrome_header_signals'|'missing_chrome_blank_header_or_footer'|'empty_critical_filters'|'empty_critical_published'
+     * @return 'none'|'slot_placeholder'|'filter_data_placeholder'|'missing_chrome_header_signals'|'missing_chrome_blank_header_or_footer'|'empty_critical_filters'|'empty_critical_published'|'missing_required_newsletter_popup'
      */
     public static function shellSafetyNetFillReason(string $html): string
     {
@@ -101,7 +101,39 @@ final class ThemeLayoutEntityPublishedSlotHost
             return $chromePresent ? 'empty_critical_filters' : 'empty_critical_published';
         }
 
+        // Required newsletter-popup injects into homepage content; design solidify may omit
+        // it while chrome is "complete" — force narrow Overlay heal (append, not replace).
+        if (self::shellMissingRequiredNewsletterPopup($html)) {
+            return 'missing_required_newsletter_popup';
+        }
+
         return 'none';
+    }
+
+    /**
+     * Homepage / chrome with footer-newsletter enable_popup but missing popup DOM.
+     * Also covers design shells that still lack the co-rendered popup.
+     */
+    public static function shellMissingRequiredNewsletterPopup(string $html): bool
+    {
+        if ($html === '' || \str_contains($html, 'data-widget-code="newsletter-popup"')) {
+            return false;
+        }
+        // Footer band enabled popup but bake omitted sibling → heal.
+        if (\str_contains($html, 'data-widget-code="footer-newsletter"')
+            && \preg_match('/\bdata-enable-popup\s*=\s*(["\'])true\1/', $html) === 1
+        ) {
+            return true;
+        }
+        if (!\str_contains($html, 'data-slot-id="content"')) {
+            return false;
+        }
+        if (\preg_match('/\bdata-layout\s*=\s*(["\'])homepage\1/', $html) === 1) {
+            return true;
+        }
+
+        return \str_contains($html, 'homepage-content-slot')
+            || \str_contains($html, 'homepage-section');
     }
 
     /**

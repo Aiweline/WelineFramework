@@ -144,10 +144,59 @@
         return null;
     }
 
+    /**
+     * Website Path from runtime baseUrl (e.g. /daocharms/) so multi-site same host
+     * does not share show_once cookies. Fallback '/' when base is site root.
+     */
+    function cookiePath() {
+        try {
+            var cfg = document.getElementById('weline-frontend-runtime-config');
+            var raw = cfg ? (cfg.textContent || cfg.innerText || '') : '';
+            var json = raw ? JSON.parse(raw) : null;
+            var base = (json && (json.baseUrl || (json.site && json.site.host))) || '';
+            if (!base && window.WelineRuntime && window.WelineRuntime.baseUrl) {
+                base = String(window.WelineRuntime.baseUrl);
+            }
+            if (!base) {
+                return '/';
+            }
+            var path = '/';
+            try {
+                path = new URL(String(base), window.location.origin).pathname || '/';
+            } catch (eUrl) {
+                var m = String(base).match(/^https?:\/\/[^/]+(\/.*)?$/i);
+                path = (m && m[1]) ? m[1] : '/';
+            }
+            if (path.charAt(path.length - 1) !== '/') {
+                path += '/';
+            }
+            return path || '/';
+        } catch (e) {
+            return '/';
+        }
+    }
+
+    /** Cookie name suffix: website path key so / and /daocharms/ stay independent. */
+    function cookieSiteKey() {
+        var path = cookiePath();
+        if (!path || path === '/') {
+            return 'root';
+        }
+        return String(path).replace(/^\/+|\/+$/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-') || 'root';
+    }
+
     function setCookie(name, value, days) {
         var date = new Date();
         date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-        document.cookie = name + '=' + value + ';expires=' + date.toUTCString() + ';path=/';
+        document.cookie = name + '=' + value + ';expires=' + date.toUTCString() + ';path=' + cookiePath();
+    }
+
+    function clearCookie(name) {
+        document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=' + cookiePath();
+        /* Also clear legacy path=/ so old dismissals do not keep suppressing this site. */
+        if (cookiePath() !== '/') {
+            document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+        }
     }
 
     function unlockNewsletterScroll() {
@@ -171,6 +220,28 @@
         unlockNewsletterScroll();
     }
 
+    /**
+     * 页脚/chrome 内嵌时祖先常带 transform/filter，会把 position:fixed 困在页脚「趴地」。
+     * 绑定与打开前挂到 body，保证相对视口全屏居中。
+     */
+    function mountPopupToBody(root) {
+        if (!root || !document.body) {
+            return;
+        }
+        if (root.parentNode === document.body) {
+            return;
+        }
+        if (root.classList.contains('editor-preview-mode')
+            || root.classList.contains('is-preview')
+            || root.closest('.widget-preview-canvas')) {
+            return;
+        }
+        try {
+            document.body.appendChild(root);
+            root.setAttribute('data-newsletter-popup-mounted', 'body');
+        } catch (eMount) { /* ignore */ }
+    }
+
     function bindPopup(root) {
         if (!root || root.getAttribute('data-newsletter-kind') !== 'popup') {
             return;
@@ -179,6 +250,7 @@
             return;
         }
         root.setAttribute('data-newsletter-popup-bound', '1');
+        mountPopupToBody(root);
 
         if (root.classList.contains('editor-preview-mode')
             || root.classList.contains('is-preview')
@@ -214,9 +286,9 @@
                 scrollPercent = 40;
             }
         }
-        /* cookie 用稳定 widget-code，避免 data-uid 重建后 show_once 失效反复弹锁滚动 */
+        /* cookie 用稳定 widget-code + 网站 path key，避免 data-uid 重建与跨站 path=/ 误伤 */
         var cookieKey = root.getAttribute('data-widget-code') || root.getAttribute('data-uid') || 'popup';
-        var cookieName = 'weline-newsletter-popup-shown-' + cookieKey;
+        var cookieName = 'weline-newsletter-popup-shown-' + cookieSiteKey() + '-' + cookieKey;
         /* 验收/预览：?newsletter_popup=1 跳过 show_once cookie，并尽快弹出 */
         var forcePreview = false;
         try {
@@ -227,7 +299,9 @@
         if (forcePreview) {
             showOnce = false;
             try {
-                document.cookie = cookieName + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+                clearCookie(cookieName);
+                /* 清旧版无站点前缀的 cookie（path=/） */
+                clearCookie('weline-newsletter-popup-shown-' + cookieKey);
             } catch (eClear) { /* ignore */ }
         }
         var isOpen = false;
@@ -250,6 +324,7 @@
                 closeTimer = null;
             }
             isOpen = true;
+            mountPopupToBody(root);
             root.style.display = 'block';
             lockNewsletterScroll();
             /* 双 rAF：先挂载闭合态再加 is-open，触发信封掀开 + 信笺升起 */

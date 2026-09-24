@@ -12,6 +12,8 @@ final readonly class FrontendWorkerExecutionContext
     public const AREA_FRONTEND = 'frontend';
     public const AREA_BACKEND = 'backend';
     public const REQUEST_CONTEXT_KEY = 'frontend_worker.execution_context';
+    /** Document pathname from Worker payload context (path-mount Scope recovery). */
+    public const STOREFRONT_PATHNAME_CONTEXT_KEY = 'frontend_worker.storefront_pathname';
 
     private function __construct(
         public string $area,

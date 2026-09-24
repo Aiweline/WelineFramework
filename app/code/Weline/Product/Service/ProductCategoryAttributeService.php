@@ -382,6 +382,8 @@ final class ProductCategoryAttributeService
             self::ENTITY_TYPE,
             $categoryIds,
             [AttributeValue::WEBSITE_STORE_ID],
+            null,
+            $attributeCodes,
         ) as $attribute) {
             $attributeCode = (string)($attribute['attribute_code'] ?? '');
             if (!isset($maps[$attributeCode]) || !empty($attribute['cleared'])) {

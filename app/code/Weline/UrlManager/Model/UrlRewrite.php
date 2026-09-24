@@ -134,13 +134,16 @@ class UrlRewrite extends Model
         foreach (array_chunk($requested, self::PATH_LOOKUP_BATCH_SIZE, true) as $batch) {
             $fingerprints = array_values(array_unique(array_column($batch, 'fingerprint')));
             $fingerprints[] = '';
+            $batchPaths = array_column($batch, 'path');
             $query = $this->newQuery();
             // 每个 OR 分支独立限定网站，避免条件重排将旧记录扩到其他网站。
             $query->_index_sort_keys = [];
             $rows = $query
                 ->where(self::schema_fields_WEBSITE_ID, $websiteId, '=', 'AND')
+                ->where(self::schema_fields_PATH, $batchPaths, 'IN', 'AND')
                 ->where(self::schema_fields_PATH_FINGERPRINT, $fingerprints, 'IN', 'OR')
                 ->where(self::schema_fields_WEBSITE_ID, $websiteId, '=', 'AND')
+                ->where(self::schema_fields_PATH, $batchPaths, 'IN', 'AND')
                 ->where(self::schema_fields_PATH_FINGERPRINT, null, 'IS NULL')
                 ->order(self::schema_fields_ID, 'DESC')
                 ->select()

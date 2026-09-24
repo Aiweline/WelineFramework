@@ -76,7 +76,7 @@ final class FooterDefaultLinksHelperTest extends TestCase
 
     public function testDefaultSocialChannelsFitAnInternationalHanfuStore(): void
     {
-        $items = FooterDefaultLinksHelper::defaultSocialItems();
+        $items = FooterDefaultLinksHelper::defaultSocialItems('default');
 
         $this->assertSame(
             ['YouTube', 'X', 'Instagram', 'TikTok'],
@@ -96,8 +96,20 @@ final class FooterDefaultLinksHelperTest extends TestCase
                 'https://www.instagram.com/changanhanfu/',
                 'https://www.tiktok.com/@changanhanfu_hq',
             ],
-            FooterDefaultLinksHelper::defaultSameAsUrls(),
+            FooterDefaultLinksHelper::defaultSameAsUrls('default'),
         );
+    }
+
+    public function testDaocharmsWebsiteDoesNotInheritHanfuSocialDefaults(): void
+    {
+        self::assertFalse(FooterDefaultLinksHelper::allowsHanfuSocialDefaults('daocharms'));
+        self::assertSame([], FooterDefaultLinksHelper::defaultSocialItems('daocharms'));
+        self::assertSame([], FooterDefaultLinksHelper::defaultSameAsUrls('daocharms'));
+        // SEO extract path must not invent brand defaults from empty / placeholder rows.
+        self::assertSame([], FooterDefaultLinksHelper::actionableSocialItems([]));
+        self::assertSame([], FooterDefaultLinksHelper::actionableSocialItems([
+            ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => '#'],
+        ]));
     }
 
     public function testResolveSocialPlatformCodeMapsOfficialProfiles(): void
@@ -124,7 +136,7 @@ final class FooterDefaultLinksHelperTest extends TestCase
 
     public function testNormalizeSocialItemsOnlyReturnsActionableProfileLinks(): void
     {
-        $defaults = FooterDefaultLinksHelper::defaultSocialItems();
+        $defaults = FooterDefaultLinksHelper::defaultSocialItems('default');
         self::assertSame($defaults, FooterDefaultLinksHelper::normalizeSocialItems(null));
         self::assertSame(
             $defaults,

@@ -89,13 +89,20 @@ final class StorefrontCategoryViewService
         $segments = explode('/', $slugPath);
         $breadcrumbs = [];
         $prefix = [];
+        $paths = [];
         foreach ($segments as $segment) {
             $prefix[] = $segment;
             $partialPath = implode('/', $prefix);
+            $paths[] = 'category/' . $partialPath;
             $breadcrumbs[] = [
                 'label' => $this->displayNameFromPath($segment),
-                'url' => $this->url->getFrontendUrl('category/' . $partialPath),
+                'url' => '',
             ];
+        }
+
+        $urls = $this->url->getFrontendUrls($paths);
+        foreach ($urls as $index => $url) {
+            $breadcrumbs[$index]['url'] = $url;
         }
 
         return [
@@ -105,7 +112,7 @@ final class StorefrontCategoryViewService
                 'parent_id' => 0,
                 'path' => $slugPath,
                 'name' => $this->displayNameFromPath($slugPath),
-                'url' => $this->url->getFrontendUrl('category/' . $slugPath),
+                'url' => $urls[array_key_last($urls)],
                 'synthetic' => true,
             ],
             'children' => [],

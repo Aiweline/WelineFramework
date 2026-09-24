@@ -550,48 +550,9 @@ final class StorefrontProductWidgetCatalog
                 <=> (int)($left['product_id'] ?? 0),
         );
 
-        $cards = [];
-        $seenProductIds = [];
-        foreach ($offers as $offer) {
-            if (!$this->isHanfuOffer($offer) || !$this->isDisplayableShelfOffer($offer)) {
-                continue;
-            }
-            $productId = max(0, (int)($offer['product_id'] ?? 0));
-            if ($excludeProductId > 0 && $productId === $excludeProductId) {
-                continue;
-            }
-            if ($productId <= 0 || isset($seenProductIds[$productId])) {
-                continue;
-            }
-            $seenProductIds[$productId] = true;
-            $cards[] = $this->mapOffer($offer, count($cards));
-            if (count($cards) >= $limit) {
-                return $this->withReviewAggregates($cards);
-            }
-        }
-
-        // Related / you-may-like fill: preserve Hanfu-first ordering, then fill from
-        // all published offers so PDP personalization never collapses empty when
-        // the optional HF-* SKU convention is absent.
-        foreach ($offers as $offer) {
-            if (!$this->isDisplayableShelfOffer($offer)) {
-                continue;
-            }
-            $fallbackProductId = max(0, (int)($offer['product_id'] ?? 0));
-            if ($excludeProductId > 0 && $fallbackProductId === $excludeProductId) {
-                continue;
-            }
-            if ($fallbackProductId <= 0 || isset($seenProductIds[$fallbackProductId])) {
-                continue;
-            }
-            $seenProductIds[$fallbackProductId] = true;
-            $cards[] = $this->mapOffer($offer, count($cards));
-            if (count($cards) >= $limit) {
-                break;
-            }
-        }
-
-        return $this->withReviewAggregates($cards);
+        return $this->withReviewAggregates(
+            $this->selectShelfCardsFromOffers($offers, $excludeProductId, $limit),
+        );
     }
 
     /**
@@ -613,61 +574,74 @@ final class StorefrontProductWidgetCatalog
      */
     public function youMayLikeCards(int $excludeProductId = 0, int $limit = 8): array
     {
-        $limit = max(1, min(24, $limit));
+        $limit = max(1, min(8, $limit));
         $excludeProductId = max(0, $excludeProductId);
-        $cards = [];
-        $seenProductIds = [];
+        // Same-category companions only (one targeted batch). Do not call
+        // publishedOfferSummaries() as a fill — that cold-builds the summary
+        // catalog and reintroduces the PDP query storm.
         $companions = $this->sameCategoryCompanionOffers($excludeProductId, max($limit * 3, 12));
+        $cards = $this->selectShelfCardsFromOffers($companions, $excludeProductId, $limit);
 
-        foreach ($companions as $offer) {
+        return $this->withReviewAggregates($cards);
+    }
+
+    /**
+     * Map published offers into shelf cards.
+     * Related / you-may-like fill: preserve Hanfu-first ordering, then fill from
+     * all published offers so PDP personalization never collapses empty when
+     * the optional HF-* SKU convention is absent.
+     *
+     * @param list<array<string, mixed>> $offers
+     * @param array<int, true> $seenProductIds
+     * @return list<array<string, mixed>>
+     */
+    private function selectShelfCardsFromOffers(
+        array $offers,
+        int $excludeProductId,
+        int $limit,
+        array $seenProductIds = [],
+    ): array {
+        $limit = max(1, $limit);
+        $cards = [];
+        $seen = $seenProductIds;
+
+        foreach ($offers as $offer) {
             if (!$this->isHanfuOffer($offer) || !$this->isDisplayableShelfOffer($offer)) {
                 continue;
             }
             $productId = max(0, (int)($offer['product_id'] ?? 0));
-            if ($productId <= 0 || isset($seenProductIds[$productId])) {
+            if ($productId <= 0 || isset($seen[$productId])) {
                 continue;
             }
             if ($excludeProductId > 0 && $productId === $excludeProductId) {
                 continue;
             }
-            $seenProductIds[$productId] = true;
+            $seen[$productId] = true;
             $cards[] = $this->mapOffer($offer, count($cards));
             if (count($cards) >= $limit) {
-                return $this->withReviewAggregates($cards);
+                return $cards;
             }
         }
 
-        foreach ($companions as $offer) {
+        foreach ($offers as $offer) {
             if (!$this->isDisplayableShelfOffer($offer)) {
                 continue;
             }
             $productId = max(0, (int)($offer['product_id'] ?? 0));
-            if ($productId <= 0 || isset($seenProductIds[$productId])) {
+            if ($productId <= 0 || isset($seen[$productId])) {
                 continue;
             }
             if ($excludeProductId > 0 && $productId === $excludeProductId) {
                 continue;
             }
-            $seenProductIds[$productId] = true;
+            $seen[$productId] = true;
             $cards[] = $this->mapOffer($offer, count($cards));
-            if (count($cards) >= $limit) {
-                return $this->withReviewAggregates($cards);
-            }
-        }
-
-        foreach ($this->relatedCards($excludeProductId, $limit) as $card) {
-            $productId = max(0, (int)($card['product_id'] ?? $card['id'] ?? 0));
-            if ($productId <= 0 || isset($seenProductIds[$productId])) {
-                continue;
-            }
-            $seenProductIds[$productId] = true;
-            $cards[] = $card;
             if (count($cards) >= $limit) {
                 break;
             }
         }
 
-        return $this->withReviewAggregates($cards);
+        return $cards;
     }
 
     /**
@@ -749,8 +723,12 @@ final class StorefrontProductWidgetCatalog
     public function bundleCards(int $seedProductId = 0, int $companionLimit = 3): array
     {
         $seedProductId = max(0, $seedProductId);
-        $companionLimit = max(1, min(8, $companionLimit));
-        $companions = $this->relatedCards($seedProductId, $companionLimit);
+        // Cross-sell shelf freeze: total cards ≤4 (seed + companions).
+        $companionLimit = max(1, min(3, $companionLimit));
+        $companionOffers = $seedProductId > 0
+            ? $this->sameCategoryCompanionOffers($seedProductId, max($companionLimit * 3, 12))
+            : [];
+        $companions = $this->selectShelfCardsFromOffers($companionOffers, $seedProductId, $companionLimit);
 
         $seed = null;
         if ($seedProductId > 0) {
@@ -778,6 +756,9 @@ final class StorefrontProductWidgetCatalog
             $companion['is_seed'] = false;
             $companion['selected'] = true;
             $bundle[] = $companion;
+            if (count($bundle) >= 4) {
+                break;
+            }
         }
 
         return $this->withReviewAggregates($bundle);

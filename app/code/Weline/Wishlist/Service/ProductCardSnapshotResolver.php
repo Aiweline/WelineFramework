@@ -13,23 +13,38 @@ class ProductCardSnapshotResolver
      */
     public function resolve(int $productId): ?array
     {
-        if ($productId <= 0) {
-            return null;
-        }
+        return $productId > 0 ? ($this->resolveMany([$productId])[$productId] ?? null) : null;
+    }
 
+    /** @param list<int> $productIds @return array<int, array<string, mixed>> */
+    public function resolveMany(array $productIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0)));
+        if ($ids === []) { return []; }
         try {
-            if (class_exists(\Weline\Product\Service\StorefrontCatalogViewService::class)) {
-                /** @var \Weline\Product\Service\StorefrontCatalogViewService $catalog */
-                $catalog = ObjectManager::getInstance(\Weline\Product\Service\StorefrontCatalogViewService::class);
-                $offer = $catalog->publishedOffer($productId);
+            $offers = $this->queryLiveOffers($ids);
+            $out = [];
+            foreach ($ids as $id) {
+                $offer = $offers[$id] ?? null;
                 if (is_array($offer) && $offer !== []) {
-                    return $this->normalizeOffer($offer);
+                    $out[$id] = $this->normalizeOffer($offer);
                 }
             }
+            return $out;
         } catch (\Throwable) {
+            return [];
         }
+    }
 
-        return null;
+    /** @param list<int> $ids @return array<int, array<string, mixed>> */
+    protected function queryLiveOffers(array $ids): array
+    {
+        if (function_exists('w_query')) {
+            return w_query('product_storefront', 'liveOffersByProductIds', ['product_ids' => $ids], 'frontend');
+        }
+        return ObjectManager::getInstance(\Weline\Framework\Service\Query\FrameworkQueryService::class)
+            ->execute('product_storefront', 'liveOffersByProductIds', ['product_ids' => $ids], 'frontend');
     }
 
     /**

@@ -178,6 +178,8 @@ final class TemplateRenderProfileTest extends TestCase
         self::assertStringContainsString('data-wls-tpl-php-ms="215.5"', $out);
         self::assertStringContainsString('db 400.0ms(12q)', $out);
         self::assertStringContainsString('php 215.5ms', $out);
+        self::assertStringContainsString('159.2 KB', $out);
+        self::assertStringContainsString('data-wls-tpl-bytes="163000"', $out);
         self::assertStringContainsString('widgets/com_recently-viewed.phtml', $out);
         self::assertStringStartsWith('<div class="widget-wrapper"', $out);
         self::assertMatchesRegularExpression(
@@ -188,6 +190,7 @@ final class TemplateRenderProfileTest extends TestCase
         $doc = '<!doctype html><html><body class="x"><main>ok</main></body></html>';
         $docOut = $annotate->invoke($this->template, $doc, 'layouts/product/com_default.phtml', 1200.0, 900000);
         self::assertMatchesRegularExpression('/<body class="x">\s*<div class="wls-tpl-perf"/', $docOut);
+        self::assertStringContainsString('878.9 KB', $docOut);
 
         $fast = $annotate->invoke($this->template, $widget, 'fast.phtml', 4.0, 10);
         self::assertSame($widget, $fast);

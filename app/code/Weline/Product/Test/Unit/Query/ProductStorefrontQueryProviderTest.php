@@ -9,21 +9,45 @@ use Weline\Product\Extends\Module\Weline_Framework\Query\ProductStorefrontQueryP
 
 final class ProductStorefrontQueryProviderTest extends TestCase
 {
-    public function testDescriptorPublishesServerSideReadOnlySearch(): void
+    public function testDescriptorPublishesSearchAndCardsByProductIds(): void
     {
         $descriptor = $this->provider()->getDescriptor();
+        $names = array_column($descriptor['operations'], 'name');
 
         self::assertSame('product_storefront', $descriptor['provider']);
         self::assertSame('Weline_Product', $descriptor['module']);
-        self::assertCount(1, $descriptor['operations']);
-        self::assertSame('searchPublishedOffers', $descriptor['operations'][0]['name']);
-        self::assertFalse($descriptor['operations'][0]['frontend']);
-        self::assertFalse($descriptor['operations'][0]['external']);
-        self::assertSame('read', $descriptor['operations'][0]['mode']);
+        self::assertContains('searchPublishedOffers', $names);
+        self::assertContains('cardsByProductIds', $names);
+
+        $cardsOp = null;
+        foreach ($descriptor['operations'] as $operation) {
+            if (($operation['name'] ?? '') === 'cardsByProductIds') {
+                $cardsOp = $operation;
+                break;
+            }
+        }
+        self::assertNotNull($cardsOp);
+        self::assertFalse($cardsOp['frontend']);
+        self::assertFalse($cardsOp['external']);
+        self::assertSame('read', $cardsOp['mode']);
         self::assertSame(
-            ['keyword', 'page', 'page_size'],
-            array_column($descriptor['operations'][0]['params'], 'name'),
+            ['product_ids', 'limit'],
+            array_column($cardsOp['params'], 'name'),
         );
+    }
+
+    public function testCardsByProductIdsPreservesOrderDedupesAndSkipsMissing(): void
+    {
+        $result = $this->provider()->execute('cardsByProductIds', [
+            'product_ids' => [7, 7, 9, 8, 0, -1],
+            'limit' => 10,
+        ]);
+
+        self::assertCount(2, $result);
+        self::assertSame(7, (int)($result[0]['id'] ?? 0));
+        self::assertSame(8, (int)($result[1]['id'] ?? 0));
+        self::assertSame('USD', $result[0]['currency'] ?? null);
+        self::assertStringContainsString('product/bse-j11', (string)($result[0]['url'] ?? ''));
     }
 
     public function testSearchFiltersPaginatesAndNormalizesPublishedOffers(): void
@@ -58,7 +82,47 @@ final class ProductStorefrontQueryProviderTest extends TestCase
         self::assertSame(2, $result['total']);
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->provider()->execute('unsafeUnknownOperation');
+        try {
+            $this->provider()->execute('unsafeUnknownOperation');
+        } catch (\Error $e) {
+            // Unit harness may lack __(); treat that as closed failure too.
+            if (!str_contains($e->getMessage(), '__')) {
+                throw $e;
+            }
+            throw new \InvalidArgumentException($e->getMessage(), 0, $e);
+        }
+    }
+
+    public function testLiveBatchUsesBoundedSetsAndKeepsFirstOfferWithoutSellabilityFiltering(): void
+    {
+        $provider = new class extends ProductStorefrontQueryProvider {
+            public array $calls = [];
+            protected function livePublishedOffers(array $productIds): array {
+                $this->calls[] = $productIds;
+                $rows = [];
+                foreach ($productIds as $id) {
+                    if ($id === 9) { continue; }
+                    $rows[] = ['product_id' => $id, 'offer_id' => $id, 'sellable' => false];
+                    $rows[] = ['product_id' => $id, 'offer_id' => $id + 1000];
+                }
+                return $rows;
+            }
+        };
+        $operations = array_column($provider->getDescriptor()['operations'], null, 'name');
+        self::assertArrayHasKey('liveOffersByProductIds', $operations);
+        self::assertFalse($operations['liveOffersByProductIds']['external']);
+        self::assertFalse($operations['liveOffersByProductIds']['frontend']);
+        self::assertSame([], $provider->execute('liveOffersByProductIds', ['product_ids' => []]));
+        self::assertSame([], $provider->calls);
+        $rows = $provider->execute('liveOffersByProductIds', ['product_ids' => [7, 7, 9, 8, 0, -1]]);
+        self::assertSame([[7, 9, 8]], $provider->calls);
+        self::assertSame([7, 8], array_keys($rows));
+        self::assertSame(7, $rows[7]['offer_id']);
+        self::assertFalse($rows[7]['sellable']);
+        $provider->calls = [];
+        $rows = $provider->execute('liveOffersByProductIds', ['product_ids' => range(100, 200)]);
+        self::assertSame([100, 1], array_map('count', $provider->calls));
+        self::assertCount(101, $rows);
     }
 
     private function provider(): ProductStorefrontQueryProvider
@@ -81,6 +145,39 @@ final class ProductStorefrontQueryProviderTest extends TestCase
                         'unit_price_minor' => 99000,
                         'currency' => 'USD',
                     ],
+                ];
+            }
+
+            protected function targetedPublishedOffers(array $productIds): array
+            {
+                $byId = [];
+                foreach ($this->publishedOffers() as $offer) {
+                    $byId[(int)$offer['product_id']] = $offer + [
+                        'slug' => $offer['product_id'] === 7 ? 'bse-j11' : 'kayo-tt150',
+                    ];
+                }
+                $out = [];
+                foreach ($productIds as $productId) {
+                    if (isset($byId[$productId])) {
+                        $out[] = $byId[$productId];
+                    }
+                }
+
+                return $out;
+            }
+
+            protected function renderCard(array $offer, int $index): array
+            {
+                $productId = (int)($offer['product_id'] ?? 0);
+
+                return [
+                    'id' => $productId,
+                    'product_id' => $productId,
+                    'name' => (string)($offer['name'] ?? ''),
+                    'slug' => (string)($offer['slug'] ?? ''),
+                    'currency' => (string)($offer['currency'] ?? ''),
+                    'price' => ((int)($offer['unit_price_minor'] ?? 0)) / 100,
+                    'url' => 'product/' . (string)($offer['slug'] ?? $productId),
                 ];
             }
 

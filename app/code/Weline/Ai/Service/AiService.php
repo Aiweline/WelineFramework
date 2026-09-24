@@ -1124,7 +1124,12 @@ class AiService
         if ($requestedTransparent && $nativeTransparency) {
             $backgroundParam = $this->resolveTransparentBackgroundParameter($params, $resolvedConfig);
             $params[$backgroundParam] = $this->resolveTransparentBackgroundValue($params, $resolvedConfig);
-            $params['output_format'] = 'png';
+            // 默认 WebP（含 alpha）；调用方显式 output_format 时尊重已有值。
+            if (!$hadOutputFormat) {
+                $params['output_format'] = 'webp';
+            } else {
+                $params['output_format'] = $this->normalizeIdentityOutputFormat((string)$params['output_format']);
+            }
         } elseif ($requestedTransparent) {
             $params = $this->removeNativeTransparencyRequestParams(
                 $params,
@@ -1135,18 +1140,28 @@ class AiService
             }
         }
 
+        $resolvedFormat = isset($params['output_format'])
+            ? $this->normalizeIdentityOutputFormat((string)$params['output_format'])
+            : 'webp';
+
         return [
             'prompt' => $this->appendIdentityAssetPromptRules($prompt),
             'params' => $params,
             'metadata' => [
                 'requested_transparent_background' => $requestedTransparent,
                 'native_transparent_background' => $nativeTransparency,
-                'output_format' => 'png',
+                'output_format' => $resolvedFormat,
                 'identity_asset' => true,
                 'identity_asset_role' => $role,
                 'native_transparency_error' => '',
             ],
         ];
+    }
+
+    private function normalizeIdentityOutputFormat(string $format): string
+    {
+        $format = strtolower(trim($format));
+        return in_array($format, ['png', 'webp'], true) ? $format : 'webp';
     }
 
     private function appendIdentityAssetPromptRules(string $prompt): string

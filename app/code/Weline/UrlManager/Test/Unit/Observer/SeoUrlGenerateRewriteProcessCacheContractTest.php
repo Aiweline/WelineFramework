@@ -8,10 +8,10 @@ use PHPUnit\Framework\TestCase;
 
 final class SeoUrlGenerateRewriteProcessCacheContractTest extends TestCase
 {
-    public function testInvalidateCachesClearsProcessAndMentionsSharedPool(): void
+    public function testInvalidationKeepsSharedPoolAndResetCompatibility(): void
     {
         $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Observer/SeoUrlGenerateRewrite.php');
-        self::assertStringContainsString('private static array $processCache', $src);
+        self::assertStringNotContainsString('private static array $processCache', $src);
         self::assertStringContainsString('function clearProcessCache', $src);
         self::assertStringContainsString('function invalidateCaches', $src);
         self::assertStringContainsString("w_cache('url_rewrite')->clear()", $src);

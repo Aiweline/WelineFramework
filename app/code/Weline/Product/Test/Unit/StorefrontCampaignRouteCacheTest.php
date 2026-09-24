@@ -72,6 +72,12 @@ final class StorefrontCampaignRouteCacheTest extends TestCase
         $this->setProperty($request, 'parsedHttps', true);
         $this->url = new class($request) extends Url {
             public int $calls = 0;
+            public array $batches = [];
+            public function getFrontendUrls(array $paths, array $params = [], bool $merge_url_params = false): array {
+                $this->batches[] = $paths;
+                $this->calls += count($paths);
+                return parent::getFrontendUrls($paths, $params, $merge_url_params);
+            }
             protected function getRequest(): \Weline\Framework\Http\Request { return $this->request; }
             public function getFrontendUrl(string $path = '', array $params = [], bool $merge_url_params = false) {
                 ++$this->calls;
@@ -211,6 +217,42 @@ final class StorefrontCampaignRouteCacheTest extends TestCase
         $this->request(19655);
         self::assertSame('https://shop.test:19655/store/USD/en_US/promotion/weekend',
             $this->catalog->publishedOfferSummaries()[0]['campaign_url']);
+    }
+
+    public function testCampaignRoutesAcrossRowsAndChoicesUseOneDistinctBatch(): void
+    {
+        $rows = [
+            ['_campaign_frontend_route' => 'promotion/a', 'eligible_campaigns' => [
+                ['frontend_route' => 'promotion/b'], ['frontend_route' => 'promotion/a'],
+            ]],
+            ['_campaign_frontend_route' => 'promotion/b', 'eligible_campaigns' => [['url' => 'https://external.test/custom']]],
+        ];
+        $method = new \ReflectionMethod($this->catalog, 'materializeCampaignUrls');
+        $result = $method->invoke($this->catalog, $rows);
+        self::assertSame([['promotion/a' => 'promotion/a', 'promotion/b' => 'promotion/b']], $this->url->batches);
+        self::assertSame($result[0]['campaign_url'], $result[0]['eligible_campaigns'][1]['url']);
+        self::assertSame($result[1]['campaign_url'], $result[0]['eligible_campaigns'][0]['url']);
+        self::assertSame('https://external.test/custom', $result[1]['eligible_campaigns'][0]['url']);
+        self::assertSame($result, $method->invoke($this->catalog, $rows));
+        self::assertCount(1, $this->url->batches);
+    }
+
+    public function testSyntheticCategoryBreadcrumbsResolveOnceIncludingLeafUrl(): void
+    {
+        $treeClass = \Weline\Product\Service\StorefrontCategoryTreeIndex::class;
+        $tree = (new \ReflectionClass($treeClass))->newInstanceWithoutConstructor();
+        $this->setProperty($tree, 'hotCache', $this->hotCache);
+        $this->setProperty($tree, 'url', $this->url);
+        $this->hotCache->rememberPolicy(StorefrontCatalogCacheCoordinator::categoryTreePolicy(),
+            $treeClass::logicalCacheKey(3), static fn(): array => ['by_id' => [], 'by_parent' => [], 'by_path' => []]);
+        $links = (new \ReflectionClass(\Weline\Product\Repository\CategoryLinkRepository::class))->newInstanceWithoutConstructor();
+        $view = new \Weline\Product\Service\StorefrontCategoryViewService($links, $tree, $this->url);
+        $result = $view->synthesizePageFromPublicPath('clothes/winter/coats');
+        self::assertSame([['category/clothes', 'category/clothes/winter', 'category/clothes/winter/coats']], array_values(array_filter($this->url->batches)));
+        self::assertSame(3, $this->url->calls);
+        self::assertSame($result['breadcrumbs'][2]['url'], $result['category']['url']);
+        self::assertSame(['clothes', 'winter', 'coats'], array_column($result['breadcrumbs'], 'label'));
+        self::assertNull($view->synthesizePageFromPublicPath('../unsafe'));
     }
 
     public function testLegacyAbsolutePayloadKeysAreRetiredTogether(): void

@@ -9,7 +9,7 @@ declare(strict_types=1);
 return [
     'footer-newsletter' => [
         'name' => '页脚订阅',
-        'description' => '邮件订阅表单；经 required default_injections 注入 partials/footer 的 footer-above 槽（信任徽章同槽扩展）。',
+        'description' => '邮件订阅表单；经 required default_injections 注入 partials/footer 的 footer-above 槽；enable_popup 默认同渲订阅弹窗。',
         'type' => 'newsletter',
         'code' => 'footer-newsletter',
         'area' => 'frontend',
@@ -36,6 +36,12 @@ return [
                 'title' => '订阅我们的邮件',
                 'description' => '获取最新的优惠信息和新品资讯',
                 'layout' => 'horizontal',
+                'enable_popup' => true,
+                'popup_trigger' => 'deferred',
+                'popup_delay_seconds' => 15,
+                'popup_scroll_percent' => 40,
+                'popup_min_open_seconds' => 3,
+                'popup_cookie_days' => 14,
             ],
         ]],
         'params' => [
@@ -68,12 +74,49 @@ return [
                     'vertical' => '纵向',
                 ],
             ],
+            'enable_popup' => [
+                'default' => true,
+                'type' => 'bool',
+                'label' => '开启订阅弹窗',
+                'description' => '与本页脚条同启；关闭则不渲染弹窗',
+            ],
+            'popup_trigger' => [
+                'default' => 'deferred',
+                'type' => 'select',
+                'label' => '弹窗触发方式',
+                'options' => [
+                    'deferred' => '组合延后（停留/滚动/退出意向）',
+                    'delay' => '延迟显示',
+                    'scroll' => '滚动触发',
+                    'exit' => '退出意图',
+                ],
+            ],
+            'popup_delay_seconds' => [
+                'default' => 15,
+                'type' => 'number',
+                'label' => '弹窗延迟秒数',
+            ],
+            'popup_scroll_percent' => [
+                'default' => 40,
+                'type' => 'number',
+                'label' => '弹窗滚动百分比',
+            ],
+            'popup_min_open_seconds' => [
+                'default' => 3,
+                'type' => 'number',
+                'label' => '弹窗最早弹出秒数',
+            ],
+            'popup_cookie_days' => [
+                'default' => 14,
+                'type' => 'number',
+                'label' => '弹窗 Cookie 天数',
+            ],
         ],
     ],
 
     'newsletter-popup' => [
         'name' => '订阅弹窗',
-        'description' => '全站邮件订阅弹窗（古风信封信笺整图 PNG）；cookie_days 默认 14；经 required default_injections 注入 content。',
+        'description' => '邮件订阅弹窗（古风宣纸信笺）；默认由 footer-newsletter 开启同渲，禁止再 required 注入 content 以免双份。编辑器仍可单独放置。',
         'type' => 'newsletter',
         'code' => 'newsletter-popup',
         'area' => 'frontend',
@@ -85,24 +128,11 @@ return [
         'supports' => [
             'newsletter-popup',
             'layout-homepage-content',
+            'layout-footer-above',
             'content',
         ],
-        'default_injections' => [[
-            'layout_type' => 'homepage',
-            'slot' => 'content',
-            'area' => 'content',
-            'sort_order' => 910,
-            'required' => true,
-            'reason' => '店面默认订阅弹窗；恢复原始布局后 required 回填',
-            'config' => [
-                'trigger' => 'deferred',
-                'delay_seconds' => 15,
-                'scroll_percent' => 40,
-                'min_open_seconds' => 3,
-                'show_once' => true,
-                'cookie_days' => 14,
-            ],
-        ]],
+        // 与 footer-newsletter enable_popup 内嵌 XOR：勿再 JSON required 注入 content。
+        'default_injections' => [],
         'params' => [
             'title' => [
                 'default' => '订阅获取优惠',

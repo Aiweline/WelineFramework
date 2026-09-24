@@ -618,7 +618,7 @@ class AiDrawService
             'disable_style_prompt_injection' => true,
             'size' => \trim((string)($input['size'] ?? '1024x1024')) ?: '1024x1024',
             'aspect_ratio' => \trim((string)($input['aspect_ratio'] ?? '1:1')) ?: '1:1',
-            'output_format' => \trim((string)($input['output_format'] ?? 'png')) ?: 'png',
+            'output_format' => \trim((string)($input['output_format'] ?? 'webp')) ?: 'webp',
             'negative_prompt' => \trim((string)($input['negative_prompt'] ?? '')),
             'source_file_hash' => $sourceFileHash,
             'batch_index' => $batchIndex,
@@ -651,7 +651,7 @@ class AiDrawService
     private function generateImageBytes(string $prompt, array $params, int $adminId): array
     {
         if ($this->isMockEnabled()) {
-            return $this->mockImageBytes((string)($params['output_format'] ?? 'png'));
+            return $this->mockImageBytes((string)($params['output_format'] ?? 'webp'));
         }
         $service = $this->resolveAiService();
         $result = $service->generate($prompt, null, self::SCENARIO_CODE, $params);
@@ -664,7 +664,7 @@ class AiDrawService
             throw new \RuntimeException(__('图片生成未返回有效字节'));
         }
 
-        return ['bytes' => $bytes, 'mime_type' => $mime];
+        return $this->ensurePreferredRasterFormat($bytes, $mime, (string)($params['output_format'] ?? 'webp'));
     }
 
     /**
@@ -680,7 +680,7 @@ class AiDrawService
             throw new \InvalidArgumentException('SSE writer must be SseWriter or CollectingSseWriter.');
         }
         if ($this->isMockEnabled()) {
-            return $this->mockImageBytes((string)($params['output_format'] ?? 'png'));
+            return $this->mockImageBytes((string)($params['output_format'] ?? 'webp'));
         }
 
         if (!\class_exists(\Fiber::class)) {
@@ -1078,6 +1078,65 @@ class AiDrawService
         }
 
         return \strlen($text) <= $maxChars ? $text : \substr($text, 0, $maxChars);
+    }
+
+    /**
+     * 默认把非目标格式栅格转成 WebP（或调用方指定的 output_format）。
+     * PNG 仅在调用方明确要求 png 时保留。
+     *
+     * @return array{bytes:string,mime_type:string}
+     */
+    private function ensurePreferredRasterFormat(string $bytes, string $mimeType, string $wantedFormat): array
+    {
+        $wanted = \strtolower(\trim($wantedFormat));
+        if ($wanted === '' || $wanted === 'auto') {
+            $wanted = 'webp';
+        }
+        if (!\in_array($wanted, ['webp', 'png', 'jpeg', 'jpg'], true)) {
+            $wanted = 'webp';
+        }
+        $wantedMime = match ($wanted) {
+            'png' => 'image/png',
+            'jpeg', 'jpg' => 'image/jpeg',
+            default => 'image/webp',
+        };
+        $current = \strtolower(\trim($mimeType));
+        if ($current === $wantedMime || ($wanted === 'jpg' && \str_contains($current, 'jpeg'))) {
+            return ['bytes' => $bytes, 'mime_type' => $wantedMime];
+        }
+        if (!\function_exists('imagecreatefromstring') || !\function_exists('imagewebp')) {
+            return ['bytes' => $bytes, 'mime_type' => $mimeType !== '' ? $mimeType : $wantedMime];
+        }
+        $image = @\imagecreatefromstring($bytes);
+        if ($image === false) {
+            return ['bytes' => $bytes, 'mime_type' => $mimeType !== '' ? $mimeType : $wantedMime];
+        }
+        if (\function_exists('imagepalettetotruecolor')) {
+            @\imagepalettetotruecolor($image);
+        }
+        if (\function_exists('imagealphablending') && \function_exists('imagesavealpha')) {
+            @\imagealphablending($image, true);
+            @\imagesavealpha($image, true);
+        }
+        FiberOutputBuffer::beginCapture();
+        try {
+            $ok = match ($wanted) {
+                'png' => \imagepng($image),
+                'jpeg', 'jpg' => \imagejpeg($image, null, 90),
+                default => \imagewebp($image, null, 82),
+            };
+            $encoded = FiberOutputBuffer::endCapture();
+        } catch (\Throwable $throwable) {
+            FiberOutputBuffer::discardCapture();
+            \imagedestroy($image);
+            throw $throwable;
+        }
+        \imagedestroy($image);
+        if (!$ok || $encoded === '') {
+            return ['bytes' => $bytes, 'mime_type' => $mimeType !== '' ? $mimeType : $wantedMime];
+        }
+
+        return ['bytes' => $encoded, 'mime_type' => $wantedMime];
     }
 
     /**

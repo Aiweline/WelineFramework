@@ -187,7 +187,9 @@ class SmtpQueryProvider implements QueryProviderInterface
             $tpl = $hit['template'];
             $templateId = (int)$tpl->getId();
             $resolvedLocale = (string)$hit['locale'];
-            $storageScope = (string)$hit['storage_scope'];
+            // 品牌/壳色盘走请求 scope（website），勿被模板继承回落到 default 站覆盖
+            $brandScope = (string)$ctx['storage_scope'];
+            $storageScope = $brandScope !== '' ? $brandScope : (string)$hit['storage_scope'];
 
             $allowed = [];
             /** @var MailChannelCollector $collector */

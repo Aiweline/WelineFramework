@@ -140,7 +140,7 @@ final class RequiredDefaultInjectionStorefrontOverlay
             return $rendered;
         }
         $html = $this->renderNode($item['node'], $themeId, $scopeKey, $versionKey);
-        if ($html === '' || \str_starts_with(\trim($html), '<!--')) {
+        if (!$this->isUsableWidgetHtml($html)) {
             // Soft: missing bake config / render miss — assertFilled logs; do not abort plan.
             if (\function_exists('w_log_warning')) {
                 w_log_warning(sprintf(
@@ -164,8 +164,11 @@ final class RequiredDefaultInjectionStorefrontOverlay
         // Homepage content nesting: never replace away homepage-* slot markers.
         // missing-config / comment-only inners are blank — replace, do not append stubs.
         $blankExisting = ThemeLayoutEntityPublishedSlotHost::isEffectivelyBlankSlotInner($existingInner);
+        // Published shells strip <!--@weline-slot:homepage-*-->; keep nest via data-slot-id too.
         $preserveHomepageNest = $slotId === 'content'
-            && \str_contains($existingInner, '<!--@weline-slot:homepage-');
+            && (\str_contains($existingInner, '<!--@weline-slot:homepage-')
+                || \preg_match('/\bdata-slot-id\s*=\s*(["\'])homepage-[\w.-]+\1/i', $existingInner) === 1
+                || \str_contains($existingInner, 'homepage-section'));
         $allowMultipleAppend = !$blankExisting
             && !RequiredDefaultInjectionContract::slotInnerHasWidgetCode($existingInner, $module, $code)
             && $this->slotAllowsMultiple($rendered, $slotId, $target);
@@ -335,6 +338,10 @@ final class RequiredDefaultInjectionStorefrontOverlay
         // Fallback: Theme chrome/footer extension slots are multiple by contract.
         $slotId = \strtolower(\trim($slotId));
         $multipleSlots = [
+            // Homepage content is multiple=true in Theme layouts; published HTML often
+            // drops data-wslot-multiple — floating required widgets (newsletter-popup) append.
+            'content',
+            'homepage-bottom',
             'header-nav-extensions',
             'header-policy-links',
             'footer-about-links',
@@ -555,7 +562,7 @@ final class RequiredDefaultInjectionStorefrontOverlay
             /** @var ThemeLayoutEntityWidgetRenderer $renderer */
             $renderer = ObjectManager::getInstance(ThemeLayoutEntityWidgetRenderer::class);
             $html = $renderer->render($uid, 'page', $themeId, $scopeKey, $versionKey);
-            if ($html !== '' && !\str_starts_with(\trim($html), '<!--')) {
+            if ($this->isUsableWidgetHtml($html)) {
                 return $html;
             }
         } catch (\Throwable) {
@@ -578,7 +585,7 @@ final class RequiredDefaultInjectionStorefrontOverlay
             $config = \is_array($widget['config'] ?? null) ? $widget['config'] : [];
             $config['_widget_instance_key'] = $uid;
             $html = (string)$componentRenderer->render($definition, $config, null, ['area' => 'frontend']);
-            if ($html === '' || \str_starts_with(\trim($html), '<!--')) {
+            if (!$this->isUsableWidgetHtml($html)) {
                 throw new \RuntimeException(
                     'required_default_injection_render_failed: ' . $module . '|' . $code . ' (empty html)'
                 );
@@ -595,5 +602,23 @@ final class RequiredDefaultInjectionStorefrontOverlay
                 $e,
             );
         }
+    }
+
+    /**
+     * True when rendered widget HTML has real markup (not comment-only stubs).
+     * ThemeComponentRenderer wraps widgets with <!--weline-widget:start--> — that is usable.
+     * Entity missing-config / invalid-widget comments alone are not.
+     */
+    private function isUsableWidgetHtml(string $html): bool
+    {
+        $trim = \trim($html);
+        if ($trim === '') {
+            return false;
+        }
+        // Strip leading HTML comments (asset markers or stub-only).
+        $withoutLeadingComments = \preg_replace('/^(?:\s*<!--.*?-->\s*)+/s', '', $trim);
+        $withoutLeadingComments = \is_string($withoutLeadingComments) ? \trim($withoutLeadingComments) : '';
+
+        return $withoutLeadingComments !== '';
     }
 }
