@@ -37,11 +37,12 @@ final class HeaderCommerceDataTest extends TestCase
         self::assertStringContainsString("theme.header.hot_words", $source);
         self::assertStringContainsString("theme.header.search_types", $source);
         self::assertStringContainsString('headerSearchTypesPolicy', $source);
-        self::assertStringContainsString('theme.header.search_types.v1', $source);
+        self::assertStringContainsString('theme.header.search_types.v2', $source);
         self::assertStringContainsString('theme.header.category_nav', $source);
-        self::assertStringContainsString('headerNavigationPolicy', $source);
-        self::assertStringContainsString('theme.header.category_nav.v1.', $source);
-        self::assertStringContainsString("listTypes(area: 'frontend')", $source);
+        self::assertStringContainsString('requestOriginSegment', $source);
+        // Absolute nav URLs must stay request-local — never share without origin.
+        self::assertStringNotContainsString('theme.header.category_nav.v1.', $source);
+        self::assertStringContainsString("listTypes(true, 'frontend')", $source);
         self::assertStringContainsString('RequestLifecycleTrace::measurePhase', $source);
     }
 

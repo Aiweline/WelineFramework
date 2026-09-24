@@ -121,9 +121,12 @@ final class StorefrontHeaderNavFragmentCache
         $panelSlug = \preg_replace('/[^a-z0-9_-]+/i', '-', \strtolower($panelId)) ?: 'panel';
         $structureFp = $this->navStructureFingerprint($item);
 
+        // v8: include browser origin so Nginx-fronted public Host cannot reuse
+        // HTML baked under loopback warmup Host (127.0.0.1:worker_port).
         return \sprintf(
-            'theme.header.mega_panel.v7.%s.%s.%s.%s.%s',
+            'theme.header.mega_panel.v8.%s.%s.%s.%s.%s.%s',
             $this->storefrontLocaleSegment(),
+            $this->requestOriginSegment(),
             $drawerFlyout ? 'drawer' : 'top',
             $panelSlug,
             $showBannerWithChildren ? 'banner1' : 'banner0',
@@ -136,8 +139,10 @@ final class StorefrontHeaderNavFragmentCache
      */
     public function sidebarNavLogicalKey(array $items): string
     {
-        return 'theme.header.sidebar_nav.v7.'
+        return 'theme.header.sidebar_nav.v8.'
             . $this->storefrontLocaleSegment()
+            . '.'
+            . $this->requestOriginSegment()
             . '.'
             . $this->navListFingerprint($items);
     }
@@ -147,8 +152,10 @@ final class StorefrontHeaderNavFragmentCache
      */
     public function horizontalNavLogicalKey(array $items, bool $showBannerWithChildren = true): string
     {
-        return 'theme.header.horizontal_nav.v1.'
+        return 'theme.header.horizontal_nav.v2.'
             . $this->storefrontLocaleSegment()
+            . '.'
+            . $this->requestOriginSegment()
             . '.'
             . ($showBannerWithChildren ? 'banner1' : 'banner0')
             . '.'
@@ -172,13 +179,83 @@ final class StorefrontHeaderNavFragmentCache
     }
 
     /**
+     * Browser-visible origin embedded in fragment keys that store absolute href HTML.
+     */
+    private function requestOriginSegment(): string
+    {
+        $websiteUrl = '';
+        try {
+            $websiteUrl = \trim((string)\Weline\Framework\Env\WelineEnv::get('website_url', ''));
+        } catch (\Throwable) {
+            $websiteUrl = '';
+        }
+        if ($websiteUrl === '') {
+            try {
+                $websiteUrl = \trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_URL', ''));
+            } catch (\Throwable) {
+                $websiteUrl = '';
+            }
+        }
+        if ($websiteUrl !== '' && \str_contains($websiteUrl, '://')) {
+            $parts = \parse_url($websiteUrl);
+            if (\is_array($parts)) {
+                $scheme = \strtolower(\trim((string)($parts['scheme'] ?? '')));
+                $host = \strtolower(\trim((string)($parts['host'] ?? '')));
+                $port = isset($parts['port']) ? (int)$parts['port'] : 0;
+                if ($scheme !== '' && $host !== '') {
+                    $default = ($scheme === 'https') ? 443 : 80;
+                    $authority = $host . ($port > 0 && $port !== $default ? ':' . $port : '');
+
+                    return \preg_replace('/[^a-z0-9.:_-]+/i', '-', $scheme . '-' . $authority) ?: 'unknown';
+                }
+            }
+        }
+
+        $scheme = 'http';
+        try {
+            $scheme = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::get('request.scheme', 'http'))) ?: 'http';
+        } catch (\Throwable) {
+            $scheme = 'http';
+        }
+        $host = '';
+        try {
+            $host = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::get('server.http_host', '')));
+        } catch (\Throwable) {
+            $host = '';
+        }
+        if ($host === '') {
+            $host = \strtolower(\trim((string)(
+                \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '')
+                ?: ($_SERVER['HTTP_HOST'] ?? '')
+            )));
+        }
+        $raw = ($scheme !== '' ? $scheme : 'http') . '-' . ($host !== '' ? $host : 'unknown');
+
+        return \preg_replace('/[^a-z0-9.:_-]+/i', '-', $raw) ?: 'unknown';
+    }
+
+    private function navUrlFingerprintToken(string $url): string
+    {
+        $url = \trim($url);
+        if ($url === '') {
+            return '';
+        }
+        if (\str_contains($url, '://')) {
+            $path = \parse_url($url, \PHP_URL_PATH);
+            return \is_string($path) && $path !== '' ? $path : $url;
+        }
+
+        return $url;
+    }
+
+    /**
      * @param array<string, mixed> $item
      */
     private function navStructureFingerprint(array $item): string
     {
         $children = \is_array($item['children'] ?? null) ? $item['children'] : [];
         $parts = [
-            (string)($item['url'] ?? ''),
+            $this->navUrlFingerprintToken((string)($item['url'] ?? '')),
             (string)($item['text'] ?? $item['name'] ?? ''),
             (string)($item['ref'] ?? ''),
             (string)($item['banner'] ?? ''),
@@ -189,7 +266,7 @@ final class StorefrontHeaderNavFragmentCache
             if (!\is_array($child)) {
                 continue;
             }
-            $parts[] = (string)($child['url'] ?? '')
+            $parts[] = $this->navUrlFingerprintToken((string)($child['url'] ?? ''))
                 . '|'
                 . (string)($child['text'] ?? $child['name'] ?? '')
                 . '|'
@@ -213,7 +290,7 @@ final class StorefrontHeaderNavFragmentCache
             if (!\is_array($item)) {
                 continue;
             }
-            $parts[] = (string)($item['url'] ?? '')
+            $parts[] = $this->navUrlFingerprintToken((string)($item['url'] ?? ''))
                 . '|'
                 . (string)($item['text'] ?? $item['name'] ?? '')
                 . '|'
