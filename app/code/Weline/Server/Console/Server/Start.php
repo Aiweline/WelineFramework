@@ -38,6 +38,7 @@ use Weline\Server\Service\SharedSidecarInspector;
 use Weline\Server\Service\SharedStateRuntimeScope;
 use Weline\Server\Service\SharedStateRuntimeResolver;
 use Weline\Server\Service\SharedStateServiceManager;
+use Weline\Server\Service\DarwinWinModeLogWindow;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\WlsLogService;
 use Weline\Server\Log\LogConfig;
@@ -136,9 +137,12 @@ class Start extends CommandAbstract
      * 启动维护事务必须在一个总 deadline 内看到控制操作终态。
      * Direct Master 仅在全部 READY Worker ACK 后提交 maintenance_mode，
      * 因此“operation 已退出队列 + 状态相符”才允许启动命令报告成功。
+     *
+     * -f 强制完整重启收尾也会走同一同步链；本机实测 12s 在 Master
+     * post_housekeeping / Worker 预热占满控制面时不够，故整体加倍。
      */
-    private const MAINTENANCE_SYNC_TIMEOUT_SEC = 12.0;
-    private const WINDOWS_MAINTENANCE_SYNC_TIMEOUT_SEC = 30.0;
+    private const MAINTENANCE_SYNC_TIMEOUT_SEC = 24.0;
+    private const WINDOWS_MAINTENANCE_SYNC_TIMEOUT_SEC = 60.0;
 
     private const MAINTENANCE_SYNC_POLL_INTERVAL_USEC = 50_000;
     private const RESTART_CLEANUP_TIMEOUT_SECONDS = 12.0;
@@ -415,16 +419,37 @@ class Start extends CommandAbstract
             return 1;
         }
 
-        // Explicit clean-start is intentionally targeted and fail-closed. The
-        // saved endpoint has already contributed its configuration above; now
-        // retire only this exact offline generation through the same fenced
-        // transaction used by server:clean. No process is signalled here.
+        // Explicit clean-start is intentionally targeted. Without -f it stays
+        // fail-closed and never signals processes. With -f the operator accepts
+        // a stop-then-force-retire path that can clear corrupt endpoints and
+        // indeterminate lock probes for this named instance only.
         $masterOnly = isset($args['master-only']) || getenv('WLS_MASTER_ONLY');
+        $forceClean = \array_key_exists('f', $args)
+            || \array_key_exists('force', $args);
         if ($cleanRequested && !$masterOnly) {
             try {
                 $instanceManager = $this->getInstanceManager();
-                $oldEndpoint = $instanceManager->getRawInstanceData($instanceName);
-                if ($oldEndpoint === null) {
+                $oldEndpoint = null;
+                try {
+                    $oldEndpoint = $instanceManager->getRawInstanceData($instanceName);
+                } catch (\Throwable) {
+                    $oldEndpoint = null;
+                }
+                $endpointPath = $instanceManager->getInstanceFile($instanceName);
+                $hasEndpointResidue = \is_file($endpointPath) || \is_link($endpointPath);
+
+                if ($forceClean) {
+                    $this->printer->warning(__(
+                        '检测到 -clean -f：将强制停止本实例（若仍在线），并强制退役旧运行资料（含损坏端点或不确定锁探测），再执行完整新代启动。',
+                    ));
+                    if (!$this->prepareForcedCleanStart($instanceName, $config)) {
+                        return 1;
+                    }
+                    $this->printer->success(__(
+                        '实例 [%{1}] 的旧运行资料已强制清理；开始完整新代启动。',
+                        [$instanceName],
+                    ));
+                } elseif (!$hasEndpointResidue && $oldEndpoint === null) {
                     $this->printer->note(__(
                         '实例 [%{1}] 没有旧运行资料；继续执行完整新代启动。',
                         [$instanceName],
@@ -437,6 +462,10 @@ class Start extends CommandAbstract
                     $this->printer->note(__(
                         '如实例仍在线，请先执行 php bin/w server:stop %{1} -f，确认停止后再执行：%{2}',
                         [$instanceName, $cleanRestartCommand],
+                    ));
+                    $this->printer->note(__(
+                        '若需强制停止并清理损坏资料，请执行：%{1} -f',
+                        [$cleanRestartCommand],
                     ));
                     return 1;
                 } else {
@@ -745,20 +774,31 @@ class Start extends CommandAbstract
                         (string)($config['host'] ?? '127.0.0.1'),
                     );
             $startupDecision = $this->createGatewayStartupDecisionForListenerPhase();
-            // In auto/gateway modes `-p` is a loopback join-backend intent,
-            // never a request to expose that number as the degraded public
-            // WLS address. Only explicit pure-WLS mode owns a public exact
-            // port request.
-            $publicPortExplicit = $configuredEdgeMode
-                === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS
-                && $portExplicit;
+            // In auto mode, an explicit `-p` is dual-purpose:
+            // - gateway joined: Start keeps it as loopback backend intent
+            //   via requested_backend_port (this reservation is skipped)
+            // - gateway unavailable: the same `-p` is the degraded pure-WLS
+            //   public listen port (must not silently allocate 20000–29999)
+            // Explicit `--edge=wls` always owns the public exact port.
+            $honorExplicitPublicPort = $portExplicit
+                && \in_array(
+                    $configuredEdgeMode,
+                    [
+                        \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS,
+                        \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO,
+                    ],
+                    true,
+                );
+            $exactPublicPort = $honorExplicitPublicPort
+                ? (int)($config['requested_port'] ?? $config['port'] ?? 0)
+                : null;
             $edgeDecision = $startupDecision->decide(
                     $configuredEdgeMode,
                     $instanceName,
-                    $publicPortExplicit,
+                    $honorExplicitPublicPort,
                     (string)($config['source'] ?? 'runtime'),
                     $publicLeaseBindHost,
-                    $publicPortExplicit ? (int)($config['port'] ?? 0) : null,
+                    $exactPublicPort,
                     !$deferStartupListenerReservation,
                     $this->startupListenerStateDeadline(),
                 );
@@ -2050,6 +2090,9 @@ class Start extends CommandAbstract
             $sharedStateRuntime,
             LogConfig::isVerboseWlsLog(),
         );
+        if ($windowMode) {
+            $this->openDarwinWinModeWindowsForSharedRuntime($instanceName, $sharedStateRuntime);
+        }
 
         // Worker 端口计算移至端口冲突检测之后，避免重复计算
         // Public TLS and HTTP redirects terminate at Nginx.
@@ -2619,10 +2662,16 @@ class Start extends CommandAbstract
         $originalMaintenanceEnabled = $this->restartMaintenanceSnapshot !== null
             && $this->restartMaintenanceSnapshot['instance_name'] === $instanceName
             && $this->restartMaintenanceSnapshot['enabled'];
-        if ($runtimeControlAvailable) {
-            $this->disableMaintenanceMode($instanceName, $startupCompleted);
-        } else {
+        // -f 停机型切换只做 beginRestartMaintenanceTransaction，从不 enableMaintenanceMode。
+        // 运维原本未开维护时，新 Master 已按 env 权威态启动；若在 post_housekeeping
+        // 窗口硬要求 required IPC sync，控制面无响应会误判失败并拆掉已 READY 实例。
+        $forceSwitchAlreadyMatching = $maintenanceResetAfterForceSwitch
+            && !$maintenanceEnabledByUser
+            && !$originalMaintenanceEnabled;
+        if ($forceSwitchAlreadyMatching || !$runtimeControlAvailable) {
             $this->restoreRestartMaintenanceConfigurationOnly($instanceName);
+        } else {
+            $this->disableMaintenanceMode($instanceName, $startupCompleted);
         }
         if (!$startupCompleted) {
             $this->printer->warning(__('新 Master 未在预期时间内就绪，已回滚到重启前的维护态，禁止在启动失败后污染持久配置。'));
@@ -3390,21 +3439,47 @@ class Start extends CommandAbstract
                     $processIdentity,
                 );
             } elseif ($inheritedDescriptors !== []) {
-                $command = \implode(' ', \array_map('escapeshellarg', $argv));
-                $spawnResults = Processer::batchCreate([
-                    'wls-master-startup-handoff' => [
-                        'command' => $command,
-                        'argv' => $argv,
-                        'cwd' => BP,
-                        'block' => false,
-                        'foreground' => false,
-                        'enableLog' => null,
-                        'childOwnsPid' => true,
-                        'masterOwned' => false,
-                        'inheritDescriptors' => $inheritedDescriptors,
-                    ],
-                ]);
-                $spawnedMasterPid = (int)($spawnResults['wls-master-startup-handoff'] ?? 0);
+                // Inherited-FD handoff needs the FFI-backed Unix batch launcher.
+                // Production PHP builds often omit FFI; falling back keeps Master
+                // startable via createDetachedPhpArgv after releasing the sockets.
+                $ffiReady = \extension_loaded('FFI') && \class_exists(\FFI::class, false);
+                $spawnedMasterPid = 0;
+                if ($ffiReady) {
+                    try {
+                        $command = \implode(' ', \array_map('escapeshellarg', $argv));
+                        $spawnResults = Processer::batchCreate([
+                            'wls-master-startup-handoff' => [
+                                'command' => $command,
+                                'argv' => $argv,
+                                'cwd' => BP,
+                                'block' => false,
+                                'foreground' => false,
+                                'enableLog' => null,
+                                'childOwnsPid' => true,
+                                'masterOwned' => false,
+                                'inheritDescriptors' => $inheritedDescriptors,
+                            ],
+                        ]);
+                        $spawnedMasterPid = (int)($spawnResults['wls-master-startup-handoff'] ?? 0);
+                    } catch (\RuntimeException $throwable) {
+                        if (!\str_contains(
+                            $throwable->getMessage(),
+                            'Unix batch process creation is unavailable'
+                        )) {
+                            throw $throwable;
+                        }
+                        $spawnedMasterPid = 0;
+                    }
+                }
+                if ($spawnedMasterPid <= 0) {
+                    $this->closeStartupListenerCopies();
+                    $spawnedMasterPid = Processer::createDetachedPhpArgv(
+                        $argv,
+                        BP,
+                        $processIdentity,
+                        null
+                    );
+                }
                 if ($spawnedMasterPid <= 0) {
                     throw new \RuntimeException(
                         'POSIX Master inherited-listener launcher did not return a child PID.'
@@ -4902,11 +4977,14 @@ class Start extends CommandAbstract
                     $managerConfig['memory_server_port']
                 ));
 
+            if ($windowMode) {
+                $managerConfig['shared_service_frontend'] = true;
+            }
             $ensuredRuntime = $this->createSharedStateServiceManager()->ensureRuntime(
                 $instanceName,
                 $managerConfig,
                 $envConfig,
-                SharedStateServiceManager::resolveEnsureFrontendFlag($managerConfig),
+                SharedStateServiceManager::resolveEnsureFrontendFlag($managerConfig) || $windowMode,
                 $forceRestart
             );
             if (\is_array($ensuredRuntime['session'] ?? null) && \is_array($ensuredRuntime['memory'] ?? null)) {
@@ -10106,6 +10184,93 @@ class Start extends CommandAbstract
     }
     
     /**
+     * `-clean -f`: stop the named instance when still online, then force-retire
+     * its offline/corrupt runtime artifacts before a full new generation starts.
+     *
+     * @param array<string,mixed> $config
+     */
+    protected function prepareForcedCleanStart(string $instanceName, array $config): bool
+    {
+        $instanceManager = $this->getInstanceManager();
+        $port = (int)($config['port'] ?? 0);
+        $count = \max(1, (int)($config['count'] ?? 1));
+        $workerPort = (int)($config['worker_port'] ?? $port);
+
+        $needsStop = false;
+        try {
+            if ($instanceManager->isInstanceRunning($instanceName)) {
+                $needsStop = true;
+            }
+        } catch (\Throwable) {
+            $needsStop = true;
+        }
+        if (!$needsStop) {
+            try {
+                $info = $instanceManager->getInstanceInfo($instanceName, false);
+                if ($info !== null && $info->isMasterRunning()) {
+                    $needsStop = true;
+                }
+            } catch (\Throwable) {
+                // Corrupt endpoint: continue with presence / lock probes.
+            }
+        }
+        // IPC 超时或 Master 命令行无 --launch-id 时，isInstanceRunning /
+        // isMasterRunning 会假阴性；仍须先 stop -f，否则 forceCleanup 会因
+        // 存活租约、受管 PID 或 lifecycle/start flock 直接失败。
+        if (!$needsStop) {
+            try {
+                if ($instanceManager->hasForceCleanBlockingPresence($instanceName)) {
+                    $needsStop = true;
+                }
+            } catch (\Throwable) {
+                $needsStop = true;
+            }
+        }
+
+        if ($needsStop) {
+            $this->printer->warning(__(
+                '实例 [%{1}] 仍在线或 Master 进程仍存活：先按 server:stop -f 强制停止再清理。',
+                [$instanceName],
+            ));
+            if ($port <= 0) {
+                $this->printer->error(__(
+                    '无法解析实例 [%{1}] 的端口，已中止强制清理启动。',
+                    [$instanceName],
+                ));
+                return false;
+            }
+            if (!$this->stopExistingServer(
+                $instanceName,
+                $port,
+                $count,
+                false,
+                $workerPort,
+                true,
+                true,
+            )) {
+                return false;
+            }
+        }
+
+        if (!$instanceManager->forceCleanupInstance($instanceName)) {
+            $this->printer->error(__(
+                '无法强制清理实例 [%{1}]：启动/生命周期锁仍被占用，或仍有本实例受管进程存活。',
+                [$instanceName],
+            ));
+            $this->printer->note(__(
+                '请先执行 php bin/w server:stop %{1} -f，确认停止后再重试 php bin/w server:start%{2} -clean -f',
+                [
+                    $instanceName,
+                    $instanceName === 'default' ? '' : (' ' . $instanceName),
+                ],
+            ));
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * 停止现有服务器
      *
      * 委托给 server:stop 统一执行：先停 Master，再按进程名杀 Worker/Dispatcher 并清理 PID 文件，
@@ -10130,6 +10295,8 @@ class Start extends CommandAbstract
             $workerPort
         );
         $this->restartHandoffCaptured = true;
+        // -r/-f 停旧代前先关本实例 --win 窗口（Stop 内也会关；此处保证启动链路不漏）。
+        DarwinWinModeLogWindow::closeAllForInstance($instanceName);
         $mainStop = ObjectManager::getInstance(MainStop::class);
         $mainStop->execute(
             $this->buildStopExistingServerArgs($instanceName, $fastLocal, $restartCleanup, $force),
@@ -11834,6 +12001,48 @@ class Start extends CommandAbstract
             'frontend_non_worker_windows' => true,
         ];
     }
+
+    /**
+     * macOS --win：为共享 Session/Memory 侧车打开 Terminal 日志跟随窗口。
+     *
+     * @param array<string, mixed> $sharedStateRuntime
+     */
+    protected function openDarwinWinModeWindowsForSharedRuntime(string $instanceName, array $sharedStateRuntime): void
+    {
+        if (!DarwinWinModeLogWindow::isSupported()) {
+            return;
+        }
+
+        foreach (['session', 'memory'] as $roleKey) {
+            $runtime = $sharedStateRuntime[$roleKey] ?? null;
+            if (!\is_array($runtime)) {
+                continue;
+            }
+            $processName = \trim((string)($runtime['process_name'] ?? ''));
+            if ($processName === '') {
+                continue;
+            }
+            // 共享侧车真实日志在 service_instance_name 目录下，不能跟 requester 的 default/ 空文件。
+            $logInstanceName = \trim((string)($runtime['service_instance_name'] ?? ''));
+            if ($logInstanceName === '') {
+                $logInstanceName = \trim((string)($runtime['instance_name'] ?? ''));
+            }
+            if ($logInstanceName === '') {
+                $logInstanceName = $instanceName;
+            }
+            $title = $roleKey . ' ' . $processName;
+            $realLog = WlsLogService::getProcessLogFile($processName, $logInstanceName);
+            if (DarwinWinModeLogWindow::openForProcess(
+                $title,
+                $processName,
+                $instanceName,
+                $logInstanceName,
+                $realLog
+            )) {
+                $this->printer->note(__('macOS --win: Terminal 日志窗口已打开 → %{1}', [$title]));
+            }
+        }
+    }
     
     /**
      * 将实际的 host 同步到 env.php 的 wls 配置
@@ -12856,13 +13065,13 @@ PHP;
             [
                 '[name]' => __('实例名称（默认：default）'),
                 '--host <host>' => __('公网域名或展示主机；gateway/legacy 模式回源监听 127.0.0.1，wls 模式直接监听'),
-                '-p, --port <port>' => __('gateway/legacy 模式的 WLS 回源端口；wls 模式为纯 WLS HTTPS 端口'),
+                '-p, --port <port>' => __('gateway 已加入时为 WLS 回源端口；auto 降级纯 WLS 或 --edge=wls 时为公网 HTTPS 监听端口'),
                 '-c, --count <n>' => __('Worker 进程数（默认：auto 智能模式）'),
-                '--win' => __('Windows 子进程使用可见控制台窗口'),
+                '--win' => __('窗口模式：Windows 为各 WLS PHP 子进程打开可见控制台；macOS 为各进程打开 Terminal 跟随日志窗口（Direct/shared_fd 不能整进程迁入）'),
                 '-m, --mode <mode>' => __('运行模式：io（I/O密集）或 cpu（CPU密集）'),
                 '-r, --restart' => __('滚动排水重启：Master 保持运行，Orchestrator 分批次排水替换 Worker（默认三批）'),
-                '-f' => __('与 -r 同用时强制完整重启（停 Master，跳过排水等待）'),
-                '-clean, --clean' => __('仅安全清理当前已停止实例的旧运行资料，再执行完整新代启动；不会终止在线或身份不明的进程'),
+                '-f' => __('与 -r 同用时强制完整重启；与 -clean 同用时强制停止本实例并退役损坏/不确定的旧运行资料'),
+                '-clean, --clean' => __('清理当前实例旧运行资料后完整新代启动；不加 -f 时仅允许已停止且身份可证明的安全清理'),
                 '--ssl-cert <path>' => __('公网 TLS 证书文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）'),
                 '--ssl-key <path>' => __('公网 TLS 私钥文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）'),
                 '--certificate-profile <profile>' => __('WLS 2.0 证书信任范围：production（默认）或显式 test；域名后缀不会自动启用 test'),
@@ -12887,7 +13096,7 @@ PHP;
                 __('启动副作用') => __('auto/gateway 仅在 virgin host 上从最终项目发行物自带的签名包首装宿主网关；不下载或编译 legacy Nginx，复制到宿主 A/B 槽后不依赖引导项目'),
                 __('多项目支持') => __('多个项目共享宿主 80/443，并通过项目 UUID、域名冲突检查、generation 和租约隔离'),
                 __('配置记忆') => __('首次 server:start api -p 9981 会保存回源端口，之后 server:start api 自动复用'),
-                __('清理启动') => __('普通启动不会自动删除损坏或过期资料；确认实例已停止后执行 php bin/w server:start [name] -clean'),
+                __('清理启动') => __('普通启动不会自动删除损坏或过期资料；确认实例已停止后执行 php bin/w server:start [name] -clean；在线或资料损坏时用 -clean -f 强制停止并清理'),
                 __('智能模式') => __('worker_count 设为 "auto" 时由运行时策略按 OS/CPU/内存自动计算'),
                 __('事件循环') => __('Windows Direct 使用内置 stream_select；Linux reuseport/shared_fd 与 macOS shared_fd Direct 使用预装 ext-event，缺失时停止并提示显式 --install-deps'),
                 __('HTTP/3') => __('仅当 nginx -V 证明包含 ngx_http_v3_module 时配置 QUIC/Alt-Svc；可用 verifier 必须通过 owner-bound 真实 QUIC，否则明确 pending'),
@@ -12914,6 +13123,7 @@ PHP;
                 __('Windows 可见窗口') => 'php bin/w server:start win -p 9985 --win',
                 __('滚动排水重启') => 'php bin/w server:start api -r',
                 __('强制完整重启') => 'php bin/w server:start api -r -f',
+                __('强制清理并启动') => 'php bin/w server:start -clean -f',
                 __('指定 Nginx TLS 证书') => 'php bin/w server:start api --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem',
                 __('设置 Worker 内存') => 'php bin/w server:start api --worker-memory-limit=512M',
                 __('查看所有实例状态') => 'php bin/w server:status --all',

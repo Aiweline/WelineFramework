@@ -614,6 +614,26 @@ final class HeaderCommerceData
         );
     }
 
+    /** 在搜索菜单渲染前一次预取整棵类型树的动态文案。 */
+    public static function prefetchSearchTypeLabels(array $types): void
+    {
+        $sources = ['全部', '全部%{1}'];
+        $collect = static function (array $nodes, bool $topLevel) use (&$collect, &$sources): void {
+            foreach ($nodes as $node) {
+                if (!is_array($node)) {
+                    continue;
+                }
+                $label = trim((string)($node['label'] ?? ''));
+                $sources[] = $label !== '' ? $label : ($topLevel ? (string)($node['code'] ?? '') : '');
+                if (is_array($node['children'] ?? null)) {
+                    $collect($node['children'], false);
+                }
+            }
+        };
+        $collect($types, true);
+        WidgetI18n::prefetchLabels($sources);
+    }
+
     private static function rememberRequestMemo(
         string $resource,
         string $logicalKey,
