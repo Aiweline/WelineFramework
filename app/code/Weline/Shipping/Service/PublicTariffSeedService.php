@@ -33,12 +33,7 @@ final class PublicTariffSeedService
         if ($websiteId !== 0) {
             throw new \InvalidArgumentException('Public tariff seed only supports website 0.');
         }
-        $source = json_decode(
-            file_get_contents(dirname(__DIR__) . '/data/public-tariff/standard-20260923.json'),
-            true,
-            512,
-            JSON_THROW_ON_ERROR,
-        );
+        $source = self::loadOfficialSnapshot();
         if (($source['schema_version'] ?? null) !== 1 || ($source['currency'] ?? '') !== 'CNY'
             || empty($source['countries']) || !is_array($source['countries'])) {
             throw new \UnexpectedValueException('Invalid public tariff source.');
@@ -202,6 +197,43 @@ final class PublicTariffSeedService
                     ->setData(['profile_id' => $profileId, 'service_id' => $serviceId])->save();
             }
         }
+    }
+
+    /**
+     * 官方公开价快照：优先读 `.json.gz`（仓内压缩），导入时再展开；兼容未压缩的 `.json`。
+     *
+     * @return array<string, mixed>
+     */
+    public static function loadOfficialSnapshot(): array
+    {
+        $dir = dirname(__DIR__) . '/data/public-tariff/';
+        $gzPath = $dir . 'standard-20260923.json.gz';
+        $jsonPath = $dir . 'standard-20260923.json';
+        if (is_file($gzPath)) {
+            if (!\function_exists('gzdecode')) {
+                throw new \RuntimeException(
+                    'Public tariff gzip snapshot requires PHP zlib extension (gzdecode). '
+                    . 'Enable zlib or install php-zlib; Windows builds usually ship zlib built-in.'
+                );
+            }
+            $compressed = file_get_contents($gzPath);
+            if ($compressed === false || $compressed === '') {
+                throw new \RuntimeException('Public tariff gzip snapshot unreadable: ' . $gzPath);
+            }
+            $json = gzdecode($compressed);
+            if ($json === false || $json === '') {
+                throw new \RuntimeException('Public tariff gzip snapshot corrupt: ' . $gzPath);
+            }
+        } elseif (is_file($jsonPath)) {
+            $json = file_get_contents($jsonPath);
+            if ($json === false || $json === '') {
+                throw new \RuntimeException('Public tariff snapshot unreadable: ' . $jsonPath);
+            }
+        } else {
+            throw new \RuntimeException('Public tariff snapshot missing (expected .json.gz or .json).');
+        }
+
+        return json_decode($json, true, 512, JSON_THROW_ON_ERROR);
     }
 
     private function find(string $class, array $filters): ?AbstractModel

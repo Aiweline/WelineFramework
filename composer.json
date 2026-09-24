@@ -35,6 +35,7 @@
     "ext-dom": "*",
     "ext-libxml": "*",
     "ext-zip": "*",
+    "ext-zlib": "*",
     "ext-gd": "*",
     "symfony/intl": "^5.2",
     "symfony/polyfill-intl-icu": "^1.23",

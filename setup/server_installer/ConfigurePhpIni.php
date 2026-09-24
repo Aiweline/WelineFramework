@@ -54,6 +54,7 @@ final class ConfigurePhpIni
             'PDO', 'openssl', 'curl', 'mbstring', 'exif', 'fileinfo', 'xsl',
             'intl', 'dom', 'libxml', 'simplexml', 'iconv', 'json',
             'pdo_pgsql', 'pgsql', 'pdo_mysql', 'mysqli', 'sockets', 'zip', 'bcmath',
+            'zlib',
         ];
     }
 
