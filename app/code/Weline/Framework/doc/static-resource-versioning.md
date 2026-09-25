@@ -11,17 +11,27 @@
 ## 主题命名空间归一化（发布目标必须与 URL 同源）
 
 `pub/static/{命名空间}/...` 与 `/static/{命名空间}/...` 的命名空间**必须来自同一个归一化函数**
-`Weline\Framework\View\PublicThemeNamespace::resolve()`。发布目录与 URL 前缀一旦分叉就是 404。
+`Weline\Framework\View\PublicThemeNamespace`。发布目录与 URL 前缀一旦分叉就是 404。
 
-`theme.path` 允许三种形态，归一化落点：
+该类是**唯一权威**，提供两个入口：
+
+- `resolve()` —— **永不返回空**；无法解析时回落默认命名空间。用于「必须得到一个可发布命名空间」的调用点（`Deploy\Upgrade`、`TraitTemplate`）。
+- `tryResolve(): ?string` —— 无法解析时返回 `null`。用于需要区分「无法解析」的调用点（`ThemeStaticNamespaceService` 据此回退配置项、`theme:upgrade` 据此报错中止）。
+
+`theme.path` 允许多种形态，归一化落点：
 
 | `theme.path` 原值 | 归一化结果 |
 |-------------------|-----------|
 | `Weline/hanfu` | `Weline/hanfu`（相对自定义主题路径保持不变） |
-| `app/code/Weline/Theme/view/theme` 绝对路径 | 默认命名空间 `Weline/Theme/view/theme` |
-| `Weline_Theme::view/theme` 模块标识 | 默认命名空间 |
-| `<app/design>/{Vendor}/{theme}` 绝对路径 | `{Vendor}/{theme}` |
-| 其它绝对路径 / 盘符路径 / `..` / 空段 | 默认命名空间 |
+| `Weline_Theme::view/theme` 模块标识 | `Weline/Theme/view/theme`（**展开**，保留主题身份） |
+| `app/code/Weline/Theme/view/theme` 绝对路径 | `Weline/Theme/view/theme`（同上，保留主题身份） |
+| `app/design/{Vendor}/{theme}` 绝对路径 | `{Vendor}/{theme}` |
+| 项目内相对写法 `app/code/...` / `app/design/...` | 先补成项目内绝对路径，再按上两行处理 |
+| 其它绝对路径 / 盘符路径 / `..` / `.` / 空段 / `::` / 空值 | 默认命名空间（`resolve()`）或 `null`（`tryResolve()`） |
+
+**为什么模块标识要展开而不是回落默认**：`Vendor_Module::path` 命名的是**某个具体主题**；
+若一律回落默认，两个不同主题会写进同一个 `pub/static/{默认}/...` 而互相覆盖。
+对内置默认主题（`Weline_Theme::view/theme`）展开结果恰好等于默认命名空间，故该场景行为不变。
 
 `Deploy\Upgrade` 的 overlay 与 `view/theme` 目标都经该函数解析；解析结果不是安全相对命名空间时
 **跳过主题域发布并告警**（`pub/static/{Vendor}/{Module}/` 扁平树与命名空间无关，照常发布）。
@@ -30,27 +40,43 @@
 > 绝对路径被当成目录段，`pub/static` 下长出 `Users/<name>/.../app/code/...`（291 MB）与
 > `Weline_Theme::view/` 这类畸形树。
 
-**已知分歧（未合并）**：`Theme\Service\ThemeStaticNamespaceService::normalizePublicThemePath()` 对
-`Vendor_Module::path` 的处理是**展开**为 `Vendor/Module/path`，而本函数是**回落默认命名空间**。
-两者语义不同，合并前须先定语义；`theme:upgrade` 走前者、`deploy:upgrade` 走后者。
+> 安全背景：`Theme\Service\ThemeStaticNamespaceService` 曾自持一份 `normalizePublicThemePath()`，
+> 会把 `..` / `.` / `a//b` / `a::b` **原样返回**，使 `theme:upgrade` 能把文件铺到 `pub/static` 之外
+> 或长出畸形目录树。现已**删除该实现，改为委托** `PublicThemeNamespace::tryResolve()`，
+> 两处语义不再可能漂移。
+
+**消费方（全部走同一权威）**：
+
+| 调用点 | 入口 |
+|--------|------|
+| 模板静态资源 URL 前缀 | `TraitTemplate::resolvePublicThemeNamespace()` |
+| 模块 `view/statics` / `view/theme` 发布目标 | `Deploy\Upgrade::execute` |
+| 按请求即时补发 `/static` 资源 | `ThemeResourceGateway::publishForRequestPath` |
+| 主题静态命名空间解析 | `ThemeStaticNamespaceService::resolvePublicThemePath`（委托 `tryResolve`） |
+| 设计覆盖搬迁 | `theme:upgrade`（`Theme\Console\Theme\Upgrade`） |
 
 ## 发布排除（`pub/static` 只许含运行时资源）
 
-`pub/static` 位于 Web 根之下，铺进去的文件浏览器可直接取到（`*.php` 更会被执行）。故两条发布链路都先按 `Weline\Framework\Deploy\StaticPublishExclusion` 过滤再落盘：
+`pub/static` 位于 Web 根之下，铺进去的文件浏览器可直接取到：文档会被读取，`*.php` 更会被执行
+（`.phtml` / `.pht` / `.phar` 在 Apache / LiteSpeed 常见 `AddHandler` 配置下同样按 PHP 处理；
+即便服务器不执行，`Router\Core::StaticFile()` 也会用 `file_get_contents()` 回吐源码原文）。
+故所有发布链路都先按 `Weline\Framework\Deploy\StaticPublishExclusion` 过滤再落盘：
 
 | 链路 | 入口 | 过滤点 |
 |------|------|--------|
 | 模块 `view/statics`（overlay + 扁平双写） | `Deploy\Upgrade::execute` | `recursiveCopy()` 以 `RecursiveCallbackFilterIterator` 剪枝 |
 | `app/design/{theme}` 设计覆盖搬迁 | `theme:upgrade` | `Theme\Console\Theme\Upgrade::fetchThemeFiles()` |
+| 按请求即时补发 | `ThemeResourceGateway::publishForRequestPath()` | 解析出 `relative_path` 后即判定（否则一次针对 `/static/{Vendor}/{Module}/php/connector.minimal.php` 的请求就能把 `view/statics/php/**` 重新铺回 Web 根） |
 
 排除类别（权威常量在 `StaticPublishExclusion`）：
 
 - **段**（任意层级，命中即剪整棵子树）：`.git` `.github` `.gitlab` `.circleci` `.husky` `.idea` `.vscode` `node_modules` `bower_components` `nuget` `doc` `docs` `documentation`；`test` `tests` `__tests__` `cypress` `e2e` `spec` `specs` **仅在用户命名空间之外**生效。
-- **文件名**：`package.json` `package-lock.json` `yarn.lock` `pnpm-lock.yaml` `composer.json` `composer.lock` `bower.json` `Gruntfile.js` `gulpfile.js` `webpack.config.js` `rollup.config.js` `vite.config.js` `karma.conf.js` `jest.config.js` `cypress.json` `tsconfig.json`，`.eslintrc*` `.stylelintrc*` `.babelrc*` `.prettierrc*`，以及 `.editorconfig` `.gitignore` `.npmignore` `.travis.yml` `.browserslistrc` 等。
+- **文件名**：`package.json` `package-lock.json` `yarn.lock` `pnpm-lock.yaml` `composer.json` `composer.lock` `bower.json` `Gruntfile.js` `gulpfile.js` `webpack.config.js` `rollup.config.js` `vite.config.js` `karma.conf.js` `jest.config.js` `cypress.json` `tsconfig.json`，`.eslintrc*` `.stylelintrc*` `.babelrc*` `.prettierrc*`，`.editorconfig` `.gitignore` `.npmignore` `.travis.yml` `.browserslistrc` 等；以及 **Web 服务器 / PHP 运行期配置**：`.htaccess` `.htpasswd` `.user.ini` `php.ini` `web.config`（落在 Web 根里能改变「谁能访问、什么会被执行」）。
 - **文档主干**（忽略扩展名，含无扩展名的 `LICENSE`）：`readme` `changelog` `contributing` `license` `licence` `copying` `notice` `authors` `contributors` `code_of_conduct`。
 - **文档扩展名**：`md` `markdown` `mdown` `rst` `adoc` `asciidoc`。刻意不含 `txt`：`robots.txt` 是合法运行时资源。
+- **服务端可执行 / 模板源码扩展名**：`php` `phtml` `pht` `phps` `phar` `php3`–`php8`，以及 `php` 前缀变体（如 `.php-dist`）；`cgi` `fcgi` `pl` `py` `rb` `sh` `bash` `zsh`；`asp` `aspx` `jsp` `jspx` `shtml`。**只按文件判定，不剪同名目录**（`view/statics/php/` 目录本身可保留）。
 
-**用户命名空间逃逸**：`layouts` / `partials` / `widgets` 下是布局与部件自命名目录，真实存在名为 `test` 的布局（`Theme/view/theme/frontend/layouts/test`），故 `test`/`spec` 等段在其内不套用，避免误伤运行时资源。
+**用户命名空间逃逸**：`layouts` / `partials` / `widgets` 下是布局与部件自命名目录，真实存在名为 `test` 的布局（`Theme/view/theme/frontend/layouts/test`），故 `test`/`spec` 等段在其内不套用，避免误伤运行时资源。注意逃逸只作用于**段规则**：该目录下的 `.phtml` **源码模板仍会被排除**，其 `.css` / `.js` 等运行时资源照常发布。
 
 **边界**：排除只作用于**后续发布**，不会清理 `pub/static` 中已有的历史产物；清理须单独执行。
 
