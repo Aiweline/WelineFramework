@@ -6,7 +6,8 @@
     const VERSION = 1;
     const MAX_DEPTH = 32;
     const MAX_LIST_ITEMS = 2000;
-    const MAX_MAP_KEYS = 100;
+    // Keep in sync with Weline\\Framework\\Binary\\Limits::MAP_KEYS (i18n/widget bags).
+    const MAX_MAP_KEYS = 2000;
     const MAX_STRING_BYTES = 2097152;
     const CONTENT_TYPE = 'application/x-weline-query-bin';
     const PROTOCOL = 'worker-query-bin-v1';
@@ -1449,7 +1450,7 @@
         }
         if (typeof value === 'object') {
             const keys = Object.keys(value);
-            if (keys.length > MAX_MAP_KEYS) throw new Error('Map exceeds 100 key limit.');
+            if (keys.length > MAX_MAP_KEYS) throw new Error('Map exceeds 2000 key limit.');
             writer.byte(0x08);
             writer.varuint(keys.length);
             keys.forEach((key) => {
@@ -1522,7 +1523,7 @@
         }
         if (type === 0x08) {
             const count = reader.varuint();
-            if (count > MAX_MAP_KEYS) throw new Error('Map exceeds 100 key limit.');
+            if (count > MAX_MAP_KEYS) throw new Error('Map exceeds 2000 key limit.');
             const map = {};
             for (let i = 0; i < count; i += 1) {
                 const length = reader.varuint();

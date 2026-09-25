@@ -18,9 +18,49 @@ final class FreeShippingProgressServiceContractTest extends TestCase
                 'subtotal_minor' => $subtotalMinor,
             ]);
             self::assertFalse($progress['enabled']);
-            self::assertArrayNotHasKey('message_qualified', $progress);
             self::assertArrayNotHasKey('threshold_minor', $progress);
         }
+    }
+
+    public function testMixedCartShowsLineDistinctionWithoutWholeCartQualified(): void
+    {
+        $service = new FreeShippingProgressService();
+        $progress = $service->build([
+            'currency_precision' => 2,
+            'items' => [
+                [
+                    'requires_shipping' => true,
+                    'is_free_shipping' => 1,
+                    'free_shipping_min_amount' => 0,
+                    'row_total_minor' => 1000,
+                ],
+                [
+                    'requires_shipping' => true,
+                    'row_total_minor' => 5000,
+                ],
+            ],
+        ]);
+        self::assertTrue($progress['enabled']);
+        self::assertFalse($progress['qualified']);
+        self::assertSame('product_line', $progress['source']);
+        self::assertSame(1, $progress['free_item_count']);
+        self::assertSame(1, $progress['paid_item_count']);
+        self::assertLessThan(100, $progress['progress_percent']);
+    }
+
+    public function testAllProductFreeLinesDoNotAdvertiseWholeCartFreeShipping(): void
+    {
+        $service = new FreeShippingProgressService();
+        $progress = $service->build([
+            'items' => [
+                [
+                    'requires_shipping' => true,
+                    'is_free_shipping' => 1,
+                    'row_total_minor' => 1000,
+                ],
+            ],
+        ]);
+        self::assertFalse($progress['enabled']);
     }
 
     public function testCartQueryProviderEnrichesFreeShippingProgress(): void

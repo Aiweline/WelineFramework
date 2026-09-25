@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Checkout\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\StorefrontSsrChromeHealer;
 
 /**
  * Storefront checkout page.
@@ -50,7 +52,21 @@ class Index extends FrontendController
         $this->assign('meta', $meta);
         $this->assign('content', $body);
 
-        return $this->template('Weline_Checkout::theme/frontend/layouts/checkout/default.phtml');
+        $html = $this->template('Weline_Checkout::theme/frontend/layouts/checkout/default.phtml');
+
+        return $this->ensurePublishedChrome($html);
+    }
+
+    private function ensurePublishedChrome(string $html): string
+    {
+        try {
+            /** @var StorefrontSsrChromeHealer $healer */
+            $healer = ObjectManager::getInstance(StorefrontSsrChromeHealer::class);
+
+            return $healer->ensure($html);
+        } catch (\Throwable) {
+            return $html;
+        }
     }
 
     /**

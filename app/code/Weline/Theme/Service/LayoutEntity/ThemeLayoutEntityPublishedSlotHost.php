@@ -75,16 +75,18 @@ final class ThemeLayoutEntityPublishedSlotHost
         if ($html === '') {
             return 'none';
         }
-        if (\str_contains($html, 'slot-placeholder')) {
-            return 'slot_placeholder';
-        }
-
-        // Filter destinations on products/category layouts.
+        // Filter destinations first — products/category layouts keep a declaration
+        // placeholder with class slot-placeholder; classify as filter so LayoutSlot
+        // can take the narrow overlay heal (not whole-shell fill).
         if (\preg_match(
             '/\bdata-placeholder\s*=\s*(["\'])(?:list-filters|category-filters)\1/',
             $html,
         ) === 1) {
             return 'filter_data_placeholder';
+        }
+
+        if (\str_contains($html, 'slot-placeholder')) {
+            return 'slot_placeholder';
         }
 
         if (self::shellMissingStorefrontChromeSignals($html)) {
@@ -288,8 +290,119 @@ final class ThemeLayoutEntityPublishedSlotHost
             return true;
         }
 
+        // Strong Partial/chrome header already on the page → blank exclusive
+        // data-slot-id="header" wrappers are leftover declaration shells, not 缺壳.
+        // Empty exclusive footer (incl. footer--shell) still forces heal UNLESS a real
+        // Partial footer body is already present (list/PDP: footer lives outside the
+        // exclusive published root while data-slot-id="footer" stays blank).
+        if (self::shellHasSubstantialHeaderChrome($html)) {
+            if (!self::shellHasBlankExclusiveFooterRoot($html)) {
+                return false;
+            }
+
+            return !self::shellHasSubstantialFooterChrome($html);
+        }
+
         // Header signal present but exclusive chrome roots still blank → 缺壳.
         return self::shellHasBlankExclusiveChromeRoots($html);
+    }
+
+    /**
+     * Real header chrome with non-trivial body (Partial-rendered), not empty slot shells.
+     */
+    public static function shellHasSubstantialHeaderChrome(string $html): bool
+    {
+        if ($html === '' || !self::shellHasStorefrontHeaderSignal($html)) {
+            return false;
+        }
+
+        // weline-header … with nav/account content (depth-agnostic sample).
+        if (\preg_match(
+            '/\bweline-header\b(?!-)[^>]*>[\s\S]{80,8000}?(?:header-nav|header-account|site-header|hanfu-atelier-chrome)/i',
+            $html,
+        ) === 1) {
+            return true;
+        }
+
+        // Published non-blank header root already carries widgets.
+        if (\preg_match(
+            '/\bdata-slot-id=(["\'])header\1[^>]*>[\s\S]{40,}?<\/(?:div|header|section)>/i',
+            $html,
+        ) === 1) {
+            $sample = '';
+            if (\preg_match(
+                '/\bdata-slot-id=(["\'])header\1[^>]*>([\s\S]{0,4000})<\/(?:div|header|section)>/i',
+                $html,
+                $m,
+            ) === 1) {
+                $sample = (string)($m[2] ?? '');
+            }
+            if ($sample !== '' && !self::isBlankPublishedSlotInner($sample)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Real footer chrome body already on the page (Partial / bake), not empty shell.
+     */
+    public static function shellHasSubstantialFooterChrome(string $html): bool
+    {
+        if ($html === '' || !\str_contains($html, 'weline-footer')) {
+            return false;
+        }
+
+        if (\preg_match(
+            '/\bweline-footer\b(?!-)/i',
+            $html,
+        ) !== 1) {
+            return false;
+        }
+
+        // Reject pages that ONLY have empty footer--shell and no real footer body.
+        if (\str_contains($html, 'weline-footer--shell')
+            && !\preg_match('/\bweline-footer\b(?!-)(?![^>]*--shell)[^>]*>/i', $html)
+        ) {
+            return false;
+        }
+
+        if (\preg_match(
+            '/\bweline-footer\b(?!-)(?![^>]*--shell)[^>]*>[\s\S]{0,12000}?(?:footer-container|footer-nav|footer-bottom|site-footer|wc-theme_widget_footer)/i',
+            $html,
+        ) === 1) {
+            return true;
+        }
+
+        // Non-blank published footer root.
+        if (\preg_match(
+            '/\bdata-slot-id=(["\'])footer\1[^>]*>([\s\S]{0,8000})<\/(?:div|footer|section)>/i',
+            $html,
+            $m,
+        ) === 1) {
+            $sample = (string)($m[2] ?? '');
+            if ($sample !== ''
+                && !\str_contains($sample, 'weline-footer--shell')
+                && !self::isBlankPublishedSlotInner($sample)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Blank exclusive footer published root (incl. footer--shell) = 缺壳.
+     */
+    public static function shellHasBlankExclusiveFooterRoot(string $html): bool
+    {
+        if ($html === '' || (!\str_contains($html, 'data-slot-id=') && !\str_contains($html, '<!--@weline-slot:'))) {
+            return false;
+        }
+
+        return self::shellHasBlankSlotsMatching($html, 'footer');
     }
 
     /**
@@ -502,6 +615,13 @@ final class ThemeLayoutEntityPublishedSlotHost
             return '';
         }
 
+        // N1: list/category filter inventory — bake owns required Filters relationship HTML.
+        // Design declaration placeholders must not survive beside a solidified Filters panel
+        // (otherwise LayoutSlot narrow_filter_heal → Overlay becomes the per-request main path).
+        if (self::isFilterInventorySlot($slotId) && self::bakeInnerHasFiltersWidget($bakeInner)) {
+            return self::sanitizePublishedHtml($bakeInner);
+        }
+
         $defaultHtml = (string)$defaultHtml;
         if ($defaultHtml !== '' && (
             self::defaultCarriesNestedSlotMarkup($defaultHtml)
@@ -512,6 +632,27 @@ final class ThemeLayoutEntityPublishedSlotHost
         }
 
         return self::sanitizePublishedHtml($bakeInner);
+    }
+
+    /** list-filters (products) / category-filters (category) inventory destinations. */
+    public static function isFilterInventorySlot(string $slotId): bool
+    {
+        $slotId = \strtolower(\trim($slotId));
+
+        return $slotId === 'list-filters' || $slotId === 'category-filters';
+    }
+
+    /** True when solidified bake inner already carries Filters widget presence markers. */
+    public static function bakeInnerHasFiltersWidget(string $inner): bool
+    {
+        if ($inner === '') {
+            return false;
+        }
+
+        return \str_contains($inner, 'storefront-filters-panel')
+            || \str_contains($inner, 'data-widget-code="category-filters"')
+            || \str_contains($inner, "data-widget-code='category-filters'")
+            || \str_contains($inner, 'w-filters');
     }
 
     private static function isEditorOrPreviewRequest(): bool

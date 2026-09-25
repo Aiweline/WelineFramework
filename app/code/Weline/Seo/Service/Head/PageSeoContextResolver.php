@@ -1279,6 +1279,29 @@ class PageSeoContextResolver
                     return $name;
                 }
             }
+            // N4: prefer storefront.render_context.v1 before WebsiteData SQL.
+            if (class_exists(\Weline\Theme\Service\Storefront\StorefrontRenderContextBag::class)) {
+                $fromBag = \trim((string)(
+                    \Weline\Theme\Service\Storefront\StorefrontRenderContextBag::websiteLocalName() ?? ''
+                ));
+                if ($fromBag !== '') {
+                    return $fromBag;
+                }
+            }
+            if (class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
+                $ctx = \Weline\Framework\Runtime\StorefrontRenderContextReader::get();
+                if ($ctx instanceof \Weline\Framework\Runtime\StorefrontRenderContext) {
+                    $row = \is_array($ctx->websiteTableSnapshot['row'] ?? null)
+                        ? $ctx->websiteTableSnapshot['row']
+                        : null;
+                    if (\is_array($row)) {
+                        $fromSnap = \trim((string)($row['name'] ?? ''));
+                        if ($fromSnap !== '') {
+                            return $fromSnap;
+                        }
+                    }
+                }
+            }
             if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
                 $name = trim((string)(\Weline\Websites\Data\WebsiteData::getName() ?? ''));
                 if ($name !== '') {

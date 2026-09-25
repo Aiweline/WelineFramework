@@ -22,6 +22,24 @@ class ThemeComponentRenderer
 
     public function render(ThemeComponentDefinition $definition, array $instanceConfig = [], ?WelineTheme $theme = null, array $context = []): string
     {
+        $phase = ThemePdpBudgetPhases::forWidgetCode((string)($definition->code ?? ''))
+            ?? ThemePdpBudgetPhases::forWidgetCode((string)($definition->name ?? ''));
+        if ($phase !== null) {
+            return (string)ThemePdpBudgetPhases::measure(
+                $phase,
+                fn(): string => $this->doRender($definition, $instanceConfig, $theme, $context),
+                [
+                    'widget_code' => (string)($definition->code ?? $definition->name ?? ''),
+                    'branch' => 'theme_component',
+                ],
+            );
+        }
+
+        return $this->doRender($definition, $instanceConfig, $theme, $context);
+    }
+
+    private function doRender(ThemeComponentDefinition $definition, array $instanceConfig = [], ?WelineTheme $theme = null, array $context = []): string
+    {
         // REQ-THEME-0016 / required-default-all-layouts: entity + overlay paths also
         // re-render container widgets (product-info → product-selling-mode). A request-wide
         // Slot registry would throw duplicate id on the second pass (unknown:0 via

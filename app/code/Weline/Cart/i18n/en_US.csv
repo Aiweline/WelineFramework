@@ -151,6 +151,7 @@ Scope,Scope
 该商品暂不可售，请从购物车移除或稍后再试,"This product is temporarily unavailable; remove it from the cart or try again later"
 "channel_code 必须与 store_code 同时提供","channel_code must be provided together with store_code"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","Cart Scope does not match the trusted Website/Store/Channel request"
+"已有 %1 件本品包邮，另 %2 件仍需计运费","%1 item(s) have product free shipping; %2 still need shipping"
 已享包邮,"You've unlocked free shipping"
 "还差 %1 包邮","You're %1 away from free shipping"
 "浏览%{1} %{2}件商品","Browse %{1} · %{2} items"

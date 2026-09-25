@@ -873,7 +873,24 @@ class LanguageSwitcher implements TaglibInterface
      */
     private static function filterFrontendLanguages(array $welineLanguages, int $websiteId): array
     {
-        $websiteLanguageCodes = w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
+        $websiteLanguageCodes = [];
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
+                $ctx = \Weline\Framework\Runtime\StorefrontRenderContextReader::get();
+                if ($ctx instanceof \Weline\Framework\Runtime\StorefrontRenderContext
+                    && $ctx->websiteId === $websiteId
+                ) {
+                    $active = $ctx->localeCatalog['active'] ?? [];
+                    if (\is_array($active) && $active !== []) {
+                        $websiteLanguageCodes = \array_values(\array_map('strval', $active));
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+        if ($websiteLanguageCodes === []) {
+            $websiteLanguageCodes = w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
+        }
         if (!is_array($websiteLanguageCodes) || $websiteLanguageCodes === []) {
             return [];
         }
@@ -1630,6 +1647,27 @@ class LanguageSwitcher implements TaglibInterface
     private static function defaultLanguage(): string
     {
         try {
+            if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
+                $ctx = \Weline\Framework\Runtime\StorefrontRenderContextReader::get();
+                if ($ctx instanceof \Weline\Framework\Runtime\StorefrontRenderContext) {
+                    $row = \is_array($ctx->websiteTableSnapshot['row'] ?? null)
+                        ? $ctx->websiteTableSnapshot['row']
+                        : null;
+                    if (\is_array($row)) {
+                        $fromRow = \trim((string)($row['default_language'] ?? ''));
+                        if ($fromRow !== '') {
+                            return \str_replace('-', '_', $fromRow);
+                        }
+                    }
+                    $locale = \trim($ctx->locale);
+                    if ($locale !== '') {
+                        return \str_replace('-', '_', $locale);
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+        try {
             if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
                 $fromWebsite = \trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultLanguage() ?? ''));
                 if ($fromWebsite !== '') {
@@ -1649,6 +1687,27 @@ class LanguageSwitcher implements TaglibInterface
 
     private static function defaultCurrency(): string
     {
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
+                $ctx = \Weline\Framework\Runtime\StorefrontRenderContextReader::get();
+                if ($ctx instanceof \Weline\Framework\Runtime\StorefrontRenderContext) {
+                    $currency = \strtoupper(\trim($ctx->currency));
+                    if ($currency !== '') {
+                        return $currency;
+                    }
+                    $row = \is_array($ctx->websiteTableSnapshot['row'] ?? null)
+                        ? $ctx->websiteTableSnapshot['row']
+                        : null;
+                    if (\is_array($row)) {
+                        $fromRow = \strtoupper(\trim((string)($row['default_currency'] ?? '')));
+                        if ($fromRow !== '') {
+                            return $fromRow;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
         try {
             if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
                 $fromWebsite = \strtoupper(\trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultCurrency() ?? '')));

@@ -63,10 +63,10 @@
     max-width: 100%;
 }
 
-/* 压缩货架卡高：媒体区矮于正方，一行含价+主 CTA 更易入屏；禁对 .wpc-media 写有限 max-height */
+/* 媒体区锁正方：与 canonical product-card 一致；禁 68% 横幅锁（方图/全身汉服会被裁成「压扁」） */
 .wc-theme_widget_featured_products .weline-product-card.density-shelf .wpc-media,
 .theme-layout-homepage .homepage-section--featured-lead .wc-theme_widget_featured_products .weline-product-card .wpc-media {
-    padding-top: 68%;
+    padding-top: 100%;
 }
 
 .wc-theme_widget_featured_products .weline-product-card.density-shelf .wpc-body {

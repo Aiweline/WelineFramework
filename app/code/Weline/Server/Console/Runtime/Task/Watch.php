@@ -21,8 +21,8 @@ use Weline\Server\Service\Runtime\WorkerProcessLease;
 final class Watch extends CommandAbstract
 {
     private const TICK_MILLISECONDS = 1_000;
-    /** Empty-candidate idle backoff upper bound (lease safety). */
-    private const IDLE_TICK_MAX_MILLISECONDS = 15_000;
+    /** Empty-candidate idle backoff upper bound (lease safety; R3 stretch). */
+    private const IDLE_TICK_MAX_MILLISECONDS = 60_000;
     private const SHUTDOWN_DRAIN_SECONDS = 30;
 
     public function __construct(

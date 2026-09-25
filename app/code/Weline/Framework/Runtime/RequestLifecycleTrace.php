@@ -864,6 +864,46 @@ class RequestLifecycleTrace
     }
 
     /**
+     * Pre-create summary phase slots so later measurePhase/recordPhase can update them
+     * even after MAX_SUMMARY_PHASES is saturated by early catalog/i18n phases.
+     * Stable acceptance names only (L0–L4 / pdp.*); never product IDs.
+     *
+     * @param list<string> $names
+     */
+    public static function reserveSummaryPhases(array $names): void
+    {
+        if (!self::isEnabled() || $names === []) {
+            return;
+        }
+
+        $state = self::state();
+        foreach ($names as $name) {
+            if (!\is_string($name)) {
+                continue;
+            }
+            $name = \trim($name);
+            if ($name === '' || isset($state->phases[$name])) {
+                continue;
+            }
+            if (\count($state->phases) >= self::MAX_SUMMARY_PHASES) {
+                break;
+            }
+            $state->phases[$name] = [
+                'duration_ms' => 0.0,
+                'calls' => 0,
+                'max_ms' => 0.0,
+                'errors' => 0,
+                'db_span_count' => 0,
+                'db_duration_ms' => 0.0,
+                'wls_span_count' => 0,
+                'wls_duration_ms' => 0.0,
+                'measurement' => 'inclusive',
+                'meta' => ['reserved' => true],
+            ];
+        }
+    }
+
+    /**
      * Measure a callback with bounded, request-local aggregates even after the detail cap.
      * Durations include children and Fiber suspension; overlapping phases must not be summed.
      * Use stable phase names, never product IDs or raw request values.

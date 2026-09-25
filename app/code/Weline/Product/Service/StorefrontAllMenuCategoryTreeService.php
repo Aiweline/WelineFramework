@@ -70,6 +70,15 @@ final class StorefrontAllMenuCategoryTreeService
             'product.category_menu.urls',
             $requestKey,
             function () use ($websiteId, $locale, $logicalKey): array {
+                // Protocol MGET latch: same-request sidebar/header consumers share L1.
+                try {
+                    $this->hotCache->prefetchPolicy(
+                        StorefrontCatalogCacheCoordinator::categoryMenuPolicy(),
+                        [$logicalKey],
+                    );
+                } catch (\Throwable) {
+                    // Fail-open to rememberPolicy.
+                }
                 $tree = $this->hotCache->rememberPolicy(
                     StorefrontCatalogCacheCoordinator::categoryMenuPolicy(),
                     $logicalKey,

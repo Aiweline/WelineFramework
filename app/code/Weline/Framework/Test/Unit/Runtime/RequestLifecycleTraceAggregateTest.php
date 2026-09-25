@@ -347,7 +347,31 @@ final class RequestLifecycleTraceAggregateTest extends TestCase
         self::assertSame(0, $summary['db_span_count']);
         self::assertSame(0, $summary['wls_span_count']);
         self::assertSame(0.0, $summary['wls_duration_ms']);
+    }
 
+    public function testReserveSummaryPhasesStayUpdatableAfterCap(): void
+    {
+        RequestLifecycleTrace::reserveSummaryPhases(['pdp.main', 'pdp.personalization', 'theme.layout.L3-slots']);
+        for ($i = 0; $i < 60; ++$i) {
+            RequestLifecycleTrace::recordPhase('filler.' . $i, 1.0);
+        }
+        RequestLifecycleTrace::measurePhase('pdp.main', static function (): string {
+            $x = 0;
+            for ($i = 0; $i < 5000; $i++) {
+                $x += $i;
+            }
+
+            return 'ok-' . $x;
+        });
+        $phases = RequestLifecycleTrace::getAggregateSummary()['phases'];
+        self::assertArrayHasKey('pdp.main', $phases);
+        self::assertArrayHasKey('pdp.personalization', $phases);
+        self::assertGreaterThanOrEqual(1, (int)$phases['pdp.main']['calls']);
+        self::assertSame(0, (int)($phases['pdp.personalization']['calls'] ?? 0));
+    }
+
+    public function testFiberScopedAggregatesRemainIsolated(): void
+    {
         $first = new \Fiber(function (): array {
             $this->enterRequest('measured-fiber-one');
             RequestLifecycleTrace::measurePhase('shared.name', static function (): void {

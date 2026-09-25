@@ -64,6 +64,10 @@ final class ProductCardVerticalRhythmContractTest extends TestCase
             dirname(__DIR__, 3) . '/view/templates/frontend/partials/product-card.phtml'
         );
         self::assertStringContainsString("'css_owned_by_card' => true", $tpl);
+        // 无评也必须渲染评分行，否则网格价签/CTA 上下错位
+        self::assertStringContainsString('if ($showRating):', $tpl);
+        self::assertStringNotContainsString('if ($showRating && $rating > 0):', $tpl);
+        self::assertStringContainsString('$reviewCountSafe', $tpl);
 
         $partial = (string)file_get_contents(
             dirname(__DIR__, 4) . '/Theme/view/theme/frontend/partials/product/add-to-cart.phtml'

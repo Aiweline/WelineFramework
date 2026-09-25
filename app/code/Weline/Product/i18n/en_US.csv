@@ -428,13 +428,13 @@ SKU,SKU
 联系询价,"Contact for quote"
 查看详情,"View details"
 暂无热销商品,"No best sellers yet"
+"Buy these items together","Buy these items together"
 请至少选择一个商品,"Please select at least one product."
 已添加,Added
 已加入购物车,"Added to cart"
 全部加入购物车,"Add all to cart"
 正在加入购物车...,"Adding to cart..."
 加入购物车失败,"Failed to add to cart"
-"Buy these items together","Buy these items together"
 当前商品,"Current products."
 总价,"Total Price"
 上一组,"Previous Group"
@@ -645,6 +645,10 @@ SPU,SPU
 配送方案,"Shipping options"
 不限制（全部地址可达服务）,"Unlimited (all addresses reachable)"
 绑定配送服务编码（非费用模板）。空=不限制。同车混绑不同方案时，结算可能无可选运力。,"Bind shipping service codes (not fee templates). Empty=unlimited. Mixed schemes in one cart may leave no selectable capacity at checkout."
+启用本品包邮,"Enable free shipping for this product"
+仅减免本商品行运费，不会让整车其它商品免邮。,"Waives shipping for this product line only; other cart items still incur shipping."
+本品免邮额度,"Free-shipping threshold (this product)"
+本币金额。0=启用后本行即免运费；大于0=本行小计达到该额度才免本行运费。,"Amount in catalog currency. 0=waive this line once enabled; >0=waive this line only when its subtotal meets the threshold."
 危品类别,"Hazard class"
 普货（无危品）,"General goods (non-hazardous)"
 含锂电池,"Contains lithium battery"
@@ -1529,3 +1533,4 @@ AI翻译,"AI Translation"
 大小,Size
 大小:,Size:
 类型:,Type:
+请输入有效本品免邮额度,"Enter a valid free-shipping threshold for this product"

@@ -17,6 +17,10 @@ final class Offer extends AbstractWebsiteShardModel
     public const schema_fields_REQUIRES_SHIPPING = 'requires_shipping';
     public const schema_fields_SHIPPING_PROFILE_CODE = 'shipping_profile_code';
     public const schema_fields_SHIPPING_HAZARD_CLASS = 'shipping_hazard_class';
+    /** Offer-level free shipping flag (line-scoped waive only; never whole-cart). */
+    public const schema_fields_IS_FREE_SHIPPING = 'is_free_shipping';
+    /** Major-unit threshold for this offer line; 0 = no minimum once enabled. */
+    public const schema_fields_FREE_SHIPPING_MIN_AMOUNT = 'free_shipping_min_amount';
     public const schema_fields_TYPE_CONFIG_JSON = 'type_config_json';
     public const schema_fields_STATUS = 'status';
     public const schema_fields_PUBLISH_VERSION = 'publish_version';

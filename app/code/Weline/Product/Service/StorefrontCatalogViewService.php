@@ -1046,6 +1046,8 @@ final class StorefrontCatalogViewService
                 'is_default' => (bool)($offer[Offer::schema_fields_IS_DEFAULT] ?? false),
                 'requires_shipping' => (bool)($offer[Offer::schema_fields_REQUIRES_SHIPPING] ?? true),
                 'shipping_profile_code' => trim((string)($offer[Offer::schema_fields_SHIPPING_PROFILE_CODE] ?? '')),
+                'is_free_shipping' => !empty($offer[Offer::schema_fields_IS_FREE_SHIPPING]),
+                'free_shipping_min_amount' => max(0.0, (float)($offer[Offer::schema_fields_FREE_SHIPPING_MIN_AMOUNT] ?? 0)),
                 'image' => $snapshot->image,
                 'currency' => $snapshot->currency,
                 'unit_price_minor' => $snapshot->unitPriceMinor,
