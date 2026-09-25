@@ -1,0 +1,47 @@
+#!/bin/sh
+# Strip Cursor/agent attribution trailers injected by IDE/CLI.
+tmp="$1.tmp.$$"
+grep -Eiv \
+  -e '^[[:space:]]*Co-Authored-By:[[:space:]].*(cursoragent@cursor\.com|[Cc]ursor|[Cc]laude|noreply@anthropic\.com|multica-agent|github@multica\.ai)' \
+  -e '^[[:space:]]*Made-with:[[:space:]]*Cursor[[:space:]]*$' \
+  "$1" > "$tmp" || true
+# trim trailing blank lines + require Simplified Chinese in subject
+python3 - "$tmp" "$1" <<'PY'
+import re
+import sys
+
+src, dst = sys.argv[1], sys.argv[2]
+raw = open(src, encoding='utf-8', errors='replace').read().splitlines()
+# drop comment lines for subject detection
+lines = [ln for ln in raw if not ln.startswith('#')]
+while lines and lines[-1].strip() == '':
+    lines.pop()
+open(dst, 'w', encoding='utf-8').write(('\n'.join(lines) + '\n') if lines else '')
+
+subject = next((ln.strip() for ln in lines if ln.strip()), '')
+if not subject:
+    print('ERROR: empty commit message', file=sys.stderr)
+    sys.exit(1)
+
+lower = subject.lower()
+if lower.startswith('merge ') or lower.startswith('revert '):
+    sys.exit(0)
+
+# Optional conventional type prefix, then Chinese summary required.
+summary = re.sub(
+    r'^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\([^)]+\))?!?:\s*',
+    '',
+    subject,
+    flags=re.I,
+)
+if not re.search(r'[\u4e00-\u9fff]', summary):
+    print(
+        'ERROR: 提交说明必须使用简体中文（禁止纯英文）。'
+        '示例：fix: 修复侧栏菜单启用态过滤',
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+status=$?
+rm -f "$tmp"
+exit $status
