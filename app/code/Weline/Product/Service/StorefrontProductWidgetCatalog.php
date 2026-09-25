@@ -833,6 +833,7 @@ final class StorefrontProductWidgetCatalog
             'product_id' => $productId,
             'card_index' => max(0, $index),
             'name' => $name !== '' ? $name : (string)($offer['sku'] ?? ''),
+            'slug' => $slug,
             'url' => $route,
             'image' => $image,
             'image_fallback' => $fallback,

@@ -62,8 +62,10 @@ final class ListingSummarySlugUrlContractTest extends TestCase
         $source = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/ProductCardRenderer.php',
         );
-        self::assertStringContainsString("\$slug = strtolower(trim((string)(\$offer['slug'] ?? '')));", $source);
-        self::assertStringContainsString("'product/' . \$slug", $source);
+        self::assertStringContainsString("\$urlPath = trim((string)(\$product['url_path'] ?? ''))", $source);
+        self::assertStringContainsString("\$route === '' && \$urlPath !== ''", $source);
+        self::assertStringContainsString("\$slug = strtolower(trim((string)(\$product['slug'] ?? '')))", $source);
+        self::assertStringContainsString("'product/' . ltrim(\$slug, '/')", $source);
         self::assertStringContainsString("'product/' . \$productId", $source);
     }
 
