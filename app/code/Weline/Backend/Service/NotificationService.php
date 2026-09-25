@@ -166,23 +166,26 @@ class NotificationService
 
     /**
      * 标记所有通知为已读
+     *
+     * 必须 bulk UPDATE：无界 select()->fetchArray() 会触发 QueryAst 无 LIMIT 门禁
+     * （Unbounded SELECT / threshold 10000）。
      */
     public function markAllAsRead(int $userId): int
     {
-        $unreadStatuses = $this->statusModel->clearQuery()
+        $count = (int) $this->statusModel->clearQuery()
             ->where(UserNotificationStatus::schema_fields_user_id, $userId)
             ->where(UserNotificationStatus::schema_fields_is_read, 0)
-            ->select()
-            ->fetchArray();
+            ->total();
 
-        $count = 0;
-        foreach ($unreadStatuses as $statusData) {
-            $status = clone $this->statusModel;
-            $status->clearQuery()->load((int) $statusData['status_id']);
-            if ($status->getId()) {
-                $status->markAsRead()->save();
-                $count++;
-            }
+        if ($count > 0) {
+            $this->statusModel->clearQuery()
+                ->where(UserNotificationStatus::schema_fields_user_id, $userId)
+                ->where(UserNotificationStatus::schema_fields_is_read, 0)
+                ->update([
+                    UserNotificationStatus::schema_fields_is_read => 1,
+                    UserNotificationStatus::schema_fields_read_at => date('Y-m-d H:i:s'),
+                ])
+                ->fetch();
         }
 
         // Always bump presentation even when already clean, so chrome topbar
@@ -195,6 +198,8 @@ class NotificationService
     /**
      * 按主题（topic_code）将该类通知全部标记为已读
      *
+     * 用 fetchIterator 流式取 status_id，再分批 UPDATE，避免无界 SELECT 门禁与逐行 save。
+     *
      * @param int    $userId    用户 ID
      * @param string $topicCode 主题码（如 ai_translation、system_info）
      * @return int 标记成功的条数
@@ -206,7 +211,12 @@ class NotificationService
             return 0;
         }
 
-        $unreadByTopic = $this->statusModel->clearQuery()
+        $readAt = date('Y-m-d H:i:s');
+        $batch = [];
+        $batchSize = 500;
+        $count = 0;
+
+        $rows = $this->statusModel->clearQuery()
             ->joinModel(
                 SystemNotification::class,
                 'n',
@@ -218,16 +228,22 @@ class NotificationService
             ->where('main_table.' . UserNotificationStatus::schema_fields_is_read, 0)
             ->where('n.' . SystemNotification::schema_fields_topic_code, $topicCode)
             ->select()
-            ->fetchArray();
+            ->fetchIterator();
 
-        $count = 0;
-        foreach ($unreadByTopic as $row) {
-            $status = clone $this->statusModel;
-            $status->clearQuery()->load((int) $row['status_id']);
-            if ($status->getId()) {
-                $status->markAsRead()->save();
-                $count++;
+        foreach ($rows as $row) {
+            $statusId = (int) ($row['status_id'] ?? 0);
+            if ($statusId <= 0) {
+                continue;
             }
+            $batch[] = $statusId;
+            if (count($batch) >= $batchSize) {
+                $count += $this->bulkMarkStatusIdsAsRead($batch, $readAt);
+                $batch = [];
+            }
+        }
+
+        if ($batch !== []) {
+            $count += $this->bulkMarkStatusIdsAsRead($batch, $readAt);
         }
 
         if ($count > 0) {
@@ -235,6 +251,30 @@ class NotificationService
         }
 
         return $count;
+    }
+
+    /**
+     * @param list<int> $statusIds
+     */
+    private function bulkMarkStatusIdsAsRead(array $statusIds, string $readAt): int
+    {
+        $statusIds = array_values(array_unique(array_filter(
+            array_map('intval', $statusIds),
+            static fn (int $id): bool => $id > 0
+        )));
+        if ($statusIds === []) {
+            return 0;
+        }
+
+        $this->statusModel->clearQuery()
+            ->where(UserNotificationStatus::schema_fields_ID, $statusIds, 'IN')
+            ->update([
+                UserNotificationStatus::schema_fields_is_read => 1,
+                UserNotificationStatus::schema_fields_read_at => $readAt,
+            ])
+            ->fetch();
+
+        return count($statusIds);
     }
 
     /**

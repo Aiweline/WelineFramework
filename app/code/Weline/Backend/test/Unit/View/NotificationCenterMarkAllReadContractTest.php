@@ -33,7 +33,12 @@ final class NotificationCenterMarkAllReadContractTest extends TestCase
 
         self::assertStringContainsString("mark-all-read", $script);
         self::assertStringContainsString('data-w-mark-all-url', $script);
-        self::assertStringContainsString('fetch(', $script);
+        // 全部已读必须走 binquery（Weline.adminRequest → query-bin），不能直接
+        // window.fetch：会被 ApiModule 的 monkey-patch 路由进 Weline.Api，
+        // 其按 METHOD+pathname 的 MAX_IN_FLIGHT=1 闸门会让快速连点报
+        // "too many in-flight requests for POST ..."。这是历史 bug 锁定的回归断言。
+        self::assertStringNotContainsString('fetch(', $script);
+        self::assertStringContainsString("adminRequest('backend_admin'", $script);
         self::assertStringContainsString('POST', $script);
     }
 

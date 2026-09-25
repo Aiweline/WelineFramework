@@ -9,52 +9,38 @@
         return window.Weline && window.Weline.UI ? window.Weline.UI : null;
     }
 
-    function csrfToken() {
-        if (window.site && window.site.csrf_token) {
-            return String(window.site.csrf_token);
-        }
-        const cfg = window.Weline && window.Weline.config && window.Weline.config.site
-            ? window.Weline.config.site
-            : null;
-        return cfg && cfg.csrf_token ? String(cfg.csrf_token) : '';
-    }
-
-    function buildHeaders() {
-        const headers = {
-            Accept: 'application/json',
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'X-Requested-With': 'XMLHttpRequest',
-        };
-        const token = csrfToken();
-        if (token) {
-            headers['X-CSRF-TOKEN'] = token;
-        }
-        return headers;
-    }
-
     async function postForm(url, fields) {
-        const body = fields && typeof fields === 'object'
+        const runtime = window.Weline;
+        if (!runtime || typeof runtime.adminRequest !== 'function') {
+            throw new Error('adminRequest bridge unavailable');
+        }
+        const body = fields && typeof fields === 'object' && Object.keys(fields).length
             ? new URLSearchParams(fields).toString()
             : '';
-        const response = await fetch(String(url || ''), {
+        // Route through the query-bin gateway: shared pathname across the whole
+        // backend (no per-URL in-flight gate, see Weline.Api circuit breaker).
+        // `window.fetch` is monkey-patched to flow through ApiModule.fetch,
+        // which keys MAX_IN_FLIGHT=1 by METHOD+pathname — a quick double-tap
+        // on "全部已读" therefore throws "too many in-flight requests for POST".
+        const response = await runtime.adminRequest('backend_admin', String(url || ''), {
             method: 'POST',
-            credentials: 'same-origin',
-            cache: 'no-store',
-            headers: buildHeaders(),
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
             body: body,
         });
-        const text = await response.text();
-        let data = null;
-        try {
-            data = text ? JSON.parse(text) : null;
-        } catch (_error) {
-            data = null;
+        if (!response) {
+            throw new Error('Empty response');
         }
-        const success = data && (data.success === true || data.success === 'true');
-        if (!response.ok || !success) {
+        const helpers = window.WelineApiBusiness
+            || (window.Weline && window.Weline.ApiBusiness)
+            || null;
+        const data = helpers && typeof helpers.unwrapBusiness === 'function'
+            ? helpers.unwrapBusiness(response)
+            : response;
+        const ok = response.ok === true && data && (data.success === true || data.success === 'true');
+        if (!ok) {
             const message = data && data.message
                 ? String(data.message)
-                : ('HTTP ' + response.status);
+                : ('HTTP ' + (response.status || 0));
             throw new Error(message);
         }
         return data;
