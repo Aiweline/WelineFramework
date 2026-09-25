@@ -16,9 +16,11 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Deploy\DeployFpcInvalidation;
 use Weline\Framework\Deploy\FlatStaticRuntimeFilesProviderInterface;
+use Weline\Framework\Deploy\StaticPublishExclusion;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
+use Weline\Framework\View\PublicThemeNamespace;
 
 class Upgrade extends CommandAbstract
 {
@@ -50,6 +52,18 @@ class Upgrade extends CommandAbstract
         $modules    = Env::getInstance()->getActiveModules();
         $theme      = Env::getInstance()->getConfig('theme', Env::default_theme_DATA);
         $staticRoot = PUB . 'static';
+
+        // 主题命名空间必须与 /static/ URL 前缀同源。`theme.path` 可能是绝对源码路径或
+        // `Module::path` 标识；未归一化就把绝对路径当成了目录段，pub/static 下会因此
+        // 长出 `Users/<name>/.../app/code/...` 与 `Weline_Theme::view/` 这类畸形树。
+        $themeNamespace = PublicThemeNamespace::resolve((string)($theme['path'] ?? ''));
+        $themeOverlayEnabled = $themeNamespace !== '';
+        if (!$themeOverlayEnabled) {
+            $this->printer->warning(
+                __('主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：')
+                . (string)($theme['path'] ?? '')
+            );
+        }
 
         if (!is_dir($staticRoot) && !mkdir($staticRoot, 0775, true) && !is_dir($staticRoot)) {
             throw new \RuntimeException('Unable to create static deployment directory: ' . $staticRoot);
@@ -102,21 +116,24 @@ class Upgrade extends CommandAbstract
                 $this->printer->note($name . '...');
             }
 
-            if (is_dir($staticSource)) {
+            if ($themeOverlayEnabled && is_dir($staticSource)) {
                 // Theme overlay（主题域 / theme-namespaced URL）；保留不回归。
-                $staticTarget = $staticRoot . DS . $theme['path'] . DS . $moduleViewDir
+                $staticTarget = $staticRoot . DS . $themeNamespace . DS . $moduleViewDir
                     . DS . DataInterface::dir_type_STATICS;
                 if (!is_dir($staticTarget) && !mkdir($staticTarget, 0775, true) && !is_dir($staticTarget)) {
                     throw new \RuntimeException('Unable to create module static directory: ' . $staticTarget);
                 }
                 $this->recursiveCopy($staticSource, $staticTarget);
+            }
 
+            if (is_dir($staticSource)) {
                 // PROD Module:: / resolveStaticPath 扁平树：整树铺到 pub/static/{Vendor}/{Module}/。
+                // 目标与主题命名空间无关，故主题命名空间异常时仍照常发布。
                 $this->publishModuleFlatStatics((string)$name, $staticSource, $staticRoot);
             }
 
-            if (is_dir($themeSource)) {
-                $themeTarget = $staticRoot . DS . $theme['path'] . DS . $moduleViewDir . DS . 'theme';
+            if ($themeOverlayEnabled && is_dir($themeSource)) {
+                $themeTarget = $staticRoot . DS . $themeNamespace . DS . $moduleViewDir . DS . 'theme';
                 $this->publishThemeAssets($themeSource, $themeTarget, $themeAssetExtensions);
             }
         }
@@ -281,7 +298,10 @@ class Upgrade extends CommandAbstract
     }
 
     /**
-     * 递归复制目录（跨平台兼容）
+     * 递归复制目录（跨平台兼容）。
+     *
+     * `pub/static` 在 Web 根之下，故发布树只许含运行时资源：文档、测试与工具链元数据
+     * 按 StaticPublishExclusion 剪枝（目录命中即整棵子树剪枝），避免文档被直接读取。
      *
      * @param string $source 源目录
      * @param string $dest 目标目录
@@ -300,11 +320,16 @@ class Upgrade extends CommandAbstract
             mkdir($parent_dest, 0775, true);
         }
 
-        // 遍历源目录
-        $iterator = new \RecursiveIteratorIterator(
+        // 遍历源目录（排除非运行时资源）
+        $publishable = new \RecursiveCallbackFilterIterator(
             new \RecursiveDirectoryIterator($source, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::SELF_FIRST
+            static function (\SplFileInfo $item) use ($source): bool {
+                $relativePath = ltrim(substr($item->getPathname(), strlen($source)), '/\\');
+
+                return !StaticPublishExclusion::isExcluded($relativePath, $item->isDir());
+            }
         );
+        $iterator = new \RecursiveIteratorIterator($publishable, \RecursiveIteratorIterator::SELF_FIRST);
 
         foreach ($iterator as $item) {
             // 计算相对路径
