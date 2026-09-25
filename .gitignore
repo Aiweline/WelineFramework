@@ -49,7 +49,12 @@ CLAUDE.local.md
 .codex/
 .github/copilot-instructions.md
 GEMINI.md
+.gemini/
 .windsurfrules
+.windsurf/
+.aider*
+opencode.json
+AGENTS.local.md
 
 # ???????
 /.workflow
@@ -155,12 +160,9 @@ tests/e2e/.smoke-publish-last.log
 /sql.log
 /dev_sql.log
 
-.codex/*
-!.codex/agents/
-!.codex/agents/**
-!.codex/prompts/
-!.codex/prompts/**
-!.codex/config.toml
+# NOTE: .codex/ is ignored as a whole above (see "AI agent protocols"). The former
+# `.codex/*` + `!.codex/agents|prompts|config.toml` negations were dead rules — git cannot
+# re-include a path whose parent directory is excluded (verified via git check-ignore).
 
 # Local build, cache, backup and test artifacts
 /build/
