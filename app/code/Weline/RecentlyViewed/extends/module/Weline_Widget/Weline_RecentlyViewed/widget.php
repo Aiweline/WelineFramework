@@ -23,6 +23,8 @@ return [
             'layout-search-recommendations',
             'recently-viewed',
         ],
+        // Bake/registry 回落：与模板 @widget.source 同值；缺此键则布局闭包可能漏挂货架 CSS。
+        'source' => 'Weline_RecentlyViewed::css/widgets/recently-viewed.css,Weline_Product::css/frontend/product-card.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js',
         'default_injections' => [[
             'layout_type' => 'product',
             'layout_option' => 'default',

@@ -17,6 +17,11 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         $widget = $widgets['recently-viewed'] ?? [];
         self::assertSame('recently-viewed', $widget['code'] ?? null);
         self::assertSame('Weline_RecentlyViewed::templates/frontend/widgets/recently-viewed.phtml', $widget['template'] ?? null);
+        self::assertSame(
+            'Weline_RecentlyViewed::css/widgets/recently-viewed.css,Weline_Product::css/frontend/product-card.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js',
+            (string)($widget['source'] ?? ''),
+            'Registry must declare source so bake/runtime primer can attach shelf CSS without only relying on @widget.source scrape.',
+        );
         $injection = $widget['default_injections'][0] ?? [];
         self::assertSame('product-recently-viewed', $injection['slot'] ?? null);
         self::assertSame('product', $injection['layout_type'] ?? null);
@@ -77,6 +82,12 @@ final class RecentlyViewedWidgetContractTest extends TestCase
             $css,
             'Recently-viewed block must use transparent section background.',
         );
+        self::assertMatchesRegularExpression(
+            '/\.wrv-track\.layout-carousel\s+\.wrv-card\s*\{[\s\S]*?flex:\s*0\s+0\s+15rem;/',
+            $css,
+            'Carousel width must bind .wrv-card (server + hydrate), not only .weline-product-card.',
+        );
+        self::assertStringContainsString('.wrv-hydrate-media img', $css);
         self::assertStringNotContainsString(
             'background: var(--wrv-surface);',
             $css,

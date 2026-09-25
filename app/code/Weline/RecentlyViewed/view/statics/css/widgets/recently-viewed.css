@@ -102,12 +102,14 @@
 .weline-recently-viewed .wrv-track.layout-grid.columns-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .weline-recently-viewed .wrv-track.layout-grid.columns-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 
-.weline-recently-viewed .wrv-track.layout-carousel .weline-product-card {
+/* Server card (.weline-product-card.wrv-card) + deferred hydrate (.wrv-hydrate-card.wrv-card) */
+.weline-recently-viewed .wrv-track.layout-carousel .wrv-card {
   flex: 0 0 15rem;
   width: 15rem;
   min-width: 15rem;
   max-width: 15rem;
   scroll-snap-align: start;
+  box-sizing: border-box;
 }
 
 .weline-recently-viewed .weline-product-card.wrv-card {
@@ -115,10 +117,50 @@
   height: 100%;
 }
 
-.weline-recently-viewed .wrv-track.layout-grid .weline-product-card {
+.weline-recently-viewed .wrv-track.layout-grid .wrv-card {
   flex: none;
   min-width: 0;
   max-width: none;
+}
+
+.weline-recently-viewed .wrv-hydrate-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.weline-recently-viewed .wrv-hydrate-media {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: var(--weline-theme-radius-md, var(--radius-md, 0.5rem));
+  background: var(--weline-theme-surface-subtle, #f7f8f8);
+}
+
+.weline-recently-viewed .wrv-hydrate-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.weline-recently-viewed .wrv-hydrate-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  color: var(--wrv-ink);
+}
+
+.weline-recently-viewed .wrv-hydrate-price {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--wrv-ink);
 }
 
 .weline-recently-viewed .wrv-nav {
@@ -168,7 +210,7 @@
     padding-inline: 2.5rem;
   }
 
-  .weline-recently-viewed .wrv-track.layout-carousel .weline-product-card {
+  .weline-recently-viewed .wrv-track.layout-carousel .wrv-card {
     flex-basis: 13.25rem;
     width: 13.25rem;
     min-width: 13.25rem;
@@ -199,7 +241,7 @@
     padding-inline: 0.2rem;
   }
 
-  .weline-recently-viewed .wrv-track.layout-carousel .weline-product-card {
+  .weline-recently-viewed .wrv-track.layout-carousel .wrv-card {
     flex: 0 0 calc((100% - 1rem) / 2);
     width: calc((100% - 1rem) / 2);
     min-width: 10rem;
