@@ -20,6 +20,14 @@
  if (!defined('DEV')) {
      define('DEV', true);
  }
+ // 必须与 DEV 成对固定：否则 App::init() 会按 env.php 的 system.deploy 求值 PROD，
+ // 当本机 system.deploy=prod 时会出现 DEV=true 且 PROD=true 的自相矛盾，
+ // 使测试同时命中 dev 分支与 prod 分支（如 TraitTemplate 把 view/statics 解析到真实
+ // pub/static、QueryProviderRegistry 强制编译注册表）。各模块 Test/Unit/bootstrap.php
+ // 均已按此成对固定，此处对齐同一约定。
+ if (!defined('PROD')) {
+     define('PROD', false);
+ }
  // PHPUnit / CLI 测试请求：与 Observer 中不重抛 layout 异常等逻辑对齐（勿与非测试入口混淆）
  if (!defined('ENV_TEST')) {
      define('ENV_TEST', true);
