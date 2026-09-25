@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\App\Env;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Session\Session;
+use Weline\Framework\View\PublicThemeNamespace;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewRequestInspector;
@@ -182,6 +184,109 @@ class ThemeStaticNamespaceServiceTest extends TestCase
             '__preview/token_pv_absolute_module/Weline/Theme/view/theme/backend/layouts/default/default.css',
             $staticRelative
         );
+    }
+
+    /**
+     * 安全契约：无论 `theme.path` 原值多畸形，`resolvePublicThemePath()` 都不得产出
+     * 可越出 `pub/static` 的命名空间（`..` / `.` / 空段 / `::`）。
+     *
+     * 历史实现（本服务自实现的 `normalizePublicThemePath()`）会把 `..`、`a//b`、`a::b`
+     * 等输入**原样返回**，于是 `theme:upgrade` 会把文件铺到 `pub/static` 之外或长出畸形
+     * 目录树（正是本次清理掉的那类污染）。现在委托给唯一权威
+     * {@see PublicThemeNamespace::tryResolve()}。
+     *
+     * @dataProvider hostileOriginPathProvider
+     */
+    public function testUnsafeOriginPathNeverProducesTraversableNamespace(string $originPath): void
+    {
+        $service = $this->createService(false, [
+            'frontend_theme_id' => 0,
+            'preview_token' => '',
+        ]);
+
+        $namespace = $service->resolvePublicThemePath($this->createTheme($originPath));
+
+        // 允许为空（主题原值与配置项都无法解析时的既定回退），但绝不能是畸形/可穿越的命名空间。
+        if ($namespace === '') {
+            self::assertSame('', $namespace);
+            return;
+        }
+
+        self::assertTrue(
+            PublicThemeNamespace::isSafeRelativeNamespace($namespace),
+            \sprintf('畸形 theme.path `%s` 产出了不安全命名空间 `%s`', $originPath, $namespace)
+        );
+        self::assertStringNotContainsString('..', $namespace);
+        self::assertStringNotContainsString('::', $namespace);
+        self::assertFalse(\str_starts_with($namespace, '/'));
+    }
+
+    /**
+     * 与唯一权威逐输入一致：本服务只是 `PublicThemeNamespace` 的薄封装。
+     *
+     * 这是「语义分歧」回归的哨兵——两处实现一旦再次分叉就会在此失败。仅对**可解析**的
+     * 输入成立（无法解析时本服务会按既定行为回退配置项，而 `tryResolve()` 返回 `null`）。
+     */
+    public function testResolutionDelegatesToSingleAuthority(): void
+    {
+        $service = $this->createService(false, [
+            'frontend_theme_id' => 0,
+            'preview_token' => '',
+        ]);
+
+        $resolvablePaths = [
+            'Weline/hanfu',
+            'Weline/hanfu/',
+            'WeShop/motor',
+            'Weline_Theme::view/theme',
+            'Weline_Frontend::view/theme',
+            'Weline_Hanfu::view\\theme',
+        ];
+
+        // 项目内绝对路径形态依赖运行时常量；未定义时该输入本就「无法解析」，不纳入等价断言。
+        if (defined('APP_CODE_PATH')) {
+            $resolvablePaths[] = \rtrim(\str_replace('\\', '/', (string)APP_CODE_PATH), '/')
+                . '/Weline/Theme/view/theme';
+            $resolvablePaths[] = 'app/code/Weline/Theme/view/theme';
+        }
+
+        $designRoot = \rtrim(\str_replace('\\', '/', (string)Env::path_THEME_DESIGN_DIR), '/');
+        if ($designRoot !== '') {
+            $resolvablePaths[] = $designRoot . '/WeShop/motor';
+            $resolvablePaths[] = 'app/design/Weline/hanfu';
+        }
+
+        foreach ($resolvablePaths as $originPath) {
+            $expected = PublicThemeNamespace::tryResolve($originPath);
+            self::assertNotNull($expected, '用例前提：该输入应可解析 → ' . $originPath);
+            self::assertSame(
+                $expected,
+                $service->resolvePublicThemePath($this->createTheme($originPath)),
+                'ThemeStaticNamespaceService 应与 PublicThemeNamespace::tryResolve 逐输入一致：' . $originPath
+            );
+        }
+    }
+
+    /**
+     * @return array<string, array{0:string}>
+     */
+    public static function hostileOriginPathProvider(): array
+    {
+        return [
+            'traversal' => ['Weline/hanfu/../evil'],
+            'deep traversal' => ['../../etc'],
+            'absolute traversal' => ['/Users/example/../../etc'],
+            'dot only' => ['.'],
+            'dotdot only' => ['..'],
+            'double slash' => ['Weline//hanfu'],
+            'bare module separator' => ['a::b'],
+            'module separator without inner' => ['Weline_Theme::'],
+            'absolute source outside project' => ['/Users/example/project/app/code/Weline/Theme/view/theme'],
+            'windows drive' => ['C:/project/app/code/Weline/Theme/view/theme'],
+            'relative code traversal' => ['app/code/../../etc'],
+            'empty' => [''],
+            'spaces' => ['   '],
+        ];
     }
 
     /**

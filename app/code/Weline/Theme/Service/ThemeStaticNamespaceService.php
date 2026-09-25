@@ -6,6 +6,7 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Session\Session;
+use Weline\Framework\View\PublicThemeNamespace;
 use Weline\Theme\Model\WelineTheme;
 
 final class ThemeStaticNamespaceService
@@ -148,56 +149,16 @@ final class ThemeStaticNamespaceService
         return $this->normalizePublicThemePath((string)$configuredTheme);
     }
 
+    /**
+     * 归一化为公开主题命名空间；无法解析时返回 `''`（调用方据此回退配置或报错中止）。
+     *
+     * 实现委托给唯一权威 {@see PublicThemeNamespace::tryResolve()}，避免两处规则漂移：
+     * 历史实现会把 `..` / `a//b` / `a::b` 等不安全输入**原样返回**，从而让
+     * `theme:upgrade` 把文件铺到 `pub/static` 之外或长出畸形目录树。
+     */
     private function normalizePublicThemePath(string $themePath): string
     {
-        $themePath = \rtrim(\str_replace('\\', '/', \trim($themePath)), '/');
-        if ($themePath === '') {
-            return '';
-        }
-
-        if (\preg_match('#^([^/:]+)_([^/:]+)::(.+)$#', $themePath, $matches)) {
-            $moduleRelativePath = \trim(\str_replace('\\', '/', (string)$matches[3]), '/');
-            if ($moduleRelativePath === '') {
-                return '';
-            }
-
-            return $matches[1] . '/' . $matches[2] . '/' . $moduleRelativePath;
-        }
-
-        $designRoot = \rtrim(\str_replace('\\', '/', Env::path_THEME_DESIGN_DIR), '/');
-        if ($this->isPathUnderRoot($themePath, $designRoot)) {
-            return \trim(\substr($themePath, \strlen($designRoot)), '/');
-        }
-
-        $codeRoot = \rtrim(\str_replace('\\', '/', BP), '/') . '/app/code';
-        if ($this->isPathUnderRoot($themePath, $codeRoot)) {
-            $relativeCodePath = \trim(\substr($themePath, \strlen($codeRoot)), '/');
-            if (\preg_match('#^([^/]+)/([^/]+)/view/theme(?:/|$)#', $relativeCodePath, $matches)) {
-                return $matches[1] . '/' . $matches[2] . '/view/theme';
-            }
-        }
-
-        if ($this->isAbsolutePath($themePath)) {
-            return '';
-        }
-
-        return \trim($themePath, '/');
-    }
-
-    private function isPathUnderRoot(string $path, string $root): bool
-    {
-        if ($root === '') {
-            return false;
-        }
-
-        return $path === $root || \str_starts_with($path, $root . '/');
-    }
-
-    private function isAbsolutePath(string $path): bool
-    {
-        return \preg_match('#^[A-Za-z]:/#', $path) === 1
-            || \str_starts_with($path, '/')
-            || \str_starts_with($path, '//');
+        return PublicThemeNamespace::tryResolve($themePath) ?? '';
     }
 
     private function sanitizeSegment(string $segment): string
