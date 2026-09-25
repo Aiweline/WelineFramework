@@ -45,7 +45,7 @@
 
 - 需求先进入归属模块 `需求.md`，再修改代码；结果同步 `开发日志.md`。
 - **每个功能收口前**必须对照归属模块 `doc/`（README / 需求 / 开发日志 / 专题）与实现：有差异则改文档或代码，禁止功能已交付而文档未跟上。
-- **每个功能交付时**须在汇报列出前台、后台与 API/Query 地址；主验收必须是 **可直接打开的 http(s) Markdown 链接**（`[名称](http(s)://…)`），禁止把 `command:simpleBrowser.api.open` 等宿主私有伪协议当作唯一/主链；禁止仅写变色「打开」文字；无 UI 标注 N/A。本机默认 Host 为 `{project_hash}.test.weline.com`（例 `http://p05113ef3.test.weline.com:9555/...`）；**禁止**主验收使用 `*.weline.test`；仅无 `*.test.weline.com` 时才用 `127.0.0.1`。验收 Browser **每次打开/导航前须禁用 HTTP 缓存**（`browser_cache_disabled_on_open`）。写完「交付地址」后须**立即关闭**本回合验收 Browser（`browser_release_after_delivery`）。见 [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md) 与 MCP `feature_delivery_urls`。
+- **每个功能交付时**须在汇报列出前台、后台与 API/Query 地址；主验收必须是 **可直接打开的 http(s) Markdown 链接**（`[名称](http(s)://…)`），禁止把 `command:simpleBrowser.api.open` 等宿主私有伪协议当作唯一/主链；禁止仅写变色「打开」文字；无 UI 标注 N/A。本机默认 Host 为 `{project_hash}.test.weline.com`（例 `http://p05113ef3.test.weline.com:9555/...`）；**禁止**主验收使用 `*.weline.test`；仅无 `*.test.weline.com` 时才用 `127.0.0.1`。验收 Browser **每次打开/导航前须禁用 HTTP 缓存**（`browser_cache_disabled_on_open`）。写完「交付地址」后须**立即关闭**本回合验收 Browser（`browser_release_after_delivery`）。见 [WebUI浏览器验收与交付地址门禁.md](../../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md) 与 MCP `feature_delivery_urls`。
 - Web/UI 变更在设计阶段就要纳入平板（≈768）与 PC（≥1024）响应式（兼顾 375），验收收集多断点证据。
 - AI 客户端执行开发任务时必须遵循 [AI工程交付流程](./AI工程交付流程.md) 的阶段顺序（引导 → 定位 → 扩展点选型 → 设计 → 原生实现 → 分层验收 → 收口）；MCP 通过 `workflow_contract.v1` 附带流程摘要；工程任务须先读 `agent_guidance.hard_constraints`（`session_startup_notices` 只指路）。
 - 新增功能按“实现 → 架构/缺陷/安全复审 → 整改并复审 → 分层测试 → 真实运行路径 → 可重复回归”串行完成。

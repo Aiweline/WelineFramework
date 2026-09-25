@@ -63,9 +63,9 @@
 
 无现成扩展点时：在 TaskContract 中声明「将新建」并补文档，**禁止静默发明事件名**。
 
-Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 专项：[事件命名与注册规范.md](../Framework/doc/3-开发/事件命名与注册规范.md)。Taglib 控件：[场景映射表.md](../../Taglib/doc/场景映射表.md)。
+Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 专项：[事件命名与注册规范.md](../../Framework/doc/3-开发/事件命名与注册规范.md)。Taglib 控件：[场景映射表.md](../../Taglib/doc/场景映射表.md)。
 
-详见 [扩展点选型](../Framework/doc/3-开发/扩展点选型.md)（路径：`app/code/Weline/Framework/doc/3-开发/扩展点选型.md`）。
+详见 [扩展点选型](../../Framework/doc/3-开发/扩展点选型.md)（路径：`app/code/Weline/Framework/doc/3-开发/扩展点选型.md`）。
 
 ### 3. 计划拆解
 
@@ -120,8 +120,8 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 |----------|----------|
 | 纯函数 / Service 局部 | 聚焦单测 |
 | 命令 / API / 持久化 | 真实命令或 API 结果 + 必要单测 |
-| Model / Controller / 注册表 | bump `etc/module.php` version + `setup:upgrade` 或 `--route` 成功（见 [模块版本与升级门禁](../Framework/doc/3-开发/模块版本与升级门禁.md)） |
-| i18n CSV / 新增可翻译文案 | **源串默认简体中文**（禁止模板英文源串）+ `zh_Hans_CN.csv` + `en_US.csv` 对齐（**禁止其它 locale CSV**）；**用户提到翻译时还须覆盖默认网站已选全部语言（非中英语种进系统词典）** + 中英改动后 `php bin/w i18n:collect`（见 [模块翻译CSV规范](../I18n/doc/模块翻译CSV规范.md)；MCP `module_i18n_chinese_source_default` / `user_mentions_translation_all_default_website_locales`） |
+| Model / Controller / 注册表 | bump `etc/module.php` version + `setup:upgrade` 或 `--route` 成功（见 [模块版本与升级门禁](../../Framework/doc/3-开发/模块版本与升级门禁.md)） |
+| i18n CSV / 新增可翻译文案 | **源串默认简体中文**（禁止模板英文源串）+ `zh_Hans_CN.csv` + `en_US.csv` 对齐（**禁止其它 locale CSV**）；**用户提到翻译时还须覆盖默认网站已选全部语言（非中英语种进系统词典）** + 中英改动后 `php bin/w i18n:collect`（见 [模块翻译CSV规范](../../I18n/doc/模块翻译CSV规范.md)；MCP `module_i18n_chinese_source_default` / `user_mentions_translation_all_default_website_locales`） |
 | 页面 / 交互 / SSE | 真实 WLS + **当前宿主可用的真实 Browser** 操作员路径（**WB-OP**）；**须截图 + 对照模块 `doc/原型设计.md` 视觉清单（WB-VIS）**；多断点 375 / ≈768 / ≥1024 |
 | 文档 / 规则 | Diff、链接、渲染检查；**与实现对照无漂移** |
 
@@ -138,7 +138,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 1. AI **必须**用**当前宿主可用的真实 Browser**（IDE Browser / Browser MCP / Playwright 等，**不绑定 Cursor**）**亲自按用例自测**（WB-OP）；单测 / curl **不能**替代。
 2. **每次打开/导航验收页前必须禁用 HTTP 缓存**（硬，`browser_cache_disabled_on_open`）：Cursor 先 `Network.setCacheDisabled`，失败则 `Page.reload({ignoreCache:true})`；禁止用默认磁盘缓存验本回合 CSS/JS/HTML。
 3. 面向用户的完成/阶段性汇报**末尾必须**有「交付地址」小节（探活过的 http(s) Markdown 链接）；禁止省略。
-4. 细则见 [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
+4. 细则见 [WebUI浏览器验收与交付地址门禁.md](../../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
 
 ### 前端开发规范（MCP 写死表面 `frontend_development`）
 
@@ -180,7 +180,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **自行验证（硬门槛，`agent_self_verify_before_done`）**：实现后须亲自跑 UT/RT/WB（按表面）；acceptance 无 evidence 不得标 passed，亦不得宣称完成。
 - **计划 / todo 诚实收口（硬门槛，`plan_todo_evidence_closeout`）**：多 todo 计划不得在未逐项举证时宣称「已完成 / done / 主链路完成」。每个 todo 须有可复核证据（代码路径、DB 行数/表状态、命令输出、Browser）。部分完成必须明确报告「部分完成」并附**未完成清单**；同步写入归属模块 `doc/开发日志.md` 与 SESSION（禁止把 Cursor todo 无证据标为 completed）。虚报完成属硬违规。
 - **汇审（硬门槛，`closeout_requires_huishen`）**：收口前写 `huishen_notes` 并在用户汇报含「汇审」小节；缺则不得宣称完成。
-- **Browser 自测（硬门槛，含 Web 时）**：按约定用例用**当前宿主可用的真实 Browser**跑完操作员路径；**每次打开/导航前禁用 HTTP 缓存**（`browser_cache_disabled_on_open`）；未跑或宿主无 Browser 只能报「代码已改，WebUI 验收未完成」，禁止宣称完成。见 [WebUI浏览器验收与交付地址门禁.md](../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
+- **Browser 自测（硬门槛，含 Web 时）**：按约定用例用**当前宿主可用的真实 Browser**跑完操作员路径；**每次打开/导航前禁用 HTTP 缓存**（`browser_cache_disabled_on_open`）；未跑或宿主无 Browser 只能报「代码已改，WebUI 验收未完成」，禁止宣称完成。见 [WebUI浏览器验收与交付地址门禁.md](../../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
 - **交付后关闭 Browser（硬门槛，`browser_release_after_delivery`）**：面向用户写出「交付地址」小节之后，**立即关闭**本回合打开的全部验收 Browser 标签/webview（Cursor：`unlock` 后 `browser_tabs` close；其它宿主结束操作员会话）。禁止留下空转 Renderer。仅当用户明确要求保留时可例外并注明。从未打开过 Browser 记 `N/A`。
 - **文档对齐（硬门槛）**：打开归属模块 `doc/README.md`、`doc/需求.md`、`doc/开发日志.md` 及本次触及的专题文档，对照刚交付行为；有差异则改文档或回改代码，二者必须一致。
 - **交付地址清单（硬门槛）**：在面向用户的交付汇报**末尾**列出本功能涉及的全部入口，按表面分组：
