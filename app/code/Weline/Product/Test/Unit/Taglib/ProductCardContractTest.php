@@ -55,6 +55,56 @@ final class ProductCardContractTest extends TestCase
         self::assertSame('今日精选', $product['campaign_label']);
     }
 
+    public function testNormalizeProductKeepsSeoPathAfterSplitForTaglib(): void
+    {
+        // Regression: featured/bestsellers call ProductCardUrl::splitForTaglib before
+        // render, which clears url and leaves url_path=product/{slug}. normalizeProduct
+        // used to ignore url_path and fall back to /product/{id}.
+        $split = \Weline\Theme\Helper\ProductCardUrl::splitForTaglib(
+            '/product/hua-chao-ji-zhao-zhao-gong-zhu-yuan-chuang-tang-zhi-han-fu-bb5ecc5a'
+        );
+        self::assertSame('', $split['url']);
+        self::assertSame(
+            'product/hua-chao-ji-zhao-zhao-gong-zhu-yuan-chuang-tang-zhi-han-fu-bb5ecc5a',
+            $split['url_path']
+        );
+
+        $normalized = ProductCardRenderer::normalizeProduct([
+            'product_id' => 236,
+            'id' => 236,
+            'name' => '昭昭公主',
+            'url' => $split['url'],
+            'url_path' => $split['url_path'],
+            'image' => '/x.webp',
+            'price' => 110.0,
+        ]);
+        self::assertStringContainsString(
+            'hua-chao-ji-zhao-zhao-gong-zhu-yuan-chuang-tang-zhi-han-fu-bb5ecc5a',
+            (string)$normalized['url']
+        );
+        self::assertStringNotContainsString('/product/236', (string)$normalized['url']);
+        self::assertStringNotContainsString('product/236', (string)$normalized['url_path']);
+    }
+
+    public function testNormalizeProductPrefersSlugOverNumericIdWhenUrlEmpty(): void
+    {
+        $normalized = ProductCardRenderer::normalizeProduct([
+            'product_id' => 543,
+            'id' => 543,
+            'slug' => 'qi-yue-xi-fu-shi-yuan-chuang-zhang-le-gong-zhu',
+            'name' => 'Demo',
+            'url' => '',
+            'url_path' => '',
+            'image' => '/x.webp',
+            'price' => 1.0,
+        ]);
+        self::assertStringContainsString(
+            'qi-yue-xi-fu-shi-yuan-chuang-zhang-le-gong-zhu',
+            (string)$normalized['url']
+        );
+        self::assertStringNotContainsString('/product/543', (string)$normalized['url']);
+    }
+
     public function testCardHrefIncludesWebsiteMountPathAndOfferQuery(): void
     {
         $renderer = (string)file_get_contents(

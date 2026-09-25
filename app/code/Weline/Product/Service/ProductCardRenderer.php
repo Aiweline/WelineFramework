@@ -210,8 +210,15 @@ final class ProductCardRenderer
         $product['id'] = $productId;
         $product['product_id'] = $productId;
 
+        // Widgets often call ProductCardUrl::splitForTaglib first, which moves a
+        // relative SEO path into url_path and clears url. Prefer url → url_path →
+        // slug before falling back to /product/{id} (numeric IDs are not SEO).
         $route = trim((string)($product['url'] ?? ''));
-        $slug = trim((string)($product['slug'] ?? ''));
+        $urlPath = trim((string)($product['url_path'] ?? ''));
+        $slug = strtolower(trim((string)($product['slug'] ?? '')));
+        if ($route === '' && $urlPath !== '') {
+            $route = $urlPath;
+        }
         if ($route === '' && $slug !== '') {
             $route = 'product/' . ltrim($slug, '/');
         } elseif ($route === '' && $productId > 0) {
