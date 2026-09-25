@@ -14,6 +14,7 @@ namespace Weline\Theme\Console\Theme;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\ConsoleException;
+use Weline\Framework\Deploy\StaticPublishExclusion;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\File\Scan;
 use Weline\Theme\Model\WelineTheme;
@@ -330,22 +331,44 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             /** @var \Weline\Framework\System\File\Data\File $file */
             foreach ($theme_extend_file as $file) {
                 $file_path = $file->getOrigin();
-                if (!str_contains($file_path, DS . 'templates' . DS) && !str_ends_with($file_path, DS . 'register.php')) {
-                    $destinationDirectory = self::buildDestinationDirectory(
-                        $theme->getPath(),
-                        $file_path,
-                        $publicThemePath,
-                        APP_STATIC_PATH,
-                    );
-                    if ($destinationDirectory === null) {
-                        throw new ConsoleException(__('主题文件不在允许的主题目录内：') . $file_path);
-                    }
-                    $themes_files_data[$file_path] = $destinationDirectory . DS;
+                if (str_contains($file_path, DS . 'templates' . DS)
+                    || str_ends_with($file_path, DS . 'register.php')
+                    || self::isExcludedPublishPath($theme->getPath(), $file_path)
+                ) {
+                    continue;
                 }
+
+                $destinationDirectory = self::buildDestinationDirectory(
+                    $theme->getPath(),
+                    $file_path,
+                    $publicThemePath,
+                    APP_STATIC_PATH,
+                );
+                if ($destinationDirectory === null) {
+                    throw new ConsoleException(__('主题文件不在允许的主题目录内：') . $file_path);
+                }
+                $themes_files_data[$file_path] = $destinationDirectory . DS;
             }
         }
 
         return $themes_files_data;
+    }
+
+    /**
+     * 设计目录同样铺进 pub/static（Web 根），故文档与测试必须排除。
+     *
+     * 真实事故：app/design/{theme}/doc 与 /test 下的内部资料、`*.py` 与
+     * `*.candidate.php` 被搬到 pub/static 后可从浏览器直接读取。
+     */
+    private static function isExcludedPublishPath(string $themeRoot, string $sourceFile): bool
+    {
+        $root = rtrim(str_replace('\\', '/', $themeRoot), '/');
+        $source = str_replace('\\', '/', $sourceFile);
+        if ($root === '' || !str_starts_with($source, $root . '/')) {
+            return false;
+        }
+
+        return StaticPublishExclusion::isExcluded(ltrim(substr($source, strlen($root)), '/'));
     }
 
     public static function buildDestinationDirectory(

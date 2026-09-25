@@ -8,6 +8,52 @@
 
 **正式入口**：`php bin/w deploy:mode:set prod`（内联 `Deploy\Upgrade` → `prod_after`）。日常生产变更须经 `setup:upgrade`（!DEV → `SetupUpgradeAfterDeployStatic`）或显式 `deploy:upgrade`；`core:update` / 仅改 env **不算**完成。Orchestrator 空 `POST_DEPLOY` 默认执行 `setup:upgrade`。
 
+## 主题命名空间归一化（发布目标必须与 URL 同源）
+
+`pub/static/{命名空间}/...` 与 `/static/{命名空间}/...` 的命名空间**必须来自同一个归一化函数**
+`Weline\Framework\View\PublicThemeNamespace::resolve()`。发布目录与 URL 前缀一旦分叉就是 404。
+
+`theme.path` 允许三种形态，归一化落点：
+
+| `theme.path` 原值 | 归一化结果 |
+|-------------------|-----------|
+| `Weline/hanfu` | `Weline/hanfu`（相对自定义主题路径保持不变） |
+| `app/code/Weline/Theme/view/theme` 绝对路径 | 默认命名空间 `Weline/Theme/view/theme` |
+| `Weline_Theme::view/theme` 模块标识 | 默认命名空间 |
+| `<app/design>/{Vendor}/{theme}` 绝对路径 | `{Vendor}/{theme}` |
+| 其它绝对路径 / 盘符路径 / `..` / 空段 | 默认命名空间 |
+
+`Deploy\Upgrade` 的 overlay 与 `view/theme` 目标都经该函数解析；解析结果不是安全相对命名空间时
+**跳过主题域发布并告警**（`pub/static/{Vendor}/{Module}/` 扁平树与命名空间无关，照常发布）。
+
+> 事故背景：`Deploy\Upgrade` 曾直接使用未归一化的 `theme.path`。当它被自动安装写成绝对源码路径时，
+> 绝对路径被当成目录段，`pub/static` 下长出 `Users/<name>/.../app/code/...`（291 MB）与
+> `Weline_Theme::view/` 这类畸形树。
+
+**已知分歧（未合并）**：`Theme\Service\ThemeStaticNamespaceService::normalizePublicThemePath()` 对
+`Vendor_Module::path` 的处理是**展开**为 `Vendor/Module/path`，而本函数是**回落默认命名空间**。
+两者语义不同，合并前须先定语义；`theme:upgrade` 走前者、`deploy:upgrade` 走后者。
+
+## 发布排除（`pub/static` 只许含运行时资源）
+
+`pub/static` 位于 Web 根之下，铺进去的文件浏览器可直接取到（`*.php` 更会被执行）。故两条发布链路都先按 `Weline\Framework\Deploy\StaticPublishExclusion` 过滤再落盘：
+
+| 链路 | 入口 | 过滤点 |
+|------|------|--------|
+| 模块 `view/statics`（overlay + 扁平双写） | `Deploy\Upgrade::execute` | `recursiveCopy()` 以 `RecursiveCallbackFilterIterator` 剪枝 |
+| `app/design/{theme}` 设计覆盖搬迁 | `theme:upgrade` | `Theme\Console\Theme\Upgrade::fetchThemeFiles()` |
+
+排除类别（权威常量在 `StaticPublishExclusion`）：
+
+- **段**（任意层级，命中即剪整棵子树）：`.git` `.github` `.gitlab` `.circleci` `.husky` `.idea` `.vscode` `node_modules` `bower_components` `nuget` `doc` `docs` `documentation`；`test` `tests` `__tests__` `cypress` `e2e` `spec` `specs` **仅在用户命名空间之外**生效。
+- **文件名**：`package.json` `package-lock.json` `yarn.lock` `pnpm-lock.yaml` `composer.json` `composer.lock` `bower.json` `Gruntfile.js` `gulpfile.js` `webpack.config.js` `rollup.config.js` `vite.config.js` `karma.conf.js` `jest.config.js` `cypress.json` `tsconfig.json`，`.eslintrc*` `.stylelintrc*` `.babelrc*` `.prettierrc*`，以及 `.editorconfig` `.gitignore` `.npmignore` `.travis.yml` `.browserslistrc` 等。
+- **文档主干**（忽略扩展名，含无扩展名的 `LICENSE`）：`readme` `changelog` `contributing` `license` `licence` `copying` `notice` `authors` `contributors` `code_of_conduct`。
+- **文档扩展名**：`md` `markdown` `mdown` `rst` `adoc` `asciidoc`。刻意不含 `txt`：`robots.txt` 是合法运行时资源。
+
+**用户命名空间逃逸**：`layouts` / `partials` / `widgets` 下是布局与部件自命名目录，真实存在名为 `test` 的布局（`Theme/view/theme/frontend/layouts/test`），故 `test`/`spec` 等段在其内不套用，避免误伤运行时资源。
+
+**边界**：排除只作用于**后续发布**，不会清理 `pub/static` 中已有的历史产物；清理须单独执行。
+
 ## 呈现世代 / FPC（C-NS · C-STAMP · C-HELPER）
 
 | 概念 | 权威 | 说明 |
