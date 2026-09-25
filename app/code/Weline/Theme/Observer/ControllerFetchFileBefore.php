@@ -297,10 +297,14 @@ class ControllerFetchFileBefore implements ObserverInterface
             || ($editorArea === 'backend' && $isThemeEditorPreviewRoute);
         $theme = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
             \Weline\Theme\Service\ThemeLayoutBudgetPhases::L0_CONTEXT,
-            fn() => \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
-                'theme.layout.context',
-                fn() => $this->resolveThemeForLayout($area, $allowPreviewTheme),
-            ),
+            function () use ($area, $allowPreviewTheme) {
+                \Weline\Theme\Service\ThemePdpBudgetPhases::reserveTraceBuckets();
+
+                return \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                    'theme.layout.context',
+                    fn() => $this->resolveThemeForLayout($area, $allowPreviewTheme),
+                );
+            },
         );
 
         // 如果没有指定 layoutType，使用默认值（确保布局信息始终存在）

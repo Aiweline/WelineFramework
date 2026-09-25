@@ -374,7 +374,14 @@ final class ThemeLayoutEntitySlotFiller
     }
 
     /**
-     * Soft degrade / chrome-only paths: still enforce 有部件必入声明槽 on the shell HTML.
+     * Soft degrade / chrome-only / bake-finalize paths: enforce 有部件必入声明槽.
+     *
+     * N1: LayoutSlot complete skip_fill must NOT call this (bake owns required).
+     * When $slotAllowlist is set (narrow filter safety-net), Overlay is XOR + empty-slot
+     * fill for those slots only — not a full-page Overlay main path.
+     * Only user_deleted@{versionId} omits plan items inside Overlay.
+     *
+     * @param list<string>|null $slotAllowlist
      */
     public function fillRequiredDefaultsOnShell(
         string $html,
@@ -382,17 +389,14 @@ final class ThemeLayoutEntitySlotFiller
         string $pageType,
         string $status,
         string $scope = 'default',
+        ?array $slotAllowlist = null,
     ): string {
         if ($html === '' || $themeId < 1 || \trim($pageType) === '') {
             return $html;
         }
-        // required-default-always-present: published / solidified / complete chrome must NOT
-        // hard no-op required overlay. Only user_deleted@{versionId} omits plan items
-        // (inside RequiredDefaultInjectionStorefrontOverlay). Bake may still embed widgets;
-        // overlay is identity XOR + empty-slot fill, not a published skip gate.
 
         return \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
-            ->append($html, $themeId, $pageType, $status, $scope, 'required', null);
+            ->append($html, $themeId, $pageType, $status, $scope, 'required', null, $slotAllowlist);
     }
 
     /**
@@ -526,6 +530,202 @@ final class ThemeLayoutEntitySlotFiller
     }
 
     /**
+     * Narrow safety-net for list/category filter declaration placeholders only.
+     * N1: prefer published page bake splice (Filters relationship HTML already in
+     * layout.phtml) over whole-shell fill / full Overlay — Overlay is XOR + empty-slot
+     * allowlist only when bake miss leaves filter destinations empty.
+     *
+     * Does not strip chrome / required filter slots; only replaces placeholder inners.
+     */
+    public function healNarrowFilterPlaceholders(
+        string $html,
+        int $themeId,
+        string $pageType,
+        string $area = 'frontend',
+    ): string {
+        if ($html === '' || $themeId < 1 || \trim($pageType) === '') {
+            return $html;
+        }
+        $gate = ThemeLayoutEntityPublishedSlotHost::shellSafetyNetFillReason($html);
+        if ($gate !== 'filter_data_placeholder'
+            && $gate !== 'empty_critical_filters'
+            && !(
+                $gate === 'slot_placeholder'
+                && \preg_match(
+                    '/\bdata-placeholder\s*=\s*(["\'])(?:list-filters|category-filters)\1/',
+                    $html,
+                ) === 1
+            )
+        ) {
+            return $html;
+        }
+
+        return (string)\Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'theme.layout_slot.narrow_filter_heal',
+            function () use ($html, $themeId, $pageType, $area): string {
+                $memoKey = 'theme.layout_slot.narrow_filter_heal.v1';
+                $cached = RequestContext::get($memoKey);
+                if (\is_string($cached) && $cached !== '') {
+                    return $cached;
+                }
+
+                // Write-side bake owns Filters: splice page layout.phtml filter slots first.
+                $healed = $this->splicePublishedFilterSlotsFromBake($html, $themeId, $pageType, $area);
+                $healed = $this->stripFilterDeclarationPlaceholdersIfPresent($healed);
+
+                if (!self::shouldPreferNarrowFilterHeal($healed)
+                    && ThemeLayoutEntityPublishedSlotHost::shellSafetyNetFillReason($healed) !== 'empty_critical_filters'
+                ) {
+                    RequestContext::set($memoKey, $healed);
+
+                    return $healed;
+                }
+
+                // XOR / empty-slot safety-net for filter inventory slots only (not full plan).
+                $healed = $this->fillRequiredDefaultsOnShell(
+                    $healed,
+                    $themeId,
+                    $pageType,
+                    ThemeLayout::STATUS_PUBLISHED,
+                    'default',
+                    ['list-filters', 'category-filters'],
+                );
+                $healed = $this->stripFilterDeclarationPlaceholdersIfPresent($healed);
+
+                RequestContext::set($memoKey, $healed);
+
+                return $healed;
+            },
+            [
+                'theme_id' => $themeId,
+                'page_type' => $pageType,
+                'area' => $area,
+                'gate' => $gate ?? '',
+            ],
+        );
+    }
+
+    /**
+     * Drop design declaration placeholders once Filters panel markers are present.
+     */
+    private function stripFilterDeclarationPlaceholdersIfPresent(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+        if (!ThemeLayoutEntityPublishedSlotHost::bakeInnerHasFiltersWidget($html)) {
+            return $html;
+        }
+        $stripped = \preg_replace(
+            '/<div\b[^>]*\bdata-placeholder\s*=\s*(["\'])(?:list-filters|category-filters)\1[^>]*>.*?<\/div>/is',
+            '',
+            $html,
+        );
+
+        return \is_string($stripped) && $stripped !== '' ? $stripped : $html;
+    }
+
+    /**
+     * N1: include published page layout.phtml (not whole shell) and splice only
+     * list-filters / category-filters inners into the design shell.
+     */
+    private function splicePublishedFilterSlotsFromBake(
+        string $html,
+        int $themeId,
+        string $pageType,
+        string $area,
+    ): string {
+        if ($html === '' || $themeId < 1 || \trim($pageType) === '') {
+            return $html;
+        }
+        try {
+            $scope = $this->resolveScope();
+            $resolved = $this->resolvePageEntityLocation($themeId, $scope, $pageType, $area, true);
+            if ($resolved === null) {
+                return $html;
+            }
+            $pageScope = $resolved['scope'];
+            $identityKey = $resolved['identity_key'];
+            $structureOrRelease = $resolved['structure_or_release'];
+            $binding = $this->readPageBinding($themeId, $pageScope, $identityKey, $structureOrRelease);
+            $phtml = $binding?->templatePath
+                ?? $this->paths->pagePhtml($themeId, $pageScope, $identityKey, $structureOrRelease);
+            if (!\is_file($phtml)) {
+                return $html;
+            }
+            $this->primeLocaleConfigs(
+                $themeId,
+                $pageType,
+                ThemeLayout::STATUS_PUBLISHED,
+                $area,
+                $pageScope,
+                $identityKey,
+                $structureOrRelease,
+                $binding,
+            );
+            $rendered = $this->includeEntityPhtml($phtml, $binding);
+            if ($rendered === '' || !\str_contains($rendered, '<!--@weline-slot:')) {
+                return $html;
+            }
+            foreach (['list-filters', 'category-filters'] as $slotId) {
+                $inner = $this->boundaryScanner->extractSlotInner($rendered, $slotId, false, true);
+                if ($inner === null || \trim($inner) === '') {
+                    continue;
+                }
+                if (!ThemeLayoutEntityPublishedSlotHost::bakeInnerHasFiltersWidget($inner)
+                    && ThemeLayoutEntityPublishedSlotHost::isEffectivelyBlankSlotInner($inner)
+                ) {
+                    continue;
+                }
+                $regions = $this->boundaryScanner->enumerateRegions($html, $slotId);
+                if ($regions !== []) {
+                    \usort(
+                        $regions,
+                        static fn(array $a, array $b): int => ((int)($b['region_start'] ?? 0) <=> (int)($a['region_start'] ?? 0)),
+                    );
+                    foreach ($regions as $region) {
+                        if (!\is_array($region)) {
+                            continue;
+                        }
+                        $html = $this->boundaryScanner->replaceWrapperInner($html, $region, $inner);
+                    }
+                    continue;
+                }
+                $html = $this->replaceSlotInner($html, $slotId, $inner);
+            }
+        } catch (\Throwable) {
+            return $html;
+        }
+
+        return $html;
+    }
+
+    /**
+     * True when the gate is filter-declaration leftovers — LayoutSlot should prefer
+     * healNarrowFilterPlaceholders before whole-shell fill().
+     *
+     * Note: LayoutSlotRenderer runs before ControllerFetchFileAfter chrome Partials,
+     * so the HTML often lacks substantial header signals here; do not require them.
+     */
+    public static function shouldPreferNarrowFilterHeal(string $html): bool
+    {
+        $gate = ThemeLayoutEntityPublishedSlotHost::shellSafetyNetFillReason($html);
+        if ($gate === 'filter_data_placeholder' || $gate === 'empty_critical_filters') {
+            return true;
+        }
+        if ($gate === 'slot_placeholder'
+            && \preg_match(
+                '/\bdata-placeholder\s*=\s*(["\'])(?:list-filters|category-filters)\1/',
+                $html,
+            ) === 1
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * wave8-8s5+safety / wave9-9s2: heal published shells that are incomplete
      * (placeholders, empty chrome/required slots, missing header signals).
      * Order: fill(splice) → required overlay → project solidified fragments
@@ -545,6 +745,23 @@ final class ThemeLayoutEntitySlotFiller
             return $html;
         }
 
+        return (string)\Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'theme.layout_slot.safety_net_heal',
+            fn(): string => $this->doHealPublishedPlaceholderShell($html, $themeId, $pageType, $area),
+            [
+                'theme_id' => $themeId,
+                'page_type' => $pageType,
+                'gate' => ThemeLayoutEntityPublishedSlotHost::shellSafetyNetFillReason($html),
+            ],
+        );
+    }
+
+    private function doHealPublishedPlaceholderShell(
+        string $html,
+        int $themeId,
+        string $pageType,
+        string $area,
+    ): string {
         // Prefer durable chrome.rendered.* snapshot BEFORE live fill/include —
         // empty footer shells with header already present are the common path;
         // live footer-container render peaks ~270MB and OOMs default 256MB workers.
@@ -569,6 +786,15 @@ final class ThemeLayoutEntitySlotFiller
         }
         if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
             return $html;
+        }
+
+        // Filter-only leftovers: skip whole-shell include (list wall-clock hot path).
+        if (self::shouldPreferNarrowFilterHeal($html)) {
+            $narrow = $this->healNarrowFilterPlaceholders($html, $themeId, $pageType, $area);
+            if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($narrow)) {
+                return $narrow;
+            }
+            $html = $narrow;
         }
 
         try {
@@ -695,6 +921,13 @@ final class ThemeLayoutEntitySlotFiller
         $candidates = [
             $dir . \DIRECTORY_SEPARATOR . 'chrome.rendered.' . $locale . '.html',
         ];
+        // ThemeLayoutEntityChrome::renderedCachePath writes
+        // chrome.rendered.v2.{bindingHash}.{locale}.html — prefer those over legacy.
+        foreach (\glob($dir . \DIRECTORY_SEPARATOR . 'chrome.rendered.v2.*.' . $locale . '.html') ?: [] as $v2Path) {
+            if (\is_string($v2Path) && $v2Path !== '' && \is_file($v2Path)) {
+                \array_unshift($candidates, $v2Path);
+            }
+        }
         // Never fall back to another locale's snapshot (en_US→zh froze 「Ship to」).
         // Legacy locale-agnostic file only when no per-locale snapshot exists.
         $legacy = $dir . \DIRECTORY_SEPARATOR . 'chrome.rendered.html';
@@ -914,6 +1147,42 @@ final class ThemeLayoutEntitySlotFiller
         $html = $this->injectChromeSlots($html, $themeId, $scope, $preview);
 
         return $this->fillNestedChromeExtensionSlots($html, $themeId, $scope, $preview);
+    }
+
+    /**
+     * SSR-slim pages (cart/checkout `template()` skips LayoutSlotRenderer) still render
+     * Theme Partials footer as empty `weline-footer--shell`. Splice header/footer inners
+     * from durable `chrome.rendered.{locale}.html` only — never live fill/include
+     * (avoids cart recommendation carousel after_ms≈30s / worker starvation).
+     */
+    public function splicePublishedChromeFromDisk(string $html, int $themeId): string
+    {
+        if ($html === '' || $themeId < 1) {
+            return $html;
+        }
+        if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
+            return $html;
+        }
+
+        try {
+            $fromDisk = $this->chromeSlotProjectionFromRenderedSnapshot($themeId, $this->resolveScope());
+            if ($fromDisk === []) {
+                $fallbackThemeId = $this->resolveGlobalActiveThemeId();
+                if ($fallbackThemeId > 0 && $fallbackThemeId !== $themeId) {
+                    $fromDisk = $this->chromeSlotProjectionFromRenderedSnapshot(
+                        $fallbackThemeId,
+                        $this->resolveScope(),
+                    );
+                }
+            }
+            if ($fromDisk !== []) {
+                $html = $this->spliceChromeSlotsFromBake($html, $fromDisk);
+            }
+        } catch (\Throwable) {
+            // soft — leave shell; caller must not invent chrome
+        }
+
+        return $html;
     }
 
     /**

@@ -92,6 +92,10 @@ final class PublishedStorefrontForcedZeroFillContractTest extends TestCase
         self::assertTrue(
             ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($shellWithPlaceholder)
         );
+        self::assertSame(
+            'filter_data_placeholder',
+            ThemeLayoutEntityPublishedSlotHost::shellSafetyNetFillReason($shellWithPlaceholder)
+        );
 
         $strippedOnly = SlotBoundaryMarkers::strip($shellWithPlaceholder);
         self::assertSame(0, \preg_match_all('/\bdata-wslot\s*=/', $strippedOnly));
@@ -312,7 +316,7 @@ final class PublishedStorefrontForcedZeroFillContractTest extends TestCase
         $forcePos = \strpos($src, 'shouldForcePublishedZeroRuntimeFill');
         self::assertNotFalse($forcePos);
         // Limit to the published zero-runtime-fill branch (avoid earlier/later primes).
-        $block = \substr($src, (int)$forcePos, 12000);
+        $block = \substr($src, (int)$forcePos, 20000);
         $gatePos = \strpos($block, 'shellSafetyNetFillReason($html)');
         $prefillPos = \strpos($block, 'prefillPublishedChromeFromRenderedSnapshot');
         $primePos = \strpos($block, 'primeStorefront(');

@@ -47,12 +47,19 @@ const CustomerServiceWidget = (function() {
         }
 
         const requestedLocale = config.widgetTranslations[localeCode];
-        if (requestedLocale && typeof requestedLocale === 'object') {
+        if (requestedLocale && typeof requestedLocale === 'object' && !Array.isArray(requestedLocale)) {
             return requestedLocale;
         }
 
-        const fallbackLocale = config.widgetTranslations.zh_Hans_CN;
-        return fallbackLocale && typeof fallbackLocale === 'object' ? fallbackLocale : {};
+        // Interlingua only — never fall back to zh chrome when the active locale is not Chinese.
+        if (localeCode !== 'en_US' && localeCode !== 'zh_Hans_CN' && localeCode !== 'zh_Hant_TW') {
+            const enBag = config.widgetTranslations.en_US;
+            if (enBag && typeof enBag === 'object' && !Array.isArray(enBag)) {
+                return enBag;
+            }
+        }
+
+        return {};
     }
 
     function __(text, params) {
@@ -301,43 +308,67 @@ const CustomerServiceWidget = (function() {
         return customerServiceApiPromise;
     }
 
-    function hasLoadedWidgetTranslations() {
+    function hasLoadedWidgetTranslationsFor(localeCode) {
         const bag = config.widgetTranslations;
-        return !!(bag && typeof bag === 'object' && !Array.isArray(bag) && Object.keys(bag).length > 0);
+        if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
+            return false;
+        }
+        const localeBag = bag[localeCode];
+        return !!(
+            localeBag
+            && typeof localeBag === 'object'
+            && !Array.isArray(localeBag)
+            && Object.keys(localeBag).length > 0
+        );
     }
 
     /**
-     * P10: dictionaries are not SSR'd into body-end; batch-load on first open / language change.
+     * P10/P11: dictionaries are not SSR'd into body-end.
+     * Load only the active locale (follow storefront / 「我的语言」); switch → async fetch that locale.
      */
-    async function ensureWidgetTranslations(force) {
-        if (!force && hasLoadedWidgetTranslations()) {
+    async function ensureWidgetTranslations(force, localeCode) {
+        const locale = String(localeCode || state.locale || '').trim() || 'zh_Hans_CN';
+        if (!force && hasLoadedWidgetTranslationsFor(locale)) {
             return true;
         }
-        if (widgetTranslationsLoadPromise && !force) {
-            return widgetTranslationsLoadPromise;
+        if (widgetTranslationsLoadPromises[locale] && !force) {
+            return widgetTranslationsLoadPromises[locale];
         }
-        widgetTranslationsLoadPromise = (async function () {
+        widgetTranslationsLoadPromises[locale] = (async function () {
             try {
-                const data = await (await getCustomerServiceApi()).widgetTranslations({}, {silent: true});
+                const data = await (await getCustomerServiceApi()).widgetTranslations(
+                    {locales: locale},
+                    {silent: true}
+                );
                 if (data && data.success && data.data && data.data.translations
                     && typeof data.data.translations === 'object') {
-                    config.widgetTranslations = data.data.translations;
+                    if (!config.widgetTranslations || typeof config.widgetTranslations !== 'object'
+                        || Array.isArray(config.widgetTranslations)) {
+                        config.widgetTranslations = {};
+                    }
+                    Object.keys(data.data.translations).forEach(function (code) {
+                        const localeBag = data.data.translations[code];
+                        if (localeBag && typeof localeBag === 'object' && !Array.isArray(localeBag)) {
+                            config.widgetTranslations[code] = localeBag;
+                        }
+                    });
                     updateWidgetLocaleText();
                     return true;
                 }
             } catch (error) {
                 console.error('[CustomerService] widget translations load failed', error);
             }
-            widgetTranslationsLoadPromise = null;
+            delete widgetTranslationsLoadPromises[locale];
             return false;
         })();
-        return widgetTranslationsLoadPromise;
+        return widgetTranslationsLoadPromises[locale];
     }
 
     let sessionInitializationPromise = null;
     let guestBindPromptShown = false;
     let customerServiceApiPromise = null;
-    let widgetTranslationsLoadPromise = null;
+    /** @type {Object.<string, Promise<boolean>>} */
+    let widgetTranslationsLoadPromises = {};
     let miniCartStateObserver = null;
     let widgetControlsBound = false;
     
@@ -1048,7 +1079,7 @@ const CustomerServiceWidget = (function() {
             chatWindow.style.display = 'flex';
             chatButton.style.display = 'none';
             widget?.classList.add('is-open');
-            await ensureWidgetTranslations(false);
+            await ensureWidgetTranslations(false, state.locale);
             await activateChat();
             await markChatReadFromServer();
         }
@@ -2736,7 +2767,8 @@ const CustomerServiceWidget = (function() {
     async function changeLanguage(locale) {
         state.locale = locale;
         saveState();
-        await ensureWidgetTranslations(false);
+        // Async load only the newly selected locale; merge into chrome bag.
+        await ensureWidgetTranslations(false, locale);
         updateWidgetLocaleText();
 
         const sessionReady = await ensureSessionReady();

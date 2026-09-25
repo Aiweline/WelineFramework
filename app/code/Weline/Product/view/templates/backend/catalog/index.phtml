@@ -564,6 +564,20 @@ foreach ($websiteOptionsForScope as $websiteOpt) {
                                             </select>
                                             <p class="w-field__help"><lang>绑定配送服务编码（非费用模板）。空=不限制。同车混绑不同方案时，结算可能无可选运力。</lang></p>
                                         </div>
+                                        <div class="w-field" data-span="full" data-testid="product-create-is-free-shipping">
+                                            <label class="w-field__label" for="product-create-is-free-shipping">
+                                                <input type="checkbox" id="product-create-is-free-shipping" name="is_free_shipping"
+                                                       value="1" scope="product_create_draft">
+                                                <lang>启用本品包邮</lang>
+                                            </label>
+                                            <p class="w-field__help"><lang>仅减免本商品行运费，不会让整车其它商品免邮。</lang></p>
+                                        </div>
+                                        <div class="w-field" data-span="full" data-testid="product-create-free-shipping-min-amount">
+                                            <label class="w-field__label" for="product-create-free-shipping-min-amount"><lang>本品免邮额度</lang></label>
+                                            <input class="w-input" id="product-create-free-shipping-min-amount" name="free_shipping_min_amount"
+                                                   type="number" min="0" step="0.01" value="0" scope="product_create_draft">
+                                            <p class="w-field__help"><lang>本币金额。0=启用后本行即免运费；大于0=本行小计达到该额度才免本行运费。</lang></p>
+                                        </div>
                                         <div class="w-field" data-span="full" data-testid="product-create-shipping-hazard">
                                             <label class="w-field__label" for="product-create-shipping-hazard"><lang>危品类别</lang></label>
                                             <select class="w-input" id="product-create-shipping-hazard" name="shipping_hazard_class"

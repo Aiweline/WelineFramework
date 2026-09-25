@@ -12,7 +12,7 @@ final class AttributeValueShardLookupIndexContractTest extends TestCase
 {
     public function testSchemaVersionBumpedForLookupIndexes(): void
     {
-        self::assertSame('4.10.0', ProductShardSchemaCatalog::SCHEMA_VERSION);
+        self::assertSame('4.12.0', ProductShardSchemaCatalog::SCHEMA_VERSION);
     }
 
     /**

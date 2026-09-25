@@ -11,6 +11,8 @@ namespace Weline\Framework\Http\Request;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Runtime\StateManager;
+
 class RequestFilter extends DataObject
 {
     private static RequestFilter $instance;
@@ -24,6 +26,32 @@ class RequestFilter extends DataObject
     ];
 
     public const default_ENCODE = 'UTF-8';
+
+    /**
+     * GET attack pattern.
+     *
+     * Intentionally omits a bare apostrophe (`'`): English product titles such as
+     * "Women's Hanfu" / "Chang'an" are legitimate, and controllers publish them via
+     * setGet('theme_page_title', …). A lone quote was a classic false positive that
+     * surfaced as "WelineFramework 警告:非法操作！". SQL-ish quote+keyword payloads
+     * are still covered by the (and|or) / UNION / SELECT branches below.
+     */
+    public const GET_ATTACK_PATTERN = "(and|or)\\b.+?(>|<|=|in|like)|\\/\\*.+?\\*\\/|<\\s*script\\b|\\bEXEC\\b|UNION.+?SELECT|UPDATE.+?SET|INSERT\\s+INTO.+?VALUES|(SELECT|DELETE).+?FROM|(CREATE|ALTER|DROP|TRUNCATE)\\s+(TABLE|DATABASE)";
+
+    public const POST_ATTACK_PATTERN = '\\b(and|or)\\b.{1,6}?(=|>|<|\\bin\\b|\\blike\\b)|\\/\\*.+?\\*\\/|<\\s*script\\b|\\bEXEC\\b|UNION.+?SELECT|UPDATE.+?SET|INSERT\\s+INTO.+?VALUES|(SELECT|DELETE).+?FROM|(CREATE|ALTER|DROP|TRUNCATE)\\s+(TABLE|DATABASE)';
+
+    public const COOKIE_ATTACK_PATTERN = self::POST_ATTACK_PATTERN;
+
+    /** @var array<string, true> Keys written by the application (not client wire). */
+    private array $trustedGetKeys = [];
+
+    /** @var array<string, true> */
+    private array $trustedPostKeys = [];
+
+    /** Client-origin attack scan runs once per request; getServer() must not re-scan app-injected GET. */
+    private bool $attackScanCompleted = false;
+
+    private static bool $stateManagerRegistered = false;
 
     private function __clone()
     {
@@ -114,8 +142,80 @@ class RequestFilter extends DataObject
         if (!isset(self::$instance)) {
             self::$instance = new self();
         }
+        self::$instance->registerStateManager();
 
         return self::$instance;
+    }
+
+    /**
+     * Mark a GET key as application-injected so mid-request re-scans skip it.
+     */
+    public function markTrustedGet(string $key): void
+    {
+        if ($key === '') {
+            return;
+        }
+        $this->trustedGetKeys[$key] = true;
+    }
+
+    /**
+     * Mark a POST key as application-injected so mid-request re-scans skip it.
+     */
+    public function markTrustedPost(string $key): void
+    {
+        if ($key === '') {
+            return;
+        }
+        $this->trustedPostKeys[$key] = true;
+    }
+
+    /**
+     * WLS / test request boundary: allow the next request's client params to be scanned again.
+     */
+    public function resetRequestState(): void
+    {
+        $this->trustedGetKeys = [];
+        $this->trustedPostKeys = [];
+        $this->attackScanCompleted = false;
+    }
+
+    public static function resetRequestStateStatic(): void
+    {
+        if (isset(self::$instance)) {
+            self::$instance->resetRequestState();
+        }
+    }
+
+    private function registerStateManager(): void
+    {
+        if (self::$stateManagerRegistered) {
+            return;
+        }
+        if (class_exists(StateManager::class)) {
+            StateManager::registerResetCallback('RequestFilter', [self::class, 'resetRequestStateStatic']);
+            self::$stateManagerRegistered = true;
+        }
+    }
+
+    /**
+     * Whether a value matches the channel attack pattern (no PROD gate — for UT / diagnostics).
+     */
+    public function matchesAttackPattern(string $channel, mixed $value): bool
+    {
+        $pattern = match (strtolower($channel)) {
+            'get' => self::GET_ATTACK_PATTERN,
+            'post' => self::POST_ATTACK_PATTERN,
+            'cookie' => self::COOKIE_ATTACK_PATTERN,
+            default => self::GET_ATTACK_PATTERN,
+        };
+        if (is_array($value)) {
+            $value = json_encode($value);
+        }
+        if (!is_string($value) && !is_numeric($value)) {
+            $value = (string)$value;
+        }
+
+        return preg_match('/' . $pattern . '/is', (string)$value) === 1;
     }
 
     /**
@@ -298,17 +398,31 @@ class RequestFilter extends DataObject
 
     /**
      * 过滤危险参数
+     *
+     * Runs once per request. {@see \Weline\Framework\Http\Request\RequestAbstract::getServer()}
+     * calls this on every read; re-scanning after controllers {@see markTrustedGet()} inject
+     * page titles (with apostrophes) caused false "非法操作" blocks.
      */
     public function init(): void
     {
-        $getfilter    = "'|(and|or)\\b.+?(>|<|=|in|like)|\\/\\*.+?\\*\\/|<\\s*script\\b|\\bEXEC\\b|UNION.+?SELECT|UPDATE.+?SET|INSERT\\s+INTO.+?VALUES|(SELECT|DELETE).+?FROM|(CREATE|ALTER|DROP|TRUNCATE)\\s+(TABLE|DATABASE)";
-        $postfilter   = '\\b(and|or)\\b.{1,6}?(=|>|<|\\bin\\b|\\blike\\b)|\\/\\*.+?\\*\\/|<\\s*script\\b|\\bEXEC\\b|UNION.+?SELECT|UPDATE.+?SET|INSERT\\s+INTO.+?VALUES|(SELECT|DELETE).+?FROM|(CREATE|ALTER|DROP|TRUNCATE)\\s+(TABLE|DATABASE)';
-        $cookiefilter = '\\b(and|or)\\b.{1,6}?(=|>|<|\\bin\\b|\\blike\\b)|\\/\\*.+?\\*\\/|<\\s*script\\b|\\bEXEC\\b|UNION.+?SELECT|UPDATE.+?SET|INSERT\\s+INTO.+?VALUES|(SELECT|DELETE).+?FROM|(CREATE|ALTER|DROP|TRUNCATE)\\s+(TABLE|DATABASE)';
+        $this->registerStateManager();
+
+        if ($this->attackScanCompleted) {
+            return;
+        }
+
+        $getfilter = self::GET_ATTACK_PATTERN;
+        $postfilter = self::POST_ATTACK_PATTERN;
+        $cookiefilter = self::COOKIE_ATTACK_PATTERN;
 
         //$ArrPGC=array_merge($_GET,$_POST,$_COOKIE);
         foreach (\Weline\Framework\Env\WelineEnv::getGet() as $key => $value) {
-            if ($this->isReturnUrlParam((string)$key)) {
-                if ($this->isSafeReturnUrlParam((string)$key, $value)) {
+            $keyStr = (string)$key;
+            if (isset($this->trustedGetKeys[$keyStr])) {
+                continue;
+            }
+            if ($this->isReturnUrlParam($keyStr)) {
+                if ($this->isSafeReturnUrlParam($keyStr, $value)) {
                     continue;
                 }
                 $this->StopAttack($key, is_string($value) ? $this->decodeNestedUrlValue($value) : $value, $getfilter);
@@ -317,8 +431,12 @@ class RequestFilter extends DataObject
             }
         }
         foreach (\Weline\Framework\Env\WelineEnv::getPost() as $key => $value) {
-            if ($this->isReturnUrlParam((string)$key)) {
-                if ($this->isSafeReturnUrlParam((string)$key, $value)) {
+            $keyStr = (string)$key;
+            if (isset($this->trustedPostKeys[$keyStr])) {
+                continue;
+            }
+            if ($this->isReturnUrlParam($keyStr)) {
+                if ($this->isSafeReturnUrlParam($keyStr, $value)) {
                     continue;
                 }
                 $this->StopAttack($key, is_string($value) ? $this->decodeNestedUrlValue($value) : $value, $postfilter);
@@ -336,6 +454,8 @@ class RequestFilter extends DataObject
                 ['Content-Type' => 'text/html; charset=UTF-8']
             );
         }
+
+        $this->attackScanCompleted = true;
     }
 
     public function StopAttack($StrFiltKey, $StrFiltValue, $ArrFiltReq): void

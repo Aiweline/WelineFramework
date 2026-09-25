@@ -70,6 +70,8 @@ final class HeaderNavFragment
 
         /** @var StorefrontHeaderNavFragmentCache $cache */
         $cache = ObjectManager::getInstance(StorefrontHeaderNavFragmentCache::class);
+        // N2: search-types Policy MGET before remember (residual shared_read).
+        $cache->prefetchSearchTypeDropdown($menuId, $types);
 
         $html = (string)RequestLifecycleTrace::measurePhase(
             'theme.header.search_types',
@@ -346,6 +348,8 @@ final class HeaderNavFragment
 
         /** @var StorefrontHeaderNavFragmentCache $cache */
         $cache = ObjectManager::getInstance(StorefrontHeaderNavFragmentCache::class);
+        // Collapse residual per-panel shared_read into one shared_read_batch.
+        $cache->prefetchCategoryNavFragments($items, $showBannerWithChildren);
 
         return (string)RequestLifecycleTrace::measurePhase(
             'theme.header.horizontal.cache',
@@ -392,6 +396,8 @@ final class HeaderNavFragment
 
         /** @var StorefrontHeaderNavFragmentCache $cache */
         $cache = ObjectManager::getInstance(StorefrontHeaderNavFragmentCache::class);
+        // N2: standalone mega (drawer/flyout) still collapses into one MGET.
+        $cache->prefetchCategoryNavFragments([$item], $showBannerWithChildren);
 
         return (string)RequestLifecycleTrace::measurePhase(
             'theme.header.mega_panel.cache',
@@ -437,6 +443,10 @@ final class HeaderNavFragment
 
         /** @var StorefrontHeaderNavFragmentCache $cache */
         $cache = ObjectManager::getInstance(StorefrontHeaderNavFragmentCache::class);
+        // N2: sidebar often renders before horizontal widget — must MGET first
+        // or residual theme.header.sidebar_nav shared_read survives R2.
+        $showBanner = self::coerceBool($params['show_banner_with_children'] ?? true, true);
+        $cache->prefetchCategoryNavFragments($items, $showBanner);
 
         return (string)RequestLifecycleTrace::measurePhase(
             'theme.header.sidebar.cache',

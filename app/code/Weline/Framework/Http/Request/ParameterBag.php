@@ -200,6 +200,8 @@ class ParameterBag
     {
         $this->query[$key] = $value;
         WelineEnv::setGet($key, $value);
+        // Application-injected GET (e.g. theme_page_title) must not be treated as client attack input.
+        RequestFilter::getInstance()->markTrustedGet($key);
         $this->allParams = null;
         return $this;
     }
@@ -270,25 +272,12 @@ class ParameterBag
                 \w_env_set("get.{$key}", null);
             }
         }
+        $filter = RequestFilter::getInstance();
         foreach ($data as $key => $value) {
             $fullKey = $prefix . $key;
             $this->query[$fullKey] = $value;
             \w_env_set("get.{$fullKey}", $value);
-        }
-        $this->allParams = null;
-        return $this;
-        // 先删除所有带该前缀的参数
-        foreach (array_keys($this->query) as $key) {
-            if (str_starts_with($key, $prefix)) {
-                unset($this->query[$key]);
-                \w_env_set("get.{$key}", null);
-            }
-        }
-        // 添加新参数
-        foreach ($data as $key => $value) {
-            $fullKey = $prefix . $key;
-            $this->query[$fullKey] = $value;
-            \w_env_set("get.{$fullKey}", $value);
+            $filter->markTrustedGet($fullKey);
         }
         $this->allParams = null;
         return $this;
@@ -302,14 +291,6 @@ class ParameterBag
      */
     public function removeQueryByPrefix(string $prefix): static
     {
-        foreach (array_keys($this->query) as $key) {
-            if (str_starts_with($key, $prefix)) {
-                unset($this->query[$key]);
-                \w_env_set("get.{$key}", null);
-            }
-        }
-        $this->allParams = null;
-        return $this;
         foreach (array_keys($this->query) as $key) {
             if (str_starts_with($key, $prefix)) {
                 unset($this->query[$key]);
@@ -354,10 +335,7 @@ class ParameterBag
     {
         $this->request[$key] = $value;
         \w_env_set("post.{$key}", $value);
-        $this->allParams = null;
-        return $this;
-        $this->request[$key] = $value;
-        \w_env_set("post.{$key}", $value); // 同步到 WelineEnv 支持 Fiber 隔离
+        RequestFilter::getInstance()->markTrustedPost($key);
         $this->allParams = null;
         return $this;
     }

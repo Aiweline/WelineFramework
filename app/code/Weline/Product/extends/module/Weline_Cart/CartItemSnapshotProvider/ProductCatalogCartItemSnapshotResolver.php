@@ -218,12 +218,18 @@ final class ProductCatalogCartItemSnapshotResolver
         $weightMinor = $this->weightMinorFromCatalog($websiteId, $storeId, $productId, $locale);
         $shippingProfileCode = trim((string)$offer->getData(Offer::schema_fields_SHIPPING_PROFILE_CODE));
         $shippingHazardClass = trim((string)$offer->getData(Offer::schema_fields_SHIPPING_HAZARD_CLASS));
+        $isFreeShipping = !empty($offer->getData(Offer::schema_fields_IS_FREE_SHIPPING));
+        $freeShippingMinAmount = (float)$offer->getData(Offer::schema_fields_FREE_SHIPPING_MIN_AMOUNT);
         $fulfillmentMetadata = [];
         if ($shippingProfileCode !== '') {
             $fulfillmentMetadata['shipping_profile_code'] = $shippingProfileCode;
         }
         if ($shippingHazardClass !== '' && $shippingHazardClass !== 'none' && $shippingHazardClass !== 'general') {
             $fulfillmentMetadata['shipping_hazard_class'] = strtolower($shippingHazardClass);
+        }
+        if ($isFreeShipping) {
+            $fulfillmentMetadata['is_free_shipping'] = '1';
+            $fulfillmentMetadata['free_shipping_min_amount'] = number_format(max(0.0, $freeShippingMinAmount), 4, '.', '');
         }
         if ($fxUnavailable) {
             $fulfillmentMetadata['currency_unavailable'] = '1';

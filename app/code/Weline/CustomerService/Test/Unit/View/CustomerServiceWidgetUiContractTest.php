@@ -31,9 +31,14 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
 
         $this->assertStringContainsString('widgetTranslations: <?= json_encode($widgetTranslations', $content);
         $this->assertStringContainsString('ensureWidgetTranslations', $js);
-        $this->assertStringContainsString('widgetTranslations({}, {silent: true})', $js);
+        // One locale at a time — never dump the full matrix with widgetTranslations({}).
+        $this->assertStringContainsString('{locales: locale}', $js);
+        $this->assertStringContainsString('hasLoadedWidgetTranslationsFor', $js);
+        $this->assertStringContainsString('storefrontLocale', $js);
+        $this->assertStringNotContainsString('widgetTranslations({}, {silent: true})', $js);
         $this->assertStringContainsString("'name' => 'widgetTranslations'", $provider);
         $this->assertStringContainsString("'widgetTranslations' => \$this->widgetTranslations(\$params)", $provider);
+        $this->assertStringContainsString('Fail-closed empty: storefront loads one locale at a time', $provider);
     }
 
     public function testFrontendWidgetUsesWelineFormControls(): void

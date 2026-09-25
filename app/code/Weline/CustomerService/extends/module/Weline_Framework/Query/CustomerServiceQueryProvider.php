@@ -474,8 +474,15 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
                 }
             }
         }
+        // Fail-closed empty: storefront loads one locale at a time via locales=…
+        // (never dump the full supported matrix into a single query-bin map).
         if ($codes === []) {
-            $codes = $allowed;
+            return [
+                'success' => true,
+                'data' => [
+                    'translations' => [],
+                ],
+            ];
         }
 
         return [

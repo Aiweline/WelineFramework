@@ -24,6 +24,25 @@ final class WelineBinaryCodecTest extends TestCase
         $codec->encodePacket(\range(1, Limits::LIST_ITEMS + 1));
     }
 
+    public function testMapKeyLimitAllowsTwoThousandKeysForI18nDictionaries(): void
+    {
+        self::assertSame(2000, Limits::MAP_KEYS);
+        self::assertSame('Map exceeds 2000 key limit.', Limits::MAP_KEYS_ERROR);
+
+        $codec = new WelineBinaryCodec();
+        $ok = [];
+        for ($i = 0; $i < Limits::MAP_KEYS; $i++) {
+            $ok['k' . $i] = $i;
+        }
+        self::assertSame($ok, $codec->decodePacket($codec->encodePacket($ok)));
+
+        $overflow = $ok;
+        $overflow['k' . Limits::MAP_KEYS] = Limits::MAP_KEYS;
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(Limits::MAP_KEYS_ERROR);
+        $codec->encodePacket($overflow);
+    }
+
     public function testV1GoldenPacketRemainsWireCompatible(): void
     {
         $codec = new WelineBinaryCodec();

@@ -270,6 +270,9 @@ final class Agent extends CommandAbstract
         $lastCertificateReplayAt = 0.0;
         $lastCertificateRetirementProbeAt = 0.0;
         $retirementReplayBackoff = new CertificateRetirementReplayBackoff();
+        /** @var array<string,array<string,mixed>>|null */
+        $retirementPendingProbeCache = null;
+        $retirementPendingProbeCacheUntil = 0.0;
         $status = [];
         $lastAuthenticatedStatus = [];
         $routePublication = self::emptyRoutePublicationObservation();
@@ -347,6 +350,8 @@ final class Agent extends CommandAbstract
                             (bool)($retirementPayload['deferred'] ?? false),
                             ($desiredStateResult['ok'] ?? false) === true,
                         );
+                        $retirementPendingProbeCache = null;
+                        $retirementPendingProbeCacheUntil = 0.0;
                     }
                     $registration = \is_array($desiredStateResult['registration'] ?? null)
                         ? $desiredStateResult['registration']
@@ -560,8 +565,17 @@ final class Agent extends CommandAbstract
                     ) {
                         $lastCertificateRetirementProbeAt = $now;
                         try {
-                            $certificateRetirementReplay = $certificateRetirements
-                                ->pendingRetirementIntents($now + 0.25);
+                            if ($retirementPendingProbeCache !== null
+                                && $now < $retirementPendingProbeCacheUntil
+                            ) {
+                                $certificateRetirementReplay = $retirementPendingProbeCache;
+                            } else {
+                                $certificateRetirementReplay = $certificateRetirements
+                                    ->pendingRetirementIntents($now + 0.25);
+                                $retirementPendingProbeCache = $certificateRetirementReplay;
+                                $retirementPendingProbeCacheUntil = $now
+                                    + $retirementReplayBackoff->probeCacheTtlSeconds();
+                            }
                             if ($certificateRetirementReplay === []) {
                                 $retirementReplayBackoff->noteEmptyQueue();
                             } else {
@@ -1196,6 +1210,10 @@ final class Agent extends CommandAbstract
                             )) {
                                 $lastCertificateReplayAt = $now;
                                 $desiredStateBuildPending = false;
+                                if ($desiredStateAction === 'retirements') {
+                                    $retirementPendingProbeCache = null;
+                                    $retirementPendingProbeCacheUntil = 0.0;
+                                }
                             } else {
                                 $desiredStateBuildPending = false;
                             }
@@ -1359,7 +1377,11 @@ final class Agent extends CommandAbstract
                         }
                     }
                 }
-                SchedulerSystem::yieldDelay(self::TICK_MILLISECONDS);
+                SchedulerSystem::yieldDelay(
+                    $retirementReplayBackoff->cooperativeTickMilliseconds(
+                        self::TICK_MILLISECONDS,
+                    ),
+                );
             }
         } catch (\Throwable $throwable) {
             try {
@@ -1443,7 +1465,7 @@ final class Agent extends CommandAbstract
                 $retirements = (new SslCertificateService())
                     ->replayPendingCertificateRetirements(
                         75.0,
-                        8,
+                        16,
                         $mutationDeadline,
                     );
                 $result['retirements'] = [

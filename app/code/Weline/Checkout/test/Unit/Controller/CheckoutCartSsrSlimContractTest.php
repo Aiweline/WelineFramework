@@ -20,6 +20,8 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
             self::assertStringNotContainsString('currentCart()', $src, $rel);
             self::assertStringContainsString("'showHeader' => true", $src, $rel);
             self::assertStringContainsString("'showFooter' => true", $src, $rel);
+            self::assertStringContainsString('StorefrontSsrChromeHealer', $src, $rel);
+            self::assertStringContainsString('ensurePublishedChrome', $src, $rel);
         }
     }
 
@@ -46,6 +48,8 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
         self::assertStringContainsString("'showHeader' => true", $src);
         self::assertStringContainsString("'showFooter' => true", $src);
         self::assertStringContainsString('theme_seat_integrity', $src);
+        self::assertStringContainsString('StorefrontSsrChromeHealer', $src);
+        self::assertStringContainsString('ensurePublishedChrome', $src);
     }
 
     public function testCurrentCartSkipsLegacySummaryOnGetCartSuccess(): void

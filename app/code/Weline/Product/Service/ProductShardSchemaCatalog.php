@@ -16,7 +16,7 @@ use Weline\Product\Model\ProductShardKey;
 final class ProductShardSchemaCatalog
 {
     /** Schema generation for overlay/cleared/COW, media CAS, brand/supplier images, attribute lookup indexes. */
-    public const SCHEMA_VERSION = '4.10.0';
+    public const SCHEMA_VERSION = '4.12.0';
 
     /** @var list<string> */
     public const ENTITIES = ProductShardKey::ENTITY_CODES;
@@ -79,6 +79,8 @@ final class ProductShardSchemaCatalog
                     new ColumnDefinition('requires_shipping', 'tinyint', 1, false, false, false, 1, 'Requires shipping'),
                     new ColumnDefinition('shipping_profile_code', 'varchar', 50, true, false, false, null, 'Opaque shipping service profile code'),
                     new ColumnDefinition('shipping_hazard_class', 'varchar', 64, true, false, false, null, 'Hazard class for shipping capability gate'),
+                    new ColumnDefinition('is_free_shipping', 'tinyint', 1, false, false, false, 0, 'Enable product-scoped free shipping (line only)'),
+                    new ColumnDefinition('free_shipping_min_amount', 'decimal', '16,4', false, false, false, 0, 'Min line amount major units; 0=no min'),
                     new ColumnDefinition('type_config_json', 'text', null, true, false, false, null, 'Provider Offer configuration JSON'),
                     new ColumnDefinition('status', 'varchar', 32, false, false, false, 'draft', 'Status'),
                     new ColumnDefinition('publish_version', 'int', 11, false, false, false, 0, 'Optimistic publish version'),

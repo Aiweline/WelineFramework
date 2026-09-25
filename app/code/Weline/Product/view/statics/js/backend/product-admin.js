@@ -2106,6 +2106,18 @@
                     if (shippingHazardEl) {
                         payload.shipping_hazard_class = String(shippingHazardEl.value || '').trim();
                     }
+                    var createFreeShipEl = document.getElementById('product-create-is-free-shipping');
+                    if (createFreeShipEl) {
+                        payload.is_free_shipping = !!createFreeShipEl.checked;
+                    }
+                    var createFreeShipMinEl = document.getElementById('product-create-free-shipping-min-amount');
+                    if (createFreeShipMinEl) {
+                        var createMinRaw = String(createFreeShipMinEl.value || '').trim();
+                        payload.free_shipping_min_amount = createMinRaw === '' ? 0 : Number(createMinRaw);
+                        if (!Number.isFinite(payload.free_shipping_min_amount) || payload.free_shipping_min_amount < 0) {
+                            throw new Error('请输入有效本品免邮额度');
+                        }
+                    }
                     var categoryIds = [];
                     var categorySelect = window.WelineCatalogCategorySelect
                         && window.WelineCatalogCategorySelect['product-create-categories'];
@@ -4791,6 +4803,18 @@
         var shippingHazardEl = document.getElementById('product-edit-shipping-hazard');
         if (shippingHazardEl) {
             payload.shipping_hazard_class = String(shippingHazardEl.value || '').trim();
+        }
+        var editFreeShipEl = document.getElementById('product-edit-is-free-shipping');
+        if (editFreeShipEl) {
+            payload.is_free_shipping = !!editFreeShipEl.checked;
+        }
+        var editFreeShipMinEl = document.getElementById('product-edit-free-shipping-min-amount');
+        if (editFreeShipMinEl) {
+            var editMinRaw = String(editFreeShipMinEl.value || '').trim();
+            payload.free_shipping_min_amount = editMinRaw === '' ? 0 : Number(editMinRaw);
+            if (!Number.isFinite(payload.free_shipping_min_amount) || payload.free_shipping_min_amount < 0) {
+                throw new Error('请输入有效本品免邮额度');
+            }
         }
         payload.attributes = mergeWholesaleSellingModeFlag(payload.attributes || []);
         var priceSelector = payload.offer_matrix

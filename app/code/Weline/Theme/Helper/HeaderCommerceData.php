@@ -72,27 +72,81 @@ final class HeaderCommerceData
         $label = $label !== '' ? $label : '全部商品';
         $url = $url !== '' && $url !== '#' ? $url : '/products';
 
-        // Request memo only. Nav items carry absolute URLs from
-        // StorefrontAllMenuCategoryTreeService::materializeUrls(); a shared
-        // HotCache bag keyed without origin would leak warmup Host
-        // (e.g. 127.0.0.1:9510) into public Nginx responses. The category
-        // tree service already shares origin-free relative routes.
+        // Absolute nav URLs are origin-sensitive: shared HotCache key MUST embed
+        // request origin (v2) so loopback warmup Host cannot leak into Nginx.
+        // Underlying tree still shares origin-free relative routes via Product.
+        $origin = self::requestOriginSegment();
         $requestKey = ($include ? 'all1' : 'all0')
             . '|' . $label
             . '|' . $url
-            . '|' . self::requestOriginSegment();
+            . '|' . $origin;
+        $sharedKey = \sprintf(
+            'theme.header.category_nav.v2.%s.%s.%s.%s',
+            self::storefrontLocaleSegment(),
+            \preg_replace('/[^a-z0-9.:_-]+/i', '-', $origin) ?: 'unknown',
+            $include ? 'all1' : 'all0',
+            \substr(\sha1($label . '|' . $url), 0, 12),
+        );
+
+        // N2: prime category_nav.v2 into one shared_read_batch *before* remember
+        // so the projection itself is not a lone residual shared_read.
+        try {
+            /** @var \Weline\Theme\Service\StorefrontHeaderNavFragmentCache $fragCache */
+            $fragCache = ObjectManager::getInstance(
+                \Weline\Theme\Service\StorefrontHeaderNavFragmentCache::class
+            );
+            $fragCache->prefetchCategoryNavFragments([], true, [$sharedKey], false);
+        } catch (\Throwable) {
+            // Prefetch is an optimization boundary.
+        }
 
         $resolved = self::rememberRequestMemo(
             'theme.header.category_nav',
             $requestKey,
             static fn(): array => self::resolveCategoryNavItemsUncached($include, $label, $url),
+            StorefrontThemeCacheCoordinator::headerNavigationPolicy(),
+            $sharedKey,
         );
 
-        return \is_array($resolved) ? $resolved : [
-            'items' => self::maybePrependAllProductsItem([], $include, $label, $url),
-            'source' => 'error',
-            'is_demo' => false,
-        ];
+        if (!\is_array($resolved)) {
+            return [
+                'items' => self::maybePrependAllProductsItem([], $include, $label, $url),
+                'source' => 'error',
+                'is_demo' => false,
+            ];
+        }
+
+        // N2: after items known, MGET horizontal/sidebar/mega (+ sharedKey again).
+        $items = \is_array($resolved['items'] ?? null) ? $resolved['items'] : [];
+        if ($items !== []) {
+            try {
+                /** @var \Weline\Theme\Service\StorefrontHeaderNavFragmentCache $fragCache */
+                $fragCache = ObjectManager::getInstance(
+                    \Weline\Theme\Service\StorefrontHeaderNavFragmentCache::class
+                );
+                $fragCache->prefetchCategoryNavFragments(
+                    $items,
+                    true,
+                    [$sharedKey],
+                    true,
+                );
+            } catch (\Throwable) {
+                // Prefetch is an optimization boundary.
+            }
+        }
+
+        return $resolved;
+    }
+
+    private static function storefrontLocaleSegment(): string
+    {
+        try {
+            $locale = \trim(\str_replace('-', '_', (string)\Weline\Framework\App\State::getLangLocal()));
+        } catch (\Throwable) {
+            $locale = '';
+        }
+
+        return $locale !== '' ? $locale : 'zh_Hans_CN';
     }
 
     /**

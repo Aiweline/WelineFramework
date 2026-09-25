@@ -1790,6 +1790,27 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     'shipping_hazard_class' => $hazard,
                 ];
             }
+            $meta = \is_array($item['fulfillment_metadata'] ?? null) ? $item['fulfillment_metadata'] : [];
+            $lineFree = !empty($item['is_free_shipping'])
+                || (($meta['is_free_shipping'] ?? '') === '1')
+                || !empty($meta['is_free_shipping']);
+            if ($lineFree) {
+                $line['is_free_shipping'] = true;
+                $line['fulfillment_metadata'] = ($line['fulfillment_metadata'] ?? []) + [
+                    'is_free_shipping' => '1',
+                ];
+                $minAmount = $item['free_shipping_min_amount']
+                    ?? ($meta['free_shipping_min_amount'] ?? null);
+                if ($minAmount !== null && $minAmount !== '' && is_numeric($minAmount)) {
+                    $line['free_shipping_min_amount'] = (float)$minAmount;
+                    $line['fulfillment_metadata']['free_shipping_min_amount'] = number_format(
+                        (float)$minAmount,
+                        4,
+                        '.',
+                        '',
+                    );
+                }
+            }
             $lines[] = $line;
         }
 

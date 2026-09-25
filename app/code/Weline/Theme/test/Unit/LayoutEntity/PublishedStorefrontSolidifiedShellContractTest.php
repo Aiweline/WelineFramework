@@ -37,9 +37,9 @@ final class PublishedStorefrontSolidifiedShellContractTest extends TestCase
         self::assertStringNotContainsString('injectChromeSlots', $fragmentsBody);
         // fillChromeOnly published no-op.
         self::assertStringContainsString('chrome already in shell bake', $src);
-        // required-default-always-present: fillRequiredDefaultsOnShell always overlays
-        // (no published+complete hard no-op); only user_deleted omits plan items.
-        self::assertStringContainsString('required-default-always-present', $src);
+        // N1: LayoutSlot complete skip_fill does not call fillRequiredDefaultsOnShell
+        // (bake owns required). This helper still overlays when invoked — pass
+        // $slotAllowlist for XOR/empty-slot filter safety-net only.
         self::assertStringContainsString('user_deleted@{versionId}', $src);
         $fillRequiredStart = \strpos($src, 'function fillRequiredDefaultsOnShell');
         self::assertNotFalse($fillRequiredStart);
@@ -47,6 +47,7 @@ final class PublishedStorefrontSolidifiedShellContractTest extends TestCase
         self::assertNotFalse($fillRequiredEnd);
         $fillRequiredBody = \substr($src, $fillRequiredStart, $fillRequiredEnd - $fillRequiredStart);
         self::assertStringContainsString('RequiredDefaultInjectionStorefrontOverlay', $fillRequiredBody);
+        self::assertStringContainsString('slotAllowlist', $fillRequiredBody);
         self::assertStringNotContainsString('shellNeedsRuntimeSafetyNetFill', $fillRequiredBody);
         // Bake-time chrome.rendered finalize always overlays required JSON (slot exists).
         $finalizeStart = \strpos($src, 'function finalizePublishedChromeRenderedHtml');
@@ -116,12 +117,13 @@ final class PublishedStorefrontSolidifiedShellContractTest extends TestCase
         $finalizeBody = \substr($filler, $finalizeStart, $finalizeEnd - $finalizeStart);
         self::assertStringContainsString('fillRequiredDefaultsOnShell', $finalizeBody);
 
-        // No published+!safetyNet hard return in fillRequiredDefaultsOnShell.
+        // N1: allowlist XOR/empty-slot; LayoutSlot skip_fill owns complete-shell no-Overlay.
         $fnStart = \strpos($filler, 'function fillRequiredDefaultsOnShell');
         self::assertNotFalse($fnStart);
         $fnEnd = \strpos($filler, 'function finalizePublishedChromeRenderedHtml', $fnStart);
         self::assertNotFalse($fnEnd);
         $body = \substr($filler, $fnStart, $fnEnd - $fnStart);
+        self::assertStringContainsString('slotAllowlist', $body);
         self::assertStringNotContainsString('shellNeedsRuntimeSafetyNetFill', $body);
         self::assertStringContainsString('RequiredDefaultInjectionStorefrontOverlay', $body);
 

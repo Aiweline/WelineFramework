@@ -1232,6 +1232,8 @@ class Run implements CommandInterface
                 ->prefetchProcessVector([
                     'global/websites-registry',
                     'global/storefront/deploy',
+                    'global/storefront/theme',
+                    'global/i18n',
                     'website/default',
                 ]);
         } catch (\Throwable) {

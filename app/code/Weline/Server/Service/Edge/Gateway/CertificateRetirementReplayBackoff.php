@@ -13,20 +13,27 @@ namespace Weline\Server\Service\Edge\Gateway;
  *
  * Empty queues must not keep probing / spawning short-lived retirement workers
  * on the idle floor either — that is the ~350 txn/s background storm.
+ *
+ * R3 (rework): stretch idle / stalled-pending caps further without clearing
+ * OPS-207 pending intents and without memory sharding.
  */
 final class CertificateRetirementReplayBackoff
 {
     public const MIN_SECONDS = 10.0;
-    public const MAX_SECONDS = 300.0;
+    /** Active no-progress cap (pending remains; intents NOT cleared). */
+    public const MAX_SECONDS = 900.0;
     /** Floor after an empty pending probe (no spawn). */
-    public const IDLE_EMPTY_SECONDS = 60.0;
+    public const IDLE_EMPTY_SECONDS = 120.0;
     /** Cap while the queue stays empty. */
-    public const IDLE_MAX_SECONDS = 600.0;
+    public const IDLE_MAX_SECONDS = 1800.0;
     /** Process-local pending probe cache TTL upper bound. */
-    public const PENDING_PROBE_TTL_SECONDS = 5.0;
+    public const PENDING_PROBE_TTL_SECONDS = 30.0;
+    /** Jump target on deferred/no-progress so OPS-207 storms cool quickly. */
+    public const STALLED_JUMP_SECONDS = 180.0;
 
     private float $intervalSeconds;
     private bool $idleEmpty = false;
+    private bool $stalledPending = false;
 
     public function __construct(float $initialSeconds = self::MIN_SECONDS)
     {
@@ -41,6 +48,12 @@ final class CertificateRetirementReplayBackoff
     public function isIdleEmpty(): bool
     {
         return $this->idleEmpty;
+    }
+
+    /** Pending intents observed but workers make no durable progress. */
+    public function isStalledPending(): bool
+    {
+        return $this->stalledPending;
     }
 
     public function isDue(float $nowMonotonic, float $lastAttemptAt): bool
@@ -61,14 +74,30 @@ final class CertificateRetirementReplayBackoff
     {
         return \min(
             self::PENDING_PROBE_TTL_SECONDS,
-            \max(1.0, $this->intervalSeconds / 4.0),
+            \max(2.5, $this->intervalSeconds / 4.0),
         );
+    }
+
+    /**
+     * Cooperative sleep for retirement-only agents: wake less often while idle
+     * or stalled so empty/stale queues do not burn 1Hz ticks into DB.
+     */
+    public function cooperativeTickMilliseconds(int $floorMilliseconds = 1_000): int
+    {
+        $floor = \max(250, $floorMilliseconds);
+        if (!$this->idleEmpty && !$this->stalledPending) {
+            return $floor;
+        }
+        $scaled = (int)\round($this->intervalSeconds * 500.0);
+
+        return \max($floor, \min(60_000, $scaled));
     }
 
     /** Empty pending probe: stretch idle floor; never spawn from this note. */
     public function noteEmptyQueue(): void
     {
         $this->idleEmpty = true;
+        $this->stalledPending = false;
         if ($this->intervalSeconds < self::IDLE_EMPTY_SECONDS) {
             $this->intervalSeconds = self::IDLE_EMPTY_SECONDS;
 
@@ -85,6 +114,7 @@ final class CertificateRetirementReplayBackoff
     {
         if ($this->idleEmpty) {
             $this->idleEmpty = false;
+            $this->stalledPending = false;
             $this->intervalSeconds = self::MIN_SECONDS;
         }
     }
@@ -98,12 +128,22 @@ final class CertificateRetirementReplayBackoff
     {
         $this->idleEmpty = false;
         if ($completed > 0 && $ok) {
+            $this->stalledPending = false;
             $this->intervalSeconds = self::MIN_SECONDS;
 
             return;
         }
-        $factor = $deferred || !$ok ? 3.0 : 2.0;
-        $this->intervalSeconds = $this->clamp($this->intervalSeconds * $factor);
+        $this->stalledPending = true;
+        // Deferred / failed with zero completions: jump toward a cool floor so
+        // OPS-207-sized queues do not keep spawning every ~10–30s.
+        if ($deferred || !$ok) {
+            $this->intervalSeconds = $this->clamp(
+                \max($this->intervalSeconds * 3.0, self::STALLED_JUMP_SECONDS),
+            );
+
+            return;
+        }
+        $this->intervalSeconds = $this->clamp($this->intervalSeconds * 2.0);
     }
 
     private function clamp(float $seconds): float

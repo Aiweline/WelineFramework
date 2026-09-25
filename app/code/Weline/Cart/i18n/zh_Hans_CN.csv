@@ -151,6 +151,7 @@ Scope,Scope
 该商品暂不可售，请从购物车移除或稍后再试,该商品暂不可售，请从购物车移除或稍后再试
 "channel_code 必须与 store_code 同时提供","channel_code 必须与 store_code 同时提供"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","购物车 Scope 与当前可信 Website/Store/Channel 请求不一致"
+"已有 %1 件本品包邮，另 %2 件仍需计运费","已有 %1 件本品包邮，另 %2 件仍需计运费"
 已享包邮,已享包邮
 "还差 %1 包邮","还差 %1 包邮"
 "浏览%{1} %{2}件商品","浏览%{1} %{2}件商品"

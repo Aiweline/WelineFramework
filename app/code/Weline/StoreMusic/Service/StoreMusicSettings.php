@@ -287,6 +287,35 @@ class StoreMusicSettings
         return $hit ? $bag : null;
     }
 
+    /**
+     * Hook body-end owns the audible float. Theme may stamp annotation /
+     * default_injection defaults (enabled=false, tracks=[]) onto a shared
+     * template bag; that must not override SystemConfig when the layout node
+     * never set real tracks or an explicit enable.
+     *
+     * @param array<string, mixed>|null $fromTemplate
+     * @return array<string, mixed>|null
+     */
+    public static function hookOwnedWidgetConfig(?array $fromTemplate): ?array
+    {
+        if ($fromTemplate === null) {
+            return null;
+        }
+        $tracks = self::tracksFromWidgetConfig($fromTemplate['tracks'] ?? null);
+        if ($tracks !== []) {
+            return $fromTemplate;
+        }
+        $enabledOn = \array_key_exists('enabled', $fromTemplate)
+            && self::coerceBool($fromTemplate['enabled'], false);
+        if ($enabledOn) {
+            return $fromTemplate;
+        }
+        $bag = $fromTemplate;
+        unset($bag['enabled'], $bag['tracks']);
+
+        return $bag === [] ? null : $bag;
+    }
+
     public static function mediaUrlFromMixed(mixed $value): string
     {
         if (is_array($value)) {

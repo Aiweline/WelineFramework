@@ -340,7 +340,20 @@ class Widget implements TaglibInterface
 
             $blockClass = (string)($spec['block_class'] ?? '');
             $template = (string)($spec['template'] ?? '');
-            $html = self::renderWidget($widget, $params, $blockClass, $template);
+            $renderWidget = static function () use ($widget, $params, $blockClass, $template): string {
+                return self::renderWidget($widget, $params, $blockClass, $template);
+            };
+            $phase = null;
+            if (\class_exists(\Weline\Theme\Service\ThemePdpBudgetPhases::class)) {
+                $phase = \Weline\Theme\Service\ThemePdpBudgetPhases::forWidgetCode($code !== '' ? $code : $name);
+            }
+            $html = $phase !== null
+                ? (string)\Weline\Theme\Service\ThemePdpBudgetPhases::measure(
+                    $phase,
+                    $renderWidget,
+                    ['widget_code' => $code !== '' ? $code : $name, 'branch' => 'runtime_inline'],
+                )
+                : $renderWidget();
             $assetRenderer = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer::class);
             $html = $assetRenderer->wrap($html, $assetRenderer->render($widget, $params, $template));
 

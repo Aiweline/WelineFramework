@@ -96,7 +96,8 @@ final class StorefrontProductCardFragmentCache
             $this->storefrontOriginSegment(),
         ];
 
-        return 'theme.product_card.html.v3.'
+        // v4: 无评也渲染灰星+(0)，旧 v3 片段缺评分行会导致网格价签错位
+        return 'theme.product_card.html.v4.'
             . $this->storefrontLocaleSegment()
             . '.'
             . $productId
