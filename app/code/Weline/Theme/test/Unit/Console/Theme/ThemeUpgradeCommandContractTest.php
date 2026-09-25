@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit\Console\Theme;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Console\Theme\Upgrade as ThemeUpgradeCommand;
+use Weline\Theme\Model\WelineTheme;
 
 if (!class_exists(ThemeUpgradeCommand::class, false)) {
     require_once dirname(__DIR__, 4) . '/Console/Theme/Upgrade.php';
@@ -104,6 +106,92 @@ final class ThemeUpgradeCommandContractTest extends TestCase
                 '/Users/example/project/pub/static'
             )
         );
+    }
+
+    public function testDesignDocAndTestDirectoriesAreNeverPublished(): void
+    {
+        $root = '/Users/example/project/app/design/Weline/hanfu';
+        $method = new \ReflectionMethod(ThemeUpgradeCommand::class, 'isExcludedPublishPath');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke(null, $root, $root . '/doc/README.md'));
+        self::assertTrue($method->invoke(null, $root, $root . '/doc/开发/待授权修复/widget-preview-catalog.candidate.php'));
+        self::assertTrue($method->invoke(null, $root, $root . '/test/deep-remediation.py'));
+
+        self::assertFalse($method->invoke(null, $root, $root . '/frontend/assets/css/theme.css'));
+        self::assertFalse($method->invoke(null, $root, $root . '/frontend/layouts/test/assets-test.phtml'));
+        self::assertFalse($method->invoke(
+            null,
+            $root,
+            '/Users/example/project/app/code/Weline/Theme/view/theme/frontend/assets/css/theme.css'
+        ));
+    }
+
+    /**
+     * 真实落盘 + 真实 Scan：fetchThemeFiles 只收集运行时资源。
+     * 反例来自事故：app/design/{theme}/doc 与 /test 的内部文档、*.py、*.candidate.php
+     * 曾被搬进 pub/static，浏览器可直接读取。
+     */
+    public function testFetchThemeFilesSkipsDesignDocsAndTestScripts(): void
+    {
+        try {
+            $command = ObjectManager::getInstance(ThemeUpgradeCommand::class);
+        } catch (\Throwable $exception) {
+            self::markTestSkipped('需要框架容器（app/bootstrap_phpunit.php）构建真实命令：' . $exception->getMessage());
+        }
+
+        $workspace = sys_get_temp_dir() . '/weline-theme-fetch-' . bin2hex(random_bytes(6));
+        $root = $workspace . '/Weline/hanfu';
+        foreach ([
+            $root . '/doc/开发/待授权修复',
+            $root . '/test',
+            $root . '/frontend/assets/css',
+            $root . '/frontend/layouts/test',
+        ] as $directory) {
+            self::assertTrue(mkdir($directory, 0775, true), 'mkdir ' . $directory);
+        }
+
+        $fixtures = [
+            $root . '/doc/README.md' => 'internal notes',
+            $root . '/doc/开发/待授权修复/widget-preview-catalog.candidate.php' => 'internal script',
+            $root . '/test/deep-remediation.py' => 'print(1)',
+            $root . '/frontend/assets/css/theme.css' => '.theme { color: red; }',
+            $root . '/frontend/layouts/test/assets-test.phtml' => 'layout body',
+        ];
+        foreach ($fixtures as $path => $content) {
+            self::assertNotFalse(file_put_contents($path, $content), 'write ' . $path);
+        }
+
+        try {
+            $theme = (new \ReflectionClass(WelineTheme::class))->newInstanceWithoutConstructor();
+            $theme->setData('path', $root);
+            $theme->setData('origin_path', 'Weline/hanfu');
+
+            $sources = array_keys($command->fetchThemeFiles($theme, $root));
+
+            self::assertContains($root . '/frontend/assets/css/theme.css', $sources);
+            self::assertContains($root . '/frontend/layouts/test/assets-test.phtml', $sources);
+            self::assertNotContains($root . '/doc/README.md', $sources);
+            self::assertNotContains($root . '/doc/开发/待授权修复/widget-preview-catalog.candidate.php', $sources);
+            self::assertNotContains($root . '/test/deep-remediation.py', $sources);
+        } finally {
+            self::removeTree($workspace);
+        }
+    }
+
+    private static function removeTree(string $path): void
+    {
+        if (!is_dir($path)) {
+            return;
+        }
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+        }
+        @rmdir($path);
     }
 
     public function testPublisherRejectsAFileOutsideTheThemeRoot(): void

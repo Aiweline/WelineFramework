@@ -136,6 +136,44 @@ final class ModuleFlatStaticsPublishTest extends TestCase
         self::assertSame('keep', (string)file_get_contents($flatFile));
     }
 
+    public function testPublishModuleFlatStaticsSkipsNonRuntimeArtifacts(): void
+    {
+        $statics = $this->workspace . DIRECTORY_SEPARATOR . 'dirty-src' . DIRECTORY_SEPARATOR . 'view'
+            . DIRECTORY_SEPARATOR . 'statics';
+        $demo = $statics . DIRECTORY_SEPARATOR . 'libs' . DIRECTORY_SEPARATOR . 'demo';
+        self::assertTrue(mkdir($statics . DIRECTORY_SEPARATOR . 'js', 0775, true));
+        self::assertTrue(mkdir($demo . DIRECTORY_SEPARATOR . 'docs', 0775, true));
+        self::assertTrue(mkdir($demo . DIRECTORY_SEPARATOR . 'tests', 0775, true));
+        self::assertTrue(mkdir($demo . DIRECTORY_SEPARATOR . '.github', 0775, true));
+
+        self::assertNotFalse(file_put_contents($statics . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'app.js', 'runtime'));
+        self::assertNotFalse(file_put_contents($statics . DIRECTORY_SEPARATOR . 'README.md', 'internal notes'));
+        self::assertNotFalse(file_put_contents($demo . DIRECTORY_SEPARATOR . 'demo.js', 'runtime lib'));
+        self::assertNotFalse(file_put_contents($demo . DIRECTORY_SEPARATOR . 'Gruntfile.js', 'grunt'));
+        self::assertNotFalse(file_put_contents($demo . DIRECTORY_SEPARATOR . 'docs' . DIRECTORY_SEPARATOR . 'usage.md', 'doc'));
+        self::assertNotFalse(file_put_contents($demo . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'spec.js', 'test'));
+        self::assertNotFalse(file_put_contents(
+            $demo . DIRECTORY_SEPARATOR . '.github' . DIRECTORY_SEPARATOR . 'workflows.yml',
+            'ci'
+        ));
+
+        $staticRoot = $this->workspace . DIRECTORY_SEPARATOR . 'pub-static-dirty';
+        self::assertTrue(mkdir($staticRoot, 0775, true));
+
+        $this->publishModuleFlatStatics->invoke($this->upgrade, 'Weline_DirtyDemo', $statics, $staticRoot);
+
+        $flat = $staticRoot . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . 'DirtyDemo';
+        $flatDemo = $flat . DIRECTORY_SEPARATOR . 'libs' . DIRECTORY_SEPARATOR . 'demo';
+
+        self::assertFileExists($flat . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'app.js');
+        self::assertFileExists($flatDemo . DIRECTORY_SEPARATOR . 'demo.js');
+        self::assertFileDoesNotExist($flat . DIRECTORY_SEPARATOR . 'README.md');
+        self::assertFileDoesNotExist($flatDemo . DIRECTORY_SEPARATOR . 'Gruntfile.js');
+        self::assertDirectoryDoesNotExist($flatDemo . DIRECTORY_SEPARATOR . 'docs');
+        self::assertDirectoryDoesNotExist($flatDemo . DIRECTORY_SEPARATOR . 'tests');
+        self::assertDirectoryDoesNotExist($flatDemo . DIRECTORY_SEPARATOR . '.github');
+    }
+
     private function removeTree(string $path): void
     {
         if (!is_dir($path)) {

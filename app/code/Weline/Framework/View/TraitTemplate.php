@@ -711,37 +711,16 @@ trait TraitTemplate
 
     /**
      * 将主题配置中的源码路径归一化为 pub/static 使用的公开设计主题命名空间。
+     *
+     * 逻辑权威在 {@see PublicThemeNamespace}：发布目标与 `/static/` URL 前缀必须同源。
      */
     private function resolvePublicThemeNamespace(): string
     {
         $configuredPath = $this->theme['path']
             ?? Env::get('theme')['path']
             ?? Env::default_theme_DATA['path'];
-        $themePath = rtrim(str_replace('\\', '/', trim((string)$configuredPath)), '/');
-        $defaultPath = trim(str_replace('\\', '/', (string)Env::default_theme_DATA['path']), '/');
 
-        if ($themePath === '') {
-            return $defaultPath;
-        }
-
-        // 模块主题标识和 app/code 绝对源码路径不是公开设计主题命名空间。
-        if (preg_match('#^[^/:]+_[^/:]+::.+$#', $themePath)) {
-            return $defaultPath;
-        }
-
-        $designRoot = rtrim(str_replace('\\', '/', Env::path_THEME_DESIGN_DIR), '/');
-        if ($designRoot !== '' && ($themePath === $designRoot || str_starts_with($themePath, $designRoot . '/'))) {
-            $relativePath = trim(substr($themePath, strlen($designRoot)), '/');
-            return $relativePath !== '' ? $relativePath : $defaultPath;
-        }
-
-        $isAbsolutePath = preg_match('#^[A-Za-z]:/#', $themePath) === 1
-            || str_starts_with($themePath, '/');
-        if ($isAbsolutePath || strcasecmp(trim($themePath, '/'), 'Weline/Theme/view/theme') === 0) {
-            return $defaultPath;
-        }
-
-        return trim($themePath, '/');
+        return PublicThemeNamespace::resolve((string)$configuredPath);
     }
 
     /**
