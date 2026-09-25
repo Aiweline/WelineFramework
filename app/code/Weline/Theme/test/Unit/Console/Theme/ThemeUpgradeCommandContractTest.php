@@ -118,8 +118,14 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertTrue($method->invoke(null, $root, $root . '/doc/开发/待授权修复/widget-preview-catalog.candidate.php'));
         self::assertTrue($method->invoke(null, $root, $root . '/test/deep-remediation.py'));
 
+        // 设计主题的 `.phtml` 是**源码模板**，不是静态资源；铺进 pub/static 后
+        // `/static/{theme}/.../default.phtml` 会回吐模板源码（部分服务器还会执行）。
+        self::assertTrue($method->invoke(null, $root, $root . '/frontend/layouts/homepage/default.phtml'));
+        self::assertTrue($method->invoke(null, $root, $root . '/frontend/layouts/test/assets-test.phtml'));
+        self::assertTrue($method->invoke(null, $root, $root . '/register.php'));
+
         self::assertFalse($method->invoke(null, $root, $root . '/frontend/assets/css/theme.css'));
-        self::assertFalse($method->invoke(null, $root, $root . '/frontend/layouts/test/assets-test.phtml'));
+        self::assertFalse($method->invoke(null, $root, $root . '/frontend/layouts/test/assets-test.css'));
         self::assertFalse($method->invoke(
             null,
             $root,
@@ -130,7 +136,8 @@ final class ThemeUpgradeCommandContractTest extends TestCase
     /**
      * 真实落盘 + 真实 Scan：fetchThemeFiles 只收集运行时资源。
      * 反例来自事故：app/design/{theme}/doc 与 /test 的内部文档、*.py、*.candidate.php
-     * 曾被搬进 pub/static，浏览器可直接读取。
+     * 曾被搬进 pub/static，浏览器可直接读取；设计主题的 `*.phtml` 源码模板同理
+     * （`/static/{theme}/.../default.phtml` 会回吐模板源码）。
      */
     public function testFetchThemeFilesSkipsDesignDocsAndTestScripts(): void
     {
@@ -156,6 +163,7 @@ final class ThemeUpgradeCommandContractTest extends TestCase
             $root . '/doc/开发/待授权修复/widget-preview-catalog.candidate.php' => 'internal script',
             $root . '/test/deep-remediation.py' => 'print(1)',
             $root . '/frontend/assets/css/theme.css' => '.theme { color: red; }',
+            $root . '/frontend/layouts/test/assets-test.css' => '.test-layout { color: blue; }',
             $root . '/frontend/layouts/test/assets-test.phtml' => 'layout body',
         ];
         foreach ($fixtures as $path => $content) {
@@ -170,7 +178,10 @@ final class ThemeUpgradeCommandContractTest extends TestCase
             $sources = array_keys($command->fetchThemeFiles($theme, $root));
 
             self::assertContains($root . '/frontend/assets/css/theme.css', $sources);
-            self::assertContains($root . '/frontend/layouts/test/assets-test.phtml', $sources);
+            // `test` 是合法的布局名：布局目录下的**静态资源**照常发布……
+            self::assertContains($root . '/frontend/layouts/test/assets-test.css', $sources);
+            // ……但 `.phtml` 源码模板绝不发布（Web 根下会回吐源码）。
+            self::assertNotContains($root . '/frontend/layouts/test/assets-test.phtml', $sources);
             self::assertNotContains($root . '/doc/README.md', $sources);
             self::assertNotContains($root . '/doc/开发/待授权修复/widget-preview-catalog.candidate.php', $sources);
             self::assertNotContains($root . '/test/deep-remediation.py', $sources);

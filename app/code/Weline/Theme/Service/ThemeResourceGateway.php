@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Deploy\StaticPublishExclusion;
 use Weline\Framework\Http\Request;
 use Weline\Theme\Model\WelineTheme;
 
@@ -44,6 +45,13 @@ final class ThemeResourceGateway
 
         $relativePath = $resource['relative_path'];
         if ($relativePath === '' || $this->containsParentTraversal($relativePath)) {
+            return null;
+        }
+
+        // 按请求补发也必须服从静态发布排除规则，否则一次针对
+        // `/static/{Vendor}/{Module}/php/connector.minimal.php` 的请求就能把
+        // `view/statics/php/**` 重新铺回 Web 根（把清理结果一键还原）。
+        if (StaticPublishExclusion::isExcluded(str_replace(DIRECTORY_SEPARATOR, '/', $relativePath))) {
             return null;
         }
 

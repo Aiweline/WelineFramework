@@ -8,12 +8,14 @@ namespace Weline\Framework\Deploy;
  * 静态发布排除规则（唯一权威）。
  *
  * `pub/static` 位于 Web 根之下，凡被铺进去的文件浏览器都能直接取到：文档会被读取，
- * `*.php` 更会被执行。因此发布树只允许含运行时资源，文档、测试、版本库与工具链
- * 元数据必须留在源目录。
+ * `*.php` 更会被执行（`.phtml` 等在常见 Web 服务器配置下同样按 PHP 处理）。
+ * 因此发布树只允许含运行时资源，文档、测试、版本库与工具链元数据、以及服务端
+ * 可执行/模板源码必须留在源目录。
  *
- * 本类给出统一的「相对发布根」路径判定，供以下发布链路复用，避免两处规则漂移：
+ * 本类给出统一的「相对发布根」路径判定，供以下发布链路复用，避免多处规则漂移：
  * - Deploy\Upgrade（模块 view/statics 的 overlay + 扁平双写）
  * - Theme\Console\Theme\Upgrade（app/design/{theme} 设计覆盖搬迁）
+ * - Theme\Service\ThemeResourceGateway（按请求即时补发 /static 资源）
  */
 final class StaticPublishExclusion
 {
@@ -60,6 +62,10 @@ final class StaticPublishExclusion
         'karma.conf.js', 'jest.config.js', 'cypress.json', 'tsconfig.json',
         '.editorconfig', '.gitignore', '.npmignore', '.eslintignore', '.stylelintignore',
         '.travis.yml', '.browserslistrc',
+        // Web 服务器 / PHP 运行期配置文件：落在 Web 根里可以改变「谁能访问、什么会被执行」
+        // （`.htaccess` 的 `AddHandler`、`php.ini` 的指令、`web.config` 的 handler 映射），
+        // 且从不属于运行时静态资源。
+        '.htaccess', '.htpasswd', '.user.ini', 'php.ini', 'web.config',
     ];
 
     /** @var list<string> */
@@ -84,6 +90,32 @@ final class StaticPublishExclusion
      */
     private const EXCLUDED_EXTENSIONS = [
         'md', 'markdown', 'mdown', 'rst', 'adoc', 'asciidoc',
+    ];
+
+    /**
+     * 服务端可执行 / 模板源码扩展名（小写、不含点）。
+     *
+     * `pub/static` 在 Web 根之下，被铺进去的文件浏览器都能直接取到：
+     * - `*.php` 会被 Web 服务器交给 PHP **执行**（本类 docblock 早已声明的风险）；
+     * - `.phtml` / `.pht` / `.phar` / `.php-dist` 在 Apache / LiteSpeed 常见
+     *   `AddHandler` 配置下同样按 PHP 处理；
+     * - 即使服务器不执行，`Framework\Router\Core::StaticFile()` 也会用
+     *   `file_get_contents()` 把**源码原文**回给客户端（源码泄露）。
+     *
+     * 真实污染：elFinder 的 `view/statics/php/**` 连接器（95 个 `.php` 的三份副本）
+     * 与 `theme:upgrade` 误搬的设计主题源码模板（301 个 `.phtml`）。二者均无运行时
+     * 消费方：elFinder 由 `VENDOR_PATH . '/autoload.php'` 装载，模板由
+     * `ThemePathResolver` 从模块/主题**源目录**解析。
+     *
+     * @var list<string>
+     */
+    private const EXCLUDED_SCRIPT_EXTENSIONS = [
+        // PHP 家族
+        'php', 'phtml', 'pht', 'phps', 'phar', 'php3', 'php4', 'php5', 'php7', 'php8',
+        // 其它 CGI / 脚本语言（静态树里出现即为工具链残留，非运行时资源）
+        'cgi', 'fcgi', 'pl', 'py', 'rb', 'sh', 'bash', 'zsh',
+        // 其它服务端模板
+        'asp', 'aspx', 'jsp', 'jspx', 'shtml',
     ];
 
     /**
@@ -147,7 +179,18 @@ final class StaticPublishExclusion
         }
 
         $extension = pathinfo($baseName, PATHINFO_EXTENSION);
+        if ($extension === '') {
+            return false;
+        }
 
-        return $extension !== '' && in_array($extension, self::EXCLUDED_EXTENSIONS, true);
+        if (in_array($extension, self::EXCLUDED_EXTENSIONS, true)
+            || in_array($extension, self::EXCLUDED_SCRIPT_EXTENSIONS, true)
+        ) {
+            return true;
+        }
+
+        // `connector.minimal.php-dist` 这类「可执行扩展名 + 变体后缀」同样排除，
+        // 否则 elFinder 的 php 目录会留下一半（`.php` 被排除、`.php-dist` 被铺出去）。
+        return str_starts_with($extension, 'php');
     }
 }
