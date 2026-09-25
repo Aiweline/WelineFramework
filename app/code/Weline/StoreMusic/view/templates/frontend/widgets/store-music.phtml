@@ -46,6 +46,9 @@ if (empty($GLOBALS['__weline_store_music_from_hook'])) {
     $presenceStub('hook-owned');
     return;
 }
+// Drop annotation-default pollution (enabled=false + empty tracks) so Hook
+// falls back to SystemConfig; keep real layout tracks / explicit enable.
+$widgetConfig = StoreMusicSettings::hookOwnedWidgetConfig($widgetConfig);
 if (!$settings->isWidgetActive($widgetConfig)) {
     $presenceStub('inactive');
     return;
@@ -73,13 +76,19 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES 
 $t = static fn (string $word): string => $esc((string)__($word));
 $configJson = $esc((string)json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 $defaultVol = (int)$payload['default_volume'];
+$hostCssUrl = '';
 $cssUrl = '';
 $faceUrl = '';
 try {
     // This template is also included directly by the base::body-end Hook. In
-    // that path the @static tag is not passed through the template renderer,
-    // so resolve asset URLs through Template::fetchTagSource before emitting
-    // markup. fetchTagSource also applies the normal development cache key.
+    // that path @widget.source / @static are NOT processed by the widget asset
+    // pipeline — JS still boots via data-weline-load, but CSS would never land
+    // → float stays position:static at page bottom while audio plays.
+    // Resolve + emit <link> here so Hook and layout share the same stylesheet.
+    $hostCssUrl = (string)$this->fetchTagSource(
+        DataInterface::dir_type_STATICS,
+        'Weline_StoreMusic::css/widgets/widget-store-music.css',
+    );
     $cssUrl = (string)$this->fetchTagSource(
         DataInterface::dir_type_STATICS,
         'Weline_StoreMusic::css/store-music.css',
@@ -91,9 +100,22 @@ try {
 } catch (\Throwable) {
     // Keep the widget renderable if a host view does not expose static URLs.
 }
+$hostCssUrl = $esc($hostCssUrl);
 $cssUrl = $esc($cssUrl);
 $faceUrl = $esc($faceUrl);
 ?>
+<?php /* Critical float geometry inline: Hook/外链 CSS 未到或 403 时仍须 position:fixed，
+ * 否则浮层以 static 落在 body-end（页底版权旁），表现为「没有浮起来」。 */ ?>
+<style data-store-music-critical>
+.w-store-music-host[data-store-music-host]{position:static;display:block;width:0;height:0;margin:0;padding:0;border:0;overflow:visible}
+.w-store-music[data-store-music]{position:fixed!important;left:max(.85rem,env(safe-area-inset-left,0px));bottom:calc(max(.95rem,env(safe-area-inset-bottom,0px)) + var(--weline-product-sticky-purchase-clearance,0px) + var(--w-store-music-heading-lift,0px));z-index:2147483001}
+</style>
+<?php if ($hostCssUrl !== ''): ?>
+<link rel="stylesheet" href="<?= $hostCssUrl ?>" data-store-music-host-css>
+<?php endif; ?>
+<?php if ($cssUrl !== ''): ?>
+<link rel="stylesheet" href="<?= $cssUrl ?>" data-store-music-css>
+<?php endif; ?>
 <span hidden data-widget-script="storemusic-store-music-0"></span>
 <div class="w-store-music-host" data-store-music-host aria-hidden="false" data-widget-style-class="077587d4f9d73a11">
 

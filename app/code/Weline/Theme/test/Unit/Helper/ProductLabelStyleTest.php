@@ -62,6 +62,18 @@ final class ProductLabelStyleTest extends TestCase
         self::assertFalse($flags['is_sale']);
     }
 
+    public function testResolveFlagsDoesNotFabricateFreeShippingByPrice(): void
+    {
+        $flags = ProductLabelStyle::resolveFlags(['price' => 99.0], 0);
+        self::assertFalse($flags['is_free_shipping']);
+        $flags = ProductLabelStyle::resolveFlags([
+            'is_free_shipping' => 1,
+            'free_shipping_min_amount' => 0,
+            'price' => 10,
+        ], 0);
+        self::assertTrue($flags['is_free_shipping']);
+    }
+
     public function testSanitizeUsesThemeUiColor(): void
     {
         self::assertTrue(ThemeUiColor::isValid(ProductLabelStyle::globalBgToken(ProductLabelStyle::KIND_NEW)));

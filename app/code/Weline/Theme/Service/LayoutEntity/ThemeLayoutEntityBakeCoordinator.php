@@ -402,7 +402,90 @@ final class ThemeLayoutEntityBakeCoordinator
         // Page solidify must not leave the scope without shared chrome (header/footer).
         $this->ensurePublishedChromeForScope($themeId, $scope, []);
 
+        // N1: list layouts — required Filters must be in published structure (relationship
+        // shell). Runtime Overlay is XOR/empty-slot only when bake already owns the slot.
+        if ($mergeDefaults && $published) {
+            $this->finalizePublishedListFilterSlots($layoutType, $path);
+        }
+
         return $path;
+    }
+
+    /**
+     * N1 write-side gate for products/category/search: structure.json must list
+     * Weline_Filters::category-filters under list-filters or category-filters when
+     * the inventory slot exists. Does not bake request HTML snapshots (关系壳 only).
+     * Does not change default_injections JSON — Filters placement stays injection XOR;
+     * widget seat wake not required unless declarations change.
+     */
+    private function finalizePublishedListFilterSlots(string $layoutType, string $layoutPhtmlPath): void
+    {
+        $layoutType = \strtolower(\trim($layoutType));
+        $listTypes = [
+            ThemeLayout::PAGE_TYPE_PRODUCT_LIST,
+            ThemeLayout::PAGE_TYPE_CATEGORY,
+            ThemeLayout::PAGE_TYPE_SEARCH,
+            'products',
+            'category',
+            'search',
+        ];
+        if (!\in_array($layoutType, $listTypes, true)) {
+            return;
+        }
+        $structurePath = \dirname($layoutPhtmlPath) . \DIRECTORY_SEPARATOR . 'structure.json';
+        if ($structurePath === '' || !\is_file($structurePath)) {
+            return;
+        }
+        try {
+            $decoded = \json_decode((string)\file_get_contents($structurePath), true);
+        } catch (\Throwable) {
+            return;
+        }
+        if (!\is_array($decoded)) {
+            return;
+        }
+        $slots = $decoded['slots'] ?? null;
+        if (!\is_array($slots)) {
+            return;
+        }
+        $filterSlots = [];
+        foreach (['list-filters', 'category-filters'] as $slotId) {
+            if (isset($slots[$slotId]) && \is_array($slots[$slotId])) {
+                $filterSlots[$slotId] = $slots[$slotId];
+            }
+        }
+        if ($filterSlots === []) {
+            // Layout may omit filter sidebar (e.g. search without filters) — soft.
+            return;
+        }
+        $hasFilters = false;
+        foreach ($filterSlots as $widgets) {
+            foreach ($widgets as $widget) {
+                if (!\is_array($widget)) {
+                    continue;
+                }
+                $module = \trim((string)($widget['widget_module'] ?? ''));
+                $code = \trim((string)($widget['widget_code'] ?? ''));
+                if ($module === 'Weline_Filters' && $code === 'category-filters') {
+                    $hasFilters = true;
+                    break 2;
+                }
+            }
+        }
+        if ($hasFilters) {
+            return;
+        }
+        if (\function_exists('w_log_warning')) {
+            w_log_warning(
+                'theme_layout_entity_list_filters_bake_missing',
+                [
+                    'layout_type' => $layoutType,
+                    'structure' => $structurePath,
+                    'hint' => 'mergeRequiredDefaultsIntoNodes must write Weline_Filters::category-filters; runtime Overlay is XOR-only',
+                ],
+                'theme_layout_entity',
+            );
+        }
     }
 
     /**

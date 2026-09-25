@@ -371,6 +371,8 @@ final class OfferRepository extends AbstractWebsiteShardRepository
             'requires_shipping',
             'shipping_profile_code',
             'shipping_hazard_class',
+            'is_free_shipping',
+            'free_shipping_min_amount',
             'type_config_json',
         ];
         foreach (array_keys($fields) as $field) {

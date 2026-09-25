@@ -106,6 +106,96 @@ final class StorefrontHeaderNavFragmentCache
     }
 
     /**
+     * R2/N2: one protocol MGET for horizontal + sidebar + per-item mega panel keys
+     * before the serial waterfall. Subsequent rememberPolicy hits L1.
+     *
+     * N2: also merge same-Policy extras (e.g. category_nav.v2.*) and both banner
+     * variants so sidebar-first / widget-second entry points do not re-open
+     * residual shared_read.
+     *
+     * @param list<array<string, mixed>> $items
+     * @param list<string> $extraLogicalKeys same headerNavigationPolicy keys
+     */
+    public function prefetchCategoryNavFragments(
+        array $items,
+        bool $showBannerWithChildren = true,
+        array $extraLogicalKeys = [],
+        bool $bothBannerVariants = true,
+    ): int {
+        if ($items === [] && $extraLogicalKeys === []) {
+            return 0;
+        }
+        $bannerFlags = $bothBannerVariants
+            ? [true, false]
+            : [$showBannerWithChildren];
+        $keys = [];
+        foreach ($extraLogicalKeys as $extra) {
+            $extra = \trim((string)$extra);
+            if ($extra !== '') {
+                $keys[] = $extra;
+            }
+        }
+        if ($items !== []) {
+            foreach ($bannerFlags as $bannerFlag) {
+                $keys[] = $this->horizontalNavLogicalKey($items, $bannerFlag);
+            }
+            $keys[] = $this->sidebarNavLogicalKey($items);
+            foreach ($items as $index => $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                $panelId = \trim((string)($item['id'] ?? $item['ref'] ?? ''));
+                if ($panelId === '') {
+                    $panelId = 'nav-item-' . (string)$index;
+                }
+                foreach ($bannerFlags as $bannerFlag) {
+                    $keys[] = $this->megaMenuPanelLogicalKey(
+                        $panelId,
+                        false,
+                        $item,
+                        $bannerFlag,
+                    );
+                    $keys[] = $this->megaMenuPanelLogicalKey(
+                        $panelId,
+                        true,
+                        $item,
+                        $bannerFlag,
+                    );
+                }
+            }
+        }
+        $keys = \array_values(\array_unique($keys));
+        if ($keys === []) {
+            return 0;
+        }
+        try {
+            return $this->hotCache->prefetchPolicy(self::cachePolicy(), $keys);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
+     * N2: collapse search-type dropdown residual shared_read into one MGET.
+     *
+     * @param list<array<string, mixed>> $types
+     */
+    public function prefetchSearchTypeDropdown(string $menuId, array $types): int
+    {
+        if ($types === []) {
+            return 0;
+        }
+        try {
+            return $this->hotCache->prefetchPolicy(
+                StorefrontThemeCacheCoordinator::headerSearchTypesPolicy(),
+                [$this->searchTypeDropdownLogicalKey($menuId, $types)],
+            );
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
      * Stable search-type tree HTML (no request selected state).
      * Callers apply selection / facade after HIT — forbid dirty selected HTML in the bag.
      *

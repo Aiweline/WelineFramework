@@ -367,6 +367,7 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertStringContainsString('noteEmptyQueue()', $loopSource);
         self::assertStringContainsString('notePendingQueue()', $loopSource);
         self::assertStringContainsString('probeCacheTtlSeconds()', $loopSource);
+        self::assertStringContainsString('cooperativeTickMilliseconds(', $loopSource);
         self::assertStringContainsString(
             'pendingRetirementIntents($now + 0.25)',
             $loopSource,
@@ -382,7 +383,7 @@ final class GatewayFallbackProviderTest extends TestCase
             $worker->getEndLine() - $worker->getStartLine() + 1,
         ));
         self::assertMatchesRegularExpression(
-            '/replayPendingCertificateRetirements\(\s*75\.0,\s*8,\s*'
+            '/replayPendingCertificateRetirements\(\s*75\.0,\s*16,\s*'
                 . '\$mutationDeadline,\s*\)/',
             $workerSource,
         );

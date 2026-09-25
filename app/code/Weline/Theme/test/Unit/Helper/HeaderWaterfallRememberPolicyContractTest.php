@@ -20,9 +20,10 @@ final class HeaderWaterfallRememberPolicyContractTest extends TestCase
         );
 
         self::assertStringContainsString('headerNavigationPolicy()', $src);
-        self::assertStringContainsString('theme.header.category_nav.v1.', $src);
+        self::assertStringContainsString('theme.header.category_nav.v2.', $src);
         self::assertStringContainsString('rememberPolicy', $src);
         self::assertStringContainsString('resolveCategoryNavItemsUncached', $src);
+        self::assertStringContainsString('requestOriginSegment', $src);
 
         $policy = StorefrontThemeCacheCoordinator::headerNavigationPolicy();
         self::assertSame('theme.header_navigation', $policy->resource);
@@ -45,8 +46,10 @@ final class HeaderWaterfallRememberPolicyContractTest extends TestCase
         );
 
         self::assertStringContainsString('rememberCategoriesHorizontalNav', $cacheSrc);
+        self::assertStringContainsString('prefetchCategoryNavFragments', $cacheSrc);
         self::assertStringContainsString('horizontalNavLogicalKey', $cacheSrc);
-        self::assertStringContainsString('theme.header.horizontal_nav.v1.', $cacheSrc);
+        self::assertStringContainsString('theme.header.horizontal_nav.v2.', $cacheSrc);
+        self::assertStringContainsString('prefetchCategoryNavFragments', $helperSrc);
         self::assertStringContainsString('fetchCategoriesHorizontalNav', $helperSrc);
         self::assertStringContainsString('fetchCategoriesHorizontalNav', $widgetSrc);
         self::assertStringNotContainsString(

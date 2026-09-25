@@ -171,6 +171,21 @@ final class LocaleCatalogScopeResolver
      */
     private function fetchWebsiteLanguageCodes(int $websiteId): array
     {
+        // N4: prefer storefront.render_context.v1 locale_catalog (no parallel bag).
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
+                $ctx = \Weline\Framework\Runtime\StorefrontRenderContextReader::get();
+                if ($ctx instanceof \Weline\Framework\Runtime\StorefrontRenderContext
+                    && $ctx->websiteId === $websiteId
+                ) {
+                    $active = $ctx->localeCatalog['active'] ?? [];
+                    if (\is_array($active) && $active !== []) {
+                        return \array_values(\array_map('strval', $active));
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
         try {
             $result = \w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
             return \is_array($result) ? $result : [];
@@ -181,6 +196,26 @@ final class LocaleCatalogScopeResolver
 
     private function fetchWebsiteDefaultLanguage(int $websiteId): string
     {
+        // N4: prefer bag website_table_snapshot / locale before websites RPC.
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
+                $ctx = \Weline\Framework\Runtime\StorefrontRenderContextReader::get();
+                if ($ctx instanceof \Weline\Framework\Runtime\StorefrontRenderContext
+                    && $ctx->websiteId === $websiteId
+                ) {
+                    $row = \is_array($ctx->websiteTableSnapshot['row'] ?? null)
+                        ? $ctx->websiteTableSnapshot['row']
+                        : null;
+                    if (\is_array($row)) {
+                        $fromRow = \trim((string)($row['default_language'] ?? ''));
+                        if ($fromRow !== '') {
+                            return $fromRow;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
         try {
             $website = \w_query('websites', 'getWebsiteById', ['website_id' => $websiteId]);
             if (\is_array($website)) {

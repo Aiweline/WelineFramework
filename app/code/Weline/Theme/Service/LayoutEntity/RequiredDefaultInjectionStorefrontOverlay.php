@@ -37,6 +37,11 @@ final class RequiredDefaultInjectionStorefrontOverlay
     ) {
     }
 
+    /**
+     * @param list<string>|null $slotAllowlist When set (N1 filter safety-net), only plan
+     *        items whose slot_id is in this list run. Identity XOR still skips present widgets;
+     *        empty destinations still render — Overlay is not a full-page main path.
+     */
     public function append(
         string $rendered,
         int $themeId,
@@ -45,6 +50,7 @@ final class RequiredDefaultInjectionStorefrontOverlay
         string $scopeKey,
         string $versionKey,
         ?string $structurePath,
+        ?array $slotAllowlist = null,
     ): string {
         unset($structurePath);
         if ($status !== ThemeLayout::STATUS_PUBLISHED || $themeId < 1 || \trim($pageType) === '') {
@@ -61,10 +67,37 @@ final class RequiredDefaultInjectionStorefrontOverlay
             return $rendered;
         }
 
+        $allow = null;
+        if ($slotAllowlist !== null) {
+            $allow = [];
+            foreach ($slotAllowlist as $slotId) {
+                $slotId = \strtolower(\trim((string)$slotId));
+                if ($slotId !== '') {
+                    $allow[$slotId] = true;
+                }
+            }
+            if ($allow === []) {
+                return $rendered;
+            }
+        }
+
         [$declarations, $plan] = $this->loadPlan($themeId, $pageType);
         unset($declarations);
         if ($plan === []) {
             return $rendered;
+        }
+        if ($allow !== null) {
+            $plan = \array_values(\array_filter(
+                $plan,
+                static function (array $item) use ($allow): bool {
+                    $slotId = \strtolower(\trim((string)($item['slot_id'] ?? '')));
+
+                    return $slotId !== '' && isset($allow[$slotId]);
+                },
+            ));
+            if ($plan === []) {
+                return $rendered;
+            }
         }
 
         $maxDepth = 0;

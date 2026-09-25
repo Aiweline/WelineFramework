@@ -8,6 +8,7 @@
             <module name="Weline_Customer"/>
             <module name="Weline_I18n"/>
             <module name="Weline_Order"/>
+            <module name="Weline_Product"/>
             <module name="Weline_Widget"/>
         </sequence>
     </module>

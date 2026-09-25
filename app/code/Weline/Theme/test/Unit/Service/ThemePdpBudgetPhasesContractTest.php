@@ -44,5 +44,14 @@ final class ThemePdpBudgetPhasesContractTest extends TestCase
         self::assertStringContainsString("public const MAIN = 'pdp.main'", $phases);
         self::assertStringContainsString("public const RELATED_STACK = 'pdp.related_stack'", $phases);
         self::assertStringContainsString("public const PERSONALIZATION = 'pdp.personalization'", $phases);
+        self::assertStringContainsString('function reserveTraceBuckets', $phases);
+        self::assertStringContainsString('function stampSectionAttributes', $phases);
+        self::assertStringContainsString('function forWidgetCode', $phases);
+
+        $component = (string)file_get_contents($themeRoot . '/Service/ThemeComponentRenderer.php');
+        self::assertStringContainsString('ThemePdpBudgetPhases::forWidgetCode', $component);
+
+        $fetchBefore = (string)file_get_contents($themeRoot . '/Observer/ControllerFetchFileBefore.php');
+        self::assertStringContainsString('ThemePdpBudgetPhases::reserveTraceBuckets', $fetchBefore);
     }
 }

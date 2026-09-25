@@ -110,11 +110,29 @@ final class ProductLabelStyle
             $saleText = $discountPercent > 0 ? ('-' . $discountPercent . '%') : '特价';
         }
 
-        // Align with storefront trust copy「满 $49 包邮」; USD-facing shelf prices.
-        $freeShipThreshold = 49.0;
+        // Only honor product-scoped catalog config — never invent whole-cart thresholds.
         $isFreeShipping = !empty($product['free_shipping']) || !empty($product['is_free_shipping']);
-        if (!$isFreeShipping && empty($product['currency_unavailable']) && empty($product['quote_only']) && $price >= $freeShipThreshold) {
-            $isFreeShipping = true;
+        if (!$isFreeShipping) {
+            $meta = $product['fulfillment_metadata'] ?? null;
+            if (\is_array($meta)) {
+                $flag = $meta['is_free_shipping'] ?? false;
+                $isFreeShipping = $flag === true || $flag === 1 || $flag === '1';
+            }
+        }
+        if ($isFreeShipping) {
+            $minMajor = 0.0;
+            if (isset($product['free_shipping_min_amount']) && is_numeric($product['free_shipping_min_amount'])) {
+                $minMajor = max(0.0, (float)$product['free_shipping_min_amount']);
+            } elseif (\is_array($product['fulfillment_metadata'] ?? null)
+                && isset($product['fulfillment_metadata']['free_shipping_min_amount'])
+                && is_numeric($product['fulfillment_metadata']['free_shipping_min_amount'])
+            ) {
+                $minMajor = max(0.0, (float)$product['fulfillment_metadata']['free_shipping_min_amount']);
+            }
+            if ($minMajor > 0.0) {
+                $price = (float)($product['price'] ?? 0);
+                $isFreeShipping = $price + 1e-9 >= $minMajor;
+            }
         }
 
         return [

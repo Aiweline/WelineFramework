@@ -245,6 +245,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  /* 固定占位，避免偶发空态仍把价签顶上去 */
+  min-height: 1em;
   color: var(--wpc-link);
   font-size: 0.75rem;
 }

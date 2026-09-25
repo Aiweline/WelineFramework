@@ -1234,6 +1234,14 @@ final class CartService
         if ($snapshot->fulfillmentMetadata !== []) {
             $line['fulfillment_metadata'] = $snapshot->fulfillmentMetadata;
         }
+        $metaFree = $snapshot->fulfillmentMetadata['is_free_shipping'] ?? false;
+        if ($metaFree === true || $metaFree === 1 || $metaFree === '1') {
+            $line['is_free_shipping'] = true;
+            $minAmount = $snapshot->fulfillmentMetadata['free_shipping_min_amount'] ?? null;
+            if ($minAmount !== null && $minAmount !== '' && is_numeric($minAmount)) {
+                $line['free_shipping_min_amount'] = (float)$minAmount;
+            }
+        }
         return $line;
     }
 

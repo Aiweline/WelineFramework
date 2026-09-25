@@ -212,10 +212,119 @@ class LayoutSlotRenderer implements ObserverInterface
                             ::shellSafetyNetFillReason($html);
                         $needsSafetyNet = $gateReason !== 'none';
                         $snapshotPrefill = !$needsSafetyNet;
+
+                        // List/category: filter declaration placeholders with chrome already
+                        // present → narrow overlay only (avoid ~1.7s whole-shell fill).
+                        if ($needsSafetyNet
+                            && \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller
+                                ::shouldPreferNarrowFilterHeal($html)
+                        ) {
+                            if ($pageTypeForPrime === '') {
+                                $pageTypeForPrime = $this->detectPageType($template);
+                            }
+                            $narrowPageType = $pageTypeForPrime !== ''
+                                ? $pageTypeForPrime
+                                : $this->resolveSafetyNetPageType($template, $html, '');
+                            if ($narrowPageType === '') {
+                                $narrowPageType = ThemeLayout::PAGE_TYPE_HOME;
+                            }
+                            $html = $prefillFiller->healNarrowFilterPlaceholders(
+                                $html,
+                                $themeIdForPrime,
+                                $narrowPageType,
+                                $area,
+                            );
+                            $gateReason = \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                                ::shellSafetyNetFillReason($html);
+                            $needsSafetyNet = $gateReason !== 'none';
+                            if (!$needsSafetyNet) {
+                                $reason .= '+narrow_filter_heal';
+                                $snapshotPrefill = true;
+                            } elseif (
+                                (
+                                    $gateReason === 'missing_chrome_blank_header_or_footer'
+                                    || $gateReason === 'missing_chrome_header_signals'
+                                )
+                                && (
+                                    \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                                        ::shellHasSubstantialHeaderChrome($html)
+                                    || \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                                        ::shellHasStorefrontHeaderSignal($html)
+                                )
+                                // Empty weline-footer--shell also contains "weline-footer" — require real body.
+                                && \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                                    ::shellHasSubstantialFooterChrome($html)
+                                && (
+                                    \str_contains($html, 'products-layout')
+                                    || \str_contains($html, 'category-layout')
+                                    || \str_contains($html, 'product-detail-layout')
+                                    || \str_contains($html, 'theme-layout-product')
+                                    || \str_contains($html, 'data-layout="product-detail"')
+                                )
+                            ) {
+                                // Filters healed; exclusive chrome roots may still look blank while
+                                // Partial header/footer bodies are already present — skip whole-shell fill.
+                                $html = $prefillFiller->prefillPublishedChromeFromRenderedSnapshot(
+                                    $html,
+                                    $themeIdForPrime,
+                                );
+                                $needsSafetyNet = false;
+                                $snapshotPrefill = true;
+                                $reason .= '+narrow_filter_heal+chrome_partial_skip';
+                                $gateReason = 'none';
+                            }
+                        }
                     }
                 } catch (\Throwable) {
                     // soft — fall through to prime+heal when still incomplete
                 }
+            }
+
+            // PDP / listing: chrome-only gate with Partial header+footer already present →
+            // skip whole-shell fill (exclusive blank roots are declaration leftovers).
+            // Bare "weline-footer" matches empty footer--shell — require substantial body.
+            if ($needsSafetyNet
+                && (
+                    $gateReason === 'missing_chrome_blank_header_or_footer'
+                    || $gateReason === 'missing_chrome_header_signals'
+                )
+                && (
+                    \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                        ::shellHasStorefrontHeaderSignal($html)
+                    || \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                        ::shellHasSubstantialHeaderChrome($html)
+                )
+                && \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                    ::shellHasSubstantialFooterChrome($html)
+                && (
+                    \str_contains($html, 'products-layout')
+                    || \str_contains($html, 'category-layout')
+                    || \str_contains($html, 'product-detail-layout')
+                    || \str_contains($html, 'theme-layout-product')
+                    || \str_contains($html, 'data-layout="product-detail"')
+                )
+            ) {
+                try {
+                    if ($themeIdForPrime < 1) {
+                        $themeIdForPrime = $this->resolveThemeId($area);
+                    }
+                    if ($themeIdForPrime > 0) {
+                        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller $prefillFiller */
+                        $prefillFiller = ObjectManager::getInstance(
+                            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller::class,
+                        );
+                        $html = $prefillFiller->prefillPublishedChromeFromRenderedSnapshot(
+                            $html,
+                            $themeIdForPrime,
+                        );
+                    }
+                } catch (\Throwable) {
+                    // soft
+                }
+                $needsSafetyNet = false;
+                $snapshotPrefill = true;
+                $reason .= '+chrome_partial_skip';
+                $gateReason = 'none';
             }
 
             if (!$needsSafetyNet) {
@@ -312,12 +421,17 @@ class LayoutSlotRenderer implements ObserverInterface
                     $html = $filler->healPublishedPlaceholderShell($html, $themeId, $pageType, $area);
                     // Actual $pageType (not HOME): requiredForPage inherits chrome-carrier only;
                     // forcing HOME would plan content→newsletter onto policy/terms.
-                    $html = $filler->fillRequiredDefaultsOnShell(
-                        $html,
-                        $themeId,
-                        $pageType,
-                        ThemeLayout::STATUS_PUBLISHED,
-                    );
+                    // Skip second overlay when heal already closed the gate (avoid double work).
+                    if (\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                        ::shellNeedsRuntimeSafetyNetFill($html)
+                    ) {
+                        $html = $filler->fillRequiredDefaultsOnShell(
+                            $html,
+                            $themeId,
+                            $pageType,
+                            ThemeLayout::STATUS_PUBLISHED,
+                        );
+                    }
                 } catch (\Throwable) {
                     // Soft: still strip markers and deliver whatever healed.
                 }
@@ -506,6 +620,9 @@ class LayoutSlotRenderer implements ObserverInterface
         } elseif (\defined('PROD') && PROD) {
             $html = SlotBoundaryMarkers::strip($html);
         }
+
+        // Design themes (hanfu/daocharms) may omit data-pdp-budget-phase; stamp for armed samples.
+        $html = \Weline\Theme\Service\ThemePdpBudgetPhases::stampSectionAttributes($html);
 
         try {
             /** @var PreviewBootstrapAssetInjector $injector */

@@ -48,6 +48,7 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('isWidgetActive', $settings);
         self::assertStringContainsString('frontendPayload', $settings);
         self::assertStringContainsString('widgetConfigFromTemplate', $settings);
+        self::assertStringContainsString('hookOwnedWidgetConfig', $settings);
         self::assertStringContainsString('tracksFromWidgetConfig', $settings);
         self::assertStringContainsString('KEY_PLAYLIST', $settings);
         self::assertStringContainsString('KEY_AVATAR_SPIN', $settings);
@@ -90,6 +91,7 @@ final class StoreMusicSettingsContractTest extends TestCase
 
         self::assertStringContainsString('isWidgetActive', $widget);
         self::assertStringContainsString('widgetConfigFromTemplate', $widget);
+        self::assertStringContainsString('hookOwnedWidgetConfig', $widget);
         self::assertStringContainsString('frontendPayload($widgetConfig)', $widget);
         self::assertStringContainsString('data-weline-load="storeMusic"', $widget);
         self::assertStringContainsString('data-testid="store-music-widget"', $widget);
@@ -183,6 +185,30 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertSame('简介甲', $tracks[0]['intro']);
         self::assertSame('/media/store-music/b.mp3', $tracks[1]['url']);
         self::assertSame('b', $tracks[1]['title']);
+    }
+
+    public function testHookOwnedWidgetConfigStripsAnnotationDefaultPollution(): void
+    {
+        self::assertNull(StoreMusicSettings::hookOwnedWidgetConfig(null));
+        self::assertNull(StoreMusicSettings::hookOwnedWidgetConfig([
+            'enabled' => false,
+            'tracks' => [],
+        ]));
+        self::assertSame(
+            ['delay_seconds' => 5],
+            StoreMusicSettings::hookOwnedWidgetConfig([
+                'enabled' => false,
+                'tracks' => [],
+                'delay_seconds' => 5,
+            ])
+        );
+        $withTracks = [
+            'enabled' => false,
+            'tracks' => [['url' => '/media/a.mp3', 'title' => '甲']],
+        ];
+        self::assertSame($withTracks, StoreMusicSettings::hookOwnedWidgetConfig($withTracks));
+        $enabledOn = ['enabled' => true, 'tracks' => []];
+        self::assertSame($enabledOn, StoreMusicSettings::hookOwnedWidgetConfig($enabledOn));
     }
 
     public function testDoesNotPatchSystemConfigCoreTemplate(): void

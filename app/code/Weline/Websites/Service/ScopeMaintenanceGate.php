@@ -60,11 +60,57 @@ final class ScopeMaintenanceGate
         return $this->maintenanceScope($scope) !== null;
     }
 
-    /**
-     * @return array{scope_key:string,enabled:bool,reason:string,generation:int,since:int}
-     */
     public function status(ScopeIdentity $scope): array
     {
+        // N4: prefer storefront.render_context.v1 when Installer already froze
+        // this scope's maintenance snapshot (no parallel bag / no second SQL).
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
+                $bag = \Weline\Framework\Runtime\StorefrontRenderContextReader::maintenance();
+                if (\is_array($bag)
+                    && ($bag['scope_key'] ?? '') === $scope->canonicalKey()
+                ) {
+                    return [
+                        'scope_key' => (string)($bag['scope_key'] ?? $scope->canonicalKey()),
+                        'enabled' => (bool)($bag['enabled'] ?? false),
+                        'reason' => (string)($bag['reason'] ?? ''),
+                        'generation' => (int)($bag['generation'] ?? 0),
+                        'since' => (int)($bag['since'] ?? 0),
+                    ];
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        // Request memo for parent candidates walked by maintenanceScope().
+        try {
+            if (\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)
+                && \class_exists(\Weline\Framework\Manager\ObjectManager::class)
+            ) {
+                /** @var \Weline\Framework\Cache\Service\StorefrontScopeHotCache $hot */
+                $hot = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class
+                );
+                $memo = $hot->rememberForRequest(
+                    'scope_maintenance',
+                    $scope->canonicalKey(),
+                    fn (): array => $this->repository->status($scope),
+                );
+                if (\is_array($memo)
+                    && \array_key_exists('enabled', $memo)
+                ) {
+                    return [
+                        'scope_key' => (string)($memo['scope_key'] ?? $scope->canonicalKey()),
+                        'enabled' => (bool)($memo['enabled'] ?? false),
+                        'reason' => (string)($memo['reason'] ?? ''),
+                        'generation' => (int)($memo['generation'] ?? 0),
+                        'since' => (int)($memo['since'] ?? 0),
+                    ];
+                }
+            }
+        } catch (\Throwable) {
+        }
+
         return $this->repository->status($scope);
     }
 
@@ -74,7 +120,7 @@ final class ScopeMaintenanceGate
     public function maintenanceScope(ScopeIdentity $scope): ?ScopeIdentity
     {
         foreach ($this->candidates($scope) as $candidate) {
-            if ($this->repository->status($candidate)['enabled']) {
+            if ($this->status($candidate)['enabled']) {
                 return $candidate;
             }
         }

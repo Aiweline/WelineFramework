@@ -67,7 +67,7 @@ final class HeadAndProductCardRememberPolicyContractTest extends TestCase
             ['density' => 'compact', 'show_price' => true]
         );
 
-        self::assertStringStartsWith('theme.product_card.html.v2.', $a);
+        self::assertStringStartsWith('theme.product_card.html.v4.', $a);
         self::assertNotSame($a, $b);
         self::assertNotSame($a, $c);
     }
@@ -79,7 +79,7 @@ final class HeadAndProductCardRememberPolicyContractTest extends TestCase
         );
         // Absolute @url links in card HTML must not cross Worker :19655 vs public :9555.
         self::assertStringContainsString('storefrontOriginSegment', $src);
-        self::assertStringContainsString('theme.product_card.html.v2.', $src);
+        self::assertStringContainsString('theme.product_card.html.v4.', $src);
         self::assertStringContainsString("'website_url' => true", $src);
         self::assertStringContainsString("'host' => true", $src);
         self::assertStringContainsString("'base_url' => true", $src);

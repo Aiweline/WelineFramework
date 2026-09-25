@@ -146,12 +146,16 @@ $hrefAttr = 'href="' . $esc($resolvedHref !== '' ? $resolvedHref : '#') . '"';
             <p class="wpc-sku">SKU: <?= $esc($sku) ?></p>
         <?php endif; ?>
 
-        <?php if ($showRating && $rating > 0): ?>
-            <div class="wpc-rating" aria-label="<?= $esc(number_format($rating, 1)) ?>">
-                <span class="wpc-stars" data-widget-style="--rating: <?= $esc(number_format(min(5, max(0, $rating)), 2)) ?>"></span>
-                <?php if ($reviewCount > 0): ?>
-                    <span class="wpc-reviews">(<?= $reviewCount ?>)</span>
-                <?php endif; ?>
+        <?php if ($showRating): ?>
+            <?php
+            // 无评论也保留评分行（灰星 + (0)），避免网格内价签/CTA 上下错位
+            $ratingSafe = min(5.0, max(0.0, $rating));
+            $reviewCountSafe = max(0, $reviewCount);
+            $ratingAria = number_format($ratingSafe, 1) . ' (' . $reviewCountSafe . ')';
+            ?>
+            <div class="wpc-rating" aria-label="<?= $esc($ratingAria) ?>">
+                <span class="wpc-stars" data-widget-style="--rating: <?= $esc(number_format($ratingSafe, 2)) ?>"></span>
+                <span class="wpc-reviews">(<?= $reviewCountSafe ?>)</span>
             </div>
         <?php endif; ?>
 

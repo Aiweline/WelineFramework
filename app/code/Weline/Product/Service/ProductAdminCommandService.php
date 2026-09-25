@@ -247,6 +247,8 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 $localOffers = [];
                 $shippingProfileCode = $this->normalizeShippingProfileCode($payload);
                 $shippingHazardClass = $this->normalizeShippingHazardClass($payload);
+                $isFreeShipping = $this->normalizeIsFreeShipping($payload);
+                $freeShippingMinAmount = $this->normalizeFreeShippingMinAmount($payload);
                 foreach ($offerSpecs as $index => $spec) {
                     $offerIdentity = $offerIdentities[$index];
                     $offerData = [
@@ -263,6 +265,12 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     }
                     if ($shippingHazardClass !== null) {
                         $offerData[Offer::schema_fields_SHIPPING_HAZARD_CLASS] = $shippingHazardClass;
+                    }
+                    if ($isFreeShipping !== null) {
+                        $offerData[Offer::schema_fields_IS_FREE_SHIPPING] = $isFreeShipping;
+                    }
+                    if ($freeShippingMinAmount !== null) {
+                        $offerData[Offer::schema_fields_FREE_SHIPPING_MIN_AMOUNT] = $freeShippingMinAmount;
                     }
                     $configuration = is_array($spec['configuration'] ?? null)
                         ? $spec['configuration']
@@ -543,6 +551,8 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     $this->writePrices($command->websiteId, $productId, $payload);
                     $this->writeOfferShippingProfiles($command->websiteId, $productId, $payload);
                     $this->writeOfferShippingHazards($command->websiteId, $productId, $payload);
+                    $this->writeOfferIsFreeShipping($command->websiteId, $productId, $payload);
+                    $this->writeOfferFreeShippingMinAmount($command->websiteId, $productId, $payload);
                     $this->writeTaxonomyAndMedia($command->websiteId, $productId, $payload);
                     if (array_key_exists('store_ids', $payload)) {
                         $selected = $this->selectedStoreIds($command->websiteId, $payload);
@@ -1526,6 +1536,105 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
             $cost,
             false,
         );
+    }
+
+    /**
+     * Null = field absent (do not write). 0/1 = explicit product free-shipping flag.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function normalizeIsFreeShipping(array $payload): ?int
+    {
+        if (!array_key_exists('is_free_shipping', $payload)) {
+            return null;
+        }
+        $value = $payload['is_free_shipping'];
+        if ($value === true || $value === 1 || $value === '1' || $value === 'true') {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    /**
+     * Null = absent. Major-unit threshold; 0 = no minimum once enabled.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function normalizeFreeShippingMinAmount(array $payload): ?string
+    {
+        if (!array_key_exists('free_shipping_min_amount', $payload)) {
+            return null;
+        }
+        $raw = $payload['free_shipping_min_amount'];
+        if ($raw === null || $raw === '') {
+            return '0';
+        }
+        if (!is_numeric($raw)) {
+            throw new \InvalidArgumentException('free_shipping_min_amount_invalid');
+        }
+        $amount = (float)$raw;
+        if ($amount < 0 || $amount > 99999999) {
+            throw new \InvalidArgumentException('free_shipping_min_amount_invalid');
+        }
+
+        return number_format($amount, 4, '.', '');
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function writeOfferIsFreeShipping(int $websiteId, int $productId, array $payload): void
+    {
+        $flag = $this->normalizeIsFreeShipping($payload);
+        if ($flag === null) {
+            return;
+        }
+        $offers = $this->offers->listByProductIds($websiteId, [$productId]);
+        foreach ($offers as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $offerId = (int)($row['offer_id'] ?? $row['id'] ?? 0);
+            $version = (int)($row['publish_version'] ?? $row['offer_version'] ?? 0);
+            if ($offerId <= 0) {
+                continue;
+            }
+            $this->offers->updateVersioned(
+                $websiteId,
+                $offerId,
+                $version,
+                [Offer::schema_fields_IS_FREE_SHIPPING => $flag],
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function writeOfferFreeShippingMinAmount(int $websiteId, int $productId, array $payload): void
+    {
+        $amount = $this->normalizeFreeShippingMinAmount($payload);
+        if ($amount === null) {
+            return;
+        }
+        $offers = $this->offers->listByProductIds($websiteId, [$productId]);
+        foreach ($offers as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $offerId = (int)($row['offer_id'] ?? $row['id'] ?? 0);
+            $version = (int)($row['publish_version'] ?? $row['offer_version'] ?? 0);
+            if ($offerId <= 0) {
+                continue;
+            }
+            $this->offers->updateVersioned(
+                $websiteId,
+                $offerId,
+                $version,
+                [Offer::schema_fields_FREE_SHIPPING_MIN_AMOUNT => $amount],
+            );
+        }
     }
 
     /**

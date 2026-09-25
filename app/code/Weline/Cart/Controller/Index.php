@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Weline\Cart\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Service\StorefrontSsrChromeHealer;
 
 /**
  * Storefront cart page.
@@ -52,12 +54,27 @@ class Index extends FrontendController
         // P0: template()/fetchHtml — skips fetch_file_after LayoutSlotRenderer
         // entity fill (after_ms≈30s / worker starvation / nginx 502 + RequestExit).
         // Theme Partials header/footer stay; do not tear chrome.
+        // Disk-splice footer-container into empty weline-footer--shell (theme_seat_integrity).
         $body = $this->template('Weline_Cart::templates/frontend/cart/index.phtml');
         $meta['content'] = $body;
         $this->assign('meta', $meta);
         $this->assign('content', $body);
 
-        return $this->template('Weline_Cart::theme/frontend/layouts/cart/default.phtml');
+        $html = $this->template('Weline_Cart::theme/frontend/layouts/cart/default.phtml');
+
+        return $this->ensurePublishedChrome($html);
+    }
+
+    private function ensurePublishedChrome(string $html): string
+    {
+        try {
+            /** @var StorefrontSsrChromeHealer $healer */
+            $healer = ObjectManager::getInstance(StorefrontSsrChromeHealer::class);
+
+            return $healer->ensure($html);
+        } catch (\Throwable) {
+            return $html;
+        }
     }
 
     /**

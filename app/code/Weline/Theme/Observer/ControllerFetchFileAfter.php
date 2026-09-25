@@ -12,6 +12,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\StorefrontWidgetRuntimeSchedule;
 use Weline\Framework\View\PreparedContentStore;
 use Weline\Framework\View\Template;
 
@@ -70,6 +71,7 @@ class ControllerFetchFileAfter implements ObserverInterface
         // FetchBefore 仍会把同一路径写成 contentTemplate+layoutTemplate；
         // 若再 wrap，meta.content 会嵌进第二份 <html>/<head>/header。
         if ($this->isSameFrontendLayoutDocument($contentTemplate, $layoutTemplate)) {
+            $this->primeWidgetRuntimeSchedule($template, $layoutTemplate, $contentTemplate);
             $html = $fallbackContent !== ''
                 ? $fallbackContent
                 : $this->renderContentTemplate($template, $contentTemplate, '');
@@ -83,6 +85,7 @@ class ControllerFetchFileAfter implements ObserverInterface
         }
 
         try {
+            $this->primeWidgetRuntimeSchedule($template, $layoutTemplate, $contentTemplate);
             $contentHtml = $this->renderContentTemplate($template, $contentTemplate, $fallbackContent);
             $memoryProbe('after_content_template', $contentHtml);
             $fastAuthHtml = $this->renderFastAccountAuthLayout($template, $layoutTemplate, $contentHtml);
@@ -738,6 +741,12 @@ HTML;
 
                 // Clear previous layout directive before rendering.
                 $template->setData('layout', null);
+                // N3 / F2：布局 fetch 前页级 WidgetRuntimeSchedule（asset prefetchPolicy 一次 MGET）。
+                $this->primeWidgetRuntimeSchedule(
+                    $template,
+                    $currentLayoutTemplate,
+                    $currentContentTemplate
+                );
                 $layoutFetchSpan = 'theme::ControllerFetchFileAfter::layoutFetch::'
                     . $this->traceTemplateLabel($currentLayoutTemplate)
                     . "::depth_{$depth}";
@@ -839,6 +848,22 @@ HTML;
                     'theme'
                 );
             }
+        }
+    }
+
+    /**
+     * N3 / F2：布局渲染前页级 StorefrontWidgetRuntimeSchedule（asset prefetchPolicy）。
+     * Fail-open：编排失败不阻断布局。
+     */
+    private function primeWidgetRuntimeSchedule(Template $template, string ...$templateRefs): void
+    {
+        try {
+            $schedule = ObjectManager::getInstance(StorefrontWidgetRuntimeSchedule::class);
+            if ($schedule instanceof StorefrontWidgetRuntimeSchedule) {
+                $schedule->primeBeforeLayoutFetch($template, ...$templateRefs);
+            }
+        } catch (\Throwable) {
+            // Fail-open: inline render still works without page-level prime.
         }
     }
 

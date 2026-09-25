@@ -17,14 +17,16 @@ final class Limits
     // Align with address region children max (RegionQueryProvider children limit≤2000);
     // global country catalogs alone exceed the previous 200-item cap.
     public const LIST_ITEMS = 2000;
-    public const MAP_KEYS = 100;
+    // Align with LIST_ITEMS: i18n / widget chrome dictionaries (e.g. CustomerService
+    // WIDGET_KEYS) already exceed the previous 100-key cap and fail query-bin encode.
+    public const MAP_KEYS = 2000;
     public const STRING_BYTES = 2_097_152;
     public const SAFE_INTEGER = 9_007_199_254_740_991;
 
     public const PACKET_ERROR = 'Weline binary packet exceeds 4MB limit.';
     public const VALUE_DEPTH_ERROR = 'Weline binary value exceeds max depth.';
     public const LIST_ITEMS_ERROR = 'List exceeds 2000 item limit.';
-    public const MAP_KEYS_ERROR = 'Map exceeds 100 key limit.';
+    public const MAP_KEYS_ERROR = 'Map exceeds 2000 key limit.';
     public const STRING_BYTES_ERROR = 'String exceeds 2MB limit.';
     public const BYTE_STRING_BYTES_ERROR = 'Byte string exceeds 2MB limit.';
     public const MAP_KEY_BYTES_ERROR = 'Map key exceeds 2MB limit.';

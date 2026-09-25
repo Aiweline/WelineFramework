@@ -236,13 +236,22 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('data-store-music-wave', $phtml);
         self::assertStringNotContainsString('music-box-closed.png', $phtml);
         self::assertStringNotContainsString('data-store-music-stage', $phtml);
-        self::assertStringContainsString('data-weline-store-music-purge', $phtml);
         self::assertStringContainsString('data-store-music-spectrum', $phtml);
         self::assertStringContainsString('w-store-music__spectrum', $phtml);
         // The template is included by a raw Hook as well as the normal view
         // renderer; static URLs must therefore be resolved before HTML output.
+        // Hook bypasses @widget.source — must emit <link data-store-music-css>
+        // or the float stays position:static while audio still plays.
+        // Critical inline style keeps position:fixed even when the stylesheet 403s.
         self::assertStringContainsString('fetchTagSource', $phtml);
         self::assertStringContainsString('DataInterface::dir_type_STATICS', $phtml);
+        self::assertStringContainsString('data-store-music-css', $phtml);
+        self::assertStringContainsString('data-store-music-host-css', $phtml);
+        self::assertStringContainsString('data-store-music-critical', $phtml);
+        self::assertStringContainsString('position:fixed!important', $phtml);
+        self::assertStringContainsString('css/widgets/widget-store-music.css', $phtml);
+        self::assertStringContainsString('css/store-music.css', $phtml);
+        self::assertStringContainsString('<link rel="stylesheet"', $phtml);
         self::assertStringNotContainsString('getStaticUrl', $phtml);
         self::assertStringNotContainsString('href="@static(', $phtml);
         self::assertStringNotContainsString('src="@static(', $phtml);

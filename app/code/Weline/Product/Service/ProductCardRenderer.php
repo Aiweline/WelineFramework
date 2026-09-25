@@ -21,7 +21,7 @@ final class ProductCardRenderer
     private const CSS_DISCARD_HOOK = 'product.product_card_css_discard';
     /** Marker consumed by the shared widget asset placement pipeline. */
     public const CSS_LINK_MARKER = 'data-weline-product-card-css';
-    private const CSS_VERSION = '20260923-fe01-cta-reach';
+    private const CSS_VERSION = '20260925-rating-zero';
     /** Keep the first two desktop rows available without flooding the network. */
     private const INITIAL_VIEWPORT_IMAGE_COUNT = 8;
 
@@ -401,6 +401,15 @@ final class ProductCardRenderer
             'is_new' => !empty($offer['is_new']),
             'is_demo' => !empty($offer['is_demo']),
             'is_hot' => !empty($offer['is_hot']) || !empty($offer['is_bestseller']),
+            'is_free_shipping' => !empty($offer['is_free_shipping'])
+                || !empty($offer['free_shipping'])
+                || (($offer['fulfillment_metadata']['is_free_shipping'] ?? '') === '1')
+                || !empty($offer['fulfillment_metadata']['is_free_shipping']),
+            'free_shipping_min_amount' => max(
+                0.0,
+                (float)($offer['free_shipping_min_amount']
+                    ?? ($offer['fulfillment_metadata']['free_shipping_min_amount'] ?? 0)),
+            ),
             'discount_percent' => $hasDeal && $originalPrice > $price && $price > 0
                 ? max(0, min(90, (int)round((1 - ($price / $originalPrice)) * 100)))
                 : 0,

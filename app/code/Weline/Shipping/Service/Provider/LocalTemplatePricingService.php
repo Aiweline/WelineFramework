@@ -6,6 +6,7 @@ namespace Weline\Shipping\Service\Provider;
 
 use Weline\Currency\Service\CurrencyRateService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\ProductScopedFreeShipping;
 use Weline\Shipping\Exception\ShippingRateUnavailableException;
 use Weline\Shipping\Model\FreeShippingRule;
 use Weline\Shipping\Model\RateTemplate;
@@ -48,9 +49,24 @@ final class LocalTemplatePricingService
         array $addons = [],
     ): array {
         $currency = strtoupper(trim($currency));
-        $subtotalMinor = $freeShippingSubtotalMinor !== null
-            ? max(0, $freeShippingSubtotalMinor)
-            : $this->subtotalMinor($lines);
+        // Product-scoped waive: only billable lines enter weight/fee packing.
+        // Never treat product flags as cart-wide free shipping.
+        [$billableLines, $waivedLines] = ProductScopedFreeShipping::partition($lines, $currencyPrecision);
+        $quoteLines = $billableLines !== [] ? $billableLines : (
+            $waivedLines !== [] ? [] : $lines
+        );
+        $allProductWaived = $billableLines === [] && $waivedLines !== [];
+        // Mixed carts: evaluate cart-wide free-shipping rules on billable lines only,
+        // so product-scoped waive cannot unlock whole-cart free shipping.
+        if ($waivedLines !== [] && $billableLines !== []) {
+            $subtotalMinor = $this->subtotalMinor($billableLines);
+        } elseif ($allProductWaived) {
+            $subtotalMinor = 0;
+        } elseif ($freeShippingSubtotalMinor !== null) {
+            $subtotalMinor = max(0, $freeShippingSubtotalMinor);
+        } else {
+            $subtotalMinor = $this->subtotalMinor($lines);
+        }
         $rates = [];
         $fxSkipped = [];
         $unavailableReasons = [];
@@ -65,9 +81,11 @@ final class LocalTemplatePricingService
         /** @var PackingSplitter $packer */
         $packer = $this->objectManager->getInstance(PackingSplitter::class);
         $limits = $packingPolicy->resolveLimits($context);
-        $boxes = $packer->splitBoxes($lines, $limits['max_weight_kg'], $limits['max_volume_cm3']);
-        if ($boxes === []) {
-            $boxes = [$lines];
+        $boxes = $quoteLines === []
+            ? []
+            : $packer->splitBoxes($quoteLines, $limits['max_weight_kg'], $limits['max_volume_cm3']);
+        if ($boxes === [] && $quoteLines !== []) {
+            $boxes = [$quoteLines];
         }
 
         foreach ($matchedServices as $summary) {
@@ -83,10 +101,14 @@ final class LocalTemplatePricingService
             ) {
                 continue;
             }
-            $freeReason = $this->freeReason($service, $subtotalMinor, $currencyPrecision, $destAddress);
+            // Cart-wide service/rule free shipping uses billable-only subtotal so
+            // product-waived lines cannot unlock whole-cart free shipping.
+            $freeReason = $allProductWaived
+                ? 'product_line_free_shipping'
+                : $this->freeReason($service, $subtotalMinor, $currencyPrecision, $destAddress);
             $baseMinor = 0;
             $publicPolicy = null;
-            $boxCount = count($boxes);
+            $boxCount = max(1, count($boxes));
             if ($freeReason === null) {
                 $templateId = (int)$service->getData(ShippingService::schema_fields_RATE_TEMPLATE_ID);
                 if ($templateId <= 0) {
@@ -183,6 +205,10 @@ final class LocalTemplatePricingService
             ];
             if ($freeReason !== null) {
                 $row['free_reason'] = $freeReason;
+            }
+            if ($waivedLines !== []) {
+                $row['product_free_shipping_line_count'] = count($waivedLines);
+                $row['billable_shipping_line_count'] = count($billableLines);
             }
             if ($surchargeHits !== []) {
                 $row['surcharges'] = $surchargeHits;
