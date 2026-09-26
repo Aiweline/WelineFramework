@@ -30,6 +30,7 @@
  * @param popup_cookie_days {default=14,type="number",label="弹窗 Cookie 天数"}
  */
 
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('footer-newsletter');
@@ -37,10 +38,44 @@ $wc = $scope->cssClass;
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
-$title = __((string)($this->getData('title') ?: '订阅我们的邮件'));
-$description = __((string)($this->getData('description') ?: '获取最新的优惠信息和新品资讯'));
-$placeholder = __((string)($this->getData('placeholder') ?: '请输入您的邮箱地址'));
-$buttonText = __((string)($this->getData('button_text') ?: '订阅'));
+
+$srcTitle = '订阅我们的邮件';
+$srcDescription = '获取最新的优惠信息和新品资讯';
+$srcPlaceholder = '请输入您的邮箱地址';
+$srcButton = '订阅';
+$srcTopicPref = '主题偏好';
+$srcPromo = '优惠活动';
+$srcNew = '新品上新';
+$srcPrivacy = '可随时退订';
+$srcCoupon = '您的优惠码';
+$srcEmailRequired = '请输入有效的邮箱地址。';
+$srcFailed = '订阅失败。';
+
+WidgetI18n::prefetchLabels([
+    $srcTitle,
+    $srcDescription,
+    $srcPlaceholder,
+    $srcButton,
+    $srcTopicPref,
+    $srcPromo,
+    $srcNew,
+    $srcPrivacy,
+    $srcCoupon,
+    $srcEmailRequired,
+    $srcFailed,
+]);
+
+$title = WidgetI18n::label((string)($this->getData('title') ?? ''), $srcTitle);
+$description = WidgetI18n::label((string)($this->getData('description') ?? ''), $srcDescription);
+$placeholder = WidgetI18n::label((string)($this->getData('placeholder') ?? ''), $srcPlaceholder);
+$buttonText = WidgetI18n::label((string)($this->getData('button_text') ?? ''), $srcButton);
+$topicPrefLabel = WidgetI18n::label($srcTopicPref);
+$promoLabel = WidgetI18n::label($srcPromo);
+$newLabel = WidgetI18n::label($srcNew);
+$privacyLabel = WidgetI18n::label($srcPrivacy);
+$couponLabel = WidgetI18n::label($srcCoupon);
+$msgEmailRequired = WidgetI18n::label($srcEmailRequired);
+$msgFailed = WidgetI18n::label($srcFailed);
 $layout = $this->getData('layout') ?? 'horizontal';
 $enablePopup = filter_var($this->getData('enable_popup') ?? true, FILTER_VALIDATE_BOOLEAN);
 ?>
@@ -72,7 +107,9 @@ $enablePopup = filter_var($this->getData('enable_popup') ?? true, FILTER_VALIDAT
                 method="post"
                 data-testid="newsletter-footer-form"
                 data-newsletter-form="1"
-                data-source-surface="footer">
+                data-source-surface="footer"
+                data-msg-email-required="<?= $esc($msgEmailRequired) ?>"
+                data-msg-subscribe-failed="<?= $esc($msgFailed) ?>">
             <input type="hidden" name="source_surface" value="footer">
             <div class="newsletter-controls">
                 <input type="email"
@@ -86,19 +123,19 @@ $enablePopup = filter_var($this->getData('enable_popup') ?? true, FILTER_VALIDAT
                 </button>
             </div>
             <div class="newsletter-meta">
-                <div class="newsletter-topics" role="group" aria-label="<?= $esc(__('主题偏好')) ?>">
+                <div class="newsletter-topics" role="group" aria-label="<?= $esc($topicPrefLabel) ?>">
                     <label class="newsletter-topic">
                         <input type="hidden" name="topic_promo" value="0">
                         <input type="checkbox" name="topic_promo" value="1" checked>
-                        <span><?= $esc(__('优惠活动')) ?></span>
+                        <span><?= $esc($promoLabel) ?></span>
                     </label>
                     <label class="newsletter-topic">
                         <input type="hidden" name="topic_new_arrivals" value="0">
                         <input type="checkbox" name="topic_new_arrivals" value="1" checked>
-                        <span><?= $esc(__('新品上新')) ?></span>
+                        <span><?= $esc($newLabel) ?></span>
                     </label>
                 </div>
-                <p class="newsletter-privacy"><?= $esc(__('可随时退订')) ?></p>
+                <p class="newsletter-privacy"><?= $esc($privacyLabel) ?></p>
             </div>
         </w:form>
 
@@ -107,7 +144,7 @@ $enablePopup = filter_var($this->getData('enable_popup') ?? true, FILTER_VALIDAT
              hidden>
             <p data-newsletter-success-message></p>
             <p class="newsletter-coupon-wrap">
-                <span class="newsletter-coupon-label"><?= $esc(__('您的优惠码')) ?>:</span>
+                <span class="newsletter-coupon-label"><?= $esc($couponLabel) ?>:</span>
                 <strong data-newsletter-coupon hidden></strong>
             </p>
         </div>
@@ -124,4 +161,3 @@ $enablePopup = filter_var($this->getData('enable_popup') ?? true, FILTER_VALIDAT
     'show_once' => true,
 ]) ?>
 <?php endif; ?>
-

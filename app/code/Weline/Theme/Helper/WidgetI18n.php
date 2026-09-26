@@ -22,6 +22,7 @@ final class WidgetI18n
 
     private const PREFERRED_MODULES = [
         'Weline_Theme',
+        'Weline_Newsletter',
         'Weline_I18n',
         'Weline_Blog',
         'Weline_Review',

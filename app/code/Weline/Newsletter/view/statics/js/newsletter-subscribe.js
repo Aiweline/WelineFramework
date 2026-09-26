@@ -471,7 +471,12 @@
         var root = form.closest(ROOT_SEL) || form.closest('[data-widget-code]') || form.parentElement;
         var payload = collectPayload(form);
         if (!payload.email) {
-            showError(root, form.getAttribute('data-msg-email-required') || '请输入有效的邮箱地址。');
+            showError(
+                root,
+                form.getAttribute('data-msg-email-required')
+                    || root.getAttribute('data-msg-email-required')
+                    || '请输入有效的邮箱地址。'
+            );
             return;
         }
         var submitBtn = form.querySelector('[type="submit"]');
@@ -484,8 +489,11 @@
                 throw new Error('newsletter.subscribe unavailable');
             }
             var result = unwrap(await client.subscribe(payload, { silent: true }));
+            var failFallback = form.getAttribute('data-msg-subscribe-failed')
+                || root.getAttribute('data-msg-subscribe-failed')
+                || '订阅失败。';
             if (!result || !result.ok) {
-                showError(root, (result && result.message) || '订阅失败。');
+                showError(root, (result && result.message) || failFallback);
                 return;
             }
             showSuccess(root, result);
@@ -494,7 +502,10 @@
                 /* keep popup open to show coupon; do not auto-close */
             }
         } catch (error) {
-            showError(root, (error && error.message) ? error.message : '订阅失败。');
+            var catchFallback = form.getAttribute('data-msg-subscribe-failed')
+                || root.getAttribute('data-msg-subscribe-failed')
+                || '订阅失败。';
+            showError(root, (error && error.message) ? error.message : catchFallback);
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
