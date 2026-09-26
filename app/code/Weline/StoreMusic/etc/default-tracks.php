@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 /**
- * Default entrance-music playlist (websites/default/default/store-music).
+ * Default entrance-music playlist for Website(default) / 长安汉服
+ * (`websites/default/default/store-music`). Not Global — other websites
+ * (e.g. DaoCharms) must configure their own website-scoped playlist.
  *
  * @return list<array{url:string,title:string,intro:array<string,string>}>
  */

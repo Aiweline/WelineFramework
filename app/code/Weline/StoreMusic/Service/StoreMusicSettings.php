@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\StoreMusic\Service;
 
 use Weline\Framework\App\State;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\ConfigReader;
 
 /**
@@ -13,6 +15,11 @@ use Weline\SystemConfig\Api\ConfigReader;
  * Primary source for layout-placed widgets: Theme widget params (部件配置).
  * SystemConfig remains the Hook fallback and legacy migration source when
  * widget tracks are empty.
+ *
+ * Request-scoped reads prefer ScopeIdentity typed resolution so website-level
+ * playlists (e.g. default vs daocharms) do not collapse onto Global via the
+ * legacy `website.default.default` string (which collides with Global for the
+ * default website).
  */
 class StoreMusicSettings
 {
@@ -634,16 +641,43 @@ class StoreMusicSettings
 
     private function string(string $key, ?string $scope = null): string
     {
-        return trim((string)$this->config->get($key, self::MODULE, self::AREA, '', $scope));
+        return trim((string)$this->readConfig($key, '', $scope));
     }
 
     private function boolean(string $key, bool $default): bool
     {
-        $value = $this->config->get($key, self::MODULE, self::AREA, $default ? '1' : '0');
+        $value = $this->readConfig($key, $default ? '1' : '0', null);
         if (is_bool($value)) {
             return $value;
         }
 
         return in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    /**
+     * Explicit storage-scope string (backend editor) → legacy get.
+     * Storefront / unset scope + RequestContext ScopeIdentity → typed chain.
+     */
+    private function readConfig(string $key, mixed $default, ?string $scope): mixed
+    {
+        if ($scope !== null && trim($scope) !== '') {
+            return $this->config->get($key, self::MODULE, self::AREA, $default, $scope);
+        }
+
+        $identity = RequestContext::scopeIdentity();
+        if ($identity instanceof ScopeIdentity) {
+            $typed = $this->config->resolveTypedConfig(
+                $key,
+                self::MODULE,
+                self::AREA,
+                $identity,
+                null,
+                $default,
+            );
+
+            return $typed->found() ? $typed->value : $default;
+        }
+
+        return $this->config->get($key, self::MODULE, self::AREA, $default, $scope);
     }
 }
