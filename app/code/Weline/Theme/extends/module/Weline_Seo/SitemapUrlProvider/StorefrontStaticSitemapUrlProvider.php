@@ -95,4 +95,9 @@ final class StorefrontStaticSitemapUrlProvider implements SitemapUrlProviderInte
     {
         return true;
     }
+
+    public function supportsSiteLanguagePathExpansion(): bool
+    {
+        return true;
+    }
 }

@@ -79,4 +79,36 @@ final class WebsiteOriginRoutingTest extends TestCase
             $foreign,
         );
     }
+
+    public function testRewriteOriginsInXmlAlignsXhtmlLinkHrefWithLoc(): void
+    {
+        $directory = new SeoWebsiteDirectory();
+        $public = 'https://p05113ef3.test.weline.com:9555';
+        $xml = <<<'XML'
+<urlset xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://p05113ef3.test.weline.com/fr_FR/policy/accessibility</loc>
+    <xhtml:link rel="alternate" hreflang="en-US" href="https://p05113ef3.test.weline.com/policy/accessibility" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://p05113ef3.test.weline.com/policy/accessibility" />
+  </url>
+</urlset>
+XML;
+        $out = $directory->rewriteLoopbackOriginsInXml($xml, $public);
+        self::assertStringContainsString('<loc>' . $public . '/fr_FR/policy/accessibility</loc>', $out);
+        self::assertStringContainsString('href="' . $public . '/policy/accessibility"', $out);
+        self::assertStringNotContainsString('href="https://p05113ef3.test.weline.com/policy/accessibility"', $out);
+
+        $loopback = <<<'XML'
+<urlset xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>http://localhost/help</loc>
+    <xhtml:link rel="alternate" hreflang="en-US" href="http://localhost/help" />
+  </url>
+</urlset>
+XML;
+        $loopOut = $directory->rewriteLoopbackOriginsInXml($loopback, $public);
+        self::assertStringContainsString('<loc>' . $public . '/help</loc>', $loopOut);
+        self::assertStringContainsString('href="' . $public . '/help"', $loopOut);
+        self::assertStringNotContainsString('localhost', $loopOut);
+    }
 }

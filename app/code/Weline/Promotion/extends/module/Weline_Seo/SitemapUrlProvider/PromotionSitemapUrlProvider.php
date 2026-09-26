@@ -130,4 +130,9 @@ final class PromotionSitemapUrlProvider extends AbstractSitemapUrlProvider
     {
         return (string)\__('促销活动 sitemap URL 提供器');
     }
+
+    public function supportsSiteLanguagePathExpansion(): bool
+    {
+        return true;
+    }
 }

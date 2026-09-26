@@ -323,6 +323,33 @@ class Account extends BackendController
         }
     }
 
+    #[AclAttribute('Weline_Seo::seo_account_delete', '删除SEO账户', 'trash', '删除SEO账户并级联解除绑定与统计')]
+    public function delete(): string
+    {
+        if (!$this->request->isPost()) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('无效的请求方法'),
+            ]);
+        }
+
+        $accountId = (int)$this->request->getPost('account_id', 0);
+        if ($accountId <= 0) {
+            $accountId = (int)$this->request->getPost('id', 0);
+        }
+
+        try {
+            /** @var \Weline\Seo\Service\Admin\SeoAdminAccountService $accounts */
+            $accounts = ObjectManager::getInstance(\Weline\Seo\Service\Admin\SeoAdminAccountService::class);
+            return $this->jsonResponse($accounts->deleteAccount(['account_id' => $accountId]));
+        } catch (\Throwable $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('删除失败：%{1}', $e->getMessage()),
+            ]);
+        }
+    }
+
     #[AclAttribute('Weline_Seo::seo_account_websites', '获取站点列表', 'globe', '获取账户可绑定的站点列表')]
     public function websites(): string
     {

@@ -226,6 +226,50 @@ final class SeoAdminAccountService
     }
 
     /** @param array<string,mixed> $params @return array<string,mixed> */
+    public function deleteAccount(array $params): array
+    {
+        $accountId = (int)($params['account_id'] ?? $params['id'] ?? 0);
+        $this->assertAccount($accountId);
+
+        return $this->transactions->run($this->accounts->getConnection(), function () use ($accountId): array {
+            $bindingsRemoved = 0;
+            foreach ($this->websiteAccounts->reset()
+                ->where(SeoWebsiteAccount::schema_fields_ACCOUNT_ID, $accountId)
+                ->select()->fetchArray() as $binding) {
+                $websiteId = (int)($binding[SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? -1);
+                if ($websiteId < 0) {
+                    continue;
+                }
+                $bindingsRemoved += $this->websiteAccounts->unbindWebsiteAccount($websiteId, $accountId) ? 1 : 0;
+            }
+
+            $statsQuery = clone $this->stats;
+            $statsRemoved = count($statsQuery->reset()
+                ->where(SeoWebsiteStats::schema_fields_ACCOUNT_ID, $accountId)
+                ->select()->fetchArray());
+            if ($statsRemoved > 0) {
+                $statsQuery->reset()
+                    ->where(SeoWebsiteStats::schema_fields_ACCOUNT_ID, $accountId)
+                    ->delete()
+                    ->fetch();
+            }
+
+            $account = clone $this->accounts;
+            $account->reset()->load($accountId);
+            if (!$account->getId()) {
+                throw new \InvalidArgumentException((string)__('账户不存在'));
+            }
+            $account->delete()->fetch();
+
+            return $this->result(__('账户已删除'), [
+                'account_id' => $accountId,
+                'bindings_removed' => $bindingsRemoved,
+                'stats_removed' => $statsRemoved,
+            ]);
+        });
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
     public function syncAccountStats(array $params): array
     {
         $accountId = (int)($params['account_id'] ?? 0);

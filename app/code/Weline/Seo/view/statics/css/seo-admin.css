@@ -378,6 +378,10 @@
     max-width: 36rem;
     min-width: min(100%, 16rem);
 }
+.seo-account-toolbar__actions {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+}
 .seo-account-panel__body {
     padding: 0;
 }

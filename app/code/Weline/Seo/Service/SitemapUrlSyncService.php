@@ -14,6 +14,7 @@ use Weline\Seo\Api\Sitemap\WebsiteDirectoryInterface;
 use Weline\Seo\Interface\SitemapUrlProviderInterface;
 use Weline\Seo\Model\SitemapUrl;
 use Weline\Seo\Service\Database\SeoTransactionRunner;
+use Weline\Seo\Service\Sitemap\SitemapLocaleUrlExpander;
 use Weline\Seo\Service\Sitemap\SitemapOperationLock;
 
 final class SitemapUrlSyncService
@@ -32,6 +33,7 @@ final class SitemapUrlSyncService
         private readonly LocaleRepositoryInterface $localeRepository,
         private readonly SeoTransactionRunner $transactions,
         private readonly SitemapOperationLock $operationLock,
+        private readonly SitemapLocaleUrlExpander $localeUrlExpander,
     ) {
     }
 
@@ -48,7 +50,84 @@ final class SitemapUrlSyncService
             $stats['providers'][] = $providerStats;
             $this->mergeStats($stats, $providerStats);
         }
+        // Full sync only: disable active rows whose (module, scope) has no registered provider.
+        if ($filterModule === '') {
+            $orphanStats = $this->disableUnregisteredProviderUrls($forceReload);
+            $this->mergeStats($stats, $orphanStats);
+            if ((int)($orphanStats['disabled'] ?? 0) > 0) {
+                $stats['orphan_modules_disabled'] = $orphanStats['orphan_modules'] ?? [];
+            }
+        }
         return $this->finalizeStats($stats);
+    }
+
+    /**
+     * Disable active sitemap URL rows whose module+scope is not owned by any registered
+     * SitemapUrlProvider (e.g. removed Weline_Help provider leaving localhost orphans).
+     *
+     * @return array<string,mixed>
+     */
+    public function disableUnregisteredProviderUrls(bool $forceReload = false): array
+    {
+        $stats = $this->emptyStats();
+        $registered = [];
+        foreach ($this->registryService->getUrlProviders($forceReload) as $provider) {
+            $module = trim($provider->getModule());
+            $scope = trim($provider->getScope());
+            if ($module === '' || $scope === '') {
+                continue;
+            }
+            $registered[$this->moduleKey($module, $scope)] = true;
+        }
+        if ($registered === []) {
+            $stats['warnings'][] = 'sitemap orphan cleanup skipped: no registered URL providers';
+            return $stats;
+        }
+
+        $orphanModules = [];
+        $changedWebsites = [];
+        // Stream active rows — full-table fetchArray trips the 10k unbounded SELECT gate.
+        $query = $this->sitemapUrl->reset()
+            ->fields(implode(',', [
+                SitemapUrl::schema_fields_ID,
+                SitemapUrl::schema_fields_WEBSITE_ID,
+                SitemapUrl::schema_fields_MODULE,
+                SitemapUrl::schema_fields_SCOPE,
+            ]))
+            ->where(SitemapUrl::schema_fields_STATUS, 1)
+            ->select();
+        foreach ($query->fetchIterator() as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $module = trim((string)($row[SitemapUrl::schema_fields_MODULE] ?? ''));
+            $scope = trim((string)($row[SitemapUrl::schema_fields_SCOPE] ?? ''));
+            $key = $this->moduleKey($module, $scope);
+            if (isset($registered[$key])) {
+                continue;
+            }
+            $id = (int)($row[SitemapUrl::schema_fields_ID] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $this->disableUrl($id);
+            $stats['disabled']++;
+            $orphanModules[$key] = true;
+            $changedWebsites[(int)($row[SitemapUrl::schema_fields_WEBSITE_ID] ?? 0)] = true;
+        }
+        if ($stats['disabled'] > 0) {
+            $stats['generation_pending'] = true;
+            $stats['changed_websites'] = array_map('intval', array_keys($changedWebsites));
+            $stats['changed_modules'] = array_keys($orphanModules);
+            $stats['orphan_modules'] = array_keys($orphanModules);
+            $stats['warnings'][] = sprintf(
+                'disabled %d active sitemap URL(s) for unregistered provider(s): %s',
+                $stats['disabled'],
+                implode(', ', array_keys($orphanModules)),
+            );
+        }
+
+        return $stats;
     }
 
     /** @return array<string,mixed> */
@@ -142,19 +221,23 @@ final class SitemapUrlSyncService
                     throw new \InvalidArgumentException((string)__('Sitemap Provider 目标站点不存在：%{1}', $websiteId));
                 }
                 $rawUrls = $provider->isEnabled() ? $provider->getUrlsForWebsite($websiteId) : [];
-                $validated = $this->validateUrls($rawUrls, $website, $scope, $module);
+                $expanded = $this->localeUrlExpander->expand($provider, $website, is_array($rawUrls) ? $rawUrls : []);
+                $urlsForValidate = $expanded['urls'];
+                $validated = $this->validateUrls($urlsForValidate, $website, $scope, $module);
                 if ($validated['errors'] !== []) {
                     $result = $this->emptyStats();
                     $result['invalid'] = count($validated['errors']);
                     $result['errors'] = count($validated['errors']);
                     $result['error_messages'] = $validated['errors'];
-                    $result['owner_url_count'] = count($rawUrls);
+                    $result['owner_url_count'] = (int)$expanded['owner_url_count'];
+                    $result['expanded_url_count'] = (int)$expanded['expanded_url_count'];
+                    $result['warnings'] = $expanded['warnings'];
                     return $result;
                 }
 
                 return $this->transactions->run(
                     $this->sitemapUrl->getConnection(),
-                    function () use ($websiteId, $scope, $module, $validated, $rawUrls): array {
+                    function () use ($websiteId, $scope, $module, $validated, $expanded): array {
                         $existing = $this->getExistingUrls($websiteId, $scope, $module);
                         $result = $this->performIncrementalUpdate(
                             $websiteId,
@@ -164,7 +247,9 @@ final class SitemapUrlSyncService
                             $existing['rows'],
                         );
                         $result['manual_cleanup'] = $existing['manual_cleanup'];
-                        $result['owner_url_count'] = count($rawUrls);
+                        $result['owner_url_count'] = (int)$expanded['owner_url_count'];
+                        $result['expanded_url_count'] = (int)$expanded['expanded_url_count'];
+                        $result['warnings'] = $expanded['warnings'];
                         return $result;
                     },
                 );
@@ -496,14 +581,17 @@ final class SitemapUrlSyncService
     /** @return array{rows:array<string,array<string,mixed>>,manual_cleanup:int} */
     private function getExistingUrls(int $websiteId, string $scope, string $module): array
     {
-        $rows = $this->sitemapUrl->reset()
+        $query = $this->sitemapUrl->reset()
             ->where(SitemapUrl::schema_fields_WEBSITE_ID, $websiteId)
             ->where(SitemapUrl::schema_fields_SCOPE, $scope)
             ->where(SitemapUrl::schema_fields_MODULE, $module)
-            ->select()->fetchArray();
+            ->select();
         $existing = [];
         $manualCleanup = 0;
-        foreach ($rows as $row) {
+        foreach ($query->fetchIterator() as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
             $urlKey = trim((string)($row[SitemapUrl::schema_fields_URL_KEY] ?? ''));
             if ($urlKey === '') {
                 $manualCleanup++;
@@ -664,6 +752,7 @@ final class SitemapUrlSyncService
         return [
             'inserted' => 0, 'updated' => 0, 'disabled' => 0, 'unchanged' => 0, 'total' => 0,
             'invalid' => 0, 'errors' => 0, 'manual_cleanup' => 0, 'error_messages' => [],
+            'warnings' => [], 'owner_url_count' => 0, 'expanded_url_count' => 0,
             'changed_websites' => [], 'changed_modules' => [], 'retryable' => false,
             'generation_pending' => false,
         ];
@@ -672,12 +761,13 @@ final class SitemapUrlSyncService
     /** @param array<string,mixed> $target @param array<string,mixed> $source */
     private function mergeStats(array &$target, array $source): void
     {
-        foreach (['inserted', 'updated', 'disabled', 'unchanged', 'total', 'invalid', 'errors', 'manual_cleanup'] as $key) {
+        foreach (['inserted', 'updated', 'disabled', 'unchanged', 'total', 'invalid', 'errors', 'manual_cleanup', 'owner_url_count', 'expanded_url_count'] as $key) {
             $target[$key] = (int)($target[$key] ?? 0) + (int)($source[$key] ?? 0);
         }
         $target['retryable'] = !empty($target['retryable']) || !empty($source['retryable']);
         $target['generation_pending'] = !empty($target['generation_pending']) || !empty($source['generation_pending']);
         $target['error_messages'] = array_merge((array)($target['error_messages'] ?? []), (array)($source['error_messages'] ?? []));
+        $target['warnings'] = array_merge((array)($target['warnings'] ?? []), (array)($source['warnings'] ?? []));
         $target['changed_websites'] = array_merge((array)($target['changed_websites'] ?? []), (array)($source['changed_websites'] ?? []));
         $target['changed_modules'] = array_merge((array)($target['changed_modules'] ?? []), (array)($source['changed_modules'] ?? []));
     }
@@ -688,6 +778,7 @@ final class SitemapUrlSyncService
         $stats['changed_websites'] = array_values(array_unique(array_map('intval', (array)($stats['changed_websites'] ?? []))));
         $stats['changed_modules'] = array_values(array_unique(array_map('strval', (array)($stats['changed_modules'] ?? []))));
         $stats['error_messages'] = array_values(array_unique(array_filter(array_map('strval', (array)($stats['error_messages'] ?? [])))));
+        $stats['warnings'] = array_values(array_unique(array_filter(array_map('strval', (array)($stats['warnings'] ?? [])))));
         return $stats;
     }
 

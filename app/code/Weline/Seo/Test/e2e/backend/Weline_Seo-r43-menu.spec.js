@@ -53,7 +53,8 @@ moduleDescribe(test, MODULE, 'R4.3 SEO 后台菜单', () => {
     try {
       await loginAsAdmin(page);
       await openBackendMenuBySource(page, ITEMS[2][0], { parentSources: [PARENT], title: ITEMS[2][1], pageAnchor: `[data-testid="${ITEMS[2][2]}"]` });
-      await page.getByRole('link', { name: '新增账户', exact: true }).click();
+      await expect(page.locator('[data-testid="seo-account-add"]').first()).toBeVisible();
+      await page.getByRole('link', { name: '新增账户', exact: true }).first().click();
       const form = page.locator('[data-seo-account-form]');
       await expect(form).toBeVisible();
       await form.locator('[name="name"]').fill(fixture.name);
@@ -70,6 +71,8 @@ moduleDescribe(test, MODULE, 'R4.3 SEO 后台菜单', () => {
       await expect(page.locator('body')).toContainText(fixture.name, { timeout: 12000 });
       const persisted = runFixture({ action: 'inspect_account', token: fixture.token, platform: fixture.platform });
       expect(persisted.account_id).toBeGreaterThan(0);
+      const deleteBtn = page.locator(`[data-seo-delete-account="${persisted.account_id}"]`);
+      await expect(deleteBtn).toBeVisible();
       guards.assertClean();
     } finally {
       runFixture({ action: 'cleanup_account', token: fixture.token });
