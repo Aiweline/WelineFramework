@@ -126,21 +126,30 @@
 |--------|------|------|
 | 框架回退层（**纯 WLS / 无 nginx 时的执行点**） | `Router\Core::StaticFile()` → `StaticPublicSurface::isServableFile()` | 已接入 |
 | WLS 传输层快路径 | `Server/bin/worker.php`、`worker_ssl.php` 的 `$staticExtensions` | 两份拷贝，须等于 `FAST_PATH_EXTENSIONS` |
-| nginx | 仓库根 `nginx.static-surface.conf`（`nginx.conf` 只 `include`，不再手写） | 白名单由 `servableExtensionPattern()` 生成 |
+| nginx | 仓库根 `nginx.static-surface.conf`，**由站点配置以字面绝对路径 include**（`include` 不支持变量，见下节） | 白名单由 `servableExtensionPattern()` 生成 |
 | 发布侧 | `Deploy\Upgrade` / `theme:upgrade` / `ThemeResourceGateway` | 见上节 |
 | 一致性 | `Framework/Test/Unit/Deploy/StaticPublicSurfaceContractTest` | 漂移即失败 |
 
-### nginx 两条必须知道的匹配规则
+### nginx 必须知道的规则（匹配 + 加载）
 
 1. location 优先级：`=` > `^~`（最长前缀，**命中后跳过所有正则**）> 正则 `~`/`~*`
    （**按文件出现顺序，首个命中者胜**）> 普通前缀。
 2. 因此只要站点配置里存在 `location ^~ /s/20260914/`，它就会绕过一切正则 deny，
    包括任何位置的 `location ~ \.php$ { deny all; }`。
+3. **`include` 不支持变量**：`include $WELINE_ROOT/nginx.static-surface.conf;` 会被当成
+   **字面路径**（`nginx -t` 报 `open() ".../$WELINE_ROOT/..." failed`）；相对路径又只按
+   **主配置所在目录**解析（**不是**被包含文件的目录），同样不可移植。
+   ⇒ 只能由**站点配置**（宝塔 vhost / `nginx.sample.conf` / `bt-nginx.conf`）用
+   **字面绝对路径** include 本文件。
+4. **正则里的 `{n}` 必须加双引号**：nginx 分词器把 `{` `}` 当**块定界符**，未加引号的
+   `[0-9]{8}` 会让 `nginx -t` 报 `pcre2_compile() failed: missing closing parenthesis`。
+   → 写成 `location ~ "^/s/[0-9]{8}/(?P<name>.*)$" {`。
 
-> **硬要求**：站点配置不得自己手写静态 `^~` 块；静态面全部由 `nginx.static-surface.conf` 拥有。
+> **硬要求**：站点配置不得自己手写静态 `^~` 块；静态面全部由 `nginx.static-surface.conf` 拥有，
+> 并由站点配置以**字面绝对路径** include，位置必须在 PHP-FPM 的 `location ~ \.php$`
+> （宝塔为 `include enable-php-*.conf;`）**之前** —— 否则 `/static/**.php` 会先被交给 PHP 执行。
 > 若托管面板（宝塔等）强制生成 `^~`，必须把该文件末尾「`^~` 变体」的 `if` 原样贴进那个块内部
-> （嵌套 `if` 在 `^~` 内部仍会被求值）。且该 `include` 必须位于 PHP-FPM 的
-> `location ~ \.php$` **之前**。
+> （嵌套 `if` 在 `^~` 内部仍会被求值）。
 
 ### 影响面（实测，非估算）
 
