@@ -378,10 +378,12 @@ $semanticTitle = ($defaultBrandTitle !== '' && $configuredTitle === $defaultBran
             letter-spacing: var(--hanfu-label-tracking, 0.04em);
         }
 
-        /* 店音乐悬浮头像勿挡货架标题：略缩小并确保在视口底角 */
+        /* 店音乐悬浮头像勿挡货架标题：略缩小；face 随 avatar 100% 填满，须同步 --w-spectrum-r */
         .theme-layout-homepage .w-store-music__avatar {
             width: 3.75rem;
             height: 3.75rem;
+            aspect-ratio: 1;
+            --w-spectrum-r: 1.875rem;
         }
 
         .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-actions,

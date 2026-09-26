@@ -275,6 +275,13 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringNotContainsString('--w-store-music-z-wave: 8;', $css);
         self::assertStringNotContainsString('w-store-music-edge-pulse', $css);
         self::assertStringNotContainsString('w-store-music__ripple', $css);
+        // Face must fill avatar (not a second rem size) so homepage shrink cannot oval-stretch + clip.
+        self::assertStringContainsString('inset: 0', $css);
+        self::assertMatchesRegularExpression('/\.w-store-music__face\s*\{[^}]*width:\s*100%/s', $css);
+        self::assertMatchesRegularExpression('/\.w-store-music__face\s*\{[^}]*height:\s*100%/s', $css);
+        self::assertMatchesRegularExpression('/\.w-store-music__face\s*\{[^}]*aspect-ratio:\s*1/s', $css);
+        self::assertStringNotContainsString('height="120"', $phtml);
+        self::assertStringContainsString('height="96"', $phtml);
     }
 
     public function testCrossTabPlaybackKeepsOwnershipAndUsesCompactRemoteSpectrum(): void
