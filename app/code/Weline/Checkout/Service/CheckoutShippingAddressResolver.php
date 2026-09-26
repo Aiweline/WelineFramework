@@ -6,6 +6,7 @@ namespace Weline\Checkout\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\DeliveryAddress;
+use Weline\Shipping\Service\AddressFormatter;
 use Weline\Shipping\Service\DeliveryAddressService;
 
 /**
@@ -46,7 +47,7 @@ final class CheckoutShippingAddressResolver
         if ($addressId > 0) {
             $fromBook = $this->fromDeliveryAddressId($addressId);
             if ($fromBook !== null) {
-                return $fromBook + $shippingAddress;
+                return AddressFormatter::canonicalizeCountryFields($fromBook + $shippingAddress);
             }
         }
 
@@ -69,13 +70,15 @@ final class CheckoutShippingAddressResolver
                 }
             }
             if (\is_array($preferred)) {
-                return $this->mergePreferred($shippingAddress, $preferred);
+                return AddressFormatter::canonicalizeCountryFields(
+                    $this->mergePreferred($shippingAddress, $preferred)
+                );
             }
         } catch (\Throwable) {
             // Keep client payload.
         }
 
-        return $shippingAddress;
+        return AddressFormatter::canonicalizeCountryFields($shippingAddress);
     }
 
     /**

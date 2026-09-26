@@ -34,8 +34,10 @@ final class CheckoutShippingMethodsHomologyContractTest extends TestCase
             "? (\$description . ' · ' . \$dutyNotice)",
             $src,
         );
-        self::assertStringContainsString('当前地址下所选配送方案不可用', $src);
-        self::assertStringContainsString('或联系客服协助处理', $src);
+        // 空态文案已收口到 CheckoutShippingUnavailablePresenter（getData 经 present() 消费），
+        // Provider 不再内联拒因文案。
+        self::assertFileExists(dirname(__DIR__, 3) . '/Service/CheckoutShippingUnavailablePresenter.php');
+        self::assertStringContainsString('shippingUnavailablePresenter', $src);
 
         $express = (string) file_get_contents(
             dirname(__DIR__, 3) . '/Service/ExpressCheckoutFlowService.php',

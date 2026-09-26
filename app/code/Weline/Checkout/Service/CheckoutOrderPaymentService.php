@@ -55,9 +55,9 @@ final class CheckoutOrderPaymentService
         if ($orderUuids === []) {
             throw new \InvalidArgumentException('checkout_payment_order_required');
         }
-        if ($methodCode === '') {
-            throw new \InvalidArgumentException('checkout_payment_method_required');
-        }
+        // 支付方式码只在真正发起网关扣款时才必需：资产结算（授信覆盖全额定金）与
+        // 已付对账都不经过任何 Provider，前端也不应为了过校验编造 method code。
+        // 因此该校验下移到扣款点，见下方 $amountMinor 判定之后。
         if ($idempotencyKey === '') {
             throw new \InvalidArgumentException('checkout_payment_idempotency_required');
         }
@@ -158,6 +158,11 @@ final class CheckoutOrderPaymentService
             if ($amountMinor <= 0) {
                 $this->releaseB2bCreditForDeposit($order->orderUuid, $typePayload, $idempotencyKey);
                 throw new \RuntimeException('checkout_payment_amount_invalid');
+            }
+            // 走到这里说明本单确实要发起网关扣款，此时 method code 才是必需的。
+            if ($methodCode === '') {
+                $this->releaseB2bCreditForDeposit($order->orderUuid, $typePayload, $idempotencyKey);
+                throw new \InvalidArgumentException('checkout_payment_method_required');
             }
             $lastPurpose = $hangPurpose;
 

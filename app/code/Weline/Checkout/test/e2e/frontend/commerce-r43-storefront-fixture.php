@@ -37,11 +37,15 @@ use Weline\Product\Repository\PriceRepository;
 use Weline\Product\Repository\ProductRepository;
 use Weline\Product\Service\ProductShardProvisioner;
 use Weline\Shipping\Model\Carrier;
+use Weline\Shipping\Model\CarrierRegion;
+use Weline\Shipping\Model\DestinationRegion;
 use Weline\Shipping\Model\RateTemplate;
 use Weline\Shipping\Model\Region;
+use Weline\Shipping\Model\ServiceRegion;
+use Weline\Shipping\Model\ShippingProfile;
+use Weline\Shipping\Model\ShippingProfileService;
 use Weline\Shipping\Model\ShippingService;
-use Weline\Shipping\Model\Zone;
-use Weline\Shipping\Model\ZoneRegion;
+use Weline\Shipping\Service\ShippingProfileResolver;
 use Weline\SystemConfig\Api\ConfigStore;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\SystemConfig\Model\SystemConfigVersion;
@@ -580,28 +584,6 @@ function r43_store_prepare(): array
         $regionId = r43_store_lookup_id(Region::class, Region::schema_fields_REGION_CODE, $run, Region::schema_fields_ID);
         $owned['region_id'] = $regionId;
 
-        $zone = r43_store_model(Zone::class);
-        $zone->setData([
-            Zone::schema_fields_ZONE_NAME => 'R43 Storefront Zone',
-            Zone::schema_fields_ZONE_CODE => $run,
-            Zone::schema_fields_DESCRIPTION => 'CK-R43-STORE-101',
-            Zone::schema_fields_IS_ACTIVE => 1,
-            Zone::schema_fields_SORT_ORDER => 0,
-            Zone::schema_fields_CREATED_AT => $now,
-            Zone::schema_fields_UPDATED_AT => $now,
-        ])->save();
-        $zoneId = r43_store_lookup_id(Zone::class, Zone::schema_fields_ZONE_CODE, $run, Zone::schema_fields_ID);
-        $owned['zone_id'] = $zoneId;
-
-        $zoneRegion = r43_store_model(ZoneRegion::class);
-        $zoneRegion->setData([
-            ZoneRegion::schema_fields_ZONE_ID => $zoneId,
-            ZoneRegion::schema_fields_REGION_ID => $regionId,
-            ZoneRegion::schema_fields_CREATED_AT => $now,
-        ])->save();
-        $zoneRegionId = r43_store_lookup_id(ZoneRegion::class, ZoneRegion::schema_fields_ZONE_ID, $zoneId, ZoneRegion::schema_fields_ID);
-        $owned['zone_region_id'] = $zoneRegionId;
-
         $carrier = r43_store_model(Carrier::class);
         $carrier->setData([
             Carrier::schema_fields_CARRIER_CODE => $run,
@@ -617,6 +599,49 @@ function r43_store_prepare(): array
         ])->save();
         $carrierId = r43_store_lookup_id(Carrier::class, Carrier::schema_fields_CARRIER_CODE, $run, Carrier::schema_fields_ID);
         $owned['carrier_id'] = $carrierId;
+
+        // 承运商可达性：matchingCarrierIds() 对「无覆盖规则」的承运商直接跳过（无通配回退），
+        // 所以必须为测试国家建一条 country 级覆盖，否则报价会以「无可达航线」失败。
+        $carrierRegion = r43_store_model(CarrierRegion::class);
+        $carrierRegion->setData([
+            CarrierRegion::schema_fields_CARRIER_ID => $carrierId,
+            CarrierRegion::schema_fields_REGION_TYPE => CarrierRegion::TYPE_COUNTRY,
+            CarrierRegion::schema_fields_COUNTRY_CODE => $country,
+            CarrierRegion::schema_fields_REGION_ID => $regionId,
+            CarrierRegion::schema_fields_REGION_CODE => $run,
+            CarrierRegion::schema_fields_IS_ACTIVE => 1,
+            CarrierRegion::schema_fields_CREATED_AT => $now,
+            CarrierRegion::schema_fields_UPDATED_AT => $now,
+        ])->save();
+        $carrierRegionId = r43_store_lookup_id(
+            CarrierRegion::class,
+            CarrierRegion::schema_fields_REGION_CODE,
+            $run,
+            CarrierRegion::schema_fields_ID,
+        );
+        $owned['carrier_region_id'] = $carrierRegionId;
+
+        // 可售目的地白名单：DestinationService 一旦存在白名单规则，未覆盖的地址即返回 false，
+        // 承运商覆盖匹配会直接返回空。测试国家是虚构的 'XZ'，必须显式放行。
+        $destination = r43_store_model(DestinationRegion::class);
+        $destination->setData([
+            DestinationRegion::schema_fields_SCOPE_TYPE => DestinationRegion::SCOPE_WEBSITE,
+            DestinationRegion::schema_fields_SCOPE_ID => 0,
+            DestinationRegion::schema_fields_REGION_TYPE => DestinationRegion::TYPE_COUNTRY,
+            DestinationRegion::schema_fields_COUNTRY_CODE => $country,
+            DestinationRegion::schema_fields_REGION_ID => $regionId,
+            DestinationRegion::schema_fields_REGION_CODE => $run,
+            DestinationRegion::schema_fields_IS_ACTIVE => 1,
+            DestinationRegion::schema_fields_CREATED_AT => $now,
+            DestinationRegion::schema_fields_UPDATED_AT => $now,
+        ])->save();
+        $destinationId = r43_store_lookup_id(
+            DestinationRegion::class,
+            DestinationRegion::schema_fields_REGION_CODE,
+            $run,
+            DestinationRegion::schema_fields_ID,
+        );
+        $owned['destination_id'] = $destinationId;
 
         $template = r43_store_model(RateTemplate::class);
         $template->setData([
@@ -639,10 +664,11 @@ function r43_store_prepare(): array
 
         $service = r43_store_model(ShippingService::class);
         $service->setData([
+            ShippingService::schema_fields_SCOPE_TYPE => ShippingService::SCOPE_WEBSITE,
+            ShippingService::schema_fields_SCOPE_ID => 0,
             ShippingService::schema_fields_SERVICE_NAME => 'R43 Storefront Standard',
             ShippingService::schema_fields_SERVICE_CODE => $run,
             ShippingService::schema_fields_CARRIER_ID => $carrierId,
-            ShippingService::schema_fields_ZONE_ID => $zoneId,
             ShippingService::schema_fields_RATE_TEMPLATE_ID => $templateId,
             ShippingService::schema_fields_FREE_SHIPPING_RULE_ID => null,
             ShippingService::schema_fields_ESTIMATED_DAYS_MIN => 1,
@@ -655,6 +681,51 @@ function r43_store_prepare(): array
         ])->save();
         $serviceId = r43_store_lookup_id(ShippingService::class, ShippingService::schema_fields_SERVICE_CODE, $run, ShippingService::schema_fields_ID);
         $owned['service_id'] = $serviceId;
+
+        // 2.4.18 起 Zone/ZoneRegion 已删除：目的地覆盖改由「航线」ServiceRegion 表达。
+        $serviceRegion = r43_store_model(ServiceRegion::class);
+        $serviceRegion->setData([
+            ServiceRegion::schema_fields_SERVICE_ID => $serviceId,
+            ServiceRegion::schema_fields_REGION_TYPE => ServiceRegion::TYPE_COUNTRY,
+            ServiceRegion::schema_fields_COUNTRY_CODE => $country,
+            ServiceRegion::schema_fields_REGION_ID => $regionId,
+            ServiceRegion::schema_fields_REGION_CODE => $run,
+            ServiceRegion::schema_fields_IS_ACTIVE => 1,
+            ServiceRegion::schema_fields_CREATED_AT => $now,
+            ServiceRegion::schema_fields_UPDATED_AT => $now,
+        ])->save();
+        $serviceRegionId = r43_store_lookup_id(
+            ServiceRegion::class,
+            ServiceRegion::schema_fields_REGION_CODE,
+            $run,
+            ServiceRegion::schema_fields_ID,
+        );
+        $owned['service_region_id'] = $serviceRegionId;
+
+        // 商品配送档案 -> 服务 关联：报价先由 profile 解析出 service_ids 白名单，
+        // 不在白名单内的服务会被整组过滤（表现：「商品配送档案与仓航线无交集」）。
+        // 无 shipping_profile_code 的购物车行会落到通用档案(SEED_PROFILE_GENERAL)，必须挂进去。
+        $profileServiceId = 0;
+        $generalProfile = ObjectManager::getInstance(ShippingProfileResolver::class)
+            ->resolveGeneral(ShippingProfile::SCOPE_WEBSITE, 0);
+        $profileId = (int)($generalProfile['profile']->getId() ?? 0);
+        if ($profileId > 0) {
+            $profileService = r43_store_model(ShippingProfileService::class);
+            $profileService->setData([
+                ShippingProfileService::schema_fields_PROFILE_ID => $profileId,
+                ShippingProfileService::schema_fields_SERVICE_ID => $serviceId,
+                ShippingProfileService::schema_fields_CREATED_AT => $now,
+            ])->save();
+            $profileServiceId = (int)$profileService->getId();
+            if ($profileServiceId <= 0) {
+                $linkRows = r43_store_rows(r43_store_model(ShippingProfileService::class), [
+                    ShippingProfileService::schema_fields_PROFILE_ID => $profileId,
+                    ShippingProfileService::schema_fields_SERVICE_ID => $serviceId,
+                ]);
+                $profileServiceId = (int)($linkRows[0][ShippingProfileService::schema_fields_ID] ?? 0);
+            }
+        }
+        $owned['profile_service_id'] = $profileServiceId;
 
         $websiteId = 0;
         $provision = ObjectManager::getInstance(ProductShardProvisioner::class)->provisionWebsite($websiteId);
@@ -725,8 +796,10 @@ function r43_store_prepare(): array
             'service_code' => $run,
             'payment_method' => 'fake_card',
             'region_id' => $regionId,
-            'zone_id' => $zoneId,
-            'zone_region_id' => $zoneRegionId,
+            'service_region_id' => $serviceRegionId,
+            'carrier_region_id' => $carrierRegionId,
+            'destination_id' => $destinationId,
+            'profile_service_id' => $profileServiceId,
             'carrier_id' => $carrierId,
             'template_id' => $templateId,
             'service_id' => $serviceId,
@@ -925,12 +998,15 @@ function r43_store_cleanup(array $fixture, string $groupUuid, string $orderUuid)
         r43_store_delete(r43_store_shard_model(Product::class, $websiteId), [Product::schema_fields_ID => $productId]);
     }
 
+    // 覆盖/关联行先删（引用 service_id / carrier_id / region_id），再删服务本身，避免留下悬空关联。
     foreach ([
+        [ShippingProfileService::class, ShippingProfileService::schema_fields_ID, 'profile_service_id'],
+        [ServiceRegion::class, ServiceRegion::schema_fields_ID, 'service_region_id'],
+        [CarrierRegion::class, CarrierRegion::schema_fields_ID, 'carrier_region_id'],
+        [DestinationRegion::class, DestinationRegion::schema_fields_ID, 'destination_id'],
         [ShippingService::class, ShippingService::schema_fields_ID, 'service_id'],
-        [ZoneRegion::class, ZoneRegion::schema_fields_ID, 'zone_region_id'],
         [Carrier::class, Carrier::schema_fields_ID, 'carrier_id'],
         [RateTemplate::class, RateTemplate::schema_fields_ID, 'template_id'],
-        [Zone::class, Zone::schema_fields_ID, 'zone_id'],
         [Region::class, Region::schema_fields_ID, 'region_id'],
     ] as [$class, $field, $fixtureKey]) {
         $id = (int)($fixture[$fixtureKey] ?? 0);
@@ -980,7 +1056,14 @@ function r43_store_cleanup(array $fixture, string $groupUuid, string $orderUuid)
         'shipping_services' => count(r43_store_rows(r43_store_model(ShippingService::class), [ShippingService::schema_fields_SERVICE_CODE => $run])),
         'shipping_carriers' => count(r43_store_rows(r43_store_model(Carrier::class), [Carrier::schema_fields_CARRIER_CODE => $run])),
         'shipping_templates' => count(r43_store_rows(r43_store_model(RateTemplate::class), [RateTemplate::schema_fields_TEMPLATE_CODE => $run])),
-        'shipping_zones' => count(r43_store_rows(r43_store_model(Zone::class), [Zone::schema_fields_ZONE_CODE => $run])),
+        'shipping_service_regions' => count(r43_store_rows(r43_store_model(ServiceRegion::class), [ServiceRegion::schema_fields_REGION_CODE => $run])),
+        'shipping_carrier_regions' => count(r43_store_rows(r43_store_model(CarrierRegion::class), [CarrierRegion::schema_fields_REGION_CODE => $run])),
+        'shipping_destinations' => count(r43_store_rows(r43_store_model(DestinationRegion::class), [DestinationRegion::schema_fields_REGION_CODE => $run])),
+        'shipping_profile_services' => (int)($fixture['service_id'] ?? 0) <= 0
+            ? 0
+            : count(r43_store_rows(r43_store_model(ShippingProfileService::class), [
+                ShippingProfileService::schema_fields_SERVICE_ID => (int)$fixture['service_id'],
+            ])),
         'shipping_regions' => count(r43_store_rows(r43_store_model(Region::class), [Region::schema_fields_REGION_CODE => $run])),
     ];
     if (array_sum($remaining) !== 0) {

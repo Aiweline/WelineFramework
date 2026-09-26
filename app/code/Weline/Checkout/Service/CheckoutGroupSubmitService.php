@@ -25,6 +25,7 @@ use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Shipping\Api\Quote\ShippingQuoteRequest;
 use Weline\Shipping\Api\Quote\ShippingQuoteServiceInterface;
 use Weline\Shipping\Api\Quote\SplitShippingQuoteServiceInterface;
+use Weline\Shipping\Service\AddressFormatter;
 use Weline\Shipping\Service\ShippingQuoteConflictException;
 use Weline\Tax\Api\CheckoutTaxAdvisorInterface;
 use Weline\Tax\Api\TaxConflictException;
@@ -142,6 +143,13 @@ final class CheckoutGroupSubmitService
         string $cartFingerprint = '',
         string $checkoutEntry = CheckoutEntry::CHECKOUT,
     ): array {
+        // 国家选择器会把「邮编命中的地点」当提示拼进国家显示名（"United States · San Francisco"）。
+        // 那是 UI 提示，不是国家名；country_code 才是权威。这里统一剥掉，避免落库成脏国家名。
+        $address = AddressFormatter::canonicalizeCountryFields($address);
+        if ($billingAddress !== null) {
+            $billingAddress = AddressFormatter::canonicalizeCountryFields($billingAddress);
+        }
+
         $this->rejectClientAuthority($clientHints);
         $checkoutEntry = CheckoutEntry::normalize($checkoutEntry, CheckoutEntry::CHECKOUT);
         if ($lines === []) {

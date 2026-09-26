@@ -118,6 +118,18 @@ final class CheckoutSessionFaultRecorder
         if ($token === '' || $code === '') {
             return;
         }
+        // A submitted session already produced its order; its outcome is decided.
+        // A later stray request that carries the same quote_token (typically a
+        // post-submit freezeQuote whose cart was consumed by the successful
+        // order) must not rewrite history: recording `freeze_failed` there made
+        // a completed checkout look like a failed one in the ops tables.
+        $existing = $this->sessions->get($token);
+        if (is_array($existing)) {
+            $state = (string)($existing['state'] ?? '');
+            if ($state === CheckoutSession::STATE_SUBMITTED) {
+                return;
+            }
+        }
         $this->sessions->setErrorSnapshot($token, $code, $message, $snapshot);
     }
 

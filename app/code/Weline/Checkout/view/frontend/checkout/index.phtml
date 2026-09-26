@@ -1514,6 +1514,27 @@ $copy = [
         message.classList.toggle('is-success', type === 'success');
     }
 
+    // 通知区是否已有可见提示（地址部件 / 内联回退可能已写过 embargo 或字段级提示）。
+    function hasCheckoutMessage() {
+        return !!(message && text(message.textContent).trim() !== '');
+    }
+
+    // 校验失败但无字段可标错时，把焦点落到第一个无效控件，避免「点支付毫无反馈」。
+    function focusFirstInvalidCheckoutField() {
+        const widget = window.WelineShippingCheckoutAddress;
+        if (widget && typeof widget.focusFirstFieldError === 'function') {
+            widget.focusFirstFieldError();
+            return;
+        }
+        if (!form) {
+            return;
+        }
+        const invalid = form.querySelector(':invalid');
+        if (invalid && typeof invalid.focus === 'function') {
+            invalid.focus();
+        }
+    }
+
     function setText(node, value) {
         if (node) {
             node.textContent = text(value);
@@ -2576,15 +2597,46 @@ $copy = [
 
     /**
      * P2E-003：只注入服务端 HTML，禁止 createElement 拼商品/选项 DOM。
+     *
+     * 支付方式面板的服务端 HTML 恒以首项选中渲染（selected_index=0）：传统 getData
+     * 按硬隔离规则忽略 payment_method，不会回带 selected_code。选中支付方式后会用软刷新
+     * 核对优惠（schedulePaymentIncentiveReconcile），若重渲染不保留用户已选方式，刚点的
+     * PayPal 会被打回首项「本地测试支付」（表现：闪一下就跳回）。故注入前后保留已选方式。
      */
     function applyServerHtml(node, html) {
         if (!node || typeof html !== 'string') {
             return;
         }
+        const keepPaymentMethod = node === paymentBox && form
+            ? selectedValue('payment_method')
+            : '';
         node.innerHTML = html;
+        if (keepPaymentMethod !== '') {
+            restorePaymentMethodSelection(node, keepPaymentMethod);
+        }
         if (node === paymentBox) {
             enhancePaymentMethodIntros();
         }
+    }
+
+    /**
+     * 重渲染后还原用户已选支付方式；该方式已不可用（disabled/已下线）则保留服务端默认项。
+     * 只改 checked 属性，不派发 change，避免与优惠核对软刷新互相触发。
+     */
+    function restorePaymentMethodSelection(node, code) {
+        const inputs = node.querySelectorAll('input[name="payment_method"]');
+        let target = null;
+        inputs.forEach(function (input) {
+            if (target === null && input.value === code && !input.disabled) {
+                target = input;
+            }
+        });
+        if (target === null) {
+            return;
+        }
+        inputs.forEach(function (input) {
+            input.checked = input === target;
+        });
     }
 
     function enhancePaymentMethodIntros() {
@@ -3530,6 +3582,12 @@ $copy = [
         if (!(await validateCheckoutShippingFields(address, {
             skipRequired: !requireFormValidity,
         }))) {
+            // 显式提示：此前此处静默 return，用户点支付后页面毫无反馈（自动化也会误判「已取消」）。
+            // 校验器可能已写 embargo / 字段级提示，只在通知区为空时兜底，避免覆盖更具体的文案。
+            if (!hasCheckoutMessage()) {
+                setMessage(copy.required, 'error');
+            }
+            focusFirstInvalidCheckoutField();
             return { cancelled: true, reason: 'shipping_fields' };
         }
         if (requireFormValidity && !form.reportValidity()) {
@@ -3616,7 +3674,8 @@ $copy = [
             if (!(zeroCash && shippingMethod)) {
                 throw new Error(copy.required);
             }
-            paymentMethod = paymentMethod || 'fake_card';
+            // 资产结算（授信覆盖全额定金）不经过 Provider，空 payment_method 才是真实值。
+            // 禁止编造 method code 兜底：壳列表为空时不得假按钮兜底。
         }
         const api = await getApi();
         const billingSameEl = form.querySelector('[data-billing-same]');
@@ -3664,10 +3723,6 @@ $copy = [
             window.WelineB2BCheckoutTob.syncFromFrozen(frozen);
         }
         const idempotencyKey = newIdempotencyKey(opts.idempotency_prefix || 'checkout_ui_');
-        if (window.WelineB2BCheckoutTob && typeof window.WelineB2BCheckoutTob.cashDepositMinor === 'function'
-            && window.WelineB2BCheckoutTob.cashDepositMinor() === 0) {
-            paymentMethod = paymentMethod || 'fake_card';
-        }
         const submitPayload = {
             quote_token: quoteToken,
             payment_method: paymentMethod,
@@ -3721,12 +3776,17 @@ $copy = [
             const shippingMethod = selectedValue('shipping_method');
             const paymentMethod = selectedValue('payment_method')
                 || text(continuePayBinding && continuePayBinding.payment_method).trim();
+            // 资产结算（授信覆盖全额定金）无需 Provider 支付方式，只要求配送方式；
+            // 与 submitCheckoutPayment 内的同款豁免保持一致，避免提交前被必填拦下。
+            const zeroCashDeposit = window.WelineB2BCheckoutTob
+                && typeof window.WelineB2BCheckoutTob.cashDepositMinor === 'function'
+                && window.WelineB2BCheckoutTob.cashDepositMinor() === 0;
             if (isContinuePayMode()) {
                 if (!paymentMethod) {
                     setMessage(copy.required, 'error');
                     return;
                 }
-            } else if (!shippingMethod || !paymentMethod) {
+            } else if (!shippingMethod || (!paymentMethod && !zeroCashDeposit)) {
                 setMessage(copy.required, 'error');
                 return;
             }

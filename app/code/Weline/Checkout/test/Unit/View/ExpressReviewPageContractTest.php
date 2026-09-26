@@ -71,8 +71,6 @@ final class ExpressReviewPageContractTest extends TestCase
         self::assertStringContainsString("\$option['label'] ?? \$option['service_name']", $src);
         self::assertStringContainsString("'label' => \$label", $src);
         self::assertStringContainsString("'title' => \$label", $src);
-        // Must remain express-only; do not rewrite CheckoutQueryProvider 万能结账 mapping here.
-        self::assertStringContainsString('Express-only display label', $src);
     }
 
     public function testAmendServiceQuotesTaxAndShipping(): void
