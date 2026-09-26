@@ -107,6 +107,17 @@ class CheckoutQueryProvider implements QueryProviderInterface
         try {
             $address = \is_array($params['address'] ?? null) ? $params['address'] : [];
             $address = $this->shippingAddressResolver->resolve($address, $params);
+            $checkoutEntry = $this->resolveCheckoutEntry($params);
+            $serviceCode = trim((string) ($params['service_code'] ?? ''));
+            // Express 延后运费：无航线时禁止把会话仅国家（常 CN）写回地址，否则
+            // freezeAndQuote 无法走 0 运费建单，会报 Plan family required。
+            if ($checkoutEntry === CheckoutEntry::EXPRESS && $serviceCode === '') {
+                $concreteName = trim((string) ($address['contact_name'] ?? $address['name'] ?? ''));
+                $concreteLine = trim((string) ($address['address1'] ?? $address['street'] ?? ''));
+                if ($concreteName === '' || $concreteLine === '') {
+                    $address = [];
+                }
+            }
             $clientHints = \is_array($params['client_hints'] ?? null) ? $params['client_hints'] : [];
             // Allow top-level money fields as client hints for rejection tests.
             foreach (['shipping_amount', 'shipping_amount_minor', 'tax_amount', 'tax_amount_minor', 'discount_amount', 'discount_amount_minor', 'grand_total', 'grand_total_minor'] as $moneyKey) {
@@ -157,7 +168,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 lines: $cart['lines'],
                 address: $address,
                 scope: $scope,
-                serviceCode: (string)($params['service_code'] ?? ''),
+                serviceCode: $serviceCode,
                 currency: $currency,
                 configVersion: '',
                 clientHints: $clientHints,
@@ -169,7 +180,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 cartType: strtolower(trim((string)($cart['cart_type'] ?? $cartType))) ?: $cartType,
                 existingQuoteToken: trim((string)($params['quote_token'] ?? '')),
                 cartFingerprint: $this->checkoutFingerprint($params),
-                checkoutEntry: $this->resolveCheckoutEntry($params),
+                checkoutEntry: $checkoutEntry,
             );
             $frozenToken = (string)($payload['quote_token'] ?? '');
             $this->recordCheckoutFaultSafe(function () use ($frozenToken): void {
@@ -2829,9 +2840,19 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'selling_mode' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                         'address' => ['type' => 'array', 'required' => false],
                         'idempotency_key' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                        // PDP：只结当前商品（隔离浏览车），结账页快捷支付勿传。
+                        'buy_now' => ['type' => 'boolean', 'required' => false],
+                        'product_express' => ['type' => 'boolean', 'required' => false],
+                        'provider_code' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'global_offer_uuid' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'legacy_product_id' => ['type' => 'integer', 'required' => false],
+                        'product_id' => ['type' => 'integer', 'required' => false],
+                        'selection' => ['type' => 'array', 'required' => false],
+                        'qty' => ['type' => 'integer', 'required' => false],
+                        'product' => ['type' => 'array', 'required' => false],
                     ],
                     'returns' => ['type' => 'array'],
-                    'summary' => 'Start express checkout (toc): freeze+submit with express_checkout and return approve URL',
+                    'summary' => 'Start express checkout (toc): freeze+submit with express_checkout and return approve URL; buy_now isolates PDP product',
                 ],
                 [
                     'name' => 'getExpressReview',
@@ -2846,6 +2867,9 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'checkout_group_uuid' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'service_code' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        // express-review.js refreshReview 在 shipping_address 之外再带顶层补缺字段
+                        'contact_phone' => ['type' => 'string', 'required' => false, 'max_length' => 32],
+                        'email' => ['type' => 'string', 'required' => false, 'max_length' => 128],
                         'shipping_address' => ['type' => 'array', 'required' => false],
                     ],
                     'returns' => ['type' => 'array'],
