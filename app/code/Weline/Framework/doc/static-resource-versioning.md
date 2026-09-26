@@ -79,6 +79,75 @@
 **用户命名空间逃逸**：`layouts` / `partials` / `widgets` 下是布局与部件自命名目录，真实存在名为 `test` 的布局（`Theme/view/theme/frontend/layouts/test`），故 `test`/`spec` 等段在其内不套用，避免误伤运行时资源。注意逃逸只作用于**段规则**：该目录下的 `.phtml` **源码模板仍会被排除**，其 `.css` / `.js` 等运行时资源照常发布。
 
 **边界**：排除只作用于**后续发布**，不会清理 `pub/static` 中已有的历史产物；清理须单独执行。
+不过服务侧已按同一口径拒绝（见下节），因此**即使历史产物仍物理存在也取不到** —— 清理只是收敛磁盘，不再是安全前提。
+
+## 服务侧统一口径（静态公共面）
+
+`pub/static` 在 Web 根之下，同一份「什么能作为静态字节对外提供」的规则曾散落四处且强度不一，
+导致真实泄露。唯一权威是 **`Weline\Framework\Deploy\StaticPublicSurface`**（与上面的
+`StaticPublishExclusion` 同源，二者不得各自演进）。
+
+### 事故与根因
+
+实测（**纯 WLS、不经 nginx**）：`GET /static/Weline/Frontend/view/statics/_probe.php`
+→ `HTTP 200` `Content-Type: text/x-php`，PHP 源码原文回吐。
+
+根因不是「某处规则写错了」，而是**分层语义错误**：
+
+| # | 位置 | 强度 | 实际行为 |
+|---|------|------|----------|
+| 1 | `Server/bin/worker*.php` `handleStaticFile()` 的 `$staticExtensions` | 白名单，**正确** | 不匹配时 `return null` —— 本意是「我不接管」 |
+| 2 | `Router\Core::StaticFile()`（回退层） | **无策略** | 唯一守卫是「路径含 `view`」，随后 `file_get_contents()` 原样回吐 |
+| 3 | nginx 站点配置 | 残缺 | `^~` 前缀 location **跳过所有正则** deny；`/s/{version}/` 曾零过滤 |
+| 4 | `StaticPublishExclusion`（发布侧） | 排除规则 | 只管「什么不该被铺进 `pub/static`」 |
+
+**「不接管」被回退层当成了「允许」。**
+
+### 架构原则
+
+1. **「不接管」≠「允许」。** 快路径清单只是**性能优化**，不是安全边界；
+   安全边界必须被**每一层**执行，且回退层的默认动作是**拒绝**。
+2. **发布不了的东西，绝不可能是给人下载的东西。** 服务侧拒绝规则直接复用
+   `StaticPublishExclusion`，两处共用同一套常量，无需第二份名单。
+3. **默认拒绝（allowlist）**：对编译产物树（`static` / `s/<ver>`）再要求扩展名在
+   `StaticPublicSurface::SERVABLE_EXTENSIONS` 内。
+
+### 三类判定（勿混用）
+
+| 判定 | 权威 | 语义 | 是否安全边界 |
+|------|------|------|--------------|
+| 拒绝规则 | `StaticPublishExclusion::isExcluded()` | 脚本/模板/清单/文档一律拒绝 | **是** |
+| 允许规则 | `StaticPublicSurface::SERVABLE_EXTENSIONS` | 编译产物树的扩展名白名单 | **是**（纵深防御） |
+| 快路径 | `StaticPublicSurface::FAST_PATH_EXTENSIONS` | WLS 传输层「值不值得直接回」 | **否**（⊆ 允许规则） |
+
+### 消费点（都必须走权威）
+
+| 消费点 | 位置 | 现状 |
+|--------|------|------|
+| 框架回退层（**纯 WLS / 无 nginx 时的执行点**） | `Router\Core::StaticFile()` → `StaticPublicSurface::isServableFile()` | 已接入 |
+| WLS 传输层快路径 | `Server/bin/worker.php`、`worker_ssl.php` 的 `$staticExtensions` | 两份拷贝，须等于 `FAST_PATH_EXTENSIONS` |
+| nginx | 仓库根 `nginx.static-surface.conf`（`nginx.conf` 只 `include`，不再手写） | 白名单由 `servableExtensionPattern()` 生成 |
+| 发布侧 | `Deploy\Upgrade` / `theme:upgrade` / `ThemeResourceGateway` | 见上节 |
+| 一致性 | `Framework/Test/Unit/Deploy/StaticPublicSurfaceContractTest` | 漂移即失败 |
+
+### nginx 两条必须知道的匹配规则
+
+1. location 优先级：`=` > `^~`（最长前缀，**命中后跳过所有正则**）> 正则 `~`/`~*`
+   （**按文件出现顺序，首个命中者胜**）> 普通前缀。
+2. 因此只要站点配置里存在 `location ^~ /s/20260914/`，它就会绕过一切正则 deny，
+   包括任何位置的 `location ~ \.php$ { deny all; }`。
+
+> **硬要求**：站点配置不得自己手写静态 `^~` 块；静态面全部由 `nginx.static-surface.conf` 拥有。
+> 若托管面板（宝塔等）强制生成 `^~`，必须把该文件末尾「`^~` 变体」的 `if` 原样贴进那个块内部
+> （嵌套 `if` 在 `^~` 内部仍会被求值）。且该 `include` 必须位于 PHP-FPM 的
+> `location ~ \.php$` **之前**。
+
+### 影响面（实测，非估算）
+
+对 `pub/static` 全量：白名单外的 **764** 个文件**全部**是构建残留
+（`.scss` 600 / `.less` 70 / `.lock` 42 / `.hbs` 8 / `Makefile` / `.jshintrc` / `.sql` 等），
+**无任何运行时资源**；且全仓无任何代码以 HTTP 方式取 `.scss` / `.less` / `.hbs`。
+`.well-known/` / `media/` / `errors/` 只套拒绝规则、不套白名单（其中文件可能无扩展名）。
 
 ## 呈现世代 / FPC（C-NS · C-STAMP · C-HELPER）
 
