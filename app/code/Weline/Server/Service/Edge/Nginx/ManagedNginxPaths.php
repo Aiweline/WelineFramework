@@ -46,10 +46,15 @@ final class ManagedNginxPaths
     }
 
     /**
-     * Resolved managed flag.
+     * 托管 Nginx 是否被**许可**（配置谓词，不等于「本次启动会启动它」）。
      *
-     * - explicit true: WLS owns an opt-in managed Nginx lifecycle
-     * - false/missing/auto: external or disabled; binary presence is not live edge readiness
+     * - true：显式许可
+     * - false：显式否决 —— auto 与 legacy 都不得启动托管 Nginx
+     * - auto / 未配置：许可，但本次是否真的启动由启动决策裁定：auto 还要看
+     *   宿主有没有 Nginx、二进制是否已安装（见 Nginx\ManagedNginxEdgeAvailability
+     *   与 Gateway\GatewayStartupDecision）
+     *
+     * 本方法只回答「许可」，不回答「可用」：二进制存在不等于边缘就绪。
      */
     public function managedEnabled(): bool
     {

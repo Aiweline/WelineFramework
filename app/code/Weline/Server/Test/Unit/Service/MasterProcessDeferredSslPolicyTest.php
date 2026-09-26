@@ -39,6 +39,39 @@ final class MasterProcessDeferredSslPolicyTest extends TestCase
         ])->shouldRetryCertificate());
     }
 
+    /**
+     * auto 的第三个出口（宿主无 Nginx、本项目托管 Nginx 就绪 → mode=legacy）
+     * 同样是「明文 loopback 后端 + 由别的进程终止公网 TLS」，因此同样需要项目
+     * 自己的 ACME worker 去取公网证书。漏掉 legacy 会让该实例永远没有公网证书。
+     */
+    public function testAutoResolvedManagedNginxStillTriggersFirstCertificateRetry(): void
+    {
+        self::assertTrue($this->probe(false, [
+            'gateway' => [
+                'requested_mode' => GatewayStartupDecision::MODE_AUTO,
+                'mode' => GatewayStartupDecision::MODE_LEGACY,
+                'protocol' => GatewayPaths::PROTOCOL,
+                'certificate_pending' => true,
+            ],
+        ])->shouldRetryCertificate());
+    }
+
+    /**
+     * 显式 legacy（WLS 1.x 迁移）不走 Gateway 首签路径：它没有 WLS Edge
+     * Protocol 2 的 protocol 身份，因此不应触发本项目 ACME worker。
+     */
+    public function testExplicitLegacyNeverTriggersGatewayFirstIssuance(): void
+    {
+        self::assertFalse($this->probe(false, [
+            'gateway' => [
+                'requested_mode' => GatewayStartupDecision::MODE_LEGACY,
+                'mode' => GatewayStartupDecision::MODE_LEGACY,
+                'protocol' => GatewayPaths::PROTOCOL,
+                'certificate_pending' => true,
+            ],
+        ])->shouldRetryCertificate());
+    }
+
     public function testUntrustedOrNonPendingHttpBackendCannotTriggerCertificateFlow(): void
     {
         self::assertFalse($this->probe(false, [

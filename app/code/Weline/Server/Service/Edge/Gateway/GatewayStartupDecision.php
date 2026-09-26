@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge\Gateway;
 
+use Weline\Server\Service\Edge\Nginx\ManagedNginxEdgeAvailability;
+
 /**
  * Resolves the public WLS 2.0 edge intent before WLS binds its backend.
+ *
+ * auto 的三个出口（按优先级）：命中可信宿主 Weline Gateway → 宿主无 Nginx 且本项目
+ * 托管 Nginx 已安装 → 自建项目级托管 Nginx；都不成立才回退纯 WLS。
  */
 final class GatewayStartupDecision
 {
@@ -29,14 +34,19 @@ final class GatewayStartupDecision
 
     private GatewayStartupBootstrapperInterface $bootstrapper;
 
+    private ManagedEdgeAvailabilityInterface $managedEdge;
+
     public function __construct(
         private readonly GatewayStartupHostInterface $gateway = new GatewayHostManager(),
         ?GatewayPortLeaseAllocator $ports = null,
         ?GatewayStartupBootstrapperInterface $bootstrapper = null,
+        ?ManagedEdgeAvailabilityInterface $managedEdge = null,
     ) {
         $this->ports = $ports;
         $this->bootstrapper = $bootstrapper
             ?? new GatewayInitialBootstrapCoordinator();
+        $this->managedEdge = $managedEdge
+            ?? new ManagedNginxEdgeAvailability();
     }
 
     public function decide(
@@ -220,11 +230,42 @@ final class GatewayStartupDecision
             );
         }
 
-        $fallbackReason = self::boundedDecisionText(
+        // auto 的第三出口：宿主既没有可信 Weline Gateway，也没有自己的 Nginx，
+        // 而本项目托管 Nginx 已安装 —— 此时由 WLS 自建项目级 Nginx 边缘，
+        // 不再退到高端口纯 WLS。显式 gateway 模式永不落到这里（上面已抛错）。
+        if ($requested === self::MODE_AUTO
+            && !$this->managedEdge->hostNginxOccupied()
+            && $this->managedEdge->managedNginxReady()
+        ) {
+            return new EdgeRuntimeDecision(
+                adapter: \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX,
+                requestedMode: $requested,
+                mode: self::MODE_LEGACY,
+                scope: EdgeRuntimeDecision::SCOPE_LEGACY,
+                source: $source,
+                reason: 'Host Nginx is absent and the project-managed Nginx is installed; '
+                    . 'WLS owns the project-scoped Nginx edge.',
+                gateway: $gatewayObservation,
+            );
+        }
+
+        // 回退纯 WLS 时把「为什么没用托管 Nginx」也写进原因，否则运维无法区分
+        // 「宿主已占用边缘」与「托管 Nginx 没装」。宿主网关那段先压到 160 字节，
+        // 给托管 Nginx 的说明留出预算，避免尾部被整体截断。
+        $gatewayFallbackReason = self::boundedDecisionText(
             (string)($observed['state'] ?? 'GATEWAY_UNAVAILABLE') . ': '
                 . (string)($observed['reason'] ?? 'Gateway unavailable.'),
-            256,
+            160,
             'GATEWAY_UNAVAILABLE: Gateway unavailable.',
+        );
+        $fallbackReason = self::boundedDecisionText(
+            $requested === self::MODE_AUTO
+                ? $gatewayFallbackReason
+                    . ' | managed Nginx edge unavailable: '
+                    . $this->managedEdge->unavailableReason()
+                : $gatewayFallbackReason,
+            256,
+            $gatewayFallbackReason,
         );
         if (!$reserveListener) {
             return new EdgeRuntimeDecision(
