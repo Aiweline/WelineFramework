@@ -5161,6 +5161,13 @@ final class ManagedNginxService
             'owner_ports_bound' => $ownerPortsBound,
             'owner_config_bound' => $ownerConfigBound,
             'port_source' => \is_array($owner) ? 'owner' : $ports['source'],
+            // 「本次会怎么选端口」的口径，与上面 listen_* 的「现在实际在听什么」分开：
+            // 托管 Nginx 默认听公网 80/443，只有公网端口被外人占着或无权限绑定时才回退，
+            // 回退必须在这里可见，不能只体现在端口数字上。
+            'configured_port_source' => $ports['source'],
+            'configured_listen_http_source' => $ports['http_source'],
+            'configured_listen_https_source' => $ports['https_source'],
+            'configured_port_notes' => $ports['notes'],
             'project_offset' => $ports['offset'],
             'running' => $status['running'],
             'runtime_owner_active' => $runtimeOwnerActive,

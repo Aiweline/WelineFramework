@@ -6,6 +6,7 @@ namespace Weline\Server\Console\Server\Nginx;
 
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
+use Weline\Server\Service\Edge\Nginx\ManagedNginxPortAllocator;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
 
 /**
@@ -27,11 +28,18 @@ final class Install extends CommandAbstract
         $this->printer->success((string)$result['message']);
         $details = $service->doctorSnapshot();
         $this->printer->note(__('二进制：%{1}', [(string)$details['binary']]));
-        $this->printer->note(__('HTTP 监听：%{1}，HTTPS 监听：%{2}（offset=%{3}）', [
-            (string)$details['listen_http'],
-            (string)$details['listen_https'],
+        $this->printer->note(__('HTTP 监听：%{1}，HTTPS 监听：%{2}（来源：%{3}，offset=%{4}）', [
+            (string)$details['configured_listen_http'],
+            (string)$details['configured_listen_https'],
+            ManagedNginxPortAllocator::describeSource(
+                (string)($details['configured_port_source'] ?? '')
+            ),
             (string)$details['project_offset'],
         ]));
+        // 回退到高位端口时把原因一并说清：网关没拿到公网端口这件事不能只体现在数字上。
+        foreach ((array)($details['configured_port_notes'] ?? []) as $note) {
+            $this->printer->note(__('端口说明：%{1}', [(string)$note]));
+        }
         return 0;
     }
 
@@ -50,7 +58,7 @@ final class Install extends CommandAbstract
             ],
             [
                 __('隔离') => __('每个项目使用独立安装根；Windows 固定使用本机 LOCALAPPDATA，避免 UNC/共享盘解压'),
-                __('端口') => __('未配置时使用 8080/8443 + projectPortOffset'),
+                __('端口') => __('默认监听公网 80/443；被占用或本用户无权绑定时回退 8080/8443 + projectPortOffset'),
                 __('macOS') => __('需 Xcode CLT、OpenSSL 3 与 PCRE2；可执行 brew install openssl@3 pcre2'),
                 __('Linux') => __('需 gcc/make 与 OpenSSL/PCRE 头文件（apt/dnf/apk 对应 *-devel/*-dev）'),
                 __('Windows') => __('下载官方 nginx.zip 到本机项目隔离目录；需 ZipArchive 或 PowerShell/tar'),

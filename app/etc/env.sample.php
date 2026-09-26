@@ -423,8 +423,8 @@ return [
                 'managed' => false,
                 // 仅 managed=true 时有效；false 或 CLI --no-nginx 时 server:start 不启动 Nginx
                 'auto_start' => false,
-                'listen_http' => null,       // null → 8080 + projectPortOffset（仅托管模式）
-                'listen_https' => null,      // null → 8443 + projectPortOffset（仅托管模式）
+                'listen_http' => null,       // null → 公网 80；被占用或无权限时回退 8080 + projectPortOffset
+                'listen_https' => null,      // null → 公网 443；被占用或无权限时回退 8443 + projectPortOffset
                 'server_names' => [],
                 'install_root' => null, // Linux 自动按架构隔离；Windows 使用稳定本地目录
                 'runtime_root' => null, // Linux 自动按架构隔离；Windows 使用稳定本地目录
