@@ -656,4 +656,4 @@ php bin/w server:start gateway80 -p 9560 --certificate-profile test
 | 5.2 回归 | ✅ 与基线逐条对齐，无新增失败 |
 | 5.3 实机端到端 | ✅ E1–E7 全通过 |
 | 5.4 环境收尾 | ✅ 已按字节还原 |
-| 5.4 环境收尾 + 提交推送 | ⬜ |
+| 提交推送 | ✅ `9e072f86b`（13 files / +2330 −3）→ `origin/dev` 与 `github/dev` 均已同步 |
