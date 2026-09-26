@@ -22,9 +22,22 @@ final class BlogSearchCategoryScopeService
     public function listForSearch(?int $websiteId = null, string $locale = ''): array
     {
         $websiteId = $websiteId ?? max(0, (int)(RequestContext::websiteId() ?? 0));
+        @file_put_contents(
+            BP . 'dev/tmp/blog-search-scope.log',
+            date('c') . ' websiteId=' . $websiteId
+                . ' code=' . (string)RequestContext::getWelineWebsiteCode()
+                . "\n",
+            FILE_APPEND
+        );
         $fromDb = $this->listFromDatabase($websiteId, $locale);
         if ($fromDb !== []) {
             return $fromDb;
+        }
+
+        // Non-default storefronts must not inherit default-site (website_id=0) blog
+        // taxonomies or generic demos — that leaks Hanfu Guide etc. onto DaoCharms.
+        if ($websiteId > 0) {
+            return [];
         }
 
         return $this->demoScopes();
@@ -35,7 +48,11 @@ final class BlogSearchCategoryScopeService
      */
     private function listFromDatabase(int $websiteId, string $locale = ''): array
     {
-        $tree = $this->categoryAdmin->tree($websiteId, $locale);
+        // Search type dropdown is brand-facing: only categories owned by this website.
+        // Admin/content trees may still merge website_id=0 via BlogWebsiteScope.
+        $tree = $websiteId > 0
+            ? $this->categoryAdmin->treeOwnedOnly($websiteId, $locale)
+            : $this->categoryAdmin->tree($websiteId, $locale);
         if ($tree === []) {
             return [];
         }

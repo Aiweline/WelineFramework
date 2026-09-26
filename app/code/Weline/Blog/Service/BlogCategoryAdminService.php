@@ -28,17 +28,41 @@ final class BlogCategoryAdminService
     public function tree(int $websiteId, string $locale = ''): array
     {
         if (!\Weline\Framework\Context::hasCurrent()) {
-            return $this->buildTree($websiteId, $locale);
+            return $this->buildTree($websiteId, $locale, true);
         }
         $locale = trim(str_replace('-', '_', $locale !== '' ? $locale : (string)\Weline\Framework\App\State::getLangLocal()));
         $this->contentCache ??= \Weline\Framework\Manager\ObjectManager::getInstance(BlogContentCache::class);
-        return $this->contentCache->rememberForRequest('category_tree', [$websiteId, $locale], fn(): array => $this->buildTree($websiteId, $locale));
+        return $this->contentCache->rememberForRequest('category_tree', [$websiteId, $locale], fn(): array => $this->buildTree($websiteId, $locale, true));
+    }
+
+    /**
+     * Categories owned solely by this website (no website_id=0 merge).
+     * Used by storefront search type scopes to prevent cross-brand taxonomy leakage.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function treeOwnedOnly(int $websiteId, string $locale = ''): array
+    {
+        $websiteId = max(0, $websiteId);
+        if ($websiteId <= 0) {
+            return $this->tree($websiteId, $locale);
+        }
+        if (!\Weline\Framework\Context::hasCurrent()) {
+            return $this->buildTree($websiteId, $locale, false);
+        }
+        $locale = trim(str_replace('-', '_', $locale !== '' ? $locale : (string)\Weline\Framework\App\State::getLangLocal()));
+        $this->contentCache ??= \Weline\Framework\Manager\ObjectManager::getInstance(BlogContentCache::class);
+        return $this->contentCache->rememberForRequest(
+            'category_tree_owned',
+            [$websiteId, $locale],
+            fn(): array => $this->buildTree($websiteId, $locale, false)
+        );
     }
 
     /** @return list<array<string, mixed>> */
-    private function buildTree(int $websiteId, string $locale): array
+    private function buildTree(int $websiteId, string $locale, bool $includeGlobal = true): array
     {
-        $presented = $this->enrichedRows($websiteId, $locale);
+        $presented = $this->enrichedRows($websiteId, $locale, $includeGlobal);
         $byParent = [];
         foreach ($presented as $row) {
             $parentId = max(0, (int)($row['parent_id'] ?? 0));
@@ -235,9 +259,9 @@ final class BlogCategoryAdminService
     /**
      * @return list<array<string, mixed>>
      */
-    private function enrichedRows(int $websiteId, string $locale): array
+    private function enrichedRows(int $websiteId, string $locale, bool $includeGlobal = true): array
     {
-        $rows = $this->listRows($websiteId);
+        $rows = $this->listRows($websiteId, $includeGlobal);
         $ids = array_values(array_filter(array_map(
             static fn(array $row): int => (int)($row[Category::schema_fields_ID] ?? 0),
             $rows,
@@ -374,12 +398,15 @@ final class BlogCategoryAdminService
     /**
      * @return list<array<string, mixed>>
      */
-    private function listRows(int $websiteId): array
+    private function listRows(int $websiteId, bool $includeGlobal = true): array
     {
         $model = clone $this->categoryModel;
         $query = $model->clearData()->reset();
         if ($websiteId > 0) {
-            $query->where(Category::schema_fields_WEBSITE_ID, BlogWebsiteScope::websiteIdsForQuery($websiteId), 'IN');
+            $ids = $includeGlobal
+                ? BlogWebsiteScope::websiteIdsForQuery($websiteId)
+                : [$websiteId];
+            $query->where(Category::schema_fields_WEBSITE_ID, $ids, 'IN');
         }
         $rows = $query
             ->order(Category::schema_fields_SORT_ORDER, 'ASC')
