@@ -7,16 +7,18 @@ use PHPUnit\Framework\TestCase;
 
 final class ThemePublishedVersionRuntimeResolverContractTest extends TestCase
 {
-    public function testResolverUsesThemeLayoutVersionNotScopeReleaseReason(): void
+    public function testResolverUsesThemeScopeVersionNotThemeLayoutVersionPageAxis(): void
     {
         $path = \dirname(__DIR__, 3) . '/Service/ThemePublishedVersionRuntimeResolver.php';
         self::assertFileExists($path);
         $src = (string)\file_get_contents($path);
-        self::assertStringContainsString('ThemeLayoutVersionService', $src);
-        self::assertStringContainsString('getPublishedVersion', $src);
-        self::assertStringContainsString('getDisplayName', $src);
+        // 版本权威已切到 ThemeScopeVersion 的 owner+V 选择，不再走 theme_layout_version 页面轴。
+        self::assertStringContainsString('ThemeScopeVersionService', $src);
+        self::assertStringContainsString('getPublished(', $src);
+        self::assertStringContainsString('getVersionName()', $src);
+        self::assertStringNotContainsString('ThemeLayoutVersionService', $src);
         self::assertStringNotContainsString('ThemeRuntimeLayoutResolver', $src);
         self::assertStringContainsString('default.__website__.default', $src);
-        self::assertMatchesRegularExpression('/版本权威来源为 theme_layout_version/', $src);
+        self::assertMatchesRegularExpression('/Authority is ThemeScopeVersion/', $src);
     }
 }

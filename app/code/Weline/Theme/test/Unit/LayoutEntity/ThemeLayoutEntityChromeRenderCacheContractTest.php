@@ -27,9 +27,12 @@ final class ThemeLayoutEntityChromeRenderCacheContractTest extends TestCase
         $materializer = (string)\file_get_contents($materializerPath);
 
         self::assertStringContainsString('function chromeRenderedHtml', $paths);
-        self::assertStringContainsString('chrome.rendered.html', $paths);
-        self::assertStringContainsString('chromeRenderedHtmlSnapshots', $paths);
-        self::assertStringContainsString('chrome.rendered*.html', $paths);
+        self::assertStringContainsString('ThemeVersionIdentity $identity', $paths);
+        // Disk snapshot path is version-rooted rendered/{artifact}/{vary}.html (not legacy chrome.rendered.html).
+        self::assertTrue(
+            \str_contains($paths, "'rendered'") || \str_contains($paths, '"rendered"'),
+            'chromeRenderedHtml must place files under a rendered/ segment',
+        );
         self::assertStringContainsString('readRenderedCache', $chrome);
         self::assertStringContainsString('writeRenderedCache', $chrome);
         self::assertStringContainsString('finalizePublishedChromeRenderedHtml', $chrome);
@@ -50,12 +53,42 @@ final class ThemeLayoutEntityChromeRenderCacheContractTest extends TestCase
         self::assertStringContainsString('WidgetI18n::storefrontLocale', $chrome);
         self::assertStringContainsString('State::setRequestLanguageOverride', $chrome);
         self::assertStringContainsString('delivery-line-1">Ship to', $chrome);
+        self::assertStringContainsString('isLocalePoisonedChrome', $chrome);
+        self::assertStringContainsString('定制与合作', $chrome);
+        self::assertStringContainsString('支付与账户', $chrome);
         self::assertStringContainsString('publishedChromeRenderedPolicy', $chrome);
         self::assertStringContainsString('peekPolicy(', $chrome);
         self::assertStringContainsString('PostResponseTaskQueue::enqueue', $chrome);
         self::assertStringContainsString('rememberPolicy(', $chrome);
         self::assertStringContainsString('weline-footer--shell', $chrome);
-        self::assertStringContainsString('chromeRenderedHtmlSnapshots', $materializer);
-        self::assertStringContainsString('@\\unlink($rendered)', $materializer);
+        // Materializer no longer owns flat chrome.rendered.html snapshots; Paths+Chrome do.
+        self::assertStringContainsString('function chromeRenderedHtml', $paths);
+        self::assertStringContainsString('writeRenderedCache', $chrome);
+        self::assertStringContainsString('readRenderedCache', $chrome);
+
+        // Task 5: HotCache logical keys include owner V/mode/R identity cacheKey.
+        self::assertStringContainsString("SNAPSHOT_FORMAT = 'v3'", $chrome);
+        self::assertStringContainsString('identity->cacheKey()', $chrome);
+        self::assertStringContainsString('if ($preview)', $chrome);
+        self::assertStringContainsString('chrome.slot.projection.v5|', $filler);
+        self::assertStringContainsString('page.location.v4|', $filler);
+        self::assertStringContainsString('identity->cacheKey()', $filler);
+
+        $identityApi = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Api/Version/ThemeVersionIdentity.php'
+        );
+        self::assertStringContainsString('function cacheKey', $identityApi);
+
+        $publication = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/Version/ThemeVersionPublicationService.php'
+        );
+        self::assertStringContainsString("'invalidation'", $publication);
+        self::assertStringContainsString('changed_owners', $publication);
+
+        $cleaner = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/ThemeRuntimeCacheCleaner.php'
+        );
+        self::assertStringContainsString('invalidateAfterVersionPublish', $cleaner);
+        self::assertStringContainsString('sweepOrphanLayoutEntityDerivatives', $cleaner);
     }
 }

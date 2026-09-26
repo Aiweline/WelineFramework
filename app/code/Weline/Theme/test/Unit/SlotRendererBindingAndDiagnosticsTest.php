@@ -7,6 +7,7 @@ namespace Weline\Theme\Test\Unit;
 use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Test\TestCore;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Service\LayoutEntity\EntityRenderBinding;
 use Weline\Theme\Service\SlotRendererService;
 
@@ -53,11 +54,17 @@ final class SlotRendererBindingAndDiagnosticsTest extends TestCore
         Context::enter(new Context());
         $path = tempnam(sys_get_temp_dir(), 'preview-chrome-');
         try {
-            $binding = new EntityRenderBinding(3, 'actual-owner', '', 'tv10', 's-unit', 'c-unit', 'chrome', $path, '', '', '', '');
+            $identity = new ThemeVersionIdentity(3, 'actual-owner', 'default', 'frontend', 10, ThemeVersionIdentity::MODE_DRAFT, 1);
+            $binding = new EntityRenderBinding($identity, 'chrome', '', 's-unit', 'c-unit', '', $path, '', '', '', '');
             RequestContext::set('theme.layout_entity.preview_entity', [
                 'theme_id' => 3, 'chrome_version_id' => 10, 'chrome_scope' => 'actual-owner', 'scope' => 'request-scope',
             ]);
-            RequestContext::set('theme.layout_entity.chrome_binding.' . hash('sha256', json_encode([3, 'actual-owner', 10], JSON_THROW_ON_ERROR)), $binding);
+            // v3 投影键以 identity（含 owner/V/mode/R）为种子；预览时 selection 会把 scope/version
+            // 覆写为 owner 值（actual-owner/10）。若覆写失效，键会落到 wrong-legacy-scope/9 而查不中。
+            RequestContext::set(
+                'theme.layout_entity.chrome_source.' . hash('sha256', json_encode([3, 'actual-owner', 10, true], JSON_THROW_ON_ERROR)),
+                ['path' => $path, 'binding' => $binding, 'scope' => 'actual-owner', 'version_id' => 10, 'preview' => true],
+            );
             $chrome = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityChrome::class);
             self::assertTrue(method_exists($chrome, 'resolveRenderSource'), 'Root and nested slots need the same version selector.');
             $source = $chrome->resolveRenderSource(3, 'wrong-legacy-scope', 9, false);
@@ -82,10 +89,12 @@ final class SlotRendererBindingAndDiagnosticsTest extends TestCore
             file_put_contents($path, json_encode([$uid => ['node_uid' => $uid, 'widget_module' => 'Weline_Theme',
                 'widget_type' => 'footer', 'widget_code' => $index === 0 ? 'footer-faq-link' : 'retired',
                 'slot_id' => 'footer-help-links', 'area' => 'footer']], JSON_THROW_ON_ERROR));
-            $bindings[] = new EntityRenderBinding(3, 'owner-' . $index, '', 'tv' . $index, 's-unit', basename($path), 'chrome', '', $path, '', '', '');
+            $identity = new ThemeVersionIdentity(3, 'owner-' . $index, 'default', 'frontend', $index + 1, ThemeVersionIdentity::MODE_DRAFT, 1);
+            $bindings[] = new EntityRenderBinding($identity, 'chrome', '', 's-unit', basename($path), '', $path, '', '', '', '');
         }
         try {
-            RequestContext::set('theme.layout_entity.rendered_chrome_bindings', $bindings);
+            // v3：该方法经 resolveRenderSources 取候选链（首绑最近），末位已渲染祖先不得覆盖它。
+            $this->seedChromeSourceProjection($bindings);
             RequestContext::set('theme.layout_entity.rendered_chrome_binding', $bindings[1]);
             $reflection = new \ReflectionClass(SlotRendererService::class);
             $slots = $reflection->getMethod('loadSharedChromeSlotWidgetsFromEntity')->invoke($reflection->newInstanceWithoutConstructor(), 3, 'frontend');
@@ -103,7 +112,8 @@ final class SlotRendererBindingAndDiagnosticsTest extends TestCore
         try {
             $sources = [];
             foreach (['fixture-scope', 'default.default.default'] as $index => $scope) {
-                $binding = new EntityRenderBinding(3, $scope, '', 'tv' . (10 - $index), 's-unit', 'config-' . $index, 'chrome', '', '', '', '', '');
+                $identity = new ThemeVersionIdentity(3, $scope, 'default', 'frontend', 10 - $index, ThemeVersionIdentity::MODE_DRAFT, 1);
+                $binding = new EntityRenderBinding($identity, 'chrome', '', 's-unit', 'config-' . $index, '', '', '', '', '', '');
                 $sources[] = ['binding' => $binding, 'scope' => $scope, 'version_id' => 10 - $index, 'path' => '', 'preview' => true];
                 RequestContext::set('theme.layout_entity.chrome_source.' . hash('sha256', json_encode([3, $scope, null, true], JSON_THROW_ON_ERROR)), $sources[$index]);
             }
@@ -138,8 +148,10 @@ final class SlotRendererBindingAndDiagnosticsTest extends TestCore
         ];
         file_put_contents($path, json_encode($nodes, JSON_THROW_ON_ERROR));
         try {
-            $binding = new EntityRenderBinding(3, 'actual-owner', '', 'tv10', 's-unit', basename($path), 'chrome', '', $path, '', '', '');
-            RequestContext::set('theme.layout_entity.rendered_chrome_binding', $binding);
+            $identity = new ThemeVersionIdentity(3, 'actual-owner', 'default', 'frontend', 10, ThemeVersionIdentity::MODE_DRAFT, 1);
+            $binding = new EntityRenderBinding($identity, 'chrome', '', 's-unit', basename($path), '', $path, '', '', '', '');
+            // v3：固定槽读取改走 resolveRenderSources 投影，不再直读 rendered_chrome_binding。
+            $this->seedChromeSourceProjection([$binding]);
             $reflection = new \ReflectionClass(SlotRendererService::class);
             $service = $reflection->newInstanceWithoutConstructor();
             $slots = $reflection->getMethod('loadSharedChromeSlotWidgetsFromEntity')->invoke($service, 3, 'frontend');
@@ -149,5 +161,35 @@ final class SlotRendererBindingAndDiagnosticsTest extends TestCore
             unlink($path);
             $oldContext !== null ? Context::enter($oldContext) : Context::leave();
         }
+    }
+
+    /**
+     * v3 后 loadSharedChromeSlotWidgetsFromEntity 经 ThemeLayoutEntityChrome::resolveRenderSources
+     * 读投影缓存，不再直读 rendered_chrome_binding(s)。这里按同一 scope/preview 计算出投影键并播种，
+     * 使用例仍能验证「绑定链顺序与槽归属」这一原意。
+     *
+     * @param list<EntityRenderBinding> $bindings
+     */
+    private function seedChromeSourceProjection(array $bindings): void
+    {
+        $reflection = new \ReflectionClass(SlotRendererService::class);
+        $probe = $reflection->newInstanceWithoutConstructor();
+        $storageScope = (string)$reflection->getMethod('resolveStorageScopeForSharedChrome')->invoke($probe, 'frontend');
+        $preview = (bool)$reflection->getMethod('isEditorPreviewRequest')->invoke($probe);
+        $selection = RequestContext::get('theme.layout_entity.preview_entity');
+        $sources = [];
+        foreach ($bindings as $binding) {
+            $sources[] = [
+                'path' => $binding->templatePath,
+                'binding' => $binding,
+                'scope' => $binding->identity->canonicalScope,
+                'version_id' => $binding->identity->themeVersionId,
+                'preview' => $preview,
+            ];
+        }
+        RequestContext::set(
+            'theme.layout_entity.chrome_sources.' . hash('sha256', json_encode([3, $storageScope, $preview, $selection], JSON_THROW_ON_ERROR)),
+            $sources,
+        );
     }
 }

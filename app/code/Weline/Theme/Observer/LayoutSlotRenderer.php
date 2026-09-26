@@ -357,6 +357,18 @@ class LayoutSlotRenderer implements ObserverInterface
                 // 布局固化与默认注入.md §3–§4: complete solidified shell → strip only.
                 // Required JSON default_injections must already live in chrome.rendered /
                 // layout bake (minus user_deleted). Per-request Overlay is NOT the primary path.
+                //
+                // 必装永远存在（2026-09-22 架构裁决 + spec/required-default-always-present.md §4）：
+                // `+skip_fill_solidified` 只允许跳过 entity fill，不得跳过 required overlay。
+                // 无可用固化产物时（CTX_FRAGMENTS 非数组），strip 前必须仍跑 required 注入，
+                // 否则结账页等尚未固化的布局会留下空 theme-published-slot。
+                $html = $this->fillRequiredDefaultsOnZeroFillPath(
+                    $html,
+                    $themeIdForPrime,
+                    $pageTypeForPrime,
+                    $area,
+                    $template,
+                );
                 $html = SlotBoundaryMarkers::strip($html);
                 $event->setData('content', $this->finalizeFrontendHtml($html, $area));
                 return;
@@ -1748,6 +1760,78 @@ HTML;
         }
 
         return $this->authoritativePreviewContext() !== null;
+    }
+
+    /**
+     * 必装永远存在：`+skip_fill_solidified` 零补槽快路径上的 required 注入兜底。
+     *
+     * 权威：`app/code/Weline/Theme/doc/开发/spec/required-default-always-present.md`
+     * 与 `doc/开发/team/required-default-always-present/meetings/技术方案会-必装永远存在-20260922.md` §4：
+     * `+skip_fill_solidified` **可以**跳过 entity fill，但**不得**跳过 required overlay；
+     * 只有本版本人工卸载 `user_deleted@{versionId}` 才能省略。
+     *
+     * 触发条件收窄为「无可用固化产物」：仅当本请求没有装载到固化片段
+     * （`CTX_FRAGMENTS` 不是数组）时才跑 Overlay。固化产物可用时 required 已由 bake
+     * 承载（spec 主路径），保持零补槽快路径，避免把「每请求 Overlay」变成长期主路径。
+     */
+    private function fillRequiredDefaultsOnZeroFillPath(
+        string $html,
+        int $themeId,
+        string $pageType,
+        string $area,
+        string $template,
+    ): string {
+        if ($html === '' || !\str_contains($html, 'data-slot-id=')) {
+            return $html;
+        }
+        // 固化片段已装载且含页面 bake：required 已由 bake 承载，走零补槽快路径。
+        // 仅有 chrome bake（page_html 为空）时页面槽仍是空壳，必须继续注入。
+        $fragments = RequestContext::get(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_FRAGMENTS
+        );
+        if (\is_array($fragments) && \trim((string)($fragments['page_html'] ?? '')) !== '') {
+            return $html;
+        }
+        if ($themeId < 1) {
+            $themeId = $this->resolveThemeId($area);
+        }
+        if ($themeId < 1) {
+            return $html;
+        }
+        if ($pageType === '') {
+            $pageType = $this->detectPageType($template);
+        }
+        if ($pageType === '') {
+            $pageType = $this->resolveSafetyNetPageType($template, $html, '');
+        }
+        if ($pageType === '') {
+            return $html;
+        }
+
+        try {
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller $filler */
+            $filler = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller::class,
+            );
+
+            return $filler->fillRequiredDefaultsOnShell(
+                $html,
+                $themeId,
+                $pageType,
+                ThemeLayout::STATUS_PUBLISHED,
+            );
+        } catch (\Throwable $requiredError) {
+            // 软降级：注入失败不得吞掉整页，仍需 strip 后交付。
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning(
+                    'required_default_injection_zero_fill_soft_skip: ' . $requiredError->getMessage(),
+                    ['theme_id' => $themeId, 'page_type' => $pageType, 'area' => $area],
+                    'theme_layout_entity',
+                );
+            }
+
+            return $html;
+        }
     }
 
     /**

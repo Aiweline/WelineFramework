@@ -10,7 +10,8 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 
 #[Table(comment: 'Theme scoped draft/published workspace pointers')]
-#[Index(name: 'uk_theme_scope_workspace_identity', columns: ['identity_hash'], type: 'UNIQUE')]
+#[Index(name: 'uk_theme_scope_workspace_version_identity', columns: ['theme_version_id', 'identity_hash'], type: 'UNIQUE')]
+#[Index(name: 'uk_theme_scope_workspace_binding_identity', columns: ['binding_identity_key'], type: 'UNIQUE')]
 #[Index(name: 'idx_theme_scope_workspace_scope', columns: ['scope', 'store_mode', 'area', 'resource_type'])]
 #[Index(name: 'idx_theme_scope_workspace_parent', columns: ['parent_release_id'])]
 final class ThemeScopeWorkspace extends Model
@@ -21,10 +22,26 @@ final class ThemeScopeWorkspace extends Model
     public const STATUS_ACTIVE = 'active';
     public const STATUS_CONFLICT = 'conflict';
 
+    /** Sentinel theme_version_id for version-external theme_binding workspaces (NULL semantics). */
+    public const THEME_VERSION_EXTERNAL = 0;
+
     #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'Workspace ID')]
     public const schema_fields_ID = 'workspace_id';
-    #[Col(type: 'varchar', length: 64, nullable: false, comment: 'Canonical context SHA-256')]
+    #[Col(type: 'varchar', length: 64, nullable: false, comment: 'Canonical context SHA-256 (never mixes tv)')]
     public const schema_fields_IDENTITY_HASH = 'identity_hash';
+    /**
+     * Version-scoped workspaces store ThemeScopeVersion.version_id.
+     * theme_binding uses THEME_VERSION_EXTERNAL (0) — never a real version id —
+     * so theme selection stays outside the version→theme cycle.
+     */
+    #[Col(type: 'int', nullable: false, default: self::THEME_VERSION_EXTERNAL, comment: 'Owning theme version; 0 = theme_binding external')]
+    public const schema_fields_THEME_VERSION_ID = 'theme_version_id';
+    /**
+     * 单一唯一键：把“版本外绑定唯一”和“版本内按版本唯一”收敛到一个可移植唯一索引，
+     * 取值规则见 resolveBindingIdentityKey()。长度须容纳 'v:{versionId}:' + 64 位 hash。
+     */
+    #[Col(type: 'varchar', length: 128, nullable: false, default: '', comment: 'Canonical scoped unique key: identity_hash | legacy:{hash} | v:{versionId}:{hash}')]
+    public const schema_fields_BINDING_IDENTITY_KEY = 'binding_identity_key';
     #[Col(type: 'varchar', length: 191, nullable: false, comment: 'Canonical three-segment scope')]
     public const schema_fields_SCOPE = 'scope';
     #[Col(type: 'varchar', length: 16, nullable: false, comment: 'global/website/store/channel')]
@@ -73,6 +90,17 @@ final class ThemeScopeWorkspace extends Model
         return (int)($this->getData(self::schema_fields_ID) ?: $default);
     }
 
+    public function getThemeVersionId(): int
+    {
+        return (int)($this->getData(self::schema_fields_THEME_VERSION_ID) ?: self::THEME_VERSION_EXTERNAL);
+    }
+
+    public function isThemeBindingWorkspace(): bool
+    {
+        return $this->getThemeVersionId() === self::THEME_VERSION_EXTERNAL
+            && (string)$this->getData(self::schema_fields_RESOURCE_TYPE) === 'theme_binding';
+    }
+
     public function getRevision(): int
     {
         return (int)($this->getData(self::schema_fields_REVISION) ?: 0);
@@ -89,9 +117,43 @@ final class ThemeScopeWorkspace extends Model
         return \is_array($decoded) ? $decoded : [];
     }
 
+    /**
+     * binding_identity_key 的取值规则。save_before() 与升级回填 healer 共用同一份推导，
+     * 禁止在别处再写一套，否则回填值与运行时写入值会漂移。
+     */
+    public static function resolveBindingIdentityKey(string $resourceType, int $themeVersionId, string $identityHash): string
+    {
+        if ($resourceType === 'theme_binding') {
+            return $identityHash;
+        }
+        if ($themeVersionId < 1) {
+            return 'legacy:' . $identityHash;
+        }
+
+        return 'v:' . $themeVersionId . ':' . $identityHash;
+    }
+
     public function save_before(): void
     {
         parent::save_before();
+        $resourceType = (string)($this->getData(self::schema_fields_RESOURCE_TYPE) ?: '');
+        $identityHash = (string)($this->getData(self::schema_fields_IDENTITY_HASH) ?: '');
+        if ($resourceType === 'theme_binding') {
+            // theme_binding 必须留在版本外，避免 theme↔version 循环：
+            // 绑定先选主题、再选该主题版本，绑定自身占有版本就无法确定该读哪个版本。
+            // 这里不再静默改写成版本外，而是直接拒绝，让调用方 bug 在写入点暴露出来。
+            if ($this->getThemeVersionId() >= 1) {
+                throw new \RuntimeException('theme_binding_must_not_own_theme_version');
+            }
+            $this->setData(self::schema_fields_THEME_VERSION_ID, self::THEME_VERSION_EXTERNAL);
+        } elseif ($this->getThemeVersionId() < 1) {
+            // 旧无版本 workspace 是 1→3 过渡态，接线发布前保持可读。
+            $this->setData(self::schema_fields_THEME_VERSION_ID, self::THEME_VERSION_EXTERNAL);
+        }
+        $this->setData(
+            self::schema_fields_BINDING_IDENTITY_KEY,
+            self::resolveBindingIdentityKey($resourceType, $this->getThemeVersionId(), $identityHash)
+        );
         $now = \date('Y-m-d H:i:s');
         if (!$this->getId()) {
             $this->setData(self::schema_fields_CREATE_TIME, $now);

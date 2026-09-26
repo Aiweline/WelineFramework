@@ -37,7 +37,8 @@ final class HeaderCommerceDataTest extends TestCase
         self::assertStringContainsString("theme.header.hot_words", $source);
         self::assertStringContainsString("theme.header.search_types", $source);
         self::assertStringContainsString('headerSearchTypesPolicy', $source);
-        self::assertStringContainsString('theme.header.search_types.v2', $source);
+        // search_types 共享键带版本段（随版本隔离演进 v2→v4）；断言「带版本段」而非钉死某一代。
+        self::assertMatchesRegularExpression('/theme\.header\.search_types\.v\d+/', $source);
         self::assertStringContainsString('theme.header.category_nav', $source);
         self::assertStringContainsString('requestOriginSegment', $source);
         self::assertStringContainsString('headerNavigationPolicy', $source);

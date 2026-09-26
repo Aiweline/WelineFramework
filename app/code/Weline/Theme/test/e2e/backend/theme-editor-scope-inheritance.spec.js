@@ -165,6 +165,14 @@ moduleDescribe(test, MODULE, 'scope inheritance workspace', () => {
           { timeout: 20000 },
         );
 
+        await expect(page.locator('#themeEditor')).toHaveAttribute('data-api-scope-versions', /scope-versions/);
+        const scopeVersionsSmoke = await callEditorRequest(page, '/theme/backend/theme-editor/scope-versions', 'GET', {
+          theme_id: themeId,
+          page_type: pageType,
+          limit: 5,
+        });
+        expectEditorSuccess(scopeVersionsSmoke, 'scope versions smoke');
+
         const currentIdentity = await page.evaluate(() => (
           window.Weline?.Theme?.Editor || window.ThemeEditor
         ).getScopeIdentity());

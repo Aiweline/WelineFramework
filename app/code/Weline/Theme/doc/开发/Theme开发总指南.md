@@ -1,8 +1,8 @@
 # Theme 开发总指南
 
-> **写任何 `.phtml` / 模板 / 布局 / 部件前**：先读 [AI硬规则索引.md](../../Ai/doc/AI硬规则索引.md) 与 [Taglib 场景映射表.md](../../Taglib/doc/场景映射表.md)。
+> **写任何 `.phtml` / 模板 / 布局 / 部件前**：先读 [AI硬规则索引.md](../../../Ai/doc/AI硬规则索引.md) 与 [Taglib 场景映射表.md](../../../Taglib/doc/场景映射表.md)。
 >
-> **先判 `work_mode`（硬）**：维护默认主题 / 新开 design / Theme PHP 运行时是三件事。工程团队主题席须先声明 `work_mode∈{default_theme,design_theme,theme_module_runtime}` 再落文件——完整双模式手册见 [主题开发.md](../../../../../dev/ai-command/ai/主题开发.md)；新建 design 操作摘要见 [theme-inheritance「新建设计主题」](../theme-inheritance-and-file-conventions.md#新建设计主题操作摘要)。
+> **先判 `work_mode`（硬）**：维护默认主题 / 新开 design / Theme PHP 运行时是三件事。工程团队主题席须先声明 `work_mode∈{default_theme,design_theme,theme_module_runtime}` 再落文件——完整双模式手册见 [主题开发.md](../../../../../../dev/ai-command/ai/主题开发.md)；新建 design 操作摘要见 [theme-inheritance「新建设计主题」](../theme-inheritance-and-file-conventions.md#新建设计主题操作摘要)。
 >
 > 适用范围：WelineFramework 当前主题开发、布局开发、部件开发、主题覆盖、前端请求链路、Taglib 与可视化编辑器相关开发。
 >
@@ -12,7 +12,7 @@
 
 建议按下面顺序建立上下文，再动源码：
 
-0. **先判 work_mode** → [主题开发.md](../../../../../dev/ai-command/ai/主题开发.md) Mode A/B/C；新建 design 再读 inheritance「新建设计主题」节
+0. **先判 work_mode** → [主题开发.md](../../../../../../dev/ai-command/ai/主题开发.md) Mode A/B/C；新建 design 再读 inheritance「新建设计主题」节
 1. `AGENTS.md`
 2. `app/code/Weline/Ai/doc/AI开发治理.md`
 3. `app/code/Weline/Theme/doc/README.md`
@@ -141,21 +141,11 @@ Theme 请求里「当前主题 / Scope / draft|published / version」的权威�
 |------|------|----------|
 | **可视化编辑预览** | **参数为主**（query + typed `editor_context`） | 编辑器 iframe → **真实店面 path** + `editor_mode`；勿种店面预览 Token；禁止 `theme-preview/content` 冒充画布 |
 | **版本真实预览** | **Token 反解析参数为准**（URL 不能覆盖主题身份） | `start-preview` → 真实店面 + `weline_preview_token` |
-| **正式（正常店面）** | **RequestContext / 路径 / Scope**；布局只认 `r{published_release_id}` | 访客 URL；无有效预览 Token |
+| **正式（正常店面）** | **RequestContext / 路径 / Scope**；目标按 selection 选 P/formal，再读同 V/R 的 page/chrome/assets | 访客 URL；无有效预览 Token |
 
 业务逻辑与交付路径必须与正式店面同构（MCP `preview_storefront_delivery_parity`）；只允许在身份装配层分支。
 
-### 预览与运行三态（身份权威）
-
-改预览、编辑器 canvas、真实前端预览或店面主题解析前，先读 [`../preview-and-runtime-modes.md`](../preview-and-runtime-modes.md)，并加载 MCP 技能 `weline-theme-development`：
-
-| 状态 | 身份权威 |
-|------|----------|
-| 可视化编辑预览 | **请求参数**（query + typed `editor_context`）为主 |
-| 版本真实预览 | **预览 Token 反解析**为准（URL 不能覆盖主题身份） |
-| 正式店面 | **RequestContext / Scope / 路径**解析为准（`r{published_release_id}`） |
-
-三态业务逻辑与交付路径必须同构（MCP `preview_storefront_delivery_parity`）；只允许在身份装配层分支。
+版本/路径改造按[主题固化物实施方案](./spec/layout-entity-per-version-isolation.md)执行（2026-09-25，任务 1–6 代码与本机转换已落地；Playwright UC 验收未跑）。release/revision 是内部数据引用；新运行不保留旧 r/d/s、current.json 或旧页面版本兼容。
 
 ### 可视化编辑器与 Weline UI 2.0
 

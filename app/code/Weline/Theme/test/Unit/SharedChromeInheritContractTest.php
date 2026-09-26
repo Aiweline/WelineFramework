@@ -100,7 +100,13 @@ final class SharedChromeInheritContractTest extends TestCase
         $path = dirname(__DIR__, 2) . '/Setup/Upgrade.php';
         $src = (string)file_get_contents($path);
 
-        self::assertStringContainsString("VERSION = '2.2.480'", $src);
+        // Upgrade::VERSION 记录脚本已覆盖的最高历史迁移版；断言仍 ≥ 冰点 2.2.480，不钉死字面量。
+        preg_match("/public const VERSION = '(\d+\.\d+\.\d+)';/", $src, $versionMatch);
+        self::assertNotEmpty($versionMatch[1] ?? '', 'Upgrade::VERSION 必须存在且为语义化版本。');
+        self::assertTrue(
+            version_compare($versionMatch[1], '2.2.480', '>='),
+            'Upgrade::VERSION 不得低于历史迁移冰点 2.2.480，当前 ' . $versionMatch[1],
+        );
         self::assertStringContainsString('getFromSetupVersion()', $src);
         self::assertStringContainsString("version_compare(\$from, self::VERSION, '>=')", $src);
         self::assertStringContainsString('ScopeIdentity::global()', $src);

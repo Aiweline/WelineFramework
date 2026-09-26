@@ -8,14 +8,19 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
+use Weline\Theme\Api\Version\ThemeVersionPublicationInterface;
 
 /**
- * Theme-scope version authority for shared chrome (header/footer).
+ * Theme-scope version: full logical resource snapshot owner row.
  *
- * Natural key is (theme_id, scope) — no page_type.
+ * Owner = (theme_id, scope, store_mode, area). Selection is the mutable
+ * published/draft authority; is_current/is_published remain only as legacy
+ * bridge columns until Task 6 hard-cut deletes them from runtime.
  */
-#[Table(comment: '主题范围版本表（头尾权威，无 page_type）')]
-#[Index(name: 'uk_theme_scope_version_number', columns: ['theme_id', 'scope', 'version_number'], type: 'UNIQUE')]
+#[Table(comment: '主题范围版本表（完整逻辑快照游标）')]
+#[Index(name: 'uk_theme_scope_version_number', columns: ['theme_id', 'scope', 'store_mode', 'area', 'version_number'], type: 'UNIQUE')]
+#[Index(name: 'idx_theme_scope_version_lifecycle', columns: ['theme_id', 'scope', 'store_mode', 'area', 'lifecycle'])]
 #[Index(name: 'idx_theme_scope_version_current', columns: ['theme_id', 'scope', 'is_current'])]
 #[Index(name: 'idx_theme_scope_version_published', columns: ['theme_id', 'scope', 'is_published'])]
 final class ThemeScopeVersion extends Model
@@ -26,6 +31,10 @@ final class ThemeScopeVersion extends Model
     public const TYPE_MANUAL = 'manual';
     public const TYPE_AUTO_BACKUP = 'auto_backup';
     public const TYPE_PUBLISH = 'publish';
+    public const TYPE_SCOPE_REBASE = 'scope_rebase';
+
+    public const LIFECYCLE_DRAFT = 'draft';
+    public const LIFECYCLE_SEALED = 'sealed';
 
     #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '版本ID')]
     public const schema_fields_ID = 'version_id';
@@ -39,21 +48,34 @@ final class ThemeScopeVersion extends Model
     public const schema_fields_WEBSITE_ID = 'website_id';
     #[Col(type: 'varchar', length: 16, nullable: false, default: 'normal', comment: 'Store mode')]
     public const schema_fields_STORE_MODE = 'store_mode';
+    #[Col(type: 'varchar', length: 16, nullable: false, default: 'frontend', comment: 'frontend/backend')]
+    public const schema_fields_AREA = 'area';
     #[Col(type: 'int', nullable: false, default: 1, comment: '版本号')]
     public const schema_fields_VERSION_NUMBER = 'version_number';
     #[Col(type: 'varchar', length: 100, nullable: true, comment: '版本名称')]
     public const schema_fields_VERSION_NAME = 'version_name';
     #[Col(type: 'varchar', length: 20, nullable: false, default: self::TYPE_MANUAL, comment: '版本类型')]
     public const schema_fields_VERSION_TYPE = 'version_type';
-    #[Col(type: 'longtext', nullable: true, comment: 'Chrome nodes map JSON (header/footer)')]
+    #[Col(type: 'varchar', length: 16, nullable: false, default: self::LIFECYCLE_DRAFT, comment: 'draft/sealed')]
+    public const schema_fields_LIFECYCLE = 'lifecycle';
+    #[Col(type: 'int', nullable: false, default: 0, comment: 'Current content revision cursor')]
+    public const schema_fields_CONTENT_REVISION = 'content_revision';
+    #[Col(type: 'varchar', length: 32, nullable: false, default: ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT, comment: 'Creation source kind')]
+    public const schema_fields_CREATION_SOURCE_KIND = 'creation_source_kind';
+    #[Col(type: 'int', nullable: true, comment: 'Audit-only creation source version')]
+    public const schema_fields_CREATION_SOURCE_VERSION_ID = 'creation_source_version_id';
+    #[Col(type: 'longtext', nullable: true, comment: 'Legacy chrome JSON; new writes go to revision head')]
     public const schema_fields_CHROME_PAYLOAD_JSON = 'chrome_payload_json';
     #[Col(type: 'varchar', length: 64, nullable: false, default: '', comment: 'Chrome structure-only SHA-256')]
     public const schema_fields_STRUCTURE_KEY = 'structure_key';
-    #[Col(type: 'int', nullable: true, comment: '父版本ID')]
+    /** @deprecated Use creation_source_version_id; kept for Task 1→6 bridge. */
+    #[Col(type: 'int', nullable: true, comment: 'Legacy parent version ID (audit synonym)')]
     public const schema_fields_PARENT_VERSION_ID = 'parent_version_id';
-    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: '是否为当前编辑版本')]
+    /** @deprecated Selection is authority; kept until Task 6 hard-cut. */
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: 'Legacy current flag')]
     public const schema_fields_IS_CURRENT = 'is_current';
-    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: '是否为已发布版本')]
+    /** @deprecated Selection is authority; kept until Task 6 hard-cut. */
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: 'Legacy published flag')]
     public const schema_fields_IS_PUBLISHED = 'is_published';
     #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
     public const schema_fields_CREATE_TIME = 'create_time';
@@ -133,6 +155,18 @@ final class ThemeScopeVersion extends Model
         return $this->setData(self::schema_fields_STORE_MODE, $storeMode !== '' ? $storeMode : 'normal');
     }
 
+    public function getArea(): string
+    {
+        return (string)($this->getData(self::schema_fields_AREA) ?: 'frontend');
+    }
+
+    public function setArea(string $area): self
+    {
+        $area = \trim($area);
+
+        return $this->setData(self::schema_fields_AREA, \in_array($area, ['frontend', 'backend'], true) ? $area : 'frontend');
+    }
+
     public function getVersionNumber(): int
     {
         return (int)$this->getData(self::schema_fields_VERSION_NUMBER);
@@ -163,6 +197,89 @@ final class ThemeScopeVersion extends Model
     public function setVersionType(string $type): self
     {
         return $this->setData(self::schema_fields_VERSION_TYPE, $type);
+    }
+
+    public function getLifecycle(): string
+    {
+        return (string)($this->getData(self::schema_fields_LIFECYCLE) ?: self::LIFECYCLE_DRAFT);
+    }
+
+    public function setLifecycle(string $lifecycle): self
+    {
+        return $this->setData(self::schema_fields_LIFECYCLE, $lifecycle);
+    }
+
+    public function getContentRevision(): int
+    {
+        return (int)($this->getData(self::schema_fields_CONTENT_REVISION) ?: 0);
+    }
+
+    public function setContentRevision(int $revision): self
+    {
+        return $this->setData(self::schema_fields_CONTENT_REVISION, $revision);
+    }
+
+    /**
+     * Typed owner+V/mode/R for layout-entity bake/read.
+     * Bridge: unknown content_revision floors to 1 so sealed path segments stay valid.
+     */
+    public function toVersionIdentity(): ThemeVersionIdentity
+    {
+        $mode = $this->getLifecycle() === self::LIFECYCLE_DRAFT
+            ? ThemeVersionIdentity::MODE_DRAFT
+            : ThemeVersionIdentity::MODE_FORMAL;
+        $revision = $this->getContentRevision();
+        if ($revision < 1) {
+            $revision = 1;
+        }
+        $area = \trim($this->getArea());
+        if (!\in_array($area, ThemeVersionIdentity::AREAS, true)) {
+            $area = ThemeVersionIdentity::AREA_FRONTEND;
+        }
+        $storeMode = \trim($this->getStoreMode());
+        if ($storeMode === '') {
+            $storeMode = 'normal';
+        }
+
+        return new ThemeVersionIdentity(
+            themeId: $this->getThemeId(),
+            canonicalScope: $this->getScope(),
+            storeMode: $storeMode,
+            area: $area,
+            themeVersionId: $this->getVersionId(),
+            mode: $mode,
+            contentRevision: $revision,
+        );
+    }
+
+    public function getCreationSourceKind(): string
+    {
+        return (string)($this->getData(self::schema_fields_CREATION_SOURCE_KIND)
+            ?: ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT);
+    }
+
+    public function setCreationSourceKind(string $kind): self
+    {
+        return $this->setData(self::schema_fields_CREATION_SOURCE_KIND, $kind);
+    }
+
+    public function getCreationSourceVersionId(): ?int
+    {
+        $id = $this->getData(self::schema_fields_CREATION_SOURCE_VERSION_ID);
+        if ($id === null || $id === '') {
+            $id = $this->getData(self::schema_fields_PARENT_VERSION_ID);
+        }
+
+        return $id ? (int)$id : null;
+    }
+
+    public function setCreationSourceVersionId(?int $id): self
+    {
+        $this->setData(self::schema_fields_CREATION_SOURCE_VERSION_ID, $id);
+        // Keep legacy column in sync during Task 1→6 bridge.
+        $this->setData(self::schema_fields_PARENT_VERSION_ID, $id);
+
+        return $this;
     }
 
     /**
@@ -206,16 +323,16 @@ final class ThemeScopeVersion extends Model
         return $this->setData(self::schema_fields_STRUCTURE_KEY, $structureKey);
     }
 
+    /** @deprecated Prefer getCreationSourceVersionId() */
     public function getParentVersionId(): ?int
     {
-        $id = $this->getData(self::schema_fields_PARENT_VERSION_ID);
-
-        return $id ? (int)$id : null;
+        return $this->getCreationSourceVersionId();
     }
 
+    /** @deprecated Prefer setCreationSourceVersionId() */
     public function setParentVersionId(?int $id): self
     {
-        return $this->setData(self::schema_fields_PARENT_VERSION_ID, $id);
+        return $this->setCreationSourceVersionId($id);
     }
 
     public function isCurrent(): bool
@@ -269,17 +386,37 @@ final class ThemeScopeVersion extends Model
         $scope = \trim($this->getScope());
         $versionNumber = $this->getVersionNumber();
         $versionType = \trim($this->getVersionType());
+        $lifecycle = \trim($this->getLifecycle());
+        $area = \trim($this->getArea());
+        $creationKind = \trim($this->getCreationSourceKind());
+        $allowedTypes = [self::TYPE_MANUAL, self::TYPE_AUTO_BACKUP, self::TYPE_PUBLISH, self::TYPE_SCOPE_REBASE];
         if (
             $themeId < 1
             || $scope === ''
             || \strlen($scope) > 400
             || $versionNumber < 1
-            || !\in_array($versionType, [self::TYPE_MANUAL, self::TYPE_AUTO_BACKUP, self::TYPE_PUBLISH], true)
+            || !\in_array($versionType, $allowedTypes, true)
+            || !\in_array($lifecycle, [self::LIFECYCLE_DRAFT, self::LIFECYCLE_SEALED], true)
+            || !\in_array($area, ['frontend', 'backend'], true)
+            || !\in_array($creationKind, ThemeVersionPublicationInterface::CREATION_SOURCES, true)
         ) {
             throw new \InvalidArgumentException((string)__('Theme 范围版本身份无效。'));
         }
+        if ($lifecycle === self::LIFECYCLE_SEALED && $this->getContentRevision() < 1) {
+            throw new \InvalidArgumentException((string)__('封存版本必须具有内容修订。'));
+        }
         $this->setData(self::schema_fields_SCOPE, $scope);
         $this->setData(self::schema_fields_VERSION_TYPE, $versionType);
+        $this->setData(self::schema_fields_LIFECYCLE, $lifecycle);
+        $this->setData(self::schema_fields_AREA, $area);
+        $this->setData(self::schema_fields_CREATION_SOURCE_KIND, $creationKind);
+        // Keep audit synonym columns aligned.
+        $sourceId = $this->getData(self::schema_fields_CREATION_SOURCE_VERSION_ID);
+        if (($sourceId === null || $sourceId === '') && $this->getData(self::schema_fields_PARENT_VERSION_ID)) {
+            $this->setData(self::schema_fields_CREATION_SOURCE_VERSION_ID, $this->getData(self::schema_fields_PARENT_VERSION_ID));
+        } elseif ($sourceId !== null && $sourceId !== '') {
+            $this->setData(self::schema_fields_PARENT_VERSION_ID, $sourceId);
+        }
         $now = \date('Y-m-d H:i:s');
         if (!$this->getVersionId() && !$this->getData(self::schema_fields_CREATE_TIME)) {
             $this->setData(self::schema_fields_CREATE_TIME, $now);

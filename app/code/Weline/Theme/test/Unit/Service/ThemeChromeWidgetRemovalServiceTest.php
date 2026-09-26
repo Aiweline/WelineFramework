@@ -36,7 +36,14 @@ final class ThemeChromeWidgetRemovalServiceTest extends TestCase
         }
         if ($status !== null) {
             self::assertFalse($result['active']);
-            self::assertSame('user_deleted', $result['source']);
+            if ($status === 'already_absent') {
+                self::assertTrue(
+                    str_starts_with((string)$result['source'], 'user_deleted'),
+                    'prior uninstall marker must remain target-version uninstall',
+                );
+            } else {
+                self::assertSame('user_deleted@' . $versionId, $result['source']);
+            }
             self::assertFalse($result['rebaked_active'], 'Required defaults must not reactivate a user removal.');
             self::assertSame('shop.store.channel', $result['owner_scope']);
             self::assertSame('kept', $result['other_config']);

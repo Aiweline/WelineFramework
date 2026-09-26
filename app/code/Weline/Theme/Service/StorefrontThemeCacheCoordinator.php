@@ -219,9 +219,10 @@ final class StorefrontThemeCacheCoordinator
 
     /**
      * wave6-6s / wave7-7s: published chrome.phtml render snapshot (locale-aware HTML).
-     * Logical key: chrome path + locale segment. Disk snapshot is the first-cold
-     * durable fill; HotCache is peek-first + post-response seed (no sync bag-write
-     * tax on virgin LayoutSlot). Same-request secondary slots HIT slot-projection Policy.
+     * Logical key MUST include ThemeVersionIdentity::cacheKey() (owner V/mode/R)
+     * plus binding fingerprint and locale — draft/formal/history must not collide.
+     * Disk snapshot is the first-cold durable fill; HotCache is peek-first + post-response
+     * seed. Preview/draft never enter this policy.
      */
     public static function publishedChromeRenderedPolicy(): CachePolicy
     {
@@ -238,8 +239,8 @@ final class StorefrontThemeCacheCoordinator
 
     /**
      * wave6-6s / wave8-8c8: merged ancestor→leaf chrome slot inners for injectChromeSlots.
-     * Language-aware (footer/nav labels); website scope (not channel) so bag-prime
-     * and panel/public probes share one L1/L2 bag under the same website.
+     * Logical key includes binding identity cacheKeys (V/mode/R). Language-aware;
+     * website scope so bag-prime and probes share one bag. Preview/draft bypass HotCache.
      * wave7-7s: keep sync rememberPolicy so same-request secondary inject HIT.
      */
     public static function publishedChromeSlotProjectionPolicy(): CachePolicy
@@ -252,12 +253,14 @@ final class StorefrontThemeCacheCoordinator
             dependencies: ['theme', 'global/i18n'],
             freshTtlSeconds: 3600,
             staleTtlSeconds: 86400,
+            // Honest-empty markers are legitimate shared values for this resource.
+            allowEmptyResult: true,
         );
     }
 
     /**
      * wave6-6s: published page entity location (scope + identity + release/structure).
-     * Structure-only — no lang/currency/request_id.
+     * Structure-only — no lang/currency/request_id. Key includes published identity cacheKey (V/mode/R).
      */
     public static function publishedPageEntityLocationPolicy(): CachePolicy
     {

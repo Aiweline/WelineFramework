@@ -42,12 +42,17 @@ final class ThemePublishedPreviewReadEfficiencyTest extends TestCase
         State::setRequestLanguageOverride('en_US');
         ObjectManager::setInstance(EventsManager::class, $this->getMockBuilder(EventsManager::class)
             ->disableOriginalConstructor()->onlyMethods(['dispatch'])->getMock());
-        // 真实规范化器会翻译区域名称；复用现有独占词典测试数据，
-        // 让这些载荷来源用例不依赖词典数据库。
-        (new \ReflectionMethod(EventDictionary::class, 'setStoredState'))->invoke(null, [
-            'locale' => 'en_US', 'active' => true, 'mode' => EventDictionary::MODE_EXCLUSIVE,
-            'owner' => 'published-preview-read-test', 'hash' => 'published-preview-read-test',
-            'words' => [], 'keyed_words' => [], 'layers' => [],
+        // 真实规范化器会翻译区域名称；写入请求级独占词典，
+        // 让这些载荷来源用例不依赖词典数据库或已删除的 setStoredState。
+        RequestContext::set('phrase.event_dictionary.state', [
+            'locale' => 'en_US',
+            'active' => true,
+            'mode' => EventDictionary::MODE_EXCLUSIVE,
+            'scope_key' => 'published-preview-read-test',
+            'owners' => ['published-preview-read-test'],
+            'words' => [],
+            'keyed_words' => [],
+            'layer_hashes' => [],
         ]);
     }
 

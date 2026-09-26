@@ -32,7 +32,14 @@ namespace Weline\Framework\Database {
         public function select(): static { return $this; }
         public function order(string $field, string $direction = 'ASC'): static { return $this; }
         public function fetch(): static { $this->row = $this->fetchArray()[0] ?? []; return $this; }
-        public function load(int $id): static { return $this->where(static::schema_fields_ID, $id)->fetch(); }
+        public function load(string|int $field_or_pk_value, mixed $value = null, bool $forceReload = false)
+        {
+            if ($value !== null) {
+                return $this->where((string)$field_or_pk_value, $value)->fetch();
+            }
+
+            return $this->where(static::schema_fields_ID, (int)$field_or_pk_value)->fetch();
+        }
         public function fetchArray(): array
         {
             self::$reads[static::class] = (self::$reads[static::class] ?? 0) + 1;
@@ -46,8 +53,11 @@ namespace Weline\Framework\Database {
                 return true;
             }));
         }
-        public function save(): bool
+        public function save(mixed $data = [], mixed $sequence = ''): bool
         {
+            if (\is_array($data) && $data !== []) {
+                $this->setData($data);
+            }
             $id = (int)($this->row[static::schema_fields_ID] ?? 0);
             if ($id === 0) {
                 $query = self::$pdo->prepare('SELECT COALESCE(MAX(id), 0) + 1 FROM records WHERE kind = ?');
@@ -59,6 +69,25 @@ namespace Weline\Framework\Database {
             return $query->execute([static::class, $id, json_encode($this->row)]);
         }
         public function save_before(): void {}
+    }
+}
+
+namespace Weline\Websites\Model {
+    /**
+     * Fixture stub: ThemeScopedWorkspace may class_exists(Website) for default-locale.
+     * Keep real Website.php off the fixture Model to avoid signature clashes.
+     */
+    final class Website extends \Weline\Framework\Database\Model
+    {
+        public const schema_fields_ID = 'website_id';
+        public const schema_fields_CODE = 'code';
+
+        public function getDefaultLanguage(): string
+        {
+            $lang = \trim((string)$this->getData('default_language', 'en_US'));
+
+            return $lang !== '' ? $lang : 'en_US';
+        }
     }
 }
 

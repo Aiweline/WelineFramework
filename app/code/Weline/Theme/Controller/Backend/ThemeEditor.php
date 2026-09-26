@@ -75,6 +75,17 @@ use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemePatchCommand;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
+use Weline\Theme\Api\Version\ThemeVersionPublicationInterface;
+use Weline\Theme\Model\ThemeScopeVersion;
+use Weline\Theme\Model\ThemeScopeVersionResourceSnapshot;
+use Weline\Theme\Model\ThemeScopeVersionSelection;
+use Weline\Theme\Model\ThemeScopeVersionWidgetDecision;
+use Weline\Theme\Service\ThemeScopeVersionService;
+use Weline\Theme\Service\Version\ThemeVersionPublicationService;
+use Weline\Theme\Service\Version\ThemeVersionScopePropagator;
+use Weline\Theme\Service\Version\ThemeVersionSelectionResolver;
+use Weline\Theme\Service\Version\ThemeVersionSnapshotBuilder;
 
 /**
  * 主题编辑器控制器
@@ -6874,224 +6885,6 @@ HTML;
         return $resolved !== '' && is_file($resolved) ? $resolved : '';
     }
 
-    public function getVersionsPayload(): array
-    {
-        $data = $this->getEditorJsonPayload();
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id'));
-        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-        $limit = (int)$this->request->getParam('limit', 20);
-
-        if (!$themeId) {
-            return [
-                'success' => false,
-                'message' => __('Missing theme ID'),
-            ];
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
-            $themeId = $context->themeId;
-            $pageType = $context->layoutType;
-            $identity = $this->layoutIdentityFromEditorContext($context);
-            $versions = $this->versionService->getVersions($themeId, $pageType, $limit, $identity);
-            $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType, $identity);
-            $publishedVersion = $this->versionService->getPublishedVersion($themeId, $pageType, $identity);
-            $suggestion = $this->nextLayoutVersionSuggestion($context);
-
-            return [
-                'success' => true,
-                'data' => [
-                    'versions' => $versions,
-                    'current_version_id' => $currentVersion?->getVersionId(),
-                    'published_version_id' => $publishedVersion?->getVersionId(),
-                    'next_version_number' => $suggestion['next_version_number'],
-                    'suggested_version_name' => $suggestion['suggested_version_name'],
-                ],
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'message' => $e->getMessage(),
-            ];
-        }
-    }
-
-    public function saveVersionPayload(): array
-    {
-        $data = $this->getVersionRequestData();
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-        $versionName = $data['version_name'] ?? $this->request->getParam('version_name');
-        $description = $data['description'] ?? $this->request->getParam('description');
-
-        if (!$themeId) {
-            return [
-                'success' => false,
-                'message' => __('Missing theme ID'),
-            ];
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
-            $version = $this->saveScopedLayoutVersion(
-                $context,
-                $versionName !== null ? (string)$versionName : null,
-                $description !== null ? (string)$description : null,
-            );
-            $this->clearVersionPreviewCaches($themeId);
-
-            return [
-                'success' => true,
-                'message' => __('Version saved: %{name}', ['name' => $version->getDisplayName()]),
-                'data' => $version->toArray(),
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'message' => $e->getMessage(),
-            ];
-        }
-    }
-
-    public function switchVersionPayload(): array
-    {
-        $data = $this->getVersionRequestData();
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-        $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
-
-        if (!$themeId || !$versionId) {
-            return [
-                'success' => false,
-                'message' => __('Missing required parameters'),
-            ];
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
-            $identity = $this->layoutIdentityFromEditorContext($context);
-            $targetVersion = $this->versionService->getVersion($themeId, $pageType, $versionId, $identity);
-            if (!$targetVersion instanceof ThemeLayoutVersion) {
-                throw new \RuntimeException('theme_layout_version_not_found');
-            }
-            $targetSnapshot = $this->normalizeLegacyLayoutSnapshot($context, $targetVersion->getSnapshotData());
-            $result = $this->versionService->switchToVersion(
-                $themeId,
-                $pageType,
-                $versionId,
-                $identity,
-                $targetSnapshot,
-            );
-            if (!$result) {
-                return [
-                    'success' => false,
-                    'message' => __('Switch version failed'),
-                ];
-            }
-
-            $this->clearVersionPreviewCaches($themeId);
-            $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType, $identity);
-            if (!$currentVersion instanceof ThemeLayoutVersion) {
-                throw new \RuntimeException('theme_layout_current_version_missing');
-            }
-            $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
-                $context,
-                $targetSnapshot,
-                'Restore selected legacy layout version',
-            );
-
-            return [
-                'success' => true,
-                'message' => __('Restored selected version'),
-                'data' => [
-                    'current_version_id' => $currentVersion?->getVersionId(),
-                    'version' => $currentVersion?->toArray(),
-                    'scoped_workspace' => $scopedDraft,
-                ],
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'message' => $e->getMessage(),
-            ];
-        }
-    }
-
-    public function restoreOriginalPayload(): array
-    {
-        $data = $this->getVersionRequestData();
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-
-        if (!$themeId) {
-            return [
-                'success' => false,
-                'message' => __('Missing theme ID'),
-            ];
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
-            $identity = $this->layoutIdentityFromEditorContext($context);
-            $result = $this->versionService->restoreOriginal(
-                $themeId,
-                $pageType,
-                null,
-                $identity,
-                $this->scopedLayoutSnapshot($context),
-            );
-            $this->clearVersionPreviewCaches($themeId);
-
-            $backupVersion = $result['backup_version'];
-            $newVersion = $result['new_version'];
-            $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
-                $context,
-                $newVersion->getSnapshotData(),
-                'Restore original layout snapshot',
-            );
-
-            /** @var WidgetDefaultInjectionService $injectionService */
-            $injectionService = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
-            $restoreComponentArea = $context->area === PreviewContextService::AREA_BACKEND
-                ? PreviewContextService::AREA_BACKEND
-                : PreviewContextService::AREA_FRONTEND;
-            $injectionRestore = $injectionService->restoreDefaultInjectionsAfterDraftReset(
-                $themeId,
-                $identity,
-                $restoreComponentArea,
-                $pageType,
-            );
-            if ((int)($injectionRestore['applied_defaults'] ?? 0) > 0) {
-                ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-                /** @var ThemeScopedWorkspaceInterface $workspace */
-                $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
-                $scopedDraft = $workspace->load($context->withResource(ThemeEditorContext::RESOURCE_LAYOUT), true);
-            }
-
-            return [
-                'success' => true,
-                'message' => __('Restored original layout'),
-                'data' => [
-                    'backup_version' => $backupVersion?->toArray(),
-                    'new_version' => $newVersion->toArray(),
-                    'scoped_workspace' => $scopedDraft,
-                    'default_injection_restore' => $injectionRestore,
-                ],
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'message' => $e->getMessage(),
-            ];
-        }
-    }
-
-    /**
-     * Manually flush Theme runtime / generated / preview caches for the editor.
-     * Does not mutate layout drafts or version history.
-     *
-     * @return array{success:bool,message:string,data?:array<string,mixed>}
-     */
     public function clearThemeCachePayload(): array
     {
         $data = $this->getVersionRequestData();
@@ -7299,73 +7092,6 @@ HTML;
         }
 
         return false;
-    }
-
-    public function publishVersionPayload(): array
-    {
-        $data = $this->getVersionRequestData();
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-        $versionId = isset($data['version_id']) ? (int)$data['version_id'] : 0;
-
-        if (!$themeId) {
-            return [
-                'success' => false,
-                'message' => __('Missing theme ID'),
-            ];
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
-            $opts = [
-                'create_version' => $data['create_version'] ?? false,
-                'version_name' => $data['version_name'] ?? '',
-                'version_id' => $versionId,
-                'reason' => 'theme_editor_compat_version_publish',
-            ];
-            if ($this->wantsStandardPublishStream($data)) {
-                $this->streamStandardLayoutPublish(
-                    $context,
-                    $opts,
-                    null,
-                    static function (array $result, array $finalizeMeta): array {
-                        return [
-                            'message' => (string)__('Version published'),
-                            'code' => 'theme_standard_publish_ok',
-                            'data' => \array_merge(
-                                \is_array($result['data'] ?? null) ? $result['data'] : [],
-                                ['finalize' => $finalizeMeta],
-                            ),
-                        ];
-                    },
-                );
-                // SSE already committed on the socket; stop Query/JSON wrapping.
-                throw new ResponseTerminateException('');
-            }
-
-            $result = $this->runStandardLayoutPublish($context, $opts);
-            if (empty($result['success'])) {
-                return $result;
-            }
-
-            $this->clearVersionPreviewCaches($context->themeId, true);
-            $finalizeMeta = $this->finalizeStandardLayoutPublish($context, null);
-
-            return [
-                'success' => true,
-                'message' => __('Version published'),
-                'code' => 'theme_standard_publish_ok',
-                'data' => \array_merge(
-                    \is_array($result['data'] ?? null) ? $result['data'] : [],
-                    ['finalize' => $finalizeMeta],
-                ),
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'message' => $e->getMessage(),
-            ];
-        }
     }
 
     public function deleteVersionPayload(): array
@@ -8151,59 +7877,1572 @@ HTML;
         }
     }
 
-    // ==================== 版本控制 API ====================
+    // ==================== Scope 版本身份 API（Task 4；旧 versions/* 保留至 Task 6）====================
 
     /**
-     * 获取版本列表 (Query)
-     * 路由: /backend/theme-editor/versions (GET)
+     * 列出 owner 的 sealed 历史、当前 P、当前 D/R。
+     * 路由: /theme/backend/theme-editor/scope-versions (GET)
      */
-    public function getVersions()
+    public function getScopeVersions()
     {
-        $data = $this->getEditorJsonPayload();
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id'));
-        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-        $limit = (int)$this->request->getParam('limit', 20);
+        return $this->fetchJson($this->getScopeVersionsPayload());
+    }
 
-        if (!$themeId) {
-            return $this->fetchJson([
+    /**
+     * @return array{success:bool,message?:string,data?:array<string,mixed>}
+     */
+    public function getScopeVersionsPayload(): array
+    {
+        $data = $this->getScopeVersionRequestData();
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+        $limit = (int)($data['limit'] ?? $this->request->getParam('limit', 20));
+        if ($limit < 1) {
+            $limit = 20;
+        }
+        if ($limit > 100) {
+            $limit = 100;
+        }
+
+        if ($themeId < 1) {
+            return [
                 'success' => false,
                 'message' => __('缺少主题ID'),
-            ]);
+            ];
         }
 
         try {
             $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
-            $themeId = $context->themeId;
-            $pageType = $context->layoutType;
-            $identity = $this->layoutIdentityFromEditorContext($context);
-            $versions = $this->versionService->getVersions($themeId, $pageType, $limit, $identity);
-            $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType, $identity);
-            $publishedVersion = $this->versionService->getPublishedVersion($themeId, $pageType, $identity);
-            $suggestion = $this->nextLayoutVersionSuggestion($context);
+            $owner = $this->themeVersionOwnerFromContext($context);
+            $selection = $this->loadScopeVersionSelectionArray($owner);
+            $resolver = ObjectManager::getInstance(ThemeVersionSelectionResolver::class);
+            $publishedIdentity = null;
+            $draftIdentity = null;
+            if ($selection !== null && (int)($selection['published_version_id'] ?? 0) > 0) {
+                $publishedIdentity = $resolver->resolvePublished($owner, $selection);
+                $draftIdentity = $resolver->resolveDraft($owner, $selection);
+            }
 
-            return $this->fetchJson([
+            $rows = $this->listScopeVersionRowsForOwner($owner, $limit);
+            $sealed = [];
+            $archivedOnly = [];
+            $draftRow = null;
+            foreach ($rows as $row) {
+                $versionId = (int)($row['version_id'] ?? 0);
+                $lifecycle = (string)($row['lifecycle'] ?? '');
+                $entry = $this->normalizeScopeVersionListEntry($row, $selection);
+                if ($lifecycle === ThemeScopeVersion::LIFECYCLE_DRAFT) {
+                    $draftRow = $entry;
+                    continue;
+                }
+                if ($lifecycle === ThemeScopeVersion::LIFECYCLE_SEALED) {
+                    $sealed[] = $entry;
+                    if ((string)($row['version_type'] ?? '') === ThemeScopeVersion::TYPE_AUTO_BACKUP
+                        && $versionId !== (int)($selection['published_version_id'] ?? 0)
+                    ) {
+                        $archivedOnly[] = $entry;
+                    }
+                }
+            }
+
+            $publishedId = $publishedIdentity?->themeVersionId
+                ?? (int)($selection['published_version_id'] ?? 0);
+            $draftId = $draftIdentity?->themeVersionId
+                ?? (int)($selection['draft_version_id'] ?? 0);
+            $draftRevision = $draftIdentity?->contentRevision
+                ?? (int)($draftRow['content_revision'] ?? 0);
+            $nextNumber = 1;
+            foreach ($rows as $row) {
+                $nextNumber = \max($nextNumber, (int)($row['version_number'] ?? 0) + 1);
+            }
+
+            return [
                 'success' => true,
+                'message' => __('Scope 版本列表已加载'),
                 'data' => [
-                    'versions' => $versions,
-                    'current_version_id' => $currentVersion?->getVersionId(),
-                    'published_version_id' => $publishedVersion?->getVersionId(),
-                    'next_version_number' => $suggestion['next_version_number'],
-                    'suggested_version_name' => $suggestion['suggested_version_name'],
+                    'owner' => $owner->toArray(),
+                    'selection' => $selection,
+                    'selection_revision' => (int)($selection['selection_revision'] ?? 0),
+                    'published_version_id' => $publishedId > 0 ? $publishedId : null,
+                    'draft_version_id' => $draftId > 0 ? $draftId : null,
+                    'draft_content_revision' => $draftRevision > 0 ? $draftRevision : null,
+                    'current_version_id' => $draftId > 0 ? $draftId : ($publishedId > 0 ? $publishedId : null),
+                    'versions' => $sealed,
+                    'sealed_history' => $sealed,
+                    'draft' => $draftRow,
+                    'archived_only' => $archivedOnly,
+                    'next_version_number' => $nextNumber,
+                    'suggested_version_name' => 'v' . $nextNumber,
+                    'theme_version_id' => isset($data['theme_version_id'])
+                        ? (int)$data['theme_version_id']
+                        : null,
+                    'mode' => $this->normalizeScopeVersionMode($data['mode'] ?? null),
+                    'content_revision' => isset($data['content_revision'])
+                        ? (int)$data['content_revision']
+                        : null,
                 ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
+            ];
+        } catch (\Throwable $e) {
+            return [
                 'success' => false,
                 'message' => $e->getMessage(),
-            ]);
+            ];
         }
     }
 
     /**
-     * Copy one layout version snapshot into the theme currently being edited.
-     * Does not publish, does not change the source version flags, and does not
-     * insert the source row into the target version list.
+     * 按三种来源创建草稿。
+     * 路由: /theme/backend/theme-editor/create-scope-draft (POST)
      */
+    public function postCreateScopeDraft()
+    {
+        return $this->fetchJson($this->createScopeDraftPayload());
+    }
+
+    /**
+     * @return array{success:bool,message?:string,data?:array<string,mixed>,conflict?:bool}
+     */
+    public function createScopeDraftPayload(): array
+    {
+        $data = $this->getScopeVersionRequestData();
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+        $creationSourceKind = \trim((string)($data['creation_source_kind']
+            ?? ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT));
+
+        if ($themeId < 1) {
+            return [
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ];
+        }
+
+        try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $owner = $this->themeVersionOwnerFromContext($context);
+            // 写路径要求祖先基准：本级没有已发布版本时，用祖先 owner 的已发布版本做基准，
+            // 否则新 scope 首次续编会直接报 create_draft_base_required（UC-08 缺口）。
+            $selection = $this->loadScopeVersionSelectionArray($owner, true) ?? [
+                'published_version_id' => 0,
+                'draft_version_id' => null,
+                'selection_revision' => 0,
+            ];
+            $publication = ObjectManager::getInstance(ThemeVersionPublicationService::class);
+
+            $existingDraftId = (int)($selection['draft_version_id'] ?? 0);
+            $existingRevision = 0;
+            if ($existingDraftId > 0) {
+                $existing = $this->loadScopeVersionRow($existingDraftId, $owner);
+                $existingRevision = (int)($existing['content_revision'] ?? 0);
+            }
+
+            $baseVersionId = (int)($selection['base_version_id'] ?? $selection['published_version_id'] ?? 0);
+            $options = [
+                'existing_draft_version_id' => $existingDraftId,
+                'existing_content_revision' => $existingRevision > 0 ? $existingRevision : 1,
+                'published_version_id' => (int)($selection['published_version_id'] ?? 0),
+                'base_version_id' => $baseVersionId,
+                'source_theme_version_id' => (int)($data['source_theme_version_id'] ?? 0),
+                'force_new' => !empty($data['force_new']),
+            ];
+
+            $allocatedCarry = ['chrome_nodes' => 0, 'decisions' => 0];
+            if (
+                $creationSourceKind !== ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT
+                || $existingDraftId < 1
+                || !empty($options['force_new'])
+            ) {
+                $allocated = $this->allocateScopeVersionDraftRow(
+                    $owner,
+                    $creationSourceKind,
+                    $options,
+                    isset($data['version_name']) ? (string)$data['version_name'] : null,
+                    isset($data['description']) ? (string)$data['description'] : null,
+                );
+                $options['allocated_version_id'] = $allocated['version_id'];
+                $allocatedCarry = [
+                    'chrome_nodes' => (int)($allocated['carried_chrome_nodes'] ?? 0),
+                    'decisions' => (int)($allocated['carried_decisions'] ?? 0),
+                ];
+                if ($creationSourceKind === ThemeVersionPublicationInterface::CREATION_EXPLICIT_HISTORICAL) {
+                    $options['source_theme_version_id'] = (int)($data['source_theme_version_id'] ?? 0);
+                }
+            }
+
+            $result = $publication->createDraft($owner, $creationSourceKind, $options);
+            if (empty($result['reused_existing_draft'])) {
+                $this->persistScopeDraftSelection(
+                    $owner,
+                    $selection,
+                    (int)$result['theme_version_id'],
+                    (int)($result['content_revision'] ?? 1),
+                );
+            }
+
+            $this->clearVersionPreviewCaches($context->themeId);
+
+            return [
+                'success' => true,
+                'message' => __('Scope 草稿已创建'),
+                'data' => $result + [
+                    'selection' => $this->loadScopeVersionSelectionArray($owner, true),
+                    // 基准来源单独暴露，便于验收「无本级覆盖者用祖先 owner」。
+                    'base_version_id' => $baseVersionId,
+                    'base_source_scope' => (string)($selection['base_source_scope'] ?? ''),
+                    'base_inherited_from_ancestor' => !empty($selection['base_inherited']),
+                    // 新版本行从基准版本承接到的内容量：0 表示空壳行（缺陷 B 的观测点）。
+                    'carried_chrome_nodes' => $allocatedCarry['chrome_nodes'],
+                    'carried_decisions' => $allocatedCarry['decisions'],
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * 封存当前 D 为命名 N=D，默认不上线（published=false）。
+     * 路由: /theme/backend/theme-editor/save-scope-version (POST)
+     */
+    public function postSaveScopeVersion()
+    {
+        return $this->fetchJson($this->saveScopeVersionPayload());
+    }
+
+    /**
+     * @return array{success:bool,message?:string,data?:array<string,mixed>,conflict?:bool}
+     */
+    public function saveScopeVersionPayload(): array
+    {
+        $data = $this->getScopeVersionRequestData();
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+
+        if ($themeId < 1) {
+            return [
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ];
+        }
+
+        try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $owner = $this->themeVersionOwnerFromContext($context);
+            $selection = $this->loadScopeVersionSelectionArray($owner);
+            $draftId = (int)($data['theme_version_id']
+                ?? $selection['draft_version_id']
+                ?? 0);
+            if ($draftId < 1) {
+                return [
+                    'success' => false,
+                    'message' => __('缺少草稿版本'),
+                ];
+            }
+
+            $draftRow = $this->loadScopeVersionRow($draftId, $owner);
+            if ($draftRow === null) {
+                throw new \RuntimeException('theme_scope_version_not_found');
+            }
+            $actualRevision = (int)($draftRow['content_revision'] ?? 0);
+            $expectedRevision = \array_key_exists('expected_content_revision', $data)
+                ? (int)$data['expected_content_revision']
+                : (\array_key_exists('content_revision', $data)
+                    ? (int)$data['content_revision']
+                    : $actualRevision);
+            $identity = $owner->withVersion(
+                $draftId,
+                ThemeVersionIdentity::MODE_DRAFT,
+                $actualRevision > 0 ? $actualRevision : 1,
+            );
+
+            $publication = ObjectManager::getInstance(ThemeVersionPublicationService::class);
+            $save = $publication->saveDraft(
+                $identity,
+                \is_array($data['changes'] ?? null) ? $data['changes'] : [],
+                $expectedRevision,
+            );
+            if (!empty($save['conflict'])) {
+                return [
+                    'success' => false,
+                    'conflict' => true,
+                    'message' => __('内容修订冲突'),
+                    'data' => $save,
+                ];
+            }
+
+            $sealedIdentity = $owner->withVersion(
+                $draftId,
+                ThemeVersionIdentity::MODE_DRAFT,
+                (int)($save['content_revision'] ?? $actualRevision),
+            );
+            $sealed = $publication->seal($sealedIdentity, [
+                'published_version_id' => (int)($selection['published_version_id'] ?? 0),
+            ]);
+            $this->persistScopeVersionSealed(
+                $draftId,
+                $owner,
+                (int)$sealed['content_revision'],
+                isset($data['version_name']) ? (string)$data['version_name'] : null,
+                isset($data['description']) ? (string)$data['description'] : null,
+            );
+
+            $this->clearVersionPreviewCaches($context->themeId);
+
+            return [
+                'success' => true,
+                'message' => __('Scope 版本已封存（未发布）'),
+                'data' => $sealed + [
+                    'published' => false,
+                    'selection' => $this->loadScopeVersionSelectionArray($owner),
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * 发布当前 D 或已有 sealed H。
+     * 路由: /theme/backend/theme-editor/publish-scope-version (POST)
+     */
+    public function postPublishScopeVersion()
+    {
+        return $this->fetchJson($this->publishScopeVersionPayload());
+    }
+
+    /**
+     * @return array{success:bool,message?:string,data?:array<string,mixed>,conflict?:bool,code?:string}
+     */
+    public function publishScopeVersionPayload(): array
+    {
+        $data = $this->getScopeVersionRequestData();
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+
+        if ($themeId < 1) {
+            return [
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ];
+        }
+
+        try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $owner = $this->themeVersionOwnerFromContext($context);
+            $selection = $this->loadScopeVersionSelectionArray($owner) ?? [
+                'published_version_id' => 0,
+                'draft_version_id' => null,
+                'selection_revision' => 0,
+            ];
+            $themeVersionId = (int)($data['theme_version_id']
+                ?? $selection['draft_version_id']
+                ?? $selection['published_version_id']
+                ?? 0);
+            if ($themeVersionId < 1) {
+                return [
+                    'success' => false,
+                    'message' => __('缺少主题版本'),
+                ];
+            }
+
+            $row = $this->loadScopeVersionRow($themeVersionId, $owner);
+            if ($row === null) {
+                throw new \RuntimeException('theme_scope_version_not_found');
+            }
+            $mode = $this->normalizeScopeVersionMode($data['mode'] ?? null)
+                ?? ((string)($row['lifecycle'] ?? '') === ThemeScopeVersion::LIFECYCLE_DRAFT
+                    ? ThemeVersionIdentity::MODE_DRAFT
+                    : ThemeVersionIdentity::MODE_FORMAL);
+            $contentRevision = (int)($data['content_revision']
+                ?? $row['content_revision']
+                ?? 0);
+            if ($contentRevision < 1) {
+                $contentRevision = 1;
+            }
+            $identity = $owner->withVersion($themeVersionId, $mode, $contentRevision);
+
+            $expectedSelectionRevision = \array_key_exists('expected_selection_revision', $data)
+                ? (int)$data['expected_selection_revision']
+                : (int)($selection['selection_revision'] ?? 0);
+            $actualSelectionRevision = (int)($selection['selection_revision'] ?? 0);
+            $publishSet = $data['publish_set'] ?? 'all';
+            $publication = ObjectManager::getInstance(ThemeVersionPublicationService::class);
+            // 「重选历史」只针对：目标版本已封存，且它**不是**当前正在编辑的那份草稿。
+            // 正常流程是「保存版本(把 D 封存) → 发布」，此时 selection.draft_version_id 仍指向它，
+            // 必须走 publish()：只有 publish() 会消费草稿、按 publish_set 生成 D'，并把
+            // descendant_updates/descendant_conflicts 计入失效范围。若这里误判成「重选历史」，
+            // 父发布既不生成后代 C' 也不做冲突判定（UC-08 写入端传播整体失效）。
+            $isSelectHistory = $mode === ThemeVersionIdentity::MODE_FORMAL
+                && (string)($row['lifecycle'] ?? '') === ThemeScopeVersion::LIFECYCLE_SEALED
+                && (int)($selection['draft_version_id'] ?? 0) !== $themeVersionId;
+
+            // CAS 预检：与 publish()/selectHistory() 同一判定，但放在封存与烘焙之前。
+            // 冲突时不产生新版本、不落任何产物 —— 否则会为注定失败的发布留下孤儿文件。
+            if ($expectedSelectionRevision >= 0 && $expectedSelectionRevision !== $actualSelectionRevision) {
+                return [
+                    'success' => false,
+                    'conflict' => true,
+                    'message' => 'selection_revision_cas_failed',
+                    'data' => [
+                        'ok' => false,
+                        'conflict' => true,
+                        'reason' => 'selection_revision_cas_failed',
+                        'published_version_id' => (int)($selection['published_version_id'] ?? 0),
+                        'draft_version_id' => (int)($selection['draft_version_id'] ?? 0),
+                    ],
+                ];
+            }
+
+            $draftResources = \is_array($data['draft_resources'] ?? null)
+                ? $data['draft_resources']
+                : ['layout:' . $context->layoutType, 'chrome', 'appearance', 'theme_binding'];
+            $preparedPublished = \is_array($data['prepared_published_resources'] ?? null)
+                ? $data['prepared_published_resources']
+                : $draftResources;
+            // 先算出「父这次发布了哪些资源」：后代传播要在 publish() 之前就知道变更集合。
+            $publishResourcePlan = $publication->planPublishedResources([
+                'publish_set' => $publishSet,
+                'draft_resources' => $draftResources,
+                'prepared_published_resources' => $preparedPublished,
+            ]);
+
+            // 顺序很关键：先封存 → 再烘焙产物 → 再分配 D' → 再算后代传播 → 再写资源快照 → 最后才翻转发布指针。
+            // 指针可见即代表该版本的 formal 产物已存在于磁盘，读者不会读到「指向空目录」的版本。
+            // 封存必须先做：chrome 目录由 lifecycle 推导，未封存会落到 draft 目录。
+            $this->persistScopeVersionSealed(
+                $themeVersionId,
+                $owner,
+                $contentRevision,
+                isset($data['version_name']) ? (string)$data['version_name'] : null,
+                isset($data['description']) ? (string)$data['description'] : null,
+            );
+
+            $bake = $this->bakePublishedScopeArtifacts($context, $themeVersionId);
+            if (empty($bake['ok'])) {
+                // 补偿回滚：封存必须早于烘焙（chrome 目录由 lifecycle 推导），所以烘焙失败时
+                // D 已经被封存。不回滚就等于「失败也把草稿消费掉了」，违反 UC-05 的
+                // 「失败不消费草稿」。回滚后 selection 仍指向 D，用户可原样重试。
+                $this->restoreScopeVersionToDraft($themeVersionId, $owner, $contentRevision);
+                return [
+                    'success' => false,
+                    'code' => 'theme_scope_publish_bake_failed',
+                    'message' => (string)($bake['message'] ?? __('发布产物烘焙失败')),
+                    'data' => ['bake' => $bake],
+                ];
+            }
+
+            // 单页发布：未选中的资源必须留在草稿里，而 publish() 是纯规划器、只接受一个
+            // 「已分配好的 D' id」。分配点只能在这里 —— 全模块再没有别处会分配它，
+            // 缺了就会抛 single_page_publish_requires_draft_prime_id。
+            // 放在烘焙之后分配，是为了让烘焙失败时不留孤儿版本行。
+            // 分配失败即中止整次发布：宁可失败，也不能让未选中的资源凭空消失。
+            // 重选历史（selectHistory）不消费草稿，因此不分配。
+            $allocatedDraftPrimeId = 0;
+            if (!$isSelectHistory && $publishResourcePlan['remaining_draft_resources'] !== []) {
+                $allocatedDraftPrime = $this->allocateScopeVersionDraftRow(
+                    $owner,
+                    ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT,
+                    [
+                        // 以正在发布的这份 D 为基准：D' 承接它的 chrome 载荷与卸载决定。
+                        'base_version_id' => $themeVersionId,
+                        'source_theme_version_id' => $themeVersionId,
+                        // D' 是同一个编辑会话的延续，必须带上卸载决定，否则只发布本页会把
+                        // 用户刚删掉的部件「复活」到 D' 上（UC-03）。
+                        'carry_decisions' => true,
+                    ],
+                    null,
+                    (string)__('单页发布剩余草稿'),
+                );
+                $allocatedDraftPrimeId = (int)$allocatedDraftPrime['version_id'];
+            }
+
+            // 后代传播：重选历史（selectHistory）不改父版本内容，因此不做传播。
+            $descendants = ['plan' => [], 'updates' => [], 'conflicts' => [], 'fallback' => [], 'prepared' => []];
+            if (!$isSelectHistory) {
+                $descendants = $this->propagateScopeVersionDescendants(
+                    $context,
+                    $owner,
+                    $themeVersionId,
+                    (int)($selection['published_version_id'] ?? 0),
+                    $publishResourcePlan['published_resources'],
+                    $bake,
+                );
+            }
+
+            if ($isSelectHistory) {
+                $result = $publication->selectHistory($identity, [
+                    'expected_selection_revision' => $expectedSelectionRevision,
+                    'actual_selection_revision' => $actualSelectionRevision,
+                    'current_draft_version_id' => $selection['draft_version_id'] ?? null,
+                ]);
+            } else {
+                $result = $publication->publish($identity, [
+                    'expected_selection_revision' => $expectedSelectionRevision,
+                    'actual_selection_revision' => $actualSelectionRevision,
+                    'publish_set' => $publishSet,
+                    'draft_resources' => $draftResources,
+                    'prepared_published_resources' => $preparedPublished,
+                    'allocated_draft_prime_id' => $allocatedDraftPrimeId,
+                    'current_published_version_id' => (int)($selection['published_version_id'] ?? 0),
+                    'current_draft_version_id' => (int)($selection['draft_version_id'] ?? 0),
+                    'sealed_content_revision' => $contentRevision,
+                    // 后代分类结果交给规划器统一计算失效范围（父 + 实际更新的后代）。
+                    'descendant_updates' => $descendants['updates'],
+                    'descendant_conflicts' => $descendants['conflicts'],
+                ]);
+            }
+
+            if (!empty($result['conflict']) || (isset($result['ok']) && $result['ok'] === false)) {
+                return [
+                    'success' => false,
+                    'conflict' => !empty($result['conflict']),
+                    'message' => (string)($result['reason'] ?? __('发布冲突')),
+                    'data' => $result,
+                ];
+            }
+
+            $snapshots = $this->persistVersionResourceSnapshots(
+                $context,
+                $owner,
+                $themeVersionId,
+                (int)($result['content_revision'] ?? $contentRevision),
+                $result,
+                \is_array($bake['fingerprints'] ?? null) ? $bake['fingerprints'] : [],
+            );
+            if (empty($snapshots['ok'])) {
+                return [
+                    'success' => false,
+                    'code' => 'theme_scope_publish_snapshot_failed',
+                    'message' => (string)($snapshots['message'] ?? __('发布资源快照落库失败')),
+                    'data' => $result + ['bake' => $bake, 'snapshots' => $snapshots],
+                ];
+            }
+
+            $this->persistScopePublishSelection($owner, $selection, $result);
+            // 后代指针最后翻转：此时父与全部 C' 候选都已就绪（先备齐再切）。
+            $this->persistDescendantSelections($descendants, $selection);
+
+            $this->clearVersionPreviewCaches($context->themeId, true);
+
+            return [
+                'success' => true,
+                'message' => __('Scope 版本已发布'),
+                'code' => 'theme_scope_publish_ok',
+                'data' => $result + [
+                    'selection' => $this->loadScopeVersionSelectionArray($owner),
+                    'artifacts' => $bake,
+                    'snapshots' => $snapshots,
+                    'descendants' => $descendants,
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * 备份当前编辑状态后，在新草稿恢复包默认值。
+     * 路由: /theme/backend/theme-editor/restore-scope-defaults (POST)
+     */
+    public function postRestoreScopeDefaults()
+    {
+        return $this->fetchJson($this->restoreScopeDefaultsPayload());
+    }
+
+    /**
+     * @return array{success:bool,message?:string,data?:array<string,mixed>}
+     */
+    public function restoreScopeDefaultsPayload(): array
+    {
+        $data = $this->getScopeVersionRequestData();
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+
+        if ($themeId < 1) {
+            return [
+                'success' => false,
+                'message' => __('缺少主题ID'),
+            ];
+        }
+
+        try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $owner = $this->themeVersionOwnerFromContext($context);
+            $selection = $this->loadScopeVersionSelectionArray($owner) ?? [
+                'published_version_id' => 0,
+                'draft_version_id' => null,
+                'selection_revision' => 0,
+            ];
+            $publishedId = (int)($selection['published_version_id'] ?? 0);
+            $existingDraftId = (int)($selection['draft_version_id'] ?? 0);
+            $publication = ObjectManager::getInstance(ThemeVersionPublicationService::class);
+
+            $autoBackup = null;
+            if ($existingDraftId > 0) {
+                $draftRow = $this->loadScopeVersionRow($existingDraftId, $owner);
+                $revision = (int)($draftRow['content_revision'] ?? 1);
+                if ($revision < 1) {
+                    $revision = 1;
+                }
+                $autoBackup = $publication->seal(
+                    $owner->withVersion($existingDraftId, ThemeVersionIdentity::MODE_DRAFT, $revision),
+                    ['published_version_id' => $publishedId],
+                );
+                $this->persistScopeVersionSealed(
+                    $existingDraftId,
+                    $owner,
+                    $revision,
+                    (string)__('自动备份'),
+                    (string)__('恢复默认前自动备份'),
+                );
+                // Mark as auto_backup for archive listing.
+                try {
+                    /** @var ThemeScopeVersion $model */
+                    $model = ObjectManager::getInstance(ThemeScopeVersion::class);
+                    $model->clearQuery()->clearData()->load($existingDraftId);
+                    if ($model->getVersionId() === $existingDraftId) {
+                        $model->setVersionType(ThemeScopeVersion::TYPE_AUTO_BACKUP)->save();
+                    }
+                } catch (\Throwable) {
+                }
+            }
+
+            $allocated = $this->allocateScopeVersionDraftRow(
+                $owner,
+                ThemeVersionPublicationInterface::CREATION_PACKAGE_DEFAULTS,
+                [
+                    'published_version_id' => $publishedId,
+                    'existing_draft_version_id' => $existingDraftId,
+                ],
+                (string)__('原始布局'),
+                (string)__('已恢复到包默认'),
+            );
+            $created = $publication->createDraft(
+                $owner,
+                ThemeVersionPublicationInterface::CREATION_PACKAGE_DEFAULTS,
+                [
+                    'allocated_version_id' => $allocated['version_id'],
+                    'existing_draft_version_id' => $existingDraftId,
+                    'published_version_id' => $publishedId,
+                    'base_version_id' => $publishedId,
+                ],
+            );
+            $this->persistScopeDraftSelection(
+                $owner,
+                $selection,
+                (int)$created['theme_version_id'],
+                (int)($created['content_revision'] ?? 1),
+            );
+
+            $this->clearVersionPreviewCaches($context->themeId);
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+
+            return [
+                'success' => true,
+                'message' => __('已恢复 Scope 默认值'),
+                'data' => [
+                    'auto_backup' => $autoBackup,
+                    'draft' => $created,
+                    'published_version_id' => $publishedId > 0 ? $publishedId : null,
+                    'selection' => $this->loadScopeVersionSelectionArray($owner),
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /** @param array<string,mixed> $data */
+    private function getScopeVersionRequestData(): array
+    {
+        $payload = $this->getEditorJsonPayload();
+        if ($payload !== []) {
+            return $payload;
+        }
+
+        return $this->getVersionRequestData();
+    }
+
+    private function themeVersionOwnerFromContext(ThemeEditorContext $context): ThemeVersionIdentity
+    {
+        $storeMode = \trim((string)$context->scope->storeMode);
+
+        return new ThemeVersionIdentity(
+            themeId: $context->themeId,
+            canonicalScope: (string)$context->scope->storageScope,
+            storeMode: $storeMode !== '' ? $storeMode : 'normal',
+            area: $context->area,
+        );
+    }
+
+    private function normalizeScopeVersionMode(mixed $mode): ?string
+    {
+        $mode = \is_string($mode) ? \trim($mode) : '';
+        if ($mode === '') {
+            return null;
+        }
+        if (!\in_array($mode, ThemeVersionIdentity::MODES, true)) {
+            throw new \InvalidArgumentException('theme_scope_version_mode_invalid');
+        }
+
+        return $mode;
+    }
+
+    /**
+     * 读取 owner 的 selection。
+     *
+     * `$withAncestorBase=true` 时（写路径专用）额外解析「祖先基准」：本级没有已发布版本时，
+     * 沿祖先链取最近的已发布版本作为建草稿的基准 —— 对应 UC-08「无本级覆盖者用祖先 owner」。
+     *
+     * 注意 `published_version_id` 始终是**本级**的值（0 表示本级无正式覆盖），
+     * 祖先基准单独放在 `base_version_id`/`base_source_scope`：否则会把祖先版本写成本级
+     * 已发布指针，后代传播时就会被误判成「本级有覆盖」，落回继承语义。
+     *
+     * @return array<string,mixed>|null
+     */
+    private function loadScopeVersionSelectionArray(ThemeVersionIdentity $owner, bool $withAncestorBase = false): ?array
+    {
+        try {
+            /** @var ThemeScopeVersionSelection $model */
+            $model = ObjectManager::getInstance(ThemeScopeVersionSelection::class);
+            $rows = $model->clearQuery()->clearData()
+                ->where(ThemeScopeVersionSelection::schema_fields_THEME_ID, $owner->themeId)
+                ->where(ThemeScopeVersionSelection::schema_fields_SCOPE, $owner->canonicalScope)
+                ->where(ThemeScopeVersionSelection::schema_fields_STORE_MODE, $owner->storeMode)
+                ->where(ThemeScopeVersionSelection::schema_fields_AREA, $owner->area)
+                ->limit(1)
+                ->select()
+                ->fetchArray();
+            if (!\is_array($rows) || $rows === []) {
+                return $withAncestorBase ? $this->scopeVersionSelectionWithAncestorBase($owner, null) : null;
+            }
+            $row = \array_is_list($rows) ? ($rows[0] ?? null) : $rows;
+            if (!\is_array($row)) {
+                return $withAncestorBase ? $this->scopeVersionSelectionWithAncestorBase($owner, null) : null;
+            }
+            $publishedId = (int)($row[ThemeScopeVersionSelection::schema_fields_PUBLISHED_VERSION_ID] ?? 0);
+            $draftId = $row[ThemeScopeVersionSelection::schema_fields_DRAFT_VERSION_ID] ?? null;
+            $publishedRevision = 0;
+            $draftRevision = 0;
+            if ($publishedId > 0) {
+                $publishedRow = $this->loadScopeVersionRow($publishedId, $owner);
+                $publishedRevision = (int)($publishedRow['content_revision'] ?? 0);
+            }
+            if ($draftId !== null && $draftId !== '' && (int)$draftId > 0) {
+                $draftRow = $this->loadScopeVersionRow((int)$draftId, $owner);
+                $draftRevision = (int)($draftRow['content_revision'] ?? 0);
+            }
+
+            $result = [
+                'selection_id' => (int)($row[ThemeScopeVersionSelection::schema_fields_ID] ?? 0),
+                'published_version_id' => $publishedId,
+                'draft_version_id' => ($draftId === null || $draftId === '') ? null : (int)$draftId,
+                'selection_revision' => (int)($row[ThemeScopeVersionSelection::schema_fields_SELECTION_REVISION] ?? 0),
+                'published_content_revision' => $publishedRevision,
+                'draft_content_revision' => $draftRevision,
+            ];
+
+            return $withAncestorBase
+                ? $this->scopeVersionSelectionWithAncestorBase($owner, $result)
+                : $result;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * 给本级 selection 补上「祖先基准」三个键（写路径用）。
+     *
+     * @param array<string,mixed>|null $selection 本级 selection；null 表示本级尚无行
+     * @return array<string,mixed>
+     */
+    private function scopeVersionSelectionWithAncestorBase(ThemeVersionIdentity $owner, ?array $selection): array
+    {
+        $selection ??= [
+            'selection_id' => 0,
+            'published_version_id' => 0,
+            'draft_version_id' => null,
+            'selection_revision' => 0,
+            'published_content_revision' => 0,
+            'draft_content_revision' => 0,
+        ];
+        $localPublished = (int)($selection['published_version_id'] ?? 0);
+        $baseVersionId = $localPublished;
+        $baseSourceScope = $localPublished > 0 ? $owner->canonicalScope : '';
+        $baseInherited = false;
+        if ($localPublished < 1) {
+            try {
+                /** @var ThemeVersionScopePropagator $propagator */
+                $propagator = ObjectManager::getInstance(ThemeVersionScopePropagator::class);
+                $ancestorBase = $propagator->resolveAncestorBaseVersion($owner);
+                $baseVersionId = (int)($ancestorBase['version_id'] ?? 0);
+                $baseSourceScope = (string)($ancestorBase['source_scope'] ?? '');
+                $baseInherited = !empty($ancestorBase['inherited']);
+            } catch (\Throwable) {
+                $baseVersionId = 0;
+                $baseSourceScope = '';
+                $baseInherited = false;
+            }
+        }
+        $selection['base_version_id'] = $baseVersionId;
+        $selection['base_source_scope'] = $baseSourceScope;
+        $selection['base_inherited'] = $baseInherited;
+
+        return $selection;
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function listScopeVersionRowsForOwner(ThemeVersionIdentity $owner, int $limit): array
+    {
+        try {
+            /** @var ThemeScopeVersion $model */
+            $model = ObjectManager::getInstance(ThemeScopeVersion::class);
+            $rows = $model->clearQuery()->clearData()
+                ->where(ThemeScopeVersion::schema_fields_THEME_ID, $owner->themeId)
+                ->where(ThemeScopeVersion::schema_fields_SCOPE, $owner->canonicalScope)
+                ->where(ThemeScopeVersion::schema_fields_STORE_MODE, $owner->storeMode)
+                ->where(ThemeScopeVersion::schema_fields_AREA, $owner->area)
+                ->order(ThemeScopeVersion::schema_fields_VERSION_NUMBER, 'DESC')
+                ->limit($limit)
+                ->select()
+                ->fetchArray();
+            if (!\is_array($rows) || $rows === []) {
+                return [];
+            }
+
+            return \array_is_list($rows) ? $rows : [$rows];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function loadScopeVersionRow(int $versionId, ThemeVersionIdentity $owner): ?array
+    {
+        if ($versionId < 1) {
+            return null;
+        }
+        try {
+            /** @var ThemeScopeVersion $model */
+            $model = ObjectManager::getInstance(ThemeScopeVersion::class);
+            $model->clearQuery()->clearData()->load($versionId);
+            if ($model->getVersionId() !== $versionId) {
+                return null;
+            }
+            if (
+                $model->getThemeId() !== $owner->themeId
+                || $model->getScope() !== $owner->canonicalScope
+                || $model->getStoreMode() !== $owner->storeMode
+                || $model->getArea() !== $owner->area
+            ) {
+                throw new \RuntimeException('theme_scope_version_owner_mismatch');
+            }
+
+            return $model->getData();
+        } catch (\RuntimeException $e) {
+            throw $e;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @param array<string,mixed>|null $selection
+     * @return array<string,mixed>
+     */
+    private function normalizeScopeVersionListEntry(array $row, ?array $selection): array
+    {
+        $versionId = (int)($row['version_id'] ?? 0);
+        $versionNumber = (int)($row['version_number'] ?? 0);
+        $versionName = $row['version_name'] ?? null;
+        $displayName = \is_string($versionName) && $versionName !== ''
+            ? $versionName
+            : ('v' . \max(1, $versionNumber));
+
+        return [
+            'version_id' => $versionId,
+            'theme_version_id' => $versionId,
+            'version_number' => $versionNumber,
+            'version_name' => $versionName,
+            'display_name' => $displayName,
+            'version_type' => (string)($row['version_type'] ?? ThemeScopeVersion::TYPE_MANUAL),
+            'lifecycle' => (string)($row['lifecycle'] ?? ThemeScopeVersion::LIFECYCLE_DRAFT),
+            'content_revision' => (int)($row['content_revision'] ?? 0),
+            'creation_source_kind' => (string)($row['creation_source_kind']
+                ?? ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT),
+            'is_auto_backup' => (string)($row['version_type'] ?? '') === ThemeScopeVersion::TYPE_AUTO_BACKUP,
+            'is_current' => $versionId > 0 && $versionId === (int)($selection['draft_version_id'] ?? 0),
+            'is_published' => $versionId > 0 && $versionId === (int)($selection['published_version_id'] ?? 0),
+            'create_time' => $row['create_time'] ?? null,
+            'description' => $row['description'] ?? null,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     * @return array{version_id:int,version_number:int}
+     */
+    private function allocateScopeVersionDraftRow(
+        ThemeVersionIdentity $owner,
+        string $creationSourceKind,
+        array $options,
+        ?string $versionName,
+        ?string $description,
+    ): array {
+        /** @var ThemeScopeVersion $model */
+        $model = ObjectManager::getInstance(ThemeScopeVersion::class);
+        $existing = $this->listScopeVersionRowsForOwner($owner, 1);
+        $nextNumber = 1;
+        if ($existing !== []) {
+            $nextNumber = (int)($existing[0]['version_number'] ?? 0) + 1;
+        } else {
+            // Fallback when list returns empty but denser numbers exist.
+            try {
+                $all = $model->clearQuery()->clearData()
+                    ->where(ThemeScopeVersion::schema_fields_THEME_ID, $owner->themeId)
+                    ->where(ThemeScopeVersion::schema_fields_SCOPE, $owner->canonicalScope)
+                    ->where(ThemeScopeVersion::schema_fields_STORE_MODE, $owner->storeMode)
+                    ->where(ThemeScopeVersion::schema_fields_AREA, $owner->area)
+                    ->order(ThemeScopeVersion::schema_fields_VERSION_NUMBER, 'DESC')
+                    ->limit(1)
+                    ->select()
+                    ->fetchArray();
+                if (\is_array($all) && $all !== []) {
+                    $row = \array_is_list($all) ? ($all[0] ?? []) : $all;
+                    $nextNumber = (int)($row['version_number'] ?? 0) + 1;
+                }
+            } catch (\Throwable) {
+            }
+        }
+        if ($nextNumber < 1) {
+            $nextNumber = 1;
+        }
+
+        // 「承接源」按「取第一个正值」解析，不能用 ?? 链：调用方（createScopeDraftPayload）
+        // 恒会把 source_theme_version_id 写成 int（缺省即 0），而 ?? 只在键不存在/null 时回退，
+        // 于是 0 会短路掉 base_version_id ⇒ 承接源被误判成「无源」⇒ 仍然只建空壳行（缺陷 B）。
+        $sourceId = (int)($options['source_theme_version_id'] ?? 0);
+        if ($sourceId < 1) {
+            $sourceId = (int)($options['base_version_id'] ?? 0);
+        }
+        $model->clearQuery()->clearData();
+        $model->setThemeId($owner->themeId)
+            ->setScope($owner->canonicalScope)
+            ->setStoreMode($owner->storeMode)
+            ->setArea($owner->area)
+            ->setVersionNumber($nextNumber)
+            ->setVersionName($versionName)
+            ->setVersionType(ThemeScopeVersion::TYPE_MANUAL)
+            ->setLifecycle(ThemeScopeVersion::LIFECYCLE_DRAFT)
+            ->setContentRevision(1)
+            ->setCreationSourceKind($creationSourceKind)
+            ->setCreationSourceVersionId($sourceId > 0 ? $sourceId : null)
+            ->setDescription($description)
+            ->setCreatedBy((int)($this->session->getUserId() ?? 0) ?: null)
+            ->save();
+
+        $versionId = $model->getVersionId();
+        if ($versionId < 1) {
+            throw new \RuntimeException('theme_scope_version_allocate_failed');
+        }
+
+        // 空壳行有两个后果：纯内容发布后 structure_key 退化成空集摘要（后代被误判结构冲突），
+        // 以及单页发布剩下的 D' 丢掉 chrome 与卸载决定。基准版本存在时把内容态一并搬过去。
+        // 决定行只在 `carry_decisions` 显式打开时搬（见 carryOverVersionContent 的说明）。
+        $carried = $this->carryOverVersionContent(
+            $owner,
+            $sourceId,
+            $versionId,
+            !empty($options['carry_decisions']),
+        );
+
+        return [
+            'version_id' => $versionId,
+            'version_number' => $nextNumber,
+            'carried_chrome_nodes' => $carried['chrome_nodes'],
+            'carried_decisions' => $carried['decisions'],
+        ];
+    }
+
+    /**
+     * 把源版本的「内容态」复制到刚分配的版本行。
+     *
+     * allocateScopeVersionDraftRow() 只建空壳行：不复制 chrome 载荷 / 结构摘要 / 卸载决定。
+     * 后果有二：
+     *   ① 纯内容发布时版本行的 chrome_payload 为空，而 bakePublishArtifactsForVersion()
+     *      用「版本行自己的载荷」重算 structure_key ⇒ 退化成空集摘要 ⇒ structureKeyChanged()
+     *      恒真 ⇒ 凡本地覆盖 chrome 的后代每次父发布都被误判结构冲突（fail-safe 保留 C）。
+     *   ② 单页发布剩下的 D' 丢掉 chrome 与卸载决定，「D' 保留商品页/chrome 及决定」不成立。
+     *
+     * ThemeScopeVersionService::createRevisionFrom() 会复制载荷，但它顺带 unsetCurrent +
+     * persistSelectionDraft（把 selection 提前翻到新版本），在发布路径里不能用，故此处单独实现。
+     * 本方法**不碰 selection**：指针只由 persistScopeDraftSelection / persistScopePublishSelection 翻。
+     *
+     * 搬运失败一律不抛：退回空壳行是旧行为，发布仍可继续（只是结构判定退化为 fail-safe）。
+     *
+     * **卸载决定是 opt-in**（$carryDecisions）：chrome 载荷恒搬（缺陷 B 的结构摘要需要它），
+     * 但决定行只在调用方明确要求时搬。理由是「决定按版本记录并隔离」是既有语义（UC-09-partial
+     * 实测断言 `decision_isolated_per_version`）：常规续编只需载荷里的 user_deleted 标记防复活，
+     * 决定行应留在它被做出的那个版本上；只有单页发布派生出的 D' 例外 —— 它是**同一个编辑会话的
+     * 延续**，不带上决定就会把用户刚删掉的部件「复活」回去（缺陷 A 的「D' 保留…决定」）。
+     * 这也与框架既有设计一致：发布规划器本来就把决定搬运放在显式入参 `source_decisions` 后面。
+     *
+     * @return array{chrome_nodes:int,decisions:int}
+     */
+    private function carryOverVersionContent(
+        ThemeVersionIdentity $owner,
+        int $sourceVersionId,
+        int $targetVersionId,
+        bool $carryDecisions = false,
+    ): array {
+        $result = ['chrome_nodes' => 0, 'decisions' => 0];
+        if ($sourceVersionId < 1 || $targetVersionId < 1 || $sourceVersionId === $targetVersionId) {
+            return $result;
+        }
+
+        $payload = [];
+        $structureKey = '';
+        try {
+            /** @var ThemeScopeVersion $source */
+            $source = ObjectManager::getInstance(ThemeScopeVersion::class);
+            $source->clearQuery()->clearData()->load($sourceVersionId);
+            if ($source->getVersionId() !== $sourceVersionId
+                || $source->getThemeId() !== $owner->themeId
+                || $source->getScope() !== $owner->canonicalScope
+                || $source->getStoreMode() !== $owner->storeMode
+                || $source->getArea() !== $owner->area
+            ) {
+                return $result;
+            }
+            $payload = $source->getChromePayload();
+            $structureKey = $source->getStructureKey();
+        } catch (\Throwable) {
+            return $result;
+        }
+
+        if ($payload !== []) {
+            try {
+                /** @var ThemeScopeVersion $target */
+                $target = ObjectManager::getInstance(ThemeScopeVersion::class);
+                $target->clearQuery()->clearData()->load($targetVersionId);
+                if ($target->getVersionId() === $targetVersionId) {
+                    if ($structureKey === '') {
+                        /** @var ThemeScopeVersionService $scopeVersions */
+                        $scopeVersions = ObjectManager::getInstance(ThemeScopeVersionService::class);
+                        $structureKey = $scopeVersions->hashStructure($payload);
+                    }
+                    $target->setChromePayload($payload)->setStructureKey($structureKey)->save();
+                    $result['chrome_nodes'] = \count($payload);
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        if (!$carryDecisions) {
+            // 决定按版本隔离：常规续编不搬决定行（载荷里的 user_deleted 标记已足够防复活）。
+            return $result;
+        }
+
+        try {
+            /** @var ThemeScopeVersionWidgetDecision $decisionModel */
+            $decisionModel = ObjectManager::getInstance(ThemeScopeVersionWidgetDecision::class);
+            $rows = $decisionModel->clearQuery()->clearData()
+                ->where(ThemeScopeVersionWidgetDecision::schema_fields_THEME_VERSION_ID, $sourceVersionId)
+                ->select()
+                ->fetchArray();
+            $rows = \is_array($rows) ? $rows : [];
+            if ($rows !== [] && !isset($rows[0])) {
+                $rows = [$rows];
+            }
+            $sourceDecisions = [];
+            foreach ($rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $injectionKey = \trim((string)($row[ThemeScopeVersionWidgetDecision::schema_fields_INJECTION_KEY] ?? ''));
+                $resourceHash = \trim((string)($row[ThemeScopeVersionWidgetDecision::schema_fields_RESOURCE_IDENTITY_HASH] ?? ''));
+                if ($injectionKey === '' || $resourceHash === '') {
+                    continue;
+                }
+                $sourceDecisions[] = [
+                    'resource_identity_hash' => $resourceHash,
+                    'injection_key' => $injectionKey,
+                    'decision' => (string)($row[ThemeScopeVersionWidgetDecision::schema_fields_DECISION]
+                        ?? ThemeScopeVersionWidgetDecision::DECISION_UNINSTALL),
+                    'slot_identity' => (string)($row[ThemeScopeVersionWidgetDecision::schema_fields_SLOT_IDENTITY] ?? ''),
+                    'widget_identity' => (string)($row[ThemeScopeVersionWidgetDecision::schema_fields_WIDGET_IDENTITY] ?? ''),
+                    'actor_id' => (string)($row[ThemeScopeVersionWidgetDecision::schema_fields_ACTOR_ID] ?? ''),
+                ];
+            }
+            if ($sourceDecisions === []) {
+                return $result;
+            }
+            /** @var ThemeVersionSnapshotBuilder $snapshots */
+            $snapshots = ObjectManager::getInstance(ThemeVersionSnapshotBuilder::class);
+            // 决定恒指向目标版本；source_version_id 仅作审计，运行时不把它当权威。
+            $copied = $snapshots->copyDecisionsToTargetVersion($sourceDecisions, $targetVersionId, 1, $sourceVersionId);
+            foreach ($copied as $row) {
+                $model = clone $decisionModel;
+                $model->reset()->clearData();
+                foreach ($row as $field => $value) {
+                    $model->setData((string)$field, $value);
+                }
+                $model->save();
+                $result['decisions']++;
+            }
+        } catch (\Throwable) {
+            // 决定搬运失败不阻断分配：chrome 载荷里的 user_deleted 标记仍能防复活。
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string,mixed> $selection
+     */
+    private function persistScopeDraftSelection(
+        ThemeVersionIdentity $owner,
+        array $selection,
+        int $draftVersionId,
+        int $contentRevision,
+    ): void {
+        if ($draftVersionId < 1) {
+            return;
+        }
+        try {
+            /** @var ThemeScopeVersionSelection $model */
+            $model = ObjectManager::getInstance(ThemeScopeVersionSelection::class);
+            $selectionId = (int)($selection['selection_id'] ?? 0);
+            if ($selectionId > 0) {
+                $model->clearQuery()->clearData()->load($selectionId);
+            } else {
+                $model->clearQuery()->clearData();
+                $model->setData(ThemeScopeVersionSelection::schema_fields_THEME_ID, $owner->themeId);
+                $model->setData(ThemeScopeVersionSelection::schema_fields_SCOPE, $owner->canonicalScope);
+                $model->setData(ThemeScopeVersionSelection::schema_fields_STORE_MODE, $owner->storeMode);
+                $model->setData(ThemeScopeVersionSelection::schema_fields_AREA, $owner->area);
+                $published = (int)($selection['published_version_id'] ?? 0);
+                if ($published < 1) {
+                    // Selection requires published_version_id ≥ 1; until a formal
+                    // publish exists, point published at the new draft as temporary bridge.
+                    $published = $draftVersionId;
+                }
+                $model->setData(ThemeScopeVersionSelection::schema_fields_PUBLISHED_VERSION_ID, $published);
+                $model->setData(ThemeScopeVersionSelection::schema_fields_SELECTION_REVISION, 0);
+            }
+            $model->setData(ThemeScopeVersionSelection::schema_fields_DRAFT_VERSION_ID, $draftVersionId);
+            $model->save();
+
+            /** @var ThemeScopeVersion $version */
+            $version = ObjectManager::getInstance(ThemeScopeVersion::class);
+            $version->clearQuery()->clearData()->load($draftVersionId);
+            if ($version->getVersionId() === $draftVersionId) {
+                $version->setContentRevision(\max(1, $contentRevision))->setLifecycle(ThemeScopeVersion::LIFECYCLE_DRAFT)->save();
+            }
+        } catch (\Throwable) {
+            // Partial Task 4: planner result still returned even if selection row cannot persist yet.
+        }
+    }
+
+    private function persistScopeVersionSealed(
+        int $versionId,
+        ThemeVersionIdentity $owner,
+        int $contentRevision,
+        ?string $versionName,
+        ?string $description,
+    ): void {
+        try {
+            /** @var ThemeScopeVersion $model */
+            $model = ObjectManager::getInstance(ThemeScopeVersion::class);
+            $model->clearQuery()->clearData()->load($versionId);
+            if ($model->getVersionId() !== $versionId) {
+                return;
+            }
+            if (
+                $model->getThemeId() !== $owner->themeId
+                || $model->getScope() !== $owner->canonicalScope
+            ) {
+                return;
+            }
+            $model->setLifecycle(ThemeScopeVersion::LIFECYCLE_SEALED)
+                ->setContentRevision(\max(1, $contentRevision));
+            if ($versionName !== null && $versionName !== '') {
+                $model->setVersionName($versionName);
+            }
+            if ($description !== null) {
+                $model->setDescription($description);
+            }
+            $model->save();
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * 烘焙失败时把已封存的版本补偿回滚为草稿。
+     *
+     * 封存必须早于烘焙（chrome 目录由 lifecycle 推导），所以烘焙失败时 D 已经被封存。
+     * 不回滚就等于「发布失败也把草稿消费掉了」。回滚后 selection 仍指向 D，
+     * 用户可原样重试，满足 UC-05 的「失败不消费草稿」。
+     */
+    private function restoreScopeVersionToDraft(
+        int $versionId,
+        ThemeVersionIdentity $owner,
+        int $contentRevision,
+    ): void {
+        try {
+            /** @var ThemeScopeVersion $model */
+            $model = ObjectManager::getInstance(ThemeScopeVersion::class);
+            $model->clearQuery()->clearData()->load($versionId);
+            if ($model->getVersionId() !== $versionId
+                || $model->getThemeId() !== $owner->themeId
+                || $model->getScope() !== $owner->canonicalScope
+            ) {
+                return;
+            }
+            $model->setLifecycle(ThemeScopeVersion::LIFECYCLE_DRAFT)
+                ->setContentRevision(\max(1, $contentRevision))
+                ->setIsPublished(false)
+                ->save();
+        } catch (\Throwable) {
+            // 尽力而为：回滚失败也不改变返回值（发布本就失败）。
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $selection
+     * @param array<string,mixed> $result
+     */
+    private function persistScopePublishSelection(
+        ThemeVersionIdentity $owner,
+        array $selection,
+        array $result,
+    ): void {
+        $publishedId = (int)($result['published_version_id'] ?? 0);
+        if ($publishedId < 1) {
+            return;
+        }
+        try {
+            /** @var ThemeScopeVersionSelection $model */
+            $model = ObjectManager::getInstance(ThemeScopeVersionSelection::class);
+            $selectionId = (int)($selection['selection_id'] ?? 0);
+            if ($selectionId > 0) {
+                $model->clearQuery()->clearData()->load($selectionId);
+            } else {
+                $model->clearQuery()->clearData();
+                $model->setData(ThemeScopeVersionSelection::schema_fields_THEME_ID, $owner->themeId);
+                $model->setData(ThemeScopeVersionSelection::schema_fields_SCOPE, $owner->canonicalScope);
+                $model->setData(ThemeScopeVersionSelection::schema_fields_STORE_MODE, $owner->storeMode);
+                $model->setData(ThemeScopeVersionSelection::schema_fields_AREA, $owner->area);
+            }
+            $model->setData(ThemeScopeVersionSelection::schema_fields_PUBLISHED_VERSION_ID, $publishedId);
+            $draftPrime = $result['draft_version_id'] ?? null;
+            $model->setData(
+                ThemeScopeVersionSelection::schema_fields_DRAFT_VERSION_ID,
+                ($draftPrime === null || $draftPrime === '' || (int)$draftPrime < 1) ? null : (int)$draftPrime,
+            );
+            $nextRevision = (int)($result['selection_revision']
+                ?? ((int)($selection['selection_revision'] ?? 0) + 1));
+            $model->setData(ThemeScopeVersionSelection::schema_fields_SELECTION_REVISION, \max(0, $nextRevision));
+            $model->save();
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * 发布时按「逐值继承」把结果推给后代 owner（UC-08 写入端传播）。
+     *
+     * 只做分类与候选准备，不翻任何指针：候选全部就绪后才由
+     * persistDescendantSelections() 统一翻转，满足「先备齐再切」。
+     *
+     * @param list<string> $publishedResources
+     * @param array<string,mixed> $bake
+     * @return array<string,mixed>
+     */
+    private function propagateScopeVersionDescendants(
+        ThemeEditorContext $context,
+        ThemeVersionIdentity $owner,
+        int $parentVersionId,
+        int $previousPublishedVersionId,
+        array $publishedResources,
+        array $bake,
+    ): array {
+        unset($context);
+        $empty = [
+            'plan' => ['updates' => [], 'conflicts' => [], 'fallback' => []],
+            'updates' => [],
+            'conflicts' => [],
+            'fallback' => [],
+            'prepared' => [],
+            'changed_resources' => [],
+        ];
+        try {
+            /** @var ThemeVersionScopePropagator $propagator */
+            $propagator = ObjectManager::getInstance(ThemeVersionScopePropagator::class);
+
+            return $propagator->planAndPrepareCandidates(
+                $owner,
+                $parentVersionId,
+                $previousPublishedVersionId,
+                $publishedResources,
+                $previousPublishedVersionId > 0
+                    ? $this->resourceFingerprintsOfVersion($previousPublishedVersionId)
+                    : [],
+                \is_array($bake['fingerprints'] ?? null) ? $bake['fingerprints'] : [],
+            );
+        } catch (\Throwable $e) {
+            // 后代传播失败不能让父发布失败：父版本本身已经封存并烘焙完成，
+            // 后代保持原状（回落或保留 C）是安全状态。
+            return $empty + ['error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * 读取版本占有的资源指纹（资源键 => 产物指纹），供后代「本地是否覆盖」判定使用。
+     *
+     * @return array<string,string>
+     */
+    private function resourceFingerprintsOfVersion(int $versionId): array
+    {
+        if ($versionId < 1) {
+            return [];
+        }
+        $out = [];
+        try {
+            /** @var ThemeScopeVersionResourceSnapshot $model */
+            $model = ObjectManager::getInstance(ThemeScopeVersionResourceSnapshot::class);
+            $rows = $model->reset()->clearData()
+                ->where(ThemeScopeVersionResourceSnapshot::schema_fields_THEME_VERSION_ID, $versionId)
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return [];
+        }
+        if (!\is_array($rows) || $rows === []) {
+            return [];
+        }
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $keyJson = $row[ThemeScopeVersionResourceSnapshot::schema_fields_RESOURCE_KEY_JSON] ?? '';
+            $decoded = \is_string($keyJson) ? \json_decode($keyJson, true) : $keyJson;
+            $resourceKey = \is_array($decoded) ? \trim((string)($decoded['resource'] ?? '')) : '';
+            if ($resourceKey === '') {
+                continue;
+            }
+            $out[$resourceKey] = (string)($row[ThemeScopeVersionResourceSnapshot::schema_fields_SOURCE_FINGERPRINT] ?? '');
+        }
+
+        return $out;
+    }
+
+    /**
+     * 把后代 C' 的发布指针落到 selection（父指针已翻好之后调用）。
+     *
+     * 冲突桶不写：它按计划保留完整 C，页面与 chrome 都不迁移。
+     *
+     * @param array<string,mixed> $descendants
+     * @param array<string,mixed> $parentSelection
+     */
+    private function persistDescendantSelections(array $descendants, array $parentSelection): void
+    {
+        $updates = \is_array($descendants['updates'] ?? null) ? $descendants['updates'] : [];
+        if ($updates === []) {
+            return;
+        }
+        unset($parentSelection);
+        foreach ($updates as $update) {
+            if (!\is_array($update)) {
+                continue;
+            }
+            $identityArray = \is_array($update['identity'] ?? null) ? $update['identity'] : null;
+            $publishedId = (int)($update['theme_version_id'] ?? 0);
+            if ($identityArray === null || $publishedId < 1) {
+                continue;
+            }
+            try {
+                $owner = ThemeVersionIdentity::fromArray($identityArray);
+                $owner = $owner->withVersion(0, ThemeVersionIdentity::MODE_FORMAL, 0);
+                $selection = $this->loadScopeVersionSelectionArray($owner) ?? [
+                    'selection_id' => 0,
+                    'published_version_id' => 0,
+                    'draft_version_id' => null,
+                    'selection_revision' => 0,
+                ];
+                $this->persistScopePublishSelection($owner, $selection, [
+                    'published_version_id' => $publishedId,
+                    // 保留后代自己的草稿指针：本步只推正式版，绝不能顺手清掉别人的在编内容。
+                    // （草稿重基线到 C' 属计划后续项，未实现；未重基线是安全状态，不丢数据。）
+                    'draft_version_id' => $selection['draft_version_id'] ?? null,
+                ]);
+            } catch (\Throwable) {
+                // 单个后代指针失败不影响其余后代与父版本。
+            }
+        }
+    }
+
+    /**
+     * 发布前烘焙该版本的 formal 产物；失败即中止发布，绝不翻转发布指针。
+     *
+     * @return array<string,mixed>
+     */
+    private function bakePublishedScopeArtifacts(ThemeEditorContext $context, int $themeVersionId): array
+    {
+        try {
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator $coordinator */
+            $coordinator = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class,
+            );
+
+            return $coordinator->bakePublishArtifactsForVersion($context, $themeVersionId);
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * 发布时把该版本占有的每个资源写成不可变资源快照行。
+     *
+     * theme_binding 不写：它按设计留在版本之外（identityThemeId() 恒为 0），
+     * 无法满足快照表 theme_version_id >= 1 的身份约束，写了反而是错的。
+     * 快照按 (theme_version_id, content_revision, resource_identity_hash) 幂等，
+     * 已存在即跳过，重复发布同一版本不会因唯一键冲突而失败。
+     *
+     * @param array<string,mixed> $result
+     * @param array<string,string> $fingerprints
+     * @return array<string,mixed>
+     */
+    private function persistVersionResourceSnapshots(
+        ThemeEditorContext $context,
+        ThemeVersionIdentity $owner,
+        int $themeVersionId,
+        int $contentRevision,
+        array $result,
+        array $fingerprints = [],
+    ): array {
+        $resources = \is_array($result['published_resources'] ?? null) && $result['published_resources'] !== []
+            ? $result['published_resources']
+            // selectHistory 分支（重选已封存版本）不回传 published_resources，
+            // 此时按发布分支的同一份默认资源集记录，避免快照静默为空。
+            : ['layout:' . $context->layoutType, 'chrome', 'appearance', 'theme_binding'];
+        $revision = \max(1, $contentRevision);
+        $written = [];
+        $skipped = [];
+        try {
+            /** @var ThemeScopeVersionResourceSnapshot $model */
+            $model = ObjectManager::getInstance(ThemeScopeVersionResourceSnapshot::class);
+            $chromeIdentity = $owner
+                ->withVersion($themeVersionId, ThemeVersionIdentity::MODE_FORMAL, $revision)
+                ->ownerHash();
+            foreach ($resources as $resourceKey) {
+                $resourceKey = \is_string($resourceKey) ? \trim($resourceKey) : '';
+                if ($resourceKey === '' || $resourceKey === '*') {
+                    continue;
+                }
+                $resourceType = $this->snapshotResourceTypeFor($resourceKey);
+                if ($resourceType === null) {
+                    $skipped[] = ['resource' => $resourceKey, 'reason' => 'resource_not_version_owned'];
+                    continue;
+                }
+                // chrome 的绑定身份就是版本 owner 身份；页面/外观按资源上下文身份。
+                $identityHash = $resourceKey === 'chrome'
+                    ? $chromeIdentity
+                    : $context->withResource($resourceType)->identityHash();
+                if ($identityHash === '') {
+                    $skipped[] = ['resource' => $resourceKey, 'reason' => 'resource_identity_missing'];
+                    continue;
+                }
+
+                $existing = $model->reset()->clearData()
+                    ->where(ThemeScopeVersionResourceSnapshot::schema_fields_THEME_VERSION_ID, $themeVersionId)
+                    ->where(ThemeScopeVersionResourceSnapshot::schema_fields_CONTENT_REVISION, $revision)
+                    ->where(ThemeScopeVersionResourceSnapshot::schema_fields_RESOURCE_IDENTITY_HASH, $identityHash)
+                    ->find()
+                    ->fetch();
+                if ($existing instanceof ThemeScopeVersionResourceSnapshot && $existing->getId() > 0) {
+                    $skipped[] = ['resource' => $resourceKey, 'reason' => 'snapshot_already_present'];
+                    continue;
+                }
+
+                $resourceContext = $context->withResource($resourceType);
+                $fingerprint = (string)($fingerprints[$resourceKey] ?? '');
+                $row = clone $model;
+                $row->reset()->clearData()
+                    ->setData(ThemeScopeVersionResourceSnapshot::schema_fields_THEME_VERSION_ID, $themeVersionId)
+                    ->setData(ThemeScopeVersionResourceSnapshot::schema_fields_CONTENT_REVISION, $revision)
+                    ->setData(ThemeScopeVersionResourceSnapshot::schema_fields_RESOURCE_IDENTITY_HASH, $identityHash)
+                    ->setData(ThemeScopeVersionResourceSnapshot::schema_fields_RESOURCE_TYPE, $resourceType)
+                    ->setData(
+                        ThemeScopeVersionResourceSnapshot::schema_fields_RESOURCE_KEY_JSON,
+                        \json_encode([
+                            'resource' => $resourceKey,
+                            'canonical_scope' => (string)$resourceContext->scope->storageScope,
+                            'store_mode' => (string)$resourceContext->scope->storeMode,
+                            'area' => (string)$resourceContext->area,
+                            'layout_type' => $resourceContext->identityLayoutType(),
+                            'layout_option' => $resourceContext->identityLayoutOption(),
+                            // 明确标注本次发布是否产出了该资源的磁盘产物，避免空指纹被误读成缺陷。
+                            'artifact_baked' => $fingerprint !== '',
+                        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}',
+                    )
+                    ->setData(ThemeScopeVersionResourceSnapshot::schema_fields_SOURCE_FINGERPRINT, $fingerprint)
+                    ->save();
+                $written[] = [
+                    'resource' => $resourceKey,
+                    'resource_type' => $resourceType,
+                    'resource_identity_hash' => $identityHash,
+                    'snapshot_id' => $row->getId(),
+                    'source_fingerprint' => $fingerprint,
+                ];
+            }
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'message' => $e->getMessage(),
+                'written' => $written,
+                'skipped' => $skipped,
+            ];
+        }
+
+        return ['ok' => true, 'written' => $written, 'skipped' => $skipped];
+    }
+
+    /**
+     * 把发布资源键映射成快照可记录的版本内资源类型；版本外资源返回 null。
+     */
+    private function snapshotResourceTypeFor(string $resourceKey): ?string
+    {
+        if (\str_starts_with($resourceKey, 'layout:') || $resourceKey === 'chrome') {
+            return ThemeEditorContext::RESOURCE_LAYOUT;
+        }
+        if ($resourceKey === ThemeEditorContext::RESOURCE_APPEARANCE) {
+            return ThemeEditorContext::RESOURCE_APPEARANCE;
+        }
+
+        return null;
+    }
+
+    // ==================== 版本控制 API ====================
     public function postInheritVersion()
     {
         $data = $this->readJsonBody();
@@ -8300,137 +9539,7 @@ HTML;
         }
     }
 
-    /**
-     * 保存为新版本 (Query)
-     * 路由: /backend/theme-editor/save-version (POST)
-     */
-    public function postSaveVersion()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-        $versionName = $data['version_name'] ?? $this->request->getParam('version_name');
-        $description = $data['description'] ?? $this->request->getParam('description');
-
-        if (!$themeId) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少主题ID'),
-            ]);
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, (string)$pageType);
-            $version = $this->saveScopedLayoutVersion(
-                $context,
-                $versionName !== null ? (string)$versionName : null,
-                $description !== null ? (string)$description : null,
-            );
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => __('已保存为 %{name}', ['name' => $version->getDisplayName()]),
-                'data' => $version->toArray(),
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * 切换到指定版本 (Query)
-     * 路由: /backend/theme-editor/switch-version (POST)
-     */
-    public function postSwitchVersion()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-        $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
-
-        if (!$themeId || !$versionId) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('参数不完整'),
-            ]);
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, (string)$pageType);
-            $identity = $this->layoutIdentityFromEditorContext($context);
-            $targetVersion = $this->versionService->getVersion(
-                $themeId,
-                (string)$pageType,
-                $versionId,
-                $identity,
-            );
-            if (!$targetVersion instanceof ThemeLayoutVersion) {
-                throw new \RuntimeException('theme_layout_version_not_found');
-            }
-            $targetSnapshot = $this->normalizeLegacyLayoutSnapshot($context, $targetVersion->getSnapshotData());
-            $result = $this->versionService->switchToVersion(
-                $themeId,
-                (string)$pageType,
-                $versionId,
-                $identity,
-                $targetSnapshot,
-            );
-
-            if ($result) {
-                // 获取更新后的布局数据
-                $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType, $identity);
-                $currentVersion = $this->versionService->getCurrentVersion($themeId, (string)$pageType, $identity);
-                if (!$currentVersion instanceof ThemeLayoutVersion) {
-                    throw new \RuntimeException('theme_layout_current_version_missing');
-                }
-                $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
-                    $context,
-                    $targetSnapshot,
-                    'Restore selected legacy layout version',
-                );
-
-                return $this->fetchJson([
-                    'success' => true,
-                    'message' => __('已切换到选定版本'),
-                    'data' => [
-                        'layout' => $layout,
-                        'scoped_workspace' => $scopedDraft,
-                    ],
-                ]);
-            }
-
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('切换版本失败'),
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
+/**
      * 清理 Theme 缓存 (POST)
      * 路由: /theme/backend/theme-editor/clear-theme-cache
      */
@@ -8439,178 +9548,7 @@ HTML;
         return $this->fetchJson($this->clearThemeCachePayload());
     }
 
-    /**
-     * 恢复原始布局 (Query) - 重构版本
-     * 路由: /backend/theme-editor/restore-original (POST)
-     * 
-     * 新行为：
-     * 1. 自动创建当前状态的备份版本
-     * 2. 清空工作区恢复到主题模板原始状态（不添加任何部件）
-     * 3. 创建新的"原始布局"版本
-     */
-    public function postRestoreOriginal()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-
-        if (!$themeId) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少主题ID'),
-            ]);
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, (string)$pageType);
-            $identity = $this->layoutIdentityFromEditorContext($context);
-            $result = $this->versionService->restoreOriginal(
-                $themeId,
-                (string)$pageType,
-                null,
-                $identity,
-                $this->scopedLayoutSnapshot($context),
-            );
-
-            // 清除插槽渲染服务的布局缓存，否则 WLS 常驻进程会继续返回旧 draft 缓存，预览无法恢复为空白
-            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-
-            $backupVersion = $result['backup_version'];
-            $newVersion = $result['new_version'];
-            $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
-                $context,
-                $newVersion->getSnapshotData(),
-                'Restore original layout snapshot',
-            );
-
-            /** @var WidgetDefaultInjectionService $injectionService */
-            $injectionService = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
-            $restoreComponentArea = $context->area === PreviewContextService::AREA_BACKEND
-                ? PreviewContextService::AREA_BACKEND
-                : PreviewContextService::AREA_FRONTEND;
-            $injectionRestore = $injectionService->restoreDefaultInjectionsAfterDraftReset(
-                $themeId,
-                $identity,
-                $restoreComponentArea,
-                (string)$pageType,
-            );
-            if ((int)($injectionRestore['applied_defaults'] ?? 0) > 0) {
-                ObjectManager::getInstance(SlotRendererService::class)->clearCache();
-                /** @var ThemeScopedWorkspaceInterface $workspace */
-                $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
-                $scopedDraft = $workspace->load($context->withResource(ThemeEditorContext::RESOURCE_LAYOUT), true);
-            }
-
-            $message = __('已恢复到原始布局');
-            if ($backupVersion) {
-                $message .= ' (' . __('已备份为 %{name}', ['name' => $backupVersion->getDisplayName()]) . ')';
-            }
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => $message,
-                'data' => [
-                    'backup_version' => $backupVersion?->toArray(),
-                    'new_version' => $newVersion->toArray(),
-                    'scoped_workspace' => $scopedDraft,
-                    'default_injection_restore' => $injectionRestore,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * 发布版本 (Query)
-     * 路由: /backend/theme-editor/publish-version (POST)
-     */
-    public function postPublishVersion()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = $data['page_type'] ?? $this->request->getParam('page_type');
-        $versionId = isset($data['version_id']) ? (int)$data['version_id'] : 0;
-
-        if (!$themeId) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少主题ID'),
-            ]);
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, (string)$pageType);
-            $opts = [
-                'create_version' => $data['create_version'] ?? false,
-                'version_name' => $data['version_name'] ?? '',
-                'version_id' => $versionId,
-                'reason' => 'theme_editor_compat_version_publish',
-            ];
-            if ($this->wantsStandardPublishStream($data)) {
-                $this->streamStandardLayoutPublish(
-                    $context,
-                    $opts,
-                    null,
-                    static function (array $result, array $finalizeMeta): array {
-                        return [
-                            'message' => (string)__('版本已发布'),
-                            'code' => 'theme_standard_publish_ok',
-                            'data' => \array_merge(
-                                \is_array($result['data'] ?? null) ? $result['data'] : [],
-                                ['finalize' => $finalizeMeta],
-                            ),
-                        ];
-                    },
-                );
-
-                return;
-            }
-
-            $result = $this->runStandardLayoutPublish($context, $opts);
-            if (empty($result['success'])) {
-                return $this->fetchJson($result);
-            }
-
-            $finalizeMeta = $this->finalizeStandardLayoutPublish($context, null);
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => __('版本已发布'),
-                'code' => 'theme_standard_publish_ok',
-                'data' => \array_merge(
-                    \is_array($result['data'] ?? null) ? $result['data'] : [],
-                    ['finalize' => $finalizeMeta],
-                ),
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
+/**
      * 删除版本 (Query)
      * 路由: /backend/theme-editor/delete-version (POST)
      */
@@ -8763,6 +9701,14 @@ HTML;
                 'preview_mode' => (string)($data['preview_mode'] ?? $this->request->getParam('preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE)),
                 'status' => (string)($data['status'] ?? $this->request->getParam('status', PreviewContextService::DEFAULT_STATUS)),
                 'version_id' => isset($data['version_id']) ? (int)$data['version_id'] : ((int)$this->request->getParam('version_id', 0) ?: null),
+                'theme_version_id' => isset($data['theme_version_id'])
+                    ? (int)$data['theme_version_id']
+                    : (isset($data['version_id']) ? (int)$data['version_id'] : null),
+                'mode' => isset($data['mode']) ? (string)$data['mode'] : null,
+                'content_revision' => isset($data['content_revision']) ? (int)$data['content_revision'] : null,
+                'canonical_scope' => (string)($data['canonical_scope'] ?? $data['scope'] ?? $this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE)),
+                'store_mode' => (string)($data['store_mode'] ?? $identity['store_mode'] ?? 'normal'),
+                'area' => PreviewContextService::AREA_FRONTEND,
                 'scope' => (string)($data['scope'] ?? $this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE)),
                 'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
                 'target_value' => $pageType,

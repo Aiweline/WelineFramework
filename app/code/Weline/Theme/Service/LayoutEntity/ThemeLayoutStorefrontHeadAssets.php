@@ -6,6 +6,7 @@ namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Service\ThemeScopeVersionService;
 
 /**
@@ -24,7 +25,7 @@ final class ThemeLayoutStorefrontHeadAssets
     }
 
     /**
-     * @param array{theme_id:int,scope:string,identity_key:string,structure_or_release:string} $ptr
+     * @param array{theme_id:int,scope:string,identity_key:string,structure_or_release?:string,binding?:?EntityRenderBinding} $ptr
      */
     public static function rememberPointer(array $ptr): void
     {
@@ -54,12 +55,8 @@ final class ThemeLayoutStorefrontHeadAssets
         if (\is_array($ptr)) {
             $themeId = (int)($ptr['theme_id'] ?? 0);
             $scope = (string)($ptr['scope'] ?? '');
-            $identityKey = (string)($ptr['identity_key'] ?? '');
-            $structureOrRelease = (string)($ptr['structure_or_release'] ?? '');
             if (($ptr['binding'] ?? null) instanceof EntityRenderBinding) {
                 $page = $this->configStore->readBoundAssets($ptr['binding']);
-            } elseif ($themeId > 0 && $scope !== '' && $identityKey !== '' && $structureOrRelease !== '') {
-                $page = $this->configStore->readPageAssets($themeId, $scope, $identityKey, $structureOrRelease);
             }
         }
 
@@ -77,13 +74,23 @@ final class ThemeLayoutStorefrontHeadAssets
             return $this->mergeAndEmit($renderedAssets, $page);
         }
         $chromeBinding = RequestContext::get('theme.layout_entity.rendered_chrome_binding');
-        if ($chromeBinding instanceof EntityRenderBinding && $chromeBinding->themeId === $themeId) {
+        if ($chromeBinding instanceof EntityRenderBinding && $chromeBinding->identity->themeId === $themeId) {
             return $this->mergeAndEmit($this->configStore->readBoundAssets($chromeBinding), $page);
         }
         $selection = RequestContext::get('theme.layout_entity.preview_entity');
         if (is_array($selection) && (int)($selection['theme_id'] ?? 0) === $themeId && (int)($selection['chrome_version_id'] ?? 0) > 0) {
-            $chrome = $this->configStore->readChromeAssets($themeId, (string)($selection['chrome_scope'] ?? $selection['scope']), (int)$selection['chrome_version_id']);
-            return $this->mergeAndEmit($chrome, $page);
+            $versions = $this->scopeVersions ?? ObjectManager::getInstance(ThemeScopeVersionService::class);
+            $chromeScope = (string)($selection['chrome_scope'] ?? $selection['scope']);
+            $version = $versions->getCurrent($themeId, $chromeScope)
+                ?? $versions->getPublished($themeId, $chromeScope);
+            if ($version !== null && $version->getVersionId() === (int)$selection['chrome_version_id']) {
+                $identity = $version->toVersionIdentity()->withVersion(
+                    $version->getVersionId(),
+                    ThemeVersionIdentity::MODE_DRAFT,
+                    \max(1, $version->getContentRevision()),
+                );
+                return $this->mergeAndEmit($this->configStore->readChromeAssets($identity), $page);
+            }
         }
         $preview = $this->previewContext();
         $chrome = [];
@@ -95,11 +102,15 @@ final class ThemeLayoutStorefrontHeadAssets
             if ($published === null) {
                 continue;
             }
-            $candidate = $this->configStore->readChromeAssets(
-                $themeId,
-                $candidateScope,
+            $mode = $preview !== null && ($preview['status'] ?? '') !== 'published'
+                ? ThemeVersionIdentity::MODE_DRAFT
+                : ThemeVersionIdentity::MODE_FORMAL;
+            $identity = $published->toVersionIdentity()->withVersion(
                 $published->getVersionId(),
+                $mode,
+                \max(1, $published->getContentRevision()),
             );
+            $candidate = $this->configStore->readChromeAssets($identity);
             $n = \count($candidate['layout_css'] ?? [])
                 + \count($candidate['layout_js'] ?? [])
                 + \count($candidate['source_css'] ?? [])
@@ -115,9 +126,7 @@ final class ThemeLayoutStorefrontHeadAssets
     }
 
     /**
-     * Store/channel request scopes often lack a baked chrome-assets sidecar; walk up to website.
-     *
-     * @return list<string>
+     * @return array<string, mixed>|null
      */
     private function renderedChromeAssets(int $themeId): ?array
     {
@@ -127,13 +136,17 @@ final class ThemeLayoutStorefrontHeadAssets
         }
         $assets = null;
         foreach ($bindings as $binding) {
-            if ($binding instanceof EntityRenderBinding && $binding->themeId === $themeId) {
+            if ($binding instanceof EntityRenderBinding && $binding->identity->themeId === $themeId) {
                 $assets = $this->mergeManifests($assets ?? [], $this->configStore->readBoundAssets($binding));
             }
         }
+
         return $assets;
     }
 
+    /**
+     * @return list<string>
+     */
     private function chromeScopeCandidates(string $scope): array
     {
         $scope = \trim($scope);
@@ -153,9 +166,6 @@ final class ThemeLayoutStorefrontHeadAssets
         return $out;
     }
 
-    /**
-     * @return array{0:int,1:string}
-     */
     private function previewContext(): ?array
     {
         try {
@@ -165,11 +175,14 @@ final class ThemeLayoutStorefrontHeadAssets
                 return (int)($context['frontend_theme_id'] ?? 0) > 0 ? $context : null;
             }
         } catch (\Throwable) {
-            // 早期bootstrap还没有预览服务，使用已经绑定的渲染身份。
         }
+
         return null;
     }
 
+    /**
+     * @return array{0:int,1:string}
+     */
     private function resolveActiveThemeScope(): array
     {
         $preview = $this->previewContext();
@@ -187,7 +200,6 @@ final class ThemeLayoutStorefrontHeadAssets
                 }
             }
         } catch (\Throwable) {
-            // soft
         }
         if ($scope === '') {
             $scope = 'default.__website__.default';
@@ -221,7 +233,6 @@ final class ThemeLayoutStorefrontHeadAssets
             'source_js' => $this->uniqueMerge($chrome['source_js'] ?? [], $page['source_js'] ?? []),
             'source_positions' => $this->mergePositions($this->positionsForManifest($chrome), $this->positionsForManifest($page)),
         ];
-        // Drop source entries already in layout bucket.
         $layoutSeen = [];
         foreach (\array_merge($merged['layout_css'], $merged['layout_js']) as $p) {
             $layoutSeen[\strtolower((string)$p)] = true;
@@ -244,17 +255,13 @@ final class ThemeLayoutStorefrontHeadAssets
         return $merged;
     }
 
-    /**
-     * @param list<mixed> $a
-     * @param list<mixed> $b
-     * @return list<string>
-     */
     private function positionsForManifest(array $manifest): array
     {
         $positions = [];
         foreach (array_merge($manifest['source_css'] ?? [], $manifest['source_js'] ?? []) as $path) {
             $positions[$path] = $this->collector->normalizePosition((string)($manifest['source_positions'][$path] ?? 'head'));
         }
+
         return $positions;
     }
 
@@ -267,6 +274,7 @@ final class ThemeLayoutStorefrontHeadAssets
                 $a[$path] = $position;
             }
         }
+
         return $a;
     }
 

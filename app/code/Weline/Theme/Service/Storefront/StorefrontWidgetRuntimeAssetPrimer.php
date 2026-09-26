@@ -144,14 +144,6 @@ final class StorefrontWidgetRuntimeAssetPrimer
             $page = [];
             if (($ptr['binding'] ?? null) instanceof \Weline\Theme\Service\LayoutEntity\EntityRenderBinding) {
                 $page = $configStore->readBoundAssets($ptr['binding']);
-            } else {
-                $themeId = (int)($ptr['theme_id'] ?? 0);
-                $scope = (string)($ptr['scope'] ?? '');
-                $identityKey = (string)($ptr['identity_key'] ?? '');
-                $structureOrRelease = (string)($ptr['structure_or_release'] ?? '');
-                if ($themeId > 0 && $scope !== '' && $identityKey !== '' && $structureOrRelease !== '') {
-                    $page = $configStore->readPageAssets($themeId, $scope, $identityKey, $structureOrRelease);
-                }
             }
             if (!\is_array($page) || $page === []) {
                 return [];

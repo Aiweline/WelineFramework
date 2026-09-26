@@ -15,6 +15,7 @@ use Weline\Theme\Service\SharedChromeService;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeLayoutVersionService;
 use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
+use Weline\Theme\Service\Version\ThemeVersionSnapshotBuilder;
 
 /** Validates HTTP-shaped commands before invoking the scoped workspace API. */
 final class ThemeScopedWorkspaceRequestService
@@ -33,6 +34,7 @@ final class ThemeScopedWorkspaceRequestService
         private readonly ThemeLayoutVersionService $layoutVersions,
         private readonly SharedChromeService $sharedChrome,
         private readonly ThemeScopeWorkspace $workspaceRows,
+        private readonly ThemeVersionSnapshotBuilder $versionSnapshots,
     ) {
     }
 
@@ -47,6 +49,8 @@ final class ThemeScopedWorkspaceRequestService
     public function apply(array $input, string $actorId, string $actorName = ''): array
     {
         $context = $this->contexts->fromInput($input);
+        // 绑定补丁落库前先确认该绑定未被任何版本占有，防止 theme↔version 循环。
+        $this->assertBindingHasNoVersionCycle($context);
         $changes = $input['changes'] ?? null;
         if (\is_string($changes)) {
             if (\strlen($changes) > self::MAX_CHANGES_JSON_BYTES) {
@@ -524,6 +528,37 @@ final class ThemeScopedWorkspaceRequestService
         if (!$matches) {
             throw new \RuntimeException('theme_scope_release_batch_context_mismatch');
         }
+    }
+
+    /**
+     * 绑定写入口的版本循环前置断言。
+     *
+     * 读取已落库的绑定工作区行，把它的版本占有值交给守卫校验：
+     * 绑定必须停在版本外，若该行被某个版本占有，说明存量数据已漂移，
+     * 此时拒绝写入并要求先修复，而不是静默覆盖掉漂移痕迹。
+     */
+    private function assertBindingHasNoVersionCycle(ThemeEditorContext $context): void
+    {
+        if ($context->resourceType !== ThemeEditorContext::RESOURCE_THEME_BINDING) {
+            return;
+        }
+        // 首次写入尚无对应行，按版本外处理；落库强制由模型层 save_before() 兜底。
+        $persistedVersionId = ThemeScopeWorkspace::THEME_VERSION_EXTERNAL;
+        try {
+            $rows = (clone $this->workspaceRows)->clearData()->clearQuery()
+                ->where(ThemeScopeWorkspace::schema_fields_BINDING_IDENTITY_KEY, $context->identityHash())
+                ->select()
+                ->fetch()
+                ->getItems();
+            $row = \is_array($rows) ? ($rows[0] ?? null) : null;
+            if (\is_object($row) && \method_exists($row, 'getData')) {
+                $persistedVersionId = (int)$row->getData(ThemeScopeWorkspace::schema_fields_THEME_VERSION_ID);
+            }
+        } catch (\Throwable) {
+            $persistedVersionId = ThemeScopeWorkspace::THEME_VERSION_EXTERNAL;
+        }
+
+        $this->versionSnapshots->assertThemeBindingHasNoVersionCycle($context, $persistedVersionId);
     }
 
     private function assertThemeBindingValue(ThemeEditorContext $context, ThemePatchCommand $command): void

@@ -4,257 +4,232 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\LayoutEntity;
 
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
+
 /**
- * Disk layout for baked theme layout entities under var/runtime/theme-layout-entities/.
+ * Disk layout for baked theme layout entities (version-isolated tree).
  *
- * Chrome:
- *   {theme_id}/{scope_key}/tv{theme_version_id}/chrome/chrome.phtml
- *   {theme_id}/{scope_key}/tv{theme_version_id}/chrome/chrome-config.json
+ *   var/runtime/theme-layout-entities/
+ *     {theme_id}/{area}/{scope_key}/tv{V}/{formal|draft}/
+ *       chrome/structures|configs|bindings|rendered/…
+ *       pages/{layout_identity_hash}/structures|configs|bindings/…
  *
- * Page:
- *   {theme_id}/{scope_key}/pages/{identity_key}/{structure_or_release}/layout.phtml
- *   {theme_id}/{scope_key}/pages/{identity_key}/{structure_or_release}/shell.phtml  (wave8-8s5: chrome+page 整壳)
- *   {theme_id}/{scope_key}/pages/{identity_key}/{structure_or_release}/page-config.json
- *   {theme_id}/{scope_key}/pages/{identity_key}/{structure_or_release}/page-assets.json
- *   {theme_id}/{scope_key}/pages/{identity_key}/{structure_or_release}/structure.json
- *   {theme_id}/{scope_key}/tv{theme_version_id}/chrome/chrome-assets.json
+ * No current pointer file, no r/d/s segments, no scope-level shared structure bags.
  */
 final class ThemeLayoutEntityPaths
 {
     public const ROOT_SEGMENT = 'theme-layout-entities';
+    public const SCHEMA_BINDING = 'theme-layout-entity.v3';
+
+    public function __construct(
+        private readonly ?string $rootOverride = null,
+    ) {
+    }
 
     public function root(): string
     {
+        if ($this->rootOverride !== null && $this->rootOverride !== '') {
+            return \rtrim($this->rootOverride, '/\\') . \DIRECTORY_SEPARATOR;
+        }
+
         return \rtrim((string)BP, '/\\') . \DIRECTORY_SEPARATOR . 'var' . \DIRECTORY_SEPARATOR
             . 'runtime' . \DIRECTORY_SEPARATOR . self::ROOT_SEGMENT . \DIRECTORY_SEPARATOR;
     }
 
-    public function scopeKey(string $scope): string
+    /**
+     * Deterministic scope_key: full SHA-256 of canonical_scope + store_mode.
+     * Binding stores original values separately.
+     */
+    public function scopeKey(string $canonicalScope, string $storeMode = 'normal'): string
     {
-        $scope = \trim($scope);
-        if ($scope === '') {
-            return 'empty';
+        $canonicalScope = \trim($canonicalScope);
+        $storeMode = \trim($storeMode);
+        if ($storeMode === '') {
+            $storeMode = 'normal';
         }
-        // Keep trailing underscores — storage sentinels end with __ (e.g. __channel__).
-        $sanitized = \preg_replace('/[^a-zA-Z0-9._-]+/', '_', $scope) ?? '';
-        $sanitized = \trim($sanitized, '.-');
-        if ($sanitized !== '' && \strlen($sanitized) <= 120) {
-            return $sanitized;
+        if ($canonicalScope === '') {
+            return \hash('sha256', "\0" . $storeMode);
         }
 
-        return \sha1($scope);
+        return \hash('sha256', $canonicalScope . "\0" . $storeMode);
     }
 
+    /** Full resource identity hash — never truncated. */
     public function identityKey(string $identityHash): string
     {
         $identityHash = \strtolower(\trim($identityHash));
-        if ($identityHash === '') {
-            return 'unknown';
+        if ($identityHash === '' || !\preg_match('/^[a-f0-9]{64}$/D', $identityHash)) {
+            throw new \InvalidArgumentException('theme_layout_identity_hash_invalid');
         }
 
-        return \substr($identityHash, 0, 16);
+        return $identityHash;
     }
 
-    public function themeScopeDir(int $themeId, string $scope): string
+    public function ownerDir(ThemeVersionIdentity $identity): string
     {
         return $this->root()
-            . $themeId . \DIRECTORY_SEPARATOR
-            . $this->scopeKey($scope) . \DIRECTORY_SEPARATOR;
+            . $identity->themeId . \DIRECTORY_SEPARATOR
+            . $identity->area . \DIRECTORY_SEPARATOR
+            . $identity->scopeKey() . \DIRECTORY_SEPARATOR;
     }
 
-    public function chromeDir(int $themeId, string $scope, int $themeVersionId): string
+    public function versionModeDir(ThemeVersionIdentity $identity): string
     {
-        return $this->themeScopeDir($themeId, $scope)
-            . 'tv' . $themeVersionId . \DIRECTORY_SEPARATOR
-            . 'chrome' . \DIRECTORY_SEPARATOR;
-    }
-
-    public function chromePhtml(int $themeId, string $scope, int $themeVersionId): string
-    {
-        return $this->chromeDir($themeId, $scope, $themeVersionId) . 'chrome.phtml';
-    }
-
-    public function chromeConfigJson(int $themeId, string $scope, int $themeVersionId): string
-    {
-        return $this->chromeDir($themeId, $scope, $themeVersionId) . 'chrome-config.json';
-    }
-
-    public function chromeAssetsJson(int $themeId, string $scope, int $themeVersionId): string
-    {
-        return $this->chromeDir($themeId, $scope, $themeVersionId) . 'chrome-assets.json';
-    }
-
-    /**
-     * Request-time snapshot of renderCurrent() output. Invalidated when chrome.phtml
-     * or chrome-config.json is newer (see ThemeLayoutEntityChrome).
-     *
-     * Prefer locale-keyed files: chrome.rendered.{locale}.html. The bare
-     * chrome.rendered.html name is legacy (locale-agnostic) and must not be reused.
-     */
-    public function chromeRenderedHtml(
-        int $themeId,
-        string $scope,
-        int $themeVersionId,
-        ?string $locale = null,
-    ): string {
-        $dir = $this->chromeDir($themeId, $scope, $themeVersionId);
-        $locale = \trim((string)$locale);
-        if ($locale !== ''
-            && \preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $locale) === 1
-        ) {
-            return $dir . 'chrome.rendered.' . $locale . '.html';
+        if ($identity->themeVersionId < 1) {
+            throw new \InvalidArgumentException('theme_layout_version_id_required');
         }
+        $modeDir = $identity->mode === ThemeVersionIdentity::MODE_DRAFT ? 'draft' : 'formal';
 
-        // Materializer invalidation helper: pattern prefix (callers glob).
-        return $dir . 'chrome.rendered.html';
+        return $this->ownerDir($identity)
+            . 'tv' . $identity->themeVersionId . \DIRECTORY_SEPARATOR
+            . $modeDir . \DIRECTORY_SEPARATOR;
     }
 
-    /**
-     * Absolute paths of all chrome.rendered*.html snapshots under a chrome dir
-     * (legacy bare file + every locale-keyed variant).
-     *
-     * @return list<string>
-     */
-    public function chromeRenderedHtmlSnapshots(int $themeId, string $scope, int $themeVersionId): array
+    public function chromeRoot(ThemeVersionIdentity $identity): string
     {
-        $dir = $this->chromeDir($themeId, $scope, $themeVersionId);
-        if (!\is_dir($dir)) {
-            return [];
-        }
-
-        $matches = \glob($dir . 'chrome.rendered*.html') ?: [];
-        $out = [];
-        foreach ($matches as $path) {
-            if (\is_string($path) && $path !== '' && \is_file($path)) {
-                $out[] = $path;
-            }
-        }
-
-        return $out;
+        return $this->versionModeDir($identity) . 'chrome' . \DIRECTORY_SEPARATOR;
     }
 
-    public function pageIdentityDir(int $themeId, string $scope, string $identityKey): string
+    public function pageRoot(ThemeVersionIdentity $identity, string $layoutIdentityHash): string
     {
-        return $this->themeScopeDir($themeId, $scope)
+        return $this->versionModeDir($identity)
             . 'pages' . \DIRECTORY_SEPARATOR
-            . $this->normalizePathSegment($identityKey, 'identity') . \DIRECTORY_SEPARATOR;
+            . $this->identityKey($layoutIdentityHash) . \DIRECTORY_SEPARATOR;
     }
 
-    /**
-     * Points at the current solidified page segment. Config writes must not rewrite this file's target phtml.
-     */
-    public function pageCurrentJson(int $themeId, string $scope, string $identityKey): string
+    public function pageStructureDir(ThemeVersionIdentity $identity, string $layoutIdentityHash, string $structureKey): string
     {
-        return $this->pageIdentityDir($themeId, $scope, $identityKey) . 'current.json';
+        return $this->pageRoot($identity, $layoutIdentityHash)
+            . 'structures' . \DIRECTORY_SEPARATOR
+            . 'v' . $identity->themeVersionId . \DIRECTORY_SEPARATOR
+            . $this->normalizeStructureKey($structureKey) . \DIRECTORY_SEPARATOR;
     }
 
-    public function pageDir(
-        int $themeId,
-        string $scope,
-        string $identityKey,
-        string $structureOrRelease,
-    ): string {
-        return $this->pageIdentityDir($themeId, $scope, $identityKey)
-            . $this->normalizePathSegment($structureOrRelease, 'structure') . \DIRECTORY_SEPARATOR;
-    }
-
-    public function pagePhtml(
-        int $themeId,
-        string $scope,
-        string $identityKey,
-        string $structureOrRelease,
-    ): string {
-        return $this->pageDir($themeId, $scope, $identityKey, $structureOrRelease) . 'layout.phtml';
-    }
-
-    /**
-     * wave8-8s5: published whole-shell bake (chrome.phtml source + layout.phtml source).
-     * Storefront includes this file once — header/chrome already in the shell.
-     */
-    public function shellPhtml(
-        int $themeId,
-        string $scope,
-        string $identityKey,
-        string $structureOrRelease,
-    ): string {
-        return $this->pageDir($themeId, $scope, $identityKey, $structureOrRelease) . 'shell.phtml';
-    }
-
-    public function pageConfigJson(
-        int $themeId,
-        string $scope,
-        string $identityKey,
-        string $structureOrRelease,
-    ): string {
-        return $this->pageDir($themeId, $scope, $identityKey, $structureOrRelease) . 'page-config.json';
-    }
-
-    public function pageAssetsJson(
-        int $themeId,
-        string $scope,
-        string $identityKey,
-        string $structureOrRelease,
-    ): string {
-        return $this->pageDir($themeId, $scope, $identityKey, $structureOrRelease) . 'page-assets.json';
-    }
-
-    public function pageStructureJson(
-        int $themeId,
-        string $scope,
-        string $identityKey,
-        string $structureOrRelease,
-    ): string {
-        return $this->pageDir($themeId, $scope, $identityKey, $structureOrRelease) . 'structure.json';
-    }
-
-    public function pageStructureOrRelease(string $structureKey, bool $published, ?int $releaseId): string
+    public function pagePhtml(ThemeVersionIdentity $identity, string $layoutIdentityHash, string $structureKey): string
     {
-        if ($published && $releaseId !== null && $releaseId > 0) {
-            return 'r' . $releaseId;
+        return $this->pageStructureDir($identity, $layoutIdentityHash, $structureKey) . 'layout.phtml';
+    }
+
+    public function shellPhtml(ThemeVersionIdentity $identity, string $layoutIdentityHash, string $structureKey): string
+    {
+        return $this->pageStructureDir($identity, $layoutIdentityHash, $structureKey) . 'shell.phtml';
+    }
+
+    public function pageStructureJson(ThemeVersionIdentity $identity, string $layoutIdentityHash, string $structureKey): string
+    {
+        return $this->pageStructureDir($identity, $layoutIdentityHash, $structureKey) . 'structure.json';
+    }
+
+    public function pageConfigDir(ThemeVersionIdentity $identity, string $layoutIdentityHash, string $configKey): string
+    {
+        return $this->pageRoot($identity, $layoutIdentityHash)
+            . 'configs' . \DIRECTORY_SEPARATOR
+            . 'v' . $identity->themeVersionId . \DIRECTORY_SEPARATOR
+            . $this->normalizeConfigKey($configKey) . \DIRECTORY_SEPARATOR;
+    }
+
+    public function pageConfigJson(ThemeVersionIdentity $identity, string $layoutIdentityHash, string $configKey): string
+    {
+        return $this->pageConfigDir($identity, $layoutIdentityHash, $configKey) . 'config.json';
+    }
+
+    public function pageAssetsJson(ThemeVersionIdentity $identity, string $layoutIdentityHash, string $configKey): string
+    {
+        return $this->pageConfigDir($identity, $layoutIdentityHash, $configKey) . 'assets.json';
+    }
+
+    public function pageBindingsDir(ThemeVersionIdentity $identity, string $layoutIdentityHash): string
+    {
+        return $this->pageRoot($identity, $layoutIdentityHash)
+            . 'bindings' . \DIRECTORY_SEPARATOR
+            . $this->revisionBindingSegment($identity) . \DIRECTORY_SEPARATOR;
+    }
+
+    public function pageBindingJson(ThemeVersionIdentity $identity, string $layoutIdentityHash): string
+    {
+        return $this->pageBindingsDir($identity, $layoutIdentityHash) . 'binding.json';
+    }
+
+    public function pageArtifactBindingJson(
+        ThemeVersionIdentity $identity,
+        string $layoutIdentityHash,
+        string $artifactKey,
+    ): string {
+        return $this->pageBindingsDir($identity, $layoutIdentityHash)
+            . $this->normalizePathSegment($artifactKey, 'artifact') . '.json';
+    }
+
+    public function chromeStructureDir(ThemeVersionIdentity $identity, string $structureKey): string
+    {
+        return $this->chromeRoot($identity)
+            . 'structures' . \DIRECTORY_SEPARATOR
+            . 'v' . $identity->themeVersionId . \DIRECTORY_SEPARATOR
+            . $this->normalizeStructureKey($structureKey) . \DIRECTORY_SEPARATOR;
+    }
+
+    public function chromePhtml(ThemeVersionIdentity $identity, string $structureKey): string
+    {
+        return $this->chromeStructureDir($identity, $structureKey) . 'chrome.phtml';
+    }
+
+    public function chromeConfigDir(ThemeVersionIdentity $identity, string $configKey): string
+    {
+        return $this->chromeRoot($identity)
+            . 'configs' . \DIRECTORY_SEPARATOR
+            . 'v' . $identity->themeVersionId . \DIRECTORY_SEPARATOR
+            . $this->normalizeConfigKey($configKey) . \DIRECTORY_SEPARATOR;
+    }
+
+    public function chromeConfigJson(ThemeVersionIdentity $identity, string $configKey): string
+    {
+        return $this->chromeConfigDir($identity, $configKey) . 'config.json';
+    }
+
+    public function chromeAssetsJson(ThemeVersionIdentity $identity, string $configKey): string
+    {
+        return $this->chromeConfigDir($identity, $configKey) . 'assets.json';
+    }
+
+    public function chromeBindingsDir(ThemeVersionIdentity $identity): string
+    {
+        return $this->chromeRoot($identity)
+            . 'bindings' . \DIRECTORY_SEPARATOR
+            . $this->revisionBindingSegment($identity) . \DIRECTORY_SEPARATOR;
+    }
+
+    public function chromeBindingJson(ThemeVersionIdentity $identity): string
+    {
+        return $this->chromeBindingsDir($identity) . 'binding.json';
+    }
+
+    public function chromeArtifactBindingJson(ThemeVersionIdentity $identity, string $artifactKey): string
+    {
+        return $this->chromeBindingsDir($identity)
+            . $this->normalizePathSegment($artifactKey, 'artifact') . '.json';
+    }
+
+    public function chromeRenderedHtml(
+        ThemeVersionIdentity $identity,
+        string $artifactKey,
+        string $renderVaryKey,
+    ): string {
+        return $this->chromeRoot($identity)
+            . 'rendered' . \DIRECTORY_SEPARATOR
+            . $this->normalizePathSegment($artifactKey, 'artifact') . \DIRECTORY_SEPARATOR
+            . $this->normalizePathSegment($renderVaryKey, 'vary') . '.html';
+    }
+
+    public function revisionBindingSegment(ThemeVersionIdentity $identity): string
+    {
+        if ($identity->contentRevision < 1) {
+            throw new \InvalidArgumentException('theme_layout_content_revision_required');
         }
-        $structureKey = \strtolower(\trim($structureKey));
-        if ($structureKey === '') {
-            return 'sempty';
-        }
 
-        return 's' . $structureKey;
-    }
-
-    /** 结构模板保留 s 身份；草稿与发布实体只保存绑定。 */
-    public function pageBindingJson(int $themeId, string $scope, string $identityKey, string $entityKey): string
-    {
-        return $this->pageDir($themeId, $scope, $identityKey, $entityKey) . 'binding.json';
-    }
-
-    public function pageConfigBundleDir(int $themeId, string $scope, string $identityKey, string $configKey): string
-    {
-        return $this->pageIdentityDir($themeId, $scope, $identityKey)
-            . 'configs/' . $this->normalizePathSegment($configKey, 'config') . '/';
-    }
-
-    public function chromeStructureDir(int $themeId, string $scope, string $structureKey): string
-    {
-        return $this->themeScopeDir($themeId, $scope) . 'chrome/'
-            . $this->normalizePathSegment($structureKey, 'structure') . '/';
-    }
-
-    public function chromeConfigBundleDir(int $themeId, string $scope, string $configKey): string
-    {
-        return $this->themeScopeDir($themeId, $scope) . 'chrome/configs/'
-            . $this->normalizePathSegment($configKey, 'config') . '/';
-    }
-
-    public function chromeBindingJson(int $themeId, string $scope, int $versionId): string
-    {
-        return $this->chromeDir($themeId, $scope, $versionId) . 'binding.json';
+        return 'v' . $identity->themeVersionId . '-g' . $identity->contentRevision;
     }
 
     /**
      * Delete the entire layout-entity bake tree under var/runtime/theme-layout-entities/.
-     * Used on setup:upgrade so storefront dynamicSolidify rebuilds from current source templates
-     * (never rematerialize stale DB structure as the upgrade recovery path).
-     *
-     * Missing root is idempotent success (returns 0). Unsafe paths throw.
      *
      * @return int Number of filesystem nodes deleted (files + directories)
      */
@@ -264,10 +239,119 @@ final class ThemeLayoutEntityPaths
     }
 
     /**
-     * Delete one absolute entity-root directory after safety checks.
-     * Production callers use {@see purgeAllEntities()}; tests may pass a sibling
-     * `…/var/…/theme-layout-entities` tree under BP.
+     * Enumerate tv{V}/{formal|draft} derived roots under the entity tree.
      *
+     * @return list<array{
+     *   path:string,
+     *   theme_id:int,
+     *   area:string,
+     *   scope_key:string,
+     *   theme_version_id:int,
+     *   mode:string
+     * }>
+     */
+    public function listVersionModeDirectories(): array
+    {
+        $root = \rtrim($this->root(), '/\\');
+        if (!\is_dir($root)) {
+            return [];
+        }
+
+        $out = [];
+        $themeDirs = @\scandir($root) ?: [];
+        foreach ($themeDirs as $themeName) {
+            if ($themeName === '.' || $themeName === '..' || !\ctype_digit($themeName)) {
+                continue;
+            }
+            $themeId = (int)$themeName;
+            $themePath = $root . \DIRECTORY_SEPARATOR . $themeName;
+            if (!\is_dir($themePath)) {
+                continue;
+            }
+            foreach (@\scandir($themePath) ?: [] as $area) {
+                if ($area === '.' || $area === '..') {
+                    continue;
+                }
+                if (!\in_array($area, ThemeVersionIdentity::AREAS, true)) {
+                    continue;
+                }
+                $areaPath = $themePath . \DIRECTORY_SEPARATOR . $area;
+                if (!\is_dir($areaPath)) {
+                    continue;
+                }
+                foreach (@\scandir($areaPath) ?: [] as $scopeKey) {
+                    if ($scopeKey === '.' || $scopeKey === '..' || !\preg_match('/^[a-f0-9]{64}$/D', $scopeKey)) {
+                        continue;
+                    }
+                    $scopePath = $areaPath . \DIRECTORY_SEPARATOR . $scopeKey;
+                    if (!\is_dir($scopePath)) {
+                        continue;
+                    }
+                    foreach (@\scandir($scopePath) ?: [] as $tv) {
+                        if ($tv === '.' || $tv === '..' || !\preg_match('/^tv(\d+)$/', $tv, $m)) {
+                            continue;
+                        }
+                        $versionId = (int)$m[1];
+                        $tvPath = $scopePath . \DIRECTORY_SEPARATOR . $tv;
+                        if (!\is_dir($tvPath)) {
+                            continue;
+                        }
+                        foreach (ThemeVersionIdentity::MODES as $mode) {
+                            $modePath = $tvPath . \DIRECTORY_SEPARATOR . $mode;
+                            if (!\is_dir($modePath)) {
+                                continue;
+                            }
+                            $out[] = [
+                                'path' => $modePath,
+                                'theme_id' => $themeId,
+                                'area' => $area,
+                                'scope_key' => $scopeKey,
+                                'theme_version_id' => $versionId,
+                                'mode' => $mode,
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Delete one tv{V}/{mode} derived tree. Must stay under the entity root.
+     *
+     * @return int Nodes deleted
+     */
+    public function purgeVersionModeDirectory(string $absoluteDirectory): int
+    {
+        $absoluteDirectory = \rtrim(\str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, \trim($absoluteDirectory)), "/\\");
+        if ($absoluteDirectory === '' || !\is_dir($absoluteDirectory)) {
+            return 0;
+        }
+        $rootReal = \realpath($this->root());
+        $targetReal = \realpath($absoluteDirectory);
+        if ($rootReal === false || $targetReal === false) {
+            return 0;
+        }
+        $rootNorm = \strtolower(\rtrim(\str_replace('\\', '/', $rootReal), '/') . '/');
+        $targetNorm = \strtolower(\str_replace('\\', '/', $targetReal));
+        if (!\str_starts_with($targetNorm . '/', $rootNorm)) {
+            throw new \RuntimeException('theme_layout_entity_purge_version_outside_root');
+        }
+        $base = \basename($targetReal);
+        if (!\in_array($base, ThemeVersionIdentity::MODES, true)) {
+            throw new \RuntimeException('theme_layout_entity_purge_version_mode_mismatch');
+        }
+        $tvBase = \basename(\dirname($targetReal));
+        if (!\preg_match('/^tv\d+$/', $tvBase)) {
+            throw new \RuntimeException('theme_layout_entity_purge_version_tv_mismatch');
+        }
+
+        return $this->deleteTreeRecursive($targetReal);
+    }
+
+    /**
      * @return int Number of filesystem nodes deleted (files + directories)
      */
     public function purgeEntityTree(string $absoluteDirectory): int
@@ -282,6 +366,7 @@ final class ThemeLayoutEntityPaths
         }
 
         $resolved = $this->assertPurgeableEntityRoot($absoluteDirectory);
+
         return $this->deleteTreeRecursive($resolved);
     }
 
@@ -327,7 +412,6 @@ final class ThemeLayoutEntityPaths
             return $resolved;
         }
 
-        // Allow unit-test sibling trees under BP/var/**/theme-layout-entities only.
         if (!\str_starts_with($resolvedNorm . '/', $varPrefix)) {
             throw new \RuntimeException('theme_layout_entity_purge_outside_var');
         }
@@ -375,6 +459,33 @@ final class ThemeLayoutEntityPaths
         }
 
         return $deleted + 1;
+    }
+
+    private function normalizeStructureKey(string $structureKey): string
+    {
+        $structureKey = \strtolower(\trim($structureKey));
+        if ($structureKey === '') {
+            throw new \InvalidArgumentException('theme_layout_structure_key_empty');
+        }
+        // Accept both bare sha256 and legacy s{sha256} prefixes by normalizing to full key segment.
+        if (\preg_match('/^s([a-f0-9]{64})$/D', $structureKey, $m) === 1) {
+            $structureKey = $m[1];
+        }
+        if (\preg_match('/^[a-f0-9]{64}$/D', $structureKey) !== 1) {
+            throw new \InvalidArgumentException('theme_layout_structure_key_invalid');
+        }
+
+        return $structureKey;
+    }
+
+    private function normalizeConfigKey(string $configKey): string
+    {
+        $configKey = \strtolower(\trim($configKey));
+        if (\preg_match('/^[a-f0-9]{64}$/D', $configKey) !== 1) {
+            throw new \InvalidArgumentException('theme_layout_config_key_invalid');
+        }
+
+        return $configKey;
     }
 
     private function normalizePathSegment(string $segment, string $fallback): string

@@ -4,135 +4,320 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
-use Weline\Theme\Model\ThemeScopeRelease;
-use Weline\Theme\Model\ThemeScopeRevision;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Model\ThemeScopeWorkspace;
 
-/** Authorized editor version selection; a layout version is neither a release nor a chrome version. */
+/**
+ * Authorized editor / Token preview selection via explicit ThemeScopeVersion (V/mode/R).
+ * Never guesses page/chrome by nodeProjection similarity.
+ */
 final class ThemeVersionPreviewResolver
 {
     public const REQUEST_KEY = 'theme.layout_entity.preview_entity';
 
-    public function __construct(private readonly ThemeLayoutVersionBindingResolver $bindings) {}
-
-    public function resolve(int $themeId, string $pageType, string $area, array $identity, int $versionId): array
+    /**
+     * Overlay optional Token owner/V/mode/R onto a resolve() result.
+     *
+     * @param array<string,mixed> $tokenData
+     * @param array<string,mixed> $resolved
+     * @return array<string,mixed>
+     */
+    public function applyTokenVersionCursor(array $tokenData, array $resolved): array
     {
-        $context = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class)->buildContext($themeId, $pageType, $area, $identity);
-        $base = ['resolved' => false, 'reason' => 'preview_layout_version_missing', 'theme_id' => $themeId,
-            'scope' => $context->scope->storageScope, 'identity_key' => substr($context->identityHash(), 0, 16),
-            'identity_hash' => $context->identityHash(), 'entity_key' => '', 'chrome_version_id' => 0,
-            'chrome_scope' => $context->scope->storageScope, 'version_id' => $versionId, 'nodes' => []];
-        $exactIdentity = ['scope' => $context->scope->storageScope, 'layout_option' => $context->layoutOption,
-            'target_type' => $context->targetType, 'target_id' => $context->targetId, 'locale_code' => ''];
-        $version = ObjectManager::getInstance(ThemeLayoutVersionService::class)->getVersion($themeId, $pageType, $versionId, $exactIdentity);
-        if ($version === null) {
+        $themeVersionId = (int)($tokenData['theme_version_id'] ?? $tokenData['version_id'] ?? 0);
+        if ($themeVersionId > 0) {
+            $resolved['theme_version_id'] = $themeVersionId;
+            $resolved['version_id'] = $themeVersionId;
+            $resolved['chrome_version_id'] = $themeVersionId;
+        }
+        $mode = \trim((string)($tokenData['mode'] ?? ''));
+        if ($mode !== '' && \in_array($mode, ThemeVersionIdentity::MODES, true)) {
+            $resolved['mode'] = $mode;
+        }
+        $contentRevision = (int)($tokenData['content_revision'] ?? 0);
+        if ($contentRevision > 0) {
+            $resolved['content_revision'] = $contentRevision;
+        }
+        foreach (['canonical_scope', 'store_mode', 'area', 'owner_hash'] as $key) {
+            $value = \trim((string)($tokenData[$key] ?? ''));
+            if ($value !== '') {
+                $resolved[$key] = $value;
+            }
+        }
+        if (($resolved['version_identity'] ?? null) instanceof ThemeVersionIdentity
+            && ((int)($resolved['theme_version_id'] ?? 0) > 0 || $mode !== '' || $contentRevision > 0)
+        ) {
+            /** @var ThemeVersionIdentity $identity */
+            $identity = $resolved['version_identity'];
+            $resolved['version_identity'] = $identity->withVersion(
+                (int)($resolved['theme_version_id'] ?? $identity->themeVersionId),
+                (string)($resolved['mode'] ?? $identity->mode),
+                (int)($resolved['content_revision'] ?? $identity->contentRevision),
+            );
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * Resolve preview identity from an explicit ThemeScopeVersion id and/or Token cursor.
+     * Missing/ambiguous identity returns unresolved — no structure-equality fallback.
+     *
+     * @param array<string,mixed> $identity Layout identity (scope/layout_option/target_*)
+     * @param array<string,mixed> $cursor Optional Token/selection cursor (theme_version_id/mode/content_revision/owner fields)
+     * @return array<string,mixed>
+     */
+    public function resolve(
+        int $themeId,
+        string $pageType,
+        string $area,
+        array $identity,
+        int $versionId,
+        array $cursor = [],
+    ): array {
+        $context = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class)
+            ->buildContext($themeId, $pageType, $area, $identity);
+        $identityHash = $context->identityHash();
+        $base = [
+            'resolved' => false,
+            'reason' => 'preview_theme_version_id_required',
+            'theme_id' => $themeId,
+            'scope' => $context->scope->storageScope,
+            'identity_key' => $identityHash,
+            'identity_hash' => $identityHash,
+            'entity_key' => '',
+            'chrome_version_id' => 0,
+            'chrome_scope' => $context->scope->storageScope,
+            'version_id' => $versionId,
+            'theme_version_id' => null,
+            'mode' => null,
+            'content_revision' => null,
+            'version_identity' => null,
+            'nodes' => [],
+            'release_id' => null,
+            'draft_revision_id' => 0,
+        ];
+
+        $themeVersionId = (int)($cursor['theme_version_id'] ?? 0);
+        if ($themeVersionId < 1) {
+            $themeVersionId = $versionId;
+        }
+        if ($themeVersionId < 1) {
             return $base;
         }
-        $nodes = $this->bindings->snapshotNodes($version->getSnapshotData());
-        $base['nodes'] = $nodes;
-        $rows = $this->rows(ThemeScopeWorkspace::class, ['identity_hash' => $context->identityHash()]);
-        $row = $rows[0] ?? [];
-        $releases = $row === [] ? [] : $this->rows(ThemeScopeRelease::class,
-            ['workspace_id' => (int)$row['workspace_id'], 'status' => 'effective']);
-        $draft = [];
-        $historicalDraftsUnresolved = [];
-        $workspaceService = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedWorkspace::class);
-        foreach ($releases as &$release) {
-            $composed = $workspaceService->readHistoricalLayoutRelease($context, (int)$release['release_id']);
-            if ($composed !== null) { $release['effective_payload_json'] = $composed; }
+
+        $version = clone ObjectManager::getInstance(ThemeScopeVersion::class);
+        $version->load($themeVersionId);
+        if ($version->getVersionId() < 1 || $version->getThemeId() !== $themeId) {
+            return \array_replace($base, [
+                'reason' => 'preview_theme_version_missing',
+                'theme_version_id' => $themeVersionId,
+                'version_id' => $themeVersionId,
+            ]);
         }
-        unset($release);
-        if ($row !== []) {
-            foreach ($this->rows(ThemeScopeRevision::class, ['workspace_id' => (int)$row['workspace_id']]) as $revision) {
-                $revisionId = (int)$revision['revision_id'];
-                $state = $revisionId === (int)($row['draft_revision_id'] ?? 0) && $version->isCurrent()
-                    ? $workspaceService->load($context, true)
-                    : $workspaceService->readHistoricalLayoutRevision($context, $revisionId);
-                if (is_array($state['draft_payload'] ?? null)) {
-                    $draft[] = $state;
-                } else {
-                    $historicalDraftsUnresolved[] = ['draft_revision_id' => $revisionId, 'reason' => $state['reason'] ?? 'historical_draft_baseline_missing'];
-                }
-            }
+
+        $ownerMismatch = $this->ownerMismatchReason($version, $cursor, $area, $context->scope->storageScope);
+        if ($ownerMismatch !== null) {
+            return \array_replace($base, [
+                'reason' => $ownerMismatch,
+                'theme_version_id' => $themeVersionId,
+                'version_id' => $themeVersionId,
+                'chrome_scope' => $version->getScope(),
+            ]);
         }
-        $base['unresolved_drafts'] = $historicalDraftsUnresolved;
-        $releaseReferences = [];
-        foreach ($nodes as $node) {
-            $config = $this->decode($node['config'] ?? []);
-            if ((int)($config['_theme_release_id'] ?? 0) > 0) {
-                $releaseReferences[(int)$config['_theme_release_id']] = true;
-            }
+
+        $versionIdentity = $version->toVersionIdentity();
+        $mode = \trim((string)($cursor['mode'] ?? ''));
+        if ($mode === '' || !\in_array($mode, ThemeVersionIdentity::MODES, true)) {
+            $mode = $versionIdentity->mode;
         }
-        $explicitRelease = count($releaseReferences) === 1 ? (int)array_key_first($releaseReferences) : null;
-        $page = $this->selectPageBinding($nodes, $releases, $draft, $explicitRelease);
-        if (!$page['resolved']) {
-            return array_replace($base, $page);
+        $contentRevision = (int)($cursor['content_revision'] ?? 0);
+        if ($contentRevision < 1) {
+            $contentRevision = \max(1, $versionIdentity->contentRevision);
         }
-        $base = array_replace($base, $page, ['resolved' => false, 'reason' => 'preview_chrome_version_unresolved']);
-        $expectedChrome = $this->bindings->nodeProjection($nodes, true);
-        foreach ($context->scope->fallbackStorageScopes as $scope) {
-            $matches = [];
-            foreach ($this->rows(ThemeScopeVersion::class, ['theme_id' => $themeId, 'scope' => $scope]) as $chrome) {
-                if ($this->bindings->nodeProjection($this->decode($chrome['chrome_payload_json'] ?? []), true) === $expectedChrome) {
-                    $matches[] = (int)$chrome['version_id'];
-                }
-            }
-            if (count($matches) === 1) {
-                return array_replace($base, ['resolved' => true, 'reason' => '', 'chrome_version_id' => $matches[0], 'chrome_scope' => $scope]);
-            }
-            if (count($matches) > 1) {
-                return array_replace($base, ['reason' => 'preview_chrome_version_ambiguous', 'candidate_chrome_version_ids' => $matches]);
-            }
+        $versionIdentity = $versionIdentity->withVersion($themeVersionId, $mode, $contentRevision);
+
+        $page = $this->loadWorkspaceNodes($context, $mode === ThemeVersionIdentity::MODE_FORMAL);
+        $nodes = $page['nodes'];
+        if ($nodes === []) {
+            $nodes = $version->getChromePayload();
         }
-        return $base;
+
+        return [
+            'resolved' => true,
+            'reason' => '',
+            'theme_id' => $themeId,
+            'scope' => $version->getScope() !== '' ? $version->getScope() : $context->scope->storageScope,
+            'identity_key' => $identityHash,
+            'identity_hash' => $identityHash,
+            // New path: never invent r/d/s entity keys.
+            'entity_key' => '',
+            'chrome_version_id' => $themeVersionId,
+            'chrome_scope' => $version->getScope() !== '' ? $version->getScope() : $context->scope->storageScope,
+            'version_id' => $themeVersionId,
+            'theme_version_id' => $themeVersionId,
+            'mode' => $mode,
+            'content_revision' => $contentRevision,
+            'lifecycle' => $version->getLifecycle(),
+            'version_identity' => $versionIdentity,
+            'nodes' => $nodes,
+            'release_id' => $page['release_id'],
+            'draft_revision_id' => $page['draft_revision_id'],
+            'canonical_scope' => $versionIdentity->canonicalScope,
+            'store_mode' => $versionIdentity->storeMode,
+            'area' => $versionIdentity->area,
+            'owner_hash' => $versionIdentity->ownerHash(),
+        ];
     }
 
-    public function selectPageBinding(array $nodes, array $releases, array $draft, ?int $explicitReleaseId = null): array
+    /**
+     * Explicit page release/draft binding only — no nodeProjection matching.
+     * entity_key stays empty (v3 paths use ThemeVersionIdentity, not r/d/s keys).
+     *
+     * @param list<array<string,mixed>>|array<string,mixed> $releases
+     * @param list<array<string,mixed>>|array<string,mixed> $draft
+     * @return array<string,mixed>
+     */
+    public function selectPageBinding(
+        array $nodes,
+        array $releases,
+        array $draft,
+        ?int $explicitReleaseId = null,
+        ?int $explicitDraftRevisionId = null,
+    ): array {
+        unset($nodes);
+        if ($explicitReleaseId !== null && $explicitReleaseId > 0) {
+            foreach ($releases as $release) {
+                if ((int)($release['release_id'] ?? 0) === $explicitReleaseId) {
+                    return [
+                        'resolved' => true,
+                        'reason' => '',
+                        'entity_key' => '',
+                        'release_id' => $explicitReleaseId,
+                        'draft_revision_id' => 0,
+                    ];
+                }
+            }
+
+            return [
+                'resolved' => false,
+                'reason' => 'preview_page_release_missing',
+                'entity_key' => '',
+                'candidate_release_ids' => [],
+            ];
+        }
+        if ($explicitDraftRevisionId !== null && $explicitDraftRevisionId > 0) {
+            foreach (\array_is_list($draft) ? $draft : [$draft] as $state) {
+                if ((int)($state['draft_revision_id'] ?? 0) === $explicitDraftRevisionId) {
+                    return [
+                        'resolved' => true,
+                        'reason' => '',
+                        'entity_key' => '',
+                        'release_id' => null,
+                        'draft_revision_id' => $explicitDraftRevisionId,
+                    ];
+                }
+            }
+
+            return [
+                'resolved' => false,
+                'reason' => 'preview_page_draft_missing',
+                'entity_key' => '',
+                'candidate_release_ids' => [],
+            ];
+        }
+
+        return [
+            'resolved' => false,
+            'reason' => 'preview_page_version_unresolved',
+            'entity_key' => '',
+            'candidate_release_ids' => [],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $cursor
+     */
+    private function ownerMismatchReason(
+        ThemeScopeVersion $version,
+        array $cursor,
+        string $requestArea,
+        string $requestScope,
+    ): ?string {
+        $cursorScope = \trim((string)($cursor['canonical_scope'] ?? $cursor['scope'] ?? ''));
+        if ($cursorScope !== '' && $version->getScope() !== '' && $cursorScope !== $version->getScope()) {
+            return 'preview_theme_version_scope_mismatch';
+        }
+        $cursorArea = \trim((string)($cursor['area'] ?? $requestArea));
+        if ($cursorArea !== '' && $version->getArea() !== '' && $cursorArea !== $version->getArea()) {
+            return 'preview_theme_version_area_mismatch';
+        }
+        $cursorStoreMode = \trim((string)($cursor['store_mode'] ?? ''));
+        if ($cursorStoreMode !== '' && $version->getStoreMode() !== '' && $cursorStoreMode !== $version->getStoreMode()) {
+            return 'preview_theme_version_store_mode_mismatch';
+        }
+        $ownerHash = \trim((string)($cursor['owner_hash'] ?? ''));
+        if ($ownerHash !== '' && $ownerHash !== $version->toVersionIdentity()->ownerHash()) {
+            return 'preview_theme_version_owner_mismatch';
+        }
+        unset($requestScope);
+
+        return null;
+    }
+
+    /**
+     * Load workspace page nodes for the layout identity — never by structure projection.
+     *
+     * @return array{nodes:array,release_id:?int,draft_revision_id:int}
+     */
+    private function loadWorkspaceNodes(object $context, bool $formal): array
     {
-        $expected = $this->bindings->nodeProjection($nodes);
-        $matches = [];
-        foreach ($releases as $release) {
-            $id = (int)($release['release_id'] ?? 0);
-            if ($id < 1 || ($explicitReleaseId !== null && $id !== $explicitReleaseId)) {
-                continue;
+        $empty = ['nodes' => [], 'release_id' => null, 'draft_revision_id' => 0];
+        try {
+            $rows = $this->rows(ThemeScopeWorkspace::class, ['identity_hash' => $context->identityHash()]);
+            $row = $rows[0] ?? [];
+            if ($row === []) {
+                return $empty;
             }
-            $payload = $this->decode($release['effective_payload_json'] ?? []);
-            if ($this->bindings->nodeProjection((array)($payload['nodes'] ?? [])) === $expected) {
-                $matches[] = $id;
+            $workspaceService = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedWorkspace::class);
+            $state = $workspaceService->load($context, true);
+            if ($formal) {
+                $payload = $state['published_payload'] ?? $state['effective_payload'] ?? [];
+                $nodes = \is_array($payload['nodes'] ?? null) ? $payload['nodes'] : (\is_array($payload) ? $payload : []);
+                $releaseId = (int)($state['effective_release_id'] ?? $state['published_release_id'] ?? 0);
+
+                return [
+                    'nodes' => $nodes,
+                    'release_id' => $releaseId > 0 ? $releaseId : null,
+                    'draft_revision_id' => 0,
+                ];
             }
+            $payload = $state['draft_payload'] ?? [];
+            $nodes = \is_array($payload['nodes'] ?? null) ? $payload['nodes'] : (\is_array($payload) ? $payload : []);
+
+            return [
+                'nodes' => $nodes,
+                'release_id' => null,
+                'draft_revision_id' => (int)($state['draft_revision_id'] ?? 0),
+            ];
+        } catch (\Throwable) {
+            return $empty;
         }
-        if (count($matches) === 1) {
-            return ['resolved' => true, 'reason' => '', 'entity_key' => 'r' . $matches[0], 'release_id' => $matches[0], 'draft_revision_id' => 0];
-        }
-        $draftMatches = [];
-        foreach (array_is_list($draft) ? $draft : [$draft] as $state) {
-            if ($matches === [] && $explicitReleaseId === null && (int)($state['draft_revision_id'] ?? 0) > 0
-                && $this->bindings->nodeProjection((array)($state['draft_payload']['nodes'] ?? [])) === $expected) {
-                $draftMatches[(int)$state['draft_revision_id']] = true;
-            }
-        }
-        if (count($draftMatches) === 1) {
-            $id = (int)array_key_first($draftMatches);
-            return ['resolved' => true, 'reason' => '', 'entity_key' => 'd' . $id,
-                'release_id' => null, 'draft_revision_id' => $id];
-        }
-        return ['resolved' => false, 'reason' => count($matches) > 1 ? 'preview_page_version_ambiguous' : 'preview_page_version_unresolved',
-            'entity_key' => '', 'candidate_release_ids' => $matches];
     }
 
+    /**
+     * @param array<string,mixed> $filters
+     * @return list<array<string,mixed>>
+     */
     private function rows(string $model, array $filters): array
     {
         $query = (clone ObjectManager::getInstance($model))->clearQuery()->clearData();
-        foreach ($filters as $field => $value) { $query->where($field, $value); }
+        foreach ($filters as $field => $value) {
+            $query->where($field, $value);
+        }
         $rows = $query->select()->fetchArray();
-        return !is_array($rows) || $rows === [] ? [] : (array_is_list($rows) ? $rows : [$rows]);
-    }
 
-    private function decode(mixed $value): array
-    {
-        $value = is_string($value) ? json_decode($value, true) : $value;
-        return is_array($value) ? $value : [];
+        return !\is_array($rows) || $rows === [] ? [] : (\array_is_list($rows) ? $rows : [$rows]);
     }
 }

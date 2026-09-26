@@ -19,11 +19,18 @@ final class ThemeLayoutEntitySlotFillerContractTest extends TestCase
 
         self::assertStringContainsString('function resolvePageEntityLocation', $src);
         self::assertStringContainsString('scopeFallbackChain', $src);
-        self::assertStringContainsString('resolveEditorIdentity($themeId, $pageType, $area, $candidateScope)', $src);
+        // Per-scope resource hash: identityKeyForScope recomputes under each candidate.
+        self::assertStringContainsString('identityKeyForScope($themeId, $pageType, $area, $candidateScope)', $src);
+        self::assertStringContainsString('resolvePageEntityLocationUncached', $src);
+        self::assertStringContainsString('ThemeVersionIdentity', $src);
         self::assertStringContainsString("'identity_key' => \$identityKey", $src);
         self::assertStringContainsString('function includeEntityPhtml', $src);
-        self::assertStringContainsString('pageCurrentJson', $src);
-        self::assertStringNotContainsString('processSlotsWithLayout', $src);
+        self::assertStringNotContainsString('pageCurrentJson', $src);
+        self::assertStringNotContainsString('pageStructureOrRelease', $src);
+        self::assertStringNotContainsString('readPageCurrent', $src);
+        self::assertStringNotContainsString('rememberPageCurrent', $src);
+        self::assertStringNotContainsString('resolveStructureOrRelease', $src);
+        self::assertStringNotContainsString('scandir($pageRoot)', $src);
         self::assertStringContainsString('header-nav-extensions', $src);
         self::assertStringContainsString('theme_layout_entity_chrome_soft_skip', $src);
         self::assertStringContainsString('function fillNestedChromeExtensionSlots', $src);
@@ -52,8 +59,7 @@ final class ThemeLayoutEntitySlotFillerContractTest extends TestCase
         self::assertStringContainsString("slotId === 'content' && \$this->shellContentCarriesProtectedNestedLayout", $src);
         self::assertStringContainsString('keep shell nested slot document order', $src);
         self::assertStringContainsString('$entityInner . $shellInner', $src);
-        // Hard-cut: published is r{id} only — delete scandir / s* / older-r* fishing.
-        self::assertStringContainsString("pageStructureOrRelease('', true, \$preferredReleaseId)", $src);
+        // Hard-cut: no current.json / r*/d*/s* fishing — typed ThemeVersionIdentity + binding only.
         self::assertStringNotContainsString('scandir($pageRoot)', $src);
         self::assertStringNotContainsString('bestDraft', $src);
         self::assertStringNotContainsString('bestRelease', $src);
@@ -94,23 +100,19 @@ final class ThemeLayoutEntitySlotFillerContractTest extends TestCase
     }
 
     /**
-     * DaoCharms W158 P-filters：published 指针只认 rN；非法 published:d0 不得进店面 fragments。
+     * Task 6 hard-cut: SlotFiller must not revive deleted current.json or legacy r/d/s pointer APIs.
+     * Formal reads resolve via ThemeVersionIdentity (owner/V/mode/R), not release-key regex.
      */
-    public function testReadPageCurrentPublishedPointerAcceptsOnlyReleaseKeys(): void
+    public function testSlotFillerUsesThemeVersionIdentityWithoutLegacyCurrentPointers(): void
     {
         $path = \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php';
         self::assertFileExists($path);
         $src = (string)\file_get_contents($path);
 
-        $fnStart = \strpos($src, 'function readPageCurrent');
-        self::assertNotFalse($fnStart);
-        $fnEnd = \strpos($src, 'function rememberPageCurrent', $fnStart);
-        self::assertNotFalse($fnEnd);
-        $body = \substr($src, $fnStart, $fnEnd - $fnStart);
-
-        self::assertStringContainsString('/^r[1-9][0-9]*$/D', $body);
-        self::assertStringContainsString("\$keys = \$published ? ['published'] : ['draft', 'published']", $body);
-        // published 三元左侧必须是 rN 门禁（拒 d0）。
-        self::assertStringContainsString("preg_match(\$published ? '/^r[1-9][0-9]*\$/D'", $body);
+        self::assertStringNotContainsString('function readPageCurrent', $src);
+        self::assertStringNotContainsString('function rememberPageCurrent', $src);
+        self::assertStringNotContainsString('pageCurrentJson', $src);
+        self::assertStringContainsString('ThemeVersionIdentity', $src);
+        self::assertStringContainsString('theme.layout_entity.preview_entity', $src);
     }
 }

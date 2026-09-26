@@ -16,8 +16,11 @@ final class ThemeLayoutEntityWidgetAssetsContractTest extends TestCase
         );
         self::assertStringContainsString('function pageAssetsJson', $src);
         self::assertStringContainsString('function chromeAssetsJson', $src);
-        self::assertStringContainsString('page-assets.json', $src);
-        self::assertStringContainsString('chrome-assets.json', $src);
+        // Paths v3: assets.json sidecars live under configs/v{V}/{config_key}/.
+        self::assertStringContainsString("'assets.json'", $src);
+        self::assertStringContainsString('ThemeVersionIdentity', $src);
+        self::assertStringNotContainsString('page-assets.json', $src);
+        self::assertStringNotContainsString('chrome-assets.json', $src);
     }
 
     public function testCollectorDedupesAndSplitsBuckets(): void

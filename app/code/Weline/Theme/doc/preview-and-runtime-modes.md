@@ -4,13 +4,15 @@
 > MCP 技能：`get_skill(weline-theme-development)` / surface `frontend_development`。  
 > 同构硬规则：MCP `preview_storefront_delivery_parity`（业务逻辑与交付路径与正式店面一致；本文件只区分**身份/参数权威**，不授权预览专用抽空逻辑）。
 
+> 2026-09-25 版本身份目标见[主题固化物实施方案](./开发/spec/layout-entity-per-version-isolation.md)，业务改造待实施。本文保留三态产品行为，版本/路径段按目标契约更新；当前旧 r/d 代码不作为继续开发的接口。
+
 ## 一句话对照
 
-| 状态 | 称呼 | **身份权威**（theme / scope / status / version / target…） | 典型入口 |
+| 状态 | 称呼 | **身份权威**（theme / scope / mode / V / R / target…） | 典型入口 |
 |------|------|--------------------------------------------------------------|----------|
 | 1 | **可视化编辑预览** | **请求参数为主**（query + typed `editor_context`） | 编辑器 iframe → **真实店面 path** + `editor_mode=1` / `shell=theme-editor` / `editor_context` |
 | 2 | **版本真实预览** | **预览 Token 反解析参数为准**（token 不可被 URL 改写主题身份） | `#btnFrontendPreview` / `start-preview` → 真实店面 URL + `weline_preview_token` |
-| 3 | **正式（正常店面）** | **RequestContext / 路径 / Scope 解析为准** | 访客普通 URL；读 `published_release_id` → `r{id}` |
+| 3 | **正式（正常店面）** | **RequestContext / 路径 / Scope 解析为准** | 访客普通 URL；读 selection → ThemeScopeVersion 的正式修订 |
 
 三种状态**业务渲染链路必须同构**；差别只在「这次请求的主题身份从哪来」。
 
@@ -29,9 +31,9 @@
 以**当前请求参数**为准，优先级与装配见 `PreviewContextService` + 编辑器壳：
 
 - URL path：店面公开路径（点击导航，或布局 path 本身；首页为 `/`）
-- URL query：`theme_id` / `frontend_theme_id` / `editor_area` / `preview_area` / `layout_option` / `status` / `version_id` / `scope` / `interaction_mode` / `editor_mode` / `shell=theme-editor` 等
-- typed **`editor_context`**（JSON）：与 query 对齐的编辑会话身份；保存/删部件必须带同一套上下文
-- 版本面板在画布内切换历史版：仍走参数（如 `status` + `version_id`），**不是**店面 Token 路径
+- URL query：`theme_id` / `frontend_theme_id` / `editor_area` / `preview_area` / `layout_option` / `mode` / `theme_version_id` / `content_revision` / `scope` / `interaction_mode` / `editor_mode` / `shell=theme-editor` 等
+- typed **`editor_context`**（JSON）：由服务端校验权限与 owner/版本归属的编辑会话身份；query 必须与其一致，保存/删部件必须带同一套上下文
+- 版本面板在画布内切换历史版：仍走参数（明确 `mode` + `theme_version_id` + `content_revision`），**不是**店面 Token 路径
 
 ### 正确用法
 
@@ -60,7 +62,7 @@
 
 ### 权威来源
 
-1. `start-preview`（或等价启动 API）把当时选定的 theme / scope / status / version / target 等**写入 Token 载荷**
+1. `start-preview`（或等价启动 API）把当时选定的 theme / scope / mode / V / R / target 等**写入 Token 载荷**
 2. 后续店面请求：`PreviewContextService` **反解析 Token** 得到上下文
 3. 代码约定（严重）：**有效 Token 是 Theme/Scope/Store/target 身份的不可变服务端权威**；URL 上的 theme/scope 等**不能覆盖** Token  
    - 例外：显式 `locale` 覆盖仅影响文案/chrome，不写用户语言 Cookie，也不改 Token 里的主题身份
@@ -75,7 +77,7 @@
 - 验收/排错：先看 Token 反解出的字段，再看页面；**不要**用当前 URL query 覆盖结论
 - 换主题 / 换版本 / 换 Scope：必须**重新 start-preview** 发新 Token，禁止手改 URL 参数指望生效
 - 退出：清客户端 Token + gateway `exit` 路径；失效 Token 不得回种
-- 实现锚点（店面侧）：有效 Token 时安装 `LayoutIdentity`，并走 draft `processSlots`，禁止误入正式实体硬切
+- 目标读取：有效 Token 安装完整 owner/V/mode/R；draft 读修订头 B 对应的 `tvB/draft`，指定历史 H 读 `tvH/formal`，不能把所有 Token 都当 draft。Token 固定 R，D 后续保存/封存不改变旧 Token 展示；切换目标需重新签发。
 
 ### Cookie / bootstrap 边界（短）
 
@@ -109,7 +111,7 @@
 
 - **RequestContext**（website / store / 语言等）+ 路由 / 页型
 - `ThemeContextService` 等按 Scope 解析激活主题（热缓存 / path 身份）
-- 布局实体：`published_release_id` → 磁盘 **`r{releaseId}`**；**禁止** s* / 旧 r* scandir 回退
+- 布局实体：按完整 owner 沿 Scope 链一次选择有效源范围与已发布 P，再读 P 的资源快照及 `tvP/formal`；page/chrome/assets 同一版本修订。release 是内部数据引用，旧 r/d/s 路径退出。
 
 无有效预览 Token、非编辑器画布请求时，**一律**走本态；不得偷偷读 draft 工作区。
 
@@ -117,7 +119,7 @@
 
 - 发布验收：清预览 Token / 退出预览后，用正式 Host 打开目标页
 - 主题身份以上下文解析结果为准；不要把编辑器 query 或过期 Token 残渣当成正式身份
-- 缺 `r{id}`：fail-closed（不显示陈旧 draft bake），而不是回退挑目录
+- 缺派生文件：在已选 P 内从当前源模板和版本用户意图定点重建；数据引用缺失另行报告，不读草稿、另一版本或目录扫描结果，也不能自动发布 D。
 
 ---
 
@@ -135,7 +137,7 @@
 ```
 有有效预览 Token？     → 信 Token 反解析（态 2）
 否则 editor_mode=1 / shell=theme-editor + editor_context？ → 信参数（态 1，店面 path）
-否则                   → 信 RequestContext / Scope / published r{id}（态 3）
+否则                   → 信 RequestContext / Scope / selection 选出的 P/formal（态 3）
 ```
 
 ---
@@ -154,9 +156,11 @@
 | 前台 layout 编译/取槽 | `renderFrontendLayoutTemplateHtml` → 真实 `layouts/{type}/{option}.phtml`（不再走 content 桩） |
 | 后台主题预览 | 真实后台首页 `weline_dashboard/backend/dashboard`（不再走 `layout-preview` 壳） |
 | Policy 包装 | 真实 `theme/frontend/layouts/{type}/{option}.phtml`（不再走 content 桩） |
-| 发布实体路径 | `ThemeLayoutEntitySlotFiller`（仅 `r{published_release_id}`） |
+| 发布实体路径 | `ThemeLayoutEntitySlotFiller` + 目标版本解析器（同 owner/V/mode/R） |
 
 ## 修订记录
+
+- 2026-09-25：按待实施的主题版本方案统一 owner/V/mode/R；去除 page release 路径权威，历史 Token 可读 formal，缺文件只在已选版本重建。
 
 - 2026-09-21：态 2 bootstrap 禁止仅 sessionStorage 回种 Cookie；退出须清 `weline_live_preview_token`。
 - 2026-09-20：态 1 站内 URL 经 `url_generate_rewrite` 自动携带 `theme_id`；禁止 Session 冒充态 1 隔离。

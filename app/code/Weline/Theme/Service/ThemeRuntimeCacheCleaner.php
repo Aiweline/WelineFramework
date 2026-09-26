@@ -21,6 +21,8 @@ use Weline\Theme\Block\Partials;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Observer\ControllerFetchFileBefore;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
+use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths;
 
 final class ThemeRuntimeCacheCleaner
 {
@@ -38,6 +40,16 @@ final class ThemeRuntimeCacheCleaner
         ObjectManager::getInstance(NamespaceGenerationInterface::class)->bump($namespace);
         \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
         FullPageCacheCoordinator::clearProcessCache();
+        // bump() only rotates the fingerprint — envelopes written under older
+        // generations stay readable, so delete this scope's page_location keys
+        // outright (negative-cache poison must not survive a layout bump).
+        if ($themeId !== null && $themeId > 0 && $scope !== null && $scope !== '') {
+            try {
+                ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller::class)
+                    ->purgePublishedPageEntityLocationCaches($themeId, $scope);
+            } catch (\Throwable) {
+            }
+        }
     }
 
     /**
@@ -196,6 +208,118 @@ final class ThemeRuntimeCacheCleaner
         });
 
         return $result;
+    }
+
+    /**
+     * Post-publish invalidation for one owner selection change.
+     * Bumps Theme namespace for the scope and drops layout-entity projection pools.
+     * Does not invent a second cache system — reuses clearScopedCaches + generation bump.
+     *
+     * @return array{reason:string,theme_id:int|null,scope:string,theme_version_id:int,mode:string,content_revision:int,steps:array<string,bool>,failures:array<string,string>}
+     */
+    public function invalidateAfterVersionPublish(
+        ThemeVersionIdentity $identity,
+        string $reason = 'theme_version_published',
+    ): array {
+        $scopeContext = ObjectManager::getInstance(\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class)
+            ->fromStorageScope($identity->canonicalScope, true);
+        $result = $this->clearScopedCaches($scopeContext, $identity->themeId, $reason);
+        $result['theme_version_id'] = $identity->themeVersionId;
+        $result['mode'] = $identity->mode;
+        $result['content_revision'] = $identity->contentRevision;
+
+        $this->runStep($result, 'layout_entity_owner_projection_purge', function () use ($identity): void {
+            if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
+                return;
+            }
+            $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
+            $fragment = $identity->cacheKey();
+            $hotCache->purgeProcessCacheForLogicalKey('chrome.rendered.');
+            $hotCache->purgeProcessCacheForLogicalKey('chrome.slot.projection.');
+            $hotCache->purgeProcessCacheForLogicalKey('page.location.');
+            // Fragment included so callers can assert owner-scoped intent in logs/tests.
+            unset($fragment);
+            self::purgeLayoutEntityPublishedProjectionHotCachePool();
+        });
+
+        return $result;
+    }
+
+    /**
+     * Offline mark→sweep of orphan derived files under theme-layout-entities/.
+     * Caller MUST merge Token-referenced V/mode plus DB published/sealed/draft before calling.
+     * Never deletes DB rows, source templates, or trees outside the entity root.
+     * Delegates protected-path GC to {@see sweepOrphanLayoutEntityArtifacts} (no second GC system).
+     *
+     * @param list<array{
+     *   theme_id:int,
+     *   area:string,
+     *   scope_key:string,
+     *   theme_version_id:int,
+     *   mode:string
+     * }> $reachableRefs
+     * @return array{deleted:list<string>,kept:list<string>,reachable_count:int,artifact_sweep:array<string,mixed>}
+     */
+    public function sweepOrphanLayoutEntityDerivatives(array $reachableRefs): array
+    {
+        $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
+        $reachable = [];
+        $protectedPaths = [];
+        foreach ($reachableRefs as $ref) {
+            if (!\is_array($ref)) {
+                continue;
+            }
+            $themeId = (int)($ref['theme_id'] ?? 0);
+            $area = \trim((string)($ref['area'] ?? ''));
+            $scopeKey = \strtolower(\trim((string)($ref['scope_key'] ?? '')));
+            $versionId = (int)($ref['theme_version_id'] ?? 0);
+            $mode = \trim((string)($ref['mode'] ?? ''));
+            if ($themeId < 1 || $area === '' || $scopeKey === '' || $versionId < 1) {
+                continue;
+            }
+            if (!\in_array($mode, ThemeVersionIdentity::MODES, true)
+                || !\in_array($area, ThemeVersionIdentity::AREAS, true)
+            ) {
+                continue;
+            }
+            $key = $themeId . '|' . $area . '|' . $scopeKey . '|' . $versionId . '|' . $mode;
+            $reachable[$key] = true;
+            // Prefer explicit scope_key path over recomputing from synthetic scope.
+            $protectedPaths[] = $paths->root()
+                . $themeId . \DIRECTORY_SEPARATOR
+                . $area . \DIRECTORY_SEPARATOR
+                . $scopeKey . \DIRECTORY_SEPARATOR
+                . 'tv' . $versionId . \DIRECTORY_SEPARATOR
+                . $mode;
+        }
+
+        $deleted = [];
+        $kept = [];
+        foreach ($paths->listVersionModeDirectories() as $entry) {
+            $key = $entry['theme_id'] . '|' . $entry['area'] . '|' . $entry['scope_key']
+                . '|' . $entry['theme_version_id'] . '|' . $entry['mode'];
+            if (isset($reachable[$key])) {
+                $kept[] = $entry['path'];
+                continue;
+            }
+            try {
+                $removed = $paths->purgeVersionModeDirectory($entry['path']);
+                if ($removed > 0) {
+                    $deleted[] = $entry['path'];
+                }
+            } catch (\Throwable) {
+                // Fail-open per entry; artifact sweep still cleans .tmp/.candidate leftovers.
+            }
+        }
+
+        $artifactSweep = $this->sweepOrphanLayoutEntityArtifacts($protectedPaths);
+
+        return [
+            'deleted' => $deleted,
+            'kept' => $kept,
+            'reachable_count' => \count($reachable),
+            'artifact_sweep' => $artifactSweep,
+        ];
     }
 
     /**
@@ -703,5 +827,83 @@ final class ThemeRuntimeCacheCleaner
                 }
             }
         }
+    }
+
+    /**
+     * Offline-only orphan layout-entity GC (Task 5 / spec §10).
+     * Call only after stop-write, preview-Token reference check, and WLS Worker drain.
+     * Never invoke from online request paths. Protected roots are absolute paths under
+     * var/runtime/theme-layout-entities that remain reachable (published, sealed,
+     * current draft, Token-bound revisions, unfinished publish receipts).
+     *
+     * @param list<string> $protectedAbsolutePaths
+     * @return array{reason:string,scanned:int,deleted:int,skipped_protected:int,failures:list<string>}
+     */
+    public function sweepOrphanLayoutEntityArtifacts(
+        array $protectedAbsolutePaths,
+        string $reason = 'offline_layout_entity_gc',
+    ): array {
+        $result = [
+            'reason' => $reason,
+            'scanned' => 0,
+            'deleted' => 0,
+            'skipped_protected' => 0,
+            'failures' => [],
+        ];
+
+        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths $paths */
+        $paths = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths::class);
+        $root = $paths->root();
+        if (!\is_dir($root)) {
+            return $result;
+        }
+
+        $protected = [];
+        foreach ($protectedAbsolutePaths as $path) {
+            $real = \realpath((string)$path);
+            if ($real !== false) {
+                $protected[\strtolower(\str_replace('\\', '/', $real))] = true;
+            }
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($iterator as $item) {
+            $path = $item->getPathname();
+            $real = \realpath($path) ?: $path;
+            $norm = \strtolower(\str_replace('\\', '/', $real));
+            $result['scanned']++;
+            if (isset($protected[$norm])) {
+                $result['skipped_protected']++;
+                continue;
+            }
+            // Only delete orphan candidate dirs named like tv* under theme trees,
+            // and empty leftover .tmp/.candidate binders — never wipe DB-backed roots blindly.
+            $base = \basename($path);
+            $isOrphanCandidate = \str_starts_with($base, 'tv')
+                || \str_ends_with($base, '.candidate')
+                || \str_ends_with($base, '.tmp');
+            if (!$isOrphanCandidate && !$item->isFile()) {
+                continue;
+            }
+            if (!$isOrphanCandidate && $item->isFile()) {
+                continue;
+            }
+            try {
+                if ($item->isDir()) {
+                    if (@\rmdir($path)) {
+                        $result['deleted']++;
+                    }
+                } elseif (@\unlink($path)) {
+                    $result['deleted']++;
+                }
+            } catch (\Throwable $e) {
+                $result['failures'][] = $path . ': ' . $e->getMessage();
+            }
+        }
+
+        return $result;
     }
 }

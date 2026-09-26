@@ -977,7 +977,9 @@ class SlotRendererService
             $slotTree = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder::class);
             $slots = [];
             foreach ($bindings as $binding) {
-                if (!$binding instanceof \Weline\Theme\Service\LayoutEntity\EntityRenderBinding || $binding->themeId !== $themeId) {
+                if (!$binding instanceof \Weline\Theme\Service\LayoutEntity\EntityRenderBinding
+                    || $binding->identity->themeId !== $themeId
+                ) {
                     continue;
                 }
                 $nodes = $configStore->readBoundConfig($binding);

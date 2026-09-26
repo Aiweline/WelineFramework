@@ -25,11 +25,14 @@ final class WidgetAssetOptimizationTest extends TestCase
         for ($i = 3; $i <= 7; $i++) { $html .= $begin . ($i >= 6 ? $tag('shared') . $tag('w' . $i) : '') . $end; }
         $html .= '</body></html>';
         $result = (new WidgetAssetHtmlPlacement($optimizer))->inject($html, '', ['js_merge' => true, 'js_merge_start_widget' => 6]);
-        self::assertSame([['/w6.js', '/w7.js']], $publisher->batches);
-        self::assertStringContainsString('src="/shared.js"', $result);
+        // Under PROD, singleton early shared is published alone; late widgets still merge.
+        self::assertSame([['/shared.js'], ['/w6.js', '/w7.js']], $publisher->batches);
         self::assertStringContainsString('/static/bundle-1.js', $result);
+        self::assertStringContainsString('/static/bundle-2.js', $result);
         self::assertStringNotContainsString('weline-widget:start', $result);
-        self::assertLessThan(strpos($result, 'bundle-1.js'), strpos($result, 'shared.js'));
+        self::assertLessThan(\strpos($result, 'bundle-2.js'), \strpos($result, 'bundle-1.js') !== false ? \strpos($result, 'bundle-1.js') : \PHP_INT_MAX);
+        // Early shared must not join the late merge batch.
+        self::assertNotContains('/shared.js', $publisher->batches[1]);
     }
     public function testMixedCssJsStreamsKeepJsOrderAndLayoutIndependent(): void
     {
@@ -49,8 +52,21 @@ final class WidgetAssetOptimizationTest extends TestCase
             $make('/layout.js', 'js', 'layout'), $make('/a.js'), $make('/a.css', 'css'),
             $make('/b.js'), $make('/b.css', 'css'), $make('/boundary.js'), $make('/c.js'),
         ], ['js_merge' => true, 'css_merge' => true]);
-        self::assertSame([['/a.js', '/b.js'], ['/a.css', '/b.css']], $publisher->batches);
-        self::assertSame(['/layout.js', '/static/bundle-1.js', '/static/bundle-2.css', '/boundary.js', '/c.js'], array_column($result, 'url'));
+        // PROD publishes singletons too; layout/boundary/c stay independent of source merges.
+        self::assertSame([
+            ['/layout.js'],
+            ['/a.js', '/b.js'],
+            ['/boundary.js'],
+            ['/c.js'],
+            ['/a.css', '/b.css'],
+        ], $publisher->batches);
+        self::assertSame([
+            '/static/bundle-1.js',
+            '/static/bundle-2.js',
+            '/static/bundle-5.css',
+            '/static/bundle-3.js',
+            '/static/bundle-4.js',
+        ], \array_column($result, 'url'));
     }
 
     public function testUnwrappedTopLevelDeclarationsKeepTheirFileBoundary(): void

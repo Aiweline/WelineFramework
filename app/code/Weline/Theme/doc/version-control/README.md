@@ -1,152 +1,47 @@
-# 主题编辑器版本控制系统
+# 主题版本、草稿与发布
 
-## 概述
+> 目标契约，2026-09-25 更新；业务实现待开展。完整设计及改删清单见[主题固化物实施方案](../开发/spec/layout-entity-per-version-isolation.md)。旧 `ThemeLayoutVersion` 页面级版本模型已退出目标方案，当前代码仍需按实施任务替换。
 
-主题编辑器版本控制系统为布局编辑提供完整的版本管理功能，包括：
+## 一个版本表示什么
 
-- **版本保存**：将当前工作区保存为新版本，支持自定义版本名称
-- **版本切换**：在历史版本间自由切换，继续编辑任意版本
-- **恢复原始布局**：一键恢复到主题模板的原始状态（自动创建备份）
-- **版本发布**：将指定版本发布到前台
+主题版本采用 `ThemeScopeVersion`，owner 为 `(theme_id, canonical_scope, store_mode, area)`。版本包含页面、Meta、外观、语言资源及公共 chrome 的完整逻辑来源；源模板和注入账本更新后，用该版本的用户意图重建关系模板，不承诺当年的 HTML 字节回放。
 
-### 看版本时走哪条预览？
+主题绑定 `theme_binding` 在版本外，先决定使用哪个主题，再确定主题的已发布版本。page release/revision 是内部内容引用，不再作为后台主题版本号或磁盘入口。
 
-| 场景 | 状态 | 权威 |
-|------|------|------|
-| 编辑器画布 / 版本面板内预览 | 可视化编辑预览 | **参数**（`status` / `version_id` / `editor_context`） |
-| 「真实前端预览」打开店面 | **版本真实预览** | **Token 反解析**（须重新 `start-preview`） |
-| 发布后访客页 | 正式 | **RequestContext** + `r{published_release_id}` |
+## 草稿、命名版本与当前发布
 
-权威全文：[`../preview-and-runtime-modes.md`](../preview-and-runtime-modes.md)。技能：`weline-theme-development`。
+| 对象 | 行为 |
+|---|---|
+| 当前正式 P | selection 唯一选中的 sealed 版本，普通访客读取 |
+| 草稿 D/R | D 是持久版本身份，R 是不可变的保存修订；基线 B 存于 R 头，文件派生在 `tvB/draft` |
+| 命名版本 N | D 封存后 N=D，产生新的 sealed 修订，文件位于 `tvN/formal`；可以保存而不发布 |
+| 历史 H | 只读预览其用户状态；继续编辑时明确从 H 创建 D，不原位修改 H |
 
-## 核心概念
+每个 owner 同时只有一个当前草稿；旧草稿修订仍可供尚未过期的 Token 读取。保存/发布失败不丢草稿。缺派生文件从持久修订定点重建，不自动切其它版本。
 
-### 工作区 vs 版本快照
+## 常用操作
 
-| 概念 | 说明 | 存储位置 |
-|-----|------|---------|
-| 工作区（Draft） | 当前正在编辑的实时数据 | `m_theme_layout` 表（status=draft） |
-| 版本快照 | 某一时刻的完整布局备份 | `m_theme_layout_version` 表 |
+1. **继续编辑当前版本**：由 P 创建 D，保留用户配置与人工卸载意图；日常保存只产生新 R，不反复询问继承。
+2. **保存命名版本**：将 D 封存为 N；P 保持不变。继续编辑再创建 D'。
+3. **从历史版本继承**：明确选择同 owner 的 H，复制其用户意图为新 D；已有草稿先自动备份，不覆盖修改。满足输入一致性时才可在目标目录硬链不可变文件；源和目标仍有各自路径与 binding。
+4. **只发布当前页面**：默认只包含该 layout 及其页面 Meta/i18n；公共 chrome/外观/主题绑定须明确选中。未选资源保留准备时 P 的状态，未选草稿修改留在 D'。
+5. **发布整个主题版本**：封存并发布 D 的全部资源，或选择已有 sealed H 上线；文件先准备完整，再事务切换 selection。
+6. **恢复原始布局**：先封存当前编辑状态为不上线的自动备份，再在新草稿中清除指定资源的用户覆盖与卸载决定，恢复当前主题包默认值；不修改 P。
 
-### 版本类型
+人工卸载随上述内容继承生成目标版本自己的结构化决定；运行仅检查目标决定，来源版本只作审计。这样续编/发布其它页不会复活用户删除的部件。恢复默认或重新安装才撤销决定。
 
-| 类型 | 代码 | 说明 |
-|-----|------|-----|
-| 手动保存 | `manual` | 用户主动保存的版本 |
-| 自动备份 | `auto_backup` | 恢复原始布局前自动创建 |
-| 恢复原始 | `restore` | 恢复操作后的空布局版本 |
-| 发布快照 | `publish` | 发布时自动创建（可选） |
+## 预览与 Scope
 
-## 架构设计
+| 场景 | 身份来源 | 目标 |
+|---|---|---|
+| 编辑器画布 | 已校验参数与 typed context | D/R draft 或 H formal，真实路由，不签店面 Token |
+| 真实前端预览 | Token 固定 owner/V/mode/R | 指定修订，不能被 URL 改写 |
+| 访客正常请求 | RequestContext + 已发布主题绑定 + selection | P/formal，page/chrome/assets 同源 |
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      前端 UI (theme-editor.js)              │
-├─────────────────────────────────────────────────────────────┤
-│  版本选择面板  │  保存按钮  │  恢复按钮  │  发布按钮       │
-└───────┬─────────────┬───────────┬───────────┬───────────────┘
-        │             │           │           │
-        ▼             ▼           ▼           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 ThemeEditor 控制器 (API 层)                 │
-├─────────────────────────────────────────────────────────────┤
-│ getVersions │ postSaveVersion │ postRestoreOriginal │ ...   │
-└───────┬─────────────┬───────────┬───────────┬───────────────┘
-        │             │           │           │
-        ▼             ▼           ▼           ▼
-┌─────────────────────────────────────────────────────────────┐
-│              ThemeLayoutVersionService (业务逻辑)           │
-├─────────────────────────────────────────────────────────────┤
-│ saveVersion │ switchToVersion │ restoreOriginal │ publish   │
-└───────┬─────────────┬───────────────────────────────────────┘
-        │             │
-        ▼             ▼
-┌─────────────────────┐  ┌────────────────────────────────────┐
-│ ThemeLayoutVersion  │  │ ThemeLayout（工作区）               │
-│ （版本快照表）       │  │ ThemeLayoutService                 │
-└─────────────────────┘  └────────────────────────────────────┘
-```
+三态详见[预览与运行态](../preview-and-runtime-modes.md)。Scope 保留逐值继承；父发布使无冲突后代形成新的完整版本，冲突后代继续使用最后有效整套版本。历史 H 不追随后来父版本变化。
 
-## 数据模型
+## 旧数据与接口
 
-### 版本表结构 (`m_theme_layout_version`)
+删除旧页面版本 API、节点相似度猜历史版本、`current.json`、tv 外 r/d/s 读取和 v2 兼容迁移命令。一次性转换能证明的当前状态与历史；不能证明完整关联的旧历史只归档，不能伪造预览。原始 DB 内容和源码不随缓存清理删除。
 
-| 字段 | 类型 | 说明 |
-|-----|------|-----|
-| `version_id` | INT UNSIGNED PK | 自增主键 |
-| `theme_id` | INT UNSIGNED | 主题ID |
-| `page_type` | VARCHAR(50) | 页面/布局类型 |
-| `version_number` | INT UNSIGNED | 版本号 (1, 2, 3...) |
-| `version_name` | VARCHAR(100) | 版本名称（可自定义） |
-| `version_type` | VARCHAR(20) | 类型：manual/auto_backup/restore/publish |
-| `snapshot_data` | LONGTEXT | JSON 快照数据 |
-| `parent_version_id` | INT UNSIGNED NULL | 父版本ID |
-| `is_current` | TINYINT(1) | 是否为当前编辑版本 |
-| `is_published` | TINYINT(1) | 是否为已发布版本 |
-| `created_at` | DATETIME | 创建时间 |
-| `created_by` | INT UNSIGNED NULL | 创建者用户ID |
-| `description` | TEXT NULL | 版本描述 |
-
-### 快照数据格式
-
-```json
-{
-    "header": {
-        "label": "头部区域",
-        "widgets": [
-            {
-                "widget_code": "logo",
-                "widget_module": "Weline_Theme",
-                "widget_type": "header",
-                "slot_id": "logo",
-                "config": { "image": "/logo.png" },
-                "sort_order": 0
-            }
-        ]
-    },
-    "content": { ... },
-    "footer": { ... }
-}
-```
-
-## 使用指南
-
-### 保存版本
-
-1. 在主题编辑器中进行布局修改
-2. 点击工具栏的「保存版本」按钮
-3. 输入版本名称（可选）
-4. 系统自动创建版本快照
-
-### 切换版本
-
-1. 点击版本选择器展开版本面板
-2. 选择要切换的历史版本
-3. 点击「切换」按钮
-4. 工作区将恢复到该版本的状态
-
-### 恢复原始布局
-
-1. 点击「恢复原始布局」按钮
-2. 确认操作（系统会自动备份当前状态）
-3. 工作区清空，恢复到主题模板原始状态
-4. 可随时通过版本面板切换回备份版本
-
-### 发布版本
-
-1. 确认当前工作区是期望发布的状态
-2. 点击「发布」按钮
-3. 系统将 draft 复制到 published
-4. 前台将显示新发布的布局
-
-## API 参考
-
-详见 [API 文档](./api-reference.md)
-
-## 相关文件
-
-- `Model/ThemeLayoutVersion.php` - 版本数据模型
-- `Service/ThemeLayoutVersionService.php` - 版本管理服务
-- `Controller/Backend/ThemeEditor.php` - 控制器 API
-- `view/statics/js/theme-editor.js` - 前端交互逻辑
-- `view/templates/backend/ThemeEditor/index.phtml` - 主编辑器模板（包含版本面板 UI）
+新操作与请求字段见[版本 API 契约](./api-reference.md)。该文档描述待实现接口，不能按旧 `/backend/theme-editor/*` 路径直接试运行。

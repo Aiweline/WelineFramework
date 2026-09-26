@@ -6,11 +6,13 @@ namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Service\SlotBoundaryMarkers;
 
 /**
- * Bake chrome/page entity phtml + config sidecars. Structure changes only.
+ * Bake chrome/page entity phtml + config sidecars into a typed ThemeVersionIdentity tree.
+ * Structure writes only create missing PHTML; config-only changes go through BindingStore.
  */
 final class ThemeLayoutEntityMaterializer
 {
@@ -22,16 +24,14 @@ final class ThemeLayoutEntityMaterializer
     }
 
     /**
-     * Materialize chrome.phtml + chrome-config.json for a theme scope version.
+     * Materialize chrome.phtml + binding for a theme scope version.
      *
      * @return string Absolute chrome.phtml path
      */
     public function materializeChrome(ThemeScopeVersion $version): string
     {
-        $themeId = $version->getThemeId();
-        $scope = $version->getScope();
-        $versionId = $version->getVersionId();
-        if ($themeId < 1 || $scope === '' || $versionId < 1) {
+        $identity = $version->toVersionIdentity();
+        if ($identity->themeVersionId < 1) {
             throw new \InvalidArgumentException('Invalid ThemeScopeVersion for chrome materialize.');
         }
 
@@ -41,18 +41,24 @@ final class ThemeLayoutEntityMaterializer
         $configByUid = $this->extractConfigByUid($nodes);
 
         $document = $this->structureDocument($bySlot);
-        $structureKey = 's' . hash('sha256', json_encode($document, JSON_THROW_ON_ERROR));
-        $dir = $this->paths->chromeStructureDir($themeId, $scope, $structureKey);
-        $path = $dir . 'chrome.phtml';
-        if (!is_file($path)) {
+        $structureKey = \hash('sha256', \json_encode($document, \JSON_THROW_ON_ERROR));
+        $path = $this->paths->chromePhtml($identity, $structureKey);
+        if (!\is_file($path)) {
             $this->writePhtml($path, $this->buildSlotPhtml($bySlot, 'chrome'));
             $this->opcacheCompile($path);
         }
-        $this->writeStructureJson($dir . 'structure.json', $bySlot);
+        $this->writeStructureJson(
+            $this->paths->chromeStructureDir($identity, $structureKey) . 'structure.json',
+            $bySlot,
+        );
         $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
-        $this->bindingStore()->publishChromeBinding($themeId, $scope, $versionId, $structureKey,
-            $configByUid, $collector->collectFromNodes($collector->withChromeRegistryBaseline($nodes), true));
-        // 快照以配置/结构摘要隔离；保留旧快照供正在运行的请求使用。
+        $this->bindingStore()->publishChromeBinding(
+            $identity,
+            $structureKey,
+            $configByUid,
+            $collector->collectFromNodes($collector->withChromeRegistryBaseline($nodes), true),
+        );
+
         return $path;
     }
 
@@ -62,43 +68,49 @@ final class ThemeLayoutEntityMaterializer
      */
     public function bustChromeRenderedSnapshots(ThemeScopeVersion $version): void
     {
-        $themeId = $version->getThemeId();
-        $scope = $version->getScope();
-        $versionId = $version->getVersionId();
-        if ($themeId < 1 || $scope === '' || $versionId < 1) {
+        $identity = $version->toVersionIdentity();
+        if ($identity->themeVersionId < 1) {
             return;
         }
-        foreach ($this->paths->chromeRenderedHtmlSnapshots($themeId, $scope, $versionId) as $rendered) {
-            @\unlink($rendered);
+        $renderedRoot = $this->paths->chromeRoot($identity) . 'rendered' . \DIRECTORY_SEPARATOR;
+        if (!\is_dir($renderedRoot)) {
+            return;
+        }
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($renderedRoot, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($iterator as $item) {
+            $path = $item->getPathname();
+            if ($item->isDir()) {
+                @\rmdir($path);
+            } else {
+                @\unlink($path);
+            }
         }
     }
 
     /**
-     * Materialize page layout.phtml + page-config.json for content nodes only.
+     * Materialize page layout.phtml + shell + binding for content nodes only.
      *
      * @param array<string|int, mixed> $contentNodes
      * @param array<string, mixed> $pageConfigByUid
      * @return string Absolute layout.phtml path
      */
     public function materializePage(
-        int $themeId,
-        string $scope,
-        string $identityKey,
+        ThemeVersionIdentity $identity,
+        string $layoutIdentityHash,
         string $structureKey,
         array $contentNodes,
         array $pageConfigByUid,
-        bool $published,
-        ?int $releaseId,
         string $pageType = '',
-        int $draftRevisionId = 0,
     ): string {
-        if ($themeId < 1 || \trim($scope) === '' || \trim($identityKey) === '') {
+        if ($identity->themeVersionId < 1 || \trim($layoutIdentityHash) === '') {
             throw new \InvalidArgumentException('Invalid page materialize identity.');
         }
 
         $nodes = $this->slotTree->filterContentNodes($contentNodes);
         $layout = $this->slotTree->nodesToAreaLayout($nodes);
-        // Bake-time only: former request-path normalizers (product layout + footer container).
         $layout = \Weline\Framework\Manager\ObjectManager::getInstance(
             \Weline\Theme\Service\ProductPageLayoutNormalizer::class,
         )->normalizeLayoutForRender($pageType, $layout);
@@ -108,41 +120,50 @@ final class ThemeLayoutEntityMaterializer
             ? $pageConfigByUid
             : $this->extractConfigByUid($nodes);
 
-        // 输入 structureKey 是上游结构/源布局指纹，最终槽树必须同时参与摘要。
-        $structureKey = 's' . hash('sha256', json_encode([
+        // Source structureKey + final slot tree participate in the digest.
+        $structureKey = \hash('sha256', \json_encode([
             'source' => $structureKey,
             'structure' => $this->structureDocument($bySlot, $pageType),
-        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-        $entityKey = $published && $releaseId !== null && $releaseId > 0
-            ? 'r' . $releaseId : 'd' . $draftRevisionId;
-        $path = $this->paths->pagePhtml($themeId, $scope, $identityKey, $structureKey);
-        if (!is_file($path)) {
+            'owner' => $identity->ownerKey(),
+            'mode' => $identity->mode,
+        ], \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES));
+
+        $layoutIdentityHash = $this->paths->identityKey($layoutIdentityHash);
+        $path = $this->paths->pagePhtml($identity, $layoutIdentityHash, $structureKey);
+        if (!\is_file($path)) {
             $phtml = $this->buildSlotPhtml($bySlot, 'page');
             $this->writePhtml($path, $phtml);
             $this->opcacheCompile($path);
         }
         $this->writeStructureJson(
-            $this->paths->pageStructureJson($themeId, $scope, $identityKey, $structureKey), $bySlot, $pageType);
-        $shellPath = $this->paths->shellPhtml($themeId, $scope, $identityKey, $structureKey);
-        if (!is_file($shellPath)) {
-            $phtml = $phtml ?? (string)file_get_contents($path);
-            // 整壳仍保留公共壳渲染，模板只绑定本次请求身份，不固化发布/配置版本。
-            $pageBody = preg_replace('/^\s*<\?php\s+declare\(strict_types=1\);\s*\/\*\*.*?\*\/\s*\?>\s*/s', '', $phtml) ?? $phtml;
+            $this->paths->pageStructureJson($identity, $layoutIdentityHash, $structureKey),
+            $bySlot,
+            $pageType,
+        );
+        $shellPath = $this->paths->shellPhtml($identity, $layoutIdentityHash, $structureKey);
+        if (!\is_file($shellPath)) {
+            $phtml = $phtml ?? (string)\file_get_contents($path);
+            $pageBody = \preg_replace('/^\s*<\?php\s+declare\(strict_types=1\);\s*\/\*\*.*?\*\/\s*\?>\s*/s', '', $phtml) ?? $phtml;
             $shell = "<?php\ndeclare(strict_types=1);\n"
                 . "echo \\Weline\\Framework\\Manager\\ObjectManager::getInstance("
                 . "\\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityChrome::class)"
-                . "->renderCurrent(\$entityBinding->themeId, \$entityBinding->scope);\n?>\n" . $pageBody;
+                . "->renderCurrent(\$entityBinding->identity->themeId, \$entityBinding->identity->canonicalScope,"
+                . " \$entityBinding->identity->themeVersionId);\n?>\n" . $pageBody;
             $this->writePhtml($shellPath, $shell);
         }
         $collector = ObjectManager::getInstance(ThemeLayoutEntityAssetCollector::class);
-        $this->bindingStore()->publishPageBinding($themeId, $scope, $identityKey, $entityKey, $structureKey,
-            $configByUid, $collector->collectFromNodes($nodes, true));
+        $this->bindingStore()->publishPageBinding(
+            $identity,
+            $layoutIdentityHash,
+            $structureKey,
+            $configByUid,
+            $collector->collectFromNodes($nodes, true),
+        );
+
         return $path;
     }
 
     /**
-     * Sidecar listing widgets per slot for storefront SlotFiller (no DB).
-     *
      * @param array<string, list<array<string, mixed>>> $bySlot
      */
     private function structureDocument(array $bySlot, string $pageType = ''): array
@@ -175,16 +196,18 @@ final class ThemeLayoutEntityMaterializer
             $slots[(string)$slotId] = $list;
         }
 
-        return ['page_type' => trim($pageType), 'slots' => $slots];
+        return ['page_type' => \trim($pageType), 'slots' => $slots];
     }
 
     private function writeStructureJson(string $path, array $bySlot, string $pageType = ''): void
     {
-        if (is_file($path)) {
+        if (\is_file($path)) {
             return;
         }
-        $json = json_encode($this->structureDocument($bySlot, $pageType),
-            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $json = \json_encode(
+            $this->structureDocument($bySlot, $pageType),
+            \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES,
+        );
         $this->writePhtml($path, $json . "\n");
     }
 
@@ -194,9 +217,6 @@ final class ThemeLayoutEntityMaterializer
     private function buildSlotPhtml(
         array $bySlot,
         string $configSource,
-        int $themeId = 0,
-        string $scopeKey = '',
-        string $versionKey = '',
     ): string {
         $rendererClass = ThemeLayoutEntityWidgetRenderer::class;
         $lines = [];
@@ -270,7 +290,7 @@ final class ThemeLayoutEntityMaterializer
 
     private function writePhtml(string $path, string $contents): void
     {
-        if (!is_file($path)) {
+        if (!\is_file($path)) {
             (new AtomicCompiledFilePublisher())->publish($path, $contents);
         }
     }

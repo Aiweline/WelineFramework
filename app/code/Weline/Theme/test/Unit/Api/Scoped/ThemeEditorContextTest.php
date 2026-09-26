@@ -219,4 +219,64 @@ final class ThemeEditorContextTest extends TestCase
         self::assertNotSame($themeThreeVersionTen, $themeOneVersionEleven);
         self::assertNotSame('editor_lock_' . $themeOneVersionTen, 'editor_lock_' . $themeThreeVersionTen);
     }
+
+    public function testResourceIdentityHashDoesNotEmbedThemeVersion(): void
+    {
+        $scope = new ScopeContext(
+            identity: ScopeIdentity::website(0, 'default'),
+            storageScope: 'default.default.default',
+            storeMode: ScopeIdentity::MODE_NORMAL,
+            fallbackStorageScopes: ['default.default.default'],
+        );
+        $layout = new ThemeEditorContext(
+            scope: $scope,
+            area: 'frontend',
+            resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+            themeId: 9,
+            layoutType: 'homepage',
+        );
+        $parts = $layout->identityParts();
+        self::assertNotContains('v12', $parts);
+        self::assertSame(10, \count($parts));
+        // ThemeVersionIdentity composes V/R separately; resource hash stays stable.
+        $vA = new \Weline\Theme\Api\Version\ThemeVersionIdentity(9, 'default.default.default', 'normal', 'frontend', 12, 'draft', 3);
+        $vB = $vA->withVersion(99, 'formal', 8);
+        self::assertSame($layout->identityHash(), $layout->identityHash());
+        self::assertNotSame($vA->ownerHash() . $vA->themeVersionId, $vB->ownerHash() . $vB->themeVersionId);
+        self::assertSame($vA->ownerHash(), $vB->ownerHash());
+    }
+
+    public function testAreaAndStoreModeIsolationInVersionOwner(): void
+    {
+        $frontend = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+            3,
+            'shop.default.default',
+            'normal',
+            'frontend',
+            1,
+            'formal',
+            1,
+        );
+        $backend = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+            3,
+            'shop.default.default',
+            'normal',
+            'backend',
+            1,
+            'formal',
+            1,
+        );
+        $testMode = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+            3,
+            'shop.default.default',
+            'test',
+            'frontend',
+            1,
+            'formal',
+            1,
+        );
+        self::assertNotSame($frontend->ownerHash(), $backend->ownerHash());
+        self::assertNotSame($frontend->ownerHash(), $testMode->ownerHash());
+        self::assertNotSame($frontend->scopeKey(), $testMode->scopeKey());
+    }
 }

@@ -21,17 +21,25 @@ $showPageHeader = $asBool($layoutShowPageHeader ?? ($meta['showPageHeader'] ?? t
 $showMessages = $asBool($layoutShowMessages ?? ($meta['showMessages'] ?? true), true);
 $contentHtml = $layoutContentHtml ?? (string)$this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml');
 $fallbackTitle = '';
+// Prefer explicit page/controller titles over a bare extracted $title that may still
+// hold BackendPageController's default "WelineFramework Admin".
 foreach ([
     $layoutTitle ?? null,
-    $page_title ?? $this->getData('page_title'),
-    $title ?? $this->getData('title'),
-    $meta['title'] ?? null,
+    $page_title ?? null,
+    $this->getData('page_title'),
+    $controller_title ?? null,
+    $this->getData('controller_title'),
+    is_array($meta) ? ($meta['controller_title'] ?? null) : null,
+    is_array($meta) ? ($meta['title'] ?? null) : null,
+    $this->getData('title'),
+    $title ?? null,
 ] as $titleCandidate) {
     $titleValue = trim((string)($titleCandidate ?? ''));
-    if ($titleValue !== '') {
-        $fallbackTitle = $titleValue;
-        break;
+    if ($titleValue === '' || $titleValue === 'WelineFramework Admin' || $titleValue === (string)__('WelineFramework Admin')) {
+        continue;
     }
+    $fallbackTitle = $titleValue;
+    break;
 }
 $pageHeader = \Weline\Framework\Manager\ObjectManager::getInstance(
     \Weline\Theme\Service\BackendPageHeaderResolver::class

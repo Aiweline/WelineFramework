@@ -985,6 +985,136 @@ if (document.readyState === 'loading') {
     initSystemConfigSaveLoading();
 }
 
+/**
+ * 统一配置中心：多模板同页时每条表单都有 fixed 底部保存条。
+ * 同一时刻只激活一条（焦点所在表单 / 视口内占比最大的模板），避免叠出「两个保存提示」。
+ */
+function initSystemConfigSaveDock() {
+    const root = document.querySelector('[data-w-system-config]');
+    if (!(root instanceof HTMLElement)) {
+        return;
+    }
+    if (root.dataset.wSystemConfigSaveDockBound === '1') {
+        return;
+    }
+    root.dataset.wSystemConfigSaveDockBound = '1';
+
+    function listDocks() {
+        return [...root.querySelectorAll('[data-w-system-config-save-dock="1"]')]
+            .filter((node) => node instanceof HTMLElement);
+    }
+
+    function isEffectivelyVisible(element) {
+        if (!(element instanceof HTMLElement)) {
+            return false;
+        }
+        // 判定所属模板/表单是否可见；忽略 dock 自身因未激活而产生的 display:none。
+        const scope = element.closest('.w-system-config__template')
+            || element.closest('form[data-w-system-config-save-form="1"]')
+            || element.parentElement;
+        let node = scope instanceof HTMLElement ? scope : element;
+        while (node && node !== document.documentElement) {
+            if (node instanceof HTMLElement) {
+                if (node.hidden || node.classList.contains('is-search-hidden')) {
+                    return false;
+                }
+                if (node !== element) {
+                    const style = window.getComputedStyle(node);
+                    if (style.display === 'none' || style.visibility === 'hidden') {
+                        return false;
+                    }
+                }
+            }
+            if (node === root) {
+                break;
+            }
+            node = node.parentElement;
+        }
+        return true;
+    }
+
+    function activateDock(target) {
+        listDocks().forEach((dock) => {
+            const on = dock === target;
+            dock.classList.toggle('is-active', on);
+            dock.setAttribute('aria-hidden', on ? 'false' : 'true');
+        });
+    }
+
+    function pickDock() {
+        const visible = listDocks().filter(isEffectivelyVisible);
+        if (visible.length === 0) {
+            return null;
+        }
+        if (visible.length === 1) {
+            return visible[0];
+        }
+
+        const active = document.activeElement;
+        if (active instanceof HTMLElement && root.contains(active)) {
+            const form = active.closest('form[data-w-system-config-save-form="1"]');
+            const focusedDock = form instanceof HTMLFormElement
+                ? form.querySelector('[data-w-system-config-save-dock="1"]')
+                : null;
+            if (focusedDock instanceof HTMLElement && visible.includes(focusedDock)) {
+                return focusedDock;
+            }
+        }
+
+        const viewportHeight = window.innerHeight || 1;
+        let best = visible[0];
+        let bestScore = -1;
+        visible.forEach((dock) => {
+            const template = dock.closest('.w-system-config__template');
+            const box = (template instanceof HTMLElement ? template : dock).getBoundingClientRect();
+            const top = Math.max(box.top, 0);
+            const bottom = Math.min(box.bottom, viewportHeight - 72);
+            const score = Math.max(0, bottom - top);
+            if (score > bestScore) {
+                bestScore = score;
+                best = dock;
+            }
+        });
+        return best;
+    }
+
+    let syncTimer = 0;
+    function syncSaveDocks() {
+        activateDock(pickDock());
+    }
+
+    function scheduleSync() {
+        if (syncTimer) {
+            window.clearTimeout(syncTimer);
+        }
+        syncTimer = window.setTimeout(() => {
+            syncTimer = 0;
+            syncSaveDocks();
+        }, 32);
+    }
+
+    root.addEventListener('focusin', scheduleSync);
+    root.addEventListener('pointerdown', scheduleSync);
+    window.addEventListener('scroll', scheduleSync, { passive: true });
+    window.addEventListener('resize', scheduleSync);
+    document.addEventListener('w-system-config:filter-ready', scheduleSync);
+    const observer = new MutationObserver(scheduleSync);
+    observer.observe(root, {
+        attributes: true,
+        subtree: true,
+        attributeFilter: ['hidden', 'class'],
+    });
+
+    syncSaveDocks();
+    root.setAttribute('data-save-dock-ready', '1');
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSystemConfigSaveDock, { once: true });
+} else {
+    initSystemConfigSaveDock();
+}
+
 function initSystemConfigCountryProviderMap() {
     const root = document.querySelector('[data-w-system-config]');
     if (!(root instanceof HTMLElement)) {

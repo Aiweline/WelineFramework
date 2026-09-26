@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-// 仅隔离外部目录/资源发现；真实固化器、槽树、绑定和文件发布均运行。
+/**
+ * Published binding miss must not read an unfinished draft artifact (v3 identity tree).
+ */
 namespace Weline\Framework\Runtime {
     final class RequestContext {
         private static array $values = [];
@@ -14,7 +16,8 @@ namespace Weline\Framework\Manager {
     final class ObjectManager {
         public static function getInstance(string $class): object {
             return $class === \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBindingStore::class
-                ? new $class(new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths()) : new $class();
+                ? new $class(new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths())
+                : new $class();
         }
     }
 }
@@ -45,42 +48,73 @@ namespace Weline\Theme\Service\LayoutEntity {
     final class ThemeLayoutEntityAssetCollector {
         public function collectFromNodes(array $nodes, bool $full): array { return []; }
     }
-    final class ThemeLayoutEntityWidgetRenderer {
-        public function renderBound(string $uid, string $source, EntityRenderBinding $binding): string {
-            return json_decode(file_get_contents($binding->configPath), true)[$uid]['config']['title'];
-        }
-    }
 }
 namespace {
     $theme = dirname(__DIR__, 4);
     define('BP', sys_get_temp_dir() . '/weline-materializer-' . bin2hex(random_bytes(6)));
     require $theme . '/../Framework/Compilation/AtomicCompiledFilePublisher.php';
+    require $theme . '/Api/Version/ThemeVersionIdentity.php';
     require $theme . '/Service/SharedChromeService.php';
     require $theme . '/Service/SlotBoundaryMarkers.php';
-    foreach (['ThemeLayoutEntityPaths', 'ThemeLayoutSlotTreeBuilder', 'ThemeLayoutEntityConfigStore', 'EntityRenderBinding', 'ThemeLayoutEntityBindingStore', 'ThemeLayoutEntityMaterializer', 'ThemeLayoutEntityBakeCoordinator'] as $class) {
+    foreach ([
+        'ThemeLayoutEntityPaths',
+        'ThemeLayoutSlotTreeBuilder',
+        'ThemeLayoutEntityConfigStore',
+        'EntityRenderBinding',
+        'ThemeLayoutEntityBindingStore',
+        'ThemeLayoutEntityMaterializer',
+    ] as $class) {
         require $theme . '/Service/LayoutEntity/' . $class . '.php';
     }
+
     $paths = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths();
     $shared = (new \ReflectionClass(\Weline\Theme\Service\SharedChromeService::class))->newInstanceWithoutConstructor();
     $tree = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder($shared);
-    $materializer = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityMaterializer($paths, $tree, new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore($paths));
+    $configStore = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore($paths);
+    $materializer = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityMaterializer($paths, $tree, $configStore);
     $store = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBindingStore($paths);
+
+    $layoutHash = hash('sha256', 'homepage-identity');
+    $draftIdentity = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+        901,
+        'test.default.default',
+        'normal',
+        'frontend',
+        1,
+        'draft',
+        1,
+    );
+    $formalIdentity = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+        901,
+        'test.default.default',
+        'normal',
+        'frontend',
+        2,
+        'formal',
+        1,
+    );
+
     $uid = str_repeat('a', 32);
-    $identity = str_repeat('b', 16);
-    $draftNodes = [$uid => ['node_uid' => $uid, 'area' => 'content', 'slot_id' => 'draft-only', 'widget_code' => 'test', 'config' => ['title' => 'draft']]];
-    $materializer->materializePage(901, 'test', $identity, 'source', $draftNodes, [], false, null, 'homepage', 1);
-    file_put_contents($paths->pageCurrentJson(901, 'test', $identity), json_encode(['draft' => 'd1']));
-    $publishedUid = str_repeat('c', 32);
-    $publishedNodes = [$publishedUid => ['node_uid' => $publishedUid, 'area' => 'content', 'slot_id' => 'published-only', 'widget_code' => 'test', 'config' => ['title' => 'published']]];
-    $coordinator = (new ReflectionClass(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class))->newInstanceWithoutConstructor();
-    foreach (['slotTree' => $tree, 'materializer' => $materializer, 'configStore' => new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore($paths), 'pointers' => new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPointerResolver()] as $name => $value) {
-        (new ReflectionProperty($coordinator, $name))->setValue($coordinator, $value);
-    }
-    (new ReflectionMethod($coordinator, 'updateConfigSidecarsOnly'))->invoke($coordinator, 901, 'test', $identity, $publishedNodes, true, 2, 2, 'homepage');
-    $entityBinding = $store->readPageBinding(901, 'test', $identity, 'r2');
-    ob_start(); include $entityBinding->templatePath; $html = ob_get_clean();
-    $result = ['html' => $html];
-    $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(BP, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST);
+    $draftNodes = [$uid => [
+        'node_uid' => $uid,
+        'area' => 'content',
+        'slot_id' => 'draft-only',
+        'widget_code' => 'test',
+        'config' => ['title' => 'draft'],
+    ]];
+    $materializer->materializePage($draftIdentity, $layoutHash, 'source', $draftNodes, [], 'homepage');
+
+    // Formal version has no binding yet — must not fall back to draft binding.
+    $entityBinding = $store->readPageBinding($formalIdentity, $layoutHash);
+    $result = [
+        'binding_null' => $entityBinding === null,
+        'draft_binding_exists' => $store->readPageBinding($draftIdentity, $layoutHash) !== null,
+    ];
+
+    $files = new \RecursiveIteratorIterator(
+        new \RecursiveDirectoryIterator(BP, \FilesystemIterator::SKIP_DOTS),
+        \RecursiveIteratorIterator::CHILD_FIRST,
+    );
     foreach ($files as $file) {
         $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
     }

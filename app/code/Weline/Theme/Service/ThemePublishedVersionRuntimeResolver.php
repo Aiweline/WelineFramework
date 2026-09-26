@@ -8,12 +8,12 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
-use Weline\Theme\Model\ThemeLayoutVersion;
+use Weline\Theme\Model\ThemeScopeVersion;
 
 /**
- * 解析当前主题「可视化编辑器已发布版本」（ThemeLayoutVersion），供前台 runtime / 错误监控 / 维护波次标签使用。
+ * Resolve the published ThemeScopeVersion (theme version V) for storefront runtime tags.
  *
- * 版本权威来源为 theme_layout_version.is_published（编辑器版本面板），不是 theme_scope_release reason/修订号。
+ * Authority is ThemeScopeVersion selection / is_published — not ThemeLayoutVersion page axis.
  */
 class ThemePublishedVersionRuntimeResolver
 {
@@ -22,6 +22,7 @@ class ThemePublishedVersionRuntimeResolver
      */
     public function resolve(?int $themeId = null, string $pageType = 'homepage'): array
     {
+        unset($pageType);
         $empty = [
             'themePublishedVersionId' => '',
             'themePublishedVersion' => '',
@@ -36,22 +37,24 @@ class ThemePublishedVersionRuntimeResolver
                 return $empty;
             }
 
-            /** @var ThemeLayoutVersionService $versions */
-            $versions = ObjectManager::getInstance(ThemeLayoutVersionService::class);
-            foreach ($this->identityCandidates() as $identity) {
-                $published = $versions->getPublishedVersion($themeId, $pageType, $identity);
-                if (!$published instanceof ThemeLayoutVersion || $published->getVersionId() <= 0) {
+            /** @var ThemeScopeVersionService $versions */
+            $versions = ObjectManager::getInstance(ThemeScopeVersionService::class);
+            foreach ($this->scopeCandidates() as $scope) {
+                $published = $versions->getPublished($themeId, $scope);
+                if (!$published instanceof ThemeScopeVersion || $published->getVersionId() <= 0) {
                     continue;
+                }
+
+                $name = \trim((string)($published->getVersionName() ?? ''));
+                if ($name === '') {
+                    $name = 'v' . $published->getVersionNumber();
                 }
 
                 return [
                     'themePublishedVersionId' => (string)$published->getVersionId(),
-                    'themePublishedVersion' => $published->getDisplayName(),
+                    'themePublishedVersion' => $name,
                 ];
             }
-
-            // Hard cutover: no findAnyPublishedVersion cross-identity steal.
-            // Empty when this pageType has no published version in scope candidates.
         } catch (\Throwable) {
             return $empty;
         }
@@ -60,9 +63,9 @@ class ThemePublishedVersionRuntimeResolver
     }
 
     /**
-     * @return list<array{layout_option:string,scope:string,locale_code:string,target_type:string,target_id:int}>
+     * @return list<string>
      */
-    private function identityCandidates(): array
+    private function scopeCandidates(): array
     {
         $list = [];
         $seen = [];
@@ -72,13 +75,7 @@ class ThemePublishedVersionRuntimeResolver
                 return;
             }
             $seen[$scope] = true;
-            $list[] = [
-                'layout_option' => 'default',
-                'scope' => $scope,
-                'locale_code' => '',
-                'target_type' => 'global',
-                'target_id' => 0,
-            ];
+            $list[] = $scope;
         };
 
         try {
@@ -95,7 +92,6 @@ class ThemePublishedVersionRuntimeResolver
             // CLI / early bootstrap.
         }
 
-        // 无请求 Scope（CLI / 维护固化）：对齐前台 website/store 已发布编辑器版本。
         $push('default.__store__.default');
         $push('default.__website__.default');
         $push('default.default.default');

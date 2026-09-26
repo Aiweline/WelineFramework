@@ -39,6 +39,7 @@ final class ThemePreviewContentEditorIsolationContractTest extends TestCase
         self::assertStringContainsString('function bootstrapEditorCanvasIdentity', $source);
         self::assertStringContainsString('EditorModeAssetInjector', $source);
         self::assertStringContainsString("getParam('editor_mode'", $source);
-        self::assertStringContainsString('bootstrapEditorCanvasIdentity()', $source);
+        // 画布身份安装必须真实被调用（带 template 参数），仅断言无参形式会漏掉 $this->bootstrapEditorCanvasIdentity($template) 的真实调用。
+        self::assertStringContainsString('bootstrapEditorCanvasIdentity($template)', $source);
     }
 }

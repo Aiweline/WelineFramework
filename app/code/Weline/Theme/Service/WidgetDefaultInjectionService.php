@@ -1102,6 +1102,37 @@ class WidgetDefaultInjectionService
             \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract::userDeletedSource($versionId),
             true,
         );
+        if ($versionId > 0) {
+            try {
+                /** @var \Weline\Theme\Service\Version\ThemeScopeVersionWidgetDecisionService $decisions */
+                $decisions = ObjectManager::getInstance(
+                    \Weline\Theme\Service\Version\ThemeScopeVersionWidgetDecisionService::class
+                );
+                $scopeVersions = ObjectManager::getInstance(ThemeScopeVersionService::class);
+                $scopeVersion = $scopeVersions->getCurrent($themeId, (string)($identity['scope'] ?? 'default'))
+                    ?? $scopeVersions->getPublished($themeId, (string)($identity['scope'] ?? 'default'));
+                $revision = $scopeVersion instanceof \Weline\Theme\Model\ThemeScopeVersion
+                    ? \max(1, $scopeVersion->getContentRevision())
+                    : 1;
+                $resourceHash = \hash('sha256', \implode("\0", [
+                    trim($pageType),
+                    (string)($identity['layout_option'] ?? 'default'),
+                    (string)($identity['scope'] ?? 'default'),
+                    (string)($identity['target_type'] ?? 'global'),
+                    (string)(int)($identity['target_id'] ?? 0),
+                ]));
+                $decisions->recordUninstall(
+                    $versionId,
+                    $revision,
+                    $resourceHash,
+                    (string)$item['injection_key'],
+                    $slotId,
+                    $module . '|' . $code,
+                );
+            } catch (\Throwable) {
+                // Legacy ThemeWidgetDefaultInjection row remains authoritative until migrate.
+            }
+        }
     }
 
     private function saveInjection(int $themeId, array $item, string $status, string $source = self::SOURCE_MANUAL_APPLY): string
@@ -1251,6 +1282,9 @@ class WidgetDefaultInjectionService
             return [];
         }
 
+        $list = [];
+        $seen = [];
+
         try {
             $rows = (clone $this->defaultInjectionRecord)->clearQuery()->clearData()
                 ->where(ThemeWidgetDefaultInjection::schema_fields_THEME_ID, $themeId)
@@ -1262,10 +1296,9 @@ class WidgetDefaultInjectionService
                 ->select()
                 ->fetchArray();
         } catch (\Throwable) {
-            return [];
+            $rows = [];
         }
 
-        $list = [];
         $rows = \is_array($rows) ? $rows : [];
         if ($rows !== [] && !isset($rows[0]) && isset($rows[ThemeWidgetDefaultInjection::schema_fields_ID])) {
             $rows = [$rows];
@@ -1278,41 +1311,72 @@ class WidgetDefaultInjectionService
             if ($code === '') {
                 continue;
             }
-            $list[] = [
+            $item = [
                 'slot_id' => trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_SLOT_ID] ?? '')),
                 'widget_module' => trim((string)($row[ThemeWidgetDefaultInjection::schema_fields_WIDGET_MODULE] ?? '')),
                 'widget_code' => $code,
             ];
+            $key = \strtolower($item['slot_id'] . '|' . $item['widget_module'] . '|' . $item['widget_code']);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $list[] = $item;
+        }
+
+        // Target ThemeScopeVersion widget decisions (never source-version authority).
+        try {
+            /** @var \Weline\Theme\Service\Version\ThemeScopeVersionWidgetDecisionService $decisions */
+            $decisions = ObjectManager::getInstance(
+                \Weline\Theme\Service\Version\ThemeScopeVersionWidgetDecisionService::class
+            );
+            foreach ($decisions->listUninstallOmissions($versionId) as $omission) {
+                $key = \strtolower(
+                    ($omission['slot_id'] ?? '') . '|'
+                    . ($omission['widget_module'] ?? '') . '|'
+                    . ($omission['widget_code'] ?? '')
+                );
+                if ($key === '||' || isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $list[] = [
+                    'slot_id' => (string)($omission['slot_id'] ?? ''),
+                    'widget_module' => (string)($omission['widget_module'] ?? ''),
+                    'widget_code' => (string)($omission['widget_code'] ?? ''),
+                ];
+            }
+        } catch (\Throwable) {
+            // Decision table may be absent before migrate; legacy rows still apply.
         }
 
         return $list;
     }
 
     /**
+     * Target ThemeScopeVersion id (V) for uninstall/required omission authority.
+     * Must not borrow ThemeLayoutVersion page-axis ids — page and theme version numbers diverge.
+     *
      * @param array<string,mixed> $identity
      */
     private function resolveEditingVersionId(int $themeId, string $pageType, array $identity): int
     {
-        if ($themeId <= 0 || trim($pageType) === '') {
+        unset($pageType);
+        if ($themeId <= 0) {
             return 0;
         }
 
         try {
-            /** @var ThemeLayoutVersionService $versions */
-            $versions = ObjectManager::getInstance(ThemeLayoutVersionService::class);
-            $current = $versions->getCurrentVersion($themeId, $pageType, $identity);
-            if ($current instanceof ThemeLayoutVersion && $current->getVersionId() > 0) {
-                return $current->getVersionId();
-            }
-            $published = $versions->getPublishedVersion($themeId, $pageType, $identity);
-            if ($published instanceof ThemeLayoutVersion && $published->getVersionId() > 0) {
-                return $published->getVersionId();
-            }
+            /** @var \Weline\Theme\Service\Version\ThemeScopeVersionWidgetDecisionService $decisions */
+            $decisions = ObjectManager::getInstance(
+                \Weline\Theme\Service\Version\ThemeScopeVersionWidgetDecisionService::class
+            );
+            $scope = \trim((string)($identity['scope'] ?? 'default'));
+
+            return $decisions->resolveTargetThemeVersionId($themeId, $scope !== '' ? $scope : 'default');
         } catch (\Throwable) {
             return 0;
         }
-
-        return 0;
     }
 
     /**

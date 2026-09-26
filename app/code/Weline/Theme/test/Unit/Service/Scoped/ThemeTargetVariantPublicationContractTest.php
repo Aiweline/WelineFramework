@@ -24,9 +24,13 @@ final class ThemeTargetVariantPublicationContractTest extends TestCase
         $source = (string)file_get_contents(dirname(__DIR__, 4) . '/Service/Scoped/ThemeScopedWorkspace.php');
 
         self::assertGreaterThanOrEqual(3, substr_count($source, '->projectPublished('));
+        // Idempotent path must re-project then return release_id with idempotent=true
+        // (dispatch may sit between projectPublished and the return array).
         self::assertMatchesRegularExpression(
-            "/projectPublished\\([^;]+;\\s*return \\[\\s*'release_id'.+?'idempotent' => true/s",
+            "/projectPublished\\([\\s\\S]*?'idempotent'\\s*=>\\s*true/s",
             $source,
         );
+        self::assertStringContainsString("'idempotent' => true", $source);
+        self::assertStringContainsString("'release_id' => \$currentRelease->getId()", $source);
     }
 }

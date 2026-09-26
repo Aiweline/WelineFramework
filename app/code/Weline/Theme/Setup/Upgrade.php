@@ -27,7 +27,7 @@ use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 
 class Upgrade implements UpgradeInterface
 {
-    public const VERSION = '2.2.480';
+    public const VERSION = '2.2.631';
 
     public function setup(Data\Setup $setup, Data\Context $context): void
     {
@@ -37,6 +37,7 @@ class Upgrade implements UpgradeInterface
             return;
         }
 
+        $this->healScopedWorkspaceBindingKeys();
         $this->migratePublishActiveThemeCategoryFilters();
         $this->migrateSemanticIcons();
         $this->purgeLegacyLocalSharedChrome();
@@ -50,8 +51,27 @@ class Upgrade implements UpgradeInterface
     }
 
     /**
+     * 补路径：SchemaDiff 之后再次回填 binding_identity_key，防止观察者因事件注册表未刷新而漏跑。
+     * 正常情况观察者已回填完毕，这里是幂等空转。
+     */
+    private function healScopedWorkspaceBindingKeys(): void
+    {
+        try {
+            ObjectManager::getInstance(
+                \Weline\Theme\Service\Scoped\ThemeScopeWorkspaceBindingKeyHealer::class,
+            )->heal();
+        } catch (\Throwable $e) {
+            throw new \Weline\Framework\App\Exception(
+                __('theme_scope_workspace.binding_identity_key 回填失败：%{1}', [$e->getMessage()]),
+                0,
+                $e,
+            );
+        }
+    }
+
+    /**
      * Injection-table rename is not enough: scoped drafts still block publish with
-     * "widget not registered" until node widget_code is rewritten.
+     * "widget not registered" until node widget code is rewritten.
      */
     private function migrateScopedFooterHelpCenterLinkNodes(): void
     {
