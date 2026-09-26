@@ -35,6 +35,8 @@ final class ConfigCenterSaveFormActionContractTest extends TestCase
         self::assertStringContainsString('GoogleOAuthClientJsonImporter', $src);
         self::assertStringContainsString('readUploadedGoogleOAuthClientJson', $src);
         self::assertStringContainsString('isSensitiveUnchangedPlaceholder', $src);
+        self::assertStringContainsString('validation_failed', $src);
+        self::assertStringContainsString('errors', $src);
     }
 
     public function testTemplateExposesGoogleOauthJsonFilePicker(): void
@@ -49,6 +51,8 @@ final class ConfigCenterSaveFormActionContractTest extends TestCase
         self::assertStringContainsString('import_file', $src);
         self::assertStringContainsString('form-actions--dock', $src);
         self::assertStringContainsString('data-w-system-config-save-dock="1"', $src);
+        self::assertStringContainsString('is-active', $src);
+        self::assertStringContainsString('wsc_save_dock_activated', $src);
         self::assertStringContainsString('data-w-system-config-reauth="1"', $src);
         self::assertStringContainsString('data-w-system-config-reauth-panel="1"', $src);
         self::assertStringContainsString('data-w-system-config-sensitive="1"', $src);
@@ -56,18 +60,23 @@ final class ConfigCenterSaveFormActionContractTest extends TestCase
         $css = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/statics/css/system-config.css');
         self::assertStringContainsString('--backend-theme-sidebar-width', $css);
         self::assertStringContainsString('form-actions--dock', $css);
+        self::assertStringContainsString('form-actions--dock:not(.is-active)', $css);
         self::assertStringContainsString('reauth-field:not([hidden])', $css);
         $js = (string)\file_get_contents(\dirname(__DIR__, 3) . '/view/statics/js/system-config-filter.js');
         self::assertStringContainsString('findValueControl', $js);
         self::assertStringContainsString('parseSelectedFile', $js);
         self::assertStringContainsString('syncReauthVisibility', $js);
         self::assertStringContainsString('formNeedsReauth', $js);
+        self::assertStringContainsString('initSystemConfigSaveDock', $js);
+        self::assertStringContainsString('syncSaveDocks', $js);
         $publishedJs = (string)\file_get_contents(\dirname(__DIR__, 4) . '/Theme/view/statics/ui/pages/weline-system-config.js');
         self::assertStringContainsString('syncReauthVisibility', $publishedJs);
+        self::assertStringContainsString('initSystemConfigSaveDock', $publishedJs);
         self::assertStringContainsString('scrollGuideTargetIntoView', $publishedJs);
         self::assertStringContainsString('/* Weline UI source: js/system-config-guide.js */', $publishedJs);
         $publishedCss = (string)\file_get_contents(\dirname(__DIR__, 4) . '/Theme/view/statics/ui/pages/weline-system-config.css');
         self::assertStringContainsString('reauth-field:not([hidden])', $publishedCss);
+        self::assertStringContainsString('form-actions--dock:not(.is-active)', $publishedCss);
         self::assertStringContainsString('system-config-collapsible-hint', $src);
         self::assertStringContainsString('w-system-config__hint-details', $src);
         self::assertStringContainsString('w-system-config__hint-details', $css);
