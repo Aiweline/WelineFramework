@@ -22,7 +22,8 @@ final class Payment extends FrontendController
     public function index(): string
     {
         $title = (string) __('支付方式指南');
-        $entries = $this->guideRegistry->listPublishedEntries();
+        // 不启用即隐藏：可用性由 Provider 层门闩判定，指南层只消费结果。
+        $entries = $this->guideRegistry->listStorefrontPublishedEntries();
 
         $this->layoutType = 'payment_guide';
         $this->request->setGet('page_type', 'payment_guide');
@@ -92,7 +93,14 @@ final class Payment extends FrontendController
         $this->assign('page_title', $title);
         $this->assign('title', $title);
         $this->assign('payment_guide_entry', $entry);
-        $this->assign('payment_guide_entries', $this->guideRegistry->listPublishedEntries());
+        // 侧边导航同样「不启用即隐藏」，但当前页始终保留：
+        // 供应商登记的协议链接是法律链接，即使该方式已下线也要可达。
+        $this->assign(
+            'payment_guide_entries',
+            $this->guideRegistry->listStorefrontPublishedEntries(
+                alwaysIncludeMethodCode: $methodCode,
+            )
+        );
         $this->assign('payment_guide_page_type', $pageType);
         $this->assign('showSidebar', true);
 

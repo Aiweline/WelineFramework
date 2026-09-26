@@ -126,6 +126,31 @@ class PaymentMethodManager
     }
 
     /**
+     * 店面可用支付方式码集合：Provider 层唯一可用性门闩。
+     *
+     * 与结账列表同口径（{@see self::isMethodActiveForScope()}：enabled + 测连通过）。
+     * 店面各表面（指南 hub 等）据此「不启用即隐藏」，禁止各处自建可用性规则。
+     *
+     * @param array<string, mixed> $context
+     * @return array<string, true> method_code => true，便于 O(1) 判定
+     */
+    public function getStorefrontAvailableMethodCodes(array $context = []): array
+    {
+        $codes = [];
+        foreach ($this->getActiveMethods($context) as $method) {
+            if (!$method instanceof PaymentMethod) {
+                continue;
+            }
+            $code = $this->normalizeCode((string) $method->getData(PaymentMethod::schema_fields_CODE));
+            if ($code !== '') {
+                $codes[$code] = true;
+            }
+        }
+
+        return $codes;
+    }
+
+    /**
      * Admin method list for the current scope (includes disabled), ordered by scoped sort_order.
      *
      * @return PaymentMethod[]
