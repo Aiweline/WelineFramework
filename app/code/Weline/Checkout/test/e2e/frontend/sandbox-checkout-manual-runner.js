@@ -141,17 +141,59 @@ async function main() {
     await page.goto(FRONTEND + '/checkout', { waitUntil: 'domcontentloaded' });
     result.steps.push('checkout_opened');
     await page.waitForFunction(() => !!(window.Weline && window.Weline.Api), null, { timeout: 60000 });
+    // The payment radios are rendered by JS only after the checkout quote settles.
+    // Immediately after a full WLS restart the very first request pays for a cold
+    // FPC / layout-entity cache, so a fixed short sleep can expire before the radios
+    // exist and the run dies with `payment_method_not_selectable:...(none)` on an
+    // otherwise healthy storefront. Wait for the container to actually carry options,
+    // then keep a fixed settle for the rest of the summary widgets.
+    await page.waitForFunction(() => {
+      const box = document.querySelector('[data-payment-methods]');
+      return !!box && box.querySelectorAll('input[name="payment_method"]').length > 0;
+    }, null, { timeout: 90000 }).catch(() => {});
     await page.waitForTimeout(1500);
     await ensureAddress(page);
     // Shipping/payment radios may lag or stay empty while quote API already has lanes;
     // freezeQuote path below refreshes US quote and picks SEED_LANE_AMERICAS.
-    const payRadio = page.locator('input[name="payment_method"][value="paypal"], input[name="payment_method"][value*="paypal"]').first();
-    if (await payRadio.count()) {
-      await payRadio.check({ force: true }).catch(() => {});
+    // The payment radios are re-rendered by JS once the quote settles, so a single
+    // `check()` can land on a stale node and silently leave the default method
+    // selected (e.g. fake_card) while the run claims to exercise paypal. Retry
+    // until the wanted radio actually sticks, then report what was selected.
+    const wantedMethod = (process.env.FORCE_PAYMENT_METHOD || 'paypal').toLowerCase();
+    // Budget must outlast a cold start: 24 x 700ms ≈ 17s. A too-small budget made a
+    // cold-cache first run fail even though the storefront was healthy.
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const wantRadio = page.locator(`input[name="payment_method"][value="${wantedMethod}"]`).first();
+      if (await wantRadio.count()) {
+        await wantRadio.check({ force: true }).catch(() => {});
+      } else {
+        await page.evaluate((m) => {
+          const el = document.querySelector(`input[name="payment_method"][value="${m}"]`);
+          if (el) {
+            el.checked = true;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }, wantedMethod).catch(() => {});
+      }
+      const now = await page.evaluate(() => {
+        const el = document.querySelector('input[name="payment_method"]:checked');
+        return el ? String(el.value || '') : '';
+      }).catch(() => '');
+      if (now.toLowerCase() === wantedMethod) break;
+      await page.waitForTimeout(700);
     }
+    const selectedPayment = await page.evaluate(() => {
+      const el = document.querySelector('input[name="payment_method"]:checked');
+      return el ? String(el.value || '') : '';
+    }).catch(() => '');
+    if (selectedPayment.toLowerCase() !== wantedMethod) {
+      throw new Error(`payment_method_not_selectable:${wantedMethod}:got=${selectedPayment || '(none)'}`);
+    }
+    result.steps.push('payment_selected:' + selectedPayment);
     result.steps.push('ui_ready');
 
-    const started = await page.evaluate(async () => {
+    const started = await page.evaluate(async (forcedMethod) => {
       const getVal = (name) => {
         const el = document.querySelector(`[name="${name}"]:checked`) || document.querySelector(`[name="${name}"]`);
         return el ? String(el.value || '').trim() : '';
@@ -196,7 +238,7 @@ async function main() {
         const americas = codes.find((c) => /AMERICAS/i.test(c)) || 'SEED_LANE_AMERICAS';
         if (!/DOMESTIC/i.test(americas)) shippingMethod = americas;
       }
-      const paymentMethod = getVal('payment_method') || 'paypal';
+      const paymentMethod = String(forcedMethod || '').trim() || getVal('payment_method') || 'paypal';
       if (!shippingMethod) {
         return {
           success: false,
@@ -230,7 +272,7 @@ async function main() {
         result._shipping_method = shippingMethod;
       }
       return result;
-    });
+    }, wantedMethod);
     result.steps.push('submit_done');
     if (!started || started.success === false) {
       throw new Error('checkout_submit_failed:' + JSON.stringify(started).slice(0, 800));
@@ -260,11 +302,30 @@ async function main() {
     await paypal.waitForURL(/test\.weline\.com|127\.0\.0\.1/, { timeout: 120000 });
     result.success_url = paypal.url();
     result.steps.push('returned:' + result.success_url);
-    if (!/checkout\/success|payment\/.*callback|handoff/.test(result.success_url)) {
-      await paypal.waitForURL(/checkout\/success/, { timeout: 60000 }).catch(() => {});
+    // The site's `/payment/handoff/` entry redirects on to `/checkout/success`.
+    // The previous guard matched `handoff` and therefore skipped the wait, then
+    // read page.content() while that redirect was in flight — which threw
+    // "Unable to retrieve content because the page is navigating" and made a
+    // fully successful PayPal run report ok:false. Always wait for the final
+    // success URL, then let the page settle before reading any content.
+    if (!/checkout\/success/.test(result.success_url)) {
+      await paypal.waitForURL(/checkout\/success/, { timeout: 90000 }).catch(() => {});
       result.success_url = paypal.url();
+      result.steps.push('landed:' + result.success_url);
     }
-    result.ok = /checkout\/success/.test(result.success_url) || /订单已支付|感谢您的订购|已支付成功|结账成功/.test(await paypal.content());
+    await paypal.waitForLoadState('domcontentloaded').catch(() => {});
+    let bodyText = '';
+    for (let i = 0; i < 6; i += 1) {
+      try {
+        bodyText = await paypal.content();
+        break;
+      } catch (e) {
+        // still navigating — let it settle and retry instead of failing the run
+        await paypal.waitForTimeout(1000);
+      }
+    }
+    result.ok = /checkout\/success/.test(result.success_url)
+      || /订单已支付|感谢您的订购|已支付成功|结账成功/.test(bodyText);
   } catch (e) {
     result.error = String(e && e.message || e);
   }

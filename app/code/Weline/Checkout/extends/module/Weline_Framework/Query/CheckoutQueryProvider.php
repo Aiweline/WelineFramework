@@ -651,7 +651,24 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 $paymentIdempotencyKey,
                 $context,
             );
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            // Never swallow a gateway exception silently: the caller only gets a
+            // generic `checkout_payment_failed`, so without this line the real
+            // cause (provider config, credentials, transport) is unrecoverable
+            // after the fact. Log it with the order/method for triage.
+            try {
+                w_log('error', sprintf(
+                    '[checkout] payCreatedOrders failed: method=%s orders=%s error=%s: %s at %s:%d',
+                    $paymentMethod,
+                    implode(',', $orderUuids),
+                    $e::class,
+                    $e->getMessage(),
+                    $e->getFile(),
+                    $e->getLine(),
+                ), ['_exception' => $e], 'checkout');
+            } catch (\Throwable) {
+                // logging must never mask the original failure
+            }
             return [
                 'paid' => false,
                 'outcome' => 'failed',
