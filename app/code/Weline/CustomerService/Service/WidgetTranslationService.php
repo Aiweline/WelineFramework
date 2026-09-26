@@ -4,8 +4,22 @@ declare(strict_types=1);
 
 namespace Weline\CustomerService\Service;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Api\Translation\BatchTranslationResolverInterface;
+use Weline\I18n\Api\Translation\TranslationResolverInterface;
+
+/**
+ * 客服浮层 chrome 译包。
+ *
+ * 模块 CSV 仅允许 zh_Hans_CN / en_US；其它默认站语种必须从系统词典解析。
+ * 2026-09-21 删除非中英 CSV 后若仍只读模块 CSV，bn/ar/hi 等会落到 en_US 或源串简中。
+ */
 class WidgetTranslationService
 {
+    private const MODULE_CSV_LOCALES = ['zh_Hans_CN', 'en_US'];
+
+    private const PREFERRED_MODULES = ['Weline_CustomerService'];
+
     private const SUPPORTED_LOCALES = [
         ['code' => 'zh_Hans_CN', 'nativeLabel' => '简体中文', 'shortLabel' => '简中'],
         ['code' => 'zh_Hant_TW', 'nativeLabel' => '繁體中文', 'shortLabel' => '繁中'],
@@ -184,9 +198,17 @@ class WidgetTranslationService
 
         $result = [];
         foreach (self::WIDGET_KEYS as $key) {
-            $result[$key] = $localeDictionary[$key]
-                ?? $fallbackDictionary[$key]
-                ?? $key;
+            $translated = $localeDictionary[$key] ?? null;
+            if ($this->isUsableTranslation($key, $translated, $localeCode)) {
+                $result[$key] = $translated;
+                continue;
+            }
+            $fallback = $fallbackDictionary[$key] ?? null;
+            if ($this->isUsableTranslation($key, $fallback, 'en_US')) {
+                $result[$key] = $fallback;
+                continue;
+            }
+            $result[$key] = $key;
         }
 
         return $result;
@@ -201,10 +223,28 @@ class WidgetTranslationService
             return $this->localeDictionaryCache[$localeCode];
         }
 
+        $dictionary = $this->loadModuleCsvDictionary($localeCode);
+
+        // 非中英：模块 CSV 已禁止落盘，必须补系统词典（含 generated/language 回退）。
+        if (!\in_array($localeCode, self::MODULE_CSV_LOCALES, true)) {
+            $dictionary = $this->mergeDictionary(
+                $this->loadSystemDictionary($localeCode),
+                $dictionary
+            );
+        }
+
+        return $this->localeDictionaryCache[$localeCode] = $dictionary;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function loadModuleCsvDictionary(string $localeCode): array
+    {
         $dictionary = [];
         $file = dirname(__DIR__) . '/i18n/' . $localeCode . '.csv';
         if (!is_file($file)) {
-            return $this->localeDictionaryCache[$localeCode] = $dictionary;
+            return $dictionary;
         }
 
         $csv = new \SplFileObject($file);
@@ -225,7 +265,146 @@ class WidgetTranslationService
             $dictionary[$source] = $translation !== '' ? $translation : $source;
         }
 
-        return $this->localeDictionaryCache[$localeCode] = $dictionary;
+        return $dictionary;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function loadSystemDictionary(string $localeCode): array
+    {
+        $fromResolver = $this->loadSystemDictionaryViaResolver($localeCode);
+        if ($fromResolver !== []) {
+            return $fromResolver;
+        }
+
+        return $this->loadSystemDictionaryFromGeneratedPack($localeCode);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function loadSystemDictionaryViaResolver(string $localeCode): array
+    {
+        try {
+            $resolver = ObjectManager::getInstance(TranslationResolverInterface::class);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!$resolver instanceof TranslationResolverInterface) {
+            return [];
+        }
+
+        $sources = self::WIDGET_KEYS;
+        if ($resolver instanceof BatchTranslationResolverInterface) {
+            $many = $resolver->translateMany($sources, $localeCode, self::PREFERRED_MODULES);
+            return $this->filterWidgetBag($many, $localeCode);
+        }
+
+        $bag = [];
+        foreach ($sources as $source) {
+            $bag[$source] = $resolver->translate($source, $localeCode, self::PREFERRED_MODULES);
+        }
+
+        return $this->filterWidgetBag($bag, $localeCode);
+    }
+
+    /**
+     * UT / 无 ObjectManager 时：直接读 collect 产出的 generated/language/{locale}.php。
+     *
+     * @return array<string, string>
+     */
+    private function loadSystemDictionaryFromGeneratedPack(string $localeCode): array
+    {
+        $roots = [];
+        if (\defined('BP') && \is_string(BP) && BP !== '') {
+            $roots[] = rtrim(BP, "/\\");
+        }
+        $roots[] = dirname(__DIR__, 5);
+
+        $pack = null;
+        foreach (array_unique($roots) as $root) {
+            $file = $root . '/generated/language/' . $localeCode . '.php';
+            if (!is_file($file)) {
+                continue;
+            }
+            $loaded = include $file;
+            if (\is_array($loaded)) {
+                $pack = $loaded;
+                break;
+            }
+        }
+        if (!\is_array($pack)) {
+            return [];
+        }
+
+        $bag = [];
+        foreach (self::WIDGET_KEYS as $key) {
+            if (!\array_key_exists($key, $pack)) {
+                continue;
+            }
+            $bag[$key] = (string)$pack[$key];
+        }
+
+        return $this->filterWidgetBag($bag, $localeCode);
+    }
+
+    /**
+     * @param array<string, string> $bag
+     * @return array<string, string>
+     */
+    private function filterWidgetBag(array $bag, string $localeCode): array
+    {
+        $filtered = [];
+        foreach (self::WIDGET_KEYS as $key) {
+            $value = $bag[$key] ?? null;
+            if (!$this->isUsableTranslation($key, $value, $localeCode)) {
+                continue;
+            }
+            $filtered[$key] = $value;
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * @param array<string, string> $base
+     * @param array<string, string> $override
+     * @return array<string, string>
+     */
+    private function mergeDictionary(array $base, array $override): array
+    {
+        foreach ($override as $key => $value) {
+            if (\is_string($key) && \is_string($value) && $value !== '') {
+                $base[$key] = $value;
+            }
+        }
+
+        return $base;
+    }
+
+    private function isUsableTranslation(string $source, mixed $translation, string $localeCode): bool
+    {
+        if (!\is_string($translation)) {
+            return false;
+        }
+        $translation = trim($translation);
+        if ($translation === '') {
+            return false;
+        }
+        // 非中文 locale 禁止把简中源串当「已译」透传（否则店面孟加拉文页客服窗仍中文）。
+        if ($localeCode !== 'zh_Hans_CN' && $localeCode !== 'zh_Hant_TW' && $translation === $source) {
+            return false;
+        }
+        if ($localeCode !== 'zh_Hans_CN' && $localeCode !== 'zh_Hant_TW'
+            && preg_match('/\p{Han}/u', $translation) === 1
+            && preg_match('/\p{Han}/u', $source) === 1
+        ) {
+            return false;
+        }
+
+        return true;
     }
 
     private function normalizeCsvValue(mixed $value): string
