@@ -437,6 +437,8 @@
             bindScrollTrigger();
         } else if (trigger === 'exit' || trigger === 'exit-intent') {
             bindExitTrigger();
+        } else if (trigger === 'none' || trigger === 'manual') {
+            /* 设计稿无自动弹窗：仅保留 ?newsletter_popup=1 强制预览通道 */
         } else {
             /* 未知触发：回退组合延后 */
             bindDelayTrigger();
