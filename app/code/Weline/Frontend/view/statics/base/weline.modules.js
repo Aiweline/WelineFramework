@@ -176,8 +176,8 @@
             description: "支付生命周期：weline:payment:* 统一事件"
         },
         productExpressPay: {
-            origin_paths: ["app/code/Weline/Payment/view/statics/js/product-express-pay.js?v=20260918-express-ga4params1"],
-            paths: ["Weline_Payment::js/product-express-pay.js?v=20260918-express-ga4params1"],
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/product-express-pay.js?v=20260925-express-silent1"],
+            paths: ["Weline_Payment::js/product-express-pay.js?v=20260925-express-silent1"],
             globalVar: "WelineProductExpressPay",
             load: "lazy",
             description: "PDP 快捷智能支付：加车后 startExpressCheckout 并打开支付商窗体"
@@ -357,6 +357,7 @@
             description: "顶栏收藏角标水合（SSR 游客空角标）"
         },
         storeMusic: {
+            origin_paths: ["app/code/Weline/StoreMusic/view/statics/js/store-music.js?v=20260924-no-unload1"],
             paths: ["Weline_StoreMusic::js/store-music.js?v=20260924-no-unload1"],
             globalVar: "WelineStoreMusic",
             load: "defer",
