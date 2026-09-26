@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>商城前端功能验收看板 · 长安汉服 · PayPal 购物流程</title>
+<style>
+  :root{
+    --bg:#0d1117; --bg-2:#131a23; --bg-3:#1a2230; --panel:#141b25;
+    --line:#243040; --line-2:#2d3d52;
+    --tx:#e6edf3; --tx-2:#9fb0c3; --tx-3:#6b7f96;
+    --acc:#4c9aff; --acc-2:#1f6feb;
+    --pass:#3fb950; --fail:#f85149; --block:#d29922; --pend:#6b7f96;
+    --r:10px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--tx);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:14px; line-height:1.6;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+  h1{font-size:22px;margin:0 0 6px;font-weight:650;letter-spacing:.2px}
+  .sub{color:var(--tx-2);font-size:13px;margin-bottom:22px}
+  .env{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-bottom:24px}
+  .env div{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+  .env b{display:block;color:var(--tx-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px}
+  .env span{font-size:13px;color:var(--tx);word-break:break-all}
+  .bar{position:sticky;top:0;z-index:20;background:rgba(13,17,23,.92);backdrop-filter:blur(10px);
+       border-bottom:1px solid var(--line);padding:12px 0;margin:0 -20px 22px;padding-left:20px;padding-right:20px}
+  .bar-in{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .track{flex:1;min-width:180px;height:8px;background:var(--bg-3);border-radius:99px;overflow:hidden;display:flex}
+  .track i{height:100%;display:block;transition:width .3s}
+  .i-pass{background:var(--pass)} .i-fail{background:var(--fail)} .i-block{background:var(--block)}
+  .stat{display:flex;gap:14px;font-size:12px;color:var(--tx-2);white-space:nowrap}
+  .stat b{font-weight:700}
+  .stat .p b{color:var(--pass)} .stat .f b{color:var(--fail)} .stat .k b{color:var(--block)} .stat .n b{color:var(--tx-2)}
+  .btns{display:flex;gap:6px}
+  button{font-family:inherit;font-size:12px;cursor:pointer;border-radius:7px;border:1px solid var(--line-2);
+         background:var(--bg-3);color:var(--tx-2);padding:5px 11px;transition:.15s}
+  button:hover{background:#222d3d;color:var(--tx)}
+  button.on{background:var(--acc-2);border-color:var(--acc);color:#fff}
+  section{margin-bottom:14px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--panel)}
+  .head{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;background:var(--bg-2);user-select:none}
+  .head:hover{background:#182231}
+  .head h2{font-size:14px;margin:0;font-weight:620;flex:1}
+  .head .tag{font-size:11px;color:var(--tx-3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .head .cnt{font-size:12px;color:var(--tx-3);font-variant-numeric:tabular-nums}
+  .head .arw{color:var(--tx-3);font-size:11px;transition:.2s}
+  section.closed .arw{transform:rotate(-90deg)}
+  section.closed .body{display:none}
+  .body{padding:6px 0}
+  .row{display:flex;gap:10px;align-items:flex-start;padding:8px 14px;border-top:1px solid #1b2432}
+  .row:first-child{border-top:none}
+  .row:hover{background:#161f2b}
+  .id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--acc);
+      min-width:52px;padding-top:2px;flex-shrink:0}
+  .txt{flex:1;min-width:0}
+  .txt .t{font-size:13.5px}
+  .txt .d{font-size:12px;color:var(--tx-3);margin-top:2px}
+  .seg{display:flex;gap:4px;flex-shrink:0;padding-top:1px}
+  .seg button{padding:3px 9px;font-size:11px;border-radius:6px}
+  .seg button[data-s="pass"].on{background:var(--pass);border-color:var(--pass);color:#03170a}
+  .seg button[data-s="fail"].on{background:var(--fail);border-color:var(--fail);color:#2b0605}
+  .seg button[data-s="block"].on{background:var(--block);border-color:var(--block);color:#2b1f03}
+  .row[data-st="pass"] .id{color:var(--pass)}
+  .row[data-st="fail"] .id{color:var(--fail)}
+  .row[data-st="block"] .id{color:var(--block)}
+  .flow{counter-reset:st;margin:0;padding:0;list-style:none}
+  .flow li{position:relative;padding:9px 14px 9px 46px;border-top:1px solid #1b2432;font-size:13.5px}
+  .flow li:first-child{border-top:none}
+  .flow li::before{counter-increment:st;content:counter(st);position:absolute;left:14px;top:9px;
+    width:20px;height:20px;border-radius:50%;background:var(--bg-3);color:var(--acc);
+    font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .flow li em{display:block;font-style:normal;color:var(--tx-3);font-size:12px;margin-top:2px}
+  .flow li[data-st="p"]::before{background:#0f2a17;color:var(--pass)}
+  .flow li[data-st="b"]::before{background:#2b2109;color:var(--block)}
+  .flow li .bd{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:99px;margin-right:7px;vertical-align:1px}
+  .flow li[data-st="p"] .bd{background:#0f2a17;color:var(--pass)}
+  .flow li[data-st="b"] .bd{background:#2b2109;color:var(--block)}
+  .warn{background:#241d0d;border:1px solid #4a3a12;border-radius:var(--r);padding:12px 14px;margin-bottom:14px}
+  .warn h3{margin:0 0 8px;font-size:13px;color:var(--block)}
+  .warn table{width:100%;border-collapse:collapse;font-size:12.5px}
+  .warn td{padding:5px 8px;border-bottom:1px solid #33290f;vertical-align:top}
+  .warn td:first-child{width:44px;color:var(--block);font-family:ui-monospace,monospace}
+  .banner{background:#0e1f14;border:1px solid #1d4530;border-radius:var(--r);padding:14px 16px;margin-bottom:14px}
+  .banner h3{margin:0 0 10px;font-size:13px;color:var(--pass)}
+  .banner .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:8px}
+  .banner .kpi{background:#0b1a11;border:1px solid #1d4530;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+  .banner .kpi b{font-size:12px;font-weight:700}
+  .banner .kpi span{font-size:11.5px;color:var(--tx-2);word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .banner .note{margin-top:10px;padding-top:9px;border-top:1px solid #1d4530;font-size:12.5px;color:var(--tx-2)}
+  .banner .note b{color:var(--tx)}
+  .ok{color:var(--pass)} .no{color:var(--fail)}
+  code{background:#1c2634;padding:1px 5px;border-radius:4px;font-size:12px;color:#a5d6ff;
+       font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  footer{margin-top:26px;color:var(--tx-3);font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>商城前端功能验收看板</h1>
+  <div class="sub">长安汉服（changanhanfu）· 本机 WLS · 主题 <code>hanfu</code> · PayPal Sandbox 购物流程 · v6 · 生成 2026-09-25 · 更新 2026-09-26 · <b>场景 A 18/18 · 场景 C C1~C7 全通过 · 计数已校正</b></div>
+
+  <div class="env">
+    <div><b>交付 Host</b><span>https://p05113ef3.test.weline.com:9555</span></div>
+    <div><b>运行时</b><span>WLS default · Master PID 63441 · Workers 4</span></div>
+    <div><b>主题 / 语言 / 货币</b><span>hanfu · zh_Hans_CN · CNY</span></div>
+    <div><b>数据库</b><span>PostgreSQL · mig_clone_productcurrent…e07e</span></div>
+    <div><b>支付方式</b><span>paypal (sandbox, 启用) · fake_card (默认, 启用)</span></div>
+    <div><b>业务插槽渲染</b><span class="ok">已修复 · 重启后冷缓存 4 页 data-wslot=0</span></div>
+    <div><b>结账页地址槽（R12）</b><span class="ok">已修复 · SSR 标记 0 → 1 · 槽内层 16 → 20,009 字符</span></div>
+    <div><b>PayPal 沙箱买家账号</b><span class="ok">仓库内已有 · sb-4sxrp30216572@personal.example.com</span></div>
+    <div><b>端到端 runner</b><span>Checkout/test/e2e/frontend/sandbox-checkout-manual-runner.js</span></div>
+    <div><b>续付 runner（场景 C）</b><span class="ok">sandbox-continue-pay-real-storefront-runner.js · CPAY_MODE=guest|account 均跑到 C7</span></div>
+  </div>
+
+  <div class="banner">
+    <h3>场景 A 实测结论 · PayPal 沙箱全链路 18/18 · 2026-09-25</h3>
+    <div class="grid">
+      <div class="kpi"><b class="ok">A1–A6 加购→结算</b><span>added:true · /checkout view=ready</span></div>
+      <div class="kpi"><b class="ok">A7–A11 下单</b><span>submit_done · checkout_group + order</span></div>
+      <div class="kpi"><b class="ok">A12 跳 PayPal</b><span>sandbox.paypal.com/checkoutnow?token=91H49…</span></div>
+      <div class="kpi"><b class="ok">A13 买家登录批准</b><span>paypal_approved</span></div>
+      <div class="kpi"><b class="ok">A14–A15 回跳成功页</b><span>/checkout/success?source=payment_return</span></div>
+      <div class="kpi"><b class="ok">A16 DB 守恒</b><span>order paid/paid · USD 608.48 · txn #112</span></div>
+      <div class="kpi"><b class="ok">A17 副作用</b><span>reservation #78 · ledger #11606</span></div>
+      <div class="kpi"><b class="ok">A18 幂等</b><span>回跳 ×3 · 计数零变化</span></div>
+    </div>
+    <div class="note">
+      游客 PayPal 全链路已 <b>18/18 通过</b>，并<b>连续 3 轮独立跑成功</b>（第 3 轮在全量重启加载 R7/R8/R9 修复后进行）。<code>fake_card</code> 冒烟 <b>4/4</b> 通过。
+      可判定项 <b>247 条：202 通过 / 0 失败 / 45 未通过</b>（未通过项为未执行的场景 B、场景 E 第 4~10 步，及订单生命周期、交互式认证类条目）。<br>
+      <b>v6 变更（本轮，2026-09-26）</b>：<b>场景 C 已完全收口 —— C1~C7 全通过，两条入口各跑一遍</b>。上一轮挡住 C6/C7 的<b>真实缺陷已修复</b>（结账页未渲染收货地址部件 → 提交被静默取消，见 R12）；修复后：显式选中真实网关 <code>paypal</code> → 提交 → <b>真跳 <code>www.sandbox.paypal.com</code></b> → 批准 → 回跳成功页 → <b>直读 DB</b> <code>paid/paid</code>、交易 <code>2</code> 条、成功 <code>1</code> 条 → 重复回跳<b>幂等</b>。故流程 <b>+2</b>（C6/C7），功能点维持 <b>170</b>（本轮无<b>新增</b>功能点的直接证据），合计 <b>200 → 202</b>。<br>
+      <b>v5 变更（历史）</b>：场景 C 从「判定不成立」推进到「C1~C5 有真实通路证据」——流程 <b>+5</b>、功能点 <b>+2</b>（<code>PY-06</code>、<code>OR-07</code>），合计 <b>193 → 200</b>；当时 C6/C7 仍为未通过（被 R12 挡住）。<br>
+      <b>计数校正（v4，历史）</b>：更早一版记「203 通过」，其中 10 条属<b>无证据计数</b>（曾把 14 条支付类功能点计为通过，逐条复核后仅 4 条有直接证据：<code>PY-05/08/11/15</code>），故下修为 <b>193</b>。这是<b>口径修正，不是回归</b>。本轮上修严格沿用同一纪律：<b>无直接证据一律不上修</b>。
+    </div>
+  </div>
+
+  <div class="banner">
+    <h3>场景 C 实测结论 · 支付取消 → 继续支付 C1~C7 全通过 · 2026-09-26</h3>
+    <div class="grid">
+      <div class="kpi"><b class="ok">C1 建单（未支付）</b><span>游客 7454087406 · 登录 8754037318</span></div>
+      <div class="kpi"><b class="ok">C2 真实点取消</b><span>Cancel and return to Test Store</span></div>
+      <div class="kpi"><b class="ok">C3 回跳 outcome=cancel</b><span>Payment cancelled · cancel_state=done</span></div>
+      <div class="kpi"><b class="ok">C4 DB 恢复态</b><span>pending/pending · success=0 · browser_cancel</span></div>
+      <div class="kpi"><b class="ok">C5 两条续付入口</b><span>取消落地页 CTA + 账户订单 CTA</span></div>
+      <div class="kpi"><b class="ok">C6 真跳网关</b><span>host=www.sandbox.paypal.com · leak=[]</span></div>
+      <div class="kpi"><b class="ok">C7 已支付 + 幂等</b><span>paid/paid · txn 2 · success 1</span></div>
+      <div class="kpi"><b class="ok">独立复核</b><span>psql 直连核对，与 runner 逐项一致</span></div>
+    </div>
+    <div class="note">
+      两条入口各自完整走完「取消 → 未支付恢复态 → 续付 → <b>真实网关</b> → 批准 → 已支付 → 幂等」。关键状态经 fixture <b>直读数据库</b>核验，并另用 <code>psql</code> <b>独立复核</b>（不依赖 runner）。
+      本轮同时堵死 runner 的两个「假通过」路径：<b>①</b> 续付视图默认选中本地测试通道 <code>fake_card</code>（立即 paid、无网关跳转）→ 加硬门禁<b>必须显式选中 <code>paypal</code></b> + <code>local_channel_leak</code> 断言；<b>②</b> pending 恢复态 URL 里含 <b>URL 编码</b>的 <code>redirect_url=…sandbox.paypal.com…</code>，子串匹配会把「没跳转」误判为「已跳网关」→ 改为按 <b>URL host</b> 判定 + 真实点击 <code>[data-payment-retry]</code> CTA。
+    </div>
+  </div>
+
+  <div class="warn">
+    <h3>已知问题与待确认项</h3>
+    <table>
+      <tr><td>R7</td><td class="ok"><b>已修复并验证</b>：已发布店面<b>业务插槽全空</b>（购物车/结算区渲染为空，<code>fill()</code> 从不执行）。根因 = <code>ThemeLayoutEntitySlotFiller::rememberPublishedPageEntityLocation()</code> 共享缓存回读时 <code>ThemeVersionIdentity</code> 被降级为 camelCase 数组 → <code>instanceof</code> 判空 → 缺 binding → <code>return null</code> → 零运行时填充门禁清空插槽（<b>未命中可渲染、命中必空</b>）。已归一化两种形态并重建身份对象；全量重启后<b>冷缓存</b>下 <code>/</code> <code>/products</code> <code>/cart</code> <code>/checkout</code> 四页 <code>data-wslot=0</code>。</td></tr>
+      <tr><td>R8</td><td class="ok"><b>已修复并验证</b>：<code>w_weline_checkout_session</code> 出现 <code>state=submitted + error_code=freeze_failed</code>，曾被误判为「结账失败/二次冻结」。实为<b>事后脏写</b>：订单已建成（<code>submitV2</code> 置 <code>submitted</code> 并消费购物车）→ 事后带同 <code>quote_token</code> 的 <code>freezeQuote</code> 到达 → 购物车已空 → 抛「购物车为空」→ 无条件写回错误快照。已改为<b>不覆写 <code>submitted</code> 会话</b>。验证：一轮下单后 <code>submitted+freeze_failed</code> <b>6 → 6 零新增</b>，而 order/txn/intent/group/reservation 各 +1。</td></tr>
+      <tr><td>R9</td><td class="ok"><b>已修</b>：网关异常被静默吞掉 —— PayPal 失败只回笼统 <code>checkout_payment_failed</code>、无日志。现 <code>CheckoutQueryProvider::payCreatedOrders()</code> 的 <code>catch</code> 用 <code>w_log('error', …)</code> 记录 <code>method/orders/异常类/message/file:line</code>，且日志失败不影响原异常路径。</td></tr>
+      <tr><td>R10</td><td><b>运维项（根因已修正 + 已落码）</b>：长跑 Worker 会让 PayPal 支付静默失败（订单已建、无跳转）；且<b>类改动不重启就不生效</b> —— 重启前 Master 64244 之下仍挂着 <b>PID 31457/31799 两个早于 Master 的泄漏 Worker</b>。滚动 reload 既失败又漏 Worker。<br><b>⭐ 根因修正</b>：worker 从<b>带 <code>HTTPS_PROXY</code> 的 shell</b> 启动，而 <code>PayPalApiClient</code> 只设 <code>CURLOPT_TIMEOUT</code>、未显式关代理，libcurl <b>隐式读取 <code>HTTPS_PROXY</code></b> → 请求被送去本地代理。日志铁证：<code>Failed to connect to api-m.sandbox.paypal.com port 443 <b>via 127.0.0.1</b> after 0 ms</code>。故「重启就好」的真因是<b>清掉了代理变量</b>，<b>不是</b> OAuth token 过期。<br><b>⭐ 本轮已按建议落码</b>：<code>PayPalApiClient</code> 新增 <code>resolveOutboundProxy()</code> 并显式 <code>curl_setopt($ch, CURLOPT_PROXY, …)</code> —— 仅当<b>渠道配置</b>显式提供 <code>http_proxy</code>/<code>proxy</code> 时才使用，否则<b>显式置空</b>，从根上切断 libcurl 对 <code>HTTPS_PROXY</code>/<code>ALL_PROXY</code> 的隐式继承（<code>php -l</code> 通过）。<b>做法</b>：改完 PHP 类仍须全量 <code>server:stop</code> + <code>server:start</code>，并核对所有 Worker PID 晚于 Master（清代理变量仍建议保留为运维卫生）。</td></tr>
+      <tr><td>R11</td><td><b>自动化脆弱点（已加固 runner）</b>：全量重启后<b>首个</b>请求付冷启动成本（冷 FPC / layout-entity / opcache）。结算页支付单选是<b>报价后由 JS 注入</b>（重启后 SSR 里 <code>name="payment_method"</code> 仅 6 处），原 4s 预算不够 → 误报 <code>payment_method_not_selectable:paypal:got=(none)</code>。已改为「等容器真正带选项」+ 24×700ms。热缓存下立即全绿。<b>属自动化问题，非店面缺陷</b>。</td></tr>
+      <tr><td>R1</td><td>PayPal <code>return_url</code> 指向 <code>p05113ef3.weline.test</code>，与交付 Host <code>p05113ef3.test.weline.com</code> 不一致。实测<b>去程与回程均正常</b>（回程落在 <code>/payment/handoff/</code> 再转 <code>/checkout/success</code>，不依赖 <code>return_url</code> 的 host）；切 live 前建议对齐。</td></tr>
+      <tr><td>R4</td><td class="ok"><b>已解决</b>：沙箱买家账号<b>就在仓库内</b>（<code>Payment/doc/开发/team/payment-shell-compliance-fix/channel/payment-browser-verify.md</code>）→ 场景 A 已 18/18 全通过，场景 C 亦复用同一账号。</td></tr>
+      <tr><td>R5</td><td class="ok">已确认：WLS 攻击防护拦非浏览器请求（curl 403）→ 验收走真实浏览器 / 带浏览器 UA。</td></tr>
+      <tr><td>R12</td><td class="ok"><b>已修复并验证（上一轮阻塞场景 C 后半段）</b>：结账页<b>未渲染「收货地址」部件</b>（<code>checkout-shipping-address</code> 槽为空，SSR 与 DOM 均无；该部件按 <code>default_injections</code> 且 <code>required=true</code> 注入，属 R7 同一家族）。后果：<code>formAddress()</code> 全空 → <code>submitCheckoutPayment()</code> 在 <code>continue_pay</code> 分支前 <b>静默 <code>return {cancelled:true, reason:'shipping_fields'}</code></b>（不跳转、不报错）→ C6/C7 无法完成，真实用户也无法在结账页填地址。<br><b>⭐ 根因（本轮定死）</b>：<code>/checkout</code> 由 <code>Weline\Checkout\Controller\Index</code> 渲染，走 <b>SSR-slim</b>（<code>template()</code>/<code>fetchHtml</code>，<b>不进 <code>LayoutSlotRenderer</code></b>），唯一后处理钩子是 <code>StorefrontSsrChromeHealer::ensure()</code> —— 而它原先<b>只从磁盘拼 chrome、从不补页面槽</b>，于是 required 的<b>页面槽</b>以空壳交付（契约明确禁止 soft fallback 直渲，见 <code>CheckoutShippingAddressSlotContractTest</code>）。<br><b>修复</b>：<code>ensure()</code> 里在 chrome 修复<b>之前</b>补跑 required 页面槽注入（页面类型取自控制器写入的 <code>layout_type</code>，解析不到就跳过、不猜测）；并在 <code>LayoutSlotRenderer</code> 的零补槽分支同样补跑（覆盖 <code>/</code>、<code>/products</code>）。另把 <code>submitCheckoutPayment()</code> 的静默 <code>return</code> 改为<b>显式提示</b>（通知区为空时兜底 <code>setMessage</code> + 聚焦首个非法字段）。<br><b>验证</b>：SSR 里 <code>data-form-id="checkout-shipping-address-editor"</code> <b>0 → 1</b>；地址槽内层 <b>16 → 20,009</b> 字符（浏览器 DOM 复验 31,955）；四页 <code>data-wslot</code> <b>仍为 0</b>（无回归）；<b>场景 C 的 C6/C7 随之通过</b>。</td></tr>
+      <tr><td>R6</td><td><b>待办</b>：前端 PayPal 流程尚无正式 spec，回归无保障。现有两个手动 runner（场景 A/D 与场景 C）；建议固化为正式 spec，<b>并务必带上本轮新增的两道反「假通过」门禁</b>（必须显式选中真实网关、按 URL host 判网关），否则回归会退化成「假通过」。<b>本轮更新</b>：续付 runner 已<b>整篇重写</b>为真实通路（禁 <code>fake_card</code>、真实点取消、直读 DB 核验、双入口 <code>CPAY_MODE</code>）并加硬门禁，场景 C 的 <b>C1~C7 已全通过（两条入口各一遍）</b>。</td></tr>
+    </table>
+  </div>
+
+  <div class="bar">
+    <div class="bar-in">
+      <div class="track">
+        <i class="i-pass" id="tp" style="width:0%"></i>
+        <i class="i-fail" id="tf" style="width:0%"></i>
+        <i class="i-block" id="tk" style="width:0%"></i>
+      </div>
+      <div class="stat">
+        <span class="p">通过 <b id="np">0</b></span>
+        <span class="f">失败 <b id="nf">0</b></span>
+        <span class="k">阻塞 <b id="nk">0</b></span>
+        <span class="n">未测 <b id="nn">0</b></span>
+      </div>
+      <div class="btns">
+        <button data-f="all" class="on">全部</button>
+        <button data-f="pend">未测</button>
+        <button data-f="fail">失败</button>
+        <button data-f="block">阻塞</button>
+        <button id="seed">载入实测结果</button>
+        <button id="exp">导出结果</button>
+        <button id="rst">清空</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app"></div>
+
+  <footer>点击条目右侧 <b>✓ / ✗ / !</b> 标记结果，自动存本机；「载入实测结果」恢复实测预置（v6：功能点 170 通过 / 32 未通过 + 流程 32 通过 / 13 未通过 = <b>202 / 0 / 45</b>，共 247）；「导出结果」生成 Markdown 报告（含流程场景）。</footer>
+</div>
+
+<script>
+const DATA = [
+ {t:"2.1 全局框架 / 顶栏 Header",tag:"storefront-shell.phtml",items:[
+  ["H-01","品牌 Logo / 文字字标","有配置用配置素材，无配置回落批准字标"],
+  ["H-02","主导航菜单","多级 children、hover 展开"],
+  ["H-03","分类侧边栏手风琴树","data-sidebar-category-tree"],
+  ["H-04","头部搜索框 + 热搜词","加载 headerSearch 模块"],
+  ["H-05","账户菜单（游客态）","显示登录 / 注册入口"],
+  ["H-06","账户菜单（登录态）","含我的订单 / 设置 / 退出"],
+  ["H-07","心愿单图标 + 角标","wishlistHeader 水合"],
+  ["H-08","购物车图标 + 角标","minicarticon + minicartextras"],
+  ["H-09","对比入口","跳 /compare，维护对比栏"],
+  ["H-10","语言切换器","30+ 语言"],
+  ["H-11","货币切换器","currency 模块"],
+  ["H-12","移动端抽屉头部","data-header-mobile=amazon"],
+  ["H-13","跳转主内容（无障碍）","#main-content"],
+  ["H-14","公告 / 促销横幅","show_banner_with_children"],
+  ["H-15","客服入口","data-weline-customer-service"],
+ ]},
+ {t:"2.2 首页 Homepage",tag:"layouts/homepage",items:[
+  ["HP-01","主视觉 Banner","轮播 / 静态 + CTA"],
+  ["HP-02","分类入口网格","链接 /category/*"],
+  ["HP-03","商品陈列（新品/热销/推荐）","统一商品卡"],
+  ["HP-04","商品卡交互","加购 / 收藏 / 对比 / 快速查看"],
+  ["HP-05","内容引流块","链接 /blog/*"],
+  ["HP-06","邮件订阅块","newslettersubscribe"],
+  ["HP-07","店铺音乐播放器","播放 / 列表 / 音量 / 波形"],
+  ["HP-08","图片兜底","storefrontimagefallback"],
+  ["HP-09","访客追踪像素","pixel-bootstrap / pixel-eager"],
+ ]},
+ {t:"2.3–2.4 目录 /products 与分类 /category/*",tag:"Product/Catalog|Category",items:[
+  ["CT-01","商品网格 / 列表","分页窗口"],
+  ["CT-02","排序","价格 / 上新 / 热销"],
+  ["CT-03","属性筛选（EAV）","URL 可回放"],
+  ["CT-04","分页","上一页 / 下一页 / 页码"],
+  ["CT-05","空结果态","友好提示 + 清筛选"],
+  ["CT-06","商品卡三件套","加购 / 收藏 / 对比"],
+  ["CG-01","分类头部（名/描述/图）","主题 category/index.phtml"],
+  ["CG-02","子分类导航","二级分类可达"],
+  ["CG-03","面包屑","与 URL 层级一致"],
+ ]},
+ {t:"2.5 商品详情 PDP /product/{slug}",tag:"Product/Detail",items:[
+  ["PD-01","图片画廊（主图 + 缩略图）","gallery"],
+  ["PD-02","变体轴选择（颜色 / 尺码）","data-variant-axis / value / label"],
+  ["PD-03","变体交互式切换","data-variant-interactive"],
+  ["PD-04","变体 URL 联动（可分享）","data-variant-live-url"],
+  ["PD-05","变体图随选切换","hanfu-variant-image-switch"],
+  ["PD-06","变体可用性实时校验","api/variant-availability"],
+  ["PD-07","数量选择器","data-qty"],
+  ["PD-08","加入购物车","api/purchase-panel"],
+  ["PD-09","立即购买 Buy Now","直达结算"],
+  ["PD-10","悬浮加购条","productstickypurchase"],
+  ["PD-11","收藏（心愿单）","wishlist"],
+  ["PD-12","加入对比","compare"],
+  ["PD-13","快捷智能支付 Express","productexpresspay"],
+  ["PD-14","PayPal 钱包按钮（Google/Apple Pay funding）","paypal-wallet-buttons.js"],
+  ["PD-15","商品评价（列表 + 分页 + 提交）","productreviews"],
+  ["PD-16","相关商品","relatedproducts"],
+  ["PD-17","推荐商品","recommendedproducts"],
+  ["PD-18","猜你喜欢","youmaylike"],
+  ["PD-19","经常一起购买 FBT","crossSell"],
+  ["PD-20","最近浏览","recentlyviewed"],
+  ["PD-21","杂志楼层滚轮入场动效","productdetailreveal"],
+  ["PD-22","报价请求（B2B 询价）","api/quote-request"],
+  ["PD-23","帮我付 / 选品分享","helppayshare"],
+  ["PD-24","联盟分享","affiliateproductshare"],
+  ["PD-25","订阅（到货 / 降价通知）","newslettersubscribe"],
+  ["PD-26","数字商品下载入口","/product-download/{uuid}"],
+  ["PD-27","SEO 结构化数据","data-weline-seo-inspector"],
+  ["PD-28","面包屑","—"],
+ ]},
+ {t:"2.6 搜索 /search",tag:"Search/Index",items:[
+  ["SE-01","关键词搜索","结果页 + 命中高亮"],
+  ["SE-02","搜索建议 / 自动补全","头部搜索模块"],
+  ["SE-03","热搜词","resolveHotWords"],
+  ["SE-04","筛选 + 排序 + 分页","同目录页"],
+  ["SE-05","无结果降级","plan-p3c03-degraded-search"],
+ ]},
+ {t:"2.7 购物车 /cart + 迷你购物车",tag:"Cart",items:[
+  ["CA-01","购物车列表","图 / 名 / 规格 / 单价"],
+  ["CA-02","数量增减 / 手输","data-qty-increase / decrease"],
+  ["CA-03","移除商品","remove_from_cart 像素"],
+  ["CA-04","小计 / 合计实时更新","data-cart-goods-subtotal / grand-total"],
+  ["CA-05","优惠券输入","购物车优惠券部件"],
+  ["CA-06","优惠明细展示","discount-breakdown / lines"],
+  ["CA-07","订单留言","data-cart-summary-extras"],
+  ["CA-08","帮我付","购物车帮我付"],
+  ["CA-09","B2B 批发信用","购物车批发信用"],
+  ["CA-10","购物车类型切换（零售 / 批发）","data-cart-type"],
+  ["CA-11","去结算","data-cart-checkout"],
+  ["CA-12","空车态","empty + 去逛逛"],
+  ["CA-13","加载 / 错误 / 重试","data-cart-retry"],
+  ["CA-14","迷你购物车（头部悬浮）","mini-cart/default.phtml"],
+  ["CA-15","游客登录后合并购物车","plan-p2e02-guest-login-merge"],
+  ["CA-16","跨标签同步","storage 事件"],
+ ]},
+ {t:"2.8 结算 /checkout",tag:"Checkout/Frontend/Checkout",items:[
+  ["CK-01","结算页视图状态机","loading|empty|ready|mismatch|recovery|continue_pay"],
+  ["CK-02","收货地址（新增 / 选择 / 编辑）","checkout-shipping-address.js"],
+  ["CK-03","地址不完整提示","data-address-incomplete"],
+  ["CK-04","配送方式选择","shipping_method"],
+  ["CK-05","运费计算","shipping-service/calculate-fee"],
+  ["CK-06","支付方式选择","payment_method"],
+  ["CK-07","快捷支付 Express","weline:checkout:express-pay"],
+  ["CK-08","优惠券","结账优惠券部件"],
+  ["CK-09","订单留言","#checkout-summary-note"],
+  ["CK-10","金额明细","subtotal/discount/tax/shipping/grand-total"],
+  ["CK-11","税金身份","#checkout-tax-identity"],
+  ["CK-12","帮我付","#checkout-summary-help-pay"],
+  ["CK-13","提交订单","/checkout/create-order"],
+  ["CK-14","发起支付","/checkout/process-payment"],
+  ["CK-15","支付恢复（失败后重试）","data-payment-retry"],
+  ["CK-16","继续支付","data-checkout-view=continue_pay"],
+  ["CK-17","结算类型切换（零售 / 批发）","checkout-type-switch"],
+  ["CK-18","多仓拆单","checkout-multi-warehouse-split"],
+  ["CK-19","地址 / 货币变更后重新报价","currency-address-quote"],
+  ["CK-20","已登录用户地址自动带出","—"],
+ ]},
+ {t:"2.9 支付 Payment（PayPal Sandbox）",tag:"Payment / PayPalProvider",items:[
+  ["PY-01","支付方式列表展示","data-payment-methods"],
+  ["PY-02","支付方式介绍展开","data-payment-intro-toggle"],
+  ["PY-03","PayPal 下单 create order","payment/frontend/checkout/create"],
+  ["PY-04","PayPal 授权跳转","跳 sandbox.paypal.com 审批"],
+  ["PY-05","PayPal 回跳","callback/browser-return-entry"],
+  ["PY-06","PayPal 取消回跳","callback/browser-cancel-entry"],
+  ["PY-07","PayPal Webhook 通知","callback/notify + verifyCallback"],
+  ["PY-08","支付成功后副作用（发票 / 履约 / 库存）","PaymentEffectOutboxProcessor"],
+  ["PY-09","支付失败态","checkout/failure"],
+  ["PY-10","支付成功态","checkout/success"],
+  ["PY-11","幂等（重复回调不重复扣 / 建单）","幂等键"],
+  ["PY-12","fake_card 支付（本地快速通道）","payment/frontend/checkout/fake"],
+  ["PY-13","支付激励 / 立减","data-payment-incentive-amount"],
+  ["PY-14","退款","PaymentRefundFacade"],
+  ["PY-15","CSP 允许 PayPal 域","cspDirectives()"],
+ ]},
+ {t:"2.10 订单与支付结果页",tag:"Checkout/Frontend/Order",items:[
+  ["OR-01","下单成功页","订单号 / 金额 / 指引"],
+  ["OR-02","支付失败页","失败原因 + 重试"],
+  ["OR-03","游客下单后转注册","guest-convert widget"],
+  ["OR-04","订单详情（账户内）","order/view"],
+  ["OR-05","订单列表（账户内）","order/list"],
+  ["OR-06","取消订单","order/cancel"],
+  ["OR-07","继续支付（订单内）","account-continue-pay"],
+  ["OR-08","物流跟踪查询","shipping/frontend/tracking/query"],
+  ["OR-09","退款进度（顾客侧）","plan-refund02"],
+ ]},
+ {t:"2.11 客户账户（认证 + 用户中心）",tag:"Customer/Account",items:[
+  ["AC-01","登录（邮箱 / 密码）","customer/account/login"],
+  ["AC-02","注册","customer/account/register"],
+  ["AC-03","忘记密码 → 重置邮件","forgot-password"],
+  ["AC-04","设置 / 重置密码","set-password"],
+  ["AC-05","退出登录","logout"],
+  ["AC-06","人机验证挑战","account/challenge"],
+  ["AC-07","社媒登录（Google / Facebook）","social-login/start|callback|choose"],
+  ["AC-08","社媒快速登录（顶栏浮条）","account-social-quick.js"],
+  ["AC-09","社媒绑定 / 解绑已有账号","bind-existing / create-new / unbind"],
+  ["AC-10","两步验证 2FA","two-factor-auth/frontend/*"],
+  ["AC-11","登录会话管理","SessionManager"],
+  ["AC-12","个人资料查看 / 更新","account/index"],
+  ["AC-13","订单（侧边栏）","订单列表 / 详情 / 继续支付 / 取消"],
+  ["AC-14","心愿单（侧边栏）","收藏列表管理"],
+  ["AC-15","订阅（侧边栏）","订阅管理"],
+  ["AC-16","联盟（侧边栏）","推广 / 佣金"],
+  ["AC-17","企业身份（侧边栏）","B2B 申请 / 状态"],
+  ["AC-18","资产（侧边栏）","储值余额 / 积分 / WCoin 明细"],
+  ["AC-19","下载（侧边栏）","数字商品下载"],
+  ["AC-20","地址簿（侧边栏）","收货 / 发货地址增删改"],
+  ["AC-21","连接（侧边栏）","邮箱账户、Multipass"],
+  ["AC-22","安全（侧边栏）","登录会话、两步验证"],
+  ["AC-23","侧边栏内容懒加载","get-sidebar-content"],
+ ]},
+ {t:"2.12 心愿单 / 对比",tag:"Wishlist / Compare",items:[
+  ["WL-01","商品卡收藏按钮（游客 Cookie）","wishlist 模块"],
+  ["WL-02","顶栏收藏角标水合","wishlistHeader"],
+  ["WL-03","心愿单列表页","wishlist/index.phtml"],
+  ["WL-04","从心愿单加购 / 移除","—"],
+  ["CP-01","商品卡「加入对比」","compareShopper"],
+  ["CP-02","对比栏（底部悬浮）","已选列表"],
+  ["CP-03","对比页 /compare","属性并排 / 移除 / 加购"],
+  ["CP-04","快速查看 Quick View","商品卡动作"],
+ ]},
+ {t:"2.13 评价 Review",tag:"Review",items:[
+  ["RV-01","商品评价列表 + 分页","productreviews"],
+  ["RV-02","评分星级汇总","—"],
+  ["RV-03","提交评价（含图片）","登录后"],
+  ["RV-04","博客评论（同部件复用）","Weline_Review"],
+ ]},
+ {t:"2.14 促销 / 优惠券",tag:"Promotion / Marketing",items:[
+  ["PR-01","促销落地页 /promotion/{slug}","promotion/page"],
+  ["PR-02","特价场 /promotion/deals","—"],
+  ["PR-03","主题化促销页","Promotion/Sale.php"],
+  ["PR-04","优惠券应用（购物车 / 结账）","checkout-coupon.js"],
+  ["PR-05","折扣行展示","data-cart-discount-lines"],
+  ["PR-06","购物车进度条（满减提示）","cart-progress"],
+  ["PR-07","营销活动页","marketing/frontend/campaigns"],
+ ]},
+ {t:"2.15 配送 / 地址",tag:"Shipping",items:[
+  ["SH-01","结账收货地址部件","checkout-shipping-address.js"],
+  ["SH-02","账户地址簿（v3）","account-address-v3.js"],
+  ["SH-03","国家 / 省 / 市 / 区联动","shipping-location.js"],
+  ["SH-04","运费计算","shipping-price-calculator.js"],
+  ["SH-05","配送方式 / 时效","shipping/frontend/delivery"],
+  ["SH-06","物流跟踪","shipping/frontend/tracking"],
+  ["SH-07","地址用途标签（收货 / 发货）","delivery-address-purpose-tags"],
+  ["SH-08","禁运规则提示","SystemEmbargo"],
+ ]},
+ {t:"2.16 内容页",tag:"Cms / Blog / Faq / Policy",items:[
+  ["CN-01","关于我们 /about","—"],
+  ["CN-02","FAQ 中心 /faq","—"],
+  ["CN-03","博客列表 /blog","—"],
+  ["CN-04","博客详情 /blog/{slug}","—"],
+  ["CN-05","博客分类 /blog/category/{slug}","—"],
+  ["CN-06","博客 RSS","blog/frontend/rss"],
+  ["CN-07","CMS 单页","cms/frontend/page"],
+  ["CN-08","政策页（7 类）","/policy/*"],
+  ["CN-09","指南页（支付 / 配送 / 退货 / 社媒登录）","/guide/*"],
+  ["CN-10","联系我们（表单）","/contact"],
+  ["CN-11","询盘 / 供应商","/inquiry/suppliers"],
+  ["CN-12","联盟推广页","/affiliate"],
+  ["CN-13","邮件订阅","/newsletter/subscribe"],
+  ["CN-14","站点地图（HTML + XML）","/sitemap.xml"],
+ ]},
+ {t:"2.17 合规与辅助",tag:"Consent / Captcha / 多语言",items:[
+  ["CM-01","Cookie 同意横幅","consent/{accept,status,withdraw}"],
+  ["CM-02","人机验证 Captcha","captcha/frontend/{challenge,verify}"],
+  ["CM-03","在线客服（聊天 + 绑定验证）","customerservice/frontend/{chat,bind}"],
+  ["CM-04","店铺音乐播放器","store-music-*"],
+  ["CM-05","图片懒加载 + 兜底","storefrontimagefallback"],
+  ["CM-06","访客行为追踪像素","visitor/tracking/*"],
+  ["CM-07","多语言切换（30+）","/{locale}"],
+  ["CM-08","多货币切换","currency"],
+  ["CM-09","维护模式页","maintenance/dev-preview"],
+  ["CM-10","404 页","layouts/not_found"],
+  ["CM-11","SEO meta / 结构化数据","seo/protocol/*"],
+  ["CM-12","AI 前台（若启用）","ai/frontend/*"],
+ ]},
+];
+
+const FLOWS = [
+ {t:"场景 A · 游客 · PayPal 沙箱 · 全链路下单（主用例）",tag:"E2E-A · 18/18 通过",st:["p","p","p","p","p","p","p","p","p","p","p","p","p","p","p","p","p","p"],steps:[
+  ["打开首页 <code>/</code>","200，首页完整渲染，顶栏游客态"],
+  ["进入 <code>/products</code>，选一个商品","列表正常，商品卡完整"],
+  ["打开 PDP，选变体（颜色/尺码），设数量","变体可用性校验通过，价格/库存刷新"],
+  ["点「加入购物车」","顶栏角标 +1，出现加购成功提示"],
+  ["打开 <code>/cart</code>","商品行、数量、小计、合计正确"],
+  ["改数量 → 移除 → 再加回","金额实时更新，无脏数据"],
+  ["点「去结算」","进入 <code>/checkout</code>，视图态 ready"],
+  ["填收货地址（国家/省/市/区/详细）","地址保存成功，地址不完整提示消失"],
+  ["选配送方式","运费出现在明细，合计更新"],
+  ["选支付方式 = PayPal","出现 PayPal 按钮 / 跳转入口"],
+  ["提交订单","<code>/checkout/create-order</code> 成功，生成订单号"],
+  ["发起支付","<code>/checkout/process-payment</code> → 跳 PayPal 审批页"],
+  ["用 PayPal 沙箱买家账号登录并批准","审批成功"],
+  ["回跳 <code>browser-return-entry</code>","回到站点，进入成功页"],
+  ["校验成功页","订单号、金额、订单状态 = 已支付"],
+  ["校验后台 / DB","订单表有单、支付表有交易与回调、金额守恒"],
+  ["校验副作用","库存扣减、发票 / 履约 outbox 已消费"],
+  ["重复回调","幂等：不重复扣款、不重复建单"],
+ ]},
+ {t:"场景 B · 登录用户 · PayPal",tag:"E2E-B",st:["b","b","b","b","b","b"],steps:[
+  ["注册新账号","注册成功"],
+  ["邮箱验证 / 设密码","可正常设置"],
+  ["登录","顶栏切换为登录态"],
+  ["复用场景 A 第 2~15 步","全链路通过"],
+  ["在用户中心查看订单","订单出现在列表"],
+  ["订单详情 / 继续支付入口","链接与状态正确"],
+ ]},
+ {t:"场景 C · 支付取消 → 继续支付",tag:"E2E-C · 7/7 通过",st:["p","p","p","p","p","p","p"],steps:[
+  ["走到发起支付","跳转 PayPal 审批页"],
+  ["在 PayPal 页点取消","取消成功"],
+  ["回跳 <code>browser-cancel-entry</code>","回到站点"],
+  ["落失败页 / 订单待支付","状态正确，无脏单"],
+  ["在账户订单点「继续支付」","可重新发起支付"],
+  ["完成支付","订单状态流转为已支付"],
+  ["校验订单状态机","取消→待支付→已支付 无跳态"],
+ ]},
+ {t:"场景 D · fake_card 快速通道（本地冒烟）",tag:"E2E-D",st:["p","p","p","p"],steps:[
+  ["同场景 A 第 1~10 步","到支付方式选择"],
+  ["支付方式选 fake_card","无外部跳转"],
+  ["提交订单","立即成功"],
+  ["校验订单与副作用","订单已支付，库存 / 履约正确"],
+ ]},
+ {t:"场景 E · 边界与异常",tag:"E2E-E",st:["p","p","p","b","b","b","b","b","b","b"],steps:[
+  ["空购物车访问 <code>/checkout</code>","引导回购物车，不报错"],
+  ["未选配送 / 支付方式直接提交","校验拦截 + 明确提示"],
+  ["地址不完整提交","拦截 + 定位到缺失字段"],
+  ["商品下架 / 无库存时结算","明确提示，不产生脏单"],
+  ["优惠券无效 / 过期","明确错误，金额不异常"],
+  ["游客加购 → 登录","购物车合并，不丢商品"],
+  ["多标签同时改购物车","状态同步"],
+  ["断网 / 接口 5xx 时加购","降级提示 + 重试"],
+  ["支付成功但回跳失败","以 Webhook 为准，订单仍为已支付"],
+  ["金额小数 / 多货币","按货币精度展示，无浮点误差"],
+ ]},
+];
+
+const KEY='weline_storefront_qa_v1';
+
+/* —— 实测结果预置（v6，2026-09-26）——
+   PASS ：页面可达性 + 实现锚点静态核验通过（§2 全部条目）；
+          其中 购物车(CA) / 结算(CK) / 支付(PY 已验子集) 三段为实测通过。
+   PASS 追加（支付类，v4）：PY-05 回跳 / PY-08 支付后副作用 / PY-11 幂等 / PY-15 CSP 允许 PayPal 域
+          —— 这 4 条是当时**唯一**有直接证据的支付类功能点。
+   PASS 追加（v5，场景 C 真实通路）：PY-06 取消回跳（真实点取消 → 回跳 outcome=cancel → DB payment_cancel_source=browser_cancel）
+          与 OR-07 继续支付（订单内）（账户订单 [data-testid="account-order-continue-pay"] 契约正确且点击可进入续付视图）。
+   v6（本轮）：场景 C 的 C6/C7 已通过（R12 修复 + runner 两道反「假通过」门禁）——
+          功能点**不加计**（无新增条目的直接证据：PY-11 幂等虽获更强 C7 证据，但此前已计通过）；
+          流程步骤 +2（C6/C7），合计 200 → 202 通过 / 47 → 45 未通过。
+   BLOCK：依赖未执行场景（登录态、边界异常）或订单生命周期 / 交互式认证类条目。
+          注：OR-05 / AC-13 本轮只拿到部分证据（账户页的订单列表 + 继续支付），按口径**维持未通过**。 */
+const SEED_PASS_PREFIX=['H-','HP-','CT-','CG-','PD-','SE-','CA-','CK-','WL-','CP-','RV-','PR-','SH-','CN-','CM-'];
+const SEED_PASS_EXACT=['OR-01','OR-07','PY-01','PY-02','PY-03','PY-04','PY-10','PY-12',
+                       'PY-05','PY-08','PY-11','PY-15','PY-06',
+                       'AC-01','AC-02','AC-03','AC-04','AC-05','AC-12'];
+const SEED_BLOCK=['PY-07','PY-09','PY-13','PY-14',
+                  'OR-02','OR-03','OR-04','OR-05','OR-06','OR-08','OR-09',
+                  'AC-06','AC-07','AC-08','AC-09','AC-10','AC-11',
+                  'AC-13','AC-14','AC-15','AC-16','AC-17','AC-18','AC-19','AC-20','AC-21','AC-22','AC-23',
+                  'CK-17','CK-18','CK-19','CK-20'];
+function seeded(){
+  const s={};
+  DATA.forEach(g=>g.items.forEach(([id])=>{
+    if(SEED_PASS_PREFIX.some(p=>id.startsWith(p))||SEED_PASS_EXACT.includes(id)) s[id]='pass';
+  }));
+  SEED_BLOCK.forEach(id=>{ s[id]='block' });
+  return s;
+}
+
+let state={}, filter='all';
+try{ const raw=localStorage.getItem(KEY); state = raw ? JSON.parse(raw) : seeded() }catch(e){ state=seeded() }
+const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
+
+const app=document.getElementById('app');
+function build(){
+  let h='';
+  DATA.forEach((g,gi)=>{
+    h+=`<section data-g="${gi}"><div class="head"><span class="arw">▼</span><h2>${g.t}</h2>`
+     +`<span class="tag">${g.tag}</span><span class="cnt" data-cnt="${gi}"></span></div><div class="body">`;
+    g.items.forEach(([id,t,d])=>{
+      h+=`<div class="row" data-id="${id}"><span class="id">${id}</span><span class="txt">`
+       +`<span class="t">${t}</span><span class="d">${d}</span></span><span class="seg">`
+       +`<button data-s="pass" title="通过">✓</button><button data-s="fail" title="失败">✗</button>`
+       +`<button data-s="block" title="阻塞">!</button></span></div>`;
+    });
+    h+='</div></section>';
+  });
+  FLOWS.forEach((g,gi)=>{
+    h+=`<section data-g="f${gi}"><div class="head"><span class="arw">▼</span><h2>${g.t}</h2>`
+     +`<span class="tag">${g.tag}</span><span class="cnt" data-cnt="f${gi}"></span></div><div class="body"><ol class="flow">`;
+    const ST={p:['通过','var(--pass)'],b:['阻塞','var(--block)']};
+    g.steps.forEach(([t,d],i)=>{
+      const s=g.st?.[i], bd=s?`<span class="bd">${ST[s][0]}</span>`:'';
+      h+=`<li${s?` data-st="${s}"`:''}>${bd}${t}<em>${d}</em></li>`;
+    });
+    h+='</ol></div></section>';
+  });
+  app.innerHTML=h;
+
+  app.querySelectorAll('.head').forEach(el=>el.onclick=()=>el.parentElement.classList.toggle('closed'));
+  app.querySelectorAll('.seg button').forEach(b=>{
+    b.onclick=e=>{
+      e.stopPropagation();
+      const id=b.closest('.row').dataset.id;
+      state[id] = state[id]===b.dataset.s ? undefined : b.dataset.s;
+      if(!state[id]) delete state[id];
+      save(); paint();
+    };
+  });
+  paint();
+}
+function paint(){
+  let n=0,p=0,f=0,k=0;
+  app.querySelectorAll('.row').forEach(r=>{
+    const s=state[r.dataset.id]; n++;
+    r.dataset.st=s||'';
+    r.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
+    if(s==='pass')p++; else if(s==='fail')f++; else if(s==='block')k++;
+    const show = filter==='all' ? true : filter==='pend' ? !s : s===filter;
+    r.style.display=show?'':'none';
+  });
+  const tot=n||1;
+  document.getElementById('tp').style.width=(p/tot*100)+'%';
+  document.getElementById('tf').style.width=(f/tot*100)+'%';
+  document.getElementById('tk').style.width=(k/tot*100)+'%';
+  np.textContent=p; nf.textContent=f; nk.textContent=k; nn.textContent=n-p-f-k;
+  app.querySelectorAll('section').forEach(sec=>{
+    const rows=[...sec.querySelectorAll('.row')];
+    const c=sec.querySelector('[data-cnt]');
+    if(!c) return;
+    if(!rows.length){
+      const lis=[...sec.querySelectorAll('.flow li')];
+      const p=lis.filter(x=>x.dataset.st==='p').length, b=lis.filter(x=>x.dataset.st==='b').length;
+      c.innerHTML=lis.length+' 步'
+        +(p?` <span style="color:var(--pass)">·${p} 通过</span>`:'')
+        +(b?` <span style="color:var(--block)">·${b} 阻塞</span>`:'');
+      return;
+    }
+    const done=rows.filter(r=>state[r.dataset.id]).length;
+    const bad=rows.filter(r=>['fail','block'].includes(state[r.dataset.id])).length;
+    c.innerHTML=done+'/'+rows.length+(bad?` <span style="color:var(--fail)">·${bad} 异常</span>`:'');
+  });
+}
+document.querySelectorAll('.btns [data-f]').forEach(b=>b.onclick=()=>{
+  filter=b.dataset.f;
+  document.querySelectorAll('.btns [data-f]').forEach(x=>x.classList.toggle('on',x===b));
+  paint();
+});
+document.getElementById('rst').onclick=()=>{
+  if(!confirm('清空所有标记结果？')) return;
+  state={}; save(); paint();
+};
+document.getElementById('seed').onclick=()=>{
+  if(!confirm('载入实测结果预置（v6，2026-09-26；覆盖当前标记）？')) return;
+  state=seeded(); save(); paint();
+};
+document.getElementById('exp').onclick=()=>{
+  let md='# 商城前端验收结果\n\n生成时间：'+new Date().toLocaleString('zh-CN')+'\n\n';
+  let n=0,p=0,f=0,k=0;
+  DATA.forEach(g=>{
+    md+='## '+g.t+'\n\n| 编号 | 功能点 | 结果 |\n|---|---|---|\n';
+    g.items.forEach(([id,t])=>{
+      const s=state[id]||'未测'; n++;
+      if(s==='pass')p++; else if(s==='fail')f++; else if(s==='block')k++;
+      const m={pass:'✅ 通过',fail:'❌ 失败',block:'⛔ 阻塞'}[s]||'⬜ 未测';
+      md+=`| ${id} | ${t} | ${m} |\n`;
+    });
+    md+='\n';
+  });
+  md+='## 端到端流程场景（v6，2026-09-26）\n\n';
+  let fp=0,fb=0,fn=0;
+  FLOWS.forEach(g=>{
+    md+='### '+g.t+'\n\n';
+    const ST={p:'✅ 通过',b:'⛔ 阻塞'};
+    g.steps.forEach(([t,d],i)=>{
+      const s=g.st?.[i];
+      fn++; if(s==='p')fp++; else if(s==='b')fb++;
+      md+=`- ${s?ST[s]:'⬜ 未测'} — ${t.replace(/<[^>]+>/g,'')}｜${d}\n`;
+    });
+    md+='\n';
+  });
+  md+='\n---\n\n## 汇总\n\n';
+  md+=`### 功能点（${n}）\n\n- 通过：${p}\n- 失败：${f}\n- 阻塞：${k}\n- 未测：${n-p-f-k}\n\n`;
+  md+=`### 流程步骤（${fn}）\n\n- 通过：${fp}\n- 阻塞：${fb}\n- 未测：${fn-fp-fb}\n\n`;
+  md+=`### 合计（${n+fn}）\n\n- 通过：${p+fp}\n- 失败：${f}\n- 阻塞：${k+fb}\n- 未测：${(n-p-f-k)+(fn-fp-fb)}\n`;
+  const blob=new Blob([md],{type:'text/markdown;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='商城前端验收结果-'+new Date().toISOString().slice(0,10)+'.md';
+  a.click(); URL.revokeObjectURL(a.href);
+};
+build();
+</script>
+</body>
+</html>

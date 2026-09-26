@@ -60,14 +60,14 @@ function resolveBrowserSessionName(): string
     $host = (string) (parse_url($origin, PHP_URL_HOST) ?: '');
     $port = parse_url($origin, PHP_URL_PORT);
     if ($host === '') {
-        return SessionCookieNameResolver::resolve('');
+        return SessionCookieNameResolver::resolve('', 'backend');
     }
     if (str_contains($host, ':') && !str_starts_with($host, '[')) {
         $host = '[' . $host . ']';
     }
     $authority = $host . (is_int($port) ? ':' . $port : '');
 
-    return SessionCookieNameResolver::resolve($authority);
+    return SessionCookieNameResolver::resolve($authority, 'backend');
 }
 
 function assertBackendUserCanLogin(BackendUser $user): void
