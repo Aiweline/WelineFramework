@@ -252,6 +252,20 @@ final class CheckoutHtmlRenderer
         if ($methods === []) {
             return $this->renderMethodEmptyAlert($inputName, $emptyMessage, $emptyTitle, $emptyReasonCode);
         }
+        $prefetch = [];
+        foreach ($methods as $method) {
+            $label = (string)($method['label'] ?? $method['title'] ?? '');
+            if ($label !== '') {
+                $prefetch[] = $label;
+            }
+        }
+        if ($prefetch !== []) {
+            try {
+                \Weline\Framework\Phrase\Parser::prefetchWords($prefetch);
+            } catch (\Throwable) {
+                // Unit tests / non-storefront contexts may lack State bootstrap.
+            }
+        }
         $html = '';
         foreach ($methods as $index => $method) {
             $code = (string)($method['code'] ?? '');
@@ -293,6 +307,23 @@ final class CheckoutHtmlRenderer
     ): string {
         if ($methods === []) {
             return $this->renderMethodEmptyAlert($inputName, $emptyMessage);
+        }
+
+        $prefetch = ['展开简介', '收起', '查看详情'];
+        foreach ($methods as $method) {
+            $label = (string)($method['label'] ?? $method['title'] ?? '');
+            $desc = trim((string)($method['description'] ?? ''));
+            if ($label !== '') {
+                $prefetch[] = $label;
+            }
+            if ($desc !== '') {
+                $prefetch[] = $desc;
+            }
+        }
+        try {
+            \Weline\Framework\Phrase\Parser::prefetchWords($prefetch);
+        } catch (\Throwable) {
+            // Unit tests / non-storefront contexts may lack State bootstrap.
         }
 
         $expandLabel = (string)__('展开简介');

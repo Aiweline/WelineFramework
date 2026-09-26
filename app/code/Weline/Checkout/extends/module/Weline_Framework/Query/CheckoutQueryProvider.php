@@ -1893,6 +1893,23 @@ class CheckoutQueryProvider implements QueryProviderInterface
         $payload = \is_array($result['data'] ?? null) ? $result['data'] : [];
         $options = \is_array($payload['options'] ?? null) ? $payload['options'] : [];
         $quoteDiagnostics = \is_array($payload['quote_diagnostics'] ?? null) ? $payload['quote_diagnostics'] : [];
+        $prefetch = ['免邮'];
+        foreach ($options as $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+            $rawLabel = trim((string)($option['label'] ?? $option['service_name'] ?? ''));
+            if ($rawLabel !== '') {
+                $prefetch[] = $rawLabel;
+            }
+            $dutyNotice = trim((string)($option['duty_notice'] ?? ''));
+            if ($dutyNotice !== '') {
+                $prefetch[] = (new ShippingIncotermService())->labelForDutyNoticeCode($dutyNotice);
+            }
+        }
+        if ($prefetch !== []) {
+            \Weline\Framework\Phrase\Parser::prefetchWords($prefetch);
+        }
         $methods = [];
         foreach ($options as $option) {
             if (!\is_array($option)) {

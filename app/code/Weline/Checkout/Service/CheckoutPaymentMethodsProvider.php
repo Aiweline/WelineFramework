@@ -326,10 +326,11 @@ final class CheckoutPaymentMethodsProvider
      */
     private function staticMethodChrome(string $code): ?array
     {
+        // Return Chinese sources; callers/HtmlRenderer prefetch before __().
         return match ($code) {
             'fake_card' => [
-                'label' => (string)__('本地测试支付'),
-                'description' => (string)__('仅用于本地开发验证，不会产生真实扣款。'),
+                'label' => '本地测试支付',
+                'description' => '仅用于本地开发验证，不会产生真实扣款。',
                 'icon_raw' => 'Weline_Payment::img/payment/fake-card.svg',
             ],
             'paypal' => [
@@ -343,7 +344,7 @@ final class CheckoutPaymentMethodsProvider
                 'icon_raw' => 'Weline_Payment::img/payment/stripe.svg',
             ],
             'cash_on_delivery', 'cod' => [
-                'label' => (string)__('货到付款'),
+                'label' => '货到付款',
                 'description' => '',
                 'icon_raw' => '',
             ],

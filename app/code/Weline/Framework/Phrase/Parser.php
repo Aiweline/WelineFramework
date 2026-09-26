@@ -223,6 +223,17 @@ class Parser
                     $resolved = $words;
                 }
 
+                // CJK identity miss on a non-zh locale must not poison request cache:
+                // early __() before prefetchWords would otherwise lock Chinese into
+                // H1/title for the rest of the request even after dictionary prefetch.
+                if (
+                    $resolved === $words
+                    && self::sourceContainsCjk($words)
+                    && !self::isChineseLocaleCode((string)($layers['lang'] ?? ''))
+                ) {
+                    return $resolved;
+                }
+
                 return $requestWords[$translationCacheKey] = $resolved;
             } finally {
                 self::leaveTranslationResolution();
@@ -760,6 +771,13 @@ class Parser
             if (\is_string($prefetched) && $prefetched !== '' && $prefetched !== $word) {
                 return self::rememberWorkerTranslatedWord($workerCacheKey, $prefetched, $locales);
             }
+        }
+
+        // Do not remember CJK→CJK identity misses on non-zh locales in the Worker
+        // cache. Early __() before prefetch would otherwise permanently shadow
+        // later dictionary hits until the Worker restarts.
+        if (self::sourceContainsCjk($word) && !self::isChineseLocaleCode($lang)) {
+            return $word;
         }
 
         return self::rememberWorkerTranslatedWord($workerCacheKey, $word, $locales);

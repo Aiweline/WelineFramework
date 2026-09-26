@@ -45,12 +45,17 @@ class Checkout extends FrontendController
     public function index(): string
     {
         // 默认允许匿名结账：未登录也直接渲染结账页。
-        $this->request->setGet('theme_page_title', (string)__('结账'));
+        // WLS：先 prefetch 再 __()，避免模板预取前把中文 identity miss 写进 Worker/请求缓存。
+        $checkoutTitle = '结账';
+        $checkoutSubtitle = '确认收货地址、配送方式和支付信息后即可提交订单。';
+        $emptyCartMessage = '购物车为空，请先加入商品。';
+        \Weline\Framework\Phrase\Parser::prefetchWords([$checkoutTitle, $checkoutSubtitle, $emptyCartMessage]);
+        $this->request->setGet('theme_page_title', (string)__($checkoutTitle));
         $this->request->setGet('page_type', 'checkout');
         $this->request->setGet('layout_type', 'checkout');
         $this->request->setGet('layout_option', 'default');
-        $this->assign('page_title', __('结账'));
-        $this->assign('title', __('结账'));
+        $this->assign('page_title', __($checkoutTitle));
+        $this->assign('title', __($checkoutTitle));
         $this->layoutType = 'checkout';
 
         // P0: SSR empty shell — no currentCart/QueryBin hang; keep chrome.
@@ -61,10 +66,10 @@ class Checkout extends FrontendController
         ];
         $this->assign('checkout_items', $cart['items']);
         $this->assign('checkout_currency', $cart['currency']);
-        $this->assign('checkout_items_empty_message', __('购物车为空，请先加入商品。'));
+        $this->assign('checkout_items_empty_message', __($emptyCartMessage));
         $this->assign(
             'checkout_page_subtitle',
-            (string)__('确认收货地址、配送方式和支付信息后即可提交订单。')
+            (string)__($checkoutSubtitle)
         );
 
         $body = $this->template('Weline_Checkout::frontend/checkout/index.phtml');
