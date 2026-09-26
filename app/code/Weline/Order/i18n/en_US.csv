@@ -183,6 +183,8 @@ cash,cash
 快捷购买,"Quick buy"
 找朋友代付,"Ask a friend to pay"
 未标记,Unmarked
+订单列表,"Order List"
+订单编辑,"Order Edit"
 客户调整已保存,"Customer adjustment saved"
 订单创建成功,"Order created successfully"
 备注已添加,"Note added"
@@ -274,37 +276,6 @@ switch,switch
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot required fields are empty: %{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot value/hash is illegal"
 我的订单,"My Orders"
-查看订单进度与支付状态,"View order progress and payment status"
-已关闭,Closed
-未知状态,"unknown status"
-默认按结账组汇总；部分退款或状态分叉时展开明细,"Orders are grouped by checkout by default; details expand for partial refunds or split statuses"
-订单详情,"Order Details"
-订单商品,"Order items"
-商品,Products
-SKU,SKU
-数量,Quantity
-单价,Price
-小计,Subtotal
-收货信息,"Receiving information"
-帮我付订单在店面不展示收货地址。如需更正，请撤销后重新发起。,"Pay-for-me orders hide shipping address on storefront. To correct, cancel and re-initiate."
-物流方式,"Shipping method"
-物流追踪,"Logistics tracking"
-商品小计,Subtotal
-运费,"Shipping Amount"
-税费,"Tax Amount"
-订单总额,"Grand Total"
-返回订单列表,"Return to order list"
-暂无订单,"No orders yet"
-继续支付,"Continue payment"
-查看详情,"View Details"
-订单明细,"Order details"
-退货,Return
-与我的订单,"And My Orders"
-查询失败,"Query failed"
-物流单号,"Tracking Number"
-当前,Current
-订单留言,"Order note"
-如有特殊要求请留言,"Leave a message if you have special requirements"
 结账配送（参考）,"Checkout shipping (reference)"
 未指定,"Not specified"
 "对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。","Aligned with Shopify: register shipment first; tracking can be added later; no ""shipped"" email without tracking."
@@ -321,6 +292,7 @@ SKU,SKU
 其他（手填名称）,"Other (enter name)"
 其他承运商名称,"Other carrier name"
 选「其他」时填写,"Fill when selecting Other"
+物流单号,"Tracking Number"
 可选，可后补,"Optional, can add later"
 留空则不发送发货邮件,"Leave blank to skip shipping email"
 本次数量,"This quantity"
@@ -330,6 +302,7 @@ SKU,SKU
 打单服务,"Label printing"
 重量（克）,"Weight (g)"
 缺商品重时必填,"Required when product weight missing"
+数量,Quantity
 打单成功后通知客户,"Notify customer after label success"
 确认打单并发货,"Confirm label and ship"
 订单发货记录,"Order shipment log"
@@ -337,23 +310,6 @@ SKU,SKU
 履约单元,"fulfillment unit"
 版本,Version
 时间,Time
-本单可退项；占额由服务端重算。,"Refundable items on this order; holds recalculated server-side."
-可退数量,"Refundable qty"
-提交,Submit
-本单暂无可退款订单项,"No refundable items on this order"
-退款数量,"Refund quantity"
-后台退款,"Backstage refund"
-退款原因,"Reason for refund"
-退款,Refund
-案例,"Case study"
-渠道退款号,"Channel refund ID"
-原因,Reason
-顾客视图,"customer view"
-支付记录与批发沟通（插件槽位）。,"Payment records & wholesale chat (plugin slots)."
-订单支付记录,"Order payment records"
-批发订单沟通,"Wholesale order chat"
-打开完整详情,"Open full details"
-状态流转,"Status flow"
 选择客户,"Select customer"
 当前为访客结账，可改为注册客户,"Guest checkout now; can switch to registered customer"
 客户姓名（展示）,"Customer name (display)"
@@ -376,16 +332,112 @@ SKU,SKU
 订单尚未记录支付方式时，摘要显示「未指定」并附带支付状态；可在此选择可用方式后保存。,"When order has no payment method yet, summary shows ""Unspecified"" with payment status; select an available method here then save."
 配送方式,"Shipping Method"
 运输方式,"Shipping method"
+运费,"Shipping Amount"
 未指定配送方式,"Shipping method not specified"
 系统代码,"System code"
 未加载到运输服务目录时，可直接填写代码；摘要优先展示可读名称。,"When shipping service catalog is not loaded, enter code directly; summary prefers readable names."
 订单备注,"Order Notes"
 订单项,"Order Items"
 添加订单项,"Add Order Item"
+查看详情,"View Details"
 返回列表,"Back to list"
 保存客户调整,"Save customer adjustment"
-订单列表,"Order List"
+暂无收货地址,"No shipping addresses"
+暂无账单地址,"No billing addresses"
+订单详情,"Order Details"
 新建订单,"Create Order"
+返回订单列表,"Return to order list"
+订单摘要,"Order summary"
+结账组号,"Checkout group ID"
+订单状态,"Order Status"
+支付状态,"Payment Status"
+发货状态,"Fulfillment Status"
+商品行数,"Product line count"
+商品数量累计,"Product qty total"
+商品行累计,"Product line total"
+商品小计,Subtotal
+税费,"Tax Amount"
+折扣,Discount
+订单总额,"Grand Total"
+优惠项目,"Discount items"
+无优惠项目,"No discount items"
+累计校验：行累计与商品小计不一致，请核对快照,"Cumulative check: line totals mismatch product subtotal; please verify snapshot"
+状态调整,"Status adjustment"
+状态备注,"Status note"
+通知客户,"Notify customer"
+更新状态,"Update Status"
+订单办理,"Process order"
+加载中…,Loading...
+加载失败，请重试,"Failed to load, please retry"
+发货,Ship
+退款,Refund
+支付与沟通,"Payment & chat"
+客户调整,"Customer adjustment"
+切换到此页签时异步加载本单发货。,"Async-load this order shipments when switching to tab."
+切换到此页签时异步加载本单退款。,"Async-load this order refunds when switching to tab."
+切换到此页签时异步加载支付与沟通。,"Async-load payment & chat when switching to this tab."
+订单商品,"Order items"
+结账快照不可改行,"Checkout snapshot lines immutable"
+商品,Products
+SKU,SKU
+价格快照,"Price snapshot"
+行优惠,"Line discount"
+行总计,"Row Total"
+活动,Campaign
+暂无订单项,"No Order Items"
+成交,Deal
+原价,"Original price"
+原价未记录,"Original price not recorded"
+活动价,"Promo price"
+无活动记录,"No campaign records"
+点击展开编辑客户、地址与备注,"Click to expand edit customer, address & notes"
+更多,More
+"沟通备注 · 取消 · 历史","Chat notes · cancel · history"
+追加沟通备注,"Append chat note"
+写入订单历史，可选通知客户,"Write to order history; optionally notify customer"
+添加备注,"Add note"
+取消原因,"Cancel reason"
+确认取消,"Confirm cancel"
+订单历史,"Order History"
+暂无历史记录,"No History Records"
+"支付记录与沟通也可在上方「订单办理 → 支付与沟通」页签异步加载。","Payment records and chat can also async-load under ""Order processing → Payment & chat"" tab above."
+商品名称,"Product Name"
+单价,Price
+删除,Delete
+查看订单进度与支付状态,"View order progress and payment status"
+已关闭,Closed
+未知状态,"unknown status"
+默认按结账组汇总；部分退款或状态分叉时展开明细,"Orders are grouped by checkout by default; details expand for partial refunds or split statuses"
+小计,Subtotal
+收货信息,"Receiving information"
+帮我付订单在店面不展示收货地址。如需更正，请撤销后重新发起。,"Pay-for-me orders hide shipping address on storefront. To correct, cancel and re-initiate."
+物流方式,"Shipping method"
+物流追踪,"Logistics tracking"
+暂无订单,"No orders yet"
+继续支付,"Continue payment"
+订单明细,"Order details"
+退货,Return
+与我的订单,"And My Orders"
+查询失败,"Query failed"
+当前,Current
+订单留言,"Order note"
+如有特殊要求请留言,"Leave a message if you have special requirements"
+本单可退项；占额由服务端重算。,"Refundable items on this order; holds recalculated server-side."
+可退数量,"Refundable qty"
+提交,Submit
+本单暂无可退款订单项,"No refundable items on this order"
+退款数量,"Refund quantity"
+后台退款,"Backstage refund"
+退款原因,"Reason for refund"
+案例,"Case study"
+渠道退款号,"Channel refund ID"
+原因,Reason
+顾客视图,"customer view"
+支付记录与批发沟通（插件槽位）。,"Payment records & wholesale chat (plugin slots)."
+订单支付记录,"Order payment records"
+批发订单沟通,"Wholesale order chat"
+打开完整详情,"Open full details"
+状态流转,"Status flow"
 "搜索订单号、分组号 G-xxx、UUID、客户","Search order No., group G-xxx, UUID, customer"
 全部状态,"All Status"
 全部支付状态,"All Payment Status"
@@ -399,25 +451,17 @@ SKU,SKU
 类型,Type
 来源,Source
 客户,Customer
-订单状态,"Order Status"
-支付状态,"Payment Status"
-发货状态,"Fulfillment Status"
 暂无数据,"No Data"
 匿名,Anonymous
 编辑,Edit
 上一页,"Previous Page"
 下一页,"Next Page"
-系统,System
 订单基本信息,"Order Information"
 客户姓名,"Customer Name"
-折扣,Discount
 批发信用优惠,"Wholesale credit discount"
 汇率快照,"Exchange rate snapshot"
 现金定金,"Cash deposit"
 状态操作,"Status Actions"
-更新状态,"Update Status"
-暂无收货地址,"No shipping addresses"
-暂无账单地址,"No billing addresses"
 配送服务,"Shipping services."
 备注与履约方式,"Notes & fulfillment method"
 点击复制服务码,"Click to copy service code"
@@ -425,54 +469,9 @@ SKU,SKU
 已复制服务码,"Service code copied"
 复制失败，请手动选择,"Copy failed, please select manually"
 结账快照,"Checkout snapshot"
-价格快照,"Price snapshot"
-行优惠,"Line discount"
-行总计,"Row Total"
-活动,Campaign
-暂无订单项,"No Order Items"
-成交,Deal
-原价,"Original price"
-原价未记录,"Original price not recorded"
-活动价,"Promo price"
-无活动记录,"No campaign records"
-订单历史,"Order History"
 是否通知客户,"Customer Notified"
-暂无历史记录,"No History Records"
 是,Yes
 否,No
-管理订单,"Manage orders"
-订单摘要,"Order summary"
-结账组号,"Checkout group ID"
-商品行数,"Product line count"
-商品数量累计,"Product qty total"
-商品行累计,"Product line total"
-优惠项目,"Discount items"
-无优惠项目,"No discount items"
-累计校验：行累计与商品小计不一致，请核对快照,"Cumulative check: line totals mismatch product subtotal; please verify snapshot"
-状态调整,"Status adjustment"
-状态备注,"Status note"
-通知客户,"Notify customer"
-订单办理,"Process order"
-加载中…,Loading...
-加载失败，请重试,"Failed to load, please retry"
-发货,Ship
-支付与沟通,"Payment & chat"
-客户调整,"Customer adjustment"
-切换到此页签时异步加载本单发货。,"Async-load this order shipments when switching to tab."
-切换到此页签时异步加载本单退款。,"Async-load this order refunds when switching to tab."
-切换到此页签时异步加载支付与沟通。,"Async-load payment & chat when switching to this tab."
-结账快照不可改行,"Checkout snapshot lines immutable"
-点击展开编辑客户、地址与备注,"Click to expand edit customer, address & notes"
-更多,More
-"沟通备注 · 取消 · 历史","Chat notes · cancel · history"
-追加沟通备注,"Append chat note"
-写入订单历史，可选通知客户,"Write to order history; optionally notify customer"
-添加备注,"Add note"
-取消原因,"Cancel reason"
-确认取消,"Confirm cancel"
-"支付记录与沟通也可在上方「订单办理 → 支付与沟通」页签异步加载。","Payment records and chat can also async-load under ""Order processing → Payment & chat"" tab above."
-商品名称,"Product Name"
-删除,Delete
 按状态筛选,"Filter by status"
 筛选,filter
 暂无记录,"No record yet"
@@ -485,6 +484,7 @@ SKU,SKU
 是否启用,Enable
 排序,Sort
 暂无状态,"No Status"
+系统,System
 启用,Enabled
 禁用,Disabled
 状态已删除,"Status Deleted"
@@ -729,6 +729,7 @@ Outbox,Outbox
 "旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","The old Checkout writer has been disabled by the cutover gate (mode=%{1})"
 "新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）","The new Order writer is not writable in the current mode (mode=%{1}; shadow only allows plan)"
 "MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）","MIG-P2-ORDER: Checkout→Order single write flow (only registered isolation clone)"
+管理订单,"Manage orders"
 联系人、地址与备注在下方「客户调整」区编辑。,"Edit contact, address and notes in the ""Customer adjustment"" section below."
 前往客户调整,"Go to customer adjustment"
 本单发货进度,"Order shipping progress"

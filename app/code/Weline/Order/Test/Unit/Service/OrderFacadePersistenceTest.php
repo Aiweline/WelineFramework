@@ -168,6 +168,60 @@ final class OrderFacadePersistenceTest extends TestCase
         }
     }
 
+    /**
+     * 回归：订单级折扣（券 / 支付方式激励）必须同时落盘到 discount_amount 列。
+     *
+     * 旧行为：MoneySnapshot 里有 discount_amount_minor，但 insertOrder 只写
+     * subtotal / shipping_amount / tax_amount / grand_total ⇒ 折扣列停在默认 0，
+     * 订单自身金额不守恒（小计 + 运费 + 税费 - 折扣 ≠ 订单总额）。
+     * 后台订单详情直接渲染这些列，于是展示出对不上的金额分解。
+     */
+    public function testOrderDiscountIsPersistedIntoColumnSoBreakdownReconciles(): void
+    {
+        [$path, $connection, $connector, $store, $allocator] = $this->database();
+        try {
+            $facade = $this->facade($store, $allocator);
+            $created = $facade->create(new CreateCheckoutGroupCommand(
+                idempotencyKey: 'sqlite-discount',
+                requestHash: hash('sha256', 'sqlite-discount'),
+                websiteId: 0,
+                storeId: 1,
+                currency: 'CNY',
+                lines: [
+                    ['name' => 'A', 'qty_minor' => 1, 'unit_price_minor' => 100, 'split_key' => 'a'],
+                ],
+                shippingMethod: 'flat',
+                shippingAmountMinor: 50,
+                options: ['discount_amount_minor' => 30],
+            ));
+
+            $rows = $connector->query(
+                'SELECT subtotal, shipping_amount, tax_amount, discount_amount, grand_total, '
+                . 'money_snapshot_json FROM weline_order WHERE order_uuid = '
+                . "'" . $created->orderUuids[0] . "'"
+            )->fetch();
+            self::assertIsArray($rows);
+            self::assertArrayHasKey(0, $rows);
+            $row = $rows[0];
+
+            // 折扣列必须落盘（旧行为：停在默认 0）
+            self::assertSame(0.30, (float)$row['discount_amount']);
+            // 订单自身金额必须守恒（列均为元，非分）
+            $computed = (float)$row['subtotal']
+                + (float)$row['shipping_amount']
+                + (float)$row['tax_amount']
+                - (float)$row['discount_amount'];
+            self::assertEqualsWithDelta($computed, (float)$row['grand_total'], 0.001);
+            self::assertSame(1.20, (float)$row['grand_total']);
+            // 快照与列必须一致
+            $money = json_decode((string)$row['money_snapshot_json'], true);
+            self::assertIsArray($money);
+            self::assertSame(30, (int)($money['discount_amount_minor'] ?? -1));
+        } finally {
+            $this->cleanup($path, $connection, $connector);
+        }
+    }
+
     private function facade(
         OrderFacadeStoreInterface $store,
         DisplayNumberAllocator $allocator,
@@ -269,8 +323,14 @@ final class OrderFacadePersistenceTest extends TestCase
             . 'website_id INTEGER, store_id INTEGER, customer_id INTEGER, '
             . 'status VARCHAR(50) NOT NULL, state VARCHAR(50) NOT NULL, currency VARCHAR(10) NOT NULL, '
             . 'subtotal DECIMAL(20,2) NOT NULL, shipping_amount DECIMAL(20,2) NOT NULL, '
-            . 'tax_amount DECIMAL(20,2) NOT NULL, grand_total DECIMAL(20,2) NOT NULL, '
+            . 'tax_amount DECIMAL(20,2) NOT NULL, discount_amount DECIMAL(20,2) NOT NULL DEFAULT 0, '
+            . 'grand_total DECIMAL(20,2) NOT NULL, '
             . 'source_module VARCHAR(100) NOT NULL, shipping_method VARCHAR(100), shipping_address TEXT, '
+            // 以下列由 OrmOrderFacadeStore::insertOrder 写入；镜像表若缺列会让整条 create 链路在
+            // SQLite 上直接 INSERT 失败（fixture 与真实表脱节，与本次金额修复无关）。
+            . 'billing_address TEXT, payment_method VARCHAR(100), order_type VARCHAR(16) NOT NULL DEFAULT \'toc\', '
+            . 'type_payload_json TEXT, checkout_entry VARCHAR(32), '
+            . 'customer_email VARCHAR(255), customer_name VARCHAR(255), customer_phone VARCHAR(50), '
             . 'money_snapshot_json TEXT, catalog_snapshot_json TEXT, scope_snapshot_json TEXT, '
             . 'tax_snapshot_json TEXT, shipping_snapshot_json TEXT, '
             . 'is_shipping_charge_owner INTEGER NOT NULL DEFAULT 0, split_key VARCHAR(64), '

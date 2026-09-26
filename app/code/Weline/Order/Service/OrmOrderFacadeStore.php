@@ -148,6 +148,11 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             Order::schema_fields_SUBTOTAL => $this->minorToMajor((int)($money['subtotal_minor'] ?? 0)),
             Order::schema_fields_SHIPPING_AMOUNT => $this->minorToMajor((int)($money['shipping_amount_minor'] ?? 0)),
             Order::schema_fields_TAX_AMOUNT => $this->minorToMajor((int)($money['tax_amount_minor'] ?? 0)),
+            // 折扣必须与其它金额列一起落盘：money 快照里已有 discount_amount_minor（券 + 支付方式激励），
+            // 若只写小计/运费/税费/总额而不写折扣列，该列会停在默认 0，
+            // 于是订单自身金额不守恒（小计 + 运费 + 税费 - 折扣 ≠ 订单总额），
+            // 后台订单详情直接渲染该列 ⇒ 展示出对不上的金额分解。
+            Order::schema_fields_DISCOUNT_AMOUNT => $this->minorToMajor((int)($money['discount_amount_minor'] ?? 0)),
             Order::schema_fields_GRAND_TOTAL => $this->minorToMajor((int)($money['grand_total_minor'] ?? 0)),
             Order::schema_fields_SOURCE_MODULE => 'Weline_Order',
             Order::schema_fields_PAYMENT_METHOD => strtolower(trim((string)($row['payment_method'] ?? ''))),
