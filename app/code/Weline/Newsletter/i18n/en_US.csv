@@ -22,16 +22,6 @@
 查看邮件订阅名单与发券台账,"View newsletter subscribers and gift ledger"
 邮件订阅名单列表,"Newsletter subscriber list"
 查看邮件订阅名单,"View newsletter subscribers"
-请输入您的邮箱,"Enter your email"
-关闭,Close
-优惠活动,Promotions
-新品上新,"New arrivals"
-可随时退订,"Unsubscribe anytime"
-您的优惠码,"Your coupon code"
-订阅我们,Subscribe
-订阅获取最新优惠信息,"Subscribe for the latest offers"
-订阅,Subscribe
-请输入邮箱地址,"Enter email address"
 "配置订阅欢迎礼折扣与弹窗 Cookie；保存后同步 Marketing 规则。","Configure welcome-gift discount and popup cookie; saving syncs the Marketing rule."
 启用状态,Status
 启用订阅欢迎礼,"Enable subscribe welcome gift"
@@ -57,6 +47,16 @@ ID,ID
 来源,Source
 创建时间,"Created at"
 暂无订阅记录,"No subscribers yet"
+请输入您的邮箱,"Enter your email"
+关闭,Close
+优惠活动,Promotions
+新品上新,"New arrivals"
+可随时退订,"Unsubscribe anytime"
+您的优惠码,"Your coupon code"
+订阅我们,Subscribe
+订阅获取最新优惠信息,"Subscribe for the latest offers"
+订阅,Subscribe
+请输入邮箱地址,"Enter email address"
 请输入有效的邮箱地址。,"Please enter a valid email address."
 您已订阅，主题偏好已更新。,"You are already subscribed; your topic preferences were updated."
 订阅成功！欢迎礼优惠券已发送到您的邮箱。,"Subscribed! Your welcome coupon was sent to your email."

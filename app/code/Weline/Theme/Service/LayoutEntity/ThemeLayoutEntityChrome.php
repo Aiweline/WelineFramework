@@ -649,6 +649,14 @@ final class ThemeLayoutEntityChrome
         if (!$isEn && \str_contains($html, 'delivery-line-1">Ship to')) {
             return true;
         }
+        // Address Taglib English fallback baked while Phrase/State lagged (bn/fr/… filename + EN labels).
+        if (!$isEn && (
+            \str_contains($html, '"province":"Province"')
+            || \str_contains($html, 'Quickly add address')
+            || \str_contains($html, '">Province</label>')
+        )) {
+            return true;
+        }
 
         $isZh = $locale === 'zh_Hans_CN'
             || $locale === 'zh_Hant_TW'
@@ -670,6 +678,13 @@ final class ThemeLayoutEntityChrome
             '回到顶部',
             '同时用作结账地址',
             '周一至周五 9:00 - 18:00',
+            // Newsletter footer / popup CTA seeds (dict has bn_BD etc.; stale bake must rebuild).
+            '订阅我们的邮件',
+            '获取最新的优惠信息和新品资讯',
+            '请输入您的邮箱',
+            '请输入您的邮箱地址',
+            '>订阅</',
+            '>立即订阅</',
         ] as $zhMarker) {
             if (\str_contains($html, $zhMarker)) {
                 return true;

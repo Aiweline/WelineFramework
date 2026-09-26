@@ -7,6 +7,7 @@ namespace Weline\Newsletter\Service;
 use Weline\Framework\DateTime\Timezone;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\I18n\Api\Translation\TranslationResolverInterface;
 use Weline\Newsletter\Model\Subscriber;
 
 /**
@@ -16,11 +17,14 @@ final class SubscribeService
 {
     private const EMAIL_MAX_LEN = 254;
 
+    private const MSG_MODULES = ['Weline_Newsletter'];
+
     public function __construct(
         private readonly ?SubscribeGiftIssuer $giftIssuer = null,
         private readonly ?NewsletterMailSender $mailSender = null,
         private readonly ?CheckoutAutoApplyService $autoApply = null,
         private readonly ?SubscribeGiftConfig $giftConfig = null,
+        private readonly ?TranslationResolverInterface $translationResolver = null,
     ) {
     }
 
@@ -31,8 +35,9 @@ final class SubscribeService
     public function subscribe(array $input): array
     {
         $email = $this->normalizeEmail((string)($input['email'] ?? ''));
+        $locale = \trim((string)($input['locale'] ?? $this->resolveLocale()));
         if ($email === '' || !$this->isValidEmail($email)) {
-            return $this->fail((string)\__('请输入有效的邮箱地址。'));
+            return $this->fail($this->msg('请输入有效的邮箱地址。', $locale));
         }
 
         $topicPromo = $this->boolOrDefault($input['topic_promo'] ?? null, true);
@@ -41,7 +46,6 @@ final class SubscribeService
         $websiteId = isset($input['website_id'])
             ? \max(0, (int)$input['website_id'])
             : $this->resolveWebsiteId();
-        $locale = \trim((string)($input['locale'] ?? $this->resolveLocale()));
         $customerId = isset($input['customer_id']) ? \max(0, (int)$input['customer_id']) : 0;
 
         /** @var Subscriber $model */
@@ -107,7 +111,7 @@ final class SubscribeService
 
         if ($preferenceUpdated) {
             // Preference update: do not force another mail.
-            $message = (string)\__('您已订阅，主题偏好已更新。');
+            $message = $this->msg('您已订阅，主题偏好已更新。', $locale);
         } elseif ($issuedNow && $couponCode !== '') {
             $this->mailSender()->sendGift($email, [
                 'email' => $email,
@@ -115,17 +119,17 @@ final class SubscribeService
                 'discount_label' => $this->discountLabel(),
                 'valid_until' => $this->validUntilLabel(),
                 'shop_url' => (string)($input['shop_url'] ?? '/'),
-                'topics_label' => $this->topicsLabel($topicPromo, $topicNew),
+                'topics_label' => $this->topicsLabel($topicPromo, $topicNew, $locale),
                 'site_name' => (string)($input['site_name'] ?? ''),
             ]);
-            $message = (string)\__('订阅成功！欢迎礼优惠券已发送到您的邮箱。');
+            $message = $this->msg('订阅成功！欢迎礼优惠券已发送到您的邮箱。', $locale);
         } else {
             $this->mailSender()->sendWelcome($email, [
                 'email' => $email,
-                'topics_label' => $this->topicsLabel($topicPromo, $topicNew),
+                'topics_label' => $this->topicsLabel($topicPromo, $topicNew, $locale),
                 'site_name' => (string)($input['site_name'] ?? ''),
             ]);
-            $message = (string)\__('订阅成功！感谢您的关注。');
+            $message = $this->msg('订阅成功！感谢您的关注。', $locale);
         }
 
         $payload = [
@@ -216,17 +220,30 @@ final class SubscribeService
         }
     }
 
-    private function topicsLabel(bool $promo, bool $newArrivals): string
+    private function topicsLabel(bool $promo, bool $newArrivals, string $locale = ''): string
     {
         $parts = [];
         if ($promo) {
-            $parts[] = (string)\__('优惠活动');
+            $parts[] = $this->msg('优惠活动', $locale);
         }
         if ($newArrivals) {
-            $parts[] = (string)\__('上新资讯');
+            $parts[] = $this->msg('上新资讯', $locale);
         }
 
-        return $parts === [] ? (string)\__('邮件资讯') : \implode(' / ', $parts);
+        return $parts === [] ? $this->msg('邮件资讯', $locale) : \implode(' / ', $parts);
+    }
+
+    private function msg(string $source, string $locale = ''): string
+    {
+        $locale = \trim($locale) !== '' ? \trim($locale) : $this->resolveLocale();
+        if ($locale === '') {
+            $locale = 'zh_Hans_CN';
+        }
+        try {
+            return $this->translator()->translate($source, $locale, self::MSG_MODULES);
+        } catch (\Throwable) {
+            return (string)\__($source);
+        }
     }
 
     private function discountLabel(): string
@@ -278,5 +295,10 @@ final class SubscribeService
     private function giftConfig(): SubscribeGiftConfig
     {
         return $this->giftConfig ?? ObjectManager::getInstance(SubscribeGiftConfig::class);
+    }
+
+    private function translator(): TranslationResolverInterface
+    {
+        return $this->translationResolver ?? ObjectManager::getInstance(TranslationResolverInterface::class);
     }
 }
