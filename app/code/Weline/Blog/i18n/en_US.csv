@@ -1,6 +1,6 @@
 ﻿博客分类,"Blog categories"
 "分类 ID 不能为空","Category ID is required."
-"博客文章 sitemap URL 提供器","Blog post sitemap URL provider"
+"博客文章 sitemap URL 提供器（多语 hreflang）","博客文章 sitemap URL 提供器（多语 hreflang）"
 博客,Blog
 标题（选填）,"Title (optional)"
 一句话概括您的观点,"Summarize your point in one sentence"
@@ -161,6 +161,7 @@ Slug,Slug
 技术分享,"Tech Sharing"
 产品动态,"Product Updates"
 公司新闻,"Company News"
+"博客文章 sitemap URL 提供器","Blog post sitemap URL provider"
 最新博客文章,"Latest blog posts"
 分类「%{1}」的最新文章,"Latest articles in category ""%{1}"""
 "「%{1}」分类博客 · 穿搭与选购","""%{1}"" category blog · styling & buying"
