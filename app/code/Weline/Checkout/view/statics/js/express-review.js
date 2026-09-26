@@ -195,7 +195,8 @@
       if (label) {
         methodLabel = label;
       } else if (paymentMethod) {
-        methodLabel = '支付方式：' + paymentMethod;
+        // 禁止硬编码中文：非中文 locale 下否则会露「支付方式：paypal」
+        methodLabel = translatePhrase('支付方式') + '：' + paymentMethod;
       }
       if (methodEl) {
         if (methodLabel) {
@@ -220,6 +221,10 @@
       } else if (totals.grand_total_minor != null) {
         grand = Number(totals.grand_total_minor) / 100;
       }
+      var items = [];
+      if (lastReview && Array.isArray(lastReview.items) && lastReview.items.length) {
+        items = lastReview.items;
+      }
       var payload = {
         payment_method: paymentMethod || 'paypal',
         payment_type: paymentMethod || 'paypal',
@@ -233,10 +238,31 @@
         service_code: selectedServiceCode || '',
         source: 'express_review',
       };
+      if (items.length) {
+        payload.items = items;
+      }
       if (lastReview && lastReview.order_uuid) {
         payload.order_uuid = text(lastReview.order_uuid);
       }
       return Object.assign(payload, extra || {});
+    }
+
+    function trackReviewEnter(data) {
+      if (root.getAttribute('data-express-review-enter-tracked') === '1') {
+        return;
+      }
+      var items = Array.isArray(data && data.items) ? data.items : [];
+      if (!items.length) {
+        return;
+      }
+      root.setAttribute('data-express-review-enter-tracked', '1');
+      // 支付商回跳后路径不是 /checkout，路径级 begin_checkout 不会触发；快捷车可能已空。
+      trackPixel('begin_checkout', chainPayload({
+        items: items,
+        method_label: methodLabel,
+        trigger: 'express_review_enter',
+        source: 'express_review',
+      }), root);
     }
 
     if (!transactionNo && !checkoutGroupUuid) {
@@ -505,6 +531,8 @@
       if (addressHint && data.copy && data.copy.address_hint) {
         addressHint.textContent = text(data.copy.address_hint);
       }
+
+      trackReviewEnter(data);
 
       return address;
     }

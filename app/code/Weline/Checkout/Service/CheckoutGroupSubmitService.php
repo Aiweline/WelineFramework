@@ -198,8 +198,32 @@ final class CheckoutGroupSubmitService
         $quoteArray = null;
         $amountMinor = 0;
         $requestHash = '';
+        $addressCountry = strtoupper(trim((string) ($address['country_code'] ?? $address['country'] ?? '')));
+        // Express 延后运费：无 service_code 且无可信国家时，先按商品小计建单（0 运费），
+        // 支付商带回地址后由 express-review / patchOrder 重估运费。避免 PDP $101 被默认 CN 航线抬成 $223。
+        $deferExpressShipping = $checkoutEntry === CheckoutEntry::EXPRESS
+            && trim($serviceCode) === ''
+            && $addressCountry === ''
+            && $shippableLines !== [];
         try {
             $this->quoteCalls++;
+            if ($deferExpressShipping) {
+                $requestHash = hash('sha256', 'express_deferred_shipping|' . $cartHash . '|' . $currency);
+                $quote = new \Weline\Shipping\Api\Quote\ShippingQuote(
+                    quoteId: 'sq_deferred_' . bin2hex(random_bytes(6)),
+                    serviceCode: '',
+                    amountMinor: 0,
+                    currency: $currency,
+                    currencyPrecision: 2,
+                    configVersion: $configVersion,
+                    requestHash: $requestHash,
+                    isFree: true,
+                    freeReason: 'express_deferred_shipping',
+                    expiresAt: gmdate('c', time() + 1800),
+                );
+                $amountMinor = 0;
+                $quoteArray = $quote->toArray() + ['express_deferred_shipping' => true];
+            } else {
             $splitQuotes = $this->splitShippingQuotes();
             if ($splitQuotes !== null && $shippableLines !== []) {
                 $split = $splitQuotes->quoteSplit($req, $serviceCode);
@@ -235,6 +259,7 @@ final class CheckoutGroupSubmitService
                 $amountMinor = $quote->amountMinor;
                 $requestHash = $quote->requestHash;
                 $quoteArray = $quote->toArray();
+            }
             }
         } catch (ShippingQuoteConflictException $e) {
             throw new CheckoutV2ConflictException($e->errorCode(), $e->getMessage(), $e->context(), $e);

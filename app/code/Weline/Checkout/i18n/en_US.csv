@@ -199,8 +199,6 @@
 在后台订单详情页面内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。,"Inject content before the backend order detail page content, allowing other modules to add custom content at the top of the order detail page."
 后台订单详情页之后,"After Backend Order Detail Page"
 在后台订单详情页面内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after the backend order detail page content, allowing other modules to add custom content at the bottom of the order detail page."
-结账,Checkout
-确认收货地址、配送方式和支付信息后即可提交订单。,"Review your shipping and payment details"
 无效的请求方法,"Invalid request method"
 请先登录,"Please login first"
 无权操作此订单,"No permission to operate this order"
@@ -314,6 +312,7 @@ SKU,SKU
 关闭,Close
 切换结账,"Switch checkout"
 安全结账,"Secure checkout"
+结账,Checkout
 零售,Retail
 暂时无法结账,"Unable to checkout at the moment"
 购物车是空的,"Shopping cart is empty"
@@ -327,7 +326,7 @@ SKU,SKU
 结账收货地址,"Checkout shipping address"
 结账税号,"Checkout tax ID"
 正在加载配送方式...,"Loading shipping methods..."
-支付方式,"Payment Method"
+支付方式,"Payment method"
 正在加载支付方式...,"Loading payment methods..."
 订单摘要,"Order summary"
 优惠与留言,"Discounts and notes"
@@ -358,9 +357,6 @@ SKU,SKU
 该地区暂不支持配送,"Shipping is not available for this region"
 应付,"Amount due"
 取消,Cancel
-正在前往结账...,"Proceeding to checkout..."
-结账准备失败,"Checkout preparation failed"
-立即结账,"Proceed to checkout"
 当前国家暂无地址，可直接快速新增。,"No addresses for this country yet. You can add one quickly."
 当前国家暂无地址。,"No addresses for the current country."
 匿名,Guest
@@ -400,6 +396,9 @@ SKU,SKU
 配送,Shipping
 合计,Total
 错误代码：,"Error code:"
+正在前往结账...,"Proceeding to checkout..."
+结账准备失败,"Checkout preparation failed"
+立即结账,"Proceed to checkout"
 订单列表,"order list"
 订单号关键词,"Order number keyword"
 全部状态,"All status"
@@ -487,6 +486,9 @@ SKU,SKU
 报价令牌缺失,"Quote token missing"
 快捷支付下单失败,"Express checkout order failed"
 请在支付商窗口完成授权,"Please complete authorization in the payment provider window"
+快捷支付缺少商品信息,快捷支付缺少商品信息
+游客会话缺失，请刷新后重试,游客会话缺失，请刷新后重试
+无法加入当前商品,无法加入当前商品
 商品暂不可售,"Product temporarily unavailable"
 无法更新订单金额,"Unable to update order amount"
 无法定位支付交易上下文,"Unable to locate payment transaction context"
@@ -537,9 +539,6 @@ SKU,SKU
 地址不存在,"Address not found"
 当前地址暂不可配送，请更换收货地址。,"This address cannot be shipped to. Please choose another delivery address."
 该地址所在地区暂不支持配送（禁运）。,"This address is in an embargoed area and cannot be shipped to."
-本地测试支付,"Local test payment"
-仅用于本地开发验证，不会产生真实扣款。,"For local development verification only; no real charge is made."
-货到付款,"Cash on delivery"
 万能结账,"Universal checkout"
 快捷购买,"Express buy"
 找朋友代付,"Ask a friend to pay"
@@ -554,6 +553,10 @@ SKU,SKU
 收货地址暂未匹配到可用的配送服务。请确认国家或地区是否正确，或联系客服确认是否可送达。,"No shipping service matched this address. Please confirm the country or region, or contact support about delivery coverage."
 当前收货国家：%{1}。,"Current destination country: %{1}."
 系统暂未返回可用的配送方案。请确认收货地址与商品信息，或联系客服了解具体原因（常见如商品缺重量/尺寸，或目的地限制）。,"No shipping options were returned. Please confirm the shipping address and product details, or contact support (common causes: missing weight/dimensions, or destination restrictions)."
+确认收货地址、配送方式和支付信息后即可提交订单。,"Review your shipping and payment details"
+本地测试支付,"Local test payment"
+仅用于本地开发验证，不会产生真实扣款。,"For local development verification only; no real charge is made."
+货到付款,"Cash on delivery"
 China,China
 国家/地区,Country/Region
 搜索国家/地区,"Search country/region"

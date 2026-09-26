@@ -59,9 +59,17 @@ final class ExpressAwaitingConfirmContractTest extends TestCase
         $js = (string) file_get_contents(dirname(__DIR__, 3) . '/view/statics/js/product-express-pay.js');
         self::assertStringContainsString('startExpressCheckout', $js);
         self::assertStringContainsString('weline_express_pay', $js);
-        self::assertStringContainsString('openProviderWindow', $js);
+        // Popup must be opened synchronously on click (about:blank), then navigated
+        // after startExpressCheckout — async window.open is blocked by browsers.
+        self::assertStringContainsString('openBlankProviderWindow', $js);
+        self::assertStringContainsString('navigateProviderWindow', $js);
+        self::assertStringContainsString("'about:blank'", $js);
         self::assertStringNotContainsString('buyNow.click', $js);
         self::assertStringNotContainsString("searchParams.set('express_pay'", $js);
         self::assertStringNotContainsString('location.assign(target)', $js);
+        // PDP 快捷支付只结当前商品：传 buy_now，禁止先 cart.add 再结整车。
+        self::assertStringContainsString('buy_now: true', $js);
+        self::assertStringContainsString('product_express: true', $js);
+        self::assertStringNotContainsString('cartApi.add', $js);
     }
 }
