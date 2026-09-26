@@ -1,4 +1,8 @@
-﻿请指定分支。,"Please specify a branch."
+﻿发布完成后,发布完成后
+"deploy:release / Orchestrator 发布流程完成后触发。","deploy:release / Orchestrator 发布流程完成后触发。"
+核心更新完成后,核心更新完成后
+"core:update 将框架核心同步到项目并打印统计后触发。观察者可清主题布局固化物等派生磁盘；Deploy 不硬绑 Theme。","core:update 将框架核心同步到项目并打印统计后触发。观察者可清主题布局固化物等派生磁盘；Deploy 不硬绑 Theme。"
+请指定分支。,"Please specify a branch."
 请求方式错误。,"Invalid request method."
 发布参数不完整。,"Incomplete release parameters."
 请先确认发布操作。,"Please confirm the release first."
