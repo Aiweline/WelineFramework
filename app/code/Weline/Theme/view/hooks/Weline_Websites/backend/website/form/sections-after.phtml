@@ -1,0 +1,156 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 15
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\WebsiteThemeBindingService;
+
+$website = (array)($this->getData('website') ?? []);
+$hasWebsiteIdentity = array_key_exists('website_id', $website) || array_key_exists('id', $website);
+$websiteId = $hasWebsiteIdentity ? (int)($website['website_id'] ?? $website['id']) : -1;
+$hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'website'));
+if (!is_string($hookId) || $hookId === '' || preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
+    $hookId = 'website_' . (is_string($hookId) ? $hookId : '');
+}
+$sectionId = $hookId . '_theme_binding';
+$themeFieldId = $sectionId . '_theme_id';
+$versionFieldId = $sectionId . '_version_id';
+
+$summary = [
+    'ok' => false,
+    'theme_id' => 0,
+    'theme_name' => '',
+    'binding_source' => 'none',
+    'inherited' => false,
+    'version_id' => 0,
+    'version_number' => 0,
+    'version_name' => '',
+    'storage_scope' => '',
+    'themes' => [],
+    'versions' => [],
+];
+
+try {
+    /** @var WebsiteThemeBindingService $bindings */
+    $bindings = ObjectManager::getInstance(WebsiteThemeBindingService::class);
+    if ($hasWebsiteIdentity && $websiteId >= 0) {
+        $summary = $bindings->summarize($website);
+    } else {
+        $summary['themes'] = $bindings->listFrontendThemes();
+    }
+} catch (\Throwable) {
+}
+
+$h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$themeId = (int)($summary['theme_id'] ?? 0);
+$versionId = (int)($summary['version_id'] ?? 0);
+$themes = is_array($summary['themes'] ?? null) ? $summary['themes'] : [];
+$versions = is_array($summary['versions'] ?? null) ? $summary['versions'] : [];
+$inherited = !empty($summary['inherited']);
+$bindingSource = (string)($summary['binding_source'] ?? 'none');
+$versionLabel = '';
+if ((int)($summary['version_number'] ?? 0) > 0) {
+    $versionLabel = 'v' . (int)$summary['version_number'];
+    $name = trim((string)($summary['version_name'] ?? ''));
+    if ($name !== '') {
+        $versionLabel .= ' · ' . $name;
+    }
+}
+?>
+<div class="w-disclosure" data-w-component="disclosure">
+    <div id="<?= $h($sectionId . '_heading') ?>">
+        <button class="w-disclosure__trigger" type="button" aria-expanded="false" aria-controls="<?= $h($sectionId . '_body') ?>" data-w-target="#<?= $h($sectionId . '_body') ?>" data-w-action="disclosure.toggle" data-w-disclosure-trigger>
+            <w:icon name="palette" size="sm"></w:icon>
+            <span><lang>店面主题</lang></span>
+            <?php if ($themeId > 0): ?>
+                <span class="w-badge" data-tone="neutral" data-size="sm"><?= $h((string)($summary['theme_name'] ?? '')) ?></span>
+            <?php endif; ?>
+            <w:icon name="chevron-down" size="sm"></w:icon>
+        </button>
+    </div>
+    <div id="<?= $h($sectionId . '_body') ?>" class="w-disclosure__panel" aria-labelledby="<?= $h($sectionId . '_heading') ?>" data-w-disclosure-panel hidden>
+        <div class="w-disclosure__body">
+            <?php if (!$hasWebsiteIdentity || $websiteId < 0): ?>
+                <p class="w-text" data-tone="muted" data-size="sm"><lang>请先保存网站后，再为本站选择店面主题。</lang></p>
+            <?php else: ?>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);">
+                    <lang>本站店面主题按网站范围绑定，不受主题列表「全局回退」切换影响。全局回退仅 Default。</lang>
+                </p>
+                <div class="w-grid">
+                    <div style="--w-span:6;--w-mb:var(--weline-space-4);">
+                        <label for="<?= $h($themeFieldId) ?>" class="w-field__label"><lang>前台主题</lang></label>
+                        <select class="w-select" id="<?= $h($themeFieldId) ?>" name="extensions[theme][theme_id]">
+                            <option value="0" <?= $themeId <= 0 ? 'selected' : '' ?>><lang>不修改（保持当前）</lang></option>
+                            <?php foreach ($themes as $themeOption): ?>
+                                <?php
+                                if (!is_array($themeOption)) {
+                                    continue;
+                                }
+                                $optId = (int)($themeOption['id'] ?? 0);
+                                if ($optId <= 0) {
+                                    continue;
+                                }
+                                $optName = trim((string)($themeOption['name'] ?? ('#' . $optId)));
+                                ?>
+                                <option value="<?= $optId ?>" <?= $optId === $themeId ? 'selected' : '' ?>><?= $h($optName) ?> (#<?= $optId ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php if ($inherited): ?>
+                            <p class="w-text" data-tone="warning" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                <lang>当前显示为继承上级绑定，保存时选择主题将写入本站专属绑定。</lang>
+                            </p>
+                        <?php elseif ($bindingSource === 'website'): ?>
+                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                <lang>本站已发布专属主题绑定。</lang>
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                    <div style="--w-span:6;--w-mb:var(--weline-space-4);">
+                        <label for="<?= $h($versionFieldId) ?>" class="w-field__label"><lang>已发布版本</lang></label>
+                        <select class="w-select" id="<?= $h($versionFieldId) ?>" name="extensions[theme][version_id]">
+                            <option value="0" <?= $versionId <= 0 ? 'selected' : '' ?>><lang>不修改（保持当前）</lang></option>
+                            <?php foreach ($versions as $versionOption): ?>
+                                <?php
+                                if (!is_array($versionOption)) {
+                                    continue;
+                                }
+                                $optVid = (int)($versionOption['id'] ?? 0);
+                                if ($optVid <= 0) {
+                                    continue;
+                                }
+                                $optNum = (int)($versionOption['number'] ?? 0);
+                                $optVName = trim((string)($versionOption['name'] ?? ''));
+                                $optLife = trim((string)($versionOption['lifecycle'] ?? ''));
+                                $label = 'v' . $optNum;
+                                if ($optVName !== '') {
+                                    $label .= ' · ' . $optVName;
+                                }
+                                if ($optLife !== '') {
+                                    $label .= ' (' . $optLife . ')';
+                                }
+                                ?>
+                                <option value="<?= $optVid ?>" <?= $optVid === $versionId ? 'selected' : '' ?>><?= $h($label) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php if ($versionLabel !== ''): ?>
+                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                <lang>当前生效</lang>：<?= $h($versionLabel) ?>
+                            </p>
+                        <?php else: ?>
+                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                                <lang>本站范围尚无已发布主题版本；可在主题编辑器发布后再选。</lang>
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php if (trim((string)($summary['storage_scope'] ?? '')) !== ''): ?>
+                    <p class="w-text" data-tone="muted" data-size="sm">
+                        <lang>范围</lang>：<code><?= $h((string)$summary['storage_scope']) ?></code>
+                    </p>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

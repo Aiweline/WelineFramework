@@ -580,6 +580,7 @@
 "主题编辑器基础信息 · 身份槽","Theme editor basics · identity slot"
 "主题编辑器「基础信息」Drawer 的身份字段扩展槽。Website / Store / Channel 等模块应通过 BrandBasicsIdentityProviderInterface 挂载真实名称与简介，并由本 Hook 可选注入自定义 UI；权威读写走 identity API，不写入 appearance.brand。","Identity-field extension slot in the theme editor Basics drawer. Website / Store / Channel modules should mount real names and bios via BrandBasicsIdentityProviderInterface; this Hook may optionally inject custom UI. Authoritative read/write uses the identity API and must not write appearance.brand."
 站点,site
+"theme_scope_workspace.binding_identity_key 回填失败：%{1}","theme_scope_workspace.binding_identity_key backfill failed: %{1}"
 "Weline UI 2.0 语义图标迁移失败：%{1}","Weline UI 2.0 semantic icon migration failed: %{1}"
 "Theme 旧布局数据无效，升级已停止。","Legacy Theme layout data is invalid; the upgrade was stopped."
 "Theme 旧布局身份哈希无效，升级已停止。","A legacy Theme layout identity hash is invalid; the upgrade was stopped."
@@ -597,14 +598,13 @@
 "正在推送主题预览 CDN 绕过规则…","Pushing theme-preview CDN bypass rules…"
 "主题预览 CDN 绕过规则推送完成","Theme-preview CDN bypass rules push completed"
 "主题预览 CDN 规则推送跳过：%{msg}","Theme-preview CDN rules push skipped: %{msg}"
-正在删除主题布局固化磁盘产物（theme-layout-entities）…,正在删除主题布局固化磁盘产物（theme-layout-entities）…
-"主题布局固化磁盘已清理：删除节点 %{count}","主题布局固化磁盘已清理：删除节点 %{count}"
-主题布局固化失效后的店面缓存清理完成,主题布局固化失效后的店面缓存清理完成
 "开始发布前台 404 静态页（website×locale，Fiber 协作）…","Publishing storefront 404 static pages (website×locale, Fiber coop)…"
 "前台 404 静态页发布完成：共 %{count} 个快照","Storefront 404 static publish completed: %{count} snapshots"
 "前台 404 静态页发布失败：%{msg}","Storefront 404 static publish failed: %{msg}"
 生产静态资源发布（含压缩）开始…,"Production static resource publishing (including compression) begins..."
 生产静态资源发布异常：%{msg},"Production static resource publishing exception: %{msg}"
+"website_id 必须是非负整数","website_id 必须是非负整数"
+"website_id 不能为负数","website_id 不能为负数"
 主题整盘合编开始…,"Thematic compilation begins..."
 "主题整盘合编失败：theme=%{id} area=%{area} — %{msg}","Theme disk compile failed: theme=%{id} area=%{area} — %{msg}"
 "主题整盘合编完成：成功 %{ok}，跳过 %{skip}，失败 %{fail}","Compilation of the whole theme is completed: success %{ok}, skip %{skip}, failure %{fail}"
@@ -796,17 +796,13 @@ AI翻译服务未找到，请确保AI模块已安装,"AI translation service not
 后台仪表盘预览,"Backstage dashboard preview"
 "主题目标类型或 ID 无效。","Invalid topic target type or ID."
 "AI 翻译未返回有效 JSON。","AI Translate did not return valid JSON."
-"Version saved: %{name}","Version saved: %{name}"
-"Missing required parameters","Missing required parameters"
-"Switch version failed","Switch version failed"
-"Restored selected version","Restored selected version"
-"Restored original layout","Restored original layout"
 "Theme cache cleared","Theme cache cleared"
 "Theme 已完全初始化","Theme fully initialized"
 "Current draft resources reset","Current draft resources reset"
 "Missing version ID","Missing version ID"
 "Version deleted","Version deleted"
 "Cannot delete current or published version","Cannot delete current or published version"
+"Missing required parameters","Missing required parameters"
 "Version renamed","Version renamed"
 "Rename failed","Rename failed"
 布局不存在,"layout does not exist"
@@ -815,13 +811,23 @@ AI翻译服务未找到，请确保AI模块已安装,"AI translation service not
 布局选项,"layout options"
 请在主题编辑器中选择有效的布局。,"Please select a valid layout in the theme editor."
 "Weline UI 资源路径无效","Weline UI resource path is invalid"
+"Scope 版本列表已加载","Scope version list loaded"
+"Scope 草稿已创建","Scope draft created"
+缺少草稿版本,"Missing draft version"
+内容修订冲突,"Content revision conflict"
+"Scope 版本已封存（未发布）","Scope version sealed (not published)"
+缺少主题版本,"Missing theme version"
+发布产物烘焙失败,发布产物烘焙失败
+单页发布剩余草稿,单页发布剩余草稿
+发布冲突,"Publish conflict"
+发布资源快照落库失败,发布资源快照落库失败
+"Scope 版本已发布","Scope version published"
+自动备份,"Auto Backup"
+恢复默认前自动备份,"Automatic backup before restoring defaults"
+原始布局,"Original Layout"
+已恢复到包默认,"Restored to package defaults"
+"已恢复 Scope 默认值","Scope defaults restored"
 已继承到当前主题草稿,"Inherited into the current theme draft"
-"已保存为 %{name}","Saved as %{name}"
-已切换到选定版本,"Switched to selected version"
-切换版本失败,"Switch Version Failed"
-已恢复到原始布局,"Restored to original layout"
-"已备份为 %{name}","Backed up as %{name}"
-版本已发布,"Version Published"
 缺少版本ID,"Missing version ID"
 版本已删除,"Version Deleted"
 无法删除当前版本或已发布版本,"Unable to delete current version or published version"
@@ -993,10 +999,15 @@ CSS变量配置无效,"Invalid CSS variable configuration"
 更新,Update
 主题注册失败！,"Topic registration failed!"
 布局收集失败:,"Layout collection failed:"
+"Theme 版本修订头身份无效。","Invalid Theme version revision-header identity."
+"Theme 版本修订 kind 无效。","Invalid Theme version revision kind."
+"Theme 版本部件决定身份无效。","Invalid Theme version widget-decision identity."
 "Theme 范围版本身份无效。","Theme scope version identity is invalid."
+封存版本必须具有内容修订。,"A sealed version must have a content revision."
+"Theme 版本选择身份无效。","Invalid Theme version selection identity."
+"Theme 版本资源快照身份无效。","Invalid Theme version resource-snapshot identity."
 "Theme 虚拟布局身份无效。","The Theme virtual-layout identity is invalid."
 手动保存,"Manual save"
-自动备份,"Auto Backup"
 恢复原始,"Restore Original"
 发布快照,"Publish snapshot"
 "Theme 布局版本身份无效。","The Theme layout-version identity is invalid."
@@ -1044,6 +1055,53 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+件商品,"items of goods"
+查看更多,"View more"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
+商品,Products
+查看规格图,"View spec images"
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+购物车是空的,"Shopping cart is empty"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+继续购物,"Continue shopping"
+小计,Subtotal
+去结算,"Proceed to Checkout"
+正在前往结算...,"Proceeding to checkout..."
+查看购物车,"View cart"
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+"还差 %1 包邮","You're %1 away from free shipping"
+已享包邮,"You've unlocked free shipping"
+关闭通知,"Close notification"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1060,11 +1118,6 @@ FAQ/常见问题,FAQ
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -1106,9 +1159,6 @@ ERROR,ERROR
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
 联系询价,联系询价
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
 面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 展开搜索,"Expand search"
@@ -1122,16 +1172,12 @@ ERROR,ERROR
 语言,language
 货币,currency
 关闭菜单,"Close menu"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
 搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
 导航菜单,"Navigation menu"
 我的账户,"My account"
 我的收藏,"My Favorites"
@@ -1141,12 +1187,8 @@ Weline,Weline
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
-购物车是空的,"Shopping cart is empty"
 去购物,"Go Shopping"
 删除,delete
-小计,Subtotal
-查看购物车,"View cart"
-去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1172,8 +1214,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1215,7 +1255,6 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1226,10 +1265,6 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1247,8 +1282,6 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-查看更多,"View more"
-距离结束,"Ends in"
 精选轮播,"Featured Carousel"
 回到顶部,"Back to top"
 站点偏好,"Site preferences"
@@ -1277,24 +1310,6 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
-商品,Products
-查看规格图,"View spec images"
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-继续购物,"Continue shopping"
-正在前往结算...,"Proceeding to checkout..."
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-"还差 %1 包邮","You're %1 away from free shipping"
-已享包邮,"You've unlocked free shipping"
-关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
@@ -1309,10 +1324,6 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1351,6 +1362,17 @@ Logo,Logo
 "共 %{1} 条","Total %{1} items"
 "您好, 登录","Hello, login"
 "登录 / 注册",Login/Register
+店面主题,"Storefront theme"
+请先保存网站后，再为本站选择店面主题。,"Save the website first, then choose a storefront theme for this site."
+"本站店面主题按网站范围绑定，不受主题列表「全局回退」切换影响。全局回退仅 Default。","This site’s storefront theme is bound at website scope and is not affected by the theme-list global fallback switch. Global fallback is Default only."
+前台主题,"Frontend Theme"
+不修改（保持当前）,"Do not change (keep current)"
+当前显示为继承上级绑定，保存时选择主题将写入本站专属绑定。,"Currently inheriting a parent binding. Choosing a theme on save writes a website-owned binding."
+本站已发布专属主题绑定。,"This website has a published theme binding."
+已发布版本,"Published version"
+当前生效,"Currently active"
+本站范围尚无已发布主题版本；可在主题编辑器发布后再选。,"No published theme version for this website scope yet. Publish in the theme editor first."
+范围,Scope
 CSS变量配置,"CSS variable configuration"
 选择色盘：,"Select Color Palette:"
 不使用色盘,"No color palette"
@@ -1491,6 +1513,7 @@ JSON格式数组,"JSON format array"
 主题编辑器,"Theme Editor"
 作用范围,Scope
 基础信息,"Brand basics"
+只发布本页,"Publish this page only"
 展开顶栏,"Expand toolbar"
 返回主题列表,"Back to theme list"
 编辑区域,"Edit area"
@@ -1623,8 +1646,7 @@ Favicon,Favicon
 保存当前我的盘,"Save current my disk"
 点击配置此部件,"Click to configure this widget"
 无模板,"No template"
-选择前台与后台各自激活的主题。,"Select the themes to be activated in the foreground and backend respectively."
-前台主题,"Frontend Theme"
+"前台列表「激活」仅切换全局回退（建议保持 Default）；各网站店面主题请在「网站信息 → 店面主题」按站绑定。后台主题仍为全局一套。","Frontend list “Activate” only switches the global fallback (keep Default). Bind each website’s storefront theme under Website Info → Storefront theme. Backend theme stays one global skin."
 后台主题,"Backend Theme"
 已选,Selected
 "前端 %{1} 个，后端 %{2} 个","Frontend: %{1}, Backend: %{2}"
@@ -1763,6 +1785,10 @@ AI目录加载失败,"AI directory loading failed"
 主题布局图片内容超过校验上限。,"Theme layout image content exceeds the validation limit."
 模板文件不存在：%{1},"Template file does not exist: %{1}"
 读取模板文件失败：%{1},"Failed to read the template file: %{1}"
+网站主题绑定参数无效,"Invalid website theme binding parameters"
+网站代码无效,"Invalid website code"
+所选主题版本不属于当前网站范围,"Selected theme version does not belong to this website scope"
+主题不可用于前台,"Theme is not available for the frontend"
 定时计划参数不完整,"Incomplete schedule parameters"
 仅支持产品或分类默认产品布局定时,"Only product or category default product-layout schedules are supported"
 布局选项不存在,"Layout option does not exist"
@@ -1786,6 +1812,7 @@ AI目录加载失败,"AI directory loading failed"
 "主题 %{1} 的 %{2} 页面发布失败：%{3}","The %{2} page of topic %{1} failed to publish: %{3}"
 "CDN 缓存刷新失败（域名：%{1}）：%{2}","CDN cache refresh failed (domain name: %{1}): %{2}"
 "Theme 运行时缺少冻结的 ScopeIdentity。","Theme runtime requires a frozen ScopeIdentity."
+"已更新前台回退标记。各网站店面主题请在「网站信息 → 店面主题」绑定；主题列表不再改各站 binding。","Frontend fallback flag updated. Bind each website’s storefront theme in Website Info → Storefront theme; the theme list no longer changes per-site bindings."
 激活失败：%{1},"Activation failed: %{1}"
 "Theme Scope 无法解析为 ScopeIdentity。","Theme scope cannot be resolved to a ScopeIdentity."
 "Theme Store Mode 无效：%{1}","Invalid Theme Store Mode: %{1}"
@@ -1798,6 +1825,11 @@ AI目录加载失败,"AI directory loading failed"
 "类型化布局值解析缺少冻结的 locale_code。","Typed layout value resolution requires a frozen locale_code."
 "类型化布局值解析缺少冻结的 ScopeIdentity。","Typed layout value resolution requires a frozen ScopeIdentity."
 "Theme 布局渲染缺少冻结的 ScopeIdentity。","Theme layout rendering requires a frozen ScopeIdentity."
+"ThemeScopeWorkspaceBindingKeyHealer: 跳过（新增列尚未建好）","ThemeScopeWorkspaceBindingKeyHealer: skipped (new columns not created yet)"
+"ThemeScopeWorkspaceBindingKeyHealer: updated=0","ThemeScopeWorkspaceBindingKeyHealer: updated=0"
+"ThemeScopeWorkspaceBindingKeyHealer: 延后，列宽 %{1} 小于目标值长度 %{2}","ThemeScopeWorkspaceBindingKeyHealer: deferred, column length %{1} is smaller than target value length %{2}"
+"ThemeScopeWorkspaceBindingKeyHealer: workspace_id=%{1} 回填失败：%{2}","ThemeScopeWorkspaceBindingKeyHealer: workspace_id=%{1} backfill failed: %{2}"
+"ThemeScopeWorkspaceBindingKeyHealer: updated=%{1}","ThemeScopeWorkspaceBindingKeyHealer: updated=%{1}"
 目标类型不能为空,"Target type cannot be empty"
 全局,"overall situation"
 分类商品默认,"Category product default"
@@ -1874,10 +1906,11 @@ AI目录加载失败,"AI directory loading failed"
 "复制 CMS 页面草稿布局版本","Copy CMS page draft layout version"
 "复制 CMS 页面发布布局版本","Copy CMS page published layout version"
 回滚虚拟布局版本,"Rollback a virtual layout version"
+继承父版本,继承父版本
+父版本发布后系统派生,父版本发布后系统派生
 备份,backup
 恢复原始布局前的自动备份,"Auto-backup before restoring original layout"
 来自版本,"From version"
-原始布局,"Original Layout"
 恢复到主题模板的原始状态,"Restore theme template to original state"
 "待发布的 Theme 布局版本不存在。","The Theme layout version to publish does not exist."
 "Theme 旧版本发布校验或投影失败。","Legacy Theme version validation or projection failed."
@@ -1911,6 +1944,9 @@ AI目录加载失败,"AI directory loading failed"
 "保存主题盘失败：配置值过长（%{len}/%{max}），请减少变更 Token 或缩短取值","Failed to save theme disk: configuration value is too long (%{len}/%{max}), please reduce the change token or shorten the value"
 "Theme 布局类型化值超过运行时解析上限。","Theme layout typed value exceeds the runtime resolution limit."
 "file-image 运行时适配器不可用。","The file-image runtime adapter is unavailable."
+正在删除主题布局固化磁盘产物（theme-layout-entities）…,正在删除主题布局固化磁盘产物（theme-layout-entities）…
+"主题布局固化磁盘已清理：删除节点 %{count}","主题布局固化磁盘已清理：删除节点 %{count}"
+主题布局固化失效后的店面缓存清理完成,主题布局固化失效后的店面缓存清理完成
 "Theme 范围版本参数无效。","Theme scope version parameters are invalid."
 "Theme 范围发布版本无效。","Theme scope published version is invalid."
 "Theme 范围版本未持久化。","Theme scope version is not persisted."
@@ -1950,7 +1986,6 @@ AI目录加载失败,"AI directory loading failed"
 示例商品名称,"Example Product Name"
 全部,All
 官方商城帮助与客户服务,"Official mall help and customer service"
-"周一至周五 9:00 - 18:00（法定节假日除外）","Monday to Friday 9:00 AM - 6:00 PM (excluding public holidays)"
 保留所有权利,"All rights reserved."
 "© %{1} %{2}","© %{1} %{2}"
 "严重错误：在 after_render 事件中检测到PHP代码\n\n位置信息：\n  源文件: %{1}\n  来源标识: %{2}\n\n错误说明：\n  在 after_render 事件中，PHP代码应该已经执行，渲染后的HTML中不应该再包含PHP标签。\n  如果仍然看到PHP代码，说明提取的内容来自编译后的模板文件，而不是渲染后的HTML。\n\n解决方案：\n  1. 确保在 after_render 事件中只处理渲染后的HTML内容\n  2. 不要从文件系统读取编译后的模板文件\n  3. 如果 script 标签包含PHP代码，请添加 data-no-extract=""true"" 属性，不提取该标签","Serious error: PHP code detected in the after_render event\n\nLocation information:\n Source file: %{1}\n Source identifier: %{2}\n\nError description:\n In the after_render event, the PHP code should have been executed, and the rendered HTML should no longer contain PHP tags. \n If you still see PHP code, it means that the extracted content comes from the compiled template file, not the rendered HTML. \n\nSolution:\n 1. Make sure to process only the rendered HTML content in the after_render event\n 2. Do not read the compiled template file from the file system\n 3. If the script tag contains PHP code, add the data-no-extract=""true"" attribute to not extract the tag"
@@ -2353,12 +2388,25 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-汉服分类展示图,"Hanfu category showcase image"
-开始搬迁文件...,"Start moving files..."
-更新主题文件！,"Update theme file!"
+"已更新前台回退标记。各网站店面主题请在「网站信息 → 店面主题」绑定；全局 binding 仅 Default 可改。","Frontend fallback flag updated. Bind each website’s storefront theme in Website Info → Storefront theme; only Default may change the global binding."
+选择前台与后台各自激活的主题。,"Select the themes to be activated in the foreground and backend respectively."
+"周一至周五 9:00 - 18:00（法定节假日除外）","Monday to Friday 9:00 AM - 6:00 PM (excluding public holidays)"
 选择作用范围,"Select scope."
 搜索作用范围,"Search scope."
 未找到匹配作用范围,"No matching scope found."
+"Version saved: %{name}","Version saved: %{name}"
+"Switch version failed","Switch version failed"
+"Restored selected version","Restored selected version"
+"Restored original layout","Restored original layout"
+"已保存为 %{name}","Saved as %{name}"
+已切换到选定版本,"Switched to selected version"
+切换版本失败,"Switch Version Failed"
+已恢复到原始布局,"Restored to original layout"
+"已备份为 %{name}","Backed up as %{name}"
+版本已发布,"Version Published"
+汉服分类展示图,"Hanfu category showcase image"
+开始搬迁文件...,"Start moving files..."
+更新主题文件！,"Update theme file!"
 晒出你的汉服穿搭,"Share your Hanfu look"
 Pagination,Pagination
 Previous,Previous
@@ -3212,9 +3260,9 @@ CNY,CNY
 暂无可用筛选条件,"No filters available"
 清除全部,"Clear all"
 价格区间,"Price range"
-"0 - 99 元","0 - 99 yuan"
-"100 - 299 元","100 - 299 yuan"
-"300 元以上","More than 300 yuan"
+"0 - 99 元","$0 – $99"
+"100 - 299 元","$100 – $299"
+"300 元以上","Over $300"
 暂无浏览记录,"No recently viewed items"
 用户名,Username
 按形制探索适合日常、节庆与礼仪场景的女士汉服,"Explore women's Hanfu by historical style for everyday wear, festivals, and ceremonies."
@@ -3634,7 +3682,6 @@ Global（全部网站和店铺）,"Global (all websites, stores and channels)"
 按当前区域和布局显示可用部件。,"Shows available parts by current region and layout."
 搜索部件,"Search widgets"
 搜索部件…,"Search for parts…"
-已发布版本,"Published version"
 草稿版本,"draft version"
 加载中,loading
 主题布局预览,"Theme layout preview"
@@ -4475,3 +4522,4 @@ Chiffon,Chiffon
 水,Water
 火,Fire
 土,Earth
+正在只发布本页...,"Publishing this page only..."
