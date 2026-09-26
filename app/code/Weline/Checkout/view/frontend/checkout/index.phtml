@@ -1,6 +1,12 @@
 <?php
 use Weline\Theme\Helper\WidgetI18n;
 /** @var \Weline\Framework\View\Template $this */
+// WLS：模板内再 prefetch 标题源串，避免 chrome/layout 早于控制器 prefetch 时露中文。
+\Weline\Framework\Phrase\Parser::prefetchWords([
+    '结账',
+    '安全结账',
+    '确认收货地址、配送方式和支付信息后即可提交订单。',
+]);
 $checkoutPageSubtitle = (string)($this->getData('checkout_page_subtitle') ?? '');
 $currencySymbolMap = class_exists(\Weline\Currency\Helper\CurrencySymbol::class)
     ? \Weline\Currency\Helper\CurrencySymbol::clientMap()

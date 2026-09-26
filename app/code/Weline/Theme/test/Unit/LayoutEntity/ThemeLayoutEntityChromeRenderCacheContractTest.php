@@ -53,6 +53,8 @@ final class ThemeLayoutEntityChromeRenderCacheContractTest extends TestCase
         self::assertStringContainsString('WidgetI18n::storefrontLocale', $chrome);
         self::assertStringContainsString('State::setRequestLanguageOverride', $chrome);
         self::assertStringContainsString('delivery-line-1">Ship to', $chrome);
+        self::assertStringContainsString('"province":"Province"', $chrome);
+        self::assertStringContainsString('Quickly add address', $chrome);
         self::assertStringContainsString('isLocalePoisonedChrome', $chrome);
         self::assertStringContainsString('定制与合作', $chrome);
         self::assertStringContainsString('支付与账户', $chrome);

@@ -1055,19 +1055,14 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
 加入收藏,"Add to Favorites"
 加入对比,"Add to Compare"
 快速查看,"Quick View"
-面包屑,"bread crumbs"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
+查看更多,"View more"
 商品,Products
 查看规格图,"View spec images"
 减少数量,"Decrease quantity"
@@ -1090,15 +1085,14 @@ NEW,NEW
 "还差 %1 包邮","You're %1 away from free shipping"
 已享包邮,"You've unlocked free shipping"
 关闭通知,"Close notification"
-"WelineFramework Admin","WelineFramework Admin"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
-官方社交媒体,"Official social media"
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
 视频,Video
 您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 件商品,"items of goods"
-查看更多,"View more"
 距离结束,"Ends in"
 时,Hour
 分,Minute
@@ -1108,6 +1102,9 @@ NEW,NEW
 第%d张,"Slide %d"
 剩余,Remaining
 天,Day(s)
+全部商品,"Shop All"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+面包屑,"bread crumbs"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1288,8 +1285,12 @@ Weline,Weline
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
 精选轮播,"Featured Carousel"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
+官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1309,7 +1310,6 @@ Logo,Logo
 请使用微信扫描二维码分享,"Please scan the QR code with WeChat to share"
 上一条,Previous
 下一条,Next
-全部商品,"Shop All"
 面包屑导航,Breadcrumbs
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
@@ -1350,6 +1350,7 @@ Logo,Logo
 确认操作,"Confirm action"
 确定,Sure
 输入,Input
+"WelineFramework Admin","WelineFramework Admin"
 "Weline Admin","Weline Admin"
 管理后台,"Admin Panel"
 后台Logo,"Background Logo"
@@ -2388,7 +2389,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 "已更新前台回退标记。各网站店面主题请在「网站信息 → 店面主题」绑定；全局 binding 仅 Default 可改。","Frontend fallback flag updated. Bind each website’s storefront theme in Website Info → Storefront theme; only Default may change the global binding."
 选择前台与后台各自激活的主题。,"Select the themes to be activated in the foreground and backend respectively."
 "周一至周五 9:00 - 18:00（法定节假日除外）","Monday to Friday 9:00 AM - 6:00 PM (excluding public holidays)"
@@ -4524,3 +4524,36 @@ Chiffon,Chiffon
 火,Fire
 土,Earth
 正在只发布本页...,"Publishing this page only..."
+国家/地区,Country/Region
+省份,Province
+城市,City
+区县,District
+街道,Street
+暂无可选地区,"No regions available"
+可直接输入该地区,"You can enter this region manually"
+请选择国家/地区,"Please select country/region"
+请选择省份,"Please select province"
+请选择城市,"Please select city"
+请选择区县,"Please select district"
+请选择街道,"Please select street"
+请先选择国家/地区,"Please select country/region first"
+请先选择省份,"Please select province first"
+请先选择城市,"Please select city first"
+请先选择区县,"Please select district first"
+请填写详细地址,"Enter street address"
+加载中…,Loading…
+该邮编匹配多个国家，请选择,"This postal matches multiple countries — please choose"
+本站不支持,"Not supported by this store"
+不支持配送,"Delivery not supported"
+邮编匹配,"Postal matches"
+尚未选择，请搜索后添加,"Nothing selected yet — search to add"
+搜索并添加国家/地区,"Search and add country/region"
+搜索并添加省份,"Search and add province"
+搜索并添加城市,"Search and add city"
+搜索并添加区县,"Search and add district"
+搜索并添加街道,"Search and add street"
+输入关键字筛选更多,"Type to filter more results"
+"共 {n} 项可选，输入关键字筛选","{n} options available — type to filter"
+邮编,"Postal code"
+详细地址,"Street address"
+"门牌号 / 楼栋单元等","Building / unit number"
