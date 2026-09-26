@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\System\Process\Native\DarwinProcessProbe;
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
 use Weline\Server\Service\Edge\Gateway\GatewayHostBootIdentity;
 use Weline\Server\Service\Runtime\PhpRuntimeSafetyProfile;
@@ -1512,6 +1513,10 @@ CDEF,
                 if ($exists === false) {
                     return ['exists' => false];
                 }
+                if ($this->darwinProcessIsZombie($pid)) {
+                    // A corpse holds the PID but is no longer the live owner.
+                    return ['exists' => false, 'pid' => $pid, 'state' => 'Z'];
+                }
                 // ps can still provide bounded liveness/diagnostic evidence, but
                 // processBirth() deliberately refuses its second-resolution time.
                 return $this->inspectPosixProcessWithPs($pid);
@@ -1536,6 +1541,9 @@ CDEF,
             $exists = $this->probePosixProcessExistence($pid);
             if ($exists === false) {
                 return ['exists' => false];
+            }
+            if ($this->darwinProcessIsZombie($pid)) {
+                return ['exists' => false, 'pid' => $pid, 'state' => 'Z'];
             }
 
             return [];
@@ -1569,6 +1577,35 @@ CDEF,
                 : ['name' => '', 'command' => ''];
             $name = $selfMeta['name'] !== '' ? $selfMeta['name'] : $libprocName;
             $command = $selfMeta['command'];
+            if ($pid !== (int)\getmypid()) {
+                // ★ 绝不能停在「pbi_name=php + 空 argv」。managedProcessStatus() 在
+                // 「有 name、无 argv」时返回 MISMATCH，而 Darwin 的 pbi_name 恒为
+                // `php`、永远匹配不上 `weline-wls-master-…` 长标题
+                // ⇒ 健康的 Master 被判成「别人的」，与 D2 同类的误判。
+                //
+                // 两级原生通路：
+                // 1) inspectDarwinManagedProcess()：与 ps 同呈现口径
+                //    （KERN_PROCARGS2 + strnvis），使本方法与之逐字节一致；
+                // 2) 它刻意拒绝非 ASCII（C locale 转义会破坏比对），
+                //    此时退到字节级 KERN_PROCARGS2 —— 本仓项目路径本身含非 ASCII，
+                //    留空同样会把健康 Master 判成 MISMATCH。
+                $native = $this->inspectDarwinManagedProcess($pid);
+                $nativeCommand = \is_array($native)
+                    ? \trim((string)($native['command'] ?? ''))
+                    : '';
+                if ($nativeCommand === '') {
+                    $nativeCommand = \trim((string)(DarwinProcessProbe::commandLine($pid) ?? ''));
+                }
+                if ($nativeCommand !== '') {
+                    $command = $nativeCommand;
+                    $nativeName = \is_array($native)
+                        ? \trim((string)($native['name'] ?? ''))
+                        : '';
+                    if ($nativeName !== '') {
+                        $name = $nativeName;
+                    }
+                }
+            }
 
             return [
                 'exists' => true,
@@ -1588,6 +1625,39 @@ CDEF,
         $info['start_time'] = 'darwin-start-timeval:' . $second['start_ticks'];
 
         return $info;
+    }
+
+    /**
+     * Darwin 僵尸判据，**不调用 `ps`**。
+     *
+     * libproc 读不到「尸体」：实测（2026-09-26，macOS arm64 / PHP 8.4）
+     * 僵尸与已回收在 `proc_pidinfo(pid, PROC_PIDTBSDINFO, …)` 下**同样**返回 `read=0`，
+     * 唯一区分原语是 `posix_kill(pid, 0)`：
+     *
+     * | 状态 | `proc_pidinfo` | `posix_kill(pid,0)` |
+     * |------|----------------|---------------------|
+     * | 存活 | `read=size`    | `1`                 |
+     * | 僵尸 | `read=0`       | `1`                 |
+     * | 已回收 | `read=0`     | `0`（ESRCH）        |
+     *
+     * 调用点必须**先**排除 `probePosixProcessExistence() === false`（已回收），
+     * 再问本方法，否则会把「已回收」重复判一遍。
+     *
+     * `DarwinProcessProbe::liveness()` 只在 `posix_kill` **真的成功**时给出 `zombie`；
+     * `EPERM`（进程属他人）一律 `unknown` ⇒ 本方法返回 false，保持 fail-closed。
+     *
+     * 影响：`observeProcessIdentity()` 由此得到 `OWNER_MISSING` 而不是 `OWNER_UNKNOWN`，
+     * `terminateExactProcessIdentity()` 才能把「已发出 SIGTERM/SIGKILL 且进程已成尸体」
+     * 判定为 `released` —— 修复前它会卡在 `darwin_posix_termination_unverified`，
+     * 导致失败回滚拒绝回收自己刚启动的 Master / Nginx master。
+     */
+    private function darwinProcessIsZombie(int $pid): bool
+    {
+        if (PHP_OS_FAMILY !== 'Darwin') {
+            return false;
+        }
+
+        return DarwinProcessProbe::liveness($pid) === DarwinProcessProbe::LIVENESS_ZOMBIE;
     }
 
     /**

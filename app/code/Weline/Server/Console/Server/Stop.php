@@ -2801,11 +2801,25 @@ class Stop extends CommandAbstract
     }
 
     /**
-     * 从 name_index 中一次性收集指定实例的 WLS PID，避免逐前缀触发系统搜索。
+     * 从 pid_index 中一次性收集指定实例的 WLS PID，避免逐前缀触发系统搜索。
+     *
+     * 可见性为 `protected`（**不是** `private`）：本方法是**唯一**读取
+     * `Env::VAR_DIR . process/pid/pid_index.json` 的残留来源，因此也是唯一会把
+     * 「本机此刻是否真有同名实例在跑」这一环境状态带进单测的入口。
+     * 必须允许测试覆写它，才能在不依赖宿主环境的前提下验证「热路径不扫 PID 索引」
+     * 与「IPC 成功后不做本地前缀扫描」两条契约；
+     * 与同族的 {@see self::collectResidualPrefixPids()} /
+     * {@see self::collectRecoverableManagedPids()} 保持一致的可见性。
+     *
+     * ⚠️ 历史上它是 `private`，导致
+     * {@see \Weline\Server\Test\Unit\Console\StopCommandFastLocalCleanupTest} 与
+     * {@see \Weline\Server\Test\Unit\Console\StopCommandResidualPidIndexTest} 里
+     * 那两处 `throw new RuntimeException('direct force-stop must not scan PID indexes…')`
+     * 覆写**永远不可能被调用**——守卫是死的。
      *
      * @return array<int>
      */
-    private function collectIndexedResidualPids(string $instanceName, bool $includeSharedState = false): array
+    protected function collectIndexedResidualPids(string $instanceName, bool $includeSharedState = false): array
     {
         $pidIndex = Processer::readPidIndex();
         if (empty($pidIndex)) {
