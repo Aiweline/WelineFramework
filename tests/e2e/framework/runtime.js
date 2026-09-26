@@ -160,7 +160,9 @@ async function applyAdminSessionCookie(page, sessionInfo, options = {}) {
     domain: hostname,
     path: cookiePath,
     httpOnly: true,
-    secure: false,
+    // HTTPS targets (WLS TLS / *.test.weline.com) require Secure; otherwise Chromium
+    // accepts the cookie via CDP but never attaches it on subsequent navigations.
+    secure: String(getBaseUrl(options) || '').startsWith('https:'),
     sameSite: 'Lax',
     expires,
   })));

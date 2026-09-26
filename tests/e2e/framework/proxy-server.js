@@ -83,16 +83,18 @@ function getForwardedHost(targetUrl) {
 function buildForwardedHeaders(clientRequest, targetUrl) {
   const browserFacingProto = proxyUrl.protocol.replace(':', '');
   const browserFacingPort = proxyUrl.port || (browserFacingProto === 'https' ? '443' : '80');
-  // 必须使用浏览器访问代理时的 Host（含 :port），否则 PHP 的 getBaseHost() 会生成
-  // https://127.0.0.1/static/...（无代理端口），子资源绕过代理直连上游默认端口导致 E2E 样式断言失败。
+  // Browser-facing Host (含代理端口) 写入 x-forwarded / weline-original-*，供 PHP getBaseHost() 生成
+  // 可经代理回源的静态 URL。上游 HTTP Host 必须与 TLS SNI/项目公网 Host 一致，否则 WLS 会
+  // 对 Host=127.0.0.1:代理端口 直接 RST（ECONNRESET），theme-editor 等长路径必挂。
   const browserFacingHost =
     clientRequest.headers.host
     || clientRequest.headers.Host
     || getForwardedHost(proxyUrl);
+  const upstreamHost = getForwardedHost(targetUrl);
 
   return {
     ...clientRequest.headers,
-    host: browserFacingHost,
+    host: upstreamHost,
     'x-forwarded-host': browserFacingHost,
     'x-forwarded-proto': browserFacingProto,
     'x-forwarded-port': browserFacingPort,
