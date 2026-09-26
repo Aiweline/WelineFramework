@@ -23,6 +23,9 @@ final class WebsiteBrandIdentitySeedService
 
     public const SEED_DESCRIPTION = '长安汉服是面向全球的大型汉服售卖平台，汇聚明制、宋制、唐制汉服与马面裙及传统配饰，覆盖日常出行、节日庆典与礼仪场合。平台同时支持单件零售与批量批发，服务个人买家与全球经销商；并提供形制说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的汉服款式。';
 
+    /** 客服服务时间简中源串（店面/邮件/FAQ 共用；译包见 website-brand-local-copy） */
+    public const SEED_SERVICE_HOURS = '周一至周五 9:00 - 18:00（法定节假日除外）';
+
     /** @var list<string> */
     private const PLACEHOLDER_NAMES = [
         '',
@@ -151,7 +154,7 @@ final class WebsiteBrandIdentitySeedService
     {
         $locale = trim($locale);
         if ($locale === '' || self::isChineseLocaleCode($locale)) {
-            return '周一至周五 9:00 - 18:00（法定节假日除外）';
+            return self::SEED_SERVICE_HOURS;
         }
         $pack = self::loadLocalBrandCopyPack();
         $hours = $pack['service_hours'];
