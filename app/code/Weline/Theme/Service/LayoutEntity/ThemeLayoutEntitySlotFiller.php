@@ -8,6 +8,7 @@ use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Service\SharedChromeService;
@@ -16,6 +17,7 @@ use Weline\Theme\Service\SlotBoundaryScanner;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 use Weline\Theme\Service\ThemeRuntimeLayoutResolver;
+use Weline\Theme\Service\ThemeScopeVersionService;
 
 /**
  * Storefront hard-cut slot fill: include the solidified layout.phtml.
@@ -63,8 +65,7 @@ final class ThemeLayoutEntitySlotFiller
         $pageScope = $resolved['scope'];
         $identityKey = $resolved['identity_key'];
         $structureOrRelease = $resolved['structure_or_release'];
-        $binding = $this->readPageBinding($themeId, $pageScope, $identityKey, $structureOrRelease);
-        $paths = $this->paths;
+        $binding = $resolved['binding'] ?? $this->bindingFromResolved($resolved, $identityKey);
         ThemeLayoutStorefrontHeadAssets::rememberPointer([
             'theme_id' => $themeId,
             'scope' => $pageScope,
@@ -72,9 +73,8 @@ final class ThemeLayoutEntitySlotFiller
             'structure_or_release' => $structureOrRelease,
             'binding' => $binding,
         ]);
-        $shellPhtml = $paths->shellPhtml($themeId, $pageScope, $identityKey, $structureOrRelease);
-        $phtml = $binding?->templatePath ?? $paths->pagePhtml($themeId, $pageScope, $identityKey, $structureOrRelease);
-        $shellPhtml = $binding?->shellPath ?: $shellPhtml;
+        $shellPhtml = $binding?->shellPath ?: '';
+        $phtml = $binding?->templatePath ?? '';
 
         $this->primeLocaleConfigs(
             $themeId,
@@ -219,9 +219,9 @@ final class ThemeLayoutEntitySlotFiller
         $pageScope = $resolved['scope'];
         $identityKey = $resolved['identity_key'];
         $structureOrRelease = $resolved['structure_or_release'];
-        $binding = $this->readPageBinding($themeId, $pageScope, $identityKey, $structureOrRelease);
-        $phtml = $binding?->templatePath ?? $this->paths->pagePhtml($themeId, $pageScope, $identityKey, $structureOrRelease);
-        if (!\is_file($phtml)) {
+        $binding = $resolved['binding'] ?? $this->bindingFromResolved($resolved, $identityKey);
+        $phtml = $binding?->templatePath ?? '';
+        if ($phtml === '' || !\is_file($phtml)) {
             $rebuilt = $this->tryRematerializeMissingPhtml(
                 $themeId,
                 $pageScope,
@@ -230,7 +230,8 @@ final class ThemeLayoutEntitySlotFiller
                 $pageType,
             );
             if ($rebuilt !== '' && \is_file($rebuilt)) {
-                $binding = $this->readPageBinding($themeId, $pageScope, $identityKey, $structureOrRelease);
+                $binding = $this->bindingFromResolved($resolved, $identityKey)
+                    ?? $this->readPageBindingFromScope($themeId, $pageScope, $identityKey, true);
                 $phtml = $binding?->templatePath ?? $rebuilt;
             } else {
                 throw new \RuntimeException('theme_layout_entity_phtml_missing: ' . $phtml);
@@ -256,7 +257,7 @@ final class ThemeLayoutEntitySlotFiller
         if ($binding !== null) {
             return $this->spliceSolidifiedSlots($html, $rendered);
         }
-        $structurePath = $this->paths->pageStructureJson($themeId, $pageScope, $identityKey, $structureOrRelease);
+        $structurePath = $binding?->structurePath ?? '';
         $rendered = \Weline\Framework\Manager\ObjectManager::getInstance(RequiredDefaultInjectionStorefrontOverlay::class)
             ->append(
                 $rendered,
@@ -647,9 +648,8 @@ final class ThemeLayoutEntitySlotFiller
             $pageScope = $resolved['scope'];
             $identityKey = $resolved['identity_key'];
             $structureOrRelease = $resolved['structure_or_release'];
-            $binding = $this->readPageBinding($themeId, $pageScope, $identityKey, $structureOrRelease);
-            $phtml = $binding?->templatePath
-                ?? $this->paths->pagePhtml($themeId, $pageScope, $identityKey, $structureOrRelease);
+            $binding = $resolved['binding'] ?? $this->bindingFromResolved($resolved, $identityKey);
+            $phtml = $binding?->templatePath ?? '';
             if (!\is_file($phtml)) {
                 return $html;
             }
@@ -1203,7 +1203,7 @@ final class ThemeLayoutEntitySlotFiller
         }
 
         $boundChrome = RequestContext::get('theme.layout_entity.rendered_chrome_binding');
-        if ($boundChrome instanceof EntityRenderBinding && $boundChrome->themeId === $themeId) {
+        if ($boundChrome instanceof EntityRenderBinding && $boundChrome->identity->themeId === $themeId) {
             return $html;
         }
 
@@ -1231,9 +1231,13 @@ final class ThemeLayoutEntitySlotFiller
                 $layout = $slotTree->nodesToAreaLayout($candidate->getChromePayload());
                 $candidateBySlot = $slotTree->organizeWidgetsBySlot($layout);
                 $candidateConfig = $this->configStore->readChromeConfig(
-                    $themeId,
-                    $candidateScope,
-                    $candidate->getVersionId(),
+                    $candidate->toVersionIdentity()->withVersion(
+                        $candidate->getVersionId(),
+                        $preview
+                            ? \Weline\Theme\Api\Version\ThemeVersionIdentity::MODE_DRAFT
+                            : \Weline\Theme\Api\Version\ThemeVersionIdentity::MODE_FORMAL,
+                        \max(1, $candidate->getContentRevision()),
+                    ),
                 );
                 foreach ($candidateBySlot as $slotId => $widgets) {
                     $slotId = \strtolower(\trim((string)$slotId));
@@ -1455,11 +1459,9 @@ final class ThemeLayoutEntitySlotFiller
         $logicalKey = $this->chromeSlotProjectionLogicalKey($themeId, $scope);
         $policy = StorefrontThemeCacheCoordinator::publishedChromeSlotProjectionPolicy();
         try {
-            $peeked = $hotCache->peekPolicy($policy, $logicalKey);
-            if (\is_array($peeked)) {
-                return true;
-            }
-            $hotCache->rememberPolicy($policy, $logicalKey, static fn(): array => []);
+            // Force the shared path: an honest empty marker is exactly the
+            // negative-cache value this resource wants even in a fence context.
+            $hotCache->rememberPolicyNoCache($policy, $logicalKey, static fn(): array => []);
         } catch (\Throwable) {
             return false;
         }
@@ -1513,8 +1515,17 @@ final class ThemeLayoutEntitySlotFiller
 
         $sources = $this->chrome->resolveRenderSources($themeId, $scope, false);
         $bindings = array_map(static fn(array $source): string => $source['binding']?->cacheKey() ?? $source['path'], $sources);
-        return 'chrome.slot.projection.v4|' . $themeId . '|' . \trim($scope) . '|' . $locale
-            . '|' . hash('sha256', json_encode($bindings, JSON_THROW_ON_ERROR));
+        $identityKeys = [];
+        foreach ($sources as $source) {
+            $binding = $source['binding'] ?? null;
+            if ($binding instanceof EntityRenderBinding) {
+                $identityKeys[] = $binding->identity->cacheKey();
+            }
+        }
+
+        // v5: owner V/mode/R identity fragments so draft/formal/history never collide.
+        return 'chrome.slot.projection.v5|' . $themeId . '|' . \trim($scope) . '|' . $locale
+            . '|' . hash('sha256', json_encode([$bindings, $identityKeys], JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -1891,11 +1902,41 @@ final class ThemeLayoutEntitySlotFiller
         $scope = (string)($context['scope'] ?? $this->resolveScope());
         $identity = $this->entityIdentityForScope($scope);
         $identity['layout_option'] = (string)($context['layout_option'] ?? $identity['layout_option']);
-        $key = 'theme.layout_entity.preview_selection.' . hash('sha256', json_encode([$themeId, $pageType, $area, $identity, (int)$context['version_id']], JSON_THROW_ON_ERROR));
+        $cursor = [];
+        foreach (['theme_version_id', 'mode', 'content_revision', 'canonical_scope', 'store_mode', 'area', 'owner_hash', 'scope'] as $cursorKey) {
+            if (!\array_key_exists($cursorKey, $context) || $context[$cursorKey] === null || $context[$cursorKey] === '') {
+                continue;
+            }
+            $cursor[$cursorKey] = $context[$cursorKey];
+        }
+        if (!isset($cursor['theme_version_id']) && (int)($context['version_id'] ?? 0) > 0) {
+            $cursor['theme_version_id'] = (int)$context['version_id'];
+        }
+        $key = 'theme.layout_entity.preview_selection.' . hash('sha256', json_encode([$themeId, $pageType, $area, $identity, $cursor], JSON_THROW_ON_ERROR));
         $resolved = RequestContext::get($key);
         if (!is_array($resolved)) {
-            $resolved = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeVersionPreviewResolver::class)
-                ->resolve($themeId, $pageType, $area, $identity, (int)$context['version_id']);
+            /** @var \Weline\Theme\Service\ThemeVersionPreviewResolver $previewResolver */
+            $previewResolver = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeVersionPreviewResolver::class);
+            $resolved = $previewResolver->resolve(
+                $themeId,
+                $pageType,
+                $area,
+                $identity,
+                (int)$context['version_id'],
+                $cursor,
+            );
+            $token = \trim((string)($context['preview_token'] ?? ''));
+            if ($token !== '') {
+                try {
+                    $tokenData = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\PreviewTokenService::class)
+                        ->validateToken($token);
+                    if (\is_array($tokenData)) {
+                        $resolved = $previewResolver->applyTokenVersionCursor($tokenData, $resolved);
+                    }
+                } catch (\Throwable) {
+                    // Token overlay is best-effort; explicit cursor already applied above.
+                }
+            }
             RequestContext::set($key, $resolved);
         }
         if (empty($resolved['resolved'])) {
@@ -2124,11 +2165,10 @@ final class ThemeLayoutEntitySlotFiller
     }
 
     /**
-     * Resolve the solidified layout.phtml. Published and draft both load a file.
-     * current.json is written at structural bake; workspace is only a one-time fallback
-     * for pages baked before that pointer existed.
+     * Resolve the solidified layout.phtml via ThemeVersionIdentity + page binding.
+     * Missing artifact fails closed here; callers may rebuild in the same version dir.
      *
-     * @return array{scope:string,identity_key:string,structure_or_release:string}|null
+     * @return array{scope:string,identity_key:string,structure_or_release:string,version_identity?:ThemeVersionIdentity,binding?:?EntityRenderBinding}|null
      */
     private function resolvePageEntityLocation(
         int $themeId,
@@ -2139,7 +2179,25 @@ final class ThemeLayoutEntitySlotFiller
     ): ?array {
         $previewEntity = RequestContext::get('theme.layout_entity.preview_entity');
         if (is_array($previewEntity) && (int)($previewEntity['theme_id'] ?? 0) === $themeId) {
-            return ['scope' => (string)$previewEntity['scope'], 'identity_key' => (string)$previewEntity['identity_key'], 'structure_or_release' => (string)$previewEntity['entity_key']];
+            $previewScope = (string)$previewEntity['scope'];
+            $identityKey = (string)$previewEntity['identity_key'];
+            $structureKey = (string)($previewEntity['structure_key'] ?? $previewEntity['entity_key'] ?? '');
+            $versionIdentity = $previewEntity['version_identity'] ?? null;
+            $binding = null;
+            if ($versionIdentity instanceof ThemeVersionIdentity && $identityKey !== '') {
+                $binding = $this->readPageBinding($versionIdentity, $identityKey);
+                if ($binding !== null) {
+                    $structureKey = $binding->structureKey;
+                }
+            }
+
+            return [
+                'scope' => $previewScope,
+                'identity_key' => $identityKey,
+                'structure_or_release' => $structureKey,
+                'version_identity' => $versionIdentity instanceof ThemeVersionIdentity ? $versionIdentity : null,
+                'binding' => $binding,
+            ];
         }
         if ($published) {
             return $this->rememberPublishedPageEntityLocation($themeId, $scope, $pageType, $area);
@@ -2149,7 +2207,7 @@ final class ThemeLayoutEntitySlotFiller
     }
 
     /**
-     * @return array{scope:string,identity_key:string,structure_or_release:string}|null
+     * @return array{scope:string,identity_key:string,structure_or_release:string,version_identity?:ThemeVersionIdentity,binding?:?EntityRenderBinding}|null
      */
     private function rememberPublishedPageEntityLocation(
         int $themeId,
@@ -2162,13 +2220,31 @@ final class ThemeLayoutEntitySlotFiller
             return $this->resolvePageEntityLocationUncached($themeId, $scope, $pageType, $area, true);
         }
 
-        $logicalKey = 'page.location.v1|' . $themeId . '|' . \trim($scope)
+        /** @var ThemeScopeVersionService $scopeVersions */
+        $scopeVersions = \Weline\Framework\Manager\ObjectManager::getInstance(ThemeScopeVersionService::class);
+        $publishedVersion = $scopeVersions->getPublished($themeId, $scope);
+        $versionCacheKey = '';
+        if ($publishedVersion !== null && $publishedVersion->getVersionId() > 0) {
+            $versionCacheKey = $publishedVersion->toVersionIdentity()
+                ->withVersion(
+                    $publishedVersion->getVersionId(),
+                    ThemeVersionIdentity::MODE_FORMAL,
+                    \max(1, $publishedVersion->getContentRevision()),
+                )
+                ->cacheKey();
+        }
+
+        // v4: include published V/mode/R so a new selection cannot HIT a prior formal blob.
+        $logicalKey = 'page.location.v4|' . $themeId . '|' . \trim($scope)
             . '|' . \strtolower(\trim($pageType)) . '|' . \strtolower(\trim($area))
+            . '|' . $versionCacheKey
             . '|' . hash('sha256', json_encode($this->entityIdentityForScope($scope), JSON_THROW_ON_ERROR));
         $cached = $hotCache->rememberPolicy(
             StorefrontThemeCacheCoordinator::publishedPageEntityLocationPolicy(),
             $logicalKey,
-            fn(): array => $this->resolvePageEntityLocationUncached($themeId, $scope, $pageType, $area, true) ?? [],
+            function () use ($themeId, $scope, $pageType, $area): array {
+                return $this->resolvePageEntityLocationUncached($themeId, $scope, $pageType, $area, true) ?? [];
+            },
         );
         if (!\is_array($cached) || $cached === []) {
             return null;
@@ -2176,16 +2252,49 @@ final class ThemeLayoutEntitySlotFiller
         if (!isset($cached['scope'], $cached['identity_key'], $cached['structure_or_release'])) {
             return null;
         }
-
-        return [
+        $out = [
             'scope' => (string)$cached['scope'],
             'identity_key' => (string)$cached['identity_key'],
             'structure_or_release' => (string)$cached['structure_or_release'],
         ];
+        // A shared-cache (L2) round-trip degrades the identity object into its
+        // toArray() form. Rebuild it so the binding can be re-read from the
+        // binding store. Without this the location has no usable binding,
+        // renderPublishedSolidifiedFragments() returns null, and published
+        // storefront business slots (checkout/cart) get stripped to empty on
+        // every cache HIT.
+        $cachedIdentity = $cached['version_identity'] ?? null;
+        if (\is_array($cachedIdentity) && $cachedIdentity !== []) {
+            // The shared cache round-trips this object as JSON of its public
+            // properties (camelCase) rather than ThemeVersionIdentity::toArray()
+            // (snake_case). Normalise both shapes before rebuilding, otherwise
+            // the location loses its binding and published storefront business
+            // slots (checkout/cart) render empty on every cache HIT.
+            $cachedIdentity = [
+                'theme_id' => $cachedIdentity['theme_id'] ?? $cachedIdentity['themeId'] ?? 0,
+                'canonical_scope' => (string)($cachedIdentity['canonical_scope'] ?? $cachedIdentity['canonicalScope'] ?? ''),
+                'store_mode' => (string)($cachedIdentity['store_mode'] ?? $cachedIdentity['storeMode'] ?? ''),
+                'area' => (string)($cachedIdentity['area'] ?? ''),
+                'theme_version_id' => (int)($cachedIdentity['theme_version_id'] ?? $cachedIdentity['themeVersionId'] ?? 0),
+                'mode' => (string)($cachedIdentity['mode'] ?? ThemeVersionIdentity::MODE_FORMAL),
+                'content_revision' => (int)($cachedIdentity['content_revision'] ?? $cachedIdentity['contentRevision'] ?? 0),
+            ];
+            try {
+                $cachedIdentity = ThemeVersionIdentity::fromArray($cachedIdentity);
+            } catch (\Throwable) {
+                $cachedIdentity = null;
+            }
+        }
+        if ($cachedIdentity instanceof ThemeVersionIdentity) {
+            $out['version_identity'] = $cachedIdentity;
+            $out['binding'] = $this->readPageBinding($cachedIdentity, $out['identity_key']);
+        }
+
+        return $out;
     }
 
     /**
-     * @return array{scope:string,identity_key:string,structure_or_release:string}|null
+     * @return array{scope:string,identity_key:string,structure_or_release:string,version_identity:ThemeVersionIdentity,binding:EntityRenderBinding}|null
      */
     private function resolvePageEntityLocationUncached(
         int $themeId,
@@ -2194,61 +2303,36 @@ final class ThemeLayoutEntitySlotFiller
         string $area,
         bool $published,
     ): ?array {
+        /** @var ThemeScopeVersionService $scopeVersions */
+        $scopeVersions = \Weline\Framework\Manager\ObjectManager::getInstance(ThemeScopeVersionService::class);
         foreach ($this->scopeFallbackChain($scope) as $candidateScope) {
-            $identityKey = $this->identityKeyForScope($themeId, $pageType, $area, $candidateScope);
-            $fromPointer = $this->readPageCurrent($themeId, $candidateScope, $identityKey, $published);
-            if ($fromPointer !== null) {
-                return [
-                    'scope' => $candidateScope,
-                    'identity_key' => $identityKey,
-                    'structure_or_release' => $fromPointer,
-                ];
+            $version = $published
+                ? $scopeVersions->getPublished($themeId, $candidateScope)
+                : $scopeVersions->getCurrent($themeId, $candidateScope);
+            if ($version === null || $version->getVersionId() < 1) {
+                continue;
             }
-        }
-
-        if (!$published) {
-            foreach ($this->scopeFallbackChain($scope) as $candidateScope) {
-                $identityKey = $this->identityKeyForScope($themeId, $pageType, $area, $candidateScope);
-                $scanned = $this->scanSolidifiedSegment($themeId, $candidateScope, $identityKey, false);
-                if ($scanned === null) {
-                    continue;
-                }
-                $this->rememberPageCurrent($themeId, $candidateScope, $identityKey, $scanned, false);
-
-                return [
-                    'scope' => $candidateScope,
-                    'identity_key' => $identityKey,
-                    'structure_or_release' => $scanned,
-                ];
-            }
-
-            return null;
-        }
-
-        foreach ($this->scopeFallbackChain($scope) as $candidateScope) {
-            $identity = $this->resolveEditorIdentity($themeId, $pageType, $area, $candidateScope);
-            $identityKey = $this->paths->identityKey($identity['identity_hash']);
-            $structureOrRelease = $this->resolveStructureOrRelease(
-                $themeId,
-                $candidateScope,
-                $identityKey,
-                true,
-                $identity['release_id'],
+            $versionIdentity = $version->toVersionIdentity();
+            $versionIdentity = $versionIdentity->withVersion(
+                $versionIdentity->themeVersionId,
+                $published ? ThemeVersionIdentity::MODE_FORMAL : ThemeVersionIdentity::MODE_DRAFT,
+                \max(1, $versionIdentity->contentRevision),
             );
-            if ($structureOrRelease === null) {
+            $identityKey = $this->identityKeyForScope($themeId, $pageType, $area, $candidateScope);
+            $binding = $this->readPageBinding($versionIdentity, $identityKey);
+            if ($binding === null || !\is_file($binding->templatePath)) {
                 continue;
             }
-            if (!$this->pagePhtmlHasSlots(
-                $this->paths->pagePhtml($themeId, $candidateScope, $identityKey, $structureOrRelease),
-            )) {
+            if (!$this->pagePhtmlHasSlots($binding->templatePath)) {
                 continue;
             }
-            $this->rememberPageCurrent($themeId, $candidateScope, $identityKey, $structureOrRelease, true);
 
             return [
                 'scope' => $candidateScope,
                 'identity_key' => $identityKey,
-                'structure_or_release' => $structureOrRelease,
+                'structure_or_release' => $binding->structureKey,
+                'version_identity' => $versionIdentity,
+                'binding' => $binding,
             ];
         }
 
@@ -2266,91 +2350,62 @@ final class ThemeLayoutEntitySlotFiller
         }
     }
 
-    private function readPageBinding(int $themeId, string $scope, string $identityKey, string $entityKey): ?EntityRenderBinding
+    /**
+     * @param array{version_identity?:mixed,binding?:mixed} $resolved
+     */
+    private function bindingFromResolved(array $resolved, string $identityKey): ?EntityRenderBinding
     {
-        $key = 'theme.layout_entity.page_binding.' . hash('sha256', json_encode([$themeId, $scope, $identityKey, $entityKey], JSON_THROW_ON_ERROR));
+        if (($resolved['binding'] ?? null) instanceof EntityRenderBinding) {
+            return $resolved['binding'];
+        }
+        $identity = $resolved['version_identity'] ?? null;
+        if ($identity instanceof ThemeVersionIdentity && $identityKey !== '') {
+            return $this->readPageBinding($identity, $identityKey);
+        }
+
+        return null;
+    }
+
+    private function readPageBinding(ThemeVersionIdentity $identity, string $layoutIdentityHash): ?EntityRenderBinding
+    {
+        $key = 'theme.layout_entity.page_binding.v3.' . hash('sha256', json_encode([
+            $identity->toArray(),
+            $layoutIdentityHash,
+        ], JSON_THROW_ON_ERROR));
         $cached = RequestContext::get($key);
         if ($cached instanceof EntityRenderBinding) {
             return $cached;
         }
         $binding = \Weline\Framework\Manager\ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)
-            ->readPageBinding($themeId, $scope, $identityKey, $entityKey);
+            ->readPageBinding($identity, $layoutIdentityHash);
         if ($binding !== null) {
             RequestContext::set($key, $binding);
         }
+
         return $binding;
     }
 
-    private function readPageCurrent(int $themeId, string $scope, string $identityKey, bool $published): ?string
-    {
-        $file = $this->paths->pageCurrentJson($themeId, $scope, $identityKey);
-        if (!\is_file($file)) {
-            return null;
-        }
-        $decoded = \json_decode((string)\file_get_contents($file), true);
-        if (!\is_array($decoded)) {
-            return null;
-        }
-        $keys = $published ? ['published'] : ['draft', 'published'];
-        foreach ($keys as $key) {
-            $segment = \trim((string)($decoded[$key] ?? ''));
-            if ($segment === '') {
-                continue;
-            }
-            if (preg_match($published ? '/^r[1-9][0-9]*$/D' : '/^(?:[dr][1-9][0-9]*|s[a-f0-9]+)$/D', $segment) === 1) {
-                return $segment;
-            }
-        }
-
-        return null;
-    }
-
-    private function rememberPageCurrent(
+    private function readPageBindingFromScope(
         int $themeId,
         string $scope,
-        string $identityKey,
-        string $structureOrRelease,
+        string $layoutIdentityHash,
         bool $published,
-    ): void {
-        if ($structureOrRelease === '' || $identityKey === '') {
-            return;
+    ): ?EntityRenderBinding {
+        /** @var ThemeScopeVersionService $scopeVersions */
+        $scopeVersions = \Weline\Framework\Manager\ObjectManager::getInstance(ThemeScopeVersionService::class);
+        $version = $published
+            ? $scopeVersions->getPublished($themeId, $scope)
+            : $scopeVersions->getCurrent($themeId, $scope);
+        if ($version === null || $version->getVersionId() < 1) {
+            return null;
         }
-        $file = $this->paths->pageCurrentJson($themeId, $scope, $identityKey);
-        $dir = \dirname($file);
-        if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
-            return;
-        }
-        $existing = [];
-        if (\is_file($file)) {
-            $decoded = \json_decode((string)\file_get_contents($file), true);
-            if (\is_array($decoded)) {
-                $existing = $decoded;
-            }
-        }
-        $existing[$published ? 'published' : 'draft'] = $structureOrRelease;
-        $json = \json_encode($existing, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
-        if ($json === false) {
-            return;
-        }
-        $tmp = $file . '.tmp';
-        if (@\file_put_contents($tmp, $json . "\n") === false) {
-            return;
-        }
-        @\rename($tmp, $file);
-    }
+        $identity = $version->toVersionIdentity()->withVersion(
+            $version->getVersionId(),
+            $published ? ThemeVersionIdentity::MODE_FORMAL : ThemeVersionIdentity::MODE_DRAFT,
+            \max(1, $version->getContentRevision()),
+        );
 
-    /**
-     * Draft fallback only: pick an existing solidified file. Published storefront
-     * never fishes older r* / s* — it uses current.json or the published release id.
-     */
-    private function scanSolidifiedSegment(
-        int $themeId,
-        string $scope,
-        string $identityKey,
-        bool $published,
-    ): ?string {
-        // 没有权威指针时不能按目录排序猜测草稿或发布版本。
-        return null;
+        return $this->readPageBinding($identity, $layoutIdentityHash);
     }
 
     private function pagePhtmlHasSlots(string $path): bool
@@ -2714,20 +2769,17 @@ final class ThemeLayoutEntitySlotFiller
         string $structureOrRelease,
         ?EntityRenderBinding $binding = null,
     ): void {
+        if ($binding === null) {
+            return;
+        }
         try {
-            $configByUid = $binding !== null ? $this->configStore->readBoundConfig($binding) : $this->configStore->readPageConfig(
-                $themeId,
-                $pageScope,
-                $identityKey,
-                $structureOrRelease,
-            );
+            $configByUid = $this->configStore->readBoundConfig($binding);
         } catch (\Throwable) {
             return;
         }
         if ($configByUid === []) {
             return;
         }
-        $versionKey = $identityKey . '/' . $structureOrRelease;
         foreach ($configByUid as $uid => $node) {
             if (!\is_array($node)) {
                 continue;
@@ -2736,13 +2788,11 @@ final class ThemeLayoutEntitySlotFiller
             if ($uid === '') {
                 continue;
             }
-            if ($binding === null && $this->configStore->needsStructureHydration($node)) {
+            if ($this->configStore->needsStructureHydration($node)) {
                 $configByUid[$uid] = $this->configStore->hydratePageNodeFromStructure(
                     $node,
                     $uid,
-                    $themeId,
-                    $pageScope,
-                    $versionKey,
+                    $binding->structurePath,
                 );
             }
         }
@@ -2794,7 +2844,7 @@ $this->entityIdentityForScope($overlayScope),
                 }
                 $uid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
                 if ($uid !== '') {
-                    RequestContext::set(ThemeLayoutEntityWidgetRenderer::requestNodeKey($uid, 'page', $themeId, $binding?->scope ?? $this->paths->scopeKey($pageScope), $binding?->cacheKey() ?? $versionKey, WidgetI18n::storefrontLocale()), $widget);
+                    RequestContext::set(ThemeLayoutEntityWidgetRenderer::requestNodeKey($uid, 'page', $themeId, $binding?->identity->scopeKey() ?? $this->paths->scopeKey($pageScope), $binding?->cacheKey() ?? $versionKey, WidgetI18n::storefrontLocale()), $widget);
                 }
             }
         }
@@ -2806,34 +2856,6 @@ $this->entityIdentityForScope($overlayScope),
     private function scopeFallbackChain(string $scope): array
     {
         return $this->chrome->scopeFallbackChain($scope);
-    }
-
-    /**
-     * Hard-cut path picker: published storefront is r{published_release_id} only.
-     * Never scandir-fish s* / older r* — missing bake fails closed (caller throws).
-     * Draft/preview does not resolve page entities via this directory fallback.
-     */
-    private function resolveStructureOrRelease(
-        int $themeId,
-        string $scope,
-        string $identityKey,
-        bool $published,
-        ?int $preferredReleaseId,
-    ): ?string {
-        if (!$published) {
-            return null;
-        }
-        if ($preferredReleaseId === null || $preferredReleaseId < 1) {
-            return null;
-        }
-
-        $candidate = $this->paths->pageStructureOrRelease('', true, $preferredReleaseId);
-        $path = $this->paths->pagePhtml($themeId, $scope, $identityKey, $candidate);
-        if (!$this->pagePhtmlHasSlots($path)) {
-            return null;
-        }
-
-        return $candidate;
     }
 
     private function resolveHotCache(): ?StorefrontScopeHotCache
@@ -2848,5 +2870,86 @@ $this->entityIdentityForScope($overlayScope),
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Drop the shared page_location envelopes for one theme scope so a bump
+     * cannot keep serving a pre-bump (possibly empty) location through its
+     * namespace-generation fingerprint.
+     */
+    public function purgePublishedPageEntityLocationCaches(int $themeId, string $scope): void
+    {
+        $hotCache = $this->resolveHotCache();
+        if (!$hotCache instanceof StorefrontScopeHotCache || $themeId < 1 || trim($scope) === '') {
+            return;
+        }
+        /** @var ThemeScopeVersionService $scopeVersions */
+        $scopeVersions = \Weline\Framework\Manager\ObjectManager::getInstance(ThemeScopeVersionService::class);
+        $pageTypes = array_keys(\Weline\Theme\Model\ThemeLayout::getPageTypes());
+        foreach ($this->scopeFallbackChain($scope) as $candidateScope) {
+            $published = $scopeVersions->getPublished($themeId, $candidateScope);
+            $versionCacheKeys = [''];
+            if ($published !== null && $published->getVersionId() > 0) {
+                $identity = $published->toVersionIdentity()->withVersion(
+                    $published->getVersionId(),
+                    ThemeVersionIdentity::MODE_FORMAL,
+                    \max(1, $published->getContentRevision()),
+                );
+                $versionCacheKeys[] = $identity->cacheKey();
+            }
+            foreach ($this->entityIdentityVariantsForScope($candidateScope) as $entityIdentity) {
+                $entityHash = hash('sha256', json_encode($entityIdentity, JSON_THROW_ON_ERROR));
+                foreach ($pageTypes as $pageType) {
+                    foreach ($versionCacheKeys as $versionCacheKey) {
+                        $logicalKey = 'page.location.v4|' . $themeId . '|' . \trim($candidateScope)
+                            . '|' . \strtolower(\trim($pageType)) . '|frontend'
+                            . '|' . $versionCacheKey
+                            . '|' . $entityHash;
+                        $hotCache->forgetPolicyAcrossGenerations(
+                            StorefrontThemeCacheCoordinator::publishedPageEntityLocationPolicy(),
+                            $logicalKey,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Entity identity as baked into the location logical key. A worker request
+     * may carry a LayoutIdentity with website_id while CLI/admin writes run with
+     * the bare global identity — purge both encodings so neither keeps poison.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function entityIdentityVariantsForScope(string $scope): array
+    {
+        $base = $this->entityIdentityForScope($scope);
+        $variants = [$base];
+        if (!isset($base['website_id'])) {
+            $websiteId = 0;
+            try {
+                $identity = RequestContext::scopeIdentity();
+                if ($identity instanceof ScopeIdentity) {
+                    $websiteId = (int)$identity->websiteId;
+                }
+            } catch (\Throwable) {
+            }
+            $withWebsite = $base;
+            $withWebsite['website_id'] = $websiteId;
+            $variants[] = $withWebsite;
+        }
+        $seen = [];
+        $out = [];
+        foreach ($variants as $variant) {
+            $fingerprint = json_encode($variant, JSON_THROW_ON_ERROR);
+            if (isset($seen[$fingerprint])) {
+                continue;
+            }
+            $seen[$fingerprint] = true;
+            $out[] = $variant;
+        }
+
+        return $out;
     }
 }

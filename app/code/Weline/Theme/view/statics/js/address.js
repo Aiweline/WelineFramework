@@ -782,9 +782,10 @@
             if (code.length !== 2) {
                 return;
             }
-            if (placeName && name.indexOf(placeName) < 0) {
-                name = name + ' · ' + placeName;
-            }
+            // 邮编命中的地点只作「国家菜单提示」，禁止拼进国家名：
+            // region_name 会被 updateControl() 写进国家输入框的 value，并随结账提交原样落库，
+            // 拼进去会得到 "United States · San Francisco" 这种脏国家名（country_code 才是权威）。
+            // 提示改存 region.postal_place_name，只在国家菜单项里展示。
             var supported = true;
             if (typeof row === 'object' && row && row.supported !== undefined) {
                 supported = !!row.supported;
@@ -804,6 +805,7 @@
                 if (name) {
                     region.region_name = name;
                 }
+                region.postal_place_name = placeName || '';
             }
         });
         if (!codes.length) {
@@ -1944,7 +1946,9 @@
         return labelOf(region).toLowerCase().indexOf(needle) > -1 ||
             text(region.region_default_name).toLowerCase().indexOf(needle) > -1 ||
             text(region.region_code).toLowerCase().indexOf(needle) > -1 ||
-            text(region.country_code).toLowerCase().indexOf(needle) > -1;
+            text(region.country_code).toLowerCase().indexOf(needle) > -1 ||
+            // 邮编命中的地点名已不再并入 region_name，这里补上以保持可搜（提示仍只在菜单展示）。
+            text(region.postal_place_name).toLowerCase().indexOf(needle) > -1;
     }
 
     function findRegionById(group, regionId) {
@@ -2247,6 +2251,10 @@
                 var unsupported = !!(hit.region && (hit.region.postal_unsupported || hit.region.embargoed));
                 var disabled = unsupported && (lockUnsupported || !!(hit.region && hit.region.embargoed));
                 var label = hit.label;
+                // 邮编命中地点只在这里补提示，绝不写回国家名（见 setPostalCountryPin）。
+                if (hit.region && hit.region.postal_place_name && label.indexOf(hit.region.postal_place_name) < 0) {
+                    label = label + ' · ' + hit.region.postal_place_name;
+                }
                 if (hit.region && hit.region.embargoed) {
                     label = label + '（' + text(labels.embargoedRegion || labels.unsupportedCountry || 'unsupported') + '）';
                 } else if (unsupported) {

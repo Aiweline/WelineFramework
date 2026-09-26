@@ -36,7 +36,14 @@ final class ThemeLayoutEntityWidgetRenderer
 
     public function renderBound(string $nodeUid, string $source, EntityRenderBinding $binding): string
     {
-        return $this->render($nodeUid, $source, $binding->themeId, $binding->scope, $binding->cacheKey(), $binding);
+        return $this->render(
+            $nodeUid,
+            $source,
+            $binding->identity->themeId,
+            $binding->identity->scopeKey(),
+            $binding->cacheKey(),
+            $binding,
+        );
     }
 
     /**
@@ -79,13 +86,11 @@ final class ThemeLayoutEntityWidgetRenderer
         }
 
         // Primed page-config may be param-only (legacy bake). Hydrate identity from structure.
-        if ($binding === null && $configSource === 'page' && $this->configStore->needsStructureHydration($entry)) {
+        if ($configSource === 'page' && $this->configStore->needsStructureHydration($entry)) {
             $entry = $this->configStore->hydratePageNodeFromStructure(
                 $entry,
                 $nodeUid,
-                $themeId,
-                $scopeKey,
-                $versionKey,
+                $binding?->structurePath ?? '',
             );
             RequestContext::set($requestKey, $entry);
         }

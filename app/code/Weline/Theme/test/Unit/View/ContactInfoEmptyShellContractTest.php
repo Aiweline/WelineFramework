@@ -19,5 +19,8 @@ final class ContactInfoEmptyShellContractTest extends TestCase
         self::assertStringContainsString('if (!$hasContactBody && $subtitle === \'\')', $src);
         self::assertStringContainsString('return;', $src);
         self::assertStringContainsString('if ($hasContactBody):', $src);
+        self::assertStringContainsString('SiteContactInfo', $src);
+        self::assertStringContainsString('@example', $src);
+        self::assertStringContainsString('$resolver->resolve()', $src);
     }
 }

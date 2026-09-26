@@ -9,26 +9,36 @@ final class ThemeLayoutVersionBindingResolverTest extends TestCase
 {
     private function resolver(): ThemeLayoutVersionBindingResolver
     {
-        return new ThemeLayoutVersionBindingResolver((new ReflectionClass(SharedChromeService::class))->newInstanceWithoutConstructor());
+        return new ThemeLayoutVersionBindingResolver(
+            (new ReflectionClass(SharedChromeService::class))->newInstanceWithoutConstructor(),
+        );
     }
-    public function testHistoricalChromeUsesItsOwnOmissions(): void
+
+    public function testMatchChromeOmissionsDoesNotGuessByProjection(): void
     {
         $old = ['node_uid' => 'a', 'area' => 'footer', 'widget_module' => 'Weline_Test', 'widget_code' => 'footer', 'config' => ['title' => 'old']];
         $new = array_replace($old, ['config' => ['title' => 'new']]);
-        $versions = [['version_id' => 10, 'snapshot_data' => ['footer' => ['widgets' => [$old]]]], ['version_id' => 20, 'is_published' => true, 'snapshot_data' => ['footer' => ['widgets' => [$new]]]]];
+        $versions = [
+            ['version_id' => 10, 'snapshot_data' => ['footer' => ['widgets' => [$old]]]],
+            ['version_id' => 20, 'is_published' => true, 'snapshot_data' => ['footer' => ['widgets' => [$new]]]],
+        ];
         $decisions = [['source' => 'user_deleted@10', 'slot_id' => 'footer-links', 'widget_module' => 'Weline_Test', 'widget_code' => 'links']];
         $result = $this->resolver()->matchChromeOmissions(['a' => $old], $versions, $decisions);
-        self::assertTrue($result['resolved']);
-        self::assertSame([10], $result['version_ids']);
-        self::assertSame('links', $result['omissions'][0]['widget_code']);
+        self::assertFalse($result['resolved']);
+        self::assertSame(ThemeLayoutVersionBindingResolver::REASON_PROJECTION_MATCHING_REMOVED, $result['reason']);
+        self::assertSame([], $result['version_ids']);
+        self::assertSame([], $result['omissions']);
     }
-    public function testIdenticalChromeWithDifferentUninstallHistoryIsUnresolved(): void
+
+    public function testResolvePageVersionAndChromeOmissionsRefuseProjection(): void
     {
         $node = ['node_uid' => 'a', 'area' => 'footer', 'widget_code' => 'footer'];
-        $snapshot = ['footer' => ['widgets' => [$node]]];
-        $versions = [['version_id' => 10, 'snapshot_data' => $snapshot], ['version_id' => 20, 'snapshot_data' => $snapshot]];
-        $decisions = [['source' => 'user_deleted@10', 'slot_id' => 'footer-links', 'widget_module' => 'Weline_Test', 'widget_code' => 'links']];
-        self::assertFalse($this->resolver()->matchChromeOmissions(['a' => $node], $versions, $decisions)['resolved']);
-        self::assertTrue($this->resolver()->matchChromeOmissions(['a' => $node], $versions, [])['resolved']);
+        $page = $this->resolver()->resolvePageVersion(1, 'default', 'homepage', 'default', 'frontend', [$node]);
+        self::assertFalse($page['resolved']);
+        self::assertSame(ThemeLayoutVersionBindingResolver::REASON_PROJECTION_MATCHING_REMOVED, $page['reason']);
+
+        $chrome = $this->resolver()->resolveChromeOmissions(1, 'default', [$node]);
+        self::assertFalse($chrome['resolved']);
+        self::assertSame(ThemeLayoutVersionBindingResolver::REASON_PROJECTION_MATCHING_REMOVED, $chrome['reason']);
     }
 }

@@ -53,12 +53,12 @@ final class EnsurePublishedChromeForScopeContractTest extends TestCase
         self::assertStringContainsString('bootstrapMissingChromeScopes(', $rebakeBody);
     }
 
-    public function testMigrateBindingsBootstrapsMissingChrome(): void
+    public function testLegacyMigrateBindingsCommandRemoved(): void
     {
-        $src = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Console/Theme/Layout/MigrateBindings.php'
-        );
-        self::assertStringContainsString('bootstrapMissingChromeScopes(', $src);
+        $path = \dirname(__DIR__, 3) . '/Console/Theme/Layout/MigrateBindings.php';
+        self::assertFileDoesNotExist($path);
+        $convert = \dirname(__DIR__, 3) . '/Console/Theme/Layout/ConvertVersionArtifacts.php';
+        self::assertFileExists($convert);
     }
 
     public function testEnsureCurrentPromotesOrphanScopeVersions(): void

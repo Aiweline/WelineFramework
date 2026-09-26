@@ -10,13 +10,15 @@
  * @param.meta_title {default="",name="SEO标题",description="SEO标题，留空时回退页面标题；有实体SEO时不覆盖实体"}
  * @param.meta_description {default="",name="SEO描述",description="留空时回退网站简介（Website 基础信息）"}
  * @param.subtitle {default="告诉我们你需要什么，支持团队会将请求分派给合适的处理人。",name="页面副标题",description="联系我们页面引导文案"}
- * @param.contactEmail {default="support@example.com",name="客服邮箱",description="主要客服邮箱"}
- * @param.contactPhone {default="+1 000 000 0000",name="客服电话",description="主要客服电话"}
- * @param.contactHours {default="周一至周五，9:00 - 18:00",name="服务时间",description="客服可用时间"}
+ * @param.contactEmail {default="",name="客服邮箱",description="留空则用网站 SMTP / SiteContactInfo；勿写 example.com 占位"}
+ * @param.contactPhone {default="",name="客服电话",description="留空则用网站联系配置"}
+ * @param.contactHours {default="",name="服务时间",description="留空则用网站联系配置"}
  * @param.showHeader {default=true,name="显示 header",description="是否渲染站点头部"}
  * @param.showFooter {default=true,name="显示 footer",description="是否渲染站点底部"}
  * @param.class {default="",name="额外 CSS 类",description="联系我们主内容区域的额外 CSS 类"}
  */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\SiteContactInfo;
 use Weline\Theme\Helper\WidgetI18n;
 
 $meta = $this->getData('meta') ?? [];
@@ -27,14 +29,42 @@ $subtitle = WidgetI18n::label(
         ? (string)$meta['subtitle']
         : '告诉我们你需要什么，支持团队会将请求分派给合适的处理人。'
 );
-$contactEmail = (string)($meta['contactEmail'] ?? 'support@example.com');
-$contactPhone = (string)($meta['contactPhone'] ?? '+1 000 000 0000');
+
+$contact = [
+    'contact_email' => '',
+    'contact_phone' => '',
+    'service_hours' => (string)WidgetI18n::label('周一至周五，9:00 - 18:00'),
+];
+try {
+    $resolver = ObjectManager::getInstance(SiteContactInfo::class);
+    if ($resolver instanceof SiteContactInfo) {
+        $contact = array_merge($contact, $resolver->resolve());
+    }
+} catch (\Throwable) {
+}
+
+$paramEmail = trim((string)($meta['contactEmail'] ?? ''));
+$contactEmail = ($paramEmail !== '' && !preg_match('/@example\\.com$/i', $paramEmail))
+    ? $paramEmail
+    : (string)($contact['contact_email'] ?? '');
+if ($contactEmail === '' || preg_match('/@example\\.com$/i', $contactEmail)) {
+    $contactEmail = '';
+}
+
+$paramPhone = trim((string)($meta['contactPhone'] ?? ''));
+$contactPhone = ($paramPhone !== '' && !preg_match('/^\\+1\\s*0{3}/', $paramPhone))
+    ? $paramPhone
+    : (string)($contact['contact_phone'] ?? '');
+
+$paramHours = trim((string)($meta['contactHours'] ?? ''));
 $contactHours = WidgetI18n::label(
-    trim((string)($meta['contactHours'] ?? '')) !== ''
-        ? (string)$meta['contactHours']
-        : '周一至周五，9:00 - 18:00'
+    $paramHours !== ''
+        ? $paramHours
+        : (trim((string)($contact['service_hours'] ?? '')) !== ''
+            ? (string)$contact['service_hours']
+            : '周一至周五，9:00 - 18:00')
 );
-$mailHref = 'mailto:' . $contactEmail;
+$mailHref = $contactEmail !== '' ? ('mailto:' . $contactEmail) : '#';
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
@@ -310,9 +340,11 @@ $mailHref = 'mailto:' . $contactEmail;
                                 <h1 id="contact-layout-title"><?= $escape($title) ?></h1>
                                 <p class="contact-layout__lead"><?= $escape($subtitle) ?></p>
                                 <div class="contact-layout__actions">
+                                    <?php if ($contactEmail !== ''): ?>
                                     <a class="contact-layout__button contact-layout__button--primary" href="<?= $escape($mailHref) ?>">
                                         <?= WidgetI18n::label('发送邮件') ?>
                                     </a>
+                                    <?php endif; ?>
                                     <a class="contact-layout__button" href="@url{'customer/account'}">
                                         <?= WidgetI18n::label('查看我的账户') ?>
                                     </a>
@@ -359,14 +391,18 @@ $mailHref = 'mailto:' . $contactEmail;
                                 <section class="contact-layout__panel" aria-labelledby="contact-methods-title" weline-code="theme.contact.contact_methods_title">
                                     <h2 id="contact-methods-title"><?= WidgetI18n::label('联系方式') ?></h2>
                                     <div class="contact-layout__method-list contact-layout__stack-list">
+                                        <?php if ($contactEmail !== ''): ?>
                                         <article class="contact-layout__method">
                                             <h3><?= WidgetI18n::label('邮箱') ?></h3>
-                                            <p><?= $escape($contactEmail) ?></p>
+                                            <p><a href="<?= $escape($mailHref) ?>"><?= $escape($contactEmail) ?></a></p>
                                         </article>
+                                        <?php endif; ?>
+                                        <?php if ($contactPhone !== ''): ?>
                                         <article class="contact-layout__method">
                                             <h3><?= WidgetI18n::label('电话') ?></h3>
                                             <p><?= $escape($contactPhone) ?></p>
                                         </article>
+                                        <?php endif; ?>
                                         <article class="contact-layout__method">
                                             <h3><?= WidgetI18n::label('服务时间') ?></h3>
                                             <p><?= $escape($contactHours) ?></p>

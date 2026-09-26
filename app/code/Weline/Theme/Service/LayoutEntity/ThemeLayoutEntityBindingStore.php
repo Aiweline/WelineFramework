@@ -6,104 +6,270 @@ namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
 
-/** 完整产物先落盘，再原子切换实体绑定；旧请求继续使用旧配置快照。 */
+/**
+ * theme-layout-entity.v3 binding store.
+ * Rejects v1/v2 and r/d/s entity keys — no schema fallback.
+ */
 final class ThemeLayoutEntityBindingStore
 {
     private readonly AtomicCompiledFilePublisher $publisher;
 
-    public function __construct(private readonly ThemeLayoutEntityPaths $paths, ?AtomicCompiledFilePublisher $publisher = null)
-    {
+    public function __construct(
+        private readonly ThemeLayoutEntityPaths $paths,
+        ?AtomicCompiledFilePublisher $publisher = null,
+    ) {
         $this->publisher = $publisher ?? new AtomicCompiledFilePublisher();
     }
 
-    public function readPageBinding(int $themeId, string $scope, string $identityKey, string $entityKey): ?EntityRenderBinding
+    public function readPageBinding(ThemeVersionIdentity $identity, string $layoutIdentityHash): ?EntityRenderBinding
     {
-        return $this->read($this->paths->pageBindingJson($themeId, $scope, $identityKey, $entityKey), $themeId, $scope, $identityKey, $entityKey, 'page');
+        return $this->read(
+            $this->paths->pageBindingJson($identity, $layoutIdentityHash),
+            $identity,
+            'page',
+            $layoutIdentityHash,
+        );
     }
 
-    public function readChromeBinding(int $themeId, string $scope, int $versionId): ?EntityRenderBinding
+    public function readChromeBinding(ThemeVersionIdentity $identity): ?EntityRenderBinding
     {
-        return $this->read($this->paths->chromeBindingJson($themeId, $scope, $versionId), $themeId, $scope, '', 'tv' . $versionId, 'chrome');
+        return $this->read(
+            $this->paths->chromeBindingJson($identity),
+            $identity,
+            'chrome',
+            '',
+        );
     }
 
-    public function publishPageBinding(int $themeId, string $scope, string $identityKey, string $entityKey, string $structureKey, array $config, array $assets): EntityRenderBinding
-    {
-        return $this->publish($this->paths->pageBindingJson($themeId, $scope, $identityKey, $entityKey), $themeId, $scope, $identityKey, $entityKey, $structureKey, 'page', $config, $assets);
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $assets
+     */
+    public function publishPageBinding(
+        ThemeVersionIdentity $identity,
+        string $layoutIdentityHash,
+        string $structureKey,
+        array $config,
+        array $assets,
+        int $baseVersionId = 0,
+        string $chromeImmutableBindingKey = '',
+        string $sourceFingerprint = '',
+        string $injectionFingerprint = '',
+    ): EntityRenderBinding {
+        return $this->publish(
+            $this->paths->pageBindingJson($identity, $layoutIdentityHash),
+            $identity,
+            'page',
+            $layoutIdentityHash,
+            $structureKey,
+            $config,
+            $assets,
+            $baseVersionId,
+            $chromeImmutableBindingKey,
+            $sourceFingerprint,
+            $injectionFingerprint,
+        );
     }
 
-    public function publishChromeBinding(int $themeId, string $scope, int $versionId, string $structureKey, array $config, array $assets): EntityRenderBinding
-    {
-        return $this->publish($this->paths->chromeBindingJson($themeId, $scope, $versionId), $themeId, $scope, '', 'tv' . $versionId, $structureKey, 'chrome', $config, $assets);
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $assets
+     */
+    public function publishChromeBinding(
+        ThemeVersionIdentity $identity,
+        string $structureKey,
+        array $config,
+        array $assets,
+        int $baseVersionId = 0,
+        string $sourceFingerprint = '',
+        string $injectionFingerprint = '',
+    ): EntityRenderBinding {
+        return $this->publish(
+            $this->paths->chromeBindingJson($identity),
+            $identity,
+            'chrome',
+            '',
+            $structureKey,
+            $config,
+            $assets,
+            $baseVersionId,
+            '',
+            $sourceFingerprint,
+            $injectionFingerprint,
+        );
     }
 
-    private function publish(string $manifest, int $themeId, string $scope, string $identityKey, string $entityKey, string $structureKey, string $source, array $config, array $assets): EntityRenderBinding
-    {
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $assets
+     */
+    private function publish(
+        string $manifest,
+        ThemeVersionIdentity $identity,
+        string $source,
+        string $layoutIdentityHash,
+        string $structureKey,
+        array $config,
+        array $assets,
+        int $baseVersionId,
+        string $chromeImmutableBindingKey,
+        string $sourceFingerprint,
+        string $injectionFingerprint,
+    ): EntityRenderBinding {
+        $structureKey = $this->normalizeStructureKey($structureKey);
         $configJson = $this->encode($config);
         $assetsJson = $this->encode($assets);
-        $configKey = hash('sha256', $configJson . "\n" . $assetsJson);
-        $binding = $this->binding($themeId, $scope, $identityKey, $entityKey, $structureKey, $configKey, $source);
-        if (!is_file($binding->templatePath) || !is_file($binding->structurePath)) {
+        $configKey = \hash('sha256', $configJson . "\n" . $assetsJson);
+        $binding = $this->binding(
+            $identity,
+            $source,
+            $layoutIdentityHash,
+            $structureKey,
+            $configKey,
+            $baseVersionId,
+            $chromeImmutableBindingKey,
+            $sourceFingerprint,
+            $injectionFingerprint,
+        );
+        if (!\is_file($binding->templatePath) || !\is_file($binding->structurePath)) {
             throw new \RuntimeException('theme_layout_binding_structure_missing');
         }
-        // 内容寻址文件一旦存在便不重写，确保旧请求的快照稳定。
         foreach ([$binding->configPath => $configJson, $binding->assetsPath => $assetsJson] as $path => $content) {
-            if (!is_file($path)) {
+            if (!\is_file($path)) {
                 $this->publisher->publish($path, $content);
             }
         }
-        $manifestJson = $this->encode([
-            'schema_version' => 2,
-            'structure_key' => $structureKey,
-            'config_key' => $configKey,
-        ]);
-        if (!is_file($manifest) || file_get_contents($manifest) !== $manifestJson) {
+        $manifestJson = $this->encode($binding->toManifestArray());
+        if (!\is_file($manifest) || \file_get_contents($manifest) !== $manifestJson) {
             $this->publisher->publish($manifest, $manifestJson);
         }
-        // 同一请求中的写后再读取得新绑定；已传入模板的 DTO 仍保持旧快照。
-        if (class_exists(RequestContext::class)) {
-            $identity = $source === 'chrome'
-                ? [$themeId, $scope, (int)substr($entityKey, 2)]
-                : [$themeId, $scope, $identityKey, $entityKey];
-            RequestContext::set('theme.layout_entity.' . $source . '_binding.'
-                . hash('sha256', json_encode($identity, JSON_THROW_ON_ERROR)), null);
+        if (\class_exists(RequestContext::class)) {
+            RequestContext::set('theme.layout_entity.' . $source . '_binding.v3.'
+                . $binding->cacheKey(), null);
         }
+
         return $binding;
     }
 
-    private function read(string $manifest, int $themeId, string $scope, string $identityKey, string $entityKey, string $source): ?EntityRenderBinding
-    {
-        if (!is_file($manifest)) {
+    private function read(
+        string $manifest,
+        ThemeVersionIdentity $identity,
+        string $source,
+        string $layoutIdentityHash,
+    ): ?EntityRenderBinding {
+        if (!\is_file($manifest)) {
             return null;
         }
-        $data = json_decode((string)file_get_contents($manifest), true);
-        if (!is_array($data) || ($data['schema_version'] ?? null) !== 2
-            || !is_string($data['structure_key'] ?? null) || !preg_match('/^s[a-f0-9]{64}$/D', $data['structure_key'])
-            || !is_string($data['config_key'] ?? null) || !preg_match('/^[a-f0-9]{64}$/D', $data['config_key'])) {
+        $data = \json_decode((string)\file_get_contents($manifest), true);
+        if (!\is_array($data)) {
             return null;
         }
-        return $this->binding($themeId, $scope, $identityKey, $entityKey, $data['structure_key'], $data['config_key'], $source);
-    }
-
-    private function binding(int $themeId, string $scope, string $identityKey, string $entityKey, string $structureKey, string $configKey, string $source): EntityRenderBinding
-    {
-        if (!preg_match('/^s[a-f0-9]{64}$/D', $structureKey)) {
-            throw new \InvalidArgumentException('theme_layout_binding_structure_key_invalid');
+        // Hard reject legacy schemas — no v1/v2 fallback.
+        if (($data['schema'] ?? null) !== ThemeLayoutEntityPaths::SCHEMA_BINDING
+            && ($data['schema_version'] ?? null) !== 3
+        ) {
+            return null;
         }
-        $structureDir = $source === 'chrome'
-            ? $this->paths->chromeStructureDir($themeId, $scope, $structureKey)
-            : $this->paths->pageDir($themeId, $scope, $identityKey, $structureKey);
-        $configDir = $source === 'chrome'
-            ? $this->paths->chromeConfigBundleDir($themeId, $scope, $configKey)
-            : $this->paths->pageConfigBundleDir($themeId, $scope, $identityKey, $configKey);
-        return new EntityRenderBinding($themeId, $scope, $identityKey, $entityKey, $structureKey, $configKey, $source,
-            $structureDir . ($source === 'chrome' ? 'chrome.phtml' : 'layout.phtml'),
-            $configDir . $source . '-config.json', $configDir . $source . '-assets.json',
-            $structureDir . 'structure.json', $structureDir . 'shell.phtml');
+        if (($data['schema_version'] ?? null) !== 3) {
+            return null;
+        }
+        $structureKey = (string)($data['structure_key'] ?? '');
+        $configKey = (string)($data['config_key'] ?? '');
+        try {
+            $structureKey = $this->normalizeStructureKey($structureKey);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+        if (\preg_match('/^[a-f0-9]{64}$/D', $configKey) !== 1) {
+            return null;
+        }
+        // Manifest owner/version must match the requested identity — no cross-tv reuse.
+        if ((int)($data['theme_version_id'] ?? 0) !== $identity->themeVersionId
+            || (string)($data['mode'] ?? '') !== $identity->mode
+            || (int)($data['content_revision'] ?? 0) !== $identity->contentRevision
+        ) {
+            return null;
+        }
+
+        return $this->binding(
+            $identity,
+            $source,
+            $layoutIdentityHash !== '' ? $layoutIdentityHash : (string)($data['layout_identity_hash'] ?? ''),
+            $structureKey,
+            $configKey,
+            (int)($data['base_version_id'] ?? 0),
+            (string)($data['chrome_immutable_binding_key'] ?? ''),
+            (string)($data['source_fingerprint'] ?? ''),
+            (string)($data['injection_fingerprint'] ?? ''),
+        );
     }
 
+    private function binding(
+        ThemeVersionIdentity $identity,
+        string $source,
+        string $layoutIdentityHash,
+        string $structureKey,
+        string $configKey,
+        int $baseVersionId,
+        string $chromeImmutableBindingKey,
+        string $sourceFingerprint,
+        string $injectionFingerprint,
+    ): EntityRenderBinding {
+        if ($source === 'chrome') {
+            $templatePath = $this->paths->chromePhtml($identity, $structureKey);
+            $structurePath = $this->paths->chromeStructureDir($identity, $structureKey) . 'structure.json';
+            $configPath = $this->paths->chromeConfigJson($identity, $configKey);
+            $assetsPath = $this->paths->chromeAssetsJson($identity, $configKey);
+            $shellPath = '';
+            $bindingPath = $this->paths->chromeBindingJson($identity);
+        } else {
+            $layoutIdentityHash = $this->paths->identityKey($layoutIdentityHash);
+            $templatePath = $this->paths->pagePhtml($identity, $layoutIdentityHash, $structureKey);
+            $structurePath = $this->paths->pageStructureJson($identity, $layoutIdentityHash, $structureKey);
+            $configPath = $this->paths->pageConfigJson($identity, $layoutIdentityHash, $configKey);
+            $assetsPath = $this->paths->pageAssetsJson($identity, $layoutIdentityHash, $configKey);
+            $shellPath = $this->paths->shellPhtml($identity, $layoutIdentityHash, $structureKey);
+            $bindingPath = $this->paths->pageBindingJson($identity, $layoutIdentityHash);
+        }
+
+        return new EntityRenderBinding(
+            identity: $identity,
+            source: $source,
+            layoutIdentityHash: $layoutIdentityHash,
+            structureKey: $structureKey,
+            configKey: $configKey,
+            templatePath: $templatePath,
+            configPath: $configPath,
+            assetsPath: $assetsPath,
+            structurePath: $structurePath,
+            shellPath: $shellPath,
+            bindingPath: $bindingPath,
+            chromeImmutableBindingKey: $chromeImmutableBindingKey,
+            baseVersionId: $baseVersionId,
+            sourceFingerprint: $sourceFingerprint,
+            injectionFingerprint: $injectionFingerprint,
+        );
+    }
+
+    private function normalizeStructureKey(string $structureKey): string
+    {
+        $structureKey = \strtolower(\trim($structureKey));
+        if (\preg_match('/^s([a-f0-9]{64})$/D', $structureKey, $m) === 1) {
+            return $m[1];
+        }
+        if (\preg_match('/^[a-f0-9]{64}$/D', $structureKey) === 1) {
+            return $structureKey;
+        }
+        throw new \InvalidArgumentException('theme_layout_binding_structure_key_invalid');
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
     private function encode(array $data): string
     {
-        return json_encode($data, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+        return \json_encode($data, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) . "\n";
     }
 }

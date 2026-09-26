@@ -34,7 +34,7 @@ use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
  */
 final class ThemeLayoutEntityChrome
 {
-    private const SNAPSHOT_FORMAT = 'v2';
+    private const SNAPSHOT_FORMAT = 'v3';
     public function __construct(
         private readonly ThemeLayoutEntityPointerResolver $pointers,
         private readonly ThemeLayoutEntityPaths $paths,
@@ -92,14 +92,16 @@ final class ThemeLayoutEntityChrome
 
         $hotCache = $this->resolveHotCache();
         $locale = $this->normalizeLocaleSegment(WidgetI18n::storefrontLocale());
-        $logicalKey = 'chrome.rendered.' . self::SNAPSHOT_FORMAT . '|' . ($binding?->cacheKey() ?? $path) . '|' . $locale;
+        $logicalKey = 'chrome.rendered.' . self::SNAPSHOT_FORMAT . '|'
+                    . ($binding?->identity->cacheKey() ?? '') . '|'
+                    . ($binding?->cacheKey() ?? $path) . '|' . $locale;
         if ($hotCache instanceof StorefrontScopeHotCache) {
             // Warm HIT only — never invent a HIT; miss falls through to disk.
             $cached = $hotCache->peekPolicy(
                 StorefrontThemeCacheCoordinator::publishedChromeRenderedPolicy(),
                 $logicalKey,
             );
-            if (\is_string($cached) && $cached !== '' && !$this->isEnglishPoisonedNonEnChrome($cached, $locale)) {
+            if (\is_string($cached) && $cached !== '' && !$this->isLocalePoisonedChrome($cached, $locale)) {
                 $this->noteVisitorPixelBootstrapIfPresent($cached);
 
                 return $cached;
@@ -148,10 +150,22 @@ final class ThemeLayoutEntityChrome
             }
             return $resolved;
         }
-        $path = null;
+        $path = '';
         $binding = null;
+        $versionIdentity = null;
         if ($themeVersionId !== null && $themeVersionId > 0) {
-            $path = $this->paths->chromePhtml($themeId, $scope, $themeVersionId);
+            $version = clone ObjectManager::getInstance(\Weline\Theme\Model\ThemeScopeVersion::class);
+            $version->load($themeVersionId);
+            if ($version->getVersionId() > 0) {
+                $versionIdentity = $version->toVersionIdentity()->withVersion(
+                    $version->getVersionId(),
+                    $preview
+                        ? \Weline\Theme\Api\Version\ThemeVersionIdentity::MODE_DRAFT
+                        : \Weline\Theme\Api\Version\ThemeVersionIdentity::MODE_FORMAL,
+                    \max(1, $version->getContentRevision()),
+                );
+                $scope = $version->getScope();
+            }
         } else {
             $pointer = $preview
                 ? $this->pointers->resolveCurrentChrome($themeId, $scope)
@@ -159,10 +173,18 @@ final class ThemeLayoutEntityChrome
             $path = \is_array($pointer) ? (string)($pointer['path'] ?? '') : '';
             $themeVersionId = (int)($pointer['version_id'] ?? 0);
             $scope = (string)($pointer['scope'] ?? $scope);
+            $versionIdentity = ($pointer['identity'] ?? null) instanceof \Weline\Theme\Api\Version\ThemeVersionIdentity
+                ? $pointer['identity']
+                : null;
+            $binding = null;
+            if ($versionIdentity !== null) {
+                $binding = $this->readChromeBinding($versionIdentity);
+                $path = $binding?->templatePath ?? $path;
+            }
         }
 
-        if ($themeVersionId !== null && $themeVersionId > 0) {
-            $binding = $this->readChromeBinding($themeId, $scope, $themeVersionId);
+        if ($versionIdentity !== null && $binding === null) {
+            $binding = $this->readChromeBinding($versionIdentity);
             $path = $binding?->templatePath ?? $path;
         }
 
@@ -242,6 +264,14 @@ final class ThemeLayoutEntityChrome
         if ($chain === [] && $scope !== '') {
             $chain[] = $scope;
         }
+        // SystemConfig folds default Store/Channel into the global bucket, so a
+        // storefront identity resolves storage scope "default.default.default" while Theme
+        // publishes own the sentinel scopes. Ascend to them before the literal global.
+        if (\in_array('default.default.default', $chain, true)
+            && !\in_array('default.__store__.__channel__', $chain, true)) {
+            $chain[] = 'default.__website__.default';
+            $chain[] = 'default.__store__.__channel__';
+        }
         if (!\in_array('default.default.default', $chain, true)) {
             $chain[] = 'default.default.default';
         }
@@ -305,16 +335,21 @@ final class ThemeLayoutEntityChrome
             try {
                 $pointer = $this->pointers->resolvePublishedChrome($themeId, $candidateScope);
                 $path = \is_array($pointer) ? (string)($pointer['path'] ?? '') : '';
-                $binding = $this->readChromeBinding($themeId, (string)($pointer['scope'] ?? $candidateScope), (int)($pointer['version_id'] ?? 0));
+                $versionIdentity = ($pointer['identity'] ?? null) instanceof \Weline\Theme\Api\Version\ThemeVersionIdentity
+                    ? $pointer['identity']
+                    : null;
+                $binding = $versionIdentity !== null ? $this->readChromeBinding($versionIdentity) : null;
                 $path = $binding?->templatePath ?? $path;
                 if ($path === '' || !\is_file($path)) {
                     continue;
                 }
 
-                $logicalKey = 'chrome.rendered.' . self::SNAPSHOT_FORMAT . '|' . ($binding?->cacheKey() ?? $path) . '|' . $locale;
+                $logicalKey = 'chrome.rendered.' . self::SNAPSHOT_FORMAT . '|'
+                    . ($binding?->identity->cacheKey() ?? '') . '|'
+                    . ($binding?->cacheKey() ?? $path) . '|' . $locale;
                 $peeked = $hotCache->peekPolicy($policy, $logicalKey);
                 if (\is_string($peeked) && $peeked !== ''
-                    && !$this->isEnglishPoisonedNonEnChrome($peeked, $locale)
+                    && !$this->isLocalePoisonedChrome($peeked, $locale)
                 ) {
                     return ['seeded' => false, 'peeked' => true, 'scope' => $candidateScope];
                 }
@@ -328,7 +363,7 @@ final class ThemeLayoutEntityChrome
                 if ($html === null || $html === '') {
                     continue;
                 }
-                if ($this->isEnglishPoisonedNonEnChrome($html, $locale)) {
+                if ($this->isLocalePoisonedChrome($html, $locale)) {
                     continue;
                 }
 
@@ -545,10 +580,9 @@ final class ThemeLayoutEntityChrome
             return $html;
         }
 
-        // Heal: non-en snapshot must not keep English header「Ship to」from a prior
-        // path-vs-Phrase locale skew (chrome.rendered.zh_*.html with Ship to).
+        // Heal: snapshot locale must match chrome labels (EN「Ship to」/ ZH footer seeds).
         $locale = $this->normalizeLocaleSegment(WidgetI18n::storefrontLocale());
-        if ($this->isEnglishPoisonedNonEnChrome($html, $locale)) {
+        if ($this->isLocalePoisonedChrome($html, $locale)) {
             @\unlink($cachePath);
 
             return null;
@@ -600,16 +634,49 @@ final class ThemeLayoutEntityChrome
     }
 
     /**
-     * True when a non-English chrome snapshot still contains the English delivery
-     * label baked under a lagged Phrase locale.
+     * True when a chrome snapshot was baked under the wrong Phrase/path locale:
+     * - non-English pages still contain English「Ship to」
+     * - non-Chinese pages still contain Chinese footer/chrome seed labels
+     * (dict already has fr_FR etc.; stale chrome.rendered.{locale}.html must rebuild).
      */
-    private function isEnglishPoisonedNonEnChrome(string $html, string $locale): bool
+    private function isLocalePoisonedChrome(string $html, string $locale): bool
     {
-        if ($locale === 'en_US' || $locale === 'en_GB' || \str_starts_with($locale, 'en_')) {
+        if ($html === '') {
             return false;
         }
 
-        return \str_contains($html, 'delivery-line-1">Ship to');
+        $isEn = $locale === 'en_US' || $locale === 'en_GB' || \str_starts_with($locale, 'en_');
+        if (!$isEn && \str_contains($html, 'delivery-line-1">Ship to')) {
+            return true;
+        }
+
+        $isZh = $locale === 'zh_Hans_CN'
+            || $locale === 'zh_Hant_TW'
+            || $locale === 'zh_CN'
+            || \str_starts_with($locale, 'zh_');
+        if ($isZh) {
+            return false;
+        }
+
+        // Footer / chrome seeds that must not leak Chinese on FR/ES/… pages.
+        foreach ([
+            '定制与合作',
+            '支付与账户',
+            '帮助中心',
+            '关于我们',
+            '官方社交媒体',
+            '无障碍声明',
+            '社媒登录',
+            '回到顶部',
+            '同时用作结账地址',
+            '周一至周五 9:00 - 18:00',
+        ] as $zhMarker) {
+            if (\str_contains($html, $zhMarker)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function writeRenderedCache(string $chromePhtmlPath, string $html, ?EntityRenderBinding $binding = null): void
@@ -629,17 +696,18 @@ final class ThemeLayoutEntityChrome
         }
     }
 
-    private function readChromeBinding(int $themeId, string $scope, int $versionId): ?EntityRenderBinding
+    private function readChromeBinding(\Weline\Theme\Api\Version\ThemeVersionIdentity $identity): ?EntityRenderBinding
     {
-        $key = 'theme.layout_entity.chrome_binding.' . hash('sha256', json_encode([$themeId, $scope, $versionId], JSON_THROW_ON_ERROR));
+        $key = 'theme.layout_entity.chrome_binding.v3.' . hash('sha256', json_encode($identity->toArray(), JSON_THROW_ON_ERROR));
         $cached = \Weline\Framework\Runtime\RequestContext::get($key);
         if ($cached instanceof EntityRenderBinding) {
             return $cached;
         }
-        $binding = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)->readChromeBinding($themeId, $scope, $versionId);
+        $binding = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)->readChromeBinding($identity);
         if ($binding !== null) {
             \Weline\Framework\Runtime\RequestContext::set($key, $binding);
         }
+
         return $binding;
     }
 

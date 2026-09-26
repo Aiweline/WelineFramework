@@ -68,10 +68,13 @@ class PreviewTokenService
 
     /**
      * 生成预览 Token
-     * 
+     *
+     * Token payload carries optional owner/V/mode/R (Task 4). Missing fields stay
+     * valid for legacy issuers; old draft tokens without these keys remain readable.
+     *
      * @param int $themeId 主题ID
      * @param string $pageType 页面类型
-     * @param int|null $versionId 版本ID（可选）
+     * @param int|null $versionId 版本ID（可选；legacy alias of theme_version_id）
      * @param array $context Normalized preview/editor context payload
      * @return string 生成的 token
      */
@@ -99,18 +102,49 @@ class PreviewTokenService
         // 256-bit opaque capability. Identity is retained only in the protected
         // cache payload; it is not encoded into the bearer token.
         $token = 'pv_' . rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-        
-        // 存储 token 数据
+
+        $themeVersionId = (int)($context['theme_version_id'] ?? $versionId ?? 0);
+        $mode = \trim((string)($context['mode'] ?? ''));
+        if ($mode !== '' && !\in_array($mode, ['draft', 'formal'], true)) {
+            $mode = '';
+        }
+        $contentRevision = (int)($context['content_revision'] ?? 0);
+        $canonicalScope = \trim((string)($context['canonical_scope']
+            ?? $context['scope']
+            ?? ''));
+        $storeMode = \trim((string)($context['store_mode'] ?? ''));
+        $area = \trim((string)($context['area'] ?? $context['editor_area'] ?? ''));
+        if ($area !== '' && !\in_array($area, ['frontend', 'backend'], true)) {
+            $area = '';
+        }
+        $ownerHash = \trim((string)($context['owner_hash'] ?? ''));
+        if ($ownerHash === '' && $themeId > 0 && $canonicalScope !== '' && $storeMode !== '' && $area !== '') {
+            $ownerHash = \hash('sha256', \implode("\0", [
+                (string)$themeId,
+                $canonicalScope,
+                $storeMode,
+                $area,
+            ]));
+        }
+
+        // 存储 token 数据（owner/V/mode/R 为可选；缺省不失效旧格式）
         $tokenData = [
             'token' => $token,
             'theme_id' => $themeId,
             'page_type' => $pageType,
             'version_id' => $versionId,
+            'theme_version_id' => $themeVersionId > 0 ? $themeVersionId : null,
+            'mode' => $mode !== '' ? $mode : null,
+            'content_revision' => $contentRevision > 0 ? $contentRevision : null,
+            'canonical_scope' => $canonicalScope !== '' ? $canonicalScope : null,
+            'store_mode' => $storeMode !== '' ? $storeMode : null,
+            'area' => $area !== '' ? $area : null,
+            'owner_hash' => $ownerHash !== '' ? $ownerHash : null,
             'context' => $context,
             'created_at' => time(),
             'expires_at' => time() + self::TOKEN_TTL,
         ];
-        
+
         $cacheKey = self::CACHE_PREFIX . $token;
         // Primary pool may be wls_memory under WLS and can fail transiently
         // (sidecar cool-down). Persist to shared file fallback so another Worker
@@ -118,7 +152,7 @@ class PreviewTokenService
         if (!$this->storeCapability($cacheKey, $tokenData)) {
             throw new \RuntimeException((string)__('Theme 预览 Token 无法写入共享缓存。'));
         }
-        
+
         return $token;
     }
 

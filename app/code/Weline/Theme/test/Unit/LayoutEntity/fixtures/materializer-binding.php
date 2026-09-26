@@ -32,33 +32,82 @@ namespace {
     $theme = dirname(__DIR__, 4);
     define('BP', sys_get_temp_dir() . '/weline-materializer-' . bin2hex(random_bytes(6)));
     require $theme . '/../Framework/Compilation/AtomicCompiledFilePublisher.php';
+    require $theme . '/Api/Version/ThemeVersionIdentity.php';
     require $theme . '/Service/SharedChromeService.php';
     require $theme . '/Service/SlotBoundaryMarkers.php';
-    foreach (['ThemeLayoutEntityPaths', 'ThemeLayoutSlotTreeBuilder', 'ThemeLayoutEntityConfigStore', 'EntityRenderBinding', 'ThemeLayoutEntityBindingStore', 'ThemeLayoutEntityMaterializer'] as $class) {
+    foreach ([
+        'ThemeLayoutEntityPaths',
+        'ThemeLayoutSlotTreeBuilder',
+        'ThemeLayoutEntityConfigStore',
+        'EntityRenderBinding',
+        'ThemeLayoutEntityBindingStore',
+        'ThemeLayoutEntityMaterializer',
+    ] as $class) {
         require $theme . '/Service/LayoutEntity/' . $class . '.php';
     }
+
     $paths = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths();
     $shared = (new \ReflectionClass(\Weline\Theme\Service\SharedChromeService::class))->newInstanceWithoutConstructor();
     $tree = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder($shared);
-    $materializer = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityMaterializer($paths, $tree, new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore($paths));
+    $materializer = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityMaterializer(
+        $paths,
+        $tree,
+        new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore($paths),
+    );
     $store = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBindingStore($paths);
     $uid = str_repeat('a', 32);
-    $nodes = [$uid => ['node_uid' => $uid, 'area' => 'content', 'slot_id' => 'content', 'widget_code' => 'test', 'config' => ['title' => 'old']]];
-    $path = $materializer->materializePage(901, 'test', 'identity', 'source', $nodes, [], false, null, 'homepage', 1);
+    $nodes = [$uid => [
+        'node_uid' => $uid,
+        'area' => 'content',
+        'slot_id' => 'content',
+        'widget_code' => 'test',
+        'config' => ['title' => 'old'],
+    ]];
+    $layoutHash = hash('sha256', 'identity');
+    $draft = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+        901, 'test.default.default', 'normal', 'frontend', 1, 'draft', 1,
+    );
+    $formal2 = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+        901, 'test.default.default', 'normal', 'frontend', 2, 'formal', 1,
+    );
+    $formal3 = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+        901, 'test.default.default', 'normal', 'frontend', 3, 'formal', 1,
+    );
+    $formal4 = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+        901, 'test.default.default', 'normal', 'frontend', 4, 'formal', 1,
+    );
+
+    $path = $materializer->materializePage($draft, $layoutHash, 'source', $nodes, [], 'homepage');
     touch($path, 1234567890);
-    $old = $store->readPageBinding(901, 'test', 'identity', 'd1');
+    $old = $store->readPageBinding($draft, $layoutHash);
     $nodes[$uid]['config']['title'] = 'new';
-    $next = $materializer->materializePage(901, 'test', 'identity', 'source', $nodes, [], true, 2, 'homepage', 2);
-    $new = $store->readPageBinding(901, 'test', 'identity', 'r2');
-    $render = static function ($entityBinding): string { ob_start(); include $entityBinding->templatePath; return ob_get_clean(); };
+    $next = $materializer->materializePage($formal2, $layoutHash, 'source', $nodes, [], 'homepage');
+    $new = $store->readPageBinding($formal2, $layoutHash);
+    $render = static function ($entityBinding): string {
+        ob_start();
+        include $entityBinding->templatePath;
+        return ob_get_clean();
+    };
     clearstatcache(true, $path);
-    $result = ['same_path' => $path === $next, 'mtime' => filemtime($path), 'old_html' => $render($old), 'new_html' => $render($new), 'shell_exists' => is_file($new->shellPath)];
+    // Same structure hash can share bytes; paths must still be version-isolated.
+    $result = [
+        'same_path' => $path === $next,
+        'paths_isolated' => $path !== $next,
+        'mtime' => filemtime($path),
+        'old_html' => $render($old),
+        'new_html' => $render($new),
+        'shell_exists' => is_file($new->shellPath),
+    ];
     $nodes[$uid]['slot_id'] = 'other';
-    $changed = $materializer->materializePage(901, 'test', 'identity', 'source', $nodes, [], true, 3, 'homepage', 3);
-    $result['structure_changed'] = $changed !== $path;
-    $sourceChanged = $materializer->materializePage(901, 'test', 'identity', 'different-source', $nodes, [], true, 4, 'homepage', 4);
+    $changed = $materializer->materializePage($formal3, $layoutHash, 'source', $nodes, [], 'homepage');
+    $result['structure_changed'] = $changed !== $path && $changed !== $next;
+    $sourceChanged = $materializer->materializePage($formal4, $layoutHash, 'different-source', $nodes, [], 'homepage');
     $result['source_changed'] = $sourceChanged !== $changed;
-    $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(BP, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST);
+
+    $files = new \RecursiveIteratorIterator(
+        new \RecursiveDirectoryIterator(BP, \FilesystemIterator::SKIP_DOTS),
+        \RecursiveIteratorIterator::CHILD_FIRST,
+    );
     foreach ($files as $file) {
         $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
     }

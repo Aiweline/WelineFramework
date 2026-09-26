@@ -272,6 +272,14 @@ final class RequiredDefaultInjectionContractTest extends TestCase
             'A plain `user_deleted` row without a version is not an uninstall of this version',
             $service,
         );
+        // Task 5: target ThemeScopeVersion V — never ThemeLayoutVersion page axis.
+        self::assertStringContainsString('ThemeScopeVersionWidgetDecisionService', $service);
+        self::assertStringContainsString('resolveTargetThemeVersionId', $service);
+        self::assertStringNotContainsString(
+            'ThemeLayoutVersionService::class',
+            $service,
+        );
+        self::assertStringContainsString('listUninstallOmissions', $service);
 
         $with = RequiredDefaultInjectionContract::merge([], 'checkout', [[
             'module' => 'Weline_Shipping',
@@ -368,6 +376,32 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         ], 'homepage');
         self::assertCount(1, $items);
         self::assertSame('footer-payment-methods-link', $items[0]['widget_code']);
+    }
+
+    public function testTargetThemeVersionDecisionDoesNotBorrowSourceVersion(): void
+    {
+        $decisionService = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/Version/ThemeScopeVersionWidgetDecisionService.php'
+        );
+        self::assertStringContainsString('resolveTargetThemeVersionId', $decisionService);
+        self::assertStringContainsString('ThemeScopeVersionService', $decisionService);
+        self::assertStringContainsString('source_version_id is audit only', $decisionService);
+        self::assertStringNotContainsString('use Weline\\Theme\\Model\\ThemeLayoutVersion', $decisionService);
+        self::assertStringNotContainsString('ThemeLayoutVersionService', $decisionService);
+
+        $resolver = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/ThemePublishedVersionRuntimeResolver.php'
+        );
+        self::assertStringContainsString('ThemeScopeVersion', $resolver);
+        self::assertStringContainsString('getPublished($themeId, $scope)', $resolver);
+        self::assertStringNotContainsString('ThemeLayoutVersionService', $resolver);
+
+        $removal = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/ThemeChromeWidgetRemovalService.php'
+        );
+        self::assertStringContainsString('userDeletedSource($versionId)', $removal);
+        self::assertStringContainsString('persistTargetVersionDecision', $removal);
+        self::assertStringContainsString('ThemeScopeVersionWidgetDecisionService', $removal);
     }
 
     /**

@@ -10,8 +10,8 @@ final class ThemeLayoutBoundShellReuseTest extends TestCase
         exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/fixtures/published-missing-binding.php') . ' 2>&1', $output, $status);
         self::assertSame(0, $status, implode("\n", $output));
         $result = json_decode(implode("\n", $output), true, 512, JSON_THROW_ON_ERROR);
-        self::assertStringContainsString('published</div>', $result['html']);
-        self::assertStringNotContainsString('draft-only', $result['html']);
+        self::assertTrue($result['binding_null'], 'formal V must not resolve draft binding');
+        self::assertTrue($result['draft_binding_exists'], 'draft V still has its own binding');
     }
 
     public function testPublishedReleaseReturnsImmutableBoundShellWithoutWritingIt(): void

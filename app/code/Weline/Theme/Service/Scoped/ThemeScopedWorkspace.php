@@ -552,6 +552,16 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     $actorName,
                     $reason,
                 );
+                // Task 3: prepare layout-entity candidates before the published pointer is visible.
+                // Failure here rolls back the DB write so P/D selection is not consumed.
+                if ($context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT) {
+                    $this->bakeLayoutEntityAfterWrite($context, [
+                        'release_id' => $release->getId(),
+                        'payload' => $effective,
+                        'revision_id' => $revisionId,
+                        'changes' => [],
+                    ], []);
+                }
                 $this->adapter->projectPublished($context, $effective, $release->getId());
                 $this->markRevisionPublished($revisionId);
                 $workspace->setData([
@@ -576,6 +586,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     'payload' => $effective,
                     'conflicts' => [],
                     'idempotent' => false,
+                    'layout_entity_prepared' => $context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT,
                 ];
             },
         );
@@ -584,7 +595,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             return $result;
         }
 
+        // Layout bake already ran inside the write intent (prepare-before-pointer).
         if ($context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT
+            && empty($result['layout_entity_prepared'])
             && (int)($result['release_id'] ?? 0) > 0
             && \is_array($result['payload'] ?? null)
         ) {
@@ -2935,6 +2948,8 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         int $releaseId,
         string $entry,
         bool $idempotent,
+        ?int $themeVersionId = null,
+        ?int $contentRevision = null,
     ): void {
         $themeId = max(0, $context->themeId);
         $resourceType = $context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING
@@ -2961,6 +2976,24 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $namespaces = \array_values(\array_unique($namespaces));
         \sort($namespaces, \SORT_STRING);
         $revision = ObjectManager::getInstance(ResourceRevisionService::class)->next($resourceType, $resourceId);
+        $after = [
+            'theme_id' => $themeId,
+            'release_id' => max(0, $releaseId),
+            'resource_type' => $context->resourceType,
+            'area' => $context->area,
+            'layout_type' => $context->layoutType,
+            'layout_option' => $context->layoutOption,
+            'locale' => $context->locale,
+            'storage_scope' => $context->scope->storageScope,
+            'scope' => $context->scope->toArray(),
+            'idempotent' => $idempotent,
+        ];
+        if ($themeVersionId !== null && $themeVersionId > 0) {
+            $after['theme_version_id'] = $themeVersionId;
+        }
+        if ($contentRevision !== null && $contentRevision > 0) {
+            $after['content_revision'] = $contentRevision;
+        }
         $change = ObjectManager::getInstance(ResourceChangeFactory::class)->create(
             resourceType: $resourceType,
             resourceId: $resourceId,
@@ -2969,19 +3002,8 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             websiteId: $websiteId,
             websiteCode: $websiteCode,
             before: [],
-            after: [
-                'theme_id' => $themeId,
-                'release_id' => max(0, $releaseId),
-                'resource_type' => $context->resourceType,
-                'area' => $context->area,
-                'layout_type' => $context->layoutType,
-                'layout_option' => $context->layoutOption,
-                'locale' => $context->locale,
-                'storage_scope' => $context->scope->storageScope,
-                'scope' => $context->scope->toArray(),
-                'idempotent' => $idempotent,
-            ],
-            changedFields: ['published_release', 'static_version'],
+            after: $after,
+            changedFields: ['published_release', 'static_version', 'theme_version_id'],
             impact: [
                 'namespaces' => $namespaces,
                 'urls' => ['/'],

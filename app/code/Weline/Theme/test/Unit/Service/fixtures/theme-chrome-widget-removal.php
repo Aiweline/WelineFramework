@@ -10,6 +10,7 @@ namespace Weline\Theme\Model {
         public function getVersionId(): int { return $this->id; }
         public function getThemeId(): int { return 3; }
         public function getScope(): string { return $this->scope; }
+        public function getContentRevision(): int { return 1; }
         public function getChromePayload(): array { return $this->nodes; }
         public function isPublished(): bool { return $this->published; }
     }
@@ -44,7 +45,10 @@ namespace Weline\Theme\Service\LayoutEntity {
     class ThemeLayoutEntityConfigStore
     {
         public array $nodes = [];
-        public function readBoundConfig(EntityRenderBinding $binding): array { return $this->nodes[$binding->scope] ?? []; }
+        public function readBoundConfig(EntityRenderBinding $binding): array
+        {
+            return $this->nodes[$binding->identity->canonicalScope] ?? [];
+        }
     }
     class ThemeLayoutEntityBakeCoordinator
     {
@@ -52,7 +56,11 @@ namespace Weline\Theme\Service\LayoutEntity {
     }
 }
 namespace {
+    $theme = dirname(__DIR__, 4);
     require dirname(__DIR__, 8) . '/vendor/autoload.php';
+    require_once $theme . '/Api/Version/ThemeVersionIdentity.php';
+    require_once $theme . '/Service/LayoutEntity/EntityRenderBinding.php';
+    require_once $theme . '/Service/ThemeChromeWidgetRemovalService.php';
     use Weline\Framework\Runtime\ScopeIdentity;
     use Weline\SystemConfig\Api\Scope\ScopeContext;
     use Weline\Theme\Api\Scoped\ThemeEditorContext;
@@ -63,6 +71,7 @@ namespace {
     use Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract;
     use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityChrome;
     use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore;
+    use Weline\Theme\Api\Version\ThemeVersionIdentity;
     use Weline\Theme\Service\LayoutEntity\EntityRenderBinding;
 
     $uid = str_repeat('a', 32);
@@ -88,7 +97,25 @@ namespace {
     $chrome = new ThemeLayoutEntityChrome();
     $chrome->missing = $argv[1] === 'missing-binding';
     $configs = new ThemeLayoutEntityConfigStore();
-    $binding = static fn(string $scope): EntityRenderBinding => new EntityRenderBinding(3, $scope, '', '9', 's', 'c', 'chrome', '', '', '', '', '');
+    $binding = static function (string $scopeName): EntityRenderBinding {
+        static $seq = 0;
+        ++$seq;
+        $identity = new ThemeVersionIdentity(3, $scopeName, 'normal', 'frontend', 9 + $seq, 'formal', 1);
+
+        return new EntityRenderBinding(
+            identity: $identity,
+            source: 'chrome',
+            layoutIdentityHash: '',
+            structureKey: hash('sha256', 's'),
+            configKey: hash('sha256', 'c'),
+            templatePath: '',
+            configPath: '',
+            assetsPath: '',
+            structurePath: '',
+            shellPath: '',
+            bindingPath: '',
+        );
+    };
     $chrome->sources = [['binding' => $binding('shop.__website__.default')]];
     $configs->nodes['shop.__website__.default'] = $nodes;
     if ($argv[1] === 'nearer-slot') {

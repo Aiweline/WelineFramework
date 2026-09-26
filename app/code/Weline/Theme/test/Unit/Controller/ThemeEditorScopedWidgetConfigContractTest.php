@@ -52,8 +52,18 @@ final class ThemeEditorScopedWidgetConfigContractTest extends TestCase
         // 无 @param 必须 success=true 空态，禁止 success=false 触发 BinQuery ERR /「加载配置失败」
         self::assertStringContainsString("'has_params' => false", $getBody);
         self::assertStringContainsString("'params' => []", $getBody);
-        // GET 配置不得同步渲 preview（会阻塞打开配置面板）
-        self::assertStringNotContainsString('tryBuildPreviewHtmlForWidget', $getBody);
+        // GET 配置默认不得同步渲 preview（单部件预览可达数十秒，会堵住「点部件」）。
+        // 契约演进：允许保留 tryBuildPreviewHtmlForWidget 入口，但必须先经 widgetConfigWantsPreviewHtml() 门控，
+        // 仅显式 with_preview=1（画布回填）那一次才渲；禁止无条件调用。
+        $previewGatePosition = strpos($getBody, 'widgetConfigWantsPreviewHtml()');
+        $previewCallPosition = strpos($getBody, 'tryBuildPreviewHtmlForWidget');
+        self::assertNotFalse($previewGatePosition, 'GET 配置必须以 widgetConfigWantsPreviewHtml() 门控预览渲染。');
+        self::assertNotFalse($previewCallPosition, '自动保存后的画布回填仍需保留 preview 渲染入口。');
+        self::assertLessThan(
+            $previewCallPosition,
+            $previewGatePosition,
+            '预览门控必须先于 preview 渲染，保证打开配置时不渲染预览。',
+        );
         self::assertDoesNotMatchRegularExpression(
             '/if\s*\(\s*empty\(\s*\$params\s*\)\s*\)\s*\{\s*return\s+\$this->fetchJson\(\s*\[\s*\'success\'\s*=>\s*false/s',
             $getBody,

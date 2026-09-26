@@ -604,6 +604,11 @@
         backdrop-filter: blur(10px);
     }
 
+    /* 多模板同页时每个表单各有一条 fixed 保存条；仅激活一条，避免底部叠两层 */
+    .w-system-config__form-actions--dock:not(.is-active) {
+        display: none;
+    }
+
     html[data-backend-sidebar-collapsed="true"] .w-system-config__form-actions--dock,
     .w-backend-shell[data-sidebar-collapsed="true"] .w-system-config__form-actions--dock {
         inset-inline-start: var(--backend-theme-sidebar-collapsed-width, 4.375rem);
