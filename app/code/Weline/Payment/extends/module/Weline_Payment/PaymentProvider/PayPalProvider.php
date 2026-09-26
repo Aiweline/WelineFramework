@@ -409,18 +409,38 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
             $lines = $snapshot['discount_lines'];
         }
 
+        $totals = \is_array($context['totals'] ?? null) ? $context['totals'] : [];
+        $staleBreakdown = \is_array($context['amount_breakdown'] ?? null) ? $context['amount_breakdown'] : [];
+        $staleValueMinor = (int) ($staleBreakdown['value_minor'] ?? 0);
+        $hasFreshTotals = (int) ($totals['grand_total_minor'] ?? 0) > 0
+            || (int) ($totals['subtotal_minor'] ?? 0) > 0
+            || (int) ($totals['discount_amount_minor'] ?? 0) > 0
+            || (int) ($totals['shipping_amount_minor'] ?? 0) > 0;
+
         $hasDiscount = $lines !== []
             || (int) ($snapshot['discount_amount_minor'] ?? 0) > 0
-            || (int) ($context['totals']['discount_amount_minor'] ?? 0) > 0
-            || \is_array($context['amount_breakdown'] ?? null);
+            || (int) ($totals['discount_amount_minor'] ?? 0) > 0
+            || $staleBreakdown !== [];
 
         // 无优惠分项时可不带 breakdown（仅合计 value）；有优惠必须守恒 breakdown
-        if (!$hasDiscount && !\is_array($context['amount_breakdown'] ?? null)) {
+        if (!$hasDiscount && $staleBreakdown === []) {
             return null;
         }
 
-        if (\is_array($context['amount_breakdown'] ?? null) && $context['amount_breakdown'] !== []) {
-            $breakdown = $context['amount_breakdown'];
+        // Express confirm 会把重报价 totals 写回 context，但 amount_breakdown 仍可能是
+        // 下单时的旧分解。有权威 totals 时一律按 totals 重建，避免只改 value 触发
+        // PayPal AMOUNT_MISMATCH。
+        if ($hasFreshTotals) {
+            $breakdown = $builder->fromOrderData($context + [
+                'amount_minor' => $presentmentAmountMinor,
+                'currency' => $presentmentCurrency,
+                'discount_lines' => $lines,
+            ]);
+        } elseif ($staleBreakdown !== []) {
+            $breakdown = $staleBreakdown;
+            if ($staleValueMinor !== $presentmentAmountMinor && $staleValueMinor > 0) {
+                $breakdown = $builder->scaleToValue($breakdown, $presentmentAmountMinor, $presentmentCurrency);
+            }
         } elseif ($snapshot !== []) {
             $breakdown = $builder->fromSnapshot($snapshot, $lines !== [] ? $lines : null, $presentmentCurrency);
         } else {
@@ -436,8 +456,19 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
         ) {
             $breakdown = $builder->scaleToValue($breakdown, $paypalAmountMinor, $paypalCurrency);
         } else {
+            // 与目标 value 对齐；若组件和仍不守恒，用 scaleToValue 微调（勿只改 value）
             $breakdown['currency_code'] = $paypalCurrency;
             $breakdown['value_minor'] = $paypalAmountMinor;
+            $computed = (int) ($breakdown['item_total_minor'] ?? 0)
+                + (int) ($breakdown['tax_total_minor'] ?? 0)
+                + (int) ($breakdown['shipping_minor'] ?? 0)
+                + (int) ($breakdown['handling_minor'] ?? 0)
+                + (int) ($breakdown['insurance_minor'] ?? 0)
+                - (int) ($breakdown['shipping_discount_minor'] ?? 0)
+                - (int) ($breakdown['discount_minor'] ?? 0);
+            if ($computed !== $paypalAmountMinor) {
+                $breakdown = $builder->scaleToValue($breakdown, $paypalAmountMinor, $paypalCurrency);
+            }
         }
 
         return $breakdown;
@@ -500,20 +531,43 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                         $patchMinor,
                         $config,
                     );
-                    $breakdown = $this->resolveAmountBreakdownForPayPal(
-                        $context,
-                        $patchCurrency,
-                        $patchMinor,
-                        $paypalCurrency,
-                        $paypalAmountMinor,
-                    );
-                    $this->getApiClient()->patchOrder(
-                        $config,
-                        $orderId,
-                        $paypalAmountMinor,
-                        $paypalCurrency,
-                        $breakdown,
-                    );
+                    $presentment = $this->presentmentOrderAmount($context);
+                    // 读不到支付商侧金额时（例如回跳上下文没带支付商订单快照），
+                    // 绝不能假设「支付商侧金额 == 本次应付金额」而跳过 patch：
+                    // 那会按支付商侧旧金额 capture，造成实扣 ≠ 订单总额。
+                    // 未知即视为需要 patch，用调用方给的权威金额覆盖。
+                    $presentmentKnown = $presentment['minor'] > 0;
+                    if (!$presentmentKnown) {
+                        $presentment['minor'] = $paypalAmountMinor;
+                        $presentment['currency'] = $paypalCurrency;
+                    }
+                    // A cart that only re-scaled (same grand total, e.g. free shipping
+                    // swapped for paid) leaves a stale provider-side breakdown; patching
+                    // just `amount` would contradict it and PayPal rejects the capture.
+                    $needsPatch = !$presentmentKnown
+                        || ($paypalAmountMinor !== $presentment['minor']
+                            || $paypalCurrency !== $presentment['currency'])
+                        || !$this->providerBreakdownMatchesPresentment(
+                            $presentment['breakdown'],
+                            $presentment['currency'],
+                            $presentment['minor'],
+                        );
+                    if ($needsPatch) {
+                        $breakdown = $this->resolveAmountBreakdownForPayPal(
+                            $context,
+                            $patchCurrency,
+                            $patchMinor,
+                            $paypalCurrency,
+                            $paypalAmountMinor,
+                        );
+                        $this->getApiClient()->patchOrder(
+                            $config,
+                            $orderId,
+                            $paypalAmountMinor,
+                            $paypalCurrency,
+                            $breakdown,
+                        );
+                    }
                 } catch (Throwable $patchError) {
                     return PaymentResult::fromArray([
                         'status' => PaymentResult::STATUS_FAILED,
@@ -597,6 +651,61 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
         $meta = is_array($context['metadata'] ?? null) ? $context['metadata'] : [];
 
         return !empty($meta['express_checkout']);
+    }
+
+    /**
+     * Amount actually sitting on the PayPal order (from the stored create/resume payload).
+     *
+     * @param array<string, mixed> $context
+     * @return array{minor:int, currency:string, breakdown:array<string, mixed>}
+     */
+    private function presentmentOrderAmount(array $context): array
+    {
+        $payload = is_array($context['payload'] ?? null) ? $context['payload'] : [];
+        $unit = is_array($payload['order']['purchase_units'][0] ?? null)
+            ? $payload['order']['purchase_units'][0]
+            : (is_array($payload['purchase_units'][0] ?? null) ? $payload['purchase_units'][0] : []);
+        $amount = is_array($unit['amount'] ?? null) ? $unit['amount'] : [];
+
+        $currency = strtoupper(trim((string) ($amount['currency_code'] ?? '')));
+        $minor = 0;
+        if (isset($amount['value']) && is_numeric($amount['value'])) {
+            $minor = (int) round((float) $amount['value'] * 100);
+        }
+
+        return [
+            'minor' => $minor,
+            'currency' => $currency,
+            'breakdown' => is_array($amount['breakdown'] ?? null) ? $amount['breakdown'] : [],
+        ];
+    }
+
+    /**
+     * Whether the provider-side breakdown still sums to the provider-side value.
+     * Absent or unparseable breakdown counts as matching (nothing to contradict).
+     *
+     * @param array<string, mixed> $breakdown
+     */
+    private function providerBreakdownMatchesPresentment(array $breakdown, string $currency, int $valueMinor): bool
+    {
+        if ($breakdown === [] || $valueMinor <= 0) {
+            return true;
+        }
+        $sum = 0;
+        foreach (['item_total', 'tax_total', 'shipping', 'handling', 'insurance'] as $key) {
+            $entry = is_array($breakdown[$key] ?? null) ? $breakdown[$key] : [];
+            if (isset($entry['value']) && is_numeric($entry['value'])) {
+                $sum += (int) round((float) $entry['value'] * 100);
+            }
+        }
+        foreach (['discount', 'shipping_discount'] as $key) {
+            $entry = is_array($breakdown[$key] ?? null) ? $breakdown[$key] : [];
+            if (isset($entry['value']) && is_numeric($entry['value'])) {
+                $sum -= (int) round((float) $entry['value'] * 100);
+            }
+        }
+
+        return $sum === $valueMinor;
     }
 
     public function cancelPayment(CancelRequest $request): PaymentResult

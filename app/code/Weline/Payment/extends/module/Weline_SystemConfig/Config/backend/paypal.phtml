@@ -103,29 +103,29 @@
         value-type="string"
         default="USD"
         scope="global,website,store"
-        options="USD:USD,EUR:EUR,GBP:GBP,CAD:CAD,AUD:AUD,JPY:JPY,HKD:HKD,SGD:SGD"
+        options="USD:USD,EUR:EUR,GBP:GBP,CAD:CAD,CHF:CHF,SEK:SEK,NOK:NOK,DKK:DKK,PLN:PLN,MXN:MXN,AUD:AUD,JPY:JPY,HKD:HKD,SGD:SGD,CNY:CNY"
         validation="required|in_options" />
 
     <w:config:field
         key="payment/method/paypal/supported_currencies"
         label="支持货币"
-        description="PayPal 可以在这些货币下展示。"
+        description="PayPal 可以在这些货币下展示。选项与 PayPalProvider 能力清单对齐（含本站常用 CNY）。"
         type="multiselect"
         value-type="json"
-        default="USD,EUR,GBP,CAD,AUD,JPY,HKD,SGD"
+        default="USD,EUR,GBP,CAD,AUD,JPY,HKD,SGD,CNY"
         scope="global,website,store"
-        options="USD:USD,EUR:EUR,GBP:GBP,CAD:CAD,AUD:AUD,JPY:JPY,HKD:HKD,SGD:SGD"
+        options="USD:USD,EUR:EUR,GBP:GBP,CAD:CAD,CHF:CHF,SEK:SEK,NOK:NOK,DKK:DKK,PLN:PLN,MXN:MXN,AUD:AUD,JPY:JPY,HKD:HKD,SGD:SGD,CNY:CNY"
         validation="required|in_options" />
 
     <w:config:field
         key="payment/method/paypal/supported_countries"
         label="支持国家"
-        description="PayPal 可以在这些国家下选择。"
+        description="PayPal 可以在这些国家下选择。选项与 PayPalProvider 能力清单对齐（含本站收货国 CN）。"
         type="multiselect"
         value-type="json"
-        default="US,GB,DE,CA,AU,FR,IT,ES,JP,HK,SG"
+        default="US,GB,DE,CA,AU,FR,IT,ES,JP,HK,SG,CN"
         scope="global,website,store"
-        options="US:US,GB:GB,DE:DE,CA:CA,AU:AU,FR:FR,IT:IT,ES:ES,JP:JP,HK:HK,SG:SG"
+        options="US:US,GB:GB,DE:DE,CA:CA,AU:AU,FR:FR,IT:IT,ES:ES,NL:NL,BE:BE,AT:AT,IE:IE,PT:PT,SE:SE,NO:NO,DK:DK,FI:FI,CH:CH,PL:PL,MX:MX,JP:JP,HK:HK,SG:SG,CN:CN,XZ:XZ"
         validation="in_options" />
 </w:config:group>
 

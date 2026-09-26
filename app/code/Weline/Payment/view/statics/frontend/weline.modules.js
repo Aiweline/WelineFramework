@@ -16,7 +16,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     productExpressPay: {
         paths: [
-            "Weline_Payment::js/product-express-pay.js?v=20260918-express-ga4params1"
+            "Weline_Payment::js/product-express-pay.js?v=20260925-express-silent1"
         ],
         globalVar: "WelineProductExpressPay",
         load: "lazy",

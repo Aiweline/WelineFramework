@@ -210,6 +210,227 @@ final class PayPalProviderTest extends TestCase
         self::assertIsArray($result->getPayload()['express_profile'] ?? null);
     }
 
+    public function testExpressConfirmSkipsPatchWhenAmountUnchanged(): void
+    {
+        $patched = false;
+        $captured = false;
+        $provider = new PayPalProvider();
+        $provider->setApiClient(new PayPalApiClient(
+            static function (string $method, string $url, array $headers, ?string $body) use (&$patched, &$captured): array {
+                if (str_contains($url, '/v1/oauth2/token')) {
+                    return ['status' => 200, 'body' => json_encode(['access_token' => 'token-123']) ?: '{}'];
+                }
+                if ($method === 'PATCH') {
+                    $patched = true;
+
+                    return ['status' => 422, 'body' => json_encode([
+                        'message' => 'The requested action could not be performed, semantically incorrect, or failed business validation.',
+                    ]) ?: '{}'];
+                }
+                if (str_contains($url, '/capture')) {
+                    $captured = true;
+
+                    return ['status' => 201, 'body' => json_encode([
+                        'id' => 'ORDER-SKIP',
+                        'status' => 'COMPLETED',
+                        'purchase_units' => [[
+                            'payments' => ['captures' => [['id' => 'CAP-SKIP', 'status' => 'COMPLETED']]],
+                        ]],
+                    ]) ?: '{}'];
+                }
+                if (str_contains($url, '/v2/checkout/orders/ORDER-SKIP') && $method === 'GET') {
+                    return ['status' => 200, 'body' => json_encode(['id' => 'ORDER-SKIP', 'status' => 'APPROVED']) ?: '{}'];
+                }
+
+                throw new \RuntimeException('Unexpected PayPal URL: ' . $url);
+            }
+        ));
+
+        // Provider already shows 323.53 USD with a breakdown that sums to it —
+        // re-confirm must capture directly, not patch (PayPal rejects the stale patch).
+        $result = $provider->resumePayment(\Weline\Payment\Api\Data\ResumeRequest::fromArray([
+            'intent_code' => 'INT-SKIP',
+            'attempt_code' => 'ATT-SKIP',
+            'method_code' => 'paypal',
+            'provider_reference' => 'ORDER-SKIP',
+            'amount_minor' => 32353,
+            'currency_code' => 'USD',
+            'context' => [
+                'environment' => 'sandbox',
+                'express_checkout' => true,
+                'express_confirm_capture' => true,
+                'patch_amount_minor' => 32353,
+                'patch_currency' => 'USD',
+                'payload' => [
+                    'order' => [
+                        'purchase_units' => [[
+                            'reference_id' => 'ATT-SKIP',
+                            'amount' => [
+                                'currency_code' => 'USD',
+                                'value' => '323.53',
+                                'breakdown' => [
+                                    'item_total' => ['currency_code' => 'USD', 'value' => '323.53'],
+                                    'shipping' => ['currency_code' => 'USD', 'value' => '122.38'],
+                                    'discount' => ['currency_code' => 'USD', 'value' => '122.38'],
+                                ],
+                            ],
+                        ]],
+                    ],
+                ],
+                'runtime_config' => [
+                    'sandbox_client_id' => 'sb-client',
+                    'sandbox_client_secret' => 'sb-secret',
+                ],
+            ],
+        ]));
+
+        self::assertFalse($patched, 'unchanged presentment must not trigger PATCH');
+        self::assertTrue($captured);
+        self::assertSame(PaymentResult::STATUS_PAID, $result->getStatus());
+    }
+
+    public function testExpressConfirmStillPatchesWhenAmountChanged(): void
+    {
+        $patchBodies = [];
+        $provider = new PayPalProvider();
+        $provider->setApiClient(new PayPalApiClient(
+            static function (string $method, string $url, array $headers, ?string $body) use (&$patchBodies): array {
+                if (str_contains($url, '/v1/oauth2/token')) {
+                    return ['status' => 200, 'body' => json_encode(['access_token' => 'token-123']) ?: '{}'];
+                }
+                if ($method === 'PATCH') {
+                    $patchBodies[] = (string) $body;
+
+                    return ['status' => 200, 'body' => '{"id":"ORDER-PATCH"}'];
+                }
+                if (str_contains($url, '/v2/checkout/orders/ORDER-PATCH') && $method === 'GET') {
+                    return ['status' => 200, 'body' => json_encode([
+                        'id' => 'ORDER-PATCH',
+                        'status' => 'APPROVED',
+                        'purchase_units' => [[
+                            'reference_id' => 'ATT-PATCH',
+                            'amount' => ['currency_code' => 'USD', 'value' => '200.00'],
+                        ]],
+                    ]) ?: '{}'];
+                }
+                if (str_contains($url, '/capture')) {
+                    return ['status' => 201, 'body' => json_encode([
+                        'id' => 'ORDER-PATCH',
+                        'status' => 'COMPLETED',
+                        'purchase_units' => [[
+                            'payments' => ['captures' => [['id' => 'CAP-PATCH', 'status' => 'COMPLETED']]],
+                        ]],
+                    ]) ?: '{}'];
+                }
+
+                throw new \RuntimeException('Unexpected PayPal URL: ' . $url);
+            }
+        ));
+
+        $result = $provider->resumePayment(\Weline\Payment\Api\Data\ResumeRequest::fromArray([
+            'intent_code' => 'INT-PATCH',
+            'attempt_code' => 'ATT-PATCH',
+            'method_code' => 'paypal',
+            'provider_reference' => 'ORDER-PATCH',
+            'amount_minor' => 30000,
+            'currency_code' => 'USD',
+            'context' => [
+                'environment' => 'sandbox',
+                'express_checkout' => true,
+                'express_confirm_capture' => true,
+                'patch_amount_minor' => 30000,
+                'patch_currency' => 'USD',
+                'payload' => [
+                    'order' => [
+                        'purchase_units' => [[
+                            'reference_id' => 'ATT-PATCH',
+                            'amount' => ['currency_code' => 'USD', 'value' => '200.00'],
+                        ]],
+                    ],
+                ],
+                'runtime_config' => [
+                    'sandbox_client_id' => 'sb-client',
+                    'sandbox_client_secret' => 'sb-secret',
+                ],
+            ],
+        ]));
+
+        self::assertCount(1, $patchBodies);
+        self::assertStringContainsString('300.00', $patchBodies[0]);
+        self::assertSame(PaymentResult::STATUS_PAID, $result->getStatus());
+    }
+
+    /**
+     * 回归：回跳上下文没带支付商订单快照（读不到支付商侧金额）时，
+     * 绝不能假设「支付商侧金额 == 本次应付金额」而跳过 patch。
+     * 旧实现把 presentment.minor 兜底成目标金额，needsPatch 恒为 false，
+     * 结果按支付商侧旧金额 capture —— 实测订单 204/206：订单总额 442.97，实扣 323.53。
+     */
+    public function testExpressConfirmPatchesWhenProviderSideAmountUnknown(): void
+    {
+        $patchBodies = [];
+        $provider = new PayPalProvider();
+        $provider->setApiClient(new PayPalApiClient(
+            static function (string $method, string $url, array $headers, ?string $body) use (&$patchBodies): array {
+                if (str_contains($url, '/v1/oauth2/token')) {
+                    return ['status' => 200, 'body' => json_encode(['access_token' => 'token-123']) ?: '{}'];
+                }
+                if ($method === 'PATCH') {
+                    $patchBodies[] = (string) $body;
+
+                    return ['status' => 204, 'body' => ''];
+                }
+                if (str_contains($url, '/v2/checkout/orders/ORDER-NOPRESENT') && $method === 'GET') {
+                    // 支付商侧仍是下单时的旧金额 323.53
+                    return ['status' => 200, 'body' => json_encode([
+                        'id' => 'ORDER-NOPRESENT',
+                        'status' => 'APPROVED',
+                        'purchase_units' => [[
+                            'reference_id' => 'ATT-NOPRESENT',
+                            'amount' => ['currency_code' => 'USD', 'value' => '323.53'],
+                        ]],
+                    ]) ?: '{}'];
+                }
+                if (str_contains($url, '/capture')) {
+                    return ['status' => 201, 'body' => json_encode([
+                        'id' => 'ORDER-NOPRESENT',
+                        'status' => 'COMPLETED',
+                        'purchase_units' => [[
+                            'payments' => ['captures' => [['id' => 'CAP-NOPRESENT', 'status' => 'COMPLETED']]],
+                        ]],
+                    ]) ?: '{}'];
+                }
+
+                throw new \RuntimeException('Unexpected PayPal URL: ' . $url);
+            }
+        ));
+
+        $result = $provider->resumePayment(\Weline\Payment\Api\Data\ResumeRequest::fromArray([
+            'intent_code' => 'INT-NOPRESENT',
+            'attempt_code' => 'ATT-NOPRESENT',
+            'method_code' => 'paypal',
+            'provider_reference' => 'ORDER-NOPRESENT',
+            'amount_minor' => 44297,
+            'currency_code' => 'USD',
+            'context' => [
+                'environment' => 'sandbox',
+                'express_checkout' => true,
+                'express_confirm_capture' => true,
+                'patch_amount_minor' => 44297,
+                'patch_currency' => 'USD',
+                // 故意不带 payload：模拟 dispatcher 未把支付商快照注入上下文
+                'runtime_config' => [
+                    'sandbox_client_id' => 'sb-client',
+                    'sandbox_client_secret' => 'sb-secret',
+                ],
+            ],
+        ]));
+
+        self::assertCount(1, $patchBodies, '读不到支付商侧金额时必须 patch，不能默认跳过');
+        self::assertStringContainsString('442.97', $patchBodies[0]);
+        self::assertSame(PaymentResult::STATUS_PAID, $result->getStatus());
+    }
+
     public function testTestConnectionUsesSandboxEnvironment(): void
     {
         $provider = new PayPalProvider();

@@ -19,6 +19,9 @@ class PaymentCustomerGuideRegistry
     /** @var (callable(string):string)|null */
     private $urlBuilder;
 
+    /** @var (callable(array<string,mixed>):(array<string,true>|null))|null */
+    private $availableCodesResolver;
+
     /**
      * @var array<string, array<string, mixed>>|null
      */
@@ -27,11 +30,17 @@ class PaymentCustomerGuideRegistry
 
     /**
      * @param (callable(string):string)|null $urlBuilder
+     * @param (callable(array<string,mixed>):(array<string,true>|null))|null $availableCodesResolver
+     *        店面可用支付方式码解析器；缺省走 Provider 层门闩。返回 null 表示可用性不可判定。
      */
-    public function __construct(?ObjectManager $objectManager = null, ?callable $urlBuilder = null)
-    {
+    public function __construct(
+        ?ObjectManager $objectManager = null,
+        ?callable $urlBuilder = null,
+        ?callable $availableCodesResolver = null,
+    ) {
         $this->objectManager = $objectManager;
         $this->urlBuilder = $urlBuilder;
+        $this->availableCodesResolver = $availableCodesResolver;
     }
 
     /**
@@ -47,6 +56,67 @@ class PaymentCustomerGuideRegistry
         );
 
         return $entries;
+    }
+
+    /**
+     * 店面可见的指南条目：不启用的支付方式即隐藏。
+     *
+     * 可用性只在 Provider 层判定（{@see PaymentMethodManager::getStorefrontAvailableMethodCodes()}），
+     * 本方法只消费结果；可用性不可判定时不过滤，避免把指南 hub 变成空页。
+     *
+     * 注意：本方法只影响「列表」。{@see self::getEntry()} 不过滤——供应商登记的协议链接是
+     * 法律链接，必须保持可达。
+     *
+     * @param array<string, mixed> $context
+     * @param string $alwaysIncludeMethodCode 正在浏览的 method_code；即使不可用也留在导航里
+     * @return array<int, array<string, mixed>>
+     */
+    public function listStorefrontPublishedEntries(
+        bool $forceReload = false,
+        array $context = [],
+        string $alwaysIncludeMethodCode = '',
+    ): array {
+        $entries = $this->listPublishedEntries($forceReload);
+        $available = $this->resolveAvailableMethodCodes($context);
+        if ($available === null) {
+            return $entries;
+        }
+
+        $alwaysInclude = strtolower(trim($alwaysIncludeMethodCode));
+        if ($alwaysInclude !== '') {
+            $available[$alwaysInclude] = true;
+        }
+
+        return array_values(array_filter(
+            $entries,
+            static fn(array $entry): bool => isset($available[(string) ($entry['method_code'] ?? '')])
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, true>|null null 表示可用性不可判定，调用方应保持既有行为
+     */
+    private function resolveAvailableMethodCodes(array $context): ?array
+    {
+        try {
+            if ($this->availableCodesResolver !== null) {
+                $resolved = ($this->availableCodesResolver)($context);
+
+                return \is_array($resolved) ? $resolved : null;
+            }
+
+            $manager = $this->om()->getInstance(PaymentMethodManager::class);
+            if (!$manager instanceof PaymentMethodManager) {
+                return null;
+            }
+
+            return $manager->getStorefrontAvailableMethodCodes($context);
+        } catch (\Throwable $exception) {
+            w_log_error('Resolve storefront payment availability failed: ' . $exception->getMessage());
+
+            return null;
+        }
     }
 
     /**

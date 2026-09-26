@@ -31,6 +31,7 @@ final class BackendOrderPaymentRecordsService
      *     amount: float,
      *     currency: string,
      *     transaction_id: string,
+     *     provider_reference: string,
      *     status: string,
      *     paid_at: string,
      *     source: string
@@ -68,6 +69,7 @@ final class BackendOrderPaymentRecordsService
      *     amount: float,
      *     currency: string,
      *     transaction_id: string,
+     *     provider_reference: string,
      *     status: string,
      *     paid_at: string,
      *     source: string
@@ -103,9 +105,18 @@ final class BackendOrderPaymentRecordsService
     }
 
     /**
-     * Attempt ∪ Transaction: prefer Attempt on matching transaction_id;
-     * unmatched Transaction rows (including failed) are retained.
-     * Sorted paid_at DESC, then transaction_id DESC (stable newest-first).
+     * Attempt ∪ Transaction：同一笔支付事件只保留一行；未命中的 Transaction 行（含失败）继续保留。
+     *
+     * 两个来源的「交易标识」不在同一命名空间，这是历史缺陷的根因：
+     * - Attempt 侧 transaction_id = provider_reference（支付商 capture id，如 3PK91601X3311762N）
+     * - Transaction 侧 transaction_id = transaction_no（内部号 PAY2026…），
+     *   而它的支付商 capture id 存在 response_data.provider_reference
+     * 只按 transaction_id 比对 ⇒ 两组 id 永不相等 ⇒ 去重失效 ⇒ 同一笔成功支付被展示成两行。
+     *
+     * 因此改用「身份键集合」（transaction_id ∪ provider_reference）归并：任一身份键命中即同一事件。
+     * 命中时保留 Attempt 行（金额精度与支付商 capture id 展示更完整）。
+     *
+     * 排序：paid_at DESC，再 transaction_id DESC（稳定倒序）。
      *
      * @param list<array<string, mixed>> $attemptRows
      * @param list<array<string, mixed>> $transactionRows
@@ -116,34 +127,22 @@ final class BackendOrderPaymentRecordsService
         array $transactionRows,
     ): array {
         $merged = [];
-        $seenTxnIds = [];
+        $seenKeys = [];
 
-        foreach ($attemptRows as $row) {
-            if (!\is_array($row)) {
-                continue;
-            }
-            $txnId = trim((string)($row['transaction_id'] ?? ''));
-            if ($txnId !== '') {
-                if (isset($seenTxnIds[$txnId])) {
+        foreach ([$attemptRows, $transactionRows] as $side) {
+            foreach ($side as $row) {
+                if (!\is_array($row)) {
                     continue;
                 }
-                $seenTxnIds[$txnId] = true;
+                $keys = self::paymentIdentityKeys($row);
+                if (self::hasSeenIdentityKey($keys, $seenKeys)) {
+                    continue;
+                }
+                foreach ($keys as $key) {
+                    $seenKeys[$key] = true;
+                }
+                $merged[] = $row;
             }
-            $merged[] = $row;
-        }
-
-        foreach ($transactionRows as $row) {
-            if (!\is_array($row)) {
-                continue;
-            }
-            $txnId = trim((string)($row['transaction_id'] ?? ''));
-            if ($txnId !== '' && isset($seenTxnIds[$txnId])) {
-                continue;
-            }
-            if ($txnId !== '') {
-                $seenTxnIds[$txnId] = true;
-            }
-            $merged[] = $row;
         }
 
         usort($merged, static function (array $a, array $b): int {
@@ -156,6 +155,40 @@ final class BackendOrderPaymentRecordsService
         });
 
         return array_values($merged);
+    }
+
+    /**
+     * 一行支付记录的全部非空身份键（transaction_id 与 provider_reference）。
+     *
+     * @param array<string, mixed> $row
+     * @return list<string>
+     */
+    private static function paymentIdentityKeys(array $row): array
+    {
+        $keys = [];
+        foreach (['transaction_id', 'provider_reference'] as $field) {
+            $value = trim((string)($row[$field] ?? ''));
+            if ($value !== '') {
+                $keys[$value] = true;
+            }
+        }
+
+        return array_keys($keys);
+    }
+
+    /**
+     * @param list<string> $keys
+     * @param array<string, bool> $seenKeys
+     */
+    private static function hasSeenIdentityKey(array $keys, array $seenKeys): bool
+    {
+        foreach ($keys as $key) {
+            if (isset($seenKeys[$key])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -259,6 +292,7 @@ final class BackendOrderPaymentRecordsService
             $precision = max(0, (int)($data[PaymentAttempt::schema_fields_PRECISION] ?? 2));
             $amountMinor = (int)($data[PaymentAttempt::schema_fields_AMOUNT_MINOR] ?? 0);
             $divisor = 10 ** $precision;
+            $providerReference = trim((string)($data[PaymentAttempt::schema_fields_PROVIDER_REFERENCE] ?? ''));
             $rows[] = [
                 'payment_method' => $this->firstNonEmpty(
                     (string)($data[PaymentAttempt::schema_fields_METHOD_CODE] ?? ''),
@@ -269,7 +303,9 @@ final class BackendOrderPaymentRecordsService
                     (string)($data[PaymentAttempt::schema_fields_PAYMENT_CURRENCY_CODE] ?? ''),
                     'CNY',
                 ),
-                'transaction_id' => trim((string)($data[PaymentAttempt::schema_fields_PROVIDER_REFERENCE] ?? '')),
+                'transaction_id' => $providerReference,
+                // 支付商 capture id：跨来源归并的锚点，与 Transaction 侧 response_data.provider_reference 对齐。
+                'provider_reference' => $providerReference,
                 'status' => $this->mapStatus((string)($data[PaymentAttempt::schema_fields_STATUS] ?? '')),
                 'paid_at' => $this->formatDateTime(
                     $this->firstNonEmpty(
@@ -304,6 +340,9 @@ final class BackendOrderPaymentRecordsService
             if (!\is_array($data)) {
                 continue;
             }
+            $responseData = $this->decodeJsonArray(
+                (string)($data[PaymentTransaction::schema_fields_RESPONSE_DATA] ?? ''),
+            );
             $rows[] = [
                 'payment_method' => (string)($data[PaymentTransaction::schema_fields_METHOD_CODE] ?? ''),
                 'amount' => (float)($data[PaymentTransaction::schema_fields_AMOUNT] ?? 0),
@@ -312,6 +351,9 @@ final class BackendOrderPaymentRecordsService
                     'CNY',
                 ),
                 'transaction_id' => trim((string)($data[PaymentTransaction::schema_fields_TRANSACTION_NO] ?? '')),
+                // 支付商 capture id：本侧 transaction_no 是内部号（PAY2026…），
+                // 只有 response_data.provider_reference 能与 Attempt 侧 provider_reference 对齐。
+                'provider_reference' => trim((string)($responseData['provider_reference'] ?? '')),
                 'status' => $this->mapStatus((string)($data[PaymentTransaction::schema_fields_STATUS] ?? '')),
                 'paid_at' => $this->formatDateTime(
                     (string)($data[PaymentTransaction::schema_fields_PAID_AT] ?? ''),
@@ -321,6 +363,20 @@ final class BackendOrderPaymentRecordsService
         }
 
         return $rows;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeJsonArray(string $raw): array
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+
+        return \is_array($decoded) ? $decoded : [];
     }
 
     private function mapStatus(string $status): string

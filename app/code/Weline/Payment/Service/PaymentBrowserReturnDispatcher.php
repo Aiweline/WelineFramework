@@ -188,12 +188,18 @@ final class PaymentBrowserReturnDispatcher
             || ExpressCheckoutOrchestrator::isExpressAwaitingConfirm($requestData);
         $alreadyAwaiting = ExpressCheckoutOrchestrator::isExpressAwaitingConfirm($requestData);
 
+        // 支付商侧订单快照（首次回跳 prepare-only 时写入 response_data）必须一并交给 provider。
+        // 否则 provider 读不到「支付商侧当前金额」，在金额已变更（Express 回跳重报价改运费）
+        // 时会判定无需 patch，直接按支付商侧旧金额 capture，导致「实扣 ≠ 订单总额」。
+        $providerPayload = \is_array($responseData['payload'] ?? null) ? $responseData['payload'] : [];
+
         $resumeContext = array_replace($requestData, [
             'runtime_config' => $runtimeConfig,
             'scope' => $scope['scope'],
             'environment' => $scope['environment'],
             'browser_return_params' => $params,
             'browser_return_context' => $context,
+            'payload' => $providerPayload,
         ]);
         if ($express && !$transaction->isSuccess()) {
             // First browser return: prepare only (get profile, no capture).
