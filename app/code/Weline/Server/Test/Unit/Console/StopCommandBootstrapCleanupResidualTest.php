@@ -121,9 +121,9 @@ final class StopCommandBootstrapCleanupResidualTest extends TestCase
                 unset($success, $message);
             }
 
-            protected function acquireStopLock(string $instanceName, int $timeout = 5): bool
+            protected function acquireStopLock(string $instanceName, int $timeout = 5, bool $force = false): bool
             {
-                unset($instanceName, $timeout);
+                unset($instanceName, $timeout, $force);
 
                 return true;
             }
