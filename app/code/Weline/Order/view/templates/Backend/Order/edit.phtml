@@ -78,11 +78,14 @@ $availableTransitions = $this->getData('available_transitions') ?? [];
 $orderCustomerSelectValue = (string)($this->getData('orderCustomerSelectValue') ?? '');
 $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDisplay') ?? '');
 ?>
+<?php
+// 顶栏壳已提供 H1 + 菜单面包屑；正文只保留订单号副标题，避免第二套「系统/…」面包屑。
+?>
 <div class="w-grid">
     <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-2);" data-testid="order-edit-subheader">
             <h4 class="w-cluster" data-align="center" style="--w-mb-sm:0;--w-gap:var(--weline-space-2);">
-                <?= $isEdit ? __('管理订单') : __('新建订单') ?>
+                <?= $isEdit ? __('订单详情') : __('新建订单') ?>
                 <?php if ($isEdit): ?>
                     <span data-testid="order-edit-number"><?= htmlspecialchars((string)($orderData[Order::schema_fields_ORDER_NUMBER] ?? '')) ?></span>
                     <?php if ($groupDisplay !== ''): ?>
@@ -96,13 +99,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                     <?php endif; ?>
                 <?php endif; ?>
             </h4>
-            <div class="w-cluster">
-                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
-                    <li class="w-breadcrumb__item"><a href="@backend-url{'order/backend/order/index'}"><?= __('订单管理') ?></a></li>
-                    <li class="w-breadcrumb__item" data-state="active"><?= $isEdit ? __('管理订单') : __('新建订单') ?></li>
-                </ol>
-            </div>
+            <a href="@backend-url{'order/backend/order/index'}" class="w-button" data-tone="neutral" data-size="sm"><?= __('返回订单列表') ?></a>
         </div>
     </div>
 </div>
@@ -236,7 +233,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
         <div class="w-card" style="--w-mb:var(--weline-space-2);" data-testid="order-edit-status-actions">
             <div class="w-card__header"><h5 class="w-card__title" style="--w-mb:0;"><?= __('状态调整') ?></h5></div>
             <div class="w-card__body">
-                <w:form method="post" action="@backend-url{'order/backend/order/updateStatus'}">
+                <w:form method="post" action="@backend-url{'order/backend/order/update-status'}">
                     <input type="hidden" name="order_id" value="<?= $orderId ?>">
                     <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
                     <div class="w-cluster" data-align="end">
@@ -555,7 +552,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
         <div class="w-card" style="--w-mb:0;" data-testid="order-edit-comment">
             <div class="w-card__header"><h5 class="w-card__title" style="--w-mb:0;"><?= __('追加沟通备注') ?></h5></div>
             <div class="w-card__body">
-                <w:form method="post" action="@backend-url{'order/backend/order/addComment'}">
+                <w:form method="post" action="@backend-url{'order/backend/order/add-comment'}">
                     <input type="hidden" name="order_id" value="<?= $orderId ?>">
                     <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
                     <textarea name="comment" class="w-textarea" rows="2" required placeholder="<?= __('写入订单历史，可选通知客户') ?>"></textarea>
