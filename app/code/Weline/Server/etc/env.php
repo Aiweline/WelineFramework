@@ -45,6 +45,9 @@ return [
                 // 只管理本项目隔离的 binary/runtime，绝不接管宿主机 Nginx。
                 'managed' => true,
                 'auto_start' => true,
+                // 托管 Nginx 是公网网关，null 表示默认监听公网 80/443；
+                // 只有公网端口被别的进程占用或本用户无权绑定时才回退
+                // 8080/8443 + projectPortOffset（回退原因见 server:nginx:status）。
                 'listen_http' => null,
                 'listen_https' => null,
                 'server_names' => [],

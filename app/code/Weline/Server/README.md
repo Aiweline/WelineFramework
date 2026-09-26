@@ -80,7 +80,7 @@ php bin/w server:start pure-wls -p 9982 --no-nginx
 
 | 参数 | 简写 | 说明 | 默认值 |
 |-----|------|------|--------|
-| `--port` | `-p` | Nginx 模式为 WLS 明文回源端口；`--no-nginx` 时为纯 WLS HTTPS 公网端口 | 9981 为常用值；Nginx 公网端口默认按 `8080/8443 + projectPortOffset` 分配，可由 env 覆盖 |
+| `--port` | `-p` | Nginx 模式为 WLS 明文回源端口；`--no-nginx` 时为纯 WLS HTTPS 公网端口 | 9981 为常用值；Nginx 公网端口默认是 `80/443`，仅当被占用或本用户无权绑定时才回退 `8080/8443 + projectPortOffset`（回退原因见 `server:nginx:status`），也可由 env 显式指定 |
 | `--host` | `-h` | Nginx 模式自动约束为 loopback；`--no-nginx` 时作为纯 WLS 监听地址 | 127.0.0.1 |
 | `--count` | `-c` | Worker 进程数 | 智能推算 |
 | `--daemon` | `-d` | 守护进程模式 | false |
