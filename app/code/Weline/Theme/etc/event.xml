@@ -285,4 +285,13 @@
                   sort="500"/>
     </event>
 
+    <!-- Website info form: persist Website-scoped storefront theme_binding after commit. -->
+    <event name="Weline_Websites::website_save_after">
+        <observer name="Weline_Theme::website_save_after_theme_binding"
+                  instance="Weline\Theme\Observer\WebsiteSaveAfter"
+                  disabled="false"
+                  shared="true"
+                  sort="30"/>
+    </event>
+
 </config>

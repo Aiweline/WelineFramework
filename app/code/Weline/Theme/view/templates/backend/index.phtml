@@ -23,7 +23,7 @@ foreach ($themes as $themeItem) {
     }
 }
 $openAiThemeId = (int)($active_frontend_id ?: 0);
-$pageHint = $h(__('选择前台与后台各自激活的主题。'));
+$pageHint = $h(__('前台列表「激活」仅切换全局回退（建议保持 Default）；各网站店面主题请在「网站信息 → 店面主题」按站绑定。后台主题仍为全局一套。'));
 $tabFrontendLabel = $h(__('前台主题'));
 $tabBackendLabel = $h(__('后台主题'));
 $selectedBadge = $h(__('已选'));
