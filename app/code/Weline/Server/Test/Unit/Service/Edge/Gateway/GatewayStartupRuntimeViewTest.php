@@ -79,6 +79,29 @@ final class GatewayStartupRuntimeViewTest extends TestCase
         );
     }
 
+    /**
+     * auto 的第三出口：宿主无 Nginx 且本项目托管 Nginx 就绪时，解析结果是
+     * adapter=nginx / mode=legacy。它与显式 legacy 的决策形状完全一致，只有
+     * requested_mode 不同，因此必须同样拿到受管的公网发布动作，而不是被判成
+     * 「请求模式与生效模式矛盾」而拒绝发布公网入口。
+     */
+    public function testAutoResolvedManagedNginxKeepsItsManagedPublicationAction(): void
+    {
+        $view = GatewayStartupRuntimeView::resolveObserved(
+            $this->endpoint('auto', 'legacy', 'nginx'),
+            false,
+            false,
+        );
+
+        self::assertSame(GatewayStartupRuntimeView::SOURCE_MANAGED_NGINX, $view['source']);
+        self::assertSame(
+            GatewayStartupRuntimeView::READY_ACTION_START_MANAGED_NGINX,
+            $view['ready_action'],
+        );
+        self::assertFalse($view['public_proven']);
+        self::assertSame('auto', $view['requested_mode']);
+    }
+
     public function testContradictoryRequestedAndEffectiveModesFailClosed(): void
     {
         $gatewayEndpoint = $this->endpoint('wls', 'gateway', 'nginx');
@@ -91,13 +114,23 @@ final class GatewayStartupRuntimeViewTest extends TestCase
         self::assertSame(GatewayStartupRuntimeView::SOURCE_UNKNOWN, $gatewayMismatch['source']);
         self::assertSame(GatewayStartupRuntimeView::READY_ACTION_REJECT, $gatewayMismatch['ready_action']);
 
+        // requested=wls 永不解析成 legacy；即使适配器是 nginx 也必须 fail closed。
         $legacyMismatch = GatewayStartupRuntimeView::resolveObserved(
-            $this->endpoint('auto', 'legacy', 'nginx'),
+            $this->endpoint('wls', 'legacy', 'nginx'),
             false,
             false,
         );
         self::assertSame(GatewayStartupRuntimeView::SOURCE_UNKNOWN, $legacyMismatch['source']);
         self::assertSame(GatewayStartupRuntimeView::READY_ACTION_REJECT, $legacyMismatch['ready_action']);
+
+        // requested=gateway 解析成 legacy 同样是矛盾状态。
+        $gatewayAsLegacy = GatewayStartupRuntimeView::resolveObserved(
+            $this->endpoint('gateway', 'legacy', 'nginx'),
+            false,
+            false,
+        );
+        self::assertSame(GatewayStartupRuntimeView::SOURCE_UNKNOWN, $gatewayAsLegacy['source']);
+        self::assertSame(GatewayStartupRuntimeView::READY_ACTION_REJECT, $gatewayAsLegacy['ready_action']);
     }
 
     /** @return array<string,mixed> */

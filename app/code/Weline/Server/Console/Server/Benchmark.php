@@ -1147,7 +1147,7 @@ class Benchmark extends CommandAbstract
                 ],
             ];
         }
-        if (!GatewayRuntimeServingProjection::isExplicitLegacyManagedNginx($endpoint)) {
+        if (!GatewayRuntimeServingProjection::isManagedNginxEdge($endpoint)) {
             // A gateway tenant with no current authenticated serving projection
             // is unknown, not a legacy project Nginx or a private backend.
             return null;

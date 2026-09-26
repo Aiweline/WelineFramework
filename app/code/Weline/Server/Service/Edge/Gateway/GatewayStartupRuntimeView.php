@@ -170,9 +170,19 @@ final class GatewayStartupRuntimeView
                 $nativeState,
             );
         }
+        // 托管 Nginx 边缘的判据是「实际解析出的 mode 是 legacy」，而不是「操作者
+        // 显式写了 legacy」。auto 在宿主无 Nginx 且本项目托管 Nginx 就绪时会解析成
+        // legacy（见 GatewayStartupDecision::decide 的第三出口），它同样需要一个
+        // 受管的公网发布动作；若这里只认 requested=legacy，auto 就会掉进下面的
+        // SOURCE_UNKNOWN + REJECT，把已经正确解析出的托管 Nginx 边缘判成矛盾状态。
+        // auto→gateway 仍在上面第 121 行被 gateway_pending 分支接走；即使其协议
+        // 证明缺失而落到这里，$mode 也是 gateway 而非 legacy，依旧 fail closed。
         if ($adapter === EdgeAdapterInterface::NAME_NGINX
-            && $requested === GatewayStartupDecision::MODE_LEGACY
             && $mode === GatewayStartupDecision::MODE_LEGACY
+            && \in_array($requested, [
+                GatewayStartupDecision::MODE_LEGACY,
+                GatewayStartupDecision::MODE_AUTO,
+            ], true)
         ) {
             return self::view(
                 self::SOURCE_MANAGED_NGINX,

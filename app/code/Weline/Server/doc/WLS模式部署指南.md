@@ -45,7 +45,7 @@ Master/Worker 或平台副作用前统一拒绝不满足该合同的 PHP，`serv
 ```php
 'wls' => [
     'edge' => [
-        'mode' => 'auto',               // auto / gateway / wls
+        'mode' => 'auto',               // auto / gateway / wls / legacy
         'adapter' => 'nginx',           // 兼容投影；由最终 decision 固化
         'gateway' => [
             // 可选 CDN：默认关闭。开启前须注入 enabled 信任公钥。
@@ -55,8 +55,10 @@ Master/Worker 或平台副作用前统一拒绝不满足该合同的 PHP，`serv
             'package_fetch_hosts' => ['www.aiweline.com'],
         ],
         'nginx' => [
-            // 以下项目托管 Nginx 键只服务 legacy 实例；
-            // 共享网关由宿主 Gateway Controller 管理。
+            // 项目托管 Nginx：既服务显式 legacy 实例，也是 auto 的第三出口
+            // （宿主无可信 Gateway、且宿主没有自己的 Nginx 时由 WLS 自建）。
+            // 共享网关仍由宿主 Gateway Controller 管理。
+            // managed=false 是显式否决：auto 与 legacy 都不会启动托管 Nginx。
             'managed' => true,
             'auto_start' => true,
         ],
@@ -69,6 +71,51 @@ Master/Worker 或平台副作用前统一拒绝不满足该合同的 PHP，`serv
 初始安装先无副作用预检项目包，再在 root-only `package-bootstrap.lock` 内复查宿主状态、
 重复验签并安装；并发第二项目只加入胜者建立的网关。升级、修复、rebootstrap 和显式
 提升仍必须使用对应的 `server:gateway:*` 管理命令。
+
+#### `auto` 的三个出口（逐级降级，不跳级）
+
+1. **命中可信宿主 Weline Gateway** → `gateway`，共享宿主 80/443。
+2. **宿主没有可用 Nginx，且本项目托管 Nginx 已安装** → `legacy`，WLS 自建项目级
+   Nginx 边缘（端口 `8080/8443 + projectPortOffset`）。
+3. **以上都不成立** → `wls`，高端口纯 WLS 回退。
+
+第 2 级的两个条件缺一不可：
+
+- **宿主已有 Nginx 时不争抢公网边缘**。判据是宿主上是否存在**可用**的 Nginx 二进制
+  （宝塔 `/www/server/nginx/sbin/nginx`、`/usr/sbin/nginx`、`/usr/local/nginx/sbin/nginx`、
+  `/opt/homebrew/bin/nginx` 等，以及 `PATH` 中的 `nginx`），且该二进制**不属于**本项目的
+  `install_root`。命中即视为公网边缘已被占用，`auto` 不再自建。
+- **托管 Nginx 未安装时绝不补装**。启动路径只复用已安装二进制；未安装直接降到第 3 级，
+  安装仍只能由 `php bin/w server:nginx:install` 显式完成。
+
+第 3 级的 `fallback_reason` 会同时写明「宿主网关为何不可用」与「托管 Nginx 为何不可用」
+（宿主已占用边缘 / `managed=false` / `auto_start=false` / 未安装），据此即可判断降级原因。
+
+显式 `mode=gateway` **不降级**，失败即报错；显式 `mode=legacy` 仍要求 `managed=true`
+且已安装，否则启动失败。
+
+#### 实现约定：判定 `auto` 的出口要看「解析后的 `mode`」，不要枚举 `requested_mode`
+
+`auto` 解析到第 2 级（托管 Nginx）时，决策形状是
+`adapter=nginx / mode=legacy / scope=legacy`，**与显式 `legacy` 完全一致**，
+只有 `requested_mode` 不同（`auto` vs `legacy`）。
+
+因此凡是「只认显式 legacy」的判定，都必须改成看**解析后的 `mode`**；凡是
+「枚举 `auto` 的出口」的列表，都必须把 `legacy` 一起算进去。历史上有 4 处
+硬编码枚举 `auto` 只有「gateway / wls」两个出口，导致第 2 级被逐层拒绝：
+
+| 位置 | 旧判据 | 症状 |
+| --- | --- | --- |
+| `GatewayStartupRuntimeView::resolveObserved()` | `requested === legacy` | `auto` 掉进 `SOURCE_UNKNOWN` + `READY_ACTION_REJECT`，启动中止：*「WLS Worker 已 READY，但运行态边缘投影与启动意图不一致」* |
+| `GatewayRuntimeServingProjection::isManagedNginxEdge()` | `requested === legacy` | 证书物料不会重载进托管 Nginx |
+| `EdgeRuntimeDecision::__construct()` | `auto → [gateway, wls]` | 决策对象构造即抛「invalid requested/resolved mode transition」 |
+| `MasterProcess::shouldTriggerDeferredSslRetryAfterStartup()` | `auto → [gateway, wls]` | 公网证书首签永不触发 |
+
+新增同类判定时请优先复用 `GatewayRuntimeServingProjection::isManagedNginxEdge()`
+（判据是 `mode === legacy && adapter === nginx`）与
+`GatewayStartupRuntimeView` 的 `SOURCE_MANAGED_NGINX` 分支，不要再手写枚举。
+注意反向陷阱：`auto→gateway` 的端点 `adapter` 同样是 `nginx`，
+所以**只看 adapter 会把宿主网关误判成托管 Nginx**，必须同时校验 `mode`。
 
 项目发布系统必须把 `wls-gateway-project-distribution-*` overlay 中的签名包和启用公钥
 inventory 一起合并进最终发行物；当前仓库没有该 artifact 的下游消费 workflow。发布组装
@@ -99,6 +146,11 @@ php bin/w server:stop pure-wls
 检测、接管或放行未知宿主 Nginx；`managed=false`、`auto_start=false` 也不会使它成为
 可信网关。需要共享 80/443 时安装 Weline Gateway；需要绕开网关时使用
 `--edge=wls`。
+
+`managed=false` / `auto_start=false` 是**显式否决**：它同时关闭 `auto` 的第三出口
+（自建项目托管 Nginx），因此启动只会在宿主网关与纯 WLS 之间选择。反过来，只要宿主上
+存在可用 Nginx（见 §1.1「`auto` 的三个出口」的探测位置），即使 `managed=true`，
+`auto` 也不会自建托管 Nginx —— WLS 不与宿主争抢公网边缘。
 
 ```php
 'wls' => [
@@ -154,7 +206,7 @@ server {
 
 ### 1.3 本项目托管 Nginx（多项目互不干扰）
 
-托管 Nginx 必须由运维显式安装（需 `managed=true`）。macOS 默认安装到 `extend/server/nginx`；Linux 默认使用 `extend/server/nginx-linux-{arch}`，避免不同架构共用二进制；Windows 使用项目身份隔离的本机目录。该安装动作与协议实现无关：WLS 本身仍是 PHP 代码；仅 macOS/Linux 的托管 Nginx 安装命令会构建 Nginx，Windows 使用官方预编译包。
+托管 Nginx 必须由运维显式安装（需 `managed=true`）。它有两条进入路径：**显式 `mode=legacy`**，或 **`auto` 的第三出口**（宿主无可信 Gateway、且宿主没有自己的 Nginx 时，`managed=true` 且二进制已安装即由 WLS 自建）。两条路径的门槛相同——`managed=true`、`auto_start=true`、二进制已安装——差别只在谁来触发：前者由运维点名，后者由启动决策在无宿主边缘可接管时自动选择。macOS 默认安装到 `extend/server/nginx`；Linux 默认使用 `extend/server/nginx-linux-{arch}`，避免不同架构共用二进制；Windows 使用项目身份隔离的本机目录。该安装动作与协议实现无关：WLS 本身仍是 PHP 代码；仅 macOS/Linux 的托管 Nginx 安装命令会构建 Nginx，Windows 使用官方预编译包。
 
 Windows 安装器把 ZIP cache、extract、candidate、rollback 与 final 全部限制在同一项目身份的本机 LOCALAPPDATA 根。candidate 的 nginx.exe、PE 架构、二进制 SHA 与 manifest 完整校验后，才以 final → rollback、candidate → final 的同卷目录 rename 发布；解压或发布失败时恢复旧 final。即使项目从 UNC/Parallels 共享目录启动，也不会在共享盘解压或逐文件覆盖正式安装。
 

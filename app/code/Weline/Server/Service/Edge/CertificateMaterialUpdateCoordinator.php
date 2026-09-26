@@ -122,10 +122,10 @@ final class CertificateMaterialUpdateCoordinator
                 $this->assertRetirementBudget($deadlineMonotonic, 0.01);
             }
             $instanceName = (string)$instanceName;
-            $explicitLegacy = GatewayRuntimeServingProjection::isExplicitLegacyManagedNginx(
+            $managedNginxEdge = GatewayRuntimeServingProjection::isManagedNginxEdge(
                 $endpoint,
             );
-            if ($explicitLegacy) {
+            if ($managedNginxEdge) {
                 $legacyMasterPid = (int)($endpoint['master_pid'] ?? 0);
                 $legacyMasterEpoch = (int)($endpoint['master_epoch'] ?? 0);
                 if ($legacyMasterPid < 1 || $legacyMasterEpoch < 1) {

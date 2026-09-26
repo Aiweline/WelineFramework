@@ -476,8 +476,19 @@ final class GatewayRuntimeServingProjection
         ], true);
     }
 
-    /** @param array<string,mixed> $endpoint */
-    public static function isExplicitLegacyManagedNginx(array $endpoint): bool
+    /**
+     * The resolved serving face of this endpoint is a project-managed Nginx.
+     *
+     * 判据是「解析出的 mode 是 legacy 且适配器是 nginx」，不是「操作者显式写了
+     * legacy」：auto 在宿主无 Nginx 且本项目托管 Nginx 就绪时同样解析成 legacy，
+     * 该边缘同样持有站点证书，证书物料必须重载进这台的托管 Nginx。
+     *
+     * 必须同时校验 mode，否则 auto→gateway 的端点（requested=auto、adapter=nginx、
+     * mode=gateway）会被误判成托管 Nginx 边缘，从而跳过宿主网关收敛。
+     *
+     * @param array<string,mixed> $endpoint
+     */
+    public static function isManagedNginxEdge(array $endpoint): bool
     {
         if (\strtolower(\trim((string)($endpoint['edge_adapter'] ?? ''))) !== 'nginx') {
             return false;
@@ -486,7 +497,12 @@ final class GatewayRuntimeServingProjection
         $requested = \strtolower(\trim((string)(
             $gateway['requested_mode'] ?? $gateway['mode'] ?? ''
         )));
-        return $requested === GatewayStartupDecision::MODE_LEGACY;
+        $mode = \strtolower(\trim((string)($gateway['mode'] ?? '')));
+        return $mode === GatewayStartupDecision::MODE_LEGACY
+            && \in_array($requested, [
+                GatewayStartupDecision::MODE_LEGACY,
+                GatewayStartupDecision::MODE_AUTO,
+            ], true);
     }
 
     /**

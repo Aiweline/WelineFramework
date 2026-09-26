@@ -2223,6 +2223,10 @@ class MasterProcess
             $gateway['requested_mode'] ?? $gateway['mode'] ?? ''
         )));
         $mode = \strtolower(\trim((string)($gateway['mode'] ?? '')));
+        // auto 有三个出口：宿主 Gateway、项目托管 Nginx（mode=legacy）、纯 WLS。
+        // 三者的共同点是「WLS 后端是明文 loopback，公网 TLS 由别的进程终止」，
+        // 所以都需要项目自己的 ACME worker 去拿公网证书。漏掉 legacy 会让
+        // auto→托管 Nginx 的实例永远拿不到证书。
         $validGatewayIntent = ($requested
                 === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
                 && $mode
@@ -2231,6 +2235,7 @@ class MasterProcess
                 === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO
                 && \in_array($mode, [
                     \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY,
+                    \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_LEGACY,
                     \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS,
                 ], true));
         return ($gateway['certificate_pending'] ?? false) === true

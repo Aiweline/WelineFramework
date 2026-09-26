@@ -260,6 +260,54 @@ final class GatewayRuntimeServingProjectionTest extends TestCase
         ];
     }
 
+    /**
+     * 托管 Nginx 边缘的判据必须是「解析出的 mode 是 legacy」，而不是
+     * requested_mode：auto 在宿主无 Nginx 且本项目托管 Nginx 就绪时会解析成
+     * legacy（GatewayStartupDecision 的第三出口），该边缘同样持有站点证书，
+     * 证书物料必须重载进这台托管 Nginx。
+     *
+     * 反向同样关键：auto→gateway 的端点 edge_adapter 也是 nginx，若只按
+     * requested_mode 判断，它会被误判成托管 Nginx 边缘并跳过宿主网关收敛。
+     */
+    public function testManagedNginxEdgeFollowsResolvedModeNotRequestedMode(): void
+    {
+        self::assertTrue(GatewayRuntimeServingProjection::isManagedNginxEdge(
+            $this->managedNginxEndpoint('legacy', 'legacy'),
+        ));
+        self::assertTrue(GatewayRuntimeServingProjection::isManagedNginxEdge(
+            $this->managedNginxEndpoint('auto', 'legacy'),
+        ));
+        self::assertFalse(GatewayRuntimeServingProjection::isManagedNginxEdge(
+            $this->managedNginxEndpoint('auto', 'gateway'),
+        ));
+        self::assertFalse(GatewayRuntimeServingProjection::isManagedNginxEdge(
+            $this->managedNginxEndpoint('gateway', 'gateway'),
+        ));
+        self::assertFalse(GatewayRuntimeServingProjection::isManagedNginxEdge(
+            $this->managedNginxEndpoint('auto', 'wls'),
+        ));
+
+        $wlsAdapter = $this->managedNginxEndpoint('auto', 'legacy');
+        $wlsAdapter['edge_adapter'] = 'wls';
+        self::assertFalse(GatewayRuntimeServingProjection::isManagedNginxEdge($wlsAdapter));
+
+        $missingAdapter = $this->managedNginxEndpoint('legacy', 'legacy');
+        unset($missingAdapter['edge_adapter']);
+        self::assertFalse(GatewayRuntimeServingProjection::isManagedNginxEdge($missingAdapter));
+    }
+
+    /** @return array<string,mixed> */
+    private function managedNginxEndpoint(string $requested, string $mode): array
+    {
+        return [
+            'edge_adapter' => 'nginx',
+            'gateway' => [
+                'requested_mode' => $requested,
+                'mode' => $mode,
+            ],
+        ];
+    }
+
     private function removeTree(string $root): void
     {
         if (!\is_dir($root) || \is_link($root)) {

@@ -9,6 +9,7 @@ use Weline\Server\Service\Edge\Gateway\GatewayPaths;
 use Weline\Server\Service\Edge\Gateway\GatewayStartupBootstrapperInterface;
 use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
 use Weline\Server\Service\Edge\Gateway\GatewayStartupHostInterface;
+use Weline\Server\Service\Edge\Gateway\ManagedEdgeAvailabilityInterface;
 
 final class GatewayStartupAutoBootstrapTest extends TestCase
 {
@@ -21,6 +22,7 @@ final class GatewayStartupAutoBootstrapTest extends TestCase
             $host,
             null,
             $bootstrapper,
+            new FakeDisabledManagedEdgeAvailability(),
         ))->decide(
             GatewayStartupDecision::MODE_AUTO,
             'first-project',
@@ -52,6 +54,7 @@ final class GatewayStartupAutoBootstrapTest extends TestCase
             $host,
             null,
             $bootstrapper,
+            new FakeDisabledManagedEdgeAvailability(),
         ))->decide(
             GatewayStartupDecision::MODE_AUTO,
             'first-project',
@@ -102,6 +105,7 @@ final class GatewayStartupAutoBootstrapTest extends TestCase
             $host,
             null,
             $bootstrapper,
+            new FakeDisabledManagedEdgeAvailability(),
         ))->decide(
             GatewayStartupDecision::MODE_WLS,
             'standalone-project',
@@ -131,6 +135,7 @@ final class GatewayStartupAutoBootstrapTest extends TestCase
             $host,
             null,
             $bootstrapper,
+            new FakeDisabledManagedEdgeAvailability(),
         ))->decide(
             GatewayStartupDecision::MODE_AUTO,
             'safe-project',
@@ -172,6 +177,7 @@ final class GatewayStartupAutoBootstrapTest extends TestCase
             $host,
             null,
             new FakeGatewayStartupBootstrapper(self::trustedStatus()),
+            new FakeDisabledManagedEdgeAvailability(),
         );
         $decision = $startup->decide(
             GatewayStartupDecision::MODE_AUTO,
@@ -291,5 +297,30 @@ final class FakeGatewayStartupBootstrapper implements GatewayStartupBootstrapper
         $this->observed = $observedStatus;
         $this->deadlines[] = $deadlineMonotonic;
         return $this->result;
+    }
+}
+
+/**
+ * 恒「不可自建托管 Nginx」的假实现。
+ *
+ * 本文件的用例只关心宿主网关链路，必须显式关掉 auto 的第三出口，
+ * 否则判定会读真实机器上的 wls.edge.nginx 配置与 Nginx 安装状态，
+ * 在不同开发机上得到不同结论（测试失去确定性）。
+ */
+final class FakeDisabledManagedEdgeAvailability implements ManagedEdgeAvailabilityInterface
+{
+    public function hostNginxOccupied(): bool
+    {
+        return false;
+    }
+
+    public function managedNginxReady(): bool
+    {
+        return false;
+    }
+
+    public function unavailableReason(): string
+    {
+        return 'managed Nginx edge disabled in test';
     }
 }
