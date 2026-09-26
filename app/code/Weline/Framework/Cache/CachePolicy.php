@@ -14,6 +14,8 @@ final readonly class CachePolicy
     public array $vary;
     /** @var list<string> */
     public array $dependencies;
+    /** True when a deliberately empty (honest) result may be cached as a shared negative marker. */
+    public bool $allowsEmptyResult;
 
     /** @param list<string> $vary @param list<string> $dependencies Relative scope domains or canonical global/... dependencies. */
     public function __construct(
@@ -25,6 +27,8 @@ final readonly class CachePolicy
         public int $freshTtlSeconds = 300,
         public int $staleTtlSeconds = 1800,
         public int $singleFlightWaitMs = 0,
+        /** Opt-in: builder [] is a legitimate shared value (honest-empty markers), not negative cache. */
+        public bool $allowEmptyResult = false,
     ) {
         if (trim($resource) === '' || trim($pool) === '') {
             throw new \InvalidArgumentException('Cache policy resource and pool must not be empty.');
@@ -48,8 +52,8 @@ final readonly class CachePolicy
         sort($dependencies, SORT_STRING);
         $this->vary = $vary;
         $this->dependencies = $dependencies;
+        $this->allowsEmptyResult = $allowEmptyResult;
     }
-
     /** @return list<string> */
     public function namespacePaths(?ScopeIdentity $identity, array $translationLocales = []): array
     {
@@ -109,6 +113,7 @@ final readonly class CachePolicy
             'fresh_ttl' => $this->freshTtlSeconds,
             'stale_ttl' => $this->staleTtlSeconds,
             'single_flight_wait_ms' => $this->singleFlightWaitMs,
+            'allow_empty_result' => $this->allowsEmptyResult,
         ];
     }
 }

@@ -68,6 +68,9 @@ class SingleFlightCoordinator implements SingleFlightInterface
 
     public function acquire(string $key, int $timeoutMs = 1500, int $ttlSeconds = 30): ?string
     {
+        // TTL 秒数向上取整：亚秒级预算（如 200ms）若截断为 0，在带滑动过期
+        // 的共享存储上会退化成默认长 TTL 的永不过期锁占位。
+        $ttlSeconds = (int)\max(1, \ceil($ttlSeconds));
         $token = $this->generateToken();
         $deadlineNs = $timeoutMs > 0 ? (\hrtime(true) + ($timeoutMs * 1_000_000)) : 0;
 

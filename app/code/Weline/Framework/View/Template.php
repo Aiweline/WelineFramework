@@ -924,7 +924,7 @@ class Template extends DataObject
     public function getFetchFile(string $fileName, string|null $module_name = ''): string
     {
         list($comFileName, $tplFile) = $this->convertFetchFileName($fileName);
-        
+
         // 检测编译文件，如果不符合条件则重新进行文件编译
         if (self::shouldRecompileCompiledTemplate(
             $comFileName,

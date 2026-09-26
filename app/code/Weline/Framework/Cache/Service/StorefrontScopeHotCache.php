@@ -10,6 +10,7 @@ use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
 use Weline\Framework\Cache\Contract\SingleFlightInterface;
 use Weline\Framework\Cache\StorefrontCacheKeyContext;
 use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
+use Weline\Framework\Cache\Namespace\NamespaceKeyDecorator;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Cache\Pool\CachePool;
@@ -84,7 +85,41 @@ final class StorefrontScopeHotCache
         if ($key === null) {
             return $builder();
         }
-        return $this->rememberKey($policy->pool, $key, $policy->freshTtlSeconds, $builder, $policy->staleTtlSeconds, true, $traceMeta, $policy->singleFlightWaitMs);
+        return $this->rememberKey($policy->pool, $key, $policy->freshTtlSeconds, $builder, $policy->staleTtlSeconds, true, $traceMeta, $policy->singleFlightWaitMs, $policy->allowsEmptyResult);
+    }
+
+    /**
+     * Force a shared read/write through rememberKey even when the policy would
+     * normally fence it — used by writers that deliberately persist an honest
+     * empty marker (chrome_slot_projection). Returns null when no stable shared
+     * key exists for this context.
+     */
+    public function rememberPolicyNoCache(
+        CachePolicy|string $policy,
+        string $logicalKey,
+        callable $builder,
+    ): mixed {
+        $policy = $this->resolvePolicy($policy);
+        $traceMeta = RequestLifecycleTrace::isEnabled() ? [
+            'resource' => $policy->resource,
+            'scope' => $policy->scope,
+            'logical_key_hash' => hash('sha256', $logicalKey),
+        ] : null;
+        $key = $this->policyKey($policy, $logicalKey, $traceMeta);
+        if ($key === null) {
+            return null;
+        }
+        return $this->rememberKey(
+            $policy->pool,
+            $key,
+            $policy->freshTtlSeconds,
+            $builder,
+            $policy->staleTtlSeconds,
+            true,
+            $traceMeta,
+            $policy->singleFlightWaitMs,
+            true,
+        );
     }
 
     public function forgetPolicy(CachePolicy|string $policy, string $logicalKey): void
@@ -103,6 +138,68 @@ final class StorefrontScopeHotCache
             $this->pool($policy->pool)->deleteCustom($key);
         } catch (\Throwable) {
         }
+    }
+
+    /**
+     * Purge every namespace-generation variant of one policy logical key.
+     *
+     * bump()/bumpMany() change the pool fingerprint instead of wiping entries,
+     * so a poisoned envelope written under an older generation stays readable
+     * after a scope bump. Deleting the bare (undecorated) physical key drops it
+     * for all current and future generations.
+     */
+    public function forgetPolicyAcrossGenerations(
+        CachePolicy|string $policy,
+        string $logicalKey,
+    ): int {
+        $policy = $this->resolvePolicy($policy);
+        $removed = 0;
+        $pool = $this->pool($policy->pool);
+        foreach ($this->policyKeyVariants($policy, $logicalKey) as $key) {
+            unset(self::$processCache[$policy->pool . '|' . $key]);
+            try {
+                $pool->deleteCustom($key);
+                ++$removed;
+            } catch (\Throwable) {
+            }
+        }
+
+        return $removed;
+    }
+
+    /**
+     * @return list<string> distinct policy keys ('' when the context fences writes)
+     */
+    private function policyKeyVariants(CachePolicy $policy, string $logicalKey): array
+    {
+        $keys = [];
+        // Current frozen context first (exact live write path), then a bare
+        // legacy fallback, then one variant per dependency namespace generation.
+        $traceMeta = null;
+        $current = $this->policyKey($policy, $logicalKey, $traceMeta);
+        if (is_string($current) && $current !== '') {
+            $keys[$current] = true;
+        }
+        $context = StorefrontCacheKeyContext::currentOrRequestFence();
+        if ($policy->dependencies !== []) {
+            try {
+                $this->generations ??= ObjectManager::getInstance(NamespaceGenerationRepository::class);
+                $decorator = new NamespaceKeyDecorator();
+                $namespacePaths = $policy->namespacePaths(
+                    $context->scopeIdentity,
+                    $context->translationLocales ?? [],
+                );
+                $vector = $this->generations->resolveVector($namespacePaths);
+                $keys[$KeyBuilder::policyKey($policy, $logicalKey, $decorator->fingerprint($vector))] = true;
+                foreach ($vector as $namespace => $generation) {
+                    $single = $decorator->fingerprint([(string)$namespace => (int)$generation]);
+                    $keys[$KeyBuilder::policyKey($policy, $logicalKey, $single)] = true;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return array_keys($keys);
     }
 
     /**
@@ -290,6 +387,7 @@ final class StorefrontScopeHotCache
         bool $explicitDimensions = false,
         ?array $traceMeta = null,
         int $singleFlightWaitMs = 0,
+        bool $allowEmptyResult = false,
     ): mixed {
         $processKey = $poolIdentity . '|' . $scopedKey;
 
@@ -308,6 +406,7 @@ final class StorefrontScopeHotCache
                         $staleTtlSeconds,
                         $builder,
                         $explicitDimensions,
+                        $allowEmptyResult,
                     );
                 }
 
@@ -377,6 +476,7 @@ final class StorefrontScopeHotCache
                                     $staleTtlSeconds,
                                     $builder,
                                     $explicitDimensions,
+                                    $allowEmptyResult,
                                 );
                             }
                             return $entry['payload'];
@@ -387,6 +487,12 @@ final class StorefrontScopeHotCache
                         $builder,
                         $phaseMeta,
                     );
+                    // 空结果不落共享/L1：否则一次瞬时缺件（bake 未就绪、锁冲突）会被
+                    // 固化成 fresh 负缓存，在 TTL 内持续交白卷且无自愈路径。
+                    // 仅当策略显式声明 allowEmptyResult（诚实空标记）时才允许写入。
+                    if (!$allowEmptyResult && $this->isEmptyResult($payload)) {
+                        return $payload;
+                    }
                     $entry = $this->makeEnvelope($payload, $freshTtlSeconds, $staleTtlSeconds);
                     if ($traceMeta !== null) {
                         $phaseMeta['write_fresh_until'] = $entry['fresh_until'];
@@ -432,6 +538,7 @@ final class StorefrontScopeHotCache
                         $staleTtlSeconds,
                         $builder,
                         $explicitDimensions,
+                        $allowEmptyResult,
                     );
                 }
 
@@ -451,6 +558,16 @@ final class StorefrontScopeHotCache
         );
         if ($traceMeta !== null) {
             $phaseMeta['singleflight_acquired'] = $token !== null;
+        }
+        // 未占到 single-flight 令牌时绝不能回退执行 builder：否则每次请求都会
+        // 重跑冷构建并反复写共享池（占位失败风暴下会自旋放大）。持锁者完成
+        // 后，本请求走下方 raw builder 只服务当前请求、不落缓存。
+        if ($token === null) {
+            return RequestLifecycleTrace::measurePhase(
+                'storefront.cache.builder_uncontended',
+                $builder,
+                $phaseMeta,
+            );
         }
         try {
             // Another worker may have populated the entry while this worker waited.
@@ -478,6 +595,12 @@ final class StorefrontScopeHotCache
                 $builder,
                 $phaseMeta,
             );
+            // 空结果不落共享/L1：否则一次瞬时缺件（bake 未就绪、锁冲突）会被
+            // 固化成 fresh 负缓存，在 TTL 内持续交白卷且无自愈路径。
+            // 仅当策略显式声明 allowEmptyResult（诚实空标记）时才允许写入。
+            if (!$allowEmptyResult && $this->isEmptyResult($payload)) {
+                return $payload;
+            }
             $entry = $this->makeEnvelope($payload, $freshTtlSeconds, $staleTtlSeconds);
             if ($traceMeta !== null) {
                 $phaseMeta['write_fresh_until'] = $entry['fresh_until'];
@@ -493,15 +616,21 @@ final class StorefrontScopeHotCache
             $this->storeProcessEntry($processKey, $entry);
             return $payload;
         } finally {
-            if ($token !== null) {
-                $flight->release($lockKey, $token);
-            }
+            $flight->release($lockKey, $token);
         }
     }
 
-    /** 复用已完成的命中分类和原始截止时间，不重新判定过期或读取缓存。 */
-    private function entryTraceMetadata(?array $entry, string $status, string $layer): array
+    /**
+     * A builder that returns nothing meaningful must not be persisted: negative
+     * results would otherwise pin empty renders for the whole fresh TTL.
+     */
+    private function isEmptyResult(mixed $payload): bool
     {
+        return $payload === null || (is_array($payload) && $payload === []);
+    }
+
+    /** 复用已完成的命中分类和原始截止时间，不重新判定过期或读取缓存。 */
+    private function entryTraceMetadata(?array $entry, string $status, string $layer): array    {
         $meta = [$layer . '_status' => $status === 'miss' ? 'expired' : $status];
         if ($entry !== null) {
             $meta[$layer . '_fresh_until'] = $entry['fresh_until'] ?? null;
@@ -702,6 +831,7 @@ final class StorefrontScopeHotCache
         int $staleTtlSeconds,
         callable $builder,
         bool $explicitDimensions = false,
+        bool $allowEmptyResult = false,
     ): void {
         $queueKey = $poolIdentity . ':' . $scopedKey;
         if (isset(self::$refreshQueued[$queueKey])) {
@@ -718,6 +848,7 @@ final class StorefrontScopeHotCache
             $builder,
             $queueKey,
             $explicitDimensions,
+            $allowEmptyResult,
         ): void {
             $flight = $this->singleFlight ??= new SingleFlightCoordinator();
             $lockKey = 'storefront-hot-cache:' . hash('sha256', $processKey);
@@ -737,6 +868,9 @@ final class StorefrontScopeHotCache
                     }
                 }
                 $payload = $builder();
+                if (!$allowEmptyResult && $this->isEmptyResult($payload)) {
+                    return;
+                }
                 $entry = $this->makeEnvelope($payload, $freshTtlSeconds, $staleTtlSeconds);
                 $this->writeShared($pool, $scopedKey, $entry, $freshTtlSeconds + $staleTtlSeconds, $explicitDimensions);
                 $this->storeProcessEntry($processKey, $entry);
