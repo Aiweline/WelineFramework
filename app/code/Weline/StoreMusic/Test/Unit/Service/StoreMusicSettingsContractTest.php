@@ -45,6 +45,9 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('ext="mp3,wav,ogg,oga,m4a,aac,flac,opus,wma,weba"', $template);
 
         self::assertStringContainsString('ConfigReader', $settings);
+        self::assertStringContainsString('resolveTypedConfig', $settings);
+        self::assertStringContainsString('ScopeIdentity', $settings);
+        self::assertStringContainsString('RequestContext::scopeIdentity', $settings);
         self::assertStringContainsString('isWidgetActive', $settings);
         self::assertStringContainsString('frontendPayload', $settings);
         self::assertStringContainsString('widgetConfigFromTemplate', $settings);
