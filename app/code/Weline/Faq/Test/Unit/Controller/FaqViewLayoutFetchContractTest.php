@@ -48,5 +48,8 @@ final class FaqViewLayoutFetchContractTest extends TestCase
         self::assertStringContainsString("\$meta['content']", $layout);
         self::assertStringContainsString('faq-article-panel', $layout);
         self::assertStringContainsString("Weline_Faq::templates/frontend/view.phtml", $layout);
+        // Article hero must stay Hub chrome; article title only in view.phtml h1.
+        self::assertStringContainsString('$heroTitle = $isFaqArticle ? $hubTitle : $title;', $layout);
+        self::assertStringContainsString('$escape($heroTitle)', $layout);
     }
 }
