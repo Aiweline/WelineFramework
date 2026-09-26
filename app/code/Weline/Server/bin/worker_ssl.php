@@ -11817,6 +11817,15 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     };
     
     // 静态文件扩展名列表
+    //
+    // ⚠️ 这是「快路径」清单，不是安全边界：不匹配的请求会 return null 并继续
+    // 交给框架（Router\Core::StaticFile），后者会执行完整口径
+    // Framework\Deploy\StaticPublicSurface。切勿把「传输层不接管」理解成「允许」——
+    // 那正是纯 WLS 下 PHP 源码被原样回吐的成因。
+    //
+    // 本清单必须与 Framework\Deploy\StaticPublicSurface::FAST_PATH_EXTENSIONS
+    // 完全一致（且为其 SERVABLE_EXTENSIONS 的子集），由
+    // Framework/Test/Unit/Deploy/StaticPublicSurfaceContractTest 锁定。
     static $staticExtensions = [
         'css', 'js', 'map',
         'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'ico', 'bmp',

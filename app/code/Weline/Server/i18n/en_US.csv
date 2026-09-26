@@ -1704,6 +1704,10 @@ Disabled,Disabled
 "%{1} active crawlers","%{1} active crawlers"
 Configured,Configured
 "%{1} entries","%{1} entries"
+显式配置,"Explicitly configured"
+"公网默认 80/443","Public default 80/443"
+已回退项目偏移,"Fell back to project offset"
+当前运行实例,"Currently running instance"
 Local,Local
 Path,Path
 "Runtime action skipped.","Runtime action skipped."
@@ -2424,7 +2428,8 @@ Endpoint：,Endpoint:
 "本命令可能联网下载钉死版本的 Nginx 源码/压缩包，并写入项目隔离的本地安装根。","This command may download the pinned Nginx source/archive and write it to the project-isolated local install root."
 安装失败,"Installation failed"
 二进制：%{1},"Binary: %{1}"
-"HTTP 监听：%{1}，HTTPS 监听：%{2}（offset=%{3}）","HTTP listening: %{1}, HTTPS listening: %{2} (offset=%{3})"
+"HTTP 监听：%{1}，HTTPS 监听：%{2}（来源：%{3}，offset=%{4}）","HTTP listening: %{1}, HTTPS listening: %{2} (source: %{3}, offset=%{4})"
+端口说明：%{1},"Port notes: %{1}"
 "安装本项目托管 Nginx 到项目隔离的本地安装根","Install the project-managed Nginx into its project-isolated local install root"
 "按平台下载并安装本项目独立 Nginx 实例；普通 server:start 不会静默下载","Download and install the independent Nginx instance of this project according to the platform; ordinary server:start will not download silently"
 "强制重新获取并按平台重新安装（macOS/Linux 编译，Windows 解压官方预编译包）","Reacquire and reinstall for the current platform (compile on macOS/Linux; extract the official prebuilt package on Windows)"
@@ -2440,9 +2445,11 @@ Windows,Windows
 安装,Install
 "本项目托管 Nginx 状态","This project hosts Nginx status"
 二进制,binary
+端口来源,"Port source"
 项目偏移,"Project offset"
 安装目录,"Installation directory"
 运行目录,"Run directory"
+端口说明,"Port notes"
 "查看本项目托管 Nginx 状态","Check the status of this project’s hosting Nginx"
 "查看本项目托管 Nginx 安装与运行状态","Check the installation and running status of Nginx hosted by this project"
 "JSON 输出","JSON output"
@@ -2885,6 +2892,7 @@ Previous：%{1},Previous：%{1}
 无法证明受管代次时拒绝发送任何终止信号,"Refuse to send any termination signal when the managed generation cannot be proven"
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","Retired: console:server:start no longer starts the PHP built-in web server."
 "已退役：PHP 内置 Web Server 启动入口","Retired: PHP built-in Web Server startup entry"
+"HTTP 监听：%{1}，HTTPS 监听：%{2}（offset=%{3}）","HTTP listening: %{1}, HTTPS listening: %{2} (offset=%{3})"
 强制停止：中止占用生命周期锁的同实例后台任务（purpose=%{1},pid=%{2}）。
 "已回收子进程 PID %{1} (%{2})","Recycled child process PID %{1} (%{2})"
 "Session Server stop was not confirmed; runtime identity was retained for retry/repair.","Session Server stop was not confirmed; runtime identity was retained for retry/repair."
@@ -3542,11 +3550,3 @@ Nginx-only,Nginx-only
 "检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空...","Server already running; full generation restart: enable maintenance and drain all Workers before switching..."
 滚动排水重启,"Rolling drain restart"
 强制完整重启,"Force full restart"
-端口来源,"Port source"
-端口说明,"Port notes"
-"HTTP 监听：%{1}，HTTPS 监听：%{2}（来源：%{3}，offset=%{4}）","HTTP listening: %{1}, HTTPS listening: %{2} (source: %{3}, offset=%{4})"
-"端口说明：%{1}","Port notes: %{1}"
-显式配置,"Explicitly configured"
-公网默认 80/443,"Public default 80/443"
-已回退项目偏移,"Fell back to project offset"
-当前运行实例,"Currently running instance"
