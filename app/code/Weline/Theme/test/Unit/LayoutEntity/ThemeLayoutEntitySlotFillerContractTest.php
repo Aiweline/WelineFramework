@@ -34,9 +34,20 @@ final class ThemeLayoutEntitySlotFillerContractTest extends TestCase
         self::assertStringContainsString('header-nav-extensions', $src);
         self::assertStringContainsString('theme_layout_entity_chrome_soft_skip', $src);
         self::assertStringContainsString('function fillNestedChromeExtensionSlots', $src);
+        self::assertStringContainsString('function fillBlankNestedChromeExtensions', $src);
         self::assertStringContainsString('scopeFallbackChain', $src);
         self::assertStringContainsString('isBlankChromeInner', $src);
         self::assertStringContainsString('isEffectivelyBlankSlotInner', $src);
+        // Bake finalize must fill blank footer-extras from chrome payload (coupon/留言).
+        $finalizePos = \strpos($src, 'function finalizePublishedChromeRenderedHtml');
+        self::assertNotFalse($finalizePos);
+        $finalizeBody = \substr($src, $finalizePos, 4500);
+        self::assertStringContainsString('fillNestedChromeExtensionSlots', $finalizeBody);
+        // Bound chrome must not skip nested blank fill (mini-cart footer-extras).
+        self::assertStringNotContainsString(
+            "rendered_chrome_binding');\n        if (\$boundChrome instanceof EntityRenderBinding",
+            $src,
+        );
         self::assertStringContainsString('chromeByScope', $src);
         // Storefront must read workspace published_release_id (never hardcode null).
         self::assertStringContainsString('schema_fields_PUBLISHED_RELEASE_ID', $src);
