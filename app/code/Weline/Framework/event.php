@@ -678,6 +678,11 @@ return [
         'name' => __('静态资源发布变换'),
         'description' => __('deploy:upgrade 写入 pub/static 目标文件前触发。中立字段：source_path、target_path、extension、content（可写）、transformed。核心不包含 minify 语义。'),
     ],
+    'Weline_Framework_Deploy::upgrade_after' => [
+        'name' => __('静态资源升级后'),
+        'description' => __('deploy:upgrade 双树铺平与 FPC bump（若未 skip）完成后触发。观察者可清主题布局固化物等派生缓存；核心不硬绑 Theme。'),
+        'doc' => 'deploy/静态资源升级后.md',
+    ],
     'Framework_Http::response_redirect_before' => [
         'name' => __('响应重定向前'),
         'description' => __('在HTTP响应重定向前触发，允许其他模块修改重定向URL。'),

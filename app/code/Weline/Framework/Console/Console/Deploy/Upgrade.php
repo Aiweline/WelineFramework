@@ -153,6 +153,16 @@ class Upgrade extends CommandAbstract
                 $this->printer->note(__('已 bump global/storefront/deploy（日常 Upgrade 优先 bump）'));
             }
         }
+
+        // Theme 等模块可在此清布局固化物（theme-layout-entities）；核心不硬绑 Theme。
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $eventsManager->dispatch('Weline_Framework_Deploy::upgrade_after', [
+            'tree_changed' => $this->treeChanged,
+            'skip_invalidation' => $skipInvalidation,
+            'args' => $args,
+            'data' => $data,
+        ]);
     }
 
     /**

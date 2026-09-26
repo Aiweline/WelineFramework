@@ -90,7 +90,7 @@ php bin/w deploy:build
 | `setup:upgrade`（!DEV） | 是（`SetupUpgradeAfterDeployStatic`） |
 | `deploy:upgrade` | 是（直接） |
 | `deploy:release` / Orchestrator | **是**：空 `POST_DEPLOY` 默认 `php bin/w setup:upgrade`；白名单亦允许 `deploy:upgrade` |
-| `core:update` | **否** — 完成后须再跑 `setup:upgrade` 或 `deploy:upgrade` |
+| `core:update` | **否**（静态铺平）— 须再跑 `setup:upgrade` 或 `deploy:upgrade`；**会**派发 `core_update_after`（Theme 可清布局固化物） |
 
 发布成功后 `release_after` 经 `DeployFpcInvalidation` bump `global/storefront/deploy`（禁 Observer 内拷贝静态）。
 
