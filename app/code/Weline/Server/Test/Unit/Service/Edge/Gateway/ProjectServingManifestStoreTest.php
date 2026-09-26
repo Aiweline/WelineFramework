@@ -1254,14 +1254,16 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertStringContainsString('$instanceName,', $source);
         self::assertStringContainsString('assertNativeReloadReceipt(', $source);
         self::assertStringNotContainsString('->reloadSslCert($domains);', $source);
-        $legacyStart = \strpos($source, 'if ($explicitLegacy)');
-        $legacyEnd = \strpos($source, '$rawMasterPid =', (int)$legacyStart);
-        self::assertIsInt($legacyStart);
-        self::assertIsInt($legacyEnd);
-        $legacyBlock = \substr($source, $legacyStart, $legacyEnd - $legacyStart);
-        self::assertStringContainsString('validateRunningLease(', $legacyBlock);
-        self::assertStringContainsString("['authorized']", $legacyBlock);
-        self::assertStringContainsString('continue;', $legacyBlock);
+        // 托管 Nginx 边缘分支的判据变量在 auto 第三出口接入后更名为
+        // $managedNginxEdge（它同时覆盖 auto→legacy，不再只覆盖显式 legacy）。
+        $managedStart = \strpos($source, 'if ($managedNginxEdge)');
+        $managedEnd = \strpos($source, '$rawMasterPid =', (int)$managedStart);
+        self::assertIsInt($managedStart);
+        self::assertIsInt($managedEnd);
+        $managedBlock = \substr($source, $managedStart, $managedEnd - $managedStart);
+        self::assertStringContainsString('validateRunningLease(', $managedBlock);
+        self::assertStringContainsString("['authorized']", $managedBlock);
+        self::assertStringContainsString('continue;', $managedBlock);
     }
 
     public function testFallbackManifestStaticContractPersistsGatewayRenewalIntent(): void

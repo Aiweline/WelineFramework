@@ -47,8 +47,11 @@ final class EdgeRuntimeDecision
             throw new \InvalidArgumentException('WLS edge decision contains an invalid mode.');
         }
         $allowedResolvedModes = match ($requestedMode) {
+            // auto 可以落到三个出口：命中宿主 Gateway、自建项目托管 Nginx、
+            // 或两者都不成立时回退纯 WLS。
             GatewayStartupDecision::MODE_AUTO => [
                 GatewayStartupDecision::MODE_GATEWAY,
+                GatewayStartupDecision::MODE_LEGACY,
                 GatewayStartupDecision::MODE_WLS,
             ],
             GatewayStartupDecision::MODE_GATEWAY => [
