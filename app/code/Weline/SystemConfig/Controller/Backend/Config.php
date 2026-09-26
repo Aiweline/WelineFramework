@@ -309,6 +309,25 @@ class Config extends BackendController
                             $status = (string)($result['status'] ?? '');
                             if ($status === 'conflict') {
                                 $this->getMessageManager()->addError(__('版本冲突，请刷新后重试。'));
+                            } elseif ($status === 'validation_failed') {
+                                $errorMap = is_array($result['errors'] ?? null) ? $result['errors'] : [];
+                                $detailParts = [];
+                                foreach ($errorMap as $fieldKey => $fieldError) {
+                                    $fieldKey = trim((string)$fieldKey);
+                                    $fieldError = trim((string)$fieldError);
+                                    if ($fieldKey === '' || $fieldError === '') {
+                                        continue;
+                                    }
+                                    $detailParts[] = $fieldKey . '：' . $fieldError;
+                                }
+                                $detail = $detailParts !== []
+                                    ? implode('；', array_slice($detailParts, 0, 5))
+                                    : '';
+                                $message = (string)($result['message'] ?? __('配置校验失败，当前配置未改变。'));
+                                if ($detail !== '') {
+                                    $message .= ' ' . $detail;
+                                }
+                                $this->getMessageManager()->addError($message);
                             } else {
                                 $this->getMessageManager()->addError((string)($result['message'] ?? __('配置保存失败，当前配置未改变。')));
                             }

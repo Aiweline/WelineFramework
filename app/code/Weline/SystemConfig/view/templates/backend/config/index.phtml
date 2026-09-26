@@ -1843,7 +1843,12 @@ $flashToastFn = match ($flashTone) {
                                                 }
                                             }
                                             ?>
-                                            <div class="w-system-config__form-actions w-system-config__form-actions--dock" data-w-system-config-save-dock="1" style="--w-mt:var(--weline-space-4);">
+                                            <?php
+                                            // 首个保存条默认激活，避免 JS 就绪前多条 fixed 条叠在底部；后续由 JS 按焦点/可视模板切换。
+                                            $saveDockIsActive = empty($GLOBALS['wsc_save_dock_activated']);
+                                            $GLOBALS['wsc_save_dock_activated'] = true;
+                                            ?>
+                                            <div class="w-system-config__form-actions w-system-config__form-actions--dock<?= $saveDockIsActive ? ' is-active' : '' ?>" data-w-system-config-save-dock="1" style="--w-mt:var(--weline-space-4);">
                                                 <div class="w-system-config__form-actions-main">
                                                     <div class="w-field">
                                                         <div class="w-field__control">
