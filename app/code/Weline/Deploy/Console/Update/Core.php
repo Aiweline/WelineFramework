@@ -17,6 +17,7 @@ use Weline\Deploy\Service\DeployConfigService;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 
@@ -221,7 +222,7 @@ class Core extends CommandAbstract
         $this->printer->success('═══════════════════════════════════════════════════════════════');
         $this->printer->note('');
         $this->printer->warning(__(
-            '提醒：core:update 不算生产静态发布完成。请再执行 php bin/w setup:upgrade（或 deploy:upgrade）以达 Deploy\\Upgrade 双树铺平与 FPC deploy 世代。'
+            '提醒：core:update 已派发 core_update_after（Theme 可清布局固化物）；仍不算静态发布完成。请再执行 php bin/w setup:upgrade（或 deploy:upgrade）以达 Deploy\\Upgrade 双树铺平与 FPC deploy 世代。'
         ));
         $this->printer->note('');
         
@@ -235,6 +236,19 @@ class Core extends CommandAbstract
 
         // 最后打印本次落到的最新 commit 详情，便于确认更新到哪一版
         $this->printLatestSyncedCommitDetails($tmpDir);
+
+        // Theme 等可在此清布局固化物；核心同步后旧 shell/layout 不得继续直读。
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $eventsManager->dispatch('Weline_Deploy::core_update_after', [
+            'branch' => $branch,
+            'force' => $this->forceUpdate,
+            'tmp_dir' => $tmpDir,
+            'new_files' => $this->newFiles,
+            'updated_files' => $this->updatedFiles,
+            'deleted_files' => $this->deletedFiles,
+            'args' => $args,
+        ]);
     }
 
     /**

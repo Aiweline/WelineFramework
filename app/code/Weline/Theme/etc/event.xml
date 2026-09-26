@@ -187,6 +187,24 @@
                   sort="300"/>
     </event>
 
+    <!-- deploy:upgrade 静态铺平后：同语义清布局固化物（与 setup:upgrade 共享 Observer + runOnce） -->
+    <event name="Weline_Framework_Deploy::upgrade_after">
+        <observer name="Weline_Theme::deploy_upgrade_purge_layout_entities"
+                  instance="Weline\Theme\Observer\SetupUpgradeAfterPurgeLayoutEntities"
+                  disabled="false"
+                  shared="true"
+                  sort="300"/>
+    </event>
+
+    <!-- core:update 核心同步后：同语义清布局固化物（代码已换仍可能直读旧壳） -->
+    <event name="Weline_Deploy::core_update_after">
+        <observer name="Weline_Theme::core_update_purge_layout_entities"
+                  instance="Weline\Theme\Observer\SetupUpgradeAfterPurgeLayoutEntities"
+                  disabled="false"
+                  shared="true"
+                  sort="300"/>
+    </event>
+
     <event name="Weline_Widget::widget_install_after">
         <observer name="Weline_Theme::apply_widget_default_injections"
                   instance="Weline\Theme\Observer\ApplyWidgetDefaultInjections"
@@ -253,5 +271,18 @@
     </event>
 
     <!-- Layout→storefront path via module_name + getModuleInfo router (after slug samples). -->
+
+    <!--
+        theme_scope_workspace 新增列 binding_identity_key 的唯一索引：必须在 ADD_COLUMN 之后、
+        ADD_INDEX 之前回填存量空值，否则重复空值会导致建唯一索引失败。
+        sort=500 保证在 ModuleManager 的表名冲突检查（sort=0）之后执行。
+    -->
+    <event name="Weline_Framework_Schema::table_ddl_before">
+        <observer name="Weline_Theme::scoped_workspace_binding_key_ddl_before"
+                  instance="Weline\Theme\Observer\ScopedWorkspaceBindingKeyDdlBefore"
+                  disabled="false"
+                  shared="true"
+                  sort="500"/>
+    </event>
 
 </config>
