@@ -797,18 +797,79 @@ class SystemConfigCenterService
         $validation = $this->parseList((string)($field['validation'] ?? ''));
         $required = in_array('required', $validation, true)
             || in_array((string)($field['required'] ?? ''), ['1', 'true', 'required'], true);
-        if ($required && (is_string($value) ? trim($value) === '' : $value === null)) {
+        $candidates = $this->validationCandidateValues($value, $field);
+        if ($required && $candidates === []) {
             return (string)__('此字段不能为空。');
         }
 
         if (in_array('in_options', $validation, true)) {
             $options = $this->parseLiteralOptions((string)($field['options'] ?? ''));
-            if ($options !== [] && !array_key_exists((string)$value, $options)) {
-                return (string)__('字段值不在允许选项内。');
+            if ($options !== []) {
+                foreach ($candidates as $candidate) {
+                    if (!array_key_exists($candidate, $options)) {
+                        return (string)__('字段值不在允许选项内。');
+                    }
+                }
             }
         }
 
         return '';
+    }
+
+    /**
+     * Flatten scalar / CSV / multiselect / json-list values for required + in_options checks.
+     * Multiselect posts as array (or JSON list); casting the whole array to string becomes "Array"
+     * and falsely fails in_options — validate each item instead.
+     *
+     * @return list<string>
+     */
+    private function validationCandidateValues(mixed $value, array $field): array
+    {
+        if ($value === null) {
+            return [];
+        }
+
+        $fieldType = strtolower((string)($field['type'] ?? 'text'));
+        $isMulti = in_array($fieldType, ['multiselect', 'select_multi', 'tags'], true);
+
+        if (is_array($value)) {
+            $items = [];
+            foreach ($value as $item) {
+                if (is_array($item)) {
+                    continue;
+                }
+                $token = trim((string)$item);
+                if ($token !== '') {
+                    $items[] = $token;
+                }
+            }
+
+            return array_values(array_unique($items));
+        }
+
+        if (!is_scalar($value)) {
+            return [];
+        }
+
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return [];
+        }
+
+        if ($isMulti || str_contains($raw, ',')) {
+            $parts = preg_split('/[\s,;]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $items = [];
+            foreach ($parts as $part) {
+                $token = trim((string)$part);
+                if ($token !== '') {
+                    $items[] = $token;
+                }
+            }
+
+            return array_values(array_unique($items));
+        }
+
+        return [$raw];
     }
 
     private function fieldValueType(array $field): string
