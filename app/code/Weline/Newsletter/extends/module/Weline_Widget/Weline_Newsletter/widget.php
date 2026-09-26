@@ -35,6 +35,8 @@ return [
             'config' => [
                 'title' => '订阅我们的邮件',
                 'description' => '获取最新的优惠信息和新品资讯',
+                'placeholder' => '请输入您的邮箱地址',
+                'button_text' => '订阅',
                 'layout' => 'horizontal',
                 'enable_popup' => true,
                 'popup_trigger' => 'deferred',
