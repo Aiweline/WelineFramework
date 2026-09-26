@@ -90,25 +90,79 @@
     } catch (e) {}
   }
 
-  function openProviderWindow(url) {
-    var href = text(url);
-    if (!href) {
-      return false;
-    }
+  /**
+   * Open the PayPal/express window synchronously on the user click.
+   * Browsers block window.open after await (add-to-cart / startExpressCheckout),
+   * so the blank shell must be created before any async work.
+   */
+  function openBlankProviderWindow() {
     var popup = null;
     try {
-      popup = global.open(href, 'weline_express_pay', 'width=520,height=720,scrollbars=yes,resizable=yes');
+      popup = global.open(
+        'about:blank',
+        'weline_express_pay',
+        'width=520,height=720,scrollbars=yes,resizable=yes'
+      );
     } catch (e) {
       popup = null;
     }
     if (!popup || popup.closed) {
-      global.location.assign(href);
-      return false;
+      return null;
     }
     try {
-      popup.focus();
+      popup.document.open();
+      popup.document.write(
+        '<!doctype html><html><head><meta charset="utf-8">'
+        + '<title>PayPal</title>'
+        + '<style>html,body{margin:0;height:100%;font:15px/1.45 system-ui,sans-serif;'
+        + 'background:#f7f7f7;color:#111}'
+        + '.wrap{min-height:100%;display:flex;align-items:center;justify-content:center;'
+        + 'padding:24px;text-align:center}'
+        + '.card{max-width:280px}'
+        + '.spin{width:28px;height:28px;margin:0 auto 12px;border:2px solid #ccc;'
+        + 'border-top-color:#003087;border-radius:50%;animation:s .8s linear infinite}'
+        + '@keyframes s{to{transform:rotate(360deg)}}</style></head><body>'
+        + '<div class="wrap"><div class="card"><div class="spin" aria-hidden="true"></div>'
+        + '<p>Connecting to PayPal…</p></div></div></body></html>'
+      );
+      popup.document.close();
     } catch (e2) {}
-    return true;
+    try {
+      popup.focus();
+    } catch (e3) {}
+    return popup;
+  }
+
+  function closeProviderWindow(popup) {
+    if (!popup) {
+      return;
+    }
+    try {
+      if (!popup.closed) {
+        popup.close();
+      }
+    } catch (e) {}
+  }
+
+  function navigateProviderWindow(popup, url) {
+    var href = text(url);
+    if (!href) {
+      return false;
+    }
+    if (popup && !popup.closed) {
+      try {
+        popup.location.href = href;
+        try {
+          popup.focus();
+        } catch (eFocus) {}
+        return true;
+      } catch (eNav) {
+        closeProviderWindow(popup);
+      }
+    }
+    // Popup blocked or navigable: fall back to same-tab redirect.
+    global.location.assign(href);
+    return false;
   }
 
   function notifyCartUpdated(result) {
@@ -161,7 +215,7 @@
     } catch (e) {}
   }
 
-  async function startExpressFromSection(section, button) {
+  async function startExpressFromSection(section, button, popup) {
     var methodCode = text(button.getAttribute('data-method-code')
       || section.getAttribute('data-method-code')
       || 'paypal') || 'paypal';
@@ -195,35 +249,32 @@
     if (!global.Weline || !global.Weline.Api || typeof global.Weline.Api.resource !== 'function') {
       throw new Error('api_missing');
     }
+    if (!offerUuid) {
+      throw new Error(text(section.getAttribute('data-offer-missing-message'))
+        || '快捷支付缺少商品信息');
+    }
 
     var guestToken = await ensureGuestToken();
-    var cartApi = await global.Weline.Api.resource('cart');
     var qtySelect = qs(detailRoot(section), '[data-testid="product-qty"]');
     var qty = qtySelect
       ? Math.max(1, Number(qtySelect.value || 1) || 1)
       : Math.max(1, Number((buyNow && buyNow.dataset.qty) || 1) || 1);
 
-    var addResult = await cartApi.add({
-      provider_code: (buyNow && buyNow.dataset.providerCode) || 'product',
-      global_offer_uuid: offerUuid,
-      legacy_product_id: productId,
-      selection: readEavSelection(section),
-      guest_token: guestToken,
-      qty: qty,
-      selling_mode: cartType,
-      cart_type: cartType,
-    }, { silent: true });
-    if (!addResult || addResult.success === false) {
-      throw new Error((addResult && addResult.message) || 'add_failed');
-    }
-    notifyCartUpdated(addResult);
-
+    // PDP 快捷支付只结当前商品：服务端 buy_now 隔离浏览车，禁止先加购再结整车。
     var checkoutApi = await global.Weline.Api.resource('checkout');
     var started = await checkoutApi.startExpressCheckout({
       payment_method: methodCode,
       guest_token: guestToken,
       cart_type: cartType,
       selling_mode: cartType,
+      buy_now: true,
+      product_express: true,
+      provider_code: (buyNow && buyNow.dataset.providerCode) || 'product',
+      global_offer_uuid: offerUuid,
+      legacy_product_id: productId,
+      product_id: productId,
+      selection: readEavSelection(section),
+      qty: qty,
     }, { silent: true });
     if (!started || started.success === false) {
       throw new Error((started && started.message) || 'express_start_failed');
@@ -238,6 +289,8 @@
     if (!redirectUrl) {
       throw new Error((started && started.message) || 'express_redirect_missing');
     }
+    // buy_now 服务端已还原浏览车；通知迷你车刷新。
+    notifyCartUpdated(started);
     trackPixel('express_pay_started', {
       payment_method: methodCode,
       payment_type: methodCode,
@@ -248,7 +301,7 @@
       transaction_no: text(data.transaction_no || ''),
       transaction_id: text(data.transaction_no || ''),
     }, button);
-    openProviderWindow(redirectUrl);
+    navigateProviderWindow(popup, redirectUrl);
     return started;
   }
 
@@ -266,9 +319,14 @@
       }
       event.preventDefault();
       event.stopPropagation();
+      // Must open the blank popup in the same synchronous turn as the click.
+      // Async add-to-cart / startExpressCheckout lose the user-gesture token
+      // and browsers then block window.open (no PayPal express popup).
+      var popup = openBlankProviderWindow();
       // stopPropagation 会挡住声明式像素点击；起点/拉起在 startExpressFromSection 内 track
       setBusy(button, true);
-      startExpressFromSection(section, button).catch(function (error) {
+      startExpressFromSection(section, button, popup).catch(function (error) {
+        closeProviderWindow(popup);
         var message = text(error && error.message) || 'express_failed';
         try {
           if (global.console && typeof global.console.warn === 'function') {

@@ -40,6 +40,15 @@ final class ExpressReviewPageContractTest extends TestCase
         self::assertStringContainsString("'confirmExpressCheckout'", $src);
         self::assertStringContainsString("'cancelExpressCheckout'", $src);
         self::assertStringContainsString('ExpressCheckoutFlowService', $src);
+        // refreshReview 会带顶层 contact_phone/email；未声明则 Unknown frontend worker param
+        self::assertMatchesRegularExpression(
+            "/'name' => 'getExpressReview'[\s\S]*?'contact_phone' => \['type' => 'string'/",
+            $src,
+        );
+        self::assertMatchesRegularExpression(
+            "/'name' => 'getExpressReview'[\s\S]*?'email' => \['type' => 'string'/",
+            $src,
+        );
     }
 
     public function testSinkDoesNotInventFakePhone(): void
@@ -60,9 +69,24 @@ final class ExpressReviewPageContractTest extends TestCase
         self::assertStringContainsString('shipping_address', $js);
         self::assertStringContainsString('collectShippingAddress', $js);
         self::assertStringContainsString('method.title || method.label || method.service_name', $js);
+        self::assertStringContainsString('trackReviewEnter', $js);
+        self::assertStringContainsString("trackPixel('begin_checkout'", $js);
+        self::assertStringContainsString('express_review_enter', $js);
+        // 支付方式徽章禁止硬编码中文（非中文 locale 漏译）
+        self::assertStringContainsString("translatePhrase('支付方式')", $js);
+        self::assertStringNotContainsString("methodLabel = '支付方式：'", $js);
         self::assertStringContainsString('data-express-shipping-list', (string) file_get_contents(
             dirname(__DIR__, 3) . '/view/frontend/checkout/express-review.phtml'
         ));
+    }
+
+    public function testExpressReviewDtoExposesPixelItems(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/ExpressCheckoutFlowService.php');
+        self::assertStringContainsString('orderItemsToPixelItems', $src);
+        self::assertStringContainsString("'items' => \$pixelItems", $src);
+        self::assertStringContainsString("'item_id'", $src);
+        self::assertStringContainsString("'item_name'", $src);
     }
 
     public function testExpressFlowMapsShippingLabelNotRawCodeOnly(): void

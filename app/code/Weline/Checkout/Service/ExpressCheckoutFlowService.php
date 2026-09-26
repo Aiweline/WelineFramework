@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Checkout\Service;
 
+use Weline\Cart\Service\CartCurrentCustomerResolver;
+use Weline\Cart\Service\CartScopeResolver;
 use Weline\Cart\Service\CartService;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Order\Model\Order;
 use Weline\Order\Service\OrderService;
@@ -65,6 +68,51 @@ final class ExpressCheckoutFlowService
             $guestToken = trim((string) Cookie::get(CartService::GUEST_TOKEN_COOKIE));
         }
 
+        // PDP 快捷支付：只结当前商品，禁止把浏览车其它行带进 PayPal。
+        $buyNowActive = false;
+        $priorLines = [];
+        if ($this->wantsBuyNowIsolation($params)) {
+            $prepared = $this->isolateBuyNowCart($params, $guestToken, $cartType);
+            if (empty($prepared['success'])) {
+                return $prepared;
+            }
+            $buyNowActive = true;
+            $priorLines = is_array($prepared['prior_lines'] ?? null) ? $prepared['prior_lines'] : [];
+            $guestToken = trim((string) ($prepared['guest_token'] ?? $guestToken));
+        }
+
+        try {
+            return $this->startAfterCartReady(
+                $params,
+                $guestToken,
+                $cartType,
+                $paymentMethod,
+                $freezeQuote,
+                $submitV2,
+                $getData,
+                $buyNowActive,
+            );
+        } finally {
+            if ($buyNowActive) {
+                $this->restorePriorCartLines($priorLines, $guestToken, $cartType, $params);
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function startAfterCartReady(
+        array $params,
+        string $guestToken,
+        string $cartType,
+        string $paymentMethod,
+        callable $freezeQuote,
+        callable $submitV2,
+        callable $getData,
+        bool $buyNowActive = false,
+    ): array {
         $data = $getData([
             'guest_token' => $guestToken,
             'cart_type' => $cartType,
@@ -88,11 +136,19 @@ final class ExpressCheckoutFlowService
         $requiresShipping = $this->itemsRequireShipping($items);
 
         $address = is_array($params['address'] ?? null) ? $params['address'] : [];
-        if ($address === [] && is_array($data['default_shipping_address'] ?? null)) {
-            $address = $data['default_shipping_address'];
-        }
-        if ($address === [] && is_array($data['delivery']['checkout_address'] ?? null)) {
-            $address = $data['delivery']['checkout_address'];
+        // PDP buy_now：禁止把会话/默认仅国家（常为 CN）写进 PayPal 建单金额。
+        // 真实地址由支付商带回后 patch；否则页上 $101 会变成商品+国内运费的 $223。
+        if ($buyNowActive) {
+            if (!$this->isConcreteShippingAddress($address)) {
+                $address = [];
+            }
+        } else {
+            if ($address === [] && is_array($data['default_shipping_address'] ?? null)) {
+                $address = $data['default_shipping_address'];
+            }
+            if ($address === [] && is_array($data['delivery']['checkout_address'] ?? null)) {
+                $address = $data['delivery']['checkout_address'];
+            }
         }
         /** @var CheckoutShippingAddressResolver $addressResolver */
         $addressResolver = $this->om()->getInstance(CheckoutShippingAddressResolver::class);
@@ -100,10 +156,16 @@ final class ExpressCheckoutFlowService
             'shipping_address' => $address,
             'address' => $address,
         ]);
+        if ($buyNowActive && !$this->isConcreteShippingAddress($address)) {
+            $address = [];
+        }
         // 快捷智能支付设计：地址由支付商带回、回跳 review 后智能补齐。
         // guest / 无真实国家时禁止盲目 CN 兜底报价——那会把国际客人堵死在入口
         // （express_no_shipping），而不是让其进入 PayPal 授权带回地址。
         $trustedCountry = strtoupper(trim((string) ($address['country_code'] ?? '')));
+        if ($buyNowActive && !$this->isConcreteShippingAddress($address)) {
+            $trustedCountry = '';
+        }
 
         $serviceCode = '';
         if ($requiresShipping && $trustedCountry !== '') {
@@ -223,6 +285,238 @@ final class ExpressCheckoutFlowService
     }
 
     /**
+     * PDP buy_now：仅当姓名+街道+国家齐全才视为可报价地址（排除仅 country=CN 的会话默认）。
+     *
+     * @param array<string, mixed> $address
+     */
+    private function isConcreteShippingAddress(array $address): bool
+    {
+        $name = trim((string) ($address['contact_name'] ?? $address['name'] ?? ''));
+        $line = trim((string) ($address['address1'] ?? $address['street'] ?? ''));
+        $country = strtoupper(trim((string) ($address['country_code'] ?? $address['country'] ?? '')));
+
+        return $name !== '' && $line !== '' && $country !== '';
+    }
+
+    /**
+     * PDP product-express: checkout only the requested line (not the browse cart).
+     *
+     * @param array<string, mixed> $params
+     */
+    private function wantsBuyNowIsolation(array $params): bool
+    {
+        foreach (['buy_now', 'product_express', 'product_express_buy_now'] as $key) {
+            if (!array_key_exists($key, $params)) {
+                continue;
+            }
+            $raw = $params[$key];
+            if ($raw === true || $raw === 1 || $raw === '1' || $raw === 'true') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Snapshot browse cart → clear → add only the PDP line.
+     * Caller must restore prior lines in finally (submit also clears cart).
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function isolateBuyNowCart(array $params, string $guestToken, string $cartType): array
+    {
+        $product = $this->resolveBuyNowProductParams($params);
+        $offerUuid = trim((string) ($product['global_offer_uuid'] ?? ''));
+        $legacyId = (int) ($product['legacy_product_id'] ?? $product['product_id'] ?? 0);
+        // OfferIdentity 要求 global_offer_uuid；PDP 快捷支付必须带上 offer。
+        if ($offerUuid === '') {
+            return [
+                'success' => false,
+                'message' => (string) __('快捷支付缺少商品信息'),
+                'error_code' => 'express_buy_now_product_required',
+            ];
+        }
+
+        /** @var CartService $cart */
+        $cart = $this->om()->getInstance(CartService::class);
+        $scope = $this->resolveCartScope($params);
+        $customerId = $this->resolveCartCustomerId();
+        if ($customerId === null && $guestToken === '') {
+            return [
+                'success' => false,
+                'message' => (string) __('游客会话缺失，请刷新后重试'),
+                'error_code' => 'express_guest_token_required',
+            ];
+        }
+
+        $prior = $cart->getCart($scope, $guestToken !== '' ? $guestToken : null, $customerId, $cartType);
+        $priorLines = [];
+        foreach (is_array($prior['items'] ?? null) ? $prior['items'] : [] as $line) {
+            if (is_array($line)) {
+                $priorLines[] = $line;
+            }
+        }
+
+        $cart->clearCart($scope, $guestToken !== '' ? $guestToken : null, $customerId, $cartType);
+
+        $addParams = [
+            'provider_code' => trim((string) ($product['provider_code'] ?? 'product')) ?: 'product',
+            'global_offer_uuid' => $offerUuid,
+            'legacy_product_id' => max(0, $legacyId),
+            'selection' => is_array($product['selection'] ?? null) ? $product['selection'] : [],
+            'qty' => max(1, min(999, (int) ($product['qty'] ?? 1))),
+            'cart_type' => $cartType,
+            'selling_mode' => $cartType,
+        ];
+        if (isset($product['selection_schema_version'])) {
+            $addParams['selection_schema_version'] = trim((string) $product['selection_schema_version']);
+        }
+        if ($customerId !== null) {
+            $addParams['customer_id'] = $customerId;
+        } else {
+            $addParams['guest_token'] = $guestToken;
+        }
+
+        try {
+            $added = $cart->addFromParams($addParams);
+        } catch (\Throwable $e) {
+            $this->restorePriorCartLines($priorLines, $guestToken, $cartType, $params);
+            return [
+                'success' => false,
+                'message' => (string) ($e->getMessage() !== '' ? $e->getMessage() : __('无法加入当前商品')),
+                'error_code' => 'express_buy_now_add_failed',
+            ];
+        }
+        if (($added['success'] ?? true) === false || !empty($added['error_code'])) {
+            $this->restorePriorCartLines($priorLines, $guestToken, $cartType, $params);
+            return [
+                'success' => false,
+                'message' => (string) ($added['message'] ?? __('无法加入当前商品')),
+                'error_code' => (string) ($added['error_code'] ?? 'express_buy_now_add_failed'),
+            ];
+        }
+
+        return [
+            'success' => true,
+            'prior_lines' => $priorLines,
+            'guest_token' => $guestToken,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function resolveBuyNowProductParams(array $params): array
+    {
+        $nested = is_array($params['product'] ?? null) ? $params['product'] : [];
+        $flat = [
+            'provider_code' => $params['provider_code'] ?? null,
+            'global_offer_uuid' => $params['global_offer_uuid'] ?? $params['offer_uuid'] ?? null,
+            'legacy_product_id' => $params['legacy_product_id'] ?? $params['product_id'] ?? null,
+            'product_id' => $params['product_id'] ?? null,
+            'selection' => $params['selection'] ?? $params['selected_options'] ?? null,
+            'qty' => $params['qty'] ?? null,
+            'selection_schema_version' => $params['selection_schema_version'] ?? null,
+        ];
+        $out = [];
+        foreach (['provider_code', 'global_offer_uuid', 'legacy_product_id', 'product_id', 'selection', 'qty', 'selection_schema_version'] as $key) {
+            if (array_key_exists($key, $nested) && $nested[$key] !== null && $nested[$key] !== '') {
+                $out[$key] = $nested[$key];
+            } elseif (array_key_exists($key, $flat) && $flat[$key] !== null && $flat[$key] !== '') {
+                $out[$key] = $flat[$key];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $priorLines
+     * @param array<string, mixed> $params
+     */
+    private function restorePriorCartLines(
+        array $priorLines,
+        string $guestToken,
+        string $cartType,
+        array $params,
+    ): void {
+        try {
+            /** @var CartService $cart */
+            $cart = $this->om()->getInstance(CartService::class);
+            $scope = $this->resolveCartScope($params);
+            $customerId = $this->resolveCartCustomerId();
+            if ($customerId === null && $guestToken === '') {
+                return;
+            }
+            // Drop buy-now residue (or empty post-submit cart) before restoring browse lines.
+            $cart->clearCart($scope, $guestToken !== '' ? $guestToken : null, $customerId, $cartType);
+            foreach ($priorLines as $line) {
+                if (!is_array($line)) {
+                    continue;
+                }
+                $offer = is_array($line['offer'] ?? null) ? $line['offer'] : [];
+                $addParams = [
+                    'provider_code' => trim((string) ($offer['provider_code'] ?? 'product')) ?: 'product',
+                    'global_offer_uuid' => trim((string) ($offer['global_offer_uuid'] ?? $offer['offer_uuid'] ?? '')),
+                    'legacy_product_id' => (int) ($offer['legacy_product_id'] ?? $line['product_id'] ?? $line['offer_id'] ?? 0),
+                    'selection' => is_array($line['selection'] ?? null) ? $line['selection'] : [],
+                    'qty' => max(1, min(999, (int) ($line['qty'] ?? 1))),
+                    'cart_type' => $cartType,
+                    'selling_mode' => $cartType,
+                ];
+                if ($addParams['global_offer_uuid'] === '') {
+                    continue;
+                }
+                if (isset($offer['selection_schema_version'])) {
+                    $addParams['selection_schema_version'] = trim((string) $offer['selection_schema_version']);
+                }
+                if ($customerId !== null) {
+                    $addParams['customer_id'] = $customerId;
+                } else {
+                    $addParams['guest_token'] = $guestToken;
+                }
+                $cart->addFromParams($addParams);
+            }
+        } catch (\Throwable) {
+            // Best-effort: express order already created; browse-cart restore must not fail start.
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function resolveCartScope(array $params): ScopeIdentity
+    {
+        try {
+            /** @var CartScopeResolver $resolver */
+            $resolver = $this->om()->getInstance(CartScopeResolver::class);
+            if ($resolver instanceof CartScopeResolver) {
+                return $resolver->fromParams($params);
+            }
+        } catch (\Throwable) {
+        }
+
+        return ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL);
+    }
+
+    private function resolveCartCustomerId(): ?int
+    {
+        try {
+            /** @var CartCurrentCustomerResolver $resolver */
+            $resolver = $this->om()->getInstance(CartCurrentCustomerResolver::class);
+            if ($resolver instanceof CartCurrentCustomerResolver) {
+                return $resolver->currentCustomerId();
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    /**
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
@@ -262,6 +556,13 @@ final class ExpressCheckoutFlowService
         if ($selectedAddress !== []) {
             $address = array_replace($address, $selectedAddress);
         }
+        // 与 confirm 一致：允许顶层 contact_phone/email 补缺（即使已有 shipping_address）
+        $gaps = [
+            'contact_phone' => trim((string) ($params['contact_phone'] ?? $params['phone'] ?? '')),
+            'phone' => trim((string) ($params['contact_phone'] ?? $params['phone'] ?? '')),
+            'email' => trim((string) ($params['email'] ?? '')),
+        ];
+        $address = array_replace($address, array_filter($gaps, static fn ($v) => $v !== ''));
         /** @var CheckoutShippingAddressResolver $addressResolver */
         $addressResolver = $this->om()->getInstance(CheckoutShippingAddressResolver::class);
         $address = $addressResolver->resolve($address, $params + [
@@ -373,6 +674,8 @@ final class ExpressCheckoutFlowService
             ? ((string) __('支付方式') . '：' . $methodCode)
             : (string) __('快捷支付');
 
+        $pixelItems = $this->orderItemsToPixelItems(is_array($items) ? $items : []);
+
         return [
             'success' => true,
             'message' => (string) __('尚未扣款，确认后向支付商收款'),
@@ -392,6 +695,7 @@ final class ExpressCheckoutFlowService
                 'shipping_methods' => $shippingMethods,
                 'selected_service_code' => $serviceCode,
                 'totals' => $totals,
+                'items' => $pixelItems,
                 'payer_email' => $payerEmail,
                 'embargo_blocked' => !empty($embargo['blocked']),
                 'embargo_message' => (string) ($embargo['message'] ?? ''),
@@ -413,6 +717,7 @@ final class ExpressCheckoutFlowService
             'transaction_no' => $transactionNo,
             'order_uuid' => $orderUuid,
             'totals' => $totals,
+            'items' => $pixelItems,
             'can_confirm' => $canConfirm,
             'address' => $address,
             'shipping_methods' => $shippingMethods,
@@ -420,6 +725,54 @@ final class ExpressCheckoutFlowService
             'method_code' => $methodCode,
             'method_label' => $methodLabel,
         ];
+    }
+
+    /**
+     * 订单行 → 像素/GA4 items（express-review 进页/确认埋点；快捷路径购物车可能已空）。
+     *
+     * @param list<array<string, mixed>> $items
+     * @return list<array<string, mixed>>
+     */
+    private function orderItemsToPixelItems(array $items): array
+    {
+        $out = [];
+        foreach ($items as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $sku = \trim((string) ($item['sku'] ?? $item['product_sku'] ?? $item['item_id'] ?? ''));
+            $name = \trim((string) ($item['name'] ?? $item['product_name'] ?? $item['item_name'] ?? ''));
+            $qty = (int) ($item['qty'] ?? $item['qty_ordered'] ?? $item['qty_minor'] ?? 1);
+            if ($qty < 1) {
+                $qty = 1;
+            }
+            $price = null;
+            if (isset($item['unit_price']) && \is_numeric($item['unit_price'])) {
+                $price = (float) $item['unit_price'];
+            } elseif (isset($item['price']) && \is_numeric($item['price'])) {
+                $price = (float) $item['price'];
+            } elseif (isset($item['unit_price_minor']) && \is_numeric($item['unit_price_minor'])) {
+                $price = ((int) $item['unit_price_minor']) / 100;
+            }
+            if ($sku === '' && $name === '') {
+                continue;
+            }
+            $row = [
+                'item_id' => $sku !== '' ? $sku : ('line_' . (\count($out) + 1)),
+                'item_name' => $name !== '' ? $name : $sku,
+                'quantity' => $qty,
+            ];
+            if ($price !== null) {
+                $row['price'] = \round($price, 2);
+            }
+            $productId = (int) ($item['product_id'] ?? $item['legacy_product_id'] ?? 0);
+            if ($productId > 0) {
+                $row['product_id'] = $productId;
+            }
+            $out[] = $row;
+        }
+
+        return $out;
     }
 
     /**
