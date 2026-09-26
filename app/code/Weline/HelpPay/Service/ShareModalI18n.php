@@ -66,6 +66,7 @@ final class ShareModalI18n
             'addressUnavailable' => (string) __('收货地址组件暂不可用，请改用结账流程。'),
             'addressIncomplete' => (string) __('请先完善收货地址后再付款。'),
             'cannotComplete' => (string) __('无法完成操作'),
+            'noPaymentMethod' => (string) __('暂无可用支付方式，请稍后重试。'),
             'close' => (string) __('关闭'),
             // Quick-pay: address → shipping → payment
             'dialogStepShipping' => (string) __('物流'),
