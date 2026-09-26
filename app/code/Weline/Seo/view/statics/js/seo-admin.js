@@ -648,14 +648,46 @@
             });
         });
         root.addEventListener('click', function (event) {
-            var button = event.target.closest('[data-seo-sync-account]');
-            if (!button) return;
-            setButtonLoading(button, true);
-            resource(root).then(function (api) { return api.syncAccountStats({ account_id: Number.parseInt(button.dataset.seoSyncAccount, 10) }); }).then(function (response) {
-                var data = unwrap(response);
-                toast(data && data.success ? 'success' : 'error', data && data.message || message(root, 'statsCompleted'));
-                if (data && data.success) window.setTimeout(function () { window.location.reload(); }, 600);
-            }).catch(function (error) { toast('error', formatApiError(error, root)); }).finally(function () { setButtonLoading(button, false); });
+            var syncButton = event.target.closest('[data-seo-sync-account]');
+            if (syncButton) {
+                setButtonLoading(syncButton, true);
+                resource(root).then(function (api) { return api.syncAccountStats({ account_id: Number.parseInt(syncButton.dataset.seoSyncAccount, 10) }); }).then(function (response) {
+                    var data = unwrap(response);
+                    toast(data && data.success ? 'success' : 'error', data && data.message || message(root, 'statsCompleted'));
+                    if (data && data.success) window.setTimeout(function () { window.location.reload(); }, 600);
+                }).catch(function (error) { toast('error', formatApiError(error, root)); }).finally(function () { setButtonLoading(syncButton, false); });
+                return;
+            }
+
+            var deleteButton = event.target.closest('[data-seo-delete-account]');
+            if (!deleteButton) return;
+            var accountId = Number.parseInt(deleteButton.dataset.seoDeleteAccount, 10);
+            if (!Number.isInteger(accountId) || accountId <= 0) return;
+
+            var confirmText = message(root, 'accountConfirmDelete') || '确定删除该 SEO 账户？';
+            var confirmPromise = window.Weline && window.Weline.UI && window.Weline.UI.dialog && typeof window.Weline.UI.dialog.confirm === 'function'
+                ? window.Weline.UI.dialog.confirm(confirmText, { tone: 'danger', dangerous: true })
+                : Promise.resolve(window.confirm(confirmText));
+
+            Promise.resolve(confirmPromise).then(function (confirmed) {
+                if (!confirmed) return;
+                setButtonLoading(deleteButton, true);
+                return resource(root).then(function (api) {
+                    return api.deleteAccount({ account_id: accountId });
+                }).then(function (response) {
+                    var data = unwrap(response) || {};
+                    toast(data.success ? 'success' : 'error', data.message || message(root, data.success ? 'accountDeleted' : 'accountDeleteFailed'));
+                    if (data.success) {
+                        var row = deleteButton.closest('[data-seo-account-row]');
+                        if (row) row.remove();
+                        if (!root.querySelector('[data-seo-account-row]')) {
+                            window.setTimeout(function () { window.location.reload(); }, 400);
+                        }
+                    }
+                }).catch(function (error) {
+                    toast('error', formatApiError(error, root) || message(root, 'accountDeleteFailed'));
+                }).finally(function () { setButtonLoading(deleteButton, false); });
+            });
         });
     }
 

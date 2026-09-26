@@ -20,6 +20,7 @@ final class SeoAdminQueryProvider implements QueryProviderInterface
         'generateSitemaps' => 'Weline_Seo::sitemap_management',
         'submitSitemaps' => 'Weline_Seo::sitemap_management',
         'saveAccount' => 'Weline_Seo::seo_account',
+        'deleteAccount' => 'Weline_Seo::seo_account',
         'syncAccountStats' => 'Weline_Seo::seo_account',
         'saveWebsiteBindings' => 'Weline_Seo::website_account',
         'saveWebsiteConfig' => 'Weline_Seo::website_account',
@@ -53,6 +54,7 @@ final class SeoAdminQueryProvider implements QueryProviderInterface
             'generateSitemaps' => $this->sitemaps->generateSitemaps($params),
             'submitSitemaps' => $this->sitemaps->submitSitemaps($params),
             'saveAccount' => $this->accounts->saveAccount($params),
+            'deleteAccount' => $this->accounts->deleteAccount($params),
             'syncAccountStats' => $this->accounts->syncAccountStats($params),
             'saveWebsiteBindings' => $this->accounts->saveWebsiteBindings($params),
             'saveWebsiteConfig' => $this->accounts->saveWebsiteConfig($params),
@@ -113,6 +115,9 @@ final class SeoAdminQueryProvider implements QueryProviderInterface
                 'config_action' => ['type' => 'string', 'max_length' => 10],
             ]),
             $this->operation('syncAccountStats', __('同步一个 SEO 账户所绑定站点的统计数据。'), [
+                'account_id' => ['type' => 'int', 'required' => true, 'min' => 1],
+            ]),
+            $this->operation('deleteAccount', __('删除 SEO 账户，并级联解除站点绑定与统计数据。'), [
                 'account_id' => ['type' => 'int', 'required' => true, 'min' => 1],
             ]),
             $this->operation('saveWebsiteBindings', __('保存账户到站点或站点到账户的绑定关系。'), [

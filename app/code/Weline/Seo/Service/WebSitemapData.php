@@ -151,13 +151,26 @@ class WebSitemapData
         $platformResults = [];
         $totalUrls = (int)($canonical['total_urls'] ?? 0);
         $totalFiles = (int)($canonical['total_files'] ?? 0);
+        // Legacy platform adapters expect module => urlRows; publisher buckets are
+        // list<{module,scope,locale,urls}>. Flatten by module for adapter copies.
+        $adapterGroupedUrls = $this->flattenBucketsForLegacyAdapters($groupedUrls);
         foreach ($adapters as $platformCode => $adapter) {
-            $result = $adapter->generateSitemapFiles(
-                $websiteId,
-                $websiteCode,
-                $baseUrl,
-                $groupedUrls
-            );
+            try {
+                $result = $adapter->generateSitemapFiles(
+                    $websiteId,
+                    $websiteCode,
+                    $baseUrl,
+                    $adapterGroupedUrls
+                );
+            } catch (\Throwable $e) {
+                $result = [
+                    'platform_code' => $platformCode,
+                    'success' => false,
+                    'error' => $e->getMessage(),
+                    'total_urls' => 0,
+                    'total_files' => 0,
+                ];
+            }
             $platformResults[$platformCode] = $result;
             
             // 累计生成的文件数
@@ -237,6 +250,44 @@ class WebSitemapData
     /**
      * 获取站点特定平台的 sitemap URL
      */
+    /**
+     * Convert publisher buckets into legacy adapter map: module => list<urlRow>.
+     *
+     * @param list<array{module?:string,scope?:string,locale?:string,urls?:list<array<string,mixed>>}>|array<string,list<array<string,mixed>>> $groupedUrls
+     * @return array<string, list<array<string,mixed>>>
+     */
+    private function flattenBucketsForLegacyAdapters(array $groupedUrls): array
+    {
+        $map = [];
+        $isList = array_is_list($groupedUrls);
+        foreach ($groupedUrls as $key => $value) {
+            if (!is_array($value)) {
+                continue;
+            }
+            if ($isList && isset($value['module'], $value['urls']) && is_array($value['urls'])) {
+                $module = trim((string)$value['module']);
+                if ($module === '') {
+                    $module = 'default';
+                }
+                foreach ($value['urls'] as $row) {
+                    if (is_array($row)) {
+                        $map[$module][] = $row;
+                    }
+                }
+                continue;
+            }
+            if (is_string($key)) {
+                foreach ($value as $row) {
+                    if (is_array($row)) {
+                        $map[$key][] = $row;
+                    }
+                }
+            }
+        }
+
+        return $map;
+    }
+
     public function getPlatformSitemapUrl(int $websiteId, string $platform): ?string
     {
         $adapter = $this->adapterRegistry->getAdapter($platform);

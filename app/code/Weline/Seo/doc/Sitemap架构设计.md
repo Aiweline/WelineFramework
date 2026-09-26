@@ -81,6 +81,25 @@ Provider URL 行：
 `action=refresh` 在 URL target 校验之前单独处理：按 module+website 去重同步，不建 URL Push 任务、
 不生成 XML，结果显式返回 `retryable` 和 `generation_pending`。
 
+## 3.1 同步侧站点语种路径展开
+
+`SitemapUrlSyncService` 在 `validateUrls` 之前调用 `SitemapLocaleUrlExpander`：
+
+1. 仅当 Provider `supportsSiteLanguagePathExpansion() === true` 时展开；默认 `false`（`AbstractSitemapUrlProvider`）。
+2. 语种源：`WebsiteLanguage::getWebsiteLanguageCodes($websiteId)` ∩ `LocaleCatalog` 已安装启用（软过滤非法码并记 `warnings`，避免整快照零写）。
+3. 对每个 `url_key`：已声明的非空 `locale` **保留其 `loc`**；仅对缺失语种用 `LocalizedUrlBuilderInterface` 按路径前缀补行；新快照不写 `locale=''`。
+4. 可扩行写入完整 `metadata.alternates`（含 `x-default` = 站点默认语 URL）。
+5. **不可扩 Provider 完全原样透传**，禁止合成 alternates（避免 Blog 等自管 slug 被路径前缀乘出幽灵链接）。
+
+本仓 opt-in：`Weline_Theme` storefront_static、`Weline_Product` product/category、`Weline_Faq`、`Weline_Promotion`。  
+明确不扩：`Weline_Blog`、`Weline_Cms`、自管 locale 的 PageBuilder 类 Provider。
+
+残余风险：
+
+- 页头 `noindex` / `seo_profile` 语种过滤不在 sync 层执行（靠 Provider 不返回 URL）；§7「noindex 语言不进 Sitemap」仍是合作契约目标。
+- 错误 `loc`（如纯数字商品 path）会被乘以语种数；应由 Provider 吐规范 slug。
+- 活跃 URL 读取使用 `fetchIterator()`，避免多语膨胀后触发无界 SELECT（默认 10000）门禁；平台适配器收到的是按 module 展平的 legacy map。
+
 ## 4. Canonical 文件发布
 
 每个站点始终可生成账户无关的 canonical 集合：
@@ -115,6 +134,15 @@ pub/sitemaps/{website_code}/canonical/sitemap_{provider}_{locale}_{sequence}_{ha
 文件不存在时，只有全部 active DB URL 可在一个合法且未超限的 urlset 中完整输出才允许 fallback；
 任何非法行、重复 loc 或超限都返回 HTTP 503，不截断为部分 Sitemap。
 
+协议 HTTP 出口经 `SeoWebsiteDirectory::rewriteLoopbackOriginsInXml` /
+`rewriteAllOriginsInXml` 对齐当前 serve origin 时，**同时改写 `<loc>` 与 `xhtml:link` 的
+`href`**（以及同文件内其它绝对 `href=`），保证多语 alternates 与条目 loc 同源；落盘
+canonical 仍写站点配置 origin，不因开发端口改写磁盘文件。
+
+全站 `SitemapUrlSyncService::syncAll`（无 module 过滤）收尾会按当前已注册
+`SitemapUrlProvider` 白名单 **disable** 无主模块的活跃行（如已移除的 `Weline_Help`），
+避免孤儿 URL 进入后续 canonical 生成。
+
 ## 6. SEO 后台管理
 
 后台业务写操作统一走后台认证 QueryProvider：
@@ -128,7 +156,7 @@ ACL 按菜单 source 分组：
 | 界面 | 操作 | source |
 |---|---|---|
 | Sitemap | `syncSitemapUrls` / `generateSitemaps` / `submitSitemaps` | `Weline_Seo::sitemap_management` |
-| 账户 | `saveAccount` / `syncAccountStats` | `Weline_Seo::seo_account` |
+| 账户 | `saveAccount` / `deleteAccount` / `syncAccountStats` | `Weline_Seo::seo_account` |
 | 站点绑定 | `saveWebsiteBindings` / `saveWebsiteConfig` / `unbindWebsite` | `Weline_Seo::website_account` |
 
 QueryProvider 不调用 Controller；Controller 仅保留 GET 渲染和无脚本 fallback，业务逻辑在 `Service/Admin`。
@@ -206,9 +234,12 @@ Sitemap 首页是纯读取页，打开时不生成 XML。同步、生成、提�
   `robots.txt` 同步为每个公开 origin 输出一行 `Sitemap:`。已生成 manifest 中的 loopback
   索引/分片 URL 在后台展示时同样改写为当前项目入口，重新生成后会写入真实 origin。
   canonical 文件内容的同源校验仍只认站点配置 origin，不按别名域名拆分生成。
-- `/sitemap.xml` 与 `/sitemaps/{code}/{target}/*.xml` 在协议输出时会把历史 localhost `<loc>`
-  **以及同 host 但 scheme/port 不一致的 `<loc>`**（例如落盘无端口、爬虫访问 `:9555`）
-  改写为当前请求 serve origin，再做同源校验；避免默认站占位 URL 或开发端口差导致 503 `<error>`。
+- `/sitemap.xml` 与 `/sitemaps/{code}/{target}/*.xml` 在协议输出时会把历史 localhost `<loc>` /
+  `xhtml:link href` **以及同 host 但 scheme/port 不一致的绝对 URL**（例如落盘无端口、爬虫访问 `:9555`）
+  改写为当前请求 serve origin，再做同源校验；避免默认站占位 URL 或开发端口差导致 503 `<error>`，
+  并避免 `<loc>` 与 hreflang `href` 主机分裂。
+- 全站 sync 会 disable 当前注册表中不存在 Provider 的 `(module, scope)` 活跃行；无 Provider 的
+  module 行不得进入 canonical。
 - 生成物落在 `pub/sitemaps/**`，但 WLS 不得把 `/sitemaps/**`（以及根路径
   `sitemap.xml` / `robots.txt`）当静态文件直出：`StaticRequestBypassDecider` 必须把它们
   交给框架，走 `ProtocolRouteRewrite` → `SitemapProtocolRenderer`，否则磁盘里的

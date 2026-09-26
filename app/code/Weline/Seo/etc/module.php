@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Seo',
-    "version" => '1.2.105',
+    "version" => '1.2.106',
     "requires" => [
         'Weline_Ai' => '*',
         'Weline_Backend' => '*',
