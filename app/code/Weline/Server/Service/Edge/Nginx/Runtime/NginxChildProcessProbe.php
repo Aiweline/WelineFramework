@@ -4,10 +4,26 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge\Nginx\Runtime;
 
+use Weline\Framework\System\Process\Native\DarwinProcessProbe;
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
 
 /**
  * Bounded process-table probes shared by legacy and host-managed Nginx paths.
+ *
+ * ## Darwin 分支（2026-09-26 新增）
+ *
+ * 此前 macOS 落在「通用 Unix」分支上，即 `pgrep -P` + `ps -p … -o pid=,ppid=,command=`。
+ * `ps` 一旦不可用（沙箱 / 加固运行时 / 受限 PATH），`workerPids()` 返回 `null`、
+ * `processIsRunning()` 返回 `null`，于是：
+ *
+ * - `ManagedNginxTlsSessionResumptionVerifier::detectEffectiveWorkerCount()` 得到 0
+ *   ⇒ `managed nginx effective worker count could not be verified` ⇒ **托管 Nginx 整体起不来**；
+ * - `SslCertificateService` 的旧版 Nginx 退役校验直接抛
+ *   `Unable to enumerate the exact legacy Nginx worker generation.`。
+ *
+ * 现改为走 {@see DarwinProcessProbe}（libproc / sysctl，**零子进程**）：
+ * `proc_listchildpids` 取子进程、`bsdInfo` 校 `ppid`、`commandLine` 认标题、`liveness` 判存活。
+ * FFI 不可用时逐条回落到既有的 `ps`/`pgrep` 通路，行为与今天一致。
  */
 final class NginxChildProcessProbe
 {
@@ -89,6 +105,13 @@ final class NginxChildProcessProbe
             return null;
         }
 
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            $native = self::darwinWorkerPids($masterPid, $deadlineMonotonic);
+            if ($native !== null) {
+                return $native;
+            }
+        }
+
         $ps = self::processTableExecutable();
         $pgrep = self::childListExecutable();
         if ($ps === null || $pgrep === null) {
@@ -152,6 +175,57 @@ final class NginxChildProcessProbe
         return self::sortedPids($workers);
     }
 
+    /**
+     * Darwin 原生 worker 枚举：`proc_listchildpids` + `bsdInfo(ppid)` + `commandLine(标题)`。
+     *
+     * 与 Linux 分支保持**同样的稳定性契约**：采样前后各取一次子进程列表并要求逐字节相等，
+     * 否则视为「代际不可证」返回 `null`，由调用方保持 fail-closed。
+     *
+     * `null`（问不出来 ⇒ 回落 `ps`/`pgrep`）与 `[]`（确认没有子进程）语义严格区分。
+     *
+     * @return list<int>|null
+     */
+    private static function darwinWorkerPids(
+        int $masterPid,
+        ?float $deadlineMonotonic,
+    ): ?array {
+        if (!DarwinProcessProbe::available()) {
+            return null;
+        }
+
+        $firstChildren = DarwinProcessProbe::childPids($masterPid);
+        if ($firstChildren === null) {
+            return null;
+        }
+        if ($firstChildren === []) {
+            return [];
+        }
+
+        $workers = [];
+        foreach ($firstChildren as $childPid) {
+            self::remainingDeadline($deadlineMonotonic);
+            $info = DarwinProcessProbe::bsdInfo($childPid);
+            if ($info === null || (int)$info['ppid'] !== $masterPid) {
+                // 子进程在采样窗口内消失或被 reparent ⇒ 无法证明代际，不表态。
+                return null;
+            }
+            $title = DarwinProcessProbe::commandLine($childPid);
+            if ($title === null) {
+                return null;
+            }
+            if (\str_contains(\strtolower($title), 'nginx: worker process')) {
+                $workers[$childPid] = true;
+            }
+        }
+
+        $secondChildren = DarwinProcessProbe::childPids($masterPid);
+        if ($secondChildren === null || $secondChildren !== $firstChildren) {
+            return null;
+        }
+
+        return self::sortedPids($workers);
+    }
+
     public static function linuxProcessStartTicks(int $pid): ?string
     {
         if (\PHP_OS_FAMILY !== 'Linux' || $pid < 1) {
@@ -186,6 +260,18 @@ final class NginxChildProcessProbe
         }
         if (\PHP_OS_FAMILY === 'Windows') {
             return null;
+        }
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            $native = DarwinProcessProbe::liveness($pid);
+            if ($native === DarwinProcessProbe::LIVENESS_RUNNING) {
+                return true;
+            }
+            if ($native === DarwinProcessProbe::LIVENESS_ZOMBIE
+                || $native === DarwinProcessProbe::LIVENESS_EXITED
+            ) {
+                return false;
+            }
+            // unknown（FFI 不可用 / EPERM / 无 posix_kill）⇒ 回落既有 ps 通路。
         }
         $ps = self::processTableExecutable();
         if ($ps === null) {

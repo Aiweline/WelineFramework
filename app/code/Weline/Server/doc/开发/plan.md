@@ -191,4 +191,39 @@
 ### 8.3 后续专项（暂缓）
 
 1. Linux 直连模式：需要把 Dispatcher 的规则生效能力下放到 Worker，再评估切换路径。
-2. 请求链固定成本拆账：继续分析 `run_before`、`Router::__init()`、`router->start()`、`StateManager::reset()` 的占比并做定点优化。
+2. 请求链固定成本拆账：继续分析 `run_before`、`Router::__init__()`、`router->start()`、`StateManager::reset()` 的占比并做定点优化。
+
+---
+
+## 九、2026-09-26 Darwin 进程身份专项
+
+托管 Nginx 默认改公网 `80/443` 做实机验证时，暴露出一组**与本改动无关的既有缺陷**：
+Darwin 上「取进程命令行」和「判僵尸」两条通路都只剩外部 `ps`，导致身份门禁必然失败、
+失败回滚杀不掉自己启动的进程。已单独立项：
+
+➡️ **[`spec/darwin-process-identity-without-ps.md`](./spec/darwin-process-identity-without-ps.md)**
+
+覆盖缺陷：D1 命令行无原生通路（🔴 阻断）、D2 僵尸无法分类（🔴 阻断）、
+D3 `Stop::acquireStopLock()` 夹具签名漂移（✅ 已修 `30fceb9fe`）、
+D4 `getProcessIdByPort()` 归属歧义（📝 已缓解，记录在案）、
+D5 停止路径两条测试契约**长期假绿**（`private` 死守卫 + 用例直读真实 `pid_index.json`，
+🟡 **D1 修复后才暴露**）、
+D6 `NginxChildProcessProbe` 在 Darwin 上仍靠 `ps -p … -o pid=,ppid=,command=` 枚举 worker
+（🔴 阻断，**D1 修复后才暴露**）。
+
+**状态**：✅ 全部修复；A1–A13 用例全绿；实机 E1–E7 全通过；环境已按字节还原。
+
+> **★ 本专项最有价值的一条经验**：修好 D1 之后，实机 `server:start` **不是变成功，
+> 而是报出了下一条 `ps` 依赖**（D6）。这说明「Darwin 上把进程观察押在外部二进制上」
+> 不是一个 bug，而是一**类** bug —— 同一台机器上有多处。
+> 因此验收方式不能是「跑一次单测」，必须是**反复跑实机 E2E**，
+> 让每一层失败精确指认下一层。三次实机运行的错误信息依次是：
+> `PID or command line is unavailable`（D1）→
+> `effective worker count could not be verified`（D6）→
+> `✅ Weline Server Startup Completed!`。
+
+> D5 值得单记一笔：它证明「某个探测常年坏掉」会让**依赖该探测的测试常年绿**。
+> `StopCommandFastLocalCleanupTest::testGracefulStopTrustsAuthoritativeIpcCompletionWithoutLocalPrefixScan`
+> 的绿，正是 D1 这个缺陷本身撑起来的 —— 修好 D1 后它立刻变红。
+> 定位手法：**stash 改动后同环境复跑对照**，确认「基线 7 条 / 改动后 8 条 ⇒ 新增恰好 1 条」，
+> 再在用例内插桩取真实调用序列，才定位到 `pid_index.json` 这一环境输入。

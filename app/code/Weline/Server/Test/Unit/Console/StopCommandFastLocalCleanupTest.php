@@ -1023,6 +1023,30 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             {
                 $this->calls[] = 'unlock:' . $instanceName;
             }
+
+            /**
+             * 必须切断 `var/process/pid/pid_index.json` 这一环境输入。
+             *
+             * `collectFastLocalResidualPids()` 会合并 pid_index 扫描，而该文件是
+             * **项目级真实状态**：只要本机此刻真有一个名为 `default` 的 WLS 实例在跑，
+             * 扫描结果就是「真实存活的同实例进程」，`collectRunningResidualPids()`
+             * 于是判为残留、拒绝 `deleteInstance()`。
+             *
+             * 本用例断言的是「IPC 成功后信任 Master、不做本地前缀扫描」这条契约，
+             * 与宿主上跑不跑实例无关，因此这里把索引来源钉成空。
+             * 其余来源（本实例 Master PID 记录 + 真实存活探测 + 真实 IPC 成功路径）
+             * 全部保留原实现。
+             *
+             * ⚠️ 此前本用例在 macOS 上长期**假绿**：`Processer::getProcessCommandLine()`
+             * 因 `ps` 不可用而恒返回空串 ⇒ `Processer::isWelineServerProcess()` 恒 false
+             * ⇒ 残留恒被误判为「已清干净」。原生进程身份通路修好后，这个环境耦合才暴露。
+             */
+            protected function collectIndexedResidualPids(string $name, bool $includeSharedState = false): array
+            {
+                unset($name, $includeSharedState);
+
+                return [];
+            }
         };
 
         $stop->__init();
