@@ -61,13 +61,14 @@ final class LayoutSlotRendererColdPathPolicyContractTest extends TestCase
 
         self::assertStringContainsString('rememberPublishedChromeSlotProjection', $src);
         self::assertStringContainsString('publishedChromeSlotProjectionPolicy()', $src);
-        self::assertStringContainsString('chrome.slot.projection.v3|', $src);
+        // v5 logical keys include ThemeVersionIdentity cache fragments (draft/formal/history).
+        self::assertStringContainsString('chrome.slot.projection.v5|', $src);
         self::assertStringContainsString('chromeSlotProjectionLogicalKey', $src);
         self::assertStringContainsString('peekPolicy(', $src);
         self::assertStringContainsString('rememberPolicy(', $src);
         self::assertStringContainsString('rememberPublishedPageEntityLocation', $src);
         self::assertStringContainsString('publishedPageEntityLocationPolicy()', $src);
-        self::assertStringContainsString('page.location.v1|', $src);
+        self::assertStringContainsString('page.location.v4|', $src);
         self::assertStringContainsString('buildChromeSlotProjection', $src);
         self::assertStringNotContainsString('private static array $', $src);
 

@@ -2,7 +2,6 @@
 declare(strict_types=1);
 namespace Weline\Theme\Test\Unit\LayoutEntity;
 use PHPUnit\Framework\TestCase;
-use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller;
 require_once dirname(__DIR__, 7) . '/vendor/autoload.php';
 final class ThemeLayoutEntityReadBindingTest extends TestCase
@@ -28,25 +27,18 @@ final class ThemeLayoutEntityReadBindingTest extends TestCase
         }
     }
 
-    public function testDraftFallbackNeverSelectsAnUnrelatedReleaseDirectory(): void
+    public function testSlotFillerHasNoLegacySegmentFishing(): void
     {
-        if (!defined('BP')) { define('BP', dirname(__DIR__, 7)); }
-        $paths = new ThemeLayoutEntityPaths();
-        $scope = 'test-read-binding-' . bin2hex(random_bytes(6));
-        $base = $paths->pageIdentityDir(999999986, $scope, 'fixture');
-        mkdir($base . 'r999', 0775, true);
-        file_put_contents($base . 'r999/layout.phtml', '<!--@weline-slot:content-->old release');
-        try {
-            $class = new \ReflectionClass(ThemeLayoutEntitySlotFiller::class);
-            $filler = $class->newInstanceWithoutConstructor();
-            $class->getProperty('paths')->setValue($filler, $paths);
-            self::assertNull($class->getMethod('scanSolidifiedSegment')->invoke($filler, 999999986, $scope, 'fixture', false));
-        } finally {
-            unlink($base . 'r999/layout.phtml');
-            rmdir($base . 'r999');
-            rmdir($base);
-            rmdir(dirname($base));
-            rmdir(dirname($base, 2));
-        }
+        $fillerSrc = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php'
+        );
+        $pathsSrc = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityPaths.php'
+        );
+        self::assertStringNotContainsString('function scanSolidifiedSegment(', $fillerSrc);
+        self::assertStringNotContainsString('function readPageCurrent(', $fillerSrc);
+        self::assertStringNotContainsString('function rememberPageCurrent(', $fillerSrc);
+        self::assertStringNotContainsString('pageCurrentJson', $pathsSrc);
+        self::assertStringNotContainsString('pageStructureOrRelease', $pathsSrc);
     }
 }

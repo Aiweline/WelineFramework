@@ -50,7 +50,7 @@ final class ThemeStandardLayoutPublishContractTest extends TestCase
     {
         $source = $this->themeEditorSource();
 
-        foreach (['postPublish', 'postPublishVersion', 'publishVersionPayload', 'postPublishAndExit'] as $name) {
+        foreach (['postPublish', 'postPublishAndExit'] as $name) {
             $fn = $this->extractMethod($source, $name);
             self::assertStringContainsString(
                 'runStandardLayoutPublish(',
@@ -63,6 +63,10 @@ final class ThemeStandardLayoutPublishContractTest extends TestCase
                 $name
             );
         }
+        $scopePublish = $this->extractMethod($source, 'publishScopeVersionPayload');
+        self::assertStringContainsString('ThemeVersionPublicationService', $scopePublish);
+        self::assertStringNotContainsString('function postPublishVersion(', $source);
+        self::assertStringNotContainsString('function publishVersionPayload(', $source);
     }
 
     public function testHttpScopedPublishRejectsPendingWithSameCode(): void
@@ -75,19 +79,17 @@ final class ThemeStandardLayoutPublishContractTest extends TestCase
         self::assertStringContainsString('nextLayoutVersionSuggestion($gateContext)', $fn);
     }
 
-    public function testVersionsPayloadIncludesSuggestedVersionName(): void
+    public function testScopeVersionsPayloadIncludesSuggestedVersionName(): void
     {
         $source = $this->themeEditorSource();
-        $payload = $this->extractMethod($source, 'getVersionsPayload');
-        $get = $this->extractMethod($source, 'getVersions');
+        $payload = $this->extractMethod($source, 'getScopeVersionsPayload');
         $suggest = $this->extractMethod($source, 'nextLayoutVersionSuggestion');
 
         self::assertStringContainsString("'suggested_version_name'", $suggest);
         self::assertStringContainsString("'v' . \$next", $suggest);
-        self::assertStringContainsString('nextLayoutVersionSuggestion($context)', $payload);
-        self::assertStringContainsString("'suggested_version_name' => \$suggestion['suggested_version_name']", $payload);
-        self::assertStringContainsString('nextLayoutVersionSuggestion($context)', $get);
-        self::assertStringContainsString("'suggested_version_name' => \$suggestion['suggested_version_name']", $get);
+        self::assertStringContainsString("'suggested_version_name'", $payload);
+        self::assertStringNotContainsString('function getVersionsPayload(', $source);
+        self::assertStringNotContainsString('function getVersions(', $source);
     }
 
     public function testEditorPublishStopsPreemptiveBatch(): void
@@ -204,12 +206,14 @@ final class ThemeStandardLayoutPublishContractTest extends TestCase
         self::assertStringContainsString('正在清理预览会话并准备跳转', $source);
         self::assertStringContainsString('exit_preview', $source);
 
-        foreach (['postPublish', 'postPublishVersion', 'publishVersionPayload', 'postPublishAndExit'] as $name) {
+        foreach (['postPublish', 'postPublishAndExit'] as $name) {
             $fn = $this->extractMethod($source, $name);
             self::assertStringContainsString('wantsStandardPublishStream(', $fn, $name);
             self::assertStringContainsString('streamStandardLayoutPublish(', $fn, $name);
             self::assertStringContainsString('finalizeStandardLayoutPublish(', $fn, $name);
         }
+        self::assertStringNotContainsString('function postPublishVersion(', $source);
+        self::assertStringNotContainsString('function publishVersionPayload(', $source);
 
         $workspace = (string)file_get_contents(dirname(__DIR__, 4) . '/Service/Scoped/ThemeScopedWorkspace.php');
         self::assertStringContainsString('bakePublishedLayoutResourcesFromBatchReceipt(', $workspace);
@@ -219,9 +223,9 @@ final class ThemeStandardLayoutPublishContractTest extends TestCase
             '/view/statics/js/theme-editor.js',
         ] as $relative) {
             $js = (string)file_get_contents(dirname(__DIR__, 4) . $relative);
-            self::assertStringContainsString('consumeStandardPublishSse', $js, $relative);
-            self::assertStringContainsString('text/event-stream', $js, $relative);
-            self::assertStringContainsString('stream: 1', $js, $relative);
+            self::assertStringContainsString('apiPublishScopeVersion', $js, $relative);
+            self::assertStringContainsString('requestStandardLayoutPublish', $js, $relative);
+            self::assertStringNotContainsString('apiPublishVersion', $js, $relative);
         }
     }
 }

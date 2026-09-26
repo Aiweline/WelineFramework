@@ -14,6 +14,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_theme_scope_release_parent', columns: ['parent_release_id'])]
 #[Index(name: 'idx_theme_scope_release_scope', columns: ['scope', 'store_mode', 'area', 'resource_type'])]
 #[Index(name: 'idx_theme_scope_release_fingerprint', columns: ['fingerprint'])]
+#[Index(name: 'idx_theme_scope_release_theme_version', columns: ['theme_version_id', 'content_revision'])]
 final class ThemeScopeRelease extends Model
 {
     public const schema_table = 'theme_scope_release';
@@ -26,6 +27,10 @@ final class ThemeScopeRelease extends Model
     public const schema_fields_ID = 'release_id';
     #[Col(type: 'int', nullable: false, comment: 'Workspace ID')]
     public const schema_fields_WORKSPACE_ID = 'workspace_id';
+    #[Col(type: 'int', nullable: true, comment: 'Owning ThemeScopeVersion; null for pre-cut legacy')]
+    public const schema_fields_THEME_VERSION_ID = 'theme_version_id';
+    #[Col(type: 'int', nullable: true, comment: 'Snapshot content revision when owned by a theme version')]
+    public const schema_fields_CONTENT_REVISION = 'content_revision';
     #[Col(type: 'int', nullable: true, comment: 'Published local revision; null for pure inherited propagation')]
     public const schema_fields_REVISION_ID = 'revision_id';
     #[Col(type: 'int', nullable: true, comment: 'Direct parent release')]

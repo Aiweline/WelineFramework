@@ -13,12 +13,14 @@
  * @param subtitle {default="",type="textarea",label="副标题"}
  * @param address {default="",type="textarea",label="联系地址"}
  * @param hours {default="",type="textarea",label="营业时间"}
- * @param email {default="",type="string",label="邮箱"}
+ * @param email {default="",type="string",label="邮箱（留空用网站 SMTP / 站点联系配置）"}
  * @param phone {default="",type="string",label="电话"}
  * @param map_link {default="",type="url",label="地图链接"}
  */
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\SiteBlockConfig as Block;
+use Weline\Theme\Helper\SiteContactInfo;
 use Weline\Theme\Helper\WidgetUiScope;
 use Weline\Theme\Helper\WidgetI18n;
 
@@ -31,8 +33,37 @@ $address = Block::text($this->getData('address'));
 $hours = Block::text($this->getData('hours'));
 $email = Block::text($this->getData('email'));
 $phone = Block::text($this->getData('phone'));
-$emailLink = Block::link('mailto:' . $email);
-$phoneLink = Block::link('tel:' . $phone);
+
+// 部件参数留空或 example.com 占位 → 网站 SMTP / SiteContactInfo（线上本地同一套）
+$needsSite = $address === '' || $hours === '' || $email === '' || preg_match('/@example\\.com$/i', $email)
+    || $phone === '';
+if ($needsSite) {
+    try {
+        $resolver = ObjectManager::getInstance(SiteContactInfo::class);
+        if ($resolver instanceof SiteContactInfo) {
+            $site = $resolver->resolve();
+            if ($address === '') {
+                $address = trim((string)($site['contact_address'] ?? ''));
+            }
+            if ($hours === '') {
+                $hours = trim((string)($site['service_hours'] ?? ''));
+            }
+            if ($email === '' || preg_match('/@example\\.com$/i', $email)) {
+                $email = trim((string)($site['contact_email'] ?? ''));
+            }
+            if ($phone === '') {
+                $phone = trim((string)($site['contact_phone'] ?? ''));
+            }
+        }
+    } catch (\Throwable) {
+    }
+}
+if ($email !== '' && preg_match('/@example\\.com$/i', $email)) {
+    $email = '';
+}
+
+$emailLink = $email !== '' ? Block::link('mailto:' . $email) : '';
+$phoneLink = $phone !== '' ? Block::link('tel:' . $phone) : '';
 $mapLink = Block::link($this->getData('map_link'));
 // 未配置地址/时段/邮箱/电话/地图时不渲染空壳，避免指南/政策页底部只剩「联系我们」标题压在信任徽章上方
 $hasContactBody = $address !== '' || $hours !== '' || $emailLink !== '' || $phoneLink !== '' || $mapLink !== '';

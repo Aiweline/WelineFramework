@@ -293,14 +293,14 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-virtual-theme-publish-version="@url{'theme/backend/virtual-theme/publish-version'}"
      data-api-theme-preview-gateway="@frontend-url{'theme/frontend/theme-preview/gateway'}"
      data-api-param-render-form="@url{'theme/backend/widget/paramrender/form'}"
-     data-api-versions="@url{'theme/backend/theme-editor/versions'}"
-     data-api-save-version="@url{'theme/backend/theme-editor/save-version'}"
-     data-api-switch-version="@url{'theme/backend/theme-editor/switch-version'}"
-     data-api-restore-original="@url{'theme/backend/theme-editor/restore-original'}"
+     data-api-scope-versions="@url{'theme/backend/theme-editor/scope-versions'}"
+     data-api-create-scope-draft="@url{'theme/backend/theme-editor/create-scope-draft'}"
+     data-api-save-scope-version="@url{'theme/backend/theme-editor/save-scope-version'}"
+     data-api-publish-scope-version="@url{'theme/backend/theme-editor/publish-scope-version'}"
+     data-api-restore-scope-defaults="@url{'theme/backend/theme-editor/restore-scope-defaults'}"
      data-api-clear-theme-cache="@url{'theme/backend/theme-editor/clear-theme-cache'}"
      data-api-reset-draft-resources="@url{'theme/backend/theme-editor/reset-draft-resources'}"
      data-api-factory-reset="@url{'theme/backend/theme-editor/factory-reset'}"
-     data-api-publish-version="@url{'theme/backend/theme-editor/publish-version'}"
      data-api-delete-version="@url{'theme/backend/theme-editor/delete-version'}"
      data-api-start-preview="@url{'theme/backend/theme-editor/start-preview'}"
      data-api-check-lock="@url{'theme/backend/theme-editor/check-lock'}"
@@ -331,6 +331,10 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
         <button type="button" class="w-button" data-tone="primary" data-size="sm" data-icon-only="true" id="btnPublishStrip" data-w-component="tooltip" data-w-tooltip="@lang{发布}" data-w-placement="bottom" title="@lang{发布}" aria-label="@lang{发布}">
             <w:icon name="upload" size="sm"></w:icon>
             <span class="w-theme-editor-toolbar-button-text">@lang{发布}</span>
+        </button>
+        <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-icon-only="true" id="btnPublishCurrentPageStrip" data-w-component="tooltip" data-w-tooltip="@lang{只发布本页}" data-w-placement="bottom" title="@lang{只发布本页}" aria-label="@lang{只发布本页}">
+            <w:icon name="upload" size="sm"></w:icon>
+            <span class="w-theme-editor-toolbar-button-text">@lang{只发布本页}</span>
         </button>
         <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-icon-only="true" id="btnThemeChromeExpand" data-w-component="tooltip" data-w-tooltip="@lang{展开}" data-w-placement="bottom" title="@lang{展开顶栏}" aria-label="@lang{展开顶栏}">
             <w:icon name="chevron-down" size="sm"></w:icon>
@@ -540,6 +544,9 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
             </span>
             <button type="button" class="w-button" data-tone="primary" data-icon-only="true" id="btnPublish" data-w-toolbar-overflow-pin data-w-component="tooltip" data-w-tooltip="@lang{发布}" data-w-placement="bottom" title="@lang{发布}" aria-label="@lang{发布}">
                 <w:icon name="upload" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{发布}</span>
+            </button>
+            <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-icon-only="true" id="btnPublishCurrentPage" data-w-component="tooltip" data-w-tooltip="@lang{只发布本页}" data-w-placement="bottom" title="@lang{只发布本页}" aria-label="@lang{只发布本页}">
+                <w:icon name="upload" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{只发布本页}</span>
             </button>
             <div class="toolbar-chrome-tools" role="group" aria-label="@lang{顶栏}">
             <button type="button"

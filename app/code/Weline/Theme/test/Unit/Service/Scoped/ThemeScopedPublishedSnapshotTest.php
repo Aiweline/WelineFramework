@@ -49,8 +49,8 @@ final class ThemeScopedPublishedSnapshotTest extends TestCase
     public function testPublishedLocaleAndTargetFallbackRemainIsolated(): void
     {
         $result = $this->probe();
-        self::assertSame(['marker' => 'scope-default-locale'], $result['default_locale']);
-        self::assertSame(['marker' => 'target-99'], $result['target_locale']);
+        self::assertSame(['marker' => 'scope-default-locale', 'nodes' => []], $result['default_locale']);
+        self::assertSame(['marker' => 'target-99', 'nodes' => []], $result['target_locale']);
         self::assertSame(['nodes' => []], $result['missing_target']);
         self::assertSame($result['default_locale'], $result['default_locale_again']);
         self::assertSame($result['target_locale'], $result['target_locale_again']);

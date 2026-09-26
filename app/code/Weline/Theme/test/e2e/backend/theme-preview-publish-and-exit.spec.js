@@ -28,6 +28,11 @@ test.describe('Theme preview publish-and-exit', () => {
       settleMs: 2000,
     });
 
+    await expect(page.locator('#themeEditor')).toHaveAttribute('data-api-scope-versions', /scope-versions/, {
+      timeout: 60000,
+    });
+    await expect(page.locator('#themeEditor')).toHaveAttribute('data-api-publish-scope-version', /publish-scope-version/);
+
     // Prefer explicit frontend preview button when present.
     const frontendPreviewBtn = page.locator('#btnFrontendPreview, [data-action="frontend-preview"], button:has-text("前台预览")').first();
     const hasFrontendPreview = await frontendPreviewBtn.isVisible({ timeout: 8000 }).catch(() => false);

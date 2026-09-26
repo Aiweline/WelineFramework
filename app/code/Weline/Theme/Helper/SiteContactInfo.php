@@ -8,16 +8,22 @@ use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Model\SystemConfig;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Websites\Service\SiteContactSeedService;
+use Weline\Websites\Service\WebsiteBrandIdentitySeedService;
 
 /**
  * 前台帮助中心等页面读取站点公开联系与品牌信息。
  * 站名/简介优先 Website 范围（SiteBrand），再 Backend / env；禁止硬编码商户品牌。
  * 联系地址/电话/服务时间：SystemConfig（Weline_Websites）按 Global→Website→Store 继承，再 Backend / env。
+ * 联系邮箱：Backend / env 后回落网站 SMTP（smtp_senders）发件邮箱，再才是 example.com 占位。
  */
 class SiteContactInfo
 {
     public const CONFIG_MODULE = 'Weline_Backend';
+
+    /** 无任何真实配置时的占位；店面/邮件应优先被网站 SMTP 发件邮箱覆盖。 */
+    public const PLACEHOLDER_EMAIL = 'support@example.com';
 
     public function __construct(
         private readonly BackendConfigStore $backendConfig,
@@ -67,7 +73,8 @@ class SiteContactInfo
             $this->env('contact_email'),
             $this->env('site.contact_email'),
             $this->env('ssl.contact_email'),
-            'support@example.com',
+            $this->smtpWebsiteFromEmail($scope),
+            self::PLACEHOLDER_EMAIL,
         ]);
 
         $phone = $this->firstNonEmpty([
@@ -84,7 +91,7 @@ class SiteContactInfo
             $this->backend('service_hours'),
             $this->backend('contact_hours'),
             $this->env('site.service_hours'),
-            (string)__('周一至周五 9:00 - 18:00（法定节假日除外）'),
+            WebsiteBrandIdentitySeedService::SEED_SERVICE_HOURS,
         ]);
 
         $address = $this->firstNonEmpty([
@@ -100,9 +107,38 @@ class SiteContactInfo
             'site_description' => $siteDescription,
             'contact_email' => $email,
             'contact_phone' => $phone,
-            'service_hours' => $hours,
+            // 配置常存简中源串；须按店面 locale 译出，禁止法文页露出「周一至周五…」
+            'service_hours' => $this->localizeServiceHours($hours),
             'contact_address' => $address,
         ];
+    }
+
+    /**
+     * 品牌种子 service_hours 优先读 website-brand-local-copy；其它自定义串走词典。
+     */
+    private function localizeServiceHours(string $hours): string
+    {
+        $hours = trim($hours);
+        if ($hours === '') {
+            return '';
+        }
+
+        $locale = WidgetI18n::storefrontLocale();
+        $seed = WebsiteBrandIdentitySeedService::SEED_SERVICE_HOURS;
+        $seedShort = '周一至周五 9:00 - 18:00';
+        if ($hours === $seed || $hours === $seedShort) {
+            try {
+                $fromPack = WebsiteBrandIdentitySeedService::serviceHoursForLocale($locale);
+                if ($fromPack !== '') {
+                    return $fromPack;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        $translated = trim((string)__($hours));
+
+        return $translated !== '' ? $translated : $hours;
     }
 
     /** 当前网站的法定资料独立于品牌与客服地址，不回退到全局商户。 */
@@ -165,6 +201,25 @@ class SiteContactInfo
     {
         try {
             return trim((string)($this->backendConfig->getConfig($key, self::CONFIG_MODULE) ?? ''));
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * 软依赖 Smtp：读当前 storageScope 网站 SMTP 传输账户公开发件邮箱（线上/本地同一套配置）。
+     */
+    private function smtpWebsiteFromEmail(string $storageScope): string
+    {
+        try {
+            if (!class_exists(\Weline\Smtp\Helper\Data::class)) {
+                return '';
+            }
+            /** @var \Weline\Smtp\Helper\Data $smtp */
+            $smtp = ObjectManager::getInstance(\Weline\Smtp\Helper\Data::class);
+            $scope = $storageScope === SystemConfig::SCOPE_GLOBAL ? null : $storageScope;
+
+            return trim((string)$smtp->resolvePublicFromEmail('Weline_Smtp', $scope));
         } catch (\Throwable) {
             return '';
         }

@@ -643,10 +643,22 @@ final class HeaderCommerceData
      */
     public static function resolveSearchTypes(): array
     {
+        $websiteCode = trim((string)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteCode());
+        $websiteId = max(0, (int)(\Weline\Framework\Runtime\RequestContext::websiteId() ?? 0));
+        @file_put_contents(
+            BP . 'dev/tmp/blog-search-scope.log',
+            date('c') . " resolveSearchTypes code={$websiteCode} id={$websiteId}\n",
+            FILE_APPEND
+        );
         return self::rememberRequestMemo(
             'theme.header.search_types',
             'default',
-            static function (): array {
+            static function () use ($websiteCode, $websiteId): array {
+                @file_put_contents(
+                    BP . 'dev/tmp/blog-search-scope.log',
+                    date('c') . " builder RUN code={$websiteCode} id={$websiteId}\n",
+                    FILE_APPEND
+                );
                 try {
                     /** @var SearchProviderRegistry $registry */
                     $registry = ObjectManager::getInstance(SearchProviderRegistry::class);
@@ -673,8 +685,8 @@ final class HeaderCommerceData
                 ];
             },
             StorefrontThemeCacheCoordinator::headerSearchTypesPolicy(),
-            // v2: scoped frontend types (category children) restored after flat v1.
-            'theme.header.search_types.v2',
+            // v4: website code in logical key — prevent cross-brand blog taxonomy bleed via shared header cache.
+            'theme.header.search_types.v4.' . ($websiteCode !== '' ? $websiteCode : 'w' . $websiteId),
         );
     }
 

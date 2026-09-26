@@ -801,14 +801,14 @@
         defaultLocale: 'zh_Hans_CN',
         autoSaveDelay: 1000,
         // 版本控制 API
-        apiVersions: '',
-        apiSaveVersion: '',
-        apiSwitchVersion: '',
+        apiScopeVersions: '',
+        apiCreateScopeDraft: '',
+        apiSaveScopeVersion: '',
+        apiPublishScopeVersion: '',
+        apiRestoreScopeDefaults: '',
         apiInheritVersion: '',
-        apiRestoreOriginal: '',
         apiClearThemeCache: '',
         apiResetDraftResources: '',
-        apiPublishVersion: '',
         apiDeleteVersion: '',
         // 前端预览 API
         apiStartPreview: '',
@@ -861,6 +861,10 @@
         publishedVersionId: null, // 已发布版本ID
         nextVersionNumber: null, // 后端自增下一版号
         suggestedVersionName: '', // 后端建议预填名（如 v21）
+        contentRevision: 0,
+        selectionRevision: 0,
+        themeVersionId: null,
+        versionMode: 'draft',
         versionPanelOpen: false, // 版本面板是否展开
         // 嵌套距离：elementsFromPoint 得到的层级栈 [0]=最外，lastHoverPoint 为 iframe 内坐标
         lockHeld: false,
@@ -2446,6 +2450,10 @@
         const scope = identityPayload.scope || 'default';
         const targetType = identityPayload.target_type || 'global';
         const targetId = parseInt(identityPayload.target_id || 0, 10) || 0;
+        const themeVersionId = parseInt(
+            state.themeVersionId || state.currentVersionId || 0,
+            10,
+        ) || 0;
         const payload = {
             theme_id: state.themeId || 0,
             page_type: layoutType,
@@ -2457,7 +2465,12 @@
             store_mode: payloadStoreModeFromScopeIdentity(identityPayload),
             target_type: targetType,
             target_id: targetId,
-            version_id: parseInt(state.currentVersionId || 0, 10) || 0,
+            version_id: themeVersionId,
+            theme_version_id: themeVersionId || undefined,
+            mode: state.versionMode || 'draft',
+            content_revision: parseInt(state.contentRevision || 0, 10) || undefined,
+            expected_content_revision: parseInt(state.contentRevision || 0, 10) || undefined,
+            expected_selection_revision: parseInt(state.selectionRevision || 0, 10) || undefined,
             draft_revision_id: currentLayoutDraftRevisionId(),
             editor_context: editorContext,
         };
@@ -2472,6 +2485,23 @@
             ...extra,
         };
     }
+
+    function buildScopeVersionPayload(extra = {}) {
+        const themeVersionId = parseInt(state.currentVersionId || state.themeVersionId || 0, 10) || 0;
+        const contentRevision = parseInt(state.contentRevision || 0, 10) || 0;
+        const selectionRevision = parseInt(state.selectionRevision || 0, 10) || 0;
+        return {
+            ...buildLayoutVersionIdentityPayload(),
+            theme_version_id: themeVersionId,
+            content_revision: contentRevision,
+            expected_content_revision: contentRevision,
+            expected_selection_revision: selectionRevision,
+            mode: state.versionMode || 'draft',
+            ...extra,
+        };
+    }
+
+
 
     function buildCmsEditorLockPayload({
         locale,
@@ -5358,17 +5388,16 @@
             || '/theme/frontend/theme-preview/gateway';
         config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramrender/form';
         config.defaultLocale = container.dataset.defaultLocale || config.defaultLocale || 'zh_Hans_CN';
-
-        // 版本控制 API 端点
-        config.apiVersions = container.dataset.apiVersions || `${config.apiBase}/versions`;
-        config.apiSaveVersion = container.dataset.apiSaveVersion || `${config.apiBase}/save-version`;
-        config.apiSwitchVersion = container.dataset.apiSwitchVersion || `${config.apiBase}/switch-version`;
+        // 版本控制 API 端点（Task 6：仅 scope-*）
+        config.apiScopeVersions = container.dataset.apiScopeVersions || `${config.apiBase}/scope-versions`;
+        config.apiCreateScopeDraft = container.dataset.apiCreateScopeDraft || `${config.apiBase}/create-scope-draft`;
+        config.apiSaveScopeVersion = container.dataset.apiSaveScopeVersion || `${config.apiBase}/save-scope-version`;
+        config.apiPublishScopeVersion = container.dataset.apiPublishScopeVersion || `${config.apiBase}/publish-scope-version`;
+        config.apiRestoreScopeDefaults = container.dataset.apiRestoreScopeDefaults || `${config.apiBase}/restore-scope-defaults`;
         config.apiInheritVersion = container.dataset.apiInheritVersion || `${config.apiBase}/inherit-version`;
-        config.apiRestoreOriginal = container.dataset.apiRestoreOriginal || `${config.apiBase}/restore-original`;
         config.apiClearThemeCache = container.dataset.apiClearThemeCache || `${config.apiBase}/clear-theme-cache`;
         config.apiResetDraftResources = container.dataset.apiResetDraftResources || `${config.apiBase}/reset-draft-resources`;
         config.apiFactoryReset = container.dataset.apiFactoryReset || `${config.apiBase}/factory-reset`;
-        config.apiPublishVersion = container.dataset.apiPublishVersion || `${config.apiBase}/publish-version`;
         config.apiDeleteVersion = container.dataset.apiDeleteVersion || `${config.apiBase}/delete-version`;
 
         // 前端预览 API 端点
@@ -5447,6 +5476,8 @@
             btnPreview: document.getElementById('btnPreview'),
             btnSave: document.getElementById('btnSave'),
             btnPublish: document.getElementById('btnPublish'),
+            btnPublishCurrentPage: document.getElementById('btnPublishCurrentPage'),
+            btnPublishCurrentPageStrip: document.getElementById('btnPublishCurrentPageStrip'),
             btnFrontendPreview: document.getElementById('btnFrontendPreview'),
             btnRestoreLayout: document.getElementById('btnRestoreLayout'),
             btnClearThemeCache: document.getElementById('btnClearThemeCache'),
@@ -6264,6 +6295,9 @@
 
         // 发布按钮
         elements.btnPublish?.addEventListener('click', publishTheme);
+        // 只发布本页：publish_set 只含当前 layout，未选中的资源由后端分配 D' 留在草稿里。
+        elements.btnPublishCurrentPage?.addEventListener('click', publishCurrentPage);
+        elements.btnPublishCurrentPageStrip?.addEventListener('click', publishCurrentPage);
 
         // 预览按钮
         elements.btnPreview?.addEventListener('click', openPreview);
@@ -20149,24 +20183,34 @@
             await flushPendingEditorMutations();
             showToast('Saving version...', 'info');
 
-            const result = await apiJson(config.apiSaveVersion, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
+            const result = await apiJson(
+                config.apiSaveScopeVersion,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(
+                        buildScopeVersionPayload({ version_name: versionName || undefined }),
+                    ),
                 },
-                body: JSON.stringify(buildLayoutVersionIdentityPayload({
-                    version_name: versionName || undefined,
-                })),
-            });
+            );
 
             if (result.success) {
                 showToast(result.message || 'Version saved', 'success');
+                if (result.data?.theme_version_id) {
+                    state.themeVersionId = result.data.theme_version_id;
+                    state.currentVersionId = result.data.theme_version_id;
+                }
+                if (result.data?.content_revision) {
+                    state.contentRevision = result.data.content_revision;
+                }
                 // 刷新版本列表
                 try {
                     await loadVersions();
                 } finally {
                     notifyDashboardLayoutSaved('version-saved', {
-                        versionId: result.data?.version_id || null,
+                        versionId: result.data?.theme_version_id || result.data?.version_id || null,
                     });
                 }
             } else {
@@ -20320,11 +20364,33 @@
     /**
      * 发布主题（标准发布：有改动则同请求建版本）
      */
+    /**
+     * 只发布本页时提交给后端的资源集：只含当前 layout。
+     * 未选中的资源（chrome / appearance / theme_binding）由控制器新分配一个 D' 承接，
+     * 用户可见的差别就是「本页立即上线，其余改动仍留在草稿里继续编辑」。
+     */
+    function currentPagePublishSet() {
+        const layoutType = String(state.layoutType || 'default').trim() || 'default';
+
+        return ['layout:' + layoutType];
+    }
+
     async function publishTheme() {
+        return publishThemeWithScope('all');
+    }
+
+    /** 「只发布本页」入口：只把当前 layout 的改动推上线，其余留在草稿里。 */
+    async function publishCurrentPage() {
+        return publishThemeWithScope('current_page');
+    }
+
+    async function publishThemeWithScope(publishScope) {
         if (!state.themeId) {
             showToast('请先选择主题', 'warning');
             return;
         }
+        const currentPageOnly = publishScope === 'current_page';
+        const publishSetPayload = currentPageOnly ? { publish_set: currentPagePublishSet() } : {};
 
         try {
             const pending = await detectPendingScopedChanges();
@@ -20355,10 +20421,11 @@
                 }
             }
 
-            showToast(window.__('正在发布...'), 'info');
+            showToast(currentPageOnly ? window.__('正在只发布本页...') : window.__('正在发布...'), 'info');
             let result = await requestStandardLayoutPublish({
                 create_version: createVersion,
                 version_name: versionName || undefined,
+                ...publishSetPayload,
             });
             if (!result?.success && result?.code === 'theme_publish_requires_new_version') {
                 const name = await showPromptDialog(
@@ -20374,6 +20441,7 @@
                 result = await requestStandardLayoutPublish({
                     create_version: true,
                     version_name: String(name || '') || undefined,
+                    ...publishSetPayload,
                 });
             }
 
@@ -20507,53 +20575,18 @@
     }
 
     async function requestStandardLayoutPublish(extra = {}) {
-        const payload = buildLayoutVersionIdentityPayload({
-            frontend_theme_id: state.themeId || getCurrentWindowParam('frontend_theme_id') || '',
-            backend_theme_id: getCurrentWindowParam('backend_theme_id') || '',
-            editor_area: state.editorArea || 'frontend',
-            status: state.previewStatus || 'draft',
-            stream: 1,
-            ...extra,
-        });
-        const onProgress = (event) => {
-            const message = String(event && event.message ? event.message : '').trim();
-            const progress = Number(event && event.progress);
-            if (!message) {
-                return;
-            }
-            const suffix = Number.isFinite(progress) ? ` (${Math.max(0, Math.min(100, Math.round(progress)))}%)` : '';
-            showToast(`${message}${suffix}`, 'info');
-        };
-        const nativeFetch = (typeof window.WelineNativeFetch === 'function')
-            ? window.WelineNativeFetch
-            : window.fetch.bind(window);
-        const response = await nativeFetch(config.apiPublishVersion, {
+        const { stream, ...rest } = extra || {};
+        return apiJson(config.apiPublishScopeVersion, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'text/event-stream',
-                'X-Requested-With': 'XMLHttpRequest',
             },
-            credentials: 'include',
-            body: JSON.stringify(payload),
-            __welineNativeFetch: true,
+            body: JSON.stringify(buildScopeVersionPayload({
+                publish_set: 'all',
+                ...rest,
+            })),
         });
-        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-        if (contentType.indexOf('text/event-stream') !== -1) {
-            if (!response.ok) {
-                throw new Error(window.__('发布失败'));
-            }
-            return consumeStandardPublishSse(response, onProgress);
-        }
-        // Fallback: non-SSE JSON (legacy bridge / older server).
-        const json = await response.json();
-        return json;
     }
-
-    /**
-     * #btnPreview — discard editor chrome; open the same storefront path=layout URL
-     * with editor markers (no live preview token / exit float).
-     */
     async function openPreview() {
         if (!state.themeId) {
             showToast('请先选择主题', 'warning');
@@ -21551,15 +21584,26 @@
         try {
             showToast('正在恢复原始布局...', 'info');
 
-            const result = await apiJson(config.apiRestoreOriginal, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
+            const result = await apiJson(
+                config.apiRestoreScopeDefaults,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(
+                        buildScopeVersionPayload(),
+                    ),
                 },
-                body: JSON.stringify(buildLayoutVersionIdentityPayload()),
-            });
+            );
 
             if (result.success) {
+                if (result.data?.draft?.theme_version_id) {
+                    state.themeVersionId = result.data.draft.theme_version_id;
+                    state.currentVersionId = result.data.draft.theme_version_id;
+                    state.contentRevision = result.data.draft.content_revision || 1;
+                    state.versionMode = 'draft';
+                }
                 await loadScopedWorkspace('layout');
                 showToast(result.message || '已恢复到原始布局', 'success');
                 clearSlotSelection();
@@ -22871,6 +22915,10 @@
         state.publishedVersionId = null;
         state.nextVersionNumber = null;
         state.suggestedVersionName = '';
+        state.contentRevision = 0;
+        state.selectionRevision = 0;
+        state.themeVersionId = null;
+        state.versionMode = 'draft';
     }
 
     function resolveSuggestedVersionName(payload) {
@@ -22909,8 +22957,11 @@
         setVersionPanelStatus('加载中...', { updateCurrent: state.versions.length === 0 });
 
         try {
-            const url = new URL(config.apiVersions, window.location.origin);
-            Object.entries(buildLayoutVersionIdentityPayload()).forEach(([key, value]) => {
+            const versionsApi = config.apiScopeVersions;
+            const url = new URL(versionsApi, window.location.origin);
+            Object.entries(
+                buildScopeVersionPayload(),
+            ).forEach(([key, value]) => {
                 if (value !== undefined && value !== null && String(value) !== '') {
                     url.searchParams.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
                 }
@@ -22929,9 +22980,22 @@
                 return;
             }
 
-            state.versions = Array.isArray(result.data.versions) ? result.data.versions : [];
-            state.currentVersionId = result.data.current_version_id;
+            const versionRows = Array.isArray(result.data.versions)
+                ? result.data.versions
+                : (Array.isArray(result.data.sealed_history) ? result.data.sealed_history : []);
+            state.versions = versionRows;
+            state.currentVersionId = result.data.current_version_id
+                || result.data.draft_version_id
+                || null;
             state.publishedVersionId = result.data.published_version_id;
+            state.selectionRevision = result.data.selection_revision || 0;
+            state.contentRevision = result.data.draft_content_revision
+                || result.data.content_revision
+                || 0;
+            state.themeVersionId = result.data.current_version_id
+                || result.data.draft_version_id
+                || null;
+            state.versionMode = result.data.draft_version_id ? 'draft' : (state.versionMode || 'draft');
             const nextNo = parseInt(result.data.next_version_number || 0, 10);
             state.nextVersionNumber = Number.isFinite(nextNo) && nextNo > 0 ? nextNo : null;
             state.suggestedVersionName = resolveSuggestedVersionName(result.data);
@@ -23126,15 +23190,21 @@
         try {
             showToast('正在回撤版本...', 'info');
 
-            const result = await apiJson(config.apiSwitchVersion, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
+            const result = await apiJson(
+                config.apiCreateScopeDraft,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(
+                        buildScopeVersionPayload({
+                                creation_source_kind: 'explicit_historical',
+                                source_theme_version_id: versionId,
+                            }),
+                    ),
                 },
-                body: JSON.stringify(buildLayoutVersionIdentityPayload({
-                    version_id: versionId,
-                })),
-            });
+            );
 
             if (result.success) {
                 navigateEditorShell({

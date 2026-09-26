@@ -74,12 +74,12 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'function handleClearThemeCache(',
             'function openResetDraftModal(',
             'function executeResetDraftResources(',
-            'function setEditorBusy(',
             'function publishTheme(',
             'function initializeEditorLock(',
         ] as $capability) {
             self::assertStringContainsString($capability, $editor, $capability);
         }
+        self::assertStringContainsString("setAttribute('aria-busy'", $editor);
 
         self::assertStringContainsString('skip full preview reload', $editor);
         self::assertStringContainsString("weline:form:prepare-submit", $editor);
@@ -225,8 +225,8 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'data-api-reconcile-required-defaults=',
             'data-api-apply-required-defaults=',
             'data-api-layout-config=',
-            'data-api-versions=',
-            'data-api-restore-original=',
+            'data-api-scope-versions=',
+            'data-api-restore-scope-defaults=',
             'data-api-clear-theme-cache=',
             'data-api-reset-draft-resources=',
             'data-api-publish=',
@@ -240,6 +240,10 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         ] as $contract) {
             self::assertStringContainsString($contract, $template, $contract);
         }
+        self::assertStringNotContainsString('data-api-versions=', $template);
+        self::assertStringNotContainsString('data-api-restore-original=', $template);
+        self::assertStringNotContainsString('data-api-save-version=', $template);
+        self::assertStringNotContainsString('data-api-publish-version=', $template);
 
         self::assertStringContainsString('data-w-component="dialog"', $template);
         self::assertStringContainsString('data-w-component="drawer"', $template);
@@ -251,8 +255,12 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertDoesNotMatchRegularExpression('/<script[^>]+theme-editor-toolbar-overflow\.js/', $template);
         self::assertStringNotContainsString('data-bs-', $template);
         self::assertStringNotContainsString('$this->fetchTagHtml(', $template);
+        // PROD static-cache ternary is the only allowed raw PHP control in this template.
+        self::assertSame(1, \preg_match_all('/<\?php if\b/', $template));
+        self::assertSame(1, \preg_match_all('/<\?php else:/', $template));
+        self::assertSame(1, \preg_match_all('/<\?php endif;/', $template));
         self::assertDoesNotMatchRegularExpression(
-            '/<\?php\s+(?:if|elseif|else|endif|foreach|endforeach|for|endfor|while|endwhile)\b/',
+            '/<\?php\s+(?:elseif|foreach|endforeach|for|endfor|while|endwhile)\b/',
             $template
         );
 
@@ -1206,10 +1214,10 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         $editor = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
         $legacyEditor = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
 
-        $payloadStart = strpos($controller, 'public function getVersionsPayload');
-        $payloadEnd = strpos($controller, 'public function saveVersionPayload');
-        $listStart = strpos($controller, 'public function getVersions()');
-        $listEnd = strpos($controller, 'public function postInheritVersion');
+        $payloadStart = strpos($controller, 'public function getScopeVersionsPayload');
+        $payloadEnd = strpos($controller, 'public function postCreateScopeDraft');
+        $listStart = strpos($controller, 'public function getScopeVersions()');
+        $listEnd = strpos($controller, 'public function postCreateScopeDraft');
         self::assertNotFalse($payloadStart);
         self::assertNotFalse($payloadEnd);
         self::assertNotFalse($listStart);
@@ -1222,6 +1230,8 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'initializeVersionIfNeeded',
             substr($controller, $listStart, $listEnd - $listStart),
         );
+        self::assertStringNotContainsString('public function getVersionsPayload', $controller);
+        self::assertStringNotContainsString('public function getVersions()', $controller);
 
         $getVersionStart = strpos($versions, 'public function getVersion(');
         $getVersionEnd = strpos($versions, 'public function getVersionSnapshot(');
@@ -1232,7 +1242,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringNotContainsString('->load($versionId)', $getVersion);
 
         $inheritStart = strpos($controller, 'public function postInheritVersion');
-        $inheritEnd = strpos($controller, 'public function postSaveVersion');
+        $inheritEnd = strpos($controller, 'public function postClearThemeCache');
         self::assertNotFalse($inheritStart);
         self::assertNotFalse($inheritEnd);
         $inherit = substr($controller, $inheritStart, $inheritEnd - $inheritStart);
@@ -1265,7 +1275,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('loadEditorRequestTheme()', $observer);
         self::assertStringContainsString("return \$area . '|published';", $observer);
         self::assertStringContainsString('function resolvePartialsTheme(', $partials);
-        self::assertStringContainsString('resolveTheme($area, null, false)', $partials);
+        self::assertStringContainsString('resolveTheme($area)', $partials);
     }
 
     private function assertEditorBundleVersionedLinksMatch(string $template): void

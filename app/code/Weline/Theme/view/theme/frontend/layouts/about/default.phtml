@@ -27,7 +27,7 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
 $contact = [
     'site_name' => '',
     'site_description' => (string)WidgetI18n::label('精选优质商品与可靠服务，覆盖日常选购与礼赠场景。'),
-    'contact_email' => 'support@example.com',
+    'contact_email' => SiteContactInfo::PLACEHOLDER_EMAIL,
     'contact_phone' => '',
     'service_hours' => (string)WidgetI18n::label('周一至周五 9:00 - 18:00（法定节假日除外）'),
     'contact_address' => '',

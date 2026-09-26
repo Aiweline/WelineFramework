@@ -50,7 +50,9 @@ final class RouterLegalPublicRoutesContractTest extends TestCase
         $source = (string)file_get_contents($policyPath);
 
         $scopePosition = strpos($source, "\$this->request->addModule('Weline_Theme');");
-        $translationPosition = strpos($source, '__($title)');
+        // 公开路由标题的翻译入口是 Theme WidgetI18n::label（源串默认简体中文），
+        // 不再走 __($title)，否则断言恒为 false 而失去「注册先于翻译」的守护意义。
+        $translationPosition = strpos($source, 'WidgetI18n::label($title)');
 
         self::assertNotFalse($scopePosition, 'Theme request scope must be registered explicitly.');
         self::assertNotFalse($translationPosition, 'Public route title must remain translatable.');

@@ -7,12 +7,13 @@ namespace Weline\Theme\Service\LayoutEntity;
 use Weline\Framework\Cache\CachePolicy;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Service\ThemeScopeVersionService;
 
 /**
  * Cheap chrome/page entity pointers via CachePolicy HotCache only.
  * Never loads full workspace payloads; never keys on RequestContext::getId().
- * wave6-6s: removed parallel process static — rememberPolicy is the sole bag.
+ * Resolves typed ThemeVersionIdentity — no current.json / r-d-s segments.
  */
 final class ThemeLayoutEntityPointerResolver
 {
@@ -37,7 +38,7 @@ final class ThemeLayoutEntityPointerResolver
     }
 
     /**
-     * @return array{version_id:int,path:string}|null
+     * @return array{version_id:int,path:string,scope:string,identity:?ThemeVersionIdentity}|null
      */
     public function resolvePublishedChrome(int $themeId, string $scope): ?array
     {
@@ -45,7 +46,7 @@ final class ThemeLayoutEntityPointerResolver
     }
 
     /**
-     * @return array{version_id:int,path:string}|null
+     * @return array{version_id:int,path:string,scope:string,identity:?ThemeVersionIdentity}|null
      */
     public function resolveCurrentChrome(int $themeId, string $scope): ?array
     {
@@ -53,41 +54,35 @@ final class ThemeLayoutEntityPointerResolver
     }
 
     /**
-     * @return array{path:string,structure_key:string}|null
+     * @return array{path:string,structure_key:string,identity:?ThemeVersionIdentity}|null
      */
     public function resolvePageEntity(
-        int $themeId,
-        string $scope,
-        string $identityHash,
-        string $structureKey,
-        bool $published = true,
-        ?int $releaseId = null,
+        ThemeVersionIdentity $identity,
+        string $layoutIdentityHash,
+        string $structureKey = '',
     ): ?array {
-        $logicalKey = 'page|' . $themeId . '|' . \trim($scope) . '|'
-            . \strtolower(\trim($identityHash)) . '|' . \strtolower(\trim($structureKey))
-            . '|' . ($published ? '1' : '0') . '|' . (int)($releaseId ?? 0);
+        $logicalKey = 'page|' . $identity->ownerKey() . '|'
+            . $identity->themeVersionId . '|' . $identity->mode . '|' . $identity->contentRevision . '|'
+            . \strtolower(\trim($layoutIdentityHash)) . '|' . \strtolower(\trim($structureKey));
 
-        return $this->remember($logicalKey, function () use (
-            $themeId,
-            $scope,
-            $identityHash,
-            $structureKey,
-            $published,
-            $releaseId,
-        ): ?array {
-            $identityKey = $this->paths->identityKey($identityHash);
-            $structureOrRelease = $this->paths->pageStructureOrRelease($structureKey, $published, $releaseId);
-            $path = $this->paths->pagePhtml($themeId, $scope, $identityKey, $structureOrRelease);
+        return $this->remember($logicalKey, function () use ($identity, $layoutIdentityHash, $structureKey): ?array {
+            $layoutKey = $this->paths->identityKey($layoutIdentityHash);
             $binding = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)
-                ->readPageBinding($themeId, $scope, $identityKey, $structureOrRelease);
-            $path = $binding?->templatePath ?? $path;
-            if (!\is_file($path)) {
+                ->readPageBinding($identity, $layoutKey);
+            $resolvedStructure = $binding?->structureKey
+                ?? ($structureKey !== '' ? $this->normalizeStructureKey($structureKey) : '');
+            $path = $binding?->templatePath
+                ?? ($resolvedStructure !== ''
+                    ? $this->paths->pagePhtml($identity, $layoutKey, $resolvedStructure)
+                    : '');
+            if ($path === '' || !\is_file($path)) {
                 return null;
             }
 
             return [
                 'path' => $path,
-                'structure_key' => $structureKey,
+                'structure_key' => $resolvedStructure !== '' ? $resolvedStructure : ($binding?->structureKey ?? ''),
+                'identity' => $identity,
             ];
         });
     }
@@ -112,20 +107,18 @@ final class ThemeLayoutEntityPointerResolver
     }
 
     public function rememberPagePointer(
-        int $themeId,
-        string $scope,
-        string $identityHash,
+        ThemeVersionIdentity $identity,
+        string $layoutIdentityHash,
         string $structureKey,
         string $path,
-        bool $published = true,
-        ?int $releaseId = null,
     ): void {
-        $logicalKey = 'page|' . $themeId . '|' . \trim($scope) . '|'
-            . \strtolower(\trim($identityHash)) . '|' . \strtolower(\trim($structureKey))
-            . '|' . ($published ? '1' : '0') . '|' . (int)($releaseId ?? 0);
+        $logicalKey = 'page|' . $identity->ownerKey() . '|'
+            . $identity->themeVersionId . '|' . $identity->mode . '|' . $identity->contentRevision . '|'
+            . \strtolower(\trim($layoutIdentityHash)) . '|' . \strtolower(\trim($structureKey));
         $this->warm($logicalKey, [
             'path' => $path,
             'structure_key' => $structureKey,
+            'identity' => $identity,
         ]);
     }
 
@@ -138,22 +131,15 @@ final class ThemeLayoutEntityPointerResolver
                 $hotCache->forgetPolicy(self::pointerCachePolicy(), $this->chromeKey($themeId, $scope, true));
                 $hotCache->forgetPolicy(self::pointerCachePolicy(), $this->chromeKey($themeId, $scope, false));
             } catch (\Throwable) {
-                // Best-effort; callers may also bump theme generation.
             }
         }
     }
 
-    public function invalidatePage(
-        int $themeId,
-        string $scope,
-        string $identityHash,
-        string $structureKey,
-        bool $published = true,
-        ?int $releaseId = null,
-    ): void {
-        $logicalKey = 'page|' . $themeId . '|' . \trim($scope) . '|'
-            . \strtolower(\trim($identityHash)) . '|' . \strtolower(\trim($structureKey))
-            . '|' . ($published ? '1' : '0') . '|' . (int)($releaseId ?? 0);
+    public function invalidatePage(ThemeVersionIdentity $identity, string $layoutIdentityHash, string $structureKey = ''): void
+    {
+        $logicalKey = 'page|' . $identity->ownerKey() . '|'
+            . $identity->themeVersionId . '|' . $identity->mode . '|' . $identity->contentRevision . '|'
+            . \strtolower(\trim($layoutIdentityHash)) . '|' . \strtolower(\trim($structureKey));
         $hotCache = $this->resolveHotCache();
         if ($hotCache instanceof StorefrontScopeHotCache) {
             try {
@@ -174,7 +160,7 @@ final class ThemeLayoutEntityPointerResolver
     }
 
     /**
-     * @return array{version_id:int,path:string}|null
+     * @return array{version_id:int,path:string,scope:string,identity:?ThemeVersionIdentity}|null
      */
     private function resolveChromePointer(int $themeId, string $scope, bool $published): ?array
     {
@@ -187,11 +173,18 @@ final class ThemeLayoutEntityPointerResolver
             if ($version === null || $version->getVersionId() < 1) {
                 return null;
             }
-            $path = $this->paths->chromePhtml($themeId, $version->getScope(), $version->getVersionId());
+            $identity = $version->toVersionIdentity();
+            if ($published && $identity->mode !== ThemeVersionIdentity::MODE_FORMAL) {
+                $identity = $identity->withVersion(
+                    $identity->themeVersionId,
+                    ThemeVersionIdentity::MODE_FORMAL,
+                    \max(1, $identity->contentRevision),
+                );
+            }
             $binding = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)
-                ->readChromeBinding($themeId, $version->getScope(), $version->getVersionId());
-            $path = $binding?->templatePath ?? $path;
-            if (!\is_file($path)) {
+                ->readChromeBinding($identity);
+            $path = $binding?->templatePath ?? '';
+            if ($path === '' || !\is_file($path)) {
                 return null;
             }
 
@@ -199,6 +192,7 @@ final class ThemeLayoutEntityPointerResolver
                 'version_id' => $version->getVersionId(),
                 'path' => $path,
                 'scope' => $version->getScope(),
+                'identity' => $identity,
             ];
         });
     }
@@ -206,6 +200,19 @@ final class ThemeLayoutEntityPointerResolver
     private function chromeKey(int $themeId, string $scope, bool $published): string
     {
         return 'chrome|' . ($published ? 'pub' : 'cur') . '|' . $themeId . '|' . \trim($scope);
+    }
+
+    private function normalizeStructureKey(string $structureKey): string
+    {
+        $structureKey = \strtolower(\trim($structureKey));
+        if (\preg_match('/^s([a-f0-9]{64})$/D', $structureKey, $m) === 1) {
+            return $m[1];
+        }
+        if (\preg_match('/^[a-f0-9]{64}$/D', $structureKey) === 1) {
+            return $structureKey;
+        }
+
+        return $structureKey;
     }
 
     /**

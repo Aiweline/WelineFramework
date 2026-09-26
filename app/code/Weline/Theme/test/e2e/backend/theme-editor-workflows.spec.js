@@ -173,6 +173,31 @@ moduleDescribe(test, MODULE, 'theme editor workflows', () => {
         await expect(page.locator('#currentVersionDisplay')).not.toContainText(/Loading|加载中/i, { timeout: 20000 });
         await expect(page.locator('#versionList')).not.toContainText(/Loading|加载中/i, { timeout: 20000 });
 
+        const editorRoot = page.locator('#themeEditor');
+        await expect(editorRoot).toHaveAttribute('data-api-scope-versions', /scope-versions/);
+        await expect(editorRoot).toHaveAttribute('data-api-create-scope-draft', /create-scope-draft/);
+        await expect(editorRoot).toHaveAttribute('data-api-save-scope-version', /save-scope-version/);
+        await expect(editorRoot).toHaveAttribute('data-api-publish-scope-version', /publish-scope-version/);
+        await expect(editorRoot).toHaveAttribute('data-api-restore-scope-defaults', /restore-scope-defaults/);
+
+        const scopeVersions = await callEditorRequest(page, '/theme/backend/theme-editor/scope-versions', 'GET', {
+          theme_id: themeId,
+          page_type: pageType,
+          limit: 20,
+        });
+        expectEditorSuccess(scopeVersions, 'scope versions');
+        expect(scopeVersions.data?.owner?.theme_id || themeId).toBeTruthy();
+
+        const createdDraft = await callEditorRequest(page, '/theme/backend/theme-editor/create-scope-draft', 'POST', {
+          theme_id: themeId,
+          page_type: pageType,
+          creation_source_kind: 'continue_current',
+        });
+        expectEditorSuccess(createdDraft, 'create scope draft');
+        const draftThemeVersionId = Number(
+          createdDraft.data?.theme_version_id || scopeVersions.data?.draft_version_id || 0,
+        );
+
         const buttonSave = await callEditorRequest(page, '/theme/backend/theme-editor/save-widget', 'POST', {
           theme_id: themeId,
           page_type: pageType,
@@ -241,22 +266,26 @@ moduleDescribe(test, MODULE, 'theme editor workflows', () => {
         });
         expectEditorSuccess(updateSort, 'update sort');
 
-        const savedVersion = await callEditorRequest(page, '/theme/backend/theme-editor/save-version', 'POST', {
+        const savedVersion = await callEditorRequest(page, '/theme/backend/theme-editor/save-scope-version', 'POST', {
           theme_id: themeId,
           page_type: pageType,
+          theme_version_id: draftThemeVersionId || undefined,
           version_name: 'E2E visible workflow',
           description: 'Saved by theme editor E2E.',
         });
-        expectEditorSuccess(savedVersion, 'save version');
-        const versionId = Number(savedVersion.data?.version_id || 0);
+        expectEditorSuccess(savedVersion, 'save scope version');
+        const versionId = Number(
+          savedVersion.data?.theme_version_id || savedVersion.data?.version_id || draftThemeVersionId || 0,
+        );
         expect(versionId).toBeGreaterThan(0);
 
-        const published = await callEditorRequest(page, '/theme/backend/theme-editor/publish-version', 'POST', {
+        const published = await callEditorRequest(page, '/theme/backend/theme-editor/publish-scope-version', 'POST', {
           theme_id: themeId,
           page_type: pageType,
-          version_id: versionId,
+          theme_version_id: versionId,
+          publish_set: 'all',
         });
-        expectEditorSuccess(published, 'publish version');
+        expectEditorSuccess(published, 'publish scope version');
 
         await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
         await waitForThemeEditor(page);
@@ -275,11 +304,11 @@ moduleDescribe(test, MODULE, 'theme editor workflows', () => {
         await expect(page.locator('#widgetConfigModal')).toHaveClass(/show/, { timeout: 20000 });
         await expect(page.locator('#widgetConfigModal')).not.toContainText(/Loading|加载中/i, { timeout: 20000 });
 
-        const restored = await callEditorRequest(page, '/theme/backend/theme-editor/restore-original', 'POST', {
+        const restored = await callEditorRequest(page, '/theme/backend/theme-editor/restore-scope-defaults', 'POST', {
           theme_id: themeId,
           page_type: pageType,
         });
-        expectEditorSuccess(restored, 'restore original');
+        expectEditorSuccess(restored, 'restore scope defaults');
 
         await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
         await waitForThemeEditor(page);

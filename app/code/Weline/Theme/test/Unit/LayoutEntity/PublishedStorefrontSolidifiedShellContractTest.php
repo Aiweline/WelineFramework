@@ -171,10 +171,12 @@ final class PublishedStorefrontSolidifiedShellContractTest extends TestCase
             \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityPaths.php'
         );
 
-        self::assertStringContainsString("return \$this->pageDir(\$themeId, \$scope, \$identityKey, \$structureOrRelease) . 'layout.phtml';", $src);
-        self::assertStringContainsString("return \$this->pageDir(\$themeId, \$scope, \$identityKey, \$structureOrRelease) . 'shell.phtml';", $src);
+        // Paths v3: shell lives beside layout under structures/v{V}/{structure_key}/.
+        self::assertStringContainsString("return \$this->pageStructureDir(\$identity, \$layoutIdentityHash, \$structureKey) . 'layout.phtml';", $src);
+        self::assertStringContainsString("return \$this->pageStructureDir(\$identity, \$layoutIdentityHash, \$structureKey) . 'shell.phtml';", $src);
         self::assertStringContainsString('function shellPhtml', $src);
-        self::assertStringContainsString('wave8-8s5', $src);
+        self::assertStringContainsString('ThemeVersionIdentity', $src);
+        self::assertStringNotContainsString('function pageDir(', $src);
     }
 
     public function testLoadPublishedChromeBakeHtmlDirectEnsuresThenLogs(): void
