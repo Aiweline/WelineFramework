@@ -27,6 +27,7 @@ final class MigratedSetupTaskProvidersContractTest extends TestCase
             'Cdn' => 'CdnCloudflareSetupTaskProvider',
             'Websites' => 'WebsitesDomainHttpsSetupTaskProvider',
             'Smtp' => 'SmtpSetupTaskProvider',
+            'Mail' => 'MailSetupTaskProvider',
         ];
 
         foreach ($expected as $module => $class) {

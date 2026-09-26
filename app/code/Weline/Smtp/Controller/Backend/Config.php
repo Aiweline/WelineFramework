@@ -17,6 +17,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Helper\SmtpSender;
+use Weline\Smtp\Service\MailAccountTransportProvisioner;
 use Weline\Smtp\Service\MailChannelCollector;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
@@ -41,6 +42,13 @@ class Config extends BackendController
         $storageScope = (string)$workScope['storage_scope'];
         $module = 'Weline_Smtp';
 
+        if (trim((string)$this->request->getGet('ensure_mail', '')) === '1') {
+            $this->runEnsureMailAccountTransport($storageScope, $workScope);
+            $this->redirect($this->scopedConfigUrl($workScope));
+
+            return '';
+        }
+
         $senders = $this->data->getSenders($module, $storageScope);
         $mailAccounts = $this->loadMailSmtpAccounts();
         $contacts = [];
@@ -53,14 +61,39 @@ class Config extends BackendController
         $legacy = $this->data->get('', $module, $storageScope);
         /** @var MailChannelCollector $channelCollector */
         $channelCollector = ObjectManager::getInstance(MailChannelCollector::class);
+        /** @var MailAccountTransportProvisioner $provisioner */
+        $provisioner = ObjectManager::getInstance(MailAccountTransportProvisioner::class);
         $this->assign('senders', $senders);
         $this->assign('mail_accounts', $mailAccounts);
         $this->assign('sender_contacts', $contacts);
         $this->assign('legacy', $legacy);
         $this->assign('mail_channels', $channelCollector->collect());
         $this->assign('channel_bindings', $this->data->getChannelBindings($module, $storageScope));
+        $this->assign('smtp_send_path', $provisioner->detectSendPath($storageScope));
+        $this->assign('smtp_unbound_channels', $provisioner->unboundChannels($storageScope));
+        $configUrl = $this->scopedConfigUrl($workScope);
+        $this->assign(
+            'ensure_mail_url',
+            $configUrl . (str_contains($configUrl, '?') ? '&' : '?') . 'ensure_mail=1'
+        );
         $this->assignScopeVars($workScope);
         return $this->fetch('Weline_Smtp::Backend/Config');
+    }
+
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function postEnsureMail(): string
+    {
+        $workScope = $this->resolveWorkScope(false);
+        $storageScope = (string)$workScope['storage_scope'];
+        $result = $this->runEnsureMailAccountTransport($storageScope, $workScope, false);
+        if ($this->wantsJsonResponse()) {
+            return !empty($result['success'])
+                ? $this->jsonSuccess((string)($result['message'] ?? __('完成')))
+                : $this->jsonError((string)($result['message'] ?? __('失败')));
+        }
+        $this->redirect($this->scopedConfigUrl($workScope));
+
+        return '';
     }
 
     /** @deprecated 兼容旧路由，重定向到 index */
@@ -436,6 +469,35 @@ class Config extends BackendController
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         return json_encode(['success' => false, 'message' => $msg], JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * @param array{storage_scope?:string,website_code?:string,store_code?:string,channel_code?:string} $workScope
+     * @return array<string, mixed>
+     */
+    private function runEnsureMailAccountTransport(string $storageScope, array $workScope, bool $flash = true): array
+    {
+        /** @var MailAccountTransportProvisioner $provisioner */
+        $provisioner = ObjectManager::getInstance(MailAccountTransportProvisioner::class);
+        $accountId = (int)$this->request->getGet('mail_account_id', 0);
+        if ($accountId <= 0 && $this->request->isPost()) {
+            $accountId = (int)$this->request->getPost('mail_account_id', 0);
+        }
+        // 默认切全渠道；显式 rebind=0 时仅补未绑定
+        $rebindRaw = $this->request->isPost()
+            ? (string)$this->request->getPost('rebind', $this->request->getGet('rebind', '1'))
+            : (string)$this->request->getGet('rebind', '1');
+        $rebindAll = !in_array(strtolower(trim($rebindRaw)), ['0', 'false', 'no', 'off'], true);
+        $result = $provisioner->ensure($storageScope, $accountId, $rebindAll);
+        if ($flash) {
+            if (!empty($result['success'])) {
+                $this->getMessageManager()->addSuccess((string)($result['message'] ?? __('自建邮局传输已配置')));
+            } else {
+                $this->getMessageManager()->addError((string)($result['message'] ?? __('自建邮局一键配置失败')));
+            }
+        }
+
+        return $result;
     }
 
     private function loadMailSmtpAccounts(): array
