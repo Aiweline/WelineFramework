@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Observer;
 
+use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Websites\Service\WebsiteCrawlerPolicyService;
@@ -38,6 +39,13 @@ class WebsiteCrawlerPolicySaveAfter implements ObserverInterface
             return;
         }
 
-        $this->policyService->saveForWebsite($websiteId, $extensions['crawler']);
+        $connection = $event->getData('connection');
+        if (!$connection instanceof ConnectionFactory) {
+            throw new \RuntimeException(
+                'website_save_after missing connection; crawler policy must not open a second PDO'
+            );
+        }
+
+        $this->policyService->saveForWebsite($websiteId, $extensions['crawler'], $connection);
     }
 }

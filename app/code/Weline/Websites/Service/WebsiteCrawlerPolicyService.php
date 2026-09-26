@@ -66,9 +66,15 @@ class WebsiteCrawlerPolicyService
      * @param array<string, mixed> $input
      * @return array<string, mixed>
      */
-    public function saveForWebsite(int $websiteId, array $input): array
-    {
+    public function saveForWebsite(
+        int $websiteId,
+        array $input,
+        ?\Weline\Framework\Database\ConnectionFactory $connection = null,
+    ): array {
         $normalized = $this->normalizeInput($input);
+        if ($connection !== null) {
+            $this->policyModel->setConnection($connection);
+        }
         $this->policyModel->loadByWebsiteId($websiteId);
         if (!$this->policyModel->getId()) {
             $this->policyModel->setData(WebsiteCrawlerPolicy::schema_fields_WEBSITE_ID, $websiteId);
@@ -84,7 +90,7 @@ class WebsiteCrawlerPolicyService
             ->setData(WebsiteCrawlerPolicy::schema_fields_UPDATED_AT, \date('Y-m-d H:i:s'))
             ->save();
 
-        $this->syncToWlsDomainOverrides($websiteId, $normalized);
+        $this->syncToWlsDomainOverrides($websiteId, $normalized, $connection);
 
         return $normalized;
     }
@@ -147,17 +153,17 @@ class WebsiteCrawlerPolicyService
     }
 
     /**
-     * @param array<string, mixed> $rule
-     */
-    /**
      * Persist domain_overrides then republish RuntimePolicy so Workers enforce
      * the site crawler rule immediately (immutable attack_guard matcher).
      *
      * @param array<string, mixed> $rule
      * @return array{synced:bool,hosts:list<string>,published:bool,digest:string,message:string}
      */
-    public function syncToWlsDomainOverrides(int $websiteId, array $rule): array
-    {
+    public function syncToWlsDomainOverrides(
+        int $websiteId,
+        array $rule,
+        ?\Weline\Framework\Database\ConnectionFactory $connection = null,
+    ): array {
         $empty = [
             'synced' => false,
             'hosts' => [],
@@ -168,7 +174,7 @@ class WebsiteCrawlerPolicyService
         if (!\class_exists(AttackDetector::class)) {
             return $empty + ['message' => 'AttackDetector unavailable'];
         }
-        $hosts = $this->resolveWebsiteHosts($websiteId);
+        $hosts = $this->resolveWebsiteHosts($websiteId, $connection);
         if ($hosts === []) {
             return $empty + ['message' => 'No website hosts to sync'];
         }
@@ -241,10 +247,15 @@ class WebsiteCrawlerPolicyService
     /**
      * @return list<string>
      */
-    public function resolveWebsiteHosts(int $websiteId): array
-    {
+    public function resolveWebsiteHosts(
+        int $websiteId,
+        ?\Weline\Framework\Database\ConnectionFactory $connection = null,
+    ): array {
         $hosts = [];
         try {
+            if ($connection !== null) {
+                $this->websiteDomainModel->setConnection($connection);
+            }
             $rows = $this->websiteDomainModel
                 ->reset()
                 ->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
@@ -266,6 +277,9 @@ class WebsiteCrawlerPolicyService
         }
 
         try {
+            if ($connection !== null) {
+                $this->websiteModel->setConnection($connection);
+            }
             $this->websiteModel->reset()->load($websiteId);
             $url = (string)$this->websiteModel->getData(Website::schema_fields_URL);
             $host = $this->normalizeHost(\parse_url($url, PHP_URL_HOST) ?: $url);

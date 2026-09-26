@@ -23,11 +23,18 @@ ResourceChange 的 sync/async 消费或 afterCommit 调度。
 
 ```php
 [
-    'website_id' => 1,  // 网站ID（必填，整数）
-    'website' => $website,  // 网站对象（可选）
-    // 其他相关数据...
+    'website_id' => 1,  // 网站ID（必填，整数；0=default 合法）
+    'website' => [...], // 当前 Website 行数据（数组）
+    'post_data' => [...], // 原始 POST（含 extensions[{module}]）
+    'address_list' => [...],
+    'action' => 'edit', // add|edit|quickSave
+    'connection' => $connection, // 外层写意图主库 ConnectionFactory（必填）
 ]
 ```
+
+观察者写入同库关联数据时**必须** `setConnection($event['connection'])`（或把 connection 传给 Service）。
+禁止在活动事务内另租同 DSN 第二 PDO，否则事务协调器会抛
+「活动事务检测到同配置的第二个 PDO，事务已标记为仅回滚」。
 
 ## 观察者实现规范
 
@@ -47,8 +54,12 @@ public function execute(\Weline\Framework\Event\Event $event): void
     if ($websiteId < 0) {
         throw new \InvalidArgumentException(__('website_id 不能为负数'));
     }
-    
-    // 仅保存必须与 Website 一起提交的同库关联数据
+    $connection = $event->getData('connection');
+    if (!$connection instanceof \Weline\Framework\Database\ConnectionFactory) {
+        throw new \RuntimeException('website_save_after missing connection');
+    }
+
+    // 仅保存必须与 Website 一起提交的同库关联数据（绑同一 connection）
     // ...
 }
 ```
