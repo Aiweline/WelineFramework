@@ -7,6 +7,9 @@ namespace Weline\Product\Service;
 /**
  * Storefront listing pager: sliding window + ellipsis so large page counts
  * do not emit hundreds of numbered links.
+ *
+ * Prev/next labels stay Chinese source strings. Templates must resolve them
+ * with WidgetI18n::label at render time — controller-time __() can lag path locale.
  */
 final class StorefrontListingPager
 {
@@ -77,7 +80,7 @@ final class StorefrontListingPager
                 'page' => $prev,
                 'url' => $this->listingFilter->buildListingUrl($baseUrl, $resolveParams($prev)),
                 'disabled' => $currentPage <= 1,
-                'label' => (string)__('上一页'),
+                'label' => '上一页',
             ];
         }
 
@@ -127,7 +130,7 @@ final class StorefrontListingPager
                 'page' => $next,
                 'url' => $this->listingFilter->buildListingUrl($baseUrl, $resolveParams($next)),
                 'disabled' => $currentPage >= $totalPages,
-                'label' => (string)__('下一页'),
+                'label' => '下一页',
             ];
         }
 
