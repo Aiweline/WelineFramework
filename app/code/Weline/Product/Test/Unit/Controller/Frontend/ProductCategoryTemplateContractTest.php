@@ -43,6 +43,11 @@ final class ProductCategoryTemplateContractTest extends TestCase
 
         self::assertStringContainsString('data-testid="storefront-category-toolbar"', $template);
         self::assertStringContainsString('data-testid="storefront-category-sort"', $template);
+        // Heavy-locale packs only prefetch template literals; dynamic __($var) stays Chinese.
+        self::assertStringContainsString("__('默认排序')", $template);
+        self::assertStringContainsString("__('价格从低到高')", $template);
+        self::assertStringContainsString("__('价格从高到低')", $template);
+        self::assertStringContainsString("__('名称 A-Z')", $template);
         self::assertStringContainsString('data-testid="storefront-category-grid"', $template);
         self::assertStringContainsString('amz-plp__results-bar', $template);
         self::assertStringContainsString('ProductCardRenderer::projectFromOffers', $template);

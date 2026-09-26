@@ -442,7 +442,7 @@ final class ProductCardRenderer
 
         return [
             'show_price' => self::toBool($options['show_price'] ?? true, true),
-            'show_rating' => self::toBool($options['show_rating'] ?? true, true),
+            'show_rating' => self::toBool($options['show_rating'] ?? false, false),
             'show_add_to_cart' => self::toBool($options['show_add_to_cart'] ?? true, true),
             'show_wishlist' => self::toBool($options['show_wishlist'] ?? true, true),
             'show_compare' => self::toBool($options['show_compare'] ?? true, true),
