@@ -22,6 +22,17 @@ final class CategoryFiltersWidgetContractTest extends TestCase
         self::assertTrue((bool)($injections[0]['required'] ?? false));
     }
 
+    public function testWidgetCssPadsFilterPanelAwayFromSidebarEdge(): void
+    {
+        $css = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/css/widgets/widget-category-filters.css',
+        );
+
+        self::assertStringContainsString('padding-inline: var(--spacing-component-padding', $css);
+        self::assertStringContainsString('padding-block: var(--spacing-md', $css);
+        self::assertStringContainsString('box-sizing: border-box', $css);
+    }
+
     public function testWidgetTemplateExposesAttributeAndPriceContracts(): void
     {
         $template = (string)file_get_contents(

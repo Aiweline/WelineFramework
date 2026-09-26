@@ -1,4 +1,12 @@
-.w-filters { color: #0f1111; font-size: 13px; line-height: 1.35; }
+.w-filters {
+    box-sizing: border-box;
+    /* 侧栏内容不得贴边；水平呼吸用组件内边距 Token */
+    padding-block: var(--spacing-md, 1rem);
+    padding-inline: var(--spacing-component-padding, var(--spacing-md, 1rem));
+    color: #0f1111;
+    font-size: 13px;
+    line-height: 1.35;
+}
 .w-filters__clear-row { margin-bottom: 12px; }
 .w-filters__clear { color: #c45500; text-decoration: none; font-weight: 600; }
 .w-filters__clear:hover { text-decoration: underline; }
