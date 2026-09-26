@@ -9,6 +9,7 @@ use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Context;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Search\Api\SearchProviderInterface;
 use Weline\Search\Api\SearchScopeOptionsProviderInterface;
 
@@ -93,10 +94,12 @@ class SearchProviderRegistry
      */
     public function listTypes(bool $withScopes = true, ?string $area = null): array
     {
-        $logicalKey = 'search.provider_types.v2.'
+        $websiteId = max(0, (int)(RequestContext::websiteId() ?? 0));
+        $logicalKey = 'search.provider_types.v3.'
             . ($withScopes ? 'scoped' : 'flat')
             . '.'
-            . ($area !== null && trim($area) !== '' ? strtolower(trim($area)) : 'all');
+            . ($area !== null && trim($area) !== '' ? strtolower(trim($area)) : 'all')
+            . '.w' . $websiteId;
         $builder = fn(): array => $this->buildTypes($withScopes, $area);
 
         // Search type metadata is storefront presentation data. Keep the
