@@ -76,7 +76,8 @@ Master/Worker 或平台副作用前统一拒绝不满足该合同的 PHP，`serv
 
 1. **命中可信宿主 Weline Gateway** → `gateway`，共享宿主 80/443。
 2. **宿主没有可用 Nginx，且本项目托管 Nginx 已安装** → `legacy`，WLS 自建项目级
-   Nginx 边缘（端口 `8080/8443 + projectPortOffset`）。
+   Nginx 边缘（默认监听公网 `80/443`；被占用或本用户无权绑定时回退
+   `8080/8443 + projectPortOffset`）。
 3. **以上都不成立** → `wls`，高端口纯 WLS 回退。
 
 第 2 级的两个条件缺一不可：
@@ -230,7 +231,30 @@ php bin/w server:stop   # managed=true 时会先停本项目托管 Nginx
 
 普通 `server:start`、reload 和 restart **绝不下载或编译 Nginx**。托管模式缺少二进制时，启动返回非零并提示先显式执行 `php bin/w server:nginx:install`；不会在启动路径中自动补装。Unix 显式安装在 PCRE2 头文件缺失时 fail closed，安装 manifest 和运行时 capability probe 都要求 rewrite 模块；不会回退到 `--without-http_rewrite_module`。
 
-对外访问端口为 `8080/8443 + projectPortOffset`（可用 env 覆盖）。安装与运行目录均按项目 BP 和平台隔离；Linux 默认目录还包含架构后缀，Windows 使用项目身份哈希对应的本机目录。托管 conf 默认：HTTPS `http2 on`（客户端不支持时自动回退 HTTP/1.1）、HTTP/1.1 upstream keepalive、`upstream_keepalive_timeout_sec=5`、`access_log off`、较大 `worker_connections`。Worker reload 的 drain 安全下限为 upstream idle timeout 再加 5 秒。启动前同时校验 manifest 的平台/架构/官方包摘要/已安装二进制摘要、实际 `nginx -V` 版本、HTTP/2、HTTP SSL、rewrite 与 OpenSSL ≥ 1.1.1；发布后还必须完成证书指纹绑定的 TLS 1.3 握手，并分别以真实 H2/H1 请求抵达 owner 绑定的 WLS health、匹配 generation 与 backend identity。install/start/reload/stop 共用项目级生命周期锁。新配置先写候选文件并通过 `nginx -t`，再发布、reload；任一步失败都会恢复磁盘上的上一版配置，而且只有旧 owner generation 被真实请求重新证明后才继续运行，否则停止 Nginx 并保留恢复证据。
+对外访问端口**默认就是公网 `80/443`** —— 托管 Nginx 是本项目的公网网关，正常状态就该占用公网端口。只有当 `80/443` 已被**别的**进程占用（例如宿主 Nginx 已监听），或当前用户无权绑定特权端口（Linux 非 root 且未 `setcap`）时，才逐端口回退到 `8080/8443 + projectPortOffset`；回退不静默，`server:nginx:status` 的 `configured_port_source` / `configured_port_notes` 会写明是哪个端口、因为什么回退。两端都可用 env `wls.edge.nginx.listen_http|listen_https` 或环境变量 `WLS_NGINX_LISTEN_HTTP|WLS_NGINX_LISTEN_HTTPS` 显式指定（显式指定时不再做占用探测，端口可用性由运维负责）。判断 `80/443` 是否可用必须用**通配地址**绑定探测：BSD/macOS 允许具体地址与通配监听共存，绑 `127.0.0.1:80` 在别人已 `listen *:80` 时仍会成功，会把已占用误判成空闲；如果占用者正是本项目托管 Nginx 自己（重载/证书续期路径），则继续沿用该端口，绝不把健康的公网入口挪到高位端口。安装与运行目录均按项目 BP 和平台隔离；Linux 默认目录还包含架构后缀，Windows 使用项目身份哈希对应的本机目录。托管 conf 默认：HTTPS `http2 on`（客户端不支持时自动回退 HTTP/1.1）、HTTP/1.1 upstream keepalive、`upstream_keepalive_timeout_sec=5`、`access_log off`、较大 `worker_connections`。Worker reload 的 drain 安全下限为 upstream idle timeout 再加 5 秒。启动前同时校验 manifest 的平台/架构/官方包摘要/已安装二进制摘要、实际 `nginx -V` 版本、HTTP/2、HTTP SSL、rewrite 与 OpenSSL ≥ 1.1.1；发布后还必须完成证书指纹绑定的 TLS 1.3 握手，并分别以真实 H2/H1 请求抵达 owner 绑定的 WLS health、匹配 generation 与 backend identity。install/start/reload/stop 共用项目级生命周期锁。新配置先写候选文件并通过 `nginx -t`，再发布、reload；任一步失败都会恢复磁盘上的上一版配置，而且只有旧 owner generation 被真实请求重新证明后才继续运行，否则停止 Nginx 并保留恢复证据。
+
+#### 实现约定：公网端口探测与「端口归谁」判定
+
+- **占用探测必须绑通配地址**。托管 conf 里是裸 `listen 80;`（即 `0.0.0.0`）。BSD/macOS
+  允许「具体地址」与「通配监听」共存：别人已经 `listen *:80` 时，绑 `127.0.0.1:80`
+  依然会成功。因此不能复用 `Processer::isPortFreeByBindProbe()`（它绑 `127.0.0.1`），
+  必须自己绑 `0.0.0.0` 并读 errno 区分 `EADDRINUSE`（被占）与 `EACCES/EPERM`（无权限）。
+  本机实测：持 `*:18099` 时绑 `0.0.0.0:18099` 得 `EADDRINUSE(48)`，而绑
+  `127.0.0.1:18099` 与 `[::]:18099` 都成功 —— 所以也不要额外探 IPv6，它对已占用的
+  IPv4 端口同样返回成功。
+- **「是不是自己的网关」不能只看 kernel 监听者 PID**。同一端口可以被**多个**进程同时
+  listen（macOS/BSD 允许具体地址与通配共存），而 `Processer::getProcessIdByPort()`
+  只返回 `lsof` 的第一条，可能是同端口另一个地址上的无关进程。实测本机：托管 Nginx
+  master 持 `*:443`，`getProcessIdByPort(443)` 却返回了另一个只监听 `127.0.0.1:443`
+  的桌面应用 PID ⇒ 只看 PID 会把「自己的网关」判成外人占用，把健康的公网入口挪到高位
+  端口。判据改为「我们自己的 master 存活（`run/nginx.pid`）**且** 端口被我们自己的配置
+  声明（owner 记录或当前生效 conf 的 `listen` 指令）」，kernel PID 比对只作最后兜底。
+- **显式配置不做探测**。`wls.edge.nginx.listen_http|listen_https`（或
+  `WLS_NGINX_LISTEN_HTTP|WLS_NGINX_LISTEN_HTTPS`）一旦指定，端口可用性由运维负责；
+  显式端口与解析出的另一侧公网端口撞车时直接报错，不静默生成自相冲突的 conf。
+- **无权限绑定也算回退理由**。Linux 非 root 且未 `setcap` 时 `80/443` 绑不上，
+  此时与「被占用」同样回退到 offset，只是 `source`/`notes` 里写明是权限原因 ——
+  静默换端口会把「网关没拿到公网端口」藏起来。
 
 每次托管 Nginx reload 还执行独立的 `fresh-share-across-nginx-reload-v1` 连续性事务：候选发布前用新 SSL share 建立一个 fresh TLS 1.3 Session 并保留该 share；新 generation 激活、旧 Worker 排水后，使用同一 share 在 fresh TCP 上恢复。只有 Nginx Master PID 和证书摘要不变、generation 已变化、结果为 `r`、新旧 Nginx Worker PID 不同且恢复握手 ≤ 50ms 才通过。它证明 Nginx shared SSL session cache/ticket 在 graceful reload 期间连续，不能推导 PHP Stream/WLS 或 HTTP/3/QUIC Session Resumption。
 
@@ -281,7 +305,7 @@ ACME HTTP-01 也只走项目托管 Nginx：`/.well-known/acme-challenge/` 明确
 ],
 ```
 
-- **公网端口**：默认由项目托管 Nginx 监听，默认是 `8080/8443 + projectPortOffset`，也可由 env 覆盖为 80/443 等端口；WLS 自动固定为 loopback 明文 H1 高端口。`--no-nginx` 时由纯 WLS 直接监听指定端口并默认启用 HTTPS。
+- **公网端口**：默认由项目托管 Nginx 监听**公网 `80/443`**；只有 `80/443` 被别的进程占用或当前用户无权绑定时才逐端口回退 `8080/8443 + projectPortOffset`（回退原因见 `server:nginx:status`）。可用 env `wls.edge.nginx.listen_http|listen_https` 显式指定，显式指定时不再探测占用。WLS 自动固定为 loopback 明文 H1 高端口。`--no-nginx` 时由纯 WLS 直接监听指定端口并默认启用 HTTPS。
 - 配置优先级：**命令行参数 > env.servers[实例名] > env.server > 默认值**。
 - Nginx 模式的 `auto` 在所有平台都选择 Direct：Windows 为 Nginx 均衡的独立 `worker_ports`；Linux 优先经能力验证的 `reuseport`，不可用时回退 Master-owned `shared_fd`；macOS 使用 Master-owned `shared_fd`。纯 WLS 模式在 macOS/Linux 继续使用 Direct，在 Windows 固定 Dispatcher；纯 WLS Windows 显式 Direct/independent 均拒绝。
 

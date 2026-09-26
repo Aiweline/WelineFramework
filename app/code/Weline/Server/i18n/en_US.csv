@@ -2430,7 +2430,7 @@ Endpoint：,Endpoint:
 "强制重新获取并按平台重新安装（macOS/Linux 编译，Windows 解压官方预编译包）","Reacquire and reinstall for the current platform (compile on macOS/Linux; extract the official prebuilt package on Windows)"
 隔离,isolation
 "每个项目使用独立安装根；Windows 固定使用本机 LOCALAPPDATA，避免 UNC/共享盘解压","Each project uses an isolated install root; Windows always uses local LOCALAPPDATA to avoid UNC/shared-volume extraction."
-"未配置时使用 8080/8443 + projectPortOffset","Use 8080/8443 + projectPortOffset when not configured"
+"默认监听公网 80/443；被占用或本用户无权绑定时回退 8080/8443 + projectPortOffset","Listens on the public 80/443 by default; falls back to 8080/8443 + projectPortOffset only when those ports are taken or this user cannot bind them"
 macOS,macOS
 "需 Xcode CLT、OpenSSL 3 与 PCRE2；可执行 brew install openssl@3 pcre2","Requires Xcode CLT, OpenSSL 3 and PCRE2; executable brew install openssl@3 pcre2"
 Linux,Linux
@@ -3542,3 +3542,11 @@ Nginx-only,Nginx-only
 "检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空...","Server already running; full generation restart: enable maintenance and drain all Workers before switching..."
 滚动排水重启,"Rolling drain restart"
 强制完整重启,"Force full restart"
+端口来源,"Port source"
+端口说明,"Port notes"
+"HTTP 监听：%{1}，HTTPS 监听：%{2}（来源：%{3}，offset=%{4}）","HTTP listening: %{1}, HTTPS listening: %{2} (source: %{3}, offset=%{4})"
+"端口说明：%{1}","Port notes: %{1}"
+显式配置,"Explicitly configured"
+公网默认 80/443,"Public default 80/443"
+已回退项目偏移,"Fell back to project offset"
+当前运行实例,"Currently running instance"

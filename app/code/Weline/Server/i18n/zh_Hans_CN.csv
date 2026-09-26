@@ -2430,7 +2430,7 @@ Endpoint：,端点：
 "强制重新获取并按平台重新安装（macOS/Linux 编译，Windows 解压官方预编译包）","强制重新获取并按平台重新安装（macOS/Linux 编译，Windows 解压官方预编译包）"
 隔离,隔离
 "每个项目使用独立安装根；Windows 固定使用本机 LOCALAPPDATA，避免 UNC/共享盘解压","每个项目使用独立安装根；Windows 固定使用本机 LOCALAPPDATA，避免 UNC/共享盘解压"
-"未配置时使用 8080/8443 + projectPortOffset","未配置时使用 8080/8443 + projectPortOffset"
+"默认监听公网 80/443；被占用或本用户无权绑定时回退 8080/8443 + projectPortOffset","默认监听公网 80/443；被占用或本用户无权绑定时回退 8080/8443 + projectPortOffset"
 macOS,macOS
 "需 Xcode CLT、OpenSSL 3 与 PCRE2；可执行 brew install openssl@3 pcre2","需 Xcode CLT、OpenSSL 3 与 PCRE2；执行brew install openssl@3 pcre2"
 Linux,Linux
@@ -3542,3 +3542,11 @@ Nginx-only,"仅限 Nginx"
 "检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空...","检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空..."
 滚动排水重启,滚动排水重启
 强制完整重启,强制完整重启
+端口来源,端口来源
+端口说明,端口说明
+"HTTP 监听：%{1}，HTTPS 监听：%{2}（来源：%{3}，offset=%{4}）","HTTP 监听：%{1}，HTTPS 监听：%{2}（来源：%{3}，offset=%{4}）"
+"端口说明：%{1}","端口说明：%{1}"
+显式配置,显式配置
+公网默认 80/443,公网默认 80/443
+已回退项目偏移,已回退项目偏移
+当前运行实例,当前运行实例
