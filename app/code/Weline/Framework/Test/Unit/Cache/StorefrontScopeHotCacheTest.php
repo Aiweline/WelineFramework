@@ -113,6 +113,64 @@ final class StorefrontScopeHotCacheTest extends TestCase
         // peek(miss) + remember(shared_read+recheck) + peek(L2 after L1 reset)
         self::assertSame(['read', 'read', 'read', 'read'], $adapter->events);
     }
+
+    public function testForgetPolicyAcrossGenerationsPurgesWarmSharedEntry(): void
+    {
+        $service = $this->policyService('unit_scope_hot_forget', $adapter);
+        $policy = new \Weline\Framework\Cache\CachePolicy(
+            resource: 'unit.forget',
+            pool: 'unit_scope_hot_forget',
+            scope: 'global',
+            freshTtlSeconds: 60,
+            staleTtlSeconds: 120,
+        );
+
+        self::assertSame('warm', $service->rememberPolicy($policy, 'demo.key', static fn(): string => 'warm'));
+        StorefrontScopeHotCache::resetProcessCache();
+        self::assertSame('warm', $service->peekPolicy($policy, 'demo.key'));
+
+        self::assertGreaterThanOrEqual(1, $service->forgetPolicyAcrossGenerations($policy, 'demo.key'));
+        StorefrontScopeHotCache::resetProcessCache();
+        self::assertNull($service->peekPolicy($policy, 'demo.key'));
+    }
+
+    public function testForgetPolicyAcrossGenerationsResolvesDependencyVector(): void
+    {
+        $generation = $this->createMock(\Weline\Framework\Cache\Contract\NamespaceGenerationInterface::class);
+        $generation->method('fingerprint')->willReturn('fp-test-1');
+        $service = $this->policyService('unit_scope_hot_forget_dep', $adapter, $generation);
+        $policy = new \Weline\Framework\Cache\CachePolicy(
+            resource: 'unit.forget.dep',
+            pool: 'unit_scope_hot_forget_dep',
+            scope: 'global',
+            dependencies: ['theme'],
+            freshTtlSeconds: 60,
+            staleTtlSeconds: 120,
+        );
+
+        self::assertSame('warm', $service->rememberPolicy($policy, 'demo.key', static fn(): string => 'warm'));
+        StorefrontScopeHotCache::resetProcessCache();
+        self::assertSame('warm', $service->peekPolicy($policy, 'demo.key'));
+
+        self::assertGreaterThanOrEqual(1, $service->forgetPolicyAcrossGenerations($policy, 'demo.key'));
+        StorefrontScopeHotCache::resetProcessCache();
+        self::assertNull($service->peekPolicy($policy, 'demo.key'));
+    }
+
+    private function policyService(string $poolId, ?InMemoryAdapter &$adapter = null, mixed $generation = null): StorefrontScopeHotCache
+    {
+        $adapter = new InMemoryAdapter();
+        $pool = new CachePool($poolId, $adapter, jitterRatio: 0.0);
+        $cacheManager = $this->createMock(CacheManager::class);
+        $cacheManager->method('pool')->willReturn($pool);
+        $cacheManager->method('registerPolicy')->willReturnArgument(0);
+        if ($generation === null) {
+            $generation = $this->createMock(\Weline\Framework\Cache\Contract\NamespaceGenerationInterface::class);
+            $generation->method('fingerprint')->willReturn('fp-test-1');
+        }
+
+        return new StorefrontScopeHotCache($cacheManager, $generation, new ImmediateSingleFlight());
+    }
 }
 
 final class InMemoryAdapter implements CacheAdapterInterface
