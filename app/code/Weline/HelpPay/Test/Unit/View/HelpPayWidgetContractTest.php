@@ -206,9 +206,11 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('payerBillingRequired', $js);
         self::assertStringContainsString('startPayerPayment', $js);
         self::assertStringContainsString('startQuickPayment', $js);
-        self::assertStringContainsString("method === 'fake_card'", $js);
         self::assertStringContainsString('/payment/success?transaction_no=', $js);
-        self::assertStringContainsString("'fake_card'", $js);
+        // 壳不得硬编码具体支付方式码：方式由服务端按 Provider 列表下发；
+        // 列表为空时明确提示，不得编造兜底 code（见 HelpPayNoPaymentMethodFallbackContractTest）。
+        self::assertStringNotContainsString('fake_card', $js);
+        self::assertStringContainsString("t('noPaymentMethod'", $js);
         self::assertStringContainsString('onQuickSelfPayClick', $js);
         self::assertStringContainsString('onPayerPayClick', $js);
         self::assertStringContainsString('data-helppay-billing-mount', $js);
