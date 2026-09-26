@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Blog',
-    'version' => '1.0.47',
+    'version' => '1.0.48',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Websites' => '*',
@@ -22,5 +22,7 @@ return [
         'Weline_I18n' => '*',
         'Weline_Review' => '*',
     ],
-    'provides' => [],
+    'provides' => [
+        \Weline\Blog\Api\Sitemap\BlogSitemapContentSourceInterface::class => \Weline\Blog\Service\BlogContentResolver::class,
+    ],
 ];
