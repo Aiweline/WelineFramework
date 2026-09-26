@@ -560,6 +560,7 @@ URL,URL
 下载备份：,"Download backup:"
 确定要删除这个备份吗？,"Are you sure you want to delete this backup?"
 删除备份：,"Delete backup:"
+"WelineFramework Admin","WelineFramework Admin"
 用户不存在，请联系管理员,"The user does not exist, please contact the administrator"
 用户不存在！,"User does not exist!"
 "框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}（文件与数据库均未找到）。请修复 menu.xml 的 parent/source 链。","Framework contract error: broken menu ACL chain. Menu %{1} (module %{2}) declares missing parent %{3} (not found in files or database). Fix the parent/source chain in menu.xml."
