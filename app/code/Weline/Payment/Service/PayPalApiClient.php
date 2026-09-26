@@ -667,6 +667,19 @@ final class PayPalApiClient
     }
 
     /**
+     * 出站代理：只有渠道配置显式给出才使用，否则返回空串强制直连。
+     *
+     * 空串会覆盖 libcurl 对 `HTTPS_PROXY` / `https_proxy` / `ALL_PROXY` 等环境变量的
+     * 隐式继承，避免宿主残留代理把 PayPal 请求劫持到本地端口。
+     */
+    private function resolveOutboundProxy(array $config): string
+    {
+        $proxy = trim((string) ($config['http_proxy'] ?? $config['proxy'] ?? ''));
+
+        return $proxy;
+    }
+
+    /**
      * @param array<string, mixed> $config
      * @param array<int, string> $headers
      * @return array{status:int,body:string}
@@ -691,6 +704,11 @@ final class PayPalApiClient
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        // 出站代理必须显式声明：libcurl 会隐式继承进程的 HTTPS_PROXY / https_proxy，
+        // 一旦宿主 shell 残留代理变量，请求会走本地代理并报
+        // "Failed to connect to api-m.sandbox.paypal.com port 443 via 127.0.0.1"。
+        // 渠道配置显式给出 http_proxy 时才走代理，否则强制直连。
+        curl_setopt($ch, CURLOPT_PROXY, $this->resolveOutboundProxy($config));
         if ($body !== null) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         }
@@ -804,6 +822,12 @@ final class PayPalApiClient
         }
 
         $base = $message !== '' ? $message : ($detailText !== '' ? $detailText : 'PayPal request failed.');
+        // PayPal 的 message 常常是笼统的「The requested action could not be performed, semantically
+        // incorrect, or failed business validation.」，真正的校验原因只在 details[].issue 里。
+        // 只回 message 会让线上问题无法定位（同 R9：网关异常不得被吞成无信息失败）。
+        if ($message !== '' && $detailText !== '' && stripos($base, $detailText) === false) {
+            $base .= ' [' . $detailText . ']';
+        }
         if ($httpStatus === 403 && (stripos($base, 'NOT_AUTHORIZED') !== false || stripos($base, 'insufficient permissions') !== false)) {
             return $base . '（若走旧接口 /v1/shipping/trackers-batch：该权限通常不在 App Features 勾选页，需 PayPal 支持加 scope。本站 Checkout 应优先用 Orders v2 /v2/checkout/orders/{id}/track，见后台 PayPal「发货物流回传」与 doc/payment-methods/paypal/paypal.md）';
         }

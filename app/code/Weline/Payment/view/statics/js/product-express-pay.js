@@ -224,7 +224,7 @@
       guest_token: guestToken,
       cart_type: cartType,
       selling_mode: cartType,
-    });
+    }, { silent: true });
     if (!started || started.success === false) {
       throw new Error((started && started.message) || 'express_start_failed');
     }
