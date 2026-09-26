@@ -258,6 +258,10 @@ final class CheckoutHtmlRenderer
             if ($label !== '') {
                 $prefetch[] = $label;
             }
+            $desc = (string)($method['description'] ?? $method['eta_label'] ?? $method['source'] ?? '');
+            if ($desc !== '') {
+                $prefetch[] = $desc;
+            }
         }
         if ($prefetch !== []) {
             try {
@@ -273,6 +277,9 @@ final class CheckoutHtmlRenderer
             // Prefer already-translated payload; __() no-ops when key is target locale.
             $label = $label !== '' ? (string)__($label) : $code;
             $desc = (string)($method['description'] ?? $method['eta_label'] ?? $method['source'] ?? '');
+            if ($desc !== '') {
+                $desc = (string)__($desc);
+            }
             $amount = (float)($method['amount'] ?? $method['fee'] ?? 0);
             $checked = $index === 0 ? ' checked' : '';
             $priceHtml = $showPrice ? '<span>' . $this->e($this->money($currency, $amount)) . '</span>' : '<span></span>';
@@ -342,6 +349,8 @@ final class CheckoutHtmlRenderer
         foreach ($methods as $index => $method) {
             $code = (string)($method['code'] ?? '');
             $label = (string)($method['label'] ?? $method['title'] ?? $code);
+            // PaymentMethodsProvider returns Chinese sources; translate after prefetch.
+            $label = $label !== '' ? (string)__($label) : $code;
             $desc = trim((string)($method['description'] ?? ''));
             $iconUrl = trim((string)($method['icon_url'] ?? ''));
             $guideUrl = trim((string)($method['guide_url'] ?? ''));
