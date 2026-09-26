@@ -1375,6 +1375,8 @@ class Website extends BackendController
             'post_data' => $postData,
             'address_list' => $addressList,
             'action' => $action,
+            // Same owner connection as the outer Website write intent — observers must not rent a second PDO.
+            'connection' => $this->website->getConnection(),
         ];
         ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
             ->dispatch('Weline_Websites::website_save_after', $eventData);
@@ -2004,13 +2006,15 @@ class Website extends BackendController
                 } elseif ($websiteId !== null) {
                     $params['node'] = WebsiteScopeTreeService::formatNode('website', $websiteId);
                 }
+                // Success: flash once after reload. Error: JSON toast only — do not also
+                // MessageManager+reload (that stacked two identical「错误！」toasts).
                 if ($isError) {
-                    $this->getMessageManager()->addError($message);
+                    $payload['reload'] = false;
                 } else {
                     $this->getMessageManager()->addSuccess($message);
+                    $payload['reload'] = true;
+                    $payload['redirect_url'] = $this->resolveTreeReturnTarget((string)($params['node'] ?? ''));
                 }
-                $payload['reload'] = true;
-                $payload['redirect_url'] = $this->resolveTreeReturnTarget((string)($params['node'] ?? ''));
             } else {
                 $payload['reload'] = !$isError;
                 if (!$isError) {
