@@ -15,9 +15,12 @@ final class CheckoutPageTitleContractTest extends TestCase
         ];
 
         foreach ($checkoutSources as $source) {
-            self::assertStringContainsString("\$this->request->setGet('theme_page_title', (string)__('结账'));", $source);
-            self::assertStringContainsString("\$this->assign('page_title', __('结账'));", $source);
-            self::assertStringContainsString("\$this->assign('title', __('结账'));", $source);
+            self::assertStringContainsString('Parser::prefetchWords', $source);
+            self::assertStringContainsString("\$checkoutTitle = '结账'", $source);
+            self::assertStringContainsString("\$this->request->setGet('theme_page_title', (string)__(\$checkoutTitle));", $source);
+            self::assertStringContainsString("\$this->assign('page_title', __(\$checkoutTitle));", $source);
+            self::assertStringContainsString("\$this->assign('title', __(\$checkoutTitle));", $source);
+            self::assertStringContainsString("确认收货地址、配送方式和支付信息后即可提交订单。", $source);
         }
     }
 
