@@ -86,6 +86,7 @@ final class SmtpWebsiteScopeSettingsContractTest extends TestCase
         self::assertStringContainsString('setScopedConfig', $data);
         self::assertStringContainsString('function getSenders(string $module = \'Weline_Smtp\', ?string $scope = null)', $data);
         self::assertStringContainsString('function setSenders(array $senders, string $module = \'Weline_Smtp\', ?string $scope = null)', $data);
+        self::assertStringContainsString('function resolvePublicFromEmail(string $module = \'Weline_Smtp\', ?string $scope = null)', $data);
 
         self::assertStringContainsString("'scope'", $provider);
         self::assertStringContainsString('resolveScopeParam', $provider);

@@ -9,10 +9,50 @@ use Symfony\Component\Intl\Countries as IntlCountries;
 
 class AddressFormatter
 {
+    /**
+     * 国家选择器把「邮编命中的地点」当作提示拼进国家显示名，形如 "United States · San Francisco"。
+     * 该提示只应存在于 UI 菜单；一旦被当作 country 值提交，就会落库成脏国家名。
+     * country_code 才是权威，故这里统一剥掉「 · <地点>」尾巴。
+     */
+    public const PLACE_HINT_SEPARATOR = '·';
+
     public function __construct(
         private AddressSchemaProvider $schemaProvider,
         private RegionLocalNameResolver $localNames,
     ) {
+    }
+
+    /**
+     * 去掉国家名里的「 · <地点>」UI 提示尾巴；无提示时原样返回。
+     */
+    public static function canonicalCountryName(string $country): string
+    {
+        $country = trim(preg_replace('/\s+/u', ' ', $country) ?: '');
+        if ($country === '' || !str_contains($country, self::PLACE_HINT_SEPARATOR)) {
+            return $country;
+        }
+
+        $head = trim(explode(self::PLACE_HINT_SEPARATOR, $country, 2)[0]);
+
+        return $head !== '' ? $head : $country;
+    }
+
+    /**
+     * 就地清洗地址里的国家显示名（country / country_name），返回新数组。
+     *
+     * @param array<string, mixed> $address
+     * @return array<string, mixed>
+     */
+    public static function canonicalizeCountryFields(array $address): array
+    {
+        foreach (['country', 'country_name'] as $key) {
+            if (!isset($address[$key]) || !is_string($address[$key])) {
+                continue;
+            }
+            $address[$key] = self::canonicalCountryName($address[$key]);
+        }
+
+        return $address;
     }
 
     /**
@@ -23,7 +63,9 @@ class AddressFormatter
     {
         $countryCode = $this->schemaProvider->inferCountryCode($address);
         $address['country_code'] = $countryCode;
-        $address['country'] = $this->clean((string)($address['country'] ?? '')) ?: $this->countryName($countryCode);
+        // 剥掉国家选择器的「 · <邮编命中地点>」提示，避免 UI 提示被当作国家名落库。
+        $address['country'] = self::canonicalCountryName((string)($address['country'] ?? ''))
+            ?: $this->countryName($countryCode);
 
         foreach (['province', 'city', 'district', 'street', 'postal_code', 'contact_name', 'contact_phone'] as $field) {
             $address[$field] = $this->clean((string)($address[$field] ?? ''));

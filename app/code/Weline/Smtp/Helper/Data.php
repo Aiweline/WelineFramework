@@ -281,6 +281,41 @@ class Data
     }
 
     /**
+     * 网站 SMTP 公开联系/发件邮箱：优先 default 传输，再扫其它 senders。
+     * 供店面联系部件 / SiteContactInfo 继承网站配置（含 global→website），禁止硬编码 example.com。
+     */
+    public function resolvePublicFromEmail(string $module = 'Weline_Smtp', ?string $scope = null): string
+    {
+        $senders = $this->getSenders($module, $scope);
+        if ($senders === []) {
+            return '';
+        }
+
+        $ordered = [];
+        foreach ($senders as $sender) {
+            if (!is_array($sender)) {
+                continue;
+            }
+            if (($sender['code'] ?? '') === 'default') {
+                array_unshift($ordered, $sender);
+            } else {
+                $ordered[] = $sender;
+            }
+        }
+
+        foreach ($ordered as $sender) {
+            foreach (['mail_account_email', 'smtp_username', 'email'] as $key) {
+                $candidate = trim((string)($sender[$key] ?? ''));
+                if ($candidate !== '' && filter_var($candidate, \FILTER_VALIDATE_EMAIL) !== false) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
      * 保存发件人列表（完整覆盖当前 scope）
      */
     public function setSenders(array $senders, string $module = 'Weline_Smtp', ?string $scope = null): bool
