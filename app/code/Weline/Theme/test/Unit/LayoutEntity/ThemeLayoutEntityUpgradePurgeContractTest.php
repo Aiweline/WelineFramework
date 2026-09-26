@@ -79,11 +79,13 @@ final class ThemeLayoutEntityUpgradePurgeContractTest extends TestCase
         self::assertFileExists($deployUpgrade);
         $deploySrc = (string)\file_get_contents($deployUpgrade);
         self::assertStringContainsString("dispatch('Weline_Framework_Deploy::upgrade_after'", $deploySrc);
+        self::assertStringContainsString('$afterPayload', $deploySrc);
 
         $coreUpdate = $welineRoot . '/Deploy/Console/Update/Core.php';
         self::assertFileExists($coreUpdate);
         $coreSrc = (string)\file_get_contents($coreUpdate);
         self::assertStringContainsString("dispatch('Weline_Deploy::core_update_after'", $coreSrc);
+        self::assertStringContainsString('$afterPayload', $coreSrc);
     }
 
     public function testOfflineGcHooksReuseThemeRuntimeCacheCleaner(): void

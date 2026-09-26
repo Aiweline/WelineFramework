@@ -240,7 +240,7 @@ class Core extends CommandAbstract
         // Theme 等可在此清布局固化物；核心同步后旧 shell/layout 不得继续直读。
         /** @var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Weline_Deploy::core_update_after', [
+        $afterPayload = [
             'branch' => $branch,
             'force' => $this->forceUpdate,
             'tmp_dir' => $tmpDir,
@@ -248,7 +248,8 @@ class Core extends CommandAbstract
             'updated_files' => $this->updatedFiles,
             'deleted_files' => $this->deletedFiles,
             'args' => $args,
-        ]);
+        ];
+        $eventsManager->dispatch('Weline_Deploy::core_update_after', $afterPayload);
     }
 
     /**

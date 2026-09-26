@@ -157,12 +157,13 @@ class Upgrade extends CommandAbstract
         // Theme 等模块可在此清布局固化物（theme-layout-entities）；核心不硬绑 Theme。
         /** @var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Weline_Framework_Deploy::upgrade_after', [
+        $afterPayload = [
             'tree_changed' => $this->treeChanged,
             'skip_invalidation' => $skipInvalidation,
             'args' => $args,
             'data' => $data,
-        ]);
+        ];
+        $eventsManager->dispatch('Weline_Framework_Deploy::upgrade_after', $afterPayload);
     }
 
     /**
