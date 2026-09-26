@@ -25,7 +25,7 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
 $contact = [
     'site_name' => 'Weline',
     'site_description' => (string)WidgetI18n::label('官方商城常见问题与客户服务'),
-    'contact_email' => 'support@example.com',
+    'contact_email' => SiteContactInfo::PLACEHOLDER_EMAIL,
     'contact_phone' => '',
     'service_hours' => (string)WidgetI18n::label('周一至周五 9:00 - 18:00（法定节假日除外）'),
     'contact_address' => '',
@@ -38,7 +38,8 @@ try {
 } catch (\Throwable) {
 }
 
-$title = (string)($meta['title'] ?? WidgetI18n::label('FAQ/常见问题'));
+$hubTitle = (string)WidgetI18n::label('FAQ/常见问题');
+$title = (string)($meta['title'] ?? $hubTitle);
 $subtitle = trim((string)($meta['subtitle'] ?? ''));
 if ($subtitle === '') {
     $subtitle = (string)$contact['site_description'];
@@ -66,6 +67,8 @@ $isFaqArticle = is_array($faqArticle) && (
     || trim((string)($faqArticle['slug'] ?? '')) !== ''
     || trim((string)($faqArticle['title'] ?? '')) !== ''
 );
+// Article pages already render provider/CMS title in view.phtml <h1>; keep hero as Hub chrome.
+$heroTitle = $isFaqArticle ? $hubTitle : $title;
 if (!$isFaqArticle && ((!is_array($topics) || $topics === []) || (!is_array($faqs) || $faqs === []) || (!is_array($quickLinks) || $quickLinks === []))) {
     try {
         /** @var \Weline\Faq\Service\FaqHubContent $hub */
@@ -380,7 +383,7 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
                 <div class="amazon-faq__stage faq-layout__inner">
                     <header class="amazon-faq__hero" aria-labelledby="faq-layout-title" weline-code="theme.faq.hero">
                         <p class="amazon-faq__eyebrow"><?= $escape($siteName) ?></p>
-                        <h1 id="faq-layout-title"><?= $escape($title) ?></h1>
+                        <h1 id="faq-layout-title"><?= $escape($heroTitle) ?></h1>
                         <p class="amazon-faq__hero-lead"><?= $escape($lead) ?></p>
                         <div class="amazon-faq__meta">
                             <span><?= $escape(WidgetI18n::label('最后更新：')) ?><?= $escape($updatedAt) ?></span>
