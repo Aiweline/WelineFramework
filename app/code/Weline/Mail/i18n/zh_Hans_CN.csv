@@ -21,6 +21,25 @@
 业务来源ID,业务来源ID
 写信浮层发送并写入业务线程,写信浮层发送并写入业务线程
 发件账号,发件账号
+通信,通信
+安装并启动邮局引擎,安装并启动邮局引擎
+开通邮局域名,开通邮局域名
+"已有 %{1} 个 active 域名（例：%{2}）。真实域须从 Websites 候选选择。","已有 %{1} 个 active 域名（例：%{2}）。真实域须从 Websites 候选选择。"
+"已有域名记录但未 active。请在企业邮箱「域名与 DNS」启用域名。","已有域名记录但未 active。请在企业邮箱「域名与 DNS」启用域名。"
+"尚未开通邮局域名。后台 → 企业邮箱管理 → 从 Websites 候选创建真实域；本机冒烟可用 .test/.invalid fake 域。","尚未开通邮局域名。后台 → 企业邮箱管理 → 从 Websites 候选创建真实域；本机冒烟可用 .test/.invalid fake 域。"
+"配置邮箱 DNS","配置邮箱 DNS"
+"请先开通并启用邮局域名，再配置 MX/SPF/DKIM/DMARC 与 mail 主机 A 记录（禁止橙云代理）。","请先开通并启用邮局域名，再配置 MX/SPF/DKIM/DMARC 与 mail 主机 A 记录（禁止橙云代理）。"
+"真实域 DNS 状态已记录为通过。仍建议抽测外域收发与 SPF/DKIM/DMARC。","真实域 DNS 状态已记录为通过。仍建议抽测外域收发与 SPF/DKIM/DMARC。"
+"域名 %{1} 需完成 DNS：A(mail)/MX/SPF/DKIM/DMARC；mail 主机必须 DNS-only。后台域名页可连 Cloudflare 一键应用，或 mail:dns:check。","域名 %{1} 需完成 DNS：A(mail)/MX/SPF/DKIM/DMARC；mail 主机必须 DNS-only。后台域名页可连 Cloudflare 一键应用，或 mail:dns:check。"
+开通邮局账号,开通邮局账号
+"已有 %{1} 个 active 邮箱账号（例：%{2}）。建议至少保留 noreply@ 供系统发信。","已有 %{1} 个 active 邮箱账号（例：%{2}）。建议至少保留 noreply@ 供系统发信。"
+请先启用邮局域名，再在「用户与账号」创建并启用邮箱。,请先启用邮局域名，再在「用户与账号」创建并启用邮箱。
+"域名已就绪，但尚无 active 邮箱账号。请创建 noreply@ 或业务邮箱并启用。","域名已就绪，但尚无 active 邮箱账号。请创建 noreply@ 或业务邮箱并启用。"
+"交给 Smtp 自管发信","交给 Smtp 自管发信"
+"Smtp 已挂接自建邮局并完成测试确认。","Smtp 已挂接自建邮局并完成测试确认。"
+"Smtp 已挂接自建邮局传输，请打开 Smtp配置 发送测试邮件完成确认。","Smtp 已挂接自建邮局传输，请打开 Smtp配置 发送测试邮件完成确认。"
+"邮局账号已就绪。请打开 Smtp配置，使用「用自建邮局一键配置」由 Smtp 自动写传输并绑渠道，再测试发信确认。","邮局账号已就绪。请打开 Smtp配置，使用「用自建邮局一键配置」由 Smtp 自动写传输并绑渠道，再测试发信确认。"
+"完成引擎/域名/DNS/账号后，由 Smtp 一键挂接 mail_account 传输；本任务不代替 Smtp 测试确认。","完成引擎/域名/DNS/账号后，由 Smtp 一键挂接 mail_account 传输；本任务不代替 Smtp 测试确认。"
 企业邮箱沟通,企业邮箱沟通
 关闭,关闭
 发送,发送
@@ -444,3 +463,7 @@ STARTTLS（推荐）,STARTTLS（推荐）
 选择一封邮件查看正文,选择一封邮件查看正文
 左侧写第一封后，发送记录会出现在「已发送」。,左侧写第一封后，发送记录会出现在「已发送」。
 在左侧列表点选一封邮件即可在此阅读。,在左侧列表点选一封邮件即可在此阅读。
+"Stalwart 环境检测已通过（二进制/端口/服务）。仍可用：php bin/w mail:service:status","Stalwart 环境检测已通过（二进制/端口/服务）。仍可用：php bin/w mail:service:status"
+"当前仅 fake 测试域：可先冒烟。上线真实域名前须安装 Stalwart：php bin/w env:install stalwart-mail-server -y，并检查 php bin/w mail:env:check","当前仅 fake 测试域：可先冒烟。上线真实域名前须安装 Stalwart：php bin/w env:install stalwart-mail-server -y，并检查 php bin/w mail:env:check"
+"邮局引擎未就绪%{1}。请执行：php bin/w mail:env:check → php bin/w env:install stalwart-mail-server -y → php bin/w mail:service:status","邮局引擎未就绪%{1}。请执行：php bin/w mail:env:check → php bin/w env:install stalwart-mail-server -y → php bin/w mail:service:status"
+"当前为 fake 测试域，无需公网 DNS。上线真实域时在域名页按清单配置，或 php bin/w mail:dns:check example.com mail.example.com","当前为 fake 测试域，无需公网 DNS。上线真实域时在域名页按清单配置，或 php bin/w mail:dns:check example.com mail.example.com"
