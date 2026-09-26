@@ -22,6 +22,18 @@ final class AddressOutlinedFieldContractTest extends TestCase
         self::assertStringNotContainsString('w-address__label', $src);
     }
 
+    public function testAddressTaglibPrefetchesLabelSourcesBeforeTranslate(): void
+    {
+        $path = dirname(__DIR__, 2) . '/Taglib/Address.php';
+        $src = (string)file_get_contents($path);
+        self::assertStringContainsString('Parser::prefetchWords($labelSources', $src);
+        self::assertStringContainsString('WidgetI18n::storefrontLocale()', $src);
+        self::assertStringContainsString('WidgetI18n::prefetchLabels($labelSources)', $src);
+        self::assertStringContainsString("'省份'", $src);
+        self::assertStringContainsString("'城市'", $src);
+        self::assertStringContainsString("'区县'", $src);
+    }
+
     public function testAddressJsCascadeItemsUseWFieldNotch(): void
     {
         $path = dirname(__DIR__, 2) . '/view/statics/js/address.js';
