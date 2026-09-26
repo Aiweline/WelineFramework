@@ -8,6 +8,7 @@
 
 use Weline\Product\Helper\StorefrontOfferDetailQuery;
 use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('product-card-add-to-cart');
@@ -55,11 +56,10 @@ $variant = trim((string)($this->getData('card_add_to_cart_variant') ?? 'cta'));
 $extraClass = trim((string)($this->getData('card_add_to_cart_button_class') ?? ''));
 $labelOverride = trim((string)($this->getData('card_add_to_cart_label') ?? ''));
 
-$buttonLabel = $labelOverride !== ''
-    ? $labelOverride
-    : ($quoteOnly
-        ? __('仅询价')
-        : ($sellable ? __('加入购物车') : __('暂不可售')));
+$buttonLabel = WidgetI18n::label(
+    $labelOverride,
+    $quoteOnly ? '仅询价' : ($sellable ? '加入购物车' : '暂不可售')
+);
 
 if ($variant === 'icon') {
     $buttonClass = 'action-btn btn-cart weline-pixel::add_to_cart';
@@ -95,12 +95,12 @@ if ($quoteOnly) {
      data-widget-module="Weline_Cart"
      data-widget-code="product-card-add-to-cart"
      data-uid="<?= $escape($scope->uid) ?>"
-     data-purchase-loading="<?= $escape(__('正在加入购物车...')) ?>"
-     data-purchase-success="<?= $escape(__('已加入购物车')) ?>"
-     data-purchase-error="<?= $escape(__('加入购物车失败')) ?>"
-     data-purchase-mark-added="<?= $escape(__('已加入')) ?>"
+     data-purchase-loading="<?= $escape(WidgetI18n::label('正在加入购物车...')) ?>"
+     data-purchase-success="<?= $escape(WidgetI18n::label('已加入购物车')) ?>"
+     data-purchase-error="<?= $escape(WidgetI18n::label('加入购物车失败')) ?>"
+     data-purchase-mark-added="<?= $escape(WidgetI18n::label('已加入')) ?>"
      data-cart-url="@url{'cart'}"
-     data-cart-link-text="<?= $escape(__('前往购物车')) ?>"
+     data-cart-link-text="<?= $escape(WidgetI18n::label('前往购物车')) ?>"
      weline-code="<?= $escape($scope->code) ?>">
     <?php if ($quoteOnly && $quoteHrefPath !== ''): ?>
         <a class="<?= $escape($controlClass) ?>"

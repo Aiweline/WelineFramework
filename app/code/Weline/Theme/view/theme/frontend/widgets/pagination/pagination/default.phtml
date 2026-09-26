@@ -22,6 +22,7 @@
  * @param next_text {default="下一页",type="string",label="下一页文字"}
  */
 
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('pagination');
@@ -33,12 +34,12 @@ $style = $this->getData('style') ?? 'default';
 $showFirstLast = (bool)($this->getData('show_first_last') ?? true);
 $showPrevNext = (bool)($this->getData('show_prev_next') ?? true);
 $pageRange = (int)($this->getData('page_range') ?? 5);
-$prevText = $this->getData('prev_text') ?? __('上一页');
-$nextText = $this->getData('next_text') ?? __('下一页');
+// Layout config stores Chinese source; always resolve via WidgetI18n (path locale).
+$prevText = WidgetI18n::label(trim((string)($this->getData('prev_text') ?? '')), '上一页');
+$nextText = WidgetI18n::label(trim((string)($this->getData('next_text') ?? '')), '下一页');
 $currentPage = (int)($this->getData('current_page') ?? 1);
 $totalPages = (int)($this->getData('total_pages') ?? 10);
 $baseUrl = $this->getData('base_url') ?? '?page=';
-
 $startPage = max(1, $currentPage - (int)floor($pageRange / 2));
 $endPage = min($totalPages, $startPage + $pageRange - 1);
 if ($endPage - $startPage + 1 < $pageRange) {
