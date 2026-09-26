@@ -1,6 +1,7 @@
 <?php
 
 use Weline\Product\Service\ProductCardRenderer;
+use Weline\Theme\Helper\WidgetI18n;
 /**
  * Amazon-style category results: breadcrumb, results bar, compact product grid.
  *
@@ -175,13 +176,11 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
         <div class="amz-plp__grid weline-product-card-shelf" data-testid="storefront-category-grid">
             <?= ProductCardRenderer::projectFromOffers($offers, [
                 'show_price' => true,
-                'show_rating' => true,
                 'show_add_to_cart' => true,
                 'show_wishlist' => true,
                 'show_compare' => true,
                 'show_quickview' => true,
                 'show_labels' => true,
-                'show_sku' => true,
                 'density' => 'standard',
                 'class' => 'wpc-listing-card',
                 'wishlist_pixel' => true,
@@ -190,7 +189,7 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
         <?php if ($totalPages > 1 && $pageOptions !== []): ?>
             <nav class="amz-plp__pager"
                  data-testid="storefront-category-pager"
-                 aria-label="<?= $escape(__('分页')) ?>">
+                 aria-label="<?= $escape(WidgetI18n::label('分页')) ?>">
                 <?php foreach ($pageOptions as $option): ?>
                     <?php
                     if (!is_array($option)) {
@@ -199,6 +198,11 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
                     $type = (string)($option['type'] ?? 'page');
                     $href = trim((string)($option['url'] ?? ''));
                     $label = (string)($option['label'] ?? $option['page'] ?? '');
+                    if ($type === 'prev') {
+                        $label = WidgetI18n::label('上一页');
+                    } elseif ($type === 'next') {
+                        $label = WidgetI18n::label('下一页');
+                    }
                     if ($label === '') {
                         continue;
                     }
