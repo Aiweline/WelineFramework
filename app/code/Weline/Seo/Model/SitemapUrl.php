@@ -89,7 +89,7 @@ class SitemapUrl extends Model
      */
     public function getActiveUrlsByWebsiteGrouped(int $websiteId): array
     {
-        $urls = $this->reset()
+        $query = $this->reset()
             ->where(self::schema_fields_WEBSITE_ID, $websiteId)
             ->where(self::schema_fields_STATUS, 1)
             ->order(self::schema_fields_MODULE, 'ASC')
@@ -98,11 +98,13 @@ class SitemapUrl extends Model
             ->order(self::schema_fields_URL_KEY, 'ASC')
             ->order(self::schema_fields_ENTITY_TYPE, 'ASC')
             ->order(self::schema_fields_ENTITY_ID, 'ASC')
-            ->select()
-            ->fetchArray();
+            ->select();
 
         $grouped = [];
-        foreach ($urls as $url) {
+        foreach ($query->fetchIterator() as $url) {
+            if (!is_array($url)) {
+                continue;
+            }
             $module = (string)($url[self::schema_fields_MODULE] ?? 'default');
             $scope = (string)($url[self::schema_fields_SCOPE] ?? '');
             $locale = (string)($url[self::schema_fields_LOCALE] ?? '');
@@ -129,11 +131,18 @@ class SitemapUrl extends Model
      */
     public function getActiveUrls(int $websiteId): array
     {
-        return $this->reset()
+        $urls = [];
+        $query = $this->reset()
             ->where(self::schema_fields_WEBSITE_ID, $websiteId)
             ->where(self::schema_fields_STATUS, 1)
-            ->select()
-            ->fetchArray();
+            ->select();
+        foreach ($query->fetchIterator() as $url) {
+            if (is_array($url)) {
+                $urls[] = $url;
+            }
+        }
+
+        return $urls;
     }
 
     /**

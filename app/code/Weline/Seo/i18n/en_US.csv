@@ -33,6 +33,7 @@
 "向选定站点已绑定的平台提交 canonical Sitemap。","Submits a canonical Sitemap to the platform to which the selected site is bound."
 "保存脱敏的 SEO 平台账户配置。","Save desensitized SEO platform account configuration."
 "同步一个 SEO 账户所绑定站点的统计数据。","Synchronize statistics of sites bound to an SEO account."
+"删除 SEO 账户，并级联解除站点绑定与统计数据。","删除 SEO 账户，并级联解除站点绑定与统计数据。"
 保存账户到站点或站点到账户的绑定关系。,"Save account-to-site or site-to-account bindings."
 "保存一个站点账户绑定的 Sitemap 配置。","Save a Sitemap configuration bound to a site account."
 "解除一个站点与 SEO 账户的绑定。","Unbind a site from an SEO account."
@@ -165,6 +166,7 @@ copy,copy
 平台未注册：%{1},"Platform is not registered: %{1}"
 账户保存成功,"Account saved successfully"
 账户保存失败，请检查配置后重试,"Account save failed; check the configuration and try again."
+删除失败：%{1},"Deletion failed: %{1}"
 账户ID无效,"Invalid Account ID"
 获取站点列表失败：%{1},"Failed to fetch site list: %{1}"
 未接收到请求数据,"No request data received"
@@ -187,7 +189,6 @@ SEO主体管理,"SEO Subject Management"
 标题不能为空,"Title is required"
 保存成功,"Saved successfully"
 删除成功,"Deletion successful"
-删除失败：%{1},"Deletion failed: %{1}"
 商品目录,Catalog
 商品,Product
 站点,Website
@@ -739,6 +740,8 @@ AI优化建议,"AI optimization suggestions"
 平台错误,"Platform error"
 统计同步完成,"Statistics synchronization completed"
 统计同步失败,"Statistics synchronization failed"
+账户已删除,"Account deleted"
+"确定删除该 SEO 账户？将同时解除站点绑定并清除统计数据。","Delete this SEO account? Site bindings will be removed and stats cleared."
 账户操作,"Account actions"
 账户概览,"Account overview"
 搜索账户名称或平台,"Search account name or platform"
@@ -746,6 +749,7 @@ AI优化建议,"AI optimization suggestions"
 错误数,"Error Count"
 同步中,Synchronizing
 同步统计数据,"Sync statistics"
+删除中,Deleting…
 编辑SEO账户,"Edit SEO account"
 新增SEO账户,"Add SEO Account"
 新增,Add

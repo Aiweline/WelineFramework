@@ -48,4 +48,9 @@ final class CategorySitemapUrlProvider implements SitemapUrlProviderInterface
     {
         return true;
     }
+
+    public function supportsSiteLanguagePathExpansion(): bool
+    {
+        return true;
+    }
 }

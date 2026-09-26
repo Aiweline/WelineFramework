@@ -624,6 +624,15 @@ final class SeoAdminSitemapService
                 $generationPending = $generationPending || !empty($result['generation_pending']);
             }
         }
+        // Full-module sync: disable active rows whose (module, scope) has no registered provider.
+        if ($module === '') {
+            $orphan = $this->sync->disableUnregisteredProviderUrls(true);
+            $summary['disabled'] += (int)($orphan['disabled'] ?? 0);
+            $generationPending = $generationPending || !empty($orphan['generation_pending']) || ((int)($orphan['disabled'] ?? 0) > 0);
+            if ((int)($orphan['disabled'] ?? 0) > 0) {
+                $results[] = $orphan;
+            }
+        }
         $hasErrors = $summary['errors'] > 0;
         $summaryMessage = __('Sitemap URL 同步完成：新增 %{1}、更新 %{2}、停用 %{3}、未变化 %{4}', [
             $summary['inserted'], $summary['updated'], $summary['disabled'], $summary['unchanged'],

@@ -361,30 +361,13 @@ class SeoWebsiteDirectory
     }
 
     /**
-     * Rewrite loopback / same-host <loc> origins inside sitemap XML to the live public base.
-     * Used when serving files generated under localhost or a portless configured origin
-     * while the crawler hits the live project Host+port.
+     * Rewrite loopback / same-host <loc> and xhtml:link href origins inside sitemap XML
+     * to the live public base. Used when serving files generated under localhost or a
+     * portless configured origin while the crawler hits the live project Host+port.
      */
     public function rewriteLoopbackOriginsInXml(string $xml, string $publicBaseUrl): string
     {
-        $publicBaseUrl = rtrim(trim($publicBaseUrl), '/');
-        if ($xml === '' || $publicBaseUrl === '' || $this->isLoopbackBaseUrl($publicBaseUrl)) {
-            return $xml;
-        }
-
-        $rewritten = preg_replace_callback(
-            '#(<loc>)([^<]*)(</loc>)#i',
-            function (array $matches) use ($publicBaseUrl): string {
-                $loc = html_entity_decode(trim($matches[2]), ENT_XML1 | ENT_QUOTES, 'UTF-8');
-                $next = $this->rewriteToPublicOriginUrl($loc, $publicBaseUrl);
-                return $matches[1]
-                    . htmlspecialchars($next, ENT_XML1 | ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
-                    . $matches[3];
-            },
-            $xml,
-        );
-
-        return is_string($rewritten) ? $rewritten : $xml;
+        return $this->rewriteAbsoluteUrlsInSitemapXml($xml, $publicBaseUrl, 'same_host');
     }
 
     private function swapOriginKeepingPath(string $url, string $publicBaseUrl): string
@@ -403,34 +386,78 @@ class SeoWebsiteDirectory
     }
 
     /**
-     * Rewrite every absolute http(s) <loc> onto the live public base (keep path).
-     * Used when serving /sitemaps/{code}/… on a Host that is not the file's
+     * Rewrite every absolute http(s) <loc> and xhtml:link href onto the live public base
+     * (keep path). Used when serving /sitemaps/{code}/… on a Host that is not the file's
      * original origin (e.g. inspecting another website's canonical index on the
      * project entry Host). Same-host / loopback cases reuse {@see rewriteToPublicOriginUrl}.
      */
     public function rewriteAllOriginsInXml(string $xml, string $publicBaseUrl): string
+    {
+        return $this->rewriteAbsoluteUrlsInSitemapXml($xml, $publicBaseUrl, 'all');
+    }
+
+    /**
+     * Align absolute URLs in sitemap XML (<loc> text and xhtml:link href=) onto the serve origin.
+     *
+     * @param 'same_host'|'all' $mode
+     */
+    private function rewriteAbsoluteUrlsInSitemapXml(string $xml, string $publicBaseUrl, string $mode): string
     {
         $publicBaseUrl = rtrim(trim($publicBaseUrl), '/');
         if ($xml === '' || $publicBaseUrl === '' || $this->isLoopbackBaseUrl($publicBaseUrl)) {
             return $xml;
         }
 
+        $mapUrl = function (string $url) use ($publicBaseUrl, $mode): string {
+            $url = html_entity_decode(trim($url), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+            if ($url === '' || !preg_match('#^https?://#i', $url)) {
+                return $url;
+            }
+            if ($mode === 'all') {
+                return $this->swapOriginKeepingPath($url, $publicBaseUrl);
+            }
+
+            return $this->rewriteToPublicOriginUrl($url, $publicBaseUrl);
+        };
+
+        $escape = static fn (string $url): string => htmlspecialchars(
+            $url,
+            ENT_XML1 | ENT_QUOTES | ENT_SUBSTITUTE,
+            'UTF-8',
+        );
+
         $rewritten = preg_replace_callback(
             '#(<loc>)([^<]*)(</loc>)#i',
-            function (array $matches) use ($publicBaseUrl): string {
-                $loc = html_entity_decode(trim($matches[2]), ENT_XML1 | ENT_QUOTES, 'UTF-8');
-                if (!preg_match('#^https?://#i', $loc)) {
+            static function (array $matches) use ($mapUrl, $escape, $mode): string {
+                $decoded = html_entity_decode(trim($matches[2]), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+                if ($mode === 'all' && ($decoded === '' || !preg_match('#^https?://#i', $decoded))) {
                     return $matches[0];
                 }
-                $next = $this->swapOriginKeepingPath($loc, $publicBaseUrl);
-                return $matches[1]
-                    . htmlspecialchars($next, ENT_XML1 | ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
-                    . $matches[3];
+                $next = $mapUrl($matches[2]);
+
+                return $matches[1] . $escape($next) . $matches[3];
             },
             $xml,
         );
+        if (!is_string($rewritten)) {
+            $rewritten = $xml;
+        }
 
-        return is_string($rewritten) ? $rewritten : $xml;
+        // xhtml:link (and similar) href="https://…" — attribute order may vary.
+        $rewrittenHref = preg_replace_callback(
+            '#\bhref=(["\'])(https?://[^"\']+)\1#i',
+            static function (array $matches) use ($mapUrl, $escape): string {
+                $next = $mapUrl($matches[2]);
+                if ($next === '') {
+                    return $matches[0];
+                }
+
+                return 'href=' . $matches[1] . $escape($next) . $matches[1];
+            },
+            $rewritten,
+        );
+
+        return is_string($rewrittenHref) ? $rewrittenHref : $rewritten;
     }
 
     public function isLoopbackBaseUrl(string $url): bool

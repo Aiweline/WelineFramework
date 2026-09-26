@@ -50,6 +50,14 @@ abstract class AbstractSitemapUrlProvider implements SitemapUrlProviderInterface
     }
 
     /**
+     * Default deny: sync will not path-prefix expand locales for this provider.
+     */
+    public function supportsSiteLanguagePathExpansion(): bool
+    {
+        return false;
+    }
+
+    /**
      * 保存所有站点的 URL 数据到数据库
      *
      * 此方法会遍历所有站点并调用 syncUrls() 进行同步

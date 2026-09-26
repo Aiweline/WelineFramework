@@ -95,4 +95,13 @@ interface SitemapUrlProviderInterface
      * @return bool
      */
     public function isEnabled(): bool;
+
+    /**
+     * Whether SitemapUrlSyncService may expand each snapshot URL across website languages
+     * using LocalizedUrlBuilder path prefixes (same url_key, one row per locale).
+     *
+     * Default false: entity-owned slugs (Blog / PageBuilder) must emit locale rows themselves.
+     * Opt-in true only when the public path is stable across locales (product slug, /policy/*, …).
+     */
+    public function supportsSiteLanguagePathExpansion(): bool;
 }

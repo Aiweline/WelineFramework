@@ -25,4 +25,9 @@ final class ProductSitemapUrlProvider implements SitemapUrlProviderInterface
     public function getUrlsForWebsite(int $websiteId): array { return $this->urls->getUrlsForWebsite($websiteId); }
     public function getDescription(): string { return (string)__('商品'); }
     public function isEnabled(): bool { return true; }
+
+    public function supportsSiteLanguagePathExpansion(): bool
+    {
+        return true;
+    }
 }

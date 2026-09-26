@@ -28,6 +28,9 @@ final class AccountIndexThemeContractTest extends TestCase
         self::assertStringContainsString("'icon' => 'users'", $templateSrc);
         self::assertStringContainsString('<w:icon name="user"', $templateSrc);
         self::assertStringContainsString('data-seo-account-search', $templateSrc);
+        self::assertStringContainsString('data-testid="seo-account-add"', $templateSrc);
+        self::assertStringContainsString('data-seo-delete-account', $templateSrc);
+        self::assertStringContainsString('data-account-confirm-delete', $templateSrc);
         self::assertStringNotContainsString('class="mdi', $templateSrc);
         self::assertStringNotContainsString('seo-empty-state', $templateSrc);
         self::assertStringNotContainsString('<style>', $templateSrc);

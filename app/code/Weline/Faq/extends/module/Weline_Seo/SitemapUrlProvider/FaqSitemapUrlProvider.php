@@ -144,6 +144,12 @@ final class FaqSitemapUrlProvider extends AbstractSitemapUrlProvider
         return (string)__('帮助中心 sitemap URL 提供器');
     }
 
+    public function supportsSiteLanguagePathExpansion(): bool
+    {
+        // Assumes FAQ public paths are locale-stable (single slug). Revert to false if CMS gains per-locale slugs.
+        return true;
+    }
+
     private function pageProviders(): FaqPageProviderRegistry
     {
         return $this->pageProviders ?? ObjectManager::getInstance(FaqPageProviderRegistry::class);
