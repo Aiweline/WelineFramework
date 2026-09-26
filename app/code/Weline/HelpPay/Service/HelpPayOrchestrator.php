@@ -274,9 +274,9 @@ final class HelpPayOrchestrator
      */
     public function startQuickPayment(array $input): array
     {
-        $requested = strtolower(trim((string) ($input['payment_method'] ?? '')));
-        // Prefer local fake_card when caller omitted method (Buy-now /q/ must not only hardcode PayPal).
-        $input['payment_method'] = $requested !== '' ? $requested : 'fake_card';
+        // 支付方式由调用方按 Provider 列表下发；缺失即视为「未选择」，
+        // 交给 startLinkPayment 抛 helppay_payment_method_required，壳不编造兜底 code。
+        $input['payment_method'] = strtolower(trim((string) ($input['payment_method'] ?? '')));
 
         return $this->startLinkPayment($input, PaymentLinkServiceInterface::KIND_QUICK_PAY, 'quick_pay_self');
     }
@@ -338,7 +338,7 @@ final class HelpPayOrchestrator
 
         $billing = \is_array($input['billing_address'] ?? null) ? $input['billing_address'] : [];
         $ship = \is_array($row['shipping_snapshot'] ?? null) ? $row['shipping_snapshot'] : [];
-        // Quick-self /q/ often has shipping only; fake_card requires billing — reuse ship-to.
+        // 本人快捷购买 /q/ 常只有收货信息，而需要账单地址的方式会拒付 —— 复用收货地址作账单。
         if ($mode === 'quick_pay_self' && !$this->billingAddressComplete($billing) && $ship !== []) {
             $billing = $this->billingFromShippingSnapshot($ship, $billing);
         }
@@ -418,11 +418,6 @@ final class HelpPayOrchestrator
                 'mode' => $mode,
             ],
         ];
-        if ($method === 'fake_card') {
-            $createContext['dynamic_form_values'] = ['fake_result' => 'paid'];
-            $createContext['fake_result'] = 'paid';
-        }
-
         try {
             $tx = $facade->tryCreatePayment($method, $createContext);
         } catch (\Throwable $e) {
@@ -438,7 +433,7 @@ final class HelpPayOrchestrator
         $paidStatuses = ['paid', 'success', 'succeeded', 'completed', 'captured'];
         $paid = $redirect === '' && \in_array($status, $paidStatuses, true);
         $transactionNo = trim((string) $tx->transactionNumber);
-        // Instant providers (fake_card) must land on Payment L1 so pixels/success UC can fire.
+        // 即时成功的 Provider 必须落到 Payment L1，像素与成功 UC 才能触发。
         if ($paid && $transactionNo !== '') {
             $redirect = '/payment/success?' . http_build_query([
                 'transaction_no' => $transactionNo,

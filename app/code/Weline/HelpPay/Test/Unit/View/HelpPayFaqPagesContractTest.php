@@ -20,7 +20,14 @@ final class HelpPayFaqPagesContractTest extends TestCase
         foreach ($slugs as $slug) {
             $tpl = $base . '/view/templates/frontend/faq/' . $slug . '.phtml';
             self::assertFileExists($tpl, $slug);
-            self::assertStringContainsString('data-testid="faq-' . $slug . '"', (string) file_get_contents($tpl));
+            $html = (string) file_get_contents($tpl);
+            self::assertStringContainsString('data-testid="faq-' . $slug . '"', $html);
+            // SPI body must not repeat Faq view.phtml article <h1> (provider title).
+            self::assertDoesNotMatchRegularExpression(
+                '/<h[12]\b/i',
+                $html,
+                $slug . ' SPI must not emit h1/h2; article title lives in Faq view.phtml'
+            );
         }
         $providerDir = $base . '/extends/module/Weline_Faq/FaqPageProvider';
         self::assertDirectoryExists($providerDir);

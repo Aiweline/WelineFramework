@@ -64,7 +64,8 @@ final class QuickPay extends FrontendController
     }
 
     /**
-     * Prefer local fake_card when available for bill currency/country so Buy-now /q/ can Paid→success.
+     * 快捷购买默认支付方式：只取 Provider 列表（与万能结账同一目录）。
+     * 列表为空或不可用时返回空串，由模板提示「暂无可用支付方式」，不得兜底编造 code。
      *
      * @param array<string,mixed> $row
      * @param array<string,mixed>|null $shipping
@@ -105,9 +106,6 @@ final class QuickPay extends FrontendController
                     $codes[] = $code;
                 }
             }
-            if (in_array('fake_card', $codes, true)) {
-                return 'fake_card';
-            }
             if (in_array('paypal', $codes, true)) {
                 return 'paypal';
             }
@@ -115,10 +113,10 @@ final class QuickPay extends FrontendController
                 return $codes[0];
             }
         } catch (\Throwable) {
-            // Fall through to local default.
+            // 列表不可用时按「无可用支付方式」处理，不编造兜底 code。
         }
 
-        return 'fake_card';
+        return '';
     }
 
     private function isExpiredLink(PaymentLinkServiceInterface $links, string $token): bool

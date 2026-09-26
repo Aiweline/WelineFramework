@@ -9,10 +9,9 @@ $shareHint = (string) ($this->getData('share_hint') ?? '');
 $token = trim((string) ($this->getData('token') ?? ($bill['token'] ?? '')));
 $amount = ((int) ($bill['amount_minor'] ?? 0)) / 100;
 $currency = (string) ($bill['currency_code'] ?? 'USD');
-$preferredMethod = strtolower(trim((string) ($this->getData('preferred_payment_method') ?? 'fake_card')));
-if ($preferredMethod === '') {
-    $preferredMethod = 'fake_card';
-}
+// 可用支付方式由 Provider 列表决定（QuickPay 控制器下发）。列表为空时保持空串，
+// 由前端提示「暂无可用支付方式」，壳不得编造 code 兜底。
+$preferredMethod = strtolower(trim((string) ($this->getData('preferred_payment_method') ?? '')));
 $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 if (isset($_SERVER['REQUEST_SCHEME']) && is_string($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] !== '') {
@@ -60,9 +59,9 @@ if ($shareUrl !== '' && !str_starts_with($shareUrl, 'http') && $host !== '') {
                 data-token="<?= $escape($token) ?>">
             <?= $escape(__('立即支付')) ?>
         </button>
-        <?php if ($preferredMethod === 'fake_card'): ?>
+        <?php if ($preferredMethod === ''): ?>
             <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:var(--weline-space-2, var(--space-2)) 0 0;">
-                <lang>本机测试支付将即时完成并进入成功页（Fake result=Paid）。</lang>
+                <lang>暂无可用支付方式，请稍后再试或联系客服。</lang>
             </p>
         <?php endif; ?>
     </div>

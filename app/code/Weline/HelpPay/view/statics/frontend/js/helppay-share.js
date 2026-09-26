@@ -2490,9 +2490,14 @@
       var m = String(w.location.pathname || '').match(/\/q\/([^/?#]+)/);
       token = m ? decodeURIComponent(m[1]) : '';
     }
-    var method = String(btn.getAttribute('data-payment-method') || 'fake_card').trim() || 'fake_card';
+    var method = String(btn.getAttribute('data-payment-method') || '').trim();
     if (!token) {
       setPayerPayMessage(root, t('cannotComplete', '无法完成操作'), true);
+      return;
+    }
+    if (!method) {
+      // 服务端未下发可用支付方式（Provider 列表为空）：明确提示，不编造 code 兜底。
+      setPayerPayMessage(root, t('noPaymentMethod', '暂无可用支付方式，请稍后重试。'), true);
       return;
     }
     btn.disabled = true;
@@ -2502,10 +2507,6 @@
         payment_method: method,
         idempotency_key: 'quickpay_ui_' + token + '_' + Date.now(),
       };
-      if (method === 'fake_card') {
-        payload.dynamic_form_values = { fake_result: 'paid' };
-        payload.fake_result = 'paid';
-      }
       var result = await w.Weline.Api.resource('helpPay').startQuickPayment(payload);
       var data = (result && (result.data || result)) || {};
       var redirect = String(data.redirect_url || data.approve_url || data.success_url || '').trim();
