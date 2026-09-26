@@ -37,6 +37,12 @@ final class ProductStorefrontTemplateContractTest extends TestCase
 
         self::assertStringContainsString('data-testid="storefront-products-pager"', $catalog);
         self::assertStringContainsString('data-testid="storefront-category-pager"', $category);
+        // Heavy-locale packs only prefetch template literals; dynamic __($var) stays Chinese.
+        self::assertStringContainsString("__('默认排序')", $catalog);
+        self::assertStringContainsString("__('价格从低到高')", $catalog);
+        self::assertStringContainsString("__('价格从高到低')", $catalog);
+        self::assertStringContainsString("__('名称 A-Z')", $catalog);
+        self::assertStringContainsString("__('默认排序')", $category);
         self::assertStringContainsString('storefront_listing_page_options', $catalog);
         self::assertStringContainsString('storefront_listing_page_options', $category);
         self::assertStringContainsString('is-ellipsis', $catalog);

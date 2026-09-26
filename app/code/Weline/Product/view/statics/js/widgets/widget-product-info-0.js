@@ -1408,6 +1408,26 @@ window.WelineWidgetAssets.register('product-product-info-0', function (widgetScr
                 button.textContent = purchasable ? addLabel : unavailableLabel;
             }
         });
+        // Keep PDP PayPal/express CTAs in sync with add/buy — SSR may start disabled
+        // before a purchasable variant is selected; without this the yellow button
+        // stays disabled (or looks "gone") while cart/checkout already work.
+        const expressDisabled = quoteOnly || !purchasable;
+        root.querySelectorAll(
+            '[data-express-pay], [data-product-express-pay], [data-testid="product-express-paypal"]'
+        ).forEach(function (button) {
+            if (exactOffer) {
+                button.dataset.globalOfferUuid = exactOffer.global_offer_uuid || '';
+                button.dataset.productId = String(exactOffer.product_id || '');
+            }
+            button.hidden = quoteOnly;
+            button.disabled = expressDisabled;
+        });
+        root.querySelectorAll('[data-payment-express][data-product-express]').forEach(function (section) {
+            if (exactOffer) {
+                section.dataset.globalOfferUuid = exactOffer.global_offer_uuid || '';
+                section.dataset.productId = String(exactOffer.product_id || '');
+            }
+        });
         const quoteButton = root.querySelector('[data-action="open-product-quote"]');
         if (quoteButton) {
             quoteButton.hidden = !quoteOnly;

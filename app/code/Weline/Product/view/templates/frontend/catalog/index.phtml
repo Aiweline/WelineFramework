@@ -63,7 +63,18 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
                         }
                         ?>
                         <option value="<?= $escape($href) ?>"<?= !empty($option['selected']) ? ' selected' : '' ?>>
-                            <?= $escape($option['label'] ?? '') ?>
+                            <?php
+                            // Literal __() so Taglib can prefetch heavy locale packs;
+                            // dynamic __($var) is not collected and falls back to Chinese.
+                            $sortLabel = match ((string)($option['code'] ?? '')) {
+                                'default' => (string)__('默认排序'),
+                                'price_asc' => (string)__('价格从低到高'),
+                                'price_desc' => (string)__('价格从高到低'),
+                                'name_asc' => (string)__('名称 A-Z'),
+                                default => (string)__((string)($option['label'] ?? '')),
+                            };
+                            ?>
+                            <?= $escape($sortLabel) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>

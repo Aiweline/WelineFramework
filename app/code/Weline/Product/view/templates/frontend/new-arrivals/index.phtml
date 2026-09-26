@@ -70,7 +70,16 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
                 $name = trim((string)$pick($item, ['name', 'title'], __('汉服商品')));
                 $url = trim((string)$pick($item, ['url', 'product_url', 'detail_url', 'link'], '/products'));
                 $image = trim((string)$pick($item, ['image_url', 'image', 'thumbnail_url', 'thumbnail'], ''));
-                $price = trim((string)$pick($item, ['formatted_price', 'price_label', 'price'], ''));
+                $priceRaw = trim((string)$pick($item, ['formatted_price', 'price_label', 'price'], ''));
+                if ($priceRaw !== '' && !preg_match('/\d+\.\d{2}/', $priceRaw)) {
+                    // 与列表卡同源格式：符号 + 两位小数（mapOffer 给的是 float 分值换算数）
+                    $amount = (float)preg_replace('/[^\d.]/', '', $priceRaw);
+                    $currencyCode = trim((string)$pick($item, ['currency'], ''));
+                    $priceRaw = $amount > 0
+                        ? \Weline\Currency\Helper\CurrencySymbol::formatAmount($amount, $currencyCode !== '' ? $currencyCode : null)
+                        : '';
+                }
+                $price = $priceRaw;
                 $sku = trim((string)$pick($item, ['sku', 'offer_sku'], ''));
                 ?>
                 <article class="new-arrivals-page__card"

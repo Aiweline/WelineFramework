@@ -101,12 +101,15 @@ final class Catalog extends FrontendController
             $isInternalStorefrontChainWarmup ? 1 : null,
         );
         $pageOffers = $this->catalog->hydrateListingMedia($paged['items']);
+        // Pass Chinese source labels; translate in the template at render time so
+        // Phrase can resolve against the request locale pack (controller-time __()
+        // may run before heavy locale dictionaries are loaded on WLS).
         $sortOptions = [];
         foreach ([
-            StorefrontCategoryListingFilter::SORT_DEFAULT => __('默认排序'),
-            StorefrontCategoryListingFilter::SORT_PRICE_ASC => __('价格从低到高'),
-            StorefrontCategoryListingFilter::SORT_PRICE_DESC => __('价格从高到低'),
-            StorefrontCategoryListingFilter::SORT_NAME_ASC => __('名称 A-Z'),
+            StorefrontCategoryListingFilter::SORT_DEFAULT => '默认排序',
+            StorefrontCategoryListingFilter::SORT_PRICE_ASC => '价格从低到高',
+            StorefrontCategoryListingFilter::SORT_PRICE_DESC => '价格从高到低',
+            StorefrontCategoryListingFilter::SORT_NAME_ASC => '名称 A-Z',
         ] as $code => $label) {
             $params = $attributeFilterParams;
             if ($priceBucket !== '') {
@@ -117,7 +120,7 @@ final class Catalog extends FrontendController
             }
             $sortOptions[] = [
                 'code' => $code,
-                'label' => (string)$label,
+                'label' => $label,
                 'url' => $this->listingFilter->buildListingUrl($productsUrl, $params),
                 'selected' => $sort === $code,
             ];

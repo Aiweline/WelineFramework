@@ -77,7 +77,7 @@ final class ProductCard implements TaglibInterface
             return '<?php ' . $code . ' echo \\Weline\\Product\\Service\\ProductCardRenderer::renderFromTaglib('
                 . $productExpr . ', ['
                 . "'show_price' => \$Taglib__show_price ?? true,"
-                . "'show_rating' => \$Taglib__show_rating ?? true,"
+                . "'show_rating' => \$Taglib__show_rating ?? false,"
                 . "'show_add_to_cart' => \$Taglib__show_add_to_cart ?? true,"
                 . "'show_wishlist' => \$Taglib__show_wishlist ?? true,"
                 . "'show_compare' => \$Taglib__show_compare ?? true,"
@@ -111,7 +111,7 @@ final class ProductCard implements TaglibInterface
 
             return ProductCardRenderer::renderFromTaglib($product, [
                 'show_price' => $attributes['show-price'] ?? true,
-                'show_rating' => $attributes['show-rating'] ?? true,
+                'show_rating' => $attributes['show-rating'] ?? false,
                 'show_add_to_cart' => $attributes['show-add-to-cart'] ?? true,
                 'show_wishlist' => $attributes['show-wishlist'] ?? true,
                 'show_compare' => $attributes['show-compare'] ?? true,
