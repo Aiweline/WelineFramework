@@ -75,7 +75,11 @@ class DeployWebhookRefResolver
         if ($branch !== '' && $ref !== '' && $ref !== $branch) {
             return $this->skipped('branch_mismatch', $ref);
         }
-        if ($ref === '' || $ref === $branch) {
+        // GitHub ping / empty payload must NOT deploy (empty ref used to match default branch).
+        if ($ref === '') {
+            return $this->skipped('missing_ref', $ref);
+        }
+        if ($ref === $branch) {
             return [
                 'type'               => self::TYPE_BRANCH,
                 'ref'                => $ref,

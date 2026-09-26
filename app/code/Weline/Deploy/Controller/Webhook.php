@@ -51,6 +51,15 @@ class Webhook extends FrontendController
             return $this->fetchJson(['ok' => false, 'error' => 'invalid webhook token'], 403);
         }
 
+        $githubEvent = strtolower(trim((string)$this->request->getHeader('X-GitHub-Event')));
+        if ($githubEvent === 'ping') {
+            return $this->fetchJson([
+                'ok' => true,
+                'skipped' => true,
+                'reason' => 'github_ping',
+            ], 202);
+        }
+
         $result = $this->webhookReleaseService->releaseFromWebhook($rawBody, $effectiveConfig, $releaseContext);
         return $this->fetchJson($result['payload'], $result['status']);
     }
