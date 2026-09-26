@@ -25,32 +25,47 @@ $pack = require __DIR__ . '/data/dict-fill-shipping-lane-names.v1.php';
 
 $db = (array)(Env::getInstance()->getConfig('db')['master'] ?? []);
 $host = (string)($db['hostname'] ?? '127.0.0.1');
-$port = (string)($db['hostport'] ?? '5432');
+$port = (string)($db['hostport'] ?? '');
 $name = (string)($db['database'] ?? '');
 $user = (string)($db['username'] ?? '');
 $pass = (string)($db['password'] ?? '');
+$prefix = (string)($db['prefix'] ?? 'w_');
+$type = strtolower((string)($db['type'] ?? 'pgsql'));
+$isMysql = str_contains($type, 'mysql');
+if ($port === '') {
+    $port = $isMysql ? '3306' : '5432';
+}
 if ($name === '' || $user === '') {
     fwrite(STDERR, "error: missing db master config\n");
     exit(1);
 }
 
-$pdo = new PDO(
-    sprintf('pgsql:host=%s;port=%s;dbname=%s', $host, $port, $name),
-    $user,
-    $pass,
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-);
+$dsn = $isMysql
+    ? sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', $host, $port, $name)
+    : sprintf('pgsql:host=%s;port=%s;dbname=%s', $host, $port, $name);
+$pdo = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
+$langTable = $prefix . 'weline_websites_website_language';
+$dictTable = $prefix . 'i18n_locale_dictionary';
 $localeRows = $pdo->query(
-    'SELECT language_code FROM w_weline_websites_website_language WHERE website_id = 0 ORDER BY language_code'
+    "SELECT language_code FROM {$langTable} WHERE website_id = 0 ORDER BY language_code"
 )->fetchAll(PDO::FETCH_COLUMN);
 $locales = array_values(array_filter(
     array_map('strval', $localeRows ?: []),
     static fn(string $code): bool => $code !== '' && $code !== 'zh_Hans_CN'
 ));
 
-$sql = <<<'SQL'
-INSERT INTO w_i18n_locale_dictionary (md5, word, locale_code, translate, is_ai)
+$sql = $isMysql
+    ? <<<SQL
+INSERT INTO {$dictTable} (md5, word, locale_code, translate, is_ai)
+VALUES (:md5, :word, :locale, :translate, 0)
+ON DUPLICATE KEY UPDATE
+  word = VALUES(word),
+  locale_code = VALUES(locale_code),
+  translate = VALUES(translate)
+SQL
+    : <<<SQL
+INSERT INTO {$dictTable} (md5, word, locale_code, translate, is_ai)
 VALUES (:md5, :word, :locale, :translate, 0)
 ON CONFLICT (md5) DO UPDATE SET
   word = EXCLUDED.word,

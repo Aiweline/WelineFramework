@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Seed shipping lane service names (DefaultShippingLaneSeedService LANE_META + HEAVY_META).
+ * Seed shipping lane service names (DefaultShippingLaneSeedService LANE_META + HEAVY_META
+ * + PublicTariffSeedService「国际标快」).
  * Module CSV remains zh_Hans_CN + en_US only; other locales → LocaleDictionary.
  *
  * @return array<string, array<string, string>>
@@ -172,6 +173,47 @@ return [
         'tr_TR' => 'Yurt içi ekspres',
         'uk_UA' => 'Внутрішній експрес',
         'ur_PK' => 'ملکی ایکسپریس',
+    ],
+    '国际标快' => [
+        'ar_SA' => 'بريد سريع دولي',
+        'bg_BG' => 'Международен експрес',
+        'bn_BD' => 'আন্তর্জাতিক এক্সপ্রেস',
+        'ca_ES' => 'Exprés internacional',
+        'cs_CZ' => 'Mezinárodní expres',
+        'da_DK' => 'International ekspres',
+        'de_DE' => 'Internationaler Express',
+        'el_GR' => 'Διεθνές express',
+        'en_GB' => 'International Express',
+        'en_US' => 'International Express',
+        'es_ES' => 'Exprés internacional',
+        'es_MX' => 'Exprés internacional',
+        'et_EE' => 'Rahvusvaheline express',
+        'fi_FI' => 'Kansainvälinen express',
+        'fr_CA' => 'Express international',
+        'fr_FR' => 'Express international',
+        'ga_IE' => 'Mearnocht idirnáisiúnta',
+        'hi_IN' => 'अंतरराष्ट्रीय एक्सप्रेस',
+        'hr_HR' => 'Međunarodni ekspres',
+        'hu_HU' => 'Nemzetközi expressz',
+        'id_ID' => 'Ekspres internasional',
+        'is_IS' => 'Alþjóðlegur hraðsending',
+        'it_IT' => 'Express internazionale',
+        'lt_LT' => 'Tarptautinis ekspresas',
+        'lv_LV' => 'Starptautiskais ekspress',
+        'mt_MT' => 'Express internazzjonali',
+        'nb_NO' => 'Internasjonal ekspress',
+        'nl_NL' => 'Internationale express',
+        'pl_PL' => 'Ekspres międzynarodowy',
+        'pt_BR' => 'Expresso internacional',
+        'pt_PT' => 'Expresso internacional',
+        'ro_RO' => 'Express internațional',
+        'ru_RU' => 'Международный экспресс',
+        'sk_SK' => 'Medzinárodný expres',
+        'sl_SI' => 'Mednarodni ekspres',
+        'sv_SE' => 'Internationell express',
+        'tr_TR' => 'Uluslararası ekspres',
+        'uk_UA' => 'Міжнародний експрес',
+        'ur_PK' => 'بین الاقوامی ایکسپریس',
     ],
     '国内重货' => [
         'ar_SA' => 'شحن ثقيل محلي',
