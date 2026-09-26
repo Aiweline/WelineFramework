@@ -1,6 +1,25 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
-$headTitle = (string)($this->getData('title') ?? '');
+$headTitle = trim((string)($this->getData('page_title') ?? ''));
+if ($headTitle === '') {
+    $headTitle = trim((string)($this->getData('controller_title') ?? ''));
+}
+if ($headTitle === '') {
+    $headTitle = trim((string)($this->getData('title') ?? ''));
+}
+$defaultAdminTitle = (string)__('WelineFramework Admin');
+if ($headTitle === '' || $headTitle === 'WelineFramework Admin' || $headTitle === $defaultAdminTitle) {
+    $meta = $this->getData('meta');
+    if (is_array($meta)) {
+        foreach (['controller_title', 'title', 'meta_title'] as $metaKey) {
+            $candidate = trim((string)($meta[$metaKey] ?? ''));
+            if ($candidate !== '' && $candidate !== 'WelineFramework Admin' && $candidate !== $defaultAdminTitle) {
+                $headTitle = $candidate;
+                break;
+            }
+        }
+    }
+}
 $headDescription = (string)($this->getData('description') ?? '');
 ?>
 <meta charset="UTF-8">
