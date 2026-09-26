@@ -84,7 +84,9 @@
   flex: 0 0 auto;
   width: 5.5rem;
   height: 5.5rem;
+  aspect-ratio: 1;
   border-radius: 50%;
+  /* Spectrum spokes paint outside the disc; face is absolutely inset so it cannot stretch the box. */
   overflow: visible;
   box-shadow: var(--w-store-music-shadow);
   --w-store-music-level: 0;
@@ -150,11 +152,18 @@
 }
 
 .w-store-music__face {
-  position: relative;
+  /* Fill avatar box only — never keep a separate rem size (homepage may shrink avatar). */
+  position: absolute;
+  inset: 0;
   z-index: 1;
   display: block;
-  width: 5.5rem;
-  height: 5.5rem;
+  box-sizing: border-box;
+  width: 100%;
+  /* Override global img height:auto so HTML ratio cannot oval-stretch the disc. */
+  height: 100% !important;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: 1;
   border-radius: 50%;
   object-fit: cover;
   object-position: center 18%;
@@ -642,13 +651,9 @@
 }
 
 @media (max-width: 420px) {
-  .w-store-music__avatar,
-  .w-store-music__face {
+  .w-store-music__avatar {
     width: 5rem;
     height: 5rem;
-  }
-
-  .w-store-music__avatar {
     --w-spectrum-r: 2.5rem;
   }
 
