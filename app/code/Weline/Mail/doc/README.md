@@ -16,6 +16,8 @@ php bin/w mail:service:status
 php bin/w mail:dns:check example.com mail.example.com
 ```
 
+建站助手会列出自建邮局深度任务：`mail_engine` → `mail_domain` → `mail_dns` → `mail_account` → `mail_smtp_handoff`（深链 Smtp 一键挂接）。传输账户与渠道绑定由 **Weline_Smtp** 自管，不在 Mail 后台重复配置。
+
 后台入口默认展示 Stalwart 真实收件箱。**推荐写信入口**：`<w:mail-composer/>` + `WelineMailComposer.open`（见 [mail-composer-taglib.md](mail-composer-taglib.md)）。企业邮箱管理页仍保留代发表单与深链预填兼容：`?compose=1&to=&subject=&body=&account=&source=&source_id=`（询价等业务主路径勿再依赖 GET body）。普通后台用户只能使用本人资料邮箱对应的本机 active 账号；超管（`user_id=1`）或 ACL `Weline_Mail::mail_send_as` 可任选本机账号（含 fake 测试号）。发信成功派发 `Weline_Mail::mail_message_sent`。
 
 Query：`resolveLocalMailboxByEmail`、`listLocalMailboxes`、`listThreadBySource`、`sendComposerMessage`（只读列表无凭据）。
