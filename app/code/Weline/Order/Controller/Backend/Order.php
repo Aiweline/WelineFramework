@@ -145,6 +145,7 @@ class Order extends BackendPageController
             ['code' => 'unknown', 'label' => (string)__('未标记')],
         ]);
         $this->assign('order_action_grant_versions', $actionGrantVersions);
+        $this->assignBackendPageTitle((string)__('订单列表'));
         
         return $this->fetch();
     }
@@ -166,6 +167,8 @@ class Order extends BackendPageController
         }
         
         try {
+            // 覆盖 BackendPageController 默认「WelineFramework Admin」，供顶栏 H1 / 面包屑末级使用。
+            $this->assignBackendPageTitle((string)__('订单编辑'));
             $order = $record['order'];
             $items = $this->orderService->getOrderItems($orderId);
             $displayItems = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderLinePresenter::class)
@@ -237,12 +240,14 @@ class Order extends BackendPageController
                 'expected_grant_version',
                 $updateGrant->allowed ? $updateGrant->matchedGrantVersion : 0,
             );
-            
+            // 紧贴 fetch：避免中间逻辑/观察者把壳标题打回默认值
+            $this->assignBackendPageTitle((string)__('订单编辑'));
+
             return $this->fetch();
             
         } catch (\Exception $e) {
             $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect('*/index');
+            $this->redirect('*/backend/order/index');
         }
     }
     
@@ -263,6 +268,8 @@ class Order extends BackendPageController
         }
         
         try {
+            // 覆盖 BackendPageController 默认「WelineFramework Admin」，供顶栏 H1 / 面包屑末级使用。
+            $this->assignBackendPageTitle((string)__('订单编辑'));
             $order = $record['order'];
             $items = $this->orderService->getOrderItems($orderId);
             $displayItems = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderLinePresenter::class)
@@ -353,12 +360,13 @@ class Order extends BackendPageController
                 'expected_grant_version',
                 $updateGrant->allowed ? $updateGrant->matchedGrantVersion : 0,
             );
-            
+            $this->assignBackendPageTitle((string)__('订单编辑'));
+
             return $this->fetch();
             
         } catch (\Exception $e) {
             $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect('*/index');
+            $this->redirect('*/backend/order/index');
         }
     }
 
@@ -497,15 +505,15 @@ class Order extends BackendPageController
             }
             
             $this->getMessageManager()->addSuccess($message);
-            $this->redirect('*/edit?id=' . $orderId);
+            $this->redirect('*/backend/order/edit?id=' . $orderId);
             
         } catch (FrontendQueryException $exception) {
             $this->request->getResponse()->setCode(403);
             $this->getMessageManager()->addError($exception->getMessage());
-            $this->redirect('*/edit' . ($orderId ? '?id=' . $orderId : ''));
+            $this->redirect('*/backend/order/edit' . ($orderId ? '?id=' . $orderId : ''));
         } catch (\Exception $e) {
             $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect('*/edit' . ($orderId ? '?id=' . $orderId : ''));
+            $this->redirect('*/backend/order/edit' . ($orderId ? '?id=' . $orderId : ''));
         }
     }
 
@@ -535,7 +543,7 @@ class Order extends BackendPageController
             $this->getMessageManager()->addError($e->getMessage());
         }
 
-        $this->redirect('*/edit?id=' . $orderId);
+        $this->redirect('*/backend/order/edit?id=' . $orderId);
     }
     
     /**
@@ -563,14 +571,14 @@ class Order extends BackendPageController
             $this->getMessageManager()->addError($e->getMessage());
         }
         
-        $this->redirect('*/edit?id=' . $orderId);
+        $this->redirect('*/backend/order/edit?id=' . $orderId);
     }
     
     /**
-     * 更新订单状态
+     * 更新订单状态（method 前缀 post → 注册为 POST；勿用 update*，会被解析成非标准 UPDATE 动词，HTML 表单 POST 会 404）
      */
     #[Acl('Weline_Order::order_update_status', '更新订单状态', 'refresh', '更新订单状态')]
-    public function updateStatus()
+    public function postUpdateStatus()
     {
         $orderId = (int)$this->request->getPost('order_id');
         $newStatus = trim((string)$this->request->getPost('status'));
@@ -579,7 +587,7 @@ class Order extends BackendPageController
         
         if (!$newStatus) {
             $this->getMessageManager()->addError(\__('参数错误'));
-            $this->redirect('*/index');
+            $this->redirect('*/backend/order/index');
             return;
         }
         
@@ -599,7 +607,35 @@ class Order extends BackendPageController
             $this->getMessageManager()->addError($e->getMessage());
         }
         
-        $this->redirect('*/edit?id=' . $orderId);
+        $this->redirect('*/backend/order/edit?id=' . $orderId);
+    }
+
+    /**
+     * 写入后台壳页标题（document title / 顶栏 H1 / 非精确菜单匹配时的面包屑末级）。
+     * BackendPageController 默认是「WelineFramework Admin」，订单页必须覆盖。
+     */
+    private function assignBackendPageTitle(string $title): void
+    {
+        $title = trim($title);
+        if ($title === '') {
+            return;
+        }
+        // title / page_title / controller_title：顶栏 H1、面包屑末级、document <title>
+        $this->assign('title', $title);
+        $this->assign('page_title', $title);
+        $this->assign('controller_title', $title);
+        // 写入 meta，避免 Theme ControllerFetchFileBefore 用布局默认值盖掉控制器标题
+        $meta = $this->getTemplate()->getData('meta');
+        if (!\is_array($meta)) {
+            $meta = [];
+        }
+        $meta['title'] = $title;
+        $meta['controller_title'] = $title;
+        $this->assign('meta', $meta);
+        try {
+            $this->request->setGet('theme_page_title', $title);
+        } catch (\Throwable) {
+        }
     }
 
     /**
