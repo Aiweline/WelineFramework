@@ -25,10 +25,15 @@ class ProcessDriverFactory
      * 
      * 按优先级排序，先匹配先使用
      * 
+     * ⚠️ 顺序是**语义**，不是风格：`LinuxProcessDriver::supports()` 对所有非 Windows
+     * 返回 true，所以更具体的 `DarwinProcessDriver` 必须排在它**之前**，
+     * 否则 Darwin 会静默落回「每条通路都依赖外部 ps」的旧驱动。
+     * 
      * @var class-string<ProcessDriverInterface>[]
      */
     private static array $driverClasses = [
         WindowsProcessDriver::class,
+        DarwinProcessDriver::class,
         LinuxProcessDriver::class,
     ];
     
