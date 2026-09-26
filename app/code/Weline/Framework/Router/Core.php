@@ -1415,6 +1415,18 @@ class Core
             }
         }
         if (is_file($filename)) {
+            // 静态公共面统一口径（唯一权威：Framework\Deploy\StaticPublicSurface）。
+            //
+            // 传输层 `worker(_ssl).php::handleStaticFile()` 的扩展名白名单只是
+            // 「快路径」——不匹配时它 `return null`，请求会落到这里。若此处不设防，
+            // 「传输层不接管」就会被当成「允许」，而本方法原本唯一的守卫是
+            // 「路径含 view」，随后 `file_get_contents()` 原样回吐。
+            // 实测（纯 WLS、不经 nginx）：`/static/.../view/statics/x.php`
+            // → 200 `text/x-php`，PHP 源码泄露。故此处必须执行完整口径。
+            if (!\Weline\Framework\Deploy\StaticPublicSurface::isServableFile($filename)) {
+                $this->request->getResponse()->noRouter();
+            }
+
             // Handle caching
             $fileModificationTime = gmdate('D, d M Y H:i:s', filemtime($filename)) . ' GMT';
             $ifModifiedSince = $this->getRequestHeaderValue($this->getRequestHeaders(), 'If-Modified-Since');
