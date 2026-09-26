@@ -227,3 +227,46 @@ D6 `NginxChildProcessProbe` 在 Darwin 上仍靠 `ps -p … -o pid=,ppid=,comman
 > 的绿，正是 D1 这个缺陷本身撑起来的 —— 修好 D1 后它立刻变红。
 > 定位手法：**stash 改动后同环境复跑对照**，确认「基线 7 条 / 改动后 8 条 ⇒ 新增恰好 1 条」，
 > 再在用例内插桩取真实调用序列，才定位到 `pid_index.json` 这一环境输入。
+
+---
+
+## 十、2026-09-26 生产 502 事故专项
+
+生产站 `changanhanfu.com` 于 2026-09-26 全站 502 约 75 分钟。事故由**两个互相独立的根因**
+叠加而成，分别归属两个模块，已各自立项：
+
+### 10.1 直接原因（`Weline_Deploy`）：磁盘被发布快照写满
+
+`var/backup/deploy/` 当天 3 份整站快照累计 **12 G**，把 40 G 系统盘打到 **100%**，
+WLS Master 因日志写入失败（`errno=28 No space left on device`）退出 → 上游不可达 → 502。
+快照**无保留策略**、**排除集不含 `var/backup`**（快照自我放大）、**无磁盘预检**，
+且生产**没有任何可用的可用性监控**（看门狗既未安装、装了也读不到目标地址）。
+
+➡️ **[`Weline_Deploy/doc/开发/spec/deploy-backup-retention-and-disk-guard.md`](../../../Deploy/doc/开发/spec/deploy-backup-retention-and-disk-guard.md)**
+
+### 10.2 恢复时的阻断原因（`Weline_Server`）：无 FFI 时启动监听交接不可兑现
+
+磁盘腾出后重启仍失败：`MASTER_BOOTSTRAP_FAILED: Direct shared listener endpoint could not be read.`
+根因是「能力门禁漏检 FFI」+「回退路径仍然持久化 fd 3 交接声明」——
+任何 **PHP 无 FFI** 的 Linux 主机在纯 WLS 下**都无法以后台 Master 启动**。
+
+➡️ **[`spec/wls-startup-handoff-capability-gate.md`](./spec/wls-startup-handoff-capability-gate.md)**
+
+### 10.3 本专项最有价值的两条经验
+
+1. **「修一层冒一层」在生产恢复中同样成立。** 恢复过程依次被四道门挡住：
+   DNS 门禁（Cloudflare 代理域名解析不到源站 IP）→ `ext-event` 缺失 →
+   `MASTER_BOOTSTRAP_FAILED`（FFI/FD-3）→ 才起来。
+   与 §九 的 D1→D6 是同一类现象：**同一条启动链上有多个独立的能力假设**，
+   每修一层只揭开下一层。⇒ 恢复动作必须**重复做真实端到端启动**，
+   不能「修完一处就宣布好了」。
+2. **`fopen('php://fd/3')` 成功 ≠ fd 3 是那个套接字。**
+   `continuous_ownership=true` 若只靠「能打开」自证，就会变成一份从未被兑现的声明。
+
+> 另记两个定位期的环境坑（非缺陷，但会误导排查）：
+> ① 生产 `curl` 默认 UA 会被 WLS 的 `attack_guard` 拦成 **403**
+> （`X-WLS-Deny-Reason: server.request.attack_guard`）—— 用浏览器 UA 才是 200，
+> 别把 403 当成「站还没起来」。
+> ② 生产 PHP **未定义 `SO_ACCEPTCONN`**，故 `assertStreamEndpoint()` 里的二次校验会被跳过；
+> 而 `stream_socket_get_name()` 在裸 socket 与 `fopen('php://fd/N')` 包装上**都能用**，
+> 所以该错误的语义是「这个 fd 不是套接字」，不是「PHP 读不了端点」。
