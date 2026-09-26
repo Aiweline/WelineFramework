@@ -48,13 +48,19 @@ CLAUDE.local.md
 .cursorignore
 .codex/
 .github/copilot-instructions.md
+# NOTE: do NOT ignore .github/prompts/ as a whole — ui-ux-pro-max is a tracked asset.
+.github/instructions/
 GEMINI.md
 .gemini/
 .windsurfrules
 .windsurf/
 .aider*
+.aiderignore
 opencode.json
+.continue/
+.clinerules
 AGENTS.local.md
+AGENTS.override.md
 
 # ???????
 /.workflow
