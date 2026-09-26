@@ -47,12 +47,16 @@ use Weline\Order\Model\OrderItem;
 use Weline\Order\Service\OrderFacade;
 use Weline\Shipping\Api\Quote\ShippingQuoteServiceInterface;
 use Weline\Shipping\Model\Carrier;
+use Weline\Shipping\Model\CarrierRegion;
+use Weline\Shipping\Model\DestinationRegion;
 use Weline\Shipping\Model\RateTemplate;
 use Weline\Shipping\Model\Region;
+use Weline\Shipping\Model\ServiceRegion;
+use Weline\Shipping\Model\ShippingProfile;
+use Weline\Shipping\Model\ShippingProfileService;
 use Weline\Shipping\Model\ShippingService;
-use Weline\Shipping\Model\Zone;
-use Weline\Shipping\Model\ZoneRegion;
 use Weline\Shipping\Service\ScopedShippingQuoteService;
+use Weline\Shipping\Service\ShippingProfileResolver;
 
 require dirname(__DIR__, 7) . '/app/bootstrap.php';
 
@@ -140,36 +144,6 @@ function p2e002_prepare(): array
         Region::schema_fields_ID,
     );
 
-    $zone = new Zone();
-    $zone->setData([
-        Zone::schema_fields_ZONE_NAME => 'P2E002 Zone',
-        Zone::schema_fields_ZONE_CODE => $run,
-        Zone::schema_fields_DESCRIPTION => 'P2E-002 isolated fixture',
-        Zone::schema_fields_IS_ACTIVE => 1,
-        Zone::schema_fields_SORT_ORDER => 0,
-        Zone::schema_fields_CREATED_AT => $now,
-        Zone::schema_fields_UPDATED_AT => $now,
-    ])->save();
-    $zoneId = p2e002_lookup_id(
-        Zone::class,
-        Zone::schema_fields_ZONE_CODE,
-        $run,
-        Zone::schema_fields_ID,
-    );
-
-    $zoneRegion = new ZoneRegion();
-    $zoneRegion->setData([
-        ZoneRegion::schema_fields_ZONE_ID => $zoneId,
-        ZoneRegion::schema_fields_REGION_ID => $regionId,
-        ZoneRegion::schema_fields_CREATED_AT => $now,
-    ])->save();
-    $zoneRegionId = p2e002_lookup_id(
-        ZoneRegion::class,
-        ZoneRegion::schema_fields_ZONE_ID,
-        $zoneId,
-        ZoneRegion::schema_fields_ID,
-    );
-
     $carrier = new Carrier();
     $carrier->setData([
         Carrier::schema_fields_CARRIER_CODE => $run,
@@ -188,6 +162,47 @@ function p2e002_prepare(): array
         Carrier::schema_fields_CARRIER_CODE,
         $run,
         Carrier::schema_fields_ID,
+    );
+
+    // 承运商可达性：matchingCarrierIds() 对「无覆盖规则」的承运商直接跳过（无通配回退），
+    // 所以必须为测试国家建一条 country 级覆盖，否则报价会以「无可达航线」失败。
+    $carrierRegion = new CarrierRegion();
+    $carrierRegion->setData([
+        CarrierRegion::schema_fields_CARRIER_ID => $carrierId,
+        CarrierRegion::schema_fields_REGION_TYPE => CarrierRegion::TYPE_COUNTRY,
+        CarrierRegion::schema_fields_COUNTRY_CODE => $country,
+        CarrierRegion::schema_fields_REGION_ID => $regionId,
+        CarrierRegion::schema_fields_REGION_CODE => $run,
+        CarrierRegion::schema_fields_IS_ACTIVE => 1,
+        CarrierRegion::schema_fields_CREATED_AT => $now,
+        CarrierRegion::schema_fields_UPDATED_AT => $now,
+    ])->save();
+    $carrierRegionId = p2e002_lookup_id(
+        CarrierRegion::class,
+        CarrierRegion::schema_fields_REGION_CODE,
+        $run,
+        CarrierRegion::schema_fields_ID,
+    );
+
+    // 可售目的地白名单：DestinationService 一旦存在白名单规则，未覆盖的地址即返回 false，
+    // 承运商覆盖匹配会直接返回空。测试国家是虚构的 'XZ'，必须显式放行。
+    $destination = new DestinationRegion();
+    $destination->setData([
+        DestinationRegion::schema_fields_SCOPE_TYPE => DestinationRegion::SCOPE_WEBSITE,
+        DestinationRegion::schema_fields_SCOPE_ID => 0,
+        DestinationRegion::schema_fields_REGION_TYPE => DestinationRegion::TYPE_COUNTRY,
+        DestinationRegion::schema_fields_COUNTRY_CODE => $country,
+        DestinationRegion::schema_fields_REGION_ID => $regionId,
+        DestinationRegion::schema_fields_REGION_CODE => $run,
+        DestinationRegion::schema_fields_IS_ACTIVE => 1,
+        DestinationRegion::schema_fields_CREATED_AT => $now,
+        DestinationRegion::schema_fields_UPDATED_AT => $now,
+    ])->save();
+    $destinationId = p2e002_lookup_id(
+        DestinationRegion::class,
+        DestinationRegion::schema_fields_REGION_CODE,
+        $run,
+        DestinationRegion::schema_fields_ID,
     );
 
     $template = new RateTemplate();
@@ -215,10 +230,11 @@ function p2e002_prepare(): array
 
     $service = new ShippingService();
     $service->setData([
+        ShippingService::schema_fields_SCOPE_TYPE => ShippingService::SCOPE_WEBSITE,
+        ShippingService::schema_fields_SCOPE_ID => 0,
         ShippingService::schema_fields_SERVICE_NAME => 'P2E002 Standard',
         ShippingService::schema_fields_SERVICE_CODE => $run,
         ShippingService::schema_fields_CARRIER_ID => $carrierId,
-        ShippingService::schema_fields_ZONE_ID => $zoneId,
         ShippingService::schema_fields_RATE_TEMPLATE_ID => $templateId,
         ShippingService::schema_fields_FREE_SHIPPING_RULE_ID => null,
         ShippingService::schema_fields_ESTIMATED_DAYS_MIN => 1,
@@ -235,6 +251,51 @@ function p2e002_prepare(): array
         $run,
         ShippingService::schema_fields_ID,
     );
+
+    // 2.4.18 起 Zone/ZoneRegion 已删除：目的地覆盖改由「航线」ServiceRegion 表达。
+    // 原 ZoneRegion(zone -> region) 的等价物就是一条 country 级航线覆盖。
+    $serviceRegion = new ServiceRegion();
+    $serviceRegion->setData([
+        ServiceRegion::schema_fields_SERVICE_ID => $serviceId,
+        ServiceRegion::schema_fields_REGION_TYPE => ServiceRegion::TYPE_COUNTRY,
+        ServiceRegion::schema_fields_COUNTRY_CODE => $country,
+        ServiceRegion::schema_fields_REGION_ID => $regionId,
+        ServiceRegion::schema_fields_REGION_CODE => $run,
+        ServiceRegion::schema_fields_IS_ACTIVE => 1,
+        ServiceRegion::schema_fields_CREATED_AT => $now,
+        ServiceRegion::schema_fields_UPDATED_AT => $now,
+    ])->save();
+    $serviceRegionId = p2e002_lookup_id(
+        ServiceRegion::class,
+        ServiceRegion::schema_fields_REGION_CODE,
+        $run,
+        ServiceRegion::schema_fields_ID,
+    );
+
+    // 商品配送档案 -> 服务 关联：报价先由 profile 解析出 service_ids 白名单，
+    // 不在白名单内的服务会被整组过滤（表现：「商品配送档案与仓航线无交集」）。
+    // 无 shipping_profile_code 的购物车行会落到通用档案(SEED_PROFILE_GENERAL)，必须挂进去。
+    $profileServiceId = 0;
+    $generalProfile = ObjectManager::getInstance(ShippingProfileResolver::class)
+        ->resolveGeneral(ShippingProfile::SCOPE_WEBSITE, 0);
+    $profileId = (int)($generalProfile['profile']->getId() ?? 0);
+    if ($profileId > 0) {
+        $profileService = new ShippingProfileService();
+        $profileService->setData([
+            ShippingProfileService::schema_fields_PROFILE_ID => $profileId,
+            ShippingProfileService::schema_fields_SERVICE_ID => $serviceId,
+            ShippingProfileService::schema_fields_CREATED_AT => $now,
+        ])->save();
+        $profileServiceId = (int)$profileService->getId();
+        if ($profileServiceId <= 0) {
+            $linkRow = (new ShippingProfileService())
+                ->where(ShippingProfileService::schema_fields_PROFILE_ID, $profileId)
+                ->where(ShippingProfileService::schema_fields_SERVICE_ID, $serviceId)
+                ->find()
+                ->fetch();
+            $profileServiceId = $linkRow instanceof ShippingProfileService ? (int)$linkRow->getId() : 0;
+        }
+    }
 
     $offerBase = random_int(20_000_000, 80_000_000);
     $offers = [
@@ -373,8 +434,10 @@ function p2e002_prepare(): array
         'shipping_amount_minor' => 1500,
         'config_version' => $quotes->activeConfigVersion(),
         'region_id' => $regionId,
-        'zone_id' => $zoneId,
-        'zone_region_id' => $zoneRegionId,
+        'service_region_id' => $serviceRegionId,
+        'carrier_region_id' => $carrierRegionId,
+        'destination_id' => $destinationId,
+        'profile_service_id' => $profileServiceId,
         'template_id' => $templateId,
         'service_id' => $serviceId,
         'carrier_id' => $carrierId,
@@ -680,9 +743,24 @@ function p2e002_cleanup(array $fixture, array $quoteTokens, array $groupUuids): 
     $serviceId = (int)($fixture['service_id'] ?? 0);
     $carrierId = (int)($fixture['carrier_id'] ?? 0);
     $templateId = (int)($fixture['template_id'] ?? 0);
-    $zoneRegionId = (int)($fixture['zone_region_id'] ?? 0);
-    $zoneId = (int)($fixture['zone_id'] ?? 0);
+    $serviceRegionId = (int)($fixture['service_region_id'] ?? 0);
+    $carrierRegionId = (int)($fixture['carrier_region_id'] ?? 0);
+    $destinationId = (int)($fixture['destination_id'] ?? 0);
+    $profileServiceId = (int)($fixture['profile_service_id'] ?? 0);
     $regionId = (int)($fixture['region_id'] ?? 0);
+    // 覆盖/关联行先删：它们引用 service_id / carrier_id / region_id，避免留下悬空关联。
+    if ($profileServiceId > 0) {
+        (new ShippingProfileService())->where(ShippingProfileService::schema_fields_ID, $profileServiceId)->delete();
+    }
+    if ($serviceRegionId > 0) {
+        (new ServiceRegion())->where(ServiceRegion::schema_fields_ID, $serviceRegionId)->delete();
+    }
+    if ($carrierRegionId > 0) {
+        (new CarrierRegion())->where(CarrierRegion::schema_fields_ID, $carrierRegionId)->delete();
+    }
+    if ($destinationId > 0) {
+        (new DestinationRegion())->where(DestinationRegion::schema_fields_ID, $destinationId)->delete();
+    }
     if ($serviceId > 0) {
         (new ShippingService())->where(ShippingService::schema_fields_ID, $serviceId)->delete();
     }
@@ -691,12 +769,6 @@ function p2e002_cleanup(array $fixture, array $quoteTokens, array $groupUuids): 
     }
     if ($templateId > 0) {
         (new RateTemplate())->where(RateTemplate::schema_fields_ID, $templateId)->delete();
-    }
-    if ($zoneRegionId > 0) {
-        (new ZoneRegion())->where(ZoneRegion::schema_fields_ID, $zoneRegionId)->delete();
-    }
-    if ($zoneId > 0) {
-        (new Zone())->where(Zone::schema_fields_ID, $zoneId)->delete();
     }
     if ($regionId > 0) {
         (new Region())->where(Region::schema_fields_ID, $regionId)->delete();

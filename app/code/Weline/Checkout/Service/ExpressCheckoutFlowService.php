@@ -100,13 +100,13 @@ final class ExpressCheckoutFlowService
             'shipping_address' => $address,
             'address' => $address,
         ]);
-        if (trim((string) ($address['country_code'] ?? '')) === '') {
-            // Last resort only when resolver and delivery context have no ISO country.
-            $address['country_code'] = 'CN';
-        }
+        // 快捷智能支付设计：地址由支付商带回、回跳 review 后智能补齐。
+        // guest / 无真实国家时禁止盲目 CN 兜底报价——那会把国际客人堵死在入口
+        // （express_no_shipping），而不是让其进入 PayPal 授权带回地址。
+        $trustedCountry = strtoupper(trim((string) ($address['country_code'] ?? '')));
 
         $serviceCode = '';
-        if ($requiresShipping) {
+        if ($requiresShipping && $trustedCountry !== '') {
             $methods = is_array($data['shipping_methods'] ?? null) ? $data['shipping_methods'] : [];
             foreach ($methods as $method) {
                 if (is_array($method) && trim((string) ($method['code'] ?? '')) !== '') {
@@ -138,11 +138,35 @@ final class ExpressCheckoutFlowService
             'buyer_tax_identity' => \is_array($params['buyer_tax_identity'] ?? null) ? $params['buyer_tax_identity'] : [],
         ]);
         if (empty($frozen['success'])) {
-            return [
-                'success' => false,
-                'message' => (string) ($frozen['message'] ?? __('无法冻结结账报价')),
-                'error_code' => (string) ($frozen['error_code'] ?? 'express_freeze_failed'),
-            ];
+            // 无可信地址时 freeze 被配送报价拒绝（缺国家 / CN 兜底航线不可达）：
+            // 一次性降级为 deferred shipping——不带 service_code 重冻，放行去支付商带回地址；
+            // review 回跳后会用真实 profile 地址重估并 auto-select lane。仍失败则原样报错。
+            $deferred = null;
+            if ($requiresShipping && $trustedCountry === '') {
+                $deferred = $freezeQuote([
+                    'address' => [],
+                    'billing_address' => [],
+                    'billing_same_as_shipping' => true,
+                    'service_code' => '',
+                    'payment_method' => $paymentMethod,
+                    'guest_token' => $guestToken,
+                    'quote_token' => trim((string) ($data['quote_token'] ?? $params['quote_token'] ?? '')),
+                    'cart_type' => $cartType,
+                    'selling_mode' => $cartType,
+                    'checkout_entry' => \Weline\Checkout\Service\CheckoutEntry::EXPRESS,
+                    'tax_identity' => \is_array($params['tax_identity'] ?? null) ? $params['tax_identity'] : [],
+                    'buyer_tax_identity' => \is_array($params['buyer_tax_identity'] ?? null) ? $params['buyer_tax_identity'] : [],
+                ]);
+            }
+            if (\is_array($deferred) && !empty($deferred['success'])) {
+                $frozen = $deferred;
+            } else {
+                return [
+                    'success' => false,
+                    'message' => (string) ($frozen['message'] ?? __('无法冻结结账报价')),
+                    'error_code' => (string) ($frozen['error_code'] ?? 'express_freeze_failed'),
+                ];
+            }
         }
 
         $quoteToken = trim((string) ($frozen['quote_token'] ?? $frozen['data']['quote_token'] ?? ''));
@@ -525,7 +549,12 @@ final class ExpressCheckoutFlowService
         if ($grandMinor <= 0) {
             $grandMinor = (int) round(((float) ($amended['totals']['grand_total'] ?? 0)) * 100);
         }
-        $this->markConfirmCapture($transactionNo, $grandMinor, (string) ($order['currency'] ?? 'CNY'));
+        $this->markConfirmCapture(
+            $transactionNo,
+            $grandMinor,
+            (string) ($order['currency'] ?? 'CNY'),
+            \is_array($amended['totals'] ?? null) ? $amended['totals'] : [],
+        );
 
         $dispatchParams = $this->buildConfirmCaptureDispatchParams($transactionNo, $params);
         if ($dispatchParams === []) {
@@ -1527,8 +1556,10 @@ final class ExpressCheckoutFlowService
 
     /**
      * TODO(payment-shell-compliance): move write to PaymentExpressFacade — Checkout must not setData/save PaymentTransaction.
+     *
+     * @param array<string, mixed> $totals 回跳 review 重报价后的最新订单金额（含 *_minor 键）
      */
-    private function markConfirmCapture(string $transactionNo, int $grandMinor, string $currency): void
+    private function markConfirmCapture(string $transactionNo, int $grandMinor, string $currency, array $totals = []): void
     {
         try {
             /** @var PaymentTransaction $txn */
@@ -1545,6 +1576,32 @@ final class ExpressCheckoutFlowService
                 $request = [];
             }
             $request['express_confirm_capture'] = true;
+            // 回跳 review 会重报价（运费/税/优惠），下单时的支付请求快照金额已经过期。
+            // 这里把最新金额写回快照：provider 侧 patch 的金额分解（AmountBreakdownBuilder
+            // 读 context.totals/amount_minor）以及其它读 request_data.totals 的展示，
+            // 都必须拿到当前值，否则会按旧小计/旧运费拼出与目标 value 不守恒的 breakdown。
+            $request['amount_minor'] = $grandMinor;
+            $request['amount'] = $grandMinor / 100.0;
+            if ($totals !== []) {
+                $existingTotals = \is_array($request['totals'] ?? null) ? $request['totals'] : [];
+                $request['totals'] = array_replace(
+                    $existingTotals,
+                    array_filter($totals, static fn (mixed $value): bool => $value !== null),
+                );
+            }
+            // 丢弃创建时写入的 amount_breakdown：确认扣款必须以 totals 重建，
+            // 否则 PayPal PATCH 只改 value 会触发 AMOUNT_MISMATCH。
+            unset($request['amount_breakdown']);
+            $discountMinor = (int) ($totals['discount_amount_minor'] ?? 0);
+            if ($discountMinor > 0) {
+                $couponCode = strtoupper(trim((string) ($totals['coupon_code'] ?? '')));
+                $request['discount_lines'] = [[
+                    'key' => $couponCode !== '' ? $couponCode : 'discount',
+                    'label' => $couponCode !== '' ? $couponCode : (string) __('优惠'),
+                    'amount_minor' => $discountMinor,
+                    'source_type' => 'coupon',
+                ]];
+            }
             $currency = strtoupper(trim($currency)) ?: 'CNY';
             $providerCurrency = $this->detectProviderOrderCurrency($txn->getResponseData());
             // Patch only when provider currency is known and matches; otherwise capture approved amount.

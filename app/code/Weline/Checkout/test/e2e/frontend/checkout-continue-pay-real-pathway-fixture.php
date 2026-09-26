@@ -463,6 +463,89 @@ try {
         ]);
     }
 
+    if ($action === 'verify_order_state') {
+        // 只读核验：订单 / 支付交易 / 结账会话恢复态，全部直读数据库。
+        // 供「取消 → 继续支付」真实通路 runner 逐步断言，不写入任何状态。
+        $orderUuid = trim((string)($input['order_uuid'] ?? ''));
+        if ($orderUuid === '') {
+            throw new RuntimeException('order_uuid_required');
+        }
+
+        /** @var Order $order */
+        $order = $om->getInstance(Order::class);
+        $order->clear()->reset()
+            ->where(Order::schema_fields_ORDER_UUID, $orderUuid)
+            ->find()
+            ->fetch();
+        if (!$order->getId()) {
+            throw new RuntimeException('order_not_found');
+        }
+
+        $txs = (new PaymentTransaction())->reset()
+            ->where(PaymentTransaction::schema_fields_ORDER_ID, $orderUuid)
+            ->order(PaymentTransaction::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
+        $txRows = [];
+        $successCount = 0;
+        foreach ($txs as $tx) {
+            $data = $tx instanceof PaymentTransaction ? $tx->getData() : (array)$tx;
+            $status = strtolower(trim((string)($data[PaymentTransaction::schema_fields_STATUS] ?? '')));
+            if ($status === strtolower(PaymentTransaction::STATUS_SUCCESS)) {
+                $successCount++;
+            }
+            $txRows[] = [
+                'transaction_id' => (int)($data[PaymentTransaction::schema_fields_ID] ?? 0),
+                'transaction_no' => (string)($data[PaymentTransaction::schema_fields_TRANSACTION_NO] ?? ''),
+                'method_code' => (string)($data[PaymentTransaction::schema_fields_METHOD_CODE] ?? ''),
+                'status' => $status,
+                'amount' => (string)($data[PaymentTransaction::schema_fields_AMOUNT] ?? ''),
+                'currency' => (string)($data[PaymentTransaction::schema_fields_CURRENCY] ?? ''),
+                'paid_at' => (string)($data[PaymentTransaction::schema_fields_PAID_AT] ?? ''),
+            ];
+        }
+
+        /** @var CheckoutSessionStoreInterface $sessions */
+        $sessions = $om->getInstance(CheckoutSessionStoreInterface::class);
+        $quoteToken = trim((string)($input['quote_token'] ?? ''));
+        if ($quoteToken === '') {
+            $quoteToken = trim((string)($sessions->findSubmittedTokenByOrderUuid($orderUuid) ?? ''));
+        }
+        $session = $quoteToken !== '' ? $sessions->get($quoteToken) : null;
+        $payment = is_array($session) && is_array($session['payment_result'] ?? null)
+            ? $session['payment_result']
+            : [];
+        $history = is_array($session) && is_array($session['payment_attempt_history'] ?? null)
+            ? $session['payment_attempt_history']
+            : [];
+
+        cpay_output([
+            'ok' => true,
+            'data' => [
+                'order_uuid' => $orderUuid,
+                'order_number' => trim((string)$order->getData(Order::schema_fields_ORDER_NUMBER)),
+                'order_status' => strtolower(trim((string)$order->getData(Order::schema_fields_STATUS))),
+                'payment_status' => strtolower(trim((string)$order->getData(Order::schema_fields_PAYMENT_STATUS))),
+                'payment_method' => trim((string)$order->getData(Order::schema_fields_PAYMENT_METHOD)),
+                'grand_total' => (string)$order->getData(Order::schema_fields_GRAND_TOTAL),
+                'currency' => trim((string)$order->getData(Order::schema_fields_CURRENCY)),
+                'customer_id' => (int)$order->getData(Order::schema_fields_CUSTOMER_ID),
+                'transaction_count' => count($txRows),
+                'success_transaction_count' => $successCount,
+                'transactions' => $txRows,
+                'quote_token' => $quoteToken,
+                'session_state' => is_array($session) ? (string)($session['state'] ?? '') : '',
+                'session_idempotency_key' => is_array($session) ? (string)($session['idempotency_key'] ?? '') : '',
+                'payment_outcome' => strtolower(trim((string)($payment['outcome'] ?? ''))),
+                'payment_status_detail' => strtolower(trim((string)($payment['status'] ?? ''))),
+                'payment_recoverable' => (bool)($payment['recoverable'] ?? false),
+                'payment_cancel_source' => trim((string)($payment['cancel_source'] ?? '')),
+                'attempt_history_count' => count($history),
+            ],
+        ]);
+    }
+
     throw new RuntimeException('unknown_action:' . $action);
 } catch (Throwable $e) {
     cpay_output([

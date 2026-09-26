@@ -69,7 +69,11 @@ final class CheckoutQuoteSelectedAddressContractTest extends TestCase
         $src = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/CheckoutDeliveryContextService.php',
         );
-        self::assertStringContainsString("foreach (\$this->listAddresses('') as \$address)", $src);
+        // 意图：跨国家查找（首参恒 ''），禁止按当前国家过滤；后续加了 purpose 维度不违此意。
+        self::assertMatchesRegularExpression(
+            "/foreach \(\\\$this->listAddresses\(''/",
+            $src,
+        );
         self::assertStringNotContainsString(
             'foreach ($this->listAddresses($this->currentCountryCode()) as $address)',
             $src,
