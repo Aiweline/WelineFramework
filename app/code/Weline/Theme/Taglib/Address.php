@@ -149,9 +149,59 @@ class Address implements TaglibInterface
         if (!in_array($catalog, ['installed', 'global'], true)) {
             $catalog = 'installed';
         }
-        $locale = (string)(w_env('user.lang') ?: \Weline\Framework\Http\Cookie::getLangLocal() ?: 'zh_Hans_CN');
+        // 店面 chrome：路径 locale 优先（与 WidgetI18n 一致），避免 header Hook 渲染时
+        // State/RequestContext 仍停在网站默认 en_US，把省市区标签 prefetch/回落成英文。
+        $locale = (string)(\Weline\Theme\Helper\WidgetI18n::storefrontLocale() ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN');
         $useEnglishFallback = !str_starts_with($locale, 'zh');
-        $translate = static function (string $source, string $fallback) use ($useEnglishFallback): string {
+        // WLS：CJK 源串缺词不打 DB；先 prefetch 再取值，否则非中文 locale 会英文回落（Province/City…）。
+        $labelSources = [
+            '国家/地区',
+            '省份',
+            '城市',
+            '区县',
+            '街道',
+            '暂无可选地区',
+            '可直接输入该地区',
+            '请选择国家/地区',
+            '请选择省份',
+            '请选择城市',
+            '请选择区县',
+            '请选择街道',
+            '请先选择国家/地区',
+            '请先选择省份',
+            '请先选择城市',
+            '请先选择区县',
+            '请填写详细地址',
+            '加载中…',
+            '该邮编匹配多个国家，请选择',
+            '本站不支持',
+            '不支持配送',
+            '邮编匹配',
+            '尚未选择，请搜索后添加',
+            '搜索并添加国家/地区',
+            '搜索并添加省份',
+            '搜索并添加城市',
+            '搜索并添加区县',
+            '搜索并添加街道',
+            '输入关键字筛选更多',
+            '共 {n} 项可选，输入关键字筛选',
+            '邮编',
+            '详细地址',
+            '门牌号 / 楼栋单元等',
+        ];
+        \Weline\Framework\Phrase\Parser::prefetchWords($labelSources, $locale);
+        \Weline\Theme\Helper\WidgetI18n::prefetchLabels($labelSources);
+        $translate = static function (string $source, string $fallback) use ($useEnglishFallback, $locale): string {
+            // 1) 目标 locale 的显式 prefetch（避免 __() 在 header 早渲染时落到 en_US）
+            $prefetched = \Weline\Framework\Phrase\Parser::getPrefetchedGlobalWord($locale, $source);
+            if (\is_string($prefetched) && $prefetched !== '' && $prefetched !== $source) {
+                return $prefetched;
+            }
+            // 2) WidgetI18n：路径 locale + TranslationResolver
+            $viaWidget = \Weline\Theme\Helper\WidgetI18n::label($source);
+            if ($viaWidget !== '' && $viaWidget !== $source) {
+                return $viaWidget;
+            }
             $translated = (string)__($source);
             if ($useEnglishFallback && ($translated === '' || $translated === $source)) {
                 return $fallback;
