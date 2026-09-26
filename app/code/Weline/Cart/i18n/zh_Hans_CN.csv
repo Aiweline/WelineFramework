@@ -27,6 +27,13 @@
 购物车工作台,购物车工作台
 search,search
 "按 Scope / guest_token 检查真实 Cart 持久库","按 Scope / guest_token 检查真实 Cart 持久库"
+当前货币暂不可用,当前货币暂不可用
+加入购物车,加入购物车
+暂不可售,暂不可售
+正在加入购物车...,正在加入购物车...
+已加入购物车,已加入购物车
+加入购物车失败,加入购物车失败
+前往购物车,前往购物车
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,小计
@@ -65,15 +72,6 @@ search,search
 购物车批发信用,购物车批发信用
 商品小计,商品小计
 购物车帮我付,购物车帮我付
-仅询价,仅询价
-加入购物车,加入购物车
-暂不可售,暂不可售
-正在加入购物车...,正在加入购物车...
-已加入购物车,已加入购物车
-加入购物车失败,加入购物车失败
-已加入,已加入
-前往购物车,前往购物车
-当前货币暂不可用,当前货币暂不可用
 "Inspection 按 scope_key 与/或 guest_token（完整或末 4+ 位）查询真实持久库；对照店面 Cookie weline_cart_guest_token。","Inspection 按 scope_key 与/或 guest_token（完整或末 4+ 位）查询真实持久库；对照店面 Cookie weline_cart_guest_token。"
 "完整 scope key（可选）","完整 scope key（可选）"
 "guest_token 完整或末 4+ 位","guest_token 完整或末 4+ 位"
@@ -151,6 +149,8 @@ Scope,Scope
 该商品暂不可售，请从购物车移除或稍后再试,该商品暂不可售，请从购物车移除或稍后再试
 "channel_code 必须与 store_code 同时提供","channel_code 必须与 store_code 同时提供"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","购物车 Scope 与当前可信 Website/Store/Channel 请求不一致"
+仅询价,仅询价
+已加入,已加入
 "已有 %1 件本品包邮，另 %2 件仍需计运费","已有 %1 件本品包邮，另 %2 件仍需计运费"
 已享包邮,已享包邮
 "还差 %1 包邮","还差 %1 包邮"
