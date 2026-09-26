@@ -73,6 +73,8 @@ final class SlotBoundaryMarkers
         }
 
         // Promote primary data-wslot="id" → data-slot-id + theme-published-slot first.
+        // Also promote data-wslot-layout → data-slot-layout so layout-scoped merges
+        // (mini-cart footer-extras) survive reactive strip on published outbound.
         if (\str_contains($html, 'data-wslot')) {
             $promoted = \preg_replace_callback(
                 '/<([a-z][a-z0-9:-]*)\b([^>]*?\bdata-wslot\s*=\s*(["\'])([^"\']+)\3[^>]*)>/i',
@@ -85,6 +87,20 @@ final class SlotBoundaryMarkers
                     }
                     if (!\preg_match('/\bdata-slot-id\s*=/i', $attrs)) {
                         $attrs .= ' data-slot-id="' . $slotId . '"';
+                    }
+                    if (\preg_match('/\bdata-wslot-layout\s*=\s*(["\'])([^"\']*)\1/i', $attrs, $layoutMatch) === 1) {
+                        $layoutType = \trim((string)$layoutMatch[2]);
+                        if ($layoutType !== ''
+                            && \preg_match('/^[\w.-]+$/', $layoutType) === 1
+                            && !\preg_match('/\bdata-slot-layout\s*=/i', $attrs)
+                        ) {
+                            $attrs .= ' data-slot-layout="' . $layoutType . '"';
+                        }
+                    }
+                    if (\preg_match('/\bdata-wslot-multiple\s*=\s*(["\']?)true\1/i', $attrs) === 1
+                        && !\preg_match('/\bdata-slot-multiple\s*=/i', $attrs)
+                    ) {
+                        $attrs .= ' data-slot-multiple="true"';
                     }
                     if (\preg_match('/\bclass\s*=\s*(["\'])(.*?)\1/i', $attrs, $classMatch) === 1) {
                         $classes = \preg_split('/\s+/', \trim((string)$classMatch[2])) ?: [];

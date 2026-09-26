@@ -66,9 +66,32 @@ final class ThemeLayoutEntityPublishedSlotHost
     }
 
     /**
+     * 2026-09-26 用户纠偏（严格档「有固化就完全不注」）：
+     * 本请求是否已装载**页面固化产物**（整壳 `shell.phtml` bake 或 page `layout.phtml`）。
+     *
+     * 判据 = `CTX_FRAGMENTS` 为数组且 `page_html` 非空 —— 该片段由
+     * {@see primeStorefront} / {@see loadFragments} 从盘上固化产物装载，是
+     * 「固化产物存在」的**权威请求内信号**（无需再查盘 / 查部件声明）。
+     *
+     * 为真 ⇒ 运行时**禁止**任何注入 / 补槽 / 部件声明查询（`fillRequiredDefaultsOnShell`、
+     * `RequiredDefaultInjectionStorefrontOverlay`、`fill()` Overlay 回落），直接以固化模板交付。
+     * 固化壳缺槽位 = **固化缺陷**，须重固化（rebake）修复，不得每请求 Overlay 打补丁。
+     *
+     * 为假（无固化产物）⇒ 才允许回退注入；且优先触发 dynamicSolidify 重固化。
+     * 与「固化模板不存在的时候才重新固化」一一对应。
+     */
+    public static function publishedSolidifiedArtifactLoaded(): bool
+    {
+        $fragments = RequestContext::get(self::CTX_FRAGMENTS);
+
+        return \is_array($fragments)
+            && \trim((string)($fragments['page_html'] ?? '')) !== '';
+    }
+
+    /**
      * wave9-9s6: which gate branch forces safety-net (observability for zero_runtime_fill).
      *
-     * @return 'none'|'slot_placeholder'|'filter_data_placeholder'|'missing_chrome_header_signals'|'missing_chrome_blank_header_or_footer'|'empty_critical_filters'|'empty_critical_published'|'missing_required_newsletter_popup'
+     * @return 'none'|'slot_placeholder'|'filter_data_placeholder'|'missing_chrome_header_signals'|'missing_chrome_blank_header_or_footer'|'empty_critical_filters'|'empty_critical_footer_extras'|'empty_critical_published'|'missing_required_newsletter_popup'
      */
     public static function shellSafetyNetFillReason(string $html): string
     {
@@ -99,6 +122,9 @@ final class ThemeLayoutEntityPublishedSlotHost
 
         if (self::shellHasEmptyCriticalPublishedSlots($html)) {
             $chromePresent = !self::shellMissingStorefrontChromeSignals($html);
+            if ($chromePresent && self::shellHasBlankSlotsMatching($html, 'footer-extras')) {
+                return 'empty_critical_footer_extras';
+            }
 
             return $chromePresent ? 'empty_critical_filters' : 'empty_critical_published';
         }
@@ -154,9 +180,11 @@ final class ThemeLayoutEntityPublishedSlotHost
         }
 
         $chromePresent = !self::shellMissingStorefrontChromeSignals($html);
-        // wave9-9s6: chrome complete → filters only. Header/footer blanks = 缺壳 branch.
+        // wave9-9s6: chrome complete → filters + layout-scoped nested chrome blanks.
+        // footer-extras lives inside mini-cart-icon; empty shell must heal (coupon/留言).
+        // Header/footer exclusive blanks = 缺壳 branch (shellMissingStorefrontChromeSignals).
         $critical = $chromePresent
-            ? '(?:list-filters|category-filters)'
+            ? '(?:list-filters|category-filters|footer-extras)'
             : '(?:header|footer|delivery|header-[\w.-]+|footer-[\w.-]+|list-filters|category-filters)';
 
         return self::shellHasBlankSlotsMatching($html, $critical);
@@ -623,15 +651,59 @@ final class ThemeLayoutEntityPublishedSlotHost
         }
 
         $defaultHtml = (string)$defaultHtml;
+        // 2026-09-26：固化完备后禁止再拼 layout 默认（placement=layout 会双渲）。
+        // 仅当 bake 是稀疏 overlay、或 default 为 policy/terms 正文时，才允许 bake.default。
+        // 稀疏判据须覆盖「首页嵌套树 + bake 仅 store-music/newsletter」——否则会整槽替换成空首页。
         if ($defaultHtml !== '' && (
             self::defaultCarriesNestedSlotMarkup($defaultHtml)
             || self::defaultCarriesLayoutPolicyOrTermsBody($defaultHtml)
             || self::bakeIsSparseContentOverlay($bakeInner, $defaultHtml)
         )) {
-            return self::sanitizePublishedHtml($bakeInner . $defaultHtml);
+            $isSparseOrProtected = self::bakeIsSparseContentOverlay($bakeInner, $defaultHtml)
+                || self::defaultCarriesLayoutPolicyOrTermsBody($defaultHtml);
+            if ($isSparseOrProtected) {
+                // 稀疏注入（store-music / newsletter-popup）或 policy 正文：保留 layout 嵌套树。
+                // 偶发同码不得走「只交 bake」——那会把首页 hero/featured 整树冲掉。
+                return self::sanitizePublishedHtml($bakeInner . $defaultHtml);
+            }
+            if (self::bakeAndDefaultShareWidgetCode($bakeInner, $defaultHtml)) {
+                return self::sanitizePublishedHtml($bakeInner);
+            }
+            // Nested markup alone is not enough to concat when bake already fills the slot.
+            return self::sanitizePublishedHtml($bakeInner);
         }
 
         return self::sanitizePublishedHtml($bakeInner);
+    }
+
+    /**
+     * True when bake and layout default both carry the same data-widget-code
+     * (identity XOR — concatenating would double-render).
+     */
+    public static function bakeAndDefaultShareWidgetCode(string $bakeInner, string $defaultHtml): bool
+    {
+        if ($bakeInner === '' || $defaultHtml === '') {
+            return false;
+        }
+        if (!\preg_match_all('/\bdata-widget-code=(["\'])([^"\']+)\1/i', $defaultHtml, $m)
+            || ($m[2] ?? []) === []
+        ) {
+            return false;
+        }
+        $bakeNorm = \strtolower($bakeInner);
+        foreach ($m[2] as $code) {
+            $code = \strtolower(\trim((string)$code));
+            if ($code === '') {
+                continue;
+            }
+            if (\str_contains($bakeNorm, 'data-widget-code="' . $code . '"')
+                || \str_contains($bakeNorm, "data-widget-code='" . $code . "'")
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** list-filters (products) / category-filters (category) inventory destinations. */
@@ -944,8 +1016,12 @@ final class ThemeLayoutEntityPublishedSlotHost
     }
 
     /**
-     * Sparse content bake (homepage-only newsletter popup etc.) must prepend onto a
-     * non-blank layout default — never wholesale replace.
+     * Sparse content bake (homepage injectables / newsletter popup etc.) must prepend
+     * onto a non-blank layout default — never wholesale replace.
+     *
+     * Homepage regression (2026-09-26)：entity content bake 常只有 store-music（hook-owned）
+     * 或缺 newsletter，却没有 homepage-hero 嵌套树；若只认 newsletter 为稀疏，会把 design
+     * 默认首页整树冲成空 content。
      */
     private static function bakeIsSparseContentOverlay(string $bakeInner, string $defaultHtml): bool
     {
@@ -955,14 +1031,35 @@ final class ThemeLayoutEntityPublishedSlotHost
         if (self::defaultCarriesLayoutPolicyOrTermsBody($bakeInner)) {
             return false;
         }
-        if (\str_contains($bakeInner, 'homepage-hero')
-            || \str_contains($bakeInner, '<!--@weline-slot:homepage-')
-        ) {
+        if (self::bakeHasHomepageNestedStructure($bakeInner)) {
             return false;
+        }
+
+        if (self::defaultHasHomepageNestedSlots($defaultHtml)) {
+            // Bake lacks homepage tree while layout default still carries it → sparse injectables.
+            return true;
         }
 
         return \str_contains($bakeInner, 'newsletter-popup')
             || \str_contains($bakeInner, 'data-widget-code="newsletter')
-            || \str_contains($bakeInner, "data-widget-code='newsletter");
+            || \str_contains($bakeInner, "data-widget-code='newsletter")
+            || \str_contains($bakeInner, 'data-widget-code="store-music"')
+            || \str_contains($bakeInner, "data-widget-code='store-music'");
+    }
+
+    /** Layout default still owns the homepage nested slot tree (hero/featured/…). */
+    private static function defaultHasHomepageNestedSlots(string $html): bool
+    {
+        return self::bakeHasHomepageNestedStructure($html)
+            || \str_contains($html, 'homepage-content-slot')
+            || \str_contains($html, 'homepage-section');
+    }
+
+    /** Bake already carries homepage nested structure (not a sparse injectable-only overlay). */
+    private static function bakeHasHomepageNestedStructure(string $html): bool
+    {
+        return \str_contains($html, 'homepage-hero')
+            || \str_contains($html, '<!--@weline-slot:homepage-')
+            || \preg_match('/\bdata-slot-id=(["\'])homepage-[\w.-]+\1/', $html) === 1;
     }
 }

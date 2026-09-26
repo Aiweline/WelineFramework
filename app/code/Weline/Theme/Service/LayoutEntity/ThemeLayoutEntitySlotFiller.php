@@ -458,6 +458,37 @@ final class ThemeLayoutEntitySlotFiller
             );
         }
 
+        // 2026-09-26 用户纠偏（严格档）durable 修法：mini-cart 抽屉 footer-extras
+        // （优惠券/留言）此前**只**靠运行时 `fillBlankNestedChromeExtensions` 兜底。
+        // 固化时把 `layout_type=mini-cart` 必装也写进 chrome 快照，运行时即可只读固化
+        // payload（fillNestedChromeExtensionSlots），无需每请求 Overlay。
+        if ($themeId > 0) {
+            try {
+                $html = $this->fillRequiredDefaultsOnShell(
+                    $html, $themeId, 'mini-cart', ThemeLayout::STATUS_PUBLISHED,
+                );
+            } catch (\Throwable) {
+                // soft — chrome payload fill below still runs
+            }
+        }
+
+        // Nested chrome extensions (footer-extras coupon/留言) live in chrome payload
+        // but may remain blank inside mini-cart-icon after chrome.phtml include.
+        // Fill from published chrome payload before durable write — even when
+        // structureComplete (required homepage Overlay does not cover mini-cart).
+        if ($themeId > 0) {
+            try {
+                $html = $this->fillNestedChromeExtensionSlots(
+                    $html,
+                    $themeId,
+                    $this->resolveScope(),
+                    false,
+                );
+            } catch (\Throwable) {
+                // soft — storefront safety-net may still heal blank footer-extras
+            }
+        }
+
         if ($slotIds !== []) {
             $html = '<!--@weline-chrome-slots:' . implode(',', $slotIds) . '-->' . $html;
         }
@@ -582,15 +613,20 @@ final class ThemeLayoutEntitySlotFiller
                     return $healed;
                 }
 
-                // XOR / empty-slot safety-net for filter inventory slots only (not full plan).
-                $healed = $this->fillRequiredDefaultsOnShell(
-                    $healed,
-                    $themeId,
-                    $pageType,
-                    ThemeLayout::STATUS_PUBLISHED,
-                    'default',
-                    ['list-filters', 'category-filters'],
-                );
+                // 2026-09-26 用户纠偏（严格档「有固化就完全不注」）：
+                // 固化产物已装载 ⇒ 只做固化盘读（上方 bake splice），**不再** Overlay 查部件声明。
+                // 固化壳仍缺筛选槽 = 固化缺陷 → 重固化修复，不得每请求打补丁。
+                if (!ThemeLayoutEntityPublishedSlotHost::publishedSolidifiedArtifactLoaded()) {
+                    // XOR / empty-slot safety-net for filter inventory slots only (not full plan).
+                    $healed = $this->fillRequiredDefaultsOnShell(
+                        $healed,
+                        $themeId,
+                        $pageType,
+                        ThemeLayout::STATUS_PUBLISHED,
+                        'default',
+                        ['list-filters', 'category-filters'],
+                    );
+                }
                 $healed = $this->stripFilterDeclarationPlaceholdersIfPresent($healed);
 
                 RequestContext::set($memoKey, $healed);
@@ -723,6 +759,74 @@ final class ThemeLayoutEntitySlotFiller
         }
 
         return false;
+    }
+
+    /**
+     * Fill blank nested chrome extension slots (e.g. mini-cart footer-extras coupon/留言)
+     * from published chrome payload. Safe to call after chrome Partials are in the HTML.
+     *
+     * When the bound theme's chrome payload never baked footer-extras widgets (common on
+     * design themes that inherit shell but omit channel overlay nodes), fall back to
+     * required default_injections for layout_type=mini-cart.
+     */
+    public function fillBlankNestedChromeExtensions(string $html, int $themeId): string
+    {
+        if ($html === '' || $themeId < 1) {
+            return $html;
+        }
+        if (!\str_contains($html, 'data-slot-id="footer-extras"')
+            && !\str_contains($html, 'data-wslot="footer-extras"')
+        ) {
+            return $html;
+        }
+        $blankFooterExtras = static function (string $candidate): bool {
+            return ThemeLayoutEntityPublishedSlotHost::shellSafetyNetFillReason($candidate)
+                    === 'empty_critical_footer_extras'
+                || \preg_match(
+                    '/\bdata-(?:slot-id|wslot)=(["\'])footer-extras\1[^>]*>\s*<\/(?:div|section|aside)>/i',
+                    $candidate,
+                ) === 1;
+        };
+        if (!$blankFooterExtras($html)) {
+            return $html;
+        }
+
+        try {
+            $html = $this->fillNestedChromeExtensionSlots(
+                $html,
+                $themeId,
+                $this->resolveScope(),
+                false,
+            );
+        } catch (\Throwable) {
+            // soft — try required mini-cart injections below
+        }
+
+        if (!$blankFooterExtras($html)) {
+            return $html;
+        }
+
+        // Design themes may lack footer-extras nodes in chrome payload; required
+        // mini-cart injections still own coupon/留言 for the empty destination.
+        //
+        // 2026-09-26 用户纠偏（严格档）**例外**：本条是**嵌套 chrome 扩展**槽
+        // （mini-cart 抽屉 footer-extras），不是布局槽 / 部件计划注入；且触发前提是
+        // 该槽**为空**（部件不存在 —— 用户原文「除非部件不存在」）。严格档下布局槽
+        // 注入已全部收口（见 §3.2.1）；此处保留兜底，避免固化壳缺 chrome payload 节点时
+        // 迷你车优惠券/留言整块消失。durable 修法 = `finalizePublishedChromeRenderedHtml`
+        // 固化时把 mini-cart 必装写进 chrome 快照（待办）。
+        try {
+            $html = $this->fillRequiredDefaultsOnShell(
+                $html,
+                $themeId,
+                'mini-cart',
+                ThemeLayout::STATUS_PUBLISHED,
+            );
+        } catch (\Throwable) {
+            return $html;
+        }
+
+        return $html;
     }
 
     /**
@@ -939,12 +1043,18 @@ final class ThemeLayoutEntitySlotFiller
             if (\is_file($candidate)) {
                 $html = (string)@\file_get_contents($candidate);
                 if ($html !== '') {
-                    // Reject English delivery label in non-en locale snapshots.
+                    // Reject English delivery / address labels in non-en locale snapshots.
                     if ($locale !== 'en_US' && $locale !== 'en_GB' && !\str_starts_with($locale, 'en_')
-                        && \str_contains($html, 'delivery-line-1">Ship to')
+                        && (
+                            \str_contains($html, 'delivery-line-1">Ship to')
+                            || \str_contains($html, '"province":"Province"')
+                            || \str_contains($html, 'Quickly add address')
+                        )
                     ) {
                         $html = '';
-                        if (\str_ends_with($candidate, 'chrome.rendered.' . $locale . '.html')) {
+                        if (\str_ends_with($candidate, 'chrome.rendered.' . $locale . '.html')
+                            || \str_contains(\basename($candidate), '.' . $locale . '.html')
+                        ) {
                             @\unlink($candidate);
                         }
                         continue;
@@ -1202,10 +1312,9 @@ final class ThemeLayoutEntitySlotFiller
             return $html;
         }
 
-        $boundChrome = RequestContext::get('theme.layout_entity.rendered_chrome_binding');
-        if ($boundChrome instanceof EntityRenderBinding && $boundChrome->identity->themeId === $themeId) {
-            return $html;
-        }
+        // Bound chrome.rendered may still leave layout-scoped nested blanks
+        // (footer-extras inside mini-cart-icon). Do NOT early-return on binding —
+        // the loop below already skips non-blank inners and only fills empties.
 
         try {
             /** @var \Weline\Theme\Service\ThemeScopeVersionService $scopeVersions */

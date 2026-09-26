@@ -22,13 +22,14 @@ use Weline\Widget\Service\DefaultInjectionPlanRepository;
  * → execute one pass per depth layer → assert. Does not write layouts.
  * HTML multi-pass discovery is not the default algorithm.
  *
- * Storefront default_injections (REQ-THEME-0036, 2026-09-21 user纠偏):
- * Best-effort only — try declared JSON injections; unfilled must NOT 500.
- * Identity XOR（同模块同部件）: layout 已内嵌该部件 → 禁止再留同部件的
- * `default_injections` JSON（勿布局+JSON 各注一遍）。跨模块：禁止布局互调部件，
- * 外国部件只能走拥有模块 JSON + 空槽。仅 `user_deleted@{versionId}` 从 plan 省略。
- * Multiple 槽内多部件并存 OK（append）。Exclusive：整区替换防同码叠层。
- * 页级 once / count>1 仅 soft-skip 日志。
+ * Storefront default_injections (REQ-THEME-0036 + 2026-09-26 user纠偏):
+ * Identity XOR（同模块同部件）硬规则：布局已内嵌该部件 → 禁止再留同部件的
+ * `default_injections` / DefaultLayoutSeeder / 实体节点；槽内同码 count>1 必须硬失败
+ * （`required_default_injection_duplicate`），禁止 soft-skip 叠渲。
+ * 跨模块：禁止布局互调部件，外国部件只能走拥有模块 JSON + 空槽。
+ * 仅 `user_deleted@{versionId}` 从 plan 省略。Multiple 槽内多部件并存 OK（append）。
+ * Exclusive：整区替换防同码叠层。未填（声明但缺）仍 soft-skip，不另增店面 500。
+ * 固化完备后 Overlay 不是主路径：只在未固化/安全网触发；完备壳由 bake 承载。
  */
 final class RequiredDefaultInjectionStorefrontOverlay
 {
@@ -268,11 +269,12 @@ final class RequiredDefaultInjectionStorefrontOverlay
             $combined .= (string)($region['inner'] ?? '');
         }
         $count = RequiredDefaultInjectionContract::countWidgetPresent($combined, $module, $code);
-        // Soft: duplicate is a source hygiene issue (delete layout copy XOR default_injections),
-        // not a storefront hard-fail. Prefer layout-owned Theme chrome widgets without injection JSON.
-        if ($count > 1 && \function_exists('w_log_warning')) {
-            w_log_warning(sprintf(
-                '[RequiredDefaultInjection] slot duplicate soft-skip %s|%s slot=%s count=%d',
+        // HARD (2026-09-26): layout 内嵌 + JSON/Seeder/实体同名再嵌 = 直接报错，禁止 soft-skip。
+        if ($count > 1) {
+            throw new \RuntimeException(sprintf(
+                'required_default_injection_duplicate: %s|%s slot=%s count=%d'
+                . ' — layout 内嵌与 default_injections/DefaultLayoutSeeder/实体节点禁止并存；'
+                . '清空 JSON/Seeder 并标 placement=layout，或改为空槽 + 注入后 rebake。',
                 $module,
                 $code,
                 $slotId,
@@ -368,6 +370,9 @@ final class RequiredDefaultInjectionStorefrontOverlay
         if (\preg_match('/\bdata-wslot-multiple\s*=\s*(["\']?)true\1/i', $probe) === 1) {
             return true;
         }
+        if (\preg_match('/\bdata-slot-multiple\s*=\s*(["\']?)true\1/i', $probe) === 1) {
+            return true;
+        }
         // Fallback: Theme chrome/footer extension slots are multiple by contract.
         $slotId = \strtolower(\trim($slotId));
         $multipleSlots = [
@@ -381,6 +386,8 @@ final class RequiredDefaultInjectionStorefrontOverlay
             'footer-partner-links',
             'footer-payment-account-links',
             'footer-help-links',
+            // Mini-cart footer extras: coupon + order note (+ optional B2B credit).
+            'footer-extras',
         ];
         if (\in_array($slotId, $multipleSlots, true)) {
             return true;

@@ -424,7 +424,26 @@ class LayoutSlotRenderer implements ObserverInterface
             if ($pageType === '') {
                 $pageType = ThemeLayout::PAGE_TYPE_HOME;
             }
-            if ($themeId > 0 && $pageType !== '') {
+            // 2026-09-26 用户纠偏（严格档「有固化就完全不注」）：
+            // 页面固化产物已装载 ⇒ 运行时**禁止** heal / 注入 / 查部件声明。
+            // 固化壳仍缺必装槽位 = **固化缺陷**：记硬失败，交由重固化（rebake）修复，
+            // 不得每请求 Overlay 打补丁（否则「固化后运行时不得再注」形同虚设）。
+            if (\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                ::publishedSolidifiedArtifactLoaded()
+            ) {
+                if (\function_exists('w_log_error')) {
+                    \w_log_error(
+                        'solidified_shell_missing_required_slot: ' . $gateReason,
+                        [
+                            'theme_id' => $themeId,
+                            'page_type' => $pageType,
+                            'area' => $area,
+                            'gate' => $gateReason,
+                        ],
+                        'theme_layout_entity',
+                    );
+                }
+            } elseif ($themeId > 0 && $pageType !== '') {
                 try {
                     /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller $filler */
                     $filler = ObjectManager::getInstance(
@@ -627,9 +646,13 @@ class LayoutSlotRenderer implements ObserverInterface
 
         // wave8-8s4: published storefront outbound always strip markers (DEV probes too).
         // Editor canvas returns above; preview Token / editor_mode keep markers for the canvas.
+        // Mini-cart footer-extras (coupon/留言) is nested inside header chrome — fill blank
+        // nested chrome extensions before strip so skip_fill paths still deliver them.
         if ($this->shouldForcePublishedZeroRuntimeFill()) {
+            $html = $this->ensureMiniCartFooterExtrasFilled($html);
             $html = SlotBoundaryMarkers::strip($html);
         } elseif (\defined('PROD') && PROD) {
+            $html = $this->ensureMiniCartFooterExtrasFilled($html);
             $html = SlotBoundaryMarkers::strip($html);
         }
 
@@ -641,6 +664,43 @@ class LayoutSlotRenderer implements ObserverInterface
             $injector = ObjectManager::getInstance(PreviewBootstrapAssetInjector::class);
 
             return $injector->inject($html);
+        } catch (\Throwable) {
+            return $html;
+        }
+    }
+
+    /**
+     * Ensure mini-cart footer-extras (优惠券/留言) is filled from chrome payload when blank.
+     */
+    private function ensureMiniCartFooterExtrasFilled(string $html): string
+    {
+        if ($html === ''
+            || (!\str_contains($html, 'data-slot-id="footer-extras"')
+                && !\str_contains($html, 'data-wslot="footer-extras"'))
+        ) {
+            return $html;
+        }
+        if (!\preg_match(
+            '/\bdata-(?:slot-id|wslot)=(["\'])footer-extras\1[^>]*>\s*<\/(?:div|section|aside)>/i',
+            $html,
+        )
+            && \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                ::shellSafetyNetFillReason($html) !== 'empty_critical_footer_extras'
+        ) {
+            return $html;
+        }
+
+        try {
+            $themeId = $this->resolveThemeId('frontend');
+            if ($themeId < 1) {
+                return $html;
+            }
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller $filler */
+            $filler = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller::class,
+            );
+
+            return $filler->fillBlankNestedChromeExtensions($html, $themeId);
         } catch (\Throwable) {
             return $html;
         }
@@ -1765,14 +1825,12 @@ HTML;
     /**
      * 必装永远存在：`+skip_fill_solidified` 零补槽快路径上的 required 注入兜底。
      *
-     * 权威：`app/code/Weline/Theme/doc/开发/spec/required-default-always-present.md`
-     * 与 `doc/开发/team/required-default-always-present/meetings/技术方案会-必装永远存在-20260922.md` §4：
-     * `+skip_fill_solidified` **可以**跳过 entity fill，但**不得**跳过 required overlay；
-     * 只有本版本人工卸载 `user_deleted@{versionId}` 才能省略。
+     * 权威：`app/code/Weline/Theme/doc/布局固化与默认注入.md` §3–§4 + 2026-09-26 用户纠偏：
+     * 固化完备后运行时不得再实时注入；仅当本请求没有装载到页面固化片段
+     * （`CTX_FRAGMENTS.page_html` 为空）时才允许 Overlay/安全网——且优先应触发
+     * dynamicSolidify/rebake，而不是把每请求 Overlay 当主路径。
      *
-     * 触发条件收窄为「无可用固化产物」：仅当本请求没有装载到固化片段
-     * （`CTX_FRAGMENTS` 不是数组）时才跑 Overlay。固化产物可用时 required 已由 bake
-     * 承载（spec 主路径），保持零补槽快路径，避免把「每请求 Overlay」变成长期主路径。
+     * `+skip_fill_solidified` **可以**跳过 entity fill；完备壳 required 已由 bake 承载。
      */
     private function fillRequiredDefaultsOnZeroFillPath(
         string $html,
@@ -1786,10 +1844,10 @@ HTML;
         }
         // 固化片段已装载且含页面 bake：required 已由 bake 承载，走零补槽快路径。
         // 仅有 chrome bake（page_html 为空）时页面槽仍是空壳，必须继续注入。
-        $fragments = RequestContext::get(
-            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::CTX_FRAGMENTS
-        );
-        if (\is_array($fragments) && \trim((string)($fragments['page_html'] ?? '')) !== '') {
+        // 2026-09-26 用户纠偏（严格档「有固化就完全不注」）：固化产物存在 ⇒ 运行时不得再注入。
+        if (\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+            ::publishedSolidifiedArtifactLoaded()
+        ) {
             return $html;
         }
         if ($themeId < 1) {

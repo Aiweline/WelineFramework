@@ -1093,17 +1093,28 @@ class SlotRendererService
     private function extractSlotLayoutBindingsFromHtml(string $html): array
     {
         $bindings = [];
-        if (!preg_match_all('/<[^>]*\bdata-wslot\s*=\s*(["\'])([^"\']+)\1[^>]*>/is', $html, $matches, PREG_SET_ORDER)) {
+        // Reactive data-wslot + durable published data-slot-id (after strip).
+        if (!preg_match_all(
+            '/<[^>]*\b(?:data-wslot|data-slot-id)\s*=\s*(["\'])([^"\']+)\1[^>]*>/is',
+            $html,
+            $matches,
+            PREG_SET_ORDER,
+        )) {
             return $bindings;
         }
 
         foreach ($matches as $match) {
             $tag = (string)($match[0] ?? '');
             $slotId = trim((string)($match[2] ?? ''));
-            if ($slotId === '' || !preg_match('/\bdata-wslot-layout\s*=\s*(["\'])([^"\']+)\1/i', $tag, $layoutMatch)) {
+            if ($slotId === '') {
                 continue;
             }
-            $layoutType = trim((string)($layoutMatch[2] ?? ''));
+            $layoutType = '';
+            if (preg_match('/\bdata-wslot-layout\s*=\s*(["\'])([^"\']+)\1/i', $tag, $layoutMatch)) {
+                $layoutType = trim((string)($layoutMatch[2] ?? ''));
+            } elseif (preg_match('/\bdata-slot-layout\s*=\s*(["\'])([^"\']+)\1/i', $tag, $layoutMatch)) {
+                $layoutType = trim((string)($layoutMatch[2] ?? ''));
+            }
             if ($layoutType !== '') {
                 $bindings[$slotId] = $layoutType;
             }

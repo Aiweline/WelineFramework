@@ -58,6 +58,43 @@ final class MiniCartLayoutSlotContractTest extends TestCase
 
         $html = '<div data-wslot="footer-extras" data-wslot-layout="mini-cart"></div>';
         self::assertSame(['footer-extras' => 'mini-cart'], $extract->invoke($service, $html));
+
+        // Published outbound keeps layout on durable data-slot-layout after reactive strip.
+        $published = '<div class="theme-published-slot" data-slot-id="footer-extras" data-slot-layout="mini-cart"></div>';
+        self::assertSame(['footer-extras' => 'mini-cart'], $extract->invoke($service, $published));
+    }
+
+    public function testStripPromotesWslotLayoutToDurableSlotLayout(): void
+    {
+        $html = '<div data-wslot="footer-extras" data-wslot-layout="mini-cart" class="mini-cart-drawer__extras"></div>';
+        $stripped = \Weline\Theme\Service\SlotBoundaryMarkers::strip($html);
+        self::assertStringNotContainsString('data-wslot=', $stripped);
+        self::assertStringNotContainsString('data-wslot-layout=', $stripped);
+        self::assertStringContainsString('data-slot-id="footer-extras"', $stripped);
+        self::assertStringContainsString('data-slot-layout="mini-cart"', $stripped);
+        self::assertStringContainsString('theme-published-slot', $stripped);
+    }
+
+    public function testEmptyFooterExtrasForcesSafetyNetWhenChromePresent(): void
+    {
+        $shell = '<div class="weline-page-wrapper">'
+            . '<header class="weline-header"><nav class="header-nav">nav</nav>'
+            . '<div class="header-account">acct</div></header>'
+            . '<div class="theme-published-slot mini-cart-drawer__extras" data-slot-id="footer-extras"></div>'
+            . '<main class="weline-main-content homepage-main">ok</main></div>';
+        self::assertFalse(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::shellMissingStorefrontChromeSignals($shell)
+        );
+        self::assertTrue(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::shellHasEmptyCriticalPublishedSlots($shell)
+        );
+        self::assertSame(
+            'empty_critical_footer_extras',
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::shellSafetyNetFillReason($shell)
+        );
+        self::assertTrue(
+            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($shell)
+        );
     }
 
     public function testSlotRendererFillsUnmarkedLayoutScopedSlotsAfterBoundaryPass(): void
@@ -70,7 +107,7 @@ final class MiniCartLayoutSlotContractTest extends TestCase
 
         $methodPos = strpos($source, 'function processSlotFragmentWithBoundaries');
         self::assertNotFalse($methodPos);
-        $fragment = substr($source, $methodPos, 3500);
+        $fragment = substr($source, $methodPos, 8000);
         $restorePos = strpos($fragment, '$parker->restore($html)');
         $fillPos = strpos($fragment, '$this->fillRemainingUnmarkedSlotWidgets($html, $slotWidgets)');
         self::assertNotFalse($restorePos);
