@@ -92,7 +92,7 @@ Provider URL 行：
 5. **不可扩 Provider 完全原样透传**，禁止合成 alternates（避免 Blog 等自管 slug 被路径前缀乘出幽灵链接）。
 
 本仓 opt-in：`Weline_Theme` storefront_static、`Weline_Product` product/category、`Weline_Faq`、`Weline_Promotion`。  
-明确不扩：`Weline_Blog`、`Weline_Cms`、自管 locale 的 PageBuilder 类 Provider。
+明确不扩：`Weline_Blog`（**自管多语**：`BlogSitemapUrlBuilder` 按站点语种吐 `locale` + `metadata.alternates`/`x-default`，禁止路径盲扩）、`Weline_Cms`、自管 locale 的 PageBuilder 类 Provider。
 
 残余风险：
 

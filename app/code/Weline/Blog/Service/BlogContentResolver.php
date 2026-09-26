@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Weline\Blog\Service;
 
 use Weline\Blog\Api\Data\BlogArticle;
+use Weline\Blog\Api\Sitemap\BlogSitemapContentSourceInterface;
 use Weline\Blog\Api\Uri\BlogNamespace;
 use Weline\Blog\Model\Category;
 use Weline\Blog\Model\Post;
 use Weline\Blog\Model\Post\LocalDescription;
 use Weline\Framework\Runtime\RequestContext;
 
-final class BlogContentResolver
+final class BlogContentResolver implements BlogSitemapContentSourceInterface
 {
     private const CTX_POST_BY_ID = 'blog.published_post.by_id.v1.';
     private const CTX_POST_BY_SLUG = 'blog.published_post.by_slug.v1.';

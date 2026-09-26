@@ -12,6 +12,12 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Api\Sitemap\AbstractSitemapUrlProvider;
 use Weline\Seo\Api\Sitemap\WebsiteDirectoryInterface;
 
+/**
+ * Blog sitemap URL provider.
+ *
+ * Emits per-site-locale rows with metadata.alternates (hreflang). Does not opt into
+ * SitemapLocaleUrlExpander path expansion — Blog owns locale content / public slug pairing.
+ */
 final class BlogSitemapUrlProvider extends AbstractSitemapUrlProvider
 {
     public function __construct(
@@ -60,7 +66,7 @@ final class BlogSitemapUrlProvider extends AbstractSitemapUrlProvider
         $urls = $this->builder->buildForWebsite($websiteId, $baseUrl);
         foreach ($urls as &$url) {
             $loc = (string)($url['loc'] ?? '');
-            // Blog publicUrl stays request-relative; the Sitemap boundary requires an absolute loc.
+            // Relative Blog paths only — absolute locs from LocalizedUrlBuilder stay intact.
             if ($loc === '/blog' || str_starts_with($loc, '/blog/')) {
                 $url['loc'] = $baseUrl . $loc;
             }
@@ -80,11 +86,15 @@ final class BlogSitemapUrlProvider extends AbstractSitemapUrlProvider
             // Match the same public route as the frontend, including Post precedence over CMS.
             $loc = (string)$rows[0]['loc'];
             $resolved = null;
-            if (str_starts_with($loc, $baseUrl . '/blog/')) {
-                $slug = (string)parse_url(substr($loc, strlen($baseUrl . '/blog/')), PHP_URL_PATH);
+            if (str_starts_with($loc, $baseUrl . '/blog/') || preg_match('#/blog/#', $loc) === 1) {
+                $path = (string)(parse_url($loc, PHP_URL_PATH) ?: '');
+                $slug = '';
+                if (str_contains($path, '/blog/')) {
+                    $slug = trim(substr($path, (int)strpos($path, '/blog/') + strlen('/blog/')), '/');
+                }
                 $locale = trim((string)($rows[0]['locale'] ?? $rows[0]['metadata']['locale'] ?? ''));
                 $resolver = $this->contentResolver ?? ObjectManager::getInstance(BlogContentResolver::class);
-                $resolved = $resolver->resolveBySlug($websiteId, $locale, $slug, $baseUrl);
+                $resolved = $slug !== '' ? $resolver->resolveBySlug($websiteId, $locale, $slug, $baseUrl) : null;
             }
             usort($rows, static function (array $left, array $right) use ($resolved): int {
                 $rank = static function (array $row) use ($resolved): int {
@@ -98,11 +108,18 @@ final class BlogSitemapUrlProvider extends AbstractSitemapUrlProvider
             });
             $result[] = $rows[0];
         }
+
         return $result;
     }
 
     public function getDescription(): string
     {
-        return (string)__('博客文章 sitemap URL 提供器');
+        return (string)__('博客文章 sitemap URL 提供器（多语 hreflang）');
+    }
+
+    public function supportsSiteLanguagePathExpansion(): bool
+    {
+        // Content is locale-owned; builder already emits locale rows + alternates.
+        return false;
     }
 }
