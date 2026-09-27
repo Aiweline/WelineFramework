@@ -1322,10 +1322,13 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 foreach ($insert as $insert_field => $insert_value) {
                     $insert_bound_key = ':' . md5("insert_{$insert_field}_field_{$insert_key}");
                     // 🔧 修复：正确处理 null 值，避免将 null 转换为空字符串导致 PostgreSQL 整数字段错误
+                    // 布尔值不可 (string)false→''，否则 integer 列 INSERT 失败（与 UPDATE 路径对齐）
                     if (is_array($insert_value)) {
                         $this->bound_values[$insert_bound_key] = json_encode($insert_value, JSON_UNESCAPED_UNICODE);
                     } elseif (is_null($insert_value)) {
                         $this->bound_values[$insert_bound_key] = null;
+                    } elseif (is_bool($insert_value)) {
+                        $this->bound_values[$insert_bound_key] = $insert_value ? '1' : '0';
                     } else {
                         $this->bound_values[$insert_bound_key] = (string)$insert_value;
                     }
@@ -1342,6 +1345,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                         $this->bound_values[$insert_bound_key] = json_encode($insert_value, JSON_UNESCAPED_UNICODE);
                     } elseif (is_null($insert_value)) {
                         $this->bound_values[$insert_bound_key] = null;
+                    } elseif (is_bool($insert_value)) {
+                        $this->bound_values[$insert_bound_key] = $insert_value ? '1' : '0';
                     } else {
                         $this->bound_values[$insert_bound_key] = (string)$insert_value;
                     }
