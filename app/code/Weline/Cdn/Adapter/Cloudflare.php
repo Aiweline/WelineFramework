@@ -162,13 +162,36 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
     /** Read-only: token validity and optional zone access do not prove Cache Purge permission. */
     public function testConnection(array $credentials, string $zoneId = '', string $domain = ''): array
     {
-        $response = $this->makeRequest('GET', self::API_BASE_URL . '/user/tokens/verify', [], $credentials);
+        try {
+            $response = $this->makeRequest('GET', self::API_BASE_URL . '/user/tokens/verify', [], $credentials);
+        } catch (Core $e) {
+            return [
+                'success' => false,
+                'message' => $this->mapTokenFailureMessage($e->getMessage()),
+                'purge_verified' => false,
+            ];
+        }
         if (($response['success'] ?? null) !== true || ($response['result']['status'] ?? '') !== 'active') {
-            return ['success' => false, 'message' => $response['errors'][0]['message'] ?? __('Cloudflare Token 验证失败'), 'purge_verified' => false];
+            $raw = (string)($response['errors'][0]['message'] ?? '');
+            return [
+                'success' => false,
+                'message' => $this->mapTokenFailureMessage($raw !== '' ? $raw : (string)__('Cloudflare Token 验证失败')),
+                'purge_verified' => false,
+            ];
         }
         $result = ['success' => true, 'message' => __('Token 有效；清缓存权限需由实际清理结果确认'), 'token_verified' => true, 'zone_verified' => false, 'purge_verified' => false];
         if ($zoneId !== '') {
-            $zone = $this->makeRequest('GET', self::API_BASE_URL . '/zones/' . rawurlencode($zoneId), [], $credentials);
+            try {
+                $zone = $this->makeRequest('GET', self::API_BASE_URL . '/zones/' . rawurlencode($zoneId), [], $credentials);
+            } catch (Core $e) {
+                return [
+                    'success' => false,
+                    'message' => $this->mapTokenFailureMessage($e->getMessage()),
+                    'token_verified' => true,
+                    'zone_verified' => false,
+                    'purge_verified' => false,
+                ];
+            }
             $zoneName = strtolower(rtrim(trim((string)($zone['result']['name'] ?? '')), '.'));
             $host = strtolower(rtrim(trim($domain), '.'));
             if (($zone['success'] ?? null) !== true || ($zone['result']['id'] ?? '') !== $zoneId || $zoneName === ''
@@ -181,6 +204,24 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
             $result['message'] = __('Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认');
         }
         return $result;
+    }
+
+    /**
+     * Cloudflare 原文 "Invalid API Token" 易被误读成 Account/Zone 填错；映射为可操作说明。
+     */
+    private function mapTokenFailureMessage(string $raw): string
+    {
+        $normalized = \strtolower(\trim($raw));
+        if ($normalized === ''
+            || \str_contains($normalized, 'invalid api token')
+            || \str_contains($normalized, 'invalid access token')
+        ) {
+            return (string)__(
+                'Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。'
+            );
+        }
+
+        return $raw;
     }
 
     /**

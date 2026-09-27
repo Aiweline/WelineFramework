@@ -105,8 +105,8 @@ $accountId = $isEdit ? (int)$account->getData('account_id') : 0;
                 <?php if ($isEdit): ?>
                     <small class="w-field__hint" data-testid="cdn-account-token-hint">
                         <?= $hasSavedToken
-                            ? __('库里已有 Token（安全起见不回显）。改 Token 请重新粘贴后点保存；只点「测试连接」会优先用本框新值，否则用已存 Token。')
-                            : __('库里还没有 Token。请粘贴后保存，再测连接。') ?>
+                            ? __('库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；若测连接报 Invalid API Token，请重新粘贴有效 API Token 后先保存再测（不要填 Global API Key）。')
+                            : __('库里还没有 Token。请粘贴 Cloudflare API Token 后保存，再测连接（不要填 Account ID 或 Global API Key 到 Token 框）。') ?>
                     </small>
                 <?php endif; ?>
             </div>
