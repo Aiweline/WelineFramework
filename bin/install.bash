@@ -667,6 +667,9 @@ get_required_php_extensions() {
     fw=$(sed -n "/'extensions'/,/],/p" "$req" 2>/dev/null | grep -oE "'[A-Za-z0-9_]+'" | tr -d "'" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')
     exts="$exts $fw"
   fi
+  # WLS/多进程：即便 requirements 只列了 PDO 等必需项，Linux 编译也必须带上 pcntl（及 opcache）。
+  # 否则「有 requirements 就不走下方默认集」会导致 configure 丢掉 --enable-pcntl，server:start 无法 fork。
+  exts="$exts pcntl opcache"
   # 去重、排序、每行一个
   echo "$exts" | tr ' ' '\n' | grep -v '^$' | sort -u
 }
