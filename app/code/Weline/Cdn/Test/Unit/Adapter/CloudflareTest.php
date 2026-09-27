@@ -140,6 +140,49 @@ class CloudflareTest extends TestCase
     }
 
     /**
+     * 内部 default-rules 必须转成 Cloudflare set_cache_settings + action_parameters。
+     */
+    public function testFormatRulesForApiEmitsSetCacheSettings(): void
+    {
+        $method = new \ReflectionMethod(Cloudflare::class, 'formatRulesForApi');
+        $method->setAccessible(true);
+
+        /** @var list<array<string, mixed>> $formatted */
+        $formatted = $method->invoke($this->adapter, [
+            [
+                'expression' => 'http.request.uri.path matches "^/static/"',
+                'action' => ['cache' => ['ttl' => 3600, 'status_code' => [200]]],
+                'description' => 'static',
+            ],
+            [
+                'expression' => 'http.request.uri.path matches "^/admin/"',
+                'action' => ['cache' => false],
+            ],
+            [
+                'expression' => '(http.request.method eq "GET")',
+                'action' => ['cache' => ['mode' => 'bypass_by_default']],
+            ],
+            [
+                'expression' => 'http.response.headers["x-weline-cache-status"][0] eq "hit"',
+                'action' => ['cache_reserve' => true],
+            ],
+        ]);
+
+        $this->assertCount(3, $formatted, 'response-field / invalid action rules must be dropped');
+
+        $this->assertSame('set_cache_settings', $formatted[0]['action']);
+        $this->assertTrue($formatted[0]['action_parameters']['cache'] ?? false);
+        $this->assertSame('override_origin', $formatted[0]['action_parameters']['edge_ttl']['mode'] ?? null);
+        $this->assertSame(3600, $formatted[0]['action_parameters']['edge_ttl']['default'] ?? null);
+
+        $this->assertSame('set_cache_settings', $formatted[1]['action']);
+        $this->assertFalse($formatted[1]['action_parameters']['cache'] ?? true);
+
+        $this->assertSame('set_cache_settings', $formatted[2]['action']);
+        $this->assertSame('bypass_by_default', $formatted[2]['action_parameters']['edge_ttl']['mode'] ?? null);
+    }
+
+    /**
      * 测试：确保Zone存在（接口测试）
      */
     public function testEnsureZoneInterface(): void

@@ -41,20 +41,12 @@
         "description": "Weline 幂等请求：客户端声明 X-Weline-Idempotent=1 的 GET/HEAD 请求允许 CDN 短期缓存（10 分钟）"
     },
     {
-        "expression": "http.response.headers[\"x-weline-url-guard\"][0] matches \"^rejected:\"",
+        "expression": "(http.request.method eq \"GET\" or http.request.method eq \"HEAD\") and not http.request.uri.path matches \"^/admin/\" and not http.request.uri.path matches \"^/backend/\" and not http.request.uri.path matches \"^/api/\"",
         "action": {
             "cache": {
-                "status_code": [410],
-                "ttl": 86400
+                "mode": "bypass_by_default"
             }
         },
-        "description": "Weline URL Guard 拒绝：把 410 越界响应缓存 1 天，避免恶意刷量穿透到源站"
-    },
-    {
-        "expression": "http.response.headers[\"x-weline-cache-status\"][0] eq \"hit\"",
-        "action": {
-            "cache_reserve": true
-        },
-        "description": "Weline 缓存命中：将源站标记为命中的响应放入 CDN 缓存层"
+        "description": "店面 GET/HEAD：仅当源站带 Cache-Control/CDN-Cache-Control 时进入 CF 边缘（配合 FPC HIT 出站 CDN-Cache-Control）；无缓存头则 bypass，避免把 SSR MISS 冻进边缘"
     }
 ]
