@@ -54,11 +54,62 @@ final class PublishedStorefrontForcedZeroFillContractTest extends TestCase
         $between = \substr($src, $skipPos, $stripAfterSkip - $skipPos);
         self::assertStringNotContainsString('fillRequiredDefaultsOnShell', $between);
         self::assertStringContainsString('布局固化与默认注入', $between);
-        // Incomplete shells still self-heal with Overlay on safety-net path.
+        // 2026-09-26 用户纠偏（严格档「有固化就完全不注」）：
+        // safety-net 的 heal / Overlay 以「无固化产物」为前提；固化产物存在 ⇒
+        // 只记固化缺陷（solidified_shell_missing_required_slot），禁止每请求 Overlay。
         self::assertStringContainsString('+safety_net_fill', $src);
         $safetyPos = \strpos($src, '+safety_net_fill');
         self::assertNotFalse($safetyPos);
-        self::assertStringContainsString('fillRequiredDefaultsOnShell', \substr($src, $safetyPos, 2500));
+        $safetyTail = \substr($src, $safetyPos, 4000);
+        self::assertStringContainsString('publishedSolidifiedArtifactLoaded', $safetyTail);
+        self::assertStringContainsString('solidified_shell_missing_required_slot', $safetyTail);
+        self::assertStringContainsString('fillRequiredDefaultsOnShell', $safetyTail);
+    }
+
+    /**
+     * 2026-09-26 用户纠偏（严格档「有固化就完全不注」）：
+     * `publishedSolidifiedArtifactLoaded()` 以 `CTX_FRAGMENTS.page_html` 非空为唯一判据。
+     */
+    public function testPublishedSolidifiedArtifactLoadedPredicate(): void
+    {
+        RequestContext::remove(ThemeLayoutEntityPublishedSlotHost::CTX_FRAGMENTS);
+        self::assertFalse(
+            ThemeLayoutEntityPublishedSlotHost::publishedSolidifiedArtifactLoaded(),
+            'unprimed request has no solidified artifact',
+        );
+
+        RequestContext::set(ThemeLayoutEntityPublishedSlotHost::CTX_FRAGMENTS, false);
+        self::assertFalse(
+            ThemeLayoutEntityPublishedSlotHost::publishedSolidifiedArtifactLoaded(),
+            'definitive miss (CTX_FRAGMENTS=false) is not a loaded artifact',
+        );
+
+        RequestContext::set(ThemeLayoutEntityPublishedSlotHost::CTX_FRAGMENTS, [
+            'page_html' => '',
+            'chrome_by_slot' => ['header' => '<header>x</header>'],
+        ]);
+        self::assertFalse(
+            ThemeLayoutEntityPublishedSlotHost::publishedSolidifiedArtifactLoaded(),
+            'chrome-only bake is not a page artifact — injection stays allowed',
+        );
+
+        RequestContext::set(ThemeLayoutEntityPublishedSlotHost::CTX_FRAGMENTS, [
+            'page_html' => '   ',
+            'chrome_by_slot' => [],
+        ]);
+        self::assertFalse(
+            ThemeLayoutEntityPublishedSlotHost::publishedSolidifiedArtifactLoaded(),
+            'whitespace page bake is not a loaded artifact',
+        );
+
+        RequestContext::set(ThemeLayoutEntityPublishedSlotHost::CTX_FRAGMENTS, [
+            'page_html' => '<div data-slot-id="content">page</div>',
+            'chrome_by_slot' => [],
+        ]);
+        self::assertTrue(
+            ThemeLayoutEntityPublishedSlotHost::publishedSolidifiedArtifactLoaded(),
+            'non-empty page bake = solidified artifact loaded',
+        );
     }
 
     public function testHostDoesNotStickyMissOnTransientIncludeError(): void

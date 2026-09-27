@@ -216,7 +216,7 @@ class DefaultLayoutSeeder
     private function getDefaultLayoutConfig(string $pageType, ?int $themeId = null): array
     {
         if ($themeId && ($themeConfig = $this->getThemeDefaultLayoutConfig($themeId, $pageType))) {
-            return $themeConfig;
+            return $this->rejectLayoutPlacementWidgets($themeConfig, $pageType);
         }
 
         $configs = [
@@ -269,17 +269,8 @@ class DefaultLayoutSeeder
             ],
 
             // ==================== 产品详情页默认布局 ====================
+            // product-info 已由 Product 布局 placement=layout 内嵌；禁止再 seed 同名节点（会双渲）。
             ThemeLayout::PAGE_TYPE_PRODUCT => [
-                // 产品主要信息（Product 拥有）
-                [
-                    'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'product-main',
-                    'widget_code' => 'product-info',
-                    'widget_module' => 'Weline_Product',
-                    'widget_type' => 'product',
-                    'config' => [],
-                    'sort_order' => 0,
-                ],
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
                     'slot_id' => 'product-purchase-actions',
@@ -462,7 +453,66 @@ class DefaultLayoutSeeder
             ],
         ];
 
-        return $configs[$pageType] ?? [];
+        return $this->rejectLayoutPlacementWidgets($configs[$pageType] ?? [], $pageType);
+    }
+
+    /**
+     * placement=layout 部件由源布局内嵌承载；DefaultLayoutSeeder / 实体节点禁止再写同名，否则双渲。
+     * 命中时硬失败（不静默跳过），迫使修正 Seeder 或布局二选一。
+     *
+     * @param list<array<string, mixed>> $widgets
+     * @return list<array<string, mixed>>
+     */
+    private function rejectLayoutPlacementWidgets(array $widgets, string $pageType): array
+    {
+        if ($widgets === []) {
+            return [];
+        }
+        try {
+            /** @var \Weline\Widget\Service\WidgetData $widgetData */
+            $widgetData = ObjectManager::getInstance(\Weline\Widget\Service\WidgetData::class);
+        } catch (\Throwable) {
+            return $widgets;
+        }
+
+        $out = [];
+        foreach ($widgets as $widget) {
+            if (!\is_array($widget)) {
+                continue;
+            }
+            $code = \strtolower(\trim((string)($widget['widget_code'] ?? '')));
+            $type = \trim((string)($widget['widget_type'] ?? 'product'));
+            if ($code === '') {
+                $out[] = $widget;
+                continue;
+            }
+            $meta = null;
+            try {
+                $meta = $widgetData->getWidget($type !== '' ? $type : 'product', $code);
+                if ($meta === null && $type !== 'product') {
+                    $meta = $widgetData->getWidget('product', $code);
+                }
+            } catch (\Throwable) {
+                $meta = null;
+            }
+            $placement = \strtolower(\trim((string)(
+                $meta['placement']
+                    ?? ($meta['config']['placement'] ?? 'injection')
+            )));
+            if ($placement === 'layout') {
+                throw new \RuntimeException(sprintf(
+                    'default_layout_seeder_layout_placement_conflict: page=%s widget=%s|%s'
+                    . ' — placement=layout 禁止 DefaultLayoutSeeder 再嵌同名；'
+                    . '清空 Seeder 条目或改为 placement=injection + 空槽。',
+                    $pageType,
+                    (string)($widget['widget_module'] ?? ''),
+                    $code,
+                ));
+            }
+            $out[] = $widget;
+        }
+
+        return $out;
     }
 
     private function getThemeDefaultLayoutConfig(int $themeId, string $pageType): array

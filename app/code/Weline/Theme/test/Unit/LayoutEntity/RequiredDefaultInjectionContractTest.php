@@ -213,7 +213,6 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertStringContainsString('uninstalledInjectionsForVersion', $src);
         self::assertStringContainsString('REQ-THEME-0036', $src);
         self::assertStringContainsString('Identity XOR', $src);
-        self::assertStringContainsString('unfilled must NOT 500', $src);
         self::assertStringContainsString('user_deleted@{versionId}', $src);
         self::assertStringNotContainsString('$html . $inner', $src);
         self::assertStringNotContainsString(
@@ -227,12 +226,12 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertStringContainsString('pageHasWidgetPresent', $src);
         self::assertStringContainsString('assertSlotHasAtMostOne', $src);
         self::assertStringContainsString('outermostSlotRegions', $src);
-        // Duplicate is soft (log only): layout-owned chrome must drop default_injections JSON
-        self::assertStringNotContainsString(
-            "throw new \\RuntimeException(\n                'required_default_injection_duplicate:",
+        // 2026-09-26：同码双路径硬失败（禁止 soft-skip 叠渲）
+        self::assertStringContainsString(
+            "throw new \\RuntimeException(sprintf(\n                'required_default_injection_duplicate:",
             $src,
         );
-        self::assertStringContainsString('soft-skip', $src);
+        self::assertStringNotContainsString('slot duplicate soft-skip', $src);
         self::assertStringContainsString('slotAllowsMultiple', $src);
 
         $contract = (string)file_get_contents(

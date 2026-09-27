@@ -36,6 +36,12 @@ final class PublishedPolicyContentPreserveContractTest extends TestCase
         $sparseDetect->setAccessible(true);
         self::assertTrue($sparseDetect->invoke(null, $sparse, $policyBody));
         self::assertFalse($sparseDetect->invoke(null, $sparse, '   '));
+
+        $homepageDefault = '<div data-slot-id="homepage-hero"><section data-widget-code="hero-slider">H</section></div>';
+        $storeMusicOnly = '<span data-widget-code="store-music" data-testid="store-music"></span>';
+        self::assertTrue($sparseDetect->invoke(null, $storeMusicOnly, $homepageDefault));
+        $fullHomepageBake = '<div data-slot-id="homepage-hero"><section data-widget-code="hero-slider">H</section></div>';
+        self::assertFalse($sparseDetect->invoke(null, $fullHomepageBake, $homepageDefault));
     }
 
     public function testSlotFillerProtectsPolicyNestedContent(): void

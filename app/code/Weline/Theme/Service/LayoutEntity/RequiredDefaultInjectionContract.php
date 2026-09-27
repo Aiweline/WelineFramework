@@ -7,17 +7,20 @@ namespace Weline\Theme\Service\LayoutEntity;
 /**
  * Storefront contract for default_injections planning helpers.
  *
- * Design (2026-09-21 user纠偏):
+ * Design (2026-09-21 XOR + 2026-09-26 hard-fail 纠偏):
  * - Identity XOR (SAME module): the *same* widget must not be both layout-embedded
- *   and listed in `default_injections` JSON (layout OR injection — not both; delete JSON).
+ *   and listed in `default_injections` JSON / DefaultLayoutSeeder / entity nodes
+ *   (layout OR injection — not both; delete JSON/Seeder; mark placement=layout).
  * - CROSS module: FORBID layout/partial mutual widget calls; foreign widgets enter
  *   ONLY via owning-module JSON `default_injections` + empty slot.
- * - Overlay is best-effort; missing fill must not 500. Uninstall (`user_deleted@{versionId}`)
- *   still omits a planned injection.
+ * - Duplicate same-code in a slot MUST hard-fail (`required_default_injection_duplicate`).
+ * - Overlay unfilled (declared but missing) remains soft-skip — missing fill must not 500.
+ *   Uninstall (`user_deleted@{versionId}`) still omits a planned injection.
+ * - Solidified shells: bake owns required; runtime Overlay is not the primary path.
  *
- * Runtime presence helpers (pageHasWidgetPresent / countWidgetPresent) avoid
- * stacking the same code; XOR at registry/static gate remains the source-of-truth
- * fix for dual-path (delete layout copy XOR `default_injections` JSON — do not 500).
+ * Runtime presence helpers (pageHasWidgetPresent / countWidgetPresent) detect
+ * illegal dual-path stacking; source-of-truth fix remains delete layout copy XOR
+ * JSON/Seeder — storefront must not soft-skip duplicates.
  */
 final class RequiredDefaultInjectionContract
 {

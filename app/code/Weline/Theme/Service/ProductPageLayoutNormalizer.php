@@ -120,14 +120,19 @@ final class ProductPageLayoutNormalizer
         }
     }
 
+    private const WIDGET_CODE_PRODUCT_INFO = 'product-info';
+
     /**
      * 渲染前将仍配置在右侧栏的热销产品挪到全宽推荐区（与 DB 种子/迁移目标一致）。
+     * placement=layout 的 product-info 禁止再出现在实体/Seeder 节点中（与布局内嵌双路径硬失败）。
      */
     public function normalizeLayoutForRender(string $pageType, array $layout): array
     {
         if ($pageType !== ThemeLayout::PAGE_TYPE_PRODUCT) {
             return $layout;
         }
+
+        $layout = $this->assertNoLayoutPlacementProductInfo($layout);
 
         $layout = $this->reassignRelatedProductsModuleInLayout($layout);
         $layout = $this->reassignCrossSellModuleInLayout($layout);
@@ -174,6 +179,50 @@ final class ProductPageLayoutNormalizer
             $layout[ThemeLayout::AREA_CONTENT]['widgets'],
             static fn(array $a, array $b): int => ($a['sort_order'] ?? 0) <=> ($b['sort_order'] ?? 0)
         );
+
+        return $layout;
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     */
+    private function assertNoLayoutPlacementProductInfo(array $layout): array
+    {
+        $removed = false;
+        foreach ($layout as $area => $areaData) {
+            if (!\is_array($areaData)) {
+                continue;
+            }
+            $widgets = $areaData['widgets'] ?? null;
+            if (!\is_array($widgets)) {
+                continue;
+            }
+            $kept = [];
+            foreach ($widgets as $widget) {
+                if (!\is_array($widget)) {
+                    continue;
+                }
+                $code = \strtolower(\trim((string)($widget['widget_code'] ?? '')));
+                if ($code === self::WIDGET_CODE_PRODUCT_INFO) {
+                    $removed = true;
+                    continue;
+                }
+                $kept[] = $widget;
+            }
+            $layout[$area]['widgets'] = $kept;
+        }
+        if ($removed) {
+            // 固化期自清：实体/历史节点里的 placement=layout 同名必须剔除。
+            // 源侧 Seeder/JSON 双路径仍由门禁与 Overlay 硬失败拦截。
+            if (\function_exists('w_log_error')) {
+                \w_log_error(
+                    'required_default_injection_duplicate: stripped Weline_Product|product-info from entity nodes'
+                    . ' (placement=layout — layout XOR injection)',
+                    [],
+                    'theme_layout_entity',
+                );
+            }
+        }
 
         return $layout;
     }
