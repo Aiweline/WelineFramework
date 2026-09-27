@@ -4,7 +4,6 @@
 .DS_Store
 
 # Local tooling / session state (do not commit)
-.omx/
 .dev
 /tmp/
 /data/pagebuilder/
@@ -35,15 +34,22 @@
 /https:
 
 # IDE / editor local config (do not commit)
-.idea
-.vscode
-.cursor/
-.trae/
+.idea/
+.vscode/
+.zed/
+.fleet/
+.junie/
+.eclipse/
+*.code-workspace
 
-# AI agent protocols — only AGENTS.md is committed; editor-local MCP/rules stay untracked
+# AI agent protocols / editor-private dirs — only AGENTS.md is committed.
+# MCP 注册、宿主 rules/hooks、各厂商忽略清单与会话缓存一律本机生成，勿入库。
 CLAUDE.md
 CLAUDE.local.md
+.claude/
+.claudeignore
 .mcp.json
+.cursor/
 .cursorrules
 .cursorignore
 .codex/
@@ -57,10 +63,55 @@ GEMINI.md
 .aider*
 .aiderignore
 opencode.json
+.opencode/
 .continue/
 .clinerules
+.cline/
+.roo/
+.roomodes
+.augment/
+.workbuddy-ai/
+.workbuddy/
+.trae/
+.openclaw/
+.superpowers/
+.omx/
+.kiro/
+.amazonq/
+.tabnine/
+.codeium/
+.qoder/
+.lingma/
+.codebuddy/
+.factory/
+.goose/
+.crush/
+.pieces/
+.repomix/
+.pearai/
+.void/
+.specstory/
+.agent/
+.agents/
+.ai/
+.aiconfig/
+.chatgpt/
+.openai/
+.anthropic/
+.sweep/
+.mentat/
+.bolt/
+.lovable/
+.devin/
+.amp/
+.warp/
 AGENTS.local.md
 AGENTS.override.md
+
+# Local one-click / edge deploy scratch (not product config)
+.vercel/
+.vercelignore
+vercel.json
 
 # ???????
 /.workflow
@@ -108,8 +159,6 @@ weline-async.json
 
 # Playwright MCP ??????????
 .playwright-mcp/
-.claude/
-.openclaw/
 /tools/.skills-sh-publish/
 /tools/clawhub-skill-manifest.json
 
@@ -204,7 +253,6 @@ tests/e2e/.smoke-publish-last.log
 !**/view/email/_prototype/**
 
 # Local agent/debug workspaces (do not commit)
-.superpowers/
 /evidence/
 /parent/
 /tests/e2e/tmp-*.mjs
