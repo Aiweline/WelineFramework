@@ -142,7 +142,9 @@ class SitemapAdapterRegistry
     public function getAdapter(string $platformCode): ?SitemapPlatformAdapterInterface
     {
         $adapters = $this->getAdapters();
-        return $adapters[$platformCode] ?? null;
+        $canonical = SeoPlatformCode::canonicalize($platformCode);
+
+        return $adapters[$canonical] ?? $adapters[$platformCode] ?? null;
     }
 
     /**
@@ -330,13 +332,20 @@ class SitemapAdapterRegistry
     public function extractPlatformFromProvider(string $provider): ?string
     {
         $provider = strtolower($provider);
+        $canonical = SeoPlatformCode::canonicalize($provider);
+        if ($canonical !== '' && $canonical !== $provider) {
+            return $canonical;
+        }
+        if (SeoPlatformCode::isGoogle($provider)) {
+            return SeoPlatformCode::GOOGLE;
+        }
 
         $platformCodes = $this->getPlatformCodes();
         usort($platformCodes, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
         
         foreach ($platformCodes as $code) {
             if (strpos($provider, $code) !== false) {
-                return $code;
+                return SeoPlatformCode::canonicalize($code);
             }
         }
         

@@ -759,7 +759,6 @@ class Account extends BackendController
             /** @var \Weline\Seo\Model\SeoWebsiteStats $statsModel */
             $statsModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteStats::class);
             
-            $accountConfig = ['config' => $account->getConfigArray()];
             $syncedCount = 0;
             $errors = [];
             
@@ -775,11 +774,13 @@ class Account extends BackendController
                 }
                 
                 $siteUrl = (string)($website['url'] ?? '');
-                if (empty($siteUrl)) {
+                $cfg = $account->getConfigArray();
+                $cfgSite = trim((string)($cfg['site_url'] ?? ''));
+                if ($siteUrl === '' && $cfgSite === '') {
                     continue;
                 }
                 
-                $result = $adapter->getStats($siteUrl, $accountConfig);
+                $result = $adapter->getStats($siteUrl, ['config' => $cfg]);
                 
                 if ($result['success'] && !empty($result['data'])) {
                     $statsRecord = $statsModel->reset();

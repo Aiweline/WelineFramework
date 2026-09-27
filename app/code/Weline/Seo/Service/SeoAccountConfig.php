@@ -109,7 +109,7 @@ final class SeoAccountConfig
                 $errors[] = __('URL 格式无效：%{1}', (string)($field['label'] ?? $key));
             }
         }
-        if ($platform === 'google' || $platform === 'google_search_console' || $platform === 'google_indexing_api') {
+        if (SeoPlatformCode::isGoogle($platform)) {
             if (isset($config['site_url']) && is_string($config['site_url'])) {
                 $config['site_url'] = self::normalizeGoogleSiteProperty($config['site_url']);
             }
@@ -126,7 +126,7 @@ final class SeoAccountConfig
                 $errors[] = __('请填写 Search Console 已验证的 URL 或 sc-domain 站点属性');
             }
         }
-        $indexNow = !empty($config['use_indexnow']) || (!in_array($platform, ['google', 'bing', 'baidu'], true) && isset($config['indexnow_key']));
+        $indexNow = !empty($config['use_indexnow']) || (!in_array(SeoPlatformCode::canonicalize($platform), ['google', 'bing', 'baidu'], true) && isset($config['indexnow_key']));
         if ($platform === 'bing' && !$indexNow && empty($config['api_key'])) { $errors[] = __('请填写 Bing Webmaster API Key'); }
         if ($indexNow) {
             if (!preg_match('/^[a-zA-Z0-9-]{8,128}$/', (string)($config['indexnow_key'] ?? ''))) { $errors[] = __('IndexNow Key 必须为 8-128 位字母、数字或连字符'); }

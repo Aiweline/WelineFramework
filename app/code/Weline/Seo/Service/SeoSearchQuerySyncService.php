@@ -41,18 +41,22 @@ final class SeoSearchQuerySyncService
         if ($gscBound) {
             $website = $this->directory->getWebsiteById($websiteId);
             $siteUrl = \trim((string)($website['url'] ?? ''));
-            foreach ($this->bindings->getWebsiteAccountsWithPlatforms($websiteId) as $info) {
+            foreach ($this->bindings->dedupeByCanonicalPlatform(
+                $this->bindings->getWebsiteAccountsWithPlatforms($websiteId)
+            ) as $info) {
                 $adapter = $info['adapter'] ?? null;
                 if ($adapter === null || !$adapter->supportsStats()) {
                     continue;
                 }
-                if ($siteUrl === '') {
+                $cfg = \is_array($info['account_config'] ?? null) ? $info['account_config'] : [];
+                $cfgSite = \trim((string)($cfg['site_url'] ?? ''));
+                if ($siteUrl === '' && $cfgSite === '') {
                     $errors[] = 'site_url_missing';
                     continue;
                 }
                 try {
                     $result = $adapter->getStats($siteUrl, [
-                        'config' => \is_array($info['account_config'] ?? null) ? $info['account_config'] : [],
+                        'config' => $cfg,
                     ]);
                 } catch (\Throwable $throwable) {
                     $errors[] = $throwable->getMessage();
@@ -72,7 +76,7 @@ final class SeoSearchQuerySyncService
                     $window = $data['extra']['search_window'];
                 }
                 $accountId = (int)($info['account_id'] ?? 0);
-                $platform = (string)($info['platform_code'] ?? 'google');
+                $platform = SeoPlatformCode::canonicalize((string)($info['platform_code'] ?? 'google'));
                 if ($queries !== [] && $accountId > 0) {
                     $written += $this->heat->upsertQueries(
                         $websiteId,

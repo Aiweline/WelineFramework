@@ -98,7 +98,36 @@ class SeoPlatformCapabilityService
             ];
         }
 
-        return $normalized;
+        return $this->specializeIndexNowFieldsForPlatform($platform, $normalized);
+    }
+
+    /**
+     * Yandex / 其它 IndexNow 参与方：端点占位与分区文案按平台收紧（适配器类共用）。
+     *
+     * @param list<array<string, mixed>> $fields
+     * @return list<array<string, mixed>>
+     */
+    private function specializeIndexNowFieldsForPlatform(string $platform, array $fields): array
+    {
+        $platform = SeoPlatformCode::canonicalize($platform);
+        if (str_starts_with($platform, 'yandex')) {
+            foreach ($fields as &$field) {
+                $key = (string)($field['key'] ?? '');
+                if ($key === '__section_endpoint') {
+                    $field['hint'] = (string)__('Yandex 账户请将 Endpoint 设为 https://yandex.com/indexnow（可与 IndexNow 中枢共用同一 Key 文件）。');
+                }
+                if ($key === 'indexnow_endpoint') {
+                    $field['placeholder'] = 'https://yandex.com/indexnow';
+                    $field['hint'] = (string)__('建议显式填写 https://yandex.com/indexnow；勿填 api.indexnow.org（那是 IndexNow 中枢账户用的）。须为 HTTPS。留空时部分路径会回退平台默认端点，仍建议填上以免混淆。');
+                }
+                if ($key === '__section_key') {
+                    $field['hint'] = (string)__('与 IndexNow / Bing 共用同一 Key 时，只需一份生产 pub/{key}.txt。key_location 须与推送 URL 同主机。只开 URL 推送、关 Sitemap 定时提交。');
+                }
+            }
+            unset($field);
+        }
+
+        return $fields;
     }
 
     /**
@@ -117,12 +146,12 @@ class SeoPlatformCapabilityService
 
     public function supportsUrlPush(string $platform): bool
     {
-        $platform = strtolower(trim($platform));
+        $platform = SeoPlatformCode::canonicalize($platform);
         if ($platform === '') {
             return false;
         }
 
-        if (in_array($platform, ['google', 'google_search_console', 'google_indexing_api'], true)) {
+        if (SeoPlatformCode::isGoogle($platform)) {
             return false;
         }
 

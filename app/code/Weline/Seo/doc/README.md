@@ -79,6 +79,7 @@
 - `app/code/Weline/Seo/doc/开发/task.md`
 - `app/code/Weline/Seo/doc/扩展规约说明.md`
 - `app/code/Weline/Seo/doc/站点SEO配置说明.md`
+- `app/code/Weline/Seo/doc/海外搜索引擎对接指南.md`
 - `app/code/Weline/Seo/doc/设计文档.md`
 - `app/code/Weline/Seo/doc/账户与定时任务简要说明.md`
 - `app/code/Weline/Seo/doc/队列化架构说明.md`

@@ -133,12 +133,11 @@ class BingSearchEngineAdapter implements SearchEngineAdapterInterface
     {
         return [
             [
-                'key' => 'api_key',
-                'label' => (string)__('Bing Webmaster API Key'),
-                'type' => 'password',
+                'key' => '__section_site',
+                'label' => (string)__('站点与 Webmaster'),
+                'type' => 'section',
                 'required' => false,
-                'placeholder' => 'your-bing-webmaster-api-key',
-                'hint' => (string)__('在 Bing Webmaster Tools → Settings → API Access 生成'),
+                'hint' => (string)__('先在 Bing Webmaster Tools 验证与生产一致的站点。「绑定站点」只挂本系统网站，不能代替 Bing 侧验证。Sitemap 自动提交需要下方 API Key；仅 IndexNow 推送时可留空 API Key。'),
             ],
             [
                 'key' => 'site_url',
@@ -146,11 +145,46 @@ class BingSearchEngineAdapter implements SearchEngineAdapterInterface
                 'type' => 'website_url',
                 'required' => true,
                 'placeholder' => 'https://www.example.com',
-                'hint' => (string)__('从网站列表选择；须与 Bing Webmaster Tools 已验证站点一致'),
+                'hint' => (string)__('从网站列表选择或填写 HTTPS 地址；须与 Bing Webmaster 已验证站点完全一致（注意 www / apex）。推送 URL 与 IndexNow Key 文件也必须同主机。'),
             ],
-            ['key' => 'use_indexnow', 'label' => (string)__('使用 IndexNow 推送页面 URL'), 'type' => 'checkbox', 'required' => false],
-            ['key' => 'indexnow_key', 'label' => 'IndexNow Key', 'type' => 'password', 'required' => false],
-            ['key' => 'key_location', 'label' => (string)__('Key 文件公开地址'), 'type' => 'url', 'required' => false],
+            [
+                'key' => 'api_key',
+                'label' => (string)__('Bing Webmaster API Key'),
+                'type' => 'password',
+                'required' => false,
+                'placeholder' => 'your-bing-webmaster-api-key',
+                'hint' => (string)__('可选。在 Bing Webmaster → Settings → API Access 生成。用于 URL Submission API 与 Sitemap SubmitFeed。未填写时请关闭「启用 Sitemap 定时提交」，并勾选下方 IndexNow。'),
+            ],
+            [
+                'key' => '__section_indexnow',
+                'label' => (string)__('IndexNow URL 推送（推荐）'),
+                'type' => 'section',
+                'required' => false,
+                'hint' => (string)__('勾选后页面 URL 推送走 https://www.bing.com/indexnow，可不填 API Key。须先在生产 Web root（pub/）放置 {key}.txt，内容与 Key 一致；key_location 须公网可读且与站点同主机。HTTP 202=已接受，不是已收录。'),
+            ],
+            [
+                'key' => 'use_indexnow',
+                'label' => (string)__('使用 IndexNow 推送页面 URL'),
+                'type' => 'checkbox',
+                'required' => false,
+                'hint' => (string)__('推荐开启。开启后须填写 IndexNow Key 与 Key 文件公开地址；删除通知也依赖 IndexNow（Webmaster URL API 不提供删除）。'),
+            ],
+            [
+                'key' => 'indexnow_key',
+                'label' => 'IndexNow Key',
+                'type' => 'password',
+                'required' => false,
+                'placeholder' => '8-128 位字母数字或连字符',
+                'hint' => (string)__('建议 openssl rand -hex 16。须与生产 pub/{key}.txt 文件内容完全一致；可与 IndexNow / Yandex 账户共用同一 Key。'),
+            ],
+            [
+                'key' => 'key_location',
+                'label' => (string)__('Key 文件公开地址'),
+                'type' => 'url',
+                'required' => false,
+                'placeholder' => 'https://www.example.com/your-indexnow-key.txt',
+                'hint' => (string)__('形如 https://www.example.com/{key}.txt。主机必须与「已验证站点 URL」一致。源站可用爬虫 UA 探活；办公网裸 curl 遇 attack_guard 403 不能当作文件不存在。'),
+            ],
         ];
     }
 
