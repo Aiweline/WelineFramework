@@ -790,12 +790,12 @@ $assemble = static function (array $t) use ($A, $img, $feature, $figureStack, $h
         . '<div class="weline-detail-feature__media">' . $img($A['poem'], (string)$t['alt_poem']) . '</div>'
         . '</div>';
 
+    // 2026-09-26：look 文案（look_title/look_body）已由下方 $feat 承载，
+    // pair 图组不再重复追加 h3+body —— 否则 PDP 上整块渲染两次。
     $pair = $figureStack([
         $img($A['look02'], (string)$t['alt_look'] . ' 1'),
         $img($A['look04'], (string)$t['alt_look'] . ' 2'),
-    ], 'weline-detail-figure-stack--caption')
-        . '<div class="weline-detail-prose"><h3>' . $h((string)$t['look_title']) . '</h3><p>'
-        . $h((string)$t['look_body']) . '</p></div>';
+    ], 'weline-detail-figure-stack--caption');
 
     $stack = $figureStack([
         $img($A['look06'], (string)$t['alt_look'] . ' 3'),

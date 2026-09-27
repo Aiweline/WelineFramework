@@ -1787,27 +1787,21 @@ function suiteAssembleHtml(array $t, array $imgs, callable $h): string
         $pair = $figureStack([
             $img($a1, (string)$t['alt_look'] . ' 1'),
             $img($a2, (string)$t['alt_look'] . ' 2'),
-        ], 'weline-detail-figure-stack--caption')
-            . '<div class="weline-detail-prose"><h3>' . $h((string)$t['look_title']) . '</h3><p>'
-            . $h((string)$t['look_body']) . '</p></div>';
+        ], 'weline-detail-figure-stack--caption');
         $poolOffset += 2;
     } elseif ($a1) {
         // 仅剩 1 张：与 hero 再组 pair（诗侧栏已展示 hero，双列仍满足 §5.2）
         $pair = $figureStack([
             $img($hero, (string)$t['alt_hero']),
             $img($a1, (string)$t['alt_look'] . ' 1'),
-        ], 'weline-detail-figure-stack--caption')
-            . '<div class="weline-detail-prose"><h3>' . $h((string)$t['look_title']) . '</h3><p>'
-            . $h((string)$t['look_body']) . '</p></div>';
+        ], 'weline-detail-figure-stack--caption');
         $poolOffset += 1;
     } elseif ($nPool >= 1 && $hero) {
         // 整池仅 1 张：hero 自复用组 pair（§5.2 单图不得缺 pair）
         $pair = $figureStack([
             $img($hero, (string)$t['alt_hero']),
             $img($hero, (string)$t['alt_look'] . ' 1'),
-        ], 'weline-detail-figure-stack--caption')
-            . '<div class="weline-detail-prose"><h3>' . $h((string)$t['look_title']) . '</h3><p>'
-            . $h((string)$t['look_body']) . '</p></div>';
+        ], 'weline-detail-figure-stack--caption');
     }
 
     $featureMedia = $pick($poolOffset);

@@ -1523,6 +1523,18 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     background: var(--color-bg-secondary, #ede9e1);
     border-top: 1px solid var(--color-border-subtle, #e8e4dc);
 }
+.product-native-detail__description-body .weline-detail-text--buyer-notice > .weline-detail-text__body {
+    margin: 0;
+    padding: 0 16px 14px;
+    color: var(--color-text-secondary, #4a4a48);
+    font-size: 14px;
+    line-height: 1.7;
+}
+.product-native-detail__description-body .weline-detail-text__foot--emphasis {
+    color: var(--color-danger, #b42318);
+    font-weight: 700;
+    background: var(--color-bg-primary, #fffefa);
+}
 .product-native-detail__description-body .weline-detail-text__defs {
     width: 100%;
     border-collapse: collapse;
@@ -1720,12 +1732,15 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     --product-spec-clamp-max: 15.5rem;
     --product-spec-fade-size: 4.5rem;
     position: relative;
+    isolation: isolate;
 }
 .product-native-detail__spec-clamp-body {
     overflow: hidden;
 }
 .product-native-detail__spec-clamp[data-collapsed="1"].is-overflow .product-native-detail__spec-clamp-body {
     max-height: var(--product-spec-clamp-max);
+    /* mask 会建叠层；收起时禁止身体抢点，否则部分引擎点「Show more」落在透明 mask 上不触发按钮 */
+    pointer-events: none;
     -webkit-mask-image: linear-gradient(
         to bottom,
         #000 0,
@@ -1751,7 +1766,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     position: absolute;
     left: 50%;
     bottom: 0.85rem;
-    z-index: 2;
+    z-index: 5;
     transform: translateX(-50%);
     margin: 0;
     padding: 0.2rem 0.75rem;
@@ -1760,6 +1775,9 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     color: var(--amz-link);
     font: inherit;
     cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 .product-native-detail__spec-more::after {
     content: "▼";
@@ -1776,6 +1794,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
 }
 .product-native-detail__spec-clamp[data-collapsed="0"] .product-native-detail__spec-clamp-body {
     width: 100%;
+    pointer-events: auto;
 }
 .product-native-detail__spec-clamp[data-collapsed="0"] .product-native-detail__spec-more {
     position: static;

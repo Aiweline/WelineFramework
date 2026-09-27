@@ -121,4 +121,37 @@ class DetailDescriptionTextifierTest extends TestCore
         self::assertStringNotContainsString('asset://' . $infoId, $updated);
         self::assertStringNotContainsString('asset://' . $chartId, $updated);
     }
+
+    public function testBuyerNoticePanelReplacesAssetAndKeepsPhoto(): void
+    {
+        $noticeId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+        $photoId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+        $html = '<div data-weline-product-description="1688">'
+            . '<div class="weline-detail-feature weline-detail-feature--poem-aside">'
+            . '<div class="weline-detail-feature__copy"><p>诗意旁笺</p></div>'
+            . '<div class="weline-detail-feature__media">'
+            . '<img src="asset://' . $noticeId . '" alt="notice">'
+            . '</div></div>'
+            . '<img src="asset://' . $photoId . '" alt="photo">'
+            . '</div>';
+
+        $notice = DetailDescriptionTextifier::buildBuyerNoticePanel(
+            [
+                ['title' => '面料', 'body' => '汉服用料较大，无法做到完美请知悉。'],
+                ['title' => '洗涤', 'body' => '面料请温柔手洗。'],
+            ],
+            '普通小店无法做到完美，各类小问题已提前告知。',
+            ['试穿不喜欢均可退货', '辛苦退货不要为了邮费选质量问题，感恩理解'],
+            '购前须知',
+        );
+        $updated = DetailDescriptionTextifier::replaceAssetImageWithHtml($html, $noticeId, $notice);
+
+        self::assertStringContainsString('data-weline-detail-text="buyer-notice"', $updated);
+        self::assertStringContainsString('weline-detail-text--buyer-notice', $updated);
+        self::assertStringContainsString('<h4>面料</h4>', $updated);
+        self::assertStringContainsString('试穿不喜欢均可退货', $updated);
+        self::assertStringContainsString('weline-detail-text__foot--emphasis', $updated);
+        self::assertStringNotContainsString('asset://' . $noticeId, $updated);
+        self::assertStringContainsString('asset://' . $photoId, $updated);
+    }
 }
