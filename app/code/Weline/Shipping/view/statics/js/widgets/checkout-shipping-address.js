@@ -1424,6 +1424,10 @@
     }
 
     async function commitEditedAddress() {
+        var useBtn = root.querySelector('[data-use-edited-address]');
+        if (useBtn && (useBtn.disabled || useBtn.classList.contains('is-loading') || useBtn.getAttribute('aria-busy') === 'true')) {
+            return;
+        }
         var snap = readShippingSnapshot();
         if (!(await validateShippingFields(snap))) {
             return;
@@ -1449,54 +1453,48 @@
                 also_use_receiving: alsoReceiving ? (alsoReceiving.checked ? 1 : 0) : 1
             }
         };
-        var useBtn = root.querySelector('[data-use-edited-address]');
-        if (text(root.getAttribute('data-is-logged-in')) !== '1') {
-            try {
-                await ensureCaptchaTokenBeforeSave();
-                appendCaptchaFields(payload, root);
-            } catch (e) {
-                setMessage(e.message || '验证码加载失败，请稍后重试。', true);
-                return;
-            }
-        }
-        if (useBtn) {
-            useBtn.disabled = true;
-        }
+        setSaveButtonLoading(useBtn, true);
         setMessage('', false);
         clearFieldErrors();
-        // Isolated modal: apply local card state only — never saveDeliveryAddress into checkout session.
-        if (isSessionIsolated()) {
-            var localId = selectedId || ('local_' + Date.now().toString(36));
-            var localPayload = {
-                id: localId,
-                name: snap.name,
-                phone: snap.phone,
-                email: snap.email || '',
-                country_code: snap.country_code || '',
-                country: snap.country || '',
-                province: snap.province || '',
-                city: snap.city || '',
-                district: snap.district || '',
-                street: snap.address1 || snap.street || '',
-                address1: snap.address1 || snap.street || '',
-                postal_code: snap.postal_code || '',
-            };
-            markSelected(localId);
-            fillShipping(localPayload);
-            // Upsert into existing cards — do not wipe the book (that hid「更换地址」).
-            upsertLocalSavedAddress(Object.assign({}, localPayload, {is_selected: true}));
-            if (savedBox) {
-                savedBox.hidden = false;
-            }
-            setMode('collapsed');
-            setShippingRequired(false);
-            setMessage(t('address_updated_local', '地址已用于本单（不影响结账页）。'), false);
-            if (useBtn) {
-                useBtn.disabled = false;
-            }
-            return;
-        }
         try {
+            if (text(root.getAttribute('data-is-logged-in')) !== '1') {
+                try {
+                    await ensureCaptchaTokenBeforeSave();
+                    appendCaptchaFields(payload, root);
+                } catch (e) {
+                    setMessage(e.message || '验证码加载失败，请稍后重试。', true);
+                    return;
+                }
+            }
+            // Isolated modal: apply local card state only — never saveDeliveryAddress into checkout session.
+            if (isSessionIsolated()) {
+                var localId = selectedId || ('local_' + Date.now().toString(36));
+                var localPayload = {
+                    id: localId,
+                    name: snap.name,
+                    phone: snap.phone,
+                    email: snap.email || '',
+                    country_code: snap.country_code || '',
+                    country: snap.country || '',
+                    province: snap.province || '',
+                    city: snap.city || '',
+                    district: snap.district || '',
+                    street: snap.address1 || snap.street || '',
+                    address1: snap.address1 || snap.street || '',
+                    postal_code: snap.postal_code || '',
+                };
+                markSelected(localId);
+                fillShipping(localPayload);
+                // Upsert into existing cards — do not wipe the book (that hid「更换地址」).
+                upsertLocalSavedAddress(Object.assign({}, localPayload, {is_selected: true}));
+                if (savedBox) {
+                    savedBox.hidden = false;
+                }
+                setMode('collapsed');
+                setShippingRequired(false);
+                setMessage(t('address_updated_local', '地址已用于本单（不影响结账页）。'), false);
+                return;
+            }
             if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
                 throw new Error('Weline.Api 尚未就绪，请刷新页面后重试。');
             }
@@ -1528,9 +1526,21 @@
                 setMessage(sanitizeErrorMessage(error.message) || '地址保存失败，请稍后重试。', true);
             }
         } finally {
-            if (useBtn) {
-                useBtn.disabled = false;
-            }
+            setSaveButtonLoading(useBtn, false);
+        }
+    }
+
+    function setSaveButtonLoading(button, loading) {
+        if (!button) {
+            return;
+        }
+        var on = !!loading;
+        button.disabled = on;
+        button.classList.toggle('is-loading', on);
+        if (on) {
+            button.setAttribute('aria-busy', 'true');
+        } else {
+            button.removeAttribute('aria-busy');
         }
     }
 
@@ -2280,9 +2290,9 @@
         bootAddress();
     }
 
-    root.setAttribute('data-shipping-js-rev', '20260921-cpay-addr3');
+    root.setAttribute('data-shipping-js-rev', '20260926-save-loading');
     var api = {
-        rev: '20260921-cpay-addr3',
+        rev: '20260926-save-loading',
         root: root,
         mount: mount,
         getMode: mode,
@@ -2303,7 +2313,7 @@
     }
 
     window.WelineShippingCheckoutAddress = {
-        rev: '20260921-cpay-addr3',
+        rev: '20260926-save-loading',
         root: null,
         mount: mount,
         getMode: function () { return ''; },
