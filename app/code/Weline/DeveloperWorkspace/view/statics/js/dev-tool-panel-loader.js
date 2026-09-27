@@ -514,6 +514,27 @@
         }
     }
 
+    /**
+     * Server truth: HttpOnly `w_weline_tpl_perf` cookie (or env) arms overlays without
+     * needing `wls_tpl_perf` in the URL — e.g. after PayPal return. Bootstrap / DOM badges.
+     */
+    function isTplPerfOverlayArmedOnPage() {
+        try {
+            var boot = document.querySelector('script[data-weline-panel-bootstrap], #weline-panel-loader-js');
+            if (boot && String(boot.getAttribute('data-tpl-perf-armed') || '') === '1') {
+                return true;
+            }
+        } catch (eBoot) {
+        }
+        try {
+            if (document.querySelector('.wls-tpl-perf')) {
+                return true;
+            }
+        } catch (eDom) {
+        }
+        return false;
+    }
+
     function buildTplPerfNavigationUrl(enabled) {
         var url = new URL(window.location.href);
         if (enabled) {
@@ -570,7 +591,12 @@
     }
 
     function isTplPerfOverlayPreferred() {
-        return readTplPerfPreference() || currentUrlHasTplPerfQuery();
+        var preferred = readTplPerfPreference() || currentUrlHasTplPerfQuery() || isTplPerfOverlayArmedOnPage();
+        // Cookie-armed redirects drop the query and may lose localStorage; heal preference to match page truth.
+        if (preferred && !readTplPerfPreference() && isTplPerfOverlayArmedOnPage()) {
+            writeTplPerfPreference(true);
+        }
+        return preferred;
     }
 
     function openLoadedPanel() {

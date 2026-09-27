@@ -6374,6 +6374,19 @@ const DevToolPanel = (function() {
             return !!window.WelinePanel.isTplPerfOverlayPreferred();
         }
         try {
+            var boot = document.querySelector('script[data-weline-panel-bootstrap], #weline-panel-loader-js');
+            if (boot && String(boot.getAttribute('data-tpl-perf-armed') || '') === '1') {
+                return true;
+            }
+        } catch (eBoot) {
+        }
+        try {
+            if (document.querySelector('.wls-tpl-perf')) {
+                return true;
+            }
+        } catch (eDom) {
+        }
+        try {
             return new URL(window.location.href).searchParams.get('wls_tpl_perf') === '1';
         } catch (error) {
             return /(?:^|[?&])wls_tpl_perf=(?:1|true)(?:&|$)/i.test(String(window.location.search || ''));
@@ -6385,7 +6398,7 @@ const DevToolPanel = (function() {
         var html = '<div class="dev-tool-tpl-perf-switch">';
         html += '<div class="dev-tool-tpl-perf-switch-copy">';
         html += '<div class="dev-tool-tpl-perf-switch-title">模板耗时徽标</div>';
-        html += '<div class="dev-tool-tpl-perf-switch-hint">需面板 Token；开启后签发签名 Cookie，并为当前页补上 wls_tpl_perf=1，在部件旁显示 timing。</div>';
+        html += '<div class="dev-tool-tpl-perf-switch-hint">需面板 Token；开启后签发签名 Cookie（跨跳转仍生效），并为当前页补上 wls_tpl_perf=1。开关与页面 timing 徽标保持一致。</div>';
         html += '</div>';
         html += '<button type="button" class="dev-tool-tpl-perf-switch-btn' + (on ? ' is-on' : '') + '" data-dev-tool-action="toggle-tpl-perf" aria-pressed="' + (on ? 'true' : 'false') + '">';
         html += on ? '已开' : '开启';

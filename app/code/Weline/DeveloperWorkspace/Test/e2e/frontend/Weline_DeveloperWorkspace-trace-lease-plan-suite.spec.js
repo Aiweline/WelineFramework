@@ -44,6 +44,7 @@ moduleDescribe(test, MODULE, '请求链路面板开闭计划链路', () => {
         tplPerf: runtime.includes('w_weline_tpl_perf')
           && traceApi.includes('postTplPerf')
           && loader.includes('setTplPerfOverlay')
+          && loader.includes('isTplPerfOverlayArmedOnPage')
           && panel.includes('toggle-tpl-perf')
           && unit.includes('testPanelTplPerfCookieArmsTemplateOverlayWithoutQuery'),
       };

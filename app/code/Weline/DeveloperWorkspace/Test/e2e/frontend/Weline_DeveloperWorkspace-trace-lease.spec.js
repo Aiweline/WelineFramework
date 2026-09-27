@@ -63,6 +63,7 @@ function assertChapter3TplPerfOverlay() {
   const traceApi = read('app/code/Weline/DeveloperWorkspace/Api/Rest/V1/Trace.php');
   const loader = read('app/code/Weline/DeveloperWorkspace/view/statics/js/dev-tool-panel-loader.js');
   const panel = read('app/code/Weline/DeveloperWorkspace/view/hooks/dev-tool-panel.phtml');
+  const observer = read('app/code/Weline/DeveloperWorkspace/Observer/DevToolPanelObserver.php');
   const routes = read('app/code/Weline/DeveloperWorkspace/extends/module/Weline_Framework/Query/DeveloperWorkspaceAdminQueryProvider.php');
   const matcher = read('app/code/Weline/Framework/Http/PublicApiAuthRouteMatcher.php');
   const unit = read('app/code/Weline/Framework/Test/Unit/Runtime/RequestLifecycleTraceTest.php');
@@ -76,6 +77,8 @@ function assertChapter3TplPerfOverlay() {
       && loader.includes('setTplPerfOverlay')
       && loader.includes("apiFetch('trace/tpl-perf'")
       && loader.includes('wls_tpl_perf')
+      && loader.includes('isTplPerfOverlayArmedOnPage')
+      && observer.includes('data-tpl-perf-armed')
       && panel.includes('toggle-tpl-perf')
       && panel.includes('模板耗时徽标')
       && unit.includes('testPanelTplPerfCookieArmsTemplateOverlayWithoutQuery'),
@@ -83,6 +86,7 @@ function assertChapter3TplPerfOverlay() {
     api: traceApi.includes('function postTplPerf'),
     loader: loader.includes('setTplPerfOverlay'),
     ui: panel.includes('toggle-tpl-perf'),
+    armedBootstrap: observer.includes('data-tpl-perf-armed') && loader.includes('isTplPerfOverlayArmedOnPage'),
   };
 }
 
