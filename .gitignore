@@ -183,15 +183,26 @@ tests/**/pnpm-lock.yaml
 # Tests ?????????????
 tests/e2e/modules.json
 
-# Tests / ?????????????????????
+# Tests / Playwright 产物与临时文件（勿入库）
 test-results.xml
 /test-results/
+**/test-results/
 tests/e2e/playwright-report/
 tests/e2e/test-results/
+/tests/test-results/
 tests/e2e/collected-tests.json
 tests/e2e/*-debug.png
 tests/e2e/.last-playwright-tee.txt
 tests/e2e/.smoke-publish-last.log
+/tests/e2e/**/artifacts/
+/tests/e2e/tests/
+/tests/e2e/tmp-*
+/tests/e2e/*.log
+/tests/var/codex-tmp/
+
+# 模块测试证据 / 静态 evidence 倾倒（非产品文档）
+**/test/evidence/
+**/view/statics/evidence/
 
 # PHPUnit cache directory (10+)
 .phpunit.cache/
