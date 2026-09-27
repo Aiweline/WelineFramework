@@ -89,7 +89,7 @@ final class GlobalRateLimiter
         if ($instanceName === '' || $ip === '' || $expiresAt <= \time()) {
             return false;
         }
-        if (self::isLoopbackIp($ip)) {
+        if (self::isLoopbackIp($ip) || self::isCloudflareEdgeIp($ip)) {
             return false;
         }
         if ($expectedInstanceName !== '' && !\hash_equals($expectedInstanceName, $instanceName)) {
@@ -106,9 +106,10 @@ final class GlobalRateLimiter
             return false;
         }
         $ip = self::normalizeIp($ip);
-        if ($ip === '' || self::isLoopbackIp($ip)) {
-            // Existing loopback ban keys are inert: Nginx→WLS peer is always
-            // 127.0.0.0/8 or ::1; banning it 403s the whole site.
+        if ($ip === '' || self::isLoopbackIp($ip) || self::isCloudflareEdgeIp($ip)) {
+            // Existing loopback / CF-edge ban keys are inert: Nginx→WLS peer is
+            // always 127.0.0.0/8 or ::1, and mis-peeled orange-cloud XFF used to
+            // ban CF POPs (site-wide 403 for that edge).
             return false;
         }
         // Authoritative ban expiries are epoch seconds because they survive
@@ -159,7 +160,7 @@ final class GlobalRateLimiter
             return;
         }
         $ip = self::normalizeIp($ip);
-        if ($ip === '' || self::isLoopbackIp($ip)) {
+        if ($ip === '' || self::isLoopbackIp($ip) || self::isCloudflareEdgeIp($ip)) {
             return;
         }
         $expiresAt = \time() + \max(1, $ttl);
@@ -465,5 +466,14 @@ final class GlobalRateLimiter
         }
 
         return false;
+    }
+
+    /**
+     * Cloudflare edge CIDRs must never enter shared_ban — without trusting them
+     * as XFF hops, orange-cloud traffic keys bans on the POP and 403s browsers.
+     */
+    public static function isCloudflareEdgeIp(string $ip): bool
+    {
+        return CloudflareTrustedProxyCatalog::contains($ip);
     }
 }
