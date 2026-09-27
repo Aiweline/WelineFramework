@@ -1,0 +1,566 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>flex-probe</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font:14px system-ui}
+
+
+.header-main-nav-inner {
+    display: flex;
+    /* 业界：宽屏单行 nowrap，靠「更多」收项；禁止 flex 自然换行后再挤回一行 */
+    flex-wrap: nowrap;
+    align-items: center;
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    margin-inline: auto;
+    padding: 0 var(--weline-layout-content-padding-inline);
+    box-sizing: border-box;
+    background: transparent;
+    color: inherit;
+    min-height: var(--size-control-md);
+    gap: var(--spacing-sm);
+}
+
+
+/* 锁两行：JS 滞回 class，或 ≤768 媒体查询兜底（二者任一即栈） */
+.header-main-nav-inner.is-nav-stacked {
+    flex-wrap: wrap;
+    gap: 0;
+}
+
+
+.header-main-nav-inner.is-nav-stacked .header-nav-left-cluster {
+    flex: 1 1 auto;
+    min-width: 0;
+    order: 1;
+    overflow: hidden;
+}
+
+
+.header-main-nav-inner.is-nav-stacked .header-nav-right-cluster {
+    flex: 1 1 100%;
+    order: 2;
+    justify-content: flex-start;
+    overflow: hidden;
+    min-height: var(--size-control-md);
+}
+
+
+.header-main-nav-inner.is-nav-stacked .header-nav-fill-inner {
+    justify-content: flex-start;
+    overflow: hidden;
+    width: 100%;
+}
+
+
+/* 左大簇：严格内容宽（max-content），永不吃中间空白；空白归右簇 */
+.header-nav-left-cluster {
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto;
+    flex-grow: 0;
+    width: max-content;
+    min-width: 0;
+    max-width: 100%;
+    gap: var(--spacing-sm);
+    overflow: hidden;
+}
+
+
+/* 右大簇：吃剩余宽，右对齐；左空则右自动铺满，再在实宽内决定是否「更多」 */
+.header-nav-right-cluster {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 1 1 0%;
+    min-width: 0;
+    gap: var(--weline-space-5);
+    overflow: hidden;
+}
+
+
+.header-nav-extensions .header-nav-extension-link,
+.header-nav-extensions a,
+.header-nav-right-cluster > .header-nav-extension-link,
+.header-nav-right-cluster > .header-blog-link {
+    color: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+
+.header-nav-extensions .header-nav-extension-link:hover,
+.header-nav-extensions a:hover,
+.header-nav-right-cluster > .header-nav-extension-link:hover,
+.header-nav-right-cluster > .header-blog-link:hover {
+    text-decoration: underline;
+}
+
+
+/* 空 exclusive 槽 / 空 hook 不占 gap；「更多」已提到右簇旁，默认 display:none 亦不占位 */
+.header-nav-right:not(:has(*)),
+.header-nav-right-cluster > .header-nav-right-slot:has(#nav-links-list:empty) {
+    display: none;
+}
+
+
+/* 「更多」未展开时不占 flex 位；出现时（JS 写 display:flex）再申请宽度 */
+.header-nav-right-cluster > .nav-more-wrapper[style*="display: none"],
+.header-nav-right-cluster > .nav-more-wrapper[hidden] {
+    display: none !important;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    width: 0;
+    overflow: hidden;
+    flex: 0 0 0;
+}
+
+
+.header-nav-right-cluster > .header-nav-extension-link.is-nav-overflow-hidden,
+.header-nav-right-cluster .nav-links-list > li.is-nav-overflow-hidden {
+    display: none !important;
+}
+
+
+/* 左簇整体 More：挂在左簇末（分类+政策之后），未展开不占位 */
+.header-nav-left-cluster > .categories-overflow-wrapper.header-left-cluster-more {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+}
+
+.header-nav-left-cluster > .categories-overflow-wrapper.header-left-cluster-more[style*="display: none"],
+.header-nav-left-cluster > .categories-overflow-wrapper.header-left-cluster-more[hidden] {
+    display: none !important;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    width: 0;
+    overflow: hidden;
+    flex: 0 0 0;
+}
+
+.categories-list > .category-item.is-nav-overflow-hidden {
+    display: none !important;
+}
+
+    .header-main-nav-inner {
+        flex-wrap: wrap;
+        gap: 0;
+    }
+
+
+    .header-nav-left-cluster {
+        flex: 1 1 auto;
+        min-width: 0;
+        order: 1;
+        overflow: hidden;
+    }
+
+
+    .header-nav-right-cluster {
+        flex: 1 1 100%;
+        order: 2;
+        justify-content: flex-start;
+        overflow: hidden;
+        min-height: var(--size-control-md);
+    }
+
+
+/* 分类菜单内容：未抬升时仍可横向裁剪；抬升后由 [data-wf-raised] 强制 overflow:visible */
+.header-categories .categories-nav,
+.header-nav-left-slot .categories-nav {
+    flex: 0 1 auto;
+    min-width: 0;
+    width: max-content;
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    position: relative;
+}
+
+
+.categories-nav {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    overflow: visible; /* 允许子菜单溢出显示 */
+}
+
+
+.categories-list {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+
+.category-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+
+.categories-list > li.hidden {
+    display: none !important;
+}
+
+
+.category-link-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+
+.header-main-nav .categories-list > .category-item > .category-link,
+.header-main-nav .categories-list > .category-item > .category-link-wrapper > .category-link {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    padding: var(--spacing-sm) var(--weline-space-3);
+    color: var(--weline-theme-text-on-dark);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    line-height: 1.2;
+    white-space: nowrap;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    pointer-events: auto;
+    flex: 1;
+}
+
+
+.header-main-nav .categories-list > .category-item > .category-link:hover,
+.header-main-nav .categories-list > .category-item > .category-link-wrapper:hover > .category-link {
+    background-color: var(--weline-theme-mega-menu-top-hover-bg, var(--weline-chrome-mega-menu-top-hover-bg, var(--color-on-dark-15, rgba(255, 255, 255, 0.15)))) !important;
+    color: var(--weline-theme-mega-menu-top-hover-color, var(--weline-chrome-mega-menu-top-hover-color, #ffffff));
+}
+
+
+.header-main-nav .categories-list > .category-item:hover > .category-link,
+.header-main-nav .categories-list > .category-item > .category-link-wrapper:hover > .category-link {
+    color: var(--weline-theme-mega-menu-top-hover-color, var(--weline-chrome-mega-menu-top-hover-color, #ffffff));
+}
+
+
+.category-item.has-children:hover .category-arrow {
+    transform: rotate(180deg);
+    border-top-color: var(--weline-theme-mega-menu-top-hover-color, var(--weline-chrome-mega-menu-top-hover-color, #ffffff));
+}
+
+
+.category-link-wrapper:hover .category-arrow {
+    border-top-color: var(--weline-theme-mega-menu-top-hover-color, var(--weline-chrome-mega-menu-top-hover-color, #ffffff));
+}
+
+
+/* 分类子菜单：由 Weline.UI Popover 托管（portal + host+1），不再用 CSS :hover 绝对定位 */
+.category-item.has-children > .category-submenu,
+.category-item.has-children > .category-link-wrapper:hover ~ .category-submenu,
+.category-item.has-children .category-link:hover ~ .category-submenu,
+
+
+.header-category-panel.w-popover {
+    --w-floating-max-inline-size: min(1100px, calc(100vw - 2rem));
+    min-inline-size: min(18rem, calc(100vw - 2rem));
+    border-radius: var(--weline-radius-lg, 12px);
+}
+
+
+.header-category-panel.is-megamenu .header-category-panel__list > .category-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 220px;
+    max-width: 280px;
+    align-items: flex-start;
+}
+
+
+.header-category-panel .category-item {
+    display: block;
+    min-width: 0;
+}
+
+
+.header-category-panel .category-link-wrapper {
+    width: 100%;
+}
+
+
+.header-category-panel.w-surface-body .category-link,
+.header-category-panel.w-surface-body .category-link-wrapper .category-link {
+    display: flex;
+    width: 100%;
+    color: var(--weline-theme-body-text, var(--color-text-primary));
+    background: transparent;
+}
+
+
+.header-category-panel.is-megamenu .header-category-panel__list > .category-item > .category-link,
+.header-category-panel.is-megamenu .header-category-panel__list > .category-item > .category-link-wrapper .category-link {
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.5rem 0;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--weline-theme-menu-panel-border);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 0;
+    color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
+}
+
+
+.header-category-panel.is-megamenu .header-category-panel__list > .category-item > .category-link:hover,
+.header-category-panel.is-megamenu .header-category-panel__list > .category-item > .category-link-wrapper:hover .category-link {
+    background: transparent !important;
+    color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover)) !important;
+    border-bottom-color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover));
+}
+
+
+.header-category-panel.w-surface-body .category-link:hover,
+.header-category-panel.w-surface-body .category-link-wrapper:hover .category-link {
+    background: var(--weline-theme-surface-hover, rgba(0, 0, 0, 0.06)) !important;
+    color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover)) !important;
+}
+
+
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item {
+    display: block;
+    width: 100%;
+    min-width: 0;
+}
+
+
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item > .category-link,
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item > .category-link-wrapper,
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item > .category-link-wrapper > .category-link {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.55rem 0.75rem;
+    margin: 0;
+    border-radius: var(--weline-radius-sm, 6px);
+    color: var(--weline-theme-body-text, var(--color-text-primary));
+    background: transparent;
+    text-decoration: none !important;
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item > .category-link-wrapper {
+    justify-content: space-between;
+    gap: var(--spacing-xs, 0.25rem);
+    padding: 0;
+}
+
+
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item > .category-link-wrapper > .category-link {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item > .category-link:hover,
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item > .category-link-wrapper:hover,
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item > .category-link-wrapper:hover > .category-link,
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item[data-state="open"] > .category-link-wrapper,
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item[data-state="open"] > .category-link-wrapper > .category-link {
+    background: var(--weline-theme-surface-hover, rgba(0, 0, 0, 0.06)) !important;
+    color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover, var(--color-primary))) !important;
+    text-decoration: none !important;
+}
+
+
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item .category-arrow {
+    border-top-color: var(--weline-theme-body-text-muted, #666666);
+    transform: rotate(-90deg);
+    margin-right: 0.35rem;
+}
+
+
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item:hover .category-arrow,
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item[data-state="open"] .category-arrow,
+.categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item > .category-link-wrapper:hover .category-arrow {
+    border-top-color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover, var(--color-primary)));
+    transform: rotate(-90deg);
+}
+
+
+.nav-links-list {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-5);
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 var(--spacing-md);
+    flex-wrap: nowrap; /* 禁止换行 */
+}
+
+
+.nav-links-list li {
+    flex-shrink: 0; /* 禁止项被压缩 */
+}
+
+
+.nav-links-list a {
+    color: var(--weline-theme-text-on-dark);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+    transition: color 0.2s ease;
+    padding: var(--spacing-sm) 0;
+    display: block;
+}
+
+
+.nav-links-list a:hover {
+    color: var(--color-primary);
+}
+
+
+.categories-overflow-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+
+.categories-overflow-wrapper.active .categories-overflow-btn i,
+.categories-overflow-wrapper:hover .categories-overflow-btn i {
+    transform: rotate(180deg);
+}
+
+
+.categories-overflow-list > .category-item > .category-link-wrapper {
+    width: 100%;
+    justify-content: space-between;
+}
+
+
+.categories-overflow-list .category-link {
+    color: var(--weline-theme-body-text, var(--color-text-primary));
+    text-decoration: none !important;
+}
+
+
+
+
+
+
+/* 更多按钮：与 .nav-links-list a 同级视觉间距，不贴前一项 */
+.nav-more-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+
+/* 隐藏的菜单项 */
+.nav-links-list li.hidden {
+    display: none;
+}
+
+
+    /* ≤768 两行已由上方 stack 规则锁定；此处只收滚动条，禁止再 nowrap 挤回一行 */
+    .header-main-nav-inner {
+        overflow-x: hidden;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        min-height: var(--size-control-md);
+    }
+
+
+    .header-main-nav-inner::-webkit-scrollbar {
+        display: none;
+    }
+
+
+    .header-nav-fill .nav-menu,
+    .header-nav-fill .nav-links-list,
+    .header-nav-right-slot .nav-menu,
+    .header-nav-right-slot .nav-links-list,
+    .categories-list {
+        flex-wrap: nowrap;
+        width: auto;
+        max-width: 100%;
+        padding-left: var(--weline-space-3);
+    }
+
+
+    .header-nav-fill .nav-item,
+    .header-nav-fill .nav-links-list li,
+    .header-nav-right-slot .nav-item,
+    .header-nav-right-slot .nav-links-list li,
+    .category-item {
+        flex: 0 0 auto;
+    }
+
+
+    .header-nav-fill .nav-link,
+    .header-nav-fill .nav-links-list a,
+    .header-nav-right-slot .nav-link,
+    .header-nav-right-slot .nav-links-list a,
+    .category-link {
+        white-space: nowrap;
+        padding: var(--spacing-0_65) var(--spacing-0_7);
+        font-size: var(--font-size-sm);
+    }
+
+
+    /* More 可见性由 adjustNavLinks / adjustCategoriesOverflow 写 inline；此处只保证不被挤没 */
+    .categories-overflow-wrapper,
+    .nav-more-wrapper {
+        flex-shrink: 0;
+    }
+
+
+    .categories-nav::after {
+        opacity: 1;
+    }
+.header-main-nav-inner{display:flex;flex-wrap:nowrap;align-items:center;width:531px;margin:20px auto;padding:0;gap:12px;border:1px solid #ccc}
+.header-nav-left-cluster{display:flex;align-items:center;flex:0 1 auto;width:max-content;min-width:0;gap:8px;overflow:hidden;}
+.header-nav-right-cluster{display:flex;align-items:center;justify-content:flex-end;flex:1 1 0%;min-width:0;gap:20px;}
+.categories-list{display:flex;list-style:none;margin:0;padding:0;gap:8px}
+.category-item{white-space:nowrap;padding:8px 10px;background:#eee}
+.nav-links-list{display:flex;list-style:none;margin:0;padding:0;gap:20px}
+.nav-links-list li{white-space:nowrap;padding:8px 10px;background:#dde}
+.cart-block{display:flex;flex-direction:column;line-height:1.2}
+</style></head><body>
+<div class="header-main-nav-inner">
+  <ul class="categories-list" id="categories-list">
+    <li class="category-item">Shop All</li><li class="category-item">Balance &amp; Harmony</li><li class="category-item">Calm &amp; Wellness</li><li class="category-item">Practice &amp; Training</li><li class="category-item">Grounding &amp; Boundaries</li><li class="category-item">Focus &amp; Clarity</li><li class="category-item">By Symbol</li><li class="category-item">By Shape</li><li class="category-item">By Material</li>
+  </ul>
+  <div class="header-nav-right-cluster">
+    <a href="#">Blog</a>
+    <ul class="nav-links-list"><li><a href="#">Wishlist</a></li></ul>
+    <div class="cart-block"><span>Cart</span><b>Retail: $28.00</b></div>
+  </div>
+</div>
+<script>
+window.addEventListener('load', () => {
+  const inner=document.querySelector('.header-main-nav-inner').getBoundingClientRect();
+  const L=document.querySelector('.header-nav-left-cluster')||document.getElementById('categories-list');
+  const R=document.querySelector('.header-nav-right-cluster');
+  const rr=R.getBoundingClientRect(), lr=L.getBoundingClientRect();
+  const res={mode:'hide', innerW:Math.round(inner.width), leftW:Math.round(lr.width), rightW:Math.round(rr.width), rightOverflow:Math.round(rr.right-(inner.left+inner.width)), sameRowDeltaTop:Math.round(rr.top-lr.top)};
+  res.rightKids=[...R.children].map(k=>({t:k.textContent.trim().slice(0,12),w:Math.round(k.getBoundingClientRect().width)})); res.Rscroll=R.scrollWidth; res.Rclient=R.clientWidth; res.rightKids=[...R.children].map(k=>({t:k.textContent.trim().slice(0,12),w:Math.round(k.getBoundingClientRect().width)})); res.Rscroll=R.scrollWidth; res.Rclient=R.clientWidth; document.title=JSON.stringify(res);
+  const d=document.createElement('pre'); d.textContent=JSON.stringify(res,null,2); document.body.appendChild(d);
+});
+</script></body></html>

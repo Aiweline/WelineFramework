@@ -665,7 +665,7 @@ return [
             'csp_delivery' => 'meta',
             'cors_origins' => '',
         ],
-        // CDN/Storage 等 secret_ref 主密钥（生产必须为高强度随机串；仅 ENV_TEST/DEV 可空）
+        // CDN/Storage 等 secret_ref 主密钥（生产建议预置高强度随机串；缺键时首次密封会自动写入；仅 ENV_TEST/DEV 可空）
         'secret_ref_key' => '',
         // 跨实例配置包 AEAD（TASK-P1D-003 / DEC-021）；默认关闭 fail-closed
         'config_envelope' => [

@@ -944,6 +944,7 @@ operation：%{id},operation：%{id}
 "✓ generated/code 目录已清理。","✓ The generated/code directory has been cleaned."
 "清理 generated/code 目录时发生错误: %{1}，将继续执行。","Error occurred while clearing the generated/code directory: %{1}, continuing."
 无法创建缓存目录：%{1},"Unable to create cache directory: %{1}"
+"无法彻底清理缓存路径（可能被运行中的 Worker 占用，已跳过）：%{1}","无法彻底清理缓存路径（可能被运行中的 Worker 占用，已跳过）：%{1}"
 无法清理缓存路径：%{1},"Unable to clear cache path: %{1}"
 缓存目录属主未能对齐到项目根（%{1}），但当前进程可写，已继续。,"The cache directory owner failed to align to the project root (%{1}), but the current process is writable and has continued."
 无法恢复缓存目录所有权：%{1},"Unable to restore cache directory ownership: %{1}"

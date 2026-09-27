@@ -304,13 +304,14 @@ class Account extends BackendController
                 'redirect' => $this->request->getUrlBuilder()->getBackendUrl('*/backend/account/index')
             ]);
         } catch (\Exception $e) {
+            $errorMsg = $this->mapCredentialSaveError($e);
             if ($this->request->isIframe()) {
-                return $this->redirectCdnOffcanvasResult('error', __('保存失败：%{1}', $e->getMessage()));
+                return $this->redirectCdnOffcanvasResult('error', $errorMsg);
             }
 
             return $this->jsonResponse([
                 'success' => false,
-                'message' => __('保存失败：%{1}', $e->getMessage())
+                'message' => $errorMsg
             ]);
         }
     }
@@ -471,5 +472,15 @@ class Account extends BackendController
             return '';
         }
         return (string)(($envConfig['wls'] ?? [])['origin_token'] ?? '');
+    }
+
+    private function mapCredentialSaveError(\Throwable $e): string
+    {
+        $code = \trim((string)$e->getMessage());
+        return match ($code) {
+            'secret_ref_key_missing' => __('保存失败：生产环境缺少凭据主密钥 security.secret_ref_key，且无法自动写入 env.php。请检查 app/etc/env.php 可写权限后重试。'),
+            'secret_ref_corrupt', 'secret_ref_decrypt_failed' => __('保存失败：凭据密封损坏或主密钥已变更，请重新填写 Token 后保存。'),
+            default => __('保存失败：%{1}', $code !== '' ? $code : $e::class),
+        };
     }
 }

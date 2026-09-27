@@ -1055,11 +1055,29 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
+全部商品,"Shop All"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
 面包屑,"bread crumbs"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+件商品,"items of goods"
+查看更多,"View more"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
 商品,Products
 查看规格图,"View spec images"
 减少数量,"Decrease quantity"
@@ -1082,24 +1100,6 @@ FAQ/常见问题,FAQ
 "还差 %1 包邮","You're %1 away from free shipping"
 已享包邮,"You've unlocked free shipping"
 关闭通知,"Close notification"
-全部商品,"Shop All"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
-查看更多,"View more"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-件商品,"items of goods"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
 上一张,"Previous picture"
 下一张,Next
 第%d张,"Slide %d"
@@ -2319,8 +2319,8 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 系统未安装任何主题！,"No theme installed in the system!"
 【已激活】,【Activated】
 查看主题列表,"View theme list"
-主题不存在：,主题不存在：
 "未找到激活主题，请用 -t/--theme 指定主题名。","未找到激活主题，请用 -t/--theme 指定主题名。"
+主题不存在：,主题不存在：
 无法解析主题静态资源命名空间。,"Unable to resolve theme static resource namespace."
 收集,Collect
 主题文件...,"Theme files..."
@@ -2334,7 +2334,7 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "设置了 -t 参数，但却没有-t参数值！","The -t parameter was set, but no -t parameter value was provided!"
 无法创建主题静态资源目录：,"Unable to create theme static resource directory:"
 无法发布主题静态资源：,"Unable to publish theme static resources:"
-"更新主题静态资源（设计覆盖 + 模块 view/theme 继承发布到 /static/{主题}/...）","更新主题静态资源（设计覆盖 + 模块 view/theme 继承发布到 /static/{主题}/...）"
+"更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）","更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）"
 主题文件不在允许的主题目录内：,"The theme file is not in the allowed theme directory:"
 "=== 批量生成主题预览图 ===","=== Generate theme previews in batches ==="
 "并发数量: %{1}","Concurrency Count: %{1}"
@@ -2389,6 +2389,7 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"更新主题静态资源（设计覆盖 + 模块 view/theme 继承发布到 /static/{主题}/...）","更新主题静态资源（设计覆盖 + 模块 view/theme 继承发布到 /static/{主题}/...）"
 "已更新前台回退标记。各网站店面主题请在「网站信息 → 店面主题」绑定；全局 binding 仅 Default 可改。","Frontend fallback flag updated. Bind each website’s storefront theme in Website Info → Storefront theme; only Default may change the global binding."
 选择前台与后台各自激活的主题。,"Select the themes to be activated in the foreground and backend respectively."
 "周一至周五 9:00 - 18:00（法定节假日除外）","Monday to Friday 9:00 AM - 6:00 PM (excluding public holidays)"

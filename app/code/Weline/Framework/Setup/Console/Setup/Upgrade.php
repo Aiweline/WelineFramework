@@ -524,6 +524,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      *
      * 部署 webhook 常以 www 运行，而 BP 属主可能是部署账号（如 weline）：此时无法
      * chown 到 BP 属主。只要目录对当前进程可写，就不应让升级失败。
+     *
+     * 存活 Worker 可能在清空过程中回写 cache 条目：多轮重试后仍残留的可写路径仅告警，
+     * 禁止因此中断整个 setup:upgrade。
      */
     private function clearCacheContentsPreservingRuntimeOwner(): void
     {
@@ -534,33 +537,33 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             throw new \RuntimeException((string)__('无法创建缓存目录：%{1}', [$cacheDir]));
         }
 
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($cacheDir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-        // Worker session store must stay owner-private (0600/0700). Widening to 0664
-        // during a failed unlink leaves Backend attestation permanently broken.
-        $frontendWorkerPrefix = $cacheDir . DS . 'frontend_worker';
-        foreach ($iterator as $item) {
-            $path = $item->getPathname();
-            $removed = $item->isLink() || !$item->isDir()
-                ? @unlink($path)
-                : @rmdir($path);
-            if (!$removed && (file_exists($path) || is_link($path))) {
-                $privateWorkerStore = str_starts_with($path, $frontendWorkerPrefix . DS)
-                    || $path === $frontendWorkerPrefix;
-                @chmod(
-                    $path,
-                    $item->isDir()
-                        ? ($privateWorkerStore ? 0700 : 0775)
-                        : ($privateWorkerStore ? 0600 : 0664)
-                );
-                $removed = $item->isLink() || !$item->isDir()
-                    ? @unlink($path)
-                    : @rmdir($path);
+        $remaining = [];
+        for ($pass = 1; $pass <= 3; $pass++) {
+            $remaining = $this->clearCacheDirectoryPass($cacheDir);
+            if ($remaining === []) {
+                break;
             }
-            if (!$removed && (file_exists($path) || is_link($path))) {
-                throw new \RuntimeException((string)__('无法清理缓存路径：%{1}', [$path]));
+            \usleep(50_000 * $pass);
+        }
+
+        if ($remaining !== []) {
+            $permissionBlocked = [];
+            foreach ($remaining as $path) {
+                $parent = \dirname($path);
+                if (\is_writable($path) || \is_writable($parent) || \is_writable($cacheDir)) {
+                    $this->printing->warning(__(
+                        '无法彻底清理缓存路径（可能被运行中的 Worker 占用，已跳过）：%{1}',
+                        [$path]
+                    ));
+                    continue;
+                }
+                $permissionBlocked[] = $path;
+            }
+            if ($permissionBlocked !== []) {
+                throw new \RuntimeException((string)__(
+                    '无法清理缓存路径：%{1}',
+                    [\implode(', ', \array_slice($permissionBlocked, 0, 5))]
+                ));
             }
         }
 
@@ -595,6 +598,47 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
             throw new \RuntimeException((string)__('无法恢复缓存目录所有权：%{1}', [$runtimeDir]));
         }
+    }
+
+    /**
+     * @return list<string> 本轮仍残留的路径
+     */
+    private function clearCacheDirectoryPass(string $cacheDir): array
+    {
+        if (!\is_dir($cacheDir)) {
+            return [];
+        }
+
+        clearstatcache(true, $cacheDir);
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($cacheDir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        // Worker session store must stay owner-private (0600/0700). Widening to 0664
+        // during a failed unlink leaves Backend attestation permanently broken.
+        $frontendWorkerPrefix = $cacheDir . DS . 'frontend_worker';
+        $remaining = [];
+        foreach ($iterator as $item) {
+            $path = $item->getPathname();
+            $isDir = !$item->isLink() && $item->isDir();
+            $removed = $isDir ? @\rmdir($path) : @\unlink($path);
+            if (!$removed && (\file_exists($path) || \is_link($path))) {
+                $privateWorkerStore = \str_starts_with($path, $frontendWorkerPrefix . DS)
+                    || $path === $frontendWorkerPrefix;
+                @\chmod(
+                    $path,
+                    $isDir
+                        ? ($privateWorkerStore ? 0700 : 0775)
+                        : ($privateWorkerStore ? 0600 : 0664)
+                );
+                $removed = $isDir ? @\rmdir($path) : @\unlink($path);
+            }
+            if (!$removed && (\file_exists($path) || \is_link($path))) {
+                $remaining[] = $path;
+            }
+        }
+
+        return $remaining;
     }
 
     /**
