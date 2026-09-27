@@ -88,7 +88,7 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString('closePurchasePanel(dialog)', $script);
         self::assertStringContainsString('Weline.UI.dialog', $script);
         self::assertStringContainsString(
-            'product-purchase-actions.js?v=20260922-purchase-panel-binquery',
+            'product-purchase-actions.js?v=20260326-purchase-panel-css1',
             $modules,
         );
     }
@@ -128,9 +128,23 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringNotContainsString('fetch(url.toString()', $script);
         self::assertStringNotContainsString('data-purchase-panel-url', $template);
         self::assertStringContainsString(
-            'product-purchase-actions.js?v=20260922-purchase-panel-binquery',
+            'product-purchase-actions.js?v=20260326-purchase-panel-css1',
             $modules,
         );
+    }
+
+    public function testPurchasePanelEnsuresProductInfoAssetsOnListingHosts(): void
+    {
+        $script = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/widgets/product-purchase-actions.js',
+        );
+
+        // Listing pages never bake product-info @widget.source; panel must ensure CSS/JS.
+        self::assertStringContainsString('function ensurePurchasePanelProductInfoAssets()', $script);
+        self::assertStringContainsString('ensurePurchasePanelProductInfoAssets()', $script);
+        self::assertStringContainsString('Weline_Product::css/widgets/product-native-detail.css', $script);
+        self::assertStringContainsString('Weline_Product::js/widgets/widget-product-info-0.js', $script);
+        self::assertStringContainsString('data-purchase-panel-css', $script);
     }
 
     public function testAddOfferResolvesCartTypeFromPreferredModeBeforeSsrHtml(): void

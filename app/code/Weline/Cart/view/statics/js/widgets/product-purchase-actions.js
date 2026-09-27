@@ -809,6 +809,105 @@
     }
 
     /**
+     * Listing pages do not bake product-info @widget.source. Purchase-panel HTML is
+     * AJAX-injected, so product-native-detail.css (hero-grid / gallery / buybox) is
+     * missing unless we ensure it here — same pattern as HelpPay ensureShareCss.
+     */
+    const PRODUCT_INFO_ASSET_VER = '20260326-purchase-panel-css1';
+    const PRODUCT_INFO_CSS = [
+        'Weline_Product::css/widgets/product-native-detail.css?v=' + PRODUCT_INFO_ASSET_VER,
+        'Weline_Theme::css/widgets/widget-instance-styles.css?v=' + PRODUCT_INFO_ASSET_VER,
+    ];
+    const PRODUCT_INFO_JS = [
+        'Weline_Theme::js/widgets/widget-assets-runtime.js?v=' + PRODUCT_INFO_ASSET_VER,
+        'Weline_Product::js/widgets/widget-product-info-0.js?v=' + PRODUCT_INFO_ASSET_VER,
+        'Weline_Product::js/widgets/widget-product-info-1.js?v=' + PRODUCT_INFO_ASSET_VER,
+        'Weline_Theme::js/widgets/widget-instance-styles.js?v=' + PRODUCT_INFO_ASSET_VER,
+    ];
+
+    function resolvePurchasePanelAssetHref(modulePath) {
+        const loader = global.Weline && global.Weline.loader;
+        if (loader && typeof loader.resolveStaticPath === 'function') {
+            const resolved = loader.resolveStaticPath(modulePath);
+            if (resolved) {
+                return resolved;
+            }
+        }
+        const bare = String(modulePath || '').replace(/^Weline_([^:]+)::/, '/static/Weline/$1/');
+        return bare.charAt(0) === '/' ? bare : ('/' + bare);
+    }
+
+    function ensurePurchasePanelStylesheet(modulePath) {
+        const href = resolvePurchasePanelAssetHref(modulePath);
+        if (!href) {
+            return Promise.resolve();
+        }
+        const key = modulePath.split('?')[0];
+        const marker = 'data-purchase-panel-css';
+        const existing = Array.prototype.find.call(
+            document.querySelectorAll('link[' + marker + ']'),
+            function (el) { return el.getAttribute(marker) === key; },
+        );
+        if (existing) {
+            return Promise.resolve();
+        }
+        return new Promise(function (resolve) {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            link.setAttribute(marker, key);
+            link.addEventListener('load', function () { resolve(); }, { once: true });
+            link.addEventListener('error', function () { resolve(); }, { once: true });
+            document.head.appendChild(link);
+            // Cap wait so a hung CSS request cannot block the panel forever.
+            global.setTimeout(resolve, 2500);
+        });
+    }
+
+    function ensurePurchasePanelScript(modulePath) {
+        const href = resolvePurchasePanelAssetHref(modulePath);
+        if (!href) {
+            return Promise.resolve();
+        }
+        const key = modulePath.split('?')[0];
+        const marker = 'data-purchase-panel-js';
+        const existing = Array.prototype.find.call(
+            document.querySelectorAll('script[' + marker + ']'),
+            function (el) { return el.getAttribute(marker) === key; },
+        );
+        if (existing) {
+            return Promise.resolve();
+        }
+        // Already baked on PDP (or another host): skip duplicate fetch.
+        const fileHint = key.replace(/^Weline_[^:]+::/, '');
+        if (fileHint && document.querySelector('script[src*="' + fileHint.replace(/"/g, '') + '"]')) {
+            return Promise.resolve();
+        }
+        return new Promise(function (resolve) {
+            const script = document.createElement('script');
+            script.src = href;
+            script.async = false;
+            script.setAttribute(marker, key);
+            script.addEventListener('load', function () { resolve(); }, { once: true });
+            script.addEventListener('error', function () { resolve(); }, { once: true });
+            document.head.appendChild(script);
+            global.setTimeout(resolve, 2500);
+        });
+    }
+
+    function ensurePurchasePanelProductInfoAssets() {
+        // Styles can load in parallel; widget JS must stay ordered (runtime → info-0 → …).
+        const cssReady = Promise.all(PRODUCT_INFO_CSS.map(ensurePurchasePanelStylesheet));
+        let jsChain = Promise.resolve();
+        PRODUCT_INFO_JS.forEach(function (path) {
+            jsChain = jsChain.then(function () {
+                return ensurePurchasePanelScript(path);
+            });
+        });
+        return Promise.all([cssReady, jsChain]);
+    }
+
+    /**
      * Rewrite absolute panel/cart URLs onto the current page origin.
      * Product-card HTML may be reused from Worker :19655 into public :9555 pages;
      * fetching the Worker absolute URL from HTTPS causes Failed to fetch / CSP blocks.
@@ -992,6 +1091,9 @@
             panelParams.offer = offerUuid;
         }
 
+        // Kick CSS/JS ensure in parallel with BinQuery so listing hosts get product-info styles.
+        const assetsReady = ensurePurchasePanelProductInfoAssets();
+
         let payload;
         try {
             const productApi = await waitForProductApi();
@@ -1013,6 +1115,11 @@
             );
             showPurchasePanelError(body, msg);
             throw new Error(msg);
+        }
+        try {
+            await assetsReady;
+        } catch (e) {
+            // Styles/scripts are best-effort; panel HTML still usable.
         }
         if (body) {
             body.innerHTML = String(payload.html);

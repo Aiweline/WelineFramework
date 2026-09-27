@@ -16,11 +16,11 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     productExpressPay: {
         paths: [
-            "Weline_Payment::js/product-express-pay.js?v=20260925-express-silent1"
+            "Weline_Payment::js/product-express-pay.js?v=20260926-buy-now-isol1"
         ],
         globalVar: "WelineProductExpressPay",
         load: "lazy",
-        description: "PDP 快捷智能支付：加车后 startExpressCheckout 并打开支付商窗体"
+        description: "PDP 快捷智能支付：buy_now 只结当前商品并打开支付商窗体"
     },
     paypalWalletButtons: {
         paths: [

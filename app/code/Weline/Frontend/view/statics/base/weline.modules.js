@@ -176,11 +176,11 @@
             description: "支付生命周期：weline:payment:* 统一事件"
         },
         productExpressPay: {
-            origin_paths: ["app/code/Weline/Payment/view/statics/js/product-express-pay.js?v=20260925-express-silent1"],
-            paths: ["Weline_Payment::js/product-express-pay.js?v=20260925-express-silent1"],
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/product-express-pay.js?v=20260926-buy-now-isol1"],
+            paths: ["Weline_Payment::js/product-express-pay.js?v=20260926-buy-now-isol1"],
             globalVar: "WelineProductExpressPay",
             load: "lazy",
-            description: "PDP 快捷智能支付：加车后 startExpressCheckout 并打开支付商窗体"
+            description: "PDP 快捷智能支付：buy_now 只结当前商品并打开支付商窗体"
         },
         paypalWalletButtons: {
             origin_paths: ["app/code/Weline/Payment/view/statics/js/paypal-wallet-buttons.js?v=20260920-gpay-apay1"],
@@ -256,8 +256,8 @@
             description: "Geo定位模块（浏览器定位和IP定位）"
         },
         shippingCheckoutAddress: {
-            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260921-cpay-addr3"],
-            paths: ["Weline_Shipping::js/widgets/checkout-shipping-address.js?v=20260921-cpay-addr3"],
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260926-save-loading"],
+            paths: ["Weline_Shipping::js/widgets/checkout-shipping-address.js?v=20260926-save-loading"],
             globalVar: "WelineShippingCheckoutAddress",
             description: "结账收货地址部件"
         },
@@ -268,8 +268,8 @@
             description: "账户中心发货/收货地址维护"
         },
         cart: {
-            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js?v=20260923-remove-from-cart-pixel1", "app/code/Weline/Cart/view/statics/js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20260922-purchase-panel-binquery"],
-            paths: ["Weline_Cart::js/cart.js?v=20260923-remove-from-cart-pixel1", "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "Weline_Cart::js/widgets/product-purchase-actions.js?v=20260922-purchase-panel-binquery"],
+            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js?v=20260923-remove-from-cart-pixel1", "app/code/Weline/Cart/view/statics/js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20260326-purchase-panel-css1"],
+            paths: ["Weline_Cart::js/cart.js?v=20260923-remove-from-cart-pixel1", "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "Weline_Cart::js/widgets/product-purchase-actions.js?v=20260326-purchase-panel-css1"],
             globalVar: "WelineCartPurchaseActions",
             load: "defer",
             description: "万能购物车：优惠券事件 / 游客续期 / 加购交互 / remove_from_cart 像素标记"
@@ -282,8 +282,8 @@
             description: "结账生命周期：weline:checkout:order-created / success"
         },
         checkoutExpressReview: {
-            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260921-shipping-i18n1"],
-            paths: ["Weline_Checkout::js/express-review.js?v=20260921-shipping-i18n1"],
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260926-enter-pixel"],
+            paths: ["Weline_Checkout::js/express-review.js?v=20260926-enter-pixel"],
             globalVar: "WelineCheckoutExpressReview",
             load: "lazy",
             description: "快捷支付回头确认页：摘要/缺口/确认收款"
