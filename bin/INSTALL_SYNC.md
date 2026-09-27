@@ -23,6 +23,28 @@
 | 安装后命令 | 安装结束后若 php 可用则执行：`php setup/server_installer/run.php`（内部完成 composer、env:check、env:install、尝试安装 event 推荐扩展、setup:upgrade×2、server:stop、server:start） |
 | 部署用户 / 防特权污染 | **Linux**：`install.bash` 以 root 启动时可创建 `WELINE_USER` 并切用户；`run.php` 对 `bin/w`/composer 用 `runuser`/`sudo -u` 降权。**Windows**：允许管理员跑 `install.bat`；框架命令经 `DeployUserCommandRunner` 以部署用户 Limited/凭据降权（可选 `WELINE_USER_PASSWORD` 跨用户）；`Cli` 在 elevated 时重执行。**macOS**：禁止 sudo/root 安装（Homebrew）。 |
 
+## 面板 / 平台一键部署（统一目录）
+
+**唯一入口：** `dev/installer/`  
+**平台实现：** `dev/installer/platforms/`  
+公共规则与脚本：`COMMON.md`、`scripts/orchestrate-install.sh`  
+总打包：`bash dev/installer/package-all.sh`
+
+| 平台 | 目录 |
+|------|------|
+| 宝塔第三方插件 | `dev/installer/platforms/bt-weline-deploy/` |
+| 宝塔官方商店上架 | `dev/installer/platforms/bt-official-store/` |
+| aaPanel | `dev/installer/platforms/aapanel-weline-deploy/` |
+| 1Panel | `dev/installer/platforms/1panel-weline-deploy/` |
+| Docker Compose | `dev/installer/platforms/docker-weline-deploy/` |
+| Coolify / CapRover / CasaOS | `platforms/coolify-…` / `caprover-…` / `casaos-…` |
+| 云市场镜像 | `platforms/cloud-marketplace-weline/` |
+| Softaculous/cPanel（延期） | `platforms/softaculous-cpanel-weline/` |
+
+旧路径 `dev/tools/one-click-install/`、`dev/tools/*-weline-deploy/` 等已删除；请只使用 `dev/installer/`。
+
+**禁止**在任一编排壳内平行实现 composer / 建库 / `setup:upgrade`；必须调用本文件与 `setup/server_installer/run.php` 描述的官方链（`bash bin/install.sh [-y|-f]`）。
+
 ## 修改时检查
 
 - [ ] 默认组件/参数解析是否一致
