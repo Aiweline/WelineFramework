@@ -14,30 +14,39 @@ if (!defined('BP')) {
 
 final class CloudflareOAuthStateStoreTest extends TestCase
 {
-    public function testStateIsHashedOneTimeAndCallbackBound(): void
+    public function testStateIsHashedOneTimeAndCallbackBoundWithPkce(): void
     {
         $session = $this->session();
         $store = new CloudflareOAuthStateStore($session);
-        $state = $store->issue(
+        $issued = $store->issue(
             'https://admin.example.com/backend/cdn/backend/oauth/callback',
             'weline_mail/backend',
         );
 
+        self::assertArrayHasKey('state', $issued);
+        self::assertArrayHasKey('code_challenge', $issued);
+        self::assertSame('S256', $issued['code_challenge_method']);
+        self::assertMatchesRegularExpression('/^[A-Za-z0-9]/', $issued['code_challenge']);
         self::assertStringNotContainsString(
-            $state,
+            $issued['state'],
             json_encode($session->values, JSON_THROW_ON_ERROR),
         );
-        self::assertSame(
-            ['return_route' => 'weline_mail/backend'],
-            $store->consume(
-                $state,
-                'https://admin.example.com/backend/cdn/backend/oauth/callback',
-            ),
+
+        $context = $store->consume(
+            $issued['state'],
+            'https://admin.example.com/backend/cdn/backend/oauth/callback',
         );
+        self::assertSame('weline_mail/backend', $context['return_route']);
+        self::assertGreaterThanOrEqual(43, strlen($context['code_verifier']));
+        $expectedChallenge = rtrim(
+            strtr(base64_encode(hash('sha256', $context['code_verifier'], true)), '+/', '-_'),
+            '=',
+        );
+        self::assertSame($expectedChallenge, $issued['code_challenge']);
 
         $this->expectException(\DomainException::class);
         $store->consume(
-            $state,
+            $issued['state'],
             'https://admin.example.com/backend/cdn/backend/oauth/callback',
         );
     }

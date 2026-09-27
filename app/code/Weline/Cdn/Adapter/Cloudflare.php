@@ -12,14 +12,20 @@ declare(strict_types=1);
 namespace Weline\Cdn\Adapter;
 
 use Weline\Cdn\Api\AdapterInterface;
+use Weline\Cdn\Api\OauthCapableProviderInterface;
+use Weline\Cdn\Service\CloudflareOAuthService;
 use Weline\Framework\Exception\Core;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * Cloudflare CDN适配器
- * 
- * 实现 Cloudflare v4 API 的缓存清理和规则管理功能
+ *
+ * 实现 Cloudflare v4 API 的缓存清理和规则管理功能；
+ * 一键 OAuth 授权逻辑由本 Provider 自行适配（委托 CloudflareOAuthService）。
  */
-class Cloudflare implements AdapterInterface
+class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
 {
     /**
      * Cloudflare API基础URL
@@ -703,8 +709,13 @@ class Cloudflare implements AdapterInterface
             CURLOPT_CUSTOMREQUEST => $method,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_SSL_VERIFYPEER => $sslVerifyPeer,
-            CURLOPT_SSL_VERIFYHOST => $sslVerifyHost
+            CURLOPT_SSL_VERIFYHOST => $sslVerifyHost,
+            // 与 Framework Http Request 一致：禁用本机 HTTP(S)_PROXY（常见 Clash 残留 127.0.0.1 无端口 → 秒失败）
+            CURLOPT_PROXY => '',
+            CURLOPT_PROXYUSERPWD => '',
+            CURLOPT_PROXYTYPE => CURLPROXY_HTTP,
         ]);
 
         // 如果是POST或PUT，添加请求体
@@ -743,5 +754,121 @@ class Cloudflare implements AdapterInterface
             throw new Core(__('Cloudflare 返回无效响应'));
         }
         return $decodedResponse;
+    }
+
+    public function supportsOneClickOauth(): bool
+    {
+        return true;
+    }
+
+    public function isOauthConfigured(): bool
+    {
+        return $this->oauthService()->isConfigured();
+    }
+
+    public function getOauthConnectLabel(): string
+    {
+        return (string)__('连接或重新授权 Cloudflare');
+    }
+
+    public function getOauthConfigUrl(): string
+    {
+        return $this->oauthSystemConfigUrl('cdn/cloudflare/oauth_client_id');
+    }
+
+    public function getOauthCallbackUrl(): string
+    {
+        $request = ObjectManager::getInstance(Request::class);
+        $raw = rtrim(
+            (string)$request->getUrlBuilder()->getBackendUrl('cdn/backend/oauth/callback'),
+            '?&',
+        );
+
+        return Url::withoutStorefrontLocalizationPrefix($raw);
+    }
+
+    public function getOauthRequestedScopesLabel(): string
+    {
+        return $this->oauthService()->requestedScopesLabel();
+    }
+
+    public function getOauthCredentialHints(): array
+    {
+        $service = $this->oauthService();
+        if ($service->isConfigured()) {
+            return [];
+        }
+
+        $callbackUrl = $this->getOauthCallbackUrl();
+        $idUrl = $this->oauthSystemConfigUrl('cdn/cloudflare/oauth_client_id');
+        $secretUrl = $this->oauthSystemConfigUrl('cdn/cloudflare/oauth_client_secret');
+
+        if ($service->hasIdenticalClientCredentials()) {
+            return [
+                'tone' => 'danger',
+                'kind' => 'identical',
+                'title' => (string)__('已保存，但 Client ID 与 Secret 填成一样了'),
+                'body' => (string)__('系统已读到两项配置，但内容完全相同（通常是把 Client ID 粘进了 Secret）。这样无法跳转授权；到 Cloudflare 会报 invalid_client。'),
+                'action_label' => (string)__('去修正 Client Secret'),
+                'action_url' => $secretUrl,
+                'callback_url' => $callbackUrl,
+            ];
+        }
+
+        if ($service->hasMisplacedClientCredentials()) {
+            return [
+                'tone' => 'danger',
+                'kind' => 'misplaced',
+                'title' => (string)__('已保存，但 Client ID / Secret 填反了'),
+                'body' => (string)__('系统已读到两项配置，因此不是「尚未配置」。对照 Cloudflare「客户端已创建」弹窗：下面「Your Client ID」是 Client ID（32 位十六进制）；上面「您的客户端密钥」是 Secret（常以 cfoc_ 开头）。对调粘贴会导致无法授权。'),
+                'action_label' => (string)__('去修正 Client ID / Secret'),
+                'action_url' => $idUrl,
+                'callback_url' => $callbackUrl,
+            ];
+        }
+
+        return [
+            'tone' => 'warning',
+            'kind' => 'empty',
+            'title' => (string)__('尚未配置 Cloudflare OAuth'),
+            'body' => (string)__('系统配置里还没有 Client ID / Secret。直接点「连接」不会跳转 Cloudflare，只会回到本页。请先填写并保存，再回来授权。'),
+            'action_label' => (string)__('打开 Cloudflare OAuth 配置'),
+            'action_url' => $idUrl,
+            'callback_url' => $callbackUrl,
+        ];
+    }
+
+    public function startOauthAuthorization(string $callbackUrl, string $returnRoute): string
+    {
+        return $this->oauthService()->authorizationUrl($callbackUrl, $returnRoute);
+    }
+
+    public function completeOauthAuthorization(string $code, string $state, string $callbackUrl): array
+    {
+        return $this->oauthService()->completeAuthorization($code, $state, $callbackUrl);
+    }
+
+    public function consumeOauthFailureState(string $state, string $callbackUrl): array
+    {
+        return $this->oauthService()->consumeFailureState($state, $callbackUrl);
+    }
+
+    private function oauthService(): CloudflareOAuthService
+    {
+        return ObjectManager::getInstance(CloudflareOAuthService::class);
+    }
+
+    private function oauthSystemConfigUrl(string $guideKey): string
+    {
+        $request = ObjectManager::getInstance(Request::class);
+
+        return (string)$request->getUrlBuilder()->getBackendUrl(
+            'weline_systemconfig/backend/config',
+            [
+                'module' => 'Weline_Cdn',
+                'area' => 'backend',
+                'guide_key' => $guideKey,
+            ],
+        );
     }
 }

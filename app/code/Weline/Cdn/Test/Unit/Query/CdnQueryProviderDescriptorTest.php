@@ -80,6 +80,8 @@ final class CdnQueryProviderDescriptorTest extends TestCase
 
         $expectedSources = [
             'saveAccount' => 'Weline_Cdn::cdn_account_save',
+            'deleteAccount' => 'Weline_Cdn::cdn_account_delete',
+            'setDefaultAccount' => 'Weline_Cdn::cdn_account_set_default',
             'saveDomain' => 'Weline_Cdn::cdn_domain_save',
         ];
         foreach ($expectedSources as $name => $sourceId) {
@@ -110,6 +112,14 @@ final class CdnQueryProviderDescriptorTest extends TestCase
         self::assertSame(32, $accountParams['credentials']['max_items']);
         self::assertSame('bool', $accountParams['is_default']['type']);
 
+        self::assertSame(
+            ['account_id' => ['type' => 'int', 'required' => true, 'min' => 1, 'description' => __('账户 ID')]],
+            $operations['deleteAccount']['params'],
+        );
+        self::assertSame(
+            ['account_id' => ['type' => 'int', 'required' => true, 'min' => 1, 'description' => __('账户 ID')]],
+            $operations['setDefaultAccount']['params'],
+        );
         $domainParams = $operations['saveDomain']['params'];
         self::assertSame(
             ['domain_id', 'site_id', 'adapter', 'domain_name', 'zone_id', 'account_id', 'inherit_default', 'warmup_interval_seconds', 'enabled'],

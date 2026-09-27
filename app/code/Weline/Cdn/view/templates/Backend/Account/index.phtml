@@ -5,216 +5,638 @@
  * @var \Weline\Framework\View\Template $this
  */
 
+use Weline\Cdn\Api\OauthCapableProviderInterface;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Cdn\Service\AdapterResolver;
+
 $accounts = $this->getData('accounts') ?: [];
 $total = (int)$this->getData('total');
+$activeCount = (int)$this->getData('activeCount');
+$defaultCount = (int)$this->getData('defaultCount');
 $page = (int)$this->getData('page');
 $pageSize = (int)$this->getData('pageSize');
 $totalPages = (int)$this->getData('totalPages');
 $search = $this->getData('search') ?: '';
 $adapter = $this->getData('adapter') ?: '';
 $adapters = $this->getData('adapters') ?: [];
-$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
-    | JSON_UNESCAPED_SLASHES
-    | JSON_HEX_TAG
-    | JSON_HEX_AMP
-    | JSON_HEX_APOS
-    | JSON_HEX_QUOT;
-$jsonForScript = static function (mixed $value) use ($jsonForScriptFlags): string {
-    $json = json_encode((string)$value, $jsonForScriptFlags);
-    return is_string($json) ? $json : '""';
-};
+/** @var array<string, OauthCapableProviderInterface> $oauthProviders */
+$oauthProviders = $this->getData('oauthProviders');
+if (!is_array($oauthProviders)) {
+    // 兜底：避免旧 OPcache 控制器未 assign 时整页无 CTA
+    try {
+        $oauthProviders = ObjectManager::getInstance(AdapterResolver::class)->getOauthCapableAdapters();
+    } catch (\Throwable) {
+        $oauthProviders = [];
+    }
+}
 $escapeAttr = static function (mixed $value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 };
+$oauthError = trim((string)($this->request->getGet('oauth_error', ''))) === '1';
+$oauthErrorAdapter = trim((string)($this->request->getGet('oauth_adapter', '')));
+if ($oauthErrorAdapter === '') {
+    $oauthErrorAdapter = 'cloudflare';
+}
+$oauthCfError = strtolower(trim((string)($this->request->getGet('oauth_cf_error', ''))));
+$oauthCfDesc = trim((string)($this->request->getGet('oauth_cf_desc', '')));
+$oauthRedirectError = in_array($oauthCfError, ['invalid_request', 'redirect_uri_mismatch'], true)
+    || str_contains(strtolower($oauthCfDesc), 'redirect_uri');
+/** @var OauthCapableProviderInterface|null $oauthErrorProvider */
+$oauthErrorProvider = $oauthProviders[$oauthErrorAdapter] ?? null;
+$oauthErrorProviderName = $oauthErrorProvider !== null && method_exists($oauthErrorProvider, 'getAdapterName')
+    ? (string)$oauthErrorProvider->getAdapterName()
+    : $oauthErrorAdapter;
+$oauthErrorTitle = (string)__('%{1} OAuth 未能开始', $oauthErrorProviderName);
+$oauthErrorBody = (string)__('发起授权时出错。请先看下方凭据状态；若 Client ID / Secret 已正确，可再点「%{1}」。', $oauthErrorProvider !== null ? $oauthErrorProvider->getOauthConnectLabel() : __('连接'));
+if ($oauthCfError === 'access_denied') {
+    $oauthErrorTitle = (string)__('%{1} 授权已取消', $oauthErrorProviderName);
+    $oauthErrorBody = (string)__('你在授权页拒绝了授权，或关闭了授权页。若要继续，请再点「%{1}」。', $oauthErrorProvider !== null ? $oauthErrorProvider->getOauthConnectLabel() : __('连接'));
+} elseif ($oauthCfError === 'invalid_scope') {
+    $oauthErrorTitle = (string)__('%{1} 拒绝了本次授权（scope 不匹配）', $oauthErrorProviderName);
+    $oauthErrorBody = (string)__('权限要在 Cloudflare 控制台勾，不在本页填写。打开 OAuth clients → 编辑该 Client →「选择权限范围」，勾选 Zone Read、DNS Write、Cache Purge、Cache Settings Write 并保存，再点连接。授权页无法带回未勾选的权限。');
+} elseif (in_array($oauthCfError, ['invalid_request', 'redirect_uri_mismatch'], true)
+    || str_contains(strtolower($oauthCfDesc), 'redirect_uri')
+) {
+    $oauthErrorTitle = (string)__('%{1} 拒绝了本次授权（回调 URL 不匹配）', $oauthErrorProviderName);
+    $oauthErrorBody = (string)__('请展开下方「回调 URL 与权限准备」，把回调 URL 整段原样粘进供应商 OAuth Client 的 Redirect URLs（可登记多条），保存后再点连接。');
+} elseif ($oauthCfError === 'invalid_client') {
+    $oauthErrorTitle = (string)__('%{1} 拒绝了本次授权（invalid_client）', $oauthErrorProviderName);
+    $oauthErrorBody = (string)__('Client ID / Secret 无效或填错。请到系统配置核对两项。');
+} elseif ($oauthCfError === 'connect_failed' || $oauthCfError === 'exchange_failed') {
+    $oauthErrorTitle = (string)__('%{1} OAuth 未能完成', $oauthErrorProviderName);
+    $oauthErrorBody = $oauthCfDesc !== ''
+        ? $oauthCfDesc
+        : (string)__('发起或换票失败。请核对 OAuth 凭据与回调 URL 后重试。');
+} elseif ($oauthCfError !== '') {
+    $oauthErrorTitle = (string)__('%{1} OAuth 返回错误：%{2}', $oauthErrorProviderName, $oauthCfError);
+    if ($oauthCfDesc !== '') {
+        $oauthErrorBody = $oauthCfDesc;
+    }
+}
+$kpis = [
+    ['icon' => 'cloud', 'value' => $total, 'label' => __('账户总数')],
+    ['icon' => 'check-circle', 'value' => $activeCount, 'label' => __('已激活')],
+    ['icon' => 'star', 'value' => $defaultCount, 'label' => __('默认账户')],
+];
 ?>
 
-<!-- 消息提示 -->
-<div class="w-grid" style="--w-mb:var(--weline-space-4);">
-    <template>Weline_Component::message.phtml</template>
-</div>
+<div class="w-grid w-backend-page" data-testid="cdn-account-management">
+    <div style="--w-span:12;">
+        <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+            <template>Weline_Component::message.phtml</template>
+        </div>
 
-<!-- 操作栏 -->
-<div class="action-toolbar" data-testid="cdn-account-management">
-    <div class="action-toolbar-left" data-testid="cdn-account-create">
-        <block class='Weline\Component\Block\OffCanvas'
-               template='Weline_Component::off-canvas.phtml'
-               title='@lang(添加账户)'
-               cache='0'
-               id='cdn_account_add_offcanvas'
-               action='*/backend/account/form'
-               target-tag='button'
-               icon='plus'
-               submit-button-text='@lang(保存)'
-               submit-tone='primary'
-               target-button-text='@lang(添加账户)'
-               target-tone='primary'
-               flush-button-text='@lang(刷新)'
-               flush-tone='neutral'
-               flush='1'
-               save='1'
-               save-form='#accountForm'
-               close-button-show='1'
-               close-button-text='@lang(关闭)'
-               direction='right'
-               drawer-size='lg'
-
-        />
-    </div>
-    <div class="action-toolbar-right">
-        <w:form method="get" class="search-form">
-            <input type="text" name="search" class="w-input" placeholder="<?= __('搜索账户名称或描述') ?>" value="<?= htmlspecialchars($search) ?>" data-size="sm">
-            <select name="adapter" class="w-select" data-size="sm">
-                <option value=""><?= __('所有适配器') ?></option>
-                <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
-                    <option value="<?= $adapterCode ?>" <?= $adapter === $adapterCode ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($adapterInstance->getAdapterName()) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-            <button type="submit" class="w-button" data-tone="primary" data-size="sm">
-                <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
-            </button>
-            <a href="@backend-url('*/backend/account/index')" class="w-button" data-tone="neutral" data-size="sm">
-                <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
-            </a>
-        </w:form>
-    </div>
-</div>
-
-<!-- 账户列表卡片 -->
-<div class="w-card">
-    <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
-        <?php if (empty($accounts)): ?>
-            <div class="empty-state w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
-                <w:icon name="user" size="sm"></w:icon>
-                <h5 style="--w-mt:var(--weline-space-4);"><?= __('暂无账户数据') ?></h5>
-                <p class="w-text" data-tone="muted"><?= __('点击「添加账户」按钮创建第一个CDN账户') ?></p>
-            </div>
-        <?php else: ?>
-            <div class="w-table-wrap">
-                <table class="w-table" style="--w-mb:0;">
-                    <thead>
-                        <tr>
-                            <th style="width: 80px;"><?= __('ID') ?></th>
-                            <th><?= __('账户名称') ?></th>
-                            <th style="width: 120px;"><?= __('适配器') ?></th>
-                            <th><?= __('描述') ?></th>
-                            <th style="width: 100px;"><?= __('状态') ?></th>
-                            <th style="width: 100px;"><?= __('默认账户') ?></th>
-                            <th style="width: 160px;"><?= __('创建时间') ?></th>
-                            <th style="width: 280px;"><?= __('操作') ?></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($accounts as $account): ?>
-                            <tr>
-                                <td><?= $account->getData('account_id') ?></td>
-                                <td>
-                                    <strong><?= htmlspecialchars($account->getData('name')) ?></strong>
-                                </td>
-                                <td>
-                                    <?php 
-                                    $adapterCode = $account->getData('adapter');
-                                    $adapterName = isset($adapters[$adapterCode]) 
-                                        ? $adapters[$adapterCode]->getAdapterName() 
-                                        : $adapterCode;
-                                    ?>
-                                    <span class="w-badge" data-w-background="info"><?= htmlspecialchars($adapterName) ?></span>
-                                </td>
-                                <td>
-                                    <span class="w-text" data-tone="muted">
-                                        <?= htmlspecialchars($account->getData('description') ?: '-') ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <?php if ($account->getData('status') === 'active'): ?>
-                                        <span class="w-badge" data-w-background="success"><?= __('激活') ?></span>
-                                    <?php else: ?>
-                                        <span class="w-badge" data-w-background="muted"><?= __('未激活') ?></span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php if ($account->getData('is_default')): ?>
-                                        <span class="w-badge" data-w-background="primary">
-                                            <w:icon name="star" size="sm"></w:icon> <?= __('是') ?>
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('否') ?></span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <small class="w-text" data-tone="muted">
-                                        <?= date('Y-m-d H:i', $account->getData('created_at')) ?>
-                                    </small>
-                                </td>
-                                <td>
-                                    <div class="w-button-group">
-                                        <a href="@backend-url('*/backend/account/form')?id=<?= $account->getData('account_id') ?>" class="w-button" title="<?= __('编辑账户') ?>" data-tone="primary">
-                                            <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
-                                        </a>
-                                        <?php if (!$account->getData('is_default')): ?>
-                                            <button type="button" class="w-button" data-cdn-account-action="set-default" data-account-id="<?= $escapeAttr($account->getData('account_id')) ?>" title="<?= __('设为默认账户') ?>" data-tone="info">
-                                                <w:icon name="star" size="sm"></w:icon> <?= __('设默认') ?>
-                                            </button>
-                                        <?php endif; ?>
-                                        <a href="@backend-url('*/backend/account/domains')?id=<?= $account->getData('account_id') ?>" class="w-button" title="<?= __('管理关联域名') ?>" data-tone="neutral">
-                                            <w:icon name="globe" size="sm"></w:icon> <?= __('域名') ?>
-                                        </a>
-                                        <button type="button" class="w-button" w-delete="true" data-provider="cdn" data-operation="deleteAccount" w-var-account_id="<?= $account->getData('account_id') ?>" w-msg="<?= __('确定要删除账户 "%{1}" 吗？此操作不可恢复！', htmlspecialchars($account->getData('name'))) ?>" title="<?= __('删除账户') ?>" data-tone="danger">
-                                            <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+        <?php if ($oauthError): ?>
+            <div class="w-alert" data-tone="danger" data-testid="cdn-oauth-error" style="--w-mb:var(--weline-space-4);">
+                <div class="w-alert__content" style="gap:var(--weline-space-2);">
+                    <strong class="w-alert__title"><?= $escapeAttr($oauthErrorTitle) ?></strong>
+                    <p class="w-text" data-size="sm" style="--w-mb:0;">
+                        <?= $escapeAttr($oauthErrorBody) ?>
+                    </p>
+                    <?php if ($oauthCfError !== '' && $oauthCfDesc !== '' && !in_array($oauthCfError, ['connect_failed', 'exchange_failed'], true)): ?>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;" data-testid="cdn-oauth-cf-desc">
+                            <?= $escapeAttr(__('供应商原文：%{1}', $oauthCfDesc)) ?>
+                        </p>
+                    <?php endif; ?>
+                    <?php if ($oauthCfError === 'invalid_scope'): ?>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;" data-testid="cdn-oauth-scopes-hint">
+                            <?= __('提示：本站连接时会向 Cloudflare 申请上述权限；请到供应商控制台勾选，勿在账户页粘贴或修改 scope 字符串。') ?>
+                        </p>
+                        <?php if ($oauthErrorAdapter === 'cloudflare'): ?>
+                            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                <a class="w-button" href="https://dash.cloudflare.com/?to=/:account/oauth-clients" target="_blank" rel="noopener noreferrer" data-tone="primary" data-size="sm" data-testid="cdn-oauth-open-cf-clients-from-error">
+                                    <w:icon name="external-link" size="sm"></w:icon> <?= __('去 Cloudflare 勾选权限') ?>
+                                </a>
+                            </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         <?php endif; ?>
-    </div>
-    
-    <!-- 分页 -->
-    <?php if ($totalPages > 1): ?>
-        <div class="w-card__footer w-cluster" data-justify="between" data-align="center">
-            <div class="w-text" data-tone="muted">
-                <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
+
+        <header
+            class="w-backend-page__heading w-cluster"
+            style="--w-mb:var(--weline-space-4);"
+            data-align="start"
+            data-justify="between"
+            data-wrap="true"
+        >
+            <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                <p class="w-text" data-tone="primary" data-size="sm" style="--w-mb:0;"><?= __('CDN 运维') ?></p>
+                <h4 class="w-backend-page__title" style="--w-mb:0;"><?= __('CDN 账户') ?></h4>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);--w-mb:0;">
+                    <?= __('统一管理各适配器账户、默认账户与关联域名；支持一键授权的供应商在右侧各自发起连接。') ?>
+                </p>
             </div>
-            <nav>
-                <ul class="w-pagination" style="--w-mb:0;">
-                    <?php if ($page > 1): ?>
-                        <li class="w-pagination__item">
-                            <a class="w-pagination__link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
-                                <w:icon name="chevron-left" size="sm"></w:icon> <?= __('上一页') ?>
-                            </a>
-                        </li>
+            <div
+                class="w-cluster"
+                data-align="center"
+                data-wrap="true"
+                style="--w-gap:var(--weline-space-2);"
+                data-testid="cdn-account-create"
+                aria-label="<?= $escapeAttr(__('账户操作')) ?>"
+            >
+                <?php foreach ($oauthProviders as $oauthCode => $oauthProvider): ?>
+                    <?php
+                    $configured = $oauthProvider->isOauthConfigured();
+                    $hints = $oauthProvider->getOauthCredentialHints();
+                    $connectLabel = $oauthProvider->getOauthConnectLabel();
+                    $configUrl = $oauthProvider->getOauthConfigUrl();
+                    $actionUrl = (string)($hints['action_url'] ?? $configUrl);
+                    $actionLabel = (string)($hints['action_label'] ?? __('去配置 OAuth'));
+                    $kind = (string)($hints['kind'] ?? 'empty');
+                    ?>
+                    <?php if ($configured): ?>
+                        <w:form method="post" action="@backend-url{'cdn/backend/oauth/connect'}" data-testid="cdn-oauth-connect-form" data-oauth-adapter="<?= $escapeAttr($oauthCode) ?>">
+                            <input type="hidden" name="return_route" value="cdn/backend/account">
+                            <input type="hidden" name="adapter" value="<?= $escapeAttr($oauthCode) ?>">
+                            <button class="w-button" type="submit" data-tone="primary" data-size="sm" data-testid="cdn-oauth-connect-button" data-oauth-adapter="<?= $escapeAttr($oauthCode) ?>">
+                                <w:icon name="link" size="sm"></w:icon> <?= $escapeAttr($connectLabel) ?>
+                            </button>
+                        </w:form>
+                    <?php else: ?>
+                        <a
+                            class="w-button"
+                            href="<?= $escapeAttr($actionUrl) ?>"
+                            data-tone="primary"
+                            data-size="sm"
+                            data-testid="<?= $escapeAttr($kind === 'identical' ? 'cdn-oauth-fix-secret-button' : ($kind === 'misplaced' ? 'cdn-oauth-fix-misplaced-button' : 'cdn-oauth-config-button')) ?>"
+                            data-oauth-adapter="<?= $escapeAttr($oauthCode) ?>"
+                        >
+                            <w:icon name="settings" size="sm"></w:icon> <?= $escapeAttr($actionLabel) ?>
+                        </a>
                     <?php endif; ?>
-                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                        <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
-                            <a class="w-pagination__link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
-                                <?= $i ?>
+                <?php endforeach; ?>
+                <button
+                    type="button"
+                    class="w-button"
+                    data-tone="neutral"
+                    data-size="sm"
+                    data-w-action="drawer.open"
+                    data-w-target="#cdn-account-drawer"
+                    data-cdn-account-action="create"
+                    data-testid="cdn-account-add-button"
+                >
+                    <w:icon name="plus" size="sm"></w:icon> <?= __('添加账户') ?>
+                </button>
+            </div>
+        </header>
+
+        <?php foreach ($oauthProviders as $oauthCode => $oauthProvider): ?>
+            <?php
+            $configured = $oauthProvider->isOauthConfigured();
+            $hints = $oauthProvider->getOauthCredentialHints();
+            $callbackUrl = $oauthProvider->getOauthCallbackUrl();
+            $scopesLabel = $oauthProvider->getOauthRequestedScopesLabel();
+            $providerName = method_exists($oauthProvider, 'getAdapterName')
+                ? (string)$oauthProvider->getAdapterName()
+                : (string)$oauthCode;
+            ?>
+            <?php if ($configured): ?>
+                <?php
+                // 默认收起：回调/权限准备不应常驻占屏；仅回调 URL 类错误时自动展开。
+                $gateOpen = $oauthError
+                    && $oauthErrorAdapter === (string)$oauthCode
+                    && $oauthRedirectError;
+                $gateState = $gateOpen ? 'open' : 'closed';
+                $gatePanelId = 'cdn-oauth-redirect-uri-panel-' . preg_replace('/[^a-z0-9_-]+/i', '-', (string)$oauthCode);
+                ?>
+                <div
+                    class="w-disclosure w-alert"
+                    data-tone="warning"
+                    data-w-component="disclosure"
+                    data-state="<?= $escapeAttr($gateState) ?>"
+                    data-testid="cdn-oauth-redirect-uri-gate"
+                    data-oauth-adapter="<?= $escapeAttr($oauthCode) ?>"
+                    style="--w-mb:var(--weline-space-4);"
+                >
+                    <button
+                        type="button"
+                        class="w-disclosure__trigger w-cluster"
+                        data-align="center"
+                        data-justify="between"
+                        data-w-disclosure-trigger
+                        aria-controls="<?= $escapeAttr($gatePanelId) ?>"
+                        aria-expanded="<?= $gateOpen ? 'true' : 'false' ?>"
+                        style="inline-size:100%;"
+                        data-testid="cdn-oauth-redirect-uri-gate-toggle"
+                    >
+                        <span class="w-stack" style="--w-gap:var(--weline-space-1);min-inline-size:0;text-align:start;">
+                            <strong class="w-alert__title" style="--w-mb:0;"><?= __('回调 URL 与权限准备') ?></strong>
+                            <span class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
+                                <?= $escapeAttr(__('需要时展开：登记 Redirect URL、对照 Cloudflare 勾选权限（默认收起，避免占屏）。')) ?>
+                            </span>
+                        </span>
+                        <w:icon name="chevron-down" size="sm"></w:icon>
+                    </button>
+                    <div
+                        id="<?= $escapeAttr($gatePanelId) ?>"
+                        class="w-disclosure__panel w-alert__content"
+                        data-w-disclosure-panel
+                        <?= $gateOpen ? '' : 'hidden' ?>
+                        style="gap:var(--weline-space-2);--w-mt:var(--weline-space-3);"
+                    >
+                        <strong class="w-text" data-size="sm" style="--w-mb:0;">
+                            <?= $escapeAttr(__('先做这一步，否则 %{1} 会报 invalid_request（缺参数/回调未登记）', $providerName)) ?>
+                        </strong>
+                        <p class="w-text" data-size="sm" style="--w-mb:0;">
+                            <?= $escapeAttr(__('请把下面整段原样粘进 %{1} OAuth Client 的 Redirect URLs（可登记多条）。若以前登记过带 /CNY/ 的旧地址，请额外再加这一条（无货币段），保存后再点连接。', $providerName)) ?>
+                        </p>
+                        <code
+                            id="cdn-oauth-callback-url-ready-<?= $escapeAttr($oauthCode) ?>"
+                            data-testid="cdn-oauth-callback-url-ready"
+                            class="w-text"
+                            data-size="sm"
+                            style="display:block;max-inline-size:100%;min-inline-size:0;padding:var(--weline-space-2) var(--weline-space-3);border:1px solid var(--weline-theme-border);border-radius:var(--weline-radius-sm);background:var(--weline-theme-surface);color:var(--weline-theme-text);overflow-x:auto;overflow-wrap:anywhere;white-space:pre-wrap;user-select:all;"
+                        ><?= $escapeAttr($callbackUrl) ?></code>
+                        <?php if ($oauthCode === 'cloudflare'): ?>
+                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;" data-testid="cdn-oauth-scopes-gate-hint">
+                                <?= __('提示：同一 Client 请在 Cloudflare「选择权限范围」勾选 Zone Read、DNS Write、Cache Purge、Cache Settings Write（本页仅提示，不在此填写）。') ?>
+                            </p>
+                        <?php elseif ($scopesLabel !== ''): ?>
+                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;" data-testid="cdn-oauth-scopes-gate-hint">
+                                <?= __('提示：请在供应商 OAuth 控制台勾选本站所需权限（本页仅提示，不在此填写）。') ?>
+                            </p>
+                        <?php endif; ?>
+                        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                            <button
+                                type="button"
+                                class="w-button"
+                                data-tone="primary"
+                                data-size="sm"
+                                data-testid="cdn-oauth-copy-callback"
+                                data-cdn-oauth-copy-target="cdn-oauth-callback-url-ready-<?= $escapeAttr($oauthCode) ?>"
+                            >
+                                <w:icon name="clipboard" size="sm"></w:icon> <?= __('复制回调 URL') ?>
+                            </button>
+                            <?php if ($oauthCode === 'cloudflare'): ?>
+                                <a class="w-button" href="https://dash.cloudflare.com/?to=/:account/oauth-clients" target="_blank" rel="noopener noreferrer" data-tone="neutral" data-size="sm" data-testid="cdn-oauth-open-cf-clients">
+                                    <w:icon name="external-link" size="sm"></w:icon> <?= __('打开 Cloudflare OAuth clients') ?>
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php elseif (!empty($hints)): ?>
+                <?php
+                $tone = (string)($hints['tone'] ?? 'warning');
+                $kind = (string)($hints['kind'] ?? 'empty');
+                $hintTitle = (string)($hints['title'] ?? '');
+                $hintBody = (string)($hints['body'] ?? '');
+                $hintActionUrl = (string)($hints['action_url'] ?? $oauthProvider->getOauthConfigUrl());
+                $hintActionLabel = (string)($hints['action_label'] ?? __('去配置 OAuth'));
+                $hintCallback = (string)($hints['callback_url'] ?? $callbackUrl);
+                $testid = match ($kind) {
+                    'identical' => 'cdn-oauth-identical-credentials',
+                    'misplaced' => 'cdn-oauth-misplaced-credentials',
+                    default => 'cdn-oauth-config-hint',
+                };
+                $btnTestid = match ($kind) {
+                    'identical' => 'cdn-oauth-fix-secret-hint-button',
+                    'misplaced' => 'cdn-oauth-config-hint-button',
+                    default => 'cdn-oauth-config-empty-button',
+                };
+                $callbackTestid = match ($kind) {
+                    'misplaced' => 'cdn-oauth-callback-url-misplaced',
+                    'identical' => 'cdn-oauth-callback-url',
+                    default => 'cdn-oauth-callback-url',
+                };
+                ?>
+                <div class="w-alert" data-tone="<?= $escapeAttr($tone) ?>" data-testid="<?= $escapeAttr($testid) ?>" data-oauth-adapter="<?= $escapeAttr($oauthCode) ?>" style="--w-mb:var(--weline-space-4);">
+                    <div class="w-alert__content" style="gap:var(--weline-space-2);">
+                        <strong class="w-alert__title"><?= $escapeAttr($hintTitle) ?></strong>
+                        <p class="w-text" data-size="sm" style="--w-mb:0;">
+                            <?= $escapeAttr($hintBody) ?>
+                        </p>
+                        <p class="w-text" data-size="sm" style="--w-mb:0;">
+                            <?= __('创建 Client 时回调 URL 请填：') ?>
+                        </p>
+                        <code data-testid="<?= $escapeAttr($callbackTestid) ?>" class="w-text" data-size="sm" style="display:block;max-inline-size:100%;min-inline-size:0;padding:var(--weline-space-2) var(--weline-space-3);border:1px solid var(--weline-theme-border);border-radius:var(--weline-radius-sm);background:var(--weline-theme-surface);color:var(--weline-theme-text);overflow-x:auto;overflow-wrap:anywhere;white-space:pre-wrap;user-select:all;"><?= $escapeAttr($hintCallback) ?></code>
+                        <div class="w-cluster">
+                            <a class="w-button" href="<?= $escapeAttr($hintActionUrl) ?>" data-tone="primary" data-size="sm" data-testid="<?= $escapeAttr($btnTestid) ?>">
+                                <w:icon name="settings" size="sm"></w:icon> <?= $escapeAttr($hintActionLabel) ?>
                             </a>
-                        </li>
-                    <?php endfor; ?>
-                    <?php if ($page < $totalPages): ?>
-                        <li class="w-pagination__item">
-                            <a class="w-pagination__link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
-                                <?= __('下一页') ?> <w:icon name="chevron-right" size="sm"></w:icon>
-                            </a>
-                        </li>
-                    <?php endif; ?>
-                </ul>
-            </nav>
-        </div>
-    <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+
+        <section
+            class="w-stat-tiles w-grid"
+            aria-label="<?= $escapeAttr(__('账户概览')) ?>"
+            style="--w-stat-tile-min:9rem;--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"
+        >
+            <?php foreach ($kpis as $kpi): ?>
+                <article class="w-card" data-w-height="full" data-w-shadow="sm">
+                    <div class="w-card__body w-cluster" data-align="center" style="--w-gap:var(--weline-space-3);">
+                        <span aria-hidden="true">
+                            <w:icon name="<?= $escapeAttr($kpi['icon']) ?>" size="sm"></w:icon>
+                        </span>
+                        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                            <strong><?= number_format((int)$kpi['value']) ?></strong>
+                            <span class="w-text" data-tone="muted" data-size="sm"><?= $escapeAttr((string)$kpi['label']) ?></span>
+                        </div>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </section>
+
+<section class="w-card" data-w-shadow="sm" data-testid="cdn-account-list-card" style="--w-mb:var(--weline-space-4);">
+            <div
+                class="w-card__header w-cluster"
+                data-align="center"
+                data-justify="between"
+                data-wrap="true"
+                style="--w-gap:var(--weline-space-3);"
+            >
+                <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                    <strong class="w-text" data-weight="strong"><?= __('账户列表') ?></strong>
+                    <span class="w-text" data-tone="muted" data-size="sm">
+                        <?= __('共 %{1} 条', (string)$total) ?>
+                    </span>
+                </div>
+                <w:form
+                    method="get"
+                    class="w-cluster"
+                    role="search"
+                    aria-label="<?= $escapeAttr(__('搜索账户')) ?>"
+                    data-align="center"
+                    data-wrap="true"
+                    style="--w-gap:var(--weline-space-2);max-inline-size:min(100%,36rem);"
+                    data-testid="cdn-account-search"
+                >
+                    <label class="w-visually-hidden" for="cdn-account-search-input"><?= __('搜索账户名称或描述') ?></label>
+                    <input
+                        id="cdn-account-search-input"
+                        type="search"
+                        name="search"
+                        class="w-input"
+                        data-size="sm"
+                        placeholder="<?= $escapeAttr(__('搜索账户名称或描述')) ?>"
+                        value="<?= $escapeAttr($search) ?>"
+                        autocomplete="off"
+                        style="inline-size:min(100%,12rem);flex:1 1 8rem;min-inline-size:7rem;"
+                    >
+                    <label class="w-visually-hidden" for="cdn-account-adapter-filter"><?= __('所有适配器') ?></label>
+                    <select
+                        id="cdn-account-adapter-filter"
+                        name="adapter"
+                        class="w-select"
+                        data-size="sm"
+                        style="flex:0 1 9rem;min-inline-size:7rem;"
+                        aria-label="<?= $escapeAttr(__('所有适配器')) ?>"
+                    >
+                        <option value=""><?= __('所有适配器') ?></option>
+                        <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
+                            <option value="<?= $escapeAttr($adapterCode) ?>" <?= $adapter === $adapterCode ? 'selected' : '' ?>>
+                                <?= $escapeAttr($adapterInstance->getAdapterName()) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="w-button" data-tone="primary" data-size="sm" style="flex:0 0 auto;white-space:nowrap;">
+                        <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
+                    </button>
+                    <a href="@backend-url('*/backend/account/index')" class="w-button" data-tone="neutral" data-size="sm" style="flex:0 0 auto;white-space:nowrap;">
+                        <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
+                    </a>
+                </w:form>
+            </div>
+
+            <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+                <?php if (empty($accounts)): ?>
+                    <div class="w-empty" data-testid="cdn-account-empty">
+                        <w:icon name="cloud" size="lg"></w:icon>
+                        <p class="w-text" data-weight="strong"><?= __('暂无账户数据') ?></p>
+                        <p class="w-text" data-tone="muted" data-size="sm"><?= __('点击「添加账户」或「连接 Cloudflare」创建第一个 CDN 账户') ?></p>
+                    </div>
+                <?php else: ?>
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle" style="--w-mb:0;" data-testid="cdn-account-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:4.5rem;"><?= __('ID') ?></th>
+                                    <th><?= __('账户名称') ?></th>
+                                    <th style="width:7.5rem;"><?= __('适配器') ?></th>
+                                    <th><?= __('描述') ?></th>
+                                    <th style="width:5.5rem;"><?= __('状态') ?></th>
+                                    <th style="width:6rem;"><?= __('默认账户') ?></th>
+                                    <th style="width:9rem;"><?= __('创建时间') ?></th>
+                                    <th class="w-text" data-align="end" style="width:16rem;"><?= __('操作') ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($accounts as $account): ?>
+                                    <?php
+                                    $adapterCode = $account->getData('adapter');
+                                    $adapterName = isset($adapters[$adapterCode])
+                                        ? $adapters[$adapterCode]->getAdapterName()
+                                        : $adapterCode;
+                                    $accountId = $account->getData('account_id');
+                                    $accountName = (string)$account->getData('name');
+                                    ?>
+                                    <tr>
+                                        <td class="w-text" data-tone="muted"><?= $escapeAttr($accountId) ?></td>
+                                        <td>
+                                            <strong><?= $escapeAttr($accountName) ?></strong>
+                                        </td>
+                                        <td>
+                                            <span class="w-badge" data-tone="info"><?= $escapeAttr($adapterName) ?></span>
+                                        </td>
+                                        <td>
+                                            <span class="w-text" data-tone="muted" data-size="sm">
+                                                <?= $escapeAttr($account->getData('description') ?: '-') ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <?php if ($account->getData('status') === 'active'): ?>
+                                                <span class="w-badge" data-tone="success"><?= __('激活') ?></span>
+                                            <?php else: ?>
+                                                <span class="w-badge" data-tone="neutral"><?= __('未激活') ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if ($account->getData('is_default')): ?>
+                                                <span class="w-badge" data-tone="primary">
+                                                    <w:icon name="star" size="sm"></w:icon> <?= __('是') ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="w-badge" data-tone="neutral"><?= __('否') ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <small class="w-text" data-tone="muted" style="font-variant-numeric:tabular-nums;">
+                                                <?= date('Y-m-d H:i', $account->getData('created_at')) ?>
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <div class="w-button-group w-cluster" data-justify="end" data-wrap="true" style="--w-gap:var(--weline-space-1);">
+                                                <button
+                                                    type="button"
+                                                    class="w-button"
+                                                    title="<?= $escapeAttr(__('编辑账户')) ?>"
+                                                    data-tone="primary"
+                                                    data-size="sm"
+                                                    data-w-action="drawer.open"
+                                                    data-w-target="#cdn-account-drawer"
+                                                    data-cdn-account-action="edit"
+                                                    data-account="<?= $escapeAttr(json_encode([
+                                                        'account_id' => (int)$accountId,
+                                                        'adapter' => (string)$adapterCode,
+                                                        'name' => $accountName,
+                                                        'description' => (string)($account->getData('description') ?: ''),
+                                                        'status' => (string)($account->getData('status') ?: 'active'),
+                                                        'is_default' => (bool)$account->getData('is_default'),
+                                                        'cf_account_id' => (string)(($account->getCredentialsArray()['account_id'] ?? '')),
+                                                        'has_api_token' => trim((string)(($account->getCredentialsArray()['api_token'] ?? ''))) !== '',
+                                                    ], JSON_UNESCAPED_UNICODE)) ?>"
+                                                >
+                                                    <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
+                                                </button>
+                                                <?php if (!$account->getData('is_default')): ?>
+                                                    <button type="button" class="w-button" data-cdn-account-action="set-default" data-account-id="<?= $escapeAttr($accountId) ?>" title="<?= $escapeAttr(__('设为默认账户')) ?>" data-tone="info" data-size="sm">
+                                                        <w:icon name="star" size="sm"></w:icon> <?= __('设默认') ?>
+                                                    </button>
+                                                <?php endif; ?>
+                                                <a href="@backend-url('*/backend/account/domains')?id=<?= $escapeAttr($accountId) ?>" class="w-button" title="<?= $escapeAttr(__('管理关联域名')) ?>" data-tone="neutral" data-size="sm">
+                                                    <w:icon name="globe" size="sm"></w:icon> <?= __('域名') ?>
+                                                </a>
+                                                <button type="button" class="w-button" w-delete="true" data-provider="cdn" data-operation="deleteAccount" w-var-account_id="<?= $escapeAttr($accountId) ?>" w-msg="<?= $escapeAttr(__('确定要删除账户 "%{1}" 吗？此操作不可恢复！', $accountName)) ?>" title="<?= $escapeAttr(__('删除账户')) ?>" data-tone="danger" data-size="sm">
+                                                    <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($totalPages > 1): ?>
+                <div class="w-card__footer w-cluster" data-justify="between" data-align="center" data-wrap="true">
+                    <div class="w-text" data-tone="muted" data-size="sm">
+                        <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
+                    </div>
+                    <nav aria-label="<?= $escapeAttr(__('分页')) ?>">
+                        <ul class="w-pagination" style="--w-mb:0;">
+                            <?php if ($page > 1): ?>
+                                <li class="w-pagination__item">
+                                    <a class="w-pagination__link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
+                                        <w:icon name="chevron-left" size="sm"></w:icon> <?= __('上一页') ?>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                                <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
+                                    <a class="w-pagination__link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
+                                        <?= $i ?>
+                                    </a>
+                                </li>
+                            <?php endfor; ?>
+                            <?php if ($page < $totalPages): ?>
+                                <li class="w-pagination__item">
+                                    <a class="w-pagination__link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&adapter=<?= urlencode($adapter) ?>">
+                                        <?= __('下一页') ?> <w:icon name="chevron-right" size="sm"></w:icon>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                        </ul>
+                    </nav>
+                </div>
+            <?php endif; ?>
+        </section>
+
+        <section
+            class="w-drawer"
+            id="cdn-account-drawer"
+            data-w-component="drawer"
+            data-w-side="end"
+            data-size="lg"
+            data-state="closed"
+            aria-labelledby="cdn-account-drawer-title"
+            aria-hidden="true"
+            hidden
+            data-testid="cdn-account-drawer"
+        >
+            <header class="w-drawer__header w-cluster" data-align="center" data-justify="between">
+                <h2 class="w-drawer__title" id="cdn-account-drawer-title"><?= __('添加账户') ?></h2>
+                <button class="w-button" type="button" data-tone="quiet" data-size="sm" data-w-action="drawer.close" data-w-target="#cdn-account-drawer" aria-label="<?= $escapeAttr(__('关闭')) ?>">
+                    <w:icon name="close" size="sm"></w:icon>
+                </button>
+            </header>
+            <div class="w-drawer__body w-stack" style="--w-gap:var(--weline-space-5);padding:var(--weline-space-5);box-sizing:border-box;">
+                <div class="w-alert" data-tone="info">
+                    <div class="w-alert__content">
+                        <strong class="w-alert__title"><?= __('手工添加 CDN 账户') ?></strong>
+                        <p class="w-text" data-size="sm" style="--w-mb:0;">
+                            <?= __('Cloudflare 推荐先走 OAuth 一键授权；也可在此手工填写 API Token。同页保存，不用 iframe。') ?>
+                        </p>
+                    </div>
+                </div>
+                <w:form
+                    id="accountForm"
+                    class="w-form"
+                    method="post"
+                    action="#"
+                    data-testid="cdn-account-editor-form"
+                    data-state="idle"
+                    data-message=""
+                    data-cdn-binquery-save="1"
+                    novalidate
+                    style="gap:var(--weline-space-8);"
+                >
+                    <?php
+                    $drawerAccount = null;
+                    $this->assign('adapters', $adapters);
+                    $this->assign('account', $drawerAccount);
+                    $this->assign('credentials', []);
+                    $this->assign('originToken', (string)($this->getData('originToken') ?? ''));
+                    $this->assign('isEdit', false);
+                    $this->assign('showConnectionTest', true);
+                    ?>
+                    <template>Weline_Cdn::Backend/Account/form-fields.phtml</template>
+                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                        <button type="submit" class="w-button" data-testid="cdn-account-editor-submit" data-tone="primary">
+                            <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
+                        </button>
+                        <button type="button" class="w-button" data-tone="neutral" data-w-action="drawer.close" data-w-target="#cdn-account-drawer">
+                            <w:icon name="close" size="sm"></w:icon> <?= __('取消') ?>
+                        </button>
+                    </div>
+                </w:form>
+            </div>
+        </section>
+
+    </div>
 </div>
+
+<script type="application/json" id="cdn-account-form-config"><?= json_encode([
+    'accountIndexUrl' => '',
+    'messages' => [
+        'saving' => (string)__('正在保存…'),
+        'saved' => (string)__('账户保存成功'),
+        'saveFailed' => (string)__('保存失败'),
+        'requestFailed' => (string)__('请求失败'),
+        'required' => (string)__('请填写必填项'),
+        'tokenRequired' => (string)__('请粘贴 API Token（新建 Cloudflare 账户必填）'),
+        'confirm' => (string)__('确定'),
+        'success' => (string)__('成功'),
+        'testing' => (string)__('正在验证连接'),
+        'addTitle' => (string)__('添加账户'),
+        'editTitle' => (string)__('编辑账户'),
+        'tokenSavedHint' => (string)__('库里已有 Token（安全起见不回显）。改 Token 请重新粘贴后点保存；只点「测试连接」会优先用本框新值，否则用已存 Token。'),
+        'tokenMissingHint' => (string)__('库里还没有 Token。请粘贴后保存，再测连接。'),
+    ],
+], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?></script>
+<template>Weline_Cdn::Backend/Account/form-script.phtml</template>
 
 <js:part name="w-delete"/>
 
 <js:part>
 (function() {
     'use strict';
-    
-    var setDefaultUrl = "@backend-url{'*/backend/account/setDefault'}";
 
     function confirmAction(message, onConfirm) {
         Weline.UI.dialog.confirm(message).then(function(confirmed) {
@@ -229,6 +651,23 @@ $escapeAttr = static function (mixed $value): string {
     }
 
     document.addEventListener('click', function(event) {
+        var createBtn = event.target instanceof Element
+            ? event.target.closest('[data-cdn-account-action="create"]')
+            : null;
+        if (createBtn && window.CdnAccountForm) {
+            window.CdnAccountForm.resetForCreate();
+            return;
+        }
+        var editBtn = event.target instanceof Element
+            ? event.target.closest('[data-cdn-account-action="edit"]')
+            : null;
+        if (editBtn && window.CdnAccountForm) {
+            var raw = editBtn.getAttribute('data-account') || '{}';
+            try {
+                window.CdnAccountForm.fill(JSON.parse(raw));
+            } catch (e) {}
+            return;
+        }
         var target = event.target instanceof Element
             ? event.target.closest('[data-cdn-account-action]')
             : null;
@@ -237,7 +676,48 @@ $escapeAttr = static function (mixed $value): string {
         }
         window.CdnAccountManager.setDefault(target.dataset.accountId || '');
     });
-    
+
+    document.addEventListener('click', function(event) {
+        var copyBtn = event.target instanceof Element
+            ? event.target.closest('[data-cdn-oauth-copy-target]')
+            : null;
+        if (!copyBtn) {
+            return;
+        }
+        var targetId = copyBtn.getAttribute('data-cdn-oauth-copy-target') || '';
+        var el = targetId ? document.getElementById(targetId) : null;
+        var text = el ? String(el.textContent || '').trim() : '';
+        if (!text) {
+            return;
+        }
+        var done = function() {
+            if (window.Weline && window.Weline.UI && window.Weline.UI.toast && typeof window.Weline.UI.toast.success === 'function') {
+                window.Weline.UI.toast.success('<?= __('回调 URL 已复制') ?>');
+            }
+        };
+        var fail = function() {
+            if (window.Weline && window.Weline.UI && window.Weline.UI.toast && typeof window.Weline.UI.toast.error === 'function') {
+                window.Weline.UI.toast.error('<?= __('复制失败，请手动选中黄框整段复制') ?>');
+            }
+        };
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(text).then(done).catch(fail);
+            return;
+        }
+        try {
+            var range = document.createRange();
+            range.selectNodeContents(el);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            document.execCommand('copy');
+            sel.removeAllRanges();
+            done();
+        } catch (e) {
+            fail();
+        }
+    });
+
     window.CdnAccountManager = {
         setDefault: function(id) {
             confirmAction('<?= __('确定要设置此账户为默认账户吗？') ?>', function() {

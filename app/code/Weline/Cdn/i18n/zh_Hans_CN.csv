@@ -62,6 +62,7 @@ CDN账户列表,CDN账户列表
 "确保域名在 CDN 中存在（创建或返回已有 Zone）","确保域名在 CDN 中存在（创建或返回已有 Zone）"
 域名,域名
 测试账户连接,测试账户连接
+"可选：用表单里新填的 Token 覆盖测试（不入库）","可选：用表单里新填的 Token 覆盖测试（不入库）"
 获取适配器详细信息,获取适配器详细信息
 "将 CDN/媒体账户绑定到 Scope（TEST-P1D-02）","将 CDN/媒体账户绑定到 Scope（TEST-P1D-02）"
 "解析 Scope 授权账户绑定（跨请求 DB）","解析 Scope 授权账户绑定（跨请求 DB）"
@@ -70,6 +71,7 @@ CDN账户列表,CDN账户列表
 "解析 Scope 授权账户（脱敏，无 credentials）","解析 Scope 授权账户（脱敏，无 credentials）"
 "预览或同步当前企业邮箱域名的 Cloudflare DNS","预览或同步当前企业邮箱域名的 Cloudflare DNS"
 适配器代码和账户名称不能为空,适配器代码和账户名称不能为空
+"请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权","请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权"
 "未找到 CDN 适配器：%{1}","未找到 CDN 适配器：%{1}"
 账户不存在：%{1},账户不存在：%{1}
 更新,更新
@@ -79,6 +81,7 @@ CDN账户列表,CDN账户列表
 保存失败：%{1},保存失败：%{1}
 "账户 ID 无效","账户 ID 无效"
 账户不存在,账户不存在
+该账户正在被使用，无法删除,该账户正在被使用，无法删除
 账户已删除,账户已删除
 删除失败：%{1},删除失败：%{1}
 域名ID不能为空,域名ID不能为空
@@ -90,6 +93,7 @@ CDN账户列表,CDN账户列表
 "ensureZone 失败：%{1}","ensureZone 失败：%{1}"
 适配器不存在,适配器不存在
 账户凭证为空,账户凭证为空
+"API Token 为空：请在上方粘贴 Token 后再测，或先保存有效 Token","API Token 为空：请在上方粘贴 Token 后再测，或先保存有效 Token"
 该适配器未提供连接验证,该适配器未提供连接验证
 "邮箱 DNS 参数格式无效。","邮箱 DNS 参数格式无效。"
 Cloudflare,Cloudflare
@@ -168,6 +172,16 @@ URL列表不能为空,URL列表不能为空
 "请求失败: %{1}","请求失败: %{1}"
 "HTTP错误: %{1}","HTTP错误: %{1}"
 "Cloudflare 返回无效响应","Cloudflare 返回无效响应"
+"连接或重新授权 Cloudflare","连接或重新授权 Cloudflare"
+"已保存，但 Client ID 与 Secret 填成一样了","已保存，但 Client ID 与 Secret 填成一样了"
+"系统已读到两项配置，但内容完全相同（通常是把 Client ID 粘进了 Secret）。这样无法跳转授权；到 Cloudflare 会报 invalid_client。","系统已读到两项配置，但内容完全相同（通常是把 Client ID 粘进了 Secret）。这样无法跳转授权；到 Cloudflare 会报 invalid_client。"
+"去修正 Client Secret","去修正 Client Secret"
+"已保存，但 Client ID / Secret 填反了","已保存，但 Client ID / Secret 填反了"
+"系统已读到两项配置，因此不是「尚未配置」。对照 Cloudflare「客户端已创建」弹窗：下面「Your Client ID」是 Client ID（32 位十六进制）；上面「您的客户端密钥」是 Secret（常以 cfoc_ 开头）。对调粘贴会导致无法授权。","系统已读到两项配置，因此不是「尚未配置」。对照 Cloudflare「客户端已创建」弹窗：下面「Your Client ID」是 Client ID（32 位十六进制）；上面「您的客户端密钥」是 Secret（常以 cfoc_ 开头）。对调粘贴会导致无法授权。"
+"去修正 Client ID / Secret","去修正 Client ID / Secret"
+"尚未配置 Cloudflare OAuth","尚未配置 Cloudflare OAuth"
+"系统配置里还没有 Client ID / Secret。直接点「连接」不会跳转 Cloudflare，只会回到本页。请先填写并保存，再回来授权。","系统配置里还没有 Client ID / Secret。直接点「连接」不会跳转 Cloudflare，只会回到本页。请先填写并保存，再回来授权。"
+"打开 Cloudflare OAuth 配置","打开 Cloudflare OAuth 配置"
 加载域名列表失败：%{1},加载域名列表失败：%{1}
 无效的请求方法,无效的请求方法
 网站不能为空,网站不能为空
@@ -242,14 +256,12 @@ Slowloris,斯洛洛里斯
 开始时间,开始时间
 结束时间,结束时间
 创建时间,创建时间
-"Cloudflare OAuth 授权失败：%{1}","Cloudflare OAuth 授权失败：%{1}"
-"Cloudflare OAuth 授权已取消。","Cloudflare OAuth 授权已取消。"
-"Cloudflare OAuth 授权成功。","Cloudflare OAuth 授权成功。"
+"%{1} OAuth 授权成功。","%{1} OAuth 授权成功。"
+"适配器 %{1} 不支持一键授权","适配器 %{1} 不支持一键授权"
 加载账户列表失败：%{1},加载账户列表失败：%{1}
 账户名称不能为空,账户名称不能为空
 账户保存成功,账户保存成功
 账户ID不能为空,账户ID不能为空
-该账户正在被使用，无法删除,该账户正在被使用，无法删除
 账户删除成功,账户删除成功
 默认账户设置成功,默认账户设置成功
 设置失败：%{1},设置失败：%{1}
@@ -277,9 +289,15 @@ Tag列表不能为空,Tag列表不能为空
 今日攻击,今日攻击
 本周攻击,本周攻击
 本月攻击,本月攻击
+"CDN 运维","CDN 运维"
+攻击日志,攻击日志
+"查看 CDN 攻击检测记录，支持筛选、导出与历史清理。","查看 CDN 攻击检测记录，支持筛选、导出与历史清理。"
 批量删除,批量删除
 清理历史,清理历史
 导出CSV,导出CSV
+攻击概览,攻击概览
+日志列表,日志列表
+"共 %{1} 条","共 %{1} 条"
 搜索域名或IP,搜索域名或IP
 所有状态,所有状态
 所有类型,所有类型
@@ -289,13 +307,17 @@ Tag列表不能为空,Tag列表不能为空
 重置,重置
 暂无攻击日志,暂无攻击日志
 系统正常运行中，未检测到攻击,系统正常运行中，未检测到攻击
+全选,全选
 ID,ID
 次数,次数
 操作,操作
+选择日志,选择日志
 查看详情,查看详情
 删除,删除
 "共 %{1} 条记录，第 %{2}/%{3} 页","共 %{1} 条记录，第 %{2}/%{3} 页"
+分页,分页
 清理历史日志,清理历史日志
+关闭,关闭
 清理多少天前的日志,清理多少天前的日志
 7天前,7天前
 30天前,30天前
@@ -313,6 +335,9 @@ ID,ID
 确定批量删除？,确定批量删除？
 将删除,将删除
 条日志，此操作不可恢复！,条日志，此操作不可恢复！
+攻击日志详情,攻击日志详情
+"查看攻击基本信息、时间线与 CDN 响应。","查看攻击基本信息、时间线与 CDN 响应。"
+返回列表,返回列表
 攻击基本信息,攻击基本信息
 被攻击域名,被攻击域名
 当前状态,当前状态
@@ -326,16 +351,18 @@ ID,ID
 攻击已恢复,攻击已恢复
 "持续时间 %{1}","持续时间 %{1}"
 CDN响应详情,CDN响应详情
-返回列表,返回列表
+"API 规则","API 规则"
+"查看各模块收集的 CDN API 规则，按触发方式筛选并启用。","查看各模块收集的 CDN API 规则，按触发方式筛选并启用。"
+重新收集规则,重新收集规则
 模块筛选,模块筛选
 全部模块,全部模块
 触发方式,触发方式
 全部,全部
 定时推送,定时推送
 实时推送,实时推送
-重新收集规则,重新收集规则
 规则列表,规则列表
-"暂无规则。请运行 setup:upgrade 收集规则，或点击""重新收集规则""按钮。","暂无规则。请运行 setup:upgrade 收集规则，或点击""重新收集规则""按钮。"
+暂无规则,暂无规则
+"请运行 setup:upgrade 收集规则，或点击""重新收集规则""按钮。","请运行 setup:upgrade 收集规则，或点击""重新收集规则""按钮。"
 详情,详情
 描述,描述
 表达式,表达式
@@ -349,6 +376,8 @@ CDN响应详情,CDN响应详情
 确认删除,确认删除
 确定要删除这条规则吗？,确定要删除这条规则吗？
 删除失败,删除失败
+"API 规则详情","API 规则详情"
+查看规则表达式、动作配置与启用状态。,查看规则表达式、动作配置与启用状态。
 模块,模块
 类名,类名
 方法名,方法名
@@ -361,6 +390,8 @@ CDN响应详情,CDN响应详情
 禁用规则,禁用规则
 启用规则,启用规则
 删除规则,删除规则
+"CDN 规则","CDN 规则"
+"编辑全局或按域名的缓存规则，保存后推送到 CDN 方可生效。","编辑全局或按域名的缓存规则，保存后推送到 CDN 方可生效。"
 选择域名,选择域名
 全局默认规则,全局默认规则
 保存规则,保存规则
@@ -373,7 +404,6 @@ CDN响应详情,CDN响应详情
 总数,总数
 推送日志,推送日志
 正在推送...,正在推送...
-关闭,关闭
 请求失败,请求失败
 JSON格式错误,JSON格式错误
 提示,提示
@@ -383,20 +413,60 @@ JSON格式错误,JSON格式错误
 确定导入,确定导入
 导入失败,导入失败
 正在获取域名列表...,正在获取域名列表...
+未知ID,未知ID
 正在推送域名,正在推送域名
 请求失败：,请求失败：
 获取域名列表失败：,获取域名列表失败：
 账户关联域名,账户关联域名
+账户,账户
+返回,返回
+关联域名,关联域名
 该账户暂无关联的域名,该账户暂无关联的域名
+"可在 CDN 域名管理中绑定此账户。","可在 CDN 域名管理中绑定此账户。"
 域名ID,域名ID
 适配器,适配器
 编辑,编辑
-返回,返回
+"%{1} OAuth 未能开始","%{1} OAuth 未能开始"
+"发起授权时出错。请先看下方凭据状态；若 Client ID / Secret 已正确，可再点「%{1}」。","发起授权时出错。请先看下方凭据状态；若 Client ID / Secret 已正确，可再点「%{1}」。"
+连接,连接
+"%{1} 授权已取消","%{1} 授权已取消"
+你在授权页拒绝了授权，或关闭了授权页。若要继续，请再点「%{1}」。,你在授权页拒绝了授权，或关闭了授权页。若要继续，请再点「%{1}」。
+"%{1} 拒绝了本次授权（scope 不匹配）","%{1} 拒绝了本次授权（scope 不匹配）"
+"权限要在 Cloudflare 控制台勾，不在本页填写。打开 OAuth clients → 编辑该 Client →「选择权限范围」，勾选 Zone Read、DNS Write、Cache Purge、Cache Settings Write 并保存，再点连接。授权页无法带回未勾选的权限。","权限要在 Cloudflare 控制台勾，不在本页填写。打开 OAuth clients → 编辑该 Client →「选择权限范围」，勾选 Zone Read、DNS Write、Cache Purge、Cache Settings Write 并保存，再点连接。授权页无法带回未勾选的权限。"
+"%{1} 拒绝了本次授权（回调 URL 不匹配）","%{1} 拒绝了本次授权（回调 URL 不匹配）"
+"请展开下方「回调 URL 与权限准备」，把回调 URL 整段原样粘进供应商 OAuth Client 的 Redirect URLs（可登记多条），保存后再点连接。","请展开下方「回调 URL 与权限准备」，把回调 URL 整段原样粘进供应商 OAuth Client 的 Redirect URLs（可登记多条），保存后再点连接。"
+"%{1} 拒绝了本次授权（invalid_client）","%{1} 拒绝了本次授权（invalid_client）"
+"Client ID / Secret 无效或填错。请到系统配置核对两项。","Client ID / Secret 无效或填错。请到系统配置核对两项。"
+"%{1} OAuth 未能完成","%{1} OAuth 未能完成"
+"发起或换票失败。请核对 OAuth 凭据与回调 URL 后重试。","发起或换票失败。请核对 OAuth 凭据与回调 URL 后重试。"
+"%{1} OAuth 返回错误：%{2}","%{1} OAuth 返回错误：%{2}"
+账户总数,账户总数
+已激活,已激活
+默认账户,默认账户
+供应商原文：%{1},供应商原文：%{1}
+"提示：本站连接时会向 Cloudflare 申请上述权限；请到供应商控制台勾选，勿在账户页粘贴或修改 scope 字符串。","提示：本站连接时会向 Cloudflare 申请上述权限；请到供应商控制台勾选，勿在账户页粘贴或修改 scope 字符串。"
+"去 Cloudflare 勾选权限","去 Cloudflare 勾选权限"
+"CDN 账户","CDN 账户"
+统一管理各适配器账户、默认账户与关联域名；支持一键授权的供应商在右侧各自发起连接。,统一管理各适配器账户、默认账户与关联域名；支持一键授权的供应商在右侧各自发起连接。
+账户操作,账户操作
+"去配置 OAuth","去配置 OAuth"
+添加账户,添加账户
+"回调 URL 与权限准备","回调 URL 与权限准备"
+"需要时展开：登记 Redirect URL、对照 Cloudflare 勾选权限（默认收起，避免占屏）。","需要时展开：登记 Redirect URL、对照 Cloudflare 勾选权限（默认收起，避免占屏）。"
+"先做这一步，否则 %{1} 会报 invalid_request（缺参数/回调未登记）","先做这一步，否则 %{1} 会报 invalid_request（缺参数/回调未登记）"
+"请把下面整段原样粘进 %{1} OAuth Client 的 Redirect URLs（可登记多条）。若以前登记过带 /CNY/ 的旧地址，请额外再加这一条（无货币段），保存后再点连接。","请把下面整段原样粘进 %{1} OAuth Client 的 Redirect URLs（可登记多条）。若以前登记过带 /CNY/ 的旧地址，请额外再加这一条（无货币段），保存后再点连接。"
+"提示：同一 Client 请在 Cloudflare「选择权限范围」勾选 Zone Read、DNS Write、Cache Purge、Cache Settings Write（本页仅提示，不在此填写）。","提示：同一 Client 请在 Cloudflare「选择权限范围」勾选 Zone Read、DNS Write、Cache Purge、Cache Settings Write（本页仅提示，不在此填写）。"
+"提示：请在供应商 OAuth 控制台勾选本站所需权限（本页仅提示，不在此填写）。","提示：请在供应商 OAuth 控制台勾选本站所需权限（本页仅提示，不在此填写）。"
+"复制回调 URL","复制回调 URL"
+"打开 Cloudflare OAuth clients","打开 Cloudflare OAuth clients"
+"创建 Client 时回调 URL 请填：","创建 Client 时回调 URL 请填："
+账户概览,账户概览
+账户列表,账户列表
+搜索账户,搜索账户
 搜索账户名称或描述,搜索账户名称或描述
 所有适配器,所有适配器
 暂无账户数据,暂无账户数据
-点击「添加账户」按钮创建第一个CDN账户,点击「添加账户」按钮创建第一个CDN账户
-默认账户,默认账户
+"点击「添加账户」或「连接 Cloudflare」创建第一个 CDN 账户","点击「添加账户」或「连接 Cloudflare」创建第一个 CDN 账户"
 激活,激活
 未激活,未激活
 是,是
@@ -409,36 +479,55 @@ JSON格式错误,JSON格式错误
 删除账户,删除账户
 上一页,上一页
 下一页,下一页
+"手工添加 CDN 账户","手工添加 CDN 账户"
+"Cloudflare 推荐先走 OAuth 一键授权；也可在此手工填写 API Token。同页保存，不用 iframe。","Cloudflare 推荐先走 OAuth 一键授权；也可在此手工填写 API Token。同页保存，不用 iframe。"
+保存,保存
+正在保存…,正在保存…
+请填写必填项,请填写必填项
+"请粘贴 API Token（新建 Cloudflare 账户必填）","请粘贴 API Token（新建 Cloudflare 账户必填）"
+正在验证连接,正在验证连接
+"库里已有 Token（安全起见不回显）。改 Token 请重新粘贴后点保存；只点「测试连接」会优先用本框新值，否则用已存 Token。","库里已有 Token（安全起见不回显）。改 Token 请重新粘贴后点保存；只点「测试连接」会优先用本框新值，否则用已存 Token。"
+"库里还没有 Token。请粘贴后保存，再测连接。","库里还没有 Token。请粘贴后保存，再测连接。"
 确认组件不可用，请刷新页面后重试。,确认组件不可用，请刷新页面后重试。
+"回调 URL 已复制","回调 URL 已复制"
+复制失败，请手动选中黄框整段复制,复制失败，请手动选中黄框整段复制
 确定要设置此账户为默认账户吗？,确定要设置此账户为默认账户吗？
 请选择适配器,请选择适配器
 凭据配置,凭据配置
-"请根据选择的适配器配置相应的凭据。例如Cloudflare需要API Token。","请根据选择的适配器配置相应的凭据。例如Cloudflare需要API Token。"
 "Cloudflare API Token 权限要求：","Cloudflare API Token 权限要求："
 "清理缓存；资源范围选择目标 Zone","清理缓存；资源范围选择目标 Zone"
 "自动查找 Zone ID 时需要","自动查找 Zone ID 时需要"
 仅管理缓存规则时需要,仅管理缓存规则时需要
 前往Cloudflare创建Token,前往Cloudflare创建Token
 "API Token",API令牌
-"留空保留已保存的 Token","留空保留已保存的 Token"
-"请输入API Token","请输入API Token"
+"重新粘贴 Token 才会覆盖；空白不改已存值","重新粘贴 Token 才会覆盖；空白不改已存值"
+"请粘贴 Cloudflare API Token","请粘贴 Cloudflare API Token"
 "Account ID",账户ID
 "请输入Account ID（Cloudflare）",请输入账户ID（Cloudflare）
-"Account ID 可选；缓存清理使用域名配置中的 Zone ID","Account ID 可选；缓存清理使用域名配置中的 Zone ID"
-"验证 Zone ID（可选）","验证 Zone ID（可选）"
-测试已保存账户连接,测试已保存账户连接
+"Account ID 可选。真正的 Zone ID 在「域名管理」里配置并保存，不在本账户表单。","Account ID 可选。真正的 Zone ID 在「域名管理」里配置并保存，不在本账户表单。"
+连通性测试（不会保存）,连通性测试（不会保存）
+"临时 Zone ID 只给测试用，不会入库。若上方 Token 框有内容，测试用新值；否则用库里已存 Token。","临时 Zone ID 只给测试用，不会入库。若上方 Token 框有内容，测试用新值；否则用库里已存 Token。"
+"临时 Zone ID","临时 Zone ID"
+"粘贴 Zone ID 后点测试","粘贴 Zone ID 后点测试"
+测试连接,测试连接
 "回源 Origin Token（只读）","回源 Origin Token（只读）"
 "请在 app/etc/env.php 的 server.origin_token 中配置","请在 app/etc/env.php 的 server.origin_token 中配置"
 "CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。","CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。"
 设置为该适配器的默认账户,设置为该适配器的默认账户
-保存,保存
-正在验证连接,正在验证连接
-添加域名,添加域名
+"编辑 CDN 账户","编辑 CDN 账户"
+"添加 CDN 账户","添加 CDN 账户"
+"Cloudflare 推荐先走 OAuth 一键授权；也可在此手工填写 API Token。","Cloudflare 推荐先走 OAuth 一键授权；也可在此手工填写 API Token。"
+返回账户列表,返回账户列表
+"CDN 域名","CDN 域名"
+"管理站点与 CDN Zone 的映射、启用状态与缓存清理。","管理站点与 CDN Zone 的映射、启用状态与缓存清理。"
+域名操作,域名操作
+域名列表,域名列表
 搜索域名,搜索域名
 全部状态,全部状态
+暂无域名数据,暂无域名数据
+"点击「添加域名」绑定第一个站点与 CDN Zone","点击「添加域名」绑定第一个站点与 CDN Zone"
 网站名称,网站名称
 "Zone ID",区域ID
-暂无数据,暂无数据
 未知网站,未知网站
 清理缓存,清理缓存
 "确定要删除域名 ""%{1}"" 吗？此操作不可恢复！","确定要删除域名 ""%{1}"" 吗？此操作不可恢复！"
@@ -454,17 +543,31 @@ JSON格式错误,JSON格式错误
 账户关联,账户关联
 继承默认账户,继承默认账户
 请先选择适配器,请先选择适配器
+"该适配器暂无可用账户。请先在「账户管理」添加 Cloudflare 等账户，再回来关联；也可勾选「继承默认账户」。","该适配器暂无可用账户。请先在「账户管理」添加 Cloudflare 等账户，再回来关联；也可勾选「继承默认账户」。"
+去添加账户,去添加账户
 选择适配器后，将显示该适配器下的可用账户,选择适配器后，将显示该适配器下的可用账户
 预热间隔,预热间隔
 预热URL的间隔时间（秒），默认300秒,预热URL的间隔时间（秒），默认300秒
+"编辑 CDN 域名","编辑 CDN 域名"
+"添加 CDN 域名","添加 CDN 域名"
+"绑定网站、适配器与 Zone ID；可继承默认账户或指定账户。","绑定网站、适配器与 Zone ID；可继承默认账户或指定账户。"
+返回域名列表,返回域名列表
 请选择账户（可选）,请选择账户（可选）
 该适配器暂无可用账户,该适配器暂无可用账户
+默认,默认
+保存失败，请稍后重试,保存失败，请稍后重试
 总URL数,总URL数
 待处理,待处理
+"CDN 预热","CDN 预热"
+"管理预热 URL 队列，查看进度并执行待处理任务。","管理预热 URL 队列，查看进度并执行待处理任务。"
 执行预热,执行预热
+预热概览,预热概览
+"预热 URL 列表","预热 URL 列表"
 搜索URL,搜索URL
 处理中,处理中
 已完成,已完成
+暂无预热数据,暂无预热数据
+"暂无待处理或已登记的预热 URL","暂无待处理或已登记的预热 URL"
 URL,网址
 提供商,提供商
 进度,进度
@@ -506,14 +609,18 @@ URL,网址
 "Cloudflare DNS 列表响应无效。","Cloudflare DNS 列表响应无效。"
 "Cloudflare DNS 记录分页超过安全上限。","Cloudflare DNS 记录分页超过安全上限。"
 "Cloudflare OAuth 未返回授权码。","Cloudflare OAuth 未返回授权码。"
-"Cloudflare OAuth 未返回可续期令牌，请检查 offline_access scope。","Cloudflare OAuth 未返回可续期令牌，请检查 offline_access scope。"
+"Cloudflare OAuth 未返回可续期令牌。请确认 OAuth Client 的授权类型包含 Refresh Token（offline_access 由 Cloudflare 按 grant 自动追加，控制台勾选列表里没有该项）。","Cloudflare OAuth 未返回可续期令牌。请确认 OAuth Client 的授权类型包含 Refresh Token（offline_access 由 Cloudflare 按 grant 自动追加，控制台勾选列表里没有该项）。"
 "Cloudflare OAuth 授权已过期，请重新连接。","Cloudflare OAuth 授权已过期，请重新连接。"
 "由 Cloudflare OAuth 管理；令牌会自动刷新。","由 Cloudflare OAuth 管理；令牌会自动刷新。"
 "Cloudflare OAuth 账户保存失败。","Cloudflare OAuth 账户保存失败。"
 "Cloudflare OAuth 缺少必需 scope：%{1}","Cloudflare OAuth 缺少必需 scope：%{1}"
+"Cloudflare OAuth Client ID 与 Client Secret 相同。请到系统配置分别粘贴 Cloudflare 控制台里的两项，不要把 Client ID 填进 Secret。","Cloudflare OAuth Client ID 与 Client Secret 相同。请到系统配置分别粘贴 Cloudflare 控制台里的两项，不要把 Client ID 填进 Secret。"
+"Cloudflare OAuth 凭据位置不对：创建弹窗里「Your Client ID」是 32 位十六进制，「客户端密钥」才是以 cfoc_ 开头的 Secret。不要对调粘贴。","Cloudflare OAuth 凭据位置不对：创建弹窗里「Your Client ID」是 32 位十六进制，「客户端密钥」才是以 cfoc_ 开头的 Secret。不要对调粘贴。"
+"Cloudflare OAuth 客户端未配置，请先在系统配置填写 OAuth Client ID/Secret，或设置服务器环境变量。","Cloudflare OAuth 客户端未配置，请先在系统配置填写 OAuth Client ID/Secret，或设置服务器环境变量。"
 未配置账户凭据,未配置账户凭据
 "Cloudflare OAuth state 无效或已过期，请重新连接。","Cloudflare OAuth state 无效或已过期，请重新连接。"
 "Cloudflare OAuth 回调地址不匹配。","Cloudflare OAuth 回调地址不匹配。"
+"Cloudflare OAuth PKCE 校验失败，请重新连接。","Cloudflare OAuth PKCE 校验失败，请重新连接。"
 域名不存在：%{1},域名不存在：%{1}
 域名未启用,域名未启用
 "该适配器不支持按 URL 前缀清理","该适配器不支持按 URL 前缀清理"
@@ -573,6 +680,81 @@ CDN域名创建成功：%{1},CDN域名创建成功：%{1}
 "规则导入成功，共导入 %{1} 条规则","规则导入成功，共导入 %{1} 条规则"
 规则已保存为域名覆盖规则,规则已保存为域名覆盖规则
 规则导入失败：%{1},规则导入失败：%{1}
+"请把下方黄框里的回调 URL 整段原样粘进供应商 OAuth Client 的 Redirect URLs（可登记多条），保存后再点连接。","请把下方黄框里的回调 URL 整段原样粘进供应商 OAuth Client 的 Redirect URLs（可登记多条），保存后再点连接。"
+"%{1} 一键授权在这里","%{1} 一键授权在这里"
+"黄框回调 URL 已登记，并在 Cloudflare 勾选好权限之后，再点「%{1}」。成功时应停在登录/同意页。","黄框回调 URL 已登记，并在 Cloudflare 勾选好权限之后，再点「%{1}」。成功时应停在登录/同意页。"
+确认,确认
+"缺少 data-provider / data-operation","缺少 data-provider / data-operation"
+删除请求失败,删除请求失败
+确认删除吗？,确认删除吗？
+"OAuth Client 勾选的权限与本站请求的 scopes 不一致。请到供应商控制台编辑该 Client，勾选并保存：%{1}","OAuth Client 勾选的权限与本站请求的 scopes 不一致。请到供应商控制台编辑该 Client，勾选并保存：%{1}"
+"同一 Client 还须勾选 scopes（Required）：","同一 Client 还须勾选 scopes（Required）："
+"黄框回调 URL + scopes 都保存进供应商之后，再点「%{1}」。成功时应停在登录/同意页。","黄框回调 URL + scopes 都保存进供应商之后，再点「%{1}」。成功时应停在登录/同意页。"
+"下面代码块只是本站将请求的权限清单（只读提示），不是在本页填写。授权页也不能「带回」未开放的权限——必须先到 Cloudflare → OAuth clients 编辑该 Client，在「选择权限范围」勾选并保存与清单一致的项（至少 Zone Read / DNS Write / Cache Purge / Cache Settings Write），再点连接。","下面代码块只是本站将请求的权限清单（只读提示），不是在本页填写。授权页也不能「带回」未开放的权限——必须先到 Cloudflare → OAuth clients 编辑该 Client，在「选择权限范围」勾选并保存与清单一致的项（至少 Zone Read / DNS Write / Cache Purge / Cache Settings Write），再点连接。"
+"本站请求清单（只读 · 请到 Cloudflare 勾选，勿在本页改）","本站请求清单（只读 · 请到 Cloudflare 勾选，勿在本页改）"
+"去 Cloudflare 勾选 scopes","去 Cloudflare 勾选 scopes"
+"同一 Client 在 Cloudflare 控制台还须勾选下列 scopes（Required；下方只是本站请求对照，不是本页配置项）：","同一 Client 在 Cloudflare 控制台还须勾选下列 scopes（Required；下方只是本站请求对照，不是本页配置项）："
+"留空保留已保存的 Token","留空保留已保存的 Token"
+"请输入API Token","请输入API Token"
+"下面的 Zone ID 只给「测试连接」临时用：点保存不会入库，重新打开也不会回填。要长期保存请去「域名管理」。","下面的 Zone ID 只给「测试连接」临时用：点保存不会入库，重新打开也不会回填。要长期保存请去「域名管理」。"
+一键授权入口,一键授权入口
+"系统配置只保存 OAuth 应用凭据。真正跳转 Cloudflare 授权请回到账户列表，点击「连接或重新授权 Cloudflare」。","系统配置只保存 OAuth 应用凭据。真正跳转 Cloudflare 授权请回到账户列表，点击「连接或重新授权 Cloudflare」。"
+返回账户列表授权,返回账户列表授权
+"Cloudflare OAuth 未能开始","Cloudflare OAuth 未能开始"
+"发起授权时出错。请先看下方凭据状态；若 Client ID / Secret 已正确，可再点「连接或重新授权 Cloudflare」。","发起授权时出错。请先看下方凭据状态；若 Client ID / Secret 已正确，可再点「连接或重新授权 Cloudflare」。"
+"Cloudflare 授权已取消","Cloudflare 授权已取消"
+"你在 Cloudflare 拒绝了授权，或关闭了授权页。若要继续，请再点「连接或重新授权 Cloudflare」。","你在 Cloudflare 拒绝了授权，或关闭了授权页。若要继续，请再点「连接或重新授权 Cloudflare」。"
+"Cloudflare 拒绝了本次授权（scope 不匹配）","Cloudflare 拒绝了本次授权（scope 不匹配）"
+"OAuth Client 勾选的权限与本站请求的 scopes 不一致。请到 Cloudflare → OAuth clients 编辑该 Client，勾选并保存：%{1}","OAuth Client 勾选的权限与本站请求的 scopes 不一致。请到 Cloudflare → OAuth clients 编辑该 Client，勾选并保存：%{1}"
+"Cloudflare 拒绝了本次授权（回调 URL 不匹配）","Cloudflare 拒绝了本次授权（回调 URL 不匹配）"
+"请把下方黄框里的回调 URL 整段原样粘进 Cloudflare OAuth Client 的 Redirect URLs（可登记多条），保存后再点连接。","请把下方黄框里的回调 URL 整段原样粘进 Cloudflare OAuth Client 的 Redirect URLs（可登记多条），保存后再点连接。"
+"Cloudflare 拒绝了本次授权（invalid_client）","Cloudflare 拒绝了本次授权（invalid_client）"
+"Client ID / Secret 无效或填错。请到系统配置核对两项，并确认 Secret 仍是创建/轮换时复制的 cfoc_ 密钥。","Client ID / Secret 无效或填错。请到系统配置核对两项，并确认 Secret 仍是创建/轮换时复制的 cfoc_ 密钥。"
+"Cloudflare OAuth 未能完成","Cloudflare OAuth 未能完成"
+"Cloudflare OAuth 返回错误：%{1}","Cloudflare OAuth 返回错误：%{1}"
+"Cloudflare 原文：%{1}","Cloudflare 原文：%{1}"
+"统一管理 Cloudflare 等适配器账户、默认账户与关联域名；推荐先走 OAuth 一键授权。","统一管理 Cloudflare 等适配器账户、默认账户与关联域名；推荐先走 OAuth 一键授权。"
+"先去配置 Cloudflare OAuth","先去配置 Cloudflare OAuth"
+"先做这一步，否则 Cloudflare 会报 invalid_request（缺参数/回调未登记）","先做这一步，否则 Cloudflare 会报 invalid_request（缺参数/回调未登记）"
+"你看到的 dash.cloudflare.com/oauth/error「Page not found」多半是 Cloudflare 自己的错误页；地址栏里的 error=invalid_request 真正意思是：本站发出的回调 URL 不在 OAuth Client 的 Redirect URLs 白名单里（或 scopes 未勾齐）。","你看到的 dash.cloudflare.com/oauth/error「Page not found」多半是 Cloudflare 自己的错误页；地址栏里的 error=invalid_request 真正意思是：本站发出的回调 URL 不在 OAuth Client 的 Redirect URLs 白名单里（或 scopes 未勾齐）。"
+"请把下面整段原样粘进 Cloudflare → OAuth clients → 该 Client → Redirect URLs（可登记多条）。若以前登记过带 /CNY/ 的旧地址，请额外再加这一条（无货币段），保存后再点连接。","请把下面整段原样粘进 Cloudflare → OAuth clients → 该 Client → Redirect URLs（可登记多条）。若以前登记过带 /CNY/ 的旧地址，请额外再加这一条（无货币段），保存后再点连接。"
+"Cloudflare 一键授权在这里","Cloudflare 一键授权在这里"
+"黄框回调 URL + scopes 都保存进 Cloudflare 之后，再点「连接或重新授权 Cloudflare」。成功时应停在 Cloudflare 登录/同意页，而不是 Page not found。","黄框回调 URL + scopes 都保存进 Cloudflare 之后，再点「连接或重新授权 Cloudflare」。成功时应停在 Cloudflare 登录/同意页，而不是 Page not found。"
+"请到 Cloudflare → OAuth clients 分别复制 Client ID 与 Client Secret，填回系统配置并保存。回调 URL 必须与下面完全一致：","请到 Cloudflare → OAuth clients 分别复制 Client ID 与 Client Secret，填回系统配置并保存。回调 URL 必须与下面完全一致："
+"请到系统配置按弹窗原文粘贴：Client ID = 32 位 hex，Client Secret = cfoc_…（丢失则 Rotate client secret）。回调 URL 必须与下面完全一致：","请到系统配置按弹窗原文粘贴：Client ID = 32 位 hex，Client Secret = cfoc_…（丢失则 Rotate client secret）。回调 URL 必须与下面完全一致："
+"BinQuery API 不可用，请刷新后台后重试","BinQuery API 不可用，请刷新后台后重试"
+"BinQuery 参数不完整","BinQuery 参数不完整"
+"未找到可用的 CDN BinQuery 操作","未找到可用的 CDN BinQuery 操作"
+"Cloudflare OAuth 授权成功。","Cloudflare OAuth 授权成功。"
+"授权报 redirect_uri 不匹配？把下面整段原样粘进 Cloudflare","授权报 redirect_uri 不匹配？把下面整段原样粘进 Cloudflare"
+"Cloudflare 报「redirect_uri does not match」时，不是本站丢页：OAuth Client 的 Redirect URLs 必须与下方字符串逐字一致（含 https、端口、后台 key）。少一段、多斜杠、用了线上域名或漏端口都会失败。可在 Client 里登记多条。","Cloudflare 报「redirect_uri does not match」时，不是本站丢页：OAuth Client 的 Redirect URLs 必须与下方字符串逐字一致（含 https、端口、后台 key）。少一段、多斜杠、用了线上域名或漏端口都会失败。可在 Client 里登记多条。"
+"OAuth 应用凭据已就绪。确认上方回调 URL 已写入 Cloudflare 后，再点「连接或重新授权 Cloudflare」。","OAuth 应用凭据已就绪。确认上方回调 URL 已写入 Cloudflare 后，再点「连接或重新授权 Cloudflare」。"
+"Cloudflare OAuth 未返回可续期令牌，请检查 offline_access scope。","Cloudflare OAuth 未返回可续期令牌，请检查 offline_access scope。"
+"Cloudflare OAuth 授权失败：%{1}","Cloudflare OAuth 授权失败：%{1}"
+"Cloudflare OAuth 授权已取消。","Cloudflare OAuth 授权已取消。"
+"Cloudflare 报「redirect_uri does not match」时，不是本站丢页：OAuth Client 的 Redirect URLs 必须与下方字符串逐字一致（含 https、端口 :9555、后台 key、/CNY/）。少一段、多斜杠、用了线上域名或漏端口都会失败。可在 Client 里登记多条。","Cloudflare 报「redirect_uri does not match」时，不是本站丢页：OAuth Client 的 Redirect URLs 必须与下方字符串逐字一致（含 https、端口 :9555、后台 key、/CNY/）。少一段、多斜杠、用了线上域名或漏端口都会失败。可在 Client 里登记多条。"
+"OAuth 应用凭据已就绪。点击上方「连接或重新授权 Cloudflare」跳转授权；成功后会自动创建默认 CDN 账户。","OAuth 应用凭据已就绪。点击上方「连接或重新授权 Cloudflare」跳转授权；成功后会自动创建默认 CDN 账户。"
+"查看 Cloudflare 回调 URL","查看 Cloudflare 回调 URL"
+"Cloudflare 回调 URL（须与 OAuth Client 里登记的完全一致）：","Cloudflare 回调 URL（须与 OAuth Client 里登记的完全一致）："
+"Cloudflare 返回 invalid_client：Client ID 与 Secret 填成一样了","Cloudflare 返回 invalid_client：Client ID 与 Secret 填成一样了"
+"系统配置里两项内容完全相同（通常是把 Client ID 粘进了 Secret）。Cloudflare 会报 Client authentication failed；他们的 /oauth/error 页本身也可能 404，这不是本站路由丢失。","系统配置里两项内容完全相同（通常是把 Client ID 粘进了 Secret）。Cloudflare 会报 Client authentication failed；他们的 /oauth/error 页本身也可能 404，这不是本站路由丢失。"
+"Cloudflare 返回 invalid_request：Client ID / Secret 填错位置了","Cloudflare 返回 invalid_request：Client ID / Secret 填错位置了"
+"当前常见误填：Client ID 写成了 Account ID（32 位十六进制），而 Client Secret 写成了以 cfoc_ 开头的真正 Client ID。Cloudflare 会报 missing required parameter；/oauth/error 页的 404 仍是 Cloudflare 自身页面，不是本站丢路由。","当前常见误填：Client ID 写成了 Account ID（32 位十六进制），而 Client Secret 写成了以 cfoc_ 开头的真正 Client ID。Cloudflare 会报 missing required parameter；/oauth/error 页的 404 仍是 Cloudflare 自身页面，不是本站丢路由。"
+"请到 Cloudflare → Manage Account → OAuth clients 打开应用：Client ID 一栏应是 cfoc_…；Client Secret 是创建时另给的密钥（不是 Account ID，也不是 Client ID）。Secret 若已丢失请「Rotate client secret」。回调 URL 必须与下面完全一致：","请到 Cloudflare → Manage Account → OAuth clients 打开应用：Client ID 一栏应是 cfoc_…；Client Secret 是创建时另给的密钥（不是 Account ID，也不是 Client ID）。Secret 若已丢失请「Rotate client secret」。回调 URL 必须与下面完全一致："
+"发起授权时出错。请查看页面顶部提示；若已配置 Client ID / Secret，可直接再点「连接或重新授权 Cloudflare」。","发起授权时出错。请查看页面顶部提示；若已配置 Client ID / Secret，可直接再点「连接或重新授权 Cloudflare」。"
+"重新连接 Cloudflare","重新连接 Cloudflare"
+"Cloudflare OAuth：Client ID / Secret 填反了","Cloudflare OAuth：Client ID / Secret 填反了"
+"对照 Cloudflare「客户端已创建」弹窗：上面「您的客户端密钥」是 Secret（常以 cfoc_ 开头）；下面「Your Client ID」是 Client ID（32 位十六进制）。若把密钥填进 Client ID、把 ID 填进 Secret，授权会失败；Cloudflare /oauth/error 页也可能显示 404，那不是本站丢路由。","对照 Cloudflare「客户端已创建」弹窗：上面「您的客户端密钥」是 Secret（常以 cfoc_ 开头）；下面「Your Client ID」是 Client ID（32 位十六进制）。若把密钥填进 Client ID、把 ID 填进 Secret，授权会失败；Cloudflare /oauth/error 页也可能显示 404，那不是本站丢路由。"
+"Cloudflare OAuth 凭据位置不对：Client ID 不能填 Account ID（32 位十六进制）；Client Secret 不能填以 cfoc_ 开头的 Client ID。请到 OAuth clients 分别复制两项；Secret 若已丢失请轮换。","Cloudflare OAuth 凭据位置不对：Client ID 不能填 Account ID（32 位十六进制）；Client Secret 不能填以 cfoc_ 开头的 Client ID。请到 OAuth clients 分别复制两项；Secret 若已丢失请轮换。"
+"请确认系统配置已保存 Client ID / Secret，再重试连接。","请确认系统配置已保存 Client ID / Secret，再重试连接。"
+暂无数据,暂无数据
+"请先在系统配置填写 Cloudflare OAuth Client ID/Secret 并保存，再点上方按钮跳转 Cloudflare 授权。授权成功后会自动创建默认 CDN 账户。","请先在系统配置填写 Cloudflare OAuth Client ID/Secret 并保存，再点上方按钮跳转 Cloudflare 授权。授权成功后会自动创建默认 CDN 账户。"
+"暂无规则。请运行 setup:upgrade 收集规则，或点击""重新收集规则""按钮。","暂无规则。请运行 setup:upgrade 收集规则，或点击""重新收集规则""按钮。"
+添加域名,添加域名
+"请先在系统配置填写 Cloudflare OAuth Client ID/Secret 并保存，再点下方按钮跳转 Cloudflare 授权。授权成功后会自动创建默认 CDN 账户。","请先在系统配置填写 Cloudflare OAuth Client ID/Secret 并保存，再点下方按钮跳转 Cloudflare 授权。授权成功后会自动创建默认 CDN 账户。"
+点击「添加账户」按钮创建第一个CDN账户,点击「添加账户」按钮创建第一个CDN账户
+"Cloudflare 推荐先走 OAuth 一键授权（账户列表页按钮）；也可在此手工填写 API Token。","Cloudflare 推荐先走 OAuth 一键授权（账户列表页按钮）；也可在此手工填写 API Token。"
+"请根据选择的适配器配置相应的凭据。例如Cloudflare需要API Token。","请根据选择的适配器配置相应的凭据。例如Cloudflare需要API Token。"
 "CDN ResourceChange Observer 只接受 v1 契约","CDN ResourceChange Observer 只接受 v1 契约"
 账户配置有效,账户配置有效
 "成功清理 %{count} 个URL","成功清理 %{count} 个URL"
@@ -595,7 +777,195 @@ Tag清理失败,Tag清理失败
 API规则管理,API规则管理
 CDN管理,CDN管理
 域名管理,域名管理
-攻击日志,攻击日志
 规则管理,规则管理
 账户管理,账户管理
 预热管理,预热管理
+"「响应类型」只选 Code；「令牌身份验证方法」选 Client Secret Post 或 Basic。两处是不同字段，不要混在一起。","「响应类型」只选 Code；「令牌身份验证方法」选 Client Secret Post 或 Basic。两处是不同字段，不要混在一起。"
+"Weline 必选（照抄填 Cloudflare）","Weline 必选（照抄填 Cloudflare）"
+"按 Cloudflare 表单从上到下照抄（与「响应类型」下拉里的 Token / ID Token / Code 一一对应）：
+
+① 响应类型 → 只勾 Code
+   · 下拉里有 Token、ID Token、Code：选 Code
+   · 不要选 Token，也不要选 ID Token（旧 Implicit 流程；Token 会进地址栏，且本系统用「授权码换 Token」，对不上）
+
+② 授权类型 → Authorization Code
+   · 需要长期免重新登录时，再额外勾选 Refresh Token
+
+③ 令牌身份验证方法 → Client Secret Post（或 Client Secret Basic）
+   · 这一项才是「不要选 None」——None 只给纯前端/PKCE；本系统要保存 Client Secret
+
+④ 重定向（回调）URL → https://本站域名/后台key/cdn/backend/oauth/callback
+   · 协议、域名、后台 key、路径必须与真实后台一致
+
+⑤ 客户端名称 → 任意，例如 Weline；客户端 URL 可选（站点首页）
+
+【常见错误】
+· 在「响应类型」里找 None：没有这项；None 在下一个字段「令牌身份验证方法」
+· 回调 URL 少写后台 key、用了 http、或域名与访问后台不一致：授权后会回调失败
+
+【创建后】
+把 Client ID / Client Secret 填回下方字段；Scopes 须与 Cloudflare Client 里勾选的权限一致（默认建议：account.read zone.read，并按 CDN 需要补 Cache Purge / Cache Rules 等）。
+完整说明见模块文档：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md","按 Cloudflare 表单从上到下照抄（与「响应类型」下拉里的 Token / ID Token / Code 一一对应）：
+
+① 响应类型 → 只勾 Code
+   · 下拉里有 Token、ID Token、Code：选 Code
+   · 不要选 Token，也不要选 ID Token（旧 Implicit 流程；Token 会进地址栏，且本系统用「授权码换 Token」，对不上）
+
+② 授权类型 → Authorization Code
+   · 需要长期免重新登录时，再额外勾选 Refresh Token
+
+③ 令牌身份验证方法 → Client Secret Post（或 Client Secret Basic）
+   · 这一项才是「不要选 None」——None 只给纯前端/PKCE；本系统要保存 Client Secret
+
+④ 重定向（回调）URL → https://本站域名/后台key/cdn/backend/oauth/callback
+   · 协议、域名、后台 key、路径必须与真实后台一致
+
+⑤ 客户端名称 → 任意，例如 Weline；客户端 URL 可选（站点首页）
+
+【常见错误】
+· 在「响应类型」里找 None：没有这项；None 在下一个字段「令牌身份验证方法」
+· 回调 URL 少写后台 key、用了 http、或域名与访问后台不一致：授权后会回调失败
+
+【创建后】
+把 Client ID / Client Secret 填回下方字段；Scopes 须与 Cloudflare Client 里勾选的权限一致（默认建议：account.read zone.read，并按 CDN 需要补 Cache Purge / Cache Rules 等）。
+完整说明见模块文档：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"
+"创建 OAuth Client 文档","创建 OAuth Client 文档"
+打开官方文档,打开官方文档
+"响应类型选 Code。下一步「选择权限范围」：展开「DNS 和区域」，勾 Zone Read + DNS Edit；搜索并勾 offline_access。CDN 再补 Cache Purge。","响应类型选 Code。下一步「选择权限范围」：展开「DNS 和区域」，勾 Zone Read + DNS Edit；搜索并勾 offline_access。CDN 再补 Cache Purge。"
+"须与 Cloudflare OAuth Client 勾选一致。硬性最少：zone.read dns.write offline_access；CDN 建议再加 Cache Purge / Cache Rules 对应 scope。","须与 Cloudflare OAuth Client 勾选一致。硬性最少：zone.read dns.write offline_access；CDN 建议再加 Cache Purge / Cache Rules 对应 scope。"
+"按 Cloudflare 向导从上到下照抄：
+
+【第 1 步 · 配置 OAuth 客户端】
+① 响应类型 → 只勾 Code（不要 Token / ID Token）
+② 授权类型 → Authorization Code（需要长期免登录再勾 Refresh Token）
+③ 令牌身份验证方法 → Client Secret Post（或 Basic；不要 None）
+④ 重定向（回调）URL → https://本站域名/后台key/cdn/backend/oauth/callback
+⑤ 客户端名称 → 任意，例如 Weline
+
+【第 2 步 · 选择权限范围】（你现在这屏）
+搜索框可搜英文权限名。最少勾下面 3 个（Weline 硬性校验）：
+
+展开「DNS 和区域」：
+· Zone Read / 区域读取 → 对应 zone.read
+· DNS Edit（或 DNS Write）/ DNS 编辑 → 对应 dns.write
+
+再用搜索框搜 offline：
+· offline_access（离线访问 / Refresh）→ 必须勾；否则授权后无法自动续期
+
+CDN 清缓存 / 推规则时再补（强烈建议）：
+· 仍在「DNS 和区域」或搜 Cache Purge → Cache Purge / 缓存清理
+· 展开「规则和配置」→ Cache Rules Edit / 缓存规则编辑（要读写规则才勾）
+· 若列表里有 Account Read / 账户读取 → 也可勾（列账户更稳）
+
+不要勾（本站用不到）：
+· 开发人员平台、AI 和机器学习、应用安全性、Cloudflare One / Zero Trust、分析和日志
+
+【第 3 步 · Choose optional scopes】
+上面勾过的项全部保持 Required（默认即可），不要改成可选。Weline 请求授权时会带上这些 scope。
+
+【创建后】
+把 Client ID / Client Secret 填回下方字段；「OAuth Scopes」填：
+zone.read dns.write offline_access
+（若勾了 Cache Purge / Cache Rules，把控制台显示的对应 scope 名也空格追加进去，须与 Cloudflare 勾选项一致。）
+完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md","按 Cloudflare 向导从上到下照抄：
+
+【第 1 步 · 配置 OAuth 客户端】
+① 响应类型 → 只勾 Code（不要 Token / ID Token）
+② 授权类型 → Authorization Code（需要长期免登录再勾 Refresh Token）
+③ 令牌身份验证方法 → Client Secret Post（或 Basic；不要 None）
+④ 重定向（回调）URL → https://本站域名/后台key/cdn/backend/oauth/callback
+⑤ 客户端名称 → 任意，例如 Weline
+
+【第 2 步 · 选择权限范围】（你现在这屏）
+搜索框可搜英文权限名。最少勾下面 3 个（Weline 硬性校验）：
+
+展开「DNS 和区域」：
+· Zone Read / 区域读取 → 对应 zone.read
+· DNS Edit（或 DNS Write）/ DNS 编辑 → 对应 dns.write
+
+再用搜索框搜 offline：
+· offline_access（离线访问 / Refresh）→ 必须勾；否则授权后无法自动续期
+
+CDN 清缓存 / 推规则时再补（强烈建议）：
+· 仍在「DNS 和区域」或搜 Cache Purge → Cache Purge / 缓存清理
+· 展开「规则和配置」→ Cache Rules Edit / 缓存规则编辑（要读写规则才勾）
+· 若列表里有 Account Read / 账户读取 → 也可勾（列账户更稳）
+
+不要勾（本站用不到）：
+· 开发人员平台、AI 和机器学习、应用安全性、Cloudflare One / Zero Trust、分析和日志
+
+【第 3 步 · Choose optional scopes】
+上面勾过的项全部保持 Required（默认即可），不要改成可选。Weline 请求授权时会带上这些 scope。
+
+【创建后】
+把 Client ID / Client Secret 填回下方字段；「OAuth Scopes」填：
+zone.read dns.write offline_access
+（若勾了 Cache Purge / Cache Rules，把控制台显示的对应 scope 名也空格追加进去，须与 Cloudflare 勾选项一致。）
+完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"
+"权限默认填：zone.read dns.write offline_access cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、offline_access、Cache Purge、Cache Settings Write。","权限默认填：zone.read dns.write offline_access cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、offline_access、Cache Purge、Cache Settings Write。"
+"默认即含清缓存与缓存规则。原样：zone.read dns.write offline_access cache.purge cache-settings.write；须与 Cloudflare OAuth Client 勾选一致。","默认即含清缓存与缓存规则。原样：zone.read dns.write offline_access cache.purge cache-settings.write；须与 Cloudflare OAuth Client 勾选一致。"
+"按 Cloudflare 向导从上到下照抄：
+
+【第 1 步 · 配置 OAuth 客户端】
+① 响应类型 → 只勾 Code（不要 Token / ID Token）
+② 授权类型 → Authorization Code（需要长期免登录再勾 Refresh Token）
+③ 令牌身份验证方法 → Client Secret Post（或 Basic；不要 None）
+④ 重定向（回调）URL → https://本站域名/后台key/cdn/backend/oauth/callback
+⑤ 客户端名称 → 任意，例如 Weline
+
+【第 2 步 · 选择权限范围】
+默认就要含「清缓存 + 缓存规则」，不是可选项。搜索框可搜英文名，全部勾上并保持 Required：
+
+展开「DNS 和区域」或顶部搜索：
+· Zone Read → zone.read
+· DNS Write（DNS Edit）→ dns.write
+· Cache Purge（缓存清理）→ cache.purge
+
+搜索 Cache Settings / Cache Rules：
+· Cache Settings Write（若列表写 Cache Rules Edit，也勾）→ cache-settings.write
+
+再搜 offline：
+· offline_access → 必须勾（Refresh Token）
+
+不要勾：开发人员平台、AI、应用安全性、Zero Trust、分析和日志
+
+【第 3 步 · Choose optional scopes】
+上面勾过的项全部保持 Required，不要改成可选。
+
+【创建后 · OAuth Scopes 字段原样填】
+zone.read dns.write offline_access cache.purge cache-settings.write
+（须与 Cloudflare Client 勾选项一致。若控制台对缓存规则显示的 id 是 cache-rules.write，用它替换 cache-settings.write。）
+完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md","按 Cloudflare 向导从上到下照抄：
+
+【第 1 步 · 配置 OAuth 客户端】
+① 响应类型 → 只勾 Code（不要 Token / ID Token）
+② 授权类型 → Authorization Code（需要长期免登录再勾 Refresh Token）
+③ 令牌身份验证方法 → Client Secret Post（或 Basic；不要 None）
+④ 重定向（回调）URL → https://本站域名/后台key/cdn/backend/oauth/callback
+⑤ 客户端名称 → 任意，例如 Weline
+
+【第 2 步 · 选择权限范围】
+默认就要含「清缓存 + 缓存规则」，不是可选项。搜索框可搜英文名，全部勾上并保持 Required：
+
+展开「DNS 和区域」或顶部搜索：
+· Zone Read → zone.read
+· DNS Write（DNS Edit）→ dns.write
+· Cache Purge（缓存清理）→ cache.purge
+
+搜索 Cache Settings / Cache Rules：
+· Cache Settings Write（若列表写 Cache Rules Edit，也勾）→ cache-settings.write
+
+再搜 offline：
+· offline_access → 必须勾（Refresh Token）
+
+不要勾：开发人员平台、AI、应用安全性、Zero Trust、分析和日志
+
+【第 3 步 · Choose optional scopes】
+上面勾过的项全部保持 Required，不要改成可选。
+
+【创建后 · OAuth Scopes 字段原样填】
+zone.read dns.write offline_access cache.purge cache-settings.write
+（须与 Cloudflare Client 勾选项一致。若控制台对缓存规则显示的 id 是 cache-rules.write，用它替换 cache-settings.write。）
+完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"
+"权限默认填：zone.read dns.write cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、Cache Purge、Cache Settings Write；Refresh Token 靠授权类型勾选，不要找 offline_access 勾选项。","权限默认填：zone.read dns.write cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、Cache Purge、Cache Settings Write；Refresh Token 靠授权类型勾选，不要找 offline_access 勾选项。"
+"API scopes 原样：zone.read dns.write cache.purge cache-settings.write。勿填 offline_access（由 Refresh Token grant 自动处理）。","API scopes 原样：zone.read dns.write cache.purge cache-settings.write。勿填 offline_access（由 Refresh Token grant 自动处理）。"

@@ -11,6 +11,7 @@ final class CloudflareHttpClient
 {
     private const API_BASE = 'https://api.cloudflare.com/client/v4';
     private const TOKEN_URL = 'https://dash.cloudflare.com/oauth2/token';
+    private const REVOKE_URL = 'https://dash.cloudflare.com/oauth2/revoke';
 
     /**
      * @param array<string, scalar> $query
@@ -95,6 +96,52 @@ final class CloudflareHttpClient
     }
 
     /**
+     * RFC 7009 token revocation against Cloudflare dashboard OAuth.
+     */
+    public function oauthRevoke(
+        string $token,
+        string $tokenTypeHint,
+        string $clientId,
+        string $clientSecret,
+        string $authenticationMethod,
+    ): void {
+        if ($clientId === '' || $clientSecret === '' || trim($token) === '') {
+            return;
+        }
+
+        $form = [
+            'token' => $token,
+        ];
+        $hint = strtolower(trim($tokenTypeHint));
+        if (in_array($hint, ['access_token', 'refresh_token'], true)) {
+            $form['token_type_hint'] = $hint;
+        }
+
+        $headers = [
+            'Accept: application/json',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+        if ($authenticationMethod === 'client_secret_basic') {
+            $headers[] = 'Authorization: Basic ' . base64_encode($clientId . ':' . $clientSecret);
+            $form['client_id'] = $clientId;
+        } elseif ($authenticationMethod === 'client_secret_post') {
+            $form['client_id'] = $clientId;
+            $form['client_secret'] = $clientSecret;
+        } else {
+            throw new \RuntimeException('Unsupported Cloudflare OAuth client authentication method.');
+        }
+
+        $this->request(
+            'POST',
+            self::REVOKE_URL,
+            $headers,
+            http_build_query($form, '', '&', PHP_QUERY_RFC3986),
+            false,
+            true,
+        );
+    }
+
+    /**
      * @param array<int, string> $headers
      * @return array<string, mixed>
      */
@@ -104,6 +151,7 @@ final class CloudflareHttpClient
         array $headers,
         ?string $payload,
         bool $cloudflareEnvelope,
+        bool $allowEmptyBody = false,
     ): array {
         $handle = curl_init($url);
         if ($handle === false) {
@@ -122,6 +170,10 @@ final class CloudflareHttpClient
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
             CURLOPT_USERAGENT => 'Weline-Cdn/1.0',
+            // Bypass env HTTP(S)_PROXY / ALL_PROXY (local Clash leftovers break Cloudflare admin tests).
+            CURLOPT_PROXY => '',
+            CURLOPT_PROXYUSERPWD => '',
+            CURLOPT_PROXYTYPE => CURLPROXY_HTTP,
         ]);
         if ($payload !== null) {
             curl_setopt($handle, CURLOPT_POSTFIELDS, $payload);
@@ -138,9 +190,17 @@ final class CloudflareHttpClient
             );
         }
 
+        $body = trim((string)$raw);
+        if ($allowEmptyBody && ($body === '' || $body === '{}') && $status >= 200 && $status < 300) {
+            return [];
+        }
+
         try {
-            $decoded = json_decode((string)$raw, true, 512, JSON_THROW_ON_ERROR);
+            $decoded = json_decode($body === '' ? '{}' : $body, true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
+            if ($allowEmptyBody && $status >= 200 && $status < 300) {
+                return [];
+            }
             throw new \RuntimeException(
                 (string)__('Cloudflare 返回了无法解析的响应（HTTP %{1}）。', $status)
             );

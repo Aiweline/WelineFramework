@@ -27,6 +27,14 @@ use Weline\Framework\Manager\ObjectManager;
 #[AclAttribute('Weline_Cdn::cdn_account_manager', 'CDN账户管理', 'user', 'CDN账户管理', 'Weline_Cdn::cdn_manager')]
 class Account extends BackendController
 {
+    use CdnBackendIframeTrait;
+
+    public function __init()
+    {
+        parent::__init();
+        $this->applyCdnIframeBlankLayout();
+    }
+
     /**
      * 获取账户模型
      */
@@ -93,29 +101,51 @@ class Account extends BackendController
             $total = $pagination['totalSize'] ?? 0;
             $totalPages = $pagination['lastPage'] ?? 0;
 
-            // 获取所有适配器
+            // 获取所有适配器与支持一键授权的 Provider
             $adapters = $this->getAdapterResolver()->getAllAdapters();
+            $oauthProviders = $this->getAdapterResolver()->getOauthCapableAdapters();
+
+            $activeCount = (int)$this->getAccountModel()->reset()
+                ->where(AccountModel::schema_fields_STATUS, 'active')
+                ->count();
+            $defaultCount = (int)$this->getAccountModel()->reset()
+                ->where(AccountModel::schema_fields_IS_DEFAULT, 1)
+                ->count();
 
             $this->assign('accounts', $accounts);
             $this->assign('total', $total);
+            $this->assign('activeCount', $activeCount);
+            $this->assign('defaultCount', $defaultCount);
+            $this->assign('oauthProviders', $oauthProviders);
             $this->assign('page', $page);
             $this->assign('pageSize', $pageSize);
             $this->assign('totalPages', $totalPages);
             $this->assign('search', $search);
             $this->assign('adapter', $adapter);
             $this->assign('adapters', $adapters);
+            $this->assign('originToken', $this->getOriginToken());
 
             return $this->fetch();
         } catch (\Exception $e) {
             Message::error(__('加载账户列表失败：%{1}', $e->getMessage()));
+            $oauthProviders = [];
+            try {
+                $oauthProviders = $this->getAdapterResolver()->getOauthCapableAdapters();
+            } catch (\Throwable) {
+                $oauthProviders = [];
+            }
             $this->assign('accounts', []);
             $this->assign('total', 0);
+            $this->assign('activeCount', 0);
+            $this->assign('defaultCount', 0);
+            $this->assign('oauthProviders', $oauthProviders);
             $this->assign('page', 1);
             $this->assign('pageSize', 20);
             $this->assign('totalPages', 0);
             $this->assign('search', '');
             $this->assign('adapter', '');
             $this->assign('adapters', []);
+            $this->assign('originToken', $this->getOriginToken());
             return $this->fetch();
         }
     }
@@ -128,6 +158,9 @@ class Account extends BackendController
     #[AclAttribute('Weline_Cdn::cdn_account_form', '账户表单', 'circle', '创建/编辑CDN账户表单')]
     public function form(): string
     {
+        // 二次强制：OffCanvas iframe 偶发查询参数丢失时仍靠 Sec-Fetch-Dest 去壳
+        $this->applyCdnIframeBlankLayout();
+
         $id = (int)$this->request->getGet('id');
 
         if ($id) {
@@ -147,6 +180,10 @@ class Account extends BackendController
         $adapters = $this->getAdapterResolver()->getAllAdapters();
         $this->assign('adapters', $adapters);
         $this->assign('originToken', $this->getOriginToken());
+        $this->assign(
+            'accountIndexUrl',
+            $this->request->getUrlBuilder()->getBackendUrl('*/backend/account/index')
+        );
 
         return $this->fetch();
     }
@@ -178,10 +215,7 @@ class Account extends BackendController
                 if (!$account->getData(AccountModel::schema_fields_ACCOUNT_ID)) {
                     $errorMsg = __('账户不存在');
                     if ($this->request->isIframe()) {
-                        return (string)$this->redirect('/component/offcanvas/error', [
-                            'msg' => $errorMsg,
-                            'reload' => 0
-                        ]);
+                        return $this->redirectCdnOffcanvasResult('error', $errorMsg);
                     }
                     return $this->jsonResponse([
                         'success' => false,
@@ -194,10 +228,7 @@ class Account extends BackendController
             if (empty($data['name'])) {
                 $errorMsg = __('账户名称不能为空');
                 if ($this->request->isIframe()) {
-                    return (string)$this->redirect('/component/offcanvas/error', [
-                        'msg' => $errorMsg,
-                        'reload' => 0
-                    ]);
+                    return $this->redirectCdnOffcanvasResult('error', $errorMsg);
                 }
                 return $this->jsonResponse([
                     'success' => false,
@@ -208,10 +239,7 @@ class Account extends BackendController
             if (empty($data['adapter'])) {
                 $errorMsg = __('适配器不能为空');
                 if ($this->request->isIframe()) {
-                    return (string)$this->redirect('/component/offcanvas/error', [
-                        'msg' => $errorMsg,
-                        'reload' => 0
-                    ]);
+                    return $this->redirectCdnOffcanvasResult('error', $errorMsg);
                 }
                 return $this->jsonResponse([
                     'success' => false,
@@ -224,10 +252,7 @@ class Account extends BackendController
             if (!isset($adapters[$data['adapter']])) {
                 $errorMsg = __('无效的适配器');
                 if ($this->request->isIframe()) {
-                    return (string)$this->redirect('/component/offcanvas/error', [
-                        'msg' => $errorMsg,
-                        'reload' => 0
-                    ]);
+                    return $this->redirectCdnOffcanvasResult('error', $errorMsg);
                 }
                 return $this->jsonResponse([
                     'success' => false,
@@ -269,12 +294,8 @@ class Account extends BackendController
 
             Message::success(__('账户保存成功'));
 
-            // 如果是 iframe 模式（OffCanvas），重定向到成功页面
             if ($this->request->isIframe()) {
-                return (string)$this->redirect('/component/offcanvas/success', [
-                    'msg' => __('账户保存成功'),
-                    'reload' => 1
-                ]);
+                return $this->redirectCdnOffcanvasResult('success', __('账户保存成功'), true);
             }
 
             return $this->jsonResponse([
@@ -283,12 +304,8 @@ class Account extends BackendController
                 'redirect' => $this->request->getUrlBuilder()->getBackendUrl('*/backend/account/index')
             ]);
         } catch (\Exception $e) {
-            // 如果是 iframe 模式（OffCanvas），重定向到错误页面
             if ($this->request->isIframe()) {
-                return (string)$this->redirect('/component/offcanvas/error', [
-                    'msg' => __('保存失败：%{1}', $e->getMessage()),
-                    'reload' => 0
-                ]);
+                return $this->redirectCdnOffcanvasResult('error', __('保存失败：%{1}', $e->getMessage()));
             }
 
             return $this->jsonResponse([

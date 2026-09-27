@@ -10,8 +10,9 @@ use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 后台 OffCanvas 结果页（成功/失败/信息），供 iframe 重定向使用。
- * 路由：component/offcanvas/success -> getSuccess，component/offcanvas/error -> getError，
- *      component/backend/offcanvas/getResult -> getResult（框架级 success/error/info 桥接页）。
+ * 路由：component/backend/offcanvas/getSuccess、component/backend/offcanvas/getError、
+ *      component/backend/offcanvas/getResult（框架级 success/error/info 桥接页）。
+ * 禁止再使用无 backend 段的 component/offcanvas/success|error（后台 token 下会店面 404）。
  *
  * 使用主题布局：默认 default.blank（无菜单/边栏，含 head 与 Weline.UI.toast），
  * 可通过请求参数 layout 指定非 blank，如 layout=default 使用 default.default。

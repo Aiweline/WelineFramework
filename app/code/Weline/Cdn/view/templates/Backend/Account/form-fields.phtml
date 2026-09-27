@@ -1,0 +1,162 @@
+<?php
+/**
+ * CDN 账户表单字段（列表抽屉 / 整页编辑共用，无 iframe）
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $adapters
+ * @var object|null $account
+ * @var array $credentials
+ * @var string $originToken
+ * @var bool $isEdit
+ * @var bool $showConnectionTest
+ * @var callable $escapeAttr
+ */
+$adapters = $adapters ?? ($this->getData('adapters') ?: []);
+$account = $account ?? $this->getData('account');
+$credentials = $credentials ?? ($this->getData('credentials') ?: []);
+$originToken = (string)($originToken ?? ($this->getData('originToken') ?? ''));
+$isEdit = (bool)($isEdit ?? ($account && $account->getData('account_id')));
+$showConnectionTest = (bool)($showConnectionTest ?? $isEdit);
+$escapeAttr = $escapeAttr ?? static function (mixed $value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+};
+$hasSavedToken = $isEdit && trim((string)($credentials['api_token'] ?? '')) !== '';
+$accountId = $isEdit ? (int)$account->getData('account_id') : 0;
+?>
+<input type="hidden" name="id" id="cdnAccountIdInput" value="<?= $accountId > 0 ? $escapeAttr((string)$accountId) : '' ?>">
+
+<div class="w-field">
+    <label class="w-field__label" for="adapterSelect"><?= __('适配器') ?> <span class="w-text" data-tone="danger">*</span></label>
+    <div class="w-field__control">
+        <select name="adapter" id="adapterSelect" class="w-select" required>
+            <option value=""><?= __('请选择适配器') ?></option>
+            <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
+                <option value="<?= $escapeAttr($adapterCode) ?>"
+                        data-adapter-name="<?= $escapeAttr((string)($adapterInstance->getAdapterName() ?? '')) ?>"
+                        <?= ($account && $account->getData('adapter') === $adapterCode) ? 'selected' : '' ?>>
+                    <?= $escapeAttr((string)($adapterInstance->getAdapterName() ?? '')) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+</div>
+
+<div class="w-field">
+    <label class="w-field__label" for="accountNameInput"><?= __('账户名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+    <div class="w-field__control">
+        <input type="text" name="name" id="accountNameInput" class="w-input" value="<?= $escapeAttr($account && $account->getData('name') ? (string)$account->getData('name') : '') ?>" required autocomplete="off">
+    </div>
+</div>
+
+<div class="w-field">
+    <label class="w-field__label" for="accountDescription"><?= __('描述') ?></label>
+    <div class="w-field__control">
+        <textarea name="description" id="accountDescription" class="w-textarea" rows="3"><?= $escapeAttr($account && $account->getData('description') ? (string)$account->getData('description') : '') ?></textarea>
+    </div>
+</div>
+
+<div class="w-field">
+    <label class="w-field__label" for="accountStatus"><?= __('状态') ?></label>
+    <div class="w-field__control">
+        <select name="status" id="accountStatus" class="w-select">
+            <option value="active" <?= (!$account || $account->getData('status') === 'active') ? 'selected' : '' ?>><?= __('激活') ?></option>
+            <option value="inactive" <?= ($account && $account->getData('status') === 'inactive') ? 'selected' : '' ?>><?= __('未激活') ?></option>
+        </select>
+    </div>
+</div>
+
+<div class="w-disclosure" data-w-component="disclosure" data-state="open">
+    <button type="button" class="w-disclosure__trigger w-cluster" data-align="center" data-justify="between" data-w-action="disclosure.toggle" style="inline-size:100%;">
+        <span class="w-text" data-weight="strong"><?= __('凭据配置') ?></span>
+        <w:icon name="chevron-down" size="sm"></w:icon>
+    </button>
+    <div class="w-disclosure__panel w-stack" style="--w-gap:var(--weline-space-6);--w-mt:var(--weline-space-5);">
+        <div id="adapterPermissionsInfo" hidden>
+            <div class="w-alert" data-tone="info">
+                <div class="w-alert__content">
+                    <strong class="w-alert__title"><?= __('Cloudflare API Token 权限要求：') ?></strong>
+                    <ul style="--w-mb:0;--w-mt:var(--weline-space-2);">
+                        <li><code>Zone:Cache Purge:Edit</code> — <?= __('清理缓存；资源范围选择目标 Zone') ?></li>
+                        <li><code>Zone:Read</code> — <?= __('自动查找 Zone ID 时需要') ?></li>
+                        <li><code>Zone:Cache Rules:Read / Edit</code> — <?= __('仅管理缓存规则时需要') ?></li>
+                    </ul>
+                    <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" class="w-button" data-tone="primary" data-variant="outline" data-size="sm" style="--w-mt:var(--weline-space-2);">
+                        <?= __('前往Cloudflare创建Token') ?>
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div id="credentialsConfig" class="w-stack" style="--w-gap:var(--weline-space-6);">
+            <div class="w-field" style="--w-mb:0;">
+                <label class="w-field__label" for="apiTokenInput"><?= __('API Token') ?> <?php if (!$isEdit): ?><span class="w-text" data-tone="danger">*</span><?php endif; ?></label>
+                <div class="w-field__control">
+                    <input
+                        type="password"
+                        name="credentials[api_token]"
+                        id="apiTokenInput"
+                        class="w-input"
+                        value=""
+                        autocomplete="new-password"
+                        <?= $isEdit ? '' : 'required' ?>
+                        placeholder="<?= $escapeAttr($isEdit ? __('重新粘贴 Token 才会覆盖；空白不改已存值') : __('请粘贴 Cloudflare API Token')) ?>"
+                        data-has-saved="<?= $hasSavedToken ? '1' : '0' ?>"
+                    >
+                </div>
+                <?php if ($isEdit): ?>
+                    <small class="w-field__hint" data-testid="cdn-account-token-hint">
+                        <?= $hasSavedToken
+                            ? __('库里已有 Token（安全起见不回显）。改 Token 请重新粘贴后点保存；只点「测试连接」会优先用本框新值，否则用已存 Token。')
+                            : __('库里还没有 Token。请粘贴后保存，再测连接。') ?>
+                    </small>
+                <?php endif; ?>
+            </div>
+            <div class="w-field" style="--w-mb:0;">
+                <label class="w-field__label" for="cfAccountIdInput"><?= __('Account ID') ?></label>
+                <div class="w-field__control">
+                    <input type="text" name="credentials[account_id]" id="cfAccountIdInput" class="w-input" value="<?= $escapeAttr($credentials['account_id'] ?? '') ?>" placeholder="<?= $escapeAttr(__('请输入Account ID（Cloudflare）')) ?>">
+                </div>
+                <small class="w-field__hint"><?= __('Account ID 可选。真正的 Zone ID 在「域名管理」里配置并保存，不在本账户表单。') ?></small>
+            </div>
+        </div>
+        <?php if ($showConnectionTest): ?>
+            <div
+                class="w-stack"
+                data-testid="cdn-account-connection-test"
+                <?= $isEdit ? '' : 'hidden' ?>
+                style="--w-gap:var(--weline-space-3);padding:var(--weline-space-4);border:1px dashed var(--weline-theme-border);border-radius:var(--weline-radius-md);background:var(--weline-theme-surface-muted);"
+            >
+                <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                    <strong class="w-text" data-weight="strong"><?= __('连通性测试（不会保存）') ?></strong>
+                    <p class="w-text" data-size="sm" data-tone="muted" style="--w-mb:0;">
+                        <?= __('临时 Zone ID 只给测试用，不会入库。若上方 Token 框有内容，测试用新值；否则用库里已存 Token。') ?>
+                    </p>
+                </div>
+                <div class="w-field" style="--w-mb:0;" data-floating-label="0">
+                    <label class="w-field__label" for="connectionZoneId"><?= __('临时 Zone ID') ?></label>
+                    <div class="w-field__control w-cluster" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                        <input type="text" id="connectionZoneId" class="w-input" autocomplete="off" placeholder="<?= $escapeAttr(__('粘贴 Zone ID 后点测试')) ?>" style="flex:1 1 12rem;min-inline-size:8rem;">
+                        <button type="button" id="testConnectionButton" class="w-button" data-tone="primary" data-variant="outline" data-size="sm" data-account-id="<?= $accountId ?>"><?= __('测试连接') ?></button>
+                    </div>
+                </div>
+                <p id="connectionResult" role="status" aria-live="polite" class="w-text" data-size="sm" style="--w-mb:0;"></p>
+            </div>
+        <?php endif; ?>
+        <div class="w-field" style="--w-mb:0;">
+            <label class="w-field__label" for="originTokenReadonly"><?= __('回源 Origin Token（只读）') ?></label>
+            <div class="w-field__control">
+                <input type="text" id="originTokenReadonly" class="w-input" readonly value="<?= $escapeAttr($originToken) ?>" placeholder="<?= $escapeAttr(__('请在 app/etc/env.php 的 server.origin_token 中配置')) ?>">
+            </div>
+            <small class="w-field__hint"><?= __('CDN 回源时可通过自定义 Header 传递该 Token，在源站进行校验。') ?></small>
+        </div>
+    </div>
+</div>
+
+<div class="w-field">
+    <label class="w-field__label" for="isDefault"><?= __('默认账户') ?></label>
+    <div class="w-field__control">
+        <div class="w-switch">
+            <input type="checkbox" name="is_default" value="1" id="isDefault" <?= ($account && $account->getData('is_default')) ? 'checked' : '' ?>>
+            <label for="isDefault"><?= __('设置为该适配器的默认账户') ?></label>
+        </div>
+    </div>
+</div>

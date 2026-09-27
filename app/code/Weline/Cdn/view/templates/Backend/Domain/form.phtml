@@ -1,6 +1,6 @@
 <?php
 /**
- * CDN域名表单页
+ * CDN 域名表单（整页编辑 + OffCanvas iframe 共用）
  *
  * @var \Weline\Framework\View\Template $this
  */
@@ -10,6 +10,7 @@ $adapters = $this->getData('adapters') ?: [];
 $websites = $this->getData('websites') ?: [];
 $accounts = $this->getData('accounts') ?: [];
 $isEdit = $domain && $domain->getId() ? true : false;
+$isIframe = (bool)$this->request->isIframe() || (bool)$this->getData('cdn_iframe_embed');
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_UNESCAPED_SLASHES
     | JSON_HEX_TAG
@@ -17,192 +18,350 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_HEX_APOS
     | JSON_HEX_QUOT
     | JSON_INVALID_UTF8_SUBSTITUTE;
+$escapeAttr = static function (mixed $value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+};
 ?>
 
-<!-- 消息提示 -->
-<div class="w-grid" style="--w-mb:var(--weline-space-4);">
+<?php if ($isIframe): ?>
+<?php
+/**
+ * 抽屉表单节奏（与账户表单一致）：外层 gutter + w-card；
+ * w:form 必须带 class=w-form，并用 space-6 拉开字段上下间距。
+ */
+?>
+<div
+    class="w-stack"
+    data-testid="cdn-domain-editor"
+    data-cdn-embed="iframe"
+    style="--w-gap:var(--weline-space-5);padding-block:var(--weline-space-5);padding-inline:var(--weline-space-5);box-sizing:border-box;"
+>
     <template>Weline_Component::message.phtml</template>
-</div>
 
-<!-- 表单 -->
-<div class="w-card">
-    <div class="w-card__body">
-        <w:form id="domainForm" method="post" action="@backend-url{'*/backend/domain/save'}" data-testid="cdn-domain-editor-form" data-state="idle" data-message="">
-            <input type="hidden" name="id" value="<?= $domain && $domain->getId() ? (int)$domain->getId() : '' ?>">
-            
-            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-                <label class="w-field__label" style="--w-span-md:2;"><?= __('网站') ?> <span class="w-text" data-tone="danger">*</span></label>
-                <div style="--w-span-md:10;">
-                    <select name="site_id" id="siteSelect" class="w-select" required>
-                        <option value=""><?= __('请选择网站') ?></option>
-                        <?php foreach ($websites as $website): ?>
-                            <option value="<?= (int)$website['website_id'] ?>" 
-                                    data-url="<?= htmlspecialchars((string)($website['url'] ?? '')) ?>"
-                                    <?= ($domain && $domain->getData('site_id') == $website['website_id']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars((string)($website['name'] ?? '')) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <small class="w-field__hint w-text" data-tone="muted"><?= __('从Weline_Websites模块选择网站') ?></small>
-                </div>
-            </div>
+    <div class="w-card" data-w-shadow="sm">
+        <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-6);">
+            <w:form
+                id="domainForm"
+                class="w-form"
+                method="post"
+                action="@backend-url{'*/backend/domain/save'}"
+                data-testid="cdn-domain-editor-form"
+                data-state="idle"
+                data-message=""
+                style="gap:var(--weline-space-8);"
+            >
+                <input type="hidden" name="id" value="<?= $domain && $domain->getId() ? (int)$domain->getId() : '' ?>">
+                <input type="hidden" name="isIframe" value="1">
 
-            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-                <label class="w-field__label" style="--w-span-md:2;"><?= __('适配器') ?> <span class="w-text" data-tone="danger">*</span></label>
-                <div style="--w-span-md:10;">
-                    <select name="adapter" id="adapterSelect" class="w-select" required>
-                        <option value=""><?= __('请选择适配器') ?></option>
-                        <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
-                            <option value="<?= htmlspecialchars((string)$adapterCode) ?>" 
-                                    <?= ($domain && $domain->getData('adapter') === $adapterCode) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars((string)($adapterInstance->getAdapterName() ?? '')) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-            </div>
-
-            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-                <label class="w-field__label" style="--w-span-md:2;"><?= __('域名名称') ?> <span class="w-text" data-tone="danger">*</span></label>
-                <div style="--w-span-md:10;">
-                    <input type="text" name="domain_name" id="domainNameInput" class="w-input" value="<?= htmlspecialchars((string)($domain ? ($domain->getData('domain_name') ?? '') : '')) ?>" required>
-                    <small class="w-field__hint w-text" data-tone="muted"><?= __('例如：example.com') ?></small>
-                </div>
-            </div>
-
-            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-                <label class="w-field__label" style="--w-span-md:2;"><?= __('Zone ID') ?> <span class="w-text" data-tone="danger">*</span></label>
-                <div style="--w-span-md:10;">
-                    <input type="text" name="zone_id" class="w-input" value="<?= htmlspecialchars((string)($domain ? ($domain->getData('zone_id') ?? '') : '')) ?>" required>
-                    <small class="w-field__hint w-text" data-tone="muted"><?= __('CDN提供商的Zone ID，例如Cloudflare的Zone ID') ?></small>
-                </div>
-            </div>
-
-            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-                <label class="w-field__label" style="--w-span-md:2;"><?= __('账户关联') ?></label>
-                <div style="--w-span-md:10;">
-                    <div class="w-switch" style="--w-mb:var(--weline-space-2);">
-                        <input type="checkbox" name="inherit_default" value="1" id="inheritDefault" <?= ($domain && $domain->getData('inherit_default')) ? 'checked' : '' ?>>
-                        <label for="inheritDefault">
-                            <?= __('继承默认账户') ?>
-                        </label>
+                <div class="w-field">
+                    <label class="w-field__label" for="siteSelect"><?= __('网站') ?> <span class="w-text" data-tone="danger">*</span></label>
+                    <div class="w-field__control">
+                        <select name="site_id" id="siteSelect" class="w-select" required>
+                            <option value=""><?= __('请选择网站') ?></option>
+                            <?php foreach ($websites as $website): ?>
+                                <option value="<?= (int)$website['website_id'] ?>"
+                                        data-url="<?= $escapeAttr((string)($website['url'] ?? '')) ?>"
+                                        <?= ($domain && $domain->getData('site_id') == $website['website_id']) ? 'selected' : '' ?>>
+                                    <?= $escapeAttr((string)($website['name'] ?? '')) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
-                    <select name="account_id" class="w-select" id="accountSelect" disabled>
-                        <option value=""><?= __('请先选择适配器') ?></option>
-                    </select>
-                    <small class="w-field__hint w-text" data-tone="muted"><?= __('选择适配器后，将显示该适配器下的可用账户') ?></small>
+                    <small class="w-field__hint"><?= __('从Weline_Websites模块选择网站') ?></small>
                 </div>
-            </div>
 
-            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-                <label class="w-field__label" style="--w-span-md:2;"><?= __('预热间隔') ?></label>
-                <div style="--w-span-md:10;">
-                    <input type="number" name="warmup_interval_seconds" class="w-input" value="<?= $domain && $domain->getData('warmup_interval_seconds') ? (int)$domain->getData('warmup_interval_seconds') : 300 ?>" min="60" step="60">
-                    <small class="w-field__hint w-text" data-tone="muted"><?= __('预热URL的间隔时间（秒），默认300秒') ?></small>
-                </div>
-            </div>
-
-            <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-                <label class="w-field__label" style="--w-span-md:2;"><?= __('状态') ?></label>
-                <div style="--w-span-md:10;">
-                    <div class="w-switch">
-                        <input type="checkbox" name="enabled" value="1" id="enabled" <?= ($domain && $domain->getData('enabled')) ? 'checked' : '' ?>>
-                        <label for="enabled">
-                            <?= __('启用') ?>
-                        </label>
+                <div class="w-field">
+                    <label class="w-field__label" for="adapterSelect"><?= __('适配器') ?> <span class="w-text" data-tone="danger">*</span></label>
+                    <div class="w-field__control">
+                        <select name="adapter" id="adapterSelect" class="w-select" required>
+                            <option value=""><?= __('请选择适配器') ?></option>
+                            <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
+                                <option value="<?= $escapeAttr((string)$adapterCode) ?>"
+                                        <?= ($domain && $domain->getData('adapter') === $adapterCode) ? 'selected' : '' ?>>
+                                    <?= $escapeAttr((string)($adapterInstance->getAdapterName() ?? '')) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                 </div>
-            </div>
 
-            <div class="w-grid">
-                <div class="offset-md-2" style="--w-span-md:10;">
-                    <button type="submit" class="w-button" data-testid="cdn-domain-editor-submit" data-tone="primary">
-                        <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
-                    </button>
-                    <a href="@backend-url{'*/backend/domain/index'}" class="w-button" data-tone="neutral">
-                        <w:icon name="close" size="sm"></w:icon> <?= __('取消') ?>
-                    </a>
+                <div class="w-field">
+                    <label class="w-field__label" for="domainNameInput"><?= __('域名名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                    <div class="w-field__control">
+                        <input type="text" name="domain_name" id="domainNameInput" class="w-input" value="<?= $escapeAttr((string)($domain ? ($domain->getData('domain_name') ?? '') : '')) ?>" required>
+                    </div>
+                    <small class="w-field__hint"><?= __('例如：example.com') ?></small>
                 </div>
-            </div>
-        </w:form>
+
+                <div class="w-field">
+                    <label class="w-field__label" for="zoneIdInput"><?= __('Zone ID') ?> <span class="w-text" data-tone="danger">*</span></label>
+                    <div class="w-field__control">
+                        <input type="text" name="zone_id" id="zoneIdInput" class="w-input" value="<?= $escapeAttr((string)($domain ? ($domain->getData('zone_id') ?? '') : '')) ?>" required>
+                    </div>
+                    <small class="w-field__hint"><?= __('CDN提供商的Zone ID，例如Cloudflare的Zone ID') ?></small>
+                </div>
+
+                <div class="w-field">
+                    <label class="w-field__label" for="accountSelect"><?= __('账户关联') ?></label>
+                    <div class="w-field__control w-stack" style="--w-gap:var(--weline-space-2);">
+                        <div class="w-switch">
+                            <input type="checkbox" name="inherit_default" value="1" id="inheritDefault" <?= ($domain && $domain->getData('inherit_default')) ? 'checked' : '' ?>>
+                            <label for="inheritDefault"><?= __('继承默认账户') ?></label>
+                        </div>
+                        <select name="account_id" class="w-select" id="accountSelect" disabled>
+                            <option value=""><?= __('请先选择适配器') ?></option>
+                        </select>
+                        <p class="w-text" data-tone="warning" data-size="sm" id="accountEmptyHint" hidden style="--w-mb:0;">
+                            <?= __('该适配器暂无可用账户。请先在「账户管理」添加 Cloudflare 等账户，再回来关联；也可勾选「继承默认账户」。') ?>
+                            <a href="@backend-url{'*/backend/account/form'}" class="w-link" data-testid="cdn-domain-account-create-link"><?= __('去添加账户') ?></a>
+                        </p>
+                    </div>
+                    <small class="w-field__hint"><?= __('选择适配器后，将显示该适配器下的可用账户') ?></small>
+                </div>
+
+                <div class="w-field">
+                    <label class="w-field__label" for="warmupIntervalInput"><?= __('预热间隔') ?></label>
+                    <div class="w-field__control">
+                        <input type="number" name="warmup_interval_seconds" id="warmupIntervalInput" class="w-input" value="<?= $domain && $domain->getData('warmup_interval_seconds') ? (int)$domain->getData('warmup_interval_seconds') : 300 ?>" min="60" step="60">
+                    </div>
+                    <small class="w-field__hint"><?= __('预热URL的间隔时间（秒），默认300秒') ?></small>
+                </div>
+
+                <div class="w-field">
+                    <label class="w-field__label" for="enabled"><?= __('状态') ?></label>
+                    <div class="w-field__control">
+                        <div class="w-switch">
+                            <input type="checkbox" name="enabled" value="1" id="enabled" <?= ($domain && $domain->getData('enabled')) ? 'checked' : '' ?>>
+                            <label for="enabled"><?= __('启用') ?></label>
+                        </div>
+                    </div>
+                </div>
+            </w:form>
+        </div>
     </div>
 </div>
+<?php else: ?>
+<div class="w-grid w-backend-page" data-testid="cdn-domain-editor" data-cdn-embed="page">
+    <div style="--w-span:12;">
+        <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+            <template>Weline_Component::message.phtml</template>
+        </div>
+
+        <header
+            class="w-backend-page__heading w-cluster"
+            style="--w-mb:var(--weline-space-4);"
+            data-align="start"
+            data-justify="between"
+            data-wrap="true"
+        >
+            <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                <p class="w-text" data-tone="primary" data-size="sm" style="--w-mb:0;"><?= __('CDN 运维') ?></p>
+                <h4 class="w-backend-page__title" style="--w-mb:0;">
+                    <?= $isEdit ? __('编辑 CDN 域名') : __('添加 CDN 域名') ?>
+                </h4>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);--w-mb:0;">
+                    <?= __('绑定网站、适配器与 Zone ID；可继承默认账户或指定账户。') ?>
+                </p>
+            </div>
+            <a href="@backend-url{'*/backend/domain/index'}" class="w-button" data-tone="neutral" data-size="sm" data-variant="outline">
+                <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回域名列表') ?>
+            </a>
+        </header>
+
+        <div class="w-card" data-w-shadow="sm">
+            <div class="w-card__body">
+                <w:form id="domainForm" method="post" action="@backend-url{'*/backend/domain/save'}" data-testid="cdn-domain-editor-form" data-state="idle" data-message="">
+                    <input type="hidden" name="id" value="<?= $domain && $domain->getId() ? (int)$domain->getId() : '' ?>">
+
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="siteSelect"><?= __('网站') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <div class="w-field__control">
+                            <select name="site_id" id="siteSelect" class="w-select" required>
+                                <option value=""><?= __('请选择网站') ?></option>
+                                <?php foreach ($websites as $website): ?>
+                                    <option value="<?= (int)$website['website_id'] ?>"
+                                            data-url="<?= $escapeAttr((string)($website['url'] ?? '')) ?>"
+                                            <?= ($domain && $domain->getData('site_id') == $website['website_id']) ? 'selected' : '' ?>>
+                                        <?= $escapeAttr((string)($website['name'] ?? '')) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <small class="w-field__hint"><?= __('从Weline_Websites模块选择网站') ?></small>
+                    </div>
+
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="adapterSelect"><?= __('适配器') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <div class="w-field__control">
+                            <select name="adapter" id="adapterSelect" class="w-select" required>
+                                <option value=""><?= __('请选择适配器') ?></option>
+                                <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>
+                                    <option value="<?= $escapeAttr((string)$adapterCode) ?>"
+                                            <?= ($domain && $domain->getData('adapter') === $adapterCode) ? 'selected' : '' ?>>
+                                        <?= $escapeAttr((string)($adapterInstance->getAdapterName() ?? '')) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="domainNameInput"><?= __('域名名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <div class="w-field__control">
+                            <input type="text" name="domain_name" id="domainNameInput" class="w-input" value="<?= $escapeAttr((string)($domain ? ($domain->getData('domain_name') ?? '') : '')) ?>" required>
+                        </div>
+                        <small class="w-field__hint"><?= __('例如：example.com') ?></small>
+                    </div>
+
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="zoneIdInput"><?= __('Zone ID') ?> <span class="w-text" data-tone="danger">*</span></label>
+                        <div class="w-field__control">
+                            <input type="text" name="zone_id" id="zoneIdInput" class="w-input" value="<?= $escapeAttr((string)($domain ? ($domain->getData('zone_id') ?? '') : '')) ?>" required>
+                        </div>
+                        <small class="w-field__hint"><?= __('CDN提供商的Zone ID，例如Cloudflare的Zone ID') ?></small>
+                    </div>
+
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="accountSelect"><?= __('账户关联') ?></label>
+                        <div class="w-field__control w-stack" style="--w-gap:var(--weline-space-2);">
+                            <div class="w-switch">
+                                <input type="checkbox" name="inherit_default" value="1" id="inheritDefault" <?= ($domain && $domain->getData('inherit_default')) ? 'checked' : '' ?>>
+                                <label for="inheritDefault"><?= __('继承默认账户') ?></label>
+                            </div>
+                            <select name="account_id" class="w-select" id="accountSelect" disabled>
+                                <option value=""><?= __('请先选择适配器') ?></option>
+                            </select>
+                            <p class="w-text" data-tone="warning" data-size="sm" id="accountEmptyHint" hidden style="--w-mb:0;">
+                                <?= __('该适配器暂无可用账户。请先在「账户管理」添加 Cloudflare 等账户，再回来关联；也可勾选「继承默认账户」。') ?>
+                                <a href="@backend-url{'*/backend/account/form'}" class="w-link" data-testid="cdn-domain-account-create-link"><?= __('去添加账户') ?></a>
+                            </p>
+                        </div>
+                        <small class="w-field__hint"><?= __('选择适配器后，将显示该适配器下的可用账户') ?></small>
+                    </div>
+
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="warmupIntervalInput"><?= __('预热间隔') ?></label>
+                        <div class="w-field__control">
+                            <input type="number" name="warmup_interval_seconds" id="warmupIntervalInput" class="w-input" value="<?= $domain && $domain->getData('warmup_interval_seconds') ? (int)$domain->getData('warmup_interval_seconds') : 300 ?>" min="60" step="60">
+                        </div>
+                        <small class="w-field__hint"><?= __('预热URL的间隔时间（秒），默认300秒') ?></small>
+                    </div>
+
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="enabled"><?= __('状态') ?></label>
+                        <div class="w-field__control">
+                            <div class="w-switch">
+                                <input type="checkbox" name="enabled" value="1" id="enabled" <?= ($domain && $domain->getData('enabled')) ? 'checked' : '' ?>>
+                                <label for="enabled"><?= __('启用') ?></label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                        <button type="submit" class="w-button" data-testid="cdn-domain-editor-submit" data-tone="primary">
+                            <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
+                        </button>
+                        <a href="@backend-url{'*/backend/domain/index'}" class="w-button" data-tone="neutral">
+                            <w:icon name="close" size="sm"></w:icon> <?= __('取消') ?>
+                        </a>
+                    </div>
+                </w:form>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <js:part>
 (function() {
     'use strict';
-    
+
+    var isIframe = <?= $isIframe ? 'true' : 'false' ?>;
     var indexUrl = '@backend-url{'*/backend/domain/index'}';
     var accountsByAdapter = <?= json_encode($accounts, $jsonForScriptFlags) ?>;
     var currentDomainAccountId = <?= $domain && $domain->getData('account_id') ? (int)$domain->getData('account_id') : 'null' ?>;
-    
+
     var domainForm = document.getElementById('domainForm');
     var adapterSelect = document.getElementById('adapterSelect');
     var accountSelect = document.getElementById('accountSelect');
+    var accountEmptyHint = document.getElementById('accountEmptyHint');
     var inheritDefault = document.getElementById('inheritDefault');
     var siteSelect = document.getElementById('siteSelect');
     var domainNameInput = document.getElementById('domainNameInput');
-    
+
+    function setAccountEmptyHint(visible) {
+        if (!accountEmptyHint) {
+            return;
+        }
+        if (visible) {
+            accountEmptyHint.removeAttribute('hidden');
+        } else {
+            accountEmptyHint.setAttribute('hidden', 'hidden');
+        }
+    }
+
     function updateAccountSelect(adapterCode) {
         accountSelect.innerHTML = '<option value=""><?= __('请选择账户（可选）') ?></option>';
-        
+        setAccountEmptyHint(false);
+
         if (!adapterCode) {
             accountSelect.disabled = true;
             accountSelect.innerHTML = '<option value=""><?= __('请先选择适配器') ?></option>';
             return;
         }
-        
+
         var accounts = accountsByAdapter[adapterCode] || [];
-        
+
         if (accounts.length === 0) {
-            accountSelect.disabled = false;
+            accountSelect.disabled = inheritDefault ? inheritDefault.checked : false;
             accountSelect.innerHTML = '<option value=""><?= __('该适配器暂无可用账户') ?></option>';
+            setAccountEmptyHint(true);
             return;
         }
-        
+
         accounts.forEach(function(account) {
             var option = document.createElement('option');
             option.value = account.account_id;
-            option.textContent = account.name + (account.is_default ? ' (默认)' : '');
-            
+            option.textContent = account.name + (account.is_default ? ' (<?= __('默认') ?>)' : '');
+
             if (currentDomainAccountId && currentDomainAccountId == account.account_id) {
                 option.selected = true;
             }
-            
+
             accountSelect.appendChild(option);
         });
-        
+
         accountSelect.disabled = inheritDefault.checked;
     }
-    
+
     if (adapterSelect) {
         adapterSelect.addEventListener('change', function() {
             updateAccountSelect(this.value);
         });
     }
-    
+
     if (inheritDefault) {
         inheritDefault.addEventListener('change', function() {
             accountSelect.disabled = this.checked;
         });
     }
-    
+
     document.addEventListener('DOMContentLoaded', function() {
         if (adapterSelect && adapterSelect.value) {
             updateAccountSelect(adapterSelect.value);
         }
     });
-    
+
     if (siteSelect) {
         siteSelect.addEventListener('change', function() {
             var selectedOption = this.options[this.selectedIndex];
             var siteUrl = selectedOption.getAttribute('data-url');
-            
+
             if (siteUrl && domainNameInput && !domainNameInput.value) {
                 try {
                     var url = new URL(siteUrl);
                     var hostname = url.hostname;
-                    
+
                     if (hostname) {
                         domainNameInput.value = hostname;
                     }
@@ -215,26 +374,23 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             }
         });
     }
-    
-    if (domainForm) {
+
+    if (domainForm && !isIframe) {
         domainForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            
+
             var formData = new FormData(this);
-            
-            var url = this.action;
-            var opts = { method: 'POST', body: formData };
             var params = {};
-            if (opts.body instanceof FormData) { opts.body.forEach(function(v,k){ params[k]=v; }); }
-            else if (typeof opts.body === 'string') { new URLSearchParams(opts.body).forEach(function(v,k){ params[k]=v; }); }
+            formData.forEach(function(v, k) { params[k] = v; });
             if (params.id) { params.domain_id = params.id; }
             delete params.id;
             delete params.csrf;
             if (!params.account_id) { delete params.account_id; }
             params.site_id = Number(params.site_id);
             params.warmup_interval_seconds = Number(params.warmup_interval_seconds || 300);
-            params.inherit_default = params.inherit_default === '1';
-            params.enabled = params.enabled === '1';
+            // 必须传 0/1 整数：PostgreSQL integer 列不能绑 JS boolean（false→空串会保存失败）
+            params.inherit_default = params.inherit_default === '1' ? 1 : 0;
+            params.enabled = params.enabled === '1' ? 1 : 0;
             domainForm.dataset.state = 'saving';
             domainForm.dataset.message = '';
             Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
@@ -268,8 +424,8 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 domainForm.dataset.message = error && error.message ? error.message : String(error);
                 Weline.UI.dialog.request({
                     tone: 'danger',
-                    title: '<?= __('请求失败') ?>',
-                    message: error.message,
+                    title: '<?= __('保存失败') ?>',
+                    message: (error && error.message) ? error.message : '<?= __('保存失败，请稍后重试') ?>',
                     confirmLabel: '<?= __('确定') ?>'
                 });
             });

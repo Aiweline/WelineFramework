@@ -25,7 +25,7 @@ $domainLookup = $domain_lookup ?? [];
 $websiteOptions = $website_domain_options ?? [];
 $managementReady = (bool)($management_ready ?? false);
 $basePath = 'weline_mail/backend';
-$cloudflareConnectParams = ['return_route' => 'weline_mail/backend'];
+$cloudflareConnectParams = ['adapter' => 'cloudflare', 'return_route' => 'weline_mail/backend'];
 $composeOpen = (bool)($compose_open ?? false);
 $composeTo = (string)($compose_to ?? '');
 $composeSubject = (string)($compose_subject ?? '');
