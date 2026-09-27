@@ -158,6 +158,7 @@ URL列表不能为空,URL列表不能为空
 "Token 有效；清缓存权限需由实际清理结果确认","Token 有效；清缓存权限需由实际清理结果确认"
 "Zone 不可访问或与域名不匹配","Zone 不可访问或与域名不匹配"
 "Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认","Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认"
+"Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。","Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。"
 获取现有规则失败,获取现有规则失败
 "规则推送成功，共 %{count} 条","规则推送成功，共 %{count} 条"
 规则推送失败,规则推送失败
@@ -489,7 +490,7 @@ JSON格式错误,JSON格式错误
 请填写必填项,请填写必填项
 "请粘贴 API Token（新建 Cloudflare 账户必填）","请粘贴 API Token（新建 Cloudflare 账户必填）"
 正在验证连接,正在验证连接
-"库里已有 Token（安全起见不回显）。改 Token 请重新粘贴后点保存；只点「测试连接」会优先用本框新值，否则用已存 Token。","库里已有 Token（安全起见不回显）。改 Token 请重新粘贴后点保存；只点「测试连接」会优先用本框新值，否则用已存 Token。"
+"库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；若测连接报 Invalid API Token，请重新粘贴有效 API Token 后先保存再测（不要填 Global API Key）。","库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；若测连接报 Invalid API Token，请重新粘贴有效 API Token 后先保存再测（不要填 Global API Key）。"
 "库里还没有 Token。请粘贴后保存，再测连接。","库里还没有 Token。请粘贴后保存，再测连接。"
 确认组件不可用，请刷新页面后重试。,确认组件不可用，请刷新页面后重试。
 "回调 URL 已复制","回调 URL 已复制"
@@ -505,6 +506,7 @@ JSON格式错误,JSON格式错误
 "API Token",API令牌
 "重新粘贴 Token 才会覆盖；空白不改已存值","重新粘贴 Token 才会覆盖；空白不改已存值"
 "请粘贴 Cloudflare API Token","请粘贴 Cloudflare API Token"
+"库里还没有 Token。请粘贴 Cloudflare API Token 后保存，再测连接（不要填 Account ID 或 Global API Key 到 Token 框）。","库里还没有 Token。请粘贴 Cloudflare API Token 后保存，再测连接（不要填 Account ID 或 Global API Key 到 Token 框）。"
 "Account ID",账户ID
 "请输入Account ID（Cloudflare）",请输入账户ID（Cloudflare）
 "Account ID 可选。真正的 Zone ID 在「域名管理」里配置并保存，不在本账户表单。","Account ID 可选。真正的 Zone ID 在「域名管理」里配置并保存，不在本账户表单。"
@@ -683,6 +685,7 @@ CDN域名创建成功：%{1},CDN域名创建成功：%{1}
 "规则导入成功，共导入 %{1} 条规则","规则导入成功，共导入 %{1} 条规则"
 规则已保存为域名覆盖规则,规则已保存为域名覆盖规则
 规则导入失败：%{1},规则导入失败：%{1}
+"库里已有 Token（安全起见不回显）。改 Token 请重新粘贴后点保存；只点「测试连接」会优先用本框新值，否则用已存 Token。","库里已有 Token（安全起见不回显）。改 Token 请重新粘贴后点保存；只点「测试连接」会优先用本框新值，否则用已存 Token。"
 "请把下方黄框里的回调 URL 整段原样粘进供应商 OAuth Client 的 Redirect URLs（可登记多条），保存后再点连接。","请把下方黄框里的回调 URL 整段原样粘进供应商 OAuth Client 的 Redirect URLs（可登记多条），保存后再点连接。"
 "%{1} 一键授权在这里","%{1} 一键授权在这里"
 "黄框回调 URL 已登记，并在 Cloudflare 勾选好权限之后，再点「%{1}」。成功时应停在登录/同意页。","黄框回调 URL 已登记，并在 Cloudflare 勾选好权限之后，再点「%{1}」。成功时应停在登录/同意页。"
