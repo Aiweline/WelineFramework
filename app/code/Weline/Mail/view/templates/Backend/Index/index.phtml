@@ -162,6 +162,7 @@ endif;
                 <?= __('mail 主机的 A/AAAA 必须关闭 Cloudflare 代理（灰云 / DNS-only）。这会公开邮件服务器源站 IP；SMTP、IMAP、POP 不能走 Cloudflare 橙云代理。') ?>
             </div>
             <w:form method="post" action="@backend-url{'cdn/backend/oauth/connect'}">
+                <input type="hidden" name="adapter" value="cloudflare">
                 <input type="hidden" name="return_route" value="weline_mail/backend">
                 <button class="w-button" type="submit" data-tone="primary" data-variant="outline" data-size="sm"><?= __('连接或重新授权 Cloudflare') ?></button>
             </w:form>

@@ -13,6 +13,7 @@ namespace Weline\Cdn\Service;
 
 use Weline\Cdn\Api\AdapterInterface;
 use Weline\Cdn\Api\EdgeCacheAdapterBridge;
+use Weline\Cdn\Api\OauthCapableProviderInterface;
 use Weline\Framework\Cache\Contract\EdgeCacheAdapterInterface;
 use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Manager\ObjectManager;
@@ -84,6 +85,36 @@ class AdapterResolver
     {
         $adapters = $this->getAllAdapters();
         return $adapters[$adapterCode] ?? null;
+    }
+
+    /**
+     * 支持一键 OAuth 的适配器（实现 OauthCapableProviderInterface 且 supportsOneClickOauth）。
+     *
+     * @return array<string, OauthCapableProviderInterface>
+     */
+    public function getOauthCapableAdapters(bool $forceReload = false): array
+    {
+        $out = [];
+        foreach ($this->getAllAdapters($forceReload) as $code => $adapter) {
+            if ($adapter instanceof OauthCapableProviderInterface && $adapter->supportsOneClickOauth()) {
+                $out[$code] = $adapter;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * 按 adapter code 取一键授权 Provider；不支持则 null。
+     */
+    public function getOauthCapableAdapter(string $adapterCode): ?OauthCapableProviderInterface
+    {
+        $adapter = $this->getAdapter($adapterCode);
+        if ($adapter instanceof OauthCapableProviderInterface && $adapter->supportsOneClickOauth()) {
+            return $adapter;
+        }
+
+        return null;
     }
 
     /**

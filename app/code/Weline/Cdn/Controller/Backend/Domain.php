@@ -29,6 +29,14 @@ use Weline\Framework\Manager\ObjectManager;
 #[AclAttribute('Weline_Cdn::cdn_domain_manager', 'CDN域名管理', 'globe', 'CDN域名管理', 'Weline_Cdn::cdn_manager')]
 class Domain extends BackendController
 {
+    use CdnBackendIframeTrait;
+
+    public function __init()
+    {
+        parent::__init();
+        $this->applyCdnIframeBlankLayout();
+    }
+
     /**
      * 获取域名模型
      */
@@ -229,17 +237,25 @@ class Domain extends BackendController
     #[AclAttribute('Weline_Cdn::cdn_domain_save', '保存域名', 'save', '保存CDN域名')]
     public function save(): string
     {
+        $iframe = $this->request->isIframe();
+
         if (!$this->request->isPost()) {
-            return $this->jsonResponse([
-                'success' => false,
-                'message' => __('无效的请求方法')
-            ]);
+            $msg = __('无效的请求方法');
+            return $iframe
+                ? $this->redirectCdnOffcanvasResult('error', $msg)
+                : $this->jsonResponse(['success' => false, 'message' => $msg]);
         }
 
         // 支持 JSON 和表单数据
         $params = $this->request->getParams();
         $id = (int)($params['id'] ?? 0);
         $data = $params;
+
+        $fail = function (string $message) use ($iframe): string {
+            return $iframe
+                ? $this->redirectCdnOffcanvasResult('error', $message)
+                : $this->jsonResponse(['success' => false, 'message' => $message]);
+        };
 
         try {
             $domain = $this->getDomainModel()->reset();
@@ -248,49 +264,31 @@ class Domain extends BackendController
                 $domain->load($id);
                 
                 if (!$domain->getId()) {
-                    return $this->jsonResponse([
-                        'success' => false,
-                        'message' => __('域名不存在')
-                    ]);
+                    return $fail(__('域名不存在'));
                 }
             }
 
             // 验证必填字段
             if (!\array_key_exists('site_id', $data) || $data['site_id'] === '' || $data['site_id'] === null) {
-                return $this->jsonResponse([
-                    'success' => false,
-                    'message' => __('网站不能为空')
-                ]);
+                return $fail(__('网站不能为空'));
             }
 
             if (empty($data['adapter'])) {
-                return $this->jsonResponse([
-                    'success' => false,
-                    'message' => __('适配器不能为空')
-                ]);
+                return $fail(__('适配器不能为空'));
             }
 
             if (empty($data['domain_name'])) {
-                return $this->jsonResponse([
-                    'success' => false,
-                    'message' => __('域名名称不能为空')
-                ]);
+                return $fail(__('域名名称不能为空'));
             }
 
             if (empty($data['zone_id'])) {
-                return $this->jsonResponse([
-                    'success' => false,
-                    'message' => __('Zone ID不能为空')
-                ]);
+                return $fail(__('Zone ID不能为空'));
             }
 
             // 验证适配器是否存在
             $adapters = $this->getAdapterResolver()->getAllAdapters();
             if (!isset($adapters[$data['adapter']])) {
-                return $this->jsonResponse([
-                    'success' => false,
-                    'message' => __('无效的适配器')
-                ]);
+                return $fail(__('无效的适配器'));
             }
 
             $data['domain_name'] = strtolower(rtrim(trim((string)$data['domain_name']), '.'));
@@ -308,10 +306,7 @@ class Domain extends BackendController
             $existingByName = $existingByName->find()->fetch();
             
             if ($existingByName->getId()) {
-                return $this->jsonResponse([
-                    'success' => false,
-                    'message' => __('域名 "%{1}" 已存在，请使用不同的域名', $data['domain_name'])
-                ]);
+                return $fail(__('域名 "%{1}" 已存在，请使用不同的域名', $data['domain_name']));
             }
             
             // 设置数据
@@ -329,9 +324,9 @@ class Domain extends BackendController
             }
             $domain->setData(DomainModel::schema_fields_ACCOUNT_ID, $accountId);
             
-            $domain->setData(DomainModel::schema_fields_INHERIT_DEFAULT, isset($data['inherit_default']) ? (int)$data['inherit_default'] : 1);
+            $domain->setData(DomainModel::schema_fields_INHERIT_DEFAULT, isset($data['inherit_default']) && (string)$data['inherit_default'] !== '0' && $data['inherit_default'] !== false ? 1 : 0);
             $domain->setData(DomainModel::schema_fields_WARMUP_INTERVAL_SECONDS, (int)($data['warmup_interval_seconds'] ?? 300));
-            $domain->setData(DomainModel::schema_fields_ENABLED, isset($data['enabled']) ? (int)$data['enabled'] : 1);
+            $domain->setData(DomainModel::schema_fields_ENABLED, isset($data['enabled']) && (string)$data['enabled'] !== '0' && $data['enabled'] !== false ? 1 : 0);
 
             // 处理自定义凭据
             if (isset($data['credentials']) && !empty($data['credentials'])) {
@@ -362,16 +357,17 @@ class Domain extends BackendController
 
             Message::success(__('域名保存成功'));
 
+            if ($iframe) {
+                return $this->redirectCdnOffcanvasResult('success', __('域名保存成功'), true);
+            }
+
             return $this->jsonResponse([
                 'success' => true,
                 'message' => __('域名保存成功'),
                 'redirect' => $this->request->getUrlBuilder()->getBackendUrl('*/backend/domain/index')
             ]);
         } catch (\Exception $e) {
-            return $this->jsonResponse([
-                'success' => false,
-                'message' => __('保存失败：%{1}', $e->getMessage())
-            ]);
+            return $fail(__('保存失败：%{1}', $e->getMessage()));
         }
     }
 

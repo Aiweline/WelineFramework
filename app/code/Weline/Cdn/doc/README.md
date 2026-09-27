@@ -61,11 +61,13 @@ Cloudflare API Token 权限说明见：`doc/Cloudflare-API-Token-Permissions.md`
 
 ### 2.1 配置 Cloudflare OAuth（一键授权，推荐）
 
+一键授权由各 CDN **Provider** 自行实现（`OauthCapableProviderInterface`）。Cloudflare 适配器已实现；`Oauth` 控制器只按 `adapter` 分发。不支持 OAuth 的适配器（如本机 wls_memory）不会出现连接按钮。
+
 平台管理员在 Cloudflare 创建一次机密 OAuth Client，回调 URL 使用：
 
 https://{域名}/{后台key}/cdn/backend/oauth/callback
 
-服务器通过 WELINE_CLOUDFLARE_OAUTH_CLIENT_ID 和 WELINE_CLOUDFLARE_OAUTH_CLIENT_SECRET 保存客户端配置；最小 scopes 为 zone.read、dns.write、offline_access。企业邮箱用户随后只需在每域名面板点击“连接或重新授权 Cloudflare”。授权 state 为一次性、会话绑定且只存哈希；用户令牌通过 Cdn Account 的 secret_ref 加密边界保存并自动刷新。
+服务器通过 WELINE_CLOUDFLARE_OAUTH_CLIENT_ID 和 WELINE_CLOUDFLARE_OAUTH_CLIENT_SECRET 保存客户端配置；默认 API scopes 为 zone.read、dns.write、cache.purge、cache-settings.write（`offline_access` 由 Client 勾选 Refresh Token 后由 Cloudflare 自动追加，勿当勾选项）。企业邮箱用户随后只需在每域名面板点击“连接或重新授权 Cloudflare”。授权 state 为一次性、会话绑定且只存哈希；用户令牌通过 Cdn Account 的 secret_ref 加密边界保存并自动刷新。
 
 邮箱 DNS 写命令只管理当前域名的 mail A/AAAA（强制 DNS-only）、根 MX、根 SPF、实际 DKIM 选择器和 DMARC。它会先预览，检测 Email Routing 锁定记录，明确确认后才写入；失败时反向回滚并报告残留变更。smtp CNAME、其他 TXT 和其他域名不会被删除。PTR/rDNS 不属于 Cloudflare DNS，仍需云服务器厂商配置。
 

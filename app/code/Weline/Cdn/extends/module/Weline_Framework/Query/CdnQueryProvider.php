@@ -9,9 +9,11 @@ use Weline\Cdn\Model\Domain;
 use Weline\Cdn\Service\AccountManager;
 use Weline\Cdn\Service\AdapterResolver;
 use Weline\Cdn\Service\CdnAdminQueryService;
+use Weline\Cdn\Service\CloudflareOAuthService;
 use Weline\Cdn\Service\MediaUrlCowResolver;
 use Weline\Cdn\Service\ScopedAccountBindingService;
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
@@ -130,16 +132,30 @@ class CdnQueryProvider implements QueryProviderInterface
                 [
                     'name'        => 'deleteAccount',
                     'description' => __('删除 CDN 账户'),
+                    'frontend'    => true,
+                    'auth'        => 'backend',
+                    'backend'     => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Cdn::cdn_account_delete'],
+                    'mode'        => 'write',
+                    'graph'       => false,
                     'params'      => [
-                        ['name' => 'account_id', 'type' => 'int', 'required' => true, 'description' => __('账户 ID')],
+                        'account_id' => ['type' => 'int', 'required' => true, 'min' => 1, 'description' => __('账户 ID')],
                     ],
+                    'returns'     => ['type' => 'array'],
                 ],
                 [
                     'name'        => 'setDefaultAccount',
                     'description' => __('设置默认账户'),
+                    'frontend'    => true,
+                    'auth'        => 'backend',
+                    'backend'     => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Cdn::cdn_account_set_default'],
+                    'mode'        => 'write',
+                    'graph'       => false,
                     'params'      => [
-                        ['name' => 'account_id', 'type' => 'int', 'required' => true, 'description' => __('账户 ID')],
+                        'account_id' => ['type' => 'int', 'required' => true, 'min' => 1, 'description' => __('账户 ID')],
                     ],
+                    'returns'     => ['type' => 'array'],
                 ],
                 [
                     'name'        => 'getDefaultAccount',
@@ -366,6 +382,7 @@ class CdnQueryProvider implements QueryProviderInterface
                         'account_id' => ['type' => 'int', 'required' => true, 'min' => 1, 'description' => __('账户 ID')],
                         'zone_id' => ['type' => 'string', 'required' => false, 'max_length' => 128, 'description' => __('CDN Zone ID')],
                         'domain' => ['type' => 'string', 'required' => false, 'max_length' => 255, 'description' => __('域名')],
+                        'credentials' => ['type' => 'array', 'required' => false, 'max_items' => 32, 'description' => __('可选：用表单里新填的 Token 覆盖测试（不入库）')],
                     ],
                     'returns'     => ['type' => 'array'],
                 ],
@@ -571,6 +588,16 @@ class CdnQueryProvider implements QueryProviderInterface
             return ['success' => false, 'message' => (string)__('适配器代码和账户名称不能为空')];
         }
 
+        if ($accountId <= 0 && $adapter === 'cloudflare') {
+            $token = '';
+            if (isset($params['credentials']) && is_array($params['credentials'])) {
+                $token = trim((string)($params['credentials']['api_token'] ?? ''));
+            }
+            if ($token === '') {
+                return ['success' => false, 'message' => (string)__('请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权')];
+            }
+        }
+
         $adapterInstance = $this->adapterResolver->getAdapter($adapter);
         if ($adapterInstance === null) {
             return ['success' => false, 'message' => (string)__('未找到 CDN 适配器：%{1}', $adapter)];
@@ -634,6 +661,24 @@ class CdnQueryProvider implements QueryProviderInterface
 
             if (!$account->getId()) {
                 return ['success' => false, 'message' => (string)__('账户不存在')];
+            }
+
+            $domains = $this->accountManager->getAccountDomains($accountId);
+            if ($domains !== []) {
+                return ['success' => false, 'message' => (string)__('该账户正在被使用，无法删除')];
+            }
+
+            $credentials = $account->getCredentialsArray();
+            if (($credentials['oauth_provider'] ?? '') === 'cloudflare') {
+                $oauth = ObjectManager::getInstance(CloudflareOAuthService::class);
+                $refresh = trim((string)($credentials['oauth_refresh_token'] ?? ''));
+                $access = trim((string)($credentials['api_token'] ?? ''));
+                if ($refresh !== '') {
+                    $oauth->revokeToken($refresh, 'refresh_token');
+                }
+                if ($access !== '') {
+                    $oauth->revokeToken($access, 'access_token');
+                }
             }
 
             $account->delete();
@@ -772,10 +817,17 @@ class CdnQueryProvider implements QueryProviderInterface
                 return ['success' => false, 'message' => (string)__('适配器不存在')];
             }
 
-            $credentials = $account->getCredentialsArray();
+            $credentials = AccountManager::mergeCredentials(
+                $account->getCredentialsArray(),
+                $params['credentials'] ?? null
+            );
 
-            if (empty($credentials)) {
+            if ($credentials === []) {
                 return ['success' => false, 'message' => (string)__('账户凭证为空')];
+            }
+
+            if (trim((string)($credentials['api_token'] ?? '')) === '') {
+                return ['success' => false, 'message' => (string)__('API Token 为空：请在上方粘贴 Token 后再测，或先保存有效 Token')];
             }
 
             if (!method_exists($adapter, 'testConnection')) {

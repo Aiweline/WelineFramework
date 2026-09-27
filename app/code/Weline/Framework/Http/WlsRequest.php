@@ -1164,11 +1164,20 @@ class WlsRequest extends Request
     }
     
     /**
-     * 判断是否为 iframe 请求，不依赖 $_SERVER
+     * 判断是否为 iframe 请求。
+     *
+     * 优先查询/表单参数（OffCanvas 显式 isIframe=true）；
+     * 并认 Sec-Fetch-Dest: iframe（对齐 RequestAbstract，避免参数丢失时抽屉仍套完整后台壳）。
      */
     public function isIframe(): bool
     {
-        return isset($this->parsedGetParams['isIframe']) || isset($this->parsedPostParams['isIframe']);
+        if (isset($this->parsedGetParams['isIframe']) || isset($this->parsedPostParams['isIframe'])) {
+            return true;
+        }
+
+        $fetchDest = strtolower(trim((string)($this->getHeader('Sec-Fetch-Dest') ?? '')));
+
+        return $fetchDest === 'iframe';
     }
     
     /**

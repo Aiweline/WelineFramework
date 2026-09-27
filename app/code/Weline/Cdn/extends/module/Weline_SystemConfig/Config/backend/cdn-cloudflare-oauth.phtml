@@ -11,7 +11,7 @@
 <w:config:group
     code="cdn_cloudflare_oauth"
     label="Cloudflare OAuth"
-    description="一键授权登录 Cloudflare。请先在 Cloudflare 控制台按下方「Weline 必选」创建 OAuth Client，再把 Client ID / Secret 填回本页。配置按站点隔离。"
+    description="本页只配置 OAuth 应用凭据（Client ID / Secret），不是一键授权按钮。填好并保存后，请到「CDN → 账户」点击「连接或重新授权 Cloudflare」。"
     sort="10"
 >
     <w:config:adapter
@@ -26,7 +26,7 @@
     <w:config:adapter
         code="cf.oauth.docs"
         label="创建 OAuth Client 文档"
-        description="官方步骤与字段说明。创建时请严格按本页「Weline 必选」组合，不要选 Token / None。"
+        description="权限默认填：zone.read dns.write cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、Cache Purge、Cache Settings Write；Refresh Token 靠授权类型勾选，不要找 offline_access 勾选项。"
         external-url="https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/"
         target="_blank"
         action-label="打开官方文档"
@@ -41,23 +41,55 @@
         action-label="打开控制台首页"
     />
 
-    <w:config:hint type="info">
-【Weline 必选 — 按此填 Cloudflare「配置 OAuth 客户端」】
-· 客户端名称：任意，例如 Weline
-· 响应类型：Code（禁止选 Token）
-· 授权类型：Authorization Code（需要长期免重新登录时，再额外勾选/加上 Refresh Token）
-· 令牌身份验证方法：Client Secret Post 或 Client Secret Basic（禁止选 None；None 仅用于纯前端/PKCE）
-· 重定向（回调）URL：https://本站域名/后台key/cdn/backend/oauth/callback（协议、域名、后台 key、路径必须与真实后台一致）
-· 客户端 URL：可选，填站点首页；若以后要公开客户端，该项可能变为必填
+    <w:config:hint type="warning" title="两步流程：本页 ≠ 一键授权" collapsed="0">
+【你现在在哪】
+系统配置只保存 Cloudflare OAuth 应用（Client ID / Secret / Scopes）。这里没有「一键授权」按钮。
 
-【常见错误】
-· 响应类型选 Token：Token 会出现在浏览器地址栏，不安全，且本系统用「授权码换 Token」，对不上
-· 认证方法选 None：本系统保存并使用 Client Secret，必须选带 Secret 的方法
-· 回调 URL 少写后台 key、用了 http、或域名与访问后台不一致：授权后会回调失败
+【最常见踩坑】
+1. Client ID 与 Client Secret 是两项不同的值。若两栏填成一样 → Cloudflare invalid_client。
+2. 对照 Cloudflare「客户端已创建」弹窗：上面「您的客户端密钥」→ 填本页 Client Secret（常以 cfoc_ 开头）；下面「Your Client ID」→ 填本页 Client ID（32 位十六进制）。
+3. 不要对调：把 cfoc_… 填进 Client ID、把 32 位 hex 填进 Secret。Account ID 也是 32 位 hex，请只从 OAuth 创建弹窗复制 Client ID，不要从账户概览 URL 抄。
+误填后 Cloudflare 常报 invalid_request / invalid_client，/oauth/error 还可能再套一层 404——那是 Cloudflare 错误页，不是本站丢页。
 
-【创建后】
-把 Client ID / Client Secret 填回下方字段；Scopes 须与 Cloudflare Client 里勾选的权限一致（默认建议：account.read zone.read，并按 CDN 需要补 Cache Purge / Cache Rules 等）。
-完整说明见模块文档：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md
+【下一步】
+1. 在 Cloudflare 创建 OAuth Client，按弹窗原文：Client ID（32 位 hex）/ Secret（cfoc_…）分别填回本页并保存
+2. 重定向（回调）URL 必须与「CDN → 账户」页黄框里的整段字符串完全一致（含协议、端口、后台 key；无货币段）。本机示例常含 :9555；不要只填域名根路径
+3. 打开后台「CDN → 账户」，确认黄框回调 URL 已写入 Cloudflare，再点「连接或重新授权 Cloudflare」
+4. 授权成功后会自动写入 CDN 账户「Cloudflare OAuth」，再去「CDN → 域名」绑定 Zone 并推送规则
+    </w:config:hint>
+
+    <w:config:hint type="info" title="Weline 必选（照抄填 Cloudflare）" collapsed="0">
+按 Cloudflare 向导从上到下照抄：
+
+【第 1 步 · 配置 OAuth 客户端】
+① 响应类型 → 只勾 Code（不要 Token / ID Token）
+② 授权类型 → Authorization Code + Refresh Token（Refresh 会让 Cloudflare 自动带 offline_access；勾选列表里没有 offline_access 项是正常的）
+③ 令牌身份验证方法 → Client Secret Post（或 Basic；不要 None）
+④ 重定向（回调）URL → 与「CDN → 账户」黄框逐字一致（无 /CNY/）
+⑤ 客户端名称 → 任意，例如 Weline
+
+【第 2 步 · 选择权限范围】
+默认就要含「清缓存 + 缓存规则」。搜索框可搜英文名，全部勾上并保持 Required：
+
+展开「DNS 和区域」或顶部搜索：
+· Zone Read → zone.read
+· DNS Write（DNS Edit）→ dns.write
+· Cache Purge（缓存清理）→ cache.purge
+
+搜索 Cache Settings / Cache Rules：
+· Cache Settings Write（若列表写 Cache Rules Edit，也勾）→ cache-settings.write
+
+不要搜、不要勾 offline_access——它不在权限勾选列表里（协议 scope，由 Refresh Token grant 自动追加）。
+
+不要勾：开发人员平台、AI、应用安全性、Zero Trust、分析和日志
+
+【第 3 步 · Choose optional scopes】
+上面勾过的项全部保持 Required，不要改成可选。
+
+【创建后 · OAuth Scopes 字段原样填】
+zone.read dns.write cache.purge cache-settings.write
+（若控制台对缓存规则显示的 id 是 cache-rules.write，用它替换 cache-settings.write。旧配置里若仍含 offline_access，运行时会自动忽略。）
+完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md
     </w:config:hint>
 
     <w:config:field key="cdn/cloudflare/oauth_client_id" label="OAuth Client ID" type="text" value-type="string" default="" scope="global,website" sensitive="0" />
@@ -67,8 +99,8 @@
         label="OAuth Scopes（空格分隔）"
         type="text"
         value-type="string"
-        default="account.read zone.read"
+        default="zone.read dns.write cache.purge cache-settings.write"
         scope="global,website"
-        description="须与 Cloudflare OAuth Client 中勾选的 scopes 一致；创建 Client 时请包含 Zone/Cache Purge/Cache Rules 等 CDN 所需权限。"
+        description="API scopes 原样：zone.read dns.write cache.purge cache-settings.write。勿填 offline_access（由 Refresh Token grant 自动处理）。"
     />
 </w:config:group>

@@ -73,6 +73,14 @@ class CdnAdminQueryService
     {
         $id = (int)($params['id'] ?? $params['domain_id'] ?? 0);
         try {
+            $normalized = self::normalizeSaveDomainParams($params);
+            if (($normalized['success'] ?? true) === false) {
+                return [
+                    'success' => false,
+                    'message' => (string)($normalized['message'] ?? __('保存失败，请稍后重试')),
+                ];
+            }
+
             /** @var DomainModel $domain */
             $domain = ObjectManager::getInstance(DomainModel::class, [], false);
             $domain->reset();
@@ -82,29 +90,36 @@ class CdnAdminQueryService
                     return ['success' => false, 'message' => (string)__('域名不存在')];
                 }
             }
-            if (!\array_key_exists('site_id', $params) || $params['site_id'] === '' || $params['site_id'] === null) {
-                return ['success' => false, 'message' => (string)__('网站不能为空')];
+
+            $siteId = (int)$normalized['site_id'];
+            $adapter = (string)$normalized['adapter'];
+            $domainName = (string)$normalized['domain_name'];
+
+            // 同一网站、适配器内保持映射唯一（与 Domain::save 控制器路径对齐）
+            $existingByName = ObjectManager::getInstance(DomainModel::class, [], false)
+                ->reset()
+                ->where(DomainModel::schema_fields_DOMAIN_NAME, $domainName)
+                ->where(DomainModel::schema_fields_SITE_ID, $siteId)
+                ->where(DomainModel::schema_fields_ADAPTER, $adapter);
+            if ($id > 0) {
+                $existingByName->where(DomainModel::schema_fields_DOMAIN_ID, $id, '!=');
             }
-            foreach (['adapter' => __('适配器不能为空'), 'domain_name' => __('域名名称不能为空'), 'zone_id' => __('Zone ID不能为空')] as $key => $msg) {
-                if (empty($params[$key])) {
-                    return ['success' => false, 'message' => (string)$msg];
-                }
+            $existingByName = $existingByName->find()->fetch();
+            if ($existingByName->getId()) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('域名 "%{1}" 已存在，请使用不同的域名', $domainName),
+                ];
             }
-            foreach ([
-                DomainModel::schema_fields_SITE_ID => 'site_id',
-                DomainModel::schema_fields_ADAPTER => 'adapter',
-                DomainModel::schema_fields_DOMAIN_NAME => 'domain_name',
-                DomainModel::schema_fields_ZONE_ID => 'zone_id',
-                DomainModel::schema_fields_ACCOUNT_ID => 'account_id',
-                DomainModel::schema_fields_INHERIT_DEFAULT => 'inherit_default',
-                DomainModel::schema_fields_WARMUP_INTERVAL_SECONDS => 'warmup_interval_seconds',
-                DomainModel::schema_fields_ENABLED => 'enabled',
-            ] as $field => $key) {
-                if (\array_key_exists($key, $params)) {
-                    $domain->setData($field, $params[$key]);
-                }
-            }
-            $domain->setData(DomainModel::schema_fields_DOMAIN_NAME, strtolower(rtrim(trim((string)$params['domain_name']), '.')));
+
+            $domain->setData(DomainModel::schema_fields_SITE_ID, $siteId);
+            $domain->setData(DomainModel::schema_fields_ADAPTER, $adapter);
+            $domain->setData(DomainModel::schema_fields_DOMAIN_NAME, $domainName);
+            $domain->setData(DomainModel::schema_fields_ZONE_ID, (string)$normalized['zone_id']);
+            $domain->setData(DomainModel::schema_fields_ACCOUNT_ID, $normalized['account_id']);
+            $domain->setData(DomainModel::schema_fields_INHERIT_DEFAULT, (int)$normalized['inherit_default']);
+            $domain->setData(DomainModel::schema_fields_WARMUP_INTERVAL_SECONDS, (int)$normalized['warmup_interval_seconds']);
+            $domain->setData(DomainModel::schema_fields_ENABLED, (int)$normalized['enabled']);
             $domain->save();
             return [
                 'success' => true,
@@ -114,6 +129,65 @@ class CdnAdminQueryService
         } catch (\Throwable $e) {
             return $this->failure('saveDomain', $e, '保存失败，请稍后重试');
         }
+    }
+
+    /**
+     * 规范化 saveDomain 入参：布尔旗标落库为 0/1（PostgreSQL integer 列不能绑 boolean / (string)false 空串）。
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    public static function normalizeSaveDomainParams(array $params): array
+    {
+        if (!\array_key_exists('site_id', $params) || $params['site_id'] === '' || $params['site_id'] === null) {
+            return ['success' => false, 'message' => (string)__('网站不能为空')];
+        }
+        foreach (['adapter' => __('适配器不能为空'), 'domain_name' => __('域名名称不能为空'), 'zone_id' => __('Zone ID不能为空')] as $key => $msg) {
+            if (!\array_key_exists($key, $params) || $params[$key] === '' || $params[$key] === null) {
+                return ['success' => false, 'message' => (string)$msg];
+            }
+        }
+
+        $accountId = $params['account_id'] ?? null;
+        if ($accountId === '' || $accountId === '0' || $accountId === 0 || $accountId === false) {
+            $accountId = null;
+        } else {
+            $accountId = (int)$accountId;
+            if ($accountId <= 0) {
+                $accountId = null;
+            }
+        }
+
+        return [
+            'success' => true,
+            'site_id' => (int)$params['site_id'],
+            'adapter' => trim((string)$params['adapter']),
+            'domain_name' => strtolower(rtrim(trim((string)$params['domain_name']), '.')),
+            'zone_id' => trim((string)$params['zone_id']),
+            'account_id' => $accountId,
+            'inherit_default' => self::normalizeFlagInt($params['inherit_default'] ?? 0),
+            'warmup_interval_seconds' => max(60, (int)($params['warmup_interval_seconds'] ?? 300)),
+            'enabled' => self::normalizeFlagInt($params['enabled'] ?? 1),
+        ];
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private static function normalizeFlagInt(mixed $value): int
+    {
+        if (\is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return ((float)$value === 0.0) ? 0 : 1;
+        }
+        $normalized = strtolower(trim((string)$value));
+        if ($normalized === '' || \in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+            return 0;
+        }
+
+        return 1;
     }
 
     public function executeWarmup(array $params): array

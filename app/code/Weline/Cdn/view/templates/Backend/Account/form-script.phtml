@@ -1,0 +1,327 @@
+<?php
+/**
+ * CDN 账户表单 BinQuery 保存/测连脚本（整页与列表抽屉共用）
+ */
+?>
+<js:part>
+(function() {
+    'use strict';
+
+    var configEl = document.getElementById('cdn-account-form-config');
+    var config = {};
+    try {
+        config = configEl ? JSON.parse(configEl.textContent || '{}') : {};
+    } catch (e) {
+        config = {};
+    }
+    var messages = config.messages || {};
+    var adapterSelect = document.getElementById('adapterSelect');
+    var accountNameInput = document.getElementById('accountNameInput');
+    var permissionsInfo = document.getElementById('adapterPermissionsInfo');
+    var accountForm = document.getElementById('accountForm');
+    var testButton = document.getElementById('testConnectionButton');
+    var drawerTitle = document.getElementById('cdn-account-drawer-title');
+
+    function loadApi() {
+        if (window.Weline && typeof window.Weline.load === 'function') {
+            return Promise.resolve(window.Weline.load('api'));
+        }
+        if (window.Weline && window.Weline.Api) {
+            return Promise.resolve(window.Weline.Api);
+        }
+        return Promise.reject(new Error(messages.requestFailed || 'API unavailable'));
+    }
+
+    function dialogRequest(options) {
+        if (window.Weline && window.Weline.UI && window.Weline.UI.dialog && typeof window.Weline.UI.dialog.request === 'function') {
+            return window.Weline.UI.dialog.request(options);
+        }
+        return Promise.resolve();
+    }
+
+    function collectSaveParams(form) {
+        var formData = new FormData(form);
+        var params = {};
+        var credentials = {};
+        formData.forEach(function(value, key) {
+            var match = String(key).match(/^credentials\[([^\]]+)\]$/);
+            if (match) {
+                if (String(value) !== '') {
+                    credentials[match[1]] = String(value);
+                }
+                return;
+            }
+            params[key] = value;
+        });
+        if (Object.keys(credentials).length) {
+            params.credentials = credentials;
+        }
+        var accountId = Number(params.id || 0);
+        if (accountId > 0) {
+            params.account_id = accountId;
+        }
+        delete params.id;
+        delete params.csrf;
+        delete params.form_key;
+        params.is_default = params.is_default === '1' || params.is_default === 'on' || params.is_default === true;
+        if (params.status == null || params.status === '') {
+            params.status = 'active';
+        }
+        return params;
+    }
+
+    function updatePermissionsInfo() {
+        if (!adapterSelect || !permissionsInfo) return;
+        var selectedOption = adapterSelect.options[adapterSelect.selectedIndex];
+        if (selectedOption && selectedOption.value === 'cloudflare') {
+            permissionsInfo.hidden = false;
+        } else {
+            permissionsInfo.hidden = true;
+        }
+        if (selectedOption && selectedOption.value && accountNameInput) {
+            var adapterName = selectedOption.getAttribute('data-adapter-name');
+            if (adapterName && (!accountNameInput.value || accountNameInput.value.trim() === '')) {
+                accountNameInput.value = adapterName;
+            }
+        }
+        var tokenInput = document.getElementById('apiTokenInput');
+        if (tokenInput) {
+            var isCreate = !(document.getElementById('cdnAccountIdInput') || {}).value;
+            var needToken = isCreate && selectedOption && selectedOption.value === 'cloudflare';
+            tokenInput.required = !!needToken;
+        }
+    }
+
+    if (adapterSelect) {
+        adapterSelect.addEventListener('change', updatePermissionsInfo);
+        updatePermissionsInfo();
+    }
+
+    if (testButton) {
+        testButton.addEventListener('click', function() {
+            var output = document.getElementById('connectionResult');
+            var accountId = Number(testButton.dataset.accountId || (document.getElementById('cdnAccountIdInput') || {}).value || 0);
+            if (accountId <= 0) {
+                if (output) {
+                    output.textContent = messages.saveFailed || 'save first';
+                    output.setAttribute('data-tone', 'danger');
+                }
+                return;
+            }
+            testButton.disabled = true;
+            if (output) {
+                output.textContent = messages.testing || '';
+                output.removeAttribute('data-tone');
+            }
+            var tokenEl = document.getElementById('apiTokenInput');
+            var accountIdEl = document.getElementById('cfAccountIdInput');
+            var credentials = {};
+            if (tokenEl && String(tokenEl.value || '').trim() !== '') {
+                credentials.api_token = String(tokenEl.value).trim();
+            }
+            if (accountIdEl && String(accountIdEl.value || '').trim() !== '') {
+                credentials.account_id = String(accountIdEl.value).trim();
+            }
+            var payload = {
+                account_id: accountId,
+                zone_id: (document.getElementById('connectionZoneId') || {}).value
+                    ? document.getElementById('connectionZoneId').value.trim()
+                    : ''
+            };
+            if (Object.keys(credentials).length) {
+                payload.credentials = credentials;
+            }
+            loadApi()
+                .then(function(api) {
+                    return api.resource('cdn').testConnection(payload);
+                })
+                .then(function(result) {
+                    if (output) {
+                        output.textContent = (result && result.message) ? result.message : '';
+                        output.setAttribute('data-tone', (result && result.success) ? 'success' : 'danger');
+                    }
+                })
+                .catch(function(error) {
+                    if (output) {
+                        output.textContent = (error && error.message) ? error.message : String(error);
+                        output.setAttribute('data-tone', 'danger');
+                    }
+                })
+                .finally(function() {
+                    testButton.disabled = false;
+                });
+        });
+    }
+
+    function closeAccountDrawer() {
+        var drawer = document.getElementById('cdn-account-drawer');
+        if (drawer && window.Weline && window.Weline.UI && window.Weline.UI.drawer) {
+            window.Weline.UI.drawer.close(drawer, 'saved');
+            return;
+        }
+        if (drawer) {
+            drawer.setAttribute('data-state', 'closed');
+            drawer.setAttribute('aria-hidden', 'true');
+            drawer.hidden = true;
+        }
+    }
+
+    function resetAccountFormForCreate() {
+        if (!accountForm) return;
+        accountForm.reset();
+        var idInput = document.getElementById('cdnAccountIdInput');
+        if (idInput) idInput.value = '';
+        if (testButton) {
+            testButton.dataset.accountId = '';
+            var testWrap = document.querySelector('[data-testid="cdn-account-connection-test"]');
+            if (testWrap) testWrap.hidden = true;
+        }
+        var hint = document.querySelector('[data-testid="cdn-account-token-hint"]');
+        if (hint) hint.hidden = true;
+        var tokenInput = document.getElementById('apiTokenInput');
+        if (tokenInput) {
+            tokenInput.required = true;
+            tokenInput.placeholder = messages.tokenRequired || tokenInput.placeholder;
+            tokenInput.dataset.hasSaved = '0';
+        }
+        if (drawerTitle) {
+            drawerTitle.textContent = messages.addTitle || drawerTitle.textContent;
+        }
+        accountForm.dataset.state = 'idle';
+        updatePermissionsInfo();
+    }
+
+    function fillAccountForm(data) {
+        if (!accountForm || !data) return;
+        var idInput = document.getElementById('cdnAccountIdInput');
+        if (idInput) idInput.value = data.account_id ? String(data.account_id) : '';
+        if (adapterSelect) adapterSelect.value = data.adapter || '';
+        if (accountNameInput) accountNameInput.value = data.name || '';
+        var desc = document.getElementById('accountDescription');
+        if (desc) desc.value = data.description || '';
+        var status = document.getElementById('accountStatus');
+        if (status) status.value = data.status || 'active';
+        var cfId = document.getElementById('cfAccountIdInput');
+        if (cfId) cfId.value = data.cf_account_id || '';
+        var isDefault = document.getElementById('isDefault');
+        if (isDefault) isDefault.checked = !!data.is_default;
+        var tokenInput = document.getElementById('apiTokenInput');
+        if (tokenInput) {
+            tokenInput.value = '';
+            tokenInput.required = false;
+            tokenInput.dataset.hasSaved = data.has_api_token ? '1' : '0';
+        }
+        if (testButton) {
+            testButton.dataset.accountId = data.account_id ? String(data.account_id) : '';
+            var testWrap = document.querySelector('[data-testid="cdn-account-connection-test"]');
+            if (testWrap) testWrap.hidden = !data.account_id;
+        }
+        var hint = document.querySelector('[data-testid="cdn-account-token-hint"]');
+        if (hint) {
+            hint.hidden = false;
+            hint.textContent = data.has_api_token
+                ? (messages.tokenSavedHint || hint.textContent)
+                : (messages.tokenMissingHint || hint.textContent);
+        }
+        if (drawerTitle) {
+            drawerTitle.textContent = messages.editTitle || drawerTitle.textContent;
+        }
+        updatePermissionsInfo();
+    }
+
+    window.CdnAccountForm = {
+        resetForCreate: resetAccountFormForCreate,
+        fill: fillAccountForm,
+        closeDrawer: closeAccountDrawer
+    };
+
+    if (accountForm && accountForm.getAttribute('data-cdn-binquery-save') === '1') {
+        accountForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            if (typeof accountForm.reportValidity === 'function' && !accountForm.reportValidity()) {
+                return;
+            }
+            var params = collectSaveParams(accountForm);
+            if (!params.adapter || !params.name) {
+                dialogRequest({
+                    tone: 'warning',
+                    title: messages.saveFailed || '',
+                    message: messages.required || '',
+                    confirmLabel: messages.confirm || ''
+                });
+                return;
+            }
+            var isCreate = !params.account_id;
+            var token = params.credentials && params.credentials.api_token
+                ? String(params.credentials.api_token).trim()
+                : '';
+            if (isCreate && params.adapter === 'cloudflare' && token === '') {
+                dialogRequest({
+                    tone: 'warning',
+                    title: messages.saveFailed || '',
+                    message: messages.tokenRequired || '',
+                    confirmLabel: messages.confirm || ''
+                });
+                return;
+            }
+            accountForm.dataset.state = 'saving';
+            accountForm.dataset.message = messages.saving || '';
+            var submitButtons = accountForm.querySelectorAll('[type="submit"]');
+            submitButtons.forEach(function(btn) { btn.disabled = true; });
+
+            loadApi()
+                .then(function(api) {
+                    return api.resource('cdn').saveAccount(params);
+                })
+                .then(function(data) {
+                    if (data && data.success) {
+                        accountForm.dataset.state = 'saved';
+                        accountForm.dataset.message = data.message || messages.saved || '';
+                        var inDrawer = !!document.getElementById('cdn-account-drawer');
+                        if (inDrawer && accountForm.closest('#cdn-account-drawer')) {
+                            return dialogRequest({
+                                tone: 'success',
+                                title: messages.success || '',
+                                message: data.message || messages.saved || '',
+                                duration: 1200,
+                                confirmable: false
+                            }).then(function() {
+                                window.location.reload();
+                            });
+                        }
+                        return dialogRequest({
+                            tone: 'success',
+                            title: messages.success || '',
+                            message: data.message || messages.saved || '',
+                            duration: 1600,
+                            confirmable: false
+                        }).then(function() {
+                            window.location.href = config.accountIndexUrl || './index';
+                        });
+                    }
+                    accountForm.dataset.state = 'error';
+                    accountForm.dataset.message = (data && data.message) || messages.saveFailed || '';
+                    return dialogRequest({
+                        tone: 'danger',
+                        title: messages.saveFailed || '',
+                        message: (data && data.message) || messages.saveFailed || '',
+                        confirmLabel: messages.confirm || ''
+                    });
+                })
+                .catch(function(error) {
+                    accountForm.dataset.state = 'error';
+                    accountForm.dataset.message = (error && error.message) ? error.message : String(error);
+                    return dialogRequest({
+                        tone: 'danger',
+                        title: messages.requestFailed || '',
+                        message: (error && error.message) ? error.message : String(error),
+                        confirmLabel: messages.confirm || ''
+                    });
+                })
+                .finally(function() {
+                    submitButtons.forEach(function(btn) { btn.disabled = false; });
+                });
+        });
+    }
+})();
+</js:part>

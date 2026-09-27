@@ -13,214 +13,264 @@ $totalPages = (int)$this->getData('totalPages');
 $search = $this->getData('search') ?: '';
 $status = $this->getData('status') ?: '';
 $statistics = $this->getData('statistics') ?: [];
-$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
-    | JSON_UNESCAPED_SLASHES
-    | JSON_HEX_TAG
-    | JSON_HEX_AMP
-    | JSON_HEX_APOS
-    | JSON_HEX_QUOT;
-$jsonForScript = static function (mixed $value) use ($jsonForScriptFlags): string {
-    $json = json_encode((string)$value, $jsonForScriptFlags);
-    return is_string($json) ? $json : '""';
-};
 $escapeAttr = static function (mixed $value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 };
+$kpis = [
+    ['icon' => 'link', 'value' => (int)($statistics['total'] ?? 0), 'label' => __('总URL数')],
+    ['icon' => 'check-circle', 'value' => (int)($statistics['success'] ?? 0), 'label' => __('成功')],
+    ['icon' => 'warning', 'value' => (int)($statistics['fail'] ?? 0), 'label' => __('失败')],
+    ['icon' => 'clock', 'value' => (int)($statistics['pending'] ?? 0), 'label' => __('待处理')],
+];
 ?>
 
-<!-- 消息提示 -->
-<div class="w-grid" style="--w-mb:var(--weline-space-4);">
-    <template>Weline_Component::message.phtml</template>
-</div>
+<div class="w-grid w-backend-page" data-testid="cdn-warmup-management">
+    <div style="--w-span:12;">
+        <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+            <template>Weline_Component::message.phtml</template>
+        </div>
 
-<!-- 统计信息 -->
-<?php if (!empty($statistics)): ?>
-    <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-        <div style="--w-span-md:3;">
-            <div class="w-card w-text" data-w-background="primary" data-tone="inverse">
-                <div class="w-card__body">
-                    <h5><?= __('总URL数') ?></h5>
-                    <h3><?= $statistics['total'] ?? 0 ?></h3>
-                </div>
+        <header
+            class="w-backend-page__heading w-cluster"
+            style="--w-mb:var(--weline-space-4);"
+            data-align="start"
+            data-justify="between"
+            data-wrap="true"
+        >
+            <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                <p class="w-text" data-tone="primary" data-size="sm" style="--w-mb:0;"><?= __('CDN 运维') ?></p>
+                <h4 class="w-backend-page__title" style="--w-mb:0;"><?= __('CDN 预热') ?></h4>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);--w-mb:0;">
+                    <?= __('管理预热 URL 队列，查看进度并执行待处理任务。') ?>
+                </p>
             </div>
-        </div>
-        <div style="--w-span-md:3;">
-            <div class="w-card w-text" data-w-background="success" data-tone="inverse">
-                <div class="w-card__body">
-                    <h5><?= __('成功') ?></h5>
-                    <h3><?= $statistics['success'] ?? 0 ?></h3>
-                </div>
-            </div>
-        </div>
-        <div style="--w-span-md:3;">
-            <div class="w-card w-text" data-w-background="danger" data-tone="inverse">
-                <div class="w-card__body">
-                    <h5><?= __('失败') ?></h5>
-                    <h3><?= $statistics['fail'] ?? 0 ?></h3>
-                </div>
-            </div>
-        </div>
-        <div style="--w-span-md:3;">
-            <div class="w-card w-text" data-w-background="warning" data-tone="inverse">
-                <div class="w-card__body">
-                    <h5><?= __('待处理') ?></h5>
-                    <h3><?= $statistics['pending'] ?? 0 ?></h3>
-                </div>
-            </div>
-        </div>
-    </div>
-<?php endif; ?>
-
-<!-- 操作栏 -->
-<div class="w-cluster" data-testid="cdn-warmup-management" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
-    <div>
-        <button type="button" class="w-button" data-cdn-warmup-action="execute" data-tone="success">
-            <w:icon name="play" size="sm"></w:icon> <?= __('执行预热') ?>
-        </button>
-    </div>
-    <div>
-        <w:form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);">
-            <input type="text" name="search" class="w-input" placeholder="<?= __('搜索URL') ?>" value="<?= htmlspecialchars($search) ?>" data-size="sm">
-            <select name="status" class="w-select" data-size="sm">
-                <option value=""><?= __('全部状态') ?></option>
-                <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>><?= __('待处理') ?></option>
-                <option value="processing" <?= $status === 'processing' ? 'selected' : '' ?>><?= __('处理中') ?></option>
-                <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>><?= __('已完成') ?></option>
-                <option value="failed" <?= $status === 'failed' ? 'selected' : '' ?>><?= __('失败') ?></option>
-            </select>
-            <button type="submit" class="w-button" data-tone="primary" data-size="sm">
-                <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
+            <button type="button" class="w-button" data-cdn-warmup-action="execute" data-tone="success" data-size="sm">
+                <w:icon name="play" size="sm"></w:icon> <?= __('执行预热') ?>
             </button>
-            <a href="@backend-url{'*/backend/warmup/index'}" class="w-button" data-tone="neutral" data-size="sm">
-                <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
-            </a>
-        </w:form>
-    </div>
-</div>
+        </header>
 
-<!-- URL列表 -->
-<div class="w-card">
-    <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
-        <div class="w-table-wrap">
-            <table class="w-table" style="--w-mb:0;">
-                <thead>
-                    <tr>
-                        <th><?= __('ID') ?></th>
-                        <th><?= __('URL') ?></th>
-                        <th><?= __('模块') ?></th>
-                        <th><?= __('提供商') ?></th>
-                        <th><?= __('状态') ?></th>
-                        <th><?= __('进度') ?></th>
-                        <th><?= __('重试次数') ?></th>
-                        <th><?= __('最后预热时间') ?></th>
-                        <th><?= __('操作') ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($urls)): ?>
-                        <tr>
-                            <td colspan="9" class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('暂无数据') ?></td>
-                        </tr>
-                    <?php else: ?>
-                        <?php foreach ($urls as $url): ?>
-                            <tr>
-                                <td><?= $url->getData('warmup_url_id') ?></td>
-                                <td>
-                                    <a href="<?= htmlspecialchars($url->getData('url')) ?>" target="_blank">
-                                        <?= htmlspecialchars(mb_substr($url->getData('url'), 0, 50)) ?>
-                                        <?= mb_strlen($url->getData('url')) > 50 ? '...' : '' ?>
-                                    </a>
-                                </td>
-                                <td><?= htmlspecialchars($url->getData('module') ?: '-') ?></td>
-                                <td><?= htmlspecialchars($url->getData('provider') ?: '-') ?></td>
-                                <td>
-                                    <?php 
+        <?php if (!empty($statistics)): ?>
+            <section
+                class="w-stat-tiles w-grid"
+                aria-label="<?= $escapeAttr(__('预热概览')) ?>"
+                style="--w-stat-tile-min:9rem;--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"
+            >
+                <?php foreach ($kpis as $kpi): ?>
+                    <article class="w-card" data-w-height="full" data-w-shadow="sm">
+                        <div class="w-card__body w-cluster" data-align="center" style="--w-gap:var(--weline-space-3);">
+                            <span aria-hidden="true">
+                                <w:icon name="<?= $escapeAttr($kpi['icon']) ?>" size="sm"></w:icon>
+                            </span>
+                            <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                                <strong><?= number_format((int)$kpi['value']) ?></strong>
+                                <span class="w-text" data-tone="muted" data-size="sm"><?= $escapeAttr((string)$kpi['label']) ?></span>
+                            </div>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </section>
+        <?php endif; ?>
+
+        <section class="w-card" data-w-shadow="sm">
+            <div
+                class="w-card__header w-cluster"
+                data-align="center"
+                data-justify="between"
+                data-wrap="true"
+                style="--w-gap:var(--weline-space-3);"
+            >
+                <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                    <strong class="w-text" data-weight="strong"><?= __('预热 URL 列表') ?></strong>
+                    <span class="w-text" data-tone="muted" data-size="sm">
+                        <?= __('共 %{1} 条', (string)$total) ?>
+                    </span>
+                </div>
+                <w:form
+                    method="get"
+                    class="w-cluster"
+                    role="search"
+                    aria-label="<?= $escapeAttr(__('搜索URL')) ?>"
+                    data-align="center"
+                    data-wrap="true"
+                    style="--w-gap:var(--weline-space-2);max-inline-size:min(100%,36rem);"
+                >
+                    <label class="w-visually-hidden" for="cdn-warmup-search-input"><?= __('搜索URL') ?></label>
+                    <input
+                        id="cdn-warmup-search-input"
+                        type="search"
+                        name="search"
+                        class="w-input"
+                        data-size="sm"
+                        placeholder="<?= $escapeAttr(__('搜索URL')) ?>"
+                        value="<?= $escapeAttr($search) ?>"
+                        autocomplete="off"
+                        style="inline-size:min(100%,12rem);flex:1 1 8rem;min-inline-size:7rem;"
+                    >
+                    <label class="w-visually-hidden" for="cdn-warmup-status-filter"><?= __('全部状态') ?></label>
+                    <select
+                        id="cdn-warmup-status-filter"
+                        name="status"
+                        class="w-select"
+                        data-size="sm"
+                        style="flex:0 1 9rem;min-inline-size:7rem;"
+                        aria-label="<?= $escapeAttr(__('全部状态')) ?>"
+                    >
+                        <option value=""><?= __('全部状态') ?></option>
+                        <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>><?= __('待处理') ?></option>
+                        <option value="processing" <?= $status === 'processing' ? 'selected' : '' ?>><?= __('处理中') ?></option>
+                        <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>><?= __('已完成') ?></option>
+                        <option value="failed" <?= $status === 'failed' ? 'selected' : '' ?>><?= __('失败') ?></option>
+                    </select>
+                    <button type="submit" class="w-button" data-tone="primary" data-size="sm" style="flex:0 0 auto;white-space:nowrap;">
+                        <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
+                    </button>
+                    <a href="@backend-url{'*/backend/warmup/index'}" class="w-button" data-tone="neutral" data-size="sm" style="flex:0 0 auto;white-space:nowrap;">
+                        <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
+                    </a>
+                </w:form>
+            </div>
+
+            <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
+                <?php if (empty($urls)): ?>
+                    <div class="w-empty">
+                        <w:icon name="link" size="lg"></w:icon>
+                        <p class="w-text" data-weight="strong"><?= __('暂无预热数据') ?></p>
+                        <p class="w-text" data-tone="muted" data-size="sm"><?= __('暂无待处理或已登记的预热 URL') ?></p>
+                    </div>
+                <?php else: ?>
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
+                            <thead>
+                                <tr>
+                                    <th style="width:4.5rem;"><?= __('ID') ?></th>
+                                    <th><?= __('URL') ?></th>
+                                    <th style="width:7rem;"><?= __('模块') ?></th>
+                                    <th style="width:7rem;"><?= __('提供商') ?></th>
+                                    <th style="width:5.5rem;"><?= __('状态') ?></th>
+                                    <th style="width:9rem;"><?= __('进度') ?></th>
+                                    <th style="width:5rem;"><?= __('重试次数') ?></th>
+                                    <th style="width:9rem;"><?= __('最后预热时间') ?></th>
+                                    <th class="w-text" data-align="end" style="width:10rem;"><?= __('操作') ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($urls as $url): ?>
+                                    <?php
                                     $urlStatus = $url->getData('status');
                                     $statusMap = [
-                                        'pending' => ['label' => __('待处理'), 'class' => 'secondary'],
-                                        'processing' => ['label' => __('处理中'), 'class' => 'info'],
-                                        'completed' => ['label' => __('已完成'), 'class' => 'success'],
-                                        'failed' => ['label' => __('失败'), 'class' => 'danger']
+                                        'pending' => ['label' => __('待处理'), 'tone' => 'neutral'],
+                                        'processing' => ['label' => __('处理中'), 'tone' => 'info'],
+                                        'completed' => ['label' => __('已完成'), 'tone' => 'success'],
+                                        'failed' => ['label' => __('失败'), 'tone' => 'danger'],
                                     ];
-                                    $statusInfo = $statusMap[$urlStatus] ?? ['label' => $urlStatus, 'class' => 'secondary'];
-                                    ?>
-                                    <span class="w-badge bg-<?= $statusInfo['class'] ?>"><?= $statusInfo['label'] ?></span>
-                                </td>
-                                <td>
-                                    <?php 
+                                    $statusInfo = $statusMap[$urlStatus] ?? ['label' => $urlStatus, 'tone' => 'neutral'];
                                     $processed = (int)$url->getData('processed_count');
                                     $target = (int)$url->getData('target_count');
                                     $percent = $target > 0 ? round(($processed / $target) * 100, 1) : 0;
+                                    $isEnabled = (bool)$url->getData('enabled');
+                                    $urlId = $url->getData('warmup_url_id');
                                     ?>
-                                    <div class="w-progress" style="height: 20px;">
-                                        <div class="w-progress__bar" role="progressbar" style="width: <?= $percent ?>%">
-                                            <?= $processed ?>/<?= $target ?> (<?= $percent ?>%)
-                                        </div>
-                                    </div>
-                                </td>
-                                <td><?= $url->getData('retries') ?></td>
-                                <td><?= $url->getData('last_warmed_at') ? date('Y-m-d H:i:s', $url->getData('last_warmed_at')) : '-' ?></td>
-                                <td>
-                                    <div class="w-button-group">
-                                        <button type="button" class="w-button btn-<?= $url->getData('enabled') ? 'warning' : 'success' ?>" data-cdn-warmup-action="toggle-enable" data-url-id="<?= $escapeAttr($url->getData('warmup_url_id')) ?>" data-enabled="<?= $url->getData('enabled') ? '0' : '1' ?>" data-state="idle" data-message="">
-                                            <i class="mdi mdi-<?= $url->getData('enabled') ? 'close' : 'check' ?>"></i> 
-                                            <?= $url->getData('enabled') ? __('禁用') : __('启用') ?>
-                                        </button>
-                                        <button type="button" class="w-button" data-cdn-warmup-action="delete" data-url-id="<?= $escapeAttr($url->getData('warmup_url_id')) ?>" data-tone="danger">
-                                            <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- 分页 -->
-    <?php if ($totalPages > 1): ?>
-        <div class="w-card__footer">
-            <nav>
-                <ul class="w-pagination" data-justify="center" style="--w-mb:0;">
-                    <?php if ($page > 1): ?>
-                        <li class="w-pagination__item">
-                            <a class="w-pagination__link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
-                                <?= __('上一页') ?>
-                            </a>
-                        </li>
-                    <?php endif; ?>
-                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                        <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
-                            <a class="w-pagination__link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
-                                <?= $i ?>
-                            </a>
-                        </li>
-                    <?php endfor; ?>
-                    <?php if ($page < $totalPages): ?>
-                        <li class="w-pagination__item">
-                            <a class="w-pagination__link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
-                                <?= __('下一页') ?>
-                            </a>
-                        </li>
-                    <?php endif; ?>
-                </ul>
-            </nav>
-            <div class="w-text" data-align="center" data-tone="muted" style="--w-mt:var(--weline-space-2);">
-                <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
+                                    <tr>
+                                        <td class="w-text" data-tone="muted"><?= $escapeAttr($urlId) ?></td>
+                                        <td>
+                                            <a href="<?= $escapeAttr($url->getData('url')) ?>" target="_blank" rel="noopener noreferrer">
+                                                <?= $escapeAttr(mb_substr($url->getData('url'), 0, 50)) ?>
+                                                <?= mb_strlen($url->getData('url')) > 50 ? '...' : '' ?>
+                                            </a>
+                                        </td>
+                                        <td><?= $escapeAttr($url->getData('module') ?: '-') ?></td>
+                                        <td><?= $escapeAttr($url->getData('provider') ?: '-') ?></td>
+                                        <td>
+                                            <span class="w-badge" data-tone="<?= $escapeAttr($statusInfo['tone']) ?>"><?= $statusInfo['label'] ?></span>
+                                        </td>
+                                        <td>
+                                            <div class="w-progress">
+                                                <div class="w-progress__bar" role="progressbar" style="width: <?= $percent ?>%" aria-valuenow="<?= $percent ?>" aria-valuemin="0" aria-valuemax="100">
+                                                    <?= $processed ?>/<?= $target ?> (<?= $percent ?>%)
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><?= (int)$url->getData('retries') ?></td>
+                                        <td>
+                                            <small class="w-text" data-tone="muted" style="font-variant-numeric:tabular-nums;">
+                                                <?= $url->getData('last_warmed_at') ? date('Y-m-d H:i:s', $url->getData('last_warmed_at')) : '-' ?>
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <div class="w-button-group w-cluster" data-justify="end" data-wrap="true" style="--w-gap:var(--weline-space-1);">
+                                                <button
+                                                    type="button"
+                                                    class="w-button"
+                                                    data-cdn-warmup-action="toggle-enable"
+                                                    data-url-id="<?= $escapeAttr($urlId) ?>"
+                                                    data-enabled="<?= $isEnabled ? '0' : '1' ?>"
+                                                    data-state="idle"
+                                                    data-message=""
+                                                    data-tone="<?= $isEnabled ? 'warning' : 'success' ?>"
+                                                    data-size="sm"
+                                                >
+                                                    <w:icon name="<?= $isEnabled ? 'close' : 'check' ?>" size="sm"></w:icon>
+                                                    <?= $isEnabled ? __('禁用') : __('启用') ?>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="w-button"
+                                                    data-cdn-warmup-action="delete"
+                                                    data-url-id="<?= $escapeAttr($urlId) ?>"
+                                                    data-tone="danger"
+                                                    data-size="sm"
+                                                >
+                                                    <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
             </div>
-        </div>
-    <?php endif; ?>
+
+            <?php if ($totalPages > 1): ?>
+                <div class="w-card__footer w-cluster" data-justify="between" data-align="center" data-wrap="true">
+                    <div class="w-text" data-tone="muted" data-size="sm">
+                        <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
+                    </div>
+                    <nav aria-label="<?= $escapeAttr(__('分页')) ?>">
+                        <ul class="w-pagination" style="--w-mb:0;">
+                            <?php if ($page > 1): ?>
+                                <li class="w-pagination__item">
+                                    <a class="w-pagination__link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
+                                        <w:icon name="chevron-left" size="sm"></w:icon> <?= __('上一页') ?>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                                <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
+                                    <a class="w-pagination__link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
+                                        <?= $i ?>
+                                    </a>
+                                </li>
+                            <?php endfor; ?>
+                            <?php if ($page < $totalPages): ?>
+                                <li class="w-pagination__item">
+                                    <a class="w-pagination__link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
+                                        <?= __('下一页') ?> <w:icon name="chevron-right" size="sm"></w:icon>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                        </ul>
+                    </nav>
+                </div>
+            <?php endif; ?>
+        </section>
+    </div>
 </div>
 
 <js:part>
 (function() {
     'use strict';
-    
-    var executeUrl = "@backend-url{'*/backend/warmup/execute'}";
-    var toggleEnableUrl = "@backend-url{'*/backend/warmup/toggleEnable'}";
-    var deleteUrl = "@backend-url{'*/backend/warmup/delete'}";
 
     function confirmAction(message, onConfirm) {
         Weline.UI.dialog.confirm(message).then(function(confirmed) {
@@ -256,7 +306,7 @@ $escapeAttr = static function (mixed $value): string {
             window.CdnWarmupManager.deleteUrl(target.dataset.urlId || '');
         }
     });
-    
+
     window.CdnWarmupManager = {
         executeWarmup: function() {
             Weline.UI.dialog.request({
@@ -269,7 +319,8 @@ $escapeAttr = static function (mixed $value): string {
                 confirmTone: 'success'
             }).then(function(result) {
                 if (result.confirmed) {
-                    Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api).then(function(api){ return api.resource('cdn').executeWarmup({}); })
+                    Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+                    .then(function(api){ return api.resource('cdn').executeWarmup({}); })
                     .then(function(data) {
                         if (data && data.success !== false) {
                             Weline.UI.dialog.request({
@@ -299,7 +350,7 @@ $escapeAttr = static function (mixed $value): string {
                 }
             });
         },
-        
+
         toggleEnable: function(id, enabled) {
             var trigger = document.querySelector('[data-cdn-warmup-action="toggle-enable"][data-url-id="' + id + '"]');
             if (trigger) {
@@ -341,7 +392,7 @@ $escapeAttr = static function (mixed $value): string {
                 }
             });
         },
-        
+
         deleteUrl: function(id) {
             confirmAction('<?= __('确定要删除此URL吗？') ?>', function() {
                 Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
