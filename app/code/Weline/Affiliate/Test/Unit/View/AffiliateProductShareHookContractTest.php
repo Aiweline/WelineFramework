@@ -41,7 +41,14 @@ final class AffiliateProductShareHookContractTest extends TestCase
         self::assertStringContainsString('facebook.com/sharer', $src);
         self::assertStringContainsString('<svg', $src);
         self::assertStringContainsString('type="text"', $src);
-        self::assertStringContainsString('repeat(4, minmax(0, 1fr))', $src);
+        // Flat buybox chrome: one disclosure shell — no nested guest card / platform boxes.
+        self::assertStringContainsString('no nested promo card', $src);
+        self::assertStringContainsString('no per-platform card borders', $src);
+        self::assertStringContainsString('background: transparent', $src);
+        self::assertStringContainsString('border: 0', $src);
+        self::assertStringContainsString('white-space: normal', $src);
+        self::assertStringContainsString('overflow-wrap: anywhere', $src);
+        self::assertStringContainsString('justify-self: stretch', $src);
         self::assertStringNotContainsString('也可以直接免费分享', $src);
         self::assertStringNotContainsString('data-affiliate-share-free', $src);
         self::assertStringNotContainsString('affiliate-share-panel--gallery', $src);

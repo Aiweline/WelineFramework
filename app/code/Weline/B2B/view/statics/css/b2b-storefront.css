@@ -147,6 +147,8 @@
 }
 
 .product-native-detail--quick-add .product-native-detail__hero-grid {
+    /* display:grid here too: listing hosts may open the panel before product-native-detail.css lands. */
+    display: grid;
     grid-template-columns: minmax(0, 34%) minmax(0, 1fr);
     gap: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
     align-items: start;
@@ -157,6 +159,9 @@
     top: var(--spacing-sm, 0.5rem);
     align-self: start;
     z-index: 2;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
 }
 
 /* Cap gallery so variants + B2B tiers stay reachable without a giant white spill. */
