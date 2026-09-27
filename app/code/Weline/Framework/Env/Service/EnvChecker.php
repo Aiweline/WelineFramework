@@ -122,8 +122,9 @@ class EnvChecker implements EnvCheckerInterface
         $loadedExtensions = get_loaded_extensions();
         // 将已加载扩展转为小写进行比较（扩展名不区分大小写）
         $loadedExtensionsLower = array_map('strtolower', $loadedExtensions);
-        
-        foreach ($this->requirements->getExtensions() as $extension) {
+        $resolved = $this->resolveDatabaseDriverExtensions($this->requirements->getExtensions());
+
+        foreach ($resolved['required'] as $extension) {
             $key = 'extension_' . $extension;
             // 不区分大小写比较
             if (in_array(strtolower($extension), $loadedExtensionsLower, true)) {
@@ -135,6 +136,90 @@ class EnvChecker implements EnvCheckerInterface
                 $this->printError(__('扩展 %{ext} ✖（未安装）', ['ext' => $extension]));
             }
         }
+
+        foreach ($resolved['recommended'] as $extension) {
+            $key = 'extension_optional_db_' . $extension;
+            if (in_array(strtolower($extension), $loadedExtensionsLower, true)) {
+                $result->addDetail($key, '✔', true);
+                $this->printSuccess(__('扩展 %{ext} ✔（当前库未使用，可选）', ['ext' => $extension]));
+                continue;
+            }
+            // 非当前库驱动：不进 missingRequired，只记推荐缺失，避免 pgsql 装被 pdo_mysql 卡住（反之亦然）
+            $result->addMissingRecommendedExtension($extension);
+            $result->addDetail($key, '○', true);
+            $this->printSuccess(__('扩展 %{ext} 未装（当前库类型不需要，已降为推荐）', ['ext' => $extension]));
+        }
+    }
+
+    /**
+     * Keep only the PDO driver required by env.php db.master.type (default pgsql).
+     *
+     * @param list<string> $extensions
+     * @return array{required:list<string>,recommended:list<string>}
+     */
+    private function resolveDatabaseDriverExtensions(array $extensions): array
+    {
+        $dbType = $this->resolveConfiguredDatabaseType();
+        $required = [];
+        $recommended = [];
+        foreach ($extensions as $extension) {
+            if (!is_string($extension) || $extension === '') {
+                continue;
+            }
+            $lower = strtolower($extension);
+            if ($lower === 'pdo_pgsql') {
+                if (in_array($dbType, ['pgsql', 'postgres', 'postgresql'], true)) {
+                    $required[] = $extension;
+                } else {
+                    $recommended[] = $extension;
+                }
+                continue;
+            }
+            if ($lower === 'pdo_mysql') {
+                if (in_array($dbType, ['mysql', 'mariadb'], true)) {
+                    $required[] = $extension;
+                } else {
+                    $recommended[] = $extension;
+                }
+                continue;
+            }
+            $required[] = $extension;
+        }
+
+        return [
+            'required' => $required,
+            'recommended' => $recommended,
+        ];
+    }
+
+    /**
+     * Read configured master DB type; default pgsql (framework one-click default).
+     */
+    private function resolveConfiguredDatabaseType(): string
+    {
+        try {
+            if (\defined('BP')) {
+                $envFile = rtrim((string)BP, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
+                if (is_file($envFile)) {
+                    /** @var mixed $env */
+                    $env = include $envFile;
+                    if (is_array($env)) {
+                        $type = strtolower(trim((string)(
+                            $env['db']['master']['type']
+                            ?? $env['db']['connection']['default']['type']
+                            ?? ''
+                        )));
+                        if ($type !== '') {
+                            return $type;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // fall through to installer default
+        }
+
+        return 'pgsql';
     }
 
     /**

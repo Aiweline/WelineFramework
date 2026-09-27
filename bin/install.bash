@@ -917,6 +917,43 @@ find_system_php_linux() {
   return 1
 }
 
+
+# apt/dpkg 锁占用时返回 0（busy）
+# flock 仅在可写锁文件时可信（weline 用户对 /var/lib/dpkg/lock* 常无写权限，
+# flock 失败会被误判为 busy）。无写权限时只看真实 apt/dpkg 进程。
+# 勿把常驻 unattended-upgrade-shutdown --wait-for-signal 当 busy。
+linux_package_manager_busy() {
+  local lock
+  for lock in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock /var/lib/apt/lists/lock; do
+    [[ -e "$lock" ]] || continue
+    if command -v flock >/dev/null 2>&1 && [[ -w "$lock" ]]; then
+      if ! flock -n "$lock" true 2>/dev/null; then
+        return 0
+      fi
+    fi
+  done
+  if pgrep -x apt-get >/dev/null 2>&1 || pgrep -x apt >/dev/null 2>&1 || pgrep -x dpkg >/dev/null 2>&1; then
+    return 0
+  fi
+  if pgrep -f "/usr/bin/unattended-upgrade$" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+restore_php_rebuild_backup() {
+  local dest="$1"
+  local backup="$2"
+  if [[ -d "$backup" ]]; then
+    echo "Restoring PHP from rebuild backup: $backup -> $dest" >&2
+    rm -rf "$dest" 2>/dev/null || true
+    mv "$backup" "$dest" || {
+      echo "ERROR: failed to restore PHP backup from $backup" >&2
+      return 1
+    }
+  fi
+}
+
 # ---- PHP ----（Linux：检测 extend/server/php 或编译安装；Mac：仅用 Homebrew 安装，不自行编译）
 install_php() {
   local dest="$SERVER_DIR/php"
@@ -960,9 +997,21 @@ install_php() {
   fi
 
   # Linux：检测 extend/server/php 或从源码编译
+  local php_rebuild_backup=""
   if [[ "$REBUILD_PHP" == true ]] && [[ -d "$dest" ]]; then
-    echo "Removing existing PHP at $dest (--rebuild-php) to recompile with required extensions..."
-    rm -rf "$dest"
+    if linux_package_manager_busy; then
+      echo "ERROR: apt/dpkg is busy (lock held). Refusing --rebuild-php so the existing PHP at $dest is not deleted while packages cannot install." >&2
+      echo "  Wait for apt to finish, then re-run: $0 --rebuild-php php" >&2
+      return 1
+    fi
+    php_rebuild_backup="${dest}.rebuild-bak.$$"
+    echo "Moving existing PHP aside for rebuild: $dest -> $php_rebuild_backup"
+    rm -rf "$php_rebuild_backup" 2>/dev/null || true
+    if ! mv "$dest" "$php_rebuild_backup"; then
+      echo "ERROR: failed to move existing PHP aside; aborting --rebuild-php" >&2
+      return 1
+    fi
+    trap 'restore_php_rebuild_backup "'"$dest"'" "'"$php_rebuild_backup"'"' ERR
     php_exe=""
   else
   [[ -x "$dest/php.exe" ]] && php_exe="$dest/php.exe"
@@ -985,6 +1034,12 @@ install_php() {
       safe_ln_sf "$php_exe" "$dest/bin/php" || return 1
     fi
     configure_wls_php_ini "$dest"
+    if [[ -n "${php_rebuild_backup:-}" ]] && [[ -d "$php_rebuild_backup" ]]; then
+      trap - ERR
+      echo "Rebuild succeeded; removing PHP backup $php_rebuild_backup"
+      rm -rf "$php_rebuild_backup"
+      php_rebuild_backup=""
+    fi
     add_to_path "$dest"
     [[ -d "$dest/bin" ]] && add_to_path "$dest/bin"
     return 0
@@ -1011,6 +1066,12 @@ install_php() {
   install_php_system_deps || return 1
   install_php_from_source "$dest" || return 1
   configure_wls_php_ini "$dest"
+    if [[ -n "${php_rebuild_backup:-}" ]] && [[ -d "$php_rebuild_backup" ]]; then
+      trap - ERR
+      echo "Rebuild succeeded; removing PHP backup $php_rebuild_backup"
+      rm -rf "$php_rebuild_backup"
+      php_rebuild_backup=""
+    fi
   add_to_path "$dest"
   [[ -d "$dest/bin" ]] && add_to_path "$dest/bin"
   return 0
