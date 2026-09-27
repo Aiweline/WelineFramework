@@ -25,6 +25,11 @@ final class PgsqlBooleanUpdateQuery extends Query
     {
         return $this->buildUpdateForPgsql($table, $wheres);
     }
+
+    public function buildInsertForTest(string $table): string
+    {
+        return $this->buildInsertForPgsql($table);
+    }
 }
 
 final class PgsqlBooleanUpdateTest extends TestCase
@@ -81,5 +86,30 @@ final class PgsqlBooleanUpdateTest extends TestCase
         );
 
         self::assertSame('1', $compiled->bindings[':up_' . md5('is_anonymous')] ?? null);
+    }
+
+    public function testInsertBindsBooleanFalseAsZeroStringNotEmpty(): void
+    {
+        $query = new PgsqlBooleanUpdateQuery();
+        $query->identity_field = 'domain_id';
+        $query->insert = [
+            'insert' => [[
+                'domain_id' => null,
+                'site_id' => 1,
+                'adapter' => 'cloudflare',
+                'domain_name' => 'example.com',
+                'zone_id' => 'zone-1',
+                'inherit_default' => false,
+                'enabled' => true,
+            ]],
+        ];
+
+        $query->buildInsertForTest('w_cdn_domain');
+
+        $falseKey = ':' . md5('insert_inherit_default_field_1');
+        $trueKey = ':' . md5('insert_enabled_field_1');
+        self::assertSame('0', $query->bound_values[$falseKey] ?? null);
+        self::assertSame('1', $query->bound_values[$trueKey] ?? null);
+        self::assertNotSame('', $query->bound_values[$falseKey] ?? null);
     }
 }
