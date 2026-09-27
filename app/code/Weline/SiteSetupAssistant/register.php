@@ -8,7 +8,7 @@ Register::register(
     Register::MODULE,
     'Weline_SiteSetupAssistant',
     __DIR__,
-    '0.3.4',
+    '0.3.5',
     '建站助手：默认全站；胶囊提示各站未完成并可切站。',
     [
         'Weline_Backend',

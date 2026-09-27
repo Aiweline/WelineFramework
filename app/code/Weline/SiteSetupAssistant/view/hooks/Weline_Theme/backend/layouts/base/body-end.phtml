@@ -5,9 +5,12 @@
  * @hook-solo false
  *
  * 后台通用壳 body-end：挂建站助手悬浮（default / dashboard / fullscreen 等含 base::body-end 的布局）。
+ * Hook 直出 HTML 不会走布局 bake，须在此显式挂 CSS/JS（对齐客服浮层 hook），否则 FAB 无样式且面板逻辑不跑。
  *
  * @var \Weline\Framework\View\Template $this
  */
+
+use Weline\Framework\App\Env;
 
 $requestPathRaw = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
 $requestPathParsed = parse_url($requestPathRaw, PHP_URL_PATH);
@@ -19,4 +22,52 @@ if (str_contains($requestPath, '/backend/login')
     return;
 }
 
-echo $this->fetch('Weline_SiteSetupAssistant::templates/backend/widgets/site-setup-assistant-float.phtml');
+$h = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$ssaModule = Env::getInstance()->getModuleList()['Weline_SiteSetupAssistant'] ?? [];
+$ssaStaticDir = rtrim((string)($ssaModule['base_path'] ?? ''), DIRECTORY_SEPARATOR)
+    . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR . 'statics';
+$themeModule = Env::getInstance()->getModuleList()['Weline_Theme'] ?? [];
+$themeStaticDir = rtrim((string)($themeModule['base_path'] ?? ''), DIRECTORY_SEPARATOR)
+    . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR . 'statics';
+
+$cssPath = $ssaStaticDir . DIRECTORY_SEPARATOR . 'css' . DIRECTORY_SEPARATOR . 'widgets'
+    . DIRECTORY_SEPARATOR . 'widget-site-setup-assistant-float.css';
+$jsPath = $ssaStaticDir . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'widgets'
+    . DIRECTORY_SEPARATOR . 'widget-site-setup-assistant-float-0.js';
+$runtimePath = $themeStaticDir . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'widgets'
+    . DIRECTORY_SEPARATOR . 'widget-assets-runtime.js';
+$instanceCssPath = $themeStaticDir . DIRECTORY_SEPARATOR . 'css' . DIRECTORY_SEPARATOR . 'widgets'
+    . DIRECTORY_SEPARATOR . 'widget-instance-styles.css';
+$instanceJsPath = $themeStaticDir . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'widgets'
+    . DIRECTORY_SEPARATOR . 'widget-instance-styles.js';
+
+$cssHref = (string)$this->fetchTagSource('statics', 'Weline_SiteSetupAssistant::css/widgets/widget-site-setup-assistant-float.css');
+$runtimeHref = (string)$this->fetchTagSource('statics', 'Weline_Theme::js/widgets/widget-assets-runtime.js');
+$jsHref = (string)$this->fetchTagSource('statics', 'Weline_SiteSetupAssistant::js/widgets/widget-site-setup-assistant-float-0.js');
+$instanceCssHref = (string)$this->fetchTagSource('statics', 'Weline_Theme::css/widgets/widget-instance-styles.css');
+$instanceJsHref = (string)$this->fetchTagSource('statics', 'Weline_Theme::js/widgets/widget-instance-styles.js');
+
+$cssV = (string)((int)(@filemtime($cssPath) ?: time()));
+$runtimeV = (string)((int)(@filemtime($runtimePath) ?: time()));
+$jsV = (string)((int)(@filemtime($jsPath) ?: time()));
+$instanceCssV = (string)((int)(@filemtime($instanceCssPath) ?: time()));
+$instanceJsV = (string)((int)(@filemtime($instanceJsPath) ?: time()));
+?>
+<link rel="stylesheet"
+      href="<?= $h($cssHref) ?>?v=<?= $h($cssV) ?>"
+      data-no-extract="true"
+      data-weline-ssa-float="1">
+<link rel="stylesheet"
+      href="<?= $h($instanceCssHref) ?>?v=<?= $h($instanceCssV) ?>"
+      data-no-extract="true"
+      data-weline-ssa-float="1">
+<?= $this->fetch('Weline_SiteSetupAssistant::templates/backend/widgets/site-setup-assistant-float.phtml') ?>
+<script src="<?= $h($runtimeHref) ?>?v=<?= $h($runtimeV) ?>"
+        data-no-extract="true"
+        data-weline-ssa-float="1"></script>
+<script src="<?= $h($jsHref) ?>?v=<?= $h($jsV) ?>"
+        data-no-extract="true"
+        data-weline-ssa-float="1"></script>
+<script src="<?= $h($instanceJsHref) ?>?v=<?= $h($instanceJsV) ?>"
+        data-no-extract="true"
+        data-weline-ssa-float="1"></script>
