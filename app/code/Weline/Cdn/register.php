@@ -15,7 +15,7 @@ Register::register(
     Register::MODULE,
     'Weline_Cdn',
     __DIR__,
-    '1.0.0',
+    '1.0.7',
     '多适配器CDN管理模块，提供缓存清理、规则管理、预热等功能。默认支持Cloudflare，同时允许其他模块通过适配器模式贡献其他CDN提供商。',
     [
         'Weline_Framework',

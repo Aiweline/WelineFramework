@@ -62,7 +62,7 @@ class RulesPushDefaultsTest extends TestCase
         $this->assertIsString($content);
         $rules = \json_decode($content, true);
         $this->assertIsArray($rules, 'default-rules.json must decode as JSON array');
-        $this->assertGreaterThanOrEqual(7, \count($rules), 'default-rules.json should keep at least 7 rules');
+        $this->assertGreaterThanOrEqual(6, \count($rules), 'default-rules.json should keep at least 6 rules');
 
         $expressions = \array_column($rules, 'expression');
         $this->assertNotEmpty($expressions);
@@ -71,8 +71,9 @@ class RulesPushDefaultsTest extends TestCase
 
         $this->assertStringContainsString('x-weline-cache-bypass', $joined, 'cache bypass header rule missing');
         $this->assertStringContainsString('x-weline-idempotent', $joined, 'idempotent header rule missing');
-        $this->assertStringContainsString('x-weline-url-guard', $joined, 'url guard header rule missing');
-        $this->assertStringContainsString('x-weline-cache-status', $joined, 'cache status header rule missing');
+        $this->assertStringContainsString('bypass_by_default', \strtolower(\json_encode($rules) ?: ''), 'storefront FPC→CF bridge mode missing');
+        $this->assertStringNotContainsString('http.response.', $joined, 'request-phase rules must not use response fields');
+        $this->assertStringNotContainsString('cache_reserve', \strtolower(\json_encode($rules) ?: ''), 'cache_reserve is not a Cache Rules action');
     }
 
     public function testStaticAndAdminRulesArePreservedForCompatibility(): void

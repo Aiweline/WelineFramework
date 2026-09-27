@@ -24,6 +24,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\ContentEncodingNegotiator;
 use Weline\Framework\Http\Fpc\FpcBypassEvaluator;
 use Weline\Framework\Http\Fpc\FpcStoreAdapterRegistry;
+use Weline\Framework\Http\GuardHeaders;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\ResponseObservabilityPolicy;
 use Weline\Framework\Http\Security\SecurityHeaderPolicyService;
@@ -956,6 +957,7 @@ final class FullPageCacheCoordinator
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'STALE');
+        $this->applyFpcHitEdgeCacheHeaders($response, true);
         $this->applyFpcHitPerformanceHeaders(
             $response,
             $cacheSource,
@@ -1146,6 +1148,7 @@ final class FullPageCacheCoordinator
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'HIT');
+        $this->applyFpcHitEdgeCacheHeaders($response);
         $this->applyFpcHitPerformanceHeaders($response, 'process', $variant);
         $this->ensureVaryHeader($response, 'Cookie');
         $response->markTelemetryPrepared();
@@ -1790,6 +1793,7 @@ final class FullPageCacheCoordinator
         }
         $isStale = \str_starts_with($source, 'stale-');
         $response->setHeader('X-Weline-FPC', $isStale ? 'STALE' : 'HIT');
+        $this->applyFpcHitEdgeCacheHeaders($response, $isStale);
         $this->applyFpcHitPerformanceHeaders($response, $source, $variant, $isStale);
         $this->ensureVaryHeader($response, 'Cookie');
         $response->markTelemetryPrepared();
@@ -2411,6 +2415,7 @@ final class FullPageCacheCoordinator
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'HIT');
+        $this->applyFpcHitEdgeCacheHeaders($response);
         $this->applyFpcHitPerformanceHeaders(
             $response,
             $cacheSource,
@@ -2947,6 +2952,7 @@ final class FullPageCacheCoordinator
         $response->setHeader('Content-Length', (string)\strlen($encodedBody));
         $this->ensureVaryAcceptEncoding($response);
         $response->setHeader('X-Weline-FPC', 'HIT');
+        $this->applyFpcHitEdgeCacheHeaders($response);
         $variant = \is_array($cached[self::VARIANT_PAYLOAD_KEY] ?? null)
             ? $cached[self::VARIANT_PAYLOAD_KEY]
             : [];
@@ -3169,6 +3175,20 @@ final class FullPageCacheCoordinator
         }
 
         return false;
+    }
+
+    /**
+     * FPC HIT/STALE 出站：写 CDN 专用缓存头，供 Cloudflare Cache Rules
+     *（edge_ttl.mode=bypass_by_default）在「有源站缓存头才进边缘」时命中。
+     * 不改浏览器 Cache-Control（保持 private/no-store 语义由调用方决定）。
+     */
+    private function applyFpcHitEdgeCacheHeaders(Response $response, bool $stale = false): void
+    {
+        $maxAge = $stale ? 300 : 600;
+        $directive = 'public, max-age=' . $maxAge;
+        $response->setHeader('CDN-Cache-Control', $directive);
+        $response->setHeader('Cloudflare-CDN-Cache-Control', $directive);
+        GuardHeaders::writeCacheStatus($response, GuardHeaders::STATUS_HIT);
     }
 
     /**
