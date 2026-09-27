@@ -211,7 +211,17 @@
                     24,
                     Math.floor((leftCluster.offsetHeight || 40) * 0.75)
                 );
-                return Math.abs(leftCluster.offsetTop - rightCluster.offsetTop) >= rowThreshold;
+                const deltaTop = Math.abs(leftCluster.offsetTop - rightCluster.offsetTop);
+                if (deltaTop < rowThreshold) {
+                    return false;
+                }
+                // offsetTop 差达阈值也可能是「同高基线错位」误判（实测两行时 Δtop≈9px），
+                // 必须 rect 佐证垂直区间真的不相交，才按两行全宽算。
+                const leftRect = leftCluster.getBoundingClientRect();
+                const rightRect = rightCluster.getBoundingClientRect();
+                const overlap = Math.min(leftRect.bottom, rightRect.bottom)
+                    - Math.max(leftRect.top, rightRect.top);
+                return overlap <= 2;
             }
 
             function syncNavStackMode() {
@@ -1008,12 +1018,14 @@
                     return '/Weline/Theme/view/statics/images/storefront-placeholder/default.svg';
                 }
 
-                function appendLeafTab(label, href, description) {
+                function appendLeafTab(label, href, description, categoryImage) {
                     const newPanelId = panelId + '-panel-' + tabIndex;
                     const newTabId = panelId + '-tab-' + tabIndex;
                     const isActive = tabIndex === 0;
-                    const sidebarImage = headerDemoImage((tabIndex + 1) * 11);
-                    const cardImage = headerDemoImage((tabIndex + 1) * 17);
+                    const sidebarImage = String(categoryImage || '').trim()
+                        || headerDemoImage((tabIndex + 1) * 11);
+                    const cardImage = String(categoryImage || '').trim()
+                        || headerDemoImage((tabIndex + 1) * 17);
                     const descText = String(description || '').trim() || formatBrowseCategoryDesc(label);
 
                     const wrap = document.createElement('li');
@@ -1061,12 +1073,14 @@
                 }
 
 
-                function appendTopLevelTab(label, href, sourceMega) {
+                function appendTopLevelTab(label, href, sourceMega, categoryImage) {
                     const newPanelId = panelId + '-panel-' + tabIndex;
                     const newTabId = panelId + '-tab-' + tabIndex;
                     const isActive = tabIndex === 0;
+                    // SSR data-category-image 是权威源；面板首图仅作回退（懒面板可能无 img）。
                     const firstSidebarImg = sourceMega.querySelector('.mega-menu-sidebar-item__media img');
-                    const sidebarImage = (firstSidebarImg && firstSidebarImg.getAttribute('src'))
+                    const sidebarImage = String(categoryImage || '').trim()
+                        || (firstSidebarImg && firstSidebarImg.getAttribute('src'))
                         || headerDemoImage((tabIndex + 1) * 11);
 
                     const wrap = document.createElement('li');
@@ -1150,25 +1164,27 @@
                     const label = ((link && link.textContent) || '').trim() || headerMoreLabel;
                     const href = (link && link.getAttribute('href')) || '#';
                     const description = (link && (link.getAttribute('data-category-description') || link.getAttribute('data-description'))) || '';
+                    const categoryImage = (item.getAttribute && item.getAttribute('data-category-image')) || '';
                     const sourceMega = item.querySelector(':scope > [data-mega-menu], :scope > .header-category-panel[data-mega-menu]');
 
                     // More = 展开被隐藏的顶层分类（L1），不把二级摊进侧栏
                     if (!sourceMega) {
-                        appendLeafTab(label, href, description);
+                        appendLeafTab(label, href, description, categoryImage);
                         return;
                     }
                     const sourceTabs = Array.from(sourceMega.querySelectorAll('.mega-menu-sidebar [data-mega-tab]'));
                     if (!sourceTabs.length) {
-                        appendLeafTab(label, href, description);
+                        appendLeafTab(label, href, description, categoryImage);
                         return;
                     }
-                    appendTopLevelTab(label, href, sourceMega);
+                    appendTopLevelTab(label, href, sourceMega, categoryImage);
                 });
 
                 container.innerHTML = '';
                 container.appendChild(sidebar);
                 container.appendChild(panels);
             }
+
 
             // 首屏同步：先锁单行/两行策略；先左后右
             syncNavStackMode();
