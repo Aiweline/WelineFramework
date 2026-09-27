@@ -212,6 +212,7 @@ tests/e2e/.smoke-publish-last.log
 # 模块测试证据 / 静态 evidence 倾倒（非产品文档）
 **/test/evidence/
 **/view/statics/evidence/
+app/code/Weline/Ai/Test/Http/Backend/batch-test-results.json
 
 # PHPUnit cache directory (10+)
 .phpunit.cache/
