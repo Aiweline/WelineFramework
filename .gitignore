@@ -196,9 +196,17 @@ tests/e2e/.last-playwright-tee.txt
 tests/e2e/.smoke-publish-last.log
 /tests/e2e/**/artifacts/
 /tests/e2e/tests/
+/tests/e2e/results/
 /tests/e2e/tmp-*
 /tests/e2e/*.log
+/tests/e2e/*.png
 /tests/var/codex-tmp/
+**/*-snapshots/
+
+# 已迁出模块残留
+/app/code/WeShop/
+/tests/unit/specs/WeShop/
+/tests/unit/WeShop/
 
 # 模块测试证据 / 静态 evidence 倾倒（非产品文档）
 **/test/evidence/
