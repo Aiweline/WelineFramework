@@ -47,6 +47,18 @@ $configFields = (array)($platforms[$platform]['config_fields'] ?? []);
 $configuredSecretKeys = $configBoundary->configuredSecrets($accountConfig, $configFields);
 $configArray = $configBoundary->forDisplay($accountConfig, $configFields);
 $configJson = $configArray ? json_encode($configArray, JSON_PRETTY_PRINT | $jsonForScriptFlags) : '';
+$serviceAccountClientEmail = '';
+$serviceAccountRaw = $accountConfig['service_account'] ?? null;
+if (is_string($serviceAccountRaw) && $serviceAccountRaw !== '') {
+    $decodedSa = json_decode($serviceAccountRaw, true);
+    $serviceAccountRaw = is_array($decodedSa) ? $decodedSa : null;
+}
+if (is_array($serviceAccountRaw)) {
+    $candidateEmail = trim((string)($serviceAccountRaw['client_email'] ?? ''));
+    if ($candidateEmail !== '' && filter_var($candidateEmail, FILTER_VALIDATE_EMAIL)) {
+        $serviceAccountClientEmail = $candidateEmail;
+    }
+}
 
 $seoAccountWebsiteSelectOptions = [];
 try {
@@ -113,19 +125,19 @@ $platformFeatures = [
             '性能监控（含可选 Discover / Google News）',
             '分发渠道主页登记（GSC 品牌官方渠道对照，非自动分发）'
         ],
-        'config_hint' => '先在 Google Search Console 验证域名/网址属性，再把 Service Account 的 client_email 加成所有者；本处属性 URL 须与 GSC 完全一致后再点验证。Discover 走网站属性 API。分发渠道仅登记品牌官方主页作 Platform Property 对照（不自动分发、不加分），请在 GSC 手动添加平台属性后把 URL 填回本页。',
+        'config_hint' => '先在 GSC 验证属性（常为 sc-domain:example.com），再打开<strong>同一条属性</strong>→ 用户和权限，把 Service Account 的 client_email 加成所有者；本处「站点属性 URL」填同一字符串后再验证。「绑定站点」只挂本系统网站，不会自动写成 sc-domain:，也不会授予 GSC 权限。Discover 走网站属性 API。分发渠道仅登记品牌官方主页作 Platform Property 对照。',
         'outbound_hint' => '验证与提交依赖服务器访问 Google（oauth2.googleapis.com）。若运行环境无法出网或未配置代理，验证会超时失败；凭证已读到时请检查网络/代理，勿重复上传 JSON。',
         'guide_title' => 'Google Search Console 配置顺序（先 GSC，再本系统）',
         'guide_steps' => [
-            '1. 打开 <a href="https://search.google.com/search-console" target="_blank" rel="noopener">Google Search Console</a>，添加并<strong>验证</strong>站点属性（域名属性如 sc-domain:example.com，或网址前缀如 https://www.example.com/）',
+            '1. 打开 <a href="https://search.google.com/search-console" target="_blank" rel="noopener">Google Search Console</a>，添加并<strong>验证</strong>站点属性（域名属性如 <code>sc-domain:example.com</code>，或网址前缀如 https://www.example.com/）',
             '2. 访问 Google Cloud Console: <a href="https://console.cloud.google.com" target="_blank" rel="noopener">https://console.cloud.google.com</a>，创建/选择项目',
             '3. 启用 <strong>Search Console API</strong>（普通页面走 Sitemap，不使用 Indexing API）',
             '4. 创建服务账号：API 和服务 → 凭证 → 创建凭证 → 服务账号（如 seo-indexing）',
             '5. 为服务账号创建 JSON 密钥并下载；记下 JSON 里的 <code>client_email</code>（形如 xxx@xxx.iam.gserviceaccount.com）',
-            '6. 回到 Search Console → 该属性 → 设置 → 用户和权限 → 添加用户：粘贴 <code>client_email</code>，权限选 <strong>所有者</strong>（仅「完整」可能不够）',
-            '7. 在本页粘贴/上传 Service Account JSON，并填写 <strong>与 GSC 属性字符串完全一致</strong> 的站点属性 URL（GSC 里是 sc-domain: 就必须填 sc-domain:，不要自作主张改成 https://www…）',
+            '6. 打开<strong>刚才验证的那条属性</strong>（GSC 左侧，如 <code>sc-domain:example.com</code>）→ 设置 → 用户和权限 → 添加用户：粘贴 <code>client_email</code>，权限选 <strong>所有者</strong>。必须加到这条属性上，不要加到别的站；本页「绑定站点」不能代替本步',
+            '7. 在本页粘贴/上传 Service Account JSON，并填写 <strong>与 GSC 属性字符串完全一致</strong> 的站点属性 URL（GSC 里是 <code>sc-domain:</code> 就填同样的 <code>sc-domain:</code>；也可填 https，保存时会自动转成 sc-domain 并去掉 www）',
             '8. 按需勾选 <strong>启用 Discover 统计</strong>（及可选 Google News）。分发渠道：登记 YouTube / X / Instagram / TikTok / LinkedIn 官方主页，便于在 GSC 添加 <strong>平台属性</strong>做品牌渠道对照（本系统只存清单，不自动分发、不直接加分；官方 API 尚未开放拉取）',
-            '9. 确认服务器能访问 Google（出网/代理）后，再点「验证配置与连接」；通过后再绑定网站并开启 Sitemap 定时提交'
+            '9. 确认服务器能访问 Google（出网/代理）后，再点「验证配置与连接」；通过后再在下方「绑定站点」挂本系统网站，并开启 Sitemap 定时提交'
         ],
         'config_template' => [
             'service_account' => [
@@ -309,9 +321,99 @@ foreach ($platforms as $code => $info) {
                 const ACCOUNT_SECRET_KEYS = <?= json_encode($configuredSecretKeys, $jsonForScriptFlags) ?>;
                 const ACCOUNT_SAVED_PLATFORM = <?= json_encode($platform, $jsonForScriptFlags) ?>;
                 const ACCOUNT_CONFIG_VALUES = <?= json_encode($configArray, $jsonForScriptFlags) ?> || {};
+                const ACCOUNT_SERVICE_CLIENT_EMAIL = <?= json_encode($serviceAccountClientEmail, $jsonForScriptFlags) ?>;
                 const SEO_ACCOUNT_WEBSITE_OPTIONS = <?= json_encode($seoAccountWebsiteSelectOptions, $jsonForScriptFlags) ?> || [];
+                const GSC_OWNER_HINT_NEED_JSON = <?= json_encode((string)__('请先上传或粘贴上方 Service Account JSON；解析出 client_email 后，这里会显示要加成所有者的邮箱与操作步骤。'), $jsonForScriptFlags) ?>;
+                const GSC_OWNER_HINT_NEED_SITE = <?= json_encode((string)__('已解析服务账号 %{1}。请填写上方「站点属性 URL」（如 sc-domain:example.com），再按此处提示到 GSC 授权。'), $jsonForScriptFlags) ?>;
+                const GSC_OWNER_HINT_READY = <?= json_encode((string)__('操作：打开 Search Console → 左侧选属性「%{1}」→ 设置 → 用户和权限 → 添加用户，粘贴下方邮箱，权限选「所有者」。'), $jsonForScriptFlags) ?>;
+                const GSC_OWNER_HINT_EMAIL_LABEL = <?= json_encode((string)__('要添加的服务账号'), $jsonForScriptFlags) ?>;
                 let currentSelectedPlatform = <?= json_encode($platform, $jsonForScriptFlags) ?>;
                 let seoAccountWebsiteUrlKey = '';
+
+                function resolveServiceAccountClientEmail() {
+                    const el = document.querySelector('#seoProviderConfigFields [data-seo-config-key="service_account"]');
+                    const raw = el ? String(el.value || '').trim() : '';
+                    if (raw !== '') {
+                        try {
+                            const obj = JSON.parse(raw);
+                            const email = obj && typeof obj.client_email === 'string' ? String(obj.client_email).trim() : '';
+                            if (email.indexOf('@') !== -1) {
+                                return email;
+                            }
+                        } catch (e) {}
+                    }
+                    return String(ACCOUNT_SERVICE_CLIENT_EMAIL || '').trim();
+                }
+
+                function resolveGscSiteProperty() {
+                    const el = document.querySelector('#seoProviderConfigFields [data-seo-config-key="site_url"]');
+                    return el ? String(el.value || '').trim() : '';
+                }
+
+                function updateGscOwnerActionHint() {
+                    const panel = document.querySelector('#seoProviderConfigFields [data-seo-gsc-owner-action]');
+                    if (!panel) {
+                        return;
+                    }
+                    panel.replaceChildren();
+                    const email = resolveServiceAccountClientEmail();
+                    const site = resolveGscSiteProperty();
+                    const line = document.createElement('div');
+                    line.className = 'w-stack';
+                    line.setAttribute('data-gap', 'xs');
+
+                    if (email === '') {
+                        const tip = document.createElement('p');
+                        tip.className = 'w-text';
+                        tip.setAttribute('data-size', 'sm');
+                        tip.setAttribute('data-tone', 'warning');
+                        tip.style.margin = '0';
+                        tip.textContent = GSC_OWNER_HINT_NEED_JSON;
+                        line.appendChild(tip);
+                        panel.appendChild(line);
+                        return;
+                    }
+
+                    if (site === '') {
+                        const tip = document.createElement('p');
+                        tip.className = 'w-text';
+                        tip.setAttribute('data-size', 'sm');
+                        tip.style.margin = '0';
+                        tip.textContent = String(GSC_OWNER_HINT_NEED_SITE).replace('%{1}', email);
+                        line.appendChild(tip);
+                        panel.appendChild(line);
+                        return;
+                    }
+
+                    const tip = document.createElement('p');
+                    tip.className = 'w-text';
+                    tip.setAttribute('data-size', 'sm');
+                    tip.style.margin = '0';
+                    tip.textContent = String(GSC_OWNER_HINT_READY).replace('%{1}', site);
+                    line.appendChild(tip);
+
+                    const emailRow = document.createElement('p');
+                    emailRow.className = 'w-text';
+                    emailRow.setAttribute('data-size', 'sm');
+                    emailRow.setAttribute('data-weight', 'strong');
+                    emailRow.style.margin = '0';
+                    emailRow.appendChild(document.createTextNode(GSC_OWNER_HINT_EMAIL_LABEL + '：'));
+                    const code = document.createElement('code');
+                    code.textContent = email;
+                    emailRow.appendChild(code);
+                    line.appendChild(emailRow);
+
+                    const link = document.createElement('a');
+                    link.href = 'https://search.google.com/search-console';
+                    link.target = '_blank';
+                    link.rel = 'noopener';
+                    link.className = 'w-text';
+                    link.setAttribute('data-size', 'sm');
+                    link.textContent = <?= json_encode((string)__('打开 Google Search Console'), $jsonForScriptFlags) ?>;
+                    line.appendChild(link);
+
+                    panel.appendChild(line);
+                }
 
                 // ==================== 通用工具函数 ====================
                 
@@ -1061,8 +1163,18 @@ foreach ($platforms as $code => $info) {
                         if (field.placeholder && !hasSavedSecret) {
                             control.placeholder = String(field.placeholder);
                         }
-                        control.addEventListener('input', syncConfigJsonFromFields);
-                        control.addEventListener('change', syncConfigJsonFromFields);
+                        control.addEventListener('input', function() {
+                            syncConfigJsonFromFields();
+                            if (key === 'service_account' || key === 'site_url') {
+                                updateGscOwnerActionHint();
+                            }
+                        });
+                        control.addEventListener('change', function() {
+                            syncConfigJsonFromFields();
+                            if (key === 'service_account' || key === 'site_url') {
+                                updateGscOwnerActionHint();
+                            }
+                        });
                         wrap.appendChild(control);
 
                         if (type === 'json') {
@@ -1095,12 +1207,21 @@ foreach ($platforms as $code => $info) {
                             wrap.appendChild(hint);
                         }
 
+                        if (key === 'site_url') {
+                            const action = document.createElement('div');
+                            action.className = 'w-field__hint';
+                            action.setAttribute('data-seo-gsc-owner-action', '1');
+                            action.style.setProperty('--w-mt', 'var(--weline-space-2)');
+                            wrap.appendChild(action);
+                        }
+
                         if (!wrap.parentElement) {
                             fieldsRoot.appendChild(wrap);
                         }
                     });
 
                     syncConfigJsonFromFields();
+                    updateGscOwnerActionHint();
                 }
 
                 /**
@@ -1132,6 +1253,7 @@ foreach ($platforms as $code => $info) {
                             target.value = JSON.stringify(jsonObj, null, 2);
                             target.focus();
                             syncConfigJsonFromFields();
+                            updateGscOwnerActionHint();
                             showMessage('success', <?= json_encode((string)__('JSON 文件上传成功'), $jsonForScriptFlags) ?>);
                         } catch (err) {
                             showMessage('error', <?= json_encode((string)__('JSON 文件格式错误'), $jsonForScriptFlags) ?> + ': ' + err.message);
@@ -1498,7 +1620,7 @@ foreach ($platforms as $code => $info) {
                                     clearable="false"
                                 />
                                 <div class="w-field__hint">
-                                    <lang>保存账户时同步本页所选站点；可多选。Sitemap 频率等细项可在站点绑定页调整。</lang>
+                                    <lang>保存账户时同步本页所选本系统站点（可多选），用于生成/提交该站 Sitemap。这不是 Search Console 属性，也不会自动加 sc-domain: 或授予 GSC 权限；GSC 授权请在上方「站点属性 URL」对应属性里把服务账号加成所有者。Sitemap 频率等细项可在站点绑定页调整。</lang>
                                 </div>
                             </div>
 
