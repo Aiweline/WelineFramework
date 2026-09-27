@@ -37,8 +37,10 @@ return [
         'zip',
         'bcmath',
         'zlib', // gzdecode：公开运价种子 .json.gz、HTTP/备份压缩等
-        'pdo_pgsql', // PostgreSQL 支持；使用 pgsql 时须安装（apt-get install php-pgsql / yum install php-pgsql）
-        'pdo_mysql', // MySQL 支持；使用 mysql 时须安装
+        // DB PDO 驱动：EnvChecker 按 env.php db.master.type 只把「当前库」对应驱动当必需
+        // （pgsql→pdo_pgsql；mysql/mariadb→pdo_mysql；sqlite 不强制二者）。未装的另一侧会降为推荐。
+        'pdo_pgsql',
+        'pdo_mysql',
     ],
 
     // 必需的函数（须未被 disable_functions）——与 ConfigurePhpIni / unblock_functions.php 同步

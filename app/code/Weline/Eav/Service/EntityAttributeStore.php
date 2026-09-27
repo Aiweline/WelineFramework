@@ -39,6 +39,9 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface, Scope
 
     public function provisionValueTables(EntityDefinitionInterface $entity, ModelSetup $setup): void
     {
+        // Fresh install: Module Install may run before UpgradeDefaultAttribute has
+        // scanned Models. Persist the EAV entity row from the definition first.
+        $this->ensureRegisteredFromDefinition($entity);
         $entityCode = $this->normalizeCode($entity->getEntityCode(), 'eav_entity_code_invalid');
         $types = (clone $this->typeModel)->clear()->select()->fetch()->getItems();
 
@@ -172,6 +175,7 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface, Scope
         AttributeDefinition $definition,
     ): AttributeRecord {
         $attributeCode = $this->normalizeCode($definition->code, 'eav_attribute_code_invalid');
+        $this->ensureRegisteredFromDefinition($entity);
         $entityRow = $this->requireEntity($entity->getEntityCode());
         $type = $this->requireType($definition->typeCode);
         $set = $this->requireSet((int)$entityRow->getId(), $definition->setCode);
@@ -727,6 +731,42 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface, Scope
                 "default ''",
                 'locale；空=默认',
             );
+    }
+
+
+    /**
+     * Upsert eav_entity from an EntityDefinitionInterface when the row is missing.
+     * Mirrors UpgradeDefaultAttribute so Install scripts are not order-dependent.
+     */
+    private function ensureRegisteredFromDefinition(EntityDefinitionInterface $definition): EavEntity
+    {
+        $entityCode = $this->normalizeCode($definition->getEntityCode(), 'eav_entity_code_invalid');
+        $entity = clone $this->entityModel;
+        $entity->clearData()->load(EavEntity::schema_fields_code, $entityCode);
+        if ($entity->getId()) {
+            return $entity;
+        }
+
+        $entity->clearData()->setData([
+            EavEntity::schema_fields_code => $entityCode,
+            EavEntity::schema_fields_class => $definition::class,
+            EavEntity::schema_fields_name => $definition->getEntityName(),
+            EavEntity::schema_fields_is_system => 1,
+            EavEntity::schema_fields_eav_entity_id_field_type => $definition->getEntityFieldIdType(),
+            EavEntity::schema_fields_eav_entity_id_field_length => $definition->getEntityFieldIdLength(),
+        ])->forceCheck(true, EavEntity::schema_fields_code)->save();
+
+        if (!$entity->getId()) {
+            $entity->clearData()->load(EavEntity::schema_fields_code, $entityCode);
+        }
+        if (!$entity->getId()) {
+            throw new AttributeStorageException(
+                AttributeStorageException::ENTITY_NOT_REGISTERED,
+                $entityCode,
+            );
+        }
+
+        return $entity;
     }
 
     private function requireEntity(string $entityCode): EavEntity

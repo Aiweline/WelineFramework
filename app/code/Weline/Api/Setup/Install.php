@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Api\Setup;
 
-use Weline\Acl\Api\Resource\WhitelistServiceInterfaceFactory;
+use Weline\Acl\Api\Resource\WhitelistServiceInterface;
 use Weline\Api\Model\ApiUser;
 use Weline\Framework\Setup\InstallInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -143,7 +143,8 @@ class Install implements InstallInterface
              'api/rest/v1/backend/auth/token-info',
          ];
          
-         $whitelist = ObjectManager::getInstance(WhitelistServiceInterfaceFactory::class)->create();
+         // ObjectManager 对 *Factory 会自动 create()；对 Interface 走工厂桥接。勿再 ->create()。
+         $whitelist = ObjectManager::getInstance(WhitelistServiceInterface::class);
          $whitelist->upsertPaths(array_merge($apiWhiteListPaths, $backendApiWhiteListPaths), 'api');
 
          // 调用ApiUser模型，插入初始数据

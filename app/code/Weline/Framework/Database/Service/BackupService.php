@@ -95,6 +95,15 @@ class BackupService
             throw new \RuntimeException('physical structure backup failed');
         }
 
+        // Fresh install / first-time module: affected tables may not exist yet.
+        // Persist existed=false structure markers, then skip data backup.
+        if ($connector instanceof PhysicalTableMetadataInterface
+            && !$connector->physicalTableExists($identity)
+        ) {
+            $result['strategy'] = 'absent';
+            return $result;
+        }
+
         $rowCount = $this->getPhysicalTableRowCountUsing($identity, $connector);
         $result['total_rows'] = $rowCount;
         if ($rowCount === 0) {
@@ -720,9 +729,6 @@ class BackupService
     ): bool {
         $connector = $this->requirePhysicalConnector();
         $this->assertNotBackupRepositoryTarget($identity, $connector);
-        if ($connector->physicalTableExists($identity)) {
-            throw new \RuntimeException('physical structure restore target already exists');
-        }
         $backup = $this->getBackupData(
             $migrationId,
             $identity->canonical(),
@@ -739,7 +745,30 @@ class BackupService
             return false;
         }
         $snapshot = json_decode($ddl, true);
-        if (is_array($snapshot) && ($snapshot['format'] ?? null) === 'weline.pg.table_snapshot.v1') {
+        $isSnapshot = is_array($snapshot)
+            && in_array(
+                (string)($snapshot['format'] ?? ''),
+                [
+                    'weline.pg.table_snapshot.v1',
+                    'weline.mysql.table_snapshot.v1',
+                    'weline.absent.table_snapshot.v1',
+                ],
+                true,
+            );
+        if ($isSnapshot && ($snapshot['existed'] ?? null) !== true) {
+            // Backup recorded "table did not exist" — restore means keep/ensure absent.
+            if ($connector->physicalTableExists($identity)) {
+                $connector->dropPhysicalTableIfExists($identity);
+            }
+            $this->markPhysicalBackupRestoredFailClosed($backup);
+            return true;
+        }
+        if ($connector->physicalTableExists($identity)) {
+            // Existing table + structure backup that recorded a live DDL: keep table,
+            // only mark restored (same semantics as prior match-arm short-circuit).
+            return $this->markExistingPhysicalStructureRestored($backup);
+        }
+        if ($isSnapshot && ($snapshot['format'] ?? null) !== 'weline.absent.table_snapshot.v1') {
             if (!$connector instanceof PhysicalTableSnapshotInterface) {
                 throw new \RuntimeException('physical table snapshot restore capability unavailable');
             }
@@ -1449,14 +1478,12 @@ class BackupService
                                 $operationId,
                                 $backupId,
                             ),
-                            MigrationBackup::TYPE_STRUCTURE => $lockedConnector->physicalTableExists($physicalIdentity)
-                                ? $this->markExistingPhysicalStructureRestored($fresh)
-                                : $this->restorePhysicalTableStructure(
-                                    $physicalIdentity,
-                                    $migrationId,
-                                    $backupScope,
-                                    $operationId,
-                                ),
+                            MigrationBackup::TYPE_STRUCTURE => $this->restorePhysicalTableStructure(
+                                $physicalIdentity,
+                                $migrationId,
+                                $backupScope,
+                                $operationId,
+                            ),
                             MigrationBackup::TYPE_CHUNK => $this->restorePhysicalTableDataChunked(
                                 $physicalIdentity,
                                 $migrationId,
@@ -1924,8 +1951,41 @@ class BackupService
         $payload = $connector instanceof PhysicalTableSnapshotInterface
             ? $connector->capturePhysicalTableSnapshot($identity)
             : trim($connector->getPhysicalCreateTableSql($identity));
-        if ($payload === '' || (is_array($payload) && empty($payload['existed']))) {
-            return false;
+        if (is_array($payload)) {
+            // Snapshot adapters always return an array; existed=false is a valid
+            // fresh-install marker and must be persisted so requiresBackup migrations
+            // can proceed when the table has not been created yet.
+            if (!array_key_exists('existed', $payload)) {
+                return false;
+            }
+            if ($payload['existed'] !== true) {
+                $this->savePhysicalBackup(
+                    $identity,
+                    $migrationId,
+                    $payload,
+                    MigrationBackup::TYPE_STRUCTURE,
+                    '',
+                    $backupScope,
+                    $operationId,
+                );
+                return true;
+            }
+        } elseif ($payload === '') {
+            // Legacy DDL path with no CREATE SQL ⇒ treat as absent table marker.
+            $this->savePhysicalBackup(
+                $identity,
+                $migrationId,
+                [
+                    'format' => 'weline.absent.table_snapshot.v1',
+                    'existed' => false,
+                    'ddl' => '',
+                ],
+                MigrationBackup::TYPE_STRUCTURE,
+                '',
+                $backupScope,
+                $operationId,
+            );
+            return true;
         }
         $this->savePhysicalBackup(
             $identity,

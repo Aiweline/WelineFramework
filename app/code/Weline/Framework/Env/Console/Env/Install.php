@@ -577,11 +577,16 @@ class Install extends CommandAbstract
                         && str_contains((string) PHP_BINARY, 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php')
                     ) {
                         $triedRebuildPhp = true;
-                        $this->printer->note(__('    当前为项目自带 PHP，正在尝试重编 PHP 以加入缺失扩展（bin/install.sh --rebuild-php php）...'));
-                        if ($this->tryRebuildProjectPhp()) {
-                            $this->printer->success(__('    PHP 已重新编译完成。请再次运行 php bin/w env:check 验证环境。'));
-                            $successCount++;
-                            break; // 当前进程仍为旧 PHP，后续扩展需重跑 env:check 后再判
+                        if ($this->isLinuxPackageManagerBusy()) {
+                            $this->printer->warning(__('    检测到 apt/dpkg 锁占用，跳过自动 --rebuild-php，以免删掉现有 extend/server/php 后装不上。'));
+                            $this->printer->note(__('    请等 apt 结束后再执行: bin/install.sh --rebuild-php php'));
+                        } else {
+                            $this->printer->note(__('    当前为项目自带 PHP，正在尝试重编 PHP 以加入缺失扩展（bin/install.sh --rebuild-php php）...'));
+                            if ($this->tryRebuildProjectPhp()) {
+                                $this->printer->success(__('    PHP 已重新编译完成。请再次运行 php bin/w env:check 验证环境。'));
+                                $successCount++;
+                                break; // 当前进程仍为旧 PHP，后续扩展需重跑 env:check 后再判
+                            }
                         }
                     }
                     $failCount++;
@@ -1264,6 +1269,55 @@ class Install extends CommandAbstract
         );
 
         return $probeCode === 0;
+    }
+
+
+    /**
+     * apt/dpkg 忙时禁止自动 --rebuild-php（会先移走现有 PHP）。
+     */
+    private function isLinuxPackageManagerBusy(): bool
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            return false;
+        }
+        $locks = [
+            '/var/lib/dpkg/lock-frontend',
+            '/var/lib/dpkg/lock',
+            '/var/cache/apt/archives/lock',
+            '/var/lib/apt/lists/lock',
+        ];
+        foreach ($locks as $lock) {
+            if (!is_file($lock)) {
+                continue;
+            }
+            // 无权限读锁时勿一律判 busy：root 安装路径会用 flock CLI；非 root 再看进程。
+            $fh = @fopen($lock, 'rb');
+            if ($fh !== false) {
+                $busy = !flock($fh, LOCK_EX | LOCK_NB);
+                fclose($fh);
+                if ($busy) {
+                    return true;
+                }
+                continue;
+            }
+        }
+        // 真在跑的包管理进程（排除 unattended-upgrade-shutdown --wait-for-signal）
+        foreach (['apt-get', 'apt', 'dpkg'] as $proc) {
+            $out = [];
+            $code = 0;
+            @exec('pgrep -x ' . escapeshellarg($proc) . ' 2>/dev/null', $out, $code);
+            if ($code === 0 && $out !== []) {
+                return true;
+            }
+        }
+        $out = [];
+        $code = 0;
+        @exec('pgrep -f /usr/bin/unattended-upgrade$ 2>/dev/null', $out, $code);
+        if ($code === 0 && $out !== []) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

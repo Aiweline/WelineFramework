@@ -356,15 +356,24 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
             $expectedByHash[$hash] = $namespace;
         }
 
-        $rows = $this->newGenerationModel()
-            ->fields(implode(',', [
-                NamespaceVersion::schema_fields_HASH,
-                NamespaceVersion::schema_fields_NAMESPACE,
-                NamespaceVersion::schema_fields_GENERATION,
-            ]))
-            ->where(NamespaceVersion::schema_fields_HASH, array_keys($expectedByHash), 'IN')
-            ->select()
-            ->fetchArray();
+        try {
+            $rows = $this->newGenerationModel()
+                ->fields(implode(',', [
+                    NamespaceVersion::schema_fields_HASH,
+                    NamespaceVersion::schema_fields_NAMESPACE,
+                    NamespaceVersion::schema_fields_GENERATION,
+                ]))
+                ->where(NamespaceVersion::schema_fields_HASH, array_keys($expectedByHash), 'IN')
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable $e) {
+            // Fresh install / setup:upgrade：代际表尚未建时 Phrase/CLI 文案会先触达此处。
+            // 缺表按「尚无代际行」软退，避免一键安装在建表前因 i18n 缓存查询炸掉。
+            if ($this->isGenerationAuthorityTableMissing($e)) {
+                return [];
+            }
+            throw $e;
+        }
 
         $stored = [];
         foreach ((array)$rows as $row) {
@@ -384,6 +393,47 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
             $stored[$namespace] = $generation;
         }
         return $stored;
+    }
+
+
+    /**
+     * Detect missing `weline_cache_namespace_version` across PG/MySQL/SQLite.
+     * Walks the throwable chain so wrapped Query/PDO errors still match.
+     */
+    private function isGenerationAuthorityTableMissing(\Throwable $cause): bool
+    {
+        for ($current = $cause; $current !== null; $current = $current->getPrevious()) {
+            $message = $current->getMessage();
+            $sqlState = '';
+            $driverCode = null;
+            if ($current instanceof \PDOException) {
+                $sqlState = (string)($current->errorInfo[0] ?? $current->getCode());
+                $driverCode = $current->errorInfo[1] ?? null;
+            }
+            if ($sqlState === '42P01'
+                || $driverCode === 1146
+                || $driverCode === '1146'
+                || \str_contains($message, '42P01')
+                || \str_contains($message, 'Undefined table')
+                || \str_contains($message, 'Base table or view not found')
+                || \str_contains($message, 'no such table')
+                || (
+                    (
+                        \str_contains($message, 'weline_cache_namespace_version')
+                        || \str_contains($message, NamespaceVersion::schema_table)
+                    )
+                    && (
+                        \str_contains($message, 'does not exist')
+                        || \str_contains($message, "doesn't exist")
+                        || \str_contains($message, '不存在')
+                    )
+                )
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function bumpStoredValue(string $namespace, ?int $expected): int
