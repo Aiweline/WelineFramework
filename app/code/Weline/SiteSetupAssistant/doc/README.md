@@ -5,6 +5,7 @@
 ## 挂载
 
 - 经 `Weline_Theme::backend::layouts::base::body-end` hook 注入；模板 `view/templates/backend/widgets/site-setup-assistant-float.phtml`。
+- Hook **必须**显式输出 CSS/JS（`fetchTagSource`）：直出 `fetch` 不走布局 `@widget.source` bake；否则浮层不可见。
 
 ## 任务模型（0.2.0）
 

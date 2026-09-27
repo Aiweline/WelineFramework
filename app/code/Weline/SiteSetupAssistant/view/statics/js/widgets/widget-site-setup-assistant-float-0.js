@@ -23,7 +23,14 @@ window.WelineWidgetAssets.register('sitesetupassistant-site-setup-assistant-floa
     root.removeAttribute('hidden');
 
     function readOpen() {
-        try { return localStorage.getItem(storageKey) === '1'; } catch (e) { return false; }
+        // 首次访问（无本地记录）默认展开面板，避免只剩 FAB 像「没弹出」。
+        try {
+            var stored = localStorage.getItem(storageKey);
+            if (stored === null) return true;
+            return stored === '1';
+        } catch (e) {
+            return true;
+        }
     }
     function writeOpen(open) {
         try { localStorage.setItem(storageKey, open ? '1' : '0'); } catch (e) {}
