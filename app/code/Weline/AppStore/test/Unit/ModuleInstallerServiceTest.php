@@ -46,8 +46,8 @@ class ModuleInstallerServiceTest extends TestCase
         $method->setAccessible(true);
 
         $this->assertSame(
-            rtrim(APP_CODE_PATH, DS) . DS . 'Weline' . DS . 'Bt_Center',
-            $method->invoke($service, 'Weline_Bt_Center')
+            rtrim(APP_CODE_PATH, DS) . DS . 'Weline' . DS . 'Foo_Bar',
+            $method->invoke($service, 'Weline_Foo_Bar')
         );
     }
 

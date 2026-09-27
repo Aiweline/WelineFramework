@@ -113,7 +113,7 @@ class UpgradeDefaultAttribute implements ObserverInterface
                     }
                 }
             } catch (\Throwable $e) {
-                // 如果类不存在或无法实例化，跳过（可能是命名空间转换问题，如 Weline_Bt_Center -> Weline\Bt\Center）
+                // 如果类不存在或无法实例化，跳过（可能是命名空间转换问题，如 Weline_Foo_Bar -> Weline\Foo\Bar）
                 // 或者类不是 EAV 实体，静默跳过
                 continue;
             }
