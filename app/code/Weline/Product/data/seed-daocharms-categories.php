@@ -252,8 +252,8 @@ function seedNodes(
             $code,
             'en_US',
             null,
-            is_file(dirname(__DIR__, 4) . $icon) ? $icon : null,
-            is_file(dirname(__DIR__, 4) . $banner) ? $banner : null,
+            is_file(dirname(__DIR__, 5) . $icon) ? $icon : null,
+            is_file(dirname(__DIR__, 5) . $banner) ? $banner : null,
             (string)($en['summary'] ?? ''),
             (string)($en['description'] ?? ''),
         );

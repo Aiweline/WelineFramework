@@ -283,12 +283,12 @@ $assemble = static function (array $t) use ($A, $img, $figureStack, $h): string 
 
     $sizeChart = (string)$t['size_chart_html'];
 
+    // 2026-09-26：look 文案（title/body）已由上方 $feature 承载，pair 图组不再重复
+    // 追加 h3+body —— 否则 PDP 上「通身气韵 / Full-body rhythm」整块渲染两次。
     $pairLooks = $figureStack([
         $img($A['look_a'], (string)$t['alt_look'] . ' 1'),
         $img($A['look_b'], (string)$t['alt_look'] . ' 2'),
-    ], 'weline-detail-figure-stack--caption weline-detail-orient--portrait')
-        . '<div class="weline-detail-prose"><h3>' . $h((string)$t['look_title']) . '</h3><p>'
-        . $h((string)$t['look_body']) . '</p></div>';
+    ], 'weline-detail-figure-stack--caption weline-detail-orient--portrait');
 
     $pairMacro = $figureStack([
         $img($A['macro_a'], (string)$t['alt_macro'] . ' 1'),

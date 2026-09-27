@@ -235,21 +235,28 @@ window.WelineWidgetAssets.register('product-product-info-0', function (widgetScr
 
         const labelMore = more.getAttribute('data-label-more') || more.textContent.trim() || '展示更多';
         const labelLess = more.getAttribute('data-label-less') || '收起';
+        let suspendRefreshUntil = 0;
 
         function clampLimitPx() {
             const raw = getComputedStyle(clamp).getPropertyValue('--product-spec-clamp-max').trim();
+            // Measure off-DOM so ResizeObserver on body/section does not re-enter refresh.
             const probe = document.createElement('div');
-            probe.style.cssText = 'position:absolute;visibility:hidden;height:' + (raw || '15.5rem');
-            clamp.appendChild(probe);
+            probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;height:' + (raw || '15.5rem');
+            document.documentElement.appendChild(probe);
             const px = probe.getBoundingClientRect().height;
             probe.remove();
             return px > 0 ? px : 248;
         }
 
-        function setCollapsed(collapsed) {
-            clamp.setAttribute('data-collapsed', collapsed ? '1' : '0');
+        function applyLabels(collapsed) {
             more.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
             more.textContent = collapsed ? labelMore : labelLess;
+        }
+
+        function setCollapsed(collapsed) {
+            suspendRefreshUntil = Date.now() + 120;
+            clamp.setAttribute('data-collapsed', collapsed ? '1' : '0');
+            applyLabels(collapsed);
             if (!collapsed) {
                 clamp.classList.add('is-overflow');
                 more.hidden = false;
@@ -259,29 +266,35 @@ window.WelineWidgetAssets.register('product-product-info-0', function (widgetScr
         }
 
         function refresh() {
+            if (Date.now() < suspendRefreshUntil) {
+                return;
+            }
             const overflow = body.scrollHeight > clampLimitPx() + 2;
             const collapsed = clamp.getAttribute('data-collapsed') !== '0';
             if (!overflow) {
                 clamp.classList.remove('is-overflow');
                 clamp.setAttribute('data-collapsed', '1');
                 more.hidden = true;
-                more.textContent = labelMore;
-                more.setAttribute('aria-expanded', 'false');
+                applyLabels(true);
                 return;
             }
             clamp.classList.add('is-overflow');
             more.hidden = false;
+            applyLabels(collapsed);
             if (collapsed) {
                 clamp.setAttribute('data-collapsed', '1');
-                more.textContent = labelMore;
-                more.setAttribute('aria-expanded', 'false');
-            } else {
-                more.textContent = labelLess;
-                more.setAttribute('aria-expanded', 'true');
             }
         }
 
-        more.addEventListener('click', function () {
+        // Delegate from root so a late DOM swap of the button still toggles expand.
+        root.addEventListener('click', function (event) {
+            const trigger = event.target && event.target.closest
+                ? event.target.closest('[data-testid="product-specifications-more"]')
+                : null;
+            if (!trigger || !clamp.contains(trigger)) {
+                return;
+            }
+            event.preventDefault();
             setCollapsed(clamp.getAttribute('data-collapsed') === '0');
         });
 

@@ -226,6 +226,51 @@ final class DetailDescriptionTextifier
         );
     }
 
+    /**
+     * Buyer / care / return disclaimer boards baked as tall green-grey word JPGs (zh & locales).
+     *
+     * @param list<array{title:string,body:string}> $sections
+     * @param list<string> $highlights bold return / policy lines (often red in source art)
+     */
+    public static function buildBuyerNoticePanel(
+        array $sections,
+        string $closing = '',
+        array $highlights = [],
+        string $title = '购前须知',
+    ): string {
+        $h = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $body = '<div class="weline-detail-text weline-detail-text--product-info weline-detail-text--buyer-notice"'
+            . ' data-weline-detail-text="buyer-notice">'
+            . '<h3>' . $h(trim($title)) . '</h3>';
+        foreach ($sections as $section) {
+            $secTitle = trim((string)($section['title'] ?? ''));
+            $secBody = trim((string)($section['body'] ?? ''));
+            if ($secTitle === '' && $secBody === '') {
+                continue;
+            }
+            if ($secTitle !== '') {
+                $body .= '<h4>' . $h($secTitle) . '</h4>';
+            }
+            if ($secBody !== '') {
+                $body .= '<p class="weline-detail-text__body">' . $h($secBody) . '</p>';
+            }
+        }
+        $closing = trim($closing);
+        if ($closing !== '') {
+            $body .= '<p class="weline-detail-text__note">' . $h($closing) . '</p>';
+        }
+        foreach ($highlights as $line) {
+            $line = trim((string)$line);
+            if ($line === '') {
+                continue;
+            }
+            $body .= '<p class="weline-detail-text__foot weline-detail-text__foot--emphasis">' . $h($line) . '</p>';
+        }
+        $body .= '</div>';
+
+        return self::sanitizeFragment($body);
+    }
+
     public static function buildSectionHeading(string $heading, string $marker = 'section-heading'): string
     {
         $marker = preg_replace('/[^a-z0-9-]/', '', strtolower(trim($marker))) ?: 'section-heading';

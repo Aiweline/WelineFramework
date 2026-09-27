@@ -890,12 +890,12 @@ $assemble = static function (array $t) use ($A, $img, $figureStack, $h): string 
 
     $sizeChart = (string)$t['size_chart_html'];
 
+    // 2026-09-26：look 文案（look_title/look_body）已由上方 $feature 承载，
+    // pair 图组不再重复追加 h3+body —— 否则 PDP 上整块渲染两次。
     $pairLooks = $figureStack([
         $img($A['look_peach'], (string)$t['alt_look'] . ' · peach'),
         $img($A['look_green'], (string)$t['alt_look'] . ' · green'),
-    ], 'weline-detail-figure-stack--caption weline-detail-orient--portrait')
-        . '<div class="weline-detail-prose"><h3>' . $h((string)$t['look_title']) . '</h3><p>'
-        . $h((string)$t['look_body']) . '</p></div>';
+    ], 'weline-detail-figure-stack--caption weline-detail-orient--portrait');
 
     $pairMacro = $figureStack([
         $img($A['look_fabric'], (string)$t['alt_macro'] . ' 1'),
@@ -1062,16 +1062,16 @@ try {
          WHERE entity_id = ? AND attribute_code = 'description' AND store_id = 0
          ORDER BY locale, len DESC"
     );
-    $stmt->execute([$productId]);
-    $perLocale = [];
-    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+$stmt->execute([$productId]);
+$perLocale = [];
+while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $perLocale[(string)$r['locale']][] = ['value_id' => (int)$r['value_id'], 'len' => (int)$r['len']];
-    }
-    foreach ($perLocale as $loc => $rows) {
+}
+foreach ($perLocale as $loc => $rows) {
         if (count($rows) <= 1) {
             continue;
         }
-        usort($rows, static fn($a, $b) => $b['len'] <=> $a['len']);
+    usort($rows, static fn($a, $b) => $b['len'] <=> $a['len']);
         array_shift($rows);
         $ids = array_column($rows, 'value_id');
         $in = implode(',', array_fill(0, count($ids), '?'));
