@@ -27,28 +27,117 @@ final class RequiredInjectionSiblingFetchScanner
         }
 
         $index = $this->buildRequiredInjectionIndex($root);
-        if ($index['by_code'] === []) {
-            return [];
+        $violations = [];
+        if ($index['by_code'] !== []) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
+            );
+            /** @var \SplFileInfo $file */
+            foreach ($iterator as $file) {
+                if (!$file->isFile() || strtolower($file->getExtension()) !== 'phtml') {
+                    continue;
+                }
+                $abs = str_replace('\\', '/', $file->getPathname());
+                if (!str_contains($abs, '/view/')) {
+                    continue;
+                }
+                $rel = $this->toRelativePath($abs, $root);
+                $violations = array_merge($violations, $this->scanFile($abs, $rel, $index));
+            }
         }
 
+        return array_merge($violations, $this->scanDefaultLayoutSeederLayoutPlacement($root));
+    }
+
+    /**
+     * DefaultLayoutSeeder 不得再列 placement=layout 部件（与布局内嵌同名 = 双路径）。
+     *
+     * @return list<array{type:string,path:string,line:int,snippet:string,code:string,slot:string,module?:string}>
+     */
+    public function scanDefaultLayoutSeederLayoutPlacement(?string $codeRoot = null): array
+    {
+        $root = $this->normalizeRoot($codeRoot);
+        $seeder = $root . '/Weline/Theme/Service/DefaultLayoutSeeder.php';
+        if (!is_file($seeder)) {
+            return [];
+        }
+        $content = (string)@file_get_contents($seeder);
+        if ($content === '') {
+            return [];
+        }
+        $placementByCode = $this->buildPlacementIndex($root);
+        if ($placementByCode === []) {
+            return [];
+        }
         $violations = [];
+        $lines = preg_split("/\r\n|\n|\r/", $content) ?: [];
+        foreach ($lines as $idx => $line) {
+            if (!preg_match("/'widget_code'\\s*=>\\s*'([^']+)'/", $line, $m)) {
+                continue;
+            }
+            $code = strtolower(trim((string)$m[1]));
+            if ($code === '' || ($placementByCode[$code]['placement'] ?? '') !== 'layout') {
+                continue;
+            }
+            $meta = $placementByCode[$code];
+            $violations[] = [
+                'type' => 'required-injection-seeder-layout-placement',
+                'path' => $this->toRelativePath(str_replace('\\', '/', $seeder), $root),
+                'line' => $idx + 1,
+                'snippet' => $this->snippet(trim($line)),
+                'code' => $code,
+                'slot' => (string)($meta['slot'] ?? ''),
+                'module' => (string)($meta['module'] ?? ''),
+            ];
+        }
+
+        return $violations;
+    }
+
+    /**
+     * @return array<string, array{placement:string,module:string,slot:string}>
+     */
+    private function buildPlacementIndex(string $root): array
+    {
+        $out = [];
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
         );
         /** @var \SplFileInfo $file */
         foreach ($iterator as $file) {
-            if (!$file->isFile() || strtolower($file->getExtension()) !== 'phtml') {
+            if (!$file->isFile() || $file->getFilename() !== 'widget.php') {
                 continue;
             }
             $abs = str_replace('\\', '/', $file->getPathname());
-            if (!str_contains($abs, '/view/')) {
+            if (!str_contains($abs, '/extends/module/Weline_Widget/')) {
                 continue;
             }
-            $rel = $this->toRelativePath($abs, $root);
-            $violations = array_merge($violations, $this->scanFile($abs, $rel, $index));
+            $module = $this->moduleFromWidgetPhpPath($abs, $root);
+            if ($module === null) {
+                continue;
+            }
+            $raw = @include $abs;
+            if (!is_array($raw)) {
+                continue;
+            }
+            foreach ($raw as $key => $value) {
+                if (!is_array($value)) {
+                    continue;
+                }
+                $code = strtolower(trim((string)($value['code'] ?? (is_string($key) ? $key : ''))));
+                if ($code === '') {
+                    continue;
+                }
+                $placement = strtolower(trim((string)($value['placement'] ?? 'injection')));
+                $out[$code] = [
+                    'placement' => $placement !== '' ? $placement : 'injection',
+                    'module' => $module,
+                    'slot' => strtolower(trim((string)($value['slot'] ?? ''))),
+                ];
+            }
         }
 
-        return $violations;
+        return $out;
     }
 
     /**

@@ -155,11 +155,16 @@ final class PublishedStorefrontSolidifiedShellContractTest extends TestCase
         $between = \substr($layoutSlot, $skipPos, $stripPos - $skipPos);
         self::assertStringNotContainsString('fillRequiredDefaultsOnShell', $between);
         self::assertStringNotContainsString('DefaultInjectionPlanRepository', $between);
-        // Safety-net incomplete path still self-heals with Overlay.
+        // 2026-09-26 用户纠偏（严格档「有固化就完全不注」）：
+        // safety-net 的 heal / Overlay 以「无固化产物」为前提；固化产物存在 ⇒
+        // 只记固化缺陷（solidified_shell_missing_required_slot），禁止每请求 Overlay。
         self::assertStringContainsString('+safety_net_fill', $layoutSlot);
         $safetyPos = \strpos($layoutSlot, '+safety_net_fill');
         self::assertNotFalse($safetyPos);
-        self::assertStringContainsString('fillRequiredDefaultsOnShell', \substr($layoutSlot, $safetyPos, 2500));
+        $safetyTail = \substr($layoutSlot, $safetyPos, 4000);
+        self::assertStringContainsString('publishedSolidifiedArtifactLoaded', $safetyTail);
+        self::assertStringContainsString('solidified_shell_missing_required_slot', $safetyTail);
+        self::assertStringContainsString('fillRequiredDefaultsOnShell', $safetyTail);
     }
 
     // Atomic shell publication and config/release reuse are exercised by

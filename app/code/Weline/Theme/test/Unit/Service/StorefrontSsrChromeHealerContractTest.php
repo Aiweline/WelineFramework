@@ -19,6 +19,14 @@ final class StorefrontSsrChromeHealerContractTest extends TestCase
         self::assertStringContainsString('shellNeedsRuntimeSafetyNetFill', $healerSrc);
         self::assertStringContainsString('SlotBoundaryMarkers::strip', $healerSrc);
         self::assertStringNotContainsString('->fill(', $healerSrc);
+        // 2026-09-26 用户纠偏（严格档「有固化就完全不注」）：
+        // 已装载页面固化产物 ⇒ 运行时不得补跑 required overlay（禁查部件声明）。
+        self::assertStringContainsString('publishedSolidifiedArtifactLoaded', $healerSrc);
+        $gatePos = \strpos($healerSrc, 'publishedSolidifiedArtifactLoaded');
+        self::assertNotFalse($gatePos);
+        $fillPos = \strpos($healerSrc, '$this->fillRequiredPageDefaults($html)');
+        self::assertNotFalse($fillPos);
+        self::assertLessThan($fillPos, $gatePos, 'strict gate must precede required overlay');
 
         $fillerSrc = (string)file_get_contents($filler);
         self::assertStringContainsString('function splicePublishedChromeFromDisk', $fillerSrc);

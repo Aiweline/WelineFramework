@@ -73,4 +73,45 @@ final class PublishedSlotHostNestedPageTest extends TestCase
         self::assertSame(1, substr_count($rendered, '<b>Outer</b>'));
         self::assertSame(1, substr_count($rendered, '<b>Inner</b>'));
     }
+
+    public function testPublishedInnerDoesNotConcatSameWidgetCodeBakeAndDefault(): void
+    {
+        $bake = $this->slot(
+            'product-main',
+            '<section data-widget-code="product-info" data-testid="storefront-product-detail">BAKE</section>',
+            true,
+        );
+        $default = '<section data-widget-code="product-info" data-testid="storefront-product-detail">DEFAULT'
+            . $this->slot('product-purchase-actions', '<button>Cart</button>')
+            . '</section>';
+        $rendered = $this->render($bake, 'product-main', $default);
+        self::assertSame(1, substr_count($rendered, 'data-widget-code="product-info"'));
+        self::assertStringContainsString('BAKE', $rendered);
+        self::assertStringNotContainsString('DEFAULT', $rendered);
+        self::assertTrue(Host::bakeAndDefaultShareWidgetCode(
+            '<section data-widget-code="product-info">A</section>',
+            '<section data-widget-code="product-info">B</section>',
+        ));
+    }
+
+    /**
+     * Regression 2026-09-26：content bake 仅 store-music 时不得冲掉 design 首页嵌套树。
+     */
+    public function testSparseStoreMusicBakeKeepsHomepageNestedDefaultTree(): void
+    {
+        $bake = $this->slot(
+            'content',
+            '<span hidden data-widget-code="store-music" data-testid="store-music"></span>',
+            true,
+        );
+        $default = '<div class="theme-published-slot homepage-content-slot" data-slot-id="content">'
+            . $this->slot('homepage-hero', '<section data-widget-code="hero-slider">HERO</section>')
+            . $this->slot('homepage-featured', '<section data-widget-code="featured-products">FEAT</section>')
+            . '</div>';
+        $rendered = $this->render($bake, 'content', $default);
+        self::assertStringContainsString('data-widget-code="store-music"', $rendered);
+        self::assertStringContainsString('HERO', $rendered);
+        self::assertStringContainsString('FEAT', $rendered);
+        self::assertStringContainsString('homepage-hero', $rendered);
+    }
 }

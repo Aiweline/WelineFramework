@@ -129,11 +129,12 @@ final class RequiredDefaultInjectionOverlayExecuteTest extends TestCase
         self::assertStringContainsString('pageHasWidgetPresent', $src);
         self::assertStringContainsString('assertSlotHasAtMostOne', $src);
         self::assertStringContainsString('outermostSlotRegions', $src);
-        self::assertStringContainsString('soft-skip', $src);
+        self::assertStringContainsString('required_default_injection_duplicate', $src);
+        self::assertStringNotContainsString('slot duplicate soft-skip', $src);
         self::assertStringContainsString('slotAllowsMultiple', $src);
         self::assertStringContainsString('isEffectivelyBlankSlotInner', $src);
-        self::assertStringNotContainsString(
-            "throw new \\RuntimeException(\n                'required_default_injection_duplicate:",
+        self::assertStringContainsString(
+            "throw new \\RuntimeException(sprintf(\n                'required_default_injection_duplicate:",
             $src,
         );
 

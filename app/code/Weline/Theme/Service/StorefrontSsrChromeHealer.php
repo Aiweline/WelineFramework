@@ -31,8 +31,13 @@ final class StorefrontSsrChromeHealer
         // 典型即结账页 `checkout-shipping-address`（契约见
         // Weline_Checkout/test/Unit/View/CheckoutShippingAddressSlotContractTest：
         // 「只走 required injection，禁止 soft fallback 直渲」）。
-        // 故在 chrome 修复之前，先补跑一次 required overlay。
-        $html = $this->fillRequiredPageDefaults($html);
+        //
+        // 2026-09-26 用户纠偏（严格档「有固化就完全不注」）：
+        // 本请求已装载页面固化产物 ⇒ 运行时不得再注入 / 查部件声明，固化模板直接交付；
+        // 缺槽位 = 固化缺陷，须重固化（rebake）修复。仅**无**固化产物时才补跑 required overlay。
+        if (!ThemeLayoutEntityPublishedSlotHost::publishedSolidifiedArtifactLoaded()) {
+            $html = $this->fillRequiredPageDefaults($html);
+        }
 
         if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
             return SlotBoundaryMarkers::strip($html);
