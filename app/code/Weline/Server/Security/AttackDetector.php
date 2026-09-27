@@ -517,7 +517,15 @@ class AttackDetector
         foreach (\array_keys($this->permanentBannedIps) as $ip) {
             unset($this->blockedIps[$ip]);
         }
-        $this->permanentBannedIps = \array_fill_keys($ips, true);
+        $filtered = [];
+        foreach ($ips as $ip) {
+            $ip = \trim((string)$ip);
+            if ($ip === '' || $this->isNonBanableInfrastructureIp($ip)) {
+                continue;
+            }
+            $filtered[$ip] = true;
+        }
+        $this->permanentBannedIps = $filtered;
         foreach ($this->permanentBannedIps as $ip => $_) {
             $this->blockedIps[$ip] = \PHP_INT_MAX;
         }
@@ -837,6 +845,9 @@ class AttackDetector
      */
     private function blockIp(string $ip, int $duration): void
     {
+        if ($this->isNonBanableInfrastructureIp($ip)) {
+            return;
+        }
         $this->blockedIps[$ip] = \time() + $duration;
         $this->logAttack($ip, 'block', "IP 被封禁 {$duration} 秒");
     }
@@ -846,12 +857,24 @@ class AttackDetector
      */
     private function blockIpPermanent(string $ip): void
     {
+        if ($this->isNonBanableInfrastructureIp($ip)) {
+            return;
+        }
         $state = $this->stateStore->addPermanentBan($ip);
         $this->applyPermanentBannedIps($state['ips']);
         $this->appliedBansGeneration = $state['generation'];
         $this->appliedBansDigest = $state['digest'];
         $this->lastRulesUpdateSignal = '';
         $this->logAttack($ip, 'block_permanent', 'IP 已永久封禁（命中扫描路径，仅后台可解禁）');
+    }
+
+    /**
+     * Loopback / Cloudflare edges are transport hops, never client identities.
+     */
+    private function isNonBanableInfrastructureIp(string $ip): bool
+    {
+        return GlobalRateLimiter::isLoopbackIp($ip)
+            || GlobalRateLimiter::isCloudflareEdgeIp($ip);
     }
 
     /**

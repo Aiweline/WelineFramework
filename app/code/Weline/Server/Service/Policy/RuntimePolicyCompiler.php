@@ -408,6 +408,13 @@ final class RuntimePolicyCompiler
         $trustedProxy = \is_array($rules['cdn_trusted_ips'] ?? null) ? $rules['cdn_trusted_ips'] : [];
         if (($trustedProxy['enabled'] ?? true) !== false) {
             $trustedProxyCidrs = (array)($trustedProxy['ips'] ?? []);
+            // Orange-cloud: Nginx `$remote_addr` is a CF edge; peel it from XFF
+            // so shared_ban never keys on the POP. Operators may still append
+            // extra CDN CIDRs via cdn_trusted_ips.ips / accept_gate.
+            $trustedProxyCidrs = \array_merge(
+                $trustedProxyCidrs,
+                \Weline\Server\Security\CloudflareTrustedProxyCatalog::cidrs(),
+            );
         }
         $trustedProxyCidrs = \array_merge(
             $trustedProxyCidrs,
