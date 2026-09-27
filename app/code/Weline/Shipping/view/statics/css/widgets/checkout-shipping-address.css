@@ -281,10 +281,49 @@
   border-color: #fcd200;
   background: linear-gradient(to bottom, #f7dfa5, #f0c14b);
   color: var(--sca-text);
+  position: relative;
 }
 
 .w-shipping-checkout-address__primary-btn:hover {
   background: linear-gradient(to bottom, #f5d78e, #eeb933);
+}
+
+/* Beat theme hanfu-checkout primary-btn (body .weline-checkout …) for save loading. */
+.w-shipping-checkout-address .w-shipping-checkout-address__primary-btn.is-loading,
+.w-shipping-checkout-address .w-shipping-checkout-address__primary-btn:disabled,
+.w-shipping-checkout-address__primary-btn.is-loading,
+.w-shipping-checkout-address__primary-btn:disabled {
+  pointer-events: none;
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.w-shipping-checkout-address .w-shipping-checkout-address__primary-btn.is-loading,
+.w-shipping-checkout-address__primary-btn.is-loading {
+  color: transparent !important;
+}
+
+.w-shipping-checkout-address .w-shipping-checkout-address__primary-btn.is-loading::before,
+.w-shipping-checkout-address__primary-btn.is-loading::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 50%;
+  top: 50%;
+  width: 1rem;
+  height: 1rem;
+  margin-inline-start: -0.5rem;
+  margin-top: -0.5rem;
+  border: 2px solid color-mix(in srgb, var(--sca-text, #0f1111) 25%, transparent);
+  border-top-color: var(--sca-text, #0f1111);
+  border-radius: 50%;
+  animation: w-shipping-checkout-address-spin 0.75s linear infinite;
+  z-index: 1;
+}
+
+@keyframes w-shipping-checkout-address-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .w-shipping-checkout-address__secondary-btn {
