@@ -265,6 +265,8 @@ Slowloris,斯洛洛里斯
 账户删除成功,账户删除成功
 默认账户设置成功,默认账户设置成功
 设置失败：%{1},设置失败：%{1}
+"保存失败：生产环境缺少凭据主密钥 security.secret_ref_key，且无法自动写入 env.php。请检查 app/etc/env.php 可写权限后重试。","保存失败：生产环境缺少凭据主密钥 security.secret_ref_key，且无法自动写入 env.php。请检查 app/etc/env.php 可写权限后重试。"
+"保存失败：凭据密封损坏或主密钥已变更，请重新填写 Token 后保存。","保存失败：凭据密封损坏或主密钥已变更，请重新填写 Token 后保存。"
 加载预热URL列表失败：%{1},加载预热URL列表失败：%{1}
 加载统计信息失败：%{1},加载统计信息失败：%{1}
 预热任务执行完成,预热任务执行完成
@@ -483,6 +485,7 @@ JSON格式错误,JSON格式错误
 "Cloudflare 推荐先走 OAuth 一键授权；也可在此手工填写 API Token。同页保存，不用 iframe。","Cloudflare 推荐先走 OAuth 一键授权；也可在此手工填写 API Token。同页保存，不用 iframe。"
 保存,保存
 正在保存…,正在保存…
+"网络请求失败：无法到达 query-bin。请刷新后台后重试；若持续失败请检查 CDN/WAF 是否拦截 /api/framework/query-bin。","网络请求失败：无法到达 query-bin。请刷新后台后重试；若持续失败请检查 CDN/WAF 是否拦截 /api/framework/query-bin。"
 请填写必填项,请填写必填项
 "请粘贴 API Token（新建 Cloudflare 账户必填）","请粘贴 API Token（新建 Cloudflare 账户必填）"
 正在验证连接,正在验证连接

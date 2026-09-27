@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<title>[PROTOTYPE] 顶栏左右簇宽度互让 — 单行预算 vs 现状</title>
+<style>
+  :root { --ink:#2b2620; --muted:#8a7f70; --paper:#f7f5f1; --line:#e3ddd2; --accent:#9a3b2e; --ok:#3c6e47; }
+  body { margin:0; font:15px/1.65 Georgia,"Songti SC",serif; color:var(--ink); background:var(--paper); }
+  .wrap { max-width:1080px; margin:0 auto; padding:36px 24px 70px; }
+  h1 { font-size:24px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin-bottom:18px; }
+  .q { background:#fff; border:1px solid var(--line); border-left:4px solid var(--accent); padding:14px 18px; margin-bottom:24px; }
+  .tabs button { font:inherit; border:1px solid var(--line); background:#fff; padding:8px 14px; cursor:pointer; border-radius:6px 6px 0 0; margin-right:4px; }
+  .tabs button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+  section.panel { display:none; background:#fff; border:1px solid var(--line); padding:18px 20px; }
+  section.panel.on { display:block; }
+  .state { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin:12px 0; }
+  .field { border:1px solid var(--line); padding:7px 10px; border-radius:6px; background:var(--paper); }
+  .field label { display:block; font-size:11px; color:var(--muted); }
+  .field output { font-size:16px; font-weight:700; }
+  .verdict { padding:9px 13px; border-radius:6px; font-weight:700; margin:8px 0; }
+  .verdict.bad { background:#fdecea; color:var(--accent); border:1px solid #f3c5be; }
+  .verdict.good { background:#eaf3ec; color:var(--ok); border:1px solid #c5ddca; }
+  canvas { border:1px solid var(--line); width:100%; height:auto; background:#fdfcfa; }
+  .btns { margin:12px 0; display:flex; flex-wrap:wrap; gap:8px; }
+  .btns button { font:inherit; padding:6px 13px; border:1px solid var(--ink); background:#fff; border-radius:6px; cursor:pointer; }
+  .btns button:hover { background:var(--ink); color:#fff; }
+  .log { font:12.5px ui-monospace,Menlo,monospace; background:#23201b; color:#d8d2c6; padding:10px 13px; border-radius:6px; max-height:210px; overflow:auto; white-space:pre-wrap; }
+  .note { color:var(--muted); font-size:13.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>顶栏「More」挤掉右侧导航 —— 单行宽度预算原型</h1>
+  <p class="sub">原型（可丢弃）— 复刻 header-default.js 的 syncNavStackMode / clustersOnSeparateRows / measureCatAvailableWidth / measureNavAvailableWidth / computeHideFromRaw，数字取 daocharms 线上实测。</p>
+
+  <div class="q">
+    <b>问题</b>：宽屏本应「左分类 + 右导航在同一行内互让宽度」。现状代码有两个洞：<br>
+    ① <b>sepRows 误判</b>：判定"是否两行"只看 offsetTop 差 ≥ max(24, 左高×0.75)。两侧内容高度不同（如右簇 Cart 变两行、top 差≈30px）时，<b>同一行也被当成两行</b> → 双方都按整行 1200 规划 → 实占 ≈1400 → nowrap 溢出被裁。<br>
+    ② <b>CSS 兜底缺口</b>：nowrap 下浏览器按 min-content(=max-content) 收缩 flex 项。左簇若没有 <code>overflow:hidden</code>（jsdom 复现证实），它<b>拒绝收缩</b>，把右簇直接压没——即使 JS 预算算对了也白搭。<br>
+    <b>验证</b>：切到各场景点「按步骤推进」；对照页跑修复版（rect 佐证 sepRows + 单行总预算）。
+  </div>
+
+  <div class="tabs">
+    <button class="on" data-tab="free">自由推演</button>
+    <button data-tab="s1">场景① 高差误判（bug）</button>
+    <button data-tab="s2">场景② 正常互让回归</button>
+    <button data-tab="s3">场景③ 真·两行窄屏</button>
+  </div>
+
+  <section class="panel on" id="free"><div class="state"></div><div class="verdict-slot"></div><canvas width="1240" height="170"></canvas><div class="btns"></div><div class="log"></div></section>
+  <section class="panel" id="s1"><p class="note">基线 innerW=1200 一切正常 → <b>第 2 步只把右簇变高</b>（什么都没变窄）→ 观察「误判两行?」与「右簇被裁?」。对照页同三步跑修复版：不再溢出。</p><div class="state"></div><div class="verdict-slot"></div><canvas width="1240" height="170"></canvas><div class="btns"></div><div class="log"></div></section>
+  <section class="panel" id="s2"><p class="note">等高压窄 1200→900→820：左簇先折叠进 More、右簇始终完整。修复不能弄坏这条路径。</p><div class="state"></div><div class="verdict-slot"></div><canvas width="1240" height="170"></canvas><div class="btns"></div><div class="log"></div></section>
+  <section class="panel" id="s3"><p class="note">≤768 合法栈模式：左右各一行，各自整行预算；右簇再变高也不应有异常。</p><div class="state"></div><div class="verdict-slot"></div><canvas width="1240" height="170"></canvas><div class="btns"></div><div class="log"></div></section>
+
+  <h2 style="margin-top:34px;font-size:19px">附：真实浏览器 flex 探针（反证，非模拟）</h2>
+  <p class="note">同目录 <code>prototype-flexprobe-a531.html</code> / <code>b531.html</code>（左簇分别无/有 overflow:hidden），容器 531px、内容超宽。实测两种配置<b>完全相同</b>：</p>
+  <pre class="log">{"innerW":531,"leftW":529,"rightW":0,"sameRowDeltaTop":-9,
+ "rightKids":[{"t":"Blog","w":29},{"t":"Wishlist","w":71},{"t":"Cart","w":50}],"Rscroll":168}</pre>
+  <p class="note"><b>三条判定：</b>① nowrap flex 下左簇按 max-content 占满、右簇被压到 <b>0 宽</b>——<code>flex-shrink:1</code> 救不了（min-content≈max-content，nowrap 长文本），<b>overflow:hidden 也不改变结果</b>；所以「挤出去」是数学必然，唯一出路是 JS 折叠（More）。② 同一行时 Δtop 实测 −9px → 现状阈值 24 不误报，但更高差(≥24)会误判两行、令双方各按整行规划 → 溢出。③ <b>探针 C</b>（同布局 + 真实 More 折叠算法）：折叠后 leftW=228 / rightW=289、右簇完整可见、overflow=−1 ⇒ 互让机制本身有效，坏在 sepRows 误判把它关掉。</p>
+</div>
+
+<script>
+/* ================= 纯逻辑模块（无 DOM）================= */
+const ENTER_MAX = 768, EXIT_MIN = 792, HYSTERESIS = 12;
+function buildPrefix(ws, gap) { let s = 0; return ws.map((w, i) => s += w + (i > 0 ? gap : 0)); }
+function computeHideFromRaw(pfx, moreW, avail, count) {
+  if (!count) return -1;
+  if (pfx[count - 1] <= avail + 0.5) return -1;
+  let lo = 0, hi = count - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; const need = (mid === 0 ? 0 : pfx[mid - 1]) + moreW; if (need <= avail + 0.5) lo = mid; else hi = mid - 1; }
+  if (lo === 0 && moreW > avail + 0.5) return 0;
+  return lo;
+}
+function resolveHysteresis(pfx, moreW, avail, count, prev) {
+  const raw = computeHideFromRaw(pfx, moreW, avail, count);
+  if (prev == null) return raw;
+  const vis = h => h < 0 ? count : h;
+  if (vis(raw) < vis(prev)) return raw;
+  if (vis(raw) > vis(prev)) {
+    const strict = computeHideFromRaw(pfx, moreW, Math.max(0, avail - HYSTERESIS), count);
+    if (vis(strict) >= vis(raw)) return raw;
+    if (vis(strict) > vis(prev)) return strict;
+    return prev;
+  }
+  return prev;
+}
+function visibleWidth(ws, gap, hideFrom) { const k = hideFrom < 0 ? ws.length : hideFrom; let s = 0; for (let i = 0; i < k; i++) s += ws[i] + (i > 0 ? gap : 0); return s; }
+
+function createModel(input, silverBullet) {
+  const S = { innerW: 1200, rightTall: false, sticky: false, stacked: false, lastCat: null, lastNav: null, log: [] };
+  function step(action, payload) {
+    if (action === 'innerW') S.innerW = payload;
+    if (action === 'growRight') S.rightTall = true;
+    if (action === 'shrinkRight') S.rightTall = false;
+    if (!S.sticky && S.innerW <= ENTER_MAX) S.sticky = true;
+    else if (S.sticky && S.innerW > EXIT_MIN) S.sticky = false;
+    S.stacked = S.sticky || S.innerW <= ENTER_MAX;
+    const leftH = 40, topDelta = S.rightTall ? 30 : 0;
+    const threshold = Math.max(24, Math.floor(leftH * 0.75)); // 现状=24
+    // 现状：Δtop≥24 即"两行"；修复：还需 rect 同行情据（demo 里 sameRowRect=true 表示确实同行）
+    const misfire = !S.stacked && topDelta >= threshold;
+    S.sepRows = silverBullet ? (S.stacked) : (S.stacked || topDelta >= threshold);
+    S.misfire = silverBullet ? false : misfire;
+    const mainW = S.innerW;
+    let catAvail, navAvail;
+    if (!S.sepRows) {
+      // ---- 修复核心：单行总预算 T，左右共享 ----
+      const T = Math.max(0, mainW - input.allW - input.gap - 8);
+      const rightFull = visibleWidth(input.rights, input.rightGap, -1) + input.navMoreW;
+      const catPfx = buildPrefix(input.cats, input.leftGap);
+      // 左可用 = T − 右全量（现状策略：左先塌）
+      catAvail = Math.max(0, T - rightFull);
+      S.hideCat = resolveHysteresis(catPfx, input.moreW, catAvail, input.cats.length, S.lastCat);
+      S.lastCat = S.hideCat;
+      S.catShown = visibleWidth(input.cats, input.leftGap, S.hideCat) + (S.hideCat >= 0 ? input.moreW : 0);
+      navAvail = Math.max(0, T - S.catShown);
+      S.hideNav = resolveHysteresis(buildPrefix(input.rights, input.rightGap), input.navMoreW, navAvail, input.rights.length, S.lastNav);
+      S.lastNav = S.hideNav;
+      S.navShown = visibleWidth(input.rights, input.rightGap, S.hideNav) + (S.hideNav >= 0 ? input.navMoreW : 0);
+      S.rowTotal = input.allW + S.catShown + input.gap + S.navShown;
+      S.overflow = S.rowTotal > mainW + 0.5;   // 数学上不可能（navAvail=T−catShown）
+    } else {
+      // ---- 两行：各自整行 ----
+      const catPfx = buildPrefix(input.cats, input.leftGap);
+      catAvail = Math.max(0, mainW - input.allW - input.gap - 8);
+      S.hideCat = resolveHysteresis(catPfx, input.moreW, catAvail, input.cats.length, S.lastCat);
+      S.lastCat = S.hideCat;
+      S.catShown = visibleWidth(input.cats, input.leftGap, S.hideCat) + (S.hideCat >= 0 ? input.moreW : 0);
+      navAvail = mainW;
+      S.hideNav = resolveHysteresis(buildPrefix(input.rights, input.rightGap), input.navMoreW, navAvail, input.rights.length, S.lastNav);
+      S.lastNav = S.hideNav;
+      S.navShown = visibleWidth(input.rights, input.rightGap, S.hideNav) + (S.hideNav >= 0 ? input.navMoreW : 0);
+      S.rowTotal = S.catShown; // 第一行只有左
+      S.overflow = S.misfire && (input.allW + S.catShown + input.gap + S.navShown) > mainW + 0.5; // 误判但物理仍一行 → 溢出
+    }
+    S.catAvail = catAvail; S.navAvail = navAvail; S.threshold = threshold; S.topDelta = topDelta;
+    S.log.push(`${action}${payload !== undefined ? '=' + payload : ''} | W=${S.innerW} stacked=${S.stacked} sep=${S.sepRows}${S.misfire?'(误判!)':''} Δ${topDelta}≥${threshold} | catAvail=${r(catAvail)} hideCat=${S.hideCat} | navAvail=${r(navAvail)} hideNav=${S.hideNav} | row=${r(S.rowTotal)} OVERFLOW=${S.overflow}`);
+    return S;
+  }
+  return { state: S, step };
+}
+function r(n) { return Math.round(n); }
+const INPUT = { cats: [100, 77, 160, 138, 157, 195, 129, 93, 85, 99], rights: [150, 150], allW: 0, gap: 12, leftGap: 8, moreW: 62, navMoreW: 72 };
+
+/* ================= 页面壳 ================= */
+function renderPanel(root, S, silver) {
+  const f = (l, v, warn) => `<div class="field"><label>${l}</label><output style="${warn ? 'color:var(--accent)' : ''}">${v}</output></div>`;
+  root.querySelector('.state').innerHTML =
+    f('容器宽 innerW', S.innerW) +
+    f('栈模式(合法两行)', S.stacked ? '是' : '否') +
+    f('sepRows 判定', S.sepRows ? (S.misfire ? '两行←误判!' : '两行') : '单行', S.misfire) +
+    f('左可用宽', r(S.catAvail)) +
+    f('左进 More', S.hideCat < 0 ? '全放下' : (INPUT.cats.length - S.hideCat) + ' 项') +
+    f('右可用宽', r(S.navAvail), S.misfire) +
+    f('右进 More', S.hideNav < 0 ? '全放下' : (INPUT.rights.length - S.hideNav) + ' 项') +
+    f('实占行宽', r(S.rowTotal)) +
+    f('右簇被裁?', S.overflow ? '是 ←BUG' : '否', S.overflow);
+  root.querySelector('.verdict-slot').innerHTML = S.overflow
+    ? '<div class="verdict bad">BUG 复现：Δtop≥24 误判两行 → 双簇各按整行规划 → 合计超容器被裁（截图现象）</div>'
+    : (silver && S.sepRows && !S.stacked
+      ? '<div class="verdict good">修复版：rect 情据否决误判 → 单行总预算成立，溢出在数学上不可能</div>'
+      : '<div class="verdict good">OK：双簇均在容器内</div>');
+  draw(root.querySelector('canvas'), S);
+  root.querySelector('.log').textContent = S.log.slice(-10).join('\n');
+}
+function draw(cv, S) {
+  const c = cv.getContext('2d'), scale = (cv.width - 40) / 1200;
+  c.clearRect(0, 0, cv.width, cv.height);
+  c.strokeStyle = '#8a7f70'; c.setLineDash([4, 4]); c.strokeRect(20, 10, 1200 * scale, cv.height - 20); c.setLineDash([]);
+  c.font = '12px Menlo';
+  const twoRowVis = S.sepRows;
+  c.fillStyle = '#2b2620'; c.fillRect(20, 30, S.catShown * scale, 26);
+  c.fillStyle = '#fff'; c.fillText('左簇 ' + r(S.catShown) + 'px', 26, 47);
+  const ry = twoRowVis ? 80 : 30;
+  const navX = twoRowVis ? 20 : 20 + (S.catShown + 12) * scale;
+  c.fillStyle = S.overflow ? '#9a3b2e' : '#3c6e47';
+  c.fillRect(navX, ry, S.navShown * scale, 26);
+  if (S.overflow) { c.strokeStyle = '#9a3b2e'; c.lineWidth = 2; c.beginPath(); c.moveTo(20 + 1200 * scale, 10); c.lineTo(20 + 1200 * scale, cv.height - 10); c.stroke(); }
+  c.fillStyle = '#fff';
+  c.fillText('右簇 ' + r(S.navShown) + 'px' + (S.misfire ? '（被摆第二行=误判，实际还在一行→超出虚线）' : '') + (S.overflow ? ' ←超出容器' : ''), navX + 6, ry + 17);
+}
+function wire(id, actions, guidedSteps, silver) {
+  const root = document.getElementById(id);
+  let m = createModel(INPUT, silver);
+  m.step('init');
+  renderPanel(root, m.state, silver);
+  const box = root.querySelector('.btns');
+  let idx = 0;
+  if (guidedSteps) {
+    const next = document.createElement('button'); next.textContent = '按步骤推进 ▶';
+    const reset = document.createElement('button'); reset.textContent = '重置';
+    next.onclick = () => { if (idx < guidedSteps.length) { const st = guidedSteps[idx++]; m.step(st.act, st.payload); renderPanel(root, m.state, silver); } else next.textContent = '已到底，观察上方'; };
+    reset.onclick = () => { m = createModel(INPUT, silver); m.step('init'); idx = 0; next.textContent = '按步骤推进 ▶'; renderPanel(root, m.state, silver); };
+    box.append(next, reset);
+  } else {
+    actions.forEach(a => { const b = document.createElement('button'); b.textContent = a.label; b.onclick = () => { m.step(a.act, a.payload); renderPanel(root, m.state, silver); }; box.appendChild(b); });
+    const reset = document.createElement('button'); reset.textContent = '重置'; reset.onclick = () => { m = createModel(INPUT, silver); m.step('init'); renderPanel(root, m.state, silver); }; box.appendChild(reset);
+  }
+}
+wire('free', [
+  { label: 'innerW=1200', act: 'innerW', payload: 1200 },
+  { label: 'innerW=1100', act: 'innerW', payload: 1100 },
+  { label: 'innerW=900', act: 'innerW', payload: 900 },
+  { label: 'innerW=760', act: 'innerW', payload: 760 },
+  { label: '右簇变高（Cart 两行）', act: 'growRight' },
+  { label: '右簇恢复等高', act: 'shrinkRight' },
+], null, false);
+wire('s1', null, [{ act: 'innerW', payload: 1200 }, { act: 'growRight' }, { act: 'innerW', payload: 1100 }], false);
+wire('s2', null, [{ act: 'innerW', payload: 1200 }, { act: 'innerW', payload: 900 }, { act: 'innerW', payload: 820 }], false);
+wire('s3', null, [{ act: 'innerW', payload: 760 }, { act: 'growRight' }], false);
+(function(){
+  const root=document.createElement('section'); root.className='panel'; root.id='s4';
+  root.innerHTML='<p class="note">对照实验：与场景①完全同步的三步，但启用<b>修复版</b>（sepRows 需 rect 同行情据 + 单行总预算共享）。第 2 步右簇变高后：不判两行、右簇按剩余空间自适应折叠 ⇒ 不溢出。</p><div class="state"></div><div class="verdict-slot"></div><canvas width="1240" height="170"></canvas><div class="btns"></div><div class="log"></div>';
+  document.querySelector('section.panel#s3').after(root);
+  document.querySelector('.tabs').insertAdjacentHTML('beforeend','<button data-tab="s4">场景④ 修复版对照</button>');
+  wire('s4', null, [{ act: 'innerW', payload: 1200 }, { act: 'growRight' }, { act: 'innerW', payload: 1100 }], true);
+})();
+document.querySelectorAll('.tabs button').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on')); t.classList.add('on');
+  document.querySelectorAll('section.panel').forEach(p => p.classList.remove('on'));
+  document.getElementById(t.dataset.tab).classList.add('on');
+  if (t.dataset.tab === 's4') { const b = document.querySelector('#s4 .btns button'); if (b && !b._wired) { b._wired = 1; b.onclick(); b.onclick(); } } // 自动推进两步到 bug 点位
+});
+</script>
+</body>
+</html>

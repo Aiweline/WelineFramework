@@ -55,6 +55,8 @@
 | 主题静态命名空间解析 | `ThemeStaticNamespaceService::resolvePublicThemePath`（委托 `tryResolve`） |
 | 设计覆盖搬迁 | `theme:upgrade`（`Theme\Console\Theme\Upgrade`） |
 
+**前后台双激活（硬）**：省略 `-t` 时，`theme:upgrade` 必须发布 **frontend + backend** 各自激活主题的静态命名空间（同主题去重）。仅发前台（如 `hanfu`）会导致后台 Default 命名空间 `/static/Weline/Theme/view/theme/...`（如 `backend/colors/_light.css`）在 PROD / 本地 NG 网关下 404（`X-WLS-Static-Missing: fastpath`）。指定 `-t` 仍只发该主题。
+
 ## 发布排除（`pub/static` 只许含运行时资源）
 
 `pub/static` 位于 Web 根之下，铺进去的文件浏览器可直接取到：文档会被读取，`*.php` 更会被执行

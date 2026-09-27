@@ -15,6 +15,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\ConsoleException;
 use Weline\Framework\Deploy\StaticPublishExclusion;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\File\Scan;
 use Weline\Theme\Model\WelineTheme;
@@ -59,19 +60,65 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         [$theme_name, $modules] = self::parseArguments($args);
+        $themes = $this->resolveThemesToUpgrade($theme_name);
+        if ($themes === []) {
+            throw new ConsoleException(__('未找到激活主题，请用 -t/--theme 指定主题名。'));
+        }
 
-        if ($theme_name !== '') {
-            $theme = $this->welineTheme->clear()->load(WelineTheme::schema_fields_NAME, $theme_name);
+        foreach ($themes as $theme) {
+            $this->upgradeOneTheme($theme, $modules);
+        }
+    }
+
+    /**
+     * Resolve themes to publish.
+     *
+     * Named `-t` → that theme only.
+     * No `-t` → unique active themes for both frontend and backend areas
+     * (PROD / local NG gateway need both namespaces, e.g. hanfu storefront +
+     * Default backend `Weline/Theme/view/theme/.../colors/*.css`).
+     *
+     * @return list<WelineTheme>
+     */
+    public function resolveThemesToUpgrade(string $themeName): array
+    {
+        if ($themeName !== '') {
+            $theme = ObjectManager::create(WelineTheme::class, [], false);
+            $theme->clear()->clearQuery()->load(WelineTheme::schema_fields_NAME, $themeName);
             if (!$theme->getId()) {
-                throw new ConsoleException(__('主题不存在：') . $theme_name);
+                throw new ConsoleException(__('主题不存在：') . $themeName);
             }
-        } else {
-            $theme = $this->welineTheme->getActiveTheme();
-            if (!$theme || !$theme->getId()) {
-                throw new ConsoleException(__('未找到激活主题，请用 -t/--theme 指定主题名。'));
+
+            return [$theme];
+        }
+
+        $ids = [];
+        foreach (['frontend', 'backend'] as $area) {
+            $probe = ObjectManager::create(WelineTheme::class, [], false);
+            $probe->clearData()->clearQuery()->getActiveTheme($area);
+            $id = (int)$probe->getId();
+            if ($id > 0) {
+                $ids[$id] = true;
             }
         }
 
+        $themes = [];
+        foreach (array_keys($ids) as $id) {
+            $theme = ObjectManager::create(WelineTheme::class, [], false);
+            $theme->clear()->clearQuery()->load((int)$id);
+            if ($theme->getId()) {
+                $themes[] = $theme;
+            }
+        }
+
+        return $themes;
+    }
+
+    /**
+     * @param list<string> $modules
+     */
+    private function upgradeOneTheme(WelineTheme $theme, array $modules): void
+    {
         $publicThemePath = $this->themeStaticNamespaceService->resolvePublicThemePath($theme);
         if ($publicThemePath === '') {
             throw new ConsoleException(__('无法解析主题静态资源命名空间。'));
@@ -292,7 +339,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function tip(): string
     {
-        return __('更新主题静态资源（设计覆盖 + 模块 view/theme 继承发布到 /static/{主题}/...）');
+        return __('更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）');
     }
 
     public function help(): array|string
@@ -302,14 +349,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->tip(),
             [
                 '-h, --help' => '显示帮助信息',
-                '-t, --theme <name>' => '指定主题名（如 daocharms / hanfu）；省略则用当前激活主题',
+                '-t, --theme <name>' => '指定主题名（如 daocharms / hanfu）；省略则发布前台+后台各自的激活主题（去重）',
             ],
             [
                 'module...' => '可选：只处理设计主题下指定模块目录（如 Weline_Theme）',
             ],
             [
                 '指定主题全量发布' => 'php bin/w theme:upgrade -t daocharms',
-                '激活主题全量发布' => 'php bin/w theme:upgrade',
+                '前后台激活主题全量发布' => 'php bin/w theme:upgrade',
                 '指定主题+模块过滤' => 'php bin/w theme:upgrade -t daocharms Weline_Theme',
             ]
         );
