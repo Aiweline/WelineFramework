@@ -1940,6 +1940,17 @@ function registerRemoteDrawer() {
             load();
         });
         listen(element, 'weline:ui:drawer:close', () => clearBusy());
+        // iframe 内 BinQuery / SPA 提交不会触发 frame load；子页可 postMessage 清 busy
+        listen(window, 'message', (event) => {
+            if (event.origin !== window.location.origin) return;
+            if (event.source !== frame.contentWindow) return;
+            const payload = event.data;
+            if (!payload || typeof payload !== 'object') return;
+            if (payload.type !== 'weline-remote-drawer') return;
+            if (payload.action === 'idle' || payload.action === 'clear-busy') {
+                clearBusy();
+            }
+        });
         listen(element, 'click', (event) => {
             const trigger = eventClosest(event, '[data-w-remote-action]');
             const action = trigger?.dataset.wRemoteAction || '';

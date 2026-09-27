@@ -1531,12 +1531,14 @@ textarea::-webkit-scrollbar-thumb:hover,
 .header-main-nav-inner.is-nav-stacked .header-nav-left-cluster {
     flex: 1 1 auto;
     min-width: 0;
+    max-width: 100%;
     order: 1;
     overflow: hidden;
 }
 
 .header-main-nav-inner.is-nav-stacked .header-nav-right-cluster {
     flex: 1 1 100%;
+    min-width: 0;
     order: 2;
     justify-content: flex-start;
     overflow: hidden;
@@ -1557,7 +1559,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     flex-grow: 0;
     width: max-content;
     min-width: 0;
-    max-width: 100%;
+    max-width: calc(100% - max(240px, 30%));
     gap: var(--spacing-sm);
     overflow: hidden;
 }
@@ -1568,9 +1570,14 @@ textarea::-webkit-scrollbar-thumb:hover,
     align-items: center;
     justify-content: flex-end;
     flex: 1 1 0%;
-    min-width: 0;
+    min-width: max(240px, 30%);
     gap: var(--weline-space-5);
     overflow: hidden;
+}
+
+/* JS 折叠失效时的兜底：右簇 More 按钮永不贴边裁切 */
+.header-nav-right-cluster > .nav-more-wrapper {
+    flex: 0 0 auto;
 }
 
 /* 全部菜单：内容宽度，不被左右菜单挤压覆盖 */
@@ -1756,12 +1763,14 @@ textarea::-webkit-scrollbar-thumb:hover,
     .header-nav-left-cluster {
         flex: 1 1 auto;
         min-width: 0;
+        max-width: 100%;
         order: 1;
         overflow: hidden;
     }
 
     .header-nav-right-cluster {
         flex: 1 1 100%;
+        min-width: 0;
         order: 2;
         justify-content: flex-start;
         overflow: hidden;

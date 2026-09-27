@@ -1055,14 +1055,11 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
+面包屑,"bread crumbs"
 搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
-查看更多,"View more"
 商品,Products
 查看规格图,"View spec images"
 减少数量,"Decrease quantity"
@@ -1085,11 +1082,17 @@ FAQ/常见问题,FAQ
 "还差 %1 包邮","You're %1 away from free shipping"
 已享包邮,"You've unlocked free shipping"
 关闭通知,"Close notification"
+全部商品,"Shop All"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
 特价,Sale
 DEMO,DEMO
 热销,Hot
 包邮,"Free shipping"
 NEW,NEW
+查看更多,"View more"
 视频,Video
 您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 件商品,"items of goods"
@@ -1102,9 +1105,6 @@ NEW,NEW
 第%d张,"Slide %d"
 剩余,Remaining
 天,Day(s)
-全部商品,"Shop All"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-面包屑,"bread crumbs"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
