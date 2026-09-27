@@ -86,8 +86,8 @@ SEO管理,SEO管理
 "Google Search Console 站点权限验证通过","Google Search Console 站点权限验证通过"
 "（当前 JSON 中的 client_email）","（当前 JSON 中的 client_email）"
 "GSC 属性「%{1}」对该服务账号不可见（HTTP 404），且该账号下暂无任何属性。请先在 Google Search Console 验证域名/网址前缀，再将 %{2} 加成「所有者」，并把本处属性 URL 改成与 GSC 完全一致后再验证。前往：%{3}","GSC 属性「%{1}」对该服务账号不可见（HTTP 404），且该账号下暂无任何属性。请先在 Google Search Console 验证域名/网址前缀，再将 %{2} 加成「所有者」，并把本处属性 URL 改成与 GSC 完全一致后再验证。前往：%{3}"
-"属性 URL 不一致：本处填写「%{1}」，但服务账号 %{2} 当前可见的是「%{3}」。说明账号多半已加入 GSC，请把本处改成与 GSC 左侧属性名完全相同的字符串（常见：域名属性要用 sc-domain:example.com，不能写成 https://www.example.com）。改完保存后再点验证。前往：%{4}","属性 URL 不一致：本处填写「%{1}」，但服务账号 %{2} 当前可见的是「%{3}」。说明账号多半已加入 GSC，请把本处改成与 GSC 左侧属性名完全相同的字符串（常见：域名属性要用 sc-domain:example.com，不能写成 https://www.example.com）。改完保存后再点验证。前往：%{4}"
-"服务账号 %{1} 无权访问 GSC 属性「%{2}」（HTTP 403）。请到 Search Console → 设置 → 用户和权限，将其加成「所有者」。前往：%{3}","服务账号 %{1} 无权访问 GSC 属性「%{2}」（HTTP 403）。请到 Search Console → 设置 → 用户和权限，将其加成「所有者」。前往：%{3}"
+"本处填写的 GSC 属性「%{1}」对服务账号 %{2} 尚不可见（HTTP 404）。该账号当前可见的是「%{3}」（多为已授权的其它站，不要改成它）。请打开 Search Console 中的「%{1}」→ 设置 → 用户和权限，将 %{2} 加成「所有者」；若尚未验证该域名属性请先验证。前往：%{4}","本处填写的 GSC 属性「%{1}」对服务账号 %{2} 尚不可见（HTTP 404）。该账号当前可见的是「%{3}」（多为已授权的其它站，不要改成它）。请打开 Search Console 中的「%{1}」→ 设置 → 用户和权限，将 %{2} 加成「所有者」；若尚未验证该域名属性请先验证。前往：%{4}"
+"服务账号 %{1} 无权访问本处填写的 GSC 属性「%{2}」（HTTP 403）。请打开 Search Console 中的「%{2}」→ 设置 → 用户和权限，将其加成「所有者」（不要加到别的属性）。前往：%{3}","服务账号 %{1} 无权访问本处填写的 GSC 属性「%{2}」（HTTP 403）。请打开 Search Console 中的「%{2}」→ 设置 → 用户和权限，将其加成「所有者」（不要加到别的属性）。前往：%{3}"
 "GSC 属性「%{1}」当前权限为 %{2}，需要 siteOwner 或 siteFullUser。请将服务账号 %{3} 加成「所有者」。前往：%{4}","GSC 属性「%{1}」当前权限为 %{2}，需要 siteOwner 或 siteFullUser。请将服务账号 %{3} 加成「所有者」。前往：%{4}"
 "请确认属性已验证、URL 一致，且 Service Account 已是所有者。","请确认属性已验证、URL 一致，且 Service Account 已是所有者。"
 "Google Search Console 站点权限验证失败（HTTP %{1}）。%{2} 前往：%{3}","Google Search Console 站点权限验证失败（HTTP %{1}）。%{2} 前往：%{3}"
@@ -769,7 +769,7 @@ AI优化建议,AI优化建议
 已验证站点,已验证站点
 "该平台无需填写 API 凭据","该平台无需填写 API 凭据"
 "保存账户并绑定站点后，按指南到对应站长平台手动提交 Sitemap 即可。","保存账户并绑定站点后，按指南到对应站长平台手动提交 Sitemap 即可。"
-"保存账户时同步本页所选站点；可多选。Sitemap 频率等细项可在站点绑定页调整。","保存账户时同步本页所选站点；可多选。Sitemap 频率等细项可在站点绑定页调整。"
+"保存账户时同步本页所选本系统站点（可多选），用于生成/提交该站 Sitemap。这不是 Search Console 属性，也不会自动加 sc-domain: 或授予 GSC 权限；GSC 授权请在上方「站点属性 URL」对应属性里把服务账号加成所有者。Sitemap 频率等细项可在站点绑定页调整。","保存账户时同步本页所选本系统站点（可多选），用于生成/提交该站 Sitemap。这不是 Search Console 属性，也不会自动加 sc-domain: 或授予 GSC 权限；GSC 授权请在上方「站点属性 URL」对应属性里把服务账号加成所有者。Sitemap 频率等细项可在站点绑定页调整。"
 启用账户,启用账户
 启用URL定时推送,启用URL定时推送
 启用Sitemap定时提交,启用Sitemap定时提交
@@ -795,6 +795,11 @@ AI优化建议,AI优化建议
 配置验证通过,配置验证通过
 验证失败,验证失败
 "去 Google Search Console","去 Google Search Console"
+"请先上传或粘贴上方 Service Account JSON；解析出 client_email 后，这里会显示要加成所有者的邮箱与操作步骤。","请先上传或粘贴上方 Service Account JSON；解析出 client_email 后，这里会显示要加成所有者的邮箱与操作步骤。"
+"已解析服务账号 %{1}。请填写上方「站点属性 URL」（如 sc-domain:example.com），再按此处提示到 GSC 授权。","已解析服务账号 %{1}。请填写上方「站点属性 URL」（如 sc-domain:example.com），再按此处提示到 GSC 授权。"
+"操作：打开 Search Console → 左侧选属性「%{1}」→ 设置 → 用户和权限 → 添加用户，粘贴下方邮箱，权限选「所有者」。","操作：打开 Search Console → 左侧选属性「%{1}」→ 设置 → 用户和权限 → 添加用户，粘贴下方邮箱，权限选「所有者」。"
+要添加的服务账号,要添加的服务账号
+"打开 Google Search Console","打开 Google Search Console"
 确认操作,确认操作
 确定,确定
 "当前平台不支持 URL 定时推送；Google 普通页面请改用 Sitemap 定时提交","当前平台不支持 URL 定时推送；Google 普通页面请改用 Sitemap 定时提交"
@@ -951,9 +956,9 @@ AI优化建议,AI优化建议
 "Google 普通页面请使用 Search Console Sitemap 提交；Indexing API 仅适用于招聘信息或直播视频","Google 普通页面请使用 Search Console Sitemap 提交；Indexing API 仅适用于招聘信息或直播视频"
 "Google Service Account JSON 凭据内容","Google 服务帐户 JSON 凭据内容"
 "Search Console 中已验证的站点属性 URL","Search Console 中已验证的站点属性 URL"
-"先下载 JSON；把其中的 client_email 在 GSC「用户和权限」加成所有者后，再粘贴到此处","先下载 JSON；把其中的 client_email 在 GSC「用户和权限」加成所有者后，再粘贴到此处"
+"先下载 JSON。打开 GSC 中与下方「站点属性 URL」同一条属性（如 sc-domain:example.com）→ 设置 → 用户和权限，把 JSON 里的 client_email 加成「所有者」，再粘贴到此处。本页「绑定站点」不能代替这一步。","先下载 JSON。打开 GSC 中与下方「站点属性 URL」同一条属性（如 sc-domain:example.com）→ 设置 → 用户和权限，把 JSON 里的 client_email 加成「所有者」，再粘贴到此处。本页「绑定站点」不能代替这一步。"
 "Search Console 站点属性 URL","Search Console 站点属性 URL"
-"须与 GSC 左侧属性名完全一致。可填 https 域名，保存时自动转为 sc-domain:example.com（去掉 www）。请先在 GSC 验证属性并把服务账号加成所有者，再点验证","须与 GSC 左侧属性名完全一致。可填 https 域名，保存时自动转为 sc-domain:example.com（去掉 www）。请先在 GSC 验证属性并把服务账号加成所有者，再点验证"
+"须与 GSC 左侧属性名完全一致。可填 https://www.example.com，保存时自动转为 sc-domain:example.com（去掉 www）。要把服务账号加进这条属性（不是别的站）；下方会根据 JSON 解析出的服务账号邮箱，提示如何操作。「绑定站点」只关联本系统网站，不会自动加 GSC 权限。","须与 GSC 左侧属性名完全一致。可填 https://www.example.com，保存时自动转为 sc-domain:example.com（去掉 www）。要把服务账号加进这条属性（不是别的站）；下方会根据 JSON 解析出的服务账号邮箱，提示如何操作。「绑定站点」只关联本系统网站，不会自动加 GSC 权限。"
 "Discover / News 监测","Discover / News 监测"
 "使用现有网站属性，经 Search Analytics 的 type=discover / googleNews 拉取；无需新建账户类型","使用现有网站属性，经 Search Analytics 的 type=discover / googleNews 拉取；无需新建账户类型"
 "启用 Discover 统计","启用 Discover 统计"
@@ -1050,6 +1055,10 @@ Canonical,典范
 "以下站点未绑定 SEO 账户，无法自动提交 sitemap：","以下站点未绑定 SEO 账户，无法自动提交 sitemap："
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。"
 SEO账户配置,SEO账户配置
+"服务账号 %{1} 无权访问 GSC 属性「%{2}」（HTTP 403）。请到 Search Console → 设置 → 用户和权限，将其加成「所有者」。前往：%{3}","服务账号 %{1} 无权访问 GSC 属性「%{2}」（HTTP 403）。请到 Search Console → 设置 → 用户和权限，将其加成「所有者」。前往：%{3}"
+"保存账户时同步本页所选站点；可多选。Sitemap 频率等细项可在站点绑定页调整。","保存账户时同步本页所选站点；可多选。Sitemap 频率等细项可在站点绑定页调整。"
+"先下载 JSON；把其中的 client_email 在 GSC「用户和权限」加成所有者后，再粘贴到此处","先下载 JSON；把其中的 client_email 在 GSC「用户和权限」加成所有者后，再粘贴到此处"
+"须与 GSC 左侧属性名完全一致。可填 https 域名，保存时自动转为 sc-domain:example.com（去掉 www）。请先在 GSC 验证属性并把服务账号加成所有者，再点验证","须与 GSC 左侧属性名完全一致。可填 https 域名，保存时自动转为 sc-domain:example.com（去掉 www）。请先在 GSC 验证属性并把服务账号加成所有者，再点验证"
 总览,总览
 SEO主体总数,SEO主体总数
 关键词总数,关键词总数

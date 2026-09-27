@@ -302,14 +302,14 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             }
 
             return (string)__(
-                '属性 URL 不一致：本处填写「%{1}」，但服务账号 %{2} 当前可见的是「%{3}」。说明账号多半已加入 GSC，请把本处改成与 GSC 左侧属性名完全相同的字符串（常见：域名属性要用 sc-domain:example.com，不能写成 https://www.example.com）。改完保存后再点验证。前往：%{4}',
+                '本处填写的 GSC 属性「%{1}」对服务账号 %{2} 尚不可见（HTTP 404）。该账号当前可见的是「%{3}」（多为已授权的其它站，不要改成它）。请打开 Search Console 中的「%{1}」→ 设置 → 用户和权限，将 %{2} 加成「所有者」；若尚未验证该域名属性请先验证。前往：%{4}',
                 [$site, $emailHint, implode('、', array_slice($visibleSites, 0, 5)), $helpUrl]
             );
         }
 
         if ($httpCode === 403) {
             return (string)__(
-                '服务账号 %{1} 无权访问 GSC 属性「%{2}」（HTTP 403）。请到 Search Console → 设置 → 用户和权限，将其加成「所有者」。前往：%{3}',
+                '服务账号 %{1} 无权访问本处填写的 GSC 属性「%{2}」（HTTP 403）。请打开 Search Console 中的「%{2}」→ 设置 → 用户和权限，将其加成「所有者」（不要加到别的属性）。前往：%{3}',
                 [$emailHint, $site, $helpUrl]
             );
         }

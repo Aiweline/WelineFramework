@@ -56,7 +56,7 @@ class GoogleSearchConsoleAdapter implements SearchEngineAdapterInterface
                 'required' => true,
                 'accept' => '.json,application/json',
                 'placeholder' => '{"type":"service_account","project_id":"..."}',
-                'hint' => (string)__('先下载 JSON；把其中的 client_email 在 GSC「用户和权限」加成所有者后，再粘贴到此处'),
+                'hint' => (string)__('先下载 JSON。打开 GSC 中与下方「站点属性 URL」同一条属性（如 sc-domain:example.com）→ 设置 → 用户和权限，把 JSON 里的 client_email 加成「所有者」，再粘贴到此处。本页「绑定站点」不能代替这一步。'),
             ],
             [
                 'key' => 'site_url',
@@ -64,7 +64,7 @@ class GoogleSearchConsoleAdapter implements SearchEngineAdapterInterface
                 'type' => 'text',
                 'required' => true,
                 'placeholder' => 'https://www.example.com/ 或 sc-domain:example.com',
-                'hint' => (string)__('须与 GSC 左侧属性名完全一致。可填 https 域名，保存时自动转为 sc-domain:example.com（去掉 www）。请先在 GSC 验证属性并把服务账号加成所有者，再点验证'),
+                'hint' => (string)__('须与 GSC 左侧属性名完全一致。可填 https://www.example.com，保存时自动转为 sc-domain:example.com（去掉 www）。要把服务账号加进这条属性（不是别的站）；下方会根据 JSON 解析出的服务账号邮箱，提示如何操作。「绑定站点」只关联本系统网站，不会自动加 GSC 权限。'),
             ],
             [
                 'key' => '__section_discover',

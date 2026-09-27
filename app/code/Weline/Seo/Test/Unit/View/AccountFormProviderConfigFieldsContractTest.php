@@ -85,14 +85,23 @@ final class AccountFormProviderConfigFieldsContractTest extends TestCase
         self::assertStringContainsString('openGsc', $jsSrc);
         self::assertStringContainsString('dialogApi.request', $jsSrc);
 
-        self::assertStringContainsString('先在 Google Search Console 验证', $templateSrc);
+        self::assertStringContainsString('先在 GSC 验证属性', $templateSrc);
         self::assertStringContainsString('Google Search Console 配置顺序', $templateSrc);
         self::assertStringContainsString('与 GSC 属性字符串完全一致', $templateSrc);
+        self::assertStringContainsString('绑定站点」不能代替本步', $templateSrc);
+        self::assertStringContainsString('这不是 Search Console 属性', $templateSrc);
 
         $gscAdapterSrc = (string) file_get_contents($root . '/Service/Adapter/GoogleSearchConsoleAdapter.php');
         self::assertStringContainsString('须与 GSC 左侧属性名完全一致', $gscAdapterSrc);
-        self::assertStringContainsString('加成所有者后，再粘贴到此处', $gscAdapterSrc);
-        self::assertStringContainsString('属性 URL 不一致', $adapterSrc);
+        self::assertStringContainsString('加成「所有者」，再粘贴到此处', $gscAdapterSrc);
+        self::assertStringContainsString('要把服务账号加进这条属性', $gscAdapterSrc);
+        self::assertStringContainsString('下方会根据 JSON 解析出的服务账号邮箱', $gscAdapterSrc);
+        self::assertStringContainsString('本处填写的 GSC 属性', $adapterSrc);
+        self::assertStringContainsString('不要改成它', $adapterSrc);
+        self::assertStringContainsString('ACCOUNT_SERVICE_CLIENT_EMAIL', $templateSrc);
+        self::assertStringContainsString('updateGscOwnerActionHint', $templateSrc);
+        self::assertStringContainsString('data-seo-gsc-owner-action', $templateSrc);
+        self::assertStringContainsString('resolveServiceAccountClientEmail', $templateSrc);
         self::assertStringContainsString('enable_discover_stats', $gscAdapterSrc);
         self::assertStringContainsString('youtube_channel_url', $gscAdapterSrc);
         self::assertStringContainsString("'type' => 'section'", $gscAdapterSrc);
