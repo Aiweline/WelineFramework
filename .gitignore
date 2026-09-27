@@ -128,9 +128,10 @@ weline.env
 # ??????
 /vendor/*
 
-# install ???????????????php/pgsql/mysql/composer.phar ????
+# install 下载的运行时工具（php/pgsql/mysql/composer.phar 等）不入库
 /extend/server/
 /composer.phar
+/extend/phpunit.phar
 
 .user.ini
 .phpunit.result.cache
