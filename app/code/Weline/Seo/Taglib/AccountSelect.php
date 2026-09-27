@@ -370,7 +370,8 @@ JS;
     {
       "account_id": 1,
       "name": "Google Search Console",
-      "provider": "google_indexing_api",
+      "provider": "google",
+      "platform": "google",
       "is_active": 1
     }
   ]

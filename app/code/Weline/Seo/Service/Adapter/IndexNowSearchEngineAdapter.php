@@ -90,19 +90,34 @@ class IndexNowSearchEngineAdapter implements SearchEngineAdapterInterface
     {
         return [
             [
+                'key' => '__section_key',
+                'label' => (string)__('IndexNow Key 与公网文件'),
+                'type' => 'section',
+                'required' => false,
+                'hint' => (string)__('先在生产 Web root（pub/）放置 {key}.txt（内容=Key），再填写本页。key_location 必须与推送 URL 同主机。本协议不提交 Sitemap 文件：请开 URL 定时推送、关 Sitemap 定时提交。「绑定站点」不会自动生成 Key 文件。'),
+            ],
+            [
                 'key' => 'indexnow_key',
                 'label' => (string)__('IndexNow Key'),
                 'type' => 'password',
                 'required' => true,
-                'placeholder' => '8-128 位密钥',
-                'hint' => (string)__('网站根目录 Key 文件内容须与此一致'),
+                'placeholder' => '8-128 位字母数字或连字符',
+                'hint' => (string)__('建议 openssl rand -hex 16。网站根目录 Key 文件内容须与此完全一致（UTF-8）；可与 Bing / Yandex 账户共用。'),
             ],
             [
                 'key' => 'key_location',
                 'label' => (string)__('Key 文件公开地址'),
                 'type' => 'url',
                 'required' => true,
-                'placeholder' => 'https://example.com/your-indexnow-key.txt',
+                'placeholder' => 'https://www.example.com/your-indexnow-key.txt',
+                'hint' => (string)__('形如 https://www.example.com/{key}.txt。须公网可读；验证连接会拉取该 URL 核对内容。源站探活请用爬虫 UA，勿仅用办公网裸 curl。'),
+            ],
+            [
+                'key' => '__section_endpoint',
+                'label' => (string)__('推送端点'),
+                'type' => 'section',
+                'required' => false,
+                'hint' => (string)__('中枢账户用 api.indexnow.org；Yandex 账户请改填 https://yandex.com/indexnow。留空则使用平台默认端点。'),
             ],
             [
                 'key' => 'indexnow_endpoint',
@@ -110,7 +125,7 @@ class IndexNowSearchEngineAdapter implements SearchEngineAdapterInterface
                 'type' => 'url',
                 'required' => false,
                 'placeholder' => 'https://api.indexnow.org/indexnow',
-                'hint' => (string)__('留空则使用平台默认 IndexNow 端点'),
+                'hint' => (string)__('IndexNow 中枢默认 https://api.indexnow.org/indexnow；Yandex 填 https://yandex.com/indexnow；Bing 账户若走本适配器也可填 https://www.bing.com/indexnow。须为 HTTPS。'),
             ],
         ];
     }

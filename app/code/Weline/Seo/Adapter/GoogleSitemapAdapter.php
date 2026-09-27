@@ -769,6 +769,21 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
                 'data' => [],
             ];
         }
+
+        // Prefer account GSC property (sc-domain:…); website.url is fallback only.
+        $property = trim((string)($config['site_url'] ?? $config['search_console_site_url'] ?? ''));
+        if ($property !== '') {
+            $siteUrl = SeoAccountConfig::normalizeGoogleSiteProperty($property);
+        } elseif (trim($siteUrl) !== '') {
+            $siteUrl = SeoAccountConfig::normalizeGoogleSiteProperty($siteUrl);
+        }
+        if ($siteUrl === '') {
+            return [
+                'success' => false,
+                'message' => __('缺少 Search Console 站点属性 URL'),
+                'data' => [],
+            ];
+        }
         
         try {
             // 获取 Access Token（使用 Webmaster 只读权限）

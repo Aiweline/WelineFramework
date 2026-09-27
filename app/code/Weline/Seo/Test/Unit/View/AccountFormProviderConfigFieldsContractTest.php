@@ -35,7 +35,7 @@ final class AccountFormProviderConfigFieldsContractTest extends TestCase
         self::assertStringNotContainsString('直接上传从 Google Cloud 下载的 JSON 密钥文件', $templateSrc);
 
         $baiduSrc = (string) file_get_contents($root . '/Service/Adapter/BaiduSearchEngineAdapter.php');
-        $googleSrc = (string) file_get_contents($root . '/Service/Adapter/GoogleIndexingApiAdapter.php');
+        $googleSrc = (string) file_get_contents($root . '/Service/Adapter/GoogleSearchConsoleAdapter.php');
 
         self::assertStringContainsString("'key' => 'token'", $baiduSrc);
         self::assertStringContainsString("'key' => 'site'", $baiduSrc);
@@ -91,6 +91,25 @@ final class AccountFormProviderConfigFieldsContractTest extends TestCase
         self::assertStringContainsString('绑定站点」不能代替本步', $templateSrc);
         self::assertStringContainsString('这不是 Search Console 属性', $templateSrc);
 
+        self::assertStringContainsString('Bing 配置顺序（先 IndexNow 推送', $templateSrc);
+        self::assertStringContainsString('使用 IndexNow 推送页面 URL', $templateSrc);
+        self::assertStringContainsString('IndexNow 中枢配置顺序', $templateSrc);
+        self::assertStringContainsString('Yandex IndexNow 配置顺序', $templateSrc);
+        self::assertStringContainsString('yandex.com/indexnow', $templateSrc);
+        self::assertStringContainsString('api.indexnow.org', $templateSrc);
+        self::assertStringContainsString('attack_guard', $templateSrc);
+        self::assertStringContainsString('outbound_hint', $templateSrc);
+
+        $bingAdapterSrc = (string) file_get_contents($root . '/Service/Adapter/BingSearchEngineAdapter.php');
+        $indexNowAdapterSrc = (string) file_get_contents($root . '/Service/Adapter/IndexNowSearchEngineAdapter.php');
+        self::assertStringContainsString("'key' => '__section_indexnow'", $bingAdapterSrc);
+        self::assertStringContainsString('IndexNow URL 推送（推荐）', $bingAdapterSrc);
+        self::assertStringContainsString("'key' => '__section_key'", $indexNowAdapterSrc);
+        self::assertStringContainsString('openssl rand -hex 16', $indexNowAdapterSrc);
+        $capabilitySpecializeSrc = (string) file_get_contents($root . '/Service/SeoPlatformCapabilityService.php');
+        self::assertStringContainsString('specializeIndexNowFieldsForPlatform', $capabilitySpecializeSrc);
+        self::assertStringContainsString('yandex.com/indexnow', $capabilitySpecializeSrc);
+
         $gscAdapterSrc = (string) file_get_contents($root . '/Service/Adapter/GoogleSearchConsoleAdapter.php');
         self::assertStringContainsString('须与 GSC 左侧属性名完全一致', $gscAdapterSrc);
         self::assertStringContainsString('加成「所有者」，再粘贴到此处', $gscAdapterSrc);
@@ -102,6 +121,10 @@ final class AccountFormProviderConfigFieldsContractTest extends TestCase
         self::assertStringContainsString('updateGscOwnerActionHint', $templateSrc);
         self::assertStringContainsString('data-seo-gsc-owner-action', $templateSrc);
         self::assertStringContainsString('resolveServiceAccountClientEmail', $templateSrc);
+        self::assertStringContainsString("'key' => 'service_account'", $gscAdapterSrc);
+        $platformCodeSrc = (string) file_get_contents($root . '/Service/SeoPlatformCode.php');
+        self::assertStringContainsString('google_search_console', $platformCodeSrc);
+        self::assertStringContainsString("GOOGLE = 'google'", $platformCodeSrc);
         self::assertStringContainsString('enable_discover_stats', $gscAdapterSrc);
         self::assertStringContainsString('youtube_channel_url', $gscAdapterSrc);
         self::assertStringContainsString("'type' => 'section'", $gscAdapterSrc);

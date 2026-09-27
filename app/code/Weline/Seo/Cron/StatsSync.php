@@ -95,15 +95,15 @@ class StatsSync implements CronTaskInterface
                 }
                 
                 $siteUrl = (string)($website['url'] ?? '');
-                if (empty($siteUrl)) {
-                    $skippedCount++;
-                    continue;
-                }
-                
-                // 获取账户配置
+                // Google getStats prefers account site_url; empty website url is OK when config has property.
                 $accountConfig = [
                     'config' => (array)($bindingInfo['account_config'] ?? []),
                 ];
+                $cfgSite = trim((string)(($accountConfig['config']['site_url'] ?? '')));
+                if ($siteUrl === '' && $cfgSite === '') {
+                    $skippedCount++;
+                    continue;
+                }
                 
                 // 调用适配器获取统计数据
                 try {

@@ -119,7 +119,10 @@ class SeoWebsiteAccountBindingService
             $platformCode = (string)($info['platform_code'] ?? '');
             $adapter = $info['adapter'] ?? null;
             if ($platformCode !== '' && $adapter !== null && !isset($adapters[$platformCode])) {
-                $adapters[$platformCode] = $adapter;
+                $canonical = SeoPlatformCode::canonicalize($platformCode);
+                if ($canonical !== '' && !isset($adapters[$canonical])) {
+                    $adapters[$canonical] = $adapter;
+                }
             }
         }
 
@@ -177,7 +180,7 @@ class SeoWebsiteAccountBindingService
             $accounts[] = $info;
         }
 
-        return $accounts;
+        return $this->dedupeByCanonicalPlatform($accounts);
     }
 
     /**
@@ -196,11 +199,15 @@ class SeoWebsiteAccountBindingService
         }
 
         foreach ($websiteIds as $websiteId) {
+            $forSite = [];
             foreach ($this->getWebsiteAccountsWithPlatforms($websiteId) as $info) {
                 $adapter = $info['adapter'] ?? null;
                 if ($adapter !== null && $adapter->supportsStats()) {
-                    $accounts[] = $info + ['website_id' => $websiteId];
+                    $forSite[] = $info + ['website_id' => $websiteId];
                 }
+            }
+            foreach ($this->dedupeByCanonicalPlatform($forSite) as $info) {
+                $accounts[] = $info;
             }
         }
 
@@ -214,12 +221,75 @@ class SeoWebsiteAccountBindingService
     {
         $platformCode = trim((string)($account[SeoAccount::schema_fields_PLATFORM] ?? ''));
         if ($platformCode !== '') {
-            return $platformCode;
+            return SeoPlatformCode::canonicalize($platformCode);
         }
 
-        return (string)($this->sitemapAdapterRegistry->extractPlatformFromProvider(
+        $fromProvider = (string)($this->sitemapAdapterRegistry->extractPlatformFromProvider(
             (string)($account[SeoAccount::schema_fields_PROVIDER] ?? '')
         ) ?? '');
+
+        return SeoPlatformCode::canonicalize($fromProvider);
+    }
+
+    /**
+     * Keep one active binding per website + canonical platform (lowest account_id wins for cron).
+     *
+     * @param list<array<string, mixed>> $infos
+     * @return list<array<string, mixed>>
+     */
+    public function dedupeByCanonicalPlatform(array $infos): array
+    {
+        $best = [];
+        foreach ($infos as $info) {
+            if (!is_array($info)) {
+                continue;
+            }
+            $canonical = SeoPlatformCode::canonicalize((string)($info['platform_code'] ?? ''));
+            if ($canonical === '') {
+                continue;
+            }
+            $info['platform_code'] = $canonical;
+            $accountId = (int)($info['account_id'] ?? 0);
+            if (!isset($best[$canonical]) || $accountId < (int)($best[$canonical]['account_id'] ?? PHP_INT_MAX)) {
+                $best[$canonical] = $info;
+            }
+        }
+
+        return array_values($best);
+    }
+
+    /**
+     * Unbind other accounts on the same website that share the canonical platform.
+     */
+    public function enforceSinglePlatformBinding(int $websiteId, int $accountId): void
+    {
+        if ($websiteId < 0 || $accountId <= 0) {
+            return;
+        }
+
+        $account = $this->loadAccountData($accountId);
+        if ($account === null) {
+            return;
+        }
+        $canonical = $this->resolvePlatformCode($account);
+        if ($canonical === '') {
+            return;
+        }
+
+        foreach ($this->getBindingsByWebsite($websiteId) as $binding) {
+            $otherId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
+            if ($otherId <= 0 || $otherId === $accountId) {
+                continue;
+            }
+            $other = $this->loadAccountData($otherId);
+            if ($other === null) {
+                continue;
+            }
+            if ($this->resolvePlatformCode($other) !== $canonical) {
+                continue;
+            }
+            $this->websiteAccount->unbindWebsiteAccount($websiteId, $otherId);
+        }
     }
 
     /**

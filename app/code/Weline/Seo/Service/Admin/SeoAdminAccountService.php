@@ -9,6 +9,7 @@ use Weline\Seo\Model\SeoWebsiteAccount;
 use Weline\Seo\Service\Database\SeoTransactionRunner;
 use Weline\Seo\Model\SeoWebsiteStats;
 use Weline\Seo\Service\SeoPlatformCapabilityService;
+use Weline\Seo\Service\SeoPlatformCode;
 use Weline\Seo\Service\SeoAccountConfig;
 use Weline\Seo\Service\SeoAccountVerifier;
 use Weline\Seo\Service\SeoWebsiteAccountBindingService;
@@ -92,6 +93,7 @@ final class SeoAdminAccountService
                     throw new \InvalidArgumentException((string)__('账户不存在'));
                 }
             }
+            $platform = SeoPlatformCode::canonicalize($platform);
             $config = $this->prepareConfig($account, $platform, $config, $capability);
             // 平台支持时默认开启；仅当请求显式传 false/0 或平台不支持时关闭
             $enablePush = !empty($capability['supports_url_push'])
@@ -170,9 +172,10 @@ final class SeoAdminAccountService
         $fields = (array)($capability['config_fields'] ?? []);
         $existing = $account->getId() && $account->getPlatform() === $platform ? $account->getConfigArray() : [];
         $config = $boundary->merge($existing, $posted, $fields);
-        if (in_array($platform, ['google', 'google_search_console', 'google_indexing_api'], true)
-            && isset($config['site_url']) && is_string($config['site_url'])) {
-            $config['site_url'] = SeoAccountConfig::normalizeGoogleSiteProperty($config['site_url']);
+        if (SeoPlatformCode::isGoogle($platform)) {
+            if (isset($config['site_url']) && is_string($config['site_url'])) {
+                $config['site_url'] = SeoAccountConfig::normalizeGoogleSiteProperty($config['site_url']);
+            }
         }
         $errors = $boundary->validate($platform, $config, $fields);
         if ($errors !== []) { throw new \InvalidArgumentException(implode('；', $errors)); }
@@ -294,11 +297,13 @@ final class SeoAdminAccountService
             }
             $website = $this->websiteDirectory->getWebsiteById($websiteId);
             $siteUrl = trim((string)($website['url'] ?? ''));
-            if (!is_array($website) || $siteUrl === '') {
+            $accountConfig = $account->getConfigArray();
+            $cfgSite = trim((string)($accountConfig['site_url'] ?? ''));
+            if (!is_array($website) || ($siteUrl === '' && $cfgSite === '')) {
                 $errors[] = __('站点 %{1} 不存在或没有 URL', $websiteId);
                 continue;
             }
-            $result = $adapter->getStats($siteUrl, ['config' => $account->getConfigArray()]);
+            $result = $adapter->getStats($siteUrl, ['config' => $accountConfig]);
             if (!empty($result['success']) && is_array($result['data'] ?? null)) {
                 $record = clone $this->stats;
                 $record->reset()->getOrCreateTodayStats($websiteId, $accountId, $platform);

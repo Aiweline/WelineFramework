@@ -24,15 +24,20 @@ CDN 接收同一变更通知，按网站的账户和域名绑定向服务商发�
 
 后台入口：**SEO 管理 → SEO 账户**。选择平台、填写字段并保存，再在网站账户配置中启用 URL 自动提交和平台支持的 sitemap 提交。编辑账户时敏感字段留空保留旧凭证，页面不回显密钥。
 
+**海外逐步指南（Key 部署、三账户字段、探活、验收）：** [海外搜索引擎对接指南](海外搜索引擎对接指南.md)。  
+**账户开关与 Cron：** [账户与定时任务简要说明](账户与定时任务简要说明.md)。
+
 | 平台 | 配置与验证 | 更新提交方式 |
 | --- | --- | --- |
 | IndexNow | Key；当前实际主机能公开读取同内容的 UTF-8 Key 文件；Key Location。需先部署公开 TXT，账户验证读取 Key 文件 | 页面新增、修改、删除使用 IndexNow URL API，按主机分组；最多 10,000 URL/批 |
-| Bing | 网站验证属性及 API Key；读取提交配额验证 | URL API 最多 500/批；sitemap 使用 JSON `SubmitFeed` |
+| Bing | 建议先开 `use_indexnow`（与 IndexNow 共用 Key）；Sitemap 自动提交另需 Webmaster API Key 与已验证 `site_url` | IndexNow URL 推送；或 URL API 最多 500/批；sitemap 使用 JSON `SubmitFeed` |
+| Yandex | 与 IndexNow 相同 Key；Endpoint 用 `https://yandex.com/indexnow` | URL 通知；不自动提交 Sitemap 文件 |
 | 百度 | 资源平台已验证站点与推送 Token。没有无配额消耗的 Token 验证接口，配置检查不能代替真实推送 | 普通收录 API 最多 2,000 URL/批，核对接收数、额度和拒绝 URL；sitemap 在资源平台配置 |
 | Google Search Console | 属性 URL（URL-prefix 或 `sc-domain:`）与有该属性权限的服务账户；验证属性可访问 | 通过 Search Console API 提交 sitemap；普通商品不使用 Indexing API |
 
 HTTP 202 的 IndexNow 结果表示已接受、Key 验证待完成；不会当成“已收录”，也不会因此反复推送。批次部分接受会保留明细，重试不重复发送已确认接受的 URL。百度只返回接收数量而无法识别具体接受项时，保留待核对提示，避免整批重复消耗额度。
 
+**探活注意：** 公网裸 curl 可能被 WLS `attack_guard` 打成 403；Key / 首页是否可达，以**源站 + 爬虫 UA**（或后台「验证连接」）为准，见海外指南 §3.3。
 ## CDN 账户和域名
 
 后台入口：**CDN 管理 → 账户管理 → 域名管理**。先保存服务商账户，再绑定实际网站、公开域名及服务商的资源 ID。Cloudflare 填 API Token 与 Zone ID；Token 应具有目标 Zone 的 Cache Purge 权限。多个网站共用 Zone 时仍按各自网站的域名/URL匹配。
@@ -40,6 +45,16 @@ HTTP 202 的 IndexNow 结果表示已接受、Key 验证待完成；不会当成
 账户“测试连接”验证 Token 与目标 Zone 的读取结果；这不等于已验证清理权限。最终需要对一条属于该网站的公开 URL 执行清缓存，看到平台返回成功及请求 ID，并从线上请求观察内容已更新。编辑账户时密码/Token 留空保留原值。
 
 ## 当前验收记录（2026-09-05）
+
+### 长安汉服生产（2026-09-27 · GSC 账户内共用 SA）
+
+- 架构：不单开 GSC 面板；Google 账户 #2 = 一份 SA + `sc-domain:changanhanfu.com`；Discover/News 为账户内开关。
+- P1：`getStats` 优先账户 `site_url`；同站同平台唯一绑定；`SeoPlatformCode` 归一 `google_*` 别名。
+- 运维：停用测试 Google 账户 #3 并解绑；website/0 以 Google #2 为统计/Sitemap 主账户。
+- 验收：`getStats` 成功（clicks/impressions 有数，`extra.discover` / `extra.google_news` 已拉取）；`seo_stats_sync` 强制跑通；公开 `https://www.changanhanfu.com/sitemap.xml` HTTP 200。
+- 同构海外通道（已绑 website/0）：Bing #4、IndexNow #5、Yandex #6；共用 IndexNow Key 文件（源站爬虫 UA 200）；三 Endpoint 手工 POST 首页均 **202**。逐步说明与站柜事实：[海外搜索引擎对接指南](海外搜索引擎对接指南.md)、`websites/changanhanfu.com/SEO-海外渠道.md`。Bing Webmaster API Key（Sitemap `SubmitFeed`）待补后可开 `enable_cron_sitemap`。
+- **百度**待运营提供推送 Token 后再建账户（模型与 Cron 已就绪，见账户说明）。
+## 当前验收记录（2026-09-05 · 开发库）
 
 - 实际开发环境：[网站首页](https://p05113ef3.test.weline.com:9555/)。运行库有默认网站及两个既有测试网站；SEO 账户数 **0**、CDN 账户数 **0**。
 - 修改前实际 `/robots.txt` 同时列出带端口主域、无端口主域、127.0.0.1 和 localhost；sitemap 仅首页，已发布商品未进入。对应回归已先复现。

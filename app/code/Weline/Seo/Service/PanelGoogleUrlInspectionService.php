@@ -47,8 +47,8 @@ final class PanelGoogleUrlInspectionService
 
         $google = null;
         foreach ($this->bindings->getWebsiteAccountsWithPlatforms((int)$website->id, true) as $info) {
-            $platform = strtolower(trim((string)($info['platform_code'] ?? '')));
-            if (in_array($platform, ['google', 'google_search_console'], true)) {
+            $platform = (string)($info['platform_code'] ?? '');
+            if (SeoPlatformCode::isGoogle($platform)) {
                 $google = $info;
                 break;
             }

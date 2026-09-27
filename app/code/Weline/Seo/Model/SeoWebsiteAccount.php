@@ -16,6 +16,7 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Seo\Service\SeoWebsiteAccountBindingService;
 /** 站点-SEO账户关联模型 - 管理站点与SEO账户绑定、sitemap自动提交 */
 #[Table(comment: '站点SEO账户关联表')]
 #[Index(name: 'unique_website_account', columns: ['website_id', 'account_id'], type: 'UNIQUE')]
@@ -178,6 +179,8 @@ class SeoWebsiteAccount extends Model
         
         if ($existing) {
             $existing->setData($data)->save();
+            ObjectManager::getInstance(SeoWebsiteAccountBindingService::class)
+                ->enforceSinglePlatformBinding($websiteId, $accountId);
             return $existing;
         }
         
@@ -185,6 +188,9 @@ class SeoWebsiteAccount extends Model
         $data[self::schema_fields_ACCOUNT_ID] = $accountId;
         
         $this->reset()->setData($data)->save();
+
+        ObjectManager::getInstance(SeoWebsiteAccountBindingService::class)
+            ->enforceSinglePlatformBinding($websiteId, $accountId);
         
         return $this;
     }
