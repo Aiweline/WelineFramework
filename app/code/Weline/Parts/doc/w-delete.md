@@ -45,6 +45,12 @@
 </button>
 ```
 
+## 参数传递（BinQuery）
+
+业务参数请用 **`w-var-*`** 或 **`data-params` JSON**，例如 `w-var-account_id="12"` → 请求体 `account_id`。
+
+`collectParams` **只**读取上述两种来源；`data-tone` / `data-size` / `data-variant` / `data-testid` / 自动化注入的 `data-cursor-ref` 等 **一律不会**打进 BinQuery。若误扫 `data-*`，FrontendQueryGateway 会 422：`Unknown frontend worker param: tone`。
+
 ## 属性说明
 
 | 属性 | 类型 | 必需 | 说明 |
@@ -144,17 +150,19 @@
 
 ```css
 .w-delete-confirm {
-    background: white;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    padding: 20px;
+    /* Prefer theme tokens so light/dark 色系主题 both stay readable */
+    background: var(--weline-theme-surface-raised);
+    color: var(--weline-theme-text);
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
+    box-shadow: var(--weline-theme-shadow-lg);
+    padding: var(--weline-space-4);
     min-width: 300px;
 }
 
 .w-delete-message {
-    border-radius: 6px;
-    padding: 12px 16px;
+    border-radius: var(--weline-radius-sm);
+    padding: var(--weline-space-3) var(--weline-space-4);
     font-weight: 500;
 }
 ```
