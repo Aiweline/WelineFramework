@@ -915,10 +915,8 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
         $request = ObjectManager::getInstance(Request::class);
 
         return (string)$request->getUrlBuilder()->getBackendUrl(
-            'weline_systemconfig/backend/config',
+            'cdn/backend/config',
             [
-                'module' => 'Weline_Cdn',
-                'area' => 'backend',
                 'guide_key' => $guideKey,
             ],
         );

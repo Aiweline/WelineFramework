@@ -268,6 +268,11 @@ Slowloris,斯洛洛里斯
 设置失败：%{1},设置失败：%{1}
 "保存失败：生产环境缺少凭据主密钥 security.secret_ref_key，且无法自动写入 env.php。请检查 app/etc/env.php 可写权限后重试。","保存失败：生产环境缺少凭据主密钥 security.secret_ref_key，且无法自动写入 env.php。请检查 app/etc/env.php 可写权限后重试。"
 "保存失败：凭据密封损坏或主密钥已变更，请重新填写 Token 后保存。","保存失败：凭据密封损坏或主密钥已变更，请重新填写 Token 后保存。"
+CDN系统配置,CDN系统配置
+settings,settings
+CDN模块系统配置,CDN模块系统配置
+查看CDN系统配置,查看CDN系统配置
+查看CDN模块系统配置,查看CDN模块系统配置
 加载预热URL列表失败：%{1},加载预热URL列表失败：%{1}
 加载统计信息失败：%{1},加载统计信息失败：%{1}
 预热任务执行完成,预热任务执行完成
@@ -288,6 +293,10 @@ Tag列表不能为空,Tag列表不能为空
 秒,秒
 分钟,分钟
 小时,小时
+"本页嵌入 CDN 模块在统一配置中心声明的字段。Cloudflare OAuth Client ID / Secret 在此填写并保存后，再到「账户管理」点击连接或重新授权。切换作用范围后按新范围加载。","本页嵌入 CDN 模块在统一配置中心声明的字段。Cloudflare OAuth Client ID / Secret 在此填写并保存后，再到「账户管理」点击连接或重新授权。切换作用范围后按新范围加载。"
+去账户管理授权,去账户管理授权
+在统一配置中心打开,在统一配置中心打开
+作用范围,作用范围
 进行中的攻击,进行中的攻击
 今日攻击,今日攻击
 本周攻击,本周攻击
@@ -975,3 +984,6 @@ zone.read dns.write offline_access cache.purge cache-settings.write
 完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"
 "权限默认填：zone.read dns.write cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、Cache Purge、Cache Settings Write；Refresh Token 靠授权类型勾选，不要找 offline_access 勾选项。","权限默认填：zone.read dns.write cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、Cache Purge、Cache Settings Write；Refresh Token 靠授权类型勾选，不要找 offline_access 勾选项。"
 "API scopes 原样：zone.read dns.write cache.purge cache-settings.write。勿填 offline_access（由 Refresh Token grant 自动处理）。","API scopes 原样：zone.read dns.write cache.purge cache-settings.write。勿填 offline_access（由 Refresh Token grant 自动处理）。"
+选择网站、店铺或渠道,选择网站、店铺或渠道
+搜索作用范围,搜索作用范围
+选择作用范围,选择作用范围

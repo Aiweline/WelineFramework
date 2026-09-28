@@ -109,8 +109,14 @@ class Upgrade extends CommandAbstract
         foreach ($modules as $module) {
             $name          = $module['name'];
             $moduleViewDir = (DEV ? $module['path'] : str_replace('_', DS, $name) . DS) . DataInterface::dir;
-            $staticSource  = $module['base_path'] . DataInterface::dir . DS . DataInterface::dir_type_STATICS;
+            $staticSource  = $this->resolveModuleStaticsSourceDir((string)$module['base_path']);
             $themeSource   = $module['base_path'] . DataInterface::dir . DS . 'theme';
+            if ($themeSource !== '' && !is_dir($themeSource)) {
+                $altTheme = rtrim((string)$module['base_path'], '\\/') . DS . 'View' . DS . 'theme';
+                if (is_dir($altTheme)) {
+                    $themeSource = $altTheme;
+                }
+            }
 
             if (is_dir($staticSource) || is_dir($themeSource)) {
                 $this->printer->note($name . '...');
@@ -225,6 +231,24 @@ class Upgrade extends CommandAbstract
     }
 
     /**
+     * Convention is lowercase `view/statics`. Framework git tree stores them under
+     * PSR-4 `View/statics`; on case-sensitive Linux those diverge — prefer
+     * lowercase when present, else fall back to `View`.
+     */
+    private function resolveModuleStaticsSourceDir(string $moduleBasePath): string
+    {
+        $base = rtrim($moduleBasePath, '\\/');
+        foreach (['view', 'View'] as $viewDir) {
+            $candidate = $base . DS . $viewDir . DS . DataInterface::dir_type_STATICS;
+            if (is_dir($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return $base . DS . DataInterface::dir . DS . DataInterface::dir_type_STATICS;
+    }
+
+    /**
      * Vendor_Module → {staticRoot}/{Vendor}/{Module}；非法名返回 null（不污染 static 根）。
      */
     private function resolveFlatStaticModuleRoot(string $moduleName, string $staticRoot): ?string
@@ -286,9 +310,8 @@ class Upgrade extends CommandAbstract
 
     private function copyFlatStaticRuntimeFile(string $moduleName, string $moduleBasePath, string $relativeFile): void
     {
-        $sourceFile = rtrim($moduleBasePath, '\\/') . DS
-            . DataInterface::dir . DS
-            . DataInterface::dir_type_STATICS . DS
+        $staticsRoot = $this->resolveModuleStaticsSourceDir($moduleBasePath);
+        $sourceFile = rtrim($staticsRoot, '\\/') . DS
             . str_replace(['/', '\\'], DS, $relativeFile);
         if (!is_file($sourceFile)) {
             return;

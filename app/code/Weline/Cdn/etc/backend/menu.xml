@@ -11,6 +11,13 @@
          parent="Weline_Backend::business_operations" 
          icon="cloud" 
          order="20000">
+        <!-- 系统配置子菜单：内嵌 CDN 模块 SystemConfig（OAuth 等） -->
+        <menu source="Weline_Cdn::cdn_system_config" 
+             name="cdn_system_config" 
+             title="系统配置" 
+             action="cdn/backend/config"
+             icon="settings" 
+             order="5"/>
         <!-- 账户管理子菜单 -->
         <menu source="Weline_Cdn::cdn_account_manager" 
              name="cdn_account_manager" 

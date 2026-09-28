@@ -57,6 +57,8 @@
 
 **前后台双激活（硬）**：省略 `-t` 时，`theme:upgrade` 必须发布 **frontend + backend** 各自激活主题的静态命名空间（同主题去重）。仅发前台（如 `hanfu`）会导致后台 Default 命名空间 `/static/Weline/Theme/view/theme/...`（如 `backend/colors/_light.css`）在 PROD / 本地 NG 网关下 404（`X-WLS-Static-Missing: fastpath`）。指定 `-t` 仍只发该主题。
 
+**设计主题 area 资源双写（硬）**：`app/design/{Vendor}/{theme}/{area}/assets/...` 经设计覆盖搬迁会落到 `/static/{ns}/{area}/assets/...`，但 `<theme:js|css>Weline_Theme::theme/{area}/...</theme:...>` 生成的 URL 是 `/static/{ns}/Weline/Theme/view/theme/{area}/...`。二者必须同时存在：`theme:upgrade` 在模块 `view/theme` 发布之后，再把设计主题 `{area}/**` 运行时资源经 `ThemeResourceGateway` 双写到 Theme 模块路径。PROD / NG / WLS **缺文件快路径直接 404**，不会延迟补发——只发相对设计根路径、不双写 Theme 路径，就会出现 `hanfu-product-docks.js` 一类店面 404。
+
 ## 发布排除（`pub/static` 只许含运行时资源）
 
 `pub/static` 位于 Web 根之下，铺进去的文件浏览器可直接取到：文档会被读取，`*.php` 更会被执行

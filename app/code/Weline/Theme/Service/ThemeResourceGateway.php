@@ -125,11 +125,8 @@ final class ThemeResourceGateway
 
     private function publishFlatModuleStaticResource(array $resource, string $relativePath, string $moduleBasePath): ?string
     {
-        $sourceFile = rtrim($moduleBasePath, '\\/') . DIRECTORY_SEPARATOR
-            . 'view' . DIRECTORY_SEPARATOR
-            . 'statics' . DIRECTORY_SEPARATOR
-            . $relativePath;
-        if (!is_file($sourceFile)) {
+        $sourceFile = $this->resolveModuleStaticsSourceFile($moduleBasePath, $relativePath);
+        if ($sourceFile === null) {
             return null;
         }
 
@@ -151,11 +148,8 @@ final class ThemeResourceGateway
 
     private function publishModuleStaticResource(array $resource, string $relativePath, string $moduleBasePath, ?WelineTheme $theme = null): ?string
     {
-        $sourceFile = rtrim($moduleBasePath, '\\/') . DIRECTORY_SEPARATOR
-            . 'view' . DIRECTORY_SEPARATOR
-            . 'statics' . DIRECTORY_SEPARATOR
-            . $relativePath;
-        if (!is_file($sourceFile)) {
+        $sourceFile = $this->resolveModuleStaticsSourceFile($moduleBasePath, $relativePath);
+        if ($sourceFile === null) {
             return null;
         }
 
@@ -180,6 +174,28 @@ final class ThemeResourceGateway
         }
 
         return str_replace('\\', '/', $publicRelativePath);
+    }
+
+    /**
+     * Module statics live under `view/statics` by convention. Framework ships
+     * them under PSR-4 `View/statics` in git; on case-sensitive Linux those are
+     * different directories, so fall back to `View` when lowercase is empty/missing.
+     */
+    private function resolveModuleStaticsSourceFile(string $moduleBasePath, string $relativePath): ?string
+    {
+        $relativePath = ltrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $relativePath), DIRECTORY_SEPARATOR);
+        $base = rtrim($moduleBasePath, '\\/');
+        foreach (['view', 'View'] as $viewDir) {
+            $candidate = $base . DIRECTORY_SEPARATOR
+                . $viewDir . DIRECTORY_SEPARATOR
+                . 'statics' . DIRECTORY_SEPARATOR
+                . $relativePath;
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     public function buildThemeAssetUrl(

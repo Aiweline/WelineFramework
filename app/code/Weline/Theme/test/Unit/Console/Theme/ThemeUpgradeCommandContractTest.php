@@ -35,6 +35,16 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertStringContainsString('upgradeOneTheme', $source);
     }
 
+    public function testDesignAreaAssetsAreMirroredIntoThemeModuleStaticNamespace(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 4) . '/Console/Theme/Upgrade.php');
+
+        self::assertIsString($source);
+        self::assertStringContainsString('publishDesignAreaAssetsIntoThemeModuleNamespace', $source);
+        self::assertStringContainsString("buildNamespacedModuleThemeRequestPath(\n                    \$publicThemePath,\n                    'Weline',\n                    'Theme'", $source);
+        self::assertStringContainsString('设计主题 area 资源双写到 Weline/Theme/view/theme', $source);
+    }
+
     public function testCliMetadataIsNotTreatedAsAModuleFilter(): void
     {
         [$themeName, $modules] = ThemeUpgradeCommand::parseArguments([

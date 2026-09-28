@@ -60,17 +60,19 @@ final class StorefrontImagePlaceholder
         unset($seed);
         $relative = 'Weline/Theme/view/statics/' . self::STATIC_DIR . '/' . self::FILE;
         if (\defined('PROD') && PROD) {
-            $theme = 'default';
+            // Must match PublicThemeNamespace (same as @static / theme:upgrade).
+            // Reading theme.frontend / inventing "default" produced
+            // /static/default/... 404s while assets live under Weline/hanfu/...
+            $configuredPath = null;
             try {
                 $cfg = \Weline\Framework\App\Env::getInstance()->getConfig('theme');
                 if (\is_array($cfg)) {
-                    $candidate = trim((string)($cfg['frontend'] ?? $cfg['frontend_theme'] ?? ''));
-                    if ($candidate !== '') {
-                        $theme = $candidate;
-                    }
+                    $configuredPath = (string)($cfg['path'] ?? '');
                 }
             } catch (\Throwable) {
             }
+
+            $theme = \Weline\Framework\View\PublicThemeNamespace::resolve($configuredPath);
 
             return '/static/' . $theme . '/' . $relative;
         }

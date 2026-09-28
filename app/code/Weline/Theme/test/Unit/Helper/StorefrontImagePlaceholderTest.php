@@ -45,4 +45,14 @@ final class StorefrontImagePlaceholderTest extends TestCase
         self::assertSame($ok, $resolved['src']);
         self::assertStringEndsWith('/images/storefront-placeholder/default.svg', $resolved['fallback']);
     }
+
+    public function testProdUrlUsesPublicThemeNamespaceNotLiteralDefault(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/Helper/StorefrontImagePlaceholder.php');
+        self::assertIsString($source);
+        self::assertStringContainsString('PublicThemeNamespace::resolve', $source);
+        self::assertStringContainsString("\$cfg['path']", $source);
+        self::assertStringNotContainsString("\$theme = 'default'", $source);
+        self::assertStringNotContainsString("\$cfg['frontend']", $source);
+    }
 }

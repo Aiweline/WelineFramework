@@ -1,0 +1,79 @@
+<?php
+/**
+ * CDN 系统配置：内嵌 Weline_Cdn backend 区全部已声明配置（Cloudflare OAuth 等）。
+ */
+$selectedScope = (string)($this->getData('selected_scope') ?? 'default.default.default');
+$centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig/backend/config', [
+    'module' => 'Weline_Cdn',
+    'area' => 'backend',
+    'target_scope' => $selectedScope,
+]);
+$accountUrl = $this->request->getUrlBuilder()->getBackendUrl('cdn/backend/account/index');
+?>
+<div class="cdn-system-config w-stack" style="--w-gap:var(--weline-space-6);" data-testid="cdn-system-config">
+    <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
+        <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+            <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                <lang>本页嵌入 CDN 模块在统一配置中心声明的字段。Cloudflare OAuth Client ID / Secret 在此填写并保存后，再到「账户管理」点击连接或重新授权。切换作用范围后按新范围加载。</lang>
+            </p>
+        </div>
+        <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+            <a class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"
+               href="<?= htmlspecialchars($accountUrl, ENT_QUOTES, 'UTF-8') ?>">
+                <lang>去账户管理授权</lang>
+            </a>
+            <a class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"
+               href="<?= htmlspecialchars($centerUrl, ENT_QUOTES, 'UTF-8') ?>">
+                <lang>在统一配置中心打开</lang>
+            </a>
+        </div>
+    </div>
+
+    <div class="w-field" style="--w-max-inline-size:22rem;">
+        <label class="w-field__label" for="cdn-config-scope"><lang>作用范围</lang></label>
+        <div class="w-field__control">
+            <w:scope
+                id="cdn-config-scope"
+                name="target_scope"
+                value="selected_scope"
+                placeholder="@lang(选择网站、店铺或渠道)"
+                search-placeholder="@lang(搜索作用范围)"
+                aria-label="@lang(选择作用范围)"
+                searchable="true"
+                default-expand-all="true"
+                required="true"
+            />
+        </div>
+    </div>
+
+    <w:config:embed
+        module="Weline_Cdn"
+        area="backend"
+        locale="default"
+    />
+</div>
+<script>
+(function () {
+    var root = document.getElementById('cdn-config-scope');
+    if (!root) {
+        return;
+    }
+    var field = root.querySelector('input[type="hidden"][name="target_scope"]') || root.querySelector('input[name="target_scope"]');
+    if (!field) {
+        return;
+    }
+    field.addEventListener('change', function () {
+        var next = String(field.value || '').trim();
+        if (!next) {
+            return;
+        }
+        var url = new URL(window.location.href);
+        url.searchParams.set('target_scope', next);
+        var parts = next.split('.');
+        url.searchParams.set('website_code', parts[0] && parts[0] !== 'default' ? parts[0] : '');
+        url.searchParams.set('store_code', parts[1] && parts[1] !== 'default' ? parts[1] : '');
+        url.searchParams.set('channel_code', parts[2] && parts[2] !== 'default' ? parts[2] : '');
+        window.location.assign(url.toString());
+    });
+})();
+</script>
