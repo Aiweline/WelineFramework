@@ -1,5 +1,9 @@
 # 控制器CDN注释规则需求文档
 
+> **2026-09-28 纠偏**：源站 FPC 是否可缓存以 **`@Extra type=fpc`** 为准（Framework `controller-extra-fpc`）。本文 `@Cdn` 仅描述 **CDN 边缘**规则；二者正交。完整对照与开发模式规格见 `doc/开发/spec/cdn-route-realtime-fpc-devmode.md` 与 `CDN注释使用指南.md` §0。
+
+---
+
 ## 1. 需求概述
 
 ### 1.1 背景

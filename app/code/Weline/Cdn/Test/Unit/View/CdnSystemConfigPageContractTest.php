@@ -40,4 +40,13 @@ final class CdnSystemConfigPageContractTest extends TestCase
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('@config.acl {Weline_Cdn::cdn_system_config}', $src);
     }
+
+    public function testFpcDevModeConfigTemplateExists(): void
+    {
+        $path = dirname(__DIR__, 3) . '/extends/module/Weline_SystemConfig/Config/backend/cdn-fpc-dev-mode.phtml';
+        self::assertFileExists($path);
+        $src = (string)file_get_contents($path);
+        self::assertStringContainsString('cdn/fpc/dev_mode', $src);
+        self::assertStringContainsString('website,store,channel', $src);
+    }
 }

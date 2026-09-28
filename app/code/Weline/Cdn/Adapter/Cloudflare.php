@@ -380,20 +380,43 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
     }
 
     /**
+     * Zone 尚未创建 http_request_cache_settings 阶段入口 ruleset。
+     */
+    public static function isMissingCacheRulesEntrypoint(string $message): bool
+    {
+        $normalized = \strtolower(\trim($message));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return \str_contains($normalized, 'could not find entrypoint')
+            || (\str_contains($normalized, 'entrypoint ruleset')
+                && \str_contains($normalized, 'http_request_cache_settings'))
+            || (\str_contains($normalized, 'not found')
+                && \str_contains($normalized, 'http_request_cache_settings'));
+    }
+
+    /**
      * @inheritDoc
      */
     public function getRules(string $zoneId, array $credentials): array
     {
         $url = self::API_BASE_URL . '/zones/' . $zoneId . '/rulesets/phases/http_request_cache_settings/entrypoint';
-        
-        $response = $this->makeRequest('GET', $url, [], $credentials);
+
+        try {
+            $response = $this->makeRequest('GET', $url, [], $credentials);
+        } catch (Core $e) {
+            if (self::isMissingCacheRulesEntrypoint((string)$e->getMessage())) {
+                return [];
+            }
+            throw $e;
+        }
 
         if (($response['success'] ?? null) === true) {
             $rules = $response['result']['rules'] ?? [];
             return is_array($rules) ? $rules : [];
         }
 
-        // 如果获取失败，返回空数组
         return [];
     }
 
@@ -402,79 +425,79 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
      */
     public function putRules(string $zoneId, array $rules, array $credentials): array
     {
-        // Cloudflare Cache Rules使用rulesets API
+        // Cloudflare Cache Rules：phase entrypoint；缺失时 PUT entrypoint 即创建（官方 create-api）
         $url = self::API_BASE_URL . '/zones/' . $zoneId . '/rulesets/phases/http_request_cache_settings/entrypoint';
-        
-        // 先获取现有ruleset ID
-        $getResponse = $this->makeRequest('GET', $url, [], $credentials);
-        
-        if (!($getResponse['success'] ?? false)) {
-            return [
-                'success' => false,
-                'message' => __('获取现有规则失败')
-            ];
+        $formattedRules = $this->formatRulesForApi($rules);
+
+        $rulesetId = null;
+        $existingRuleset = [];
+        try {
+            $getResponse = $this->makeRequest('GET', $url, [], $credentials);
+            if (($getResponse['success'] ?? false) === true) {
+                $rulesetId = $getResponse['result']['id'] ?? null;
+                $existingRuleset = is_array($getResponse['result'] ?? null) ? $getResponse['result'] : [];
+            }
+        } catch (Core $e) {
+            if (!self::isMissingCacheRulesEntrypoint((string)$e->getMessage())) {
+                return [
+                    'success' => false,
+                    'message' => (string)$e->getMessage(),
+                ];
+            }
         }
 
-        $rulesetId = $getResponse['result']['id'] ?? null;
-        
-        // 转换规则格式，确保符合 Cloudflare API 要求
-        $formattedRules = $this->formatRulesForApi($rules);
-        
-        if ($rulesetId) {
-            // 更新现有ruleset - PUT 请求需要包含完整的 ruleset 结构
-            $updateUrl = self::API_BASE_URL . '/zones/' . $zoneId . '/rulesets/' . $rulesetId;
-            
-            // 获取现有 ruleset 的完整结构，保留除 rules 外的其他字段
-            $existingRuleset = $getResponse['result'] ?? [];
-            
-            // 构建请求数据，只包含必要的字段
-            $requestData = [
-                'rules' => $formattedRules
+        try {
+            if ($rulesetId) {
+                $updateUrl = self::API_BASE_URL . '/zones/' . $zoneId . '/rulesets/' . $rulesetId;
+                $requestData = [
+                    'rules' => $formattedRules,
+                ];
+                if (isset($existingRuleset['kind'])) {
+                    $requestData['kind'] = $existingRuleset['kind'];
+                }
+                if (isset($existingRuleset['phase'])) {
+                    $requestData['phase'] = $existingRuleset['phase'];
+                }
+                if (isset($existingRuleset['name'])) {
+                    $requestData['name'] = $existingRuleset['name'];
+                }
+                $response = $this->makeRequest('PUT', $updateUrl, $requestData, $credentials);
+            } else {
+                // 无 entrypoint：对 phase entrypoint 发 PUT 创建（勿先 GET 失败就放弃）
+                $response = $this->makeRequest('PUT', $url, [
+                    'rules' => $formattedRules,
+                ], $credentials);
+            }
+        } catch (Core $e) {
+            return [
+                'success' => false,
+                'message' => (string)$e->getMessage(),
             ];
-            
-            // 保留其他必要的字段（如果存在）
-            if (isset($existingRuleset['kind'])) {
-                $requestData['kind'] = $existingRuleset['kind'];
-            }
-            if (isset($existingRuleset['phase'])) {
-                $requestData['phase'] = $existingRuleset['phase'];
-            }
-            if (isset($existingRuleset['name'])) {
-                $requestData['name'] = $existingRuleset['name'];
-            }
-            
-            $response = $this->makeRequest('PUT', $updateUrl, $requestData, $credentials);
-        } else {
-            // 创建新ruleset - POST 请求需要包含 phase 信息
-            $response = $this->makeRequest('POST', $url, [
-                'rules' => $formattedRules
-            ], $credentials);
         }
 
         if (($response['success'] ?? null) === true) {
             return [
                 'success' => true,
                 'message' => __('规则推送成功，共 %{count} 条', ['count' => count($formattedRules)]),
-                'data' => $response['result'] ?? null
+                'data' => $response['result'] ?? null,
             ];
         }
 
-        // 收集所有错误信息
         $errorMessages = [];
         if (isset($response['errors']) && is_array($response['errors'])) {
             foreach ($response['errors'] as $error) {
                 $errorMessages[] = $error['message'] ?? '未知错误';
             }
         }
-        
-        $errorMessage = !empty($errorMessages) 
-            ? implode('; ', $errorMessages) 
+
+        $errorMessage = !empty($errorMessages)
+            ? implode('; ', $errorMessages)
             : __('规则推送失败');
-        
+
         return [
             'success' => false,
             'message' => $errorMessage,
-            'errors' => $response['errors'] ?? []
+            'errors' => $response['errors'] ?? [],
         ];
     }
 

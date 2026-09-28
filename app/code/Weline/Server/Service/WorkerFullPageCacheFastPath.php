@@ -8,6 +8,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Context;
 use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Http\Fpc\FpcBypassEvaluator;
+use Weline\Framework\Http\Fpc\FpcBypassFactsBuilder;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\WlsRuntime;
@@ -238,12 +239,13 @@ final class WorkerFullPageCacheFastPath
             $normalizedHeaders[\strtolower((string)$name)] = (string)$value;
         }
 
-        return FpcBypassEvaluator::shouldBypass([
-            'query' => $query,
-            'cookie_header' => (string)($headers['cookie'] ?? ''),
-            'headers' => $normalizedHeaders,
-            'env' => [],
-        ]);
+        return FpcBypassEvaluator::shouldBypass(FpcBypassFactsBuilder::build(
+            $requestUri,
+            $query,
+            (string)($headers['cookie'] ?? ''),
+            $normalizedHeaders,
+            null,
+        ));
     }
 
     /** @param array<string, mixed> $targetParts */

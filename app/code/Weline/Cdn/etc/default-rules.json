@@ -1,6 +1,6 @@
 [
     {
-        "expression": "(http.request.uri.path matches \"^/static/\" or http.request.uri.path matches \"^/media/\")",
+        "expression": "(starts_with(http.request.uri.path, \"/static/\") or starts_with(http.request.uri.path, \"/media/\"))",
         "action": {
             "cache": {
                 "status_code": [200, 301, 308],
@@ -10,14 +10,14 @@
         "description": "静态资源缓存30天"
     },
     {
-        "expression": "(http.request.uri.path matches \"^/admin/\" or http.request.uri.path matches \"^/backend/\")",
+        "expression": "(starts_with(http.request.uri.path, \"/admin/\") or starts_with(http.request.uri.path, \"/backend/\"))",
         "action": {
             "cache": false
         },
         "description": "后台路径不缓存"
     },
     {
-        "expression": "http.request.uri.path matches \"^/api/\"",
+        "expression": "starts_with(http.request.uri.path, \"/api/\")",
         "action": {
             "cache": false
         },
@@ -41,12 +41,12 @@
         "description": "Weline 幂等请求：客户端声明 X-Weline-Idempotent=1 的 GET/HEAD 请求允许 CDN 短期缓存（10 分钟）"
     },
     {
-        "expression": "(http.request.method eq \"GET\" or http.request.method eq \"HEAD\") and not http.request.uri.path matches \"^/admin/\" and not http.request.uri.path matches \"^/backend/\" and not http.request.uri.path matches \"^/api/\"",
+        "expression": "(http.request.method eq \"GET\" or http.request.method eq \"HEAD\") and not starts_with(http.request.uri.path, \"/admin/\") and not starts_with(http.request.uri.path, \"/backend/\") and not starts_with(http.request.uri.path, \"/api/\")",
         "action": {
             "cache": {
                 "mode": "bypass_by_default"
             }
         },
-        "description": "店面 GET/HEAD：仅当源站带 Cache-Control/CDN-Cache-Control 时进入 CF 边缘（配合 FPC HIT 出站 CDN-Cache-Control）；无缓存头则 bypass，避免把 SSR MISS 冻进边缘"
+        "description": "店面 GET/HEAD：仅当源站带 Cache-Control/CDN-Cache-Control 时进入 CF 边缘（配合 FPC HIT 出站 CDN-Cache-Control）；无缓存头则 bypass，避免把 SSR MISS 冻进边缘。表达式用 starts_with（Free/Pro 可用；matches 需 Business）"
     }
 ]

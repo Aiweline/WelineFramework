@@ -85,6 +85,8 @@ class RulesPushDefaultsTest extends TestCase
         $this->assertStringContainsString('/static/', $expressions, 'should keep static asset rule');
         $this->assertStringContainsString('/admin/', $expressions, 'should keep backend bypass rule');
         $this->assertStringContainsString('/api/', $expressions, 'should keep api bypass rule');
+        $this->assertStringContainsString('starts_with', $expressions, 'Free/Pro Cache Rules must use starts_with not matches');
+        $this->assertStringNotContainsString(' matches ', ' ' . $expressions . ' ', 'matches operator requires Business plan');
     }
 
     private function resolveRulesFilePath(): string

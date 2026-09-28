@@ -1,5 +1,28 @@
 # CDN注释使用指南
 
+## 0. 先分清：`@Extra type=fpc` ≠ `@Cdn`（硬）
+
+| 声明 | 管什么 | 权威 |
+|------|--------|------|
+| **`@Extra type=fpc enabled=… ttl=… namespaces=… public_path_patterns=…`** | **源站 WLS 全页缓存（FPC）** 是否可缓存、TTL、失效命名空间 | Framework `controller-extra-fpc`；`FpcExtraType` |
+| **`@Cdn cache=…`** | **CDN 边缘 Cache Rules**（推 Cloudflare 等） | 本文后续章节 |
+
+要点：
+
+- 想让**新路由被 FPC 识别**：必须在控制器上声明 **`@Extra type=fpc`**，再经路由收集 / `setup:upgrade` 进 Extra 侧车。  
+- **只写 `@Cdn`、不写 Extra** ≠ 已启用源站 FPC。  
+- Cloudflare Free 下，店面页进边缘通常靠：已推送的 `default-rules`（`bypass_by_default`）+ FPC HIT 出站 `CDN-Cache-Control`，不必为每条店面路径再推一条 `@Cdn` 规则。  
+- CDN 后台「开发模式」（按 Scope）是**临时旁路 FPC**，不改写、不删除控制器上的 Extra 声明。
+
+FPC Extra 写法示例与失效（`w_changed`）见：
+
+- `app/code/Weline/Framework/doc/开发/team/controller-extra-fpc/README.md`
+- `app/code/Weline/Framework/doc/开发/spec/controller-extra-fpc.md`
+
+本功能规格：`app/code/Weline/Cdn/doc/开发/spec/cdn-route-realtime-fpc-devmode.md`
+
+---
+
 ## 1. 背景介绍
 
 ### 1.1 为什么需要CDN注释规则？
@@ -10,11 +33,11 @@
 - 规则分散在多个地方，难以管理
 - 规则与代码分离，容易遗忘更新
 
-**CDN注释规则**通过在代码中直接定义缓存规则，解决了这些问题：
+**CDN注释规则**通过在代码中直接定义**边缘**缓存规则，解决了这些问题：
 - ✅ **代码即文档**：规则与代码在一起，一目了然
 - ✅ **自动收集**：系统自动扫描和收集规则
 - ✅ **统一管理**：所有规则集中管理，便于查看和维护
-- ✅ **自动推送**：规则自动推送到CDN服务商
+- ✅ **按策略推送**：可定时或 realtime 推送到 CDN（Free 套餐有条数/算子上限，默认以 `default-rules` + 源站头为主，注解慎推全量）
 
 ### 1.2 工作原理
 

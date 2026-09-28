@@ -23,6 +23,7 @@ use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\ContentEncodingNegotiator;
 use Weline\Framework\Http\Fpc\FpcBypassEvaluator;
+use Weline\Framework\Http\Fpc\FpcBypassFactsBuilder;
 use Weline\Framework\Http\Fpc\FpcStoreAdapterRegistry;
 use Weline\Framework\Http\GuardHeaders;
 use Weline\Framework\Http\Response;
@@ -1890,40 +1891,28 @@ final class FullPageCacheCoordinator
 
     private function isEditorOrPreviewRequest(string $fullUri): bool
     {
-        $query = [];
-        $queryString = (string)(\parse_url($fullUri, \PHP_URL_QUERY) ?: '');
-        if ($queryString === '') {
-            $queryString = (string)WelineEnv::server('QUERY_STRING', '');
-        }
-        if ($queryString !== '') {
-            \parse_str($queryString, $query);
-        }
-        $getParams = WelineEnv::getGet(null, []);
-        if (\is_array($getParams) && $getParams !== []) {
-            $query = \array_merge($query, $getParams);
+        $facts = FpcBypassFactsBuilder::buildFromCurrentRequest($fullUri);
+        $bypass = FpcBypassEvaluator::shouldBypass($facts);
+        if ($bypass && (($facts['env']['cdn_fpc_dev_mode'] ?? '') === '1')) {
+            $this->applyCdnFpcDevModeEdgeBypassHeader();
         }
 
-        $headers = [];
-        foreach ([
-            'HTTP_X_WLS_FPC_BYPASS' => 'x-wls-fpc-bypass',
-            'HTTP_X_WLS_INTERNAL_FPC_BYPASS' => 'x-wls-internal-fpc-bypass',
-            'HTTP_X_WLS_DYNAMIC_WARMUP' => 'x-wls-dynamic-warmup',
-            'HTTP_X_WLS_DYNAMIC_BENCHMARK' => 'x-wls-dynamic-benchmark',
-        ] as $serverKey => $headerName) {
-            $value = (string)WelineEnv::server($serverKey, '');
-            if ($value !== '') {
-                $headers[$headerName] = $value;
-            }
-        }
+        return $bypass;
+    }
 
-        return FpcBypassEvaluator::shouldBypass([
-            'query' => $query,
-            'cookie_header' => (string)(WelineEnv::server('HTTP_COOKIE', '') ?: WelineEnv::get('server.http_cookie', '')),
-            'headers' => $headers,
-            'env' => [
-                'editor_mode' => (string)WelineEnv::get('editor_mode', ''),
-            ],
-        ]);
+    /**
+     * CDN Scope 开发模式旁路时出站声明边缘也不缓存（default-rules #4）；不误伤纯 Theme editor bypass。
+     */
+    private function applyCdnFpcDevModeEdgeBypassHeader(): void
+    {
+        try {
+            RequestContext::set('cdn.fpc_dev_mode_active', true);
+            /** @var Response $response */
+            $response = ObjectManager::getInstance(Response::class);
+            $response->setHeader('X-Weline-Cache-Bypass', '1');
+        } catch (\Throwable) {
+            // best-effort
+        }
     }
 
     /**
