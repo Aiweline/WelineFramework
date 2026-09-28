@@ -94,7 +94,7 @@ class PushRules implements CronTaskInterface
                 continue;
             }
             try {
-                $rules = $this->ruleManager->getMergedRules($domain, 'cron');
+                $rules = $this->ruleManager->planRulesForEdgePush($domain, 'cron');
                 
                 if (empty($rules)) {
                     continue;
@@ -103,7 +103,7 @@ class PushRules implements CronTaskInterface
                 // 3. 触发推送事件（所有适配器都会收到）
                 $event = new Event([
                     'domain' => $domain,
-                    'rules' => $rules, // 通用规则，所有适配器都可以使用
+                    'rules' => $rules, // 闸门后的安全规则集
                     'adapter_code' => $domain->getData(Domain::schema_fields_ADAPTER), // 用于适配器过滤
                     'trigger_type' => 'cron' // 标记为定时触发
                 ]);

@@ -116,6 +116,34 @@ final class QueryProviderRegistryTest extends TestCase
         self::assertSame([], $deferredDefinitions);
     }
 
+    public function testCompiledRegistryReloadsWhenFileMtimeChanges(): void
+    {
+        if (!is_file(QueryProviderRegistry::COMPILED_REGISTRY_FILE)) {
+            self::markTestSkipped('Compiled query_providers.php is required for this contract.');
+        }
+
+        $registry = new QueryProviderRegistry();
+        $descriptor = $registry->getOperationDescriptor('cart', 'issueGuestToken');
+        self::assertIsArray($descriptor);
+        self::assertArrayHasKey('guest_token', $descriptor['params'] ?? []);
+
+        // Simulate a stale in-memory map (pre-compile worker) while disk already has guest_token.
+        $operations = $this->getPrivateProperty($registry, 'compiledOperations');
+        self::assertIsArray($operations);
+        $operations['cart']['issueGuestToken']['params'] = [];
+        $this->setPrivateProperty($registry, 'compiledOperations', $operations);
+        $this->setPrivateProperty($registry, 'compiledFileMtime', 1);
+
+        $reloaded = $registry->getOperationDescriptor('cart', 'issueGuestToken');
+        self::assertIsArray($reloaded);
+        self::assertArrayHasKey(
+            'guest_token',
+            $reloaded['params'] ?? [],
+            'WLS must hot-reload compiled registry after framework:compile mtime change.',
+        );
+        self::assertGreaterThan(1, (int)$this->getPrivateProperty($registry, 'compiledFileMtime'));
+    }
+
     /**
      * @return array{0:string,1:string}
      */

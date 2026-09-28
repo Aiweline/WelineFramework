@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Cdn',
-    "version" => '1.0.12',
+    "version" => '1.0.14',
     "requires" => [
         'Weline_Cron' => '*',
         'Weline_Framework' => '*',
@@ -18,5 +18,7 @@ return [
             => \Weline\Cdn\Service\OrmScopedAccountBindingRepository::class,
         \Weline\Cdn\Api\MailDnsManagerInterface::class
             => \Weline\Cdn\Service\CloudflareMailDnsManager::class,
+        \Weline\Framework\Http\Fpc\CdnFpcDevModeFlagResolverInterface::class
+            => \Weline\Cdn\Service\CdnFpcDevModeFlagResolver::class,
     ],
 ];

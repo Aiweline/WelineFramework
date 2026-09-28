@@ -98,6 +98,29 @@ class AccountManager
     }
 
     /**
+     * 该适配器尚无默认账户时，把指定账户升为默认（首个账户 / 继承域名 purge 前置）。
+     *
+     * @return bool 是否执行了 setDefault
+     */
+    public function ensureDefaultAccountIfNone(int $accountId): bool
+    {
+        $account = $this->getAccount($accountId);
+        if ($account === null || !$account->getId()) {
+            return false;
+        }
+        $adapter = (string)$account->getData(Account::schema_fields_ADAPTER);
+        if ($adapter === '') {
+            return false;
+        }
+        if ($this->getDefaultAccount($adapter) !== null) {
+            return false;
+        }
+        $this->setDefaultAccount($accountId);
+
+        return true;
+    }
+
+    /**
      * 获取适配器的默认账户
      *
      * @param string $adapter 适配器代码

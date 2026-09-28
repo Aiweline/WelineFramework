@@ -166,7 +166,6 @@ URL列表不能为空,URL列表不能为空
 "Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认","Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认"
 "Cloudflare 拒绝了当前 Global API Key（或邮箱不匹配）。请确认 My Profile → API Keys 中的 Global API Key，以及该 Key 所属账户的登录邮箱，保存后再测。","Cloudflare 拒绝了当前 Global API Key（或邮箱不匹配）。请确认 My Profile → API Keys 中的 Global API Key，以及该 Key 所属账户的登录邮箱，保存后再测。"
 "Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），或改用「Global API Key」鉴权方式并填写邮箱+密钥。","Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），或改用「Global API Key」鉴权方式并填写邮箱+密钥。"
-获取现有规则失败,获取现有规则失败
 "规则推送成功，共 %{count} 条","规则推送成功，共 %{count} 条"
 规则推送失败,规则推送失败
 "Zone不存在: %{1}","Zone不存在: %{1}"
@@ -708,6 +707,7 @@ CDN域名创建成功：%{1},CDN域名创建成功：%{1}
 "规则导入成功，共导入 %{1} 条规则","规则导入成功，共导入 %{1} 条规则"
 规则已保存为域名覆盖规则,规则已保存为域名覆盖规则
 规则导入失败：%{1},规则导入失败：%{1}
+获取现有规则失败,获取现有规则失败
 "请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权","请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权"
 "Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。","Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。"
 "库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；若测连接报 Invalid API Token，请重新粘贴有效 API Token 后先保存再测（不要填 Global API Key）。","库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；若测连接报 Invalid API Token，请重新粘贴有效 API Token 后先保存再测（不要填 Global API Key）。"
@@ -979,3 +979,8 @@ zone.read dns.write offline_access cache.purge cache-settings.write
 选择网站、店铺或渠道,选择网站、店铺或渠道
 搜索作用范围,搜索作用范围
 选择作用范围,选择作用范围
+"启用 FPC 开发模式（旁路全页缓存）","启用 FPC 开发模式（旁路全页缓存）"
+"FPC 开发模式","FPC 开发模式"
+"按当前页面所选 Scope（website / store / channel）开关。仅临时旁路 FPC，不修改控制器 @Extra type=fpc，也不改写 Cloudflare Cache Rules。","按当前页面所选 Scope（website / store / channel）开关。仅临时旁路 FPC，不修改控制器 @Extra type=fpc，也不改写 Cloudflare Cache Rules。"
+"源站是否可 FPC 仍由控制器 \`@Extra type=fpc enabled=…\` 声明。本开关只是 Scope 级调试旁路：打开时跳过公共 FPC；关闭后恢复 Extra 策略。","源站是否可 FPC 仍由控制器 \`@Extra type=fpc enabled=…\` 声明。本开关只是 Scope 级调试旁路：打开时跳过公共 FPC；关闭后恢复 Extra 策略。"
+"与 @Extra type=fpc 的关系","与 @Extra type=fpc 的关系"

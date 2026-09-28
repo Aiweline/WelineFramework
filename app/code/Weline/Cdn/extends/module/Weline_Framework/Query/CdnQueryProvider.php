@@ -632,9 +632,13 @@ class CdnQueryProvider implements QueryProviderInterface
             }
 
             $account->save();
+            $savedId = (int)$account->getId();
 
             if (isset($params['is_default']) && $params['is_default']) {
-                $this->accountManager->setDefaultAccount((int)$account->getId());
+                $this->accountManager->setDefaultAccount($savedId);
+            } elseif ($accountId <= 0) {
+                // 新建且未勾默认：若该适配器尚无默认，自动设为默认（继承域名可立刻 purge）
+                $this->accountManager->ensureDefaultAccountIfNone($savedId);
             }
 
             $action = $accountId > 0 ? __('更新') : __('创建');

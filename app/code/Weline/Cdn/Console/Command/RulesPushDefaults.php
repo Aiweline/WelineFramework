@@ -120,7 +120,7 @@ class RulesPushDefaults extends CommandAbstract implements CommandInterface
                 $name = (string)$domainObj->getData(Domain::schema_fields_DOMAIN_NAME);
                 $this->printer->note(__('正在推送到域名：%{1}', [$name]));
                 try {
-                    $result = $this->ruleManager->pushRules($domainObj);
+                    $result = $this->ruleManager->pushDefaultRules($domainObj);
                     if (!empty($result['success'])) {
                         $this->printer->success(__('  -> 成功（%{1}）', [$result['message'] ?? __('已推送')]));
                         $okCount++;

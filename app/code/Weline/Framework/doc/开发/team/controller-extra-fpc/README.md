@@ -28,6 +28,11 @@ Seo 等仍听 `resource_changed` 事件。
 
 已删除：`CacheNamespaceObserver`、`CacheImpactObserver`、`Cdn\Observer\ResourceChanged`、`Theme\Observer\ResourceChanged`。
 
+## 与 `@Cdn` / CDN 开发模式
+
+- **`@Cdn`**：CDN **边缘**规则，**不是**源站 FPC 开关。见 `Weline_Cdn/doc/CDN注释使用指南.md` §0。  
+- **CDN Scope 开发模式**：临时 bypass FPC（`FpcBypassRuleProvider`），**不**改本页 Extra 声明。规格：`Weline_Cdn/doc/开发/spec/cdn-route-realtime-fpc-devmode.md`。
+
 ## MVP ChangedType
 
 `product_search_projection`、`theme`、`theme_layout`、`cms_page`、`url_rewrite`。

@@ -402,7 +402,7 @@ class CdnRuleCollector
             $rule['expression'] = $config['expression'];
         } else {
             // 生成表达式
-            $rule['expression'] = 'http.request.uri.path matches "^' . $route . '"';
+            $rule['expression'] = 'starts_with(http.request.uri.path, "' . $route . '")';
         }
         
         // 如果提供了完整action，直接使用
@@ -683,28 +683,36 @@ class CdnRuleCollector
      */
     private function pushRealtimeRule(ApiRule $apiRule): void
     {
-        // 获取所有启用的域名（不区分适配器）
         $domains = $this->domainModel->clear()
             ->where(Domain::schema_fields_ENABLED, 1)
             ->select()
             ->fetch();
-        
+
         foreach ($domains as $domain) {
+            if (!$domain instanceof Domain) {
+                continue;
+            }
             try {
-                // 合并规则（包含这个实时规则）
-                $rules = $this->ruleManager->getMergedRules($domain, null); // null表示获取所有规则
-                
-                // 触发推送事件（所有适配器都会收到）
+                // Free：注解已入库，不向边缘全量 PUT；付费：推预算内安全子集
+                if (!$this->ruleManager->annotationsAllowedOnEdge($domain)) {
+                    w_log_info(
+                        'CDN realtime：注解已收录，Free/低容量 Zone 跳过边缘 PUT（靠 default-rules + 源站头） ['
+                        . (string)$domain->getData(Domain::schema_fields_DOMAIN_NAME) . ']'
+                    );
+                    continue;
+                }
+
+                $rules = $this->ruleManager->planRulesForEdgePush($domain, null);
+
                 $event = new Event([
                     'domain' => $domain,
-                    'rules' => $rules, // 通用规则，所有适配器都可以使用
-                    'adapter_code' => $domain->getData(Domain::schema_fields_ADAPTER), // 用于适配器过滤
-                    'trigger_type' => 'realtime' // 标记为实时触发
+                    'rules' => $rules,
+                    'adapter_code' => $domain->getData(Domain::schema_fields_ADAPTER),
+                    'trigger_type' => 'realtime',
                 ]);
-                
+
                 $this->eventsManager->dispatch('Weline_Cdn::push_rules', $event);
             } catch (\Exception $e) {
-                // 记录错误但不中断
                 w_log_error("CDN实时规则推送失败 [域名: {$domain->getData(Domain::schema_fields_DOMAIN_NAME)}]: " . $e->getMessage());
             }
         }

@@ -51,12 +51,20 @@ class QueryProviderRegistry
 
     private bool $compiledDescriptorIndexLoaded = false;
 
+    /** mtime of COMPILED_REGISTRY_FILE when compiled index was last loaded (WLS hot-reload). */
+    private ?int $compiledFileMtime = null;
+
     private ?BinQueryDescriptorAttributeResolver $binQueryAttributeResolver = null;
 
     private function loadDefinitions(): void
     {
         if ($this->definitionsLoaded) {
-            return;
+            if (!$this->compiledDescriptorIndexLoaded || !$this->isCompiledRegistryStale()) {
+                return;
+            }
+            // framework:compile updated query_providers.php while this long-lived
+            // WLS worker still held the previous in-memory operation map.
+            $this->resetCompiledRegistryState();
         }
 
         $compiled = $this->loadCompiledDefinitions();
@@ -71,6 +79,7 @@ class QueryProviderRegistry
                 $this->compiledExternalDescriptorLists[$area] = \array_values($areaIndex['providers']);
             }
             $this->compiledDescriptorIndexLoaded = true;
+            $this->compiledFileMtime = $this->compiledRegistryFileMtime();
             $this->definitionsLoaded = true;
             return;
         }
@@ -129,12 +138,57 @@ class QueryProviderRegistry
      *     external_areas:array<string, array{providers:array, operations:array, summaries:array}>
      * }|null
      */
+    private function isCompiledRegistryStale(): bool
+    {
+        if ($this->compiledFileMtime === null) {
+            return true;
+        }
+
+        return $this->compiledRegistryFileMtime() !== $this->compiledFileMtime;
+    }
+
+    private function compiledRegistryFileMtime(): int
+    {
+        \clearstatcache(true, self::COMPILED_REGISTRY_FILE);
+        if (!\is_file(self::COMPILED_REGISTRY_FILE)) {
+            return 0;
+        }
+
+        return (int)(@\filemtime(self::COMPILED_REGISTRY_FILE) ?: 0);
+    }
+
+    /**
+     * Drop compiled + static descriptor caches so the next loadDefinitions()
+     * re-reads generated/framework/query_providers.php (post framework:compile).
+     */
+    private function resetCompiledRegistryState(): void
+    {
+        $this->definitionsLoaded = false;
+        $this->compiledDescriptorIndexLoaded = false;
+        $this->compiledFileMtime = null;
+        $this->providers = [];
+        $this->providerDefinitions = [];
+        $this->deferredDefinitions = [];
+        $this->compiledDescriptors = [];
+        $this->compiledDescriptorList = [];
+        $this->compiledOperations = [];
+        $this->compiledExternalAreas = [];
+        $this->compiledExternalDescriptorLists = [];
+        self::$descriptorCache = [];
+        self::$operationDescriptorCache = [];
+        self::$externalAreaCache = [];
+    }
+
     private function loadCompiledDefinitions(): ?array
     {
         if (!is_file(self::COMPILED_REGISTRY_FILE)) {
             return null;
         }
-        $registry = require self::COMPILED_REGISTRY_FILE;
+        // Long-lived WLS workers may keep a prior opcode; invalidate before re-include.
+        if (\function_exists('opcache_invalidate')) {
+            @\opcache_invalidate(self::COMPILED_REGISTRY_FILE, true);
+        }
+        $registry = include self::COMPILED_REGISTRY_FILE;
         $valid = is_array($registry)
             && ($registry['format'] ?? null) === QueryProviderCompiler::FORMAT_VERSION
             && is_array($registry['providers'] ?? null)

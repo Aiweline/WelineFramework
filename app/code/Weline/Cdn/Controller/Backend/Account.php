@@ -276,20 +276,21 @@ class Account extends BackendController
 
             // 处理默认账户标记
             $shouldSetDefault = isset($data['is_default']) && $data['is_default'] == 1;
-            
-            if (!$shouldSetDefault) {
+            $isNewAccount = !$id;
+
+            if (!$shouldSetDefault && !$isNewAccount) {
                 $account->setData(AccountModel::schema_fields_IS_DEFAULT, 0);
             }
 
             // 先保存获取ID（如果是新账户）
             $account->save();
-            $accountId = $account->getData(AccountModel::schema_fields_ACCOUNT_ID);
+            $accountId = (int)$account->getData(AccountModel::schema_fields_ACCOUNT_ID);
 
-            // 如果是新账户或者是标记为默认且当前不是默认，则设置为默认
-            if ($shouldSetDefault && (!$id || $account->getData(AccountModel::schema_fields_IS_DEFAULT) != 1)) {
-                if ($accountId) {
-                    $this->getAccountManager()->setDefaultAccount($accountId);
-                }
+            if ($shouldSetDefault && $accountId > 0) {
+                $this->getAccountManager()->setDefaultAccount($accountId);
+            } elseif ($isNewAccount && $accountId > 0) {
+                // 新建未勾默认：该适配器尚无默认时自动提升，避免「继承默认」域名 purge 无账户
+                $this->getAccountManager()->ensureDefaultAccountIfNone($accountId);
             }
 
             Message::success(__('账户保存成功'));

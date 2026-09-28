@@ -1,0 +1,30 @@
+<?php
+/**
+ * @meta.title {default="FPC 开发模式",description="按 Scope 临时绕过 WLS 全页缓存（不改控制器 @Extra type=fpc 声明）"}
+ * @meta.description {default="开启后该 Scope 请求绕过公共 FPC，并出站 X-Weline-Cache-Bypass=1。关闭后仍以 @Extra type=fpc 为准。与主题编辑器旁路分开关。"}
+ * @config.area {backend}
+ * @config.sort {56}
+ * @config.acl {Weline_Cdn::cdn_system_config}
+ */
+?>
+
+<w:config:group
+    code="cdn_fpc_dev_mode"
+    label="FPC 开发模式"
+    description="按当前页面所选 Scope（website / store / channel）开关。仅临时旁路 FPC，不修改控制器 @Extra type=fpc，也不改写 Cloudflare Cache Rules。"
+    sort="20"
+>
+    <w:config:hint type="info" title="与 @Extra type=fpc 的关系" collapsed="0">
+源站是否可 FPC 仍由控制器 `@Extra type=fpc enabled=…` 声明。本开关只是 Scope 级调试旁路：打开时跳过公共 FPC；关闭后恢复 Extra 策略。
+    </w:config:hint>
+
+    <w:config:field
+        key="cdn/fpc/dev_mode"
+        label="启用 FPC 开发模式（旁路全页缓存）"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store,channel"
+        sensitive="0"
+    />
+</w:config:group>

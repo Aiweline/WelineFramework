@@ -204,6 +204,18 @@ class CloudflareTest extends TestCase
         ]));
     }
 
+    public function testIsMissingCacheRulesEntrypointDetectsCommonCfMessages(): void
+    {
+        $this->assertTrue(Cloudflare::isMissingCacheRulesEntrypoint(
+            'could not find entrypoint ruleset in the http_request_cache_settings phase'
+        ));
+        $this->assertTrue(Cloudflare::isMissingCacheRulesEntrypoint(
+            'Not found: http_request_cache_settings'
+        ));
+        $this->assertFalse(Cloudflare::isMissingCacheRulesEntrypoint('Invalid API Token'));
+        $this->assertFalse(Cloudflare::isMissingCacheRulesEntrypoint(''));
+    }
+
     public function testBuildAuthHeadersForTokenAndGlobalKey(): void
     {
         $tokenHeaders = Cloudflare::buildAuthHeaders(['api_token' => 'tok-1']);

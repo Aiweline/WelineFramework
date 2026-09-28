@@ -196,8 +196,8 @@ class RuleManager
             throw new Core(__('适配器不存在：%{1}', [$domain->getData(Domain::schema_fields_ADAPTER)]));
         }
 
-        // 获取合并后的规则
-        $rules = $this->getMergedRules($domain);
+        // 获取合并后的规则（Free：仅 defaults；付费：预算内子集）
+        $rules = $this->planRulesForEdgePush($domain);
 
         // 获取凭据
         $credentials = $this->getCredentials($domain);
@@ -209,6 +209,124 @@ class RuleManager
         $result = $adapter->putRules($zoneId, $rules, $credentials);
 
         return $result;
+    }
+
+    /**
+     * Cloudflare Free Cache Rules 默认容量（未知套餐时保守取值）。
+     */
+    public const DEFAULT_CACHE_RULES_CAPACITY = 10;
+
+    /**
+     * 解析 Zone 可用 Cache Rules 条数上限。
+     * 优先 credentials.cache_rules_capacity / 环境变量 CDN_CF_CACHE_RULES_CAPACITY，否则 10。
+     */
+    public function getCacheRulesCapacity(Domain $domain): int
+    {
+        $credentials = $this->getCredentials($domain);
+        $fromCred = (int)($credentials['cache_rules_capacity'] ?? 0);
+        if ($fromCred > 0) {
+            return $fromCred;
+        }
+        $fromEnv = (int)(getenv('CDN_CF_CACHE_RULES_CAPACITY') ?: 0);
+        if ($fromEnv > 0) {
+            return $fromEnv;
+        }
+
+        return self::DEFAULT_CACHE_RULES_CAPACITY;
+    }
+
+    /**
+     * Free（容量≤10）默认不允许注解规则上边缘；仅 defaults。
+     */
+    public function annotationsAllowedOnEdge(Domain $domain): bool
+    {
+        return $this->getCacheRulesCapacity($domain) > self::DEFAULT_CACHE_RULES_CAPACITY;
+    }
+
+    /**
+     * 计划推送到边缘的规则集（闸门后）。
+     * Free：仅 default-rules；付费：defaults + 预算内 override/api（表达式已消毒）。
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function planRulesForEdgePush(Domain $domain, ?string $triggerType = null): array
+    {
+        $defaults = $this->getDefaultRules();
+        if (!$this->annotationsAllowedOnEdge($domain)) {
+            return $defaults;
+        }
+
+        $capacity = $this->getCacheRulesCapacity($domain);
+        $budget = \max(0, $capacity - \count($defaults));
+        if ($budget === 0) {
+            return $defaults;
+        }
+
+        $extra = \array_merge(
+            $domain->getRulesOverrideArray(),
+            $this->getApiRules($triggerType)
+        );
+        $accepted = [];
+        foreach ($extra as $rule) {
+            if (!\is_array($rule)) {
+                continue;
+            }
+            $sanitized = $this->sanitizeRuleExpressionForEdge($rule);
+            if ($sanitized === null) {
+                continue;
+            }
+            $accepted[] = $sanitized;
+            if (\count($accepted) >= $budget) {
+                break;
+            }
+        }
+
+        return \array_merge($defaults, $accepted);
+    }
+
+    /**
+     * 丢弃含 matches 的规则（Free/Pro 不可用）；显式 expression 含 matches 则跳过。
+     *
+     * @param array<string, mixed> $rule
+     * @return array<string, mixed>|null
+     */
+    public function sanitizeRuleExpressionForEdge(array $rule): ?array
+    {
+        $expression = isset($rule['expression']) ? \trim((string)$rule['expression']) : '';
+        if ($expression === '') {
+            return null;
+        }
+        if (\preg_match('/\bmatches\b/i', $expression)) {
+            return null;
+        }
+
+        return $rule;
+    }
+
+    /**
+     * 仅推送全局 default-rules.json（不含域名覆盖与 API 注释规则）。
+     * Free 套餐 Cache Rules 上限 10 条；合并推送易超限。
+     *
+     * @return array{success: bool, message: string, data?: mixed, errors?: array}
+     * @throws Core
+     */
+    public function pushDefaultRules(Domain $domain): array
+    {
+        $adapterCode = (string)($domain->getData(Domain::schema_fields_ADAPTER) ?? '');
+        $adapter = $this->adapterResolver->getAdapter($adapterCode);
+        if (!$adapter) {
+            throw new Core(__('适配器不存在：%{1}', [$domain->getData(Domain::schema_fields_ADAPTER)]));
+        }
+
+        $rules = $this->getDefaultRules();
+        $credentials = $this->getCredentials($domain);
+        if (empty($credentials)) {
+            throw new Core(__('未配置账户凭据'));
+        }
+
+        $zoneId = (string)$domain->getData(Domain::schema_fields_ZONE_ID);
+
+        return $adapter->putRules($zoneId, $rules, $credentials);
     }
 
     /**
