@@ -23,13 +23,28 @@ final class ManagedNginxEdgeAvailabilityPortOccupancyContractTest extends TestCa
 
         self::assertTrue($availability->hostNginxOccupied());
         self::assertSame([80, 443], \array_slice($probe->inspectedPorts, 0, 2));
-        self::assertStringContainsString('80/443', $availability->unavailableReason());
+        self::assertStringContainsString('foreign listener', $availability->unavailableReason());
     }
 
-    public function testHostOccupiedWhenPublicPortIsUnbindable(): void
+    public function testUnbindablePrivilegedPortsDoNotBlockManagedAutoEdge(): void
     {
         $probe = new FakePublicPortProbe([
             80 => ManagedNginxPublicPortProbeInterface::STATE_UNBINDABLE,
+            443 => ManagedNginxPublicPortProbeInterface::STATE_UNBINDABLE,
+        ]);
+        $availability = new ManagedNginxEdgeAvailability(null, null, $probe);
+
+        self::assertFalse(
+            $availability->hostNginxOccupied(),
+            'weline 用户探测特权端口 UNBINDABLE 是常态；托管 Nginx 靠 setcap 绑定，不得因此降级纯 WLS',
+        );
+        self::assertSame([80, 443], $probe->inspectedPorts);
+    }
+
+    public function testHostOccupiedWhenPublicPortIsForeignOnly(): void
+    {
+        $probe = new FakePublicPortProbe([
+            80 => ManagedNginxPublicPortProbeInterface::STATE_FOREIGN,
             443 => ManagedNginxPublicPortProbeInterface::STATE_FREE,
         ]);
         $availability = new ManagedNginxEdgeAvailability(null, null, $probe);

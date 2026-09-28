@@ -18,6 +18,8 @@ interface ManagedEdgeAvailabilityInterface
      * 为真表示公网边缘不可争抢，auto 不得再起一套托管 Nginx。
      * 仅「系统盘存在 nginx 二进制、进程未听公网端口」不得判为占用——否则 apt/宝塔
      * 装包即会把 auto 的第三出口（托管 Nginx 网关）永久堵死。
+     * 当前 PHP 对特权端口 UNBINDABLE（非 root 常态）也不得判为占用——绑定能力在
+     * 托管 Nginx 二进制（setcap）侧，不在探测用的 PHP 进程侧。
      */
     public function hostNginxOccupied(): bool;
 

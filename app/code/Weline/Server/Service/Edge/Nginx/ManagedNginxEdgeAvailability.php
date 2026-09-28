@@ -40,14 +40,16 @@ final class ManagedNginxEdgeAvailability implements ManagedEdgeAvailabilityInter
             return (bool)($this->hostNginxProbe)();
         }
 
+        // 只认「外人已听在公网端口」。UNBINDABLE 只表示当前 PHP 进程无权试绑
+        // 特权端口（普通 weline 用户常态），托管 Nginx 二进制可另有 setcap，
+        // 不得因此把 auto 的第三出口（托管网关）整段堵死。
         foreach ([
             ManagedNginxPortAllocator::DEFAULT_PUBLIC_HTTP_PORT,
             ManagedNginxPortAllocator::DEFAULT_PUBLIC_HTTPS_PORT,
         ] as $port) {
             $verdict = $this->portProbe->inspect($port);
-            $state = (string)($verdict['state'] ?? '');
-            if ($state === ManagedNginxPublicPortProbeInterface::STATE_FOREIGN
-                || $state === ManagedNginxPublicPortProbeInterface::STATE_UNBINDABLE
+            if ((string)($verdict['state'] ?? '')
+                === ManagedNginxPublicPortProbeInterface::STATE_FOREIGN
             ) {
                 return true;
             }
@@ -66,7 +68,7 @@ final class ManagedNginxEdgeAvailability implements ManagedEdgeAvailabilityInter
     public function unavailableReason(): string
     {
         if ($this->hostNginxOccupied()) {
-            return 'host public edge (80/443) is occupied or unbindable; WLS will not contend for the public edge';
+            return 'host public edge (80/443) is occupied by a foreign listener; WLS will not contend for the public edge';
         }
         if (!$this->paths->managedEnabled()) {
             return 'wls.edge.nginx.managed=false disables the project-managed Nginx edge';
