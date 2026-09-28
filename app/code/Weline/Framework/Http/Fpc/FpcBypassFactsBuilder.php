@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http\Fpc;
 
-use Weline\Framework\App\Env as WelineEnv;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
