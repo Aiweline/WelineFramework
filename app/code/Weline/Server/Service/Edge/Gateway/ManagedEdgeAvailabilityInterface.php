@@ -13,9 +13,11 @@ namespace Weline\Server\Service\Edge\Gateway;
 interface ManagedEdgeAvailabilityInterface
 {
     /**
-     * 宿主是否已有可用的 Nginx。
+     * 宿主公网边缘（标准 80/443）是否已被外人占用或本进程无权绑定。
      *
-     * 为真表示公网边缘已被宿主占用，WLS 不得再起一套自己的 Nginx 与其争抢。
+     * 为真表示公网边缘不可争抢，auto 不得再起一套托管 Nginx。
+     * 仅「系统盘存在 nginx 二进制、进程未听公网端口」不得判为占用——否则 apt/宝塔
+     * 装包即会把 auto 的第三出口（托管 Nginx 网关）永久堵死。
      */
     public function hostNginxOccupied(): bool;
 
