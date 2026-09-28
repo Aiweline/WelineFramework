@@ -41,14 +41,14 @@ final class GatewayStartupManagedEdgeAutoTest extends TestCase
         $edge = new FakeManagedEdgeAvailability(
             hostOccupied: true,
             edgeReady: true,
-            unavailable: 'host public edge (80/443) is occupied or unbindable; WLS will not contend for the public edge',
+            unavailable: 'host public edge (80/443) is occupied by a foreign listener; WLS will not contend for the public edge',
         );
         $decision = $this->decide(GatewayStartupDecision::MODE_AUTO, $edge);
 
         self::assertSame(GatewayStartupDecision::MODE_WLS, $decision->mode);
         self::assertTrue($decision->isAutoFallback());
         self::assertStringContainsString('PACKAGE_UNAVAILABLE', $decision->fallbackReason);
-        self::assertStringContainsString('host public edge', $decision->fallbackReason);
+        self::assertStringContainsString('foreign listener', $decision->fallbackReason);
         self::assertSame(0, $edge->readyProbes, '宿主已占用边缘时不必再问托管 Nginx 是否就绪');
     }
 
