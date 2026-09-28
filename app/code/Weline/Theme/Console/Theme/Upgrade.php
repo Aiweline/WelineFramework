@@ -155,6 +155,16 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $this->printing->success(
             __('模块主题资源：') . $published . __(' 个文件已发布到 /static/') . $publicThemePath . '/...'
         );
+
+        // 设计主题根下 {area}/assets/... 会被搬到 /static/{ns}/{area}/...，但模板
+        // <theme:js>Weline_Theme::theme/{area}/...</theme:js> 生成的 URL 是
+        // /static/{ns}/Weline/Theme/view/theme/{area}/...。PROD / NG / WLS 快路径
+        // 缺文件直接 404，不会走 ThemeResourceGateway 延迟补发。须双写到 Theme 模块路径。
+        $this->printing->warning(__('开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径...'));
+        $mirrored = $this->publishDesignAreaAssetsIntoThemeModuleNamespace($theme, $publicThemePath, $modules);
+        $this->printing->success(
+            __('设计 area→Theme 模块路径：') . $mirrored . __(' 个文件')
+        );
     }
 
     /**
@@ -213,6 +223,63 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if (!copy($source, $destination)) {
             throw new ConsoleException(__('无法发布主题静态资源：') . $source);
         }
+    }
+
+    /**
+     * Mirror design-theme `{area}/**` runtime assets into the URL namespace used by
+     * `<theme:*>` / `Weline_Theme::theme/{area}/...` tags:
+     * `/static/{ns}/Weline/Theme/view/theme/{area}/...`.
+     *
+     * Design overlay copy already writes `/static/{ns}/{area}/...` (relative to
+     * theme root). That path is NOT what theme tags emit, so PROD WLS fastpath
+     * 404s unless this second publish runs (or a request-time gateway publish
+     * happens — which NG/WLS missing-file fastpath does not).
+     *
+     * @param list<string> $moduleFilter when non-empty and excludes Weline_Theme, skip
+     */
+    private function publishDesignAreaAssetsIntoThemeModuleNamespace(
+        WelineTheme $theme,
+        string $publicThemePath,
+        array $moduleFilter,
+    ): int {
+        if ($moduleFilter !== [] && !in_array('Weline_Theme', $moduleFilter, true)) {
+            return 0;
+        }
+
+        $themeRoot = rtrim(str_replace('\\', '/', (string)$theme->getPath()), '/');
+        if ($themeRoot === '' || !is_dir($themeRoot)) {
+            return 0;
+        }
+
+        $extensionSet = array_fill_keys(self::THEME_ASSET_EXTENSIONS, true);
+        $published = 0;
+
+        foreach (['frontend', 'backend'] as $area) {
+            $areaRoot = $themeRoot . '/' . $area;
+            if (!is_dir($areaRoot)) {
+                continue;
+            }
+
+            foreach ($this->listThemeAssetRelativePaths($areaRoot, $extensionSet) as $relativePath) {
+                if (self::isExcludedPublishPath($themeRoot, $areaRoot . '/' . $relativePath)) {
+                    continue;
+                }
+
+                $requestPath = self::buildNamespacedModuleThemeRequestPath(
+                    $publicThemePath,
+                    'Weline',
+                    'Theme',
+                    $area,
+                    $relativePath,
+                );
+                $publicPath = $this->themeResourceGateway->publishForRequestPath($requestPath, $theme);
+                if (is_string($publicPath) && $publicPath !== '') {
+                    $published++;
+                }
+            }
+        }
+
+        return $published;
     }
 
     /**
