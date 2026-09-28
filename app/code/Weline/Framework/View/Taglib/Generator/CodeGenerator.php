@@ -332,8 +332,10 @@ final class CodeGenerator
             // 添加空数组作为最终回退，避免对 null 进行数组访问
             $result = '($' . $first . ' ?? $this->getData(\'' . $first . '\') ?? [])';
             foreach ($parts as $part) {
-                // 每一级属性访问都添加 null 安全检查
-                $result = '(' . $result . '[\'' . $part . '\'] ?? null)';
+                // showHeader/showFooter：缺键默认 true（店面 Partials 页头页尾）
+                // 其它键仍 ?? null，避免把缺失当假阳性 true。
+                $fallback = \in_array($part, ['showHeader', 'showFooter'], true) ? 'true' : 'null';
+                $result = '(' . $result . '[\'' . $part . '\'] ?? ' . $fallback . ')';
             }
             return $result;
         }
@@ -551,7 +553,7 @@ final class CodeGenerator
             return '<?php if(true): ?>';
         }
 
-        // 解析变量表达式（如 meta.showHeader => ($meta['showHeader'] ?? null)）
+        // 解析变量表达式（如 meta.showHeader => ...['showHeader'] ?? true）
         $condition = $this->parseVarExpression($condition);
 
         $children = $this->generateNodes($node->children);
@@ -571,7 +573,8 @@ final class CodeGenerator
      *
      * 例如：
      * - content => ($content ?? $this->getData('content'))
-     * - meta.showHeader => (($meta ?? $this->getData('meta') ?? [])['showHeader'] ?? null)
+     * - meta.showHeader => (($meta ?? $this->getData('meta') ?? [])['showHeader'] ?? true)
+     * - meta.title => (($meta ?? $this->getData('meta') ?? [])['title'] ?? null)
      * - $user.name => ($user ?? [])['name']   // 已写 $ 则保持显式 PHP 变量
      *
      * @param string $expr 表达式
