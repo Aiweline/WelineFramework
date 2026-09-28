@@ -488,7 +488,10 @@ $kpis = [
                                                         'status' => (string)($account->getData('status') ?: 'active'),
                                                         'is_default' => (bool)$account->getData('is_default'),
                                                         'cf_account_id' => (string)(($account->getCredentialsArray()['account_id'] ?? '')),
+                                                        'email' => (string)(($account->getCredentialsArray()['email'] ?? ($account->getCredentialsArray()['api_email'] ?? ''))),
+                                                        'auth_mode' => (string)(($account->getCredentialsArray()['auth_mode'] ?? '')),
                                                         'has_api_token' => trim((string)(($account->getCredentialsArray()['api_token'] ?? ''))) !== '',
+                                                        'has_api_key' => trim((string)(($account->getCredentialsArray()['api_key'] ?? ($account->getCredentialsArray()['global_api_key'] ?? '')))) !== '',
                                                     ], JSON_UNESCAPED_UNICODE)) ?>"
                                                 >
                                                     <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
@@ -622,13 +625,16 @@ $kpis = [
         'networkFailed' => (string)__('网络请求失败：无法到达 query-bin。请刷新后台后重试；若持续失败请检查 CDN/WAF 是否拦截 /api/framework/query-bin。'),
         'required' => (string)__('请填写必填项'),
         'tokenRequired' => (string)__('请粘贴 API Token（新建 Cloudflare 账户必填）'),
+        'credentialsRequired' => (string)__('请填写 API Token，或改用 Global API Key（邮箱+密钥）'),
         'confirm' => (string)__('确定'),
         'success' => (string)__('成功'),
         'testing' => (string)__('正在验证连接'),
         'addTitle' => (string)__('添加账户'),
         'editTitle' => (string)__('编辑账户'),
-        'tokenSavedHint' => (string)__('库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；若测连接报 Invalid API Token，请重新粘贴有效 API Token 后先保存再测（不要填 Global API Key）。'),
-        'tokenMissingHint' => (string)__('库里还没有 Token。请粘贴后保存，再测连接。'),
+        'tokenSavedHint' => (string)__('库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；测连失败时可改贴有效 Token，或切换到 Global API Key。'),
+        'tokenMissingHint' => (string)__('库里还没有 Token。可粘贴 API Token，或切换鉴权方式为 Global API Key。'),
+        'apiKeySavedHint' => (string)__('库里已有 Global API Key（不回显）。请确认邮箱与 Key 同属一个 Cloudflare 账户。'),
+        'apiKeyMissingHint' => (string)__('库里还没有 Global API Key。请粘贴后保存再测。'),
     ],
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?></script>
 <template>Weline_Cdn::Backend/Account/form-script.phtml</template>

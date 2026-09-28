@@ -21,6 +21,15 @@ $escapeAttr = $escapeAttr ?? static function (mixed $value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 };
 $hasSavedToken = $isEdit && trim((string)($credentials['api_token'] ?? '')) !== '';
+$hasSavedApiKey = $isEdit && (
+    trim((string)($credentials['api_key'] ?? '')) !== ''
+    || trim((string)($credentials['global_api_key'] ?? '')) !== ''
+);
+$authMode = strtolower(trim((string)($credentials['auth_mode'] ?? '')));
+if ($authMode !== 'global' && $authMode !== 'token') {
+    $authMode = $hasSavedApiKey && !$hasSavedToken ? 'global' : 'token';
+}
+$cfEmail = trim((string)($credentials['email'] ?? ($credentials['api_email'] ?? '')));
 $accountId = $isEdit ? (int)$account->getData('account_id') : 0;
 ?>
 <input type="hidden" name="id" id="cdnAccountIdInput" value="<?= $accountId > 0 ? $escapeAttr((string)$accountId) : '' ?>">
@@ -74,41 +83,94 @@ $accountId = $isEdit ? (int)$account->getData('account_id') : 0;
         <div id="adapterPermissionsInfo" hidden>
             <div class="w-alert" data-tone="info">
                 <div class="w-alert__content">
-                    <strong class="w-alert__title"><?= __('Cloudflare API Token 权限要求：') ?></strong>
+                    <strong class="w-alert__title"><?= __('Cloudflare 鉴权说明：') ?></strong>
                     <ul style="--w-mb:0;--w-mt:var(--weline-space-2);">
-                        <li><code>Zone:Cache Purge:Edit</code> — <?= __('清理缓存；资源范围选择目标 Zone') ?></li>
-                        <li><code>Zone:Read</code> — <?= __('自动查找 Zone ID 时需要') ?></li>
-                        <li><code>Zone:Cache Rules:Read / Edit</code> — <?= __('仅管理缓存规则时需要') ?></li>
+                        <li><strong><?= __('API Token（推荐）') ?></strong> — <code>Zone:Cache Purge:Edit</code>、<code>Zone:Read</code>；管理规则另需 Cache Rules</li>
+                        <li><strong><?= __('Global API Key') ?></strong> — <?= __('需账户登录邮箱 + My Profile → API Keys 中的 Global API Key（权限更大，请谨慎保管）') ?></li>
                     </ul>
-                    <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" class="w-button" data-tone="primary" data-variant="outline" data-size="sm" style="--w-mt:var(--weline-space-2);">
-                        <?= __('前往Cloudflare创建Token') ?>
-                    </a>
+                    <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-2);--w-mt:var(--weline-space-2);">
+                        <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" class="w-button" data-tone="primary" data-variant="outline" data-size="sm">
+                            <?= __('前往创建 Token') ?>
+                        </a>
+                        <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
+                            <?= __('查看 API Keys') ?>
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
         <div id="credentialsConfig" class="w-stack" style="--w-gap:var(--weline-space-6);">
-            <div class="w-field" style="--w-mb:0;">
-                <label class="w-field__label" for="apiTokenInput"><?= __('API Token') ?> <?php if (!$isEdit): ?><span class="w-text" data-tone="danger">*</span><?php endif; ?></label>
+            <div class="w-field" style="--w-mb:0;" data-testid="cdn-auth-mode-field">
+                <label class="w-field__label" for="cfAuthModeSelect"><?= __('鉴权方式') ?></label>
                 <div class="w-field__control">
-                    <input
-                        type="password"
-                        name="credentials[api_token]"
-                        id="apiTokenInput"
-                        class="w-input"
-                        value=""
-                        autocomplete="new-password"
-                        <?= $isEdit ? '' : 'required' ?>
-                        placeholder="<?= $escapeAttr($isEdit ? __('重新粘贴 Token 才会覆盖；空白不改已存值') : __('请粘贴 Cloudflare API Token')) ?>"
-                        data-has-saved="<?= $hasSavedToken ? '1' : '0' ?>"
-                    >
+                    <select name="credentials[auth_mode]" id="cfAuthModeSelect" class="w-select">
+                        <option value="token" <?= $authMode !== 'global' ? 'selected' : '' ?>><?= __('API Token（推荐）') ?></option>
+                        <option value="global" <?= $authMode === 'global' ? 'selected' : '' ?>><?= __('Global API Key') ?></option>
+                    </select>
                 </div>
-                <?php if ($isEdit): ?>
-                    <small class="w-field__hint" data-testid="cdn-account-token-hint">
-                        <?= $hasSavedToken
-                            ? __('库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；若测连接报 Invalid API Token，请重新粘贴有效 API Token 后先保存再测（不要填 Global API Key）。')
-                            : __('库里还没有 Token。请粘贴 Cloudflare API Token 后保存，再测连接（不要填 Account ID 或 Global API Key 到 Token 框）。') ?>
-                    </small>
-                <?php endif; ?>
+            </div>
+            <div id="cfAuthTokenPanel" class="w-stack" style="--w-gap:var(--weline-space-6);" <?= $authMode === 'global' ? 'hidden' : '' ?>>
+                <div class="w-field" style="--w-mb:0;">
+                    <label class="w-field__label" for="apiTokenInput"><?= __('API Token') ?> <?php if (!$isEdit): ?><span class="w-text" data-tone="danger" id="apiTokenRequiredMark">*</span><?php endif; ?></label>
+                    <div class="w-field__control">
+                        <input
+                            type="password"
+                            name="credentials[api_token]"
+                            id="apiTokenInput"
+                            class="w-input"
+                            value=""
+                            autocomplete="new-password"
+                            <?= ($isEdit || $authMode === 'global') ? '' : 'required' ?>
+                            placeholder="<?= $escapeAttr($isEdit ? __('重新粘贴 Token 才会覆盖；空白不改已存值') : __('请粘贴 Cloudflare API Token')) ?>"
+                            data-has-saved="<?= $hasSavedToken ? '1' : '0' ?>"
+                        >
+                    </div>
+                    <?php if ($isEdit): ?>
+                        <small class="w-field__hint" data-testid="cdn-account-token-hint">
+                            <?= $hasSavedToken
+                                ? __('库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；测连失败时可改贴有效 Token，或切换到 Global API Key。')
+                                : __('库里还没有 Token。可粘贴 API Token，或切换鉴权方式为 Global API Key。') ?>
+                        </small>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div id="cfAuthGlobalPanel" class="w-stack" style="--w-gap:var(--weline-space-6);" <?= $authMode === 'global' ? '' : 'hidden' ?>>
+                <div class="w-field" style="--w-mb:0;">
+                    <label class="w-field__label" for="cfEmailInput"><?= __('Cloudflare 登录邮箱') ?> <span class="w-text" data-tone="danger" id="cfEmailRequiredMark" <?= $authMode === 'global' && !$isEdit ? '' : 'hidden' ?>>*</span></label>
+                    <div class="w-field__control">
+                        <input
+                            type="email"
+                            name="credentials[email]"
+                            id="cfEmailInput"
+                            class="w-input"
+                            value="<?= $escapeAttr($cfEmail) ?>"
+                            autocomplete="off"
+                            placeholder="<?= $escapeAttr(__('与 Global API Key 所属账户一致的登录邮箱')) ?>"
+                        >
+                    </div>
+                </div>
+                <div class="w-field" style="--w-mb:0;">
+                    <label class="w-field__label" for="cfApiKeyInput"><?= __('Global API Key') ?> <span class="w-text" data-tone="danger" id="cfApiKeyRequiredMark" <?= $authMode === 'global' && !$isEdit ? '' : 'hidden' ?>>*</span></label>
+                    <div class="w-field__control">
+                        <input
+                            type="password"
+                            name="credentials[api_key]"
+                            id="cfApiKeyInput"
+                            class="w-input"
+                            value=""
+                            autocomplete="new-password"
+                            placeholder="<?= $escapeAttr($isEdit ? __('重新粘贴才会覆盖；空白不改已存值') : __('请粘贴 Global API Key')) ?>"
+                            data-has-saved="<?= $hasSavedApiKey ? '1' : '0' ?>"
+                        >
+                    </div>
+                    <?php if ($isEdit): ?>
+                        <small class="w-field__hint" data-testid="cdn-account-apikey-hint">
+                            <?= $hasSavedApiKey
+                                ? __('库里已有 Global API Key（不回显）。请确认邮箱与 Key 同属一个 Cloudflare 账户。')
+                                : __('库里还没有 Global API Key。请粘贴后保存再测。') ?>
+                        </small>
+                    <?php endif; ?>
+                </div>
             </div>
             <div class="w-field" style="--w-mb:0;">
                 <label class="w-field__label" for="cfAccountIdInput"><?= __('Account ID') ?></label>
@@ -128,7 +190,7 @@ $accountId = $isEdit ? (int)$account->getData('account_id') : 0;
                 <div class="w-stack" style="--w-gap:var(--weline-space-1);">
                     <strong class="w-text" data-weight="strong"><?= __('连通性测试（不会保存）') ?></strong>
                     <p class="w-text" data-size="sm" data-tone="muted" style="--w-mb:0;">
-                        <?= __('临时 Zone ID 只给测试用，不会入库。若上方 Token 框有内容，测试用新值；否则用库里已存 Token。') ?>
+                        <?= __('临时 Zone ID 只给测试用，不会入库。鉴权字段若有新输入则用新值，否则用库里已存凭据。') ?>
                     </p>
                 </div>
                 <div class="w-field" style="--w-mb:0;" data-floating-label="0">

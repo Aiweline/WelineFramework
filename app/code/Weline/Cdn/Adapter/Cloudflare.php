@@ -32,10 +32,113 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
      */
     private const API_BASE_URL = 'https://api.cloudflare.com/client/v4';
 
+    public const AUTH_MODE_TOKEN = 'token';
+
+    public const AUTH_MODE_GLOBAL = 'global';
+
     /**
      * @var array<string, mixed>
      */
     private array $credentials = [];
+
+    /**
+     * 解析鉴权方式：显式 auth_mode 优先；否则有 Token 用 Token，有邮箱+Global Key 用 Global。
+     *
+     * @param array<string, mixed> $credentials
+     */
+    public static function resolveAuthMode(array $credentials): string
+    {
+        $mode = \strtolower(\trim((string)($credentials['auth_mode'] ?? '')));
+        if ($mode === self::AUTH_MODE_GLOBAL || $mode === self::AUTH_MODE_TOKEN) {
+            return $mode;
+        }
+        if (self::tokenValue($credentials) !== '') {
+            return self::AUTH_MODE_TOKEN;
+        }
+        if (self::emailValue($credentials) !== '' && self::globalKeyValue($credentials) !== '') {
+            return self::AUTH_MODE_GLOBAL;
+        }
+
+        return self::AUTH_MODE_TOKEN;
+    }
+
+    /**
+     * @param array<string, mixed> $credentials
+     */
+    public static function hasUsableCredentials(array $credentials): bool
+    {
+        if (self::resolveAuthMode($credentials) === self::AUTH_MODE_GLOBAL) {
+            return self::emailValue($credentials) !== '' && self::globalKeyValue($credentials) !== '';
+        }
+
+        return self::tokenValue($credentials) !== '';
+    }
+
+    /**
+     * @param array<string, mixed> $credentials
+     * @return list<string>
+     * @throws Core
+     */
+    public static function buildAuthHeaders(array $credentials): array
+    {
+        if (self::resolveAuthMode($credentials) === self::AUTH_MODE_GLOBAL) {
+            $email = self::emailValue($credentials);
+            $key = self::globalKeyValue($credentials);
+            if ($email === '' || $key === '') {
+                throw new Core(__('Cloudflare Global API Key 需同时填写登录邮箱与密钥'));
+            }
+
+            return [
+                'X-Auth-Email: ' . $email,
+                'X-Auth-Key: ' . $key,
+                'Content-Type: application/json',
+            ];
+        }
+
+        $token = self::tokenValue($credentials);
+        if ($token === '') {
+            throw new Core(__('Cloudflare API Token未配置'));
+        }
+
+        return [
+            'Authorization: Bearer ' . $token,
+            'Content-Type: application/json',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $credentials
+     */
+    public static function tokenValue(array $credentials): string
+    {
+        return \trim((string)($credentials['api_token'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $credentials
+     */
+    public static function emailValue(array $credentials): string
+    {
+        $email = \trim((string)($credentials['email'] ?? ''));
+        if ($email !== '') {
+            return $email;
+        }
+
+        return \trim((string)($credentials['api_email'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $credentials
+     */
+    public static function globalKeyValue(array $credentials): string
+    {
+        $key = \trim((string)($credentials['api_key'] ?? ''));
+        if ($key !== '') {
+            return $key;
+        }
+
+        return \trim((string)($credentials['global_api_key'] ?? ''));
+    }
 
     /**
      * @inheritDoc
@@ -159,34 +262,71 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
         return ['success' => true, 'message' => __('缓存清理成功'), 'purged_count' => $purged, 'requested_count' => count($items), 'purge_ids' => $ids];
     }
 
-    /** Read-only: token validity and optional zone access do not prove Cache Purge permission. */
+    /** Read-only: credential validity and optional zone access do not prove Cache Purge permission. */
     public function testConnection(array $credentials, string $zoneId = '', string $domain = ''): array
     {
+        $authMode = self::resolveAuthMode($credentials);
         try {
-            $response = $this->makeRequest('GET', self::API_BASE_URL . '/user/tokens/verify', [], $credentials);
+            if ($authMode === self::AUTH_MODE_GLOBAL) {
+                $response = $this->makeRequest('GET', self::API_BASE_URL . '/user', [], $credentials);
+            } else {
+                $response = $this->makeRequest('GET', self::API_BASE_URL . '/user/tokens/verify', [], $credentials);
+            }
         } catch (Core $e) {
             return [
                 'success' => false,
-                'message' => $this->mapTokenFailureMessage($e->getMessage()),
+                'message' => $this->mapAuthFailureMessage($e->getMessage(), $authMode),
                 'purge_verified' => false,
             ];
         }
-        if (($response['success'] ?? null) !== true || ($response['result']['status'] ?? '') !== 'active') {
-            $raw = (string)($response['errors'][0]['message'] ?? '');
-            return [
-                'success' => false,
-                'message' => $this->mapTokenFailureMessage($raw !== '' ? $raw : (string)__('Cloudflare Token 验证失败')),
+        if ($authMode === self::AUTH_MODE_GLOBAL) {
+            if (($response['success'] ?? null) !== true) {
+                $raw = (string)($response['errors'][0]['message'] ?? '');
+                return [
+                    'success' => false,
+                    'message' => $this->mapAuthFailureMessage(
+                        $raw !== '' ? $raw : (string)__('Cloudflare Global API Key 验证失败'),
+                        $authMode
+                    ),
+                    'purge_verified' => false,
+                ];
+            }
+            $result = [
+                'success' => true,
+                'message' => __('Global API Key 有效；清缓存权限需由实际清理结果确认'),
+                'auth_mode' => self::AUTH_MODE_GLOBAL,
+                'token_verified' => true,
+                'zone_verified' => false,
+                'purge_verified' => false,
+            ];
+        } else {
+            if (($response['success'] ?? null) !== true || ($response['result']['status'] ?? '') !== 'active') {
+                $raw = (string)($response['errors'][0]['message'] ?? '');
+                return [
+                    'success' => false,
+                    'message' => $this->mapAuthFailureMessage(
+                        $raw !== '' ? $raw : (string)__('Cloudflare Token 验证失败'),
+                        $authMode
+                    ),
+                    'purge_verified' => false,
+                ];
+            }
+            $result = [
+                'success' => true,
+                'message' => __('Token 有效；清缓存权限需由实际清理结果确认'),
+                'auth_mode' => self::AUTH_MODE_TOKEN,
+                'token_verified' => true,
+                'zone_verified' => false,
                 'purge_verified' => false,
             ];
         }
-        $result = ['success' => true, 'message' => __('Token 有效；清缓存权限需由实际清理结果确认'), 'token_verified' => true, 'zone_verified' => false, 'purge_verified' => false];
         if ($zoneId !== '') {
             try {
                 $zone = $this->makeRequest('GET', self::API_BASE_URL . '/zones/' . rawurlencode($zoneId), [], $credentials);
             } catch (Core $e) {
                 return [
                     'success' => false,
-                    'message' => $this->mapTokenFailureMessage($e->getMessage()),
+                    'message' => $this->mapAuthFailureMessage($e->getMessage(), $authMode),
                     'token_verified' => true,
                     'zone_verified' => false,
                     'purge_verified' => false,
@@ -201,23 +341,38 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
             $result['zone_verified'] = true;
             $result['zone_name'] = $zoneName;
             $result['zone_id'] = $zoneId;
-            $result['message'] = __('Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认');
+            $result['message'] = $authMode === self::AUTH_MODE_GLOBAL
+                ? __('Global API Key 有效且 Zone 可访问；清缓存权限需由实际清理结果确认')
+                : __('Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认');
         }
         return $result;
     }
 
     /**
-     * Cloudflare 原文 "Invalid API Token" 易被误读成 Account/Zone 填错；映射为可操作说明。
+     * Cloudflare 鉴权失败原文易被误读成 Account/Zone 填错；映射为可操作说明。
      */
-    private function mapTokenFailureMessage(string $raw): string
+    private function mapAuthFailureMessage(string $raw, string $authMode = self::AUTH_MODE_TOKEN): string
     {
         $normalized = \strtolower(\trim($raw));
+        if ($authMode === self::AUTH_MODE_GLOBAL) {
+            if ($normalized === ''
+                || \str_contains($normalized, 'authentication')
+                || \str_contains($normalized, 'invalid')
+                || \str_contains($normalized, 'unauthorized')
+            ) {
+                return (string)__(
+                    'Cloudflare 拒绝了当前 Global API Key（或邮箱不匹配）。请确认 My Profile → API Keys 中的 Global API Key，以及该 Key 所属账户的登录邮箱，保存后再测。'
+                );
+            }
+
+            return $raw;
+        }
         if ($normalized === ''
             || \str_contains($normalized, 'invalid api token')
             || \str_contains($normalized, 'invalid access token')
         ) {
             return (string)__(
-                'Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。'
+                'Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），或改用「Global API Key」鉴权方式并填写邮箱+密钥。'
             );
         }
 
@@ -685,19 +840,10 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
             $credentials = $this->credentials;
         }
 
-        // 验证凭据
-        $apiToken = $credentials['api_token'] ?? '';
-        if (empty($apiToken)) {
-            throw new Core(__('Cloudflare API Token未配置'));
-        }
+        $headers = self::buildAuthHeaders($credentials);
 
         // 初始化cURL
         $ch = curl_init($url);
-        
-        $headers = [
-            'Authorization: Bearer ' . $apiToken,
-            'Content-Type: application/json'
-        ];
 
         // 配置 SSL 选项
         $sslVerifyPeer = true;

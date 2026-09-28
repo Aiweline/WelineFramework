@@ -21,6 +21,7 @@
     var accountForm = document.getElementById('accountForm');
     var testButton = document.getElementById('testConnectionButton');
     var drawerTitle = document.getElementById('cdn-account-drawer-title');
+    var authModeSelect = document.getElementById('cfAuthModeSelect');
 
     function loadApi() {
         if (window.Weline && typeof window.Weline.load === 'function') {
@@ -39,6 +40,44 @@
         return Promise.resolve();
     }
 
+    function isCreateMode() {
+        return !(document.getElementById('cdnAccountIdInput') || {}).value;
+    }
+
+    function currentAuthMode() {
+        return authModeSelect && authModeSelect.value === 'global' ? 'global' : 'token';
+    }
+
+    function updateAuthModeUi() {
+        var mode = currentAuthMode();
+        var tokenPanel = document.getElementById('cfAuthTokenPanel');
+        var globalPanel = document.getElementById('cfAuthGlobalPanel');
+        var tokenInput = document.getElementById('apiTokenInput');
+        var emailInput = document.getElementById('cfEmailInput');
+        var keyInput = document.getElementById('cfApiKeyInput');
+        var tokenMark = document.getElementById('apiTokenRequiredMark');
+        var emailMark = document.getElementById('cfEmailRequiredMark');
+        var keyMark = document.getElementById('cfApiKeyRequiredMark');
+        var create = isCreateMode();
+        if (tokenPanel) tokenPanel.hidden = mode === 'global';
+        if (globalPanel) globalPanel.hidden = mode !== 'global';
+        if (tokenInput) {
+            tokenInput.required = create && mode === 'token'
+                && adapterSelect && adapterSelect.value === 'cloudflare';
+        }
+        if (emailInput) {
+            emailInput.required = create && mode === 'global'
+                && adapterSelect && adapterSelect.value === 'cloudflare';
+        }
+        if (keyInput) {
+            keyInput.required = create && mode === 'global'
+                && adapterSelect && adapterSelect.value === 'cloudflare';
+        }
+        if (tokenMark) tokenMark.hidden = !(create && mode === 'token');
+        if (emailMark) emailMark.hidden = !(create && mode === 'global');
+        if (keyMark) keyMark.hidden = !(create && mode === 'global');
+    }
+
     function collectSaveParams(form) {
         var formData = new FormData(form);
         var params = {};
@@ -53,6 +92,9 @@
             }
             params[key] = value;
         });
+        if (authModeSelect && authModeSelect.value) {
+            credentials.auth_mode = authModeSelect.value;
+        }
         if (Object.keys(credentials).length) {
             params.credentials = credentials;
         }
@@ -70,6 +112,15 @@
         return params;
     }
 
+    function hasCreateCredentials(params) {
+        var creds = params.credentials || {};
+        var mode = String(creds.auth_mode || currentAuthMode());
+        if (mode === 'global') {
+            return String(creds.email || '').trim() !== '' && String(creds.api_key || '').trim() !== '';
+        }
+        return String(creds.api_token || '').trim() !== '';
+    }
+
     function updatePermissionsInfo() {
         if (!adapterSelect || !permissionsInfo) return;
         var selectedOption = adapterSelect.options[adapterSelect.selectedIndex];
@@ -84,17 +135,16 @@
                 accountNameInput.value = adapterName;
             }
         }
-        var tokenInput = document.getElementById('apiTokenInput');
-        if (tokenInput) {
-            var isCreate = !(document.getElementById('cdnAccountIdInput') || {}).value;
-            var needToken = isCreate && selectedOption && selectedOption.value === 'cloudflare';
-            tokenInput.required = !!needToken;
-        }
+        updateAuthModeUi();
     }
 
     if (adapterSelect) {
         adapterSelect.addEventListener('change', updatePermissionsInfo);
         updatePermissionsInfo();
+    }
+    if (authModeSelect) {
+        authModeSelect.addEventListener('change', updateAuthModeUi);
+        updateAuthModeUi();
     }
 
     if (testButton) {
@@ -115,9 +165,19 @@
             }
             var tokenEl = document.getElementById('apiTokenInput');
             var accountIdEl = document.getElementById('cfAccountIdInput');
-            var credentials = {};
+            var emailEl = document.getElementById('cfEmailInput');
+            var keyEl = document.getElementById('cfApiKeyInput');
+            var credentials = {
+                auth_mode: currentAuthMode()
+            };
             if (tokenEl && String(tokenEl.value || '').trim() !== '') {
                 credentials.api_token = String(tokenEl.value).trim();
+            }
+            if (emailEl && String(emailEl.value || '').trim() !== '') {
+                credentials.email = String(emailEl.value).trim();
+            }
+            if (keyEl && String(keyEl.value || '').trim() !== '') {
+                credentials.api_key = String(keyEl.value).trim();
             }
             if (accountIdEl && String(accountIdEl.value || '').trim() !== '') {
                 credentials.account_id = String(accountIdEl.value).trim();
@@ -128,9 +188,7 @@
                     ? document.getElementById('connectionZoneId').value.trim()
                     : ''
             };
-            if (Object.keys(credentials).length) {
-                payload.credentials = credentials;
-            }
+            payload.credentials = credentials;
             loadApi()
                 .then(function(api) {
                     return api.resource('cdn').testConnection(payload);
@@ -184,12 +242,18 @@
         }
         var hint = document.querySelector('[data-testid="cdn-account-token-hint"]');
         if (hint) hint.hidden = true;
+        var keyHint = document.querySelector('[data-testid="cdn-account-apikey-hint"]');
+        if (keyHint) keyHint.hidden = true;
+        if (authModeSelect) authModeSelect.value = 'token';
         var tokenInput = document.getElementById('apiTokenInput');
         if (tokenInput) {
-            tokenInput.required = true;
             tokenInput.placeholder = messages.tokenRequired || tokenInput.placeholder;
             tokenInput.dataset.hasSaved = '0';
         }
+        var keyInput = document.getElementById('cfApiKeyInput');
+        if (keyInput) keyInput.dataset.hasSaved = '0';
+        var emailInput = document.getElementById('cfEmailInput');
+        if (emailInput) emailInput.value = '';
         if (drawerTitle) {
             drawerTitle.textContent = messages.addTitle || drawerTitle.textContent;
         }
@@ -211,11 +275,21 @@
         if (cfId) cfId.value = data.cf_account_id || '';
         var isDefault = document.getElementById('isDefault');
         if (isDefault) isDefault.checked = !!data.is_default;
+        var mode = data.auth_mode === 'global' || (data.has_api_key && !data.has_api_token) ? 'global' : 'token';
+        if (authModeSelect) authModeSelect.value = mode;
+        var emailInput = document.getElementById('cfEmailInput');
+        if (emailInput) emailInput.value = data.email || '';
         var tokenInput = document.getElementById('apiTokenInput');
         if (tokenInput) {
             tokenInput.value = '';
             tokenInput.required = false;
             tokenInput.dataset.hasSaved = data.has_api_token ? '1' : '0';
+        }
+        var keyInput = document.getElementById('cfApiKeyInput');
+        if (keyInput) {
+            keyInput.value = '';
+            keyInput.required = false;
+            keyInput.dataset.hasSaved = data.has_api_key ? '1' : '0';
         }
         if (testButton) {
             testButton.dataset.accountId = data.account_id ? String(data.account_id) : '';
@@ -228,6 +302,13 @@
             hint.textContent = data.has_api_token
                 ? (messages.tokenSavedHint || hint.textContent)
                 : (messages.tokenMissingHint || hint.textContent);
+        }
+        var keyHint = document.querySelector('[data-testid="cdn-account-apikey-hint"]');
+        if (keyHint) {
+            keyHint.hidden = false;
+            keyHint.textContent = data.has_api_key
+                ? (messages.apiKeySavedHint || keyHint.textContent)
+                : (messages.apiKeyMissingHint || keyHint.textContent);
         }
         if (drawerTitle) {
             drawerTitle.textContent = messages.editTitle || drawerTitle.textContent;
@@ -258,14 +339,11 @@
                 return;
             }
             var isCreate = !params.account_id;
-            var token = params.credentials && params.credentials.api_token
-                ? String(params.credentials.api_token).trim()
-                : '';
-            if (isCreate && params.adapter === 'cloudflare' && token === '') {
+            if (isCreate && params.adapter === 'cloudflare' && !hasCreateCredentials(params)) {
                 dialogRequest({
                     tone: 'warning',
                     title: messages.saveFailed || '',
-                    message: messages.tokenRequired || '',
+                    message: messages.credentialsRequired || messages.tokenRequired || '',
                     confirmLabel: messages.confirm || ''
                 });
                 return;

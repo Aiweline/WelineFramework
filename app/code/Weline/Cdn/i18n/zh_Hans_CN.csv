@@ -37,7 +37,7 @@ CDN账户列表,CDN账户列表
 "域名 ID（更新时必填）","域名 ID（更新时必填）"
 "网站 ID","网站 ID"
 域名名称,域名名称
-"CDN Zone ID","CDN 区域 ID"
+"CDN Zone ID","CDN Zone ID"
 "关联账户 ID","关联账户 ID"
 是否继承默认账户,是否继承默认账户
 预热间隔秒数,预热间隔秒数
@@ -71,7 +71,7 @@ CDN账户列表,CDN账户列表
 "解析 Scope 授权账户（脱敏，无 credentials）","解析 Scope 授权账户（脱敏，无 credentials）"
 "预览或同步当前企业邮箱域名的 Cloudflare DNS","预览或同步当前企业邮箱域名的 Cloudflare DNS"
 适配器代码和账户名称不能为空,适配器代码和账户名称不能为空
-"请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权","请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权"
+"请填写 API Token，或改用 Global API Key（邮箱+密钥）；也可使用 OAuth 一键授权","请填写 API Token，或改用 Global API Key（邮箱+密钥）；也可使用 OAuth 一键授权"
 "未找到 CDN 适配器：%{1}","未找到 CDN 适配器：%{1}"
 账户不存在：%{1},账户不存在：%{1}
 更新,更新
@@ -93,6 +93,7 @@ CDN账户列表,CDN账户列表
 "ensureZone 失败：%{1}","ensureZone 失败：%{1}"
 适配器不存在,适配器不存在
 账户凭证为空,账户凭证为空
+"凭证不完整：请粘贴 API Token，或填写 Global API Key 的邮箱与密钥后再测（先保存亦可）","凭证不完整：请粘贴 API Token，或填写 Global API Key 的邮箱与密钥后再测（先保存亦可）"
 "API Token 为空：请在上方粘贴 Token 后再测，或先保存有效 Token","API Token 为空：请在上方粘贴 Token 后再测，或先保存有效 Token"
 该适配器未提供连接验证,该适配器未提供连接验证
 "邮箱 DNS 参数格式无效。","邮箱 DNS 参数格式无效。"
@@ -153,12 +154,18 @@ URL列表不能为空,URL列表不能为空
 "CDN 攻击防护模式已开启: 域名=%{1}, CDN=%{2}","CDN 攻击防护模式已开启: 域名=%{1}, CDN=%{2}"
 "CDN 攻击防护模式开启失败: 域名=%{1}, 错误=%{2}","CDN 攻击防护模式开启失败: 域名=%{1}, 错误=%{2}"
 "CDN 攻击信号处理异常: %{1}","CDN 攻击信号处理异常: %{1}"
+"Cloudflare Global API Key 需同时填写登录邮箱与密钥","Cloudflare Global API Key 需同时填写登录邮箱与密钥"
+"Cloudflare API Token未配置","Cloudflare API Token未配置"
 清理列表不能为空,清理列表不能为空
+"Cloudflare Global API Key 验证失败","Cloudflare Global API Key 验证失败"
+"Global API Key 有效；清缓存权限需由实际清理结果确认","Global API Key 有效；清缓存权限需由实际清理结果确认"
 "Cloudflare Token 验证失败","Cloudflare Token 验证失败"
 "Token 有效；清缓存权限需由实际清理结果确认","Token 有效；清缓存权限需由实际清理结果确认"
 "Zone 不可访问或与域名不匹配","Zone 不可访问或与域名不匹配"
+"Global API Key 有效且 Zone 可访问；清缓存权限需由实际清理结果确认","Global API Key 有效且 Zone 可访问；清缓存权限需由实际清理结果确认"
 "Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认","Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认"
-"Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。","Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。"
+"Cloudflare 拒绝了当前 Global API Key（或邮箱不匹配）。请确认 My Profile → API Keys 中的 Global API Key，以及该 Key 所属账户的登录邮箱，保存后再测。","Cloudflare 拒绝了当前 Global API Key（或邮箱不匹配）。请确认 My Profile → API Keys 中的 Global API Key，以及该 Key 所属账户的登录邮箱，保存后再测。"
+"Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），或改用「Global API Key」鉴权方式并填写邮箱+密钥。","Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），或改用「Global API Key」鉴权方式并填写邮箱+密钥。"
 获取现有规则失败,获取现有规则失败
 "规则推送成功，共 %{count} 条","规则推送成功，共 %{count} 条"
 规则推送失败,规则推送失败
@@ -169,7 +176,6 @@ URL列表不能为空,URL列表不能为空
 "Cloudflare 攻击防护模式已关闭","Cloudflare 攻击防护模式已关闭"
 关闭攻击防护模式失败,关闭攻击防护模式失败
 "关闭攻击防护模式异常: %{1}","关闭攻击防护模式异常: %{1}"
-"Cloudflare API Token未配置","Cloudflare API 令牌未配置"
 "请求失败: %{1}","请求失败: %{1}"
 "HTTP错误: %{1}","HTTP错误: %{1}"
 "Cloudflare 返回无效响应","Cloudflare 返回无效响应"
@@ -234,7 +240,7 @@ URL列表不能为空,URL列表不能为空
 恶意特征,恶意特征
 恶意UA,恶意UA
 保护路径,保护路径
-Slowloris,斯洛洛里斯
+Slowloris,Slowloris
 未知,未知
 进行中,进行中
 已恢复,已恢复
@@ -498,29 +504,37 @@ JSON格式错误,JSON格式错误
 "网络请求失败：无法到达 query-bin。请刷新后台后重试；若持续失败请检查 CDN/WAF 是否拦截 /api/framework/query-bin。","网络请求失败：无法到达 query-bin。请刷新后台后重试；若持续失败请检查 CDN/WAF 是否拦截 /api/framework/query-bin。"
 请填写必填项,请填写必填项
 "请粘贴 API Token（新建 Cloudflare 账户必填）","请粘贴 API Token（新建 Cloudflare 账户必填）"
+"请填写 API Token，或改用 Global API Key（邮箱+密钥）","请填写 API Token，或改用 Global API Key（邮箱+密钥）"
 正在验证连接,正在验证连接
-"库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；若测连接报 Invalid API Token，请重新粘贴有效 API Token 后先保存再测（不要填 Global API Key）。","库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；若测连接报 Invalid API Token，请重新粘贴有效 API Token 后先保存再测（不要填 Global API Key）。"
-"库里还没有 Token。请粘贴后保存，再测连接。","库里还没有 Token。请粘贴后保存，再测连接。"
+"库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；测连失败时可改贴有效 Token，或切换到 Global API Key。","库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；测连失败时可改贴有效 Token，或切换到 Global API Key。"
+"库里还没有 Token。可粘贴 API Token，或切换鉴权方式为 Global API Key。","库里还没有 Token。可粘贴 API Token，或切换鉴权方式为 Global API Key。"
+"库里已有 Global API Key（不回显）。请确认邮箱与 Key 同属一个 Cloudflare 账户。","库里已有 Global API Key（不回显）。请确认邮箱与 Key 同属一个 Cloudflare 账户。"
+"库里还没有 Global API Key。请粘贴后保存再测。","库里还没有 Global API Key。请粘贴后保存再测。"
 确认组件不可用，请刷新页面后重试。,确认组件不可用，请刷新页面后重试。
 "回调 URL 已复制","回调 URL 已复制"
 复制失败，请手动选中黄框整段复制,复制失败，请手动选中黄框整段复制
 确定要设置此账户为默认账户吗？,确定要设置此账户为默认账户吗？
 请选择适配器,请选择适配器
 凭据配置,凭据配置
-"Cloudflare API Token 权限要求：","Cloudflare API Token 权限要求："
-"清理缓存；资源范围选择目标 Zone","清理缓存；资源范围选择目标 Zone"
-"自动查找 Zone ID 时需要","自动查找 Zone ID 时需要"
-仅管理缓存规则时需要,仅管理缓存规则时需要
-前往Cloudflare创建Token,前往Cloudflare创建Token
-"API Token",API令牌
+"Cloudflare 鉴权说明：","Cloudflare 鉴权说明："
+"API Token（推荐）","API Token（推荐）"
+"Global API Key","Global API Key"
+"需账户登录邮箱 + My Profile → API Keys 中的 Global API Key（权限更大，请谨慎保管）","需账户登录邮箱 + My Profile → API Keys 中的 Global API Key（权限更大，请谨慎保管）"
+"前往创建 Token","前往创建 Token"
+"查看 API Keys","查看 API Keys"
+鉴权方式,鉴权方式
+"API Token","API Token"
 "重新粘贴 Token 才会覆盖；空白不改已存值","重新粘贴 Token 才会覆盖；空白不改已存值"
 "请粘贴 Cloudflare API Token","请粘贴 Cloudflare API Token"
-"库里还没有 Token。请粘贴 Cloudflare API Token 后保存，再测连接（不要填 Account ID 或 Global API Key 到 Token 框）。","库里还没有 Token。请粘贴 Cloudflare API Token 后保存，再测连接（不要填 Account ID 或 Global API Key 到 Token 框）。"
-"Account ID",账户ID
-"请输入Account ID（Cloudflare）",请输入账户ID（Cloudflare）
+"Cloudflare 登录邮箱","Cloudflare 登录邮箱"
+"与 Global API Key 所属账户一致的登录邮箱","与 Global API Key 所属账户一致的登录邮箱"
+重新粘贴才会覆盖；空白不改已存值,重新粘贴才会覆盖；空白不改已存值
+"请粘贴 Global API Key","请粘贴 Global API Key"
+"Account ID","Account ID"
+"请输入Account ID（Cloudflare）","请输入Account ID（Cloudflare）"
 "Account ID 可选。真正的 Zone ID 在「域名管理」里配置并保存，不在本账户表单。","Account ID 可选。真正的 Zone ID 在「域名管理」里配置并保存，不在本账户表单。"
 连通性测试（不会保存）,连通性测试（不会保存）
-"临时 Zone ID 只给测试用，不会入库。若上方 Token 框有内容，测试用新值；否则用库里已存 Token。","临时 Zone ID 只给测试用，不会入库。若上方 Token 框有内容，测试用新值；否则用库里已存 Token。"
+"临时 Zone ID 只给测试用，不会入库。鉴权字段若有新输入则用新值，否则用库里已存凭据。","临时 Zone ID 只给测试用，不会入库。鉴权字段若有新输入则用新值，否则用库里已存凭据。"
 "临时 Zone ID","临时 Zone ID"
 "粘贴 Zone ID 后点测试","粘贴 Zone ID 后点测试"
 测试连接,测试连接
@@ -541,7 +555,7 @@ JSON格式错误,JSON格式错误
 暂无域名数据,暂无域名数据
 "点击「添加域名」绑定第一个站点与 CDN Zone","点击「添加域名」绑定第一个站点与 CDN Zone"
 网站名称,网站名称
-"Zone ID",区域ID
+"Zone ID","Zone ID"
 未知网站,未知网站
 清理缓存,清理缓存
 "确定要删除域名 ""%{1}"" 吗？此操作不可恢复！","确定要删除域名 ""%{1}"" 吗？此操作不可恢复！"
@@ -582,7 +596,7 @@ JSON格式错误,JSON格式错误
 已完成,已完成
 暂无预热数据,暂无预热数据
 "暂无待处理或已登记的预热 URL","暂无待处理或已登记的预热 URL"
-URL,网址
+URL,URL
 提供商,提供商
 进度,进度
 重试次数,重试次数
@@ -694,6 +708,17 @@ CDN域名创建成功：%{1},CDN域名创建成功：%{1}
 "规则导入成功，共导入 %{1} 条规则","规则导入成功，共导入 %{1} 条规则"
 规则已保存为域名覆盖规则,规则已保存为域名覆盖规则
 规则导入失败：%{1},规则导入失败：%{1}
+"请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权","请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权"
+"Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。","Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。"
+"库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；若测连接报 Invalid API Token，请重新粘贴有效 API Token 后先保存再测（不要填 Global API Key）。","库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；若测连接报 Invalid API Token，请重新粘贴有效 API Token 后先保存再测（不要填 Global API Key）。"
+"库里还没有 Token。请粘贴后保存，再测连接。","库里还没有 Token。请粘贴后保存，再测连接。"
+"Cloudflare API Token 权限要求：","Cloudflare API Token 权限要求："
+"清理缓存；资源范围选择目标 Zone","清理缓存；资源范围选择目标 Zone"
+"自动查找 Zone ID 时需要","自动查找 Zone ID 时需要"
+仅管理缓存规则时需要,仅管理缓存规则时需要
+前往Cloudflare创建Token,前往Cloudflare创建Token
+"库里还没有 Token。请粘贴 Cloudflare API Token 后保存，再测连接（不要填 Account ID 或 Global API Key 到 Token 框）。","库里还没有 Token。请粘贴 Cloudflare API Token 后保存，再测连接（不要填 Account ID 或 Global API Key 到 Token 框）。"
+"临时 Zone ID 只给测试用，不会入库。若上方 Token 框有内容，测试用新值；否则用库里已存 Token。","临时 Zone ID 只给测试用，不会入库。若上方 Token 框有内容，测试用新值；否则用库里已存 Token。"
 "库里已有 Token（安全起见不回显）。改 Token 请重新粘贴后点保存；只点「测试连接」会优先用本框新值，否则用已存 Token。","库里已有 Token（安全起见不回显）。改 Token 请重新粘贴后点保存；只点「测试连接」会优先用本框新值，否则用已存 Token。"
 "请把下方黄框里的回调 URL 整段原样粘进供应商 OAuth Client 的 Redirect URLs（可登记多条），保存后再点连接。","请把下方黄框里的回调 URL 整段原样粘进供应商 OAuth Client 的 Redirect URLs（可登记多条），保存后再点连接。"
 "%{1} 一键授权在这里","%{1} 一键授权在这里"
@@ -784,7 +809,7 @@ Tag清理失败,Tag清理失败
 读取Zone信息,读取Zone信息
 读取缓存规则,读取缓存规则
 编辑缓存规则,编辑缓存规则
-"Cloudflare Zone 创建需要 Account ID","Cloudflare 区域创建需要帐户 ID"
+"Cloudflare Zone 创建需要 Account ID","Cloudflare Zone 创建需要 Account ID"
 收集失败：%{1},收集失败：%{1}
 "缺少预热 URL 的站点上下文","缺少预热 URL 的站点上下文"
 "站点 %{1} 未找到 URL %{2} 对应的 CDN 域名","站点 %{1} 未找到 URL %{2} 对应的 CDN 域名"
@@ -820,30 +845,23 @@ CDN管理,CDN管理
 
 【创建后】
 把 Client ID / Client Secret 填回下方字段；Scopes 须与 Cloudflare Client 里勾选的权限一致（默认建议：account.read zone.read，并按 CDN 需要补 Cache Purge / Cache Rules 等）。
-完整说明见模块文档：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md","按 Cloudflare 表单从上到下照抄（与「响应类型」下拉里的 Token / ID Token / Code 一一对应）：
-
-① 响应类型 → 只勾 Code
-   · 下拉里有 Token、ID Token、Code：选 Code
-   · 不要选 Token，也不要选 ID Token（旧 Implicit 流程；Token 会进地址栏，且本系统用「授权码换 Token」，对不上）
-
-② 授权类型 → Authorization Code
-   · 需要长期免重新登录时，再额外勾选 Refresh Token
-
-③ 令牌身份验证方法 → Client Secret Post（或 Client Secret Basic）
-   · 这一项才是「不要选 None」——None 只给纯前端/PKCE；本系统要保存 Client Secret
-
-④ 重定向（回调）URL → https://本站域名/后台key/cdn/backend/oauth/callback
-   · 协议、域名、后台 key、路径必须与真实后台一致
-
-⑤ 客户端名称 → 任意，例如 Weline；客户端 URL 可选（站点首页）
-
-【常见错误】
-· 在「响应类型」里找 None：没有这项；None 在下一个字段「令牌身份验证方法」
-· 回调 URL 少写后台 key、用了 http、或域名与访问后台不一致：授权后会回调失败
-
-【创建后】
-把 Client ID / Client Secret 填回下方字段；Scopes 须与 Cloudflare Client 里勾选的权限一致（默认建议：account.read zone.read，并按 CDN 需要补 Cache Purge / Cache Rules 等）。
-完整说明见模块文档：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"
+完整说明见模块文档：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md""""""""""""""""""""""""""""""","完整说明见模块文档：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"""""""""""""""
+"① 响应类型 → 只勾 Code","① 响应类型 → 只勾 Code"
+"· 下拉里有 Token、ID Token、Code：选 Code","· 下拉里有 Token、ID Token、Code：选 Code"
+"· 不要选 Token，也不要选 ID Token（旧 Implicit 流程；Token 会进地址栏，且本系统用「授权码换 Token」，对不上）","· 不要选 Token，也不要选 ID Token（旧 Implicit 流程；Token 会进地址栏，且本系统用「授权码换 Token」，对不上）"
+"② 授权类型 → Authorization Code","② 授权类型 → Authorization Code"
+"· 需要长期免重新登录时，再额外勾选 Refresh Token","· 需要长期免重新登录时，再额外勾选 Refresh Token"
+"③ 令牌身份验证方法 → Client Secret Post（或 Client Secret Basic）","③ 令牌身份验证方法 → Client Secret Post（或 Client Secret Basic）"
+"· 这一项才是「不要选 None」——None 只给纯前端/PKCE；本系统要保存 Client Secret","· 这一项才是「不要选 None」——None 只给纯前端/PKCE；本系统要保存 Client Secret"
+"④ 重定向（回调）URL → https://本站域名/后台key/cdn/backend/oauth/callback","④ 重定向（回调）URL → https://本站域名/后台key/cdn/backend/oauth/callback"
+"· 协议、域名、后台 key、路径必须与真实后台一致","· 协议、域名、后台 key、路径必须与真实后台一致"
+"⑤ 客户端名称 → 任意，例如 Weline；客户端 URL 可选（站点首页）","⑤ 客户端名称 → 任意，例如 Weline；客户端 URL 可选（站点首页）"
+【常见错误】,【常见错误】
+"· 在「响应类型」里找 None：没有这项；None 在下一个字段「令牌身份验证方法」","· 在「响应类型」里找 None：没有这项；None 在下一个字段「令牌身份验证方法」"
+"· 回调 URL 少写后台 key、用了 http、或域名与访问后台不一致：授权后会回调失败","· 回调 URL 少写后台 key、用了 http、或域名与访问后台不一致：授权后会回调失败"
+【创建后】,【创建后】
+"把 Client ID / Client Secret 填回下方字段；Scopes 须与 Cloudflare Client 里勾选的权限一致（默认建议：account.read zone.read，并按 CDN 需要补 Cache Purge / Cache Rules 等）。","把 Client ID / Client Secret 填回下方字段；Scopes 须与 Cloudflare Client 里勾选的权限一致（默认建议：account.read zone.read，并按 CDN 需要补 Cache Purge / Cache Rules 等）。"
+"完整说明见模块文档：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md""","完整说明见模块文档：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"""
 "创建 OAuth Client 文档","创建 OAuth Client 文档"
 打开官方文档,打开官方文档
 "响应类型选 Code。下一步「选择权限范围」：展开「DNS 和区域」，勾 Zone Read + DNS Edit；搜索并勾 offline_access。CDN 再补 Cache Purge。","响应类型选 Code。下一步「选择权限范围」：展开「DNS 和区域」，勾 Zone Read + DNS Edit；搜索并勾 offline_access。CDN 再补 Cache Purge。"
@@ -882,41 +900,31 @@ CDN 清缓存 / 推规则时再补（强烈建议）：
 把 Client ID / Client Secret 填回下方字段；「OAuth Scopes」填：
 zone.read dns.write offline_access
 （若勾了 Cache Purge / Cache Rules，把控制台显示的对应 scope 名也空格追加进去，须与 Cloudflare 勾选项一致。）
-完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md","按 Cloudflare 向导从上到下照抄：
-
-【第 1 步 · 配置 OAuth 客户端】
-① 响应类型 → 只勾 Code（不要 Token / ID Token）
-② 授权类型 → Authorization Code（需要长期免登录再勾 Refresh Token）
-③ 令牌身份验证方法 → Client Secret Post（或 Basic；不要 None）
-④ 重定向（回调）URL → https://本站域名/后台key/cdn/backend/oauth/callback
-⑤ 客户端名称 → 任意，例如 Weline
-
-【第 2 步 · 选择权限范围】（你现在这屏）
-搜索框可搜英文权限名。最少勾下面 3 个（Weline 硬性校验）：
-
-展开「DNS 和区域」：
-· Zone Read / 区域读取 → 对应 zone.read
-· DNS Edit（或 DNS Write）/ DNS 编辑 → 对应 dns.write
-
-再用搜索框搜 offline：
-· offline_access（离线访问 / Refresh）→ 必须勾；否则授权后无法自动续期
-
-CDN 清缓存 / 推规则时再补（强烈建议）：
-· 仍在「DNS 和区域」或搜 Cache Purge → Cache Purge / 缓存清理
-· 展开「规则和配置」→ Cache Rules Edit / 缓存规则编辑（要读写规则才勾）
-· 若列表里有 Account Read / 账户读取 → 也可勾（列账户更稳）
-
-不要勾（本站用不到）：
-· 开发人员平台、AI 和机器学习、应用安全性、Cloudflare One / Zero Trust、分析和日志
-
-【第 3 步 · Choose optional scopes】
-上面勾过的项全部保持 Required（默认即可），不要改成可选。Weline 请求授权时会带上这些 scope。
-
-【创建后】
-把 Client ID / Client Secret 填回下方字段；「OAuth Scopes」填：
-zone.read dns.write offline_access
-（若勾了 Cache Purge / Cache Rules，把控制台显示的对应 scope 名也空格追加进去，须与 Cloudflare 勾选项一致。）
-完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"
+完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md""""""""""""""""""""""""""""""","完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"""""""""""""""
+"【第 1 步 · 配置 OAuth 客户端】","【第 1 步 · 配置 OAuth 客户端】"
+"① 响应类型 → 只勾 Code（不要 Token / ID Token）","① 响应类型 → 只勾 Code（不要 Token / ID Token）"
+"② 授权类型 → Authorization Code（需要长期免登录再勾 Refresh Token）","② 授权类型 → Authorization Code（需要长期免登录再勾 Refresh Token）"
+"③ 令牌身份验证方法 → Client Secret Post（或 Basic；不要 None）","③ 令牌身份验证方法 → Client Secret Post（或 Basic；不要 None）"
+"⑤ 客户端名称 → 任意，例如 Weline","⑤ 客户端名称 → 任意，例如 Weline"
+"【第 2 步 · 选择权限范围】（你现在这屏）","【第 2 步 · 选择权限范围】（你现在这屏）"
+"搜索框可搜英文权限名。最少勾下面 3 个（Weline 硬性校验）：","搜索框可搜英文权限名。最少勾下面 3 个（Weline 硬性校验）："
+"展开「DNS 和区域」：","展开「DNS 和区域」："
+"· Zone Read / 区域读取 → 对应 zone.read","· Zone Read / 区域读取 → 对应 zone.read"
+"· DNS Edit（或 DNS Write）/ DNS 编辑 → 对应 dns.write","· DNS Edit（或 DNS Write）/ DNS 编辑 → 对应 dns.write"
+"再用搜索框搜 offline：","再用搜索框搜 offline："
+"· offline_access（离线访问 / Refresh）→ 必须勾；否则授权后无法自动续期","· offline_access（离线访问 / Refresh）→ 必须勾；否则授权后无法自动续期"
+"CDN 清缓存 / 推规则时再补（强烈建议）：","CDN 清缓存 / 推规则时再补（强烈建议）："
+"· 仍在「DNS 和区域」或搜 Cache Purge → Cache Purge / 缓存清理","· 仍在「DNS 和区域」或搜 Cache Purge → Cache Purge / 缓存清理"
+"· 展开「规则和配置」→ Cache Rules Edit / 缓存规则编辑（要读写规则才勾）","· 展开「规则和配置」→ Cache Rules Edit / 缓存规则编辑（要读写规则才勾）"
+"· 若列表里有 Account Read / 账户读取 → 也可勾（列账户更稳）","· 若列表里有 Account Read / 账户读取 → 也可勾（列账户更稳）"
+不要勾（本站用不到）：,不要勾（本站用不到）：
+"· 开发人员平台、AI 和机器学习、应用安全性、Cloudflare One / Zero Trust、分析和日志","· 开发人员平台、AI 和机器学习、应用安全性、Cloudflare One / Zero Trust、分析和日志"
+"【第 3 步 · Choose optional scopes】","【第 3 步 · Choose optional scopes】"
+"上面勾过的项全部保持 Required（默认即可），不要改成可选。Weline 请求授权时会带上这些 scope。","上面勾过的项全部保持 Required（默认即可），不要改成可选。Weline 请求授权时会带上这些 scope。"
+"把 Client ID / Client Secret 填回下方字段；「OAuth Scopes」填：","把 Client ID / Client Secret 填回下方字段；「OAuth Scopes」填："
+"zone.read dns.write offline_access","zone.read dns.write offline_access"
+"（若勾了 Cache Purge / Cache Rules，把控制台显示的对应 scope 名也空格追加进去，须与 Cloudflare 勾选项一致。）","（若勾了 Cache Purge / Cache Rules，把控制台显示的对应 scope 名也空格追加进去，须与 Cloudflare 勾选项一致。）"
+"完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md""","完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"""
 "权限默认填：zone.read dns.write offline_access cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、offline_access、Cache Purge、Cache Settings Write。","权限默认填：zone.read dns.write offline_access cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、offline_access、Cache Purge、Cache Settings Write。"
 "默认即含清缓存与缓存规则。原样：zone.read dns.write offline_access cache.purge cache-settings.write；须与 Cloudflare OAuth Client 勾选一致。","默认即含清缓存与缓存规则。原样：zone.read dns.write offline_access cache.purge cache-settings.write；须与 Cloudflare OAuth Client 勾选一致。"
 "按 Cloudflare 向导从上到下照抄：
@@ -950,38 +958,22 @@ zone.read dns.write offline_access
 【创建后 · OAuth Scopes 字段原样填】
 zone.read dns.write offline_access cache.purge cache-settings.write
 （须与 Cloudflare Client 勾选项一致。若控制台对缓存规则显示的 id 是 cache-rules.write，用它替换 cache-settings.write。）
-完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md","按 Cloudflare 向导从上到下照抄：
-
-【第 1 步 · 配置 OAuth 客户端】
-① 响应类型 → 只勾 Code（不要 Token / ID Token）
-② 授权类型 → Authorization Code（需要长期免登录再勾 Refresh Token）
-③ 令牌身份验证方法 → Client Secret Post（或 Basic；不要 None）
-④ 重定向（回调）URL → https://本站域名/后台key/cdn/backend/oauth/callback
-⑤ 客户端名称 → 任意，例如 Weline
-
-【第 2 步 · 选择权限范围】
-默认就要含「清缓存 + 缓存规则」，不是可选项。搜索框可搜英文名，全部勾上并保持 Required：
-
-展开「DNS 和区域」或顶部搜索：
-· Zone Read → zone.read
-· DNS Write（DNS Edit）→ dns.write
-· Cache Purge（缓存清理）→ cache.purge
-
-搜索 Cache Settings / Cache Rules：
-· Cache Settings Write（若列表写 Cache Rules Edit，也勾）→ cache-settings.write
-
-再搜 offline：
-· offline_access → 必须勾（Refresh Token）
-
-不要勾：开发人员平台、AI、应用安全性、Zero Trust、分析和日志
-
-【第 3 步 · Choose optional scopes】
-上面勾过的项全部保持 Required，不要改成可选。
-
-【创建后 · OAuth Scopes 字段原样填】
-zone.read dns.write offline_access cache.purge cache-settings.write
-（须与 Cloudflare Client 勾选项一致。若控制台对缓存规则显示的 id 是 cache-rules.write，用它替换 cache-settings.write。）
-完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"
+完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md""""""""""""""""""""""""""""""","完整说明见：app/code/Weline/Cdn/doc/Cloudflare-OAuth-Client-Setup.md"""""""""""""""
+"【第 2 步 · 选择权限范围】","【第 2 步 · 选择权限范围】"
+"默认就要含「清缓存 + 缓存规则」，不是可选项。搜索框可搜英文名，全部勾上并保持 Required：","默认就要含「清缓存 + 缓存规则」，不是可选项。搜索框可搜英文名，全部勾上并保持 Required："
+"展开「DNS 和区域」或顶部搜索：","展开「DNS 和区域」或顶部搜索："
+"· Zone Read → zone.read","· Zone Read → zone.read"
+"· DNS Write（DNS Edit）→ dns.write","· DNS Write（DNS Edit）→ dns.write"
+"· Cache Purge（缓存清理）→ cache.purge","· Cache Purge（缓存清理）→ cache.purge"
+"搜索 Cache Settings / Cache Rules：","搜索 Cache Settings / Cache Rules："
+"· Cache Settings Write（若列表写 Cache Rules Edit，也勾）→ cache-settings.write","· Cache Settings Write（若列表写 Cache Rules Edit，也勾）→ cache-settings.write"
+"再搜 offline：","再搜 offline："
+"· offline_access → 必须勾（Refresh Token）","· offline_access → 必须勾（Refresh Token）"
+"不要勾：开发人员平台、AI、应用安全性、Zero Trust、分析和日志","不要勾：开发人员平台、AI、应用安全性、Zero Trust、分析和日志"
+"上面勾过的项全部保持 Required，不要改成可选。","上面勾过的项全部保持 Required，不要改成可选。"
+"【创建后 · OAuth Scopes 字段原样填】","【创建后 · OAuth Scopes 字段原样填】"
+"zone.read dns.write offline_access cache.purge cache-settings.write","zone.read dns.write offline_access cache.purge cache-settings.write"
+"（须与 Cloudflare Client 勾选项一致。若控制台对缓存规则显示的 id 是 cache-rules.write，用它替换 cache-settings.write。）","（须与 Cloudflare Client 勾选项一致。若控制台对缓存规则显示的 id 是 cache-rules.write，用它替换 cache-settings.write。）"
 "权限默认填：zone.read dns.write cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、Cache Purge、Cache Settings Write；Refresh Token 靠授权类型勾选，不要找 offline_access 勾选项。","权限默认填：zone.read dns.write cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、Cache Purge、Cache Settings Write；Refresh Token 靠授权类型勾选，不要找 offline_access 勾选项。"
 "API scopes 原样：zone.read dns.write cache.purge cache-settings.write。勿填 offline_access（由 Refresh Token grant 自动处理）。","API scopes 原样：zone.read dns.write cache.purge cache-settings.write。勿填 offline_access（由 Refresh Token grant 自动处理）。"
 选择网站、店铺或渠道,选择网站、店铺或渠道
