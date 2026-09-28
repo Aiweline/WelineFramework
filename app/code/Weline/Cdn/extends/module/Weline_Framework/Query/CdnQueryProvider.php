@@ -589,12 +589,14 @@ class CdnQueryProvider implements QueryProviderInterface
         }
 
         if ($accountId <= 0 && $adapter === 'cloudflare') {
-            $token = '';
-            if (isset($params['credentials']) && is_array($params['credentials'])) {
-                $token = trim((string)($params['credentials']['api_token'] ?? ''));
-            }
-            if ($token === '') {
-                return ['success' => false, 'message' => (string)__('请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权')];
+            $creds = (isset($params['credentials']) && is_array($params['credentials']))
+                ? $params['credentials']
+                : [];
+            if (!\Weline\Cdn\Adapter\Cloudflare::hasUsableCredentials($creds)) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('请填写 API Token，或改用 Global API Key（邮箱+密钥）；也可使用 OAuth 一键授权'),
+                ];
             }
         }
 
@@ -826,7 +828,15 @@ class CdnQueryProvider implements QueryProviderInterface
                 return ['success' => false, 'message' => (string)__('账户凭证为空')];
             }
 
-            if (trim((string)($credentials['api_token'] ?? '')) === '') {
+            if (!\Weline\Cdn\Adapter\Cloudflare::hasUsableCredentials($credentials)
+                && $adapterCode === 'cloudflare'
+            ) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('凭证不完整：请粘贴 API Token，或填写 Global API Key 的邮箱与密钥后再测（先保存亦可）'),
+                ];
+            }
+            if ($adapterCode !== 'cloudflare' && trim((string)($credentials['api_token'] ?? '')) === '') {
                 return ['success' => false, 'message' => (string)__('API Token 为空：请在上方粘贴 Token 后再测，或先保存有效 Token')];
             }
 

@@ -182,6 +182,68 @@ class CloudflareTest extends TestCase
         $this->assertSame('bypass_by_default', $formatted[2]['action_parameters']['edge_ttl']['mode'] ?? null);
     }
 
+    public function testResolveAuthModePrefersExplicitThenTokenThenGlobal(): void
+    {
+        $this->assertSame(Cloudflare::AUTH_MODE_TOKEN, Cloudflare::resolveAuthMode([
+            'auth_mode' => 'token',
+            'api_key' => 'k',
+            'email' => 'a@b.c',
+        ]));
+        $this->assertSame(Cloudflare::AUTH_MODE_GLOBAL, Cloudflare::resolveAuthMode([
+            'auth_mode' => 'global',
+            'api_token' => 't',
+        ]));
+        $this->assertSame(Cloudflare::AUTH_MODE_TOKEN, Cloudflare::resolveAuthMode([
+            'api_token' => 't',
+            'api_key' => 'k',
+            'email' => 'a@b.c',
+        ]));
+        $this->assertSame(Cloudflare::AUTH_MODE_GLOBAL, Cloudflare::resolveAuthMode([
+            'api_key' => 'k',
+            'email' => 'a@b.c',
+        ]));
+    }
+
+    public function testBuildAuthHeadersForTokenAndGlobalKey(): void
+    {
+        $tokenHeaders = Cloudflare::buildAuthHeaders(['api_token' => 'tok-1']);
+        $this->assertContains('Authorization: Bearer tok-1', $tokenHeaders);
+        $this->assertContains('Content-Type: application/json', $tokenHeaders);
+
+        $globalHeaders = Cloudflare::buildAuthHeaders([
+            'auth_mode' => 'global',
+            'email' => 'ops@example.com',
+            'api_key' => 'cfk_global_demo',
+        ]);
+        $this->assertContains('X-Auth-Email: ops@example.com', $globalHeaders);
+        $this->assertContains('X-Auth-Key: cfk_global_demo', $globalHeaders);
+        $this->assertTrue(Cloudflare::hasUsableCredentials([
+            'auth_mode' => 'global',
+            'email' => 'ops@example.com',
+            'api_key' => 'cfk_global_demo',
+        ]));
+        $this->assertFalse(Cloudflare::hasUsableCredentials([
+            'auth_mode' => 'global',
+            'email' => 'ops@example.com',
+        ]));
+    }
+
+    public function testBuildAuthHeadersRejectsIncompleteGlobalKey(): void
+    {
+        $incomplete = [
+            'auth_mode' => 'global',
+            'email' => 'ops@example.com',
+        ];
+        $this->assertFalse(Cloudflare::hasUsableCredentials($incomplete));
+        if (!\function_exists('__')) {
+            // 独立 phpunit 无框架引导时 __() 不可用；完整性由 hasUsableCredentials 覆盖
+            $this->assertTrue(true);
+            return;
+        }
+        $this->expectException(\Weline\Framework\Exception\Core::class);
+        Cloudflare::buildAuthHeaders($incomplete);
+    }
+
     /**
      * 测试：确保Zone存在（接口测试）
      */

@@ -93,9 +93,14 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
         'networkFailed' => (string)__('网络请求失败：无法到达 query-bin。请刷新后台后重试；若持续失败请检查 CDN/WAF 是否拦截 /api/framework/query-bin。'),
         'required' => (string)__('请填写必填项'),
         'tokenRequired' => (string)__('请粘贴 API Token（新建 Cloudflare 账户必填）'),
+        'credentialsRequired' => (string)__('请填写 API Token，或改用 Global API Key（邮箱+密钥）'),
         'confirm' => (string)__('确定'),
         'success' => (string)__('成功'),
         'testing' => (string)__('正在验证连接'),
+        'tokenSavedHint' => (string)__('库里已有 Token（安全起见不回显）。Account ID / Zone ID 不能代替 Token；测连失败时可改贴有效 Token，或切换到 Global API Key。'),
+        'tokenMissingHint' => (string)__('库里还没有 Token。可粘贴 API Token，或切换鉴权方式为 Global API Key。'),
+        'apiKeySavedHint' => (string)__('库里已有 Global API Key（不回显）。请确认邮箱与 Key 同属一个 Cloudflare 账户。'),
+        'apiKeyMissingHint' => (string)__('库里还没有 Global API Key。请粘贴后保存再测。'),
     ],
 ], $jsonFlags) ?></script>
 
