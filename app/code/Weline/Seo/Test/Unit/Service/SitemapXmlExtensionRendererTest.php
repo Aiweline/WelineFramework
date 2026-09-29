@@ -51,4 +51,40 @@ class SitemapXmlExtensionRendererTest extends TestCase
         self::assertStringContainsString('<news:language>zh-cn</news:language>', $extensions);
         self::assertStringContainsString('<xhtml:link rel="alternate" hreflang="en-US" href="https://shop.test/en/news/launch" />', $extensions);
     }
+
+    public function testRelativeImageLocIsAbsolutizedAgainstPageUrl(): void
+    {
+        $renderer = new SitemapXmlExtensionRenderer();
+        $url = [
+            SitemapUrl::schema_fields_URL => 'https://www.changanhanfu.com/blog/hanfu-guide',
+            SitemapUrl::schema_fields_METADATA => [
+                'images' => [
+                    [
+                        'loc' => '/pub/media/blog/hanfu/r2/covers/core/aliexpress-hanfu-europe-sea-57bdc2ba575e.webp',
+                        'title' => 'Hanfu Guide',
+                    ],
+                ],
+            ],
+        ];
+
+        $extensions = $renderer->renderUrlExtensions($url);
+
+        self::assertStringContainsString(
+            '<image:loc>https://www.changanhanfu.com/pub/media/blog/hanfu/r2/covers/core/aliexpress-hanfu-europe-sea-57bdc2ba575e.webp</image:loc>',
+            $extensions,
+        );
+        self::assertStringNotContainsString('<image:loc>/pub/media/', $extensions);
+    }
+
+    public function testRelativeImageLocWithoutPageOriginIsOmitted(): void
+    {
+        $renderer = new SitemapXmlExtensionRenderer();
+        $extensions = $renderer->renderUrlExtensions([
+            SitemapUrl::schema_fields_METADATA => [
+                'images' => [['loc' => '/pub/media/blog/cover.webp']],
+            ],
+        ]);
+
+        self::assertSame('', $extensions);
+    }
 }

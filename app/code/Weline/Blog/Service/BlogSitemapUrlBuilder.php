@@ -150,9 +150,46 @@ final class BlogSitemapUrlBuilder
                 'content_kind' => $article->contentKind,
                 'title' => $article->title,
                 'locale' => $locale,
-                'images' => $article->coverImage ? [['loc' => $article->coverImage, 'title' => $article->title]] : [],
+                'images' => $this->coverImages($article->coverImage, $baseUrl, $article->title),
             ],
         ];
+    }
+
+    /**
+     * @return list<array{loc:string,title:string}>
+     */
+    private function coverImages(?string $coverImage, string $baseUrl, string $title): array
+    {
+        $loc = $this->absoluteMediaUrl((string)$coverImage, $baseUrl);
+        if ($loc === '') {
+            return [];
+        }
+
+        return [['loc' => $loc, 'title' => $title]];
+    }
+
+    private function absoluteMediaUrl(string $path, string $baseUrl): string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+        if (preg_match('#^https?://#i', $path) === 1) {
+            return $path;
+        }
+        if (str_starts_with($path, '//')) {
+            return 'https:' . $path;
+        }
+        $baseUrl = rtrim(trim($baseUrl), '/');
+        if ($baseUrl === '' || preg_match('#^https?://#i', $baseUrl) !== 1) {
+            // Without a public origin, omit image:loc (relative paths fail GSC).
+            return '';
+        }
+        if (!str_starts_with($path, '/')) {
+            $path = '/' . ltrim($path, '/');
+        }
+
+        return $baseUrl . $path;
     }
 
     private function articleUrlKey(BlogArticle $article): string
