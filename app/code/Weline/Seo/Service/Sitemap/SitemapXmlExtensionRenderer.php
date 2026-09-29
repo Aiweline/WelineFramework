@@ -37,17 +37,18 @@ class SitemapXmlExtensionRenderer
     public function renderUrlExtensions(array $url): string
     {
         $metadata = $this->metadata($url);
+        $pageUrl = $this->pageUrl($url);
         $xml = '';
         foreach ($this->list($metadata['images'] ?? $metadata['image'] ?? []) as $image) {
-            $xml .= $this->renderImage($image);
+            $xml .= $this->renderImage($image, $pageUrl);
         }
         foreach ($this->list($metadata['videos'] ?? $metadata['video'] ?? []) as $video) {
-            $xml .= $this->renderVideo($video);
+            $xml .= $this->renderVideo($video, $pageUrl);
         }
         if (isset($metadata['news']) && is_array($metadata['news'])) {
             $xml .= $this->renderNews($metadata['news']);
         }
-        $xml .= $this->renderAlternates($metadata['alternates'] ?? $metadata['hreflang'] ?? []);
+        $xml .= $this->renderAlternates($metadata['alternates'] ?? $metadata['hreflang'] ?? [], $pageUrl);
 
         return $xml;
     }
@@ -102,10 +103,13 @@ class SitemapXmlExtensionRenderer
         return $metadata;
     }
 
-    private function renderImage(mixed $image): string
+    private function renderImage(mixed $image, string $pageUrl = ''): string
     {
         $data = is_array($image) ? $image : ['loc' => $image];
-        $loc = trim((string) ($data['loc'] ?? $data['url'] ?? $data['src'] ?? ''));
+        $loc = $this->absoluteUrl(
+            trim((string) ($data['loc'] ?? $data['url'] ?? $data['src'] ?? '')),
+            $pageUrl,
+        );
         if ($loc === '') {
             return '';
         }
@@ -121,12 +125,15 @@ class SitemapXmlExtensionRenderer
         return $xml;
     }
 
-    private function renderVideo(mixed $video): string
+    private function renderVideo(mixed $video, string $pageUrl = ''): string
     {
         if (!is_array($video)) {
             return '';
         }
-        $thumbnail = trim((string) ($video['thumbnail_loc'] ?? $video['thumbnail'] ?? $video['image'] ?? ''));
+        $thumbnail = $this->absoluteUrl(
+            trim((string) ($video['thumbnail_loc'] ?? $video['thumbnail'] ?? $video['image'] ?? '')),
+            $pageUrl,
+        );
         $title = trim((string) ($video['title'] ?? ''));
         $description = trim((string) ($video['description'] ?? ''));
         if ($thumbnail === '' || $title === '' || $description === '') {
@@ -139,7 +146,14 @@ class SitemapXmlExtensionRenderer
         foreach (['content_loc', 'player_loc', 'duration', 'publication_date'] as $tag) {
             $value = trim((string) ($video[$tag] ?? ''));
             if ($value !== '') {
-                $value = $tag === 'publication_date' ? $this->formatDateIfNeeded($value) : $value;
+                if ($tag === 'publication_date') {
+                    $value = $this->formatDateIfNeeded($value);
+                } elseif ($tag === 'content_loc' || $tag === 'player_loc') {
+                    $value = $this->absoluteUrl($value, $pageUrl);
+                    if ($value === '') {
+                        continue;
+                    }
+                }
                 $xml .= '      <video:' . $tag . '>' . $this->escape($value) . '</video:' . $tag . ">\n";
             }
         }
@@ -172,10 +186,10 @@ class SitemapXmlExtensionRenderer
         return $xml;
     }
 
-    private function renderAlternates(mixed $alternates): string
+    private function renderAlternates(mixed $alternates, string $pageUrl = ''): string
     {
         $xml = '';
-        foreach ($this->alternates($alternates) as $alternate) {
+        foreach ($this->alternates($alternates, $pageUrl) as $alternate) {
             $xml .= '    <xhtml:link rel="alternate" hreflang="' . $this->escape($alternate['hreflang']) . '" href="' . $this->escape($alternate['href']) . "\" />\n";
         }
         return $xml;
@@ -184,7 +198,7 @@ class SitemapXmlExtensionRenderer
     /**
      * @return array<int, array{hreflang:string,href:string}>
      */
-    private function alternates(mixed $alternates): array
+    private function alternates(mixed $alternates, string $pageUrl = ''): array
     {
         if (!is_array($alternates)) {
             return [];
@@ -198,12 +212,62 @@ class SitemapXmlExtensionRenderer
                 $href = $value;
             }
             $locale = trim((string) $locale);
-            $href = trim((string) $href);
+            $href = $this->absoluteUrl(trim((string) $href), $pageUrl);
             if ($locale !== '' && $href !== '') {
                 $result[] = ['hreflang' => $this->normalizeHreflang($locale), 'href' => $href];
             }
         }
         return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $url
+     */
+    private function pageUrl(array $url): string
+    {
+        foreach ([SitemapUrl::schema_fields_URL, 'loc', 'url'] as $key) {
+            $candidate = trim((string) ($url[$key] ?? ''));
+            if ($candidate !== '' && preg_match('#^https?://#i', $candidate) === 1) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Sitemap protocol requires absolute http(s) URLs for image:loc / video:*_loc / xhtml:link href.
+     */
+    private function absoluteUrl(string $url, string $pageUrl): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+        if (preg_match('#^https?://#i', $url) === 1) {
+            return $url;
+        }
+        if (str_starts_with($url, '//')) {
+            $scheme = 'https';
+            if ($pageUrl !== '' && preg_match('#^(https?):#i', $pageUrl, $matches) === 1) {
+                $scheme = strtolower($matches[1]);
+            }
+
+            return $scheme . ':' . $url;
+        }
+
+        $parts = $pageUrl !== '' ? parse_url($pageUrl) : false;
+        if (!is_array($parts) || empty($parts['host'])) {
+            // No page origin available — refuse relative output (would fail GSC).
+            return '';
+        }
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+        $origin = ((string) ($parts['scheme'] ?? 'https')) . '://' . $parts['host'] . $port;
+        if (!str_starts_with($url, '/')) {
+            $url = '/' . ltrim($url, '/');
+        }
+
+        return $origin . $url;
     }
 
     /**

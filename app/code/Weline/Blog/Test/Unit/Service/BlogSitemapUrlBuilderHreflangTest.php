@@ -43,7 +43,7 @@ final class BlogSitemapUrlBuilderHreflangTest extends TestCase
             publishedAt: '2026-01-01',
             updatedAt: '2026-01-03',
             author: null,
-            coverImage: null,
+            coverImage: '/pub/media/blog/hanfu/cover.webp',
             categories: [],
             canonicalUrl: 'https://shop.test/en_US/blog/hanfu-guide',
             publicUrl: '/blog/hanfu-guide',
@@ -116,5 +116,15 @@ final class BlogSitemapUrlBuilderHreflangTest extends TestCase
             'https://shop.test/fr_FR/blog/hanfu-guide',
             $byLocale['zh_Hans_CN']['metadata']['alternates']['fr_FR'],
         );
+        self::assertSame(
+            [
+                [
+                    'loc' => 'https://shop.test/pub/media/blog/hanfu/cover.webp',
+                    'title' => 'Hanfu Guide',
+                ],
+            ],
+            $byLocale['en_US']['metadata']['images'],
+        );
+        self::assertSame([], $byLocale['zh_Hans_CN']['metadata']['images']);
     }
 }
