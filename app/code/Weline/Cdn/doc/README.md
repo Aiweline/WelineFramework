@@ -14,6 +14,7 @@ Weline_Cdn 是一个多适配器 CDN 管理模块，支持多种 CDN 提供商�
 - ✅ **域名管理**：为每个域名配置独立的 CDN 设置
 - ✅ **缓存清理**：支持多种清理模式（全部、URL、主机、标签、缓存键）
 - ✅ **规则管理**：管理 CDN 缓存规则，支持全局和域名级别的规则
+- **FPC 策略管理**：按控制器方法管理范围覆盖，统一源站与 CDN 缓存策略，查看发布、清理及请求验证结果
 - ✅ **缓存预热**：自动或手动预热 CDN 缓存，提升访问速度
 - ✅ **HTTP API**：提供 RESTful API 接口，支持程序化调用
 - ✅ **命令行工具**：提供 CLI 工具，支持批量操作
@@ -130,7 +131,40 @@ php bin/w cdn:cache:clear --domain=example.com --mode=everything
 2. 选择域名（或选择"全局默认规则"）
 3. 编辑规则（JSON 格式）
 4. 点击"保存规则"
-5. 点击"推送到 CDN"使规则生效
+5. 点击"推送到 CDN"安排同步，在 **API 规则 > 同步记录** 查看处理结果
+
+### 管理控制器 FPC 策略
+
+进入 **CDN管理 > API 规则**。页面包含 **FPC 策略、现有 CDN 注释规则、同步记录** 三个页签；原有 CDN 注释规则仍在第二个页签管理。
+
+1. 在 **FPC 策略** 选择作用范围及运行模式（normal/test），搜索目标控制器方法。
+2. 查看代码默认值、当前范围覆盖、字段来源和最终开关/TTL。TTL 的单位是秒。
+3. 编辑目标方法：开关与 TTL 可以分别继承或覆盖。TTL 覆盖须为正整数；需要停止缓存时关闭开关。保存只修改本次更改的字段。
+4. 使用字段恢复或全部恢复，移除当前范围的覆盖。恢复后重新采用父级或代码默认值，不会删除代码声明。
+5. 打开 **同步记录** 查看对应任务；失败时按具体原因修正账户、域名绑定等配置，再重试。重试表示重新安排处理，实际结果仍以各阶段回执为准。
+
+开关和 TTL 分别沿 **Channel → Store → Website → Global → 代码默认** 继承。normal 与 test 的覆盖相互隔离。代码明确禁止公共缓存或声明 TTL 为 0 的方法不能从后台开启；没有 FPC 声明的路径不生成可开启的管理策略，继续遵守框架原有公共缓存资格。登录态、私有响应、语言及货币变体仍受既有缓存约束。
+
+声明由模块、类、方法和类型确定身份。重新收集只更新代码声明与公开路径，不覆盖人工设置；方法的公开路径变化也不会建立重复策略。修改代码后完成正式路由收集，后台投影会自动更新，也可从页面发起收集。
+
+保存/恢复、路由收集、相关域名启用或绑定变更会安排自动任务。现有 Queue 依次发布源站策略、同步 CDN 默认规则、清理受影响缓存；定时任务补齐未完成处理。CDN 默认规则配合源站响应头执行有效策略，无需为每个控制器方法创建一条云端规则。源站命中响应的边缘 TTL 不超过有效策略 TTL 与缓存剩余新鲜寿命；STALE 内容不会重新获得完整边缘 TTL。
+
+连续修改会累计尚未清理的旧路径。清理优先采用精确 URL；通配路径使用对应范围的公开路径前缀，无法进一步缩小时使用该范围的公共主机或基址。规则、清理与请求样本共用域名所属网站的可信公开地址映射，可包含已配置的 www 公共地址，并保留店铺路径。同 Zone 的域名汇总受管规则，保留云端人工规则及相对顺序；无变化时不重复提交规则。
+
+#### 如何判断已经生效
+
+| 页面证据 | 含义 |
+|---|---|
+| 期望版本 | 已保存、等待处理的最新策略版本 |
+| 源站已确认版本（`origin_version`） | 源站已确认内容等价的期望版本高水位 |
+| 快照文件版本与修订标识（`snapshot_version` / `snapshot_revision`） | 实际编译文件的版本与内容标识；内容未变时不重写文件，因此可以与已确认版本不同 |
+| CDN 接受结果 | 服务商接受规则请求；不等于目标 URL 已观察到新缓存行为 |
+| 缓存清理回执 | 服务商对清理目标的处理结果；失败目标仍保留待处理 |
+| 实际请求验证 | 对公开 URL 的观测证据；没有证据时为“未验证” |
+
+保存成功或队列入队都不能单独证明线上生效。清理阶段完成后，系统最多对两个可信公开主机样本各发起三次匿名 GET，记录时间、响应头及正文摘要；不携登录 Cookie 或 Authorization。结果标为 `coverage=sample`：样本满足策略条件才记为已验证，请求失败、条件未满足或没有公开样本均保留实际原因，不能代表全部页面、语言或货币组合。HTTP 观察失败不回滚已确认的源站、规则与清理阶段。版本详情及错误原因用于区分各阶段；本轮功能的运行验收状态见 [开发日志](开发日志.md)。
+
+开发集成沿用 `cdn` QueryProvider 的六个后台操作：`listFpcPolicies`、`saveFpcPolicyOverride`、`restoreFpcPolicyInheritance`、`collectFpcPolicies`、`listFpcSyncRecords`、`retryFpcSync`。它们使用后台会话与既有 ACL，不提供新的公共 REST 接口。策略契约见 [实施规格](开发/spec/cdn-fpc-policy-sync.md)，路由触发顺序见 [FPC 策略收集](event/FPC策略收集.md)。
 
 ### 缓存预热
 
@@ -316,36 +350,18 @@ Provider 清单在进程内不可变；`forceReload` 只会重建适配器实例
 
 ### 提供预热 URL
 
-其他模块可以提供预热 URL，只需创建 `Cdn/WarmupProvider.php` 文件：
+其他模块在 `extends/module/Weline_Cdn/{Name}.php` 实现 `WarmupProviderInterface::execute()`（无参，返回绝对 URL）。  
+`module` 字段写入源模块名，`provider` 写入 FQCN。详见 [extends.md](../extends.md) 与 [CDN预热URL投递](event/CDN预热URL投递.md)。
 
-```php
-<?php
-namespace YourModule\Cdn;
-
-class WarmupProvider
-{
-    public function getWarmupUrls(): array
-    {
-        return [
-            [
-                'url' => 'https://example.com/page1',
-                'site_id' => 1,
-                'domain_id' => 1
-            ],
-            // ... 更多 URL
-        ];
-    }
-}
-```
+内置：`Weline\Cdn\WarmupProvider\FpcExtraDeclaredUrls`（静态文档 FPC）。  
+Product 示例：`Weline\Product\Extends\Module\Weline_Cdn\ProductHeatUrls`（热度 Top N PDP）。
 
 ## 定时任务
 
-模块包含一个定时任务，用于自动执行缓存预热：
-
-- **任务名称**：`Weline_Cdn::warmup`
-- **执行频率**：每小时执行一次
-- **任务类**：`Weline\Cdn\Cron\Warmup`
-
+- **execute_name**：`cdn_warmup`
+- **频率**：`*/5 * * * *`
+- **类**：`Weline\Cdn\Cron\Warmup`（`CronTaskInterface`）
+- **行为**：按 Provider FQCN 分批收集 → `WarmupRunner`（`skipped` 不计 `success`）
 ## 数据库表结构
 
 ### cdn_account

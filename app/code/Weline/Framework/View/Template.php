@@ -46,6 +46,9 @@ class Template extends DataObject
     use TraitTemplate;
 
     private string $file_ext = '.phtml';
+    private array $pinnedSources = [];
+    private array $compiledSourceOrigins = [];
+    private string $activeSourceOrigin = '';
 
     protected Request $request;
     private ?Taglib $taglib = null;
@@ -129,6 +132,12 @@ class Template extends DataObject
                 $instance = new self();
                 $instance->init();
                 self::$scopedInstances[$scopeKey] = $instance;
+                if (\str_starts_with($scopeKey, 'req:')) {
+                    // 只清理本请求创建的实例，避免新 Fiber 入场时清掉仍在渲染的同伴。
+                    RequestContext::onCleanup(static function () use ($scopeKey): void {
+                        unset(self::$scopedInstances[$scopeKey]);
+                    }, 'framework.template.' . $scopeKey);
+                }
             }
 
             return self::$scopedInstances[$scopeKey];
@@ -173,28 +182,12 @@ class Template extends DataObject
             if (self::$fiberInstances !== null && isset(self::$fiberInstances[$fiber])) {
                 unset(self::$fiberInstances[$fiber]);
             }
-            // RequestContext already torn down: drop orphaned req:* buckets so they
-            // cannot accumulate across WLS requests when reset runs after cleanup.
-            self::purgeOrphanedRequestScopedInstances();
             return;
         }
 
         self::$instance = null;
         self::$fiberInstances = null;
         self::$scopedInstances = [];
-    }
-
-    /**
-     * Drop Template instances keyed by request id when the request context is gone.
-     * Connection-scoped (conn:*) buckets are left intact for interleaved fibers.
-     */
-    private static function purgeOrphanedRequestScopedInstances(): void
-    {
-        foreach (\array_keys(self::$scopedInstances) as $key) {
-            if (\is_string($key) && \str_starts_with($key, 'req:')) {
-                unset(self::$scopedInstances[$key]);
-            }
-        }
     }
 
     public static function clearStaticHookCaches(): void
@@ -921,87 +914,131 @@ class Template extends DataObject
     }
 
 
+    /** Fixed bytes are scoped to this request's Template instance. */
+    public function pinSource(string $logicalPath, string $sourceBytes, string $originPath = '', string $contextKey = ''): void
+    {
+        $this->pinnedSources[$logicalPath] = [$sourceBytes, $originPath !== '' ? $originPath : $logicalPath, $contextKey];
+    }
+
     public function getFetchFile(string $fileName, string|null $module_name = ''): string
     {
-        list($comFileName, $tplFile) = $this->convertFetchFileName($fileName);
+        if (isset($this->pinnedSources[$fileName])) {
+            return $this->getFetchFileFromSource($fileName, ...$this->pinnedSources[$fileName]);
+        }
+        if ($this->activeSourceOrigin !== '' && !$this->isAbsoluteTemplateSourcePath($fileName) && !str_contains($fileName, '::')) {
+            $relative = dirname($this->activeSourceOrigin) . DS . $fileName;
+            if (is_file($relative)) {
+                $fileName = $relative;
+            }
+        }
+        [$comFileName, $tplFile] = $this->convertFetchFileName($fileName);
+        if (isset($this->pinnedSources[$tplFile])) {
+            return $this->getFetchFileFromSource($tplFile, ...$this->pinnedSources[$tplFile]);
+        }
+        $content = file_get_contents($tplFile);
+        if (!is_string($content)) {
+            throw new Exception('Unable to read template source: ' . $tplFile);
+        }
 
-        // 检测编译文件，如果不符合条件则重新进行文件编译
-        if (self::shouldRecompileCompiledTemplate(
-            $comFileName,
-            $tplFile,
-            DEV,
-            Env::getInstance()->getConfig('template.force_recompile_in_dev', false)
-        )) {
-            // 如果缓存文件不存在则编译，或者文件修改了也编译
-            $content = file_get_contents($tplFile);
-            $repContent = $this->tmp_replace($content, $comFileName);  // 得到模板文件并替换占位符，得到替换后的文件
-            
-            // 检查是否显示模板位置注释（默认不显示，可通过配置 template.show_comments 控制）
-            $showTemplateComments = Env::getInstance()->getConfig('template.show_comments', false);
-            if ($showTemplateComments === true || $showTemplateComments === '1' || $showTemplateComments === 1) {
-                $tpl_pad_file_name = __('模板文件：%{1} START', $tplFile);
-                $tpl_str_len = strlen($tpl_pad_file_name);
-                $tpl_str_pad_all = str_pad('', $tpl_str_len, '=', STR_PAD_BOTH);
-                $tpl_str_pad_file = str_pad($tpl_pad_file_name, $tpl_str_len, '=', STR_PAD_BOTH);
-                $com_pad_file_name = __('模板文件：%{1} END', $comFileName);
-                $com_str_len = strlen($com_pad_file_name);
-                $com_str_pad_all = str_pad('', $com_str_len, '=', STR_PAD_BOTH);
-                $com_str_pad_file = str_pad($com_pad_file_name, $com_str_len, '=', STR_PAD_BOTH);
-                $repContent = "<!--" . PHP_EOL . "$tpl_str_pad_all " . PHP_EOL . $tpl_str_pad_file . PHP_EOL . $tpl_str_pad_all . PHP_EOL . ' -->'
-                    . PHP_EOL . $repContent . PHP_EOL
-                    . '<!--' . PHP_EOL . $com_str_pad_all . PHP_EOL . $com_str_pad_file . PHP_EOL . $com_str_pad_all . PHP_EOL . '-->';
+        return $this->compileSourceBytes($comFileName, $content, $tplFile, '');
+    }
+
+    /** Compile a captured or virtual source with the ordinary Taglib/i18n pipeline. */
+    public function getFetchFileFromSource(string $logicalPath, string $sourceBytes, string $originPath = '', string $contextKey = ''): string
+    {
+        $originPath = $originPath !== '' ? $originPath : $logicalPath;
+        [, , , , $compileDir] = $this->processFileSource($originPath, '');
+        $compileDir = $this->stableTemplateCompileDirectory($compileDir) . $this->templateCompileContextDir()
+            . DS . '__source_' . substr(hash('sha256', $logicalPath . "\0" . $originPath . "\0" . $contextKey), 0, 24) . DS;
+        $filename = 'com_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($logicalPath));
+        if (!str_ends_with($filename, '.phtml')) {
+            $filename .= '.phtml';
+        }
+
+        return $this->compileSourceBytes($compileDir . $filename, $sourceBytes, $originPath, $contextKey);
+    }
+
+    public function fetchSourceHtml(string $logicalPath, string $sourceBytes, string $originPath = '', string $contextKey = '', array $dictionary = []): string
+    {
+        return $this->ob_file($this->getFetchFileFromSource($logicalPath, $sourceBytes, $originPath, $contextKey), $dictionary);
+    }
+
+    private function compileSourceBytes(string $baseCompiledPath, string $sourceBytes, string $originPath, string $contextKey): string
+    {
+        $sourceHash = md5(md5($sourceBytes) . '|' . strlen($sourceBytes) . '|' . Taglib::COMPILER_GENERATION) . '-' . strlen($sourceBytes);
+        // Event registration changes alter the compiler pipeline as well as source bytes.
+        $pipeline = json_encode($this->eventsManager->getEventObservers('Weline_Framework_Template::before_compile'), JSON_PARTIAL_OUTPUT_ON_ERROR);
+        // A delayed compilation of R1 can never overwrite the file for R2.
+        $digest = substr(hash('sha256', $sourceHash . "\0" . $originPath . "\0" . $contextKey . "\0source-pipeline-v2\0" . $pipeline), 0, 24);
+        $compiledPath = dirname($baseCompiledPath) . DS . '__bytes_' . $digest . DS . basename($baseCompiledPath);
+        $this->compiledSourceOrigins[$compiledPath] = $originPath;
+        $force = Env::getInstance()->getConfig('template.force_recompile_in_dev', false);
+        if (is_file($compiledPath) && !(DEV && in_array($force, [true, 1, '1'], true))) {
+            return $compiledPath;
+        }
+
+        $content = '';
+        foreach (token_get_all($sourceBytes) as $token) {
+            if (is_array($token)) {
+                $content .= match ($token[0]) {
+                    T_DIR => var_export(dirname($originPath), true),
+                    T_FILE => var_export($originPath, true),
+                    default => $token[1],
+                };
             } else {
-                // 当 template.show_comments 为 false 时，移除展示用 HTML 注释；
-                // 保留 Theme Slot 边界注释（<!--@weline-slot:...-->），运行时填充依赖它们。
-                $repContent = preg_replace('/\<!--(?!@\/?weline-slot:)([\s\S]*?)-->/', '', $repContent);
+                $content .= $token;
             }
-            
-            // 触发模板编译后事件，允许 Observer 处理内容（如提取 JS 模块声明和翻译词）
-            // 在所有编译处理完成后、写入文件之前触发，这样观察者可以处理最终的内容
-            /**@var EventsManager $eventsManager */
-            $eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $eventData = new DataObject([
-                'content' => $repContent,
-                'comFileName' => $comFileName,
-                'tplFile' => $tplFile,
-                'template' => $this,
-            ]);
-            $eventsManager->dispatch('Weline_Framework_Template::after_compile', $eventData);
-            $repContent = $eventData->getData('content');
-
-            // Embed content hash in compiled file for cross-platform reliable cache detection.
-            // Include Taglib compiler generation so Taglib output-shape changes invalidate view/tpl.
-            $contentHash = \md5(
-                (string)\md5_file($tplFile)
-                . '|'
-                . (string)\filesize($tplFile)
-                . '|'
-                . \Weline\Framework\View\Taglib::COMPILER_GENERATION
-            ) . '-' . \filesize($tplFile);
-            $hashHeader = "<?php /* hash:{$contentHash} */ ?>\n";
-            $compiledContent = $hashHeader . $repContent;
-
-            // Ensure compiled template directory exists before writing file.
-            $compiledDir = dirname($comFileName);
-            if (!is_dir($compiledDir)) {
-                if (!mkdir($compiledDir, 0770, true) && !is_dir($compiledDir)) {
-                    throw new Exception(__('无法创建模板编译目录：%{1}', $compiledDir));
-                }
+        }
+        $previousOrigin = $this->activeSourceOrigin;
+        $this->activeSourceOrigin = $originPath;
+        try {
+            $compiled = (string)$this->tmp_replace($content, $originPath);
+        } finally {
+            $this->activeSourceOrigin = $previousOrigin;
+        }
+        $showComments = Env::getInstance()->getConfig('template.show_comments', false);
+        if (!in_array($showComments, [true, 1, '1'], true)) {
+            $compiled = (string)preg_replace('/\<!--(?!@\/?weline-slot:)([\s\S]*?)-->/', '', $compiled);
+        }
+        $eventData = new DataObject(['content' => $compiled, 'comFileName' => $compiledPath, 'tplFile' => $originPath, 'template' => $this]);
+        $this->eventsManager->dispatch('Weline_Framework_Template::after_compile', $eventData);
+        $compiled = (string)$eventData->getData('content');
+        $compiled = str_starts_with($compiled, '<?php')
+            ? '<?php /* hash:' . $sourceHash . ' */' . substr($compiled, 5)
+            : '<?php /* hash:' . $sourceHash . ' */ ?>' . $compiled;
+        $directory = dirname($compiledPath);
+        if (!is_dir($directory) && !@mkdir($directory, 0770, true) && !is_dir($directory)) {
+            throw new Exception('Failed to create template compile directory: ' . $directory);
+        }
+        $temporary = tempnam($directory, '.compile-');
+        if ($temporary === false) {
+            throw new Exception('Failed to stage compiled template: ' . $compiledPath);
+        }
+        try {
+            if (file_put_contents($temporary, $compiled) !== strlen($compiled) || !rename($temporary, $compiledPath)) {
+                throw new Exception('Failed to publish compiled template: ' . $compiledPath);
             }
-
-            // Write compiled file with hash header
-            file_put_contents($comFileName, $compiledContent);
-
-            // Also update TemplateCacheManager for enhanced caching
-            try {
-                $cacheManager = TemplateCacheManager::getInstance();
-                $cacheManager->writeCache($tplFile, $repContent);
-            } catch (\Throwable) {
-                // Non-critical - continue without enhanced cache
+        } finally {
+            if (is_file($temporary)) {
+                unlink($temporary);
             }
         }
 
-        return $comFileName;
+        return $compiledPath;
+    }
+
+    private function templateSourceModule(): array
+    {
+        $normalized = str_replace('\\', '/', $this->activeSourceOrigin);
+        if ($normalized !== '') {
+            foreach (Env::getInstance()->getModuleList() as $name => $module) {
+                $base = rtrim(str_replace('\\', '/', (string)($module['base_path'] ?? '')), '/');
+                if ($base !== '' && str_starts_with($normalized, $base . '/view/')) {
+                    return [(string)$name, $base . '/'];
+                }
+            }
+        }
+        return [$this->getRequest()->getModuleName(), $this->getRequest()->getModulePath()];
     }
 
     /**
@@ -1576,6 +1613,8 @@ class Template extends DataObject
         $htmlLang = \str_replace('_', '-', $htmlLang);
         $this->setData('htmlLang', $htmlLang);
         $captureEnding = false;
+        $previousSourceOrigin = $this->activeSourceOrigin;
+        $this->activeSourceOrigin = $this->compiledSourceOrigins[$filename] ?? '';
         try {
             // 框架级保障：模板内 $block 永远指向当前 Template 实例。
             // 兼容历史模板（含 view/tpl 编译产物）中的 $block->setTitle()/getBackendUrl() 调用。
@@ -1623,6 +1662,7 @@ class Template extends DataObject
             throw $exception;
         } finally {
             $this->popTemporaryTemplateData($temporaryTemplateData);
+            $this->activeSourceOrigin = $previousSourceOrigin;
         }
         if ($reusableTemplateCacheKey !== null
             && !$this->isEmptyCacheHtml($result)
@@ -2269,7 +2309,9 @@ class Template extends DataObject
      */
     public function tmp_replace(string $content, string $fileName = ''): array|string|null
     {
-        # 系统自带的标签
+        $eventData = new DataObject(['content' => $content, 'tplFile' => $fileName, 'template' => $this]);
+        $this->eventsManager->dispatch('Weline_Framework_Template::before_compile', $eventData);
+        $content = (string)$eventData->getData('content');
         return $this->getTaglib()->tagReplace($this, $content, $fileName);
     }
 

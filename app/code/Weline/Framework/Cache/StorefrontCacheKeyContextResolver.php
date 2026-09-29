@@ -128,9 +128,9 @@ final class StorefrontCacheKeyContextResolver
     }
 
     /** 复用权威请求快照核对已冻结回执；不信任广播更新的进程向量。 */
-    public function fingerprintForIdentity(ScopeIdentity $identity, array $translationLocales = []): string
+    public function fingerprintForIdentity(ScopeIdentity $identity, array $translationLocales = [], ?string $policyPath = null): string
     {
-        return $this->generations->fingerprint($this->namespacePathsForIdentity($identity, $translationLocales));
+        return $this->generations->fingerprint($this->namespacePathsForIdentity($identity, $translationLocales, $policyPath));
     }
 
     private function translationKeyFingerprint(string $fingerprint, StorefrontCacheKeyContext $context): string
@@ -174,7 +174,7 @@ final class StorefrontCacheKeyContextResolver
      *
      * @return list<string>
      */
-    public function namespacePathsForIdentity(ScopeIdentity $identity, array $translationLocales = []): array
+    public function namespacePathsForIdentity(ScopeIdentity $identity, array $translationLocales = [], ?string $policyPath = null): array
     {
         if (!$this->isCompleteChannelIdentity($identity)) {
             throw new \InvalidArgumentException(__('Storefront 缓存版本缺少完整 Channel Scope'));
@@ -195,7 +195,7 @@ final class StorefrontCacheKeyContextResolver
         ];
 
         // 读路径 Extra.namespaces ∪ 全局 Storefront 向量（写失效仍以 Enricher 为准）
-        foreach ($this->extraNamespacesForCurrentRequest() as $extraNs) {
+        foreach ($this->extraNamespacesForCurrentRequest($policyPath) as $extraNs) {
             $paths[] = $extraNs;
         }
 
@@ -203,18 +203,20 @@ final class StorefrontCacheKeyContextResolver
     }
 
     /** @return list<string> */
-    private function extraNamespacesForCurrentRequest(): array
+    private function extraNamespacesForCurrentRequest(?string $policyPath = null): array
     {
         try {
             if (!class_exists(\Weline\Framework\Controller\Extra\ExtraPolicyResolver::class)) {
                 return [];
             }
-            $path = '';
-            if (Context::hasCurrent()) {
+            $path = $policyPath ?? '';
+            if ($policyPath === null && Context::hasCurrent()) {
                 $uri = (string)(RequestContext::get('request.uri')
                     ?? $_SERVER['REQUEST_URI']
                     ?? '');
-                $path = parse_url($uri, PHP_URL_PATH) ?: $uri;
+                $path = \Weline\Framework\Controller\Extra\FpcPolicySnapshot::normalizePath(
+                    $uri, (string)\Weline\Framework\Env\WelineEnv::get('website_url', ''),
+                );
             }
             if ($path === '') {
                 return [];

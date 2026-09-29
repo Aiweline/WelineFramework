@@ -39,6 +39,7 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             'listen_http' => 18091,
             'listen_https' => 18491,
             'edge_cache' => true,
+            'edge_cache_dynamic' => true,
             'gzip' => true,
         ]);
         $paths->ensureRuntimeDirectories();
@@ -99,7 +100,7 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             'HTML edge must refuse to store upstream FPC MISS/BYPASS responses.',
         );
         self::assertStringContainsString(
-            'proxy_cache_key "$scheme$request_method$host$request_uri|fpc2";',
+            'proxy_cache_key "$scheme$request_method$host$request_uri|fpc2$wls_edge_host_generation";',
             $genericBlock,
             'HTML edge cache key generation must bump past MISS-poisoned entries.',
         );

@@ -97,4 +97,21 @@ class AffiliateIndexTemplateTest extends TestCase
         $this->assertStringContainsString('Previous', $content);
         $this->assertStringContainsString('Next', $content);
     }
+
+    public function testAffiliateIndexTemplateDoesNotEmbedPhpInTaglibAttributes(): void
+    {
+        $path = BP . 'app/code/Weline/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
+        $content = (string) file_get_contents($path);
+
+        // Taglib 禁止在 <w:*> 属性内写短标签 echo，否则编译产物会泄漏为页面原文
+        $this->assertStringNotContainsString('disabled="<?=', $content);
+        $this->assertDoesNotMatchRegularExpression(
+            '/<w:[a-z0-9:_-]+[^>]*<\?=/',
+            $content,
+            'Taglib attributes must not embed PHP short echo tags'
+        );
+        $this->assertStringContainsString('createScopeReady', $content);
+        $this->assertStringContainsString('filterScopeReady', $content);
+        $this->assertStringContainsString('disabled="true"', $content);
+    }
 }

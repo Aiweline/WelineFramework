@@ -24,6 +24,12 @@
             globalVar: "WelineDropshipOrderAccordion",
             description: "履约订单手风琴：展开后再异步加载订单商品行"
         },
+        cdnFpcPolicyManagement: {
+            origin_paths: ["app/code/Weline/Cdn/view/statics/js/backend/fpc-policy-management.js?v=20260928-fpc6"],
+            paths: ["Weline_Cdn::js/backend/fpc-policy-management.js?v=20260928-fpc6"],
+            globalVar: "WelineCdnFpcPolicyModule",
+            description: "控制器 FPC 策略、注释规则与同步回执"
+        },
         b2bOrderChat: {
             origin_paths: ["app/code/Weline/B2B/view/statics/backend/order-chat-accordion.js?v=20260912-order-chat4"],
             paths: ["Weline_B2B::backend/order-chat-accordion.js?v=20260912-order-chat4"],

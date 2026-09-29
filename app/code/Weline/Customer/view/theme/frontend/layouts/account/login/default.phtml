@@ -334,6 +334,12 @@ layoutType=account/login，option=default → layouts/account/login/default.phtm
                             </if>
                             <?php endif; ?>
                             </w:slot>
+                            <?php if ($isLoginAuthPage): ?>
+                            <!-- 登录页同页注册（挂 content multiple，避开 auth exclusive XOR） -->
+                            <div class="account-auth-stage__register-pane" data-testid="account-login-register-pane">
+                                <w:widget type="form" name="account-register" />
+                            </div>
+                            <?php endif; ?>
                         </w:slot>
                     </div>
                 </div>

@@ -101,10 +101,38 @@ final readonly class ThemeVersionIdentity
         ]));
     }
 
-    /** Deterministic scope_key for disk trees: SHA-256 of scope + store_mode (full digest). */
+    /** Reversible on case-insensitive filesystems; store mode has its own directory. */
     public function scopeKey(): string
     {
-        return \hash('sha256', $this->canonicalScope . "\0" . $this->storeMode);
+        return \implode('/', \array_map(self::encodePathIdentity(...), \explode('.', $this->canonicalScope)));
+    }
+
+    public function storeModeKey(): string
+    {
+        return self::encodePathIdentity($this->storeMode);
+    }
+
+    public static function encodePathIdentity(string $value): string
+    {
+        $encoded = '';
+        for ($i = 0, $length = \strlen($value); $i < $length; ++$i) {
+            $byte = $value[$i];
+            $encoded .= \preg_match('/[a-z0-9._-]/D', $byte) === 1
+                ? $byte : (\preg_match('/[A-Z]/D', $byte) === 1 ? '~' . \strtolower($byte) : '%' . \bin2hex($byte));
+        }
+
+        if ($encoded === '.' || $encoded === '..') {
+            return \str_replace('.', '%2e', $encoded);
+        }
+        if ($encoded === '') {
+            return '!';
+        }
+        if (\strlen($encoded) > 240) {
+            $chunks = \str_split($encoded, 240);
+            return '+' . \count($chunks) . '/' . \implode('/', $chunks);
+        }
+
+        return $encoded;
     }
 
     public function withVersion(int $themeVersionId, string $mode, int $contentRevision): self

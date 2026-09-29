@@ -66,6 +66,9 @@ final class ThemeLayoutSnapshotNormalizer
                     'source' => \trim((string)($widget['source'] ?? '')),
                     'source_position' => \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityAssetCollector::normalizePosition((string)($widget['source-postion'] ?? $widget['source-position'] ?? $widget['source_position'] ?? $config['_source_position'] ?? 'head')),
                 ];
+                foreach (['parent_uid', 'anchor_uid', 'position'] as $field) {
+                    if (\array_key_exists($field, $widget)) { $nodes[$uid][$field] = $widget[$field]; }
+                }
             }
         }
 
@@ -88,6 +91,13 @@ final class ThemeLayoutSnapshotNormalizer
             : [];
         foreach ($nodes as $uid => $node) {
             if (!\is_array($node)) {
+                continue;
+            }
+            // This is persisted page intent, not a placeable widget. In
+            // particular, widget/media validation must not look it up in a registry.
+            if (($node['widget_module'] ?? '') === 'Weline_Theme'
+                && ($node['widget_type'] ?? '') === 'layout_state'
+                && ($node['widget_code'] ?? '') === '__no_widget_placements__') {
                 continue;
             }
             $uid = \strtolower((string)($node['node_uid'] ?? $uid));
@@ -118,6 +128,7 @@ final class ThemeLayoutSnapshotNormalizer
                 'source' => (string)($node['source'] ?? ''),
                 'source_position' => (string)($node['source_position'] ?? 'head'),
                 'status' => ThemeLayout::STATUS_DRAFT,
+                ...\array_intersect_key($node, \array_flip(['parent_uid', 'anchor_uid', 'position'])),
             ];
         }
         foreach ($snapshot as &$areaData) {

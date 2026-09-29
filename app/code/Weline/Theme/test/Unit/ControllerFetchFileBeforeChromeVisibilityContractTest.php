@@ -28,6 +28,14 @@ final class ControllerFetchFileBeforeChromeVisibilityContractTest extends TestCa
         self::assertStringContainsString('ensureStorefrontChromeVisibilityDefaults(array_merge(', $src);
         self::assertStringContainsString('stripLeakedStorefrontChromeFlags(', $src);
         self::assertStringContainsString('ensureStorefrontChromeOnForLayout(', $src);
+        // 模板头 @param {default=true}：DB 只有部分键时仍用文件 meta 区 default 补缺键
+        self::assertStringContainsString("ComponentMetaParser::parse(\$layoutFilePath)", $src);
+        self::assertStringContainsString('array_key_exists($paramName, $layoutParams)', $src);
+        self::assertStringNotContainsString(
+            'if (empty($layoutParams)) {' . "\n" . '                    // 获取布局文件的完整路径',
+            $src,
+            '不得仅在 empty(layoutParams) 时才解析模板 @param default',
+        );
         self::assertGreaterThanOrEqual(
             3,
             \substr_count($src, 'ensureStorefrontChromeVisibilityDefaults('),

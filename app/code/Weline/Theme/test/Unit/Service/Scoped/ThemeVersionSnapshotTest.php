@@ -31,7 +31,9 @@ final class ThemeVersionSnapshotTest extends TestCase
         self::assertTrue($builder->compareOwnerIsolation($a, $d)['isolated']);
         self::assertTrue($builder->compareOwnerIsolation($a, $e)['isolated']);
         self::assertSame($a->ownerHash(), $e->ownerHash());
-        self::assertNotSame($a->scopeKey(), $c->scopeKey());
+        $paths = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths();
+        self::assertNotSame($paths->ownerDir($a), $paths->ownerDir($c));
+        self::assertNotSame($paths->versionModeDir($a), $paths->versionModeDir($c));
         self::assertNotSame($a->cacheKey(), $e->cacheKey());
         self::assertNotSame(
             $a->cacheKey(),

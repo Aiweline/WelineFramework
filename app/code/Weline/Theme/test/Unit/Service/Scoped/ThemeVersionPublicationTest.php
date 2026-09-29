@@ -15,6 +15,22 @@ final class ThemeVersionPublicationTest extends TestCase
 {
     private ThemeVersionPublicationService $service;
 
+    public function testForcedContinuationUsesCurrentDraftAsItsSource(): void
+    {
+        $owner = new ThemeVersionIdentity(3, 'default.default.default', 'normal', 'frontend', 0, 'draft', 0);
+        $result = $this->service->createDraft($owner, ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT, [
+            'existing_draft_version_id' => 25,
+            'published_version_id' => 10,
+            'base_version_id' => 10,
+            'force_new' => true,
+            'allocated_version_id' => 26,
+        ]);
+        self::assertSame(25, $result['base_version_id']);
+        self::assertSame(0, $this->service->draftSourceVersionId(ThemeVersionPublicationInterface::CREATION_PACKAGE_DEFAULTS, [
+            'existing_draft_version_id' => 25, 'base_version_id' => 10,
+        ]));
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

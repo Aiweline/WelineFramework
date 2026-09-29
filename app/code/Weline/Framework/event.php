@@ -344,6 +344,18 @@ return [
         'description' => __('在模板标签配置完成后触发，允许其他模块修改标签配置。'),
         'doc' => 'template/标签配置后.md',
     ],
+    'Weline_Framework_Template::before_compile' => [
+        'name' => __('模板源码编译前'),
+        'description' => __('普通文件、固定源字节和虚拟模板进入 Taglib 前触发，只允许转换源码，不执行页面业务渲染。'),
+        'doc' => 'template/模板源码编译前.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'content' => ['type' => 'string', 'required' => true, 'description' => '可替换的模板源字节'],
+            'tplFile' => ['type' => 'string', 'required' => true, 'description' => '原始逻辑源路径，供模块与相对引用解析'],
+            'template' => ['type' => 'Weline\\Framework\\View\\Template', 'required' => true, 'description' => '当前请求的普通模板实例'],
+        ],
+    ],
     'Weline_Framework_Template::after_compile' => [
         'name' => __('模板编译后'),
         'description' => __('在模板编译完成后触发，允许其他模块处理编译后的模板内容。可以修改模板内容、提取信息、注入代码等。'),

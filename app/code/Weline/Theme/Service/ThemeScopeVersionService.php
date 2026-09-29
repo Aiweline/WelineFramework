@@ -19,29 +19,36 @@ final class ThemeScopeVersionService
     ) {
     }
 
+    public function invalidateOwner(int $themeId, string $scope, string $storeMode = 'normal', string $area = 'frontend'): void
+    {
+        $this->forgetSelection($themeId, $scope, $storeMode, $area);
+        $this->forgetFlagged($themeId, $scope, $storeMode, $area);
+    }
+
     public function ensureCurrent(
         int $themeId,
         string $scope,
         string $scopeKind = 'website',
         ?int $websiteId = null,
         string $storeMode = 'normal',
+        string $area = 'frontend',
     ): ThemeScopeVersion {
         $scope = $this->normalizeScope($scope);
         if ($themeId < 1 || $scope === '') {
             throw new \InvalidArgumentException((string)__('Theme 范围版本参数无效。'));
         }
 
-        $current = $this->getCurrent($themeId, $scope);
+        $current = $this->getCurrent($themeId, $scope, $storeMode, $area);
         if ($current instanceof ThemeScopeVersion) {
             return $current;
         }
 
         // Orphan rows may exist with is_current=0 (unique on version_number still holds).
-        $orphan = $this->loadLatestForScope($themeId, $scope);
+        $orphan = $this->loadLatestForScope($themeId, $scope, $storeMode, $area);
         if ($orphan instanceof ThemeScopeVersion) {
-            $this->unsetCurrent($themeId, $scope);
+            $this->unsetCurrent($themeId, $scope, $storeMode, $area);
             $orphan->setIsCurrent(true)->save();
-            $this->forgetFlagged($themeId, $scope);
+            $this->forgetFlagged($themeId, $scope, $storeMode, $area);
             // 仅在已有 selection 行时同步草稿指针；不新建行以免把草稿冒充成已发布。
             $this->persistSelectionDraft(
                 $themeId,
@@ -64,7 +71,7 @@ final class ThemeScopeVersionService
             ->setScopeKind($scopeKind)
             ->setWebsiteId($websiteId)
             ->setStoreMode($storeMode !== '' ? $storeMode : 'normal')
-            ->setArea('frontend')
+            ->setArea($area)
             ->setVersionNumber(1)
             ->setVersionName('v1')
             ->setVersionType(ThemeScopeVersion::TYPE_MANUAL)
@@ -92,11 +99,13 @@ final class ThemeScopeVersionService
         return $version;
     }
 
-    private function loadLatestForScope(int $themeId, string $scope): ?ThemeScopeVersion
+    private function loadLatestForScope(int $themeId, string $scope, string $storeMode, string $area): ?ThemeScopeVersion
     {
         $result = $this->versionModel->reset()
             ->where(ThemeScopeVersion::schema_fields_THEME_ID, $themeId)
             ->where(ThemeScopeVersion::schema_fields_SCOPE, $scope)
+            ->where(ThemeScopeVersion::schema_fields_STORE_MODE, $storeMode)
+            ->where(ThemeScopeVersion::schema_fields_AREA, $area)
             ->order(ThemeScopeVersion::schema_fields_VERSION_NUMBER, 'DESC')
             ->limit(1)
             ->select()
@@ -141,7 +150,7 @@ final class ThemeScopeVersionService
             }
         }
 
-        return $this->loadFlagged($themeId, $scope, ThemeScopeVersion::schema_fields_IS_CURRENT);
+        return $this->loadFlagged($themeId, $scope, ThemeScopeVersion::schema_fields_IS_CURRENT, $storeMode, $area);
     }
 
     /**
@@ -166,7 +175,7 @@ final class ThemeScopeVersionService
             $publishedId = (int)($selection['published_version_id'] ?? 0);
             if ($publishedId > 0) {
                 $version = $this->loadVersionById($publishedId, $themeId, $candidate, $storeMode, $area);
-                if ($version instanceof ThemeScopeVersion) {
+                if ($version instanceof ThemeScopeVersion && $version->getLifecycle() === ThemeScopeVersion::LIFECYCLE_SEALED) {
                     return $version;
                 }
             }
@@ -175,8 +184,10 @@ final class ThemeScopeVersionService
                 $themeId,
                 $candidate,
                 ThemeScopeVersion::schema_fields_IS_PUBLISHED,
+                $storeMode,
+                $area,
             );
-            if ($version instanceof ThemeScopeVersion) {
+            if ($version instanceof ThemeScopeVersion && $version->getLifecycle() === ThemeScopeVersion::LIFECYCLE_SEALED) {
                 return $version;
             }
         }
@@ -195,12 +206,14 @@ final class ThemeScopeVersionService
         $this->versionModel->reset()
             ->where(ThemeScopeVersion::schema_fields_THEME_ID, $themeId)
             ->where(ThemeScopeVersion::schema_fields_SCOPE, $scope)
+            ->where(ThemeScopeVersion::schema_fields_STORE_MODE, $version->getStoreMode())
+            ->where(ThemeScopeVersion::schema_fields_AREA, $version->getArea())
             ->where(ThemeScopeVersion::schema_fields_IS_PUBLISHED, 1)
             ->update([ThemeScopeVersion::schema_fields_IS_PUBLISHED => 0])
             ->fetch();
 
         $version->setIsPublished(true)->save();
-        $this->forgetFlagged($themeId, $scope);
+        $this->forgetFlagged($themeId, $scope, $version->getStoreMode(), $version->getArea());
 
         // selection 是唯一可变权威：同步已发布指针，否则读者仍会解析到旧版本。
         $this->persistSelectionPublished(
@@ -245,7 +258,7 @@ final class ThemeScopeVersionService
             ->setChromePayload($normalized)
             ->setStructureKey($this->hashStructure($normalized))
             ->save();
-        $this->forgetFlagged($version->getThemeId(), $this->normalizeScope((string)$version->getScope()));
+        $this->forgetFlagged($version->getThemeId(), $this->normalizeScope((string)$version->getScope()), $version->getStoreMode(), $version->getArea());
     }
 
     public function createRevisionFrom(
@@ -260,7 +273,7 @@ final class ThemeScopeVersionService
         }
 
         $nextNumber = $this->nextVersionNumber($themeId, $scope);
-        $this->unsetCurrent($themeId, $scope);
+        $this->unsetCurrent($themeId, $scope, $source->getStoreMode(), $source->getArea());
 
         $revision = clone $this->versionModel;
         $revision->reset()
@@ -301,9 +314,9 @@ final class ThemeScopeVersionService
         return $revision;
     }
 
-    private function loadFlagged(int $themeId, string $scope, string $flagField): ?ThemeScopeVersion
+    private function loadFlagged(int $themeId, string $scope, string $flagField, string $storeMode, string $area): ?ThemeScopeVersion
     {
-        $cacheKey = $this->flaggedCacheKey($themeId, $scope, $flagField);
+        $cacheKey = $this->flaggedCacheKey($themeId, $scope, $flagField, $storeMode, $area);
         $cached = RequestContext::get($cacheKey);
         if (\is_array($cached) && \array_key_exists('version', $cached)) {
             $version = $cached['version'];
@@ -314,6 +327,8 @@ final class ThemeScopeVersionService
         $result = $this->versionModel->reset()
             ->where(ThemeScopeVersion::schema_fields_THEME_ID, $themeId)
             ->where(ThemeScopeVersion::schema_fields_SCOPE, $scope)
+            ->where(ThemeScopeVersion::schema_fields_STORE_MODE, $storeMode)
+            ->where(ThemeScopeVersion::schema_fields_AREA, $area)
             ->where($flagField, 1)
             ->order(ThemeScopeVersion::schema_fields_VERSION_NUMBER, 'DESC')
             ->limit(1)
@@ -335,18 +350,18 @@ final class ThemeScopeVersionService
         return $resolved;
     }
 
-    private function flaggedCacheKey(int $themeId, string $scope, string $flagField): string
+    private function flaggedCacheKey(int $themeId, string $scope, string $flagField, string $storeMode, string $area): string
     {
-        return 'theme.scope_version.flag.' . $themeId . '|' . $scope . '|' . $flagField;
+        return 'theme.scope_version.flag.' . $themeId . '|' . $scope . '|' . $storeMode . '|' . $area . '|' . $flagField;
     }
 
-    private function forgetFlagged(int $themeId, string $scope): void
+    private function forgetFlagged(int $themeId, string $scope, string $storeMode, string $area): void
     {
         foreach ([
             ThemeScopeVersion::schema_fields_IS_CURRENT,
             ThemeScopeVersion::schema_fields_IS_PUBLISHED,
         ] as $flagField) {
-            RequestContext::set($this->flaggedCacheKey($themeId, $scope, $flagField), null);
+            RequestContext::set($this->flaggedCacheKey($themeId, $scope, $flagField, $storeMode, $area), null);
         }
     }
 
@@ -491,7 +506,7 @@ final class ThemeScopeVersionService
             if ($existing !== null && $existing['selection_id'] > 0) {
                 $model->load($existing['selection_id']);
             } else {
-                $published = $fallbackPublishedVersionId > 0 ? $fallbackPublishedVersionId : $draftVersionId;
+                $published = max(0, $fallbackPublishedVersionId);
                 $model->setData(ThemeScopeVersionSelection::schema_fields_THEME_ID, $themeId);
                 $model->setData(ThemeScopeVersionSelection::schema_fields_SCOPE, $scope);
                 $model->setData(ThemeScopeVersionSelection::schema_fields_STORE_MODE, $storeMode);
@@ -595,15 +610,17 @@ final class ThemeScopeVersionService
         return ((int)($row[ThemeScopeVersion::schema_fields_VERSION_NUMBER] ?? 0)) + 1;
     }
 
-    private function unsetCurrent(int $themeId, string $scope): void
+    private function unsetCurrent(int $themeId, string $scope, string $storeMode, string $area): void
     {
         $this->versionModel->reset()
             ->where(ThemeScopeVersion::schema_fields_THEME_ID, $themeId)
             ->where(ThemeScopeVersion::schema_fields_SCOPE, $scope)
+            ->where(ThemeScopeVersion::schema_fields_STORE_MODE, $storeMode)
+            ->where(ThemeScopeVersion::schema_fields_AREA, $area)
             ->where(ThemeScopeVersion::schema_fields_IS_CURRENT, 1)
             ->update([ThemeScopeVersion::schema_fields_IS_CURRENT => 0])
             ->fetch();
-        $this->forgetFlagged($themeId, $scope);
+        $this->forgetFlagged($themeId, $scope, $storeMode, $area);
     }
 
     private function normalizeScope(string $scope): string

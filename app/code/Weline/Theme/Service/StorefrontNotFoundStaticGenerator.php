@@ -22,6 +22,7 @@ use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewContextService;
+use Weline\Theme\Service\SlotBoundaryMarkers;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Service\DefaultWebsiteService;
 use Weline\Websites\Service\ScopeResolver;
@@ -410,6 +411,9 @@ final class StorefrontNotFoundStaticGenerator
         // Prefer Context language override — do not mutate process $_SERVER REQUEST_URI.
         try {
             $html = $this->renderThemedNotFoundPage($websiteId, $websiteCode, $websiteUrl);
+            // Published outbound: promote data-wslot → data-slot-id (header / not-found-*)
+            // then strip reactive markers — acceptance gates only match data-slot-id.
+            $html = SlotBoundaryMarkers::strip($html);
 
             return self::stripClientTranslationDictionaries($html);
         } catch (\Throwable) {

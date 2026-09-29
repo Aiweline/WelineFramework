@@ -6,9 +6,20 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * WO-BUILD-CHK-01: cart/checkout SSR slim — keep Theme chrome, skip LayoutSlot fill + QueryBin.
+ * Chrome heal lives in FrontendController::template (not business controllers).
  */
 final class CheckoutCartSsrSlimContractTest extends TestCase
 {
+    public function testFrontendControllerTemplateOwnsStorefrontSsrChromeHealer(): void
+    {
+        $src = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Framework/App/Controller/FrontendController.php'
+        );
+        self::assertStringContainsString('function template(', $src);
+        self::assertStringContainsString('StorefrontSsrChromeHealer', $src);
+        self::assertStringContainsString('ensurePublishedStorefrontChrome', $src);
+    }
+
     public function testCheckoutIndexUsesTemplateNotFetchAndSkipsCurrentCart(): void
     {
         $root = dirname(__DIR__, 3) . '/Controller';
@@ -20,19 +31,24 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
             self::assertStringNotContainsString('currentCart()', $src, $rel);
             self::assertStringContainsString("'showHeader' => true", $src, $rel);
             self::assertStringContainsString("'showFooter' => true", $src, $rel);
-            self::assertStringContainsString('StorefrontSsrChromeHealer', $src, $rel);
-            self::assertStringContainsString('ensurePublishedChrome', $src, $rel);
+            self::assertStringNotContainsString('use Weline\\Theme\\Service\\StorefrontSsrChromeHealer', $src, $rel);
+            self::assertStringNotContainsString('function ensurePublishedChrome', $src, $rel);
+            self::assertStringContainsString('FrontendController::template', $src, $rel);
         }
     }
 
-    public function testCheckoutLayoutOmitsTrustAndBottomSlots(): void
+    public function testCheckoutLayoutKeepsEmptyTrustAndBottomSlotMarkers(): void
     {
         $layout = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/theme/frontend/layouts/checkout/default.phtml'
         );
-        self::assertStringNotContainsString('id="checkout-trust"', $layout);
-        self::assertStringNotContainsString('id="checkout-bottom"', $layout);
-        self::assertStringContainsString('omit SSR trust/bottom', $layout);
+        // Empty-shell data-slot-id markers must remain for acceptance; SSR-slim
+        // still forbids heavy widget SSR (no currentCart / LayoutSlot fill).
+        self::assertStringContainsString('id="checkout-trust"', $layout);
+        self::assertStringContainsString('id="checkout-bottom"', $layout);
+        self::assertStringContainsString('id="checkout-content"', $layout);
+        self::assertStringContainsString('Empty-shell slots kept', $layout);
+        self::assertStringNotContainsString('<w:widget', $layout);
     }
 
     public function testCartIndexUsesTemplateKeepsChromeSkipsSummary(): void
@@ -48,8 +64,9 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
         self::assertStringContainsString("'showHeader' => true", $src);
         self::assertStringContainsString("'showFooter' => true", $src);
         self::assertStringContainsString('theme_seat_integrity', $src);
-        self::assertStringContainsString('StorefrontSsrChromeHealer', $src);
-        self::assertStringContainsString('ensurePublishedChrome', $src);
+        self::assertStringNotContainsString('use Weline\\Theme\\Service\\StorefrontSsrChromeHealer', $src);
+        self::assertStringNotContainsString('function ensurePublishedChrome', $src);
+        self::assertStringContainsString('FrontendController::template', $src);
     }
 
     public function testCurrentCartSkipsLegacySummaryOnGetCartSuccess(): void

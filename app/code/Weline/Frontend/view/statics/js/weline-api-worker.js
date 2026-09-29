@@ -129,6 +129,8 @@
                     error: {
                         code: error && error.code ? error.code : 'protocol_error',
                         message: error instanceof Error ? error.message : String(error),
+                        details: error && error.details ? String(error.details) : '',
+                        responseKind: error && error.responseKind ? String(error.responseKind) : '',
                     },
                     request_id: '',
                 },
@@ -1080,17 +1082,34 @@
                     : (desc.kind === 'gzip'
                         ? 'got gzip bytes without Content-Encoding decode'
                         : (desc.kind === 'empty' ? 'empty body' : '')));
-            const message = [
-                error instanceof Error ? error.message : String(error),
+            const baseMessage = error instanceof Error ? error.message : String(error);
+            const details = [
+                baseMessage,
                 `(HTTP ${status}${contentType ? ', ' + contentType : ''})`,
                 `response_bytes=${desc.length}`,
                 hint,
                 desc.hex ? `head_hex=${desc.hex}` : '',
                 desc.ascii ? `head_ascii=${desc.ascii}` : '',
             ].filter(Boolean).join(' ');
-            throw Object.assign(new Error(message), {
-                code: 'protocol_error',
+            let code = 'protocol_error';
+            if (status === 521) {
+                code = 'origin_unreachable';
+            } else if (status === 502 || status === 503 || status === 504) {
+                code = 'service_unavailable';
+            } else if (status === 403) {
+                code = 'request_forbidden';
+            } else if (status === 401) {
+                code = 'auth_error';
+            } else if (desc.kind === 'html') {
+                code = 'unexpected_html';
+            } else if (/invalid weline binary magic/i.test(baseMessage)) {
+                code = 'wqb_invalid_magic';
+            }
+            throw Object.assign(new Error(baseMessage), {
+                code,
                 status,
+                details,
+                responseKind: desc.kind,
             });
         }
     }

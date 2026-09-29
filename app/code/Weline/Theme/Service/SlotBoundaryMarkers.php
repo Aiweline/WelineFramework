@@ -37,6 +37,23 @@ final class SlotBoundaryMarkers
     }
 
     /**
+     * Whether HTML exposes slot destinations Overlay / required-default can write into.
+     * Align with RequiredDefaultInjectionStorefrontOverlay::append presence gate —
+     * reactive Taglib shells emit data-wslot only (no data-slot-id until strip promote).
+     */
+    public static function htmlHasInjectableSlotDestinations(string $html): bool
+    {
+        if ($html === '') {
+            return false;
+        }
+
+        return \str_contains($html, self::OPEN_PREFIX)
+            || \str_contains($html, 'data-wslot=')
+            || \str_contains($html, 'data-slot-id=')
+            || \str_contains($html, 'widget-slot-area');
+    }
+
+    /**
      * Remove boundary comments from final HTML (PROD / published outbound).
      * wave8-8s3: also strip reactive data-wslot* / widget-slot-area attributes.
      */

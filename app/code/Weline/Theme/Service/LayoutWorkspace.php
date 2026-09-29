@@ -72,28 +72,11 @@ final class LayoutWorkspace implements LayoutWorkspaceInterface
         LayoutStatus $status,
         LayoutIdentity $identity,
     ): bool {
-        try {
-            return $this->atomic('theme_layout_replace', function () use (
-                $themeId,
-                $pageType,
-                $layoutData,
-                $status,
-                $identity,
-            ): bool {
-                if (!$this->layoutService->saveLayout(
-                    $themeId,
-                    $pageType,
-                    $layoutData,
-                    $status->value,
-                    $identity->toArray(),
-                )) {
-                    throw new \RuntimeException((string)__('Theme 布局保存失败。'));
-                }
-                return true;
-            });
-        } catch (\Throwable) {
-            return false;
-        }
+        // The canonical writer commits before publishing PHTML. An outer
+        // transaction here could roll back the DB after files became visible.
+        return $this->layoutService->saveLayout(
+            $themeId, $pageType, $layoutData, $status->value, $identity->toArray(),
+        );
     }
 
     public function publishLayout(

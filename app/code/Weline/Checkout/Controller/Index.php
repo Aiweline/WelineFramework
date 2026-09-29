@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Weline\Checkout\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Service\StorefrontSsrChromeHealer;
 
 /**
  * Storefront checkout page.
@@ -14,9 +12,9 @@ use Weline\Theme\Service\StorefrontSsrChromeHealer;
  * HARD: keep Theme Partials header/footer chrome (theme_seat_integrity).
  * Bare HTML shells that omit chrome are rejected as a performance "fix".
  *
- * P0 reachability: SSR is a client shell only — no currentCart/getCart/summary,
- * template()/fetchHtml skips LayoutSlotRenderer entity fill. Address / shipping /
- * payment hydrate via QueryBin after first paint.
+ * SSR remains a client shell with no currentCart/getCart/summary call. The normal
+ * layout lifecycle selects the captured body and chrome before one layout wrap.
+ * Address, shipping and payment hydrate via QueryBin after first paint.
  */
 class Index extends FrontendController
 {
@@ -52,26 +50,8 @@ class Index extends FrontendController
             'class' => 'weline-checkout-page',
         ];
 
-        $body = $this->template('Weline_Checkout::frontend/checkout/index.phtml');
-        $meta['content'] = $body;
         $this->assign('meta', $meta);
-        $this->assign('content', $body);
-
-        $html = $this->template('Weline_Checkout::theme/frontend/layouts/checkout/default.phtml');
-
-        return $this->ensurePublishedChrome($html);
-    }
-
-    private function ensurePublishedChrome(string $html): string
-    {
-        try {
-            /** @var StorefrontSsrChromeHealer $healer */
-            $healer = ObjectManager::getInstance(StorefrontSsrChromeHealer::class);
-
-            return $healer->ensure($html);
-        } catch (\Throwable) {
-            return $html;
-        }
+        return $this->fetch('Weline_Checkout::frontend/checkout/index.phtml');
     }
 
     /**

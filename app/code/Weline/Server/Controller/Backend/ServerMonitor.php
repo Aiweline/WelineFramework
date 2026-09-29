@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Server\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Security\AttackDetector;
 use Weline\Server\Model\AttackLog;
@@ -21,6 +22,7 @@ use Weline\Server\Service\Benchmark\ServerBenchmarkService;
 use Weline\Server\Service\Control\BackendStatusService;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\HealthAllowCookieService;
+use Weline\Server\Service\Security\AttackScanWarningAnalyzer;
 use Weline\Server\Service\Telemetry\MetricsFlushScheduler;
 use Weline\Server\Service\OptimizationGuideService;
 
@@ -94,7 +96,7 @@ class ServerMonitor extends BackendController
         $serverStatus = $this->guideService->getServerStatus();
         
         // 获取攻击统计
-        $attackStats = $this->attackLog->getStatistics($instance, 7);
+        $attackStats = $this->attackStatsWithWarnings((string)$instance, 7);
         
         // 获取最新状态日志
         $statusLogs = $this->statusLog->getLatestStatus($instance);
@@ -228,7 +230,7 @@ class ServerMonitor extends BackendController
         $page = (int) $this->request->getGet('page', 1);
         
         $attacks = $this->attackLog->getRecentAttacks($limit, $instance);
-        $stats = $this->attackLog->getStatistics($instance, 7);
+        $stats = $this->attackStatsWithWarnings((string)$instance, 7, $attacks);
         
         return [
             'success' => true,
@@ -252,7 +254,7 @@ class ServerMonitor extends BackendController
         
         return [
             'success' => true,
-            'data' => $this->attackLog->getStatistics($instance, $days),
+            'data' => $this->attackStatsWithWarnings((string)$instance, $days),
         ];
     }
     
@@ -308,7 +310,7 @@ class ServerMonitor extends BackendController
         $this->assign('limit', $limit);
         $this->assign('total', $total);
         $this->assign('totalPages', \ceil($total / $limit));
-        $this->assign('attackStats', $this->attackLog->getStatistics($instance, 7));
+        $this->assign('attackStats', $this->attackStatsWithWarnings((string)$instance, 7, \is_array($list) ? $list : []));
         $this->assign('title', __('攻击日志'));
         
         return $this->fetch('attack-log');
@@ -492,5 +494,20 @@ class ServerMonitor extends BackendController
                 'message' => __('保存失败：%{1}', $throwable->getMessage()),
             ];
         }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $recentRows
+     * @return array<string, mixed>
+     */
+    private function attackStatsWithWarnings(string $instance, int $days, array $recentRows = []): array
+    {
+        $stats = $this->attackLog->getStatistics($instance, $days);
+        if ($recentRows === []) {
+            $recentRows = $this->attackLog->getRecentAttacks(80, $instance);
+        }
+
+        return ObjectManager::getInstance(AttackScanWarningAnalyzer::class)
+            ->enrichStatistics($stats, $recentRows);
     }
 }

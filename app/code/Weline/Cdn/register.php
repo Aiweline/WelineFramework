@@ -20,7 +20,7 @@ Register::register(
     [
         'Weline_Framework',
         'Weline_Websites',
+        'Weline_Queue',
         'Weline_Cron'
     ]
 );
-

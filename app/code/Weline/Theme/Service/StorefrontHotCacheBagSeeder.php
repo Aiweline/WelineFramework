@@ -16,16 +16,19 @@ use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller;
 /**
  * wave8-8c / 8c3 / P5-O1: Theme-owned compliant HotCache bag priming for deferred warmup.
  *
- * Seeds chrome.rendered (eager sync, disk-only + scope fallback), chrome slot projection,
- * header commerce bags, and frontend header Partials HTML.
+ * Seeds chrome.phtml-include HTML HotCache (eager sync + scope fallback), chrome slot
+ * projection, header commerce bags, and frontend header Partials HTML.
  * Fail-open; never invents FPC HIT; never clears shared FPC; no cross-module Model.
+ *
+ * W4: does NOT seed from / write chrome.rendered.{locale}.html. Primary chrome is
+ * relationship chrome.phtml include + hydrate + HotCache/FPC.
  *
  * wls-perf-regression Option C + O1/P8-O2: when bag-prime runs with a live request Context but
  * ScopeIdentity was never frozen (FPC HIT / capture edge), install the default
  * storefront channel so HotCache keys match `default.__store__.__channel__` —
  * no fake HIT. Chrome miss → honest [] short-path (禁空烧重投影).
- * P8-O2: ensure Theme on Template before chrome seed so stage-gated durable bake
- * (loadOrRenderPublished on heavy/peer) can write chrome.rendered.{locale}.html.
+ * P8-O2: ensure Theme on Template before chrome seed so stage-gated include
+ * (loadOrRenderPublished on heavy/peer) can fill the HotCache bag.
  */
 final class StorefrontHotCacheBagSeeder
 {
@@ -65,10 +68,10 @@ final class StorefrontHotCacheBagSeeder
                     $peeked++;
                     $bags[] = 'theme.layout_entity.chrome_rendered';
                 } else {
-                    // Architect msg-5 / O1: honest miss — do NOT remember empty chrome.rendered HTML;
+                    // Architect msg-5 / O1: honest miss — do NOT remember empty chrome HTML;
                     // do NOT buildChromeSlotProjection (空烧). Light [] Shared only.
                     $chromeMiss = true;
-                    $errors[] = 'chrome_rendered:miss scope=' . $storageScope;
+                    $errors[] = 'chrome_phtml:miss scope=' . $storageScope;
                     try {
                         /** @var ThemeLayoutEntitySlotFiller $fillerEarly */
                         $fillerEarly = ObjectManager::getInstance(ThemeLayoutEntitySlotFiller::class);
@@ -81,7 +84,7 @@ final class StorefrontHotCacheBagSeeder
                 }
             } catch (\Throwable $e) {
                 $chromeMiss = true;
-                $errors[] = 'chrome_rendered:' . $e->getMessage();
+                $errors[] = 'chrome_phtml:' . $e->getMessage();
             }
         } else {
             $errors[] = 'theme_id_unresolved';

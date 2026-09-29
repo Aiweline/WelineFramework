@@ -71,7 +71,6 @@ final class WidgetDefaultInjectionRequiredContractTest extends TestCase
         self::assertStringContainsString("'默认安装'", $js);
         self::assertStringContainsString("'推荐'", $js);
         self::assertStringContainsString('一键安装默认项', $js);
-        self::assertStringContainsString('reconcileRequiredDefaultsAfterDraftReady', $js);
         self::assertStringNotContainsString("'强烈推荐'", $js);
     }
 

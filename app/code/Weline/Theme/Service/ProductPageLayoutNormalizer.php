@@ -204,6 +204,13 @@ final class ProductPageLayoutNormalizer
                 }
                 $code = \strtolower(\trim((string)($widget['widget_code'] ?? '')));
                 if ($code === self::WIDGET_CODE_PRODUCT_INFO) {
+                    // layout_embed_recover = solidified shell bake of the layout path (keep).
+                    // Strip only injection/Seeder/JSON duplicates (XOR).
+                    $source = \strtolower(\trim((string)($widget['source'] ?? '')));
+                    if ($source === 'layout_embed_recover' || $source === 'layout_embed') {
+                        $kept[] = $widget;
+                        continue;
+                    }
                     $removed = true;
                     continue;
                 }

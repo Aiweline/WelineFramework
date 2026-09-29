@@ -28,6 +28,7 @@ use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeDirectoryResolver;
 use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
+use Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot;
 
 /**
  * Partials Block
@@ -180,14 +181,16 @@ class Partials extends Block
         // on the chrome hot path. Shared theme_runtime IPC is also skipped here —
         // each wls.memory get/set/incr currently burns ~200ms under pool pressure,
         // which made chrome caching slower than plain render and produced 0 hits.
-        $sourceFile = $this->resolveModulePath($fileName);
+        $snapshot = ThemeLayoutSourceSnapshot::current();
+        $captured = $snapshot?->source($fileName);
+        $sourceFile = $captured === null ? $this->resolveModulePath($fileName) : null;
         if ((!is_string($sourceFile) || $sourceFile === '' || !is_file($sourceFile)) && is_file($fileName)) {
             $sourceFile = $fileName;
         }
-        $sourceStat = is_string($sourceFile) ? @stat($sourceFile) : false;
-        $sourceFingerprint = is_array($sourceStat)
+        $sourceStat = $captured === null && is_string($sourceFile) ? @stat($sourceFile) : false;
+        $sourceFingerprint = $captured !== null ? $snapshot->fingerprint() : (is_array($sourceStat)
             ? (int)$sourceStat['mtime'] . '|' . (int)$sourceStat['size']
-            : '0|0';
+            : '0|0');
         $cacheKey = \sha1($fileName . '|' . $sourceFingerprint . '|' . $cacheContext);
 
         $cached = $this->readPartialOutputCache($cacheKey);
@@ -476,6 +479,9 @@ class Partials extends Block
     private function resolveChromeCachePolicy(string $modulePath, array $partialsMeta, string $type = ''): ?array
     {
         $cacheKey = $modulePath . "\0" . \strtolower(\trim($type));
+        $snapshot = ThemeLayoutSourceSnapshot::current();
+        $captured = $snapshot?->source($modulePath);
+        if ($captured !== null) { $cacheKey .= "\0" . $snapshot->fingerprint(); }
         if (isset(self::$chromePolicyCache[$cacheKey])) {
             $cached = self::$chromePolicyCache[$cacheKey];
             unset(self::$chromePolicyCache[$cacheKey]);
@@ -489,7 +495,7 @@ class Partials extends Block
 
         if ($mode === null || $mode === '') {
             try {
-                $filePath = $this->resolveModulePath($modulePath);
+                $filePath = $captured === null ? $this->resolveModulePath($modulePath) : null;
                 if ((!(\is_string($filePath) && $filePath !== '' && \is_file($filePath)))
                     && \is_string($modulePath)
                     && $modulePath !== ''
@@ -497,8 +503,10 @@ class Partials extends Block
                 ) {
                     $filePath = $modulePath;
                 }
-                if (\is_string($filePath) && $filePath !== '' && \is_file($filePath)) {
-                    $parsed = ComponentMetaParser::parse($filePath);
+                if ($captured !== null || (\is_string($filePath) && $filePath !== '' && \is_file($filePath))) {
+                    $parsed = $captured !== null
+                        ? ComponentMetaParser::parseContent($captured['bytes'], $captured['origin'])
+                        : ComponentMetaParser::parse($filePath);
                     $cacheNode = \is_array($parsed['meta']['cache'] ?? null) ? (array)$parsed['meta']['cache'] : [];
                     $mode = $this->readCacheMetaDefault($cacheNode, 'mode')
                         ?? $this->readCacheMetaDefault(['cache' => $cacheNode], 'mode');
@@ -1225,6 +1233,11 @@ class Partials extends Block
 
     public function getPartialsPath(string $area, string $type, string $defaultOption = 'default'): ?string
     {
+        $snapshot = ThemeLayoutSourceSnapshot::current();
+        if ($snapshot !== null && $snapshot->identity->area === strtolower($area)) {
+            $selected = $snapshot->selectedPartialPath($type, $defaultOption);
+            if ($selected !== null) { return $selected; }
+        }
         /** @var ThemeContextService $ctx */
         $ctx = ObjectManager::getInstance(ThemeContextService::class);
         $normalizedArea = $ctx->normalizeArea($area);
@@ -1367,7 +1380,8 @@ class Partials extends Block
                 }
             }
 
-            $scope = $this->resolveScope($area);
+            $captured = ThemeLayoutSourceSnapshot::current()?->source($path);
+            $scope = $captured !== null ? ThemeLayoutSourceSnapshot::current()->identity->canonicalScope : $this->resolveScope($area);
             $metaIdentify = "partials.{$type}";
             if ($defaultOption && $defaultOption !== 'default') {
                 $metaIdentify .= ".{$defaultOption}";
@@ -1376,7 +1390,16 @@ class Partials extends Block
             }
 
             $cacheKey = $area . '|' . $type . '|' . $defaultOption . '|' . $scope . '|' . $path;
-            if (array_key_exists($cacheKey, self::$partialsMetaCache)) {
+            if ($captured !== null) {
+                // Saved parameters are emitted in this PHTML; defaults come from
+                // the same captured source, never today's scoped DB configuration.
+                $parsed = ComponentMetaParser::parseContent($captured['bytes'], $captured['origin']);
+                $partialsMeta = [];
+                foreach (LayoutPathResolver::formatParsedParams($parsed['params'] ?? []) as $name => $definition) {
+                    $value = $definition['default'] ?? null;
+                    $partialsMeta[$name] = $value === 'true' ? true : ($value === 'false' ? false : $value);
+                }
+            } elseif (array_key_exists($cacheKey, self::$partialsMetaCache)) {
                 $partialsMeta = self::$partialsMetaCache[$cacheKey];
                 unset(self::$partialsMetaCache[$cacheKey]);
                 self::$partialsMetaCache[$cacheKey] = $partialsMeta;
@@ -1532,6 +1555,7 @@ class Partials extends Block
         array $dictionary = [],
         ?string $compiledFile = null
     ): string {
+        ThemeLayoutSourceSnapshot::current()?->install($this);
         $compiledFile ??= $this->getFetchFile($fileName);
         if (!\is_file($compiledFile)) {
             $compiledFile = $this->getFetchFile($fileName);

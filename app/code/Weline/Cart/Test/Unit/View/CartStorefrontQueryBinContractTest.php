@@ -30,25 +30,39 @@ final class CartStorefrontQueryBinContractTest extends TestCase
         self::assertStringContainsString("node.setAttribute('inert', '')", $template);
     }
 
-    public function testCartPageAdoptsTheSharedGuestSessionBeforeIssuingANewToken(): void
+    public function testCartPageAlwaysIssuesGuestTokenAfterSharedSessionLoad(): void
     {
         $template = $this->template();
         $ensureGuestToken = strpos($template, 'async function ensureGuestToken()');
         $loadCartModule = strpos($template, "await Weline.load('cart')", $ensureGuestToken ?: 0);
         $rereadStoredToken = strpos($template, 'guestToken = readStoredGuestToken()', $loadCartModule ?: 0);
-        $firstReuseGuestToken = strpos($template, 'if (guestToken) {', $ensureGuestToken ?: 0);
-        $reuseGuestToken = strpos($template, 'if (guestToken) {', $rereadStoredToken ?: 0);
-        $issueGuestToken = strpos($template, '.issueGuestToken(', $rereadStoredToken ?: 0);
+        $forceRenew = strpos($template, 'renewGuestSession({ force: true })', $ensureGuestToken ?: 0);
+        $issueEmpty = strpos($template, 'issueGuestToken({})', $forceRenew ?: 0);
+        $issueWithToken = strpos($template, 'issueGuestToken({ guest_token: guestToken })', $ensureGuestToken ?: 0);
+        // Early return on JS-only guestToken must stay gone (Cookie authority via always-issue).
+        $earlyReturnReuse = preg_match(
+            '/async function ensureGuestToken\(\)\s*\{[\s\S]*?if \(guestToken\) \{\s*return guestToken;\s*\}/',
+            $template,
+        );
 
         self::assertIsInt($ensureGuestToken);
         self::assertIsInt($loadCartModule, 'Cart page must load the shared Cart browser session first.');
         self::assertIsInt($rereadStoredToken, 'Cart page must re-read the shared guest token after loading Cart.');
-        self::assertSame($reuseGuestToken, $firstReuseGuestToken, 'Do not return a stale legacy token before adoption.');
-        self::assertIsInt($reuseGuestToken, 'Legacy sessionStorage must not win before shared-session adoption.');
-        self::assertIsInt($issueGuestToken, 'Cart page may issue a token only after attempting adoption.');
+        self::assertIsInt($forceRenew, 'Existing JS token must force-renew into Cookie before issue.');
+        self::assertIsInt($issueEmpty, 'After renew OK (or no JS token) must issueGuestToken({}).');
+        self::assertIsInt($issueWithToken, 'Renew fail/skip path must still try issueGuestToken({guest_token}).');
+        self::assertSame(0, $earlyReturnReuse, 'Do not return a JS-only guestToken without issueGuestToken.');
         self::assertLessThan($rereadStoredToken, $loadCartModule);
-        self::assertLessThan($reuseGuestToken, $rereadStoredToken);
-        self::assertLessThan($issueGuestToken, $reuseGuestToken);
+        self::assertLessThan($forceRenew, $rereadStoredToken);
+        self::assertLessThan($issueEmpty, $forceRenew);
+        self::assertStringContainsString('cookieSyncedByRenew', $template);
+        self::assertStringContainsString('isUnknownGuestTokenWorkerParam', $template);
+        self::assertStringContainsString('Unknown frontend worker param:\\s*guest_token', $template);
+        // Must not always-issue with guest_token when Cookie was synced by renew.
+        self::assertStringNotContainsString(
+            'const issueParams = guestToken ? { guest_token: guestToken } : {};',
+            $template,
+        );
     }
 
     public function testCartPageDoesNotSendClientOwnedIdentityOrScope(): void

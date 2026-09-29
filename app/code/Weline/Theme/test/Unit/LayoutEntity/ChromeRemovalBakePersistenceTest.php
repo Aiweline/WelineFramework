@@ -1,51 +1,65 @@
 <?php
-
 declare(strict_types=1);
-
+namespace Weline\Theme\Test\Unit\LayoutEntity;
 use PHPUnit\Framework\TestCase;
-use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator;
-
-require_once dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php';
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Template;
+use Weline\Theme\Service\LayoutEntity\LayoutRelationCompiler;
+use Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract;
+use Weline\Theme\Service\RuntimeTemplateMaterializer;
+require_once __DIR__ . '/fixtures/ResolvedPhtmlFixture.php';
 
 final class ChromeRemovalBakePersistenceTest extends TestCase
 {
-    private function merge(array $incoming, array $current): array
+    use ResolvedPhtmlFixture;
+    public function testAutomaticRebakeCannotReviveCanonicalRemovalWithANewUid(): void
     {
-        $class = new ReflectionClass(ThemeLayoutEntityBakeCoordinator::class);
-        return $class->getMethod('preserveChromeUserRemovals')->invoke($class->newInstanceWithoutConstructor(), $incoming, $current);
+        $removed=$this->removed();
+        $slots=RequiredDefaultInjectionContract::merge(['footer-help-links'=>[$removed]],'homepage',[$this->declaration()],[]);
+        self::assertCount(1,$slots['footer-help-links']);
+        self::assertSame($removed['node_uid'],$slots['footer-help-links'][0]['node_uid']);
+        self::assertStringNotContainsString('REMOVED',$this->renderSlots($slots));
     }
-
-    private function removed(): array
+    public function testOmittedPlacementStaysEmptyAcrossRepeatedGeneration(): void
     {
-        return ['node_uid' => str_repeat('a', 32), 'widget_module' => 'Weline_Test', 'widget_type' => 'footer', 'widget_code' => 'help', 'area' => 'footer', 'slot_id' => 'footer-help-links', 'is_active' => false, 'source' => 'user_deleted'];
+        $omission=['slot_id'=>'footer-help-links','widget_module'=>'Fixture','widget_code'=>'label'];
+        $slots=RequiredDefaultInjectionContract::merge([],'homepage',[$this->declaration()],[$omission]);
+        $again=RequiredDefaultInjectionContract::merge($slots,'homepage',[$this->declaration()],[$omission]);
+        self::assertSame('<footer data-wslot="footer-help-links"></footer>',$this->renderSlots($again));
     }
-
-    public function testAutomaticRebakeCannotReviveRemovedPlacementWithANewUid(): void
+    public function testCanonicalDeletionBeatsAStaleActiveFlag(): void
     {
-        $removed = $this->removed();
-        $automatic = array_replace($removed, ['node_uid' => str_repeat('b', 32), 'source' => 'default_injection', 'is_active' => true]);
-        $otherModule = array_replace($automatic, ['node_uid' => str_repeat('c', 32), 'widget_module' => 'Weline_Other']);
-        self::assertSame([$otherModule['node_uid'] => $otherModule, $removed['node_uid'] => $removed], $this->merge([$automatic['node_uid'] => $automatic, $otherModule['node_uid'] => $otherModule], [$removed['node_uid'] => $removed]));
+        $node=$this->removed();$node['is_active']=true;
+        self::assertStringNotContainsString('REMOVED',$this->renderSlots(['footer-help-links'=>[$node]]));
     }
-
-    public function testOmittedRemovalSurvivesFullPayloadBake(): void
-    {
-        $removed = $this->removed();
-        self::assertSame([$removed['node_uid'] => $removed], $this->merge([], [$removed['node_uid'] => $removed]));
-    }
-
-    public function testStaleWorkspaceActiveFlagIsNotAnExplicitRestoreCommand(): void
-    {
-        $removed = $this->removed();
-        foreach (['', 'manual', 'user_deleted'] as $source) {
-            $stale = array_replace($removed, ['is_active' => true, 'source' => $source]);
-            self::assertSame([$removed['node_uid'] => $removed], $this->merge([$removed['node_uid'] => $stale], [$removed['node_uid'] => $removed]));
-        }
-    }
-
     public function testOrdinaryInactiveNodeIsNotInventedAsUserRemoval(): void
     {
-        $node = array_replace($this->removed(), ['source' => 'manual']);
-        self::assertSame([], $this->merge([], [$node['node_uid'] => $node]));
+        $node=$this->removed();$node['source']='manual';
+        $slots=RequiredDefaultInjectionContract::merge(['footer-help-links'=>[$node]],'homepage',[$this->declaration()],[]);
+        self::assertSame('manual',$slots['footer-help-links'][0]['source']);
+        self::assertStringNotContainsString('REMOVED',$this->renderSlots($slots));
+        $slots['footer-help-links'][0]['is_active']=true;
+        self::assertStringContainsString('<b>REMOVED</b>',$this->renderSlots($slots));
+    }
+    public function testFullPayloadOmittingCanonicalDeletionCannotReinjectDefault(): void
+    {
+        $removed=$this->removed(); $before=['nodes'=>[$removed['node_uid']=>$removed]];
+        $commands=(new \Weline\Theme\Service\Scoped\ThemeLayoutPayloadDiffer())->diff($before,['nodes'=>[]]);
+        $payload=(new \Weline\Theme\Service\Scoped\ThemePatchEngine())->apply($before,$commands);
+        $slots=RequiredDefaultInjectionContract::merge(['footer-help-links'=>array_values($payload['nodes'])],'homepage',[$this->declaration()],[]);
+        self::assertStringNotContainsString('<b>REMOVED</b>',$this->renderSlots($slots),'A full snapshot omission must not erase the prior manual uninstall intent.');
+    }
+    private function removed(): array
+    {
+        return $this->node('a','footer-help-links','REMOVED',0)+['area'=>'footer','is_active'=>false,'source'=>'user_deleted'];
+    }
+    private function declaration(): array
+    {
+        return ['module'=>'Fixture','type'=>'content','code'=>'label','default_injections'=>[['layout_type'=>'homepage','slot'=>'footer-help-links','area'=>'footer','required'=>true,'config'=>['text'=>'REMOVED']]]];
+    }
+    private function renderSlots(array $slots): string
+    {
+        $nodes=[];foreach($slots as $items){foreach($items as $node){$nodes[$node['node_uid']]=$node;}}
+        return (new RuntimeTemplateMaterializer(ObjectManager::getInstance(Template::class)))->renderContent((new LayoutRelationCompiler($this->registry))->compile('<footer data-wslot="footer-help-links"></footer>',$nodes));
     }
 }

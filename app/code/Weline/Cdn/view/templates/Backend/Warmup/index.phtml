@@ -1,27 +1,15 @@
 <?php
 /**
- * CDN预热管理列表页
+ * CDN 预热管理：<w:scope> 范围 + Provider 折叠 + 已入队 URL 异步分页
  *
  * @var \Weline\Framework\View\Template $this
  */
 
-$urls = $this->getData('urls') ?: [];
-$total = (int)$this->getData('total');
-$page = (int)$this->getData('page');
-$pageSize = (int)$this->getData('pageSize');
-$totalPages = (int)$this->getData('totalPages');
-$search = $this->getData('search') ?: '';
-$status = $this->getData('status') ?: '';
-$statistics = $this->getData('statistics') ?: [];
+$providers = $this->getData('providers') ?: [];
+$selectedScope = (string)($this->getData('selected_scope') ?? 'default.default.default');
 $escapeAttr = static function (mixed $value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 };
-$kpis = [
-    ['icon' => 'link', 'value' => (int)($statistics['total'] ?? 0), 'label' => __('总URL数')],
-    ['icon' => 'check-circle', 'value' => (int)($statistics['success'] ?? 0), 'label' => __('成功')],
-    ['icon' => 'warning', 'value' => (int)($statistics['fail'] ?? 0), 'label' => __('失败')],
-    ['icon' => 'clock', 'value' => (int)($statistics['pending'] ?? 0), 'label' => __('待处理')],
-];
 ?>
 
 <div class="w-grid w-backend-page" data-testid="cdn-warmup-management">
@@ -41,382 +29,488 @@ $kpis = [
                 <p class="w-text" data-tone="primary" data-size="sm" style="--w-mb:0;"><?= __('CDN 运维') ?></p>
                 <h4 class="w-backend-page__title" style="--w-mb:0;"><?= __('CDN 预热') ?></h4>
                 <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);--w-mb:0;">
-                    <?= __('管理预热 URL 队列，查看进度并执行待处理任务。') ?>
+                    <?= __('按 Provider 管理预热队列；范围使用官方作用范围标签，按 Website 过滤（Global=全部）。首页与 /products 本迭代不进静态文档 Provider。') ?>
                 </p>
             </div>
-            <button type="button" class="w-button" data-cdn-warmup-action="execute" data-tone="success" data-size="sm">
-                <w:icon name="play" size="sm"></w:icon> <?= __('执行预热') ?>
+            <button
+                type="button"
+                class="w-button"
+                id="cdn-warmup-execute-btn"
+                data-cdn-warmup-action="execute"
+                data-tone="success"
+                data-size="sm"
+            >
+                <w:icon name="play" size="sm"></w:icon>
+                <span data-cdn-warmup-execute-label><?= __('执行预热') ?></span>
             </button>
         </header>
 
-        <?php if (!empty($statistics)): ?>
-            <section
-                class="w-stat-tiles w-grid"
-                aria-label="<?= $escapeAttr(__('预热概览')) ?>"
-                style="--w-stat-tile-min:9rem;--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"
-            >
-                <?php foreach ($kpis as $kpi): ?>
-                    <article class="w-card" data-w-height="full" data-w-shadow="sm">
-                        <div class="w-card__body w-cluster" data-align="center" style="--w-gap:var(--weline-space-3);">
-                            <span aria-hidden="true">
-                                <w:icon name="<?= $escapeAttr($kpi['icon']) ?>" size="sm"></w:icon>
-                            </span>
-                            <div class="w-stack" style="--w-gap:var(--weline-space-1);">
-                                <strong><?= number_format((int)$kpi['value']) ?></strong>
-                                <span class="w-text" data-tone="muted" data-size="sm"><?= $escapeAttr((string)$kpi['label']) ?></span>
-                            </div>
-                        </div>
-                    </article>
-                <?php endforeach; ?>
-            </section>
-        <?php endif; ?>
+        <section class="w-card" data-w-shadow="sm" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__body w-cluster" data-align="end" data-wrap="true" style="--w-gap:var(--weline-space-3);">
+                <div class="w-field" style="--w-mb:0;flex:1 1 16rem;max-inline-size:24rem;">
+                    <label class="w-field__label" for="cdn-warmup-scope"><?= __('作用范围') ?></label>
+                    <div class="w-field__control">
+                        <w:scope
+                            id="cdn-warmup-scope"
+                            name="target_scope"
+                            value="selected_scope"
+                            scope="global,website"
+                            placeholder="@lang(选择作用范围)"
+                            search-placeholder="@lang(搜索作用范围)"
+                            aria-label="@lang(选择作用范围)"
+                            searchable="true"
+                            default-expand-all="true"
+                            required="true"
+                        />
+                    </div>
+                    <small class="w-field__hint" id="cdn-warmup-scope-hint" data-tone="muted"></small>
+                </div>
+                <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                    <span class="w-text" data-size="sm" data-tone="muted"><?= __('本范围摘要') ?></span>
+                    <strong class="w-text" id="cdn-warmup-scope-summary">—</strong>
+                </div>
+            </div>
+        </section>
+
+        <section
+            class="w-stat-tiles w-grid"
+            id="cdn-warmup-kpi"
+            aria-label="<?= $escapeAttr(__('预热概览')) ?>"
+            style="--w-stat-tile-min:9rem;--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"
+        ></section>
 
         <section class="w-card" data-w-shadow="sm">
-            <div
-                class="w-card__header w-cluster"
-                data-align="center"
-                data-justify="between"
-                data-wrap="true"
-                style="--w-gap:var(--weline-space-3);"
-            >
-                <div class="w-stack" style="--w-gap:var(--weline-space-1);">
-                    <strong class="w-text" data-weight="strong"><?= __('预热 URL 列表') ?></strong>
-                    <span class="w-text" data-tone="muted" data-size="sm">
-                        <?= __('共 %{1} 条', (string)$total) ?>
-                    </span>
-                </div>
-                <w:form
-                    method="get"
-                    class="w-cluster"
-                    role="search"
-                    aria-label="<?= $escapeAttr(__('搜索URL')) ?>"
-                    data-align="center"
-                    data-wrap="true"
-                    style="--w-gap:var(--weline-space-2);max-inline-size:min(100%,36rem);"
-                >
-                    <label class="w-visually-hidden" for="cdn-warmup-search-input"><?= __('搜索URL') ?></label>
-                    <input
-                        id="cdn-warmup-search-input"
-                        type="search"
-                        name="search"
-                        class="w-input"
-                        data-size="sm"
-                        placeholder="<?= $escapeAttr(__('搜索URL')) ?>"
-                        value="<?= $escapeAttr($search) ?>"
-                        autocomplete="off"
-                        style="inline-size:min(100%,12rem);flex:1 1 8rem;min-inline-size:7rem;"
-                    >
-                    <label class="w-visually-hidden" for="cdn-warmup-status-filter"><?= __('全部状态') ?></label>
-                    <select
-                        id="cdn-warmup-status-filter"
-                        name="status"
-                        class="w-select"
-                        data-size="sm"
-                        style="flex:0 1 9rem;min-inline-size:7rem;"
-                        aria-label="<?= $escapeAttr(__('全部状态')) ?>"
-                    >
-                        <option value=""><?= __('全部状态') ?></option>
-                        <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>><?= __('待处理') ?></option>
-                        <option value="processing" <?= $status === 'processing' ? 'selected' : '' ?>><?= __('处理中') ?></option>
-                        <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>><?= __('已完成') ?></option>
-                        <option value="failed" <?= $status === 'failed' ? 'selected' : '' ?>><?= __('失败') ?></option>
-                    </select>
-                    <button type="submit" class="w-button" data-tone="primary" data-size="sm" style="flex:0 0 auto;white-space:nowrap;">
-                        <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
-                    </button>
-                    <a href="@backend-url{'*/backend/warmup/index'}" class="w-button" data-tone="neutral" data-size="sm" style="flex:0 0 auto;white-space:nowrap;">
-                        <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
-                    </a>
-                </w:form>
+            <div class="w-card__header">
+                <strong class="w-text" data-weight="strong"><?= __('预热 URL 提供者') ?></strong>
             </div>
-
-            <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
-                <?php if (empty($urls)): ?>
-                    <div class="w-empty">
-                        <w:icon name="link" size="lg"></w:icon>
-                        <p class="w-text" data-weight="strong"><?= __('暂无预热数据') ?></p>
-                        <p class="w-text" data-tone="muted" data-size="sm"><?= __('暂无待处理或已登记的预热 URL') ?></p>
+            <div class="w-card__body" id="cdn-warmup-provider-list">
+                <?php if (empty($providers)): ?>
+                    <div class="w-empty" data-testid="cdn-warmup-no-provider">
+                        <p class="w-text" data-weight="strong"><?= __('未发现 WarmupProvider') ?></p>
+                        <p class="w-text" data-tone="muted" data-size="sm">
+                            <?= __('请在模块 extends/module/Weline_Cdn/ 下实现 WarmupProviderInterface，详见 CDN extends 文档。') ?>
+                        </p>
                     </div>
                 <?php else: ?>
-                    <div class="w-table-wrap">
-                        <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
-                            <thead>
-                                <tr>
-                                    <th style="width:4.5rem;"><?= __('ID') ?></th>
-                                    <th><?= __('URL') ?></th>
-                                    <th style="width:7rem;"><?= __('模块') ?></th>
-                                    <th style="width:7rem;"><?= __('提供商') ?></th>
-                                    <th style="width:5.5rem;"><?= __('状态') ?></th>
-                                    <th style="width:9rem;"><?= __('进度') ?></th>
-                                    <th style="width:5rem;"><?= __('重试次数') ?></th>
-                                    <th style="width:9rem;"><?= __('最后预热时间') ?></th>
-                                    <th class="w-text" data-align="end" style="width:10rem;"><?= __('操作') ?></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($urls as $url): ?>
-                                    <?php
-                                    $urlStatus = $url->getData('status');
-                                    $statusMap = [
-                                        'pending' => ['label' => __('待处理'), 'tone' => 'neutral'],
-                                        'processing' => ['label' => __('处理中'), 'tone' => 'info'],
-                                        'completed' => ['label' => __('已完成'), 'tone' => 'success'],
-                                        'failed' => ['label' => __('失败'), 'tone' => 'danger'],
-                                    ];
-                                    $statusInfo = $statusMap[$urlStatus] ?? ['label' => $urlStatus, 'tone' => 'neutral'];
-                                    $processed = (int)$url->getData('processed_count');
-                                    $target = (int)$url->getData('target_count');
-                                    $percent = $target > 0 ? round(($processed / $target) * 100, 1) : 0;
-                                    $isEnabled = (bool)$url->getData('enabled');
-                                    $urlId = $url->getData('warmup_url_id');
-                                    ?>
-                                    <tr>
-                                        <td class="w-text" data-tone="muted"><?= $escapeAttr($urlId) ?></td>
-                                        <td>
-                                            <a href="<?= $escapeAttr($url->getData('url')) ?>" target="_blank" rel="noopener noreferrer">
-                                                <?= $escapeAttr(mb_substr($url->getData('url'), 0, 50)) ?>
-                                                <?= mb_strlen($url->getData('url')) > 50 ? '...' : '' ?>
-                                            </a>
-                                        </td>
-                                        <td><?= $escapeAttr($url->getData('module') ?: '-') ?></td>
-                                        <td><?= $escapeAttr($url->getData('provider') ?: '-') ?></td>
-                                        <td>
-                                            <span class="w-badge" data-tone="<?= $escapeAttr($statusInfo['tone']) ?>"><?= $statusInfo['label'] ?></span>
-                                        </td>
-                                        <td>
-                                            <div class="w-progress">
-                                                <div class="w-progress__bar" role="progressbar" style="width: <?= $percent ?>%" aria-valuenow="<?= $percent ?>" aria-valuemin="0" aria-valuemax="100">
-                                                    <?= $processed ?>/<?= $target ?> (<?= $percent ?>%)
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td><?= (int)$url->getData('retries') ?></td>
-                                        <td>
-                                            <small class="w-text" data-tone="muted" style="font-variant-numeric:tabular-nums;">
-                                                <?= $url->getData('last_warmed_at') ? date('Y-m-d H:i:s', $url->getData('last_warmed_at')) : '-' ?>
-                                            </small>
-                                        </td>
-                                        <td>
-                                            <div class="w-button-group w-cluster" data-justify="end" data-wrap="true" style="--w-gap:var(--weline-space-1);">
-                                                <button
-                                                    type="button"
-                                                    class="w-button"
-                                                    data-cdn-warmup-action="toggle-enable"
-                                                    data-url-id="<?= $escapeAttr($urlId) ?>"
-                                                    data-enabled="<?= $isEnabled ? '0' : '1' ?>"
-                                                    data-state="idle"
-                                                    data-message=""
-                                                    data-tone="<?= $isEnabled ? 'warning' : 'success' ?>"
-                                                    data-size="sm"
-                                                >
-                                                    <w:icon name="<?= $isEnabled ? 'close' : 'check' ?>" size="sm"></w:icon>
-                                                    <?= $isEnabled ? __('禁用') : __('启用') ?>
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    class="w-button"
-                                                    data-cdn-warmup-action="delete"
-                                                    data-url-id="<?= $escapeAttr($urlId) ?>"
-                                                    data-tone="danger"
-                                                    data-size="sm"
-                                                >
-                                                    <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                    <div class="w-stack" style="--w-gap:var(--weline-space-3);" data-cdn-warmup-providers>
+                        <?php foreach ($providers as $provider): ?>
+                            <?php
+                            $fqcn = (string)($provider['fqcn'] ?? '');
+                            $label = (string)($provider['label'] ?? $provider['short_name'] ?? $fqcn);
+                            $hint = (string)($provider['hint'] ?? '');
+                            $module = (string)($provider['module'] ?? '');
+                            $short = (string)($provider['short_name'] ?? '');
+                            ?>
+                            <article
+                                class="w-card"
+                                data-w-shadow="none"
+                                data-cdn-warmup-provider="<?= $escapeAttr($fqcn) ?>"
+                                style="border:1px solid var(--weline-border-color, rgba(255,255,255,.08));"
+                            >
+                                <div class="w-card__header w-cluster" data-align="center" data-justify="between" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+                                    <button
+                                        type="button"
+                                        class="w-button"
+                                        data-tone="neutral"
+                                        data-size="sm"
+                                        data-cdn-warmup-action="toggle-expand"
+                                        aria-expanded="false"
+                                        title="<?= $escapeAttr($fqcn) ?>"
+                                    >
+                                        <span data-cdn-warmup-chevron>▶</span>
+                                        <span class="w-stack" style="--w-gap:0;text-align:start;">
+                                            <strong><?= $escapeAttr(__($label)) ?></strong>
+                                            <span class="w-text" data-size="sm" data-tone="muted">
+                                                <?= $escapeAttr($module) ?><?= $short !== '' ? ' · ' . $escapeAttr($short) : '' ?>
+                                                <?php if ($hint !== ''): ?> · <?= $escapeAttr(__($hint)) ?><?php endif; ?>
+                                            </span>
+                                        </span>
+                                        <span class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-1);">
+                                            <span class="w-badge" data-cdn-warmup-count>0</span>
+                                            <?php if (!empty($provider['top_n'])): ?>
+                                                <span class="w-badge" data-tone="info">Top <?= (int)$provider['top_n'] ?></span>
+                                            <?php endif; ?>
+                                        </span>
+                                    </button>
+                                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                        <button type="button" class="w-button" data-tone="info" data-size="sm" data-cdn-warmup-action="collect" data-provider="<?= $escapeAttr($fqcn) ?>">
+                                            <?= __('收集') ?>
+                                        </button>
+                                        <button type="button" class="w-button" data-tone="success" data-size="sm" data-cdn-warmup-action="execute-provider" data-provider="<?= $escapeAttr($fqcn) ?>">
+                                            <?= __('预热已收集') ?>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="w-card__body" data-cdn-warmup-panel hidden>
+                                    <p class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-2);"><?= __('已入队 URL') ?></p>
+                                    <div data-cdn-warmup-urls class="w-stack" style="--w-gap:var(--weline-space-2);"></div>
+                                    <div
+                                        class="w-cluster"
+                                        data-cdn-warmup-pager
+                                        data-justify="between"
+                                        data-align="center"
+                                        data-wrap="true"
+                                        style="--w-mt:var(--weline-space-3);"
+                                        hidden
+                                    >
+                                        <div class="w-text" data-tone="muted" data-size="sm" data-cdn-warmup-pager-summary></div>
+                                        <nav aria-label="<?= $escapeAttr(__('分页')) ?>">
+                                            <ul class="w-pagination" style="--w-mb:0;" data-cdn-warmup-pager-list></ul>
+                                        </nav>
+                                    </div>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
             </div>
-
-            <?php if ($totalPages > 1): ?>
-                <div class="w-card__footer w-cluster" data-justify="between" data-align="center" data-wrap="true">
-                    <div class="w-text" data-tone="muted" data-size="sm">
-                        <?= __('共 %{1} 条记录，第 %{2}/%{3} 页', [$total, $page, $totalPages]) ?>
-                    </div>
-                    <nav aria-label="<?= $escapeAttr(__('分页')) ?>">
-                        <ul class="w-pagination" style="--w-mb:0;">
-                            <?php if ($page > 1): ?>
-                                <li class="w-pagination__item">
-                                    <a class="w-pagination__link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
-                                        <w:icon name="chevron-left" size="sm"></w:icon> <?= __('上一页') ?>
-                                    </a>
-                                </li>
-                            <?php endif; ?>
-                            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                                <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
-                                    <a class="w-pagination__link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
-                                        <?= $i ?>
-                                    </a>
-                                </li>
-                            <?php endfor; ?>
-                            <?php if ($page < $totalPages): ?>
-                                <li class="w-pagination__item">
-                                    <a class="w-pagination__link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">
-                                        <?= __('下一页') ?> <w:icon name="chevron-right" size="sm"></w:icon>
-                                    </a>
-                                </li>
-                            <?php endif; ?>
-                        </ul>
-                    </nav>
-                </div>
-            <?php endif; ?>
         </section>
     </div>
 </div>
 
-<js:part>
-(function() {
-    'use strict';
+<script>
+(function () {
+    var root = document.querySelector('[data-testid="cdn-warmup-management"]');
+    if (!root || !window.Weline || !Weline.Api) return;
 
-    function confirmAction(message, onConfirm) {
-        Weline.UI.dialog.confirm(message).then(function(confirmed) {
-            if (confirmed) {
-                onConfirm();
-            }
+    var scopeRoot = document.getElementById('cdn-warmup-scope');
+    var scopeField = scopeRoot
+        ? (scopeRoot.querySelector('input[type="hidden"][name="target_scope"]')
+            || scopeRoot.querySelector('input[name="target_scope"]'))
+        : null;
+    var hintEl = document.getElementById('cdn-warmup-scope-hint');
+    var summaryEl = document.getElementById('cdn-warmup-scope-summary');
+    var kpiEl = document.getElementById('cdn-warmup-kpi');
+    var executeLabel = root.querySelector('[data-cdn-warmup-execute-label]');
+    var busy = false;
+    var pages = {};
+    var initialScope = <?= json_encode($selectedScope, JSON_UNESCAPED_UNICODE) ?>;
+
+    function targetScope() {
+        var v = scopeField ? String(scopeField.value || '').trim() : '';
+        return v || initialScope || 'default.default.default';
+    }
+
+    function isGlobalScope(scope) {
+        return !scope || scope === 'default.default.default' || scope === 'global';
+    }
+
+    function scopeParams() {
+        var scope = targetScope();
+        return scope ? { target_scope: scope } : {};
+    }
+
+    function toast(ok, message) {
+        var uiToast = window.Weline && Weline.UI && Weline.UI.toast;
+        if (uiToast && typeof uiToast[ok ? 'success' : 'error'] === 'function') {
+            uiToast[ok ? 'success' : 'error'](message || (ok ? 'OK' : 'Error'));
+            return;
+        }
+        if (window.Weline && Weline.Message) {
+            Weline.Message[ok ? 'success' : 'error'](message || (ok ? 'OK' : 'Error'));
+            return;
+        }
+        if (window.Weline && Weline.UI && Weline.UI.dialog && typeof Weline.UI.dialog.alert === 'function') {
+            Weline.UI.dialog.alert(message || '');
+            return;
+        }
+        console[ok ? 'info' : 'error'](message || '');
+    }
+
+    function confirmAction(message) {
+        var dialog = window.Weline && Weline.UI && Weline.UI.dialog;
+        if (dialog && typeof dialog.confirm === 'function') {
+            return dialog.confirm(message, {
+                title: <?= json_encode((string)__('请确认'), JSON_UNESCAPED_UNICODE) ?>,
+                confirmLabel: <?= json_encode((string)__('确定'), JSON_UNESCAPED_UNICODE) ?>,
+                cancelLabel: <?= json_encode((string)__('取消'), JSON_UNESCAPED_UNICODE) ?>
+            });
+        }
+        toast(false, <?= json_encode((string)__('确认组件不可用，请刷新页面后重试。'), JSON_UNESCAPED_UNICODE) ?>);
+        return Promise.resolve(false);
+    }
+
+    function setBusy(on) {
+        busy = !!on;
+        root.querySelectorAll('[data-cdn-warmup-action]').forEach(function (btn) {
+            btn.disabled = busy;
+            if (busy) btn.setAttribute('aria-busy', 'true');
+            else btn.removeAttribute('aria-busy');
         });
-        return;
-        if (window.Weline.UI.toast && typeof window.Weline.UI.toast.error === 'function') {
-            window.Weline.UI.toast.error('<?= __('确认组件不可用，请刷新页面后重试。') ?>');
+    }
+
+    function refreshExecuteLabel() {
+        if (!executeLabel) return;
+        executeLabel.textContent = isGlobalScope(targetScope())
+            ? <?= json_encode((string)__('执行预热'), JSON_UNESCAPED_UNICODE) ?>
+            : <?= json_encode((string)__('执行本范围预热'), JSON_UNESCAPED_UNICODE) ?>;
+    }
+
+    function renderKpi(scope) {
+        if (!kpiEl) return;
+        var tiles = [
+            { label: <?= json_encode((string)__('总URL数'), JSON_UNESCAPED_UNICODE) ?>, value: scope.total || 0 },
+            { label: <?= json_encode((string)__('成功'), JSON_UNESCAPED_UNICODE) ?>, value: scope.success || 0 },
+            { label: <?= json_encode((string)__('失败'), JSON_UNESCAPED_UNICODE) ?>, value: scope.fail || 0 },
+            { label: <?= json_encode((string)__('待处理'), JSON_UNESCAPED_UNICODE) ?>, value: scope.pending || 0 }
+        ];
+        kpiEl.innerHTML = tiles.map(function (t) {
+            return '<article class="w-card" data-w-height="full" data-w-shadow="sm"><div class="w-card__body w-stack" style="--w-gap:var(--weline-space-1);"><strong>' +
+                Number(t.value).toLocaleString() + '</strong><span class="w-text" data-tone="muted" data-size="sm">' +
+                t.label + '</span></div></article>';
+        }).join('');
+        if (hintEl) {
+            if (scope.interval_seconds) {
+                hintEl.textContent = <?= json_encode((string)__('该域名预热间隔 %{1} 秒'), JSON_UNESCAPED_UNICODE) ?>.replace('%{1}', String(scope.interval_seconds));
+            } else if (isGlobalScope(targetScope())) {
+                hintEl.textContent = <?= json_encode((string)__('全局将按各 Domain 各自间隔跳过过频 URL'), JSON_UNESCAPED_UNICODE) ?>;
+            } else {
+                hintEl.textContent = <?= json_encode((string)__('当前范围按 Website 过滤队列；间隔仍按各 Domain 配置'), JSON_UNESCAPED_UNICODE) ?>;
+            }
+        }
+        if (summaryEl) {
+            summaryEl.textContent = (scope.total || 0) + ' URL · pending ' + (scope.pending || 0) + ' · fail ' + (scope.fail || 0);
         }
     }
 
-    document.addEventListener('click', function(event) {
-        var target = event.target instanceof Element
-            ? event.target.closest('[data-cdn-warmup-action]')
-            : null;
-        if (!target) {
+    function refreshProviders() {
+        return Weline.Api.resource('cdn').listWarmupProviders(scopeParams()).then(function (res) {
+            if (!res || !res.success) {
+                toast(false, (res && res.message) || 'load failed');
+                return;
+            }
+            var data = res.data || {};
+            renderKpi(data.scope || {});
+            (data.providers || []).forEach(function (p) {
+                var card = root.querySelector('[data-cdn-warmup-provider="' + CSS.escape(p.fqcn) + '"]');
+                if (!card) return;
+                var badge = card.querySelector('[data-cdn-warmup-count]');
+                if (badge) badge.textContent = String(p.url_count || 0);
+            });
+        });
+    }
+
+    function renderUrlRows(container, items) {
+        if (!items.length) {
+            container.innerHTML = '<div class="w-empty"><p class="w-text" data-tone="muted" data-size="sm">' +
+                <?= json_encode((string)__('本 Provider×本范围暂无已入队 URL，请先收集'), JSON_UNESCAPED_UNICODE) ?> +
+                '</p></div>';
+            return;
+        }
+        var html = '<div class="w-table-wrap"><table class="w-table"><thead><tr>' +
+            '<th>URL</th><th>' + <?= json_encode((string)__('状态'), JSON_UNESCAPED_UNICODE) ?> + '</th>' +
+            '<th>' + <?= json_encode((string)__('进度'), JSON_UNESCAPED_UNICODE) ?> + '</th>' +
+            '<th>' + <?= json_encode((string)__('重试'), JSON_UNESCAPED_UNICODE) ?> + '</th>' +
+            '</tr></thead><tbody>';
+        items.forEach(function (row) {
+            html += '<tr><td style="word-break:break-all;">' + String(row.url || '').replace(/</g, '&lt;') +
+                '</td><td>' + String(row.status || '') +
+                '</td><td>' + String(row.processed_count || 0) + '/' + String(row.target_count || 1) +
+                '</td><td>' + String(row.retries || 0) + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    }
+
+    function pageWindow(current, totalPages) {
+        var maxButtons = 7;
+        if (totalPages <= maxButtons) {
+            var all = [];
+            for (var i = 1; i <= totalPages; i++) all.push(i);
+            return all;
+        }
+        var half = Math.floor(maxButtons / 2);
+        var start = Math.max(1, current - half);
+        var end = Math.min(totalPages, start + maxButtons - 1);
+        start = Math.max(1, end - maxButtons + 1);
+        var pagesInWindow = [];
+        for (var p = start; p <= end; p++) pagesInWindow.push(p);
+        return pagesInWindow;
+    }
+
+    function renderPager(card, fqcn, page, pageSize, total) {
+        var pager = card.querySelector('[data-cdn-warmup-pager]');
+        var summary = card.querySelector('[data-cdn-warmup-pager-summary]');
+        var list = card.querySelector('[data-cdn-warmup-pager-list]');
+        if (!pager || !list) return;
+        var totalPages = Math.max(1, Math.ceil((total || 0) / Math.max(1, pageSize || 20)));
+        if (!total || totalPages <= 1) {
+            pager.hidden = true;
+            list.innerHTML = '';
+            if (summary) summary.textContent = '';
+            return;
+        }
+        pager.hidden = false;
+        if (summary) {
+            summary.textContent = <?= json_encode((string)__('共 %{1} 条记录，第 %{2}/%{3} 页'), JSON_UNESCAPED_UNICODE) ?>
+                .replace('%{1}', String(total))
+                .replace('%{2}', String(page))
+                .replace('%{3}', String(totalPages));
+        }
+        var html = '';
+        if (page > 1) {
+            html += '<li class="w-pagination__item"><button type="button" class="w-pagination__link" data-cdn-warmup-action="goto-page" data-provider="' +
+                String(fqcn).replace(/"/g, '&quot;') + '" data-page="' + (page - 1) + '">' +
+                <?= json_encode((string)__('上一页'), JSON_UNESCAPED_UNICODE) ?> + '</button></li>';
+        }
+        pageWindow(page, totalPages).forEach(function (i) {
+            html += '<li class="w-pagination__item' + (i === page ? ' active' : '') + '">' +
+                '<button type="button" class="w-pagination__link" data-cdn-warmup-action="goto-page" data-provider="' +
+                String(fqcn).replace(/"/g, '&quot;') + '" data-page="' + i + '"' +
+                (i === page ? ' aria-current="page"' : '') + '>' + i + '</button></li>';
+        });
+        if (page < totalPages) {
+            html += '<li class="w-pagination__item"><button type="button" class="w-pagination__link" data-cdn-warmup-action="goto-page" data-provider="' +
+                String(fqcn).replace(/"/g, '&quot;') + '" data-page="' + (page + 1) + '">' +
+                <?= json_encode((string)__('下一页'), JSON_UNESCAPED_UNICODE) ?> + '</button></li>';
+        }
+        list.innerHTML = html;
+    }
+
+    function loadUrls(fqcn, page) {
+        var card = root.querySelector('[data-cdn-warmup-provider="' + CSS.escape(fqcn) + '"]');
+        if (!card) return Promise.resolve();
+        var targetPage = Math.max(1, Number(page) || 1);
+        var pageSize = 20;
+        var params = Object.assign({ provider: fqcn, page: targetPage, page_size: pageSize }, scopeParams());
+        return Weline.Api.resource('cdn').listWarmupUrls(params).then(function (res) {
+            if (!res || !res.success) {
+                toast(false, (res && res.message) || 'load urls failed');
+                return;
+            }
+            var data = res.data || {};
+            var box = card.querySelector('[data-cdn-warmup-urls]');
+            pages[fqcn] = Number(data.page || targetPage) || 1;
+            renderUrlRows(box, data.items || []);
+            renderPager(card, fqcn, pages[fqcn], Number(data.page_size || pageSize), Number(data.total || 0));
+        });
+    }
+
+    function onScopeChanged() {
+        pages = {};
+        refreshExecuteLabel();
+        root.querySelectorAll('[data-cdn-warmup-panel]').forEach(function (p) { p.hidden = true; });
+        root.querySelectorAll('[data-cdn-warmup-action="toggle-expand"]').forEach(function (b) {
+            b.setAttribute('aria-expanded', 'false');
+            var c = b.querySelector('[data-cdn-warmup-chevron]');
+            if (c) c.textContent = '▶';
+        });
+        var next = targetScope();
+        try {
+            var url = new URL(window.location.href);
+            url.searchParams.set('target_scope', next);
+            window.history.replaceState({}, '', url.toString());
+        } catch (e) {}
+        refreshProviders();
+    }
+
+    root.addEventListener('click', function (event) {
+        var btn = event.target.closest('[data-cdn-warmup-action]');
+        if (!btn || busy) return;
+        var action = btn.getAttribute('data-cdn-warmup-action');
+        var provider = btn.getAttribute('data-provider') || '';
+
+        if (action === 'toggle-expand') {
+            var card = btn.closest('[data-cdn-warmup-provider]');
+            if (!card) return;
+            var panel = card.querySelector('[data-cdn-warmup-panel]');
+            var expanded = btn.getAttribute('aria-expanded') === 'true';
+            btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            var chev = btn.querySelector('[data-cdn-warmup-chevron]');
+            if (chev) chev.textContent = expanded ? '▶' : '▼';
+            if (panel) panel.hidden = expanded;
+            if (!expanded) {
+                loadUrls(card.getAttribute('data-cdn-warmup-provider'), 1);
+            }
             return;
         }
 
-        if (target.dataset.cdnWarmupAction === 'execute') {
-            window.CdnWarmupManager.executeWarmup();
+        if (action === 'goto-page') {
+            var page = Number(btn.getAttribute('data-page') || 1);
+            setBusy(true);
+            loadUrls(provider, page).finally(function () { setBusy(false); });
             return;
         }
 
-        if (target.dataset.cdnWarmupAction === 'toggle-enable') {
-            window.CdnWarmupManager.toggleEnable(target.dataset.urlId || '', target.dataset.enabled || '0');
+        if (action === 'collect') {
+            confirmAction(<?= json_encode((string)__('确认收集该 Provider 的 URL 到当前范围？'), JSON_UNESCAPED_UNICODE) ?>)
+                .then(function (ok) {
+                    if (!ok) return;
+                    setBusy(true);
+                    return Weline.Api.resource('cdn').collectWarmup(Object.assign({ provider: provider }, scopeParams()))
+                        .then(function (res) {
+                            if (!res || !res.success) {
+                                toast(false, (res && res.message) || 'collect failed');
+                                return;
+                            }
+                            var d = res.data || {};
+                            toast(true, <?= json_encode((string)__('写入 %{1} · 范围未命中过滤 %{2} · 去重跳过 %{3}'), JSON_UNESCAPED_UNICODE) ?>
+                                .replace('%{1}', String(d.inserted_count || 0))
+                                .replace('%{2}', String(d.filtered_count || 0))
+                                .replace('%{3}', String(d.updated_count || d.skipped_dedupe_hint || 0)));
+                            return refreshProviders().then(function () {
+                                var card = root.querySelector('[data-cdn-warmup-provider="' + CSS.escape(provider) + '"]');
+                                var btnExpand = card && card.querySelector('[data-cdn-warmup-action="toggle-expand"]');
+                                if (btnExpand && btnExpand.getAttribute('aria-expanded') === 'true') {
+                                    return loadUrls(provider, 1);
+                                }
+                            });
+                        })
+                        .finally(function () { setBusy(false); });
+                });
             return;
         }
 
-        if (target.dataset.cdnWarmupAction === 'delete') {
-            window.CdnWarmupManager.deleteUrl(target.dataset.urlId || '');
+        if (action === 'execute' || action === 'execute-provider') {
+            var msg = action === 'execute-provider'
+                ? <?= json_encode((string)__('确认预热该 Provider 已收集的 URL？'), JSON_UNESCAPED_UNICODE) ?>
+                : <?= json_encode((string)__('确认执行当前范围的预热？'), JSON_UNESCAPED_UNICODE) ?>;
+            confirmAction(msg).then(function (ok) {
+                if (!ok) return;
+                setBusy(true);
+                var payload = Object.assign({ limit: 50 }, scopeParams());
+                if (action === 'execute-provider') payload.provider = provider;
+                return Weline.Api.resource('cdn').executeWarmup(payload)
+                    .then(function (res) {
+                        if (!res || !res.success) {
+                            toast(false, (res && res.message) || 'execute failed');
+                            return;
+                        }
+                        var d = res.data || {};
+                        var processed = Number(d.processed || 0);
+                        var successN = Number(d.success || 0);
+                        var failN = Number(d.fail || 0);
+                        var skippedN = Number(d.skipped || 0);
+                        var summary = <?= json_encode((string)__('处理 %{1} · 成功 %{2} · 失败 %{3} · 跳过 %{4}'), JSON_UNESCAPED_UNICODE) ?>
+                            .replace('%{1}', String(processed))
+                            .replace('%{2}', String(successN))
+                            .replace('%{3}', String(failN))
+                            .replace('%{4}', String(skippedN));
+                        if (processed === 0 && successN === 0 && failN === 0 && skippedN === 0) {
+                            toast(false, <?= json_encode((string)__('未处理任何 URL（可能已全部完成或当前范围无待预热）'), JSON_UNESCAPED_UNICODE) ?> + ' · ' + summary);
+                        } else {
+                            toast(true, summary);
+                        }
+                        return refreshProviders().then(function () {
+                            if (action === 'execute-provider' && provider) {
+                                var card = root.querySelector('[data-cdn-warmup-provider="' + CSS.escape(provider) + '"]');
+                                var btnExpand = card && card.querySelector('[data-cdn-warmup-action="toggle-expand"]');
+                                if (btnExpand && btnExpand.getAttribute('aria-expanded') === 'true') {
+                                    return loadUrls(provider, pages[provider] || 1);
+                                }
+                            }
+                        });
+                    })
+                    .finally(function () { setBusy(false); });
+            });
         }
     });
 
-    window.CdnWarmupManager = {
-        executeWarmup: function() {
-            Weline.UI.dialog.request({
-                title: '<?= __('确认执行预热') ?>',
-                message: '<?= __('确定要执行预热吗？这将处理所有待处理的URL。') ?>',
-                tone: 'info',
-                cancelable: true,
-                confirmLabel: '<?= __("确定执行") ?>',
-                cancelLabel: '<?= __("取消") ?>',
-                confirmTone: 'success'
-            }).then(function(result) {
-                if (result.confirmed) {
-                    Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-                    .then(function(api){ return api.resource('cdn').executeWarmup({}); })
-                    .then(function(data) {
-                        if (data && data.success !== false) {
-                            Weline.UI.dialog.request({
-                                tone: 'success',
-                                title: '<?= __('成功') ?>',
-                                message: data.message,
-                                duration: 2000,
-                                confirmable: false
-                            }).then(function() { location.reload(); });
-                        } else {
-                            Weline.UI.dialog.request({
-                                tone: 'danger',
-                                title: '<?= __('执行失败') ?>',
-                                message: data.message,
-                                confirmLabel: '<?= __('确定') ?>'
-                            });
-                        }
-                    })
-                    .catch(function(error) {
-                        Weline.UI.dialog.request({
-                            tone: 'danger',
-                            title: '<?= __('请求失败') ?>',
-                            message: error.message,
-                            confirmLabel: '<?= __('确定') ?>'
-                        });
-                    });
-                }
-            });
-        },
+    if (scopeField) {
+        scopeField.addEventListener('change', onScopeChanged);
+    }
 
-        toggleEnable: function(id, enabled) {
-            var trigger = document.querySelector('[data-cdn-warmup-action="toggle-enable"][data-url-id="' + id + '"]');
-            if (trigger) {
-                trigger.dataset.state = 'saving';
-                trigger.dataset.message = '';
-            }
-            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-            .then(function(api){ return api.resource('cdn').toggleWarmupEnable({ id: Number(id), enabled: Number(enabled) }); })
-            .then(function(data) {
-                if (data && data.success !== false) {
-                    if (trigger) {
-                        trigger.dataset.state = 'saved';
-                        trigger.dataset.message = data.message || '';
-                    }
-                    Weline.UI.dialog.request({
-                        tone: 'success',
-                        title: '<?= __('成功') ?>',
-                        message: data.message,
-                        duration: 2000,
-                        confirmable: false
-                    }).then(function() { location.reload(); });
-                } else {
-                    if (trigger) {
-                        trigger.dataset.state = 'error';
-                        trigger.dataset.message = data && data.message ? data.message : '<?= __('操作失败') ?>';
-                    }
-                    Weline.UI.dialog.request({
-                        tone: 'danger',
-                        title: '<?= __('操作失败') ?>',
-                        message: data.message,
-                        confirmLabel: '<?= __('确定') ?>'
-                    });
-                }
-            })
-            .catch(function(error) {
-                if (trigger) {
-                    trigger.dataset.state = 'error';
-                    trigger.dataset.message = error && error.message ? error.message : String(error);
-                }
-            });
-        },
-
-        deleteUrl: function(id) {
-            confirmAction('<?= __('确定要删除此URL吗？') ?>', function() {
-                Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-                .then(function(api){ return api.resource('cdn').deleteWarmupUrl({ id: id }); })
-                .then(function(data) {
-                    if (data && data.success !== false) {
-                        Weline.UI.dialog.request({
-                            tone: 'success',
-                            title: '<?= __('成功') ?>',
-                            message: data.message,
-                            duration: 2000,
-                            confirmable: false
-                        }).then(function() { location.reload(); });
-                    } else {
-                        Weline.UI.dialog.request({
-                            tone: 'danger',
-                            title: '<?= __('删除失败') ?>',
-                            message: data.message,
-                            confirmLabel: '<?= __('确定') ?>'
-                        });
-                    }
-                });
-            });
-        }
-    };
+    refreshExecuteLabel();
+    refreshProviders();
 })();
-</js:part>
+</script>

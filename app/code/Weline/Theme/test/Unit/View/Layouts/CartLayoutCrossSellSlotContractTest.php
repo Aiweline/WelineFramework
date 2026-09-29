@@ -10,7 +10,8 @@ final class CartLayoutCrossSellSlotContractTest extends TestCase
 {
     public function testCartLayoutProvidesRecommendationsSlotWithoutHardcodedCrossSellWidget(): void
     {
-        $path = dirname(__DIR__, 4) . '/view/theme/frontend/layouts/cart/default.phtml';
+        // Authority: Cart module layout (+ design overlay). Theme module has no layouts/cart.
+        $path = dirname(__DIR__, 5) . '/Cart/view/theme/frontend/layouts/cart/default.phtml';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('id="cart-recommendations"', $source);

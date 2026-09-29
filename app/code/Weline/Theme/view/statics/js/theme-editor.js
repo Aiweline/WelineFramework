@@ -2697,6 +2697,8 @@
         if (snapshot.revision_id !== undefined && snapshot.draft_revision_id === undefined) {
             next.draft_revision_id = snapshot.revision_id;
         }
+        if (snapshot.content_revision !== undefined) state.contentRevision = Number(snapshot.content_revision);
+        if (snapshot.theme_version_id !== undefined) state.themeVersionId = Number(snapshot.theme_version_id);
         state.scopedWorkspaces[key] = next;
         state.hasChanges = true;
         renderThemeBindingOwnership();
@@ -2727,12 +2729,6 @@
         state.scopedWorkspaces[key] = result.data || {};
         renderThemeBindingOwnership();
         renderScopedConflictPanel();
-        if (resourceType === 'layout' && options.skipReconcile !== true) {
-            const queued = Promise.resolve(state.pendingScopedMutation).catch(() => {}).then(function() {
-                return reconcileRequiredDefaultsAfterDraftReady();
-            });
-            state.pendingScopedMutation = queued.catch(() => undefined);
-        }
         return state.scopedWorkspaces[key];
     }
 
@@ -2765,7 +2761,7 @@
                 const next = { ...workspace, ...(result.data || {}) };
                 next.expected_parent_release_id = result.data?.expected_parent_release_id ?? workspace.expected_parent_release_id ?? null;
                 next.draft_revision_id = result.data?.revision_id ?? workspace.draft_revision_id ?? null;
-                state.scopedWorkspaces[key] = next;
+                applyScopedWorkspaceSnapshot(resourceType, next, options);
                 state.hasChanges = true;
                 renderThemeBindingOwnership();
                 renderScopedConflictPanel();
@@ -4604,7 +4600,6 @@
         config.apiWidgets = container.dataset.apiWidgets || `${config.apiBase}/widgets`;
         config.apiDefaultInjections = container.dataset.apiDefaultInjections || `${config.apiBase}/default-injections`;
         config.apiApplyDefaultInjection = container.dataset.apiApplyDefaultInjection || `${config.apiBase}/apply-default-injection`;
-        config.apiReconcileRequiredDefaults = container.dataset.apiReconcileRequiredDefaults || `${config.apiBase}/reconcile-required-defaults`;
         config.apiApplyRequiredDefaults = container.dataset.apiApplyRequiredDefaults || `${config.apiBase}/apply-required-defaults`;
         config.apiInitSlotDefaults = container.dataset.apiInitSlotDefaults || `${config.apiBase}/init-slot-defaults`;
         config.apiPublish = container.dataset.apiPublish || `${config.apiBase}/publish`;
@@ -7922,6 +7917,9 @@
         try {
             const editorArea = getEffectiveEditorArea();
             const effectiveLocale = locale === undefined ? getActiveConfigLocale() : (locale || '');
+            const resourceType = effectiveLocale ? 'i18n' : 'meta';
+            const resourceOptions = { locale: effectiveLocale || 'default' };
+            const workspace = getScopedWorkspaceState(resourceType, resourceOptions);
             const payload = {
                 theme_id: state.themeId || 0,
                 layout_type: getEffectiveLayoutType(),
@@ -7931,6 +7929,10 @@
                 scope: getCurrentWindowParam('scope') || 'default',
                 locale: effectiveLocale,
                 config: configData,
+                editor_context: buildTypedEditorContext(resourceType, resourceOptions),
+                expected_revision: workspace?.revision,
+                expected_parent_release_id: workspace?.expected_parent_release_id,
+                expected_content_revision: Number(state.contentRevision || 0) || undefined,
                 ...getLayoutLockVirtualPayload()
             };
             const result = await apiJson(config.apiSaveLayoutConfig, {
@@ -7941,7 +7943,7 @@
             if (!result.success) {
                 throw new Error(result.message || 'Save layout config failed');
             }
-            await queueLayoutConfigOwnership(configData, effectiveLocale);
+            applyScopedWorkspaceSnapshot(resourceType, result.data?.workspace, resourceOptions);
             rememberLayoutConfigValues(form, configData);
             setWidgetConfigAutosaveStatus(form, 'saved');
             if (!silent) {
@@ -8006,7 +8008,9 @@
                 layout_option: state.layoutOption || 'default',
                 editor_area: state.editorArea || 'frontend',
                 preview_area: state.editorArea || 'frontend',
-                scope: getCurrentWindowParam('scope') || 'default'
+                scope: getCurrentWindowParam('scope') || 'default',
+                editor_context: buildTypedEditorContext('layout'),
+                expected_content_revision: Number(state.contentRevision || 0) || undefined
             }),
             silent: options.silent === true
         });
@@ -8021,14 +8025,7 @@
         }
         state.layoutOption = resolveLayoutOptionForType(state.layoutType, data.layout_option || state.layoutOption);
         renderLayoutOptionSelect(state.layoutType, state.layoutOption);
-        await queueScopedChanges('layout', [{
-            op: 'set',
-            path: '/selection/layout_option',
-            value: state.layoutOption,
-        }], {
-            layout_option: 'default',
-            summary: 'layout_selection_changed',
-        });
+        applyScopedWorkspaceSnapshot('layout', data.workspace, { layout_option: 'default' });
         if (!options.silent) {
             showToast(result.message || 'Layout option saved.', 'success');
         }
@@ -11942,50 +11939,6 @@
         }
 
         return el;
-    }
-
-    async function reconcileRequiredDefaultsAfterDraftReady() {
-        if (!state.themeId || !config.apiReconcileRequiredDefaults) {
-            return;
-        }
-        const defaults = state.defaultInjectionLib;
-        if (defaults.reconciling) {
-            return;
-        }
-        defaults.reconciling = true;
-        try {
-            const payload = buildLayoutVersionIdentityPayload({
-                editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
-            });
-            const result = await apiJson(config.apiReconcileRequiredDefaults, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (!result || !result.success) {
-                return;
-            }
-            const blockers = Array.isArray(result.blockers) ? result.blockers : [];
-            blockers.forEach(function(entry) {
-                if (entry && entry.injection_key) {
-                    clearDefaultInjectionBlockerDismiss(entry.injection_key);
-                }
-            });
-            if (result.scoped_workspace) {
-                applyScopedWorkspaceSnapshot('layout', result.scoped_workspace);
-            } else if (Number(result.applied || 0) > 0) {
-                await loadScopedWorkspace('layout', { skipReconcile: true });
-            }
-            await refreshDefaultInjectionApplications({
-                render: state.widgetLibraryTab === 'applications',
-                silent: true,
-            });
-            if (Number(result.applied || 0) > 0 ) {
-                loadCanvas();
-            }
-        } finally {
-            defaults.reconciling = false;
-        }
     }
 
     async function applyRequiredDefaultsBatch(buttonEl) {

@@ -16,10 +16,11 @@ use Weline\Checkout\Service\CheckoutService;
 use Weline\Checkout\Service\PaymentService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Service\StorefrontSsrChromeHealer;
 
 /**
  * 前端结账控制器
+ *
+ * The normal layout lifecycle selects captured body/chrome sources and wraps once.
  */
 class Checkout extends FrontendController
 {
@@ -72,31 +73,13 @@ class Checkout extends FrontendController
             (string)__($checkoutSubtitle)
         );
 
-        $body = $this->template('Weline_Checkout::frontend/checkout/index.phtml');
         $meta = [
             'showHeader' => true,
             'showFooter' => true,
             'class' => 'weline-checkout-page',
-            'content' => $body,
         ];
         $this->assign('meta', $meta);
-        $this->assign('content', $body);
-
-        $html = $this->template('Weline_Checkout::theme/frontend/layouts/checkout/default.phtml');
-
-        return $this->ensurePublishedChrome($html);
-    }
-
-    private function ensurePublishedChrome(string $html): string
-    {
-        try {
-            /** @var StorefrontSsrChromeHealer $healer */
-            $healer = ObjectManager::getInstance(StorefrontSsrChromeHealer::class);
-
-            return $healer->ensure($html);
-        } catch (\Throwable) {
-            return $html;
-        }
+        return $this->fetch('Weline_Checkout::frontend/checkout/index.phtml');
     }
 
     /**

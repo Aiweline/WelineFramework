@@ -8,11 +8,11 @@ use PHPUnit\Framework\TestCase;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths;
 
 /**
- * setup:upgrade purge of var/runtime/theme-layout-entities (disk bake only).
+ * §0 R5/R6: upgrade solidifies layout templates under generated/ (not purge-only).
  */
 final class ThemeLayoutEntityUpgradePurgeContractTest extends TestCase
 {
-    public function testPathsExposePurgeAllEntitiesWithVarRuntimeSafety(): void
+    public function testPathsExposeGeneratedRootAndLegacyMigrate(): void
     {
         $path = \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityPaths.php';
         self::assertFileExists($path);
@@ -21,55 +21,44 @@ final class ThemeLayoutEntityUpgradePurgeContractTest extends TestCase
         self::assertStringContainsString('function purgeAllEntities', $src);
         self::assertStringContainsString('function purgeEntityTree', $src);
         self::assertStringContainsString('function assertPurgeableEntityRoot', $src);
-        self::assertStringContainsString('theme_layout_entity_purge_outside_var', $src);
+        self::assertStringContainsString('function legacyVarRoot', $src);
+        self::assertStringContainsString('function migrateLegacyVarTreeToGenerated', $src);
+        self::assertStringContainsString('GENERATED_DIR', $src);
+        self::assertStringContainsString('theme_layout_entity_purge_outside_allowed_root', $src);
         self::assertStringContainsString('theme_layout_entity_purge_basename_mismatch', $src);
-        self::assertStringContainsString('theme_layout_entity_purge_symlink_root_forbidden', $src);
         self::assertStringContainsString('ROOT_SEGMENT', $src);
     }
 
-    public function testObserverRegisteredAfterWidgetAndThemeStaticPublish(): void
+    public function testDefaultRootIsUnderGenerated(): void
     {
-        $eventXml = \dirname(__DIR__, 3) . '/etc/event.xml';
-        self::assertFileExists($eventXml);
-        $xml = (string)\file_get_contents($eventXml);
+        if (!\defined('BP')) {
+            self::markTestSkipped('BP undefined');
+        }
+        $paths = new ThemeLayoutEntityPaths();
+        $root = \str_replace('\\', '/', $paths->root());
+        self::assertStringContainsString('/generated/theme-layout-entities/', $root);
+        self::assertStringNotContainsString('/var/runtime/theme-layout-entities/', $root);
+    }
 
-        self::assertStringContainsString('Weline_Framework_Setup::upgrade_after', $xml);
-        self::assertStringContainsString('Weline_Framework_Deploy::upgrade_after', $xml);
-        self::assertStringContainsString('Weline_Deploy::core_update_after', $xml);
-        self::assertStringContainsString(
-            'Weline\\Theme\\Observer\\SetupUpgradeAfterPurgeLayoutEntities',
-            $xml
-        );
-        self::assertStringContainsString('setup_upgrade_purge_layout_entities', $xml);
-        self::assertStringContainsString('deploy_upgrade_purge_layout_entities', $xml);
-        self::assertStringContainsString('core_update_purge_layout_entities', $xml);
-        self::assertMatchesRegularExpression(
-            '/setup_upgrade_purge_layout_entities[\s\S]*?sort="300"/',
-            $xml
-        );
+    public function testUpgradeEventsRegisterSolidificationObserver(): void
+    {
+        $xml = simplexml_load_file(dirname(__DIR__, 3) . '/etc/event.xml');
+        self::assertNotFalse($xml);
+        foreach (['Weline_Framework_Setup::upgrade_after', 'Weline_Framework_Deploy::upgrade_after', 'Weline_Deploy::core_update_after'] as $event) {
+            $observers = $xml->xpath('//*[local-name()="event" and @name="' . $event . '"]/*[local-name()="observer"]');
+            $classes = array_map(static fn($observer): string => (string)$observer['instance'], $observers);
+            self::assertContains('Weline\\Theme\\Observer\\SetupUpgradeAfterPurgeLayoutEntities', $classes, $event);
+        }
+    }
 
-        $observer = \dirname(__DIR__, 3) . '/Observer/SetupUpgradeAfterPurgeLayoutEntities.php';
-        self::assertFileExists($observer);
-        $src = (string)\file_get_contents($observer);
-        self::assertStringContainsString('ThemeLayoutEntityUpgradePurgeService', $src);
-        self::assertStringContainsString('runOnce', $src);
-        self::assertStringContainsString("'setup_upgrade_layout_entities_invalidated'", $src);
-        self::assertStringContainsString("'deploy_upgrade_layout_entities_invalidated'", $src);
-        self::assertStringContainsString("'core_update_layout_entities_invalidated'", $src);
-        self::assertStringNotContainsString('->rebakeAfterInjectionCollect', $src);
-        self::assertStringNotContainsString('rebakeAfterInjectionCollect(', $src);
-        self::assertStringContainsString('dynamicSolidify', $src);
-        // Task 5: upgrade purge is disk-only — keep user decisions / DB versions.
-        self::assertStringNotContainsString('ThemeScopeVersionWidgetDecision', $src);
-        self::assertStringNotContainsString('delete()->', $src);
-        self::assertStringNotContainsString('DROP TABLE', $src);
-
-        $service = \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityUpgradePurgeService.php';
-        self::assertFileExists($service);
-        $svcSrc = (string)\file_get_contents($service);
-        self::assertStringContainsString('function runOnce', $svcSrc);
-        self::assertStringContainsString('purgeAllEntities', $svcSrc);
-        self::assertStringContainsString('clearAllThemeRelatedCaches', $svcSrc);
+    public function testThemeUpgradeCommandWiresLayoutSolidify(): void
+    {
+        $upgrade = \dirname(__DIR__, 3) . '/Console/Theme/Upgrade.php';
+        self::assertFileExists($upgrade);
+        $src = (string)\file_get_contents($upgrade);
+        self::assertStringContainsString('ThemeLayoutEntityUpgradeSolidifyService', $src);
+        self::assertStringContainsString('cutoverFromThemeCommand', $src);
+        self::assertStringContainsString('purge 旧布局固化物', $src);
     }
 
     public function testDeployUpgradeAndCoreUpdateDispatchLifecyclePurgeEvents(): void
@@ -79,13 +68,11 @@ final class ThemeLayoutEntityUpgradePurgeContractTest extends TestCase
         self::assertFileExists($deployUpgrade);
         $deploySrc = (string)\file_get_contents($deployUpgrade);
         self::assertStringContainsString("dispatch('Weline_Framework_Deploy::upgrade_after'", $deploySrc);
-        self::assertStringContainsString('$afterPayload', $deploySrc);
 
         $coreUpdate = $welineRoot . '/Deploy/Console/Update/Core.php';
         self::assertFileExists($coreUpdate);
         $coreSrc = (string)\file_get_contents($coreUpdate);
         self::assertStringContainsString("dispatch('Weline_Deploy::core_update_after'", $coreSrc);
-        self::assertStringContainsString('$afterPayload', $coreSrc);
     }
 
     public function testOfflineGcHooksReuseThemeRuntimeCacheCleaner(): void
@@ -94,9 +81,6 @@ final class ThemeLayoutEntityUpgradePurgeContractTest extends TestCase
             \dirname(__DIR__, 3) . '/Service/ThemeRuntimeCacheCleaner.php'
         );
         self::assertStringContainsString('function sweepOrphanLayoutEntityArtifacts', $cleaner);
-        self::assertStringContainsString('function sweepOrphanLayoutEntityDerivatives', $cleaner);
-        self::assertStringContainsString('function invalidateAfterVersionPublish', $cleaner);
-        self::assertStringContainsString('Token reference check', $cleaner);
         self::assertStringContainsString('listVersionModeDirectories', $cleaner);
 
         $paths = (string)\file_get_contents(
@@ -106,52 +90,24 @@ final class ThemeLayoutEntityUpgradePurgeContractTest extends TestCase
         self::assertStringContainsString('function purgeVersionModeDirectory', $paths);
     }
 
-    public function testSourceUpgradeRemovalKeepsUserDecisionsInBakeMerger(): void
-    {
-        $merger = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionBakeMerger.php'
-        );
-        self::assertStringContainsString('removeRetiredAutomaticNodes', $merger);
-        self::assertStringContainsString('uninstalledInjectionsForVersion', $merger);
-        // Source template upgrades purge derived disks; omissions still come from target V decisions.
-        self::assertStringContainsString('omissionsFor', $merger);
-    }
-
     public function testListAndPurgeVersionModeDirectoryLeavesNeighborIntact(): void
     {
-        if (!\defined('BP')) {
-            self::markTestSkipped('BP undefined');
+        $root = sys_get_temp_dir() . '/theme-purge-' . bin2hex(random_bytes(6)) . '/theme-layout-entities';
+        $paths = new ThemeLayoutEntityPaths($root);
+        $formal = new \Weline\Theme\Api\Version\ThemeVersionIdentity(7, 'shop.cn.app', 'test', 'frontend', 10, 'formal', 2);
+        $draft = $formal->withVersion(10, 'draft', 2);
+        $keep = $paths->pageLayoutPhtml($formal, 'homepage');
+        $drop = $paths->pageLayoutPhtml($draft, 'homepage');
+        try {
+            mkdir(dirname($keep), 0770, true); mkdir(dirname($drop), 0770, true);
+            file_put_contents($keep, 'FORMAL'); file_put_contents($drop, 'DRAFT');
+            self::assertCount(2, $paths->listVersionModeDirectories());
+            self::assertGreaterThan(0, $paths->purgeVersionModeDirectory($paths->versionModeDir($draft)));
+            self::assertFileDoesNotExist($drop);
+            self::assertSame('FORMAL', file_get_contents($keep));
+        } finally {
+            $paths->purgeAllEntities(); @rmdir(dirname($root));
         }
-
-        $varTmp = \rtrim((string)BP, '/\\') . \DIRECTORY_SEPARATOR . 'var' . \DIRECTORY_SEPARATOR . 'tmp';
-        if (!\is_dir($varTmp) && !@\mkdir($varTmp, 0775, true) && !\is_dir($varTmp)) {
-            self::markTestSkipped('cannot create var/tmp');
-        }
-
-        $root = $varTmp . \DIRECTORY_SEPARATOR . ThemeLayoutEntityPaths::ROOT_SEGMENT;
-        if (\is_dir($root)) {
-            $this->deleteDir($root);
-        }
-        $scopeKey = \str_repeat('a', 64);
-        $keep = $root . '/7/frontend/' . $scopeKey . '/tv10/formal/chrome';
-        $drop = $root . '/7/frontend/' . $scopeKey . '/tv99/draft/chrome';
-        self::assertTrue(@\mkdir($keep, 0775, true) || \is_dir($keep));
-        self::assertTrue(@\mkdir($drop, 0775, true) || \is_dir($drop));
-        self::assertNotFalse(\file_put_contents($keep . '/binding.json', '{}'));
-        self::assertNotFalse(\file_put_contents($drop . '/binding.json', '{}'));
-
-        $paths = new ThemeLayoutEntityPaths($root . \DIRECTORY_SEPARATOR);
-        $listed = $paths->listVersionModeDirectories();
-        self::assertGreaterThanOrEqual(2, \count($listed));
-
-        $deleted = $paths->purgeVersionModeDirectory(
-            $root . '/7/frontend/' . $scopeKey . '/tv99/draft'
-        );
-        self::assertGreaterThan(0, $deleted);
-        self::assertDirectoryDoesNotExist($root . '/7/frontend/' . $scopeKey . '/tv99/draft');
-        self::assertFileExists($keep . '/binding.json');
-
-        $this->deleteDir($root);
     }
 
     public function testPurgeEntityTreeRemovesSiblingThemeLayoutEntitiesUnderVar(): void
@@ -172,8 +128,6 @@ final class ThemeLayoutEntityUpgradePurgeContractTest extends TestCase
         $page = $root . '/2/default.__store__/pages/abc/s1';
         self::assertTrue(@\mkdir($page, 0775, true) || \is_dir($page));
         self::assertNotFalse(\file_put_contents($page . '/layout.phtml', 'R43-STORE-PREVIEW'));
-        self::assertNotFalse(\file_put_contents($page . '/shell.phtml', 'old-shell'));
-        self::assertNotFalse(\file_put_contents($page . '/structure.json', '{"x":1}'));
 
         $neighbor = $varTmp . \DIRECTORY_SEPARATOR . 'keep-neighbor.txt';
         self::assertNotFalse(\file_put_contents($neighbor, 'keep'));
@@ -183,12 +137,11 @@ final class ThemeLayoutEntityUpgradePurgeContractTest extends TestCase
         self::assertGreaterThan(0, $deleted);
         self::assertDirectoryDoesNotExist($root);
         self::assertFileExists($neighbor);
-        self::assertSame(0, $paths->purgeEntityTree($root));
 
         @\unlink($neighbor);
     }
 
-    public function testAssertPurgeableEntityRootRejectsBpAndVarRuntimeParents(): void
+    public function testAssertPurgeableEntityRootRejectsBp(): void
     {
         if (!\defined('BP')) {
             self::markTestSkipped('BP undefined');

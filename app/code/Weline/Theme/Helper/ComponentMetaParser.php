@@ -32,8 +32,12 @@ class ComponentMetaParser
             ];
         }
         
-        $content = file_get_contents($filePath);
-        
+        return self::parseContent((string)file_get_contents($filePath), $filePath);
+    }
+
+    /** Parse the source bytes already captured for this request or generation. */
+    public static function parseContent(string $content, string $filePath = ''): array
+    {
         $meta = [
             'component' => '',
             'description' => '',

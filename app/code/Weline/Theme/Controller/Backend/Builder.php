@@ -106,6 +106,7 @@ class Builder extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $throwable->getMessage(),
+                'saved_revision' => $throwable instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $throwable->receipt() : null,
             ]);
         }
     }

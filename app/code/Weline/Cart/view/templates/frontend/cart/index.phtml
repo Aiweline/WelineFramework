@@ -287,25 +287,69 @@ $copy = [
         // Storage can be unavailable in privacy-restricted browser contexts.
     }
 
+    function isUnknownGuestTokenWorkerParam(errorOrResult) {
+        const msg = String(
+            (errorOrResult && errorOrResult.message)
+            || (errorOrResult && errorOrResult.error)
+            || (errorOrResult && errorOrResult.code)
+            || ''
+        );
+        return /Unknown frontend worker param:\s*guest_token/i.test(msg);
+    }
+
     async function ensureGuestToken() {
         try {
             await Weline.load('cart');
             guestToken = readStoredGuestToken();
         } catch (error) {
-            // The API fallback below can still establish a new guest session.
-        }
-        if (guestToken) {
-            return guestToken;
+            // No WelineCart: still issue below (sessionStorage token may use guest_token path).
         }
 
-        const result = await (await getCartApi()).issueGuestToken({});
+        // Always adopt via issueGuestToken (Cookie authority).
+        // Renew OK → issue({}) only. Renew fail/skip + JS token → issue({guest_token})
+        // with 422 Unknown frontend worker param: guest_token → degrade to issue({}).
+        let cookieSyncedByRenew = false;
+        if (guestToken && window.WelineCart && typeof window.WelineCart.renewGuestSession === 'function') {
+            try {
+                await window.WelineCart.renewGuestSession({ force: true });
+                cookieSyncedByRenew = true;
+            } catch (error) {
+                cookieSyncedByRenew = false;
+            }
+        }
+
+        const cartApi = await getCartApi();
+        let result;
+        if (cookieSyncedByRenew || !guestToken) {
+            result = await cartApi.issueGuestToken({});
+        } else {
+            try {
+                result = await cartApi.issueGuestToken({ guest_token: guestToken });
+                if (result && result.success === false && isUnknownGuestTokenWorkerParam(result)) {
+                    result = await cartApi.issueGuestToken({});
+                } else if (result && result.success === false) {
+                    throw new Error(String(result.message || copy.guestTokenIssueFailed));
+                }
+            } catch (error) {
+                if (isUnknownGuestTokenWorkerParam(error)) {
+                    result = await cartApi.issueGuestToken({});
+                } else {
+                    throw error;
+                }
+            }
+        }
+
+        if (result && result.success === false) {
+            throw new Error(String(result.message || copy.guestTokenIssueFailed));
+        }
         const payload = result && result.data && typeof result.data === 'object' ? result.data : result;
         guestToken = String((payload && payload.guest_token) || (result && result.guest_token) || '').trim();
         if (!guestToken) {
             throw new Error(copy.guestTokenIssueFailed);
         }
+        const expiresAt = Number((payload && payload.expires_at_ms) || 0);
         if (window.WelineCart && typeof window.WelineCart.rememberGuestSession === 'function') {
-            window.WelineCart.rememberGuestSession(guestToken);
+            window.WelineCart.rememberGuestSession(guestToken, expiresAt || undefined);
         } else {
             try {
                 window.sessionStorage.setItem(guestTokenStorageKey, guestToken);

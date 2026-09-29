@@ -1,79 +1,60 @@
 <?php
-
 declare(strict_types=1);
 
-// Process-local persistence doubles: never connect to or mutate the configured database.
+// Persistence doubles supply immutable heads and current selections. The real
+// removal service, patch engine and uninstall merger execute below.
+namespace Weline\Framework\Manager {
+    class ObjectManager { public static function getInstance(string $class): object { return new class { public function __call($name,$args) { return ''; } }; } }
+}
+namespace Weline\Theme\Api\Scoped {
+    interface ThemeScopedWorkspaceInterface { public function load($context, $draft): array; public function applyChanges($context, $revision, $parent, $changes, $actor, $actorName = '', $summary = ''): array; }
+}
 namespace Weline\Theme\Model {
-    class ThemeScopeVersion
-    {
+    class ThemeScopeVersion {
+        public int $revision = 1;
         public function __construct(public int $id, public string $scope, public array $nodes, public bool $published = false) {}
         public function getVersionId(): int { return $this->id; }
         public function getThemeId(): int { return 3; }
         public function getScope(): string { return $this->scope; }
-        public function getContentRevision(): int { return 1; }
+        public function getContentRevision(): int { return $this->revision; }
         public function getChromePayload(): array { return $this->nodes; }
-        public function isPublished(): bool { return $this->published; }
+        public function toVersionIdentity(): \Weline\Theme\Api\Version\ThemeVersionIdentity { return new \Weline\Theme\Api\Version\ThemeVersionIdentity(3,$this->scope,'normal','frontend',$this->id,$this->published?'formal':'draft',$this->revision); }
     }
 }
 namespace Weline\Theme\Service {
-    use Weline\Theme\Model\ThemeScopeVersion;
-    class ThemeScopeVersionService
-    {
-        public ?ThemeScopeVersion $current;
-        public ThemeScopeVersion $published;
-        public function getCurrent(int $themeId, string $scope): ?ThemeScopeVersion { return $this->current; }
-        public function getPublished(int $themeId, string $scope): ?ThemeScopeVersion { return $this->published; }
-        public function createRevisionFrom(ThemeScopeVersion $source, string $name = '', string $actor = ''): ThemeScopeVersion {
-            return $this->current = new ThemeScopeVersion(11, $source->scope, $source->nodes);
+    class ThemeScopeVersionService {
+        public ?\Weline\Theme\Model\ThemeScopeVersion $current;
+        public \Weline\Theme\Model\ThemeScopeVersion $published;
+        public function getCurrent(...$args) { return $this->current; }
+        public function getPublished(...$args) { return $this->published; }
+        public function invalidateOwner(...$args): void {}
+    }
+}
+namespace Weline\Theme\Service\Version {
+    class ThemeVersionResourceSnapshotService {
+        public function __construct(private object $versions) {}
+        public function head($identity): array {
+            $version = $this->versions->current?->id === $identity->themeVersionId ? $this->versions->current : $this->versions->published;
+            return ['chrome_intent_json'=>json_encode($version->nodes),'package_default_json'=>'{"omissions":{"homepage":[]}}'];
         }
-        public function ensureCurrent(int $themeId, string $scope, string $scopeKind = 'website', ?int $websiteId = null, string $storeMode = 'normal'): ThemeScopeVersion {
-            return $this->current ??= new ThemeScopeVersion(11, $scope, []);
-        }
-        public function setChromePayload(ThemeScopeVersion $version, array $nodes): void { $version->nodes = $nodes; }
     }
 }
 namespace Weline\Theme\Service\LayoutEntity {
-    class ThemeLayoutEntityChrome
-    {
-        public array $sources = [];
-        public bool $missing = false;
-        public function resolveRenderSources(int $themeId, string $scope, bool $preview = false): array {
-            if ($this->missing) { throw new \RuntimeException('theme_layout_entity_chrome_missing: fixture'); }
-            return $this->sources;
-        }
-    }
-    class ThemeLayoutEntityConfigStore
-    {
-        public array $nodes = [];
-        public function readBoundConfig(EntityRenderBinding $binding): array
-        {
-            return $this->nodes[$binding->identity->canonicalScope] ?? [];
-        }
-    }
-    class ThemeLayoutEntityBakeCoordinator
-    {
-        public function bakeChromeFromNodes(int $themeId, string $scope, array $nodes, bool $structural = true, bool $invalidate = true, ?int $versionId = null): string { return '/fixture/chrome.phtml'; }
-    }
+    class RequiredDefaultInjectionBakeMerger { public function mergeIntoNodes($nodes,...$args): array { return $nodes; } }
+    class ThemeLayoutSlotTreeBuilder { public function filterChromeNodes($nodes): array { return array_filter($nodes,fn($n)=>in_array($n['area'],['header','footer'],true)); } }
 }
 namespace {
-    $theme = dirname(__DIR__, 4);
-    require dirname(__DIR__, 8) . '/vendor/autoload.php';
-    require_once $theme . '/Api/Version/ThemeVersionIdentity.php';
-    require_once $theme . '/Service/LayoutEntity/EntityRenderBinding.php';
-    require_once $theme . '/Service/ThemeChromeWidgetRemovalService.php';
+    $theme=dirname(__DIR__,4);
+    require dirname(__DIR__,8).'/vendor/autoload.php';
+    foreach (['Api/Version/ThemeVersionIdentity.php','Api/Scoped/ThemePatchCommand.php','Service/Scoped/ThemePatchEngine.php','Service/LayoutEntity/ThemeLayoutEntityOwnerLock.php','Service/LayoutEntity/RequiredDefaultInjectionContract.php','Service/ThemeChromeWidgetRemovalService.php'] as $file) { require_once $theme.'/'.$file; }
     use Weline\Framework\Runtime\ScopeIdentity;
     use Weline\SystemConfig\Api\Scope\ScopeContext;
     use Weline\Theme\Api\Scoped\ThemeEditorContext;
+    use Weline\Theme\Api\Scoped\ThemePatchCommand;
     use Weline\Theme\Model\ThemeScopeVersion;
     use Weline\Theme\Service\ThemeScopeVersionService;
     use Weline\Theme\Service\ThemeChromeWidgetRemovalService;
-    use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator;
     use Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract;
-    use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityChrome;
-    use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore;
-    use Weline\Theme\Api\Version\ThemeVersionIdentity;
-    use Weline\Theme\Service\LayoutEntity\EntityRenderBinding;
-
     $uid = str_repeat('a', 32);
     $other = str_repeat('b', 32);
     $nodes = [
@@ -89,40 +70,25 @@ namespace {
         $service->current->nodes = $argv[1] === 'empty' ? [] : [$headerUid => ['node_uid' => $headerUid, 'area' => 'header', 'slot_id' => 'header', 'widget_module' => 'Weline_Test', 'widget_type' => 'header', 'widget_code' => 'logo', 'config' => ['title' => 'local-header']]];
     }
     if ($argv[1] === 'removed') { $service->current->nodes[$uid]['is_active'] = false; $service->current->nodes[$uid]['source'] = 'user_deleted'; }
+    if ($argv[1] === 'partial') { $service->current->nodes += $nodes; }
+    if ($argv[1] === 'nearer-slot') { $service->current->nodes += [$other => $nodes[$other]]; }
     $history = serialize($service->published);
     $currentHistory = $service->current?->published ? serialize($service->current) : null;
     $oldCurrent = $service->current;
     $scope = new ScopeContext(ScopeIdentity::channel(1, 'shop', 'store', 'channel', 'normal'), 'shop.store.channel', 'normal', ['shop.store.channel', 'shop.__website__.default']);
     $context = new ThemeEditorContext($scope, 'frontend', themeId: 3, layoutType: 'product');
-    $chrome = new ThemeLayoutEntityChrome();
-    $chrome->missing = $argv[1] === 'missing-binding';
-    $configs = new ThemeLayoutEntityConfigStore();
-    $binding = static function (string $scopeName): EntityRenderBinding {
-        static $seq = 0;
-        ++$seq;
-        $identity = new ThemeVersionIdentity(3, $scopeName, 'normal', 'frontend', 9 + $seq, 'formal', 1);
-
-        return new EntityRenderBinding(
-            identity: $identity,
-            source: 'chrome',
-            layoutIdentityHash: '',
-            structureKey: hash('sha256', 's'),
-            configKey: hash('sha256', 'c'),
-            templatePath: '',
-            configPath: '',
-            assetsPath: '',
-            structurePath: '',
-            shellPath: '',
-            bindingPath: '',
-        );
+    $workspace = new class($service) implements \Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface {
+        public function __construct(private object $versions) {}
+        public function load($context,$draft): array { return ['draft_payload'=>['nodes'=>$this->versions->current?->nodes??[]], 'revision'=>1,'expected_parent_release_id'=>null]; }
+        public function applyChanges($context,$revision,$parent,$changes,$actor,$actorName='',$summary=''): array {
+            $current=$this->versions->current;
+            if ($current===null || $current->published) { $current=new ThemeScopeVersion(11,$context->scope->storageScope,$current?->nodes??[]); $this->versions->current=$current; }
+            $payload=(new \Weline\Theme\Service\Scoped\ThemePatchEngine())->apply(['nodes'=>$current->nodes],array_map([ThemePatchCommand::class,'fromArray'],$changes));
+            $current->nodes=$payload['nodes']; ++$current->revision;
+            return ['theme_version_id'=>$current->id,'content_revision'=>$current->revision,'draft_payload'=>$payload];
+        }
     };
-    $chrome->sources = [['binding' => $binding('shop.__website__.default')]];
-    $configs->nodes['shop.__website__.default'] = $nodes;
-    if ($argv[1] === 'nearer-slot') {
-        array_unshift($chrome->sources, ['binding' => $binding('shop.store.default')]);
-        $configs->nodes['shop.store.default'] = [$other => $nodes[$other]];
-    }
-    $result = (new ThemeChromeWidgetRemovalService($service, new ThemeLayoutEntityBakeCoordinator(), $chrome, $configs))->remove($context, $uid, 'backend-user:1');
+    $result=(new ThemeChromeWidgetRemovalService($service,$workspace,new \Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService($service),new \Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder(),new \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionBakeMerger()))->remove($context,$uid,'backend-user:1');
     $current = $service->current;
     $bySlot = ['footer-help-links' => array_values($current?->nodes ?? [])];
     $declarations = [['module' => 'Weline_Test', 'type' => 'footer', 'code' => 'help', 'default_injections' => [['layout_type' => 'homepage', 'slot' => 'footer-help-links', 'area' => 'footer', 'required' => true]]]];
@@ -133,6 +99,7 @@ namespace {
         'history_before' => [$history, $currentHistory],
         'history_after' => [serialize($service->published), $currentHistory !== null ? serialize($oldCurrent) : null],
         'current_id' => $current?->id,
+        'content_revision' => $current?->getContentRevision(),
         'active' => $current?->nodes[$uid]['is_active'] ?? null,
         'source' => $current?->nodes[$uid]['source'] ?? null,
         'rebaked_active' => $rebaked[0]['is_active'] ?? null,

@@ -17,6 +17,9 @@ final class ThemeLayoutPayloadDiffer
         $targetNodes = \is_array($target['nodes'] ?? null) ? $target['nodes'] : [];
 
         foreach (\array_diff_key($parentNodes, $targetNodes) as $uid => $_node) {
+            // A full form payload commonly omits invisible deleted rows. That
+            // omission is not an explicit reinstall of a required widget.
+            if (is_array($_node) && \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract::isUninstallSource((string)($_node['source'] ?? $_node['config']['_source'] ?? ''))) { continue; }
             $commands[] = ThemePatchCommand::fromArray([
                 'op' => ThemePatchCommand::OP_REMOVE_NODE,
                 'path' => '/nodes/' . $uid,

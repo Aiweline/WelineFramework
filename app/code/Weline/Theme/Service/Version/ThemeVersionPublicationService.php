@@ -40,9 +40,8 @@ final class ThemeVersionPublicationService implements ThemeVersionPublicationInt
             ];
         }
 
-        $baseVersionId = (int)($options['base_version_id'] ?? $options['published_version_id'] ?? 0);
+        $baseVersionId = $this->draftSourceVersionId($creationSourceKind, $options);
         if ($creationSourceKind === self::CREATION_EXPLICIT_HISTORICAL) {
-            $baseVersionId = (int)($options['source_theme_version_id'] ?? 0);
             if ($baseVersionId < 1) {
                 throw new \InvalidArgumentException('explicit_historical_source_required');
             }
@@ -84,6 +83,19 @@ final class ThemeVersionPublicationService implements ThemeVersionPublicationInt
             'reused_existing_draft' => false,
             'owner' => $owner->toArray(),
         ];
+    }
+
+    /** The persisted draft and the planner must resolve the same source. */
+    public function draftSourceVersionId(string $creationSourceKind, array $options): int
+    {
+        if ($creationSourceKind === self::CREATION_PACKAGE_DEFAULTS) { return 0; }
+        if ($creationSourceKind === self::CREATION_EXPLICIT_HISTORICAL) {
+            return max(0, (int)($options['source_theme_version_id'] ?? 0));
+        }
+        foreach (['existing_draft_version_id', 'source_theme_version_id', 'base_version_id', 'published_version_id'] as $key) {
+            if ((int)($options[$key] ?? 0) > 0) { return (int)$options[$key]; }
+        }
+        return 0;
     }
 
     public function saveDraft(ThemeVersionIdentity $identity, array $changes, int $expectedContentRevision): array

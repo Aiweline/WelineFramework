@@ -198,7 +198,7 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 
 #### 部件静态资源固化（硬约束）
 
-部件 CSS/JS **静态文件**须在 `<w:widget layout-source="…" source="…">`（或 `@widget.layout_source` / `@widget.source`）声明；布局固化写入 sidecar，按声明位置统一去重排放。禁止所有部件内联 CSS/可执行 JS（含 style= 与 on*=）及模板裸资源标签。详见 [部件静态资源固化规范.md](../部件静态资源固化规范.md)、[部件开发指南.md](../部件开发指南.md)。MCP：`widget_static_assets_bake_to_head`。
+部件 CSS/JS **静态文件**须在 `<w:widget layout-source="…" source="…">`（或 `@widget.layout_source` / `@widget.source`）声明；派生 PHTML 保留声明，复用正常资源加载，按声明位置统一去重排放，不生成资源 sidecar。禁止所有部件内联 CSS/可执行 JS（含 style= 与 on*=）及模板裸资源标签。详见 [部件静态资源固化规范.md](../部件静态资源固化规范.md)、[部件开发指南.md](../部件开发指南.md)。
 
 完整规范见 [前端JS模块加载规范.md](../前端JS模块加载规范.md)、[Theme.js使用指南.md](../Theme.js使用指南.md)。MCP 规则 id：`theme_js_module_declare_only`（含 bake head 静态 `.js` 书面例外）。
 
@@ -352,10 +352,10 @@ component 负责：
 
 - **硬规则（本模块才可标签内嵌）**：`<w:widget>` / `fetch(.../widgets/...)` **只能**引用**本模块**部件。Theme 布局仅可内嵌 `Weline_Theme`；Customer/Product 等自有布局亦同理——禁止布局标签拉第三方部件。
 - **同模块 XOR**：同一模块下，布局/宿主已用标签内嵌某部件 ↔ **禁止**再在该部件 JSON 写 `default_injections`（二选一，否则会重复出现两个）。布局已提供 → 清空 JSON 并标 `placement=layout`；走注入 → 布局只留空 `<w:slot>` + `placement=injection`。禁止用页级 presence / 槽内 count 等运行时「只留一份」打补丁。**同码叠渲必须硬失败**（`required_default_injection_duplicate` / Seeder×placement=layout 门禁），禁止 soft-skip。门禁：`php bin/w frontend:check-required-injection-sibling-fetch`（`setup:upgrade` 致命）。
-- **固化完备**：店面运行时不得再实时注入同名部件；未固化时只允许 `dynamicSolidify`/rebake 写关系壳（见 `布局固化与默认注入.md` §3–§4；纠偏 2026-09-26）。
+- **固化完备（纯 PHTML）**：原布局、编辑意图与默认注入生成派生模板，落盘 **`generated/theme-layout-entities/`**；已有对应文件时优先选择，否则使用原模板，统一经过普通 Template/Taglib/语言 `com_*`。装卸、移动、参数及语言配置变更均同步重生成。固化目录仅保存 PHTML，语言差异随参数进入同一 PHTML；升级按受影响布局重建。店面不通过 Overlay 或重播种修补缺件。权威：[布局固化与默认注入.md](../布局固化与默认注入.md) §0。
 - **硬规则（跨模块禁布局互调 · 只走 JSON）**：不同模块之间 **禁止**在布局/partial 里互相 `<w:widget>` / `fetch` 调用对方部件；外国部件**只能**经拥有模块的 JSON `default_injections`（应用部件默认注入）+ 空槽进入。门禁：`php bin/w frontend:check-theme-layout-widgets`。
-- **硬规则（默认注入 · 固化进布局模板 · 必须记住）**：JSON 应用部件默认注入在**固化布局模板**时写入；只要目标槽存在且无 `user_deleted@{versionId}`，就必须固化进去——**与主题是否激活、主题版本无关**。唯一省略=人工卸载。店面遗漏默认部件 → **固化方案/触发出问题**，不是「可选 overlay」。无固化模板时：对**当前激活主题**运行期动态固化；已有模板：仅主题**新增/移除**部件再固化；插件安装/变更 JSON 默认注入：重固化**所有主题**下涉及的对应布局。权威：[布局固化与默认注入.md](../布局固化与默认注入.md)。MCP：`required_default_always_present_without_user_deleted`；短规格：`doc/开发/spec/required-default-always-present.md`。
-- **硬规则（固化 = 关系模板 · 非渲染快照）**：编译/固化只把 slot 与部件对准坑位并写入可执行 phtml **模板**；**禁止**把某次请求的部件 HTML 烘焙进 `com_*.phtml` / 实体 `layout.phtml`。所有合法 `<w:widget>` Taglib 编译唯一产物为 `<?= Widget::renderRuntimeInline([...]) ?>`，店面执行模板时 hydrate。**禁止**按部件 code / placement / page_layouts 维护「延期渲染」白名单。`chrome.rendered.{locale}.html` 边界见权威文 §3.0。
+- **硬规则（默认注入 · 固化进布局模板 · 必须记住）**：JSON 应用部件默认注入在**固化布局模板**时写入；只要目标槽存在且无 `user_deleted@{versionId}`，就必须固化进去——不得用激活态/版本号省略。唯一省略=人工卸载。店面遗漏 → **固化方案/触发出问题**。权威：[布局固化与默认注入.md](../布局固化与默认注入.md)。MCP：`required_default_always_present_without_user_deleted`；短规格：`doc/开发/spec/required-default-always-present.md`。
+- **硬规则（固化 = 模板）**：PHTML 中的显式部件调用顺序表达布局关系，命名子槽回调表达嵌套；保留主题组件、虚拟模板与 Block 分派。运行时处理动态业务和语言选择，不读取布局配置侧车或把首次请求 HTML 当作模板。原 PHP、Hook、条件、Partial 与资源上下文保持正常模板语义。
 - **工程团队**：部件相关施工/复审分配给专席 **部件开发工程师**（MCP `widget_development` / `工程团队.md`）。
 - `position` / `page_layouts` / `slot` / `supports` 表示部件允许出现的位置和协议
 - `default_injections`：跨模块开箱进槽的**唯一合法路径**（经布局固化写入模板）；同模块若已布局内嵌则不得再写

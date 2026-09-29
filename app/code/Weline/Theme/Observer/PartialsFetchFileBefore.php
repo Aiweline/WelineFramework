@@ -41,6 +41,16 @@ class PartialsFetchFileBefore implements ObserverInterface
             return;
         }
 
+        $snapshot = \Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot::current();
+        if ($snapshot !== null && $snapshot->identity->area === $pathInfo['area']) {
+            $path = $snapshot->partialPath($pathInfo['type'], $pathInfo['option']);
+            if ($path !== null) {
+                $snapshot->install(Template::getInstance());
+                $fileData->setData('filename', $path);
+                return;
+            }
+        }
+
         try {
             $area = $pathInfo['area'];
             $partialType = $pathInfo['type'];

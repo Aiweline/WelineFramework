@@ -8,81 +8,66 @@ use PHPUnit\Framework\TestCase;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths;
 
-/**
- * Source-string + behavioral contract for version-isolated entity disk tree.
- */
 final class ThemeLayoutEntityPathsContractTest extends TestCase
 {
-    public function testPathSegmentsMatchVersionIsolatedLayout(): void
+    public function testDistinctScopesAndStoreModesCannotShareDirectories(): void
     {
-        $path = \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityPaths.php';
-        self::assertFileExists($path);
-        $src = (string)\file_get_contents($path);
-
-        self::assertStringContainsString("ROOT_SEGMENT = 'theme-layout-entities'", $src);
-        self::assertStringContainsString("SCHEMA_BINDING = 'theme-layout-entity.v3'", $src);
-        self::assertStringContainsString("'tv'", $src);
-        self::assertStringContainsString("'formal'", $src);
-        self::assertStringContainsString("'draft'", $src);
-        self::assertStringContainsString("'structures'", $src);
-        self::assertStringContainsString("'bindings'", $src);
-        self::assertStringContainsString("'rendered'", $src);
-        self::assertStringContainsString("'layout.phtml'", $src);
-        self::assertStringContainsString("'shell.phtml'", $src);
-        self::assertStringContainsString('function scopeKey', $src);
-        self::assertStringContainsString('function identityKey', $src);
-        self::assertStringContainsString('function purgeAllEntities', $src);
-        self::assertStringContainsString("hash('sha256'", $src);
-
-        self::assertStringNotContainsString('pageCurrentJson', $src);
-        self::assertStringNotContainsString('pageStructureOrRelease', $src);
-        self::assertStringNotContainsString("return 'r'", $src);
-        self::assertStringNotContainsString('substr($identityHash, 0, 16)', $src);
-        self::assertStringNotContainsString('sha1($scope)', $src);
+        $paths = new ThemeLayoutEntityPaths('/tmp/theme-layout-entities-contract/');
+        $owners = [
+            ['shop.eu.default', 'normal'], ['shop_eu.default', 'normal'],
+            ['Shop.eu.default', 'normal'], ['shop.eu.default__test', 'normal'],
+            ['shop.eu.default', 'test'], ['shop.eu.default', 'Test'],
+        ];
+        $directories = [];
+        foreach ($owners as [$scope, $mode]) {
+            $identity = new ThemeVersionIdentity(3, $scope, $mode, 'frontend', 10, 'formal', 2);
+            $directories[] = strtolower($paths->ownerDir($identity));
+        }
+        self::assertCount(count($owners), array_unique($directories));
     }
 
-    public function testScopeKeyIsFullSha256OfScopeAndStoreMode(): void
+    public function testLayoutOptionsTargetsAndNestedTypesRemainSeparate(): void
     {
-        $paths = new ThemeLayoutEntityPaths();
-        $key = $paths->scopeKey('default.__store__.__channel__', 'normal');
-        self::assertSame(64, \strlen($key));
-        self::assertSame(
-            \hash('sha256', "default.__store__.__channel__\0normal"),
-            $key,
-        );
-        self::assertNotSame(
-            $paths->scopeKey('default.__store__.__channel__', 'normal'),
-            $paths->scopeKey('default.__store__.__channel__', 'test'),
-        );
+        $paths = new ThemeLayoutEntityPaths('/tmp/theme-layout-entities-contract/');
+        $formal = new ThemeVersionIdentity(3, 'default.default.default', 'normal', 'frontend', 10, 'formal', 2);
+        $draft = $formal->withVersion(10, 'draft', 2);
+        $plain = $paths->pageLayoutPhtml($formal, 'account/login');
+        self::assertStringEndsWith('/v10/pages/layouts/account/login/default.phtml', $plain);
+        self::assertStringEndsWith('/draft/pages/layouts/account/login/default.phtml', $paths->pageLayoutPhtml($draft, 'account/login'));
+        self::assertNotSame($plain, $paths->pageLayoutPhtml($formal, 'account/login', 'compact'));
+        self::assertNotSame($plain, $paths->pageLayoutPhtml($formal, 'account/login', 'default', 'product', 12));
+        self::assertNotSame($paths->pageLayoutPhtml($formal, 'account/login', 'default', 'product', 12), $paths->pageLayoutPhtml($formal, 'account/login', 'default', 'product', 13));
     }
 
-    public function testIdentityKeyRequiresFullHashAndVersionDirsIsolate(): void
+    public function testPartialOptionsArePreserved(): void
     {
-        $paths = new ThemeLayoutEntityPaths();
-        $hash = \hash('sha256', 'homepage');
-        self::assertSame($hash, $paths->identityKey($hash));
-
-        $a = new ThemeVersionIdentity(3, 'default.default.default', 'normal', 'frontend', 10, 'formal', 2);
-        $b = new ThemeVersionIdentity(3, 'default.default.default', 'normal', 'frontend', 11, 'formal', 2);
-        $draft = new ThemeVersionIdentity(3, 'default.default.default', 'normal', 'frontend', 10, 'draft', 2);
-
-        $pathA = $paths->pagePhtml($a, $hash, \hash('sha256', 'struct'));
-        $pathB = $paths->pagePhtml($b, $hash, \hash('sha256', 'struct'));
-        $pathDraft = $paths->pagePhtml($draft, $hash, \hash('sha256', 'struct'));
-
-        self::assertStringContainsString('/frontend/', $pathA);
-        self::assertStringContainsString('/tv10/formal/', $pathA);
-        self::assertStringContainsString('/tv11/formal/', $pathB);
-        self::assertStringContainsString('/tv10/draft/', $pathDraft);
-        self::assertNotSame($pathA, $pathB);
-        self::assertNotSame($pathA, $pathDraft);
-        self::assertStringContainsString('/pages/' . $hash . '/', $pathA);
-        self::assertStringNotContainsString('/current.json', $pathA);
+        $paths = new ThemeLayoutEntityPaths('/tmp/theme-layout-entities-contract/');
+        $identity = new ThemeVersionIdentity(3, 'default.default.default', 'normal', 'frontend', 10, 'formal', 2);
+        self::assertTrue(method_exists($paths, 'partialPhtml'), 'The shared partial loader needs a type/option path.');
+        self::assertStringEndsWith('/v10/theme/partials/header/compact.phtml', $paths->partialPhtml($identity, 'header', 'compact'));
+        self::assertNotSame($paths->partialPhtml($identity, 'header'), $paths->partialPhtml($identity, 'header', 'compact'));
     }
-
-    public function testTruncatedIdentityRejected(): void
+    public function testLongestLegalScopeCanBeCreatedAndEnumerated(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        (new ThemeLayoutEntityPaths())->identityKey(\substr(\hash('sha256', 'x'), 0, 16));
+        $root = sys_get_temp_dir() . '/weline-path-' . bin2hex(random_bytes(6)) . '/theme-layout-entities';
+        $paths = new ThemeLayoutEntityPaths($root);
+        $scope = str_repeat('W', 255) . '.' . str_repeat('s', 64) . '.' . str_repeat('c', 64);
+        $identity = new ThemeVersionIdentity(3, $scope, 'normal', 'frontend', 10, 'formal', 2);
+        $path = $paths->pageLayoutPhtml($identity, 'homepage');
+        try {
+            self::assertTrue(@mkdir(dirname($path), 0770, true), 'Legal scope must fit filesystem component limits.');
+            self::assertSame(2, file_put_contents($path, 'ok'));
+            self::assertSame('ok', file_get_contents($path));
+            $versions = $paths->listVersionModeDirectories();
+            self::assertCount(1, $versions);
+            self::assertSame(10, $versions[0]['theme_version_id']);
+            self::assertSame($scope, $versions[0]['canonical_scope']);
+            self::assertSame('normal', $versions[0]['store_mode']);
+        } finally {
+            if (is_dir($root)) {
+                $paths->purgeAllEntities();
+                @rmdir(dirname($root));
+            }
+        }
     }
 }

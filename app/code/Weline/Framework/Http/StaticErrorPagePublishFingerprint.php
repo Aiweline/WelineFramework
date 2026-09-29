@@ -68,8 +68,8 @@ final class StaticErrorPagePublishFingerprint
     ): string {
         return \hash(
             'sha256',
-            // 404v6: strip client widgetTranslations / multi-locale bags from snapshots.
-            '404v6|'
+            // 404v7: also SlotBoundaryMarkers::strip → promote data-wslot to data-slot-id.
+            '404v7|'
             . $websiteCode . '|'
             . $lang . '|'
             . $websiteId . '|'

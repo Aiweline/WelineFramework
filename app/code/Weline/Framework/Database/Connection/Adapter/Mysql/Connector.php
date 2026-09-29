@@ -937,6 +937,11 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function buildAlterModifyColumnSql(string $table, array $col, ?array $existingCol = null): string
     {
         $t = $this->getDialect()->quoteTable($table);
+        // MODIFY 保留既有主键约束；重复内联声明会被 MySQL 当作新增主键。
+        if (!empty($existingCol['primaryKey']) && !empty($col['primaryKey'])) {
+            $col['primaryKey'] = false;
+            $col['nullable'] = false;
+        }
         $def = $this->mysqlColumnDef($col);
         return "ALTER TABLE {$t} MODIFY COLUMN {$def}";
     }

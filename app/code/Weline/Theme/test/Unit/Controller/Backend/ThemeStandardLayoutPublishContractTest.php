@@ -64,7 +64,8 @@ final class ThemeStandardLayoutPublishContractTest extends TestCase
             );
         }
         $scopePublish = $this->extractMethod($source, 'publishScopeVersionPayload');
-        self::assertStringContainsString('ThemeVersionPublicationService', $scopePublish);
+        self::assertStringContainsString('publishScopeVersionPayloadLocked', $scopePublish);
+        self::assertStringContainsString('ThemeVersionPublicationService', $this->extractMethod($source, 'publishScopeVersionPayloadLocked'));
         self::assertStringNotContainsString('function postPublishVersion(', $source);
         self::assertStringNotContainsString('function publishVersionPayload(', $source);
     }
@@ -216,7 +217,11 @@ final class ThemeStandardLayoutPublishContractTest extends TestCase
         self::assertStringNotContainsString('function publishVersionPayload(', $source);
 
         $workspace = (string)file_get_contents(dirname(__DIR__, 4) . '/Service/Scoped/ThemeScopedWorkspace.php');
-        self::assertStringContainsString('bakePublishedLayoutResourcesFromBatchReceipt(', $workspace);
+        self::assertStringContainsString('ThemeScopedVersionPublicationBridge::class', $workspace);
+        $publication = (string)file_get_contents(dirname(__DIR__, 4) . '/Service/Version/ThemeScopedVersionPublicationBridge.php');
+        self::assertStringContainsString('bakePublishArtifactsForVersion(', $publication);
+        self::assertStringContainsString('preparePublication(', $publication);
+        self::assertStringNotContainsString('bakePublishedLayoutResourcesFromBatchReceipt(', $workspace);
 
         foreach ([
             '/view/statics/ui/pages/weline-theme-editor.js',

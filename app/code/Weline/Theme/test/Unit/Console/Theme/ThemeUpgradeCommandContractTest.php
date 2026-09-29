@@ -15,6 +15,19 @@ if (!class_exists(ThemeUpgradeCommand::class, false)) {
 
 final class ThemeUpgradeCommandContractTest extends TestCase
 {
+    public function testLayoutEntitySolidifyIsInvokedAfterStaticPublish(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 4) . '/Console/Theme/Upgrade.php');
+        self::assertIsString($source);
+        self::assertStringContainsString('ThemeLayoutEntityUpgradeSolidifyService', $source);
+        self::assertStringContainsString('cutoverFromThemeCommand', $source);
+        self::assertStringContainsString('generated/theme-layout-entities', $source);
+        self::assertStringContainsString('purge 旧布局固化物', $source);
+        // Must not skip purge (old solidify-only path was the premature-close root cause).
+        self::assertStringNotContainsString('solidifyAllThemes();', $source);
+        self::assertStringNotContainsString('solidifyFromThemeCommand($themes', $source);
+    }
+
     public function testNamedThemeLookupUsesTheDeclaredNameFieldConstant(): void
     {
         $source = file_get_contents(dirname(__DIR__, 4) . '/Console/Theme/Upgrade.php');

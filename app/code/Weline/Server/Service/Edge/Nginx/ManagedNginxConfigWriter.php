@@ -60,9 +60,13 @@ final class ManagedNginxConfigWriter
         bool $http3Enabled = false,
         array $upstreamPorts = [],
         ?array $certificateGeneration = null,
+        ?array $edgeCacheState = null,
     ): array
     {
         $this->paths->ensureRuntimeDirectories();
+        $hostCacheState = $edgeCacheState === null
+            ? ManagedNginxHostCacheState::read($this->paths->confFile())
+            : ManagedNginxHostCacheState::fromArray($edgeCacheState);
         $ports = (new ManagedNginxPortAllocator($this->paths))->allocate();
         $upstreamHost = $this->normalizeLoopbackUpstreamHost($upstreamHost);
         $upstreamPorts = $this->normalizeUpstreamPorts($upstreamPort, $upstreamPorts, $ports);
@@ -150,7 +154,7 @@ NGINX;
         }
 
         $cacheHttpBlock = '';
-        $cacheLocationBlock = '';
+        $cacheLocationBlock = "\n            proxy_cache off;\n";
         $staticCacheLocationBlock = '';
         $gzipBlock = '';
         if ($gzipOn) {
@@ -189,10 +193,12 @@ NGINX;
         BYPASS  1;
     }
 NGINX;
-            $cacheLocationBlock = <<<NGINX
+            if ($this->paths->dynamicEdgeCacheEnabled()) {
+                $cacheHttpBlock .= $hostCacheState->nginxMap();
+                $cacheLocationBlock = <<<NGINX
 
             proxy_cache wls_edge;
-            proxy_cache_key "\$scheme\$request_method\$host\$request_uri|fpc2";
+            proxy_cache_key "\$scheme\$request_method\$host\$request_uri|fpc2\$wls_edge_host_generation";
             proxy_cache_methods GET HEAD;
             proxy_cache_valid 200 {$ttl}s;
             proxy_cache_valid 301 302 {$ttl}s;
@@ -205,6 +211,7 @@ NGINX;
             proxy_no_cache \$wls_edge_bypass \$wls_edge_skip_fpc_miss_status \$wls_edge_skip_fpc_miss_weline;
             add_header X-Wls-Edge-Cache \$upstream_cache_status always;
 NGINX;
+            }
         }
         $authorityMapBlock = <<<NGINX
 
@@ -448,6 +455,7 @@ NGINX;
             $conf = \str_replace("    use                 epoll;\n", "    use                 kqueue;\n", $conf);
         }
 
+        $conf = $hostCacheState->configComment() . $conf;
         $configSha256 = \hash('sha256', $conf);
         if ($candidate) {
             $confFile = $this->publication->stageCandidate($conf);
@@ -473,6 +481,7 @@ NGINX;
             'certificate_chain_sha256' => (string)($ssl['chain_sha256'] ?? ''),
             'server_names' => $names,
             'edge_cache' => $edgeCache,
+            'edge_cache_dynamic' => $this->paths->dynamicEdgeCacheEnabled(),
             'edge_cache_ttl_sec' => $ttl,
             'edge_cache_max_size_mb' => $cacheMaxMb,
             'gzip' => $gzipOn,

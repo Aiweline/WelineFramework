@@ -94,4 +94,15 @@ final class WlsDevPanelAttackStatsHttpContractTest extends TestCase
         self::assertStringContainsString("active === 'security'", $activateSlice);
         self::assertStringContainsString('loadWlsAttackStats()', $activateSlice);
     }
+
+    public function testAttackStatsUiRendersScanWarnings(): void
+    {
+        $src = $this->hookSource();
+        $pos = strpos($src, 'window.loadWlsAttackStats = function');
+        self::assertNotFalse($pos);
+        $slice = substr($src, (int)$pos, 2800);
+        self::assertStringContainsString('scan_warnings', $slice);
+        self::assertStringContainsString('wls-scan-warnings', $slice);
+        self::assertStringContainsString('扫描特征警告', $slice);
+    }
 }

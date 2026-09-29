@@ -209,10 +209,16 @@ final class ThemePatchEngine
                     && $existingAtPath->operation === ThemePatchCommand::OP_ADD_NODE
                     && $command->operation === ThemePatchCommand::OP_REMOVE_NODE
                 ) {
-                    // Removing a node created only by this Scope restores the
-                    // parent (where the random UID is absent); it is not a
-                    // tombstone against inherited data.
-                    unset($map[$command->path]);
+                    // An editor removal keeps the local slot explicitly empty;
+                    // only INHERIT relinquishes that ownership to its parent.
+                    $node = $existingAtPath->value;
+                    $node['is_active'] = false;
+                    $node['source'] = 'user_deleted';
+                    $map[$command->path] = ThemePatchCommand::fromArray([
+                        'op' => ThemePatchCommand::OP_ADD_NODE, 'path' => $existingAtPath->path,
+                        'node_uid' => $existingAtPath->nodeUid, 'value' => $node,
+                        'anchor_uid' => $existingAtPath->anchorUid, 'position' => $existingAtPath->position,
+                    ]);
                     $prefix = \rtrim($command->path, '/') . '/';
                     foreach (\array_keys($map) as $ownedPath) {
                         if (\str_starts_with($ownedPath, $prefix)) {

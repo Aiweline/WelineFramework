@@ -6,6 +6,7 @@
     "require": {
         "php": "^8.4",
         "weline/module-cron": "@dev",
+        "weline/module-queue": "@dev",
         "weline/framework": "@dev",
         "weline/module-websites": "@dev"
     },

@@ -44,7 +44,14 @@ CDN账户列表,CDN账户列表
 是否启用,是否启用
 "删除 CDN 域名绑定","删除 CDN 域名绑定"
 "域名 ID","域名 ID"
-"执行 CDN 预热任务","执行 CDN 预热任务"
+"执行 CDN 预热任务（仅跑队列）","执行 CDN 预热任务（仅跑队列）"
+"作用范围 storage_scope，空/Global=全部","作用范围 storage_scope，空/Global=全部"
+"Website ID（与 target_scope 二选一；0=默认站）","Website ID（与 target_scope 二选一；0=默认站）"
+"兼容：按 CDN Domain 过滤","兼容：按 CDN Domain 过滤"
+"Provider FQCN","Provider FQCN"
+"列出 CDN WarmupProvider 及本范围计数","列出 CDN WarmupProvider 及本范围计数"
+"分页列出某 Provider 已入队 URL","分页列出某 Provider 已入队 URL"
+"从 WarmupProvider 收集 URL 入队","从 WarmupProvider 收集 URL 入队"
 "启用或禁用 CDN 预热 URL","启用或禁用 CDN 预热 URL"
 "删除 CDN 预热 URL","删除 CDN 预热 URL"
 "重新收集 CDN API 规则","重新收集 CDN API 规则"
@@ -70,6 +77,13 @@ CDN账户列表,CDN账户列表
 "解析 Scope COW 媒体 URL","解析 Scope COW 媒体 URL"
 "解析 Scope 授权账户（脱敏，无 credentials）","解析 Scope 授权账户（脱敏，无 credentials）"
 "预览或同步当前企业邮箱域名的 Cloudflare DNS","预览或同步当前企业邮箱域名的 Cloudflare DNS"
+作用范围,作用范围
+运行模式,运行模式
+声明标识,声明标识
+"本层启用覆盖，null 表示继承","本层启用覆盖，null 表示继承"
+"本层 TTL 覆盖，null 表示继承","本层 TTL 覆盖，null 表示继承"
+恢复继承的字段,恢复继承的字段
+"同步记录 ID","同步记录 ID"
 适配器代码和账户名称不能为空,适配器代码和账户名称不能为空
 "请填写 API Token，或改用 Global API Key（邮箱+密钥）；也可使用 OAuth 一键授权","请填写 API Token，或改用 Global API Key（邮箱+密钥）；也可使用 OAuth 一键授权"
 "未找到 CDN 适配器：%{1}","未找到 CDN 适配器：%{1}"
@@ -166,6 +180,7 @@ URL列表不能为空,URL列表不能为空
 "Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认","Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认"
 "Cloudflare 拒绝了当前 Global API Key（或邮箱不匹配）。请确认 My Profile → API Keys 中的 Global API Key，以及该 Key 所属账户的登录邮箱，保存后再测。","Cloudflare 拒绝了当前 Global API Key（或邮箱不匹配）。请确认 My Profile → API Keys 中的 Global API Key，以及该 Key 所属账户的登录邮箱，保存后再测。"
 "Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），或改用「Global API Key」鉴权方式并填写邮箱+密钥。","Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），或改用「Global API Key」鉴权方式并填写邮箱+密钥。"
+"Cloudflare 规则读取失败","Cloudflare 规则读取失败"
 "规则推送成功，共 %{count} 条","规则推送成功，共 %{count} 条"
 规则推送失败,规则推送失败
 "Zone不存在: %{1}","Zone不存在: %{1}"
@@ -278,10 +293,12 @@ settings,settings
 CDN模块系统配置,CDN模块系统配置
 查看CDN系统配置,查看CDN系统配置
 查看CDN模块系统配置,查看CDN模块系统配置
-加载预热URL列表失败：%{1},加载预热URL列表失败：%{1}
+加载预热管理失败：%{1},加载预热管理失败：%{1}
 加载统计信息失败：%{1},加载统计信息失败：%{1}
 预热任务执行完成,预热任务执行完成
 执行失败：%{1},执行失败：%{1}
+收集完成,收集完成
+收集失败：%{1},收集失败：%{1}
 "URL ID不能为空","URL ID不能为空"
 URL不存在,URL不存在
 URL已启用,URL已启用
@@ -301,7 +318,6 @@ Tag列表不能为空,Tag列表不能为空
 "本页嵌入 CDN 模块在统一配置中心声明的字段。Cloudflare OAuth Client ID / Secret 在此填写并保存后，再到「账户管理」点击连接或重新授权。切换作用范围后按新范围加载。","本页嵌入 CDN 模块在统一配置中心声明的字段。Cloudflare OAuth Client ID / Secret 在此填写并保存后，再到「账户管理」点击连接或重新授权。切换作用范围后按新范围加载。"
 去账户管理授权,去账户管理授权
 在统一配置中心打开,在统一配置中心打开
-作用范围,作用范围
 进行中的攻击,进行中的攻击
 今日攻击,今日攻击
 本周攻击,本周攻击
@@ -369,30 +385,121 @@ ID,ID
 "持续时间 %{1}","持续时间 %{1}"
 CDN响应详情,CDN响应详情
 "API 规则","API 规则"
-"查看各模块收集的 CDN API 规则，按触发方式筛选并启用。","查看各模块收集的 CDN API 规则，按触发方式筛选并启用。"
-重新收集规则,重新收集规则
+"控制器缓存策略与 CDN 规则","控制器缓存策略与 CDN 规则"
+重新收集声明,重新收集声明
+"FPC 策略","FPC 策略"
+"CDN 注释规则","CDN 注释规则"
+同步记录,同步记录
+关键词,关键词
+查询,查询
+刷新,刷新
+"覆盖按字段分别继承；保存后自动安排源站发布和 CDN 同步。","覆盖按字段分别继承；保存后自动安排源站发布和 CDN 同步。"
+正在加载…,正在加载…
+方法与公开路径,方法与公开路径
+TTL,TTL
+生效进度,生效进度
+"此处管理现有 CDN 注释规则；FPC 缓存策略在前一页签管理。","此处管理现有 CDN 注释规则；FPC 缓存策略在前一页签管理。"
 模块筛选,模块筛选
-全部模块,全部模块
 触发方式,触发方式
-全部,全部
-定时推送,定时推送
-实时推送,实时推送
-规则列表,规则列表
 暂无规则,暂无规则
-"请运行 setup:upgrade 收集规则，或点击""重新收集规则""按钮。","请运行 setup:upgrade 收集规则，或点击""重新收集规则""按钮。"
 详情,详情
 描述,描述
 表达式,表达式
-确认收集规则,确认收集规则
-确定要重新收集规则吗？这将扫描所有Api和Controller目录。,确定要重新收集规则吗？这将扫描所有Api和Controller目录。
-确定收集,确定收集
-收集失败,收集失败
-确定,确定
-请重试,请重试
+"同 Zone 合并任务，可能包含其他域名；这里展示合并任务的阶段回执。","同 Zone 合并任务，可能包含其他域名；这里展示合并任务的阶段回执。"
+"HTTP抽样验证仅覆盖回执列出的 URL、声明与作用范围，不代表所有控制器均已验证。","HTTP抽样验证仅覆盖回执列出的 URL、声明与作用范围，不代表所有控制器均已验证。"
+目标,目标
+源站确认,源站确认
+云端受理,云端受理
+缓存清理,缓存清理
+HTTP抽样验证,HTTP抽样验证
+更新时间,更新时间
+"编辑 FPC 覆盖","编辑 FPC 覆盖"
+代码声明禁止公共缓存，后台不能开启。,代码声明禁止公共缓存，后台不能开启。
+继承上级,继承上级
+开启,开启
+恢复启用继承,恢复启用继承
+"请输入大于 0 的整数秒；关闭缓存请使用启用开关。","请输入大于 0 的整数秒；关闭缓存请使用启用开关。"
+"恢复 TTL 继承","恢复 TTL 继承"
+恢复全部继承,恢复全部继承
+保存覆盖,保存覆盖
+正式,正式
+测试,测试
+搜索方法或路径,搜索方法或路径
+重新收集规则,重新收集规则
+刷新记录,刷新记录
+本层,本层
+来源,来源
+代码声明,代码声明
+全局,全局
+网站,网站
+店铺,店铺
+渠道,渠道
+不缓存,不缓存
+"%{1} 秒","%{1} 秒"
+编辑覆盖,编辑覆盖
+声明已撤回,声明已撤回
+公开路径,公开路径
+声明身份,声明身份
+策略指纹,策略指纹
+期望版本,期望版本
+源站已确认版本,源站已确认版本
+快照文件版本,快照文件版本
+快照修订标识,快照修订标识
+快照错误,快照错误
+不可用,不可用
+待处理,待处理
+处理中,处理中
+已完成,已完成
 操作失败,操作失败
+重试,重试
+已安排重试，请查看阶段回执。,已安排重试，请查看阶段回执。
+"暂无 FPC 声明。可重新收集控制器声明；未声明的方法仍按现有缓存资格处理。","暂无 FPC 声明。可重新收集控制器声明；未声明的方法仍按现有缓存资格处理。"
+未找到匹配的方法或路径。,未找到匹配的方法或路径。
+暂无同步记录。,暂无同步记录。
+保存中…,保存中…
+覆盖已保存，已安排发布与同步。,覆盖已保存，已安排发布与同步。
+已恢复所选字段的继承，已安排发布与同步。,已恢复所选字段的继承，已安排发布与同步。
+声明已收集，变更已安排发布与同步。,声明已收集，变更已安排发布与同步。
+设置未变化。,设置未变化。
+HTTP抽样通过版本,HTTP抽样通过版本
+"已确认 v%{1}","已确认 v%{1}"
+"云端已受理 v%{1}","云端已受理 v%{1}"
+"已清理 v%{1}","已清理 v%{1}"
+"HTTP抽样通过 v%{1}","HTTP抽样通过 v%{1}"
+未确认,未确认
+待受理,待受理
+待清理,待清理
+未验证,未验证
+HTTP抽样未通过,HTTP抽样未通过
+"无需 CDN 处理","无需 CDN 处理"
+仅源站确认,仅源站确认
+"关联域名 ID","关联域名 ID"
+任务标识,任务标识
+阶段回执,阶段回执
+"待同步 v%{1}","待同步 v%{1}"
+"第 %{1} / %{2} 页","第 %{1} / %{2} 页"
+上一页,上一页
+下一页,下一页
+"另 %{1} 条路径","另 %{1} 条路径"
+只读,只读
+确认收集规则,确认收集规则
+"确定要重新收集规则吗？这将扫描所有 Api 和 Controller 目录。","确定要重新收集规则吗？这将扫描所有 Api 和 Controller 目录。"
 确认删除,确认删除
 确定要删除这条规则吗？,确定要删除这条规则吗？
-删除失败,删除失败
+确定,确定
+全部模块,全部模块
+全部,全部
+定时推送,定时推送
+实时推送,实时推送
+选择网站、店铺或渠道,选择网站、店铺或渠道
+搜索作用范围,搜索作用范围
+选择作用范围,选择作用范围
+当前有效值,当前有效值
+代码启用,代码启用
+"代码 TTL","代码 TTL"
+后台接口未就绪，请刷新后重试。,后台接口未就绪，请刷新后重试。
+当前范围,当前范围
+加载失败，请重试。,加载失败，请重试。
 "API 规则详情","API 规则详情"
 查看规则表达式、动作配置与启用状态。,查看规则表达式、动作配置与启用状态。
 模块,模块
@@ -403,10 +510,11 @@ CDN响应详情,CDN响应详情
 已禁用,已禁用
 规则表达式（Cloudflare格式）,规则表达式（Cloudflare格式）
 动作配置（Cloudflare格式）,动作配置（Cloudflare格式）
-更新时间,更新时间
 禁用规则,禁用规则
 启用规则,启用规则
 删除规则,删除规则
+请重试,请重试
+删除失败,删除失败
 "CDN 规则","CDN 规则"
 "编辑全局或按域名的缓存规则，保存后推送到 CDN 方可生效。","编辑全局或按域名的缓存规则，保存后推送到 CDN 方可生效。"
 选择域名,选择域名
@@ -415,12 +523,15 @@ CDN响应详情,CDN响应详情
 从CDN导入,从CDN导入
 推送到CDN,推送到CDN
 规则配置（JSON格式）,规则配置（JSON格式）
-规则格式请参考CDN提供商的文档。保存后需要推送到CDN才会生效。,规则格式请参考CDN提供商的文档。保存后需要推送到CDN才会生效。
+"「全局默认规则」来自模块 default-rules.json；选具体域名时编辑的是该域名覆盖规则。保存后需推送到 CDN 才生效。","「全局默认规则」来自模块 default-rules.json；选具体域名时编辑的是该域名覆盖规则。保存后需推送到 CDN 才生效。"
 推送规则到所有域名,推送规则到所有域名
 总体进度,总体进度
 总数,总数
 推送日志,推送日志
 正在推送...,正在推送...
+"未读到全局默认规则（default-rules.json 为空或不存在）。请检查模块配置后刷新。","未读到全局默认规则（default-rules.json 为空或不存在）。请检查模块配置后刷新。"
+该域名暂无覆盖规则。可「从CDN导入」拉取线上规则，或留空以仅使用全局默认。,该域名暂无覆盖规则。可「从CDN导入」拉取线上规则，或留空以仅使用全局默认。
+"当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。","当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。"
 请求失败,请求失败
 JSON格式错误,JSON格式错误
 提示,提示
@@ -494,8 +605,6 @@ JSON格式错误,JSON格式错误
 管理关联域名,管理关联域名
 "确定要删除账户 ""%{1}"" 吗？此操作不可恢复！","确定要删除账户 ""%{1}"" 吗？此操作不可恢复！"
 删除账户,删除账户
-上一页,上一页
-下一页,下一页
 "手工添加 CDN 账户","手工添加 CDN 账户"
 "Cloudflare 推荐先走 OAuth 一键授权；也可在此手工填写 API Token。同页保存，不用 iframe。","Cloudflare 推荐先走 OAuth 一键授权；也可在此手工填写 API Token。同页保存，不用 iframe。"
 保存,保存
@@ -562,7 +671,6 @@ JSON格式错误,JSON格式错误
 确定要清理该域名的所有缓存吗？,确定要清理该域名的所有缓存吗？
 确定清理,确定清理
 清理失败,清理失败
-网站,网站
 请选择网站,请选择网站
 从Weline_Websites模块选择网站,从Weline_Websites模块选择网站
 例如：example.com,例如：example.com
@@ -583,28 +691,30 @@ JSON格式错误,JSON格式错误
 该适配器暂无可用账户,该适配器暂无可用账户
 默认,默认
 保存失败，请稍后重试,保存失败，请稍后重试
-总URL数,总URL数
-待处理,待处理
 "CDN 预热","CDN 预热"
-"管理预热 URL 队列，查看进度并执行待处理任务。","管理预热 URL 队列，查看进度并执行待处理任务。"
+"按 Provider 管理预热队列；范围使用官方作用范围标签，按 Website 过滤（Global=全部）。首页与 /products 本迭代不进静态文档 Provider。","按 Provider 管理预热队列；范围使用官方作用范围标签，按 Website 过滤（Global=全部）。首页与 /products 本迭代不进静态文档 Provider。"
 执行预热,执行预热
+本范围摘要,本范围摘要
 预热概览,预热概览
-"预热 URL 列表","预热 URL 列表"
-搜索URL,搜索URL
-处理中,处理中
-已完成,已完成
-暂无预热数据,暂无预热数据
-"暂无待处理或已登记的预热 URL","暂无待处理或已登记的预热 URL"
-URL,URL
-提供商,提供商
+"预热 URL 提供者","预热 URL 提供者"
+"未发现 WarmupProvider","未发现 WarmupProvider"
+收集,收集
+预热已收集,预热已收集
+"已入队 URL","已入队 URL"
+请确认,请确认
+执行本范围预热,执行本范围预热
+总URL数,总URL数
+"该域名预热间隔 %{1} 秒","该域名预热间隔 %{1} 秒"
+"全局将按各 Domain 各自间隔跳过过频 URL","全局将按各 Domain 各自间隔跳过过频 URL"
+"当前范围按 Website 过滤队列；间隔仍按各 Domain 配置","当前范围按 Website 过滤队列；间隔仍按各 Domain 配置"
+"本 Provider×本范围暂无已入队 URL，请先收集","本 Provider×本范围暂无已入队 URL，请先收集"
 进度,进度
-重试次数,重试次数
-最后预热时间,最后预热时间
-确认执行预热,确认执行预热
-确定要执行预热吗？这将处理所有待处理的URL。,确定要执行预热吗？这将处理所有待处理的URL。
-确定执行,确定执行
-执行失败,执行失败
-确定要删除此URL吗？,确定要删除此URL吗？
+"确认收集该 Provider 的 URL 到当前范围？","确认收集该 Provider 的 URL 到当前范围？"
+"写入 %{1} · 范围未命中过滤 %{2} · 去重跳过 %{3}","写入 %{1} · 范围未命中过滤 %{2} · 去重跳过 %{3}"
+"确认预热该 Provider 已收集的 URL？","确认预热该 Provider 已收集的 URL？"
+确认执行当前范围的预热？,确认执行当前范围的预热？
+"处理 %{1} · 成功 %{2} · 失败 %{3} · 跳过 %{4}","处理 %{1} · 成功 %{2} · 失败 %{3} · 跳过 %{4}"
+"未处理任何 URL（可能已全部完成或当前范围无待预热）","未处理任何 URL（可能已全部完成或当前范围无待预热）"
 "Cloudflare 账户未配置可用令牌。","Cloudflare 账户未配置可用令牌。"
 "Cloudflare OAuth 客户端未配置，请先设置服务器环境变量。","Cloudflare OAuth 客户端未配置，请先设置服务器环境变量。"
 "Cloudflare OAuth 令牌交换失败。","Cloudflare OAuth 令牌交换失败。"
@@ -635,6 +745,14 @@ URL,URL
 "Cloudflare 账户中找不到唯一的活动域名 %{1}。","Cloudflare 账户中找不到唯一的活动域名 %{1}。"
 "Cloudflare DNS 列表响应无效。","Cloudflare DNS 列表响应无效。"
 "Cloudflare DNS 记录分页超过安全上限。","Cloudflare DNS 记录分页超过安全上限。"
+"enabled 必须是布尔值或 null","enabled 必须是布尔值或 null"
+"TTL 必须是正整数或 null","TTL 必须是正整数或 null"
+"FPC 声明不存在或已撤回","FPC 声明不存在或已撤回"
+代码禁止缓存的声明不可开启,代码禁止缓存的声明不可开启
+"恢复字段只能是 enabled 或 ttl","恢复字段只能是 enabled 或 ttl"
+"FPC 声明侧车不存在，请先完成路由收集","FPC 声明侧车不存在，请先完成路由收集"
+同步记录不存在,同步记录不存在
+同步任务已提交,同步任务已提交
 "Cloudflare OAuth 未返回授权码。","Cloudflare OAuth 未返回授权码。"
 "Cloudflare OAuth 未返回可续期令牌。请确认 OAuth Client 的授权类型包含 Refresh Token（offline_access 由 Cloudflare 按 grant 自动追加，控制台勾选列表里没有该项）。","Cloudflare OAuth 未返回可续期令牌。请确认 OAuth Client 的授权类型包含 Refresh Token（offline_access 由 Cloudflare 按 grant 自动追加，控制台勾选列表里没有该项）。"
 "Cloudflare OAuth 授权已过期，请重新连接。","Cloudflare OAuth 授权已过期，请重新连接。"
@@ -656,11 +774,13 @@ URL,URL
 账户未激活,账户未激活
 账户适配器与域名不匹配,账户适配器与域名不匹配
 凭证信息格式无效,凭证信息格式无效
+"provider 不能为空","provider 不能为空"
 "已删除 %{1} 条","已删除 %{1} 条"
 清理完成,清理完成
-收集完成,收集完成
 已更新,已更新
 保存成功,保存成功
+"WarmupProvider 不存在","WarmupProvider 不存在"
+"不是有效的 WarmupProvider","不是有效的 WarmupProvider"
 "域名不能为空，请使用 --domain=域名ID或名称","域名不能为空，请使用 --domain=域名ID或名称"
 "清理模式不能为空，请使用 --mode=everything|urls|hosts|tags|cache_keys","清理模式不能为空，请使用 --mode=everything|urls|hosts|tags|cache_keys"
 无效的清理模式：%{1}，支持的模式：%{2},无效的清理模式：%{1}，支持的模式：%{2}
@@ -707,6 +827,46 @@ CDN域名创建成功：%{1},CDN域名创建成功：%{1}
 "规则导入成功，共导入 %{1} 条规则","规则导入成功，共导入 %{1} 条规则"
 规则已保存为域名覆盖规则,规则已保存为域名覆盖规则
 规则导入失败：%{1},规则导入失败：%{1}
+折叠,折叠
+展开,展开
+未找到匹配作用范围,未找到匹配作用范围
+实际验证,实际验证
+"已验证 v%{1}","已验证 v%{1}"
+验证未通过,验证未通过
+源站发布,源站发布
+源站版本,源站版本
+"已发布 v%{1}","已发布 v%{1}"
+未发布,未发布
+仅源站发布,仅源站发布
+"查看各模块收集的 CDN API 规则，按触发方式筛选并启用。","查看各模块收集的 CDN API 规则，按触发方式筛选并启用。"
+规则列表,规则列表
+"请运行 setup:upgrade 收集规则，或点击""重新收集规则""按钮。","请运行 setup:upgrade 收集规则，或点击""重新收集规则""按钮。"
+确定要重新收集规则吗？这将扫描所有Api和Controller目录。,确定要重新收集规则吗？这将扫描所有Api和Controller目录。
+确定收集,确定收集
+收集失败,收集失败
+域名范围，空=全局,域名范围，空=全局
+"按 Provider 管理预热队列；范围对齐 CDN 域名（非 Website）。首页与 /products 本迭代不进静态文档 Provider。","按 Provider 管理预热队列；范围对齐 CDN 域名（非 Website）。首页与 /products 本迭代不进静态文档 Provider。"
+范围,范围
+全部范围（全局）,全部范围（全局）
+"写入 %{1} · Domain 未命中过滤 %{2} · 去重跳过 %{3}","写入 %{1} · Domain 未命中过滤 %{2} · 去重跳过 %{3}"
+加载更多,加载更多
+规则格式请参考CDN提供商的文档。保存后需要推送到CDN才会生效。,规则格式请参考CDN提供商的文档。保存后需要推送到CDN才会生效。
+"执行 CDN 预热任务","执行 CDN 预热任务"
+加载预热URL列表失败：%{1},加载预热URL列表失败：%{1}
+"管理预热 URL 队列，查看进度并执行待处理任务。","管理预热 URL 队列，查看进度并执行待处理任务。"
+"预热 URL 列表","预热 URL 列表"
+搜索URL,搜索URL
+暂无预热数据,暂无预热数据
+"暂无待处理或已登记的预热 URL","暂无待处理或已登记的预热 URL"
+URL,URL
+提供商,提供商
+重试次数,重试次数
+最后预热时间,最后预热时间
+确认执行预热,确认执行预热
+确定要执行预热吗？这将处理所有待处理的URL。,确定要执行预热吗？这将处理所有待处理的URL。
+确定执行,确定执行
+执行失败,执行失败
+确定要删除此URL吗？,确定要删除此URL吗？
 获取现有规则失败,获取现有规则失败
 "请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权","请粘贴 API Token（新建 Cloudflare 账户必填），或改用 OAuth 一键授权"
 "Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。","Cloudflare 拒绝了当前 API Token（Account ID / Zone ID 正确也不能代替 Token）。请到 Cloudflare → My Profile → API Tokens 新建 Token（需 Zone:Read 与 Cache Purge），粘贴到上方「API Token」后先保存再测。不要填 Global API Key。"
@@ -810,7 +970,6 @@ Tag清理失败,Tag清理失败
 读取缓存规则,读取缓存规则
 编辑缓存规则,编辑缓存规则
 "Cloudflare Zone 创建需要 Account ID","Cloudflare Zone 创建需要 Account ID"
-收集失败：%{1},收集失败：%{1}
 "缺少预热 URL 的站点上下文","缺少预热 URL 的站点上下文"
 "站点 %{1} 未找到 URL %{2} 对应的 CDN 域名","站点 %{1} 未找到 URL %{2} 对应的 CDN 域名"
 "domain_id 必须是正整数","domain_id 必须是正整数"
@@ -976,11 +1135,19 @@ zone.read dns.write offline_access cache.purge cache-settings.write
 "（须与 Cloudflare Client 勾选项一致。若控制台对缓存规则显示的 id 是 cache-rules.write，用它替换 cache-settings.write。）","（须与 Cloudflare Client 勾选项一致。若控制台对缓存规则显示的 id 是 cache-rules.write，用它替换 cache-settings.write。）"
 "权限默认填：zone.read dns.write cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、Cache Purge、Cache Settings Write；Refresh Token 靠授权类型勾选，不要找 offline_access 勾选项。","权限默认填：zone.read dns.write cache.purge cache-settings.write。控制台勾 Zone Read、DNS Write、Cache Purge、Cache Settings Write；Refresh Token 靠授权类型勾选，不要找 offline_access 勾选项。"
 "API scopes 原样：zone.read dns.write cache.purge cache-settings.write。勿填 offline_access（由 Refresh Token grant 自动处理）。","API scopes 原样：zone.read dns.write cache.purge cache-settings.write。勿填 offline_access（由 Refresh Token grant 自动处理）。"
-选择网站、店铺或渠道,选择网站、店铺或渠道
-搜索作用范围,搜索作用范围
-选择作用范围,选择作用范围
 "启用 FPC 开发模式（旁路全页缓存）","启用 FPC 开发模式（旁路全页缓存）"
 "FPC 开发模式","FPC 开发模式"
 "按当前页面所选 Scope（website / store / channel）开关。仅临时旁路 FPC，不修改控制器 @Extra type=fpc，也不改写 Cloudflare Cache Rules。","按当前页面所选 Scope（website / store / channel）开关。仅临时旁路 FPC，不修改控制器 @Extra type=fpc，也不改写 Cloudflare Cache Rules。"
 "源站是否可 FPC 仍由控制器 \`@Extra type=fpc enabled=…\` 声明。本开关只是 Scope 级调试旁路：打开时跳过公共 FPC；关闭后恢复 Extra 策略。","源站是否可 FPC 仍由控制器 \`@Extra type=fpc enabled=…\` 声明。本开关只是 Scope 级调试旁路：打开时跳过公共 FPC；关闭后恢复 Extra 策略。"
 "与 @Extra type=fpc 的关系","与 @Extra type=fpc 的关系"
+"请在模块 extends/module/Weline_Cdn/ 下实现 WarmupProviderInterface，详见 CDN extends 文档。","请在模块 extends/module/Weline_Cdn/ 下实现 WarmupProviderInterface，详见 CDN extends 文档。"
+"加载 Provider 失败","加载 Provider 失败"
+"加载 URL 失败","加载 URL 失败"
+收集失败，请稍后重试,收集失败，请稍后重试
+执行失败，请稍后重试,执行失败，请稍后重试
+"静态文档（FPC 公开页）","静态文档（FPC 公开页）"
+"含 Blog/FAQ/政策等；不含商品通配","含 Blog/FAQ/政策等；不含商品通配"
+"商品热度 PDP","商品热度 PDP"
+"仅热度 Top N，非全量 catalog","仅热度 Top N，非全量 catalog"
+"含 Blog/FAQ/政策等；覆盖站点已启用语种；不含商品通配","含 Blog/FAQ/政策等；覆盖站点已启用语种；不含商品通配"
+"热度 Top N × 站点已启用语种，非全量 catalog","热度 Top N × 站点已启用语种，非全量 catalog"

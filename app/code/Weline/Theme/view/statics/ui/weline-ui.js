@@ -1,4 +1,3 @@
-/* Weline UI source: js/weline-ui.js */
 const globalObject = window;
 const Weline = globalObject.Weline = globalObject.Weline || {};
 const runtimeId = 'weline-ui-2';
@@ -3523,10 +3522,16 @@ function syncToastRegionTopLayer(region) {
 
 function showToast(message, options = {}) {
     const tone = ['neutral', 'success', 'warning', 'danger', 'info'].includes(options.tone) ? options.tone : 'neutral';
-    const duration = Number.isFinite(options.duration) ? Math.max(0, options.duration) : 4200;
+    const detailsText = options.details == null ? '' : String(options.details).trim();
+    const codeText = options.code == null ? '' : String(options.code).trim();
+    const defaultDuration = detailsText !== '' ? 12000 : 4200;
+    const duration = Number.isFinite(options.duration) ? Math.max(0, options.duration) : defaultDuration;
     const toast = document.createElement('section');
     toast.className = 'w-toast';
     toast.dataset.tone = tone;
+    if (codeText !== '') {
+        toast.dataset.code = codeText;
+    }
     toast.setAttribute('role', tone === 'danger' ? 'alert' : 'status');
     const icon = createIcon({
         success: 'check-circle',
@@ -3543,11 +3548,34 @@ function showToast(message, options = {}) {
         title.textContent = String(options.title);
         content.append(title);
     }
+    if (codeText !== '') {
+        const code = document.createElement('code');
+        code.className = 'w-toast__code';
+        code.textContent = codeText;
+        content.append(code);
+    }
     if (message instanceof Node) content.append(message);
     else {
         const copy = document.createElement('span');
         copy.textContent = String(message ?? '');
         content.append(copy);
+    }
+    let detailsEl = null;
+    if (detailsText !== '') {
+        detailsEl = document.createElement('details');
+        detailsEl.className = 'w-toast__details';
+        const summary = document.createElement('summary');
+        summary.textContent = String(
+            options.detailsLabel
+            || Weline.config?.i18n?.toast_view_details
+            || Weline.config?.i18n?.view_details
+            || '查看详情'
+        );
+        const pre = document.createElement('pre');
+        pre.className = 'w-toast__details-body';
+        pre.textContent = detailsText;
+        detailsEl.append(summary, pre);
+        content.append(detailsEl);
     }
     const close = document.createElement('button');
     close.type = 'button';
@@ -3558,18 +3586,40 @@ function showToast(message, options = {}) {
     close.append(createIcon('close', { size: 'sm' }));
     toast.append(icon, content, close);
     const region = ensureToastRegion();
+    let timer = 0;
     const dismiss = () => {
-        if (!toast.isConnected || !emit(toast, 'toast', 'before-close', { tone })) return false;
-        emit(toast, 'toast', 'close', { tone }, false);
+        if (!toast.isConnected || !emit(toast, 'toast', 'before-close', { tone, code: codeText })) return false;
+        if (timer) {
+            clearTimeout(timer);
+            timer = 0;
+        }
+        emit(toast, 'toast', 'close', { tone, code: codeText }, false);
         toast.remove();
         syncToastRegionTopLayer(region);
         return true;
     };
+    const scheduleDismiss = () => {
+        if (duration <= 0 || timer) return;
+        if (detailsEl && detailsEl.open) return;
+        timer = setTimeout(dismiss, duration);
+    };
     close.addEventListener('click', dismiss);
+    if (detailsEl) {
+        detailsEl.addEventListener('toggle', () => {
+            if (detailsEl.open) {
+                if (timer) {
+                    clearTimeout(timer);
+                    timer = 0;
+                }
+                return;
+            }
+            scheduleDismiss();
+        });
+    }
     region.append(toast);
     syncToastRegionTopLayer(region);
-    emit(toast, 'toast', 'open', { tone }, false);
-    if (duration > 0) setTimeout(dismiss, duration);
+    emit(toast, 'toast', 'open', { tone, code: codeText }, false);
+    scheduleDismiss();
     return { element: toast, close: dismiss };
 }
 
@@ -3892,7 +3942,13 @@ const createdUI = {
         close(target, reason) { const element = asElement(target); return ensureMounted(element, 'drawer')?.close(reason) ?? false; },
     },
     toast: {
-        show: showToast,
+        show(message, options = {}) {
+            if (typeof options === 'string') {
+                const toneAlias = options === 'error' ? 'danger' : options;
+                options = { tone: toneAlias };
+            }
+            return showToast(message, options);
+        },
         success(message, options = {}) { return showToast(message, { ...options, tone: 'success' }); },
         warning(message, options = {}) { return showToast(message, { ...options, tone: 'warning' }); },
         error(message, options = {}) { return showToast(message, { ...options, tone: 'danger' }); },

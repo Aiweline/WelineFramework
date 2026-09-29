@@ -100,40 +100,13 @@ class FrontendController extends PcController
         return $this->frontendLayoutProvider;
     }
 
-    /**
-     * SSR-slim storefront pages call template() (skip fetch_file_after / LayoutSlotRenderer).
-     * Chrome / required page slots are healed here via Theme StorefrontSsrChromeHealer
-     * (disk splice only; soft-dep so Framework does not hard-require Theme at compile time).
-     */
+    /** Render one template without the controller layout wrapper. */
     protected function template(string $fileName, array $data = []): string
     {
         if ($data) {
             $this->getTemplate()->addData($data);
         }
-        $html = $this->getTemplate()->fetchHtml($fileName);
-
-        return $this->ensurePublishedStorefrontChrome($html);
-    }
-
-    private function ensurePublishedStorefrontChrome(string $html): string
-    {
-        if ($html === '') {
-            return $html;
-        }
-        $healerClass = 'Weline\\Theme\\Service\\StorefrontSsrChromeHealer';
-        if (!\class_exists($healerClass)) {
-            return $html;
-        }
-        try {
-            $healer = ObjectManager::getInstance($healerClass);
-            if (!\is_object($healer) || !\method_exists($healer, 'ensure')) {
-                return $html;
-            }
-
-            return (string)$healer->ensure($html);
-        } catch (\Throwable) {
-            return $html;
-        }
+        return $this->getTemplate()->fetchHtml($fileName);
     }
 
     /**

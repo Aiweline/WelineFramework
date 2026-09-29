@@ -1,0 +1,35 @@
+<?php
+declare(strict_types=1);
+require dirname(__DIR__, 6) . '/app/bootstrap.php';
+use Weline\Cdn\Service\FpcPolicyStateReducer;
+use Weline\Cdn\Service\FpcPolicyRulePlanner;
+$fail = 0;
+$check = static function (bool $ok, string $label) use (&$fail): void { echo ($ok ? 'PASS ' : 'FAIL ') . $label . "\n"; $fail += !$ok; };
+$check(class_exists(FpcPolicyStateReducer::class), '累计清理实现存在');
+$check(class_exists(FpcPolicyRulePlanner::class), '云端合并实现存在');
+if ($fail) { exit(1); }
+$a = ['domain_id'=>2,'kind'=>'url','value'=>'https://a.example/p1'];
+$b = ['domain_id'=>2,'kind'=>'url','value'=>'https://a.example/p2'];
+$c = ['domain_id'=>2,'kind'=>'url','value'=>'https://a.example/p3'];
+$pending = FpcPolicyStateReducer::accumulateTargets([], [$a,$b], 1);
+$pending = FpcPolicyStateReducer::accumulateTargets($pending, [$b,$c], 2);
+$check(count($pending) === 3, '连续路径迁移保留 P1 P2 P3');
+$remaining = FpcPolicyStateReducer::acknowledgeTargets($pending, [$a,$b], 1);
+$check(count($remaining) === 2, '旧任务不能消掉新版本再次要求清理的 P2');
+$rule = ['action'=>'set_cache_settings','expression'=>'http.host eq "a.example"','enabled'=>true,'action_parameters'=>['cache'=>true]];
+$manual = $rule + ['id'=>'manual1','description'=>'manual'];
+$owned = $rule + ['id'=>'owned1','ref'=>'weline_cdn_test'];
+$desired = $rule + ['ref'=>'weline_cdn_test'];
+$desired['action_parameters']['cache']=false;
+$result=FpcPolicyRulePlanner::merge([$manual,$owned,$manual+['x'=>1]],[$desired]);
+$check(count($result)===3 && $result[0]===$manual && $result[2]===($manual+['x'=>1]), '人工规则内容和顺序不变');
+$check($result[1]['id']==='owned1' && $result[1]['action_parameters']['cache']===false, '只更新稳定ref受管规则并保留id');
+$check(FpcPolicyRulePlanner::merge($result,[$desired])===$result, '重复合并没有新规则');
+$legacy=$rule+['id'=>'legacy'];
+$check(count(FpcPolicyRulePlanner::merge([$legacy],[$rule+['ref'=>'weline_cdn_new']]))===1,'唯一完整匹配可以认领');
+$check(count(FpcPolicyRulePlanner::merge([$legacy,array_replace($legacy,['id'=>'legacy2'])],[$rule+['ref'=>'weline_cdn_new']]))===3,'歧义旧规则不认领');
+$identicalManual=$rule+['id'=>'keep-manual'];
+$existingOwned=$rule+['id'=>'already-owned','ref'=>'weline_cdn_existing'];
+$preserved=FpcPolicyRulePlanner::merge([$identicalManual,$existingOwned],[$rule+['ref'=>'weline_cdn_existing']]);
+$check(count($preserved)===2 && $preserved[0]===$identicalManual && $preserved[1]['id']==='already-owned','已有受管ref时不认领相同人工规则');
+exit($fail ? 1 : 0);

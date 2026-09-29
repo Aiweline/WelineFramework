@@ -10,12 +10,19 @@ use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySlotFiller;
+use Weline\Theme\Service\ThemeContextService;
 
 /**
  * Heal empty Theme chrome on SSR-slim storefront pages that call template()/fetchHtml
  * (skip LayoutSlotRenderer) but still declare showHeader/showFooter Partials.
  *
- * Disk-only splice from chrome.rendered — never LayoutSlot entity fill.
+ * Call site: FrontendController::template() (soft-dep). Business controllers must not
+ * invoke this healer themselves.
+ *
+ * W4: does NOT splice chrome.rendered locale snapshots. Chrome comes from relationship
+ * chrome.phtml include + hydrate + HotCache/FPC / solidified shell. Required page slots
+ * (e.g. checkout-shipping-address): Overlay when no solidified page_html; presence gate
+ * aligns with Overlay (data-wslot / data-slot-id / markers).
  */
 final class StorefrontSsrChromeHealer
 {
@@ -23,6 +30,11 @@ final class StorefrontSsrChromeHealer
     {
         if ($html === '') {
             return $html;
+        }
+
+        // W3：已选固化控制器模板 → 完全跳过 Overlay/fill/Healer。
+        if (ThemeLayoutEntityPublishedSlotHost::solidifiedControllerTemplateSelected()) {
+            return SlotBoundaryMarkers::strip($html);
         }
 
         // 必装永远存在（2026-09-22 架构裁决 + spec/required-default-always-present.md §4）：
@@ -35,10 +47,15 @@ final class StorefrontSsrChromeHealer
         // 2026-09-26 用户纠偏（严格档「有固化就完全不注」）：
         // 本请求已装载页面固化产物 ⇒ 运行时不得再注入 / 查部件声明，固化模板直接交付；
         // 缺槽位 = 固化缺陷，须重固化（rebake）修复。仅**无**固化产物时才补跑 required overlay。
-        if (!ThemeLayoutEntityPublishedSlotHost::publishedSolidifiedArtifactLoaded()) {
+        $solidified = ThemeLayoutEntityPublishedSlotHost::publishedSolidifiedArtifactLoaded();
+        if (!$solidified) {
             $html = $this->fillRequiredPageDefaults($html);
+            $this->tryDynamicSolidifyMissingPage($html);
         }
 
+        // W4: empty chrome shells are not healed from chrome.rendered disk snapshots.
+        // Safety-net fill for incomplete shells still runs when gate says so — via
+        // healPublishedPlaceholderShell (fill / Overlay), never locale rendered HTML.
         if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
             return SlotBoundaryMarkers::strip($html);
         }
@@ -48,9 +65,13 @@ final class StorefrontSsrChromeHealer
             if ($themeId < 1) {
                 return SlotBoundaryMarkers::strip($html);
             }
+            $pageType = $this->resolvePageType();
+            if ($pageType === '') {
+                $pageType = ThemeLayout::PAGE_TYPE_HOME;
+            }
             /** @var ThemeLayoutEntitySlotFiller $filler */
             $filler = ObjectManager::getInstance(ThemeLayoutEntitySlotFiller::class);
-            $html = $filler->splicePublishedChromeFromDisk($html, $themeId);
+            $html = $filler->healPublishedPlaceholderShell($html, $themeId, $pageType, 'frontend');
         } catch (\Throwable) {
             // soft
         }
@@ -61,12 +82,12 @@ final class StorefrontSsrChromeHealer
     /**
      * 补跑 required 默认注入（页面槽，例如 checkout-shipping-address）。
      *
-     * 仅当页面确实存在 published 槽包装（`data-slot-id=`）时才尝试；
+     * Reactive Taglib 壳只有 data-wslot；与 Overlay 门闩对齐后再注入。
      * 失败软降级 —— 注入问题不得让整页 500。
      */
     private function fillRequiredPageDefaults(string $html): string
     {
-        if (!\str_contains($html, 'data-slot-id=')) {
+        if (!SlotBoundaryMarkers::htmlHasInjectableSlotDestinations($html)) {
             return $html;
         }
 
@@ -95,6 +116,32 @@ final class StorefrontSsrChromeHealer
     }
 
     /**
+     * SSR-slim skips LayoutSlot → never hits fill()-path dynamicSolidify.
+     * Soft-trigger once when page bake is missing so next request can strict-deliver.
+     */
+    private function tryDynamicSolidifyMissingPage(string $html): void
+    {
+        if (!SlotBoundaryMarkers::htmlHasInjectableSlotDestinations($html)) {
+            return;
+        }
+        $themeId = $this->resolveFrontendThemeId();
+        if ($themeId < 1) {
+            return;
+        }
+        $pageType = $this->resolvePageType();
+        if ($pageType === '') {
+            return;
+        }
+        try {
+            /** @var ThemeLayoutEntitySlotFiller $filler */
+            $filler = ObjectManager::getInstance(ThemeLayoutEntitySlotFiller::class);
+            $filler->solidifyMissingPublishedPageIfNeeded($themeId, $pageType, 'frontend');
+        } catch (\Throwable) {
+            // soft — request HTML already Overlay-healed above
+        }
+    }
+
+    /**
      * 页面类型来自控制器写入的 `layout_type`（结账页为 `checkout`）。
      * 解析不到时返回空串，交由调用方跳过注入（不做猜测）。
      */
@@ -118,6 +165,17 @@ final class StorefrontSsrChromeHealer
 
     private function resolveFrontendThemeId(): int
     {
+        try {
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            $theme = $themeContext->resolveTheme('frontend', null, true);
+            $id = (int)($theme?->getId() ?? 0);
+            if ($id > 0) {
+                return $id;
+            }
+        } catch (\Throwable) {
+            // fall through to legacy active theme
+        }
         try {
             /** @var WelineTheme $themes */
             $themes = ObjectManager::getInstance(WelineTheme::class);

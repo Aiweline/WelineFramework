@@ -137,154 +137,63 @@ class Slot implements TaglibInterface
         };
     }
 
-    /** Dynamic attributes are resolved after template execution: return HTML, not PHP source. */
+    /** Dynamic attributes are already resolved by the normal Taglib runtime. */
     public static function runtimeCallback(): callable
     {
-        return static function (
-            \Weline\Framework\View\Template $template,
-            string $tagKey,
-            array $attributes,
-            string $content,
-        ): string {
+        return static function (\Weline\Framework\View\Template $template, string $tagKey, array $attributes, string $content): string {
             SlotValidator::validate($attributes, 'unknown', 0);
             $id = (string)$attributes['id'];
-            self::registerSlot($id, 'unknown', 0);
             $wrapper = htmlspecialchars((string)($attributes['wrapper'] ?? 'div'), ENT_QUOTES, 'UTF-8');
-
-            if (\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::useReactiveMarkers()) {
-                return SlotBoundaryMarkers::open($id)
-                    . '<' . $wrapper . self::buildHtmlAttributes($attributes) . '>'
-                    . $content . '</' . $wrapper . '>' . SlotBoundaryMarkers::close($id);
+            $slots = \Weline\Theme\Service\LayoutEntity\ResolvedLayoutSlots::class;
+            if ($slots::has($id)) {
+                $rendered = $slots::render($id);
+                $content = self::isAppend($attributes) ? $content . $rendered
+                    : (self::isPrepend($attributes) ? $rendered . $content : $rendered);
             }
-
-            $class = htmlspecialchars(trim('theme-published-slot ' . (string)($attributes['class'] ?? '')), ENT_QUOTES, 'UTF-8');
-            $safeId = htmlspecialchars($id, ENT_QUOTES, 'UTF-8');
-            return '<' . $wrapper . ' class="' . $class . '" data-slot-id="' . $safeId . '">'
-                . \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::publishedInner($id, $content)
-                . '</' . $wrapper . '>';
+            return SlotBoundaryMarkers::open($id) . '<' . $wrapper . self::buildHtmlAttributes($attributes) . '>'
+                . $content . '</' . $wrapper . '>' . SlotBoundaryMarkers::close($id);
         };
     }
-    
-    /**
-     * 处理开始标签
-     *
-     * wave8-8s: published storefront emits bake via PublishedSlotHost (no data-wslot);
-     * editor/preview/backend keep reactive markers for fill / processSlots.
-     */
+
     private static function processTagStart(array $attrs, string $file, int $line): string
     {
-        // 验证属性
         SlotValidator::validate($attrs, $file, $line);
-        
-        // 注册 slot ID（用于重复检测）
-        $id = $attrs['id'];
+        $id = (string)$attrs['id'];
         self::registerSlot($id, $file, $line);
-        
-        // 构建 HTML 属性
-        $htmlAttrs = self::buildHtmlAttributes($attrs);
-        
-        // 获取包裹元素标签
-        $wrapper = $attrs['wrapper'] ?? 'div';
-        $wrapper = htmlspecialchars($wrapper, ENT_QUOTES, 'UTF-8');
-        $safeId = htmlspecialchars((string)$id, ENT_QUOTES, 'UTF-8');
-        $extraClass = \trim((string)($attrs['class'] ?? ''));
-        $publishedClass = \htmlspecialchars(
-            \trim('theme-published-slot' . ($extraClass !== '' ? ' ' . $extraClass : '')),
-            ENT_QUOTES,
-            'UTF-8',
-        );
-
-        // Published: open wrapper first, then Fiber-local body capture (never stringify into quotes).
-        // Native ob_start is process-global and unsafe under WLS Fiber concurrency (align Form 2.5.101).
-        return '<?php if (\\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::useReactiveMarkers()): ?>'
-            . SlotBoundaryMarkers::open($id) . "<{$wrapper}{$htmlAttrs}>"
-            . '<?php else: ?>'
-            . "<{$wrapper} class=\"{$publishedClass}\" data-slot-id=\"{$safeId}\">"
-            . '<?php \\Weline\\Framework\\Runtime\\FiberOutputBuffer::beginCapture(); ?>'
-            . '<?php endif; ?>';
+        $wrapper = htmlspecialchars((string)($attrs['wrapper'] ?? 'div'), ENT_QUOTES, 'UTF-8');
+        $open = SlotBoundaryMarkers::open($id) . '<' . $wrapper . self::buildHtmlAttributes($attrs) . '>';
+        $expression = '\\Weline\\Theme\\Service\\LayoutEntity\\ResolvedLayoutSlots';
+        $idPhp = var_export($id, true);
+        if (self::isAppend($attrs)) { return $open; }
+        $resolved = '<?php if (' . $expression . '::has(' . $idPhp . ')): echo ' . $expression . '::render(' . $idPhp . '); ';
+        return $open . $resolved . (self::isPrepend($attrs) ? 'endif; ?>' : 'else: ?>');
     }
-    
-    /**
-     * 处理结束标签
-     */
+
     private static function processTagEnd(array $attrs): string
     {
-        $wrapper = $attrs['wrapper'] ?? 'div';
-        $wrapper = htmlspecialchars($wrapper, ENT_QUOTES, 'UTF-8');
-        $id = (string) ($attrs['id'] ?? '');
-        $idExport = \var_export($id, true);
-
-        return '<?php if (\\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::useReactiveMarkers()): ?>'
-            . "</{$wrapper}>" . SlotBoundaryMarkers::close($id)
-            . '<?php else: '
-            . '$__welinePublishedSlotDefault = (string)\\Weline\\Framework\\Runtime\\FiberOutputBuffer::endCapture(); '
-            . 'echo \\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::publishedInner('
-            . $idExport . ', $__welinePublishedSlotDefault); '
-            . '?>'
-            . "</{$wrapper}>"
-            . '<?php endif; ?>';
+        $wrapper = htmlspecialchars((string)($attrs['wrapper'] ?? 'div'), ENT_QUOTES, 'UTF-8');
+        $id = (string)($attrs['id'] ?? '');
+        $php = '<?php endif; ?>';
+        if (self::isAppend($attrs)) {
+            $php = '<?php echo \\Weline\\Theme\\Service\\LayoutEntity\\ResolvedLayoutSlots::render(' . var_export($id, true) . '); ?>';
+        } elseif (self::isPrepend($attrs)) { $php = ''; }
+        return $php . '</' . $wrapper . '>' . SlotBoundaryMarkers::close($id);
     }
-    
-    /**
-     * 处理完整标签（自闭合或成对）
-     *
-     * Hotfix: never embed compiled default HTML/PHP inside a single-quoted
-     * publishedInner(..., '...') literal — nested quotes / `UTF-8` / `<?=` cause ParseError.
-     * Non-empty body → FiberOutputBuffer beginCapture/endCapture (discard on error); empty → var_export('').
-     */
+
     private static function processFullTag(array $attrs, string $content, string $file, int $line): string
     {
-        // 验证属性
-        SlotValidator::validate($attrs, $file, $line);
-        
-        // 注册 slot ID
-        $id = $attrs['id'];
-        self::registerSlot($id, $file, $line);
-        
-        // 构建 HTML 属性
-        $htmlAttrs = self::buildHtmlAttributes($attrs);
-        
-        // 获取包裹元素标签
-        $wrapper = $attrs['wrapper'] ?? 'div';
-        $wrapper = htmlspecialchars($wrapper, ENT_QUOTES, 'UTF-8');
-        $idExport = \var_export((string)$id, true);
-        $safeId = htmlspecialchars((string)$id, ENT_QUOTES, 'UTF-8');
-        $extraClass = \trim((string)($attrs['class'] ?? ''));
-        $publishedClass = \htmlspecialchars(
-            \trim('theme-published-slot' . ($extraClass !== '' ? ' ' . $extraClass : '')),
-            ENT_QUOTES,
-            'UTF-8',
-        );
+        return self::processTagStart($attrs, $file, $line) . $content . self::processTagEnd($attrs);
+    }
 
-        $reactive = SlotBoundaryMarkers::open($id)
-            . "<{$wrapper}{$htmlAttrs}>{$content}</{$wrapper}>"
-            . SlotBoundaryMarkers::close($id);
+    private static function isAppend(array $attrs): bool
+    {
+        return in_array(strtolower((string)($attrs['append'] ?? '')), ['true', '1'], true)
+            || (!in_array(strtolower((string)($attrs['exclusive'] ?? '')), ['true', '1'], true) && !self::isPrepend($attrs));
+    }
 
-        if (\trim($content) === '') {
-            return '<?php if (\\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::useReactiveMarkers()): ?>'
-                . $reactive
-                . '<?php else: ?>'
-                . "<{$wrapper} class=\"{$publishedClass}\" data-slot-id=\"{$safeId}\">"
-                . '<?php echo \\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::publishedInner('
-                . $idExport . ', ' . \var_export('', true) . '); ?>'
-                . "</{$wrapper}>"
-                . '<?php endif; ?>';
-        }
-
-        return '<?php if (\\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::useReactiveMarkers()): ?>'
-            . $reactive
-            . '<?php else: ?>'
-            . "<{$wrapper} class=\"{$publishedClass}\" data-slot-id=\"{$safeId}\">"
-            . '<?php \\Weline\\Framework\\Runtime\\FiberOutputBuffer::beginCapture(); try { ?>'
-            . $content
-            . '<?php $__welinePublishedSlotDefault = (string)\\Weline\\Framework\\Runtime\\FiberOutputBuffer::endCapture(); '
-            . 'echo \\Weline\\Theme\\Service\\LayoutEntity\\ThemeLayoutEntityPublishedSlotHost::publishedInner('
-            . $idExport . ', $__welinePublishedSlotDefault); '
-            . '} catch (\\Throwable $__weline_slot_e) { '
-            . '\\Weline\\Framework\\Runtime\\FiberOutputBuffer::discardCapture(); '
-            . 'throw $__weline_slot_e; } ?>'
-            . "</{$wrapper}>"
-            . '<?php endif; ?>';
+    private static function isPrepend(array $attrs): bool
+    {
+        return in_array(strtolower((string)($attrs['prepend'] ?? '')), ['true', '1'], true);
     }
 
     /**
@@ -344,6 +253,12 @@ class Slot implements TaglibInterface
             $htmlAttrs[] = "weline-code=\"{$welineCode}\"";
         }
         
+        foreach ($attrs as $name => $value) {
+            if (isset($attrMapping[$name]) || in_array($name, ['id', 'wrapper', 'class', 'style', 'weline-code'], true)) { continue; }
+            if (!is_string($name) || preg_match('/^[a-zA-Z_:][a-zA-Z0-9_.:-]*$/D', $name) !== 1 || !is_scalar($value)) { continue; }
+            $htmlAttrs[] = $name . '="' . htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
+        }
+
         return $htmlAttrs ? ' ' . implode(' ', $htmlAttrs) : '';
     }
     

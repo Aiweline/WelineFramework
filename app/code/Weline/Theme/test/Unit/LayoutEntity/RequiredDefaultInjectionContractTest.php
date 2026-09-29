@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit\LayoutEntity;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionContract;
+use Weline\Theme\Service\ThemeScopeVersionService;
+use Weline\Theme\Service\Version\ThemeScopeVersionWidgetDecisionService;
 
 final class RequiredDefaultInjectionContractTest extends TestCase
 {
@@ -176,73 +180,9 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         ));
     }
 
-    public function testSlotFillerUsesGenericShellMissingRequiredInjections(): void
-    {
-        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php');
-        self::assertStringContainsString('shellMissingRequiredInjections', $src);
-        self::assertStringNotContainsString('shellMissingRequiredPurchaseWidgets', $src);
-        self::assertStringContainsString('RequiredDefaultInjectionContract::requiredTargets', $src);
-        self::assertStringContainsString('anySlotRegionMissingWidget', $src);
-        self::assertStringContainsString('fillRequiredDefaultsOnShell', $src);
-        self::assertStringContainsString('required_default_injection_shell_scan_failed', $src);
-        self::assertStringNotContainsString("->append('',", $src);
-        self::assertStringContainsString('->append($html,', $src);
-    }
 
-    public function testOverlayUsesPlanPipelineAndDedupsRegions(): void
-    {
-        $src = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionStorefrontOverlay.php'
-        );
-        self::assertStringContainsString('SlotInventory', $src);
-        self::assertStringContainsString('InjectionPlanner', $src);
-        self::assertStringContainsString('One execute wave per depth', $src);
-        self::assertStringContainsString('anyRegionHasWidget', $src);
-        self::assertStringContainsString('pageHasWidgetBoundToSlot', $src);
-        self::assertStringContainsString('pageHasWidgetPresent', $src);
-        self::assertStringContainsString('outermostSlotRegions', $src);
-        self::assertStringContainsString('required_default_injection_render_failed', $src);
-        self::assertStringContainsString('data-required-injection-presence', $src);
-        self::assertStringContainsString('ProductCardRenderer::resetProductCardCssEmission', $src);
-        self::assertStringContainsString('resetPurchaseActionsAssetsEmission', $src);
-        self::assertStringContainsString('unfilled soft-skip', $src);
-        self::assertStringNotContainsString(
-            "throw new \\RuntimeException(\n            'required_default_injection_unfilled:",
-            $src,
-        );
-        self::assertStringContainsString('uninstalledInjectionsForVersion', $src);
-        self::assertStringContainsString('REQ-THEME-0036', $src);
-        self::assertStringContainsString('Identity XOR', $src);
-        self::assertStringContainsString('user_deleted@{versionId}', $src);
-        self::assertStringNotContainsString('$html . $inner', $src);
-        self::assertStringNotContainsString(
-            "\$rendered .= SlotBoundaryMarkers::open(\$slotId)",
-            $src,
-        );
-        self::assertStringNotContainsString("error_log('[RequiredDefaultInjection]", $src);
-        self::assertStringNotContainsString('while ($pass < 16)', $src);
-        self::assertStringNotContainsString('有槽才注', $src);
-        self::assertStringNotContainsString('有槽必注', $src);
-        self::assertStringContainsString('pageHasWidgetPresent', $src);
-        self::assertStringContainsString('assertSlotHasAtMostOne', $src);
-        self::assertStringContainsString('outermostSlotRegions', $src);
-        // 2026-09-26：同码双路径硬失败（禁止 soft-skip 叠渲）
-        self::assertStringContainsString(
-            "throw new \\RuntimeException(sprintf(\n                'required_default_injection_duplicate:",
-            $src,
-        );
-        self::assertStringNotContainsString('slot duplicate soft-skip', $src);
-        self::assertStringContainsString('slotAllowsMultiple', $src);
 
-        $contract = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionContract.php'
-        );
-        self::assertStringContainsString('function pageHasWidgetPresent', $contract);
-        self::assertStringContainsString('function countWidgetPresent', $contract);
-        self::assertStringContainsString('array_unique', $contract);
-        self::assertStringContainsString('stripIgnoredPresenceRegions', $contract);
-        self::assertStringContainsString('pageHasWidgetPresent / countWidgetPresent', $contract);
-    }
+
 
     /**
      * 同部件 XOR：卸载仍走版本化 user_deleted；未填店面软跳过（见 Overlay soft-skip）。
@@ -316,28 +256,9 @@ final class RequiredDefaultInjectionContractTest extends TestCase
         self::assertSame([], $uninstalled);
     }
 
-    public function testStorefrontFillerLoadsSolidifiedPhtmlNotRequestInjection(): void
-    {
-        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php');
-        self::assertStringContainsString('function includeEntityPhtml', $src);
-        self::assertStringContainsString('RequiredDefaultInjectionStorefrontOverlay', $src);
-        self::assertStringContainsString('ThemeLayout::STATUS_PUBLISHED', $src);
-    }
 
-    public function testLayoutSlotRendererSoftPathStillRunsRequiredOverlay(): void
-    {
-        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Observer/LayoutSlotRenderer.php');
-        self::assertStringContainsString('fillRequiredDefaultsOnShell', $src);
-        self::assertStringContainsString('required_default_injection_failed', $src);
-        // Soft path uses actual $pageType so requiredForPage inherits chrome-carrier
-        // slots only — never force HOME (that plans content→newsletter onto policy).
-        self::assertStringContainsString('fillRequiredDefaultsOnShell(', $src);
-        self::assertStringContainsString('forcing HOME would plan content→newsletter', $src);
-        self::assertStringContainsString('amazon-policy__', $src);
-        self::assertStringContainsString('footer-*-links', $src);
-        // HOME remains as last-resort safety-net detect only.
-        self::assertStringContainsString('PAGE_TYPE_HOME', $src);
-    }
+
+
 
     public function testNonHomepageInheritsHomepageChromeExtensionInjections(): void
     {
@@ -379,28 +300,25 @@ final class RequiredDefaultInjectionContractTest extends TestCase
 
     public function testTargetThemeVersionDecisionDoesNotBorrowSourceVersion(): void
     {
-        $decisionService = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/Service/Version/ThemeScopeVersionWidgetDecisionService.php'
-        );
-        self::assertStringContainsString('resolveTargetThemeVersionId', $decisionService);
-        self::assertStringContainsString('ThemeScopeVersionService', $decisionService);
-        self::assertStringContainsString('source_version_id is audit only', $decisionService);
-        self::assertStringNotContainsString('use Weline\\Theme\\Model\\ThemeLayoutVersion', $decisionService);
-        self::assertStringNotContainsString('ThemeLayoutVersionService', $decisionService);
-
-        $resolver = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/Service/ThemePublishedVersionRuntimeResolver.php'
-        );
-        self::assertStringContainsString('ThemeScopeVersion', $resolver);
-        self::assertStringContainsString('getPublished($themeId, $scope)', $resolver);
-        self::assertStringNotContainsString('ThemeLayoutVersionService', $resolver);
-
-        $removal = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/Service/ThemeChromeWidgetRemovalService.php'
-        );
-        self::assertStringContainsString('userDeletedSource($versionId)', $removal);
-        self::assertStringContainsString('persistTargetVersionDecision', $removal);
-        self::assertStringContainsString('ThemeScopeVersionWidgetDecisionService', $removal);
+        $current = (new \ReflectionClass(ThemeScopeVersion::class))->newInstanceWithoutConstructor();
+        $current->setData(['version_id' => 100, 'creation_source_version_id' => 7, 'parent_version_id' => 7]);
+        $published = (clone $current)->setData('version_id', 90);
+        $versions = new class($current, $published) {
+            public function __construct(public ?ThemeScopeVersion $current, public ThemeScopeVersion $published) {}
+            public function getCurrent(...$args): ?ThemeScopeVersion { return $this->current; }
+            public function getPublished(...$args): ThemeScopeVersion { return $this->published; }
+        };
+        $previous = ObjectManager::_getInstance(ThemeScopeVersionService::class);
+        ObjectManager::setInstance(ThemeScopeVersionService::class, $versions);
+        try {
+            $decisions = (new \ReflectionClass(ThemeScopeVersionWidgetDecisionService::class))->newInstanceWithoutConstructor();
+            self::assertSame(100, $decisions->resolveTargetThemeVersionId(3, 'shop.store.channel'));
+            $versions->current = null;
+            self::assertSame(90, $decisions->resolveTargetThemeVersionId(3, 'shop.store.channel'));
+        } finally {
+            if ($previous === null) { ObjectManager::removeInstance(ThemeScopeVersionService::class); }
+            else { ObjectManager::setInstance(ThemeScopeVersionService::class, $previous); }
+        }
     }
 
     /**

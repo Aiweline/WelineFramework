@@ -529,7 +529,9 @@ final class FullPageCacheCoordinator
 
         $ttl = $this->privateSessionTokenFromVariant($variant) !== ''
             ? $this->privateSessionFpcTtlSeconds()
-            : 3600;
+            : $this->effectiveFpcPolicy($fullUri)['ttl'];
+        $payload['policy_ttl'] = $ttl;
+        $payload['policy_fingerprint'] = $this->effectiveFpcPolicy($fullUri)['policy_fingerprint'];
         $payload[self::UNIFIED_CACHE_EXPIRES_AT_KEY] = \microtime(true) + $ttl;
         $unifiedCacheKey = $this->getUnifiedCacheKey($method);
         self::cooperativeBuildYield();
@@ -958,7 +960,7 @@ final class FullPageCacheCoordinator
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'STALE');
-        $this->applyFpcHitEdgeCacheHeaders($response, true);
+        $this->applyFpcHitEdgeCacheHeaders($response, true, $cached);
         $this->applyFpcHitPerformanceHeaders(
             $response,
             $cacheSource,
@@ -1000,6 +1002,9 @@ final class FullPageCacheCoordinator
             return false;
         }
 
+        if (!$this->effectiveFpcPolicy($fullUri)['enabled']) {
+            return false;
+        }
         $variant = $this->buildFpcVariantFromCookieHeader($cookieHeader, $fullUri);
         $cacheKey = $this->buildUnifiedFpcCacheKey($fullUri, $method, $variant);
         if (!$forceSharedRead && $this->getProcessCachedPayload($cacheKey) !== null) {
@@ -1149,7 +1154,7 @@ final class FullPageCacheCoordinator
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'HIT');
-        $this->applyFpcHitEdgeCacheHeaders($response);
+        $this->applyFpcHitEdgeCacheHeaders($response, false, $cached);
         $this->applyFpcHitPerformanceHeaders($response, 'process', $variant);
         $this->ensureVaryHeader($response, 'Cookie');
         $response->markTelemetryPrepared();
@@ -1409,6 +1414,11 @@ final class FullPageCacheCoordinator
             return null;
         }
 
+        $policy = $this->effectiveFpcPolicy($fullUri);
+        if (!$policy['enabled']) {
+            return null;
+        }
+
         // Locale/currency identity lives in full_uri + cache_key/variant.
         // Prefer empty cookie_header so preference cookies are not implied.
         $cookieHeader = '';
@@ -1422,6 +1432,8 @@ final class FullPageCacheCoordinator
             'cache_key' => $unifiedCacheKey,
             'scope_identity' => $context->scopeIdentity->toArray(),
             'namespace_fingerprint' => $context->namespaceFingerprint,
+            'policy_fingerprint' => $policy['policy_fingerprint'],
+            'policy_path' => $this->policyPath($fullUri),
             'lang' => $context->lang,
             'default_locale' => $context->defaultLocale,
             'translation_locales' => $context->translationLocales,
@@ -1561,6 +1573,12 @@ final class FullPageCacheCoordinator
 
         // 旧回执缺少版本证据时安全回落。每个请求由 NamespaceGenerationSnapshot
         // 首次读取 @clock，同请求重复核验只读已冻结向量，不依赖广播是否送达。
+        $policyFingerprint = $receipt['policy_fingerprint'] ?? null;
+        $policyPath = $receipt['policy_path'] ?? null;
+        if (!is_string($policyFingerprint) || $policyFingerprint === ''
+            || !is_string($policyPath) || !str_starts_with($policyPath, '/')) {
+            return null;
+        }
         $scope = $receipt['scope_identity'] ?? null;
         $fingerprint = $receipt['namespace_fingerprint'] ?? null;
         $lang = $receipt['lang'] ?? null;
@@ -1575,7 +1593,11 @@ final class FullPageCacheCoordinator
         }
         try {
             $identity = ScopeIdentity::fromArray($scope);
-            $currentFingerprint = $this->storefrontCacheKeyContextResolver()->fingerprintForIdentity($identity, $translationLocales);
+            $policy = $this->effectiveFpcPolicy($fullUri, $identity, $policyPath);
+            if (!$policy['enabled'] || !hash_equals($policyFingerprint, $policy['policy_fingerprint'])) {
+                return null;
+            }
+            $currentFingerprint = $this->storefrontCacheKeyContextResolver()->fingerprintForIdentity($identity, $translationLocales, $policyPath);
             if (!hash_equals($fingerprint, $currentFingerprint)) {
                 return null;
             }
@@ -1635,6 +1657,9 @@ final class FullPageCacheCoordinator
             return null;
         }
 
+        if (!$this->effectiveFpcPolicy($fullUri)['enabled']) {
+            return null;
+        }
         $variant = $this->buildFpcVariantFromCookieHeader($cookieHeader, $fullUri);
         $cacheKey = $this->buildUnifiedFpcCacheKey($fullUri, $cacheMethod, $variant);
         $payloadCacheKey = $cacheKey;
@@ -1734,7 +1759,7 @@ final class FullPageCacheCoordinator
                     $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey, $encoding);
                     $this->setProcessCachedFormattedResponse($formattedKey, $formatted);
                     if ($this->shouldPublishSharedFormattedResponse($formatted)) {
-                        $this->cache()->set($formattedKey, $formatted, 3600);
+                        $this->cache()->set($formattedKey, $formatted, max(1, $this->payloadRemainingTtlSeconds($cached) ?? 1));
                     }
                 }
             }
@@ -1794,7 +1819,7 @@ final class FullPageCacheCoordinator
         }
         $isStale = \str_starts_with($source, 'stale-');
         $response->setHeader('X-Weline-FPC', $isStale ? 'STALE' : 'HIT');
-        $this->applyFpcHitEdgeCacheHeaders($response, $isStale);
+        $this->applyFpcHitEdgeCacheHeaders($response, $isStale, $cached);
         $this->applyFpcHitPerformanceHeaders($response, $source, $variant, $isStale);
         $this->ensureVaryHeader($response, 'Cookie');
         $response->markTelemetryPrepared();
@@ -1839,6 +1864,9 @@ final class FullPageCacheCoordinator
             return false;
         }
 
+        if (!$this->effectiveFpcPolicy($fullUri)['enabled']) {
+            return false;
+        }
         $variant = $this->buildFpcVariantFromCookieHeader($cookieHeader, $fullUri);
         $cacheKey = $this->buildUnifiedFpcCacheKey($fullUri, $this->normalizeCacheMethod($method), $variant);
         $cached = $this->cache()->get($cacheKey);
@@ -1886,7 +1914,8 @@ final class FullPageCacheCoordinator
             return false;
         }
 
-        return !$this->isExcludedFrontendPath($rawFullUri);
+        return !$this->isExcludedFrontendPath($rawFullUri)
+            && $this->effectiveFpcPolicy($rawFullUri)['enabled'];
     }
 
     private function isEditorOrPreviewRequest(string $fullUri): bool
@@ -2404,7 +2433,7 @@ final class FullPageCacheCoordinator
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'HIT');
-        $this->applyFpcHitEdgeCacheHeaders($response);
+        $this->applyFpcHitEdgeCacheHeaders($response, false, $cached);
         $this->applyFpcHitPerformanceHeaders(
             $response,
             $cacheSource,
@@ -2941,7 +2970,8 @@ final class FullPageCacheCoordinator
         $response->setHeader('Content-Length', (string)\strlen($encodedBody));
         $this->ensureVaryAcceptEncoding($response);
         $response->setHeader('X-Weline-FPC', 'HIT');
-        $this->applyFpcHitEdgeCacheHeaders($response);
+        $this->applyFpcHitEdgeCacheHeaders($response, str_starts_with($source, 'stale-'), $cached);
+        $response->setHeader('X-Weline-Fpc-Fresh-Until', (string)($cached[self::UNIFIED_CACHE_EXPIRES_AT_KEY] ?? 0));
         $variant = \is_array($cached[self::VARIANT_PAYLOAD_KEY] ?? null)
             ? $cached[self::VARIANT_PAYLOAD_KEY]
             : [];
@@ -2980,6 +3010,21 @@ final class FullPageCacheCoordinator
 
     private function withFormattedResponseConnection(string $http, bool $keepAlive): string
     {
+        $headerEnd = strpos($http, "\r\n\r\n");
+        if ($headerEnd !== false) {
+            $headers = substr($http, 0, $headerEnd + 2);
+            $expiresAt = preg_match('/^X-Weline-Fpc-Fresh-Until: ([^\r\n]+)\r\n/mi', $headers, $match) === 1
+                ? (float)$match[1] : 0.0;
+            $remaining = max(0, (int)floor($expiresAt - microtime(true)));
+            $headers = preg_replace('/^X-Weline-Fpc-Fresh-Until: [^\r\n]*\r\n/mi', '', $headers) ?? $headers;
+            $headers = preg_replace_callback('/^(CDN-Cache-Control|Cloudflare-CDN-Cache-Control): ([^\r\n]*)\r\n/mi',
+                static function (array $match) use ($remaining): string {
+                    $cap = preg_match('/max-age=(\d+)/', $match[2], $age) === 1 ? (int)$age[1] : 0;
+                    $ttl = min($remaining, $cap);
+                    return $match[1] . ': ' . ($ttl > 0 ? 'public, max-age=' . $ttl : 'no-store') . "\r\n";
+                }, $headers) ?? $headers;
+            $http = $headers . substr($http, $headerEnd + 2);
+        }
         if ($keepAlive) {
             return $http;
         }
@@ -3171,10 +3216,11 @@ final class FullPageCacheCoordinator
      *（edge_ttl.mode=bypass_by_default）在「有源站缓存头才进边缘」时命中。
      * 不改浏览器 Cache-Control（保持 private/no-store 语义由调用方决定）。
      */
-    private function applyFpcHitEdgeCacheHeaders(Response $response, bool $stale = false): void
+    private function applyFpcHitEdgeCacheHeaders(Response $response, bool $stale = false, array $payload = []): void
     {
-        $maxAge = $stale ? 300 : 600;
-        $directive = 'public, max-age=' . $maxAge;
+        $remaining = $this->payloadRemainingTtlSeconds($payload) ?? 0;
+        $maxAge = max(0, min((int)($payload['policy_ttl'] ?? 3600), $remaining));
+        $directive = $stale || $maxAge <= 0 ? 'no-store' : 'public, max-age=' . $maxAge;
         $response->setHeader('CDN-Cache-Control', $directive);
         $response->setHeader('Cloudflare-CDN-Cache-Control', $directive);
         GuardHeaders::writeCacheStatus($response, GuardHeaders::STATUS_HIT);
@@ -3412,8 +3458,18 @@ final class FullPageCacheCoordinator
             $this->deleteProcessCachedFormattedResponse($oldestKey);
         }
 
+        $expiresAt = \microtime(true) + \max(1, \min(self::PROCESS_FPC_TTL_SECONDS, $ttl ?? self::PROCESS_FPC_TTL_SECONDS));
+        $headerEnd = strpos($formatted, "\r\n\r\n");
+        $headers = $headerEnd === false ? '' : substr($formatted, 0, $headerEnd + 2);
+        if (preg_match('/^CDN-Cache-Control: public, max-age=/mi', $headers) === 1
+            && preg_match('/^X-Weline-Fpc-Fresh-Until: ([^\r\n]+)\r\n/mi', $headers, $match) === 1) {
+            $expiresAt = min($expiresAt, (float)$match[1]);
+        }
+        if ($expiresAt <= microtime(true)) {
+            return;
+        }
         self::$processFormattedFpcCache[$cacheKey] = $formatted;
-        self::$processFormattedFpcExpiresAt[$cacheKey] = \microtime(true) + \max(1, \min(self::PROCESS_FPC_TTL_SECONDS, $ttl ?? self::PROCESS_FPC_TTL_SECONDS));
+        self::$processFormattedFpcExpiresAt[$cacheKey] = $expiresAt;
         self::$processFormattedFpcBytes[$cacheKey] = $bytes;
         self::$processFormattedFpcTotalBytes += $bytes;
     }
@@ -3485,6 +3541,31 @@ final class FullPageCacheCoordinator
         }
 
         return $response;
+    }
+
+    /** 普通请求与回执使用相同规范路径；回执提供已经冻结的显式 Scope。 */
+    private function policyPath(string $fullUri): string
+    {
+        return \Weline\Framework\Controller\Extra\FpcPolicySnapshot::normalizePath(
+            $fullUri, $this->currentWebsiteUrlForPathVariant(),
+        );
+    }
+
+    private function effectiveFpcPolicy(string $fullUri, ?ScopeIdentity $identity = null, ?string $policyPath = null): array
+    {
+        try {
+            $identity ??= $this->currentStorefrontCacheKeyContext()->scopeIdentity;
+            if (!$identity instanceof ScopeIdentity) {
+                return ['enabled' => false, 'ttl' => 0, 'policy_fingerprint' => 'scope-unavailable'];
+            }
+            $path = $policyPath ?? $this->policyPath($fullUri);
+            $resolver = ObjectManager::getInstance(\Weline\Framework\Controller\Extra\ExtraPolicyResolver::class);
+            return $resolver->resolveFpcForPath($path, $identity)
+                ?? ['enabled' => true, 'ttl' => 3600, 'policy_fingerprint' => 'not-applicable'];
+        } catch (\Throwable $exception) {
+            $this->logFpcWarning('FPC policy unavailable', ['error' => $exception->getMessage()]);
+            return ['enabled' => false, 'ttl' => 0, 'policy_fingerprint' => 'policy-unavailable'];
+        }
     }
 
     private function getUnifiedCacheKey(string $method): string
@@ -3964,7 +4045,10 @@ final class FullPageCacheCoordinator
      */
     private function decorateFpcLogicalKey(string $logicalKey, string $fullUri): string
     {
-        return $this->namespaceKeyDecorator()->decorate($logicalKey, $this->fpcNamespaceFingerprint($fullUri));
+        $policy = $this->effectiveFpcPolicy($fullUri);
+        return $this->namespaceKeyDecorator()->decorate(
+            $logicalKey . ':policy:' . $policy['policy_fingerprint'], $this->fpcNamespaceFingerprint($fullUri),
+        );
     }
 
     private function fpcNamespaceFingerprint(string $fullUri): string

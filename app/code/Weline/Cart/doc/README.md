@@ -8,6 +8,9 @@
 - Browser API: `Weline.Api.resource('cart')`
 - Core service: `Weline\Cart\Service\CartService`
 - Session storage: `Weline\Cart\Session\CartSession`
+- The cart controller dispatches one normal layout fetch for its body. The selected
+  page PHTML pins the body source and its slot relationships before rendering;
+  cart lines still hydrate through QueryBin from an empty SSR summary.
 - Discount preview must reuse an already-loaded cart summary when enriching V2 responses; never call `resolveStorefrontSummary()` again from `buildDiscountPreview()` in that path (recursive reload OOMs WLS workers and surfaces as Worker nonce errors on checkout).
 
 ## Item Resolution
