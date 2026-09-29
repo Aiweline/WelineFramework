@@ -25,7 +25,7 @@ use Weline\Framework\View\Data\HtmlInterface;
 trait TraitTemplate
 {
     // 路径映射和物理编译目录必须同时迁移格式，避免映射仍指向旧编译产物。
-    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v4';
+    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v5-source-bytes';
 
     /**
      * @DESC          # 读取页头代码
@@ -134,7 +134,7 @@ trait TraitTemplate
             $file_dir = str_replace($pre_module_name . '::', '', $file_dir);
         } else {
             // Empty module_path must never become CWD-relative "view/tpl" (lands under BP).
-            $modulePath = rtrim((string)$this->getRequest()->getModulePath(), '/\\');
+            $modulePath = rtrim((string)$this->templateSourceModule()[1], '/\\');
             if ($modulePath === '' || !\is_dir($modulePath)) {
                 $unscopedBase = Env::path_framework_generated_complicate
                     . '_unscoped' . DS . Data\DataInterface::dir . DS;
@@ -184,7 +184,7 @@ trait TraitTemplate
             }
         };
         if (empty($t_f_arr)) {
-            $mod = $this->getRequest()->getModuleName();
+            $mod = $this->templateSourceModule()[0];
             return [$t_f, $mod];
         }
         $mod = array_shift($t_f_arr);
@@ -222,7 +222,7 @@ trait TraitTemplate
                     }
                 } else {
                     // 没有指定模块时，使用当前请求模块的静态资源目录
-                    $current_module_name = $this->getRequest()->getModuleName();
+                    $current_module_name = $this->templateSourceModule()[0];
                     $modules = Env::getInstance()->getModuleList();
                     if (isset($modules[$current_module_name]) && $module = $modules[$current_module_name]) {
                         $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
@@ -235,7 +235,7 @@ trait TraitTemplate
                 $t_f = ltrim($t_f, '/');
                 $url_base = $this->getUrlPath($base_url_path);
                 if ($url_base === '' && $base_url_path !== '') {
-                    $name_for_base = $module_name ?? $this->getRequest()->getModuleName();
+                    $name_for_base = $module_name ?? $this->templateSourceModule()[0];
                     if ($name_for_base !== '') {
                         $url_base = '/' . str_replace('_', '/', $name_for_base) . '/view/statics/';
                         if (defined('PROD') && PROD) {
@@ -299,7 +299,7 @@ trait TraitTemplate
                     }
                 } else {
                     // 没有指定模块时，使用当前请求模块的静态资源目录
-                    $current_module_name = $this->getRequest()->getModuleName();
+                    $current_module_name = $this->templateSourceModule()[0];
                     $modules = Env::getInstance()->getModuleList();
                     if (isset($modules[$current_module_name]) && $module = $modules[$current_module_name]) {
                         $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
@@ -314,7 +314,7 @@ trait TraitTemplate
                 $url_base = $this->getUrlPath($base_url_path);
                 // 当 getUrlPath 返回空时兜底：$base_url_path 有值但路径未匹配 APP_CODE_PATH/VENDOR_PATH(PROD 下 PUB) 时会返回空，见 getUrlPath() 注释
                 if ($url_base === '' && $base_url_path !== '') {
-                    $name_for_base = $module_name ?? $this->getRequest()->getModuleName();
+                    $name_for_base = $module_name ?? $this->templateSourceModule()[0];
                     if ($name_for_base !== '') {
                         $url_base = '/' . str_replace('_', '/', $name_for_base) . '/view/statics/';
                         if (defined('PROD') && PROD) {
@@ -332,7 +332,7 @@ trait TraitTemplate
                 if ($isStaticResource) {
                     $dataIsUrl = true;
                     list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
-                    $module_name = $module_name !== '' ? $module_name : $this->getRequest()->getModuleName();
+                    $module_name = $module_name !== '' ? $module_name : $this->templateSourceModule()[0];
                     if ($module_name === '') {
                         throw new Exception(__('资源不存在：%{1}', [$source]));
                     }
@@ -448,7 +448,7 @@ trait TraitTemplate
             $moduleName = trim((string)strtok($source, ':'));
         }
         if ($moduleName === '') {
-            $moduleName = $this->getRequest()->getModuleName();
+            $moduleName = $this->templateSourceModule()[0];
         }
         if ($moduleName === '') {
             return null;
@@ -545,8 +545,8 @@ trait TraitTemplate
         if ($module_name && isset($modules[$module_name]) && $module = $modules[$module_name]) {
             $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
         } else {
-            $module_name = $this->getRequest()->getModuleName();
-            $module_view_dir_path = $this->getRequest()->getModulePath() . 'view' . DS;
+            $module_name = $this->templateSourceModule()[0];
+            $module_view_dir_path = $this->templateSourceModule()[1] . 'view' . DS;
         }
         
         // 构建真实文件路径
@@ -613,7 +613,7 @@ trait TraitTemplate
         if ($module_name && isset($modules[$module_name]) && $module = $modules[$module_name]) {
             $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
         } else {
-            $module_view_dir_path = $this->getRequest()->getModulePath() . 'view' . DS;
+            $module_view_dir_path = $this->templateSourceModule()[1] . 'view' . DS;
         }
 
         return is_file(rtrim($module_view_dir_path, DS) . DS . $rel_path);

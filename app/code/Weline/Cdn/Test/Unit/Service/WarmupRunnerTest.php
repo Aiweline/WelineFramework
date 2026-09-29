@@ -45,9 +45,11 @@ class WarmupRunnerTest extends TestCase
         $this->assertArrayHasKey('processed', $result);
         $this->assertArrayHasKey('success', $result);
         $this->assertArrayHasKey('fail', $result);
+        $this->assertArrayHasKey('skipped', $result);
         $this->assertIsInt($result['processed']);
         $this->assertIsInt($result['success']);
         $this->assertIsInt($result['fail']);
+        $this->assertIsInt($result['skipped']);
     }
 
     /**

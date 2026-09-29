@@ -43,33 +43,9 @@ final class PublishedStorefrontZeroDataWslotContractTest extends TestCase
         self::assertStringContainsString('w-auth-login__social-slot', $outbound);
     }
 
-    public function testPublishedSlotHostSolidifyAndSanitizeContracts(): void
-    {
-        $src = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityPublishedSlotHost.php'
-        );
 
-        self::assertStringContainsString('CTX_SOLIDIFYING', $src);
-        self::assertStringContainsString('sanitizePublishedFragments', $src);
-        self::assertStringContainsString('stripReactiveSlotAttributes', $src);
-        self::assertStringContainsString('wave8-8s3', $src);
-        // Must not add fill-result cache.
-        self::assertStringNotContainsString('fillResultCache', $src);
-    }
 
-    public function testLayoutSlotRendererEarlyReturnsWhenPublishedHostActive(): void
-    {
-        $src = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Observer/LayoutSlotRenderer.php'
-        );
 
-        // wave8-8s4 superseded CTX===false-only gate with forced published zero-fill.
-        self::assertStringContainsString('shouldForcePublishedZeroRuntimeFill', $src);
-        self::assertStringContainsString('CTX_ZERO_FILL_APPLIED', $src);
-        self::assertStringContainsString('SlotBoundaryMarkers::strip', $src);
-        self::assertStringContainsString('wave8-8s4', $src);
-        self::assertStringContainsString('zero-runtime-fill', $src);
-    }
 
     public function testSlotBoundaryMarkersExposesStripReactiveApi(): void
     {

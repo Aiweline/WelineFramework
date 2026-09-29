@@ -4,7 +4,7 @@
 > MCP 技能：`get_skill(weline-theme-development)` / surface `frontend_development`。  
 > 同构硬规则：MCP `preview_storefront_delivery_parity`（业务逻辑与交付路径与正式店面一致；本文件只区分**身份/参数权威**，不授权预览专用抽空逻辑）。
 
-> 2026-09-25 版本身份目标见[主题固化物实施方案](./开发/spec/layout-entity-per-version-isolation.md)，业务改造待实施。本文保留三态产品行为，版本/路径段按目标契约更新；当前旧 r/d 代码不作为继续开发的接口。
+> 版本身份见[主题固化物实施方案](./开发/spec/layout-entity-per-version-isolation.md)。固化与加载以[纯 PHTML 合同](./布局固化与默认注入.md)为准：三态只改变身份来源，共用正常 Template/Taglib/语言 com_*。
 
 ## 一句话对照
 
@@ -15,6 +15,8 @@
 | 3 | **正式（正常店面）** | **RequestContext / 路径 / Scope 解析为准** | 访客普通 URL；读 selection → ThemeScopeVersion 的正式修订 |
 
 三种状态**业务渲染链路必须同构**；差别只在「这次请求的主题身份从哪来」。
+
+源选择后固定本次页面与公共 Partial 的源字节，经普通 Template 编译执行。旧 Token 的 R 必须经已有资源快照映射到准确资源修订，不能把内容修订号当资源行主键，也不能读取最新草稿补历史。固化 PHTML 同时携带基础配置和语言差异；普通 com_* 不替代编辑器配置的语言专属图片。
 
 ---
 
@@ -77,7 +79,7 @@
 - 验收/排错：先看 Token 反解出的字段，再看页面；**不要**用当前 URL query 覆盖结论
 - 换主题 / 换版本 / 换 Scope：必须**重新 start-preview** 发新 Token，禁止手改 URL 参数指望生效
 - 退出：清客户端 Token + gateway `exit` 路径；失效 Token 不得回种
-- 目标读取：有效 Token 安装完整 owner/V/mode/R；draft 读修订头 B 对应的 `tvB/draft`，指定历史 H 读 `tvH/formal`，不能把所有 Token 都当 draft。Token 固定 R，D 后续保存/封存不改变旧 Token 展示；切换目标需重新签发。
+- 目标读取：有效 Token 安装完整 owner/V/mode/R；draft 通过修订头 B 选择 `draft/`，指定正式历史 H 选择 `vH/`，不能把所有 Token 都当 draft。Token 固定 R，D 后续保存/封存不改变旧 Token 展示；切换目标需重新签发。
 
 ### Cookie / bootstrap 边界（短）
 
@@ -111,7 +113,7 @@
 
 - **RequestContext**（website / store / 语言等）+ 路由 / 页型
 - `ThemeContextService` 等按 Scope 解析激活主题（热缓存 / path 身份）
-- 布局实体：按完整 owner 沿 Scope 链一次选择有效源范围与已发布 P，再读 P 的资源快照及 `tvP/formal`；page/chrome/assets 同一版本修订。release 是内部数据引用，旧 r/d/s 路径退出。
+- 布局实体：按完整 owner 沿 Scope 链一次选择有效源范围与已发布 P，选择 `vP/` 中对应 PHTML；页面与公共 Partial 的源字节在短读锁内一并固定。普通命中不读取资源快照重新构造部件关系；release 仅作为生成与历史预览的内部数据引用，旧 r/d/s 路径退出。
 
 无有效预览 Token、非编辑器画布请求时，**一律**走本态；不得偷偷读 draft 工作区。
 
@@ -119,7 +121,7 @@
 
 - 发布验收：清预览 Token / 退出预览后，用正式 Host 打开目标页
 - 主题身份以上下文解析结果为准；不要把编辑器 query 或过期 Token 残渣当成正式身份
-- 缺派生文件：在已选 P 内从当前源模板和版本用户意图定点重建；数据引用缺失另行报告，不读草稿、另一版本或目录扫描结果，也不能自动发布 D。
+- 缺派生文件：普通请求选择原模板；编辑保存、主题更新或注入变更负责生成派生 PHTML，不在首访查布局位置重建。授权历史预览可凭精确 V/R 的既有引用生成内存候选，缺失依据明确报告；不能读最新草稿补历史或自动发布 D。
 
 ---
 

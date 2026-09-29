@@ -621,7 +621,7 @@ class ThemeEditor extends BackendController
 
             return ['success' => true, 'data' => $data];
         } catch (\Throwable $e) {
-            return ['success' => false, 'message' => $e->getMessage()];
+            return ['success' => false, 'message' => $e->getMessage(), 'data' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null];
         }
     }
 
@@ -682,7 +682,7 @@ class ThemeEditor extends BackendController
 
             return ['success' => true, 'data' => $data];
         } catch (\Throwable $e) {
-            return ['success' => false, 'message' => $e->getMessage()];
+            return ['success' => false, 'message' => $e->getMessage(), 'data' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null];
         }
     }
 
@@ -1732,6 +1732,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
                 'items' => [],
                 'total' => 0,
             ]);
@@ -1869,16 +1870,17 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
 
-    /**
-     * 方案 A：当前 identity draft ready 后对账安装默认安装项 (Query)
-     */
+    /** Legacy automatic reconciliation now only returns the existing workspace. */
     public function postReconcileRequiredDefaults()
     {
-        return $this->fetchJson($this->runRequiredDefaultsMutation('reconcile'));
+        $result = $this->scopedWorkspacePayload('load');
+        $result['scoped_workspace'] = $result['data'] ?? null;
+        return $this->fetchJson($result + ['applied' => 0, 'skipped' => 0, 'blockers' => [], 'items' => []]);
     }
 
     /**
@@ -1886,13 +1888,13 @@ class ThemeEditor extends BackendController
      */
     public function postApplyRequiredDefaults()
     {
-        return $this->fetchJson($this->runRequiredDefaultsMutation('apply'));
+        return $this->fetchJson($this->runRequiredDefaultsMutation());
     }
 
     /**
      * @return array<string,mixed>
      */
-    private function runRequiredDefaultsMutation(string $mode): array
+    private function runRequiredDefaultsMutation(): array
     {
         $bodyParams = $this->request->getBodyParams();
         if (is_string($bodyParams)) {
@@ -1933,21 +1935,13 @@ class ThemeEditor extends BackendController
             $identity = $this->layoutIdentityFromEditorContext($context);
             /** @var WidgetDefaultInjectionService $service */
             $service = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
-            $result = $mode === 'apply'
-                ? $service->applyRequiredMissingForIdentity(
-                    $themeId,
-                    $pageType,
-                    $identity,
-                    $editorArea,
-                    ThemeLayout::STATUS_DRAFT
-                )
-                : $service->reconcileRequiredDefaultsForIdentity(
-                    $themeId,
-                    $pageType,
-                    $identity,
-                    $editorArea,
-                    ThemeLayout::STATUS_DRAFT
-                );
+            $result = $service->applyRequiredMissingForIdentity(
+                $themeId,
+                $pageType,
+                $identity,
+                $editorArea,
+                ThemeLayout::STATUS_DRAFT
+            );
 
             if ((int)($result['applied'] ?? 0) > 0) {
                 ObjectManager::getInstance(SlotRendererService::class)->clearCache();
@@ -1958,9 +1952,7 @@ class ThemeEditor extends BackendController
 
             return [
                 'success' => true,
-                'message' => $mode === 'apply'
-                    ? __('已安装默认部件')
-                    : __('已对账默认安装部件'),
+                'message' => __('已安装默认部件'),
                 'applied' => (int)($result['applied'] ?? 0),
                 'skipped' => (int)($result['skipped'] ?? 0),
                 'blockers' => $result['blockers'] ?? [],
@@ -1973,6 +1965,7 @@ class ThemeEditor extends BackendController
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
                 'applied' => 0,
                 'skipped' => 0,
                 'blockers' => [],
@@ -2067,6 +2060,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -2323,6 +2317,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -2408,6 +2403,7 @@ class ThemeEditor extends BackendController
                 'message' => __('配置已保存'),
                 'config' => $config,
                 'node_uid' => $saved['node_uid'],
+                'scoped_workspace' => $saved['workspace'] ?? null,
             ];
 
             $previewHtml = $this->tryBuildPreviewHtmlForWidget(['node_uid' => $nodeUid] + $data, $config);
@@ -2420,6 +2416,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -2457,6 +2454,7 @@ class ThemeEditor extends BackendController
                 return $this->fetchJson([
                     'success' => false,
                     'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
                 ]);
             }
         }
@@ -2644,6 +2642,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -2870,6 +2869,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -3003,6 +3003,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -3055,6 +3056,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -3114,6 +3116,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -3137,32 +3140,23 @@ class ThemeEditor extends BackendController
 
         try {
             $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
-            $identity = $this->layoutIdentityFromEditorContext($context);
-            $result = $this->layoutService->saveLayout($themeId, $pageType, $layoutData, ThemeLayout::STATUS_DRAFT, $identity);
-            $scopedDraft = null;
-            if ($result) {
-                $snapshot = $this->layoutService->getLayout(
-                    $themeId,
-                    $pageType,
-                    ThemeLayout::STATUS_DRAFT,
-                    $identity,
-                );
-                $scopedDraft = $this->replaceScopedLayoutDraftFromSnapshot(
-                    $context,
-                    $snapshot,
-                    'Convert legacy full layout form to semantic patch',
-                );
-            }
+            $saved = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedEditorSaveService::class)
+                ->saveLayout($context, $layoutData, $data,
+                    'backend-user:' . (string)($this->session->getUserId() ?? 0),
+                    (string)($this->session->getUsername() ?? ''));
 
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
-                'success' => $result,
-                'message' => $result ? __('布局已保存') : __('保存失败'),
-                'data' => $result ? ['scoped_workspace' => $scopedDraft] : null,
+                'success' => true,
+                'message' => __('布局已保存'),
+                'data' => ['scoped_workspace' => $saved, 'workspace' => $saved,
+                    'content_revision' => $saved['content_revision'] ?? null,
+                    'theme_version_id' => $saved['theme_version_id'] ?? null],
             ]), 'save_layout');
         } catch (\Exception $e) {
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]), 'save_layout');
         }
     }
@@ -3259,6 +3253,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -3346,6 +3341,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -3412,6 +3408,7 @@ class ThemeEditor extends BackendController
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]), 'publish_layout');
         }
     }
@@ -3447,6 +3444,7 @@ class ThemeEditor extends BackendController
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -4169,6 +4167,7 @@ class ThemeEditor extends BackendController
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -4210,19 +4209,23 @@ class ThemeEditor extends BackendController
                 throw new \RuntimeException((string)__('Selected layout option is unavailable.'));
             }
 
-            // Compatibility endpoint only validates the selection. The scoped
-            // workspace is the draft authority; legacy projection happens only
-            // after an immutable Release is published.
+            $saved = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedEditorSaveService::class)
+                ->saveSelection($typedContext, $layoutOption, $payload,
+                    'backend-user:' . (string)($this->session->getUserId() ?? 0),
+                    (string)($this->session->getUsername() ?? ''));
             $effectiveScope = $scope;
 
             return [
                 'success' => true,
-                'message' => __('Layout option draft validated.'),
+                'message' => __('Layout option draft saved.'),
                 'data' => [
                     'theme_id' => (int)$theme->getId(),
                     'area' => $editorArea,
                     'scope' => $scope,
                     'effective_scope' => $effectiveScope,
+                    'workspace' => $saved,
+                    'content_revision' => $saved['content_revision'] ?? null,
+                    'theme_version_id' => $saved['theme_version_id'] ?? null,
                     'layout_type' => $layoutType,
                     'layout_option' => $layoutOption,
                     'layout_options_by_type' => $this->compactEditorLayoutOptions($layoutOptionsByType),
@@ -4234,6 +4237,7 @@ class ThemeEditor extends BackendController
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -4308,6 +4312,7 @@ class ThemeEditor extends BackendController
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -4329,7 +4334,7 @@ class ThemeEditor extends BackendController
             $targetIdentify = $this->buildTargetLayoutConfigIdentify($editorArea, $layoutType, $layoutOption);
             $identify = $targetIdentify !== '' ? $targetIdentify : $layoutIdentify;
             $definitions = $this->loadLayoutParamDefinitions($theme, $editorArea, $layoutType, $layoutOption, $layoutIdentify);
-            $configData = $this->request->getParam('config', []);
+            $configData = $writeInput['config'] ?? $this->request->getParam('config', []);
             if (!is_array($configData)) {
                 $configData = [];
             }
@@ -4350,9 +4355,17 @@ class ThemeEditor extends BackendController
                 $validatedConfig[$paramName] = $value;
             }
 
+            $context = ObjectManager::getInstance(ThemeEditorContextFactory::class)->fromInput(
+                $writeInput, $locale === null ? ThemeEditorContext::RESOURCE_META : ThemeEditorContext::RESOURCE_I18N);
+            if ($locale !== null) { $context = $context->withLocale($locale); }
+            $saved = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedEditorSaveService::class)
+                ->saveConfig($context, $validatedConfig, $writeInput,
+                    'backend-user:' . (string)($this->session->getUserId() ?? 0),
+                    (string)($this->session->getUsername() ?? ''));
+
             return [
                 'success' => true,
-                'message' => __('Layout config draft validated.'),
+                'message' => __('Layout config draft saved.'),
                 'data' => [
                     'theme_id' => (int)$theme->getId(),
                     'area' => $editorArea,
@@ -4364,6 +4377,9 @@ class ThemeEditor extends BackendController
                     'layout_identify' => $layoutIdentify,
                     'target_identify' => $targetIdentify,
                     'config' => $validatedConfig,
+                    'workspace' => $saved,
+                    'content_revision' => $saved['content_revision'] ?? null,
+                    'theme_version_id' => $saved['theme_version_id'] ?? null,
                 ],
             ];
         } catch (ResponseTerminateException $e) {
@@ -4372,6 +4388,7 @@ class ThemeEditor extends BackendController
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -4839,6 +4856,7 @@ class ThemeEditor extends BackendController
                 'success' => false,
                 'status_code' => $e instanceof \InvalidArgumentException ? 400 : 500,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
                 'html' => '',
                 'slots' => [],
                 'meta' => [],
@@ -5970,6 +5988,7 @@ class ThemeEditor extends BackendController
             return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]), 'save_compiled_layout');
         }
     }
@@ -6930,6 +6949,7 @@ HTML;
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -7027,6 +7047,7 @@ HTML;
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -7069,6 +7090,7 @@ HTML;
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -7125,6 +7147,7 @@ HTML;
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -7163,6 +7186,7 @@ HTML;
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -7986,6 +8010,7 @@ HTML;
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -8003,6 +8028,19 @@ HTML;
      * @return array{success:bool,message?:string,data?:array<string,mixed>,conflict?:bool}
      */
     public function createScopeDraftPayload(): array
+    {
+        $data = $this->getScopeVersionRequestData();
+        try {
+            $context = $this->requireLayoutWriteContext($data, (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0)),
+                (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME)));
+            return \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write($this->themeVersionOwnerFromContext($context),
+                fn(): array => $this->createScopeDraftPayloadLocked());
+        } catch (\Throwable $error) {
+            return ['success' => false, 'message' => $error->getMessage()];
+        }
+    }
+
+    private function createScopeDraftPayloadLocked(): array
     {
         $data = $this->getScopeVersionRequestData();
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
@@ -8046,6 +8084,24 @@ HTML;
                 'force_new' => !empty($data['force_new']),
             ];
 
+            // Freeze a provable live source while it is still selected. Once
+            // selection moves to the new draft, that source is history and a
+            // missing old R must not be reconstructed from current data.
+            $sourceId = $publication->draftSourceVersionId($creationSourceKind, $options);
+            if ($sourceId > 0 && $creationSourceKind === ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT) {
+                $source = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery()->load($sourceId);
+                if ($source->getVersionId() < 1) { throw new \RuntimeException('theme_scope_version_source_missing'); }
+                $sourceContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeLayoutResolver::class)
+                    ->buildContext($source->getThemeId(), $context->layoutType, $source->getArea(),
+                        ['scope' => $source->getScope(), 'store_mode' => $source->getStoreMode(),
+                            'layout_option' => $context->layoutOption, 'target_type' => $context->targetType, 'target_id' => $context->targetId]);
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write($source->toVersionIdentity(),
+                    fn() => ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class)
+                        ->captureCurrent($source, $sourceContext));
+                $options['source_theme_version_id'] = $sourceId;
+                if ($sourceId === $existingDraftId) { $options['existing_content_revision'] = $source->getContentRevision(); }
+            }
+
             $allocatedCarry = ['chrome_nodes' => 0, 'decisions' => 0];
             if (
                 $creationSourceKind !== ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT
@@ -8079,6 +8135,13 @@ HTML;
                 );
             }
 
+            $draft = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery()->load((int)$result['theme_version_id']);
+            ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class)
+                ->captureCurrent($draft, $context, empty($result['reused_existing_draft']));
+            $result['content_revision'] = $draft->getContentRevision();
+            ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class)
+                ->afterResourceWrite($context, ['version_identity' => $draft->toVersionIdentity()->toArray()]);
+
             $this->clearVersionPreviewCaches($context->themeId);
 
             return [
@@ -8099,6 +8162,7 @@ HTML;
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -8118,92 +8182,51 @@ HTML;
     public function saveScopeVersionPayload(): array
     {
         $data = $this->getScopeVersionRequestData();
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-
-        if ($themeId < 1) {
-            return [
-                'success' => false,
-                'message' => __('缺少主题ID'),
-            ];
-        }
-
         try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $context = $this->requireLayoutWriteContext($data, (int)($data['theme_id'] ?? 0), (string)($data['page_type'] ?? 'homepage'));
             $owner = $this->themeVersionOwnerFromContext($context);
-            $selection = $this->loadScopeVersionSelectionArray($owner);
-            $draftId = (int)($data['theme_version_id']
-                ?? $selection['draft_version_id']
-                ?? 0);
-            if ($draftId < 1) {
-                return [
-                    'success' => false,
-                    'message' => __('缺少草稿版本'),
-                ];
-            }
-
-            $draftRow = $this->loadScopeVersionRow($draftId, $owner);
-            if ($draftRow === null) {
-                throw new \RuntimeException('theme_scope_version_not_found');
-            }
-            $actualRevision = (int)($draftRow['content_revision'] ?? 0);
-            $expectedRevision = \array_key_exists('expected_content_revision', $data)
-                ? (int)$data['expected_content_revision']
-                : (\array_key_exists('content_revision', $data)
-                    ? (int)$data['content_revision']
-                    : $actualRevision);
-            $identity = $owner->withVersion(
-                $draftId,
-                ThemeVersionIdentity::MODE_DRAFT,
-                $actualRevision > 0 ? $actualRevision : 1,
-            );
-
-            $publication = ObjectManager::getInstance(ThemeVersionPublicationService::class);
-            $save = $publication->saveDraft(
-                $identity,
-                \is_array($data['changes'] ?? null) ? $data['changes'] : [],
-                $expectedRevision,
-            );
-            if (!empty($save['conflict'])) {
-                return [
-                    'success' => false,
-                    'conflict' => true,
-                    'message' => __('内容修订冲突'),
-                    'data' => $save,
-                ];
-            }
-
-            $sealedIdentity = $owner->withVersion(
-                $draftId,
-                ThemeVersionIdentity::MODE_DRAFT,
-                (int)($save['content_revision'] ?? $actualRevision),
-            );
-            $sealed = $publication->seal($sealedIdentity, [
-                'published_version_id' => (int)($selection['published_version_id'] ?? 0),
-            ]);
-            $this->persistScopeVersionSealed(
-                $draftId,
-                $owner,
-                (int)$sealed['content_revision'],
-                isset($data['version_name']) ? (string)$data['version_name'] : null,
-                isset($data['description']) ? (string)$data['description'] : null,
-            );
-
-            $this->clearVersionPreviewCaches($context->themeId);
-
-            return [
-                'success' => true,
-                'message' => __('Scope 版本已封存（未发布）'),
-                'data' => $sealed + [
-                    'published' => false,
-                    'selection' => $this->loadScopeVersionSelectionArray($owner),
-                ],
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'message' => $e->getMessage(),
-            ];
+            return \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write($owner, function () use ($data, $context, $owner): array {
+                $selection = $this->loadScopeVersionSelectionArray($owner);
+                $draftId = (int)($data['theme_version_id'] ?? $selection['draft_version_id'] ?? 0);
+                $row = $this->loadScopeVersionRow($draftId, $owner);
+                if ($row === null) { throw new \RuntimeException('theme_scope_version_not_found'); }
+                $actual = (int)($row['content_revision'] ?? 0);
+                $expected = (int)($data['expected_content_revision'] ?? $data['content_revision'] ?? $actual);
+                if ($actual !== $expected) {
+                    return ['success' => false, 'conflict' => true, 'message' => 'content_revision_cas_failed',
+                        'data' => ['content_revision' => $actual, 'theme_version_id' => $draftId]];
+                }
+                $changes = is_array($data['changes'] ?? null) ? $data['changes'] : [];
+                if ($changes !== []) {
+                    $saved = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedEditorSaveService::class)
+                        ->save($context, $changes, $data + ['expected_content_revision' => $actual],
+                            'backend-user:' . (string)($this->session->getUserId() ?? 0), (string)($this->session->getUsername() ?? ''));
+                    $draftId = (int)$saved['theme_version_id'];
+                    $actual = (int)$saved['content_revision'];
+                }
+                $version = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery()->load($draftId);
+                $initial = $version->getContentRevision() < 1;
+                if ($initial) { $version->setContentRevision(1)->save(); }
+                $snapshots = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class);
+                $snapshots->captureCurrent($version, $context, $initial);
+                $actual = $version->getContentRevision();
+                $identity = $owner->withVersion($draftId, ThemeVersionIdentity::MODE_DRAFT, $actual);
+                $sealed = ObjectManager::getInstance(ThemeVersionPublicationService::class)->seal($identity, [
+                    'published_version_id' => (int)($selection['published_version_id'] ?? 0),
+                ]);
+                $this->persistScopeVersionSealed($draftId, $owner, $actual,
+                    isset($data['version_name']) ? (string)$data['version_name'] : null,
+                    isset($data['description']) ? (string)$data['description'] : null);
+                ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class)
+                    ->bakePublishArtifactsForVersion($context, $draftId);
+                $this->clearVersionPreviewCaches($context->themeId);
+                return ['success' => true, 'message' => __('Scope 版本已封存（未发布）'),
+                    'data' => $sealed + ['theme_version_id' => $draftId, 'content_revision' => $actual,
+                        'published' => false, 'selection' => $this->loadScopeVersionSelectionArray($owner)]];
+            });
+        } catch (\Throwable $error) {
+            return ['success' => false, 'message' => $error->getMessage(),
+                'saved_revision' => $error instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $error->receipt() : null];
         }
     }
 
@@ -8220,6 +8243,28 @@ HTML;
      * @return array{success:bool,message?:string,data?:array<string,mixed>,conflict?:bool,code?:string}
      */
     public function publishScopeVersionPayload(): array
+    {
+        $response = null;
+        try {
+            $data = $this->getScopeVersionRequestData();
+            $context = $this->requireLayoutWriteContext($data, (int)($data['theme_id'] ?? 0), (string)($data['page_type'] ?? 'homepage'));
+            return \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write(
+                $this->themeVersionOwnerFromContext($context), function () use (&$response): array {
+                    $connection = ObjectManager::getInstance(ThemeScopeVersion::class)->getConnection();
+                    return ObjectManager::getInstance(\Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface::class)
+                        ->runWrite($connection, function () use (&$response): array {
+                            $response = $this->publishScopeVersionPayloadLocked();
+                            if (empty($response['success'])) { throw new \RuntimeException((string)($response['message'] ?? 'theme_scope_publish_failed')); }
+                            return $response;
+                        });
+                });
+        } catch (\Throwable $error) {
+            if (isset($context)) { ObjectManager::getInstance(ThemeScopeVersionService::class)->invalidateOwner($context->themeId,$context->scope->storageScope,$context->scope->storeMode,$context->area); }
+            return $response ?? ['success'=>false,'message'=>$error->getMessage()];
+        }
+    }
+
+    private function publishScopeVersionPayloadLocked(): array
     {
         $data = $this->getScopeVersionRequestData();
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
@@ -8255,6 +8300,19 @@ HTML;
             if ($row === null) {
                 throw new \RuntimeException('theme_scope_version_not_found');
             }
+            $version = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery()->load($themeVersionId);
+            $snapshots = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class);
+            if (isset($data['content_revision']) && (int)$data['content_revision'] !== (int)$row['content_revision']) {
+                return ['success' => false, 'conflict' => true, 'message' => 'content_revision_cas_failed',
+                    'data' => ['content_revision' => (int)$row['content_revision']]];
+            }
+            if ($snapshots->head($version->toVersionIdentity()) === null
+                && (int)($selection['draft_version_id'] ?? 0) === $themeVersionId) {
+                $snapshots->captureCurrent($version, $context);
+                $row = $version->getData();
+                $data['content_revision'] = $version->getContentRevision();
+            }
+
             $mode = $this->normalizeScopeVersionMode($data['mode'] ?? null)
                 ?? ((string)($row['lifecycle'] ?? '') === ThemeScopeVersion::LIFECYCLE_DRAFT
                     ? ThemeVersionIdentity::MODE_DRAFT
@@ -8312,6 +8370,18 @@ HTML;
                 'prepared_published_resources' => $preparedPublished,
             ]);
 
+            $allocatedDraftPrimeId = 0;
+            $draftPrime = null;
+            if (!$isSelectHistory && is_array($publishSet)) {
+                $prepared = $snapshots->preparePublication($version, $context, $publishSet,
+                    $publishResourcePlan['remaining_draft_resources'] !== []);
+                $version = $prepared['version'];
+                $draftPrime = $prepared['draft_prime'];
+                $allocatedDraftPrimeId = $draftPrime?->getVersionId() ?? 0;
+                $contentRevision = $version->getContentRevision();
+                $identity = $owner->withVersion($themeVersionId,$mode,$contentRevision);
+            }
+
             // 顺序很关键：先封存 → 再烘焙产物 → 再分配 D' → 再算后代传播 → 再写资源快照 → 最后才翻转发布指针。
             // 指针可见即代表该版本的 formal 产物已存在于磁盘，读者不会读到「指向空目录」的版本。
             // 封存必须先做：chrome 目录由 lifecycle 推导，未封存会落到 draft 目录。
@@ -8323,7 +8393,7 @@ HTML;
                 isset($data['description']) ? (string)$data['description'] : null,
             );
 
-            $bake = $this->bakePublishedScopeArtifacts($context, $themeVersionId);
+            $bake = $this->bakePublishedScopeArtifacts($context, $themeVersionId, ['draft_prime_identity'=>$draftPrime?->toVersionIdentity()->toArray()]);
             if (empty($bake['ok'])) {
                 // 补偿回滚：封存必须早于烘焙（chrome 目录由 lifecycle 推导），所以烘焙失败时
                 // D 已经被封存。不回滚就等于「失败也把草稿消费掉了」，违反 UC-05 的
@@ -8335,31 +8405,6 @@ HTML;
                     'message' => (string)($bake['message'] ?? __('发布产物烘焙失败')),
                     'data' => ['bake' => $bake],
                 ];
-            }
-
-            // 单页发布：未选中的资源必须留在草稿里，而 publish() 是纯规划器、只接受一个
-            // 「已分配好的 D' id」。分配点只能在这里 —— 全模块再没有别处会分配它，
-            // 缺了就会抛 single_page_publish_requires_draft_prime_id。
-            // 放在烘焙之后分配，是为了让烘焙失败时不留孤儿版本行。
-            // 分配失败即中止整次发布：宁可失败，也不能让未选中的资源凭空消失。
-            // 重选历史（selectHistory）不消费草稿，因此不分配。
-            $allocatedDraftPrimeId = 0;
-            if (!$isSelectHistory && $publishResourcePlan['remaining_draft_resources'] !== []) {
-                $allocatedDraftPrime = $this->allocateScopeVersionDraftRow(
-                    $owner,
-                    ThemeVersionPublicationInterface::CREATION_CONTINUE_CURRENT,
-                    [
-                        // 以正在发布的这份 D 为基准：D' 承接它的 chrome 载荷与卸载决定。
-                        'base_version_id' => $themeVersionId,
-                        'source_theme_version_id' => $themeVersionId,
-                        // D' 是同一个编辑会话的延续，必须带上卸载决定，否则只发布本页会把
-                        // 用户刚删掉的部件「复活」到 D' 上（UC-03）。
-                        'carry_decisions' => true,
-                    ],
-                    null,
-                    (string)__('单页发布剩余草稿'),
-                );
-                $allocatedDraftPrimeId = (int)$allocatedDraftPrime['version_id'];
             }
 
             // 后代传播：重选历史（selectHistory）不改父版本内容，因此不做传播。
@@ -8445,6 +8490,7 @@ HTML;
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -8560,6 +8606,7 @@ HTML;
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -8638,7 +8685,8 @@ HTML;
             $draftRevision = 0;
             if ($publishedId > 0) {
                 $publishedRow = $this->loadScopeVersionRow($publishedId, $owner);
-                $publishedRevision = (int)($publishedRow['content_revision'] ?? 0);
+                if (($publishedRow['lifecycle'] ?? '') !== ThemeScopeVersion::LIFECYCLE_SEALED) { $publishedId = 0; }
+                else { $publishedRevision = (int)($publishedRow['content_revision'] ?? 0); }
             }
             if ($draftId !== null && $draftId !== '' && (int)$draftId > 0) {
                 $draftRow = $this->loadScopeVersionRow((int)$draftId, $owner);
@@ -8838,10 +8886,8 @@ HTML;
         // 「承接源」按「取第一个正值」解析，不能用 ?? 链：调用方（createScopeDraftPayload）
         // 恒会把 source_theme_version_id 写成 int（缺省即 0），而 ?? 只在键不存在/null 时回退，
         // 于是 0 会短路掉 base_version_id ⇒ 承接源被误判成「无源」⇒ 仍然只建空壳行（缺陷 B）。
-        $sourceId = (int)($options['source_theme_version_id'] ?? 0);
-        if ($sourceId < 1) {
-            $sourceId = (int)($options['base_version_id'] ?? 0);
-        }
+        $sourceId = ObjectManager::getInstance(ThemeVersionPublicationService::class)
+            ->draftSourceVersionId($creationSourceKind, $options);
         $model->clearQuery()->clearData();
         $model->setThemeId($owner->themeId)
             ->setScope($owner->canonicalScope)
@@ -9038,17 +9084,14 @@ HTML;
                 $model->setData(ThemeScopeVersionSelection::schema_fields_SCOPE, $owner->canonicalScope);
                 $model->setData(ThemeScopeVersionSelection::schema_fields_STORE_MODE, $owner->storeMode);
                 $model->setData(ThemeScopeVersionSelection::schema_fields_AREA, $owner->area);
-                $published = (int)($selection['published_version_id'] ?? 0);
-                if ($published < 1) {
-                    // Selection requires published_version_id ≥ 1; until a formal
-                    // publish exists, point published at the new draft as temporary bridge.
-                    $published = $draftVersionId;
-                }
+                $published = max(0, (int)($selection['published_version_id'] ?? 0));
                 $model->setData(ThemeScopeVersionSelection::schema_fields_PUBLISHED_VERSION_ID, $published);
                 $model->setData(ThemeScopeVersionSelection::schema_fields_SELECTION_REVISION, 0);
             }
+            $model->setData(ThemeScopeVersionSelection::schema_fields_PUBLISHED_VERSION_ID, max(0, (int)($selection['published_version_id'] ?? 0)));
             $model->setData(ThemeScopeVersionSelection::schema_fields_DRAFT_VERSION_ID, $draftVersionId);
             $model->save();
+            ObjectManager::getInstance(ThemeScopeVersionService::class)->invalidateOwner($owner->themeId, $owner->canonicalScope, $owner->storeMode, $owner->area);
 
             /** @var ThemeScopeVersion $version */
             $version = ObjectManager::getInstance(ThemeScopeVersion::class);
@@ -9090,7 +9133,8 @@ HTML;
                 $model->setDescription($description);
             }
             $model->save();
-        } catch (\Throwable) {
+        } catch (\Throwable $error) {
+            throw $error;
         }
     }
 
@@ -9161,7 +9205,14 @@ HTML;
                 ?? ((int)($selection['selection_revision'] ?? 0) + 1));
             $model->setData(ThemeScopeVersionSelection::schema_fields_SELECTION_REVISION, \max(0, $nextRevision));
             $model->save();
-        } catch (\Throwable) {
+            if ($draftPrime === null || $draftPrime === '' || (int)$draftPrime < 1) {
+                $selectionId = $model->getSelectionId();
+                $model->clearData()->clearQuery()->where(ThemeScopeVersionSelection::schema_fields_ID, $selectionId)
+                    ->update([ThemeScopeVersionSelection::schema_fields_DRAFT_VERSION_ID => null])->fetch();
+            }
+            ObjectManager::getInstance(ThemeScopeVersionService::class)->invalidateOwner($owner->themeId, $owner->canonicalScope, $owner->storeMode, $owner->area);
+        } catch (\Throwable $error) {
+            throw $error;
         }
     }
 
@@ -9303,7 +9354,7 @@ HTML;
      *
      * @return array<string,mixed>
      */
-    private function bakePublishedScopeArtifacts(ThemeEditorContext $context, int $themeVersionId): array
+    private function bakePublishedScopeArtifacts(ThemeEditorContext $context, int $themeVersionId, array $options = []): array
     {
         try {
             /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator $coordinator */
@@ -9311,11 +9362,12 @@ HTML;
                 \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class,
             );
 
-            return $coordinator->bakePublishArtifactsForVersion($context, $themeVersionId);
+            return $coordinator->bakePublishArtifactsForVersion($context, $themeVersionId, $options);
         } catch (\Throwable $e) {
             return [
                 'ok' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
     }
@@ -9340,96 +9392,14 @@ HTML;
         array $result,
         array $fingerprints = [],
     ): array {
-        $resources = \is_array($result['published_resources'] ?? null) && $result['published_resources'] !== []
-            ? $result['published_resources']
-            // selectHistory 分支（重选已封存版本）不回传 published_resources，
-            // 此时按发布分支的同一份默认资源集记录，避免快照静默为空。
-            : ['layout:' . $context->layoutType, 'chrome', 'appearance', 'theme_binding'];
-        $revision = \max(1, $contentRevision);
-        $written = [];
-        $skipped = [];
-        try {
-            /** @var ThemeScopeVersionResourceSnapshot $model */
-            $model = ObjectManager::getInstance(ThemeScopeVersionResourceSnapshot::class);
-            $chromeIdentity = $owner
-                ->withVersion($themeVersionId, ThemeVersionIdentity::MODE_FORMAL, $revision)
-                ->ownerHash();
-            foreach ($resources as $resourceKey) {
-                $resourceKey = \is_string($resourceKey) ? \trim($resourceKey) : '';
-                if ($resourceKey === '' || $resourceKey === '*') {
-                    continue;
-                }
-                $resourceType = $this->snapshotResourceTypeFor($resourceKey);
-                if ($resourceType === null) {
-                    $skipped[] = ['resource' => $resourceKey, 'reason' => 'resource_not_version_owned'];
-                    continue;
-                }
-                // chrome 的绑定身份就是版本 owner 身份；页面/外观按资源上下文身份。
-                $identityHash = $resourceKey === 'chrome'
-                    ? $chromeIdentity
-                    : $context->withResource($resourceType)->identityHash();
-                if ($identityHash === '') {
-                    $skipped[] = ['resource' => $resourceKey, 'reason' => 'resource_identity_missing'];
-                    continue;
-                }
-
-                $existing = $model->reset()->clearData()
-                    ->where(ThemeScopeVersionResourceSnapshot::schema_fields_THEME_VERSION_ID, $themeVersionId)
-                    ->where(ThemeScopeVersionResourceSnapshot::schema_fields_CONTENT_REVISION, $revision)
-                    ->where(ThemeScopeVersionResourceSnapshot::schema_fields_RESOURCE_IDENTITY_HASH, $identityHash)
-                    ->find()
-                    ->fetch();
-                if ($existing instanceof ThemeScopeVersionResourceSnapshot && $existing->getId() > 0) {
-                    $skipped[] = ['resource' => $resourceKey, 'reason' => 'snapshot_already_present'];
-                    continue;
-                }
-
-                $resourceContext = $context->withResource($resourceType);
-                $fingerprint = (string)($fingerprints[$resourceKey] ?? '');
-                $row = clone $model;
-                $row->reset()->clearData()
-                    ->setData(ThemeScopeVersionResourceSnapshot::schema_fields_THEME_VERSION_ID, $themeVersionId)
-                    ->setData(ThemeScopeVersionResourceSnapshot::schema_fields_CONTENT_REVISION, $revision)
-                    ->setData(ThemeScopeVersionResourceSnapshot::schema_fields_RESOURCE_IDENTITY_HASH, $identityHash)
-                    ->setData(ThemeScopeVersionResourceSnapshot::schema_fields_RESOURCE_TYPE, $resourceType)
-                    ->setData(
-                        ThemeScopeVersionResourceSnapshot::schema_fields_RESOURCE_KEY_JSON,
-                        \json_encode([
-                            'resource' => $resourceKey,
-                            'canonical_scope' => (string)$resourceContext->scope->storageScope,
-                            'store_mode' => (string)$resourceContext->scope->storeMode,
-                            'area' => (string)$resourceContext->area,
-                            'layout_type' => $resourceContext->identityLayoutType(),
-                            'layout_option' => $resourceContext->identityLayoutOption(),
-                            // 明确标注本次发布是否产出了该资源的磁盘产物，避免空指纹被误读成缺陷。
-                            'artifact_baked' => $fingerprint !== '',
-                        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}',
-                    )
-                    ->setData(ThemeScopeVersionResourceSnapshot::schema_fields_SOURCE_FINGERPRINT, $fingerprint)
-                    ->save();
-                $written[] = [
-                    'resource' => $resourceKey,
-                    'resource_type' => $resourceType,
-                    'resource_identity_hash' => $identityHash,
-                    'snapshot_id' => $row->getId(),
-                    'source_fingerprint' => $fingerprint,
-                ];
-            }
-        } catch (\Throwable $e) {
-            return [
-                'ok' => false,
-                'message' => $e->getMessage(),
-                'written' => $written,
-                'skipped' => $skipped,
-            ];
+        $identity = $owner->withVersion($themeVersionId, ThemeVersionIdentity::MODE_FORMAL, max(1, $contentRevision));
+        $snapshots = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class);
+        if ($snapshots->head($identity) === null) {
+            return ['ok' => false, 'message' => 'historical_revision_head_missing', 'written' => [], 'skipped' => []];
         }
-
-        return ['ok' => true, 'written' => $written, 'skipped' => $skipped];
+        return ['ok' => true, 'written' => $snapshots->resources($identity), 'skipped' => []];
     }
 
-    /**
-     * 把发布资源键映射成快照可记录的版本内资源类型；版本外资源返回 null。
-     */
     private function snapshotResourceTypeFor(string $resourceKey): ?string
     {
         if (\str_starts_with($resourceKey, 'layout:') || $resourceKey === 'chrome') {
@@ -9535,6 +9505,7 @@ HTML;
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -9599,6 +9570,7 @@ HTML;
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -9649,6 +9621,7 @@ HTML;
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -9740,6 +9713,7 @@ HTML;
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
     }
@@ -10274,6 +10248,7 @@ HTML;
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
 
@@ -10316,6 +10291,7 @@ HTML;
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
 
@@ -10351,6 +10327,7 @@ HTML;
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
 
@@ -10383,6 +10360,7 @@ HTML;
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
 
@@ -10413,6 +10391,7 @@ HTML;
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
         $takeoverRequest = $this->editorLockService->getTakeoverRequest(
@@ -10451,6 +10430,7 @@ HTML;
             return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
 

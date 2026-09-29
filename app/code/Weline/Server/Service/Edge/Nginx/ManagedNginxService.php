@@ -719,6 +719,44 @@ final class ManagedNginxService
         ];
     }
 
+    /** 主机代次只随已验证的配置提交，复用生命周期锁及其失败回滚。 */
+    public function invalidateHosts(array $hosts, string $operationId): array
+    {
+        $receipt = [
+            'success'=>false, 'completed'=>false, 'applicable'=>true,
+            'operation_id'=>$operationId, 'backend'=>'managed_nginx', 'granularity'=>'host',
+            'hosts'=>[], 'generation_by_host'=>[], 'reason'=>'error', 'error_code'=>'', 'message'=>'',
+        ];
+        try {
+            $receipt['hosts'] = ManagedNginxHostCacheState::normalizeHosts($hosts);
+            if (!$this->isEdgeNginxManaged() || !$this->paths->dynamicEdgeCacheEnabled()) {
+                return [...$receipt, 'success'=>true, 'completed'=>true, 'applicable'=>false,
+                    'reason'=>!$this->isEdgeNginxManaged() ? 'not_managed' : 'cache_disabled'];
+            }
+            $result = $this->withLifecycleLock(function () use ($receipt, $operationId): array {
+                $plan = ManagedNginxHostCacheState::read($this->paths->confFile())
+                    ->advance($receipt['hosts'], $operationId);
+                if (!$plan['already_applied']) {
+                    $reload = $this->reloadUnlocked(true, $plan['state']->toArray());
+                    if (!($reload['ok'] ?? false)) {
+                        return [...$receipt, 'error_code'=>'reload_failed',
+                            'message'=>(string)($reload['message'] ?? 'Managed Nginx reload failed.')];
+                    }
+                }
+                $state = ManagedNginxHostCacheState::read($this->paths->confFile());
+                return [...$receipt, 'success'=>true, 'completed'=>true,
+                    'reason'=>$plan['already_applied'] ? 'already_applied' : 'invalidated',
+                    'generation_by_host'=>array_intersect_key($state->generations(), array_flip($receipt['hosts']))];
+            });
+            return isset($result['success']) ? $result : [...$receipt,
+                'error_code'=>($result['message'] ?? '') === 'operation_conflict' ? 'operation_conflict' : 'publication_failed',
+                'message'=>(string)($result['message'] ?? 'Publication failed.')];
+        } catch (\Throwable $error) {
+            return [...$receipt, 'error_code'=>$error->getMessage() === 'operation_conflict'
+                ? 'operation_conflict' : 'invalidation_failed', 'message'=>$error->getMessage()];
+        }
+    }
+
     /**
      * @param array{light_verification?:bool}|null $options
      *        light_verification: skip TLS session-resumption / HTTP/3 proof loops
@@ -735,7 +773,7 @@ final class ManagedNginxService
     }
 
     /** @return array{ok:bool,message:string,exit_code?:int|null} */
-    private function reloadUnlocked(bool $lightVerification = false): array
+    private function reloadUnlocked(bool $lightVerification = false, ?array $edgeCacheState = null): array
     {
         $identity = $this->installedBinaryIdentity();
         if (!($identity['ok'] ?? false)) {
@@ -795,6 +833,7 @@ final class ManagedNginxService
                     && $this->http3VerifierAvailable(),
                 $upstreamPorts,
                 $certificateGeneration,
+                $edgeCacheState,
             );
             $candidate = (string)$refreshed['conf'];
             if (!$this->probeWlsBackendPool(
@@ -930,11 +969,9 @@ final class ManagedNginxService
             // Live config/TLS proof outranks worker-table drain proof. Darwin
             // double-snapshot often nulls mid-HUP; rolling back then permanently
             // swallowed Edge conf (|fpc2) and left owner unmanaged.
-            if (((!($reloaded['ok'] ?? false) && !$drainSoftFailed)
-                    || !$configGenerationLive
-                    || !$tlsConfigured
-                    || !$tlsLive)
-            ) {
+            if (!$this->reloadActivationIsVerified(
+                $reloaded, $configGenerationLive, $tlsConfigured, $tlsLive,
+            )) {
                 $recovery = $this->restorePublishedConfig(
                     $rollback,
                     true,
@@ -1216,6 +1253,27 @@ final class ManagedNginxService
             }
         }
     }
+    /** 保持原有回滚判定：排空软失败也不能替代新代配置与 TLS 实测。 */
+    private function reloadActivationIsVerified(
+        array $reloaded,
+        bool $configGenerationLive,
+        bool $tlsConfigured,
+        bool $tlsLive,
+    ): bool {
+        return (($reloaded['ok'] ?? false)
+                || $this->isReloadWorkerDrainSoftFailure((string)($reloaded['message'] ?? '')))
+            && $configGenerationLive && $tlsConfigured && $tlsLive;
+    }
+
+    /** 仅 Worker 排空观测失败可降级；调用处仍必须证明新配置/TLS/后端健康。 */
+    private function isReloadWorkerDrainSoftFailure(string $message): bool
+    {
+        return \in_array($message, [
+            'unable to prove old nginx worker generation drain',
+            'old nginx workers did not drain before the reload generation deadline',
+        ], true);
+    }
+
     /**
      * @param array<string,mixed> $written
      * @param array<string,mixed> $capabilities
@@ -1716,6 +1774,7 @@ final class ManagedNginxService
         bool $wasRunning,
         bool $startedByCall,
     ): array {
+        $ownerIntent = $this->normalizeOwner($ownerIntent);
         try {
             $this->commitOwnerIntent($ownerIntent);
         } catch (\Throwable $throwable) {
@@ -2884,6 +2943,12 @@ final class ManagedNginxService
             4 * 1024 * 1024,
             'Managed Nginx owner state',
         ), true);
+        return \is_array($decoded) ? $this->decodeOwner($decoded) : null;
+    }
+
+    /** 写入意图与读盘意图使用同一规范化，不削减身份或运行时证据比较。 */
+    private function decodeOwner(array $decoded): ?array
+    {
         if (!\is_array($decoded)
             || \trim((string)($decoded['instance_name'] ?? '')) === ''
             || \trim((string)($decoded['upstream_host'] ?? '')) === ''
@@ -3350,6 +3415,25 @@ final class ManagedNginxService
             return null;
         }
 
+        return $this->normalizeOwner($decoded);
+    }
+
+    /** 只统一字段默认值和类型；磁盘输入仍须完整通过 decodeOwner 的原有验证。 */
+    private function normalizeOwner(array $decoded): array
+    {
+        $upstreamPorts = $decoded['upstream_ports'] ?? [(int)$decoded['upstream_port']];
+        $publicProtocols = \is_array($decoded['public_protocols'] ?? null)
+            ? \array_values(\array_filter(
+                \array_map(static fn(mixed $value): string => (string)$value, $decoded['public_protocols']),
+                static fn(string $value): bool => \in_array($value, ['http/3', 'http/2', 'http/1.1'], true),
+            )) : [];
+        $http3Verified = (bool)($decoded['http3_runtime_verified'] ?? false);
+        $http3Status = (string)($decoded['http3_status'] ?? '');
+        $http3AdvertisementStatus = (string)($decoded['http3_advertisement_status'] ?? '');
+        $http3Protocol = (string)($decoded['http3_protocol'] ?? '');
+        $resumptionVerified = (bool)($decoded['tls_session_resumption_runtime_verified'] ?? false);
+        $reloadContinuityVerified = (bool)($decoded['tls_session_resumption_reload_continuity_verified'] ?? false);
+        $certificateContractPresent = \array_key_exists('certificate_generation_managed', $decoded);
         $serverNames = \is_array($decoded['server_names'] ?? null)
             ? \array_values(\array_filter(
                 \array_map(static fn(mixed $name): string => \trim((string)$name), $decoded['server_names']),
@@ -3858,8 +3942,10 @@ final class ManagedNginxService
     /** @param array<string,mixed> $expected */
     private function commitOwnerIntent(array $expected): void
     {
+        $expected = $this->normalizeOwner($expected);
         $intent = $this->readOwnerFile($this->paths->ownerIntentFile());
-        if (!\is_array($intent)
+        if (!\is_array($expected)
+            || !\is_array($intent)
             || !\hash_equals(
                 $this->ownerSemanticDigest($expected),
                 $this->ownerSemanticDigest($intent),

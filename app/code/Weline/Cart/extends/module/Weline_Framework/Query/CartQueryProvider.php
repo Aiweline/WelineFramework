@@ -43,17 +43,13 @@ class CartQueryProvider implements QueryProviderInterface
             'summary' => $this->success('Cart summary loaded.', $this->storefrontSummaryPayload($params)),
             'count' => $this->success('Cart count loaded.', $this->cartCountPayload($params)),
             'items', 'miniItems' => $this->success('Cart items loaded.', $this->cartItemsPayload($params)),
-            'add' => $this->successFromSummary($this->cartService->addFromParams(
-                $this->withTrustedCustomer(
-                    $params + ['provider_code' => $params['provider_code'] ?? 'product'],
-                ),
-            )),
+            'add' => $this->add($params),
             'mergeGuest' => $this->mergeGuest($params),
             'getCart' => $this->getCart($params),
             'update' => $this->update($params),
             'remove' => $this->remove($params),
             'clear' => $this->clear($params),
-            'issueGuestToken' => $this->issueGuestToken(),
+            'issueGuestToken' => $this->issueGuestToken($params),
             'renewGuestSession' => $this->renewGuestSession($params),
             'options' => $this->success('Cart options loaded.', ['options' => []]),
             'previewDiscount' => $this->previewDiscount($params),
@@ -96,24 +92,27 @@ class CartQueryProvider implements QueryProviderInterface
         }
     }
 
-    /** @return array<string, mixed> */
-    private function issueGuestToken(): array
+    /**
+     * Cookie-first guest identity. When Cookie is empty, optionally adopt
+     * params.guest_token only if that token already owns a non-empty cart in
+     * the current Scope; otherwise mint. Always persists via persistGuestCookie.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function issueGuestToken(array $params = []): array
     {
         $token = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
         if ($token === '') {
-            $token = $this->cartService->issueGuestToken();
+            $candidate = trim((string)($params['guest_token'] ?? ''));
+            if ($candidate !== '' && $this->guestCartHasItems($params, $candidate)) {
+                $token = $candidate;
+            } else {
+                $token = $this->cartService->issueGuestToken();
+            }
         }
         $guestTtl = CartPersistencePolicy::guestTtlSeconds();
-        Cookie::set(
-            CartService::GUEST_TOKEN_COOKIE,
-            $token,
-            $guestTtl,
-            [
-                'path' => '/',
-                'httponly' => true,
-                'samesite' => 'Lax',
-            ],
-        );
+        $this->persistGuestCookie($token);
         return $this->success('Guest token issued.', [
             'guest_token' => $token,
             'success' => true,
@@ -147,16 +146,7 @@ class CartQueryProvider implements QueryProviderInterface
         }
 
         $guestTtl = CartPersistencePolicy::guestTtlSeconds();
-        Cookie::set(
-            CartService::GUEST_TOKEN_COOKIE,
-            $guestToken,
-            $guestTtl,
-            [
-                'path' => '/',
-                'httponly' => true,
-                'samesite' => 'Lax',
-            ],
-        );
+        $this->persistGuestCookie($guestToken);
 
         return $this->success('Guest session renewed.', [
             'guest_token' => $guestToken,
@@ -164,6 +154,90 @@ class CartQueryProvider implements QueryProviderInterface
             'ttl_seconds' => $guestTtl,
             'expires_at_ms' => CartPersistencePolicy::guestExpiresAtMs(),
         ]);
+    }
+
+    /**
+     * Guest add: after a successful mutation, ensure HttpOnly Cookie matches
+     * the cart token so checkout issueGuestToken reuses the same identity.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function add(array $params): array
+    {
+        $summary = $this->cartService->addFromParams(
+            $this->withTrustedCustomer(
+                $params + ['provider_code' => $params['provider_code'] ?? 'product'],
+            ),
+        );
+        $result = $this->successFromSummary($summary);
+        if (($result['success'] ?? false) === true
+            && $this->currentCustomer->currentCustomerId() === null
+        ) {
+            $token = trim((string)($result['guest_token'] ?? $params['guest_token'] ?? ''));
+            $this->ensureGuestCookie($token);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Persist guest identity Cookie with the same attributes as issue/renew.
+     */
+    private function persistGuestCookie(string $token): void
+    {
+        $token = trim($token);
+        if ($token === '') {
+            return;
+        }
+        Cookie::set(
+            CartService::GUEST_TOKEN_COOKIE,
+            $token,
+            CartPersistencePolicy::guestTtlSeconds(),
+            [
+                'path' => '/',
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ],
+        );
+    }
+
+    /**
+     * Write Cookie only when empty or mismatched with the cart token.
+     */
+    private function ensureGuestCookie(string $token): void
+    {
+        $token = trim($token);
+        if ($token === '') {
+            return;
+        }
+        $cookie = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
+        if ($cookie === '' || $cookie !== $token) {
+            $this->persistGuestCookie($token);
+        }
+    }
+
+    /**
+     * Probe whether params.guest_token already owns a non-empty cart (adopt gate).
+     *
+     * @param array<string, mixed> $params
+     */
+    private function guestCartHasItems(array $params, string $guestToken): bool
+    {
+        try {
+            $scope = $this->scopeResolver->fromParams($params);
+            $summary = $this->cartService->getCart(
+                $scope,
+                $guestToken,
+                null,
+                $this->cartServicePreference($params),
+            );
+
+            return (int)($summary['item_count'] ?? 0) > 0
+                || ($summary['is_empty'] ?? true) === false;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -256,7 +330,13 @@ class CartQueryProvider implements QueryProviderInterface
                 );
 
             $summary = $this->enrichSummaryWithDiscountPreview($summary, $params);
-            return $this->successFromSummary($summary);
+            $result = $this->successFromSummary($summary);
+            if (($result['success'] ?? false) === true && $customerId === null) {
+                $token = trim((string)($result['guest_token'] ?? $guestToken ?? ''));
+                $this->ensureGuestCookie($token);
+            }
+
+            return $result;
         } catch (\Throwable $e) {
             return [
                 'success' => false,
@@ -786,9 +866,10 @@ class CartQueryProvider implements QueryProviderInterface
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 1,
-                    'params' => [],
+                    // Optional: when Cookie empty, backend may adopt this token if cart non-empty.
+                    'params' => $this->guestTokenParam(),
                     'returns' => $commonReturns,
-                    'summary' => 'Issue opaque guest cart token',
+                    'summary' => 'Issue or adopt opaque guest cart token (optional guest_token; response shape unchanged)',
                 ],
                 [
                     'name' => 'renewGuestSession',

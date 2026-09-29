@@ -75,6 +75,107 @@ final class CartQueryProviderSecurityTest extends TestCase
         self::assertSame($existingToken, $payload['guest_token']);
     }
 
+    public function testIssueGuestTokenAdoptsParamWhenCookieEmptyAndCartNonEmpty(): void
+    {
+        [$cart, $offer] = $this->service();
+        $scope = $this->channelScope();
+        $orphanToken = $cart->issueGuestToken();
+        $cart->add($scope, $offer, [], 2, $orphanToken);
+
+        Context::current()->set('input.cookie', []);
+        $GLOBALS['weline_cart_test_env'] = [];
+
+        $query = new CartQueryProvider(
+            $cart,
+            new CartScopeResolver(),
+            new CartCurrentCustomerResolver(static fn(): ?int => null),
+        );
+        $result = $query->execute('issueGuestToken', $this->flatScopeParams() + [
+            'guest_token' => $orphanToken,
+        ]);
+        $payload = is_array($result['data'] ?? null) ? $result['data'] : $result;
+
+        self::assertTrue($result['success']);
+        self::assertSame($orphanToken, $payload['guest_token']);
+        self::assertSame($orphanToken, (string)\Weline\Framework\Http\Cookie::get(CartService::GUEST_TOKEN_COOKIE));
+    }
+
+    public function testIssueGuestTokenMintsWhenCookieEmptyAndParamCartEmpty(): void
+    {
+        $emptyToken = str_repeat('b', 64);
+        Context::current()->set('input.cookie', []);
+        $GLOBALS['weline_cart_test_env'] = [];
+
+        $query = new CartQueryProvider(
+            CartService::forTesting(CartItemSnapshotProviderRegistry::forTesting()),
+            new CartScopeResolver(),
+            new CartCurrentCustomerResolver(static fn(): ?int => null),
+        );
+        $result = $query->execute('issueGuestToken', $this->flatScopeParams() + [
+            'guest_token' => $emptyToken,
+        ]);
+        $payload = is_array($result['data'] ?? null) ? $result['data'] : $result;
+
+        self::assertTrue($result['success']);
+        self::assertNotSame($emptyToken, $payload['guest_token']);
+        self::assertNotSame('', (string)$payload['guest_token']);
+        self::assertSame(
+            (string)$payload['guest_token'],
+            (string)\Weline\Framework\Http\Cookie::get(CartService::GUEST_TOKEN_COOKIE),
+        );
+    }
+
+    public function testGuestAddPersistsCookieWhenCookieEmpty(): void
+    {
+        [$cart, $offer] = $this->service();
+        $guestToken = $cart->issueGuestToken();
+        Context::current()->set('input.cookie', []);
+        $GLOBALS['weline_cart_test_env'] = [];
+
+        $query = new CartQueryProvider(
+            $cart,
+            new CartScopeResolver(),
+            new CartCurrentCustomerResolver(static fn(): ?int => null),
+        );
+        $result = $query->execute('add', $this->flatScopeParams() + [
+            'provider_code' => 'product',
+            'global_offer_uuid' => $offer->globalOfferUuid,
+            'legacy_product_id' => $offer->legacyProductId,
+            'guest_token' => $guestToken,
+            'qty' => 1,
+        ]);
+
+        self::assertTrue($result['success'], (string)($result['message'] ?? ''));
+        self::assertSame(1, $result['item_count']);
+        self::assertSame($guestToken, (string)\Weline\Framework\Http\Cookie::get(CartService::GUEST_TOKEN_COOKIE));
+    }
+
+    public function testGuestUpdateEnsuresCookieWhenCookieEmpty(): void
+    {
+        [$cart, $offer] = $this->service();
+        $scope = $this->channelScope();
+        $guestToken = $cart->issueGuestToken();
+        $added = $cart->add($scope, $offer, [], 2, $guestToken);
+        $itemId = (string)$added['items'][0]['item_id'];
+
+        Context::current()->set('input.cookie', []);
+        $GLOBALS['weline_cart_test_env'] = [];
+
+        $query = new CartQueryProvider(
+            $cart,
+            new CartScopeResolver(),
+            new CartCurrentCustomerResolver(static fn(): ?int => null),
+        );
+        $updated = $query->execute('update', $this->flatScopeParams() + [
+            'guest_token' => $guestToken,
+            'item_id' => $itemId,
+            'qty' => 1,
+        ]);
+
+        self::assertTrue($updated['success']);
+        self::assertSame($guestToken, (string)\Weline\Framework\Http\Cookie::get(CartService::GUEST_TOKEN_COOKIE));
+    }
+
     public function testFrontendDescriptorDoesNotExposeCustomerCartOwner(): void
     {
         $query = new CartQueryProvider(

@@ -98,7 +98,7 @@ final class ThemeScopeVersionSelection extends Model
             || $scope === ''
             || !\in_array($area, ['frontend', 'backend'], true)
             || $storeMode === ''
-            || $published < 1
+            || $published < 0
         ) {
             throw new \InvalidArgumentException((string)__('Theme 版本选择身份无效。'));
         }

@@ -721,36 +721,73 @@
         return (expiresAt - nowMs()) <= RENEW_WITHIN_MS;
     }
 
-    function renewGuestSession() {
+    /**
+     * Renew guest session (Cookie + browser mirror).
+     * @param {{force?: boolean}|undefined} options
+     *   force=true → always hit renewGuestSession API (sync Cookie even when TTL ok).
+     *   force=false/omitted → TTL gate (needsGuestRenew); used by scheduleGuestRenewWatch.
+     */
+    function renewGuestSession(options) {
+        var opts = options && typeof options === 'object' ? options : {};
+        var force = opts.force === true;
         var session = getGuestSession();
         if (!session || !session.token) {
             return Promise.resolve(null);
         }
-        if (!needsGuestRenew(session)) {
+        // Explicit Cookie sync must not short-circuit on TTL; timer/boot keep the gate.
+        if (!force && !needsGuestRenew(session)) {
             return Promise.resolve(session);
         }
         return waitForApi().then(function (api) {
             return api.resource('cart').then(function (client) {
                 if (!client || typeof client.renewGuestSession !== 'function') {
                     // Fallback: extend browser window only when API missing.
+                    // force callers treat this as soft sync (no server Cookie write).
+                    if (force) {
+                        throw new Error('renewGuestSession_unavailable');
+                    }
                     return rememberGuestSession(session.token, guestSessionFrom());
                 }
                 return client.renewGuestSession({ guest_token: session.token }, { silent: true }).then(function (response) {
                     var payload = response && response.data && typeof response.data === 'object' ? response.data : response;
+                    var failed = (response && response.success === false)
+                        || (payload && payload.success === false);
+                    if (failed) {
+                        var failMsg = String(
+                            (payload && payload.message)
+                            || (response && response.message)
+                            || 'renewGuestSession_failed'
+                        );
+                        if (force) {
+                            throw new Error(failMsg);
+                        }
+                        return rememberGuestSession(session.token, guestSessionFrom());
+                    }
                     var token = String((payload && payload.guest_token) || session.token).trim();
                     var expiresAt = Number((payload && payload.expires_at_ms) || guestSessionFrom());
                     return rememberGuestSession(token, expiresAt);
                 });
             });
-        }).catch(function () {
+        }).catch(function (err) {
+            // force=true must surface failure so ensureGuestToken can fall back to
+            // issueGuestToken({guest_token}) instead of assuming Cookie was written.
+            if (force) {
+                throw err;
+            }
             return rememberGuestSession(session.token, guestSessionFrom());
         });
+    }
+
+    /** Alias: force-renew to push JS guest_token into HttpOnly Cookie. */
+    function syncGuestCookie() {
+        return renewGuestSession({ force: true });
     }
 
     function scheduleGuestRenewWatch() {
         global.clearTimeout(renewTimer);
         renewTimer = global.setTimeout(function () {
             renewTimer = 0;
+            // Timer path: non-force (TTL short-circuit allowed).
             renewGuestSession().finally(function () {
                 scheduleGuestRenewWatch();
             });
@@ -955,6 +992,7 @@
         getGuestSession: getGuestSession,
         rememberGuestSession: rememberGuestSession,
         renewGuestSession: renewGuestSession,
+        syncGuestCookie: syncGuestCookie,
         rememberSummary: rememberSummary,
         getCachedSummary: getCachedSummary,
         clearCachedSummary: clearCachedSummary,

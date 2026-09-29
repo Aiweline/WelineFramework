@@ -282,8 +282,8 @@
             description: "结账生命周期：weline:checkout:order-created / success"
         },
         checkoutExpressReview: {
-            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260926-enter-pixel"],
-            paths: ["Weline_Checkout::js/express-review.js?v=20260926-enter-pixel"],
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/express-review.js?v=20260927-payment-method-i18n"],
+            paths: ["Weline_Checkout::js/express-review.js?v=20260927-payment-method-i18n"],
             globalVar: "WelineCheckoutExpressReview",
             load: "lazy",
             description: "快捷支付回头确认页：摘要/缺口/确认收款"

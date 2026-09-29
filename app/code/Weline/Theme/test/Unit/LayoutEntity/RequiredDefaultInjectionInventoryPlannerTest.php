@@ -61,17 +61,7 @@ final class RequiredDefaultInjectionInventoryPlannerTest extends TestCase
         self::assertContains('product-info', $codes);
     }
 
-    public function testOverlayUsesInventoryPlannerNotDiscoveryLoop(): void
-    {
-        $src = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionStorefrontOverlay.php'
-        );
-        self::assertStringContainsString('RequiredDefaultInjectionSlotInventory::build', $src);
-        self::assertStringContainsString('RequiredDefaultInjectionPlanner::plan', $src);
-        self::assertStringContainsString('One execute wave per depth', $src);
-        self::assertStringNotContainsString('while ($pass < 16)', $src);
-        self::assertStringNotContainsString('Multi-pass: parent container', $src);
-    }
+
 
     /**
      * @return list<array<string, mixed>>

@@ -42,7 +42,8 @@ final class ThemeChromeWidgetRemovalServiceTest extends TestCase
                     'prior uninstall marker must remain target-version uninstall',
                 );
             } else {
-                self::assertSame('user_deleted@' . $versionId, $result['source']);
+                self::assertSame('user_deleted', $result['source']);
+                self::assertSame(2, $result['content_revision']);
             }
             self::assertFalse($result['rebaked_active'], 'Required defaults must not reactivate a user removal.');
             self::assertSame('shop.store.channel', $result['owner_scope']);

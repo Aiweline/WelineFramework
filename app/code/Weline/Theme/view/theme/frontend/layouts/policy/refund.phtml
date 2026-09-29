@@ -268,7 +268,7 @@ $contactAddress = (string)($contact['contact_address'] ?? '');
                     position="content"
                     class="amazon-policy__content-root-slot">
             <div class="policy-main <?= $escape($meta['class'] ?? '') ?>" data-layout="policy-refund">
-                <w:slot id="policy-refund-content"
+                <w:slot id="policy-content"
                         name="退款政策正文"
                         accept="layout-policy-refund-content,layout-policy-content,refund-policy,policy-content,content,faq"
                         reject="header,footer"
@@ -407,6 +407,21 @@ $contactAddress = (string)($contact['contact_address'] ?? '');
             </div>
             </w:slot>
         </main>
+
+        <w:slot id="policy-bottom"
+                name="政策页底部扩展"
+                accept="layout-policy-bottom,banner,promo-banner,content,container,product,category,carousel,trust-badges,contact-info"
+                reject="header,footer,navigation"
+                multiple="true"
+                append="true"
+                position="content"
+                class="policy-bottom-slot">
+            <w:hook>
+                Weline_Theme::frontend::layouts::policy::bottom
+                <else/>
+                <w:widget type="content" name="contact-info" />
+            </w:hook>
+        </w:slot>
 
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>

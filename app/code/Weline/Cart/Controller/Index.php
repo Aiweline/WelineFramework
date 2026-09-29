@@ -5,19 +5,13 @@ declare(strict_types=1);
 namespace Weline\Cart\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\WidgetI18n;
-use Weline\Theme\Service\StorefrontSsrChromeHealer;
 
 /**
  * Storefront cart page.
  *
- * Lines hydrate via QueryBin in the browser. SSR must stay cheap: heavy
- * LayoutSlotRenderer fill historically spent ~30s, starved the 2-worker pool,
- * and surfaced as nginx 502 + RequestExit fiber cancel.
- *
- * HARD: keep Theme Partials header/footer chrome (theme_seat_integrity).
- * Bare HTML shells that omit chrome are rejected as a performance "fix".
+ * Lines hydrate via QueryBin in the browser. The normal layout lifecycle selects
+ * captured PHTML sources before the body renders, then wraps it once with chrome.
  */
 class Index extends FrontendController
 {
@@ -51,30 +45,7 @@ class Index extends FrontendController
         ];
         $this->assign('meta', $meta);
 
-        // P0: template()/fetchHtml — skips fetch_file_after LayoutSlotRenderer
-        // entity fill (after_ms≈30s / worker starvation / nginx 502 + RequestExit).
-        // Theme Partials header/footer stay; do not tear chrome.
-        // Disk-splice footer-container into empty weline-footer--shell (theme_seat_integrity).
-        $body = $this->template('Weline_Cart::templates/frontend/cart/index.phtml');
-        $meta['content'] = $body;
-        $this->assign('meta', $meta);
-        $this->assign('content', $body);
-
-        $html = $this->template('Weline_Cart::theme/frontend/layouts/cart/default.phtml');
-
-        return $this->ensurePublishedChrome($html);
-    }
-
-    private function ensurePublishedChrome(string $html): string
-    {
-        try {
-            /** @var StorefrontSsrChromeHealer $healer */
-            $healer = ObjectManager::getInstance(StorefrontSsrChromeHealer::class);
-
-            return $healer->ensure($html);
-        } catch (\Throwable) {
-            return $html;
-        }
+        return $this->fetch('Weline_Cart::templates/frontend/cart/index.phtml');
     }
 
     /**

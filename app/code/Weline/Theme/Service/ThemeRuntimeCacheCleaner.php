@@ -271,7 +271,8 @@ final class ThemeRuntimeCacheCleaner
             }
             $themeId = (int)($ref['theme_id'] ?? 0);
             $area = \trim((string)($ref['area'] ?? ''));
-            $scopeKey = \strtolower(\trim((string)($ref['scope_key'] ?? '')));
+            $scopeKey = isset($ref['canonical_scope']) ? $paths->scopeKey((string)$ref['canonical_scope']) : \trim((string)($ref['scope_key'] ?? ''));
+            $storeMode = (string)($ref['store_mode'] ?? 'normal');
             $versionId = (int)($ref['theme_version_id'] ?? 0);
             $mode = \trim((string)($ref['mode'] ?? ''));
             if ($themeId < 1 || $area === '' || $scopeKey === '' || $versionId < 1) {
@@ -282,24 +283,18 @@ final class ThemeRuntimeCacheCleaner
             ) {
                 continue;
             }
-            $key = $themeId . '|' . $area . '|' . $scopeKey . '|' . $versionId . '|' . $mode;
+            $key = $themeId . '|' . $area . '|' . $scopeKey . '|' . $storeMode . '|' . ($mode === 'draft' ? 'draft' : 'v' . $versionId);
             $reachable[$key] = true;
-            // Prefer explicit scope_key path over recomputing from synthetic scope.
-            $protectedPaths[] = $paths->root()
-                . $themeId . \DIRECTORY_SEPARATOR
-                . $area . \DIRECTORY_SEPARATOR
-                . $scopeKey . \DIRECTORY_SEPARATOR
-                . 'tv' . $versionId . \DIRECTORY_SEPARATOR
-                . $mode;
         }
 
         $deleted = [];
         $kept = [];
         foreach ($paths->listVersionModeDirectories() as $entry) {
             $key = $entry['theme_id'] . '|' . $entry['area'] . '|' . $entry['scope_key']
-                . '|' . $entry['theme_version_id'] . '|' . $entry['mode'];
+                . '|' . $entry['store_mode'] . '|' . ($entry['mode'] === 'draft' ? 'draft' : 'v' . $entry['theme_version_id']);
             if (isset($reachable[$key])) {
                 $kept[] = $entry['path'];
+                $protectedPaths[] = $entry['path'];
                 continue;
             }
             try {

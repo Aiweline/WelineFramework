@@ -4609,7 +4609,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $normalized['namespace_fingerprint'] = $fingerprint;
             // Keep the publication's translation snapshot through READY/IPC.
             // FPC remains the owner of validating required locale evidence.
-            foreach (['lang', 'default_locale', 'translation_locales'] as $field) {
+            foreach (['policy_fingerprint', 'policy_path', 'lang', 'default_locale', 'translation_locales'] as $field) {
                 if (array_key_exists($field, $receipt)) {
                     $normalized[$field] = $receipt[$field];
                 }

@@ -6,6 +6,8 @@ namespace Weline\Server\Service;
 use Weline\Server\Model\AttackLog;
 use Weline\Server\Security\AttackDetector;
 use Weline\Server\Security\CrawlerBlockCatalog;
+use Weline\Server\Service\Security\AttackScanWarningAnalyzer;
+use Weline\Framework\Manager\ObjectManager;
 
 class WlsPanelSecurityDataService
 {
@@ -53,6 +55,10 @@ class WlsPanelSecurityDataService
             $instance = (string)$normalizedFilters['instance'];
             $stats = $this->getFilteredStatistics($normalizedFilters, 7);
             $logResult = $this->getFilteredAttacks($normalizedFilters);
+            $stats = $this->enrichStatsWithScanWarnings(
+                $stats,
+                \is_array($logResult['items'] ?? null) ? $logResult['items'] : []
+            );
 
             return [
                 'stats' => $stats,
@@ -79,7 +85,7 @@ class WlsPanelSecurityDataService
             ];
         } catch (\Throwable $throwable) {
             return [
-                'stats' => [],
+                'stats' => ['scan_warnings' => []],
                 'project_security_summaries' => [],
                 'recent_attacks' => [],
                 'attack_pagination' => $this->emptyPagination(),
@@ -582,6 +588,17 @@ class WlsPanelSecurityDataService
         $stats['top_domains'] = \array_slice($domainCounts, 0, 10, true);
 
         return $stats;
+    }
+
+    /**
+     * @param array<string, mixed> $stats
+     * @param list<array<string, mixed>> $recentRows
+     * @return array<string, mixed>
+     */
+    private function enrichStatsWithScanWarnings(array $stats, array $recentRows = []): array
+    {
+        return ObjectManager::getInstance(AttackScanWarningAnalyzer::class)
+            ->enrichStatistics($stats, $recentRows);
     }
 
     /**

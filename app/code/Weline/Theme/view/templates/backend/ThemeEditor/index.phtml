@@ -82,6 +82,8 @@ if ($default_locale === '') {
 if ($default_locale === '') {
     $default_locale = \Weline\Framework\App\Env::default_LANGUAGE_CODE;
 }
+$scopeIdentity = $this->getData('scope_identity');
+$scopeIdentity = is_array($scopeIdentity) ? $scopeIdentity : [];
 $previewParams = [
     'theme_id' => $theme_id,
     'page_type' => $page_type,
@@ -98,6 +100,11 @@ $previewParams = [
     'locale_code' => $layout_identity_locale !== '' ? $layout_identity_locale : (string)$this->request->getParam('locale', $default_locale),
     '_t' => time(),
 ];
+foreach (['scope_kind', 'store_mode', 'website_id', 'website_code', 'store_id', 'store_code', 'channel_code', 'context_version'] as $identityField) {
+    if (array_key_exists($identityField, $scopeIdentity)) {
+        $previewParams[$identityField] = $scopeIdentity[$identityField];
+    }
+}
 $previewTargetIsConcrete = static function (string $targetType, int $targetId): bool {
     return $targetType !== ''
         && $targetType !== 'global'
@@ -121,18 +128,12 @@ if ($layout_editor_locked) {
         $previewParams['theme_layout_source_target_id'] = $previewTargetId;
     }
 } else {
-    $previewScope = trim((string)($preview_context['scope'] ?? $this->request->getParam('scope', '')));
+    $previewScope = trim($layout_identity_scope);
     if ($previewScope !== '') {
         $previewParams['scope'] = $previewScope;
     }
-    $previewTargetType = trim((string)(
-        $preview_context['theme_layout_target_type']
-        ?? $this->request->getParam('theme_layout_target_type', '')
-    ));
-    $previewTargetId = (int)(
-        $preview_context['theme_layout_target_id']
-        ?? $this->request->getParam('theme_layout_target_id', 0)
-    );
+    $previewTargetType = trim($layout_identity_target_type);
+    $previewTargetId = $layout_identity_target_id;
     if ($previewTargetIsConcrete($previewTargetType, $previewTargetId)) {
         $previewParams['target_type'] = $previewTargetType;
         $previewParams['target_id'] = $previewTargetId;
@@ -149,20 +150,34 @@ if ($layout_editor_locked) {
     }
 }
 $initialPreviewToken = trim((string)($this->getData('initial_preview_token') ?: ''));
-// 首屏就指向店面画布，避免 iframe 停在 about:blank，等 JS 再发请求时被排到 45 秒后取消。
+// 首屏与后续画布导航使用同一已解析 owner/resource，不能先请求无 scope 的默认草稿。
 $canvasArea = $editor_area === 'backend' ? 'backend' : 'frontend';
 $canvasPath = ($page_type === '' || $page_type === 'homepage') ? '/' : '/' . rawurlencode((string)$page_type);
-$initialPreviewUrl = $canvasPath . '?' . http_build_query([
-    'theme_id' => $theme_id,
-    'frontend_theme_id' => $theme_id,
-    'editor_mode' => '1',
-    'shell' => 'theme-editor',
-    'preview_mode' => 'live',
-    'interaction_mode' => 'edit',
-    'status' => $preview_status !== '' ? $preview_status : 'draft',
-    'editor_area' => $canvasArea,
-    'preview_area' => $canvasArea,
-], '', '&', PHP_QUERY_RFC3986);
+$previewParams['shell'] = 'theme-editor';
+$previewParams['interaction_mode'] = 'edit';
+$previewParams['editor_area'] = $canvasArea;
+$previewParams['preview_area'] = $canvasArea;
+$previewParams['status'] = $preview_status !== '' ? $preview_status : 'draft';
+$previewVersionId = (int)($preview_context['version_id'] ?? 0);
+if ($previewVersionId > 0) {
+    $previewParams['version_id'] = $previewVersionId;
+}
+if ($scopeIdentity !== []) {
+    $previewParams['editor_context'] = json_encode([
+        'scope' => ['identity' => $scopeIdentity],
+        'area' => $canvasArea,
+        'resource_type' => 'layout',
+        'theme_id' => $theme_id,
+        'layout_type' => $page_type,
+        'layout_option' => $layout_option,
+        'locale' => $layout_identity_locale !== '' ? $layout_identity_locale : 'default',
+        'target_type' => $layout_identity_target_type,
+        'target_id' => $layout_identity_target_id,
+    ], $jsonForScriptFlags) ?: '{}';
+}
+// 店面路由及语言由 path 决定；typed context 保留布局资源身份。
+unset($previewParams['page_type'], $previewParams['layout_type'], $previewParams['locale'], $previewParams['locale_code']);
+$initialPreviewUrl = $canvasPath . '?' . http_build_query($previewParams, '', '&', PHP_QUERY_RFC3986);
 $initialPreviewUrlSafe = htmlspecialchars($initialPreviewUrl, ENT_QUOTES, 'UTF-8');
 
 // Theme 动态图片必须由 MediaManager 返回 file-image/ImageUsage。
@@ -193,8 +208,6 @@ $selectorDisabledAttribute = ($layout_editor_locked || $scope_legacy_readonly) ?
 $editorAreaHiddenAttribute = $theme_has_backend ? '' : ' hidden';
 $initialPreviewTokenSafe = $escape($initialPreviewToken);
 $themeOptionsHtml = (string)$this->getData('theme_options_html');
-$scopeIdentity = $this->getData('scope_identity');
-$scopeIdentity = is_array($scopeIdentity) ? $scopeIdentity : [];
 $resourceConfigKind = (string)($scopeIdentity['scope_kind'] ?? 'global');
 $resourceConfigWebsite = (string)($scopeIdentity['website_code'] ?? '');
 $resourceConfigStore = (string)($scopeIdentity['store_code'] ?? '');

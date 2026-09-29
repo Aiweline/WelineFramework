@@ -234,6 +234,13 @@ final class ManagedNginxPaths
         return true;
     }
 
+    /** 动态 HTML/API 默认交给 Framework FPC 与 CDN；静态缓存继续由 edge_cache 控制。 */
+    public function dynamicEdgeCacheEnabled(): bool
+    {
+        return $this->edgeCacheEnabled()
+            && $this->toBool($this->config()['edge_cache_dynamic'] ?? false, false);
+    }
+
     public function edgeCacheTtlSec(): int
     {
         $cfg = $this->config();

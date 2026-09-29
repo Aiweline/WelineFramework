@@ -1,4 +1,3 @@
-/* Weline UI source: css/foundation.css */
 @layer reset, tokens, base, layout, components, utilities, page;
 
 @layer tokens {
@@ -1714,6 +1713,47 @@
     .w-toast__icon { color: var(--weline-theme-primary); }
     .w-toast__content { display: grid; min-width: 0; gap: var(--weline-space-1); overflow-wrap: anywhere; }
     .w-toast__content > * { min-width: 0; max-width: 100%; }
+    .w-toast__code {
+        display: inline-flex;
+        width: fit-content;
+        max-width: 100%;
+        padding: 0.1rem 0.4rem;
+        border-radius: var(--weline-radius-sm);
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text-muted, var(--weline-theme-text));
+        font-family: var(--weline-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+        font-size: var(--weline-font-size-xs);
+        line-height: 1.4;
+    }
+    .w-toast__details {
+        margin: 0;
+        border-radius: var(--weline-radius-sm);
+        background: var(--weline-theme-surface-muted);
+    }
+    .w-toast__details > summary {
+        cursor: pointer;
+        list-style: none;
+        padding: var(--weline-space-1) var(--weline-space-2);
+        color: var(--weline-theme-text-muted, var(--weline-theme-text));
+        font-size: var(--weline-font-size-xs);
+        user-select: none;
+    }
+    .w-toast__details > summary::-webkit-details-marker { display: none; }
+    .w-toast__details[open] > summary {
+        border-block-end: 1px solid var(--weline-theme-border);
+    }
+    .w-toast__details-body {
+        margin: 0;
+        padding: var(--weline-space-2);
+        max-block-size: 12rem;
+        overflow: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-family: var(--weline-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+        font-size: var(--weline-font-size-xs);
+        line-height: 1.45;
+        color: var(--weline-theme-text);
+    }
     .w-toast[data-tone="success"] { border-inline-start-color: var(--weline-theme-success); }
     .w-toast[data-tone="warning"] { border-inline-start-color: var(--weline-theme-warning); }
     .w-toast[data-tone="danger"] { border-inline-start-color: var(--weline-theme-danger); }

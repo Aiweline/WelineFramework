@@ -52,6 +52,11 @@ class ApiRules extends BackendController
     #[AclAttribute('Weline_Cdn::cdn_api_rules_list', '查看API规则列表', 'list', '查看API规则列表')]
     public function index(): string
     {
+        $tab = (string)$this->request->getParam('tab', 'fpc');
+        $mode = (string)$this->request->getParam('store_mode', 'normal');
+        $this->assign('selected_tab', in_array($tab, ['fpc', 'cdn', 'sync'], true) ? $tab : 'fpc');
+        $this->assign('selected_scope', (string)$this->request->getParam('target_scope', 'default.default.default'));
+        $this->assign('selected_mode', in_array($mode, ['normal', 'test'], true) ? $mode : 'normal');
         try {
             $module = $this->request->getParam('module', '');
             $trigger = $this->request->getParam('trigger', '');

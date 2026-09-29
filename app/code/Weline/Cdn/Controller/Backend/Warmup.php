@@ -12,16 +12,19 @@ declare(strict_types=1);
 namespace Weline\Cdn\Controller\Backend;
 
 use Weline\Cdn\Model\WarmupUrl;
+use Weline\Cdn\Service\WarmupCollectService;
 use Weline\Cdn\Service\WarmupRunner;
 use Weline\Cdn\Service\WarmupProviderScanner;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl as AclAttribute;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
 
 /**
  * CDN预热管理后台控制器
- * 
+ *
  * @package Weline_Cdn
  */
 #[AclAttribute('Weline_Cdn::cdn_warmup_manager', 'CDN预热管理', 'fire', 'CDN预热管理', 'Weline_Cdn::cdn_manager')]
@@ -52,92 +55,80 @@ class Warmup extends BackendController
     }
 
     /**
+     * @return array{storage_scope:string,site_id:?int,identity:?ScopeIdentity}
+     */
+    private function resolveSelectedScope(): array
+    {
+        /** @var SystemConfigTargetScopeService $targetScopeService */
+        $targetScopeService = ObjectManager::getInstance(SystemConfigTargetScopeService::class);
+        $resolved = $targetScopeService->resolveFromInput([
+            'target_scope' => (string)$this->request->getGet('target_scope', ''),
+            'scope' => (string)$this->request->getGet('scope', ''),
+            'website_code' => (string)$this->request->getGet('website_code', ''),
+            'store_code' => (string)$this->request->getGet('store_code', ''),
+            'channel_code' => (string)$this->request->getGet('channel_code', ''),
+        ], false);
+
+        $storageScope = (string)($resolved['storage_scope'] ?? 'default.default.default');
+        $identity = $resolved['identity'] ?? null;
+        $siteId = null;
+        if ($identity instanceof ScopeIdentity && !$identity->isGlobal()) {
+            $siteId = $identity->websiteId;
+        }
+
+        return [
+            'storage_scope' => $storageScope,
+            'site_id' => $siteId,
+            'identity' => $identity instanceof ScopeIdentity ? $identity : null,
+        ];
+    }
+
+    /**
      * 预热URL列表页面
-     * 
+     *
      * @return string
      */
     #[AclAttribute('Weline_Cdn::cdn_warmup_list', '查看预热URL列表', 'list', '查看预热URL列表')]
     public function index(): string
     {
         try {
-            $page = (int)$this->request->getGet('page', 1);
-            $pageSize = 20;
-            $search = trim($this->request->getGet('search', ''));
-            $module = trim($this->request->getGet('module', ''));
-            $status = trim($this->request->getGet('status', ''));
+            $scope = $this->resolveSelectedScope();
+            $hasExplicit = trim((string)$this->request->getGet('target_scope', '')) !== ''
+                || trim((string)$this->request->getGet('scope', '')) !== ''
+                || array_key_exists('website_code', $this->request->getGet());
 
-            $query = $this->getWarmupUrlModel()->reset()->select();
-
-            // 搜索过滤
-            if (!empty($search)) {
-                $query->where(WarmupUrl::schema_fields_URL, "%{$search}%", 'LIKE');
+            if (!$hasExplicit) {
+                return $this->redirect($this->request->getUrlBuilder()->getBackendUrl(
+                    '*/backend/warmup',
+                    [
+                        'target_scope' => $scope['storage_scope'],
+                    ]
+                ));
             }
 
-            // 模块过滤
-            if (!empty($module)) {
-                $query->where(WarmupUrl::schema_fields_MODULE, $module);
-            }
+            /** @var WarmupCollectService $collect */
+            $collect = ObjectManager::getInstance(WarmupCollectService::class);
+            $providers = $collect->listProvidersMeta();
 
-            // 状态过滤
-            if (!empty($status)) {
-                $query->where(WarmupUrl::schema_fields_STATUS, $status);
-            }
-
-            // 统计
-            $countQuery = clone $query;
-            $total = $countQuery->count();
-
-            // 分页查询
-            $urls = $query
-                ->limit($pageSize, ($page - 1) * $pageSize)
-                ->order(WarmupUrl::schema_fields_CREATED_AT, 'DESC')
-                ->fetch()
-                ->getItems();
-
-            // 计算分页信息
-            $totalPages = ceil($total / $pageSize);
-
-            // 获取所有模块（用于筛选）
-            $modules = $this->getWarmupUrlModel()->reset()
-                ->select(WarmupUrl::schema_fields_MODULE)
-                ->group(WarmupUrl::schema_fields_MODULE)
-                ->fetch()
-                ->getItems();
-
-            $moduleList = [];
-            foreach ($modules as $item) {
-                $moduleList[] = $item->getData(WarmupUrl::schema_fields_MODULE);
-            }
-
-            $this->assign('urls', $urls);
-            $this->assign('total', $total);
-            $this->assign('page', $page);
-            $this->assign('pageSize', $pageSize);
-            $this->assign('totalPages', $totalPages);
-            $this->assign('search', $search);
-            $this->assign('module', $module);
-            $this->assign('status', $status);
-            $this->assign('moduleList', $moduleList);
+            $this->assign('providers', $providers);
+            $this->assign('selected_scope', $scope['storage_scope']);
+            $this->assign('target_scope', $scope['storage_scope']);
+            $this->assign('selected_site_id', $scope['site_id']);
 
             return $this->fetch();
         } catch (\Exception $e) {
-            Message::error(__('加载预热URL列表失败：%{1}', $e->getMessage()));
-            $this->assign('urls', []);
-            $this->assign('total', 0);
-            $this->assign('page', 1);
-            $this->assign('pageSize', 20);
-            $this->assign('totalPages', 0);
-            $this->assign('search', '');
-            $this->assign('module', '');
-            $this->assign('status', '');
-            $this->assign('moduleList', []);
+            Message::error(__('加载预热管理失败：%{1}', $e->getMessage()));
+            $this->assign('providers', []);
+            $this->assign('selected_scope', 'default.default.default');
+            $this->assign('target_scope', 'default.default.default');
+            $this->assign('selected_site_id', null);
             return $this->fetch();
         }
     }
 
     /**
      * 统计信息页面
-     * 
+     *
      * @return string
      */
     #[AclAttribute('Weline_Cdn::cdn_warmup_statistics', '查看统计信息', 'chart', '查看预热统计信息')]
@@ -158,7 +149,7 @@ class Warmup extends BackendController
                 $processed = (int)$stat->getData('total_processed');
                 $success = (int)$stat->getData('total_success');
                 $fail = (int)$stat->getData('total_fail');
-                
+
                 $statistics[] = [
                     'module' => $module,
                     'total_count' => $total,
@@ -180,16 +171,40 @@ class Warmup extends BackendController
 
     /**
      * 手动触发预热任务
-     * 
+     *
      * @return string
      */
     #[AclAttribute('Weline_Cdn::cdn_warmup_execute', '执行预热任务', 'play', '手动触发预热任务')]
     public function execute(): string
     {
         $limit = (int)$this->request->getPost('limit', 50);
+        $domainId = (int)$this->request->getPost('domain_id', 0);
+        $provider = trim((string)$this->request->getPost('provider', ''));
+        $targetScope = trim((string)$this->request->getPost('target_scope', ''));
+        $siteId = null;
+        if ($targetScope !== '') {
+            try {
+                /** @var SystemConfigTargetScopeService $scopeService */
+                $scopeService = ObjectManager::getInstance(SystemConfigTargetScopeService::class);
+                $resolved = $scopeService->resolveFromInput(['target_scope' => $targetScope], false);
+                $identity = $resolved['identity'] ?? null;
+                if ($identity instanceof ScopeIdentity && !$identity->isGlobal()) {
+                    $siteId = $identity->websiteId;
+                }
+            } catch (\Throwable $e) {
+                // keep null site filter on resolve failure
+            }
+        } elseif ($this->request->getPost('site_id', '') !== '' && $this->request->getPost('site_id') !== null) {
+            $siteId = (int)$this->request->getPost('site_id');
+        }
 
         try {
-            $result = $this->getWarmupRunner()->run($limit);
+            $result = $this->getWarmupRunner()->run(
+                $limit,
+                $domainId > 0 ? $domainId : null,
+                $provider !== '' ? $provider : null,
+                $siteId
+            );
 
             return $this->jsonResponse([
                 'success' => true,
@@ -204,9 +219,52 @@ class Warmup extends BackendController
         }
     }
 
+    #[AclAttribute('Weline_Cdn::cdn_warmup_collect', '收集预热URL', 'download', '从 WarmupProvider 收集 URL')]
+    public function collect(): string
+    {
+        $provider = trim((string)$this->request->getPost('provider', ''));
+        $domainId = (int)$this->request->getPost('domain_id', 0);
+        $targetScope = trim((string)$this->request->getPost('target_scope', ''));
+        $siteId = null;
+        if ($targetScope !== '') {
+            try {
+                /** @var SystemConfigTargetScopeService $scopeService */
+                $scopeService = ObjectManager::getInstance(SystemConfigTargetScopeService::class);
+                $resolved = $scopeService->resolveFromInput(['target_scope' => $targetScope], false);
+                $identity = $resolved['identity'] ?? null;
+                if ($identity instanceof ScopeIdentity && !$identity->isGlobal()) {
+                    $siteId = $identity->websiteId;
+                }
+            } catch (\Throwable $e) {
+                // keep null
+            }
+        } elseif ($this->request->getPost('site_id', '') !== '' && $this->request->getPost('site_id') !== null) {
+            $siteId = (int)$this->request->getPost('site_id');
+        }
+        try {
+            /** @var WarmupCollectService $service */
+            $service = ObjectManager::getInstance(WarmupCollectService::class);
+            $result = $service->collectProvider(
+                $provider,
+                $domainId > 0 ? $domainId : null,
+                $siteId
+            );
+            return $this->jsonResponse([
+                'success' => true,
+                'message' => __('收集完成'),
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => __('收集失败：%{1}', $e->getMessage()),
+            ]);
+        }
+    }
+
     /**
      * 启用/禁用URL预热
-     * 
+     *
      * @return string
      */
     #[AclAttribute('Weline_Cdn::cdn_warmup_toggle_enable', '启用/禁用预热', 'switch', '启用/禁用URL预热')]
@@ -224,7 +282,7 @@ class Warmup extends BackendController
 
         try {
             $warmupUrl = $this->getWarmupUrlModel()->reset()->load($id);
-            
+
             if (!$warmupUrl->getData(WarmupUrl::schema_fields_WARMUP_URL_ID)) {
                 return $this->jsonResponse([
                     'success' => false,
@@ -251,7 +309,7 @@ class Warmup extends BackendController
 
     /**
      * 删除预热URL
-     * 
+     *
      * @return string
      */
     #[AclAttribute('Weline_Cdn::cdn_warmup_delete', '删除预热URL', 'trash', '删除预热URL')]
@@ -268,7 +326,7 @@ class Warmup extends BackendController
 
         try {
             $warmupUrl = $this->getWarmupUrlModel()->reset()->load($id);
-            
+
             if (!$warmupUrl->getData(WarmupUrl::schema_fields_WARMUP_URL_ID)) {
                 return $this->jsonResponse([
                     'success' => false,

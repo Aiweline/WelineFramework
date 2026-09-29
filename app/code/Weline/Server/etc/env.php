@@ -53,8 +53,9 @@ return [
                 'server_names' => [],
                 'install_root' => null,
                 'runtime_root' => null,
-                // 最佳性能默认：匿名边缘微缓存 + gzip + 大回源连接池
+                // 静态边缘缓存保持开启；动态 HTML/API 默认使用 Framework FPC 与 CDN。
                 'edge_cache' => true,
+                'edge_cache_dynamic' => false,
                 'edge_cache_ttl_sec' => 60,
                 'edge_cache_max_size_mb' => 1024,
                 'edge_cache_keys_zone_mb' => 128,

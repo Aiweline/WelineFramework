@@ -1,73 +1,30 @@
 <?php
-
 declare(strict_types=1);
-
 namespace Weline\Theme\Test\Unit\LayoutEntity;
-
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
-use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Template;
+use Weline\Theme\Service\LayoutEntity\LayoutRelationCompiler;
+use Weline\Theme\Service\RuntimeTemplateMaterializer;
+require_once __DIR__ . '/fixtures/ResolvedPhtmlFixture.php';
 
-/**
- * theme-published-policy-body: sparse content bake must not wipe policy/terms layout body.
- */
 final class PublishedPolicyContentPreserveContractTest extends TestCase
 {
-    public function testHostDetectsPolicyBodyAndSparseNewsletterOverlay(): void
+    use ResolvedPhtmlFixture;
+    public function testSparseContentAdditionKeepsPolicyBodyAndHomepageDefaultTree(): void
     {
-        $policyBody = '<div class="policy-main" data-layout="policy-privacy">'
-            . '<header class="amazon-policy__hero"><p class="amazon-policy__hero-lead">'
-            . '我们会认真保护您的个人信息。</p></header></div>';
-        $sparse = '<section data-widget-code="newsletter-popup" data-testid="newsletter-popup">'
-            . '订阅我们的邮件</section>';
-
-        $bodyDetect = new ReflectionMethod(
-            ThemeLayoutEntityPublishedSlotHost::class,
-            'defaultCarriesLayoutPolicyOrTermsBody',
-        );
-        $bodyDetect->setAccessible(true);
-        self::assertTrue($bodyDetect->invoke(null, $policyBody));
-        self::assertFalse($bodyDetect->invoke(null, $sparse));
-
-        $sparseDetect = new ReflectionMethod(
-            ThemeLayoutEntityPublishedSlotHost::class,
-            'bakeIsSparseContentOverlay',
-        );
-        $sparseDetect->setAccessible(true);
-        self::assertTrue($sparseDetect->invoke(null, $sparse, $policyBody));
-        self::assertFalse($sparseDetect->invoke(null, $sparse, '   '));
-
-        $homepageDefault = '<div data-slot-id="homepage-hero"><section data-widget-code="hero-slider">H</section></div>';
-        $storeMusicOnly = '<span data-widget-code="store-music" data-testid="store-music"></span>';
-        self::assertTrue($sparseDetect->invoke(null, $storeMusicOnly, $homepageDefault));
-        $fullHomepageBake = '<div data-slot-id="homepage-hero"><section data-widget-code="hero-slider">H</section></div>';
-        self::assertFalse($sparseDetect->invoke(null, $fullHomepageBake, $homepageDefault));
+        foreach (['<div class="policy-main"><p><?= $this->getData("body") ?></p></div>','<div data-wslot="homepage-hero"><h1>HERO</h1></div><div data-wslot="homepage-featured">FEATURED</div>'] as $body) {
+            $source='<w:slot id="content">'.$body.'</w:slot>';
+            $compiled=(new LayoutRelationCompiler($this->registry))->compile($source,[$this->node('a','content','NEWSLETTER',0)]);
+            $html=(new RuntimeTemplateMaterializer(ObjectManager::getInstance(Template::class)))->renderContent($compiled,['body'=>'PRIVACY TERMS']);
+            self::assertSame(1,substr_count($html,'<b>NEWSLETTER</b>'));
+            if(str_contains($body,'policy-main')){self::assertStringContainsString('<p>PRIVACY TERMS</p>',$html);}
+            else{self::assertStringContainsString('<h1>HERO</h1>',$html);self::assertStringContainsString('FEATURED',$html);}
+        }
     }
-
-    public function testSlotFillerProtectsPolicyNestedContent(): void
-    {
-        $src = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php'
-        );
-        self::assertStringContainsString('shellContentCarriesProtectedNestedLayout', $src);
-        self::assertStringContainsString('amazon-policy__', $src);
-        self::assertStringContainsString('policy-main', $src);
-
-        $observer = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Observer/LayoutSlotRenderer.php'
-        );
-        self::assertStringContainsString('forcing HOME would plan content→newsletter', $observer);
-        self::assertStringContainsString('amazon-policy__', $observer);
-        self::assertStringContainsString('PAGE_TYPE_POLICY', $observer);
-    }
-
     public function testPolicyLayoutsLinkCookieNotCookies(): void
     {
-        $base = \dirname(__DIR__, 3) . '/view/theme/frontend/layouts/policy';
-        foreach (['privacy.phtml', 'term-condition.phtml'] as $file) {
-            $src = (string)\file_get_contents($base . '/' . $file);
-            self::assertStringNotContainsString("@url{'cookies'}", $src, $file);
-            self::assertStringContainsString("@url{'cookie'}", $src, $file);
-        }
+        $base=dirname(__DIR__,3).'/view/theme/frontend/layouts/policy';
+        foreach(['privacy.phtml','term-condition.phtml'] as $file){$src=(string)file_get_contents($base.'/'.$file);self::assertStringNotContainsString("@url{'cookies'}",$src,$file);self::assertStringContainsString("@url{'cookie'}",$src,$file);}
     }
 }

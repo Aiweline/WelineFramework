@@ -23,7 +23,7 @@ use Weline\Framework\Cron\CronTaskInterface;
  * CDN规则推送定时任务
  * 
  * 定时扫描需要推送的规则，触发推送事件
- * 只处理trigger=cron的规则
+ * 完整 Zone 期望规则，补齐未完成同步
  * 
  * @package Weline_Cdn
  */
@@ -64,7 +64,7 @@ class PushRules implements CronTaskInterface
      */
     public function tip(): string
     {
-        return '定时推送CDN缓存规则到各CDN服务商，每15分钟执行一次。只处理trigger=cron的规则。';
+        return '定时推送CDN缓存规则到各CDN服务商，每15分钟执行一次。完整 Zone 期望规则，补齐未完成同步。';
     }
 
     /**
@@ -80,50 +80,15 @@ class PushRules implements CronTaskInterface
      */
     public function execute(): string
     {
-        // 1. 获取所有启用的域名
-        $domains = $this->domainModel->clear()
-            ->where(Domain::schema_fields_ENABLED, 1)
-            ->select()
-            ->fetch();
-
-        $pushedCount = 0;
-        $failedCount = 0;
-
-        foreach ($domains as $domain) {
-            if (!$domain instanceof Domain) {
-                continue;
-            }
-            try {
-                $rules = $this->ruleManager->planRulesForEdgePush($domain, 'cron');
-                
-                if (empty($rules)) {
-                    continue;
-                }
-
-                // 3. 触发推送事件（所有适配器都会收到）
-                $event = new Event([
-                    'domain' => $domain,
-                    'rules' => $rules, // 闸门后的安全规则集
-                    'adapter_code' => $domain->getData(Domain::schema_fields_ADAPTER), // 用于适配器过滤
-                    'trigger_type' => 'cron' // 标记为定时触发
-                ]);
-                
-                $this->eventsManager->dispatch('Weline_Cdn::push_rules', $event);
-                
-                $pushedCount++;
-                
-            } catch (\Exception $e) {
-                $failedCount++;
-                // 记录错误日志
-                w_log_error("CDN规则推送失败 [域名: {$domain->getData(Domain::schema_fields_DOMAIN_NAME)}]: " . $e->getMessage());
-            }
+        $policies = ObjectManager::getInstance(\Weline\Cdn\Service\FpcPolicyManagementService::class);
+        $collected = $policies->collectDeclarations();
+        if (!($collected['success'] ?? false)) {
+            throw new \RuntimeException((string)$collected['message']);
         }
-
-        return sprintf(
-            "CDN规则推送完成: 成功 %d 个域名, 失败 %d 个域名",
-            $pushedCount,
-            $failedCount
-        );
+        $sync = ObjectManager::getInstance(\Weline\Cdn\Service\FpcPolicySyncService::class);
+        $result = $sync->requestSync(['trigger'=>'cron','desired_version'=>$collected['data']['desired_version'],'domain_ids'=>[],'purge_targets'=>[]]);
+        $reconciled = $sync->reconcile();
+        return json_encode(['submitted'=>$result,'reconciled'=>$reconciled], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
 
     /**

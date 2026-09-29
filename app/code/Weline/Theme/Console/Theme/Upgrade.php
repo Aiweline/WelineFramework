@@ -19,6 +19,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\File\Scan;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityUpgradeSolidifyService;
 use Weline\Theme\Service\ThemeResourceGateway;
 use Weline\Theme\Service\ThemeStaticNamespaceService;
 
@@ -37,6 +38,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     private Printing $printing;
     private ThemeStaticNamespaceService $themeStaticNamespaceService;
     private ThemeResourceGateway $themeResourceGateway;
+    private ThemeLayoutEntityUpgradeSolidifyService $layoutSolidifyService;
 
     public function __construct(
         WelineTheme $welineTheme,
@@ -45,6 +47,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         Scan $scan,
         ThemeStaticNamespaceService $themeStaticNamespaceService,
         ThemeResourceGateway $themeResourceGateway,
+        ThemeLayoutEntityUpgradeSolidifyService $layoutSolidifyService,
     ) {
         $this->welineTheme = $welineTheme;
         $this->scan = $scan;
@@ -52,6 +55,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $this->printing = $printing;
         $this->themeStaticNamespaceService = $themeStaticNamespaceService;
         $this->themeResourceGateway = $themeResourceGateway;
+        $this->layoutSolidifyService = $layoutSolidifyService;
     }
 
     /**
@@ -68,6 +72,20 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         foreach ($themes as $theme) {
             $this->upgradeOneTheme($theme, $modules);
         }
+
+        // C-RP-07 / migrate-disk-cutover: purge 旧哈希树 + 重固（-t 指定主题，否则全部）
+        $this->printing->warning(__('开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…'));
+        $cutover = $this->layoutSolidifyService->cutoverFromThemeCommand(
+            $theme_name !== '' ? ($themes[0] ?? null) : null
+        );
+        $this->printing->success(__(
+            '布局模板切流：purge %{purged}，legacy %{legacy}，固化 %{count}',
+            [
+                'purged' => (int)($cutover['purged'] ?? 0),
+                'legacy' => (int)($cutover['purged_legacy'] ?? 0),
+                'count' => (int)($cutover['solidified'] ?? 0),
+            ]
+        ));
     }
 
     /**

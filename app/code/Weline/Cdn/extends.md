@@ -14,8 +14,15 @@ Weline_Cdn 模块提供了两个用途不同的扩展点：
 ### 创建 WarmupProvider
 
 1. 在您的模块中创建扩展目录：`extends/module/Weline_Cdn/`
-2. 创建PHP文件（文件名可自定义，如 `ProductUrls.php`）
-3. 实现 `execute()` 静态方法，返回URL数组
+2. 创建 PHP 文件（如 `ProductHeatUrls.php`）
+3. 命名空间：`{Vendor}\{Module}\Extends\Module\Weline_Cdn`
+4. 实现 `WarmupProviderInterface::execute(): array`（**无参**）
+5. 返回 **绝对 URL**（字符串或 `['url'=>..., 'site_id'=>...]`）；Domain 过滤由 CDN 编排层完成；**语种**由编排/Provider 经 `WarmupLocaleUrlExpander`（站点已启用语言 + `LocalizedUrlBuilder`）展开，勿只产出默认语
+6. 队列字段：`module`=源模块名（如 `Weline_Product`），`provider`=本类 **FQCN**（255）
+
+CDN 内置 Provider 放在 `Weline/Cdn/WarmupProvider/`，由 Scanner 内置列表加载，**不要**用 self-extends 假装 Extends。
+
+Cron `Weline\Cdn\Cron\Warmup` 实现 `CronTaskInterface`，按 FQCN **分批** `send_warmup` 后再 `WarmupRunner::run`。
 
 ### 创建 Adapter（CDN 适配器）
 
@@ -60,32 +67,29 @@ Weline_Cdn 模块提供了两个用途不同的扩展点：
 
 declare(strict_types=1);
 
-namespace Vendor\Module\Extends\Weline_Cdn;
+namespace Vendor\Module\Extends\Module\Weline_Cdn;
 
 use Weline\Cdn\Api\WarmupProviderInterface;
 
 class YourWarmupProvider implements WarmupProviderInterface
 {
     /**
-     * 执行并返回预热URL列表
-     * 
-     * @return array URL数组，可以是简单字符串数组或详细数组
+     * @return list<string|array{url:string,site_id?:int}>
      */
     public static function execute(): array
     {
         return [
             'https://example.com/page1',
-            'https://example.com/page2',
-            // 或使用详细格式
             [
                 'url' => 'https://example.com/page3',
-                'site_id' => 1
-            ]
+                'site_id' => 1,
+            ],
         ];
     }
 }
 ```
 
+> 命名空间必须含 `Extends\Module\Weline_Cdn`（与 Extends 注册表一致）。
 ### 返回值格式
 
 #### 简单格式（字符串数组）
@@ -123,9 +127,9 @@ public static function execute(): array
 
 Provider类的命名空间应该遵循以下规则：
 
-- 基础命名空间：`Vendor\Module\Extends\Weline_Cdn`
+- 基础命名空间：`Vendor\Module\Extends\Module\Weline_Cdn`
 - 类名：与文件名相同（不含扩展名）
-- 示例：文件 `ProductUrls.php` → 类名 `ProductUrls` → 完整命名空间 `Vendor\Module\Extends\Weline_Cdn\ProductUrls`
+- 示例：文件 `ProductUrls.php` → 类名 `ProductUrls` → 完整命名空间 `Vendor\Module\Extends\Module\Weline_Cdn\ProductUrls`
 
 ## 完整示例
 
@@ -136,7 +140,7 @@ Provider类的命名空间应该遵循以下规则：
 
 declare(strict_types=1);
 
-namespace Weline\Eav\Extends\Weline_Cdn;
+namespace Weline\Eav\Extends\Module\Weline_Cdn;
 
 use Weline\Cdn\Api\WarmupProviderInterface;
 use Weline\Eav\Model\Product;
@@ -170,7 +174,7 @@ class ProductUrls implements WarmupProviderInterface
 
 declare(strict_types=1);
 
-namespace Weline\Cms\Extends\Weline_Cdn;
+namespace Weline\Cms\Extends\Module\Weline_Cdn;
 
 use Weline\Cdn\Api\WarmupProviderInterface;
 use Weline\Cms\Model\Article;
@@ -212,7 +216,7 @@ class ArticleUrls implements WarmupProviderInterface
 
 declare(strict_types=1);
 
-namespace Weline\Catalog\Extends\Weline_Cdn;
+namespace Weline\Catalog\Extends\Module\Weline_Cdn;
 
 use Weline\Cdn\Api\WarmupProviderInterface;
 use Weline\Catalog\Model\Category;

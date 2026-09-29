@@ -77,8 +77,8 @@ $escapeAttr = static function (mixed $value): string {
                         <label class="w-field__label" for="rulesTextarea"><?= __('规则配置（JSON格式）') ?></label>
                         <div class="w-field__control">
                             <textarea id="rulesTextarea" class="w-textarea" rows="20" data-family="mono"></textarea>
-                            <small class="w-field__hint">
-                                <?= __('规则格式请参考CDN提供商的文档。保存后需要推送到CDN才会生效。') ?>
+                            <small class="w-field__hint" id="rulesEditorHint">
+                                <?= __('「全局默认规则」来自模块 default-rules.json；选具体域名时编辑的是该域名覆盖规则。保存后需推送到 CDN 才生效。') ?>
                             </small>
                         </div>
                     </div>
@@ -242,8 +242,21 @@ $escapeAttr = static function (mixed $value): string {
             })
             .then(function(data) {
                 if (data.success) {
-                    var rules = data.data || {};
+                    var rules = Array.isArray(data.data) ? data.data : (data.data || []);
                     document.getElementById('rulesTextarea').value = JSON.stringify(rules, null, 2);
+                    var hint = document.getElementById('rulesEditorHint');
+                    if (hint) {
+                        var count = Array.isArray(rules) ? rules.length : 0;
+                        if (!domainId && count === 0) {
+                            hint.textContent = '<?= __('未读到全局默认规则（default-rules.json 为空或不存在）。请检查模块配置后刷新。') ?>';
+                        } else if (domainId && count === 0) {
+                            hint.textContent = '<?= __('该域名暂无覆盖规则。可「从CDN导入」拉取线上规则，或留空以仅使用全局默认。') ?>';
+                        } else if (!domainId) {
+                            hint.textContent = '<?= __('「全局默认规则」来自模块 default-rules.json；选具体域名时编辑的是该域名覆盖规则。保存后需推送到 CDN 才生效。') ?>';
+                        } else {
+                            hint.textContent = '<?= __('当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。') ?>';
+                        }
+                    }
                 } else {
                     requestDialog({
                         tone: 'danger',

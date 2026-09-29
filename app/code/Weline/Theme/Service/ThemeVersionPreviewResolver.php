@@ -138,11 +138,13 @@ final class ThemeVersionPreviewResolver
         }
         $versionIdentity = $versionIdentity->withVersion($themeVersionId, $mode, $contentRevision);
 
-        $page = $this->loadWorkspaceNodes($context, $mode === ThemeVersionIdentity::MODE_FORMAL);
-        $nodes = $page['nodes'];
-        if ($nodes === []) {
-            $nodes = $version->getChromePayload();
+        $page = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class)->read($versionIdentity, $context);
+        if (empty($page['resolved'])) {
+            return array_replace($base, ['reason' => $page['reason'], 'theme_version_id' => $themeVersionId,
+                'content_revision' => $contentRevision, 'version_identity' => $versionIdentity]);
         }
+        $payload = $page['payload'];
+        $nodes = is_array($payload['nodes'] ?? null) ? $payload['nodes'] : $payload;
 
         return [
             'resolved' => true,
@@ -261,63 +263,9 @@ final class ThemeVersionPreviewResolver
         if ($ownerHash !== '' && $ownerHash !== $version->toVersionIdentity()->ownerHash()) {
             return 'preview_theme_version_owner_mismatch';
         }
-        unset($requestScope);
+        if ($version->getScope() !== $requestScope) { return 'preview_theme_version_scope_mismatch'; }
 
         return null;
     }
 
-    /**
-     * Load workspace page nodes for the layout identity — never by structure projection.
-     *
-     * @return array{nodes:array,release_id:?int,draft_revision_id:int}
-     */
-    private function loadWorkspaceNodes(object $context, bool $formal): array
-    {
-        $empty = ['nodes' => [], 'release_id' => null, 'draft_revision_id' => 0];
-        try {
-            $rows = $this->rows(ThemeScopeWorkspace::class, ['identity_hash' => $context->identityHash()]);
-            $row = $rows[0] ?? [];
-            if ($row === []) {
-                return $empty;
-            }
-            $workspaceService = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedWorkspace::class);
-            $state = $workspaceService->load($context, true);
-            if ($formal) {
-                $payload = $state['published_payload'] ?? $state['effective_payload'] ?? [];
-                $nodes = \is_array($payload['nodes'] ?? null) ? $payload['nodes'] : (\is_array($payload) ? $payload : []);
-                $releaseId = (int)($state['effective_release_id'] ?? $state['published_release_id'] ?? 0);
-
-                return [
-                    'nodes' => $nodes,
-                    'release_id' => $releaseId > 0 ? $releaseId : null,
-                    'draft_revision_id' => 0,
-                ];
-            }
-            $payload = $state['draft_payload'] ?? [];
-            $nodes = \is_array($payload['nodes'] ?? null) ? $payload['nodes'] : (\is_array($payload) ? $payload : []);
-
-            return [
-                'nodes' => $nodes,
-                'release_id' => null,
-                'draft_revision_id' => (int)($state['draft_revision_id'] ?? 0),
-            ];
-        } catch (\Throwable) {
-            return $empty;
-        }
-    }
-
-    /**
-     * @param array<string,mixed> $filters
-     * @return list<array<string,mixed>>
-     */
-    private function rows(string $model, array $filters): array
-    {
-        $query = (clone ObjectManager::getInstance($model))->clearQuery()->clearData();
-        foreach ($filters as $field => $value) {
-            $query->where($field, $value);
-        }
-        $rows = $query->select()->fetchArray();
-
-        return !\is_array($rows) || $rows === [] ? [] : (\array_is_list($rows) ? $rows : [$rows]);
-    }
 }

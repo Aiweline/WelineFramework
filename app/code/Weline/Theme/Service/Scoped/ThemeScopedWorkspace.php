@@ -110,7 +110,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             || (string)$release->getData(ThemeScopeRelease::schema_fields_IDENTITY_HASH) !== $context->identityHash()) {
             return null;
         }
-        return $this->composeLayoutPayloadBySlotNearPriority($release);
+        return $context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT ? $this->composeLayoutPayloadBySlotNearPriority($release) : $release->payload();
     }
 
     /** Read an immutable draft revision without rebasing it onto today's parent release. */
@@ -118,15 +118,17 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     {
         $missing = ['resolved' => false, 'reason' => 'historical_draft_baseline_missing',
             'draft_revision_id' => $revisionId, 'draft_payload' => null];
-        $workspace = $this->findWorkspace($context, false, false);
         $revision = (clone $this->revisions)->clearData()->clearQuery()->load($revisionId);
-        if (!$workspace || $revision->getId() !== $revisionId
-            || (int)$revision->getData(ThemeScopeRevision::schema_fields_WORKSPACE_ID) !== $workspace->getId()) {
+        $workspace = (clone $this->workspaces)->clearData()->clearQuery()->load(
+            (int)$revision->getData(ThemeScopeRevision::schema_fields_WORKSPACE_ID),
+        );
+        if ($workspace->getId() < 1 || $revision->getId() !== $revisionId
+            || (string)$workspace->getData(ThemeScopeWorkspace::schema_fields_IDENTITY_HASH) !== $context->identityHash()) {
             return $missing + ['identity_mismatch' => true];
         }
         $parent = $this->loadRelease((int)$revision->getData(ThemeScopeRevision::schema_fields_PARENT_RELEASE_ID));
         if ($parent instanceof ThemeScopeRelease) {
-            $payload = $this->patchEngine->apply($this->composeLayoutPayloadBySlotNearPriority($parent), $this->commandsForRevision($revisionId));
+            $payload = $this->patchEngine->apply($context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT ? $this->composeLayoutPayloadBySlotNearPriority($parent) : $parent->payload(), $this->commandsForRevision($revisionId));
             return ['resolved' => true, 'reason' => '', 'draft_revision_id' => $revisionId, 'draft_payload' => $payload];
         }
         // A published snapshot of this exact revision is an immutable baseline too.
@@ -146,6 +148,18 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             return ['resolved' => true, 'reason' => '', 'draft_revision_id' => $revisionId, 'draft_payload' => array_values($payloads)[0]];
         }
         return $missing;
+    }
+
+    /** Freeze only the observed current editor state during the one-way PHTML migration. */
+    public function captureCurrentResourceRelease(ThemeEditorContext $context, ThemeScopeWorkspace $workspace, bool $associateIntentRevision = true): int
+    {
+        $parent = $this->parentPublishedState($context);
+        $revisionId = (int)$workspace->getData('draft_revision_id');
+        $payload = $revisionId > 0
+            ? $this->patchEngine->apply($parent['payload'], $this->commandsForRevision($revisionId))
+            : $this->load($context, true)['draft_payload'];
+        return $this->insertRelease($workspace, $context, $associateIntentRevision && $revisionId > 0 ? $revisionId : null,
+            $parent['release_id'], $payload, [], 'theme-phtml-migration', '', 'current_version_baseline')->getId();
     }
 
     public function load(ThemeEditorContext $context, bool $includeDraft = true): array
@@ -183,13 +197,18 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $draftPayload = $draftRevisionId > 0
             ? $this->patchEngine->apply($parent['payload'], $commands)
             : $published['payload'];
+        $version = $includeDraft ? $this->selectedWorkspaceVersion($context) : null;
+        $versionInput = $includeDraft ? $this->versionDraftInput($context, $version) : null;
+        if ($versionInput !== null) {
+            $draftPayload = $versionInput['payload'];
+            $commands = $versionInput['commands'];
+            $draftRevisionId = $versionInput['draft_revision_id'];
+        }
 
         $state = [
             'context' => $context->toArray(),
             'revision' => $workspace?->getRevision() ?? 0,
-            'draft_revision_id' => $workspace
-                ? $this->nullablePositiveInt($workspace->getData(ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID))
-                : null,
+            'draft_revision_id' => $this->nullablePositiveInt($draftRevisionId),
             'published_revision_id' => $publishedRevisionId,
             'expected_parent_release_id' => $parent['release_id'],
             'parent_source_scope' => $parent['source_scope'],
@@ -226,6 +245,12 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             'published_source_scope' => $published['source_scope'],
         ];
 
+        $version ??= $this->selectedWorkspaceVersion($context);
+        if ($version !== null) {
+            $state['theme_version_id'] = $version->getVersionId();
+            $state['content_revision'] = $version->getContentRevision();
+            $state['version_identity'] = $version->toVersionIdentity()->toArray();
+        }
         if ($allowRequestCache) {
             $this->rememberRequestLoad($cacheKey, $state);
         }
@@ -234,6 +259,27 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     }
 
     public function applyChanges(
+        ThemeEditorContext $context,
+        int $expectedRevision,
+        ?int $expectedParentReleaseId,
+        array $changes,
+        string $actorId,
+        string $actorName = '',
+        string $summary = '',
+        bool $skipContentValidation = false,
+    ): array {
+        if ($context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING) {
+            return $this->applyChangesLocked($context, $expectedRevision, $expectedParentReleaseId, $changes, $actorId, $actorName, $summary, $skipContentValidation);
+        }
+        $owner = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+            $context->themeId, $context->scope->storageScope, $context->scope->storeMode, $context->area,
+        );
+        return \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write(
+            $owner, fn(): array => $this->applyChangesLocked($context, $expectedRevision, $expectedParentReleaseId, $changes, $actorId, $actorName, $summary, $skipContentValidation),
+        );
+    }
+
+    private function applyChangesLocked(
         ThemeEditorContext $context,
         int $expectedRevision,
         ?int $expectedParentReleaseId,
@@ -265,6 +311,17 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 if ($actualRevision !== $expectedRevision) {
                     throw new \RuntimeException('theme_scope_revision_conflict');
                 }
+                $versionSnapshots = $context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING ? null
+                    : ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class);
+                $themeVersion = $versionSnapshots?->beginWrite($context);
+                if ($themeVersion !== null && $workspace instanceof ThemeScopeWorkspace
+                    && $workspace->getThemeVersionId() !== $themeVersion->getVersionId()) {
+                    $data = $workspace->getData();
+                    unset($data['workspace_id'], $data['binding_identity_key'], $data['create_time'], $data['update_time']);
+                    $data['theme_version_id'] = $themeVersion->getVersionId();
+                    $workspace = (clone $this->workspaces)->clearData()->clearQuery()->setData($data);
+                    $workspace->save();
+                }
                 $parent = $this->parentPublishedState($context);
                 if ($parent['release_id'] !== $expectedParentReleaseId) {
                     throw new \RuntimeException('theme_scope_parent_release_conflict');
@@ -273,23 +330,30 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 if (!$workspace instanceof ThemeScopeWorkspace) {
                     $workspace = $this->createWorkspace($context);
                 }
-                $current = $this->commandsForRevision((int)$workspace->getData(
+                $versionInput = $this->versionDraftInput($context, $themeVersion);
+                $basePayload = $versionInput['base_payload'] ?? $parent['payload'];
+                $current = $versionInput['commands'] ?? $this->commandsForRevision((int)$workspace->getData(
                     ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID,
                 ));
                 $owned = $this->patchEngine->mergeOwnedCommands($current, $changes);
                 $baselineParentReleaseId = $this->nullablePositiveInt(
                     $workspace->getData(ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID),
                 );
-                $oldParent = $actualRevision === 0 && $baselineParentReleaseId === null
+                $oldParent = $versionInput !== null ? $basePayload : ($actualRevision === 0 && $baselineParentReleaseId === null
                     ? $parent['payload']
-                    : $this->payloadForReleaseOrRootBase($baselineParentReleaseId, $context);
-                $conflicts = $this->patchEngine->structuralConflicts($oldParent, $parent['payload'], $owned);
+                    : $this->payloadForReleaseOrRootBase($baselineParentReleaseId, $context));
+                $conflicts = $this->patchEngine->structuralConflicts($oldParent, $basePayload, $owned);
                 $revisionNo = $actualRevision + 1;
+                $intentParentReleaseId = $versionInput !== null ? $versionInput['parent_release_id'] : $parent['release_id'];
+                if (($intentParentReleaseId === null || !empty($versionInput['freeze_baseline'])) && $context->resourceType !== ThemeEditorContext::RESOURCE_THEME_BINDING) {
+                    $intentParentReleaseId = $this->insertRelease($workspace, $context, null, null,
+                        $basePayload, [], $actorId, $actorName, 'draft_baseline')->getId();
+                }
                 $revision = $this->insertRevision(
                     $workspace->getId(),
                     $revisionNo,
                     $actualRevision,
-                    $parent['release_id'],
+                    $intentParentReleaseId,
                     $actorId,
                     $actorName,
                     $summary,
@@ -297,7 +361,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 );
                 $this->insertPatches($workspace->getId(), $revision->getId(), $owned);
 
-                $draftPayload = $this->patchEngine->apply($parent['payload'], $owned);
+                $draftPayload = $this->patchEngine->apply($basePayload, $owned);
                 if (!$skipContentValidation) {
                     $this->indexLayoutDraft($context, $draftPayload, $revision->getId(), $actorId);
                 }
@@ -312,7 +376,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     ThemeScopeWorkspace::schema_fields_CONFLICT_JSON => $this->json($conflicts),
                 ])->save();
 
-                return [
+                $saved = [
                     'revision' => $revisionNo,
                     'revision_id' => $revision->getId(),
                     'expected_parent_release_id' => $parent['release_id'],
@@ -334,10 +398,17 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     'conflicts' => $conflicts,
                     'draft_payload' => $draftPayload,
                 ];
+                if ($themeVersion !== null) {
+                    $versionIdentity = $versionSnapshots->advance($themeVersion, $context, $saved, $actorId);
+                    $saved['theme_version_id'] = $versionIdentity->themeVersionId;
+                    $saved['content_revision'] = $versionIdentity->contentRevision;
+                    $saved['version_identity'] = $versionIdentity->toArray();
+                }
+                return $saved;
             },
         );
 
-        if ($context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT
+        if ($context->resourceType !== ThemeEditorContext::RESOURCE_THEME_BINDING
             && \is_array($result['draft_payload'] ?? null)
         ) {
             $this->bakeLayoutEntityAfterWrite($context, $result, $changes);
@@ -349,6 +420,26 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     }
 
     public function replaceEffectivePayload(
+        ThemeEditorContext $context,
+        int $expectedRevision,
+        ?int $expectedParentReleaseId,
+        array $effectivePayload,
+        string $actorId,
+        string $actorName = '',
+        string $summary = '',
+    ): array {
+        if ($context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING) {
+            return $this->replaceEffectivePayloadLocked($context, $expectedRevision, $expectedParentReleaseId, $effectivePayload, $actorId, $actorName, $summary);
+        }
+        $owner = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+            $context->themeId, $context->scope->storageScope, $context->scope->storeMode, $context->area,
+        );
+        return \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write(
+            $owner, fn(): array => $this->replaceEffectivePayloadLocked($context, $expectedRevision, $expectedParentReleaseId, $effectivePayload, $actorId, $actorName, $summary),
+        );
+    }
+
+    private function replaceEffectivePayloadLocked(
         ThemeEditorContext $context,
         int $expectedRevision,
         ?int $expectedParentReleaseId,
@@ -380,14 +471,27 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 if ($actualRevision !== $expectedRevision) {
                     throw new \RuntimeException('theme_scope_revision_conflict');
                 }
+                $versionSnapshots = $context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING ? null
+                    : ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class);
+                $themeVersion = $versionSnapshots?->beginWrite($context);
+                if ($themeVersion !== null && $workspace instanceof ThemeScopeWorkspace
+                    && $workspace->getThemeVersionId() !== $themeVersion->getVersionId()) {
+                    $data = $workspace->getData();
+                    unset($data['workspace_id'], $data['binding_identity_key'], $data['create_time'], $data['update_time']);
+                    $data['theme_version_id'] = $themeVersion->getVersionId();
+                    $workspace = (clone $this->workspaces)->clearData()->clearQuery()->setData($data);
+                    $workspace->save();
+                }
                 $parent = $this->parentPublishedState($context);
                 if ($parent['release_id'] !== $expectedParentReleaseId) {
                     throw new \RuntimeException('theme_scope_parent_release_conflict');
                 }
 
+                $versionInput = $this->versionDraftInput($context, $themeVersion);
+                $basePayload = $versionInput['base_payload'] ?? $parent['payload'];
                 $compiled = $this->adapter->compile($context, $effectivePayload);
                 $target = \is_array($compiled['payload'] ?? null) ? $compiled['payload'] : $effectivePayload;
-                $commands = $this->layoutDiffer->diff($parent['payload'], $target);
+                $commands = $this->layoutDiffer->diff($basePayload, $target);
                 if ($commands !== []) {
                     $commands = $this->assertCommands($context, $commands);
                 }
@@ -396,11 +500,16 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 }
 
                 $revisionNo = $actualRevision + 1;
+                $intentParentReleaseId = $versionInput !== null ? $versionInput['parent_release_id'] : $parent['release_id'];
+                if (($intentParentReleaseId === null || !empty($versionInput['freeze_baseline'])) && $context->resourceType !== ThemeEditorContext::RESOURCE_THEME_BINDING) {
+                    $intentParentReleaseId = $this->insertRelease($workspace, $context, null, null,
+                        $basePayload, [], $actorId, $actorName, 'draft_baseline')->getId();
+                }
                 $revision = $this->insertRevision(
                     $workspace->getId(),
                     $revisionNo,
                     $actualRevision,
-                    $parent['release_id'],
+                    $intentParentReleaseId,
                     $actorId,
                     $actorName,
                     $summary,
@@ -416,7 +525,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     ThemeScopeWorkspace::schema_fields_CONFLICT_JSON => null,
                 ])->save();
 
-                return [
+                $saved = [
                     'revision' => $revisionNo,
                     'revision_id' => $revision->getId(),
                     'expected_parent_release_id' => $parent['release_id'],
@@ -436,16 +545,40 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                         $commands,
                     ),
                     'conflicts' => [],
-                    'draft_payload' => $this->patchEngine->apply($parent['payload'], $commands),
+                    'draft_payload' => $this->patchEngine->apply($basePayload, $commands),
                 ];
+                if ($themeVersion !== null) {
+                    $versionIdentity = $versionSnapshots->advance($themeVersion, $context, $saved, $actorId);
+                    $saved['theme_version_id'] = $versionIdentity->themeVersionId;
+                    $saved['content_revision'] = $versionIdentity->contentRevision;
+                    $saved['version_identity'] = $versionIdentity->toArray();
+                }
+                return $saved;
             },
         );
         $this->flushRequestLoadCache();
+        $this->bakeLayoutEntityAfterWrite($context, $result);
 
         return $result;
     }
 
     public function publish(
+        ThemeEditorContext $context,
+        int $expectedRevision,
+        ?int $expectedParentReleaseId,
+        string $actorId,
+        string $actorName = '',
+        string $reason = '',
+    ): array {
+        if ($context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING) {
+            return $this->publishLocked($context,$expectedRevision,$expectedParentReleaseId,$actorId,$actorName,$reason);
+        }
+        $owner = new \Weline\Theme\Api\Version\ThemeVersionIdentity($context->themeId,$context->scope->storageScope,$context->scope->storeMode,$context->area);
+        return \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write($owner,
+            fn(): array => $this->publishLocked($context,$expectedRevision,$expectedParentReleaseId,$actorId,$actorName,$reason));
+    }
+
+    private function publishLocked(
         ThemeEditorContext $context,
         int $expectedRevision,
         ?int $expectedParentReleaseId,
@@ -482,12 +615,14 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 if ($revisionId <= 0) {
                     throw new \RuntimeException('theme_scope_draft_revision_missing');
                 }
+                $versionInput = $this->versionDraftInput($context);
+                $releaseParentId = $versionInput !== null ? null : $parent['release_id'];
                 $commands = $this->commandsForRevision($revisionId);
                 $oldParent = $this->payloadForReleaseOrRootBase(
                     $this->nullablePositiveInt($workspace->getData(ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID)),
                     $context,
                 );
-                $conflicts = $this->patchEngine->structuralConflicts($oldParent, $parent['payload'], $commands);
+                $conflicts = $versionInput !== null ? [] : $this->patchEngine->structuralConflicts($oldParent, $parent['payload'], $commands);
                 if ($conflicts !== []) {
                     $workspace->setData([
                         ThemeScopeWorkspace::schema_fields_STATUS => ThemeScopeWorkspace::STATUS_CONFLICT,
@@ -512,7 +647,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     && (int)$currentRelease->getData(ThemeScopeRelease::schema_fields_REVISION_ID) === $revisionId
                     && $this->nullablePositiveInt($currentRelease->getData(
                         ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID,
-                    )) === $parent['release_id']
+                    )) === $releaseParentId
                 ) {
                     $this->adapter->projectPublished(
                         $context,
@@ -525,6 +660,10 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                         'theme.scoped.publish',
                         true,
                     );
+                    $publication = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeScopedVersionPublicationBridge::class)->publish($context, [[
+                        'context'=>$context->toArray(),'identity_hash'=>$context->identityHash(),'release_id'=>$currentRelease->getId(),
+                        'revision_id'=>$revisionId,'payload'=>$currentRelease->payload(),
+                    ]]);
                     return [
                         'release_id' => $currentRelease->getId(),
                         'revision' => $workspace->getRevision(),
@@ -533,10 +672,11 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                         'payload' => $currentRelease->payload(),
                         'conflicts' => [],
                         'idempotent' => true,
+                        'version_publication' => $publication,
                     ];
                 }
 
-                $effective = $this->patchEngine->apply($parent['payload'], $commands);
+                $effective = $versionInput['payload'] ?? $this->patchEngine->apply($parent['payload'], $commands);
                 $compiled = $this->adapter->compile($context, $effective);
                 $effective = \is_array($compiled['payload'] ?? null) ? $compiled['payload'] : $effective;
                 $artifact = \is_array($compiled['artifact'] ?? null) ? $compiled['artifact'] : [];
@@ -545,23 +685,13 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     $workspace,
                     $context,
                     $revisionId,
-                    $parent['release_id'],
+                    $releaseParentId,
                     $effective,
                     $artifact,
                     $actorId,
                     $actorName,
                     $reason,
                 );
-                // Task 3: prepare layout-entity candidates before the published pointer is visible.
-                // Failure here rolls back the DB write so P/D selection is not consumed.
-                if ($context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT) {
-                    $this->bakeLayoutEntityAfterWrite($context, [
-                        'release_id' => $release->getId(),
-                        'payload' => $effective,
-                        'revision_id' => $revisionId,
-                        'changes' => [],
-                    ], []);
-                }
                 $this->adapter->projectPublished($context, $effective, $release->getId());
                 $this->markRevisionPublished($revisionId);
                 $workspace->setData([
@@ -578,6 +708,10 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     false,
                 );
 
+                $publication = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeScopedVersionPublicationBridge::class)->publish($context, [[
+                    'context'=>$context->toArray(),'identity_hash'=>$context->identityHash(),'release_id'=>$release->getId(),
+                    'revision_id'=>$revisionId,'payload'=>$effective,
+                ]]);
                 return [
                     'release_id' => $release->getId(),
                     'revision' => $workspace->getRevision(),
@@ -586,22 +720,13 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     'payload' => $effective,
                     'conflicts' => [],
                     'idempotent' => false,
-                    'layout_entity_prepared' => $context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT,
+                    'version_publication' => $publication,
                 ];
             },
         );
 
         if (($result['blocked'] ?? false) === true) {
             return $result;
-        }
-
-        // Layout bake already ran inside the write intent (prepare-before-pointer).
-        if ($context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT
-            && empty($result['layout_entity_prepared'])
-            && (int)($result['release_id'] ?? 0) > 0
-            && \is_array($result['payload'] ?? null)
-        ) {
-            $this->bakeLayoutEntityAfterWrite($context, $result, $result['changes'] ?? []);
         }
 
         $result['descendants'] = $this->propagateToDescendants($context, $actorId, $actorName);
@@ -612,6 +737,19 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     }
 
     public function publishBatch(
+        ThemeScopedReleaseBatch $batch,
+        string $actorId,
+        string $actorName = '',
+        string $reason = '',
+    ): array {
+        $context = $batch->baseContext();
+        if ($context->themeId < 1) { return $this->publishBatchLocked($batch,$actorId,$actorName,$reason); }
+        $owner = new \Weline\Theme\Api\Version\ThemeVersionIdentity($context->themeId,$context->scope->storageScope,$context->scope->storeMode,$context->area);
+        return \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write($owner,
+            fn(): array => $this->publishBatchLocked($batch,$actorId,$actorName,$reason));
+    }
+
+    private function publishBatchLocked(
         ThemeScopedReleaseBatch $batch,
         string $actorId,
         string $actorName = '',
@@ -670,6 +808,8 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     );
                 }
 
+                $publication = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeScopedVersionPublicationBridge::class)
+                    ->publish($batch->baseContext(), $resources);
                 $receipt = [
                     'batch_id' => $batchRecord->getId(),
                     'batch_digest' => $batch->digest(),
@@ -678,6 +818,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                     'actor_id' => $actorId,
                     'committed_at' => $committedAt,
                     'resources' => $resources,
+                    'version_publication' => $publication,
                 ];
                 $batchRecord->setData([
                     ThemeScopeReleaseBatch::schema_fields_RECEIPT_JSON => $this->json($receipt),
@@ -694,76 +835,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             },
         );
         $this->flushRequestLoadCache();
-        // publishBatch 事务内只 projectPublished；布局实体化（r{releaseId}）必须在提交后完成，
-        // 否则店面硬切找不到 bake 目录，仍显示旧预览/旧 Hook。
-        $this->bakePublishedLayoutResourcesFromBatchReceipt($result);
-
         return $result;
-    }
-
-    /**
-     * Materialize layout entity trees for every layout resource in a batch receipt.
-     *
-     * @param array<string,mixed> $result
-     */
-    private function bakePublishedLayoutResourcesFromBatchReceipt(array $result): void
-    {
-        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator $coordinator */
-        $coordinator = ObjectManager::getInstance(
-            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class,
-        );
-        foreach ((array)($result['resources'] ?? []) as $receipt) {
-            if (!\is_array($receipt)) {
-                continue;
-            }
-            if ((string)($receipt['resource_type'] ?? '') !== ThemeEditorContext::RESOURCE_LAYOUT) {
-                continue;
-            }
-            $releaseId = (int)($receipt['release_id'] ?? $receipt['effective_release_id'] ?? 0);
-            if ($releaseId <= 0) {
-                continue;
-            }
-            $contextClaims = \is_array($receipt['context'] ?? null) ? $receipt['context'] : [];
-            $themeId = (int)($contextClaims['theme_id'] ?? $result['theme_id'] ?? 0);
-            $scopeArr = \is_array($contextClaims['scope'] ?? null) ? $contextClaims['scope'] : [];
-            $scope = \trim((string)($scopeArr['storage_scope'] ?? $receipt['scope'] ?? ''));
-            $layoutType = \trim((string)($contextClaims['layout_type'] ?? ''));
-            $identityHash = \trim((string)($contextClaims['identity_hash'] ?? $receipt['identity_hash'] ?? ''));
-            if ($themeId < 1 || $scope === '' || $layoutType === '' || $identityHash === '') {
-                throw new \RuntimeException('theme_layout_entity_bake_identity_invalid:batch_receipt');
-            }
-            $payload = \is_array($receipt['payload'] ?? null) ? $receipt['payload'] : null;
-            if ($payload === null) {
-                $release = $this->loadRelease($releaseId);
-                $payload = $release instanceof ThemeScopeRelease ? $release->payload() : null;
-            }
-            if (!\is_array($payload)) {
-                throw new \RuntimeException(
-                    'theme_layout_entity_bake_payload_missing:release:' . $releaseId,
-                );
-            }
-            $nodes = \is_array($payload['nodes'] ?? null) ? $payload['nodes'] : $payload;
-            $coordinator->afterLayoutWrite(
-                $themeId,
-                $scope,
-                $layoutType,
-                $identityHash,
-                $nodes,
-                [],
-                true,
-                $releaseId,
-                (int)($receipt['revision_id'] ?? 0),
-                (string)($contextClaims['layout_option'] ?? 'default'),
-                (string)($contextClaims['area'] ?? 'frontend'),
-                ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutVersionService::class)
-                    ->getPublishedVersion($themeId, $layoutType, [
-                        'scope' => $scope,
-                        'layout_option' => $contextClaims['layout_option'] ?? 'default',
-                        'target_type' => $contextClaims['target_type'] ?? 'global',
-                        'target_id' => (int)($contextClaims['target_id'] ?? 0),
-                    ])?->getVersionId() ?? 0,
-            );
-        }
     }
 
     public function rollbackReleaseBatch(
@@ -1178,11 +1250,13 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 'descendants' => $descendants,
             ];
         }
+        $versionInput = $this->versionDraftInput($context);
+        $releaseParentId = $versionInput !== null ? null : $parent['release_id'];
         if ($currentRelease instanceof ThemeScopeRelease
             && (int)$currentRelease->getData(ThemeScopeRelease::schema_fields_REVISION_ID) === $revisionId
             && $this->nullablePositiveInt($currentRelease->getData(
                 ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID,
-            )) === $parent['release_id']
+            )) === $releaseParentId
         ) {
             return [
                 'status' => 'unchanged',
@@ -1204,12 +1278,12 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             )),
             $context,
         );
-        $conflicts = $this->patchEngine->structuralConflicts($oldParent, $parent['payload'], $commands);
+        $conflicts = $versionInput !== null ? [] : $this->patchEngine->structuralConflicts($oldParent, $parent['payload'], $commands);
         if ($conflicts !== []) {
             throw new \RuntimeException('theme_scope_structural_conflict');
         }
 
-        $effective = $this->patchEngine->apply($parent['payload'], $commands);
+        $effective = $versionInput['payload'] ?? $this->patchEngine->apply($parent['payload'], $commands);
         $compiled = $this->adapter->compile($context, $effective);
         $effective = \is_array($compiled['payload'] ?? null) ? $compiled['payload'] : $effective;
         $artifact = \is_array($compiled['artifact'] ?? null) ? $compiled['artifact'] : [];
@@ -1223,6 +1297,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             'workspace' => $workspace,
             'revision_id' => $revisionId,
             'parent' => $parent,
+            'release_parent_id' => $releaseParentId,
             'current_release' => $currentRelease,
             'published' => $published,
             'effective' => $effective,
@@ -1250,7 +1325,10 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         ) {
             throw new \RuntimeException('theme_scope_release_batch_prepared_item_invalid');
         }
-        $parentReleaseId = $this->nullablePositiveInt($prepared['parent']['release_id'] ?? null);
+        // Version payloads are complete immutable snapshots. Their release must
+        // not compose missing slots from the hierarchy's unrelated current P.
+        $parentReleaseId = $this->nullablePositiveInt(array_key_exists('release_parent_id', $prepared)
+            ? $prepared['release_parent_id'] : ($prepared['parent']['release_id'] ?? null));
         $effective = \is_array($prepared['effective'] ?? null) ? $prepared['effective'] : [];
         $artifact = \is_array($prepared['artifact'] ?? null) ? $prepared['artifact'] : [];
         $release = $this->insertRelease(
@@ -1782,6 +1860,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $workspace = clone $this->workspaces;
         $workspace->clearData()->clearQuery()->setData([
             ThemeScopeWorkspace::schema_fields_IDENTITY_HASH => $context->identityHash(),
+            ThemeScopeWorkspace::schema_fields_THEME_VERSION_ID => $this->selectedWorkspaceVersion($context)?->getVersionId() ?? 0,
             ThemeScopeWorkspace::schema_fields_SCOPE => $context->scope->storageScope,
             ThemeScopeWorkspace::schema_fields_SCOPE_KIND => $context->scope->identity->scopeKind,
             ThemeScopeWorkspace::schema_fields_WEBSITE_ID => $context->scope->identity->websiteId,
@@ -1807,62 +1886,14 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
      * @param array<string, mixed> $result
      * @param list<\Weline\Theme\Api\Scoped\ThemePatchCommand>|list<array<string,mixed>> $changes
      */
-    private function bakeLayoutEntityAfterWrite(
-        ThemeEditorContext $context,
-        array $result,
-        array $changes = [],
-    ): void {
-        if ($context->resourceType !== ThemeEditorContext::RESOURCE_LAYOUT) {
-            return;
-        }
-
+    private function bakeLayoutEntityAfterWrite(ThemeEditorContext $context, array $result, array $changes = []): void
+    {
+        if ($context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING) { return; }
         try {
-            $themeId = $context->identityThemeId();
-            $scope = $context->scope->storageScope;
-            $payload = $result['draft_payload'] ?? $result['payload'] ?? null;
-            if (!\is_array($payload)) {
-                throw new \RuntimeException('theme_layout_entity_bake_payload_missing');
-            }
-            $nodes = \is_array($payload['nodes'] ?? null) ? $payload['nodes'] : $payload;
-            $releaseId = $this->nullablePositiveInt($result['release_id'] ?? null);
-            // 只要有 release_id 就按已发布物化到 r{id}。publish 结果常同时带 payload/draft_payload，
-            // 不能因 draft_payload 键存在就当成草稿，否则店面永远找不到 r{releaseId}。
-            $published = $releaseId !== null && $releaseId > 0;
-            $draftRevisionId = (int)($result['revision_id'] ?? 0);
-            $commands = $changes !== []
-                ? $changes
-                : (\is_array($result['changes'] ?? null) ? $result['changes'] : []);
-
-            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator $coordinator */
-            $coordinator = ObjectManager::getInstance(
-                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class,
-            );
-            $coordinator->afterLayoutWrite(
-                $themeId,
-                $scope,
-                $context->identityLayoutType(),
-                $context->identityHash(),
-                $nodes,
-                $commands,
-                $published,
-                $releaseId,
-                $draftRevisionId,
-                $context->layoutOption,
-                $context->area,
-                ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutVersionService::class)
-                    ->getCurrentVersion($themeId, $context->identityLayoutType(), [
-                        'scope' => $scope,
-                        'layout_option' => $context->layoutOption,
-                        'target_type' => $context->targetType,
-                        'target_id' => $context->targetId,
-                    ])?->getVersionId() ?? 0,
-            );
-        } catch (\Throwable $e) {
-            throw new \RuntimeException(
-                'theme_layout_entity_bake_gate_failed: ' . $e->getMessage(),
-                0,
-                $e,
-            );
+            ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class)
+                ->afterResourceWrite($context, $result, $changes);
+        } catch (\Throwable $error) {
+            throw new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException($result, $error);
         }
     }
 
@@ -1873,7 +1904,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         // read result, but never reuse it for a locking read: write paths must
         // still obtain a fresh row under FOR UPDATE after the request cache is
         // flushed.
-        $requestCacheKey = self::REQUEST_WORKSPACE_CACHE_PREFIX . $context->identityHash();
+        $version = $this->selectedWorkspaceVersion($context);
+        $versionId = $version?->getVersionId() ?? 0;
+        $requestCacheKey = self::REQUEST_WORKSPACE_CACHE_PREFIX . $context->identityHash() . '|v' . $versionId;
         if (!$allowRequestCache && RequestContext::isInitialized()) {
             RequestContext::remove($requestCacheKey);
         }
@@ -1886,12 +1919,38 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
 
         $workspace = clone $this->workspaces;
         $workspace->clearData()->clearQuery()
-            ->where(ThemeScopeWorkspace::schema_fields_IDENTITY_HASH, $context->identityHash());
+            ->where(ThemeScopeWorkspace::schema_fields_IDENTITY_HASH, $context->identityHash())
+            ->where(ThemeScopeWorkspace::schema_fields_THEME_VERSION_ID, $versionId);
         if ($lockingRead && $this->supportsForUpdate()) {
             $workspace->additional('FOR UPDATE');
         }
         $workspace->find()->fetch();
 
+        if ($workspace->getId() < 1 && $version !== null) {
+            // A new editable version may intentionally reference its source's
+            // immutable revision. Follow that recorded reference, never another
+            // version's mutable workspace cursor.
+            $snapshots = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class);
+            foreach ($snapshots->resources($version->toVersionIdentity()) as $snapshot) {
+                if (($snapshot['resource_identity_hash'] ?? '') !== $context->identityHash()) { continue; }
+                $revisionId = (int)($snapshot['intent_revision_id'] ?? 0);
+                $releaseId = (int)($snapshot['release_id'] ?? 0);
+                $ref = $revisionId > 0
+                    ? (clone $this->revisions)->clearData()->clearQuery()->load($revisionId)
+                    : ($releaseId > 0 ? $this->loadRelease($releaseId) : null);
+                $sourceId = (int)($ref?->getData('workspace_id') ?? 0);
+                if ($sourceId > 0) {
+                    $workspace = (clone $this->workspaces)->clearData()->clearQuery()->load($sourceId);
+                    if ($revisionId > 0) { $workspace->setData('draft_revision_id', $revisionId)->setData('revision', (int)$ref->getData('revision_no')); }
+                    if ($releaseId > 0) { $workspace->setData('published_release_id', $releaseId); }
+                }
+                break;
+            }
+            if ($workspace->getId() < 1 && $snapshots->head($version->toVersionIdentity()) === null) {
+                $workspace = (clone $this->workspaces)->clearData()->clearQuery()
+                    ->where('identity_hash', $context->identityHash())->where('theme_version_id', 0)->find()->fetch();
+            }
+        }
         $resolved = $workspace->getId() > 0 ? $workspace : null;
         if ($allowRequestCache && !$lockingRead && RequestContext::isInitialized() && $context->identityHash() !== '') {
             RequestContext::set($requestCacheKey, $resolved);
@@ -1904,6 +1963,72 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         }
 
         return $resolved;
+    }
+
+    private function selectedWorkspaceVersion(ThemeEditorContext $context): ?\Weline\Theme\Model\ThemeScopeVersion
+    {
+        if ($context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING) { return null; }
+        $version = ObjectManager::getInstance(\Weline\Theme\Service\ThemeScopeVersionService::class)
+            ->getCurrent($context->themeId, $context->scope->storageScope, $context->scope->storeMode, $context->area);
+        if ($version === null || $version->getScope() !== $context->scope->storageScope) { return null; }
+        return (clone $version)->clearData()->clearQuery()->load($version->getVersionId());
+    }
+
+    /** The editor and its patch baseline must address the same V/R as the canvas. */
+    private function versionDraftInput(ThemeEditorContext $context, ?\Weline\Theme\Model\ThemeScopeVersion $version = null): ?array
+    {
+        if ($context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING) { return null; }
+        $version ??= $this->selectedWorkspaceVersion($context);
+        if ($version === null) { return null; }
+        $identity = $version->toVersionIdentity();
+        $snapshots = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class);
+        $head = $snapshots->head($identity);
+        // The migration reader alone may still inspect an unmapped legacy current.
+        if ($head === null) { return null; }
+        $read = $snapshots->read($identity, $context);
+        if (empty($read['resolved'])) { throw new \RuntimeException((string)$read['reason']); }
+        $revisionId = (int)($read['draft_revision_id'] ?? 0);
+        $commands = $revisionId > 0 ? $this->commandsForRevision($revisionId) : [];
+        $parentReleaseId = $this->nullablePositiveInt($read['release_id'] ?? null);
+        $basePayload = $read['payload'];
+        if ($revisionId > 0) {
+            $revision = (clone $this->revisions)->clearData()->clearQuery()->load($revisionId);
+            $parentReleaseId = $this->nullablePositiveInt($revision->getData(ThemeScopeRevision::schema_fields_PARENT_RELEASE_ID));
+            if ($parentReleaseId !== null) {
+                $basePayload = $this->payloadForReleaseOrRootBase($parentReleaseId, $context);
+            } else {
+                // A legacy revision may only be proven by its immutable release.
+                // Its observed payload becomes the next baseline, never today's parent.
+                $commands = [];
+            }
+        }
+        $rawBase = $basePayload;
+        $basePayload = $this->versionLayoutPayload($context, $identity, $head, $basePayload, $revisionId === 0);
+        $payload = $this->versionLayoutPayload($context, $identity, $head, $read['payload'], true);
+        return ['payload'=>$payload, 'base_payload'=>$basePayload, 'commands'=>$commands,
+            'draft_revision_id'=>$revisionId, 'parent_release_id'=>$parentReleaseId,
+            'freeze_baseline'=>$parentReleaseId === null || $basePayload !== $rawBase];
+    }
+
+    private function versionLayoutPayload(ThemeEditorContext $context, \Weline\Theme\Api\Version\ThemeVersionIdentity $identity, array $head, array $payload, bool $currentChrome): array
+    {
+        if ($context->resourceType !== ThemeEditorContext::RESOURCE_LAYOUT) { return $payload; }
+        $nodes = (array)($payload['nodes'] ?? []);
+        $tree = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder::class);
+        $carrier = ObjectManager::getInstance(\Weline\Theme\Service\SharedChromeService::class)->isChromeCarrierPageType($context->layoutType);
+        if ($carrier && $currentChrome) {
+            $nodes = array_replace($tree->filterContentNodes($nodes),
+                (array)json_decode((string)($head['chrome_intent_json'] ?? '[]'), true));
+        }
+        $descriptor = json_decode((string)($head['package_default_json'] ?? '{}'), true);
+        $clearAll = array_filter($nodes, static fn($node): bool => is_array($node) && ($node['widget_code'] ?? '') === '__no_widget_placements__') !== [];
+        if (!$clearAll) {
+            $nodes = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionBakeMerger::class)
+                ->mergeIntoNodes($nodes, $identity->themeId, $context->layoutType, $identity->themeVersionId, [],
+                    (array)($descriptor['omissions'][$context->layoutType] ?? []), $context->layoutOption);
+        }
+        $payload['nodes'] = $carrier ? $nodes : $tree->filterContentNodes($nodes);
+        return $payload;
     }
 
     private function insertRevision(

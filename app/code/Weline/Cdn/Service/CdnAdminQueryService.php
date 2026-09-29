@@ -32,10 +32,18 @@ class CdnAdminQueryService
             if (!$domain->getId()) {
                 return ['success' => false, 'message' => (string)__('域名不存在')];
             }
+            $before = $this->domainSyncState($domain);
             $domain->setData(DomainModel::schema_fields_ENABLED, $enabled ? 1 : 0)->save();
+            $sync = $this->fpcManagementCall('notifyDomainChange', [
+                'domain_id' => $id, 'before' => $before, 'after' => $this->domainSyncState($domain),
+            ]);
+            if (!($sync['success'] ?? false)) {
+                return $sync + ['data' => ['domain_id' => $id, 'saved' => true]];
+            }
             return [
                 'success' => true,
                 'message' => $enabled ? (string)__('域名已启用') : (string)__('域名已禁用'),
+                'data' => ['domain_id' => $id, 'sync' => $sync],
             ];
         } catch (\Throwable $e) {
             return $this->failure('toggleDomainEnable', $e, '操作失败，请稍后重试');
@@ -91,6 +99,7 @@ class CdnAdminQueryService
                 }
             }
 
+            $before = $domain->getId() ? $this->domainSyncState($domain) : [];
             $siteId = (int)$normalized['site_id'];
             $adapter = (string)$normalized['adapter'];
             $domainName = (string)$normalized['domain_name'];
@@ -121,14 +130,35 @@ class CdnAdminQueryService
             $domain->setData(DomainModel::schema_fields_WARMUP_INTERVAL_SECONDS, (int)$normalized['warmup_interval_seconds']);
             $domain->setData(DomainModel::schema_fields_ENABLED, (int)$normalized['enabled']);
             $domain->save();
+            $sync = $this->fpcManagementCall('notifyDomainChange', [
+                'domain_id' => (int)$domain->getId(), 'before' => $before, 'after' => $this->domainSyncState($domain),
+            ]);
+            if (!($sync['success'] ?? false)) {
+                return $sync + ['data' => ['domain_id' => (int)$domain->getId(), 'saved' => true]];
+            }
             return [
                 'success' => true,
                 'message' => (string)__('域名保存成功'),
-                'data' => ['domain_id' => (int)$domain->getId()],
+                'data' => ['domain_id' => (int)$domain->getId(), 'sync' => $sync],
             ];
         } catch (\Throwable $e) {
             return $this->failure('saveDomain', $e, '保存失败，请稍后重试');
         }
+    }
+
+    /** 只传同步目标配置，不把凭据或预热调度状态交给同步通知。 */
+    private function domainSyncState(DomainModel $domain): array
+    {
+        return [
+            'domain_name' => (string)$domain->getData(DomainModel::schema_fields_DOMAIN_NAME),
+            'site_id' => (int)$domain->getData(DomainModel::schema_fields_SITE_ID),
+            'adapter' => (string)$domain->getData(DomainModel::schema_fields_ADAPTER),
+            'zone_id' => (string)$domain->getData(DomainModel::schema_fields_ZONE_ID),
+            'account_id' => $domain->getData(DomainModel::schema_fields_ACCOUNT_ID) === null
+                ? null : (int)$domain->getData(DomainModel::schema_fields_ACCOUNT_ID),
+            'inherit_default' => (int)$domain->getData(DomainModel::schema_fields_INHERIT_DEFAULT),
+            'enabled' => (int)$domain->getData(DomainModel::schema_fields_ENABLED),
+        ];
     }
 
     /**
@@ -192,11 +222,18 @@ class CdnAdminQueryService
 
     public function executeWarmup(array $params): array
     {
-        $limit = (int)($params['limit'] ?? 50);
+        $limit = max(1, min(1000, (int)($params['limit'] ?? 50)));
+        $filter = $this->resolveWarmupScopeFilter($params);
+        $provider = trim((string)($params['provider'] ?? $params['provider_fqcn'] ?? ''));
         try {
             /** @var WarmupRunner $runner */
             $runner = ObjectManager::getInstance(WarmupRunner::class);
-            $result = $runner->run($limit);
+            $result = $runner->run(
+                $limit,
+                $filter['domain_id'],
+                $provider !== '' ? $provider : null,
+                $filter['site_id'],
+            );
             return [
                 'success' => true,
                 'message' => (string)__('预热任务执行完成'),
@@ -204,6 +241,240 @@ class CdnAdminQueryService
             ];
         } catch (\Throwable $e) {
             return $this->failure('executeWarmup', $e, '执行失败，请稍后重试');
+        }
+    }
+
+    public function listWarmupProviders(array $params): array
+    {
+        $filter = $this->resolveWarmupScopeFilter($params);
+        try {
+            /** @var WarmupCollectService $collect */
+            $collect = ObjectManager::getInstance(WarmupCollectService::class);
+            /** @var WarmupUrl $model */
+            $model = ObjectManager::getInstance(WarmupUrl::class);
+            $providers = [];
+            foreach ($collect->listProvidersMeta() as $meta) {
+                $fqcn = $meta['fqcn'];
+                $q = $model->reset()->where(WarmupUrl::schema_fields_PROVIDER, $fqcn);
+                $this->applyWarmupScopeFilter($q, $filter);
+                $items = $q->select()->fetch()->getItems();
+                $total = 0;
+                $pending = 0;
+                $success = 0;
+                $fail = 0;
+                foreach ($items as $row) {
+                    $total++;
+                    $status = (string)$row->getData(WarmupUrl::schema_fields_STATUS);
+                    if ($status === WarmupUrl::STATUS_PENDING) {
+                        $pending++;
+                    } elseif ($status === WarmupUrl::STATUS_SUCCESS) {
+                        $success++;
+                    } elseif ($status === WarmupUrl::STATUS_FAIL) {
+                        $fail++;
+                    }
+                }
+                $providers[] = array_merge($meta, [
+                    'url_count' => $total,
+                    'pending' => $pending,
+                    'success' => $success,
+                    'fail' => $fail,
+                ]);
+            }
+            $scopeStats = $this->warmupScopeStats($filter);
+            return [
+                'success' => true,
+                'data' => [
+                    'providers' => $providers,
+                    'scope' => $scopeStats,
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return $this->failure('listWarmupProviders', $e, '加载 Provider 失败');
+        }
+    }
+
+    public function listWarmupUrls(array $params): array
+    {
+        $provider = trim((string)($params['provider'] ?? $params['provider_fqcn'] ?? ''));
+        if ($provider === '') {
+            return ['success' => false, 'message' => (string)__('provider 不能为空')];
+        }
+        $page = max(1, (int)($params['page'] ?? 1));
+        $pageSize = max(1, min(100, (int)($params['page_size'] ?? 20)));
+        $filter = $this->resolveWarmupScopeFilter($params);
+        $status = trim((string)($params['status'] ?? ''));
+        $search = trim((string)($params['search'] ?? ''));
+        try {
+            /** @var WarmupUrl $model */
+            $model = ObjectManager::getInstance(WarmupUrl::class);
+            $query = $model->reset()->where(WarmupUrl::schema_fields_PROVIDER, $provider);
+            $this->applyWarmupScopeFilter($query, $filter);
+            if ($status !== '') {
+                $query->where(WarmupUrl::schema_fields_STATUS, $status);
+            }
+            if ($search !== '') {
+                $query->where(WarmupUrl::schema_fields_URL, '%' . $search . '%', 'LIKE');
+            }
+            $countQuery = clone $query;
+            $total = (int)$countQuery->count();
+            $items = $query
+                ->order(WarmupUrl::schema_fields_WARMUP_URL_ID, 'DESC')
+                ->limit($pageSize, ($page - 1) * $pageSize)
+                ->select()
+                ->fetch()
+                ->getItems();
+            $rows = [];
+            foreach ($items as $item) {
+                $rows[] = [
+                    'warmup_url_id' => (int)$item->getData(WarmupUrl::schema_fields_WARMUP_URL_ID),
+                    'url' => (string)$item->getData(WarmupUrl::schema_fields_URL),
+                    'status' => (string)$item->getData(WarmupUrl::schema_fields_STATUS),
+                    'enabled' => (int)$item->getData(WarmupUrl::schema_fields_ENABLED),
+                    'processed_count' => (int)$item->getData(WarmupUrl::schema_fields_PROCESSED_COUNT),
+                    'target_count' => (int)$item->getData(WarmupUrl::schema_fields_TARGET_COUNT),
+                    'success_count' => (int)$item->getData(WarmupUrl::schema_fields_SUCCESS_COUNT),
+                    'fail_count' => (int)$item->getData(WarmupUrl::schema_fields_FAIL_COUNT),
+                    'retries' => (int)$item->getData(WarmupUrl::schema_fields_RETRIES),
+                    'last_warmed_at' => (int)$item->getData(WarmupUrl::schema_fields_LAST_WARMED_AT),
+                    'domain_id' => (int)$item->getData(WarmupUrl::schema_fields_DOMAIN_ID),
+                    'site_id' => (int)$item->getData(WarmupUrl::schema_fields_SITE_ID),
+                    'module' => (string)$item->getData(WarmupUrl::schema_fields_MODULE),
+                    'provider' => (string)$item->getData(WarmupUrl::schema_fields_PROVIDER),
+                ];
+            }
+            return [
+                'success' => true,
+                'data' => [
+                    'items' => $rows,
+                    'total' => $total,
+                    'page' => $page,
+                    'page_size' => $pageSize,
+                    'has_more' => ($page * $pageSize) < $total,
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return $this->failure('listWarmupUrls', $e, '加载 URL 失败');
+        }
+    }
+
+    public function collectWarmup(array $params): array
+    {
+        $provider = trim((string)($params['provider'] ?? $params['provider_fqcn'] ?? ''));
+        if ($provider === '') {
+            return ['success' => false, 'message' => (string)__('provider 不能为空')];
+        }
+        $filter = $this->resolveWarmupScopeFilter($params);
+        try {
+            /** @var WarmupCollectService $collect */
+            $collect = ObjectManager::getInstance(WarmupCollectService::class);
+            $result = $collect->collectProvider($provider, $filter['domain_id'], $filter['site_id']);
+            return [
+                'success' => true,
+                'message' => (string)__('收集完成'),
+                'data' => $result,
+            ];
+        } catch (\Throwable $e) {
+            return $this->failure('collectWarmup', $e, '收集失败，请稍后重试');
+        }
+    }
+
+    /**
+     * @param array{domain_id:?int,site_id:?int} $filter
+     * @return array{total:int,pending:int,success:int,fail:int,interval_seconds:?int,site_id:?int,domain_id:?int}
+     */
+    private function warmupScopeStats(array $filter): array
+    {
+        /** @var WarmupUrl $model */
+        $model = ObjectManager::getInstance(WarmupUrl::class);
+        $q = $model->reset();
+        $this->applyWarmupScopeFilter($q, $filter);
+        $items = $q->select()->fetch()->getItems();
+        $total = 0;
+        $pending = 0;
+        $success = 0;
+        $fail = 0;
+        foreach ($items as $row) {
+            $total++;
+            $status = (string)$row->getData(WarmupUrl::schema_fields_STATUS);
+            if ($status === WarmupUrl::STATUS_PENDING) {
+                $pending++;
+            } elseif ($status === WarmupUrl::STATUS_SUCCESS) {
+                $success++;
+            } elseif ($status === WarmupUrl::STATUS_FAIL) {
+                $fail++;
+            }
+        }
+        $interval = null;
+        if ($filter['domain_id'] !== null) {
+            /** @var DomainModel $domain */
+            $domain = ObjectManager::getInstance(DomainModel::class);
+            $domain->reset()->load($filter['domain_id']);
+            if ($domain->getId()) {
+                $interval = (int)($domain->getData(DomainModel::schema_fields_WARMUP_INTERVAL_SECONDS) ?: 300);
+            }
+        }
+
+        return [
+            'total' => $total,
+            'pending' => $pending,
+            'success' => $success,
+            'fail' => $fail,
+            'interval_seconds' => $interval,
+            'site_id' => $filter['site_id'],
+            'domain_id' => $filter['domain_id'],
+        ];
+    }
+
+    /**
+     * @return array{domain_id:?int,site_id:?int}
+     */
+    private function resolveWarmupScopeFilter(array $params): array
+    {
+        $domainId = isset($params['domain_id']) && $params['domain_id'] !== '' && $params['domain_id'] !== null
+            ? (int)$params['domain_id']
+            : null;
+        if ($domainId !== null && $domainId <= 0) {
+            $domainId = null;
+        }
+        $siteId = null;
+        if (isset($params['site_id']) && $params['site_id'] !== '' && $params['site_id'] !== null) {
+            $siteId = (int)$params['site_id'];
+            if ($siteId < 0) {
+                $siteId = null;
+            }
+        }
+        $targetScope = trim((string)($params['target_scope'] ?? $params['scope'] ?? ''));
+        if ($siteId === null && $targetScope !== '') {
+            try {
+                /** @var \Weline\SystemConfig\Service\SystemConfigTargetScopeService $scopeService */
+                $scopeService = ObjectManager::getInstance(\Weline\SystemConfig\Service\SystemConfigTargetScopeService::class);
+                $resolved = $scopeService->resolveFromInput(['target_scope' => $targetScope], false);
+                $identity = $resolved['identity'] ?? null;
+                if ($identity instanceof \Weline\Framework\Runtime\ScopeIdentity && !$identity->isGlobal()) {
+                    $siteId = $identity->websiteId;
+                }
+            } catch (\Throwable $e) {
+                $this->log->error('CDN warmup scope resolve failed: ' . $e->getMessage());
+            }
+        }
+
+        return [
+            'domain_id' => $domainId,
+            'site_id' => $siteId,
+        ];
+    }
+
+    /**
+     * @param array{domain_id:?int,site_id:?int} $filter
+     */
+    private function applyWarmupScopeFilter(object $query, array $filter): void
+    {
+        if ($filter['domain_id'] !== null) {
+            $query->where(WarmupUrl::schema_fields_DOMAIN_ID, $filter['domain_id']);
+            return;
+        }
+        if ($filter['site_id'] !== null) {
+            $query->where(WarmupUrl::schema_fields_SITE_ID, $filter['site_id']);
         }
     }
 
@@ -308,16 +579,67 @@ class CdnAdminQueryService
         }
     }
 
+    public function listFpcPolicies(array $params): array
+    {
+        return $this->fpcManagementCall('listPolicies', $params);
+    }
+
+    public function saveFpcPolicyOverride(array $params): array
+    {
+        return $this->fpcManagementCall('saveOverride', $params);
+    }
+
+    public function restoreFpcPolicyInheritance(array $params): array
+    {
+        return $this->fpcManagementCall('restoreInheritance', $params);
+    }
+
+    public function collectFpcPolicies(array $params): array
+    {
+        return $this->fpcManagementCall('collectDeclarations', $params);
+    }
+
+    public function listFpcSyncRecords(array $params): array
+    {
+        return $this->fpcManagementCall('listSyncRecords', $params);
+    }
+
+    public function retryFpcSync(array $params): array
+    {
+        return $this->fpcManagementCall('retrySync', $params);
+    }
+
+    public function notifyScopeBindingChange(array $params): array
+    {
+        return $this->fpcManagementCall('notifyScopeBindingChange', $params);
+    }
+
+    /** 保留未传字段和显式 null；业务语义由声明/覆盖的归属服务执行。 */
+    private function fpcManagementCall(string $method, array $params): array
+    {
+        try {
+            /** @var FpcPolicyManagementService $management */
+            $management = ObjectManager::getInstance(FpcPolicyManagementService::class);
+            return $management->{$method}($params);
+        } catch (\Throwable $e) {
+            return $this->failure($method, $e, '操作失败，请稍后重试') + ['error_code' => 'fpc_management_failed'];
+        }
+    }
+
     public function collectApiRules(array $params): array
     {
         try {
             /** @var CdnRuleCollector $collector */
             $collector = ObjectManager::getInstance(CdnRuleCollector::class);
-            $result = $collector->collect();
+            $result = $collector->collectAll();
+            $fpc = $this->collectFpcPolicies($params);
+            if (!($fpc['success'] ?? false)) {
+                return $fpc;
+            }
             return [
                 'success' => true,
                 'message' => (string)__('收集完成'),
-                'data' => \is_array($result) ? $result : ['result' => $result],
+                'data' => ['rules' => $result, 'fpc_policy' => $fpc['data'] ?? []],
             ];
         } catch (\Throwable $e) {
             return $this->failure('collectApiRules', $e, '收集失败，请稍后重试');
@@ -372,7 +694,8 @@ class CdnAdminQueryService
     {
         try {
             $manager = ObjectManager::getInstance(RuleManager::class);
-            $rules = method_exists($manager, 'getGlobalRules') ? $manager->getGlobalRules() : [];
+            // RuleManager 权威方法名为 getDefaultRules（读 etc/default-rules.json）
+            $rules = $manager->getDefaultRules();
             return ['success' => true, 'data' => $rules];
         } catch (\Throwable $e) {
             return $this->failure('getGlobalRules', $e, '规则读取失败，请稍后重试');
@@ -410,8 +733,12 @@ class CdnAdminQueryService
                 $decoded = json_decode($rules, true);
                 $rules = \is_array($decoded) ? $decoded : [];
             }
-            if (method_exists($manager, 'saveGlobalRules')) {
-                $manager->saveGlobalRules($rules);
+            if (!\is_array($rules)) {
+                return ['success' => false, 'message' => (string)__('规则格式错误')];
+            }
+            // RuleManager 权威方法名为 saveDefaultRules（写 etc/default-rules.json）
+            if (!$manager->saveDefaultRules($rules)) {
+                return ['success' => false, 'message' => (string)__('保存失败')];
             }
             return ['success' => true, 'message' => (string)__('保存成功')];
         } catch (\Throwable $e) {
@@ -477,23 +804,7 @@ class CdnAdminQueryService
         if ($domainId <= 0) {
             return ['success' => false, 'message' => (string)__('域名ID不能为空')];
         }
-        try {
-            /** @var DomainModel $domain */
-            $domain = ObjectManager::getInstance(DomainModel::class);
-            $domain->reset()->load($domainId);
-            if (!$domain->getId()) {
-                return ['success' => false, 'message' => (string)__('域名不存在')];
-            }
-            $manager = ObjectManager::getInstance(RuleManager::class);
-            $result = method_exists($manager, 'pushRules') ? $manager->pushRules($domain) : ['success' => false, 'message' => 'pushRules missing'];
-            return [
-                'success' => (bool)($result['success'] ?? false),
-                'message' => (string)($result['message'] ?? (($result['success'] ?? false) ? __('推送成功') : __('推送失败'))),
-                'data' => $result,
-            ];
-        } catch (\Throwable $e) {
-            return $this->failure('pushDomainRules', $e, '推送失败，请稍后重试');
-        }
+        return $this->fpcManagementCall('requestManualSync', ['domain_id' => $domainId]);
     }
 
     public function listEnabledDomains(array $params): array

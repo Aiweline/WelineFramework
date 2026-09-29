@@ -115,5 +115,14 @@
                   sort="10"/>
     </event>
 
+    <!-- ExtraCollector sort=130 后收集；见 doc/event/FPC策略收集.md -->
+    <event name="Weline_Framework_Setup::after_route_collection">
+        <observer name="Weline_Cdn::collect_fpc_policies"
+                  instance="Weline\Cdn\Observer\CollectFpcPolicies"
+                  disabled="false"
+                  shared="true"
+                  sort="135"/>
+    </event>
+
     <!-- CDN resource_changed 已硬切至 CdnCapability -->
 </config>

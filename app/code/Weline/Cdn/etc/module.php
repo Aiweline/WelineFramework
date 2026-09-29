@@ -2,10 +2,11 @@
 
 return [
     "name" => 'Weline_Cdn',
-    "version" => '1.0.14',
+    "version" => '1.0.24',
     "requires" => [
         'Weline_Cron' => '*',
         'Weline_Framework' => '*',
+        'Weline_Queue' => '*',
         'Weline_SystemConfig' => '*',
         'Weline_Websites' => '*',
     ],
@@ -20,5 +21,7 @@ return [
             => \Weline\Cdn\Service\CloudflareMailDnsManager::class,
         \Weline\Framework\Http\Fpc\CdnFpcDevModeFlagResolverInterface::class
             => \Weline\Cdn\Service\CdnFpcDevModeFlagResolver::class,
+        \Weline\Framework\Controller\Extra\FpcPolicySnapshotProviderInterface::class
+            => \Weline\Cdn\Service\CompiledFpcPolicySnapshotProvider::class,
     ],
 ];

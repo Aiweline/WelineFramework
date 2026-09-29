@@ -184,14 +184,20 @@ final class ThemeScopedLayoutWriteService
         $state = $this->workspace->load($context, true);
         $this->assertNodeExists($state, $nodeUid);
 
+        // Keep the exact rendered identity as intent. Dropping an automatic
+        // node would make the next default merge install it again.
+        $removed = $state['draft_payload']['nodes'][$nodeUid];
+        $removed['is_active'] = false;
+        $removed['source'] = 'user_deleted';
+
         $result = $this->workspace->applyChanges(
             context: $context,
             expectedRevision: (int)($state['revision'] ?? 0),
             expectedParentReleaseId: $this->nullableReleaseId($state['expected_parent_release_id'] ?? null),
             changes: [ThemePatchCommand::fromArray([
-                'op' => ThemePatchCommand::OP_REMOVE_NODE,
+                'op' => ThemePatchCommand::OP_SET,
                 'path' => '/nodes/' . $nodeUid,
-                'node_uid' => $nodeUid,
+                'value' => $removed,
             ])],
             actorId: $actorId,
             actorName: $actorName,

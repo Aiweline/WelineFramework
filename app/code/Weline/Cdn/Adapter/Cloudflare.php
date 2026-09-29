@@ -417,7 +417,7 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
             return is_array($rules) ? $rules : [];
         }
 
-        return [];
+        throw new Core(__('Cloudflare 规则读取失败'));
     }
 
     /**
@@ -452,15 +452,6 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
                 $requestData = [
                     'rules' => $formattedRules,
                 ];
-                if (isset($existingRuleset['kind'])) {
-                    $requestData['kind'] = $existingRuleset['kind'];
-                }
-                if (isset($existingRuleset['phase'])) {
-                    $requestData['phase'] = $existingRuleset['phase'];
-                }
-                if (isset($existingRuleset['name'])) {
-                    $requestData['name'] = $existingRuleset['name'];
-                }
                 $response = $this->makeRequest('PUT', $updateUrl, $requestData, $credentials);
             } else {
                 // 无 entrypoint：对 phase entrypoint 发 PUT 创建（勿先 GET 失败就放弃）
@@ -514,7 +505,7 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
      * @param array $rules 原始规则数组
      * @return array 格式化后的规则数组
      */
-    private function formatRulesForApi(array $rules): array
+    public function formatRulesForApi(array $rules): array
     {
         $formattedRules = [];
 
@@ -538,16 +529,23 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
                 'enabled' => \array_key_exists('enabled', $rule) ? (bool)$rule['enabled'] : true,
             ];
 
+            foreach (['id', 'ref'] as $identityField) {
+                if (isset($rule[$identityField])) { $formattedRule[$identityField] = (string)$rule[$identityField]; }
+            }
+
             if (isset($rule['description'])) {
                 $formattedRule['description'] = (string)$rule['description'];
             }
 
             // 已是 Cloudflare 原生：action 为字符串（如 set_cache_settings）
             if (isset($rule['action']) && \is_string($rule['action']) && $rule['action'] !== '') {
+                $formattedRule += array_diff_key($rule, array_flip(['version', 'last_updated', '_legacy_rule']));
                 $formattedRule['action'] = $rule['action'];
                 if (isset($rule['action_parameters']) && \is_array($rule['action_parameters'])) {
                     $formattedRule['action_parameters'] = $rule['action_parameters'];
                 }
+                // Cloudflare GET以id展示默认ref；发送该展示值会被当成设置新的自定义ref。
+                if (isset($formattedRule['id']) && ($formattedRule['ref'] ?? null) === $formattedRule['id']) { unset($formattedRule['ref']); }
                 $formattedRules[] = $formattedRule;
                 continue;
             }

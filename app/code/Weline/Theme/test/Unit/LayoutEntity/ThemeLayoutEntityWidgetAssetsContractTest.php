@@ -9,19 +9,7 @@ use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityAssetCollector;
 
 final class ThemeLayoutEntityWidgetAssetsContractTest extends TestCase
 {
-    public function testPathsExposeAssetsSidecars(): void
-    {
-        $src = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityPaths.php'
-        );
-        self::assertStringContainsString('function pageAssetsJson', $src);
-        self::assertStringContainsString('function chromeAssetsJson', $src);
-        // Paths v3: assets.json sidecars live under configs/v{V}/{config_key}/.
-        self::assertStringContainsString("'assets.json'", $src);
-        self::assertStringContainsString('ThemeVersionIdentity', $src);
-        self::assertStringNotContainsString('page-assets.json', $src);
-        self::assertStringNotContainsString('chrome-assets.json', $src);
-    }
+
 
     public function testCollectorDedupesAndSplitsBuckets(): void
     {
@@ -70,27 +58,9 @@ final class ThemeLayoutEntityWidgetAssetsContractTest extends TestCase
         self::assertStringContainsString('data-weline-widget-assets-fp="deadbeef"', $html);
     }
 
-    public function testHeadAssetsFallsBackToChromeWithoutPagePointer(): void
-    {
-        $src = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutStorefrontHeadAssets.php'
-        );
-        self::assertStringContainsString('resolveActiveThemeScope', $src);
-        self::assertStringContainsString('chromeScopeCandidates', $src);
-        self::assertStringContainsString('readChromeAssets', $src);
-    }
 
-    public function testChromeMaterializeUsesRegistryBaseline(): void
-    {
-        $materializer = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityMaterializer.php'
-        );
-        $collector = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityAssetCollector.php'
-        );
-        self::assertStringContainsString('withChromeRegistryBaseline', $materializer);
-        self::assertStringContainsString('function withChromeRegistryBaseline', $collector);
-    }
+
+
 
     public function testTaglibDeclaresSourceAttrs(): void
     {
@@ -101,12 +71,5 @@ final class ThemeLayoutEntityWidgetAssetsContractTest extends TestCase
         self::assertStringContainsString("'source'", $src);
     }
 
-    public function testDocsRequireBakeContract(): void
-    {
-        $spec = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/doc/部件静态资源固化规范.md'
-        );
-        self::assertStringContainsString('layout-source', $spec);
-        self::assertStringContainsString('page-assets.json', $spec);
-    }
+
 }

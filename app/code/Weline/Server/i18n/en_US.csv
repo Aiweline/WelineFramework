@@ -721,6 +721,7 @@ LiteSSL,LiteSSL
 防护,protection
 高级规则,"Advanced rules"
 安全数据警告,"Security data warning"
+扫描特征警告,"Scan feature warnings"
 "7 天事件","7 days event"
 "7 天拦截","7 days interception"
 "7 天严重","7 days severe"
@@ -1379,6 +1380,24 @@ URI,URI
 分,minute(s)
 小时,hour(s)
 天,day(s)
+检测到路径扫描,"Path scanning detected"
+"近窗口内路径扫描事件 %{1} 次，疑似目录爆破。","Path-scan events in the recent window: %{1}; directory probing suspected."
+检测到畸形请求目标,"Malformed request target detected"
+"非法 path/query/编码请求 %{1} 次（常为扫描器探测）。","Illegal path/query/encoding requests: %{1} (often scanner probes)."
+检测到恶意请求特征,"Malicious request signatures detected"
+"恶意 URI/Body/模式命中 %{1} 次。","Malicious URI/body/pattern hits: %{1}."
+检测到异常爬虫/UA,"Abnormal crawler/UA detected"
+"恶意 UA 或爬虫拦截 %{1} 次。","Bad UA or crawler blocks: %{1}."
+命中敏感/扫描路径,"Sensitive/scan path hit"
+"敏感路径或扫描路径封禁相关事件 %{1} 次。","Sensitive/scan-path ban-related events: %{1}."
+"单 IP 高频攻击","High-frequency attacks from one IP"
+"IP %{1} 在统计窗口内出现 %{2} 次，疑似集中扫描。","IP %{1} appeared %{2} times in the window; concentrated scanning suspected."
+疑似未知参数扫描,"Suspected unknown-parameter probing"
+"近期请求 URI 中出现 %{1} 次可疑查询参数特征（仅统计提示，未自动拦截）。","Suspicious query-parameter patterns in recent URIs: %{1} (advisory only; not auto-blocked)."
+存在严重级别攻击,"Critical-severity attacks present"
+"近窗口 critical 事件 %{1} 次，请尽快核对封禁与规则。","Critical events in the recent window: %{1}. Review bans and rules soon."
+多类扫描特征并用,"Multiple scan features combined"
+"同时出现 %{1} 类扫描相关特征，更像有组织探测活动。","%{1} scan-related feature classes present; organized probing more likely."
 编码,Encoding
 "SQL 注入","SQL injection"
 跨站脚本,"Cross-site scripting"

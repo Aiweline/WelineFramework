@@ -682,68 +682,20 @@ class ThemeLayoutService
         array $identity = []
     ): bool {
         try {
-            return $this->atomicWrite('theme_layout_replace_rows', function () use (
-                $themeId,
-                $pageType,
-                $layoutData,
-                $status,
-                $identity,
-            ): bool {
-                $identity = $this->normalizeLayoutIdentity($identity);
-                $this->getImageContentValidator()->validate($layoutData, ['phase' => 'save']);
-
-                /** @var ThemeScopedLayoutWriteService $layoutWriter */
-                $layoutWriter = ObjectManager::getInstance(ThemeScopedLayoutWriteService::class);
-                /** @var ThemeScopedWorkspaceInterface $workspace */
-                $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
-                $context = $this->buildScopedLayoutContext($themeId, $pageType, $identity);
-
-                if (!$this->hasWidgetPlacementsInput($layoutData)) {
-                    $this->markNoWidgetPlacements($themeId, $pageType, $status, $identity);
-                } else {
-                    $snapshot = [];
-                    foreach ($layoutData as $area => $widgets) {
-                        if (!\is_array($widgets)) {
-                            continue;
-                        }
-                        $normalizedWidgets = [];
-                        foreach ($widgets as $index => $widget) {
-                            if (!\is_array($widget)) {
-                                continue;
-                            }
-                            if (!isset($widget['sort_order'])) {
-                                $widget['sort_order'] = (int)$index;
-                            }
-                            unset($widget['layout_id']);
-                            $normalizedWidgets[] = $widget;
-                        }
-                        $snapshot[(string)$area] = ['widgets' => \array_values($normalizedWidgets)];
-                    }
-                    $layoutWriter->replaceDraftFromSnapshot(
-                        $context,
-                        $snapshot,
-                        'system:theme-layout-service',
-                        '',
-                        'layout_saved_via_theme_layout_service',
-                    );
-                    if ($status === ThemeLayout::STATUS_PUBLISHED) {
-                        $state = $workspace->load($context, true);
-                        $workspace->publish(
-                            $context,
-                            (int)($state['revision'] ?? 0),
-                            isset($state['expected_parent_release_id'])
-                                ? (int)$state['expected_parent_release_id']
-                                : null,
-                            'system:theme-layout-service',
-                            '',
-                            'layout_published_via_theme_layout_service',
-                        );
-                        $this->purgePublishedLayoutCaches($themeId);
-                    }
-                }
-
-                return true;
-            });
+            $context = $this->buildScopedLayoutContext($themeId, $pageType, $this->normalizeLayoutIdentity($identity));
+            $saved = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedEditorSaveService::class)
+                ->saveLayout($context, $layoutData, [], 'system:theme-layout-service');
+            if ($status === ThemeLayout::STATUS_PUBLISHED) {
+                ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class)->publish(
+                    $context, (int)$saved['revision'], $saved['expected_parent_release_id'] ?? null,
+                    'system:theme-layout-service', '', 'layout_published_via_theme_layout_service',
+                );
+                $this->purgePublishedLayoutCaches($themeId);
+            }
+            return true;
+        } catch (\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException $exception) {
+            // Preserve the committed cursor for callers when only PHTML failed.
+            throw $exception;
         } catch (\Throwable) {
             return false;
         }

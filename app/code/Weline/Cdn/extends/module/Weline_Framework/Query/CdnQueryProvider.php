@@ -15,6 +15,7 @@ use Weline\Cdn\Service\ScopedAccountBindingService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Service\Query\Attribute\BinQueryOperation;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
 class CdnQueryProvider implements QueryProviderInterface
@@ -51,12 +52,21 @@ class CdnQueryProvider implements QueryProviderInterface
             'clearDomainCache'   => $this->adminQueryService->clearDomainCache($params),
             'saveDomain'         => $this->adminQueryService->saveDomain($params),
             'executeWarmup'      => $this->adminQueryService->executeWarmup($params),
+            'listWarmupProviders'=> $this->adminQueryService->listWarmupProviders($params),
+            'listWarmupUrls'     => $this->adminQueryService->listWarmupUrls($params),
+            'collectWarmup'      => $this->adminQueryService->collectWarmup($params),
             'toggleWarmupEnable' => $this->adminQueryService->toggleWarmupEnable($params),
             'deleteWarmupUrl'    => $this->adminQueryService->deleteWarmupUrl($params),
             'deleteAttackLog'    => $this->adminQueryService->deleteAttackLog($params),
             'batchDeleteAttackLogs' => $this->adminQueryService->batchDeleteAttackLogs($params),
             'cleanupAttackLogs'  => $this->adminQueryService->cleanupAttackLogs($params),
             'collectApiRules'    => $this->adminQueryService->collectApiRules($params),
+            'listFpcPolicies' => $this->listFpcPolicies($params),
+            'saveFpcPolicyOverride' => $this->saveFpcPolicyOverride($params),
+            'restoreFpcPolicyInheritance' => $this->restoreFpcPolicyInheritance($params),
+            'collectFpcPolicies' => $this->collectFpcPolicies($params),
+            'listFpcSyncRecords' => $this->listFpcSyncRecords($params),
+            'retryFpcSync' => $this->retryFpcSync($params),
             'toggleApiRule'      => $this->adminQueryService->toggleApiRule($params),
             'deleteApiRule'      => $this->adminQueryService->deleteApiRule($params),
             'getGlobalRules'     => $this->adminQueryService->getGlobalRules($params),
@@ -89,6 +99,7 @@ class CdnQueryProvider implements QueryProviderInterface
             'description' => __('提供 CDN 适配器、账户管理、域名绑定等能力'),
             'module'      => 'Weline_Cdn',
             'operations'  => [
+                ...$this->fpcPolicyDescriptors(),
                 [
                     'name'        => 'getAdapters',
                     'description' => __('获取所有可用的 CDN 适配器'),
@@ -207,7 +218,7 @@ class CdnQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name'        => 'executeWarmup',
-                    'description' => __('执行 CDN 预热任务'),
+                    'description' => __('执行 CDN 预热任务（仅跑队列）'),
                     'frontend'    => true,
                     'auth'        => 'backend',
                     'backend'     => true,
@@ -215,6 +226,61 @@ class CdnQueryProvider implements QueryProviderInterface
                     'mode'        => 'write',
                     'params'      => [
                         ['name' => 'limit', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 1000],
+                        ['name' => 'target_scope', 'type' => 'string', 'required' => false, 'max_length' => 255, 'description' => __('作用范围 storage_scope，空/Global=全部')],
+                        ['name' => 'site_id', 'type' => 'int', 'required' => false, 'min' => 0, 'description' => __('Website ID（与 target_scope 二选一；0=默认站）')],
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => false, 'min' => 1, 'description' => __('兼容：按 CDN Domain 过滤')],
+                        ['name' => 'provider', 'type' => 'string', 'required' => false, 'max_length' => 255, 'description' => __('Provider FQCN')],
+                    ],
+                    'returns'     => ['type' => 'array'],
+                ],
+                [
+                    'name'        => 'listWarmupProviders',
+                    'description' => __('列出 CDN WarmupProvider 及本范围计数'),
+                    'frontend'    => true,
+                    'auth'        => 'backend',
+                    'backend'     => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Cdn::cdn_warmup_list'],
+                    'mode'        => 'read',
+                    'params'      => [
+                        ['name' => 'target_scope', 'type' => 'string', 'required' => false, 'max_length' => 255],
+                        ['name' => 'site_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => false, 'min' => 1],
+                    ],
+                    'returns'     => ['type' => 'array'],
+                ],
+                [
+                    'name'        => 'listWarmupUrls',
+                    'description' => __('分页列出某 Provider 已入队 URL'),
+                    'frontend'    => true,
+                    'auth'        => 'backend',
+                    'backend'     => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Cdn::cdn_warmup_list'],
+                    'mode'        => 'read',
+                    'params'      => [
+                        ['name' => 'provider', 'type' => 'string', 'required' => true, 'max_length' => 255],
+                        ['name' => 'target_scope', 'type' => 'string', 'required' => false, 'max_length' => 255],
+                        ['name' => 'site_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => false, 'min' => 1],
+                        ['name' => 'page', 'type' => 'int', 'required' => false, 'min' => 1],
+                        ['name' => 'page_size', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 100],
+                        ['name' => 'status', 'type' => 'string', 'required' => false, 'max_length' => 20],
+                        ['name' => 'search', 'type' => 'string', 'required' => false, 'max_length' => 255],
+                    ],
+                    'returns'     => ['type' => 'array'],
+                ],
+                [
+                    'name'        => 'collectWarmup',
+                    'description' => __('从 WarmupProvider 收集 URL 入队'),
+                    'frontend'    => true,
+                    'auth'        => 'backend',
+                    'backend'     => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Cdn::cdn_warmup_collect'],
+                    'mode'        => 'write',
+                    'params'      => [
+                        ['name' => 'provider', 'type' => 'string', 'required' => true, 'max_length' => 255],
+                        ['name' => 'target_scope', 'type' => 'string', 'required' => false, 'max_length' => 255],
+                        ['name' => 'site_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => false, 'min' => 1],
                     ],
                     'returns'     => ['type' => 'array'],
                 ],
@@ -506,6 +572,83 @@ class CdnQueryProvider implements QueryProviderInterface
                 ],
             ],
         ];
+    }
+
+    /** 后台派生投影的输入契约；业务校验与 Scope 解析归管理 Service。 */
+    private function fpcPolicyDescriptors(): array
+    {
+        $scopeParams = [
+            'target_scope' => ['type' => 'string', 'required' => false, 'max_length' => 255, 'description' => __('作用范围')],
+            'store_mode' => ['type' => 'string', 'required' => false, 'default' => 'normal', 'description' => __('运行模式')],
+        ];
+        $listParams = $scopeParams + [
+            'page' => ['type' => 'int', 'required' => false, 'default' => 1, 'min' => 1],
+            'page_size' => ['type' => 'int', 'required' => false, 'default' => 20, 'min' => 1, 'max' => 100],
+            'keyword' => ['type' => 'string', 'required' => false, 'default' => '', 'max_length' => 255],
+        ];
+        $declaration = ['declaration_id' => ['type' => 'string', 'required' => true, 'max_length' => 64, 'description' => __('声明标识')]];
+        $definitions = [
+            ['listFpcPolicies', '查看 FPC 策略', 'read', 'cdn_api_rules_list', $listParams],
+            ['saveFpcPolicyOverride', '保存 FPC 策略覆盖', 'write', 'cdn_api_rules_toggle', $scopeParams + $declaration + [
+                'enabled' => ['type' => 'bool', 'required' => false, 'nullable' => true, 'description' => __('本层启用覆盖，null 表示继承')],
+                'ttl' => ['type' => 'int', 'required' => false, 'nullable' => true, 'min' => 1, 'description' => __('本层 TTL 覆盖，null 表示继承')],
+            ]],
+            ['restoreFpcPolicyInheritance', '恢复 FPC 策略继承', 'write', 'cdn_api_rules_toggle', $scopeParams + $declaration + [
+                'fields' => ['type' => 'array', 'required' => false, 'default' => ['enabled', 'ttl'], 'max_items' => 2, 'description' => __('恢复继承的字段')],
+            ]],
+            ['collectFpcPolicies', '收集 FPC 声明', 'write', 'cdn_api_rules_collect', $scopeParams],
+            ['listFpcSyncRecords', '查看 FPC 同步记录', 'read', 'cdn_api_rules_list', $listParams],
+            ['retryFpcSync', '重试 FPC 同步', 'write', 'cdn_rules_push', [
+                'sync_id' => ['type' => 'int', 'required' => true, 'min' => 1, 'description' => __('同步记录 ID')],
+            ]],
+        ];
+        $operations = [];
+        foreach ($definitions as [$name, $description, $mode, $source, $params]) {
+            $operations[] = [
+                'name' => $name, 'description' => __($description), 'mode' => $mode,
+                'external' => false, 'frontend' => true, 'backend' => true,
+                'auth' => 'backend', 'graph' => false,
+                'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Cdn::' . $source],
+                'params' => $params, 'returns' => ['type' => 'array'],
+            ];
+        }
+        return $operations;
+    }
+
+    #[BinQueryOperation(name: 'listFpcPolicies', description: '查看 FPC 策略', mode: 'read', external: false, frontend: true, backend: true, auth: 'backend')]
+    private function listFpcPolicies(array $params): array
+    {
+        return $this->adminQueryService->listFpcPolicies($params);
+    }
+
+    #[BinQueryOperation(name: 'saveFpcPolicyOverride', description: '保存 FPC 策略覆盖', mode: 'write', external: false, frontend: true, backend: true, auth: 'backend')]
+    private function saveFpcPolicyOverride(array $params): array
+    {
+        return $this->adminQueryService->saveFpcPolicyOverride($params);
+    }
+
+    #[BinQueryOperation(name: 'restoreFpcPolicyInheritance', description: '恢复 FPC 策略继承', mode: 'write', external: false, frontend: true, backend: true, auth: 'backend')]
+    private function restoreFpcPolicyInheritance(array $params): array
+    {
+        return $this->adminQueryService->restoreFpcPolicyInheritance($params);
+    }
+
+    #[BinQueryOperation(name: 'collectFpcPolicies', description: '收集 FPC 声明', mode: 'write', external: false, frontend: true, backend: true, auth: 'backend')]
+    private function collectFpcPolicies(array $params): array
+    {
+        return $this->adminQueryService->collectFpcPolicies($params);
+    }
+
+    #[BinQueryOperation(name: 'listFpcSyncRecords', description: '查看 FPC 同步记录', mode: 'read', external: false, frontend: true, backend: true, auth: 'backend')]
+    private function listFpcSyncRecords(array $params): array
+    {
+        return $this->adminQueryService->listFpcSyncRecords($params);
+    }
+
+    #[BinQueryOperation(name: 'retryFpcSync', description: '重试 FPC 同步', mode: 'write', external: false, frontend: true, backend: true, auth: 'backend')]
+    private function retryFpcSync(array $params): array
+    {
+        return $this->adminQueryService->retryFpcSync($params);
     }
 
     private function getAdapters(): array
@@ -879,17 +1022,26 @@ class CdnQueryProvider implements QueryProviderInterface
     private function bindAccountToScope(array $params): array
     {
         try {
+            $scope = $this->scopeFromParams($params);
+            $adapter = (string)($params['adapter'] ?? '');
+            $before = $this->scopedAccountBindingService->resolve($scope, $adapter);
             $binding = $this->accountManager->bindAccountToScope(
                 (int)($params['account_id'] ?? 0),
-                $this->scopeFromParams($params),
-                (string)($params['adapter'] ?? ''),
+                $scope,
+                $adapter,
                 (string)($params['media_base_url'] ?? ''),
                 (string)($params['global_alias'] ?? ''),
             );
 
+            $sync = $this->notifyScopeBindingSync($scope, $before, $binding);
+            if (!($sync['success'] ?? false)) {
+                return $sync + ['binding' => $this->projectBinding($binding), 'saved' => true];
+            }
+
             return [
                 'success' => true,
                 'binding' => $this->projectBinding($binding),
+                'sync' => $sync,
             ];
         } catch (\Throwable $e) {
             return [
@@ -932,14 +1084,23 @@ class CdnQueryProvider implements QueryProviderInterface
     private function restoreScopeInheritance(array $params): array
     {
         try {
+            $scope = $this->scopeFromParams($params);
+            $adapter = (string)($params['adapter'] ?? '');
+            $before = $this->scopedAccountBindingService->resolve($scope, $adapter);
             $restored = $this->accountManager->restoreScopeInheritance(
-                $this->scopeFromParams($params),
-                (string)($params['adapter'] ?? ''),
+                $scope,
+                $adapter,
             );
+            $after = $this->scopedAccountBindingService->resolve($scope, $adapter);
+            $sync = $this->notifyScopeBindingSync($scope, $before, $after);
+            if (!($sync['success'] ?? false)) {
+                return $sync + ['restored' => $restored];
+            }
 
             return [
                 'success' => true,
                 'restored' => $restored,
+                'sync' => $sync,
             ];
         } catch (\Throwable $e) {
             return [
@@ -954,6 +1115,19 @@ class CdnQueryProvider implements QueryProviderInterface
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
+    /** 使用既有 Scope 存储编码与脱敏投影，把账户变更交给 CDN 同步归属服务。 */
+    private function notifyScopeBindingSync(ScopeIdentity $scope, ?array $before, ?array $after): array
+    {
+        /** @var \Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface $resolver */
+        $resolver = ObjectManager::getInstance(\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class);
+        return $this->adminQueryService->notifyScopeBindingChange([
+            'target_scope' => $resolver->toStorageScope($scope),
+            'store_mode' => $scope->storeMode ?: ScopeIdentity::MODE_NORMAL,
+            'before' => $before === null ? null : $this->projectBinding($before),
+            'after' => $after === null ? null : $this->projectBinding($after),
+        ]);
+    }
+
     private function resolveCowMediaUrl(array $params): array
     {
         try {

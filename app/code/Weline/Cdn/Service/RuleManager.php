@@ -90,7 +90,7 @@ class RuleManager
         $overrideRules = $domain->getRulesOverrideArray();
         
         // 3. 获取API注释规则（Cloudflare格式，通用，不指定适配器）
-        $apiRules = $this->getApiRules($triggerType);
+        $apiRules = $this->getApiRules(null);
         
         // 4. 合并规则（优先级：API规则 > 域名规则 > 默认规则）
         // 这些规则是通用的，所有适配器都可以使用
@@ -109,7 +109,7 @@ class RuleManager
      * @param string|null $triggerType 触发类型过滤：'cron'、'realtime' 或 null（全部）
      * @return array
      */
-    private function getApiRules(?string $triggerType = null): array
+    private function getApiRules(?string $triggerType = null, bool $includeIdentity = false): array
     {
         /** @var ApiRule $apiRuleModel */
         $apiRuleModel = $this->objectManager->getInstance(ApiRule::class);
@@ -138,7 +138,11 @@ class RuleManager
         $rules = [];
         foreach ($ruleItems as $apiRule) {
             if (is_object($apiRule) && method_exists($apiRule, 'toCloudflareRule')) {
-                $rules[] = $apiRule->toCloudflareRule();
+                $rule = $apiRule->toCloudflareRule();
+                if ($includeIdentity) {
+                    $rule['_weline_identity'] = 'annotation:' . implode(':', [(string)$apiRule->getData('module'), (string)$apiRule->getData('class'), (string)$apiRule->getData('method')]);
+                }
+                $rules[] = $rule;
                 continue;
             }
 
@@ -190,25 +194,8 @@ class RuleManager
      */
     public function pushRules(Domain $domain): array
     {
-        $adapterCode = (string)($domain->getData(Domain::schema_fields_ADAPTER) ?? '');
-        $adapter = $this->adapterResolver->getAdapter($adapterCode);
-        if (!$adapter) {
-            throw new Core(__('适配器不存在：%{1}', [$domain->getData(Domain::schema_fields_ADAPTER)]));
-        }
-
-        // 获取合并后的规则（Free：仅 defaults；付费：预算内子集）
-        $rules = $this->planRulesForEdgePush($domain);
-
-        // 获取凭据
-        $credentials = $this->getCredentials($domain);
-        if (empty($credentials)) {
-            throw new Core(__('未配置账户凭据'));
-        }
-
-        $zoneId = $domain->getData(Domain::schema_fields_ZONE_ID);
-        $result = $adapter->putRules($zoneId, $rules, $credentials);
-
-        return $result;
+        return $this->objectManager->getInstance(FpcPolicyManagementService::class)
+            ->requestManualSync(['domain_id' => (int)$domain->getId()]);
     }
 
     /**
@@ -249,9 +236,13 @@ class RuleManager
      *
      * @return list<array<string, mixed>>
      */
-    public function planRulesForEdgePush(Domain $domain, ?string $triggerType = null): array
+    public function planRulesForEdgePush(Domain $domain, ?string $triggerType = null, bool $includeIdentity = false): array
     {
         $defaults = $this->getDefaultRules();
+        if ($includeIdentity) {
+            foreach ($defaults as $index => &$rule) { $rule['_weline_identity'] = 'default:' . $index; }
+            unset($rule);
+        }
         if (!$this->annotationsAllowedOnEdge($domain)) {
             return $defaults;
         }
@@ -262,10 +253,12 @@ class RuleManager
             return $defaults;
         }
 
-        $extra = \array_merge(
-            $domain->getRulesOverrideArray(),
-            $this->getApiRules($triggerType)
-        );
+        $overrides = $domain->getRulesOverrideArray();
+        if ($includeIdentity) {
+            foreach ($overrides as $index => &$rule) { $rule['_weline_identity'] = 'domain:' . $domain->getId() . ':override:' . $index; }
+            unset($rule);
+        }
+        $extra = \array_merge($overrides, $this->getApiRules(null, $includeIdentity));
         $accepted = [];
         foreach ($extra as $rule) {
             if (!\is_array($rule)) {
@@ -312,21 +305,7 @@ class RuleManager
      */
     public function pushDefaultRules(Domain $domain): array
     {
-        $adapterCode = (string)($domain->getData(Domain::schema_fields_ADAPTER) ?? '');
-        $adapter = $this->adapterResolver->getAdapter($adapterCode);
-        if (!$adapter) {
-            throw new Core(__('适配器不存在：%{1}', [$domain->getData(Domain::schema_fields_ADAPTER)]));
-        }
-
-        $rules = $this->getDefaultRules();
-        $credentials = $this->getCredentials($domain);
-        if (empty($credentials)) {
-            throw new Core(__('未配置账户凭据'));
-        }
-
-        $zoneId = (string)$domain->getData(Domain::schema_fields_ZONE_ID);
-
-        return $adapter->putRules($zoneId, $rules, $credentials);
+        return $this->pushRules($domain);
     }
 
     /**
@@ -335,39 +314,35 @@ class RuleManager
      * @param Domain $domain 域名模型
      * @return array 凭据数组
      */
-    private function getCredentials(Domain $domain): array
+    public function getCredentials(Domain $domain): array
     {
-        // 1. 如果域名有自定义凭据，优先使用
+        return $this->resolveCredentialSource($domain)['credentials'];
+    }
+
+    /** 有效来源与凭据一起解析；持久作业只保存来源身份，不保存凭据。 */
+    public function resolveCredentialSource(Domain $domain): array
+    {
+        $domainSource = ['credential_identity'=>'domain:'.$domain->getId(), 'credential_domain_id'=>(int)$domain->getId(), 'account_id'=>0];
         $credentials = $domain->getCredentialsArray();
-        if (!empty($credentials)) {
-            return $credentials;
+        if ($credentials !== []) {
+            return $domainSource + ['credentials'=>$credentials];
         }
-
-        // 2. 如果指定了 account_id，使用该账户的凭据
-        $accountId = $domain->getData(Domain::schema_fields_ACCOUNT_ID);
-        if ($accountId) {
-            $account = $this->objectManager->getInstance(Account::class)->reset()->load($accountId);
-            if ($account->getId()) {
-                $accountCredentials = $account->getCredentialsArray();
-                if (!empty($accountCredentials)) {
-                    return $accountCredentials;
-                }
+        $accountId = (int)$domain->getData(Domain::schema_fields_ACCOUNT_ID);
+        if ($accountId > 0) {
+            $account = $this->accountManager->getAccount($accountId);
+            $credentials = $account?->getCredentialsArray() ?? [];
+            if ($credentials !== []) {
+                return ['credential_identity'=>'account:'.$accountId, 'credential_domain_id'=>0, 'account_id'=>$accountId, 'credentials'=>$credentials];
             }
         }
-
-        // 3. 如果继承默认账户，使用默认账户的凭据
         if ($domain->isInheritDefault()) {
-            $adapter = $domain->getData(Domain::schema_fields_ADAPTER);
-            $defaultAccount = $this->accountManager->getDefaultAccount($adapter);
-            if ($defaultAccount) {
-                $defaultCredentials = $defaultAccount->getCredentialsArray();
-                if (!empty($defaultCredentials)) {
-                    return $defaultCredentials;
-                }
+            $account = $this->accountManager->getDefaultAccount((string)$domain->getData(Domain::schema_fields_ADAPTER));
+            $credentials = $account?->getCredentialsArray() ?? [];
+            if ($credentials !== []) {
+                $accountId = (int)$account->getId();
+                return ['credential_identity'=>'account:'.$accountId, 'credential_domain_id'=>0, 'account_id'=>$accountId, 'credentials'=>$credentials];
             }
         }
-
-        return [];
+        return $domainSource + ['credentials'=>[]];
     }
 }
-

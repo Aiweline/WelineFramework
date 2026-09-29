@@ -6,6 +6,7 @@ namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\LayoutValueHydrationRegistry;
 use Weline\Theme\Service\ThemeComponentRenderer;
@@ -15,10 +16,10 @@ use Weline\Theme\Service\ThemePlaceableRegistry;
 use Weline\Theme\Taglib\Slot;
 
 /**
- * Runtime widget render for baked entity phtml call sites.
+ * Renders generated PHTML widget calls with their frozen configuration.
  *
- * Loads node config from sidecar; optionally applies a light locale overlay when
- * ThemeScopedPreviewResolver is available. Falls back to an HTML comment on miss.
+ * renderResolved receives complete base and locale configurations plus instance
+ * slots. The older render/renderBound entry points remain for compatibility.
  */
 final class ThemeLayoutEntityWidgetRenderer
 {
@@ -29,6 +30,64 @@ final class ThemeLayoutEntityWidgetRenderer
     ) {
     }
 
+    /** A generated call owns its complete configuration and its instance child slots. */
+    public function renderResolved(array $entry, array $localeOverrides = [], array $slots = [], ?ThemeVersionIdentity $identity = null): string
+    {
+        if (\array_key_exists('is_active', $entry) && !$entry['is_active']) {
+            return '';
+        }
+        $uid = (string)($entry['node_uid'] ?? '');
+        $module = (string)($entry['widget_module'] ?? '');
+        $type = (string)($entry['widget_type'] ?? '');
+        $code = (string)($entry['widget_code'] ?? '');
+        if ($code === '__no_widget_placements__') { return ''; }
+        $area = $identity?->area ?? 'frontend';
+        $theme = $identity !== null ? $this->themeForRequest($identity->themeId) : null;
+        $definition = $this->placeableRegistry->find($module, $type, $code, $theme, $area);
+        if ($definition === null) {
+            return '<!-- theme-layout-entity:unknown-widget:' . \htmlspecialchars($module . '::' . $code, \ENT_QUOTES) . ' -->';
+        }
+        $config = \is_array($entry['config'] ?? null) ? $entry['config'] : [];
+        $locale = \strtolower(\str_replace('-', '_', \Weline\Theme\Helper\WidgetI18n::storefrontLocale()));
+        foreach ($localeOverrides as $candidate => $completeConfig) {
+            if (\strtolower(\str_replace('-', '_', (string)$candidate)) === $locale && \is_array($completeConfig)) {
+                $config = $completeConfig;
+                break;
+            }
+        }
+        foreach (['layout_source', 'source', 'source_position'] as $assetKey) {
+            if (!empty($entry[$assetKey])) { $config['_' . $assetKey] = $entry[$assetKey]; }
+        }
+        $config = $this->hydrateTypedLayoutValues($config, $identity?->canonicalScope ?? ThemeContextService::DEFAULT_SCOPE);
+        $config['_widget_instance_key'] = $uid;
+        $config['node_uid'] = $config['_node_uid'] = $uid;
+        $config['slot_id'] = $config['_slot_id'] = (string)($entry['slot_id'] ?? '');
+        $config['_widget_module'] = $module;
+        $config['_widget_type'] = $type;
+        $config['_widget_code'] = $code;
+        $config['_widget_area'] = $area;
+        $config['children'] = ResolvedLayoutSlots::legacyChildren($slots);
+        $context = ['area' => $area, 'block_class' => (string)($entry['block_class'] ?? ''), 'template_path' => (string)($entry['template_path'] ?? '')];
+        $html = ResolvedLayoutSlots::with($slots, fn(): string => $this->componentRenderer->renderResolved($definition, $config, $theme, $context));
+        $attributes = [
+            'data-node-uid' => $uid,
+            'data-widget-code' => $code,
+            'data-widget-module' => $module,
+            'data-widget-type' => $type,
+            'data-widget-name' => $definition->name,
+            'data-slot-id' => (string)($entry['slot_id'] ?? ''),
+            'data-layout-option' => (string)($entry['layout_option'] ?? 'default'),
+            'data-layout-scope' => (string)($entry['scope'] ?? $identity?->canonicalScope ?? ''),
+            'data-target-type' => (string)($entry['target_type'] ?? 'global'),
+            'data-target-id' => (string)($entry['target_id'] ?? ''),
+        ];
+        $attrs = '';
+        foreach ($attributes as $name => $value) {
+            if ($value !== '') { $attrs .= ' ' . $name . '="' . \htmlspecialchars($value, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"'; }
+        }
+        return '<div class="widget-wrapper"' . $attrs . '>' . $html . '</div>';
+    }
+
     public static function requestNodeKey(string $uid, string $source, int $themeId, string $scope, string $version, string $locale): string
     {
         return 'theme.layout_entity.node.' . hash('sha256', json_encode([$uid, $source, $themeId, $scope, $version, $locale], JSON_THROW_ON_ERROR));
@@ -36,13 +95,17 @@ final class ThemeLayoutEntityWidgetRenderer
 
     public function renderBound(string $nodeUid, string $source, EntityRenderBinding $binding): string
     {
+        $source = $source === 'chrome' ? 'chrome' : 'page';
+        // Page shell includeExecutable injects page binding into chrome.phtml; remap to chrome sidecar.
+        $effective = $this->configStore->bindingForConfigSource($source, $binding) ?? $binding;
+
         return $this->render(
             $nodeUid,
             $source,
-            $binding->identity->themeId,
-            $binding->identity->scopeKey(),
-            $binding->cacheKey(),
-            $binding,
+            $effective->identity->themeId,
+            $effective->identity->scopeKey(),
+            $effective->cacheKey(),
+            $effective,
         );
     }
 
@@ -68,12 +131,19 @@ final class ThemeLayoutEntityWidgetRenderer
         // may render the same container twice in one request (product-info nested slots).
         Slot::clearRegisteredSlots();
 
+        $effectiveBinding = $this->configStore->bindingForConfigSource($configSource, $binding);
+        if ($effectiveBinding !== null) {
+            $themeId = $effectiveBinding->identity->themeId;
+            $scopeKey = $effectiveBinding->identity->scopeKey();
+            $versionKey = $effectiveBinding->cacheKey();
+        }
+
         $requestKey = self::requestNodeKey($nodeUid, $configSource, $themeId, $scopeKey, $versionKey, \Weline\Theme\Helper\WidgetI18n::storefrontLocale());
         $primed = RequestContext::get($requestKey);
         $entry = \is_array($primed) && $primed !== []
             ? $primed
-            : ($binding !== null
-                ? ($this->configStore->readBoundConfig($binding)[$nodeUid] ?? [])
+            : ($effectiveBinding !== null
+                ? ($this->configStore->readBoundConfig($effectiveBinding)[$nodeUid] ?? [])
                 : $this->configStore->readNodeConfig(
                 $configSource,
                 $nodeUid,
@@ -90,7 +160,7 @@ final class ThemeLayoutEntityWidgetRenderer
             $entry = $this->configStore->hydratePageNodeFromStructure(
                 $entry,
                 $nodeUid,
-                $binding?->structurePath ?? '',
+                $effectiveBinding?->structurePath ?? '',
             );
             RequestContext::set($requestKey, $entry);
         }
@@ -210,9 +280,8 @@ final class ThemeLayoutEntityWidgetRenderer
      */
     private function maybeApplyLocaleOverlay(array $entry): array
     {
-        // Entity phtml call sites are rare; storefront slot fill applies full
-        // ThemeRuntimeLayoutResolver::overlayLocaleOnLayout before processSlotsWithLayout.
-        // Keep entry as baked when no per-locale sidecar map is present.
+        // Legacy render() compatibility leaves its supplied configuration intact.
+        // Generated PHTML uses renderResolved() with explicit locale configurations.
         if (isset($entry['config']) && \is_array($entry['config'])) {
             return $entry;
         }

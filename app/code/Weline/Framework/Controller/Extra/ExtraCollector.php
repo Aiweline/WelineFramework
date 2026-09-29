@@ -53,8 +53,17 @@ final class ExtraCollector
             'schema_version' => self::SCHEMA,
             'declarations' => $declarations,
         ], true);
-        if (file_put_contents($path, "<?php\nreturn " . $export . ";\n") === false) {
-            throw new Exception(__('无法写入 Extra 侧车'));
+        (new \Weline\Framework\Compilation\AtomicCompiledFilePublisher())->publish(
+            $path, "<?php\nreturn " . $export . ";\n",
+        );
+        // 配置了快照提供方时，由它在完整快照发布后推进代次。
+        $resolution = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Runtime\RuntimeProviderResolver::class,
+        )->resolveDetailed(FpcPolicySnapshotProviderInterface::class);
+        if ($resolution->status === \Weline\Framework\Runtime\RuntimeProviderResolution::NOT_CONFIGURED) {
+            \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Cache\Namespace\NamespaceGenerationRepository::class,
+            )->bump('global/fpc-policy');
         }
         return $declarations;
     }
@@ -65,8 +74,13 @@ final class ExtraCollector
     public function loadSidecar(): ?array
     {
         $path = BP . self::SIDECAR_RELATIVE;
+        clearstatcache(true, $path);
         if (!is_file($path)) {
             return null;
+        }
+        // 代次已由写侧推进；当前 Worker 不得继续读取旧 OPcache 侧车。
+        if (function_exists('opcache_invalidate')) {
+            @opcache_invalidate($path, true);
         }
         $data = include $path;
         if (!is_array($data) || ($data['schema_version'] ?? '') !== self::SCHEMA) {
@@ -158,6 +172,10 @@ final class ExtraCollector
                 $patterns = array_values(array_filter(array_map('strval', $normalized['public_path_patterns'])));
             }
             $out[] = [
+                'declaration_id' => FpcPolicySnapshot::declarationId([
+                    'module' => $moduleName, 'class' => $reflection->getName(),
+                    'method' => $method->getName(), 'type' => $type,
+                ]),
                 'module' => $moduleName,
                 'class' => $reflection->getName(),
                 'method' => $method->getName(),

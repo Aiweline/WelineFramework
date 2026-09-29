@@ -16,6 +16,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\UrlManager\Api\Rewrite\UrlRewriteDirectoryInterface;
@@ -288,6 +289,7 @@ class ResponseRedirectBefore implements ObserverInterface
     private function isStatefulFrontendRedirectPath(string $path): bool
     {
         $normalized = '/' . \trim($path, '/');
+        $normalized = Url::peelWebsiteMountPathFromRelativePath($normalized);
         $normalized = \strtolower($this->stripCurrencyLocalePrefixes($normalized));
 
         foreach ([

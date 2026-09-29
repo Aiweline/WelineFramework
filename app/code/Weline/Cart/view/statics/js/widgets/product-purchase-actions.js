@@ -226,49 +226,97 @@
         return result;
     }
 
+    function isUnknownGuestTokenWorkerParam(errorOrResult) {
+        const msg = String(
+            (errorOrResult && errorOrResult.message)
+            || (errorOrResult && errorOrResult.error)
+            || (errorOrResult && errorOrResult.code)
+            || ''
+        );
+        return /Unknown frontend worker param:\s*guest_token/i.test(msg);
+    }
+
+    /**
+     * Always adopt via issueGuestToken (Cookie authority).
+     * Strategy:
+     * - Has JS token + WelineCart → force renew first (writes Cookie).
+     * - Renew OK → issueGuestToken({}) only (adopt Cookie; never send guest_token).
+     * - Renew failed / skipped (no WelineCart) + JS token → issueGuestToken({guest_token});
+     *   on 422 Unknown frontend worker param: guest_token → degrade to issueGuestToken({}).
+     * - No JS token → issueGuestToken({}) (mint / adopt existing Cookie).
+     * No WelineCart: still issues via Api; sessionStorage token uses guest_token path above.
+     * Never return a JS-only token without issue; never silent-fake success on empty adopt.
+     */
     async function ensureGuestToken() {
-        if (global.WelineCart && typeof global.WelineCart.getGuestSession === 'function') {
-            const existing = global.WelineCart.getGuestSession();
-            if (existing && existing.token) {
-                if (typeof global.WelineCart.renewGuestSession === 'function') {
-                    global.WelineCart.renewGuestSession().catch(function () {});
-                }
-                return existing.token;
-            }
-        }
-
-        let guestToken = '';
-        try {
-            guestToken = String(global.sessionStorage.getItem(GUEST_TOKEN_STORAGE_KEY) || '').trim();
-        } catch (error) {
-            // Storage can be unavailable in privacy-restricted browser contexts.
-        }
-        if (guestToken) {
-            if (global.WelineCart && typeof global.WelineCart.rememberGuestSession === 'function') {
-                global.WelineCart.rememberGuestSession(guestToken);
-            }
-            return guestToken;
-        }
-
         if (!guestTokenPromise) {
             guestTokenPromise = (async function () {
-                const result = await (await waitForCartApi()).issueGuestToken({}, { silent: true });
+                let existingToken = '';
+                if (global.WelineCart && typeof global.WelineCart.getGuestSession === 'function') {
+                    const existing = global.WelineCart.getGuestSession();
+                    if (existing && existing.token) {
+                        existingToken = String(existing.token).trim();
+                    }
+                }
+                if (!existingToken) {
+                    try {
+                        existingToken = String(global.sessionStorage.getItem(GUEST_TOKEN_STORAGE_KEY) || '').trim();
+                    } catch (error) {
+                        // Storage can be unavailable in privacy-restricted browser contexts.
+                    }
+                }
+
+                let cookieSyncedByRenew = false;
+                if (existingToken && global.WelineCart && typeof global.WelineCart.renewGuestSession === 'function') {
+                    try {
+                        await global.WelineCart.renewGuestSession({ force: true });
+                        cookieSyncedByRenew = true;
+                    } catch (error) {
+                        cookieSyncedByRenew = false;
+                    }
+                }
+
+                const cartApi = await waitForCartApi();
+                let result;
+                if (cookieSyncedByRenew || !existingToken) {
+                    // Cookie should already hold the identity (or no JS token to pass).
+                    result = await cartApi.issueGuestToken({}, { silent: true });
+                } else {
+                    // Renew skipped (no WelineCart) or failed — Cookie may still be empty.
+                    try {
+                        result = await cartApi.issueGuestToken({ guest_token: existingToken }, { silent: true });
+                        if (result && result.success === false && isUnknownGuestTokenWorkerParam(result)) {
+                            result = await cartApi.issueGuestToken({}, { silent: true });
+                        } else if (result && result.success === false) {
+                            throw new Error(String(result.message || 'issueGuestToken_failed'));
+                        }
+                    } catch (error) {
+                        if (isUnknownGuestTokenWorkerParam(error)) {
+                            result = await cartApi.issueGuestToken({}, { silent: true });
+                        } else {
+                            throw error;
+                        }
+                    }
+                }
+
+                if (result && result.success === false) {
+                    throw new Error(String(result.message || 'issueGuestToken_failed'));
+                }
                 const payload = result && result.data && typeof result.data === 'object' ? result.data : result;
-                const issued = String((payload && payload.guest_token) || (result && result.guest_token) || '').trim();
-                if (!issued) {
+                const adopted = String((payload && payload.guest_token) || (result && result.guest_token) || '').trim();
+                if (!adopted) {
                     throw new Error('guest_token_unavailable');
                 }
                 const expiresAt = Number((payload && payload.expires_at_ms) || (Date.now() + 15 * 24 * 3600 * 1000));
                 if (global.WelineCart && typeof global.WelineCart.rememberGuestSession === 'function') {
-                    global.WelineCart.rememberGuestSession(issued, expiresAt);
+                    global.WelineCart.rememberGuestSession(adopted, expiresAt);
                 } else {
                     try {
-                        global.sessionStorage.setItem(GUEST_TOKEN_STORAGE_KEY, issued);
+                        global.sessionStorage.setItem(GUEST_TOKEN_STORAGE_KEY, adopted);
                     } catch (error) {
                         // The active mutation can still use this request-owned token.
                     }
                 }
-                return issued;
+                return adopted;
             })().finally(function () {
                 guestTokenPromise = null;
             });

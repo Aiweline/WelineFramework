@@ -104,33 +104,7 @@ final class RequiredDefaultInjectionBakeMergerContractTest extends TestCase
         self::assertSame([], $merged['list-filters'] ?? []);
     }
 
-    public function testBakeCoordinatorWiresMergerBeforeMaterialize(): void
-    {
-        $bake = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php'
-        );
-        $pageStart = \strpos($bake, 'function bakePageFromNodes');
-        self::assertNotFalse($pageStart);
-        $pageEnd = \strpos($bake, 'function rebakeAfterInjectionCollect', $pageStart);
-        self::assertNotFalse($pageEnd);
-        $pageBody = \substr($bake, $pageStart, $pageEnd - $pageStart);
-        self::assertStringContainsString('mergeRequiredDefaultsIntoNodes', $pageBody);
 
-        $chromeStart = \strpos($bake, 'function bakeChromeFromNodes');
-        self::assertNotFalse($chromeStart);
-        $chromeEnd = \strpos($bake, 'function bakePageFromNodes', $chromeStart);
-        self::assertNotFalse($chromeEnd);
-        $chromeBody = \substr($bake, $chromeStart, $chromeEnd - $chromeStart);
-        self::assertStringContainsString('mergeRequiredDefaultsIntoNodes', $chromeBody);
-        self::assertStringContainsString("'homepage'", $chromeBody);
-    }
 
-    public function testMaterializerWritesPageTypeIntoStructureJson(): void
-    {
-        $src = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityMaterializer.php'
-        );
-        self::assertStringContainsString("'page_type'", $src);
-        self::assertStringContainsString("'slots' => \$slots", $src);
-    }
+
 }

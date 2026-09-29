@@ -38,6 +38,13 @@ class ThemeComponentRenderer
         return $this->doRender($definition, $instanceConfig, $theme, $context);
     }
 
+    /** The saved config already includes definition and theme defaults. */
+    public function renderResolved(ThemeComponentDefinition $definition, array $config, ?WelineTheme $theme = null, array $context = []): string
+    {
+        $context['configResolved'] = true;
+        return $this->render($definition, $config, $theme, $context);
+    }
+
     private function doRender(ThemeComponentDefinition $definition, array $instanceConfig = [], ?WelineTheme $theme = null, array $context = []): string
     {
         // REQ-THEME-0016 / required-default-all-layouts: entity + overlay paths also
@@ -47,21 +54,44 @@ class ThemeComponentRenderer
         Slot::clearRegisteredSlots();
 
         $area = $definition->area ?: ((string)($context['area'] ?? 'frontend'));
-        $config = $this->mergeConfig($definition, $instanceConfig, $theme, $area);
-        $config = $this->exposeThemeComponentConfigAsMeta($definition, $config);
+        $resolved = !empty($context['configResolved']);
+        $config = $resolved
+            ? $this->normalizeConfigByParamDefinitions($instanceConfig, $definition->params, true)
+            : $this->mergeConfig($definition, $instanceConfig, $theme, $area);
+        $config = $this->exposeThemeComponentConfigAsMeta($definition, $config, $resolved);
         if (!empty($context['preview_mode'])) {
             $config['preview_mode'] = true;
         }
         $config['theme_component'] = $definition->toArray();
         $config['theme_component_meta'] = $definition->meta;
+        // Widget files use both extracted keys and the documented $config variable.
+        $dictionary = $config;
+        $dictionary['config'] = $config;
 
-        $renderable = $this->renderableResolver->resolve($definition, $config);
+        $renderable = !empty($context['block_class'])
+            ? new \Weline\Theme\Dto\ThemeRenderable(\Weline\Theme\Dto\ThemeRenderable::MODE_BLOCK_CLASS, blockClass: (string)$context['block_class'])
+            : (!empty($context['template_path'])
+                ? new \Weline\Theme\Dto\ThemeRenderable(\Weline\Theme\Dto\ThemeRenderable::MODE_TEMPLATE_PATH, templatePath: (string)$context['template_path'])
+                : $this->renderableResolver->resolve($definition, $config));
         $assets = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\WidgetAssetRenderer::class)->render(
             array_merge($definition->meta, $definition->toWidgetArray()), $config, (string)$renderable->templatePath,
         );
 
         if ($renderable->isTemplateContent()) {
-            return $this->wrapWidgetAssets($this->runtimeTemplateMaterializer->renderContent((string)$renderable->templateContent, $config), $assets);
+            $origin = (string)($definition->templatePath ?? '');
+            if ($origin === '' && $definition->module !== '') {
+                $relative = $definition->type === 'theme_component'
+                    ? 'components/' . $definition->code . '.phtml'
+                    : 'widgets/' . $definition->type . '/' . $definition->code . '/default.phtml';
+                try {
+                    $origin = (string)($this->template->convertFetchFileName($definition->module . '::theme/' . $area . '/' . $relative)[1] ?? '');
+                } catch (\Throwable) {
+                    // In-memory definitions may have no registered module source directory.
+                }
+            }
+            return $this->wrapWidgetAssets($this->runtimeTemplateMaterializer->renderContent(
+                (string)$renderable->templateContent, $dictionary, $origin, $definition->getIdentity() . ':' . (string)$definition->versionId,
+            ), $assets);
         }
 
         if ($renderable->isBlockClass()) {
@@ -74,11 +104,10 @@ class ThemeComponentRenderer
         }
 
         if (is_file($templatePath)) {
-            return $this->wrapWidgetAssets($this->runtimeTemplateMaterializer->renderFile($templatePath, $config), $assets);
+            return $this->wrapWidgetAssets($this->runtimeTemplateMaterializer->renderFile($templatePath, $dictionary), $assets);
         }
 
-        $this->template->unsetData();
-        $html = $this->template->fetchHtml($templatePath, $config);
+        $html = $this->template->fetchHtml($templatePath, $dictionary);
 
         return $this->wrapWidgetAssets(is_string($html) ? $html : '', $assets);
     }
@@ -131,14 +160,14 @@ class ThemeComponentRenderer
         return $defaults;
     }
 
-    private function exposeThemeComponentConfigAsMeta(ThemeComponentDefinition $definition, array $config): array
+    private function exposeThemeComponentConfigAsMeta(ThemeComponentDefinition $definition, array $config, bool $resolved = false): array
     {
         if ($definition->module !== 'Weline_Theme' || $definition->type !== 'theme_component') {
             return $config;
         }
 
         $meta = is_array($config['meta'] ?? null) ? $config['meta'] : [];
-        $meta = $this->normalizeMetaArrayByParamDefinitions($meta, $definition->params);
+        $meta = $this->normalizeMetaArrayByParamDefinitions($meta, $definition->params, $resolved);
         foreach ($config as $key => $value) {
             if (!is_string($key) || !str_starts_with($key, 'meta.') || $key === 'meta.') {
                 continue;
@@ -147,7 +176,7 @@ class ThemeComponentRenderer
             $this->setNestedMetaValue(
                 $meta,
                 $metaPath,
-                $this->normalizeMetaValueByParamDefinition($metaPath, $value, $definition->params)
+                $this->normalizeMetaValueByParamDefinition($metaPath, $value, $definition->params, $resolved)
             );
         }
 
@@ -167,40 +196,50 @@ class ThemeComponentRenderer
         return $config;
     }
 
-    private function normalizeConfigByParamDefinitions(array $config, array $params): array
+    private function normalizeConfigByParamDefinitions(array $config, array $params, bool $resolved = false): array
     {
         foreach ($params as $key => $definition) {
             $paramName = $this->resolveParamName($key, $definition);
             if ($paramName === null || !is_array($definition) || !array_key_exists($paramName, $config)) {
                 continue;
             }
-            $config[$paramName] = ThemeData::normalizeParamValueForDefinition($config[$paramName], $definition);
+            $config[$paramName] = $this->normalizeParamValue($config[$paramName], $definition, $resolved);
         }
 
         return $config;
     }
 
-    private function normalizeMetaArrayByParamDefinitions(array $meta, array $params): array
+    private function normalizeMetaArrayByParamDefinitions(array $meta, array $params, bool $resolved = false): array
     {
         foreach ($params as $key => $definition) {
             $paramName = $this->resolveParamName($key, $definition);
             if ($paramName === null || !is_array($definition) || !array_key_exists($paramName, $meta)) {
                 continue;
             }
-            $meta[$paramName] = ThemeData::normalizeParamValueForDefinition($meta[$paramName], $definition);
+            $meta[$paramName] = $this->normalizeParamValue($meta[$paramName], $definition, $resolved);
         }
 
         return $meta;
     }
 
-    private function normalizeMetaValueByParamDefinition(string $metaPath, mixed $value, array $params): mixed
+    private function normalizeMetaValueByParamDefinition(string $metaPath, mixed $value, array $params, bool $resolved = false): mixed
     {
         $definition = $this->findParamDefinition($metaPath, $params);
         if ($definition === null) {
             return $value;
         }
 
-        return ThemeData::normalizeParamValueForDefinition($value, $definition);
+        return $this->normalizeParamValue($value, $definition, $resolved);
+    }
+
+    /** Frozen values may be decoded, but an explicit empty value never consults today's defaults. */
+    private function normalizeParamValue(mixed $value, array $definition, bool $resolved): mixed
+    {
+        if (!$resolved) { return ThemeData::normalizeParamValueForDefinition($value, $definition); }
+        $expectsArray = strtolower(trim((string)($definition['type'] ?? ''))) === 'array' || is_array($definition['default'] ?? null);
+        if (!$expectsArray || !is_string($value) || trim($value) === '') { return $value; }
+        $decoded = json_decode($value, true);
+        return json_last_error() === JSON_ERROR_NONE && is_array($decoded) ? $decoded : $value;
     }
 
     private function findParamDefinition(string $paramName, array $params): ?array
@@ -253,7 +292,7 @@ class ThemeComponentRenderer
             return '';
         }
 
-        $block = ObjectManager::getInstance($blockClass);
+        $block = clone ObjectManager::getInstance($blockClass);
         if (method_exists($block, 'setData')) {
             foreach ($config as $key => $value) {
                 $block->setData($key, $value);

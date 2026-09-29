@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\SystemConfig\Service;
 
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
@@ -20,6 +22,7 @@ final class ScopeSelectorCatalog implements ScopeSelectorCatalogInterface
 
     public function build(string $selectedScope, ?array $catalogOptions = null, array $claims = []): array
     {
+        ObjectManager::getInstance(Request::class)->addModule('Weline_SystemConfig');
         $catalogOptions ??= $this->catalog->options();
         $identity = $claims !== []
             ? $this->identityFromClaims($claims)

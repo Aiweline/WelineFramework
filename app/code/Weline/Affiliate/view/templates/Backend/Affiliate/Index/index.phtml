@@ -158,6 +158,20 @@ $buildPageParams = static function (int $page, array $filters): array {
                                         options="storeOptionsJson"
                                         disabled="true"
                                     />
+                                <?php elseif (!$createScopeReady): ?>
+                                    <w:websites:store:select
+                                        id="affiliate-create-store"
+                                        name="store_code"
+                                        value="storeSelectValue"
+                                        display="storeSelectDisplay"
+                                        options="storeOptionsJson"
+                                        allow-empty="true"
+                                        clearable="true"
+                                        empty-label="@lang(全部店铺)"
+                                        placeholder="@lang(选择店铺)"
+                                        on-change="affiliateAdminReloadFormScope('store')"
+                                        disabled="true"
+                                    />
                                 <?php else: ?>
                                     <w:websites:store:select
                                         id="affiliate-create-store"
@@ -170,7 +184,6 @@ $buildPageParams = static function (int $page, array $filters): array {
                                         empty-label="@lang(全部店铺)"
                                         placeholder="@lang(选择店铺)"
                                         on-change="affiliateAdminReloadFormScope('store')"
-                                        disabled="<?= $createScopeReady ? 'false' : 'true' ?>"
                                     />
                                 <?php endif; ?>
                             </div>
@@ -185,6 +198,20 @@ $buildPageParams = static function (int $page, array $filters): array {
                                         options="channelOptionsJson"
                                         disabled="true"
                                     />
+                                <?php elseif (!$createScopeReady): ?>
+                                    <w:websites:channel:select
+                                        id="affiliate-create-channel"
+                                        name="channel_code"
+                                        value="channelSelectValue"
+                                        display="channelSelectDisplay"
+                                        options="channelOptionsJson"
+                                        allow-empty="true"
+                                        clearable="true"
+                                        empty-label="@lang(全部渠道)"
+                                        placeholder="@lang(选择渠道)"
+                                        on-change="affiliateAdminReloadFormScope('channel')"
+                                        disabled="true"
+                                    />
                                 <?php else: ?>
                                     <w:websites:channel:select
                                         id="affiliate-create-channel"
@@ -197,7 +224,6 @@ $buildPageParams = static function (int $page, array $filters): array {
                                         empty-label="@lang(全部渠道)"
                                         placeholder="@lang(选择渠道)"
                                         on-change="affiliateAdminReloadFormScope('channel')"
-                                        disabled="<?= $createScopeReady ? 'false' : 'true' ?>"
                                     />
                                 <?php endif; ?>
                             </div>
@@ -334,53 +360,92 @@ $buildPageParams = static function (int $page, array $filters): array {
                     <div style="--w-span-md:4;">
                         <div class="w-field">
                             <label class="w-field__label" for="affiliate-filter-store"><?= __('Store') ?></label>
-                            <w:websites:store:select
-                                id="affiliate-filter-store"
-                                name="store_code"
-                                value="filterStoreSelectValue"
-                                display="filterStoreSelectDisplay"
-                                options="filterStoreOptionsJson"
-                                allow-empty="true"
-                                clearable="true"
-                                empty-label="@lang(全部店铺)"
-                                placeholder="@lang(选择店铺)"
-                                on-change="affiliateAdminReloadFilterScope('store')"
-                                disabled="<?= $filterScopeReady ? 'false' : 'true' ?>"
-                            />
+                            <?php if (!$filterScopeReady): ?>
+                                <w:websites:store:select
+                                    id="affiliate-filter-store"
+                                    name="store_code"
+                                    value="filterStoreSelectValue"
+                                    display="filterStoreSelectDisplay"
+                                    options="filterStoreOptionsJson"
+                                    allow-empty="true"
+                                    clearable="true"
+                                    empty-label="@lang(全部店铺)"
+                                    placeholder="@lang(选择店铺)"
+                                    on-change="affiliateAdminReloadFilterScope('store')"
+                                    disabled="true"
+                                />
+                            <?php else: ?>
+                                <w:websites:store:select
+                                    id="affiliate-filter-store"
+                                    name="store_code"
+                                    value="filterStoreSelectValue"
+                                    display="filterStoreSelectDisplay"
+                                    options="filterStoreOptionsJson"
+                                    allow-empty="true"
+                                    clearable="true"
+                                    empty-label="@lang(全部店铺)"
+                                    placeholder="@lang(选择店铺)"
+                                    on-change="affiliateAdminReloadFilterScope('store')"
+                                />
+                            <?php endif; ?>
                         </div>
                     </div>
                     <div style="--w-span-md:4;">
                         <div class="w-field">
                             <label class="w-field__label" for="affiliate-filter-channel"><?= __('Channel') ?></label>
-                            <w:websites:channel:select
-                                id="affiliate-filter-channel"
-                                name="channel_code"
-                                value="filterChannelSelectValue"
-                                display="filterChannelSelectDisplay"
-                                options="filterChannelOptionsJson"
-                                allow-empty="true"
-                                clearable="true"
-                                empty-label="@lang(全部渠道)"
-                                placeholder="@lang(选择渠道)"
-                                on-change="affiliateAdminReloadFilterScope('channel')"
-                                disabled="<?= $filterScopeReady ? 'false' : 'true' ?>"
-                            />
+                            <?php if (!$filterScopeReady): ?>
+                                <w:websites:channel:select
+                                    id="affiliate-filter-channel"
+                                    name="channel_code"
+                                    value="filterChannelSelectValue"
+                                    display="filterChannelSelectDisplay"
+                                    options="filterChannelOptionsJson"
+                                    allow-empty="true"
+                                    clearable="true"
+                                    empty-label="@lang(全部渠道)"
+                                    placeholder="@lang(选择渠道)"
+                                    on-change="affiliateAdminReloadFilterScope('channel')"
+                                    disabled="true"
+                                />
+                            <?php else: ?>
+                                <w:websites:channel:select
+                                    id="affiliate-filter-channel"
+                                    name="channel_code"
+                                    value="filterChannelSelectValue"
+                                    display="filterChannelSelectDisplay"
+                                    options="filterChannelOptionsJson"
+                                    allow-empty="true"
+                                    clearable="true"
+                                    empty-label="@lang(全部渠道)"
+                                    placeholder="@lang(选择渠道)"
+                                    on-change="affiliateAdminReloadFilterScope('channel')"
+                                />
+                            <?php endif; ?>
                         </div>
                     </div>
                     <div style="--w-span-md:4;">
                         <div class="w-field">
                             <label class="w-field__label" for="affiliate-filter-customer-id"><?= __('Customer') ?></label>
-                            <w:customer:admin:select
-                                id="affiliate-filter-customer-id"
-                                name="customer_id"
-                                value="filterCustomerSelectValue"
-                                display="filterCustomerSelectDisplay"
-                                allow-empty="true"
-                                clearable="true"
-                                disabled="<?= $filterScopeReady ? 'false' : 'true' ?>"
-                            />
                             <?php if (!$filterScopeReady): ?>
+                                <w:customer:admin:select
+                                    id="affiliate-filter-customer-id"
+                                    name="customer_id"
+                                    value="filterCustomerSelectValue"
+                                    display="filterCustomerSelectDisplay"
+                                    allow-empty="true"
+                                    clearable="true"
+                                    disabled="true"
+                                />
                                 <p class="w-field__help"><?= __('Select Website scope before searching customers.') ?></p>
+                            <?php else: ?>
+                                <w:customer:admin:select
+                                    id="affiliate-filter-customer-id"
+                                    name="customer_id"
+                                    value="filterCustomerSelectValue"
+                                    display="filterCustomerSelectDisplay"
+                                    allow-empty="true"
+                                    clearable="true"
+                                />
                             <?php endif; ?>
                         </div>
                     </div>

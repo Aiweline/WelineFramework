@@ -431,7 +431,7 @@ function syncSelection(value){
     node.classList.toggle('selected', selected);
     node.setAttribute('aria-selected', String(selected));
   });
-  var current = selectedNode();
+  var current = nodes().find(function(node){ return node.dataset.value === value; }) || null;
   var shortLabel = current ? (current.dataset.displayLabel || current.dataset.label || value) : value;
   var fullTitle = current ? (current.dataset.titleLabel || current.dataset.displayLabel || current.dataset.label || value) : value;
   display.textContent = shortLabel;

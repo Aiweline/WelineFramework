@@ -48,7 +48,7 @@ final class StorefrontHotCacheBagWarmupProviderContractTest extends TestCase
             BP . 'app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php'
         );
         self::assertStringContainsString('primePublishedChromeSlotProjectionHotCache', $filler);
-        self::assertStringContainsString('chrome.slot.projection.v3|', $filler);
+        self::assertStringContainsString('chrome.slot.projection.v5|', $filler);
         self::assertStringContainsString('static fn(): array => []', $filler);
 
         $seeder = (string)\file_get_contents(
@@ -71,7 +71,7 @@ final class StorefrontHotCacheBagWarmupProviderContractTest extends TestCase
         self::assertStringContainsString('RequestContext::isInitialized()', $seeder);
         self::assertStringContainsString('default.__store__.__channel__', $seeder);
         // chrome_rendered miss short-path: honest [] only (禁空烧重投影); never empty HTML HIT.
-        self::assertStringContainsString('chrome_rendered:miss scope=', $seeder);
+        self::assertStringContainsString('chrome_phtml:miss scope=', $seeder);
         self::assertStringContainsString('rememberHonestEmptyChromeSlotProjection', $seeder);
         self::assertStringContainsString('storefrontBagPrimeScopes', $seeder);
         self::assertStringNotContainsString(
@@ -84,32 +84,28 @@ final class StorefrontHotCacheBagWarmupProviderContractTest extends TestCase
 
         // Chrome eager seed: scope fallback + disk first; stage-gated durable bake (P8-O2).
         self::assertStringContainsString('publishedChromeSeedScopes', $chrome);
+        self::assertStringNotContainsString('readRenderedCache($path)', $chrome);
+        self::assertStringContainsString('bagPrimeAllowsChromePhtmlInclude', $chrome);
         self::assertMatchesRegularExpression(
-            '/function seedPublishedHotCacheEager[\s\S]*?readRenderedCache\(\$path\)/',
+            '/function seedPublishedHotCacheEager[\s\S]*?loadOrRenderPublished\(\$path/',
             $chrome,
-            'bag-prime seed must prefer durable disk snapshot',
-        );
-        self::assertStringContainsString('bagPrimeAllowsDurableChromeBake', $chrome);
-        self::assertMatchesRegularExpression(
-            '/function seedPublishedHotCacheEager[\s\S]*?loadOrRenderPublished\(\$path\)/',
-            $chrome,
-            'P8-O2: heavy/peer stages may one-shot bake chrome.rendered when disk wiped',
+            'P8-O2: heavy/peer stages may include chrome.phtml into HotCache',
         );
         self::assertStringContainsString('post_critical_heavy', $chrome);
         self::assertMatchesRegularExpression(
-            '/function bagPrimeAllowsDurableChromeBake[\s\S]*?post_critical_heavy[\s\S]*?peer_hydrate[\s\S]*?post_locale/',
+            '/function bagPrimeAllowsChromePhtmlInclude[\s\S]*?post_critical_heavy[\s\S]*?peer_hydrate[\s\S]*?post_locale/',
             $chrome,
-            'durable bake allow-list must be heavy/peer/post_locale only',
+            'chrome.phtml include allow-list must be heavy/peer/post_locale only',
         );
         self::assertDoesNotMatchRegularExpression(
-            '/function bagPrimeAllowsDurableChromeBake[\s\S]*?\'pre_critical\'/',
+            '/function bagPrimeAllowsChromePhtmlInclude[\s\S]*?\'pre_critical\'/',
             $chrome,
-            'pre_critical must not be in durable-bake allow-list',
+            'pre_critical must not be in include allow-list',
         );
         self::assertDoesNotMatchRegularExpression(
-            '/function bagPrimeAllowsDurableChromeBake[\s\S]*?\'critical\'/',
+            '/function bagPrimeAllowsChromePhtmlInclude[\s\S]*?\'critical\'/',
             $chrome,
-            'critical must not be in durable-bake allow-list',
+            'critical must not be in include allow-list',
         );
         self::assertStringContainsString('ensureFrontendThemeAssignedToTemplate', $seeder);
         // Theme assign must precede chrome seed (durable bake needs Template theme).

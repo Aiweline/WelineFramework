@@ -218,11 +218,12 @@ final class StorefrontThemeCacheCoordinator
     }
 
     /**
-     * wave6-6s / wave7-7s: published chrome.phtml render snapshot (locale-aware HTML).
-     * Logical key MUST include ThemeVersionIdentity::cacheKey() (owner V/mode/R)
-     * plus binding fingerprint and locale — draft/formal/history must not collide.
-     * Disk snapshot is the first-cold durable fill; HotCache is peek-first + post-response
-     * seed. Preview/draft never enter this policy.
+     * W4: HotCache bag for published chrome.phtml include HTML (locale-aware).
+     * Resource name kept for key compatibility; NOT chrome.rendered.{locale}.html disk
+     * bake delivery. Logical key MUST include ThemeVersionIdentity::cacheKey()
+     * (owner V/mode/R) plus binding fingerprint and locale.
+     * First-cold fill = include chrome.phtml; HotCache is peek-first + post-response seed.
+     * Preview/draft never enter this policy.
      */
     public static function publishedChromeRenderedPolicy(): CachePolicy
     {

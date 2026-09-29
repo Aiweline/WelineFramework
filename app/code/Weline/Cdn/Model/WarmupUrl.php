@@ -21,6 +21,8 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_enabled', columns: ['enabled'])]
 #[Index(name: 'idx_domain_id', columns: ['domain_id'])]
 #[Index(name: 'idx_url', columns: ['url'])]
+#[Index(name: 'idx_enabled_domain', columns: ['enabled', 'domain_id'])]
+#[Index(name: 'idx_provider', columns: ['provider'])]
 class WarmupUrl extends Model
 {
     public const schema_table = 'cdn_warmup_url';
@@ -36,7 +38,7 @@ class WarmupUrl extends Model
     public const schema_fields_WARMUP_URL_ID = 'warmup_url_id';
     #[Col('varchar', 128, nullable: false, comment: '来源模块')]
     public const schema_fields_MODULE = 'module';
-    #[Col('varchar', 128, nullable: false, comment: '提供者')]
+    #[Col('varchar', 255, nullable: false, comment: '提供者FQCN')]
     public const schema_fields_PROVIDER = 'provider';
     #[Col('varchar', 512, nullable: false, comment: 'URL地址')]
     public const schema_fields_URL = 'url';

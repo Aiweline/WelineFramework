@@ -10,6 +10,7 @@ use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Model\AttackLog;
 use Weline\Server\Service\HealthAllowCookieService;
+use Weline\Server\Service\Security\AttackScanWarningAnalyzer;
 use Weline\Server\Service\WlsPerformanceTraceStore;
 
 class WlsPerformancePanel extends FrontendController
@@ -113,13 +114,15 @@ class WlsPerformancePanel extends FrontendController
         }
 
         $params = $this->queryParams();
+        $instance = $this->safeString($params['instance'] ?? '');
+        $days = $this->boundedInt($params['days'] ?? 7, 1, 90, 7);
+        $stats = $this->attackLog()->getStatistics($instance, $days);
+        $recent = $this->attackLog()->getRecentAttacks(80, $instance);
+        $stats = $this->scanWarningAnalyzer()->enrichStatistics($stats, $recent);
 
         return $this->jsonPayload([
             'success' => true,
-            'data' => $this->attackLog()->getStatistics(
-                $this->safeString($params['instance'] ?? ''),
-                $this->boundedInt($params['days'] ?? 7, 1, 90, 7)
-            ),
+            'data' => $stats,
         ]);
     }
 
@@ -200,6 +203,11 @@ class WlsPerformancePanel extends FrontendController
     private function attackLog(): AttackLog
     {
         return ObjectManager::getInstance(AttackLog::class);
+    }
+
+    private function scanWarningAnalyzer(): AttackScanWarningAnalyzer
+    {
+        return ObjectManager::getInstance(AttackScanWarningAnalyzer::class);
     }
 
     private function healthAllowCookieService(): HealthAllowCookieService

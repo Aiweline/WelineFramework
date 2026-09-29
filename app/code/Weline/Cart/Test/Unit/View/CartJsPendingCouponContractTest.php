@@ -57,6 +57,31 @@ final class CartJsPendingCouponContractTest extends TestCase
         self::assertStringContainsString('Weline_Cart::js/cart.js', $modules);
         self::assertStringContainsString("'renewGuestSession'", $provider);
         self::assertStringContainsString('function renewGuestSession', $provider);
+        // Force / explicit Cookie sync must bypass needsGuestRenew TTL short-circuit.
+        self::assertStringContainsString('opts.force === true', $cartJs);
+        self::assertStringContainsString('if (!force && !needsGuestRenew(session))', $cartJs);
+        self::assertStringContainsString('function syncGuestCookie()', $cartJs);
+        self::assertStringContainsString('renewGuestSession({ force: true })', $cartJs);
+        self::assertStringContainsString('syncGuestCookie: syncGuestCookie', $cartJs);
         self::assertStringContainsString('touchGuestCart', (string)\file_get_contents($root . '/Service/CartService.php'));
+    }
+
+    public function testRenewGuestSessionForcePathDoesNotSkipApiOnTtlOk(): void
+    {
+        $root = \dirname(__DIR__, 3);
+        $cartJs = (string)\file_get_contents($root . '/view/statics/js/cart.js');
+
+        // Non-force keeps TTL gate; force must reach client.renewGuestSession.
+        self::assertMatchesRegularExpression(
+            '/function renewGuestSession\(options\)[\s\S]*?if \(!force && !needsGuestRenew\(session\)\)[\s\S]*?client\.renewGuestSession\(\{ guest_token:/s',
+            $cartJs,
+        );
+        self::assertStringContainsString('// Timer path: non-force (TTL short-circuit allowed).', $cartJs);
+        self::assertStringContainsString('renewGuestSession().finally(function ()', $cartJs);
+        // force=true must not soft-swallow API failure (ensureGuestToken needs cookieSyncedByRenew accuracy).
+        self::assertStringContainsString('if (force) {', $cartJs);
+        self::assertStringContainsString('throw err;', $cartJs);
+        self::assertStringContainsString('renewGuestSession_failed', $cartJs);
+        self::assertStringContainsString('renewGuestSession_unavailable', $cartJs);
     }
 }

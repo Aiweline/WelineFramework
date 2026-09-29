@@ -70,24 +70,24 @@ final class ThemeVersionInjectionCacheContractTest extends TestCase
         self::assertStringContainsString('protectedAbsolutePaths', $src);
     }
 
-    public function testUpgradePurgeStillClearsEntityTreeWithoutRebake(): void
+    public function testUpgradeLifecycleSolidifiesViaSolidifyService(): void
     {
         $observer = (string)\file_get_contents(
             \dirname(__DIR__, 4) . '/Observer/SetupUpgradeAfterPurgeLayoutEntities.php'
         );
-        $service = (string)\file_get_contents(
-            \dirname(__DIR__, 4) . '/Service/LayoutEntity/ThemeLayoutEntityUpgradePurgeService.php'
+        $solidify = (string)\file_get_contents(
+            \dirname(__DIR__, 4) . '/Service/LayoutEntity/ThemeLayoutEntityUpgradeSolidifyService.php'
         );
         $paths = (string)\file_get_contents(
             \dirname(__DIR__, 4) . '/Service/LayoutEntity/ThemeLayoutEntityPaths.php'
         );
 
-        self::assertStringContainsString('ThemeLayoutEntityUpgradePurgeService', $observer);
+        self::assertStringContainsString('ThemeLayoutEntityUpgradeSolidifyService', $observer);
         self::assertStringContainsString('runOnce', $observer);
-        self::assertStringNotContainsString('rebakeAfterInjectionCollect(', $observer);
-        self::assertStringContainsString('purgeAllEntities', $service);
-        self::assertStringContainsString('clearAllThemeRelatedCaches(', $service);
+        self::assertStringContainsString('rebakeAfterInjectionCollect', $solidify);
+        self::assertStringContainsString('migrateLegacyVarTreeToGenerated', $solidify);
+        self::assertStringContainsString('clearAllThemeRelatedCaches', $solidify);
         self::assertStringContainsString('function purgeAllEntities', $paths);
-        self::assertStringContainsString('function assertPurgeableEntityRoot', $paths);
+        self::assertStringContainsString('GENERATED_DIR', $paths);
     }
 }

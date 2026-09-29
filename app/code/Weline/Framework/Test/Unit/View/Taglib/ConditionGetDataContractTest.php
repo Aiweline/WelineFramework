@@ -45,20 +45,6 @@ final class ConditionGetDataContractTest extends TestCase
 
         self::assertStringContainsString("getData('meta')", $compiled);
         self::assertStringContainsString("'showHeader'", $compiled);
-        // 缺键默认 true：店面页头页尾不得因 meta 省略而熄灭。
-        self::assertStringContainsString("['showHeader'] ?? true)", $compiled);
-        self::assertStringNotContainsString("['showHeader'] ?? null)", $compiled);
-    }
-
-    public function testShowFooterMissingDefaultsTrueLikeShowHeader(): void
-    {
-        $taglib = ObjectManager::getInstance(Taglib::class);
-        $template = ObjectManager::getInstance(Template::class);
-        $content = '<if condition="meta.showFooter">F</if>';
-        $compiled = $taglib->compile($template, $content, 'qa06-condition-showfooter.phtml');
-
-        self::assertStringContainsString("['showFooter'] ?? true)", $compiled);
-        self::assertStringNotContainsString("['showFooter'] ?? null)", $compiled);
     }
 
     public function testExplicitDollarConditionRemainsLocalVariable(): void

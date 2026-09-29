@@ -53,6 +53,7 @@ class ControllerFetchFileAfter implements ObserverInterface
 
         $template = $this->getTemplateInstance();
         $fallbackContent = (string)$eventData->getData('content');
+
         $memoryProbe = static function (string $phase, mixed $content = null): void {
             if ((string)\getenv('WELINE_DIAG_MEMORY') !== '1') {
                 return;
@@ -142,9 +143,6 @@ class ControllerFetchFileAfter implements ObserverInterface
         }
     }
 
-    /**
-     * 布局包装失败时写日志、响应头；deploy=dev 时抛出以便本地立刻发现。
-     */
     private function reportLayoutWrapFailure(
         string $layoutType,
         string $layoutOption,
@@ -316,6 +314,8 @@ class ControllerFetchFileAfter implements ObserverInterface
      */
     private function normalizeFrontendLayoutDocumentKey(string $templatePath): string
     {
+        $source = \Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot::current()?->source($templatePath);
+        $templatePath = is_array($source) ? $source['origin'] : $templatePath;
         $path = \str_replace('\\', '/', \trim($templatePath));
         if ($path === '') {
             return '';
@@ -330,7 +330,7 @@ class ControllerFetchFileAfter implements ObserverInterface
             return '';
         }
 
-        return $path;
+        return (string)preg_replace('#^.*?frontend/layouts/#', '', $path);
     }
 
     private function renderFastAccountAuthLayout(Template $template, string $layoutTemplate, string $contentHtml): ?string

@@ -366,23 +366,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 }
             }
 
-            // wave8-8s2: prime PublishedSlotHost BEFORE any layout/partial w:slot runs.
-            // Must happen as soon as theme_id + layout_type are known (not only after
-            // resolvedLayoutPath), otherwise useReactiveMarkers sticky-falls to reactive.
-            if ($area === 'frontend' && (int)$themeId > 0 && \trim((string)$layoutType) !== '') {
-                try {
-                    if (!$didPerformanceLoad) {
-                        ThemeData::setCurrentTheme($theme);
-                        ThemeData::setCurrentArea($area);
-                    }
-                    \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::primeStorefront(
-                        (int)$themeId,
-                        (string)$layoutType,
-                    );
-                } catch (\Throwable) {
-                    // Host falls back to temporary reactive until bake resolves.
-                }
-            }
+            // W3：primeStorefront 延后到「固化控制器模板未命中」分支；命中则禁 prime（防双渲）。
 
             // 配置来自元数据配置的布局：仅当控制器未显式传入「类型.选项」时才用 theme 的 layoutConfig 同步 option。
             // 否则会把 default.blank 强行改回 layoutConfig['default']（多为 default），导致 iframe/offcanvas 仍套 default.default。
@@ -430,51 +414,84 @@ class ControllerFetchFileBefore implements ObserverInterface
             }
             $template->setData('colors', $colors);
 
-            $virtualLayout = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.virtual', fn() => $this->resolveVirtualLayoutForRequest($request, $themeId, $area, $scope, (string)$layoutType, (string)$layoutOption));
+            // Select a normal source snapshot; original layout is the fallback when no derived source is needed.
+            $solidifiedExecutablePath = null;
+            $usedSolidifiedControllerTemplate = false;
+            if ($area === 'frontend' && (int)$themeId > 0 && \trim((string)$layoutType) !== '') {
+                try {
+                    if (!$didPerformanceLoad) {
+                        ThemeData::setCurrentTheme($theme);
+                        ThemeData::setCurrentArea($area);
+                    }
+                    /** @var \Weline\Theme\Service\LayoutEntity\SolidifiedControllerTemplateResolver $solidifiedResolver */
+                    $solidifiedResolver = ObjectManager::getInstance(
+                        \Weline\Theme\Service\LayoutEntity\SolidifiedControllerTemplateResolver::class,
+                    );
+                    $sourceTargets = $this->resolveVirtualLayoutTargets($request);
+                    $sourceTarget = $sourceTargets[0] ?? ['target_type' => 'global', 'target_id' => 0];
+                    $solidifiedExecutablePath = $solidifiedResolver->resolveExecutableLayoutPath(
+                        (int)$themeId,
+                        (string)$layoutType,
+                        (string)$layoutOption,
+                        (string)$area,
+                        (string)$sourceTarget['target_type'],
+                        (int)$sourceTarget['target_id'],
+                    );
+                    // 无固化物：不在热路径强造 bake（msg-3：双无用原布局）；升级/编辑/注入收集才 bake。
+                    if (\is_string($solidifiedExecutablePath) && $solidifiedExecutablePath !== '' ) {
+                        $usedSolidifiedControllerTemplate = true;
+                        \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
+                            ::markSolidifiedControllerTemplateSelected(true);
+                        try {
+                            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRuntime $entityRuntime */
+                            $entityRuntime = ObjectManager::getInstance(
+                                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRuntime::class,
+                            );
+                            $entityRuntime->markEntityTemplateActive($solidifiedExecutablePath);
+                            $entityRuntime->markSkipSlotProcessing(true);
+                        } catch (\Throwable) {
+                            // best-effort
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Missing V/R inputs cannot be represented by the current source fallback.
+                    if (str_starts_with($e->getMessage(), 'historical_')) {
+                        throw $e;
+                    }
+                    $solidifiedExecutablePath = null;
+                    $usedSolidifiedControllerTemplate = false;
+                }
+            }
+
+            $virtualLayout = null;
             $virtualLayoutFilePath = null;
-            if (is_array($virtualLayout)) {
-                $resolvedLayoutPath = (string)$virtualLayout['module_path'];
-                $virtualLayoutFilePath = (string)$virtualLayout['file_path'];
-                $template->setData('themeVirtualLayout', $virtualLayout);
+            $resolvedLayoutPath = null;
+            if ($usedSolidifiedControllerTemplate && \is_string($solidifiedExecutablePath)) {
+                $resolvedLayoutPath = $solidifiedExecutablePath;
             } else {
-                $layoutPath = LayoutPathResolver::buildLayoutPath($fileName, $area, $layoutType, $layoutOption);
-                $pathCacheKey = "{$layoutPath}|{$themeId}|{$area}";
-                if (array_key_exists($pathCacheKey, $requestCache->resolvedLayoutPathCache)) {
-                    $resolvedLayoutPath = $requestCache->resolvedLayoutPathCache[$pathCacheKey];
-                } elseif ($runtimeCacheAllowed && ($runtimeResolvedPath = self::runtimeCacheGet('layout_path|' . $pathCacheKey))[0]) {
-                    $resolvedLayoutPath = $runtimeResolvedPath[1];
-                    $requestCache->resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
+                $virtualLayout = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.virtual', fn() => $this->resolveVirtualLayoutForRequest($request, $themeId, $area, $scope, (string)$layoutType, (string)$layoutOption));
+                if (is_array($virtualLayout)) {
+                    $resolvedLayoutPath = (string)$virtualLayout['module_path'];
+                    $virtualLayoutFilePath = (string)$virtualLayout['file_path'];
+                    $template->setData('themeVirtualLayout', $virtualLayout);
                 } else {
-                    $resolvedLayoutPath = LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
-                    $requestCache->resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
-                    if ($runtimeCacheAllowed) {
-                        self::runtimeCacheSet('layout_path|' . $pathCacheKey, $resolvedLayoutPath);
+                    $layoutPath = LayoutPathResolver::buildLayoutPath($fileName, $area, $layoutType, $layoutOption);
+                    $pathCacheKey = "{$layoutPath}|{$themeId}|{$area}";
+                    if (array_key_exists($pathCacheKey, $requestCache->resolvedLayoutPathCache)) {
+                        $resolvedLayoutPath = $requestCache->resolvedLayoutPathCache[$pathCacheKey];
+                    } elseif ($runtimeCacheAllowed && ($runtimeResolvedPath = self::runtimeCacheGet('layout_path|' . $pathCacheKey))[0]) {
+                        $resolvedLayoutPath = $runtimeResolvedPath[1];
+                        $requestCache->resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
+                    } else {
+                        $resolvedLayoutPath = LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
+                        $requestCache->resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
+                        if ($runtimeCacheAllowed) {
+                            self::runtimeCacheSet('layout_path|' . $pathCacheKey, $resolvedLayoutPath);
+                        }
                     }
                 }
             }
             if ($resolvedLayoutPath) {
-                if ($area === 'frontend') {
-                    try {
-                        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRuntime $entityRuntime */
-                        $entityRuntime = ObjectManager::getInstance(
-                            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRuntime::class,
-                        );
-                        // Hard cut: storefront LayoutSlotRenderer fills from entities.
-                        // wave8-8s2: re-prime after layoutType finalized (option sync may
-                        // have adjusted type); fragments must be ready before w:slot.
-                        $entityRuntime->markSkipSlotProcessing(true);
-                        try {
-                            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost::primeStorefront(
-                                (int)$themeId,
-                                (string)$layoutType,
-                            );
-                        } catch (\Throwable) {
-                            // best-effort; Host falls back to temporary reactive
-                        }
-                    } catch (\Throwable) {
-                        // Runtime mark is best-effort; storefront still hard-cuts in LayoutSlotRenderer.
-                    }
-                }
                 $layoutTargets = $this->resolveVirtualLayoutTargets($request);
                 // L1 request + process layout_params keys must include lang so
                 // localized widget labels do not bleed across locales.
@@ -491,11 +508,15 @@ class ControllerFetchFileBefore implements ObserverInterface
                 if (is_array($virtualLayout)) {
                     $paramsCacheKey .= '|virtual:' . (int)($virtualLayout['asset_id'] ?? 0) . ':' . (int)($virtualLayout['version_id'] ?? 0);
                 }
-                // 优化：编译文件存在且源文件未修改则不再做重负载（不重复 performanceLoad/colors/meta）
-                $sourcePath = $virtualLayoutFilePath ?: LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
-                $compiledPath = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.compiled_path', fn() => LayoutPathResolver::getCompiledLayoutPath($resolvedLayoutPath, $lang));
-                $compiledLayoutFresh = $sourcePath && $compiledPath && is_file($sourcePath) && is_file($compiledPath)
-                    && filemtime($sourcePath) <= filemtime($compiledPath);
+                $sourceSnapshot = \Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot::current();
+                $capturedSource = $usedSolidifiedControllerTemplate && $sourceSnapshot !== null
+                    ? $sourceSnapshot->source((string)$solidifiedExecutablePath) : null;
+                $sourcePath = is_array($capturedSource)
+                    ? $capturedSource['origin']
+                    : ($virtualLayoutFilePath ?: LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area));
+                $compiledPath = null;
+                // Mutable file timestamps cannot identify the captured revision.
+                $compiledLayoutFresh = false;
                 $runtimeParamsCacheKey = null;
                 $cachedLayoutParams = null;
                 if ($compiledLayoutFresh && isset($requestCache->layoutParamsRequestCache[$paramsCacheKey])) {
@@ -600,36 +621,52 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $layoutMetaIdentity = $this->extractLayoutMetaIdentity($layoutFilePath, $resolvedLayoutPath, $area);
                 $layoutDefinitions = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.definitions', fn() => ThemeData::getParamDefinitions($metaIdentify));
                 $layoutParams = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.params', fn() => ThemeData::getFileParams($metaIdentify, $scope));
-                
-                // 如果从 Meta 表中没有读取到参数，尝试从文件直接解析
-                if (empty($layoutParams)) {
-                    // 获取布局文件的完整路径
-                    if ($layoutFilePath && is_file($layoutFilePath)) {
-                        // 使用 ComponentMetaParser 从文件解析参数定义
-                        $parsedMeta = \Weline\Theme\Helper\ComponentMetaParser::parse($layoutFilePath);
-                        if (!empty($parsedMeta['params']) && is_array($parsedMeta['params'])) {
-                            // 格式化参数定义
-                            $formattedParams = LayoutPathResolver::formatParsedParams($parsedMeta['params']);
-                            if (empty($layoutDefinitions)) {
-                                $layoutDefinitions = $formattedParams;
-                            }
-                            // 提取默认值作为参数值
+
+                // 模板头 @param.showHeader {default=true} 等：DB/缓存可能只有部分键。
+                // 缺键必须用布局文件 meta 区 default 补齐（不仅 empty($layoutParams) 时才解析）。
+                if ($layoutFilePath && is_file($layoutFilePath)) {
+                    $parsedMeta = \Weline\Theme\Helper\ComponentMetaParser::parse($layoutFilePath);
+                    if (!empty($parsedMeta['params']) && is_array($parsedMeta['params'])) {
+                        $formattedParams = LayoutPathResolver::formatParsedParams($parsedMeta['params']);
+                        if (empty($layoutDefinitions)) {
+                            $layoutDefinitions = $formattedParams;
+                        } else {
                             foreach ($formattedParams as $paramName => $paramDef) {
-                                $defaultValue = $paramDef['default'] ?? null;
-                                // 处理布尔值默认值
-                                if ($defaultValue === 'true' || $defaultValue === true) {
-                                    $defaultValue = true;
-                                } elseif ($defaultValue === 'false' || $defaultValue === false) {
-                                    $defaultValue = false;
+                                if (!isset($layoutDefinitions[$paramName])) {
+                                    $layoutDefinitions[$paramName] = $paramDef;
                                 }
-                                // 处理空字符串默认值
-                                if ($defaultValue === '') {
-                                    $defaultValue = '';
-                                }
-                                $layoutParams[$paramName] = $defaultValue;
                             }
                         }
+                        foreach ($formattedParams as $paramName => $paramDef) {
+                            if (\array_key_exists($paramName, $layoutParams)) {
+                                continue;
+                            }
+                            $defaultValue = $paramDef['default'] ?? null;
+                            if ($defaultValue === 'true' || $defaultValue === true) {
+                                $defaultValue = true;
+                            } elseif ($defaultValue === 'false' || $defaultValue === false) {
+                                $defaultValue = false;
+                            }
+                            $layoutParams[$paramName] = $defaultValue;
+                        }
                     }
+                }
+
+                // 定义表有 default、但文件解析未覆盖到的键（仅 Meta 定义）同样补齐
+                foreach ($layoutDefinitions as $paramName => $paramDef) {
+                    if (!\is_string($paramName) || \array_key_exists($paramName, $layoutParams)) {
+                        continue;
+                    }
+                    if (!\is_array($paramDef) || !\array_key_exists('default', $paramDef)) {
+                        continue;
+                    }
+                    $defaultValue = $paramDef['default'];
+                    if ($defaultValue === 'true' || $defaultValue === true) {
+                        $defaultValue = true;
+                    } elseif ($defaultValue === 'false' || $defaultValue === false) {
+                        $defaultValue = false;
+                    }
+                    $layoutParams[$paramName] = $defaultValue;
                 }
                 
                 // 确保即使没有参数，也至少设置一个空的 meta 数组，避免模板中访问 meta 时出错
@@ -712,6 +749,9 @@ class ControllerFetchFileBefore implements ObserverInterface
             // 如果布局模板不存在，保持原路径（回退机制），但布局信息已设置到 theme 对象中
         } catch (\Throwable $e) {
             $this->logThemeLayoutResolveException($e, $eventData, $fileName, $controller);
+            if (str_starts_with($e->getMessage(), 'historical_')) {
+                throw $e;
+            }
             // 如果出现异常，至少设置基本的主题数据（包括主题对象和默认布局信息）
             // 确保模板可以正常使用主题数据
             if (empty($layoutType)) {

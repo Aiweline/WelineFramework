@@ -4,69 +4,31 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\LayoutEntity;
 
-use Weline\Framework\Output\Cli\Printing;
-use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
-
 /**
- * 部署生命周期共享：删除 theme-layout-entities 派生磁盘并失效店面缓存。
- *
- * 调用方：setup:upgrade / deploy:upgrade / core:update 的 after Observer。
- * 同进程只执行一次（setup 内嵌 deploy:upgrade 时避免连清两次）。
+ * @deprecated Prefer {@see ThemeLayoutEntityUpgradeSolidifyService} (§0 R5).
+ * Kept as a thin alias so older DI/tests that type-hint purge still resolve.
  */
 final class ThemeLayoutEntityUpgradePurgeService
 {
-    private static bool $hasRun = false;
-
     public function __construct(
-        private readonly ThemeLayoutEntityPaths $paths,
-        private readonly ThemeRuntimeCacheCleaner $cacheCleaner,
-        private readonly Printing $printing,
+        private readonly ThemeLayoutEntityUpgradeSolidifyService $solidifyService,
     ) {
     }
 
     /**
-     * @param non-empty-string $invalidationReason ThemeRuntimeCacheCleaner 原因标记
-     * @return int 删除的节点数；本进程已跑过则 0
+     * @param non-empty-string $invalidationReason
+     * @return int solidified target count (legacy return was deleted nodes)
      */
     public function runOnce(string $invalidationReason): int
     {
-        if (self::$hasRun) {
-            return 0;
-        }
-        self::$hasRun = true;
+        $report = $this->solidifyService->runOnce($invalidationReason);
 
-        $reason = trim($invalidationReason) !== ''
-            ? trim($invalidationReason)
-            : 'layout_entities_invalidated';
-
-        $this->printing->note((string)__('正在删除主题布局固化磁盘产物（theme-layout-entities）…'));
-
-        $deleted = $this->paths->purgeAllEntities();
-        $this->printing->success((string)__(
-            '主题布局固化磁盘已清理：删除节点 %{count}',
-            ['count' => $deleted]
-        ));
-
-        $result = $this->cacheCleaner->clearAllThemeRelatedCaches(null, $reason);
-        $failures = \is_array($result['failures'] ?? null) ? $result['failures'] : [];
-        if ($failures !== []) {
-            $detail = [];
-            foreach ($failures as $step => $message) {
-                $detail[] = $step . '=' . $message;
-            }
-            throw new \RuntimeException(
-                'layout_entities_cache_clear_partial_failure:' . \implode(';', $detail)
-            );
-        }
-
-        $this->printing->success((string)__('主题布局固化失效后的店面缓存清理完成'));
-
-        return $deleted;
+        return (int)($report['solidified'] ?? 0);
     }
 
     /** @internal UT / fixture */
     public static function resetHasRunFlag(): void
     {
-        self::$hasRun = false;
+        ThemeLayoutEntityUpgradeSolidifyService::resetHasRunFlag();
     }
 }

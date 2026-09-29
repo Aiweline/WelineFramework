@@ -43,23 +43,6 @@ final class ThemeLayoutCopyScopedContractTest extends TestCase
         self::assertStringContainsString("IN ('theme.frontend','theme.backend')", $source);
     }
 
-    public function testSaveLayoutUsesScopedWriterNotThemeLayoutRows(): void
-    {
-        $source = (string)\file_get_contents(
-            BP . 'app/code/Weline/Theme/Service/ThemeLayoutService.php',
-        );
-        $methodStart = \strpos($source, 'function saveLayout(');
-        self::assertNotFalse($methodStart);
-        $nextFn = \strpos($source, "\n    public function ", $methodStart + 10);
-        $methodBody = $nextFn === false
-            ? \substr($source, (int)$methodStart)
-            : \substr($source, (int)$methodStart, $nextFn - (int)$methodStart);
-        self::assertStringContainsString('replaceDraftFromSnapshot', $methodBody);
-        self::assertStringContainsString('ThemeScopedLayoutWriteService', $methodBody);
-        self::assertStringNotContainsString('$this->saveWidget(', $methodBody);
-        self::assertStringNotContainsString('$this->deleteLayoutRows(', $methodBody);
-    }
-
     public function testPublishLayoutUsesScopedWorkspacePublish(): void
     {
         $source = (string)\file_get_contents(
@@ -360,10 +343,8 @@ final class ThemeLayoutCopyScopedContractTest extends TestCase
         self::assertStringContainsString('Hex identity is node_uid only', $cacheGen);
         self::assertStringContainsString('data-node-uid="', $cacheGen);
 
-        $observer = (string)\file_get_contents(
-            BP . 'app/code/Weline/Theme/Observer/LayoutSlotRenderer.php',
-        );
-        self::assertStringContainsString("str_contains(\$html, 'data-node-uid=')", $observer);
+        // Generated widget HTML is exercised by ResolvedLayoutPhtmlTest;
+        // the finalizing observer no longer selects or reconstructs wrappers.
     }
 
     public function testWidgetParamTypePrefersNodeUidIdentityAttrs(): void
@@ -497,22 +478,18 @@ final class ThemeLayoutCopyScopedContractTest extends TestCase
         self::assertStringNotContainsString('RESOURCE_LAYOUT', $methodBody);
     }
 
-    public function testBakeAfterWriteTreatsReleaseIdAsPublished(): void
+    public function testBakeAfterWritePublishesFormalArtifactsDespiteDraftPayload(): void
     {
-        $workspaceSource = (string)\file_get_contents(
-            BP . 'app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspace.php',
-        );
-        $methodStart = \strpos($workspaceSource, 'function bakeLayoutEntityAfterWrite(');
-        self::assertNotFalse($methodStart);
-        $nextFn = \strpos($workspaceSource, "\n    private function findWorkspace(", $methodStart + 10);
-        self::assertNotFalse($nextFn);
-        $methodBody = \substr($workspaceSource, $methodStart, $nextFn - $methodStart);
-        // Publish results often include draft_payload; release_id alone must select r{id}.
-        self::assertStringContainsString(
-            '$published = $releaseId !== null && $releaseId > 0;',
-            $methodBody,
-        );
-        self::assertStringNotContainsString("array_key_exists('draft_payload'", $methodBody);
+        $fixture = \dirname(__DIR__) . '/LayoutEntity/fixtures/selected-draft-rebake.php';
+        \exec(\escapeshellarg(PHP_BINARY) . ' ' . \escapeshellarg($fixture) . ' published-write 2>&1', $output, $exit);
+        self::assertSame(0, $exit, \implode("\n", $output));
+        $result = \json_decode(\implode("\n", $output), true, flags: JSON_THROW_ON_ERROR);
+
+        self::assertSame('formal:1116:R8', $result['published_artifact']);
+        self::assertStringEndsWith('/v1116/pages/layouts/homepage/default.phtml', $result['published_path']);
+        self::assertSame('selected-draft-before-publication', $result['shared_draft']);
+        self::assertSame([1116], $result['generated_versions']);
+        self::assertTrue($result['version_rows_unchanged']);
     }
 
     public function testScopedLayoutSnapshotAllowsInheritedEffectivePayload(): void

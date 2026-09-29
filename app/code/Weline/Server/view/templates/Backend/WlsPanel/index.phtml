@@ -41,6 +41,7 @@ $panelProjectFormData = is_array($panelProjectFormData) ? $panelProjectFormData 
 $panelSecurityData = $this->getData('panelSecurityData');
 $panelSecurityData = is_array($panelSecurityData) ? $panelSecurityData : [];
 $securityStats = is_array($panelSecurityData['stats'] ?? null) ? $panelSecurityData['stats'] : [];
+$securityScanWarnings = is_array($securityStats['scan_warnings'] ?? null) ? array_values($securityStats['scan_warnings']) : [];
 $securityRuleSummary = is_array($panelSecurityData['rule_summary'] ?? null) ? array_values($panelSecurityData['rule_summary']) : [];
 $securityProjectSummaries = is_array($panelSecurityData['project_security_summaries'] ?? null) ? array_values($panelSecurityData['project_security_summaries']) : [];
 $securityRecentAttacks = is_array($panelSecurityData['recent_attacks'] ?? null) ? array_values($panelSecurityData['recent_attacks']) : [];
@@ -1055,6 +1056,23 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     </section>
                 <?php endif; ?>
                 <?php if ($securityPageIsOverview): ?>
+                <?php if ($securityScanWarnings !== []): ?>
+                <section class="wls-inline-warning" aria-label="<?= __('扫描特征警告') ?>" style="--w-mb:var(--weline-space-4);">
+                    <strong style="display:block;--w-mb:var(--weline-space-2);"><?= __('扫描特征警告') ?></strong>
+                    <ul style="margin:0;padding-inline-start:1.25rem;">
+                        <?php foreach ($securityScanWarnings as $warning): ?>
+                            <?php if (!is_array($warning)) { continue; } ?>
+                            <li style="--w-mb:var(--weline-space-1);">
+                                <strong><?= $escapeHtml((string)($warning['title'] ?? '')) ?></strong>
+                                — <?= $escapeHtml((string)($warning['message'] ?? '')) ?>
+                                <?php if (!empty($warning['count'])): ?>
+                                    <span class="w-text" data-tone="muted">(<?= (int)$warning['count'] ?>)</span>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </section>
+                <?php endif; ?>
                 <div class="wls-security-metric-grid">
                     <article>
                         <span><?= __('7 天事件') ?></span>

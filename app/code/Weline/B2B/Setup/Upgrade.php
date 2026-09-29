@@ -27,15 +27,19 @@ final class Upgrade implements UpgradeInterface
 {
     public function setup(Setup $setup, Context $context): void
     {
-        foreach ([LocalDescription::class] as $modelClass) {
-            $model = ObjectManager::getInstance($modelClass);
-            $runner = ObjectManager::make(ModelSetup::class);
-            $runner->putModel($model);
-            $model->setup($runner, $context);
+        $fromVersion = $context->getFromSetupVersion();
+        if (version_compare($fromVersion, '2.6.47', '<')) {
+            foreach ([LocalDescription::class] as $modelClass) {
+                $model = ObjectManager::getInstance($modelClass);
+                $runner = ObjectManager::make(ModelSetup::class);
+                $runner->putModel($model);
+                $model->setup($runner, $context);
+            }
+            $this->seedCustomerGroupLocals();
         }
-
-        $this->seedCustomerGroupLocals();
-        $this->seedWholesaleCreditSurfaces();
+        if (version_compare($fromVersion, '2.6.62', '<')) {
+            $this->seedWholesaleCreditSurfaces();
+        }
     }
 
     private function seedCustomerGroupLocals(): void

@@ -14,6 +14,42 @@ if (!defined('BP')) {
 
 final class CdnQueryProviderDescriptorTest extends TestCase
 {
+    public function testFpcManagementContractsRemainBackendOnlyAndPreserveNullableOverrides(): void
+    {
+        $provider = (new ReflectionClass(CdnQueryProvider::class))->newInstanceWithoutConstructor();
+        $descriptor = (new \Weline\Framework\Service\Query\BinQueryDescriptorAttributeResolver())->merge($provider, $provider->getDescriptor());
+        $operations = array_column($descriptor['operations'], null, 'name');
+        foreach ([
+            'listFpcPolicies' => ['read', 'Weline_Cdn::cdn_api_rules_list'],
+            'saveFpcPolicyOverride' => ['write', 'Weline_Cdn::cdn_api_rules_toggle'],
+            'restoreFpcPolicyInheritance' => ['write', 'Weline_Cdn::cdn_api_rules_toggle'],
+            'collectFpcPolicies' => ['write', 'Weline_Cdn::cdn_api_rules_collect'],
+            'listFpcSyncRecords' => ['read', 'Weline_Cdn::cdn_api_rules_list'],
+            'retryFpcSync' => ['write', 'Weline_Cdn::cdn_rules_push'],
+        ] as $name => [$mode, $source]) {
+            self::assertArrayHasKey($name, $operations);
+            self::assertTrue($operations[$name]['frontend']);
+            self::assertTrue($operations[$name]['backend']);
+            self::assertFalse($operations[$name]['external']);
+            self::assertFalse($operations[$name]['graph']);
+            self::assertSame('backend', $operations[$name]['auth']);
+            self::assertSame($mode, $operations[$name]['mode']);
+            self::assertSame(['kind' => 'source', 'source_id' => $source], $operations[$name]['backend_acl']);
+            self::assertArrayNotHasKey('cache', $operations[$name]);
+        }
+        $override = array_column($operations['saveFpcPolicyOverride']['params'], null, 'name');
+        foreach (['enabled', 'ttl'] as $field) {
+            self::assertFalse($override[$field]['required']);
+            self::assertTrue($override[$field]['nullable']);
+            self::assertArrayNotHasKey('default', $override[$field]);
+        }
+        self::assertSame(1, $override['ttl']['min']);
+        $listParams = array_column($operations['listFpcPolicies']['params'], null, 'name');
+        $restoreParams = array_column($operations['restoreFpcPolicyInheritance']['params'], null, 'name');
+        self::assertSame(100, $listParams['page_size']['max']);
+        self::assertSame(['enabled', 'ttl'], $restoreParams['fields']['default']);
+    }
+
     public function testApiRuleBrowserOperationsRequireTheirControllerAclSources(): void
     {
         $provider = (new ReflectionClass(CdnQueryProvider::class))->newInstanceWithoutConstructor();
@@ -133,5 +169,48 @@ final class CdnQueryProviderDescriptorTest extends TestCase
         self::assertSame('bool', $domainParams['inherit_default']['type']);
         self::assertSame(60, $domainParams['warmup_interval_seconds']['min']);
         self::assertSame('bool', $domainParams['enabled']['type']);
+    }
+
+    public function testWarmupProviderTreeOperationsRequireDedicatedAclSources(): void
+    {
+        $provider = (new ReflectionClass(CdnQueryProvider::class))->newInstanceWithoutConstructor();
+        $operations = [];
+        foreach ($provider->getDescriptor()['operations'] as $operation) {
+            $operations[(string)($operation['name'] ?? '')] = $operation;
+        }
+
+        $expected = [
+            'listWarmupProviders' => ['read', 'Weline_Cdn::cdn_warmup_list'],
+            'listWarmupUrls' => ['read', 'Weline_Cdn::cdn_warmup_list'],
+            'collectWarmup' => ['write', 'Weline_Cdn::cdn_warmup_collect'],
+            'executeWarmup' => ['write', 'Weline_Cdn::cdn_warmup_execute'],
+        ];
+        foreach ($expected as $name => [$mode, $sourceId]) {
+            self::assertArrayHasKey($name, $operations);
+            self::assertTrue($operations[$name]['frontend']);
+            self::assertTrue($operations[$name]['backend']);
+            self::assertSame('backend', $operations[$name]['auth']);
+            self::assertSame($mode, $operations[$name]['mode']);
+            self::assertSame(
+                ['kind' => 'source', 'source_id' => $sourceId],
+                $operations[$name]['backend_acl'],
+            );
+        }
+
+        $executeParams = $operations['executeWarmup']['params'];
+        $paramNames = array_map(static fn ($p) => is_array($p) ? ($p['name'] ?? '') : '', $executeParams);
+        self::assertContains('domain_id', $paramNames);
+        self::assertContains('provider', $paramNames);
+        self::assertContains('target_scope', $paramNames);
+        self::assertContains('site_id', $paramNames);
+        $collectParams = $operations['collectWarmup']['params'];
+        $collectNames = array_map(static fn ($p) => is_array($p) ? ($p['name'] ?? '') : '', $collectParams);
+        self::assertContains('provider', $collectNames);
+        self::assertContains('domain_id', $collectNames);
+        self::assertContains('target_scope', $collectNames);
+        self::assertContains('site_id', $collectNames);
+        $listParams = $operations['listWarmupProviders']['params'];
+        $listNames = array_map(static fn ($p) => is_array($p) ? ($p['name'] ?? '') : '', $listParams);
+        self::assertContains('target_scope', $listNames);
     }
 }

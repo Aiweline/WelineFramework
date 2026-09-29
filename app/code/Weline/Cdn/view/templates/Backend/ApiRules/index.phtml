@@ -1,343 +1,277 @@
 <?php
 /**
- * API规则管理列表页
- *
+ * 控制器 FPC 策略、旧 CDN 注释规则及真实同步回执。
  * @var \Weline\Framework\View\Template $this
  */
-
-$groupedRules = $this->getData('groupedRules') ?: [];
 $rules = $this->getData('rules') ?: [];
-$module = $this->getData('module') ?: '';
-$trigger = $this->getData('trigger') ?: '';
-$escapeAttr = static function (mixed $value): string {
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-};
+$module = (string)($this->getData('module') ?: '');
+$trigger = (string)($this->getData('trigger') ?: '');
+$selected_tab = (string)($this->getData('selected_tab') ?: 'fpc');
+$selected_scope = (string)($this->getData('selected_scope') ?: 'default.default.default');
+$selected_mode = (string)($this->getData('selected_mode') ?: 'normal');
+$escapeAttr = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$canEdit = \Weline\Acl\Taglib\Acl::hasPermissionQuiet('Weline_Cdn::cdn_api_rules_toggle');
+$canCollect = \Weline\Acl\Taglib\Acl::hasPermissionQuiet('Weline_Cdn::cdn_api_rules_collect');
+$canRetry = \Weline\Acl\Taglib\Acl::hasPermissionQuiet('Weline_Cdn::cdn_rules_push');
+$canDelete = \Weline\Acl\Taglib\Acl::hasPermissionQuiet('Weline_Cdn::cdn_api_rules_delete');
+$canView = \Weline\Acl\Taglib\Acl::hasPermissionQuiet('Weline_Cdn::cdn_api_rules_view');
+// 外置 JS 的翻译数据，无可执行内联脚本。
+$texts = [
+    'fpc' => (string)__('FPC 策略'),
+    'cdn' => (string)__('CDN 注释规则'),
+    'sync' => (string)__('同步记录'),
+    'intro' => (string)__('控制器缓存策略与 CDN 规则'),
+    'scope' => (string)__('作用范围'),
+    'mode' => (string)__('运行模式'),
+    'normal' => (string)__('正式'),
+    'test' => (string)__('测试'),
+    'keyword' => (string)__('关键词'),
+    'search' => (string)__('搜索方法或路径'),
+    'query' => (string)__('查询'),
+    'refresh' => (string)__('刷新'),
+    'collectFpc' => (string)__('重新收集声明'),
+    'collectCdn' => (string)__('重新收集规则'),
+    'refreshSync' => (string)__('刷新记录'),
+    'method' => (string)__('方法与公开路径'),
+    'enabled' => (string)__('启用'),
+    'ttl' => (string)__('TTL'),
+    'progress' => (string)__('生效进度'),
+    'actions' => (string)__('操作'),
+    'inherit' => (string)__('继承上级'),
+    'layer' => (string)__('本层'),
+    'source' => (string)__('来源'),
+    'code' => (string)__('代码声明'),
+    'global' => (string)__('全局'),
+    'website' => (string)__('网站'),
+    'store' => (string)__('店铺'),
+    'channel' => (string)__('渠道'),
+    'on' => (string)__('开启'),
+    'off' => (string)__('关闭'),
+    'uncached' => (string)__('不缓存'),
+    'seconds' => (string)__('%{1} 秒', ['%{1}']),
+    'edit' => (string)__('编辑覆盖'),
+    'details' => (string)__('详情'),
+    'codeBlocked' => (string)__('代码声明禁止公共缓存，后台不能开启。'),
+    'withdrawn' => (string)__('声明已撤回'),
+    'path' => (string)__('公开路径'),
+    'identity' => (string)__('声明身份'),
+    'fingerprint' => (string)__('策略指纹'),
+    'desired' => (string)__('期望版本'),
+    'origin' => (string)__('源站已确认版本'),
+    'snapshotVersion' => (string)__('快照文件版本'),
+    'snapshotRevision' => (string)__('快照修订标识'),
+    'snapshotError' => (string)__('快照错误'),
+    'unavailable' => (string)__('不可用'),
+    'pending' => (string)__('待处理'),
+    'running' => (string)__('处理中'),
+    'success' => (string)__('已完成'),
+    'error' => (string)__('失败'),
+    'loading' => (string)__('正在加载…'),
+    'failure' => (string)__('操作失败'),
+    'retry' => (string)__('重试'),
+    'retryQueued' => (string)__('已安排重试，请查看阶段回执。'),
+    'empty' => (string)__('暂无 FPC 声明。可重新收集控制器声明；未声明的方法仍按现有缓存资格处理。'),
+    'noMatch' => (string)__('未找到匹配的方法或路径。'),
+    'emptySync' => (string)__('暂无同步记录。'),
+    'save' => (string)__('保存覆盖'),
+    'saving' => (string)__('保存中…'),
+    'cancel' => (string)__('取消'),
+    'restoreEnabled' => (string)__('恢复启用继承'),
+    'restoreTtl' => (string)__('恢复 TTL 继承'),
+    'restoreAll' => (string)__('恢复全部继承'),
+    'ttlInvalid' => (string)__('请输入大于 0 的整数秒；关闭缓存请使用启用开关。'),
+    'saved' => (string)__('覆盖已保存，已安排发布与同步。'),
+    'restored' => (string)__('已恢复所选字段的继承，已安排发布与同步。'),
+    'collected' => (string)__('声明已收集，变更已安排发布与同步。'),
+    'unchanged' => (string)__('设置未变化。'),
+    'inheritHint' => (string)__('覆盖按字段分别继承；保存后自动安排源站发布和 CDN 同步。'),
+    'mergedHint' => (string)__('同 Zone 合并任务，可能包含其他域名；这里展示合并任务的阶段回执。'),
+    'cdnHint' => (string)__('此处管理现有 CDN 注释规则；FPC 缓存策略在前一页签管理。'),
+    'target' => (string)__('目标'),
+    'originStage' => (string)__('源站确认'),
+    'cloudStage' => (string)__('云端受理'),
+    'purgeStage' => (string)__('缓存清理'),
+    'verifyStage' => (string)__('HTTP抽样验证'),
+    'verifyVersion' => (string)__('HTTP抽样通过版本'),
+    'httpSampleHint' => (string)__('HTTP抽样验证仅覆盖回执列出的 URL、声明与作用范围，不代表所有控制器均已验证。'),
+    'updated' => (string)__('更新时间'),
+    'published' => (string)__('已确认 v%{1}', ['%{1}']),
+    'accepted' => (string)__('云端已受理 v%{1}', ['%{1}']),
+    'purged' => (string)__('已清理 v%{1}', ['%{1}']),
+    'verified' => (string)__('HTTP抽样通过 v%{1}', ['%{1}']),
+    'notPublished' => (string)__('未确认'),
+    'notAccepted' => (string)__('待受理'),
+    'notPurged' => (string)__('待清理'),
+    'notVerified' => (string)__('未验证'),
+    'verifyFailed' => (string)__('HTTP抽样未通过'),
+    'noCdn' => (string)__('无需 CDN 处理'),
+    'originOnly' => (string)__('仅源站确认'),
+    'domains' => (string)__('关联域名 ID'),
+    'jobId' => (string)__('任务标识'),
+    'receipts' => (string)__('阶段回执'),
+    'pendingVersion' => (string)__('待同步 v%{1}', ['%{1}']),
+    'total' => (string)__('共 %{1} 条', ['%{1}']),
+    'page' => (string)__('第 %{1} / %{2} 页', ['%{1}', '%{2}']),
+    'previous' => (string)__('上一页'),
+    'next' => (string)__('下一页'),
+    'otherPaths' => (string)__('另 %{1} 条路径', ['%{1}']),
+    'readOnly' => (string)__('只读'),
+    'confirmCollect' => (string)__('确认收集规则'),
+    'collectQuestion' => (string)__('确定要重新收集规则吗？这将扫描所有 Api 和 Controller 目录。'),
+    'confirmDelete' => (string)__('确认删除'),
+    'deleteQuestion' => (string)__('确定要删除这条规则吗？'),
+    'confirm' => (string)__('确定'),
+    'delete' => (string)__('删除'),
+    'moduleFilter' => (string)__('模块筛选'),
+    'allModules' => (string)__('全部模块'),
+    'trigger' => (string)__('触发方式'),
+    'all' => (string)__('全部'),
+    'cron' => (string)__('定时推送'),
+    'realtime' => (string)__('实时推送'),
+    'description' => (string)__('描述'),
+    'expression' => (string)__('表达式'),
+    'action' => (string)__('动作'),
+    'emptyCdn' => (string)__('暂无规则'),
+    'scopePlaceholder' => (string)__('选择网站、店铺或渠道'),
+    'scopeSearch' => (string)__('搜索作用范围'),
+    'scopeAria' => (string)__('选择作用范围'),
+    'editorTitle' => (string)__('编辑 FPC 覆盖'),
+    'effective' => (string)__('当前有效值'),
+    'codeEnabled' => (string)__('代码启用'),
+    'codeTtl' => (string)__('代码 TTL'),
+    'transportMissing' => (string)__('后台接口未就绪，请刷新后重试。'),
+    'snapshot' => (string)__('当前范围'),
+    'refreshError' => (string)__('加载失败，请重试。'),
+];
+$mode_options = json_encode([['value' => 'normal', 'label' => $texts['normal']], ['value' => 'test', 'label' => $texts['test']]], JSON_UNESCAPED_UNICODE);
+$module_options = [['value' => '', 'label' => $texts['allModules']]];
+foreach (array_unique(array_column($rules, 'module')) as $moduleName) {
+    $module_options[] = ['value' => (string)$moduleName, 'label' => (string)$moduleName];
+}
+$module_options = json_encode($module_options, JSON_UNESCAPED_UNICODE);
+$trigger_options = json_encode([['value' => '', 'label' => $texts['all']], ['value' => 'cron', 'label' => $texts['cron']], ['value' => 'realtime', 'label' => $texts['realtime']]], JSON_UNESCAPED_UNICODE);
 ?>
-
-<div class="w-grid w-backend-page" data-testid="cdn-api-rules-management">
-    <div style="--w-span:12;">
-        <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-            <template>Weline_Component::message.phtml</template>
-        </div>
-
-        <header
-            class="w-backend-page__heading w-cluster"
-            style="--w-mb:var(--weline-space-4);"
-            data-align="start"
-            data-justify="between"
-            data-wrap="true"
-        >
-            <div class="w-stack" style="--w-gap:var(--weline-space-1);">
-                <p class="w-text" data-tone="primary" data-size="sm" style="--w-mb:0;"><?= __('CDN 运维') ?></p>
-                <h4 class="w-backend-page__title" style="--w-mb:0;"><?= __('API 规则') ?></h4>
-                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);--w-mb:0;">
-                    <?= __('查看各模块收集的 CDN API 规则，按触发方式筛选并启用。') ?>
-                </p>
+<css>Weline_Cdn::css/backend/fpc-policy-management.css</css>
+<div class="w-grid w-backend-page cdn-fpc-page" data-testid="cdn-api-rules-management"
+     data-weline-load="api,cdnFpcPolicyManagement" data-cdn-fpc-management
+     data-tab="<?= $escapeAttr($selected_tab) ?>" data-can-edit="<?= $canEdit ? 'true' : 'false' ?>"
+     data-can-retry="<?= $canRetry ? 'true' : 'false' ?>"
+     data-index-url="@backend-url{'*/backend/api-rules/index'}"
+     data-view-url="@backend-url{'*/backend/api-rules/view'}"
+     data-cdn-i18n="<?= $escapeAttr(json_encode($texts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?>">
+    <div class="cdn-fpc-content">
+        <template>Weline_Component::message.phtml</template>
+        <header class="w-backend-page__heading w-cluster cdn-fpc-heading" data-align="start" data-justify="between" data-wrap="true">
+            <div class="w-stack">
+                <p class="w-text cdn-fpc-intro" data-tone="primary" data-size="sm"><lang>CDN 运维</lang></p>
+                <h4 class="w-backend-page__title cdn-fpc-intro"><lang>API 规则</lang></h4>
+                <p class="w-text cdn-fpc-intro" data-tone="muted" data-size="sm"><lang>控制器缓存策略与 CDN 规则</lang></p>
             </div>
-            <button type="button" class="w-button" data-cdn-api-rules-action="collect" data-tone="primary" data-size="sm">
-                <w:icon name="refresh" size="sm"></w:icon> <?= __('重新收集规则') ?>
+            <button type="button" class="w-button" data-tone="primary" data-size="sm" data-cdn-action="main" <?= !$canCollect && $selected_tab !== 'sync' ? 'hidden' : '' ?> data-can-collect="<?= $canCollect ? 'true' : 'false' ?>">
+                <w:icon name="refresh" size="sm" /> <span data-cdn-main-label><lang>重新收集声明</lang></span>
             </button>
         </header>
-
-        <section class="w-card" data-w-shadow="sm" style="--w-mb:var(--weline-space-4);">
-            <div
-                class="w-card__body w-cluster"
-                data-align="end"
-                data-wrap="true"
-                style="--w-gap:var(--weline-space-3);"
-            >
-                <div class="w-field" style="--w-mb:0;flex:1 1 10rem;max-inline-size:16rem;">
-                    <label class="w-field__label" for="moduleFilter"><?= __('模块筛选') ?></label>
-                    <div class="w-field__control">
-                        <select id="moduleFilter" class="w-select" data-cdn-api-rules-action="filter" data-size="sm">
-                            <option value=""><?= __('全部模块') ?></option>
-                            <?php
-                            $modules = array_unique(array_column($rules, 'module'));
-                            foreach ($modules as $moduleName):
-                            ?>
-                                <option value="<?= $escapeAttr($moduleName) ?>" <?= $module === $moduleName ? 'selected' : '' ?>>
-                                    <?= $escapeAttr($moduleName) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-                <div class="w-field" style="--w-mb:0;flex:1 1 10rem;max-inline-size:14rem;">
-                    <label class="w-field__label" for="triggerFilter"><?= __('触发方式') ?></label>
-                    <div class="w-field__control">
-                        <select id="triggerFilter" class="w-select" data-cdn-api-rules-action="filter" data-size="sm">
-                            <option value=""><?= __('全部') ?></option>
-                            <option value="cron" <?= $trigger === 'cron' ? 'selected' : '' ?>><?= __('定时推送') ?></option>
-                            <option value="realtime" <?= $trigger === 'realtime' ? 'selected' : '' ?>><?= __('实时推送') ?></option>
-                        </select>
-                    </div>
-                </div>
+        <div class="w-alert cdn-fpc-notice" data-tone="info" data-cdn-notice role="status" aria-live="polite" hidden></div>
+        <div data-w-component="tabs" data-cdn-tabs>
+            <div class="w-tabs__list" role="tablist" aria-label="@lang(API 规则)">
+                <button type="button" id="cdn-tab-fpc" class="w-tabs__tab" role="tab" aria-controls="cdn-panel-fpc" aria-selected="<?= $selected_tab === 'fpc' ? 'true' : 'false' ?>" data-cdn-tab="fpc"><lang>FPC 策略</lang></button>
+                <button type="button" id="cdn-tab-cdn" class="w-tabs__tab" role="tab" aria-controls="cdn-panel-cdn" aria-selected="<?= $selected_tab === 'cdn' ? 'true' : 'false' ?>" data-cdn-tab="cdn"><lang>CDN 注释规则</lang></button>
+                <button type="button" id="cdn-tab-sync" class="w-tabs__tab" role="tab" aria-controls="cdn-panel-sync" aria-selected="<?= $selected_tab === 'sync' ? 'true' : 'false' ?>" data-cdn-tab="sync"><lang>同步记录</lang></button>
             </div>
-        </section>
-
-        <section class="w-card" data-w-shadow="sm">
-            <div class="w-card__header w-cluster" data-align="center" data-justify="between" data-wrap="true">
-                <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
-                    <w:icon name="list" size="sm"></w:icon>
-                    <strong><?= __('规则列表') ?></strong>
-                    <span class="w-badge" data-tone="primary"><?= count($rules) ?></span>
-                </div>
-            </div>
-            <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-6);">
-                <?php if (empty($rules)): ?>
-                    <div class="w-empty">
-                        <w:icon name="info" size="lg"></w:icon>
-                        <p class="w-text" data-weight="strong"><?= __('暂无规则') ?></p>
-                        <p class="w-text" data-tone="muted" data-size="sm">
-                            <?= __('请运行 setup:upgrade 收集规则，或点击"重新收集规则"按钮。') ?>
-                        </p>
-                    </div>
-                <?php else: ?>
-                    <?php foreach ($groupedRules as $moduleName => $moduleRules): ?>
-                        <div class="w-stack" style="--w-gap:var(--weline-space-3);">
-                            <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
-                                <w:icon name="box" size="sm"></w:icon>
-                                <span class="w-text" data-tone="primary" data-weight="strong"><?= $escapeAttr($moduleName) ?></span>
-                                <span class="w-badge" data-tone="neutral"><?= count($moduleRules) ?></span>
-                            </div>
-                            <?php foreach ($moduleRules as $rule): ?>
-                                <?php $isRealtime = $rule->getData('trigger') === 'realtime'; ?>
-                                <article class="w-card" data-w-shadow="sm">
-                                    <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-3);">
-                                        <div class="w-cluster" data-justify="between" data-align="start" data-wrap="true" style="--w-gap:var(--weline-space-3);">
-                                            <div class="w-stack" style="--w-gap:var(--weline-space-1);">
-                                                <div class="w-text" data-weight="strong">
-                                                    <?= $escapeAttr($rule->getData('class')) ?>::<?= $escapeAttr($rule->getData('method')) ?>()
-                                                </div>
-                                                <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-3);">
-                                                    <span class="w-text" data-tone="muted" data-size="sm">
-                                                        <w:icon name="circle" size="sm"></w:icon>
-                                                        <?= $escapeAttr($rule->getData('route')) ?>
-                                                    </span>
-                                                    <span class="w-text" data-tone="muted" data-size="sm">
-                                                        <w:icon name="box" size="sm"></w:icon>
-                                                        <?= $escapeAttr($rule->getData('module')) ?>
-                                                    </span>
-                                                    <span class="w-badge" data-tone="<?= $isRealtime ? 'warning' : 'info' ?>">
-                                                        <?= $isRealtime ? __('实时推送') : __('定时推送') ?>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div class="w-stack" style="--w-gap:var(--weline-space-2);">
-                                                <div class="w-switch">
-                                                    <input
-                                                        type="checkbox"
-                                                        id="rule_<?= $escapeAttr($rule->getId()) ?>"
-                                                        <?= $rule->getData('enabled') ? 'checked' : '' ?>
-                                                        data-cdn-api-rules-action="toggle"
-                                                        data-rule-id="<?= $escapeAttr($rule->getId()) ?>"
-                                                    >
-                                                    <label for="rule_<?= $escapeAttr($rule->getId()) ?>"><?= __('启用') ?></label>
-                                                </div>
-                                                <div class="w-button-group w-cluster" style="--w-gap:var(--weline-space-1);">
-                                                    <button type="button" class="w-button" data-cdn-api-rules-action="view" data-rule-id="<?= $escapeAttr($rule->getId()) ?>" data-tone="info" data-size="sm">
-                                                        <w:icon name="eye" size="sm"></w:icon> <?= __('详情') ?>
-                                                    </button>
-                                                    <button type="button" class="w-button" data-cdn-api-rules-action="delete" data-rule-id="<?= $escapeAttr($rule->getId()) ?>" data-tone="danger" data-size="sm">
-                                                        <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <?php if ($rule->getData('description')): ?>
-                                            <div class="w-text" data-size="sm">
-                                                <strong><?= __('描述') ?>:</strong>
-                                                <?= $escapeAttr($rule->getData('description')) ?>
-                                            </div>
-                                        <?php endif; ?>
-                                        <div class="w-text" style="background:var(--backend-color-bg-secondary);" data-w-radius="md" data-family="mono" data-size="sm">
-                                            <strong><?= __('表达式') ?>:</strong><br>
-                                            <?= $escapeAttr($rule->getData('expression')) ?>
-                                        </div>
-                                        <div class="w-text" style="background:var(--backend-color-bg-secondary);" data-w-radius="md" data-family="mono" data-size="sm">
-                                            <strong><?= __('动作') ?>:</strong>
-                                            <pre style="--w-mb:0;"><?= $escapeAttr(json_encode($rule->getActionArray(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
-                                        </div>
-                                    </div>
-                                </article>
-                            <?php endforeach; ?>
+            <section class="w-card cdn-fpc-context" data-cdn-context-card <?= $selected_tab === 'cdn' ? 'hidden' : '' ?>>
+                <div class="w-card__body">
+                    <div class="w-cluster cdn-fpc-toolbar" data-wrap="true">
+                        <div class="w-field">
+                            <label class="w-field__label" for="cdn-fpc-scope"><lang>作用范围</lang></label>
+                            <div class="w-field__control"><w:scope id="cdn-fpc-scope" name="target_scope" value="selected_scope" placeholder="@lang(选择网站、店铺或渠道)" search-placeholder="@lang(搜索作用范围)" aria-label="@lang(选择作用范围)" searchable="true" default-expand-all="true" required="true" /></div>
                         </div>
+                        <div class="w-field">
+                            <label class="w-field__label" for="cdn-fpc-mode_input"><lang>运行模式</lang></label>
+                            <div class="w-field__control"><w:theme:search-select id="cdn-fpc-mode" name="store_mode" value="selected_mode" options-json="mode_options" required="true" placeholder="@lang(运行模式)" /></div>
+                        </div>
+                        <div class="w-field cdn-fpc-keyword">
+                            <label class="w-field__label" for="cdn-fpc-keyword"><lang>关键词</lang></label>
+                            <div class="w-field__control"><input type="search" id="cdn-fpc-keyword" class="w-input" data-size="sm" placeholder="@lang(搜索方法或路径)"></div>
+                        </div>
+                        <button type="button" class="w-button" data-size="sm" data-tone="neutral" data-cdn-action="query"><lang>查询</lang></button>
+                        <button type="button" class="w-button" data-size="sm" data-tone="neutral" data-variant="outline" data-cdn-action="refresh"><lang>刷新</lang></button>
+                    </div>
+                    <div class="w-cluster cdn-fpc-context" data-wrap="true"><strong class="w-text" data-cdn-context-summary></strong><span class="w-text" data-tone="muted" data-size="sm" data-cdn-versions></span></div>
+                </div>
+            </section>
+            <section class="w-tabs__panel" id="cdn-panel-fpc" role="tabpanel" aria-labelledby="cdn-tab-fpc" <?= $selected_tab !== 'fpc' ? 'hidden' : '' ?>>
+                <p class="w-text" data-tone="muted" data-size="sm"><lang>覆盖按字段分别继承；保存后自动安排源站发布和 CDN 同步。</lang></p>
+                <div class="w-card"><div class="w-card__body">
+                    <p class="w-text" data-cdn-loading="fpc" role="status"><lang>正在加载…</lang></p>
+                    <div class="w-table-wrap"><table class="w-table cdn-fpc-table" data-cdn-table="fpc">
+                        <thead><tr><th scope="col"><lang>方法与公开路径</lang></th><th scope="col"><lang>启用</lang></th><th scope="col"><lang>TTL</lang></th><th scope="col"><lang>生效进度</lang></th><th scope="col"><lang>操作</lang></th></tr></thead>
+                        <tbody data-cdn-rows="fpc"></tbody>
+                    </table></div>
+                    <div class="w-cluster cdn-fpc-pager" data-justify="between" data-wrap="true" data-cdn-pager="fpc"></div>
+                </div></div>
+            </section>
+            <section class="w-tabs__panel" id="cdn-panel-cdn" role="tabpanel" aria-labelledby="cdn-tab-cdn" <?= $selected_tab !== 'cdn' ? 'hidden' : '' ?>>
+                <p class="w-text" data-tone="muted" data-size="sm"><lang>此处管理现有 CDN 注释规则；FPC 缓存策略在前一页签管理。</lang></p>
+                <section class="w-card"><div class="w-card__body w-cluster cdn-fpc-toolbar" data-wrap="true">
+                    <div class="w-field"><label class="w-field__label" for="cdn-module-filter_input"><lang>模块筛选</lang></label><div class="w-field__control"><w:theme:search-select id="cdn-module-filter" name="module" value="module" options-json="module_options" placeholder="@lang(全部模块)" /></div></div>
+                    <div class="w-field"><label class="w-field__label" for="cdn-trigger-filter_input"><lang>触发方式</lang></label><div class="w-field__control"><w:theme:search-select id="cdn-trigger-filter" name="trigger" value="trigger" options-json="trigger_options" placeholder="@lang(全部)" /></div></div>
+                </div></section>
+                <section class="w-card cdn-fpc-context"><div class="w-card__body w-table-wrap"><table class="w-table cdn-fpc-table">
+                    <thead><tr><th scope="col"><lang>方法与公开路径</lang></th><th scope="col"><lang>触发方式</lang></th><th scope="col"><lang>启用</lang></th><th scope="col"><lang>操作</lang></th></tr></thead><tbody>
+                    <?php if (!$rules): ?><tr><td colspan="4"><lang>暂无规则</lang></td></tr><?php endif; ?>
+                    <?php foreach ($rules as $rule): $ruleId = (string)$rule->getId(); $triggerLabel = $rule->getData('trigger') === 'realtime' ? $texts['realtime'] : $texts['cron']; ?>
+                        <tr data-cdn-rule="<?= $escapeAttr($ruleId) ?>">
+                            <td><div class="w-stack"><strong class="w-text cdn-fpc-path"><?= $escapeAttr($rule->getData('class')) ?>::<?= $escapeAttr($rule->getData('method')) ?>()</strong><span class="w-text" data-tone="muted" data-size="sm"><?= $escapeAttr($rule->getData('module')) ?></span><span class="w-text cdn-fpc-path" data-size="sm"><?= $escapeAttr($rule->getData('route')) ?></span>
+                                <details class="w-disclosure"><summary><lang>详情</lang></summary><div class="w-stack">
+                                    <?php if ($rule->getData('description')): ?><p class="w-text"><strong><lang>描述</lang>:</strong> <?= $escapeAttr($rule->getData('description')) ?></p><?php endif; ?>
+                                    <p class="w-text cdn-fpc-path"><strong><lang>表达式</lang>:</strong> <?= $escapeAttr($rule->getData('expression')) ?></p>
+                                    <div><strong><lang>动作</lang>:</strong><pre><?= $escapeAttr(json_encode($rule->getActionArray(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre></div>
+                                </div></details>
+                            </div></td>
+                            <td><?= $escapeAttr($triggerLabel) ?></td>
+                            <td><div class="w-switch"><input type="checkbox" id="rule_<?= $escapeAttr($ruleId) ?>" data-cdn-action="toggle-rule" data-rule-id="<?= $escapeAttr($ruleId) ?>" <?= $rule->getData('enabled') ? 'checked' : '' ?> <?= $canEdit ? '' : 'disabled' ?>><label for="rule_<?= $escapeAttr($ruleId) ?>"><lang>启用</lang></label></div></td>
+                            <td><div class="w-cluster" data-wrap="true">
+                                <?php if ($canView): ?><button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-cdn-action="view-rule" data-rule-id="<?= $escapeAttr($ruleId) ?>"><lang>详情</lang></button><?php endif; ?>
+                                <?php if ($canDelete): ?><button type="button" class="w-button" data-tone="danger" data-variant="outline" data-size="sm" data-cdn-action="delete-rule" data-rule-id="<?= $escapeAttr($ruleId) ?>"><lang>删除</lang></button><?php endif; ?>
+                            </div></td>
+                        </tr>
                     <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-        </section>
+                    </tbody></table></div></section>
+            </section>
+            <section class="w-tabs__panel" id="cdn-panel-sync" role="tabpanel" aria-labelledby="cdn-tab-sync" <?= $selected_tab !== 'sync' ? 'hidden' : '' ?>>
+                <p class="w-text" data-tone="muted" data-size="sm"><lang>同 Zone 合并任务，可能包含其他域名；这里展示合并任务的阶段回执。</lang> <lang>HTTP抽样验证仅覆盖回执列出的 URL、声明与作用范围，不代表所有控制器均已验证。</lang></p>
+                <div class="w-card"><div class="w-card__body">
+                    <p class="w-text" data-cdn-loading="sync" role="status"><lang>正在加载…</lang></p>
+                    <div class="w-table-wrap"><table class="w-table cdn-fpc-table" data-cdn-table="sync">
+                        <thead><tr><th scope="col"><lang>目标</lang></th><th scope="col"><lang>生效进度</lang></th><th scope="col"><lang>源站确认</lang></th><th scope="col"><lang>云端受理</lang></th><th scope="col"><lang>缓存清理</lang></th><th scope="col"><lang>HTTP抽样验证</lang></th><th scope="col"><lang>更新时间</lang></th><th scope="col"><lang>操作</lang></th></tr></thead>
+                        <tbody data-cdn-rows="sync"></tbody>
+                    </table></div>
+                    <div class="w-cluster cdn-fpc-pager" data-justify="between" data-wrap="true" data-cdn-pager="sync"></div>
+                </div></div>
+            </section>
+        </div>
     </div>
+    <dialog id="cdn-fpc-editor" class="w-dialog cdn-fpc-editor" data-w-component="dialog" aria-labelledby="cdn-fpc-editor-title">
+        <div class="w-dialog__header"><h4 id="cdn-fpc-editor-title"><lang>编辑 FPC 覆盖</lang></h4><button type="button" class="w-button" data-tone="neutral" data-size="sm" data-cdn-action="cancel"><lang>取消</lang></button></div>
+        <form data-cdn-editor-form novalidate>
+            <div class="w-dialog__body">
+                <p class="w-text cdn-fpc-context" data-cdn-editor-context></p>
+                <p class="w-alert" data-tone="warning" data-cdn-code-blocked hidden><lang>代码声明禁止公共缓存，后台不能开启。</lang></p>
+                <div class="w-field"><strong class="w-field__label"><lang>启用</lang></strong>
+                    <label class="w-cluster cdn-fpc-inherit"><input type="checkbox" name="inherit_enabled"><span><lang>继承上级</lang></span></label>
+                    <div class="w-cluster cdn-fpc-field-actions" data-wrap="true"><div class="w-switch"><input type="checkbox" id="cdn-fpc-edit-enabled" name="enabled"><label for="cdn-fpc-edit-enabled"><lang>开启</lang></label></div><button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-cdn-action="restore" data-fields="enabled"><lang>恢复启用继承</lang></button></div>
+                    <small class="w-field__hint" data-cdn-enabled-hint></small>
+                </div>
+                <div class="w-field"><label class="w-field__label" for="cdn-fpc-edit-ttl"><lang>TTL</lang></label>
+                    <label class="w-cluster cdn-fpc-inherit"><input type="checkbox" name="inherit_ttl"><span><lang>继承上级</lang></span></label>
+                    <div class="w-field__control"><input type="number" class="w-input" id="cdn-fpc-edit-ttl" name="ttl" min="1" step="1" inputmode="numeric" aria-describedby="cdn-fpc-ttl-error cdn-fpc-ttl-hint"></div>
+                    <small class="w-field__hint" id="cdn-fpc-ttl-hint" data-cdn-ttl-hint></small>
+                    <small class="w-field__hint" id="cdn-fpc-ttl-error" data-tone="danger" hidden><lang>请输入大于 0 的整数秒；关闭缓存请使用启用开关。</lang></small>
+                    <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-cdn-action="restore" data-fields="ttl"><lang>恢复 TTL 继承</lang></button>
+                </div>
+                <div class="w-alert cdn-fpc-error" data-tone="danger" role="alert" data-cdn-editor-error hidden></div>
+            </div>
+            <div class="w-dialog__footer"><button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" data-cdn-action="restore" data-fields="enabled,ttl"><lang>恢复全部继承</lang></button><button type="button" class="w-button" data-tone="neutral" data-size="sm" data-cdn-action="cancel"><lang>取消</lang></button><button type="submit" class="w-button" data-tone="primary" data-size="sm" data-cdn-save><lang>保存覆盖</lang></button></div>
+        </form>
+    </dialog>
 </div>
-
-<js:part>
-(function() {
-    'use strict';
-
-    var indexUrl = "@backend-url{'*/backend/api-rules/index'}";
-    var viewUrl = "@backend-url{'*/backend/api-rules/view'}";
-
-    function requestDialog(options) {
-        return Weline.UI.dialog.request(options);
-    }
-
-    document.addEventListener('change', function(event) {
-        var target = event.target instanceof Element ? event.target.closest('[data-cdn-api-rules-action]') : null;
-        if (!target) {
-            return;
-        }
-        if (target.dataset.cdnApiRulesAction === 'filter') {
-            window.CdnApiRulesManager.filterRules();
-            return;
-        }
-        if (target.dataset.cdnApiRulesAction === 'toggle') {
-            if (!event.isTrusted) {
-                return;
-            }
-            window.CdnApiRulesManager.toggleRule(target.dataset.ruleId || '', target.checked);
-        }
-    });
-
-    document.addEventListener('click', function(event) {
-        var target = event.target instanceof Element ? event.target.closest('[data-cdn-api-rules-action]') : null;
-        if (!target) {
-            return;
-        }
-        if (target.dataset.cdnApiRulesAction === 'collect') {
-            window.CdnApiRulesManager.collectRules();
-            return;
-        }
-        if (target.dataset.cdnApiRulesAction === 'view') {
-            window.CdnApiRulesManager.viewRule(target.dataset.ruleId || '');
-            return;
-        }
-        if (target.dataset.cdnApiRulesAction === 'delete') {
-            window.CdnApiRulesManager.deleteRule(target.dataset.ruleId || '');
-        }
-    });
-
-    window.CdnApiRulesManager = {
-        filterRules: function() {
-            var module = document.getElementById('moduleFilter').value;
-            var trigger = document.getElementById('triggerFilter').value;
-            var params = new URLSearchParams();
-            if (module) params.append('module', module);
-            if (trigger) params.append('trigger', trigger);
-            window.location.href = indexUrl + (params.toString() ? '?' + params.toString() : '');
-        },
-
-        collectRules: function() {
-            requestDialog({
-                title: '<?= __('确认收集规则') ?>',
-                message: '<?= __('确定要重新收集规则吗？这将扫描所有Api和Controller目录。') ?>',
-                tone: 'info',
-                cancelable: true,
-                confirmLabel: '<?= __("确定收集") ?>',
-                cancelLabel: '<?= __("取消") ?>'
-            }).then(function(result) {
-                if (result.confirmed) {
-                    Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-                    .then(function(api){ return api.resource('cdn').collectApiRules({}); })
-                    .then(function(data) {
-                        if (data && data.success !== false) {
-                            requestDialog({
-                                tone: 'success',
-                                title: '<?= __('成功') ?>',
-                                message: data.message,
-                                duration: 2000,
-                                confirmable: false
-                            }).then(function() { window.location.reload(); });
-                        } else {
-                            requestDialog({
-                                tone: 'danger',
-                                title: '<?= __('收集失败') ?>',
-                                message: (data && data.message) || '<?= __('收集失败') ?>',
-                                confirmLabel: '<?= __('确定') ?>'
-                            });
-                        }
-                    })
-                    .catch(function(error) {
-                        requestDialog({
-                            tone: 'danger',
-                            title: '<?= __('收集失败') ?>',
-                            message: (error && error.message) || '<?= __('请重试') ?>',
-                            confirmLabel: '<?= __('确定') ?>'
-                        });
-                    });
-                }
-            });
-        },
-
-        toggleRule: function(ruleId, enabled) {
-            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-            .then(function(api){ return api.resource('cdn').toggleApiRule({ id: ruleId, enabled: enabled ? 1 : 0 }); })
-            .then(function(data) {
-                if (!(data && data.success !== false)) {
-                    requestDialog({
-                        tone: 'danger',
-                        title: '<?= __('操作失败') ?>',
-                        message: data.message || '<?= __('操作失败') ?>',
-                        confirmLabel: '<?= __('确定') ?>'
-                    });
-                    document.getElementById('rule_' + ruleId).checked = !enabled;
-                }
-            })
-            .catch(function() {
-                requestDialog({
-                    tone: 'danger',
-                    title: '<?= __('操作失败') ?>',
-                    message: '<?= __('请重试') ?>',
-                    confirmLabel: '<?= __('确定') ?>'
-                });
-                document.getElementById('rule_' + ruleId).checked = !enabled;
-            });
-        },
-
-        viewRule: function(ruleId) {
-            window.location.href = viewUrl + '?id=' + encodeURIComponent(ruleId);
-        },
-
-        deleteRule: function(ruleId) {
-            requestDialog({
-                title: '<?= __('确认删除') ?>',
-                message: '<?= __('确定要删除这条规则吗？') ?>',
-                tone: 'warning',
-                cancelable: true,
-                confirmLabel: '<?= __("确定删除") ?>',
-                cancelLabel: '<?= __("取消") ?>',
-                confirmTone: 'danger'
-            }).then(function(result) {
-                if (result.confirmed) {
-                    Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-                    .then(function(api){ return api.resource('cdn').deleteApiRule({ id: ruleId }); })
-                    .then(function(data) {
-                        if (data && data.success !== false) {
-                            requestDialog({
-                                tone: 'success',
-                                title: '<?= __('成功') ?>',
-                                message: data.message,
-                                duration: 2000,
-                                confirmable: false
-                            }).then(function() { window.location.reload(); });
-                        } else {
-                            requestDialog({
-                                tone: 'danger',
-                                title: '<?= __('删除失败') ?>',
-                                message: data.message || '<?= __('删除失败') ?>',
-                                confirmLabel: '<?= __('确定') ?>'
-                            });
-                        }
-                    })
-                    .catch(function(error) {
-                        requestDialog({
-                            tone: 'danger',
-                            title: '<?= __('删除失败') ?>',
-                            message: (error && error.message) || '<?= __('请重试') ?>',
-                            confirmLabel: '<?= __('确定') ?>'
-                        });
-                    });
-                }
-            });
-        }
-    };
-})();
-</js:part>

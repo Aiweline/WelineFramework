@@ -887,6 +887,11 @@ class ThemeData
      */
     public static function set(string $identify, string $value, string $scope = 'default', ?string $locale = null): bool
     {
+        return self::writeLayoutConfiguration($identify, $scope, static fn(): bool => self::setConfigurationValue($identify, $value, $scope, $locale));
+    }
+
+    private static function setConfigurationValue(string $identify, string $value, string $scope, ?string $locale): bool
+    {
         self::ensureInitialized();
         $identify = self::normalizeIdentify($identify);
 
@@ -1235,6 +1240,11 @@ class ThemeData
      */
     public static function setParamValues(string $identify, array $values, string $scope = 'default', ?string $locale = null): void
     {
+        self::writeLayoutConfiguration($identify, $scope, static function () use ($identify, $values, $scope, $locale): void { self::setConfigurationParamValues($identify, $values, $scope, $locale); });
+    }
+
+    private static function setConfigurationParamValues(string $identify, array $values, string $scope, ?string $locale): void
+    {
         self::ensureInitialized();
         if (empty($values)) {
             return;
@@ -1270,6 +1280,11 @@ class ThemeData
      * 删除参数值（恢复默认）
      */
     public static function deleteParamValue(string $identify, string $paramName, string $scope = 'default', ?string $locale = null): void
+    {
+        self::writeLayoutConfiguration($identify, $scope, static function () use ($identify, $paramName, $scope, $locale): void { self::deleteConfigurationParamValue($identify, $paramName, $scope, $locale); });
+    }
+
+    private static function deleteConfigurationParamValue(string $identify, string $paramName, string $scope, ?string $locale): void
     {
         self::ensureInitialized();
         $identify = self::normalizeIdentify($identify);
@@ -1367,7 +1382,7 @@ class ThemeData
             $translationKey .= '|scope:' . $effectiveScope;
         }
 
-        return self::dictionaryRepository()->upsert($translationKey, $locale, $value);
+        return self::writeLayoutConfiguration($identify, $effectiveScope, static fn(): bool => self::dictionaryRepository()->upsert($translationKey, $locale, $value));
     }
 
     /**
@@ -1391,7 +1406,7 @@ class ThemeData
             $translationKey .= '|scope:' . $effectiveScope;
         }
 
-        return self::dictionaryRepository()->deleteEntry($translationKey, $locale);
+        return self::writeLayoutConfiguration($identify, $effectiveScope, static fn(): bool => self::dictionaryRepository()->deleteEntry($translationKey, $locale));
     }
 
     /**
@@ -2721,7 +2736,17 @@ class ThemeData
             $translationKey .= '|scope:' . $effectiveScope;
         }
 
-        return self::dictionaryRepository()->upsert($translationKey, $locale, $value);
+        return self::writeLayoutConfiguration($identify, $effectiveScope, static fn(): bool => self::dictionaryRepository()->upsert($translationKey, $locale, $value));
+    }
+
+    private static function writeLayoutConfiguration(string $identify, string $scope, callable $mutation): mixed
+    {
+        self::ensureInitialized();
+        $identify = self::normalizeIdentify($identify);
+        $themeId = (int)(self::state()->currentTheme?->getId() ?? 0);
+        if ($themeId < 1 || !preg_match('/^theme\.(frontend|backend)\.(?:layouts|partials|widgets|components)(?:\.|$)/D', $identify, $match)) { return $mutation(); }
+        return ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutConfigurationWriter::class)
+            ->write($themeId, self::resolveEffectiveScope($scope, $match[1]), $match[1], $mutation);
     }
 
     /**

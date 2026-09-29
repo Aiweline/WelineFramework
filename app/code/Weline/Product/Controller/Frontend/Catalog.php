@@ -14,6 +14,11 @@ use Weline\Product\Service\StorefrontCategoryListingFilter;
 use Weline\Product\Service\StorefrontListingPager;
 use Weline\Product\Service\StorefrontSeoListingFacts;
 
+/**
+ * 店面目录列表（/products、/category、/categories）。
+ *
+ * @Extra type=fpc enabled=true ttl=600 namespaces=website/default/catalog public_path_patterns=/products,/category,/categories
+ */
 final class Catalog extends FrontendController
 {
     public function __construct(

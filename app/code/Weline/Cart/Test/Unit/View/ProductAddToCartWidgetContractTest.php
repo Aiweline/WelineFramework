@@ -59,6 +59,36 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString('applyCachedSummary', $script);
     }
 
+    public function testPurchaseActionsEnsureGuestTokenAlwaysIssuesAndForceRenews(): void
+    {
+        $script = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/widgets/product-purchase-actions.js',
+        );
+
+        // Must not early-return on getGuestSession alone (Cookie authority via always-issue).
+        self::assertDoesNotMatchRegularExpression(
+            '/async function ensureGuestToken\(\)\s*\{[\s\S]*?getGuestSession\(\)[\s\S]*?if \(existing && existing\.token\)[\s\S]*?return existing\.token;/',
+            $script,
+        );
+        self::assertStringContainsString('renewGuestSession({ force: true })', $script);
+        self::assertStringContainsString('cookieSyncedByRenew', $script);
+        self::assertStringContainsString('issueGuestToken({}, { silent: true })', $script);
+        self::assertStringContainsString('issueGuestToken({ guest_token: existingToken }', $script);
+        self::assertStringContainsString('isUnknownGuestTokenWorkerParam', $script);
+        self::assertStringContainsString('Unknown frontend worker param:\\s*guest_token', $script);
+        self::assertStringContainsString('rememberGuestSession(adopted, expiresAt)', $script);
+        // Always-issue must NOT unconditionally send guest_token when renew already synced Cookie.
+        self::assertStringNotContainsString(
+            'const issueParams = existingToken ? { guest_token: existingToken } : {};',
+            $script,
+        );
+        // sessionStorage-only early return must also stay gone.
+        self::assertDoesNotMatchRegularExpression(
+            '/async function ensureGuestToken\(\)\s*\{[\s\S]*?sessionStorage\.getItem\(GUEST_TOKEN_STORAGE_KEY\)[\s\S]*?if \(guestToken\) \{\s*[\s\S]*?return guestToken;/',
+            $script,
+        );
+    }
+
     public function testPurchaseActionsSubmitSelectedEavVariantValues(): void
     {
         $script = (string)file_get_contents(

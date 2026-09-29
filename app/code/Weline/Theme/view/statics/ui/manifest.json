@@ -518,10 +518,10 @@
             "type": "css"
         },
         "theme-editor-js": {
-            "bytes": 1126406,
+            "bytes": 1124984,
             "file": "pages/weline-theme-editor.js",
-            "gzip_bytes": 229481,
-            "sha256": "ff24c53a81db17ae61c6563a073a06d03858abe477e8c9d155b0401efbcbb9ca",
+            "gzip_bytes": 229367,
+            "sha256": "dc3ca361d6daa9c9403b2e8208ad8e9f79d1f9cba172705062d1f75dfa67d396",
             "type": "js"
         },
         "theme-editor-overlay-css": {

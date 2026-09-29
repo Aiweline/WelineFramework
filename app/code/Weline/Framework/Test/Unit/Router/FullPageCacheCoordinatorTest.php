@@ -80,14 +80,10 @@ final class FullPageCacheCoordinatorTest extends TestCase
         WelineEnv::set('is_backend', false, 'unit-test');
         WelineEnv::set('is_static_file', false, 'unit-test');
         WelineEnv::set('response.from_cache', false, 'unit-test');
-        $currencyMap = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap');
-        $currencyScope = new \ReflectionProperty(State::class, 'allowedCurrencyCodeScope');
+        $currencyMap = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMapsByScope');
         $this->originalAllowedCurrencyCodeMap = $currencyMap->getValue();
-        $this->originalAllowedCurrencyCodeScope = $currencyScope->getValue();
-        $currencyMap->setValue(null, ['CNY' => true, 'USD' => true]);
-        $currencyScope->setValue(null, (string)\w_env('website_id', '')
-            . '|' . (string)\w_env('website.code', '')
-            . '|' . (string)WelineEnv::server('WELINE_WEBSITE_ID', ''));
+        $scope = (new \ReflectionMethod(State::class, 'currentWebsiteScopeKey'))->invoke(null);
+        $currencyMap->setValue(null, [$scope => ['CNY' => true, 'USD' => true]]);
     }
 
     protected function tearDown(): void
@@ -101,10 +97,8 @@ final class FullPageCacheCoordinatorTest extends TestCase
             }
         }
 
-        (new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap'))
+        (new \ReflectionProperty(State::class, 'allowedCurrencyCodeMapsByScope'))
             ->setValue(null, $this->originalAllowedCurrencyCodeMap);
-        (new \ReflectionProperty(State::class, 'allowedCurrencyCodeScope'))
-            ->setValue(null, $this->originalAllowedCurrencyCodeScope);
         WelineEnv::getInstance()->reset();
         FullPageCacheCoordinator::clearProcessCache();
         Runtime::resetModeCache();
@@ -470,8 +464,8 @@ final class FullPageCacheCoordinatorTest extends TestCase
         // A path currency is a route identity, not a Website selector option.
         // Keep only CNY in the presentation allowlist and prove /USD/... still
         // receives its own USD variant through the central path parser.
-        (new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap'))
-            ->setValue(null, ['CNY' => true]);
+        (new \ReflectionProperty(State::class, 'allowedCurrencyCodeMapsByScope'))
+            ->setValue(null, [(new \ReflectionMethod(State::class, 'currentWebsiteScopeKey'))->invoke(null) => ['CNY' => true]]);
         $cases = [
             '/USD/' => ['language' => 'zh_Hans_CN', 'currency' => 'USD', 'website_url' => ''],
             '/en_US/' => ['language' => 'en_US', 'currency' => 'CNY', 'website_url' => ''],
@@ -912,6 +906,28 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
         @\unlink((string)$shared['fpc_body_file']['path']);
         \Weline\Framework\App\Env::set('wls.performance.fpc_shared_file_body_min_bytes', 262144);
+    }
+
+    public function testPolicyEdgeHeadersBoundFreshnessAndNeverCacheStale(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $apply = new \ReflectionMethod($coordinator, 'applyFpcHitEdgeCacheHeaders');
+        $response = Response::fromContent('body');
+        $payload = ['fpc_expires_at' => microtime(true) + 12, 'policy_ttl' => 30];
+        $apply->invoke($coordinator, $response, false, $payload);
+        self::assertMatchesRegularExpression('/^public, max-age=(?:10|11|12)$/', $response->getHeader('CDN-Cache-Control'));
+        $apply->invoke($coordinator, $response, true, $payload);
+        self::assertSame('no-store', $response->getHeader('CDN-Cache-Control'));
+        self::assertSame('no-store', $response->getHeader('Cloudflare-CDN-Cache-Control'));
+    }
+
+    public function testFormattedWireFreshnessIsRecomputedBeforeSend(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $http = "HTTP/1.1 200 OK\r\nCDN-Cache-Control: public, max-age=60\r\nCloudflare-CDN-Cache-Control: public, max-age=60\r\nX-Weline-Fpc-Fresh-Until: " . (microtime(true) + 5) . "\r\nConnection: keep-alive\r\n\r\nbody";
+        $wire = (new \ReflectionMethod($coordinator, 'withFormattedResponseConnection'))->invoke($coordinator, $http, true);
+        self::assertStringNotContainsString('X-Weline-Fpc-Fresh-Until', $wire);
+        self::assertMatchesRegularExpression('/CDN-Cache-Control: public, max-age=[0-5]\r\n/', $wire);
     }
 
     private function coordinator(CachePoolInterface $pool): FullPageCacheCoordinator

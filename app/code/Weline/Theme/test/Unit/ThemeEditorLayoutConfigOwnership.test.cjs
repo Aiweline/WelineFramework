@@ -54,15 +54,17 @@ function layoutEditor(initial = {}, validate = async () => ({success: true})) {
     }
     const context = vm.createContext({
         FormData: BrowserFormData,
-        state: {themeId: 1}, config: {apiSaveLayoutConfig: '/save-layout-config'},
+        state: {themeId: 1, scopedWorkspaces: {}, contentRevision: 1}, config: {apiSaveLayoutConfig: '/save-layout-config'},
         getEffectiveEditorArea: () => 'frontend', getActiveConfigLocale: () => 'zh_Hans_CN',
         getEffectiveLayoutType: () => 'homepage', getEffectiveLayoutOption: () => 'default',
         getCurrentWindowParam: () => 'default', getLayoutLockVirtualPayload: () => ({}),
         apiJson: async (_url, options) => { requests.push(JSON.parse(options.body)); return validate(); },
+        buildTypedEditorContext: () => ({}), scopedWorkspaceKey: (type) => type,
+        renderThemeBindingOwnership() {}, renderScopedConflictPanel() {},
         queueLayoutConfigOwnership: async (config, locale) => { patches.push({config: plain(config), locale}); },
-        showToast() {}, fetchLayoutSlots() {}, loadCanvas() {}, console,
+        setWidgetConfigAutosaveStatus() {}, showToast() {}, fetchLayoutSlots() {}, loadCanvas() {}, console,
     });
-    const functions = ['collectWidgetConfigData', 'scopedValuesEqual', 'bindLayoutConfigEvents', 'saveLayoutConfig'];
+    const functions = ['collectWidgetConfigData', 'scopedValuesEqual', 'bindLayoutConfigEvents', 'saveLayoutConfig', 'applyScopedWorkspaceSnapshot', 'getScopedWorkspaceState', 'normalizeThemeFileImageNode', 'parseI18nFieldValue'];
     for (const name of ['rememberLayoutConfigValues', 'collectLayoutConfigChanges']) {
         if (source.includes(`    function ${name}(`)) functions.push(name);
     }
@@ -76,7 +78,7 @@ test('editing only title submits only title, without inherited fields or the hid
     form.values.title = '长安汉服 · 水墨衣冠';
     await context.saveLayoutConfig(form, 'zh_Hans_CN');
     assert.deepEqual(requests[0].config, {title: '长安汉服 · 水墨衣冠'});
-    assert.deepEqual(patches, [{config: {title: '长安汉服 · 水墨衣冠'}, locale: 'zh_Hans_CN'}]);
+    assert.deepEqual(patches, [], 'The endpoint already persisted this change');
 });
 
 test('saving an unchanged form does not create any scope override', async () => {
@@ -107,7 +109,7 @@ test('failed validation leaves the title edit available for retry', async () => 
     await assert.rejects(context.saveLayoutConfig(form, 'zh_Hans_CN'), /Save rejected/);
     await context.saveLayoutConfig(form, 'zh_Hans_CN');
     assert.deepEqual(requests.map((request) => request.config), [{title: 'New title'}, {title: 'New title'}]);
-    assert.equal(patches.length, 1);
+    assert.equal(patches.length, 0);
 });
 
 test('a newer edit made during the save remains unsaved until the next request', async () => {
@@ -121,4 +123,19 @@ test('a newer edit made during the save remains unsaved until the next request',
     await saving;
     await context.saveLayoutConfig(form, 'zh_Hans_CN');
     assert.deepEqual(requests.map((request) => request.config), [{title: 'First edit'}, {title: 'Second edit'}]);
+});
+
+
+test('consecutive saved responses advance the next content revision without a second write', async () => {
+    let revision = 1;
+    const {context, form, requests, patches} = layoutEditor({}, async () => ({success: true, data: {workspace: {
+        content_revision: ++revision, theme_version_id: 11, revision: revision - 1,
+    }}}));
+    form.values.title = 'First';
+    await context.saveLayoutConfig(form, 'zh_Hans_CN');
+    form.values.title = 'Second';
+    await context.saveLayoutConfig(form, 'zh_Hans_CN');
+    assert.deepEqual(requests.map((request) => request.expected_content_revision), [1, 2]);
+    assert.equal(context.state.contentRevision, 3);
+    assert.equal(patches.length, 0);
 });

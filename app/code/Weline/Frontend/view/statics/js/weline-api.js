@@ -542,6 +542,111 @@
         return false;
     };
 
+    // Module CSV source = 简中 phrase; lookup via runtime translator / i18n bag.
+    const i18nText = (source) => {
+        const phrase = String(source || '').trim();
+        if (!phrase) {
+            return '';
+        }
+        try {
+            if (window.WelineI18n && typeof window.WelineI18n.translate === 'function') {
+                const translated = window.WelineI18n.translate(phrase);
+                if (translated != null && String(translated).trim() !== '') {
+                    return String(translated);
+                }
+            }
+            if (window.Weline && window.Weline.i18n && typeof window.Weline.i18n.translate === 'function') {
+                const translated = window.Weline.i18n.translate(phrase);
+                if (translated != null && String(translated).trim() !== '') {
+                    return String(translated);
+                }
+            }
+            if (typeof window.__ === 'function') {
+                const translated = window.__(phrase);
+                if (translated != null && String(translated).trim() !== '') {
+                    return String(translated);
+                }
+            }
+        } catch (_error) {
+            // Fall through to bag / source.
+        }
+        const bag = (window.Weline && window.Weline.config && window.Weline.config.i18n)
+            || window.WELINE_I18N
+            || {};
+        const value = bag && bag[phrase] != null ? String(bag[phrase]).trim() : '';
+        return value || phrase;
+    };
+
+    const resolveErrorPresentation = (error) => {
+        const status = Number(error && error.status ? error.status : 0) || 0;
+        const code = String((error && error.code) || '').trim() || 'request_failed';
+        const rawMessage = String((error && error.message) || '').trim();
+        const details = String(
+            (error && error.details)
+            || rawMessage
+            || ''
+        ).trim();
+        const byCode = {
+            origin_unreachable: {
+                title: i18nText('源站暂时不可用'),
+                message: i18nText('CDN 连不上源站（常见 HTTP 521）。请稍后重试；若持续失败请检查源站与边缘配置。'),
+            },
+            service_unavailable: {
+                title: i18nText('服务暂时不可用'),
+                message: i18nText('服务器繁忙或维护中，请稍后重试。'),
+            },
+            request_forbidden: {
+                title: i18nText('请求被拒绝'),
+                message: i18nText('当前请求未被允许，可能被安全策略拦截。'),
+            },
+            auth_error: {
+                title: i18nText('登录状态异常'),
+                message: i18nText('请刷新页面后重新登录再试。'),
+            },
+            unexpected_html: {
+                title: i18nText('接口返回了网页'),
+                message: i18nText('期望二进制接口响应，却收到了 HTML（登录页、错误页或网关页）。'),
+            },
+            wqb_invalid_magic: {
+                title: i18nText('接口响应格式异常'),
+                message: i18nText('未能识别 Query Bin 数据包。可点开详情查看 HTTP 状态与响应头。'),
+            },
+            protocol_error: {
+                title: i18nText('协议错误'),
+                message: i18nText('与服务器的数据协议不匹配，请刷新后重试。'),
+            },
+            network_error: {
+                title: i18nText('网络异常'),
+                message: i18nText('无法连接服务器，请检查网络后重试。'),
+            },
+        };
+        const byStatus = {
+            521: byCode.origin_unreachable,
+            502: byCode.service_unavailable,
+            503: byCode.service_unavailable,
+            504: byCode.service_unavailable,
+            403: byCode.request_forbidden,
+            401: byCode.auth_error,
+        };
+        const preset = byCode[code] || byStatus[status] || null;
+        const title = preset
+            ? preset.title
+            : i18nText('请求失败');
+        let message = preset ? preset.message : (rawMessage || i18nText('请求失败，请稍后重试。'));
+        if (!preset && status > 0 && !/\bHTTP\s+\d+/i.test(message)) {
+            message = `${message} (HTTP ${status})`;
+        }
+        const displayCode = status > 0 ? `${code}:${status}` : code;
+        const showDetails = details !== '' && details !== message;
+        return {
+            title,
+            message,
+            code: displayCode,
+            details: showDetails ? details : '',
+            detailsLabel: i18nText('查看详情'),
+        };
+    };
+
     const readErrorEnvelope = (error) => {
         const responseData = error && error.response && error.response.data
             ? error.response.data
@@ -2037,6 +2142,8 @@
             const error = new Error(serverError.message || data.error || 'Weline worker API request failed.');
             error.code = serverError.code || 'protocol_error';
             error.status = data.status || 0;
+            error.details = serverError.details || '';
+            error.responseKind = serverError.responseKind || '';
             error.response = {
                 ok: false,
                 status: data.status || 0,
@@ -2287,37 +2394,50 @@
         }
 
         showDefaultError(error) {
-            const message = error && error.message ? error.message : 'Request failed';
-            const code = error && error.code ? String(error.code) : '';
-            if (code === 'auth_error' && /nonce has already been used/i.test(message)) {
+            const presentation = resolveErrorPresentation(error || {});
+            const message = presentation.message;
+            const code = String((error && error.code) || '').trim();
+            if (code === 'auth_error' && /nonce has already been used/i.test(String(error && error.message || ''))) {
                 return;
             }
-            if (/signing_secret/i.test(message) && /null/i.test(message)) {
+            if (/signing_secret/i.test(String(error && error.message || '')) && /null/i.test(String(error && error.message || ''))) {
                 return;
             }
-            if (code === 'auth_error' && /worker session is unavailable/i.test(message)) {
+            if (code === 'auth_error' && /worker session is unavailable/i.test(String(error && error.message || ''))) {
                 return;
             }
             if (isWorkerHandshakeCooldownNoise(error)) {
                 return;
             }
-            if (shouldDedupeDefaultErrorToast(code, message)) {
+            if (shouldDedupeDefaultErrorToast(presentation.code, message)) {
                 return;
             }
+            const toastOptions = {
+                title: presentation.title,
+                code: presentation.code,
+                details: presentation.details,
+                detailsLabel: presentation.detailsLabel,
+                duration: presentation.details ? 12000 : 5200,
+                tone: 'danger',
+            };
             try {
                 const Toast = this.resolveToastComponent();
                 if (Toast) {
                     if (typeof Toast.error === 'function') {
-                        Toast.error(message);
+                        Toast.error(message, toastOptions);
                         return;
                     }
                     if (typeof Toast.show === 'function') {
-                        Toast.show(message, 'error');
+                        Toast.show(message, { ...toastOptions, tone: 'danger' });
                         return;
                     }
                 }
 
-                this.renderFallbackToast(message);
+                this.renderFallbackToast(
+                    presentation.details
+                        ? `${presentation.title}\n${message}\n${presentation.details}`
+                        : `${presentation.title}\n${message}`
+                );
             } catch (toastError) {
                 console.error('[Weline.Api] showDefaultError failed:', toastError);
                 try {

@@ -1,10 +1,14 @@
-# 主题固化物实施方案：版本独占、持久草稿与一次性切换
+# 主题固化物：版本隔离与纯 PHTML 派生模板
 
-> 状态：任务 1–5 已完成；任务 6 进行中（转换/硬切/删旧/单测已过；isolation e2e **16 passed / 0 failed**：UC-13 / UC-01·04·07 / UC-01·03·04 / UC-02 / UC-06 / GAP-01 / **UC-08-derived-parent** / UC-10 / UC-12 / UC-09-partial / UC-09 / **UC-03** / UC-14 / GAP-03 / GAP-02-04 / UC-11）。**缺口普查确认的 5 项已全部修完**：UC-08 写入端后代传播（#1）、UC-05 publish 缺 bake-before-commit（#2）、`assertThemeBindingHasNoVersionCycle` 死守卫（#3）、`ThemeScopeVersionResourceSnapshot` 从未写入（#4）、`is_current`/`is_published` 与 selection 漂移（#5）。**UC-15（多 Worker HIT）已于第二轮整条实测通过**（见 §5 UC-15 实测状态行）。**第三轮（2026-09-26）三处缺陷 A/B/C 全修**：单页发布 D' 真实分配（含前端「只发布本页」真实入口）、新版本行承接 `chrome_payload`/`structure_key`、`candidate_write_ok` 死码删除 + 烘焙失败补偿回滚；**UC-03 / UC-08 的两条残留与 UC-05 的 `candidate_write_ok` 残留全部清除**。**任务 6 仍未勾选**，因行为表仍有 `UC-07` 一条如实标注的未实测行（三态正文/外壳与 Token 优先级需登录态编辑器 + 真实预览 Token 的浏览器通路，本机不具备稳定窗口）。注记：第三轮修复暴露并处置了一处**既有假通过** `[case:GAP-01]`（其通过建立在空壳行 chrome 载荷塌成 `sha256('[]')` 上），已改为让夹具真实改动 chrome 并新增回归护栏断言。另记：第三轮如实标注的「潜在假阴性边角」**已于第四轮（2026-09-26）修成实证并全绿**——先用真实通路用例把它**从「库中不可达」升级为「可复现缺陷」**（新增 `[case:UC-08-derived-parent]`：≥3 级 owner 嵌套 + C' 充当上一已发布版本），由此连带挖出三处缺陷并全部修复：**D** `allocateDerivedVersion()` 不写 `structure_key`（⇒ 持有 C' 的 owner 再发布时 `parentStructureChanged` 恒假、覆盖了 chrome 的冲突子被误判「可自动前进」）、**F** C' 按设计无磁盘产物 ⇒ `ensurePublishedChromeForScope()` 回落 `ensureCurrent()` + `markPublished()` 把**用户草稿静默发布**（违反 UC-04）并清空 `draft_version_id` 使后代传播整段失效、以及修 F 后**新暴露**的第三处 `ThemeChromeWidgetRemovalService` 只读 legacy `is_published` 标志（「selection 已发布、标志未置位」时删除被直接写到**已发布版本**上）。详见 §4 任务 6 第四轮区块。更新：2026-09-26（第四轮）。
+> **当前约定（2026-09-28）**：固化产物与读取统一采用[纯 PHTML 合同](../../布局固化与默认注入.md)。以下旧完成记录属于此前版本隔离工作，不能作为纯 PHTML 改造的验收结果；本文的历史任务和日志不再授权侧车、结构解释器或直接 include 读取链。
+
+> 历史实施状态（2026-09-26，非本次纯 PHTML 验收）：任务 1–5 已完成；任务 6 进行中（转换/硬切/删旧/单测已过；isolation e2e **16 passed / 0 failed**：UC-13 / UC-01·04·07 / UC-01·03·04 / UC-02 / UC-06 / GAP-01 / **UC-08-derived-parent** / UC-10 / UC-12 / UC-09-partial / UC-09 / **UC-03** / UC-14 / GAP-03 / GAP-02-04 / UC-11）。**缺口普查确认的 5 项已全部修完**：UC-08 写入端后代传播（#1）、UC-05 publish 缺 bake-before-commit（#2）、`assertThemeBindingHasNoVersionCycle` 死守卫（#3）、`ThemeScopeVersionResourceSnapshot` 从未写入（#4）、`is_current`/`is_published` 与 selection 漂移（#5）。**UC-15（多 Worker HIT）已于第二轮整条实测通过**（见 §5 UC-15 实测状态行）。**第三轮（2026-09-26）三处缺陷 A/B/C 全修**：单页发布 D' 真实分配（含前端「只发布本页」真实入口）、新版本行承接 `chrome_payload`/`structure_key`、`candidate_write_ok` 死码删除 + 烘焙失败补偿回滚；**UC-03 / UC-08 的两条残留与 UC-05 的 `candidate_write_ok` 残留全部清除**。**任务 6 仍未勾选**，因行为表仍有 `UC-07` 一条如实标注的未实测行（三态正文/外壳与 Token 优先级需登录态编辑器 + 真实预览 Token 的浏览器通路，本机不具备稳定窗口）。注记：第三轮修复暴露并处置了一处**既有假通过** `[case:GAP-01]`（其通过建立在空壳行 chrome 载荷塌成 `sha256('[]')` 上），已改为让夹具真实改动 chrome 并新增回归护栏断言。另记：第三轮如实标注的「潜在假阴性边角」**已于第四轮（2026-09-26）修成实证并全绿**——先用真实通路用例把它**从「库中不可达」升级为「可复现缺陷」**（新增 `[case:UC-08-derived-parent]`：≥3 级 owner 嵌套 + C' 充当上一已发布版本），由此连带挖出三处缺陷并全部修复：**D** `allocateDerivedVersion()` 不写 `structure_key`（⇒ 持有 C' 的 owner 再发布时 `parentStructureChanged` 恒假、覆盖了 chrome 的冲突子被误判「可自动前进」）、**F** C' 按设计无磁盘产物 ⇒ `ensurePublishedChromeForScope()` 回落 `ensureCurrent()` + `markPublished()` 把**用户草稿静默发布**（违反 UC-04）并清空 `draft_version_id` 使后代传播整段失效、以及修 F 后**新暴露**的第三处 `ThemeChromeWidgetRemovalService` 只读 legacy `is_published` 标志（「selection 已发布、标志未置位」时删除被直接写到**已发布版本**上）。详见 §4 任务 6 第四轮区块。更新：2026-09-26（第四轮）。
 > 执行时使用 `superpowers:executing-plans` 或项目工程团队逐项实施；下列任务完成后勾选，不把文档交付当成运行验收。
 > 目标：页面、公共外壳、配置和资源在同一主题版本内完整交付，草稿与正式互不污染，删除旧运行链路。
 > 技术基础：PHP、现有 Theme Scoped Workspace、PostgreSQL、Framework 事务协调器/原子文件发布器/HotCache、WLS、PHPUnit、Playwright。
 > 需求入口：[需求.md](../../需求.md) 的 `REQ-THEME-0037`；默认注入边界：[布局固化与默认注入.md](../../布局固化与默认注入.md)。本文取代旧“方案 B”中的路径、继承、草稿、发布和迁移约定。
+
+> 当前产物和加载合同以[布局固化与默认注入](../../布局固化与默认注入.md)为准。下文保留既有版本模型和历史实施记录，不能把旧侧车验收视为当前改造已经通过。
 
 ## 背景
 
@@ -12,7 +16,7 @@
 
 当前页面产物跟随 scoped release/revision，chrome 跟随 `ThemeScopeVersion`，两者还会各自选择范围与回退目录。只把文件夹改成 `tv{id}`，无法保证一个主题版本代表一套确定的页面与公共外壳。
 
-本次目标覆盖 Theme 持久模型、编辑器版本操作、画布/Token/正式三态读取、布局固化、发布、缓存失效和派生文件清理。主题源模板、业务部件渲染、Scope 身份目录仍由原 owner 管理。本轮只交付方案和相关文档，不执行数据库转换、产物清除或功能发布。
+本次目标覆盖 Theme 持久模型、编辑器版本操作、画布/Token/正式三态读取、布局固化、发布、缓存失效和派生文件清理。主题源模板、业务部件渲染、Scope 身份目录仍由原 owner 管理。这是此前方案阶段的范围记录；2026-09-28 纯 PHTML 改造已进入实施与运行验收，采用上方链接的当前合同。
 
 ### 2. 已核对的实现依据
 
@@ -39,7 +43,7 @@
 | 每个页面都独占 chrome | page 按布局隔离；chrome 按版本共享 | 页头、导航、页脚属于主题公共外壳 |
 | 草稿只靠 `tvB/draft` 保存 | 草稿 D 是未发布 `ThemeScopeVersion`，修订 R 持久化；目录只是派生缓存 | purge、重启或缺文件不能丢编辑结果 |
 | `parent=0` 才表示不继承 | `base_version_id` 表示编辑基线；创建来源枚举决定是否允许跨版本硬链 | 编辑基线与字节复用权限是两件事 |
-| 全局 `_blobs` 与多份 current/继承指针 | 删除 `_blobs`、`current.json`、`inherit.json`；DB 选版本，槽内 binding 选产物 | 避免重复权威和全局引用计数 |
+| 全局 `_blobs` 与多份 current/继承指针 | 删除磁盘 JSON 指针；DB 选版本，完整身份和原布局路径选择 PHTML | 避免重复权威和全局引用计数 |
 | 相同 hash 自动跨版本共用路径 | 每个槽有自己的路径；只有显式历史继承可 hardlink | hash 相同不代表获得跨版本复用许可 |
 | 单页发布实际带出其它草稿 | 保留单页发布；未选内容保留现正式，未选草稿进入后继 D' | 防止修改首页时一起发布尚未完成的其它页/页脚 |
 | 从版本继承不复制任何卸载决定 | 复制用户意图为目标版本自己的决定，来源仅审计 | 否则续编、单页发布或历史继承会意外复活已删除部件；仍严格检查目标版本决定 |
@@ -95,37 +99,26 @@
 
 用户操作指向已删除的源节点时，沿现有结构冲突规则报告失效操作；正式页用当前合法模板呈现可应用部分，保留原操作和诊断供编辑器修复。不能为了应用旧操作重新制造已移除的源节点，也不能默默删掉持久操作。部件缺失仍按既有 soft-skip 规则记录，不新增店面硬 500。
 
-### 4. 目录、binding 与不可变文件
+### 4. 纯 PHTML 目录与请求固定输入
 
-统一新树如下。`scope_key` 对规范 scope 和 `store_mode` 做确定性、无歧义编码后取完整 SHA-256，binding 同时保存原值；禁止继续靠有碰撞风险的字符替换。layout key 使用完整资源 hash，不再截短为 16 位。
+本节以 2026-09-28 产品方批准的[纯 PHTML 固化合同](../../布局固化与默认注入.md)为准。此前侧车、直接 include 和配置不重写模板的约定废止。
 
 ```text
-var/runtime/theme-layout-entities/
-  {theme_id}/{area}/{scope_key}/
-    tv{V}/formal/
-      chrome/
-        structures/v{V}/{structure_key}/chrome.phtml
-        configs/v{V}/{config_key}/config.json + assets.json
-        bindings/v{V}-g{R}/binding.json
-        bindings/v{V}-g{R}/{artifact_key}.json
-        rendered/{artifact_key}/{render_vary_key}.html
-      pages/{layout_identity_hash}/
-        structures/v{V}/{structure_key}/layout.phtml + shell.phtml + structure.json
-        configs/v{V}/{config_key}/config.json + assets.json
-        bindings/v{V}-g{R}/binding.json
-        bindings/v{V}-g{R}/{artifact_key}.json
-    tv{B}/draft/                         # DB 选择的草稿 D 的唯一派生根
-      chrome/…                          # 与 formal 相同的内部结构
-      pages/{layout_identity_hash}/…
+generated/theme-layout-entities/
+  {theme_id}/{area}/scope/{scope分段编码}/mode/{storeMode编码}/
+    draft/ 或 v{N}/
+      pages/layouts/{layoutType}/{option}.phtml
+      pages/targets/t-{targetType编码}/i-{targetId}/layouts/{layoutType}/{option}.phtml
+      theme/partials/{type}/{option}.phtml
 ```
 
-`structure_key` 仍描述关系结构，配置 key 描述配置与资源清单；owner 通过目录及 binding 隔离。结构/配置袋也带 V：即便两个不同 D 先后使用同一个 `tvB/draft` 根，仍有各自的文件路径，不能因 hash 相同静默跨版本共用入口；同 D 不同 R 才可直接复用本槽不变内容。shell 的结构指纹必须涵盖其固定 owner/mode，不能拿 page 结构相同误判 shell 可跨身份使用。
+原模板仍是源。主题编辑（包括参数和语言差异）或有效 JSON 注入触发生成派生 PHTML。没有相应意图/注入时使用原模板；已有固化模板经正常 Template/Taglib/语言 com_* 执行。固化目录不保留结构/配置/绑定/资源 JSON、结构 JS、永久 R 目录或按语言烘焙的公开 HTML。
 
-每份 binding 采用 `theme-layout-entity.v3` schema，字段至少包含完整 owner、`theme_version_id`、`base_version_id`、`mode`、`content_revision`、资源键、结构/配置键、源/注入指纹、文件校验信息。page 的 render bundle 还固定同 owner/同 R 的 **chrome immutable binding key**。内容文件与 `{artifact_key}.json` 写后不改；`vV-gR/binding.json` 只选择该槽该修订的完整产物，不选择版本或模式，以原子替换发布。没有 `current.json`。draft 根可以先后容纳多个 D 的历史修订，V 必须写入内部 binding 路径，不能让 R 从 1 开始的新 D 覆盖旧 Token 的文件。
+PHTML 显式调用现有组件渲染器，参数在生成时按指定 owner/V/R 合并，运行期不被当前配置补写。公共 Partial 与页面同一请求固定读取，业务数据正常实时执行。模板源与编译摘要必须来自同一次读取，编译文件完整替换。
 
-请求读一次 page render bundle 后持有不可变 DTO；结构、配置、chrome、head assets 都沿这份 DTO。shell 可固定 owner/mode，并通过请求 DTO 取 chrome binding；不得在执行时重新查“当前 chrome”。配置变化只生成 sidecar 和 binding，结构 PHTML 的 hash/mtime 保持不变。D 转正时重新生成 N/formal 的 shell/binding，不能把 draft 目录改名当成发布。
+现有版本资源快照记录 V/R 的 intent_revision_id/release_id 和首版可重放基线；内容修订 R 不等于资源修订主键。旧 Token 缓存缺失时从其真实历史引用重编，不得改读最新草稿。D 转正式重新生成 vN 文件，不通过改名 draft 目录发布。
 
-模板仍是 `renderBound`/`renderRuntimeInline` 关系壳，不能包含某次请求的商品、登录、form_key 等 HTML。公共 chrome 的去个性化 HTML 快照是单独的性能产物，必须 finalize 嵌套槽后使用。草稿和 Token 预览实时执行同构关系壳，不读公共 rendered HTML。
+同 owner 的写入临界区覆盖实际 DB 修订检查和页面/Partial 替换，失败补偿已替换文件；若 DB 已保存则如实返回 actual R 与固化失败。本文后续历史验收记录中的旧路径、侧车及字符串检查，不构成纯 PHTML 改造的验收证据。
 
 ### 5. 版本创建、继承与人工卸载
 
@@ -134,14 +127,14 @@ var/runtime/theme-layout-entities/
 | `creation_source_kind` | 内容来源 | 跨版本文件策略 |
 |---|---|---|
 | `continue_current` | 从当前 P 继续编辑，B=P；普通保存不弹继承选择 | copy 或按输入重新物化；不跨 tv 硬链 |
-| `explicit_historical` | 用户明确选择同 owner 的 sealed X，B=X；复制其用户意图 | 输入指纹一致时可将 X 的不可变结构/配置 hardlink 到目标自己的目录，否则重建 |
+| `explicit_historical` | 用户明确选择同 owner 的 sealed X，B=X；复制其用户意图 | 根据目标身份与当前源模板生成独立 PHTML；历史配置来自 X 的资源引用 |
 | `package_defaults` | 清除指定范围的用户覆盖并使用当前主题包默认值；B 仍记录本次编辑基线 | 独立物化，不借历史固化物 |
 
 系统初始版本以 package_defaults 创建；Scope 派生版本沿 continue_current 继承本级意图，并以现有 version_type 的新增 scope_rebase 类型标识，实际祖先来源固定在 R 头。
 
-不增加 `bake_inherit` 或磁盘 `inherit.json` 第二套授权。普通基线承接是必要的编辑语义；显式历史来源才授权跨 tv 字节硬链。任何 binding 只能指向自己的槽。跨主题/area/Scope/store mode 不开放“历史版本继承”，范围继承走下一节的独立规则。
+不增加 `bake_inherit` 或磁盘 `inherit.json` 第二套授权。普通基线承接是编辑语义，文件路径始终属于完整 owner 与版本。跨主题/area/Scope/store mode 不开放“历史版本继承”，范围继承走下一节的独立规则。
 
-hardlink 只是优化：源文件必须不可变、输入一致；不满足时独立生成，文件系统不支持则 copy。所有更新通过新 inode + atomic rename；禁止覆盖已有共享 inode。没有显式历史来源时，即使 draft 曾与 B/formal 共用 inode，转正也必须 copy/rebake 断链。首版不做 formal/draft 自动硬链，避免这类隐式授权。
+文件复用不是版本语义。本次实现通过完整文件替换发布候选，不新增跨版本硬链机制；相同输入的 PHTML 内容不变时跳过写入。
 
 **人工删除是用户意图。** B→D 续编、从 X 明确继承、单页发布保留未选页面时，将所采用内容的卸载意图写成目标版本同 R 的决定；审计可记录来源，运行只检查目标记录。D 封存为 N 因 ID 不变直接保留；未选草稿修改及其决定进入 D'。只有显式恢复默认/重新安装才撤销目标决定。恢复原始布局先将当前 D 封存为不上线的自动备份，再创建 D' 清除所选资源的用户覆盖和决定；其它资源保持原编辑内容，P 不变。该调整替代旧计划“不复制源卸载”的要求，防止正常版本操作复活部件。
 
@@ -159,13 +152,13 @@ flowchart TD
     D --> F
     E --> G[一次选择有效源 Scope 与 P]
     G --> F
-    F --> H[版本资源清单与 page render bundle]
-    H --> I[同身份 page + chrome + assets]
+    F --> H[固定对应 PHTML 源字节]
+    H --> I[普通 Template + Partial + 资源加载]
 ```
 
 画布仍使用真实路由 + 参数/typed context，不签发店面 Token；参数必须经过后台权限、owner 和版本归属校验。指定 H 用 `formal`，编辑 D 用 `draft`。Token 明确保存 owner、V、mode、R 和目标，不能由 URL 覆盖；Token 固定的旧草稿 R 在短期有效期内仍可读，即使 D 已封存或不再是当前草稿，也只读取该 R 头中的 B 与资源引用；不得回查版本行当前的 R/B。写操作仍只允许 selection 当前的 D/R。正式 GET 由 RequestContext 选已发布主题绑定，再沿规范 Scope 链找到完整 `(effective_owner,P)`；不读取 draft。
 
-page、chrome 和 assets 不再独立回落。资源 hash 在确定有效 owner 后按该 Scope/area/store mode 重新计算，不能拿请求 leaf 的 hash 拼祖先目录；生成子版本快照时同样转换成子 owner 的资源键，祖先身份只存来源引用。缺文件就在已选版本目录定点重建；有数据却无文件是缓存 miss，缺失显式数据引用是数据问题。两者都不能触发旧目录扫描、借另一 tv 或把 D 自动发布。无本级正式覆盖的范围可直接使用祖先 owner 的产物，不强制复制一套空壳目录。
+page 和已固化公共 Partial 使用相同已选 owner/version；短读锁内一次固定全部源字节。资源 hash 在确定有效 owner 后按该 Scope/area/store mode 计算，不能拿请求 leaf 的 hash 拼祖先目录。普通模板没有派生物时可选择原模板；历史 Token 需要重编时必须有其 V/R 对应的编辑意图与配置引用，不能借当前草稿冒充历史。无本级正式覆盖的范围可以使用已选祖先 owner 的产物。
 
 ### 7. Scope 逐值继承与历史稳定性
 
@@ -173,7 +166,7 @@ page、chrome 和 assets 不再独立回落。资源 hash 在确定有效 owner 
 
 父 P→P' 发布时，在写路径按现有依赖关系处理后代：无自有正式覆盖者直接回落；已有 C 且有效值未变者保留 C；有效值变化且无冲突者生成系统派生 C'，固定新的父来源和本地意图。P' 与所有可更新 C' 的候选先准备好，再在同一 DB 事务切 selection。出现结构冲突的后代保留完整 C，父发布继续；它下面的范围以仍有效的 C 为父计算。不得把冲突页留在 C、chrome 却换成 C'。
 
-子草稿无冲突时生成新的内容修订并重基线到 C'、迁入 `tvC'/draft`；有冲突则保留原基线与原文件、显示既有冲突信息。旧 Token 仍按原 V/R 快照读取。历史 H 总是读自己记录的父来源，不动态追今天的父 published。
+子草稿无冲突时生成新的内容修订并重基线到 C'，其派生物写入该 owner 的 `draft/`；有冲突则保留原基线与原文件、显示既有冲突信息。旧 Token 仍按原 V/R 快照读取。历史 H 总是读自己记录的父来源，不动态追今天的父 published。
 
 ### 8. 保存、封存与发布顺序
 
@@ -181,9 +174,9 @@ page、chrome 和 assets 不再独立回落。资源 hash 在确定有效 owner 
 
 版本创建、命名保存、发布和恢复默认前，编辑器先提交待保存表单/增量并取得最新 D/R；提交失败保持当前编辑状态，不继续切换。
 
-**草稿保存：** 校验 owner、D、预期 R/父 release → 构造 R+1 的不可变资源和决定 → 写齐本次会显示的 page/chrome binding 候选 → DB 事务插入资源快照并 CAS 推进 `content_revision`。失败保留 R 与输入；遗留候选之后离线清理。事务前预备文件使用同目标写者锁，但锁不被当成读者屏障。
+**草稿保存：** 同 owner 写锁覆盖实际数据库 R 的冲突检查、编辑意图/资源引用保存、候选生成与文件组发布。页面及本次公共 Partial 全部生成后再替换；普通文件错误恢复已替换文件。若数据库已提交，错误响应携带实际 R，不能声称数据库自动回滚。请求的短读锁与保存使用同一 owner 锁，不持锁执行动态业务查询。
 
-**命名保存：** 基于 D 的指定快照新建不可变 `Rsealed`，封存为 N=D，准备 N/formal；旧 draft R 不覆盖，旧 Token 仍可读。不要求同时发布。只封存时 P 不变，编辑器展示 N，后续继续编辑懒建 D'。封存后不能调用 `setChromePayload` 等旧入口原位修改 N。
+**命名保存：** 基于 D 的指定快照封存为 N=D，准备 `vN/`；旧 draft R 的数据库引用保留，旧 Token 可据此重编。不要求同时发布。只封存时 P 不变，编辑器展示 N，后续继续编辑沿现有版本流程创建 D'。封存后不能调用 `setChromePayload` 等旧入口原位修改 N 的编辑意图。
 
 **发布草稿/版本：**
 
@@ -191,10 +184,10 @@ page、chrome 和 assets 不再独立回落。资源 hash 在确定有效 owner 
 2. 对草稿用新的 `Rsealed` 构造 N=D 的完整逻辑清单，保留原 draft R。未选资源固定**准备时 P**的状态，而不是 D 的未发布状态；即便 B 为历史 X，也不回滚未选页面。保存为版本但不上线时默认封存 D 全部内容，不套用单页上线合并。
 3. 如有未选草稿修改，预备 D'（base=N）并用现有 patch 引擎重锚其意图/决定。不得丢弃、不把它们带入 N，也不让它们继续挂在已封存 N 的可变 workspace。无法重锚的冲突返回既有冲突结果并保持原 D，不能半发布。
 4. 按前节构造后代 C'。复用现有 preparing 批次 receipt 分配 D'/C' 候选版本 ID；预备记录不进入 selection 或可读历史，最终事务才封存/选中，不增加对外审批状态。候选预备范围为本次变化的布局、chrome，以及当前已物化的工作集；未物化布局有完整逻辑来源，首次请求定点生成。不因创建版本扫描全站 URL 或渲染全站 HTML。
-5. 文件使用原子 publisher 写完整不可变候选。先 chrome 关系壳及必要的公开 rendered 快照，再 page render bundle/shell；校验 owner、R、引用与内容可读。相同目标不能原位覆盖旧产物。
+5. 页面与公共 Partial 先生成完整 PHTML 候选，再用同 owner 锁与批量 publisher 替换。元信息包含原来源与完整身份；不生成 chrome rendered HTML、page bundle 或 JSON 侧车。
 6. 开启一个 DB 事务，按稳定 owner 顺序锁 selection 并比较预期版本/R。写入 N、D'、C' 的快照/决定/release receipt，原子切 published/draft 选择。文件不能随 DB 回滚，但在提交前不被公开选择；CAS 失败的候选是孤儿，旧 P 与 D 不动。
 7. 提交后沿 owner changed 推进 Theme/FPC 代次并忘掉可变选择缓存，覆盖父及实际更新的后代。复用现有事务后事件/批次恢复机制；发布响应成功前确认该批次失效已完成，失败按既有 receipt 恢复同一批次，不再封存一个重复版本。
-8. 成功后 D' 或空成为当前草稿。旧 draft 的历史修订留到 Token 到期且 Worker 排空后再回收派生文件；DB 审计保留。
+8. 成功后 D' 或空成为当前草稿。历史依据保留在数据库资源修订引用中；不为每个 R 新建永久磁盘目录。
 
 发布已有 H/回滚到 H 也先检查其可重建数据并备齐所需文件，再走相同 selection 事务与后代传播，不改写 H。当前另有草稿时保留其编辑内容，按既有 rebase/conflict 语义处理，不能因切换正式版而清空草稿。
 
@@ -202,15 +195,15 @@ DB 与缓存不是一个跨系统原子事务：提交前已开始的请求可�
 
 ### 9. 注入变更、源升级与惰性物化
 
-正常请求只读已选 binding，不能每次读计划账本、扫描模块或重组结构。缺单页产物时只建该页及必要 chrome。preview 可对明确选中的非激活主题按同样规则定点构建。
+正常请求选择 PHTML，不能每次读计划账本、扫描模块或重播种结构。历史预览缺少匹配源时依据对应版本资源引用重建输入，禁止使用最新草稿替代。
 
-默认注入变更按照声明涉及的布局/槽，处理所有主题所有版本中**已存在的受影响槽**，包括非激活主题和 draft；没有产物的槽更新源/计划指纹，待明确访问时按新输入生成。重固顺序是新 chrome 完成 finalize → 新 page bundle 固定该 chrome → 原子替换各自 binding 选择。旧不可变 bundle 可供在途请求完成；不原位覆盖。全主题批次可以逐 owner 执行，不承诺全站同时替换，但批次完成须报告每个受影响目标的结果，不能只记日志便称完成。
+默认注入变更按变更前后涉及布局的并集处理相关主题、正式版本和草稿。每个 owner 下页面与公共 Partial 候选全部生成后统一替换；在途请求使用此前已固定的完整源字节。全主题批次可以逐 owner 执行，不承诺全站同时替换，但必须如实报告每个目标结果。无剩余编辑意图、参数覆盖和有效注入时删除派生 PHTML；显式卸载全部节点仍是有效意图。
 
-`setup:upgrade` 仍清整棵 `var/runtime/theme-layout-entities/`，并失效 Theme/FPC。升级属于停写、停止接新请求并排空旧 Worker 的部署阶段，purge 后加载新代码再恢复服务；不在旧请求仍持有路径时清空它们。首次访问从当前模板和版本用户意图恢复；禁止按 DB 陈旧自动 structure 全量回烘。DB 版本、草稿、release、决定和源码不在 purge 范围。
+`setup:upgrade` / `deploy:upgrade` / `core:update` 成功收尾走 **`ThemeLayoutEntityUpgradeSolidifyService`**：迁旧 var 树（若有）→ **全主题预固化**到 `generated/theme-layout-entities/` → 清遗留 var → 失效 Theme/FPC。生成与保存共用 owner 互斥，候选全部成功后再替换；**不得**以「只 purge + 首访重建」代替 R5。DB 版本、草稿、release、决定和源码不在删除范围。普通请求缺派生文件时选择原模板；授权历史预览仅凭精确 V/R 的既有引用重编内存候选，缺历史依据明确报告。
 
 ### 10. 缓存与清理
 
-正式选择、纯数组 binding 与配置复用 Framework `CachePolicy`/`HotCache`，不增加业务 static 缓存或另一套共享池。键含完整有效 owner、V、mode、R、资源身份/产物指纹。结构 `vary=[]`，依赖 Theme；公开 chrome HTML 增加实际输出的语言、币种、来源站等合法变化维度与 i18n 依赖。共享 HTML 必须排除账户、购物车等个人信息。
+正式选择和正常模板缓存复用 Framework 现有机制，不增加业务 static 缓存或另一套共享池。编译键包含来源、同次读取的源字节摘要、语言及必要版本上下文；`com_*` 使用完整文件原子替换。语言、币种、来源站等运行时变化仍按现有缓存规则处理；共享 HTML 必须排除账户、购物车等个人信息。
 
 draft、Token/画布预览、事务候选、可变 Model 不进公共 HotCache/FPC，仅请求内复用。可变选择不使用过期值回退。发布 invalidation 使用原 owner changed 契约；现有 `clearScopedCaches` 会清多个全池，不能因名字含 Scoped 就认定它已定点。实施时测量并收紧实际 namespace/FPC 范围，不能删必要依赖制造虚假 HIT。
 
@@ -247,13 +240,13 @@ draft、Token/画布预览、事务候选、可变 Model 不进公共 HotCache/F
 
 | 旧项 | 明确处理 |
 |---|---|
-| 旧 scope 根 `pages/{identity}/{r*,d*,s*}`、`configs`、scope 级 `chrome/s*`，以及旧 `tv*/chrome` 格式 | 首次切换安全 purge 整个派生根；新格式重建。不得因也叫 tv 就误保留旧 binding |
+| 旧 scope 根 `pages/{identity}/{r*,d*,s*}`、`configs`、scope 级 `chrome/s*`，以及旧 `tv*/chrome` 格式 | 先从可证明输入生成并验证新 PHTML，再清除退休侧车和旧目录；禁止先清空整个派生根再生成 |
 | scope 级 `_blobs`、`inherit.json`、所有 `current.json` 设计/文件 | 不实现这些新建议；旧 current 文件与读写一起删除 |
 | `Paths::pageStructureOrRelease/pageCurrentJson` 及 tv 外共享结构/配置路径 API | 删除旧签名及调用；其余路径方法改为 typed identity |
 | `SlotFiller::readPageCurrent/rememberPageCurrent/scanSolidifiedSegment/resolveStructureOrRelease` | 删除 current 读写、r/d/s 目录猜测和失效的扫描桩；明确身份内的定点重建保留 |
-| `BakeCoordinator::writePageCurrentPointer`；旧 `refreshPublishedWholeShellsUnderScopeDir` | 删除双指针及遍历 r* 原位写；改新 binding 发布 |
+| `BakeCoordinator::writePageCurrentPointer`；旧 `refreshPublishedWholeShellsUnderScopeDir` | 删除磁盘双指针及遍历 r* 原位写；使用同 owner 锁内的 PHTML 批量替换 |
 | Binding/Config/Runtime 接受旧 `entityKey=r/d/s` 的参数与 v1/v2 hydration | 删除，不做 schema fallback；旧格式只在离线转换器中识别 |
-| `Chrome::readRenderedCache` 的 binding=null/mtime/裸 HTML 文件兼容；运行时各自祖先 chrome 拼接 | 删除；只读当前请求固定的合法 bundle/公开变化键 |
+| `Chrome::readRenderedCache` 的 binding=null/mtime/裸 HTML 文件兼容；运行时各自祖先 chrome 拼接 | 删除；短读锁内固定页面和公共 Partial 源字节，随后走普通模板编译 |
 | `ThemeVersionPreviewResolver`、`ThemeLayoutVersionBindingResolver` 的节点相似度/投影匹配 | 运行删除；不能按结构相同猜历史 page/chrome/卸载归属 |
 | `ThemePublishedVersionRuntimeResolver` 和编辑卸载读取旧 `ThemeLayoutVersion` 的版本轴 | 重写为 ThemeScopeVersion；旧 `source` 字符串仅作一次性输入，不作目标决定 |
 | `ThemeScopeVersion.is_current/is_published` 权威查询、无版本 `renderCurrent` 调用、缺 chrome 自动 `markPublished` | 删除；任何缺文件恢复都不能发布草稿 |
@@ -272,13 +265,13 @@ draft、Token/画布预览、事务候选、可变 Model 不进公共 HotCache/F
 3. **不猜历史。** 只有批次记录等证据能证明完整 page/chrome/决定关联的旧历史，才转换成可渲染 H。无法证明的保留原始 DB 和只读导出档案，历史列表明确标为“旧记录，仅归档”，不提供伪造的预览/发布。这不属于新运行兼容读取。
 4. **用户意图不能靠 hash 猜。** 优先使用原 revision/patch 和明确人工操作；无基线、无来源标记的旧整份结构保留原件。若它属于当前有效页面/草稿，转换报告要求具体来源映射/内容整理后再执行切换，不能静默删除用户内容，也不能作为旧结构整份回放。此限制来自现有数据缺证据，不新增审批流程。转换器必须能再次 dry-run 验证修正后的映射。
 5. **停写并排空现有请求。** 保存一致性 DB/源码部署备份；应用数据库转换和新代码。离线核对行数、映射指纹、目标版本决定、当前 P/D 与新模型约束。原始档案只读，不接前台热路径。
-6. **硬切运行树。** 用受限于本根的 `purgeAllEntities` 删除旧派生文件，失效 Theme/FPC/旧 Token，刷新需要的反射和命令产物，加载新 Worker。新模型先可用再恢复请求，绝不先清线上唯一可读文件再继续旧进程。
-7. **真实验证。** 当前正式页首次请求从当前源模板恢复；画布、草稿 Token、历史 H 各自恢复自己的版本。验证旧路径零读取与完整页脚/必装部件，之后才认定这次切换完成。
+6. **切换派生模板。** 在同 owner 互斥范围内从可证明输入生成新 PHTML 并完成批量替换；生成后清除本根内的退休侧车和旧哈希目录，再失效相关模板与页面缓存。保留数据库历史和有完整引用的 Token，不能先清线上唯一可读文件再等待生成。缺证旧历史逐 V/R 明确报告，不能用最新草稿补写。
+7. **真实验证。** 普通正式页优先选择已有 PHTML，缺失时使用原模板；画布和 Token 必须使用其精确版本输入，缺少依据时明确失败。验证正常模板流程、旧侧车零读取与完整页脚/必装部件，之后才认定这次切换完成。
 8. **回退方式。** 若切换失败，在同一停写/排空条件下恢复匹配的 DB+代码部署备份并重新生成对应派生物。不能在新代码中临时开启旧读分支，不能拿旧 DB 与新 selection 混跑。
 
 旧档案不是承诺永远保留在线旧表结构。删除档案属于独立的数据保留决策，本实施不 drop 原始历史内容；本次必须删除的是旧运行代码、派生文件、缓存和操作文档中的兼容流程。
 
-### 4. 分阶段实施任务
+### 4. 旧版本隔离实施记录（非当前纯 PHTML 验收）
 
 每项先补能够重现该问题的最小失败用例，再实现并验证该项；阶段可分提交，但所有相关入口完成后才统一切换运行。禁止把未完成的一半协议投入正式读取。
 
@@ -430,7 +423,7 @@ draft、Token/画布预览、事务候选、可变 Model 不进公共 HotCache/F
 | — **实测状态（2026-09-26 接手续轮第二轮，`[probe:uc15-fpc-matrix]`）** | **可勾选**。观测口径：真实 HTTPS 请求本机 WLS（SNI Host `p05113ef3.test.weline.com:9555`，`--noproxy '*'` 直连；`/etc/hosts` 已把该 Host 指向 `127.0.0.1`），逐次记录响应头 `x-wls-fpc-status` / `x-weline-fpc` / `Cache-Control`、TTFB（`time_starttransfer`）、体积与正文 `<nav>`/`<footer>` 标记；再**交叉核对 WLS 自身的逐请求记录** `var/log/wls/timing.log`（按 `router_profile.uri` 对齐，取 `worker_id` / `pid` / `app_apply_url` 的 `fpc_fast_path.hit`），以「**该请求是否产生 app 记录**」作为「是否启动应用、是否回源」的独立证据。全部为真实 HTTP 响应 + 真实日志行，无自造返回值自证。 |
 | — **分项证据（同一 Host、同一测量窗口）** | ① **cold**：canonical `/` 在缓存被 e2e 发布失效后连续 6 次 `MISS`；换全新 cache key 时 `MISS`、`x-weline-fpc` 缺省、`Cache-Control: private`，且 **`timing.log` 出现该请求的 app 记录**（`fpc_fast_path.hit=false`）⇒ 应用确实启动并回源。② **warm（同 Worker）**：同一 key 第 2 次起 `x-wls-fpc-status: HIT` + `x-weline-fpc: HIT`，TTFB 由 cold 的 1.4–2.7s 降至 0.038–0.106s，且 **HIT 全部没有 app 记录** ⇒ 传输层 fast path 出站、未启动应用。③ **跨 Worker shared HIT**：同一 key 连发 12 次 = **1 MISS + 11 HIT**（11 次 HIT 全无 app 记录）；另用 8 个互不相同的 cache key 各发 1 次，cold 分别落在 **5 个不同 Worker**（`worker_id` 2 / 3102 / 5104 / 5105 / 4104，`pid` 43224 / 43225 / 82187 / 84660 / 87627）⇒ 请求确实被分摊到多 Worker，故那 11 次 HIT 是**跨 Worker 共享存储命中**，不是同进程 L1。④ **三类页面**：首页 `/` 1 MISS(1.682s) → 7 HIT(0.038–0.070s)、686995 B；列表 `/products` 1 MISS(1.400s) → 5 HIT(0.050–0.275s)、1578898 B；PDP `/product/<slug>` 1 MISS(2.664s) → 7 HIT(0.040–0.106s)、842136 B；三者全部 `200`，`<nav>`/`<footer>` 标记齐备。⑤ **DB/WLS 次数（口径注记）**：未打开 `X-WLS-Performance-*` 闸门（会改动在跑服务的 env），故以「**是否产生 app 记录 / fast path 是否 hit**」代理「是否启动 WLS 应用、是否回源打库」：cold/MISS 请求**每条都有 app 记录**（`fpc_fast_path.hit=false`），warm/HIT 请求**全部没有 app 记录**。⑥ **画布与 Token 公共 FPC BYPASS**：`?editor_mode=1` **3/3 MISS**（223343–223351 B＝编辑器外壳、`Cache-Control: private, no-store`）、`?weline_preview_token=<x>` **3/3 MISS**、`?preview=1` 与 `?no_cache=1` 重复请求亦**恒 MISS**，且每次都有 app 记录 ⇒ 永不入公共 FPC；`generated/framework/fpc_bypass_rules.php` 实含 `theme.editor_preview_query` / `theme.preview_token_cookie` / `theme.editor_mode_env` 三条 `effect=bypass_serve_and_publish` 规则（源：`Theme/extends/module/Weline_Framework/Fpc/Bypass/ThemeEditorFpcBypassProvider.php`）；客户端显式 `X-Weline-Cache-Bypass: 1` 同样恒 MISS。**串缓存反证**：匿名 `/` warm 到 687425 B → 请求画布（223351 B）→ 再匿名 `/` **仍是 687425 B 的店面正文**（非画布外壳）⇒ 无个人内容串入公共缓存。⑦ **注记（非缺陷）**：本 build 对旁路请求回的是 `x-wls-fpc-status: MISS` 而**非**字面 `BYPASS`；`bypass_serve_and_publish` 的效果由「重复请求永不 HIT ＋ `private, no-store` ＋ 无串缓存」三项共同证明。⑧ **环境注记（非本任务缺陷）**：测量窗口内本机 WLS 被**其它并发会话**反复重启/回收（`server:status --all` 同时存在 `ai-u-concurrent-start` / `ai-u-phase-one-all-together` / `ready-box-width` / `ngverify` / `nginx` 等多个实例，锁文件每分钟刷新）；`default` 实例的托管 Nginx 所有者意图一度崩溃为**死 PID** 且 `nginx.process-identity.json` 缺失，框架 `ManagedNginxService::safeRecoveryProcessStatus()` 拒绝恢复，`server:start` 反复在 Nginx 公网协议门禁处回收实例；待其自行恢复后完成 PDP 一路测量。**证据脚本（只读探针，已登记）**：`var/runtime/theme-t6-handoff/probe-uc15-fpc-matrix.php`、`var/runtime/theme-t6-handoff/probe-fpc-uc15.php`。 |
 
-特别保留旧测试中的配置隔离、缺 binding 不串草稿、required/XOR、Scope 哨兵、布局不按 locale 分叉、批次恢复等合理断言。旧相同结构跨 tv **路径相同**断言改为字节可相同、路径必须各属其版本。旧迁移 CLI 测试随命令删除，并用新转换器测试替代。
+特别保留旧测试中的配置隔离、缺产物不串草稿、required/XOR、Scope 哨兵、布局不按 locale 分叉、批次恢复等行为。侧车或 SlotHost 专属断言迁为真实 PHTML 编译执行；相同结构的字节可以相同，路径仍属于完整身份。上表旧执行记录不是当前纯 PHTML 验收证据。
 
 ### 6. 验证命令与完成标准
 
@@ -447,6 +440,6 @@ node tests/e2e/node_modules/playwright/cli.js test --config=tests/e2e/playwright
 
 `theme-version-artifact-isolation.spec.js` 是任务 6 新增的整体验收套件，复用现有登录/Scope/版本操作夹具覆盖 UC-01…15；首页冒烟只验证公共壳与必装，不能替代完整验收。从 runtime-info 获取当前环境，再设置 `WELINE_E2E_BASE_URL` 与已有项目夹具所需配置；不使用文档/测试中的历史默认域名，不在文档写凭证。
 
-实际验收必须运行配置的 WLS 与 PostgreSQL，操作编辑→保存→三态预览→单页/整主题发布→退出预览→匿名请求→升级恢复，并核对 DB selection、binding、文件身份及可见结果。性能比较固定 Host、数据、Worker/请求序号与缓存状态，单独记录 FPC HIT；不把 CLI 耗时当浏览器 TTFB，不预先宣称提速比例。
+实际验收必须运行配置的 WLS 与 PostgreSQL，操作编辑→保存→三态预览→单页/整主题发布→退出预览→匿名请求→升级恢复，并核对 DB selection、资源历史引用、PHTML 来源身份及可见结果。性能比较固定 Host、数据、Worker/请求序号与缓存状态，单独记录 FPC HIT；不把 CLI 耗时当浏览器 TTFB，不预先宣称提速比例。
 
-完成条件：行为表对应的真实操作通过；旧运行路径/API/缓存入口删除；转换无静默数据损失；文档状态与实现相符。单元测试、静态检索和本方案交付都不能替代这一步。本次仅完成设计文档，不声称上述功能已经实现或验收通过。
+完成条件：当前纯 PHTML 合同对应的真实操作通过；旧侧车读取与输出修复链退出；转换无静默数据损失；文档状态与实现相符。单元测试、静态检索和设计文档不能替代运行验收。上述旧版本隔离的通过记录不自动证明本次改造通过。
