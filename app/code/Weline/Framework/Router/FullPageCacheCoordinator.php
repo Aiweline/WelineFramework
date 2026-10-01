@@ -37,11 +37,12 @@ use Weline\Framework\Runtime\RuntimeProviderResolution;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Runtime\StorefrontScopeInstallerInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 use Weline\Framework\Session\Auth\AreaConfig;
 use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Framework\Session\SessionFactory;
 
-final class FullPageCacheCoordinator
+final class FullPageCacheCoordinator implements ProcessSharedInterface
 {
     private const LOCK_TTL_SECONDS = 15;
     private const LOCK_WAIT_TIMEOUT_MS = 50;

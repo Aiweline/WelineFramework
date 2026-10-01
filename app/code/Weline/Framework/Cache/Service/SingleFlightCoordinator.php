@@ -22,10 +22,11 @@ namespace Weline\Framework\Cache\Service;
 use Weline\Framework\Cache\AdapterFactory;
 use Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface;
 use Weline\Framework\Cache\Contract\SingleFlightInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
 
-class SingleFlightCoordinator implements SingleFlightInterface
+class SingleFlightCoordinator implements SingleFlightInterface, ProcessSharedInterface
 {
     private const POOL_IDENTITY = 'single_flight';
     private const HASH_ALG = 'xxh3';

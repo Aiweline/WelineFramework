@@ -7,13 +7,17 @@ namespace Weline\Product\Service;
 use Throwable;
 use Weline\FileManager\Api\Data\FileAccessContext;
 use Weline\FileManager\Api\FileAssetManagerInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Websites\Data\WebsiteData;
 
 /**
  * Resolves durable FileManager references only at the storefront presentation boundary.
+ *
+ * Process-shared across WLS Fibers: resolved URLs live in a capped process bag
+ * keyed by asset+locale+scope (not request_id).
  */
-final class StorefrontProductMediaUrlResolver
+final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
 {
     private const ASSET_PREFIX = 'asset://';
     private const DESCRIPTION_ALLOWED_TAGS = [
@@ -25,13 +29,33 @@ final class StorefrontProductMediaUrlResolver
         'button', 'textarea', 'select', 'option', 'svg', 'math', 'video',
         'audio', 'source', 'link', 'meta', 'base',
     ];
+    private const PROCESS_CACHE_MAX = 2048;
 
-    /** @var array<string, string> */
-    private array $resolvedReferenceCache = [];
+    /** @var array<string, string> asset\0locale\0scope => url */
+    private static array $resolvedReferenceCache = [];
 
     public function __construct(
         private readonly FileAssetManagerInterface $assets,
     ) {
+    }
+
+    public static function clearProcessReferenceCache(): void
+    {
+        self::$resolvedReferenceCache = [];
+    }
+
+    public static function processReferenceCacheCount(): int
+    {
+        return \count(self::$resolvedReferenceCache);
+    }
+
+    private function rememberResolvedReference(string $cacheKey, string $url): void
+    {
+        unset(self::$resolvedReferenceCache[$cacheKey]);
+        while (\count(self::$resolvedReferenceCache) >= self::PROCESS_CACHE_MAX) {
+            unset(self::$resolvedReferenceCache[\array_key_first(self::$resolvedReferenceCache)]);
+        }
+        self::$resolvedReferenceCache[$cacheKey] = $url;
     }
 
     /**
@@ -346,8 +370,8 @@ final class StorefrontProductMediaUrlResolver
         }
 
         $cacheKey = $this->referenceCacheKey($assetId, $scope, $locale);
-        if (array_key_exists($cacheKey, $this->resolvedReferenceCache)) {
-            return $this->resolvedReferenceCache[$cacheKey];
+        if (array_key_exists($cacheKey, self::$resolvedReferenceCache)) {
+            return self::$resolvedReferenceCache[$cacheKey];
         }
 
         // Product pixels are factual media, not translated copy. Keep the target
@@ -376,7 +400,7 @@ final class StorefrontProductMediaUrlResolver
             }
         }
 
-        $this->resolvedReferenceCache[$cacheKey] = $resolvedUrl;
+        $this->rememberResolvedReference($cacheKey, $resolvedUrl);
 
         return $resolvedUrl;
     }
@@ -407,8 +431,8 @@ final class StorefrontProductMediaUrlResolver
                 continue;
             }
             $cacheKey = $this->referenceCacheKey($assetId, $scope, $locale);
-            if (array_key_exists($cacheKey, $this->resolvedReferenceCache)) {
-                $result[$key] = $this->resolvedReferenceCache[$cacheKey];
+            if (array_key_exists($cacheKey, self::$resolvedReferenceCache)) {
+                $result[$key] = self::$resolvedReferenceCache[$cacheKey];
                 continue;
             }
             $contexts ??= array_map(
@@ -430,7 +454,7 @@ final class StorefrontProductMediaUrlResolver
                 $url = trim($resolved[$key]?->url ?? '');
                 $result[$key] = $url;
                 $assetId = trim(substr((string)$references[$key], strlen(self::ASSET_PREFIX)));
-                $this->resolvedReferenceCache[$this->referenceCacheKey($assetId, $scope, $locale)] = $url;
+                $this->rememberResolvedReference($this->referenceCacheKey($assetId, $scope, $locale), $url);
             }
         } catch (Throwable) {
             foreach ($requests as $key => $_request) {
