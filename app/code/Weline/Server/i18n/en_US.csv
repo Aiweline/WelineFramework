@@ -103,7 +103,7 @@
 "下发 Fiber 池配置：闲置超时与最大活跃数","Deliver Fiber pool configuration: idle timeout and maximum active number"
 实例名,"Instance name"
 挂起超过此秒数释放，0=不自动释放,"Release after this many seconds of inactivity; 0 = do not auto-release"
-"最大挂起 Fiber 数，0=不限制","Max Suspended Fibers, 0 = Unlimited"
+"最大活跃渲染 Fiber 数；默认 12；0=不限制；满则排队而非立即 503","最大活跃渲染 Fiber 数；默认 12；0=不限制；满则排队而非立即 503"
 "通知各 Worker 立即释放闲置 Fiber","Notify all Workers to release idle Fibers immediately"
 "读取 WLS 攻击统计","Read WLS attack statistics"
 统计天数,"Statistical days"
@@ -2911,6 +2911,7 @@ Previous：%{1},Previous：%{1}
 无法证明受管代次时拒绝发送任何终止信号,"Refuse to send any termination signal when the managed generation cannot be proven"
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","Retired: console:server:start no longer starts the PHP built-in web server."
 "已退役：PHP 内置 Web Server 启动入口","Retired: PHP built-in Web Server startup entry"
+"最大挂起 Fiber 数，0=不限制","Max Suspended Fibers, 0 = Unlimited"
 "HTTP 监听：%{1}，HTTPS 监听：%{2}（offset=%{3}）","HTTP listening: %{1}, HTTPS listening: %{2} (offset=%{3})"
 强制停止：中止占用生命周期锁的同实例后台任务（purpose=%{1},pid=%{2}）。
 "已回收子进程 PID %{1} (%{2})","Recycled child process PID %{1} (%{2})"

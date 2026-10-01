@@ -1905,9 +1905,22 @@ $maxRequests = $maxRequestsBase > 0
 
 // Fiber 池配置（可由 IPC 下发：fiber_set_config）
 $fiberIdleTtlSec = 0;   // 挂起超过此秒数视为闲置并释放，0=不自动释放
-$fiberMaxActive = 0;    // 最大活跃挂起 Fiber 数，0=不限制
+$fiberAdmissionConfig = wlsResolveFiberAdmissionConfig(
+    \is_array($wls ?? null) ? $wls : [],
+    \is_array($wlsInstance ?? null) ? $wlsInstance : []
+);
+$fiberMaxActive = (int)$fiberAdmissionConfig['max_active']; // 活跃渲染上限；0=不限制
+$fiberAdmissionQueueWaitMs = (int)$fiberAdmissionConfig['queue_wait_ms'];
+$fiberAdmissionQueueDepth = (int)$fiberAdmissionConfig['queue_depth'];
+$fiberAdmissionQueueSliceMs = (int)$fiberAdmissionConfig['queue_slice_ms'];
+$fiberAdmissionWaiters = []; // fiberKey => true（排队中，不占活跃槽）
 $fiberReleaseIdleRequested = false;  // IPC 请求立即释放闲置时置 true
 $lastFiberIdleCheck = \Weline\Server\Runtime\WorkerFiberContextTracker::monotonicNowNs();
+WlsLogger::info_(
+    'Fiber admission: max_active=' . $fiberMaxActive
+    . ' queue_wait_ms=' . $fiberAdmissionQueueWaitMs
+    . ' queue_depth=' . $fiberAdmissionQueueDepth
+);
 
 // 长连接（长连接/SSE）独立计数与饱和机制
 $longLivedConnections = [];          // connId => ['type' => 'sse'|'longpoll', 'start' => timestamp]
@@ -3245,6 +3258,10 @@ while (true) {
             $connectionPeerIps[$connId]
                 ?? ((\is_string($peer = @\stream_socket_get_name($conn, true))) ? $peer : ''),
             $fiberMaxActive,
+            $fiberAdmissionQueueWaitMs,
+            $fiberAdmissionQueueDepth,
+            $fiberAdmissionQueueSliceMs,
+            $fiberAdmissionWaiters,
             $longLivedMaxActive,
             $longLivedProtocolResolver,
             $activeFibers,
@@ -4543,6 +4560,10 @@ function wlsDispatchRequestFiberStep(
     string $rawRequest,
     string $transportPeer,
     int $fiberMaxActive,
+    int $fiberAdmissionQueueWaitMs,
+    int $fiberAdmissionQueueDepth,
+    int $fiberAdmissionQueueSliceMs,
+    array &$fiberAdmissionWaiters,
     int $longLivedMaxActive,
     object $longLivedProtocolResolver,
     array &$activeFibers,
@@ -4738,24 +4759,34 @@ function wlsDispatchRequestFiberStep(
     $isSseProtocolRequest = ($requestProtocol === 'sse');
     $applyLongLivedLimit = !$isSseProtocolRequest;
 
-    $activeAdmissionFibers = wlsCountActiveFibersForAdmission($activeFibers);
-    if (!$isSseProtocolRequest && $fiberMaxActive > 0 && $activeAdmissionFibers >= $fiberMaxActive) {
-        $activeRequests--;
-        $body = 'Service Unavailable';
-        $resp = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
-        @\fwrite($conn, $resp);
-        @\fclose($conn);
-        unset(
-            $connections[$connId],
-            $requestBuffers[$connId],
-            $connectionLastActivity[$connId],
-            $requestLogged[$connId],
-            $writeBuffers[$connId],
-            $writableConnections[$connId],
-            $pendingClose[$connId]
-        );
-        WlsLogger::warning_("Fiber 池已满 (max_active={$fiberMaxActive})，拒绝请求 (connId: {$connId})");
-        return;
+    $activeAdmissionFibers = wlsCountActiveFibersForAdmission($activeFibers, $fiberAdmissionWaiters);
+    if (!$isSseProtocolRequest && $fiberMaxActive > 0) {
+        if (!wlsFiberAdmissionQueueHasRoom(
+            wlsCountFiberAdmissionWaiters($fiberAdmissionWaiters),
+            $fiberAdmissionQueueDepth,
+            $fiberMaxActive
+        )) {
+            $activeRequests--;
+            $resp = wlsFiberAdmissionUnavailableResponse('queue_full');
+            @\fwrite($conn, $resp);
+            @\fclose($conn);
+            unset(
+                $connections[$connId],
+                $requestBuffers[$connId],
+                $connectionLastActivity[$connId],
+                $requestLogged[$connId],
+                $writeBuffers[$connId],
+                $writableConnections[$connId],
+                $pendingClose[$connId]
+            );
+            WlsLogger::warning_(
+                "Fiber 准入队列已满 (max_active={$fiberMaxActive}, depth={$fiberAdmissionQueueDepth}, "
+                . "active={$activeAdmissionFibers})，拒绝请求 (connId: {$connId})"
+            );
+            return;
+        }
+        // Reserve waiter slot before Fiber start so depth accounting closes races.
+        $fiberAdmissionWaiters[$connId] = true;
     }
 
     // 长连分层：见 SseMatcher / ProtocolResolver；protocol===sse 时与 worker_ssl 一样走写队列 + SseContext 回调。
@@ -4798,6 +4829,7 @@ function wlsDispatchRequestFiberStep(
             && $longLivedMaxActive > 0
             && $quotaLongLivedCount >= $longLivedMaxActive
         ) {
+            unset($fiberAdmissionWaiters[$connId]);
             $activeRequests--;
             $body = 'Too Many Long Connections - Retry Shortly';
             $resp = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain; charset=utf-8\r\nRetry-After: 2\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
@@ -4850,10 +4882,34 @@ function wlsDispatchRequestFiberStep(
         &$writeBuffers,
         &$writableConnections,
         &$pendingClose,
-        &$longLivedConnections
+        &$longLivedConnections,
+        &$activeFibers,
+        &$fiberAdmissionWaiters,
+        $fiberMaxActive,
+        $fiberAdmissionQueueWaitMs,
+        $fiberAdmissionQueueSliceMs
     ) {
         try {
             wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
+            if (!$isSseProtocolRequest && $fiberMaxActive > 0) {
+                $admitted = wlsAwaitFiberAdmissionSlot(
+                    $activeFibers,
+                    $fiberAdmissionWaiters,
+                    $fiberConnId,
+                    $fiberMaxActive,
+                    $fiberAdmissionQueueWaitMs,
+                    $fiberAdmissionQueueSliceMs
+                );
+                if (!$admitted) {
+                    WlsLogger::warning_(
+                        "Fiber 准入排队超时 (max_active={$fiberMaxActive}, wait_ms={$fiberAdmissionQueueWaitMs}, "
+                        . "connId: {$fiberConnId})"
+                    );
+                    return wlsFiberAdmissionUnavailableResponse('timeout');
+                }
+            } else {
+                unset($fiberAdmissionWaiters[$fiberConnId]);
+            }
             // Generic downloads and SSE share the same bounded, Fiber-owned
             // non-blocking transport writer.
             \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
@@ -4938,6 +4994,7 @@ function wlsDispatchRequestFiberStep(
             $fiberResults[$fiberConnId] = ['failure' => $e];
             throw $e;
         } finally {
+            unset($fiberAdmissionWaiters[$fiberConnId]);
             $leaveFailure = null;
             try {
                 wlsFiberRequestContextLeave();
@@ -4957,6 +5014,7 @@ function wlsDispatchRequestFiberStep(
         $requestFiber->start();
     } catch (\Weline\Framework\Runtime\RequestExitException) {
     } catch (\Throwable $e) {
+        unset($fiberAdmissionWaiters[$connId]);
         WlsLogger::error_("Fiber 启动异常: " . $e->getMessage());
     }
 
@@ -5008,7 +5066,7 @@ function wlsDispatchRequestFiberStep(
         );
         \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($requestFiber);
         $fiberScheduler->unregisterFiber();
-        unset($fiberResults[$connId]);
+        unset($fiberResults[$connId], $fiberAdmissionWaiters[$connId]);
         $activeRequests = \max(0, $activeRequests - 1);
         if (\is_resource($conn)) {
             @\fclose($conn);
@@ -5040,6 +5098,7 @@ function wlsDispatchRequestFiberStep(
         'last_activity_monotonic_ns' => $fiberActivityMonotonicNs,
         'is_long_lived' => $isLongLived,
         'is_sse_protocol' => $isSseProtocolRequest,
+        'admission_waiting' => isset($fiberAdmissionWaiters[$connId]),
     ];
     if (WLS_WORKER_HOT_PATH_LOGS_ENABLED) {
         WlsLogger::info_("请求进入 Fiber 异步模式 (connId: {$connId})");

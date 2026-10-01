@@ -2305,7 +2305,15 @@ $fiberTickBudgetMs = (float)(\Weline\Framework\App\Env::get('wls.worker.fiber_ti
 );
 // Fiber 池与长连接治理（与 worker.php 对齐，供 Master IPC 与 Dispatcher 饱和策略使用）
 $fiberIdleTtlSec = 0;
-$fiberMaxActive = 0;
+$fiberAdmissionConfig = wlsResolveFiberAdmissionConfig(
+    \is_array($wls ?? null) ? $wls : [],
+    \is_array($wlsInstance ?? null) ? $wlsInstance : []
+);
+$fiberMaxActive = (int)$fiberAdmissionConfig['max_active'];
+$fiberAdmissionQueueWaitMs = (int)$fiberAdmissionConfig['queue_wait_ms'];
+$fiberAdmissionQueueDepth = (int)$fiberAdmissionConfig['queue_depth'];
+$fiberAdmissionQueueSliceMs = (int)$fiberAdmissionConfig['queue_slice_ms'];
+$fiberAdmissionWaiters = [];
 $fiberReleaseIdleRequested = false;
 $lastFiberIdleCheck = \Weline\Server\Runtime\WorkerFiberContextTracker::monotonicNowNs();
 $longLivedConnections = [];
@@ -2315,6 +2323,11 @@ $longLivedSaturationCleared = false;
 $lastLongLivedSaturationReport = 0.0; // monotonic 秒
 $longLivedSaturationInterval = 10;
 WlsLogger::info_("Fiber 调度器已初始化");
+WlsLogger::info_(
+    'Fiber admission: max_active=' . $fiberMaxActive
+    . ' queue_wait_ms=' . $fiberAdmissionQueueWaitMs
+    . ' queue_depth=' . $fiberAdmissionQueueDepth
+);
 WlsLogger::info_(
     "EventLoop 已初始化 requested={$eventLoopMeta['requested']} resolved={$eventLoopMeta['resolved']} backend={$coroutineRuntime->getLoopBackend()}"
 );
@@ -6444,15 +6457,18 @@ while (true) {
                     }
 
                     if ($fiberMaxActive > 0
-                        && wlsCountActiveFibersForAdmission($activeFibers) >= $fiberMaxActive
+                        && !wlsFiberAdmissionQueueHasRoom(
+                            wlsCountFiberAdmissionWaiters($fiberAdmissionWaiters),
+                            $fiberAdmissionQueueDepth,
+                            $fiberMaxActive
+                        )
                     ) {
                         $body = 'Service Unavailable';
                         wlsHttp3SubmitResponse(
                             $http3Runtime,
                             $http3Token,
                             $rawRequest,
-                            "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain; charset=utf-8\r\n"
-                                . 'Content-Length: ' . \strlen($body) . "\r\n\r\n" . $body,
+                            wlsFiberAdmissionUnavailableResponse('queue_full'),
                             $policyStartedAt,
                             $activeRequests,
                         );
@@ -6460,6 +6476,9 @@ while (true) {
                     }
 
                     $http3FiberKey = 'h3:' . $http3ConnectionId . ':' . $http3StreamId;
+                    if ($fiberMaxActive > 0) {
+                        $fiberAdmissionWaiters[$http3FiberKey] = true;
+                    }
                     $http3ConnectionCount = (int)($http3Runtime->stats()['active_connections'] ?? 0);
                     $requestFiber = new \Fiber(function () use (
                         $rawRequest,
@@ -6484,9 +6503,33 @@ while (true) {
                         &$longLivedConnections,
                         &$http2ConnectionAdapters,
                         &$connections,
+                        &$activeFibers,
+                        &$fiberAdmissionWaiters,
+                        $fiberMaxActive,
+                        $fiberAdmissionQueueWaitMs,
+                        $fiberAdmissionQueueSliceMs,
                     ): string {
                         wlsFiberRequestContextEnter(null, $http3FiberKey);
                         try {
+                            if ($fiberMaxActive > 0) {
+                                $admitted = wlsAwaitFiberAdmissionSlot(
+                                    $activeFibers,
+                                    $fiberAdmissionWaiters,
+                                    $http3FiberKey,
+                                    $fiberMaxActive,
+                                    $fiberAdmissionQueueWaitMs,
+                                    $fiberAdmissionQueueSliceMs
+                                );
+                                if (!$admitted) {
+                                    WlsLogger::warning_(
+                                        "Fiber 准入排队超时 (max_active={$fiberMaxActive}, wait_ms={$fiberAdmissionQueueWaitMs}, "
+                                        . "fiberKey: {$http3FiberKey})"
+                                    );
+                                    return wlsFiberAdmissionUnavailableResponse('timeout');
+                                }
+                            } else {
+                                unset($fiberAdmissionWaiters[$http3FiberKey]);
+                            }
                             return handleRequest(
                                 $rawRequest,
                                 $runtime,
@@ -6519,6 +6562,7 @@ while (true) {
                             }
                             throw $exception;
                         } finally {
+                            unset($fiberAdmissionWaiters[$http3FiberKey]);
                             wlsFiberRequestContextLeave();
                             wlsResetLongRunningExecutionLimit();
                         }
@@ -6529,11 +6573,13 @@ while (true) {
                         $requestFiber->start();
                     } catch (\Weline\Framework\Runtime\RequestExitException) {
                     } catch (\Throwable $exception) {
+                        unset($fiberAdmissionWaiters[$http3FiberKey]);
                         WlsLogger::error_('[HTTP3] Fiber start failed: ' . $exception->getMessage());
                     }
 
                     if ($requestFiber->isTerminated()) {
                         $fiberScheduler->unregisterFiber();
+                        unset($fiberAdmissionWaiters[$http3FiberKey]);
                         $response = '';
                         try {
                             $response = (string)($requestFiber->getReturn() ?? '');
@@ -6568,9 +6614,11 @@ while (true) {
                             'last_activity_monotonic_ns' => $fiberActivityMonotonicNs,
                             'is_long_lived' => false,
                             'is_sse_protocol' => false,
+                            'admission_waiting' => isset($fiberAdmissionWaiters[$http3FiberKey]),
                         ];
                     } else {
                         $fiberScheduler->unregisterFiber();
+                        unset($fiberAdmissionWaiters[$http3FiberKey]);
                         wlsHttp3SubmitResponse(
                             $http3Runtime,
                             $http3Token,
@@ -8496,67 +8544,7 @@ while (true) {
             }
         }
 
-        $activeAdmissionFibers = wlsCountActiveFibersForAdmission($activeFibers);
-        if (!$isSseProtocolRequest && $fiberMaxActive > 0 && $activeAdmissionFibers >= $fiberMaxActive) {
-            if ($http2ResponseStreamId > 0
-                && $http2ResponseAdapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
-            ) {
-                $body = 'Service Unavailable';
-                $resp = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: "
-                    . \strlen($body) . "\r\n\r\n" . $body;
-                sslFinalizeHttpResponseAfterHandle(
-                    $conn,
-                    $connId,
-                    $rawRequest,
-                    $resp,
-                    $policyStartedAt,
-                    false,
-                    $ipcDraining,
-                    $connections,
-                    $requestBuffers,
-                    $connectionLastActivity,
-                    $requestLogged,
-                    $writeBuffers,
-                    $writableConnections,
-                    $pendingClose,
-                    $longLivedConnections,
-                    $ipcClient,
-                    $instanceName,
-                    $activeRequests,
-                    true,
-                    null,
-                    true,
-                    false,
-                    $http2ResponseAdapter,
-                    $http2ResponseStreamId,
-                );
-                WlsLogger::warning_(
-                    "Fiber 池已满 (max_active={$fiberMaxActive})，拒绝 HTTP/2 stream "
-                    . "(connId: {$connId}, streamId: {$http2ResponseStreamId})"
-                );
-                continue;
-            }
-            $activeRequests--;
-            $body = 'Service Unavailable';
-            $resp = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: "
-                . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
-            @\fwrite($conn, $resp);
-            @\fclose($conn);
-            unset(
-                $connections[$connId],
-                $requestBuffers[$connId],
-                $connectionLastActivity[$connId],
-                $requestLogged[$connId],
-                $writeBuffers[$connId],
-                $writableConnections[$connId]
-            );
-            if (isset($longLivedConnections[$connId])) {
-                unset($longLivedConnections[$connId]);
-            }
-            WlsLogger::warning_("Fiber 池已满 (max_active={$fiberMaxActive})，拒绝请求 (connId: {$connId})");
-            continue;
-        }
-
+        $activeAdmissionFibers = wlsCountActiveFibersForAdmission($activeFibers, $fiberAdmissionWaiters);
         $fiberConnId = $connId;
         $fiberConn = $conn;
         $fiberRawRequest = $rawRequest;
@@ -8565,6 +8553,73 @@ while (true) {
         $fiberKey = $fiberHttp2StreamId > 0
             ? \Weline\Server\Protocol\Http2\MultiplexScheduler::key($fiberConnId, $fiberHttp2StreamId)
             : $fiberConnId;
+
+        if (!$isSseProtocolRequest && $fiberMaxActive > 0) {
+            if (!wlsFiberAdmissionQueueHasRoom(
+                wlsCountFiberAdmissionWaiters($fiberAdmissionWaiters),
+                $fiberAdmissionQueueDepth,
+                $fiberMaxActive
+            )) {
+                $resp = wlsFiberAdmissionUnavailableResponse('queue_full');
+                if ($http2ResponseStreamId > 0
+                    && $http2ResponseAdapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
+                ) {
+                    sslFinalizeHttpResponseAfterHandle(
+                        $conn,
+                        $connId,
+                        $rawRequest,
+                        $resp,
+                        $policyStartedAt,
+                        false,
+                        $ipcDraining,
+                        $connections,
+                        $requestBuffers,
+                        $connectionLastActivity,
+                        $requestLogged,
+                        $writeBuffers,
+                        $writableConnections,
+                        $pendingClose,
+                        $longLivedConnections,
+                        $ipcClient,
+                        $instanceName,
+                        $activeRequests,
+                        true,
+                        null,
+                        true,
+                        false,
+                        $http2ResponseAdapter,
+                        $http2ResponseStreamId,
+                    );
+                    WlsLogger::warning_(
+                        "Fiber 准入队列已满 (max_active={$fiberMaxActive}, depth={$fiberAdmissionQueueDepth}, "
+                        . "active={$activeAdmissionFibers})，拒绝 HTTP/2 stream "
+                        . "(connId: {$connId}, streamId: {$http2ResponseStreamId})"
+                    );
+                    continue;
+                }
+                $activeRequests--;
+                @\fwrite($conn, $resp);
+                @\fclose($conn);
+                unset(
+                    $connections[$connId],
+                    $requestBuffers[$connId],
+                    $connectionLastActivity[$connId],
+                    $requestLogged[$connId],
+                    $writeBuffers[$connId],
+                    $writableConnections[$connId]
+                );
+                if (isset($longLivedConnections[$connId])) {
+                    unset($longLivedConnections[$connId]);
+                }
+                WlsLogger::warning_(
+                    "Fiber 准入队列已满 (max_active={$fiberMaxActive}, depth={$fiberAdmissionQueueDepth}, "
+                    . "active={$activeAdmissionFibers})，拒绝请求 (connId: {$connId})"
+                );
+                continue;
+            }
+            $fiberAdmissionWaiters[$fiberKey] = true;
+        }
+
         $requestFiber = new \Fiber(function () use (
             $fiberRawRequest,
             $runtime,
@@ -8601,9 +8656,34 @@ while (true) {
             &$pendingClose,
             &$longLivedConnections,
             &$http2ConnectionAdapters,
+            $fiberKey,
+            &$activeFibers,
+            &$fiberAdmissionWaiters,
+            $fiberMaxActive,
+            $fiberAdmissionQueueWaitMs,
+            $fiberAdmissionQueueSliceMs,
         ) {
-            wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
             try {
+                wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
+                if (!$isSseProtocolRequest && $fiberMaxActive > 0) {
+                    $admitted = wlsAwaitFiberAdmissionSlot(
+                        $activeFibers,
+                        $fiberAdmissionWaiters,
+                        $fiberKey,
+                        $fiberMaxActive,
+                        $fiberAdmissionQueueWaitMs,
+                        $fiberAdmissionQueueSliceMs
+                    );
+                    if (!$admitted) {
+                        WlsLogger::warning_(
+                            "Fiber 准入排队超时 (max_active={$fiberMaxActive}, wait_ms={$fiberAdmissionQueueWaitMs}, "
+                            . "fiberKey: {$fiberKey})"
+                        );
+                        return wlsFiberAdmissionUnavailableResponse('timeout');
+                    }
+                } else {
+                    unset($fiberAdmissionWaiters[$fiberKey]);
+                }
                 // Install a Fiber-owned bounded writer for every request.
                 // SSE uses it for events; DownloadException uses the same
                 // non-blocking queue for generic file response chunks.
@@ -8743,6 +8823,7 @@ while (true) {
                 throw $e;
             } finally {
                 // 统一清台：无论正常/异常/提前返回，都清理请求级上下文，避免 Fiber 间串味。
+                unset($fiberAdmissionWaiters[$fiberKey]);
                 wlsFiberRequestContextLeave();
                 wlsResetLongRunningExecutionLimit();
             }
@@ -8753,6 +8834,7 @@ while (true) {
             $requestFiber->start();
         } catch (\Weline\Framework\Runtime\RequestExitException) {
         } catch (\Throwable $e) {
+            unset($fiberAdmissionWaiters[$fiberKey]);
             WlsLogger::error_('Fiber 启动异常: ' . $e->getMessage());
         }
 
@@ -8813,6 +8895,7 @@ while (true) {
                 'last_activity_monotonic_ns' => $fiberActivityMonotonicNs,
                 'is_long_lived' => $isLongLived,
                 'is_sse_protocol' => $isSseProtocolRequest,
+                'admission_waiting' => isset($fiberAdmissionWaiters[$fiberKey]),
             ];
             if (WLS_WORKER_HOT_PATH_LOGS_ENABLED) {
                 WlsLogger::info_("请求进入 Fiber 异步模式 (connId: {$connId})");
@@ -8936,14 +9019,21 @@ while (true) {
  * @param array<int, float> $pendingPeekStartTimes
  */
 /**
- * @param array<int, array<string, mixed>> $activeFibers
+ * @param array<int|string, array<string, mixed>> $activeFibers
+ * @param array<int|string, mixed> $admissionWaiters
  */
 if (!\function_exists('wlsCountActiveFibersForAdmission')) {
-    function wlsCountActiveFibersForAdmission(array $activeFibers): int
+    function wlsCountActiveFibersForAdmission(array $activeFibers, array $admissionWaiters = []): int
     {
         $count = 0;
-        foreach ($activeFibers as $fiberState) {
+        foreach ($activeFibers as $fiberKey => $fiberState) {
             if (($fiberState['is_sse_protocol'] ?? false) === true) {
+                continue;
+            }
+            if (($fiberState['admission_waiting'] ?? false) === true) {
+                continue;
+            }
+            if (isset($admissionWaiters[$fiberKey])) {
                 continue;
             }
             $count++;
