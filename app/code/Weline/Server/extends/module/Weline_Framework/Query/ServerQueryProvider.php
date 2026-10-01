@@ -214,7 +214,7 @@ class ServerQueryProvider implements QueryProviderInterface
                     'params' => [
                         ['name' => 'instance', 'type' => 'string', 'required' => false, 'description' => __('实例名')],
                         ['name' => 'idle_ttl_sec', 'type' => 'int', 'required' => false, 'description' => __('挂起超过此秒数释放，0=不自动释放')],
-                        ['name' => 'max_active', 'type' => 'int', 'required' => false, 'description' => __('最大挂起 Fiber 数，0=不限制')],
+                        ['name' => 'max_active', 'type' => 'int', 'required' => false, 'description' => __('最大活跃渲染 Fiber 数；默认 12；0=不限制；满则排队而非立即 503')],
                     ],
                 ],
                 ['name' => 'fiberReleaseIdle', 'description' => __('通知各 Worker 立即释放闲置 Fiber'), 'params' => [['name' => 'instance', 'type' => 'string', 'required' => false, 'description' => __('实例名')]]],

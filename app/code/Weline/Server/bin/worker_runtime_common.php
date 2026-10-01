@@ -319,20 +319,180 @@ if (!\function_exists('wlsResetLongRunningExecutionLimit')) {
 }
 
 /**
- * @param array<int, array<string, mixed>> $activeFibers
+ * Resolve fiber admission defaults.
+ *
+ * Defaults (when keys omitted): max_active=12, queue_wait_ms=8000, queue_depth=max_active*3.
+ * Explicit max_active=0 keeps unlimited concurrency (no queue).
+ *
+ * @param array<string, mixed> $wls
+ * @param array<string, mixed> $wlsInstance
+ * @return array{max_active:int,queue_wait_ms:int,queue_depth:int,queue_slice_ms:int}
+ */
+if (!\function_exists('wlsResolveFiberAdmissionConfig')) {
+function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): array
+{
+    $globalFiber = \is_array($wls['fiber'] ?? null) ? $wls['fiber'] : [];
+    $instanceFiber = \is_array($wlsInstance['fiber'] ?? null) ? $wlsInstance['fiber'] : [];
+    $fiber = \array_merge($globalFiber, $instanceFiber);
+
+    $maxActive = \array_key_exists('max_active', $fiber)
+        ? \max(0, (int)$fiber['max_active'])
+        : 12;
+
+    $waitMs = (int)($fiber['admission_queue_wait_ms'] ?? 8000);
+    if ($waitMs < 0) {
+        $waitMs = 0;
+    } elseif ($waitMs > 10000) {
+        $waitMs = 10000;
+    }
+
+    $depth = (int)($fiber['admission_queue_depth'] ?? 0);
+    if ($depth <= 0) {
+        // Keep the waiter set small: waiting Fibers still cost sockets/buffers.
+        $depth = $maxActive > 0 ? $maxActive : 0;
+    }
+
+    $sliceMs = (int)($fiber['admission_queue_slice_ms'] ?? 25);
+    if ($sliceMs < 5) {
+        $sliceMs = 5;
+    } elseif ($sliceMs > 200) {
+        $sliceMs = 200;
+    }
+
+    return [
+        'max_active' => $maxActive,
+        'queue_wait_ms' => $waitMs,
+        'queue_depth' => $depth,
+        'queue_slice_ms' => $sliceMs,
+    ];
+}
+}
+
+/**
+ * Active (non-SSE, non-waiting) fibers that occupy an admission slot.
+ *
+ * @param array<int|string, array<string, mixed>> $activeFibers
+ * @param array<int|string, mixed> $admissionWaiters
  */
 if (!\function_exists('wlsCountActiveFibersForAdmission')) {
-function wlsCountActiveFibersForAdmission(array $activeFibers): int
+function wlsCountActiveFibersForAdmission(array $activeFibers, array $admissionWaiters = []): int
 {
     $count = 0;
-    foreach ($activeFibers as $fiberState) {
+    foreach ($activeFibers as $fiberKey => $fiberState) {
         if (($fiberState['is_sse_protocol'] ?? false) === true) {
+            continue;
+        }
+        if (($fiberState['admission_waiting'] ?? false) === true) {
+            continue;
+        }
+        if (isset($admissionWaiters[$fiberKey])) {
             continue;
         }
         $count++;
     }
 
     return $count;
+}
+}
+
+/**
+ * @param array<int|string, mixed> $admissionWaiters
+ */
+if (!\function_exists('wlsCountFiberAdmissionWaiters')) {
+function wlsCountFiberAdmissionWaiters(array $admissionWaiters): int
+{
+    return \count($admissionWaiters);
+}
+}
+
+/**
+ * Whether another request may enter the admission wait queue (not a hard reject of active work).
+ */
+if (!\function_exists('wlsFiberAdmissionQueueHasRoom')) {
+function wlsFiberAdmissionQueueHasRoom(int $waitingCount, int $queueDepth, int $maxActive): bool
+{
+    if ($maxActive <= 0) {
+        return true;
+    }
+    if ($queueDepth <= 0) {
+        return true;
+    }
+
+    return $waitingCount < $queueDepth;
+}
+}
+
+/**
+ * Build a 503 for admission queue full / wait timeout (after queueing, not instant reject).
+ */
+if (!\function_exists('wlsFiberAdmissionUnavailableResponse')) {
+function wlsFiberAdmissionUnavailableResponse(string $reason = 'timeout'): string
+{
+    $body = 'Service Unavailable';
+    $retryAfter = $reason === 'queue_full' ? '1' : '2';
+
+    return 'HTTP/1.1 503 Service Unavailable' . "\r\n"
+        . 'Content-Type: text/plain; charset=utf-8' . "\r\n"
+        . 'Retry-After: ' . $retryAfter . "\r\n"
+        . 'X-WLS-Admission: ' . $reason . "\r\n"
+        . 'Content-Length: ' . \strlen($body) . "\r\n"
+        . 'Connection: close' . "\r\n\r\n"
+        . $body;
+}
+}
+
+/**
+ * Wait inside a request Fiber for an active admission slot.
+ *
+ * Yields to the scheduler so in-flight requests can finish. Callers must reserve
+ * `$admissionWaiters[$fiberKey]` before starting the Fiber (closes depth races);
+ * this function clears that reservation when the wait ends (admit or timeout).
+ *
+ * @param array<int|string, array<string, mixed>> $activeFibers
+ * @param array<int|string, mixed> $admissionWaiters
+ */
+if (!\function_exists('wlsAwaitFiberAdmissionSlot')) {
+function wlsAwaitFiberAdmissionSlot(
+    array &$activeFibers,
+    array &$admissionWaiters,
+    int|string $fiberKey,
+    int $maxActive,
+    int $waitMs,
+    int $sliceMs = 25,
+): bool {
+    if ($maxActive <= 0) {
+        unset($admissionWaiters[$fiberKey]);
+        if (isset($activeFibers[$fiberKey]) && \is_array($activeFibers[$fiberKey])) {
+            $activeFibers[$fiberKey]['admission_waiting'] = false;
+        }
+
+        return true;
+    }
+
+    $admissionWaiters[$fiberKey] = true;
+    if (isset($activeFibers[$fiberKey]) && \is_array($activeFibers[$fiberKey])) {
+        $activeFibers[$fiberKey]['admission_waiting'] = true;
+    }
+
+    $deadline = wlsWorkerMonotonicNow() + ($waitMs / 1000.0);
+    try {
+        while (wlsCountActiveFibersForAdmission($activeFibers, $admissionWaiters) >= $maxActive) {
+            if (wlsWorkerMonotonicNow() >= $deadline) {
+                return false;
+            }
+            if (isset($activeFibers[$fiberKey]) && \is_array($activeFibers[$fiberKey])) {
+                $activeFibers[$fiberKey]['admission_waiting'] = true;
+            }
+            \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(\max(5, $sliceMs));
+        }
+
+        return true;
+    } finally {
+        unset($admissionWaiters[$fiberKey]);
+        if (isset($activeFibers[$fiberKey]) && \is_array($activeFibers[$fiberKey])) {
+            $activeFibers[$fiberKey]['admission_waiting'] = false;
+        }
+    }
 }
 }
 

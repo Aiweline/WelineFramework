@@ -80,6 +80,15 @@ return [
             // 设为 0/false 才启用严格 in-process 首页证明（可能因模板编译致命错误杀死进程）。
             'ready_gate_homepage_fail_open' => true,
         ],
+        // Fiber 准入：默认限制每 Worker 并发渲染数；满则排队等待，不立即 503。
+        // max_active=0 表示不限制。queue_depth 默认=max_active（避免过长排队占内存）；wait 默认 8s（上限 10s）。
+        'fiber' => [
+            'max_active' => 12,
+            'admission_queue_wait_ms' => 8000,
+            'admission_queue_depth' => 12,
+            'admission_queue_slice_ms' => 25,
+            'long_lived_max_active' => 4,
+        ],
         // 电商店面连接预算（秒）：半开快探测、写停滞快断、Keep-Alive 适中复用。
         'keep_alive_timeout' => 45,
         'response_write_stall_timeout' => 20,
