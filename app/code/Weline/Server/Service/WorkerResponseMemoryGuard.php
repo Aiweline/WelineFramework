@@ -12,8 +12,10 @@ final class WorkerResponseMemoryGuard
 {
     public const LARGE_RESPONSE_BYTES = 262144;
     public const LARGE_BUFFER_BYTES = 524288;
-    private const RUNTIME_CACHE_PRESSURE_THRESHOLD = 0.70;
-    private const RUNTIME_CACHE_HARD_PRESSURE_THRESHOLD = 0.85;
+    /** Soft water mark: reclaim rebuildable process L1 (keep-warm ratchet control). */
+    private const RUNTIME_CACHE_PRESSURE_THRESHOLD = 0.55;
+    /** Hard water mark: aggressive process-bag clear + allocator freelist trim (no Worker drain). */
+    private const RUNTIME_CACHE_HARD_PRESSURE_THRESHOLD = 0.70;
     private static ?array $runtimeCacheThresholds = null;
     private static ?string $drainAfterResponseReason = null;
     private static int $incompleteRequestFiberCancelStreak = 0;
@@ -133,6 +135,27 @@ final class WorkerResponseMemoryGuard
         return $releasedBytes >= self::LARGE_RESPONSE_BYTES;
     }
 
+    /**
+     * Call after the request Fiber is removed from the Worker active set.
+     * During after_reset the current Fiber is still counted, so compaction must
+     * wait until the active set no longer includes it (keep-warm lifecycle).
+     *
+     * @return array<string,mixed>|null
+     */
+    public static function compactAfterRequestFiberReleased(int $releasedResponseBytes = 0): ?array
+    {
+        if (!WlsConcurrency::canCompactProcessCaches()) {
+            return null;
+        }
+        // Large responses leave ProcessShared bags + Zend freelist growth even when
+        // pressure stays low against a high memory_limit (keep-warm ratchet).
+        if ($releasedResponseBytes >= self::LARGE_RESPONSE_BYTES) {
+            return self::compact(true);
+        }
+
+        return self::compactIfPressure();
+    }
+
     public static function requestDrainAfterResponse(string $reason): void
     {
         $reason = \trim($reason);
@@ -191,7 +214,11 @@ final class WorkerResponseMemoryGuard
      *     drain_requested:bool
      * }
      */
-    public static function compact(): array
+    /**
+     * @param bool $forceSoftReclaim Soft-clear rebuildable process L1 even below soft water mark
+     *                               (used after large response Fiber exit under high memory_limit).
+     */
+    public static function compact(bool $forceSoftReclaim = false): array
     {
         $runtimeCacheCompactions = [
             'memory_store_clears' => 0,
@@ -204,29 +231,44 @@ final class WorkerResponseMemoryGuard
         // Hard pressure = in-process aggressive reclaim only. Do NOT request
         // response-after drain / Master Worker replace — that is process recycle,
         // not intelligent memory reduction in the current PID.
-        $cycleCollectionSkipped = $pressure >= $thresholds['hard'];
+        $aggressive = $pressure >= $thresholds['hard'];
 
-        if ($pressure >= $thresholds['soft']) {
-            $runtimeCacheCompactions = self::compactRuntimeCaches(
-                $cycleCollectionSkipped
-            );
+        if ($forceSoftReclaim || $pressure >= $thresholds['soft']) {
+            $runtimeCacheCompactions = self::compactRuntimeCaches($aggressive);
         }
 
         $cycles = 0;
         $trimmedBytes = 0;
-        if (!$cycleCollectionSkipped) {
+        // Always try allocator freelist trim after reclaim; skip cycle collect on hard
+        // to avoid long STW pauses under critical pressure.
+        if (!$aggressive) {
             $cycles = \gc_collect_cycles();
+        }
+        if (\function_exists('gc_mem_caches')) {
+            $trimmedBytes = \max(0, (int) \gc_mem_caches());
+        }
 
-            if (\function_exists('gc_mem_caches')) {
-                $trimmedBytes = \max(0, (int) \gc_mem_caches());
-            }
+        if (\class_exists(\Weline\Framework\Runtime\MemDiag::class, false)
+            && \Weline\Framework\Runtime\MemDiag::isArmed()
+        ) {
+            \Weline\Framework\Runtime\MemDiag::event('worker_memory_compact', [
+                'pressure' => $pressure,
+                'soft' => $thresholds['soft'],
+                'hard' => $thresholds['hard'],
+                'aggressive' => $aggressive,
+                'cycles' => $cycles,
+                'trimmed_bytes' => $trimmedBytes,
+                'runtime_cache_compactions' => $runtimeCacheCompactions,
+                'real_after' => \memory_get_usage(true),
+                'used_after' => \memory_get_usage(false),
+            ]);
         }
 
         return [
             'cycles' => $cycles,
             'trimmed_bytes' => $trimmedBytes,
             'runtime_cache_compactions' => $runtimeCacheCompactions,
-            'cycle_collection_skipped' => $cycleCollectionSkipped,
+            'cycle_collection_skipped' => $aggressive,
             'drain_requested' => self::hasDrainAfterResponseRequest(),
         ];
     }
@@ -272,7 +314,7 @@ final class WorkerResponseMemoryGuard
         }
 
         if (\class_exists(\Weline\Framework\View\TemplateCacheManager::class, false)) {
-            \Weline\Framework\View\TemplateCacheManager::getInstance()->clearMemoryCache();
+            \Weline\Framework\View\TemplateCacheManager::clearProcessMemoryCache();
             $compactions['cleared_process_caches']++;
         }
 
@@ -302,12 +344,16 @@ final class WorkerResponseMemoryGuard
             $compactions['cleared_process_caches']++;
         }
 
-        $compactions['cleared_process_caches'] += ObjectManager::getInstance(
-            ModuleProcessCacheResetterRegistry::class,
-        )->reset(new ProcessCacheResetContext(
-            ProcessCacheResetContext::REASON_MEMORY_PRESSURE,
-            $aggressive,
-        ));
+        try {
+            $compactions['cleared_process_caches'] += ObjectManager::getInstance(
+                ModuleProcessCacheResetterRegistry::class,
+            )->reset(new ProcessCacheResetContext(
+                ProcessCacheResetContext::REASON_MEMORY_PRESSURE,
+                $aggressive,
+            ));
+        } catch (\Throwable) {
+            // Incomplete bootstrap (no BP / cache adapters) must not abort reclaim.
+        }
 
         if ($aggressive && \class_exists(\Weline\Framework\Event\EventData::class, false)) {
             \Weline\Framework\Event\EventData::clearCache();

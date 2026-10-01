@@ -118,6 +118,28 @@ final class WorkerRequestFiberCancellationTest extends TestCase
         self::assertSame(0, WorkerResponseMemoryGuard::incompleteRequestFiberCancelStreak());
     }
 
+    public function testCaptureFailureWithSchedulerClearsFiberAndReturnsNull(): void
+    {
+        $fiber = new \Fiber(static function (): void {
+            // Suspended without an owned Context → captureForFiber must fail.
+            \Fiber::suspend();
+        });
+        self::assertNull($fiber->start());
+
+        $scheduler = new \Weline\Server\Scheduler\FiberScheduler();
+        $scheduler->registerFiber();
+        self::assertSame(1, $scheduler->getActiveFiberCount());
+
+        $context = wlsCaptureSuspendedRequestFiberOrQuarantine($fiber, $scheduler);
+
+        self::assertNull($context);
+        self::assertSame(0, $scheduler->getActiveFiberCount());
+        self::assertSame(
+            'request_fiber_initial_capture_failure',
+            WorkerResponseMemoryGuard::consumeDrainAfterResponseReason(),
+        );
+    }
+
     public function testStubbornIncompleteCancelDefersQuarantineUntilStreakThreshold(): void
     {
         $threshold = WorkerResponseMemoryGuard::INCOMPLETE_REQUEST_FIBER_CANCEL_QUARANTINE_STREAK;

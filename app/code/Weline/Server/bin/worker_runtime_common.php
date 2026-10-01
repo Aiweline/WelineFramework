@@ -771,8 +771,19 @@ function wlsUnwindRequestFiberForCancellation(
 }
 
 if (!\function_exists('wlsCaptureSuspendedRequestFiberOrQuarantine')) {
-function wlsCaptureSuspendedRequestFiberOrQuarantine(\Fiber $fiber): \Weline\Framework\Runtime\WlsFiberContext
-{
+/**
+ * Capture a suspended request Fiber's WlsFiberContext.
+ *
+ * When $fiberScheduler is provided (SSL/HTTP3), capture failure must NOT leave
+ * a suspended Fiber unregistered: cancel timers, unwind, clear OM/Template/FOB
+ * bags, unregister, and return null so the caller can close the transport.
+ * Without a scheduler (legacy), rethrow after quarantine signal — callers must
+ * clean up themselves (see worker.php).
+ */
+function wlsCaptureSuspendedRequestFiberOrQuarantine(
+    \Fiber $fiber,
+    ?\Weline\Server\Scheduler\FiberScheduler $fiberScheduler = null,
+): ?\Weline\Framework\Runtime\WlsFiberContext {
     try {
         return \Weline\Framework\Runtime\WlsFiberContext::captureForFiber($fiber);
     } catch (\Throwable $throwable) {
@@ -783,6 +794,24 @@ function wlsCaptureSuspendedRequestFiberOrQuarantine(\Fiber $fiber): \Weline\Fra
             'Initial Request Fiber capture failed; Worker quarantine requested: '
             . $throwable->getMessage()
         );
+        if ($fiberScheduler instanceof \Weline\Server\Scheduler\FiberScheduler) {
+            try {
+                $fiberScheduler->cancelTimersForFiber($fiber);
+            } catch (\Throwable) {
+            }
+            wlsUnwindRequestFiberForCancellation(
+                $fiber,
+                null,
+                'initial_context_capture_failure',
+            );
+            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($fiber);
+            try {
+                $fiberScheduler->unregisterFiber();
+            } catch (\Throwable) {
+            }
+
+            return null;
+        }
         throw $throwable;
     }
 }

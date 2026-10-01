@@ -6617,28 +6617,45 @@ while (true) {
                             $activeRequests,
                         );
                     } elseif ($requestFiber->isSuspended()) {
-                        $fiberActivityWall = \time();
-                        $fiberActivityMonotonicNs =
-                            \Weline\Server\Runtime\WorkerFiberContextTracker::monotonicNowNs();
-                        $activeFibers[$http3FiberKey] = [
-                            'fiber' => $requestFiber,
-                            'transport' => 'http3',
-                            'http3_token' => $http3Token,
-                            'http3_connection_id' => $http3ConnectionId,
-                            'http3_stream_id' => $http3StreamId,
-                            'rawRequest' => $rawRequest,
-                            'handleStartTime' => $policyStartedAt,
-                            'context' => wlsCaptureSuspendedRequestFiberOrQuarantine($requestFiber),
-                            'suspended_at' => $fiberActivityWall,
-                            'last_activity' => $fiberActivityWall,
-                            'suspended_at_monotonic_ns' => $fiberActivityMonotonicNs,
-                            'last_activity_monotonic_ns' => $fiberActivityMonotonicNs,
-                            'is_long_lived' => false,
-                            'is_sse_protocol' => false,
-                            'admission_waiting' => isset($fiberAdmissionWaiters[$http3FiberKey]),
-                        ];
+                        $http3FiberContext = wlsCaptureSuspendedRequestFiberOrQuarantine(
+                            $requestFiber,
+                            $fiberScheduler,
+                        );
+                        if (!($http3FiberContext instanceof \Weline\Framework\Runtime\WlsFiberContext)) {
+                            unset($fiberAdmissionWaiters[$http3FiberKey]);
+                            wlsHttp3SubmitResponse(
+                                $http3Runtime,
+                                $http3Token,
+                                $rawRequest,
+                                '',
+                                $policyStartedAt,
+                                $activeRequests,
+                            );
+                        } else {
+                            $fiberActivityWall = \time();
+                            $fiberActivityMonotonicNs =
+                                \Weline\Server\Runtime\WorkerFiberContextTracker::monotonicNowNs();
+                            $activeFibers[$http3FiberKey] = [
+                                'fiber' => $requestFiber,
+                                'transport' => 'http3',
+                                'http3_token' => $http3Token,
+                                'http3_connection_id' => $http3ConnectionId,
+                                'http3_stream_id' => $http3StreamId,
+                                'rawRequest' => $rawRequest,
+                                'handleStartTime' => $policyStartedAt,
+                                'context' => $http3FiberContext,
+                                'suspended_at' => $fiberActivityWall,
+                                'last_activity' => $fiberActivityWall,
+                                'suspended_at_monotonic_ns' => $fiberActivityMonotonicNs,
+                                'last_activity_monotonic_ns' => $fiberActivityMonotonicNs,
+                                'is_long_lived' => false,
+                                'is_sse_protocol' => false,
+                                'admission_waiting' => isset($fiberAdmissionWaiters[$http3FiberKey]),
+                            ];
+                        }
                     } else {
                         $fiberScheduler->unregisterFiber();
+                        \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($requestFiber);
                         unset($fiberAdmissionWaiters[$http3FiberKey]);
                         wlsHttp3SubmitResponse(
                             $http3Runtime,
@@ -6750,6 +6767,9 @@ while (true) {
                         $activeRequests,
                     );
                     unset($activeFibers[$afKey]);
+                    \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(
+                        \strlen($afResponse),
+                    );
                     continue;
                 }
                 $afDurationMs = \max(0.0, $afFinishedAt - $afStartedAt) * 1000;
@@ -6788,6 +6808,9 @@ while (true) {
                     \Weline\Framework\Http\Sse\SseContext::reset();
                 }
                 unset($activeFibers[$afKey]);
+                \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(
+                    \strlen($afResponse),
+                );
                 continue;
             }
             if ($af->isSuspended()) {
@@ -8898,80 +8921,139 @@ while (true) {
             );
             wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime);
         } elseif ($requestFiber->isSuspended()) {
-            $fiberActivityWall = \time();
-            $fiberActivityMonotonicNs =
-                \Weline\Server\Runtime\WorkerFiberContextTracker::monotonicNowNs();
-            $activeFibers[$fiberKey] = [
-                'fiber' => $requestFiber,
-                'conn' => $fiberConn,
-                'conn_id' => $fiberConnId,
-                'http2_stream_id' => $fiberHttp2StreamId,
-                'http2_adapter' => $fiberHttp2Adapter,
-                'rawRequest' => $rawRequest,
-                'handleStartTime' => $handleStartTime,
-                'context' => wlsCaptureSuspendedRequestFiberOrQuarantine($requestFiber),
-                'suspended_at' => $fiberActivityWall,
-                'last_activity' => $fiberActivityWall,
-                'suspended_at_monotonic_ns' => $fiberActivityMonotonicNs,
-                'last_activity_monotonic_ns' => $fiberActivityMonotonicNs,
-                'is_long_lived' => $isLongLived,
-                'is_sse_protocol' => $isSseProtocolRequest,
-                'admission_waiting' => isset($fiberAdmissionWaiters[$fiberKey]),
-            ];
-            if (WLS_WORKER_HOT_PATH_LOGS_ENABLED) {
-                WlsLogger::info_("请求进入 Fiber 异步模式 (connId: {$connId})");
-            }
-            // A normal suspended request did not mutate the long-lived
-            // registry. Sample only for a long-lived request or while a
-            // previously reported saturation still needs its cleared event.
-            $shouldSampleLongLivedSaturation = $isLongLived
-                || ($longLivedSaturationReported && !$longLivedSaturationCleared);
-            if ($shouldSampleLongLivedSaturation && $longLivedMaxActive > 0) {
-                $nowSat = wlsWorkerMonotonicNow();
-                $quotaLongLivedCount = wlsDrainConnectionCounters(
-                    $longLivedConnections,
-                )['quota_connections'];
-                $isSaturated = $quotaLongLivedCount >= $longLivedMaxActive;
+            $tlsFiberContext = wlsCaptureSuspendedRequestFiberOrQuarantine(
+                $requestFiber,
+                $fiberScheduler,
+            );
+            if (!($tlsFiberContext instanceof \Weline\Framework\Runtime\WlsFiberContext)) {
+                unset($fiberAdmissionWaiters[$fiberKey]);
                 if (
-                    $isSaturated
-                    && !$longLivedSaturationReported
-                    && ($nowSat - $lastLongLivedSaturationReport) >= $longLivedSaturationInterval
+                    $fiberHttp2StreamId > 0
+                    && $fiberHttp2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
                 ) {
-                    if ($ipcClient && $ipcClient->isConnected()) {
-                        $ipcClient->send(\Weline\Server\IPC\ControlMessage::workerSaturation(
-                            $workerId,
-                            $port,
-                            $quotaLongLivedCount,
-                            $longLivedMaxActive,
-                            \count($activeFibers),
-                            $fiberMaxActive
-                        ));
-                        $lastLongLivedSaturationReport = $nowSat;
-                        $longLivedSaturationReported = true;
-                        $longLivedSaturationCleared = false;
-                        WlsLogger::warning_(
-                            '长连接饱和上报 (long_lived_count=' . $quotaLongLivedCount
-                            . ", max={$longLivedMaxActive})"
-                        );
-                    }
-                } elseif (!$isSaturated && $longLivedSaturationReported && !$longLivedSaturationCleared) {
-                    if ($ipcClient && $ipcClient->isConnected()) {
-                        $ipcClient->send(\Weline\Server\IPC\ControlMessage::workerSaturationCleared(
-                            $workerId,
-                            $port,
-                            $quotaLongLivedCount,
-                            $longLivedMaxActive
-                        ));
-                        $longLivedSaturationReported = false;
-                        $longLivedSaturationCleared = true;
-                        WlsLogger::info_(
-                            '长连接饱和解除 (long_lived_count=' . $quotaLongLivedCount . ')'
-                        );
+                    $captureFailBody = 'Internal Server Error';
+                    $captureFailResponse = "HTTP/1.1 500 Internal Server Error\r\n"
+                        . "Content-Type: text/plain; charset=utf-8\r\n"
+                        . 'Content-Length: ' . \strlen($captureFailBody) . "\r\n\r\n"
+                        . $captureFailBody;
+                    sslFinalizeHttpResponseAfterHandle(
+                        $fiberConn,
+                        $fiberConnId,
+                        $rawRequest,
+                        $captureFailResponse,
+                        $handleStartTime,
+                        false,
+                        $ipcDraining,
+                        $connections,
+                        $requestBuffers,
+                        $connectionLastActivity,
+                        $requestLogged,
+                        $writeBuffers,
+                        $writableConnections,
+                        $pendingClose,
+                        $longLivedConnections,
+                        $ipcClient,
+                        $instanceName,
+                        $activeRequests,
+                        true,
+                        null,
+                        null,
+                        false,
+                        $fiberHttp2Adapter,
+                        $fiberHttp2StreamId,
+                    );
+                } else {
+                    $activeRequests = \max(0, $activeRequests - 1);
+                    safeCloseStream($fiberConn);
+                    unset(
+                        $connections[$fiberConnId],
+                        $requestBuffers[$fiberConnId],
+                        $connectionLastActivity[$fiberConnId],
+                        $requestLogged[$fiberConnId],
+                        $writeBuffers[$fiberConnId],
+                        $writableConnections[$fiberConnId],
+                        $pendingClose[$fiberConnId],
+                        $longLivedConnections[$fiberConnId],
+                        $http2ConnectionAdapters[$fiberConnId]
+                    );
+                }
+            } else {
+                $fiberActivityWall = \time();
+                $fiberActivityMonotonicNs =
+                    \Weline\Server\Runtime\WorkerFiberContextTracker::monotonicNowNs();
+                $activeFibers[$fiberKey] = [
+                    'fiber' => $requestFiber,
+                    'conn' => $fiberConn,
+                    'conn_id' => $fiberConnId,
+                    'http2_stream_id' => $fiberHttp2StreamId,
+                    'http2_adapter' => $fiberHttp2Adapter,
+                    'rawRequest' => $rawRequest,
+                    'handleStartTime' => $handleStartTime,
+                    'context' => $tlsFiberContext,
+                    'suspended_at' => $fiberActivityWall,
+                    'last_activity' => $fiberActivityWall,
+                    'suspended_at_monotonic_ns' => $fiberActivityMonotonicNs,
+                    'last_activity_monotonic_ns' => $fiberActivityMonotonicNs,
+                    'is_long_lived' => $isLongLived,
+                    'is_sse_protocol' => $isSseProtocolRequest,
+                    'admission_waiting' => isset($fiberAdmissionWaiters[$fiberKey]),
+                ];
+                if (WLS_WORKER_HOT_PATH_LOGS_ENABLED) {
+                    WlsLogger::info_("请求进入 Fiber 异步模式 (connId: {$connId})");
+                }
+                // A normal suspended request did not mutate the long-lived
+                // registry. Sample only for a long-lived request or while a
+                // previously reported saturation still needs its cleared event.
+                $shouldSampleLongLivedSaturation = $isLongLived
+                    || ($longLivedSaturationReported && !$longLivedSaturationCleared);
+                if ($shouldSampleLongLivedSaturation && $longLivedMaxActive > 0) {
+                    $nowSat = wlsWorkerMonotonicNow();
+                    $quotaLongLivedCount = wlsDrainConnectionCounters(
+                        $longLivedConnections,
+                    )['quota_connections'];
+                    $isSaturated = $quotaLongLivedCount >= $longLivedMaxActive;
+                    if (
+                        $isSaturated
+                        && !$longLivedSaturationReported
+                        && ($nowSat - $lastLongLivedSaturationReport) >= $longLivedSaturationInterval
+                    ) {
+                        if ($ipcClient && $ipcClient->isConnected()) {
+                            $ipcClient->send(\Weline\Server\IPC\ControlMessage::workerSaturation(
+                                $workerId,
+                                $port,
+                                $quotaLongLivedCount,
+                                $longLivedMaxActive,
+                                \count($activeFibers),
+                                $fiberMaxActive
+                            ));
+                            $lastLongLivedSaturationReport = $nowSat;
+                            $longLivedSaturationReported = true;
+                            $longLivedSaturationCleared = false;
+                            WlsLogger::warning_(
+                                '长连接饱和上报 (long_lived_count=' . $quotaLongLivedCount
+                                . ", max={$longLivedMaxActive})"
+                            );
+                        }
+                    } elseif (!$isSaturated && $longLivedSaturationReported && !$longLivedSaturationCleared) {
+                        if ($ipcClient && $ipcClient->isConnected()) {
+                            $ipcClient->send(\Weline\Server\IPC\ControlMessage::workerSaturationCleared(
+                                $workerId,
+                                $port,
+                                $quotaLongLivedCount,
+                                $longLivedMaxActive
+                            ));
+                            $longLivedSaturationReported = false;
+                            $longLivedSaturationCleared = true;
+                            WlsLogger::info_(
+                                '长连接饱和解除 (long_lived_count=' . $quotaLongLivedCount . ')'
+                            );
+                        }
                     }
                 }
             }
         } else {
             $fiberScheduler->unregisterFiber();
+            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($requestFiber);
             $activeRequests = \max(0, $activeRequests - 1);
         }
         continue;
@@ -10037,9 +10119,7 @@ function wlsSslFlushQueuedWrites(
                 safeCloseStream($conn);
                 unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
                 unset($longLivedConnections[$connId]);
-                if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
-                    \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-                }
+                \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased($initialBufferLen);
                 break;
             }
             $buffer = $writeBuffers[$connId];
@@ -10078,9 +10158,7 @@ function wlsSslFlushQueuedWrites(
                 safeCloseStream($conn);
                 unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
                 unset($longLivedConnections[$connId]);
-                if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
-                    \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-                }
+                \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased($initialBufferLen);
                 break;
             }
 
@@ -10126,9 +10204,7 @@ function wlsSslFlushQueuedWrites(
                     safeCloseStream($conn);
                     unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
                     unset($longLivedConnections[$connId]);
-                    if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
-                        \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-                    }
+                    \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased($initialBufferLen);
                     break;
                 }
 
@@ -10179,9 +10255,7 @@ function wlsSslFlushQueuedWrites(
                     unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $pendingClose[$connId]);
                     unset($longLivedConnections[$connId]);
                 }
-                if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
-                    \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-                }
+                \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased($initialBufferLen);
                 wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
                 break;
             }
@@ -11020,9 +11094,7 @@ function sslFinalizeHttpResponseAfterHandle(
             if (isset($longLivedConnections[$connId])) {
                 unset($longLivedConnections[$connId]);
             }
-            if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($responseLenPre)) {
-                \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-            }
+            \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased($responseLenPre);
         }
     }
 }
