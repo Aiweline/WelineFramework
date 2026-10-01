@@ -39,13 +39,13 @@ class Parser
     private const MODULE_DICTIONARY_SHARED_TTL_SECONDS = 86400;
     /** Tiny process working set; authoritative module/word snapshots live in phrase Shared Memory. */
     private const WORKER_TRANSLATED_WORD_CACHE_MAX_ITEMS = 1024;
-    private const WORKER_MODULE_WORDS_CACHE_MAX_ITEMS = 256;
+    private const WORKER_MODULE_WORDS_CACHE_MAX_ITEMS = 16;
     private const WORKER_GLOBAL_DICTIONARY_WORD_CACHE_MAX_ITEMS = 1024;
     /** Process bag: few full module/locale maps — authority lives in Memory Service. */
-    private const WORKER_GLOBAL_DICTIONARY_WORDS_CACHE_MAX_ITEMS = 16;
-    private const WORKER_LAYERED_WORDS_CACHE_MAX_ITEMS = 32;
-    private const WORKER_MATERIALIZED_WORDS_CACHE_MAX_ITEMS = 4;
-    private const WORKER_WORDS_CACHE_MAX_ITEMS = 8;
+    private const WORKER_GLOBAL_DICTIONARY_WORDS_CACHE_MAX_ITEMS = 2;
+    private const WORKER_LAYERED_WORDS_CACHE_MAX_ITEMS = 8;
+    private const WORKER_MATERIALIZED_WORDS_CACHE_MAX_ITEMS = 2;
+    private const WORKER_WORDS_CACHE_MAX_ITEMS = 4;
     private const WLS_HEAVY_LOCALE_HEADROOM_BYTES = 100663296;
     private const WLS_HEAVY_LOCALE_PRESSURE_THRESHOLD = 0.70;
     protected static array $words = [];

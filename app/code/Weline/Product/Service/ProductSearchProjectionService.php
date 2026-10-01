@@ -38,6 +38,8 @@ final class ProductSearchProjectionService
 
     /** Keep a small per-process snapshot cache keyed by website + watermark. */
     private const SNAPSHOT_PROCESS_CACHE_MAX = 1;
+    /** Full-site search snapshots are multi-MB; keep them out of the worker bag. */
+    private const SNAPSHOT_PROCESS_CACHE_MAX_BYTES = 262144;
 
     /**
      * @var array<string, array{watermark:int, snapshot:array<string,mixed>}>
@@ -232,7 +234,11 @@ final class ProductSearchProjectionService
             'watermark' => $watermark,
             'snapshot' => $snapshot,
         ];
-        if (\count(self::$snapshotProcessCache) > self::SNAPSHOT_PROCESS_CACHE_MAX) {
+        // Multi-MB full-site snapshots belong in Shared/indexer paths, not worker RSS.
+        $encoded = \json_encode($snapshot, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        if (!\is_string($encoded) || \strlen($encoded) > self::SNAPSHOT_PROCESS_CACHE_MAX_BYTES) {
+            unset(self::$snapshotProcessCache[$cacheKey]);
+        } elseif (\count(self::$snapshotProcessCache) > self::SNAPSHOT_PROCESS_CACHE_MAX) {
             \array_shift(self::$snapshotProcessCache);
         }
 
