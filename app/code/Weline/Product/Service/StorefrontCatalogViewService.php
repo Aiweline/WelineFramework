@@ -335,7 +335,7 @@ final class StorefrontCatalogViewService
 
         $build = function () use ($websiteId, $storeId, $productIds, $codes, $combinationKey): array {
             $storeIds = array_values(array_unique([0, $storeId]));
-            $rows = $this->requestAttributeRows($websiteId, $productIds, $storeIds);
+            $rows = $this->requestAttributeRows($websiteId, $productIds, $storeIds, array_keys($codes));
             $rowsByProductCode = [];
             foreach ($rows as $row) {
                 if (!is_array($row)) {
@@ -1345,24 +1345,46 @@ final class StorefrontCatalogViewService
     /**
      * @param list<int> $productIds
      * @param list<int> $storeIds
+     * @param list<string>|null $attributeCodes null = all codes (chunked to stay under HARD_LIMIT)
      * @return list<array<string, mixed>>
      */
-    private function requestAttributeRows(int $websiteId, array $productIds, array $storeIds): array
-    {
+    private function requestAttributeRows(
+        int $websiteId,
+        array $productIds,
+        array $storeIds,
+        ?array $attributeCodes = null,
+    ): array {
         $locales = $this->explicitRowLocales(\trim((string)RequestContext::getWelineUserLang()));
-        $key = $this->attributeRowsRequestKey($websiteId, $productIds, $storeIds, $locales);
+        $productIds = array_values(array_unique(array_filter(
+            array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        $key = $this->attributeRowsRequestKey($websiteId, $productIds, $storeIds, $locales, $attributeCodes);
         if (Context::hasCurrent() && RequestContext::has($key)) {
             $rows = RequestContext::get($key);
             return is_array($rows) ? $rows : [];
         }
 
-        $rows = $this->attributeValues->listExplicitRows(
-            $websiteId,
-            'product',
-            $productIds,
-            $storeIds,
-            $locales,
-        );
+        if ($productIds === []) {
+            return [];
+        }
+
+        // Unfiltered attribute dumps × listing catalogs still exceed HARD_LIMIT even with
+        // storefront locales; chunk entities (facets should pass $attributeCodes instead).
+        $chunkSize = $attributeCodes === null ? 24 : 120;
+        $rows = [];
+        foreach (array_chunk($productIds, $chunkSize) as $chunk) {
+            foreach ($this->attributeValues->listExplicitRows(
+                $websiteId,
+                'product',
+                $chunk,
+                $storeIds,
+                $locales,
+                $attributeCodes,
+            ) as $row) {
+                $rows[] = $row;
+            }
+        }
         if (Context::hasCurrent()) {
             RequestContext::set($key, $rows);
         }
@@ -1374,12 +1396,14 @@ final class StorefrontCatalogViewService
      * @param list<int> $productIds
      * @param list<int> $storeIds
      * @param list<string> $locales
+     * @param list<string>|null $attributeCodes
      */
     private function attributeRowsRequestKey(
         int $websiteId,
         array $productIds,
         array $storeIds,
         array $locales,
+        ?array $attributeCodes = null,
     ): string {
         $productIds = array_values(array_unique(array_map('intval', $productIds)));
         $storeIds = array_values(array_unique(array_map('intval', $storeIds)));
@@ -1389,6 +1413,16 @@ final class StorefrontCatalogViewService
                 : '',
             $locales,
         )));
+        $codes = null;
+        if ($attributeCodes !== null) {
+            $codes = array_values(array_unique(array_filter(array_map(
+                static fn(mixed $code): string => \is_string($code) || \is_int($code) || \is_float($code)
+                    ? \trim((string)$code)
+                    : '',
+                $attributeCodes,
+            ), static fn(string $code): bool => $code !== '')));
+            sort($codes);
+        }
         sort($productIds);
         sort($storeIds);
         sort($locales);
@@ -1398,6 +1432,7 @@ final class StorefrontCatalogViewService
             $productIds,
             $storeIds,
             $locales,
+            $codes,
         ]));
     }
 

@@ -445,6 +445,12 @@ class TemplateCacheManager
      */
     public function clearMemoryCache(): void
     {
+        self::clearProcessMemoryCache();
+    }
+
+    /** Keep-warm / unit-safe: no disk paths, no singleton bootstrap. */
+    public static function clearProcessMemoryCache(): void
+    {
         self::$memoryCache = [];
         self::$sourceFileKeyCache = [];
     }

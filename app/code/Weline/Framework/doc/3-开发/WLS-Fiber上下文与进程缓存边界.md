@@ -23,7 +23,7 @@ Fiber **结束/回收**（Worker 仍可能握着 terminated Fiber 引用）必�
 
 已标 ProcessShared 的热路径示例：`CacheManager`、`StorefrontScopeHotCache`、`FullPageCacheCoordinator`、`SingleFlightCoordinator`、`NamespaceGenerationRepository`、`StorefrontProductMediaUrlResolver`、`Url`、`RuntimeCachePolicy`、Theme 片段缓存协调器 / 路径解析、SearchProviderRegistry、OfferPrice 组装注册表。
 
-**禁止**对 `SlotRendererService`（含 pageRenderContext/widgetCache/Template 注入）、持 Request/Session 链或可变 ORM 的服务标 ProcessShared。
+**禁止**对 `SlotRendererService`（持 `Template` 注入 + 单次 `SlotRenderPass` 算法草稿）、持 Request/Session 链或可变 ORM 的服务标 ProcessShared。请求事实只进 `RequestContext` 袋；SlotRenderer **不得**维护 layout/widget 请求或进程 L1（已发布结构 HotCache 仅允许在 `ThemeRuntimeLayoutResolver` 读模型侧）。
 
 新增可跨 Fiber 共享的缓存协调器时：**必须**实现 `ProcessSharedInterface`，且请求维状态只进 `RequestContext`。
 

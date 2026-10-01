@@ -45,7 +45,6 @@ final class StorefrontRenderContextBagContractTest extends TestCase
             $themeRoot . '/Helper/HeaderCommerceData.php',
             $themeRoot . '/Helper/WidgetI18n.php',
             $themeRoot . '/Helper/ThemeData.php',
-            $themeRoot . '/Service/SlotRendererService.php',
             $themeRoot . '/Observer/ControllerFetchFileBefore.php',
         ];
         foreach ($consumers as $path) {
@@ -70,12 +69,11 @@ final class StorefrontRenderContextBagContractTest extends TestCase
             $header,
         );
 
+        // SlotRenderer must not re-copy WS1 bag into a private pageRenderContext mirror.
         $slot = (string)file_get_contents($themeRoot . '/Service/SlotRendererService.php');
-        self::assertMatchesRegularExpression(
-            '/function\s+capturePageRenderContext[\s\S]*StorefrontRenderContextBag::captureFields/',
-            $slot,
-        );
-        self::assertStringContainsString('storefront_offer', $slot);
+        self::assertStringNotContainsString('capturePageRenderContext', $slot);
+        self::assertStringNotContainsString('StorefrontRenderContextBag', $slot);
+        self::assertStringContainsString('SlotRenderPass', $slot);
 
         $observer = (string)file_get_contents($themeRoot . '/Observer/ControllerFetchFileBefore.php');
         self::assertStringContainsString('websiteTableSnapshot', $observer);

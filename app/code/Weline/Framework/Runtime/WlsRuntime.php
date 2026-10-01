@@ -6934,6 +6934,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 } catch (\Throwable $e) {
                     RequestResetException::append($finalizationFailures, 'memdiag_after_reset', $e);
                 }
+                // Process-bag compact waits until Worker removes this Fiber from
+                // activeFibers (see WorkerResponseMemoryGuard::compactAfterRequestFiberReleased).
                 try {
                     \Weline\Framework\View\Helper\TitleLocaleProbe::reset();
                 } catch (\Throwable $e) {

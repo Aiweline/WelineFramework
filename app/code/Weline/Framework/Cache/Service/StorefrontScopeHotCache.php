@@ -36,8 +36,19 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     private const ENVELOPE_VERSION = 1;
     private const DEFAULT_STALE_MULTIPLIER = 10;
 
+    /** Worker L1 total payload budget (chrome + structure bags share this). */
+    private const PROCESS_CACHE_MAX_BYTES = 3_145_728; // 3 MiB
+
+    /** Cap chrome-pool share so locale variants cannot dominate the whole L1. */
+    private const CHROME_POOL_MAX_BYTES = 1_048_576; // 1 MiB
+
+    /** Skip process L1 for a single oversized payload (Shared/MS still holds it). */
+    private const PROCESS_ENTRY_MAX_BYTES = 262_144; // 256 KiB
+
     /** @var array<string, array{payload:mixed,fresh_until:float,stale_until:float,version:int}> */
     private static array $processCache = [];
+
+    private static int $processCacheBytes = 0;
 
     /** @var array<string, true> */
     private static array $refreshQueued = [];
@@ -137,7 +148,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         if ($key === null) {
             return;
         }
-        unset(self::$processCache[$policy->pool . '|' . $key]);
+        self::dropProcessEntry($policy->pool . '|' . $key);
         try {
             $this->pool($policy->pool)->deleteCustom($key);
         } catch (\Throwable) {
@@ -160,7 +171,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         $removed = 0;
         $pool = $this->pool($policy->pool);
         foreach ($this->policyKeyVariants($policy, $logicalKey) as $key) {
-            unset(self::$processCache[$policy->pool . '|' . $key]);
+            self::dropProcessEntry($policy->pool . '|' . $key);
             try {
                 $pool->deleteCustom($key);
                 ++$removed;
@@ -233,7 +244,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
             if ($status === 'fresh' || $status === 'stale') {
                 return $entry['payload'];
             }
-            unset(self::$processCache[$processKey]);
+            self::dropProcessEntry($processKey);
         }
         try {
             $cached = $this->readShared($this->pool($policy->pool), $key, true);
@@ -285,7 +296,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                 if ($status === 'fresh' || $status === 'stale') {
                     continue;
                 }
-                unset(self::$processCache[$processKey]);
+                self::dropProcessEntry($processKey);
             }
             $toFetch[$scopedKey] = $processKey;
         }
@@ -417,7 +428,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                 $this->storeProcessEntry($processKey, $entry);
                 return $entry['payload'];
             }
-            unset(self::$processCache[$processKey]);
+            self::dropProcessEntry($processKey);
         }
 
         $pool = $this->pool($poolIdentity);
@@ -650,7 +661,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     {
         foreach (\array_keys(self::$processCache) as $processKey) {
             if (\str_contains($processKey, $logicalKey)) {
-                unset(self::$processCache[$processKey]);
+                self::dropProcessEntry($processKey);
             }
         }
         foreach (\array_keys(self::$refreshQueued) as $queuedKey) {
@@ -676,7 +687,33 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     public static function resetProcessCache(): void
     {
         self::$processCache = [];
+        self::$processCacheBytes = 0;
         self::$refreshQueued = [];
+    }
+
+    /**
+     * Soft memory-pressure trim: evict oldest process L1 entries until under budget.
+     * Shared/MS payloads remain; next hit rebuilds L1.
+     */
+    public static function trimProcessCacheToBudget(int $maxBytes): int
+    {
+        $maxBytes = \max(0, $maxBytes);
+        $before = self::$processCacheBytes;
+        if ($before <= $maxBytes && \count(self::$processCache) <= 128) {
+            return 0;
+        }
+        while (
+            self::$processCache !== []
+            && (self::$processCacheBytes > $maxBytes || \count(self::$processCache) > 64)
+        ) {
+            $evictKey = \array_key_first(self::$processCache);
+            if (!\is_string($evictKey)) {
+                break;
+            }
+            self::dropProcessEntry($evictKey);
+        }
+
+        return \max(0, $before - self::$processCacheBytes);
     }
 
     /**
@@ -717,12 +754,126 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     /** @param array{payload:mixed,fresh_until:float,stale_until:float,version:int} $entry */
     private function storeProcessEntry(string $key, array $entry): void
     {
-        unset(self::$processCache[$key]);
-        while (count(self::$processCache) >= $this->maxProcessEntries) {
-            unset(self::$processCache[array_key_first(self::$processCache)]);
+        $entryBytes = self::estimateProcessEntryBytes($entry);
+        if ($entryBytes > self::PROCESS_ENTRY_MAX_BYTES) {
+            // Oversized chrome/structure belongs in Shared/MS, not the worker bag.
+            self::dropProcessEntry($key);
+
+            return;
         }
+
+        if (isset(self::$processCache[$key])) {
+            self::dropProcessEntry($key);
+        }
+
+        $chromeOnly = self::isChromeProcessKey($key);
+        while (
+            self::$processCache !== []
+            && (
+                \count(self::$processCache) >= $this->maxProcessEntries
+                || self::$processCacheBytes + $entryBytes > self::PROCESS_CACHE_MAX_BYTES
+                || ($chromeOnly && self::chromePoolBytes() + $entryBytes > self::CHROME_POOL_MAX_BYTES)
+            )
+        ) {
+            $evictKey = $chromeOnly
+                ? (self::oldestChromeProcessKey() ?? \array_key_first(self::$processCache))
+                : \array_key_first(self::$processCache);
+            if (!\is_string($evictKey)) {
+                break;
+            }
+            self::dropProcessEntry($evictKey);
+        }
+
+        if ($entryBytes > self::PROCESS_CACHE_MAX_BYTES) {
+            return;
+        }
+        if ($chromeOnly && $entryBytes > self::CHROME_POOL_MAX_BYTES) {
+            return;
+        }
+
         self::$processCache[$key] = $entry;
-        // Per-store spam omitted: MemDiag cacheSnapshot tracks payload bytes / pool breakdown.
+        self::$processCacheBytes += $entryBytes;
+        if (self::$processCacheBytes < 0) {
+            self::$processCacheBytes = self::recountProcessCacheBytes();
+        }
+    }
+
+    private static function dropProcessEntry(string $key): void
+    {
+        if (!isset(self::$processCache[$key])) {
+            return;
+        }
+        self::$processCacheBytes -= self::estimateProcessEntryBytes(self::$processCache[$key]);
+        unset(self::$processCache[$key]);
+        if (self::$processCacheBytes < 0) {
+            self::$processCacheBytes = self::recountProcessCacheBytes();
+        }
+    }
+
+    private static function isChromeProcessKey(string $key): bool
+    {
+        $pool = \explode('|', $key, 2)[0] ?? $key;
+
+        return \str_contains(\strtolower($pool), 'chrome');
+    }
+
+    private static function oldestChromeProcessKey(): ?string
+    {
+        foreach (\array_keys(self::$processCache) as $processKey) {
+            if (self::isChromeProcessKey($processKey)) {
+                return $processKey;
+            }
+        }
+
+        return null;
+    }
+
+    private static function chromePoolBytes(): int
+    {
+        $bytes = 0;
+        foreach (self::$processCache as $processKey => $entry) {
+            if (self::isChromeProcessKey($processKey)) {
+                $bytes += self::estimateProcessEntryBytes($entry);
+            }
+        }
+
+        return $bytes;
+    }
+
+    private static function recountProcessCacheBytes(): int
+    {
+        $bytes = 0;
+        foreach (self::$processCache as $entry) {
+            $bytes += self::estimateProcessEntryBytes($entry);
+        }
+
+        return $bytes;
+    }
+
+    /** @param array{payload?:mixed} $entry */
+    private static function estimateProcessEntryBytes(array $entry): int
+    {
+        $payload = $entry['payload'] ?? null;
+        if (\is_string($payload)) {
+            return \strlen($payload) + 64;
+        }
+        if (\is_array($payload) || \is_object($payload)) {
+            try {
+                $json = \json_encode(
+                    $payload,
+                    \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_PARTIAL_OUTPUT_ON_ERROR,
+                );
+
+                return (\is_string($json) ? \strlen($json) : 1024) + 64;
+            } catch (\Throwable) {
+                return 1024;
+            }
+        }
+        if ($payload === null) {
+            return 64;
+        }
+
+        return 128;
     }
 
     private function readShared(CachePoolInterface $pool, string $key, bool $explicitDimensions): mixed

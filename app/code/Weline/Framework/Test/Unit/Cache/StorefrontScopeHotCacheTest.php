@@ -157,6 +157,69 @@ final class StorefrontScopeHotCacheTest extends TestCase
         self::assertNull($service->peekPolicy($policy, 'demo.key'));
     }
 
+    public function testChromePoolByteBudgetCapsProcessL1(): void
+    {
+        $adapter = new InMemoryAdapter();
+        $pool = new CachePool('weline_theme_storefront_chrome', $adapter, jitterRatio: 0.0);
+        $cacheManager = $this->createMock(CacheManager::class);
+        $cacheManager->method('pool')->willReturn($pool);
+        $service = new StorefrontScopeHotCache($cacheManager);
+
+        $chunk = \str_repeat('c', 180_000);
+        for ($i = 0; $i < 10; $i++) {
+            $service->remember(
+                'weline_theme_storefront_chrome',
+                'chrome.budget.' . $i,
+                60,
+                static fn(): string => $chunk,
+                [],
+            );
+        }
+
+        $rp = new \ReflectionProperty(StorefrontScopeHotCache::class, 'processCache');
+        $rp->setAccessible(true);
+        /** @var array<string, array{payload:mixed}> $cache */
+        $cache = $rp->getValue();
+        $chromeBytes = 0;
+        $chromeEntries = 0;
+        foreach ($cache as $key => $entry) {
+            if (!\str_contains((string)$key, 'chrome')) {
+                continue;
+            }
+            ++$chromeEntries;
+            $payload = $entry['payload'] ?? null;
+            $chromeBytes += (\is_string($payload) ? \strlen($payload) : 0) + 64;
+        }
+
+        self::assertGreaterThan(0, $chromeEntries);
+        self::assertLessThanOrEqual(1_048_576, $chromeBytes);
+        self::assertLessThan(10, $chromeEntries);
+    }
+
+    public function testTrimProcessCacheToBudgetEvictsOldest(): void
+    {
+        $adapter = new InMemoryAdapter();
+        $pool = new CachePool('unit_trim_budget', $adapter, jitterRatio: 0.0);
+        $cacheManager = $this->createMock(CacheManager::class);
+        $cacheManager->method('pool')->willReturn($pool);
+        $service = new StorefrontScopeHotCache($cacheManager);
+
+        $payload = \str_repeat('t', 50_000);
+        for ($i = 0; $i < 6; $i++) {
+            $service->remember('unit_trim_budget', 'trim.' . $i, 60, static fn(): string => $payload, []);
+        }
+
+        $freed = StorefrontScopeHotCache::trimProcessCacheToBudget(120_000);
+        self::assertGreaterThan(0, $freed);
+
+        $rp = new \ReflectionProperty(StorefrontScopeHotCache::class, 'processCache');
+        $rp->setAccessible(true);
+        $bytes = new \ReflectionProperty(StorefrontScopeHotCache::class, 'processCacheBytes');
+        $bytes->setAccessible(true);
+        self::assertLessThanOrEqual(120_000, (int)$bytes->getValue());
+        self::assertNotSame([], $rp->getValue());
+    }
+
     private function policyService(string $poolId, ?InMemoryAdapter &$adapter = null, mixed $generation = null): StorefrontScopeHotCache
     {
         $adapter = new InMemoryAdapter();

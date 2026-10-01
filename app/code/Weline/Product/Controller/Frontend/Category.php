@@ -7,6 +7,7 @@ namespace Weline\Product\Controller\Frontend;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Runtime\StorefrontPageContext;
+use Weline\Product\Helper\StorefrontPageAssignBag;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontCategoryListingFilter;
 use Weline\Product\Service\StorefrontCategoryViewService;
@@ -140,7 +141,8 @@ final class Category extends FrontendController
             );
         }
 
-        $this->assign('page_title', $name !== '' ? $name : __('分类'));
+        $pageTitle = $name !== '' ? $name : __('分类');
+        $this->assign('page_title', $pageTitle);
         $this->assign('storefront_category', $category);
         $this->assign('storefront_category_children', $page['children']);
         $this->assign('storefront_category_siblings', $page['siblings'] ?? []);
@@ -159,6 +161,27 @@ final class Category extends FrontendController
         $this->assign('storefront_listing_total_pages', $paged['total_pages']);
         $this->assign('storefront_listing_page_options', $pageOptions);
         $this->assign('storefront_listing_sort_options', $sortOptions);
+        StorefrontPageAssignBag::replace([
+            'page_title' => $pageTitle,
+            'storefront_category' => $category,
+            'storefront_category_children' => $page['children'],
+            'storefront_category_siblings' => $page['siblings'] ?? [],
+            'storefront_category_tree' => $page['tree'] ?? [],
+            'storefront_category_active_path_ids' => $page['active_path_ids'] ?? [],
+            'storefront_category_breadcrumbs' => $page['breadcrumbs'],
+            'storefront_offers_unfiltered' => $offers,
+            'storefront_offers' => $pageOffers,
+            'storefront_category_path' => $routePath,
+            'storefront_listing_price' => $priceBucket,
+            'storefront_listing_sort' => $sort,
+            'storefront_listing_total' => count($offers),
+            'storefront_listing_count' => $paged['total'],
+            'storefront_listing_page' => $paged['page'],
+            'storefront_listing_page_size' => $paged['page_size'],
+            'storefront_listing_total_pages' => $paged['total_pages'],
+            'storefront_listing_page_options' => $pageOptions,
+            'storefront_listing_sort_options' => $sortOptions,
+        ]);
 
         $listingFacts = new StorefrontSeoListingFacts();
         $breadcrumbs = $listingFacts->withHomeBreadcrumb(

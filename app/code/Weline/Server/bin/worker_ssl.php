@@ -901,6 +901,7 @@ $maxMemoryBytes = $maxMemoryBytes ?? wlsMemoryLimitToBytes($wlsMemoryLimit);
 if ($maxMemoryBytes <= 0) {
     $maxMemoryBytes = 256 * 1024 * 1024;
 }
+\Weline\Server\Service\WorkerResponseMemoryGuard::setPressureMemoryLimitBytes($maxMemoryBytes);
 $memoryCheckInterval = $memoryCheckInterval ?? 5;
 $lastMemoryCheck = $lastMemoryCheck ?? wlsWorkerMonotonicNow();
 $memoryWarningThreshold = $memoryWarningThreshold ?? 0.80;
@@ -3378,6 +3379,7 @@ $maxMemoryBytes = wlsMemoryLimitToBytes($wlsMemoryLimit);
 if ($maxMemoryBytes <= 0) {
     $maxMemoryBytes = 256 * 1024 * 1024;
 }
+\Weline\Server\Service\WorkerResponseMemoryGuard::setPressureMemoryLimitBytes($maxMemoryBytes);
 $memoryCheckInterval = 5;
 $lastMemoryCheck = wlsWorkerMonotonicNow();
 $normalizeMemoryThreshold = static function (mixed $value, float $default): float {

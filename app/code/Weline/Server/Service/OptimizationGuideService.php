@@ -531,7 +531,7 @@ CONFIG,
             'content' => <<<INI
 opcache.enable=1
 opcache.enable_cli=1
-opcache.memory_consumption=256
+opcache.memory_consumption=88
 opcache.interned_strings_buffer=16
 opcache.max_accelerated_files=10000
 opcache.validate_timestamps=0

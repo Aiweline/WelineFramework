@@ -32,6 +32,14 @@ final class StorefrontVariantContextResolver
             }
         }
 
+        $pageAssignOffers = StorefrontPageAssignBag::get('storefront_offers');
+        if (is_array($pageAssignOffers)) {
+            $offers = array_values(array_filter($pageAssignOffers, 'is_array'));
+            if ($offers !== []) {
+                return $offers;
+            }
+        }
+
         $bagOffers = $this->seoBagOffers();
         if ($bagOffers !== []) {
             return $bagOffers;

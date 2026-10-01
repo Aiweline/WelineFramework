@@ -24,6 +24,7 @@ use Weline\Theme\Helper\WidgetI18n;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Product\Helper\StorefrontPageAssignBag;
 use Weline\Product\Helper\StorefrontVariantContextResolver;
 use Weline\Product\Api\Data\StorefrontPriceContext;
 use Weline\Product\Api\StorefrontOfferPriceAssemblerInterface;
@@ -65,11 +66,11 @@ $escape = static fn(mixed $value): string => htmlspecialchars(
 
 $offer = $this->getData('storefront_offer') ?? [];
 $offer = is_array($offer) ? $offer : [];
-$storefrontOffers = $this->getData('storefront_offers') ?? [];
+$storefrontOffers = StorefrontPageAssignBag::coalesce($this->getData('storefront_offers'), 'storefront_offers', []);
 $storefrontOffers = is_array($storefrontOffers)
     ? array_values(array_filter($storefrontOffers, 'is_array'))
     : [];
-$selectedOfferUuid = trim((string)($this->getData('selected_offer_uuid') ?? ''));
+$selectedOfferUuid = trim((string)StorefrontPageAssignBag::coalesce($this->getData('selected_offer_uuid'), 'selected_offer_uuid', ''));
 
 // Prefer catalog resolve (path/query/assigns) before editor mock.
 if ($offer === []) {
@@ -127,7 +128,7 @@ if ($isPreviewMode && !$hasPublicRoute) {
 if ($storefrontOffers === []) {
     $storefrontOffers = $variantContext->resolveOffers($this);
 }
-$variantCatalog = $this->getData('variant_catalog') ?? [];
+$variantCatalog = StorefrontPageAssignBag::coalesce($this->getData('variant_catalog'), 'variant_catalog', []);
 $variantCatalog = is_array($variantCatalog) ? $variantCatalog : [];
 if (count($storefrontOffers) > 1
     && (!is_array($variantCatalog['offers'] ?? null) || $variantCatalog['offers'] === [])

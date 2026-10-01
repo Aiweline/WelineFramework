@@ -1,5 +1,6 @@
 <?php
 
+use Weline\Product\Helper\StorefrontPageAssignBag;
 use Weline\Product\Service\ProductCardRenderer;
 use Weline\Theme\Helper\WidgetI18n;
 /**
@@ -8,21 +9,21 @@ use Weline\Theme\Helper\WidgetI18n;
  *
  * @var list<array<string,mixed>> $storefront_offers
  */
-$offers = $this->getData('storefront_offers') ?? [];
+$offers = StorefrontPageAssignBag::coalesce($this->getData('storefront_offers'), 'storefront_offers', []);
 $offers = is_array($offers) ? $offers : [];
 $cartGuestToken = trim((string)($this->getData('cart_guest_token') ?? ''));
-$activePrice = trim((string)($this->getData('storefront_listing_price') ?? ''));
-$totalCount = max(0, (int)($this->getData('storefront_listing_total') ?? count($offers)));
-$visibleCount = max(0, (int)($this->getData('storefront_listing_count') ?? count($offers)));
-$page = max(1, (int)($this->getData('storefront_listing_page') ?? 1));
-$pageSize = max(1, (int)($this->getData('storefront_listing_page_size') ?? 24));
-$totalPages = max(1, (int)($this->getData('storefront_listing_total_pages') ?? 1));
-$pageOptions = $this->getData('storefront_listing_page_options') ?? [];
+$activePrice = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_price'), 'storefront_listing_price', ''));
+$totalCount = max(0, (int)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_total'), 'storefront_listing_total', count($offers)));
+$visibleCount = max(0, (int)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_count'), 'storefront_listing_count', count($offers)));
+$page = max(1, (int)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_page'), 'storefront_listing_page', 1));
+$pageSize = max(1, (int)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_page_size'), 'storefront_listing_page_size', 24));
+$totalPages = max(1, (int)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_total_pages'), 'storefront_listing_total_pages', 1));
+$pageOptions = StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_page_options'), 'storefront_listing_page_options', []);
 $pageOptions = is_array($pageOptions) ? $pageOptions : [];
-$sortOptions = $this->getData('storefront_listing_sort_options') ?? [];
+$sortOptions = StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_sort_options'), 'storefront_listing_sort_options', []);
 $sortOptions = is_array($sortOptions) ? $sortOptions : [];
-$heading = trim((string)($this->getData('storefront_heading') ?? __('全部商品')));
-$lede = trim((string)($this->getData('storefront_lede') ?? __('浏览当前网站已发布的商品，可按分类与价格筛选。')));
+$heading = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_heading'), 'storefront_heading', __('全部商品')));
+$lede = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_lede'), 'storefront_lede', __('浏览当前网站已发布的商品，可按分类与价格筛选。')));
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $from = $visibleCount > 0 ? (($page - 1) * $pageSize) + 1 : 0;
 $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;

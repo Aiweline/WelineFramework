@@ -376,13 +376,19 @@ final class ProductCategoryAttributeService
         }
 
         $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)State::getLangLocal());
+        $locales = AttributeValueRepository::storefrontReadLocales($locale);
+        foreach (self::localeAliases($locale) as $alias) {
+            if (!\in_array($alias, $locales, true)) {
+                $locales[] = $alias;
+            }
+        }
         $byAttribute = [];
         foreach ($this->attributes->listExplicitRows(
             $websiteId,
             self::ENTITY_TYPE,
             $categoryIds,
             [AttributeValue::WEBSITE_STORE_ID],
-            null,
+            $locales,
             $attributeCodes,
         ) as $attribute) {
             $attributeCode = (string)($attribute['attribute_code'] ?? '');

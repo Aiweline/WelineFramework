@@ -1,5 +1,6 @@
 <?php
 
+use Weline\Product\Helper\StorefrontPageAssignBag;
 use Weline\Product\Service\ProductCardRenderer;
 use Weline\Theme\Helper\WidgetI18n;
 /**
@@ -11,11 +12,11 @@ use Weline\Theme\Helper\WidgetI18n;
  * @var list<array{label:string,url:string}> $storefront_category_breadcrumbs
  */
 
-$category = $this->getData('storefront_category') ?? [];
+$category = StorefrontPageAssignBag::coalesce($this->getData('storefront_category'), 'storefront_category', []);
 $category = is_array($category) ? $category : [];
-$offers = $this->getData('storefront_offers') ?? [];
+$offers = StorefrontPageAssignBag::coalesce($this->getData('storefront_offers'), 'storefront_offers', []);
 $offers = is_array($offers) ? $offers : [];
-$breadcrumbs = $this->getData('storefront_category_breadcrumbs') ?? [];
+$breadcrumbs = StorefrontPageAssignBag::coalesce($this->getData('storefront_category_breadcrumbs'), 'storefront_category_breadcrumbs', []);
 $breadcrumbs = is_array($breadcrumbs) ? $breadcrumbs : [];
 $cartGuestToken = trim((string)($this->getData('cart_guest_token') ?? ''));
 $categoryName = trim((string)($category['name'] ?? __('分类')));
@@ -23,17 +24,17 @@ $categoryBanner = trim((string)($category['banner'] ?? ''));
 $categorySummary = trim((string)($category['summary'] ?? ''));
 $categoryDescription = trim((string)($category['description'] ?? ''));
 $categoryImage = trim((string)($category['image'] ?? ''));
-$activePrice = trim((string)($this->getData('storefront_listing_price') ?? ''));
-$totalCount = max(0, (int)($this->getData('storefront_listing_total') ?? count($offers)));
-$visibleCount = max(0, (int)($this->getData('storefront_listing_count') ?? count($offers)));
-$page = max(1, (int)($this->getData('storefront_listing_page') ?? 1));
-$pageSize = max(1, (int)($this->getData('storefront_listing_page_size') ?? 24));
-$totalPages = max(1, (int)($this->getData('storefront_listing_total_pages') ?? 1));
-$pageOptions = $this->getData('storefront_listing_page_options') ?? [];
+$activePrice = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_price'), 'storefront_listing_price', ''));
+$totalCount = max(0, (int)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_total'), 'storefront_listing_total', count($offers)));
+$visibleCount = max(0, (int)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_count'), 'storefront_listing_count', count($offers)));
+$page = max(1, (int)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_page'), 'storefront_listing_page', 1));
+$pageSize = max(1, (int)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_page_size'), 'storefront_listing_page_size', 24));
+$totalPages = max(1, (int)StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_total_pages'), 'storefront_listing_total_pages', 1));
+$pageOptions = StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_page_options'), 'storefront_listing_page_options', []);
 $pageOptions = is_array($pageOptions) ? $pageOptions : [];
-$sortOptions = $this->getData('storefront_listing_sort_options') ?? [];
+$sortOptions = StorefrontPageAssignBag::coalesce($this->getData('storefront_listing_sort_options'), 'storefront_listing_sort_options', []);
 $sortOptions = is_array($sortOptions) ? $sortOptions : [];
-$children = $this->getData('storefront_category_children') ?? [];
+$children = StorefrontPageAssignBag::coalesce($this->getData('storefront_category_children'), 'storefront_category_children', []);
 $children = is_array($children) ? $children : [];
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 

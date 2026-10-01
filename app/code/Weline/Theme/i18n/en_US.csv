@@ -1109,6 +1109,7 @@ NEW,NEW
 上一张,"Previous picture"
 下一张,Next
 第%d张,"Slide %d"
+搜索筛选,"Search and filter"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -2436,7 +2437,6 @@ Next,Next
 开始搬迁文件...,"Start moving files..."
 更新主题文件！,"Update theme file!"
 晒出你的汉服穿搭,"Share your Hanfu look"
-搜索筛选,"Search and filter"
 个人中心,"Personal center"
 SALE,SALE
 查看全部新品,"View all new products"

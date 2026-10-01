@@ -122,10 +122,28 @@ final class AttributeValueRepositoryLargeReadTest extends TestCase
         self::assertSame([], $ledger->sql);
     }
 
+    public function testStorefrontReadLocalesIncludesRequestBaselineAndEmpty(): void
+    {
+        $locales = AttributeValueRepository::storefrontReadLocales('pt_BR');
+        self::assertContains('pt_BR', $locales);
+        self::assertContains('zh_Hans_CN', $locales);
+        self::assertContains('en_US', $locales);
+        self::assertContains('', $locales);
+    }
+
+    public function testHardLimitThrowsBeforeMaterializingOversizedAllLocaleDump(): void
+    {
+        [$repository] = $this->fixtureRepository(rowCount: 20001);
+
+        $this->expectException(\Weline\Framework\App\Exception::class);
+        $this->expectExceptionMessage('listExplicitRows materialize hard limit exceeded');
+        $repository->listExplicitRows(0, 'product', [83], [0], null, null, true);
+    }
+
     /**
      * @return array{0: AttributeValueRepository, 1: stdClass}
      */
-    private function fixtureRepository(): array
+    private function fixtureRepository(int $rowCount = 10001): array
     {
         $pdo = new PDO('sqlite::memory:', options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
         $ledger = (object)['sql' => [], 'bindings' => [], 'websites' => [], 'queries' => []];
@@ -134,7 +152,8 @@ final class AttributeValueRepositoryLargeReadTest extends TestCase
         $pdo->exec('CREATE TABLE attribute_fixture_7 ' . $columns);
         $insert = $pdo->prepare('INSERT INTO attribute_fixture_0 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         $pdo->beginTransaction();
-        for ($index = 10000; $index >= 0; $index--) {
+        $lastIndex = $rowCount - 1;
+        for ($index = $lastIndex; $index >= 0; $index--) {
             $insert->execute(['product', 83, 0, sprintf('a%05d', $index), $index % 2 ? 'en_US' : '',
                 match ($index) { 0 => 'number', 1 => 'boolean', 2 => 'json', default => 'string' },
                 'v' . $index, $index === 0 ? 9.5 : null, $index === 1 ? 1 : null,

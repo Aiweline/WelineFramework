@@ -51,7 +51,7 @@ chart,chart
 "website_id 不能为负数：%{1}","website_id cannot be negative: %{1}"
 "非法 search shard key：%{1}","Illegal search shard key: %{1}"
 "非法 search shard 实体名：%{1}","Illegal search shard entity name: %{1}"
-搜索筛选,"Search Filters"
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 全部,All
 商品,Products
 博客,Blog
@@ -64,6 +64,7 @@ chart,chart
 查看更多%{1}结果,"View more %{1} results"
 展开/收起,"Expand / collapse"
 搜索类型,"Search type"
+搜索筛选,"Search Filters"
 是,yes
 否,no
 只读诊断,"Read-only diagnostics"

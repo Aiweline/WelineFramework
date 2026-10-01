@@ -19,6 +19,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\StorefrontPageContext;
+use Weline\Product\Helper\StorefrontPageAssignBag;
 
 /** @var \Weline\Framework\View\Template $this */
 
@@ -26,9 +27,9 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 
 $offers = StorefrontPageContext::listingOffers();
 if ($offers === null) {
-    $offers = $this->getData('storefront_offers_unfiltered');
+    $offers = StorefrontPageAssignBag::coalesce($this->getData('storefront_offers_unfiltered'), 'storefront_offers_unfiltered');
     if (!is_array($offers) || $offers === []) {
-        $offers = $this->getData('storefront_offers');
+        $offers = StorefrontPageAssignBag::coalesce($this->getData('storefront_offers'), 'storefront_offers', []);
     }
     $offers = is_array($offers) ? $offers : [];
 }
@@ -62,7 +63,7 @@ if (preg_match('#(?:^|/)(categories|products)(?:/|$)#', $requestPath, $m) === 1)
     $listingUrl = '/category/' . trim($m[1], '/');
     $rootCurrent = false;
 } else {
-    $category = $this->getData('storefront_category');
+    $category = StorefrontPageAssignBag::coalesce($this->getData('storefront_category'), 'storefront_category');
     if (is_array($category)) {
         $url = trim((string)($category['url'] ?? ''));
         $path = trim(str_replace('\\', '/', (string)($category['path'] ?? '')), '/');

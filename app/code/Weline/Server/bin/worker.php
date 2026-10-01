@@ -1864,6 +1864,7 @@ $maxMemoryBytes = wlsMemoryLimitToBytes($wlsMemoryLimit);
 if ($maxMemoryBytes <= 0) {
     $maxMemoryBytes = 256 * 1024 * 1024;
 }
+\Weline\Server\Service\WorkerResponseMemoryGuard::setPressureMemoryLimitBytes($maxMemoryBytes);
 $memoryCheckInterval = 5;
 $lastMemoryCheck = wlsWorkerMonotonicNow();
 $memoryWarningThreshold = 0.80;
