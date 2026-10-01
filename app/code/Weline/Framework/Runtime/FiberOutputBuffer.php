@@ -262,6 +262,25 @@ final class FiberOutputBuffer
         }
     }
 
+    /**
+     * Explicit teardown for a finished request Fiber while Worker locals may still pin it.
+     */
+    public static function clearForFiber(\Fiber $fiber): void
+    {
+        if (!Runtime::isPersistent()) {
+            return;
+        }
+        if (self::$fiberBufferStacks !== null && isset(self::$fiberBufferStacks[$fiber])) {
+            unset(self::$fiberBufferStacks[$fiber]);
+        }
+        if (self::$fiberNativeNestedBaselines !== null && isset(self::$fiberNativeNestedBaselines[$fiber])) {
+            unset(self::$fiberNativeNestedBaselines[$fiber]);
+        }
+        if (self::$fiberCaptureModes !== null && isset(self::$fiberCaptureModes[$fiber])) {
+            unset(self::$fiberCaptureModes[$fiber]);
+        }
+    }
+
     public static function flushBeforeYield(): bool
     {
         if (!Runtime::isPersistent()) {
