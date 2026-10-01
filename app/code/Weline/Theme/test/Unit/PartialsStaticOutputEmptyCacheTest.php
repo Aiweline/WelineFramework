@@ -24,12 +24,52 @@ final class PartialsStaticOutputEmptyCacheTest extends TestCase
     {
         parent::setUp();
         $this->outputCacheBackup = $this->readStaticProperty('partialOutputCache');
+        Partials::clearOutputCache();
     }
 
     protected function tearDown(): void
     {
         $this->writeStaticProperty('partialOutputCache', $this->outputCacheBackup);
+        $bytes = new ReflectionProperty(Partials::class, 'partialOutputCacheBytes');
+        $bytes->setAccessible(true);
+        $bytes->setValue(null, 0);
+        foreach ($this->outputCacheBackup as $entry) {
+            if (\is_array($entry)) {
+                $bytes->setValue(null, (int)$bytes->getValue() + \strlen((string)($entry['html'] ?? '')));
+            }
+        }
         parent::tearDown();
+    }
+
+    public function testRememberPartialOutputEvictsByByteBudget(): void
+    {
+        Partials::clearOutputCache();
+        $partials = (new \ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
+        $remember = new ReflectionMethod(Partials::class, 'rememberPartialOutput');
+        $remember->setAccessible(true);
+
+        // 12 × 200KB = 2.4MB > 2MB budget → must stay ≤ MAX_BYTES.
+        $chunk = \str_repeat('a', 200_000);
+        for ($i = 0; $i < 12; $i++) {
+            $remember->invoke($partials, 'partial.output.budget.' . $i, $chunk, 'fresh', 60);
+        }
+
+        $cache = $this->readStaticProperty('partialOutputCache');
+        self::assertLessThanOrEqual(48, \count($cache));
+        self::assertLessThanOrEqual(2_097_152, Partials::processPartialOutputCacheBytes());
+        self::assertGreaterThan(0, \count($cache));
+    }
+
+    public function testRememberPartialOutputSkipsOversizedEntry(): void
+    {
+        Partials::clearOutputCache();
+        $partials = (new \ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
+        $remember = new ReflectionMethod(Partials::class, 'rememberPartialOutput');
+        $remember->setAccessible(true);
+        $remember->invoke($partials, 'partial.output.huge', \str_repeat('b', 300_000), 'fresh', 60);
+
+        self::assertSame([], $this->readStaticProperty('partialOutputCache'));
+        self::assertSame(0, Partials::processPartialOutputCacheBytes());
     }
 
     public function testReadPartialOutputCacheTreatsEmptyHtmlAsHit(): void

@@ -37,7 +37,7 @@ final class ProductSearchProjectionService
     private const SEARCH_NAME_ATTRIBUTE = 'name';
 
     /** Keep a small per-process snapshot cache keyed by website + watermark. */
-    private const SNAPSHOT_PROCESS_CACHE_MAX = 8;
+    private const SNAPSHOT_PROCESS_CACHE_MAX = 1;
 
     /**
      * @var array<string, array{watermark:int, snapshot:array<string,mixed>}>

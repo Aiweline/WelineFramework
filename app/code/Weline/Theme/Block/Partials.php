@@ -46,13 +46,19 @@ class Partials extends Block
     private static ?\WeakMap $fiberRenderYieldAt = null;
     private const PARTIAL_OUTPUT_CACHE_TTL = 300.0;
     private const WLS_RENDER_YIELD_MIN_INTERVAL_US = 10000;
-    private const PARTIAL_OUTPUT_CACHE_MAX = 256;
+    /** Entry cap alone is not enough: chrome HTML blobs make ~80 keys ≈ 13MB. */
+    private const PARTIAL_OUTPUT_CACHE_MAX = 48;
+    /** Hard process-bag byte budget for partial HTML (LRU eviction). */
+    private const PARTIAL_OUTPUT_CACHE_MAX_BYTES = 2_097_152;
+    /** Skip process bag for a single oversized fragment (still may Shared/MS). */
+    private const PARTIAL_OUTPUT_CACHE_ENTRY_MAX_BYTES = 262_144;
     private const PARTIAL_META_CACHE_MAX = 512;
     private const CHROME_POLICY_CACHE_MAX = 512;
     private const PARTIAL_OUTPUT_STALE_TTL = 86400;
     private const PARTIAL_OUTPUT_REFRESH_LOCK_TTL = 10;
     /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
     private static array $partialOutputCache = [];
+    private static int $partialOutputCacheBytes = 0;
     /** @var array<string, array{mode: string, auth: string, ttl: int}> */
     private static array $chromePolicyCache = [];
 
@@ -68,6 +74,7 @@ class Partials extends Block
     public static function clearOutputCache(): void
     {
         self::$partialOutputCache = [];
+        self::$partialOutputCacheBytes = 0;
     }
 
     public static function clearAllCaches(): void
@@ -81,6 +88,11 @@ class Partials extends Block
         return count(self::$partialsMetaCache)
             + count(self::$partialOutputCache)
             + count(self::$chromePolicyCache);
+    }
+
+    public static function processPartialOutputCacheBytes(): int
+    {
+        return self::$partialOutputCacheBytes;
     }
 
     /** @param array<string,mixed> $cache */
@@ -1050,7 +1062,10 @@ class Partials extends Block
     {
         $entry = $this->normalizePartialSwrEntry(self::$partialOutputCache[$cacheKey] ?? null);
         if ($entry === null) {
-            unset(self::$partialOutputCache[$cacheKey]);
+            if (isset(self::$partialOutputCache[$cacheKey])) {
+                self::$partialOutputCacheBytes -= self::partialOutputEntryBytes(self::$partialOutputCache[$cacheKey]);
+                unset(self::$partialOutputCache[$cacheKey]);
+            }
             return ['status' => 'miss', 'html' => null];
         }
         // LRU: move to end on access
@@ -1062,16 +1077,64 @@ class Partials extends Block
 
     private function rememberPartialOutput(string $cacheKey, string $html, string $status = 'fresh', ?int $ttl = null): void
     {
-        if (isset(self::$partialOutputCache[$cacheKey])) {
+        $htmlBytes = \strlen($html);
+        if ($htmlBytes > self::PARTIAL_OUTPUT_CACHE_ENTRY_MAX_BYTES) {
+            // Oversized chrome/listing fragments belong in Shared/MS, not the worker bag.
             unset(self::$partialOutputCache[$cacheKey]);
-        } elseif (\count(self::$partialOutputCache) >= self::PARTIAL_OUTPUT_CACHE_MAX) {
-            $oldestKey = \array_key_first(self::$partialOutputCache);
-            if (\is_string($oldestKey)) {
-                unset(self::$partialOutputCache[$oldestKey]);
-            }
+            return;
         }
 
-        self::$partialOutputCache[$cacheKey] = $this->makePartialSwrEntry($html, $status, $ttl);
+        if (isset(self::$partialOutputCache[$cacheKey])) {
+            self::$partialOutputCacheBytes -= self::partialOutputEntryBytes(self::$partialOutputCache[$cacheKey]);
+            unset(self::$partialOutputCache[$cacheKey]);
+        }
+
+        $entry = $this->makePartialSwrEntry($html, $status, $ttl);
+        $entryBytes = self::partialOutputEntryBytes($entry);
+        while (
+            self::$partialOutputCache !== []
+            && (
+                \count(self::$partialOutputCache) >= self::PARTIAL_OUTPUT_CACHE_MAX
+                || self::$partialOutputCacheBytes + $entryBytes > self::PARTIAL_OUTPUT_CACHE_MAX_BYTES
+            )
+        ) {
+            $oldestKey = \array_key_first(self::$partialOutputCache);
+            if (!\is_string($oldestKey)) {
+                break;
+            }
+            self::$partialOutputCacheBytes -= self::partialOutputEntryBytes(self::$partialOutputCache[$oldestKey]);
+            unset(self::$partialOutputCache[$oldestKey]);
+        }
+
+        if ($entryBytes > self::PARTIAL_OUTPUT_CACHE_MAX_BYTES) {
+            return;
+        }
+
+        self::$partialOutputCache[$cacheKey] = $entry;
+        self::$partialOutputCacheBytes += $entryBytes;
+        if (self::$partialOutputCacheBytes < 0) {
+            self::$partialOutputCacheBytes = self::recountPartialOutputCacheBytes();
+        }
+    }
+
+    /** @param array{fresh_until?: mixed, stale_until?: mixed, html?: mixed}|null $entry */
+    private static function partialOutputEntryBytes(?array $entry): int
+    {
+        if ($entry === null) {
+            return 0;
+        }
+
+        return \strlen((string)($entry['html'] ?? ''));
+    }
+
+    private static function recountPartialOutputCacheBytes(): int
+    {
+        $bytes = 0;
+        foreach (self::$partialOutputCache as $entry) {
+            $bytes += self::partialOutputEntryBytes(\is_array($entry) ? $entry : null);
+        }
+
+        return $bytes;
     }
 
     /**
