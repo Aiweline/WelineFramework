@@ -17,6 +17,12 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        if (!\defined('BP')) {
+            \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('DS')) {
+            \define('DS', \DIRECTORY_SEPARATOR);
+        }
         WlsConcurrency::setOtherSuspendedFiberCountProvider(null);
     }
 
@@ -153,6 +159,46 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
         self::assertSame([], $this->readStaticProperty(MemoryCacheService::class, 'cache'));
         self::assertGreaterThanOrEqual(
             5,
+            $result['runtime_cache_compactions']['cleared_process_caches']
+        );
+    }
+
+    public function testCompactAfterRequestFiberReleasedRespectsActiveFiberGate(): void
+    {
+        WlsConcurrency::setOtherSuspendedFiberCountProvider(static fn (): int => 1);
+        self::assertNull(WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(1024));
+
+        WlsConcurrency::setOtherSuspendedFiberCountProvider(null);
+        $this->writeStaticProperty(WorkerResponseMemoryGuard::class, 'runtimeCacheThresholds', [
+            'soft' => 0.70,
+            'hard' => 0.85,
+        ]);
+        $result = $this->withMemoryPressure(
+            0.78,
+            static fn (): ?array => WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(1024)
+        );
+        self::assertIsArray($result);
+    }
+
+    public function testLargeResponseFiberExitForcesSoftReclaimBelowSoftThreshold(): void
+    {
+        $this->seedProbeCaches();
+        $this->writeStaticProperty(WorkerResponseMemoryGuard::class, 'runtimeCacheThresholds', [
+            'soft' => 0.70,
+            'hard' => 0.85,
+        ]);
+
+        $result = $this->withMemoryPressure(
+            0.20,
+            static fn (): ?array => WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(
+                WorkerResponseMemoryGuard::LARGE_RESPONSE_BYTES
+            )
+        );
+
+        self::assertIsArray($result);
+        self::assertSame([], $this->readStaticProperty(TemplateCacheManager::class, 'memoryCache'));
+        self::assertGreaterThanOrEqual(
+            1,
             $result['runtime_cache_compactions']['cleared_process_caches']
         );
     }

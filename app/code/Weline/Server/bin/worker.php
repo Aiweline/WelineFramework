@@ -3556,6 +3556,8 @@ function wlsProcessActiveFibersAfterTick(
                 $pendingClose
             );
             unset($activeFibers[$afConnId]);
+            // Response size already handled in finalize/write-drain paths; reclaim by water mark here.
+            \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(0);
             continue;
         }
 
@@ -3884,9 +3886,7 @@ function wlsHttpFlushQueuedWrites(
                 @\fclose($conn);
                 unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
                 unset($longLivedConnections[$connId]);
-                if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
-                    \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-                }
+                \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased($initialBufferLen);
                 break;
             }
             $buffer = $writeBuffers[$connId];
@@ -3907,9 +3907,7 @@ function wlsHttpFlushQueuedWrites(
                 @\fclose($conn);
                 unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
                 unset($longLivedConnections[$connId]);
-                if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
-                    \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-                }
+                \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased($initialBufferLen);
                 break;
             }
 
@@ -3945,9 +3943,7 @@ function wlsHttpFlushQueuedWrites(
                     @\fclose($conn);
                     unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $writeZeroProgress[$connId], $pendingClose[$connId]);
                     unset($longLivedConnections[$connId]);
-                    if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
-                        \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-                    }
+                    \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased($initialBufferLen);
                     break;
                 }
 
@@ -3979,9 +3975,7 @@ function wlsHttpFlushQueuedWrites(
                     unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $pendingClose[$connId]);
                     unset($longLivedConnections[$connId]);
                 }
-                if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
-                    \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-                }
+                \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased($initialBufferLen);
                 wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
                 break;
             }
@@ -5487,9 +5481,7 @@ function sendResponseAndCleanup(
             if (isset($longLivedConnections[$connId])) {
                 unset($longLivedConnections[$connId]);
             }
-            if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($responseLenPre)) {
-                \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
-            }
+            \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased($responseLenPre);
         }
     }
 }
