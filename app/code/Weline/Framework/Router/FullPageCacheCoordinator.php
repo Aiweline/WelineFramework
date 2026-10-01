@@ -72,8 +72,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private const DEFAULT_SHARED_STALE_MAX_BODY_BYTES = 1048576;
     private const DEFAULT_PRIVATE_SESSION_TTL_SECONDS = 300;
     private const PROCESS_FPC_TTL_SECONDS = 3600;
-    private const PROCESS_FPC_MAX_ITEMS = 128;
-    private const PROCESS_FPC_MAX_BYTES = 33554432;
+    private const PROCESS_FPC_MAX_ITEMS = 32;
+    /** Keep process L1 small; Shared Memory holds the authority payloads. */
+    private const PROCESS_FPC_MAX_BYTES = 8388608;
     private const PROCESS_LOCALIZED_HOMEPAGE_RECEIPT_MAX_ITEMS = 128;
 
     /** Cookieless `/products` catalog receipts pin Process L1 like homepage. */
