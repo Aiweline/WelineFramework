@@ -16,8 +16,9 @@ use Weline\Framework\Http\Request\FileBag;
 use Weline\Framework\Http\Request\ParameterBag;
 use Weline\Framework\Http\Request\RequestFilter;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLocalInterface;
 
-class Request extends Request\RequestAbstract implements RequestInterface
+class Request extends Request\RequestAbstract implements RequestInterface, RequestLocalInterface
 {
     private static Request $instance;
 

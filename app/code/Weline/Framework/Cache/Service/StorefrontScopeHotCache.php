@@ -19,6 +19,7 @@ use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Context;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
 /**
  * Scope-aware hot cache with stale-while-revalidate for storefront read models.
@@ -26,8 +27,11 @@ use Weline\Framework\Context;
  * - Worker process cache (L1) for sub-millisecond hits on warm workers.
  * - Shared cache pool (WLS memory when available) for cross-worker reuse.
  * - Near-expiry entries are served immediately and refreshed after the response.
+ *
+ * Process-shared across WLS Fibers: durable entries live in static/$processCache
+ * and Memory Service; per-request memos use RequestContext only.
  */
-final class StorefrontScopeHotCache
+final class StorefrontScopeHotCache implements ProcessSharedInterface
 {
     private const ENVELOPE_VERSION = 1;
     private const DEFAULT_STALE_MULTIPLIER = 10;

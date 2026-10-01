@@ -40,6 +40,8 @@ class ObjectManager implements ManagerInterface
     private static array $origin_instances = [];
     private static ?\WeakMap $fiberInstances = null;
     private static ?\WeakMap $fiberOriginInstances = null;
+    /** @var array<string, bool> class => uses process-shared OM bucket */
+    private static array $processSharedBucketCache = [];
     /**
      * 方法参数元数据缓存
      * 格式：['ClassName::methodName' => ['params' => [...], 'dependencies' => [...]]]
@@ -335,8 +337,36 @@ class ObjectManager implements ManagerInterface
         return \Fiber::getCurrent();
     }
 
+    /**
+     * Process-shared services stay on the worker `$instances` bag even inside a
+     * request Fiber. Fat caches belong here (or Memory Service), not per-Fiber.
+     */
+    private static function usesProcessSharedBucket(string $class): bool
+    {
+        if (isset(self::$processSharedBucketCache[$class])) {
+            return self::$processSharedBucketCache[$class];
+        }
+
+        $shared = false;
+        try {
+            if (\is_a($class, \Weline\Framework\Runtime\ProcessSharedInterface::class, true)) {
+                $shared = true;
+            }
+        } catch (\Throwable) {
+            $shared = false;
+        }
+
+        return self::$processSharedBucketCache[$class] = $shared;
+    }
+
     private static function getScopedInstance(string $class, bool $origin = false): ?object
     {
+        if (self::usesProcessSharedBucket($class)) {
+            return $origin
+                ? (self::$origin_instances[$class] ?? null)
+                : (self::$instances[$class] ?? null);
+        }
+
         $fiber = self::currentRequestFiber();
         if ($fiber === null) {
             return $origin
@@ -349,6 +379,15 @@ class ObjectManager implements ManagerInterface
 
     private static function setScopedInstance(string $class, object $object, bool $origin = false): void
     {
+        if (self::usesProcessSharedBucket($class)) {
+            if ($origin) {
+                self::$origin_instances[$class] = $object;
+            } else {
+                self::$instances[$class] = $object;
+            }
+            return;
+        }
+
         $fiber = self::currentRequestFiber();
         if ($fiber === null) {
             if ($origin) {
@@ -369,6 +408,7 @@ class ObjectManager implements ManagerInterface
             return $origin ? self::$origin_instances : self::$instances;
         }
 
+        // Fiber views only request-local buckets; process-shared live on $instances.
         return self::getFiberScope($origin, $fiber)?->all() ?? [];
     }
 
@@ -389,11 +429,40 @@ class ObjectManager implements ManagerInterface
             return;
         }
 
-        self::getFiberScope($origin, $fiber, true)->replace($instances);
+        // Fiber replace: request-local → fiber bag; process-shared → worker bag.
+        $fiberLocal = [];
+        foreach ($instances as $class => $object) {
+            if (!\is_string($class) || !\is_object($object)) {
+                continue;
+            }
+            if (self::usesProcessSharedBucket($class)) {
+                if ($origin) {
+                    self::$origin_instances[$class] = $object;
+                } else {
+                    self::$instances[$class] = $object;
+                }
+            } else {
+                $fiberLocal[$class] = $object;
+            }
+        }
+        if ($fiberLocal === []) {
+            self::unsetFiberScope($origin, $fiber);
+            return;
+        }
+        self::getFiberScope($origin, $fiber, true)->replace($fiberLocal);
     }
 
     private static function removeScopedInstance(string $class, bool $origin = false): void
     {
+        if (self::usesProcessSharedBucket($class)) {
+            if ($origin) {
+                unset(self::$origin_instances[$class]);
+            } else {
+                unset(self::$instances[$class]);
+            }
+            return;
+        }
+
         $fiber = self::currentRequestFiber();
         if ($fiber === null) {
             if ($origin) {
@@ -1007,6 +1076,10 @@ class ObjectManager implements ManagerInterface
         self::setScopedInstances([]);
         self::$reflections = [];
         self::setScopedInstances([], true);
+        self::$processSharedBucketCache = [];
+        // Process-shared live on worker bags even inside a Fiber — drop them too.
+        self::$instances = [];
+        self::$origin_instances = [];
         if (self::currentRequestFiber() === null) {
             self::$fiberInstances = null;
             self::$fiberOriginInstances = null;

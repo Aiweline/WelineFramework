@@ -11,6 +11,7 @@ use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
+use Weline\Framework\Runtime\RequestLocalInterface;
 use Weline\Framework\View\Helper\HtmlCacheAdmission;
 use Weline\Framework\View\Helper\TitleLocaleProbe;
 
@@ -20,7 +21,7 @@ use Weline\Framework\View\Helper\TitleLocaleProbe;
  * Existing request termination helpers are preserved, but the response state is
  * now first-class and can also be normalized from controller return values.
  */
-class Response implements ResponseInterface
+class Response implements ResponseInterface, RequestLocalInterface
 {
     public const SERVER_VERSION = '1.0.0';
     public const SERVER_SIGNATURE = 'Weline-Server/' . self::SERVER_VERSION;

@@ -237,13 +237,20 @@ final class MemDiag
         } catch (\Throwable) {
         }
         try {
-            $media = \Weline\Framework\Manager\ObjectManager::getInstance(
+            if (\method_exists(
                 \Weline\Product\Service\StorefrontProductMediaUrlResolver::class,
-            );
-            $rp = new \ReflectionProperty($media, 'resolvedReferenceCache');
-            $rp->setAccessible(true);
-            $cache = $rp->getValue($media);
-            $out['media_ref_cache'] = \is_array($cache) ? \count($cache) : 0;
+                'processReferenceCacheCount',
+            )) {
+                $out['media_ref_cache'] = (int)\Weline\Product\Service\StorefrontProductMediaUrlResolver::processReferenceCacheCount();
+            } else {
+                $media = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Product\Service\StorefrontProductMediaUrlResolver::class,
+                );
+                $rp = new \ReflectionProperty($media, 'resolvedReferenceCache');
+                $rp->setAccessible(true);
+                $cache = $rp->getValue($media);
+                $out['media_ref_cache'] = \is_array($cache) ? \count($cache) : 0;
+            }
         } catch (\Throwable) {
         }
         try {
@@ -367,6 +374,7 @@ final class MemDiag
             $out['om_reflections'] = (int)($om['metadata_entries']['reflections'] ?? 0);
             $out['om_method_params'] = (int)($om['metadata_entries']['method_params'] ?? 0);
             $out['om_fiber_instances'] = (int)($om['fiber_instances']['instance_count'] ?? 0);
+            $out['om_fiber_bucket_count'] = (int)($om['fiber_instances']['bucket_count'] ?? 0);
         } catch (\Throwable) {
         }
         foreach ([

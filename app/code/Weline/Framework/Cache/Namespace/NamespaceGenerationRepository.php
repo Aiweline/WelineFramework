@@ -11,10 +11,11 @@ use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Model\Cache\NamespaceVersion;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 use Weline\Framework\Runtime\RequestContext;
 
 /** Database authority for namespace generations and the reserved @clock row. */
-final class NamespaceGenerationRepository implements NamespaceGenerationInterface
+final class NamespaceGenerationRepository implements NamespaceGenerationInterface, ProcessSharedInterface
 {
     private const MAX_CAS_ATTEMPTS = 8;
     private const TRANSACTION_STATE_KEY = 'framework.cache.namespace_generation_transactions';

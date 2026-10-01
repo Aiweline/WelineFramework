@@ -21,11 +21,12 @@ use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Cache\Pool\NamespaceScopedCachePool;
 use Weline\Framework\Cache\Pool\TaggableCachePool;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\RuntimeRoutingPolicyInterface;
 
-class CacheManager implements CacheManagerInterface
+class CacheManager implements CacheManagerInterface, ProcessSharedInterface
 {
     /**
      * 池注册表
