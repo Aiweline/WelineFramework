@@ -201,11 +201,10 @@ final class WorkerResponseMemoryGuard
 
         $pressure = self::getMemoryPressure();
         $thresholds = self::getRuntimeCacheThresholds();
+        // Hard pressure = in-process aggressive reclaim only. Do NOT request
+        // response-after drain / Master Worker replace — that is process recycle,
+        // not intelligent memory reduction in the current PID.
         $cycleCollectionSkipped = $pressure >= $thresholds['hard'];
-
-        if ($cycleCollectionSkipped && !self::hasDrainAfterResponseRequest()) {
-            self::requestDrainAfterResponse('memory_pressure_hard_before_gc');
-        }
 
         if ($pressure >= $thresholds['soft']) {
             $runtimeCacheCompactions = self::compactRuntimeCaches(

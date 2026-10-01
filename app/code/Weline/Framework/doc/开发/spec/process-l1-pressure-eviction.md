@@ -24,9 +24,9 @@ Worker 长驻进程内，多语言词典与业务散落 `static` 袋抬高 RSS �
 ## 3. EARS
 
 1. WHEN 压力 ≥ soft(0.7) THEN 对已登记进程袋执行 pin=0 的分级驱逐，且不改共享 Memory 服务策略。  
-2. WHEN 压力 ≥ hard(0.85) THEN 加强驱逐（pin=0 全清再目标字节），保留 pin>0 条目直至作用域结束或 drain。  
-3. WHEN 进入 drain THEN 尽量排空可重建 L1，后续请求可从 L2/源重建。  
-4. IF 条目 pin_count>0 THEN 压力驱逐 SHALL 跳过该条目（非 drain/进程退出）。  
+2. WHEN 压力 ≥ hard(0.85) THEN 加强驱逐（pin=0 全清再目标字节），保留 pin>0 条目直至作用域结束或 L1 drain 档；**Guard 硬压力只做本进程淘汰，禁止登记 Worker `requestDrainAfterResponse` / Master 换进程**。  
+3. WHEN 进入 L1 drain 档（ProcessMemory 策略档，≠ Worker 进程退役）THEN 尽量排空可重建 L1，后续请求可从 L2/源重建。  
+4. IF 条目 pin_count>0 THEN 压力驱逐 SHALL 跳过该条目（非 L1 drain 档/进程退出）。  
 5. IF 实现为 Adapter L1 THEN 它 SHALL 实现 `MemoryStoreInterface` 并接受 Policy 驱动的 relieve（禁止 soft 盲 `clearMemory` 绕过 pin）。  
 6. IF 实现为纯进程袋 THEN 它 SHALL 使用 `ProcessMemoryStore` 并挂 `MemoryReclaimableInterface`，禁止再实现 MSI 与 Adapter 语义混用。  
 7. WHEN Phrase 按 locale 缓存 THEN 高压淘汰 SHALL 优先冷 locale 桶；重语种驻留默认 ≤4。  
@@ -41,7 +41,7 @@ Worker 长驻进程内，多语言词典与业务散落 `static` 袋抬高 RSS �
 | ID | 名称 |
 |----|------|
 | UC-1 | soft 驱逐：RSS/条目下降，请求成功 |
-| UC-2 | hard/drain：更强排空，可重建 |
+| UC-2 | hard：更强排空可重建 L1（本进程；≠ Worker 退役换进程） |
 | UC-3 | 语言桶：多 locale 填充后按桶淘汰，无 thrash |
 | UC-4 | cache:clear 全清，可与压力路径区分 |
 | UC-5 | pin 保护：作用域内条目不被 soft/hard 删除 |
