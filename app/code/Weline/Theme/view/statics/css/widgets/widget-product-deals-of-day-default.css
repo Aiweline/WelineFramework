@@ -208,17 +208,77 @@
     color: var(--weline-theme-on-primary);
 }
 
+@media (max-width: 992px) {
+    .wc-theme_widget_deals_of_day .products-grid.columns-5,
+    .wc-theme_widget_deals_of_day .products-grid.columns-6 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
 @media (max-width: 768px) {
     .wc-theme_widget_deals_of_day {
         padding: var(--weline-space-5);
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow-x: clip;
     }
-    
+
     .wc-theme_widget_deals_of_day .widget-header {
         flex-direction: column;
         text-align: center;
+        max-width: 100%;
     }
-    
+
     .wc-theme_widget_deals_of_day .header-left {
         text-align: center;
+    }
+
+    .wc-theme_widget_deals_of_day .header-countdown {
+        max-width: 100%;
+        flex-wrap: wrap;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .wc-theme_widget_deals_of_day .products-wrapper,
+    .wc-theme_widget_deals_of_day .products-grid {
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    /* Keep 4 cols at editor ~700; true phone drops at ≤559 (align featured). */
+    .wc-theme_widget_deals_of_day .products-grid.columns-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 559px) {
+    .wc-theme_widget_deals_of_day .products-grid.columns-3,
+    .wc-theme_widget_deals_of_day .products-grid.columns-4,
+    .wc-theme_widget_deals_of_day .products-grid.columns-5,
+    .wc-theme_widget_deals_of_day .products-grid.columns-6 {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: var(--weline-space-3);
+    }
+
+    .wc-theme_widget_deals_of_day .product-info {
+        padding: var(--weline-space-3);
+    }
+
+    .wc-theme_widget_deals_of_day .product-name {
+        font-size: var(--font-size-sm);
+    }
+
+    .wc-theme_widget_deals_of_day .time-block {
+        min-width: 0;
+        padding: var(--spacing-sm) var(--weline-space-2);
+    }
+}
+
+@media (max-width: 360px) {
+    .wc-theme_widget_deals_of_day .products-grid.columns-2,
+    .wc-theme_widget_deals_of_day .products-grid.columns-3,
+    .wc-theme_widget_deals_of_day .products-grid.columns-4 {
+        grid-template-columns: minmax(0, 1fr) !important;
     }
 }
