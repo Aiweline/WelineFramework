@@ -74,8 +74,8 @@ final class DictionaryCacheNamespaceProcessStoreMigrationTest extends TestCase
         $cold['fp|ko_KR|a'] = ['hello' => '안녕하세요'];
 
         DictionaryCacheNamespace::touchLocaleBucket('ja_JP');
-        DictionaryCacheNamespace::touchLocaleBucket('ko_KR');
         DictionaryCacheNamespace::pinLocaleBucket('ja_JP');
+        DictionaryCacheNamespace::touchLocaleBucket('ko_KR');
 
         $result = DictionaryCacheNamespace::processMemoryReclaimable()->evict(1024 * 1024);
         self::assertFalse($result['skipped'] ?? true);
@@ -92,18 +92,18 @@ final class DictionaryCacheNamespaceProcessStoreMigrationTest extends TestCase
         $localeBag = [];
         DictionaryCacheNamespace::bindProcessBag('workerLocaleWords', $localeBag);
 
-        foreach (['fr_FR', 'de_DE', 'es_ES'] as $locale) {
-            $bag = &DictionaryCacheNamespace::localCache($localeBag, 1024, [$locale]);
-            $bag['fp|' . $locale . '|heavy'] = ['x' => $locale];
-            DictionaryCacheNamespace::touchLocaleBucket($locale);
-        }
-
-        // fr_FR is coldest; bump de/es heat so soft/hard prefer fr.
-        DictionaryCacheNamespace::touchLocaleBucket('de_DE');
+        $bagEs = &DictionaryCacheNamespace::localCache($localeBag, 1024, ['es_ES']);
+        $bagEs['fp|es_ES|heavy'] = ['x' => 'es_ES'];
         DictionaryCacheNamespace::touchLocaleBucket('es_ES');
+        DictionaryCacheNamespace::pinLocaleBucket('es_ES');
+
+        $bagFr = &DictionaryCacheNamespace::localCache($localeBag, 1024, ['fr_FR']);
+        $bagFr['fp|fr_FR|heavy'] = ['x' => 'fr_FR'];
+        DictionaryCacheNamespace::touchLocaleBucket('fr_FR');
 
         $store = DictionaryCacheNamespace::processMemoryStore();
         self::assertNotSame([], $store->keysInBucket('fr_FR'));
+        self::assertNotSame([], $store->keysInBucket('es_ES'));
 
         $reclaimable = DictionaryCacheNamespace::processMemoryReclaimable();
         $result = $reclaimable->evict(1);
@@ -111,6 +111,7 @@ final class DictionaryCacheNamespaceProcessStoreMigrationTest extends TestCase
 
         self::assertSame([], $store->keysInBucket('fr_FR'));
         self::assertArrayNotHasKey('fp|fr_FR|heavy', $localeBag);
+        self::assertNotSame([], $store->keysInBucket('es_ES'));
         self::assertArrayHasKey('fp|es_ES|heavy', $localeBag);
     }
 
@@ -129,7 +130,7 @@ final class DictionaryCacheNamespaceProcessStoreMigrationTest extends TestCase
 
     public function testHeavyLocaleResidentCapStillPurgesSeededParserBags(): void
     {
-        self::assertSame(4, DictionaryCacheNamespace::heavyLocaleResidentMax());
+        self::assertSame(1, DictionaryCacheNamespace::heavyLocaleResidentMax());
 
         $localeCache = new ReflectionProperty(Parser::class, 'workerLocaleWordsCache');
         $globalCache = new ReflectionProperty(Parser::class, 'workerGlobalDictionaryWordsCache');
@@ -144,14 +145,16 @@ final class DictionaryCacheNamespaceProcessStoreMigrationTest extends TestCase
         };
 
         $touch = new \ReflectionMethod(Parser::class, 'touchHeavyLocaleResident');
-        foreach (['aa_AA', 'bb_BB', 'cc_CC', 'dd_DD', 'ee_EE'] as $locale) {
+        foreach (['aa_AA', 'bb_BB', 'cc_CC'] as $locale) {
             $seed($locale);
             $touch->invoke(null, $locale);
         }
 
-        self::assertSame(['bb_BB', 'cc_CC', 'dd_DD', 'ee_EE'], DictionaryCacheNamespace::localeBucketResidents());
+        self::assertSame(['cc_CC'], DictionaryCacheNamespace::localeBucketResidents());
         self::assertArrayNotHasKey('fp|aa_AA|heavy', $localeCache->getValue());
         self::assertArrayNotHasKey('fp|aa_AA|scope', $globalCache->getValue());
+        self::assertArrayNotHasKey('fp|bb_BB|heavy', $localeCache->getValue());
+        self::assertArrayHasKey('fp|cc_CC|heavy', $localeCache->getValue());
         self::assertSame([], DictionaryCacheNamespace::processMemoryStore()->keysInBucket('aa_AA'));
     }
 }

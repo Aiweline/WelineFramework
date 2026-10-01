@@ -26,7 +26,8 @@ final class DictionaryCacheNamespace
     private const PROCESS_FINGERPRINT_PREFIX = 'process';
     /** Store 内 locale 驻留标记键前缀；压力淘汰后据此回扫袋。 */
     private const LOCALE_MARKER_PREFIX = 'phrase.locale|';
-    private const DEFAULT_HEAVY_LOCALE_RESIDENT_MAX = 4;
+    /** Process holds at most one heavy locale bag; other locales resolve via Shared Memory. */
+    private const DEFAULT_HEAVY_LOCALE_RESIDENT_MAX = 1;
     private const PROCESS_STORE_MAX_ITEMS = 8192;
 
     private static ?ProcessMemoryStore $store = null;
@@ -200,15 +201,21 @@ final class DictionaryCacheNamespace
         self::$localeLru[] = $locale;
         self::rememberLocaleMarker($locale, 1);
 
-        while (\count(self::$localeLru) > self::heavyLocaleResidentMax()) {
+        // Cap applies to unpinned heavy bags only; request-pinned locales may exceed it
+        // so the active request locale is not thrashed when max=1.
+        while (true) {
+            $unpinnedCount = 0;
             $evictLocale = null;
             foreach (self::$localeLru as $candidate) {
-                if (!self::isLocaleBucketPinned($candidate)) {
+                if (self::isLocaleBucketPinned($candidate)) {
+                    continue;
+                }
+                $unpinnedCount++;
+                if ($evictLocale === null) {
                     $evictLocale = $candidate;
-                    break;
                 }
             }
-            if ($evictLocale === null) {
+            if ($unpinnedCount <= self::heavyLocaleResidentMax() || $evictLocale === null) {
                 break;
             }
             self::evictLocaleBucket($evictLocale);

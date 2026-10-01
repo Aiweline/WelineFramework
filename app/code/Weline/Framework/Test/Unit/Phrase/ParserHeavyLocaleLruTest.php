@@ -21,9 +21,9 @@ final class ParserHeavyLocaleLruTest extends TestCase
         Parser::clearWorkerCaches();
     }
 
-    public function testHeavyLocaleResidentCapEvictsOldestAndPurgesLocaleBuckets(): void
+    public function testHeavyLocaleResidentCapKeepsOnlyOneLocaleBag(): void
     {
-        self::assertSame(4, $this->invoke('heavyLocaleResidentMax'));
+        self::assertSame(1, $this->invoke('heavyLocaleResidentMax'));
 
         $localeCache = new ReflectionProperty(Parser::class, 'workerLocaleWordsCache');
         $globalCache = new ReflectionProperty(Parser::class, 'workerGlobalDictionaryWordsCache');
@@ -37,24 +37,22 @@ final class ParserHeavyLocaleLruTest extends TestCase
             ]));
         };
 
-        foreach (['aa_AA', 'bb_BB', 'cc_CC', 'dd_DD', 'ee_EE'] as $locale) {
+        foreach (['aa_AA', 'bb_BB', 'cc_CC'] as $locale) {
             $seed($locale);
             $this->invoke('touchHeavyLocaleResident', $locale);
         }
 
-        self::assertSame(['bb_BB', 'cc_CC', 'dd_DD', 'ee_EE'], $this->invoke('heavyLocaleResidents'));
+        self::assertSame(['cc_CC'], $this->invoke('heavyLocaleResidents'));
         self::assertArrayNotHasKey('fp|aa_AA|heavy', $localeCache->getValue());
-        self::assertArrayNotHasKey('fp|aa_AA|scope', $globalCache->getValue());
-        self::assertArrayHasKey('fp|ee_EE|heavy', $localeCache->getValue());
-        self::assertArrayHasKey('fp|bb_BB|heavy', $localeCache->getValue());
+        self::assertArrayNotHasKey('fp|bb_BB|heavy', $localeCache->getValue());
+        self::assertArrayHasKey('fp|cc_CC|heavy', $localeCache->getValue());
+        self::assertArrayHasKey('fp|cc_CC|scope', $globalCache->getValue());
 
-        // Re-touch bb so cc becomes oldest; loading ff must evict cc, not bb.
-        $this->invoke('touchHeavyLocaleResident', 'bb_BB');
-        $seed('ff_FF');
-        $this->invoke('touchHeavyLocaleResident', 'ff_FF');
-        self::assertSame(['dd_DD', 'ee_EE', 'bb_BB', 'ff_FF'], $this->invoke('heavyLocaleResidents'));
+        $seed('dd_DD');
+        $this->invoke('touchHeavyLocaleResident', 'dd_DD');
+        self::assertSame(['dd_DD'], $this->invoke('heavyLocaleResidents'));
         self::assertArrayNotHasKey('fp|cc_CC|heavy', $localeCache->getValue());
-        self::assertArrayHasKey('fp|bb_BB|heavy', $localeCache->getValue());
+        self::assertArrayHasKey('fp|dd_DD|heavy', $localeCache->getValue());
     }
 
     public function testClearWorkerCachesResetsHeavyLocaleLru(): void

@@ -29,7 +29,7 @@ Worker 长驻进程内，多语言词典与业务散落 `static` 袋抬高 RSS �
 4. IF 条目 pin_count>0 THEN 压力驱逐 SHALL 跳过该条目（非 L1 drain 档/进程退出）。  
 5. IF 实现为 Adapter L1 THEN 它 SHALL 实现 `MemoryStoreInterface` 并接受 Policy 驱动的 relieve（禁止 soft 盲 `clearMemory` 绕过 pin）。  
 6. IF 实现为纯进程袋 THEN 它 SHALL 使用 `ProcessMemoryStore` 并挂 `MemoryReclaimableInterface`，禁止再实现 MSI 与 Adapter 语义混用。  
-7. WHEN Phrase 按 locale 缓存 THEN 高压淘汰 SHALL 优先冷 locale 桶；重语种驻留默认 ≤4。  
+7. WHEN Phrase 按 locale 缓存 THEN 高压淘汰 SHALL 优先冷 locale 桶；重语种驻留默认 ≤1（权威大块在 Memory Service / phrase Shared）。  
 8. WHEN 显式 cache:clear THEN 经 `ProcessCacheResetter` 完整清理，严于压力部分驱逐。  
 9. WHEN `!WlsConcurrency::canCompactProcessCaches()` THEN 所有进程袋 compact/evict SHALL no-op。  
 10. IF fingerprint=null（事务）THEN SHALL 不向公共 L1 发布。  

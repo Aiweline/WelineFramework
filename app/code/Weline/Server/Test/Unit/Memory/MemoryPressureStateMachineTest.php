@@ -67,12 +67,18 @@ final class MemoryPressureStateMachineTest extends TestCase
             $fsm->tick($this->sample(0.95), (float)$i);
         }
         self::assertSame(MemoryPressureStateMachine::LEVEL_CRITICAL, $fsm->getLevel());
-        $first = $fsm->tick($this->sample(0.95), 10.0);
-        self::assertTrue($first['should_shrink']);
-        $fsm->markScaleDown(10.0);
+        // Default shrink_hold_samples == upgrade_samples (3): need consecutive Critical holds.
+        $hold1 = $fsm->tick($this->sample(0.95), 10.0);
+        self::assertFalse($hold1['should_shrink']);
+        $hold2 = $fsm->tick($this->sample(0.95), 11.0);
+        self::assertTrue($hold2['should_shrink']);
+        $fsm->markScaleDown(11.0);
         $second = $fsm->tick($this->sample(0.95), 20.0);
         self::assertFalse($second['should_shrink']);
-        $third = $fsm->tick($this->sample(0.95), 45.0);
+        // After cooldown, need hold streak again (markScaleDown resets hold samples).
+        $fsm->tick($this->sample(0.95), 45.0);
+        $fsm->tick($this->sample(0.95), 46.0);
+        $third = $fsm->tick($this->sample(0.95), 47.0);
         self::assertTrue($third['should_shrink']);
     }
 
