@@ -20,9 +20,22 @@ final class WorkerResponseMemoryGuard
     private const SOFT_HEAP_FORCE_BYTES = 48 * 1024 * 1024;
     /** Absolute Zend-real floor: force aggressive bag clear (was 96M; /products sat at ~78–92M). */
     private const LARGE_HEAP_FORCE_AGGRESSIVE_BYTES = 64 * 1024 * 1024;
+    /**
+     * Keep-warm contract: empty Zend freelist (real-used) must not stay at "large page" size.
+     * Above this shell size after reclaim → graceful Worker drain (only way to return pages to OS).
+     */
+    private const ZEND_SHELL_DRAIN_BYTES = 48 * 1024 * 1024;
+    /** real may exceed captured warm baseline by this much before drain. */
+    private const ZEND_REAL_OVER_BASELINE_DRAIN_BYTES = 32 * 1024 * 1024;
+    /** Capture warm baseline only when shell is small enough to look like framework floor. */
+    private const ZEND_WARM_BASELINE_MAX_SHELL_BYTES = 24 * 1024 * 1024;
+    private const ZEND_WARM_BASELINE_MAX_USED_BYTES = 96 * 1024 * 1024;
+
     private static ?array $runtimeCacheThresholds = null;
     /** Pressure denominator from Worker `--memory-limit` (ignore DevTool-inflated ini). */
     private static ?int $pressureLimitBytes = null;
+    /** Lowest clean Zend-real seen after reclaim (framework warm floor). */
+    private static ?int $warmRealBaselineBytes = null;
     private static ?string $drainAfterResponseReason = null;
     private static int $incompleteRequestFiberCancelStreak = 0;
 
@@ -153,6 +166,52 @@ final class WorkerResponseMemoryGuard
         self::$pressureLimitBytes = $bytes > 0 ? $bytes : null;
     }
 
+    /**
+     * Decide whether Zend MM freelist/ratchet violates keep-warm floor contract.
+     * Empty shell must reflect warm framework, not a prior large-page peak.
+     */
+    public static function shouldDrainForZendRatchet(
+        int $realBytes,
+        int $usedBytes,
+        ?int $warmRealBaselineBytes,
+        bool $afterForcedReclaim
+    ): bool {
+        if (!$afterForcedReclaim || $realBytes <= 0) {
+            return false;
+        }
+        $shell = \max(0, $realBytes - \max(0, $usedBytes));
+        if ($shell >= self::ZEND_SHELL_DRAIN_BYTES) {
+            return true;
+        }
+        if ($warmRealBaselineBytes !== null
+            && $warmRealBaselineBytes > 0
+            && $realBytes >= ($warmRealBaselineBytes + self::ZEND_REAL_OVER_BASELINE_DRAIN_BYTES)
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static function noteWarmHeapBaseline(int $realBytes, int $usedBytes): void
+    {
+        $shell = \max(0, $realBytes - \max(0, $usedBytes));
+        if ($shell > self::ZEND_WARM_BASELINE_MAX_SHELL_BYTES
+            || $usedBytes > self::ZEND_WARM_BASELINE_MAX_USED_BYTES
+            || $realBytes <= 0
+        ) {
+            return;
+        }
+        if (self::$warmRealBaselineBytes === null || $realBytes < self::$warmRealBaselineBytes) {
+            self::$warmRealBaselineBytes = $realBytes;
+        }
+    }
+
+    public static function warmRealBaselineBytes(): ?int
+    {
+        return self::$warmRealBaselineBytes;
+    }
+
     public static function compactAfterRequestFiberReleased(int $releasedResponseBytes = 0): ?array
     {
         if (!WlsConcurrency::canCompactProcessCaches()) {
@@ -245,9 +304,9 @@ final class WorkerResponseMemoryGuard
 
         $pressure = self::getMemoryPressure();
         $thresholds = self::getRuntimeCacheThresholds();
-        // Hard pressure = in-process aggressive reclaim only. Do NOT request
-        // response-after drain / Master Worker replace — that is process recycle,
-        // not intelligent memory reduction in the current PID.
+        // Ratio hard pressure = in-process aggressive reclaim only (no Worker drain).
+        // Zend freelist ratchet after forced reclaim is a separate keep-warm contract:
+        // empty shell must not stay at large-page size → graceful drain (see below).
         $criticalHard = $pressure >= $thresholds['hard'];
         $aggressive = $forceAggressive || $criticalHard;
 
@@ -269,6 +328,21 @@ final class WorkerResponseMemoryGuard
             }
         }
 
+        $realAfter = \memory_get_usage(true);
+        $usedAfter = \memory_get_usage(false);
+        $shellAfter = \max(0, $realAfter - $usedAfter);
+        if ($forceSoftReclaim || $forceAggressive) {
+            self::noteWarmHeapBaseline($realAfter, $usedAfter);
+            if (self::shouldDrainForZendRatchet(
+                $realAfter,
+                $usedAfter,
+                self::$warmRealBaselineBytes,
+                true
+            )) {
+                self::requestDrainAfterResponse('zend_mm_ratchet');
+            }
+        }
+
         if (\class_exists(\Weline\Framework\Runtime\MemDiag::class, false)
             && \Weline\Framework\Runtime\MemDiag::isArmed()
         ) {
@@ -283,8 +357,12 @@ final class WorkerResponseMemoryGuard
                 'cycles' => $cycles,
                 'trimmed_bytes' => $trimmedBytes,
                 'runtime_cache_compactions' => $runtimeCacheCompactions,
-                'real_after' => \memory_get_usage(true),
-                'used_after' => \memory_get_usage(false),
+                'real_after' => $realAfter,
+                'used_after' => $usedAfter,
+                'shell_after' => $shellAfter,
+                'warm_real_baseline' => self::$warmRealBaselineBytes,
+                'drain_requested' => self::hasDrainAfterResponseRequest(),
+                'drain_reason' => self::$drainAfterResponseReason,
             ]);
         }
 
@@ -518,6 +596,7 @@ final class WorkerResponseMemoryGuard
     {
         self::$runtimeCacheThresholds = null;
         self::$pressureLimitBytes = null;
+        self::$warmRealBaselineBytes = null;
     }
 
     private static function parseMemoryLimit(string $limit): int
