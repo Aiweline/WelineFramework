@@ -32752,7 +32752,22 @@ class ServiceOrchestrator
         if (\is_array($scaling) && isset($scaling['min_workers']) && \is_numeric($scaling['min_workers'])) {
             $minWorkers = \max(1, (int)$scaling['min_workers']);
         }
+        $startupExplicit = $controller->getStartupExplicitCount();
+        $serveFloor = \max(1, $minWorkers);
+        if ($startupExplicit > 0 && !$controller->allowsEmergencyScaleBelowStartupExplicit()) {
+            $serveFloor = \max($serveFloor, $startupExplicit);
+        }
         $desired = (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 0);
+        if ($desired <= $serveFloor) {
+            WlsLogger::info_(
+                '[Orchestrator][MemoryPressure] critical_reclaim_only serve_floor='
+                . $serveFloor
+                . ' desired=' . $desired
+            );
+            $controller->setShrinkInProgress(false);
+
+            return false;
+        }
         if ($desired <= $minWorkers) {
             return false;
         }
@@ -32930,14 +32945,8 @@ class ServiceOrchestrator
     }
 
     /**
-     * A pressure-reduced slot may finish its DRAIN while it is intentionally
-     * outside desiredState. If Green recovery raises desiredState before the
-     * Registry's STOPPING placeholder becomes STOPPED, generic reconciliation
-     * must not mistake that terminal placeholder for live capacity forever.
-     *
-     * Only slots tagged by scaleDownOneWorkerForMemoryPressure participate:
-     * reload/stop lifecycle slots keep their owning operation and are never
-     * hijacked by the memory controller.
+     * Raise Desired after Critical shrink: recover DRAINING/STOPPING tags and
+     * also STOPPED/FAILED placeholders that finished drain before recover ran.
      */
     private function queueMemoryPressureRecoveredWorkerSlot(int $instanceId): bool
     {
@@ -32951,19 +32960,41 @@ class ServiceOrchestrator
         }
 
         $worker = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
-        if ($worker === null
-            || !(bool)$worker->getMeta('memory_pressure_scale_down', false)
-            || !\in_array($worker->state, [
-                ServiceInstance::STATE_DRAINING,
-                ServiceInstance::STATE_STOPPING,
-            ], true)
-        ) {
+        if ($worker === null) {
+            return false;
+        }
+
+        $terminal = \in_array($worker->state, [
+            ServiceInstance::STATE_STOPPED,
+            ServiceInstance::STATE_FAILED,
+        ], true);
+        $draining = \in_array($worker->state, [
+            ServiceInstance::STATE_DRAINING,
+            ServiceInstance::STATE_STOPPING,
+        ], true);
+        $tagged = (bool)$worker->getMeta('memory_pressure_scale_down', false);
+        if (!$terminal && !($draining && $tagged)) {
             return false;
         }
 
         $fromState = $worker->state;
+        foreach ([
+            'memory_pressure_scale_down',
+            'memory_pressure_scale_down_at',
+            'memory_pressure_scale_down_from_desired',
+            'memory_pressure_scale_down_to_desired',
+        ] as $metaKey) {
+            $worker->setMeta($metaKey, null);
+        }
+        $this->registry->updateInstance($worker);
+
         $this->scheduleResurrectionWithDelay($worker, 0.0, false, true);
         if (!isset($this->resurrectQueue[$key])) {
+            // STOPPED placeholders: fall through to non-HA reconcile start.
+            if ($terminal) {
+                return false;
+            }
+
             return false;
         }
 

@@ -58,6 +58,10 @@ final class MemoryPressureStateMachine
         $swapGrowthMb = $this->positiveFloat($config['swap_growth_mb_per_sample'] ?? null, 8.0);
         $psiThreshold = $this->positiveFloat($config['psi_some_avg10_threshold'] ?? null, 0.20);
         $staggerMs = $this->positiveInt($config['reclaim_stagger_ms_per_worker'] ?? null, 50);
+        $shrinkHoldSamples = $this->positiveInt(
+            $config['shrink_hold_samples'] ?? null,
+            $upgradeSamples
+        );
 
         $pressure = (float)($sample['pressure_ratio'] ?? 0.0);
         $source = (string)($sample['pressure_source'] ?? 'unknown');
@@ -111,7 +115,7 @@ final class MemoryPressureStateMachine
         $changed = $previous !== $this->level;
         $allowsScaleUp = $this->level === self::LEVEL_GREEN;
         $shouldShrink = $this->level === self::LEVEL_CRITICAL
-            && $this->criticalHoldSamples >= 1
+            && $this->criticalHoldSamples >= $shrinkHoldSamples
             && ($now - $this->lastScaleDownAt) >= $scaleDownCooldown;
         $shouldRecover = $this->level === self::LEVEL_GREEN
             && $this->greenStreak >= $recoverSamples

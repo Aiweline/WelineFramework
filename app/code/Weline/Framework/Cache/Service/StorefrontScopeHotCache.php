@@ -42,7 +42,7 @@ final class StorefrontScopeHotCache
         private ?CacheManager $cacheManager = null,
         private ?NamespaceGenerationInterface $generations = null,
         private ?SingleFlightInterface $singleFlight = null,
-        private int $maxProcessEntries = 1024,
+        private int $maxProcessEntries = 128,
     ) {
         $this->maxProcessEntries = max(1, $this->maxProcessEntries);
     }

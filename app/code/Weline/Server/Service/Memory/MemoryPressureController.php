@@ -43,6 +43,28 @@ final class MemoryPressureController
         $this->startupExplicitCount = \max(0, $count);
     }
 
+    public function getStartupExplicitCount(): int
+    {
+        return $this->startupExplicitCount;
+    }
+
+    /**
+     * When false (default), Critical must not shrink Desired below startup -c / serve floor.
+     */
+    public function allowsEmergencyScaleBelowStartupExplicit(): bool
+    {
+        try {
+            $config = Env::get('wls.memory_pressure', []);
+        } catch (\Throwable) {
+            return false;
+        }
+        if (!\is_array($config)) {
+            return false;
+        }
+
+        return (bool)($config['allow_emergency_below_startup_c'] ?? false);
+    }
+
     public function configureHostCapacityCoordination(
         HostMemoryPressureCoordinator $coordinator,
         string $owner,
@@ -236,7 +258,9 @@ final class MemoryPressureController
             $did = $orchestrator->scaleDownOneWorkerForMemoryPressure($this);
             if ($did) {
                 $this->fsm->markScaleDown($now);
-                if ($this->startupExplicitCount > 0) {
+                if ($this->startupExplicitCount > 0
+                    && $this->allowsEmergencyScaleBelowStartupExplicit()
+                ) {
                     WlsLogger::warning_('[MemoryPressure] emergency_scale_down_override');
                 }
             }

@@ -36,10 +36,10 @@ class WlsMemoryAdapter implements CacheAdapterInterface, CacheAdapterHealthInter
     private array $localCache = [];
     private int $localEpoch = 0;
     private ?string $epochSyncedRequestId = null;
-    private int $localCacheMaxSize = 100;
+    private int $localCacheMaxSize = 32;
     private float $localCachePressureThreshold = 0.70;
     private float $localCacheHardPressureThreshold = 0.85;
-    private float $localCacheMaxValueRatio = 0.10;
+    private float $localCacheMaxValueRatio = 0.05;
 
     private string $identity;
     private int $maxItems;
@@ -51,7 +51,7 @@ class WlsMemoryAdapter implements CacheAdapterInterface, CacheAdapterHealthInter
         $this->identity = $identity;
         $this->maxItems = (int) ($config['max_items'] ?? 10000);
         $this->maxMemory = (int) ($config['max_memory'] ?? 67108864);
-        $this->localCacheMaxSize = \max(0, (int) ($config['local_cache_size'] ?? 100));
+        $this->localCacheMaxSize = \max(0, (int) ($config['local_cache_size'] ?? 32));
         $this->localCachePressureThreshold = $this->normalizeRatio(
             $config['local_cache_memory_pressure_threshold'] ?? 0.70,
             0.70
@@ -61,8 +61,8 @@ class WlsMemoryAdapter implements CacheAdapterInterface, CacheAdapterHealthInter
             $this->normalizeRatio($config['local_cache_hard_pressure_threshold'] ?? 0.85, 0.85)
         );
         $this->localCacheMaxValueRatio = $this->normalizeRatio(
-            $config['local_cache_max_value_ratio'] ?? 0.10,
-            0.10
+            $config['local_cache_max_value_ratio'] ?? 0.05,
+            0.05
         );
         $this->config = $config;
         $this->initBucket();
