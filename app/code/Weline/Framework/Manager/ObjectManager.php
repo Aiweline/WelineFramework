@@ -1117,6 +1117,32 @@ class ObjectManager implements ManagerInterface
     }
 
     /**
+     * Drop OM bags for terminated Fibers still pinned by worker locals
+     * (keep-warm / warmup). WeakMap alone cannot release while those refs live.
+     */
+    public static function sweepTerminatedFiberScopes(): int
+    {
+        $cleared = 0;
+        foreach ([self::$fiberInstances, self::$fiberOriginInstances] as $storage) {
+            if (!$storage instanceof \WeakMap) {
+                continue;
+            }
+            $victims = [];
+            foreach ($storage as $fiber => $_) {
+                if ($fiber instanceof \Fiber && $fiber->isTerminated()) {
+                    $victims[] = $fiber;
+                }
+            }
+            foreach ($victims as $fiber) {
+                unset($storage[$fiber]);
+                $cleared++;
+            }
+        }
+
+        return $cleared;
+    }
+
+    /**
      * Clear only the current WLS request Fiber's ObjectManager buckets.
      *
      * This is intentionally narrower than clearInstances(): it releases

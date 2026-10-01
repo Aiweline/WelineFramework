@@ -5318,6 +5318,7 @@ while (true) {
             $memoryTokenFileName,
             $fiberScheduler
         ): void {
+            $self = \Fiber::getCurrent();
             try {
                 WlsLogger::info_("[ConnectionPoolWarmup] async shared-state prewarm start worker={$workerId}");
                 $stats = \Weline\Server\Service\SharedRuntimeConnectionWarmup::warmWorkerPools($workerId, $instanceName, [
@@ -5336,6 +5337,9 @@ while (true) {
             } catch (\Throwable $e) {
                 WlsLogger::warning_("[ConnectionPoolWarmup] async shared-state prewarm failed worker={$workerId}: " . $e->getMessage());
             } finally {
+                if ($self instanceof \Fiber) {
+                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($self);
+                }
                 $fiberScheduler->unregisterFiber();
             }
         });
@@ -5370,6 +5374,7 @@ while (true) {
         $warmupIpcClient = $ipcClient;
         $fiberScheduler->registerFiber();
         $deferredWarmupFiber = new \Fiber(static function () use ($runtime, $workerId, $fiberScheduler, $warmupIpcClient): void {
+            $self = \Fiber::getCurrent();
             $warmupLog = static function (string $message, string $level = 'INFO') use ($workerId, $warmupIpcClient): void {
                 if ($warmupIpcClient !== null && $warmupIpcClient->isConnected()) {
                     $warmupIpcClient->sendLogLine("[WorkerWarmup] Worker{$workerId} {$message}" . PHP_EOL, $level, "Worker#{$workerId}");
@@ -5399,6 +5404,9 @@ while (true) {
                 WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup failed worker={$workerId}: " . $e->getMessage());
                 $warmupLog('warmup_failed', 'WARNING');
             } finally {
+                if ($self instanceof \Fiber) {
+                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($self);
+                }
                 $fiberScheduler->unregisterFiber();
             }
         });
@@ -5464,6 +5472,13 @@ while (true) {
         $controlMessageConsumer($deferredSslCertReload);
     }
     // ========== Homepage keep-warm (idle, low priority) ==========
+    foreach (['homepageKeepWarmFiber', 'deferredWarmupFiber', 'sharedRuntimeConnectionWarmupFiber'] as $bgFiberVar) {
+        $bgFiber = ${$bgFiberVar} ?? null;
+        if ($bgFiber instanceof \Fiber && $bgFiber->isTerminated()) {
+            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($bgFiber);
+            ${$bgFiberVar} = null;
+        }
+    }
     $homepageMemoryPressure = $maxMemoryBytes > 0
         && \memory_get_usage(true) >= (int)($maxMemoryBytes * 0.70);
     if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime
@@ -5471,15 +5486,20 @@ while (true) {
         && !$isMaintenanceWorker
         && !$ipcReceivedShutdown
         && empty($pendingHandshakes)
+        && $homepageKeepWarmFiber === null
         && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen()
         && !wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, null, $http2PendingRequests)
         && $runtime->shouldScheduleHomepageKeepWarm($activeRequests, $ipcDraining, $homepageMemoryPressure)
     ) {
         $fiberScheduler->registerFiber();
         $homepageKeepWarmFiber = new \Fiber(static function () use ($runtime, $fiberScheduler): void {
+            $self = \Fiber::getCurrent();
             try {
                 $runtime->runHomepageKeepWarmCycle();
             } finally {
+                if ($self instanceof \Fiber) {
+                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($self);
+                }
                 $fiberScheduler->unregisterFiber();
             }
         });
@@ -5487,6 +5507,7 @@ while (true) {
             $homepageKeepWarmFiber->start();
         } catch (\Throwable $e) {
             $fiberScheduler->unregisterFiber();
+            $homepageKeepWarmFiber = null;
             WlsLogger::warning_('[WorkerWarmup] homepage keep-warm start failed: ' . $e->getMessage());
         }
     }

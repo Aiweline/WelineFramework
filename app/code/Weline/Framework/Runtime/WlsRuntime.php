@@ -8972,6 +8972,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             RequestResetException::append($failures, 'object_manager:fiber_instances', $e);
         }
         try {
+            // Keep-warm / warmup Fibers may stay pinned after terminate; sweep their OM bags.
+            ObjectManager::sweepTerminatedFiberScopes();
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'object_manager:terminated_fiber_sweep', $e);
+        }
+        try {
             if (Runtime::isPersistent()) {
                 ObjectManager::clearCurrentRequestScope();
             }
