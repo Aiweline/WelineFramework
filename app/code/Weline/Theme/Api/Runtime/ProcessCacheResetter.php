@@ -21,7 +21,6 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
 {
     public function resetProcessCaches(ProcessCacheResetContext $context): int
     {
-        // Soft pressure: keep process-local chrome HTML output.
         // Explicit cache clear: wipe everything including partial HTML.
         if ($context->isExplicitCacheClear()) {
             Partials::clearAllCaches();
@@ -36,8 +35,27 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             return 8;
         }
 
+        // Hard memory pressure (keep-warm Worker): drop rebuildable process L1.
+        // Shared/MS still holds chrome/FPC; omitting this left Zend real ratcheted.
+        if ($context->aggressive) {
+            Partials::clearAllCaches();
+            ControllerFetchFileBefore::clearRuntimeCache();
+            ThemeData::clearProcessMemoryCache();
+            ThemeTemplate::clearProcessCache();
+            LayoutDependencyTracker::clearCache();
+            RuntimeTemplateMaterializer::clearProcessCache();
+            \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+            Template::clearProcessViewFileCache();
+
+            return 7;
+        }
+
+        // Soft pressure: reclaim chrome HTML + HotCache process bag; keep lighter meta.
+        Partials::clearOutputCache();
         Partials::clearMetaCache();
-        return 1;
+        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::trimProcessCacheToBudget(1_048_576);
+
+        return 3;
     }
 
     public function getMemoryUsage(): int

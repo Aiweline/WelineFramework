@@ -6,15 +6,10 @@ namespace Weline\Theme\Service;
 
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\RuntimeCachePolicy;
-use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
-use Weline\Framework\Cache\KeyBuilder;
-use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
-use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\View\Template;
 use Weline\Theme\Exception\SlotBoundaryRequiredException;
@@ -29,7 +24,6 @@ use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
-use Weline\Theme\Service\Storefront\StorefrontRenderContextBag;
 use Weline\Theme\Service\ThemeLayoutBudgetPhases;
 use Weline\Theme\Service\ThemePdpBudgetPhases;
 use Weline\Theme\Taglib\Slot;
@@ -37,8 +31,10 @@ use Weline\Widget\Api\WidgetRegistryInterface;
 use Weline\Widget\Api\Rendering\RuntimeTemplateRendererInterface;
 
 /**
- * 插槽渲染服务
- * 
+ * 插槽渲染服务（渲染编排器；禁止 ProcessShared）。
+ *
+ * 请求事实在 RequestContext 袋；本服务仅持 Fiber 本地 L1 与单次 SlotRenderPass 算法草稿。
+ *
  * 基于属性标记的插槽系统：
  * - 使用 data-wslot 系列属性标记插槽，不添加额外DOM元素
  * - 支持在任何HTML元素上标记为插槽
@@ -60,73 +56,27 @@ class SlotRendererService
     private WidgetRegistryInterface $widgetRegistry;
     private ThemePlaceableRegistryInterface $placeableRegistry;
 
-    /**
-     * Opaque blocks parked during DOMDocument parse (script/style + widget-wrapper inners).
-     * Parking wrapper inners prevents libxml from reparenting <section>/<article> out of the shell.
-     *
-     * @var array<string, string>
-     */
-    private array $domOpaqueTokens = [];
     private ThemeComponentRenderer $componentRenderer;
     private Template $template;
 
-    // 缓存
-    private array $widgetCache = [];
-    private array $layoutCache = [];
-    private const PUBLISHED_LAYOUT_CACHE_TTL = 120.0;
-    private const WIDGET_OUTPUT_CACHE_TTL = 120.0;
-    private const MAX_PUBLISHED_LAYOUT_CACHE_ENTRIES = 128;
-    private const MAX_WIDGET_OUTPUT_CACHE_ENTRIES = 128;
-    private const CACHEABLE_WIDGET_OUTPUTS = [];
-    private static array $publishedLayoutDataCache = [];
-    private static array $widgetOutputCache = [];
-    private static ?SharedCacheStateInterface $runtimeCache = null;
-    private static bool $runtimeCacheResolved = false;
     private static ?\WeakMap $fiberRenderYieldAt = null;
     private const WLS_RENDER_YIELD_MIN_INTERVAL_US = 10000;
-    
-    // 孤儿部件（找不到对应slot的部件）
-    private array $orphanWidgets = [];
 
     /**
-     * 失效部件：槽位仍在，但模块/定义/模板已缺失或渲染失败。
-     *
-     * @var list<array{
-     *   slot_id:string,
-     *   layout_id:int,
-     *   node_uid:string,
-     *   widget_code:string,
-     *   widget_module:string,
-     *   widget_name:string,
-     *   reason:string,
-     *   message:string
-     * }>
+     * Active processSlots* pass (algorithm scratch only).
+     * Request facts live in RequestContext bags — never mirror them here.
+     * Layout/widget HTML must not be process-cached on this renderer.
      */
-    private array $unavailableWidgets = [];
+    private ?SlotRenderPass $activePass = null;
 
-    /** 当前渲染周期内已填充的 slot_id，同一 slot_id 只填充文档中第一处出现，避免容器部件内层同名插槽被重复填充导致泄露 */
-    private array $filledSlotIdsThisRun = [];
-
-    /**
-     * 页面级数据快照（如 storefront_offer）。
-     * ThemeComponentRenderer / RuntimeTemplateMaterializer 会 unsetData()，
-     * 必须在首个部件渲染前捕获并回注到部件 config。
-     *
-     * @var array<string, mixed>
-     */
-    private array $pageRenderContext = [];
-
-    /** 当前渲染周期使用的主题（用于部件模板覆盖解析，确保预览显示所选主题而非全局激活主题） */
-    private ?WelineTheme $renderTheme = null;
-
-    /** 当前渲染区域：frontend/backend。 */
-    private string $renderArea = 'frontend';
+    /** Last completed pass — orphan/unavailable diagnostics for editor APIs. */
+    private ?SlotRenderPass $lastPass = null;
 
     private ?SlotBoundaryScanner $boundaryScanner = null;
 
     private ?SlotHtmlOpaqueParker $boundaryParker = null;
 
-    /** 已加载主题缓存：theme_id => WelineTheme|null */
+    /** 已加载主题缓存：theme_id => WelineTheme|null（跨 pass 可复用；非布局/部件 HTML） */
     private array $renderThemeCache = [];
 
     private RuntimeTemplateRendererInterface $runtimeTemplateRenderer;
@@ -149,6 +99,37 @@ class SlotRendererService
         $this->runtimeTemplateRenderer = $runtimeTemplateRenderer;
         $this->layoutValueHydrators = $layoutValueHydrators
             ?? ObjectManager::getInstance(LayoutValueHydrationRegistry::class);
+    }
+
+    /**
+     * Current algorithm pass. Outside processSlots*, falls back to lastPass for diagnostics APIs.
+     */
+    private function pass(): SlotRenderPass
+    {
+        if ($this->activePass !== null) {
+            return $this->activePass;
+        }
+
+        return $this->lastPass ??= new SlotRenderPass();
+    }
+
+    /**
+     * @template T
+     * @param callable():T $callback
+     * @return T
+     */
+    private function withRenderPass(callable $callback): mixed
+    {
+        $previous = $this->activePass;
+        $this->activePass = new SlotRenderPass();
+        try {
+            $result = $callback();
+            $this->lastPass = $this->activePass;
+
+            return $result;
+        } finally {
+            $this->activePass = $previous;
+        }
     }
 
     /**
@@ -234,11 +215,7 @@ class SlotRendererService
                     return $html;
                 }
 
-                $this->filledSlotIdsThisRun = [];
-                $this->unavailableWidgets = [];
-                $this->orphanWidgets = [];
-                $this->capturePageRenderContext();
-                try {
+                return $this->withRenderPass(function () use ($html, $slotWidgets, $filterToHtmlSlots, $pageType, $themeId, $area): string {
                     $processed = $this->withRenderTheme(
                         $themeId,
                         $area,
@@ -249,13 +226,10 @@ class SlotRendererService
                         $processed = $this->repairUnhealthyWidgetWrappers($processed);
                     }
 
-                    $stamped = $this->appendWidgetHealthToastBridge(
+                    return $this->appendWidgetHealthToastBridge(
                         $this->stampFinalWidgetHtmlHealth($processed)
                     );
-                    return $stamped;
-                } finally {
-                    $this->pageRenderContext = [];
-                }
+                });
             }
         );
     }
@@ -347,11 +321,8 @@ class SlotRendererService
         $this->prefetchSlotDictionaryModules($slotWidgets);
 
         // Boundaries-only slot fill (legacy DOM engine removed).
-        $this->filledSlotIdsThisRun = [];
-        $this->unavailableWidgets = [];
-        $this->orphanWidgets = [];
-        $this->capturePageRenderContext();
-        try {
+        // Page facts stay in RequestContext bags; pass holds algorithm scratch only.
+        return $this->withRenderPass(function () use ($html, $slotWidgets, $themeId, $pageType, $status, $area): string {
             $html = $this->traceCall(
                 'slot_renderer::processSlotsWithBoundaries',
                 fn() => $this->withRenderTheme(
@@ -383,9 +354,7 @@ class SlotRendererService
             return $this->appendWidgetHealthToastBridge(
                 $this->stampFinalWidgetHtmlHealth($html)
             );
-        } finally {
-            $this->pageRenderContext = [];
-        }
+        });
     }
     /** Prefetch data only; each template still activates its own translation module. */
     private function prefetchSlotDictionaryModules(array $slotWidgets): void
@@ -585,24 +554,24 @@ class SlotRendererService
         $area = $area === 'backend' ? 'backend' : 'frontend';
         $theme = $this->resolveRenderTheme($themeId);
         if (!$theme) {
-            $previousRenderArea = $this->renderArea;
-            $this->renderArea = $area;
+            $previousRenderArea = $this->pass()->renderArea;
+            $this->pass()->renderArea = $area;
             try {
                 return $callback();
             } finally {
-                $this->renderArea = $previousRenderArea;
+                $this->pass()->renderArea = $previousRenderArea;
             }
         }
 
-        $previousRenderTheme = $this->renderTheme;
-        $previousRenderArea = $this->renderArea;
+        $previousRenderTheme = $this->pass()->renderTheme;
+        $previousRenderArea = $this->pass()->renderArea;
         $previousThemeData = ThemeData::getCurrentTheme();
         $previousArea = ThemeData::getCurrentArea();
         $shouldSwitchThemeData = (int)($previousThemeData?->getId() ?? 0) !== (int)$theme->getId()
             || (string)$previousArea !== $area;
 
-        $this->renderTheme = $theme;
-        $this->renderArea = $area;
+        $this->pass()->renderTheme = $theme;
+        $this->pass()->renderArea = $area;
         if ($shouldSwitchThemeData) {
             ThemeData::setCurrentTheme($theme);
             ThemeData::setCurrentArea($area);
@@ -611,8 +580,8 @@ class SlotRendererService
         try {
             return $callback();
         } finally {
-            $this->renderTheme = $previousRenderTheme;
-            $this->renderArea = $previousRenderArea;
+            $this->pass()->renderTheme = $previousRenderTheme;
+            $this->pass()->renderArea = $previousRenderArea;
             if ($shouldSwitchThemeData) {
                 ThemeData::setCurrentTheme($previousThemeData);
                 ThemeData::setCurrentArea($previousArea);
@@ -725,7 +694,7 @@ class SlotRendererService
             return $slotIds;
         }
 
-        $area = $this->renderArea === 'backend' ? 'backend' : 'frontend';
+        $area = $this->pass()->renderArea === 'backend' ? 'backend' : 'frontend';
         $option = 'default';
         try {
             $identity = $this->currentLayoutIdentity($area);
@@ -740,9 +709,9 @@ class SlotRendererService
         try {
             /** @var ThemeResourceCatalog $catalog */
             $catalog = ObjectManager::getInstance(ThemeResourceCatalog::class);
-            $resource = $catalog->getLayoutResource($area, $this->renderTheme, $pageType, $option);
+            $resource = $catalog->getLayoutResource($area, $this->pass()->renderTheme, $pageType, $option);
             if ($resource === null && $option !== 'default') {
-                $resource = $catalog->getLayoutResource($area, $this->renderTheme, $pageType, 'default');
+                $resource = $catalog->getLayoutResource($area, $this->pass()->renderTheme, $pageType, 'default');
             }
             if ($resource === null) {
                 return $slotIds;
@@ -775,7 +744,7 @@ class SlotRendererService
      */
     private function expandSlotIdsWithContainerChildSlots(array $slotWidgets, array $slotIds): array
     {
-        $renderArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
+        $renderArea = $this->pass()->renderArea === 'backend' ? 'backend' : 'frontend';
 
         foreach ($slotWidgets as $widgets) {
             foreach ($widgets as $widget) {
@@ -799,7 +768,7 @@ class SlotRendererService
                     (string)($widget['widget_module'] ?? ''),
                     (string)($widget['widget_type'] ?? ''),
                     $widgetCode,
-                    $this->renderTheme,
+                    $this->pass()->renderTheme,
                     $renderArea,
                 );
                 if ($definition === null || !$definition->isContainer || $definition->slots === []) {
@@ -1197,7 +1166,7 @@ class SlotRendererService
         for ($iteration = 0; $iteration < $maxIterations; $iteration++) {
             $pendingSlotIds = [];
             foreach ($slotWidgets as $slotId => $widgets) {
-                if ($widgets !== [] && !isset($this->filledSlotIdsThisRun[$slotId])) {
+                if ($widgets !== [] && !isset($this->pass()->filledSlotIds[$slotId])) {
                     $pendingSlotIds[$slotId] = true;
                 }
             }
@@ -1226,7 +1195,7 @@ class SlotRendererService
                 $batchSlotIds = [];
                 foreach ($batch as $region) {
                     $slotId = $region['id'];
-                    if (isset($this->filledSlotIdsThisRun[$slotId])) {
+                    if (isset($this->pass()->filledSlotIds[$slotId])) {
                         continue;
                     }
 
@@ -1259,7 +1228,7 @@ class SlotRendererService
                             ],
                         );
                     foreach ($batchSlotIds as $slotId) {
-                        $this->filledSlotIdsThisRun[$slotId] = true;
+                        $this->pass()->filledSlotIds[$slotId] = true;
                     }
                     $filled = true;
                 }
@@ -1348,7 +1317,7 @@ class SlotRendererService
         foreach ($regions as $region) {
             $slotId = trim((string)($region['id'] ?? ''));
             if ($slotId === ''
-                || isset($this->filledSlotIdsThisRun[$slotId])
+                || isset($this->pass()->filledSlotIds[$slotId])
                 || !isset($slotWidgets[$slotId])
                 || $slotWidgets[$slotId] === []
             ) {
@@ -1398,7 +1367,7 @@ class SlotRendererService
         $scanner = $this->boundaryScanner();
         foreach ($slotWidgets as $slotId => $widgets) {
             $slotId = trim((string)$slotId);
-            if ($slotId === '' || $widgets === [] || isset($this->filledSlotIdsThisRun[$slotId])) {
+            if ($slotId === '' || $widgets === [] || isset($this->pass()->filledSlotIds[$slotId])) {
                 continue;
             }
 
@@ -1430,7 +1399,7 @@ class SlotRendererService
             }
 
             $html = $nextHtml;
-            $this->filledSlotIdsThisRun[$slotId] = true;
+            $this->pass()->filledSlotIds[$slotId] = true;
         }
 
         return $html;
@@ -2144,8 +2113,8 @@ class SlotRendererService
             }
 
             $end = $closeStart + strlen($closingTag);
-            $token = '<!--WELINE_DOM_OPAQUE_' . count($this->domOpaqueTokens) . '_' . bin2hex(random_bytes(4)) . '-->';
-            $this->domOpaqueTokens[$token] = substr($html, $openStart, $end - $openStart);
+            $token = '<!--WELINE_DOM_OPAQUE_' . count($this->pass()->domOpaqueTokens) . '_' . bin2hex(random_bytes(4)) . '-->';
+            $this->pass()->domOpaqueTokens[$token] = substr($html, $openStart, $end - $openStart);
             $out .= substr($html, $offset, $openStart - $offset) . $token;
             $offset = $end;
         }
@@ -2155,13 +2124,13 @@ class SlotRendererService
 
     private function restoreDomOpaqueBlocks(string $html): string
     {
-        if ($this->domOpaqueTokens === [] || $html === '') {
+        if ($this->pass()->domOpaqueTokens === [] || $html === '') {
             return $html;
         }
 
         // Wrapper-inner tokens may embed script/style tokens; expand until stable.
         for ($i = 0; $i < 8; $i++) {
-            $next = \strtr($html, $this->domOpaqueTokens);
+            $next = \strtr($html, $this->pass()->domOpaqueTokens);
             if ($next === $html) {
                 break;
             }
@@ -2808,7 +2777,7 @@ class SlotRendererService
      */
     private function detectOrphanWidgets(array $slotWidgets, array $existingSlotIds, string $pageType = ''): void
     {
-        $this->orphanWidgets = [];
+        $this->pass()->orphanWidgets = [];
         
         foreach ($slotWidgets as $slotId => $widgets) {
             // 如果这个 slot ID 在模板中不存在，标记其所有部件为孤儿
@@ -2817,7 +2786,7 @@ class SlotRendererService
                     if (!\is_array($widget) || !$this->widgetBelongsToCurrentPageType($widget, $pageType)) {
                         continue;
                     }
-                    $this->orphanWidgets[] = [
+                    $this->pass()->orphanWidgets[] = [
                         'slot_id' => $slotId,
                         'layout_id' => (int)($widget['layout_id'] ?? 0),
                         'widget_code' => $widget['widget_code'] ?? '',
@@ -2862,8 +2831,8 @@ class SlotRendererService
                 $module,
                 $type,
                 $code,
-                $this->renderTheme,
-                $this->renderArea === 'backend' ? 'backend' : 'frontend',
+                $this->pass()->renderTheme,
+                $this->pass()->renderArea === 'backend' ? 'backend' : 'frontend',
             );
         } catch (\Throwable) {
             return true;
@@ -2906,7 +2875,7 @@ class SlotRendererService
      */
     public function getOrphanWidgets(): array
     {
-        return $this->orphanWidgets;
+        return $this->pass()->orphanWidgets;
     }
     
     /**
@@ -2914,7 +2883,7 @@ class SlotRendererService
      */
     public function hasOrphanWidgets(): bool
     {
-        return !empty($this->orphanWidgets);
+        return !empty($this->pass()->orphanWidgets);
     }
 
     /**
@@ -2931,12 +2900,12 @@ class SlotRendererService
      */
     public function getUnavailableWidgets(): array
     {
-        return $this->unavailableWidgets;
+        return $this->pass()->unavailableWidgets;
     }
 
     public function hasUnavailableWidgets(): bool
     {
-        return $this->unavailableWidgets !== [];
+        return $this->pass()->unavailableWidgets !== [];
     }
 
     /**
@@ -3061,7 +3030,7 @@ class SlotRendererService
         foreach (['layout_source', 'source', 'source_position'] as $assetKey) {
             if (isset($widget[$assetKey]) && $widget[$assetKey] !== '') { $config['_' . $assetKey] = $widget[$assetKey]; }
         }
-        $renderArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
+        $renderArea = $this->pass()->renderArea === 'backend' ? 'backend' : 'frontend';
 
         // Uninstalled modules must not abort slot/layout seeding: DEV tip in place, PROD empty.
         $widgetModule = \is_string($widgetModule) ? $widgetModule : '';
@@ -3082,35 +3051,11 @@ class SlotRendererService
             );
         }
 
-        $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, $this->renderTheme, $renderArea);
+        $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, $this->pass()->renderTheme, $renderArea);
         $config = $this->mergeTranslatedWidgetConfig($widget, $config, $definition);
         $config = $this->hydrateTypedLayoutValues($config, $renderArea, $widget);
-        $widgetOutputCacheKey = $this->buildWidgetOutputCacheKey($widget, $config);
-        if ($widgetOutputCacheKey !== null && $this->shouldBypassWidgetOutputCacheForTemplatePerfOverlay()) {
-            $widgetOutputCacheKey = null;
-        }
-        if ($widgetOutputCacheKey !== null) {
-            $cachedWidget = self::$widgetOutputCache[$widgetOutputCacheKey] ?? null;
-            if (\is_array($cachedWidget)
-                && isset($cachedWidget['expires_at'], $cachedWidget['html'])
-                && (float)$cachedWidget['expires_at'] >= \microtime(true)
-                && \is_string($cachedWidget['html'])) {
-                unset(self::$widgetOutputCache[$widgetOutputCacheKey]);
-                self::$widgetOutputCache[$widgetOutputCacheKey] = $cachedWidget;
-                return $cachedWidget['html'];
-            }
-            unset(self::$widgetOutputCache[$widgetOutputCacheKey]);
-            $runtimeCachedWidget = $this->runtimeCacheGet($widgetOutputCacheKey);
-            if (\is_string($runtimeCachedWidget)) {
-                $this->rememberProcessWidgetOutput($widgetOutputCacheKey, [
-                    'expires_at' => \microtime(true) + $this->widgetOutputCacheTtl(),
-                    'html' => $runtimeCachedWidget,
-                ]);
-                return $runtimeCachedWidget;
-            }
-        }
 
-        // 检查缓存
+        // Placeable definition path (normal template/component render — no widget HTML cache).
         if ($definition) {
             try {
                 $renderConfig = $this->appendWidgetRenderContext($config, $widget);
@@ -3122,7 +3067,7 @@ class SlotRendererService
                 ];
                 $html = RequestLifecycleTrace::measurePhase(
                     'theme.slots.widget.component_render',
-                    fn(): string => (string)$this->componentRenderer->render($definition, $renderConfig, $this->renderTheme, [
+                    fn(): string => (string)$this->componentRenderer->render($definition, $renderConfig, $this->pass()->renderTheme, [
                         'area' => $renderArea,
                         // Editor iframe may keep PDP shells without product identity.
                         // Do not map editor/theme-preview to widget-canvas preview_mode (is-preview).
@@ -3142,7 +3087,7 @@ class SlotRendererService
                     $widgetTimingMeta,
                 );
 
-                return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
+                return $html;
             } catch (\Throwable $throwable) {
                 return $this->renderUnavailableWidgetTip(
                     $widget,
@@ -3152,12 +3097,7 @@ class SlotRendererService
             }
         }
 
-        $cacheKey = $renderArea . '::' . $widgetModule . '::' . $widgetCode;
-        if (!isset($this->widgetCache[$cacheKey])) {
-            $this->widgetCache[$cacheKey] = $this->getWidgetMeta($widgetModule, $widgetCode, $renderArea);
-        }
-
-        $widgetMeta = $this->widgetCache[$cacheKey];
+        $widgetMeta = $this->getWidgetMeta($widgetModule, $widgetCode, $renderArea);
         if (!$widgetMeta) {
             return $this->renderUnavailableWidgetTip(
                 $widget,
@@ -3187,7 +3127,7 @@ class SlotRendererService
                     (string)($widgetMeta['name'] ?? $widgetCode)
                 );
 
-                return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
+                return $html;
             } catch (\Throwable $throwable) {
                 return $this->renderUnavailableWidgetTip(
                     $widget,
@@ -3218,7 +3158,7 @@ class SlotRendererService
                 (string)($widgetMeta['name'] ?? $widgetCode)
             );
 
-            return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
+            return $html;
         } catch (\Throwable $e) {
             // 渲染失败，返回错误提示（仅开发模式）；不得中断其余槽位/布局播种
             return $this->renderUnavailableWidgetTip(
@@ -3270,7 +3210,7 @@ class SlotRendererService
         $widgetName = (string)($widget['meta']['name'] ?? ($widgetCode !== '' ? $widgetCode : '未知部件'));
         $slotId = (string)($widget['slot_id'] ?? '');
 
-        foreach ($this->unavailableWidgets as $existing) {
+        foreach ($this->pass()->unavailableWidgets as $existing) {
             if (
                 ($nodeUid !== '' && ($existing['node_uid'] ?? '') === $nodeUid)
                 || (
@@ -3284,7 +3224,7 @@ class SlotRendererService
             }
         }
 
-        $this->unavailableWidgets[] = [
+        $this->pass()->unavailableWidgets[] = [
             'slot_id' => $slotId,
             'layout_id' => (int)($widget['layout_id'] ?? 0),
             'node_uid' => $nodeUid,
@@ -3793,8 +3733,8 @@ HTML;
             return $html;
         }
 
-        $priorTokens = $this->domOpaqueTokens;
-        $this->domOpaqueTokens = [];
+        $priorTokens = $this->pass()->domOpaqueTokens;
+        $this->pass()->domOpaqueTokens = [];
         try {
             $work = $this->parkDomOpaqueBlocks($html);
             $length = \strlen($work);
@@ -3857,7 +3797,7 @@ HTML;
 
             return $this->restoreDomOpaqueBlocks($out);
         } finally {
-            $this->domOpaqueTokens = $priorTokens;
+            $this->pass()->domOpaqueTokens = $priorTokens;
         }
     }
 
@@ -4004,7 +3944,7 @@ HTML;
             'dashboard-side' => true,
             'dashboard-detail' => true,
         ];
-        if ($this->renderArea === 'backend' && isset($dashboardSlots[$slotId])) {
+        if ($this->pass()->renderArea === 'backend' && isset($dashboardSlots[$slotId])) {
             $colSpan = (int)($dashboardLayout['colSpan'] ?? $dashboardLayout['col_span'] ?? 3);
             $rowSpan = (int)($dashboardLayout['rowSpan'] ?? $dashboardLayout['row_span'] ?? 1);
             $sortOrder = (int)($dashboardLayout['sortOrder'] ?? $dashboardLayout['sort_order'] ?? 0);
@@ -4038,7 +3978,7 @@ HTML;
         $layoutId = (string)($widget['layout_id'] ?? '');
         $nodeUid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
         $slotId = (string)($widget['slot_id'] ?? '');
-        $renderArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
+        $renderArea = $this->pass()->renderArea === 'backend' ? 'backend' : 'frontend';
 
         $config['layout_id'] = $layoutId;
         $config['_layout_id'] = $layoutId;
@@ -4063,58 +4003,9 @@ HTML;
             $config['preview_mode'] = !empty($config['preview_mode']);
         }
 
-        foreach ($this->pageRenderContext as $key => $value) {
-            if (!\array_key_exists($key, $config)
-                || $config[$key] === null
-                || $config[$key] === ''
-                || $config[$key] === []
-            ) {
-                $config[$key] = $value;
-            }
-        }
+        // Page facts: RequestContext bags / OfferResolver / PageAssignBag — no SlotRenderer mirror.
 
         return $config;
-    }
-
-    /**
-     * 在首个部件 unsetData 前冻结页面上下文，供后续部件 config 回注。
-     * WS1：合并 storefront.render_context.v1（website/locale/currency/maintenance/theme_meta）；
-     * 购物车/用户会话/PDP offer 仍由 Template 键与产品主权提供，不进主题袋主权。
-     */
-    private function capturePageRenderContext(): void
-    {
-        $keys = [
-            'storefront_offer',
-            'storefront_offers',
-            'storefront_offers_unfiltered',
-            'storefront_category',
-            'selected_offer_uuid',
-            'variant_catalog',
-            'page_title',
-            'preview_mode',
-            'editor_mode',
-        ];
-        $snapshot = [];
-        foreach ($keys as $key) {
-            try {
-                $value = $this->template->getData($key);
-            } catch (\Throwable) {
-                continue;
-            }
-            if ($value === null || $value === '' || $value === []) {
-                continue;
-            }
-            $snapshot[$key] = $value;
-        }
-        foreach (StorefrontRenderContextBag::captureFields() as $key => $value) {
-            if ($value === null || $value === '' || $value === []) {
-                continue;
-            }
-            if (!\array_key_exists($key, $snapshot)) {
-                $snapshot[$key] = $value;
-            }
-        }
-        $this->pageRenderContext = $snapshot;
     }
 
     private function isEditorPreviewRequest(): bool
@@ -4154,7 +4045,7 @@ HTML;
             $widgetModule = (string)($widget['widget_module'] ?? '');
             $widgetCode = (string)($widget['widget_code'] ?? '');
             $widgetType = (string)($widget['widget_type'] ?? '');
-            $widgetArea = $this->renderArea === 'backend' ? 'backend' : 'frontend';
+            $widgetArea = $this->pass()->renderArea === 'backend' ? 'backend' : 'frontend';
             $instanceIdentify = $this->resolveWidgetInstanceIdentify($config, $widgetArea);
             $locale = $this->resolveRenderLocale();
 
@@ -4380,49 +4271,6 @@ HTML;
     /**
      * 获取部件元数据
      */
-    private function shouldBypassWidgetOutputCacheForTemplatePerfOverlay(): bool
-    {
-        try {
-            return RequestLifecycleTrace::isTemplatePerfOverlayRequested();
-        } catch (\Throwable) {
-            return false;
-        }
-    }
-
-    private function buildWidgetOutputCacheKey(array $widget, array $config): ?string
-    {
-        $widgetModule = (string)($widget['widget_module'] ?? '');
-        $widgetCode = (string)($widget['widget_code'] ?? '');
-        $identity = $widgetModule . '::' . $widgetCode;
-        if (!isset(self::CACHEABLE_WIDGET_OUTPUTS[$identity])) {
-            return null;
-        }
-
-        try {
-            // Chrome widget HTML must share across same-locale PDPs. Request::getBaseUrl()
-            // and pathInfo embed the product URI and would shard process L1 per URL.
-            $context = [
-                'identity' => $identity,
-                'layout_id' => (string)($widget['layout_id'] ?? ''),
-                'slot_id' => (string)($widget['slot_id'] ?? ''),
-                'type' => (string)($widget['widget_type'] ?? ''),
-                'area' => $this->renderArea === 'backend' ? 'backend' : 'frontend',
-                'config' => $config,
-                'cache_version' => '20260921-widget-origin-base',
-                'environment' => KeyBuilder::environmentContext([
-                    'scope' => 'theme-widget-output',
-                ], [
-                    'area_route' => false,
-                    'base_url' => true,
-                ]),
-            ];
-        } catch (\Throwable) {
-            return null;
-        }
-
-        return 'widget.output.' . \sha1(\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: $identity);
-    }
-
     private function widgetInstanceKey(array $widget, array $config): string
     {
         return \sha1(\json_encode([
@@ -4433,21 +4281,6 @@ HTML;
             'slot_id' => (string)($widget['slot_id'] ?? ''),
             'config' => $config,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
-    }
-
-    private function rememberWidgetOutput(?string $cacheKey, string $html): string
-    {
-        if ($cacheKey === null) {
-            return $html;
-        }
-
-        $this->rememberProcessWidgetOutput($cacheKey, [
-            'expires_at' => \microtime(true) + $this->widgetOutputCacheTtl(),
-            'html' => $html,
-        ]);
-        $this->runtimeCacheSet($cacheKey, $html, $this->widgetOutputCacheTtl());
-
-        return $html;
     }
 
     private function getWidgetMeta(string $module, string $code, string $area): ?array
@@ -4552,7 +4385,7 @@ HTML;
             // Fall through to RequestContext ScopeIdentity.
         }
 
-        $area = $area === 'backend' || $this->renderArea === 'backend' ? 'backend' : 'frontend';
+        $area = $area === 'backend' || $this->pass()->renderArea === 'backend' ? 'backend' : 'frontend';
         $scope = RequestContext::scopeIdentity();
         $normalizer = ObjectManager::getInstance(ThemeLayoutScopeNormalizer::class);
         if ($scope === null) {
@@ -4591,93 +4424,12 @@ HTML;
     {
         $identity = $identityOverride ?? $this->currentLayoutIdentity($area);
         $identity['locale_code'] = '';
-        $hasTargetIdentity = $this->hasTargetIdentity($identity);
-        // Structure cache key: no locale (mount graph is language-neutral).
-        $cacheKey = "{$themeId}:{$pageType}:{$status}:"
-            . $identity['layout_option'] . ':'
-            . $identity['scope'] . ':'
-            . $identity['target_type'] . ':'
-            . $identity['target_id'];
-        $isDraft = ($status === ThemeLayout::STATUS_DRAFT);
-        $cacheablePublished = !$isDraft && !$hasTargetIdentity;
-
-        $layout = null;
         /** @var ThemeRuntimeLayoutResolver $runtimeLayoutResolver */
         $runtimeLayoutResolver = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class);
-        // 草稿和页面级 target 不读缓存，保证编辑器/预览/页面级渲染每次按当前 identify 取数。
-        if ($cacheablePublished && isset($this->layoutCache[$cacheKey])) {
-            $layout = $this->layoutCache[$cacheKey];
-        } elseif ($cacheablePublished) {
-            $cached = self::$publishedLayoutDataCache[$cacheKey] ?? null;
-            if (\is_array($cached)
-                && isset($cached['expires_at'], $cached['data'])
-                && (float)$cached['expires_at'] >= \microtime(true)
-                && \is_array($cached['data'])) {
-                unset(self::$publishedLayoutDataCache[$cacheKey]);
-                self::$publishedLayoutDataCache[$cacheKey] = $cached;
-                $this->layoutCache[$cacheKey] = $cached['data'];
-                $layout = $cached['data'];
-            } else {
-                unset(self::$publishedLayoutDataCache[$cacheKey]);
-                // Cross-worker structure reuse via CachePolicy HotCache (not theme_runtime IPC).
-                $hotCache = $this->resolvePublishedLayoutHotCache();
-                if ($hotCache instanceof StorefrontScopeHotCache) {
-                    $resolved = $hotCache->rememberPolicy(
-                        StorefrontThemeCacheCoordinator::publishedLayoutStructurePolicy(),
-                        $this->publishedLayoutStructureLogicalKey($themeId, $pageType, $area, $identity),
-                        static function () use (
-                            $runtimeLayoutResolver,
-                            $themeId,
-                            $pageType,
-                            $status,
-                            $area,
-                            $identity,
-                        ): array {
-                            return $runtimeLayoutResolver->resolveLayout(
-                                $themeId,
-                                $pageType,
-                                $status,
-                                $area,
-                                $identity,
-                            );
-                        },
-                    );
-                    if (\is_array($resolved)) {
-                        $this->layoutCache[$cacheKey] = $resolved;
-                        $this->rememberPublishedLayoutData($cacheKey, $resolved);
-                        $layout = $resolved;
-                    }
-                }
-            }
-        }
+        // No request/process layout memo on SlotRenderer — resolver owns published HotCache.
+        $layout = $runtimeLayoutResolver->resolveLayout($themeId, $pageType, $status, $area, $identity);
 
-        if (!\is_array($layout)) {
-            // 1. Structure-only resolve (published 不读 legacy theme_layout).
-            $layout = $runtimeLayoutResolver->resolveLayout($themeId, $pageType, $status, $area, $identity);
-
-            // Hard cutover: no request-time PAGE_TYPE_DEFAULT steal, footer-container
-            // repair, ProductPageLayoutNormalizer, or default_injections — bake only.
-            // Empty published layouts stay empty until an immutable Release is created.
-
-            // 仅普通已发布布局写入结构缓存；草稿和页面级 target 不缓存。
-            // Storefront must not rely on this path (entity SlotFiller). Kept for
-            // editor/draft callers that still hit getLayoutData.
-            if ($cacheablePublished) {
-                $this->layoutCache[$cacheKey] = $layout;
-                $this->rememberPublishedLayoutData($cacheKey, $layout);
-                $hotCache = $this->resolvePublishedLayoutHotCache();
-                if ($hotCache instanceof StorefrontScopeHotCache) {
-                    $hotCache->rememberPolicy(
-                        StorefrontThemeCacheCoordinator::publishedLayoutStructurePolicy(),
-                        $this->publishedLayoutStructureLogicalKey($themeId, $pageType, $area, $identity),
-                        static fn(): array => $layout,
-                    );
-                }
-            }
-        }
-
-        // Language overlay after structure cache hit/miss — must not write back into structure cache.
-        // Deep-copy so in-place overlay cannot mutate the shared structure entry.
+        // Language overlay after structure resolve — deep-copy so overlay cannot mutate HotCache entry.
         $structure = \json_decode(\json_encode($layout, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '[]', true);
         if (!\is_array($structure)) {
             $structure = $layout;
@@ -4725,32 +4477,6 @@ HTML;
         }
     }
 
-    /** @param array<string,mixed> $layout */
-    private function rememberPublishedLayoutData(string $cacheKey, array $layout): void
-    {
-        if (count(self::$publishedLayoutDataCache) >= self::MAX_PUBLISHED_LAYOUT_CACHE_ENTRIES
-            && !isset(self::$publishedLayoutDataCache[$cacheKey])
-        ) {
-            array_shift(self::$publishedLayoutDataCache);
-        }
-        unset(self::$publishedLayoutDataCache[$cacheKey]);
-        self::$publishedLayoutDataCache[$cacheKey] = [
-            'expires_at' => microtime(true) + $this->publishedLayoutCacheTtl(),
-            'data' => $layout,
-        ];
-    }
-    
-    /**
-     * @param array{target_type:string,target_id:int} $identity
-     */
-    private function hasTargetIdentity(array $identity): bool
-    {
-        $targetType = trim((string)($identity['target_type'] ?? ''));
-        $targetId = (int)($identity['target_id'] ?? 0);
-
-        return ($targetType !== '' && $targetType !== 'global') || $targetId > 0;
-    }
-    
     /**
      * 检查布局中是否有部件
      */
@@ -4813,50 +4539,28 @@ HTML;
     }
 
     /**
-     * 清除缓存
+     * Reset pass-local state. SlotRenderer holds no layout/widget process L1.
      */
     public function clearCache(): void
     {
-        $this->widgetCache = [];
-        $this->layoutCache = [];
-        $this->orphanWidgets = [];
-        $this->unavailableWidgets = [];
-        self::$publishedLayoutDataCache = [];
-        self::$widgetOutputCache = [];
+        $this->activePass = null;
+        $this->lastPass = null;
         $this->purgeRuntimeCacheNamespace();
-        self::$runtimeCache = null;
-        self::$runtimeCacheResolved = false;
     }
 
-    /** Clear process L1 arrays only; the shared runtime namespace remains intact. */
+    /** Compatibility no-op — layout/widget process L1 removed from SlotRenderer. */
     public static function clearProcessMemoryCache(): void
     {
-        self::$publishedLayoutDataCache = [];
-        self::$widgetOutputCache = [];
     }
 
     public static function processCacheItemCount(): int
     {
-        return count(self::$publishedLayoutDataCache) + count(self::$widgetOutputCache);
-    }
-
-    /** @param array{expires_at:float,html:string} $entry */
-    private function rememberProcessWidgetOutput(string $cacheKey, array $entry): void
-    {
-        unset(self::$widgetOutputCache[$cacheKey]);
-        while (count(self::$widgetOutputCache) >= self::MAX_WIDGET_OUTPUT_CACHE_ENTRIES) {
-            $oldest = array_key_first(self::$widgetOutputCache);
-            if ($oldest === null) {
-                break;
-            }
-            unset(self::$widgetOutputCache[$oldest]);
-        }
-        self::$widgetOutputCache[$cacheKey] = $entry;
+        return 0;
     }
 
     /**
-     * 清理 WLS 跨请求共享的 theme_runtime 布局/部件输出缓存。
-     * 发布主题后必须调用，否则 Worker 仍可能渲染旧版 slot 布局。
+     * Publish still purges historical theme_runtime SharedState namespace (legacy Workers).
+     * Hot-path SlotRenderer never reads/writes that namespace.
      */
     public function purgeRuntimeCacheNamespace(): void
     {
@@ -4865,109 +4569,14 @@ HTML;
         }
 
         try {
-            $cache = self::runtimeCache();
-            if ($cache !== null) {
+            $cache = ObjectManager::getInstance(\Weline\Framework\Runtime\RuntimeProviderResolver::class)
+                ->resolve(\Weline\Framework\Cache\Contract\SharedCacheStateInterface::class);
+            if ($cache instanceof \Weline\Framework\Cache\Contract\SharedCacheStateInterface) {
                 $cache->clearNamespace('theme_runtime');
-                return;
             }
-
-            // The optional Server module owns the concrete shared-state
-            // implementation. Without a provider the process cache above is
-            // still cleared and no cross-module class is loaded.
         } catch (\Throwable) {
             // 静默失败，不影响发布主流程
         }
-    }
-
-    /**
-     * @param array{layout_option?:string,scope?:string,target_type?:string,target_id?:int} $identity
-     */
-    private function publishedLayoutStructureLogicalKey(
-        int $themeId,
-        string $pageType,
-        string $area,
-        array $identity,
-    ): string {
-        return 'pub_layout|'
-            . ($area === 'backend' ? 'backend' : 'frontend') . '|'
-            . $themeId . '|'
-            . $pageType . '|'
-            . \trim((string)($identity['layout_option'] ?? 'default')) . '|'
-            . \trim((string)($identity['scope'] ?? '')) . '|'
-            . \trim((string)($identity['target_type'] ?? 'global')) . '|'
-            . (int)($identity['target_id'] ?? 0);
-    }
-
-    private function resolvePublishedLayoutHotCache(): ?StorefrontScopeHotCache
-    {
-        try {
-            $resolved = ObjectManager::getInstance(StorefrontScopeHotCache::class);
-
-            return $resolved instanceof StorefrontScopeHotCache ? $resolved : null;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    /**
-     * Published layout / widget output stay process-local (L1) plus HotCache Policy.
-     *
-     * Historical theme_runtime SharedState get/set burns ~200ms each under pool
-     * pressure — the same regression Partials already escaped. Hot-path reads
-     * therefore never call wls.memory theme_runtime; publish still purges the
-     * shared namespace via {@see purgeRuntimeCacheNamespace()}. Structure reuse
-     * goes through {@see StorefrontThemeCacheCoordinator::publishedLayoutStructurePolicy()}.
-     */
-    private function runtimeCacheGet(string $key): mixed
-    {
-        unset($key);
-
-        return null;
-    }
-
-    /**
-     * @see runtimeCacheGet() — request hot path must not pay theme_runtime IPC.
-     */
-    private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
-    {
-        unset($key, $value, $ttl);
-    }
-
-    private static function runtimeCache(): ?SharedCacheStateInterface
-    {
-        if (self::$runtimeCacheResolved) {
-            return self::$runtimeCache;
-        }
-        self::$runtimeCacheResolved = true;
-
-        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent()) {
-            return null;
-        }
-
-        try {
-            $cache = ObjectManager::getInstance(RuntimeProviderResolver::class)
-                ->resolve(SharedCacheStateInterface::class);
-            self::$runtimeCache = $cache instanceof SharedCacheStateInterface ? $cache : null;
-        } catch (\Throwable) {
-            self::$runtimeCache = null;
-        }
-
-        return self::$runtimeCache;
-    }
-
-    private function publishedLayoutCacheTtl(): int
-    {
-        return self::cachePolicy()->ttl('theme.slot_layout_ttl', (int)self::PUBLISHED_LAYOUT_CACHE_TTL);
-    }
-
-    private function widgetOutputCacheTtl(): int
-    {
-        return self::cachePolicy()->ttl('theme.widget_output_ttl', (int)self::WIDGET_OUTPUT_CACHE_TTL);
-    }
-
-    private static function cachePolicy(): RuntimeCachePolicy
-    {
-        return ObjectManager::getInstance(RuntimeCachePolicy::class);
     }
 
     private function traceCall(string $name, callable $callback, array $meta = []): mixed

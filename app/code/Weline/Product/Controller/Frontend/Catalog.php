@@ -8,6 +8,7 @@ use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\StorefrontPageContext;
+use Weline\Product\Helper\StorefrontPageAssignBag;
 use Weline\Product\Service\StorefrontCatalogSurfaceResolver;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontCategoryListingFilter;
@@ -163,6 +164,23 @@ final class Catalog extends FrontendController
         $this->assign('storefront_listing_total_pages', $paged['total_pages']);
         $this->assign('storefront_listing_page_options', $pageOptions);
         $this->assign('storefront_listing_sort_options', $sortOptions);
+        StorefrontPageAssignBag::replace([
+            'page_title' => $surface['title'],
+            'storefront_heading' => $surface['heading'],
+            'storefront_lede' => $surface['lede'],
+            'storefront_surface' => $surface['code'],
+            'storefront_offers_unfiltered' => $offers,
+            'storefront_offers' => $pageOffers,
+            'storefront_listing_price' => $priceBucket,
+            'storefront_listing_sort' => $sort,
+            'storefront_listing_total' => count($offers),
+            'storefront_listing_count' => $paged['total'],
+            'storefront_listing_page' => $paged['page'],
+            'storefront_listing_page_size' => $paged['page_size'],
+            'storefront_listing_total_pages' => $paged['total_pages'],
+            'storefront_listing_page_options' => $pageOptions,
+            'storefront_listing_sort_options' => $sortOptions,
+        ]);
 
         $listingFacts = new StorefrontSeoListingFacts();
         $this->assign('seo', [

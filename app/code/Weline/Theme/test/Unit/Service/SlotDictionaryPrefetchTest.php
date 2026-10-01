@@ -36,7 +36,6 @@ final class SlotDictionaryPrefetchTest extends TestCase
         self::assertSame(1, $flow->layoutReads);
         self::assertSame(['first', 'second', 'child', 'footer'], $flow->renderedCodes);
         self::assertSame($html . '|first,second,child,footer', $result);
-        self::assertSame([], $flow->pageRenderContext);
         self::assertSame([
             'modules' => 3,
             'module_set_hash' => hash('sha256', 'Weline_Cart|Weline_Product|Weline_Theme'),
@@ -108,9 +107,6 @@ abstract class SlotPrefetchFlowDependencies
     public array $sharedChrome = [];
     public int $layoutReads = 0;
     public array $renderedCodes = [];
-    public array $pageRenderContext = [];
-    protected array $filledSlotIdsThisRun = [];
-    protected array $unavailableWidgets = [];
     abstract public function run(string $html): string;
     protected function traceCall(string $name, callable $operation): mixed { return $operation(); }
     protected function getLayoutData(...$args): array { ++$this->layoutReads; return $this->layout; }
@@ -131,7 +127,7 @@ abstract class SlotPrefetchFlowDependencies
     protected function shouldInspectWidgetHtml(): bool { return false; }
     protected function appendWidgetHealthToastBridge(string $html): string { return $html; }
     protected function stampFinalWidgetHtmlHealth(string $html): string { return $html; }
-    protected function capturePageRenderContext(): void { $this->pageRenderContext = ['captured' => true]; }
+    protected function withRenderPass(callable $callback): mixed { return $callback(); }
     protected function withRenderTheme(int $id, string $area, callable $operation): mixed { return $operation(); }
     protected function processSlotsWithBoundaries(string $html, array $widgets, ...$args): string
     {

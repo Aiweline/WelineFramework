@@ -10,6 +10,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Helper\StorefrontCampaignEntry;
 use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Product\Helper\StorefrontPageAssignBag;
 use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Service\ProductStorefrontBreadcrumbBuilder;
 use Weline\Product\Service\StorefrontCatalogViewService;
@@ -226,17 +227,22 @@ final class Detail extends FrontendController
             max(0, (int)($displayOffer['product_id'] ?? $productIdForLabels)),
             $canonicalSlug !== '' ? $canonicalSlug : $slug,
         );
-        $this->assign(
-            'selected_offer_uuid',
-            $selectedOffer === null ? '' : trim((string)($selectedOffer['global_offer_uuid'] ?? '')),
-        );
-        $this->assign(
-            'variant_catalog',
-            $this->variantSelection->compactCatalogMedia($this->enrichCatalogOptionCodes(
-                $this->variantSelection->buildCatalog($offers, $displayOffer),
-                $variantLabels,
-            )),
-        );
+        $selectedOfferUuid = $selectedOffer === null
+            ? ''
+            : trim((string)($selectedOffer['global_offer_uuid'] ?? ''));
+        $variantCatalog = $this->variantSelection->compactCatalogMedia($this->enrichCatalogOptionCodes(
+            $this->variantSelection->buildCatalog($offers, $displayOffer),
+            $variantLabels,
+        ));
+        $this->assign('selected_offer_uuid', $selectedOfferUuid);
+        $this->assign('variant_catalog', $variantCatalog);
+        // Page facts survive widget Template::unsetData(); offer seed stays on OfferResolver.
+        StorefrontPageAssignBag::replace([
+            'storefront_offers' => $offers,
+            'selected_offer_uuid' => $selectedOfferUuid,
+            'variant_catalog' => $variantCatalog,
+            'page_title' => $seoTitle,
+        ]);
 
         $productIdForView = max(0, (int)($displayOffer['product_id'] ?? 0));
         if ($productIdForView > 0) {

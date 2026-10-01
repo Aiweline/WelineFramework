@@ -38,9 +38,23 @@ class LongRunningPhpRuntime
     {
         if (\PHP_OS_FAMILY !== 'Windows') {
             if (\extension_loaded('Zend OPcache') || \function_exists('opcache_get_status')) {
+                // CLI OPcache is per-process (not SHM-shared across Workers).
+                // Sized from warm-path MemDiag: peak used ≈82.5MB + 5MB headroom → 88.
+                // Prefer a lower host/php.ini value when explicitly configured smaller.
+                $opcacheMb = 88;
+                $configured = \ini_get('opcache.memory_consumption');
+                if (\is_string($configured) && \ctype_digit($configured)) {
+                    $configuredMb = (int)$configured;
+                    if ($configuredMb > 0 && $configuredMb < $opcacheMb) {
+                        $opcacheMb = $configuredMb;
+                    }
+                }
+
                 return [
                     '-d',
                     'opcache.enable_cli=1',
+                    '-d',
+                    'opcache.memory_consumption=' . $opcacheMb,
                 ];
             }
 

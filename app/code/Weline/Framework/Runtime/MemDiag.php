@@ -133,6 +133,7 @@ final class MemDiag
             'real' => \memory_get_usage(true),
             'peak' => \memory_get_peak_usage(true),
             'data' => $data,
+            'opcache' => self::opcacheSnapshot(),
         ];
         $line = \json_encode($payload, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
         if ($line === false) {
@@ -378,8 +379,6 @@ final class MemDiag
         } catch (\Throwable) {
         }
         foreach ([
-            [\Weline\Theme\Service\SlotRendererService::class, 'widgetOutputCache', 'theme_widget_output'],
-            [\Weline\Theme\Service\SlotRendererService::class, 'publishedLayoutDataCache', 'theme_layout_data'],
             [\Weline\Theme\Block\Partials::class, 'partialOutputCache', 'theme_partial_output'],
             [\Weline\Theme\Service\RuntimeTemplateMaterializer::class, 'workerCompiledCache', 'theme_compiled'],
             [\Weline\Theme\Helper\ThemeData::class, 'runtimeCache', 'theme_data_runtime'],
@@ -494,6 +493,42 @@ final class MemDiag
         }
 
         return 0;
+    }
+
+    /** @return array<string, mixed>|null */
+    private static function opcacheSnapshot(): ?array
+    {
+        if (!\function_exists('opcache_get_status')) {
+            return null;
+        }
+        try {
+            $status = @\opcache_get_status(false);
+            if (!\is_array($status)) {
+                return [
+                    'enabled' => false,
+                    'ini_mb' => (int)\ini_get('opcache.memory_consumption'),
+                ];
+            }
+            $mem = \is_array($status['memory_usage'] ?? null) ? $status['memory_usage'] : [];
+            $stats = \is_array($status['opcache_statistics'] ?? null) ? $status['opcache_statistics'] : [];
+            $used = (int)($mem['used_memory'] ?? 0);
+            $free = (int)($mem['free_memory'] ?? 0);
+            $wasted = (int)($mem['wasted_memory'] ?? 0);
+
+            return [
+                'enabled' => (bool)($status['opcache_enabled'] ?? true),
+                'ini_mb' => (int)\ini_get('opcache.memory_consumption'),
+                'used' => $used,
+                'free' => $free,
+                'wasted' => $wasted,
+                'total' => $used + $free + $wasted,
+                'scripts' => (int)($stats['num_cached_scripts'] ?? 0),
+                'hits' => (int)($stats['hits'] ?? 0),
+                'misses' => (int)($stats['misses'] ?? 0),
+            ];
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private static function flagPath(): string

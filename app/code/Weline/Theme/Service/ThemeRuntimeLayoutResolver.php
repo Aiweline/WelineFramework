@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
@@ -18,6 +20,9 @@ use Weline\Theme\Service\Scoped\ThemeScopedPreviewResolver;
 
 /**
  * Storefront/runtime layout resolution from scoped workspace releases.
+ *
+ * Published non-target structure may reuse HotCache Policy here (read-model).
+ * SlotRenderer must not hold layout/widget process caches.
  */
 final class ThemeRuntimeLayoutResolver
 {
@@ -48,17 +53,37 @@ final class ThemeRuntimeLayoutResolver
         string $area = 'frontend',
         array $identity = [],
     ): array {
-        $context = $this->buildContext($themeId, $pageType, $area, $identity);
-        try {
-            return $this->previewResolver->resolveStructureLayout(
-                $context,
-                $status === ThemeLayout::STATUS_PUBLISHED
-                    ? ThemeLayout::STATUS_PUBLISHED
-                    : ThemeLayout::STATUS_DRAFT,
-            );
-        } catch (\Throwable) {
-            return [];
+        $load = function () use ($themeId, $pageType, $status, $area, $identity): array {
+            $context = $this->buildContext($themeId, $pageType, $area, $identity);
+            try {
+                return $this->previewResolver->resolveStructureLayout(
+                    $context,
+                    $status === ThemeLayout::STATUS_PUBLISHED
+                        ? ThemeLayout::STATUS_PUBLISHED
+                        : ThemeLayout::STATUS_DRAFT,
+                );
+            } catch (\Throwable) {
+                return [];
+            }
+        };
+
+        // Draft / page-level target: always fresh. Published structure: HotCache read-model.
+        if ($status === ThemeLayout::STATUS_DRAFT || $this->hasTargetIdentity($identity)) {
+            return $load();
         }
+
+        $hotCache = $this->resolvePublishedLayoutHotCache();
+        if (!$hotCache instanceof StorefrontScopeHotCache) {
+            return $load();
+        }
+
+        $resolved = $hotCache->rememberPolicy(
+            StorefrontThemeCacheCoordinator::publishedLayoutStructurePolicy(),
+            $this->publishedLayoutStructureLogicalKey($themeId, $pageType, $area, $identity),
+            $load,
+        );
+
+        return \is_array($resolved) ? $resolved : [];
     }
 
     /**
@@ -421,5 +446,46 @@ final class ThemeRuntimeLayoutResolver
         ]);
 
         return $list;
+    }
+
+    /**
+     * @param array{target_type?:string,target_id?:int} $identity
+     */
+    private function hasTargetIdentity(array $identity): bool
+    {
+        $targetType = \trim((string)($identity['target_type'] ?? ''));
+        $targetId = (int)($identity['target_id'] ?? 0);
+
+        return ($targetType !== '' && $targetType !== 'global') || $targetId > 0;
+    }
+
+    /**
+     * @param array{layout_option?:string,scope?:string,target_type?:string,target_id?:int} $identity
+     */
+    private function publishedLayoutStructureLogicalKey(
+        int $themeId,
+        string $pageType,
+        string $area,
+        array $identity,
+    ): string {
+        return 'pub_layout|'
+            . ($area === 'backend' ? 'backend' : 'frontend') . '|'
+            . $themeId . '|'
+            . $pageType . '|'
+            . \trim((string)($identity['layout_option'] ?? 'default')) . '|'
+            . \trim((string)($identity['scope'] ?? '')) . '|'
+            . \trim((string)($identity['target_type'] ?? 'global')) . '|'
+            . (int)($identity['target_id'] ?? 0);
+    }
+
+    private function resolvePublishedLayoutHotCache(): ?StorefrontScopeHotCache
+    {
+        try {
+            $resolved = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+
+            return $resolved instanceof StorefrontScopeHotCache ? $resolved : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

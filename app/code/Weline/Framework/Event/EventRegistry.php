@@ -42,6 +42,16 @@ class EventRegistry implements EventRegistryInterface
     }
 
     /**
+     * Drop process-local registry snapshot (keep-warm aggressive reclaim).
+     * Disk generated/events.php is unchanged; next getRegistry() reloads.
+     */
+    public static function clearRuntimeCache(): void
+    {
+        self::$runtimeRegistryCache = null;
+        self::$runtimeRegistryMtime = null;
+    }
+
+    /**
      * 获取注册表内容
      *
      * @param bool $forceReload 强制重新加载

@@ -203,6 +203,44 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
         );
     }
 
+    public function testLargeResponseFiberExitAlwaysForcesAggressive(): void
+    {
+        $this->seedProbeCaches();
+        $this->writeStaticProperty(WorkerResponseMemoryGuard::class, 'runtimeCacheThresholds', [
+            'soft' => 0.70,
+            'hard' => 0.85,
+        ]);
+
+        // Below soft ratio and below old 96MB gate — large body alone must go aggressive.
+        $result = $this->withMemoryPressure(
+            0.20,
+            static fn (): ?array => WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(
+                WorkerResponseMemoryGuard::LARGE_RESPONSE_BYTES
+            )
+        );
+
+        self::assertIsArray($result);
+        self::assertFalse($result['cycle_collection_skipped']);
+        self::assertGreaterThanOrEqual(
+            5,
+            $result['runtime_cache_compactions']['cleared_process_caches']
+        );
+    }
+
+    public function testForceAggressiveClearsRebuildableProcessCaches(): void
+    {
+        $this->seedProbeCaches();
+        WlsConcurrency::setOtherSuspendedFiberCountProvider(null);
+
+        $result = WorkerResponseMemoryGuard::compact(true, true);
+
+        self::assertGreaterThanOrEqual(
+            5,
+            $result['runtime_cache_compactions']['cleared_process_caches']
+        );
+        self::assertSame([], $this->readStaticProperty(TemplateCacheManager::class, 'memoryCache'));
+    }
+
     public function testCompactIfPressureSkipsBelowThreshold(): void
     {
         $result = $this->withMemoryPressure(

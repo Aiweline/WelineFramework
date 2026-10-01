@@ -338,16 +338,65 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         return array_values($ids);
     }
 
-    /** Hard cap on materialized explicit EAV rows per listExplicitRows call. */
-    public const LIST_EXPLICIT_ROWS_HARD_LIMIT = 100000;
+    /**
+     * Hard cap on materialized explicit EAV rows per listExplicitRows call.
+     * Sized for 256M WLS workers: full-catalog × all-locale materialize must chunk/filter, not dump.
+     */
+    public const LIST_EXPLICIT_ROWS_HARD_LIMIT = 20000;
+
+    /**
+     * Storefront-safe locale whitelist: request locale (+ aliases) + zh/en baselines + ''.
+     * Prefer this over locales=null on any storefront read path.
+     *
+     * @return list<string>
+     */
+    public static function storefrontReadLocales(?string $locale = null): array
+    {
+        $locale = \trim(\str_replace('-', '_', (string)($locale ?? '')));
+        if ($locale === '') {
+            try {
+                $locale = \trim(\str_replace('-', '_', (string)\Weline\Framework\App\State::getLangLocal()));
+            } catch (\Throwable) {
+                $locale = '';
+            }
+        }
+
+        $candidates = [];
+        if ($locale !== '') {
+            $candidates[] = $locale;
+            if (\preg_match('/^([a-z]{2,3})_([A-Za-z]+)_([A-Z]{2})$/', $locale, $matches) === 1) {
+                $candidates[] = $matches[1] . '_' . $matches[3];
+                $candidates[] = $matches[1] . '_' . $matches[2];
+                $candidates[] = $matches[1];
+            } elseif (\preg_match('/^([a-z]{2,3})_([A-Z]{2})$/', $locale, $matches) === 1) {
+                $candidates[] = $matches[1];
+            }
+        }
+        $candidates[] = 'zh_Hans_CN';
+        $candidates[] = 'en_US';
+        $candidates[] = '';
+
+        $out = [];
+        foreach ($candidates as $candidate) {
+            $candidate = \trim(\str_replace('-', '_', (string)$candidate));
+            if (!\in_array($candidate, $out, true)) {
+                $out[] = $candidate;
+            }
+        }
+
+        return $out;
+    }
 
     /**
      * Return explicit Website/Store rows without applying fallback.
      *
      * @param list<int> $entityIds
      * @param list<int> $storeIds
-     * @param list<string>|null $locales null = no locale filter; non-null always includes ''
+     * @param list<string>|null $locales null = no locale filter (admin/CLI/indexer only);
+     *        on live storefront requests null is coerced to {@see storefrontReadLocales()}
+     *        unless $allowUnfilteredLocales is true; non-null always includes ''
      * @param list<string>|null $attributeCodes null = no code filter; empty after normalize → []
+     * @param bool $allowUnfilteredLocales indexer/admin paths that intentionally need every locale
      * @return list<array{
      *   store_id:int,entity_type:string,entity_id:int,attribute_code:string,
      *   locale:string,value:mixed,cleared:bool,is_required:bool
@@ -360,6 +409,7 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         array $storeIds,
         ?array $locales = null,
         ?array $attributeCodes = null,
+        bool $allowUnfilteredLocales = false,
     ): array {
         $this->assertWebsite($websiteId);
         $entityType = trim($entityType);
@@ -373,6 +423,40 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         )));
         if ($entityType === '' || $entityIds === [] || $storeIds === []) {
             return [];
+        }
+
+        // Unfiltered attribute dumps (codes=null) × many entities still blow HARD_LIMIT
+        // even after storefront locale coercion. Auto-chunk so callers cannot OOM/500.
+        if ($attributeCodes === null && \count($entityIds) > 8) {
+            $rows = [];
+            foreach (\array_chunk($entityIds, 8) as $chunk) {
+                foreach ($this->listExplicitRows(
+                    $websiteId,
+                    $entityType,
+                    $chunk,
+                    $storeIds,
+                    $locales,
+                    null,
+                    $allowUnfilteredLocales,
+                ) as $row) {
+                    $rows[] = $row;
+                }
+            }
+
+            return $rows;
+        }
+
+        if ($locales === null && !$allowUnfilteredLocales && self::shouldCoerceStorefrontLocales()) {
+            $locales = self::storefrontReadLocales();
+            if (\class_exists(\Weline\Framework\Runtime\MemDiag::class)) {
+                \Weline\Framework\Runtime\MemDiag::event('eav_list_explicit_rows_storefront_null_coerced', [
+                    'website_id' => $websiteId,
+                    'entity_type' => $entityType,
+                    'entity_ids' => \count($entityIds),
+                    'locales' => $locales,
+                    'request_uri' => self::resolveRequestUri(),
+                ]);
+            }
         }
 
         $localeFilter = null;
@@ -514,6 +598,31 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         }
 
         return (string)($_SERVER['REQUEST_URI'] ?? '');
+    }
+
+    /** Live storefront HTTP request: coerce locales=null; CLI/backend keep unfiltered. */
+    private static function shouldCoerceStorefrontLocales(): bool
+    {
+        try {
+            if (\Weline\Framework\App\State::isBackend()) {
+                return false;
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        try {
+            if (\Weline\Framework\Context::hasCurrent()) {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            return \Weline\Framework\Runtime\RequestContext::isInitialized();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

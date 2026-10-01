@@ -672,32 +672,37 @@ final class ProductSearchProjectionService
 
         $attributeCodeSet = \array_fill_keys($attributeCodes, true);
         $texts = [];
-        foreach ($this->attributes->listExplicitRows(
-            $websiteId,
-            $entityType,
-            $entityIds,
-            [AttributeValue::WEBSITE_STORE_ID],
-            null,
-            $attributeCodes,
-        ) as $row) {
-            if (!empty($row['cleared'])) {
-                continue;
+        // Keep all locales for search keywords, but chunk so each materialize stays under HARD_LIMIT
+        // (≈ entities × locales × codes). 48 × 50 locales × 4 codes ≈ 9600 < 20000.
+        foreach (\array_chunk($entityIds, 48) as $chunk) {
+            foreach ($this->attributes->listExplicitRows(
+                $websiteId,
+                $entityType,
+                $chunk,
+                [AttributeValue::WEBSITE_STORE_ID],
+                null,
+                $attributeCodes,
+                true,
+            ) as $row) {
+                if (!empty($row['cleared'])) {
+                    continue;
+                }
+                $attributeCode = \trim((string)($row['attribute_code'] ?? ''));
+                // Defensive: SQL already filters attribute_codes; keep set check for safety.
+                if ($attributeCode === '' || !isset($attributeCodeSet[$attributeCode])) {
+                    continue;
+                }
+                $entityId = (int)($row['entity_id'] ?? 0);
+                if ($entityId <= 0) {
+                    continue;
+                }
+                $value = \trim((string)($row['value'] ?? ''));
+                if ($value === '') {
+                    continue;
+                }
+                $locale = \trim((string)($row['locale'] ?? ''));
+                $texts[$entityId][$attributeCode][$locale] = $value;
             }
-            $attributeCode = \trim((string)($row['attribute_code'] ?? ''));
-            // Defensive: SQL already filters attribute_codes; keep set check for safety.
-            if ($attributeCode === '' || !isset($attributeCodeSet[$attributeCode])) {
-                continue;
-            }
-            $entityId = (int)($row['entity_id'] ?? 0);
-            if ($entityId <= 0) {
-                continue;
-            }
-            $value = \trim((string)($row['value'] ?? ''));
-            if ($value === '') {
-                continue;
-            }
-            $locale = \trim((string)($row['locale'] ?? ''));
-            $texts[$entityId][$attributeCode][$locale] = $value;
         }
 
         return $texts;

@@ -45,6 +45,18 @@ final class StorefrontOfferContextTest extends TestCase
         }
     }
 
+    public function testResolvedOfferSurvivesTemplateUnsetData(): void
+    {
+        $offer = ['product_id' => 83, 'global_offer_uuid' => 'selected-variant',
+            'name' => 'Selected offer', 'unit_price_minor' => 12345, 'currency' => 'USD'];
+        StorefrontOfferResolver::rememberResolvedOffer($offer);
+        $template = (new \ReflectionClass(Template::class))->newInstanceWithoutConstructor();
+        $template->setData('storefront_offer', $offer);
+        $template->unsetData();
+        self::assertSame($offer, StorefrontOfferResolver::resolve($template));
+        self::assertSame($offer, StorefrontOfferResolver::currentOffer());
+    }
+
     public function testUnselectedVariantRemainsUnselectedAndDoesNotLeakToNextRequest(): void
     {
         $offer = ['product_id' => 83, 'global_offer_uuid' => '', 'selection_required' => true,

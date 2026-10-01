@@ -16,7 +16,13 @@ final class WorkerResponseMemoryGuard
     private const RUNTIME_CACHE_PRESSURE_THRESHOLD = 0.55;
     /** Hard water mark: aggressive process-bag clear + allocator freelist trim (no Worker drain). */
     private const RUNTIME_CACHE_HARD_PRESSURE_THRESHOLD = 0.70;
+    /** Soft absolute watermark: reclaim rebuildable L1 even when ratio stays low. */
+    private const SOFT_HEAP_FORCE_BYTES = 48 * 1024 * 1024;
+    /** Absolute Zend-real floor: force aggressive bag clear (was 96M; /products sat at ~78–92M). */
+    private const LARGE_HEAP_FORCE_AGGRESSIVE_BYTES = 64 * 1024 * 1024;
     private static ?array $runtimeCacheThresholds = null;
+    /** Pressure denominator from Worker `--memory-limit` (ignore DevTool-inflated ini). */
+    private static ?int $pressureLimitBytes = null;
     private static ?string $drainAfterResponseReason = null;
     private static int $incompleteRequestFiberCancelStreak = 0;
 
@@ -142,15 +148,25 @@ final class WorkerResponseMemoryGuard
      *
      * @return array<string,mixed>|null
      */
+    public static function setPressureMemoryLimitBytes(int $bytes): void
+    {
+        self::$pressureLimitBytes = $bytes > 0 ? $bytes : null;
+    }
+
     public static function compactAfterRequestFiberReleased(int $releasedResponseBytes = 0): ?array
     {
         if (!WlsConcurrency::canCompactProcessCaches()) {
             return null;
         }
-        // Large responses leave ProcessShared bags + Zend freelist growth even when
-        // pressure stays low against a high memory_limit (keep-warm ratchet).
-        if ($releasedResponseBytes >= self::LARGE_RESPONSE_BYTES) {
-            return self::compact(true);
+
+        $real = \memory_get_usage(true);
+        $largeResponse = $releasedResponseBytes >= self::LARGE_RESPONSE_BYTES;
+        // Keep-warm: ratio vs 512M/1G rarely trips soft/hard; use absolute Zend-real + large body.
+        // Large HTML responses always hard-clear rebuildable bags (Phrase/HotCache/Theme).
+        $forceAggressive = $largeResponse || $real >= self::LARGE_HEAP_FORCE_AGGRESSIVE_BYTES;
+        $forceSoft = $forceAggressive || $real >= self::SOFT_HEAP_FORCE_BYTES;
+        if ($forceSoft) {
+            return self::compact(true, $forceAggressive);
         }
 
         return self::compactIfPressure();
@@ -217,8 +233,9 @@ final class WorkerResponseMemoryGuard
     /**
      * @param bool $forceSoftReclaim Soft-clear rebuildable process L1 even below soft water mark
      *                               (used after large response Fiber exit under high memory_limit).
+     * @param bool $forceAggressive Hard-clear process bags (Theme/HotCache) when Zend real is high.
      */
-    public static function compact(bool $forceSoftReclaim = false): array
+    public static function compact(bool $forceSoftReclaim = false, bool $forceAggressive = false): array
     {
         $runtimeCacheCompactions = [
             'memory_store_clears' => 0,
@@ -231,21 +248,25 @@ final class WorkerResponseMemoryGuard
         // Hard pressure = in-process aggressive reclaim only. Do NOT request
         // response-after drain / Master Worker replace — that is process recycle,
         // not intelligent memory reduction in the current PID.
-        $aggressive = $pressure >= $thresholds['hard'];
+        $criticalHard = $pressure >= $thresholds['hard'];
+        $aggressive = $forceAggressive || $criticalHard;
 
-        if ($forceSoftReclaim || $pressure >= $thresholds['soft']) {
+        if ($forceSoftReclaim || $forceAggressive || $pressure >= $thresholds['soft']) {
             $runtimeCacheCompactions = self::compactRuntimeCaches($aggressive);
         }
 
         $cycles = 0;
         $trimmedBytes = 0;
-        // Always try allocator freelist trim after reclaim; skip cycle collect on hard
-        // to avoid long STW pauses under critical pressure.
-        if (!$aggressive) {
+        // Skip cycle collect only under true hard *ratio* pressure (STW risk).
+        // Forced aggressive after large responses still runs GC — keep-warm needs it.
+        if (!$criticalHard) {
             $cycles = \gc_collect_cycles();
         }
         if (\function_exists('gc_mem_caches')) {
             $trimmedBytes = \max(0, (int) \gc_mem_caches());
+            if ($forceSoftReclaim || $forceAggressive) {
+                $trimmedBytes += \max(0, (int) \gc_mem_caches());
+            }
         }
 
         if (\class_exists(\Weline\Framework\Runtime\MemDiag::class, false)
@@ -256,6 +277,9 @@ final class WorkerResponseMemoryGuard
                 'soft' => $thresholds['soft'],
                 'hard' => $thresholds['hard'],
                 'aggressive' => $aggressive,
+                'force_soft' => $forceSoftReclaim,
+                'force_aggressive' => $forceAggressive,
+                'critical_hard' => $criticalHard,
                 'cycles' => $cycles,
                 'trimmed_bytes' => $trimmedBytes,
                 'runtime_cache_compactions' => $runtimeCacheCompactions,
@@ -268,7 +292,7 @@ final class WorkerResponseMemoryGuard
             'cycles' => $cycles,
             'trimmed_bytes' => $trimmedBytes,
             'runtime_cache_compactions' => $runtimeCacheCompactions,
-            'cycle_collection_skipped' => $aggressive,
+            'cycle_collection_skipped' => $criticalHard,
             'drain_requested' => self::hasDrainAfterResponseRequest(),
         ];
     }
@@ -360,6 +384,13 @@ final class WorkerResponseMemoryGuard
             $compactions['cleared_process_caches']++;
         }
 
+        if ($aggressive && \class_exists(\Weline\Framework\Event\EventRegistry::class, false)
+            && \method_exists(\Weline\Framework\Event\EventRegistry::class, 'clearRuntimeCache')
+        ) {
+            \Weline\Framework\Event\EventRegistry::clearRuntimeCache();
+            $compactions['cleared_process_caches']++;
+        }
+
         if ($aggressive && \class_exists(\Weline\Framework\Extends\ExtendsData::class, false)) {
             \Weline\Framework\Extends\ExtendsData::clearCache();
             $compactions['cleared_process_caches']++;
@@ -413,6 +444,10 @@ final class WorkerResponseMemoryGuard
 
     private static function getMemoryLimitBytes(): int
     {
+        if (self::$pressureLimitBytes !== null && self::$pressureLimitBytes > 0) {
+            return self::$pressureLimitBytes;
+        }
+
         $limit = \ini_get('memory_limit');
         if ($limit === false) {
             return 0;
@@ -482,6 +517,7 @@ final class WorkerResponseMemoryGuard
     public static function resetThresholdCache(): void
     {
         self::$runtimeCacheThresholds = null;
+        self::$pressureLimitBytes = null;
     }
 
     private static function parseMemoryLimit(string $limit): int

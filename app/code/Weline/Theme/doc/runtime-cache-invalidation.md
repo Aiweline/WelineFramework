@@ -38,10 +38,12 @@
 - cache key 必须绑定模板文件状态、area/type/option、主题与页面上下文；需要用户或角色隔离的 partial 在身份无法解析时直接绕过缓存，禁止落入共享的 unknown bucket。
 - ProcessCacheResetter 的 hard reset 清空本进程 chrome LRU；Worker 启动预热只填充安全的 guest/公共上下文，登录用户/角色上下文在首次真实请求时填充。
 
-## SlotRenderer 已发布布局 / 部件输出缓存
+## SlotRenderer 与已发布布局读模型
 
-- 前台 `SlotRendererService` 的已发布 layout.data 与可缓存 widget.output 仅进程内 L1；请求热路径不得 `theme_runtime` get/set（池压下约 200ms/次，产品详情冷路径曾累计约 800ms+）。
-- 主题发布仍调用 `purgeRuntimeCacheNamespace()` 清理共享命名空间，避免历史 Worker 残留旧值。
+- 前台 `SlotRendererService` **不**缓存 layout.data / widget.output（无请求 L1、无进程 L1、无 theme_runtime get/set）。
+- 插槽渲染 = 向 `ThemeRuntimeLayoutResolver` 取结构 → 普通部件模板/Component 渲染。
+- 已发布非 target 布局结构 HotCache（`publishedLayoutStructurePolicy`）挂在 **`ThemeRuntimeLayoutResolver`**（读模型），不挂在 SlotRenderer。
+- 主题发布仍可调用 `SlotRendererService::purgeRuntimeCacheNamespace()` 清理历史 `theme_runtime` 命名空间残留。
 - 与 chrome partial 策略一致：跨 Worker 靠各自预热 / FPC，不以慢 IPC 换共享命中。
 
 ## ThemeData 运行时缓存

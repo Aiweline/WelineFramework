@@ -207,6 +207,12 @@ $this->assign('meta', $meta);
                                     // so meta.content is cleared — fall back to controller content / live catalog).
                                     $offers = $this->getData('storefront_offers');
                                     if (!\is_array($offers) || $offers === []) {
+                                        $fromBag = \Weline\Product\Helper\StorefrontPageAssignBag::get('storefront_offers');
+                                        if (\is_array($fromBag) && $fromBag !== []) {
+                                            $offers = $fromBag;
+                                        }
+                                    }
+                                    if (!\is_array($offers) || $offers === []) {
                                         try {
                                             /** @var \Weline\Product\Service\StorefrontCatalogViewService $catalogView */
                                             $catalogView = \Weline\Framework\Manager\ObjectManager::getInstance(
