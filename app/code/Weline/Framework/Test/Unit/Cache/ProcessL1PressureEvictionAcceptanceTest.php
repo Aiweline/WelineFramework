@@ -107,8 +107,8 @@ final class ProcessL1PressureEvictionAcceptanceTest extends TestCase
         self::assertGreaterThanOrEqual(1, $remaining);
     }
 
-    /** UC-2: hard clears unpinned; drain flag at hard pressure. */
-    public function testUc2HardClearsUnpinnedAndDrainRequested(): void
+    /** UC-2: hard clears unpinned; Guard hard stays in-process (no Worker drain/replace). */
+    public function testUc2HardClearsUnpinnedWithoutWorkerDrain(): void
     {
         $store = new ProcessMemoryStore(64);
         $store->set('keep', 'x', null, 10);
@@ -123,12 +123,9 @@ final class ProcessL1PressureEvictionAcceptanceTest extends TestCase
             'hard' => 0.85,
         ]);
         $result = $this->withMemoryPressure(0.90, static fn (): array => WorkerResponseMemoryGuard::compact());
-        self::assertTrue($result['drain_requested']);
+        self::assertFalse($result['drain_requested']);
         self::assertTrue($result['cycle_collection_skipped']);
-        self::assertSame(
-            'memory_pressure_hard_before_gc',
-            WorkerResponseMemoryGuard::consumeDrainAfterResponseReason()
-        );
+        self::assertNull(WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
     }
 
     /** UC-2: Guard hard fully clears Phrase store. */

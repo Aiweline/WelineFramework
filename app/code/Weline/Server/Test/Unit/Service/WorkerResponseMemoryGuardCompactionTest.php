@@ -132,8 +132,9 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
         );
     }
 
-    public function testCompactSkipsCycleCollectorAndRequestsDrainAtHardPressure(): void
+    public function testCompactSkipsCycleCollectorWithoutWorkerDrainAtHardPressure(): void
     {
+        $this->seedProbeCaches();
         $this->writeStaticProperty(WorkerResponseMemoryGuard::class, 'runtimeCacheThresholds', [
             'soft' => 0.70,
             'hard' => 0.85,
@@ -144,11 +145,15 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
             static fn (): array => WorkerResponseMemoryGuard::compact()
         );
 
+        // Hard = in-process aggressive reclaim; must NOT retire the Worker for Master replace.
         self::assertTrue($result['cycle_collection_skipped']);
-        self::assertTrue($result['drain_requested']);
-        self::assertSame(
-            'memory_pressure_hard_before_gc',
-            WorkerResponseMemoryGuard::consumeDrainAfterResponseReason()
+        self::assertFalse($result['drain_requested']);
+        self::assertNull(WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
+        self::assertSame([], $this->readStaticProperty(TemplateCacheManager::class, 'memoryCache'));
+        self::assertSame([], $this->readStaticProperty(MemoryCacheService::class, 'cache'));
+        self::assertGreaterThanOrEqual(
+            5,
+            $result['runtime_cache_compactions']['cleared_process_caches']
         );
     }
 
