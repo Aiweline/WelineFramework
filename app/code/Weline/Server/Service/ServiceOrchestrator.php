@@ -32657,8 +32657,29 @@ class ServiceOrchestrator
         );
         // At startup, resolved worker count == budget_ceiling (D08).
         $this->memoryPressureController->setBudgetCeiling(\max(1, $workerCount));
-        $requested = $context->getConfig('wls.worker_count', null);
-        if ((\is_int($requested) && $requested > 0)
+        $requested = $context->getConfig('wls.worker_count_requested', null);
+        if (!(
+            (\is_int($requested) && $requested > 0)
+            || (\is_string($requested) && \ctype_digit($requested) && (int)$requested > 0)
+        )) {
+            $requested = $context->getConfig('wls.worker_count', null);
+        }
+        if (!(
+            (\is_int($requested) && $requested > 0)
+            || (\is_string($requested) && \ctype_digit($requested) && (int)$requested > 0)
+        )) {
+            // MasterProcess runtime capacity for this boot (includes -c).
+            $runtime = $context->workerCount;
+            if ((\is_int($runtime) && $runtime > 0)
+                || (\is_string($runtime) && \ctype_digit($runtime) && (int)$runtime > 0)
+            ) {
+                $requested = (int)$runtime;
+            } elseif ($workerCount > 0) {
+                $requested = $workerCount;
+            }
+        }
+        if (
+            (\is_int($requested) && $requested > 0)
             || (\is_string($requested) && \ctype_digit($requested) && (int)$requested > 0)
         ) {
             $this->memoryPressureController->setStartupExplicitCount((int)$requested);
