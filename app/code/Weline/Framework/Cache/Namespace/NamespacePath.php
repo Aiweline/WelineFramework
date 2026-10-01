@@ -11,7 +11,7 @@ namespace Weline\Framework\Cache\Namespace;
  * website/{code} or global/{scope}. The reserved authority row is never a
  * valid public path.
  */
-final class NamespacePath
+final class NamespacePath implements \Weline\Framework\Runtime\ProcessSharedInterface
 {
     public const AUTHORITY_CLOCK = '@clock';
     public const MAX_SEGMENTS = 16;

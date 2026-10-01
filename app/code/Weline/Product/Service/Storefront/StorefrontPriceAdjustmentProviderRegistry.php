@@ -7,11 +7,12 @@ namespace Weline\Product\Service\Storefront;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Api\Storefront\StorefrontPriceAdjustmentProviderInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
 /**
  * Discovers StorefrontPriceAdjustmentProviderInterface via Product extends registry.
  */
-final class StorefrontPriceAdjustmentProviderRegistry
+final class StorefrontPriceAdjustmentProviderRegistry implements ProcessSharedInterface
 {
     private const EXTENDS_PREFIX = 'extends/module/weline_product/storefrontpriceadjustmentprovider/';
 

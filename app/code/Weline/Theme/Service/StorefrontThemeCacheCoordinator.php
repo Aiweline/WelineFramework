@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Cache\CachePolicy;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
 /**
  * Central cache policies for storefront theme read models and rendered chrome.
@@ -13,7 +14,7 @@ use Weline\Framework\Cache\CachePolicy;
  * resources.  Keeping their scope and invalidation dependencies here prevents
  * callers from silently falling back to hand-built website/lang dimensions.
  */
-final class StorefrontThemeCacheCoordinator
+final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
 {
     public const HEADER_NAV_POOL = 'weline_theme_storefront_header_nav';
     public const STOREFRONT_CHROME_POOL = 'weline_theme_storefront_chrome';

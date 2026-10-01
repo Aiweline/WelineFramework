@@ -6,7 +6,7 @@ namespace Weline\Framework\Cache;
 
 use Weline\Framework\App\Env;
 
-final class RuntimeCachePolicy
+final class RuntimeCachePolicy implements \Weline\Framework\Runtime\ProcessSharedInterface
 {
     public function ttl(string $path, int $default, int $min = 1, int $max = 86400): int
     {

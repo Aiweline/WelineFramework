@@ -9,13 +9,14 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Model\ThemeScopeVersion;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
 /**
  * Resolve the published ThemeScopeVersion (theme version V) for storefront runtime tags.
  *
  * Authority is ThemeScopeVersion selection / is_published — not ThemeLayoutVersion page axis.
  */
-class ThemePublishedVersionRuntimeResolver
+class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
 {
     /**
      * @return array{themePublishedVersionId: string, themePublishedVersion: string}

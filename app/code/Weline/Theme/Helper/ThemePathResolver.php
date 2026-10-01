@@ -17,6 +17,7 @@ use Weline\Theme\Helper\Interface\ThemeChainResolverInterface;
 use Weline\Theme\Helper\Interface\ThemePathResolverInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
 /**
  * 主题路径解析器
@@ -24,7 +25,7 @@ use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
  * 职责：解析主题文件路径，支持多级继承链
  * 遵循：单一职责原则 (SRP)、依赖倒置原则 (DIP)
  */
-class ThemePathResolver implements ThemePathResolverInterface
+class ThemePathResolver implements ThemePathResolverInterface, ProcessSharedInterface
 {
     /** CachePolicy resource for path resolve facts (deps=theme). */
     public const PATH_RESOLVE_RESOURCE = 'theme.path.resolve';
