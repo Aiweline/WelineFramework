@@ -1261,6 +1261,7 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
         // while the worker remains idle so keep-warm never competes with traffic.
         $fiberScheduler->tick(null, 2.0);
         if ($homepageKeepWarmFiber instanceof \Fiber && $homepageKeepWarmFiber->isTerminated()) {
+            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($homepageKeepWarmFiber);
             $homepageKeepWarmFiber = null;
         }
     }
@@ -1272,9 +1273,13 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
     ) {
         $fiberScheduler->registerFiber();
         $homepageKeepWarmFiber = new \Fiber(static function () use ($runtime, $fiberScheduler): void {
+            $self = \Fiber::getCurrent();
             try {
                 $runtime->runHomepageKeepWarmCycle();
             } finally {
+                if ($self instanceof \Fiber) {
+                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($self);
+                }
                 $fiberScheduler->unregisterFiber();
             }
         });
