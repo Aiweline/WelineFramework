@@ -230,16 +230,19 @@ final class ProductSearchProjectionService
             $snapshot['channel_id'] = (int)$onlyChannelId;
             $snapshot['scope_contract'] = 'product.search_projection_scope_snapshot.v1';
         }
-        self::$snapshotProcessCache[$cacheKey] = [
-            'watermark' => $watermark,
-            'snapshot' => $snapshot,
-        ];
         // Multi-MB full-site snapshots belong in Shared/indexer paths, not worker RSS.
-        $encoded = \json_encode($snapshot, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
-        if (!\is_string($encoded) || \strlen($encoded) > self::SNAPSHOT_PROCESS_CACHE_MAX_BYTES) {
-            unset(self::$snapshotProcessCache[$cacheKey]);
-        } elseif (\count(self::$snapshotProcessCache) > self::SNAPSHOT_PROCESS_CACHE_MAX) {
-            \array_shift(self::$snapshotProcessCache);
+        // Never json_encode a large catalog just to decide — that itself OOMs near 512M.
+        if (\count($documents) <= 48) {
+            $encoded = \json_encode($snapshot, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+            if (\is_string($encoded) && \strlen($encoded) <= self::SNAPSHOT_PROCESS_CACHE_MAX_BYTES) {
+                self::$snapshotProcessCache[$cacheKey] = [
+                    'watermark' => $watermark,
+                    'snapshot' => $snapshot,
+                ];
+                if (\count(self::$snapshotProcessCache) > self::SNAPSHOT_PROCESS_CACHE_MAX) {
+                    \array_shift(self::$snapshotProcessCache);
+                }
+            }
         }
 
         return $snapshot;
@@ -765,10 +768,24 @@ final class ProductSearchProjectionService
      */
     private function hashDocuments(array $documents): string
     {
-        return \hash('sha256', (string)\json_encode(
-            $documents,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
-        ));
+        // Incremental hash: one giant json_encode of the full catalog OOM'd workers
+        // near the 512M ceiling (Fatal at ProductSearchProjectionService.php hashDocuments).
+        $ctx = \hash_init('sha256');
+        \hash_update($ctx, (string)\count($documents));
+        \hash_update($ctx, "\n");
+        foreach ($documents as $document) {
+            $chunk = \json_encode(
+                $document,
+                \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES,
+            );
+            if (!\is_string($chunk)) {
+                $chunk = 'null';
+            }
+            \hash_update($ctx, $chunk);
+            \hash_update($ctx, "\n");
+        }
+
+        return \hash_final($ctx);
     }
 
     /**
