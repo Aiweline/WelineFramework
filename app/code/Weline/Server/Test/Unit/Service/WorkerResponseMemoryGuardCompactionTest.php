@@ -231,6 +231,7 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
     {
         $this->seedProbeCaches();
         WlsConcurrency::setOtherSuspendedFiberCountProvider(null);
+        WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
 
         $result = WorkerResponseMemoryGuard::compact(true, true);
 
@@ -239,6 +240,54 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
             $result['runtime_cache_compactions']['cleared_process_caches']
         );
         self::assertSame([], $this->readStaticProperty(TemplateCacheManager::class, 'memoryCache'));
+        WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
+    }
+
+    public function testShouldDrainForZendRatchetWhenShellExceedsFloor(): void
+    {
+        self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
+            80 * 1024 * 1024,
+            70 * 1024 * 1024,
+            64 * 1024 * 1024,
+            true
+        ));
+        self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
+            160 * 1024 * 1024,
+            100 * 1024 * 1024,
+            64 * 1024 * 1024,
+            true
+        ));
+        self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
+            120 * 1024 * 1024,
+            100 * 1024 * 1024,
+            64 * 1024 * 1024,
+            true
+        ));
+        self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
+            160 * 1024 * 1024,
+            100 * 1024 * 1024,
+            null,
+            false
+        ));
+    }
+
+    public function testHardPressureCompactStillDoesNotRequestDrain(): void
+    {
+        $this->seedProbeCaches();
+        WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
+        $this->writeStaticProperty(WorkerResponseMemoryGuard::class, 'runtimeCacheThresholds', [
+            'soft' => 0.70,
+            'hard' => 0.85,
+        ]);
+
+        $result = $this->withMemoryPressure(
+            0.90,
+            static fn (): array => WorkerResponseMemoryGuard::compact()
+        );
+
+        self::assertTrue($result['cycle_collection_skipped']);
+        self::assertFalse($result['drain_requested']);
+        self::assertNull(WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
     }
 
     public function testCompactIfPressureSkipsBelowThreshold(): void

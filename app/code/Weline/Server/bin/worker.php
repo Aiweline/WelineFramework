@@ -3406,8 +3406,16 @@ function wlsHttpDrainAfterResponseIfRequested(
     if ($safeReason === '') {
         $safeReason = 'request_boundary_failure';
     }
-    $plannedExitReason = 'request_quarantine:worker=' . $workerId . ',reason=' . $safeReason;
-    WlsLogger::warning_('Worker requested drain after response: ' . $safeReason);
+    $usedMb = \round(\memory_get_usage(false) / 1024 / 1024, 1);
+    $realMb = \round(\memory_get_usage(true) / 1024 / 1024, 1);
+    // Keep-warm: zend_mm_ratchet retires only after current response drain — never kill mid-write.
+    $plannedExitReason = $safeReason === 'zend_mm_ratchet'
+        ? "zend_mm_ratchet:worker={$workerId},used={$usedMb}MB,real={$realMb}MB"
+        : 'request_quarantine:worker=' . $workerId . ',reason=' . $safeReason
+            . ",used={$usedMb}MB,real={$realMb}MB";
+    WlsLogger::warning_(
+        'Worker requested drain after response (will retire after in-flight drain): ' . $plannedExitReason
+    );
     $sendExitReasonToMaster($plannedExitReason);
     $shouldExit = true;
     $ipcDraining = true;

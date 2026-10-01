@@ -6736,7 +6736,7 @@ while (true) {
                 );
             }
         );
-        wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime);
+        wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime, $ipcClient, $workerId);
         foreach ($activeFibers as $afKey => $afData) {
             $af = $afData['fiber'] ?? null;
             if (!($af instanceof \Fiber)) {
@@ -6772,6 +6772,8 @@ while (true) {
                     \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(
                         \strlen($afResponse),
                     );
+                    // Compact may request zend_mm_ratchet; drain only after response submit.
+                    wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime, $ipcClient, $workerId);
                     continue;
                 }
                 $afDurationMs = \max(0.0, $afFinishedAt - $afStartedAt) * 1000;
@@ -6804,7 +6806,8 @@ while (true) {
                         $afHttp2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter ? $afHttp2Adapter : null,
                         $afStreamId,
                     );
-                    wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime);
+                    // Quarantine/drain requested during finalize (before compact).
+                    wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime, $ipcClient, $workerId);
                 } else {
                     $activeRequests = \max(0, $activeRequests - 1);
                     \Weline\Framework\Http\Sse\SseContext::reset();
@@ -6813,6 +6816,8 @@ while (true) {
                 \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(
                     \strlen($afResponse),
                 );
+                // Keep-warm: zend_mm_ratchet drain only after body finalized + compact measured shell.
+                wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime, $ipcClient, $workerId);
                 continue;
             }
             if ($af->isSuspended()) {
@@ -7034,6 +7039,8 @@ while (true) {
         $longLivedConnections,
         $http2ConnectionAdapters
     );
+    // Write-path compact may request zend_mm_ratchet after the last buffered byte leaves.
+    wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime, $ipcClient, $workerId);
 
     // 处理 IPC 控制通道消息
     if ($ipcSocket && \in_array($ipcSocket, $read, true)) {
@@ -8921,7 +8928,10 @@ while (true) {
                 $fiberHttp2Adapter,
                 $fiberHttp2StreamId,
             );
-            wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime);
+            \Weline\Server\Service\WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(
+                \strlen($fiberResponse),
+            );
+            wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime, $ipcClient, $workerId);
         } elseif ($requestFiber->isSuspended()) {
             $tlsFiberContext = wlsCaptureSuspendedRequestFiberOrQuarantine(
                 $requestFiber,
@@ -10562,8 +10572,8 @@ function enqueueSseWriteAndAwaitDrain(
 }
 
 /**
- * SSL Worker：请求处理完成后写回响应（与同步路径一致，供 Fiber 同步完成与 tick 恢复后调用）。
- * $response 须已含 injectWlsProcessTimeHeader。
+ * SSL Worker：当前响应已写出（或 Fiber 收口）后，若 Runtime/Guard 请求退役，则进入排水。
+ * 关闭监听、不再接新连接；既有写缓冲与活跃请求由主循环排空后再退出（Master 拉新 Worker）。
  *
  * @param mixed $ipcClient Control client 或 null
  */
@@ -10572,14 +10582,30 @@ function wlsDrainAfterResponseIfRequested(
     bool &$shouldExit,
     bool &$ipcDraining,
     float &$drainStartTime,
-    int &$maxDrainTime
+    int &$maxDrainTime,
+    mixed $ipcClient = null,
+    int $workerId = 0
 ): void {
     $reason = \Weline\Server\Service\WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
     if ($reason === null) {
         return;
     }
 
-    WlsLogger::warning_("Worker requested drain after response: {$reason}");
+    $safeReason = (string)\preg_replace('/[^a-z0-9_.:-]+/i', '_', $reason);
+    $safeReason = \trim($safeReason, '_');
+    if ($safeReason === '') {
+        $safeReason = 'memory_pressure';
+    }
+    $usedMb = \round(\memory_get_usage(false) / 1024 / 1024, 1);
+    $realMb = \round(\memory_get_usage(true) / 1024 / 1024, 1);
+    $plannedExitReason = $safeReason === 'zend_mm_ratchet'
+        ? "zend_mm_ratchet:worker={$workerId},used={$usedMb}MB,real={$realMb}MB"
+        : "drain_after_response:worker={$workerId},reason={$safeReason},used={$usedMb}MB,real={$realMb}MB";
+
+    WlsLogger::warning_("Worker requested drain after response (will retire after in-flight drain): {$plannedExitReason}");
+    if ($ipcClient !== null && \is_object($ipcClient) && \method_exists($ipcClient, 'isConnected') && $ipcClient->isConnected()) {
+        @$ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason($plannedExitReason, 0));
+    }
     $shouldExit = true;
     $ipcDraining = true;
     $drainStartTime = \hrtime(true) / 1_000_000_000;
