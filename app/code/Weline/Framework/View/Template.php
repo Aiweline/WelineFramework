@@ -190,6 +190,20 @@ class Template extends DataObject
         self::$scopedInstances = [];
     }
 
+    /**
+     * Drop Fiber-owned Template singleton when the Worker still pins a terminated Fiber.
+     * WeakMap alone cannot release while that Fiber reference lives.
+     */
+    public static function clearScopeForFiber(\Fiber $fiber): void
+    {
+        if (self::$fiberInstances !== null && isset(self::$fiberInstances[$fiber])) {
+            unset(self::$fiberInstances[$fiber]);
+        }
+        if (self::$fiberRenderYieldAt !== null && isset(self::$fiberRenderYieldAt[$fiber])) {
+            unset(self::$fiberRenderYieldAt[$fiber]);
+        }
+    }
+
     public static function clearStaticHookCaches(): void
     {
         $runtimeCache = self::runtimeHookCache();

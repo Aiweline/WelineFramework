@@ -83,6 +83,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private const PROCESS_FORMATTED_FPC_MAX_BYTES = 4194304;
     private const FRONTEND_LOGIN_SESSION_POSITIVE_TTL_SECONDS = 1.0;
     private const FRONTEND_LOGIN_SESSION_CACHE_MAX_ITEMS = 1024;
+    /** Process bag: gzip demand counters by FPC key — must not grow with every unique URI forever. */
+    private const GZIP_DEMAND_CACHE_MAX_ITEMS = 1024;
     private const INTERNAL_HOMEPAGE_RECEIPT_CONTEXT_KEY = 'wls.fpc.internal_homepage_receipt';
     private const DEFAULT_LANG = 'zh_Hans_CN';
     private const DEFAULT_CURRENCY = 'CNY';
@@ -2894,6 +2896,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
         $entry['count'] = (int)$entry['count'] + 1;
         $entry['last_at'] = $now;
+        if (!isset(self::$gzipDemandByCacheKey[$cacheKey])
+            && \count(self::$gzipDemandByCacheKey) >= self::GZIP_DEMAND_CACHE_MAX_ITEMS
+        ) {
+            unset(self::$gzipDemandByCacheKey[\array_key_first(self::$gzipDemandByCacheKey)]);
+        }
+        unset(self::$gzipDemandByCacheKey[$cacheKey]);
         self::$gzipDemandByCacheKey[$cacheKey] = $entry;
 
         return (int)$entry['count'];

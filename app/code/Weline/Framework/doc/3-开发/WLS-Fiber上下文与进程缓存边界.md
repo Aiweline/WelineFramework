@@ -10,6 +10,11 @@
 
 多 Fiber 并发时：**每个 Fiber 只有自己的上下文**；可读缓存一律进程袋或 Memory Service，禁止「每 Fiber 复制一份胖单例 + 私有袋」。
 
+Fiber **结束/回收**（Worker 仍可能握着 terminated Fiber 引用）必须显式释放：
+- `ObjectManager::clearRequestScopeForFiber`（含 Template / FiberOutputBuffer 的 Fiber WeakMap）
+- `ObjectManager::sweepTerminatedFiberScopes`（reset 扫尾）
+禁止只依赖 WeakMap+GC。
+
 ## ObjectManager
 
 - `ProcessSharedInterface` → 始终写入/读取进程 `$instances`（Fiber 内也如此）。

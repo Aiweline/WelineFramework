@@ -1114,6 +1114,14 @@ class ObjectManager implements ManagerInterface
     {
         self::unsetFiberScope(false, $fiber);
         self::unsetFiberScope(true, $fiber);
+        // Template / OutputBuffer use their own Fiber WeakMaps; Worker may still
+        // pin the Fiber object after terminate, so WeakMap alone will not release.
+        if (\class_exists(\Weline\Framework\View\Template::class, false)) {
+            \Weline\Framework\View\Template::clearScopeForFiber($fiber);
+        }
+        if (\class_exists(\Weline\Framework\Runtime\FiberOutputBuffer::class, false)) {
+            \Weline\Framework\Runtime\FiberOutputBuffer::clearForFiber($fiber);
+        }
     }
 
     /**
@@ -1123,6 +1131,7 @@ class ObjectManager implements ManagerInterface
     public static function sweepTerminatedFiberScopes(): int
     {
         $cleared = 0;
+        $seen = [];
         foreach ([self::$fiberInstances, self::$fiberOriginInstances] as $storage) {
             if (!$storage instanceof \WeakMap) {
                 continue;
@@ -1134,7 +1143,14 @@ class ObjectManager implements ManagerInterface
                 }
             }
             foreach ($victims as $fiber) {
-                unset($storage[$fiber]);
+                $id = \spl_object_id($fiber);
+                if (isset($seen[$id])) {
+                    unset($storage[$fiber]);
+                    continue;
+                }
+                $seen[$id] = true;
+                // Full fiber teardown (OM + Template + OutputBuffer).
+                self::clearRequestScopeForFiber($fiber);
                 $cleared++;
             }
         }
