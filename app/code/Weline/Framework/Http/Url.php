@@ -31,7 +31,7 @@ final class UrlParserRequestState
     public ?string $requestId = null;
 }
 
-class Url implements UrlInterface
+class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterface
 {
     private const PARSER_SITES_VERSION_CACHE_KEY = 'websites.url.parser_sites_version.v1';
     // Website/Store writes update a shared version file after commit. WLS workers

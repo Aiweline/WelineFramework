@@ -7,6 +7,7 @@ namespace Weline\Theme\Service;
 use Weline\Framework\Cache\CachePolicy;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
 /**
  * Scope-hot HTML fragments for storefront header navigation (mega menu + sidebar tree).
@@ -14,7 +15,7 @@ use Weline\Framework\Runtime\RequestContext;
  * Search type dropdown: shared snapshot is the stable tree only — selected type /
  * category / facade stay request-local (WS2 fragment gate).
  */
-final class StorefrontHeaderNavFragmentCache
+final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
 {
     private const CACHE_POOL = 'weline_theme_storefront_header_nav';
     private const FRESH_TTL_SECONDS = 3600;

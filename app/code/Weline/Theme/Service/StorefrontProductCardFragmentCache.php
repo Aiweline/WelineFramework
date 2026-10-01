@@ -6,6 +6,7 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\Cache\CachePolicy;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
 /**
  * Scope-hot HTML fragments for storefront product cards (A-axis reuse).
@@ -13,7 +14,7 @@ use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
  * Cards stay in SSR HTML (SEO). Policy bags only skip re-fetch of identical
  * product+flags markup across homepage/list widgets and warm workers.
  */
-final class StorefrontProductCardFragmentCache
+final class StorefrontProductCardFragmentCache implements ProcessSharedInterface
 {
     public function __construct(
         private readonly StorefrontScopeHotCache $hotCache,

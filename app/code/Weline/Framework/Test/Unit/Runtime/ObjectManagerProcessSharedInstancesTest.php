@@ -114,6 +114,38 @@ final class ObjectManagerProcessSharedInstancesTest extends TestCase
         self::assertSame('process', $kept->owner);
         self::assertSame($kept, ObjectManager::_getInstance(ObjectManagerProcessSharedTestDouble::class));
     }
+
+    public function testHotPathCoordinatorsDeclareProcessShared(): void
+    {
+        $classes = [
+            \Weline\Framework\Cache\RuntimeCachePolicy::class,
+            \Weline\Framework\Cache\Namespace\NamespacePath::class,
+            \Weline\Framework\Http\Url::class,
+            \Weline\Framework\Cache\CacheManager::class,
+            \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
+            \Weline\Framework\Router\FullPageCacheCoordinator::class,
+            \Weline\Theme\Service\StorefrontHeaderNavFragmentCache::class,
+            \Weline\Theme\Service\StorefrontProductCardFragmentCache::class,
+            \Weline\Theme\Service\StorefrontThemeCacheCoordinator::class,
+            \Weline\Theme\Service\ThemePageTypeResolver::class,
+            \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class,
+            \Weline\Theme\Helper\ThemePathResolver::class,
+            \Weline\Theme\Helper\ThemeChainResolver::class,
+            \Weline\Product\Service\Storefront\StorefrontOfferPriceAssembler::class,
+            \Weline\Product\Service\Storefront\StorefrontPriceAdjustmentProviderRegistry::class,
+            \Weline\Search\Service\SearchProviderRegistry::class,
+        ];
+        foreach ($classes as $class) {
+            self::assertTrue(
+                \is_a($class, ProcessSharedInterface::class, true),
+                $class . ' must implement ProcessSharedInterface',
+            );
+        }
+        self::assertTrue(
+            \is_a(\Weline\Framework\View\Template::class, \Weline\Framework\Runtime\RequestLocalInterface::class, true),
+            'Template must stay request/fiber local',
+        );
+    }
 }
 
 final class ObjectManagerProcessSharedTestDouble implements ProcessSharedInterface

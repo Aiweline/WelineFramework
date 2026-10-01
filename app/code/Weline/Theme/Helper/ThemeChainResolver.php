@@ -19,7 +19,7 @@ use Weline\Theme\Model\WelineTheme;
  * 鑱岃矗锛氳В鏋愪富棰樼户鎵块摼
  * 閬靛惊锛氬崟涓€鑱岃矗鍘熷垯 (SRP)
  */
-class ThemeChainResolver implements ThemeChainResolverInterface
+class ThemeChainResolver implements ThemeChainResolverInterface, \Weline\Framework\Runtime\ProcessSharedInterface
 {
     /**
      * 鑾峰彇涓婚缁ф壙閾撅紙浠庡熀纭€鍒板綋鍓嶏細鐖朵富棰樺湪鍓嶏紝婵€娲讳富棰樺湪鍚庯級

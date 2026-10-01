@@ -10,8 +10,9 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class ThemePageTypeResolver
+final class ThemePageTypeResolver implements ProcessSharedInterface
 {
     public function extractBaseLayoutType(?string $layoutType): string
     {

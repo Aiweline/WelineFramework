@@ -12,8 +12,9 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Search\Api\SearchProviderInterface;
 use Weline\Search\Api\SearchScopeOptionsProviderInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-class SearchProviderRegistry
+class SearchProviderRegistry implements ProcessSharedInterface
 {
     /** @var array<string, SearchProviderInterface>|null */
     private ?array $providers = null;

@@ -9,6 +9,7 @@ use Weline\Product\Api\Data\StorefrontOfferPriceView;
 use Weline\Product\Api\Data\StorefrontPriceAdjustment;
 use Weline\Product\Api\Data\StorefrontPriceContext;
 use Weline\Product\Api\StorefrontOfferPriceAssemblerInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
 /**
  * Merges provider adjustments into one unit-price view.
@@ -18,7 +19,7 @@ use Weline\Product\Api\StorefrontOfferPriceAssemblerInterface;
  * - Stackable adjustments apply after the exclusive winners, in priority then code order.
  * - Cart/checkout coupons remain Marketing DiscountQuote — not assembled here.
  */
-final class StorefrontOfferPriceAssembler implements StorefrontOfferPriceAssemblerInterface
+final class StorefrontOfferPriceAssembler implements StorefrontOfferPriceAssemblerInterface, ProcessSharedInterface
 {
     public function __construct(
         private readonly StorefrontPriceAdjustmentProviderRegistry $providers,

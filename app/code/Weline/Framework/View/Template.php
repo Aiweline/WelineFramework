@@ -40,8 +40,9 @@ use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Cache\TemplateCachePolicyRegistry;
 use Weline\Framework\View\Helper\EmbeddedPageTitle;
 use Weline\Framework\View\Helper\HtmlCacheAdmission;
+use Weline\Framework\Runtime\RequestLocalInterface;
 
-class Template extends DataObject
+class Template extends DataObject implements RequestLocalInterface
 {
     use TraitTemplate;
 

@@ -19,7 +19,11 @@ Fiber **结束/回收**（Worker 仍可能握着 terminated Fiber 引用）必�
 
 - `ProcessSharedInterface` → 始终写入/读取进程 `$instances`（Fiber 内也如此）。
 - 未标记类 → 仍 Fiber 本地（兼容；避免把带请求可变字段的服务误共享）。
-- `RequestLocalInterface` → 明确请求上下文（Http Request/Response 已实现）。
+- `RequestLocalInterface` → 明确请求上下文（Http Request/Response、`Template` 已实现）。
+
+已标 ProcessShared 的热路径示例：`CacheManager`、`StorefrontScopeHotCache`、`FullPageCacheCoordinator`、`SingleFlightCoordinator`、`NamespaceGenerationRepository`、`StorefrontProductMediaUrlResolver`、`Url`、`RuntimeCachePolicy`、Theme 片段缓存协调器 / 路径解析、SearchProviderRegistry、OfferPrice 组装注册表。
+
+**禁止**对 `SlotRendererService`（含 pageRenderContext/widgetCache/Template 注入）、持 Request/Session 链或可变 ORM 的服务标 ProcessShared。
 
 新增可跨 Fiber 共享的缓存协调器时：**必须**实现 `ProcessSharedInterface`，且请求维状态只进 `RequestContext`。
 
