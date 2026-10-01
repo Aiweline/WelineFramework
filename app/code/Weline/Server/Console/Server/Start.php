@@ -6224,6 +6224,11 @@ class Start extends CommandAbstract
             );
         }
 
+        // Linux：Worker 数/内存定稿后再检查 systemd 自启；已安装且指纹匹配则跳过，否则自动安装。
+        $this->traceStartupPhase($instanceName, 'autostart:before');
+        $this->ensureLinuxSystemdAutostartInstalled($config, $instanceName, $args);
+        $this->traceStartupPhase($instanceName, 'autostart:after');
+
         $gatewayConfig = \is_array($config['gateway'] ?? null) ? $config['gateway'] : [];
         if (\array_key_exists('enabled', $gatewayConfig)
             && $this->isTruthyCliFlagValue($gatewayConfig['enabled'])
@@ -8777,6 +8782,73 @@ class Start extends CommandAbstract
      *
      * @param string $host 域名
      */
+    /**
+     * Linux systemd 自启：已安装则跳过；未安装则通过有界提权安装器自动安装。
+     * 失败不阻断 server:start。
+     *
+     * @param array<string,mixed> $config
+     * @param array<string,mixed> $args
+     */
+    protected function ensureLinuxSystemdAutostartInstalled(array $config, string $instanceName, array $args = []): void
+    {
+        if (PHP_OS_FAMILY !== 'Linux') {
+            return;
+        }
+        $envFlag = \getenv('WLS_AUTOSTART_AUTO_INSTALL');
+        $autoInstall = true;
+        if ($envFlag !== false && $envFlag !== '') {
+            $autoInstall = \in_array(\strtolower((string)$envFlag), ['1', 'true', 'yes', 'on'], true);
+        }
+        $cfgFlag = $config['autostart']['auto_install']
+            ?? $config['wls']['autostart']['auto_install']
+            ?? \Weline\Framework\App\Env::get('wls.autostart.auto_install', null);
+        if ($cfgFlag !== null && $cfgFlag !== '') {
+            $autoInstall = \in_array(\strtolower((string)$cfgFlag), ['1', 'true', 'yes', 'on'], true);
+        }
+        if (isset($args['no-autostart-install']) || isset($args['no_autostart_install'])) {
+            $autoInstall = false;
+        }
+        if (!$autoInstall) {
+            $this->printer->note(__('已跳过 WLS systemd 自启安装（显式关闭）。'));
+            return;
+        }
+
+        $configForInstall = $config;
+        if (isset($args['dispatcher']) || (($config['dispatcher'] ?? false) === true)) {
+            $configForInstall['_cli_dispatcher'] = true;
+            $configForInstall['dispatcher'] = true;
+        }
+
+        try {
+            $installer = new \Weline\Server\Service\Autostart\LinuxSystemdAutostartInstaller(
+                authorizationSession: $this->administratorAuthorizationSession
+                    ??= new \Weline\Server\Service\AdministratorAuthorizationSession(),
+            );
+            $result = $installer->ensure($configForInstall, $instanceName, true);
+        } catch (\Throwable $e) {
+            $this->printer->warning(__('WLS systemd 自启检查/安装异常：%{1}', [$e->getMessage()]));
+            return;
+        }
+
+        $status = (string)($result['status'] ?? '');
+        $unit = (string)($result['unit'] ?? '');
+        if ($status === 'already_installed') {
+            $this->printer->note(__('WLS systemd 自启已安装，跳过：%{1}', [$unit !== '' ? $unit : 'unit']));
+            return;
+        }
+        if ($status === 'installed') {
+            $this->printer->note(__('已自动安装 WLS systemd 自启：%{1}', [$unit !== '' ? $unit : 'unit']));
+            return;
+        }
+        if ($status === 'needs_admin') {
+            $this->printer->warning(__('WLS systemd 自启未安装：需要管理员授权（sudo）。启动继续；可稍后以可交互终端重跑 server:start，或手动 enable 单元。'));
+            return;
+        }
+        if ($status !== 'skipped' && ($result['message'] ?? '') !== '') {
+            $this->printer->note((string)$result['message']);
+        }
+    }
+
     protected function ensureHostsFileConfigured(string $host): void
     {
         if (!LocalDomainPolicy::requiresHostsEntry($host) || $host === 'localhost') {
@@ -13334,6 +13406,7 @@ PHP;
                 '--no-nginx' => __('兼容别名，等价于 --edge=wls'),
                 '--no-auto-deps' => __('兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用'),
                 '--supervisor <value>' => __('Supervisor：auto/true/false（默认 auto）'),
+                '--no-autostart-install' => __('跳过 Linux systemd 自启单元自动安装/校验'),
                 '--direct' => __('直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用'),
                 '--dispatcher' => __('Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断'),
                 '--help' => __('显示帮助信息'),
