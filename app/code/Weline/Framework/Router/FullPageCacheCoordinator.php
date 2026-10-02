@@ -553,6 +553,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $storeError = \error_get_last();
         FpcDiag::event('fpc_publish_store', [
             'key_sha' => \substr(\sha1($unifiedCacheKey), 0, 12),
+            'full_key' => $unifiedCacheKey,
+            'variant' => $variant,
             'stored' => $sharedPublished,
             'ttl' => $ttl,
             'payload_keys' => \is_array($sharedPayload) ? \array_keys($sharedPayload) : [],
@@ -2456,6 +2458,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $rawShared = \is_array($cached);
             FpcDiag::event('fpc_lookup', [
                 'key_sha' => \substr(\sha1($cacheKey), 0, 12),
+                'full_key' => $cacheKey,
                 'found' => \is_array($cached),
             ]);
             if (\is_array($cached)) {
