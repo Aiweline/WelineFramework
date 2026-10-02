@@ -55,7 +55,7 @@ class ThemeEditorPreviewContractTest extends TestCore
                 return $this;
             }
 
-            public function load(int|string $field_or_pk_value, $value = null): AbstractModel
+            public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): AbstractModel
             {
                 $this->setData($this->themeData());
                 return $this;

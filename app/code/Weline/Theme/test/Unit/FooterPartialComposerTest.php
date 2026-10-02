@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Unit;
 
-use PHPUnit\Framework\TestCase;
+use Weline\Theme\Test\ThemeTestCase;
 use Weline\Framework\View\Template;
 use Weline\Theme\Helper\FooterPartialComposer;
 
-final class FooterPartialComposerTest extends TestCase
+final class FooterPartialComposerTest extends ThemeTestCase
 {
     public function testComposerExposesSlotRenderMethods(): void
     {

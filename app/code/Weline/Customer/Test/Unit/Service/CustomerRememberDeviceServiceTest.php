@@ -361,7 +361,7 @@ final class CustomerLookupFake extends Customer
         return $this;
     }
 
-    public function load(int|string $field_or_pk_value, $value = null): AbstractModel
+    public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): AbstractModel
     {
         $requestedId = $value === null ? (int)$field_or_pk_value : (int)$value;
         if ($requestedId !== (int)$this->getId()) {

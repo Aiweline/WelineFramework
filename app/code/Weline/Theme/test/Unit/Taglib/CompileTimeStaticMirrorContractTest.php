@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Unit\Taglib;
 
+use Weline\Theme\Test\ThemeTestCase;
+
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Taglib\StaticMirrorCapableInterface;

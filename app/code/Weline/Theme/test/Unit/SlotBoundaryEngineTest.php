@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Test\TestCore;
+use Weline\Theme\Test\ThemeTestCase;
 use Weline\Framework\View\Taglib;
 use Weline\Framework\View\Template;
 use Weline\Theme\Service\ThemeRuntimeLayoutResolver;
@@ -15,7 +15,7 @@ use Weline\Theme\Service\SlotHtmlOpaqueParker;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Taglib\Slot;
 
-final class SlotBoundaryEngineTest extends TestCore
+final class SlotBoundaryEngineTest extends ThemeTestCase
 {
     public function testSlotCompileEmitsBoundaryComments(): void
     {

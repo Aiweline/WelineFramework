@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Test\TestCore;
+use Weline\Theme\Test\ThemeTestCase;
 use Weline\Framework\View\Exception\TemplateException;
 use Weline\Framework\View\Taglib;
 use Weline\Framework\View\Template;
@@ -13,7 +13,7 @@ use Weline\Theme\Taglib\Slot;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost;
 
-class SlotTaglibCompileStateTest extends TestCore
+class SlotTaglibCompileStateTest extends ThemeTestCase
 {
     public function setUp(): void
     {

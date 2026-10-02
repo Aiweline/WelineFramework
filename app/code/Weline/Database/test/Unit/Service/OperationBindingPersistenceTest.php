@@ -627,7 +627,7 @@ final class OperationBindingMigration extends Migration
         return $this;
     }
 
-    public function load(int|string $field_or_pk_value, $value = null): AbstractModel
+    public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): AbstractModel
     {
         $this->loadedId = (int)$field_or_pk_value;
         return $this;
