@@ -217,6 +217,48 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 - 弹出层 z-index 抬升：[`widgets/elevate-stack-layers.md`](./widgets/elevate-stack-layers.md)
 - 默认主题目录规范：[`../view/theme/README.md`](../view/theme/README.md)
 
+### 现行有效规范（此前未被本清单收录，2026-10-02 补齐）
+
+- 内容区宽度 / 统一版心：[`theme-layout-content-width.md`](./theme-layout-content-width.md)
+- 前端 JS 模块加载：[`前端JS模块加载规范.md`](./前端JS模块加载规范.md)
+- 部件静态资源固化（bake 与定位）：[`部件静态资源固化规范.md`](./部件静态资源固化规范.md)
+- 组件 Meta 信息格式：[`组件Meta信息格式规范.md`](./组件Meta信息格式规范.md)、示例 [`组件Meta信息使用示例.md`](./组件Meta信息使用示例.md)
+- 店面图占位（唯一静态 SVG、禁 data URI）：[`storefront-image-placeholder.md`](./storefront-image-placeholder.md)
+- 语义色板 / Token：[`theme-semantic-color-matrix.md`](./theme-semantic-color-matrix.md)、店面 Token 消费：[`theme-storefront-token-consumption.md`](./theme-storefront-token-consumption.md)
+- 版心与 `@lang` 语言属性：[`HTML-lang属性BCP-47规范.md`](./HTML-lang属性BCP-47规范.md)
+- 通用建站部件库：[`通用建站部件库.md`](./通用建站部件库.md)
+- 购物车共享 SSR 隔离：[`购物车共享SSR隔离.md`](./购物车共享SSR隔离.md)
+- Hook 点位总索引：[`Hook点位索引.md`](./Hook点位索引.md)
+- 能力现状 / 需求口径：[`功能现状.md`](./功能现状.md)、[`需求.md`](./需求.md)；完整版需求（含原始验收口径）：[`需求文档-完整版.md`](./需求文档-完整版.md)
+- 素材来源（织艺谱系）：[`织艺谱系素材来源.md`](./织艺谱系素材来源.md)
+
+### 预留能力（已实现，当前无调用方；**非死码，勿误删**）
+
+以下 Theme 标签已完整实现，但 2026-10-02 审查确认**全仓无调用方**。它们属**平台预留能力**，已在各自类 docblock 标注 `能力状态（2026-10-02 审查）`：
+
+| 标签 | 说明 | 备注 |
+|------|------|------|
+| `<w:theme:tag-input>` | 多选标签输入 | 通用表单控件，有契约测试 |
+| `<w:theme:tree-select>` | 树形选择器 | 通用表单控件，有 2 个测试 |
+| `<w:theme:sse-progress>` | SSE 进度组件（步骤指示 + 日志终端） | 593 行完整实现 |
+
+**判定依据**：这些是通用控件/平台能力，"零调用"不等于废弃；`Taglib/ThemeAssetSource.php` 虽无标签调用，但它是 `theme:css`/`theme:js`/`theme:font` 的**内部 helper**（属间接在用），同样不要删。
+
+### 历史记录 / 设计稿 / 一次性报告（**非当前依据**）
+
+> 以下文档含"状态说明"或已被校订标注，**仅供追溯**，不得作为实现依据。
+
+- [`layout-slot-cache-keys.md`](./layout-slot-cache-keys.md)（结构缓存键，部分待核）
+- 部件配置系列：[`widget-config-enhancement-plan.md`](./widget-config-enhancement-plan.md)、[`widget-config-ui-beautification.md`](./widget-config-ui-beautification.md)、[`widget-config-i18n-implementation-summary.md`](./widget-config-i18n-implementation-summary.md)、[`widget-config-i18n-testing.md`](./widget-config-i18n-testing.md)
+- 主题配置系列：[`主题配置方案.md`](./主题配置方案.md)（设计稿，已落地）、[`主题配置系统实施总结.md`](./主题配置系统实施总结.md)
+- 布局资源提取/编译：[`布局CSS_JS提取和编译系统实现总结.md`](./布局CSS_JS提取和编译系统实现总结.md)（**部分已失效**，见文首校订）
+- 元数据方案总结：[`组件Meta信息格式方案总结.md`](./组件Meta信息格式方案总结.md)
+- 预览图功能记录：[`preview-image-implementation.md`](./preview-image-implementation.md)（历史；与"预览三态"是不同功能）
+- 重构说明：[`SOLID原则重构说明.md`](./SOLID原则重构说明.md)
+- 虚拟布局规划稿：[`virtual-layout-scope-plan.md`](./virtual-layout-scope-plan.md)（头部称"规划中"，但 §143-149 三条 w_query 已落地——按节阅读）
+- 开发过程记录：[`DEVELOPMENT_NOTES.md`](./DEVELOPMENT_NOTES.md)
+- 自动生成（勿手改）：[`AI-INDEX.md`](./AI-INDEX.md)
+
 ## 对外能力
 
 ### Theme 资源标签族（`theme:css` / `theme:js` / `theme:font`）

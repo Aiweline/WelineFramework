@@ -1,8 +1,8 @@
-# 部件页面类型约束系统
+# 部件页面布局约束系统（`page_layouts`）
 
 ## 概述
 
-部件页面类型（page_types）约束系统用于控制哪些部件可以在哪些页面类型中使用。这确保了：
+部件页面布局（`page_layouts`）约束系统用于控制哪些部件可以在哪些页面布局中使用。这确保了：
 
 1. 部件只在适当的上下文中出现（如产品相关部件只在产品页显示）
 2. 避免在不适用的页面中添加无意义的部件
@@ -148,7 +148,7 @@
     'code'        => 'featured-products',
     'type'        => 'product',
     // 指定适用的页面类型（使用 layouts/ 目录名）
-    'page_types'  => ['homepage', 'cms_page', 'category'],
+    'page_layouts'  => ['homepage', 'cms_page', 'category'],
     // ...其他配置
 ]
 ```
@@ -162,14 +162,14 @@
     'type'        => 'container',
     'is_container' => true,   // 容器型部件
     'exclusive'   => true,    // 独占部件（同区域只能有一个）
-    'page_types'  => ['*'],   // 所有页面类型
+    'page_layouts'  => ['*'],   // 所有页面类型
     // ...
 ]
 ```
 
 ## 前端过滤机制
 
-1. **服务端过滤**：`ThemeLayoutService::getAvailableWidgets($pageType)` 根据页面类型过滤部件列表
+1. **服务端过滤**：`ThemeLayoutService::getAvailableWidgets($pageType, $filterOptions, $editorArea, $theme)`（4 参）根据页面类型过滤部件列表
 2. **客户端验证**：拖拽时检查部件是否支持当前页面类型，不支持则提示用户
 3. **可视化标识**：容器和独占部件在列表中有特殊徽章标识
 

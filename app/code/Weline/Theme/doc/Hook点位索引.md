@@ -27,7 +27,7 @@
 | `Weline_Theme::frontend::partials::footer::links` | [links.md](./hook/frontend/partials/footer/links.md) | `.../footer/links.phtml` |
 | `Weline_Theme::frontend::partials::product-card::add-to-cart` | Theme hook.php | `.../product-card/add-to-cart.phtml` |
 | `Weline_Theme::frontend::partials::product-card::buy-now` | [buy-now.md](./hook/frontend/partials/product-card/buy-now.md) | `.../buy-now.phtml` |
-| `Weline_Product::frontend::product::detail::after-add-to-cart` | [Product doc](../Product/doc/hook/frontend/product/detail/after-add-to-cart.md) | `view/hooks/Weline_Product/frontend/product/detail/after-add-to-cart.phtml` |
+| `Weline_Product::frontend::product::detail::after-add-to-cart` | [Product doc](../../Product/doc/hook/frontend/product/detail/after-add-to-cart.md) | `view/hooks/Weline_Product/frontend/product/detail/after-add-to-cart.phtml` |
 | `Weline_Theme::frontend::layouts::homepage::content-before` | `doc/hook/frontend/layouts/homepage/` | `view/hooks/Weline_Theme/frontend/layouts/homepage/content-before.phtml` |
 | `Weline_Theme::frontend::layouts::cart::content-before` | `doc/hook/frontend/layouts/cart/` | 对应 layouts/cart 路径 |
 | `Weline_Theme::frontend::layouts::checkout::content-before` | checkout layout hooks | 见 Theme/doc/hook/frontend/layouts/ |

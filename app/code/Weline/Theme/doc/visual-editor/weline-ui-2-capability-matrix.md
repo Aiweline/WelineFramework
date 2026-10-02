@@ -62,7 +62,8 @@
 - 布局：`layout-options`、`layout-config`、`save-layout-selection`、`save-layout-config`、`compile-layout`、`save-compiled-layout`。
 - 注入：`default-injections`、`apply-default-injection`。
 - 预览/发布：`preview`、frontend preview、`publish`、`start-preview`、`exit-preview`、`publish-and-exit`。
-- 版本：`versions`、`save-version`、`switch-version`、`restore-original`、`publish-version`、`delete-version`、`rename-version`。
+- 版本（**现行 = Scope 版本族**）：`scope-versions`、`create-scope-draft`、`save-scope-version`、`publish-scope-version`、`restore-scope-defaults`；页面版本删除/继承：`delete-version`、`inherit-version`。
+  - ⚠️ **2026-10-02 订正**：本行原写 `versions`、`save-version`、`switch-version`、`restore-original`、`publish-version`、`delete-version`、`rename-version` 并声明"不得删除"——该声明**与代码及契约测试相反**：前 5 条由 `test/Unit/Controller/Backend/ThemeEditorScopeVersionApiContractTest.php:71-79` 强制断言**必须不存在**；`rename-version` 已无任何调用方（前端 `apiRenameVersion` 早已移除，`VisualEditorShellRetiredContractTest.php:44` 亦断言其消失），其服务端路由与 `renameVersionPayload()`/`postRenameVersion()` 已于 2026-10-02 删除。
 - AI/虚拟主题：`ai-translate-config`、Theme Ai `agents`/`component-stream`/`refine-stream`/`publish`/`prepare-refine`；VirtualTheme `ai-catalog`/`create-draft`/`block-action`/`source`/`save-source`/`publish-version`（绿field 后门禁 fail-closed，悬停 AI 不再依赖）。
 - 部件库筛选：`widgets?library_tabs=&ai_generated=`、`default-injections?install_mode=&ai_generated=`。
 - 协作：`check-lock`、`release-lock`、`update-activity`、`request-takeover`、`check-takeover-request`、`force-takeover`。

@@ -43,20 +43,41 @@
 
 ### 1.4 页面类型 (Page Type)
 
-不同页面类型可以有不同的布局配置：
+页面类型取值即 `layouts/{目录名}/` 的目录名，**权威来源**：`Model/ThemeLayout.php` 的 `PAGE_TYPE_*` 常量（共 29 个）。不同页面类型可以有不同的布局配置：
 
 | 页面类型 | 说明 |
 |----------|------|
-| `home` | 首页 |
+| `homepage` | 首页（**不是** `home`） |
 | `category` | 分类页 |
-| `product` | 产品页 |
+| `product` | 产品详情页 |
 | `products` | 产品列表页 |
-| `cms` | CMS页面 |
+| `cms_page` | CMS 页面（**不是** `cms`） |
 | `cart` | 购物车 |
 | `checkout` | 结算页 |
+| `checkout/success` | 结算成功 |
+| `checkout/failure` | 结算失败 |
 | `account` | 账户中心 |
+| `dashboard` | 用户面板 |
 | `search` | 搜索页 |
+| `blog` | 博客 |
+| `blog_category` | 博客分类 |
+| `promotion` | 促销 |
+| `activity` | 活动 |
+| `faq` | FAQ |
+| `payment_guide` | 支付指南 |
+| `guide` | 指南 |
+| `about` | 关于 |
+| `contact` | 联系 |
+| `qa` | 问答 |
+| `rma` | 退换货 |
+| `policy` | 政策页 |
+| `terms` | 条款 |
+| `not_found` | 404 |
+| `error` | 错误页 |
+| `sitemap` | 站点地图 |
 | `default` | 默认布局 |
+
+> ⚠️ 本表曾写作 `home` / `cms`，与代码常量不符；引用时请直接使用 `ThemeLayout::PAGE_TYPE_*`，勿抄本表。
 
 ---
 
@@ -107,7 +128,7 @@
 - `true`: 可以与其他兼容部件放在同一位置
 - `false`: 排斥其他部件（默认）
 
-### 2.5 页面类型限制 (page_types)
+### 2.5 页面布局限制 (page_layouts)
 
 ```php
 'page_layouts' => ['homepage', 'category']  // 适用的布局目录名
@@ -176,8 +197,8 @@
 ### 3.4 页面类型匹配
 
 ```
-部件的 page_types 必须包含当前页面类型
-或者 page_types 包含 '*'
+部件的 page_layouts 必须包含当前页面类型
+或者 page_layouts 包含 '*'
 ```
 
 ### 3.5 匹配流程图
@@ -191,7 +212,7 @@
 │     ├─ 不匹配 → 隐藏（面板不显示该部件）                     │
 │     └─ 匹配 → 继续                                          │
 │                                                             │
-│  2. 检查 page_types 是否包含当前页面类型                     │
+│  2. 检查 page_layouts 是否包含当前页面类型                     │
 │     ├─ 不包含 → 隐藏                                        │
 │     └─ 包含 → 继续                                          │
 │                                                             │
@@ -391,7 +412,7 @@ return [
     'position' => ['header'],
     'slot' => 'logo',
     'exclusive' => true,
-    'page_types' => ['*'],
+    'page_layouts' => ['*'],
     'template' => 'Weline_Theme::widgets/header/logo.phtml',
 ];
 ```
@@ -423,7 +444,7 @@ return [
     'position' => ['header'],
     'is_container' => true,
     'exclusive' => true,
-    'page_types' => ['*'],
+    'page_layouts' => ['*'],
     'slots' => [
         'logo' => [
             'name' => 'Logo',
