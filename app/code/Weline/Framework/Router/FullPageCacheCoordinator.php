@@ -544,16 +544,23 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $sharedPayload = $this->stripPlaintextWhenBrotliAuthority(
             $this->externalizeSharedPayload($unifiedCacheKey, $payload)
         );
+        \error_clear_last();
         $sharedPublished = $this->cache()->set(
             $unifiedCacheKey,
             $sharedPayload,
             $ttl
         );
+        $storeError = \error_get_last();
         FpcDiag::event('fpc_publish_store', [
             'key_sha' => \substr(\sha1($unifiedCacheKey), 0, 12),
             'stored' => $sharedPublished,
             'ttl' => $ttl,
             'payload_keys' => \is_array($sharedPayload) ? \array_keys($sharedPayload) : [],
+            'pool_class' => \get_class($this->cache()),
+            'adapter_class' => \method_exists($this->cache(), 'getAdapter')
+                ? \get_class($this->cache()->getAdapter())
+                : '',
+            'last_error' => (string)($storeError['message'] ?? ''),
         ]);
         if (!$sharedPublished && InternalHomepagePrime::isCurrentRequest()) {
             throw new \RuntimeException('Homepage warmup could not publish the compact shared FPC payload.');
