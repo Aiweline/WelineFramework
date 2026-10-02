@@ -50,23 +50,23 @@ final class ThemeTestSchema
                 continue;
             }
 
-            $columns = self::columnsFromSchemaConstants($class);
-            if ($columns === []) {
-                continue;
-            }
-
-            $defs = [];
-            foreach ($columns as $i => $column) {
-                if ($i === 0) {
-                    // 首列恒为主键（Theme 模型约定 schema_fields_ID 在首位）
-                    $defs[] = sprintf('"%s" INTEGER PRIMARY KEY AUTOINCREMENT', $column);
-                    continue;
+            // 用框架自身的 schema 解析 + 方言适配建表，保证与生产同构
+            // （此前由 schema_fields_* 常量手拼 DDL → 全列 INTEGER 的"浅表"，
+            //   与生产列类型/默认值不一致，会让写入/读取行为偏离，2026-10-02 定位并修正）
+            try {
+                $parser = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Framework\Database\Schema\SchemaParser::class
+                );
+                $executor = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Framework\Database\Schema\SchemaMigrationExecutor::class
+                );
+                $schema = $parser->parse($class);
+                if ($schema !== null) {
+                    $executor->createBootstrapTable(self::connector(), $schema);
                 }
-                // SQLite 类型亲和性宽松：统一 INTEGER 亦可容纳文本，避免类型映射失真
-                $defs[] = sprintf('"%s" INTEGER', $column);
-            }
-            $pdo->exec(sprintf('CREATE TABLE IF NOT EXISTS "%s" (%s)', $table, implode(', ', $defs)));
-        }
+            } catch (\Throwable) {
+                // 保持 fail-safe：夹具失败不应让测试崩在基建上
+            }        }
     }
 
     /** Weline_Theme 域测试最常用的表 */
@@ -85,6 +85,13 @@ final class ThemeTestSchema
         );
     }
 
+    /** 沙箱库连接（框架方言适配连接器） */
+    private static function connector(): \Weline\Framework\Database\Connection\Adapter\Sqlite\Connector
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Database\Connection\Adapter\Sqlite\Connector::class
+        );
+    }
     private static function resolveTableName(string $modelClass): string
     {
         if (!class_exists($modelClass)) {
