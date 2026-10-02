@@ -102,11 +102,17 @@ MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁
 
 **提交前对账（硬）**：`git diff --cached --name-only`（或 `--stat`）必须**逐项等于**声明集；多出的路径只能 `git restore --staged <多余路径>` 撤出索引——**只动索引、不碰工作区**（这是本规则唯一允许的 un-stage）；`git restore <path>`（工作区）仍属禁止。
 
+**共享树禁部分暂存（硬）**：`.git/index` 是**整个 checkout 的单例**，不是按会话隔离——任何**跨会话停留**的"半暂存"都会被对方的**无路径 `git commit`** 一起卷走（反向夹带），反之亦然；若在 `git diff` 与 `git apply --cached` 之间对方重写了同一文件，暂存进去的会是**对方更新后的内容**（竞态，不是丢数据，但会把他在飞内容挂到你的提交信息下）。因此：① 只**整文件**暂存**独占**路径，并在同一动作内提交完毕；② **共写文件**（同文件含他会话改动）**禁止** `git add -p` / 交互式挑 hunk / `git apply --cached` 部分暂存；确需自己落地共写文件时，改用 **`git worktree`（各自独立 index，本仓已有先例）** 或与他会话**合并提交**；③ 撤出误加只允许索引级 `git restore --staged <path>`，且须**立即**提交完毕，不留残局。注：其它会话的写入是**按路径落磁盘**，索引不参与文件寻址，故暂存**不会**导致对方"写错文件"——真实风险是**共享索引的双向夹带**与上述竞态。
+
 **重叠文件（硬）**：dirty-load 磁盘现版，并用 `git diff -- <file>` **逐 hunk** 确认索引里只含自己的语义；归属不明 → **停工问用户**，不替他会话裁决、不顺手「清理」。
 
 **收口汇报（硬）**：必须列出「本回合提交的路径」与「**故意未提交的他会话脏改路径**」。
 
-**并行首选隔离**：能不开共享树就不开——`git worktree add ../<project>-<session> -b <branch>`，各自工作树各自分支。可选机械化：声明集落 `dev/session/{slug}/commit-scope.txt`，配 pre-commit 钩子校验 `git diff --cached --name-only ⊆ 声明集`。
+**写入纪律（硬）**：工作区文件只用宿主 `edit` / `write`（平台 CAS 闸门：**读后被外部改写即 fail-closed 拒绝**，实测 `Error: … file changed since it was read`；未读先写同样被拒）。**禁止**用 `>`、`sed -i`、`patch`、`tee` 等 shell 写入绕过闸门。**共写文件优先定向 `edit`，禁止整文件 `write`**——`edit` 只替换目标片段，天然保留他会话在其它行区的改动。**残余口子**（CAS 覆盖不到，须靠隔离或审查兜底）：① 读→写窗口内并发双写；② shell 写入；③ 区域级冲突无感知（CAS 只看整文件是否变过）。
+
+**并行与共写隔离（硬）**：① 只写**独占**文件时可在共享树继续；② 凡触碰**共写文件**（同文件含他会话改动）或不确知归属的文件，改用 `git worktree add`（**独立工作树 + 独立 index**，本仓已有先例）或与他会话合并提交，**禁止**在共享树里裸改裸提交。可选机械化：声明集落 `dev/session/{slug}/commit-scope.txt`，配 pre-commit 钩子校验 `git diff --cached --name-only ⊆ 声明集`。
+
+**合并须审查（硬）**：跨会话 / 跨 worktree / 跨分支的合并**必须审查合并**，禁止盲合并与自动丢一侧：① 先 `git diff <base>...<branch>` **逐文件、逐 hunk** 审查，再 `git merge --no-commit` 停下看 `git diff --cached`；② **禁止** `-X ours` / `-X theirs` / `-s ours` 等自动丢弃一侧的解析（冲突只能人工合，且必须两边语义都在）；③ 合并后**双方对账复验**：`git grep` 确认两边新增的 id / 函数 / 片段**都还在**（例如两条硬规则 id 同时在 `mcpOperationalRules()` 与索引中出现）；④ 证据（命令 + 输出）写入 `dev/session/{slug}.md`；**禁止**把「合并成功 / exit 0」当成审查通过。
 
 权威：`HardConstraintsCatalog::mcpOperationalRules()` → `concurrent_session_commit_hygiene`。
 
