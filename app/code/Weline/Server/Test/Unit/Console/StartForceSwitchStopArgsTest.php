@@ -279,6 +279,58 @@ final class StartForceSwitchStopArgsTest extends TestCase
         self::assertStringNotContainsString('weline-wls-memory', $joined);
     }
 
+    /**
+     * 回归（T-MW-1）：本次启动**主动开启**了维护态、且是 -f 停机型切换、重启前未开维护时，
+     * 必须真正执行 disableMaintenanceMode；不得因 `$maintenanceEnabledByUser` 笔误
+     * （应为 `$maintenanceEnabledByUs`）而走进 restore-only 分支导致维护态卡住 → 全站 503。
+     */
+    public function testForceSwitchFinalizeDisablesMaintenanceEnabledByThisStart(): void
+    {
+        $printer = new \Weline\Framework\Output\Cli\Printing();
+        $start = new class ($printer) extends Start {
+            /** @var list<string> */
+            public array $calls = [];
+
+            public function __construct(\Weline\Framework\Output\Cli\Printing $printer)
+            {
+                $this->printer = $printer;
+            }
+
+            public function seedDisabledSnapshot(string $instanceName): void
+            {
+                $ref = new \ReflectionProperty(Start::class, 'restartMaintenanceSnapshot');
+                $ref->setAccessible(true);
+                $ref->setValue($this, [
+                    'instance_name' => $instanceName,
+                    'enabled' => false,
+                ]);
+            }
+
+            protected function restoreRestartMaintenanceConfigurationOnly(string $instanceName): void
+            {
+                $this->calls[] = 'restore_only:' . $instanceName;
+            }
+
+            protected function disableMaintenanceMode(string $instanceName, bool $requireRuntimeSync = false): void
+            {
+                $this->calls[] = 'disable_ipc:' . $instanceName . ':' . ($requireRuntimeSync ? '1' : '0');
+            }
+        };
+
+        $start->seedDisabledSnapshot('default');
+        $this->invokeProtected(
+            $start,
+            'finalizeMaintenanceModeAfterStartup',
+            'default',
+            true,   // $maintenanceEnabledByUs：本次启动主动开启
+            true,   // $maintenanceResetAfterForceSwitch
+            true,   // $startupCompleted
+            true,   // $runtimeControlAvailable
+        );
+
+        self::assertSame(['disable_ipc:default:1'], $start->calls);
+    }
+
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);

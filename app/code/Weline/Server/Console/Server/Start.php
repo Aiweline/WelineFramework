@@ -2582,6 +2582,9 @@ class Start extends CommandAbstract
                 $args,
                 $maintenanceEnabledByUs,
                 $maintenanceResetAfterForceSwitch,
+                // 证书变量只在 SSL/证书分支内初始化；未进入该分支时为未定义，
+                // 必须显式归一为 null 再传入（原来是跨方法作用域读到未定义变量）。
+                $activeCertificate ?? null,
             );
             $this->traceStartupPhase($instanceName, 'master-background:after', [
                 'completed' => $startupCompleted,
@@ -2725,7 +2728,7 @@ class Start extends CommandAbstract
         // 运维原本未开维护时，新 Master 已按 env 权威态启动；若在 post_housekeeping
         // 窗口硬要求 required IPC sync，控制面无响应会误判失败并拆掉已 READY 实例。
         $forceSwitchAlreadyMatching = $maintenanceResetAfterForceSwitch
-            && !$maintenanceEnabledByUser
+            && !$maintenanceEnabledByUs
             && !$originalMaintenanceEnabled;
         if ($forceSwitchAlreadyMatching || !$runtimeControlAvailable) {
             $this->restoreRestartMaintenanceConfigurationOnly($instanceName);
@@ -3457,6 +3460,7 @@ class Start extends CommandAbstract
         array $args = [],
         bool $maintenanceEnabledByUs = false,
         bool $maintenanceResetAfterForceSwitch = false,
+        ?array $activeCertificate = null,
     ): bool {
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
