@@ -9,7 +9,10 @@ use Weline\Framework\Taglib\TaglibInterface;
  * SSE 进度组件（带步骤指示器和日志终端）
  * 
  * 提供步骤进度条 + 日志终端的组合界面
- * 适用于多步骤任务的可视化进度展示
+ * 适用于多步骤任务的可视化进度展示 *
+ * ⚠️ 能力状态（2026-10-02 审查）：标签 <w:theme:sse-progress> 已完成实现但**当前全仓无调用方**，
+ * 属预留能力，非死代码。若长期不采用，请先确认无模块计划使用后再考虑移除。
+
  */
 class SseProgress implements TaglibInterface
 {
