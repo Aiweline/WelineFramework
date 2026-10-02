@@ -549,6 +549,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $sharedPayload,
             $ttl
         );
+        FpcDiag::event('fpc_publish_store', [
+            'key_sha' => \substr(\sha1($unifiedCacheKey), 0, 12),
+            'stored' => $sharedPublished,
+            'ttl' => $ttl,
+            'payload_keys' => \is_array($sharedPayload) ? \array_keys($sharedPayload) : [],
+        ]);
         if (!$sharedPublished && InternalHomepagePrime::isCurrentRequest()) {
             throw new \RuntimeException('Homepage warmup could not publish the compact shared FPC payload.');
         }
@@ -2441,6 +2447,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             self::cooperativeBuildYield();
             $cached = $this->cache()->get($cacheKey);
             $rawShared = \is_array($cached);
+            FpcDiag::event('fpc_lookup', [
+                'key_sha' => \substr(\sha1($cacheKey), 0, 12),
+                'found' => \is_array($cached),
+            ]);
             if (\is_array($cached)) {
                 $cached = $this->hydrateSharedPayload($cached);
                 if ($cached === null && $rawShared) {
