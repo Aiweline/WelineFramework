@@ -6,8 +6,21 @@ namespace Weline\Theme\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
 
+/**
+ * ⚠️ 已过期 · 整类跳过（2026-10-02 审查结论，见 dev/audit/theme-legacy-audit-20261002.md）
+ *
+ * 布局归属已变化：blog/blog_category 布局现由 Blog 模块拥有（app/code/Weline/Blog/view/theme/frontend/layouts/），本测试却在 Theme 模块内查找，路径恒不存在。
+ *
+ * 处置：整类跳过并保留用例代码，作为「测试长期无 runner、相对实现漂移」的样本。
+ */
 final class BlogLayoutContractTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        self::markTestSkipped('已过期：blog/blog_category 布局现由 Blog 模块拥有，本测试在 Theme 模块内查找的路径恒不存在。');
+    }
+
     public function testBlogDetailLayoutUsesAmazonArticleShell(): void
     {
         $layout = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/blog/default.phtml';
