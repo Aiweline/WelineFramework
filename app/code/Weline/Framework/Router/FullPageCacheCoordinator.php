@@ -2459,6 +2459,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             FpcDiag::event('fpc_lookup', [
                 'key_sha' => \substr(\sha1($cacheKey), 0, 12),
                 'full_key' => $cacheKey,
+                'variant' => $this->buildCurrentFpcVariant(),
                 'found' => \is_array($cached),
             ]);
             if (\is_array($cached)) {
