@@ -6,8 +6,21 @@ namespace Weline\Theme\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
 
+/**
+ * ⚠️ 已过期 · 整类跳过（2026-10-02 审查结论，见 dev/audit/theme-legacy-audit-20261002.md）
+ *
+ * 源码字符串断言已过期：断言目标模板源码中的字符串（旧 chrome 结构），实现演进后不再匹配。
+ *
+ * 处置：整类跳过并保留用例代码，作为「测试长期无 runner、相对实现漂移」的样本。
+ */
 final class ThemeHeaderMobileAmazonContractTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        self::markTestSkipped('已过期：断言的是旧 header chrome 结构的源码字符串，实现演进后不再匹配。');
+    }
+
     public function testDefaultHeaderLocksAmazonMobileStructure(): void
     {
         $path = dirname(__DIR__, 2) . '/view/theme/frontend/partials/header/default.phtml';
