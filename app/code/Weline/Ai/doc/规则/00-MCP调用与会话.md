@@ -92,6 +92,24 @@ MCP 的自愈、宿主重载、插件代次刷新、验证回滚和崩溃恢复�
 
 MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁止 config/helper/pager 命令注入及 force/discard 变体。分支切换只能由工作区所有者显式执行。
 
+## 7b. 共享脏树的提交范围（`concurrent_session_commit_hygiene`，严重）
+
+多 Agent / 多聊天 / MCP 自愈刷新可能共用**同一棵脏工作树**；§7 `preserve_dirty_workspace` 管「不许擦」，本节管「**提交时不许夹带**」。
+
+**归属判据（先判再动）**：① 是否落在本回合**声明改动集**内；② 文件 mtime 是否落在本会话动作窗口、而 diff 主题与本回合任务无关 → 判他人在飞；③ 生成物（MCP 目录/i18n 导出/主题编译 tpl/`var/**`）默认**不算自己**。
+
+**暂存纪律（硬）**：只 `git add -- <显式路径>...`；**禁止** `git add -A`、`git add .`、`git commit -a` 等扫全树写法。
+
+**提交前对账（硬）**：`git diff --cached --name-only`（或 `--stat`）必须**逐项等于**声明集；多出的路径只能 `git restore --staged <多余路径>` 撤出索引——**只动索引、不碰工作区**（这是本规则唯一允许的 un-stage）；`git restore <path>`（工作区）仍属禁止。
+
+**重叠文件（硬）**：dirty-load 磁盘现版，并用 `git diff -- <file>` **逐 hunk** 确认索引里只含自己的语义；归属不明 → **停工问用户**，不替他会话裁决、不顺手「清理」。
+
+**收口汇报（硬）**：必须列出「本回合提交的路径」与「**故意未提交的他会话脏改路径**」。
+
+**并行首选隔离**：能不开共享树就不开——`git worktree add ../<project>-<session> -b <branch>`，各自工作树各自分支。可选机械化：声明集落 `dev/session/{slug}/commit-scope.txt`，配 pre-commit 钩子校验 `git diff --cached --name-only ⊆ 声明集`。
+
+权威：`HardConstraintsCatalog::mcpOperationalRules()` → `concurrent_session_commit_hygiene`。
+
 ## 8. 运行/状态查询默认本机（`runtime_status_query_local_first`，强制）
 
 | 默认 | 禁止 |
