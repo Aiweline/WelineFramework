@@ -43,6 +43,8 @@ class ThemeStaticAssetPublisherTest extends TestCore
     private const FIXTURE_SOURCE_FILES = [
         'app/design/WeShop/motor/frontend/assets/css/motor.css'
             => "/* fixture: WeShop/motor design theme override */\n.motor-theme{color:#123456}\n",
+        'app/design/WeShop/default/frontend/variables/_colors.css'
+            => "/* fixture: WeShop/default design theme override */\n:root{--fixture-default:1}\n",
     ];
 
     private ThemeStaticAssetPublisher $publisher;
