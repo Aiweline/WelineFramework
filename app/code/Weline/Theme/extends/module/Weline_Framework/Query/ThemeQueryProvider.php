@@ -937,7 +937,6 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/reset-draft-resources' => ($themeEditor ??= $this->createDirectThemeEditor())->resetDraftResourcesPayload(),
                 '/theme/backend/theme-editor/factory-reset' => ($themeEditor ??= $this->createDirectThemeEditor())->factoryResetPayload(),
                 '/theme/backend/theme-editor/delete-version' => ($themeEditor ??= $this->createDirectThemeEditor())->deleteVersionPayload(),
-                '/theme/backend/theme-editor/rename-version' => ($themeEditor ??= $this->createDirectThemeEditor())->renameVersionPayload(),
                 '/theme/backend/theme-editor/theme-tokens' => ($themeEditor ??= $this->createDirectThemeEditor())->getThemeTokens(),
                 '/theme/backend/theme-editor/theme-disk-tokens' => ($themeEditor ??= $this->createDirectThemeEditor())->getThemeDiskTokens(),
                 '/theme/backend/theme-editor/disk-save' => ($themeEditor ??= $this->createDirectThemeEditor())->postDiskSave(),

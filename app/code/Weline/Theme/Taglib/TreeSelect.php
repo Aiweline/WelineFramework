@@ -9,7 +9,10 @@ use Weline\Framework\Http\Url;
 /**
  * 树形选择器组件
  * 
- * 树形结构数据选择，支持单选/多选和搜索
+ * 树形结构数据选择，支持单选/多选和搜索 *
+ * ⚠️ 能力状态（2026-10-02 审查）：标签 <w:theme:tree-select> 已完成实现但**当前全仓无调用方**，
+ * 属预留能力，非死代码。若长期不采用，请先确认无模块计划使用后再考虑移除。
+
  */
 class TreeSelect implements TaglibInterface
 {
