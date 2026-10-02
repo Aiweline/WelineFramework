@@ -650,18 +650,40 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     public function canServeCachedResponse(string $method = 'GET'): bool
     {
         if (!$this->hasActiveFpcStoreAdapter()) {
+            // 适配器注册表为空会让 FPC 直接 disabled（不做任何查找），
+            // 表现为「每个请求都整页 SSR」而非「MISS」。
+            FpcDiag::event('can_serve', [
+                'allowed' => false,
+                'gate' => 'no_active_fpc_store_adapter',
+                'adapter_code' => $this->activeFpcStoreAdapterCode(),
+                'preferred_adapter' => $this->preferredFpcStoreAdapterCode(),
+            ]);
+
             return false;
         }
 
         $warmupMode = $this->internalFpcWarmupMode();
-        if (($this->shouldBypassForDynamicFirstRender()
-                && $warmupMode !== 'prime')
-            || $this->shouldBypassCachedResponseForClientCacheControl()
-        ) {
+        $dynamicBypass = $this->shouldBypassForDynamicFirstRender();
+        $clientBypass = $this->shouldBypassCachedResponseForClientCacheControl();
+        if (($dynamicBypass && $warmupMode !== 'prime') || $clientBypass) {
+            FpcDiag::event('can_serve', [
+                'allowed' => false,
+                'gate' => 'bypass',
+                'dynamic_first_render' => $dynamicBypass,
+                'warmup_mode' => $warmupMode,
+                'client_cache_control_bypass' => $clientBypass,
+            ]);
+
             return false;
         }
 
         if (!$this->isFrontendResponseCacheAllowed($method)) {
+            FpcDiag::event('can_serve', [
+                'allowed' => false,
+                'gate' => 'frontend_cache_not_allowed',
+                'method' => $method,
+            ]);
+
             return false;
         }
 
@@ -669,7 +691,33 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         // reconciles header chrome (w_auth / data-auth-state). Build/publish stay
         // blocked for logged-in requests so personalized HTML never enters the
         // shared cache (see canBuildCachedResponse / P1a private-session hard off).
-        return $this->hasCompleteFrozenStorefrontScope();
+        $frozen = $this->hasCompleteFrozenStorefrontScope();
+        FpcDiag::event('can_serve', [
+            'allowed' => $frozen,
+            'gate' => $frozen ? 'ok' : 'scope_not_frozen',
+        ]);
+
+        return $frozen;
+    }
+
+    /** 诊断用：当前选中的 FPC store 适配器 code；无适配器时为空。 */
+    private function activeFpcStoreAdapterCode(): string
+    {
+        try {
+            return (string)(ObjectManager::getInstance(FpcStoreAdapterRegistry::class)->active()?->code() ?? '');
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /** 诊断用：配置偏好的适配器 code，与实际选中值对照即可判断注册是否缺失。 */
+    private function preferredFpcStoreAdapterCode(): string
+    {
+        try {
+            return \strtolower(\trim((string)Env::get('wls.fpc.store_adapter', 'wls')));
+        } catch (\Throwable) {
+            return 'wls';
+        }
     }
 
     public function canBuildCachedResponse(string $method = 'GET'): bool
