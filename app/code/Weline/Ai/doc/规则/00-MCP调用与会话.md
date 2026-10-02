@@ -112,7 +112,7 @@ MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁
 
 **并行与共写隔离（硬）**：① 只写**独占**文件时可在共享树继续；② 凡触碰**共写文件**（同文件含他会话改动）或不确知归属的文件，改用 `git worktree add`（**独立工作树 + 独立 index**，本仓已有先例）或与他会话合并提交，**禁止**在共享树里裸改裸提交。可选机械化：声明集落 `dev/session/{slug}/commit-scope.txt`，配 pre-commit 钩子校验 `git diff --cached --name-only ⊆ 声明集`。
 
-**合并须审查（硬）**：跨会话 / 跨 worktree / 跨分支的合并**必须审查合并**，禁止盲合并与自动丢一侧：① 先 `git diff <base>...<branch>` **逐文件、逐 hunk** 审查，再 `git merge --no-commit` 停下看 `git diff --cached`；② **禁止** `-X ours` / `-X theirs` / `-s ours` 等自动丢弃一侧的解析（冲突只能人工合，且必须两边语义都在）；③ 合并后**双方对账复验**：`git grep` 确认两边新增的 id / 函数 / 片段**都还在**（例如两条硬规则 id 同时在 `mcpOperationalRules()` 与索引中出现）；④ 证据（命令 + 输出）写入 `dev/session/{slug}.md`；**禁止**把「合并成功 / exit 0」当成审查通过。
+**合并须审查（硬）**：跨会话 / 跨 worktree / 跨分支的合并**必须审查合并**，禁止盲合并与自动丢一侧：① 先 `git diff <base>...<branch>` **逐文件、逐 hunk** 审查，再 `git merge --no-commit` 停下看 `git diff --cached`；② **禁止** `-X ours` / `-X theirs` / `-s ours` 等自动丢弃一侧的解析（冲突只能人工合，且必须两边语义都在）；③ 合并后**双方对账复验**：`git grep` 确认两边新增的 id / 函数 / 片段**都还在**（例如两条硬规则 id 同时在 `mcpOperationalRules()` 与索引中出现）；④ 证据**双落点**：本地工作记录写 `dev/session/{slug}.md`，但**该目录被 `.gitignore` 忽略、不入库**——可入库的合并证据必须同时写进拥有模块的 `doc/开发日志.md`（合并范围、逐文件审查结论、对账命令与输出、被排除文件），否则事后无据可查；**禁止**把「合并成功 / exit 0」当成审查通过。
 
 权威：`HardConstraintsCatalog::mcpOperationalRules()` → `concurrent_session_commit_hygiene`。
 
