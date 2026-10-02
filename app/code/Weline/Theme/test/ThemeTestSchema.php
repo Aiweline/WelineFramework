@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Test;
 
 use PDO;
+use Weline\Theme\Model\ThemeComponent;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
 
@@ -71,7 +72,7 @@ final class ThemeTestSchema
     /** Weline_Theme 域测试最常用的表 */
     public static function ensureCoreTables(): void
     {
-        self::ensure(WelineTheme::class, ThemeLayout::class);
+        self::ensure(WelineTheme::class, ThemeLayout::class, ThemeComponent::class);
 
         // 跨模块依赖（显式且带说明，不是隐式耦合）：
         // Widget 渲染路径会读 I18n 词典表，缺失时部件渲染成
