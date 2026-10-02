@@ -17,6 +17,7 @@ use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultIdentifierFormat
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\IdentifierFormatterInterface;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\TableNameStrategyInterface;
+use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\Exception\DbException;
 use Weline\Framework\Database\Transaction\TransactionCoordinator;
 use Weline\Framework\Database\Util\SelectFieldListSplitter;
@@ -924,7 +925,21 @@ abstract class QueryAst implements WriteIntentQueryInterface, PhysicalTableQuery
         }
 
         $errorInfo = $statement->errorInfo();
-        throw new DbException(__('数据库语句执行失败：%{1}', [$errorInfo[2] ?? 'unknown']));
+        $driverMessage = (string)($errorInfo[2] ?? 'unknown');
+        // 断连类错误必须让连接池丢弃该物理连接。Pgsql 适配器已在自己路径上标记，
+        // MySQL 适配器原先没有对应处理，于是已断开的连接留在池中被反复取出复用，
+        // 持续产生 2006 "server has gone away"。这里按共享父类收口，对所有适配器生效。
+        if (ConnectionPool::isDisconnectException(new \PDOException($driverMessage))) {
+            try {
+                ConnectionPool::markConnectionUnhealthy($this->getLink());
+            } catch (\Throwable) {
+                // 标记失败不能掩盖原始的语句错误。
+            }
+            // 语句已绑定到断开的 PDO，下一次必须在新连接上重新 prepare。
+            $this->PDOStatement = null;
+        }
+
+        throw new DbException(__('数据库语句执行失败：%{1}', [$driverMessage]));
     }
 
     public function fetch(string $model_class = ''): mixed

@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 namespace Weline\Server\Console\Server;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
+use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Service\Runtime\HttpProtocolCapabilityProbe;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
@@ -497,7 +499,100 @@ class Doctor extends CommandAbstract
             )));
         }
 
+        $consistency = $this->collectRuntimeConsistencyChecks($instanceName);
+        if ($consistency['checks'] !== []) {
+            $diagnostics['runtime_consistency'] = $consistency['checks'];
+        }
+        if ($consistency['warnings'] !== []) {
+            $diagnostics['warnings'] = \array_values(\array_unique(\array_merge(
+                (array)($diagnostics['warnings'] ?? []),
+                $consistency['warnings'],
+            )));
+        }
+
         return $diagnostics;
+    }
+
+    /**
+     * 运行时配置一致性自检。
+     *
+     * 以下组合曾在生产上直接把局部过载放大成整站不可用，必须在只读诊断里可见：
+     * 并发上限高于连接池上限、连接获取预算无界、FPC single-flight 等待被关闭。
+     *
+     * @return array{checks: array<string, array<string, mixed>>, warnings: list<string>}
+     */
+    private function collectRuntimeConsistencyChecks(string $instanceName): array
+    {
+        $checks = [];
+        $warnings = [];
+
+        try {
+            $env = Env::getInstance()->getConfig() ?: [];
+        } catch (\Throwable) {
+            return ['checks' => [], 'warnings' => []];
+        }
+
+        $wls = \is_array($env['wls'] ?? null) ? $env['wls'] : [];
+        $fiber = \is_array($wls['fiber'] ?? null) ? $wls['fiber'] : [];
+        $performance = \is_array($wls['performance'] ?? null) ? $wls['performance'] : [];
+        $serverConfig = \is_array($wls['servers'][$instanceName] ?? null) ? $wls['servers'][$instanceName] : [];
+        $instanceFiber = \is_array($serverConfig['fiber'] ?? null) ? $serverConfig['fiber'] : [];
+        if ($instanceFiber !== []) {
+            $fiber = \array_replace($fiber, $instanceFiber);
+        }
+
+        // 权威默认值在 worker_runtime_common.php::wlsResolveFiberAdmissionConfig()：
+        // 未配置 max_active 时按 12 处理。此处只做只读比对，不改变运行行为。
+        $maxActive = \array_key_exists('max_active', $fiber)
+            ? \max(0, (int)$fiber['max_active'])
+            : 12;
+        $dbConfig = \is_array($env['db']['master'] ?? null) ? $env['db']['master'] : [];
+        $poolSize = (int)($dbConfig['pool_size'] ?? 10);
+
+        $checks['fiber_vs_pool'] = [
+            'pool_size' => $poolSize,
+            'fiber_max_active' => $maxActive,
+            'fiber_max_active_configured' => \array_key_exists('max_active', $fiber),
+            'ok' => $maxActive === 0 || $poolSize >= $maxActive,
+        ];
+        if ($maxActive > 0 && $poolSize < $maxActive) {
+            $warnings[] = 'pool_size (' . $poolSize . ') 小于 wls.fiber.max_active (' . $maxActive
+                . ')，并发取连接上限高于池上限，必然产生池满等待。';
+        }
+
+        try {
+            $budgetSeconds = ConnectionPool::resolveAcquireTimeoutSeconds();
+        } catch (\Throwable) {
+            $budgetSeconds = 0.0;
+        }
+        $checks['db_acquire_budget'] = [
+            'seconds' => $budgetSeconds,
+            'ok' => $budgetSeconds > 0.0 && $budgetSeconds <= 3.0,
+        ];
+        if ($budgetSeconds <= 0.0) {
+            $warnings[] = '连接获取等待预算为 0，池满时会立即失败，背压能力被关闭。';
+        } elseif ($budgetSeconds > 3.0) {
+            $warnings[] = '连接获取等待预算为 ' . $budgetSeconds . 's，超出有界默认（2s）；'
+                . '多级取连接叠加后会远超上游网关预算。';
+        }
+
+        // FullPageCacheCoordinator::resolvePublishedResponseWaitTimeoutMs() 会把该值
+        // 夹紧到 250ms，配置超过上限时属于静默失效，必须显式提示。
+        $fpcWaitMs = (int)($performance['fpc_build_wait_timeout_ms'] ?? 0);
+        $checks['fpc_build_wait'] = [
+            'timeout_ms' => $fpcWaitMs,
+            'effective_timeout_ms' => \min(\max(0, $fpcWaitMs), 250),
+            'ok' => $fpcWaitMs > 0,
+        ];
+        if ($fpcWaitMs <= 0) {
+            $warnings[] = 'wls.performance.fpc_build_wait_timeout_ms 未配置或为 0，'
+                . 'FPC single-flight 等待被关闭，未命中请求会重复整页渲染。';
+        } elseif ($fpcWaitMs > 250) {
+            $warnings[] = 'wls.performance.fpc_build_wait_timeout_ms=' . $fpcWaitMs
+                . ' 超过代码内 250ms 上限，实际生效值被夹紧为 250ms。';
+        }
+
+        return ['checks' => $checks, 'warnings' => $warnings];
     }
 
     private function parseInstanceName(array $args): string

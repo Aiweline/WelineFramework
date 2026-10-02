@@ -6179,6 +6179,24 @@ function handleRequest(
             );
         }
 
+        if ($responseBody === '' && !$isExpectedEmptyResponse) {
+            // 渲染失败不得返回 200 空体：空页会被搜索引擎收录，用户也只会看到白屏。
+            // 降级为 503 + Retry-After，让爬虫与用户都按「可重试」处理。
+            $degradedBody = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">'
+                . '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+                . '<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">'
+                . '<title>服务暂时不可用</title></head><body>'
+                . '<h1>服务暂时不可用</h1><p>页面渲染未完成，请稍后重试。</p></body></html>';
+            $statusCode = 503;
+            $responseBody = $degradedBody;
+            $response->setHttpResponseCode(503);
+            $response->setHeader('Content-Type', 'text/html; charset=UTF-8');
+            $response->setHeader('Content-Length', (string)\strlen($degradedBody));
+            $response->setHeader('Retry-After', '5');
+            $response->setHeader('X-WLS-Degrade', 'empty-response');
+            $response->setBody($degradedBody);
+        }
+
         $acceptEncoding = $request->getHeader('Accept-Encoding');
         if ($acceptEncoding && \is_string($acceptEncoding)) {
             $response->compress($acceptEncoding);

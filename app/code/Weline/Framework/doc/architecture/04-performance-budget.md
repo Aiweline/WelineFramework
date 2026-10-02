@@ -86,12 +86,19 @@
 - 任一逻辑 Lease 发现 PDO 不健康时，必须使同 owner/同 PDO 的全部兄弟 token
   失效并且只丢弃一次物理连接，禁止其他 clone 继续使用已断开的 PDO。
 - 池统计必须始终满足 `available + in_use = current_size <= max_size`。默认获取等待
-  预算仍为 `150ms`；耗尽后抛出 `ConnectionPoolExhaustedException`，禁止池外临时连接。
+  预算为 `2s`（`ConnectionPool::DEFAULT_ACQUIRE_TIMEOUT_SECONDS`），可用
+  `db.pool.acquire_timeout_ms` 覆盖，但一律被夹紧到 `0–30s` 的硬上限；耗尽后抛出
+  `ConnectionPoolExhaustedException`，禁止池外临时连接。
+- 预算**必须有界且小于上游网关的时间预算**：30 秒级的同步等待会把局部过载放大成
+  整站不可用（多级取连接叠加后会远超任何边缘超时）。饱和等待采用指数退避
+  （`1ms → 100ms` 封顶），禁止以固定切片长自旋并与业务争抢 CPU。
+- 配置自检约束：`pool_size` 必须 **≥** `wls.fiber.max_active`，否则并发上限高于连接池
+  上限，必然产生池满等待。`php bin/w server:doctor` 对该项给出告警。
 - `ConnectionPoolExhaustedException::getContext()` 只暴露无凭证的结构化诊断：
   `reason/pool_id/timeout_ms/max_size/current_size/available/in_use/owner_count/lease_count/raw_owner_count/owners`。
   owner id 必须是不可逆指纹，不得包含 host、database、username、password 或请求私密数据。
 - 饱和等待期间若归还的是断线/不可用连接，必须先扣减 `current_size`，再在同一个剩余
-  deadline 内补建受池管理的连接；不得因为坏连接空出的槽位继续空等到 150ms。
+  deadline 内补建受池管理的连接；不得因为坏连接空出的槽位继续空等整个预算。
 
 ### SQLite busy 重试预算
 

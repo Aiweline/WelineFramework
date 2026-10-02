@@ -394,13 +394,37 @@ final class MasterLeaseRuntimeIdentity
         // Darwin has no pidfd equivalent, but posix_kill after a verified birth
         // match is safe: the libproc birth tuple (pbi_start_tvsec:tvusec) has
         // microsecond precision which fences PID reuse within the same boot.
-        // Re-observe after each signal to confirm the *same* process exited.
+        return $this->terminateViaPosixSignal($pid, $birth, $pidNamespaceId, $graceSeconds, [
+            'unavailable' => 'darwin_posix_kill_unavailable',
+            'term' => 'darwin_posix_term_released',
+            'kill' => 'darwin_posix_kill_released',
+            'unverified' => 'darwin_posix_termination_unverified',
+        ]);
+    }
+
+    /**
+     * 通过 posix_kill 终止已校验出生元组的进程。
+     *
+     * 出生元组已证明是本代次进程，posix_kill 不会误杀 PID 复用后的无关进程，
+     * 因此该路径对 Darwin 与「Linux 未编译 pidfd」同样安全。每次发信号后都
+     * 重新观测，确认退出的是同一个进程。
+     *
+     * @param array{unavailable:string,term:string,kill:string,unverified:string} $reasons
+     * @return array{released:bool,terminated:bool,reason:string,owner_state:string,pid:int}
+     */
+    private function terminateViaPosixSignal(
+        int $pid,
+        string $birth,
+        string $pidNamespaceId,
+        float $graceSeconds,
+        array $reasons,
+    ): array {
         if (!\function_exists('posix_kill')) {
             return $this->terminationOutcome(
                 $pid,
                 false,
                 false,
-                'darwin_posix_kill_unavailable',
+                $reasons['unavailable'],
                 self::OWNER_MATCH,
             );
         }
@@ -415,18 +439,18 @@ final class MasterLeaseRuntimeIdentity
                 SchedulerSystem::usleep($pollIntervalUs);
                 $postState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
                 if (\in_array($postState, [self::OWNER_MISSING, self::OWNER_MISMATCH], true)) {
-                    return $this->terminationOutcome($pid, true, true, 'darwin_posix_term_released', self::OWNER_MISSING);
+                    return $this->terminationOutcome($pid, true, true, $reasons['term'], self::OWNER_MISSING);
                 }
             }
         }
 
-        $killSent = @\posix_kill($pid, 9); // SIGKILL — unconditional after SIGTERM grace window
+        $killSent = @\posix_kill($pid, 9); // SIGKILL — unconditional after the SIGTERM grace window
         if ($killSent) {
             for ($wait = 0; $wait < 6; ++$wait) { // up to 300ms; SIGKILL should be near-instant
                 SchedulerSystem::usleep($pollIntervalUs);
                 $postState = $this->observeProcessIdentity($pid, $birth, $pidNamespaceId);
                 if (\in_array($postState, [self::OWNER_MISSING, self::OWNER_MISMATCH], true)) {
-                    return $this->terminationOutcome($pid, true, true, 'darwin_posix_kill_released', self::OWNER_MISSING);
+                    return $this->terminationOutcome($pid, true, true, $reasons['kill'], self::OWNER_MISSING);
                 }
             }
         }
@@ -442,7 +466,7 @@ final class MasterLeaseRuntimeIdentity
             $pid,
             false,
             $termSent || $killSent,
-            'darwin_posix_termination_unverified',
+            $reasons['unverified'],
             $finalState,
         );
     }
@@ -455,23 +479,11 @@ final class MasterLeaseRuntimeIdentity
         float $graceSeconds,
     ): array {
         if (!\extension_loaded('FFI') || !\class_exists(\FFI::class)) {
-            return $this->terminationOutcome(
-                $pid,
-                false,
-                false,
-                'linux_pidfd_ffi_unavailable',
-                self::OWNER_UNKNOWN,
-            );
+            return $this->terminateLinuxWithoutPidfd($pid, $birth, $pidNamespaceId, $graceSeconds);
         }
         $ffiEnabled = \strtolower(\trim((string)\ini_get('ffi.enable')));
         if (\in_array($ffiEnabled, ['', '0', 'off', 'false', 'no'], true)) {
-            return $this->terminationOutcome(
-                $pid,
-                false,
-                false,
-                'linux_pidfd_ffi_unavailable',
-                self::OWNER_UNKNOWN,
-            );
+            return $this->terminateLinuxWithoutPidfd($pid, $birth, $pidNamespaceId, $graceSeconds);
         }
         try {
             $ffi = \FFI::cdef(
@@ -586,6 +598,29 @@ CDEF,
                 // The stable handle has no further authority after return.
             }
         }
+    }
+
+    /**
+     * 未编译 pidfd（ext-ffi 缺失或 ffi.enable 关闭）时的 Linux 终止路径。
+     *
+     * 不能返回「未知」了事：出生元组已校验匹配，posix_kill 同样是安全的，
+     * 而「未知」会让复活 fence 永远无法满足 —— 旧进程继续持有监听端口，
+     * fence 重试耗尽后升级为整组重启，形成线上重启风暴。
+     *
+     * @return array{released:bool,terminated:bool,reason:string,owner_state:string,pid:int}
+     */
+    private function terminateLinuxWithoutPidfd(
+        int $pid,
+        string $birth,
+        string $pidNamespaceId,
+        float $graceSeconds,
+    ): array {
+        return $this->terminateViaPosixSignal($pid, $birth, $pidNamespaceId, $graceSeconds, [
+            'unavailable' => 'linux_posix_kill_unavailable',
+            'term' => 'linux_posix_term_released',
+            'kill' => 'linux_posix_kill_released',
+            'unverified' => 'linux_posix_termination_unverified',
+        ]);
     }
 
     /** @return array{released:bool,terminated:bool,reason:string,owner_state:string,pid:int} */
