@@ -400,7 +400,7 @@ HTTP/SSL Worker 统一读 `wls.memory_guard.worker_memory_*`（默认 warning=0.
 - **worker_ports Direct**：Windows 自动使用。每个 Worker 绑定独立 loopback h1 端口，Nginx upstream 连接池直接均衡这些端口；Worker 使用内置 `stream_select`。
 - **reuseport Direct**：Linux 自动优先使用。每个 Worker 拥有同一 loopback 端口的独立 accept 队列，要求 `sockets`、内核 `SO_REUSEPORT` 与 `ext-event`。
 - **shared_fd Direct**：macOS 自动使用，也是 Linux reuseport 能力不可用时的自动回退。Master 拥有 listener，Worker 共享单一 loopback h1 accept 队列并执行完整策略；要求 POSIX FD 原语与 `ext-event`，`event_buffer + direct` 仍在启动预检时拒绝。
-- **Dispatcher**：仅为所有平台显式兼容/诊断拓扑；不是 `auto` 回退路径。
+- **Dispatcher**：所有平台的显式兼容/诊断拓扑，也是 `auto` 直连能力确实不可用时带原因的自动回退路径（`auto_direct_unavailable_dispatcher_fallback`）；显式 Direct 能力不足仍 fail-closed。
 - **shared_fd Direct**：共享 FD 只用于事件就绪通知；Worker 在同一内核 accept 队列上接收连接。listener 的 Event watcher 始终注册，冷却只抑制本轮 accept，不能销毁/重建 watcher。rolling 使用标准分批，不启动 reuseport new-first surge，从而不会在独立 accept backlog 退役时重置已到达连接。
 - **direct 维护态**：不启动 Maintenance Worker；Master 将维护 epoch 下发给全部业务 Worker，只有全量 ACK 后才提交状态。业务 Worker 至少跨过一个 transport loop 再 ACK，等待已分派请求和待写响应，但不等待空闲 preconnect、未完成握手或 partial slowloris；EventBuffer 中已经完整的流水线请求会按有界预算经过同一 WorkerPolicyKernel 后再 ACK。
 - **其他系统**：没有受支持的平台驱动就停止启动。

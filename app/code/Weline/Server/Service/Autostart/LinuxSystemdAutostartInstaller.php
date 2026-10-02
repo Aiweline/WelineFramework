@@ -6,6 +6,8 @@ namespace Weline\Server\Service\Autostart;
 
 use Weline\Server\Service\AdministratorAuthorizationSession;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Runtime\EffectiveTopology;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 /**
  * Ensures a Linux systemd WLS autostart unit exists for the current project/instance.
@@ -108,10 +110,18 @@ final class LinuxSystemdAutostartInstaller
             $workerCount = 2;
         }
         $workerMemoryLimit = (string)($config['worker_memory_limit'] ?? '256M');
-        $topology = \strtolower((string)($config['runtime']['topology'] ?? $config['topology'] ?? ''));
-        $useDispatcher = !empty($config['dispatcher'])
-            || $topology === 'dispatcher'
-            || (($config['_cli_dispatcher'] ?? false) === true);
+        // 已解析的运行时选择是权威：env 的 `wls.dispatcher` 是调优数组（恒非空），
+        // 绝不能被当成「显式选择了 Dispatcher 拓扑」，否则 systemd 自启单元会把
+        // Dispatcher 固化成默认拓扑。
+        $runtimeSelection = $config['runtime_selection'] ?? null;
+        if ($runtimeSelection instanceof RuntimeSelection) {
+            $useDispatcher = $runtimeSelection->effectiveTopology === EffectiveTopology::Dispatcher;
+        } else {
+            $topology = \strtolower((string)($config['runtime']['topology'] ?? $config['topology'] ?? ''));
+            $useDispatcher = $topology === 'dispatcher'
+                || (($config['_cli_dispatcher'] ?? false) === true)
+                || (($config['dispatcher'] ?? false) === true);
+        }
 
         return [
             'project_root' => $projectRoot,
