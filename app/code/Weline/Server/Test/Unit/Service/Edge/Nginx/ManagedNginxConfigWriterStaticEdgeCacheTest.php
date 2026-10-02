@@ -51,10 +51,23 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         $config = \file_get_contents($result['conf']);
         self::assertIsString($config);
 
+        $mediaStart = \strpos($config, 'location ^~ /pub/media/');
+        self::assertIsInt(
+            $mediaStart,
+            'Managed nginx must disk-serve /pub/media/ so listing images survive WLS drains.',
+        );
+        self::assertStringContainsString('X-Wls-Media-Disk "1"', $config);
+        self::assertStringContainsString('try_files $uri =404;', $config);
+
         $staticStart = \strpos($config, 'location ~* \.(?:');
         self::assertIsInt(
             $staticStart,
             'Managed nginx must emit a regex location for public static extensions.',
+        );
+        self::assertLessThan(
+            $staticStart,
+            $mediaStart,
+            'Disk /pub/media/ location must precede the extension regex proxy location.',
         );
         $genericStart = \strpos($config, 'location / {');
         self::assertIsInt($genericStart);

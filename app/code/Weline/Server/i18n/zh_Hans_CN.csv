@@ -1740,8 +1740,8 @@ Direct,直接的
 Dispatcher,调度员
 Auto,汽车
 "所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。","所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。"
-"仅在显式兼容或诊断时使用 WLS Dispatcher；公网入口仍由项目托管 Nginx 提供。","仅在显式兼容或诊断时使用 WLS Dispatcher；公网入口仍由项目托管 Nginx 提供。"
-"所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。","所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。"
+"仅在显式兼容或诊断时使用 WLS Dispatcher；Direct 能力不可用时 auto 也会带原因自动回退到此拓扑；公网入口仍由项目托管 Nginx 提供。","仅在显式兼容或诊断时使用 WLS Dispatcher；Direct 能力不可用时 auto 也会带原因自动回退到此拓扑；公网入口仍由项目托管 Nginx 提供。"
+"所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接；直连能力探测失败时自动回退 Dispatcher 并记录原因。","所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接；直连能力探测失败时自动回退 Dispatcher 并记录原因。"
 "Direct listener supported",支持直接监听
 "Direct listener unavailable",直接侦听器不可用
 "This runtime supports the native direct listener selected by WLS.","此运行时支持 WLS 选择的本机直接侦听器。"
@@ -3076,7 +3076,7 @@ proc_open不可用，使用传统方式启动后台进程,proc_open不可用，�
 "共享网关不可用，已降级纯 WLS：%{1}","共享网关不可用，已降级纯 WLS：%{1}"
 "备用入口端口：%{1}；该地址不等价于 80/443，请同步检查防火墙、DNS 或负载均衡。","备用入口端口：%{1}；该地址不等价于 80/443，请同步检查防火墙、DNS 或负载均衡。"
 "WLS 运行时依赖检查或显式安装失败：%{1}","WLS 运行时依赖检查或显式安装失败：%{1}"
-"Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。","Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。"
+"显式 Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。","显式 Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。"
 "WLS 运行时依赖已按显式请求安装并验证。","WLS 运行时依赖已按显式请求安装并验证。"
 "正在使用已加载新扩展的 PHP 进程继续启动...","正在使用已加载新扩展的 PHP 进程继续启动..."
 "依赖安装后的 WLS 重新启动失败，退出码：%{1}","依赖安装后的 WLS 重新启动失败，退出码：%{1}"
@@ -3412,8 +3412,8 @@ HTTP/3,HTTP/3
 "兼容别名，等价于 --edge=wls","兼容别名，等价于 --edge=wls"
 "兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用","兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用"
 "Supervisor：auto/true/false（默认 auto）",Supervisor：auto/true/false（默认auto）
-"直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用","直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用"
-"Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断","Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断"
+"直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用；显式 Direct 在能力不足时 fail-closed，不会改走 Dispatcher","直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用；显式 Direct 在能力不足时 fail-closed，不会改走 Dispatcher"
+"Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断；auto 直连能力不可得时也会带原因自动回退到此模式","Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断；auto 直连能力不可得时也会带原因自动回退到此模式"
 配置优先级,配置优先级
 "命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值","命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值"
 拓扑优先级,拓扑优先级
@@ -3570,3 +3570,5 @@ Nginx-only,"仅限 Nginx"
 "检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空...","检测到服务器已运行，完整代际重启：先开启维护模式并等待全部 Worker 请求排空..."
 滚动排水重启,滚动排水重启
 强制完整重启,强制完整重启
+"auto 直连所需运行时依赖不可得，将回退 Dispatcher：%{1}","auto 直连所需运行时依赖不可得，将回退 Dispatcher：%{1}"
+"auto 直连能力不可用，已回退 Dispatcher：%{1}","auto 直连能力不可用，已回退 Dispatcher：%{1}"

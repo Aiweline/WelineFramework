@@ -357,6 +357,8 @@ HTTP/SSL Worker 统一读 `wls.memory_guard.worker_memory_*`（默认 warning=0.
 
 `server:start` 在创建 Master/Worker 之前先按边缘模式与平台求出唯一内部拓扑，再只读验证当前 PHP 的必需能力。普通启动不会下载、安装、编译或修改 php.ini，也不会安装 Nginx。Linux `auto` 先验证 PHP `sockets` 与内核 `SO_REUSEPORT`，可用时选择 `reuseport`，不可用时回退只要求 POSIX FD 原语的 Master-owned `shared_fd`；两者都要求预装 `ext-event`。macOS Direct 使用 Master-owned `shared_fd + ext-event`。Windows Nginx 模式使用每 Worker 独立 loopback 端口的 Direct；Windows 纯 WLS 使用 Dispatcher。两条 Windows 路径都使用内置 select，不要求 `event/ev`、继承 FD 或 `SO_REUSEPORT`，也不会安装 DLL 或编译扩展。
 
+`auto` 优先 Direct，并在 Direct 能力确实不可得时**带原因自动回退 Dispatcher**（`reason_codes` = `auto_direct_unavailable_dispatcher_fallback`），因此普通启动不会再要求操作者手动补 `--dispatcher`。显式 `--direct` / `wls.runtime.topology=direct` 保持 fail-closed：能力不足即非零退出并打印修复指引，不会静默改写操作者声明的拓扑。
+
 只有本次显式传入 `--install-deps`，`server:start` 才允许调用 `env:install`，并在创建任何 WLS 子进程前使用同一个 `PHP_BINARY` 新进程复验：
 
 - macOS：可能以当前用户运行 Homebrew 和 PECL，不使用 `sudo`。

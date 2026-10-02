@@ -12,11 +12,11 @@
 保存成功!,"Saved successfully!"
 参数错误,"Parameter error"
 设置不存在,"Setting Does Not Exist"
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
 模块化开发,"Modular development"
 多语言多站点,"Multilingual multi-site"
 常驻运行时,"Persistent runtime"
 "启动框架内置 HTTPS 服务，默认首页可通过 %{url} 访问。","Start the built-in HTTPS service; the default homepage is available at %{url}."
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 """Unsupported contact operation: %{1}""","Unsupported contact operation: %{1}"
 首页导航,"Home navigation"
 "WelineFramework 首页","WelineFramework home"

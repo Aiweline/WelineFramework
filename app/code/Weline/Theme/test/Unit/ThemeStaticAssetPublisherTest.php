@@ -34,6 +34,17 @@ class ThemeStaticAssetPublisherTest extends TestCore
         'Weline/Backend/js/weline-api-worker.js',
     ];
 
+    /**
+     * 运行时创建的设计主题**源**夹具（相对 BP）。
+     *
+     * 只列 app/design 下、不入库且用例断言所必需的源文件；其它用例读取的是已入库的模块文件，
+     * 不需要在此创建。内容需稳定，以便与发布产物逐字节比对。
+     */
+    private const FIXTURE_SOURCE_FILES = [
+        'app/design/WeShop/motor/frontend/assets/css/motor.css'
+            => "/* fixture: WeShop/motor design theme override */\n.motor-theme{color:#123456}\n",
+    ];
+
     private ThemeStaticAssetPublisher $publisher;
 
     public function tearDown(): void
@@ -41,8 +52,54 @@ class ThemeStaticAssetPublisherTest extends TestCore
         foreach (self::FIXTURE_PUBLISHED_FILES as $relativePath) {
             $this->removePublishedFixtureFile($relativePath);
         }
+        $this->removeFixtureSourceFiles();
 
         parent::tearDown();
+    }
+
+    /**
+     * 建立本用例所需的设计主题源夹具。
+     *
+     * 存在原因（2026-10-02）：本用例断言的是"design 主题覆盖资源被发布到 pub/static"，
+     * 必须有 app/design/{Vendor}/{theme}/frontend/... 下的源文件；而 app/design 整体不入库，
+     * 此前用例只回收发布产物、**从未创建源夹具**，导致 4 个用例恒失败
+     * （publishForRequestPath 找不到源文件返回 null）。
+     */
+    private function createFixtureSourceFiles(): void
+    {
+        foreach (self::FIXTURE_SOURCE_FILES as $relativePath => $content) {
+            $absolute = rtrim(BP, '\\/') . DS . str_replace('/', DS, $relativePath);
+            $dir = dirname($absolute);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0777, true);
+            }
+            file_put_contents($absolute, $content);
+        }
+    }
+
+    /** 回收本用例创建的设计主题源夹具（同样逐级回收空目录，绝不整棵删除） */
+    private function removeFixtureSourceFiles(): void
+    {
+        $designRoot = realpath(rtrim(BP, '\\/') . DS . 'app' . DS . 'design');
+        if ($designRoot === false) {
+            return;
+        }
+        foreach (array_keys(self::FIXTURE_SOURCE_FILES) as $relativePath) {
+            $absolute = $designRoot . DS . str_replace('/', DS, $relativePath);
+            if (is_file($absolute)) {
+                @unlink($absolute);
+            }
+        }
+        // WeShop/motor 与 WeShop/default 的公共目录只回收变空的
+        foreach (['WeShop/motor', 'WeShop/default', 'WeShop', 'Codex/demo-theme', 'Codex'] as $dir) {
+            $current = $designRoot . DS . str_replace('/', DS, $dir);
+            while (is_dir($current) && str_starts_with($current, $designRoot . DS)) {
+                if (!@rmdir($current)) {
+                    break;
+                }
+                $current = dirname($current);
+            }
+        }
     }
 
     /**
@@ -75,6 +132,7 @@ class ThemeStaticAssetPublisherTest extends TestCore
     public function setUp(): void
     {
         parent::setUp();
+        $this->createFixtureSourceFiles();
         /** @var Request $request */
         $request = ObjectManager::getInstance(Request::class);
         $request->setServer('REQUEST_URI', '/test');

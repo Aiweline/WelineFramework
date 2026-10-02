@@ -43,10 +43,18 @@ final class RuntimeStrategyResolver
         $sslEngine = $this->resolveSslEngine($config);
         if ($topology['effective'] === EffectiveTopology::Direct) {
             if ($topology['listener_mode'] !== 'worker_ports' && $eventLoop['driver'] !== 'event') {
-                throw new \RuntimeException(
-                    'WLS shared-listener Direct topology requires the PHP event extension and event loop; '
-                    . 'install/enable ext-event, use Windows worker_ports, or explicitly select --dispatcher.'
+                $eventLoopGap = 'WLS shared-listener Direct topology requires the PHP event extension and event loop; '
+                    . 'install/enable ext-event, use Windows worker_ports, or explicitly select --dispatcher.';
+                $fallback = $this->autoDispatcherFallbackTopology(
+                    $topology['requested'],
+                    $this->configuredDirectListenerMode($config),
+                    $topology['source'],
+                    $eventLoopGap,
                 );
+                if ($fallback === null) {
+                    throw new \RuntimeException($eventLoopGap);
+                }
+                $topology = $fallback;
             }
         }
 
@@ -223,6 +231,10 @@ final class RuntimeStrategyResolver
      * continuously; legacy managed Nginx without that marker may still use one
      * loopback port per Worker.
      *
+     * 本方法只表达**意图**：`auto` 一律先报 Direct，以便依赖引导优先补齐
+     * ext-event / 监听 FD 能力。若能力最终仍不可用，{@see resolveTopology()}
+     * 会带原因码降级为 Dispatcher（`RuntimeTopologyConsistency` 认可该唯一差异）。
+     *
      * @param array<string, mixed> $config
      * @param array<int|string, mixed> $args
      * @return array{requested:RequestedTopology,effective:EffectiveTopology,source:string,reason:string,reason_code:string}
@@ -383,10 +395,23 @@ final class RuntimeStrategyResolver
             );
         }
 
-        $listenerMode = $this->resolveDirectListenerMode(
-            $this->configuredDirectListenerMode($config),
-            $profile,
-        );
+        $configuredListenerMode = $this->configuredDirectListenerMode($config);
+        try {
+            $listenerMode = $this->resolveDirectListenerMode($configuredListenerMode, $profile);
+        } catch (\RuntimeException $exception) {
+            $fallback = $this->autoDispatcherFallbackTopology(
+                $requested,
+                $configuredListenerMode,
+                $source,
+                $exception->getMessage(),
+            );
+            if ($fallback === null) {
+                throw $exception;
+            }
+
+            return $fallback;
+        }
+
         $listenerLabel = match ($listenerMode) {
             'shared_fd' => 'Master-owned shared listener FD',
             'reuseport' => 'SO_REUSEPORT',
@@ -415,6 +440,33 @@ final class RuntimeStrategyResolver
             $intent['reason_code'],
             $warnings,
             $listenerMode,
+        );
+    }
+
+    /**
+     * `auto` 只是「优先 Direct」，不是「Direct 或失败」：直连能力经探测确实
+     * 不可用时降级为 Dispatcher 并保留原因。显式 Direct 或显式 listener_mode
+     * 视为操作者已声明能力要求，一律 fail-closed，不经过本回退。
+     *
+     * @return array{requested:RequestedTopology,effective:EffectiveTopology,source:string,listener_mode:string,reason:string,reason_code:string,warnings:string[]}|null
+     */
+    private function autoDispatcherFallbackTopology(
+        RequestedTopology $requested,
+        string $configuredListenerMode,
+        string $source,
+        string $reason,
+    ): ?array {
+        if ($requested !== RequestedTopology::Auto || $configuredListenerMode !== 'auto') {
+            return null;
+        }
+
+        return $this->topologyResult(
+            $requested,
+            EffectiveTopology::Dispatcher,
+            $source,
+            'auto Direct capability unavailable; fell back to Dispatcher: ' . $reason,
+            RuntimeTopologyConsistency::AUTO_DISPATCHER_FALLBACK_REASON_CODE,
+            [$reason],
         );
     }
 

@@ -724,8 +724,6 @@ Default,Default
 已恢复全部布局跟随全局页头/页脚,"Restored all layouts to follow the global header/footer"
 已恢复跟随全局页头/页脚,"Restored following the global header/footer"
 主题已发布,"Theme published"
-草稿已撤销,"Draft revoked"
-撤销失败,"Undo failed"
 缺少部件模块或代码,"Missing widget module or code"
 缺少部件参数,"Missing widget parameter"
 "缺少布局节点 UID 或字段","Missing layout node UID or field"
@@ -800,9 +798,6 @@ AI翻译服务未找到，请确保AI模块已安装,"AI translation service not
 "Missing version ID","Missing version ID"
 "Version deleted","Version deleted"
 "Cannot delete current or published version","Cannot delete current or published version"
-"Missing required parameters","Missing required parameters"
-"Version renamed","Version renamed"
-"Rename failed","Rename failed"
 布局不存在,"layout does not exist"
 请求的布局模板文件未找到，请选择其他布局类型。,"The requested layout template file was not found, please choose a different layout type."
 布局类型,"layout type"
@@ -823,11 +818,6 @@ AI翻译服务未找到，请确保AI模块已安装,"AI translation service not
 已恢复到包默认,"Restored to package defaults"
 "已恢复 Scope 默认值","Scope defaults restored"
 已继承到当前主题草稿,"Inherited into the current theme draft"
-缺少版本ID,"Missing version ID"
-版本已删除,"Version Deleted"
-无法删除当前版本或已发布版本,"Unable to delete current version or published version"
-版本已重命名,"Version Renamed"
-重命名失败,"Rename failed"
 缺少前端主题ID,"Missing frontend theme ID"
 "Preview started","Preview started"
 "Missing navigation target","Missing navigation target"
@@ -890,6 +880,7 @@ history,history
 批量生成预览图失败：%{1},"Batch preview image generation failed: %{1}"
 配置保存成功,"Configuration saved successfully"
 缺少必要参数,"Missing required parameter"
+"Missing required parameters","Missing required parameters"
 "Missing parameter key for reset action","Missing parameter key for reset action"
 重置成功,"Reset Successful"
 "Save failed:","Save failed:"
@@ -1051,65 +1042,6 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
-官方社交媒体,"Official social media"
-商品,Products
-查看规格图,"View spec images"
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-购物车是空的,"Shopping cart is empty"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-继续购物,"Continue shopping"
-小计,Subtotal
-去结算,"Proceed to Checkout"
-正在前往结算...,"Proceeding to checkout..."
-查看购物车,"View cart"
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-"还差 %1 包邮","You're %1 away from free shipping"
-已享包邮,"You've unlocked free shipping"
-关闭通知,"Close notification"
-面包屑,"bread crumbs"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
-指南,Guide
-问答,Q&A
-7×24,24/7
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-内容标题,"Section title"
-查看更多,"View more"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
-剩余,Remaining
-天,Day(s)
-展开社交媒体,"Expand social media"
-收起社交媒体,"Collapse social media"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-件商品,"items of goods"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-搜索筛选,"Search and filter"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1126,6 +1058,11 @@ NEW,NEW
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -1143,6 +1080,7 @@ NEW,NEW
 表单操作,"Form operations"
 栅格内容,"Raster content"
 末页,"Last page"
+指南,Guide
 抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
 您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
 请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
@@ -1150,6 +1088,8 @@ SORRY,SORRY
 前往首页继续购物,"Continue shopping on the home page"
 返回上一页,"Go back"
 推荐产品,"Recommended product"
+问答,Q&A
+7×24,24/7
 服务暂时不可用,"Service temporarily unavailable"
 我们正在处理问题，请稍后再试。,"We are working on the issue; please try again later."
 您可以返回首页继续浏览，或稍后刷新本页。,"You can return home to keep browsing, or refresh this page later."
@@ -1164,6 +1104,10 @@ ERROR,ERROR
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
 联系询价,联系询价
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 展开搜索,"Expand search"
 我的,mine
@@ -1176,12 +1120,16 @@ ERROR,ERROR
 语言,language
 货币,currency
 关闭菜单,"Close menu"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
 搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
 导航菜单,"Navigation menu"
 我的账户,"My account"
 我的收藏,"My Favorites"
@@ -1191,8 +1139,12 @@ Weline,Weline
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
+购物车是空的,"Shopping cart is empty"
 去购物,"Go Shopping"
 删除,delete
+小计,Subtotal
+查看购物车,"View cart"
+去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1218,6 +1170,8 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1259,6 +1213,7 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
+件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1269,6 +1224,11 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
+内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
@@ -1285,7 +1245,15 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
+查看更多,"View more"
+距离结束,"Ends in"
 精选轮播,"Featured Carousel"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
+展开社交媒体,"Expand social media"
+收起社交媒体,"Collapse social media"
+官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1307,6 +1275,24 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
+商品,Products
+查看规格图,"View spec images"
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+继续购物,"Continue shopping"
+正在前往结算...,"Proceeding to checkout..."
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+"还差 %1 包邮","You're %1 away from free shipping"
+已享包邮,"You've unlocked free shipping"
+关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
@@ -1321,6 +1307,10 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1804,9 +1794,6 @@ AI目录加载失败,"AI directory loading failed"
 "Theme 预览上下文值无效。","A Theme preview context value is invalid."
 "Theme 预览上下文值超过上限。","A Theme preview context value exceeds the limit."
 "Theme 预览上下文超过大小上限。","The Theme preview context exceeds the size limit."
-"主题 %{1} 的 %{2} 页面已成功发布","The %{2} page of topic %{1} was successfully published"
-"主题 %{1} 的 %{2} 页面发布失败：%{3}","The %{2} page of topic %{1} failed to publish: %{3}"
-"CDN 缓存刷新失败（域名：%{1}）：%{2}","CDN cache refresh failed (domain name: %{1}): %{2}"
 "Theme 运行时缺少冻结的 ScopeIdentity。","Theme runtime requires a frozen ScopeIdentity."
 "已更新前台回退标记。各网站店面主题请在「网站信息 → 店面主题」绑定；主题列表不再改各站 binding。","Frontend fallback flag updated. Bind each website’s storefront theme in Website Info → Storefront theme; the theme list no longer changes per-site bindings."
 激活失败：%{1},"Activation failed: %{1}"
@@ -2385,6 +2372,19 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+草稿已撤销,"Draft revoked"
+撤销失败,"Undo failed"
+缺少版本ID,"Missing version ID"
+版本已删除,"Version Deleted"
+无法删除当前版本或已发布版本,"Unable to delete current version or published version"
+"Version renamed","Version renamed"
+"Rename failed","Rename failed"
+版本已重命名,"Version Renamed"
+重命名失败,"Rename failed"
+搜索筛选,"Search and filter"
+"主题 %{1} 的 %{2} 页面已成功发布","The %{2} page of topic %{1} was successfully published"
+"主题 %{1} 的 %{2} 页面发布失败：%{3}","The %{2} page of topic %{1} failed to publish: %{3}"
+"CDN 缓存刷新失败（域名：%{1}）：%{2}","CDN cache refresh failed (domain name: %{1}): %{2}"
 选择作用范围,"Select scope."
 搜索作用范围,"Search scope."
 未找到匹配作用范围,"No matching scope found."
