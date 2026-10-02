@@ -11,14 +11,14 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\Framework\Test\TestCore;
+use Weline\Theme\Test\ThemeTestCase;
 use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Observer\LayoutSlotRenderer;
 use Weline\Theme\Service\ThemePageTypeResolver;
 
 #[\PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses]
 #[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
-final class LayoutSlotRendererCanvasIdentityTest extends TestCore
+final class LayoutSlotRendererCanvasIdentityTest extends ThemeTestCase
 {
     public function testCanvasWithoutTypedQueryUsesRequestScopeOverInheritedLayout(): void
     {

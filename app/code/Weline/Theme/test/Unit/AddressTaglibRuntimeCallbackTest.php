@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Unit;
 
-use Weline\Framework\Test\TestCore;
+use Weline\Theme\Test\ThemeTestCase;
 use Weline\Framework\View\Template;
 use Weline\Theme\Taglib\Address;
 
-class AddressTaglibRuntimeCallbackTest extends TestCore
+class AddressTaglibRuntimeCallbackTest extends ThemeTestCase
 {
     public function testRuntimeCallbackEmitsAddressMarkupWithoutPhpSource(): void
     {

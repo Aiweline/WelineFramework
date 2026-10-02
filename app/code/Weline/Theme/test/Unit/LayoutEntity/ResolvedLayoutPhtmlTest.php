@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Unit\LayoutEntity;
 
+use Weline\Theme\Test\ThemeTestCase;
+
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;

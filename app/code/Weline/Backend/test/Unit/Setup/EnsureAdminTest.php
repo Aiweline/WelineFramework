@@ -19,7 +19,7 @@ class EnsureAdminTest extends TestCase
             {
             }
 
-            public function load(int|string $field_or_pk_value, $value = null): \Weline\Framework\Database\AbstractModel
+            public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): \Weline\Framework\Database\AbstractModel
             {
                 return $this;
             }
@@ -35,7 +35,7 @@ class EnsureAdminTest extends TestCase
             {
             }
 
-            public function load(int|string $field_or_pk_value, $value = null): \Weline\Framework\Database\AbstractModel
+            public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): \Weline\Framework\Database\AbstractModel
             {
                 return $this;
             }
@@ -62,7 +62,7 @@ class EnsureAdminTest extends TestCase
             {
             }
 
-            public function load(int|string $field_or_pk_value, $value = null): \Weline\Framework\Database\AbstractModel
+            public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): \Weline\Framework\Database\AbstractModel
             {
                 return $this;
             }
@@ -78,7 +78,7 @@ class EnsureAdminTest extends TestCase
             {
             }
 
-            public function load(int|string $field_or_pk_value, $value = null): \Weline\Framework\Database\AbstractModel
+            public function load(int|string $field_or_pk_value, $value = null, bool $forceReload = false): \Weline\Framework\Database\AbstractModel
             {
                 return $this;
             }

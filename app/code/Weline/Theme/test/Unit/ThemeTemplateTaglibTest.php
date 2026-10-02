@@ -7,14 +7,14 @@ namespace Weline\Theme\Test\Unit;
 use ReflectionClass;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Controller\PcController;
-use Weline\Framework\Test\TestCore;
+use Weline\Theme\Test\ThemeTestCase;
 use Weline\Framework\View\Taglib;
 use Weline\Framework\View\Template;
 use Weline\Theme\Controller\Frontend\ThemePreview\Content;
 use Weline\Theme\Helper\ThemeConfigHelper;
 use Weline\Theme\Helper\ThemeData;
 
-class ThemeTemplateTaglibTest extends TestCore
+class ThemeTemplateTaglibTest extends ThemeTestCase
 {
     public function testThemeConfigHelperBuildsSlashSeparatedTemplatePath(): void
     {

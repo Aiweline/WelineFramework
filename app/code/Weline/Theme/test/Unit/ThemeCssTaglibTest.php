@@ -5,7 +5,7 @@
 
 namespace Weline\Theme\Test\Unit;
 
-use Weline\Framework\Test\TestCore;
+use Weline\Theme\Test\ThemeTestCase;
 use Weline\Theme\Taglib\ThemeCss;
 use Weline\Theme\Taglib\ThemeJs;
 use Weline\Framework\Manager\ObjectManager;
@@ -13,7 +13,7 @@ use Weline\Framework\View\Taglib;
 use Weline\Framework\View\Template;
 use Weline\Taglib\TaglibRegistry;
 
-class ThemeCssTaglibTest extends TestCore
+class ThemeCssTaglibTest extends ThemeTestCase
 {
     public function setUp(): void
     {
