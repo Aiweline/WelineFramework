@@ -70,7 +70,17 @@ class CacheManager implements CacheManagerInterface, ProcessSharedInterface
      * jitter 缺省值由 DEFAULT_POOL_CONFIG 提供；短 TTL 池显式置 0 避免命中精度损失。
      */
     private const PREDEFINED_POOLS = [
-        'router' => ['ttl' => 86400, 'permanent' => true, 'tip' => '路由缓存'],
+        // 路由池同时承载响应全页缓存（FPC）的统一索引。它必须是持久且跨 worker
+        // 共享的：一旦被 WLS 的 file→wls_memory 劫持，内存 sidecar 抖动时
+        // WlsMemoryAdapter::set() 会返回 false，条目根本不会落库，查找永远落空，
+        // 每个请求都退化为整页 SSR（实测中位 8s、P90 42s）。这与 cart 池同类问题。
+        'router' => [
+            'ttl' => 86400,
+            'permanent' => true,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '路由/全页缓存索引（豁免 WLS 内存劫持）',
+        ],
         'config' => ['ttl' => 0, 'permanent' => true, 'tip' => '配置缓存'],
         'database' => ['ttl' => 1800, 'tip' => '数据库缓存'],
         'view' => ['ttl' => 3600, 'tip' => '视图缓存'],
@@ -97,7 +107,14 @@ class CacheManager implements CacheManagerInterface, ProcessSharedInterface
         'file_manager' => ['ttl' => 86400, 'permanent' => true, 'tip' => '文件管理器缓存'],
         'editor' => ['ttl' => 86400, 'permanent' => true, 'tip' => '编辑器缓存'],
         'api_doc' => ['ttl' => 3600, 'tip' => 'API文档缓存'],
-        'fpc' => ['ttl' => 3600, 'taggable' => true, 'tip' => '全页缓存', 'environment_scoped' => true],
+        'fpc' => [
+            'ttl' => 3600,
+            'taggable' => true,
+            'hijack_exempt' => true,
+            'durable' => true,
+            'tip' => '全页缓存（豁免 WLS 内存劫持，索引必须共享持久）',
+            'environment_scoped' => true,
+        ],
         'single_flight' => ['ttl' => 30, 'tip' => '请求合并锁池', 'jitter' => 0.0],
         'hot_key_tracker' => ['ttl' => 60, 'tip' => '热点 Key 跟踪', 'jitter' => 0.0],
         'url_guard' => ['ttl' => 1800, 'tip' => 'URL 越界规则缓存'],
