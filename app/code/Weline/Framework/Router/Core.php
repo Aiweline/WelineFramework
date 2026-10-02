@@ -1895,6 +1895,19 @@ class Core
         $skipCacheDerivedResponseWrites = isset($response)
             && $response instanceof Response
             && $this->shouldSkipFpcPublishForCachedControllerResponse($response);
+        // 发布门槛：任一条件不满足都不会写入 FPC，且不产生任何告警。
+        // 其中 $fpcBuildLock === null（锁被他人持有或 canBuildCachedResponse 未通过）
+        // 会让本请求只做纯 SSR 而不发布——这正是「永远没有可命中的条目」的成因之一。
+        FpcDiag::event('fpc_publish_gate', [
+            'is_backend' => (bool)$this->is_backend,
+            'editor_mode' => (bool)$isEditorMode,
+            'router_cache_enabled' => (bool)$routerCacheEnabled,
+            'frontend_cache_enabled' => (bool)$frontendCacheEnabled,
+            'fpc_html_bytes' => \strlen((string)$fpcHtml),
+            'coordinator_present' => $fpcCoordinator !== null,
+            'build_lock_held' => $fpcBuildLock !== null,
+            'skip_derived_writes' => (bool)$skipCacheDerivedResponseWrites,
+        ]);
         if (
             !$this->is_backend
             && !$isEditorMode
