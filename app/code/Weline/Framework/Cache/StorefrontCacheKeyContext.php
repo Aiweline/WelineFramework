@@ -94,6 +94,8 @@ final readonly class StorefrontCacheKeyContext
                     (string)($_SERVER['SCRIPT_FILENAME'] ?? ''),
                 ]);
             }
+            self::reportFence($failureCode, null, $seed !== '');
+
             return new self(
                 null,
                 trim(WelineEnv::getLang()) ?: 'zh_Hans_CN',
@@ -152,8 +154,34 @@ final readonly class StorefrontCacheKeyContext
             false,
             $failureCode,
         );
+        self::reportFence($failureCode, $identity, true);
         self::install($context);
         return $context;
+    }
+
+    /**
+     * 记录一次「请求栅栏」降级。
+     *
+     * 这是「FPC payload 持续增长但同一 URL 永远 MISS」的成因：栅栏指纹
+     * 掺入的是稳定输入，但每个请求都会重新装配一次，且 cacheable=false，
+     * 于是键逐请求变化、写入无法被后续请求读回。该降级不产生任何错误日志，
+     * 因此必须显式埋点（`__fpcdiag=1` 或 `var/fpc-diag.on` 启用，默认零开销）。
+     */
+    private static function reportFence(string $failureCode, ?ScopeIdentity $identity, bool $freshFingerprint): void
+    {
+        \Weline\Framework\Router\FpcDiag::event('storefront_context_fence', [
+            'failure_code' => $failureCode,
+            'cacheable' => false,
+            'fresh_fingerprint' => $freshFingerprint,
+            'context_scope_identity' => $identity instanceof ScopeIdentity,
+            'scope_kind' => $identity?->scopeKind,
+            'website_code' => $identity?->websiteCode,
+            'store_code' => $identity?->storeCode,
+            'channel_code' => $identity?->channelCode,
+            'request_scope_identity' => RequestContext::scopeIdentity() instanceof ScopeIdentity,
+            'lang' => trim(WelineEnv::getLang()),
+            'currency' => trim(WelineEnv::getCurrency()),
+        ]);
     }
 
     /**

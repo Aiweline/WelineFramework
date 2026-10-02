@@ -693,20 +693,57 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     public function canPublishResponse(Response $response, string $method = 'GET'): bool
     {
         if (!$this->canBuildCachedResponse($method)) {
+            FpcDiag::event('can_publish', ['allowed' => false, 'gate' => 'can_build_cached_response']);
+
             return false;
         }
 
         if ($response->getStatusCode() !== 200 || $response->getBody() === '') {
+            FpcDiag::event('can_publish', [
+                'allowed' => false,
+                'gate' => 'status_or_empty_body',
+                'status' => $response->getStatusCode(),
+                'body_bytes' => \strlen($response->getBody()),
+            ]);
+
             return false;
         }
 
         if (SharedResponseCachePolicy::isForbidden()) {
+            FpcDiag::event('can_publish', [
+                'allowed' => false,
+                'gate' => 'shared_response_cache_forbidden',
+                'reasons' => SharedResponseCachePolicy::reasons(),
+            ]);
             $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
             $response->setHeader('Pragma', 'no-cache');
+
             return false;
         }
 
-        return $this->responseAllowsSharedPageCache($response);
+        $allowed = $this->responseAllowsSharedPageCache($response);
+        FpcDiag::event('can_publish', [
+            'allowed' => $allowed,
+            'gate' => $allowed ? 'ok' : 'response_not_shareable',
+            'cache_control' => $this->diagHeaderValue($response, 'Cache-Control'),
+            'pragma' => $this->diagHeaderValue($response, 'Pragma'),
+            'vary' => $this->diagHeaderValue($response, 'Vary'),
+            'content_type' => $this->diagHeaderValue($response, 'Content-Type'),
+            'has_set_cookie' => $response->getHeader('Set-Cookie') !== null || $response->getCookies() !== [],
+        ]);
+
+        return $allowed;
+    }
+
+    /** 诊断用：把可能是数组的响应头归一为可读字符串。 */
+    private function diagHeaderValue(Response $response, string $name): string
+    {
+        $value = $response->getHeader($name);
+        if (\is_array($value)) {
+            $value = \implode(',', \array_map('strval', $value));
+        }
+
+        return \strtolower(\trim((string)$value));
     }
 
     public function canUsePrivateSessionCachedResponse(): bool
@@ -3564,16 +3601,41 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function effectiveFpcPolicy(string $fullUri, ?ScopeIdentity $identity = null, ?string $policyPath = null): array
     {
         try {
-            $identity ??= $this->currentStorefrontCacheKeyContext()->scopeIdentity;
+            $context = $this->currentStorefrontCacheKeyContext();
+            $identity ??= $context->scopeIdentity;
             if (!$identity instanceof ScopeIdentity) {
+                // ttl=0 意味着即使发布成功也会立即过期，是「写了却永远读不到」的直接成因之一。
+                FpcDiag::event('fpc_policy', [
+                    'fingerprint' => 'scope-unavailable',
+                    'ttl' => 0,
+                    'enabled' => false,
+                    'context_cacheable' => $context->cacheable,
+                    'context_failure_code' => $context->failureCode,
+                ]);
+
                 return ['enabled' => false, 'ttl' => 0, 'policy_fingerprint' => 'scope-unavailable'];
             }
             $path = $policyPath ?? $this->policyPath($fullUri);
             $resolver = ObjectManager::getInstance(\Weline\Framework\Controller\Extra\ExtraPolicyResolver::class);
-            return $resolver->resolveFpcForPath($path, $identity)
+            $resolved = $resolver->resolveFpcForPath($path, $identity)
                 ?? ['enabled' => true, 'ttl' => 3600, 'policy_fingerprint' => 'not-applicable'];
+            FpcDiag::event('fpc_policy', [
+                'fingerprint' => $resolved['policy_fingerprint'] ?? 'unknown',
+                'ttl' => $resolved['ttl'] ?? null,
+                'enabled' => $resolved['enabled'] ?? null,
+                'policy_path' => $path,
+            ]);
+
+            return $resolved;
         } catch (\Throwable $exception) {
             $this->logFpcWarning('FPC policy unavailable', ['error' => $exception->getMessage()]);
+            FpcDiag::event('fpc_policy', [
+                'fingerprint' => 'policy-unavailable',
+                'ttl' => 0,
+                'enabled' => false,
+                'error' => $exception->getMessage(),
+            ]);
+
             return ['enabled' => false, 'ttl' => 0, 'policy_fingerprint' => 'policy-unavailable'];
         }
     }
@@ -4143,16 +4205,43 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     {
         $provider = $this->storefrontScopeProviderResolution();
         if ($provider->status === RuntimeProviderResolution::CONFIGURED_UNAVAILABLE) {
+            FpcDiag::event('frozen_scope', [
+                'ok' => false,
+                'reason' => 'provider_configured_unavailable',
+                'error_code' => $provider->errorCode,
+                'error' => $provider->error,
+            ]);
+
             return false;
         }
         $context = $this->currentStorefrontCacheKeyContext();
         if ($provider->status === RuntimeProviderResolution::NOT_CONFIGURED) {
+            FpcDiag::event('frozen_scope', [
+                'ok' => $context->cacheable,
+                'reason' => 'provider_not_configured',
+                'context_cacheable' => $context->cacheable,
+                'context_failure_code' => $context->failureCode,
+            ]);
+
             return $context->cacheable;
         }
         $identity = RequestContext::scopeIdentity();
-        return $context->hasCompleteFrozenScope()
-            && $identity instanceof \Weline\Framework\Runtime\ScopeIdentity
+        $frozen = $context->hasCompleteFrozenScope();
+        $identityMatches = $identity instanceof \Weline\Framework\Runtime\ScopeIdentity
             && $context->scopeIdentity?->equals($identity);
+        FpcDiag::event('frozen_scope', [
+            'ok' => $frozen && $identityMatches,
+            'reason' => ($frozen && $identityMatches) ? 'ok' : 'scope_not_frozen_or_identity_mismatch',
+            'provider_status' => $provider->status,
+            'context_has_complete_frozen_scope' => $frozen,
+            'context_cacheable' => $context->cacheable,
+            'context_failure_code' => $context->failureCode,
+            'context_scope_kind' => $context->scopeIdentity?->scopeKind,
+            'request_scope_identity' => $identity instanceof \Weline\Framework\Runtime\ScopeIdentity,
+            'identity_matches' => $identityMatches,
+        ]);
+
+        return $frozen && $identityMatches;
     }
 
     private function legacyPreRouterFpcAllowed(): bool

@@ -6427,6 +6427,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 RequestContext::set('view.template.profile', []);
                 $requestMeta['request_id'] = (string)(RequestContext::getId() ?? '');
                 MemDiag::armFromRequest((string)($_SERVER['REQUEST_URI'] ?? ''));
+                \Weline\Framework\Router\FpcDiag::armFromRequest((string)($_SERVER['REQUEST_URI'] ?? ''));
                 \Weline\Framework\View\Helper\TitleLocaleProbe::armFromRequest(
                     (string)($_SERVER['REQUEST_URI'] ?? '')
                 );
