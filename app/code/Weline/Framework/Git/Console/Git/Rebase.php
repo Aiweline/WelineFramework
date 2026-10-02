@@ -84,7 +84,7 @@ class Rebase extends CommandAbstract
             ],
             [
                 'log <path...>'    => __('列出涉及指定路径的提交（git log --oneline -- <path>）'),
-                'remove <path...>' => __('用 git filter-repo --invert-paths 删除路径；默认从「文件第一次出现」的父 commit 起做局部重写，并在成功后自动 cleanup'),
+                'remove <path...>' => __('用 git filter-repo --invert-paths 删除路径；默认从「文件第一次出现」的父 commit 起做局部重写，并在成功后自动 cleanup；仓库若已被 filter-repo 处理过（.git/filter-repo/already_ran 存在，其交互闸门无法在非交互子进程中应答），执行前会自动把上次元数据归档到 .git/filter-repo-previous-<时间戳>/ 并以新的一次过滤继续'),
                 'cleanup'          => __('清理 refs/original/* 与 refs/replace/*、过期 reflog、git gc --prune=now --aggressive，让仓库收尾干净'),
                 __('其余参数')      => __('未命中子命令时，所有参数透传给 git rebase（保留原顺序与引号）'),
             ],
@@ -277,6 +277,14 @@ class Rebase extends CommandAbstract
             return;
         }
 
+        if ($useFilterRepo) {
+            $previousState = $this->archivePreviousFilterRepoRun($cwd);
+            if ($previousState !== null) {
+                $this->printer->note(__('检测到上一次 filter-repo 运行：已处理其元数据（%{1}），以「新的一次过滤」非交互继续。', [$previousState]));
+                $this->printer->note(__('原因：filter-repo 的 Already Ran 闸门需交互应答，而本命令子进程 stdin 已关闭，无法内联回答。'));
+            }
+        }
+
         $this->printer->note($useFilterRepo ? __('开始执行 git filter-repo ...') : __('开始执行 git filter-branch ...'));
         $result = $this->runProc($cmd, $cwd);
         if ($result['stdout'] !== '') {
@@ -299,6 +307,40 @@ class Rebase extends CommandAbstract
         $plan = $this->planCleanup($cwd);
         $this->printCleanupPlan($plan);
         $this->doCleanup($plan, $cwd);
+    }
+
+    /**
+     * filter-repo 的「Already Ran」闸门是交互式的（Treat this run as a
+     * continuation of filtering in the previous run? Y/N），而本命令经 runProc()
+     * 启动子进程并立即关闭其 stdin —— 仓库若已被 filter-repo 处理过
+     * （.git/filter-repo/already_ran 存在），第二次 remove 必定 EOFError 失败。
+     *
+     * 这里在真正执行前把上次的过滤元数据整体归档到
+     * .git/filter-repo-previous-<YmdHis>/，使 filter-repo 以「新的一次过滤」运行，
+     * 全程无需交互；归档保留原 commit-map/ref-map 以备审计与回溯。
+     *
+     * @return string|null 已处理的元数据位置；未检测到上次运行时为 null
+     */
+    private function archivePreviousFilterRepoRun(string $cwd): ?string
+    {
+        $gitDir = \rtrim($cwd, '/\\') . \DIRECTORY_SEPARATOR . '.git';
+        $stateDir = $gitDir . \DIRECTORY_SEPARATOR . 'filter-repo';
+        if (!\is_file($stateDir . \DIRECTORY_SEPARATOR . 'already_ran')) {
+            return null;
+        }
+
+        $archive = $gitDir . \DIRECTORY_SEPARATOR . 'filter-repo-previous-' . \date('YmdHis');
+        if (@\rename($stateDir, $archive)) {
+            return $archive;
+        }
+
+        // 归档失败（如权限/跨设备）时退而求其次：仅移除闸门标记，
+        // 让 filter-repo 接受本次为「新的一次过滤」，其余元数据原地保留。
+        if (@\unlink($stateDir . \DIRECTORY_SEPARATOR . 'already_ran')) {
+            return $stateDir;
+        }
+
+        return null;
     }
 
     /**
