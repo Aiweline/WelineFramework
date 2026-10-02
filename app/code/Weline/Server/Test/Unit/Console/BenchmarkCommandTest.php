@@ -388,6 +388,77 @@ final class BenchmarkCommandTest extends TestCase
         self::assertFalse($command->masterRunning($info, 'benchmark-ipc'));
     }
 
+    public function testManagedNginxGenerationVerificationFallsBackToProbeLocation(): void
+    {
+        $command = $this->createCommand();
+        $generation = \str_repeat('a', 32);
+        $required = [
+            'managed_nginx_generation_required' => true,
+            'managed_nginx_expected_generation' => $generation,
+        ];
+        $probeHeaders = ['x-wls-nginx-config' => $generation];
+
+        self::assertFalse(
+            $command->managedNginxGenerationVerified($required, [], []),
+            'a header-gated public surface without the probe marker must not verify',
+        );
+        self::assertFalse(
+            $command->managedNginxGenerationVerified(
+                $required,
+                ['content-type' => 'text/html'],
+                ['x-wls-nginx-config' => \str_repeat('b', 32)],
+            ),
+            'a stale generation must not verify',
+        );
+        self::assertTrue(
+            $command->managedNginxGenerationVerified(
+                $required,
+                ['x-wls-nginx-config' => $generation],
+                [],
+            ),
+            'the business surface verifies while it still publishes the marker',
+        );
+        self::assertTrue(
+            $command->managedNginxGenerationVerified(
+                $required,
+                ['content-type' => 'text/html'],
+                $probeHeaders,
+            ),
+            'the /_wls/ probe location must verify business-path benchmarks',
+        );
+        self::assertTrue(
+            $command->managedNginxGenerationVerified(
+                ['managed_nginx_generation_required' => false],
+                [],
+                [],
+            ),
+            'targets without a managed Nginx edge need no generation proof',
+        );
+    }
+
+    public function testManagedNginxGenerationProbeUrlTargetsHealthLocation(): void
+    {
+        $command = $this->createCommand();
+
+        self::assertSame(
+            'https://shop.example.test:443/_wls/health',
+            $command->managedNginxGenerationProbeUrl('https://shop.example.test:443/products?page=2'),
+        );
+        self::assertSame(
+            'http://127.0.0.1:9555/_wls/health',
+            $command->managedNginxGenerationProbeUrl('http://127.0.0.1:9555/'),
+        );
+        self::assertSame(
+            'https://[::1]:8443/_wls/health',
+            $command->managedNginxGenerationProbeUrl('https://[::1]:8443/'),
+        );
+        self::assertSame(
+            'https://shop.example.test/_wls/health',
+            $command->managedNginxGenerationProbeUrl('https://shop.example.test/'),
+        );
+        self::assertNull($command->managedNginxGenerationProbeUrl('/_wls/health'));
+    }
+
     private function createCommand(): object
     {
         return new class extends Benchmark {
@@ -421,6 +492,21 @@ final class BenchmarkCommandTest extends TestCase
             public function resolveWorkers(array $serverConfig): int
             {
                 return $this->resolveRuntimeWorkerCount($serverConfig);
+            }
+
+            public function managedNginxGenerationVerified(
+                array $benchmarkContext,
+                array $businessHeaders,
+                array $probeHeaders = [],
+            ): bool {
+                return (new \ReflectionMethod(Benchmark::class, 'managedNginxGenerationVerified'))
+                    ->invoke($this, $benchmarkContext, $businessHeaders, $probeHeaders);
+            }
+
+            public function managedNginxGenerationProbeUrl(string $url): ?string
+            {
+                return (new \ReflectionMethod(Benchmark::class, 'managedNginxGenerationProbeUrl'))
+                    ->invoke($this, $url);
             }
 
             public function evaluateGate(array $context): array

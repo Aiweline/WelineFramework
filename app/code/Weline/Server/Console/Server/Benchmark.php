@@ -1825,6 +1825,123 @@ class Benchmark extends CommandAbstract
             && \hash_equals($expected, $observed[0]);
     }
 
+    /**
+     * Managed Nginx keeps the X-Wls-Nginx-Config publication marker on the /_wls/
+     * probe location even when the public business surface suppresses identity
+     * headers (ResponseObservabilityPolicy::identityHeadersEnabled(), 2.0.56).
+     * Verify the generation from either surface instead of refusing every
+     * business-path benchmark whose response legitimately carries no marker.
+     *
+     * @param array<string,mixed> $benchmarkContext
+     * @param array<string,string> $businessHeaders
+     * @param array<string,string> $probeHeaders
+     */
+    private function managedNginxGenerationVerified(
+        array $benchmarkContext,
+        array $businessHeaders,
+        array $probeHeaders = [],
+    ): bool {
+        if (!(bool)($benchmarkContext['managed_nginx_generation_required'] ?? false)) {
+            return true;
+        }
+        if ($this->responseMatchesManagedNginxGeneration($benchmarkContext, $businessHeaders)) {
+            return true;
+        }
+
+        return $probeHeaders !== []
+            && $this->responseMatchesManagedNginxGeneration($benchmarkContext, $probeHeaders);
+    }
+
+    /**
+     * Read the Managed Nginx config generation marker from the /_wls/ contract
+     * location on the same host/port/TLS surface as the benchmarked target.
+     *
+     * @param array<string,mixed> $benchmarkContext
+     * @return array<string,string> lower-cased response headers, empty when unknown
+     */
+    private function probeManagedNginxGenerationHeaders(
+        string $url,
+        bool $ssl,
+        string $httpVersion,
+        array $benchmarkContext,
+    ): array {
+        if (!\function_exists('curl_init')) {
+            return [];
+        }
+        $probeUrl = $this->managedNginxGenerationProbeUrl($url);
+        if ($probeUrl === null) {
+            return [];
+        }
+        $handle = \curl_init($probeUrl);
+        if ($handle === false) {
+            return [];
+        }
+
+        $headers = [];
+        $options = [
+            \CURLOPT_RETURNTRANSFER => true,
+            \CURLOPT_TIMEOUT => 15,
+            \CURLOPT_CONNECTTIMEOUT => 5,
+            \CURLOPT_HTTP_VERSION => $this->curlHttpVersionOption(
+                $httpVersion,
+                (string)($benchmarkContext['http_version_requested'] ?? '') === 'auto',
+            ),
+            \CURLOPT_USERAGENT => 'Weline-Server-Benchmark-Encoding-Probe/1.0',
+            \CURLOPT_HTTPHEADER => ['X-WLS-Benchmark-Worker: 1'],
+            \CURLOPT_HEADERFUNCTION => static function ($curl, string $line) use (&$headers): int {
+                $length = \strlen($line);
+                $trimmed = \trim($line);
+                if ($trimmed === '' || \str_starts_with(\strtoupper($trimmed), 'HTTP/')) {
+                    return $length;
+                }
+                $separator = \strpos($trimmed, ':');
+                if ($separator !== false) {
+                    $name = \strtolower(\trim(\substr($trimmed, 0, $separator)));
+                    $value = \trim(\substr($trimmed, $separator + 1));
+                    if ($name !== '') {
+                        $headers[$name] = $value;
+                    }
+                }
+                return $length;
+            },
+        ];
+        if ($ssl) {
+            $options[\CURLOPT_SSL_VERIFYPEER] = false;
+            $options[\CURLOPT_SSL_VERIFYHOST] = 0;
+        }
+        $options = $this->applyBenchmarkEndpointCurlOptions(
+            $options,
+            $probeUrl,
+            $ssl,
+            $benchmarkContext,
+        );
+        \curl_setopt_array($handle, $options);
+        \curl_exec($handle);
+        \curl_close($handle);
+
+        return $headers;
+    }
+
+    private function managedNginxGenerationProbeUrl(string $url): ?string
+    {
+        $parts = \parse_url($url);
+        if (!\is_array($parts)) {
+            return null;
+        }
+        $scheme = (string)($parts['scheme'] ?? '');
+        $host = \trim((string)($parts['host'] ?? ''), '[]');
+        if ($scheme === '' || $host === '') {
+            return null;
+        }
+        if (\str_contains($host, ':')) {
+            $host = '[' . $host . ']';
+        }
+
+        return $scheme . '://' . $host
+            . (isset($parts['port']) ? ':' . (int)$parts['port'] : '')
+            . self::DEFAULT_BENCHMARK_PATH;
+    }
+
     private function endpointHostMatchesTarget(string $endpointHost, string $targetHost): bool
     {
         $endpointHost = \strtolower(\trim($endpointHost, "[] \t\n\r\0\x0B"));
@@ -1958,6 +2075,12 @@ class Benchmark extends CommandAbstract
         $knownConnectedHandles = [];
         $managedNginxGenerationRequired =
             (bool)($benchmarkContext['managed_nginx_generation_required'] ?? false);
+        // The public business surface suppresses the generation marker whenever
+        // identity headers are gated off; the run-start /_wls/ probe already
+        // proved the same Managed Nginx config generation in that case.
+        $managedNginxGenerationProbeAuthorized =
+            (string)($benchmarkContext['content_encoding_probe']['nginx_generation_source'] ?? '')
+                === 'managed_nginx_probe';
         $managedNginxGenerationVerifiedCount = 0;
         $managedNginxGenerationMismatchCount = 0;
         $managedNginxOwnerStableBefore = $this->managedNginxOwnerStillMatchesBenchmarkContext(
@@ -2396,7 +2519,17 @@ class Benchmark extends CommandAbstract
                             }
                             if ($httpCode >= 200 && $httpCode < 400) {
                                 $headers = $this->parseResponseHeaders($headerBuffers[$key] ?? '');
-                                if (!$this->responseMatchesManagedNginxGeneration($benchmarkContext, $headers)) {
+                                $generationMatches =
+                                    $this->responseMatchesManagedNginxGeneration($benchmarkContext, $headers);
+                                if (!$generationMatches
+                                    && $managedNginxGenerationProbeAuthorized
+                                    && \trim((string)($headers['x-wls-nginx-config'] ?? '')) === ''
+                                ) {
+                                    // Marker intentionally absent on this surface; a present
+                                    // but stale marker still fails closed below.
+                                    $generationMatches = true;
+                                }
+                                if (!$generationMatches) {
                                     $errors++;
                                     $managedNginxGenerationMismatchCount++;
                                     $detail = 'managed_nginx_generation_mismatch';
@@ -3508,6 +3641,8 @@ class Benchmark extends CommandAbstract
                 (int)($benchmarkContext['managed_nginx_generation_verified_count'] ?? 0),
             'managed_nginx_generation_mismatch_count' =>
                 (int)($benchmarkContext['managed_nginx_generation_mismatch_count'] ?? 0),
+            'managed_nginx_generation_source' =>
+                (string)($benchmarkContext['content_encoding_probe']['nginx_generation_source'] ?? ''),
             'managed_nginx_owner_stable_before' => (bool)($benchmarkContext['managed_nginx_owner_stable_before'] ?? true),
             'managed_nginx_owner_stable_after' => (bool)($benchmarkContext['managed_nginx_owner_stable_after'] ?? true),
             'physical_connection_lanes_created' => (int)($benchmarkContext['physical_connection_lanes_created'] ?? 0),
@@ -3867,10 +4002,27 @@ class Benchmark extends CommandAbstract
             : (int)\round((float)\curl_getinfo($handle, \CURLINFO_SIZE_DOWNLOAD));
         $generationRequired = (string)($benchmarkContext['benchmark_target_surface'] ?? '') === 'public_edge';
         $generationObserved = (string)($headers['x-wls-nginx-config'] ?? '');
-        $generationVerified = $this->responseMatchesManagedNginxGeneration(
-            $benchmarkContext,
-            $headers,
-        );
+        $generationSource = '';
+        $generationVerified = $this->managedNginxGenerationVerified($benchmarkContext, $headers);
+        if ($generationVerified) {
+            $generationSource = (bool)($benchmarkContext['managed_nginx_generation_required'] ?? false)
+                ? 'business_path'
+                : 'not_required';
+        } elseif ($generationRequired) {
+            $generationProbeHeaders = $this->probeManagedNginxGenerationHeaders(
+                $url,
+                $ssl,
+                $httpVersion,
+                $benchmarkContext,
+            );
+            if ($this->managedNginxGenerationVerified($benchmarkContext, $headers, $generationProbeHeaders)) {
+                $generationVerified = true;
+                $generationSource = 'managed_nginx_probe';
+                if ($generationObserved === '') {
+                    $generationObserved = (string)($generationProbeHeaders['x-wls-nginx-config'] ?? '');
+                }
+            }
+        }
 
         $status = (int)\curl_getinfo($handle, \CURLINFO_RESPONSE_CODE);
         $httpVersionId = \defined('CURLINFO_HTTP_VERSION')
@@ -3893,6 +4045,7 @@ class Benchmark extends CommandAbstract
             'nginx_generation_required' => $generationRequired,
             'nginx_generation_observed' => $generationObserved,
             'nginx_generation_verified' => $generationVerified,
+            'nginx_generation_source' => $generationSource,
             'wire_to_logical_ratio' => $logicalBytes > 0 ? \round($wireBytes / $logicalBytes, 6) : null,
             'http_status' => $status,
             'curl_http_version_id' => $httpVersionId,
