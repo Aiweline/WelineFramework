@@ -72,6 +72,16 @@ final class ThemeTestSchema
     public static function ensureCoreTables(): void
     {
         self::ensure(WelineTheme::class, ThemeLayout::class);
+
+        // 跨模块依赖（显式且带说明，不是隐式耦合）：
+        // Widget 渲染路径会读 I18n 词典表，缺失时部件渲染成
+        // `<div class="widget-preview-error">… no such table: w_i18n_locale_dictionary</div>`，
+        // 导致 SiteBlockLibraryRuntimeTest 等运行时用例误判（2026-10-02 定位）。
+        // 这里按同一规则（由模型 schema_fields_* 推导 DDL）确保其存在。
+        self::ensure(
+            \Weline\I18n\Model\Dictionary::class,
+            \Weline\I18n\Model\Locale\Dictionary::class,
+        );
     }
 
     private static function resolveTableName(string $modelClass): string
