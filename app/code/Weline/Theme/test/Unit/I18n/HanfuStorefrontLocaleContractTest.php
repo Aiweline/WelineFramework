@@ -6,8 +6,34 @@ namespace Weline\Theme\Test\Unit\I18n;
 
 use PHPUnit\Framework\TestCase;
 
+/**
+ * ⚠️ 已过期 · 整类跳过（2026-10-02 审查结论，见 dev/audit/theme-legacy-audit-20261002.md）
+ *
+ * 本类断言的是**旧 i18n 契约**：非基线语种（ar_SA / bn_BD / hi_IN / ur_PK / id_ID /
+ * pt_BR / es_ES / fr_FR 等）以 `{module}/i18n/{locale}.csv` 形式随模块提供。
+ *
+ * 该契约已被现行规则取代（`module_i18n_chinese_source_default` /
+ * `user_mentions_translation_all_default_website_locales`）：
+ * **模块 i18n CSV 只允许 zh_Hans_CN + en_US**，其它已选语种进**系统词典**。
+ * 因此 `ar_SA.csv` 等文件已不存在（`app/code/Weline/{Theme,Checkout,Product}/i18n/`
+ * 下实际只有 en_US.csv / zh_Hans_CN.csv），本类 11 个用例恒失败于
+ * `fopen()` 返回 false（assertIsResource）。
+ *
+ * 处置：**整类跳过并保留用例代码**，作为"测试从未被 runner 执行、相对实现漂移"的样本；
+ * 若需恢复覆盖，应改写为断言**系统词典**（或默认站全语种词典导入结果），而非模块 CSV。
+ */
 final class HanfuStorefrontLocaleContractTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        self::markTestSkipped(
+            '已过期：本类依赖模块级非基线语种 CSV（ar_SA 等），'
+            . '现行 i18n 规则只允许模块 CSV 存 zh_Hans_CN + en_US，其它语种进系统词典。'
+            . '需改写为断言系统词典后方可恢复。'
+        );
+    }
+
     /** @var array<string, string> */
     private const ENGLISH_TRANSLATIONS = [
         '热门形制' => 'Popular Hanfu Styles',
