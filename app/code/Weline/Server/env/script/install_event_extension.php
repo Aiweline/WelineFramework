@@ -28,6 +28,14 @@ $action = $argv[1] ?? 'check';
 
 const WINDOWS_EVENT_VERSION = '3.1.4';
 const WINDOWS_EVENT_BASE_URL = 'https://windows.php.net/downloads/pecl/releases/event/' . WINDOWS_EVENT_VERSION;
+
+/**
+ * Linux 源码构建时的 PECL 回退版本。
+ *
+ * 正常会先查 pecl.php.net 取最新版；取不到（离线/网络受限）时用该固定版本，
+ * 保证安装流程不会因为一次 REST 请求失败而整体失败。
+ */
+const EVENT_PECL_FALLBACK_VERSION = '3.1.6';
 const WINDOWS_EVENT_PACKAGE_SHA256 = [
     '8.4-nts-vs17-x64' => 'b172b1ee43c769f1a2c8cb4d8b924c4bc97c1fda52d6b1b3d6cc98c23a402c73',
     '8.4-ts-vs17-x64' => '28170c7e79393bfe98d20e77b27e8dbbbe6dee31a48b9cb4faa4b35e38cf1392',
@@ -410,7 +418,16 @@ function tryInstallEventLinux(): array
     }
     $errors[] = 'pecl install event 失败: ' . implode("\n", array_slice($output, -5));
 
-    // 4. 尝试通过包管理器
+    // 4. 用当前 PHP 自带的 phpize/php-config 从源码构建。
+    // bundled PHP 往往不提供 pecl；而发行版包管理器装出的扩展属于系统 PHP，
+    // 与正在运行的 PHP ABI 不匹配。因此源码构建是这类部署的主路径。
+    $sourceBuild = tryBuildEventFromSource();
+    if ($sourceBuild['success']) {
+        return $sourceBuild;
+    }
+    $errors[] = '源码构建失败: ' . ($sourceBuild['message'] ?? 'unknown');
+
+    // 5. 尝试通过包管理器
     $packages = [
         'apt-get install -y php' . $phpVersion . '-event',
         'apt-get install -y php-event',
@@ -438,35 +455,186 @@ function tryInstallEventLinux(): array
 }
 
 /**
+ * 用当前 PHP 自带的 phpize/php-config 从 PECL 源码构建 event 扩展。
+ *
+ * 这是 bundled PHP 的主安装路径：既不依赖 pecl，也不依赖发行版的 php*-event 包
+ * （后者属于系统 PHP，ABI 与正在运行的 bundled PHP 不匹配）。
+ */
+function tryBuildEventFromSource(): array
+{
+    $phpBinDir = dirname(PHP_BINARY);
+    $phpize = $phpBinDir . DIRECTORY_SEPARATOR . 'phpize';
+    $phpConfig = $phpBinDir . DIRECTORY_SEPARATOR . 'php-config';
+
+    if (!is_file($phpize) || !is_file($phpConfig)) {
+        return ['success' => false, 'message' => '当前 PHP 未提供 phpize/php-config，无法源码构建'];
+    }
+
+    $version = resolveEventPeclVersion();
+    $workDir = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
+        . DIRECTORY_SEPARATOR . 'weline-event-' . getmypid();
+    $archive = $workDir . '.tgz';
+    $sourceDir = $workDir . DIRECTORY_SEPARATOR . 'event-' . $version;
+
+    $cleanup = static function () use ($workDir, $archive): void {
+        @exec('rm -rf ' . escapeshellarg($workDir) . ' ' . escapeshellarg($archive) . ' 2>/dev/null');
+    };
+
+    $run = static function (string $cmd, string $cwd): array {
+        $output = [];
+        $code = 0;
+        @exec('cd ' . escapeshellarg($cwd) . ' && ' . $cmd . ' 2>&1', $output, $code);
+
+        return [$code, implode("\n", array_slice($output, -8))];
+    };
+
+    $cleanup();
+    if (!@mkdir($workDir, 0755, true) && !is_dir($workDir)) {
+        return ['success' => false, 'message' => '无法创建构建目录: ' . $workDir];
+    }
+
+    $url = 'https://pecl.php.net/get/event-' . $version . '.tgz';
+    if (!downloadUrlToFile($url, $archive)) {
+        $cleanup();
+
+        return ['success' => false, 'message' => '下载 event 源码失败: ' . $url];
+    }
+
+    [$code, $detail] = $run('tar xzf ' . escapeshellarg($archive), $workDir);
+    if ($code !== 0 || !is_dir($sourceDir)) {
+        $cleanup();
+
+        return ['success' => false, 'message' => '解压 event 源码失败: ' . $detail];
+    }
+
+    $jobs = max(1, (int) trim((string) @shell_exec('nproc 2>/dev/null') ?: '1'));
+    $steps = [
+        escapeshellarg($phpize),
+        './configure --with-php-config=' . escapeshellarg($phpConfig)
+            . ' --with-event-core --with-event-extra --with-event-openssl',
+        'make -j' . $jobs,
+        'make install',
+    ];
+
+    foreach ($steps as $step) {
+        [$code, $detail] = $run($step, $sourceDir);
+        if ($code !== 0) {
+            $cleanup();
+
+            return [
+                'success' => false,
+                'message' => '源码构建步骤失败: ' . $step,
+                'detail' => $detail,
+            ];
+        }
+    }
+
+    $cleanup();
+
+    // 构建产物只对新进程生效，必须写入 ini 才能让 WLS 重启后真正加载。
+    $enabled = enableExtensionInIni('event');
+
+    return [
+        'success' => true,
+        'message' => 'event 扩展已从源码构建并安装（版本 ' . $version . '）'
+            . ($enabled ? '' : '；请确认 extension=event 已启用'),
+        'enabled' => $enabled,
+        'restart_required' => true,
+    ];
+}
+
+/**
+ * 解析要构建的 PECL event 版本：优先取官方最新版，取不到则回退固定版本。
+ */
+function resolveEventPeclVersion(): string
+{
+    $context = stream_context_create(['http' => ['timeout' => 10]]);
+    $raw = @file_get_contents('https://pecl.php.net/rest/r/event/latest.txt', false, $context);
+    if (is_string($raw) && preg_match('/^\d+\.\d+\.\d+$/', trim($raw)) === 1) {
+        return trim($raw);
+    }
+
+    return EVENT_PECL_FALLBACK_VERSION;
+}
+
+/**
+ * 下载 URL 到文件；优先 curl，缺失时退回 file_get_contents。
+ */
+function downloadUrlToFile(string $url, string $target): bool
+{
+    $curl = @shell_exec('command -v curl 2>/dev/null');
+    if (is_string($curl) && trim($curl) !== '') {
+        $output = [];
+        $code = 0;
+        @exec(
+            'curl -fsSL --max-time 300 -o ' . escapeshellarg($target) . ' ' . escapeshellarg($url) . ' 2>&1',
+            $output,
+            $code
+        );
+        if ($code === 0 && is_file($target) && (int) filesize($target) > 0) {
+            return true;
+        }
+    }
+
+    $context = stream_context_create(['http' => ['timeout' => 300]]);
+    $data = @file_get_contents($url, false, $context);
+
+    return is_string($data) && $data !== '' && @file_put_contents($target, $data) !== false;
+}
+
+/**
  * 在 php.ini 中启用扩展
  */
 function enableExtensionInIni(string $ext): bool
 {
     $phpIniPath = php_ini_loaded_file();
-    if (!$phpIniPath || !is_writable($phpIniPath)) {
+    if ($phpIniPath && is_writable($phpIniPath)) {
+        $content = file_get_contents($phpIniPath);
+        if ($content !== false) {
+            // 检查是否已启用
+            $pattern = '/^\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*$/mi';
+            if (preg_match($pattern, $content)) {
+                return true;
+            }
+
+            // 检查被注释的行
+            $commentPattern = '/^;(\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*)$/mi';
+            if (preg_match($commentPattern, $content)) {
+                $content = preg_replace($commentPattern, '$1', $content);
+            } else {
+                $content .= "\nextension=" . $ext . "\n";
+            }
+
+            if (file_put_contents($phpIniPath, $content) !== false) {
+                return true;
+            }
+        }
+    }
+
+    // 没有加载 php.ini（bundled PHP 常只配了 --with-config-file-scan-dir）时，
+    // 必须写入附加 ini 扫描目录，否则新进程也不会加载该扩展。
+    return enableExtensionInScanDir($ext);
+}
+
+/**
+ * 在 PHP 的附加 ini 扫描目录（conf.d）中启用扩展。
+ */
+function enableExtensionInScanDir(string $ext): bool
+{
+    $scanDir = defined('PHP_CONFIG_FILE_SCAN_DIR') ? (string) PHP_CONFIG_FILE_SCAN_DIR : '';
+    if ($scanDir === '' || !is_dir($scanDir) || !is_writable($scanDir)) {
         return false;
     }
 
-    $content = file_get_contents($phpIniPath);
-    if ($content === false) {
-        return false;
-    }
+    $target = rtrim($scanDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'weline-' . $ext . '.ini';
+    $desired = '; 由 WLS env/script/install_event_extension.php 生成' . PHP_EOL
+        . 'extension=' . $ext . '.so' . PHP_EOL;
 
-    // 检查是否已启用
-    $pattern = '/^\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*$/mi';
-    if (preg_match($pattern, $content)) {
+    if (is_file($target) && file_get_contents($target) === $desired) {
         return true;
     }
 
-    // 检查被注释的行
-    $commentPattern = '/^;(\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*)$/mi';
-    if (preg_match($commentPattern, $content)) {
-        $content = preg_replace($commentPattern, '$1', $content);
-    } else {
-        $content .= "\nextension=" . $ext . "\n";
-    }
-
-    return file_put_contents($phpIniPath, $content) !== false;
+    return file_put_contents($target, $desired) !== false;
 }
 
 /**
@@ -494,6 +662,9 @@ function getInstallGuide(): array
         'Alpine'        => 'apk add libevent-dev && pecl install event',
         'macOS'         => 'brew install libevent && pecl install event',
         'Docker'        => 'docker-php-ext-install event',
-        '启用'          => '在 php.ini 中添加: extension=event',
+        'bundled PHP（无 pecl）' => 'apt-get install -y libevent-dev，再用该 PHP 自带的 phpize/php-config '
+            . '从 PECL 源码构建（脚本已自动执行此路径）',
+        '启用'          => '在 php.ini 或附加 ini 扫描目录（conf.d，即 PHP_CONFIG_FILE_SCAN_DIR）中添加: '
+            . 'extension=event',
     ];
 }

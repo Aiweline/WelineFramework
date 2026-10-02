@@ -222,6 +222,32 @@ class ServiceOrchestrator
     private string $fullRestartReason = '';
     private float $lastFullRestartAt = 0.0;
     private float $fullRestartCooldown = 10.0;
+
+    /**
+     * 整组重启熔断窗口与窗内允许次数。
+     *
+     * 只有冷却（默认 10s）而没有窗内上限时，故障持续会演变成重启风暴：
+     * 每次整组重启都要全量排水，排水期间所有请求都会失败。超出上限必须
+     * 停止整组重启并降级，而不是继续全量排水。
+     */
+    private const FULL_RESTART_WINDOW_SECONDS = 600.0;
+    private const FULL_RESTART_WINDOW_MAX = 3;
+
+    /** @var list<float> 整组重启发生时刻（单调秒），用于窗内熔断判定 */
+    private array $fullRestartHistory = [];
+
+    /** 避免熔断期间每个 tick 重复刷同一条 ERROR */
+    private bool $fullRestartCircuitOpenLogged = false;
+
+    /**
+     * fence 重试退避：指数基数、上限与抖动比例。
+     *
+     * 固定 1 秒重试在端口/进程迟迟不释放时会形成热循环；退避只降低churn
+     * 频率，真正的释放仍依赖终止路径本身。
+     */
+    private const FENCE_BACKOFF_BASE_SECONDS = 1.0;
+    private const FENCE_BACKOFF_MAX_SECONDS = 30.0;
+    private const FENCE_BACKOFF_JITTER_RATIO = 0.10;
     private float $registerTimeout = 60.0;
     private float $reconcileInterval = 5.0;
     private float $sweeperInterval = 15.0;
@@ -7695,17 +7721,40 @@ class ServiceOrchestrator
     }
 
     /**
+     * fence 重试的退避间隔（秒）。
+     *
+     * 指数增长并封顶，附带不超过 ±10% 的抖动，避免多个槽位同拍重试。
+     * 抖动取自单调时钟的毫秒余数，不引入随机源，保证行为可测。
+     */
+    protected function fenceRetryDelaySeconds(int $fenceAttempt): float
+    {
+        $attempt = \max(1, $fenceAttempt);
+        $exponential = self::FENCE_BACKOFF_BASE_SECONDS * (2 ** ($attempt - 1));
+        $capped = \min($exponential, self::FENCE_BACKOFF_MAX_SECONDS);
+        $jitter = $capped * self::FENCE_BACKOFF_JITTER_RATIO;
+        if ($jitter <= 0.0) {
+            return $capped;
+        }
+
+        $seed = \fmod(self::monotonicSeconds() * 1000.0, 1000.0) / 1000.0;
+        $delay = $capped + ($seed * 2.0 - 1.0) * $jitter;
+
+        return \round(\max(0.05, $delay), 3);
+    }
+
+    /**
      * Bound identity/exit/port fencing before launch. Startup acceptance uses
      * its existing recovery deadline; steady-state and infra recovery escalate
      * to a full restart instead of occupying the desired-state slot forever.
      *
      * @param array<string,mixed> $capturedEntry
+     * @param float|null $delay 显式间隔；null 表示按 fence 次数走指数退避
      */
     private function deferResurrectionFenceOrEscalate(
         string $key,
         array $capturedEntry,
         string $reason,
-        float $delay = 1.0,
+        ?float $delay = null,
     ): bool {
         if ($this->isRecoverySuspended() || $this->shouldYieldPeriodicWork(true)) {
             return false;
@@ -7721,6 +7770,9 @@ class ServiceOrchestrator
         $fenceAttempts = (int)($queuedEntry['fence_attempts'] ?? 0) + 1;
         $queuedEntry['fence_attempts'] = $fenceAttempts;
         $queuedEntry['fence_last_reason'] = $reason;
+        if ($delay === null) {
+            $delay = $this->fenceRetryDelaySeconds($fenceAttempts);
+        }
         $queuedEntry['restartDelay'] = $delay;
         $queuedEntry['scheduledAt'] = self::monotonicSeconds() + \max(0.05, $delay);
 
@@ -7749,7 +7801,7 @@ class ServiceOrchestrator
             $this->resurrectQueue[$key] = $queuedEntry;
             WlsLogger::warning_(
                 "[Orchestrator] {$queuedEntry['role']}#{$queuedEntry['instanceId']} 复活前置 fence 未满足"
-                . " ({$reason})，{$delay} 秒后重试 ({$fenceAttempts}/{$maxFenceAttempts})"
+                . " ({$reason})，" . \round($delay, 2) . " 秒后重试 ({$fenceAttempts}/{$maxFenceAttempts})"
             );
             return true;
         }
@@ -14944,6 +14996,35 @@ class ServiceOrchestrator
         return \json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: \get_debug_type($value);
     }
 
+    /**
+     * 整组重启熔断判定。
+     *
+     * 冷却只限制最小间隔；没有窗内上限时，故障持续会以冷却为周期反复全量排水，
+     * 每次排水都会让所有请求失败。
+     */
+    protected function fullRestartCircuitOpen(float $now): bool
+    {
+        $this->pruneFullRestartHistory($now);
+
+        return \count($this->fullRestartHistory) >= self::FULL_RESTART_WINDOW_MAX;
+    }
+
+    /** 记录一次整组重启；滑动窗口据此判定熔断。 */
+    protected function recordFullRestartAt(float $now): void
+    {
+        $this->fullRestartHistory[] = $now;
+        $this->pruneFullRestartHistory($now);
+        $this->fullRestartCircuitOpenLogged = false;
+    }
+
+    private function pruneFullRestartHistory(float $now): void
+    {
+        $this->fullRestartHistory = \array_values(\array_filter(
+            $this->fullRestartHistory,
+            static fn(float $at): bool => ($now - $at) < self::FULL_RESTART_WINDOW_SECONDS
+        ));
+    }
+
     private function requestFullRestart(string $reason): void
     {
         if (!$this->haMode || !$this->fullRestartOnFailure || $this->isStopFlowActive()) {
@@ -14953,6 +15034,20 @@ class ServiceOrchestrator
         $now = self::monotonicSeconds();
         if (($now - $this->lastFullRestartAt) < $this->fullRestartCooldown) {
             WlsLogger::warning_("[Orchestrator] 忽略频繁整组重启请求（冷却中）: {$reason}");
+            return;
+        }
+
+        if ($this->fullRestartCircuitOpen($now)) {
+            if (!$this->fullRestartCircuitOpenLogged) {
+                $this->fullRestartCircuitOpenLogged = true;
+                WlsLogger::error_(
+                    '[Orchestrator] 整组重启熔断已打开：'
+                    . \round(self::FULL_RESTART_WINDOW_SECONDS / 60, 1) . ' 分钟内已整组重启 '
+                    . \count($this->fullRestartHistory) . ' 次（上限 '
+                    . self::FULL_RESTART_WINDOW_MAX . ' 次），本次拒绝整组重启并降级，原因: ' . $reason
+                );
+            }
+
             return;
         }
 
@@ -14981,6 +15076,7 @@ class ServiceOrchestrator
         $this->fullRestartRequested = false;
         $this->fullRestartReason = '';
         $this->lastFullRestartAt = self::monotonicSeconds();
+        $this->recordFullRestartAt($this->lastFullRestartAt);
         // A new infrastructure epoch gives quarantined auxiliary slots one
         // clean recovery budget without letting them trigger this restart.
         $this->recoveryQuarantine = [];
@@ -15691,17 +15787,19 @@ class ServiceOrchestrator
                     $frozenTrackingPid = (int)($entry['pid'] ?? 0);
                 }
                 if ($frozenTrackingPid > 0) {
+                    $fenceFailureReason = null;
                     if (!$this->terminateStaleProcessBeforeResurrection(
                         $oldInstance,
                         $frozenTrackingPid,
                         $port,
                         (string)$entry['role'],
-                        $entry
+                        $entry,
+                        $fenceFailureReason
                     )) {
                         $this->deferResurrectionFenceOrEscalate(
                             $key,
                             $entry,
-                            'old_process_or_port_not_released'
+                            $fenceFailureReason ?? 'old_process_or_port_not_released'
                         );
                         continue;
                     }
@@ -16156,7 +16254,22 @@ class ServiceOrchestrator
     }
 
     /**
+     * 复活前终止旧代次时是否连带进程树。
+     *
+     * 只杀冻结的根 PID 会让仍持有 listen socket 的子进程存活，端口因此
+     * 永不释放，fence 也永远无法满足。终止本身仍受 launch lease 与出生
+     * 元组校验约束，进程树不会扩大到本代次之外。
+     */
+    protected function shouldTerminateResurrectionTree(): bool
+    {
+        return true;
+    }
+
+    /**
      * 复活前确保旧进程已经真正退出，优先按真实 PID 终止，避免 PID 文件滞后误杀失败。
+     *
+     * @param string|null $failureReason 失败时回填具体原因码，便于区分
+     *        「进程状态未知」「租约不完整」「终止未释放」「端口未释放」四类。
      */
     private function terminateStaleProcessBeforeResurrection(
         ?ServiceInstance $oldInstance,
@@ -16164,17 +16277,19 @@ class ServiceOrchestrator
         int $port,
         string $role,
         array $processLease = [],
+        ?string &$failureReason = null,
     ): bool
     {
         if ($trackingPid <= 0) {
-            return $this->ensurePortReleasedForResurrection($port, $role);
+            return $this->ensurePortReleasedForResurrection($port, $role, $failureReason);
         }
 
         $processState = Processer::probeProcessState($trackingPid, true);
         if ($processState === Processer::PROCESS_STATE_EXITED) {
-            return $this->ensurePortReleasedForResurrection($port, $role);
+            return $this->ensurePortReleasedForResurrection($port, $role, $failureReason);
         }
         if ($processState !== Processer::PROCESS_STATE_RUNNING) {
+            $failureReason = 'stale_process_state_unknown:' . $processState;
             WlsLogger::warning_(
                 '[Orchestrator][ResurrectionIdentityFence] pid=' . $trackingPid
                 . ', state=' . $processState
@@ -16200,6 +16315,7 @@ class ServiceOrchestrator
             $expectedIdentity = $this->buildExpectedResurrectionProcessIdentity($oldInstance);
         }
         if ($expectedIdentity === '' || $launchId === '' || $expectedPname === '') {
+            $failureReason = 'stale_process_lease_incomplete';
             WlsLogger::warning_(
                 '[Orchestrator][ResurrectionIdentityFence] pid=' . $trackingPid
                 . ', action=defer_incomplete_lease'
@@ -16215,7 +16331,7 @@ class ServiceOrchestrator
             $expectedIdentity,
             $launchId,
             $expectedPname,
-            false
+            $this->shouldTerminateResurrectionTree()
         );
         unset($this->processRunningCache[$trackingPid]);
 
@@ -16224,6 +16340,8 @@ class ServiceOrchestrator
         }
 
         if (!(bool)($result['released'] ?? false)) {
+            $failureReason = 'stale_process_not_released:'
+                . (string)($result['reason'] ?? 'termination_result_missing');
             WlsLogger::warning_(
                 '[Orchestrator][ResurrectionIdentityFence] pid=' . $trackingPid
                 . ', state=' . (string)($result['state'] ?? Processer::PROCESS_STATE_UNKNOWN)
@@ -16233,13 +16351,15 @@ class ServiceOrchestrator
             return false;
         }
 
-        return $this->ensurePortReleasedForResurrection($port, $role);
+        return $this->ensurePortReleasedForResurrection($port, $role, $failureReason);
     }
 
     /**
      * 复活前确认监听端口已释放，必要时再次清理己方残留占用。
+     *
+     * @param string|null $failureReason 失败时回填原因码，区分「不可绑定」与「仍被占用」。
      */
-    private function ensurePortReleasedForResurrection(int $port, string $role): bool
+    private function ensurePortReleasedForResurrection(int $port, string $role, ?string &$failureReason = null): bool
     {
         if ($port <= 0) {
             return true;
@@ -16257,16 +16377,20 @@ class ServiceOrchestrator
         }
 
         if ($this->shouldUseFastBindProbeForPortChecks()) {
+            $failureReason = 'resurrection_port_not_bindable:' . $port;
             WlsLogger::warning_("[Orchestrator] port {$port} is still not bindable after cleanup; defer resurrection without netstat scan");
             return false;
         }
 
         if (Processer::isPortUsedByWeline($port)) {
+            $failureReason = 'resurrection_port_held_by_weline:' . $port;
             WlsLogger::warning_(
                 "[Orchestrator] 端口 {$port} 仍被 Weline 进程占用，但无匹配 launch lease；"
                 . '延迟复活或使用应急端口，禁止按端口强杀'
             );
         }
+
+        $failureReason ??= 'resurrection_port_not_released:' . $port;
 
         return false;
     }

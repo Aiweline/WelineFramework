@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\Connection\Pool;
 
 use PDO;
+use Weline\Framework\App\Env;
 use Weline\Framework\Database\Exception\ConnectionPoolExhaustedException;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
@@ -19,9 +20,23 @@ class ConnectionPool
     /** 空闲超过此秒数才在取出时做 SELECT 1 验证，减少频繁验证开销 */
     private const IDLE_VALIDATE_SECONDS = 30;
 
-    /** 池满时的默认总等待预算；等待期间让出当前 Fiber，禁止创建池外连接。 */
-    private const DEFAULT_ACQUIRE_TIMEOUT_SECONDS = 30.0;
-    private const POOL_FULL_WAIT_SLICE_US = 1_000;
+    /**
+     * 池满时的默认总等待预算；等待期间让出当前 Fiber，禁止创建池外连接。
+     *
+     * 必须有界：30 秒级的同步等待会把局部过载放大成整站不可用，
+     * 且多级取连接叠加后会远超上游网关的时间预算。
+     */
+    private const DEFAULT_ACQUIRE_TIMEOUT_SECONDS = 2.0;
+
+    /** 预算覆盖键（毫秒）：允许按部署调整，但仍受硬上限约束。 */
+    private const ACQUIRE_TIMEOUT_ENV_KEY = 'db.pool.acquire_timeout_ms';
+
+    /** 预算硬上限（秒）：任何配置都不得把单次同步等待重新拉回 30 秒量级。 */
+    private const MAX_ACQUIRE_TIMEOUT_SECONDS = 30.0;
+
+    /** 池满等待的退避区间（微秒）：固定 1ms 切片在长预算下会自旋数万次。 */
+    private const POOL_FULL_WAIT_BASE_SLICE_US = 1_000;
+    private const POOL_FULL_WAIT_MAX_SLICE_US = 100_000;
 
     /**
      * 池中队列元素：PDO 或 array{connection: PDO, last_used: float}（新格式带 last_used）
@@ -113,6 +128,35 @@ class ConnectionPool
     }
 
     /**
+     * 解析一次连接获取的等待预算（秒）。
+     *
+     * 显式入参优先；否则读 `db.pool.acquire_timeout_ms`（毫秒）。
+     * 无论来源如何都夹紧到 [0, MAX_ACQUIRE_TIMEOUT_SECONDS]：
+     * 预算必须有界，否则单次同步等待会超过上游网关预算，
+     * 把局部过载放大成整站不可用。
+     */
+    public static function resolveAcquireTimeoutSeconds(?float $explicitSeconds = null): float
+    {
+        if ($explicitSeconds !== null) {
+            return \min(\max(0.0, $explicitSeconds), self::MAX_ACQUIRE_TIMEOUT_SECONDS);
+        }
+
+        $configuredMs = null;
+        try {
+            $configuredMs = Env::get(self::ACQUIRE_TIMEOUT_ENV_KEY, null);
+        } catch (\Throwable) {
+            // 环境未就绪（如极早期引导或单测）时退回默认预算，不能因此阻断取连接。
+            $configuredMs = null;
+        }
+
+        if (!\is_numeric($configuredMs)) {
+            return self::DEFAULT_ACQUIRE_TIMEOUT_SECONDS;
+        }
+
+        return \min(\max(0.0, (float)$configuredMs / 1000), self::MAX_ACQUIRE_TIMEOUT_SECONDS);
+    }
+
+    /**
      * Acquire one RAII ownership token. New framework code should prefer this
      * API; getConnection()/releaseConnection() remain as the raw compatibility
      * bridge for existing integrations.
@@ -120,7 +164,7 @@ class ConnectionPool
     public static function acquire(
         ConfigProviderInterface $configProvider,
         callable $createConnection,
-        float $acquireTimeoutSeconds = self::DEFAULT_ACQUIRE_TIMEOUT_SECONDS
+        ?float $acquireTimeoutSeconds = null
     ): ConnectionLease
     {
         $poolKey = self::getPoolKey($configProvider);
@@ -243,9 +287,10 @@ class ConnectionPool
     public static function getConnection(
         ConfigProviderInterface $configProvider,
         callable $createConnection,
-        float $acquireTimeoutSeconds = self::DEFAULT_ACQUIRE_TIMEOUT_SECONDS
+        ?float $acquireTimeoutSeconds = null
     ): PDO
     {
+        $acquireTimeoutSeconds = self::resolveAcquireTimeoutSeconds($acquireTimeoutSeconds);
         $poolKey = self::getPoolKey($configProvider);
         $poolSize = $configProvider->getPoolSize();
 
@@ -308,12 +353,15 @@ class ConnectionPool
         // 池已满：在单一 deadline 内等待归还。达到上限后必须显式失败，
         // 不能创建不受池统计和释放协议管理的临时连接。
         $deadline = \microtime(true) + \max(0.0, $acquireTimeoutSeconds);
+        $waitSliceUs = self::POOL_FULL_WAIT_BASE_SLICE_US;
         do {
             $remainingUs = (int) \floor(($deadline - \microtime(true)) * 1_000_000);
             if ($remainingUs <= 0) {
                 break;
             }
-            SchedulerSystem::usleep(\min(self::POOL_FULL_WAIT_SLICE_US, $remainingUs));
+            SchedulerSystem::usleep(\min($waitSliceUs, $remainingUs));
+            // 退避：长预算下若沿用固定 1ms 切片，会自旋数万次并与业务争抢 CPU。
+            $waitSliceUs = \min($waitSliceUs * 2, self::POOL_FULL_WAIT_MAX_SLICE_US);
             if (!$pool['pool']->isEmpty()) {
                 $item = $pool['pool']->dequeue();
                 $connection = is_array($item) ? $item['connection'] : $item;

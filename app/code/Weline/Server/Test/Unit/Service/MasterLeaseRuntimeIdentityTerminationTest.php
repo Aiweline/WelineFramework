@@ -127,6 +127,41 @@ final class MasterLeaseRuntimeIdentityTerminationTest extends TestCase
         self::assertStringContainsString('darwin_posix_kill_released', $source);
     }
 
+    public function testLinuxWithoutPidfdFallsBackToVerifiedPosixSignal(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 7)
+            . '/app/code/Weline/Server/Service/MasterLeaseRuntimeIdentity.php',
+        );
+
+        $start = \strpos($source, 'private function terminateLinuxProcessIdentity(');
+        $end = \strpos($source, 'private function terminateLinuxWithoutPidfd(', (int)$start);
+        self::assertIsInt($start);
+        self::assertIsInt($end);
+        $method = \substr($source, $start, $end - $start);
+
+        // 未编译 ext-ffi 时必须降级到已验证出生元组的 posix 兜底。
+        // 直接返回「未知」会让复活 fence 永远无法满足，进而触发整组重启风暴。
+        self::assertStringNotContainsString(
+            "'linux_pidfd_ffi_unavailable'",
+            $method,
+            'Linux 缺少 FFI 时必须降级到 posix 兜底，而不是用「未知」搪塞',
+        );
+        self::assertStringContainsString('terminateLinuxWithoutPidfd(', $method);
+
+        // 兜底原因码必须可 grep，便于线上取证。
+        self::assertStringContainsString('linux_posix_term_released', $source);
+        self::assertStringContainsString('linux_posix_kill_released', $source);
+        self::assertStringContainsString('linux_posix_termination_unverified', $source);
+
+        // Darwin 与 Linux 必须复用同一个 posix 终止助手，避免只修一侧。
+        self::assertGreaterThanOrEqual(
+            3,
+            \substr_count($source, 'terminateViaPosixSignal('),
+            'Darwin 与 Linux 兜底必须复用同一个 posix 终止助手',
+        );
+    }
+
     public function testPlatformHandleDispatchRunsOnlyAfterReleasedOwnerPreflight(): void
     {
         $source = (string)\file_get_contents(

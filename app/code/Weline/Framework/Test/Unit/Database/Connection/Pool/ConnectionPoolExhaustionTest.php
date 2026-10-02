@@ -63,13 +63,43 @@ final class ConnectionPoolExhaustionTest extends TestCase
         self::assertSame(1, $created);
     }
 
-    public function testDefaultAcquireBudgetAllowsHttpBackpressure(): void
+    /**
+     * 默认获取预算必须有界：30 秒级的同步等待会把局部过载放大成整站不可用。
+     */
+    public function testDefaultAcquireBudgetIsBounded(): void
     {
         $reflection = new \ReflectionClass(ConnectionPool::class);
-        self::assertGreaterThanOrEqual(
-            30.0,
-            (float)$reflection->getConstant('DEFAULT_ACQUIRE_TIMEOUT_SECONDS')
-        );
+        $budget = (float)$reflection->getConstant('DEFAULT_ACQUIRE_TIMEOUT_SECONDS');
+
+        self::assertGreaterThan(0.0, $budget, '默认预算必须大于 0，否则完全放弃背压');
+        self::assertLessThanOrEqual(3.0, $budget, '默认预算必须有界，不得再出现 30 秒级等待');
+    }
+
+    /**
+     * 行为验证：池饱和且调用方未显式传超时时，必须走默认预算并在有界时间内失败，
+     * 而不是把请求 Fiber 阻塞数十秒。
+     */
+    public function testSaturatedPoolFailsFastWithinBoundedBudget(): void
+    {
+        $config = $this->config();
+        $factory = static fn(): PDO => new ConnectionPoolExhaustionFakePdo();
+
+        // 占满唯一连接且不归还
+        ConnectionPool::getConnection($config, $factory);
+
+        $startedAt = \microtime(true);
+        try {
+            ConnectionPool::getConnection($config, $factory);
+            self::fail('Expected the saturated pool to reject the overflow acquire.');
+        } catch (ConnectionPoolExhaustedException $exception) {
+            $elapsed = \microtime(true) - $startedAt;
+            self::assertLessThan(
+                10.0,
+                $elapsed,
+                '默认获取预算必须有界；实测耗时 ' . \round($elapsed, 2) . 's'
+            );
+            self::assertStringContainsString('max_size=1', $exception->getMessage());
+        }
     }
 
     private function config(): ConfigProviderInterface
