@@ -558,6 +558,26 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'evidence')),
         false,
     ),
+    'hard_constraints include local_verify_before_change_and_after_deploy' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'local_verify_before_change_and_after_deploy'
+            && str_contains((string) ($rule['summary'] ?? ''), 'LOCAL VERIFY FIRST')
+            && str_contains((string) ($rule['summary'] ?? ''), 'VERIFY PRODUCTION AGAIN')
+            && str_contains((string) ($rule['summary'] ?? ''), '线上复验未完成')
+            && str_contains((string) ($rule['summary'] ?? ''), 'runtime_status_query_local_first')),
+        false,
+    ),
+    'hard_constraints include no_legacy_code_accumulation_on_change' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'no_legacy_code_accumulation_on_change'
+            && str_contains((string) ($rule['summary'] ?? ''), 'SAME CHANGE SET = SAME CLEANUP')
+            && str_contains((string) ($rule['summary'] ?? ''), 'NO DANGLING REFERENCES')
+            && str_contains((string) ($rule['summary'] ?? ''), '@deprecated')
+            && str_contains((string) ($rule['summary'] ?? ''), 'preserve_dirty_workspace')),
+        false,
+    ),
     'mandatory_before_code includes prepare_project_hard_constraints_when_mcp_attached' => in_array(
         'prepare_project_hard_constraints_when_mcp_attached',
         is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],
