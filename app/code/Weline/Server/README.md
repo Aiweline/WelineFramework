@@ -393,7 +393,7 @@ flowchart LR
 - Windows Nginx 模式的 `auto` 使用 `worker_ports` Direct；Windows 纯 WLS 的 `auto` 使用 Dispatcher。两者都只依赖内置 select，不安装或编译 `event/ev`。
 - Windows 从 UNC/Parallels 共享项目冷启动时，首页 READY 单次预算默认从本地盘的 30 秒提高到有界 60 秒，Orchestrator 默认基线从 90 秒提高到 150 秒且绝对上限仍为 300 秒；显式环境/配置值继续优先。该兼容预算不改变 READY 的 Process FPC HIT 要求，也不能替代本地盘发布性能门禁。
 - Windows 后台启动使用精确 argv 的 WMI 隔离创建 Master，共享 Session/Memory 批次也隔离父进程标准句柄；非交互调用会在 READY/协议门禁完成后正常返回，不会因 Master 或 sidecar 继承调用端管道而继续等待。子进程自身 PID 与 IPC 注册仍是运行身份权威。
-- Linux 的 `auto` 优先经验证的 `reuseport` Direct，并在 `sockets`/`SO_REUSEPORT` 不可用时回退 Master-owned `shared_fd`；macOS 的 `auto` 使用 `shared_fd`。显式 `--dispatcher` 在所有平台仍受支持。`shared_fd` rolling reload 使用标准安全分批；`reuseport` 使用独立监听队列的既有安全交接。
+- Linux 的 `auto` 优先经验证的 `reuseport` Direct，并在 `sockets`/`SO_REUSEPORT` 不可用时回退 Master-owned `shared_fd`；macOS 的 `auto` 使用 `shared_fd`。显式 `--dispatcher` 在所有平台仍受支持；`auto` 的 Direct 能力确实不可用时也会**带原因自动回退 Dispatcher**（`auto_direct_unavailable_dispatcher_fallback`），显式 `--direct` 则 fail-closed。`shared_fd` rolling reload 使用标准安全分批；`reuseport` 使用独立监听队列的既有安全交接。
 - Worker 在两种内部拓扑中都先执行 mandatory guard，再命中 Static/FPC，最后才进入 Session、Router 和 Controller。
 - 策略、缓存 epoch 和维护 epoch 由 Master 版本化发布；Worker active digest 不匹配时不得 READY。
 

@@ -8,6 +8,7 @@ use Weline\Server\Service\Runtime\EffectiveTopology;
 use Weline\Server\Service\Runtime\RequestedTopology;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\RuntimeStrategyResolver;
+use Weline\Server\Service\Runtime\RuntimeTopologyConsistency;
 use Weline\Server\Service\Runtime\WlsRuntimeProfile;
 
 final class RuntimeStrategyResolverTest extends TestCase
@@ -172,12 +173,9 @@ final class RuntimeStrategyResolverTest extends TestCase
         self::assertSame(['posix_auto_direct'], $selection->reasonCodes);
     }
 
-    public function testDarwinDirectFailsWhenSharedListenerProbeFails(): void
+    public function testAutoFallsBackToDispatcherWhenSharedListenerProbeFails(): void
     {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('shared listener consumers were not balanced');
-
-        (new RuntimeStrategyResolver())->resolve(
+        $result = (new RuntimeStrategyResolver())->resolve(
             ['worker_count' => 4],
             [],
             $this->profile([
@@ -191,6 +189,106 @@ final class RuntimeStrategyResolverTest extends TestCase
                 'extensions' => ['event' => true],
                 'functions' => ['proc_open' => true],
             ]),
+        );
+
+        $selection = $this->selection($result);
+        self::assertSame(RequestedTopology::Auto, $selection->requestedTopology);
+        self::assertSame(EffectiveTopology::Dispatcher, $selection->effectiveTopology);
+        self::assertSame('single', $selection->listenerMode);
+        self::assertSame(
+            [RuntimeTopologyConsistency::AUTO_DISPATCHER_FALLBACK_REASON_CODE],
+            $selection->reasonCodes,
+        );
+        self::assertSame('degraded', $result['status']);
+        self::assertStringContainsString(
+            'shared listener consumers were not balanced',
+            \implode(' ', $result['warnings']),
+        );
+    }
+
+    public function testAutoFallsBackToDispatcherWhenEventLoopCapabilityMissing(): void
+    {
+        $result = (new RuntimeStrategyResolver())->resolve(
+            ['worker_count' => 4],
+            [],
+            $this->profile([
+                'os_family' => 'Darwin',
+                'supports_direct_listener' => true,
+                'direct_listener_mode' => 'shared_fd',
+                'direct_listener_probe' => ['supported' => true],
+                'event_classes_available' => false,
+                'extensions' => [],
+                'functions' => ['proc_open' => true],
+            ]),
+        );
+
+        $selection = $this->selection($result);
+        self::assertSame(RequestedTopology::Auto, $selection->requestedTopology);
+        self::assertSame(EffectiveTopology::Dispatcher, $selection->effectiveTopology);
+        self::assertSame('single', $selection->listenerMode);
+        self::assertContains(
+            RuntimeTopologyConsistency::AUTO_DISPATCHER_FALLBACK_REASON_CODE,
+            $selection->reasonCodes,
+        );
+        self::assertStringContainsString('event extension', \implode(' ', $result['warnings']));
+    }
+
+    public function testExplicitDirectFailsClosedWhenSharedListenerProbeFails(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('shared listener consumers were not balanced');
+
+        (new RuntimeStrategyResolver())->resolve(
+            ['worker_count' => 4],
+            ['direct' => true],
+            $this->profile([
+                'os_family' => 'Darwin',
+                'supports_direct_listener' => false,
+                'direct_listener_mode' => '',
+                'direct_listener_probe' => [
+                    'reason' => 'Darwin shared listener consumers were not balanced.',
+                ],
+                'event_classes_available' => true,
+                'extensions' => ['event' => true],
+                'functions' => ['proc_open' => true],
+            ]),
+        );
+    }
+
+    public function testExplicitReusePortRequestNeverFallsBackToDispatcher(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('reuseport requires verified SO_REUSEPORT support');
+
+        (new RuntimeStrategyResolver())->resolve(
+            ['worker_count' => 4, 'runtime' => ['listener_mode' => 'reuseport']],
+            [],
+            $this->profile(['supports_reuse_port' => false]),
+        );
+    }
+
+    public function testAutoFallsBackToDispatcherWhenLinuxHasNoDirectCapability(): void
+    {
+        $result = (new RuntimeStrategyResolver())->resolve(
+            ['worker_count' => 4],
+            [],
+            $this->profile([
+                'supports_reuse_port' => false,
+                'supports_direct_listener' => false,
+                'direct_listener_mode' => '',
+                'direct_listener_probe' => ['reason' => 'No inherited listener FD primitive.'],
+                'event_classes_available' => true,
+                'extensions' => ['event' => true],
+                'functions' => ['proc_open' => true],
+            ]),
+        );
+
+        $selection = $this->selection($result);
+        self::assertSame(EffectiveTopology::Dispatcher, $selection->effectiveTopology);
+        self::assertSame('single', $selection->listenerMode);
+        self::assertSame(
+            [RuntimeTopologyConsistency::AUTO_DISPATCHER_FALLBACK_REASON_CODE],
+            $selection->reasonCodes,
         );
     }
 

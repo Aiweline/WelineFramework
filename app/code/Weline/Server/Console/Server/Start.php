@@ -61,6 +61,8 @@ use Weline\Server\Service\Runtime\HttpProtocolSelection;
 use Weline\Server\Service\Runtime\DirectSharedListener;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\RuntimeStrategyResolver;
+use Weline\Server\Service\Runtime\RuntimeTopologyConsistency;
+use Weline\Server\Service\Runtime\RequestedTopology;
 use Weline\Server\Service\Runtime\WindowsListenerHandoff;
 use Weline\Server\Service\Runtime\TlsProcessProfileConfigurator;
 use Weline\Server\Service\Runtime\VerifiedPersistentFileLock;
@@ -1052,14 +1054,27 @@ class Start extends CommandAbstract
             $dependencyMessage = (string)($dependencyResult['message'] ?? '');
 
             if ($dependencyStatus === 'failed') {
-                $this->printer->error(__('WLS 运行时依赖检查或显式安装失败：%{1}', [$dependencyMessage]));
-                if (!empty($dependencyResult['output'])) {
-                    $this->printer->note((string)$dependencyResult['output']);
+                if ($dependencyTopologyIntent['effective']->isDirect()
+                    && $dependencyTopologyIntent['requested'] === RequestedTopology::Auto
+                ) {
+                    // auto 只是优先 Direct：直连依赖确实不可得时带原因降级 Dispatcher，
+                    // 由后续 RuntimeSelection 决定生效拓扑；显式 Direct 仍然 fail-closed。
+                    $this->printer->warning(__('auto 直连所需运行时依赖不可得，将回退 Dispatcher：%{1}', [
+                        $dependencyMessage,
+                    ]));
+                    if (!empty($dependencyResult['output'])) {
+                        $this->printer->note((string)$dependencyResult['output']);
+                    }
+                } else {
+                    $this->printer->error(__('WLS 运行时依赖检查或显式安装失败：%{1}', [$dependencyMessage]));
+                    if (!empty($dependencyResult['output'])) {
+                        $this->printer->note((string)$dependencyResult['output']);
+                    }
+                    if ($dependencyTopologyIntent['effective']->isDirect()) {
+                        $this->printer->note(__('显式 Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。'));
+                    }
+                    return 1;
                 }
-                if ($dependencyTopologyIntent['effective']->isDirect()) {
-                    $this->printer->note(__('Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。'));
-                }
-                return 1;
             }
 
             if ($dependencyStatus === 'platform_optimal' || $dependencyStatus === 'skipped') {
@@ -1481,11 +1496,22 @@ class Start extends CommandAbstract
             $this->printer->error(__('WLS 运行时解析器未返回完整 RuntimeSelection；已拒绝启动。'));
             return 1;
         }
-        if ($runtimeSelection->requestedTopology !== $dependencyTopologyIntent['requested']
-            || $runtimeSelection->effectiveTopology !== $dependencyTopologyIntent['effective']
-        ) {
+        if (!RuntimeTopologyConsistency::accepts(
+            $runtimeSelection,
+            $dependencyTopologyIntent['requested'],
+            $dependencyTopologyIntent['effective'],
+        )) {
             $this->printer->error(__('WLS 依赖预检与最终 RuntimeSelection 拓扑不一致；已拒绝启动。'));
             return 1;
+        }
+        if (RuntimeTopologyConsistency::isAutoDispatcherFallback(
+            $dependencyTopologyIntent['requested'],
+            $dependencyTopologyIntent['effective'],
+            $runtimeSelection,
+        )) {
+            $this->printer->warning(__('auto 直连能力不可用，已回退 Dispatcher：%{1}', [
+                $runtimeSelection->reason,
+            ]));
         }
 
         $count = (int)$runtimeStrategy['worker_count'];
@@ -2022,9 +2048,11 @@ class Start extends CommandAbstract
                     $config,
                     $args,
                 );
-                if ($materializedTopology['requested'] !== $runtimeSelection->requestedTopology
-                    || $materializedTopology['effective'] !== $runtimeSelection->effectiveTopology
-                ) {
+                if (!RuntimeTopologyConsistency::accepts(
+                    $runtimeSelection,
+                    $materializedTopology['requested'],
+                    $materializedTopology['effective'],
+                )) {
                     throw new \RuntimeException(
                         'Materialized startup listener changed the preflighted runtime topology.',
                     );
@@ -13407,8 +13435,8 @@ PHP;
                 '--no-auto-deps' => __('兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用'),
                 '--supervisor <value>' => __('Supervisor：auto/true/false（默认 auto）'),
                 '--no-autostart-install' => __('跳过 Linux systemd 自启单元自动安装/校验'),
-                '--direct' => __('直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用'),
-                '--dispatcher' => __('Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断'),
+                '--direct' => __('直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用；显式 Direct 在能力不足时 fail-closed，不会改走 Dispatcher'),
+                '--dispatcher' => __('Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断；auto 直连能力不可得时也会带原因自动回退到此模式'),
                 '--help' => __('显示帮助信息'),
             ],
             [

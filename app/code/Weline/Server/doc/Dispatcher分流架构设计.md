@@ -6,6 +6,8 @@ Dispatcher 是所有平台显式 `--dispatcher` 时的 **WLS loopback HTTP/1.1 �
 
 所有平台 `auto` 都是 Direct：Linux 优先使用经能力验证的 `reuseport`，不可用时回退 Master 创建的 `shared_fd` loopback listener；macOS 使用 `shared_fd`；Windows 每个 Worker 绑定独立 `worker_ports`，由 Nginx upstream 直接均衡。Direct 不启动 Dispatcher，但也不是公网直连模式。
 
+`auto` 只是「优先 Direct」，不是「Direct 或失败」：当 Direct 能力经探测确实不可用（`shared_fd`/`reuseport` 均不可得，或共享监听所需的事件循环能力缺失）时，解析器会**带原因自动回退 Dispatcher**，保留 `requested_topology=auto`、`effective_topology=dispatcher`，`reason_codes` 记 `auto_direct_unavailable_dispatcher_fallback`；该降级是依赖预检意图与最终选择之间唯一允许的差异。显式 `--direct` 或显式 `wls.runtime.topology=direct` 仍然 fail-closed，不会静默改走 Dispatcher。
+
 `shared_fd` rolling reload 使用标准安全分批，不启用 reuseport new-first surge，以避免退役独立 accept backlog 时产生 RST。Nginx upstream Keep-Alive 的 idle timeout 默认为 5 秒，因此 Worker drain 下限为 10 秒（idle + 5 秒）。这些是内部回源契约；公网入口仍然唯一属于项目托管 Nginx。
 
 ## 1. 组件关系

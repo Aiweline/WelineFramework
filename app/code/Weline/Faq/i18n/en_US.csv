@@ -32,14 +32,13 @@ plus,plus
 编辑帮助页面,"Edit help page"
 edit,edit
 编辑帮助中心页面,"Edit help center page"
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
 此帮助文章暂无正文，请在帮助中心后台使用可视化编辑器完善。,"This help article has no body yet; refine it with the visual editor in help center admin."
 返回帮助中心,"Back to the Help Center"
+暂无常见问题。,"No FAQs yet."
 站点,Site
 店铺,Store
 渠道,Channel
 本商品,"This product"
-暂无常见问题。,"No FAQs yet."
 草稿,Draft
 已发布,Published
 已禁用,Disabled
@@ -115,6 +114,7 @@ Slug,Slug
 "FaqItemScopeKeyHealer: updated=%{1}","FaqItemScopeKeyHealer: updated=%{1}"
 "FAQ 类型编码无效。","Invalid FAQ type code."
 "FAQ 类型不存在或尚未注册：%{1}","FAQ type missing or unregistered: %{1}"
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 "帮助中心 | 订单物流退换与支付指南","Help Center | Orders, Shipping, Returns and Payments"
 查找订单进度、物流配送、退换货、支付发票与账户问题的自助指南，快速解决汉服购物常见疑问，支持中英文浏览。,"Self-service guides for order tracking, shipping, returns, payments, invoices, and account issues—quick answers for Hanfu shopping, with multilingual browsing."
 帮助中心分享预览图,"Help Center share preview image"

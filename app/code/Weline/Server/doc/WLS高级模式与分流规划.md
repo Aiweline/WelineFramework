@@ -2,6 +2,8 @@
 
 本文档为 **规划文档**，描述 WLS（Weline Server）在分流、发布模式、Worker 标记与可配置负载均衡上的目标设计，以及推荐的部署模式与后续实现计划。
 
+> **状态纠偏（2026-10-02）**：本文早期版本把「Dispatcher + 多 Worker」称为默认推荐模式，**该结论已作废**。现行契约（[Dispatcher 分流架构](Dispatcher分流架构设计.md)）为：所有平台 `auto` 首选 **Direct**（Linux 验证过的 `reuseport`，不可用回退 Master-owned `shared_fd`；macOS `shared_fd`；Windows Nginx 模式 `worker_ports`），**Dispatcher 只是显式 `--dispatcher` 的兼容/诊断拓扑，也是 `auto` 直连能力确实不可用时的自动回退**；显式 Direct 能力不足时 fail-closed。下文凡是把 Dispatcher 写成"标准/默认模式"的表述一律按此纠偏阅读；`--no-dispatcher` 等参数已移除，只保留 `--direct` / `--dispatcher`。
+
 ---
 
 ## 0. 整体架构图
@@ -346,13 +348,13 @@
 
 | 模式 | 名称 | 适用场景 | 说明 |
 |------|------|----------|------|
-| **标准模式（推荐）** | Dispatcher + 多 Worker | 生产/预发，单口对外、多进程扛量 | 单端口（80/443）→ Dispatcher → 多 Worker 内网端口，均衡策略与权重可配置 |
-| **单 Worker 直连** | 无 Dispatcher | 开发/调试、低流量 | `-c 1` 或 `--no-dispatcher`，单进程直连端口，无分流 |
-| **多端口直连** | 无 Dispatcher，多 Worker | 需 Nginx 等自建 upstream | `-c 4 --no-dispatcher`，每 Worker 一端口，由 Nginx 做均衡 |
+| ~~标准模式（推荐）~~ **已作废** | Dispatcher + 多 Worker | 仅显式兼容/诊断，或 `auto` 直连能力不可用时的自动回退 | 单端口（80/443）→ Dispatcher → 多 Worker 内网端口；**不再是任何平台的默认** |
+| **单 Worker 直连** | 无 Dispatcher | 开发/调试、低流量 | `-c 1 --direct`，单进程直连端口，无分流 |
+| **多端口直连** | 无 Dispatcher，多 Worker | 需 Nginx 等自建 upstream | `-c 4 --direct`（Windows `worker_ports`），每 Worker 一端口，由 Nginx 做均衡 |
 | **高级模式（规划）** | 带 Worker 标记 + 可配置分流 | 灰度、金丝雀、测试池 | Worker 带 tag（如 stable/canary/test），按策略/权重/请求头等分流 |
 | **Git Tag 渐进式发布（最高级）** | 版本标记 + API 动态规则 | 生产大版本升级、A/B 测试 | Worker 带 Git 版本标记，Dispatcher API 动态调比例，支持渐进式发布与秒级回滚 |
 
-文档中应明确：**默认推荐为「标准模式」**（多 Worker + Dispatcher），并说明何时选用单 Worker 或多端口直连。
+文档中应明确：**默认是各平台的 Direct**（Linux `shared_fd`/`reuseport`、macOS `shared_fd`、Windows `worker_ports`）；Dispatcher 仅用于显式兼容/诊断，或 `auto` 直连能力不可用时的自动回退，并说明何时选用单 Worker 或多端口直连。
 
 ---
 
@@ -516,7 +518,7 @@ Start 在启动 Dispatcher 时从 env 读取上述配置，通过**新参数或�
 ### 阶段 5：文档与运维
 
 - 在 `doc/` 下保留本文档为规划总览，并新增或更新：
-  - **推荐发布模式**：明确标准模式为默认推荐，何时使用单 Worker / 多端口直连。
+  - **推荐发布模式**：明确 Direct 为各平台默认、Dispatcher 为回退，何时使用单 Worker / 多端口直连。
   - **高级模式使用说明**：Worker 标记、env 配置项、API 调用示例、请求头约定。
   - **Git Tag 渐进式发布指南**：完整流程与最佳实践。
 - 在《WLS模式部署指南》中增加"分流与负载均衡"小节，指向本规划与 LoadBalancer 策略说明。

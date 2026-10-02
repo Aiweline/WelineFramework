@@ -528,8 +528,8 @@ class WlsPanelGatewaySettingsService
     {
         return match ($this->normalizeRequestedTopology($topology)) {
             self::TOPOLOGY_DIRECT => (string)__('所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux/macOS 默认使用可无损重载的 shared_fd；Linux reuseport 仅作为显式性能选项。'),
-            self::TOPOLOGY_DISPATCHER => (string)__('仅在显式兼容或诊断时使用 WLS Dispatcher；公网入口仍由项目托管 Nginx 提供。'),
-            default => (string)__('所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接。'),
+            self::TOPOLOGY_DISPATCHER => (string)__('仅在显式兼容或诊断时使用 WLS Dispatcher；Direct 能力不可用时 auto 也会带原因自动回退到此拓扑；公网入口仍由项目托管 Nginx 提供。'),
+            default => (string)__('所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux/macOS 使用 Master 持有的 shared_fd，以避免 Worker 替换时复位已排队连接；直连能力探测失败时自动回退 Dispatcher 并记录原因。'),
         };
     }
 

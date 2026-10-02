@@ -272,6 +272,23 @@ NGINX;
             ? "\n            if (\$scheme = http) { return 308 https://\$host{$httpsPortSuffix}\$request_uri; }"
             : '';
 
+        // Catalog/media files live on disk under {BP}/pub/media. Serving them
+        // through WLS means every listing thumbnail dies when workers drain or
+        // :9510 is briefly down (CF 502 → storefront placeholder). ^~ beats the
+        // extension regex that otherwise proxy_pass to wls_backend.
+        $quotedProjectRoot = $this->nginxQuotedPath($this->paths->projectRoot());
+        $mediaDiskLocationBlock = <<<NGINX
+
+        location ^~ /pub/media/ {
+            root {$quotedProjectRoot};
+            access_log off;
+            expires 30d;
+            add_header Cache-Control "public, max-age=2592000, immutable" always;
+            add_header X-Wls-Media-Disk "1" always;
+            try_files \$uri =404;
+        }
+NGINX;
+
         if ($edgeCache) {
             // Keep in sync with WorkerPolicyKernel::PATH_SCAN_STATIC_EXTENSIONS.
             $staticExt = 'avif|css|eot|gif|ico|jpe?g|js|map|mjs|m4a|aac|mp3|mp4|ogg|otf|png|svg|ttf|wasm|wav|webm|webp|woff2?';
@@ -426,6 +443,7 @@ http {
             proxy_read_timeout 300s;
             proxy_send_timeout 300s;
         }
+{$mediaDiskLocationBlock}
 {$staticCacheLocationBlock}
         location / {
             proxy_pass http://wls_backend;
