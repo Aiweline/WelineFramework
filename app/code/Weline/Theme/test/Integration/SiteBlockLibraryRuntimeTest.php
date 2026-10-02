@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Integration;
 
-use PHPUnit\Framework\TestCase;
+use Weline\Theme\Test\ThemeTestCase;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Widget\Service\ParamSchemaRegistry;
 use Weline\Widget\Service\WidgetPreviewService;
 use Weline\Widget\Service\WidgetRegistry;
 
 /** Exercises the installed registry and real template compiler, not source-text assertions. */
-final class SiteBlockLibraryRuntimeTest extends TestCase
+final class SiteBlockLibraryRuntimeTest extends ThemeTestCase
 {
     private const CODES = ['section-heading', 'button-group', 'spacer-divider', 'single-image', 'card-grid',
         'image-gallery', 'feature-list', 'stat-grid', 'team-grid', 'step-list', 'pricing-table',
