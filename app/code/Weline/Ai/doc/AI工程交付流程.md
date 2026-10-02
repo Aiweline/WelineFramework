@@ -112,6 +112,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **专席合规复审**：事件 / 扩展点 / Taglib / Hook / Provider / UI / i18n / ACL / Setup / 电商顾问 / API 等凡 roster 触发，必须各自 pass；产物 `meetings/{席位}-review.md`（可合并为分节）。任一 fail → 点名返工，不得进入验收。
 - **UI 复审**（UI in_scope）：功能在页面上完整可用 + 审美过审图 / 原型标准。
 - **i18n 复审**（文案 in_scope）：`@lang` / `__()` / Taglib 用法、源串简中、CSV、`i18n:collect`。
+- **废弃清理复审（硬门槛，`no_legacy_code_accumulation_on_change`）**：逐项核对本次替换是否**只加不删**——被取代的旧实现/死代码/不可达分支/新旧**双路径**/废弃类·方法·函数·常量·配置键·DI 注册项/孤儿模板·partial·部件 JSON·Hook·Event·路由·迁移·库列/注释掉的代码/未用 `use`·变量·CSS·JS 声明·i18n 词条/重复平行实现，必须**同一变更集内删除**且**全仓 grep 零引用**（文档/i18n/注册表同回合对齐）；跨模块改契约须迁移孤儿消费方；确实必须保留的旧路径带 `@deprecated` + 原因 + 删除计划并登记。任一未清理且无登记 → 不得进入验收。
 ### 6. 分层测试与验收
 
 **自行验证（硬门槛，`agent_self_verify_before_done` + `acceptance_phase_requires_shentu`）**：动手前完成需求拆解与架构映射；实现按 **TDD**（红→绿→重构）；结束后 Agent **必须亲自执行**测试命令并按验收层级验证，再标 acceptance / 向用户宣称完成。禁止「只改代码就收口」。`unit` 的 `passed` evidence 须含可识别的真实跑测输出；否则不可宣称完成。未完成只能报告「代码已改，TDD/测试未跑通」。
@@ -128,6 +129,13 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 **分章计划**：原则上每章硬绑定 `acceptance_ids` 对应**一个可完整验收的功能通路闭环**（feature 为独立 e2e，覆盖该章前后端/整体逻辑；Agent 自动跑 Playwright 自行闭环）；绑定验收全部 passed+evidence 且 **UT → RT → WB → DL** 四段全 pass 才开下一章（计划合规自检（工程行为） + `chapter_ut_rt_wb_dl` + `plan_full_pathway_e2e_suite`）；须先 进度自检 标进度再开下一章。含 Web 的章：**WB = WB-OP + WB-VIS**；截图存 `doc/evidence/ch{N}/`；禁止 curl/单测/纯文字替代 Browser 视觉证据。**真实业务通路（硬，`acceptance_real_business_pathway`）**：收口 e2e/WB 必须跑冻结主路径并留下可回查业务证据（如真实 `order_uuid`）；**禁止**仅用空 query 取消页 CTA 文案、账户页不 fatal、模板字符串 UT 冒充功能完成。**测试必须真（硬，`tester_tests_must_be_real`）**：禁止「自造假数据/假响应→再断言假数据→宣称 pass」；证据须经真实业务栈产生且可独立回查，不得只存在于测试进程内存。**Playwright 仅正式 runner（硬，`e2e_playwright_formal_runner_only`）**：`php bin/w e2e:run` 或 `npx playwright test`（仓库 `tests/e2e` 配置）；禁止 `node -e` / 临时 `chromium.launch` 探活（易残留无头浏览器）。**全部章节完成后**：必须再跑计划级 `e2e-plan-suite` 统一组测整条功能链路；组套件未 PASS 禁止宣称计划完成。禁止只完成一部分不测就汇报，禁止请用户手动测用例闭环。
 
 未完成对应层级时，只能报告「代码已改，测试未完成」「WebUI 验收未完成」或「真实通路验收未完成」。
+
+**【硬门槛 · 改动前先本地验证 + 上线后线上复验】**（`local_verify_before_change_and_after_deploy`；**仅代码/功能逻辑改动**，内容运营按各自门禁不适用）：
+
+1. **动手前判定**：本改动是否触及**逻辑**（分支/边界/错误路径/并发/持久化/注册表/接口契约）。触及时按 2→3→4 顺序执行，禁止跳步；纯样式微调/文案/纯文档不触发本门槛（其证据仍按上表）。
+2. **本地验证前置**：改动落地后立即在本机对改动逻辑跑真实验证（§6.1 最低证据表：单测真跑 PASS / 真实命令或 API 结果 / 含页面走 WB-OP+WB-VIS），留非空 evidence。**本地未 PASS**：禁止 commit / push 用于发布、禁止部署、禁止向用户宣称完成、禁止把验证推给「上线后再看」/CI/用户。未开始验证只能报「修改已完成，验证未开始」+ 待验证清单。
+3. **上线 = 生产操作，须用户明确授权**：仅当用户**明示**线上/生产/预发（线上 / 生产 / ssh weline / aiweline.com / 预发）才执行；且必须先满足第 2 步并确认本机优先、不重置数据库、有回滚路径（`runtime_status_query_local_first`）。**本地未 PASS 不得上线。**
+4. **上线后线上复验（deployed ≠ verified）**：发布后在**生产环境**对**同一逻辑通路**再跑一次验证，留可独立回查证据（真实 `order_uuid`/`transaction_no`/生产命令结果；含 UI 再走线上 WB-OP）。**部署退出码=0 不是验证**；不得用「本地已验证过」替代线上复验。复验未完成 / 无权限时只能报「**已上线，线上复验未完成**」+ 阻塞原因。
 
 **验收阶段审图（硬门槛，`acceptance_phase_requires_shentu`）**：`ui_skill_decision=participate` 或含视觉 Browser/UI 验收时，verify 阶段必须对验收截图执行 [审图](../../../../../dev/ai-command/theme/审图.md)（线稿→原型→UI→主题），`acceptance` 须含 `type=shentu` 且 passed evidence 含审图/线稿/checklist 信号；弱证据则 `不可宣称完成`。非功能且无 UI 可省略或 `na` 并写明原因。
 
@@ -178,6 +186,8 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **SESSION 闭环（硬门槛，`requirement_session_dashboard` + `pm_plan_lifecycle`）**：宣称完成前对照 `dev/session/{slug}.md`——全部计划项 `closed`、未完成清单为「无」、交付通知日志含测试与 PM 复检、汇审通过；否则只能报「代码已改，SESSION/计划未闭环」。
 - **规划 + TDD（工程行为）**：先完成需求拆解与 ≥1 `unit` 验收项；红→绿→实际跑测 PASS evidence 才算完。
 - **自行验证（硬门槛，`agent_self_verify_before_done`）**：实现后须亲自跑 UT/RT/WB（按表面）；acceptance 无 evidence 不得标 passed，亦不得宣称完成。
+- **改动前本地验证 + 上线后线上复验（硬门槛，`local_verify_before_change_and_after_deploy`）**：逻辑改动必须先在本机 PASS 才可提交/交付/发布/部署；涉及线上的变更（仅用户明示授权）走「本地 PASS 留证 → 上线 → 生产环境对同一通路复验（`order_uuid`/生产命令结果；含 UI 走线上 WB-OP）」；部署退出码≠验证，线上复验未完成只能报「已上线，线上复验未完成」。内容运营不适用。
+- **废弃清理归零（硬门槛，`no_legacy_code_accumulation_on_change`）**：收口前确认本次替换掉的旧实现/死代码/双路径/孤儿引用已随变更集删除、全仓无残留引用；收口报告必须含「**废弃清理**」小节列出删除的符号与文件路径；必须保留的旧路径带 `@deprecated` + 删除计划并写入 `doc/开发日志.md` 与未完成清单——**禁止**让遗留代码累积，**禁止**用「无」掩盖；也**禁止**借清理删他席/用户未提交脏改、业务数据或无关 TODO（`preserve_dirty_workspace` 优先）。
 - **计划 / todo 诚实收口（硬门槛，`plan_todo_evidence_closeout`）**：多 todo 计划不得在未逐项举证时宣称「已完成 / done / 主链路完成」。每个 todo 须有可复核证据（代码路径、DB 行数/表状态、命令输出、Browser）。部分完成必须明确报告「部分完成」并附**未完成清单**；同步写入归属模块 `doc/开发日志.md` 与 SESSION（禁止把 Cursor todo 无证据标为 completed）。虚报完成属硬违规。
 - **汇审（硬门槛，`closeout_requires_huishen`）**：收口前写 `huishen_notes` 并在用户汇报含「汇审」小节；缺则不得宣称完成。
 - **Browser 自测（硬门槛，含 Web 时）**：按约定用例用**当前宿主可用的真实 Browser**跑完操作员路径；**每次打开/导航前禁用 HTTP 缓存**（`browser_cache_disabled_on_open`）；未跑或宿主无 Browser 只能报「代码已改，WebUI 验收未完成」，禁止宣称完成。见 [WebUI浏览器验收与交付地址门禁.md](../../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
@@ -192,7 +202,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
   - 写完本小节后执行 **交付后关闭 Browser**（上条），再结束收口。
 - 同步 `doc/开发日志.md`：门禁表、阶段变化、证据路径（含响应式断点证据路径与 URL 清单）。
 - 需求变更写入 `需求.md`（需用户确认）。
-- commit / push / 部署仅在有明确授权时执行。
+- commit / push / 部署仅在有明确授权时执行；**且必须先过本地验证**（`local_verify_before_change_and_after_deploy`）；线上变更三步不可省（本地 PASS → 显式授权上线 → 线上复验）。
 
 ## MCP 工具映射
 
