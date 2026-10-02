@@ -3416,39 +3416,6 @@ class ThemeEditor extends BackendController
     /**
      * 撤销草稿 (Query) - 放弃所有未发布的修改
      */
-    public function postDiscardDraft()
-    {
-        $data = $this->getEditorJsonPayload();
-        $themeId = (int)($data['theme_id'] ?? 0);
-        $pageType = isset($data['page_type']) ? (string)$data['page_type'] : null;
-
-        if (!$themeId) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('请选择主题'),
-            ]);
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
-            $themeId = $context->themeId;
-            $pageType = $context->layoutType;
-            $identity = $this->layoutIdentityFromEditorContext($context);
-            $result = $this->layoutService->discardDraft($themeId, $pageType, $identity);
-
-            return $this->fetchJson([
-                'success' => $result,
-                'message' => $result ? __('草稿已撤销') : __('撤销失败'),
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
-            ]);
-        }
-    }
-
     /**
      * 渲染单个部件 (Query) - 用于实时预览
      * 
@@ -4172,11 +4139,6 @@ class ThemeEditor extends BackendController
         }
     }
 
-    public function postSaveLayoutSelection()
-    {
-        return $this->fetchJson($this->saveLayoutSelectionPayload());
-    }
-
     public function saveLayoutSelectionPayload(): array
     {
         try {
@@ -4315,11 +4277,6 @@ class ThemeEditor extends BackendController
                 'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ];
         }
-    }
-
-    public function postSaveLayoutConfig()
-    {
-        return $this->fetchJson($this->saveLayoutConfigPayload());
     }
 
     public function saveLayoutConfigPayload(): array
@@ -7152,45 +7109,6 @@ HTML;
         }
     }
 
-    public function renameVersionPayload(): array
-    {
-        $data = $this->getVersionRequestData();
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-        $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
-        $newName = \trim((string)($data['version_name'] ?? $this->request->getParam('version_name', '')));
-
-        if (!$versionId || !$themeId || $newName === '') {
-            return [
-                'success' => false,
-                'message' => __('Missing required parameters'),
-            ];
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
-            $identity = $this->layoutIdentityFromEditorContext($context);
-            $result = $this->versionService->renameVersion(
-                $versionId,
-                $newName,
-                $themeId > 0 ? $themeId : null,
-                $themeId > 0 ? $pageType : null,
-                $identity
-            );
-
-            return [
-                'success' => $result,
-                'message' => $result ? __('Version renamed') : __('Rename failed'),
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'message' => $e->getMessage(),
-                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
-            ];
-        }
-    }
-
     private function getVersionRequestData(): array
     {
         $bodyParams = $this->request->getBodyParams();
@@ -9523,108 +9441,6 @@ HTML;
      * 删除版本 (Query)
      * 路由: /backend/theme-editor/delete-version (POST)
      */
-    public function postDeleteVersion()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-
-        if (!$versionId || !$themeId) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('缺少版本ID'),
-            ]);
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
-            $identity = $this->layoutIdentityFromEditorContext($context);
-            $result = $this->versionService->deleteVersion(
-                $versionId,
-                $themeId > 0 ? $themeId : null,
-                $themeId > 0 ? $pageType : null,
-                $identity
-            );
-
-            if ($result) {
-                return $this->fetchJson([
-                    'success' => true,
-                    'message' => __('版本已删除'),
-                ]);
-            }
-
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('无法删除当前版本或已发布版本'),
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
-            ]);
-        }
-    }
-
-    /**
-     * 重命名版本 (Query)
-     * 路由: /backend/theme-editor/rename-version (POST)
-     */
-    public function postRenameVersion()
-    {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
-        $versionId = (int)($data['version_id'] ?? $this->request->getParam('version_id', 0));
-        $newName = $data['version_name'] ?? $this->request->getParam('version_name', '');
-        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
-        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
-
-        if (!$versionId || !$themeId || empty($newName)) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('参数不完整'),
-            ]);
-        }
-
-        try {
-            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
-            $identity = $this->layoutIdentityFromEditorContext($context);
-            $result = $this->versionService->renameVersion(
-                $versionId,
-                (string)$newName,
-                $themeId > 0 ? $themeId : null,
-                $themeId > 0 ? $pageType : null,
-                $identity
-            );
-
-            return $this->fetchJson([
-                'success' => $result,
-                'message' => $result ? __('版本已重命名') : __('重命名失败'),
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
-            ]);
-        }
-    }
 
     // ==================== 前端预览 API ====================
 

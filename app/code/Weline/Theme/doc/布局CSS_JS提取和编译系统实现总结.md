@@ -1,5 +1,17 @@
 # 布局CSS/JS提取和编译系统实现总结
 
+> ⚠️ **历史实现总结·部分已失效（2026-10-02 校订）**
+>
+> 本文描述的是**当时**的实现状态，**不得作为当前实现依据**。已知失实之处：
+> 1. 本文所依赖的 `Observer/LayoutAssetsExtractor.php`（"主 Observer"）**已被删除**；同名测试 `test/Unit/LayoutAssetsExtractorTest.php` 仍在 `use` 该不存在的类（待修）。
+> 2. 本文所述 `Weline_Framework_Template::after_compile` 事件在 Theme `etc/event.xml` 中命中为 **0**；现行挂载点是 `Weline_Framework_Controller::fetch_file_after`。
+> 3. `Observer/LayoutAssetsGenerator.php` 存在但**未在 `event.xml` 注册**（未生效）。
+> 4. 本文声称的 CSS 压缩（`CodeMinifier`）在 Theme 内**无任何引用**。
+> 5. 文末"98% 完成 / 已可用于生产环境"的结论**不成立**，已就地标注删除。
+>
+> 现行权威请改读：`doc/README.md`、`doc/theme-static-minify.md`。
+> 追溯记录：`dev/audit/theme-legacy-audit-20261002.md`。
+
 ## 📋 概述
 
 本文档总结了"布局CSS/JS提取和编译系统（含变量Meta存储和安全限制）"的实现状态。该系统已在Weline Theme模块中基本实现，提供了完整的CSS变量管理、内联代码提取、安全限制等功能。
@@ -287,7 +299,7 @@ if ($layoutType && $layoutOption) {
 | 事件注册 | 100% | ✅ 完成 |
 | Head Partial修改 | 90% | ⚠️ 部分完成（保留向后兼容） |
 
-**总体完成度：98%**
+**总体完成度（当时自评）：98% —— 该自评不成立，见文首校订说明。**
 
 ## 🔍 待完善项
 
@@ -440,7 +452,7 @@ foreach ($configList as $configKey => $configValue) {
 
 ## 📚 相关文档
 
-- **计划文档**：`c:\Users\17142\.cursor\plans\布局css_js提取和编译系统（含变量meta存储和安全限制）_b409fd57.plan.md`
+- **计划文档**：本机 Cursor 私有计划文件（不入库，原路径已移除）
 - **Theme模块文档**：`app/code/Weline/Theme/doc/README.md`
 - **变量目录文档**：`app/code/Weline/Frontend/doc/主题设计/variables目录文档.md`
 
@@ -495,5 +507,5 @@ php bin/w p:r app/code/Weline/Theme/test/Unit/LayoutAssetsExtractorTest.php
 5. ✅ 完善的命令行工具和后台界面
 6. ✅ **完整的单元测试套件**
 
-**系统已可用于生产环境**，所有功能已通过单元测试验证。
+**（原结论「系统已可用于生产环境」已删除——核心 Observer 未注册、引用类不存在，该结论不成立。）**
 

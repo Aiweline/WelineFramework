@@ -1,5 +1,7 @@
 # 部件配置多语言功能实现总结
 
+> ⚠️ **历史实现总结（2026-10-02 校订）**：本文记录当时落地内容。原文件清单中的**行数声明已全部删除**（实测已严重不符，例如 `ThemeEditor.php` 当时记 1,665 行、实际 **11,416** 行；`theme-editor.js` 记 5,341 → **22,825**；`widget-config-panel.css` 记 280 → **1,910**）。行数类信息必然过期，请勿在文档中复写。
+
 ## 📊 实现成果
 
 ### ✅ 已完成的5个Phase
@@ -316,32 +318,32 @@ public static function getMeta(string $identify): ?array
 
 ### 核心文件（已修改）
 
-1. **`ThemeData.php`** (1,440行)
+1. **`ThemeData.php`**
    - 新增6个部件专用函数
    - 完善双来源获取逻辑
    - 多语言参数读写支持
 
-2. **`ThemeEditor.php`** (1,665行)
+2. **`ThemeEditor.php`**
    - 简化 `getWidgetConfig()` - 委托给ThemeData
    - 新增 `postSaveWidgetConfig()` - 多语言保存
 
-3. **`theme-editor.js`** (5,341行)
+3. **`theme-editor.js`**
    - 美化 `generateWidgetConfigForm()` - 分组渲染
    - 美化 `renderConfigForm()` - 添加语言切换器
    - 新增 `reloadWidgetConfigWithLocale()` - 语言切换
    - 新增 `saveWidgetConfigWithLocale()` - 多语言保存
    - 添加分组折叠事件绑定
 
-4. **`widget.php`** (2,841行)
+4. **`widget.php`**
    - footer-social: 添加 `translatable: true`
    - sidebar-social: 添加 `translatable: true`
 
-5. **`index.phtml`** (2,996行)
+5. **`index.phtml`**
    - 引入 `widget-config-panel.css`
 
 ### 新增文件
 
-6. **`widget-config-panel.css`** (280行，新建)
+6. **`widget-config-panel.css`**（新建）
    - 现代化配置面板样式
    - 支持亮色/暗色主题
    - 响应式设计

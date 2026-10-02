@@ -1,5 +1,17 @@
 # SOLID原则重构说明
 
+> ⚠️ **历史重构说明（2026-10-02 校订）**
+>
+> 本文以 `AssetMerger` / `AssetDeduplicator` / `ConfigMerger` 为范例讲述 SOLID 拆分。其中：
+> - `AssetDeduplicator`、`ConfigMerger` 已于 2026-10-02 删除（零调用）；
+> - `AssetMerger`、`AssetMergerInterface` 亦已于同日删除（生产零消费者，仅测试引用，且其测试因缺库从未真正验证过该能力）。
+>
+> 因此**本文的类清单与依赖图不再反映当前代码**，仅作重构思路留存。现行资源链请读 `ThemeDiskCompile` / `StaticAssetMinifier` / `AssetScanner` 相关文档。
+>
+> 追溯记录：`dev/audit/theme-legacy-audit-20261002.md`。
+
+
+
 ## 概述
 
 本次重构按照SOLID原则对主题文件覆盖机制进行了优化，提高了代码的可维护性、可扩展性和可测试性。
@@ -17,7 +29,6 @@
 **重构后**：
 - `ThemeChainResolver` - 只负责解析主题继承链
 - `AssetScanner` - 只负责扫描资源目录
-- `AssetDeduplicator` - 只负责去重资源文件
 - `ThemePathResolver` - 只负责解析主题文件路径
 - `AssetMerger` - 只负责合并资源（协调其他组件）
 - `TemplateFetchFile` - 只负责观察者逻辑（委托给ThemePathResolver）
@@ -59,7 +70,6 @@ class FastAssetScanner implements AssetScannerInterface
 - 创建小而专注的接口：
   - `ThemeChainResolverInterface` - 只包含主题链解析方法
   - `AssetScannerInterface` - 只包含目录扫描方法
-  - `AssetDeduplicatorInterface` - 只包含去重方法
   - `ThemePathResolverInterface` - 只包含路径解析方法
   - `AssetMergerInterface` - 只包含资源合并方法
 
@@ -102,7 +112,6 @@ class AssetMerger implements AssetMergerInterface
 ../Helper/Interface/
 ├── ThemeChainResolverInterface.php    # 主题链解析接口
 ├── AssetScannerInterface.php          # 资源扫描接口
-├── AssetDeduplicatorInterface.php     # 资源去重接口
 ├── AssetMergerInterface.php           # 资源合并接口
 └── ThemePathResolverInterface.php      # 路径解析接口
 ```
@@ -113,7 +122,6 @@ class AssetMerger implements AssetMergerInterface
 ../Helper/
 ├── ThemeChainResolver.php              # 主题链解析实现
 ├── AssetScanner.php                    # 资源扫描实现
-├── AssetDeduplicator.php               # 资源去重实现
 ├── AssetMerger.php                     # 资源合并实现（重构后）
 └── ThemePathResolver.php               # 路径解析实现
 ```
@@ -204,7 +212,6 @@ $assetMerger = new AssetMerger($theme, $themeChainResolver, $customScanner);
 - 所有公共API保持不变
 - `AssetMerger::mergeAssets()` 方法签名不变
 - `TemplateFetchFile::execute()` 方法签名不变
-- `ConfigMerger` 已更新为使用 `ThemeChainResolverInterface`
 
 ## 测试
 

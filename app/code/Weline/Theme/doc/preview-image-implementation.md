@@ -1,3 +1,15 @@
+# 主题预览图功能实现记录（历史）
+
+> ⚠️ **历史实现记录（2026-10-02 迁入 doc/）**
+>
+> 1. 本文讲的是**主题预览图（截图）生成**，与「预览三态（可视化编辑器 / 版本预览 / 正式）」是**不同功能**，此前因命名相近易被混淆。
+> 2. 原位置在模块根 `app/code/Weline/Theme/PREVIEW_IMAGE_IMPLEMENTATION.md`，违反"模块根不放非契约文档"约定，现迁入 `doc/`。
+> 3. 原有「手动执行步骤」段落教用户**手写 `ALTER TABLE`**、并称"暂时无法通过命令行升级" + 手工安装 Chrome —— 该指引**已失效**，现已替换为指向 `Setup/Upgrade.php` 的正确升级方式。
+> 4. 相关内容现行入口：`Console/Theme/GeneratePreviews.php`（`php bin/w theme:generate-previews`）。
+>
+> 追溯记录：`dev/audit/theme-legacy-audit-20261002.md`。
+
+---
 # 主题预览图功能实现文档
 
 ## 实现内容
@@ -97,51 +109,13 @@ php bin/w theme:generate-previews --area --force
 - 批量生成预览图按钮
 - 生成进度显示
 - AJAX 操作反馈
+## 字段与依赖安装（现行方式）
 
-## 手动执行步骤
+> 原「手动执行步骤」已删除（教用户手写 `ALTER TABLE`、手工装 Chrome，均已失效）。
 
-由于 Hook 验证问题暂时无法通过命令行升级，您需要手动执行以下步骤：
-
-### 1. 手动添加数据库字段
-
-使用 MySQL 客户端或 phpMyAdmin 执行：
-
-```sql
-ALTER TABLE weline_theme ADD COLUMN preview_image VARCHAR(255) NULL DEFAULT NULL COMMENT '预览图片路径' AFTER path;
-```
-
-### 2. 安装 Chrome/Chromium 浏览器
-
-**Windows:**
-- 下载：https://www.google.com/chrome/
-- 或使用 Choco：`choco install chrome`
-
-**Linux:**
-```bash
-# Ubuntu/Debian
-sudo apt update && sudo apt install chromium-browser
-
-# CentOS/RHEL
-sudo yum install epel-release && sudo yum install chromium
-```
-
-**macOS:**
-```bash
-brew install chrome
-```
-
-### 3. 验证安装
-
-运行批量生成命令：
-
-```bash
-php bin/w theme:generate-previews
-```
-
-### 4. 在浏览器中刷新主题列表
-
-访问后台主题管理页面，刷新浏览器页面即可看到新生成的预览图。
-
+- **数据库字段**：由模块升级流程负责，执行 `php bin/w setup:upgrade -m Weline_Theme` 即可；不要再手工 `ALTER TABLE`。
+- **浏览器依赖**：由运行环境提供（Playwright/Chromium 由仓库测试链安装），无需用户手工安装。
+- **验证**：`php bin/w theme:generate-previews`，随后在后台主题列表刷新查看。
 ## 使用说明
 
 ### 生成单个主题预览图
