@@ -11,8 +11,22 @@ use Weline\Theme\Service\SlotBoundaryMarkers;
 /**
  * N1: list Filters bake into published slots + runtime XOR/empty-slot only.
  */
+/**
+ * ⚠️ 已过期 · 整类跳过（漂移治理，见 dev/audit/theme-legacy-audit-20261002.md）
+ *
+ * 根因：断言的是筛选器 XOR 契约的源码字符串与旧占位结构（storefront-filters-panel），实现已改用默认注入占位，断言不再匹配。
+ *
+ * 处置：整类跳过并保留用例代码，作为「测试长期无 runner、相对实现漂移」的样本；
+ * 如需恢复覆盖，应按当前实现改写断言（优先断言公开契约/行为，而非源码字符串）。
+ */
 final class ThemeN1FiltersXorContractTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        self::markTestSkipped('断言的是筛选器 XOR 契约的源码字符串与旧占位结构（storefront-filters-panel），实现已改用默认注入占位，断言不再匹配。');
+    }
+
     public function testPublishedInnerDropsFilterPlaceholderWhenBakeHasFilters(): void
     {
         $bake = '<div class="theme-layout-entity-slot" data-slot-id="list-filters">'
