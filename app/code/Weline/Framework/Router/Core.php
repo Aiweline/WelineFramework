@@ -1688,6 +1688,22 @@ class Core
             }
 
             if ($fpcCoordinator !== null) {
+                // 诊断：记录「查找」时刻的店面缓存上下文状态。若查找用的是「请求栅栏」
+                // 的随机指纹，而「发布」用的是后来解析出的真实上下文，则两者键不同，
+                // 命中率必然为 0——这正是延迟居高不下的直接原因。
+                $probeContext = \Weline\Framework\Cache\StorefrontCacheKeyContext::current();
+                $probeIdentity = RequestContext::scopeIdentity();
+                FpcDiag::event('fpc_probe_context', [
+                    'context_present' => $probeContext instanceof \Weline\Framework\Cache\StorefrontCacheKeyContext,
+                    'context_cacheable' => $probeContext?->cacheable,
+                    'context_failure_code' => $probeContext?->failureCode,
+                    'context_fingerprint' => $probeContext instanceof \Weline\Framework\Cache\StorefrontCacheKeyContext
+                        ? \substr($probeContext->cacheKeyFingerprint, 0, 16)
+                        : null,
+                    'request_scope_identity' => $probeIdentity instanceof \Weline\Framework\Runtime\ScopeIdentity,
+                    'scope_kind' => $probeIdentity?->scopeKind,
+                ]);
+
                 $cachedResponse = $fpcCoordinator->getCachedResponse($this->request->getMethod() ?: 'GET');
                 if ($cachedResponse !== null) {
                     $this->is_match = true;

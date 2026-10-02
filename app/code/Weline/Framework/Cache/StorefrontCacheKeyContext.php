@@ -181,7 +181,34 @@ final readonly class StorefrontCacheKeyContext
             'request_scope_identity' => RequestContext::scopeIdentity() instanceof ScopeIdentity,
             'lang' => trim(WelineEnv::getLang()),
             'currency' => trim(WelineEnv::getCurrency()),
+            // 谁先触发了栅栏决定了整个请求的缓存键，必须能定位到调用点。
+            'caller_chain' => self::callerChain(),
         ]);
+    }
+
+    /**
+     * 精简调用链（只保留 类::方法 / 函数，不含参数），用于定位是谁在作用域就绪前
+     * 提前触发了栅栏并锁死本请求的 FPC 缓存键。
+     *
+     * @return list<string>
+     */
+    private static function callerChain(): array
+    {
+        $chain = [];
+        foreach (\debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $frame) {
+            $fn = (string)($frame['function'] ?? '');
+            if ($fn === '' || $fn === 'reportFence' || $fn === 'currentOrRequestFence') {
+                continue;
+            }
+            $class = (string)($frame['class'] ?? '');
+            $type = (string)($frame['type'] ?? '');
+            $chain[] = $class !== '' ? $class . $type . $fn : $fn;
+            if (\count($chain) >= 8) {
+                break;
+            }
+        }
+
+        return $chain;
     }
 
     /**
