@@ -9,6 +9,8 @@ use Weline\Framework\Test\TestCore;
 use Weline\Framework\Http\Request;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeDirectoryResolver;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemeStaticAssetPublisher;
 
@@ -341,6 +343,17 @@ class ThemeStaticAssetPublisherTest extends TestCore
         $theme->setData(WelineTheme::schema_fields_ID, $id);
         $theme->setData(WelineTheme::schema_fields_NAME, $name);
         $theme->setData(WelineTheme::schema_fields_PATH, $path);
+
+        // 目录事实（is_dir）被 theme.area.directories 策略以 1h TTL 缓存在**共享池**，
+        // 而 clearCache() 只重置进程 L1；夹具文件是运行时新建的，不会使 theme 依赖失效，
+        // 因此必须按该主题显式失效，否则发布会回退到模块默认（2026-10-02 定位）。
+        $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+        foreach (['frontend', 'backend'] as $fixtureArea) {
+            $hotCache->forgetPolicy(
+                StorefrontThemeCacheCoordinator::themeAreaDirectoriesPolicy(),
+                $id . '|' . $fixtureArea
+            );
+        }
 
         return $theme;
     }
