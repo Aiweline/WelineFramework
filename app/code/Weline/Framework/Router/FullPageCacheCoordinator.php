@@ -249,12 +249,16 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     public function acquireBuildLock(string $method = 'GET'): ?array
     {
         if (!$this->canBuildCachedResponse($method)) {
+            FpcDiag::event('fpc_lock', ['acquired' => false, 'reason' => 'can_build_cached_response_false']);
+
             return null;
         }
 
         $method = $this->normalizeBuildMethod($method);
         $fullUri = $this->getCacheKeyFullUri();
         if (!KeyBuilder::isValidFullPageCacheKey($fullUri)) {
+            FpcDiag::event('fpc_lock', ['acquired' => false, 'reason' => 'invalid_full_page_cache_key']);
+
             return null;
         }
 
@@ -269,6 +273,13 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $token = $this->generateLockToken();
             if ($adapter->compareAndSet($lockKey, null, $token, self::LOCK_TTL_SECONDS)) {
                 $this->canonicalizeCurrentRequestForCacheBuild();
+                FpcDiag::event('fpc_lock', [
+                    'acquired' => true,
+                    'driver' => 'shared',
+                    'adapter' => \get_class($adapter),
+                    'key_sha' => \substr(\sha1($lockKey), 0, 12),
+                ]);
+
                 return [
                     'driver' => 'shared',
                     'key' => $lockKey,
@@ -276,11 +287,24 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 ];
             }
 
+            FpcDiag::event('fpc_lock', [
+                'acquired' => false,
+                'reason' => 'shared_lock_busy',
+                'adapter' => \get_class($adapter),
+                'key_sha' => \substr(\sha1($lockKey), 0, 12),
+            ]);
+
             return null;
         }
 
         $handle = $this->acquireFileLock($lockKey);
         if ($handle === null) {
+            FpcDiag::event('fpc_lock', [
+                'acquired' => false,
+                'reason' => 'file_lock_busy',
+                'key_sha' => \substr(\sha1($lockKey), 0, 12),
+            ]);
+
             return null;
         }
 
