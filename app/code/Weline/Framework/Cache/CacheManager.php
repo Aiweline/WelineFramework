@@ -115,7 +115,16 @@ class CacheManager implements CacheManagerInterface, ProcessSharedInterface
             'tip' => '全页缓存（豁免 WLS 内存劫持，索引必须共享持久）',
             'environment_scoped' => true,
         ],
-        'single_flight' => ['ttl' => 30, 'tip' => '请求合并锁池', 'jitter' => 0.0],
+        // 单飞锁池：FPC 的构建锁（compareAndSet + TTL）落在该池。被 WLS 劫持到
+        // wls_memory 后，sidecar 失效时原子操作不可靠、锁可能永远释放不掉，
+        // 结果该 URL 永久拿不到构建锁 → 永不发布 → 每次请求都整页 SSR。
+        // 豁免后走 FPC 自带的文件锁兜底（flock），锁随句柄释放、TTL 可靠。
+        'single_flight' => [
+            'ttl' => 30,
+            'hijack_exempt' => true,
+            'tip' => '请求合并锁池（豁免 WLS 内存劫持，锁必须可靠释放）',
+            'jitter' => 0.0,
+        ],
         'hot_key_tracker' => ['ttl' => 60, 'tip' => '热点 Key 跟踪', 'jitter' => 0.0],
         'url_guard' => ['ttl' => 1800, 'tip' => 'URL 越界规则缓存'],
         // Commerce carts must survive WLS file→wls_memory hijack; memory sidecar

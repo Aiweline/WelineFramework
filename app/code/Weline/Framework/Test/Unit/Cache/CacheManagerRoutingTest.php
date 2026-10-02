@@ -72,7 +72,7 @@ class CacheManagerRoutingTest extends TestCase
         $resolveDriver = $ref->getMethod('resolveDriver');
         $resolveDriver->setAccessible(true);
 
-        foreach (['router', 'fpc'] as $identity) {
+        foreach (['router', 'fpc', 'single_flight'] as $identity) {
             $poolConfig = (array)$getPoolConfig->invoke($manager, $identity);
 
             self::assertTrue(
