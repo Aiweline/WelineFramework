@@ -2464,16 +2464,27 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $cacheSource = $cachePayloadFetched ? 'shared' : 'miss';
         }
         if (!\is_array($cached)) {
+            FpcDiag::event('fpc_read_reject', ['reason' => 'miss', 'cache_source' => $cacheSource]);
             RequestContext::set('wls.fpc.hit_source', 'miss');
             return null;
         }
 
         if (!$this->payloadHasAuthoritativeBody($cached)) {
+            FpcDiag::event('fpc_read_reject', [
+                'reason' => 'no_authoritative_body',
+                'cache_source' => $cacheSource,
+                'payload_keys' => \array_keys($cached),
+            ]);
             RequestContext::set('wls.fpc.hit_source', 'invalid');
             return null;
         }
         $body = $this->resolvePlaintextBody($cached) ?? '';
         if ($body === '') {
+            FpcDiag::event('fpc_read_reject', [
+                'reason' => 'empty_plaintext',
+                'cache_source' => $cacheSource,
+                'payload_keys' => \array_keys($cached),
+            ]);
             RequestContext::set('wls.fpc.hit_source', 'invalid');
             return null;
         }
@@ -2481,6 +2492,11 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $this->logFpcWarning('invalidate hit html cache admission rejected', [
                 'cache_key' => $cacheKey,
                 'cache_source' => $cacheSource,
+            ]);
+            FpcDiag::event('fpc_read_reject', [
+                'reason' => 'admission_rejected',
+                'cache_source' => $cacheSource,
+                'body_bytes' => \strlen($body),
             ]);
             $this->deleteCachedPayloadByKey($cacheKey);
             RequestContext::set('wls.fpc.hit_source', 'invalid');
