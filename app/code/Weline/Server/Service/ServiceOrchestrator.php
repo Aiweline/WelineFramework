@@ -9335,7 +9335,22 @@ class ServiceOrchestrator
         $this->stopInstance($instance);
 
         // 阶段 3：等待并强制杀死
-        $this->waitForInstanceExit($instance, 5.0);
+        $exitProven = $this->waitForInstanceExit($instance, 5.0);
+
+        if (!$exitProven) {
+            // 未获退出证明时禁止谎报已停止：清理 PID 文件会让槽位被判定为可重新
+            // 拉起，而旧进程可能仍持有监听端口，进而造成端口冲突与重复代次。
+            $instance->setMeta('termination_unproven_at', self::diagnosticWallSeconds());
+            $instance->setMeta('termination_unproven_pid', $this->getInstanceTrackingPid($instance));
+            $this->registry->updateInstance($instance);
+            WlsLogger::error_(
+                "[Orchestrator] {$instance->role}#{$instance->instanceId} 未获退出证明，"
+                . '保留 PID/端口占用证据，不标记为已停止'
+            );
+            $provider?->onStopped($instance);
+
+            return;
+        }
 
         // 清理
         $this->cleanupInstancePidFile($instance);
@@ -9347,9 +9362,12 @@ class ServiceOrchestrator
     }
 
     /**
-     * 等待单个实例退出
+     * 等待单个实例退出。
+     *
+     * @return bool true 表示已获得退出证明；false 表示超时且强制终止也未获证明，
+     *              调用方此时不得把槽位标记为已停止。
      */
-    private function waitForInstanceExit(ServiceInstance $instance, float $timeout): void
+    private function waitForInstanceExit(ServiceInstance $instance, float $timeout): bool
     {
         $waitStart = self::monotonicSeconds();
         $trackingPid = $this->getInstanceTrackingPid($instance);
@@ -9357,14 +9375,20 @@ class ServiceOrchestrator
             $this->controlServer?->poll(0, 100000);
 
             if ($trackingPid <= 0 || !$this->isProcessRunning($trackingPid)) {
-                return;
+                return true;
             }
         }
 
-        if ($trackingPid > 0 && $this->isProcessRunning($trackingPid)) {
-            WlsLogger::warning_("[Orchestrator] 进程 {$instance->role}#{$instance->instanceId} (pid={$trackingPid}) 未在 {$timeout}s 内退出，强制杀死");
-            $this->killInstanceProcess($instance);
+        if ($trackingPid <= 0 || !$this->isProcessRunning($trackingPid)) {
+            return true;
         }
+
+        WlsLogger::warning_("[Orchestrator] 进程 {$instance->role}#{$instance->instanceId} (pid={$trackingPid}) 未在 {$timeout}s 内退出，强制杀死");
+        $released = $this->killInstanceProcess($instance);
+        // 终止后必须丢弃缓存的存活判定，否则会在 TTL 内继续把已退出的进程当作存活。
+        unset($this->processRunningCache[$trackingPid]);
+
+        return $released && !$this->isProcessRunning($trackingPid);
     }
 
     /**
@@ -14673,11 +14697,25 @@ class ServiceOrchestrator
                 $this->controlServer?->closeClient($previousClientId);
             }
             $trackingPid = $this->getInstanceTrackingPid($instance);
+            $terminationProven = true;
             if ($trackingPid > 0 && $this->isProcessRunning($trackingPid)) {
-                $this->killInstanceProcess($instance);
+                $terminationProven = $this->killInstanceProcess($instance);
+                unset($this->processRunningCache[$trackingPid]);
+                $terminationProven = $terminationProven && !$this->isProcessRunning($trackingPid);
             }
-            $this->cleanupInstancePidFile($instance);
-            $instance->setProcessTreePids(0, 0, 0);
+            if ($terminationProven) {
+                $this->cleanupInstancePidFile($instance);
+                $instance->setProcessTreePids(0, 0, 0);
+            } else {
+                // 未获退出证明时保留 PID/端口证据：清零 PID 会让残留进程在台账上
+                // "消失"，后续清理与取证都失去线索。
+                $instance->setMeta('termination_unproven_at', self::diagnosticWallSeconds());
+                $instance->setMeta('termination_unproven_pid', $trackingPid);
+                WlsLogger::error_(
+                    "[Orchestrator] {$role}#{$instanceId} 隔离时未获退出证明 (pid={$trackingPid})，"
+                    . '保留 PID 证据，不清理 PID 文件'
+                );
+            }
             $instance->state = ServiceInstance::STATE_FAILED;
             $instance->setMeta('recovery_quarantined', true);
             $instance->setMeta('recovery_quarantine_reason', $reason);
