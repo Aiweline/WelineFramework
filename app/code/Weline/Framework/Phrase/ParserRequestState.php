@@ -35,6 +35,9 @@ final class ParserRequestState
 
     public ?string $loadedLang = null;
 
+    /** @var array<string, array<string, true>> Successful module prefetches by locale. */
+    public array $prefetchedGlobalModules = [];
+
     public function reset(): void
     {
         $this->wordsId = null;
@@ -47,5 +50,6 @@ final class ParserRequestState
         $this->usedWords = [];
         $this->isLoadingWords = false;
         $this->loadedLang = null;
+        $this->prefetchedGlobalModules = [];
     }
 }

@@ -9,10 +9,17 @@ use Weline\Framework\Cache\Contract\{CacheAdapterInterface,NamespaceGenerationIn
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Context;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\{RequestContext,ScopeIdentity};
+use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
+use Weline\Framework\Session\Session;
 use Weline\SystemConfig\Api\Scope\{ScopeContext,ScopeHierarchyInterface};
 use Weline\Theme\Api\Scoped\{ThemeResolvedValue,ThemeScopedWorkspaceInterface};
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\PreviewContextService;
+use Weline\Theme\Service\PreviewRequestInspector;
+use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemeContextService;
 
 final class ThemeContextReuseTest extends TestCase
@@ -102,6 +109,109 @@ final class ThemeContextReuseTest extends TestCase
         self::assertSame([], $this->entries);
     }
 
+    public function testEditorThemeRowsAreReusedOnlyWithinRequestAndModelsStayIndependent(): void
+    {
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnCallback(static fn(string $key, mixed $default = null): mixed => match ($key) {
+            'editor_mode' => '1',
+            'theme_id' => 7,
+            default => $default,
+        });
+        $previewReflection = new \ReflectionClass(PreviewContextService::class);
+        $preview = $previewReflection->newInstanceWithoutConstructor();
+        $previewReflection->getProperty('request')->setValue($preview, $request);
+        $previousRequest = ObjectManager::getInstance(Request::class);
+        ObjectManager::setInstance(Request::class, $request);
+
+        try {
+            $service = $this->service(true, $preview);
+            $this->request('editor-one');
+            $first = $service->resolveTheme('frontend');
+            self::assertSame(7, $first?->getId());
+            $first->setData('name', 'caller mutation');
+            self::assertSame('published', $service->resolveTheme('frontend')?->getData('name'));
+            self::assertSame(1, ThemeContextReuseModel::$loads);
+
+            $this->request('editor-two');
+            self::assertSame(7, $service->resolveTheme('frontend')?->getId());
+            self::assertSame(2, ThemeContextReuseModel::$loads);
+        } finally {
+            ObjectManager::setInstance(Request::class, $previousRequest);
+        }
+    }
+
+    public function testTokenPreviewKeepsTokenThemeAuthorityAndReusesOnlyItsRequestRow(): void
+    {
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnCallback(static fn(string $key, mixed $default = null): mixed => match ($key) {
+            PreviewTokenService::TOKEN_KEY => 'signed-preview-token',
+            'theme_id' => 99,
+            default => $default,
+        });
+        $request->method('getUrlPath')->willReturn('/products');
+        $request->method('getServer')->willReturn('');
+        $request->method('getHeader')->willReturn(null);
+        $tokenService = $this->createMock(PreviewTokenService::class);
+        $tokenService->method('getCurrentPreviewData')->willReturn([
+            'context' => ['frontend_theme_id' => 7, 'scope' => 'default.default.default'],
+            'token' => 'signed-preview-token',
+        ]);
+        $session = $this->createMock(Session::class);
+        $session->method('getData')->willReturn(null);
+        $backendAuth = $this->createMock(AuthenticatedSessionInterface::class);
+        $backendAuth->method('isLoggedIn')->willReturn(false);
+        $preview = new PreviewContextService(
+            $request,
+            $session,
+            $tokenService,
+            new ThemeContextReuseModel(),
+            new PreviewRequestInspector($request),
+            $backendAuth,
+        );
+        $service = $this->service(true, $preview);
+
+        $this->request('token-one');
+        $first = $service->resolveTheme('frontend');
+        self::assertSame(7, $first?->getId());
+        $first->setData('name', 'caller mutation');
+        self::assertSame('published', $service->resolveTheme('frontend')?->getData('name'));
+        self::assertSame(1, ThemeContextReuseModel::$loads);
+
+        $this->request('token-two');
+        self::assertSame(7, $service->resolveTheme('frontend')?->getId());
+        self::assertSame(2, ThemeContextReuseModel::$loads);
+    }
+
+    public function testMissingEditorThemeRowIsRecheckedOnNextRequest(): void
+    {
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnCallback(static fn(string $key, mixed $default = null): mixed => match ($key) {
+            'editor_mode' => '1',
+            'theme_id' => 404,
+            default => $default,
+        });
+        $previewReflection = new \ReflectionClass(PreviewContextService::class);
+        $preview = $previewReflection->newInstanceWithoutConstructor();
+        $previewReflection->getProperty('request')->setValue($preview, $request);
+        $previousRequest = ObjectManager::getInstance(Request::class);
+        ObjectManager::setInstance(Request::class, $request);
+
+        try {
+            $service = $this->service(true, $preview);
+            ThemeContextReuseModel::$missingId = 404;
+            $this->request('missing-one');
+            self::assertNull($service->resolveTheme('frontend'));
+            self::assertNull($service->resolveTheme('frontend'));
+            self::assertSame(1, ThemeContextReuseModel::$loads);
+
+            $this->request('missing-two');
+            self::assertNull($service->resolveTheme('frontend'));
+            self::assertSame(2, ThemeContextReuseModel::$loads);
+        } finally {
+            ObjectManager::setInstance(Request::class, $previousRequest);
+        }
+    }
+
     private function request(string $id): void
     {
         if (Context::hasCurrent()) { RequestContext::cleanup(); Context::leave(); }
@@ -110,10 +220,11 @@ final class ThemeContextReuseTest extends TestCase
         RequestContext::installScopeIdentity(ScopeIdentity::website(1, 'site'));
     }
 
-    private function service(bool $published = true): ThemeContextService
+    private function service(bool $published = true, ?PreviewContextService $preview = null): ThemeContextService
     {
         ThemeContextReuseModel::$loads = 0;
         ThemeContextReuseModel::$activeId = 9;
+        ThemeContextReuseModel::$missingId = 0;
         $adapter = $this->createMock(CacheAdapterInterface::class);
         $adapter->method('get')->willReturnCallback(fn(string $key): mixed => $this->entries[$key] ?? null);
         $adapter->method('set')->willReturnCallback(function(string $key, mixed $value): bool { $this->entries[$key] = $value; return true; });
@@ -131,7 +242,7 @@ final class ThemeContextReuseTest extends TestCase
             $this->resolutions++;
             return new ThemeResolvedValue($published ? 7 : ThemeContextReuseModel::$activeId, null, false, $published ? 'site.default.default' : 'theme-package-default', $published ? 101 : null, false, false);
         });
-        return new class(new ThemeContextReuseModel(), null, $workspace, $scopes, null, $hotCache) extends ThemeContextService {
+        return new class(new ThemeContextReuseModel(), $preview, $workspace, $scopes, null, $hotCache) extends ThemeContextService {
             public function themeSupportsArea(WelineTheme $theme, string $area): bool { return true; }
         };
     }
@@ -141,11 +252,13 @@ final class ThemeContextReuseModel extends WelineTheme
 {
     public static int $loads = 0;
     public static int $activeId = 9;
+    public static int $missingId = 0;
     public function clearData(bool $with_query = true): static { $this->setData([]); return $this; }
     public function clearQuery(): static { return $this; }
     public function load(string|int $field_or_pk_value, $value = null, bool $forceReload = false): \Weline\Framework\Database\AbstractModel
     {
         self::$loads++;
+        if ((int)$field_or_pk_value === self::$missingId) { return $this->setData([]); }
         return $this->setData(['id'=>(int)$field_or_pk_value, 'name'=>'published']);
     }
     public function getActiveTheme(?string $area = null): static { return $this->setData(['id'=>self::$activeId, 'name'=>'legacy']); }

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Weline\Smtp\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Smtp\Api\MailChannelProviderInterface;
 
 /**
@@ -13,6 +15,8 @@ use Weline\Smtp\Api\MailChannelProviderInterface;
  */
 class MailChannelCollector
 {
+    private const REQUEST_CHANNELS_KEY = 'smtp.mail_channel_collector.declared_channels';
+
     /**
      * @return list<array{
      *   code: string,
@@ -25,6 +29,15 @@ class MailChannelCollector
      */
     public function collect(): array
     {
+        $language = null;
+        if (RequestContext::isInitialized()) {
+            $language = State::getLangLocal();
+            $memo = RequestContext::get(self::REQUEST_CHANNELS_KEY);
+            if ($memo instanceof \WeakMap && isset($memo[$this])
+                && $memo[$this]['language'] === $language) {
+                return $memo[$this]['channels'];
+            }
+        }
         $channels = [];
         foreach ($this->getProviders() as $provider) {
             $moduleName = $this->resolveModuleName($provider);
@@ -47,7 +60,15 @@ class MailChannelCollector
             }
         }
         ksort($channels);
-        return array_values($channels);
+        $result = array_values($channels);
+        // Provider declarations come from PHP modules; translated labels vary by language.
+        if (RequestContext::isInitialized()) {
+            $memo = RequestContext::get(self::REQUEST_CHANNELS_KEY);
+            $memo = $memo instanceof \WeakMap ? $memo : new \WeakMap();
+            $memo[$this] = ['language' => $language, 'channels' => $result];
+            RequestContext::set(self::REQUEST_CHANNELS_KEY, $memo);
+        }
+        return $result;
     }
 
     /**
@@ -109,7 +130,7 @@ class MailChannelCollector
     }
 
     /** @return MailChannelProviderInterface[] */
-    private function getProviders(): array
+    protected function getProviders(): array
     {
         $providers = [];
         foreach ($this->getProviderClassesFromExtends() as $implClass) {

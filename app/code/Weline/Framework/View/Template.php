@@ -48,6 +48,10 @@ class Template extends DataObject implements RequestLocalInterface
 
     private string $file_ext = '.phtml';
     private array $pinnedSources = [];
+    private array $pinnedSourceDigests = [];
+    private int $pinnedSourceGeneration = 0;
+    private ?string $pinnedSourceSetToken = null;
+    private int $pinnedSourceSetGeneration = -1;
     private array $compiledSourceOrigins = [];
     private string $activeSourceOrigin = '';
 
@@ -932,7 +936,43 @@ class Template extends DataObject implements RequestLocalInterface
     /** Fixed bytes are scoped to this request's Template instance. */
     public function pinSource(string $logicalPath, string $sourceBytes, string $originPath = '', string $contextKey = ''): void
     {
-        $this->pinnedSources[$logicalPath] = [$sourceBytes, $originPath !== '' ? $originPath : $logicalPath, $contextKey];
+        $this->writePinnedSource($logicalPath, $sourceBytes, $originPath, $contextKey);
+    }
+
+    /**
+     * Install an immutable source set. The caller supplies a token unique to its snapshot instance.
+     * Other bindings survive; a later standalone pin invalidates this installation's generation.
+     *
+     * @param array<string, array{string, string, string}> $sources
+     */
+    public function pinSourceSet(string $token, array $sources): void
+    {
+        if ($this->pinnedSourceSetToken === $token
+            && $this->pinnedSourceSetGeneration === $this->pinnedSourceGeneration
+        ) {
+            return;
+        }
+        foreach ($sources as $logicalPath => $source) {
+            $this->writePinnedSource($logicalPath, ...$source);
+        }
+        $this->pinnedSourceSetToken = $token;
+        $this->pinnedSourceSetGeneration = $this->pinnedSourceGeneration;
+    }
+
+    private function writePinnedSource(string $logicalPath, string $sourceBytes, string $originPath = '', string $contextKey = ''): void
+    {
+        $source = [$sourceBytes, $originPath !== '' ? $originPath : $logicalPath, $contextKey];
+        if (($this->pinnedSources[$logicalPath] ?? null) !== $source) {
+            unset($this->pinnedSourceDigests[$logicalPath]);
+        }
+        ++$this->pinnedSourceGeneration;
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::measurePhase('template.source_pin', function () use ($logicalPath, $source): void {
+                $this->pinnedSources[$logicalPath] = $source;
+            });
+            return;
+        }
+        $this->pinnedSources[$logicalPath] = $source;
     }
 
     public function getFetchFile(string $fileName, string|null $module_name = ''): string
@@ -970,7 +1010,13 @@ class Template extends DataObject implements RequestLocalInterface
             $filename .= '.phtml';
         }
 
-        return $this->compileSourceBytes($compileDir . $filename, $sourceBytes, $originPath, $contextKey);
+        $sourceHash = null;
+        // Direct virtual-source calls may reuse a logical name while supplying different bytes.
+        if (($this->pinnedSources[$logicalPath] ?? null) === [$sourceBytes, $originPath, $contextKey]) {
+            $sourceHash = $this->pinnedSourceDigests[$logicalPath] ??= $this->sourceBytesDigest($sourceBytes);
+        }
+
+        return $this->compileSourceBytes($compileDir . $filename, $sourceBytes, $originPath, $contextKey, $sourceHash);
     }
 
     public function fetchSourceHtml(string $logicalPath, string $sourceBytes, string $originPath = '', string $contextKey = '', array $dictionary = []): string
@@ -978,9 +1024,16 @@ class Template extends DataObject implements RequestLocalInterface
         return $this->ob_file($this->getFetchFileFromSource($logicalPath, $sourceBytes, $originPath, $contextKey), $dictionary);
     }
 
-    private function compileSourceBytes(string $baseCompiledPath, string $sourceBytes, string $originPath, string $contextKey): string
+    private function sourceBytesDigest(string $sourceBytes): string
     {
-        $sourceHash = md5(md5($sourceBytes) . '|' . strlen($sourceBytes) . '|' . Taglib::COMPILER_GENERATION) . '-' . strlen($sourceBytes);
+        return RequestLifecycleTrace::isEnabled()
+            ? RequestLifecycleTrace::measurePhase('template.source_bytes_digest', static fn(): string => md5(md5($sourceBytes) . '|' . strlen($sourceBytes) . '|' . Taglib::COMPILER_GENERATION) . '-' . strlen($sourceBytes))
+            : md5(md5($sourceBytes) . '|' . strlen($sourceBytes) . '|' . Taglib::COMPILER_GENERATION) . '-' . strlen($sourceBytes);
+    }
+
+    private function compileSourceBytes(string $baseCompiledPath, string $sourceBytes, string $originPath, string $contextKey, ?string $sourceHash = null): string
+    {
+        $sourceHash ??= $this->sourceBytesDigest($sourceBytes);
         // Event registration changes alter the compiler pipeline as well as source bytes.
         $pipeline = json_encode($this->eventsManager->getEventObservers('Weline_Framework_Template::before_compile'), JSON_PARTIAL_OUTPUT_ON_ERROR);
         // A delayed compilation of R1 can never overwrite the file for R2.

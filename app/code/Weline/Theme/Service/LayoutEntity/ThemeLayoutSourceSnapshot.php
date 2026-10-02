@@ -3,9 +3,14 @@
 declare(strict_types=1);
 namespace Weline\Theme\Service\LayoutEntity;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\View\Template;
+use Weline\Meta\Api\ParamDefinitionNormalizerInterface;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
+use Weline\Theme\Helper\ComponentMetaParser;
 
 /** One request's immutable page/partial source bytes, captured under the owner read lock. */
 final class ThemeLayoutSourceSnapshot
@@ -17,10 +22,24 @@ final class ThemeLayoutSourceSnapshot
     private array $pageDependencies = [];
     private string $fingerprint = '';
     private ?string $page = null;
+    private readonly string $installationToken;
+    /** @var array<string, array{string, string, string}> */
+    private array $sourceBindings = [];
 
-    private function __construct(public readonly ThemeVersionIdentity $identity) {}
+    private function __construct(public readonly ThemeVersionIdentity $identity)
+    {
+        $this->installationToken = bin2hex(random_bytes(16));
+    }
 
     public static function capture(ThemeLayoutEntityPaths $paths, ThemeVersionIdentity $identity, string $layoutType, string $option = 'default', string $targetType = 'global', ?int $targetId = null): self
+    {
+        if (RequestLifecycleTrace::isEnabled()) {
+            return RequestLifecycleTrace::measurePhase('theme.source.capture', static fn(): self => self::captureSources($paths, $identity, $layoutType, $option, $targetType, $targetId));
+        }
+        return self::captureSources($paths, $identity, $layoutType, $option, $targetType, $targetId);
+    }
+
+    private static function captureSources(ThemeLayoutEntityPaths $paths, ThemeVersionIdentity $identity, string $layoutType, string $option, string $targetType, ?int $targetId): self
     {
         return ThemeLayoutEntityOwnerLock::read($identity, static function () use ($paths, $identity, $layoutType, $option, $targetType, $targetId): self {
             $page = $paths->pageLayoutPhtml($identity, $layoutType, $option, $targetType, $targetId);
@@ -78,6 +97,7 @@ final class ThemeLayoutSourceSnapshot
         $digests = array_map(static fn(array $source): string => hash('sha256', $source['origin'] . "\0" . $source['bytes']), $snapshot->sources);
         ksort($digests);
         $snapshot->fingerprint = hash('sha256', $identity->cacheKey() . "\0" . json_encode($digests, JSON_THROW_ON_ERROR));
+        $snapshot->buildSourceBindings();
         return $snapshot;
     }
 
@@ -91,39 +111,84 @@ final class ThemeLayoutSourceSnapshot
 
     public function install(Template $template): void
     {
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::measurePhase('theme.source.install', fn() => $this->installSources($template));
+            return;
+        }
+        $this->installSources($template);
+    }
+
+    private function installSources(Template $template): void
+    {
+        $template->pinSourceSet($this->installationToken, $this->sourceBindings);
+        RequestContext::set(self::REQUEST_KEY, $this);
+    }
+
+    /** Preserve the original source/alias overwrite order, preparing bindings only once. */
+    private function buildSourceBindings(): void
+    {
+        $contextKey = $this->identity->cacheKey();
         foreach ($this->sources as $path => $source) {
-            $template->pinSource($path, $source['bytes'], $source['origin'], $this->identity->cacheKey());
-            $template->pinSource($source['origin'], $source['bytes'], $source['origin'], $this->identity->cacheKey());
+            $binding = [$source['bytes'], $source['origin'], $contextKey];
+            $this->sourceBindings[$path] = $binding;
+            $this->sourceBindings[$source['origin']] = $binding;
         }
         foreach ($this->pageDependencies as $logical => $path) {
             $source = $this->sources[$path];
-            $template->pinSource($logical, $source['bytes'], $source['origin'], $this->identity->cacheKey());
+            $this->sourceBindings[$logical] = [$source['bytes'], $source['origin'], $contextKey];
         }
-        foreach ($this->partialDependencies as $key => $path) { $this->pinPartialAlias($template, $key, $path); }
+        foreach ($this->partialDependencies as $key => $path) { $this->addPartialAliases($key, $path); }
         $byType = [];
         foreach ($this->partials as $key => $path) {
             $split = strrpos($key, '/');
             $type = substr($key, 0, $split);
             $byType[$type][] = $path;
-            $this->pinPartialAlias($template, $key, $path);
+            $this->addPartialAliases($key, $path);
         }
         foreach ($byType as $type => $paths) {
             if (count($paths) === 1) {
                 // Ordinary public partial calls use default; their selected option
                 // is already fixed by this version's generated partial source.
-                $this->pinPartialAlias($template, $type . '/default', $paths[0]);
+                $this->addPartialAliases($type . '/default', $paths[0]);
             }
         }
-        RequestContext::set(self::REQUEST_KEY, $this);
     }
 
-    private function pinPartialAlias(Template $template, string $key, string $path): void
+    private function addPartialAliases(string $key, string $path): void
     {
         $source = $this->sources[$path];
         $logical = 'theme/' . $this->identity->area . '/partials/' . $key . '.phtml';
         foreach ([$logical, 'Weline_Theme::' . $logical] as $alias) {
-            $template->pinSource($alias, $source['bytes'], $source['origin'], $this->identity->cacheKey());
+            $this->sourceBindings[$alias] = [$source['bytes'], $source['origin'], $this->identity->cacheKey()];
         }
+    }
+
+    /** Parse lazily for this request, snapshot and actual normalizer object. Arrays return by value. */
+    public function parseSourceMeta(array $source): array
+    {
+        $normalizer = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(ParamDefinitionNormalizerInterface::class);
+        $cacheKey = self::REQUEST_KEY . '.meta.' . $this->installationToken;
+        $memo = RequestContext::isInitialized() && $normalizer instanceof ParamDefinitionNormalizerInterface
+            ? RequestContext::get($cacheKey) : null;
+        if ($memo instanceof \WeakMap && isset($memo[$normalizer])) {
+            foreach ($memo[$normalizer] as $entry) {
+                if ($entry['origin'] === $source['origin'] && $entry['bytes'] === $source['bytes']) {
+                    return $entry['parsed'];
+                }
+            }
+        }
+        $parsed = RequestLifecycleTrace::isEnabled()
+            ? RequestLifecycleTrace::measurePhase('theme.source.meta_parse', static fn(): array => ComponentMetaParser::parseContent($source['bytes'], $source['origin']))
+            : ComponentMetaParser::parseContent($source['bytes'], $source['origin']);
+        if (RequestContext::isInitialized() && $normalizer instanceof ParamDefinitionNormalizerInterface) {
+            $memo ??= new \WeakMap();
+            $entries = $memo[$normalizer] ?? [];
+            $entries[] = ['origin' => $source['origin'], 'bytes' => $source['bytes'], 'parsed' => $parsed];
+            $memo[$normalizer] = $entries;
+            RequestContext::set($cacheKey, $memo);
+        }
+        return $parsed;
     }
 
     public function pagePath(): ?string { return $this->page; }

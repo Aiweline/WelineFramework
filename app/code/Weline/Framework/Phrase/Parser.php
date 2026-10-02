@@ -1840,16 +1840,36 @@ class Parser
             if (DictionaryCacheNamespace::fingerprint($locales) === null) {
                 return;
             }
+            // Prefetch is speculative: a successful module only needs one eager read
+            // per request. If its Worker bag is later evicted, normal translation
+            // resolution still reloads on demand; failed prefetches remain retryable.
+            $state = RequestContext::isInitialized() && RequestContext::getId() !== null
+                ? self::requestState()
+                : null;
+            $requested = self::withNullSourceGlobalModule($modules);
             foreach ($locales as $candidateLocale) {
+                $alreadyPrefetched = $state?->prefetchedGlobalModules[$candidateLocale] ?? [];
+                $needed = \array_values(\array_filter(
+                    $requested,
+                    static fn(string $module): bool => !isset($alreadyPrefetched[$module]),
+                ));
+                if ($needed === []) {
+                    continue;
+                }
                 try {
                     $pool = self::getSharedPhraseCachePool([$candidateLocale]);
                     if ($pool !== null) {
-                        self::loadGlobalDictionaryModuleMaps(
+                        $maps = self::loadGlobalDictionaryModuleMaps(
                             $pool,
                             $provider,
                             $candidateLocale,
-                            self::withNullSourceGlobalModule($modules),
+                            $needed,
                         );
+                        if ($maps !== null && $state !== null) {
+                            foreach ($needed as $module) {
+                                $state->prefetchedGlobalModules[$candidateLocale][$module] = true;
+                            }
+                        }
                     }
                 } catch (\Throwable) {
                     // 预取失败不标记模块已加载，正常解析仍能沿原路径重试。

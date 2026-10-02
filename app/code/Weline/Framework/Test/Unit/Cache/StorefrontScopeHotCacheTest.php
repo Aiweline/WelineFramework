@@ -47,7 +47,7 @@ final class StorefrontScopeHotCacheTest extends TestCase
         self::assertSame(2, $calls);
     }
 
-    public function testPolicyWaitBudgetAcquiresBeforeSharedRead(): void
+    public function testPolicyWaitUsesFilePreflightInsteadOfInjectedSharedCoordinator(): void
     {
         $adapter = new InMemoryAdapter();
         $pool = new CachePool('unit_scope_hot_policy', $adapter, jitterRatio: 0.0);
@@ -64,8 +64,8 @@ final class StorefrontScopeHotCacheTest extends TestCase
         );
 
         self::assertSame('payload', $service->rememberPolicy($policy, 'demo.key', static fn(): string => 'payload'));
-        self::assertSame(250, $flight->lastTimeoutMs);
-        self::assertSame(['acquire', 'release'], $flight->events);
+        self::assertSame(-1, $flight->lastTimeoutMs);
+        self::assertSame([], $flight->events);
         self::assertSame(['read'], $adapter->events);
     }
 

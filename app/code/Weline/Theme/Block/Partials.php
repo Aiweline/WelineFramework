@@ -517,7 +517,7 @@ class Partials extends Block
                 }
                 if ($captured !== null || (\is_string($filePath) && $filePath !== '' && \is_file($filePath))) {
                     $parsed = $captured !== null
-                        ? ComponentMetaParser::parseContent($captured['bytes'], $captured['origin'])
+                        ? $this->parseCapturedPartialMeta($captured)
                         : ComponentMetaParser::parse($filePath);
                     $cacheNode = \is_array($parsed['meta']['cache'] ?? null) ? (array)$parsed['meta']['cache'] : [];
                     $mode = $this->readCacheMetaDefault($cacheNode, 'mode')
@@ -1456,7 +1456,7 @@ class Partials extends Block
             if ($captured !== null) {
                 // Saved parameters are emitted in this PHTML; defaults come from
                 // the same captured source, never today's scoped DB configuration.
-                $parsed = ComponentMetaParser::parseContent($captured['bytes'], $captured['origin']);
+                $parsed = $this->parseCapturedPartialMeta($captured);
                 $partialsMeta = [];
                 foreach (LayoutPathResolver::formatParsedParams($parsed['params'] ?? []) as $name => $definition) {
                     $value = $definition['default'] ?? null;
@@ -1774,6 +1774,18 @@ class Partials extends Block
         
         return $params;
     }
+    private function parseCapturedPartialMeta(array $captured): array
+    {
+        $snapshot = ThemeLayoutSourceSnapshot::current();
+        if ($snapshot !== null) {
+            return $snapshot->parseSourceMeta($captured);
+        }
+        if (RequestLifecycleTrace::isEnabled()) {
+            return RequestLifecycleTrace::measurePhase('theme.source.meta_parse', static fn(): array => ComponentMetaParser::parseContent($captured['bytes'], $captured['origin']));
+        }
+        return ComponentMetaParser::parseContent($captured['bytes'], $captured['origin']);
+    }
+
     private function traceCall(string $name, callable $callback, string $category = 'theme'): mixed
     {
         if (!RequestLifecycleTrace::isEnabled()) {

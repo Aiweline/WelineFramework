@@ -222,9 +222,11 @@ class RequestLifecycleTrace
             return false;
         }
 
-        // false 可能在 URL 解析前被缓存；模板耗时旁路允许稍后武装 DB 埋点。
+        // Cookie scope may become available after the early bootstrap check.
         if ($state->enabledCache === false) {
-            if (self::isTemplatePerfOverlayRequested()) {
+            if ((self::isPanelTraceArmed() && !self::shouldSkipForCurrentRequest())
+                || self::isTemplatePerfOverlayRequested()
+            ) {
                 $state->enabledCache = true;
                 return true;
             }
@@ -442,7 +444,7 @@ class RequestLifecycleTrace
 
     private static function readPanelTraceCookieValue(): string
     {
-        if (\class_exists(\Weline\Framework\Http\Cookie::class, false)) {
+        if (\class_exists(\Weline\Framework\Http\Cookie::class)) {
             $fromHelper = \Weline\Framework\Http\Cookie::get(self::PANEL_TRACE_COOKIE, '');
             if (\is_scalar($fromHelper) && (string)$fromHelper !== '') {
                 return (string)$fromHelper;
@@ -576,7 +578,7 @@ class RequestLifecycleTrace
 
     private static function readPanelTplPerfCookieValue(): string
     {
-        if (\class_exists(\Weline\Framework\Http\Cookie::class, false)) {
+        if (\class_exists(\Weline\Framework\Http\Cookie::class)) {
             $fromHelper = \Weline\Framework\Http\Cookie::get(self::PANEL_TPL_PERF_COOKIE, '');
             if (\is_scalar($fromHelper) && (string)$fromHelper !== '') {
                 return (string)$fromHelper;

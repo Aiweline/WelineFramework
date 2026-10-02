@@ -513,8 +513,15 @@ class ThemeContextService implements ThemeContextProviderInterface
             return null;
         }
 
-        $theme = $this->newThemeModel();
-        $theme->load($themeId);
+        $data = $this->rememberThemeForRequest(
+            'editor|' . $themeId,
+            function () use ($themeId): array {
+                $theme = $this->newThemeModel();
+                $theme->load($themeId);
+                return $theme->getId() ? $theme->getData() : [];
+            },
+        );
+        $theme = $this->newThemeModel()->setData($data);
 
         return $theme->getId() ? $theme : null;
     }
@@ -534,8 +541,15 @@ class ThemeContextService implements ThemeContextProviderInterface
             if ($themeId <= 0) {
                 return null;
             }
-            $theme = $this->newThemeModel();
-            $theme->load($themeId);
+            $data = $this->rememberThemeForRequest(
+                'token|' . $area . '|' . $themeId,
+                function () use ($themeId): array {
+                    $theme = $this->newThemeModel();
+                    $theme->load($themeId);
+                    return $theme->getId() ? $theme->getData() : [];
+                },
+            );
+            $theme = $this->newThemeModel()->setData($data);
 
             return $theme->getId() ? $theme : null;
         } catch (\Throwable) {

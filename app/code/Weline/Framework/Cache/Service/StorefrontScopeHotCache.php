@@ -53,6 +53,8 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     /** @var array<string, true> */
     private static array $refreshQueued = [];
 
+    private ?SingleFlightCoordinator $preflightFileFlight = null;
+
     public function __construct(
         private ?CacheManager $cacheManager = null,
         private ?NamespaceGenerationInterface $generations = null,
@@ -455,7 +457,7 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         if ($singleFlightWaitMs > 0) {
             $preflightLockKey = 'storefront-hot-cache:' . hash('sha256', $processKey);
             // Explicit policy waits use a local file lock: WLS CAS may block well beyond the policy budget under load.
-            $preflightFlight = $this->singleFlight ??= new SingleFlightCoordinator(preferFileLock: true);
+            $preflightFlight = $this->preflightFileFlight ??= new SingleFlightCoordinator(preferFileLock: true);
             $preflightToken = RequestLifecycleTrace::measurePhase(
                 'storefront.cache.singleflight_acquire',
                 fn(): mixed => $preflightFlight->acquire($preflightLockKey, $singleFlightWaitMs, 30),

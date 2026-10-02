@@ -182,6 +182,21 @@ final class ParserModulePrefetchTest extends TestCase
         self::assertSame([], $this->provider->legacyCalls);
     }
 
+    public function testSuccessfulPrefetchIsNotRepeatedWithinRequestAfterWorkerBagEviction(): void
+    {
+        Parser::prefetchGlobalDictionaryModules(['Weline_A']);
+        $readsAfterFirst = $this->poolReads;
+        DictionaryCacheNamespace::evictLocaleBucket('en_US', true);
+        DictionaryCacheNamespace::evictLocaleBucket('zh_Hans_CN', true);
+
+        Parser::prefetchGlobalDictionaryModules(['Weline_A']);
+        self::assertSame($readsAfterFirst, $this->poolReads);
+
+        $this->nextRequest('next-request');
+        Parser::prefetchGlobalDictionaryModules(['Weline_A']);
+        self::assertGreaterThan($readsAfterFirst, $this->poolReads);
+    }
+
     public function testPrefetchedAtomicMapsAndProgressiveLayersShareWordStorage(): void
     {
         $modules = array_map(static fn(int $i): string => 'Weline_Prefetch' . $i, range(1, 24));
