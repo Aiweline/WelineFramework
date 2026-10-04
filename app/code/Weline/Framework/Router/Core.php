@@ -1712,20 +1712,39 @@ class Core
                     return $cachedResponse;
                 }
 
+                $previousGenerationSoftServe = null;
                 if (Runtime::isPersistent()
                     && (bool)Env::get('wls.performance.fpc_serve_stale_before_build', true)
                 ) {
                     $cachedResponse = $fpcCoordinator->getStaleCachedResponseForRebuild($this->request->getMethod() ?: 'GET');
                     if ($cachedResponse !== null) {
-                        $this->is_match = true;
-                        $routeProfile['fpc'] = 'stale_before_build';
-                        $routeProfilePublish('fpc_stale_before_build');
-                        return $cachedResponse;
+                        // Same-generation stale may short-circuit rebuild. Previous-generation
+                        // homepage soft-serve must only cover readers while a new generation
+                        // single-flight rebuild continues.
+                        if ($cachedResponse->getHeader('X-Weline-FPC-Source') === 'previous-generation-receipt') {
+                            $previousGenerationSoftServe = $cachedResponse;
+                        } else {
+                            $this->is_match = true;
+                            $routeProfile['fpc'] = 'stale_before_build';
+                            $routeProfilePublish('fpc_stale_before_build');
+                            return $cachedResponse;
+                        }
                     }
                 }
 
                 $fpcBuildLock = $fpcCoordinator->acquireBuildLock($this->request->getMethod() ?: 'GET');
                 if ($fpcBuildLock === null) {
+                    // Readers must soft-serve previous-generation immediately while the
+                    // single-flight peer rebuilds. Deferring that soft-serve until after
+                    // fpc_build_wait_timeout_ms (often 60s) races Nginx/client upstream
+                    // timeouts → browser 504, then refresh HIT/STALE (wait_miss stampede).
+                    if ($previousGenerationSoftServe !== null) {
+                        $this->is_match = true;
+                        $routeProfile['fpc'] = 'previous_generation_soft_serve';
+                        $routeProfilePublish('fpc_previous_generation_soft_serve');
+                        return $previousGenerationSoftServe;
+                    }
+
                     $canBuild = $fpcCoordinator->canBuildCachedResponse($this->request->getMethod() ?: 'GET');
                     if ($canBuild) {
                         $buildDecision = $fpcCoordinator->waitForPublishedResponseOrBuildLock(
@@ -1742,12 +1761,30 @@ class Core
                         $routeProfilePublish('fpc_wait_hit');
                         return $cachedResponse;
                     }
-                    if ($canBuild && $fpcBuildLock === null) {
+                    // No published HIT and no build lock: never fall through into
+                    // wait_miss full SSR (cannot publish without the lock).
+                    if ($fpcBuildLock === null) {
+                        // Only spend the publish-only grace window when a peer still
+                        // holds the build lock. Waiting 30s+20s with no publisher just
+                        // strands the browser on Service Unavailable (category/men).
+                        $method = $this->request->getMethod() ?: 'GET';
+                        $graceMs = (int)Env::get('wls.performance.fpc_publish_grace_wait_ms', 10000);
+                        if ($graceMs > 0 && $fpcCoordinator->isBuildLockBusy($method)) {
+                            $cachedResponse = $fpcCoordinator->waitForPublishedResponse(
+                                $method,
+                                \max(500, $graceMs)
+                            );
+                            if ($cachedResponse !== null) {
+                                $this->is_match = true;
+                                $routeProfile['fpc'] = 'wait_hit';
+                                $routeProfilePublish('fpc_wait_hit_grace');
+                                return $cachedResponse;
+                            }
+                        }
+
                         $routeProfile['fpc'] = 'wait_timeout';
                         $routeProfilePublish('fpc_wait_timeout');
-                        return Response::fromContent('Service Unavailable', 503, 'text/plain; charset=utf-8')
-                            ->setHeader('Retry-After', '1')
-                            ->setHeader('Cache-Control', 'no-store');
+                        return $this->buildFpcWaitTimeoutResponse();
                     }
                 }
             }
@@ -1965,6 +2002,44 @@ class Core
                 $fpcCoordinator->releaseBuildLock($fpcBuildLock);
             }
         }
+    }
+
+    /**
+     * Followers that miss single-flight publish must not strand the browser on a
+     * plain-text 503. Prefer a tiny HTML document that auto-retries once FPC lands.
+     */
+    private function buildFpcWaitTimeoutResponse(): Response
+    {
+        $acceptHeader = $this->request->getHeader('Accept');
+        if (\is_array($acceptHeader)) {
+            $acceptHeader = \implode(',', $acceptHeader);
+        }
+        $accept = \strtolower(\trim((string)$acceptHeader));
+        $wantsHtml = $accept === ''
+            || \str_contains($accept, 'text/html')
+            || \str_contains($accept, 'application/xhtml+xml')
+            || \str_contains($accept, '*/*');
+
+        if (!$wantsHtml) {
+            return Response::fromContent('Service Unavailable', 503, 'text/plain; charset=utf-8')
+                ->setHeader('Retry-After', '1')
+                ->setHeader('Cache-Control', 'no-store');
+        }
+
+        $html = '<!DOCTYPE html><html lang="zh-Hans"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<meta http-equiv="refresh" content="1">'
+            . '<title>页面加载中</title>'
+            . '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
+            . 'font:16px/1.5 system-ui,sans-serif;color:#1f2937;background:#f8fafc}'
+            . 'p{margin:0;padding:1.5rem;text-align:center}</style></head><body>'
+            . '<p>页面正在准备，即将自动重试…</p>'
+            . '<script>setTimeout(function(){location.reload()},1000)</script>'
+            . '</body></html>';
+
+        return Response::html($html, 503)
+            ->setHeader('Retry-After', '1')
+            ->setHeader('Cache-Control', 'no-store');
     }
 
     private function shouldSkipFpcPublishForCachedControllerResponse(Response $response): bool

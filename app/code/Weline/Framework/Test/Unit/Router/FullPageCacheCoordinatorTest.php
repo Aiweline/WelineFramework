@@ -906,6 +906,75 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertNull($coordinator->resolveRootHomepageProcessReceipt($queryFullUri));
     }
 
+    public function testPreviousGenerationHomepageReceiptSoftServesStaleDuringRebuild(): void
+    {
+        $authority = new MutableNamespaceGenerationAuthority(str_repeat('b', 64));
+        $pool = new InMemoryCachePool();
+        $coordinator = new FullPageCacheCoordinator(
+            cachePool: $pool,
+            storefrontCacheKeyContextResolver: new StorefrontCacheKeyContextResolver($authority, new NamespacePath()),
+        );
+        $fullUri = 'https://example.test/';
+        $this->setCurrentFpcUri($fullUri, '/');
+        $coordinator->publishResponse(
+            Response::html('<html><body>previous generation homepage</body></html>')
+                ->setHeader('Cache-Control', 'public, max-age=60'),
+            '/',
+            ['id' => 'home'],
+            ['module' => 'Test_Module'],
+            [],
+            'GET',
+        );
+
+        $receipt = $coordinator->resolveRootHomepageProcessReceipt($fullUri);
+        self::assertIsArray($receipt);
+        $previousCacheKey = (string)$receipt['cache_key'];
+        $previousFingerprint = (string)$receipt['namespace_fingerprint'];
+        self::assertSame(str_repeat('b', 64), $previousFingerprint);
+
+        $authority->fingerprint = str_repeat('c', 64);
+        $identity = RequestContext::scopeIdentity();
+        self::assertInstanceOf(ScopeIdentity::class, $identity);
+        StorefrontCacheKeyContext::install(new StorefrontCacheKeyContext(
+            $identity,
+            'zh_Hans_CN',
+            'CNY',
+            str_repeat('c', 64),
+            str_repeat('c', 64),
+            true,
+        ));
+
+        $freshKey = $this->buildCurrentUnifiedFpcCacheKey($coordinator, 'GET');
+        self::assertNotSame($previousCacheKey, $freshKey);
+        self::assertNull($coordinator->getCachedResponse('GET'));
+        self::assertNull(
+            (new \ReflectionMethod($coordinator, 'internalHomepageReceiptCacheKey'))
+                ->invoke($coordinator, $receipt),
+            'READY/HIT path must still reject a previous-generation fingerprint.',
+        );
+
+        $response = $coordinator->getStaleCachedResponseForRebuild('GET');
+        self::assertInstanceOf(Response::class, $response);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('STALE', $response->getHeader('X-Weline-FPC'));
+        self::assertSame('previous-generation-receipt', $response->getHeader('X-Weline-FPC-Source'));
+        self::assertStringContainsString(
+            '<html><body>previous generation homepage</body></html>',
+            $response->getBody(),
+        );
+
+        $softReceipt = $coordinator->resolveRootHomepageStaleReceipt($fullUri);
+        self::assertNull(
+            $softReceipt,
+            'Worker-facing stale receipt stays generation-strict after a bump.',
+        );
+        self::assertSame(
+            $previousCacheKey,
+            (new \ReflectionMethod($coordinator, 'internalHomepageReceiptSoftServeCacheKey'))
+                ->invoke($coordinator, $receipt),
+            'Framework rebuild-wait soft-serve may still resolve the previous generation key.',
+        );
+    }
 
     public function testHomepageReceiptRetainsItsTranslationSnapshotAcrossOtherRequestLanguages(): void
     {
@@ -1403,5 +1472,27 @@ final class FailingNamespaceGenerationAuthority implements NamespaceGenerationIn
     public function bump(string $namespace): array
     {
         throw new \RuntimeException('namespace unavailable');
+    }
+}
+
+final class MutableNamespaceGenerationAuthority implements NamespaceGenerationInterface
+{
+    public function __construct(public string $fingerprint)
+    {
+    }
+
+    public function fingerprint(array $namespaces): string
+    {
+        return $this->fingerprint;
+    }
+
+    public function bumpMany(array $namespaces): array
+    {
+        return [];
+    }
+
+    public function bump(string $namespace): array
+    {
+        return [];
     }
 }

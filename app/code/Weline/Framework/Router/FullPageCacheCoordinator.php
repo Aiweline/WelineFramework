@@ -450,6 +450,15 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         return \min(\max(0, $configured), 60000);
     }
 
+    /**
+     * Whether another Worker currently holds the per-URI single-flight build lock.
+     * Followers use this to decide whether a publish-only grace wait is worthwhile.
+     */
+    public function isBuildLockBusy(string $method = 'GET'): bool
+    {
+        return $this->isBuildLockHeld($this->normalizeBuildMethod($method));
+    }
+
     private function isBuildLockHeld(string $method): bool
     {
         try {
@@ -633,6 +642,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $ttl
         );
         $storeError = \error_get_last();
+        $cachePool = $this->cache();
+        $adapter = \method_exists($cachePool, 'getAdapter') ? $cachePool->getAdapter() : null;
         FpcDiag::event('fpc_publish_store', [
             'key_sha' => \substr(\sha1($unifiedCacheKey), 0, 12),
             'full_key' => $unifiedCacheKey,
@@ -640,10 +651,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             'stored' => $sharedPublished,
             'ttl' => $ttl,
             'payload_keys' => \is_array($sharedPayload) ? \array_keys($sharedPayload) : [],
-            'pool_class' => \get_class($this->cache()),
-            'adapter_class' => \method_exists($this->cache(), 'getAdapter')
-                ? \get_class($this->cache()->getAdapter())
-                : '',
+            'pool_class' => \get_class($cachePool),
+            'adapter_class' => \is_object($adapter) ? \get_class($adapter) : '',
             'last_error' => (string)($storeError['message'] ?? ''),
         ]);
         if (!$sharedPublished && InternalHomepagePrime::isCurrentRequest()) {
@@ -1098,6 +1107,17 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 $staleCacheKey = $schemaNeutralStaleKey;
             }
         }
+        $previousGenerationSoftServe = false;
+        if (!\is_array($cached)) {
+            $softServe = $this->tryPreviousGenerationHomepageSoftServePayload($method);
+            if ($softServe !== null) {
+                $cached = $softServe['payload'];
+                $staleCacheKey = $softServe['cache_key'];
+                $cacheSource = $softServe['cache_source'];
+                $cachePayloadFetched = $softServe['payload_fetched'];
+                $previousGenerationSoftServe = true;
+            }
+        }
         if (!\is_array($cached)) {
             return null;
         }
@@ -1147,6 +1167,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'STALE');
+        if ($previousGenerationSoftServe) {
+            $response->setHeader('X-Weline-FPC-Source', 'previous-generation-receipt');
+        }
         $this->applyFpcHitEdgeCacheHeaders($response, true, $cached);
         $this->applyFpcHitPerformanceHeaders(
             $response,
@@ -1393,18 +1416,42 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return null;
         }
         $freshKey = $this->internalHomepageReceiptCacheKey($receipt);
+        $previousGenerationSoftServe = false;
+        if ($freshKey === null) {
+            $freshKey = $this->internalHomepageReceiptSoftServeCacheKey($receipt);
+            $previousGenerationSoftServe = $freshKey !== null;
+        }
         if ($freshKey === null) {
             return null;
         }
         $staleKey = $this->buildStaleCacheKey($freshKey);
         $cached = $this->getProcessCachedPayload($staleKey);
-        $source = 'stale-process';
+        $source = $previousGenerationSoftServe
+            ? 'stale-previous-generation-process'
+            : 'stale-process';
+        if ($cached === null && $previousGenerationSoftServe) {
+            $cached = $this->getProcessCachedPayload($freshKey);
+            if (\is_array($cached)) {
+                $staleKey = $freshKey;
+                $source = 'stale-previous-generation-fresh-process';
+            }
+        }
         if ($cached === null && !$processOnly) {
             self::cooperativeBuildYield();
-            $cached = $this->cache()->get($staleKey);
+            $lookupKey = $staleKey;
+            $cached = $this->cache()->get($lookupKey);
             if (\is_array($cached)) {
                 $cached = $this->hydrateSharedPayload($cached);
-                $source = 'stale-shared';
+                $source = $previousGenerationSoftServe
+                    ? 'stale-previous-generation-shared'
+                    : 'stale-shared';
+            } elseif ($previousGenerationSoftServe) {
+                $cached = $this->cache()->get($freshKey);
+                if (\is_array($cached)) {
+                    $cached = $this->hydrateSharedPayload($cached);
+                    $staleKey = $freshKey;
+                    $source = 'stale-previous-generation-fresh-shared';
+                }
             }
         }
         if (!\is_array($cached) || !$this->payloadHasAuthoritativeBody($cached)) {
@@ -1432,6 +1479,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $this->ensureVaryAcceptEncoding($response);
         }
         $response->setHeader('X-Weline-FPC', 'STALE');
+        if ($previousGenerationSoftServe) {
+            $response->setHeader('X-Weline-FPC-Source', 'previous-generation-receipt');
+        }
         $this->applyFpcHitEdgeCacheHeaders($response, true, $cached);
         $this->applyFpcHitPerformanceHeaders($response, $source, $variant, true);
         $this->ensureVaryHeader($response, 'Cookie');
@@ -1530,10 +1580,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         ) {
             return null;
         }
+        // Worker transport READY/stale stays generation-strict. Previous-generation
+        // soft-serve is Framework rebuild-wait only (see tryPreviousGeneration...).
         if ($this->internalHomepageReceiptCacheKey($receipt) === null) {
-            unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
             return null;
         }
+
         return $receipt;
     }
 
@@ -1850,10 +1902,33 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     }
 
     /**
+     * READY / prime / formal HIT: receipt must match the current namespace generation.
+     *
      * @param array<string, mixed> $receipt
      */
     private function internalHomepageReceiptCacheKey(array $receipt): ?string
     {
+        return $this->resolveHomepageReceiptCacheKey($receipt, true);
+    }
+
+    /**
+     * Rebuild-window soft-serve: same URI/scope/lang/policy identity may reuse
+     * a previous-generation homepage receipt body as STALE only.
+     *
+     * @param array<string, mixed> $receipt
+     */
+    private function internalHomepageReceiptSoftServeCacheKey(array $receipt): ?string
+    {
+        return $this->resolveHomepageReceiptCacheKey($receipt, false);
+    }
+
+    /**
+     * @param array<string, mixed> $receipt
+     */
+    private function resolveHomepageReceiptCacheKey(
+        array $receipt,
+        bool $requireMatchingNamespaceFingerprint
+    ): ?string {
         if ((int)($receipt['version'] ?? 0) !== 2
             || TransactionContext::activeTransactionConnectionCount() > 0
             || \strtoupper(\trim((string)($receipt['method'] ?? ''))) !== 'GET'
@@ -1909,7 +1984,13 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 return null;
             }
             $currentFingerprint = $this->storefrontCacheKeyContextResolver()->fingerprintForIdentity($identity, $translationLocales, $policyPath);
-            if (!hash_equals($fingerprint, $currentFingerprint)) {
+            if ($requireMatchingNamespaceFingerprint) {
+                if (!hash_equals($fingerprint, $currentFingerprint)) {
+                    return null;
+                }
+            } elseif (hash_equals($fingerprint, $currentFingerprint)) {
+                // Soft-serve is only for previous-generation continuity; current
+                // generation must keep using the READY/HIT path.
                 return null;
             }
         } catch (\Throwable) {
@@ -1917,6 +1998,63 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
 
         return $cacheKey;
+    }
+
+    /**
+     * Serve a previously published anonymous homepage body while the current
+     * namespace generation rebuilds. Does not open general cross-generation stale.
+     *
+     * @return array{payload:array,cache_key:string,cache_source:string,payload_fetched:bool}|null
+     */
+    private function tryPreviousGenerationHomepageSoftServePayload(string $method): ?array
+    {
+        $method = $this->normalizeCacheMethod($method);
+        if ($method !== 'GET') {
+            return null;
+        }
+        $fullUri = $this->getCacheKeyFullUri();
+        if (!$this->isRootHomepageFullUri($fullUri) || $this->currentRequestCookieHeader() !== '') {
+            return null;
+        }
+        $receiptIndex = \hash('sha256', $fullUri);
+        $receipt = self::$processLocalizedHomepageReceipts[$receiptIndex] ?? null;
+        if (!\is_array($receipt)
+            || !\hash_equals((string)($receipt['full_uri'] ?? ''), $fullUri)
+        ) {
+            return null;
+        }
+        $freshKey = $this->internalHomepageReceiptSoftServeCacheKey($receipt);
+        if ($freshKey === null) {
+            return null;
+        }
+
+        $candidates = [
+            [$this->buildStaleCacheKey($freshKey), 'stale-previous-generation-process', 'stale-previous-generation-shared'],
+            [$freshKey, 'stale-previous-generation-fresh-process', 'stale-previous-generation-fresh-shared'],
+        ];
+        foreach ($candidates as [$cacheKey, $processSource, $sharedSource]) {
+            $cached = $this->getProcessCachedPayload($cacheKey);
+            $payloadFetched = false;
+            $cacheSource = $processSource;
+            if ($cached === null) {
+                $cached = $this->cache()->get($cacheKey);
+                $payloadFetched = \is_array($cached);
+                $cacheSource = $payloadFetched ? $sharedSource : $cacheSource;
+                if ($payloadFetched) {
+                    $cached = $this->hydrateSharedPayload($cached);
+                }
+            }
+            if (\is_array($cached) && $this->payloadHasAuthoritativeBody($cached)) {
+                return [
+                    'payload' => $cached,
+                    'cache_key' => $cacheKey,
+                    'cache_source' => $cacheSource,
+                    'payload_fetched' => $payloadFetched,
+                ];
+            }
+        }
+
+        return null;
     }
 
     /**
