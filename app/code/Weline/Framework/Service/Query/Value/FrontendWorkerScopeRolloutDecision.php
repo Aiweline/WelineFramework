@@ -43,7 +43,7 @@ final readonly class FrontendWorkerScopeRolloutDecision
             || ($storeId === null) !== ($channelId === null)) {
             throw new \InvalidArgumentException('Worker Scope rollout tuple must be complete or absent.');
         }
-        if ($websiteId !== null && ($websiteId < 0 || $storeId < 1 || $channelId < 1)) {
+        if ($websiteId !== null && ($websiteId < 0 || $storeId < 0 || $channelId < 0)) {
             throw new \InvalidArgumentException('Worker Scope rollout tuple is invalid.');
         }
         if ($authoritative && !$tokenEnabled) {

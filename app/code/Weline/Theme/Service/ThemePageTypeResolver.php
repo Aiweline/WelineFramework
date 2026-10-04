@@ -69,9 +69,9 @@ final class ThemePageTypeResolver implements ProcessSharedInterface
         return $baseLayoutType;
     }
 
-    public function getPreviewPathByPageType(?string $pageType): string
+    public function getPreviewPathByPageType(?string $pageType, string $layoutOption = 'default'): string
     {
-        $route = $this->storefrontPathForLayout($pageType);
+        $route = $this->storefrontPathForLayout($pageType, $layoutOption);
 
         return $route === '' ? '/' : '/' . ltrim($route, '/');
     }
@@ -82,17 +82,33 @@ final class ThemePageTypeResolver implements ProcessSharedInterface
      * Homepage must be "/" — never "". getFrontendUrl('') reuses the current
      * REQUEST_URI via getBaseUrl(); under BinQuery that is /framework/query-bin.
      */
-    public function getFrontendUrlPathForPreview(?string $pageType): string
+    public function getFrontendUrlPathForPreview(?string $pageType, string $layoutOption = 'default'): string
     {
-        $route = $this->storefrontPathForLayout($pageType);
+        $route = $this->storefrontPathForLayout($pageType, $layoutOption);
 
         return $route === '' ? '/' : $route;
     }
 
-    /**
-     * Path ↔ layout 1:1. Homepage and non-storefront names are "/".
-     */
-    private function storefrontPathForLayout(?string $pageType): string
+    /** One source of public paths for initial canvas, navigation and Token preview. */
+    public function getPreviewPathsByLayoutTypes(array $layoutTypes, array $layouts = []): array
+    {
+        $paths = [];
+        foreach ($layoutTypes as $layoutType) {
+            $paths[(string)$layoutType] = $this->getPreviewPathByPageType((string)$layoutType);
+        }
+        foreach ($layouts as $layoutType => $options) {
+            foreach ($options as $option) {
+                $value = is_array($option) ? (string)($option['value'] ?? 'default') : (string)$option;
+                if ($value === 'default') { continue; }
+                $key = json_encode([(string)$layoutType, $value], JSON_THROW_ON_ERROR);
+                $paths[$key] = $this->getPreviewPathByPageType((string)$layoutType, $value);
+            }
+        }
+        return $paths;
+    }
+
+    /** Homepage and non-storefront names are "/"; resource identity is unchanged. */
+    private function storefrontPathForLayout(?string $pageType, string $layoutOption = 'default'): string
     {
         $layoutPath = strtolower(trim(str_replace('\\', '/', (string)$pageType), '/'));
         if ($layoutPath === ''
@@ -106,7 +122,16 @@ final class ThemePageTypeResolver implements ProcessSharedInterface
             return '';
         }
 
-        return $layoutPath;
+        // Policy 的动态 action 对应真实政策选项；其它布局选项继续使用其已有业务入口。
+        if ($layoutPath === 'policy' && $layoutOption !== '' && $layoutOption !== 'default'
+            && preg_match('/^[a-z0-9_-]+$/D', $layoutOption) === 1) {
+            return 'policy/' . $layoutOption;
+        }
+        return match ($layoutPath) {
+            'account/login', 'account/register', 'account/forgot-password', 'account/set-password'
+                => 'customer/' . $layoutPath,
+            default => $layoutPath,
+        };
     }
 
     /**

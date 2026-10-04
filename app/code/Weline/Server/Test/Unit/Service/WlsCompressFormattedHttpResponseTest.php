@@ -87,6 +87,8 @@ final class WlsCompressFormattedHttpResponseTest extends TestCase
         self::assertStringContainsString('Content-Encoding: gzip', $compressed);
 
         $plain = wlsMaybeCompressStaticHttpResponse($response, "GET /x.js HTTP/1.1\r\nHost: example.test\r\n\r\n");
-        self::assertSame($response, $plain);
+        self::assertStringNotContainsString('Content-Encoding:', $plain);
+        self::assertStringContainsString('Vary: Accept-Encoding', $plain);
+        self::assertSame($body, \explode("\r\n\r\n", $plain, 2)[1]);
     }
 }

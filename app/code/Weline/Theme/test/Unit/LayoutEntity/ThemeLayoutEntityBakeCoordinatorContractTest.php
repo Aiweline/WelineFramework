@@ -39,4 +39,43 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
             self::assertTrue($coordinator->commandsAreStructural([['op' => $op]]));
         }
     }
+
+    public function testChromeBakeMergesMiniCartFooterExtrasAndKeepsMiniCartPageExtras(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString("'mini-cart'", $source);
+        self::assertStringContainsString('attachHeaderNativeMiniCartOwners', $source);
+        self::assertStringContainsString('contentNodesForLayout', $source);
+        self::assertStringContainsString('footer-extras', $source);
+        self::assertMatchesRegularExpression(
+            "/mergeIntoNodes\\(\\s*\\\$nodes,\\s*\\\$version->getThemeId\\(\\),\\s*'mini-cart'/s",
+            $source,
+        );
+
+        $coordinator = \Weline\Framework\Manager\ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class);
+        $content = new \ReflectionMethod($coordinator, 'contentNodesForLayout');
+        $content->setAccessible(true);
+        $nodes = [
+            'coupon' => [
+                'node_uid' => 'coupon',
+                'widget_code' => 'mini-cart-coupon',
+                'slot_id' => 'footer-extras',
+                'area' => 'footer',
+            ],
+            'page' => [
+                'node_uid' => 'page',
+                'widget_code' => 'hero',
+                'slot_id' => 'content',
+                'area' => 'content',
+            ],
+        ];
+        $miniCart = $content->invoke($coordinator, 'mini-cart', $nodes);
+        self::assertArrayHasKey('coupon', $miniCart);
+        self::assertArrayHasKey('page', $miniCart);
+        $homepage = $content->invoke($coordinator, 'homepage', $nodes);
+        self::assertArrayNotHasKey('coupon', $homepage);
+        self::assertArrayHasKey('page', $homepage);
+    }
 }

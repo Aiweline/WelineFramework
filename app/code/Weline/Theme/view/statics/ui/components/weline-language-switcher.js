@@ -871,10 +871,11 @@ async function fetchCountryFlagGroup(codes) {
             await window.Weline.load('api');
         }
         const resource = await Promise.resolve(window.Weline?.Api?.resource?.('i18n'));
-        if (!resource?.getCountryFlags) {
-            throw new Error('i18n.getCountryFlags unavailable');
+        const operation = window.Weline?.Api?.__backend === true ? 'getBackendCountryFlags' : 'getCountryFlags';
+        if (!resource?.[operation]) {
+            throw new Error(`i18n.${operation} unavailable`);
         }
-        return resource.getCountryFlags({
+        return resource[operation]({
             country_codes: codes,
             ratio: '4x3',
         });

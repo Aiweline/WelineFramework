@@ -58,6 +58,8 @@ async function boundedRead(action, timeout = 15000) {
 }
 
 function sourceContract(item) {
+  const requestUrl = require('./theme-phtml-sitewide-contract').sourceRequestUrl(item);
+  if (!requestUrl.available) return { available: false, reason: requestUrl.reason };
   const filename = item.source_expectations_file || manifest.source_expectations_file;
   if (!filename) return { available: false, reason: 'independent source contract not supplied' };
   const absolute = path.isAbsolute(filename) ? filename : path.resolve(ROOT, filename);
@@ -80,7 +82,7 @@ function sourceContract(item) {
     if (candidate.target?.type !== target.type || String(candidate.target?.id) !== String(target.id)) mismatches.push('target');
     if (!candidate.locale_applicability?.locales?.includes(item.locale)) mismatches.push('locale_applicability');
     const requestCase = Array.isArray(candidate.request_cases) ? candidate.request_cases.find(entry => {
-      try { return new URL(entry.url).toString() === new URL(item.url).toString(); } catch { return false; }
+      try { return new URL(entry.url).toString() === requestUrl.url; } catch { return false; }
     }) : undefined;
     if (Array.isArray(candidate.request_cases) && !requestCase) mismatches.push('request_case_url');
     return { candidate, mismatches, requestCase };
@@ -205,13 +207,13 @@ async function collectMatchedVisibilityCss(page, client, selector, sheetHeaders,
   return { selector, captured_at: new Date().toISOString(), read_only: true, ancestry, stylesheet_responses: stylesheetResponses };
 }
 
-async function collectDom(page, geometrySelectors = [], requestCaseAssertions = []) {
-  return page.evaluate(({ geometrySelectors, requestCaseAssertions }) => {
+async function collectDom(page, geometrySelectors = [], requestCaseAssertions = [], checkoutStages) {
+  return page.evaluate(({ geometrySelectors, requestCaseAssertions, checkoutStages }) => {
     const elements = Array.from(document.querySelectorAll('*'));
     const indexes = new Map(elements.map((element, index) => [element, index]));
     const indexOf = element => element ? indexes.get(element) ?? null : null;
     const attributes = element => Object.fromEntries(Array.from(element.attributes).filter(attribute =>
-      /^(id|class|role|data-|weline-)/.test(attribute.name)).map(attribute => [attribute.name, attribute.value]));
+      /^(id|class|role|hidden|aria-|data-|weline-)/.test(attribute.name)).map(attribute => [attribute.name, attribute.value]));
     const ancestors = (element, selector) => {
       const found = [];
       for (let parent = element.parentElement; parent; parent = parent.parentElement) if (parent.matches(selector)) found.push(indexOf(parent));
@@ -248,10 +250,23 @@ async function collectDom(page, geometrySelectors = [], requestCaseAssertions = 
       url: location.href, title: document.title, ready_state: document.readyState, lang: document.documentElement.lang,
       html_attributes: attributes(document.documentElement), body_attributes: document.body ? attributes(document.body) : null,
       server_config_scopes: serverConfigScopes,
+      declared_website_scopes: Array.from(document.querySelectorAll('[data-i18n-switcher][data-website-id][data-website-mount]')).map(element => ({ website_id: element.getAttribute('data-website-id'), mount: element.getAttribute('data-website-mount') })),
+      frontend_runtime_identity: Array.from(document.querySelectorAll('script#weline-frontend-runtime-config[data-weline-runtime-config]')).flatMap(script => {
+        try {
+          const runtime = JSON.parse(script.textContent);
+          return [{ base_host: runtime.site?.base_host, endpoint: runtime.api?.endpoint }];
+        } catch { return []; }
+      }),
       webdriver: navigator.webdriver, body_text_length: document.body?.innerText?.length || 0,
       body_excerpt: document.body?.innerText?.slice(0, 1500) || '', document_height: document.documentElement.scrollHeight,
       runtime_error_text: /Fatal error|ParseError|WLS Runtime Error|historical_revision_head_missing|historical_intent_reference_missing/.test(document.body?.innerText || ''),
       topology: elements.map(element => ({ index: indexOf(element), parent: indexOf(element.parentElement), tag: element.tagName.toLowerCase(), attributes: attributes(element) })),
+      checkout_stage_nodes: checkoutStages ? [...new Set([checkoutStages.hydrated?.when?.root_selector, checkoutStages.hydrated?.when?.extras_selector,
+        checkoutStages.hydrated?.when?.credit_content_selector, checkoutStages.hydrated?.when?.shell_selector,
+        checkoutStages.hydrated?.checks?.panels_selector, checkoutStages.hydrated?.checks?.panel_selector,
+        checkoutStages.hydrated?.checks?.candidate_panel_tab_binding?.tab_selector,
+        ...(checkoutStages.hydrated?.branches || []).flatMap(branch => [branch.checks?.panels_selector, branch.checks?.panel_selector, branch.checks?.candidate_panel_tab_binding?.tab_selector])].filter(Boolean))]
+        .map(selector => ({ selector, indexes: Array.from(document.querySelectorAll(selector)).map(indexOf) })) : undefined,
       wrappers, markers, slots,
       source_roots: elements.filter(element => element.matches('[data-testid], [weline-code], [class*="wc-theme_widget_"]')).map(node),
       headings: Array.from(document.querySelectorAll('h1,h2,h3')).map(element => ({ index: indexOf(element), level: element.tagName, text: (element.innerText || '').trim() })),
@@ -281,7 +296,27 @@ async function collectDom(page, geometrySelectors = [], requestCaseAssertions = 
       }) })),
       stylesheets: Array.from(document.styleSheets).map(sheet => ({ href: sheet.href, disabled: sheet.disabled })),
     };
-  }, { geometrySelectors, requestCaseAssertions });
+  }, { geometrySelectors, requestCaseAssertions, checkoutStages });
+}
+
+async function collectCheckoutSsr(page, response, stages) {
+  if (!response) return { available: false, reason: 'Actual document response unavailable' };
+  const bytes = await boundedRead(() => response.body());
+  if (!Buffer.isBuffer(bytes)) return { available: false, reason: 'Actual document response body unavailable' };
+  const sourceChecks = [...(stages.ssr?.source_refs || []), ...(stages.source_refs || [])].map(source => {
+    const file = path.resolve(ROOT, source.file);
+    const actual = file.startsWith(ROOT + path.sep) && fs.existsSync(file) ? createHash('sha256').update(fs.readFileSync(file)).digest('hex') : null;
+    return { file: source.file, expected_sha256: source.sha256, actual_sha256: actual, result: actual === source.sha256 ? 'pass' : 'fail' };
+  });
+  const topology = await page.evaluate(html => {
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    const elements = Array.from(parsed.querySelectorAll('*'));
+    const indexes = new Map(elements.map((element, index) => [element, index]));
+    return elements.map((element, index) => ({ index, parent: indexes.get(element.parentElement) ?? null, tag: element.tagName.toLowerCase(),
+      attributes: Object.fromEntries(Array.from(element.attributes).filter(attribute => /^(id|class|role|hidden|aria-|data-|weline-)/.test(attribute.name)).map(attribute => [attribute.name, attribute.value])) }));
+  }, bytes.toString('utf8'));
+  return { available: true, body_sha256: createHash('sha256').update(bytes).digest('hex'), body_bytes: bytes.length,
+    document_url: publicUrl(response.url()), request_id: response.headers()['x-weline-request-id'], scripts_executed: false, source_sha_checks: sourceChecks, topology };
 }
 
 const { verifyContract, verifyGeometry, verifyNavigation, verifyResponseContract, verifyHeroControlsGeometry } = require('./theme-phtml-sitewide-contract');
@@ -582,12 +617,15 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
         const pending = new Map();
         const wire = [];
         const resourceResponses = [];
+        const queryDiagnosticTasks = [];
+        const failedQueryTasks = [];
         const stylesheetResponses = [];
         const stylesheetHeaders = new Map();
         const documentRequests = [];
         const elementScreenshots = [];
         const heroInteraction = item.verify_main_hero_controls ? { result: 'not_evaluated' } : null;
         const errors = [];
+        const consoleDiagnosticTasks = [];
         const started = new Date().toISOString();
         const costs = {};
         const measure = async (name, action) => {
@@ -597,6 +635,7 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
         };
         const contractStarted = Date.now();
         const contract = sourceContract(item);
+        const failureQueryWebsitePrefix = require('./theme-phtml-query-diagnostic').frozenWebsitePrefix(item);
         costs.source_contract_lookup_ms = Date.now() - contractStarted;
         test.skip(canResume(latestFile, item, viewport, contract), 'Already rendered and verified this exact URL, identity, source hash and viewport; prior evidence retained.');
         const prefix = path.join(EVIDENCE, `${id}-${Date.now()}`);
@@ -605,6 +644,7 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
         let navigationError;
         let dom;
         let screenshotError;
+        let protocolXmlDocument = false;
         let failureStage;
         let stage = 'navigation';
         await page.setViewportSize(viewport);
@@ -623,7 +663,28 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
         }).map(([key, value]) => [key.toLowerCase(), String(value)]));
         if (Object.keys(requestHeaders).length) await page.setExtraHTTPHeaders(requestHeaders);
         page.on('pageerror', error => errors.push({ type: 'pageerror', message: error.message }));
-        page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') errors.push({ type: message.type(), message: message.text() }); });
+        page.on('console', message => {
+          if (message.type() !== 'error' && message.type() !== 'warning') return;
+          const entry = { type: message.type(), message: message.text() };
+          errors.push(entry);
+          if (item.capture_console_diagnostics) {
+            entry.at = Date.now(); entry.location = { ...message.location(), url: publicUrl(message.location().url) };
+            consoleDiagnosticTasks.push((async () => {
+              entry.safe_object_fields = [];
+              for (const arg of message.args()) {
+                try {
+                  const properties = await arg.getProperties(); const fields = {};
+                  for (const key of ['reason', 'deliveries', 'syncDepth', 'observeStack', 'createStack']) {
+                    if (!properties.has(key)) continue;
+                    const value = await properties.get(key).jsonValue();
+                    if (['string', 'number', 'boolean'].includes(typeof value)) fields[key] = value;
+                  }
+                  if (Object.keys(fields).length) entry.safe_object_fields.push(fields);
+                } catch { /* Unknown console objects are not serialized. */ }
+              }
+            })());
+          }
+        });
         page.on('request', request => {
           const entry = { started: Date.now(), method: request.method(), url: publicUrl(request.url()), resource_type: request.resourceType(), navigation: request.isNavigationRequest(), ...requestFrame(request, page) };
           pending.set(request, entry);
@@ -634,6 +695,13 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
           const headers = result.headers();
           if (result.request().isNavigationRequest() && result.request().frame() === page.mainFrame()) documentResponse = result;
           const entry = pending.get(result.request());
+          if (item.capture_query_bin_diagnostic === true && new URL(result.url()).pathname === '/api/framework/query-bin') {
+            queryDiagnosticTasks.push(require('./theme-phtml-query-diagnostic').observeQueryResponse(result, ROOT, entry?.started)
+              .catch(() => ({ observation_error: 'query diagnostic unavailable' })));
+          } else if (require('./theme-phtml-query-diagnostic').shouldObserveFailedQueryResponse(result.url(), result.status(), item.url, item.locale, failureQueryWebsitePrefix)) {
+            failedQueryTasks.push(require('./theme-phtml-query-diagnostic').observeFailedQueryResponse(result, ROOT, entry?.started)
+              .catch(() => ({ observation_error: 'Actual failed query packet unavailable', status: result.status(), request_id: headers['x-weline-request-id'] })));
+          }
           if ((item.resource_hash_assertions || []).some(assertion => new URL(result.url()).pathname === assertion.path)) resourceResponses.push(result);
           if (item.capture_visibility_css_selector && result.request().resourceType() === 'stylesheet') stylesheetResponses.push(result);
           if (entry) Object.assign(entry, { status: result.status(), response_received: Date.now(), request_id: headers['x-weline-request-id'] });
@@ -649,6 +717,9 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
         // acceptance keeps diagnostic bars out and records any unavailable evidence.
         try {
           response = await measure('navigation_ms', () => page.goto(url.toString(), { waitUntil: 'domcontentloaded', timeout: 90000 }));
+          protocolXmlDocument = contract.page?.acceptance_kind === 'non_html_resource'
+            && /^(?:application|text)\/xml(?:\s*;|$)/i.test(await response.headerValue('content-type') || '');
+          if (protocolXmlDocument) fs.writeFileSync(prefix + '-response.xml', await response.body());
           if (item.verify_main_hero_controls) {
             stage = 'hero_controls_interaction';
             await verifyMainHeroInteraction(page, heroInteraction);
@@ -675,7 +746,10 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
           costs.real_scroll_ms = Date.now() - scrollStarted;
           if (profile === 'full') {
             stage = 'full_screenshot';
-            await measure('normal_screenshot_ms', () => page.screenshot({ path: prefix + '-full.png', fullPage: true, timeout: 15000 }));
+            // Chromium XML documents have no HTML full-page scrolling surface.
+            // Preserve the complete wire body and capture their native viewport;
+            // HTML pages still require the full-page screenshot.
+            await measure('normal_screenshot_ms', () => page.screenshot({ path: prefix + '-full.png', fullPage: !protocolXmlDocument, timeout: 15000 }));
           }
           for (const target of item.element_screenshots || []) {
             stage = 'element_screenshot';
@@ -688,7 +762,9 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
           }
         } catch (error) { navigationError = error.message; failureStage = stage; if (heroInteraction && stage === 'hero_controls_interaction') Object.assign(heroInteraction, { result: 'fail', error: error.message }); if (stage.includes('screenshot')) screenshotError = error.message; }
         finally {
-          dom = await measure('dom_collection_ms', () => boundedRead(() => collectDom(page, item.geometry_selectors || [], contract.page?.request_case_assertions || [])));
+          dom = await measure('dom_collection_ms', () => boundedRead(() => collectDom(page, item.geometry_selectors || [], contract.page?.request_case_assertions || [], contract.page?.browser_assertions?.checkout_summary_order)));
+          const moduleAcceptance = item.verify_helppay_module ? await require('./theme-phtml-module-acceptance').verifyHelpPayModule(page) : null;
+          if (item.capture_console_diagnostics) await Promise.allSettled(consoleDiagnosticTasks);
           const visibilityCss = item.capture_visibility_css_selector ? await boundedRead(() => collectMatchedVisibilityCss(
             page, client, item.capture_visibility_css_selector, stylesheetHeaders, stylesheetResponses), 15000) : null;
           if (visibilityCss) writeJson(prefix + '-visibility-css.json', visibilityCss);
@@ -702,9 +778,12 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
               redirected_to: request.redirectedTo() ? publicUrl(request.redirectedTo().url()) : null };
           })));
           const comparisonStarted = Date.now();
+          const observedResponse = response || documentResponse;
+          if (dom?.topology && contract.page?.browser_assertions?.order?.some(order => order.stage)) {
+            dom.ssr_document = await collectCheckoutSsr(page, observedResponse, contract.page.browser_assertions.checkout_summary_order || {});
+          }
           let verification = dom?.topology ? verifyContract(contract, dom) : { result: 'not_evaluated', reason: 'DOM unavailable', checks: [] };
           costs.source_dom_comparison_ms = Date.now() - comparisonStarted;
-          const observedResponse = response || documentResponse;
           const headers = observedResponse?.headers() || {};
           let responseContract = null;
           let responseBodyEvidence = null;
@@ -727,27 +806,26 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
             for (const result of resourceResponses.filter(result => new URL(result.url()).pathname === assertion.path)) {
               const bytes = await boundedRead(() => result.body(), 10000);
               observations.push({ url: publicUrl(result.url()), status: result.status(), byte_length: Buffer.isBuffer(bytes) ? bytes.length : null,
-                sha256: Buffer.isBuffer(bytes) ? createHash('sha256').update(bytes).digest('hex') : null, error: bytes?.observation_error });
+                sha256: Buffer.isBuffer(bytes) ? createHash('sha256').update(bytes).digest('hex') : null,
+                contains: (assertion.contains || []).map(text => ({ text, present: Buffer.isBuffer(bytes) && bytes.toString('utf8').includes(text) })), error: bytes?.observation_error });
             }
             return { type: 'resource_body_sha256', path: assertion.path, expected_sha256: assertion.sha256, observations,
-              result: observations.length > 0 && observations.every(observation => observation.status === 200 && observation.sha256 === assertion.sha256) ? 'pass' : 'fail' };
+              result: observations.length > 0 && observations.every(observation => observation.status === 200 && observation.sha256 === assertion.sha256 && observation.contains.every(entry => entry.present)) ? 'pass' : 'fail' };
           })));
           const resourceChecksStarted = Date.now();
           const runtimeChecks = (item.forbidden_request_paths || []).map(forbiddenPath => {
             const requests = wire.filter(entry => entry.event === 'request' && new URL(entry.url).pathname === forbiddenPath);
             return { type: 'forbidden_request_path', path: forbiddenPath, expected_count: 0, actual_count: requests.length, result: requests.length ? 'fail' : 'pass' };
-          }).concat(verifyGeometry(item.geometry_assertions, dom), resourceHashChecks,
+          }).concat(moduleAcceptance ? [{ type: 'normal_helppay_module_workflow', ...moduleAcceptance }] : [], verifyGeometry(item.geometry_assertions, dom), resourceHashChecks,
             verifyNavigation(contract.page?.request_branch, documentChain, page.url()),
             item.verify_main_hero_controls && viewport.width <= 768 ? verifyHeroControlsGeometry(dom) : [],
             heroInteraction ? [{ type: 'hero_controls_interaction', ...heroInteraction }] : []);
-          const resourceFailures = wire.filter(entry => (entry.event === 'response' && entry.resource_type !== 'document' && entry.status >= 400)
+          const initialResourceFailures = wire.filter(entry => (entry.event === 'response' && entry.resource_type !== 'document' && entry.status >= 400)
             || (entry.event === 'failed' && entry.failure?.errorText !== 'net::ERR_ABORTED'));
-          const ancillaryResourceFailures = resourceFailures.filter(isAncillaryEmbeddedRequest);
-          const requiredResourceFailures = resourceFailures.filter(entry => !isAncillaryEmbeddedRequest(entry));
-          const javascriptErrors = errors.filter(entry => entry.type === 'pageerror');
+          const initialJavascriptErrors = errors.filter(entry => entry.type === 'pageerror');
           costs.resource_and_runtime_classification_ms = Date.now() - resourceChecksStarted;
           const hasFailure = navigationError || verification.result === 'fail' || dom?.runtime_error_text || runtimeChecks.some(check => check.result === 'fail')
-            || resourceFailures.length || javascriptErrors.length || wire.some(entry => entry.event === 'response' && entry.status >= 400);
+            || initialResourceFailures.length || initialJavascriptErrors.length || wire.some(entry => entry.event === 'response' && entry.status >= 400);
           if (profile === 'full' || hasFailure) {
             const html = await boundedRead(() => page.content());
             if (typeof html === 'string') { fs.writeFileSync(prefix + '-dom-private.html', html, { mode: 0o600 }); fs.chmodSync(prefix + '-dom-private.html', 0o600); }
@@ -758,21 +836,19 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
           }
           const expectedHttp = item.expected_http ?? contract.page?.response_assertions?.status ?? 200;
           const serverAddress = observedResponse ? await boundedRead(() => observedResponse.serverAddr(), 5000) : null;
-          const mappedHost = localHostMappings.find(mapping => mapping.host === new URL(item.url).hostname);
+          const logicalTransport = require('./theme-phtml-sitewide-contract').sourceRequestUrl(item);
+          const mappedHost = localHostMappings.find(mapping => mapping.host === new URL(item.url).hostname)
+            || (logicalTransport.mapped ? { host: new URL(item.url).hostname, address: item.transport_proof.expected_server_address } : null);
+          const websiteIdentity = require('./theme-phtml-website-identity').verifySelectedWebsite(dom, item, ROOT);
           const transportVerification = mappedHost ? {
-            host: mappedHost.host, expected_address: mappedHost.address, server_address: serverAddress,
+            host: mappedHost.host, expected_address: mappedHost.address, server_address: serverAddress, logical_url: item.logical_url, actual_transport_url: item.url,
             document_http_200: observedResponse?.status() === 200,
             expected_status: expectedHttp, source_status_confirmed: observedResponse?.status() === expectedHttp,
             loopback_confirmed: ['127.0.0.1', '::1', '[::1]', '::ffff:127.0.0.1'].includes(serverAddress?.ipAddress),
-            selected_website_confirmed: dom?.server_config_scopes?.some(scope => Number(scope.website_id) === Number(item.request_scope.website_id)) || false,
-            website_identity_check: responseOnly ? 'not_exposed_by_source_response_branch' : 'required_document_server_config',
+            selected_website_confirmed: websiteIdentity.confirmed,
+            website_identity_check: responseOnly ? 'not_exposed_by_source_response_branch' : websiteIdentity.source,
+            website_identity_evidence: websiteIdentity,
           } : { mapping: 'existing local domain', server_address: serverAddress };
-          const runtimeFailed = !!(navigationError || dom?.runtime_error_text || runtimeChecks.some(check => check.result === 'fail')
-            || requiredResourceFailures.length > 0 || javascriptErrors.length > 0
-            || (item.mode === 'verify' && observedResponse?.status() !== expectedHttp)
-            || (mappedHost && (!transportVerification.source_status_confirmed || !transportVerification.loopback_confirmed
-              || (!responseOnly && !transportVerification.selected_website_confirmed))));
-          const productResult = item.mode === 'verify' ? (runtimeFailed ? 'fail' : verification.result) : 'not_evaluated';
           const source = item.capture_source === true || manifest.capture_source === true ? actualTemplateSource(headers['x-weline-request-id']) : { available: false, reason: 'Full trace not requested for this URL; independent source matrix retained.' };
           if (profile === 'compact' && !hasFailure && dom?.topology) {
             const keep = new Set([...dom.wrappers, ...dom.slots, ...dom.markers, ...dom.source_roots,
@@ -782,15 +858,35 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
             dom.topology_total_elements = dom.topology.length;
             dom.topology = dom.topology.filter(node => keep.has(node.index));
           }
-          const contractEvidence = profile === 'compact' ? { available: contract.available, path: contract.path, sha256: contract.sha256, matches: contract.matches, request_case: contract.request_case, page_key: `${item.identity.theme_id}/${item.layout_type}/${item.layout_option}` } : contract;
+          const queryDiagnostic = item.capture_query_bin_diagnostic === true ? {
+            sequence: (await Promise.all(queryDiagnosticTasks)).map(entry => typeof entry.finalize === 'function' ? entry.finalize() : entry),
+            checkout_business_state: await page.locator('[data-weline-checkout]').evaluateAll(nodes => nodes.map(node => ({ view: node.getAttribute('data-checkout-view'), visible: !!(node.getBoundingClientRect().width && node.getBoundingClientRect().height) }))),
+          } : undefined;
+          const failedQueryEvidence = (await Promise.all(failedQueryTasks)).map(entry => typeof entry.finalize === 'function' ? entry.finalize() : entry);
+          // 最终判定与证据使用同一观察边界，涵盖异步取证期间已收到的失败响应。
+          const resourceFailures = wire.filter(entry => (entry.event === 'response' && entry.resource_type !== 'document' && entry.status >= 400)
+            || (entry.event === 'failed' && entry.failure?.errorText !== 'net::ERR_ABORTED'));
+          const ancillaryResourceFailures = resourceFailures.filter(isAncillaryEmbeddedRequest);
+          const requiredResourceFailures = resourceFailures.filter(entry => !isAncillaryEmbeddedRequest(entry));
+          const javascriptErrors = errors.filter(entry => entry.type === 'pageerror');
+          const runtimeFailed = !!(navigationError || dom?.runtime_error_text || runtimeChecks.some(check => check.result === 'fail')
+            || requiredResourceFailures.length > 0 || javascriptErrors.length > 0
+            || (item.mode === 'verify' && observedResponse?.status() !== expectedHttp)
+            || (mappedHost && (!transportVerification.source_status_confirmed || !transportVerification.loopback_confirmed
+              || (!responseOnly && !transportVerification.selected_website_confirmed))));
+          const productResult = item.mode === 'verify' ? (runtimeFailed ? 'fail' : verification.result) : 'not_evaluated';
+          // 比对仍使用完整独立源合同；通过用例引用原文件，失败用例保留完整输入。
+          const contractEvidence = productResult === 'pass' && contract.path && contract.sha256
+            ? { ...contract, page: undefined, page_key: `${item.identity.theme_id}/${item.layout_type}/${item.layout_option}`, page_storage: 'referenced_source_contract' }
+            : contract;
           const evidence = { id, started, ended: new Date().toISOString(), runner_sha256: RUNNER_HASH, mode: item.mode || 'observe', product_result: productResult,
-            intended_url: item.url, observed_url: publicUrl(page.url()), intended_identity: item.identity, request_scope: item.request_scope, target: item.target, locale: item.locale,
+            intended_url: item.url, logical_url: item.logical_url, observed_url: publicUrl(page.url()), intended_identity: item.identity, request_scope: item.request_scope, target: item.target, locale: item.locale,
             family: item.family, auth_state_condition: item.auth_state_condition, transport_verification: transportVerification, layout_type: item.layout_type, layout_option: item.layout_option,
             server_cache_mode: item.server_cache_mode || 'no_cache_query_only', request_headers_requested: requestHeaders, document_chain: documentChain,
             viewport, browser_cache_disabled: true, protocol_unchanged: true, template_debug_bars_requested: url.searchParams.get('wls_tpl_perf') === '1', status: observedResponse?.status(), request_id: headers['x-weline-request-id'],
             costs_ms: { ...costs, observed_total_wall_ms: Date.now() - Date.parse(started) },
             response_headers: Object.fromEntries(Object.entries(headers).filter(([key]) => /^(content-type|content-encoding|x-weline-|x-cache|x-fpc|server|cache-control)/i.test(key))),
-            evidence_profile: profile, evidence_prefix: prefix, observation_error: navigationError, failure_stage: failureStage, screenshot_error: screenshotError, source_contract: contractEvidence, actual_source_execution: source,
+            evidence_profile: profile, full_screenshot_mode: protocolXmlDocument ? 'xml_viewport_with_complete_response_body' : 'full_page', evidence_prefix: prefix, observation_error: navigationError, failure_stage: failureStage, screenshot_error: screenshotError, source_contract: contractEvidence, actual_source_execution: source,
             verification, response_contract: responseContract, response_body_evidence: responseBodyEvidence, element_screenshots: elementScreenshots,
             visibility_css_diagnostic: visibilityCss ? { file: prefix + '-visibility-css.json', observation_error: visibilityCss.observation_error } : null,
             acceptance_kind: contract.page?.acceptance_kind || 'phtml_source_and_dom', runtime_checks: runtimeChecks, runtime_verification: { failed: runtimeFailed, resource_failures: resourceFailures,
@@ -798,7 +894,7 @@ test.describe('sitewide PHTML real browser observations and source assertions', 
             acceptance_states: { layout_interaction_contract: navigationError || dom?.runtime_error_text || runtimeChecks.some(check => check.result === 'fail') ? 'fail' : verification.result,
               required_resources: requiredResourceFailures.length || javascriptErrors.length ? 'fail' : 'pass',
               ancillary_embedded_requests: ancillaryResourceFailures.length ? 'failure_observed' : 'no_failure_observed' },
-            errors, dom, network: wire, pending: Array.from(pending.entries()).map(([request, entry]) => ({ ...entry, elapsed_ms: Date.now() - entry.started, timing: request.timing() })) };
+            errors, dom, query_diagnostic: queryDiagnostic, failed_query_evidence: failedQueryEvidence, network: wire, pending: Array.from(pending.entries()).map(([request, entry]) => ({ ...entry, elapsed_ms: Date.now() - entry.started, timing: request.timing() })) };
           writeJson(prefix + '.json', evidence);
           writeJson(latestFile, evidence);
           await testInfo.attach('sitewide observation', { path: prefix + '.json', contentType: 'application/json' });

@@ -118,6 +118,9 @@
         if (root.dataset.storeCode) {
             payload.store_code = root.dataset.storeCode;
         }
+        if (root.dataset.storeMode) {
+            payload.store_mode = root.dataset.storeMode;
+        }
         if (root.dataset.channelCode) {
             payload.channel_code = root.dataset.channelCode;
         }

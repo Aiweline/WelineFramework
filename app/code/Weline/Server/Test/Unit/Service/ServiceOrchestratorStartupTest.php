@@ -6722,6 +6722,30 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(2, $orchestrator->waits);
     }
 
+    public function testFreshRegisteredWorkerPreventsEmergencyRestart(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            launchId: 'fresh-worker-launch',
+            pid: 0,
+            state: ServiceInstance::STATE_REGISTERED,
+            startedAt: self::monotonicSeconds(),
+        );
+        $orchestrator->getRegistry()->addInstance($worker);
+
+        $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
+        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {});
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'desiredState', [ControlMessage::ROLE_WORKER => 1]);
+
+        $this->invokePrivate($orchestrator, 'runWorkerLivenessAudit');
+
+        self::assertSame(0.0, $this->readPrivate($orchestrator, 'lastEmergencyWorkerRestartAt'));
+        self::assertSame($worker, $orchestrator->getRegistry()->getInstance(ControlMessage::ROLE_WORKER, 1));
+    }
+
     public function testWorkerManagedIdentityMismatchReleasesLeaseAndSchedulesResurrection(): void
     {
         $server = new class extends MasterControlServer {
@@ -6848,6 +6872,66 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'running' => true,
                 'checkedAt' => self::monotonicSeconds(),
             ],
+        ]);
+
+        self::assertTrue($this->invokePrivateWithArgs($orchestrator, 'isInstanceServiceAlive', [$worker]));
+    }
+
+    public function testWorkerManagedIdentityCacheDoesNotFollowReplacementInSameSlot(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 2,
+            epoch: 1,
+            launchId: 'replacement-launch',
+            pid: 88003,
+            state: ServiceInstance::STATE_READY,
+            startedAt: self::monotonicSeconds(),
+        );
+        $worker->setMeta('process_name', 'weline-wls-worker-identity-replacement');
+        $worker->setMeta('expected_process_identity', 'weline-wls-worker-identity-replacement');
+        $this->writePrivate($orchestrator, 'managedIdentityProbeCache', [
+            ControlMessage::ROLE_WORKER . ':2' => [
+                'state' => Processer::PROCESS_STATE_IDENTITY_MISMATCH,
+                'reason' => 'old_launch_exited',
+                'pid' => 88002,
+                'launch_id' => 'old-launch',
+                'checkedAt' => self::monotonicSeconds(),
+            ],
+        ]);
+        $this->writePrivate($orchestrator, 'processRunningCache', [
+            88003 => ['running' => true, 'checkedAt' => self::monotonicSeconds()],
+        ]);
+
+        self::assertTrue($this->invokePrivateWithArgs($orchestrator, 'isInstanceServiceAlive', [$worker]));
+    }
+
+    public function testUnknownManagedIdentityProbeDoesNotDeclareLiveWorkerDead(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: 1,
+            launchId: 'live-but-probe-unknown',
+            pid: 88004,
+            state: ServiceInstance::STATE_READY,
+            startedAt: self::monotonicSeconds(),
+        );
+        $worker->setMeta('process_name', 'weline-wls-worker-probe-unknown');
+        $worker->setMeta('expected_process_identity', 'weline-wls-worker-probe-unknown');
+        $this->writePrivate($orchestrator, 'managedIdentityProbeCache', [
+            ControlMessage::ROLE_WORKER . ':1' => [
+                'state' => Processer::PROCESS_STATE_UNKNOWN,
+                'reason' => 'transient_probe_failure',
+                'pid' => 88004,
+                'launch_id' => 'live-but-probe-unknown',
+                'checkedAt' => self::monotonicSeconds(),
+            ],
+        ]);
+        $this->writePrivate($orchestrator, 'processRunningCache', [
+            88004 => ['running' => true, 'checkedAt' => self::monotonicSeconds()],
         ]);
 
         self::assertTrue($this->invokePrivateWithArgs($orchestrator, 'isInstanceServiceAlive', [$worker]));

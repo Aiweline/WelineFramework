@@ -24,13 +24,14 @@ final class ControllerFetchFileBeforeHistoricalFailureTest extends TestCase
     private object $sourceResolver;
     private object $virtualResolver;
     private ThemeContextService $context;
+    private array $requestParams = [];
 
     protected function setUp(): void
     {
         ControllerFetchFileBefore::clearRuntimeCache();
         $request = $this->createMock(Request::class);
-        $request->method('getParam')->willReturnCallback(static fn($key, $default = null) => $default);
-        $request->method('getGet')->willReturnCallback(static fn($key = '', $default = '') => $default);
+        $request->method('getParam')->willReturnCallback(fn($key, $default = null) => $this->requestParams[$key] ?? $default);
+        $request->method('getGet')->willReturnCallback(fn($key = '', $default = '') => $this->requestParams[$key] ?? $default);
         $request->method('getServer')->willReturn('');
         $request->method('getRouterData')->willReturn('');
         $request->method('getUrlPath')->willReturn('/');
@@ -45,9 +46,11 @@ final class ControllerFetchFileBeforeHistoricalFailureTest extends TestCase
         $this->sourceResolver = new class {
             public ?\Throwable $failure = null;
             public int $calls = 0;
+            public array $arguments = [];
             public function resolveExecutableLayoutPath(...$args): ?string
             {
                 ++$this->calls;
+                $this->arguments = $args;
                 if ($this->failure !== null) { throw $this->failure; }
                 return null;
             }
@@ -92,6 +95,23 @@ final class ControllerFetchFileBeforeHistoricalFailureTest extends TestCase
         self::assertSame(1, $this->sourceResolver->calls);
         self::assertSame(0, $this->virtualResolver->calls);
         self::assertNull($event->getData('data')->getData('layoutTemplate'));
+    }
+
+    public function testNestedAccountRouteKeepsExplicitOptionBeforeSelectingOrFallingBackToSource(): void
+    {
+        $this->requestParams['layout_option'] = 'isolated-original';
+        $this->context->method('resolveCurrentScope')->willReturn('history.test.default');
+        $failure = new \RuntimeException('historical_resource_snapshot_missing');
+        $this->sourceResolver->failure = $failure;
+        $event = new Event(['data' => new DataObject([
+            'layoutType' => 'account/login',
+            'fileName' => 'Weline_Customer::templates/frontend/account/login.phtml',
+        ])]);
+        try { $this->observer()->execute($event); }
+        catch (\RuntimeException $error) { self::assertSame($failure, $error); }
+        self::assertSame(1, $this->sourceResolver->calls);
+        self::assertSame('isolated-original', $event->getData('data')->getData('layoutOption'));
+        self::assertSame('isolated-original', $this->sourceResolver->arguments[2]);
     }
 
     public function testOuterLayoutFallbackDoesNotHideHistoricalInputFailure(): void

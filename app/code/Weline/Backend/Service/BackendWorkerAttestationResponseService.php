@@ -317,7 +317,18 @@ final class BackendWorkerAttestationResponseService
             // positively identified user-activated top-level navigation.
             return \defined('DEV') && DEV;
         }
-        return $mode === 'navigate' && $dest === 'document' && $user === '?1';
+        if ($mode !== 'navigate' || $dest !== 'document') {
+            return false;
+        }
+        if ($user === '?1') {
+            return true;
+        }
+        // Post-login 302→Theme Editor often omits Sec-Fetch-User while remaining
+        // a top-level document navigation. Under scope_kernel mode=on, an empty
+        // backend bootstrap slot makes QueryBin fail with scope_binding_required
+        // and the editor stays read-only. Local/dev may mint; production still
+        // requires the positive user-activation signal above.
+        return \defined('DEV') && DEV;
     }
 
     private function applyNoStore(Response $response): void

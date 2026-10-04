@@ -43,6 +43,7 @@ class SetupTaskCollector
 
         /** @var array<string, array<string, mixed>> $byCode */
         $byCode = [];
+        $providers = $this->getProviders();
         foreach ($websites as $site) {
             $websiteId = (int)$site['website_id'];
             $label = (string)$site['label'];
@@ -50,7 +51,7 @@ class SetupTaskCollector
                 'website_id' => $websiteId,
                 'website_code' => (string)($site['website_code'] ?? ''),
                 'storage_scope' => '',
-            ]);
+            ], $providers);
             foreach ($tasks as $task) {
                 $code = (string)$task['code'];
                 if (!isset($byCode[$code])) {
@@ -218,10 +219,11 @@ class SetupTaskCollector
      * @param array{website_id?:int,website_code?:string,storage_scope?:string} $context
      * @return list<array<string, mixed>>
      */
-    private function collectRaw(array $context = []): array
+    private function collectRaw(array $context = [], ?array $providers = null): array
     {
         $byCode = [];
-        foreach ($this->getProviders() as $provider) {
+        $providers ??= $this->getProviders();
+        foreach ($providers as $provider) {
             try {
                 $rows = $provider->provideTasks($context);
             } catch (\Throwable) {
@@ -301,7 +303,7 @@ class SetupTaskCollector
     /**
      * @return list<array{website_id:int,website_code:string,label:string}>
      */
-    private function listWebsiteContexts(): array
+    protected function listWebsiteContexts(): array
     {
         $out = [];
         try {
@@ -337,7 +339,7 @@ class SetupTaskCollector
     }
 
     /** @return SetupTaskProviderInterface[] */
-    private function getProviders(): array
+    protected function getProviders(): array
     {
         $providers = [];
         foreach ($this->getProviderClassesFromExtends() as $implClass) {

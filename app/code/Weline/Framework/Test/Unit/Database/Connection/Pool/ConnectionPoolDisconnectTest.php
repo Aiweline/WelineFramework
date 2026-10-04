@@ -80,6 +80,29 @@ final class ConnectionPoolDisconnectTest extends TestCase
         ], ConnectionPool::getPoolStats($config));
     }
 
+    public function testIdleOwnerCanReturnConnectionBeforeLongFiberWait(): void
+    {
+        $config = $this->config();
+        $connection = new ConnectionPoolDisconnectFakePdo();
+        $lease = ConnectionPool::acquire($config, static fn(): PDO => $connection);
+
+        self::assertSame(1, ConnectionPool::releaseCurrentOwnerIdleConnections());
+        self::assertFalse($lease->isActive());
+        self::assertSame(0, ConnectionPool::getPoolStats($config)['in_use']);
+        self::assertSame(1, ConnectionPool::getPoolStats($config)['available']);
+    }
+
+    public function testActiveTransactionIsNotReturnedBeforeFiberWait(): void
+    {
+        $config = $this->config();
+        $connection = new ConnectionPoolDisconnectFakePdo(false, true);
+        $lease = ConnectionPool::acquire($config, static fn(): PDO => $connection);
+
+        self::assertSame(0, ConnectionPool::releaseCurrentOwnerIdleConnections());
+        self::assertTrue($lease->isActive());
+        self::assertSame(1, ConnectionPool::getPoolStats($config)['in_use']);
+    }
+
     public function testDisconnectExceptionClassifierCoversPgsqlConnectionLossMessages(): void
     {
         self::assertTrue(ConnectionPool::isDisconnectException(

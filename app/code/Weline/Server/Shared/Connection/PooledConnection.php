@@ -9,6 +9,7 @@ use Weline\Server\Log\WlsLogger;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Session\Server\SharedStateTokenStore;
 use Weline\Server\Shared\Contract\PooledConnectionInterface;
+use Weline\Server\Shared\Contract\DeadlinePooledConnectionInterface;
 
 /**
  * 单连接上复用 Session 帧协议（非 HTTP/2 多路复用）。
@@ -17,7 +18,7 @@ use Weline\Server\Shared\Contract\PooledConnectionInterface;
  * Socket 统一非阻塞：WLS Fiber + enableIoWait 时挂起等待 fd；CLI/FPM/无 I/O await 时
  * 回退到有界 stream_select。超时/EOF/协议错误一律 close，禁止迟到响应回池。
  */
-class PooledConnection implements PooledConnectionInterface
+class PooledConnection implements PooledConnectionInterface, DeadlinePooledConnectionInterface
 {
     /** Local shared-state replies are ~0.05 ms (p99 ~0.1 ms); longer waits yield to the Worker. */
     public const DEFAULT_SYNC_AWAIT_WINDOW_SEC = 0.002;
@@ -189,8 +190,16 @@ class PooledConnection implements PooledConnectionInterface
         if (!$this->isConnected() && !$this->connect()) {
             return false;
         }
+        return $this->sendUntil($payload, self::monotonicSeconds() + $this->timeout);
+    }
 
-        $deadline = self::monotonicSeconds() + $this->timeout;
+    public function sendUntil(string $payload, float $deadline): bool
+    {
+        // 带截止时间的发送只使用已取得的连接；不得另开重连预算。
+        if (!$this->isConnected()) {
+            return false;
+        }
+
         $phaseStart = self::monotonicSeconds();
         $total = \strlen($payload);
         $offset = 0;
@@ -224,11 +233,15 @@ class PooledConnection implements PooledConnectionInterface
 
     public function read(): ?array
     {
+        return $this->readUntil(self::monotonicSeconds() + $this->timeout);
+    }
+
+    public function readUntil(float $deadline): ?array
+    {
         if (!$this->isConnected()) {
             return null;
         }
 
-        $deadline = self::monotonicSeconds() + $this->timeout;
         $phaseStart = self::monotonicSeconds();
 
         while (true) {

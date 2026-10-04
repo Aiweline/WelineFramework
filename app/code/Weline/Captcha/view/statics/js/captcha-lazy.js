@@ -442,11 +442,13 @@
         })();
         if (ensurePromiseByHost && ctx.anchor) {
             ensurePromiseByHost.set(ctx.anchor, task);
-            task.finally(function () {
+            var releaseHost = function () {
                 if (ensurePromiseByHost.get(ctx.anchor) === task) {
                     ensurePromiseByHost.delete(ctx.anchor);
                 }
-            });
+            };
+            // Observe both outcomes without creating an unhandled rejected cleanup promise.
+            task.then(releaseHost, releaseHost);
         }
         return task;
     }

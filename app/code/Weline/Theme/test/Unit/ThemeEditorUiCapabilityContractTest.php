@@ -510,7 +510,8 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         $previewPage = $this->read('app/code/Weline/Theme/view/ui/js/pages/theme-preview.js');
         $editor = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
         $ui = $this->read('app/code/Weline/Theme/view/ui/js/weline-ui.js');
-        $frontend = $this->read('app/code/Weline/Frontend/view/statics/js/weline.js');
+        $frontend = $this->read('app/code/Weline/Frontend/view/statics/js/weline.js')
+            . $this->read('app/code/Weline/Framework/view/statics/js/dom-observer.js');
 
         self::assertStringContainsString('observeMutationsCoalesced', $frontend);
         self::assertStringContainsString('requestIdleCallback', $frontend);
@@ -798,6 +799,11 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('ScopeSelectorCatalogInterface::class', $controller);
         self::assertStringContainsString('LocaleCatalogScopeResolver::class', $controller);
         self::assertStringContainsString('resolveEditorWebsiteId(', $controller);
+        self::assertStringContainsString('resolveThemeIdFromScopeBinding(', $controller);
+        self::assertStringContainsString('resolveStorefrontMountPathForEditorScope(', $controller);
+        self::assertStringContainsString('RESOURCE_THEME_BINDING', $controller);
+        self::assertStringContainsString('withStorefrontMountPath(', $editor);
+        self::assertStringContainsString('data-storefront-mount-path=', $template);
         self::assertStringContainsString('getInstalledLocalesPayload($scopeIdentityForLocales)', $controller);
         self::assertStringNotContainsString('ThemeEditorScopeCatalogService::class', $controller);
         self::assertStringNotContainsString('$requestedFrontendThemeId = 0;', $controller);

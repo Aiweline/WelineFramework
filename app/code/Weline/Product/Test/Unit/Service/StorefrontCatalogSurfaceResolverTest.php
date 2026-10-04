@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Product\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Product\Service\StorefrontCatalogSurfaceResolver;
 
 final class StorefrontCatalogSurfaceResolverTest extends TestCase
@@ -71,6 +72,22 @@ final class StorefrontCatalogSurfaceResolverTest extends TestCase
         self::assertNull($this->resolver->resolveSupported('/en_US/category/women'));
         self::assertSame('categories', $this->resolver->resolveSupported('/categories')['code'] ?? null);
         self::assertSame('categories', $this->resolver->resolveSupported('/category')['code'] ?? null);
+    }
+
+    public function testMountedCategoryIndexesUseTheConfiguredMountInsteadOfWebsiteCode(): void
+    {
+        WelineEnv::set('website_url', 'https://example.test/e2e-mso3wfcu-1', 'catalog mount test');
+        try {
+            foreach (['/category', '/categories', '/EUR/en_US/categories'] as $route) {
+                $surface = $this->resolver->resolve('/e2e-mso3wfcu-1' . $route, 'en_US', 'e2e-theme-default');
+                self::assertSame('categories', $surface['code']);
+                self::assertSame('category', $surface['layout_type']);
+            }
+            self::assertNull($this->resolver->resolveSupported('/e2e-mso3wfcu-1/category/women'));
+            self::assertNull($this->resolver->resolveSupported('/e2e-mso3wfcu-10/categories'));
+        } finally {
+            WelineEnv::getInstance()->reset();
+        }
     }
 
     public function testDaocharmsWebsiteUsesRitualObjectsCopyWithoutHanfuShareImage(): void

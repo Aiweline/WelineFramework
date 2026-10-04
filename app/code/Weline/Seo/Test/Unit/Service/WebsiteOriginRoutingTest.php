@@ -50,6 +50,38 @@ final class WebsiteOriginRoutingTest extends TestCase
         } finally { $_SERVER = $before; }
     }
 
+    public function testRegisteredWebsiteAliasRewritesMountButRejectsForeignOrigin(): void
+    {
+        $directory = new class extends SeoWebsiteDirectory {
+            public function listPublicOrigins(?array $website = null): array
+            {
+                return [['base_url' => 'https://original.example/old-store']];
+            }
+        };
+        $registeredOrigins = $directory->listPublicOrigins(['website_id' => 177]);
+        self::assertSame(
+            'https://alias.example/new-store/en_US/product/1?q=blue#details',
+            $directory->rewriteWebsiteOriginUrl(
+                'https://original.example/old-store/en_US/product/1?q=blue#details',
+                'https://alias.example/new-store', $registeredOrigins,
+            ),
+        );
+        self::assertSame(
+            'https://foreign.example/old-store/product/1',
+            $directory->rewriteWebsiteOriginUrl(
+                'https://foreign.example/old-store/product/1',
+                'https://alias.example/new-store', $registeredOrigins,
+            ),
+        );
+        self::assertSame(
+            'https://original.example/old-store-other/product/1',
+            $directory->rewriteWebsiteOriginUrl(
+                'https://original.example/old-store-other/product/1',
+                'https://alias.example/new-store', $registeredOrigins,
+            ),
+        );
+    }
+
     public function testRewriteToPublicOriginAlignsSameHostPortDifference(): void
     {
         $directory = new SeoWebsiteDirectory();

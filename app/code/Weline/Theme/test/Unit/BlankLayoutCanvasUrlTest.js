@@ -16,11 +16,15 @@ function build(type, option) {
         appendThemeLayoutRuntimeParams: url => url.searchParams.set('scope', 'shop.__website__.default'),
         stripCanvasVisitorLanguageQuery: url => url.searchParams.delete('locale'),
         splitCanvasStorefrontLocalization: route => ({ business: route }),
+        withStorefrontMountPath: route => String(route || '').replace(/^\/+/, ''),
         buildTypedEditorContext: (_resource, values) => ({ ...values, scope: { storage_scope: 'shop.__website__.default' } }),
     };
     vm.createContext(context);
     const start = source.indexOf('    function buildCanvasStorefrontPreviewUrl(');
-    vm.runInContext(source.slice(start, source.indexOf('\n    /**', start)), context);
+    const end = source.indexOf('\n    function buildCanvasUrlPreservingStorefrontPath', start);
+    assert.notEqual(start, -1);
+    assert.notEqual(end, -1);
+    vm.runInContext(source.slice(start, end), context);
     return new URL(context.buildCanvasStorefrontPreviewUrl({ status: 'published', preview_mode: 'version' }));
 }
 test('blank/full uses the authenticated HTML compiler and keeps selected identity', () => {

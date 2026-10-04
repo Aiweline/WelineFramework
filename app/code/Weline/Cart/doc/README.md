@@ -53,3 +53,8 @@ Cart items include both a stable row key and product-facing fields:
 - Vendor/site modules must not register another public `cart` provider.
 - Vendor/site modules can add storefront pages, hooks, recommendations, or fallback forms around Cart, but persistent cart mutation should remain in `Weline_Cart`.
 - Payment, shipping, discount, and inventory reservation execution remain outside this module and should connect through their own published contracts.
+
+Remove-button pixel markers use the framework's `Weline.dom.observe` quiet-window
+observer. Each flush stamps the current document so buttons inserted during a
+disconnected interval receive their markers too. Stamping remains idempotent;
+document hydration must not permanently disconnect tracking for later buttons.

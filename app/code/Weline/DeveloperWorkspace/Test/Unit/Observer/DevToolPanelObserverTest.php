@@ -10,6 +10,7 @@ use Weline\DeveloperWorkspace\Observer\DevToolPanelObserver;
 use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Response;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 final class DevToolPanelObserverTest extends TestCase
@@ -99,6 +100,22 @@ final class DevToolPanelObserverTest extends TestCase
         $method->setAccessible(true);
 
         self::assertFalse((bool)$method->invoke($observer, '{"success":true,"data":[]}'));
+    }
+
+    public function testCompressedHtmlIsNotEligibleForRawDevToolInjection(): void
+    {
+        $request = $this->createMock(Request::class);
+        $response = Response::fromContent('compressed', 200, 'text/html; charset=utf-8');
+        $response->setHeader('Content-Encoding', 'gzip');
+        $request->method('getResponse')->willReturn($response);
+        $observer = new DevToolPanelObserver($request);
+        $method = new ReflectionMethod(DevToolPanelObserver::class, 'isHtmlResponse');
+        $method->setAccessible(true);
+
+        self::assertFalse((bool)$method->invoke($observer, gzencode('<html><body>page</body></html>') . '<script>trailer</script>'));
+
+        $response->setHeader('Content-Encoding', 'br');
+        self::assertFalse((bool)$method->invoke($observer, '<script>binary-marker</script>'));
     }
 
     public function testExtractRequestIdsFromExistingDevToolMarkup(): void

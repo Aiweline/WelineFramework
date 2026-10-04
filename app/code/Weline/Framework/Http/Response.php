@@ -298,6 +298,9 @@ class Response implements ResponseInterface, RequestLocalInterface
     public function emit(bool $terminate = true): void
     {
         $this->prepareForEmission();
+        if ($this->body !== '') {
+            $this->synchronizeContentLengthHeader();
+        }
 
         if (!\headers_sent()) {
             $contentType = (string)($this->getHeader('Content-Type') ?? '');
@@ -320,6 +323,9 @@ class Response implements ResponseInterface, RequestLocalInterface
     public function toHttpString(bool $keepAlive = true): string
     {
         $this->prepareForEmission();
+        if ($this->body !== '') {
+            $this->synchronizeContentLengthHeader();
+        }
 
         $statusCode = $this->getStatusCode();
         $statusText = self::getStatusText($statusCode);

@@ -246,7 +246,7 @@ final class FrontendWorkerScopeBootstrapResponseService
 
     private function isEligibleRequest(): bool
     {
-        if (InternalHomepagePrime::isCurrentRequest()) {
+        if (InternalHomepagePrime::hasServerOnlyMarker()) {
             return false;
         }
 
@@ -267,7 +267,7 @@ final class FrontendWorkerScopeBootstrapResponseService
 
     private function isEligibleResponse(Response $response): bool
     {
-        if ($response->getStatusCode() !== 200
+        if (!\in_array($response->getStatusCode(), [200, 404], true)
             || $this->headerValue($response, 'Content-Disposition') !== '') {
             return false;
         }

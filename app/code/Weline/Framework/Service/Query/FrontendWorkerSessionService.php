@@ -9,6 +9,7 @@ use Weline\Framework\Cache\AdapterFactory;
 use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface;
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
+use Weline\Framework\Cache\Exception\AtomicWriteOutcomeUnknownException;
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
@@ -190,16 +191,15 @@ final class FrontendWorkerSessionService
      */
     public function createScopeBootstrap(FrontendWorkerScopeBinding $binding): array
     {
-        $bootstrapId = $this->randomToken(32);
-        $cookieName = self::scopeBootstrapCookieName($bootstrapId);
-
-        return $this->withCredentialTransaction(function (FrontendWorkerCredentialTransactionInterface $store) use (
+        $create = fn(): array => $this->withCredentialTransaction(function (FrontendWorkerCredentialTransactionInterface $store) use (
             $binding,
-            $bootstrapId,
-            $cookieName,
         ): array {
             $now = $store->now();
             $this->assertBindingUsable($binding, $now);
+            // An uncertain first write may have committed an orphan. Never
+            // return or reuse its ID; the next transaction creates a fresh ID.
+            $bootstrapId = $this->randomToken(32);
+            $cookieName = self::scopeBootstrapCookieName($bootstrapId);
             $expiresAt = \min($now + self::SCOPE_BOOTSTRAP_TTL, $binding->tokenExpiresAt);
             $this->assertCredentialCapacity(
                 $store,
@@ -232,6 +232,23 @@ final class FrontendWorkerSessionService
                 'expires_at' => $expiresAt,
             ];
         });
+        $recoveringUnknownWrite = false;
+        for ($attempt = 1; $attempt <= 8; $attempt++) {
+            try {
+                return $create();
+            } catch (FrontendQueryException $error) {
+                if ($error->getErrorCode() !== 'worker_store_unavailable'
+                    || (!$recoveringUnknownWrite
+                        && !($error->getPrevious() instanceof AtomicWriteOutcomeUnknownException))
+                    || $attempt === 8
+                ) {
+                    throw $error;
+                }
+                $recoveringUnknownWrite = true;
+                SchedulerSystem::usleep(\random_int(30_000, \min(200_000, 50_000 * $attempt)));
+            }
+        }
+        throw new \LogicException('Scope bootstrap retry loop terminated unexpectedly.');
     }
 
     public function peekScopeBootstrap(
@@ -330,18 +347,15 @@ final class FrontendWorkerSessionService
         FrontendWorkerBackendBinding $binding,
         bool $secureCookie,
     ): array {
-        $bootstrapId = $this->randomToken(32);
-        $cookieValue = $this->randomToken(32);
-        $cookieName = self::backendBootstrapCookieName($bootstrapId, $secureCookie);
-
         return $this->withCredentialTransaction(function (FrontendWorkerCredentialTransactionInterface $store) use (
             $binding,
-            $bootstrapId,
-            $cookieValue,
-            $cookieName,
+            $secureCookie,
         ): array {
             $now = $store->now();
             $this->assertBackendBindingUsable($binding, $now);
+            $bootstrapId = $this->randomToken(32);
+            $cookieValue = $this->randomToken(32);
+            $cookieName = self::backendBootstrapCookieName($bootstrapId, $secureCookie);
             $expiresAt = \min($now + self::SCOPE_BOOTSTRAP_TTL, $binding->expiresAt);
             $this->assertCredentialCapacity(
                 $store,

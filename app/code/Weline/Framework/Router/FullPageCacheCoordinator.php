@@ -18,6 +18,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\Database\TransactionContext;
+use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
@@ -44,10 +45,11 @@ use Weline\Framework\Session\SessionFactory;
 
 final class FullPageCacheCoordinator implements ProcessSharedInterface
 {
-    private const LOCK_TTL_SECONDS = 15;
+    private const LOCK_TTL_SECONDS = 60;
     private const LOCK_WAIT_TIMEOUT_MS = 50;
     private const PERSISTENT_LOCK_WAIT_TIMEOUT_MS = 0;
     private const LOCK_WAIT_STEP_MS = 20;
+    private const LOCK_WAIT_MAX_STEP_MS = 500;
     private const UNIFIED_CACHE_FPC_GZIP_B64_KEY = 'fpc_gzip_b64';
     private const UNIFIED_CACHE_FPC_BROTLI_B64_KEY = 'fpc_br_b64';
     private const UNIFIED_CACHE_FPC_BODY_FILE_KEY = 'fpc_body_file';
@@ -340,6 +342,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 break;
             }
 
+            if (Runtime::isPersistent()) {
+                ConnectionPool::releaseCurrentOwnerIdleConnections();
+            }
             SchedulerSystem::yieldDelay(\min(self::LOCK_WAIT_STEP_MS, $remainingMs));
         } while (\microtime(true) < $deadline);
 
@@ -349,6 +354,59 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
 
         return $response;
+    }
+
+    /**
+     * A cacheable follower may build only after it owns the shared lock. A
+     * timed-out read must not fall through into a second full-page render.
+     *
+     * @return array{response:?Response,lock:?array}
+     */
+    public function waitForPublishedResponseOrBuildLock(
+        string $method = 'GET',
+        int $timeoutMs = self::LOCK_WAIT_TIMEOUT_MS,
+    ): array {
+        $method = $this->normalizeBuildMethod($method);
+        $timeoutMs = $this->resolvePublishedResponseWaitTimeoutMs($timeoutMs);
+        $deadline = \microtime(true) + ($timeoutMs / 1000);
+        $waitStepMs = self::LOCK_WAIT_STEP_MS;
+        do {
+            $response = $this->getCachedResponse($method);
+            if ($response !== null) {
+                return ['response' => $response, 'lock' => null];
+            }
+
+            $lock = $this->acquireBuildLock($method);
+            if ($lock !== null) {
+                // A publisher may have landed its result between the read and
+                // the lock handoff. Prefer that result over a redundant build.
+                $response = $this->getCachedResponse($method);
+                if ($response !== null) {
+                    $this->releaseBuildLock($lock);
+                    return ['response' => $response, 'lock' => null];
+                }
+
+                return ['response' => null, 'lock' => $lock];
+            }
+
+            $remainingMs = (int)\max(0, \ceil(($deadline - \microtime(true)) * 1000));
+            if ($remainingMs <= 0) {
+                break;
+            }
+            // Many followers polling the same missing page every 20ms can
+            // monopolize a Worker and delay the sole publisher. Back off
+            // while continuing to probe often enough for a prompt handoff.
+            if (Runtime::isPersistent()) {
+                ConnectionPool::releaseCurrentOwnerIdleConnections();
+            }
+            SchedulerSystem::yieldDelay(\min($waitStepMs, $remainingMs));
+            $waitStepMs = \min($waitStepMs * 2, self::LOCK_WAIT_MAX_STEP_MS);
+        } while (\microtime(true) < $deadline);
+
+        return [
+            'response' => $this->getCachedResponse($method) ?? $this->getStaleCachedResponse($method),
+            'lock' => null,
+        ];
     }
 
     private function resolvePublishedResponseWaitTimeoutMs(int $timeoutMs): int
@@ -389,7 +447,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             self::PERSISTENT_LOCK_WAIT_TIMEOUT_MS
         );
 
-        return \min(\max(0, $configured), 250);
+        return \min(\max(0, $configured), 60000);
     }
 
     private function isBuildLockHeld(string $method): bool
@@ -1065,7 +1123,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $staleCacheKey,
             $cached,
             $body,
-            false
+            false,
+            true
         );
         if ($cached === null) {
             return null;
@@ -1210,7 +1269,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         bool $keepAlive = false,
         string $requestMethod = 'GET',
         string $acceptHeader = '',
-        string $acceptEncoding = ''
+        string $acceptEncoding = '',
+        bool $decorateRequest = false,
     ): ?array {
         $requestMethod = \strtoupper(\trim($requestMethod) ?: 'GET');
         if (($requestMethod !== 'GET' && $requestMethod !== 'HEAD')
@@ -1246,7 +1306,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
 
         $encoding = $this->resolveHitContentEncoding($acceptEncoding, $cached);
-        if ($requestMethod === 'GET' && $encoding !== null) {
+        // Internal READY probes retain the public formatted cache. A browser
+        // request gets a private Response, decorated only after cache lookup.
+        if (!$decorateRequest && $requestMethod === 'GET' && $encoding !== null) {
             $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey, $encoding);
             $formatted = $this->getProcessCachedFormattedResponse($formattedKey);
             if ($formatted === null) {
@@ -1287,6 +1349,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $this->ensureVaryHeader($response, 'Cookie');
         $response->markTelemetryPrepared();
 
+        if ($decorateRequest) {
+            $response = $this->markCacheHit($response);
+        }
         $http = $response->toHttpString($keepAlive);
         if ($requestMethod === 'HEAD') {
             $headerEnd = \strpos($http, "\r\n\r\n");
@@ -1298,8 +1363,90 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         return [
             'response' => $http,
             'source' => 'process',
-            'bytes' => \strlen($responseBody),
+            'bytes' => $decorateRequest ? \strlen($http) : \strlen($responseBody),
         ];
+    }
+
+    /**
+     * Serve the existing stale copy after the fresh receipt payload expires.
+     * The exact receipt is still checked against current scope, policy and
+     * namespace before the stale key is read; this never reconstructs a
+     * storefront variant from an anonymous transport request.
+     *
+     * @param array<string, mixed> $receipt
+     * @return array{response:string,source:string,bytes:int}|null
+     */
+    public function getFormattedStaleCachedResponseForInternalReceipt(
+        array $receipt,
+        bool $keepAlive = false,
+        string $requestMethod = 'GET',
+        string $acceptHeader = '',
+        string $acceptEncoding = '',
+        bool $decorateRequest = false,
+        bool $processOnly = false,
+    ): ?array {
+        $requestMethod = \strtoupper(\trim($requestMethod) ?: 'GET');
+        if (!\in_array($requestMethod, ['GET', 'HEAD'], true)
+            || !$this->acceptHeaderAllowsHtml($acceptHeader)
+            || \stripos($acceptHeader, 'text/event-stream') !== false
+        ) {
+            return null;
+        }
+        $freshKey = $this->internalHomepageReceiptCacheKey($receipt);
+        if ($freshKey === null) {
+            return null;
+        }
+        $staleKey = $this->buildStaleCacheKey($freshKey);
+        $cached = $this->getProcessCachedPayload($staleKey);
+        $source = 'stale-process';
+        if ($cached === null && !$processOnly) {
+            self::cooperativeBuildYield();
+            $cached = $this->cache()->get($staleKey);
+            if (\is_array($cached)) {
+                $cached = $this->hydrateSharedPayload($cached);
+                $source = 'stale-shared';
+            }
+        }
+        if (!\is_array($cached) || !$this->payloadHasAuthoritativeBody($cached)) {
+            return null;
+        }
+        $body = $this->resolvePlaintextBody($cached) ?? '';
+        if ($body === '' || !\Weline\Framework\View\Helper\HtmlCacheAdmission::admit($body)) {
+            return null;
+        }
+        $cached = $this->prepareCachedPayloadForFrameworkHit($staleKey, $cached, $body, false, true);
+        if ($cached === null) {
+            return null;
+        }
+        $variant = $cached[self::VARIANT_PAYLOAD_KEY] ?? [];
+        if (!\is_array($variant)) {
+            return null;
+        }
+        $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
+        [$responseBody, $encoding] = $this->resolveEncodedHitBody($cached, $acceptEncoding, $staleKey);
+        $response = Response::fromContent($responseBody, $statusCode, 'text/html; charset=utf-8');
+        $this->applyCachedHeaders($response, $cached[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] ?? []);
+        if ($encoding !== null) {
+            $response->setHeader('Content-Encoding', $encoding);
+            $response->setHeader('Content-Length', (string)\strlen($responseBody));
+            $this->ensureVaryAcceptEncoding($response);
+        }
+        $response->setHeader('X-Weline-FPC', 'STALE');
+        $this->applyFpcHitEdgeCacheHeaders($response, true, $cached);
+        $this->applyFpcHitPerformanceHeaders($response, $source, $variant, true);
+        $this->ensureVaryHeader($response, 'Cookie');
+        $response->markTelemetryPrepared();
+        if ($decorateRequest) {
+            $response = $this->markCacheHit($response);
+        }
+        $http = $response->toHttpString($keepAlive);
+        if ($requestMethod === 'HEAD') {
+            $headerEnd = \strpos($http, "\r\n\r\n");
+            if ($headerEnd !== false) {
+                $http = \substr($http, 0, $headerEnd + 4);
+            }
+        }
+        return ['response' => $http, 'source' => $source, 'bytes' => \strlen($http)];
     }
 
     public function isLocalizedHomepageFullUri(string $fullUri): bool
@@ -1364,6 +1511,32 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             : null;
     }
 
+    /** Keep an exact natural-hit identity available after its fresh body expires. */
+    public function resolveRootHomepageStaleReceipt(
+        string $requestFullUri,
+        string $cookieHeader = ''
+    ): ?array {
+        if (\trim($cookieHeader) !== '' || !$this->isRootHomepageFullUri($requestFullUri)) {
+            return null;
+        }
+        $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($requestFullUri));
+        if (!KeyBuilder::isValidFullPageCacheKey($fullUri)) {
+            return null;
+        }
+        $receiptIndex = \hash('sha256', $fullUri);
+        $receipt = self::$processLocalizedHomepageReceipts[$receiptIndex] ?? null;
+        if (!\is_array($receipt)
+            || !\hash_equals((string)($receipt['full_uri'] ?? ''), $fullUri)
+        ) {
+            return null;
+        }
+        if ($this->internalHomepageReceiptCacheKey($receipt) === null) {
+            unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
+            return null;
+        }
+        return $receipt;
+    }
+
     /**
      * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string,scope_identity:array,namespace_fingerprint:string}|null
      */
@@ -1409,7 +1582,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 $shared = null;
             }
             if ($this->getProcessCachedPayload($cacheKey) === null) {
-                unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
+                // The fresh body has expired. Preserve the validated receipt
+                // for a bounded stale lookup in the Worker transport path.
                 return null;
             }
         }
@@ -1599,6 +1773,15 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
 
         $this->registerHomepageProcessReceipt($fullUri, $variant, $cacheKey);
+        // A validated Shared HIT can be the first root body seen by a new
+        // Worker. Offer its exact receipt to proof-only recovery just as a
+        // MISS publisher does; the background path still verifies Shared.
+        if (Runtime::isWls()) {
+            $receipt = self::$processLocalizedHomepageReceipts[\hash('sha256', $fullUri)] ?? null;
+            if (\is_array($receipt) && ($receipt['cache_key'] ?? '') === $cacheKey) {
+                \Weline\Framework\Runtime\WlsRuntime::noteCanonicalHomepagePublication($receipt);
+            }
+        }
     }
 
     /**
@@ -2091,6 +2274,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function isExcludedFrontendPath(string $fullUri): bool
     {
         $path = (string)(\parse_url($fullUri, \PHP_URL_PATH) ?: '/');
+        // 复用 policyPath 的站点挂载路径规范化，同时保留 API 等区域前缀，
+        // 让现有私有路由排除规则继续生效。
+        $path = State::stripWebsitePathPrefix($path, $this->currentWebsiteUrlForPathVariant());
         $path = \strtolower($this->stripLocaleAndCurrencyPrefixes('/' . \trim($path, '/')));
         if ($path === '/') {
             return false;
@@ -2173,6 +2359,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             'text/html' => ['specificity' => -1, 'quality' => 0.0],
             'application/xhtml+xml' => ['specificity' => -1, 'quality' => 0.0],
         ];
+        $preferredNonHtmlQuality = 0.0;
         foreach (\explode(',', $accept) as $range) {
             $parts = \array_map('trim', \explode(';', $range));
             $mediaRange = (string)\array_shift($parts);
@@ -2192,6 +2379,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 break;
             }
 
+            if (!\str_contains($mediaRange, '*') && !\array_key_exists($mediaRange, $accepted)) {
+                $preferredNonHtmlQuality = \max($preferredNonHtmlQuality, $quality);
+            }
+
             foreach (\array_keys($accepted) as $target) {
                 $targetType = (string)\strstr($target, '/', true);
                 $specificity = $mediaRange === $target
@@ -2208,11 +2399,11 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             }
         }
 
-        if ($accepted['text/html']['specificity'] >= 0) {
-            return $accepted['text/html']['quality'] > 0.0;
-        }
-
-        return $accepted['application/xhtml+xml']['quality'] > 0.0;
+        $htmlQuality = $accepted['text/html']['specificity'] >= 0
+            ? $accepted['text/html']['quality']
+            : $accepted['application/xhtml+xml']['quality'];
+        // 明确优先接受 CSS 等内容时，低优先级通配不能使资源请求进入 HTML 全页缓存。
+        return $htmlQuality > 0.0 && $htmlQuality >= $preferredNonHtmlQuality;
     }
 
     private function hasLoggedInFrontendSession(): bool
@@ -2638,14 +2829,16 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         string $cacheKey,
         array $cached,
         string $body,
-        bool $writeShared
+        bool $writeShared,
+        bool $allowExpired = false
     ): ?array {
         return $this->prepareCachedPayloadForHit(
             $cacheKey,
             $cached,
             $body,
             $this->shouldValidateCachedHtmlUrlsOnHit($cached),
-            $writeShared
+            $writeShared,
+            $allowExpired
         );
     }
 
@@ -2663,11 +2856,13 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         array $cached,
         string $body,
         bool $validateUrls,
-        bool $writeShared
+        bool $writeShared,
+        bool $allowExpired = false
     ): ?array {
         $remainingTtl = $this->payloadRemainingTtlSeconds($cached);
-        if ($remainingTtl !== null && $remainingTtl <= 0) {
-            $this->deleteCachedPayloadByKey($cacheKey);
+        if (!$allowExpired && $remainingTtl !== null && $remainingTtl <= 0) {
+            // A different Worker may already have published a fresh value for
+            // this key. Reject this expired snapshot without deleting its key.
             return null;
         }
         $updated = false;
@@ -3414,7 +3609,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     {
         $expiresAt = self::$processFpcPayloadExpiresAt[$cacheKey] ?? 0.0;
         if ($expiresAt <= \microtime(true)) {
-            $this->deleteProcessCachedPayload($cacheKey);
+            $this->deleteProcessCachedPayload($cacheKey, true);
             return null;
         }
 
@@ -3441,6 +3636,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     {
         if ($cacheKey === '') {
             return false;
+        }
+        // A fresh homepage receipt also owns its stale fallback. Keeping only
+        // the fresh body pinned lets unrelated locale inserts evict the stale
+        // body before the next shared-memory outage or FPC rebuild.
+        if (\str_ends_with($cacheKey, self::STALE_CACHE_SUFFIX)) {
+            $cacheKey = \substr($cacheKey, 0, -\strlen(self::STALE_CACHE_SUFFIX));
         }
         foreach (self::$processLocalizedHomepageReceipts as $receipt) {
             if (!\is_array($receipt)) {
@@ -3518,7 +3719,11 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if (!$this->payloadHasAuthoritativeBody($payload)) {
             return;
         }
+        $isStaleKey = \str_ends_with($cacheKey, self::STALE_CACHE_SUFFIX);
         $remainingTtl = $this->payloadRemainingTtlSeconds($payload);
+        if ($isStaleKey && $remainingTtl !== null) {
+            $remainingTtl += $this->staleTtlSeconds();
+        }
         if ($remainingTtl !== null && $remainingTtl <= 0) {
             return;
         }
@@ -3528,9 +3733,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return;
         }
 
-        // Capture pin before same-key delete clears the homepage receipt.
+        // Capture pin before same-key replacement; the exact identity remains
+        // valid while only the body/encoding representation changes.
         $incomingPinned = $this->isProcessFpcHomepagePinnedKey($cacheKey);
-        $this->deleteProcessCachedPayload($cacheKey);
+        $this->deleteProcessCachedPayload($cacheKey, true);
         if (!$this->evictProcessFpcPayloadForIncoming($cacheKey, $bytes, $incomingPinned)) {
             return;
         }
@@ -3542,6 +3748,16 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         self::$processFpcPayloadExpiresAt[$cacheKey] = \microtime(true) + $processTtl;
         self::$processFpcPayloadBytes[$cacheKey] = $bytes;
         self::$processFpcPayloadTotalBytes += $bytes;
+
+        // Keep a bounded process-local stale copy while the fresh entry is hot.
+        // Shared Memory may be temporarily unreachable exactly when a rebuild
+        // starts; the fresh deadline must not expire the stale fallback too.
+        $variant = $payload[self::VARIANT_PAYLOAD_KEY] ?? [];
+        if (!$isStaleKey
+            && (!\is_array($variant) || $this->privateSessionTokenFromVariant($variant) === '')
+        ) {
+            $this->setProcessCachedPayload($this->buildStaleCacheKey($cacheKey), $payload);
+        }
     }
 
     private function deleteProcessCachedFormattedResponsesForPayload(string $cacheKey): void
@@ -3554,12 +3770,14 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         }
     }
 
-    private function deleteProcessCachedPayload(string $cacheKey): void
+    private function deleteProcessCachedPayload(string $cacheKey, bool $preserveHomepageReceipt = false): void
     {
         $this->deleteProcessCachedFormattedResponsesForPayload($cacheKey);
-        foreach (self::$processLocalizedHomepageReceipts as $receiptIndex => $receipt) {
-            if (\hash_equals((string)($receipt['cache_key'] ?? ''), $cacheKey)) {
-                unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
+        if (!$preserveHomepageReceipt) {
+            foreach (self::$processLocalizedHomepageReceipts as $receiptIndex => $receipt) {
+                if (\hash_equals((string)($receipt['cache_key'] ?? ''), $cacheKey)) {
+                    unset(self::$processLocalizedHomepageReceipts[$receiptIndex]);
+                }
             }
         }
         foreach (self::$processCriticalCatalogReceipts as $receiptIndex => $receipt) {
@@ -4608,21 +4826,27 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
     private function deleteCachedPayloadByKey(string $cacheKey): void
     {
+        $this->deleteFreshCachedPayloadByKey($cacheKey);
         $staleCacheKey = $this->buildStaleCacheKey($cacheKey);
-        $this->cache()->delete($cacheKey);
-        $this->cache()->delete($this->buildFormattedFastHttpCacheKey($cacheKey, ContentEncodingNegotiator::ENCODING_GZIP));
-        $this->cache()->delete($this->buildFormattedFastHttpCacheKey($cacheKey, ContentEncodingNegotiator::ENCODING_BROTLI));
         $this->cache()->delete($staleCacheKey);
         $this->cache()->delete($this->buildFormattedFastHttpCacheKey($staleCacheKey, ContentEncodingNegotiator::ENCODING_GZIP));
         $this->cache()->delete($this->buildFormattedFastHttpCacheKey($staleCacheKey, ContentEncodingNegotiator::ENCODING_BROTLI));
-        $this->deleteSharedPayloadFile($cacheKey);
         $this->deleteSharedPayloadFile($staleCacheKey);
-        $this->deleteProcessCachedPayload($cacheKey);
         $this->deleteProcessCachedPayload($staleCacheKey);
-        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($cacheKey, ContentEncodingNegotiator::ENCODING_GZIP));
-        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($cacheKey, ContentEncodingNegotiator::ENCODING_BROTLI));
         $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($staleCacheKey, ContentEncodingNegotiator::ENCODING_GZIP));
         $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($staleCacheKey, ContentEncodingNegotiator::ENCODING_BROTLI));
+    }
+
+    private function deleteFreshCachedPayloadByKey(string $cacheKey): void
+    {
+        $this->cache()->delete($cacheKey);
+        foreach ([ContentEncodingNegotiator::ENCODING_GZIP, ContentEncodingNegotiator::ENCODING_BROTLI] as $encoding) {
+            $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey, $encoding);
+            $this->cache()->delete($formattedKey);
+            $this->deleteProcessCachedFormattedResponse($formattedKey);
+        }
+        $this->deleteSharedPayloadFile($cacheKey);
+        $this->deleteProcessCachedPayload($cacheKey);
     }
 
     private function bodyContainsIgnorableHtmlUrlQuery(string $body): bool

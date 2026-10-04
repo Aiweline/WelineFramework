@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · 商品卡三图标（收藏/对比/速览）移动端尺寸对照</title>
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     PROTOTYPE（一次性、可丢弃）：只回答一个问题——
+     手机（375px 视口、双列货架）上卡片三枚操作钮该多大？
+     结论落回真代码：app/design/Weline/hanfu/frontend/assets/css/hanfu-commerce.css
+     与 app/design/Weline/hanfu/frontend/variables/_hanfu-ink.css
+     下面复刻的是真主题 token（_colors.css / _hanfu-ink.css / hanfu-commerce.css）。
+     ───────────────────────────────────────────────────────────── */
+  :root {
+    --color-text: #1c1c1c;
+    --color-text-secondary: #4a4a48;
+    --color-bg-canvas: #f7f4ef;
+    --color-bg-primary: #fffefa;
+    --color-bg-secondary: #ede9e1;
+    --color-primary: #b84a3c;
+    --color-border-default: #d4cfc5;
+    --hanfu-round: 2px;
+    --hanfu-rule-width: 1px;
+    --weline-font-serif: Georgia, "Songti SC", "Noto Serif SC", serif;
+    --weline-font-ui: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    /* 真主题里当前生效的移动端控件高（hanfu-commerce.css @768 → --hanfu-control-height） */
+    --hanfu-control-height: 2.75rem; /* 44px */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 20px 64px;
+    background: #17301f; /* 截图里的深松绿画布 */
+    color: #f7f4ef;
+    font-family: var(--weline-font-ui);
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+  .lede { margin: 0 0 20px; font-size: 13px; line-height: 1.7; color: #cdd8ce; max-width: 62ch; }
+  .lede code { font-size: 12px; background: rgba(255,255,255,.12); padding: 1px 5px; border-radius: 3px; }
+
+  /* 浮动控制条：切换真机倍率 / 命中区可视化 */
+  .bar {
+    position: fixed; inset-block-end: 0; inset-inline: 0; z-index: 50;
+    display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+    padding: 12px 18px; background: #0f2216; border-block-start: 1px solid #2c4a35;
+    font-size: 13px;
+  }
+  .bar label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .bar output { font-variant-numeric: tabular-nums; color: #9fd3a8; }
+
+  /* 真机外壳：375px 宽的手机视口，1x 与 2x 两种看样 */
+  .board { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .device { background: #0f2216; border: 1px solid #2c4a35; border-radius: 10px; padding: 12px; }
+  .device__caption { font-size: 12px; line-height: 1.6; color: #cdd8ce; margin-block-end: 10px; max-width: 375px; }
+  .device__caption b { color: #fff; }
+  .phone { width: 375px; background: var(--color-bg-canvas); overflow: hidden; border-radius: 4px; }
+  .phone--zoom { zoom: var(--zoom, 1); }
+
+  /* 真主题货架网格（hanfu-commerce.css @≤900 → 2 列） */
+  .shelf { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; }
+
+  /* ── 复刻 .weline-product-card（只保留本题相关的盒模型/排版） ── */
+  .weline-product-card {
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--color-bg-primary); color: var(--color-text);
+    border: var(--hanfu-rule-width) solid var(--color-border-default);
+    border-radius: var(--hanfu-round);
+    --wpc-surface: var(--color-bg-primary);
+    --wpc-ink: var(--color-text);
+    --wpc-link-hover: var(--color-primary);
+  }
+  .wpc-media { position: relative; width: 100%; height: 0; padding-block-start: 100%; overflow: hidden; background: var(--color-bg-secondary); }
+  .wpc-media-link { position: absolute; inset: 0; display: block; }
+  /* 产品照占位：仅仅为了看比例，真站是实拍图 */
+  .wpc-image { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .img-a { background: linear-gradient(160deg, #f3ede2 0%, #dfe6d4 45%, #cfd8bd 100%); }
+  .img-b { background: linear-gradient(160deg, #7d1f24 0%, #a3282c 55%, #5d1418 100%); }
+  .wpc-body { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+  .wpc-title {
+    margin: 0; font-family: var(--weline-font-serif); font-size: 14px; font-weight: 400; line-height: 1.55;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .wpc-price-now { color: var(--color-primary); font-size: 20px; font-weight: 500; }
+
+  /* ── 本题主角：.product-actions / .action-btn（hanfu-commerce.css 原文） ── */
+  .product-actions {
+    position: absolute; z-index: 3; display: flex; flex-direction: row; align-items: center; justify-content: flex-end;
+    gap: var(--weline-space-1, 4px);
+    inset-block-start: auto; inset-block-end: 8px; inset-inline-end: 8px;
+    opacity: 1; /* 移动端常驻（@768 起 opacity:1） */
+  }
+  .action-btn {
+    -webkit-appearance: none; appearance: none;
+    display: inline-flex; align-items: center; justify-content: center; padding: 0; margin: 0;
+    /* 真主题桌面值：--control-height-md:40px（_spacing.css:53） */
+    inline-size: var(--control-height-md);
+    block-size: var(--control-height-md);
+    min-inline-size: var(--control-height-md);
+    min-block-size: var(--control-height-md);
+    border: var(--hanfu-rule-width) solid var(--color-border-default);
+    border-radius: var(--hanfu-round);
+    background: var(--color-bg-primary);
+    color: var(--color-text);
+    cursor: pointer; position: relative; line-height: 1;
+  }
+  .action-btn svg { inline-size: var(--icon-size, 18px); block-size: var(--icon-size, 18px); display: block; }
+  /* 命中区不等于视觉尺寸：44px 触控目标用透明伪元素撑开，不改观感 */
+  .action-btn::after {
+    content: ""; position: absolute; inset-block-start: 50%; inset-inline-start: 50%;
+    inline-size: max(100%, 44px); block-size: max(100%, 44px);
+    translate: -50% -50%;
+  }
+  body[data-hit="on"] .action-btn::after {
+    background: rgba(90, 200, 120, .28); outline: 1px dashed rgba(90, 200, 120, .9);
+    inset-block-start: auto; inset-block-end: -1px; inset-inline-start: auto; inset-inline-end: -1px; translate: none;
+  }
+
+  /* 变体：把真主题的移动端白块尺寸换成候选值。
+     图标不随白块缩放（货架卡用 <w:icon size="sm">，foundation.css 定死
+     .w-icon[data-size="sm"] = 16px），所以每格图标都一样大，只比按钮块。 */
+  .v26 { --control-height-md: 26px; --icon-size: 16px; }
+  .v30 { --control-height-md: 30px; --icon-size: 16px; }
+  .v34 { --control-height-md: 35px; --icon-size: 16px; }
+  .v38 { --control-height-md: 38px; --icon-size: 16px; }
+  .v44 { --control-height-md: 44px; --icon-size: 16px; }
+  .tag {
+    display: inline-block; margin-block-end: 8px; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; letter-spacing: .04em; background: #234a30; color: #bfe6c6;
+  }
+  .tag--now { background: #5c2a24; color: #ffd9cf; }
+</style>
+</head>
+<body>
+  <h1>PROTOTYPE ｜ 商品卡三图标（收藏 / 对比 / 速览）移动端尺寸</h1>
+  <p class="lede">
+    一次性原型，只回答「手机上这三枚钮多大合适」。复刻真主题 token 与
+    <code>hanfu-commerce.css</code> 的 <code>.action-btn</code> 盒模型。
+    修复前：≤768px 白块被顶到 <code>--hanfu-control-height</code>=<b>44px</b>（截图里那三块）。
+    现已落回 <b>35px</b>＝<code>--control-height-sm</code>（<code>--hanfu-card-action-size-mobile</code>），命中区仍由
+    <code>::after</code> 保 44px。每格都是 <b>375px 手机视口、双列货架</b>，按真机比例看；
+    底部可切换命中区可视化、也可放大到 2× 校比例。
+  </p>
+
+  <div class="board">
+    <div class="device">
+      <div class="device__caption"><span class="tag tag--now">修复前 · 44px</span><br>
+        旧线上移动端：白块 44×44。按钮 ≈ 卡片宽度的 28%，压住衣料主体。
+      </div>
+      <div class="phone"><div class="shelf v44" data-cards>…</div></div>
+    </div>
+
+    <div class="device">
+      <div class="device__caption"><span class="tag">A · 38px</span><br>
+        仍偏大（≈ 卡片宽度 25%）；只有想保留强触控观感时才取这一档。
+      </div>
+      <div class="phone"><div class="shelf v38" data-cards>…</div></div>
+    </div>
+
+    <div class="device">
+      <div class="device__caption"><span class="tag tag--now">已采纳 · 35px</span><br>
+        白块 35×35（控件刻度的 sm 档），图标仍 16px，视觉留白约 9px/边。浮层读起来像「附注」而非主按钮。
+      </div>
+      <div class="phone"><div class="shelf v34" data-cards>…</div></div>
+    </div>
+
+    <div class="device">
+      <div class="device__caption"><span class="tag">C · 30px</span><br>
+        图标 16px 在 30px 白块里只剩 7px 边距，开始显得「图标顶格」；再小就局促。
+      </div>
+      <div class="phone"><div class="shelf v30" data-cards>…</div></div>
+    </div>
+
+    <div class="device">
+      <div class="device__caption"><span class="tag">D · 26px</span><br>
+        极限档：图标几乎贴边，只剩触控命中区在兜可用性。仅作下界参照。
+      </div>
+      <div class="phone"><div class="shelf v26" data-cards>…</div></div>
+    </div>
+  </div>
+
+  <div class="bar">
+    <label><input type="checkbox" id="hit" checked> 显示 44px 透明命中区（不改变观感）</label>
+    <label>放大 <input type="range" id="zoom" min="1" max="2" step="0.5" value="1"> <output id="zoomOut">1×</output></label>
+    <label><span style="color:#cdd8ce">桌面仍 <code>--control-height-md</code>=40px，本次不动</span></label>
+  </div>
+
+<script>
+  const draw = [
+    { img: 'img-a', title: '春色唐制刺绣汉服齐胸襦裙', price: '$222.50' },
+    { img: 'img-b', title: '花朝记原创汉服 [红染] 明制袄裙', price: '$228.40' },
+  ];
+  // 图标路径逐字取自 Weline\Theme\Service\Ui\IconRegistry::ICONS（heart / list / eye）
+  const wrap = (inner) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+  const heart = wrap('<path d="M20 5.5c-2.4-2.3-5.8-1.5-8 1-2.2-2.5-5.6-3.3-8-1C1.2 8.2 2.4 12 5 14.5L12 21l7-6.5c2.6-2.5 3.8-6.3 1-9z"/>');
+  const list = wrap('<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>');
+  const eye = wrap('<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>');
+
+  const card = (p) => `
+    <article class="weline-product-card" data-testid="weline-product-card">
+      <div class="wpc-media">
+        <a class="wpc-media-link" href="#"><span class="wpc-image ${p.img}"></span></a>
+        <div class="product-actions product-actions--amz">
+          <button class="action-btn btn-wishlist" type="button" aria-label="加入收藏">${heart}</button>
+          <button class="action-btn btn-compare" type="button" aria-label="加入对比">${list}</button>
+          <button class="action-btn btn-quickview" type="button" aria-label="快速查看">${eye}</button>
+        </div>
+      </div>
+      <div class="wpc-body">
+        <h3 class="wpc-title"><a href="#">${p.title}</a></h3>
+        <div class="wpc-price"><span class="wpc-price-now">${p.price}</span></div>
+      </div>
+    </article>`;
+
+  document.querySelectorAll('[data-cards]').forEach((shelf) => {
+    shelf.innerHTML = draw.map(card).join('');
+  });
+
+  const hit = document.getElementById('hit');
+  const sync = () => { document.body.dataset.hit = hit.checked ? 'on' : 'off'; };
+  hit.addEventListener('change', sync); sync();
+
+  const zoom = document.getElementById('zoom');
+  const zoomOut = document.getElementById('zoomOut');
+  zoom.addEventListener('input', () => {
+    document.querySelectorAll('.phone').forEach((p) => p.style.setProperty('--zoom', zoom.value));
+    zoomOut.textContent = zoom.value + '×';
+  });
+</script>
+</body>
+</html>

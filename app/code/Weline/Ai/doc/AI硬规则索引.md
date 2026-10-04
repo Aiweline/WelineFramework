@@ -31,6 +31,8 @@
 
 同回合若既有内容运营又有框架 Theme/PHP 编码：仅编码切片走 MCP；内容运营切片仍只读仓内技能/指令。
 
+**AOCI 互补（`aoci_complements_weline_mcp`）**：可选并列挂载 AOCI-CODE（`aoci`）；Weline=硬规则/技能/`prepare_project`，AOCI=认知索引/Baseline/漂移。工程主链仍走 Weline；禁止用 AOCI 替代或绕过 `hard_constraints`。细则见 [规则/00 §1b](./规则/00-MCP调用与会话.md)。
+
 宿主 `AGENTS.md` 与 MCP 生成的 `.cursor/rules/weline-mcp-coldstart.mdc` 只作指针；细则以本文、分册与 `HardConstraintsCatalog::mcpOperationalRules()` 为准。禁止为「记住引导」而手写 `.cursor/rules`。完整会话/引导条款见 [规则/00-MCP调用与会话.md](./规则/00-MCP调用与会话.md)。
 
 ## 任务路由表
@@ -51,6 +53,7 @@
 | 多 todo 计划收口、进度汇报 | [AI工程交付流程.md](./AI工程交付流程.md) §7；MCP `plan_todo_evidence_closeout` / `no_legacy_code_accumulation_on_change` | 计划未逐项举证就宣称「已完成」；Cursor todo 无证据标 completed；隐瞒未清库/未删代码/未跑 Factory Reset；**改动只加不删、旧实现与死代码留着，却把未完成清单写成「无」** | 对每个 todo 给出路径/DB/命令/Browser 证据；部分完成须列「未完成清单」并写入 `doc/开发日志.md`；**收口报告须含「废弃清理」清单（删除的符号 + 文件路径），必须保留的旧路径带 `@deprecated` + 删除计划并单独列出** |
 | 计划合规审核、章节 e2e 闭环、计划组套件、串行进度 | [AI工程交付流程.md](./AI工程交付流程.md) §3–§6；MCP `task_plan_compliance_review` / `chapter_ut_rt_wb_dl` / `plan_full_pathway_e2e_suite` | 计划不审架构/解耦/电商合规/原型/e2e/体量/闭环；多任务无章节；章节无 `acceptance_ids`；多章共用同一 e2e；缺 `e2e-plan-suite`；未完成绑定验收就标 done/开下一章；并行多个 in_progress；半截汇报/甩人测 | `dev_tasks.acceptance_ids` 硬绑定；feature 章独立通路 e2e + 收口组套件；passed+evidence 后才 done；收口自检 `compliance_dimensions` |
 | **提交、commit、commit 范围、共享脏树、多会话、并发会话、worktree、脏改归属、git add -A、夹带提交、声明改动集** | [规则/00](./规则/00-MCP调用与会话.md) §7b；[AI开发治理.md](./AI开发治理.md)；MCP `concurrent_session_commit_hygiene` / `preserve_dirty_workspace` | `git add -A` / `git add .` / `git commit -a` 扫全树；把他会话在飞脏改一起提交；把在飞文件当基线编辑或「顺手清理」；为清场用 `stash` / `checkout --` / `clean`；重叠文件归属不明还自行裁决；把生成物（MCP 目录/i18n 导出/编译 tpl/`var/**`）夹带进提交 | 暂存只用**显式路径**；提交前 `git diff --cached --name-only` 与声明集**逐项一致**（多出的只 `git restore --staged` 撤索引）；收口列出「已提交路径」+「故意未提交的他会话脏改路径」；并行改用 `git worktree` 隔离 |
+| **AOCI、aoci、AOCI-CODE、认知索引、Baseline、漂移、与 Weline MCP 并存/互补** | [规则/00](./规则/00-MCP调用与会话.md) §1b；MCP `aoci_complements_weline_mcp` / `mcp_call_scope` | 用 AOCI 替代 `prepare_project` / `hard_constraints`；把 AOCI Overview 当工程门禁；未明示就对大仓自动全仓 `scan`；把含绝对路径的 aoci host 配置提交进 Git | 工程主链仍 Weline；AOCI 仅作结构认知辅助；并列挂载时绝对路径 + 勿入 Git |
 
 ### 前端与主题（细则 → [规则/20](./规则/20-前端与主题.md)）
 
@@ -164,6 +167,7 @@
 | 内容运营任务误调 MCP / 误打 Team 前缀 | [规则/50](./规则/50-内容运营.md) |
 | 只译 en_US 不查默认站全语种 | [规则/50](./规则/50-内容运营.md) |
 | 把他会话在飞脏改一起提交（`git add -A`）/ 把在飞文件当基线编辑 / 归属不明自行裁决 | [规则/00](./规则/00-MCP调用与会话.md) §7b |
+| 用 AOCI 替代 Weline `prepare_project` / hard_constraints / 工程门禁 | [规则/00](./规则/00-MCP调用与会话.md) §1b |
 
 ## 工作区不可丢弃规则（`preserve_dirty_workspace`，严重）
 

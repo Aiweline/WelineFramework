@@ -1002,6 +1002,15 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     stroke: currentColor;
 }
 
+/* Mini-cart drawer sits under header-actions but uses cream surface — keep icons dark. */
+.weline-header .header-actions .mini-cart-drawer .w-icon,
+.weline-header .header-user-area .mini-cart-drawer .w-icon,
+.weline-header .header-actions .mini-cart-drawer svg.w-icon,
+.weline-header .header-user-area .mini-cart-drawer svg.w-icon {
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+    stroke: currentColor;
+}
+
 .weline-header .header-actions .w-icon[data-size="xs"],
 .weline-header .header-user-area .w-icon[data-size="xs"],
 .weline-header .w-language-switcher__trigger .w-icon[data-size="xs"],

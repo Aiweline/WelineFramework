@@ -69,16 +69,8 @@ final class UpgradeSpeedSkipContractTest extends TestCase
         self::assertStringContainsString('is_partial_upgrade', $src);
     }
 
-    public function testStaticPublishHashesUseStableFileFingerprintHelper(): void
+    public function testMaintenancePublishHashesUseStableFileFingerprintHelper(): void
     {
-        $src404 = (string)\file_get_contents(
-            \dirname(__DIR__, 4) . '/Theme/Service/StorefrontNotFoundStaticGenerator.php'
-        );
-        self::assertStringContainsString('computePublishInputHash', $src404);
-        self::assertStringContainsString('StaticErrorPagePublishFingerprint', $src404);
-        self::assertStringContainsString('trySkipEntirePublishAll', $src404);
-        self::assertStringNotContainsString('DictionaryCacheNamespace::fingerprint', $src404);
-
         $srcMaint = (string)\file_get_contents(
             \dirname(__DIR__, 4) . '/Maintenance/Service/MaintenanceStaticGenerator.php'
         );
@@ -88,7 +80,6 @@ final class UpgradeSpeedSkipContractTest extends TestCase
         $srcFp = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/Http/StaticErrorPagePublishFingerprint.php'
         );
-        self::assertStringContainsString('404v6|', $srcFp);
         self::assertStringContainsString('maintv3|', $srcFp);
         self::assertStringContainsString('localeDictionaryToken', $srcFp);
         self::assertStringContainsString('mergeUpdates', (string)\file_get_contents(

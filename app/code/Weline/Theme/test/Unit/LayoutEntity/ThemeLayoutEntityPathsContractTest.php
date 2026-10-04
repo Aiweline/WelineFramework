@@ -15,6 +15,7 @@ final class ThemeLayoutEntityPathsContractTest extends TestCase
         $paths = new ThemeLayoutEntityPaths('/tmp/theme-layout-entities-contract/');
         $owners = [
             ['shop.eu.default', 'normal'], ['shop_eu.default', 'normal'],
+            ['shop-a.default.default', 'normal'], ['shop_a.default.default', 'normal'],
             ['Shop.eu.default', 'normal'], ['shop.eu.default__test', 'normal'],
             ['shop.eu.default', 'test'], ['shop.eu.default', 'Test'],
         ];

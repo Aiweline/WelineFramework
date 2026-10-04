@@ -342,3 +342,27 @@ Theme 对外提供 `w_query('theme', 'copyTargetLayoutData', ...)`，供 CMS 等
 `PreviewThemeModeResolverInterface` 将预览 Session、主题选择和色系加载封装在 Theme 内；
 `ComponentMetaReaderInterface` 只返回组件文件的标量数组 Meta。外部模块不得直接访问
 `PreviewContextService`、`LayoutScanner` 或 `ComponentMetaParser`。
+
+## 固化部件的动态资源
+
+`widget-assets-runtime.js` 与 `widget-instance-styles.js` 在正常前台框架加载后，复用
+`Weline.dom.observe` 合并页面 DOM 变化。合并窗口结束后扫描当前文档，覆盖窗口内
+新增的部件和参数变更；实例初始化记录与样式值记录保证重复扫描不会重复初始化，
+也不会重复插入样式规则。不能直接使用整页原生观察器，否则密集加载期间被开发环境
+保护断开后，后续部件初始化和样式更新会丢失。
+
+### 动态部件回归
+
+正式用例 `test/e2e/frontend/theme-phtml-dynamic-widgets.spec.js` 在桌面和手机
+结账页面触发密集 DOM 更新，再新增部件、修改实例样式、插入购物车删除按钮及
+B2B 模式控件，验证后续初始化、事件标记和绑定仍然生效，且没有观察器断开或
+脚本异常。用例保留实际静态响应摘要，源码修复验收须核对浏览器使用的资源；
+Worker 重载不能代替入口静态缓存或浏览器资源版本的更新。
+
+静态脚本更新须使用正常资源版本发布，或在本地验收时精确失效已变更资源的
+入口缓存。入口可能分别保存普通、gzip、Brotli 响应；普通请求拿到新脚本不代表
+浏览器拿到的压缩响应也已更新，应比较正常浏览器响应与当前资源源文件的摘要。
+
+### 404 静态页发布与模板依赖
+
+404 静态页发布每次走正常模板渲染，覆盖公共模板、Hook 和部件依赖的当前输出；不以仅包含主布局的输入摘要提前跳过。最终内容相同则保留已有静态文件。访问已发布 404 页面仍直接读取静态 HTML，不逐次查询数据库重建部件。

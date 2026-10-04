@@ -39,6 +39,8 @@
 
 ## 实现收口
 
+以下结构接口服务编辑、生成及原模板兼容流程。正常命中派生 PHTML 时，部件关系由调用语句和实例子槽直接表达，不读取结构/配置/绑定侧车，也不据此重新填槽。编译缓存使用固定源字节、来源路径、版本上下文及正常语言环境；语言专属参数已包含在派生 PHTML 中。
+
 - 结构读：`resolveStructureLayout` 只产出未译挂载投影；`applyLayoutLocaleOverlay` 按请求/编辑 locale 后贴 I18N。
 - `getLayoutData` 结构半边键**不含** `locale_code`；后贴在命中之后。
 - `LayoutIdentityHasher` / LAYOUT·META `identityLocale` / 结构 Normalizer 不把请求语言当结构维。

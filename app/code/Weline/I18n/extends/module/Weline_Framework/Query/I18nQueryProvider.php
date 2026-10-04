@@ -38,6 +38,7 @@ class I18nQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'getInstalledLocales' => $this->getInstalledLocales($params),
             'getCountryFlags' => $this->getCountryFlags($params),
+            'getBackendCountryFlags' => $this->getBackendCountryFlags($params),
             'getLocaleByCode' => $this->getLocaleByCode($params),
             'getLocaleName' => $this->getLocaleName($params),
             'getTranslations' => $this->getTranslations($params),
@@ -80,6 +81,21 @@ class I18nQueryProvider implements QueryProviderInterface
             ];
         }
         return $list;
+    }
+
+    /** Backend chrome uses its attested administrator, without a storefront Scope. */
+    #[BinQueryOperation(
+        name: 'getBackendCountryFlags',
+        description: 'Batch country flag SVG payloads for authenticated backend chrome',
+        mode: 'read',
+        frontend: true,
+        backend: true,
+        auth: 'backend',
+        cost: 1,
+    )]
+    private function getBackendCountryFlags(array $params): array
+    {
+        return $this->getCountryFlags($params);
     }
 
     /**
@@ -352,6 +368,22 @@ class I18nQueryProvider implements QueryProviderInterface
                         ['name' => 'width', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64],
                         ['name' => 'height', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64],
                         ['name' => 'installed', 'type' => 'bool', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                ],
+                [
+                    'name' => 'getBackendCountryFlags',
+                    'frontend' => true,
+                    'backend' => true,
+                    'external' => false,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        ['name' => 'country_codes', 'type' => 'list', 'required' => true, 'max_items' => 16, 'cache_key' => true],
+                        ['name' => 'ratio', 'type' => 'string', 'required' => false, 'max_length' => 8, 'default' => '4x3', 'cache_key' => true],
                     ],
                     'returns' => ['type' => 'array'],
                 ],

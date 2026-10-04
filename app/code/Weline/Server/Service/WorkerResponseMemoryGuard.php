@@ -16,14 +16,11 @@ final class WorkerResponseMemoryGuard
     private const RUNTIME_CACHE_PRESSURE_THRESHOLD = 0.55;
     /** Hard water mark: aggressive process-bag clear + allocator freelist trim (no Worker drain). */
     private const RUNTIME_CACHE_HARD_PRESSURE_THRESHOLD = 0.70;
-    /** Soft absolute watermark: reclaim rebuildable L1 even when ratio stays low. */
+    /** 绝对量触发 allocator 整理；未知上限时仍保留原 soft 回收。 */
     private const SOFT_HEAP_FORCE_BYTES = 48 * 1024 * 1024;
-    /** Absolute Zend-real floor: force aggressive bag clear (was 96M; /products sat at ~78–92M). */
+    /** 未知内存上限时，保留绝对量触发的 aggressive 回收。 */
     private const LARGE_HEAP_FORCE_AGGRESSIVE_BYTES = 64 * 1024 * 1024;
-    /**
-     * Keep-warm contract: empty Zend freelist (real-used) must not stay at "large page" size.
-     * Above this shell size after reclaim → graceful Worker drain (only way to return pages to OS).
-     */
+    /** 回收后 shell 达此量是 ratchet 候选；有限预算下还须达到 soft 压力。 */
     private const ZEND_SHELL_DRAIN_BYTES = 48 * 1024 * 1024;
     /** real may exceed captured warm baseline by this much before drain. */
     private const ZEND_REAL_OVER_BASELINE_DRAIN_BYTES = 32 * 1024 * 1024;
@@ -166,10 +163,7 @@ final class WorkerResponseMemoryGuard
         self::$pressureLimitBytes = $bytes > 0 ? $bytes : null;
     }
 
-    /**
-     * Decide whether Zend MM freelist/ratchet violates keep-warm floor contract.
-     * Empty shell must reflect warm framework, not a prior large-page peak.
-     */
+    /** 仅在回收后仍有预算压力且符合 ratchet 候选时，请求安全退役。 */
     public static function shouldDrainForZendRatchet(
         int $realBytes,
         int $usedBytes,
@@ -177,6 +171,10 @@ final class WorkerResponseMemoryGuard
         bool $afterForcedReclaim
     ): bool {
         if (!$afterForcedReclaim || $realBytes <= 0) {
+            return false;
+        }
+        $limitBytes = self::getMemoryLimitBytes();
+        if ($limitBytes > 0 && $realBytes / $limitBytes < self::getRuntimeCacheThresholds()['soft']) {
             return false;
         }
         $shell = \max(0, $realBytes - \max(0, $usedBytes));
@@ -220,12 +218,19 @@ final class WorkerResponseMemoryGuard
 
         $real = \memory_get_usage(true);
         $largeResponse = $releasedResponseBytes >= self::LARGE_RESPONSE_BYTES;
-        // Keep-warm: ratio vs 512M/1G rarely trips soft/hard; use absolute Zend-real + large body.
-        // Large HTML responses always hard-clear rebuildable bags (Phrase/HotCache/Theme).
-        $forceAggressive = $largeResponse || $real >= self::LARGE_HEAP_FORCE_AGGRESSIVE_BYTES;
-        $forceSoft = $forceAggressive || $real >= self::SOFT_HEAP_FORCE_BYTES;
-        if ($forceSoft) {
-            return self::compact(true, $forceAggressive);
+        $limitBytes = self::getMemoryLimitBytes();
+        if ($limitBytes > 0) {
+            $pressure = $real / $limitBytes;
+            $thresholds = self::getRuntimeCacheThresholds();
+            $forceAggressive = $pressure >= $thresholds['hard'];
+            $forceSoft = $pressure >= $thresholds['soft'];
+        } else {
+            $forceAggressive = $largeResponse || $real >= self::LARGE_HEAP_FORCE_AGGRESSIVE_BYTES;
+            $forceSoft = $forceAggressive || $real >= self::SOFT_HEAP_FORCE_BYTES;
+        }
+        // 大响应或绝对量仍整理 allocator；有限预算下只按真实压力清进程缓存。
+        if ($forceSoft || $largeResponse || $real >= self::SOFT_HEAP_FORCE_BYTES) {
+            return self::compactMemory($forceSoft, $forceAggressive, true);
         }
 
         return self::compactIfPressure();
@@ -235,6 +240,23 @@ final class WorkerResponseMemoryGuard
     {
         $reason = \trim($reason);
         self::$drainAfterResponseReason = $reason !== '' ? $reason : 'memory_pressure';
+    }
+
+    public static function drainTimeoutSecondsForReason(string $reason, int $currentTimeout): int
+    {
+        // An allocator ratchet retires a healthy Worker to reclaim memory;
+        // existing HTTP/2 streams still need the ordinary graceful window.
+        // Output overflows and other urgent drains retain their short bound.
+        return $reason === 'zend_mm_ratchet'
+            ? \max($currentTimeout, 120)
+            : \min($currentTimeout, 10);
+    }
+
+    public static function shouldRestartDrainAfterResponse(string $reason, bool $alreadyDraining): bool
+    {
+        // A large response can request the same allocator retirement again
+        // while older HTTP/2 streams drain. Do not restart its hard deadline.
+        return !$alreadyDraining || $reason !== 'zend_mm_ratchet';
     }
 
     public static function noteIncompleteRequestFiberCancel(): int
@@ -290,11 +312,19 @@ final class WorkerResponseMemoryGuard
      * }
      */
     /**
-     * @param bool $forceSoftReclaim Soft-clear rebuildable process L1 even below soft water mark
-     *                               (used after large response Fiber exit under high memory_limit).
-     * @param bool $forceAggressive Hard-clear process bags (Theme/HotCache) when Zend real is high.
+     * @param bool $forceSoftReclaim 显式请求 soft 进程缓存回收，保留原调用语义。
+     * @param bool $forceAggressive 显式请求 aggressive 进程缓存回收。
      */
     public static function compact(bool $forceSoftReclaim = false, bool $forceAggressive = false): array
+    {
+        return self::compactMemory($forceSoftReclaim, $forceAggressive);
+    }
+
+    private static function compactMemory(
+        bool $forceSoftReclaim,
+        bool $forceAggressive,
+        bool $forceAllocatorTrim = false,
+    ): array
     {
         $runtimeCacheCompactions = [
             'memory_store_clears' => 0,
@@ -304,9 +334,7 @@ final class WorkerResponseMemoryGuard
 
         $pressure = self::getMemoryPressure();
         $thresholds = self::getRuntimeCacheThresholds();
-        // Ratio hard pressure = in-process aggressive reclaim only (no Worker drain).
-        // Zend freelist ratchet after forced reclaim is a separate keep-warm contract:
-        // empty shell must not stay at large-page size → graceful drain (see below).
+        // hard 压力先清可重建缓存；退役还须满足回收后的 ratchet 与预算判据。
         $criticalHard = $pressure >= $thresholds['hard'];
         $aggressive = $forceAggressive || $criticalHard;
 
@@ -314,6 +342,7 @@ final class WorkerResponseMemoryGuard
             $runtimeCacheCompactions = self::compactRuntimeCaches($aggressive);
         }
 
+        $forcedReclaim = $forceSoftReclaim || $forceAggressive || $forceAllocatorTrim;
         $cycles = 0;
         $trimmedBytes = 0;
         // Skip cycle collect only under true hard *ratio* pressure (STW risk).
@@ -323,7 +352,7 @@ final class WorkerResponseMemoryGuard
         }
         if (\function_exists('gc_mem_caches')) {
             $trimmedBytes = \max(0, (int) \gc_mem_caches());
-            if ($forceSoftReclaim || $forceAggressive) {
+            if ($forcedReclaim) {
                 $trimmedBytes += \max(0, (int) \gc_mem_caches());
             }
         }
@@ -331,7 +360,7 @@ final class WorkerResponseMemoryGuard
         $realAfter = \memory_get_usage(true);
         $usedAfter = \memory_get_usage(false);
         $shellAfter = \max(0, $realAfter - $usedAfter);
-        if ($forceSoftReclaim || $forceAggressive) {
+        if ($forcedReclaim) {
             self::noteWarmHeapBaseline($realAfter, $usedAfter);
             if (self::shouldDrainForZendRatchet(
                 $realAfter,
@@ -353,6 +382,7 @@ final class WorkerResponseMemoryGuard
                 'aggressive' => $aggressive,
                 'force_soft' => $forceSoftReclaim,
                 'force_aggressive' => $forceAggressive,
+                'force_allocator_trim' => $forceAllocatorTrim,
                 'critical_hard' => $criticalHard,
                 'cycles' => $cycles,
                 'trimmed_bytes' => $trimmedBytes,

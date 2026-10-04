@@ -1011,6 +1011,8 @@
      */
     const Weline = {
         Runtime: window.Weline?.Runtime || null,
+        dom: window.Weline?.dom,
+        observeMutationsCoalesced: window.Weline?.observeMutationsCoalesced,
         __initialized: true,
         __version: '1.0.0',
         config: runtimeConfig,

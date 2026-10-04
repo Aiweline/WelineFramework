@@ -1726,12 +1726,28 @@ class Core
 
                 $fpcBuildLock = $fpcCoordinator->acquireBuildLock($this->request->getMethod() ?: 'GET');
                 if ($fpcBuildLock === null) {
-                    $cachedResponse = $fpcCoordinator->waitForPublishedResponse($this->request->getMethod() ?: 'GET');
+                    $canBuild = $fpcCoordinator->canBuildCachedResponse($this->request->getMethod() ?: 'GET');
+                    if ($canBuild) {
+                        $buildDecision = $fpcCoordinator->waitForPublishedResponseOrBuildLock(
+                            $this->request->getMethod() ?: 'GET'
+                        );
+                        $cachedResponse = $buildDecision['response'];
+                        $fpcBuildLock = $buildDecision['lock'];
+                    } else {
+                        $cachedResponse = $fpcCoordinator->waitForPublishedResponse($this->request->getMethod() ?: 'GET');
+                    }
                     if ($cachedResponse !== null) {
                         $this->is_match = true;
                         $routeProfile['fpc'] = 'wait_hit';
                         $routeProfilePublish('fpc_wait_hit');
                         return $cachedResponse;
+                    }
+                    if ($canBuild && $fpcBuildLock === null) {
+                        $routeProfile['fpc'] = 'wait_timeout';
+                        $routeProfilePublish('fpc_wait_timeout');
+                        return Response::fromContent('Service Unavailable', 503, 'text/plain; charset=utf-8')
+                            ->setHeader('Retry-After', '1')
+                            ->setHeader('Cache-Control', 'no-store');
                     }
                 }
             }

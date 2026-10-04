@@ -31,6 +31,19 @@ class PixelEventServicePrepareAttributionTest extends TestCore
         return $result;
     }
 
+    public function testLongMultibytePageNameRemainsValidDatabaseText(): void
+    {
+        $prepared = $this->prepare([
+            'eventName' => 'page_view', 'websiteId' => 0,
+            'url' => 'https://example.test/product/multibyte',
+            'name' => 'X' . str_repeat('中', 255),
+        ]);
+        $name = $prepared['data']['name'];
+        self::assertSame(1, preg_match('//u', $name), '数据库文本不能包含被截断的 UTF-8 字符');
+        // 上游 compactPayload 已将名称限制为 128 个字符。
+        self::assertSame('X' . str_repeat('中', 127), $name);
+    }
+
     public function testPrepareWritesSessionAndWchChannelCode(): void
     {
         $prepared = $this->prepare([

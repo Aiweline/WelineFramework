@@ -55,15 +55,12 @@
         if (observer || !global.MutationObserver || !global.document.body) {
             return;
         }
-        observer = new MutationObserver(function (mutations) {
-            for (var i = 0; i < mutations.length; i++) {
-                if (mutations[i].addedNodes && mutations[i].addedNodes.length) {
-                    stamp(mutations[i].target || global.document);
-                    return;
-                }
-            }
+        observer = global.Weline.dom.observe({
+            target: global.document.body,
+            options: { childList: true, subtree: true },
+            label: 'cart-remove-pixel-standalone',
+            onFlush: function () { stamp(global.document); }
         });
-        observer.observe(global.document.body, { childList: true, subtree: true });
     }
 
     global.WelineCartRemovePixel = {

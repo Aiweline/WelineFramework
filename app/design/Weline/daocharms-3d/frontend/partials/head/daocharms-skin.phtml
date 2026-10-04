@@ -1,0 +1,43 @@
+<?php
+/**
+ * @meta.name {default="DaoCharms 3D skin",name="DaoCharms 三维店面资源"}
+ * @meta.description {default="Inherited commerce skin and request-scoped town assets.",name="父主题购物呈现与当前请求的古镇资产"}
+ *
+ * Resolve through Template's official theme asset gateway on every request.
+ * Literal theme tags bake preview identities; dynamic tags currently duplicate
+ * PHP source into attributes. Keep this design-only suffix runtime-resolved.
+ * Core theme.css/theme.js stay inherited; these are presentation assets only.
+ */
+$daocharmsSkinSources = [
+    ['css', 'Weline_Theme::theme/frontend/colors/_daocharms-ritual.css'],
+    ['css', 'Weline_Theme::theme/frontend/variables/_daocharms-ritual.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-ritual.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-chrome.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-commerce.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-forms.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-account.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-reading.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-homepage.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-homepage-layout-fix.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-pages.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-product.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-quiz.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-responsive.css'],
+    ['js', 'Weline_Theme::theme/frontend/assets/js/daocharms-hero-carousel.js'],
+    ['css', 'Weline_Theme::theme/frontend/colors/_daocharms-3d.css'],
+    ['css', 'Weline_Theme::theme/frontend/variables/_daocharms-3d.css'],
+    ['css', 'Weline_Theme::theme/frontend/assets/css/daocharms-3d.css'],
+];
+foreach ($daocharmsSkinSources as [$assetType, $assetSource]):
+    $assetUrl = (string)$this->fetchTagSource(
+        \Weline\Framework\View\Data\DataInterface::dir_type_THEME,
+        $assetSource
+    );
+    if ($assetUrl === '') { continue; }
+    $assetUrlEscaped = htmlspecialchars($assetUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    if ($assetType === 'css'):
+?>
+<link rel="stylesheet" type="text/css" href="<?= $assetUrlEscaped ?>">
+<?php else: ?>
+<script src="<?= $assetUrlEscaped ?>"></script>
+<?php endif; endforeach; ?>

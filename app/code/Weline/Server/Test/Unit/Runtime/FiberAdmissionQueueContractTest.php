@@ -58,11 +58,87 @@ final class FiberAdmissionQueueContractTest extends TestCase
         self::assertStringContainsString('Retry-After: 1', $full);
     }
 
-    public function testWaitMsClampedToTenSeconds(): void
+    public function testWaitMsAllowsCacheRebuildAndIsBoundedToSixtySeconds(): void
     {
-        $cfg = wlsResolveFiberAdmissionConfig([
-            'fiber' => ['admission_queue_wait_ms' => 60000],
+        $configured = wlsResolveFiberAdmissionConfig([
+            'fiber' => ['admission_queue_wait_ms' => 45000],
         ]);
-        self::assertSame(10000, $cfg['queue_wait_ms']);
+        self::assertSame(45000, $configured['queue_wait_ms']);
+
+        $cfg = wlsResolveFiberAdmissionConfig([
+            'fiber' => ['admission_queue_wait_ms' => 90000],
+        ]);
+        self::assertSame(60000, $cfg['queue_wait_ms']);
+    }
+
+    public function testWaitingRequestCanFinishFromCacheBeforeAdmissionSlotOpens(): void
+    {
+        $active = [
+            'busy' => ['is_sse_protocol' => false],
+            'waiting' => ['is_sse_protocol' => false],
+        ];
+        $waiters = ['waiting' => true];
+        $probes = 0;
+
+        $result = wlsAwaitFiberAdmissionSlot(
+            $active,
+            $waiters,
+            'waiting',
+            1,
+            100,
+            5,
+            static function () use (&$probes): bool {
+                $probes++;
+                return true;
+            },
+            10,
+        );
+
+        self::assertNull($result);
+        self::assertSame(1, $probes);
+        self::assertSame([], $waiters);
+        self::assertFalse($active['waiting']['admission_waiting']);
+    }
+
+    public function testWaitingCacheProbesAreSingleFlightWithinWorker(): void
+    {
+        $nestedRan = false;
+        $outer = wlsTryFiberAdmissionCacheProbe(static function () use (&$nestedRan): bool {
+            $nested = wlsTryFiberAdmissionCacheProbe(static function () use (&$nestedRan): bool {
+                $nestedRan = true;
+                return true;
+            });
+            self::assertFalse($nested);
+            return true;
+        });
+
+        self::assertTrue($outer);
+        self::assertFalse($nestedRan);
+        self::assertTrue(wlsTryFiberAdmissionCacheProbe(static fn (): bool => true));
+    }
+
+    public function testInstanceAdmissionPolicyIsLoadedFromEnvironmentBeforeWorkerStarts(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'wls-fiber-policy-');
+        self::assertIsString($path);
+        try {
+            file_put_contents($path, '<?php return ' . var_export([
+                'wls' => [
+                    'fiber' => ['max_active' => 0],
+                    'servers' => ['soak' => ['fiber' => [
+                        'max_active' => 12,
+                        'admission_queue_wait_ms' => 45000,
+                        'admission_queue_depth' => 256,
+                    ]]],
+                ],
+            ], true) . ';');
+
+            $cfg = wlsResolveFiberAdmissionConfigFromEnvironment($path, 'soak');
+            self::assertSame(12, $cfg['max_active']);
+            self::assertSame(45000, $cfg['queue_wait_ms']);
+            self::assertSame(256, $cfg['queue_depth']);
+        } finally {
+            @unlink($path);
+        }
     }
 }

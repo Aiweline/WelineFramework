@@ -26,6 +26,7 @@ class AiWidgetRegistrySource
                     dependencies: [AiWidgetRegistryMutation::NAMESPACE],
                     freshTtlSeconds: 300,
                     staleTtlSeconds: 1800,
+                    allowEmptyResult: true,
                 ),
                 'active-definitions.v1',
                 fn(): array => $this->loadRegistryEntries(),

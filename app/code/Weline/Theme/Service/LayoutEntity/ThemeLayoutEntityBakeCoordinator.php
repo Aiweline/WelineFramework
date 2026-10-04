@@ -43,11 +43,18 @@ final class ThemeLayoutEntityBakeCoordinator
             $candidates = $this->candidateWorkset($identity, $context, $changes);
             $this->publish($identity, $candidates);
         });
-        $this->bustPresentationCaches($context->themeId, $context->scope->storageScope);
+        $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode);
     }
 
     /** Pure candidates for a pinned historical R; callers may render these in memory. */
     public function candidateForIdentity(ThemeVersionIdentity $identity, string $layoutType, string $layoutOption = 'default', string $targetType = 'global', ?int $targetId = null, array $changes = []): array
+    {
+        $chromeCandidates = [];
+        return $this->candidateWithChromeReuse($identity, $layoutType, $layoutOption, $targetType, $targetId, $changes, $chromeCandidates);
+    }
+
+    /** Reuse only byte-equivalent common inputs inside this one synchronous workset. */
+    private function candidateWithChromeReuse(ThemeVersionIdentity $identity, string $layoutType, string $layoutOption, string $targetType, ?int $targetId, array $changes, array &$chromeCandidates): array
     {
         $changes = array_values(array_filter($changes, static fn($change): bool => is_array($change) && (isset($change['before']) || isset($change['after']))));
         $context = $this->context($identity, $layoutType, $layoutOption, $targetType, $targetId);
@@ -67,6 +74,7 @@ final class ThemeLayoutEntityBakeCoordinator
         $localeNodes = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class)->mergeIntoNodes(
             array_replace($nodes, $version->getChromePayload()), $identity->themeId, $context->layoutType,
             $identity->themeVersionId, $changes, $this->frozenOmissions($identity, $context->layoutType), $context->layoutOption);
+        $localeNodes = $this->materializer->discoverPageNativeOwners($identity, $context->layoutType, $context->layoutOption, $localeNodes);
         $locales = $this->localeOverrides($identity, $context, $localeNodes, $params);
         $options = $this->partialOptions($identity, $context);
         $candidates = $this->pageCandidates($identity, $context, $nodes, !empty($snapshot['has_intent']) || !empty($meta['has_intent']), $locales, $changes, $params);
@@ -78,16 +86,27 @@ final class ThemeLayoutEntityBakeCoordinator
                 if (isset($configs[$key])) { $locales[$locale]['partials.' . $type] = (new ThemeLayoutEntityInputResolver())->localizedConfig($partialParams[$type], $configs[$key]); }
             }
         }
-        return array_replace($candidates, $this->chromeCandidates($version, $locales, $options, $changes, $partialParams));
+        $chromeKey = hash('sha256', serialize([$identity->toArray(), $version->getChromePayload(), $locales, $options, $changes, $partialParams]));
+        if (!array_key_exists($chromeKey, $chromeCandidates)) {
+            $chromeCandidates[$chromeKey] = $this->chromeCandidates($version, $locales, $options, $changes, $partialParams);
+        }
+        return array_replace($candidates, $chromeCandidates[$chromeKey]);
     }
 
     private function pageCandidates(ThemeVersionIdentity $identity, ThemeEditorContext $context, array $nodes, bool $hasIntent, array $locales = [], array $changes = [], array $params = []): array
     {
         $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
         $omissions = $this->frozenOmissions($identity, $context->layoutType);
-        $defaults = $this->slotTree->filterContentNodes($merger->mergeIntoNodes([], $identity->themeId, $context->layoutType, $identity->themeVersionId, $changes, $omissions, $context->layoutOption));
+        $defaults = $this->contentNodesForLayout(
+            $context->layoutType,
+            $merger->mergeIntoNodes([], $identity->themeId, $context->layoutType, $identity->themeVersionId, $changes, $omissions, $context->layoutOption),
+        );
         $clearAll = array_filter($nodes, static fn($node): bool => is_array($node) && ($node['widget_code'] ?? '') === '__no_widget_placements__') !== [];
-        $nodes = $this->slotTree->filterContentNodes($clearAll ? $nodes : $merger->mergeIntoNodes($nodes, $identity->themeId, $context->layoutType, $identity->themeVersionId, $changes, $omissions, $context->layoutOption));
+        $nodes = $this->contentNodesForLayout(
+            $context->layoutType,
+            $clearAll ? $nodes : $merger->mergeIntoNodes($nodes, $identity->themeId, $context->layoutType, $identity->themeVersionId, $changes, $omissions, $context->layoutOption),
+        );
+        if (!$clearAll) { $nodes = $this->materializer->discoverPageNativeOwners($identity, $context->layoutType, $context->layoutOption, $nodes); }
         $nodes = $this->themeConfiguredNodes($identity, (new ThemeLayoutEntityInputResolver())->placements($nodes));
         $path = $this->paths()->pageLayoutPhtml($identity, $context->layoutType, $context->layoutOption, $context->targetType, $context->targetId ?: null);
         $hasLocaleParams = array_filter($locales, static fn(array $values): bool => array_key_exists('layout', $values)) !== [];
@@ -101,10 +120,31 @@ final class ThemeLayoutEntityBakeCoordinator
     {
         $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
         $original = $version->getChromePayload();
-        $nodes = $this->slotTree->filterChromeNodes($merger->mergeIntoNodes($original, $version->getThemeId(), 'homepage', $version->getVersionId(), $changes, $this->frozenOmissions($version->toVersionIdentity(), 'homepage')));
-        $version = clone $version;
-        $version->setChromePayload($this->themeConfiguredNodes($version->toVersionIdentity(), (new ThemeLayoutEntityInputResolver())->placements($nodes)));
+        $identity = $version->toVersionIdentity();
+        // Homepage owns root chrome; mini-cart drawer footer-extras (coupon/留言) is a nested
+        // chrome extension declared layout_type=mini-cart. Homepage merge alone never seeds it,
+        // and runtime SlotFiller is a no-op under pure-PHTML bake — so chrome must merge both.
+        $nodes = $merger->mergeIntoNodes(
+            $original,
+            $version->getThemeId(),
+            'homepage',
+            $version->getVersionId(),
+            $changes,
+            $this->frozenOmissions($identity, 'homepage'),
+        );
+        $nodes = $merger->mergeIntoNodes(
+            $nodes,
+            $version->getThemeId(),
+            'mini-cart',
+            $version->getVersionId(),
+            $changes,
+            $this->frozenOmissions($identity, 'mini-cart'),
+        );
+        $nodes = $this->slotTree->filterChromeNodes($nodes);
         $options = $options ?: ['header' => 'default', 'footer' => 'default', 'sidebar' => 'default'];
+        $nodes = $this->attachHeaderNativeMiniCartOwners($identity, $nodes, (string)($options['header'] ?? 'default'));
+        $version = clone $version;
+        $version->setChromePayload($this->themeConfiguredNodes($identity, (new ThemeLayoutEntityInputResolver())->placements($nodes)));
         $partialLocaleKeys = array_fill_keys(array_map(static fn(string $type): string => 'partials.' . $type, array_keys($options)), true);
         $hasLocaleParams = array_filter($locales, static fn(array $values): bool => array_intersect_key($values, $partialLocaleKeys) !== []) !== [];
         if ($original === [] && $nodes === [] && !array_filter($partialParams) && !$hasLocaleParams && !array_filter($options, static fn($option): bool => $option !== 'default')) {
@@ -113,6 +153,76 @@ final class ThemeLayoutEntityBakeCoordinator
             return $out;
         }
         return $this->materializer->candidateChrome($version, $locales, $options, $partialParams);
+    }
+
+    /**
+     * Keep mini-cart layout preview slots that are chrome-classified by name/area
+     * (footer-extras → footer-* heuristic) so editor/page bake still writes coupon/留言.
+     *
+     * @param array<string|int, mixed> $nodes
+     * @return array<string, array<string, mixed>>
+     */
+    private function contentNodesForLayout(string $layoutType, array $nodes): array
+    {
+        $content = $this->slotTree->filterContentNodes($nodes);
+        if (\trim($layoutType) !== 'mini-cart') {
+            return $content;
+        }
+        foreach ($nodes as $key => $node) {
+            if (!\is_array($node)) {
+                continue;
+            }
+            if (\trim((string)($node['slot_id'] ?? '')) !== 'footer-extras') {
+                continue;
+            }
+            $uid = \strtolower(\trim((string)($node['node_uid'] ?? $key)));
+            if ($uid === '') {
+                continue;
+            }
+            $node['node_uid'] = $uid;
+            $content[$uid] = $node;
+        }
+
+        return $content;
+    }
+
+    /**
+     * Parent footer-extras default injections under source-native mini-cart-icon in header.
+     *
+     * @param array<string, array<string, mixed>> $nodes
+     * @return array<string, array<string, mixed>>
+     */
+    private function attachHeaderNativeMiniCartOwners(ThemeVersionIdentity $identity, array $nodes, string $headerOption): array
+    {
+        $hasExtras = false;
+        foreach ($nodes as $node) {
+            if (\is_array($node) && \trim((string)($node['slot_id'] ?? '')) === 'footer-extras') {
+                $hasExtras = true;
+                break;
+            }
+        }
+        if (!$hasExtras) {
+            return $nodes;
+        }
+        $headerOption = \trim($headerOption) !== '' ? $headerOption : 'default';
+        try {
+            $theme = (clone ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class))
+                ->clearData()->clearQuery()->load($identity->themeId);
+            $resources = ObjectManager::getInstance(\Weline\Theme\Service\ThemeResourceCatalog::class)
+                ->getResources('partials', $identity->area, $theme);
+            $resource = $resources['partials/header/' . $headerOption]
+                ?? $resources['partials/header/default']
+                ?? null;
+            $origin = \is_array($resource) ? (string)($resource['file_path'] ?? '') : '';
+            if ($origin === '' || !\is_file($origin)) {
+                return $nodes;
+            }
+            $source = (string)\file_get_contents($origin);
+
+            return (new LayoutRelationCompiler(null, $theme))->discoverNativeOwners($source, $nodes, true);
+        } catch (\Throwable) {
+            return $nodes;
+        }
     }
 
     /** Resolve complete locale configs once at generation time. */
@@ -188,7 +298,7 @@ final class ThemeLayoutEntityBakeCoordinator
         });
         $artifacts = [];
         foreach ($candidates as $path => $bytes) { if ($bytes !== null) { $artifacts[] = $this->resourceArtifactReceipt('phtml', $path); } }
-        $this->bustPresentationCaches($context->themeId, $context->scope->storageScope);
+        $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode);
         return ['status' => $status, 'version_id' => $identity->themeVersionId, 'content_revision' => $identity->contentRevision, 'entity_key' => '', 'artifacts' => $artifacts];
     }
 
@@ -217,7 +327,7 @@ final class ThemeLayoutEntityBakeCoordinator
         foreach ($this->snapshotService()->resources($identity) as $row) {
             if (($row['resource_type'] ?? '') === 'layout') { $targets[] = json_decode((string)$row['resource_key_json'], true); }
         }
-        $seen = []; $candidates = [];
+        $seen = []; $candidates = []; $chromeCandidates = [];
         foreach ($targets as $key) {
             if (!is_array($key)) { continue; }
             $type = (string)($key['layout_type'] ?? 'default'); $option = (string)($key['layout_option'] ?? 'default');
@@ -225,20 +335,21 @@ final class ThemeLayoutEntityBakeCoordinator
             $hash = json_encode([$type,$option,$target,$targetId]);
             if (isset($seen[$hash])) { continue; }
             $seen[$hash] = true;
-            $candidates = array_replace($candidates, $this->candidateForIdentity($identity,$type,$option,$target,$targetId,$changes));
+            $candidates = array_replace($candidates, $this->candidateWithChromeReuse($identity,$type,$option,$target,$targetId,$changes,$chromeCandidates));
         }
         return $candidates;
     }
 
-    public function afterLayoutWrite(int $themeId, string $scope, string $layoutType, string $identityHash, array $nodes, array $commands, bool $published, ?int $releaseId, int $draftRevisionId = 0, string $layoutOption = 'default', string $area = 'frontend', ?int $versionId = null, string $targetType = 'global', ?int $targetId = null): void
+    public function afterLayoutWrite(int $themeId, string $scope, string $layoutType, string $identityHash, array $nodes, array $commands, bool $published, ?int $releaseId, int $draftRevisionId = 0, string $layoutOption = 'default', string $area = 'frontend', ?int $versionId = null, string $targetType = 'global', ?int $targetId = null, string $storeMode = 'normal'): void
     {
-        $this->bakePageFromNodes($themeId, $scope, $identityHash, $layoutType, $nodes, $published, $releaseId, $draftRevisionId, $versionId, [], true, $layoutOption, $area, true, $targetType, $targetId, $commands !== []);
-        $this->bustPresentationCaches($themeId, $scope);
+        $identity = $this->resolveBakeIdentity($themeId, $scope, $published, $versionId, $area, $storeMode);
+        $this->bakePageFromNodes($identity->themeId, $identity->canonicalScope, $identityHash, $layoutType, $nodes, $published, $releaseId, $draftRevisionId, $identity->themeVersionId, [], true, $layoutOption, $area, true, $targetType, $targetId, $commands !== [], $identity->storeMode);
+        $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode);
     }
 
-    public function bakePageFromNodes(int $themeId, string $scope, string $identityHash, string $layoutType, array $nodes, bool $published, ?int $releaseId, int $draftRevisionId = 0, ?int $versionId = null, array $changes = [], bool $updateCurrent = true, string $layoutOption = 'default', string $area = 'frontend', bool $mergeDefaults = true, string $targetType = 'global', ?int $targetId = null, ?bool $hasIntent = null): string
+    public function bakePageFromNodes(int $themeId, string $scope, string $identityHash, string $layoutType, array $nodes, bool $published, ?int $releaseId, int $draftRevisionId = 0, ?int $versionId = null, array $changes = [], bool $updateCurrent = true, string $layoutOption = 'default', string $area = 'frontend', bool $mergeDefaults = true, string $targetType = 'global', ?int $targetId = null, ?bool $hasIntent = null, string $storeMode = 'normal'): string
     {
-        $identity = $this->resolveBakeIdentity($themeId, $scope, $published, $versionId, $area);
+        $identity = $this->resolveBakeIdentity($themeId, $scope, $published, $versionId, $area, $storeMode);
         return ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $layoutType, $layoutOption, $targetType, $targetId, $nodes, $hasIntent, $draftRevisionId, $releaseId, $changes): string {
             $context = $this->context($identity, $layoutType, $layoutOption, $targetType, $targetId);
             $candidates = $this->pageCandidates($identity, $context, $nodes, $hasIntent ?? ($draftRevisionId > 0 || $releaseId !== null), [], $changes);
@@ -249,15 +360,15 @@ final class ThemeLayoutEntityBakeCoordinator
         });
     }
 
-    public function bakeChromeFromNodes(int $themeId, string $scope, array $nodes, bool $structural = true, bool $invalidate = true, ?int $versionId = null): string
+    public function bakeChromeFromNodes(int $themeId, string $scope, array $nodes, bool $structural = true, bool $invalidate = true, ?int $versionId = null, string $storeMode = 'normal'): string
     {
-        $identity = $this->resolveBakeIdentity($themeId, $scope, false, $versionId);
+        $identity = $this->resolveBakeIdentity($themeId, $scope, false, $versionId, 'frontend', $storeMode);
         return ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $nodes, $invalidate): string {
             $version = $this->loadVersion($identity);
             $version->setChromePayload($this->slotTree->filterChromeNodes($nodes));
             $candidates = $this->chromeCandidates($version);
             $this->publish($identity, $candidates);
-            if ($invalidate) { $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope); }
+            if ($invalidate) { $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode); }
             foreach ($candidates as $path => $bytes) { if ($bytes !== null) { return $path; } }
             return '';
         });
@@ -334,7 +445,7 @@ final class ThemeLayoutEntityBakeCoordinator
                     $this->publish($identity, $candidates);
                     $this->lastRebakeReport['migrated'] += count($candidates);
                 });
-                $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope);
+                $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode);
             } catch (\Throwable $error) {
                 $this->reportMissingSourceOrThrow($identity, $error);
             }
@@ -496,8 +607,8 @@ final class ThemeLayoutEntityBakeCoordinator
         if ($digest === false) { throw new \RuntimeException('theme_layout_entity_' . $type . '_bake_failed'); }
         return ['type' => $type, 'artifact_id' => $digest, 'exists' => true];
     }
-    private function bustPresentationCaches(int $themeId, ?string $scope = null): void
+    private function bustPresentationCaches(int $themeId, ?string $scope = null, string $storeMode = 'normal'): void
     {
-        ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeCacheCleaner::class)->clearLayoutEntityCaches($themeId, $scope);
+        ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeCacheCleaner::class)->clearLayoutEntityCaches($themeId, $scope, $storeMode);
     }
 }

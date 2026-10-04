@@ -12,7 +12,6 @@ use Weline\Theme\Api\Version\ThemeVersionIdentity;
  * pages/[targets/{type}/{id}/]layouts/{layoutType}/{option}.phtml
  * pages/[targets/{type}/{id}/]layouts/{layoutType}/{option}/sources/{Module}/{source}.phtml
  * theme/partials/{type}/{option}.phtml
- * Legacy sidecar path helpers are cleanup compatibility only; writers must not use them.
  */
 final class ThemeLayoutEntityPaths
 {
@@ -261,67 +260,6 @@ final class ThemeLayoutEntityPaths
         return $this->pageLayoutPhtml($identity, $layoutRouteOrHash);
     }
 
-    /** Page sidecar root (binding/config/assets) — not storefront structure truth. */
-    public function pageMetaDir(ThemeVersionIdentity $identity, string $layoutRoute): string
-    {
-        $route = $this->layoutRoutePath($layoutRoute);
-        $rel = \str_replace('/', \DIRECTORY_SEPARATOR, $route);
-
-        return $this->versionModeDir($identity)
-            . 'pages' . \DIRECTORY_SEPARATOR
-            . 'meta' . \DIRECTORY_SEPARATOR
-            . $rel . \DIRECTORY_SEPARATOR;
-    }
-
-    /**
-     * @deprecated No structure_key directory; returns meta dir for call-site compatibility.
-     */
-    public function pageStructureDir(ThemeVersionIdentity $identity, string $layoutRouteOrHash, string $structureKey = ''): string
-    {
-        unset($structureKey);
-
-        return $this->pageMetaDir($identity, $layoutRouteOrHash);
-    }
-
-    /**
-     * @deprecated structure.json is not storefront truth (C-RP-03). Sidecar only under meta/.
-     */
-    public function pageStructureJson(ThemeVersionIdentity $identity, string $layoutRouteOrHash, string $structureKey = ''): string
-    {
-        unset($structureKey);
-
-        return $this->pageMetaDir($identity, $layoutRouteOrHash) . 'structure.json';
-    }
-
-    public function pageConfigJson(ThemeVersionIdentity $identity, string $layoutRoute, string $configKey = ''): string
-    {
-        unset($configKey);
-
-        return $this->pageMetaDir($identity, $layoutRoute) . 'config.json';
-    }
-
-    public function pageAssetsJson(ThemeVersionIdentity $identity, string $layoutRoute, string $configKey = ''): string
-    {
-        unset($configKey);
-
-        return $this->pageMetaDir($identity, $layoutRoute) . 'assets.json';
-    }
-
-    public function pageBindingJson(ThemeVersionIdentity $identity, string $layoutRoute): string
-    {
-        return $this->pageMetaDir($identity, $layoutRoute) . 'binding.json';
-    }
-
-    /** @deprecated Artifact binding keys colocated under meta/. */
-    public function pageArtifactBindingJson(
-        ThemeVersionIdentity $identity,
-        string $layoutRoute,
-        string $artifactKey,
-    ): string {
-        return $this->pageMetaDir($identity, $layoutRoute)
-            . $this->normalizePathSegment($artifactKey, 'artifact') . '.json';
-    }
-
     /**
      * Flat chrome.phtml under theme/ — no structure_key directory.
      * $structureKey retained for call-site compatibility; ignored on disk.
@@ -332,62 +270,6 @@ final class ThemeLayoutEntityPaths
 
         return $this->chromeRoot($identity) . 'chrome.phtml';
     }
-
-    public function chromeStructureDir(ThemeVersionIdentity $identity, string $structureKey = ''): string
-    {
-        unset($structureKey);
-
-        return $this->chromeRoot($identity);
-    }
-
-    public function chromeConfigJson(ThemeVersionIdentity $identity, string $configKey = ''): string
-    {
-        unset($configKey);
-
-        return $this->chromeRoot($identity) . 'config.json';
-    }
-
-    public function chromeAssetsJson(ThemeVersionIdentity $identity, string $configKey = ''): string
-    {
-        unset($configKey);
-
-        return $this->chromeRoot($identity) . 'assets.json';
-    }
-
-    public function chromeBindingJson(ThemeVersionIdentity $identity): string
-    {
-        return $this->chromeRoot($identity) . 'binding.json';
-    }
-
-    public function chromeArtifactBindingJson(ThemeVersionIdentity $identity, string $artifactKey): string
-    {
-        return $this->chromeRoot($identity)
-            . $this->normalizePathSegment($artifactKey, 'artifact') . '.json';
-    }
-
-    public function chromeRenderedHtml(
-        ThemeVersionIdentity $identity,
-        string $artifactKey,
-        string $renderVaryKey,
-    ): string {
-        return $this->chromeRoot($identity)
-            . 'rendered' . \DIRECTORY_SEPARATOR
-            . $this->normalizePathSegment($artifactKey, 'artifact') . \DIRECTORY_SEPARATOR
-            . $this->normalizePathSegment($renderVaryKey, 'vary') . '.html';
-    }
-
-    /**
-     * @deprecated Revision segment no longer appears in disk paths; revision lives in binding JSON.
-     */
-    public function revisionBindingSegment(ThemeVersionIdentity $identity): string
-    {
-        if ($identity->contentRevision < 1) {
-            throw new \InvalidArgumentException('theme_layout_content_revision_required');
-        }
-
-        return 'v' . $identity->themeVersionId . '-g' . $identity->contentRevision;
-    }
-
     /**
      * Delete leftover pre-readable hash trees: {64hex}/tv{N}/… under the entity root.
      * Called after cutover bake so stale workers cannot leave storefront dual-truth.

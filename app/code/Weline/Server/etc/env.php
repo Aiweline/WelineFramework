@@ -81,11 +81,11 @@ return [
             'ready_gate_homepage_fail_open' => true,
         ],
         // Fiber 准入：默认限制每 Worker 并发渲染数；满则排队等待，不立即 503。
-        // max_active=0 表示不限制。queue_depth 默认=max_active（避免过长排队占内存）；wait 默认 8s（上限 10s）。
+        // max_active=0 表示不限制。缓存重建时允许短时积压；wait 上限 60s。
         'fiber' => [
             'max_active' => 12,
-            'admission_queue_wait_ms' => 8000,
-            'admission_queue_depth' => 12,
+            'admission_queue_wait_ms' => 60000,
+            'admission_queue_depth' => 1024,
             'admission_queue_slice_ms' => 25,
             'long_lived_max_active' => 4,
         ],

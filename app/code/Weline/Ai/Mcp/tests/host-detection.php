@@ -25,6 +25,35 @@ $check(
     'installed editor binaries do not prove the active host',
 );
 
+$unknownGuidance = welineMcpInstallResolveGuidance(dirname(__DIR__), 'other');
+$unknownInstall = $unknownGuidance['hosts']['unknown']['install'] ?? null;
+$check(
+    is_array($unknownInstall) && ($unknownInstall['mode'] ?? '') === 'agent_resolve_host_config',
+    'unknown host gets an actionable agent-resolve plan instead of a dead end',
+);
+$unknownProbe = $unknownGuidance['hosts']['unknown']['host'] ?? [];
+$check(
+    array_key_exists('ready', $unknownProbe) && $unknownProbe['ready'] === null
+        && array_key_exists('primary_ready', $unknownGuidance) && $unknownGuidance['primary_ready'] === null,
+    'unknown host keeps primary_ready null so host reload policy is unchanged',
+);
+$unknownTargets = is_array($unknownInstall)
+    ? ($unknownInstall['steps'][0]['known_targets'] ?? [])
+    : [];
+$check(
+    ($unknownTargets['workbuddy']['config'] ?? '') === '~/.workbuddy-ai/mcp.json',
+    'unknown-host targets document the WorkBuddy MCP config location',
+);
+$check(
+    str_contains((string) ($unknownGuidance['agent_next_action'] ?? ''), 'primary_host=unknown'),
+    'unknown-host next action tells the agent to self-register instead of doing nothing',
+);
+$check(
+    ($unknownGuidance['registration']['command'] ?? '') !== ''
+        && is_array($unknownGuidance['registration']['args'] ?? null),
+    'unknown-host guidance still carries the registration payload for any editor',
+);
+
 $previousCursorAgent = getenv('CURSOR_AGENT');
 $previousCursorRole = getenv('CURSOR_EXTENSION_HOST_ROLE');
 $previousCodexThread = getenv('CODEX_THREAD_ID');

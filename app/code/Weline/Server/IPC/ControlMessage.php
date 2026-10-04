@@ -1031,9 +1031,12 @@ class ControlMessage
      *
      * @return array{soft:float,hard:float}
      */
-    public static function drainDeadlines(float $hardDeadlineSeconds): array
+    public static function drainDeadlines(float $hardDeadlineSeconds, ?float $minimumHardDeadlineSeconds = null): array
     {
-        $hard = \max(1.0, \min(7200.0, $hardDeadlineSeconds));
+        $hard = \max(1.0, \min(7200.0, \max(
+            $hardDeadlineSeconds,
+            $minimumHardDeadlineSeconds ?? 0.0,
+        )));
         $soft = $hard > 1.0 ? \max(1.0, $hard - 1.0) : $hard;
 
         return ['soft' => $soft, 'hard' => $hard];

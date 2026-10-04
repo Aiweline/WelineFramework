@@ -1141,6 +1141,7 @@ SH);
     );
 
     foreach ([
+        'aoci-installation.php',
         'context-response-budget.php',
         'host-detection.php',
         'project-guidance-reload-policy.php',

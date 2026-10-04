@@ -152,7 +152,8 @@ if ($layout_editor_locked) {
 $initialPreviewToken = trim((string)($this->getData('initial_preview_token') ?: ''));
 // 首屏与后续画布导航使用同一已解析 owner/resource，不能先请求无 scope 的默认草稿。
 $canvasArea = $editor_area === 'backend' ? 'backend' : 'frontend';
-$canvasPath = ($page_type === '' || $page_type === 'homepage') ? '/' : '/' . rawurlencode((string)$page_type);
+$storefrontPathsByLayout = (array)$this->getData('storefront_paths_by_layout');
+$canvasPath = (string)($storefrontPathsByLayout[$page_type] ?? '/');
 $previewParams['shell'] = 'theme-editor';
 $previewParams['interaction_mode'] = 'edit';
 $previewParams['editor_area'] = $canvasArea;
@@ -198,7 +199,16 @@ $layoutIdentityTargetTypeSafe = $escape($layout_identity_target_type);
 $layoutIdentityTargetIdSafe = (string)$layout_identity_target_id;
 $layoutIdentityLocaleSafe = $escape($layout_identity_locale);
 $defaultLocaleSafe = $escape($default_locale);
+$storefront_mount_path = trim((string)$this->getData('storefront_mount_path'));
+$storefront_mount_path = '/' . trim(str_replace('\\', '/', $storefront_mount_path), '/');
+if ($storefront_mount_path === '/') {
+    $storefront_mount_path = '';
+} else {
+    $storefront_mount_path = rtrim($storefront_mount_path, '/');
+}
+$storefrontMountPathSafe = $escape($storefront_mount_path);
 $layoutOptionsJsonSafe = $escape($layout_options_json);
+$storefrontPathsJsonSafe = $escape(json_encode($storefrontPathsByLayout, $jsonForScriptFlags) ?: '{}');
 $installedLocalesJsonSafe = $escape($installed_locales_json);
 $layoutLockEnabledSafe = $layout_editor_locked ? '1' : '0';
 $layoutLockSourceSafe = $escape($layout_lock_source);
@@ -211,6 +221,7 @@ $themeOptionsHtml = (string)$this->getData('theme_options_html');
 $resourceConfigKind = (string)($scopeIdentity['scope_kind'] ?? 'global');
 $resourceConfigWebsite = (string)($scopeIdentity['website_code'] ?? '');
 $resourceConfigStore = (string)($scopeIdentity['store_code'] ?? '');
+$resourceConfigMode = (string)($scopeIdentity['store_mode'] ?? '');
 $resourceConfigChannel = (string)($scopeIdentity['channel_code'] ?? '');
 $resourceConfigScope = $selected_scope !== '' ? $selected_scope : ($resourceConfigWebsite . '.' . $resourceConfigStore . '.' . $resourceConfigChannel);
 $scope_identity_json = json_encode($scopeIdentity, $jsonForScriptFlags) ?: '{}';
@@ -267,6 +278,8 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-theme-layout-source-target-type="<?= $layoutIdentityTargetTypeSafe ?>"
      data-theme-layout-source-target-id="<?= $layoutIdentityTargetIdSafe ?>"
      data-default-locale="<?= $defaultLocaleSafe ?>"
+     data-storefront-mount-path="<?= $storefrontMountPathSafe ?>"
+     data-storefront-paths-by-layout="<?= $storefrontPathsJsonSafe ?>"
      data-layout-options="<?= $layoutOptionsJsonSafe ?>"
      data-installed-locales="<?= $installedLocalesJsonSafe ?>"
      data-layout-lock-enabled="<?= $layoutLockEnabledSafe ?>"
@@ -1180,7 +1193,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
             <p class="w-text" data-tone="muted" data-size="sm">@lang{修改后自动保存到当前作用范围；未设置时按渠道、店铺、网站、全局逐级继承。}</p>
             <w:config:embed module="Weline_Theme" area="editor_area" group="theme_resource_files"
                 locale="default" layout="vertical" target_scope="resourceConfigScope"
-                scope_kind="resourceConfigKind" website_code="resourceConfigWebsite" store_code="resourceConfigStore" channel_code="resourceConfigChannel" />
+                scope_kind="resourceConfigKind" website_code="resourceConfigWebsite" store_code="resourceConfigStore" store_mode="resourceConfigMode" channel_code="resourceConfigChannel" />
         </section>
                 </div>
             </div>

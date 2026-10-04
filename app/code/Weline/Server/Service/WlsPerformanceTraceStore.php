@@ -604,6 +604,25 @@ class WlsPerformanceTraceStore
                 'direct_connect' => true,
             ];
         }
+        if (in_array($category, ['rpc', 'runtime'], true)) {
+            foreach ([
+                'command', 'encoded_bytes', 'acquire_ms', 'encode_ms', 'send_ms', 'read_ms', 'dispose_ms',
+                'send_called', 'send_succeeded', 'read_called', 'response_received',
+                'direction', 'mode', 'timeout_sec', 'result', 'failed_stage', 'exception_class',
+                'start_monotonic_us', 'end_monotonic_us', 'rpc_start_monotonic_us', 'rpc_end_monotonic_us',
+                'read_start_monotonic_us', 'read_end_monotonic_us',
+                'prepare_ms', 'dispatch_ms', 'suspend_ms', 'select_ms', 'io_resolution',
+            ] as $key) {
+                $allowed[$key] = true;
+            }
+            foreach ([
+                'registered', 'deadline', 'yield_return', 'after_resume_start', 'after_resume_end',
+                'guard_start', 'guard_end', 'collect_seen', 'first_poll_start', 'first_poll_end',
+                'resolved', 'before_resume_start', 'before_resume_end', 'resume_call',
+            ] as $stage) {
+                $allowed['io_' . $stage . '_monotonic_us'] = true;
+            }
+        }
         $max = (int)($this->config['max_meta_bytes'] ?? $this->envValue('dev_tool.panel.wls_performance.max_meta_bytes', self::DEFAULT_MAX_META_BYTES));
         $out = [];
         foreach ($meta as $key => $value) {
@@ -934,6 +953,12 @@ class WlsPerformanceTraceStore
      */
     private function shouldCapture(string $requestId, array $request, array $summary, array $timing): bool
     {
+        // WlsRuntime emits this snapshot only for a signed, explicitly armed
+        // request trace. Background sampling must not discard that observation.
+        if (is_array($timing['trace_summary'] ?? null)
+            && (int)($timing['trace_summary']['span_count'] ?? 0) > 0) {
+            return true;
+        }
         $status = (int)($timing['status'] ?? $request['status'] ?? 0);
         $totalMs = (float)($timing['total_ms'] ?? $summary['total_ms'] ?? $summary['total_duration_ms'] ?? 0.0);
         $slowThreshold = (float)($this->config['slow_request_threshold_ms']

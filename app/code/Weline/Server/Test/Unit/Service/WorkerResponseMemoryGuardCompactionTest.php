@@ -14,6 +14,16 @@ use Weline\Widget\Service\WidgetData;
 
 final class WorkerResponseMemoryGuardCompactionTest extends TestCase
 {
+    public function testRatchetRetirementKeepsHttp2DrainWindow(): void
+    {
+        self::assertSame(120, WorkerResponseMemoryGuard::drainTimeoutSecondsForReason('zend_mm_ratchet', 10));
+        self::assertSame(120, WorkerResponseMemoryGuard::drainTimeoutSecondsForReason('zend_mm_ratchet', 120));
+        self::assertSame(10, WorkerResponseMemoryGuard::drainTimeoutSecondsForReason('fiber_output_buffer_overflow', 120));
+        self::assertFalse(WorkerResponseMemoryGuard::shouldRestartDrainAfterResponse('zend_mm_ratchet', true));
+        self::assertTrue(WorkerResponseMemoryGuard::shouldRestartDrainAfterResponse('zend_mm_ratchet', false));
+        self::assertTrue(WorkerResponseMemoryGuard::shouldRestartDrainAfterResponse('fiber_output_buffer_overflow', true));
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -180,53 +190,6 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
         self::assertIsArray($result);
     }
 
-    public function testLargeResponseFiberExitForcesSoftReclaimBelowSoftThreshold(): void
-    {
-        $this->seedProbeCaches();
-        $this->writeStaticProperty(WorkerResponseMemoryGuard::class, 'runtimeCacheThresholds', [
-            'soft' => 0.70,
-            'hard' => 0.85,
-        ]);
-
-        $result = $this->withMemoryPressure(
-            0.20,
-            static fn (): ?array => WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(
-                WorkerResponseMemoryGuard::LARGE_RESPONSE_BYTES
-            )
-        );
-
-        self::assertIsArray($result);
-        self::assertSame([], $this->readStaticProperty(TemplateCacheManager::class, 'memoryCache'));
-        self::assertGreaterThanOrEqual(
-            1,
-            $result['runtime_cache_compactions']['cleared_process_caches']
-        );
-    }
-
-    public function testLargeResponseFiberExitAlwaysForcesAggressive(): void
-    {
-        $this->seedProbeCaches();
-        $this->writeStaticProperty(WorkerResponseMemoryGuard::class, 'runtimeCacheThresholds', [
-            'soft' => 0.70,
-            'hard' => 0.85,
-        ]);
-
-        // Below soft ratio and below old 96MB gate — large body alone must go aggressive.
-        $result = $this->withMemoryPressure(
-            0.20,
-            static fn (): ?array => WorkerResponseMemoryGuard::compactAfterRequestFiberReleased(
-                WorkerResponseMemoryGuard::LARGE_RESPONSE_BYTES
-            )
-        );
-
-        self::assertIsArray($result);
-        self::assertFalse($result['cycle_collection_skipped']);
-        self::assertGreaterThanOrEqual(
-            5,
-            $result['runtime_cache_compactions']['cleared_process_caches']
-        );
-    }
-
     public function testForceAggressiveClearsRebuildableProcessCaches(): void
     {
         $this->seedProbeCaches();
@@ -243,8 +206,9 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
         WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
     }
 
-    public function testShouldDrainForZendRatchetWhenShellExceedsFloor(): void
+    public function testShouldDrainForZendRatchetWithConfiguredPressureAndCandidate(): void
     {
+        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * 1024 * 1024);
         self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
             80 * 1024 * 1024,
             70 * 1024 * 1024,
@@ -257,7 +221,7 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
             64 * 1024 * 1024,
             true
         ));
-        self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
+        self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
             120 * 1024 * 1024,
             100 * 1024 * 1024,
             64 * 1024 * 1024,

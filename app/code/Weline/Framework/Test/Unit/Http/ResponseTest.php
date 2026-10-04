@@ -112,6 +112,20 @@ final class ResponseTest extends TestCase
         self::assertStringContainsString("Content-Length: 3\r\n", $http);
     }
 
+    public function testExplicitContentLengthTracksBodyChangedAfterHeaderWasSet(): void
+    {
+        $response = Response::html('<html><body>old</body></html>');
+        $response->setHeader('Content-Length', (string) \strlen($response->getBody()));
+        $response->setBody('<html><body>new content</body></html>');
+        $response->markTelemetryPrepared();
+
+        $http = $response->toHttpString();
+        [$headers, $body] = \explode("\r\n\r\n", $http, 2);
+
+        self::assertSame('<html><body>new content</body></html>', $body);
+        self::assertStringContainsString('Content-Length: ' . \strlen($body) . "\r\n", $headers . "\r\n");
+    }
+
     public function testHtmlTerminateResponseIsMutatedBeforeEmission(): void
     {
         $this->installTelemetryMutationObserver();

@@ -12,6 +12,32 @@ use Weline\Theme\Service\PreviewTokenService;
 
 final class PreviewTokenServiceTest extends TestCase
 {
+    public function testNestedLayoutIdentitySurvivesTokenGenerationAndValidation(): void
+    {
+        $payloads = [];
+        $cache = $this->createMock(CachePoolInterface::class);
+        $cache->method('set')->willReturnCallback(static function (string $key, mixed $value) use (&$payloads): bool { $payloads[$key] = $value; return true; });
+        $cache->method('get')->willReturnCallback(static function (string $key) use (&$payloads): mixed { return $payloads[$key] ?? false; });
+        $fallback = $this->createMock(CachePoolInterface::class);
+        $fallback->method('set')->willReturn(true);
+        $service = $this->serviceWithCaches($cache, $fallback);
+        foreach (['account/login', 'checkout/success', 'module/nested-page', 'cms_page'] as $layout) {
+            $token = $service->generateToken(1, $layout);
+            self::assertSame($layout, $service->validateToken($token)['page_type']);
+        }
+    }
+
+    public function testTokenRejectsUnsafeLayoutPathSegmentsBeforeCacheWrite(): void
+    {
+        $cache = $this->createMock(CachePoolInterface::class);
+        $cache->expects(self::never())->method('set');
+        $service = $this->serviceWithCaches($cache, $this->createMock(CachePoolInterface::class));
+        foreach (['../account/login', 'account/../login', 'account//login', '/account/login', 'account/login/', 'account%2Flogin', 'account\\login'] as $layout) {
+            try { $service->generateToken(1, $layout); self::fail('Accepted unsafe layout: ' . $layout); }
+            catch (\InvalidArgumentException $error) { self::assertNotSame('', $error->getMessage()); }
+        }
+    }
+
     public function testGenerateTokenFallsBackToDurableFileWhenPrimaryCacheRejectsWrite(): void
     {
         $cache = $this->createMock(CachePoolInterface::class);

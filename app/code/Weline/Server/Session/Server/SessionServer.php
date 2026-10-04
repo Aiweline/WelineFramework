@@ -49,6 +49,12 @@ final class SessionServer
      */
     private array $clients = [];
 
+    /** 未认证连接的单调截止时间，认证成功或断开后立即释放名额。 */
+    private array $preauthDeadlines = [];
+    private int $preauthMaxConnections;
+    private int $preauthMaxFrameBytes;
+    private float $preauthTimeoutSec;
+
     /** Session 存储实例 */
     private SessionStore $store;
 
@@ -104,6 +110,9 @@ final class SessionServer
     public function __construct(array $config = [])
     {
         $this->config = $config;
+        $this->preauthMaxConnections = \max(1, (int)($config['preauth_max_connections'] ?? 64));
+        $this->preauthMaxFrameBytes = \max(1, (int)($config['preauth_max_frame_bytes'] ?? 4096));
+        $this->preauthTimeoutSec = \max(0.001, (float)($config['preauth_timeout_sec'] ?? 5.0));
         $this->serviceRole = (string) ($config['role'] ?? 'session_server');
         $this->sharedRegistry = new SharedStateServiceRegistry();
         $this->sharedConsumerLeaseTtlSec = \max(1, (int) ($config['shared_consumer_lease_ttl_sec'] ?? 300));
@@ -358,6 +367,7 @@ final class SessionServer
             }
         }
         $this->clients = [];
+        $this->preauthDeadlines = [];
 
         if ($this->serverSocket) {
             @\fclose($this->serverSocket);
@@ -399,6 +409,7 @@ final class SessionServer
             return 0;
         }
         $this->ensureAuthTokenFile();
+        $this->expirePreauthClients();
 
         $read = [$this->serverSocket];
         $write = [];
@@ -412,13 +423,18 @@ final class SessionServer
                 continue;
             }
 
-            unset($this->clients[$clientId]);
+            unset($this->clients[$clientId], $this->preauthDeadlines[$clientId]);
         }
 
         $write = $write !== [] ? $write : null;
         $except = null;
         $tvSec = (int)($timeoutUsec / 1000000);
         $tvUsec = $timeoutUsec % 1000000;
+        if ($this->preauthDeadlines !== []) {
+            $timeoutUsec = \min($timeoutUsec, (int)\max(0, (\min($this->preauthDeadlines) - $this->monotonicNow()) * 1000000));
+            $tvSec = (int)($timeoutUsec / 1000000);
+            $tvUsec = $timeoutUsec % 1000000;
+        }
 
         $changed = @\stream_select($read, $write, $except, $tvSec, $tvUsec);
         if ($changed === false) {
@@ -495,7 +511,7 @@ final class SessionServer
         foreach (\array_keys($this->clients) as $clientId) {
             $socket = $this->clients[$clientId]['socket'] ?? null;
             if (!\is_resource($socket)) {
-                unset($this->clients[$clientId]);
+                unset($this->clients[$clientId], $this->preauthDeadlines[$clientId]);
                 ++$recovered;
                 continue;
             }
@@ -584,6 +600,11 @@ final class SessionServer
             return false;
         }
 
+        if ($this->authToken !== null && \count($this->preauthDeadlines) >= $this->preauthMaxConnections) {
+            @\fclose($clientSocket);
+            return true;
+        }
+
         \stream_set_blocking($clientSocket, false);
 
         $clientId = (int)$clientSocket;
@@ -610,6 +631,9 @@ final class SessionServer
             // 仅当 AUTH/PING 显式 purpose=protocol_probe 时置位；默认空=业务/池化连接。
             'connection_purpose' => '',
         ];
+        if ($this->authToken !== null) {
+            $this->preauthDeadlines[$clientId] = $this->monotonicNow() + $this->preauthTimeoutSec;
+        }
 
         $this->logDebug("Client connected: {$peerName} (id={$clientId})");
         return true;
@@ -628,10 +652,19 @@ final class SessionServer
 
         $socket = $this->clients[$clientId]['socket'] ?? null;
         if (!\is_resource($socket)) {
-            unset($this->clients[$clientId]);
+            unset($this->clients[$clientId], $this->preauthDeadlines[$clientId]);
             return 0;
         }
-        $data = @\fread($socket, 65536);
+        $preauth = !$this->isClientAuthenticated($clientId);
+        if ($preauth && isset($this->preauthDeadlines[$clientId])
+            && $this->monotonicNow() >= $this->preauthDeadlines[$clientId]) {
+            $this->disconnectClient($clientId);
+            return 0;
+        }
+        $readBytes = $preauth
+            ? \max(1, $this->preauthMaxFrameBytes - \strlen($this->clients[$clientId]['buffer']) + 1)
+            : 65536;
+        $data = @\fread($socket, $readBytes);
 
         // This read only runs after stream_select() reported the plain TCP
         // socket as readable. With no competing reader, an empty read is EOF.
@@ -643,13 +676,43 @@ final class SessionServer
             return 0;
         }
 
-        $this->clients[$clientId]['buffer'] .= $data;
+        $authenticatedMessages = 0;
+        if ($preauth) {
+            // 只限制首条 AUTH，而非整次 TCP 数据；其后的业务帧仍使用原协议预算。
+            $authBuffer = $this->clients[$clientId]['buffer'] . $data;
+            $newline = \strpos($authBuffer, "\n");
+            if ($newline === false) {
+                if (\strlen($authBuffer) > $this->preauthMaxFrameBytes) {
+                    $this->disconnectClient($clientId);
+                } else {
+                    $this->clients[$clientId]['buffer'] = $authBuffer;
+                }
+                return 0;
+            }
+            if ($newline + 1 > $this->preauthMaxFrameBytes) {
+                $this->disconnectClient($clientId);
+                return 0;
+            }
+            $authMessage = SessionProtocol::decode(\substr($authBuffer, 0, $newline));
+            if ($authMessage === null || ($authMessage['cmd'] ?? null) !== SessionProtocol::CMD_AUTH) {
+                $this->disconnectClient($clientId);
+                return 0;
+            }
+            $this->clients[$clientId]['buffer'] = \substr($authBuffer, $newline + 1);
+            $this->handleAuth($clientId, $authMessage);
+            if (!isset($this->clients[$clientId]) || !$this->isClientAuthenticated($clientId)) {
+                return 0;
+            }
+            $authenticatedMessages = 1;
+        } else {
+            $this->clients[$clientId]['buffer'] .= $data;
+        }
 
         $tlsCacheChannel = !empty($this->clients[$clientId]['tls_cache_channel']);
         if ($tlsCacheChannel) {
             $messages = SessionProtocol::extractTlsMessages(
                 $this->clients[$clientId]['buffer'],
-                self::MAX_MESSAGES_PER_CLIENT_PER_TICK
+                self::MAX_MESSAGES_PER_CLIENT_PER_TICK - $authenticatedMessages
             );
             if ($messages === null) {
                 $this->disconnectClient($clientId);
@@ -660,14 +723,17 @@ final class SessionServer
             $this->store->relieveMemoryPressure();
             $messages = SessionProtocol::extractMessages(
                 $this->clients[$clientId]['buffer'],
-                self::MAX_MESSAGES_PER_CLIENT_PER_TICK
+                self::MAX_MESSAGES_PER_CLIENT_PER_TICK - $authenticatedMessages
             );
         }
         foreach ($messages as $msg) {
+            if (!isset($this->clients[$clientId])) {
+                break;
+            }
             $this->handleMessage($clientId, $msg);
         }
 
-        return \count($messages);
+        return $authenticatedMessages + \count($messages);
     }
 
     /**
@@ -777,7 +843,7 @@ final class SessionServer
 
             case SessionProtocol::CMD_TOUCH:
                 $ok = $key !== null
-                    ? ($this->store->existsKey($sessionId, (string)$key) && $this->store->touch($sessionId, $ttl))
+                    ? $this->store->touchKey($sessionId, (string)$key, $ttl)
                     : $this->store->touch($sessionId, $ttl);
                 $response = $ok ? SessionProtocol::encodeSuccess() : SessionProtocol::encodeError('Session not found');
                 break;
@@ -982,7 +1048,7 @@ final class SessionServer
 
         $socket = $this->clients[$clientId]['socket'] ?? null;
         if (!\is_resource($socket)) {
-            unset($this->clients[$clientId]);
+            unset($this->clients[$clientId], $this->preauthDeadlines[$clientId]);
             return false;
         }
 
@@ -1013,7 +1079,7 @@ final class SessionServer
 
         $socket = $this->clients[$clientId]['socket'] ?? null;
         if (!\is_resource($socket)) {
-            unset($this->clients[$clientId]);
+            unset($this->clients[$clientId], $this->preauthDeadlines[$clientId]);
             return false;
         }
 
@@ -1055,7 +1121,7 @@ final class SessionServer
         if (\is_resource($socket)) {
             @\fclose($socket);
         }
-        unset($this->clients[$clientId]);
+        unset($this->clients[$clientId], $this->preauthDeadlines[$clientId]);
 
         if ($consumerCode !== '') {
             $this->syncIdleShutdownWindow();
@@ -1098,6 +1164,7 @@ final class SessionServer
      */
     private function doMaintenance(): void
     {
+        $this->expirePreauthClients();
         $this->tlsSessionCacheStore?->maintain();
         $this->tlsSessionCacheStore?->relieveMemoryPressure();
         $this->store->relieveMemoryPressure();
@@ -1121,6 +1188,18 @@ final class SessionServer
         }
 
         $this->maintainSharedConsumerTokens();
+    }
+
+    private function expirePreauthClients(): void
+    {
+        $now = $this->monotonicNow();
+        foreach ($this->preauthDeadlines as $clientId => $deadline) {
+            if (!isset($this->clients[$clientId])) {
+                unset($this->preauthDeadlines[$clientId]);
+            } elseif ($now >= $deadline) {
+                $this->disconnectClient($clientId);
+            }
+        }
     }
 
     public function maintainSharedConsumerTokens(): void
@@ -1318,7 +1397,7 @@ final class SessionServer
             if (\is_resource($socket)) {
                 @\fclose($socket);
             }
-            unset($this->clients[$clientId]);
+            unset($this->clients[$clientId], $this->preauthDeadlines[$clientId]);
         }
     }
 
@@ -1461,6 +1540,7 @@ final class SessionServer
 
         if (\hash_equals($this->authToken, $token)) {
             $this->clients[$clientId]['authenticated'] = true;
+            unset($this->preauthDeadlines[$clientId]);
             $this->clients[$clientId]['tls_cache_channel'] = $tlsCacheChannel;
             $this->markClientProtocolProbeIfDeclared($clientId, $msg);
             if ($tlsCacheChannel) {

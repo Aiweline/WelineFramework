@@ -151,7 +151,7 @@ final class ConnectionAdapterSseRuntimeTest extends TestCase
         self::assertSame('', $adapter->appendStreamingData(1, 'must-not-leak'));
     }
 
-    public function testGoawayRefusesNewStreamsWhileExistingSseCanFinish(): void
+    public function testGoawayDiscardsNewStreamsWhileExistingSseCanFinish(): void
     {
         $adapter = new ConnectionAdapter();
         $this->openGetStream($adapter, 1);
@@ -162,9 +162,9 @@ final class ConnectionAdapterSseRuntimeTest extends TestCase
         self::assertSame(FrameCodec::TYPE_GOAWAY, $goaway[0]['type']);
 
         $newStream = $adapter->receive($this->getHeadersFrame(3));
-        self::assertSame([3], $newStream['reset_streams']);
-        $resetFrames = $this->decodeFrames((string)$newStream['write']);
-        self::assertSame(FrameCodec::TYPE_RST_STREAM, $resetFrames[0]['type']);
+        self::assertSame([], $newStream['reset_streams']);
+        self::assertSame([], $newStream['requests']);
+        self::assertSame('', $newStream['write']);
 
         $existing = $this->decodeFrames($adapter->appendStreamingData(1, "data: still-alive\n\n"));
         self::assertSame("data: still-alive\n\n", $this->dataPayload($existing));

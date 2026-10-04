@@ -40,14 +40,14 @@ class SeoWebsiteDirectory
     /**
      * @return array<string, mixed>|null
      */
-    public function getWebsiteById(int $websiteId): ?array
+    public function getWebsiteById(int $websiteId, bool $forceReload = false): ?array
     {
         if ($websiteId < 0) {
             return null;
         }
 
         try {
-            $row = w_query('websites', 'getWebsiteById', ['website_id' => $websiteId]);
+            $row = w_query('websites', 'getWebsiteById', ['website_id' => $websiteId, 'force_reload' => $forceReload]);
         } catch (\Throwable) {
             return null;
         }
@@ -327,6 +327,36 @@ class SeoWebsiteDirectory
         return $this->swapOriginKeepingPath($url, $publicBaseUrl);
     }
 
+    /** Align a registered alias of this Website to its requested public mount. */
+    public function rewriteWebsiteOriginUrl(string $url, string $publicBaseUrl, array $registeredOrigins): string
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || !in_array(strtolower((string)($parts['scheme'] ?? '')), ['http', 'https'], true)) {
+            return $url;
+        }
+        $source = $this->urlParts($url);
+        $matchedPath = null;
+        foreach ($registeredOrigins as $origin) {
+            $registered = $this->urlParts((string)($origin['base_url'] ?? ''));
+            if ($registered['host'] !== $source['host'] || $registered['port'] !== $source['port']
+                || !$this->pathOwnsUrl($registered['path'], $source['path'])) {
+                continue;
+            }
+            if ($matchedPath === null || strlen($registered['path']) > strlen($matchedPath)) {
+                $matchedPath = $registered['path'];
+            }
+        }
+        if ($matchedPath === null) {
+            return $this->rewriteToPublicOriginUrl($url, $publicBaseUrl);
+        }
+        $path = (string)($parts['path'] ?? '/');
+        $relative = $matchedPath === '/' ? $path : substr($path, strlen($matchedPath));
+        $query = isset($parts['query']) ? '?' . $parts['query'] : '';
+        $fragment = isset($parts['fragment']) ? '#' . $parts['fragment'] : '';
+        return rtrim($publicBaseUrl, '/') . ($relative === '' || $relative === '/' ? '' : '/' . ltrim($relative, '/'))
+            . $query . $fragment;
+    }
+
     /**
      * Align a URL onto the live public origin when it is loopback or same-host
      * (scheme/port may differ — e.g. configured https://host vs request https://host:9555).
@@ -458,6 +488,29 @@ class SeoWebsiteDirectory
         );
 
         return is_string($rewrittenHref) ? $rewrittenHref : $rewritten;
+    }
+
+    /** Resolve a configured WebsiteDomain mount for the original protocol request. */
+    public function requestPublicBaseUrlForWebsite(array $website): string
+    {
+        $origin = $this->originFromRequestHost();
+        $uri = (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? $_SERVER['ORIGIN_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '');
+        $request = $this->urlParts($origin . '/' . ltrim((string)(parse_url($uri, PHP_URL_PATH) ?: '/'), '/'));
+        $matched = '';
+        $longest = -1;
+        foreach ($this->listPublicOrigins($website) as $candidate) {
+            $base = (string)($candidate['base_url'] ?? '');
+            $parts = $this->urlParts($base);
+            if ($parts['host'] !== $request['host'] || $parts['port'] !== $request['port']
+                || !$this->pathOwnsUrl($parts['path'], $request['path'])) {
+                continue;
+            }
+            if (strlen($parts['path']) > $longest) {
+                $longest = strlen($parts['path']);
+                $matched = rtrim($origin, '/') . ($parts['path'] === '/' ? '' : $parts['path']);
+            }
+        }
+        return $matched;
     }
 
     public function isLoopbackBaseUrl(string $url): bool

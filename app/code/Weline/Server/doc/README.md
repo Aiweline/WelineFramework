@@ -105,3 +105,8 @@ Windows/MSVC/SCM 与冷重启、macOS system-domain 冷重启、专用 Windows �
 - `wls-panel-plan/` 下的阶段计划和验收证据
 
 历史材料中的 `DispatcherCore`、旧控制端口公式、旧 add/remove-worker 消息、固定复活延迟或“常驻请求 Fiber 池”等描述，除非已被现行源码和总览再次确认，否则均不视为当前契约。
+
+性能面板保持普通请求抽样；通过签名 Cookie 显式开启追踪的请求，其非空执行快照完整保留。RPC 与 socket 等待只保存命令、字节数、阶段耗时、状态及单调时钟标记，不保存 Token、密码、Cookie 或请求正文。
+
+共享缓存 CAS 失败沿用该请求追踪：`wls.cache.cas.failure` 区分 `before_dispatch_unavailable`、`write_outcome_unknown` 与 `transport_exception`；`wls.cache.remote.unavailable` 记录触发不可用状态的异常类型。仅保存固定阶段、命令名和异常类，不保存缓存键值或异常消息。诊断不改变原有返回值、异常传播、冷却或重试行为；不能仅凭统一的 503 文案断言本次 CAS 已发送。
+活动请求中的同类失败也写入 `wls_cache_cas` 最小故障日志，以覆盖重路由跳过详细追踪的情况；日志只含阶段、异常类、异常来源文件及行号和请求号，同一请求的同类适配器故障只记录一次，日志失败不会替代原缓存错误。FPM 的该通道文件为 `var/log/other/wls_cache_cas.log`；WLS 通过 `[wls_cache_cas]` 前缀写入实例错误日志。失败诊断使用 error 级别，以免普通日志关闭或内存压力时被 warning 丢弃策略过滤。Worker 状态事务另记录 `atomic_exception` 与 `adapter_unavailable_after_false`，附适配器类名，以区分原子写入异常和兼容适配器失去回复的分支；未确认结果对外仍沿用原有 503 响应。适配器通过可选 `AtomicCacheConfirmationInterface` 在当前请求／Fiber 内报告本次 CAS 是否已收到提交或冲突回复；已确认冲突沿用原有有界重试，不因其他缓存池的冷却标记而误报回复丢失。若本次 CAS 可证明尚未进入写入调用，则沿用现有恢复和有界重试；发送状态不确定时不得进入该分支。真正丢失原始回复仍抛出 `AtomicWriteOutcomeUnknownException`，不得内部重放一次性凭据消费。 `SharedStateClient` 在传输失败时补充协议命令、`acquire`／`encode`／`deadline_before_send`／`send`／`read` 阶段及总耗时，不记录 namespace、缓存键、载荷或异常文本；普通协议数组响应不会被当作传输故障。

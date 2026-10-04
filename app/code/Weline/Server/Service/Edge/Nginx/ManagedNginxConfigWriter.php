@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge\Nginx;
 
+use Weline\Framework\App\Env;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Nginx\Runtime\NginxConfigPublication;
@@ -71,7 +72,11 @@ final class ManagedNginxConfigWriter
         $upstreamHost = $this->normalizeLoopbackUpstreamHost($upstreamHost);
         $upstreamPorts = $this->normalizeUpstreamPorts($upstreamPort, $upstreamPorts, $ports);
         $names = $this->resolveServerNames($serverNames);
-        $ssl = $this->resolveSslMaterial($names, $certificateGeneration);
+        [$names, $apexRedirectNames, $wwwCanonicalHost] = $this->peelWwwCanonicalRedirectHosts($names);
+        $ssl = $this->resolveSslMaterial(
+            \array_values(\array_unique([...$names, ...$apexRedirectNames])),
+            $certificateGeneration,
+        );
         $sslCertificateSha256 = $ssl !== null
             ? $this->certificateFingerprint($ssl['cert'])
             : null;
@@ -121,6 +126,17 @@ NGINX;
         } else {
             $http3Configured = false;
         }
+
+        // Apex redirect servers must not repeat the primary reuseport listen
+        // options — nginx rejects duplicate reuseport for the same address:port.
+        $apexRedirectBlock = $this->buildWwwCanonicalRedirectServerBlock(
+            $apexRedirectNames,
+            $wwwCanonicalHost,
+            $ports,
+            $ssl,
+            $http2Enabled,
+            false,
+        );
 
         $cacheDir = $this->nginxQuotedPath($this->paths->cacheDir());
         $edgeCache = $this->paths->edgeCacheEnabled();
@@ -464,6 +480,7 @@ http {
 {$locationProtocolHeaders}{$cacheLocationBlock}
         }
     }
+{$apexRedirectBlock}
 }
 NGINX;
 
@@ -497,7 +514,9 @@ NGINX;
             'certificate_cert_sha256' => (string)($ssl['cert_sha256'] ?? ''),
             'certificate_key_sha256' => (string)($ssl['key_sha256'] ?? ''),
             'certificate_chain_sha256' => (string)($ssl['chain_sha256'] ?? ''),
-            'server_names' => $names,
+            'server_names' => \array_values(\array_unique([...$names, ...$apexRedirectNames])),
+            'www_canonical_host' => $wwwCanonicalHost,
+            'apex_redirect_names' => $apexRedirectNames,
             'edge_cache' => $edgeCache,
             'edge_cache_dynamic' => $this->paths->dynamicEdgeCacheEnabled(),
             'edge_cache_ttl_sec' => $ttl,
@@ -803,6 +822,140 @@ NGINX;
             $normalized[$port] = $port;
         }
         return \array_values($normalized);
+    }
+
+    /**
+     * When public_host is www.{apex} and {apex} is also in server_names, peel the
+     * apex into a dedicated 301→www server so the primary host stays www-only.
+     *
+     * @param list<string> $names
+     * @return array{0:list<string>,1:list<string>,2:string}
+     */
+    private function peelWwwCanonicalRedirectHosts(array $names): array
+    {
+        $publicHost = $this->resolvePublicHost();
+        if ($publicHost === ''
+            || !\str_starts_with($publicHost, 'www.')
+            || !$this->isSafeServerName($publicHost)
+        ) {
+            return [$names, [], ''];
+        }
+        $apex = \substr($publicHost, 4);
+        if ($apex === ''
+            || !$this->isSafeServerName($apex)
+            || !\in_array($apex, $names, true)
+            || !\in_array($publicHost, $names, true)
+        ) {
+            return [$names, [], ''];
+        }
+        $primary = [];
+        foreach ($names as $name) {
+            if ($name !== $apex) {
+                $primary[] = $name;
+            }
+        }
+        if ($primary === []) {
+            return [$names, [], ''];
+        }
+
+        return [$primary, [$apex], $publicHost];
+    }
+
+    private function resolvePublicHost(): string
+    {
+        $cfgHost = \strtolower(\trim((string)($this->paths->config()['public_host'] ?? '')));
+        if ($cfgHost !== '' && $this->isSafeServerName($cfgHost)) {
+            return $cfgHost;
+        }
+        try {
+            $env = Env::getInstance()->getConfig();
+            $host = \strtolower(\trim((string)(
+                (\is_array($env) ? ($env['wls']['public_host'] ?? '') : '')
+            )));
+            if ($host !== '' && $this->isSafeServerName($host)) {
+                return $host;
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
+    /**
+     * @param list<string> $apexNames
+     * @param array{http:int,https:int} $ports
+     * @param array{cert:string,key:string}|null $ssl
+     */
+    private function buildWwwCanonicalRedirectServerBlock(
+        array $apexNames,
+        string $wwwHost,
+        array $ports,
+        ?array $ssl,
+        bool $http2Enabled,
+        bool $reuseport,
+    ): string {
+        if ($apexNames === [] || $wwwHost === '') {
+            return '';
+        }
+        $nameList = \implode(' ', $apexNames);
+        $reuse = $reuseport ? ' reuseport' : '';
+        $sslListen = '';
+        if ($ssl !== null) {
+            $cert = $this->nginxQuotedPath($ssl['cert']);
+            $key = $this->nginxQuotedPath($ssl['key']);
+            $http2Line = $http2Enabled ? "\n        http2 on;" : '';
+            $sslListen = <<<NGINX
+
+        listen {$ports['https']} ssl{$reuse};{$http2Line}
+        ssl_certificate     {$cert};
+        ssl_certificate_key {$key};
+        ssl_protocols       TLSv1.3;
+        ssl_session_cache   shared:WLS_SSL:50m;
+        ssl_session_timeout 1d;
+        ssl_early_data      off;
+        ssl_session_tickets on;
+        ssl_buffer_size     4k;
+NGINX;
+        }
+
+        return <<<NGINX
+
+    # WLS apex->www canonical redirect (primary host = {$wwwHost})
+    server {
+        listen {$ports['http']}{$reuse};{$sslListen}
+        server_name {$nameList};
+
+        location ^~ /.well-known/acme-challenge/ {
+            proxy_pass http://wls_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header Host \$host;
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+
+        # Keep same-origin query-bin / REST on apex workable: redirect:manual
+        # workers cannot follow the www 301 (opaque redirect → WQB1 toast).
+        location ^~ /api/ {
+            proxy_pass http://wls_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header Host \$host;
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_buffering on;
+            proxy_cache off;
+        }
+
+        location / {
+            add_header Cache-Control "no-store" always;
+            return 301 https://{$wwwHost}\$request_uri;
+        }
+    }
+NGINX;
     }
 
     /**

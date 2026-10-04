@@ -139,6 +139,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private bool $homepageKeepWarmRunning = false;
 
+    /** Candidate identity only: canonical publish enqueues no HTML/context or RPC. */
+    private static array $homepagePublicationProofCandidate = [];
+    private int $homepageProofNextAtNs = 0;
+    private int $homepageProofObservationDeadlineNs = 0;
+    private string $homepageProofObservedPublicationDigest = '';
+
     private float $homepageKeepWarmNextAt = 0.0;
 
     private float $homepageLastNaturalHitAt = 0.0;
@@ -1012,6 +1018,93 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             . ' elapsed_ms=' . $elapsedMs);
     }
 
+    public static function noteCanonicalHomepagePublication(array $receipt): void
+    {
+        if (($receipt['version'] ?? 0) === 2 && isset($receipt['cache_key'])
+            && ($receipt['cookie_header'] ?? '') === '') {
+            self::$homepagePublicationProofCandidate = $receipt;
+        }
+    }
+
+    public function shouldScheduleHomepageProofRecovery(bool $draining, bool $memoryPressure): bool
+    {
+        if (!$this->readyGateWorkerBootstrapWarmupCompleted || !$this->homepageKeepWarmEnabled()
+            || $this->homepageKeepWarmRunning || $draining || $memoryPressure) {
+            return false;
+        }
+        $digest = (string)(self::$homepagePublicationProofCandidate['identity_digest'] ?? '');
+        return \hrtime(true) >= $this->homepageProofNextAtNs
+            || ($digest !== '' && $digest !== $this->homepageProofObservedPublicationDigest);
+    }
+
+    /** Proof-only background work; never invokes READY prime or Router render. */
+    public function runHomepageProofRecoveryCycle(): array
+    {
+        if ($this->homepageKeepWarmRunning) {
+            return ['ok' => false, 'reason' => 'already-running', 'elapsed_ms' => 0.0, 'tail_ms' => 0.0];
+        }
+        $startedAtNs = \hrtime(true);
+        $this->homepageKeepWarmRunning = true;
+        $this->homepageProofObservationDeadlineNs = $startedAtNs + 3_000_000_000;
+        SchedulerSystem::markCurrentFiberBackground();
+        $result = ['ok' => false, 'reason' => 'shared-fpc-miss'];
+        try {
+            $this->homepageProofCheckpoint();
+            $candidate = self::$homepagePublicationProofCandidate;
+            if ($candidate === []) {
+                // 已经真实adopt的follower也可重证共享正文；发现TTL不是payload寿命。
+                $candidate = $this->normalizeHomepageWarmupReceipt($this->homepageCacheWarmupReceipt);
+            }
+            $this->homepageProofObservedPublicationDigest = (string)($candidate['identity_digest'] ?? '');
+            $host = ($this->homepageCacheFullUri !== ''
+                ? $this->normalizeInternalWarmupHost($this->homepageCacheFullUri) : null)
+                ?? $this->resolveCanonicalHomepageWarmupHost($this->resolveDynamicFirstRenderWarmupHosts());
+            $origin = $this->homepageCacheFullUri !== '' ? $this->homepageCacheFullUri
+                : $this->resolveInternalWarmupScheme() . '://' . $host . '/';
+            if (($candidate['full_uri'] ?? '') === $origin && $this->publishDeferredHomepageWarmupReceipt($candidate)) {
+                $this->adoptProvenHomepageProcessReceipt($candidate);
+                $result = ['ok' => true, 'reason' => 'canonical-proof-published'];
+            } else {
+                do {
+                    $this->homepageProofCheckpoint();
+                    $transaction = $this->runHomepageFpcWarmupTransaction($host, 1, false);
+                    $result = $transaction['validation'] ?? $result;
+                    if ((bool)($result['ok'] ?? false)) {
+                        // 旧canonical信号不能永久遮蔽已重新严格adopt的当下回执。
+                        $known = $this->normalizeHomepageWarmupReceipt($this->homepageCacheWarmupReceipt);
+                        if ($known !== $candidate && ($known['full_uri'] ?? '') === $origin
+                            && $this->publishDeferredHomepageWarmupReceipt($known)) {
+                            $result['reason'] = 'adopted-proof-published';
+                        }
+                        break;
+                    }
+                    SchedulerSystem::yieldDelay(50);
+                } while (\hrtime(true) < $this->homepageProofObservationDeadlineNs);
+            }
+        } catch (\Throwable $exception) {
+            $result = ['ok' => false, 'reason' => $exception->getMessage()];
+        } finally {
+            $finishedAtNs = \hrtime(true);
+            $result['elapsed_ms'] = \round(($finishedAtNs - $startedAtNs) / 1_000_000, 2);
+            // Parking and a started bounded IO are included; disclose scheduler/IO tail.
+            $result['tail_ms'] = \round(\max(0, $finishedAtNs - $this->homepageProofObservationDeadlineNs) / 1_000_000, 2);
+            $this->homepageProofObservationDeadlineNs = 0;
+            $this->homepageProofNextAtNs = $finishedAtNs + 60_000_000_000;
+            $this->homepageKeepWarmRunning = false;
+        }
+        return $result;
+    }
+
+    private function homepageProofCheckpoint(): void
+    {
+        if ($this->homepageProofObservationDeadlineNs === 0) { return; }
+        // 证明阶段直接让出一个timer tick；不搬动heavy warmup的500ms前台停车规则。
+        SchedulerSystem::yieldDelay(1);
+        if (\hrtime(true) >= $this->homepageProofObservationDeadlineNs) {
+            throw new \RuntimeException('homepage-proof-observation-expired');
+        }
+    }
+
     public function shouldScheduleHomepageKeepWarm(
         int $activeRequests,
         bool $draining,
@@ -1089,7 +1182,15 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $receipt = $this->normalizeHomepageWarmupReceipt($this->homepageCacheWarmupReceipt);
         if ($receipt === [] || !isset($receipt['cache_key'])) {
-            return null;
+            // A Worker can learn the exact root identity from a natural HIT
+            // before its READY peer proof is adopted. Keep that identity
+            // available after Process L1 compaction or fresh TTL expiry; the
+            // Coordinator still validates current policy and namespace and
+            // requires a real fresh/stale payload before serving anything.
+            $receipt = $this->normalizeHomepageWarmupReceipt(self::$homepagePublicationProofCandidate);
+            if ($receipt === [] || !isset($receipt['cache_key'])) {
+                return null;
+            }
         }
 
         try {
@@ -1361,6 +1462,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             SchedulerSystem::yieldDelay($delayMs);
         }
 
+        // 同一已存在的background Fiber只消费producer exact receipt；不冷SSR。
+        $homepagePull = $this->runHomepageKeepWarmCycle();
+
         // Light stage: Product skips catalog.full; Theme still primes chrome_slot.
         $bagPrime = $this->primeDeferredStorefrontHotCacheBags('peer_hydrate');
         // Retry once if chrome_slot still missing (owner Shared may land mid-window).
@@ -1372,6 +1476,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $this->logDeferredStorefrontWarmupStage('peer_bags_hydrated', [
             'worker_id' => $workerId,
             'delay_ms' => $delayMs,
+            'homepage_fpc' => ['ok' => (bool)$homepagePull['ok'], 'reason' => (string)$homepagePull['reason']],
             'bag_prime' => $bagPrime,
             'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
         ]);
@@ -2307,22 +2412,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             if ($normalized === [] || !isset($normalized['cache_key'])) {
                 continue;
             }
-            $this->homepageCacheWarmupReceipt = $normalized;
-            $this->homepageCacheFullUri = (string)$normalized['full_uri'];
-            $this->readyGateHomepageFpcProof = [
-                'hit' => true,
-                'fpc_status' => 'HIT',
-                'source' => 'process',
-                'full_uri' => (string)$normalized['full_uri'],
-                'reason' => 'homepage-fpc:deferred-warmup:adopted',
-                'http_status' => 200,
-            ];
-            // Keep Worker readiness + Master status_report meta in sync with
-            // the live process proof (server:status otherwise stays on the
-            // fail-open snapshot taken at READY).
-            $this->publishAdoptedHomepageFpcProofToWorkerReadiness(
-                $this->readyGateHomepageFpcProof
-            );
+            $this->adoptProvenHomepageProcessReceipt($normalized);
             $this->logDeferredStorefrontWarmupStage('adopted', [
                 'reason' => 'homepage-fpc:deferred-warmup:adopted',
                 'full_uri' => (string)$normalized['full_uri'],
@@ -2337,6 +2427,22 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'homepage_sample' => $homepageSample,
             'candidate_uris' => $candidateUris,
         ]);
+    }
+
+    /** Only called after Coordinator identity + actual formatted Process proof. */
+    private function adoptProvenHomepageProcessReceipt(array $receipt): void
+    {
+        $this->homepageCacheWarmupReceipt = $receipt;
+        $this->homepageCacheFullUri = (string)$receipt['full_uri'];
+        $this->readyGateHomepageFpcProof = [
+            'hit' => true,
+            'fpc_status' => 'HIT',
+            'source' => 'process',
+            'full_uri' => (string)$receipt['full_uri'],
+            'reason' => 'homepage-fpc:deferred-warmup:adopted',
+            'http_status' => 200,
+        ];
+        $this->publishAdoptedHomepageFpcProofToWorkerReadiness($this->readyGateHomepageFpcProof);
     }
 
     /**
@@ -2506,6 +2612,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     $warmed++;
                     $sample['ready'] = true;
                     $sample['reason'] = 'ready:fpc-hit';
+                    if ($path === '/') {
+                        $homepageReceipt = ObjectManager::getInstance(FullPageCacheCoordinator::class)
+                            ->resolveRootHomepageProcessReceipt((string)$sample['full_uri'], '');
+                        $sample['shared_receipt_published'] = \is_array($homepageReceipt)
+                            && $this->publishDeferredHomepageWarmupReceipt($homepageReceipt);
+                    }
                     $samples[] = $sample;
                     $consecutiveLocaleFailures = 0;
                     // Adopt homepage proof immediately while Process L1 still
@@ -3766,27 +3878,49 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $fullUri = $this->resolveInternalWarmupScheme() . '://' . $host . '/';
         $cacheFullUri = $this->homepageCacheFullUri !== '' ? $this->homepageCacheFullUri : $fullUri;
         $activeReceipt = $this->normalizeHomepageWarmupReceipt($this->homepageCacheWarmupReceipt);
-        if ($activeReceipt === []) {
+        if ($activeReceipt === [] && $allowPrime) {
             $activeReceipt = $this->buildHomepageWarmupReceipt($cacheFullUri);
-        } else {
+        } elseif ($activeReceipt !== []) {
             $cacheFullUri = $activeReceipt['full_uri'];
         }
 
         // READY elects exactly one shared publisher. Runtime keep-warm cycles
         // only refresh from an existing fresh shared entry and never cold-render.
         $coordinator = ObjectManager::getInstance(FullPageCacheCoordinator::class);
-        $pulledFromShared = $this->warmHomepageProcessCacheForReceipt(
-            $coordinator,
-            $activeReceipt,
-            !$allowPrime
-        );
+        $this->homepageProofCheckpoint();
+        $pulledFromShared = ($allowPrime || isset($activeReceipt['cache_key']))
+            && $this->warmHomepageProcessCacheForReceipt($coordinator, $activeReceipt, !$allowPrime);
         if (!$pulledFromShared) {
             if (!$allowPrime) {
-                return [
-                    'meta' => [],
-                    'validation' => ['ok' => false, 'reason' => 'shared-fpc-miss', 'cache' => ''],
-                ];
+                // fail-open新Worker没有精确key；消费同generation producer回执，
+                // 仍由Coordinator核验scope/policy/namespace和真实payload，不执行SSR。
+                $sharedCoordinator = $this->dynamicWarmupCoordinator();
+                $this->homepageProofCheckpoint();
+                $publishedReceipt = $sharedCoordinator !== null
+                    ? $this->readHomepageWarmupPublishedReceipt(
+                        $sharedCoordinator,
+                        $this->homepageWarmupCoordinationPool($fullUri),
+                    )
+                    : [];
+                $this->homepageProofCheckpoint();
+                if (($publishedReceipt['version'] ?? 0) === 2
+                    && isset($publishedReceipt['cache_key'])
+                    && ($publishedReceipt['full_uri'] ?? '') === $fullUri
+                    && ($publishedReceipt['cookie_header'] ?? '') === ''
+                    && $this->warmHomepageProcessCacheForReceipt($coordinator, $publishedReceipt, true)
+                ) {
+                    $activeReceipt = $publishedReceipt;
+                    $cacheFullUri = $activeReceipt['full_uri'];
+                    $pulledFromShared = true;
+                } else {
+                    return [
+                        'meta' => [],
+                        'validation' => ['ok' => false, 'reason' => 'shared-fpc-miss', 'cache' => ''],
+                    ];
+                }
             }
+        }
+        if (!$pulledFromShared) {
             $candidateReceipts = [];
             $this->addHomepageWarmupReceipt($candidateReceipts, $activeReceipt);
             $this->addHomepageWarmupReceipt(
@@ -4241,14 +4375,86 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $validation = $this->validateHomepageWarmupResponse($probeMeta, true);
         if ($validation['ok']) {
-            $this->homepageCacheFullUri = $activeReceipt['full_uri'];
-            $this->homepageCacheWarmupReceipt = $activeReceipt;
+            if (!$allowPrime && ($activeReceipt['version'] ?? 0) === 2 && isset($activeReceipt['cache_key'])) {
+                $this->adoptProvenHomepageProcessReceipt($activeReceipt);
+            } else {
+                $this->homepageCacheFullUri = $activeReceipt['full_uri'];
+                $this->homepageCacheWarmupReceipt = $activeReceipt;
+            }
         }
 
         return [
             'meta' => $probeMeta,
             'validation' => $validation,
         ];
+    }
+
+    /**
+     * Publish an already completed deferred prime through the existing READY
+     * lease/fence. No Router render or READY-only process-killing alarm runs.
+     *
+     * @param array<string,mixed> $receipt
+     */
+    private function publishDeferredHomepageWarmupReceipt(array $receipt): bool
+    {
+        $receipt = $this->normalizeHomepageWarmupReceipt($receipt);
+        if (($receipt['version'] ?? 0) !== 2
+            || !isset($receipt['cache_key'])
+            || ($receipt['cookie_header'] ?? '') !== ''
+        ) {
+            return false;
+        }
+        $coordinator = ObjectManager::getInstance(FullPageCacheCoordinator::class);
+        $this->homepageProofCheckpoint();
+        $rootReceipt = $coordinator->resolveRootHomepageProcessReceipt($receipt['full_uri'], '');
+        // Guard清Process会删除根回执索引。只允许原canonical信号或已真实adopt的
+        // exact身份作为候选；下方仍强制Coordinator核验当下namespace/policy及共享正文。
+        $knownReceipt = $this->normalizeHomepageWarmupReceipt($this->homepageCacheWarmupReceipt);
+        $publishedCandidate = $this->normalizeHomepageWarmupReceipt(self::$homepagePublicationProofCandidate);
+        if ((\is_array($rootReceipt) && $this->normalizeHomepageWarmupReceipt($rootReceipt) !== $receipt)
+            || (!\is_array($rootReceipt) && $knownReceipt !== $receipt && $publishedCandidate !== $receipt)) {
+            return false;
+        }
+        // Shared必须持有同一有效payload；不能只凭一次render或旧Process命中伪造ready。
+        $this->homepageProofCheckpoint();
+        if (!$this->warmHomepageProcessCacheForReceipt($coordinator, $receipt, true)) {
+            return false;
+        }
+        $this->homepageProofCheckpoint();
+        $cached = $coordinator->getFormattedProcessCachedResponseForInternalReceipt($receipt);
+        if (!\is_array($cached) || !\is_string($cached['response'] ?? null)) {
+            return false;
+        }
+        $formatted = $this->parseFormattedWarmupResult($cached['response']);
+        $headers = $formatted['headers'];
+        $headers['X-WLS-Performance-FPC-Source'] = (string)($cached['source'] ?? '');
+        $validation = $this->validateHomepageWarmupResponse([
+            'headers' => $headers,
+            'status_code' => (int)$formatted['status_code'],
+            'body_length' => (int)$formatted['body_length'],
+            'set_cookie_count' => 0,
+        ], true);
+        $sharedCoordinator = $validation['ok'] ? $this->dynamicWarmupCoordinator() : null;
+        if ($sharedCoordinator === null) {
+            return false;
+        }
+        $pool = $this->homepageWarmupCoordinationPool($receipt['full_uri']);
+        $this->homepageProofCheckpoint();
+        $lease = null;
+        $failureReason = '';
+        if (!$this->tryAcquireHomepageWarmupLease(
+            $sharedCoordinator, $pool, $this->homepageWarmupOwnerToken(), $lease, $failureReason,
+        )) {
+            return false;
+        }
+        try {
+            $this->homepageProofCheckpoint();
+            if (!$this->renewHomepageWarmupLease($sharedCoordinator, $pool, $lease)) { return false; }
+            $this->homepageProofCheckpoint();
+            return $this->publishHomepageWarmupReceipt($sharedCoordinator, $pool, $receipt, $lease);
+        } finally {
+            $this->releaseHomepageWarmupLease($sharedCoordinator, $pool, $lease);
+        }
     }
 
     private function homepageWarmupCoordinationPool(string $fullUri): string
@@ -4356,6 +4562,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     ): bool {
         $failureReason = '';
         try {
+            $this->homepageProofCheckpoint();
             $currentLease = $coordinator->getCache($pool, self::HOMEPAGE_WARMUP_OWNER_KEY);
             $nowMs = (int)\floor(\microtime(true) * 1000);
             $newLease = [
@@ -4383,6 +4590,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $expected = $currentLease;
             }
 
+            $this->homepageProofCheckpoint();
             $acquired = $coordinator->compareAndSetCache(
                 $pool,
                 self::HOMEPAGE_WARMUP_OWNER_KEY,
@@ -4427,6 +4635,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             + (self::homepageWarmupOwnerLeaseSeconds() * 1000);
         $renewedLease['renewal_count'] = (int)($acquiredLease['renewal_count'] ?? 0) + 1;
         try {
+            $this->homepageProofCheckpoint();
             if (!$coordinator->compareAndSetCache(
                 $pool,
                 self::HOMEPAGE_WARMUP_OWNER_KEY,
@@ -4455,6 +4664,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return false;
         }
         try {
+            $this->homepageProofCheckpoint();
             $currentLease = $coordinator->getCache($pool, self::HOMEPAGE_WARMUP_OWNER_KEY);
         } catch (\Throwable) {
             return false;
@@ -4505,6 +4715,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         ?string &$publicationId = null
     ): array {
         try {
+            $this->homepageProofCheckpoint();
             $ready = $coordinator->getCache($pool, self::HOMEPAGE_WARMUP_READY_KEY);
         } catch (\Throwable) {
             $publicationId = '';
@@ -4543,6 +4754,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 'sha256',
                 $fence . '|' . $receipt['identity_digest'] . '|' . \sprintf('%.6F', \microtime(true))
             );
+            $this->homepageProofCheckpoint();
             return $coordinator->setCache($pool, self::HOMEPAGE_WARMUP_READY_KEY, [
                 'receipt' => $receipt,
                 'publication_id' => $publicationId,
@@ -6795,7 +7007,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 }
             }
 
-            return Response::fromContent($errorContent, $noRouterEx->getStatusCode(), $contentType)->toHttpString(false);
+            $errorResponse = Response::fromContent($errorContent, $noRouterEx->getStatusCode(), $contentType);
+            return $app->finalizeResponse($errorResponse)->toHttpString(false);
             
         } catch (\Weline\Framework\Http\ResponseTerminateException $terminateEx) {
             // 通用响应终止异常：使用异常的 toHttpString() 方法

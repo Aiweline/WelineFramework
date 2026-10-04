@@ -248,14 +248,19 @@ class ControllerFetchFileBefore implements ObserverInterface
         $accountPathLayouts = $this->accountPathAlignedLayouts();
         if (isset($accountPathLayouts[(string)$layoutType])) {
             $spec = $accountPathLayouts[(string)$layoutType];
+            // Nested public routes have a default option, but an explicit
+            // selected option must survive the original-template fallback too.
+            $accountOption = str_contains((string)$layoutType, '.')
+                ? $spec['option']
+                : ($this->resolveExplicitLayoutOption($eventData, $request) ?: $spec['option']);
             $this->resolveFastAccountAuthLayout(
                 $eventData,
                 Template::getInstance(),
                 (string)$contentTemplateFileName,
                 $spec['type'],
-                $spec['option']
+                $accountOption
             );
-            return;
+            // Keep auth controller data, then select the normal published page/partials snapshot.
         }
         if ((string)$layoutType === 'account.challenge') {
             $this->resolveFastAccountChallengeLayout($eventData, Template::getInstance(), (string)$contentTemplateFileName);

@@ -94,6 +94,7 @@
         previewArrayItemIndexByLayout: {},
         previewStatus: 'draft', // 预览版本状态：draft（草稿）/ published（已发布）
         canvasRoute: '', // current canvas path; homepage stays empty, layout path otherwise
+        storefrontMountPath: '', // selected website mount on this Host (e.g. daocharms)
         saveInProgress: false,   // 防止拖入保存时重复提交导致保存两个部件
         // 版本控制状态
         versions: [], // 版本列表
@@ -2051,15 +2052,11 @@
         return type === 'homepage' || type === 'default' || type === '';
     }
 
-    /**
-     * Path ↔ layout 1:1. Homepage canvas is "/"; every other layout path is the route.
-     * Clicked navigation overwrites this afterwards.
-     */
+    /** Resolve layout selection through the public path catalog; clicked navigation wins afterwards. */
     function syncCanvasRouteFromLayout(layoutType = getEffectiveLayoutType()) {
         const type = normalizeLayoutOptionValue(layoutType || '') || 'homepage';
-        state.canvasRoute = isHomepageLayoutType(type)
-            ? ''
-            : (sanitizeStorefrontPublicRoute(type) || '');
+        state.canvasRoute = '';
+        state.canvasRoute = resolveCanvasStorefrontPath({ layout_type: type, layout_option: state.layoutOption });
     }
 
     function getCurrentWindowUrl() {
@@ -4187,7 +4184,21 @@
         if (isHomepageLayoutType(layoutType)) {
             return '';
         }
-        // Path ↔ layout 1:1. The storefront path is the layout path.
+        // PHP resolves module routes without changing the layout resource identity.
+        const catalog = document.getElementById('themeEditor')?.dataset?.storefrontPathsByLayout;
+        if (catalog) {
+            try {
+                const paths = JSON.parse(catalog);
+                const option = normalizeLayoutOptionValue(overrides.layout_option || state.layoutOption || 'default');
+                const optionKey = JSON.stringify([layoutType, option]);
+                if (Object.prototype.hasOwnProperty.call(paths, optionKey)) {
+                    return sanitizeStorefrontPublicRoute(paths[optionKey]);
+                }
+                if (Object.prototype.hasOwnProperty.call(paths, layoutType)) {
+                    return sanitizeStorefrontPublicRoute(paths[layoutType]);
+                }
+            } catch (error) { /* Keep dynamic layouts using the existing safe path fallback. */ }
+        }
         return sanitizeStorefrontPublicRoute(layoutType);
     }
 
@@ -4300,6 +4311,29 @@
         url.searchParams.delete('lang');
     }
 
+    /**
+     * Prefix a storefront route with the selected website mount on this Host
+     * (e.g. daocharms → /daocharms/…). Locale stays after the mount.
+     */
+    function withStorefrontMountPath(route) {
+        const mount = String(
+            state.storefrontMountPath
+            || config.storefrontMountPath
+            || ''
+        ).replace(/^\/+|\/+$/g, '');
+        const raw = String(route || '').replace(/^\/+/, '');
+        if (!mount) {
+            return raw;
+        }
+        const business = raw.replace(/\/+$/g, '');
+        const mountLower = mount.toLowerCase();
+        const businessLower = business.toLowerCase();
+        if (businessLower === mountLower || businessLower.startsWith(mountLower + '/')) {
+            return business;
+        }
+        return business ? `${mount}/${business}` : mount;
+    }
+
     function buildCanvasStorefrontPreviewUrl(overrides = {}) {
         const currentUrl = getCurrentWindowUrl();
         const layoutOption = (typeof overrides.layout_option === 'string' && overrides.layout_option)
@@ -4312,7 +4346,8 @@
         const route = resolveCanvasStorefrontPath(overrides);
         const previewLocale = getPreviewLocaleForRequest(overrides);
         const localizedRoute = buildCanvasLocalizedStorefrontPath(route, previewLocale);
-        const url = new URL(localizedRoute ? `/${localizedRoute}` : '/', window.location.origin);
+        const mountedRoute = withStorefrontMountPath(localizedRoute);
+        const url = new URL(mountedRoute ? `/${mountedRoute}` : '/', window.location.origin);
 
         // Visual-editor canvas: storefront path (+ optional /{locale}/) + editor markers.
         // Visitor language is path-only — never ?locale= / ?lang=.
@@ -4353,11 +4388,10 @@
         appendThemeLayoutRuntimeParams(url, overrides);
         stripCanvasVisitorLanguageQuery(url);
         // Keep typed editor_context for draft LayoutIdentity (option/scope), not for path mapping.
-        const businessRoute = splitCanvasStorefrontLocalization(route).business || route;
         const layoutTypeForContext = normalizeLayoutOptionValue(
             (typeof overrides.layout_type === 'string' && overrides.layout_type)
                 ? overrides.layout_type
-                : (businessRoute.split('/')[0] || getEffectiveLayoutType() || 'homepage')
+                : (getEffectiveLayoutType() || 'homepage')
         ) || 'homepage';
         url.searchParams.set('editor_context', JSON.stringify(buildTypedEditorContext('layout', {
             area: 'frontend',
@@ -4588,6 +4622,9 @@
 
         // 从 DOM data 属性获取后台 API URL
         config.apiBase = container.dataset.apiBase || '/backend/theme-editor';
+        config.storefrontMountPath = String(container.dataset.storefrontMountPath || '')
+            .replace(/^\/+|\/+$/g, '');
+        state.storefrontMountPath = config.storefrontMountPath;
         config.apiResolveNavigation = container.dataset.apiResolveNavigation || `${config.apiBase}/resolve-navigation`;
         config.apiResolveFileImagePreviews = container.dataset.apiResolveFileImagePreviews
             || `${config.apiBase}/resolve-file-image-previews`;
@@ -5302,6 +5339,7 @@
                 showCanvasLoadingImmediate();
                 state.layoutOption = layoutOption;
                 renderLayoutOptionSelect(state.layoutType, state.layoutOption);
+                syncCanvasRouteFromLayout(state.layoutType);
                 syncEditorUrlState({
                     theme_id: state.themeId,
                     page_type: getCurrentPageType(),

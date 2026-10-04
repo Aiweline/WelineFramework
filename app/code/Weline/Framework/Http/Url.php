@@ -2477,6 +2477,11 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
 
         try {
             $cache = w_cache('website_detect');
+            // DetectWebsite publishes registry arrays in this explicit namespace.
+            // Invalidate that owner namespace as well as the version-key pool.
+            if ($cache instanceof \Weline\Framework\Cache\Contract\NamespaceScopedCachePoolInterface) {
+                $cache->withNamespace('global/websites-registry')->clear();
+            }
             $cache->clear();
             $cache->set(self::PARSER_SITES_VERSION_CACHE_KEY, $version, 86400);
         } catch (\Throwable) {

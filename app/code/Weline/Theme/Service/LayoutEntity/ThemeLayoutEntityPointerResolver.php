@@ -11,9 +11,9 @@ use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Service\ThemeScopeVersionService;
 
 /**
- * Cheap chrome/page entity pointers via CachePolicy HotCache only.
- * Never loads full workspace payloads; never keys on RequestContext::getId().
- * Resolves typed ThemeVersionIdentity — no current.json / r-d-s segments.
+ * @deprecated Structural pointer readers/writers are retired.
+ * Kept for existing setup and cache-invalidation callers; remove after those
+ * callers migrate. Executable sources are selected by SolidifiedControllerTemplateResolver.
  */
 final class ThemeLayoutEntityPointerResolver
 {
@@ -42,7 +42,8 @@ final class ThemeLayoutEntityPointerResolver
      */
     public function resolvePublishedChrome(int $themeId, string $scope): ?array
     {
-        return $this->resolveChromePointer($themeId, $scope, true);
+        // Legacy structural pointers cannot select a pure PHTML source.
+        return null;
     }
 
     /**
@@ -50,7 +51,8 @@ final class ThemeLayoutEntityPointerResolver
      */
     public function resolveCurrentChrome(int $themeId, string $scope): ?array
     {
-        return $this->resolveChromePointer($themeId, $scope, false);
+        // Legacy structural pointers cannot select a pure PHTML source.
+        return null;
     }
 
     /**
@@ -61,30 +63,8 @@ final class ThemeLayoutEntityPointerResolver
         string $layoutIdentityHash,
         string $structureKey = '',
     ): ?array {
-        $logicalKey = 'page|' . $identity->ownerKey() . '|'
-            . $identity->themeVersionId . '|' . $identity->mode . '|' . $identity->contentRevision . '|'
-            . \strtolower(\trim($layoutIdentityHash)) . '|' . \strtolower(\trim($structureKey));
-
-        return $this->remember($logicalKey, function () use ($identity, $layoutIdentityHash, $structureKey): ?array {
-            $layoutKey = $this->paths->identityKey($layoutIdentityHash);
-            $binding = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)
-                ->readPageBinding($identity, $layoutKey);
-            $resolvedStructure = $binding?->structureKey
-                ?? ($structureKey !== '' ? $this->normalizeStructureKey($structureKey) : '');
-            $path = $binding?->templatePath
-                ?? ($resolvedStructure !== ''
-                    ? $this->paths->pagePhtml($identity, $layoutKey, $resolvedStructure)
-                    : '');
-            if ($path === '' || !\is_file($path)) {
-                return null;
-            }
-
-            return [
-                'path' => $path,
-                'structure_key' => $resolvedStructure !== '' ? $resolvedStructure : ($binding?->structureKey ?? ''),
-                'identity' => $identity,
-            ];
-        });
+        // Legacy structural pointers cannot select a pure PHTML source.
+        return null;
     }
 
     /**
@@ -97,13 +77,7 @@ final class ThemeLayoutEntityPointerResolver
         string $path,
         bool $published,
     ): void {
-        $logicalKey = $this->chromeKey($themeId, $scope, $published);
-        $value = [
-            'version_id' => $versionId,
-            'path' => $path,
-            'scope' => $scope,
-        ];
-        $this->warm($logicalKey, $value);
+        // Compatibility only: setup callers must not republish structural pointers.
     }
 
     public function rememberPagePointer(
@@ -112,14 +86,7 @@ final class ThemeLayoutEntityPointerResolver
         string $structureKey,
         string $path,
     ): void {
-        $logicalKey = 'page|' . $identity->ownerKey() . '|'
-            . $identity->themeVersionId . '|' . $identity->mode . '|' . $identity->contentRevision . '|'
-            . \strtolower(\trim($layoutIdentityHash)) . '|' . \strtolower(\trim($structureKey));
-        $this->warm($logicalKey, [
-            'path' => $path,
-            'structure_key' => $structureKey,
-            'identity' => $identity,
-        ]);
+        // Compatibility only: setup callers must not republish structural pointers.
     }
 
     public function invalidateChrome(int $themeId, string $scope): void
@@ -159,105 +126,12 @@ final class ThemeLayoutEntityPointerResolver
         }
     }
 
-    /**
-     * @return array{version_id:int,path:string,scope:string,identity:?ThemeVersionIdentity}|null
-     */
-    private function resolveChromePointer(int $themeId, string $scope, bool $published): ?array
-    {
-        $logicalKey = $this->chromeKey($themeId, $scope, $published);
-
-        return $this->remember($logicalKey, function () use ($themeId, $scope, $published): ?array {
-            $version = $published
-                ? $this->scopeVersions->getPublished($themeId, $scope)
-                : $this->scopeVersions->getCurrent($themeId, $scope);
-            if ($version === null || $version->getVersionId() < 1) {
-                return null;
-            }
-            $identity = $version->toVersionIdentity();
-            if ($published && $identity->mode !== ThemeVersionIdentity::MODE_FORMAL) {
-                $identity = $identity->withVersion(
-                    $identity->themeVersionId,
-                    ThemeVersionIdentity::MODE_FORMAL,
-                    \max(1, $identity->contentRevision),
-                );
-            }
-            $binding = ObjectManager::getInstance(ThemeLayoutEntityBindingStore::class)
-                ->readChromeBinding($identity);
-            $path = $binding?->templatePath ?? '';
-            if ($path === '' || !\is_file($path)) {
-                return null;
-            }
-
-            return [
-                'version_id' => $version->getVersionId(),
-                'path' => $path,
-                'scope' => $version->getScope(),
-                'identity' => $identity,
-            ];
-        });
-    }
-
     private function chromeKey(int $themeId, string $scope, bool $published): string
     {
         return 'chrome|' . ($published ? 'pub' : 'cur') . '|' . $themeId . '|' . \trim($scope);
     }
 
-    private function normalizeStructureKey(string $structureKey): string
-    {
-        $structureKey = \strtolower(\trim($structureKey));
-        if (\preg_match('/^s([a-f0-9]{64})$/D', $structureKey, $m) === 1) {
-            return $m[1];
-        }
-        if (\preg_match('/^[a-f0-9]{64}$/D', $structureKey) === 1) {
-            return $structureKey;
-        }
 
-        return $structureKey;
-    }
-
-    /**
-     * @template T
-     * @param callable():(?T) $builder
-     * @return T|null
-     */
-    private function remember(string $logicalKey, callable $builder): mixed
-    {
-        $hotCache = $this->resolveHotCache();
-        if ($hotCache instanceof StorefrontScopeHotCache) {
-            $value = $hotCache->rememberPolicy(
-                self::pointerCachePolicy(),
-                $logicalKey,
-                static function () use ($builder): mixed {
-                    return $builder();
-                },
-            );
-
-            return \is_array($value) ? $value : null;
-        }
-
-        $value = $builder();
-
-        return \is_array($value) ? $value : null;
-    }
-
-    /**
-     * @param array<string, mixed> $value
-     */
-    private function warm(string $logicalKey, array $value): void
-    {
-        $hotCache = $this->resolveHotCache();
-        if (!$hotCache instanceof StorefrontScopeHotCache) {
-            return;
-        }
-        try {
-            $hotCache->rememberPolicy(
-                self::pointerCachePolicy(),
-                $logicalKey,
-                static fn(): array => $value,
-            );
-        } catch (\Throwable) {
-        }
-    }
 
     private function resolveHotCache(): ?StorefrontScopeHotCache
     {

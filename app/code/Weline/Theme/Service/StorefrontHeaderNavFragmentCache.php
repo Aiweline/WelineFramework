@@ -53,7 +53,7 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
         callable $builder,
         bool $showBannerWithChildren = true,
     ): string {
-        $html = $this->hotCache->rememberPolicy(
+        $html = $this->rememberNavigation(
             self::cachePolicy(),
             $this->megaMenuPanelLogicalKey($panelId, $drawerFlyout, $item, $showBannerWithChildren),
             static function () use ($builder): string {
@@ -70,7 +70,7 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
      */
     public function rememberCategoriesSidebarNav(array $items, callable $builder): string
     {
-        $html = $this->hotCache->rememberPolicy(
+        $html = $this->rememberNavigation(
             self::cachePolicy(),
             $this->sidebarNavLogicalKey($items),
             static function () use ($builder): string {
@@ -94,7 +94,7 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
         bool $showBannerWithChildren,
         callable $builder,
     ): string {
-        $html = $this->hotCache->rememberPolicy(
+        $html = $this->rememberNavigation(
             self::cachePolicy(),
             $this->horizontalNavLogicalKey($items, $showBannerWithChildren),
             static function () use ($builder): string {
@@ -123,6 +123,9 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
         array $extraLogicalKeys = [],
         bool $bothBannerVariants = true,
     ): int {
+        if ($this->isPreviewRequest()) {
+            return 0;
+        }
         if ($items === [] && $extraLogicalKeys === []) {
             return 0;
         }
@@ -260,10 +263,10 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
         $panelSlug = \preg_replace('/[^a-z0-9_-]+/i', '-', \strtolower($panelId)) ?: 'panel';
         $structureFp = $this->navStructureFingerprint($item);
 
-        // v8: include browser origin so Nginx-fronted public Host cannot reuse
-        // HTML baked under loopback warmup Host (127.0.0.1:worker_port).
+        // v9: retain complete URL identity and retire fragments that previously
+        // conflated editor query parameters with public navigation.
         return \sprintf(
-            'theme.header.mega_panel.v8.%s.%s.%s.%s.%s.%s',
+            'theme.header.mega_panel.v9.%s.%s.%s.%s.%s.%s',
             $this->storefrontLocaleSegment(),
             $this->requestOriginSegment(),
             $drawerFlyout ? 'drawer' : 'top',
@@ -278,7 +281,7 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
      */
     public function sidebarNavLogicalKey(array $items): string
     {
-        return 'theme.header.sidebar_nav.v8.'
+        return 'theme.header.sidebar_nav.v9.'
             . $this->storefrontLocaleSegment()
             . '.'
             . $this->requestOriginSegment()
@@ -291,7 +294,7 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
      */
     public function horizontalNavLogicalKey(array $items, bool $showBannerWithChildren = true): string
     {
-        return 'theme.header.horizontal_nav.v2.'
+        return 'theme.header.horizontal_nav.v3.'
             . $this->storefrontLocaleSegment()
             . '.'
             . $this->requestOriginSegment()
@@ -434,12 +437,23 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
         if ($url === '') {
             return '';
         }
-        if (\str_contains($url, '://')) {
-            $path = \parse_url($url, \PHP_URL_PATH);
-            return \is_string($path) && $path !== '' ? $path : $url;
-        }
-
         return $url;
+    }
+
+    private function isPreviewRequest(): bool
+    {
+        // This service is process-shared; resolve the request-local inspector
+        // now rather than retaining the first request on a persistent worker.
+        $previewRequest = \Weline\Framework\Manager\ObjectManager::getInstance(PreviewRequestInspector::class);
+        return $previewRequest->isEditorMode() || $previewRequest->shouldUseStoredPreviewContext();
+    }
+
+    private function rememberNavigation(CachePolicy $policy, string $key, callable $builder): mixed
+    {
+        // Editor URLs are request state and must never enter public HTML bags.
+        return $this->isPreviewRequest()
+            ? $this->hotCache->rememberForRequest($policy->resource, $key, $builder)
+            : $this->hotCache->rememberPolicy($policy, $key, $builder);
     }
 
     /**

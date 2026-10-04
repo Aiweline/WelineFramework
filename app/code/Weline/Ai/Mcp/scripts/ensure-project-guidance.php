@@ -153,6 +153,11 @@ $nextAction = 'Local STDIO is ready. Verify the current session exposes all mcp_
 if ($reloadDecision['plugin_refresh_deferred']) {
     $nextAction = 'Codex plugin files were refreshed non-blockingly; local STDIO remains ready. Verify all mcp_required_tools in the current session; for engineering, prepare_project remains mandatory once tools are visible. No app-server restart is required.';
 }
+// 宿主不在支持表内时，Agent 必须自行完成注册：否则会出现「ensure 报 ready、
+// 会话里却一个 Weline 工具都没有」，进而把工程任务静默降级成裸读硬规则。
+if ($primaryHost === 'unknown') {
+    $nextAction = 'This host is not in the supported MCP host table (primary_host=unknown). Local STDIO is ready, but this session may expose no Weline tool at all. Resolve this host\'s MCP config location yourself (see host_mcp_install.hosts.unknown.install.steps[0].known_targets), write host_mcp_install.registration (command/args/env) into it, enable the server inside the host, then open a new session and verify every mcp_required_tool is exposed before prepare_project. Do not ask the user to hand-edit Settings, and do not treat primary_host=unknown as "nothing to do".';
+}
 
 if (!$branchOk) {
     $status = 'blocked';

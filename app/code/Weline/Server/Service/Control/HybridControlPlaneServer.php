@@ -1023,7 +1023,10 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
                 channel: $session->channel,
             ),
             ControlMessage::TYPE_SHUTDOWN => ControlMessage::shutdown(),
-            ControlMessage::TYPE_DRAIN => ControlMessage::drain($message['ports'] ?? []),
+            ControlMessage::TYPE_DRAIN => ControlMessage::drain(
+                $message['ports'] ?? [],
+                (int)($message['drain_timeout_sec'] ?? 0),
+            ),
             default => $message !== [] ? ControlMessage::encode($message) : null,
         };
     }

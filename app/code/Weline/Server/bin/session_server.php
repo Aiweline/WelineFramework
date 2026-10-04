@@ -226,7 +226,8 @@ if (!isset($sessionConfig['session_ttl']) || (int)$sessionConfig['session_ttl'] 
 }
 $sharedServiceConfig = (\is_array($envConfig) && \is_array($envConfig['wls']['shared_service'] ?? null))
     ? $envConfig['wls']['shared_service'] : [];
-foreach (['empty_token_exit_grace_sec', 'empty_token_check_interval_sec', 'startup_consumer_grace_sec'] as $sharedConfigKey) {
+foreach (['empty_token_exit_grace_sec', 'empty_token_check_interval_sec', 'startup_consumer_grace_sec',
+    'preauth_max_connections', 'preauth_max_frame_bytes', 'preauth_timeout_sec'] as $sharedConfigKey) {
     if (\array_key_exists($sharedConfigKey, $sharedServiceConfig)
         && !\array_key_exists($sharedConfigKey, $sessionConfig)) {
         $sessionConfig[$sharedConfigKey] = $sharedServiceConfig[$sharedConfigKey];

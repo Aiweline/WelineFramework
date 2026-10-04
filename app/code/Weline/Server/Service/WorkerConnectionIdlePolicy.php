@@ -34,10 +34,18 @@ final class WorkerConnectionIdlePolicy
         bool $hasBufferedOrPendingResponse,
         bool $hasActiveRequestWork = false,
         ?float $progressIdleSec = null,
+        bool $gracefulDrain = false,
     ): string {
         $keepAliveTimeoutSec = \max(1.0, $keepAliveTimeoutSec);
         $writeStallTimeoutSec = \max(1.0, $writeStallTimeoutSec);
         $progressIdleSec = $progressIdleSec ?? $idleSec;
+
+        // A draining Worker already has a bounded hard deadline. Closing an
+        // admitted H2 response on the shorter steady-state stall timer can
+        // truncate streams that are still moving through TLS flow control.
+        if ($gracefulDrain && ($hasBufferedOrPendingResponse || $hasActiveRequestWork)) {
+            return self::ACTION_KEEP;
+        }
 
         if ($hasBufferedOrPendingResponse) {
             return $progressIdleSec >= $writeStallTimeoutSec

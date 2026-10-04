@@ -51,8 +51,5 @@ HTML;
         self::assertStringContainsString('stripClientTranslationDictionaries', $source);
         self::assertStringContainsString('SlotBoundaryMarkers::strip', $source);
         self::assertStringContainsString('StaticErrorPagePublisher::CTX_PUBLISHING', $source);
-        self::assertStringContainsString('404v7', (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Framework/Http/StaticErrorPagePublishFingerprint.php'
-        ));
     }
 }

@@ -77,6 +77,34 @@ final class ScopeKernelRolloutPolicyTest extends TestCase
         self::assertTrue($decision->isAuthoritative());
     }
 
+    public function testOnAcceptsTheCatalogDefaultZeroTuple(): void
+    {
+        $policy = $this->policy(['mode' => 'on', 'allowlist' => [], 'shadow_sample_bp' => 10_000]);
+        $decision = $policy->decide(0, 0, 0, 'normal', 'https');
+
+        self::assertTrue($decision->isAuthoritative());
+        self::assertSame([0, 0, 0], [$decision->websiteId, $decision->storeId, $decision->channelId]);
+    }
+
+    public function testNegativeCatalogIdsRemainRejected(): void
+    {
+        $policy = $this->policy(['mode' => 'on', 'allowlist' => [], 'shadow_sample_bp' => 0]);
+        foreach ([[-1, 0, 0], [0, -1, 0], [0, 0, -1]] as [$website, $store, $channel]) {
+            try {
+                $policy->decide($website, $store, $channel, 'normal', 'https');
+                self::fail('Negative catalog ID was accepted.');
+            } catch (FrontendWorkerScopeException $exception) {
+                self::assertSame('rollout_scope_tuple_invalid', $exception->reason);
+            }
+            try {
+                new FrontendWorkerScopeRolloutDecision('on', true, true, $website, $store, $channel, 0, 'mode_on');
+                self::fail('Negative catalog ID was accepted by the value object.');
+            } catch (\InvalidArgumentException $exception) {
+                self::assertSame('Worker Scope rollout tuple is invalid.', $exception->getMessage());
+            }
+        }
+    }
+
     /** @param array<string, mixed> $configuration */
     private function policy(array $configuration): ScopeKernelRolloutPolicy
     {

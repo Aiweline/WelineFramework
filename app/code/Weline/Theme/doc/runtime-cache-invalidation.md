@@ -3,7 +3,21 @@
 `ThemeRuntimeCacheCleaner` 负责主题切换、布局发布和后台模式变更后的定向失效。
 请求链路不得因为其他 WLS 实例、失联 IPC 或持久化实例清单而阻塞数秒。
 
-## 失效范围
+## 派生 PHTML 的失效入口
+
+布局固化的当前契约以 [布局固化与默认注入](./布局固化与默认注入.md) 为准。编辑或注入变更先生成并完整替换受影响 PHTML，再由 BakeCoordinator 调用 `clearLayoutEntityCaches(themeId, canonicalScope, storeMode)` 推进该产物 owner 的 Theme 展示代际。普通页面访问只选择模板源，不动态生成产物、不补播种部件位置，也不读取渲染 HTML 快照。
+
+`canonicalScope` 不编码 storeMode；保存及插件重固化必须从实际产物版本传入模式，不能仅凭 storageScope 重建后默认使用 normal。Store／Channel 的 normal、test、dev 各自推进独立命名空间；Website／Global 仍沿用其不区分模式的命名空间。
+
+失效范围以实际发布版本的 owner 为准，不能从访问域名推断。访问站点可能继承 Global owner 的版本；该版本更新必须推进 `global/storefront/theme`，仅推进访问站点或默认站自己的 Theme 代际不能替代此操作。全局推进只改变已有版本指纹，不等于清空缓存池、模板或数据库历史。
+
+兼容布局保存入口也须先解析并固定实际版本，用同一版本的 owner 生成 PHTML 和推进展示代际。Channel 请求继承 Website 或 Global 的版本时，不得生成父 owner 的文件却只失效 Channel 的缓存。
+
+验收同时检查正常缓存下首次访问和后续 FPC 命中。`no_cache` 仅用于区分渲染与缓存问题，其通过结果不能替代正常缓存验收。
+
+## 既有发布、切换和兼容入口的失效范围
+
+以下记录仍在代码中保留的 Scoped Release、主题切换及静态资源发布入口；不能据此要求每次派生 PHTML 保存清空全部缓存。旧入口与纯 PHTML 主链路的清理仍需逐项核对，不能把保留实现当成本次改造已完成的证明。
 
 - **主题发布（编辑器 / Scoped Release）必须按当前发布主题所属 Scope 调用 `clearScopedCaches(scope, themeId)`**，使 storefront Theme 命名空间世代仅对该 Scope（及其后代向量）失效；禁止在已知 typed Scope 时用 `clearNonGlobalCaches(null)`（会跳过 `generated_theme_cache`）。
 - Scoped workspace `publish` 成功后由 `ThemeScopedWorkspaceRequestService` 执行 `clearAllThemeRelatedCaches`（全量主题相关缓存）；`blocked`（结构冲突）不得清缓存，且 HTTP 必须 `success=false`。
@@ -40,6 +54,7 @@
 
 ## SlotRenderer 与已发布布局读模型
 
+- 正常命中派生 PHTML 时，关系和参数来自模板内显式调用，走正常 Template / Taglib / 语言编译。以下结构读模型说明仅适用于尚需原模板或编辑器数据的入口。
 - 前台 `SlotRendererService` **不**缓存 layout.data / widget.output（无请求 L1、无进程 L1、无 theme_runtime get/set）。
 - 插槽渲染 = 向 `ThemeRuntimeLayoutResolver` 取结构 → 普通部件模板/Component 渲染。
 - 已发布非 target 布局结构 HotCache（`publishedLayoutStructurePolicy`）挂在 **`ThemeRuntimeLayoutResolver`**（读模型），不挂在 SlotRenderer。

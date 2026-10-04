@@ -26,14 +26,44 @@ use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths;
 
 final class ThemeRuntimeCacheCleaner
 {
+    /** Draft edits affect the editor preview, not the published storefront. */
+    public function clearDraftPreviewCaches(?int $themeId = null): array
+    {
+        $result = [
+            'reason' => 'theme_editor_draft_reset',
+            'theme_id' => $themeId,
+            'steps' => [],
+            'failures' => [],
+        ];
+        $this->runStep($result, 'slot_renderer_runtime', static function (): void {
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+        });
+        $this->runStep($result, 'theme_data_runtime', static function (): void {
+            ThemeData::clearCache();
+        });
+        $this->runStep($result, 'controller_fetch_file_runtime', static function (): void {
+            ControllerFetchFileBefore::clearRuntimeCache();
+        });
+        if ($themeId !== null && $themeId > 0) {
+            $this->runStep($result, 'generated_theme_cache', static function () use ($themeId): void {
+                ObjectManager::getInstance(ThemeCacheGenerator::class)->clearCache($themeId);
+            });
+        }
+
+        return $result;
+    }
+
     /** 布局绑定更新只推进 Theme 展示依赖，不清编译模板、路由或其它业务缓存池。 */
-    public function clearLayoutEntityCaches(?int $themeId = null, ?string $scope = null): void
+    public function clearLayoutEntityCaches(?int $themeId = null, ?string $scope = null, string $storeMode = 'normal'): void
     {
         $paths = ObjectManager::getInstance(NamespacePath::class);
         $identity = $scope !== null && $scope !== ''
             ? ObjectManager::getInstance(\Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class)
                 ->fromStorageScope($scope, true)
             : null;
+        if ($identity instanceof ScopeIdentity && in_array($identity->scopeKind, [ScopeIdentity::KIND_STORE, ScopeIdentity::KIND_CHANNEL], true)) {
+            $identity = ScopeIdentity::fromArray(array_replace($identity->toArray(), ['store_mode' => $storeMode]));
+        }
         $namespace = $identity instanceof ScopeIdentity
             ? $this->scopeThemeNamespace($paths, $identity)
             : $paths->global('storefront', ['theme']);

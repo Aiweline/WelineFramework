@@ -7,6 +7,7 @@ namespace Weline\Framework\Database\Connection\Pool;
 use PDO;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\Exception\ConnectionPoolExhaustedException;
+use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 
@@ -872,6 +873,38 @@ class ConnectionPool
      * 1. 回滚未提交的事务（防止事务泄漏到下一个请求）
      * 2. 只归还当前请求/Fiber owner 的连接，不影响挂起的同辈 Fiber
      */
+    /** Return completed, non-transactional queries before a Fiber waits for shared FPC. */
+    public static function releaseCurrentOwnerIdleConnections(): int
+    {
+        if (TransactionContext::activeTransactionConnectionCount() > 0) {
+            return 0;
+        }
+
+        $ownerKey = self::resolveCurrentOwnerKey();
+        $released = 0;
+        foreach (\array_keys(self::$ownerConnections) as $poolKey) {
+            $connection = self::$ownerConnections[$poolKey][$ownerKey]['connection'] ?? null;
+            if (!$connection instanceof PDO) {
+                continue;
+            }
+            try {
+                if ($connection->inTransaction()) {
+                    continue;
+                }
+            } catch (\Throwable) {
+                self::markConnectionUnhealthy($connection);
+            }
+
+            $discard = self::isConnectionMarkedUnhealthy($connection);
+            self::settleOwnerConnection($poolKey, $ownerKey, $discard);
+            if (!$discard) {
+                $released++;
+            }
+        }
+
+        return $released;
+    }
+
     public static function requestEndCleanup(): void
     {
         $ownerKey = self::resolveCurrentOwnerKey();

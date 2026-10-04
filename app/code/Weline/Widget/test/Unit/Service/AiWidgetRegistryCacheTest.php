@@ -205,6 +205,7 @@ final class AiWidgetRegistryCacheTest extends TestCase
         $generations = $this->createMock(NamespaceGenerationInterface::class);
         $generations->method('fingerprint')->willReturnCallback(static fn(array $paths): string => hash('sha256', serialize([$paths, $state->generation])));
         $flight = $this->createMock(SingleFlightInterface::class);
+        $flight->method('acquire')->willReturn('registry-cache-test-token');
         return new StorefrontScopeHotCache($manager, $generations, $flight);
     }
 }

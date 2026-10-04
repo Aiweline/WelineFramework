@@ -162,6 +162,10 @@ class ServiceOrchestrator
 
     private ServiceRegistry $registry;
     private ?ControlPlaneServerInterface $controlServer = null;
+    /** @var array{instance_id:int,pid:int}|null */
+    private ?array $activePlannedWorkerRecycle = null;
+    /** @var array<int,int> Worker slot => PID awaiting a serialized recycle grant. */
+    private array $pendingPlannedWorkerRecycles = [];
     private ?ServiceContext $context = null;
     private ?DirectSharedListener $directSharedListener = null;
     private ?DirectSharedListener $gatewayFallbackListener = null;
@@ -458,6 +462,9 @@ class ServiceOrchestrator
     private bool $reloadWaitTerminalEventSent = false;
     private ?bool $reloadWaitTerminalSucceeded = null;
     private string $reloadWaitTerminalMessage = '';
+
+    /** 仅本次共享 sidecar 恢复的诊断，不改变恢复判据或生命周期。 */
+    private string $sharedStateRecoveryFailureDetail = '';
 
     /** 滚动重启进度（已完成的 Worker 数量） */
     private int $rollingRestartProgress = 0;
@@ -6152,7 +6159,29 @@ class ServiceOrchestrator
             : ($publicLease !== []
                 ? (string)$publicLease['bind_host']
                 : $context->host);
-        $this->directSharedListener->acquire($bindHost, $context->mainPort);
+        try {
+            $this->directSharedListener->acquire($bindHost, $context->mainPort);
+        } catch (\RuntimeException $bindError) {
+            // A crashed final Worker can leave the Master holding its original
+            // inherited FD while this wrapper is no longer reachable. Only an
+            // already-confirmed exact public lease may re-adopt that same FD;
+            // never seize an unrelated process's listening port.
+            if ($wasListening
+                || $backendLease !== []
+                || $publicLease === []
+                || !$this->publicEdgeLeaseConfirmed
+                || !$this->directSharedListener->recoverInheritedMasterListener(
+                    $bindHost,
+                    $context->mainPort,
+                    (string)$publicLease['lease_id'],
+                )
+            ) {
+                throw $bindError;
+            }
+            WlsLogger::warning_(
+                '[Orchestrator] recovered exact Master-owned inherited listener for worker resurrection',
+            );
+        }
         if (!$this->directSharedListener->matches($bindHost, $context->mainPort)) {
             throw new \RuntimeException(
                 'Master listener does not match the inherited schema-6 host lease.'
@@ -8497,10 +8526,12 @@ class ServiceOrchestrator
 
     protected function ensureSharedStateRuntimeForWorkers(string $operationLabel): bool
     {
+        $this->sharedStateRecoveryFailureDetail = '';
         if ($this->context === null) {
             return true;
         }
         if (!$this->canMaintainSharedStateConsumers()) {
+            $this->sharedStateRecoveryFailureDetail = 'Shared sidecar maintenance is disabled by Master shutdown/stop intent.';
             return false;
         }
 
@@ -8549,13 +8580,31 @@ class ServiceOrchestrator
 
             return true;
         } catch (\Throwable $throwable) {
+            $this->sharedStateRecoveryFailureDetail = self::boundedSharedStateRecoveryDetail(
+                $throwable::class . ': ' . $throwable->getMessage(),
+            );
             WlsLogger::warning_(
                 '[Orchestrator] ' . $operationLabel . ' shared sidecar recovery failed: '
-                . $throwable->getMessage()
+                . $this->sharedStateRecoveryFailureDetail
             );
 
             return false;
         }
+    }
+
+    /** 诊断保留异常类别与原因，先去凭据再按字节截断，避免终态回执泄露秘密。 */
+    private static function boundedSharedStateRecoveryDetail(string $detail): string
+    {
+        $detail = (string)\preg_replace('/\b[a-f0-9]{32,}\b/i', '[redacted]', $detail);
+        $detail = (string)\preg_replace(
+            '/\b([a-z0-9_-]*(?:token|credential|password|secret)(?:[_-](?:id|value))?)(["\']?\s*[:=]\s*|\s+)(?:"[^"]*"|\'[^\']*\'|[^\s,;]+)/i',
+            '$1$2[redacted]',
+            $detail,
+        );
+        $detail = (string)\preg_replace('/(\b(?:AUTH|Bearer)\s+)[^\s,;]+/i', '$1[redacted]', $detail);
+        $detail = (string)\preg_replace('~(://)[^/\s@]+@~', '$1[redacted]@', $detail);
+        $detail = (string)\preg_replace('/[\x00-\x1f\x7f]/', ' ', $detail);
+        return \mb_strcut($detail, 0, 1024, 'UTF-8');
     }
 
     /**
@@ -9429,6 +9478,24 @@ class ServiceOrchestrator
 
         $lease = $this->buildCredentialBoundTerminationLease($instance);
         if ($lease === null) {
+            $pid = $this->getInstanceTrackingPid($instance);
+            // A missing birth credential forbids signalling by PID. ESRCH from
+            // a signal-0 probe proves there is no process to terminate, so a
+            // dead Worker may still release its Registry slot. EPERM and every
+            // uncertain probe result keep the slot until stronger proof exists.
+            if ($pid > 0
+                && PHP_OS_FAMILY !== 'Windows'
+                && \function_exists('posix_kill')
+                && \function_exists('posix_get_last_error')
+                && @\posix_kill($pid, 0) === false
+                && \posix_get_last_error() === 3 // POSIX ESRCH
+            ) {
+                WlsLogger::warning_(
+                    "[Orchestrator] {$instance->role}#{$instance->instanceId} PID {$pid} is absent; "
+                    . 'release without a termination signal'
+                );
+                return true;
+            }
             WlsLogger::error_(
                 "[Orchestrator] 拒绝按 PID 强制终止 {$instance->role}#{$instance->instanceId}："
                 . '缺少 credential-bound process-birth lease；等待子进程自毁或平台进程树回收'
@@ -9786,7 +9853,10 @@ class ServiceOrchestrator
             && !$this->ensureSharedStateRuntimeForWorkers('reload worker')) {
             $this->failWorkerBatchNotify(
                 'reload',
-                'Worker reload aborted: shared Session/Memory sidecar recovery failed'
+                self::boundedSharedStateRecoveryDetail(
+                    'Worker reload aborted: shared Session/Memory sidecar recovery failed'
+                    . ($this->sharedStateRecoveryFailureDetail === '' ? '' : ': ' . $this->sharedStateRecoveryFailureDetail),
+                ),
             );
 
             return;
@@ -18277,6 +18347,9 @@ class ServiceOrchestrator
             'elapsed_ms' => $instance->getMeta('ready_elapsed_ms'),
             'ack_elapsed_ms' => $instance->getMeta('ack_ready_elapsed_ms'),
         ]);
+        if ($instance->role === ControlMessage::ROLE_WORKER) {
+            $this->advancePlannedWorkerRecycleAfterReady($instance);
+        }
         if ($this->context !== null && $instance->role === ControlMessage::ROLE_WORKER) {
             $label = 'Worker' . ($workerId > 0 ? $workerId : $instance->instanceId);
             $this->appendStartupProgressEvent($this->context, 'worker ' . ($workerId > 0 ? $workerId : $instance->instanceId) . ' ready', 'worker_ready', [
@@ -19143,13 +19216,18 @@ class ServiceOrchestrator
 
     private function isInstanceManagedIdentityHealthy(ServiceInstance $instance): bool
     {
-        if ($this->buildInstanceManagedIdentityProbeRequest($instance) === null) {
+        $request = $this->buildInstanceManagedIdentityProbeRequest($instance);
+        if ($request === null) {
             return true;
         }
 
         $cacheKey = $instance->role . ':' . $instance->instanceId;
         $cached = $this->managedIdentityProbeCache[$cacheKey] ?? null;
         if ($cached === null) {
+            return true;
+        }
+        if ((int)($cached['pid'] ?? 0) !== (int)$request['pid']
+            || !\hash_equals((string)($cached['launch_id'] ?? ''), (string)$request['expected_launch_id'])) {
             return true;
         }
         $checkedAt = (float)($cached['checkedAt'] ?? 0.0);
@@ -19159,8 +19237,10 @@ class ServiceOrchestrator
             return true;
         }
 
-        return (string)($cached['state'] ?? Processer::PROCESS_STATE_UNKNOWN)
-            === Processer::PROCESS_STATE_RUNNING;
+        return !\in_array((string)($cached['state'] ?? Processer::PROCESS_STATE_UNKNOWN), [
+            Processer::PROCESS_STATE_IDENTITY_MISMATCH,
+            Processer::PROCESS_STATE_EXITED,
+        ], true);
     }
 
     /**
@@ -19224,6 +19304,11 @@ class ServiceOrchestrator
         $probes = $this->probeWorkerManagedProcessIdentities($requests);
         $now = self::monotonicSeconds();
         foreach ($instances as $key => $inst) {
+            $current = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $inst->instanceId);
+            if ($current !== $inst
+                || $this->buildInstanceManagedIdentityProbeRequest($current) !== $requests[$key]) {
+                continue;
+            }
             $probe = \is_array($probes[$key] ?? null)
                 ? $probes[$key]
                 : [
@@ -19236,6 +19321,8 @@ class ServiceOrchestrator
             $this->managedIdentityProbeCache[$cacheKey] = [
                 'state' => $state,
                 'reason' => $reason,
+                'pid' => (int)$requests[$key]['pid'],
+                'launch_id' => (string)$requests[$key]['expected_launch_id'],
                 'checkedAt' => $now,
             ];
             if ($inst->pid > 0) {
@@ -19294,7 +19381,6 @@ class ServiceOrchestrator
             $this->registry->updateInstance($inst);
         }
         $this->invalidateInstanceProcessRunningCache($inst);
-        unset($this->managedIdentityProbeCache[ControlMessage::ROLE_WORKER . ':' . $inst->instanceId]);
 
         if (!\in_array($inst->state, [
             ServiceInstance::STATE_DRAINING,
@@ -19446,7 +19532,7 @@ class ServiceOrchestrator
         }
         foreach ($this->registry->getInstancesByRole('worker') as $w) {
             $workerStartedMonotonic = $w->getStartedMonotonic();
-            if ($w->state === ServiceInstance::STATE_STARTING
+            if (\in_array($w->state, [ServiceInstance::STATE_STARTING, ServiceInstance::STATE_REGISTERED], true)
                 && $workerStartedMonotonic > 0.0
                 && ($now - $workerStartedMonotonic) < $this->startupGracePeriod) {
                 WlsLogger::info_('[Orchestrator] 仍有 Worker 处于启动宽限内，跳过紧急拉起');
@@ -19498,27 +19584,57 @@ class ServiceOrchestrator
 
         $this->workerEmergencyRestartInProgress = true;
         try {
-            $this->killKnownWorkerProcessesForEmergencyRestart();
+            $releasedWorkers = $this->killKnownWorkerProcessesForEmergencyRestart();
             if (!$this->sleepInterruptiblyForPeriodicWork(600000)) {
                 return;
-            }
-
-            foreach (\array_keys($this->resurrectQueue) as $key) {
-                if (\str_starts_with((string) $key, 'worker:')) {
-                    unset($this->resurrectQueue[$key]);
-                }
             }
 
             $instanceIds = [];
             for ($slot = 1; $slot <= $desired; $slot++) {
                 $old = $this->registry->getInstance('worker', $slot);
+                $release = $releasedWorkers[$slot] ?? null;
+                $queueKey = 'worker:' . $slot;
+                $queued = $this->resurrectQueue[$queueKey] ?? null;
+                if ($release !== null && !(bool)$release['released']) {
+                    WlsLogger::warning_(
+                        "[Orchestrator] Worker#{$slot} emergency restart deferred: old process release is unproved"
+                    );
+                    continue;
+                }
+                if ($old === null && $queued !== null) {
+                    WlsLogger::warning_(
+                        "[Orchestrator] Worker#{$slot} emergency restart deferred: queued generation has no current Registry identity"
+                    );
+                    continue;
+                }
                 if ($old !== null) {
+                    if ($release === null
+                        || (int)$release['pid'] !== $this->getInstanceTrackingPid($old)
+                        || !\hash_equals((string)$release['launch_id'], $this->getInstanceLaunchId($old))
+                        || ($queued !== null && (!\is_array($queued)
+                            || !$this->isResurrectionEntryCurrentLease($queued, $old)))
+                        || !$this->isCurrentLeaseIdentity(
+                            $old,
+                            (string)$release['slot_id'],
+                            (string)$release['lease_id'],
+                            (int)$release['generation'],
+                        )
+                    ) {
+                        WlsLogger::warning_(
+                            "[Orchestrator] Worker#{$slot} emergency restart deferred: slot identity changed or was not processed"
+                        );
+                        continue;
+                    }
                     $this->cleanupInstancePidFile($old);
                     $this->registry->removeInstance('worker', $slot);
                 }
+                unset($this->resurrectQueue[$queueKey]);
                 $instanceIds[] = $slot;
             }
 
+            if ($instanceIds === []) {
+                return;
+            }
             $newInstances = $this->startInstanceIdsBatch($provider, $instanceIds, $this->context);
             foreach ($newInstances as $newInst) {
                 if (!$newInst instanceof ServiceInstance) {
@@ -19537,14 +19653,33 @@ class ServiceOrchestrator
     /**
      * 紧急拉起前优先按 Registry 定点结束 Worker，避免 Windows 全表扫描进程导致主循环阻塞。
      */
-    private function killKnownWorkerProcessesForEmergencyRestart(): void
+    /**
+     * @return array<int,array{released:bool,pid:int,launch_id:string,slot_id:string,lease_id:string,generation:int}>
+     */
+    private function killKnownWorkerProcessesForEmergencyRestart(): array
     {
+        $results = [];
         foreach ($this->registry->getInstancesByRole('worker') as $worker) {
             if ($this->shouldYieldPeriodicWork(true)) {
-                return;
+                break;
             }
-            $this->killInstanceProcess($worker);
+            $slot = $worker->instanceId;
+            $pid = $this->getInstanceTrackingPid($worker);
+            $launchId = $this->getInstanceLaunchId($worker);
+            $slotId = $this->getInstanceSlotId($worker);
+            $leaseId = $this->getInstanceLeaseId($worker);
+            $generation = $this->getInstanceGeneration($worker);
+            $released = $this->killInstanceProcess($worker);
+            $results[$slot] = [
+                'released' => $released,
+                'pid' => $pid,
+                'launch_id' => $launchId,
+                'slot_id' => $slotId,
+                'lease_id' => $leaseId,
+                'generation' => $generation,
+            ];
         }
+        return $results;
     }
 
     /**
@@ -20092,6 +20227,22 @@ class ServiceOrchestrator
                 "[Master自检] 子进程上报非正常退出: {$instance->role}#{$instance->instanceId} code={$code} reason={$reason}"
             );
         }
+        // A request-count recycle is an intent to drain, not exit proof.
+        // Its IPC message proves this generation is still online; queuing
+        // resurrection here could SIGKILL accepted HTTP/2 streams.
+        if ($code === 0
+            && $instance->role === ControlMessage::ROLE_WORKER
+            && $instance->ipcClientId === $clientId
+            && \in_array($instance->state, [
+                ServiceInstance::STATE_READY,
+                ServiceInstance::STATE_REGISTERED,
+            ], true)
+            && $this->isPlannedWorkerRecycleReason($reason)
+            && \str_starts_with($reason, 'max_requests_recycle:')
+        ) {
+            $this->requestPlannedWorkerRecycle($instance);
+            return;
+        }
         $this->tryScheduleAutonomousWorkerResurrection(
             $instance,
             $this->registry->getProvider($instance->role),
@@ -20122,7 +20273,11 @@ class ServiceOrchestrator
         $instance->setMeta('autonomous_exit_pending', true);
         $instance->setMeta('autonomous_exit_source', $source);
         $instance->setMeta('autonomous_exit_from_state', $instance->state);
-        $instance->setMeta('autonomous_exit_planned_recycle', $this->isPlannedWorkerRecycleReason($reason));
+        $instance->setMeta(
+            'autonomous_exit_planned_recycle',
+            (bool)$instance->getMeta('autonomous_exit_planned_recycle', false)
+                || $this->isPlannedWorkerRecycleReason($reason),
+        );
         if ($reason !== '') {
             $instance->setMeta('autonomous_exit_reason', \substr($reason, 0, 512));
         }
@@ -20134,6 +20289,71 @@ class ServiceOrchestrator
 
         return \str_starts_with($reason, 'max_requests_recycle:')
             || \str_starts_with($reason, 'memory_pressure_drain');
+    }
+
+    private function requestPlannedWorkerRecycle(ServiceInstance $instance): void
+    {
+        if ($this->activePlannedWorkerRecycle === [
+            'instance_id' => $instance->instanceId,
+            'pid' => $instance->pid,
+        ]) {
+            return;
+        }
+
+        $this->pendingPlannedWorkerRecycles[$instance->instanceId] = $instance->pid;
+        $this->grantNextPlannedWorkerRecycle();
+    }
+
+    private function advancePlannedWorkerRecycleAfterReady(ServiceInstance $instance): void
+    {
+        if ($this->activePlannedWorkerRecycle !== null
+            && $this->activePlannedWorkerRecycle['instance_id'] === $instance->instanceId
+            && $this->activePlannedWorkerRecycle['pid'] !== $instance->pid
+        ) {
+            $this->activePlannedWorkerRecycle = null;
+        }
+        $this->grantNextPlannedWorkerRecycle();
+    }
+
+    private function grantNextPlannedWorkerRecycle(): void
+    {
+        if ($this->activePlannedWorkerRecycle !== null
+            || $this->controlServer === null
+            || $this->isStopFlowActive()
+            || $this->isRecoverySuspended()
+        ) {
+            return;
+        }
+
+        foreach ($this->pendingPlannedWorkerRecycles as $workerId => $pid) {
+            $instance = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $workerId);
+            if ($instance === null
+                || $instance->pid !== $pid
+                || $instance->state !== ServiceInstance::STATE_READY
+                || $instance->ipcClientId === null
+            ) {
+                unset($this->pendingPlannedWorkerRecycles[$workerId]);
+                continue;
+            }
+            if (!$this->controlServer->sendTo(
+                $instance->ipcClientId,
+                ControlMessage::drain([], 120),
+            )) {
+                return;
+            }
+
+            unset($this->pendingPlannedWorkerRecycles[$workerId]);
+            $this->activePlannedWorkerRecycle = [
+                'instance_id' => $workerId,
+                'pid' => $pid,
+            ];
+            $this->traceStartup('planned_recycle_granted', [
+                'role' => ControlMessage::ROLE_WORKER,
+                'instance_id' => $workerId,
+                'pid' => $pid,
+            ]);
+            return;
+        }
     }
 
     /**
@@ -26669,10 +26889,13 @@ class ServiceOrchestrator
                     "[Master自检] {$role} 槽位不齐: 期望 {$desired}，就绪 {$ready}，尝试补齐"
                 );
             }
-            WlsLogger::warning_(
-                "[MasterSelfAudit] {$role} slot diagnostics expected={$desired} ready={$ready}: "
-                . $this->formatRoleSlotDiagnostics($role, $desired)
-            );
+            $slotDiagnostics = "[MasterSelfAudit] {$role} slot diagnostics expected={$desired} ready={$ready}: "
+                . $this->formatRoleSlotDiagnostics($role, $desired);
+            if ($role === ControlMessage::ROLE_WORKER && $ready === 0) {
+                WlsLogger::error_($slotDiagnostics);
+            } else {
+                WlsLogger::warning_($slotDiagnostics);
+            }
             try {
                 $this->reconcileRoleSlotGaps($role);
             } catch (\Throwable $throwable) {

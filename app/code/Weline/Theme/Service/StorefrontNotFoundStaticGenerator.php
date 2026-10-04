@@ -13,7 +13,6 @@ use Weline\Framework\Http\StaticErrorPagePublisher;
 use Weline\Framework\Http\StorefrontNotFoundStaticPage;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
-use Weline\Framework\Http\StaticErrorPagePublishFingerprint;
 use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -47,11 +46,6 @@ final class StorefrontNotFoundStaticGenerator
     /** @var array{website_id: int, website_code: string}|null */
     private ?array $publishSite = null;
 
-    /** @var array<string, string> */
-    private array $pendingPublishFingerprints = [];
-
-    private bool $batchingPublishFingerprints = false;
-
     public function __construct(
         private readonly ThemeContextService $themeContext,
         private readonly SlotRendererService $slotRenderer,
@@ -67,97 +61,81 @@ final class StorefrontNotFoundStaticGenerator
      */
     public function publishAll(): array
     {
-        $skippedLabels = $this->trySkipEntirePublishAll();
-        if ($skippedLabels !== null) {
-            return $skippedLabels;
-        }
-
         $this->isolatePhraseBagForStaticRender();
         $this->ensureRecommendationDefaultInjections();
         $this->slotRenderer->clearCache();
-        $this->pendingPublishFingerprints = [];
-        $this->batchingPublishFingerprints = true;
-
-        try {
-            $publisher = new StaticErrorPagePublisher();
-            $result = $publisher->publish(
-                StorefrontNotFoundStaticPage::KIND,
-                function (array $target): array {
-                    return $this->publishOne(
-                        (string)$target['website_code'],
-                        (string)$target['lang'],
-                        (int)$target['website_id'],
-                        (string)($target['website_url'] ?? ''),
-                    );
-                },
-                function (string $phase, array $meta): void {
-                    if (PHP_SAPI !== 'cli') {
-                        return;
+        $publisher = new StaticErrorPagePublisher();
+        $result = $publisher->publish(
+            StorefrontNotFoundStaticPage::KIND,
+            function (array $target): array {
+                return $this->publishOne(
+                    (string)$target['website_code'],
+                    (string)$target['lang'],
+                    (int)$target['website_id'],
+                    (string)($target['website_url'] ?? ''),
+                );
+            },
+            function (string $phase, array $meta): void {
+                if (PHP_SAPI !== 'cli') {
+                    return;
+                }
+                if ($phase === 'start') {
+                    $this->printing->note(__(
+                        '开始发布前台 404 静态页：%{total} 个 website×locale（Fiber 协作并发 %{c}，非多核；已隔离升级词袋）',
+                        ['total' => (int)($meta['total'] ?? 0), 'c' => (int)($meta['concurrency'] ?? 4)]
+                    ));
+                    if (\defined('STDOUT') && \is_resource(STDOUT)) {
+                        \fflush(STDOUT);
                     }
-                    if ($phase === 'start') {
-                        $this->printing->note(__(
-                            '开始发布前台 404 静态页：%{total} 个 website×locale（Fiber 协作并发 %{c}，非多核；已隔离升级词袋）',
-                            ['total' => (int)($meta['total'] ?? 0), 'c' => (int)($meta['concurrency'] ?? 4)]
-                        ));
-                        if (\defined('STDOUT') && \is_resource(STDOUT)) {
-                            \fflush(STDOUT);
-                        }
-                        return;
-                    }
-                    if ($phase === 'task') {
-                        $label = (string)($meta['website_code'] ?? '') . '/' . (string)($meta['lang'] ?? '');
-                        if (!empty($meta['ok'])) {
-                            $this->printing->success(__(
-                                '前台 404 静态页 [%{done}/%{total}]：%{label}',
-                                [
-                                    'done' => (int)($meta['done'] ?? 0),
-                                    'total' => (int)($meta['total'] ?? 0),
-                                    'label' => $label,
-                                ]
-                            ));
-                        } else {
-                            $this->printing->warning(__(
-                                '前台 404 静态页失败 [%{done}/%{total}]：%{label} — %{err}',
-                                [
-                                    'done' => (int)($meta['done'] ?? 0),
-                                    'total' => (int)($meta['total'] ?? 0),
-                                    'label' => $label,
-                                    'err' => (string)($meta['error'] ?? ''),
-                                ]
-                            ));
-                        }
-                        if (\defined('STDOUT') && \is_resource(STDOUT)) {
-                            \fflush(STDOUT);
-                        }
-                        return;
-                    }
-                    if ($phase === 'done') {
+                    return;
+                }
+                if ($phase === 'task') {
+                    $label = (string)($meta['website_code'] ?? '') . '/' . (string)($meta['lang'] ?? '');
+                    if (!empty($meta['ok'])) {
                         $this->printing->success(__(
-                            '前台 404 静态页发布完成：成功 %{written}，失败 %{failed}，host_map %{keys} 键',
+                            '前台 404 静态页 [%{done}/%{total}]：%{label}',
                             [
-                                'written' => (int)($meta['written'] ?? 0),
-                                'failed' => (int)($meta['failed'] ?? 0),
-                                'keys' => (int)($meta['host_map_keys'] ?? 0),
+                                'done' => (int)($meta['done'] ?? 0),
+                                'total' => (int)($meta['total'] ?? 0),
+                                'label' => $label,
+                            ]
+                        ));
+                    } else {
+                        $this->printing->warning(__(
+                            '前台 404 静态页失败 [%{done}/%{total}]：%{label} — %{err}',
+                            [
+                                'done' => (int)($meta['done'] ?? 0),
+                                'total' => (int)($meta['total'] ?? 0),
+                                'label' => $label,
+                                'err' => (string)($meta['error'] ?? ''),
                             ]
                         ));
                     }
-                },
-                ['extensions' => ['html']],
-            );
+                    if (\defined('STDOUT') && \is_resource(STDOUT)) {
+                        \fflush(STDOUT);
+                    }
+                    return;
+                }
+                if ($phase === 'done') {
+                    $this->printing->success(__(
+                        '前台 404 静态页发布完成：成功 %{written}，失败 %{failed}，host_map %{keys} 键',
+                        [
+                            'written' => (int)($meta['written'] ?? 0),
+                            'failed' => (int)($meta['failed'] ?? 0),
+                            'keys' => (int)($meta['host_map_keys'] ?? 0),
+                        ]
+                    ));
+                }
+            },
+            ['extensions' => ['html']],
+        );
 
-            $labels = [];
-            foreach ($result['written'] as $row) {
-                $labels[] = $row['website_code'] . '/' . $row['lang'];
-            }
-
-            return $labels;
-        } finally {
-            if ($this->pendingPublishFingerprints !== []) {
-                (new StaticErrorPagePublishFingerprint())->rememberMany($this->pendingPublishFingerprints);
-                $this->pendingPublishFingerprints = [];
-            }
-            $this->batchingPublishFingerprints = false;
+        $labels = [];
+        foreach ($result['written'] as $row) {
+            $labels[] = $row['website_code'] . '/' . $row['lang'];
         }
+
+        return $labels;
     }
 
     /**
@@ -185,15 +163,7 @@ final class StorefrontNotFoundStaticGenerator
 
         try {
             $path = StorefrontNotFoundStaticPage::staticFilePath($lang, $websiteCode);
-            $inputHash = $this->computePublishInputHash($websiteCode, $lang, $websiteId);
-            $fpHelper = new StaticErrorPagePublishFingerprint();
-            $fpKey = $fpHelper->fpKey404($websiteCode, $lang);
-            if ($fpHelper->shouldSkipTarget($fpKey, $inputHash, $path)) {
-                FiberTaskRunner::yield();
-
-                return ['ok' => true, 'path' => $path, 'skipped' => true];
-            }
-
+            // 发布时重新渲染完整模板依赖；仅依据最终内容决定是否替换静态文件。
             $html = $this->buildHtmlForWebsite($lang, $websiteId, $websiteCode, $websiteUrl);
             FiberTaskRunner::yield();
             if ($html === '') {
@@ -209,7 +179,6 @@ final class StorefrontNotFoundStaticGenerator
                         \hash('sha256', StorefrontNotFoundStaticPage::staticFilePath($lang, '') . '|' . $lang . '|' . $websiteCode . '|' . $html)
                     );
                 }
-                $this->queuePublishFingerprint($fpKey, $inputHash);
                 FiberTaskRunner::yield();
 
                 return ['ok' => true, 'path' => $path, 'skipped' => true];
@@ -221,7 +190,6 @@ final class StorefrontNotFoundStaticGenerator
                     \hash('sha256', StorefrontNotFoundStaticPage::staticFilePath($lang, '') . '|' . $lang . '|' . $websiteCode . '|' . $html)
                 );
             }
-            $this->queuePublishFingerprint($fpKey, $inputHash);
             FiberTaskRunner::yield();
 
             return ['ok' => true, 'path' => $path];
@@ -234,86 +202,6 @@ final class StorefrontNotFoundStaticGenerator
             } catch (\Throwable) {
             }
         }
-    }
-
-    private function queuePublishFingerprint(string $fpKey, string $inputHash): void
-    {
-        if ($inputHash === '') {
-            return;
-        }
-        if ($this->batchingPublishFingerprints) {
-            $this->pendingPublishFingerprints[$fpKey] = $inputHash;
-
-            return;
-        }
-        (new StaticErrorPagePublishFingerprint())->rememberTarget($fpKey, $inputHash);
-    }
-
-    /**
-     * publish 输入指纹：站×语×主题×brand×generated/language×404 布局模板（v6，不含 URL）。
-     *
-     * @return list<string>|null null 表示不可全跳，须走 Fiber 发布
-     */
-    private function trySkipEntirePublishAll(): ?array
-    {
-        $publisher = new StaticErrorPagePublisher();
-        $sites = $publisher->discoverPublishTargets();
-        $targets = $sites['targets'];
-        if ($targets === []) {
-            return [];
-        }
-
-        $fpHelper = new StaticErrorPagePublishFingerprint();
-        $labels = [];
-        foreach ($targets as $target) {
-            $websiteCode = (string)$target['website_code'];
-            $lang = (string)$target['lang'];
-            $websiteId = (int)$target['website_id'];
-            $inputHash = $this->computePublishInputHash($websiteCode, $lang, $websiteId);
-            $path = StorefrontNotFoundStaticPage::staticFilePath($lang, $websiteCode);
-            if (!$fpHelper->shouldSkipTarget($fpHelper->fpKey404($websiteCode, $lang), $inputHash, $path)) {
-                return null;
-            }
-            $labels[] = $websiteCode . '/' . $lang;
-        }
-
-        if (PHP_SAPI === 'cli') {
-            $this->printing->note(__(
-                '前台 404 静态页输入未变，跳过全量发布（%{count} 个 website×locale）',
-                ['count' => \count($labels)]
-            ));
-        }
-
-        return $labels;
-    }
-
-    private function computePublishInputHash(
-        string $websiteCode,
-        string $lang,
-        int $websiteId,
-    ): string {
-        $fpHelper = new StaticErrorPagePublishFingerprint();
-        $themeToken = '0';
-        try {
-            $identity = $this->authoritativeWebsiteIdentity($websiteId, $websiteCode);
-            $theme = $this->themeContext->resolveThemeForScope(PreviewContextService::AREA_FRONTEND, $identity);
-            if (!$theme || !$theme->getId()) {
-                $theme = $this->themeContext->resolveTheme(PreviewContextService::AREA_FRONTEND, null, false);
-            }
-            $themeToken = $fpHelper->normalizeThemeToken($theme);
-        } catch (\Throwable) {
-        }
-
-        $brand = $this->resolveWebsiteScopedPublishedBrand($websiteId, $websiteCode);
-        $brandToken = \hash(
-            'sha256',
-            (string)($brand['logo_light'] ?? '')
-            . '|' . (string)($brand['logo_dark'] ?? '')
-            . '|' . (string)($brand['favicon'] ?? '')
-            . '|' . (string)($brand['apple_touch_icon'] ?? '')
-        );
-
-        return $fpHelper->storefront404InputHash($websiteCode, $lang, $websiteId, $themeToken, $brandToken);
     }
 
     /**

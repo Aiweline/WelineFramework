@@ -2250,6 +2250,75 @@ html.has-product-sticky-purchase body {
     line-height: 2.05;
     color: var(--color-text-primary, #1c1c1c);
 }
+/* 手机：诗意包装降级。竖排 + 厚底卡在窄屏占满首屏、过于突兀；
+   ≤640px 一律横排可读导语 + 轻量底，桌面（≥640）仍保留 CJK 竖排诗笺。 */
+@media (max-width: 640px) {
+    .product-native-detail__description-body .weline-detail-prose--verse-vertical {
+        writing-mode: horizontal-tb;
+        text-orientation: normal;
+        max-height: none;
+        margin: 0;
+        letter-spacing: 0.06em;
+        line-height: 1.85;
+        font-size: 1rem;
+    }
+    .product-native-detail__description-body .weline-detail-prose--verse-vertical > .weline-detail-prose__eyebrow,
+    .product-native-detail__description-body .weline-detail-prose--verse-vertical > h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.92rem;
+        letter-spacing: 0.1em;
+    }
+    .product-native-detail__description-body .weline-detail-prose--verse-vertical > p {
+        margin: 0 0 0.65rem;
+        font-size: 1rem;
+        letter-spacing: 0.06em;
+        line-height: 1.85;
+    }
+    .product-native-detail__description-body .weline-detail-feature--poem-aside .weline-detail-feature__copy {
+        align-items: flex-start;
+        justify-content: flex-start;
+        padding: var(--spacing-md, 1rem) var(--spacing-sm, 0.75rem);
+        border: none;
+        box-shadow: none;
+        background: var(--color-bg-secondary, #f7f4ef);
+    }
+    .product-native-detail__description-body .weline-detail-feature--poem-aside .weline-detail-prose--verse-vertical > p {
+        font-size: 1.05rem;
+        letter-spacing: 0.08em;
+        line-height: 1.85;
+    }
+}
+/* 竖排只属于 CJK 诗行。存量详情 HTML 里 `--verse-vertical` 的 `lang` 并不可靠：
+   本地库里 164 条英文详情根本没有 lang 属性（如 `<div class="weline-detail-prose
+   weline-detail-prose--verse-vertical">`），只按元素 lang 判断会漏判 → 英文仍被拆成一列竖字。
+   因此判定＝元素 lang（zh/ja/ko）或文档语言（:lang()）任一为 CJK 才竖排；
+   RTL 语言（ar/fa/he/ur）显式回落 horizontal-tb，排版方向交给 html[dir=rtl]。
+   poem-aside 的窄诗栏（0.32fr）在横排下同步放宽为等宽两栏。 */
+.product-native-detail__description-body .weline-detail-prose--verse-vertical:not([lang^="zh" i], [lang^="ja" i], [lang^="ko" i]):not(:lang(zh), :lang(ja), :lang(ko)):not([lang^="ar" i], [lang^="fa" i], [lang^="he" i], [lang^="ur" i]) {
+    writing-mode: horizontal-tb;
+    text-orientation: normal;
+    max-height: none;
+    margin: 0;
+    letter-spacing: 0.01em;
+}
+.product-native-detail__description-body .weline-detail-prose--verse-vertical:not([lang^="zh" i], [lang^="ja" i], [lang^="ko" i]):not(:lang(zh), :lang(ja), :lang(ko)):not([lang^="ar" i], [lang^="fa" i], [lang^="he" i], [lang^="ur" i]) > p,
+.product-native-detail__description-body .weline-detail-prose--verse-vertical:not([lang^="zh" i], [lang^="ja" i], [lang^="ko" i]):not(:lang(zh), :lang(ja), :lang(ko)):not([lang^="ar" i], [lang^="fa" i], [lang^="he" i], [lang^="ur" i]) > .weline-detail-prose__eyebrow,
+.product-native-detail__description-body .weline-detail-prose--verse-vertical:not([lang^="zh" i], [lang^="ja" i], [lang^="ko" i]):not(:lang(zh), :lang(ja), :lang(ko)):not([lang^="ar" i], [lang^="fa" i], [lang^="he" i], [lang^="ur" i]) > h3 {
+    margin: 0 0 0.75rem;
+    max-width: none;
+    font-size: clamp(0.98rem, 0.92rem + 0.25vw, 1.12rem);
+    letter-spacing: 0.01em;
+    line-height: 1.8;
+    overflow-wrap: anywhere;
+}
+@media (min-width: 640px) {
+    /* 等宽两栏。原先是为绕开 CSS 压缩器「吞掉相邻 minmax() 之间空白」的缺陷才写成 1fr 1fr；
+       该缺陷已于 2026-10-02 修复（见交接文档第 5 节），此处保留 1fr 1fr 只是为了不动已验证版式。
+       注意：1fr 的最小值是 auto（内容撑），若要「可压到 0」需改回 minmax(0, 1fr) minmax(0, 1fr)。 */
+    .product-native-detail__description-body .weline-detail-feature--poem-aside:has(.weline-detail-prose--verse-vertical:not([lang^="zh" i], [lang^="ja" i], [lang^="ko" i]):not(:lang(zh), :lang(ja), :lang(ko))) {
+        grid-template-columns: 1fr 1fr;
+    }
+}
 .product-native-detail__description-body .weline-detail-figure {
     transition: opacity 0.2s ease-out;
 }

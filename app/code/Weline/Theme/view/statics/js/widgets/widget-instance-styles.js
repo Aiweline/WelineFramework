@@ -49,12 +49,12 @@
     }
     function start() {
         scan(document);
-        new MutationObserver(function (records) {
-            records.forEach(function (record) {
-                if (record.type === 'attributes') apply(record.target);
-                else record.addedNodes.forEach(scan);
-            });
-        }).observe(document.documentElement, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-widget-style']});
+        window.Weline.dom.observe({
+            target: document.documentElement,
+            options: {childList: true, subtree: true, attributes: true, attributeFilter: ['data-widget-style']},
+            label: 'theme-widget-instance-styles',
+            onFlush: function () { scan(document); }
+        });
         document.addEventListener('load', function (event) { if (event.target.tagName === 'LINK' && !sheet) scan(document); }, true);
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once: true});

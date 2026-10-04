@@ -128,6 +128,7 @@ final class ThemeLayoutScopeNormalizerTest extends TestCase
         $runtime = (new \ReflectionClass(\Weline\Theme\Service\ThemeRuntimeLayoutResolver::class))
             ->newInstanceWithoutConstructor();
         $normalizer = $this->normalizer;
+        (new \ReflectionProperty($runtime, 'scopeNormalizer'))->setValue($runtime, $normalizer);
         $reader = new class($runtime, $normalizer) {
             public function __construct(
                 private readonly \Weline\Theme\Service\ThemeRuntimeLayoutResolver $runtime,

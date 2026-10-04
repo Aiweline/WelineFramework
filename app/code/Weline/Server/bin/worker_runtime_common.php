@@ -342,8 +342,8 @@ function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): ar
     $waitMs = (int)($fiber['admission_queue_wait_ms'] ?? 8000);
     if ($waitMs < 0) {
         $waitMs = 0;
-    } elseif ($waitMs > 10000) {
-        $waitMs = 10000;
+    } elseif ($waitMs > 60000) {
+        $waitMs = 60000;
     }
 
     $depth = (int)($fiber['admission_queue_depth'] ?? 0);
@@ -365,6 +365,26 @@ function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): ar
         'queue_depth' => $depth,
         'queue_slice_ms' => $sliceMs,
     ];
+}
+}
+
+/**
+ * Load the selected instance's admission policy before a worker initializes
+ * its scheduler. HTTPS workers previously read this file only much later,
+ * silently falling back to the tiny built-in queue during startup.
+ *
+ * @return array{max_active:int,queue_wait_ms:int,queue_depth:int,queue_slice_ms:int}
+ */
+if (!\function_exists('wlsResolveFiberAdmissionConfigFromEnvironment')) {
+function wlsResolveFiberAdmissionConfigFromEnvironment(string $path, string $instanceName): array
+{
+    $environment = \is_file($path) ? @include $path : [];
+    $environment = \is_array($environment) ? $environment : [];
+    $wls = \is_array($environment['wls'] ?? null) ? $environment['wls'] : [];
+    $servers = \is_array($wls['servers'] ?? null) ? $wls['servers'] : [];
+    $instance = \is_array($servers[$instanceName] ?? null) ? $servers[$instanceName] : [];
+
+    return wlsResolveFiberAdmissionConfig($wls, $instance);
 }
 }
 
@@ -441,12 +461,30 @@ function wlsFiberAdmissionUnavailableResponse(string $reason = 'timeout'): strin
 }
 }
 
+/** Bound queue cache probes to one in-flight lookup per Worker process. */
+if (!\function_exists('wlsTryFiberAdmissionCacheProbe')) {
+function wlsTryFiberAdmissionCacheProbe(callable $probe): bool
+{
+    static $inProgress = false;
+    if ($inProgress) {
+        return false;
+    }
+    $inProgress = true;
+    try {
+        return (bool)$probe();
+    } finally {
+        $inProgress = false;
+    }
+}
+}
+
 /**
  * Wait inside a request Fiber for an active admission slot.
  *
  * Yields to the scheduler so in-flight requests can finish. Callers must reserve
  * `$admissionWaiters[$fiberKey]` before starting the Fiber (closes depth races);
- * this function clears that reservation when the wait ends (admit or timeout).
+ * this function clears that reservation when the wait ends (admit, timeout, or
+ * an early response). A null result means the optional probe found a response.
  *
  * @param array<int|string, array<string, mixed>> $activeFibers
  * @param array<int|string, mixed> $admissionWaiters
@@ -459,7 +497,9 @@ function wlsAwaitFiberAdmissionSlot(
     int $maxActive,
     int $waitMs,
     int $sliceMs = 25,
-): bool {
+    ?callable $earlyResponseReady = null,
+    int $probeIntervalMs = 5000,
+): ?bool {
     if ($maxActive <= 0) {
         unset($admissionWaiters[$fiberKey]);
         if (isset($activeFibers[$fiberKey]) && \is_array($activeFibers[$fiberKey])) {
@@ -474,10 +514,19 @@ function wlsAwaitFiberAdmissionSlot(
         $activeFibers[$fiberKey]['admission_waiting'] = true;
     }
 
-    $deadline = wlsWorkerMonotonicNow() + ($waitMs / 1000.0);
+    $now = wlsWorkerMonotonicNow();
+    $deadline = $now + ($waitMs / 1000.0);
+    $nextProbeAt = $now + (\max(1, $probeIntervalMs) / 1000.0);
     try {
         while (wlsCountActiveFibersForAdmission($activeFibers, $admissionWaiters) >= $maxActive) {
-            if (wlsWorkerMonotonicNow() >= $deadline) {
+            $now = wlsWorkerMonotonicNow();
+            if ($earlyResponseReady !== null && $now >= $nextProbeAt) {
+                $nextProbeAt = $now + (\max(1, $probeIntervalMs) / 1000.0);
+                if (wlsTryFiberAdmissionCacheProbe($earlyResponseReady)) {
+                    return null;
+                }
+            }
+            if ($now >= $deadline) {
                 return false;
             }
             if (isset($activeFibers[$fiberKey]) && \is_array($activeFibers[$fiberKey])) {

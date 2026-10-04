@@ -68,6 +68,7 @@ final class ConfigEmbed implements TaglibInterface
             'target_scope' => false,
             'website_code' => false,
             'store_code' => false,
+            'store_mode' => false,
             'channel_code' => false,
             'scope_kind' => false,
         ];
@@ -94,6 +95,7 @@ final class ConfigEmbed implements TaglibInterface
                 . '\'target_scope\' => (string)($Taglib__target_scope ?? \'\'),'
                 . '\'website_code\' => (string)($Taglib__website_code ?? \'\'),'
                 . '\'store_code\' => (string)($Taglib__store_code ?? \'\'),'
+                . '\'store_mode\' => (string)($Taglib__store_mode ?? \'\'),'
                 . '\'channel_code\' => (string)($Taglib__channel_code ?? \'\'),'
                 . '\'scope_kind\' => (string)($Taglib__scope_kind ?? \'\'),'
                 . ']); ?>';

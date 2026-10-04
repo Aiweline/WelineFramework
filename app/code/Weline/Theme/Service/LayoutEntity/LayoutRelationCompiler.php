@@ -30,6 +30,7 @@ final class LayoutRelationCompiler
             }
             $indexed[$uid] = $node;
         }
+        if (!$clearAll) { $indexed = $this->discoverNativeOwners($source, $indexed, true); }
         $groups = [];
         $children = [];
         $sourceSlots = self::slotIds($source);
@@ -67,7 +68,7 @@ final class LayoutRelationCompiler
             }
             return '[' . implode(', ', $callbacks) . ']';
         };
-        $renderNode = function (string $uid, array $ancestors = [], array $sourceAttributes = []) use ($renderSlots, $indexed, $localeOverrides, $identity): string {
+        $renderNode = function (string $uid, array $ancestors = [], array $sourceAttributes = [], string $dynamicParams = '') use ($renderSlots, $indexed, $localeOverrides, $identity): string {
             if (isset($ancestors[$uid])) { throw new \RuntimeException('theme_layout_node_parent_cycle'); }
             $node = $indexed[$uid];
             if ((array_key_exists('is_active', $node) && !$node['is_active']) || !empty($node['config']['template_deleted']) || ($node['source'] ?? '') === 'user_deleted') { return "''"; }
@@ -92,8 +93,26 @@ final class LayoutRelationCompiler
                 if (isset($configs[$uid]) && is_array($configs[$uid])) { $locales[$locale] = array_replace($sourceParams, $configs[$uid]); }
             }
             $identityPhp = $identity === null ? 'null' : '\\' . ThemeVersionIdentity::class . '::fromArray(' . var_export($identity->toArray(), true) . ')';
+            $entryPhp = var_export($entry, true);
+            $localesPhp = var_export($locales, true);
+            if ($dynamicParams !== '') {
+                $entryPhp = 'array_replace(' . $entryPhp . ', [\'config\' => array_replace(' . var_export($entry['config'] ?? [], true) . ', ' . $dynamicParams . ')])';
+                $localeEntries = [];
+                foreach ($locales as $locale => $config) {
+                    $values = [];
+                    foreach ($config as $key => $value) {
+                        $php = var_export($value, true);
+                        if (array_key_exists($key, $sourceParams) && $sourceParams[$key] === $value) {
+                            $php = '(array_key_exists(' . var_export($key, true) . ', ' . $dynamicParams . ') ? ' . $dynamicParams . '[' . var_export($key, true) . '] : ' . $php . ')';
+                        }
+                        $values[] = var_export($key, true) . ' => ' . $php;
+                    }
+                    $localeEntries[] = var_export($locale, true) . ' => array_replace(' . $dynamicParams . ', [' . implode(', ', $values) . '])';
+                }
+                $localesPhp = '[' . implode(', ', $localeEntries) . ']';
+            }
             return '\\' . ObjectManager::class . '::getInstance(\\' . ThemeLayoutEntityWidgetRenderer::class . '::class)->renderResolved('
-                . var_export($entry, true) . ', ' . var_export($locales, true) . ', ' . $renderSlots($uid, $ancestors) . ', ' . $identityPhp . ')';
+                . $entryPhp . ', ' . $localesPhp . ', ' . $renderSlots($uid, $ancestors) . ', ' . $identityPhp . ')';
         };
         return self::transform($source, static function (array $element, string $inner) use ($groups, $indexed, $renderNode, $renderSlots, $clearAll, $localeOverrides): string {
             $slot = self::slotId($element);
@@ -107,7 +126,15 @@ final class LayoutRelationCompiler
                 $hasLocale = false;
                 foreach ($localeOverrides as $configs) { $hasLocale = $hasLocale || isset($configs[$uid]); }
                 $bindings[] = ['node' => $node, 'php' => '<?= ' . $renderNode($uid) . ' ?>', 'slots' => $renderSlots($uid, [$uid => true]),
-                    'has_locale' => $hasLocale, 'render' => static fn(array $attrs): string => '<?= ' . $renderNode($uid, [], $attrs) . ' ?>'];
+                    'has_locale' => $hasLocale, 'render' => static function (array $attrs) use ($uid, $node, $renderNode): string {
+                        if (($node['source'] ?? '') !== 'template_inline_dynamic') { return '<?= ' . $renderNode($uid, [], $attrs) . ' ?>'; }
+                        $variable = '$__welineNativeParams_' . substr(hash('sha256', $uid), 0, 12);
+                        return '<?php ob_start(); try { ?>' . (string)($attrs['params'] ?? '{}')
+                            . '<?php ' . $variable . ' = ob_get_clean(); } catch (\\Throwable $__welineNativeParameterError) { ob_end_clean(); throw $__welineNativeParameterError; } '
+                            . $variable . ' = json_decode(' . $variable . ', true); '
+                            . $variable . ' = is_array(' . $variable . ') ? ' . $variable . ' : []; ?>'
+                            . '<?= ' . $renderNode($uid, [], $attrs, $variable) . ' ?>';
+                    }];
             }
             return self::mergeInner($inner, $bindings, $fullSlot, $element['attrs']);
         });
@@ -154,6 +181,7 @@ final class LayoutRelationCompiler
             if ($id !== '') { $ids[$id] = true; }
         }
         $source = $definition->templateContent;
+        $path = null;
         if ($source === null && $definition->templatePath !== null) {
             $path = $definition->templatePath;
             if (!is_file($path)) {
@@ -162,7 +190,109 @@ final class LayoutRelationCompiler
             }
             $source = $path !== '' && is_file($path) ? (string)file_get_contents($path) : '';
         }
-        return array_keys($ids + self::slotIds($source ?? ''));
+        $dependencies = new ThemeLayoutTemplateDependencies();
+        $pending = [['source' => $source ?? '', 'origin' => $path]];
+        $visited = [];
+        if ($path !== null && is_file($path)) { $visited[realpath($path) ?: $path] = true; }
+        while ($pending !== []) {
+            $current = array_pop($pending);
+            $ids += self::slotIds($current['source']);
+            foreach ($dependencies->moduleSources($current['source'], $this->theme, $definition->area, $current['origin']) as $dependency) {
+                $origin = realpath($dependency['origin']) ?: $dependency['origin'];
+                if (isset($visited[$origin])) { continue; }
+                $visited[$origin] = true;
+                $bytes = file_get_contents($origin);
+                if (is_string($bytes)) { $pending[] = ['source' => $bytes, 'origin' => $origin]; }
+            }
+        }
+        return array_keys($ids);
+    }
+
+    /** Native containers are source placements too, even when no editor intent was saved. */
+    public function discoverNativeOwners(string $source, array $indexed, bool $freezeDefaults = false): array
+    {
+        $normalized = [];
+        foreach ($indexed as $key => $node) {
+            if (!is_array($node)) { continue; }
+            if (($node['widget_code'] ?? '') === '__no_widget_placements__') { return $indexed; }
+            $uid = (string)($node['node_uid'] ?? $key);
+            $node['node_uid'] = $uid;
+            $normalized[$uid] = $node;
+        }
+        $indexed = $normalized;
+        $registry = $this->registry ?? ObjectManager::getInstance(ThemePlaceableRegistry::class);
+        $saved = $indexed;
+        $savedOwners = [];
+        foreach ($saved as $uid => $node) {
+            foreach ($this->componentSlots($node) as $slot) { $savedOwners[$slot][] = $uid; }
+        }
+        $assignedNativeChildren = [];
+        $matchedSaved = [];
+        self::transform($source, static fn(array $element, string $inner): string => $inner,
+            function (array $element, string $whole) use (&$indexed, &$assignedNativeChildren, &$matchedSaved, $saved, $savedOwners, $registry, $freezeDefaults): ?string {
+                if ($element['tag'] !== 'w:widget' || $element['slotAncestors'] === []) { return null; }
+                $attrs = $element['attrs'];
+                $type = (string)($attrs['type'] ?? '');
+                $code = (string)($attrs['code'] ?? $attrs['name'] ?? '');
+                if ($type === '' || $code === '' || str_contains($type . $code, '<?') || str_contains($type . $code, '{{')) { return null; }
+                $slot = (string)end($element['slotAncestors']);
+                $module = (string)($attrs['module'] ?? '');
+                if ($module === '') {
+                    $widget = ObjectManager::getInstance(\Weline\Widget\Service\WidgetData::class)->getWidget($type, $code);
+                    $module = (string)($widget['module'] ?? '');
+                }
+                if ($module === '') { return null; }
+                $ref = self::templateRef($attrs, $module);
+                foreach ($saved as $savedUid => $node) {
+                    if (isset($matchedSaved[$savedUid])) { continue; }
+                    if (($node['slot_id'] ?? $node['area'] ?? '') === $slot && ($node['widget_code'] ?? '') === $code
+                        && ($node['widget_type'] ?? '') === $type && ($node['widget_module'] ?? '') === $module
+                        && (($node['config']['template_ref'] ?? '') === '' || $node['config']['template_ref'] === $ref)) {
+                        $matchedSaved[$savedUid] = true;
+                        return null;
+                    }
+                }
+                $definition = $registry->find($module, $type, $code, $this->theme);
+                if ($definition === null) { return null; }
+                $owner = ['widget_module' => $module, 'widget_type' => $type, 'widget_code' => $code];
+                $children = [];
+                foreach ($this->componentSlots($owner) as $childSlot) {
+                    foreach ($saved as $uid => $node) {
+                        if (($node['slot_id'] ?? $node['area'] ?? '') === $childSlot
+                            && empty($node['parent_uid']) && ($node['source'] ?? '') === 'default_injection') {
+                            $children[$uid] = $node;
+                        }
+                    }
+                }
+                if ($children === []) { return null; }
+                $uid = hash('md5', $slot . '|' . $ref . '|' . $element['start']);
+                $defaults = [];
+                foreach ($definition->params as $key => $param) {
+                    $name = is_string($key) ? $key : (string)($param['param_name'] ?? $param['key'] ?? $param['name'] ?? '');
+                    if ($name !== '' && is_array($param) && array_key_exists('default', $param)) { $defaults[$name] = $param['default']; }
+                }
+                $rawParams = (string)($attrs['params'] ?? '{}');
+                $params = json_decode($rawParams, true);
+                $dynamic = str_contains($rawParams, '<?') || str_contains($rawParams, '{{');
+                $params = is_array($params) ? $params : [];
+                $indexed[$uid] = $owner + ['node_uid' => $uid, 'slot_id' => $slot, 'source' => $dynamic ? 'template_inline_dynamic' : 'template_inline',
+                    'config' => array_replace($freezeDefaults ? array_replace($defaults, $definition->defaultConfig) : [], $params, ['template_ref' => $ref]),
+                    '_explicit_config' => $params];
+                foreach ($children as $childUid => $node) {
+                    $childSlot = (string)($node['slot_id'] ?? $node['area'] ?? '');
+                    $cloneUid = !isset($savedOwners[$childSlot]) && !isset($assignedNativeChildren[$childUid])
+                        ? $childUid : hash('md5', $uid . '|' . $childUid);
+                    $node['node_uid'] = $cloneUid;
+                    $node['parent_uid'] = $uid;
+                    $indexed[$cloneUid] = $node;
+                    if (count($savedOwners[$childSlot] ?? []) === 1) {
+                        $indexed[$childUid]['parent_uid'] = $savedOwners[$childSlot][0];
+                    }
+                    $assignedNativeChildren[$childUid] = true;
+                }
+                return null;
+            });
+        return $indexed;
     }
 
     private static function mergeInner(string $inner, array $bindings, bool $clear, array $attrs): string

@@ -17,6 +17,36 @@ final class WlsMemoryAdapterAtomicTest extends TestCase
         parent::tearDown();
     }
 
+    public function testCasConfirmationRemainsInItsRequestFiber(): void
+    {
+        $shared = new SharedCacheStateDouble();
+        $shared->setCache('fiber-confirmation', 'quota', 1);
+        $adapter = new WlsMemoryAdapter('fiber-confirmation', [], $shared);
+        $first = new \Fiber(static function () use ($adapter): void {
+            \Weline\Framework\Context::enter(new \Weline\Framework\Context());
+            \Weline\Framework\Runtime\RequestContext::init();
+            try {
+                self::assertFalse($adapter->compareAndSet('quota', 2, 3));
+                self::assertTrue($adapter->isLastCompareAndSetReplyConfirmed());
+                \Fiber::suspend();
+                self::assertTrue($adapter->isLastCompareAndSetReplyConfirmed());
+            } finally { \Weline\Framework\Context::leave(); }
+        });
+        $first->start();
+        $second = new \Fiber(static function () use ($adapter, $shared): void {
+            \Weline\Framework\Context::enter(new \Weline\Framework\Context());
+            \Weline\Framework\Runtime\RequestContext::init();
+            try {
+                $shared->fail = true;
+                self::assertNull($adapter->getFresh('quota'));
+                self::assertFalse($adapter->compareAndSet('quota', 1, 3));
+                self::assertFalse($adapter->isLastCompareAndSetReplyConfirmed());
+            } finally { \Weline\Framework\Context::leave(); }
+        });
+        $second->start();
+        $first->resume();
+    }
+
     public function testCasConflictEvictsWorkerLocalStaleSnapshot(): void
     {
         $shared = new SharedCacheStateDouble();
@@ -80,6 +110,19 @@ final class WlsMemoryAdapterAtomicTest extends TestCase
 
         $adapter->recoverRemoteProbe();
         self::assertNull($facade->getValue($adapter));
+    }
+
+    public function testRecoverRemoteProbeKeepsHealthyFacadeAfterSuccessfulOperation(): void
+    {
+        WlsMemoryAdapter::clearAllMemory();
+        $shared = new SharedCacheStateDouble();
+        $shared->setCache('healthy_probe_pool', 'value', 'ready');
+        $adapter = new WlsMemoryAdapter('healthy_probe_pool', [], $shared);
+
+        self::assertSame('ready', $adapter->getFresh('value'));
+        $adapter->recoverRemoteProbe();
+        self::assertSame(0, $shared->disconnects);
+        self::assertSame('ready', $adapter->getFresh('value'));
     }
 
     public function testSlowCacheMissKeepsTheRemoteAdapterAvailable(): void
@@ -217,6 +260,7 @@ class SharedCacheStateDouble implements SharedCacheStateInterface
     /** @var array<string, array<string, mixed>> */
     private array $values = [];
     public bool $fail = false;
+    public int $disconnects = 0;
 
     public function get(string $namespace, string $key): mixed
     {
@@ -322,6 +366,7 @@ class SharedCacheStateDouble implements SharedCacheStateInterface
 
     public function disconnect(): void
     {
+        $this->disconnects++;
     }
 
     private function assertAvailable(): void

@@ -27,6 +27,8 @@ SEO Head 使用当前 Store 的名称和独立入口覆盖 Website 默认值，�
   Product Service/Model。
 - 请求命中：Website 按“精确 Host > 单层 `www.` 别名”和最长完整路径边界选择，再由 `ScopeResolver` 以可信 Origin 一次解析并冻结 Store/Channel 三段和路由余量。
 - Scope Worker 绑定：签发可轮换 keyring 保护的 Scope Token，按 `off|shadow|allowlist|on` 渐进切流，并在 WLS/FPM/FPC 最终响应面生成一次性页面 bootstrap。
+  正常店面 HTML 的 200 与 404 响应均可携带 bootstrap，让错误页公共部件也能调用需要 Scope 绑定的接口；保持原 HTTP 状态，并沿用 opaque ID 与 Host-only HttpOnly Cookie。5xx、下载和非 HTML 响应不签发。
+WLS 无路由错误页通过与普通响应共用的 `App::finalizeResponse()` 派发 `Weline_Framework_Http::response_ready`；初始化观察器同时处理该事件，依靠请求内已装饰标记避免重复签发。
 - Scope 维护门禁：持久化 Website/Store/Channel 维护状态与 generation，使用现有 Scope Token keyring 签发只读、可撤销、跨 Worker 一致的预览令牌；详见 `scope-maintenance-preview.md`。
 - 默认网站兜底：维护系统安装默认站点 `website_id=0 / code=default`。
 - 域名注册与编排：注册商、DNS、证书、生命周期、域名池。

@@ -37,11 +37,9 @@ class ApplyWidgetDefaultInjections implements ObserverInterface
             }
             ObjectManager::getInstance(\Weline\Widget\Service\DefaultInjectionPlanRepository::class)->clearMemo();
             $this->slotRendererService->clearCache();
-            // Plugin/registry install with JSON default_injections: always re-solidify
-            // involved published shells + drop chrome.rendered across ALL themes so the
-            // next hit dynamically re-bakes required widgets (minus user_deleted only).
-            // Do not gate on applied>0 — catalog may already have decisions while
-            // durable snapshots are still incomplete.
+            // 注入声明变化时，按变更前后的目标并集为所有主题重生成派生 PHTML。
+            // 生成后失效对应 owner 的展示缓存；访问时不动态补播种或生成 HTML 快照。
+            // 已有安装决定不代表产物完整，不能以新增安装数量为零跳过重固化。
             try {
                 ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class)
                     ->rebakeAfterInjectionCollect(null, $changes);

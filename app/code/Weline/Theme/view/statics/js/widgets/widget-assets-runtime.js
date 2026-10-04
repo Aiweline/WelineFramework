@@ -26,9 +26,12 @@
     };
     function start() {
         scan(document);
-        new MutationObserver(function (records) {
-            records.forEach(function (record) { record.addedNodes.forEach(scan); });
-        }).observe(document.documentElement, {childList: true, subtree: true});
+        window.Weline.dom.observe({
+            target: document.documentElement,
+            options: {childList: true, subtree: true},
+            label: 'theme-widget-assets',
+            onFlush: function () { scan(document); }
+        });
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once: true});
     else start();

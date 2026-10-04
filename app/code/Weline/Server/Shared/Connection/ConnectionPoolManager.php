@@ -305,23 +305,30 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                 if ($item['busy'] ?? false) {
                     continue;
                 }
-                if (!$conn->isConnected() && !$conn->connect()) {
-                    $this->registerConnectFailure('reuse_connect');
-                    continue;
-                }
-                $slot = $this->pool[$idx] ?? null;
-                if (!\is_array($slot) || ($slot['conn'] ?? null) !== $conn) {
-                    continue;
-                }
-                $this->registerConnectSuccess();
-                $now = self::monotonicSeconds();
-                $this->applyCurrentTimeouts($conn);
+                // Reserve before connect: socket authentication may suspend this Fiber.
                 $this->pool[$idx] = [
                     'conn' => $conn,
                     'busy' => true,
-                    'last_used' => $now,
+                    'last_used' => self::monotonicSeconds(),
                     'lease_fiber_id' => $leaseFiberId,
                 ];
+                $acquired = false;
+                try {
+                    if (!$conn->isConnected() && !$conn->connect()) {
+                        $this->registerConnectFailure('reuse_connect');
+                        continue;
+                    }
+                    if (!$this->ownsConnectionLease($conn, $leaseFiberId)) {
+                        continue;
+                    }
+                    $this->registerConnectSuccess();
+                    $this->applyCurrentTimeouts($conn);
+                    $acquired = true;
+                } finally {
+                    if (!$acquired && $this->ownsConnectionLease($conn, $leaseFiberId)) {
+                        $this->release($conn);
+                    }
+                }
 
                 // 记录成功获取延迟
                 $this->recordAcquireMetric($startTime, 'success', $retryCount);
@@ -338,29 +345,32 @@ class ConnectionPoolManager implements ConnectionPoolInterface
 
             if (\count($this->pool) < $maxSize) {
                 $conn = $this->createConnection();
+                // Count connecting sockets toward capacity before any I/O yield.
+                $this->pool[] = [
+                    'conn' => $conn,
+                    'busy' => true,
+                    'last_used' => self::monotonicSeconds(),
+                    'lease_fiber_id' => $leaseFiberId,
+                ];
+                $acquired = false;
                 try {
-                    if ($conn->connect()) {
+                    if ($conn->connect() && $this->ownsConnectionLease($conn, $leaseFiberId)) {
                         $this->registerConnectSuccess();
                         $this->applyCurrentTimeouts($conn);
-                        $this->pool[] = [
-                            'conn' => $conn,
-                            'busy' => true,
-                            'last_used' => self::monotonicSeconds(),
-                            'lease_fiber_id' => $leaseFiberId,
-                        ];
-
-                        // 记录成功获取延迟
+                        $acquired = true;
                         $this->recordAcquireMetric($startTime, 'success', $retryCount);
-
                         return $conn;
                     }
                     $this->registerConnectFailure('create_connect');
                 } catch (\Throwable $e) {
-                    // 连接失败，清理资源
-                    $conn->close();
                     $this->log('Connection failed during acquire: ' . $e->getMessage());
                     $this->registerConnectFailure('create_exception');
+                } finally {
+                    if (!$acquired && $this->ownsConnectionLease($conn, $leaseFiberId)) {
+                        $this->invalidate($conn);
+                    }
                 }
+
             }
             $retryCount++;
             SchedulerSystem::usleep(1000);
@@ -371,6 +381,18 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         $this->incrementMetric('wls_pool_acquire_timeout_total', []);
 
         return null;
+    }
+
+    private function ownsConnectionLease(PooledConnectionInterface $connection, int $leaseFiberId): bool
+    {
+        foreach ($this->pool as $item) {
+            if (\is_array($item) && self::poolConnFromSlot($item) === $connection
+                && ($item['busy'] ?? false)
+                && ($item['lease_fiber_id'] ?? null) === $leaseFiberId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public function release(PooledConnectionInterface $connection): void

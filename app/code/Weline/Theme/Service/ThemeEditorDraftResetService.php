@@ -53,9 +53,8 @@ final class ThemeEditorDraftResetService
             $cleared[$resourceType] = $this->resetResource($baseline, $resourceType, $layoutScope);
         }
 
-        $cache = $this->cacheCleaner->clearNonGlobalCaches(
+        $cache = $this->cacheCleaner->clearDraftPreviewCaches(
             $baseline->themeId > 0 ? $baseline->themeId : null,
-            'theme_editor_draft_reset',
         );
 
         return [

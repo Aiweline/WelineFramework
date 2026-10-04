@@ -20,6 +20,21 @@ MCP 是**知识面**（技能索引 / 代码地图 / 领域硬规则下发），
 
 **同回合混合任务**：既有内容运营又有框架 Theme/PHP 编码时，**只有编码切片**走 MCP；内容运营切片仍只读仓内技能/指令。
 
+## 1b. AOCI 与 Weline MCP 互补（`aoci_complements_weline_mcp`）
+
+AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_intelligence`）**可并存**，定位互补，**不互替**。
+
+| 面 | 负责 | 不负责 |
+|----|------|--------|
+| **Weline MCP** | 工程硬规则、`prepare_project`、技能、代码地图、验收门禁 | 不写仓；不替代源码阅读与测试 |
+| **AOCI** | 仓库认知索引、Baseline、漂移、受管 Overview / Entries | **不能**替代 `prepare_project` / `hard_constraints` |
+
+**路由约定**：流程 / 规则 / 技能 → Weline；结构认知 / 漂移 / 索引 → AOCI。禁止用 AOCI 覆盖或假装已遵守 Weline 硬规则。
+
+**挂载**：Cursor 可并列注册两套 MCP；`aoci` 配置须用本机绝对路径（二进制 + `--repo` 仓库根），host 配置**勿提交 Git**；大仓首次 `scan`/建索引成本高，未经明示或范围计划不得自动全仓扫描。内容运营与闲聊豁免。
+
+权威：`HardConstraintsCatalog::mcpOperationalRules()` → `aoci_complements_weline_mcp`。
+
 ## 2. 内容运营技能跳过 MCP（`content_ops_skills_skip_mcp`）
 
 命中下列任一即属此类：产品优化 / 商品优化 / 详情优化 / 商详优化 / 翻译优化 / 商品翻译 / 主图优化 / 规格图优化 / 修主图 / 新建文章 / 写博客 / 审查文章 / 文章可行性 / 精写文章 / blog article / 规格修复（或宿主/仓内技能 `ecommerce-product-optimize`、`ecommerce-detail-suite`、`ecommerce-product-image`、`ecommerce-product-i18n`、`weline-blog-article`）。

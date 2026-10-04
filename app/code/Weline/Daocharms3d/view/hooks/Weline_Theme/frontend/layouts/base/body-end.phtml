@@ -1,0 +1,72 @@
+<?php
+/** @hook-priority 70 @hook-sort-order 70 */
+$townTheme = \Weline\Theme\Helper\ThemeData::getCurrentTheme();
+if (!$townTheme || (string)$townTheme->getData('name') !== 'daocharms-3d') { return; }
+$escapeTown = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$offers = [];
+$page = 1;
+do {
+    $catalog = w_query('product_storefront', 'searchPublishedOffers', ['page' => $page, 'page_size' => 48]);
+    foreach (($catalog['items'] ?? []) as $offer) { $offers[(int)$offer['product_id']] = $offer; }
+    $page++;
+} while ($page <= (int)($catalog['pagination']['pages'] ?? 1));
+$cards = [];
+foreach (array_chunk(array_keys($offers), 24) as $ids) {
+    foreach (w_query('product_storefront', 'cardsByProductIds', ['product_ids' => $ids, 'limit' => 24]) as $card) {
+        $id = (int)($card['id'] ?? 0);
+        if ($id > 0) {
+            $cards[$id] = $card + ($offers[$id] ?? []);
+            if (trim((string)($offers[$id]['image'] ?? '')) !== '') {
+                $cards[$id]['image'] = (string)($offers[$id]['image'] ?? '');
+            }
+            $cards[$id]['formatted_price'] = (string)($offers[$id]['formatted_price'] ?? '');
+        }
+    }
+}
+$checkoutTown = $this->getUrl('checkout');
+$accountTown = $this->getUrl('customer/account/index');
+$cartTown = $this->getUrl('cart');
+$storefrontTown = $this->getFrontendUrl('');
+$bootstrapTown = $this->fetchTagSource('statics', 'Weline_Daocharms3d::js/bootstrap.js');
+?>
+<section class="daocharms-town" weline-code="daocharms-town" data-daocharms-town data-storefront-url="<?= $escapeTown($storefrontTown) ?>" data-account-url="<?= $escapeTown($accountTown) ?>" data-cart-url="<?= $escapeTown($cartTown) ?>" data-checkout-url="<?= $escapeTown($checkoutTown) ?>" data-account-label="<lang>我的院落</lang>" data-cart-label="<lang>购物袋账房</lang>" data-checkout-label="<lang>结账柜台</lang>" data-weline-load="cart,api,account" data-request-error="<lang>请求暂未完成，请稍后重试。</lang>" data-fallback="<lang>三维场景暂不可用，您仍可使用下方完整商城。</lang>" data-travel-label="<lang>正在前往摊位</lang>" data-market-label="<lang>沿河市集</lang>" data-model-label="<lang>立体示意，以商品原图为准</lang>" data-empty-label="<lang>没有找到商品</lang>" data-enter-label="<lang>进入柜台</lang>" data-inspect-label="<lang>查看商品与规格</lang>">
+<header class="daocharms-town__toolbar">
+<h2><lang>道韵古镇</lang></h2>
+<form data-town-search><input class="w-input" name="q" aria-label="<lang>搜索镇内商品</lang>" placeholder="<lang>搜索镇内商品</lang>"><button class="w-button" type="submit"><lang>搜索</lang></button></form>
+<button class="w-button" type="button" id="reset"><lang>回到镇口</lang></button>
+<button class="w-button" type="button" id="time"><lang>切换昼夜</lang></button>
+<button class="w-button" type="button" data-town-district="-1"><lang>上一街区</lang></button><button class="w-button" type="button" data-town-district="1"><lang>下一街区</lang></button>
+<button class="w-button" type="button" data-town-operation><lang>打开办事柜台</lang></button>
+</header>
+<div class="daocharms-town__viewport" id="world" aria-label="<lang>可行走的古风购物镇</lang>">
+<div class="daocharms-town__hud"><span id="location"></span><span id="arrival"><lang>方向键或下方按钮行走，拖动画面转身，点击吊坠选购。</lang></span><span id="notice" hidden role="status"></span><span data-town-status hidden role="status"></span></div>
+<div id="interaction" hidden><span id="nearby-name"></span><button class="w-button" id="inspect" type="button"><lang>查看商品与规格</lang></button></div>
+<div class="daocharms-town__controls"><button class="w-button" data-move="forward" type="button" aria-label="<lang>前进</lang>">↑</button><button class="w-button" data-move="left" type="button" aria-label="<lang>左移</lang>">←</button><button class="w-button" data-move="back" type="button" aria-label="<lang>后退</lang>">↓</button><button class="w-button" data-move="right" type="button" aria-label="<lang>右移</lang>">→</button></div>
+</div>
+<div class="daocharms-town__results" data-town-results role="status" aria-live="polite"></div>
+<nav class="daocharms-town__portals" aria-label="<lang>镇内办事入口</lang>"><a class="w-button" href="<?= $escapeTown($accountTown) ?>"><lang>我的院落</lang></a><a class="w-button" href="<?= $escapeTown($cartTown) ?>"><lang>购物袋账房</lang></a><a class="w-button" href="<?= $escapeTown($checkoutTown) ?>"><lang>结账柜台</lang></a></nav>
+<p><lang>立体示意，以商品原图为准</lang></p>
+<details class="daocharms-town__map"><summary><lang>全部镇内商品</lang> (<?= count($cards) ?>)</summary>
+<div data-town-catalog>
+<?php foreach ($cards as $id => $card):
+ $route = (string)($card['url'] ?? ''); $routePath = explode('?', $route, 2); $routeParams = []; parse_str($routePath[1] ?? '', $routeParams); $productUrl = preg_match('~^(?:https?:)?//~', $route) || str_starts_with($route, '/') ? $route : $this->getUrl($routePath[0], $routeParams);
+?>
+<article data-town-product="<?= $id ?>" data-name="<?= $escapeTown($card['name'] ?? '') ?>" data-image="<?= $escapeTown($card['image'] ?? '') ?>" data-url="<?= $escapeTown($productUrl) ?>" data-price="<?= $escapeTown($card['formatted_price'] ?? '') ?>">
+<a href="<?= $escapeTown($productUrl) ?>"><?php if (!empty($card['image'])): ?><img src="<?= $escapeTown($card['image']) ?>" width="240" height="240" loading="lazy" alt="<?= $escapeTown($card['name']) ?>"><?php endif; ?><span><?= $escapeTown($card['name']) ?></span></a>
+<span><?= $escapeTown($card['formatted_price'] ?? '') ?></span>
+<button type="button" class="w-button" data-travel="<?= $id ?>"><lang>镇内查看</lang></button>
+<div class="weline-cart-product-card-add-to-cart" data-weline-load="cart" data-widget-module="Weline_Daocharms3d"><button type="button" class="w-button" data-town-purchase data-action="add" data-product-id="<?= $id ?>" data-qty="1" data-open-purchase-panel="1" data-needs-selection="1" data-checkout-url="<?= $escapeTown($checkoutTown) ?>"><lang>查看商品与规格</lang></button></div>
+</article>
+<?php endforeach; ?>
+</div></details>
+</section>
+
+<script data-no-extract="true">
+(function () {
+    const startTown = function () {
+        Weline.declare('daocharmsTown', {load: 'eager', path: <?= json_encode($bootstrapTown, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>});
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startTown, {once: true});
+    else startTown();
+}());
+</script>

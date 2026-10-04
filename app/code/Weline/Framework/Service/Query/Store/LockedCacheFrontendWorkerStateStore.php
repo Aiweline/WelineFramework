@@ -5,6 +5,8 @@ namespace Weline\Framework\Service\Query\Store;
 
 use Weline\Framework\Cache\Contract\CacheAdapterHealthInterface;
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
+use Weline\Framework\Cache\Contract\FreshCacheReadInterface;
+use Weline\Framework\Cache\Contract\FreshCacheWriteInterface;
 use Weline\Framework\Service\Query\FrontendQueryException;
 
 /**
@@ -88,7 +90,9 @@ final class LockedCacheFrontendWorkerStateStore implements FrontendWorkerStateSt
                 );
             }
 
-            $existing = $this->adapter->get(self::STATE_KEY);
+            $existing = $this->adapter instanceof FreshCacheReadInterface
+                ? $this->adapter->getFresh(self::STATE_KEY)
+                : $this->adapter->get(self::STATE_KEY);
             // A cooldown miss returns null — must not materialize an empty
             // credential snapshot and wipe the shared Worker session store.
             if ($this->adapter instanceof CacheAdapterHealthInterface && !$this->adapter->isAvailable()) {
@@ -109,7 +113,10 @@ final class LockedCacheFrontendWorkerStateStore implements FrontendWorkerStateSt
             $store = $existing ?? [];
             $result = $callback($store);
             $this->assertStatePayload($store);
-            if (!$this->adapter->set(self::STATE_KEY, $store, $this->ttlSeconds)) {
+            $persisted = $this->adapter instanceof FreshCacheWriteInterface
+                ? $this->adapter->setFresh(self::STATE_KEY, $store, $this->ttlSeconds)
+                : $this->adapter->set(self::STATE_KEY, $store, $this->ttlSeconds);
+            if (!$persisted) {
                 throw new FrontendQueryException(
                     'worker_store_unavailable',
                     'Shared worker session cache write failed.',

@@ -50,7 +50,7 @@ final class SessionStore
      * - expire: 过期时间戳（0 = 永不过期）
      * - atime: 最后访问时间（用于 LRU）
      */
-    /** @var array<array-key,array{data:array<array-key,mixed>,expire:int,atime:int}> */
+    /** @var array<array-key,array{data:array<array-key,mixed>,expire:int,atime:int,key_expires?:array<array-key,int>}> */
     private array $store = [];
 
     /**
@@ -464,10 +464,19 @@ final class SessionStore
             return $key === null ? [] : null;
         }
 
-        // Sliding expiration: active sessions should refresh TTL on reads.
+        if ($key === null && $this->isCacheNamespace($sessionId)) {
+            $this->normalizeCacheKeyExpiries($sessionId);
+            foreach (\array_keys($this->store[$sessionId]['data']) as $cacheKey) {
+                $this->cacheKeyExpired($sessionId, (string)$cacheKey, \time());
+            }
+        } elseif ($key !== null && $this->cacheKeyExpired($sessionId, $key, \time())) {
+            return null;
+        }
+
+        // Ordinary sessions slide on reads; cache keys retain their own TTL.
         $this->touch($sessionId);
 
-        $result = $key === null ? $entry['data'] : ($entry['data'][$key] ?? null);
+        $result = $key === null ? $this->store[$sessionId]['data'] : ($this->store[$sessionId]['data'][$key] ?? null);
 
         if ($shouldSample) {
             $this->recordOperationMetric('get', self::monotonicSeconds() - $startTime, 'hit');
@@ -502,6 +511,14 @@ final class SessionStore
         $expire = $ttl > 0 ? \time() + $ttl : 0;
         $now = \time();
 
+        if ($this->isCacheNamespace($sessionId)
+            && isset($this->store[$sessionId])
+            && $this->store[$sessionId]['expire'] > 0
+            && $this->store[$sessionId]['expire'] < $now
+        ) {
+            $this->destroy($sessionId);
+        }
+
         if (!isset($this->store[$sessionId])) {
             $this->evictIfNeeded();
             $this->store[$sessionId] = [
@@ -511,12 +528,21 @@ final class SessionStore
             ];
             $this->lruOrder[$sessionId] = true;
         } else {
-            $this->store[$sessionId]['expire'] = $expire;
+            if ($this->isCacheNamespace($sessionId)) {
+                $this->normalizeCacheKeyExpiries($sessionId);
+                $this->store[$sessionId]['expire'] = $this->longerExpiry(
+                    $this->store[$sessionId]['expire'],
+                    $expire
+                );
+            } else {
+                $this->store[$sessionId]['expire'] = $expire;
+            }
             $this->store[$sessionId]['atime'] = $now;
             $this->touchLru($sessionId);
         }
 
         $this->store[$sessionId]['data'][$key] = $value;
+        $this->setCacheKeyExpiry($sessionId, $key, $ttl);
         $this->markDirty();
         $this->evictIfNeeded(true);
 
@@ -545,6 +571,9 @@ final class SessionStore
             'expire' => $expire,
             'atime' => $now,
         ];
+        if ($this->isCacheNamespace($sessionId)) {
+            $this->store[$sessionId]['key_expires'] = \array_fill_keys(\array_keys($data), $expire);
+        }
         $this->lruOrder[$sessionId] = true;
         $this->touchLru($sessionId);
         $this->markDirty();
@@ -576,6 +605,9 @@ final class SessionStore
         }
 
         unset($this->store[$sessionId]['data'][$key]);
+        if ($this->isCacheNamespace($sessionId)) {
+            unset($this->store[$sessionId]['key_expires'][$key]);
+        }
         $this->markDirty();
 
         if ($shouldSample) {
@@ -630,6 +662,7 @@ final class SessionStore
     public function increment(string $sessionId, string $key, int $delta = 1, int $ttl = 0): ?int
     {
         $this->ensureSession($sessionId, $ttl);
+        $this->cacheKeyExpired($sessionId, $key, \time());
         
         $current = $this->store[$sessionId]['data'][$key] ?? 0;
         if (!\is_numeric($current)) {
@@ -638,6 +671,7 @@ final class SessionStore
         
         $newValue = (int)$current + $delta;
         $this->store[$sessionId]['data'][$key] = $newValue;
+        $this->setCacheKeyExpiry($sessionId, $key, $ttl > 0 ? $ttl : $this->defaultTtl);
         $this->store[$sessionId]['atime'] = \time();
         $this->touchLru($sessionId);
         $this->markDirty();
@@ -665,6 +699,7 @@ final class SessionStore
     public function append(string $sessionId, string $key, mixed $value, int $ttl = 0): bool
     {
         $this->ensureSession($sessionId, $ttl);
+        $this->cacheKeyExpired($sessionId, $key, \time());
         
         $current = $this->store[$sessionId]['data'][$key] ?? [];
         
@@ -677,6 +712,7 @@ final class SessionStore
         }
         
         $this->store[$sessionId]['data'][$key] = $current;
+        $this->setCacheKeyExpiry($sessionId, $key, $ttl > 0 ? $ttl : $this->defaultTtl);
         $this->store[$sessionId]['atime'] = \time();
         $this->touchLru($sessionId);
         $this->markDirty();
@@ -697,6 +733,7 @@ final class SessionStore
     public function compareAndSet(string $sessionId, string $key, mixed $expected, mixed $newValue, int $ttl = 0): bool
     {
         $this->ensureSession($sessionId, $ttl);
+        $this->cacheKeyExpired($sessionId, $key, \time());
         
         $current = $this->store[$sessionId]['data'][$key] ?? null;
         
@@ -705,6 +742,7 @@ final class SessionStore
         }
         
         $this->store[$sessionId]['data'][$key] = $newValue;
+        $this->setCacheKeyExpiry($sessionId, $key, $ttl > 0 ? $ttl : $this->defaultTtl);
         $this->store[$sessionId]['atime'] = \time();
         $this->touchLru($sessionId);
         $this->markDirty();
@@ -720,6 +758,14 @@ final class SessionStore
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
         $expire = $ttl > 0 ? \time() + $ttl : 0;
         $now = \time();
+
+        if ($this->isCacheNamespace($sessionId)
+            && isset($this->store[$sessionId])
+            && $this->store[$sessionId]['expire'] > 0
+            && $this->store[$sessionId]['expire'] < $now
+        ) {
+            $this->destroy($sessionId);
+        }
         
         if (!isset($this->store[$sessionId])) {
             $this->evictIfNeeded();
@@ -730,7 +776,89 @@ final class SessionStore
             ];
             $this->lruOrder[$sessionId] = true;
         } else {
-            $this->store[$sessionId]['expire'] = $expire;
+            if ($this->isCacheNamespace($sessionId)) {
+                $this->normalizeCacheKeyExpiries($sessionId);
+                $this->store[$sessionId]['expire'] = $this->longerExpiry(
+                    $this->store[$sessionId]['expire'],
+                    $expire
+                );
+            } else {
+                $this->store[$sessionId]['expire'] = $expire;
+            }
+        }
+    }
+
+    private function isCacheNamespace(string $sessionId): bool
+    {
+        return \str_starts_with($sessionId, '__kv__:');
+    }
+
+    private function longerExpiry(int $current, int $incoming): int
+    {
+        return $current === 0 || $incoming === 0 ? 0 : \max($current, $incoming);
+    }
+
+    /** Keep persisted pre-upgrade cache keys bounded by their original namespace expiry. */
+    private function normalizeCacheKeyExpiries(string $sessionId): void
+    {
+        if (!$this->isCacheNamespace($sessionId) || !isset($this->store[$sessionId])) {
+            return;
+        }
+        if (isset($this->store[$sessionId]['key_expires'])) {
+            return;
+        }
+        $expiresAt = (int)$this->store[$sessionId]['expire'];
+        $this->store[$sessionId]['key_expires'] = [];
+        foreach ($this->store[$sessionId]['data'] as $key => $_) {
+            $this->store[$sessionId]['key_expires'][$key] = $expiresAt;
+        }
+        $this->markDirty();
+    }
+
+    private function cacheKeyExpired(string $sessionId, string $key, int $now): bool
+    {
+        if (!$this->isCacheNamespace($sessionId) || !isset($this->store[$sessionId])) {
+            return false;
+        }
+        $this->normalizeCacheKeyExpiries($sessionId);
+        $expiresAt = (int)($this->store[$sessionId]['key_expires'][$key] ?? 0);
+        if ($expiresAt <= 0 || $expiresAt >= $now) {
+            return false;
+        }
+        unset($this->store[$sessionId]['data'][$key], $this->store[$sessionId]['key_expires'][$key]);
+        $this->markDirty();
+        return true;
+    }
+
+    private function setCacheKeyExpiry(string $sessionId, string $key, int $ttl): void
+    {
+        if (!$this->isCacheNamespace($sessionId)) {
+            return;
+        }
+        $this->normalizeCacheKeyExpiries($sessionId);
+        $expiresAt = $ttl > 0 ? \time() + $ttl : 0;
+        $this->store[$sessionId]['key_expires'][$key] = $expiresAt;
+        $this->store[$sessionId]['expire'] = $this->longerExpiry(
+            (int)$this->store[$sessionId]['expire'],
+            $expiresAt
+        );
+    }
+
+    private function pruneExpiredCacheKeys(string $sessionId, int $now): void
+    {
+        if (!$this->isCacheNamespace($sessionId) || !isset($this->store[$sessionId])) {
+            return;
+        }
+        $this->normalizeCacheKeyExpiries($sessionId);
+        $changed = false;
+        foreach ($this->store[$sessionId]['key_expires'] as $key => $expiresAt) {
+            if ($expiresAt > 0 && $expiresAt < $now) {
+                unset($this->store[$sessionId]['data'][$key], $this->store[$sessionId]['key_expires'][$key]);
+                $changed = true;
+            }
+        }
+        if ($changed) {
+            $this->markDirty();
         }
     }
 
@@ -767,7 +895,11 @@ final class SessionStore
             return false;
         }
 
-        return \array_key_exists($key, $entry['data']);
+        if ($this->cacheKeyExpired($sessionId, $key, \time())) {
+            return false;
+        }
+
+        return \array_key_exists($key, $this->store[$sessionId]['data']);
     }
 
     /**
@@ -796,7 +928,8 @@ final class SessionStore
         $this->touch($sessionId);
         foreach ($keys as $key) {
             $key = (string)$key;
-            $result[$key] = $entry['data'][$key] ?? null;
+            $this->cacheKeyExpired($sessionId, $key, \time());
+            $result[$key] = $this->store[$sessionId]['data'][$key] ?? null;
         }
 
         return $result;
@@ -813,6 +946,14 @@ final class SessionStore
         $expire = $ttl > 0 ? \time() + $ttl : 0;
         $now = \time();
 
+        if ($this->isCacheNamespace($sessionId)
+            && isset($this->store[$sessionId])
+            && $this->store[$sessionId]['expire'] > 0
+            && $this->store[$sessionId]['expire'] < $now
+        ) {
+            $this->destroy($sessionId);
+        }
+
         if (!isset($this->store[$sessionId])) {
             $this->evictIfNeeded();
             $this->store[$sessionId] = [
@@ -822,13 +963,22 @@ final class SessionStore
             ];
             $this->lruOrder[$sessionId] = true;
         } else {
-            $this->store[$sessionId]['expire'] = $expire;
+            if ($this->isCacheNamespace($sessionId)) {
+                $this->normalizeCacheKeyExpiries($sessionId);
+                $this->store[$sessionId]['expire'] = $this->longerExpiry(
+                    $this->store[$sessionId]['expire'],
+                    $expire
+                );
+            } else {
+                $this->store[$sessionId]['expire'] = $expire;
+            }
             $this->store[$sessionId]['atime'] = $now;
             $this->touchLru($sessionId);
         }
 
         foreach ($kv as $key => $value) {
             $this->store[$sessionId]['data'][(string)$key] = $value;
+            $this->setCacheKeyExpiry($sessionId, (string)$key, $ttl);
         }
 
         $this->markDirty();
@@ -863,6 +1013,9 @@ final class SessionStore
             $key = (string)$key;
             if (\array_key_exists($key, $this->store[$sessionId]['data'])) {
                 unset($this->store[$sessionId]['data'][$key]);
+                if ($this->isCacheNamespace($sessionId)) {
+                    unset($this->store[$sessionId]['key_expires'][$key]);
+                }
                 $changed = true;
             }
         }
@@ -887,7 +1040,11 @@ final class SessionStore
 
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
         $now = \time();
-        $this->store[$sessionId]['expire'] = $ttl > 0 ? $now + $ttl : 0;
+        if (!$this->isCacheNamespace($sessionId)) {
+            $this->store[$sessionId]['expire'] = $ttl > 0 ? $now + $ttl : 0;
+        } else {
+            $this->normalizeCacheKeyExpiries($sessionId);
+        }
         $this->store[$sessionId]['atime'] = $now;
         $this->touchLru($sessionId);
         $lastPersist = (int)($this->store[$sessionId]['touch_persist_at'] ?? 0);
@@ -896,6 +1053,22 @@ final class SessionStore
             $this->markDirty();
         }
 
+        return true;
+    }
+
+    public function touchKey(string $sessionId, string $key, int $ttl = 0): bool
+    {
+        if (!$this->existsKey($sessionId, $key)) {
+            return false;
+        }
+        if (!$this->isCacheNamespace($sessionId)) {
+            return $this->touch($sessionId, $ttl);
+        }
+
+        $this->setCacheKeyExpiry($sessionId, $key, $ttl > 0 ? $ttl : $this->defaultTtl);
+        $this->store[$sessionId]['atime'] = \time();
+        $this->touchLru($sessionId);
+        $this->markDirty();
         return true;
     }
 
@@ -912,7 +1085,11 @@ final class SessionStore
         $cleaned = 0;
 
         foreach ($this->store as $sessionId => $entry) {
-            if ($this->isEntryExpired($entry, $now, $maxLifetime)) {
+            $this->pruneExpiredCacheKeys((string)$sessionId, $now);
+            $entry = $this->store[$sessionId];
+            if ($this->isEntryExpired($entry, $now, $maxLifetime)
+                || ($this->isCacheNamespace((string)$sessionId) && $entry['data'] === [])
+            ) {
                 unset($this->store[$sessionId], $this->lruOrder[$sessionId]);
                 $cleaned++;
             }
@@ -951,8 +1128,11 @@ final class SessionStore
             if (!isset($this->store[$sessionId])) {
                 continue;
             }
+            $this->pruneExpiredCacheKeys($sessionId, $now);
             $entry = $this->store[$sessionId];
-            if (!$this->isEntryExpired($entry, $now, $maxLifetime)) {
+            if (!$this->isEntryExpired($entry, $now, $maxLifetime)
+                && !($this->isCacheNamespace($sessionId) && $entry['data'] === [])
+            ) {
                 continue;
             }
             unset($this->store[$sessionId], $this->lruOrder[$sessionId]);

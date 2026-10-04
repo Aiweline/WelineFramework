@@ -7,8 +7,6 @@ namespace Weline\Theme\Service\Storefront;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityAssetCollector;
 use Weline\Theme\Service\LayoutEntity\WidgetAssetArtifactPublisher;
-use Weline\Theme\Service\LayoutEntity\ThemeLayoutStorefrontHeadAssets;
-use Weline\Framework\Runtime\RequestContext;
 use Weline\Widget\Service\WidgetData;
 use Weline\Widget\Service\WidgetRegistry;
 
@@ -38,8 +36,7 @@ final class StorefrontWidgetRuntimeAssetPrimer
             return 0;
         }
 
-        $assets = $this->assetsFromPageManifest();
-        $assets = array_merge($assets, $this->assetsFromInlineSpecs($specs));
+        $assets = $this->assetsFromInlineSpecs($specs);
         if ($assets === []) {
             return 0;
         }
@@ -123,36 +120,6 @@ final class StorefrontWidgetRuntimeAssetPrimer
         $manifest = $collector->collectFromNodes($nodes, false);
 
         return $this->manifestToAssets($manifest);
-    }
-
-    /**
-     * 已记住的页级 / chrome 资源清单（若有）一并预热，覆盖固化页头资产热点。
-     *
-     * @return list<array{module_source:string,tag:string,type:string}>
-     */
-    private function assetsFromPageManifest(): array
-    {
-        $ptr = RequestContext::get(ThemeLayoutStorefrontHeadAssets::CTX_PTR);
-        if (!\is_array($ptr)) {
-            return [];
-        }
-        try {
-            // 只读 sidecar 清单；不触发 head HTML 渲染。
-            $configStore = ObjectManager::getInstance(
-                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore::class
-            );
-            $page = [];
-            if (($ptr['binding'] ?? null) instanceof \Weline\Theme\Service\LayoutEntity\EntityRenderBinding) {
-                $page = $configStore->readBoundAssets($ptr['binding']);
-            }
-            if (!\is_array($page) || $page === []) {
-                return [];
-            }
-
-            return $this->manifestToAssets($page);
-        } catch (\Throwable) {
-            return [];
-        }
     }
 
     /**

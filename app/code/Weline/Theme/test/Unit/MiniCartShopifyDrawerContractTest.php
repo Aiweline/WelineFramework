@@ -162,6 +162,61 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('data-widget-name', $source);
     }
 
+    /**
+     * 迷你购物车是 aria-modal 抽屉，打开时必须盖过店面常驻浮层（进店音乐 / 社交快捷条 / 筛选 FAB）。
+     * 抽屉位于 .weline-header{position:sticky;z-index:100} 的层叠上下文内，只改抽屉自身 z-index
+     * 无法越过 body 级浮层，所以必须由 :has(.header-cart.is-drawer-open) 抬高 header 的上下文。
+     */
+    public function testMiniCartDrawerLiftsHeaderStackingContextAboveStorefrontFloats(): void
+    {
+        $themeRoot = dirname(__DIR__, 2);
+        $css = (string)file_get_contents($themeRoot . '/view/statics/css/widgets/mini-cart-drawer.css');
+        self::assertMatchesRegularExpression(
+            '/\.weline-header:has\(\.header-cart\.is-drawer-open\)\s*\{[^}]*?z-index:\s*var\(--weline-z-mini-cart-modal,\s*(\d+)\)/s',
+            $css,
+            '抽屉打开时必须抬高 .weline-header 的层叠上下文，否则常驻浮层压住抽屉与遮罩',
+        );
+        self::assertSame(
+            1,
+            preg_match(
+                '/\.weline-header:has\(\.header-cart\.is-drawer-open\)\s*\{[^}]*?z-index:\s*var\(--weline-z-mini-cart-modal,\s*(\d+)\)/s',
+                $css,
+                $modalMatch,
+            ),
+        );
+        $modalZ = (int)$modalMatch[1];
+
+        // 店面常驻浮层里最高的一层：进店音乐头像。抽屉必须比它高。
+        $musicCss = (string)file_get_contents(
+            dirname($themeRoot, 1) . '/StoreMusic/view/statics/css/store-music.css',
+        );
+        self::assertSame(1, preg_match('/--w-store-music-z-widget:\s*(\d+)/', $musicCss, $musicMatch));
+        $musicZ = (int)$musicMatch[1];
+        self::assertGreaterThan(
+            $musicZ,
+            $modalZ,
+            '迷你购物车抽屉必须高于进店音乐浮层（否则音乐头像浮在抽屉上）',
+        );
+
+        // 仍须低于主题编辑器 / 预览工具浮层（2147483100+），不能把编辑器盖住。
+        self::assertLessThan(2147483100, $modalZ, '抽屉层不应越过主题编辑器/预览工具浮层');
+
+        // 抽屉与遮罩的相对顺序不能被打乱。
+        self::assertSame(
+            1,
+            preg_match('/\.header-cart \.mini-cart-drawer\s*\{[^}]*?z-index:\s*calc\(var\(--weline-z-overlay,\s*\d+\)\s*\+\s*(\d+)\)/s', $css, $drawerMatch),
+        );
+        self::assertSame(
+            1,
+            preg_match('/\.header-cart \.mini-cart-drawer__overlay\s*\{[^}]*?z-index:\s*calc\(var\(--weline-z-overlay,\s*\d+\)\s*\+\s*(\d+)\)/s', $css, $overlayMatch),
+        );
+        self::assertGreaterThan(
+            (int)$overlayMatch[1],
+            (int)$drawerMatch[1],
+            '抽屉必须高于自己的遮罩',
+        );
+    }
+
     public function testMiniCartIconUsesAmazonDrawerSurface(): void
     {
         $path = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml';

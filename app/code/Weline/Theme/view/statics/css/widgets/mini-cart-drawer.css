@@ -2,6 +2,19 @@
     z-index: calc(var(--weline-z-overlay, 1200) + 2);
 }
 
+/* —— 层叠顺序：迷你购物车是 aria-modal 抽屉，打开时必须盖过店面常驻浮层 ——
+ * 抽屉自身 z-index 只有 calc(--weline-z-overlay + 2)，且整棵抽屉位于
+ * .weline-header{position:sticky;z-index:100} 的层叠上下文内 —— 只改抽屉自身的
+ * z-index 永远越不过 body 级浮层（子级 z-index 被祖先上下文夹住）。
+ * 店面常驻浮层实测值：进店音乐 2147483001、社交快捷条/事件监视 2147483000、
+ * 筛选 FAB（--z-index-sticky）1020、页面遮罩 998。
+ * 抽屉打开时把 header 的层叠上下文抬到它们之上，仍低于主题编辑器/预览 2147483100+。
+ * 不抬 → 音乐头像与筛选按钮浮在抽屉与遮罩之上（2026-10-02 视觉验收）。
+ */
+.weline-header:has(.header-cart.is-drawer-open) {
+    z-index: var(--weline-z-mini-cart-modal, 2147483010);
+}
+
 .header-cart .mini-cart-drawer,
 .header-cart .mini-cart-drawer--amazon {
     --amz-drawer-text: #0f1111;
@@ -157,12 +170,35 @@
     border: none;
     border-radius: var(--weline-theme-radius-full);
     background: transparent;
-    color: inherit;
+    /* Header chrome paints action icons light-on-dark; drawer is cream — force drawer text. */
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
     cursor: pointer;
 }
 
+/* Beat `.weline-header .header-actions .w-icon { color: chrome-text-light }` (white × on cream). */
+.header-cart .mini-cart-drawer__close .w-icon,
+.header-cart .mini-cart-drawer__close svg.w-icon,
+.weline-header .header-actions .mini-cart-drawer__close .w-icon,
+.weline-header .header-user-area .mini-cart-drawer__close .w-icon,
+.weline-header .header-actions .mini-cart-drawer__close svg.w-icon,
+.weline-header .header-user-area .mini-cart-drawer__close svg.w-icon {
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+    stroke: currentColor;
+}
+
 .header-cart .mini-cart-drawer__close:hover {
-    background: var(--weline-theme-surface-muted, #f3f4f6);
+    background: var(--amz-drawer-surface-muted, var(--weline-theme-surface-muted, #f3f4f6));
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+}
+
+.header-cart .mini-cart-drawer__close:hover .w-icon,
+.header-cart .mini-cart-drawer__close:hover svg.w-icon,
+.weline-header .header-actions .mini-cart-drawer__close:hover .w-icon,
+.weline-header .header-user-area .mini-cart-drawer__close:hover .w-icon,
+.weline-header .header-actions .mini-cart-drawer__close:hover svg.w-icon,
+.weline-header .header-user-area .mini-cart-drawer__close:hover svg.w-icon {
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+    stroke: currentColor;
 }
 
 .header-cart .mini-cart-drawer__body {

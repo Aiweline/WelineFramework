@@ -773,6 +773,24 @@ HTML;
 
     private function isHtmlResponse(string $output): bool
     {
+        // Telemetry observers receive the wire body after compression. Binary
+        // bytes may coincidentally look like an HTML tag; appending a raw panel
+        // script then corrupts the encoded response.
+        if (\str_starts_with($output, "\x1f\x8b")) {
+            return false;
+        }
+        try {
+            $encoding = $this->request->getResponse()->getHeader('Content-Encoding');
+            $encoding = \strtolower(\trim(\is_array($encoding)
+                ? (string)($encoding[0] ?? '')
+                : (string)($encoding ?? '')
+            ));
+            if ($encoding !== '' && $encoding !== 'identity') {
+                return false;
+            }
+        } catch (\Throwable) {
+        }
+
         $trimmed = trim($output);
         if ($trimmed === '') {
             return false;

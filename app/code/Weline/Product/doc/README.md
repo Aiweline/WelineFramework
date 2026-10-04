@@ -326,6 +326,10 @@ FileManager；未实现该能力的第三方 manager 继续原单项路径。
 - 当前运行阻断：独立 WLS Worker 因 managed-child Master lease owner evidence 不可观察而退出，HTTP/TLS reset/timeout；因此后台 ACL/CSRF、五类真实前后台路径和 375/768/1024 Browser 仍未验收。
 - 完成状态以计划 M6 的 PostgreSQL、真实 HTTP/ACL/CSRF、独立 WLS Browser 和数据库断言为准；未全过不得标记 ACCEPTED。
 
+## 挂载站点目录入口
+
+目录入口识别复用 Framework `Url::peelWebsiteMountPathFromRelativePath`，先移除当前站点配置的挂载路径，再解析语言、币种和目录路由。Website code 不作为挂载路径；`/category` 和 `/categories` 使用分类布局，`/category/{slug}` 仍是实体入口，名称相似但不在段边界上的前缀不能被移除。
+
 ## EAV 标签的属性码索引
 
 `StorefrontEavLabelResolver` 优先使用 EAV 的可选 `AttributeMetadataCodeIndexInterface`，从已经获取的商品目录按 code 取只读属性引用；同一 resolver 的属性名和选项解析复用这些引用。未实现接口的提供者保留目录遍历兼容路径。商品 clone 与语言变化沿既有清理流程清空本地引用，私有项不写入公共范围；选项仍按参与的规格码惰性处理及 DTO 身份去重，不复制整库选项别名。

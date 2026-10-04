@@ -98,7 +98,14 @@ final class SitemapProtocolRenderer
             }
 
             $website = $this->websiteResolver->currentWebsite();
-            $baseUrl = $this->serveBaseUrl($website);
+            foreach ($this->websiteDirectory->listWebsites() as $candidate) {
+                if ((string)($candidate['code'] ?? '') === $websiteCode) {
+                    $website = $candidate;
+                    break;
+                }
+            }
+            $baseUrl = $this->websiteDirectory->requestPublicBaseUrlForWebsite($website)
+                ?: $this->serveBaseUrl($website);
             // File path already scopes the website code; align <loc> onto the live
             // request origin so another site's canonical tree remains inspectable
             // on the project entry Host (Host+sub_path entry still preferred).
@@ -134,7 +141,9 @@ final class SitemapProtocolRenderer
             throw new \RuntimeException((string)__('Canonical Sitemap 不可读或超过协议限制'));
         }
         $baseUrl = $this->serveBaseUrl($website);
-        $xml = $this->websiteDirectory->rewriteLoopbackOriginsInXml($xml, $baseUrl);
+        // This file already belongs to the resolved Website code. Serve its
+        // index on the same public mount used by robots and its shard route.
+        $xml = $this->websiteDirectory->rewriteAllOriginsInXml($xml, $baseUrl);
         $this->validateXmlAndOrigins($xml, $baseUrl);
         return $xml;
     }
@@ -150,6 +159,10 @@ final class SitemapProtocolRenderer
             throw new \RuntimeException((string)__('当前请求站点 ID 非法'));
         }
         $baseUrl = $this->serveBaseUrl($website);
+        // The protocol resolver may replace url with the live alias. Ownership
+        // must retain the persisted canonical URL and every registered alias.
+        $registeredWebsite = $this->websiteDirectory->getWebsiteById($websiteId, true) ?? $website;
+        $registeredOrigins = $this->websiteDirectory->listPublicOrigins($registeredWebsite);
         $rows = $this->sitemapUrl->reset()->getActiveUrls($websiteId);
         if (count($rows) > AtomicSitemapPublisher::STANDARD_MAX_URLS) {
             throw new \RuntimeException((string)__('数据库 fallback URL 数超过单文件限制'));
@@ -172,7 +185,7 @@ final class SitemapProtocolRenderer
             if (!preg_match('#^https?://#i', $loc)) {
                 $loc = $baseUrl . '/' . ltrim($loc, '/');
             }
-            $loc = $this->websiteDirectory->rewriteToPublicOriginUrl($loc, $baseUrl);
+            $loc = $this->websiteDirectory->rewriteWebsiteOriginUrl($loc, $baseUrl, $registeredOrigins);
             $this->assertSameOrigin($loc, $baseUrl);
             if (strlen($loc) >= 2048 || isset($seen[$loc])) {
                 throw new \RuntimeException((string)__('数据库 fallback 包含重复或超长 URL'));
@@ -234,6 +247,12 @@ final class SitemapProtocolRenderer
      */
     private function serveBaseUrl(array $website): string
     {
+        // XML protocol requests must resolve their WebsiteDomain mount from
+        // the original request, including anonymous crawlers without cookies.
+        $mounted = $this->websiteDirectory->requestPublicBaseUrlForWebsite($website);
+        if ($mounted !== '') {
+            return $mounted;
+        }
         $configured = rtrim($this->websiteDirectory->effectivePublicBaseUrl($website), '/');
         $request = rtrim($this->websiteDirectory->currentBaseUrl(), '/');
         if ($request === '') {

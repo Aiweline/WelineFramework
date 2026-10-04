@@ -21,6 +21,45 @@ final class WlsPerformanceTraceStoreTest extends TestCase
         $this->removeDirectory($this->baseDir);
     }
 
+    public function testRpcAndSocketDiagnosticsSurviveWithoutAuthenticationData(): void
+    {
+        $store = new WlsPerformanceTraceStore();
+        $telemetry = $this->telemetry('rpc-safe-12345678');
+        $telemetry['trace']['spans'] = [
+            ['name' => 'wls.rpc.request', 'category' => 'rpc', 'duration_ms' => 120.0,
+                'meta' => ['command' => 'cache_cas', 'encoded_bytes' => 294429,
+                    'send_succeeded' => true, 'response_received' => false, 'read_ms' => 118.0,
+                    'token' => 'private-token', 'password' => 'private-password']],
+            ['name' => 'runtime.io.await_socket', 'category' => 'runtime', 'duration_ms' => 118.0,
+                'meta' => ['direction' => 'read', 'result' => 'not_ready', 'suspend_ms' => 117.0,
+                    'io_registered_monotonic_us' => 12345, 'io_resolution' => 'timeout',
+                    'cookie' => 'private-cookie']],
+        ];
+        $normalize = new \ReflectionMethod($store, 'normalizeSpans');
+        $sanitize = new \ReflectionMethod($store, 'sanitizeTraceSpans');
+        $spans = $sanitize->invoke($store, $normalize->invoke($store, $telemetry['trace']['spans']));
+        self::assertCount(2, $spans);
+        self::assertSame('cache_cas', $spans[0]['meta']['command'] ?? null);
+        self::assertSame(294429, $spans[0]['meta']['encoded_bytes'] ?? null);
+        self::assertTrue($spans[0]['meta']['send_succeeded'] ?? false);
+        self::assertFalse($spans[0]['meta']['response_received'] ?? true);
+        self::assertEquals(118.0, $spans[0]['meta']['read_ms'] ?? null);
+        self::assertSame('timeout', $spans[1]['meta']['io_resolution'] ?? null);
+        self::assertSame(12345, $spans[1]['meta']['io_registered_monotonic_us'] ?? null);
+        self::assertArrayNotHasKey('token', $spans[0]['meta']);
+        self::assertArrayNotHasKey('password', $spans[0]['meta']);
+        self::assertArrayNotHasKey('cookie', $spans[1]['meta']);
+    }
+
+    public function testExplicitTraceSnapshotIsKeptWhenBackgroundSamplingIsOff(): void
+    {
+        $store = new WlsPerformanceTraceStore(['sample_rate' => 0, 'error_sample_rate' => 0]);
+        $capture = new \ReflectionMethod($store, 'shouldCapture');
+        self::assertFalse($capture->invoke($store, 'trace-12345678', ['status' => 503], [], []));
+        self::assertTrue($capture->invoke($store, 'trace-12345678', ['status' => 503], [],
+            ['trace_summary' => ['span_count' => 1]]));
+    }
+
     public function testRecordsAndFetchesRecentRequestFromFileStore(): void
     {
         $store = $this->store(['max_recent' => 5]);
@@ -181,6 +220,9 @@ final class WlsPerformanceTraceStoreTest extends TestCase
     {
         return new WlsPerformanceTraceStore($config + [
             'force_file' => true,
+            'sample_rate' => 1.0,
+            'slow_sample_rate' => 1.0,
+            'error_sample_rate' => 1.0,
             'base_dir' => $this->baseDir,
         ]);
     }

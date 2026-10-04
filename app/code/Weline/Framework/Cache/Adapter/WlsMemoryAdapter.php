@@ -6,13 +6,15 @@ namespace Weline\Framework\Cache\Adapter;
 
 use Weline\Framework\Cache\Contract\CacheAdapterHealthInterface;
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
+use Weline\Framework\Cache\Contract\FreshCacheReadInterface;
+use Weline\Framework\Cache\Contract\FreshCacheWriteInterface;
 use Weline\Framework\Cache\Contract\MemoryPressureAwareInterface;
 use Weline\Framework\Cache\Contract\MemoryStoreInterface;
 use Weline\Framework\Cache\Contract\StatsInterface;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Server\Service\MemoryStateFacade;
 
-class WlsMemoryAdapter implements CacheAdapterInterface, CacheAdapterHealthInterface, MemoryStoreInterface, MemoryPressureAwareInterface, StatsInterface
+class WlsMemoryAdapter implements CacheAdapterInterface, FreshCacheReadInterface, FreshCacheWriteInterface, CacheAdapterHealthInterface, MemoryStoreInterface, MemoryPressureAwareInterface, StatsInterface
 {
     /**
      * @var array<string, array{hits:int, misses:int}>
@@ -95,6 +97,14 @@ class WlsMemoryAdapter implements CacheAdapterInterface, CacheAdapterHealthInter
             return null;
         }
 
+        return $this->getFresh($key);
+    }
+
+    public function getFresh(string $key): mixed
+    {
+        // Transactional snapshots must observe other workers' latest writes.
+        unset($this->localCache[$key]);
+        $this->relieveLocalMemoryPressure(false);
         // 本地缓存未命中，查共享内存；服务不可用时快速降级为 miss，避免 WLS 请求反复等待超时。
         if ($this->isRemoteUnavailable()) {
             $this->recordMiss();
@@ -131,6 +141,15 @@ class WlsMemoryAdapter implements CacheAdapterInterface, CacheAdapterHealthInter
             unset($this->localCache[$key]);
             return true;
         }
+
+        return $this->setFresh($key, $value, $ttl);
+    }
+
+    public function setFresh(string $key, mixed $value, int $ttl = 0): bool
+    {
+        // Credential transactions must persist even when local memoization is disabled.
+        $this->syncLocalEpoch();
+        $this->relieveLocalMemoryPressure(true);
 
         if ($this->isRemoteUnavailable()) {
             return false;

@@ -119,13 +119,16 @@ const cliSpecArgs = (() => {
   });
   return result;
 })();
+// The normal PHP runner starts Playwright in tests/e2e but accepts repository-relative targets.
+function resolveExplicitSpec(specArg) {
+  const fromCwd = path.resolve(process.cwd(), specArg);
+  return fs.existsSync(fromCwd) ? fromCwd : path.resolve(rootDir, specArg);
+}
 // 主进程与 worker 进程的 argv 可能不同；显式 spec 通过环境变量固化，避免 “Test not found in worker process”
 if (cliSpecArgs.length > 0 && !process.env.PLAYWRIGHT_TEST_FILES) {
   const normalized = [];
   cliSpecArgs.forEach((specArg) => {
-    const absolute = path.isAbsolute(specArg)
-      ? specArg
-      : path.resolve(process.cwd(), specArg);
+    const absolute = resolveExplicitSpec(specArg);
     if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) {
       return;
     }
@@ -139,9 +142,7 @@ const explicitTestFiles = (() => {
   if (cliSpecArgs.length > 0) {
     const normalized = [];
     cliSpecArgs.forEach((specArg) => {
-      const absolute = path.isAbsolute(specArg)
-        ? specArg
-        : path.resolve(process.cwd(), specArg);
+      const absolute = resolveExplicitSpec(specArg);
       if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) {
         return;
       }
@@ -232,11 +233,14 @@ function normalizeFilePattern(file) {
 
 if (explicitTestFiles && explicitTestFiles.size > 0) {
   const filesToUse = Array.from(explicitTestFiles);
-  testMatch = filesToUse.map(normalizeFilePattern);
-  if (testMatch.every(file => file.startsWith('**/tests/e2e/'))) {
-    testDir = path.join(rootDir, 'tests', 'e2e');
-    testMatch = testMatch.map(file => file.replace(/^\*\*\/tests\/e2e\//, ''));
-  }
+  const absoluteFiles = filesToUse.map(file => path.resolve(rootDir, file));
+  testDir = path.dirname(absoluteFiles[0]);
+  while (!absoluteFiles.every(file => {
+    const relative = path.relative(testDir, file);
+    return !path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`);
+  })) testDir = path.dirname(testDir);
+  // Playwright applies testMatch to absolute filenames; anchor each exact explicit target.
+  testMatch = absoluteFiles.map(file => new RegExp(`^${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
   console.log(`[playwright] explicit file mode using ${filesToUse.length} files`);
 } else {
 try {

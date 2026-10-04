@@ -13,7 +13,6 @@ use Weline\Theme\Service\ThemeComponentRenderer;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeLayoutScopeNormalizer;
 use Weline\Theme\Service\ThemePlaceableRegistry;
-use Weline\Theme\Taglib\Slot;
 
 /**
  * Renders generated PHTML widget calls with their frozen configuration.
@@ -93,26 +92,13 @@ final class ThemeLayoutEntityWidgetRenderer
         return 'theme.layout_entity.node.' . hash('sha256', json_encode([$uid, $source, $themeId, $scope, $version, $locale], JSON_THROW_ON_ERROR));
     }
 
+    /** @deprecated Sidecar calls are retired; regenerated PHTML uses renderResolved. */
     public function renderBound(string $nodeUid, string $source, EntityRenderBinding $binding): string
     {
-        $source = $source === 'chrome' ? 'chrome' : 'page';
-        // Page shell includeExecutable injects page binding into chrome.phtml; remap to chrome sidecar.
-        $effective = $this->configStore->bindingForConfigSource($source, $binding) ?? $binding;
-
-        return $this->render(
-            $nodeUid,
-            $source,
-            $effective->identity->themeId,
-            $effective->identity->scopeKey(),
-            $effective->cacheKey(),
-            $effective,
-        );
+        return '';
     }
 
-    /**
-     * @param string $configSource page|chrome
-     * @param string $versionKey chrome: theme_version_id; page: identity_key/structure_or_release
-     */
+    /** @deprecated Sidecar calls are retired; regenerated PHTML uses renderResolved. */
     public function render(
         string $nodeUid,
         string $configSource,
@@ -121,98 +107,7 @@ final class ThemeLayoutEntityWidgetRenderer
         string $versionKey,
         ?EntityRenderBinding $binding = null,
     ): string {
-        $nodeUid = \strtolower(\trim($nodeUid));
-        $configSource = $configSource === 'chrome' ? 'chrome' : 'page';
-        if ($nodeUid === '' || $themeId < 1 || $scopeKey === '' || $versionKey === '') {
-            return '<!-- theme-layout-entity:invalid-widget-call -->';
-        }
-
-        // Belt-and-suspenders with ThemeComponentRenderer: entity bake + required overlay
-        // may render the same container twice in one request (product-info nested slots).
-        Slot::clearRegisteredSlots();
-
-        $effectiveBinding = $this->configStore->bindingForConfigSource($configSource, $binding);
-        if ($effectiveBinding !== null) {
-            $themeId = $effectiveBinding->identity->themeId;
-            $scopeKey = $effectiveBinding->identity->scopeKey();
-            $versionKey = $effectiveBinding->cacheKey();
-        }
-
-        $requestKey = self::requestNodeKey($nodeUid, $configSource, $themeId, $scopeKey, $versionKey, \Weline\Theme\Helper\WidgetI18n::storefrontLocale());
-        $primed = RequestContext::get($requestKey);
-        $entry = \is_array($primed) && $primed !== []
-            ? $primed
-            : ($effectiveBinding !== null
-                ? ($this->configStore->readBoundConfig($effectiveBinding)[$nodeUid] ?? [])
-                : $this->configStore->readNodeConfig(
-                $configSource,
-                $nodeUid,
-                $themeId,
-                $scopeKey,
-                $versionKey,
-            ));
-        if ($entry === []) {
-            return '<!-- theme-layout-entity:missing-config:' . \htmlspecialchars($nodeUid, \ENT_QUOTES) . ' -->';
-        }
-
-        // Primed page-config may be param-only (legacy bake). Hydrate identity from structure.
-        if ($configSource === 'page' && $this->configStore->needsStructureHydration($entry)) {
-            $entry = $this->configStore->hydratePageNodeFromStructure(
-                $entry,
-                $nodeUid,
-                $effectiveBinding?->structurePath ?? '',
-            );
-            RequestContext::set($requestKey, $entry);
-        }
-
-        if (\array_key_exists('is_active', $entry) && empty($entry['is_active'])) {
-            return '';
-        }
-
-        $entry = $this->maybeApplyLocaleOverlay($entry);
-
-        $module = (string)($entry['widget_module'] ?? '');
-        $code = (string)($entry['widget_code'] ?? '');
-        $type = (string)($entry['widget_type'] ?? '');
-        $config = \is_array($entry['config'] ?? null) ? $entry['config'] : $entry;
-        if (isset($config['config']) && \is_array($config['config'])) {
-            $config = $config['config'];
-        }
-
-        foreach (['layout_source', 'source', 'source_position'] as $assetKey) {
-            if (isset($entry[$assetKey]) && $entry[$assetKey] !== '') { $config['_' . $assetKey] = $entry[$assetKey]; }
-        }
-
-        if ($module === '' || $code === '') {
-            return '<!-- theme-layout-entity:incomplete-widget:' . \htmlspecialchars($nodeUid, \ENT_QUOTES) . ' -->';
-        }
-
-        try {
-            $theme = null;
-            if ($themeId > 0) {
-                $theme = $this->themeForRequest($themeId);
-            }
-
-            $definition = $this->placeableRegistry->find($module, $type, $code, $theme, 'frontend');
-            if ($definition === null) {
-                return '<!-- theme-layout-entity:unknown-widget:' . \htmlspecialchars($module . '::' . $code, \ENT_QUOTES) . ' -->';
-            }
-
-            // Entity hard-cut must hydrate file-image (and companions like
-            // image_file_html) the same way SlotRendererService does — otherwise
-            // hero/promo keep typed JSON but render gradient-only slides.
-            $config = $this->hydrateTypedLayoutValues($config, $scopeKey);
-            $config['_widget_instance_key'] = $nodeUid;
-            $html = (string)$this->componentRenderer->render($definition, $config, $theme, [
-                'area' => 'frontend',
-            ]);
-
-            return $html;
-        } catch (\Throwable $e) {
-            return '<!-- theme-layout-entity:render-error:'
-                . \htmlspecialchars($nodeUid . ':' . $e->getMessage(), \ENT_QUOTES)
-                . ' -->';
-        }
+        return '';
     }
 
     /**
@@ -274,18 +169,4 @@ final class ThemeLayoutEntityWidgetRenderer
         return clone $loaded;
     }
 
-    /**
-     * @param array<string, mixed> $entry
-     * @return array<string, mixed>
-     */
-    private function maybeApplyLocaleOverlay(array $entry): array
-    {
-        // Legacy render() compatibility leaves its supplied configuration intact.
-        // Generated PHTML uses renderResolved() with explicit locale configurations.
-        if (isset($entry['config']) && \is_array($entry['config'])) {
-            return $entry;
-        }
-
-        return $entry;
-    }
 }

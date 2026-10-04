@@ -51,6 +51,46 @@ class SessionStoreTest extends TestCase
         $this->assertEquals('test_user', $this->store->get($sessionId, 'username'));
     }
 
+    public function testCacheNamespaceKeepsLongerLivedStaleKeyAfterFreshKeyExpires(): void
+    {
+        $namespace = '__kv__:cache:router';
+        self::assertTrue($this->store->set($namespace, 'page:stale', 'old-page', 5));
+        self::assertTrue($this->store->set($namespace, 'page:fresh', 'new-page', 1));
+
+        \sleep(2);
+
+        self::assertSame('old-page', $this->store->get($namespace, 'page:stale'));
+        self::assertNull($this->store->get($namespace, 'page:fresh'));
+    }
+
+    public function testCacheTouchExtendsOnlyTheSelectedKey(): void
+    {
+        self::assertTrue(\method_exists($this->store, 'touchKey'));
+        $namespace = '__kv__:cache:touch';
+        $this->store->set($namespace, 'selected', 'a', 1);
+        $this->store->set($namespace, 'other', 'b', 1);
+        self::assertTrue($this->store->touchKey($namespace, 'selected', 5));
+
+        \sleep(2);
+
+        self::assertSame('a', $this->store->get($namespace, 'selected'));
+        self::assertNull($this->store->get($namespace, 'other'));
+    }
+
+    public function testCacheGcReclaimsExpiredKeysWithoutRemovingLiveNeighbors(): void
+    {
+        $namespace = '__kv__:cache:gc';
+        $this->store->set($namespace, 'short', 'expired-payload', 1);
+        $this->store->set($namespace, 'long', 'live-payload', 5);
+
+        \sleep(2);
+        $this->store->gc();
+
+        $entries = (new \ReflectionProperty($this->store, 'store'))->getValue($this->store);
+        self::assertArrayNotHasKey('short', $entries[$namespace]['data']);
+        self::assertSame('live-payload', $entries[$namespace]['data']['long']);
+    }
+
     /**
      * 测试获取不存在的 Session
      */

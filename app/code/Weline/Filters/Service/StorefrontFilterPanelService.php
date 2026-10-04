@@ -39,6 +39,7 @@ final class StorefrontFilterPanelService
         private readonly StorefrontFacetTranslator $facetTranslator,
         private readonly Url $url,
         private readonly StorefrontScopeHotCache $hotCache,
+        private readonly \Weline\Theme\Service\PreviewRequestInspector $previewRequest,
     ) {
     }
 
@@ -170,18 +171,21 @@ final class StorefrontFilterPanelService
         $query = $this->normalizePanelQuery($query);
         $logicalKey = $this->buildPanelLogicalKey($offers, $listingUrl, $query, $websiteId, $rootCurrent);
 
-        $panel = $this->hotCache->rememberPolicy(
-            StorefrontCatalogCacheCoordinator::filterPanelPolicy(),
+        $builder = fn(): array => $this->hotCache->rememberForRequest(
+            'storefront.filters.panel',
             $logicalKey,
-            fn(): array => $this->hotCache->rememberForRequest(
+            fn(): array => \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
                 'storefront.filters.panel',
-                $logicalKey,
-                fn(): array => \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
-                    'storefront.filters.panel',
-                    fn(): array => $this->buildPanelData($offers, $listingUrl, $query, $websiteId, $rootCurrent),
-                    ['website_id' => $websiteId, 'offers' => count($offers)],
-                ),
+                fn(): array => $this->buildPanelData($offers, $listingUrl, $query, $websiteId, $rootCurrent),
+                ['website_id' => $websiteId, 'offers' => count($offers)],
             ),
+        );
+        // URL generation carries the current editor identity. Keep that result
+        // in this request rather than publishing it as a public facet snapshot.
+        $preview = isset($this->previewRequest)
+            && ($this->previewRequest->isEditorMode() || $this->previewRequest->shouldUseStoredPreviewContext());
+        $panel = $preview ? $builder() : $this->hotCache->rememberPolicy(
+            StorefrontCatalogCacheCoordinator::filterPanelPolicy(), $logicalKey, $builder,
         );
 
         if (!is_array($panel)) {

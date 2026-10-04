@@ -369,6 +369,13 @@
             globalVar: "WelineNewsletterSubscribe",
             load: "defer",
             description: "邮件订阅表单（BinQuery / 弹窗 cookie）"
+        },
+        daocharmsTown: {
+            origin_paths: ["app/code/Weline/Daocharms3d/view/statics/js/bootstrap.js"],
+            paths: ["Weline_Daocharms3d::js/bootstrap.js"],
+            globalVar: "WelineDaocharmsTown",
+            load: "eager",
+            description: "真实商品三维镇内选购"
         }
     });
 

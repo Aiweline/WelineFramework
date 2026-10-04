@@ -295,7 +295,7 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheBatchS
         $wlsMode = \defined('WLS_MODE') && WLS_MODE;
         $defaults = \Weline\Server\Shared\Connection\SharedStatePoolDefaults::memoryClientOptions($wlsMode);
 
-        return [
+        $options = [
             'connect_timeout' => (float) ($config['connect_timeout'] ?? $defaults['connect_timeout']),
             'timeout' => (float) ($config['timeout'] ?? $defaults['timeout']),
             'pool_size' => (int) ($config['pool_size'] ?? $defaults['pool_size']),
@@ -321,6 +321,11 @@ class MemoryStateFacade implements MemoryStateFacadeInterface, SharedCacheBatchS
             // Master/CLI 门面默认静默逐条 CONN-*，避免与 Memory 侧车/token 就绪竞态时刷屏；排障可设 log_pool_lifecycle=true
             'log_pool_lifecycle' => (bool) ($config['log_pool_lifecycle'] ?? false),
         ];
+        if (\array_key_exists('atomic_write_timeout', $config)) {
+            $options['atomic_write_timeout'] = (float)$config['atomic_write_timeout'];
+        }
+
+        return $options;
     }
 
     /**

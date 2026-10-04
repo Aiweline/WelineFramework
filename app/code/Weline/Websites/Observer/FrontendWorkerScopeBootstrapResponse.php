@@ -30,8 +30,7 @@ final class FrontendWorkerScopeBootstrapResponse implements ObserverInterface
         $eventName = $event->getName();
         $persistent = Runtime::isPersistent();
 
-        if (($eventName === self::EVENT_RUN_AFTER && !$persistent)
-            || ($eventName === self::EVENT_RESPONSE_READY && $persistent)) {
+        if ($eventName === self::EVENT_RUN_AFTER && !$persistent) {
             return;
         }
 
@@ -60,9 +59,19 @@ final class FrontendWorkerScopeBootstrapResponse implements ObserverInterface
         try {
             return $this->responseService->decorate($result);
         } catch (FrontendWorkerScopeException $exception) {
+            $cause = $exception->getPrevious();
+            $nestedCause = $cause?->getPrevious();
             \w_log_error(
                 '[FrontendWorkerScopeBootstrap] controlled response failure: {reason}',
-                ['reason' => $exception->reason],
+                [
+                    'reason' => $exception->reason,
+                    'cause_type' => $cause !== null ? $cause::class : null,
+                    'cause_code' => $cause instanceof \Weline\Framework\Service\Query\FrontendQueryException
+                        ? $cause->getErrorCode() : null,
+                    'cause_file' => $cause !== null ? $cause->getFile() : null,
+                    'cause_line' => $cause?->getLine(),
+                    'nested_cause_type' => $nestedCause !== null ? $nestedCause::class : null,
+                ],
                 'worker_scope',
             );
 

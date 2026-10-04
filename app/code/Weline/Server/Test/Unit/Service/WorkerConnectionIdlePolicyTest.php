@@ -73,6 +73,22 @@ final class WorkerConnectionIdlePolicyTest extends TestCase
         );
     }
 
+    public function testGracefulDrainKeepsAdmittedWorkUntilTheOuterHardDeadline(): void
+    {
+        self::assertSame(
+            WorkerConnectionIdlePolicy::ACTION_KEEP,
+            WorkerConnectionIdlePolicy::decide(22.0, 45.0, 20.0, true, true, 22.0, gracefulDrain: true),
+        );
+        self::assertSame(
+            WorkerConnectionIdlePolicy::ACTION_KEEP,
+            WorkerConnectionIdlePolicy::decide(46.0, 45.0, 20.0, false, true, 46.0, gracefulDrain: true),
+        );
+        self::assertSame(
+            WorkerConnectionIdlePolicy::ACTION_CLOSE_IDLE,
+            WorkerConnectionIdlePolicy::decide(46.0, 45.0, 20.0, false, false, 46.0, gracefulDrain: true),
+        );
+    }
+
     public function testKeepAlivePlanPrefersPlatformIdleOption(): void
     {
         $plan = ClientTcpKeepAliveTuner::plan();

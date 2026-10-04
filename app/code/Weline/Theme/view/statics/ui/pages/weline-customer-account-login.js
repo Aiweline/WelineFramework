@@ -137,6 +137,8 @@ export function register(UI) {
         };
 
         const submit = async (event) => {
+            // 统一表单等待验证码时会取消提交；验证完成后会重新触发提交。
+            if (event.defaultPrevented) return;
             // Always take over submit when this component is mounted: classic POST races
             // lazy captcha and can double-prefix locale on failure redirects.
             event.preventDefault();

@@ -104,6 +104,11 @@ final class ProductSearchProvider extends AbstractSearchProvider implements Sear
                 continue;
             }
             $rows[$index]['title'] = $this->resolveDisplayTitle($row, $request->locale);
+            // The empty locale is an internal default-title bucket, not a public
+            // locale key. Resolve its fallback first, then emit the wire-safe map.
+            if (\is_array($rows[$index]['localized_titles'] ?? null)) {
+                unset($rows[$index]['localized_titles']['']);
+            }
         }
 
         // Deduplicate SPUs before pagination so hit_count matches storefront cards.

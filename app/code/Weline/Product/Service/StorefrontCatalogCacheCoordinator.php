@@ -121,7 +121,7 @@ final class StorefrontCatalogCacheCoordinator
     public static function filterPanelPolicy(): CachePolicy
     {
         return new CachePolicy(
-            resource: 'product.filter_panel.v2',
+            resource: 'product.filter_panel.v3',
             pool: 'product',
             scope: 'channel',
             vary: ['lang', 'currency'],

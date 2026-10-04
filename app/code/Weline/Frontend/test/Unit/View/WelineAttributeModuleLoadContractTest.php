@@ -51,6 +51,8 @@ final class WelineAttributeModuleLoadContractTest extends TestCase
     {
         $js = (string) \file_get_contents(
             \dirname(__DIR__, 3) . '/view/statics/js/weline.js'
+        ) . (string) \file_get_contents(
+            \dirname(__DIR__, 4) . '/Framework/view/statics/js/dom-observer.js'
         );
 
         self::assertStringContainsString('function observeMutationsCoalesced', $js);

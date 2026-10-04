@@ -577,19 +577,19 @@ class Doctor extends CommandAbstract
         }
 
         // FullPageCacheCoordinator::resolvePublishedResponseWaitTimeoutMs() 会把该值
-        // 夹紧到 250ms，配置超过上限时属于静默失效，必须显式提示。
+        // 夹紧到 60s，配置超过上限时属于静默失效，必须显式提示。
         $fpcWaitMs = (int)($performance['fpc_build_wait_timeout_ms'] ?? 0);
         $checks['fpc_build_wait'] = [
             'timeout_ms' => $fpcWaitMs,
-            'effective_timeout_ms' => \min(\max(0, $fpcWaitMs), 250),
+            'effective_timeout_ms' => \min(\max(0, $fpcWaitMs), 60000),
             'ok' => $fpcWaitMs > 0,
         ];
         if ($fpcWaitMs <= 0) {
             $warnings[] = 'wls.performance.fpc_build_wait_timeout_ms 未配置或为 0，'
                 . 'FPC single-flight 等待被关闭，未命中请求会重复整页渲染。';
-        } elseif ($fpcWaitMs > 250) {
+        } elseif ($fpcWaitMs > 60000) {
             $warnings[] = 'wls.performance.fpc_build_wait_timeout_ms=' . $fpcWaitMs
-                . ' 超过代码内 250ms 上限，实际生效值被夹紧为 250ms。';
+                . ' 超过代码内 60s 上限，实际生效值被夹紧为 60s。';
         }
 
         return ['checks' => $checks, 'warnings' => $warnings];

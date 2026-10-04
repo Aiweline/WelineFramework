@@ -20,6 +20,16 @@ final class ThemeLayoutEntityMaterializer
         private readonly ThemeLayoutEntityConfigStore $configStore,
     ) {}
 
+    /** Discover source-owned containers before version-specific theme/locale configuration is frozen. */
+    public function discoverPageNativeOwners(ThemeVersionIdentity $identity, string $layoutType, string $layoutOption, array $nodes): array
+    {
+        foreach ($nodes as $node) {
+            if (is_array($node) && ($node['widget_code'] ?? '') === '__no_widget_placements__') { return $nodes; }
+        }
+        $origin = (new ThemeLayoutEntityDocumentShellBaker())->resolveLayoutAbsolutePath($layoutType, $identity->area, $layoutOption, $identity->themeId);
+        return (new LayoutRelationCompiler(null, $this->loadTheme($identity)))->discoverNativeOwners($this->readSource($origin), $nodes);
+    }
+
     /** @return array<string,string> Absolute PHTML path => complete source bytes, with no writes. */
     public function candidatePage(
         ThemeVersionIdentity $identity,

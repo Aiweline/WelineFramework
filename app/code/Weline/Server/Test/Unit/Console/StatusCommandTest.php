@@ -389,7 +389,7 @@ final class StatusCommandTest extends TestCase
         };
 
         $info = new ServerInstanceInfo(
-            name: 'default',
+            name: 'status-wildcard-unit',
             masterPid: 0,
             controlPort: 19999,
             host: '0.0.0.0',
@@ -435,6 +435,41 @@ final class StatusCommandTest extends TestCase
                 ...$endpoint['gateway'],
                 'runtime_project_proof' => [],
             ],
+        ]));
+    }
+
+    public function testResolvedAutoLegacyNginxDoesNotRequireGatewayProof(): void
+    {
+        $method = new \ReflectionMethod(Status::class, 'requiresGatewayServingProof');
+        $raw = [
+            'edge_adapter' => 'nginx',
+            'gateway' => [
+                'requested_mode' => 'auto',
+                'mode' => 'legacy',
+                'serving_mode' => 'legacy',
+            ],
+        ];
+        self::assertFalse($method->invoke(new Status(), $raw));
+        unset($raw['gateway']['serving_mode']);
+        self::assertFalse($method->invoke(new Status(), $raw));
+    }
+
+    public function testGatewayAndUnresolvedAutoStillRequireServingProof(): void
+    {
+        $method = new \ReflectionMethod(Status::class, 'requiresGatewayServingProof');
+        $status = new Status();
+        foreach ([
+            ['requested_mode' => 'auto'],
+            ['requested_mode' => 'auto', 'mode' => 'gateway', 'serving_mode' => 'gateway'],
+            ['requested_mode' => 'gateway', 'mode' => 'legacy', 'serving_mode' => 'legacy'],
+            ['requested_mode' => 'auto', 'mode' => 'legacy', 'serving_mode' => 'fallback_wls'],
+            ['requested_mode' => 'auto', 'mode' => 'legacy', 'serving_mode' => 'gateway'],
+        ] as $gateway) {
+            self::assertTrue($method->invoke($status, ['edge_adapter' => 'nginx', 'gateway' => $gateway]));
+        }
+        self::assertTrue($method->invoke($status, [
+            'edge_adapter' => 'wls',
+            'gateway' => ['requested_mode' => 'auto', 'mode' => 'legacy', 'serving_mode' => 'legacy'],
         ]));
     }
 

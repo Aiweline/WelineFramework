@@ -1919,7 +1919,8 @@
         } catch (err) {
             assetVersion = '';
         }
-        var cssStamp = '20260915-minicart-remove-keep-open';
+        // 换戳必须同步改：旧 &v= 的抽屉样式会被浏览器缓存，层叠修复不会生效。
+        var cssStamp = '20261003-minicart-header-stacking-lift';
         var href = '/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css?v=' + cssStamp;
         if (assetVersion) {
             href += '&_weline_dev=' + encodeURIComponent(assetVersion);

@@ -125,6 +125,9 @@ $modulesConfigUrl = DEV
 if ($modulesJsMtime) {
     $modulesConfigUrl .= '?v=' . rawurlencode((string)$modulesJsMtime);
 }
+// Keep the Worker endpoint on the current Website mount so its trusted binding
+// refines the same Website navigation Scope rather than the host default.
+$queryBinUrl = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Url::class)->getFrontendApiUrl('framework/query-bin', [], false);
 $runtime = [
     'env' => ['WELINE_ENV' => DEV ? 'DEV' : 'PROD', 'DEV' => DEV, 'PROD' => !DEV],
     'area' => 'frontend',
@@ -147,8 +150,8 @@ $runtime = [
     'debug' => DEV,
     'api' => [
         'workerUrl' => $workerUrl,
-        'endpoint' => Env::getFrontendQueryBinPath(),
-        'queryBinUrl' => Env::getFrontendQueryBinPath(),
+        'endpoint' => $queryBinUrl,
+        'queryBinUrl' => $queryBinUrl,
         'locale' => $currentLang,
         'currency' => $currentCurrency,
         'availableCurrencies' => $availableCurrencies,
@@ -191,9 +194,31 @@ if (!is_string($runtimeJson) || $runtimeJson === '' || $runtimeJson[0] !== '{') 
     $runtimeJson = '{}';
 }
 $runtimeJsonTailBody = substr($runtimeJson, 1); // drop leading "{"
+$canonicalPublicHost = strtolower(trim((string)(
+    (Env::getInstance()->getConfig()['wls']['public_host'] ?? '')
+)));
+$canonicalApexHost = (str_starts_with($canonicalPublicHost, 'www.')
+    && strlen($canonicalPublicHost) > 4)
+    ? substr($canonicalPublicHost, 4)
+    : '';
 ?>
+<?php if ($canonicalApexHost !== ''): ?>
+<script>
+(function () {
+    var canonical = <?= json_encode($canonicalPublicHost, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var apex = <?= json_encode($canonicalApexHost, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var host = String((location && location.hostname) || '').toLowerCase();
+    if (!canonical || !apex || host !== apex) {
+        return;
+    }
+    // Apex HTML must not boot query-bin (redirect:manual → opaque → WQB1 toast).
+    location.replace(location.protocol + '//' + canonical + location.pathname + location.search + location.hash);
+})();
+</script>
+<?php endif; ?>
 <script type="application/json" id="weline-frontend-runtime-config" data-weline-runtime-config>{"baseUrl":"@url{'/'}",<?= $runtimeJsonTailBody ?></script>
 <js>Weline_Frontend::js/runtime.js</js>
+<js>Weline_Framework::js/dom-observer.js</js>
 <js>Weline_Frontend::js/weline-api-business.js</js>
 <?php
 // Bust sticky theme_static_version so weline.js edits are not stuck in WLS static cache.

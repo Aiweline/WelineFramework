@@ -150,6 +150,38 @@ final class ControlMessageDrainLifecycleTest extends TestCase
         );
     }
 
+    public function testPlannedRecycleKeepsAcceptedHttp2WorkPastTheOldTenSecondClose(): void
+    {
+        $deadlines = ControlMessage::drainDeadlines(10.0, 120.0);
+
+        self::assertSame(
+            ControlMessage::DRAIN_ACTION_WAIT,
+            ControlMessage::drainLifecycleDecision(
+                elapsedSeconds: 10.1,
+                softDeadlineSeconds: $deadlines['soft'],
+                hardDeadlineSeconds: $deadlines['hard'],
+                connectionCount: 16,
+                activeRequests: 20,
+                pendingApplicationWork: 20,
+                longLivedConnections: 0,
+                http2Connections: 16,
+            ),
+        );
+        self::assertSame(
+            ControlMessage::DRAIN_ACTION_FORCE,
+            ControlMessage::drainLifecycleDecision(
+                elapsedSeconds: 120.0,
+                softDeadlineSeconds: $deadlines['soft'],
+                hardDeadlineSeconds: $deadlines['hard'],
+                connectionCount: 16,
+                activeRequests: 20,
+                pendingApplicationWork: 20,
+                longLivedConnections: 0,
+                http2Connections: 16,
+            ),
+        );
+    }
+
     public function testLegacyDrainingCompleteEnvelopeRemainsCompatible(): void
     {
         $message = ControlMessage::decode(ControlMessage::drainingComplete(

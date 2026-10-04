@@ -242,6 +242,7 @@ final class StorefrontCatalogSurfaceResolver
             return null;
         }
 
+        $path = \Weline\Framework\Http\Url::peelWebsiteMountPathFromRelativePath($path);
         $segments = array_values(array_filter(
             explode('/', trim(rawurldecode($path), '/')),
             static fn(string $segment): bool => $segment !== '',

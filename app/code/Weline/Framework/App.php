@@ -84,6 +84,12 @@ class App
             $this->runPipeline(),
             ObjectManager::getInstance(Response::class)
         );
+        return $this->finalizeResponse($response);
+    }
+
+    /** Apply the same response observers to normal and runtime error pages. */
+    public function finalizeResponse(Response $response): Response
+    {
         $eventManager = $this->resolveEventManager();
         if ($eventManager->hasObservers('Weline_Framework_Http::response_ready')) {
             $eventData = ['response' => $response];

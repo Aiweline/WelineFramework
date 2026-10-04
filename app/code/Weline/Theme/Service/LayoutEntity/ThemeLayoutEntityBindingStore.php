@@ -2,10 +2,13 @@
 declare(strict_types=1);
 namespace Weline\Theme\Service\LayoutEntity;
 use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
-use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 
-/** Compatibility boundary: layout relationships are emitted only into PHTML at save time. */
+/**
+ * @deprecated Sidecar bindings are retired; layout relationships are emitted into PHTML.
+ * Retained for legacy API consumers. Remove after their callers migrate to
+ * SolidifiedControllerTemplateResolver and the save-time candidate publisher.
+ */
 final class ThemeLayoutEntityBindingStore
 {
 

@@ -451,12 +451,14 @@ class DetectWebsite implements
         if ($host === '') {
             return;
         }
-        if ($this->isReservedProjectHost($host)) {
+        $path = (string)($parsed['path'] ?? '');
+        // The reserved bare host belongs to the default Website; explicit
+        // path mounts must remain available to the native longest-base matcher.
+        if ($this->isReservedProjectHost($host) && \trim($path, '/') === '') {
             return;
         }
 
         $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
-        $path = (string)($parsed['path'] ?? '');
 
         $hosts = [$host];
         if (!\filter_var($host, FILTER_VALIDATE_IP) && \str_contains($host, '.')) {

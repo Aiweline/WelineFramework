@@ -7,8 +7,9 @@ namespace Weline\Theme\Service\LayoutEntity;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 
 /**
- * Immutable render bundle held for one request (theme-layout-entity.v3).
- * Structure, config, chrome and head assets all follow this DTO — no re-lookup.
+ * @deprecated Legacy sidecar binding DTO, not an executable PHTML input.
+ * Retained for old method signatures; remove when their consumers migrate to
+ * ThemeLayoutSourceSnapshot and explicit renderResolved parameters.
  */
 final readonly class EntityRenderBinding
 {

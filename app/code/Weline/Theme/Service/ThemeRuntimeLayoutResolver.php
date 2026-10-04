@@ -289,6 +289,12 @@ final class ThemeRuntimeLayoutResolver
             }
         }
 
+        // Version owners keep canonical scope and store mode in separate fields.
+        // Preserve that mode in the legacy projection before catalog validation.
+        if (trim((string)($identity['store_mode'] ?? '')) !== '') {
+            $identity['scope'] = $this->scopeNormalizer->normalize($identity)['scope'];
+        }
+
         return [
             'layout_option' => \trim((string)($identity['layout_option'] ?? 'default')) ?: 'default',
             'scope' => \trim((string)($identity['scope'] ?? 'default')) ?: 'default',

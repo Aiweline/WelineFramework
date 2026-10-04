@@ -39,6 +39,19 @@ Repository 只返回不可变 DTO，不暴露 I18n ORM Model、Query Builder、�
 国家；`displayName` 使用指定 locale 的国家名，缺失时回退国家码。地区、配送等模块应直接消费
 该 DTO，不得再次查询 `Countries` 或 `Countries\Locale\Name`。
 
+语言切换器的国旗查询按 Worker 的认证区域选择入口：前台使用
+`i18n.getCountryFlags`，后台使用 `i18n.getBackendCountryFlags`。后台入口声明
+`auth=backend` 和 `backend_acl.kind=self`，只接受当前已认证后台页面的 Worker，
+不要求或构造商城 Scope；前台入口仍使用正常商城 Scope 校验。两者复用同一
+国旗 SVG 数据读取逻辑与参数校验。I18n 原始脚本与 Theme UI 组件源中的入口选择
+须同步修改，并通过正常 UI 编译及资源发布更新浏览器产物。
+
+后台国旗的正式验收用例为
+`test/e2e/backend/country-flags.spec.js`（`UC-I18N-BACKEND-COUNTRY-FLAGS`）：
+通过正常已认证后台入口展开语言面板，检查每个有效国旗槽的图片加载成功，并要求
+页面、资源和接口没有 HTTP 错误。使用项目配置的 HTTPS 入口运行：
+`php bin/w e2e:run app/code/Weline/I18n/test/e2e/backend/country-flags.spec.js --project=chromium --workers=1`。
+
 前台只读操作 `i18n.resolveCurrentScopeTranslation(source, locale_code?)`
 只从 `RequestContext::scopeIdentity()` 读取当前可信 Website/Store/Channel，
 调用方不能传入或替换 Scope。缺少可信商城 Scope 时返回

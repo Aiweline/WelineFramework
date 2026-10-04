@@ -109,6 +109,27 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $_SERVER = $this->originalServer;
     }
 
+    public function testBrowserStylesheetCannotEnterHtmlCacheThroughWildcardAccept(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $this->setCurrentFpcUri('https://example.test/theme/frontend/disk/override?theme_id=3', '/theme/frontend/disk/override?theme_id=3');
+        WelineEnv::setServer('HTTP_ACCEPT', 'text/css,*/*;q=0.1', 'unit-test');
+        WelineEnv::set('server.http_accept', 'text/css,*/*;q=0.1', 'unit-test');
+
+        self::assertFalse($coordinator->canServeCachedResponse());
+        self::assertFalse($coordinator->canBuildCachedResponse());
+    }
+
+    public function testBrowserDocumentAndGenericRequestsContinueToUseHtmlCache(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        foreach (['text/html,application/xhtml+xml,*/*;q=0.8', '*/*', ''] as $accept) {
+            WelineEnv::setServer('HTTP_ACCEPT', $accept, 'unit-test');
+            WelineEnv::set('server.http_accept', $accept, 'unit-test');
+            self::assertTrue($coordinator->canServeCachedResponse(), $accept);
+        }
+    }
+
     public function testGetCachedResponseRestoresLegacyHeadersAndStatus(): void
     {
         $pool = new InMemoryCachePool();
@@ -160,6 +181,170 @@ final class FullPageCacheCoordinatorTest extends TestCase
             KeyBuilder::UNIFIED_CACHE_FPC_KEY => str_repeat('x', 1024),
             'fpc_gzip_b64' => str_repeat('a', 2048),
         ]));
+    }
+
+    public function testStaleResponseSurvivesExpiredFreshPayloadDeadline(): void
+    {
+        $pool = new InMemoryCachePool();
+        $coordinator = $this->coordinator($pool);
+        $freshKey = $this->buildCurrentUnifiedFpcCacheKey($coordinator, 'GET');
+        $staleKey = (string)(new \ReflectionMethod(
+            FullPageCacheCoordinator::class,
+            'buildStaleCacheKey',
+        ))->invoke($coordinator, $freshKey);
+        $pool->set($staleKey, [
+            KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+            KeyBuilder::UNIFIED_CACHE_FPC_KEY => '<html><body>stale homepage</body></html>',
+            KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => ['Content-Type: text/html; charset=utf-8'],
+            'fpc_html_urls_validated' => true,
+            'fpc_expires_at' => \microtime(true) - 30,
+        ], 86400);
+
+        $response = $coordinator->getStaleCachedResponseForRebuild('GET');
+
+        self::assertInstanceOf(Response::class, $response);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('STALE', $response->getHeader('X-Weline-FPC'));
+        self::assertSame('<html><body>stale homepage</body></html>', $response->getBody());
+    }
+
+    public function testProcessStaleCopySurvivesFreshExpiryWithoutSharedMemory(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $freshKey = $this->buildCurrentUnifiedFpcCacheKey($coordinator, 'GET');
+        $staleKey = (string)(new \ReflectionMethod(
+            FullPageCacheCoordinator::class,
+            'buildStaleCacheKey',
+        ))->invoke($coordinator, $freshKey);
+        $payload = [
+            KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+            KeyBuilder::UNIFIED_CACHE_FPC_KEY => '<html><body>cached homepage</body></html>',
+            KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => ['Content-Type: text/html; charset=utf-8'],
+            'fpc_html_urls_validated' => true,
+            'fpc_expires_at' => \microtime(true) + 30,
+        ];
+        (new \ReflectionMethod(FullPageCacheCoordinator::class, 'setProcessCachedPayload'))
+            ->invoke($coordinator, $freshKey, $payload);
+
+        $expiresProperty = new \ReflectionProperty(FullPageCacheCoordinator::class, 'processFpcPayloadExpiresAt');
+        $expires = $expiresProperty->getValue();
+        self::assertArrayHasKey($staleKey, $expires);
+        $expires[$freshKey] = \microtime(true) - 1;
+        $expiresProperty->setValue(null, $expires);
+        $payloadProperty = new \ReflectionProperty(FullPageCacheCoordinator::class, 'processFpcPayloadCache');
+        $cachedPayloads = $payloadProperty->getValue();
+        $cachedPayloads[$staleKey]['fpc_expires_at'] = \microtime(true) - 1;
+        $payloadProperty->setValue(null, $cachedPayloads);
+
+        self::assertSame(
+            'STALE',
+            $coordinator->getStaleCachedResponseForRebuild('GET')?->getHeader('X-Weline-FPC'),
+        );
+    }
+
+    public function testPrivateSessionPayloadDoesNotCreateProcessStaleCopy(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $freshKey = $this->buildCurrentUnifiedFpcCacheKey($coordinator, 'GET');
+        $staleKey = (string)(new \ReflectionMethod(
+            FullPageCacheCoordinator::class,
+            'buildStaleCacheKey',
+        ))->invoke($coordinator, $freshKey);
+        (new \ReflectionMethod(FullPageCacheCoordinator::class, 'setProcessCachedPayload'))
+            ->invoke($coordinator, $freshKey, [
+                KeyBuilder::UNIFIED_CACHE_FPC_KEY => '<html>private page</html>',
+                'fpc_expires_at' => \microtime(true) + 30,
+                'fpc_variant' => ['session' => \sha1('test-session')],
+            ]);
+
+        $cached = (new \ReflectionProperty(FullPageCacheCoordinator::class, 'processFpcPayloadCache'))
+            ->getValue();
+        self::assertArrayHasKey($freshKey, $cached);
+        self::assertArrayNotHasKey($staleKey, $cached);
+    }
+
+    public function testHotHomepageStaleCopySurvivesOtherProcessCacheInserts(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $freshKey = $this->buildCurrentUnifiedFpcCacheKey($coordinator, 'GET');
+        $staleKey = (string)(new \ReflectionMethod(
+            FullPageCacheCoordinator::class,
+            'buildStaleCacheKey',
+        ))->invoke($coordinator, $freshKey);
+        $receipts = new \ReflectionProperty(FullPageCacheCoordinator::class, 'processLocalizedHomepageReceipts');
+        $receipts->setValue(null, ['homepage' => ['cache_key' => $freshKey]]);
+        $set = new \ReflectionMethod(FullPageCacheCoordinator::class, 'setProcessCachedPayload');
+        $payload = [
+            KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+            KeyBuilder::UNIFIED_CACHE_FPC_KEY => '<html><body>homepage</body></html>',
+            KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => ['Content-Type: text/html; charset=utf-8'],
+            'fpc_html_urls_validated' => true,
+            'fpc_expires_at' => \microtime(true) + 30,
+        ];
+        $set->invoke($coordinator, $freshKey, $payload);
+        for ($index = 0; $index < 24; $index++) {
+            $set->invoke($coordinator, 'other-' . $index, $payload);
+        }
+
+        $cached = (new \ReflectionProperty(FullPageCacheCoordinator::class, 'processFpcPayloadCache'))
+            ->getValue();
+        self::assertArrayHasKey($freshKey, $cached);
+        self::assertArrayHasKey($staleKey, $cached);
+        $cached[$staleKey]['fpc_expires_at'] = \microtime(true) - 1;
+        (new \ReflectionProperty(FullPageCacheCoordinator::class, 'processFpcPayloadCache'))
+            ->setValue(null, $cached);
+        self::assertSame(
+            'STALE',
+            $coordinator->getStaleCachedResponseForRebuild('GET')?->getHeader('X-Weline-FPC'),
+        );
+    }
+
+    public function testExpiredFreshReadKeepsStaleResponseAvailable(): void
+    {
+        $pool = new InMemoryCachePool();
+        $coordinator = $this->coordinator($pool);
+        $freshKey = $this->buildCurrentUnifiedFpcCacheKey($coordinator, 'GET');
+        $staleKey = (string)(new \ReflectionMethod(
+            FullPageCacheCoordinator::class,
+            'buildStaleCacheKey',
+        ))->invoke($coordinator, $freshKey);
+        $payload = [
+            KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+            KeyBuilder::UNIFIED_CACHE_FPC_KEY => '<html><body>stale homepage</body></html>',
+            KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => ['Content-Type: text/html; charset=utf-8'],
+            'fpc_html_urls_validated' => true,
+            'fpc_expires_at' => \microtime(true) - 0.1,
+        ];
+        $pool->set($freshKey, $payload, 3600);
+        $pool->set($staleKey, $payload, 86400);
+
+        self::assertNull($coordinator->getCachedResponse('GET'));
+        self::assertTrue($pool->has($staleKey));
+        self::assertSame(
+            'STALE',
+            $coordinator->getStaleCachedResponseForRebuild('GET')?->getHeader('X-Weline-FPC'),
+        );
+    }
+
+    public function testExpiredReadCannotDeleteAConcurrentFreshPublication(): void
+    {
+        $pool = new InMemoryCachePool();
+        $coordinator = $this->coordinator($pool);
+        $freshKey = $this->buildCurrentUnifiedFpcCacheKey($coordinator, 'GET');
+        $newPayload = [KeyBuilder::UNIFIED_CACHE_FPC_KEY => '<html>new publication</html>'];
+        $pool->set($freshKey, $newPayload, 3600);
+
+        $expired = [
+            KeyBuilder::UNIFIED_CACHE_FPC_KEY => '<html>old publication</html>',
+            'fpc_expires_at' => \microtime(true) - 1,
+        ];
+        $result = (new \ReflectionMethod(
+            FullPageCacheCoordinator::class,
+            'prepareCachedPayloadForHit',
+        ))->invoke($coordinator, $freshKey, $expired, '<html>old publication</html>', false, false);
+
+        self::assertNull($result);
+        self::assertSame($newPayload, $pool->get($freshKey));
     }
 
     public function testCooperativeFpcYieldDefaultsEnabledForPersistentRequests(): void
@@ -221,13 +406,29 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertNotNull($lockA);
         self::assertNull($lockB);
 
+        // A follower must not be allowed to render while the publisher still
+        // owns the shared build lock, even if its first wait interval expires.
+        $busy = $coordinator->waitForPublishedResponseOrBuildLock('GET', 1);
+        self::assertNull($busy['response']);
+        self::assertNull($busy['lock']);
+
+        $pool->getCalls = 0;
+        $busy = $coordinator->waitForPublishedResponseOrBuildLock('GET', 1000);
+        self::assertNull($busy['response']);
+        self::assertNull($busy['lock']);
+        self::assertLessThan(20, $pool->getCalls, 'Followers must back off cache probes under a held build lock.');
+
         $response = Response::html('<html><body>fresh</body></html>', 200)
             ->setHeader('Cache-Control', 'public, max-age=30');
         $coordinator->publishResponse($response, '/', ['id' => 'home'], ['module' => 'Test_Module'], [], 'GET');
 
+        $follower = $coordinator->waitForPublishedResponseOrBuildLock('GET', 1);
+        self::assertInstanceOf(Response::class, $follower['response']);
+        self::assertNull($follower['lock']);
+
         $published = $coordinator->waitForPublishedResponse('GET', 1);
         self::assertInstanceOf(Response::class, $published);
-        self::assertSame('<html><body>fresh</body></html>', $published->getBody());
+        self::assertStringContainsString('<html><body>fresh</body></html>', $published->getBody());
         self::assertSame('public, max-age=30', $published->getHeader('Cache-Control'));
         self::assertSame('HIT', $published->getHeader('X-Weline-FPC'));
 
@@ -235,6 +436,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $lockC = $coordinator->acquireBuildLock('GET');
         self::assertNotNull($lockC);
         $coordinator->releaseBuildLock($lockC);
+
     }
 
     public function testPortQualifiedLoggedInSessionMayServePublicFpcButNeverBuild(): void
@@ -1049,6 +1251,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
 final class InMemoryCachePool implements CachePoolInterface
 {
+    public int $getCalls = 0;
     /**
      * @var array<string, mixed>
      */
@@ -1060,6 +1263,7 @@ final class InMemoryCachePool implements CachePoolInterface
 
     public function get(string $key): mixed
     {
+        ++$this->getCalls;
         return $this->store[$key] ?? null;
     }
 

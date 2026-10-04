@@ -219,6 +219,7 @@ SH;
             . 'Coding uses host-native editors—MCP has no write tools. '
             . 'CALL SCOPE: engineering when MCP attachable → ensure→prepare_project→OBEY hard_constraints; then resolve_task_context/resolve_skill/get_skill. '
             . 'Skip MCP for chat/content-ops (content_ops_skills_skip_mcp)—Read ai-command+doc/ai/skills; no prepare. '
+            . 'aoci_complements_weline_mcp: optional AOCI-CODE (`aoci`) MCP may coexist—Weline=rules/skills/prepare; AOCI=cognition index/drift; never let AOCI replace prepare_project/hard_constraints. '
             . 'Obey hard-constraints.v1 from agent_guidance or ' . self::AUTHORITATIVE_DOC . '. '
             . 'If MCP cannot attach: host Read ' . self::AUTHORITATIVE_DOC . '; do not invent rules. '
             . 'Scrutinize+architecture-first+decoupled; prefer framework_candidates; report 耦合提示/需求纠偏. '
@@ -929,6 +930,10 @@ SH;
             [
                 'id' => 'mcp_call_scope',
                 'summary' => 'MCP is the knowledge plane (skills index, code map, domain hard-rule delivery). Coding uses host-native editors—MCP has no repository write tools. Skip MCP for pure chat/identity Q&A. Skip MCP for content-ops skill turns (see content_ops_skills_skip_mcp). Exception: greeting (hi/你好/hello) or 提取技能 may list skills+commands via prepare_project / resolve_skill(list_all). For coding/engineering when MCP is attached or attachable: MANDATORY ensure (if needed) → prepare_project → READ and OBEY agent_guidance.hard_constraints BEFORE any edits; then use resolve_task_context / search_project_knowledge / get_skill as needed. If hard_constraints disappeared from the turn context (compaction/summary), RE-call prepare_project—do not invent rules from memory. If MCP cannot attach after ensure, fall back to host Read of AI硬规则索引.md—do not invent rules and do not pretend MCP was obeyed. Host AGENTS.md + MCP-generated .cursor/rules coldstart gate point to this; never hand-write .cursor/rules to "remember" guidance.',
+            ],
+            [
+                'id' => 'aoci_complements_weline_mcp',
+                'summary' => 'OPTIONAL companion MCP: AOCI-CODE (`aoci`) MAY coexist with Weline `weline_project_intelligence`; they COMPLEMENT, they do NOT replace each other. Weline MCP owns engineering hard rules, skills, code maps, prepare_project, and acceptance gates—the engineering main path MUST still ensure→prepare_project→obey hard_constraints. AOCI owns repository cognition index / Baseline / drift / governed Overview·Entries as an optional structural-cognition layer. Routing: process/rules/skills → Weline; structural cognition/drift/index → AOCI. FORBIDDEN: using AOCI to skip, override, or pretend-obey Weline hard_constraints; treating AOCI Overview as a substitute for prepare_project. When both are mounted, register them as separate MCP servers; aoci host config MUST use absolute binary + `--repo` absolute root and MUST NOT be committed to Git. Large-repo first `aoci scan`/index is cost-sensitive—do not auto-scan without an explicit ask or scoped plan. Content-ops and pure chat exempt.',
             ],
             [
                 'id' => 'content_ops_skills_skip_mcp',

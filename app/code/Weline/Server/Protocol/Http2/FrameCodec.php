@@ -253,7 +253,8 @@ final class FrameCodec
                 | \ord($buffer[$offset + 8])) & 0x7fffffff;
             $frame = \substr($buffer, $offset, $total);
             $offset += $total;
-            if (!$keepStream($streamId)) {
+            // RST 是拒绝/取消通知，清理旧响应时必须保留，不能随已取消正文丢弃。
+            if ($type !== self::TYPE_RST_STREAM && !$keepStream($streamId)) {
                 if ($type === self::TYPE_DATA) {
                     $removedDataBytes += $frameLength;
                 }

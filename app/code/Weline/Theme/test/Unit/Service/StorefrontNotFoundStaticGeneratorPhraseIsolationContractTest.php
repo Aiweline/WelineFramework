@@ -23,13 +23,15 @@ final class StorefrontNotFoundStaticGeneratorPhraseIsolationContractTest extends
 
     public function testParserClearUsedWordsDropsAccumulatedBag(): void
     {
+        // usedWords 现挂在 ParserRequestState（Parser::$usedWords 已移除），经 requestState() 取同一实例。
         $ref = new \ReflectionClass(Parser::class);
-        $prop = $ref->getProperty('usedWords');
-        $prop->setAccessible(true);
-        $prop->setValue(null, [
+        $method = $ref->getMethod('requestState');
+        $method->setAccessible(true);
+        $state = $method->invoke(null);
+        $state->usedWords = [
             'upgrade phrase a' => 'upgrade phrase a',
             'upgrade phrase b' => 'upgrade phrase b',
-        ]);
+        ];
 
         self::assertCount(2, Parser::getUsedWords());
         Parser::clearUsedWords();

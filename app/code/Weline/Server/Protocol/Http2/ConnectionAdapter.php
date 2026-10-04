@@ -22,7 +22,10 @@ final class ConnectionAdapter
 
     private string $buffer = '';
     private bool $prefaceSeen = false;
+    private bool $serverPrefaceSent = false;
     private bool $localGoaway = false;
+    private int $localGoawayLastStreamId = 0;
+    private string $discardedHeaderBlock = '';
     private bool $peerGoaway = false;
     private int $peerGoawayLastStreamId = 0x7fffffff;
     private int $lastClientStreamId = 0;
@@ -55,8 +58,10 @@ final class ConnectionAdapter
     /** @var array<int,array{body:string,offset:int,end_stream:bool}> */
     private array $pendingResponses = [];
 
-    public function __construct(?HpackDecoder $decoder = null)
-    {
+    public function __construct(
+        ?HpackDecoder $decoder = null,
+        private readonly int $maxRequestBodyBytes = self::MAX_REQUEST_BODY_BYTES,
+    ) {
         $this->decoder = $decoder ?? new HpackDecoder();
     }
 
@@ -99,17 +104,7 @@ final class ConnectionAdapter
 
             $this->buffer = \substr($this->buffer, $prefaceLength);
             $this->prefaceSeen = true;
-            $this->connectionReceiveWindow = self::INITIAL_RECEIVE_WINDOW;
-            $write .= FrameCodec::settings([
-                FrameCodec::SETTINGS_ENABLE_PUSH => 0,
-                FrameCodec::SETTINGS_MAX_CONCURRENT_STREAMS => self::MAX_CONCURRENT_STREAMS,
-                FrameCodec::SETTINGS_INITIAL_WINDOW_SIZE => self::INITIAL_RECEIVE_WINDOW,
-                FrameCodec::SETTINGS_MAX_HEADER_LIST_SIZE => 65536,
-            ]);
-            $write .= FrameCodec::windowUpdate(
-                0,
-                self::INITIAL_RECEIVE_WINDOW - self::DEFAULT_FLOW_WINDOW
-            );
+            $write .= $this->serverConnectionPreface();
         }
 
         while (true) {
@@ -217,6 +212,9 @@ final class ConnectionAdapter
                             'invalid_rst_stream'
                         );
                     }
+                    if ($this->isAboveLocalGoawayLast($streamId)) {
+                        continue;
+                    }
                     $this->dropStream($streamId);
                     $resetStreams[] = $streamId;
                     continue;
@@ -246,6 +244,18 @@ final class ConnectionAdapter
                 }
 
                 if ($type === FrameCodec::TYPE_HEADERS) {
+                    if ($this->isAboveLocalGoawayLast($streamId)) {
+                        if (($streamId & 1) === 0) {
+                            throw new \UnexpectedValueException('client_stream_id_must_be_odd');
+                        }
+                        $this->discardedHeaderBlock = '';
+                        $this->consumeDiscardedHeaderBlock(
+                            $streamId,
+                            $this->stripHeadersPayload($payload, $flags),
+                            $flags,
+                        );
+                        continue;
+                    }
                     if (!$this->openClientStream($streamId, $write, $resetStreams)) {
                         continue;
                     }
@@ -261,6 +271,9 @@ final class ConnectionAdapter
 
                     if ($this->streams[$streamId]['end_headers']) {
                         $this->decodeStreamHeaders($streamId);
+                        if ($this->rejectOversizedDeclaredBody($streamId, $write, $resetStreams)) {
+                            continue;
+                        }
                     } else {
                         $this->continuationStreamId = $streamId;
                     }
@@ -272,6 +285,12 @@ final class ConnectionAdapter
                 }
 
                 if ($type === FrameCodec::TYPE_CONTINUATION) {
+                    if ($this->isAboveLocalGoawayLast($streamId)
+                        && $this->continuationStreamId === $streamId
+                    ) {
+                        $this->consumeDiscardedHeaderBlock($streamId, $payload, $flags);
+                        continue;
+                    }
                     if ($streamId <= 0 || !isset($this->streams[$streamId])) {
                         return $this->connectionError(
                             $write,
@@ -292,6 +311,9 @@ final class ConnectionAdapter
                         $this->streams[$streamId]['end_headers'] = true;
                         $this->continuationStreamId = 0;
                         $this->decodeStreamHeaders($streamId);
+                        if ($this->rejectOversizedDeclaredBody($streamId, $write, $resetStreams)) {
+                            continue;
+                        }
                         $request = $this->emitRequestIfComplete($streamId);
                         if ($request !== null) {
                             $requests[] = $request;
@@ -310,20 +332,8 @@ final class ConnectionAdapter
                             'data_on_connection_stream'
                         );
                     }
-                    if (!isset($this->streams[$streamId])) {
-                        $write .= FrameCodec::rstStream($streamId, FrameCodec::ERROR_STREAM_CLOSED);
-                        $resetStreams[] = $streamId;
-                        continue;
-                    }
-                    if ($this->streams[$streamId]['remote_closed']) {
-                        $this->resetStream($streamId, FrameCodec::ERROR_STREAM_CLOSED, $write, $resetStreams);
-                        continue;
-                    }
-
                     $flowBytes = \strlen($payload);
-                    if ($flowBytes > $this->connectionReceiveWindow
-                        || $flowBytes > $this->streams[$streamId]['receive_window']
-                    ) {
+                    if ($flowBytes > $this->connectionReceiveWindow) {
                         return $this->connectionError(
                             $write,
                             $requests,
@@ -333,10 +343,45 @@ final class ConnectionAdapter
                         );
                     }
                     $this->connectionReceiveWindow -= $flowBytes;
+                    if ($this->isAboveLocalGoawayLast($streamId)) {
+                        // GOAWAY 后高流只维持连接流控，仍验证 padding，不缓存正文或发 RST。
+                        $this->stripDataPayload($payload, $flags);
+                        $this->connectionReceiveWindow += $flowBytes;
+                        if ($flowBytes > 0) {
+                            $write .= FrameCodec::windowUpdate(0, $flowBytes);
+                        }
+                        continue;
+                    }
+                    if (!isset($this->streams[$streamId]) || $this->streams[$streamId]['remote_closed']) {
+                        // 取消后在途 DATA 仍占连接窗口；丢弃正文并归还连接额度。
+                        $this->connectionReceiveWindow += $flowBytes;
+                        if ($flowBytes > 0) {
+                            $write .= FrameCodec::windowUpdate(0, $flowBytes);
+                        }
+                        if (isset($this->streams[$streamId])) {
+                            $this->resetStream($streamId, FrameCodec::ERROR_STREAM_CLOSED, $write, $resetStreams);
+                        } else {
+                            $write .= FrameCodec::rstStream($streamId, FrameCodec::ERROR_STREAM_CLOSED);
+                            $resetStreams[] = $streamId;
+                        }
+                        continue;
+                    }
+                    if ($flowBytes > $this->streams[$streamId]['receive_window']) {
+                        return $this->connectionError(
+                            $write,
+                            $requests,
+                            $resetStreams,
+                            FrameCodec::ERROR_FLOW_CONTROL_ERROR,
+                            'receive_window_exhausted'
+                        );
+                    }
                     $this->streams[$streamId]['receive_window'] -= $flowBytes;
-                    $this->streams[$streamId]['body'] .= $this->stripDataPayload($payload, $flags);
+                    $bodyPayload = $this->stripDataPayload($payload, $flags);
 
-                    if (\strlen($this->streams[$streamId]['body']) > self::MAX_REQUEST_BODY_BYTES) {
+                    // 先检查剩余容量，避免超限正文进入流缓冲；仅归还连接窗口。
+                    if (\strlen($bodyPayload)
+                        > $this->maxRequestBodyBytes - \strlen($this->streams[$streamId]['body'])
+                    ) {
                         $this->connectionReceiveWindow += $flowBytes;
                         if ($flowBytes > 0) {
                             $write .= FrameCodec::windowUpdate(0, $flowBytes);
@@ -349,6 +394,7 @@ final class ConnectionAdapter
                         );
                         continue;
                     }
+                    $this->streams[$streamId]['body'] .= $bodyPayload;
 
                     if ($flowBytes > 0) {
                         $this->connectionReceiveWindow += $flowBytes;
@@ -391,6 +437,32 @@ final class ConnectionAdapter
     public function encodeResponse(int $streamId, string $httpResponse): string
     {
         [$status, $headers, $body] = $this->parseHttpResponse($httpResponse);
+        $declaredLengths = $headers['content-length'] ?? [];
+        if ($declaredLengths !== []) {
+            $actualBytes = \strlen($body);
+            $mismatch = \count($declaredLengths) !== 1;
+            foreach ($declaredLengths as $declaredLength) {
+                $mismatch = $mismatch || !\ctype_digit((string)$declaredLength)
+                    || (int)$declaredLength !== $actualBytes;
+            }
+            if ($mismatch) {
+                // Only anomalous metadata is retained; never log response
+                // headers, cookies, query strings, or body content.
+                $line = \json_encode([
+                    'ts' => \gmdate('c'),
+                    'pid' => \getmypid(),
+                    'connection' => \spl_object_id($this),
+                    'stream' => $streamId,
+                    'status' => $status,
+                    'declared_lengths' => \array_map('strval', $declaredLengths),
+                    'actual_bytes' => $actualBytes,
+                    'body_sha256' => \hash('sha256', $body),
+                ], \JSON_UNESCAPED_SLASHES);
+                if (\is_string($line) && \defined('BP')) {
+                    @\file_put_contents(BP . 'var/log/wls-h2-length-mismatch.log', $line . "\n", \FILE_APPEND | \LOCK_EX);
+                }
+            }
+        }
         if (isset($headers['content-length'][0])
             && \ctype_digit((string)$headers['content-length'][0])
             && (int)$headers['content-length'][0] > 0
@@ -617,7 +689,65 @@ final class ConnectionAdapter
             return '';
         }
         $this->localGoaway = true;
-        return FrameCodec::goaway($this->lastProcessedStreamId, $errorCode, \substr($debug, 0, 128));
+        $this->localGoawayLastStreamId = $this->lastProcessedStreamId;
+        foreach ($this->streams as $streamId => $stream) {
+            if (!$this->isAboveLocalGoawayLast($streamId)) {
+                continue;
+            }
+            $continuing = $this->continuationStreamId === $streamId;
+            if ($continuing) {
+                $this->discardedHeaderBlock = $stream['headers'];
+            }
+            $this->dropStream($streamId);
+            if ($continuing) {
+                // 在途分片必须继续解压；dropStream 已释放该流正文与业务状态。
+                $this->continuationStreamId = $streamId;
+            }
+        }
+        return $this->serverConnectionPreface()
+            . FrameCodec::goaway($this->localGoawayLastStreamId, $errorCode, \substr($debug, 0, 128));
+    }
+
+    private function isAboveLocalGoawayLast(int $streamId): bool
+    {
+        return $this->localGoaway && $streamId > $this->localGoawayLastStreamId;
+    }
+
+    /** 丢弃流仍须有界消费 HPACK，避免旧流继续通信时动态表失同步。 */
+    private function consumeDiscardedHeaderBlock(int $streamId, string $fragment, int $flags): void
+    {
+        if (\strlen($fragment)
+            > self::MAX_COMPRESSED_HEADER_BLOCK_BYTES - \strlen($this->discardedHeaderBlock)
+        ) {
+            throw new \UnexpectedValueException('header_block_too_large');
+        }
+        $this->discardedHeaderBlock .= $fragment;
+        if (($flags & FrameCodec::FLAG_END_HEADERS) === FrameCodec::FLAG_END_HEADERS) {
+            $this->decoder->decode($this->discardedHeaderBlock);
+            $this->discardedHeaderBlock = '';
+            $this->continuationStreamId = 0;
+        } else {
+            $this->continuationStreamId = $streamId;
+        }
+    }
+
+    private function serverConnectionPreface(): string
+    {
+        if ($this->serverPrefaceSent) {
+            return '';
+        }
+        // drain 可能早于 client preface；首 SETTINGS 与连接 credit 只输出一次。
+        $this->serverPrefaceSent = true;
+        $this->connectionReceiveWindow = self::INITIAL_RECEIVE_WINDOW;
+        return FrameCodec::settings([
+            FrameCodec::SETTINGS_ENABLE_PUSH => 0,
+            FrameCodec::SETTINGS_MAX_CONCURRENT_STREAMS => self::MAX_CONCURRENT_STREAMS,
+            FrameCodec::SETTINGS_INITIAL_WINDOW_SIZE => self::INITIAL_RECEIVE_WINDOW,
+            FrameCodec::SETTINGS_MAX_HEADER_LIST_SIZE => 65536,
+        ]) . FrameCodec::windowUpdate(
+            0,
+            self::INITIAL_RECEIVE_WINDOW - self::DEFAULT_FLOW_WINDOW,
+        );
     }
 
     public function hasPendingResponseData(): bool
@@ -782,6 +912,9 @@ final class ConnectionAdapter
         if (\strlen($payload) !== 4) {
             return ['code' => FrameCodec::ERROR_FRAME_SIZE_ERROR, 'error' => 'window_update_size'];
         }
+        if ($this->isAboveLocalGoawayLast($streamId)) {
+            return null;
+        }
         $decoded = \unpack('Nincrement', $payload);
         $increment = ((int)($decoded['increment'] ?? 0)) & 0x7fffffff;
         if ($increment === 0) {
@@ -858,6 +991,24 @@ final class ConnectionAdapter
             $this->streams[$streamId]['headers']
         );
         $this->streams[$streamId]['headers'] = '';
+    }
+
+    /** 合法且唯一的长度声明可提前按 Worker 策略拒绝；其它 framing 错误仍由原路径判定。 */
+    private function rejectOversizedDeclaredBody(int $streamId, string &$write, array &$resetStreams): bool
+    {
+        $lengths = [];
+        foreach ($this->streams[$streamId]['decoded_headers'] ?? [] as $header) {
+            if (\strtolower((string)$header['name']) === 'content-length') {
+                $lengths[] = (string)$header['value'];
+            }
+        }
+        if (\count($lengths) !== 1 || !\ctype_digit($lengths[0])
+            || (int)$lengths[0] <= $this->maxRequestBodyBytes
+        ) {
+            return false;
+        }
+        $this->resetStream($streamId, FrameCodec::ERROR_ENHANCE_YOUR_CALM, $write, $resetStreams);
+        return true;
     }
 
     /** @return array{stream_id:int,raw_request:string}|null */
@@ -1170,20 +1321,10 @@ final class ConnectionAdapter
         string $error
     ): array {
         if (!$this->localGoaway) {
-            $this->localGoaway = true;
-            $write .= FrameCodec::goaway(
-                $this->lastProcessedStreamId,
-                $errorCode,
-                \substr($error, 0, 128)
-            );
+            $write .= $this->initiateGoaway($errorCode, $error);
         }
 
-        return [
-            'status' => 'error',
-            'write' => $write,
-            'requests' => $requests,
-            'reset_streams' => \array_values(\array_unique($resetStreams)),
-            'peer_goaway' => false,
+        return $this->result('error', $write, $requests, $resetStreams, false) + [
             'error' => $error,
             'error_code' => $errorCode,
         ];
@@ -1201,6 +1342,16 @@ final class ConnectionAdapter
         array $resetStreams,
         bool $peerGoaway
     ): array {
+        if ($resetStreams !== []) {
+            // 本批已发出后又取消的流不得重新进入 Worker 队列。
+            $requests = \array_values(\array_filter(
+                $requests,
+                fn (array $request): bool => $this->isStreamActive((int)$request['stream_id']),
+            ));
+            if ($status === 'ok' && $requests === []) {
+                $status = 'incomplete';
+            }
+        }
         return [
             'status' => $status,
             'write' => $write,

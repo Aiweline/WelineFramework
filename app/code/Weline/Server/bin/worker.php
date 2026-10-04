@@ -1838,6 +1838,7 @@ $activeRequests = 0; // 正在处理的请求数
 $requestBuffers = [];
 $connectionLastActivity = []; // 连接最后活动时间（用于超时清理）
 $requestLogged = []; // 记录已输出日志的连接（前端模式使用）
+$http1ContinueSent = []; // 当前 HTTP/1 请求已排的 interim，保留确切资源身份。
 $startTime = wlsWorkerMonotonicNow(); // 进程内 uptime 的 monotonic 起点
 
 // Keep-Alive 连接超时配置（秒）——电商店面默认
@@ -1903,6 +1904,7 @@ $recycleStaggerRequests = \is_numeric($configuredRecycleStagger)
 $maxRequests = $maxRequestsBase > 0
     ? $maxRequestsBase + (\max(0, $workerId - 1) * $recycleStaggerRequests)
     : 0;
+$maxRequestsRecycleReportAt = 0.0;
 
 // Fiber 池配置（可由 IPC 下发：fiber_set_config）
 $fiberIdleTtlSec = 0;   // 挂起超过此秒数视为闲置并释放，0=不自动释放
@@ -2204,6 +2206,7 @@ $attackLogNextFlushCheckAt = 0.0;
 while (true) {
     try {
     wlsResetLongRunningExecutionLimit();
+    wlsPruneHttpContinueState($http1ContinueSent, $connections);
     if (\function_exists('pcntl_signal_dispatch')) {
         \pcntl_signal_dispatch();
     }
@@ -2914,19 +2917,27 @@ while (true) {
         }
     }
     
-    // 显式启用的最大请求数限制：达到槽位预算时立即停止接入并排水。
-    // 不能继续等待 empty($connections)：协议边缘会复用上游 Keep-Alive，等待会让
-    // 所有槽位在客户端连接统一释放时集中退出，造成短暂的全池空档。
-    if ($maxRequests > 0 && $requestCount >= $maxRequests && !$shouldExit) {
-        WlsLogger::info_("已处理 {$requestCount} 个请求，达到上限 {$maxRequests}，触发优雅重启");
+    // Plan request-count recycling with Master so peer Workers do not all
+    // close their listeners before the first replacement becomes READY.
+    if ($maxRequests > 0
+        && $requestCount >= $maxRequests
+        && !$shouldExit
+        && (\microtime(true) - $maxRequestsRecycleReportAt) >= 10.0
+    ) {
+        WlsLogger::info_("已处理 {$requestCount} 个请求，达到上限 {$maxRequests}，请求 Master 安排优雅重启");
         $plannedExitReason = "max_requests_recycle:worker={$workerId},requests={$requestCount},limit={$maxRequests}";
-        $shouldExit = true;
-        $ipcDraining = true;
-        $drainStartTime = \hrtime(true) / 1_000_000_000;
-        if ($socket && \is_resource($socket)) {
-            @\fclose($socket);
-            $socket = null;
-            \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
+        if ($ipcClient && $ipcClient->isConnected()) {
+            $maxRequestsRecycleReportAt = \microtime(true);
+            @$ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason($plannedExitReason, 0));
+        } else {
+            $shouldExit = true;
+            $ipcDraining = true;
+            $drainStartTime = \hrtime(true) / 1_000_000_000;
+            if ($socket && \is_resource($socket)) {
+                @\fclose($socket);
+                $socket = null;
+                \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
+            }
         }
     }
     
@@ -3178,6 +3189,7 @@ while (true) {
             $maxRequestHeaderBytes,
             $maxRequestBodyBytes,
         );
+        wlsQueueHttpContinue($bufferedFrame, $connections[$bufferedConnId], (int)$bufferedConnId, $http1ContinueSent, $writeBuffers, $writableConnections);
         if (($bufferedFrame['status'] ?? '') !== 'incomplete'
             && !\in_array($connections[$bufferedConnId], $read, true)
         ) {
@@ -3257,7 +3269,8 @@ while (true) {
             $maxRequestBodyBytes,
             $maxBufferedRequestBytes,
             $wlsRuntimeTopology,
-            $masterRuntimeCredential
+            $masterRuntimeCredential,
+            $http1ContinueSent,
         );
         if (($readStep['closed'] ?? false) === true) {
             continue;
@@ -3400,6 +3413,12 @@ function wlsHttpDrainAfterResponseIfRequested(
     if ($reason === null) {
         return false;
     }
+    if (!\Weline\Server\Service\WorkerResponseMemoryGuard::shouldRestartDrainAfterResponse(
+        $reason,
+        $shouldExit && $ipcDraining,
+    )) {
+        return true;
+    }
 
     $safeReason = (string)\preg_replace('/[^a-z0-9_.:-]+/i', '_', $reason);
     $safeReason = \trim($safeReason, '_');
@@ -3420,7 +3439,10 @@ function wlsHttpDrainAfterResponseIfRequested(
     $shouldExit = true;
     $ipcDraining = true;
     $drainStartTime = \hrtime(true) / 1_000_000_000;
-    $maxDrainTime = \min($maxDrainTime, 10);
+    $maxDrainTime = \Weline\Server\Service\WorkerResponseMemoryGuard::drainTimeoutSecondsForReason(
+        $safeReason,
+        $maxDrainTime,
+    );
     if ($socket && \is_resource($socket)) {
         @\fclose($socket);
         $socket = null;
@@ -4332,7 +4354,8 @@ function wlsHttpReadStep(
     int $maxRequestBodyBytes,
     int $maxBufferedRequestBytes,
     string $runtimeTopology,
-    string $proxyAuthenticationSecret
+    string $proxyAuthenticationSecret,
+    array &$http1ContinueSent,
 ): array {
     if (!\is_resource($conn) || !isset($connections[$connId]) || $connections[$connId] !== $conn) {
         unset(
@@ -4340,6 +4363,7 @@ function wlsHttpReadStep(
             $requestBuffers[$connId],
             $connectionLastActivity[$connId],
             $requestLogged[$connId],
+            $http1ContinueSent[$connId],
             $writeBuffers[$connId],
             $writableConnections[$connId],
             $pendingClose[$connId]
@@ -4385,6 +4409,7 @@ function wlsHttpReadStep(
             $requestBuffers[$connId],
             $connectionLastActivity[$connId],
             $requestLogged[$connId],
+            $http1ContinueSent[$connId],
             $writeBuffers[$connId],
             $writableConnections[$connId],
             $pendingClose[$connId]
@@ -4411,6 +4436,7 @@ function wlsHttpReadStep(
                 $requestBuffers[$connId],
                 $connectionLastActivity[$connId],
                 $requestLogged[$connId],
+                $http1ContinueSent[$connId],
                 $writeBuffers[$connId],
                 $writableConnections[$connId],
                 $pendingClose[$connId]
@@ -4497,6 +4523,7 @@ function wlsHttpReadStep(
             $requestBuffers[$connId],
             $connectionLastActivity[$connId],
             $requestLogged[$connId],
+            $http1ContinueSent[$connId],
             $writeBuffers[$connId],
             $writableConnections[$connId],
             $pendingClose[$connId]
@@ -4529,6 +4556,7 @@ function wlsHttpReadStep(
         $maxRequestHeaderBytes,
         $maxRequestBodyBytes,
     );
+    wlsQueueHttpContinue($frame, $conn, $connId, $http1ContinueSent, $writeBuffers, $writableConnections);
     if (($frame['status'] ?? '') === 'error') {
         WlsLogger::warning_(
             'Invalid HTTP request framing, reject connection (connId=' . $connId
@@ -4541,6 +4569,7 @@ function wlsHttpReadStep(
             $requestBuffers[$connId],
             $connectionLastActivity[$connId],
             $requestLogged[$connId],
+            $http1ContinueSent[$connId],
             $writeBuffers[$connId],
             $writableConnections[$connId],
             $pendingClose[$connId]
@@ -4638,6 +4667,43 @@ function wlsDispatchRequestFiberStep(
         (bool)($connectionTrustedProxy[$connId] ?? false),
     );
     if ($policyDecision->allowed) {
+        // Managed Nginx owns browser HTTPS. Direct hits on the plaintext Worker
+        // listen port (Host host:workerPort) must bounce to the public origin so
+        // Scope Kernel allowlist/on and Theme Editor QueryBin never see http.
+        $publicHttpsRedirect = \Weline\Server\Service\Edge\Nginx\PlaintextWorkerPublicHttpsRedirect::responseOrNull(
+            (string)($policyDecision->headers['host'] ?? ''),
+            $port,
+            (string)($_SERVER['WLS_PUBLIC_ORIGIN'] ?? ''),
+            (string)$policyDecision->target,
+        );
+        if ($publicHttpsRedirect !== null) {
+            $handleDuration = \round((wlsWorkerMonotonicNow() - $staticFastPathStartedAt) * 1000, 2);
+            sendResponseAndCleanup(
+                $conn,
+                $connId,
+                $publicHttpsRedirect,
+                $rawRequest,
+                $connections,
+                $requestBuffers,
+                $connectionLastActivity,
+                $requestLogged,
+                $ipcClient,
+                $instanceName,
+                $activeRequests,
+                $handleDuration,
+                $ipcDraining,
+                $longLivedConnections,
+                false,
+                $writeBuffers,
+                $writableConnections,
+                $pendingClose,
+                false,
+                (string)($policyDecision->headers['host'] ?? ''),
+                false,
+            );
+            return;
+        }
+
         // Cache execution facts are part of the same immutable decision as the
         // mandatory policy digest. No descriptor scan or Env lookup occurs on
         // this hot path, including immediately after an atomic policy switch.
@@ -4647,6 +4713,7 @@ function wlsDispatchRequestFiberStep(
             ? \Weline\Server\Service\WorkerStaticResponseL1::lookup($policyDecision)
             : null;
         if ($staticFastResponse !== null) {
+            $staticFastResponse = wlsMaybeCompressStaticHttpResponse($staticFastResponse, $rawRequest);
             $handleDuration = \round((wlsWorkerMonotonicNow() - $staticFastPathStartedAt) * 1000, 2);
             $staticFastResponse = injectWlsProcessTimeHeader($staticFastResponse, $handleDuration);
             sendResponseAndCleanup(
@@ -6440,7 +6507,10 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     $plainGetCacheEligible = \str_starts_with($rawRequest, 'GET ')
         && \stripos($rawRequest, "\r\nRange:") === false
         && \stripos($rawRequest, "\r\nIf-Modified-Since:") === false
-        && \stripos($rawRequest, "\r\nIf-None-Match:") === false;
+        && \stripos($rawRequest, "\r\nIf-None-Match:") === false
+        && \stripos($rawRequest, "\r\nIf-Match:") === false
+        && \stripos($rawRequest, "\r\nIf-Unmodified-Since:") === false
+        && \stripos($rawRequest, "\r\nIf-Range:") === false;
     if ($plainGetCacheEligible && isset($staticUriIndex[$normalizedUri])) {
         $indexedFilename = $staticUriIndex[$normalizedUri];
         $indexed = $staticFileCache[$indexedFilename] ?? null;
@@ -6588,16 +6658,24 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     // 获取文件修改时间
     $mtime = \filemtime($filename);
     $lastModified = \gmdate('D, d M Y H:i:s', $mtime) . ' GMT';
-    $etag = '"' . \md5($filename . $mtime) . '"';
-    
-    // If-None-Match takes precedence over If-Modified-Since.
-    $ifNoneMatch = getHeaderValue($rawRequest, 'If-None-Match');
-    $ifModifiedSince = getHeaderValue($rawRequest, 'If-Modified-Since');
-    if (($ifNoneMatch !== null && $ifNoneMatch === $etag)
-        || ($ifNoneMatch === null && $ifModifiedSince === $lastModified)
-    ) {
+    $etag = 'W/"' . \md5($filename . $mtime) . '"';
+
+    // 条件先于 Range；mtime 校验器由各编码共享，统一使用弱标签。
+    $conditions = [];
+    foreach (['If-Match', 'If-Unmodified-Since', 'If-None-Match', 'If-Modified-Since'] as $name) {
+        $value = getHeaderValue($rawRequest, $name);
+        if ($value !== null) {
+            $conditions[\strtolower($name)] = $value;
+        }
+    }
+    $conditionStatus = \Weline\Server\Service\WorkerStaticResponseL1::preconditionStatus($conditions, $etag, $mtime);
+    if ($conditionStatus === 412) {
+        return "HTTP/1.1 412 Precondition Failed\r\nContent-Length: 0\r\nETag: {$etag}\r\n"
+            . "Last-Modified: {$lastModified}\r\nVary: Accept-Encoding\r\nConnection: {$connectionHeader}\r\n\r\n";
+    }
+    if ($conditionStatus === 304) {
         return "HTTP/1.1 304 Not Modified\r\nETag: {$etag}\r\n"
-            . "Last-Modified: {$lastModified}\r\nAccept-Ranges: bytes\r\n"
+            . "Last-Modified: {$lastModified}\r\nAccept-Ranges: bytes\r\nVary: Accept-Encoding\r\n"
             . "X-WLS-Static-Cache: {$cacheHeaderStatus}\r\nConnection: {$connectionHeader}\r\n\r\n";
     }
     
@@ -6616,7 +6694,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     
     $method = wlsStaticRequestMethod($rawRequest);
     $range = wlsResolveStaticByteRange(
-        getHeaderValue($rawRequest, 'Range'),
+        $method === 'GET' ? getHeaderValue($rawRequest, 'Range') : null,
         getHeaderValue($rawRequest, 'If-Range'),
         $fileSize,
         $etag,
@@ -6707,6 +6785,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         $responseHeaders .= "Content-Length: {$actualContentLength}\r\n";
         $responseHeaders .= "Cache-Control: public, max-age={$maxAge}\r\n";
         $responseHeaders .= "ETag: {$etag}\r\n";
+        $responseHeaders .= "Vary: Accept-Encoding\r\n";
         $responseHeaders .= "Last-Modified: {$lastModified}\r\n";
         $responseHeaders .= "Accept-Ranges: bytes\r\n";
         $responseHeaders .= "Connection: {$connectionHeader}\r\n";
@@ -6789,6 +6868,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     $response .= "Content-Length: {$contentLength}\r\n";
     $response .= "Cache-Control: public, max-age={$maxAge}\r\n";
     $response .= "ETag: {$etag}\r\n";
+    $response .= "Vary: Accept-Encoding\r\n";
     $response .= "Last-Modified: {$lastModified}\r\n";
     $response .= "Accept-Ranges: bytes\r\n";
     $response .= "Connection: {$connectionHeader}\r\n";

@@ -799,7 +799,21 @@ class MasterLeaseManager
     /** @return array<string,mixed>|null */
     private function readExactLease(string $path): ?array
     {
-        $raw = $this->readRawLease($path, false);
+        for ($attempt = 0; ; $attempt++) {
+            \clearstatcache(true, $path);
+            try {
+                $raw = $this->readRawLease($path, false);
+                break;
+            } catch (\RuntimeException $exception) {
+                // heartbeat 原子换代不撤销 owner；只对明确快照碰撞重读，安全错误照旧拒绝。
+                if ($attempt >= 2 || !\in_array($exception->getMessage(), [
+                    'WLS Master lease changed before reading.',
+                    'WLS Master lease changed while being read.',
+                ], true)) {
+                    throw $exception;
+                }
+            }
+        }
         if ($raw === null || !\array_key_exists('schema', $raw)) {
             return null;
         }
@@ -822,11 +836,7 @@ class MasterLeaseManager
             return null;
         }
         $this->assertRegularPrivateFile($path, $status, $allowLegacyMode);
-        $raw = GatewayProjectStateFilesystem::read(
-            $path,
-            self::MAX_PROTECTED_LEASE_BYTES,
-            'WLS Master lease',
-        );
+        $raw = $this->readLeaseSnapshot($path);
         try {
             $decoded = \json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
         } catch (\JsonException $exception) {
@@ -843,6 +853,12 @@ class MasterLeaseManager
         }
 
         return $decoded;
+    }
+
+    /** 只委托快照读取；目录、私有文件、JSON/schema 与租约身份检查仍由原 owner 执行。 */
+    protected function readLeaseSnapshot(string $path): string
+    {
+        return GatewayProjectStateFilesystem::read($path, self::MAX_PROTECTED_LEASE_BYTES, 'WLS Master lease');
     }
 
     /** @param array<string,mixed> $lease @return array<string,mixed> */

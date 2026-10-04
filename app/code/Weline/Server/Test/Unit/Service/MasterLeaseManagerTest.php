@@ -437,6 +437,7 @@ final class MasterLeaseManagerTest extends TestCase
         float &$now,
         ?string &$boot = null,
         ?string &$namespace = null,
+        ?\Closure $snapshotRead = null,
     ): MasterLeaseManager
     {
         $boot ??= \str_repeat('9', 64);
@@ -462,6 +463,103 @@ final class MasterLeaseManagerTest extends TestCase
             },
         );
 
-        return new MasterLeaseManager($runtime);
+        if ($snapshotRead === null) {
+            return new MasterLeaseManager($runtime);
+        }
+        return new class($runtime, $snapshotRead) extends MasterLeaseManager {
+            public function __construct(MasterLeaseRuntimeIdentity $runtime, private readonly \Closure $snapshotRead)
+            {
+                parent::__construct($runtime);
+            }
+
+            protected function readLeaseSnapshot(string $path): string
+            {
+                ($this->snapshotRead)($path);
+                return parent::readLeaseSnapshot($path);
+            }
+        };
+    }
+
+    public function testHeartbeatPublicationRaceReadsTheNewLeaseAndRechecksExpectedIdentity(): void
+    {
+        foreach (['WLS Master lease changed before reading.', 'WLS Master lease changed while being read.'] as $error) {
+            $now = 9000.0;
+            $publisher = $this->manager($now);
+            $instance = $this->instance('lease-read-heartbeat-race');
+            $pid = (int)\getmypid();
+            $token = \str_repeat('a', 64);
+            $path = $publisher->writeRunning($instance, $pid, 19190, 9, $token);
+            $reads = 0;
+            // 此窄 seam 注入真实 Gateway 错误；heartbeat 文件由真正 publisher 原子发布。
+            $reader = $this->manager($now, snapshotRead: static function () use (&$reads, &$now, $publisher, $instance, $pid, $token, $error): void {
+                if (++$reads === 1) {
+                    $now += 1.0;
+                    $publisher->touchRunning($instance, $pid, 19190, 9, $token);
+                    throw new \RuntimeException($error);
+                }
+            });
+            $result = $reader->validateRunningLease($path, $instance, $pid, 9, $token, 19190, true);
+            self::assertTrue($result['authorized']);
+            self::assertSame(2, $reads);
+            self::assertSame(2, $result['lease']['lease_sequence']);
+            self::assertSame(9001.0, $result['lease']['updated_monotonic']);
+        }
+    }
+
+    public function testSnapshotRacesAreBoundedAndOtherErrorsAreNeverRetried(): void
+    {
+        $now = 9100.0;
+        $publisher = $this->manager($now);
+        $instance = $this->instance('lease-read-bounded');
+        $path = $publisher->writeRunning($instance, (int)\getmypid(), 19191, 9, \str_repeat('b', 64));
+        foreach ([['WLS Master lease changed while being read.', 3], ['WLS Master lease JSON is malformed.', 1],
+            ['WLS Master lease is missing or unsafe.', 1], ['WLS Master lease changed while being read. unexpected suffix', 1]] as [$error, $expectedReads]) {
+            $reads = 0;
+            $reader = $this->manager($now, snapshotRead: static function () use (&$reads, $error): void {
+                $reads++;
+                throw new \RuntimeException($error);
+            });
+            $result = $reader->validateRunningLease($path);
+            self::assertFalse($result['authorized']);
+            self::assertSame($expectedReads, $reads);
+            self::assertSame($error, $result['reason']);
+        }
+    }
+
+    public function testNewGenerationAfterRaceStillFailsEpochFreshnessAndSchemaValidation(): void
+    {
+        foreach (['epoch', 'stale', 'schema', 'unsafe'] as $fault) {
+            $now = 9200.0;
+            $publisher = $this->manager($now);
+            $instance = $this->instance('lease-read-revalidate-' . $fault);
+            $pid = (int)\getmypid();
+            $token = \str_repeat('c', 64);
+            $path = $publisher->writeRunning($instance, $pid, 19192, 9, $token);
+            $reads = 0;
+            $reader = $this->manager($now, snapshotRead: static function (string $path) use (&$reads, &$now, $publisher, $instance, $pid, $token, $fault): void {
+                if (++$reads !== 1) {
+                    return;
+                }
+                if ($fault === 'epoch') {
+                    $publisher->advanceRunningEpoch($instance, $pid, 19192, 9, 10, $token);
+                } elseif ($fault === 'stale') {
+                    $now += MasterLeaseManager::HEARTBEAT_STALE_SEC + 1;
+                } elseif ($fault === 'schema') {
+                    GatewayProjectStateFilesystem::atomicWrite($path, "{}\n", 0600);
+                } else {
+                    self::assertTrue(\chmod($path, 0644));
+                }
+                throw new \RuntimeException('WLS Master lease changed before reading.');
+            });
+            $result = $reader->validateRunningLease($path, $instance, $pid, 9, $token, 19192, true);
+            self::assertFalse($result['authorized'], $fault);
+            self::assertLessThanOrEqual(2, $reads, $fault);
+            if ($fault === 'epoch') {
+                self::assertSame(10, $result['lease']['master_epoch']);
+            }
+            if ($fault === 'unsafe') {
+                \chmod($path, 0600);
+            }
+        }
     }
 }

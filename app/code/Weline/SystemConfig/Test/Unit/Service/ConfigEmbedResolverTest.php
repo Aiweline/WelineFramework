@@ -191,6 +191,21 @@ final class ConfigEmbedResolverTest extends TestCase
         self::assertSame('website', $view['target']['kind'] ?? $view['target']['scope_kind'] ?? '');
     }
 
+    public function testForcedChannelPreservesItsStoreModeInsteadOfUrlNormalMode(): void
+    {
+        $this->stubAcl(true, true);
+        $this->templates->method('getTemplates')->willReturn([]);
+        $this->templates->method('getTemplateMeta')->willReturn(null);
+        foreach (['test', 'dev'] as $mode) {
+            $view = $this->resolver->resolve([
+                'module'=>'Weline_Demo', 'field'=>'demo/enabled', 'website_code'=>'shop',
+                'store_code'=>'main', 'channel_code'=>'app', 'scope_kind'=>'channel', 'store_mode'=>$mode,
+            ], ['target_scope'=>'shop.main.app', 'store_mode'=>'normal']);
+            self::assertSame('shop.main.app', $view['storage_scope']);
+            self::assertSame($mode, $view['target']['store_mode'] ?? null, '控件读取及后续写入必须保留权威店铺模式');
+        }
+    }
+
     private function stubAcl(bool $canView, bool $canUpdate): void
     {
         $this->guard->method('check')->willReturnCallback(

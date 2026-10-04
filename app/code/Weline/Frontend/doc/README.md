@@ -130,6 +130,7 @@
 
 ## 运行期公共边界
 
+- 静态 404 页面复用 `Weline_Framework_Http::response_ready`，由 Frontend 使用当前请求的原生 URL 构造方法更新已有运行配置中的前端和 API 地址。静态生成时的主机或挂载路径不能成为访问请求的传输地址；部件内容、语言数据及资源地址保持原值。此过程不重新读取布局编辑数据，也不生成侧车文件。
 - 系统通知只经 Admin `SystemNotificationDirectoryInterface` 读取。
 - 预览主题色系只经 Theme `PreviewThemeModeResolverInterface` 读取。
 - 页面布局 Meta 只经 Theme `ComponentMetaReaderInterface` 读取。

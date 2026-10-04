@@ -18,12 +18,18 @@ final class IntelligenceService
     /** @var array<string, ProjectIndex> */
     private array $projectIndexes = [];
     private readonly ProjectReadinessService $readiness;
+    private readonly AociInstaller $aociInstaller;
 
     public function __construct(
         private readonly Store $learningStore,
         private readonly Config $config,
+        ?AociInstaller $aociInstaller = null,
     ) {
         $this->readiness = new ProjectReadinessService($config, new ProcessRunner());
+        $this->aociInstaller = $aociInstaller ?? new AociInstaller(
+            Config::expandPath('~/.learning-mcp/tools/aoci'),
+            new ProcessRunner(),
+        );
     }
 
     public function __destruct()
@@ -99,7 +105,10 @@ final class IntelligenceService
     private function prepareProject(array $input): array
     {
         return $this->withProject($input, false, function (ProjectIndex $index) use ($input): array {
-            return $this->readiness->prepare($index, $input);
+            $installation = $this->aociInstaller->ensure($index->root());
+            $prepared = $this->readiness->prepare($index, $input);
+            $prepared['agent_guidance']['aoci_installation'] = $installation;
+            return $prepared;
         });
     }
 

@@ -24,6 +24,21 @@ final class PurePhtmlRuntimeBoundaryTest extends TestCase
         self::assertSame('', $chrome->renderCurrent(3, 'default.default.default'));
     }
 
+    public function testRetiredHeadAssetReaderNeverResolvesVersionsOrSidecars(): void
+    {
+        $reader = (new \ReflectionClass(\Weline\Theme\Service\LayoutEntity\ThemeLayoutStorefrontHeadAssets::class))->newInstanceWithoutConstructor();
+        self::assertSame('', $reader->renderHtmlForCurrentRequest());
+    }
+
+    public function testRetiredWidgetEntriesNeverReadPrimedOrSidecarConfiguration(): void
+    {
+        $renderer = (new \ReflectionClass(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityWidgetRenderer::class))->newInstanceWithoutConstructor();
+        $identity = new ThemeVersionIdentity(3, 'default.default.default', 'normal', 'frontend', 4, 'formal', 2);
+        $binding = new EntityRenderBinding($identity, 'page', 'homepage', 'structure', 'config', '', '', '', '', '', '');
+        self::assertSame('', $renderer->render('legacy', 'page', 3, 'default.default.default', '4'));
+        self::assertSame('', $renderer->renderBound('legacy', 'page', $binding));
+    }
+
     public function testLegacyConfigBytesAreNeverReadAsRuntimeAuthority(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'retired-theme-config');

@@ -6,6 +6,7 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\Deploy\StaticPublishExclusion;
 use Weline\Framework\Http\Request;
+use Weline\Framework\View\PublicThemeNamespace;
 use Weline\Theme\Model\WelineTheme;
 
 final class ThemeResourceGateway
@@ -405,6 +406,19 @@ final class ThemeResourceGateway
 
     private function parseThemeRequestPath(string $requestPath): ?array
     {
+        // Module-default themes already end in Vendor/Module/view/theme;
+        // their public URL does not repeat that suffix after the namespace.
+        if (preg_match('#^/(?:pub/)?static/(__preview/[^/]+/)?([^/]+)/([^/]+)/view/theme/(frontend|backend)/(.+)$#i', $requestPath, $matches)) {
+            return [
+                'kind' => 'theme',
+                'public_theme_path' => (string)$matches[1] . $matches[2] . '/' . $matches[3] . '/view/theme',
+                'vendor' => (string)$matches[2],
+                'module' => (string)$matches[3],
+                'area' => strtolower((string)$matches[4]) === 'backend' ? 'backend' : 'frontend',
+                'relative_path' => ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$matches[5]), DIRECTORY_SEPARATOR),
+            ];
+        }
+
         if (preg_match('#^/([^/]+)/([^/]+)/view/theme/(frontend|backend)/(.+)$#i', $requestPath, $matches)) {
             return [
                 'kind' => 'theme',
@@ -560,6 +574,20 @@ final class ThemeResourceGateway
         $loaded->clear()->load(WelineTheme::schema_fields_PATH, $path);
         if ($loaded->getId()) {
             return $loaded;
+        }
+
+        // Registered module-default themes store an absolute source directory.
+        // Compare their canonical public namespace, never the active site's theme.
+        if (preg_match('#^([^/]+)/([^/]+)/view/theme$#D', $path, $modulePath)) {
+            $rows = (clone $theme)->clearData()->clearQuery()
+                ->where(WelineTheme::schema_fields_MODULE_NAME, $modulePath[1] . '_' . $modulePath[2])
+                ->select()->fetchArray();
+            $matching = [];
+            foreach ($rows as $row) {
+                $candidate = (clone $theme)->clearData()->clearQuery()->setData($row);
+                if (PublicThemeNamespace::tryResolve($candidate->getOriginPath()) === $path) { $matching[] = $candidate; }
+            }
+            if (count($matching) === 1) { return $matching[0]; }
         }
 
         return null;

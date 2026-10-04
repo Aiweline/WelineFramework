@@ -8,9 +8,13 @@ use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Connection\ConnectionPoolManager;
 use Weline\Server\Shared\Contract\ConnectionPoolInterface;
 use Weline\Server\Shared\Contract\PooledConnectionInterface;
+use Weline\Server\Shared\Contract\DeadlinePooledConnectionInterface;
+use Weline\Framework\Cache\Exception\AtomicWriteOutcomeUnknownException;
 
 class SharedStateClient
 {
+    // 保留既有 CAS 最低窗口；显式原子写预算可以覆盖该兼容缺省。
+    private const CAS_COMPAT_MIN_BUDGET_SEC = 0.120;
     private static function monotonicSeconds(): float
     {
         return \hrtime(true) / 1_000_000_000;
@@ -18,6 +22,7 @@ class SharedStateClient
 
     private ConnectionPoolInterface $pool;
     private float $acquireTimeout;
+    private float $atomicWriteTimeout = self::CAS_COMPAT_MIN_BUDGET_SEC;
     private bool $released = false;
     private bool $throwOnTransportFailure = false;
 
@@ -49,6 +54,9 @@ class SharedStateClient
         }
         $this->pool = ConnectionPoolManager::getInstance($host, $port, $options);
         $this->acquireTimeout = (float)($options['acquire_timeout'] ?? $options['pool_acquire_timeout'] ?? 0.2);
+        // 原子写使用同一次操作总预算；缺省尊重较大的已配置 timeout，普通读写不变。
+        $this->atomicWriteTimeout = \max(0.001, (float)($options['atomic_write_timeout']
+            ?? \max(self::CAS_COMPAT_MIN_BUDGET_SEC, (float)($options['timeout'] ?? 2.0))));
         $this->throwOnTransportFailure = (bool)($options['throw_on_transport_failure'] ?? false);
     }
 
@@ -56,6 +64,11 @@ class SharedStateClient
     {
         $requestStartNs = \hrtime(true);
         $requestStart = $requestStartNs / 1_000_000_000;
+        $transportPhase = 'acquire';
+        $responseConfirmed = false;
+        $casDeadline = $cmd === SessionProtocol::CMD_COMPARE_SET
+            ? $requestStart + $this->atomicWriteTimeout
+            : null;
         $trace = \Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled() ? [
             'rpc_start_monotonic_us' => \intdiv($requestStartNs, 1000),
             'rpc_end_monotonic_us' => null,
@@ -76,7 +89,8 @@ class SharedStateClient
             'response_received' => false,
         ] : null;
         try {
-            return $this->withConnection(function (PooledConnectionInterface $connection) use ($cmd, $params, $requestStart, &$trace): ?array {
+            return $this->withConnection(function (PooledConnectionInterface $connection) use ($cmd, $params, $requestStart, $casDeadline, &$trace, &$transportPhase, &$responseConfirmed): ?array {
+                $transportPhase = 'encode';
                 $encodeStart = self::monotonicSeconds();
                 try {
                     $payload = SessionProtocol::encodeRequest($cmd, $params);
@@ -86,13 +100,20 @@ class SharedStateClient
                     }
                 }
                 $this->recordClientPhase('protocol_encode', $encodeStart, 'success');
+                if ($casDeadline !== null && self::monotonicSeconds() >= $casDeadline) {
+                    $transportPhase = 'deadline_before_send';
+                    return null; // 未发送写入。
+                }
                 if ($trace !== null) {
                     $trace['encoded_bytes'] = \strlen($payload);
                     $trace['send_called'] = true;
                 }
+                $transportPhase = 'send';
                 $sendStart = $trace !== null ? self::monotonicSeconds() : null;
                 try {
-                    $sent = $connection->send($payload);
+                    $sent = $casDeadline !== null && $connection instanceof DeadlinePooledConnectionInterface
+                        ? $connection->sendUntil($payload, $casDeadline)
+                        : $connection->send($payload);
                 } finally {
                     if ($trace !== null) {
                         $trace['send_ms'] = \round((self::monotonicSeconds() - $sendStart) * 1000, 3);
@@ -108,9 +129,17 @@ class SharedStateClient
                 if ($trace !== null) {
                     $trace['read_called'] = true;
                 }
+                $transportPhase = 'read';
                 $readStartNs = $trace !== null ? \hrtime(true) : null;
                 try {
-                    $response = $connection->read();
+                    $response = $casDeadline !== null && $connection instanceof DeadlinePooledConnectionInterface
+                        ? $connection->readUntil($casDeadline)
+                        : $connection->read();
+                } catch (\Throwable $error) {
+                    if ($casDeadline !== null) {
+                        throw new AtomicWriteOutcomeUnknownException('Atomic write response was not confirmed.', 0, $error);
+                    }
+                    throw $error;
                 } finally {
                     if ($trace !== null) {
                         $readEndNs = \hrtime(true);
@@ -119,8 +148,12 @@ class SharedStateClient
                         $trace['read_end_monotonic_us'] = \intdiv($readEndNs, 1000);
                     }
                 }
+                $responseConfirmed = \is_array($response);
                 if ($trace !== null) {
                     $trace['response_received'] = \is_array($response);
+                }
+                if ($casDeadline !== null && !\is_array($response)) {
+                    throw new AtomicWriteOutcomeUnknownException('Atomic write response was not confirmed.');
                 }
                 $this->recordClientPhase(
                     'request',
@@ -128,8 +161,20 @@ class SharedStateClient
                     \is_array($response) ? 'success' : 'timeout'
                 );
                 return $response;
-            }, $trace);
+            }, $trace, $casDeadline);
         } finally {
+            if ($this->throwOnTransportFailure && !$responseConfirmed
+                && \Weline\Framework\Runtime\RequestContext::isInitialized() && \function_exists('w_log_error')) {
+                try {
+                    // 仅记录协议命令及固定阶段，不记录 namespace、key、载荷或异常文本。
+                    $safeCommand = \preg_match('/^[a-z_]{1,32}$/D', $cmd) ? $cmd : 'other';
+                    \w_log_error('[SharedStateClient] command=' . $safeCommand . ' phase=' . $transportPhase
+                        . ' elapsed_ms=' . \round((\hrtime(true) - $requestStartNs) / 1_000_000, 3)
+                        . ' request_id=' . (\Weline\Framework\Runtime\RequestContext::getId() ?? ''), [], 'wls_cache_cas');
+                } catch (\Throwable) {
+                    // 观测故障不能替换原有传输结果或异常。
+                }
+            }
             if ($trace !== null) {
                 $requestEndNs = \hrtime(true);
                 $trace['rpc_end_monotonic_us'] = \intdiv($requestEndNs, 1000);
@@ -178,11 +223,17 @@ class SharedStateClient
         $this->pool->shutdown();
     }
 
-    private function withConnection(callable $callback, ?array &$trace = null): ?array
+    private function withConnection(callable $callback, ?array &$trace = null, ?float $deadline = null): ?array
     {
         $acquireStart = $trace !== null ? self::monotonicSeconds() : null;
+        $acquireTimeout = $deadline === null
+            ? $this->acquireTimeout
+            : \min($this->acquireTimeout, \max(0.0, $deadline - self::monotonicSeconds()));
+        if ($acquireTimeout <= 0.0) {
+            return null;
+        }
         try {
-            $conn = $this->pool->acquire($this->acquireTimeout);
+            $conn = $this->pool->acquire($acquireTimeout);
         } finally {
             if ($trace !== null) {
                 $trace['acquire_ms'] = \round((self::monotonicSeconds() - $acquireStart) * 1000, 3);
@@ -225,6 +276,10 @@ class SharedStateClient
                     $trace['dispose_ms'] = \round((self::monotonicSeconds() - $disposeStart) * 1000, 3);
                 }
             }
+        }
+
+        if ($failure instanceof AtomicWriteOutcomeUnknownException) {
+            throw $failure;
         }
 
         // 先回收连接，再向显式启用的内部调用方报告传输故障；协议数组中的业务结果原样返回。

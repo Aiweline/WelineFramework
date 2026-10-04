@@ -4,8 +4,8 @@ declare(strict_types=1);
 /**
  * Transport-neutral HTTP message helpers shared by the stream workers.
  *
- * Keep these functions free of listener, socket, TLS and event-loop state so
- * every transport adapter observes the same request/response wire semantics.
+ * 此处只解析消息、构建字节和推进调用者的写队列，不监听或读写 socket。
+ * 各传输 owner 持有连接及事件循环状态，并负责实际发送。
  */
 
 /**
@@ -169,6 +169,10 @@ function wlsParseHttpRequestFrame(
             'status_code' => 0,
             'header_bytes' => $headerBytes,
             'content_length' => $bodyLength,
+            'method' => (string)$requestMatch[1],
+            'target' => (string)$requestMatch[2],
+            'protocol' => 'HTTP/' . (string)$requestMatch[3],
+            'headers' => $headers,
         ];
     }
 
@@ -200,6 +204,49 @@ function wlsIncompleteHttpRequestFrame(): array
         'header_bytes' => 0,
         'content_length' => 0,
     ];
+}
+
+/** 完整且合法的 HTTP/1.1 期待头可先推进写队列，不消费尚未收齐的请求。 */
+function wlsQueueHttpContinue(
+    array $frame,
+    mixed $conn,
+    int $connId,
+    array &$sent,
+    array &$writeBuffers,
+    array &$writableConnections,
+): void {
+    if (($frame['status'] ?? '') !== 'incomplete') {
+        unset($sent[$connId]);
+        return;
+    }
+    if (($frame['protocol'] ?? '') !== 'HTTP/1.1'
+        || (int)($frame['content_length'] ?? 0) <= 0
+        || !\is_resource($conn)
+    ) {
+        return;
+    }
+    $expectations = \explode(',', \strtolower((string)($frame['headers']['expect'] ?? '')));
+    foreach ($expectations as $expectation) {
+        if (\trim($expectation) !== '100-continue') {
+            return;
+        }
+    }
+    if (($sent[$connId] ?? null) === $conn) {
+        return;
+    }
+    $sent[$connId] = $conn;
+    $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . "HTTP/1.1 100 Continue\r\n\r\n";
+    $writableConnections[$connId] = $conn;
+}
+
+/** 只遍历期待正文的稀疏状态；资源关闭或 ID 复用后清理，不扫描全部连接。 */
+function wlsPruneHttpContinueState(array &$sent, array $connections): void
+{
+    foreach ($sent as $id => $conn) {
+        if (!\is_resource($conn) || ($connections[$id] ?? null) !== $conn) {
+            unset($sent[$id]);
+        }
+    }
 }
 
 /** @return array{status:'error',consumed:int,request:string,error:string,status_code:int,header_bytes:int,content_length:int} */
@@ -313,14 +360,12 @@ function wlsResolveStaticByteRange(
     $ifRangeHeader = \trim((string)$ifRangeHeader);
     if ($ifRangeHeader !== '') {
         if ($ifRangeHeader[0] === '"' || str_starts_with($ifRangeHeader, 'W/')) {
-            if (str_starts_with($ifRangeHeader, 'W/') || !hash_equals($etag, $ifRangeHeader)) {
+            if (str_starts_with($etag, 'W/') || str_starts_with($ifRangeHeader, 'W/') || !hash_equals($etag, $ifRangeHeader)) {
                 return $none;
             }
         } else {
-            $ifRangeTime = strtotime($ifRangeHeader);
-            if ($ifRangeTime === false || $mtime > $ifRangeTime) {
-                return $none;
-            }
+            // 此 owner 只有 mtime，没有强日期校验器依据，不能用未来日期代替强匹配。
+            return $none;
         }
     }
 
@@ -725,12 +770,36 @@ function wlsAcceptEncodingFromRawRequest(string $rawRequest): string
 
 function wlsMaybeCompressStaticHttpResponse(string $response, string $rawRequest): string
 {
-    $acceptEncoding = wlsAcceptEncodingFromRawRequest($rawRequest);
-    if ($acceptEncoding === '') {
+    $headerEnd = \strpos($response, "\r\n\r\n");
+    if ($headerEnd === false || !\preg_match('/^HTTP\/\d(?:\.\d)?\s+(200|304)\b/i', $response)) {
         return $response;
     }
+    $originalHeaders = \substr($response, 0, $headerEnd);
+    $headers = wlsAddFormattedVaryAcceptEncoding($originalHeaders);
+    $acceptEncoding = wlsAcceptEncodingFromRawRequest($rawRequest);
+    if (wlsStaticRequestMethod($rawRequest) === 'HEAD') {
+        $negotiator = wlsEnsureContentEncodingNegotiator();
+        $encoding = $negotiator::negotiate($acceptEncoding);
+        \preg_match('/^Content-Type:\s*([^\r\n]+)/mi', $headers, $type);
+        \preg_match('/^Content-Length:\s*([0-9]+)/mi', $headers, $length);
+        if ($encoding !== null && (int)($length[1] ?? 0) >= 1024
+            && $negotiator::isCompressibleContentType((string)($type[1] ?? ''))
+            && !\preg_match('/^Content-Encoding:/mi', $headers)
+        ) {
+            // HEAD 不生成编码正文；未知的编码长度应省略，不能沿用 identity 长度。
+            $headers = wlsSetFormattedHeader($headers, 'Content-Encoding', $encoding);
+            $headers = (string)\preg_replace('/\r\nContent-Length:[^\r\n]*/i', '', $headers);
+        }
+        return $headers . "\r\n\r\n";
+    }
 
-    return wlsCompressFormattedHttpResponse($response, $acceptEncoding);
+    if ($headers === $originalHeaders && $acceptEncoding === '') {
+        return $response;
+    }
+    return wlsCompressFormattedHttpResponse(
+        $headers === $originalHeaders ? $response : $headers . "\r\n\r\n" . \substr($response, $headerEnd + 4),
+        $acceptEncoding,
+    );
 }
 
 function wlsSetFormattedHeader(string $headersPart, string $name, string $value): string

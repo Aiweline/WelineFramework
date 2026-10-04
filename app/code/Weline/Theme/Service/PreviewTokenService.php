@@ -84,7 +84,7 @@ class PreviewTokenService
             throw new \InvalidArgumentException((string)__('Theme 预览主题标识无效。'));
         }
         $pageType = trim($pageType);
-        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D', $pageType) !== 1) {
+        if (!$this->isLayoutTypeValid($pageType)) {
             throw new \InvalidArgumentException((string)__('Theme 预览页面类型无效。'));
         }
         if ($versionId !== null && $versionId < 1) {
@@ -539,7 +539,7 @@ class PreviewTokenService
         if (!is_string($payload['token'] ?? null)
             || !hash_equals($token, (string)$payload['token'])
             || (int)($payload['theme_id'] ?? 0) < 1
-            || preg_match('/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D', (string)($payload['page_type'] ?? '')) !== 1
+            || !$this->isLayoutTypeValid((string)($payload['page_type'] ?? ''))
             || !is_int($payload['created_at'] ?? null)
             || !is_int($payload['expires_at'] ?? null)
             || (int)$payload['expires_at'] < (int)$payload['created_at']
@@ -557,6 +557,14 @@ class PreviewTokenService
             return false;
         }
         return true;
+    }
+
+    /** Layout identities can contain route segments; they are never encoded public URLs. */
+    private function isLayoutTypeValid(string $layoutType): bool
+    {
+        return strlen($layoutType) <= 128
+            && !str_contains($layoutType, '..')
+            && preg_match('#^[A-Za-z0-9][A-Za-z0-9_.-]*(?:/[A-Za-z0-9][A-Za-z0-9_.-]*)*$#D', $layoutType) === 1;
     }
 
     /** @param array<string,mixed> $context @return array<string,mixed> */

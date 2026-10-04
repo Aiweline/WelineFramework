@@ -10,6 +10,7 @@ use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Http\Fpc\FpcBypassEvaluator;
 use Weline\Framework\Http\Fpc\FpcBypassFactsBuilder;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\WlsRuntime;
 use Weline\Server\Security\WorkerPolicyDecision;
@@ -91,8 +92,8 @@ final class WorkerFullPageCacheFastPath
         if (TransactionContext::activeTransactionConnectionCount() > 0) {
             return null;
         }
-        // 早期 Worker 尚无请求 Context。独立短生命周期只冻结本次权威版本，
-        // 不继承上一次预热请求状态，也不安装网站、会话或 Router。
+        // Keep cache lookup and its response decorators in one isolated
+        // request Context. Scope comes only from the verified cache receipt.
         $previousContext = Context::getCurrent();
         $probeContext = new Context(['meta' => ['type' => 'fpc_probe', 'mode' => 'wls']]);
         Context::enter($probeContext);
@@ -118,14 +119,35 @@ final class WorkerFullPageCacheFastPath
                         '',
                     );
                 }
+                if ($receipt === null && $cookieHeader === '') {
+                    $receipt = $this->coordinator->resolveRootHomepageStaleReceipt($fullUri)
+                        ?? $this->coordinator->resolveRootHomepageStaleReceipt(
+                            $this->alternateRootFullUri($fullUri, $scheme),
+                        );
+                }
                 if (\is_array($receipt)) {
+                    $this->prepareReceiptResponseContext($probeContext, $decision, $scheme, $host, $requestUri, $fullUri);
+                    RequestContext::installScopeIdentity(ScopeIdentity::fromArray($receipt['scope_identity']));
+                    RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
                     $cached = $this->coordinator->getFormattedProcessCachedResponseForInternalReceipt(
                         $receipt,
                         $decision->keepAlive(),
                         $decision->method,
                         (string)($headers['accept'] ?? ''),
                         (string)($headers['accept-encoding'] ?? ''),
+                        true,
                     );
+                    if ($cached === null) {
+                        $cached = $this->coordinator->getFormattedStaleCachedResponseForInternalReceipt(
+                            $receipt,
+                            $decision->keepAlive(),
+                            $decision->method,
+                            (string)($headers['accept'] ?? ''),
+                            (string)($headers['accept-encoding'] ?? ''),
+                            true,
+                            $this->processOnly || !$decision->fpcSharedCacheEnabled(),
+                        );
+                    }
                 } else {
                     $cached = null;
                 }
@@ -135,12 +157,16 @@ final class WorkerFullPageCacheFastPath
                     (string)($headers['cookie'] ?? ''),
                 );
                 if (\is_array($localizedReceipt)) {
+                    $this->prepareReceiptResponseContext($probeContext, $decision, $scheme, $host, $requestUri, $fullUri);
+                    RequestContext::installScopeIdentity(ScopeIdentity::fromArray($localizedReceipt['scope_identity']));
+                    RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
                     $cached = $this->coordinator->getFormattedProcessCachedResponseForInternalReceipt(
                         $localizedReceipt,
                         $decision->keepAlive(),
                         $decision->method,
                         (string)($headers['accept'] ?? ''),
                         (string)($headers['accept-encoding'] ?? ''),
+                        true,
                     );
                 } elseif ($this->coordinator->isLocalizedHomepageFullUri($fullUri)) {
                     $cached = null;
@@ -186,6 +212,32 @@ final class WorkerFullPageCacheFastPath
             'source' => (string)($cached['source'] ?? 'worker_fastpath'),
             'bytes' => (int)($cached['bytes'] ?? 0),
         ];
+    }
+
+    private function prepareReceiptResponseContext(
+        Context $context,
+        WorkerPolicyDecision $decision,
+        string $scheme,
+        string $host,
+        string $requestUri,
+        string $fullUri,
+    ): void {
+        $context->set('input', [
+            'method' => $decision->method,
+            'scheme' => $scheme,
+            'host' => $host,
+            'uri' => $requestUri,
+            'full_request_uri' => $fullUri,
+            'server' => [
+                'HTTP_HOST' => $host,
+                'REQUEST_METHOD' => $decision->method,
+                'REQUEST_SCHEME' => $scheme,
+                'REQUEST_URI' => $requestUri,
+                'HTTP_X_REQUESTED_WITH' => (string)($decision->headers['x-requested-with'] ?? ''),
+            ],
+        ]);
+        $context->set('route.is_static', false);
+        $context->set('route.is_media', false);
     }
 
     /** @param array<string, string> $headers */

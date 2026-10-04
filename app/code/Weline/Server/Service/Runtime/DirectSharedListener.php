@@ -160,6 +160,43 @@ final class DirectSharedListener
     }
 
     /**
+     * Recover the exact Master-owned FD after the PHP listener wrapper was
+     * lost while the kernel listener remained open. The caller must first
+     * verify its active instance lease; an endpoint mismatch fails closed.
+     */
+    public function recoverInheritedMasterListener(string $host, int $port, string $leaseId): bool
+    {
+        if ($this->isListening()
+            || $port < 1 || $port > 65535
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $leaseId) !== 1
+        ) {
+            return false;
+        }
+
+        $host = self::normalizeLiteralHost($host);
+        $listener = @\fopen('php://fd/' . self::INHERITED_FD, 'r+');
+        if (!\is_resource($listener)) {
+            return false;
+        }
+        try {
+            self::assertStreamEndpoint($listener, $host, $port);
+            if (!@\stream_set_blocking($listener, false)) {
+                return false;
+            }
+            $this->listener = $listener;
+            $this->host = $host;
+            $this->port = $port;
+            return true;
+        } catch (\Throwable) {
+            return false;
+        } finally {
+            if ($this->listener !== $listener) {
+                @\fclose($listener);
+            }
+        }
+    }
+
+    /**
      * @return array<int, resource>
      */
     public function descriptorMap(): array

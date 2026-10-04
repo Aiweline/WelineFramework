@@ -1,5 +1,15 @@
 # AI 部件注册数据缓存
 
+## 2026-10-03：空注册表复用回归修复
+
+Theme 实际并发保存验收中，本地 active AI 定义仍为 0；成功请求的 Trace 记录了重复注册构建。当前策略遗漏 `allowEmptyResult`，成功空数组未进入缓存。本次补回 `CachePolicy::allowEmptyResult=true`，继续复用既有 `global/widget/registry` 失效依赖；数据库异常仍在 builder 外捕获，不能缓存为成功空表。
+
+定向测试修正 single-flight fixture：只有取得实际持有令牌才允许共享缓存写入。随后观察到空表复用测试先失败，修复后空表复用和数据库失败恢复两例通过（2 tests / 13 assertions）。真实本地 CLI 数据库与缓存探针首次约 68 ms，后续读取零 DB span；仅清独立进程 L1 后从共享池读取也为零 DB span。证据：`dev/tmp/theme-phtml-sitewide/ai-registry-empty-cache-fixed-20261003/`。
+
+本地 `default:9555` 已正常重载。两个独立登录会话分别进入 Worker 1 和 2 后，成功保存约 10.7 秒（此前约 29.6 秒），另一请求仍返回 `theme_layout_owner_lock_timeout`；数据库内容修订和资源修订均只推进一次，布局快照引用保持不变。并发锁超时尚未修复。完整测试文件的事务回滚例也未通过：普通 bootstrap 下出现 namespace fingerprint 不一致，测试 bootstrap 下出现 SQLite fixture 缺少 changed 管线命名空间表。此项需要单独核对测试装配，不能沿用下文历史的完整 GREEN 结论作为当前验收结果。
+
+## 历史设计与验收记录
+
 2026-09-13，Widget 1.0.8。
 
 `AiWidgetRegistrySource::getRegistryEntries()` 是 AI 公共注册定义的唯一读取拥有者。它使用现有 `StorefrontScopeHotCache::rememberPolicy()`，资源为 `widget.ai_registry`，池为 `weline_widget_ai_registry`，逻辑键为 `active-definitions.v1`，依赖 `global/widget/registry`。这些定义没有网站、店铺、渠道、语言、用户或请求 ID 维度，进程 L1 和配置的共享缓存池使用相同版本键。查询与 JSON 解码只在真正未命中时执行；成功空数组同样缓存。ORM 模型、页面布局和用户配置不进入共享值。现有生成文件注册表以及 AI 定义覆盖同代码条目的顺序保持不变。

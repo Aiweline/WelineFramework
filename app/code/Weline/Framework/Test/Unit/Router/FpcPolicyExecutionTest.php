@@ -19,6 +19,7 @@ use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\WlsRuntime;
 
 final class FpcPolicyExecutionTest extends TestCase
 {
@@ -96,6 +97,30 @@ final class FpcPolicyExecutionTest extends TestCase
         self::assertNull($this->coordinator->getCachedResponse());
         self::assertFalse($this->coordinator->warmProcessCacheForInternalReceipt($receipt));
         self::assertNull($this->coordinator->getFormattedProcessCachedResponseForInternalReceipt($receipt));
+    }
+
+    public function testPersistentCacheFollowerWaitsForPublisherInsteadOfImmediatelyRenderingAgain(): void
+    {
+        self::assertGreaterThanOrEqual(
+            30000,
+            $this->invoke('resolvePublishedResponseWaitTimeoutMs', 50)
+        );
+    }
+
+    public function testValidatedRootHitOffersItsExactReceiptToBackgroundProof(): void
+    {
+        $candidate = new \ReflectionProperty(WlsRuntime::class, 'homepagePublicationProofCandidate');
+        $previous = $candidate->getValue();
+        try {
+            $this->coordinator->publishResponse(Response::fromContent('<html><body>policy</body></html>'), '/', [], [], []);
+            $candidate->setValue([]);
+            self::assertNotNull($this->coordinator->getCachedResponse());
+            $receipt = $this->coordinator->resolveRootHomepageProcessReceipt('https://example.test/');
+            self::assertIsArray($receipt);
+            self::assertSame($receipt, $candidate->getValue());
+        } finally {
+            $candidate->setValue($previous);
+        }
     }
 
     public function testTtlChangeChangesEveryKeyAndInvalidatesOldReceipt(): void

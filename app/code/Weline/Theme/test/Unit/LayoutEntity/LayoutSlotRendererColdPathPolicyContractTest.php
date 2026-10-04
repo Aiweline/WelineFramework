@@ -14,17 +14,21 @@ use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
  */
 final class LayoutSlotRendererColdPathPolicyContractTest extends TestCase
 {
-    public function testPointerResolverDropsParallelProcessStatic(): void
+    public function testRetiredPointersCannotReadDependenciesOrReuseStaleCache(): void
     {
-        $src = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityPointerResolver.php'
+        $resolver = (new \ReflectionClass(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPointerResolver::class))
+            ->newInstanceWithoutConstructor();
+        $identity = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+            1, 'default.default.default', 'normal', 'frontend', 1, 'formal', 1,
         );
-
-        self::assertStringContainsString('rememberPolicy(', $src);
-        self::assertStringContainsString('pointerCachePolicy()', $src);
-        self::assertStringNotContainsString('private static array $processCache', $src);
-        self::assertStringNotContainsString('self::$processCache', $src);
-        self::assertStringContainsString('StorefrontScopeHotCache::resetProcessCache', $src);
+        // Any dependency access fails: retired resolution must not consult
+        // database versions, bindings, structure paths, or cached pointers.
+        self::assertNull($resolver->resolvePublishedChrome(1, 'default.default.default'));
+        self::assertNull($resolver->resolveCurrentChrome(1, 'default.default.default'));
+        self::assertNull($resolver->resolvePageEntity($identity, \str_repeat('a', 64), \str_repeat('b', 64)));
+        $runtime = (new \ReflectionClass(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRuntime::class))
+            ->newInstanceWithoutConstructor();
+        self::assertNull($runtime->tryResolvePageLayoutPath(1, 'default.default.default', \str_repeat('a', 64), \str_repeat('b', 64)));
     }
 
 

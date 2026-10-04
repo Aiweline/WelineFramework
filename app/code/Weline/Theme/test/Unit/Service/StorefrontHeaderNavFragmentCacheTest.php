@@ -10,6 +10,58 @@ use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 
 final class StorefrontHeaderNavFragmentCacheTest extends TestCase
 {
+    public function testSharedServiceUsesCurrentRequestPreviewIdentity(): void
+    {
+        $service = $this->service();
+        $request = $this->createMock(\Weline\Framework\Http\Request::class);
+        $request->method('getParam')->willReturnCallback(static fn($key, $default = '') => $key === 'editor_mode' ? '1' : $default);
+        $editor = new \Weline\Theme\Service\PreviewRequestInspector($request);
+        $om = \Weline\Framework\Manager\ObjectManager::class;
+        $om::setInstance(\Weline\Theme\Service\PreviewRequestInspector::class, $editor);
+        $method = new \ReflectionMethod($service, 'isPreviewRequest');
+        self::assertTrue($method->invoke($service));
+        $publicRequest = $this->createMock(\Weline\Framework\Http\Request::class);
+        $publicRequest->method('getParam')->willReturnCallback(static fn($key, $default = '') => $default);
+        $public = new \Weline\Theme\Service\PreviewRequestInspector($publicRequest);
+        $om::setInstance(\Weline\Theme\Service\PreviewRequestInspector::class, $public);
+        try {
+            self::assertFalse($method->invoke($service));
+        } finally {
+            $om::removeInstance(\Weline\Theme\Service\PreviewRequestInspector::class);
+        }
+    }
+
+    public function testEditorNavigationNeverReadsOrWritesPublicCache(): void
+    {
+        $manager = $this->createMock(\Weline\Framework\Cache\CacheManager::class);
+        $manager->expects(self::never())->method('pool');
+        $request = $this->createMock(\Weline\Framework\Http\Request::class);
+        $request->method('getParam')->willReturnCallback(static fn($key, $default = '') => $key === 'editor_mode' ? '1' : $default);
+        $inspector = new \Weline\Theme\Service\PreviewRequestInspector($request);
+        \Weline\Framework\Manager\ObjectManager::setInstance(\Weline\Theme\Service\PreviewRequestInspector::class, $inspector);
+        $service = new StorefrontHeaderNavFragmentCache(new \Weline\Framework\Cache\Service\StorefrontScopeHotCache($manager));
+        $items = [['text' => 'Hanfu', 'url' => '/category/hanfu?editor_mode=1', 'children' => []]];
+        $html = '<a href="/category/hanfu?editor_mode=1">Hanfu</a>';
+        self::assertSame($html, $service->rememberCategoriesSidebarNav($items, static fn() => $html));
+        self::assertSame($html, $service->rememberCategoriesHorizontalNav($items, true, static fn() => $html));
+        self::assertSame($html, $service->rememberMegaMenuPanel('hanfu', false, $items[0], static fn() => $html));
+        self::assertSame(0, $service->prefetchCategoryNavFragments($items));
+        \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Theme\Service\PreviewRequestInspector::class);
+    }
+    public function testEditorQueryDoesNotCollideWithPublicNavigation(): void
+    {
+        $service = $this->service();
+        $public = [['text' => 'Hanfu', 'url' => 'https://shop.test/category/hanfu', 'children' => []]];
+        $editor = $public;
+        $editor[0]['url'] .= '?theme_id=3&frontend_theme_id=3&editor_mode=1';
+        self::assertNotSame($service->sidebarNavLogicalKey($public), $service->sidebarNavLogicalKey($editor));
+        self::assertNotSame($service->horizontalNavLogicalKey($public), $service->horizontalNavLogicalKey($editor));
+        self::assertNotSame(
+            $service->megaMenuPanelLogicalKey('hanfu', false, $public[0]),
+            $service->megaMenuPanelLogicalKey('hanfu', false, $editor[0]),
+        );
+    }
+
     private function service(): StorefrontHeaderNavFragmentCache
     {
         return (new \ReflectionClass(StorefrontHeaderNavFragmentCache::class))->newInstanceWithoutConstructor();
@@ -37,8 +89,8 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
             ],
         ]);
 
-        self::assertStringContainsString('theme.header.mega_panel.v8.zh_Hans_CN.', $top);
-        self::assertStringContainsString('theme.header.mega_panel.v8.zh_Hans_CN.', $drawer);
+        self::assertStringContainsString('theme.header.mega_panel.v9.', $top);
+        self::assertStringContainsString('theme.header.mega_panel.v9.', $drawer);
         self::assertStringContainsString('.banner1.', $top);
         self::assertStringContainsString('.banner0.', $bannerOff);
         self::assertNotSame($top, $drawer);
@@ -57,7 +109,7 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
             ['text' => 'B', 'url' => '/b', 'children' => []],
         ]);
 
-        self::assertStringStartsWith('theme.header.sidebar_nav.v8.', $first);
+        self::assertStringStartsWith('theme.header.sidebar_nav.v9.', $first);
         self::assertNotSame($first, $second);
     }
 
@@ -74,7 +126,7 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
             ['text' => 'B', 'url' => '/b', 'children' => []],
         ], true);
 
-        self::assertStringStartsWith('theme.header.horizontal_nav.v2.', $bannerOn);
+        self::assertStringStartsWith('theme.header.horizontal_nav.v3.', $bannerOn);
         self::assertStringContainsString('.banner1.', $bannerOn);
         self::assertStringContainsString('.banner0.', $bannerOff);
         self::assertNotSame($bannerOn, $bannerOff);

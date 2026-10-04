@@ -1698,6 +1698,15 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'hard_constraints')),
         false,
     ),
+    'aoci_complements_weline_mcp keeps prepare_project as main path' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'aoci_complements_weline_mcp'
+            && str_contains((string) ($rule['summary'] ?? ''), 'COMPLEMENT')
+            && str_contains((string) ($rule['summary'] ?? ''), 'prepare_project')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')),
+        false,
+    ),
     'content_ops_skills_skip_mcp forbids prepare on product/blog ops' => array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)

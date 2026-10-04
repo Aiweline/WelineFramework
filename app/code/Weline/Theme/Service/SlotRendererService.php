@@ -933,43 +933,9 @@ class SlotRendererService
      */
     private function loadSharedChromeSlotWidgetsFromEntity(int $themeId, string $area): array
     {
-        try {
-            // The head or an inherited shell may have rendered an ancestor first.
-            // Select the chain for this layout identity, rather than treating that
-            // last same-theme binding as the owner of the current scope's slots.
-            // resolveRenderSources already caches the exact scope/preview selection.
-            $sources = ObjectManager::getInstance(
-                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityChrome::class,
-            )->resolveRenderSources($themeId, $this->resolveStorageScopeForSharedChrome($area), $this->isEditorPreviewRequest());
-            $bindings = array_column($sources, 'binding');
-            $configStore = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityConfigStore::class);
-            $slotTree = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder::class);
-            $slots = [];
-            foreach ($bindings as $binding) {
-                if (!$binding instanceof \Weline\Theme\Service\LayoutEntity\EntityRenderBinding
-                    || $binding->identity->themeId !== $themeId
-                ) {
-                    continue;
-                }
-                $nodes = $configStore->readBoundConfig($binding);
-                $bySlot = $this->organizeWidgetsBySlot($slotTree->nodesToAreaLayout($nodes));
-                foreach ($bySlot as $slotId => $widgets) {
-                    if (array_key_exists($slotId, $slots)) {
-                        continue;
-                    }
-                    // Keep an empty slot decision when all its nodes were explicitly
-                    // removed, so an ancestor cannot resurrect those nodes.
-                    $slots[$slotId] = array_values(array_filter($widgets, static fn($node): bool => is_array($node)
-                        && (!array_key_exists('is_active', $node) || !empty($node['is_active']))));
-                }
-                if ($nodes === []) {
-                    break;
-                }
-            }
-            return $slots;
-        } catch (\Throwable) {
-            return [];
-        }
+        // Derived PHTML owns the shared partial relationships. Legacy slot fill
+        // must not reconstruct them from retired sidecar configuration.
+        return [];
     }
 
     /**

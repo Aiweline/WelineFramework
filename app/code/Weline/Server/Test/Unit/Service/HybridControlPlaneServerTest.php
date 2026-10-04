@@ -193,6 +193,19 @@ final class HybridControlPlaneServerTest extends TestCase
                 $runtime->supervisor()->leases()->get('worker#1')?->state,
             );
 
+            self::assertTrue($hybrid->sendTo($readyMessages[0][1], ControlMessage::drain([], 120)));
+            $receivedDrain = null;
+            for ($attempt = 0; $attempt < 20 && $receivedDrain === null; $attempt++) {
+                $hybrid->poll(0, 10000);
+                foreach ($client->handleReadable() as $downstreamMessage) {
+                    if (($downstreamMessage['type'] ?? '') === ControlMessage::TYPE_DRAIN) {
+                        $receivedDrain = $downstreamMessage;
+                    }
+                }
+            }
+            self::assertIsArray($receivedDrain);
+            self::assertSame(120, $receivedDrain['drain_timeout_sec'] ?? null);
+
             self::assertTrue($client->send(ControlMessage::telemetry(
                 instance: 'forged-instance',
                 host: 'example.test',

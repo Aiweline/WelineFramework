@@ -33,9 +33,10 @@ final class HeaderMiniCartGuestSsrTest extends TestCase
         ObjectManager::setInstance(EventsManager::class, $this->getMockBuilder(EventsManager::class)
             ->disableOriginalConstructor()->onlyMethods(['dispatch'])->getMock());
         // 使用真实 Phrase 独占词典边界，使本例只验证购物车而不依赖词典数据库。
-        (new \ReflectionMethod(EventDictionary::class, 'setStoredState'))->invoke(null, [
-            'locale' => 'en_US', 'active' => true, 'mode' => EventDictionary::MODE_EXCLUSIVE,
-            'owner' => 'mini-cart-test', 'hash' => 'mini-cart-test', 'words' => [], 'keyed_words' => [], 'layers' => [],
+        // EventDictionary 现为只读消费（setStoredState 已移除），由调用方直接写入 RequestContext 状态。
+        RequestContext::set('phrase.event_dictionary.state', [
+            'active' => true, 'mode' => EventDictionary::MODE_EXCLUSIVE, 'scope_key' => 'mini-cart-test',
+            'locale' => 'en_US', 'owners' => [], 'words' => [], 'keyed_words' => [], 'layer_hashes' => [],
         ]);
         $cache = new StorefrontScopeHotCache();
         ObjectManager::setInstance(StorefrontScopeHotCache::class, $cache);

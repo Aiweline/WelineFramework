@@ -20,7 +20,6 @@ use Weline\Theme\Model\ThemeWidgetDefaultInjection;
 use Weline\Theme\Model\ThemeScopeWorkspace;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator;
-use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPointerResolver;
 use Weline\Theme\Service\SharedChromeService;
 use Weline\Theme\Service\ThemeScopeVersionService;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
@@ -390,16 +389,10 @@ class Upgrade implements UpgradeInterface
         $coordinator = ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class);
         /** @var ThemeScopeVersionService $scopeVersions */
         $scopeVersions = ObjectManager::getInstance(ThemeScopeVersionService::class);
-        /** @var ThemeLayoutEntityPointerResolver $pointers */
-        $pointers = ObjectManager::getInstance(ThemeLayoutEntityPointerResolver::class);
         /** @var ScopeHierarchyInterface $scopes */
         $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
         /** @var SharedChromeService $chrome */
         $chrome = ObjectManager::getInstance(SharedChromeService::class);
-        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths $paths */
-        $paths = ObjectManager::getInstance(
-            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths::class,
-        );
 
         $forceInheritThemes = [];
 
@@ -424,7 +417,6 @@ class Upgrade implements UpgradeInterface
                     ->fetch(),
             );
 
-            $scopesSeen = [];
             $pageRows = [];
             foreach ($rows as $row) {
                 $data = \is_object($row) && \method_exists($row, 'getData')
@@ -436,16 +428,13 @@ class Upgrade implements UpgradeInterface
                 if ($scope === '' || $identityHash === '' || $releaseId < 1) {
                     continue;
                 }
-                $scopesSeen[$scope] = true;
                 $pageRows[] = $data;
             }
 
-            foreach (\array_keys($scopesSeen) as $scope) {
+            foreach ($this->groupLegacyWorkspaceOwners($pageRows) as $ownerRows) {
+                $scope = (string)$ownerRows[0][ThemeScopeWorkspace::schema_fields_SCOPE];
                 $homeData = null;
-                foreach ($pageRows as $data) {
-                    if ((string)$data[ThemeScopeWorkspace::schema_fields_SCOPE] !== $scope) {
-                        continue;
-                    }
+                foreach ($ownerRows as $data) {
                     if ((string)$data[ThemeScopeWorkspace::schema_fields_LAYOUT_TYPE] === ThemeLayout::PAGE_TYPE_HOME
                         && (string)($data[ThemeScopeWorkspace::schema_fields_TARGET_TYPE] ?? 'global') === 'global'
                     ) {
@@ -454,16 +443,7 @@ class Upgrade implements UpgradeInterface
                     }
                 }
                 if ($homeData === null) {
-                    $sample = null;
-                    foreach ($pageRows as $data) {
-                        if ((string)$data[ThemeScopeWorkspace::schema_fields_SCOPE] === $scope) {
-                            $sample = $data;
-                            break;
-                        }
-                    }
-                    if ($sample === null) {
-                        continue;
-                    }
+                    $sample = $ownerRows[0];
                     $base = $this->editorContextFromWorkspaceRow($scopes, $sample);
                     if ($base === null) {
                         throw new \RuntimeException(
@@ -483,27 +463,19 @@ class Upgrade implements UpgradeInterface
                 $snapshot = $workspaceService->readPublishedSnapshot($homeContext);
                 $payload = \is_array($snapshot['payload'] ?? null) ? $snapshot['payload'] : [];
                 $nodes = \is_array($payload['nodes'] ?? null) ? $payload['nodes'] : [];
-                $coordinator->bakeChromeFromNodes($themeId, $scope, $nodes, true);
-                $version = $scopeVersions->getCurrent($themeId, $scope);
+                $coordinator->bakeChromeFromNodes(
+                    $themeId, $scope, $nodes, true, storeMode: $homeContext->scope->storeMode,
+                );
+                $version = $scopeVersions->getCurrent($themeId, $scope, $homeContext->scope->storeMode, $homeContext->area);
                 if ($version === null) {
                     throw new \RuntimeException(
                         'theme_layout_entity_cutover_chrome_version_missing: theme=' . $themeId . ' scope=' . $scope,
                     );
                 }
                 $scopeVersions->markPublished($version);
-                $chromePath = $paths->chromePhtml($themeId, $scope, $version->getVersionId());
-                if (!\is_file($chromePath)) {
-                    throw new \RuntimeException(
-                        'theme_layout_entity_cutover_chrome_missing: ' . $chromePath,
-                    );
-                }
-                $pointers->rememberChromePointer(
-                    $themeId,
-                    $scope,
-                    $version->getVersionId(),
-                    $chromePath,
-                    true,
-                );
+                // The candidate publisher validates the independent PHTML
+                // partials. No aggregate chrome.phtml or pointer is required;
+                // upgrade_after rebuilds the final published source workset.
             }
 
             foreach ($pageRows as $data) {
@@ -529,6 +501,11 @@ class Upgrade implements UpgradeInterface
                     true,
                     $releaseId > 0 ? $releaseId : null,
                     0,
+                    layoutOption: $context->layoutOption,
+                    area: $context->area,
+                    targetType: $context->targetType,
+                    targetId: $context->targetId ?: null,
+                    storeMode: $context->scope->storeMode,
                 );
             }
         }
@@ -579,14 +556,8 @@ class Upgrade implements UpgradeInterface
         $coordinator = ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class);
         /** @var ThemeScopeVersionService $scopeVersions */
         $scopeVersions = ObjectManager::getInstance(ThemeScopeVersionService::class);
-        /** @var ThemeLayoutEntityPointerResolver $pointers */
-        $pointers = ObjectManager::getInstance(ThemeLayoutEntityPointerResolver::class);
         /** @var ScopeHierarchyInterface $scopes */
         $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
-        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths $paths */
-        $paths = ObjectManager::getInstance(
-            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths::class,
-        );
 
         foreach ($themeItems as $theme) {
             $themeId = 0;
@@ -608,7 +579,6 @@ class Upgrade implements UpgradeInterface
                     ->fetch(),
             );
 
-            $scopesSeen = [];
             $pageRows = [];
             foreach ($rows as $row) {
                 $data = \is_object($row) && \method_exists($row, 'getData')
@@ -619,16 +589,13 @@ class Upgrade implements UpgradeInterface
                 if ($scope === '' || $releaseId < 1) {
                     continue;
                 }
-                $scopesSeen[$scope] = true;
                 $pageRows[] = $data;
             }
 
-            foreach (\array_keys($scopesSeen) as $scope) {
+            foreach ($this->groupLegacyWorkspaceOwners($pageRows) as $ownerRows) {
+                $scope = (string)$ownerRows[0][ThemeScopeWorkspace::schema_fields_SCOPE];
                 $homeData = null;
-                foreach ($pageRows as $data) {
-                    if ((string)$data[ThemeScopeWorkspace::schema_fields_SCOPE] !== $scope) {
-                        continue;
-                    }
+                foreach ($ownerRows as $data) {
                     if ((string)$data[ThemeScopeWorkspace::schema_fields_LAYOUT_TYPE] === ThemeLayout::PAGE_TYPE_HOME
                         && (string)($data[ThemeScopeWorkspace::schema_fields_TARGET_TYPE] ?? 'global') === 'global'
                     ) {
@@ -652,25 +619,15 @@ class Upgrade implements UpgradeInterface
                     continue;
                 }
 
-                $coordinator->bakeChromeFromNodes($themeId, $scope, $nodes, true);
-                $version = $scopeVersions->getCurrent($themeId, $scope);
+                $coordinator->bakeChromeFromNodes(
+                    $themeId, $scope, $nodes, true, storeMode: $homeContext->scope->storeMode,
+                );
+                $version = $scopeVersions->getCurrent($themeId, $scope, $homeContext->scope->storeMode, $homeContext->area);
                 if ($version === null) {
                     continue;
                 }
                 $scopeVersions->markPublished($version);
-                $chromePath = $paths->chromePhtml($themeId, $scope, $version->getVersionId());
-                if (!\is_file($chromePath)) {
-                    throw new \RuntimeException(
-                        'theme_layout_entity_chrome_reconcile_missing: ' . $chromePath,
-                    );
-                }
-                $pointers->rememberChromePointer(
-                    $themeId,
-                    $scope,
-                    $version->getVersionId(),
-                    $chromePath,
-                    true,
-                );
+                // Independent partial candidates were validated when published.
             }
         }
     }
@@ -718,12 +675,6 @@ class Upgrade implements UpgradeInterface
         );
         /** @var ThemeScopeVersionService $scopeVersions */
         $scopeVersions = ObjectManager::getInstance(ThemeScopeVersionService::class);
-        /** @var ThemeLayoutEntityPointerResolver $pointers */
-        $pointers = ObjectManager::getInstance(ThemeLayoutEntityPointerResolver::class);
-        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths $paths */
-        $paths = ObjectManager::getInstance(
-            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths::class,
-        );
 
         $scopeCtx = $scopes->contextFromIdentity(ScopeIdentity::global());
         $identity = [
@@ -811,16 +762,6 @@ class Upgrade implements UpgradeInterface
                 if (!$version->isPublished()) {
                     $scopeVersions->markPublished($version);
                 }
-                $chromePath = $paths->chromePhtml($themeId, $scope, $version->getVersionId());
-                if (\is_file($chromePath)) {
-                    $pointers->rememberChromePointer(
-                        $themeId,
-                        $scope,
-                        $version->getVersionId(),
-                        $chromePath,
-                        true,
-                    );
-                }
             } catch (\Throwable $e) {
                 w_log_warning(
                     'theme_active_chrome_publish_migrate_failed: theme=' . $themeId
@@ -835,6 +776,21 @@ class Upgrade implements UpgradeInterface
     /**
      * @param array<string, mixed> $data
      */
+    /** @param list<array<string,mixed>> $rows @return array<string,list<array<string,mixed>>> */
+    private function groupLegacyWorkspaceOwners(array $rows): array
+    {
+        $groups = [];
+        foreach ($rows as $row) {
+            $key = \json_encode([
+                (string)$row[ThemeScopeWorkspace::schema_fields_SCOPE],
+                (string)($row[ThemeScopeWorkspace::schema_fields_STORE_MODE] ?? ScopeIdentity::MODE_NORMAL),
+                (string)($row[ThemeScopeWorkspace::schema_fields_AREA] ?? 'frontend'),
+            ], JSON_THROW_ON_ERROR);
+            $groups[$key][] = $row;
+        }
+        return $groups;
+    }
+
     private function editorContextFromWorkspaceRow(ScopeHierarchyInterface $scopes, array $data): ?ThemeEditorContext
     {
         try {

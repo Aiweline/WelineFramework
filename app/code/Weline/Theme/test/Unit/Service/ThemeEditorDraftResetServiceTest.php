@@ -8,6 +8,13 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 final class ThemeEditorDraftResetServiceTest extends TestCase
 {
+    public function testDraftResetDoesNotInvalidatePublishedStorefrontCache(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/Service/ThemeEditorDraftResetService.php');
+        self::assertIsString($source);
+        self::assertStringNotContainsString('clearNonGlobalCaches(', $source);
+    }
+
     public static function resourceRevisions(): iterable
     {
         foreach ([

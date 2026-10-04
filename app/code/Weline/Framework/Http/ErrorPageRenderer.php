@@ -537,11 +537,12 @@ HTML;
             $cookie = (string)($context['cookie_header'] ?? '');
             $host = (string)($context['request_host'] ?? '');
 
-            // Prefer full REQUEST_URI so /{locale}/... still resolves after path-locale stripping.
+            // The router may strip mount and locale segments from REQUEST_URI.
             $requestUri = '';
             if (\class_exists(WelineEnv::class, false)) {
                 try {
-                    $requestUri = (string)WelineEnv::server('REQUEST_URI', '');
+                    $requestUri = (string)(WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
+                        ?: WelineEnv::server('REQUEST_URI', ''));
                 } catch (\Throwable) {
                     $requestUri = '';
                 }

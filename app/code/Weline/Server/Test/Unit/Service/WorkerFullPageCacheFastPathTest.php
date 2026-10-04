@@ -79,6 +79,83 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         return new FullPageCacheCoordinator(cachePool: $pool, storefrontCacheKeyContextResolver: $this->receiptResolver);
     }
 
+    public static function bootstrapHomepagePaths(): array
+    {
+        return [['/'], ['/zh_Hans_CN/']];
+    }
+
+    /** @dataProvider bootstrapHomepagePaths */
+    public function testEachHomepageCacheHitReceivesAnIsolatedScopeBootstrap(string $path): void
+    {
+        require_once BP . 'app/code/Weline/Websites/Test/Unit/Service/FrontendWorkerScopeBootstrapResponseServiceTest.php';
+        $providerClass = \Weline\Websites\Test\Unit\Service\TestBootstrapScopeProvider::class;
+        $providerClass::reset();
+        $providerClass::$binding = new \Weline\Framework\Service\Query\Value\FrontendWorkerScopeBinding(
+            RequestContext::scopeIdentity(), 'example.test', hash('sha256', 'fixture-scope-token'), time(), time() + 1800, true,
+        );
+        $service = new \Weline\Websites\Service\FrontendWorkerScopeBootstrapResponseService(
+            new $providerClass(),
+            new \Weline\Framework\Service\Query\FrontendWorkerSessionService(
+                new \Weline\Websites\Test\Unit\Service\BootstrapMemoryStateStore(),
+            ),
+        );
+        $events = $this->createMock(\Weline\Framework\Event\EventsManager::class);
+        $events->method('hasObservers')->willReturn(true);
+        $events->method('dispatch')->willReturnCallback(function (string $name, mixed &$data) use ($events, $service) {
+            if ($name === 'Weline_Framework_Fpc::cache_hit_response') {
+                $data['response'] = $service->decorate($data['response']);
+            }
+            return $events;
+        });
+        \Weline\Framework\Manager\ObjectManager::setInstance(\Weline\Framework\Event\EventsManager::class, $events);
+
+        $coordinator = $this->coordinator(new WorkerFastPathCountingCachePool());
+        $cacheKey = '1234567890abcdef';
+        $body = '<html><head><title>Cached</title></head><body>' . str_repeat('Public ', 512) . '</body></html>';
+        (new \ReflectionMethod($coordinator, 'setProcessCachedPayload'))->invoke($coordinator, $cacheKey, [
+            KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+            KeyBuilder::UNIFIED_CACHE_FPC_KEY => $body,
+            'fpc_br_b64' => base64_encode(\Weline\Framework\Http\ContentEncodingNegotiator::encode($body, 'br')),
+            'fpc_gzip_b64' => base64_encode(gzencode($body)),
+            KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => ['Content-Type: text/html; charset=utf-8'],
+            'fpc_variant' => ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
+            'fpc_html_urls_validated' => true,
+            'fpc_expires_at' => microtime(true) + 60,
+        ]);
+        (new \ReflectionMethod($coordinator, $path === '/' ? 'registerRootHomepageProcessReceipt' : 'registerLocalizedHomepageProcessReceipt'))->invoke(
+            $coordinator, 'https://example.test' . $path, ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'], $cacheKey,
+        );
+        $decision = WorkerPolicyDecision::allow('127.0.0.1', 'GET', 'HTTP/1.1', $path, $path,
+            ['host' => 'example.test', 'accept' => 'text/html', 'accept-encoding' => 'gzip'], '', str_repeat('f', 64), false,
+            WorkerPolicyDecision::CACHE_FPC_PROCESS_L1);
+        $fastPath = new WorkerFullPageCacheFastPath($coordinator, null, false);
+        $originalContext = Context::getCurrent();
+        $ids = [];
+        foreach ([1, 2] as $request) {
+            $hit = $fastPath->lookup($decision, 'https');
+            self::assertIsArray($hit);
+            self::assertSame($originalContext, Context::getCurrent());
+            self::assertSame('process', $hit['source']);
+            self::assertSame(strlen($hit['response']), $hit['bytes']);
+            [$headers, $encoded] = explode("\r\n\r\n", $hit['response'], 2);
+            $html = gzdecode($encoded);
+            self::assertMatchesRegularExpression('/name="weline-worker-scope-bootstrap" content="([A-Za-z0-9_-]{43})"/', $html);
+            preg_match('/name="weline-worker-scope-bootstrap" content="([A-Za-z0-9_-]{43})"/', $html, $match);
+            $ids[] = $match[1];
+            self::assertStringContainsString('__Host-Weline-Worker-Scope-Bootstrap-' . $match[1], $headers);
+            self::assertMatchesRegularExpression('/Content-Length: ' . strlen($encoded) . '\r\n/i', $headers . "\r\n");
+            self::assertStringContainsString('private, no-store', $headers);
+        }
+        self::assertNotSame($ids[0], $ids[1]);
+        $public = (new \ReflectionMethod($coordinator, 'getProcessCachedPayload'))->invoke($coordinator, $cacheKey);
+        $publicHtml = (new \ReflectionMethod($coordinator, 'resolvePlaintextBody'))->invoke($coordinator, $public);
+        self::assertSame($body, $publicHtml);
+        self::assertStringNotContainsString('weline-worker-scope-bootstrap', $publicHtml);
+        self::assertStringNotContainsString('__Host-Weline-Worker-Scope-Bootstrap-', json_encode($public));
+        self::assertSame(2, $providerClass::$issueCalls);
+        $providerClass::reset();
+    }
+
     /**
      * @param array<string, mixed> $overrides
      * @return array<string, mixed>
@@ -87,20 +164,14 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
     {
         $context = StorefrontCacheKeyContext::current();
         self::assertInstanceOf(StorefrontCacheKeyContext::class, $context);
-
-        return $overrides + [
-            'version' => 2,
-            'full_uri' => 'https://example.test/',
-            'method' => 'GET',
-            'cookie_header' => '',
-            'identity_digest' => \hash('sha256', $cacheKey),
-            'cache_key' => $cacheKey,
-            'scope_identity' => $context->scopeIdentity->toArray(),
-            'namespace_fingerprint' => $context->namespaceFingerprint,
-            'lang' => $context->lang,
-            'default_locale' => $context->defaultLocale,
-            'translation_locales' => $context->translationLocales,
-        ];
+        $coordinator = $this->coordinator();
+        $receipt = (new \ReflectionMethod($coordinator, 'buildInternalHomepageWarmupReceipt'))->invoke(
+            $coordinator,
+            'https://example.test/',
+            ['lang' => $context->lang, 'currency' => 'CNY'],
+            $cacheKey,
+        );
+        return $overrides + $receipt;
     }
 
     public function testMissedTranslationBroadcastRejectsWarmReceiptAtNextAuthorityClock(): void
@@ -261,7 +332,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
             $hit = $fastPath->lookup($decision('/CNY/zh_Hans_CN/'), 'https');
             self::assertSame($originalContext, Context::getCurrent(), '早期核验结束恢复调用者 Context。');
             self::assertIsArray($hit);
-            self::assertSame('process-formatted', $hit['source']);
+            self::assertSame('process', $hit['source']);
             self::assertStringContainsString('localized-process-receipt', \gzdecode(
                 \substr($hit['response'], (int)\strpos($hit['response'], "\r\n\r\n") + 4),
             ));
@@ -338,7 +409,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
 
             $hit = $fastPath->lookup($decision('/'), 'https');
             self::assertIsArray($hit);
-            self::assertSame('process-formatted', $hit['source']);
+            self::assertSame('process', $hit['source']);
             self::assertStringContainsString('localized-process-receipt', \gzdecode(
                 \substr($hit['response'], (int)\strpos($hit['response'], "\r\n\r\n") + 4),
             ));
@@ -361,6 +432,26 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
             self::assertSame(0, $pool->getCalls, 'Cookie-bearing requests must return to Framework.');
             self::assertNull($fastPath->lookup($decision('/?page=2'), 'https'));
             self::assertNull($fastPath->lookup($decision('/', ['host' => 'other.test']), 'https'));
+            $pool->values[$cacheKey . ':stale:v1'] = [
+                KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+                KeyBuilder::UNIFIED_CACHE_FPC_KEY => '<html><body>natural-stale-homepage</body></html>',
+                KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => ['Content-Type: text/html; charset=utf-8'],
+                'fpc_variant' => ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
+                'fpc_html_urls_validated' => true,
+                'fpc_expires_at' => \microtime(true) - 1,
+            ];
+            $expires = new \ReflectionProperty(FullPageCacheCoordinator::class, 'processFpcPayloadExpiresAt');
+            $processExpirations = $expires->getValue();
+            $processExpirations[$cacheKey] = \microtime(true) - 1;
+            $expires->setValue(null, $processExpirations);
+            self::assertNull($coordinator->resolveRootHomepageProcessReceipt($fullUri));
+            self::assertIsArray($coordinator->resolveRootHomepageStaleReceipt($fullUri));
+            $staleHit = $fastPath->lookup($decision('/'), 'https');
+            self::assertIsArray($staleHit, 'A natural exact receipt must survive fresh expiry for stale fallback.');
+            self::assertSame('stale-process', $staleHit['source']);
+            self::assertStringContainsString('localized-process-receipt', \gzdecode(
+                \substr($staleHit['response'], (int)\strpos($staleHit['response'], "\r\n\r\n") + 4),
+            ));
             FullPageCacheCoordinator::clearProcessCache();
             self::assertNull($fastPath->lookup($decision('/'), 'https'));
         } finally {
@@ -417,15 +508,15 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
             $fastPath = new WorkerFullPageCacheFastPath($coordinator, new WlsRuntime(), true);
             $hit = $fastPath->lookup($decision, 'https');
             self::assertIsArray($hit);
-            self::assertSame('process-formatted', $hit['source']);
+            self::assertSame('process', $hit['source']);
             self::assertStringContainsString('root-port-alias-formatted', \gzdecode(
                 \substr($hit['response'], (int)\strpos($hit['response'], "\r\n\r\n") + 4),
             ));
             self::assertStringContainsString("X-Weline-Fpc: HIT\r\n", $hit['response']);
             if (ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
-                self::assertMatchesRegularExpression('/X-Wls-Performance-Fpc-Source:\\s*process-formatted/i', $hit['response']);
+                self::assertMatchesRegularExpression('/X-Wls-Performance-Fpc-Source:\\s*process/i', $hit['response']);
             } else {
-                self::assertSame('process-formatted', $hit['source']);
+                self::assertSame('process', $hit['source']);
             }
         } finally {
             FullPageCacheCoordinator::clearProcessCache();
@@ -495,7 +586,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
             $result = (new WorkerFullPageCacheFastPath($coordinator, $runtime, true))->lookup($decision, 'https');
 
             self::assertIsArray($result);
-            self::assertSame('process-formatted', $result['source']);
+            self::assertSame('process', $result['source']);
             self::assertStringContainsString("X-Weline-Fpc: HIT\r\n", $result['response']);
             if (ResponseObservabilityPolicy::performanceBreakdownEnabled()) {
                 self::assertStringContainsString("X-Wls-Performance-Urlparser: 0\r\n", $result['response']);
@@ -549,6 +640,74 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         } finally {
             FullPageCacheCoordinator::clearProcessCache();
         }
+    }
+
+    public function testExpiredAnonymousHomepageUsesStaleReceiptWithoutEnteringRouter(): void
+    {
+        FullPageCacheCoordinator::clearProcessCache();
+        $cacheKey = '0123456789abcdef';
+        $pool = new WorkerFastPathCountingCachePool();
+        $pool->values[$cacheKey . ':stale:v1'] = [
+            KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+            KeyBuilder::UNIFIED_CACHE_FPC_KEY => '<html><body>stale-homepage</body></html>',
+            KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => ['Content-Type: text/html; charset=utf-8'],
+            'fpc_variant' => ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
+            'fpc_html_urls_validated' => true,
+            'fpc_expires_at' => \microtime(true) - 1,
+        ];
+        $coordinator = $this->coordinator($pool);
+        $receipt = (new \ReflectionMethod($coordinator, 'buildInternalHomepageWarmupReceipt'))->invoke(
+            $coordinator,
+            'https://example.test/',
+            ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
+            $cacheKey,
+        );
+        $runtime = new WlsRuntime();
+        (new \ReflectionProperty($runtime, 'homepageCacheWarmupReceipt'))->setValue(
+            $runtime, $receipt,
+        );
+        $decision = WorkerPolicyDecision::allow(
+            '127.0.0.1', 'GET', 'HTTP/1.1', '/', '/',
+            ['host' => 'example.test', 'accept' => 'text/html'], '',
+            \str_repeat('a', 64), false,
+            WorkerPolicyDecision::CACHE_FPC_PROCESS_L1 | WorkerPolicyDecision::CACHE_FPC_SHARED_L2,
+        );
+
+        $hit = (new WorkerFullPageCacheFastPath($coordinator, $runtime, true))->lookup($decision, 'https');
+        self::assertIsArray($hit);
+        self::assertSame('stale-shared', $hit['source']);
+        self::assertStringContainsString("X-Weline-Fpc: STALE\r\n", $hit['response']);
+        self::assertStringContainsString('stale-homepage', $hit['response']);
+        $head = $coordinator->getFormattedStaleCachedResponseForInternalReceipt(
+            $receipt, false, 'HEAD', 'text/html', '', true,
+        );
+        self::assertIsArray($head);
+        self::assertStringEndsWith("\r\n\r\n", $head['response']);
+        self::assertStringNotContainsString('stale-homepage', $head['response']);
+        self::assertNull($coordinator->getFormattedStaleCachedResponseForInternalReceipt(
+            $receipt, false, 'GET', 'text/html', '', true, true,
+        ));
+
+        $candidateProperty = new \ReflectionProperty(WlsRuntime::class, 'homepagePublicationProofCandidate');
+        $oldCandidate = $candidateProperty->getValue();
+        try {
+            (new \ReflectionProperty($runtime, 'homepageCacheWarmupReceipt'))->setValue($runtime, []);
+            $candidateProperty->setValue(null, $receipt);
+            FullPageCacheCoordinator::clearProcessCache();
+            $candidateHit = (new WorkerFullPageCacheFastPath($coordinator, $runtime, true))
+                ->lookup($decision, 'https');
+            self::assertIsArray($candidateHit, 'A natural-hit receipt must survive Process cache compaction.');
+            self::assertSame('stale-shared', $candidateHit['source']);
+        } finally {
+            $candidateProperty->setValue(null, $oldCandidate);
+        }
+
+        $receipt['namespace_fingerprint'] = \str_repeat('f', 64);
+        (new \ReflectionProperty($runtime, 'homepageCacheWarmupReceipt'))->setValue($runtime, $receipt);
+        self::assertNull((new WorkerFullPageCacheFastPath($coordinator, $runtime, true))->lookup($decision, 'https'));
+        self::assertNull($coordinator->getFormattedStaleCachedResponseForInternalReceipt(
+            $receipt, false, 'GET', 'text/html', '', true,
+        ));
     }
 
     public function testReadyReceiptRemainsBoundToTheAnonymousRootOrigin(): void
@@ -879,15 +1038,17 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
 final class WorkerFastPathCountingCachePool implements CachePoolInterface
 {
     public int $getCalls = 0;
+    public array $values = [];
 
     public function get(string $key): mixed
     {
         ++$this->getCalls;
-        return null;
+        return $this->values[$key] ?? null;
     }
 
     public function set(string $key, mixed $value, int $ttl = 0): bool
     {
+        $this->values[$key] = $value;
         return true;
     }
 

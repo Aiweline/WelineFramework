@@ -178,7 +178,7 @@
                   shared="true" sort="800"/>
     </event>
 
-    <!-- FPM final responses. Persistent runtimes skip this registration. -->
+    <!-- Final responses, including WLS error pages; the decorator is request-idempotent. -->
     <event name="Weline_Framework_Http::response_ready">
         <observer name="Weline_Websites::frontend_worker_scope_bootstrap_response_ready"
                   instance="Weline\Websites\Observer\FrontendWorkerScopeBootstrapResponse"

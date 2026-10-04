@@ -18,6 +18,7 @@ final class ThemeLayoutEntityRuntime
     ) {
     }
 
+    /** @deprecated Use SolidifiedControllerTemplateResolver; remove with legacy pointer callers. */
     public function tryResolvePageLayoutPath(
         int $themeId,
         string $scope,
@@ -26,20 +27,9 @@ final class ThemeLayoutEntityRuntime
         bool $published = true,
         ?int $releaseId = null,
     ): ?string {
-        $pointer = $this->pointers->resolvePageEntity(
-            $themeId,
-            $scope,
-            $identityHash,
-            $structureKey,
-            $published,
-            $releaseId,
-        );
-        if (!\is_array($pointer)) {
-            return null;
-        }
-        $path = (string)($pointer['path'] ?? '');
-
-        return $path !== '' && \is_file($path) ? $path : null;
+        // Retired structural identity API. Normal selection uses the typed
+        // source resolver and a pinned page/partial workset.
+        return null;
     }
 
     public function isEntityTemplate(string $path): bool

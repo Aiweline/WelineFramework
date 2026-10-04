@@ -75,8 +75,8 @@
 
 ## 6. Scope（URL 或 Tag 属性）
 
-- 默认从当前请求 GET 解析：`target_scope`，或 `scope`，以及可选 `website_code` / `store_code` / `channel_code`。
-- **实体编辑页**可在标签上声明强制范围：`target_scope`、`website_code`、`store_code`、`channel_code`、`scope_kind`。任一有值时**整段覆盖 URL**（`ConfigEmbedResolver::scopeInputFromAttributes`），避免业务页无 query 时误写 Global。
+- 默认从当前请求 GET 解析：`target_scope`，或 `scope`，以及可选 `website_code` / `store_code` / `channel_code` / `store_mode`。
+- **实体编辑页**可在标签上声明强制范围：`target_scope`、`website_code`、`store_code`、`channel_code`、`scope_kind`、`store_mode`。任一有值时**整段覆盖 URL**（`ConfigEmbedResolver::scopeInputFromAttributes`），避免业务页无 query 时误写 Global。店铺／渠道范围须同步传递权威身份中的 `store_mode`，包括 test、dev；控件及保存载荷保留该模式，不能丢失后按 normal 校验。
 - 走 `SystemConfigTargetScopeService::resolveFromInput(..., allowSessionFallback: false)`。
 - **禁止 Session / 页面类型推断**。
 - URL 与 Tag 均无范围 → **Global**（`default.default.default`）。

@@ -1486,39 +1486,18 @@
         // Mini-cart roots / lazy account sections / quick-add panel may hydrate after this script.
         // Do NOT forceNetwork here: applySummary/DOM chrome sync would re-enter the observer
         // and storm cart.getCart.
-        // chrome sync writes textContent → childList；短暂抑制，打断 enhanceMiniCarts 自激环。
+        // The shared observer disconnects during a flush, including chrome text updates.
         if (global.MutationObserver) {
-            var pending = null;
-            var suppressChromeResyncUntil = 0;
-            var origSyncMini = syncMiniCartChrome;
-            var origSyncCheckout = syncCheckoutChrome;
-            syncMiniCartChrome = function (mode) {
-                suppressChromeResyncUntil = Date.now() + 200;
-                return origSyncMini(mode);
-            };
-            syncCheckoutChrome = function (mode) {
-                suppressChromeResyncUntil = Date.now() + 200;
-                return origSyncCheckout(mode);
-            };
-            if (global.WelineB2BSellingMode) {
-                global.WelineB2BSellingMode.syncMiniCartChrome = syncMiniCartChrome;
-                global.WelineB2BSellingMode.syncCheckoutChrome = syncCheckoutChrome;
-            }
-            var observer = new MutationObserver(function () {
-                if (pending) {
-                    return;
-                }
-                pending = global.setTimeout(function () {
-                    pending = null;
-                    if (Date.now() < suppressChromeResyncUntil) {
-                        return;
-                    }
+            global.Weline.dom.observe({
+                target: document.documentElement,
+                options: { childList: true, subtree: true },
+                label: 'b2b-selling-mode',
+                onFlush: function () {
                     bindAllSellingModes();
                     enhanceMiniCarts({ refresh: false });
                     bindAllAccountIdentities();
-                }, 80);
+                }
             });
-            observer.observe(document.documentElement, { childList: true, subtree: true });
         }
     }
 

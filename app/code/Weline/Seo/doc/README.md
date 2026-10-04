@@ -87,6 +87,7 @@
 ## 维护规则
 
 - 跨模块页面头部、协议站点和 sitemap 读取分别使用 `Api\Head`、`Api\Protocol`、`Api\Sitemap`；返回值是不可变 DTO，不暴露 Seo 内部服务或 ORM。
+- Sitemap 数据库 fallback 按该 Website 登记的域名与挂载路径，将合法别名链接映射到当前请求入口；保持相对路径、查询参数与片段，未登记外域仍由同源校验拒绝。每次生成只读取一次登记列表，不逐 URL 查询域名。
 - CMS 等可选集成通知 URL 变更时，使用
   `Weline\Seo\Api\Url\UrlChangeNotifierInterface::notify()`。该边界只交换 array 数据，
   保留 `url_changed -> 提交/sitemap -> url_change_processed` 顺序；调用方不得定位 `SeoUrlChangeService`。

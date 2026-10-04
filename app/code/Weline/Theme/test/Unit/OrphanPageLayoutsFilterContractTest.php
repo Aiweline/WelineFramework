@@ -154,17 +154,14 @@ final class OrphanPageLayoutsFilterContractTest extends TestCase
         $prop->setAccessible(true);
         $prop->setValue($service, $registry);
 
-        $area = new ReflectionProperty(SlotRendererService::class, 'renderArea');
-        $area->setAccessible(true);
-        $area->setValue($service, 'frontend');
-
-        $theme = new ReflectionProperty(SlotRendererService::class, 'renderTheme');
-        $theme->setAccessible(true);
-        $theme->setValue($service, null);
-
-        $orphans = new ReflectionProperty(SlotRendererService::class, 'orphanWidgets');
-        $orphans->setAccessible(true);
-        $orphans->setValue($service, []);
+        // renderArea / renderTheme / orphanWidgets 现由 pass() 持有的 SlotRenderPass 承载
+        // （原 SlotRendererService 直属性已移除）。
+        $passMethod = new ReflectionMethod(SlotRendererService::class, 'pass');
+        $passMethod->setAccessible(true);
+        $pass = $passMethod->invoke($service);
+        $pass->renderArea = 'frontend';
+        $pass->renderTheme = null;
+        $pass->orphanWidgets = [];
 
         return $service;
     }

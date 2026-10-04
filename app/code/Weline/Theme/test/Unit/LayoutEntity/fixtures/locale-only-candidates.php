@@ -82,6 +82,7 @@ namespace Weline\Theme\Service\LayoutEntity {
     class ThemeLayoutEntityPointerResolver {}
     class ThemeLayoutEntityMaterializer {
         public array $generatedVersions = [];
+        public function discoverPageNativeOwners($identity, $type, $option, array $nodes): array { return $nodes; }
         public function resolveNodeConfigurations(...$args): array { return []; }
         public function candidatePage($identity, $hash, $structure, $nodes, $configs, $type, $option, $target, $targetId, ...$rest): array {
             $this->generatedVersions[] = $identity->themeVersionId;

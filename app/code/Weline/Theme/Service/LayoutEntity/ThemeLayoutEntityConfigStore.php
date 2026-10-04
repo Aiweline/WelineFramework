@@ -3,10 +3,13 @@ declare(strict_types=1);
 namespace Weline\Theme\Service\LayoutEntity;
 use Weline\Framework\Cache\CachePolicy;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 
-/** Compatibility boundary: layout relationships are emitted only into PHTML at save time. */
+/**
+ * @deprecated Sidecar config/asset reads are retired and return no data.
+ * Retained for legacy renderer signatures; remove with those callers after
+ * migration to explicit renderResolved parameters and normal template resources.
+ */
 final class ThemeLayoutEntityConfigStore
 {
 

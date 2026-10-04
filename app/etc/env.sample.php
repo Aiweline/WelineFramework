@@ -56,7 +56,7 @@ return [
             'charset' => 'utf8',
             'collate' => 'utf8_general_ci',
             'persistent' => true,
-            'pool_size' => 10,
+            'pool_size' => 16,
             'timeout' => 30,
         ],
         'slaves' => [],
@@ -258,8 +258,8 @@ return [
             'request_log_enabled' => null,
             // 错误日志开关；null 表示沿用现有 DEV 判断
             'error_log_enabled' => null,
-            // Persistent WLS FPC stampede guard: only wait briefly for the worker holding the build lock to publish.
-            'fpc_build_wait_timeout_ms' => 80,
+            // Wait for the single homepage publisher through a cold rebuild before admitting another renderer.
+            'fpc_build_wait_timeout_ms' => 60000,
             // Serve stale public FPC during rebuild lock contention instead of blocking readers.
             'fpc_stale_ttl_seconds' => 86400,
             'fpc_serve_stale_before_build' => true,
@@ -541,7 +541,9 @@ return [
             'heartbeat_timeout' => 60,       // Fiber 心跳超时（秒），超时未续约则强制回收
                                              // 建议：短连接 30s，长连接 120s（配合客户端 30-60s 心跳）
             'idle_ttl' => 0,                 // 非长连接 Fiber 闲置超时（秒），0=禁用
-            'max_active' => 0,               // 最大活跃 Fiber 数，0=无限制
+            'max_active' => 12,              // 每 Worker 最多同时执行的动态请求；0=无限制
+            'admission_queue_wait_ms' => 60000,
+            'admission_queue_depth' => 1024,
         ],
         // Worker 自动扩缩容配置
         'scaling' => [

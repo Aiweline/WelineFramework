@@ -45,6 +45,20 @@ final class StorefrontFilterPanelPrefetchTest extends TestCase
         RequestContext::cleanup();
     }
 
+    public function testEditorPanelUsesRequestMemoInsteadOfPublicSharedPanel(): void
+    {
+        $service = $this->serviceWithSharedPanel(['clear_url' => '/public']);
+        $request = $this->createMock(\Weline\Framework\Http\Request::class);
+        $request->method('getParam')->willReturnCallback(static fn($key, $default = '') => $key === 'editor_mode' ? '1' : $default);
+        $reflection = new ReflectionClass($service);
+        $reflection->getProperty('previewRequest')->setValue($service, new \Weline\Theme\Service\PreviewRequestInspector($request));
+        $key = (new ReflectionMethod($service, 'buildPanelLogicalKey'))->invoke($service, [], '/products', [], 3, false);
+        $hotCache = $reflection->getProperty('hotCache')->getValue($service);
+        $expected = ['clear_url' => '/products?theme_id=3&editor_mode=1'];
+        $hotCache->rememberForRequest('storefront.filters.panel', $key, static fn() => $expected);
+        self::assertSame($expected, $service->buildPanel([], '/products', [], 3));
+    }
+
     public function testIsListingLikePathGatesNonListingRoutes(): void
     {
         self::assertTrue(StorefrontFilterPanelService::isListingLikePath('categories'));

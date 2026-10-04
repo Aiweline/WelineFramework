@@ -18,7 +18,7 @@ namespace Weline\Theme\Api\Scoped {
         public string $resourceType = 'layout', $area = 'frontend', $layoutType = 'homepage', $layoutOption = 'default', $locale = 'default', $targetType = 'global';
         public int $themeId = 999997, $targetId = 0;
         public object $scope;
-        public function __construct() { $this->scope = (object)['storageScope' => 'fixture.store.channel', 'storeMode' => 'normal']; }
+        public function __construct() { $this->scope = (object)['storageScope' => 'fixture.store.channel', 'storeMode' => \Weline\Theme\Model\ThemeScopeVersion::$mode]; }
         public function withResource(string $resource): self { $copy = clone $this; $copy->resourceType = $resource; return $copy; }
         public function withLocale(string $locale): self { $copy = clone $this; $copy->locale = $locale; return $copy; }
         public function identityHash(): string { return hash('sha256', $this->resourceType); }
@@ -29,6 +29,8 @@ namespace Weline\Theme\Model {
     class ThemeScopeVersion {
         public const LIFECYCLE_DRAFT = 'draft', LIFECYCLE_SEALED = 'sealed';
         public static array $rows = [];
+        public static string $mode = 'normal';
+        public static string $ownerScope = 'fixture.store.channel';
         private array $data = [];
         public function clearData(): self { $this->data = []; return $this; }
         public function clearQuery(): self { return $this; }
@@ -39,8 +41,8 @@ namespace Weline\Theme\Model {
         public function load(int $id): self { $this->data = self::$rows[$id]; return $this; }
         public function getVersionId(): int { return $this->data['version_id']; }
         public function getThemeId(): int { return 999997; }
-        public function getScope(): string { return 'fixture.store.channel'; }
-        public function getStoreMode(): string { return 'normal'; }
+        public function getScope(): string { return self::$ownerScope; }
+        public function getStoreMode(): string { return self::$mode; }
         public function getArea(): string { return 'frontend'; }
         public function getLifecycle(): string { return $this->data['lifecycle']; }
         public function getContentRevision(): int { return $this->data['content_revision']; }
@@ -49,7 +51,7 @@ namespace Weline\Theme\Model {
         public function getChromePayload(): array { return $this->data['chrome'] ?? []; }
         public function setChromePayload(array $nodes): self { $this->data['chrome'] = $nodes; return $this; }
         public function toVersionIdentity(): \Weline\Theme\Api\Version\ThemeVersionIdentity {
-            return new \Weline\Theme\Api\Version\ThemeVersionIdentity($this->getThemeId(), $this->getScope(), 'normal', 'frontend',
+            return new \Weline\Theme\Api\Version\ThemeVersionIdentity($this->getThemeId(), $this->getScope(), $this->getStoreMode(), 'frontend',
                 $this->getVersionId(), $this->getLifecycle() === self::LIFECYCLE_DRAFT ? 'draft' : 'formal', $this->getContentRevision());
         }
     }
@@ -81,6 +83,7 @@ namespace Weline\Theme\Service\LayoutEntity {
     class ThemeLayoutEntityConfigStore {}
     class ThemeLayoutEntityPointerResolver {}
     class ThemeLayoutEntityMaterializer {
+        public function discoverPageNativeOwners($identity, $type, $option, array $nodes): array { return $nodes; }
         public array $generatedVersions = [];
         public function resolveNodeConfigurations(...$args): array { return []; }
         public function candidatePage($identity, $hash, $structure, $nodes, $configs, $type, $option, $target, $targetId, ...$rest): array {
@@ -93,7 +96,10 @@ namespace Weline\Theme\Service\LayoutEntity {
 }
 namespace Weline\Theme\Service {
     class SharedChromeService {}
-    class ThemeRuntimeCacheCleaner { public function clearLayoutEntityCaches(...$args): void {} }
+    class ThemeRuntimeCacheCleaner {
+        public static array $calls = [];
+        public function clearLayoutEntityCaches(...$args): void { self::$calls[] = $args; }
+    }
     class ThemeRuntimeLayoutResolver {
         public function buildContext(...$args): \Weline\Theme\Api\Scoped\ThemeEditorContext { return new \Weline\Theme\Api\Scoped\ThemeEditorContext(); }
     }
@@ -104,6 +110,7 @@ namespace Weline\Theme\Service {
 }
 namespace {
     $theme = dirname(__DIR__, 4);
+    \Weline\Theme\Model\ThemeScopeVersion::$mode = $argv[2] ?? 'normal';
     $parent = sys_get_temp_dir() . '/weline-selected-draft-rebake-' . bin2hex(random_bytes(6));
     mkdir($parent, 0770, true);
     define('BP', $parent);
@@ -129,6 +136,16 @@ namespace {
         new \Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder(),
         new \Weline\Theme\Service\SharedChromeService());
     try {
+        if (($argv[1] ?? '') === 'inherited-layout-write') {
+            \Weline\Theme\Model\ThemeScopeVersion::$ownerScope = $argv[3] ?? 'default.default.default';
+            $coordinator->afterLayoutWrite(999997, 'fixture.store.channel', 'homepage', 'fixture-layout',
+                ['fixture' => ['node_uid' => 'fixture', 'config' => [], 'slot_id' => 'content']], [['op' => 'set']], true, 7201);
+            $owner = (new \Weline\Theme\Model\ThemeScopeVersion())->load(1116)->toVersionIdentity();
+            $path = $paths->pageLayoutPhtml($owner, 'homepage');
+            echo json_encode(['path' => $path, 'artifact' => file_get_contents($path),
+                'cache_calls' => \Weline\Theme\Service\ThemeRuntimeCacheCleaner::$calls], JSON_THROW_ON_ERROR), "\n";
+            return;
+        }
         if (($argv[1] ?? '') === 'published-write') {
             $selected = (new \Weline\Theme\Model\ThemeScopeVersion())->load(1121)->toVersionIdentity();
             $sealed = (new \Weline\Theme\Model\ThemeScopeVersion())->load(1116)->toVersionIdentity();
@@ -150,6 +167,7 @@ namespace {
                 'shared_draft' => file_get_contents($draftPath),
                 'generated_versions' => $materializer->generatedVersions,
                 'version_rows_unchanged' => $inputs === \Weline\Theme\Model\ThemeScopeVersion::$rows,
+                'cache_calls' => \Weline\Theme\Service\ThemeRuntimeCacheCleaner::$calls,
             ], JSON_THROW_ON_ERROR), "\n";
             return;
         }
@@ -167,6 +185,7 @@ namespace {
         $result['historical_candidate'] = $candidates[$draftPath];
         $result['shared_draft_after_historical_candidate'] = file_get_contents($draftPath);
         $result['version_rows_unchanged'] = $inputs === \Weline\Theme\Model\ThemeScopeVersion::$rows;
+        $result['cache_calls'] = \Weline\Theme\Service\ThemeRuntimeCacheCleaner::$calls;
         echo json_encode($result, JSON_THROW_ON_ERROR), "\n";
     } finally {
         $paths->purgeAllEntities();

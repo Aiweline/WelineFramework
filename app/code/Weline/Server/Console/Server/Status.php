@@ -902,6 +902,12 @@ class Status extends CommandAbstract
             $gateway['requested_mode'] ?? $gateway['mode'] ?? $raw['edge_mode'] ?? ''
         )));
         $servingMode = \strtolower(\trim((string)($gateway['serving_mode'] ?? '')));
+        // auto 已解析到托管 Nginx 时，公网由该活动 owner 确认，不依赖网关证明。
+        if (GatewayRuntimeServingProjection::isManagedNginxEdge($raw)
+            && \in_array($servingMode, ['', 'legacy'], true)
+        ) {
+            return false;
+        }
         return GatewayRuntimeServingProjection::participatesInGateway($raw)
             || \in_array($requested, ['auto', 'gateway'], true)
             || \in_array($servingMode, ['gateway', 'fallback_wls'], true);

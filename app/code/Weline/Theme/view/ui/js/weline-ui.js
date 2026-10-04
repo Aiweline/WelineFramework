@@ -559,6 +559,12 @@ function clearFloatingPosition(floating) {
         '--w-floating-max-block-size',
         '--w-floating-transform-origin',
     ]) floating.style.removeProperty(property);
+    floating.style.removeProperty('max-height');
+    // removeProperty does not clear !important; explicit empty clears the priority.
+    if (floating.style.getPropertyPriority('max-height') === 'important') {
+        floating.style.setProperty('max-height', '', 'important');
+        floating.style.removeProperty('max-height');
+    }
 }
 
 /**
@@ -566,11 +572,35 @@ function clearFloatingPosition(floating) {
  * origins while the visual viewport is panned/zoomed or when a top-layer host
  * establishes a containing block. Apply the calculated point, measure the
  * rendered box, then correct it in the coordinate space the user actually sees.
+ *
+ * @param {{minTop?: number}|null} [constraints]
+ *   When `minTop` is set (bottom-anchored flyouts), never drag the panel above
+ *   that floor to “fit” a tall box — shrink max-block-size / max-height instead.
+ *   Otherwise mega menus cover header category labels on short mobile viewports.
  */
-function applyMeasuredFloatingPosition(floating, viewport, desiredLeft, desiredTop) {
+function applyMeasuredFloatingPosition(floating, viewport, desiredLeft, desiredTop, constraints = null) {
     let cssLeft = desiredLeft;
     let cssTop = desiredTop;
     let placedRect = null;
+    const minTop = Number.isFinite(constraints?.minTop) ? Number(constraints.minTop) : null;
+
+    const shrinkToFloor = (floor) => {
+        const room = Math.max(0, viewport.bottom - floor);
+        const px = `${Math.floor(room)}px`;
+        // Publish both the JS token and an !important max-height so theme mega
+        // rules (min() / larger computed max-height) cannot re-expand the box and
+        // re-trigger the top↔height clamp feedback loop.
+        floating.style.setProperty('--w-floating-max-block-size', px);
+        floating.style.setProperty('max-height', px, 'important');
+    };
+
+    // Bottom-anchored floor must be applied BEFORE the first measure. Otherwise
+    // a tall box pulls targetTop up, CSS max-block grows with the lower top, and
+    // the loop stabilizes covering the trigger row (~16px on mobile mega).
+    if (minTop !== null) {
+        cssTop = Math.max(viewport.top, minTop, desiredTop);
+        shrinkToFloor(cssTop);
+    }
 
     for (let pass = 0; pass < 3; pass += 1) {
         floating.style.setProperty('--w-floating-left', `${cssLeft.toFixed(3)}px`);
@@ -581,15 +611,28 @@ function applyMeasuredFloatingPosition(floating, viewport, desiredLeft, desiredT
             viewport.left,
             Math.min(desiredLeft, viewport.right - placedRect.width),
         );
-        const targetTop = Math.max(
-            viewport.top,
-            Math.min(desiredTop, viewport.bottom - placedRect.height),
-        );
+        let targetTop;
+        if (minTop !== null) {
+            // Never steal space from the trigger — height overflow scrolls inside.
+            targetTop = Math.max(viewport.top, minTop, desiredTop);
+            if (placedRect.height > viewport.bottom - targetTop + 0.5) {
+                shrinkToFloor(targetTop);
+                placedRect = floating.getBoundingClientRect();
+            }
+        } else {
+            targetTop = Math.max(
+                viewport.top,
+                Math.min(desiredTop, viewport.bottom - placedRect.height),
+            );
+        }
         const correctionX = targetLeft - placedRect.left;
         const correctionY = targetTop - placedRect.top;
         if (Math.abs(correctionX) < 0.25 && Math.abs(correctionY) < 0.25) break;
         cssLeft += correctionX;
         cssTop += correctionY;
+        if (minTop !== null && cssTop < minTop - 0.5) {
+            cssTop = Math.max(viewport.top, minTop);
+        }
     }
 
     placedRect = floating.getBoundingClientRect();
@@ -1220,9 +1263,48 @@ function positionFloating(anchor, floating, placement = 'bottom-start', referenc
     if (resolvedSide === 'right') left = referenceRect.right + gap;
 
     left = Math.max(viewport.left, Math.min(left, viewport.right - floatingRect.width));
-    top = Math.max(viewport.top, Math.min(top, viewport.bottom - floatingRect.height));
+    // Viewport clamp must not drag a bottom/top-anchored panel across its trigger —
+    // that covers header category labels (mega menu on short mobile viewports).
+    // Prefer shrinking max-block-size over stealing space from the anchor.
+    let measureConstraints = null;
+    if (resolvedSide === 'bottom') {
+        const anchoredTop = referenceRect.bottom + gap;
+        const room = Math.max(0, viewport.bottom - anchoredTop);
+        if (room > 0 && floatingRect.height > room + 0.5) {
+            const px = `${Math.floor(room)}px`;
+            floating.style.setProperty('--w-floating-max-block-size', px);
+            floating.style.setProperty('max-height', px, 'important');
+            floatingRect = floating.getBoundingClientRect();
+        }
+        top = Math.max(viewport.top, anchoredTop);
+        measureConstraints = { minTop: top };
+    } else if (resolvedSide === 'top') {
+        const anchoredBottom = referenceRect.top - gap;
+        const room = Math.max(0, anchoredBottom - viewport.top);
+        if (room > 0 && floatingRect.height > room + 0.5) {
+            const px = `${Math.floor(room)}px`;
+            floating.style.setProperty('--w-floating-max-block-size', px);
+            floating.style.setProperty('max-height', px, 'important');
+            floatingRect = floating.getBoundingClientRect();
+        }
+        top = Math.max(viewport.top, anchoredBottom - floating.getBoundingClientRect().height);
+    } else {
+        top = Math.max(viewport.top, Math.min(top, viewport.bottom - floatingRect.height));
+        // right/left + start: same rule — don't lift the panel above the trigger row.
+        if (alignment === 'start' && top < referenceRect.top - 0.5) {
+            const room = Math.max(0, viewport.bottom - referenceRect.top);
+            if (room > 0) {
+                const px = `${Math.floor(room)}px`;
+                floating.style.setProperty('--w-floating-max-block-size', px);
+                floating.style.setProperty('max-height', px, 'important');
+                floatingRect = floating.getBoundingClientRect();
+            }
+            top = Math.max(viewport.top, referenceRect.top);
+            measureConstraints = { minTop: top };
+        }
+    }
     const actualPlacement = `${resolvedSide}-${alignment}`;
-    const measured = applyMeasuredFloatingPosition(floating, viewport, left, top);
+    const measured = applyMeasuredFloatingPosition(floating, viewport, left, top, measureConstraints);
     floating.style.setProperty(
         '--w-floating-transform-origin',
         resolvedSide === 'top' ? 'bottom' : resolvedSide === 'bottom' ? 'top' : opposite[resolvedSide],

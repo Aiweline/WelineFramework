@@ -52,6 +52,8 @@ PHP-FPM 请求，而不能只验证当前 CLI 进程。
 
 ## 站外 BinQuery 与站内 Worker QueryBin
 
+开发面板的请求追踪和模板性能开关沿用签名 Cookie。`RequestLifecycleTrace` 在冷请求中也加载通用 Cookie 读取器，按当前站点 Cookie 范围读取开关；是否记录明细不能依赖其它业务是否已加载 Cookie 类。其它站点的同名开关与伪造签名不会启用追踪。
+
 这两条链路名称接近，但协议和信任边界不同：
 
 - `/bin/query` 是站外 SDK / API Key 协议，规范位于 [BinQuery 文档目录](./BinQuery/)。
@@ -63,6 +65,8 @@ PHP-FPM 请求，而不能只验证当前 CLI 进程。
 
 未显式配置 `wls.frontend_worker_session_store_driver` 时默认 **`cache`**：权威状态落在缓存池 `frontend_worker_credential`（WLS 常驻时 file→`wls_memory`，池配 redis 则跟 redis）。有 CAS 用原子快照仓；无 CAS 用自建文件锁包住缓存读写。显式 `local` 时 Session/nonce/ticket/bootstrap 位于 `var/cache/frontend_worker/store.json`（目录 `0700`、文件 `0600`、锁内原子替换、8 MiB 硬上限、不安全文件 fail-closed），只适合单机或受控 allowlist 验证。
 
+原子缓存快照仓兼容旧数组与 `weline-worker-state-gzip.v1:` 压缩值。默认对至少 64 KiB、JSON 往返保持类型且压缩后更小的状态使用 gzip level 1；回调仍接收原数组。CAS 比较读取到的完整原始值，保持一次性 bootstrap／nonce 消费的原子性；确认写入结果未知时返回 503，不重放回调。解压后仍执行 8 MiB 限制，损坏快照明确报错，不能作为空状态恢复。已压缩状态的只读事务不发送 CAS 或续期。升级已有集群须先部署兼容读取的版本，再启用压缩写入，避免旧进程误读新格式。
+
 显式 `database` 时 SESSION **查询**另可走三级读旁路：进程内数组 → 同名缓存池 → 主库解密行（写回填/失效）；nonce 等仍直接落库。权威是所选驱动，不是「库永远默认」。
 
 显式 `wls.frontend_worker_session_store_driver=redis` 仍只用于 dev/test 的单键 snapshot-CAS 验证：CAS 冲突会重读并重新执行安全断言，故障明确 503，绝不自动回退本地文件；`system.deploy=prod` 会拒绝该驱动。显式 `database` 时，Session、bootstrap、nonce 与 stream ticket 以主库（PostgreSQL/MySQL）逐记录事务保存；MySQL/PostgreSQL 使用行锁，SQLite 使用 `BEGIN IMMEDIATE` 但不具备生产共享资格。索引只保存域分离 SHA-256，payload 使用 XChaCha20-Poly1305 加密；一次性凭据消费后保留到原 expiry 的 tombstone，容量统计包含未过期 tombstone。nonce 先锁定由 Session 哈希首位确定的 16 个容量分片之一，再锁 Session 与 nonce；每分片最多保留 32,768 个未过期 retained 行，因此全局未过期窗口硬上限为 524,288，同时继续执行每 Session 4,096 行限制。每次 nonce 写路径在同一 shard guard 下先跨 Session 删除至多 256 个该分片的过期行；单次成功写入最多增加一行，因此持续写入时会排空历史 backlog，而不会让已放弃 Session 的过期行逐轮累积。stream ticket 以实际 ASCII 密文长度统计，未过期密文总量上限为 8 MiB；其它类型的过期清理同样按固定类型、每次至多 256 行执行。授权查询始终使用数据库 epoch 校验到期时间，清理停摆不能延长权限。
@@ -72,6 +76,8 @@ PHP-FPM 请求，而不能只验证当前 CLI 进程。
 实现入口：[QueryBin 控制器](../Controller/Api/QueryBin.php)、[站内 Gateway](../Service/Query/FrontendQueryGateway.php)、[Worker Session 服务](../Service/Query/FrontendWorkerSessionService.php)。
 
 ## Storefront 导航 Scope 与 URL 本地化
+
+静态 404 站点映射优先使用 `WELINE_ORIGIN_REQUEST_URI`；路由解析后的 `REQUEST_URI` 可能已剥离站点挂载和语言前缀，不能据此重新选站。读取仍走既有 Host／路径映射及站点语言回退，不为错误页增加请求期数据库查询。
 
 - Website/Domain 注册表使用 `var/runtime/website-parser-sites.version` 作为跨
   Worker 版本事实。WLS 请求至多 1 秒复核一次版本；版本变化时同时清空

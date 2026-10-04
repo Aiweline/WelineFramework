@@ -179,6 +179,8 @@ final class ConfigEmbedResolver
             }
         }
 
+        $storeMode = trim((string)$request->getGet('store_mode', ''));
+        if ($storeMode !== '') { $input['store_mode'] = $storeMode; }
         return $input;
     }
 
@@ -195,7 +197,7 @@ final class ConfigEmbedResolver
         if ($targetScope !== '') {
             $input['target_scope'] = $targetScope;
         }
-        foreach (['website_code', 'store_code', 'channel_code', 'scope_kind'] as $key) {
+        foreach (['website_code', 'store_code', 'channel_code', 'scope_kind', 'store_mode'] as $key) {
             if (!\array_key_exists($key, $attributes)) {
                 continue;
             }
@@ -625,6 +627,7 @@ final class ConfigEmbedResolver
             'kind' => (string)($target['kind'] ?? 'global'),
             'website_code' => (string)($target['website_code'] ?? ''),
             'store_code' => (string)($target['store_code'] ?? ''),
+            'store_mode' => (string)($target['store_mode'] ?? ''),
             'channel_code' => (string)($target['channel_code'] ?? ''),
             'storage_scope' => (string)($target['storage_scope'] ?? SystemConfig::SCOPE_GLOBAL),
         ];

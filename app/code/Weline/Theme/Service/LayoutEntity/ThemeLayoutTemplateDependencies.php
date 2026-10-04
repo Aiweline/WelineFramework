@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\View\Template;
 use Weline\Theme\Helper\ThemePathResolver;
 use Weline\Theme\Model\WelineTheme;
@@ -14,6 +15,14 @@ final class ThemeLayoutTemplateDependencies
 {
     /** @return list<string> */
     public function literalFetches(string $source): array
+    {
+        // 只复用同一请求内相同源字节的语法事实，路径解析仍使用当前主题上下文。
+        return ObjectManager::getInstance(StorefrontScopeHotCache::class)->rememberForRequest(
+            'theme.template.literal_fetches', hash('sha256', $source), fn(): array => $this->parseLiteralFetches($source));
+    }
+
+    /** @return list<string> */
+    private function parseLiteralFetches(string $source): array
     {
         $tree = (new \PhpParser\ParserFactory())->createForNewestSupportedVersion()->parse($source) ?? [];
         $calls = (new \PhpParser\NodeFinder())->findInstanceOf($tree, \PhpParser\Node\Expr\MethodCall::class);
@@ -28,11 +37,19 @@ final class ThemeLayoutTemplateDependencies
     }
 
     /** @return array<string,array{origin:string,logical_path:string}> */
-    public function moduleSources(string $source, ?WelineTheme $theme, string $area): array
+    public function moduleSources(string $source, ?WelineTheme $theme, string $area, ?string $sourceOrigin = null): array
     {
         $dependencies = [];
         foreach ($this->literalFetches($source) as $logical) {
-            if (!preg_match('~^[A-Za-z0-9_]+::[^:]+\.phtml$~D', $logical)) { continue; }
+            if (!preg_match('~^[A-Za-z0-9_]+::[^:]+\.phtml$~D', $logical)) {
+                // 相对引用按所属源模板目录解析，不依赖调用方请求模块。
+                if ($sourceOrigin === null || str_contains($logical, '://') || !str_ends_with($logical, '.phtml')) { continue; }
+                $origin = realpath(str_starts_with($logical, '/') ? $logical : dirname($sourceOrigin) . '/' . $logical);
+                if ($origin !== false && is_file($origin)) {
+                    $dependencies[$origin] = ['origin' => $origin, 'logical_path' => $logical];
+                }
+                continue;
+            }
             [, $relative] = explode('::', $logical, 2);
             // Public partials are generated once with the version's chrome nodes
             // and parameters; page nodes must not replace those shared sources.

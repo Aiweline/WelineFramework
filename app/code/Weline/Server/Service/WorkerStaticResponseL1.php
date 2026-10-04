@@ -80,21 +80,12 @@ final class WorkerStaticResponseL1
         }
 
         $keepAlive = $decision->keepAlive();
-        $ifNoneMatch = \trim((string)($decision->headers['if-none-match'] ?? ''));
-        if ($ifNoneMatch !== '') {
-            // RFC 9110: If-None-Match takes precedence over If-Modified-Since.
-            if (self::etagListMatches($ifNoneMatch, $entry['etag'])) {
-                return self::notModifiedResponse($entry['etag'], $keepAlive);
-            }
-        } else {
-            $ifModifiedSince = \trim((string)($decision->headers['if-modified-since'] ?? ''));
-            if ($ifModifiedSince !== '') {
-                $requestedAt = \strtotime($ifModifiedSince);
-                $lastModifiedAt = \strtotime($entry['last_modified']);
-                if ($requestedAt !== false && $lastModifiedAt !== false && $lastModifiedAt <= $requestedAt) {
-                    return self::notModifiedResponse($entry['etag'], $keepAlive);
-                }
-            }
+        if (self::preconditionStatus(
+            $decision->headers,
+            $entry['etag'],
+            (int)\strtotime($entry['last_modified']),
+        ) === 304) {
+            return self::notModifiedResponse($entry['etag'], $entry['last_modified'], $keepAlive);
         }
 
         $response = $keepAlive
@@ -198,20 +189,55 @@ final class WorkerStaticResponseL1
         return \is_string($normalized) ? $normalized : $response;
     }
 
-    private static function notModifiedResponse(string $etag, bool $keepAlive): string
+    /** 静态资源已经存在；冷、热路径共享 RFC 条件顺序和强弱比较。 */
+    public static function preconditionStatus(array $headers, string $etag, int $mtime): int
+    {
+        if (isset($headers['if-match'])) {
+            if (!self::etagListMatches((string)$headers['if-match'], $etag, true)) {
+                return 412;
+            }
+        } elseif (isset($headers['if-unmodified-since'])) {
+            $time = \strtotime((string)$headers['if-unmodified-since']);
+            if ($time !== false && $mtime > $time) {
+                return 412;
+            }
+        }
+
+        if (isset($headers['if-none-match'])) {
+            if (self::etagListMatches((string)$headers['if-none-match'], $etag)) {
+                return 304;
+            }
+        } elseif (isset($headers['if-modified-since'])) {
+            $time = \strtotime((string)$headers['if-modified-since']);
+            if ($time !== false && $mtime <= $time) {
+                return 304;
+            }
+        }
+
+        return 200;
+    }
+
+    private static function notModifiedResponse(string $etag, string $lastModified, bool $keepAlive): string
     {
         return "HTTP/1.1 304 Not Modified\r\nETag: {$etag}\r\n"
+            . "Last-Modified: {$lastModified}\r\nVary: Accept-Encoding\r\n"
             . 'X-WLS-Static-Cache: HIT' . "\r\nConnection: "
             . ($keepAlive ? 'keep-alive' : 'close') . "\r\n\r\n";
     }
 
-    private static function etagListMatches(string $condition, string $etag): bool
+    private static function etagListMatches(string $condition, string $etag, bool $strong = false): bool
     {
         $normalize = static fn(string $value): string => \preg_replace('/^W\//i', '', \trim($value)) ?? '';
         $expected = $normalize($etag);
         foreach (\explode(',', $condition) as $candidate) {
             $candidate = \trim($candidate);
-            if ($candidate === '*' || ($expected !== '' && $normalize($candidate) === $expected)) {
+            if ($candidate === '*') {
+                return true;
+            }
+            if ($strong && (\str_starts_with($etag, 'W/') || \str_starts_with($candidate, 'W/'))) {
+                continue;
+            }
+            if ($expected !== '' && $normalize($candidate) === $expected) {
                 return true;
             }
         }

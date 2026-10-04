@@ -74,6 +74,49 @@ final class BackendWorkerAttestationResponseServiceTest extends TestCase
         self::assertStringContainsString('<title>A</title>', $out);
     }
 
+    public function testDevAllowsPostLoginNavigateWithoutSecFetchUser(): void
+    {
+        if (!\defined('DEV')) {
+            \define('DEV', true);
+        }
+        self::assertTrue(DEV);
+
+        $service = $this->service();
+        $method = new \ReflectionMethod($service, 'isTopLevelDocumentNavigation');
+        $method->setAccessible(true);
+
+        $hadContext = \Weline\Framework\Context::hasCurrent();
+        $context = \Weline\Framework\Context::current();
+        $keys = [
+            'input.server.HTTP_SEC_FETCH_MODE',
+            'input.server.HTTP_SEC_FETCH_DEST',
+            'input.server.HTTP_SEC_FETCH_USER',
+        ];
+        $previous = [];
+        foreach ($keys as $key) {
+            $previous[$key] = $context->get($key);
+        }
+        try {
+            $context->set('input.server.HTTP_SEC_FETCH_MODE', 'navigate');
+            $context->set('input.server.HTTP_SEC_FETCH_DEST', 'document');
+            $context->set('input.server.HTTP_SEC_FETCH_USER', '');
+            self::assertTrue($method->invoke($service));
+
+            $context->set('input.server.HTTP_SEC_FETCH_USER', '?1');
+            self::assertTrue($method->invoke($service));
+
+            $context->set('input.server.HTTP_SEC_FETCH_DEST', 'iframe');
+            self::assertFalse($method->invoke($service));
+        } finally {
+            foreach ($previous as $key => $value) {
+                $context->set($key, $value);
+            }
+            if (!$hadContext) {
+                \Weline\Framework\Context::leave();
+            }
+        }
+    }
+
     private function service(): BackendWorkerAttestationResponseService
     {
         $provider = $this->createMock(FrontendWorkerBackendAttestationProviderInterface::class);

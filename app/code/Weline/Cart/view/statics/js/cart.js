@@ -955,16 +955,12 @@
         if (removePixelObserver || !global.MutationObserver || !global.document.body) {
             return;
         }
-        removePixelObserver = new MutationObserver(function (mutations) {
-            for (var i = 0; i < mutations.length; i++) {
-                var m = mutations[i];
-                if (m.addedNodes && m.addedNodes.length) {
-                    stampRemoveFromCartMarkers(m.target || global.document);
-                    return;
-                }
-            }
+        removePixelObserver = global.Weline.dom.observe({
+            target: global.document.body,
+            options: { childList: true, subtree: true },
+            label: 'cart-remove-pixel-markers',
+            onFlush: function () { stampRemoveFromCartMarkers(global.document); }
         });
-        removePixelObserver.observe(global.document.body, { childList: true, subtree: true });
     }
 
     var api = {

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Server\Cache\Adapter;
 
-use Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface;
+use Weline\Framework\Cache\Contract\AtomicCacheConfirmationInterface;
+use Weline\Framework\Cache\Exception\AtomicWriteOutcomeUnknownException;
 use Weline\Framework\Cache\Contract\BatchCacheAdapterInterface;
 use Weline\Framework\Cache\Contract\CacheAdapterHealthInterface;
+use Weline\Framework\Cache\Contract\FreshCacheReadInterface;
 use Weline\Framework\Cache\Contract\MemoryStoreInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\Contract\SharedCacheBatchStateInterface;
@@ -14,7 +16,7 @@ use Weline\Framework\Cache\Contract\StatsInterface;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Server\Service\MemoryStateFacade;
 
-class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapterInterface, CacheAdapterHealthInterface, MemoryStoreInterface, StatsInterface
+class WlsMemoryAdapter implements AtomicCacheConfirmationInterface, BatchCacheAdapterInterface, FreshCacheReadInterface, CacheAdapterHealthInterface, MemoryStoreInterface, StatsInterface
 {
     /**
      * @var array<string, array{hits:int, misses:int}>
@@ -46,6 +48,10 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapter
     private int $maxItems;
     private int $maxMemory;
     private ?SharedCacheStateInterface $memoryFacade = null;
+    /** A successful remote round trip proves the current facade is reusable. */
+    private bool $remoteOperationSucceeded = false;
+    private bool $lastCompareAndSetReplyConfirmed = false;
+    private bool $lastCompareAndSetNotDispatched = false;
     /** Constructor-injected facade (tests); production stays null and reconnects via createMemoryFacade(). */
     private readonly ?SharedCacheStateInterface $injectedMemoryFacade;
 
@@ -103,6 +109,15 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapter
                 return $this->localCache[$key];
             }
         }
+
+        return $this->getFresh($key);
+    }
+
+    public function getFresh(string $key): mixed
+    {
+        // Credential CAS callbacks must see other workers' current shared state.
+        unset($this->localCache[$key]);
+        $this->relieveLocalMemoryPressure(false);
 
         // 本地缓存未命中，查共享内存；服务不可用时快速降级为 miss，避免 WLS 请求反复等待超时。
         if ($this->isRemoteUnavailable()) {
@@ -322,18 +337,36 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapter
 
     public function compareAndSet(string $key, mixed $expected, mixed $value, int $ttl = 0): bool
     {
+        $this->setCompareAndSetReplyConfirmed(false, true);
         $this->syncLocalEpoch();
         $this->relieveLocalMemoryPressure(true);
 
         if ($this->isRemoteUnavailable()) {
+            $this->logRemoteFailureStage('before_dispatch_unavailable');
+            \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan('wls.cache.cas.failure', 0, 'wls', meta: [
+                'command' => 'cache_cas', 'failed_stage' => 'before_dispatch_unavailable',
+            ]);
             return false;
         }
 
         try {
+            $this->setCompareAndSetReplyConfirmed(false);
             $result = $this->remoteCall(
                 fn() => $this->memoryFacade()->compareAndSetCache($this->identity, $key, $expected, $value, $ttl)
             );
+            $this->setCompareAndSetReplyConfirmed(true);
+        } catch (AtomicWriteOutcomeUnknownException $error) {
+            $this->logRemoteFailureStage('write_outcome_unknown', $error);
+            \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan('wls.cache.cas.failure', 0, 'wls', meta: [
+                'command' => 'cache_cas', 'failed_stage' => 'write_outcome_unknown', 'exception_class' => $error::class,
+            ]);
+            $this->markRemoteUnavailable($error);
+            throw $error;
         } catch (\Throwable $throwable) {
+            $this->logRemoteFailureStage('transport_exception', $throwable);
+            \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan('wls.cache.cas.failure', 0, 'wls', meta: [
+                'command' => 'cache_cas', 'failed_stage' => 'transport_exception', 'exception_class' => $throwable::class,
+            ]);
             $this->markRemoteUnavailable($throwable);
             return false;
         }
@@ -353,6 +386,30 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapter
         return $result;
     }
 
+    public function isLastCompareAndSetReplyConfirmed(): bool
+    {
+        return RequestContext::isInitialized()
+            ? (bool)RequestContext::get('wls.cache.cas_confirmed.' . spl_object_id($this), false)
+            : $this->lastCompareAndSetReplyConfirmed;
+    }
+
+    public function wasLastCompareAndSetNotDispatched(): bool
+    {
+        return RequestContext::isInitialized()
+            ? (bool)RequestContext::get('wls.cache.cas_not_dispatched.' . spl_object_id($this), false)
+            : $this->lastCompareAndSetNotDispatched;
+    }
+
+    private function setCompareAndSetReplyConfirmed(bool $confirmed, bool $notDispatched = false): void
+    {
+        $this->lastCompareAndSetReplyConfirmed = $confirmed;
+        $this->lastCompareAndSetNotDispatched = $notDispatched;
+        if (RequestContext::isInitialized()) {
+            RequestContext::set('wls.cache.cas_confirmed.' . spl_object_id($this), $confirmed);
+            RequestContext::set('wls.cache.cas_not_dispatched.' . spl_object_id($this), $notDispatched);
+        }
+    }
+
     public function isAvailable(): bool
     {
         // Worker-local memory pressure disables only the bounded L1 cache.
@@ -363,6 +420,9 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapter
 
     public function recoverRemoteProbe(): void
     {
+        if ($this->remoteOperationSucceeded && !$this->isRemoteUnavailable()) {
+            return;
+        }
         // Ordinary cache reads keep the 2s/request fail-fast. Worker session
         // writes must be allowed to reopen the Memory channel on this request.
         // Drop any half-open facade so the next call reconnects cleanly —
@@ -377,6 +437,7 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapter
         // Production: drop to null so the next op createMemoryFacade() reconnects.
         // Injected test doubles: restore the same instance (no createMemoryFacade path).
         $this->memoryFacade = $this->injectedMemoryFacade;
+        $this->remoteOperationSucceeded = false;
     }
 
     /**
@@ -840,7 +901,12 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapter
 
     private function markRemoteUnavailable(\Throwable $throwable): void
     {
+        $this->logRemoteFailureStage('remote_unavailable', $throwable);
+        \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan('wls.cache.remote.unavailable', 0, 'wls', meta: [
+            'failed_stage' => 'remote_unavailable', 'exception_class' => $throwable::class,
+        ]);
         unset($throwable);
+        $this->remoteOperationSucceeded = false;
         $until = self::monotonicSeconds() + self::REMOTE_FAILURE_COOLDOWN_SECONDS;
         self::$remoteUnavailableUntil[$this->identity] = $until;
         self::$remoteGloballyUnavailableUntil = \max(self::$remoteGloballyUnavailableUntil, $until);
@@ -851,6 +917,28 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapter
         if ($this->memoryFacade !== null) {
             $this->memoryFacade->disconnect();
             $this->memoryFacade = null;
+        }
+    }
+
+    private function logRemoteFailureStage(string $stage, ?\Throwable $error = null): void
+    {
+        if (RequestContext::isInitialized() && \function_exists('w_log_error')) {
+            try {
+                // 同一请求的同类故障只记一次，避免冷却期间每次 CAS 都重复刷错误日志。
+                $origin = $error === null ? 'none' : $error->getFile() . ':' . $error->getLine();
+                $signature = $stage . '|' . $origin;
+                $logged = RequestContext::get('wls.cache.failure_logged.v1', []);
+                if (isset($logged[$signature])) { return; }
+                $logged[$signature] = true;
+                RequestContext::set('wls.cache.failure_logged.v1', $logged);
+                \w_log_error('[WlsMemoryAdapter] stage=' . $stage
+                    . ' exception=' . ($error === null ? 'none' : $error::class)
+                    . ' origin=' . $origin
+                    . ' previous=' . ($error?->getPrevious() === null ? 'none' : $error->getPrevious()::class)
+                    . ' request_id=' . (RequestContext::getId() ?? ''), [], 'wls_cache_cas');
+            } catch (\Throwable) {
+                // Diagnostics must not replace the original cache failure.
+            }
         }
     }
 
@@ -865,6 +953,7 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, BatchCacheAdapter
     private function remoteCall(callable $operation): mixed
     {
         $result = $operation();
+        $this->remoteOperationSucceeded = true;
         $this->markRemoteAvailable();
 
         return $result;

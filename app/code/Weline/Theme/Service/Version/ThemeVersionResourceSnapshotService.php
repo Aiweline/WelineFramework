@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace Weline\Theme\Service\Version;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Database\TransactionContext;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\ThemeScopeVersion;
@@ -347,12 +349,33 @@ final class ThemeVersionResourceSnapshotService
 
     public function resources(ThemeVersionIdentity $identity): array
     {
-        return $this->rows(ThemeScopeVersionResourceSnapshot::class, ['theme_version_id' => $identity->themeVersionId, 'content_revision' => $identity->contentRevision]);
+        return $this->readSnapshotInputs($identity, 'resources', fn(): array =>
+            $this->rows(ThemeScopeVersionResourceSnapshot::class, ['theme_version_id' => $identity->themeVersionId, 'content_revision' => $identity->contentRevision]));
     }
 
     public function head(ThemeVersionIdentity $identity): ?array
     {
-        return $this->rows(ThemeScopeVersionRevision::class, ['theme_version_id' => $identity->themeVersionId, 'content_revision' => $identity->contentRevision])[0] ?? null;
+        return $this->readSnapshotInputs($identity, 'head', fn(): ?array =>
+            $this->rows(ThemeScopeVersionRevision::class, ['theme_version_id' => $identity->themeVersionId, 'content_revision' => $identity->contentRevision])[0] ?? null);
+    }
+
+    private function readSnapshotInputs(ThemeVersionIdentity $identity, string $part, callable $reader): mixed
+    {
+        // 事务内的值可能回滚，不能进入请求快照，也不能沿用事务前的读取。
+        if (TransactionContext::activeTransactionConnectionCount() > 0) {
+            $this->forgetSnapshotInputs($identity);
+            return $reader();
+        }
+        return ObjectManager::getInstance(StorefrontScopeHotCache::class)->rememberForRequest(
+            'theme.version_snapshot.' . $part, $identity->cacheKey(), $reader);
+    }
+
+    private function forgetSnapshotInputs(ThemeVersionIdentity $identity): void
+    {
+        $cache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+        foreach (['head', 'resources'] as $part) {
+            $cache->forgetRequestMemo('theme.version_snapshot.' . $part, $identity->cacheKey());
+        }
     }
 
     /** Selected resources take D; all other references remain prepared-time P. */
@@ -517,6 +540,7 @@ final class ThemeVersionResourceSnapshotService
     private function writeHead(ThemeScopeVersion $version, string $actor, ?array $configuration = null, ?array $omissions = null): void
     {
         $identity = $version->toVersionIdentity();
+        $this->forgetSnapshotInputs($identity);
         if ($this->head($identity) !== null) { return; }
         $resources = $this->resources($identity);
         if ($configuration === null) {
@@ -532,6 +556,7 @@ final class ThemeVersionResourceSnapshotService
             'package_default_json' => json_encode(['current_package_defaults' => true, 'owner' => $identity->ownerHash(), 'configuration' => $configuration, 'omissions' => $omissions ?? $this->captureOmissions($version)], JSON_THROW_ON_ERROR),
             'manifest_digest' => hash('sha256', json_encode($resources, JSON_THROW_ON_ERROR)), 'actor_id' => $actor,
         ])->save();
+        $this->forgetSnapshotInputs($identity);
     }
 
     private function writeResource(ThemeVersionIdentity $identity, ThemeEditorContext $context, int $intent, int $release, bool $hasIntent): void
@@ -543,6 +568,7 @@ final class ThemeVersionResourceSnapshotService
             'intent_revision_id' => $intent > 0 ? $intent : null, 'release_id' => $release > 0 ? $release : null,
             'source_fingerprint' => hash('sha256', json_encode([$intent, $release, $hasIntent], JSON_THROW_ON_ERROR)),
         ])->save();
+        $this->forgetSnapshotInputs($identity);
     }
 
     private function captureOmissions(ThemeScopeVersion $version): array

@@ -1,0 +1,9 @@
+<?php
+/** @hook-priority 70 @hook-sort-order 70 */
+$townTheme = \Weline\Theme\Helper\ThemeData::getCurrentTheme();
+if (!$townTheme || (string)$townTheme->getData('name') !== 'daocharms-3d') { return; }
+$townSearchUrl = (string)$this->getUrl('search');
+$townSearchUrl = explode('?', $townSearchUrl, 2)[0];
+\Weline\Seo\Service\Head\SeoPageProfileBag::publish([
+    'search_url_template' => $townSearchUrl . '?q={search_term_string}',
+]);

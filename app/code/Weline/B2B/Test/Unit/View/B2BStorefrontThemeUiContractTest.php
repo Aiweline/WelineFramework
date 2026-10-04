@@ -100,7 +100,6 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('refresh({ forceNetwork: false })', $jsContent);
         // membership-active may forceNetwork; MutationObserver path must not storm cart.getCart
         self::assertStringContainsString('enhanceMiniCarts({ refresh: false })', $jsContent);
-        self::assertStringContainsString('suppressChromeResyncUntil', $jsContent);
         self::assertStringContainsString('Do NOT forceNetwork here', $jsContent);
         self::assertStringContainsString(
             "var mode = String(detail.cart_type || detail.selling_mode || preferredMode(null)).toLowerCase();",
@@ -199,7 +198,7 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('data-b2b-credit-input', $depositContent);
         self::assertStringContainsString('data-w-component="tooltip"', $depositContent);
         self::assertStringContainsString('/faq/b2b-wholesale', $depositContent);
-        self::assertStringContainsString('b2b-storefront.css)&v=20260911-credit-contrast1', $depositContent);
+        self::assertStringContainsString('Weline_B2B::css/b2b-storefront.css', $depositContent);
         self::assertStringNotContainsString('<lang>批发订单</lang>', $depositContent);
         self::assertStringNotContainsString('data-b2b-deposit-note', $depositContent);
 
