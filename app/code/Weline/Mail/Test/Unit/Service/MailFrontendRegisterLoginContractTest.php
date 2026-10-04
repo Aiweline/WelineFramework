@@ -14,12 +14,14 @@ final class MailFrontendRegisterLoginContractTest extends TestCase
     {
         $src = (string)file_get_contents(BP . 'app/code/Weline/Customer/view/templates/frontend/account/register.phtml');
         self::assertStringContainsString('account-register-extras', $src);
-        self::assertStringContainsString('account-mail-register.phtml', $src);
-        self::assertStringContainsString('Weline_Mail', $src);
+        self::assertStringNotContainsString("->fetch('Weline_Mail::", $src);
+        self::assertSame(1, substr_count($src, '<w:slot id="account-register-extras"'));
+        self::assertSame(1, substr_count($src, '<w:slot id="account-mail-register-panel"'));
+        self::assertStringContainsString('ob_start()', $src);
+        self::assertStringContainsString('ob_get_clean()', $src);
         self::assertStringContainsString('showRegisterTabs', $src);
         self::assertStringContainsString('mailRegisterPanelHtml', $src);
         self::assertStringContainsString('data-w-component="tabs"', $src);
-        self::assertStringContainsString('mail_register_variant', $src);
         self::assertStringContainsString('customer-register-panel', $src);
         self::assertStringContainsString('mail-register-panel', $src);
         self::assertStringContainsString('captcha="off"', $src);
@@ -45,8 +47,16 @@ final class MailFrontendRegisterLoginContractTest extends TestCase
         $widgets = include BP . 'app/code/Weline/Mail/extends/module/Weline_Widget/Weline_Mail/widget.php';
         self::assertArrayHasKey('account-mail-register', $widgets);
         self::assertArrayNotHasKey('account-mail-login', $widgets);
-        self::assertSame('account-register-extras', $widgets['account-mail-register']['slot'] ?? null);
-        self::assertSame([], $widgets['account-mail-register']['default_injections'] ?? null);
+        self::assertSame('account-mail-register-panel', $widgets['account-mail-register']['slot'] ?? null);
+        self::assertSame('injection', $widgets['account-mail-register']['placement']);
+        $injections = $widgets['account-mail-register']['default_injections'];
+        self::assertSame(['account/register', 'account'], array_column($injections, 'layout_type'));
+        self::assertSame(['default', 'auth'], array_column($injections, 'layout_option'));
+        foreach ($injections as $injection) {
+            self::assertSame('account-mail-register-panel', $injection['slot']);
+            self::assertTrue($injection['required']);
+            self::assertSame('panel', $injection['config']['mail_register_variant']);
+        }
     }
 
     public function testFeatureConfigKeysAndDefaults(): void

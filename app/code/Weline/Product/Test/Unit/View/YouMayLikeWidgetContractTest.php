@@ -18,7 +18,9 @@ final class YouMayLikeWidgetContractTest extends TestCase
         self::assertSame('you-may-like', $widget['code'] ?? null);
         self::assertSame('Weline_Product::templates/frontend/widgets/you-may-like.phtml', $widget['template'] ?? null);
         $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('product-you-may-like', $injection['slot'] ?? null);
+        self::assertSame('layout', $widget['placement']);
+        self::assertSame('injection', $injection['placement']);
+        self::assertSame('design-product-you-may-like', $injection['slot'] ?? null);
         self::assertSame('product', $injection['layout_type'] ?? null);
         self::assertTrue((bool)($injection['required'] ?? false));
 

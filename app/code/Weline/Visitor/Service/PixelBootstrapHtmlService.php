@@ -400,7 +400,7 @@ HTML;
     {
         $url = '/' . \trim($modulePath, '/') . '/view/statics/' . \ltrim($file, '/');
         if (\defined('PROD') && PROD) {
-            $themePath = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
+            $themePath = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
             $url = '/static/' . \str_replace('\\', '/', (string)$themePath) . $url;
         }
 

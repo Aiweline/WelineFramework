@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Api\Scoped;
 
-use Weline\SystemConfig\Api\Scope\ScopeContext;
-
 /** Immutable identity for one scoped Theme resource. */
 final readonly class ThemeEditorContext
 {
@@ -24,7 +22,7 @@ final readonly class ThemeEditorContext
     ];
 
     public function __construct(
-        public ScopeContext $scope,
+        public ThemeContentScope $scope,
         public string $area,
         public string $resourceType = self::RESOURCE_LAYOUT,
         public int $themeId = 0,
@@ -33,6 +31,7 @@ final readonly class ThemeEditorContext
         public string $locale = 'default',
         public string $targetType = 'global',
         public int $targetId = 0,
+        public ?\Weline\Framework\Runtime\ThemeApplicationContext $application = null,
     ) {
         if (!\in_array($area, ['frontend', 'backend'], true)) {
             throw new \InvalidArgumentException('theme_editor_context_area_invalid');
@@ -87,10 +86,11 @@ final readonly class ThemeEditorContext
             targetId: \in_array($resourceType, [self::RESOURCE_THEME_BINDING, self::RESOURCE_APPEARANCE], true)
                 ? 0
                 : $this->targetId,
+            application: $this->application,
         );
     }
 
-    public function withScope(ScopeContext $scope): self
+    public function withScope(ThemeContentScope $scope): self
     {
         return new self(
             scope: $scope,
@@ -102,6 +102,7 @@ final readonly class ThemeEditorContext
             locale: $this->locale,
             targetType: $this->targetType,
             targetId: $this->targetId,
+            application: $this->application,
         );
     }
 
@@ -117,6 +118,7 @@ final readonly class ThemeEditorContext
             locale: $locale,
             targetType: $this->targetType,
             targetId: $this->targetId,
+            application: $this->application,
         );
     }
 
@@ -132,6 +134,7 @@ final readonly class ThemeEditorContext
             locale: $this->locale,
             targetType: $this->targetType,
             targetId: $this->targetId,
+            application: $this->application,
         );
     }
 
@@ -219,5 +222,21 @@ final readonly class ThemeEditorContext
             'identity_hash' => $this->identityHash(),
             'canonical_key' => $this->canonicalKey(),
         ];
+    }
+
+    /** 从持久化或调用方已校验的通用资源身份恢复，不校验业务范围权限。 */
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            scope: ThemeContentScope::fromArray((array)($data['scope'] ?? [])),
+            area: (string)($data['area'] ?? ''),
+            resourceType: (string)($data['resource_type'] ?? self::RESOURCE_LAYOUT),
+            themeId: (int)($data['theme_id'] ?? 0),
+            layoutType: (string)($data['layout_type'] ?? 'default'),
+            layoutOption: (string)($data['layout_option'] ?? 'default'),
+            locale: (string)($data['locale'] ?? 'default'),
+            targetType: (string)($data['target_type'] ?? 'global'),
+            targetId: (int)($data['target_id'] ?? 0),
+        );
     }
 }

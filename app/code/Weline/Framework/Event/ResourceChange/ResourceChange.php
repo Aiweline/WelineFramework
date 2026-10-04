@@ -74,14 +74,19 @@ final readonly class ResourceChange
         return is_string($scope) && $scope !== '' ? $scope : null;
     }
 
-    public function websiteId(): int
+    public function hasWebsiteContext(): bool
     {
-        return (int)$this->data['website']['id'];
+        return $this->data['website'] !== null;
     }
 
-    public function websiteCode(): string
+    public function websiteId(): ?int
     {
-        return (string)$this->data['website']['code'];
+        return $this->data['website']['id'] ?? null;
+    }
+
+    public function websiteCode(): ?string
+    {
+        return $this->data['website']['code'] ?? null;
     }
 
     public function coalesceKey(): string
@@ -135,9 +140,9 @@ final readonly class ResourceChange
         }
         if (array_key_exists('scope', $resource)) {
             $scope = $resource['scope'];
-            if (!is_string($scope) || $scope === '' || strlen($scope) > 191
-                || preg_match('/^[a-z0-9][a-z0-9._-]{0,190}$/D', $scope) !== 1
-                || substr_count($scope, '.') !== 2
+            if (!is_string($scope) || $scope === '' || strlen($scope) > 400
+                || preg_match('/[\x00-\x1f\x7f]/', $scope) === 1
+                || ($data['website'] !== null && (preg_match('/^[a-z0-9][a-z0-9._-]{0,190}$/D', $scope) !== 1 || substr_count($scope, '.') !== 2))
             ) {
                 throw new AsyncEventValidationException(__('资源变更 resource.scope 必须是三点分 storage_scope'));
             }
@@ -148,10 +153,11 @@ final readonly class ResourceChange
         if ($action === 'delete' && $data['after'] !== null) {
             throw new AsyncEventValidationException(__('删除资源变更的 after 必须为 null'));
         }
-        if (!is_array($data['website'])) {
+        if ($data['website'] !== null && !is_array($data['website'])) {
             throw new AsyncEventValidationException(__('资源变更 website 上下文无效'));
         }
         $website = $data['website'];
+        if ($website !== null) {
         self::assertObjectKeys($website, ['id', 'code', 'previous_code', 'site_id'], [], 'website');
         if (!is_int($website['id'])
             || $website['id'] < 0
@@ -162,6 +168,7 @@ final readonly class ResourceChange
             || !is_int($website['site_id'])
             || $website['site_id'] < 0) {
             throw new AsyncEventValidationException(__('资源变更 website 字段类型或值无效'));
+        }
         }
         if (!is_array($data['impact'])) {
             throw new AsyncEventValidationException(__('资源变更 impact 必须是数组'));
@@ -232,10 +239,9 @@ final readonly class ResourceChange
             [],
             'context',
         );
-        if (!is_int($context['website_id'])
-            || !is_string($context['website_code'])
-            || $context['website_id'] !== $website['id']
-            || $context['website_code'] !== $website['code']) {
+        if (($website === null && ($context['website_id'] !== null || $context['website_code'] !== null))
+            || ($website !== null && (!is_int($context['website_id']) || !is_string($context['website_code'])
+                || $context['website_id'] !== $website['id'] || $context['website_code'] !== $website['code']))) {
             throw new AsyncEventValidationException(__('资源变更 context 与目标 website 不一致'));
         }
         foreach (['lang', 'currency', 'area', 'timezone'] as $key) {

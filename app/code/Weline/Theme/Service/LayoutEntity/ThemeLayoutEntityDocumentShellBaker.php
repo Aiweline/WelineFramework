@@ -7,6 +7,7 @@ namespace Weline\Theme\Service\LayoutEntity;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeResourceCatalog;
 
 /**
@@ -269,14 +270,21 @@ final class ThemeLayoutEntityDocumentShellBaker
                     return $theme;
                 }
             } catch (\Throwable) {
-                // fall through to active
+                // fall through to registered Default
             }
         }
         try {
-            return $theme->clearData()->clearQuery()->getActiveTheme($area);
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            $resolved = $themeContext->resolveTheme($area)
+                ?? $themeContext->resolveRegisteredDefaultTheme($area);
+            if ($resolved instanceof WelineTheme && (int)$resolved->getId() > 0) {
+                return $resolved;
+            }
         } catch (\Throwable) {
-            return $theme;
         }
+
+        return $theme;
     }
 
     /**

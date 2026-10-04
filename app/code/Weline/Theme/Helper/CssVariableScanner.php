@@ -38,10 +38,16 @@ class CssVariableScanner
         $results = [];
         $metadataWrites = [];
         
-        // 获取主题
+        // 获取主题（正式缺省 = Theme 注册 Default，不再读 is_active*）
         if ($theme === null) {
-            $theme = ObjectManager::getInstance(WelineTheme::class);
-            $theme = $theme->getActiveTheme($area);
+            try {
+                /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
+                $themeContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+                $theme = $themeContext->resolveTheme($area)
+                    ?? $themeContext->resolveRegisteredDefaultTheme($area);
+            } catch (\Throwable) {
+                $theme = null;
+            }
         }
         
         if (!$theme || !$theme->getId()) {

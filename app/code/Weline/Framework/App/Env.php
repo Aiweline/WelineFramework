@@ -64,16 +64,6 @@ class Env extends DataObject
         'language_pack' => self::path_LANGUAGE_PACK,
     ];
 
-    public const default_theme_DATA = [
-        'id' => 0,
-        'name' => 'default',
-        'module_name' => 'Weline_Theme',
-        'path' => 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme',
-        'parent_id' => null,
-        'is_active' => 1,
-        'create_time' => '2021-04-05 16:49:58',
-    ];
-
     # 助手函数文件位置
     public const path_FUNCTIONS_FILE = self::path_framework_generated . 'functions.php';
     // 路由
@@ -990,9 +980,32 @@ class Env extends DataObject
         return $provider instanceof CacheStatusProviderInterface ? $provider : null;
     }
 
-    public function getTheme()
+    /**
+     * 当前进程主题配置；缺省时委托 Theme 注册的全局 Default（不再内嵌主题身份）。
+     *
+     * @return array<string,mixed>
+     */
+    public function getTheme(): array
     {
-        return $this->getConfig('theme', self::default_theme_DATA);
+        $configured = $this->getConfig('theme', null);
+        if (is_array($configured) && $configured !== []) {
+            return $configured;
+        }
+        $interface = 'Weline\\Theme\\Api\\DefaultThemeInterface';
+        if (!interface_exists($interface)) {
+            return [];
+        }
+        try {
+            $provider = ObjectManager::getInstance($interface);
+            if (!is_object($provider) || !method_exists($provider, 'getRegisteredDefault')) {
+                return [];
+            }
+            $registered = $provider->getRegisteredDefault();
+
+            return is_array($registered) ? $registered : [];
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**

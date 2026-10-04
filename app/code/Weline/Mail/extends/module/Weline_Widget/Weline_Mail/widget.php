@@ -16,13 +16,33 @@ return [
         'template' => 'Weline_Mail::templates/frontend/widgets/account-mail-register.phtml',
         'page_layouts' => ['account/register', 'account.auth'],
         'position' => ['content'],
-        'slot' => 'account-register-extras',
+        'slot' => 'account-mail-register-panel',
         'supports' => [
             'account-register-extras',
+            'account-mail-register-panel',
             'layout-account-register-extras',
         ],
-        // placement=layout：注册页已 Customer fetch 同身份，不再 default_injections。
-        'placement' => 'layout',
-        'default_injections' => [],
+        // Customer 注册模板空槽承载，开关与域名条件仍由 Mail 部件执行。
+        'placement' => 'injection',
+        'default_injections' => [
+            [
+                'layout_type' => 'account/register',
+                'layout_option' => 'default',
+                'slot' => 'account-mail-register-panel',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'config' => ['mail_register_variant' => 'panel'],
+            ],
+            [
+                'layout_type' => 'account',
+                'layout_option' => 'auth',
+                'slot' => 'account-mail-register-panel',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'config' => ['mail_register_variant' => 'panel'],
+            ],
+        ],
     ],
 ];

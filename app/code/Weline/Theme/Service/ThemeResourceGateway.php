@@ -75,8 +75,8 @@ final class ThemeResourceGateway
             . $relativePath;
 
         // Prefer theme identity from namespaced /static/{theme}/... URLs so multi-site
-        // CSS/JS requests do not fall back to the global active theme (e.g. hanfu)
-        // when the page was rendered under a Website-scoped theme_binding (daocharms).
+        // CSS/JS requests do not fall back to a global active/default theme (e.g. hanfu)
+        // when the page was rendered under a Website-scoped websites_theme_application (daocharms).
         // If the URL carries an explicit namespace, never fail-open onto another theme
         // (that would publish the wrong site's bytes under the requested namespace).
         $resolvedTheme = $theme;
@@ -218,9 +218,9 @@ final class ThemeResourceGateway
         }
 
         // Always emit theme-namespaced /static/{theme}/... URLs (DEV and PROD).
-        // Un-namespaced /Vendor/Module/view/theme/... loses Website-scoped theme_binding
-        // identity on the subsequent static request and resolves against the global
-        // active frontend theme, so design-theme-only assets 404 (multi-site).
+        // Un-namespaced /Vendor/Module/view/theme/... loses Website-scoped
+        // websites_theme_application identity on the subsequent static request and
+        // resolves against Theme Default / another site theme, so design-theme-only assets 404.
         $resolvedTheme = $this->resolveTheme($area, $theme);
         if (!$resolvedTheme || !$resolvedTheme->getId()) {
             return '';

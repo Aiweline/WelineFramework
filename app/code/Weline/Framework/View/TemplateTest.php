@@ -24,7 +24,7 @@ class TemplateTest extends TestCore
         if (DEV) {
             self::assertEquals('/Weline/Admin/view/statics/css/index.css', $content, '解析静态资源');
         } else {
-            $theme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
+            $theme = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
             $theme = str_replace('\\', '/', $theme);
             self::assertEquals('/static/' . $theme . '/Weline/Admin/view/statics/css/index.css', $content, '解析静态资源');
         }
@@ -47,7 +47,7 @@ class TemplateTest extends TestCore
                 '开发环境：UI 资源应使用模块 statics 路径'
             );
         } else {
-            $theme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
+            $theme = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
             $theme = str_replace('\\', '/', $theme);
             self::assertEquals(
                 '/static/' . $theme . '/Weline/Theme/view/statics/ui/weline-foundation.css',

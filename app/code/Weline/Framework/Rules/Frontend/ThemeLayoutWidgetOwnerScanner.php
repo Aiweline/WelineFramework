@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Weline\Framework\Rules\Frontend;
 
 /**
- * Theme layouts/partials 内嵌部件归属扫描器。
+ * 模块与安装设计 layouts/partials 内嵌部件归属扫描器。
  *
- * 仅允许解析归属为 Weline_Theme 的 <w:widget> / fetch(.../widgets/...)；
- * 任一非 Theme 模块在 widget.php 注册的 code 出现在 Theme 布局/partial 内嵌则违规。
+ * 仅允许内嵌宿主同模块部件；设计布局宿主归属 Weline_Theme。
+ * 注册 owner 与 WidgetScanner 输出 module 一致，取物理来源模块。
  */
 final class ThemeLayoutWidgetOwnerScanner
 {
@@ -28,27 +28,30 @@ final class ThemeLayoutWidgetOwnerScanner
         }
 
         $foreign = $this->collectForeignWidgetCodes($root);
-        if ($foreign['by_code'] === [] && $foreign['by_type_code'] === []) {
-            return [];
-        }
-
         $violations = [];
-        $themeRoot = $root . '/Weline/Theme/view/theme';
-        foreach (['frontend/layouts', 'frontend/partials', 'backend/layouts', 'backend/partials'] as $relDir) {
-            $dir = $themeRoot . '/' . $relDir;
-            if (!is_dir($dir)) {
+        // Module templates keep their owning module; installed design layouts belong to Theme.
+        foreach ([$root, dirname($root) . '/design'] as $sourceRoot) {
+            if (!is_dir($sourceRoot)) {
                 continue;
             }
             $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+                new \RecursiveDirectoryIterator($sourceRoot, \FilesystemIterator::SKIP_DOTS)
             );
-            /** @var \SplFileInfo $file */
             foreach ($iterator as $file) {
                 if (!$file->isFile() || strtolower($file->getExtension()) !== 'phtml') {
                     continue;
                 }
-                $abs = $file->getPathname();
+                $abs = str_replace('\\', '/', $file->getPathname());
+                if (!preg_match('#/(layouts|partials)/#', $abs)) {
+                    continue;
+                }
                 $rel = $this->toRelativePath($abs, $root);
+                if ($sourceRoot === $root && (!str_contains($rel, '/view/') || str_contains($rel, '/view/tpl/'))) {
+                    continue;
+                }
+                if ($sourceRoot !== $root) {
+                    $rel = 'design/' . substr($abs, strlen($sourceRoot) + 1);
+                }
                 $violations = array_merge($violations, $this->scanFile($abs, $rel, $foreign));
             }
         }
@@ -57,7 +60,7 @@ final class ThemeLayoutWidgetOwnerScanner
     }
 
     /**
-     * @param array{by_code:array<string,string>,by_type_code:array<string,string>} $foreign
+     * @param array{by_code:array<string,string>,by_type_code:array<string,string>,by_template?:array<string,string>} $foreign
      * @return list<array{type:string,path:string,line:int,snippet:string,code?:string,module?:string}>
      */
     public function scanFile(string $absolutePath, string $relativePath, array $foreign): array
@@ -67,6 +70,11 @@ final class ThemeLayoutWidgetOwnerScanner
             return [];
         }
 
+        $hostModule = self::THEME_MODULE;
+        if (preg_match('#^([^/]+)/([^/]+)/view/#', $relativePath, $host)) {
+            $hostModule = $host[1] . '_' . $host[2];
+        }
+        $content = $this->withoutComments($content);
         $violations = [];
         $lines = preg_split("/\r\n|\n|\r/", $content) ?: [];
         foreach ($lines as $idx => $line) {
@@ -77,7 +85,7 @@ final class ThemeLayoutWidgetOwnerScanner
                     $name = trim((string)($attrs['name'] ?? $attrs['code'] ?? ''));
                     $type = trim((string)($attrs['type'] ?? ''));
                     $module = $this->resolveForeignModule($name, $type, $foreign);
-                    if ($module === null) {
+                    if ($module === null || $module === $hostModule) {
                         continue;
                     }
                     $violations[] = [
@@ -98,8 +106,8 @@ final class ThemeLayoutWidgetOwnerScanner
             )) {
                 foreach ($fetchMatches as $match) {
                     $path = (string)($match[1] ?? '');
-                    $owner = $this->moduleFromTemplatePath($path);
-                    if ($owner === null || $owner === self::THEME_MODULE) {
+                    $owner = $foreign['by_template'][strtolower(str_replace('\\', '/', $path))] ?? $this->moduleFromTemplatePath($path);
+                    if ($owner === null || $owner === $hostModule) {
                         continue;
                     }
                     $code = $this->codeFromWidgetTemplatePath($path);
@@ -138,13 +146,14 @@ final class ThemeLayoutWidgetOwnerScanner
     }
 
     /**
-     * @return array{by_code:array<string,string>,by_type_code:array<string,string>}
+     * @return array{by_code:array<string,string>,by_type_code:array<string,string>,by_template?:array<string,string>}
      */
     public function collectForeignWidgetCodes(?string $codeRoot = null): array
     {
         $root = $this->normalizeRoot($codeRoot);
         $byCode = [];
         $byTypeCode = [];
+        $byTemplate = [];
 
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
@@ -159,7 +168,7 @@ final class ThemeLayoutWidgetOwnerScanner
                 continue;
             }
             $module = $this->moduleFromWidgetPhpPath($abs, $root);
-            if ($module === null || $module === self::THEME_MODULE) {
+            if ($module === null) {
                 continue;
             }
             $definitions = $this->loadWidgetDefinitions($abs);
@@ -170,17 +179,20 @@ final class ThemeLayoutWidgetOwnerScanner
                     continue;
                 }
                 $byCode[strtolower($code)] = $module;
+                if ($def['template'] !== '') {
+                    $byTemplate[strtolower(str_replace('\\', '/', $def['template']))] = $module;
+                }
                 if ($type !== '') {
                     $byTypeCode[strtolower($type . '/' . $code)] = $module;
                 }
             }
         }
 
-        return ['by_code' => $byCode, 'by_type_code' => $byTypeCode];
+        return ['by_code' => $byCode, 'by_type_code' => $byTypeCode, 'by_template' => $byTemplate];
     }
 
     /**
-     * @return list<array{code:string,type:string}>
+     * @return list<array{code:string,type:string,template:string}>
      */
     private function loadWidgetDefinitions(string $absolutePath): array
     {
@@ -197,7 +209,7 @@ final class ThemeLayoutWidgetOwnerScanner
                     ? $key
                     : $this->codeFromWidgetTemplatePath($tpl);
                 $type = $this->typeFromWidgetTemplatePath($tpl);
-                $out[] = ['code' => $code, 'type' => $type];
+                $out[] = ['code' => $code, 'type' => $type, 'template' => $tpl];
                 continue;
             }
             if (!is_array($value)) {
@@ -218,14 +230,14 @@ final class ThemeLayoutWidgetOwnerScanner
             if ($type === '' && $tpl !== '') {
                 $type = $this->typeFromWidgetTemplatePath($tpl);
             }
-            $out[] = ['code' => $code, 'type' => $type];
+            $out[] = ['code' => $code, 'type' => $type, 'template' => $tpl];
         }
 
         return $out;
     }
 
     /**
-     * @param array{by_code:array<string,string>,by_type_code:array<string,string>} $foreign
+     * @param array{by_code:array<string,string>,by_type_code:array<string,string>,by_template?:array<string,string>} $foreign
      */
     private function resolveForeignModule(string $name, string $type, array $foreign): ?string
     {
@@ -249,10 +261,7 @@ final class ThemeLayoutWidgetOwnerScanner
         $rel = $this->toRelativePath($absolutePath, $root);
         // Vendor/Module/extends/module/Weline_Widget/Vendor_Module/widget.php
         if (preg_match('#^([^/]+)/([^/]+)/extends/module/Weline_Widget/([^/]+)/widget\.php$#', $rel, $m)) {
-            return $m[3];
-        }
-        if (preg_match('#/extends/module/Weline_Widget/([^/]+)/widget\.php$#', $absolutePath, $m)) {
-            return $m[1];
+            return $m[1] . '_' . $m[2];
         }
 
         return null;
@@ -309,6 +318,18 @@ final class ThemeLayoutWidgetOwnerScanner
         }
 
         return $attrs;
+    }
+
+    private function withoutComments(string $content): string
+    {
+        $content = preg_replace_callback('/<!--.*?-->/s', static fn(array $m): string => preg_replace('/[^\r\n]/', ' ', $m[0]), $content) ?? $content;
+        $out = '';
+        foreach (token_get_all($content) as $token) {
+            $out .= is_array($token)
+                ? (in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true) ? preg_replace('/[^\r\n]/', ' ', $token[1]) : $token[1])
+                : $token;
+        }
+        return $out;
     }
 
     private function snippet(string $text): string

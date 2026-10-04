@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Scoped;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Meta\Api\Data\MetaConfigIdentity;
 use Weline\Meta\Api\Data\MetaConfigRecord;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeLayoutScopeNormalizer;
 use Weline\Theme\Service\ThemeMetaIdentityService;
 
@@ -25,11 +27,13 @@ final class ThemeScopedProjectionSupport
 
     public function activeThemeId(string $area): int
     {
-        $theme = clone $this->themes;
         try {
-            $theme->clearData()->clearQuery()->getActiveTheme($area);
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            $resolved = $themeContext->resolveTheme($area)
+                ?? $themeContext->resolveRegisteredDefaultTheme($area);
 
-            return (int)$theme->getId();
+            return (int)($resolved?->getId() ?? 0);
         } catch (\Throwable) {
             return 0;
         }

@@ -7,6 +7,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Database\TransactionContext;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Model\ThemeScopeVersionRevision;
@@ -24,7 +25,7 @@ final class ThemeVersionResourceSnapshotService
         $versions = ObjectManager::getInstance(ThemeScopeVersionService::class);
         $version = $versions->getCurrent($context->themeId, $context->scope->storageScope, $context->scope->storeMode, $context->area)
             ?? $versions->ensureCurrent($context->themeId, $context->scope->storageScope,
-                $context->scope->identity->scopeKind, $context->scope->identity->websiteId, $context->scope->storeMode, $context->area);
+                'external', null, $context->scope->storeMode, $context->area);
         $version = (clone $version)->clearData()->clearQuery()->load($version->getVersionId());
         if ($version->getLifecycle() === ThemeScopeVersion::LIFECYCLE_SEALED) {
             if ($version->getContentRevision() < 1) { $version->setContentRevision(1)->save(); }
@@ -50,8 +51,9 @@ final class ThemeVersionResourceSnapshotService
         if ($publishedOnly && ($published?->getVersionId() !== $identity->themeVersionId
             || $published->toVersionIdentity()->ownerHash() !== $identity->ownerHash())) { throw new \RuntimeException('historical_revision_head_missing'); }
         if ($initial && $version->getCreationSourceKind() === \Weline\Theme\Api\Version\ThemeVersionPublicationInterface::CREATION_PACKAGE_DEFAULTS) {
+            $configuration = $this->captureConfiguration($identity, $context);
             $this->writeResource($identity, $context, 0, 0, false);
-            $this->writeHead($version, 'initial_package_defaults');
+            $this->writeHead($version, 'initial_package_defaults', $configuration, context: $context);
             return;
         }
         $sourceId = (int)$version->getCreationSourceVersionId();
@@ -77,7 +79,7 @@ final class ThemeVersionResourceSnapshotService
                 }
                 $sourceHead = $this->head($source->toVersionIdentity());
                 $sourceDescriptor = json_decode((string)($sourceHead['package_default_json'] ?? '{}'), true);
-                $this->writeHead($version, '', $sourceDescriptor['configuration'] ?? null, $sourceDescriptor['omissions'] ?? null);
+                $this->writeHead($version, '', $sourceDescriptor['configuration'] ?? null, $sourceDescriptor['omissions'] ?? null, $context);
                 return;
             }
         }
@@ -86,6 +88,8 @@ final class ThemeVersionResourceSnapshotService
         $rows = $this->rows(ThemeScopeWorkspace::class, $filters + ['theme_version_id' => $identity->themeVersionId]);
         if ($rows === []) { $rows = $this->rows(ThemeScopeWorkspace::class, $filters + ['theme_version_id' => 0]); }
         $inputs = $this->migrationResources($identity, $context, $rows, $publishedOnly);
+        // 先固定本次明确配置链，输入失败时不推进数据库 R。
+        $configuration = $this->captureConfiguration($identity, $context);
         if (!$initial) {
             // Validate the legacy identity mapping before advancing the cursor.
             // Earlier R stays unresolved; only the newly observed state is frozen.
@@ -116,7 +120,7 @@ final class ThemeVersionResourceSnapshotService
             $this->writeResource($identity, $resource, $intent, $release, $intent > 0 || $release > 0);
         }
         if (!isset($seen[$context->identityHash()]) && !isset($existing[$context->identityHash()])) { $this->writeResource($identity, $context, 0, 0, false); }
-        $this->writeHead($version, '');
+        $this->writeHead($version, '', $configuration, context: $context);
     }
 
     /** Freeze a proven current legacy intent at a new R; never repair the missing old baseline. */
@@ -247,6 +251,7 @@ final class ThemeVersionResourceSnapshotService
         $old = $version->toVersionIdentity();
         $oldHead = $this->head($old);
         $oldDescriptor = json_decode((string)($oldHead['package_default_json'] ?? '{}'), true);
+        $configuration = $oldDescriptor['configuration'] ?? $this->captureConfiguration($old, $context);
         $omissions = $oldDescriptor['omissions'] ?? $this->captureOmissions($version);
         if ($context->resourceType === ThemeEditorContext::RESOURCE_LAYOUT) {
             $previousPayload = $this->read($old, $context)['payload'] ?? [];
@@ -277,7 +282,7 @@ final class ThemeVersionResourceSnapshotService
             throw new \RuntimeException('theme_version_content_revision_conflict');
         }
         $version->setContentRevision($next->contentRevision)->save();
-        $this->writeHead($version, $actor, $oldDescriptor['configuration'] ?? null, $omissions);
+        $this->writeHead($version, $actor, $configuration, $omissions, $context);
         return $next;
     }
 
@@ -537,16 +542,14 @@ final class ThemeVersionResourceSnapshotService
         return $published;
     }
 
-    private function writeHead(ThemeScopeVersion $version, string $actor, ?array $configuration = null, ?array $omissions = null): void
+    private function writeHead(ThemeScopeVersion $version, string $actor, ?array $configuration = null, ?array $omissions = null, ?ThemeEditorContext $context = null): void
     {
         $identity = $version->toVersionIdentity();
         $this->forgetSnapshotInputs($identity);
         if ($this->head($identity) !== null) { return; }
         $resources = $this->resources($identity);
         if ($configuration === null) {
-            $context = ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeLayoutResolver::class)->buildContext($identity->themeId,'homepage',$identity->area,
-                ['scope'=>$identity->canonicalScope,'store_mode'=>$identity->storeMode]);
-            $configuration = (new \Weline\Theme\Service\LayoutEntity\ThemeLayoutConfigurationSnapshot())->capture($context);
+            $configuration = $this->captureConfiguration($identity, $context);
         }
         (clone ObjectManager::getInstance(ThemeScopeVersionRevision::class))->clearData()->clearQuery()->setData([
             'theme_version_id' => $identity->themeVersionId, 'content_revision' => $identity->contentRevision,
@@ -557,6 +560,22 @@ final class ThemeVersionResourceSnapshotService
             'manifest_digest' => hash('sha256', json_encode($resources, JSON_THROW_ON_ERROR)), 'actor_id' => $actor,
         ])->save();
         $this->forgetSnapshotInputs($identity);
+    }
+
+    /** 复用调用方明确供应的配置继承链；CLI 无入参时仅恢复可信 owner。 */
+    private function captureConfiguration(ThemeVersionIdentity $identity, ?ThemeEditorContext $context): array
+    {
+        $context ??= new ThemeEditorContext(
+            scope: ThemeContentScope::fromStoredOwner($identity->canonicalScope, $identity->storeMode, 'default'),
+            area: $identity->area,
+            themeId: $identity->themeId,
+            layoutType: 'homepage',
+        );
+        if ($context->themeId !== $identity->themeId || $context->area !== $identity->area
+            || $context->scope->storageScope !== $identity->canonicalScope || $context->scope->storeMode !== $identity->storeMode) {
+            throw new \InvalidArgumentException('theme_version_context_owner_mismatch');
+        }
+        return (new \Weline\Theme\Service\LayoutEntity\ThemeLayoutConfigurationSnapshot())->capture($context);
     }
 
     private function writeResource(ThemeVersionIdentity $identity, ThemeEditorContext $context, int $intent, int $release, bool $hasIntent): void
@@ -589,13 +608,22 @@ final class ThemeVersionResourceSnapshotService
         return ['resolved' => false, 'reason' => $reason, 'payload' => null, 'release_id' => null, 'draft_revision_id' => 0];
     }
 
-    private function contextFor(ThemeVersionIdentity $identity, array $key): ThemeEditorContext
+    public function contextFor(ThemeVersionIdentity $identity, array $key): ThemeEditorContext
     {
-        $context = ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeLayoutResolver::class)->buildContext($identity->themeId,
-            (string)($key['layout_type'] ?? 'homepage'), $identity->area,
-            ['scope' => $identity->canonicalScope, 'store_mode' => $identity->storeMode, 'layout_option' => $key['layout_option'] ?? 'default',
-                'target_type' => $key['target_type'] ?? 'global', 'target_id' => (int)($key['target_id'] ?? 0)]);
-        return $context->withResource((string)($key['resource_type'] ?? 'layout'))->withLocale((string)($key['locale'] ?? 'default'));
+        $stored = (array)($key['scope'] ?? []);
+        if (isset($stored['provider'])) {
+            $scope = ThemeContentScope::fromArray($stored);
+        } elseif (isset($stored['identity']['scope_kind'], $stored['storage_scope'], $stored['store_mode'])) {
+            // 旧快照完整记录了网站身份；仅转换这份历史依据，不查询当前网站或祖先。
+            $scope = new ThemeContentScope('websites', (string)$stored['storage_scope'], (string)$stored['store_mode'],
+                '', (string)($key['locale'] ?? 'default'));
+        } else {
+            throw new \RuntimeException('historical_context_identity_missing');
+        }
+        // 资源引用可以来自创建版本时记录的其它 owner，不能强行改成当前版本 owner。
+        return new ThemeEditorContext($scope, $identity->area, (string)($key['resource_type'] ?? 'layout'), $identity->themeId,
+            (string)($key['layout_type'] ?? 'homepage'), (string)($key['layout_option'] ?? 'default'),
+            (string)($key['locale'] ?? 'default'), (string)($key['target_type'] ?? 'global'), (int)($key['target_id'] ?? 0));
     }
 
     private function rows(string $model, array $filters): array

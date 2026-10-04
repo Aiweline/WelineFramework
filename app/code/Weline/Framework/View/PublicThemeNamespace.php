@@ -38,7 +38,7 @@ use Weline\Framework\App\Env;
  */
 final class PublicThemeNamespace
 {
-    /** 框架内置默认主题的公开命名空间（`Env::default_theme_DATA['path']` 取不到时的兜底）。 */
+    /** Theme 注册默认主题的公开命名空间（与 Theme DefaultThemeInterface::REGISTERED_RELATIVE_PATH 对齐）。 */
     private const BUILTIN_DEFAULT_NAMESPACE = 'Weline/Theme/view/theme';
 
     /**
@@ -126,9 +126,12 @@ final class PublicThemeNamespace
 
     private static function defaultNamespace(): string
     {
-        $default = self::normalize((string)Env::default_theme_DATA['path']);
+        $theme = Env::getInstance()->getTheme();
+        $path = is_array($theme) ? (string)($theme['path'] ?? '') : '';
+        // DB 主题 path 常为绝对路径，必须先归一化成 pub/static 相对命名空间。
+        $resolved = self::tryResolve($path);
 
-        return $default !== '' ? $default : self::BUILTIN_DEFAULT_NAMESPACE;
+        return $resolved ?? self::BUILTIN_DEFAULT_NAMESPACE;
     }
 
     /** 仅在结果安全时接受，否则视为「无法解析」。 */

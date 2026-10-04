@@ -475,6 +475,19 @@ class App
         }
         $markApplyUrlStep('storefront_scope_ready_gate');
 
+        // 使用方在正式缓存身份冻结前安装中性应用输入，不让能力模块反查宿主业务。
+        if ($scopeGateEventManager->hasObservers('Weline_Framework::App::application_context_ready')) {
+            $applicationContextData = [
+                'area' => $isBackend ? 'backend' : 'frontend',
+                'navigation_scope' => $navigationScope,
+                'scope_identity' => RequestContext::scopeIdentity(),
+            ];
+            $scopeGateEventManager->dispatch(
+                'Weline_Framework::App::application_context_ready',
+                $applicationContextData,
+            );
+        }
+
         $scopeIdentity = RequestContext::scopeIdentity();
         $cacheKeyContextResolver = ObjectManager::getInstance(StorefrontCacheKeyContextResolver::class);
         if ($scopeIdentity instanceof ScopeIdentity

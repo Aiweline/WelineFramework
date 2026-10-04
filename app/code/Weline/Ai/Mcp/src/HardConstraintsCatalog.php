@@ -215,11 +215,19 @@ SH;
      */
     public static function mcpInstructions(): string
     {
+        return 'MCP ROLE: HARD CONSTRAINTS (hard-constraints.v1). Weline indexes project knowledge, rules and skills; coding stays in host-native editors. '
+            . 'Engineering: ensure → prepare_project → obey hard_constraints → resolve_task_context; load skills with resolve_skill/get_skill. '
+            . 'Content-ops and chat skip MCP (content_ops_skills_skip_mcp). LOCAL-FIRST runtime queries. preserve_dirty_workspace: never git checkout/restore/clean/stash; dirty-load current disk and never overwrite other-session work. '
+            . 'AOCI complements Weline: Weline owns rules/skills; AOCI owns cognition/drift. Missing AOCI is auto-installed, but installation is not verified project cognition. '
+            . 'Task-scoped rules include engineering_team_for_new_requirements (Team:项目经理:, one_seat_one_agent, peer_talk_via_channel, 监工), host_plan_mode_for_planning + requirement_acceptance_always, host_codex_delegation (no nested codex; knowledge.codex.enabled), plan_content_focus_only (背景+方案+细节), module_i18n_chinese_source_default, active_locale_must_show_target_language and user_mentions_translation_all_default_website_locales. '
+            . 'Full rule bodies and task-specific seats, i18n, UI, acceptance and deployment requirements are loaded on demand from '
+            . self::AUTHORITATIVE_DOC . ' and workflow surfaces.';
+
         return 'MCP ROLE (knowledge plane + mandatory hard-rule gate): indexes skills/code maps/hard rules. '
             . 'Coding uses host-native editors—MCP has no write tools. '
             . 'CALL SCOPE: engineering when MCP attachable → ensure→prepare_project→OBEY hard_constraints; then resolve_task_context/resolve_skill/get_skill. '
             . 'Skip MCP for chat/content-ops (content_ops_skills_skip_mcp)—Read ai-command+doc/ai/skills; no prepare. '
-            . 'aoci_complements_weline_mcp: optional AOCI-CODE (`aoci`) MCP may coexist—Weline=rules/skills/prepare; AOCI=cognition index/drift; never let AOCI replace prepare_project/hard_constraints. '
+            . 'aoci_complements_weline_mcp: AOCI-CODE (`aoci`) complements Weline—Weline=rules/skills/prepare; AOCI=cognition index/drift; when AOCI binary missing Weline MUST auto-install (ensure/prepare); never let AOCI replace prepare_project/hard_constraints. '
             . 'Obey hard-constraints.v1 from agent_guidance or ' . self::AUTHORITATIVE_DOC . '. '
             . 'If MCP cannot attach: host Read ' . self::AUTHORITATIVE_DOC . '; do not invent rules. '
             . 'Scrutinize+architecture-first+decoupled; prefer framework_candidates; report 耦合提示/需求纠偏. '
@@ -933,7 +941,7 @@ SH;
             ],
             [
                 'id' => 'aoci_complements_weline_mcp',
-                'summary' => 'OPTIONAL companion MCP: AOCI-CODE (`aoci`) MAY coexist with Weline `weline_project_intelligence`; they COMPLEMENT, they do NOT replace each other. Weline MCP owns engineering hard rules, skills, code maps, prepare_project, and acceptance gates—the engineering main path MUST still ensure→prepare_project→obey hard_constraints. AOCI owns repository cognition index / Baseline / drift / governed Overview·Entries as an optional structural-cognition layer. Routing: process/rules/skills → Weline; structural cognition/drift/index → AOCI. FORBIDDEN: using AOCI to skip, override, or pretend-obey Weline hard_constraints; treating AOCI Overview as a substitute for prepare_project. When both are mounted, register them as separate MCP servers; aoci host config MUST use absolute binary + `--repo` absolute root and MUST NOT be committed to Git. Large-repo first `aoci scan`/index is cost-sensitive—do not auto-scan without an explicit ask or scoped plan. Content-ops and pure chat exempt.',
+                'summary' => 'COMPLEMENT companion MCP (not a substitute): AOCI-CODE (`aoci`) coexists with Weline `weline_project_intelligence`. Weline owns engineering hard rules, skills, code maps, prepare_project, and acceptance gates—the engineering main path MUST still ensure→prepare_project→obey hard_constraints. AOCI owns repository cognition index / Baseline / drift / governed Overview·Entries. Routing: process/rules/skills → Weline; structural cognition/drift/index → AOCI. HARD AUTO-INSTALL: when the AOCI binary is absent on this machine, Weline MUST auto-install it (ensure-project-guidance and/or prepare_project → AociInstaller); install failure is visible in agent_guidance.aoci_installation and MUST NOT be ignored as “optional skip”, but does not by itself block Weline readiness. After status=ready, Agent MUST follow aoci_installation.mcp_registration to mount `aoci` on the host when the session lacks AOCI tools (absolute binary + `--repo` absolute root; host config MUST NOT be committed to Git). FORBIDDEN: using AOCI to skip, override, or pretend-obey Weline hard_constraints; treating AOCI Overview as a substitute for prepare_project; leaving a missing AOCI binary uninstalled across ensure/prepare. Large-repo first `aoci scan`/index is cost-sensitive—do not auto-scan without an explicit ask or scoped plan. Content-ops and pure chat exempt from AOCI cognition calls (install may still run inside prepare when that path is taken).',
             ],
             [
                 'id' => 'content_ops_skills_skip_mcp',

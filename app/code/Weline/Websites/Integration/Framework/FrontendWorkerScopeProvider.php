@@ -91,6 +91,9 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
         } catch (FrontendWorkerScopeException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {
+            if ($exception instanceof \Weline\Framework\Runtime\RequestExitException) {
+                throw $exception;
+            }
             throw new FrontendWorkerScopeException(
                 'scope_token_issue_unavailable',
                 503,
@@ -351,6 +354,9 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
                 $binding->authoritativeAtIssue,
             );
         } catch (\Throwable $exception) {
+            if ($exception instanceof \Weline\Framework\Runtime\RequestExitException) {
+                throw $exception;
+            }
             throw new FrontendWorkerScopeException(
                 'worker_scope_authority_invalid',
                 400,
@@ -383,6 +389,9 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
                     $channel->id,
                 );
             } catch (\Throwable $exception) {
+                if ($exception instanceof \Weline\Framework\Runtime\RequestExitException) {
+                    throw $exception;
+                }
                 throw new FrontendWorkerScopeException(
                     'request_scope_already_conflicts',
                     409,
@@ -402,6 +411,9 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
         } catch (FrontendWorkerScopeException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {
+            if ($exception instanceof \Weline\Framework\Runtime\RequestExitException) {
+                throw $exception;
+            }
             throw new FrontendWorkerScopeException(
                 'request_scope_install_failed',
                 500,
@@ -449,6 +461,9 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
 
     private function catalogUnavailable(\Throwable $previous): FrontendWorkerScopeException
     {
+        if ($previous instanceof \Weline\Framework\Runtime\RequestExitException) {
+            throw $previous;
+        }
         return new FrontendWorkerScopeException(
             'scope_catalog_unavailable',
             503,

@@ -2,7 +2,7 @@
 /**
  * 片段：Footer（薄壳）
  *
- * 独占槽 `footer` 承接整页脚主部件 `footer-container`。
+ * 独占槽 `footer` 原生内嵌同模块整页脚主部件 `footer-container`。
  * 链接分组 / 法律 / 社交 / 标准扩展槽由部件模板输出，不再在 partial 内按标题猜槽。
  *
  * @meta.cache.mode {default="chrome",name="缓存模式"}
@@ -34,12 +34,10 @@
         position="footer"
         class="weline-footer-slot">
 
-    <!-- 回退：尚未默认安装 footer-container 时的最小壳；安装后由独占部件整段替换 -->
-    <footer id="footer" class="weline-footer weline-footer--shell" data-layout="shell">
-        <w:hook>Weline_Theme::frontend::partials::footer::before</w:hook>
-        <w:hook>footer</w:hook>
-        <w:hook>Weline_Theme::frontend::partials::footer::after</w:hook>
-    </footer>
+    <w:hook>Weline_Theme::frontend::partials::footer::before</w:hook>
+    <w:widget type="footer" name="footer-container" />
+    <w:hook>footer</w:hook>
+    <w:hook>Weline_Theme::frontend::partials::footer::after</w:hook>
 
 </w:slot>
 

@@ -227,6 +227,9 @@
 "Website、Store、SalesChannel 范围冻结后、任何 FPC 查询前执行店面强制门禁。","Execute storefront mandatory access control after the Website, Store, and SalesChannel scopes are frozen and before any FPC query."
 当前店面导航范围。,"The current store navigation range."
 当前已冻结范围身份。,"The scope identity is currently frozen."
+应用上下文就绪,应用上下文就绪
+店面范围冻结后、缓存查询前，供使用方安装当前请求的应用上下文。,店面范围冻结后、缓存查询前，供使用方安装当前请求的应用上下文。
+当前区域。,当前区域。
 应用运行前,"Before Application Runs"
 "URL 已解析且 early response 未命中后、Session/Router 前执行。","Executed after the URL has been parsed and the early response misses, but before the Session/Router."
 应用运行后,"After Application Runs"

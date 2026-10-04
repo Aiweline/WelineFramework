@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Weline\Framework\Rules\Frontend;
 
 /**
- * 同身份 XOR：布局/宿主内嵌 与 default_injections 禁止并存。
+ * 同宿主同落点 XOR：布局内嵌与 default_injections 禁止并存。
  *
  * 不做运行时「只留一份」去重。扫描命中后应二选一：
  * - 布局已提供 → 清空 default_injections，并标 `placement=layout`
  * - 应用注入 → 布局只留空 `<w:slot>`，保留 required default_injections
+ * 原生 layout 部件可另声明 placement=injection 的外国专用槽关系。
  */
 final class RequiredInjectionSiblingFetchScanner
 {
@@ -29,24 +30,31 @@ final class RequiredInjectionSiblingFetchScanner
         $index = $this->buildRequiredInjectionIndex($root);
         $violations = [];
         if ($index['by_code'] !== []) {
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
-            );
-            /** @var \SplFileInfo $file */
-            foreach ($iterator as $file) {
-                if (!$file->isFile() || strtolower($file->getExtension()) !== 'phtml') {
+            foreach ([$root, dirname($root) . '/design'] as $source) {
+                if (!is_dir($source)) {
                     continue;
                 }
-                $abs = str_replace('\\', '/', $file->getPathname());
-                if (!str_contains($abs, '/view/')) {
-                    continue;
+                $iterator = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS)
+                );
+                foreach ($iterator as $file) {
+                    if (!$file->isFile() || strtolower($file->getExtension()) !== 'phtml') {
+                        continue;
+                    }
+                    $abs = str_replace('\\', '/', $file->getPathname());
+                    if ($source === $root && !str_contains($abs, '/view/')) {
+                        continue;
+                    }
+                    if ($source !== $root && !preg_match('#/(layouts|partials)/#', $abs)) {
+                        continue;
+                    }
+                    $rel = $source === $root ? $this->toRelativePath($abs, $root) : 'design/' . substr($abs, strlen($source) + 1);
+                    $violations = array_merge($violations, $this->scanFile($abs, $rel, $index));
                 }
-                $rel = $this->toRelativePath($abs, $root);
-                $violations = array_merge($violations, $this->scanFile($abs, $rel, $index));
             }
         }
 
-        return array_merge($violations, $this->scanDefaultLayoutSeederLayoutPlacement($root));
+        return array_merge($violations, $this->scanLayoutPlacementDefaultInjections($root), $this->scanDefaultLayoutSeederLayoutPlacement($root));
     }
 
     /**
@@ -142,7 +150,7 @@ final class RequiredInjectionSiblingFetchScanner
 
     /**
      * @param array{
-     *   by_code: array<string, array{module:string,slots:list<string>,template:string}>,
+     *   by_code: array<string, array{module:string,slots:list<string>,template:string,native_layout?:bool}>,
      *   by_template_suffix: array<string, string>
      * } $index
      * @return list<array{type:string,path:string,line:int,snippet:string,code:string,slot:string,module?:string}>
@@ -154,6 +162,12 @@ final class RequiredInjectionSiblingFetchScanner
             return [];
         }
 
+        $content = preg_replace_callback('/<!--.*?-->/s', static fn(array $m): string => preg_replace('/[^\r\n]/', ' ', $m[0]), $content) ?? $content;
+        $active = '';
+        foreach (token_get_all($content) as $token) {
+            $active .= is_array($token) ? (in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true) ? preg_replace('/[^\r\n]/', ' ', $token[1]) : $token[1]) : $token;
+        }
+        $content = $active;
         $slotIds = $this->extractSlotIds($content);
         $acceptTokens = $this->extractAcceptTokens($content);
         if ($slotIds === [] && $acceptTokens === []) {
@@ -220,6 +234,99 @@ final class RequiredInjectionSiblingFetchScanner
         return $violations;
     }
 
+    /** Validate native layout defaults and explicit foreign-slot injection relations. */
+    private function scanLayoutPlacementDefaultInjections(string $root): array
+    {
+        $violations = [];
+        $slotOwners = $this->layoutSlotOwners($root);
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($iterator as $file) {
+            $path = str_replace('\\', '/', $file->getPathname());
+            if (!$file->isFile() || $file->getFilename() !== 'widget.php' || !str_contains($path, '/extends/module/Weline_Widget/')) {
+                continue;
+            }
+            $definitions = @include $path;
+            if (!is_array($definitions)) {
+                continue;
+            }
+            foreach ($definitions as $key => $definition) {
+                if (!is_array($definition) || strtolower(trim((string)($definition['placement'] ?? ''))) !== 'layout'
+                    || !is_array($definition['default_injections'] ?? null) || $definition['default_injections'] === []) {
+                    continue;
+                }
+                $module = (string)$this->moduleFromWidgetPhpPath($path, $root);
+                $injections = $definition['default_injections'];
+                $injections = array_is_list($injections) ? $injections : [$injections];
+                $foreignOnly = true;
+                foreach ($injections as $injection) {
+                    $slot = is_array($injection) ? strtolower(trim((string)($injection['slot'] ?? $injection['slot_id'] ?? ''))) : '';
+                    $owners = $slotOwners[$slot] ?? [];
+                    if (!is_array($injection) || ($injection['placement'] ?? '') !== 'injection'
+                        || $slot === '' || $owners === [] || in_array($module, $owners, true)) {
+                        $foreignOnly = false;
+                        break;
+                    }
+                }
+                if ($foreignOnly) {
+                    continue;
+                }
+                $code = trim((string)($definition['code'] ?? (is_string($key) ? $key : '')));
+                $content = (string)file_get_contents($path);
+                $line = 1;
+                if ($code !== '' && preg_match('/[\'"]' . preg_quote($code, '/') . '[\'"]\s*=>/', $content, $match, PREG_OFFSET_CAPTURE)) {
+                    $line += substr_count(substr($content, 0, $match[0][1]), "\n");
+                }
+                $violations[] = [
+                    'type' => 'layout-placement-default-injection',
+                    'path' => $this->toRelativePath($path, $root),
+                    'line' => $line,
+                    'snippet' => 'placement=layout default_injections must declare injection into proven foreign layout slots',
+                    'code' => $code,
+                    'slot' => (string)($definition['slot'] ?? ''),
+                    'module' => (string)$this->moduleFromWidgetPhpPath($path, $root),
+                ];
+            }
+        }
+        return $violations;
+    }
+
+    /** @return array<string,list<string>> */
+    private function layoutSlotOwners(string $root): array
+    {
+        $owners = [];
+        foreach ([$root, dirname($root) . '/design'] as $source) {
+            if (!is_dir($source)) {
+                continue;
+            }
+            $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS));
+            foreach ($iterator as $file) {
+                $path = str_replace('\\', '/', $file->getPathname());
+                if (!$file->isFile() || $file->getExtension() !== 'phtml' || !preg_match('#/(layouts|partials)/#', $path)) {
+                    continue;
+                }
+                $owner = 'Weline_Theme';
+                if ($source === $root) {
+                    $relative = $this->toRelativePath($path, $root);
+                    if (!preg_match('#^([^/]+)/([^/]+)/view/#', $relative, $match) || str_contains($relative, '/view/tpl/')) {
+                        continue;
+                    }
+                    $owner = $match[1] . '_' . $match[2];
+                }
+                $content = (string)file_get_contents($path);
+                $content = preg_replace('/<!--.*?-->/s', '', $content) ?? $content;
+                $active = '';
+                foreach (token_get_all($content) as $token) {
+                    $active .= is_array($token) ? (in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true) ? '' : $token[1]) : $token;
+                }
+                $content = $active;
+                foreach ($this->extractSlotIds($content) as $slot) {
+                    $owners[$slot][] = $owner;
+                }
+            }
+        }
+        return $owners;
+    }
+
     public function formatViolation(array $violation): string
     {
         $type = (string)($violation['type'] ?? '');
@@ -235,7 +342,7 @@ final class RequiredInjectionSiblingFetchScanner
 
     /**
      * @return array{
-     *   by_code: array<string, array{module:string,slots:list<string>,template:string}>,
+     *   by_code: array<string, array{module:string,slots:list<string>,template:string,native_layout?:bool}>,
      *   by_template_suffix: array<string, string>
      * }
      */
@@ -296,6 +403,7 @@ final class RequiredInjectionSiblingFetchScanner
                     'module' => $module,
                     'slots' => $slots,
                     'template' => $tpl,
+                    'native_layout' => strtolower(trim((string)($value['placement'] ?? ''))) === 'layout',
                 ];
                 if ($tpl !== '') {
                     $suffix = $this->templateSuffix($tpl);
@@ -320,7 +428,7 @@ final class RequiredInjectionSiblingFetchScanner
     /**
      * @param list<string> $slotIds
      * @param list<string> $acceptTokens
-     * @param array{by_code: array<string, array{module:string,slots:list<string>,template:string}>} $index
+     * @param array{by_code: array<string, array{module:string,slots:list<string>,template:string,native_layout?:bool}>} $index
      */
     private function conflictSlot(
         string $code,
@@ -336,6 +444,11 @@ final class RequiredInjectionSiblingFetchScanner
             if (in_array($slot, $slotIds, true)) {
                 return $slot;
             }
+        }
+        // Native layout widgets may also have foreign-slot injection relations.
+        // Their own slot's accept=code does not identify the foreign target slot.
+        if (!empty($meta['native_layout'])) {
+            return null;
         }
         if (in_array($code, $acceptTokens, true)) {
             return $meta['slots'][0] ?? $code;

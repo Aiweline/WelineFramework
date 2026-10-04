@@ -13,6 +13,7 @@ use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Website\LocalDescription as WebsiteLocalDescription;
 use Weline\Websites\Service\DomainPoolLifecycleService;
 use Weline\Websites\Service\DefaultWebsiteService;
+use Weline\Websites\Service\LegacyThemeApplicationMigration;
 use Weline\Websites\Service\SiteContactSeedService;
 use Weline\Websites\Service\StoreChannelSeedService;
 use Weline\Websites\Service\WebsiteBrandIdentitySeedService;
@@ -56,6 +57,29 @@ class Upgrade implements UpgradeInterface
         $n = $lifecycle->backfillAllPoolStages();
         if ($n > 0 && \function_exists('w_log_info')) {
             \w_log_info(\sprintf('[Websites Upgrade] 已回填域名池生命周期阶段 %d 条', $n), [], 'websites_upgrade');
+        }
+
+        /** @var LegacyThemeApplicationMigration $themeApplicationMigration */
+        $themeApplicationMigration = ObjectManager::getInstance(LegacyThemeApplicationMigration::class);
+        $migration = $themeApplicationMigration->migrate(
+            BP . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'backup'
+            . DIRECTORY_SEPARATOR . 'websites-theme-application-migration',
+        );
+        if (\function_exists('w_log_info')) {
+            \w_log_info(
+                \sprintf(
+                    '[Websites Upgrade] 主题应用迁移：保存%d，未解析%d，备份%s',
+                    (int)$migration['saved'],
+                    count($migration['unresolved']),
+                    (string)$migration['backup_path'],
+                ),
+                ['unresolved' => $migration['unresolved']],
+                'websites_upgrade',
+            );
+        }
+        foreach ($migration['unresolved'] as $unresolved) {
+            echo '[Websites Upgrade] 未解析旧应用：'
+                . json_encode($unresolved, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
         }
     }
 }

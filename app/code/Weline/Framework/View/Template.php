@@ -380,7 +380,7 @@ class Template extends DataObject implements RequestLocalInterface
     {
         // 语言初始化
         $local = $this->initLanguage();
-        $this->theme ??= Env::getInstance()->getConfig('theme', Env::default_theme_DATA);
+        $this->theme ??= Env::getInstance()->getTheme();
         $this->eventsManager ??= ObjectManager::getInstance(EventsManager::class);
         $this->viewCache ??= w_cache('view');
         $this->request = ObjectManager::getInstance(Request::class);

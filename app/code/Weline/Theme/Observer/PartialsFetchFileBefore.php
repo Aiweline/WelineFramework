@@ -122,10 +122,7 @@ class PartialsFetchFileBefore implements ObserverInterface
             return $theme;
         }
 
-        $fallback = clone $this->welineTheme;
-        $fallback->clearData()->clearQuery()->getActiveTheme($area);
-
-        return $fallback->getId() ? $fallback : null;
+        return $this->themeContext->resolveRegisteredDefaultTheme($area);
     }
 
     private function parsePartialsPath(string $path): ?array

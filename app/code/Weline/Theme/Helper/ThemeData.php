@@ -793,11 +793,10 @@ class ThemeData
                 try {
                     /** @var ThemeContextService $themeContext */
                     $themeContext = ObjectManager::getInstance(ThemeContextService::class);
-                    $state->currentTheme = $themeContext->resolveTheme($state->currentArea);
+                    $state->currentTheme = $themeContext->resolveTheme($state->currentArea)
+                        ?? $themeContext->resolveRegisteredDefaultTheme($state->currentArea);
                 } catch (\Throwable) {
-                    /** @var WelineTheme $theme */
-                    $theme = ObjectManager::getInstance(WelineTheme::class);
-                    $state->currentTheme = $theme->getActiveTheme($state->currentArea);
+                    $state->currentTheme = null;
                 }
             }
             

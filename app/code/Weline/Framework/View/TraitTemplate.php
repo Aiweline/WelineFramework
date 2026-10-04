@@ -718,7 +718,7 @@ trait TraitTemplate
     {
         $configuredPath = $this->theme['path']
             ?? Env::get('theme')['path']
-            ?? Env::default_theme_DATA['path'];
+            ?? (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
 
         return PublicThemeNamespace::resolve((string)$configuredPath);
     }

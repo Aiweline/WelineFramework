@@ -17,7 +17,9 @@ final class Install implements InstallInterface
     public function setup(Setup $setup, Context $context): void
     {
         $this->ensureMotorcycleDealerQuote();
-        ObjectManager::getInstance(InquiryFormBootstrap::class)->ensureSupplierApplication();
+        $bootstrap = ObjectManager::getInstance(InquiryFormBootstrap::class);
+        $bootstrap->ensureSupplierApplication();
+        $bootstrap->ensureContact();
     }
 
     private function ensureMotorcycleDealerQuote(): void

@@ -8,24 +8,28 @@ use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
-use Weline\Theme\Api\Scoped\ThemeEditorContext;
-use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
+use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
+use Weline\Theme\Api\DefaultThemeInterface;
+use Weline\Theme\Api\Version\ThemeApplicationReferenceReaderInterface;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Websites\Api\Theme\ThemeApplicationInterface;
+use Weline\Websites\Api\Theme\ThemeApplicationReference;
 
 /**
- * Website-scoped storefront theme_binding + published version summary.
- *
- * Website info form owns per-site theme selection. Global is_active_frontend /
- * Global theme_binding remain Default-only fallback and must not stomp sites.
+ * 网站信息表单拥有的店面主题应用引用（websites_theme_application）。
+ * 缺省展示 Theme 模块全局 Default（磁盘；不假定库 id）；不再写 scoped theme_binding。
  */
 final class WebsiteThemeBindingService
 {
     public const EXTENSION_KEY = 'theme';
 
     public function __construct(
-        private readonly ThemeScopedWorkspaceInterface $workspace,
+        private readonly ThemeApplicationInterface $applications,
         private readonly ScopeHierarchyInterface $scopes,
+        private readonly ScopeIdentityCatalogInterface $catalog,
+        private readonly DefaultThemeInterface $defaultTheme,
+        private readonly ThemeApplicationReferenceReaderInterface $references,
         private readonly ThemeScopeVersionService $versions,
         private readonly ThemeScopeVersion $versionModel,
         private readonly WelineTheme $themes,
@@ -61,26 +65,43 @@ final class WebsiteThemeBindingService
         }
 
         try {
-            $identity = ScopeIdentity::website($websiteId, $websiteCode);
-            $scope = $this->scopes->contextFromIdentity($identity);
-            $storageScope = trim((string)$scope->storageScope);
-            $context = new ThemeEditorContext(
-                scope: $scope,
-                area: 'frontend',
-                resourceType: ThemeEditorContext::RESOURCE_THEME_BINDING,
-            );
-            $state = $this->workspace->load($context, true);
-            $ownThemeId = (int)($state['published_payload']['theme_id'] ?? 0);
-            $effectiveThemeId = (int)($state['effective_payload']['theme_id']
-                ?? $state['published_payload']['theme_id']
-                ?? 0);
-            $inherited = $ownThemeId <= 0 && $effectiveThemeId > 0;
-            $themeId = $ownThemeId > 0 ? $ownThemeId : $effectiveThemeId;
-            $themeName = $themeId > 0 ? $this->themeName($themeId) : '';
+            $identity = $this->catalog->authoritativeIdentity(ScopeIdentity::website($websiteId, $websiteCode));
+            $storageScope = $this->scopes->toStorageScope($identity);
+            $keys = [];
+            $cursor = $identity;
+            do {
+                $keys[] = $cursor->canonicalKey();
+                $cursor = $this->scopes->parentIdentity($cursor);
+            } while ($cursor !== null);
 
-            $version = $themeId > 0 && $storageScope !== ''
-                ? $this->versions->getPublished($themeId, $storageScope, 'normal', 'frontend')
+            $resolution = $this->applications->resolve($keys, ScopeIdentity::MODE_NORMAL, 'frontend');
+            $reference = $resolution->reference;
+            $inherited = false;
+            $bindingSource = 'none';
+            if ($reference === null) {
+                $validated = $this->defaultTheme->defaultApplicationReference(
+                    'frontend',
+                    $storageScope,
+                    ScopeIdentity::MODE_NORMAL,
+                );
+                $themeId = (int)$validated['theme_id'];
+                $inherited = true;
+                $bindingSource = 'theme_default';
+                $versionId = 0;
+            } else {
+                $themeId = $reference->themeId;
+                $inherited = !$resolution->own;
+                $bindingSource = $resolution->own ? 'website' : 'inherited';
+                $versionId = $reference->themeVersionId;
+            }
+
+            $themeName = $themeId > 0 ? $this->themeName($themeId) : '';
+            $version = $versionId > 0
+                ? (clone $this->versionModel)->clearData()->clearQuery()->load($versionId)
                 : null;
+            if ($version instanceof ThemeScopeVersion && (int)$version->getVersionId() !== $versionId) {
+                $version = null;
+            }
 
             return [
                 'ok' => true,
@@ -89,7 +110,7 @@ final class WebsiteThemeBindingService
                 'storage_scope' => $storageScope,
                 'theme_id' => $themeId,
                 'theme_name' => $themeName,
-                'binding_source' => $inherited ? 'inherited' : ($ownThemeId > 0 ? 'website' : 'none'),
+                'binding_source' => $bindingSource,
                 'inherited' => $inherited,
                 'version_id' => $version instanceof ThemeScopeVersion ? (int)$version->getVersionId() : 0,
                 'version_number' => $version instanceof ThemeScopeVersion ? (int)$version->getVersionNumber() : 0,
@@ -107,9 +128,6 @@ final class WebsiteThemeBindingService
     }
 
     /**
-     * Persist website-scoped theme binding (and optional published version)
-     * after the Website save transaction commits.
-     *
      * @param array<string, mixed> $website
      * @param array<string, mixed> $payload extensions[theme]
      */
@@ -135,17 +153,16 @@ final class WebsiteThemeBindingService
 
         $runner = function () use ($websiteId, $websiteCode, $themeId, $versionId): void {
             if ($themeId > 0) {
-                $this->bindThemeForWebsite($websiteId, $websiteCode, $themeId);
-            }
-            if ($themeId > 0 && $versionId > 0) {
-                $this->selectPublishedVersionForWebsite($websiteId, $websiteCode, $themeId, $versionId);
+                $this->bindThemeForWebsite($websiteId, $websiteCode, $themeId, $versionId);
+            } elseif ($versionId > 0) {
+                $this->bindThemeForWebsite($websiteId, $websiteCode, 0, $versionId);
             }
         };
 
         if ($connection instanceof ConnectionFactory) {
             $this->transactions->afterCommit(
                 $connection,
-                'theme.website_binding.' . $websiteId,
+                'theme.website_application.' . $websiteId,
                 $runner,
             );
 
@@ -155,96 +172,99 @@ final class WebsiteThemeBindingService
         $runner();
     }
 
-    public function bindThemeForWebsite(int $websiteId, string $websiteCode, int $themeId): void
-    {
-        if ($websiteId < 0 || $themeId <= 0) {
+    public function bindThemeForWebsite(
+        int $websiteId,
+        string $websiteCode,
+        int $themeId,
+        int $versionId = 0,
+    ): void {
+        if ($websiteId < 0) {
             throw new \InvalidArgumentException((string)__('网站主题绑定参数无效'));
         }
         $websiteCode = strtolower(trim($websiteCode));
         if ($websiteCode === '') {
             throw new \InvalidArgumentException((string)__('网站代码无效'));
         }
-        $this->assertFrontendTheme($themeId);
+        $identity = $this->catalog->authoritativeIdentity(ScopeIdentity::website($websiteId, $websiteCode));
+        $storageScope = $this->scopes->toStorageScope($identity);
+        $scopeKey = $identity->canonicalKey();
+        $current = $this->applications->getOwn($scopeKey, ScopeIdentity::MODE_NORMAL, 'frontend');
 
-        $identity = ScopeIdentity::website($websiteId, $websiteCode);
-        $scope = $this->scopes->contextFromIdentity($identity);
-        $context = new ThemeEditorContext(
-            scope: $scope,
-            area: 'frontend',
-            resourceType: ThemeEditorContext::RESOURCE_THEME_BINDING,
-        );
-        $before = $this->workspace->load($context, true);
-        $publishedThemeId = (int)($before['published_payload']['theme_id'] ?? 0);
-        $draftThemeId = (int)($before['draft_payload']['theme_id'] ?? 0);
-        if ($publishedThemeId === $themeId && ($draftThemeId === 0 || $draftThemeId === $themeId)) {
-            return;
+        if ($themeId <= 0) {
+            $themeId = $current['reference']?->themeId ?? 0;
+        }
+        if ($themeId <= 0 || $this->defaultTheme->isModuleDefaultThemeId($themeId)) {
+            // 写回 Theme 模块包默认引用（theme_id 可能为目录 id 或 0），不假定 id=1。
+            $fallback = $this->defaultTheme->defaultApplicationReference(
+                'frontend',
+                $storageScope,
+                ScopeIdentity::MODE_NORMAL,
+            );
+            $themeId = (int)$fallback['theme_id'];
+        } else {
+            $this->assertFrontendTheme($themeId);
         }
 
-        $parentReleaseId = array_key_exists('expected_parent_release_id', $before)
-            ? ($before['expected_parent_release_id'] === null
-                ? null
-                : (int)$before['expected_parent_release_id'])
-            : null;
-        $this->workspace->applyChanges(
-            context: $context,
-            expectedRevision: (int)($before['revision'] ?? 0),
-            expectedParentReleaseId: $parentReleaseId,
-            changes: [[
-                'op' => 'set',
-                'path' => '/theme_id',
-                'value' => $themeId,
-            ]],
-            actorId: 'website-theme-binding',
-            actorName: 'WebsiteThemeBindingService',
-            summary: 'Website form theme_binding',
+        if ($versionId > 0) {
+            $version = clone $this->versionModel;
+            $version->clearData()->clearQuery()->load($versionId);
+            if ((int)$version->getVersionId() !== $versionId
+                || (int)$version->getThemeId() !== $themeId
+                || trim((string)$version->getScope()) !== $storageScope
+                || strtolower(trim((string)$version->getArea())) !== 'frontend'
+            ) {
+                throw new \InvalidArgumentException((string)__('所选主题版本不属于当前网站范围'));
+            }
+            $this->versions->markPublished($version);
+            $ownerScope = trim((string)$version->getScope());
+            $contentRevision = (int)$version->getContentRevision();
+            $themeVersionId = $versionId;
+        } else {
+            $published = $this->versions->getPublished($themeId, $storageScope, ScopeIdentity::MODE_NORMAL, 'frontend');
+            if ($published instanceof ThemeScopeVersion && (int)$published->getVersionId() > 0) {
+                $themeVersionId = (int)$published->getVersionId();
+                $contentRevision = (int)$published->getContentRevision();
+                $ownerScope = trim((string)$published->getScope());
+            } else {
+                $themeVersionId = 0;
+                $contentRevision = 0;
+                $ownerScope = $storageScope;
+            }
+        }
+
+        $validated = $this->references->validateReference([
+            'theme_id' => $themeId,
+            'theme_version_id' => $themeVersionId,
+            'content_revision' => $contentRevision,
+            'owner_scope' => $ownerScope !== '' ? $ownerScope : $storageScope,
+            'store_mode' => ScopeIdentity::MODE_NORMAL,
+            'area' => 'frontend',
+        ]);
+        $reference = new ThemeApplicationReference(
+            themeId: (int)$validated['theme_id'],
+            themeVersionId: (int)$validated['theme_version_id'],
+            contentRevision: (int)$validated['content_revision'],
+            versionOwnerScope: (string)$validated['owner_scope'],
+            versionOwnerStoreMode: (string)$validated['store_mode'],
+            area: (string)$validated['area'],
         );
-        $afterDraft = $this->workspace->load($context, true);
-        $this->workspace->publish(
-            context: $context,
-            expectedRevision: (int)($afterDraft['revision'] ?? 0),
-            expectedParentReleaseId: array_key_exists('expected_parent_release_id', $afterDraft)
-                ? ($afterDraft['expected_parent_release_id'] === null
-                    ? null
-                    : (int)$afterDraft['expected_parent_release_id'])
-                : null,
-            actorId: 'website-theme-binding',
-            actorName: 'WebsiteThemeBindingService',
-            reason: 'Website form theme_binding',
+        $this->applications->save(
+            $scopeKey,
+            ScopeIdentity::MODE_NORMAL,
+            'frontend',
+            $reference,
+            $current['revision'],
         );
-        $this->workspace->invalidateRequestLoadCache();
     }
 
+    /** @deprecated 版本选择已并入 bindThemeForWebsite */
     public function selectPublishedVersionForWebsite(
         int $websiteId,
         string $websiteCode,
         int $themeId,
         int $versionId,
     ): void {
-        if ($websiteId < 0 || $themeId <= 0 || $versionId <= 0) {
-            return;
-        }
-        $websiteCode = strtolower(trim($websiteCode));
-        if ($websiteCode === '') {
-            return;
-        }
-        $identity = ScopeIdentity::website($websiteId, $websiteCode);
-        $scope = $this->scopes->contextFromIdentity($identity);
-        $storageScope = trim((string)$scope->storageScope);
-        if ($storageScope === '') {
-            return;
-        }
-
-        $version = clone $this->versionModel;
-        $version->clearData()->clearQuery()->load($versionId);
-        if ((int)$version->getVersionId() !== $versionId
-            || (int)$version->getThemeId() !== $themeId
-            || trim((string)$version->getScope()) !== $storageScope
-            || strtolower(trim((string)$version->getArea())) !== 'frontend'
-        ) {
-            throw new \InvalidArgumentException((string)__('所选主题版本不属于当前网站范围'));
-        }
-
-        $this->versions->markPublished($version);
+        $this->bindThemeForWebsite($websiteId, $websiteCode, $themeId, $versionId);
     }
 
     /**
@@ -332,25 +352,10 @@ final class WebsiteThemeBindingService
 
     public function isDefaultTheme(int $themeId): bool
     {
-        if ($themeId <= 0) {
-            return false;
-        }
         try {
-            $theme = clone $this->themes;
-            $theme->clearData()->clearQuery()->load($themeId);
-            if ((int)$theme->getId() !== $themeId) {
-                return false;
-            }
-            $name = strtolower(trim((string)$theme->getName()));
-            if ($name === 'default' || str_starts_with($name, 'default ')) {
-                return true;
-            }
-            $path = str_replace('\\', '/', (string)$theme->getPath());
-
-            return str_contains($path, '/Weline/Theme/view/theme')
-                || str_ends_with(rtrim($path, '/'), '/Theme/view/theme');
+            return $this->defaultTheme->isModuleDefaultThemeId($themeId);
         } catch (\Throwable) {
-            return false;
+            return $themeId === \Weline\Theme\Api\DefaultThemeInterface::MODULE_DEFAULT_THEME_ID;
         }
     }
 

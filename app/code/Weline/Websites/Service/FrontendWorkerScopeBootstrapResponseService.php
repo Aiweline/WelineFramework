@@ -65,6 +65,8 @@ final class FrontendWorkerScopeBootstrapResponseService
                     $this->logShadowSkip($exception->reason, 'shadow');
                     return $result;
                 }
+            } catch (\Weline\Framework\Runtime\RequestExitException $cancelled) {
+                throw $cancelled;
             } catch (\Throwable) {
                 // The rollout source itself is unavailable, so its previous
                 // authority cannot be inferred safely.
@@ -217,6 +219,8 @@ final class FrontendWorkerScopeBootstrapResponseService
             ]);
 
             return $response;
+        } catch (\Weline\Framework\Runtime\RequestExitException $exception) {
+            throw $exception;
         } catch (\Throwable $exception) {
             if ($bindingRequired) {
                 if ($exception instanceof FrontendWorkerScopeException) {

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 
 final class UrlPrefixNormalizationTest extends TestCase
@@ -51,6 +53,55 @@ final class UrlPrefixNormalizationTest extends TestCase
                 'https://shop.test/customer/account/social-login/callback'
             )
         );
+    }
+
+    public function testGetFrontendUrlDoesNotDoubleExistingLocalePrefix(): void
+    {
+        $runtimeProp = (new ReflectionClass(Env::class))->getProperty('runtimeConfig');
+        $runtimeBackup = $runtimeProp->getValue(Env::getInstance());
+
+        try {
+            $_SERVER = [
+                'HTTP_HOST' => 'fixture.test',
+                'REQUEST_SCHEME' => 'https',
+                'REQUEST_URI' => '/bg_BG/customer/account/login',
+                'WELINE_WEBSITE_URL' => 'https://fixture.test',
+                'WELINE_USER_LANG' => 'bg_BG',
+                'WELINE_USER_CURRENCY' => 'CNY',
+            ];
+            WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $_SERVER);
+            WelineEnv::set('website_url', 'https://fixture.test', 'locale prefix contract');
+            WelineEnv::set('website.currency', 'CNY', 'locale prefix contract');
+            WelineEnv::set('website.language', 'zh_Hans_CN', 'locale prefix contract');
+            WelineEnv::set('user.lang', 'bg_BG', 'locale prefix contract');
+            WelineEnv::set('user.currency', 'CNY', 'locale prefix contract');
+            Env::getInstance()->applyRuntimeConfig(['seo' => false, 'currency' => 'CNY', 'locale' => 'zh_Hans_CN']);
+
+            $request = $this->createMock(Request::class);
+            $request->method('getBaseHost')->willReturn('https://fixture.test');
+            $request->method('getBaseUrl')->willReturn('https://fixture.test/bg_BG/customer/account/login');
+            $request->method('getRouterData')->with('router')->willReturn('');
+
+            $url = new Url($request);
+
+            self::assertSame('/bg_BG', Url::getPrefix());
+            self::assertSame(
+                'https://fixture.test/bg_BG/?w_auth=1',
+                $url->getFrontendUrl('/bg_BG/?w_auth=1')
+            );
+            self::assertSame(
+                'https://fixture.test/bg_BG/customer/account?w_auth=1',
+                $url->getFrontendUrl('/bg_BG/customer/account?w_auth=1')
+            );
+            self::assertSame(
+                'https://fixture.test/bg_BG/customer/account',
+                $url->getFrontendUrl('/customer/account')
+            );
+            self::assertStringNotContainsString('/bg_BG/bg_BG', $url->getFrontendUrl('/bg_BG/?w_auth=1'));
+        } finally {
+            $runtimeProp->setValue(Env::getInstance(), $runtimeBackup);
+            (new ReflectionClass(Env::class))->getMethod('rebuildEffectiveConfig')->invoke(Env::getInstance());
+        }
     }
 
     public function testPrefixDoesNotAppendApiAreaSegmentAsCurrency(): void

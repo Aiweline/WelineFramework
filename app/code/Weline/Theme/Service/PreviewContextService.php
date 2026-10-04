@@ -882,9 +882,16 @@ final class PreviewContextService
 
     private function getActiveThemeId(string $area): int
     {
-        $theme = clone $this->welineTheme;
-        $theme->clearData()->clearQuery()->getActiveTheme($area);
-        return (int)($theme->getId() ?: 0);
+        try {
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            $resolved = $themeContext->resolveTheme($area)
+                ?? $themeContext->resolveRegisteredDefaultTheme($area);
+
+            return (int)($resolved?->getId() ?: 0);
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     private function themeSupportsArea(int $themeId, string $area): bool

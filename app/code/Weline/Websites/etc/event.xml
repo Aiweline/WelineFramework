@@ -9,6 +9,12 @@
                   shared="true" sort="-45"/>
     </event>
 
+    <event name="Weline_Framework::App::application_context_ready">
+        <observer name="Weline_Websites::install_theme_application_context"
+                  instance="Weline\Websites\Observer\InstallThemeApplicationContext"
+                  disabled="false" shared="true" sort="0"/>
+    </event>
+
     <!--控制器注解属性-->
     <event name="Weline_Framework_Url::detect_website">
         <observer name="Weline_Websites::detect_website" instance="Weline\Websites\Observer\DetectWebsite"

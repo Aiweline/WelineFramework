@@ -686,9 +686,19 @@ final class ThemeVirtualThemeRuntimeService implements ThemeVirtualThemeRuntimeI
         if ($themeId > 0) {
             return $themeId;
         }
-        $theme = clone $this->welineTheme;
-        $theme->clearData()->clearQuery()->getActiveTheme($this->normalizeArea((string)($input['area'] ?? 'frontend')));
-        return (int)$theme->getId();
+        $area = $this->normalizeArea((string)($input['area'] ?? 'frontend'));
+        try {
+            /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
+            $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\ThemeContextService::class,
+            );
+            $resolved = $themeContext->resolveTheme($area)
+                ?? $themeContext->resolveRegisteredDefaultTheme($area);
+
+            return (int)($resolved?->getId() ?? 0);
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     private function resolveBatchLayoutOption(string $mode, array $payload): string

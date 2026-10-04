@@ -1251,9 +1251,12 @@ class ThemeVirtualLayoutService
     private function getActiveTheme(string $area): ?WelineTheme
     {
         try {
-            $theme = clone $this->welineTheme;
-            $theme->clearData()->clearQuery()->getActiveTheme($area);
-            return $theme->getId() ? $theme : null;
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            $resolved = $themeContext->resolveTheme($area)
+                ?? $themeContext->resolveRegisteredDefaultTheme($area);
+
+            return $resolved instanceof WelineTheme && $resolved->getId() ? $resolved : null;
         } catch (\Throwable) {
             return null;
         }

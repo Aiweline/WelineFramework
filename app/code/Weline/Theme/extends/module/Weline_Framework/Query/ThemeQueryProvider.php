@@ -398,15 +398,9 @@ class ThemeQueryProvider implements QueryProviderInterface
         if ($layoutType === '') {
             return [];
         }
-        $resolved = $this->themeContext->resolveTheme($area);
-        if ($resolved !== null && $resolved->getId()) {
-            $theme = $resolved;
-        } else {
-            $theme = clone $this->welineTheme;
-            $theme->clearData()->clearQuery();
-            $theme->getActiveTheme($area);
-        }
-        if (!$theme->getId()) {
+        $theme = $this->themeContext->resolveTheme($area)
+            ?? $this->themeContext->resolveRegisteredDefaultTheme($area);
+        if ($theme === null || !$theme->getId()) {
             return [];
         }
         $fileOptions = $this->scanThemeLayoutCatalog($layoutType, $area, $theme);

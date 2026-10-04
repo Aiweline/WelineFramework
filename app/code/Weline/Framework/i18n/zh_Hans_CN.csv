@@ -227,6 +227,9 @@
 "Website、Store、SalesChannel 范围冻结后、任何 FPC 查询前执行店面强制门禁。","Website、Store、SalesChannel 范围冻结后、任何 FPC 查询前执行店面强制门禁。"
 当前店面导航范围。,当前店面导航范围。
 当前已冻结范围身份。,当前已冻结范围身份。
+应用上下文就绪,应用上下文就绪
+店面范围冻结后、缓存查询前，供使用方安装当前请求的应用上下文。,店面范围冻结后、缓存查询前，供使用方安装当前请求的应用上下文。
+当前区域。,当前区域。
 应用运行前,应用运行前
 "URL 已解析且 early response 未命中后、Session/Router 前执行。","URL 已解析且 early response 未命中后、Session/Router 前执行。"
 应用运行后,应用运行后

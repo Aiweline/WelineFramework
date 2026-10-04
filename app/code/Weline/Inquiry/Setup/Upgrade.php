@@ -14,6 +14,8 @@ final class Upgrade implements UpgradeInterface
 {
     public function setup(Setup $setup, Context $context): void
     {
-        ObjectManager::getInstance(InquiryFormBootstrap::class)->ensureSupplierApplication();
+        $bootstrap = ObjectManager::getInstance(InquiryFormBootstrap::class);
+        $bootstrap->ensureSupplierApplication();
+        $bootstrap->ensureContact();
     }
 }

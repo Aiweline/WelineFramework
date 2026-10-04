@@ -13,6 +13,101 @@ use Weline\Inquiry\Model\Form;
 final class InquiryFormBootstrap
 {
     public const CODE_SUPPLIER_APPLICATION = 'supplier-application';
+    public const CODE_CONTACT = 'contact';
+
+    /**
+     * 站点「联系我们」通用表单：姓名 / 邮箱 / 主题 / 订单号 / 留言 / 是否附图。
+     * 前台主题表单以 code=contact 提交，提交记录在后台「询盘提交记录」可查。
+     */
+    public function ensureContact(): void
+    {
+        $form = ObjectManager::getInstance(Form::class);
+        $existing = $form->reset()
+            ->where(Form::schema_fields_CODE, self::CODE_CONTACT)
+            ->select()
+            ->fetchArray();
+        if (($existing[0][Form::schema_fields_STATUS] ?? '') === Form::STATUS_PUBLISHED) {
+            return;
+        }
+
+        $service = ObjectManager::getInstance(FormVersionService::class);
+        $draft = $service->saveDraft([
+            'form_id' => (int)($existing[0][Form::schema_fields_ID] ?? 0),
+            'code' => self::CODE_CONTACT,
+            'name' => 'Contact us',
+            'default_locale' => 'en_US',
+            'schema' => [
+                'fields' => [
+                    ['key' => 'name', 'type' => 'text', 'required' => true],
+                    ['key' => 'email', 'type' => 'email', 'required' => true],
+                    [
+                        'key' => 'topic',
+                        'type' => 'select',
+                        'required' => true,
+                        'options' => [
+                            ['value' => 'order_delivery'],
+                            ['value' => 'returns_refunds'],
+                            ['value' => 'product_question'],
+                            ['value' => 'wholesale_business_press'],
+                            ['value' => 'other'],
+                        ],
+                    ],
+                    ['key' => 'order_ref', 'type' => 'text', 'required' => false],
+                    ['key' => 'message', 'type' => 'textarea', 'required' => true],
+                    ['key' => 'attach_photos', 'type' => 'checkbox', 'required' => false],
+                ],
+            ],
+            'translations' => [
+                'en_US' => [
+                    'title' => 'Send us a message',
+                    'description' => 'Share as much detail as you can so we can better assist you.',
+                    'submit_label' => 'Send message',
+                    'success_message' => 'Thank you. Our team will get back to you shortly.',
+                    'fields' => [
+                        'name' => ['label' => 'Your name'],
+                        'email' => ['label' => 'Your email'],
+                        'topic' => [
+                            'label' => 'Topic',
+                            'options' => [
+                                'order_delivery' => 'Order & delivery',
+                                'returns_refunds' => 'Returns & refunds',
+                                'product_question' => 'Product question',
+                                'wholesale_business_press' => 'Wholesale, business & press',
+                                'other' => 'Something else',
+                            ],
+                        ],
+                        'order_ref' => ['label' => 'Order number (optional)'],
+                        'message' => ['label' => 'Message'],
+                        'attach_photos' => ['label' => 'Attach photos (optional)'],
+                    ],
+                ],
+                'zh_Hans_CN' => [
+                    'title' => '发送消息',
+                    'description' => '请尽量写清背景，方便我们一次处理到位。',
+                    'submit_label' => '发送消息',
+                    'success_message' => '感谢您的留言，我们会尽快回复。',
+                    'fields' => [
+                        'name' => ['label' => '姓名'],
+                        'email' => ['label' => '邮箱'],
+                        'topic' => [
+                            'label' => '主题',
+                            'options' => [
+                                'order_delivery' => '订单与配送',
+                                'returns_refunds' => '退换与退款',
+                                'product_question' => '商品咨询',
+                                'wholesale_business_press' => '批发、商务与媒体',
+                                'other' => '其它',
+                            ],
+                        ],
+                        'order_ref' => ['label' => '订单号（选填）'],
+                        'message' => ['label' => '留言'],
+                        'attach_photos' => ['label' => '附上照片（选填）'],
+                    ],
+                ],
+            ],
+        ]);
+        $service->publish((int)$draft['form']['form_id']);
+    }
 
     public function ensureSupplierApplication(): void
     {

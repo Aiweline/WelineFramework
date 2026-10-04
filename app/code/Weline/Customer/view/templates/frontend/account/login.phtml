@@ -78,8 +78,8 @@ $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
     <div class="w-auth-login__social w-auth-login__social--quick">
         <p class="w-auth-login__social-title"><lang>快捷登录</lang></p>
         <?php
-        // Slot-only: account-social-login is required default_injection into this slot.
-        // Do not fetch the widget beside the slot — that stacked a second copy with overlay.
+        // Same-module social login is embedded once in this slot.
+        // The owning module declares placement=layout without default_injections.
         // redirect_url stays on the login root (data-w-auth-return); the widget resolves return URL itself.
         ?>
         <w:slot id="account-login-social-providers"
@@ -91,6 +91,7 @@ $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
                 exclusive="false"
                 position="content"
                 class="w-auth-login__social-slot">
+            <w:widget type="form" name="account-social-login" />
         </w:slot>
         <w:hook name="Weline_Customer::frontend::account::login::providers"/>
     </div>

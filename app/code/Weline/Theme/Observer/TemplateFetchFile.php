@@ -9,7 +9,6 @@
 
 namespace Weline\Theme\Observer;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
@@ -118,18 +117,10 @@ class TemplateFetchFile implements ObserverInterface
         }
         $theme = $this->resolveExplicitRequestTheme($area)
             ?? $this->resolveTemplateScopedTheme($fileData, $area)
-            ?? $this->themeContext->resolveTheme($area);
+            ?? $this->themeContext->resolveTheme($area)
+            ?? $this->themeContext->resolveRegisteredDefaultTheme($area);
         if ($theme === null || !$theme->getId()) {
-            try {
-                $theme = $this->welineTheme->getActiveTheme($area);
-            } catch (\Exception $exception) {
-                throw new Exception(__('主题异常：') . $exception->getMessage());
-            }
-        }
-
-        # 主题不存在且非开发环境
-        if (PROD && (!$theme || !$theme->getId())) {
-            $theme = $this->welineTheme->setData(Env::default_theme_DATA);
+            throw new Exception(__('主题异常：Theme 注册默认主题不可用'));
         }
         
         // 使用主题路径解析器解析文件路径（支持多级继承）

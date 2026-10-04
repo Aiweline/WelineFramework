@@ -9,6 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
 
 /**
  * Head helper: resolve conditional override stylesheet URL for current theme.
@@ -139,11 +140,16 @@ class ThemeDiskHeadService
             return $current;
         }
 
-        /** @var WelineTheme $model */
-        $model = ObjectManager::getInstance(WelineTheme::class);
-        $active = $model->getActiveTheme($area);
+        try {
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            $resolved = $themeContext->resolveTheme($area)
+                ?? $themeContext->resolveRegisteredDefaultTheme($area);
 
-        return $active instanceof WelineTheme && (int)$active->getId() > 0 ? $active : null;
+            return $resolved instanceof WelineTheme && (int)$resolved->getId() > 0 ? $resolved : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function backendRoutePath(string $route): string

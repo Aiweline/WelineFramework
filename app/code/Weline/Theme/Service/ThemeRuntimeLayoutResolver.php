@@ -7,11 +7,10 @@ namespace Weline\Theme\Service;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
-use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
+use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeScopeRelease;
@@ -33,9 +32,6 @@ final class ThemeRuntimeLayoutResolver
     public function __construct(
         private readonly ThemeScopedPreviewResolver $previewResolver,
         private readonly ThemeScopedWorkspaceInterface $workspace,
-        private readonly ThemeLayoutScopeNormalizer $scopeNormalizer,
-        private readonly ScopeHierarchyInterface $scopes,
-        private readonly ScopeIdentityCatalogInterface $catalog,
         private readonly ThemeLayoutService $layoutService,
         private readonly ThemeScopeRelease $releases,
         private readonly ThemeScopeRevision $revisions,
@@ -190,10 +186,28 @@ final class ThemeRuntimeLayoutResolver
         string $area,
         array $identity = [],
     ): ThemeEditorContext {
+        $application = $identity['application_context'] ?? ThemeApplicationContext::current($area, (string)($identity['purpose'] ?? 'runtime'));
+        if (!$application instanceof ThemeApplicationContext) {
+            throw new \InvalidArgumentException('theme_runtime_consumer_context_required');
+        }
+        if ($application->themeId !== $themeId || $application->area !== $area) {
+            throw new \InvalidArgumentException('theme_runtime_context_theme_mismatch');
+        }
+        $scopeContext = $identity['content_scope'] ?? ThemeContentScope::fromApplication($application);
+        if (!$scopeContext instanceof ThemeContentScope) {
+            throw new \InvalidArgumentException('theme_runtime_content_scope_invalid');
+        }
+        if (!isset($identity['content_scope']) && $application->themeVersionId > 0
+            && in_array($application->purpose, ['runtime','preview'], true)) {
+            while ($scopeContext->storageScope !== $application->versionOwnerScope
+                || $scopeContext->storeMode !== $application->versionOwnerStoreMode) {
+                if ($scopeContext->parent === null) {
+                    throw new \InvalidArgumentException('theme_runtime_version_owner_not_supplied');
+                }
+                $scopeContext = $scopeContext->parent;
+            }
+        }
         $identity = $this->normalizeIdentity($identity);
-        $scopeIdentity = $this->scopeNormalizer->identityFromEncodedScope((string)$identity['scope']);
-        $authoritative = $this->catalog->authoritativeIdentity($scopeIdentity);
-        $scopeContext = $this->scopes->contextFromClaims($authoritative->toArray(), $authoritative);
         return new ThemeEditorContext(
             scope: $scopeContext,
             area: $area === 'backend' ? 'backend' : 'frontend',
@@ -204,6 +218,7 @@ final class ThemeRuntimeLayoutResolver
             locale: 'default',
             targetType: (string)$identity['target_type'],
             targetId: (int)$identity['target_id'],
+            application: $application,
         );
     }
 
@@ -289,15 +304,9 @@ final class ThemeRuntimeLayoutResolver
             }
         }
 
-        // Version owners keep canonical scope and store mode in separate fields.
-        // Preserve that mode in the legacy projection before catalog validation.
-        if (trim((string)($identity['store_mode'] ?? '')) !== '') {
-            $identity['scope'] = $this->scopeNormalizer->normalize($identity)['scope'];
-        }
-
         return [
             'layout_option' => \trim((string)($identity['layout_option'] ?? 'default')) ?: 'default',
-            'scope' => \trim((string)($identity['scope'] ?? 'default')) ?: 'default',
+            'scope' => \trim((string)($identity['scope'] ?? '')),
             'target_type' => \trim((string)($identity['target_type'] ?? 'global')) ?: 'global',
             'target_id' => \max(0, (int)($identity['target_id'] ?? 0)),
             'locale_code' => \trim((string)($identity['locale_code'] ?? $identity['locale'] ?? '')),
@@ -381,77 +390,17 @@ final class ThemeRuntimeLayoutResolver
      */
     private function identityCandidates(array $identity): array
     {
-        if ($identity !== []) {
-            return [$this->normalizeIdentity($identity)];
+        if ($identity !== []) { return [$identity]; }
+        $application = ThemeApplicationContext::current('frontend');
+        if ($application === null) { throw new \InvalidArgumentException('theme_runtime_consumer_context_required'); }
+        $out = [];
+        $scope = ThemeContentScope::fromApplication($application);
+        while ($scope !== null) {
+            $out[] = ['application_context'=>$application, 'content_scope'=>$scope, 'scope'=>$scope->storageScope,
+                'store_mode'=>$scope->storeMode, 'layout_option'=>'default', 'locale_code'=>'', 'target_type'=>'global', 'target_id'=>0];
+            $scope = $scope->parent;
         }
-
-        $list = [];
-        $seen = [];
-        $push = static function (array $candidate) use (&$list, &$seen): void {
-            $key = ($candidate['scope'] ?? '')
-                . '|' . ($candidate['locale_code'] ?? '')
-                . '|' . ($candidate['layout_option'] ?? 'default')
-                . '|' . ($candidate['target_type'] ?? 'global')
-                . '|' . (string)($candidate['target_id'] ?? 0);
-            if (isset($seen[$key])) {
-                return;
-            }
-            $seen[$key] = true;
-            $list[] = $candidate;
-        };
-
-        try {
-            $scopeIdentity = RequestContext::scopeIdentity();
-            if (!$scopeIdentity instanceof ScopeIdentity) {
-                $scopeIdentity = ScopeIdentity::global();
-            }
-            // 无请求 Scope（CLI / 维护波次）：先对齐前台默认 website/store 已发布指针，避免落到旧的 default.default.default。
-            if ($scopeIdentity->isGlobal()) {
-                foreach (['default.__store__.default', 'default.__website__.default'] as $frontendScope) {
-                    $push([
-                        'layout_option' => 'default',
-                        'scope' => $frontendScope,
-                        'locale_code' => '',
-                        'target_type' => 'global',
-                        'target_id' => 0,
-                    ]);
-                }
-            }
-            $context = $this->scopes->contextFromIdentity($scopeIdentity);
-            foreach ($context->fallbackStorageScopes as $storageScope) {
-                $storageScope = \trim((string)$storageScope);
-                if ($storageScope === '') {
-                    continue;
-                }
-                $push([
-                    'layout_option' => 'default',
-                    'scope' => $storageScope,
-                    'locale_code' => '',
-                    'target_type' => 'global',
-                    'target_id' => 0,
-                ]);
-            }
-        } catch (\Throwable) {
-            foreach (['default.__store__.default', 'default.__website__.default'] as $frontendScope) {
-                $push([
-                    'layout_option' => 'default',
-                    'scope' => $frontendScope,
-                    'locale_code' => '',
-                    'target_type' => 'global',
-                    'target_id' => 0,
-                ]);
-            }
-        }
-
-        $push([
-            'layout_option' => 'default',
-            'scope' => 'default.default.default',
-            'locale_code' => '',
-            'target_type' => 'global',
-            'target_id' => 0,
-        ]);
-
-        return $list;
+        return $out;
     }
 
     /**
@@ -474,7 +423,13 @@ final class ThemeRuntimeLayoutResolver
         string $area,
         array $identity,
     ): string {
+        $application = $identity['application_context'] ?? ThemeApplicationContext::current($area);
+        if (!$application instanceof ThemeApplicationContext) {
+            throw new \InvalidArgumentException('theme_runtime_consumer_context_required');
+        }
+        $inputKey = hash('sha256', json_encode($application->toArray(), JSON_THROW_ON_ERROR));
         return 'pub_layout|'
+            . $inputKey . '|'
             . ($area === 'backend' ? 'backend' : 'frontend') . '|'
             . $themeId . '|'
             . $pageType . '|'

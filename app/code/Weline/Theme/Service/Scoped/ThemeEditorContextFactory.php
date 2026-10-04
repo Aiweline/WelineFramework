@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Scoped;
 
-use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
-use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
+use Weline\Framework\Runtime\ThemeApplicationContext;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\WelineTheme;
@@ -17,8 +16,6 @@ use Weline\Theme\Service\ThemeTargetTypeRegistry;
 final class ThemeEditorContextFactory
 {
     public function __construct(
-        private readonly ScopeHierarchyInterface $scopes,
-        private readonly ScopeIdentityCatalogInterface $catalog,
         private readonly WelineTheme $themes,
         private readonly ThemeContextService $themeContext,
         private readonly ThemeTargetTypeRegistry $targetTypes,
@@ -27,7 +24,7 @@ final class ThemeEditorContextFactory
     }
 
     /** @param array<string,mixed> $input */
-    public function fromInput(array $input, ?string $forcedResourceType = null): ThemeEditorContext
+    public function fromInput(array $input, ?string $forcedResourceType = null, ?ThemeApplicationContext $application = null): ThemeEditorContext
     {
         $raw = $input['editor_context'] ?? $input;
         if (\is_string($raw)) {
@@ -37,6 +34,15 @@ final class ThemeEditorContextFactory
             throw new \InvalidArgumentException('theme_editor_context_required');
         }
 
+        $area = \strtolower(\trim((string)($raw['area'] ?? $raw['editor_area'] ?? 'frontend')));
+        $application ??= ThemeApplicationContext::current($area, 'editor')
+            ?? ThemeApplicationContext::current($area, 'preview')
+            ?? ThemeApplicationContext::current($area, 'asset');
+        if ($application === null || $application->area !== $area
+            || !in_array($application->purpose, ['editor', 'preview', 'asset'], true)) {
+            throw new \InvalidArgumentException('theme_editor_consumer_context_required');
+        }
+        $scopeContext = ThemeContentScope::fromApplication($application);
         $scope = $raw['scope'] ?? null;
         if (\is_string($scope)) {
             $scope = \json_decode($scope, true, flags: JSON_THROW_ON_ERROR);
@@ -44,20 +50,21 @@ final class ThemeEditorContextFactory
         if (!\is_array($scope)) {
             throw new \InvalidArgumentException('theme_editor_typed_scope_required');
         }
-        // Preview tokens / legacy payloads may only carry storage_scope (or an incomplete
-        // identity bag). Resolve identity first, then re-claim from authoritative toArray()
-        // so contextFromClaims never sees partial client fields.
-        $candidate = $this->resolveScopeIdentity($scope);
-        $authoritative = $this->catalog->authoritativeIdentity($candidate);
-        $claims = $authoritative->toArray();
-        $scopeContext = $this->scopes->contextFromClaims($claims, $authoritative);
+        // 范围权限由使用方校验；客户端字段只能匹配既定身份，不能决定编辑对象。
+        if (($scope['storage_scope'] ?? '') !== $scopeContext->storageScope
+            || (isset($scope['store_mode']) && $scope['store_mode'] !== $scopeContext->storeMode)
+            || (isset($scope['provider']) && $scope['provider'] !== $scopeContext->provider)) {
+            throw new \InvalidArgumentException('theme_editor_consumer_scope_mismatch');
+        }
 
         $resourceType = $forcedResourceType ?? (string)($raw['resource_type'] ?? ThemeEditorContext::RESOURCE_LAYOUT);
         if (!\in_array($resourceType, ThemeEditorContext::RESOURCES, true)) {
             throw new \InvalidArgumentException('theme_editor_context_resource_invalid');
         }
-        $area = \strtolower(\trim((string)($raw['area'] ?? $raw['editor_area'] ?? 'frontend')));
         $themeId = $this->nonNegativeInt($raw['theme_id'] ?? 0, 'theme_id');
+        if ($themeId !== $application->themeId) {
+            throw new \InvalidArgumentException('theme_editor_consumer_theme_mismatch');
+        }
         if ($resourceType !== ThemeEditorContext::RESOURCE_THEME_BINDING && $themeId <= 0) {
             throw new \InvalidArgumentException('theme_editor_context_theme_required');
         }
@@ -116,39 +123,8 @@ final class ThemeEditorContextFactory
             locale: $locale,
             targetType: $targetType,
             targetId: $targetId,
+            application: $application,
         );
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function resolveScopeIdentity(array $scope): ScopeIdentity
-    {
-        $identity = $scope['identity'] ?? null;
-        if (\is_array($identity)) {
-            try {
-                return ScopeIdentity::fromArray($identity);
-            } catch (\InvalidArgumentException) {
-                // Incomplete identity: fall through to storage_scope / bare claims.
-            }
-        }
-
-        $storageScope = \trim((string)($scope['storage_scope'] ?? ''));
-        if ($storageScope === '' && \is_string($scope['scope'] ?? null)) {
-            $storageScope = \trim((string)$scope['scope']);
-        }
-        if ($storageScope !== '') {
-            $fromStorage = $this->scopes->fromStorageScope($storageScope, true);
-            if ($fromStorage instanceof ScopeIdentity) {
-                return $fromStorage;
-            }
-        }
-
-        if (\array_key_exists('scope_kind', $scope)) {
-            return ScopeIdentity::fromArray($scope);
-        }
-
-        throw new \InvalidArgumentException('theme_editor_typed_scope_required');
     }
 
     private function nonNegativeInt(mixed $value, string $field): int

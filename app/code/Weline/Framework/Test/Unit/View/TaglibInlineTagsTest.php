@@ -80,7 +80,7 @@ class TaglibInlineTagsTest extends TestCore
                 '开发环境 href 应为 /Weline/Admin/view/statics/...'
             );
         } else {
-            $theme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
+            $theme = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
             $theme = str_replace('\\', '/', $theme);
             $expected = '/static/' . $theme . '/Weline/Theme/view/statics/ui/weline-foundation.css';
             $this->assertEquals($expected, $pathOnly, '生产环境 href 应为 /static/{theme}/Weline/Admin/view/statics/...');
@@ -111,7 +111,7 @@ class TaglibInlineTagsTest extends TestCore
                 '开发环境 src 应为 /Weline/Admin/view/statics/...'
             );
         } else {
-            $theme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
+            $theme = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
             $theme = str_replace('\\', '/', $theme);
             $expected = '/static/' . $theme . '/Weline/Frontend/view/statics/js/cookie.js';
             $this->assertEquals($expected, $pathOnly, '生产环境 src 应为 /static/{theme}/Weline/Admin/view/statics/...');

@@ -145,7 +145,7 @@ final class ThemeStaticNamespaceService
             return $themePath;
         }
 
-        $configuredTheme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'] ?? '';
+        $configuredTheme = (Env::getInstance()->getTheme()['path'] ?? '');
         return $this->normalizePublicThemePath((string)$configuredTheme);
     }
 

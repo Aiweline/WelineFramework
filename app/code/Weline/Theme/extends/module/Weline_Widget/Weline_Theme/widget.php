@@ -19,13 +19,19 @@ $textileHeritageConfig = TextileHeritageCatalog::widgetConfig();
 return [
     // --- 布局容器 (container) ---
     'Weline_Theme::theme/frontend/widgets/container/header/default.phtml',
-    'Weline_Theme::theme/frontend/widgets/container/footer/default.phtml',
+    [
+        'template' => 'Weline_Theme::theme/frontend/widgets/container/footer/default.phtml',
+        'placement' => 'layout',
+        'default_injections' => [],
+    ],
     'Weline_Theme::theme/frontend/widgets/container/content/default.phtml',
 
     // --- 页头 (header / navigation / search) ---
     'Weline_Theme::theme/frontend/widgets/header/logo/default.phtml',
     'Weline_Theme::theme/frontend/widgets/navigation/main-nav/default.phtml',
     'Weline_Theme::theme/frontend/widgets/navigation/all-menu/default.phtml' => [
+        'placement' => 'layout',
+        'default_injections' => [],
         'params' => [
             'menu_tree' => [
                 'type' => 'all_menu_tree',
@@ -41,7 +47,11 @@ return [
     'Weline_Theme::theme/frontend/widgets/header/help-center-link/default.phtml',
     'Weline_Theme::theme/frontend/widgets/header/order-tracking-link/default.phtml',
     'Weline_Theme::theme/frontend/widgets/header/notice-right-link/default.phtml',
-    'Weline_Theme::theme/frontend/widgets/header/header-policy-links/default.phtml',
+    [
+        'template' => 'Weline_Theme::theme/frontend/widgets/header/header-policy-links/default.phtml',
+        'placement' => 'layout',
+        'default_injections' => [],
+    ],
     'Weline_Theme::theme/frontend/widgets/header/top-bar/default.phtml',
 
     // --- 横幅 (banner) ---
@@ -192,6 +202,69 @@ return [
     // --- 表单 (form)：账号认证布局内嵌，全宽背景 + 悬浮登录/注册 ---
     [
         'template' => 'Weline_Theme::theme/frontend/widgets/form/account-login/default.phtml',
+        'placement' => 'layout',
+        'default_injections' => [
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account/login',
+                'layout_option' => 'default',
+                'slot' => 'foreign-theme-account-login',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account/register',
+                'layout_option' => 'default',
+                'slot' => 'foreign-theme-account-login',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account/social-login',
+                'layout_option' => 'default',
+                'slot' => 'foreign-theme-account-login',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account/forgot-password',
+                'layout_option' => 'default',
+                'slot' => 'foreign-theme-account-login',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account/set-password',
+                'layout_option' => 'default',
+                'slot' => 'foreign-theme-account-login',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account',
+                'layout_option' => 'auth',
+                'slot' => 'foreign-theme-account-login',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+        ],
         'params' => [
             'background_image' => [
                 'type' => 'media_image',
@@ -256,6 +329,69 @@ return [
     ],
     [
         'template' => 'Weline_Theme::theme/frontend/widgets/form/account-register/default.phtml',
+        'placement' => 'layout',
+        'default_injections' => [
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account/login',
+                'layout_option' => 'default',
+                'slot' => 'foreign-theme-account-register',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account/register',
+                'layout_option' => 'default',
+                'slot' => 'foreign-theme-account-register',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account/social-login',
+                'layout_option' => 'default',
+                'slot' => 'foreign-theme-account-register',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account/forgot-password',
+                'layout_option' => 'default',
+                'slot' => 'foreign-theme-account-register',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account/set-password',
+                'layout_option' => 'default',
+                'slot' => 'foreign-theme-account-register',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account',
+                'layout_option' => 'auth',
+                'slot' => 'foreign-theme-account-register',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+        ],
         'params' => [
             'background_image' => [
                 'type' => 'media_image',
@@ -320,6 +456,19 @@ return [
     ],
     [
         'template' => 'Weline_Theme::theme/frontend/widgets/form/account-challenge/default.phtml',
+        'placement' => 'layout',
+        'default_injections' => [
+            [
+                'placement' => 'injection',
+                'layout_type' => 'account',
+                'layout_option' => 'challenge',
+                'slot' => 'foreign-theme-account-challenge',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'exclusive' => true,
+            ],
+        ],
         'params' => [
             'background_image' => [
                 'type' => 'media_image',
@@ -388,7 +537,7 @@ return [
     [
         'template' => 'Weline_Theme::theme/frontend/widgets/footer/footer-faq-link/default.phtml',
         'name' => '页脚 FAQ 链接',
-        'description' => '页脚帮助扩展槽：跳转 Theme /faq FAQ 布局；默认注入 footer-help-links。',
+        'description' => '页脚帮助扩展槽：跳转 Theme /faq FAQ 布局；同模块页脚内嵌。',
         'type' => 'footer',
         'code' => 'footer-faq-link',
         'area' => 'frontend',
@@ -399,17 +548,8 @@ return [
             'footer-faq-link',
             'layout-footer-help-links',
         ],
-        'default_injections' => [[
-            'layout_type' => 'homepage',
-            'slot' => 'footer-help-links',
-            'area' => 'footer',
-            'sort_order' => 40,
-            'required' => true,
-            'reason' => '全局 chrome 载体默认展示 Theme /faq 入口；非首页继承合并',
-            'config' => [
-                'label' => 'FAQ/常见问题',
-            ],
-        ]],
+        'placement' => 'layout',
+        'default_injections' => [],
         'params' => [
             'label' => [
                 'default' => 'FAQ/常见问题',

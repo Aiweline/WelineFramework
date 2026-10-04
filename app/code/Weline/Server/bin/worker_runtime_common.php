@@ -339,11 +339,11 @@ function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): ar
         ? \max(0, (int)$fiber['max_active'])
         : 12;
 
-    $waitMs = (int)($fiber['admission_queue_wait_ms'] ?? 8000);
+    $waitMs = (int)($fiber['admission_queue_wait_ms'] ?? 10000);
     if ($waitMs < 0) {
         $waitMs = 0;
-    } elseif ($waitMs > 60000) {
-        $waitMs = 60000;
+    } elseif ($waitMs > 10000) {
+        $waitMs = 10000;
     }
 
     $depth = (int)($fiber['admission_queue_depth'] ?? 0);
@@ -473,7 +473,13 @@ function wlsTryFiberAdmissionCacheProbe(callable $probe): bool
     try {
         return (bool)$probe();
     } finally {
-        $inProgress = false;
+        try {
+            // A waiting Fiber has no admission slot. Cache probes may acquire
+            // a request-owned DB lease; return it before the next wait slice.
+            \Weline\Framework\Database\Connection\Pool\ConnectionPool::releaseCurrentOwnerIdleConnections();
+        } finally {
+            $inProgress = false;
+        }
     }
 }
 }

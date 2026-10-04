@@ -10,7 +10,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Theme\Service\WebsiteThemeBindingService;
 
 /**
- * Persist Website-scoped storefront theme_binding from website info form.
+ * Persist Website-scoped storefront theme application (websites_theme_application).
  */
 final class WebsiteSaveAfter implements ObserverInterface
 {

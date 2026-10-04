@@ -2,9 +2,14 @@
 
 ## 需求与入口
 
-任何已经连接 Weline 项目智能 MCP 的 AI 编辑器调用 `prepare_project` 时，服务端都会处理 AOCI 本机安装。安装逻辑由公共服务执行，不依赖编辑器提示词或某个编辑器的命令行。
+**硬要求（`aoci_complements_weline_mcp`）**：本机没有可用 AOCI 程序时，Weline **必须自动安装**，禁止把「没装 AOCI」当成可跳过事项。
 
-安装发生在 Weline 知识准备之前，结果返回在 `agent_guidance.aoci_installation`。AOCI 安装失败会返回 `status=failed` 与具体 `error`，不增加 Weline 开发阻断条件。
+入口有两处（同一 `AociInstaller`）：
+
+1. **`ensure-project-guidance.php`**：冷启动即处理，结果在 bootstrap JSON 的 `aoci_installation`。
+2. **`prepare_project`**：知识准备之前再确保一次，结果在 `agent_guidance.aoci_installation`。
+
+安装逻辑由公共服务执行，不依赖编辑器提示词或某个编辑器的命令行。AOCI 安装失败会返回 `status=failed` 与具体 `error`，须可见汇报；失败本身不单独增加 Weline 开发阻断条件。
 
 ## 首次处理
 
@@ -30,7 +35,7 @@
 
 成功结果包含 `status=ready`、`binary`、`version`、`source`、`verification`、`cached` 和 `marker_path`。`mcp_registration` 提供绝对程序路径与当前项目对应的 `--repo <项目根> mcp` 参数。
 
-安装 AOCI 程序不等于编辑器已经挂载 AOCI MCP。宿主接入仍使用各编辑器的 MCP 接入能力；已有会话可能需要刷新 MCP 连接或重新打开会话才能使用新增工具。
+安装 AOCI 程序不等于编辑器已经挂载 AOCI MCP。`status=ready` 时返回 `mcp_registration`（绝对程序路径 + `--repo <项目根> mcp`）；ensure 的 `host_mcp_install` 文档在 AOCI 已就绪时也会带上 `aoci` 条目。Agent 发现会话无 AOCI 工具时，必须按该登记写入宿主 MCP 配置并刷新会话；已有会话可能需要新开 Agent 回合或 Reload Window。
 
 此安装流程不修改项目 AOCI 规则、不执行 `init` 或 `scan`，不自动构建代码语义索引。Weline 继续提供硬规则、技能和准备流程；AOCI 的项目认知索引与漂移维护仍为独立能力。
 

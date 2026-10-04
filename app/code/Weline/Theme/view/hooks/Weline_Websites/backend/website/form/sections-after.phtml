@@ -76,7 +76,7 @@ if ((int)($summary['version_number'] ?? 0) > 0) {
                 <p class="w-text" data-tone="muted" data-size="sm"><lang>请先保存网站后，再为本站选择店面主题。</lang></p>
             <?php else: ?>
                 <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);">
-                    <lang>本站店面主题按网站范围绑定，不受主题列表「全局回退」切换影响。全局回退仅 Default。</lang>
+                    <lang>本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。</lang>
                 </p>
                 <div class="w-grid">
                     <div style="--w-span:6;--w-mb:var(--weline-space-4);">
@@ -99,11 +99,11 @@ if ((int)($summary['version_number'] ?? 0) > 0) {
                         </select>
                         <?php if ($inherited): ?>
                             <p class="w-text" data-tone="warning" data-size="sm" style="--w-mt:var(--weline-space-2);">
-                                <lang>当前显示为继承上级绑定，保存时选择主题将写入本站专属绑定。</lang>
+                                <lang>当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。</lang>
                             </p>
                         <?php elseif ($bindingSource === 'website'): ?>
                             <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);">
-                                <lang>本站已发布专属主题绑定。</lang>
+                                <lang>本站已配置专属主题应用引用。</lang>
                             </p>
                         <?php endif; ?>
                     </div>

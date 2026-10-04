@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Theme',
-    "version" => '2.2.659',
+    "version" => '2.2.662',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '>=2.5.0',
@@ -22,6 +22,8 @@ return [
         'Weline_Websites' => '*',
     ],
     "provides" => [
+        \Weline\Theme\Api\DefaultThemeInterface::class => \Weline\Theme\Service\RegisteredDefaultTheme::class,
+        \Weline\Theme\Api\Version\ThemeApplicationReferenceReaderInterface::class => \Weline\Theme\Service\Version\ThemeApplicationReferenceReader::class,
         \Weline\Theme\Api\Scoped\ThemeScopedResourceAdapterInterface::class => \Weline\Theme\Service\Scoped\ThemeScopedResourceProjector::class,
         \Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface::class => \Weline\Theme\Service\Scoped\ThemeScopedWorkspace::class,
         \Weline\Widget\Api\WidgetLibraryProviderInterface::class => \Weline\Theme\Integration\Widget\ThemeWidgetLibraryProvider::class,

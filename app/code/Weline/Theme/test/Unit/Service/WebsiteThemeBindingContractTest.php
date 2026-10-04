@@ -7,11 +7,11 @@ namespace Weline\Theme\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Static contracts for Website-scoped theme binding on website info form.
+ * Static contracts for Website-scoped theme application on website info form.
  */
 final class WebsiteThemeBindingContractTest extends TestCase
 {
-    public function testServiceOwnsWebsiteBindingAndDefaultOnlyGlobalSync(): void
+    public function testServiceOwnsWebsiteApplicationAndThemeDefaultFallback(): void
     {
         $service = $this->read('Service/WebsiteThemeBindingService.php');
         self::assertStringContainsString('class WebsiteThemeBindingService', $service);
@@ -20,17 +20,19 @@ final class WebsiteThemeBindingContractTest extends TestCase
         self::assertStringContainsString('function scheduleSaveFromWebsiteForm', $service);
         self::assertStringContainsString('afterCommit', $service);
         self::assertStringContainsString('ScopeIdentity::website', $service);
-        self::assertStringContainsString('RESOURCE_THEME_BINDING', $service);
+        self::assertStringContainsString('ThemeApplicationInterface', $service);
+        self::assertStringContainsString('DefaultThemeInterface', $service);
+        self::assertStringNotContainsString('RESOURCE_THEME_BINDING', $service);
         self::assertStringContainsString('function isDefaultTheme', $service);
 
         $context = $this->read('Service/ThemeContextService.php');
         self::assertStringContainsString('Intentionally no-op', $context);
-        self::assertStringContainsString('must NOT rewrite Global theme_binding', $context);
-        self::assertStringContainsString('stomps per-site bindings', $context);
+        self::assertStringContainsString('website application + Theme Default', $context);
 
         $observer = $this->read('Observer/WebsiteSaveAfter.php');
         self::assertStringContainsString('WebsiteThemeBindingService', $observer);
         self::assertStringContainsString('scheduleSaveFromWebsiteForm', $observer);
+        self::assertStringContainsString('websites_theme_application', $observer);
 
         $eventXml = $this->read('etc/event.xml');
         self::assertStringContainsString('Weline_Websites::website_save_after', $eventXml);
@@ -43,6 +45,7 @@ final class WebsiteThemeBindingContractTest extends TestCase
 
         $list = $this->read('view/templates/backend/index.phtml');
         self::assertStringContainsString('网站信息 → 店面主题', $list);
+        self::assertStringContainsString('Default 默认主题', $list);
     }
 
     private function read(string $relative): string

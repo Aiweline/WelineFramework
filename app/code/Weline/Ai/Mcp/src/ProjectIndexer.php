@@ -69,6 +69,8 @@ final class ProjectIndexer
 
     private const PHP_PARSER_TIMEOUT_SECONDS = 60;
 
+    private const INDEX_BATCH_FILE_LIMIT = 8;
+
     private SparseVectorizer $vectorizer;
     private PhpSymbolParser $phpParser;
     private PhpParserResultDecoder $phpParserResultDecoder;
@@ -807,7 +809,7 @@ final class ProjectIndexer
             $wouldExceedPhpBudget = $isPhp
                 && $batch !== []
                 && ($isolatedPhp || $phpBytes + $fileBytes > self::PHP_PARSER_ISOLATION_BYTES);
-            if ($batch !== [] && (count($batch) >= 40 || $wouldExceedPhpBudget)) {
+            if ($batch !== [] && (count($batch) >= self::INDEX_BATCH_FILE_LIMIT || $wouldExceedPhpBudget)) {
                 yield $batch;
                 $batch = [];
                 $phpBytes = 0;
@@ -817,7 +819,7 @@ final class ProjectIndexer
             if ($isPhp) {
                 $phpBytes += $fileBytes;
             }
-            if ($isolatedPhp || count($batch) >= 40) {
+            if ($isolatedPhp || count($batch) >= self::INDEX_BATCH_FILE_LIMIT) {
                 yield $batch;
                 $batch = [];
                 $phpBytes = 0;

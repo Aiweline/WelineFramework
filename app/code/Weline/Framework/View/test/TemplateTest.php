@@ -45,7 +45,7 @@ class TemplateTest extends TestCore
             );
             return;
         }
-        $theme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
+        $theme = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
         $theme = str_replace('\\', '/', $theme);
         self::assertEquals(
             '/static/' . $theme . '/Weline/Framework/view/statics/1.png',

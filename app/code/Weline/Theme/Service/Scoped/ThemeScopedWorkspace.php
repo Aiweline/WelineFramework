@@ -12,9 +12,9 @@ use Weline\Framework\Event\ResourceChange\ResourceChangeFactory;
 use Weline\Framework\Event\ResourceChange\ResourceRevisionService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\SystemConfig\Api\Scope\ScopeContext;
-use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemePatchCommand;
 use Weline\Theme\Api\Scoped\ThemePublishedSnapshotReaderInterface;
@@ -43,7 +43,6 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         private readonly ThemeScopeRevision $revisions,
         private readonly ThemeScopePatch $patches,
         private readonly ThemeScopeRelease $releases,
-        private readonly ScopeHierarchyInterface $scopes,
         private readonly ThemeScopedResourceAdapterInterface $adapter,
         private readonly ThemePatchEngine $patchEngine,
         private readonly ThemeLayoutPayloadDiffer $layoutDiffer,
@@ -90,7 +89,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $snapshot = $shareSnapshot
             ? ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)->rememberPolicy(
                 \Weline\Theme\Service\StorefrontThemeCacheCoordinator::publishedSnapshotPolicy(),
-                $context->identityHash(),
+                $this->requestLoadCacheKey($context, false),
                 $readSnapshot,
             )
             : $readSnapshot();
@@ -1056,10 +1055,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             );
         }
 
-        $parentIdentity = $this->scopes->parentIdentity($context->scope->identity);
-        if ($parentIdentity instanceof ScopeIdentity) {
+        if ($context->scope->parent !== null) {
             $parent = $this->resolveValue(
-                $context->withScope($this->scopes->contextFromIdentity($parentIdentity)),
+                $context->withScope($context->scope->parent),
                 $path,
                 false,
             );
@@ -1105,6 +1103,8 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     /** @return array{payload:array<string,mixed>,release_id:?int,source_scope:string,release:?ThemeScopeRelease} */
     private function publishedState(ThemeEditorContext $context, bool $allowRequestCache = true): array
     {
+        $provided = $this->providedResourceState($context);
+        if ($provided !== null) { return $provided; }
         $workspace = $this->findWorkspace($context, false, $allowRequestCache);
         if ($workspace instanceof ThemeScopeWorkspace) {
             $release = $this->loadRelease((int)$workspace->getData(
@@ -1153,10 +1153,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             }
         }
 
-        $parentIdentity = $this->scopes->parentIdentity($context->scope->identity);
-        if ($parentIdentity instanceof ScopeIdentity) {
+        if ($context->scope->parent !== null) {
             return $this->publishedState(
-                $context->withScope($this->scopes->contextFromIdentity($parentIdentity)),
+                $context->withScope($context->scope->parent),
                 $allowRequestCache,
             );
         }
@@ -1169,6 +1168,52 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         ];
     }
 
+    /** 明确资源引用优先于可变工作区；历史缺依据不能读取最新发布指针。 */
+    private function providedResourceState(ThemeEditorContext $context): ?array
+    {
+        $application = $context->application;
+        if ($application === null) { return null; }
+        foreach ($application->contentScopes as $source) {
+            $references = (array)($source['resource_references'] ?? []);
+            $reference = $references[$context->identityHash()] ?? null;
+            if (!is_array($reference)) { continue; }
+            $key = json_decode((string)($reference['resource_key_json'] ?? '{}'), true);
+            if (!empty($reference['package_default']) || !empty($key['package_default'])) {
+                return ['payload'=>$this->adapter->loadBase($context), 'release_id'=>null,
+                    'source_scope'=>'theme-package-default', 'release'=>null];
+            }
+            $releaseId = (int)($reference['release_id'] ?? 0);
+            $intentId = (int)($reference['intent_revision_id'] ?? $reference['draft_revision_id'] ?? 0);
+            if ($intentId > 0) {
+                $read = $this->readHistoricalLayoutRevision($context, $intentId);
+                if (empty($read['resolved'])) { throw new \RuntimeException((string)$read['reason']); }
+                return ['payload'=>$read['draft_payload'],'release_id'=>null,'source_scope'=>$context->scope->storageScope,'release'=>null];
+            }
+            if ($releaseId > 0) {
+                $release = $this->loadRelease($releaseId);
+                $payload = $this->readHistoricalLayoutRelease($context, $releaseId);
+                if (!is_array($payload)) { throw new \RuntimeException('historical_release_reference_missing'); }
+                return ['payload'=>$payload,'release_id'=>$releaseId,'source_scope'=>$context->scope->storageScope,'release'=>$release];
+            }
+            throw new \RuntimeException('historical_resource_reference_missing');
+        }
+        if ($application->themeVersionId > 0 && in_array($application->purpose, ['runtime','preview'], true)
+            && $context->scope->storageScope === $application->versionOwnerScope
+            && $context->scope->storeMode === $application->versionOwnerStoreMode) {
+            $identity = new \Weline\Theme\Api\Version\ThemeVersionIdentity($application->themeId,
+                $application->versionOwnerScope, $application->versionOwnerStoreMode, $application->area,
+                $application->themeVersionId, 'formal', $application->contentRevision);
+            $read = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class)->read($identity, $context);
+            if (empty($read['resolved'])) { throw new \RuntimeException((string)$read['reason']); }
+            $release = (int)($read['release_id'] ?? 0) > 0 ? $this->loadRelease((int)$read['release_id']) : null;
+            return ['payload'=>$read['payload'], 'release_id'=>$read['release_id'], 'source_scope'=>$context->scope->storageScope, 'release'=>$release];
+        }
+        if ($application->themeVersionId > 0 && $application->purpose === 'preview') {
+            throw new \RuntimeException('historical_scope_reference_missing');
+        }
+        return null;
+    }
+
     private function shouldInheritDefaultLocalePublished(ThemeEditorContext $context): bool
     {
         // LAYOUT/META identity is always default; I18N keeps its own locale and must not inherit.
@@ -1178,10 +1223,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     /** @return array{payload:array<string,mixed>,release_id:?int,source_scope:string,release:?ThemeScopeRelease} */
     private function parentPublishedState(ThemeEditorContext $context): array
     {
-        $parentIdentity = $this->scopes->parentIdentity($context->scope->identity);
-        if ($parentIdentity instanceof ScopeIdentity) {
+        if ($context->scope->parent !== null) {
             return $this->publishedState(
-                $context->withScope($this->scopes->contextFromIdentity($parentIdentity)),
+                $context->withScope($context->scope->parent),
             );
         }
 
@@ -1862,8 +1906,8 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             ThemeScopeWorkspace::schema_fields_IDENTITY_HASH => $context->identityHash(),
             ThemeScopeWorkspace::schema_fields_THEME_VERSION_ID => $this->selectedWorkspaceVersion($context)?->getVersionId() ?? 0,
             ThemeScopeWorkspace::schema_fields_SCOPE => $context->scope->storageScope,
-            ThemeScopeWorkspace::schema_fields_SCOPE_KIND => $context->scope->identity->scopeKind,
-            ThemeScopeWorkspace::schema_fields_WEBSITE_ID => $context->scope->identity->websiteId,
+            ThemeScopeWorkspace::schema_fields_SCOPE_KIND => 'external',
+            ThemeScopeWorkspace::schema_fields_WEBSITE_ID => null,
             ThemeScopeWorkspace::schema_fields_STORE_MODE => $context->scope->storeMode,
             ThemeScopeWorkspace::schema_fields_AREA => $context->area,
             ThemeScopeWorkspace::schema_fields_RESOURCE_TYPE => $context->resourceType,
@@ -2287,50 +2331,29 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 ? $this->composeLayoutPayloadBySlotNearPriority($release)
                 : $release->payload();
         }
-        $root = $context;
-        $cursor = $context->scope->identity;
-        while (($parent = $this->scopes->parentIdentity($cursor)) instanceof ScopeIdentity) {
-            $cursor = $parent;
-            $root = $root->withScope($this->scopes->contextFromIdentity($cursor));
+        if ($releaseId !== null) {
+            throw new \RuntimeException('historical_parent_release_missing');
         }
-
-        return $this->adapter->loadBase($root);
+        return $this->adapter->loadBase($context);
     }
 
     /** @return list<ThemeEditorContext> */
     private function descendantContexts(ThemeEditorContext $publishedContext, bool $lockingRead = false): array
     {
-        $query = (clone $this->workspaces)->clearData()->clearQuery()
-            ->where(ThemeScopeWorkspace::schema_fields_AREA, $publishedContext->area)
-            ->where(ThemeScopeWorkspace::schema_fields_RESOURCE_TYPE, $publishedContext->resourceType)
-            ->where(ThemeScopeWorkspace::schema_fields_THEME_ID, $publishedContext->identityThemeId())
-            ->where(ThemeScopeWorkspace::schema_fields_LAYOUT_TYPE, $publishedContext->identityLayoutType())
-            ->where(ThemeScopeWorkspace::schema_fields_LAYOUT_OPTION, $publishedContext->identityLayoutOption())
-            ->where(ThemeScopeWorkspace::schema_fields_LOCALE, $publishedContext->identityLocale())
-            ->where(ThemeScopeWorkspace::schema_fields_TARGET_TYPE, $publishedContext->identityTargetType())
-            ->where(ThemeScopeWorkspace::schema_fields_TARGET_ID, $publishedContext->identityTargetId());
-        if ($lockingRead && $this->supportsForUpdate()) {
-            $query->additional('FOR UPDATE');
-        }
-        $rows = $query->select()->fetchArray();
-        $candidates = [];
-        foreach (\is_array($rows) ? $rows : [] as $row) {
-            if (!\is_array($row)) {
-                continue;
+        $supplied = $publishedContext->application?->affectedContentContexts ?? [];
+        $out = [];
+        foreach ($supplied as $data) {
+            $context = ThemeEditorContext::fromArray($data);
+            if ($context->area !== $publishedContext->area || $context->resourceType !== $publishedContext->resourceType
+                || $context->themeId !== $publishedContext->themeId || $context->layoutType !== $publishedContext->layoutType
+                || $context->layoutOption !== $publishedContext->layoutOption || $context->identityLocale() !== $publishedContext->identityLocale()
+                || $context->targetType !== $publishedContext->targetType || $context->targetId !== $publishedContext->targetId
+                || $context->scope->provider !== $publishedContext->scope->provider || $context->scope->storeMode !== $publishedContext->scope->storeMode) {
+                throw new \InvalidArgumentException('theme_supplied_affected_context_mismatch');
             }
-            $context = $this->contextFromWorkspaceRow($row);
-            if (!$context instanceof ThemeEditorContext
-                || !$this->isStrictDescendant($context->scope->identity, $publishedContext->scope->identity)
-            ) {
-                continue;
-            }
-            $candidates[] = $context;
+            if ($context->identityHash() !== $publishedContext->identityHash()) { $out[] = $context; }
         }
-        // Rebase direct parents before their descendants: Website, then Store, then Channel.
-        \usort($candidates, static fn(ThemeEditorContext $a, ThemeEditorContext $b): int =>
-            \count($a->scope->fallbackStorageScopes) <=> \count($b->scope->fallbackStorageScopes));
-
-        return $candidates;
+        return $out;
     }
 
     /** @return list<array<string,mixed>> */
@@ -2584,52 +2607,6 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     }
 
     /** @param array<string,mixed> $row */
-    private function contextFromWorkspaceRow(array $row): ?ThemeEditorContext
-    {
-        $decoded = $this->scopes->fromStorageScope((string)($row[ThemeScopeWorkspace::schema_fields_SCOPE] ?? ''), false);
-        if (!$decoded instanceof ScopeIdentity) {
-            return null;
-        }
-        $websiteId = isset($row[ThemeScopeWorkspace::schema_fields_WEBSITE_ID])
-            ? (int)$row[ThemeScopeWorkspace::schema_fields_WEBSITE_ID]
-            : 0;
-        $storeMode = (string)($row[ThemeScopeWorkspace::schema_fields_STORE_MODE] ?? ScopeIdentity::MODE_NORMAL);
-        $identity = match ($decoded->scopeKind) {
-            ScopeIdentity::KIND_GLOBAL => ScopeIdentity::global(),
-            ScopeIdentity::KIND_WEBSITE => ScopeIdentity::website($websiteId, (string)$decoded->websiteCode),
-            ScopeIdentity::KIND_STORE => ScopeIdentity::store(
-                $websiteId,
-                (string)$decoded->websiteCode,
-                (string)$decoded->storeCode,
-                $storeMode,
-            ),
-            ScopeIdentity::KIND_CHANNEL => ScopeIdentity::channel(
-                $websiteId,
-                (string)$decoded->websiteCode,
-                (string)$decoded->storeCode,
-                (string)$decoded->channelCode,
-                $storeMode,
-            ),
-            default => null,
-        };
-        if (!$identity instanceof ScopeIdentity) {
-            return null;
-        }
-
-        return new ThemeEditorContext(
-            scope: $this->scopes->contextFromIdentity($identity),
-            area: (string)$row[ThemeScopeWorkspace::schema_fields_AREA],
-            resourceType: (string)$row[ThemeScopeWorkspace::schema_fields_RESOURCE_TYPE],
-            themeId: (int)($row[ThemeScopeWorkspace::schema_fields_THEME_ID] ?? 0),
-            layoutType: (string)$row[ThemeScopeWorkspace::schema_fields_LAYOUT_TYPE],
-            layoutOption: (string)$row[ThemeScopeWorkspace::schema_fields_LAYOUT_OPTION],
-            locale: (string)$row[ThemeScopeWorkspace::schema_fields_LOCALE],
-            targetType: (string)$row[ThemeScopeWorkspace::schema_fields_TARGET_TYPE],
-            targetId: (int)$row[ThemeScopeWorkspace::schema_fields_TARGET_ID],
-        );
-    }
-
-    /** @param list<mixed> $changes @return list<ThemePatchCommand> */
     private function assertCommands(ThemeEditorContext $context, array $changes): array
     {
         $commands = [];
@@ -2721,7 +2698,8 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $this->contentValidators->validate(
             $this->layoutSnapshots->denormalize($context, $effectivePayload),
             [
-                'scope_identity' => $context->scope->identity,
+                ...$this->assetAccessClaims($context),
+                'content_scope' => $context->scope->toArray(),
                 'locale_code' => $this->resolveFileAssetLocale($context),
                 'actor_id' => $fileActorId,
                 'roles' => $fileRoles,
@@ -2744,7 +2722,8 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $localeCode = $this->resolveFileAssetLocale($context);
         [$fileActorId, $fileRoles] = $this->fileAccessClaims($actorId);
         $validationContext = [
-            'scope_identity' => $context->scope->identity,
+            ...$this->assetAccessClaims($context),
+            'content_scope' => $context->scope->toArray(),
             'locale_code' => $localeCode,
             'actor_id' => $fileActorId,
             'roles' => $fileRoles,
@@ -2776,7 +2755,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     {
         $localeCode = trim($context->locale === 'default' ? '' : $context->locale);
         if ($localeCode === '' || strcasecmp($localeCode, 'default') === 0) {
-            $localeCode = $this->resolveWebsiteDefaultLocale($context->scope->identity);
+            $localeCode = $context->scope->defaultLocale;
         }
         if ($localeCode === '' || strcasecmp($localeCode, 'default') === 0) {
             throw new \InvalidArgumentException('theme_scope_file_locale_unresolved');
@@ -2785,51 +2764,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         return $localeCode;
     }
 
-    /**
-     * website_id=0 is the system default site, not "unset".
-     */
-    private function resolveWebsiteDefaultLocale(ScopeIdentity $identity): string
+    private function assetAccessClaims(ThemeEditorContext $context): array
     {
-        $kind = strtolower(trim($identity->scopeKind));
-        // website_id=0 is the system default site, not "unset".
-        $hasWebsiteScope = $kind !== '' && $kind !== ScopeIdentity::KIND_GLOBAL;
-        $websiteId = $hasWebsiteScope ? max(0, (int)($identity->websiteId ?? 0)) : 0;
-        try {
-            if ($hasWebsiteScope && class_exists(\Weline\Websites\Model\Website::class)) {
-                /** @var \Weline\Websites\Model\Website $website */
-                $website = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-                $website->clearData()->load($websiteId);
-                $fromWebsite = trim(str_replace('-', '_', (string)($website->getDefaultLanguage() ?? '')));
-                if ($fromWebsite !== '') {
-                    return $fromWebsite;
-                }
-            }
-        } catch (\Throwable) {
-        }
-
-        try {
-            if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                $fromCurrent = trim(str_replace(
-                    '-',
-                    '_',
-                    (string)(\Weline\Websites\Data\WebsiteData::getDefaultLanguage() ?? '')
-                ));
-                if ($fromCurrent !== '') {
-                    return $fromCurrent;
-                }
-            }
-        } catch (\Throwable) {
-        }
-
-        try {
-            $fromState = trim(str_replace('-', '_', (string)\Weline\Framework\App\State::resolveWebsiteDefaultLanguage()));
-            if ($fromState !== '') {
-                return $fromState;
-            }
-        } catch (\Throwable) {
-        }
-
-        return trim((string)Env::default_LANGUAGE_CODE);
+        return $context->application?->assetAccessClaims ?? [];
     }
 
     private function numericBackendActorId(string $actorId): ?int
@@ -3014,19 +2951,6 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         return $candidate === $path || \str_starts_with($candidate, $path . '/');
     }
 
-    private function isStrictDescendant(ScopeIdentity $candidate, ScopeIdentity $ancestor): bool
-    {
-        $cursor = $this->scopes->parentIdentity($candidate);
-        while ($cursor instanceof ScopeIdentity) {
-            if ($cursor->equals($ancestor)) {
-                return true;
-            }
-            $cursor = $this->scopes->parentIdentity($cursor);
-        }
-
-        return false;
-    }
-
     private function supportsForUpdate(): bool
     {
         $type = \strtolower((string)$this->workspaces->getConnection()
@@ -3049,6 +2973,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             \implode("\0", [
                 ...$context->identityParts(),
                 $includeDraft ? '1' : '0',
+                $context->application === null ? '' : hash('sha256', json_encode($context->application->toArray(), JSON_THROW_ON_ERROR)),
             ]),
         );
     }
@@ -3084,20 +3009,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         if (\strlen($resourceId) > 191) {
             $resourceId = 'sha256:' . \hash('sha256', $resourceId);
         }
-        $identity = $context->scope->identity;
-        $websiteId = max(0, (int)($identity->websiteId ?? 0));
-        $websiteCode = \trim((string)($identity->websiteCode ?? ''));
-        if ($websiteCode === '') {
-            $websiteCode = $identity->isGlobal() ? 'default' : ($websiteId === 0 ? 'default' : ('w' . $websiteId));
-        }
-        $namespacePath = ObjectManager::getInstance(NamespacePath::class);
-        $namespaces = [$namespacePath->global('storefront', ['theme'])];
-        if ($websiteCode !== '') {
-            $namespaces[] = $namespacePath->website($websiteCode, ['theme']);
-            if ($themeId > 0) {
-                $namespaces[] = $namespacePath->website($websiteCode, ['theme', (string)$themeId]);
-            }
-        }
+        $namespaces = $context->application?->invalidationNamespaces ?? [];
         $namespaces = \array_values(\array_unique($namespaces));
         \sort($namespaces, \SORT_STRING);
         $revision = ObjectManager::getInstance(ResourceRevisionService::class)->next($resourceType, $resourceId);
@@ -3124,8 +3036,8 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             resourceId: $resourceId,
             action: 'publish',
             revision: $revision,
-            websiteId: $websiteId,
-            websiteCode: $websiteCode,
+            websiteId: null,
+            websiteCode: null,
             before: [],
             after: $after,
             changedFields: ['published_release', 'static_version', 'theme_version_id'],
@@ -3134,7 +3046,8 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 'urls' => ['/'],
             ],
             origin: ['entry' => $entry],
-            siteId: $websiteId,
+            siteId: null,
+            resourceScope: $context->scope->storageScope,
         );
         \w_changed($change);
     }

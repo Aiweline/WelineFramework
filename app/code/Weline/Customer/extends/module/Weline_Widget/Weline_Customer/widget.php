@@ -166,38 +166,9 @@ return [
             'social-login',
             'account-social-login',
         ],
-        // placement=injection：登录页只留空槽；同身份禁止再旁路 fetch。
-        'placement' => 'injection',
-        'default_injections' => [
-            [
-                'layout_type' => 'account/login',
-                'layout_option' => 'default',
-                'slot' => 'account-login-social-providers',
-                'area' => 'content',
-                'sort_order' => 0,
-                'required' => true,
-                'reason' => '登录表单社媒区默认注入 Google/Facebook/Instagram 应用部件',
-                'config' => [
-                    'enable_google' => true,
-                    'enable_facebook' => true,
-                    'enable_instagram' => true,
-                ],
-            ],
-            [
-                'layout_type' => 'account.auth',
-                'layout_option' => 'default',
-                'slot' => 'account-login-social-providers',
-                'area' => 'content',
-                'sort_order' => 0,
-                'required' => true,
-                'reason' => '遗留 account.auth 壳默认注入社媒登录',
-                'config' => [
-                    'enable_google' => true,
-                    'enable_facebook' => true,
-                    'enable_instagram' => true,
-                ],
-            ],
-        ],
+        // 同模块登录模板内嵌社媒部件，禁止再默认注入。
+        'placement' => 'layout',
+        'default_injections' => [],
         'params' => [
             'enable_google' => [
                 'default' => true,

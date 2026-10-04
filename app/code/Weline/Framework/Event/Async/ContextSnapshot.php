@@ -11,6 +11,22 @@ use Weline\Framework\Runtime\RequestContext;
 
 final class ContextSnapshot
 {
+    /** 中性资源事件明确不携带网站身份；不能用当前请求网站填补。 */
+    public function captureNeutral(): array
+    {
+        $area = match (WelineEnv::getArea()) {
+            'rest_backend' => 'backend', 'rest_frontend' => 'frontend',
+            default => WelineEnv::getArea(),
+        };
+        $userId = WelineEnv::get('user.id', null);
+        return [
+            'website_id'=>null, 'website_code'=>null,
+            'lang'=>WelineEnv::getLang(), 'currency'=>WelineEnv::getCurrency(),
+            'area'=>$area, 'timezone'=>date_default_timezone_get(),
+            'user'=>['type'=>$area === 'backend' ? 'admin' : ($area === 'frontend' ? 'customer' : 'system'),
+                'id'=>$userId === null ? null : (int)$userId],
+        ];
+    }
     /** @return array<string,mixed> */
     public function capture(?int $websiteId = null, ?string $websiteCode = null): array
     {
@@ -57,11 +73,12 @@ final class ContextSnapshot
         if (array_diff(array_keys($context), $required) !== []) {
             throw new AsyncEventValidationException(__('异步事件上下文包含非白名单字段'));
         }
-        if (!is_int($context['website_id'])
+        $neutral = $context['website_id'] === null && $context['website_code'] === null;
+        if (!$neutral && (!is_int($context['website_id'])
             || $context['website_id'] < 0
             || !is_string($context['website_code'])
             || trim($context['website_code']) === ''
-            || strlen($context['website_code']) > 64) {
+            || strlen($context['website_code']) > 64)) {
             throw new AsyncEventValidationException(__('异步事件网站上下文无效'));
         }
         if (!in_array((string)$context['area'], ['frontend', 'backend', 'api', 'cli'], true)) {
@@ -124,8 +141,10 @@ final class ContextSnapshot
                     'csrf' => '',
                 ],
             ]));
-            WelineEnv::set('website_id', (int)$context['website_id'], 'async_event_restore');
-            WelineEnv::set('website_code', (string)$context['website_code'], 'async_event_restore');
+            if ($context['website_id'] !== null) {
+                WelineEnv::set('website_id', $context['website_id'], 'async_event_restore');
+                WelineEnv::set('website_code', $context['website_code'], 'async_event_restore');
+            }
             WelineEnv::setLang((string)$context['lang']);
             WelineEnv::setCurrency((string)$context['currency']);
             WelineEnv::setArea((string)$context['area']);

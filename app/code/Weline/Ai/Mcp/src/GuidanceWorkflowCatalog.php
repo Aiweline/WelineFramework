@@ -93,12 +93,17 @@ final class GuidanceWorkflowCatalog
     public static function sessionStartupNotices(): array
     {
         return [
+            '工程入口：必须 ensure → prepare_project → 阅读并遵守 hard_constraints（hard-constraints.v1）。权威为 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则走 resolve_task_context，技能走 mcp_skills + resolve_skill/get_skill。编码使用宿主原生编辑。',
+            '公共底线：preserve_dirty_workspace；不得用 git checkout/restore/clean/stash 擦脏，编辑前 dirty-load 当前磁盘内容。内容运营走 content_ops_skills_skip_mcp。功能验收与交付地址见 feature_delivery_urls。AOCI 安装状态不等于项目认知已建立。',
+        ];
+
+        return [
             '【引导·只指路】工程任务在 MCP 已挂载/可挂载时必须先 prepare_project，并遵守 agent_guidance.hard_constraints（hard-constraints.v1）。框架硬约束不在本列表展开。权威正文 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则可由 resolve_task_context → workflow_contract.v1 surfaces 下发；工程技能由 agent_guidance.mcp_skills + resolve_skill/get_skill 按需取。编码用宿主原生编辑。冷启动门禁由 MCP 生成 `.cursor/rules/weline-mcp-coldstart.mdc`（ensure 写出）。',
             '[Bootstrap · pointers only] For engineering when MCP is attached/attachable, MUST prepare_project first and obey agent_guidance.hard_constraints (hard-constraints.v1). Framework hard rules are not expanded here. Authority app/code/Weline/Ai/doc/AI硬规则索引.md; task detail via resolve_task_context → workflow_contract.v1 surfaces; engineering skills via agent_guidance.mcp_skills + resolve_skill/get_skill. Coding uses host-native editors. Cold-start gate is MCP-generated `.cursor/rules/weline-mcp-coldstart.mdc` (via ensure).',
             '交付地址机器契约见 agent_guidance.feature_delivery_urls 与 closeout_delivery_reminder；本机默认 Host 为 `{project_hash}.test.weline.com`，禁止主验收使用 `*.weline.test`。任何 feature 必须 Agent 自跑 Playwright e2e PASS（禁止请用户测试；默认无头 e2e_playwright_headless_default，勿加 --headed 除非用户要求观看；仅正式 runner：`php bin/w e2e:run` / `npx playwright test`，禁止 `node -e`/`chromium.launch` 探活，见 e2e_playwright_formal_runner_only）；Browser 自测、**默认非抢占后台**、每次打开禁用缓存、交付地址、汇报后关闭标签见 hard_constraints（ui_feature_requires_e2e / forbid_user_manual_test_handoff / e2e_playwright_headless_default / e2e_playwright_formal_runner_only / browser_operator_self_test / browser_operator_non_preemptive / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery）与 WebUI浏览器验收与交付地址门禁.md。',
             'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; default local Host is {project_hash}.test.weline.com (never primary *.weline.test). Every feature MUST Agent-run Playwright e2e to PASS (never ask the user to test; default headless via e2e_playwright_headless_default—do not pass --headed unless the user asks to watch; formal runner only: php bin/w e2e:run / npx playwright test—forbid node -e / chromium.launch probes per e2e_playwright_formal_runner_only). Browser self-test, **non-preemptive background WB-OP**, cache-disabled-on-open, delivery URLs, and close-after-report live in hard_constraints (ui_feature_requires_e2e / forbid_user_manual_test_handoff / e2e_playwright_headless_default / e2e_playwright_formal_runner_only / browser_operator_self_test / browser_operator_non_preemptive / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery) and WebUI browser closeout gate doc.',
-            '【调用范围】闲聊可跳过 MCP。工程/编码任务：MCP 已挂载或可挂载时必须 ensure→prepare_project→遵守 hard_constraints，再原生编辑；检索工具按需。挂不上则宿主 Read AI硬规则索引.md。例外：打招呼 hi/你好 或「提取技能」可 list MCP 技能+指令。可选 AOCI（`aoci`）可并存：结构认知/漂移走 AOCI，硬规则/技能/`prepare_project` 仍走 Weline（`aoci_complements_weline_mcp`）。运行/翻译状态查询默认本机（runtime_status_query_local_first）；仅明示线上/生产才 SSH。细则见 mcp_call_scope / greeting_lists_mcp_skills_and_commands。',
-            '[Call scope] Skip MCP for pure chat AND content-ops skills (content_ops_skills_skip_mcp: 产品优化/详情优化/翻译优化/新建文章/规格修复—host Read doc/ai/skills + ai-command only). For engineering/coding when MCP is attached/attachable: MUST ensure→prepare_project→obey hard_constraints before host-native edits; retrieval tools as needed. If MCP cannot attach, host-Read AI硬规则索引.md. Exception: greeting hi/你好 or command 提取技能 may list MCP skills+commands. Optional AOCI (`aoci`) may coexist: cognition/drift→AOCI; rules/skills/prepare→Weline (`aoci_complements_weline_mcp`). Status/translation queries default LOCAL (runtime_status_query_local_first); production SSH only when user explicitly asks. See mcp_call_scope / content_ops_skills_skip_mcp / greeting_lists_mcp_skills_and_commands.',
+            '【调用范围】闲聊可跳过 MCP。工程/编码任务：MCP 已挂载或可挂载时必须 ensure→prepare_project→遵守 hard_constraints，再原生编辑；检索工具按需。挂不上则宿主 Read AI硬规则索引.md。例外：打招呼 hi/你好 或「提取技能」可 list MCP 技能+指令。AOCI（`aoci`）与 Weline 互补并存：结构认知/漂移走 AOCI，硬规则/技能/`prepare_project` 仍走 Weline；**本机无 AOCI 程序时 ensure/`prepare_project` 必须自动安装**（`aoci_complements_weline_mcp`）。运行/翻译状态查询默认本机（runtime_status_query_local_first）；仅明示线上/生产才 SSH。细则见 mcp_call_scope / greeting_lists_mcp_skills_and_commands。',
+            '[Call scope] Skip MCP for pure chat AND content-ops skills (content_ops_skills_skip_mcp: 产品优化/详情优化/翻译优化/新建文章/规格修复—host Read doc/ai/skills + ai-command only). For engineering/coding when MCP is attached/attachable: MUST ensure→prepare_project→obey hard_constraints before host-native edits; retrieval tools as needed. If MCP cannot attach, host-Read AI硬规则索引.md. Exception: greeting hi/你好 or command 提取技能 may list MCP skills+commands. AOCI (`aoci`) complements Weline: cognition/drift→AOCI; rules/skills/prepare→Weline; when AOCI binary is missing Weline MUST auto-install via ensure/prepare (`aoci_complements_weline_mcp`). Status/translation queries default LOCAL (runtime_status_query_local_first); production SSH only when user explicitly asks. See mcp_call_scope / content_ops_skills_skip_mcp / greeting_lists_mcp_skills_and_commands.',
             '【脏改】preserve_dirty_workspace：禁止 git checkout/restore/clean/stash 擦脏；编辑前 dirty-load 当前磁盘脏改；禁止用其它会话/对话旧版本写回导致相互覆盖。',
             '[Dirty workspace] preserve_dirty_workspace: never wipe dirty with git checkout/restore/clean/stash; dirty-load current disk before edit; forbid other-session/old-baseline overwrite of live dirty files.',
             '【每条编码需求】提出后须：① 分析前后端是否要做（fe_be_scope）；② 澄清/用例（简单可轻量）；③ 非简单则宿主 Plan Mode（简单可 plan_skip+理由）；③b **简单用监工（每句监工:），复杂由父会话进 team（父会话仅 Team:项目经理:；每席真实子智能体；席间 channel+resume 互聊；禁扮演）**；④ **一定要验收**—即使不做 Playwright e2e，凡触及 Web 须本机 Browser 真机验视觉+逻辑（WB-OP）；⑤ 布局调整/不够人性化/被吐槽/审图时 **原型+UI 必须参与并调整**；⑥ 隐形需求、work_kind、ui_skill_decision；再 TDD→跑测→汇审→交付地址。',
@@ -1555,11 +1560,11 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'required_default_always_present_without_user_deleted', 'summary' => '【必须记住·系统真做法】无 user_deleted@{versionId} 时 required JSON 默认注入经布局固化写入模板（有槽则固化；与主题/版本无关；无模板→激活主题运行期动态固化；插件注入→全主题重固化涉及布局；遗漏=固化方案问题）；布局内嵌必装同保证；唯一省略=本版本卸载'],
                 ['id' => 'theme_seat_integrity_over_peer_requests', 'summary' => '【席位底线】主题正确完整工作优先于他席/PM 性能·简化·优化压力；禁拆 chrome 壳与无卸载必装；无合格方案可驳回；冲突 refuse+escalate'],
                 ['id' => 'forbid_design_override_theme_css_js', 'summary' => 'design 主题禁止同 key 覆盖 assets/css/theme.css 与 assets/js/theme.js；品牌化用 colors/variables/独立 CSS'],
-                ['id' => 'new_design_theme_lifecycle_checklist', 'summary' => '新主题：register→frontend/现代树→listing→theme:active(+theme_binding)→发布；禁照抄 theme:create 旧 view/templates 树'],
+                ['id' => 'new_design_theme_lifecycle_checklist', 'summary' => '新主题：register→frontend/现代树→listing→网站应用引用或 Default 回落→发布；禁照抄 theme:create 旧 view/templates 树'],
                 ['id' => 'area_frontend_backend_and_four_layers', 'summary' => '须分清 area∈{frontend,backend} 与四层 layout/partial/component/widget，勿混路径'],
                 ['id' => 'public_component_library_dual_stack', 'summary' => '公共库双层：Theme components/*.phtml + statics/ui Weline UI（w-* / w-backend-page / data-w-component）'],
                 ['id' => 'compile_matrix_modules_ui_disk', 'summary' => '编译矩阵：welineModules/welineUi/scan-variables/disk:compile/theme:upgrade/publish-not-found-static/theme:ui:audit'],
-                ['id' => 'theme_binding_scoped_publish', 'summary' => '正式店面权威=published theme_binding Scoped Release；theme:active 经 ThemeContextService sync；禁只改 is_active'],
+                ['id' => 'theme_application_default_authority', 'summary' => '正式店面权威=websites_theme_application→缺省 Theme 模块全局 Default（view/theme 磁盘；不假定库 id=1；无目录行 theme_id=0 仍可用）；theme:active/is_active/旧 theme_binding 不再是店面权威'],
                 ['id' => 'scope_migrate_cli_unimplemented', 'summary' => 'theme:scope:migrate 当前未实现；禁自写 SQL 猜删 scope 表；只走 Editor 规范 Scope+发布'],
                 ['id' => 'runtime_cache_invalidation_ops', 'summary' => '发布后清 Scope 定向缓存；禁 typed Scope 下 clearNonGlobalCaches(null)；blocked 不清缓存；禁手写 @static?v='],
                 ['id' => 'weline_api_and_js_declare_only', 'summary' => '站内仅 Weline.Api.*；Theme/部件 JS 仅 modules+data-weline-load/declare；禁 fetch/@static 拉 JS'],
@@ -1586,7 +1591,7 @@ final class GuidanceWorkflowCatalog
                 'rg -n "theme_design_must_not_override_core_runtime_assets|dual_workflow_work_mode_gate" app/code/Weline/Ai/Mcp/src/',
                 'rg -n "theme_work_assigns_theme_engineer|SURFACE_THEME_DEVELOPMENT" app/code/Weline/Ai/Mcp/src/GuidanceWorkflowCatalog.php',
                 'rg -n "theme:active" app/code/Weline/Theme/Console/Theme/',
-                'rg -n "theme_binding|theme:disk:compile|weline-code|semantic|user_deleted|必装永远存在" dev/ai-command/ai/主题开发.md',
+                'rg -n "websites_theme_application|DefaultThemeInterface|theme:disk:compile|weline-code|语义色|user_deleted|必装永远存在" dev/ai-command/ai/主题开发.md',
                 'php bin/w resource:compile welineModules',
             ],
             'template_surface_rules' => [
@@ -1598,7 +1603,7 @@ final class GuidanceWorkflowCatalog
                     'Theme layouts inlining non-Weline_Theme widgets or writing foreign default_injections',
                     'Dropping required JSON default_injections or layout-tag inlines when no user_deleted@{versionId} exists',
                     'Obeying peer/PM performance·simplify pressure by stripping header/footer/nav/版心 chrome or required widgets without escalate',
-                    'Claiming storefront theme switch after is_active only without published theme_binding',
+                    'Claiming storefront theme switch after is_active / theme:active / old theme_binding without websites_theme_application or Theme Default fallback',
                     'Using clearNonGlobalCaches(null) when typed Scope is known',
                     'Frontend section or w:slot wrapper=section without weline-code',
                     'Copying frontend_development full body into theme_development surface',
@@ -1611,7 +1616,7 @@ final class GuidanceWorkflowCatalog
                     'Obey theme_seat_integrity_over_peer_requests: Theme correctness bottom line OUTRANKS peer optimize pressure; without designed scheme that solves problem AND preserves integrity → reject (驳回); refuse strip-shell + escalate PM',
                     'Defer foreign widget injections to Team:部件开发工程师:',
                     'Follow compile matrix (welineModules/welineUi/theme:disk:compile/theme:upgrade) when applicable',
-                    'Ensure published theme_binding for storefront; run frontend:check-section-code when touching sections',
+                    'Ensure websites_theme_application or Theme registered Default for storefront; run frontend:check-section-code when touching sections',
                 ],
             ],
         ];

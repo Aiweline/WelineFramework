@@ -70,6 +70,8 @@ final class FrontendWorkerScopeBootstrapResponse implements ObserverInterface
                         ? $cause->getErrorCode() : null,
                     'cause_file' => $cause !== null ? $cause->getFile() : null,
                     'cause_line' => $cause?->getLine(),
+                    'pool_context' => $cause instanceof \Weline\Framework\Database\Exception\ConnectionPoolExhaustedException
+                        ? $cause->getContext() : null,
                     'nested_cause_type' => $nestedCause !== null ? $nestedCause::class : null,
                 ],
                 'worker_scope',

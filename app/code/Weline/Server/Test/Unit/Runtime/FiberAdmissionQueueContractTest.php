@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Database\Connection\Pool\ConnectionPool;
+use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 
 require_once \dirname(__DIR__, 3) . '/bin/worker_runtime_common.php';
 
@@ -14,7 +16,7 @@ final class FiberAdmissionQueueContractTest extends TestCase
     {
         $cfg = wlsResolveFiberAdmissionConfig([]);
         self::assertSame(12, $cfg['max_active']);
-        self::assertSame(8000, $cfg['queue_wait_ms']);
+        self::assertSame(10000, $cfg['queue_wait_ms']);
         self::assertSame(12, $cfg['queue_depth']);
         self::assertSame(25, $cfg['queue_slice_ms']);
     }
@@ -58,17 +60,20 @@ final class FiberAdmissionQueueContractTest extends TestCase
         self::assertStringContainsString('Retry-After: 1', $full);
     }
 
-    public function testWaitMsAllowsCacheRebuildAndIsBoundedToSixtySeconds(): void
+    public function testWaitMsIsBoundedToTenSeconds(): void
     {
         $configured = wlsResolveFiberAdmissionConfig([
-            'fiber' => ['admission_queue_wait_ms' => 45000],
+            'fiber' => ['admission_queue_wait_ms' => 5000],
         ]);
-        self::assertSame(45000, $configured['queue_wait_ms']);
+        self::assertSame(5000, $configured['queue_wait_ms']);
 
         $cfg = wlsResolveFiberAdmissionConfig([
-            'fiber' => ['admission_queue_wait_ms' => 90000],
+            'fiber' => ['admission_queue_wait_ms' => 45000],
         ]);
-        self::assertSame(60000, $cfg['queue_wait_ms']);
+        self::assertSame(10000, $cfg['queue_wait_ms']);
+
+        $moduleEnv = require \dirname(__DIR__, 3) . '/etc/env.php';
+        self::assertSame(10000, $moduleEnv['wls']['fiber']['admission_queue_wait_ms']);
     }
 
     public function testWaitingRequestCanFinishFromCacheBeforeAdmissionSlotOpens(): void
@@ -117,6 +122,29 @@ final class FiberAdmissionQueueContractTest extends TestCase
         self::assertTrue(wlsTryFiberAdmissionCacheProbe(static fn (): bool => true));
     }
 
+    public function testWaitingCacheProbeReturnsItsIdleDatabaseConnection(): void
+    {
+        $config = $this->createMock(ConfigProviderInterface::class);
+        $config->method('getDbType')->willReturn('sqlite');
+        $config->method('getHostName')->willReturn('local');
+        $config->method('getHostPort')->willReturn(0);
+        $config->method('getDatabase')->willReturn('wls_admission_probe');
+        $config->method('getUsername')->willReturn('test');
+        $config->method('getPoolSize')->willReturn(1);
+
+        $lease = null;
+        try {
+            self::assertFalse(wlsTryFiberAdmissionCacheProbe(static function () use ($config, &$lease): bool {
+                $lease = ConnectionPool::acquire($config, static fn (): \PDO => new \PDO('sqlite::memory:'));
+                return false;
+            }));
+            self::assertSame(0, ConnectionPool::getPoolStats($config)['in_use']);
+            self::assertSame(1, ConnectionPool::getPoolStats($config)['available']);
+        } finally {
+            ConnectionPool::closePool();
+        }
+    }
+
     public function testInstanceAdmissionPolicyIsLoadedFromEnvironmentBeforeWorkerStarts(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'wls-fiber-policy-');
@@ -135,7 +163,7 @@ final class FiberAdmissionQueueContractTest extends TestCase
 
             $cfg = wlsResolveFiberAdmissionConfigFromEnvironment($path, 'soak');
             self::assertSame(12, $cfg['max_active']);
-            self::assertSame(45000, $cfg['queue_wait_ms']);
+            self::assertSame(10000, $cfg['queue_wait_ms']);
             self::assertSame(256, $cfg['queue_depth']);
         } finally {
             @unlink($path);

@@ -4,11 +4,12 @@ declare(strict_types=1);
 namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ThemeApplicationContext;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Service\SharedChromeService;
-use Weline\Theme\Service\ThemeRuntimeLayoutResolver;
 use Weline\Theme\Service\ThemeScopeVersionService;
 use Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService;
 
@@ -578,8 +579,33 @@ final class ThemeLayoutEntityBakeCoordinator
 
     private function context(ThemeVersionIdentity $identity, string $type, string $option, string $target, ?int $targetId): ThemeEditorContext
     {
-        return ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class)->buildContext($identity->themeId, $type, $identity->area,
-            ['scope' => $identity->canonicalScope, 'store_mode' => $identity->storeMode, 'layout_option' => $option, 'target_type' => $target, 'target_id' => $targetId ?? 0]);
+        // 固化任务已有准确 owner/V/R，不依赖 HTTP 的应用选择。
+        // 结构资源使用 default 身份；语言差异继续由同一版本资源快照供应。
+        $scope = ThemeContentScope::fromStoredOwner($identity->canonicalScope, $identity->storeMode, 'default');
+        $application = new ThemeApplicationContext(
+            provider: $scope->provider,
+            scopeKey: $scope->scopeKey,
+            storeMode: $identity->storeMode,
+            area: $identity->area,
+            themeId: $identity->themeId,
+            versionOwnerScope: $identity->canonicalScope,
+            versionOwnerStoreMode: $identity->storeMode,
+            themeVersionId: $identity->themeVersionId,
+            contentRevision: $identity->contentRevision,
+            defaultLocale: 'default',
+            purpose: 'asset',
+        );
+        // 不安装请求上下文；继承来源由 read(identity, context) 的历史引用决定。
+        return new ThemeEditorContext(
+            scope: $scope,
+            area: $identity->area,
+            themeId: $identity->themeId,
+            layoutType: $type,
+            layoutOption: $option,
+            targetType: $target,
+            targetId: $targetId ?? 0,
+            application: $application,
+        );
     }
     private function resolveBakeIdentity(int $themeId, string $scope, bool $published, ?int $versionId = null, string $area = 'frontend', string $storeMode = 'normal'): ThemeVersionIdentity
     {

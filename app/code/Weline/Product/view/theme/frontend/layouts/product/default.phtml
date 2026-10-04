@@ -239,6 +239,7 @@ $this->assign('meta', $meta);
                                         position="content"
                                         wrapper="div"
                                         class="product-detail-layout__related-slot product-detail-layout__related-slot--related">
+                                    <w:widget type="product" name="related-products" params='{"title":"相关产品","limit":4,"columns":"4","layout":"carousel"}' />
                                     <w:hook>Weline_Theme::frontend::layouts::product::related-products</w:hook>
                                 </w:slot>
                                 <w:slot id="product-bestsellers"
@@ -257,6 +258,7 @@ $this->assign('meta', $meta);
                                         position="content"
                                         wrapper="div"
                                         class="product-detail-layout__related-slot product-detail-layout__related-slot--cross-sell">
+                                    <w:widget type="product" name="cross-sell" params='{"title":"经常一起购买","limit":3,"show_add_all_button":true,"show_total_price":true,"lazy_load":true}' />
                                     <w:hook>Weline_Theme::frontend::layouts::product::cross-sell</w:hook>
                                 </w:slot>
                             </div>
@@ -266,7 +268,7 @@ $this->assign('meta', $meta);
                 </section>
             </if>
 
-            <!-- ========== 猜你喜欢 / 最近浏览（常显；部件经 default_injections 注入，禁止布局内嵌 w:widget） ========== -->
+            <!-- ========== 猜你喜欢 / 最近浏览（常显；Product 自有默认部件原生内嵌，外国部件经默认注入） ========== -->
             <section class="product-detail-layout__personalization" weline-code="theme.product.section_personalization" data-pdp-budget-phase="pdp.personalization">
                 <div class="product-detail-layout__personalization-container">
                     <w:hook>Weline_Theme::frontend::layouts::product::personalization-before</w:hook>
@@ -278,6 +280,7 @@ $this->assign('meta', $meta);
                                 position="content"
                                 wrapper="div"
                                 class="product-detail-layout__related-slot product-detail-layout__related-slot--you-may-like">
+                                    <w:widget type="product" name="you-may-like" params='{"title":"猜你喜欢","limit":8,"columns":"4","layout":"grid","lazy_load":true}' />
                             <w:hook>Weline_Theme::frontend::layouts::product::you-may-like</w:hook>
                         </w:slot>
                         <w:slot id="product-recently-viewed"

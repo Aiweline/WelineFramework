@@ -9,6 +9,7 @@ use Weline\Framework\Context;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestExitException;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
 use Weline\Framework\Service\Query\Store\FrontendWorkerStateStoreInterface;
@@ -149,6 +150,18 @@ final class FrontendWorkerScopeBootstrapResponseServiceTest extends TestCase
         }
     }
 
+    public function testRequestCancellationIsNotTurnedIntoMaintenanceResponse(): void
+    {
+        TestBootstrapScopeProvider::$issueException = new RequestExitException();
+        $service = new FrontendWorkerScopeBootstrapResponseService(
+            new TestBootstrapScopeProvider(),
+            new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
+        );
+
+        $this->expectException(RequestExitException::class);
+        $service->decorate(Response::html('<!doctype html><html><head><title>Home</title></head><body>Home</body></html>'));
+    }
+
     public function testStorefrontNotFoundHtmlGetsBootstrapWithoutChangingItsStatus(): void
     {
         $now = time();
@@ -269,12 +282,14 @@ final class TestBootstrapScopeProvider implements FrontendWorkerScopeProviderInt
     public static string $mode = FrontendWorkerScopeRolloutDecision::MODE_ON;
     public static ?FrontendWorkerScopeBinding $binding = null;
     public static int $issueCalls = 0;
+    public static ?\Throwable $issueException = null;
 
     public static function reset(): void
     {
         self::$mode = FrontendWorkerScopeRolloutDecision::MODE_ON;
         self::$binding = null;
         self::$issueCalls = 0;
+        self::$issueException = null;
     }
 
     public function requiresBinding(string $requestScheme): bool
@@ -308,6 +323,9 @@ final class TestBootstrapScopeProvider implements FrontendWorkerScopeProviderInt
         ?int $now = null,
     ): ?string {
         ++self::$issueCalls;
+        if (self::$issueException !== null) {
+            throw self::$issueException;
+        }
         return FrontendWorkerScopeBootstrapResponseServiceTest::TOKEN;
     }
 

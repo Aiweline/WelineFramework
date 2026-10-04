@@ -52,7 +52,7 @@ final class UrlRewriteChangedType implements ChangedTypeInterface
             $previous = $this->stringList($previous);
         }
         $namespaces = $this->stringList($impact['namespaces'] ?? []);
-        if ($namespaces === [] && $change->websiteCode() !== '') {
+        if ($namespaces === [] && $change->hasWebsiteContext() && $change->websiteCode() !== '') {
             $namespaces = ['website/' . $change->websiteCode() . '/url'];
         }
         return [

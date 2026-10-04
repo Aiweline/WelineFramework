@@ -14,6 +14,8 @@ edit,edit
 询盘可信自定义脚本,"Trusted custom scripts for inquiry"
 code,code
 编辑已受系统开关控制的可信脚本,"Edit trusted scripts that are already controlled by system switches"
+询盘提交记录,询盘提交记录
+查看询盘提交记录,查看询盘提交记录
 供应商申请,"Supplier application"
 合作说明,"Partnership guide"
 "长安 · 供应合作","Chang'an · Supplier partnerships"
@@ -124,6 +126,13 @@ code,code
 已发布,Published
 草稿已保存,"Draft saved"
 保存失败,"Save failed"
+表单,表单
+语言,语言
+内容摘要,内容摘要
+提交时间,提交时间
+详情,详情
+展开,展开
+暂无提交记录,暂无提交记录
 人机验证失败或已过期，请重试,"Human verification failed or expired. Please try again."
 无效的幂等提交键,"Invalid idempotency key"
 提交成功，我们会尽快联系您。,"Submitted. We will contact you soon."
@@ -155,6 +164,7 @@ code,code
 "AI 翻译调用失败","AI translation call failed"
 "AI 翻译未返回可用结果","AI translation returned no usable result"
 "已填充 %{1} 条文案到 %{2} 个语言","Filled %{1} copy items into %{2} languages"
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 可视化编辑询盘表单,"Visual inquiry form editor"
 字段,Fields
 翻译,Translations

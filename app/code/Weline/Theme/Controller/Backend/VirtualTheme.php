@@ -34,9 +34,7 @@ class VirtualTheme extends BackendController
             $area = $this->normalizeArea((string)$this->request->getParam('area', 'frontend'));
             $themeId = (int)$this->request->getParam('theme_id', 0);
             if ($themeId <= 0) {
-                $theme = clone $this->welineTheme;
-                $theme->clearData()->clearQuery()->getActiveTheme($area);
-                $themeId = (int)$theme->getId();
+                $themeId = $this->resolveThemeId(['area' => $area, 'theme_id' => 0]);
             }
             if ($themeId <= 0) {
                 return $this->fetchJson([
@@ -574,9 +572,18 @@ class VirtualTheme extends BackendController
             return $themeId;
         }
 
-        $theme = clone $this->welineTheme;
-        $theme->clearData()->clearQuery()->getActiveTheme($area);
-        return (int)$theme->getId();
+        try {
+            /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
+            $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\ThemeContextService::class,
+            );
+            $resolved = $themeContext->resolveTheme($area)
+                ?? $themeContext->resolveRegisteredDefaultTheme($area);
+
+            return (int)($resolved?->getId() ?? 0);
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     /**

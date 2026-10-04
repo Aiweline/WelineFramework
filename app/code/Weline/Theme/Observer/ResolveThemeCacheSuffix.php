@@ -44,7 +44,7 @@ class ResolveThemeCacheSuffix implements ObserverInterface
         $themeId = $theme && $theme->getId() ? (string)$theme->getId() : '';
         $themePath = $theme && $theme->getPath() !== ''
             ? (string)$theme->getPath()
-            : (string)(Env::get('theme.path') ?? (Env::default_theme_DATA['path'] ?? ''));
+            : (string)(Env::get('theme.path') ?? (Env::getInstance()->getTheme()['path'] ?? ''));
 
         $suffixParts = [
             'theme_id:' . $themeId,

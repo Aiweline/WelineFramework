@@ -290,6 +290,7 @@ $this->assign('meta', $meta);
                             position="content"
                             wrapper="section"
                             class="products-layout__recommendations" weline-code="theme.products.list_recommendations">
+                                    <w:widget type="product" name="recommended-products" params='{"title":"推荐产品","limit":8,"columns":"4","layout":"grid"}' />
                         <w:hook>Weline_Theme::frontend::layouts::products::recommendations-before</w:hook>
                         <w:hook>Weline_Theme::frontend::layouts::products::recommendations-after</w:hook>
                     </w:slot>

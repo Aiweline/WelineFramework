@@ -156,6 +156,10 @@ $checks = [
             static fn (bool $hit, mixed $notice): bool => $hit || (is_string($notice) && str_contains($notice, 'Weline UI 2.0') && str_contains($notice, 'w-field')),
             false,
         ),
+    'startup and MCP instructions stay compact pointers' => strlen(ToolService::instructions()) < 2_000
+        && strlen(json_encode($contract['session_startup_notices'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) < 2_000
+        && !str_contains(ToolService::instructions(), 'required 默认 JSON 注入')
+        && !str_contains(implode("\n", $contract['session_startup_notices']), 'Every feature MUST Agent-run Playwright e2e to PASS'),
     'hard_constraints package present' => is_array($hardConstraintsPackage)
         && ($hardConstraintsPackage['schema'] ?? '') === HardConstraintsCatalog::SCHEMA
         && ($hardConstraintsPackage['must_obey'] ?? false) === true
@@ -1015,7 +1019,8 @@ $checks = [
         }
         $body = (string) file_get_contents($themeCmdPath);
 
-        return str_contains($body, 'theme_binding')
+        return str_contains($body, 'websites_theme_application')
+            && str_contains($body, 'DefaultThemeInterface')
             && str_contains($body, 'theme:disk:compile')
             && str_contains($body, 'weline-code')
             && str_contains($body, '语义色')
@@ -1027,7 +1032,7 @@ $checks = [
             && str_contains($body, '破坏性操作高压线');
     })(),
     'theme_development surface norms include binding and compile matrix' => in_array(
-        'theme_binding_scoped_publish',
+        'theme_application_default_authority',
         array_values(array_filter(array_map(
             static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
             is_array($themeDevSurface['norms'] ?? null) ? $themeDevSurface['norms'] : [],
@@ -1704,7 +1709,9 @@ $checks = [
             && ($rule['id'] ?? '') === 'aoci_complements_weline_mcp'
             && str_contains((string) ($rule['summary'] ?? ''), 'COMPLEMENT')
             && str_contains((string) ($rule['summary'] ?? ''), 'prepare_project')
-            && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')
+            && str_contains((string) ($rule['summary'] ?? ''), 'HARD AUTO-INSTALL')
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST auto-install')),
         false,
     ),
     'content_ops_skills_skip_mcp forbids prepare on product/blog ops' => array_reduce(

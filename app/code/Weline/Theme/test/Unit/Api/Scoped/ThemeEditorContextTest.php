@@ -6,24 +6,14 @@ namespace Weline\Theme\Test\Unit\Api\Scoped;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\SystemConfig\Api\Scope\ScopeContext;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 
 final class ThemeEditorContextTest extends TestCase
 {
     public function testChannelIdentityAndDownstreamSelectorsRemainCanonical(): void
     {
-        $scope = new ScopeContext(
-            identity: ScopeIdentity::channel(7, 'shop', 'cn', 'app', ScopeIdentity::MODE_TEST),
-            storageScope: 'shop.cn.app',
-            storeMode: ScopeIdentity::MODE_TEST,
-            fallbackStorageScopes: [
-                'shop.cn.app',
-                'shop.cn.default',
-                'shop.default.default',
-                'default.default.default',
-            ],
-        );
+        $scope = new ThemeContentScope('websites', 'shop.cn.app', 'test', '', 'en_US');
         $context = new ThemeEditorContext(
             scope: $scope,
             area: 'frontend',
@@ -38,7 +28,7 @@ final class ThemeEditorContextTest extends TestCase
 
         $serialized = $context->toArray();
 
-        self::assertSame('channel', $serialized['scope']['identity']['scope_kind']);
+        self::assertSame('websites', $serialized['scope']['provider']);
         self::assertSame('shop.cn.app', $serialized['scope']['storage_scope']);
         self::assertSame('test', $serialized['scope']['store_mode']);
         self::assertSame(19, $serialized['theme_id']);
@@ -57,17 +47,7 @@ final class ThemeEditorContextTest extends TestCase
 
     public function testI18nIdentityKeepsLocale(): void
     {
-        $scope = new ScopeContext(
-            identity: ScopeIdentity::channel(7, 'shop', 'cn', 'app', ScopeIdentity::MODE_TEST),
-            storageScope: 'shop.cn.app',
-            storeMode: ScopeIdentity::MODE_TEST,
-            fallbackStorageScopes: [
-                'shop.cn.app',
-                'shop.cn.default',
-                'shop.default.default',
-                'default.default.default',
-            ],
-        );
+        $scope = new ThemeContentScope('websites', 'shop.cn.app', 'test', '', 'en_US');
         $i18n = new ThemeEditorContext(
             scope: $scope,
             area: 'frontend',
@@ -89,16 +69,7 @@ final class ThemeEditorContextTest extends TestCase
 
     public function testThemeBindingDropsEveryDownstreamSelector(): void
     {
-        $scope = new ScopeContext(
-            identity: ScopeIdentity::store(7, 'shop', 'cn', ScopeIdentity::MODE_NORMAL),
-            storageScope: 'shop.cn.default',
-            storeMode: ScopeIdentity::MODE_NORMAL,
-            fallbackStorageScopes: [
-                'shop.cn.default',
-                'shop.default.default',
-                'default.default.default',
-            ],
-        );
+        $scope = new ThemeContentScope('websites', 'shop.cn.default', 'normal', '', 'en_US');
         $layout = new ThemeEditorContext(
             scope: $scope,
             area: 'frontend',
@@ -123,12 +94,7 @@ final class ThemeEditorContextTest extends TestCase
 
     public function testNestedPathLayoutTypesAreAcceptedLikeAccountLogin(): void
     {
-        $scope = new ScopeContext(
-            identity: ScopeIdentity::website(0, 'default'),
-            storageScope: 'default.default.default',
-            storeMode: ScopeIdentity::MODE_NORMAL,
-            fallbackStorageScopes: ['default.default.default'],
-        );
+        $scope = new ThemeContentScope('websites', 'default.default.default', 'normal', '', 'en_US');
 
         foreach (['account/login', 'checkout/success', 'checkout/failure'] as $layoutType) {
             $context = new ThemeEditorContext(
@@ -145,12 +111,7 @@ final class ThemeEditorContextTest extends TestCase
 
     public function testInvalidLayoutTypeStillRejected(): void
     {
-        $scope = new ScopeContext(
-            identity: ScopeIdentity::website(0, 'default'),
-            storageScope: 'default.default.default',
-            storeMode: ScopeIdentity::MODE_NORMAL,
-            fallbackStorageScopes: ['default.default.default'],
-        );
+        $scope = new ThemeContentScope('websites', 'default.default.default', 'normal', '', 'en_US');
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('theme_editor_context_layout_type_invalid');
@@ -163,12 +124,7 @@ final class ThemeEditorContextTest extends TestCase
 
     public function testLayoutIdentityDiffersByEditingThemeId(): void
     {
-        $scope = new ScopeContext(
-            identity: ScopeIdentity::website(0, 'default'),
-            storageScope: 'default.default.default',
-            storeMode: ScopeIdentity::MODE_NORMAL,
-            fallbackStorageScopes: ['default.default.default'],
-        );
+        $scope = new ThemeContentScope('websites', 'default.default.default', 'normal', '', 'en_US');
         $themeOne = new ThemeEditorContext(
             scope: $scope,
             area: 'frontend',
@@ -190,12 +146,7 @@ final class ThemeEditorContextTest extends TestCase
 
     public function testEditorLockHashesDoNotCollideAcrossThemeOrVersion(): void
     {
-        $scope = new ScopeContext(
-            identity: ScopeIdentity::website(0, 'default'),
-            storageScope: 'default.default.default',
-            storeMode: ScopeIdentity::MODE_NORMAL,
-            fallbackStorageScopes: ['default.default.default'],
-        );
+        $scope = new ThemeContentScope('websites', 'default.default.default', 'normal', '', 'en_US');
         $themeOne = new ThemeEditorContext(
             scope: $scope,
             area: 'frontend',
@@ -222,12 +173,7 @@ final class ThemeEditorContextTest extends TestCase
 
     public function testResourceIdentityHashDoesNotEmbedThemeVersion(): void
     {
-        $scope = new ScopeContext(
-            identity: ScopeIdentity::website(0, 'default'),
-            storageScope: 'default.default.default',
-            storeMode: ScopeIdentity::MODE_NORMAL,
-            fallbackStorageScopes: ['default.default.default'],
-        );
+        $scope = new ThemeContentScope('websites', 'default.default.default', 'normal', '', 'en_US');
         $layout = new ThemeEditorContext(
             scope: $scope,
             area: 'frontend',
@@ -277,6 +223,6 @@ final class ThemeEditorContextTest extends TestCase
         );
         self::assertNotSame($frontend->ownerHash(), $backend->ownerHash());
         self::assertNotSame($frontend->ownerHash(), $testMode->ownerHash());
-        self::assertNotSame($frontend->scopeKey(), $testMode->scopeKey());
+        self::assertNotSame($frontend->scopeKey() . $frontend->storeModeKey(), $testMode->scopeKey() . $testMode->storeModeKey());
     }
 }

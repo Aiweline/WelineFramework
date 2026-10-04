@@ -389,7 +389,7 @@ final class ProjectReadinessService
                 'learning_conflicts' => $this->learningConflicts($index->projectId()),
                 'feature_delivery_urls' => GuidanceWorkflowCatalog::featureDeliveryUrls(),
                 'closeout_delivery_reminder' => GuidanceWorkflowCatalog::closeoutDeliveryReminder(),
-                'mcp_skills' => McpSkillCatalog::policy($index->root()),
+                'mcp_skills' => $this->compactSkillPolicy(McpSkillCatalog::policy($index->root())),
                 'workflow_doc' => HardConstraintsCatalog::AUTHORITATIVE_WORKFLOW_DOC,
                 'hard_rules_index' => HardConstraintsCatalog::AUTHORITATIVE_DOC,
                 'read_next' => [
@@ -404,6 +404,15 @@ final class ProjectReadinessService
                 ],
             ],
         ];
+    }
+
+    /** @param array<string,mixed> $policy @return array<string,mixed> */
+    private function compactSkillPolicy(array $policy): array
+    {
+        unset($policy['engineering_team_bundle']);
+        $policy['task_detail_via'] = ['resolve_task_context', 'resolve_skill', 'get_skill'];
+
+        return $policy;
     }
 
     /** @return array<string, mixed> */

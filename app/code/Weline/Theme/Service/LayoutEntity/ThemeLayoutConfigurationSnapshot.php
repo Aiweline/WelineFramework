@@ -56,7 +56,7 @@ final class ThemeLayoutConfigurationSnapshot
         $translations = [];
         if ($words !== []) {
             $dictionary = ObjectManager::getInstance(DictionaryRepositoryInterface::class);
-            foreach (ObjectManager::getInstance(\Weline\I18n\Api\Localization\LocaleCatalogInterface::class)->list('en_US') as $locale) {
+            foreach (ObjectManager::getInstance(\Weline\I18n\Api\Localization\LocaleCatalogInterface::class)->all('en_US') as $locale) {
                 foreach (array_chunk(array_values($words), 250) as $chunk) { array_push($translations, ...array_values($dictionary->getEntries($chunk, $locale['code']))); }
             }
         }

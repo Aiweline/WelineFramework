@@ -131,8 +131,8 @@ $escape = $boot['escape'];
                                 position="content"
                                 class="product-detail-layout__main-content">
                             <w:hook>Weline_Theme::frontend::layouts::product::main-content-before</w:hook>
-                            <?php /* placement=layout：内嵌 product-info；无可用固化 bake 时靠模板渲染主信息 */ ?>
-                            <w:widget type="product" name="product-info" params='{"show_brand":true,"show_supplier":true}' />
+                            <?php /* 跨模块 Product 主信息由拥有模块向专用槽注入。 */ ?>
+                            <w:slot id="design-product-main" name="产品主信息" accept="product-info" multiple="false" exclusive="true" position="content"></w:slot>
                             <w:hook>Weline_Theme::frontend::layouts::product::main-content-after</w:hook>
                         </w:slot>
 
@@ -245,6 +245,7 @@ $escape = $boot['escape'];
                                         position="content"
                                         wrapper="div"
                                         class="product-detail-layout__related-slot product-detail-layout__related-slot--related">
+                                    <w:slot id="design-product-related-products" name="related-products" accept="related-products" multiple="true" position="content"></w:slot>
                                     <w:hook>Weline_Theme::frontend::layouts::product::related-products</w:hook>
                                 </w:slot>
                                 <w:slot id="product-bestsellers"
@@ -263,6 +264,7 @@ $escape = $boot['escape'];
                                         position="content"
                                         wrapper="div"
                                         class="product-detail-layout__related-slot product-detail-layout__related-slot--cross-sell">
+                                    <w:slot id="design-product-cross-sell" name="cross-sell" accept="cross-sell" multiple="true" position="content"></w:slot>
                                     <w:hook>Weline_Theme::frontend::layouts::product::cross-sell</w:hook>
                                 </w:slot>
                             </div>
@@ -284,6 +286,7 @@ $escape = $boot['escape'];
                                 position="content"
                                 wrapper="div"
                                 class="product-detail-layout__related-slot product-detail-layout__related-slot--you-may-like">
+                                    <w:slot id="design-product-you-may-like" name="you-may-like" accept="you-may-like" multiple="true" position="content"></w:slot>
                             <w:hook>Weline_Theme::frontend::layouts::product::you-may-like</w:hook>
                         </w:slot>
                         <w:slot id="product-recently-viewed"

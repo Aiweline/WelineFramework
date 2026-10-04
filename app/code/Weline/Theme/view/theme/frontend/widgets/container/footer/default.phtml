@@ -18,7 +18,6 @@
  * @widget.is_container {true}
  * @widget.supports {["layout-global-footer","footer-container"]}
  * @widget.slots {"footer-about-links":{"name":"了解我们扩展","accept":["footer-blog-link","footer-news-link","layout-footer-about-links"],"multiple":true},"footer-partner-links":{"name":"合作信息扩展","accept":["footer-publish-link","footer-promote-link","layout-footer-partner-links"],"multiple":true},"footer-payment-account-links":{"name":"支付与账户扩展","accept":["footer-payment-methods-link","footer-social-login-link","footer-currency-rates-link","footer-campaign-link","layout-footer-payment-account-links"],"multiple":true},"footer-help-links":{"name":"帮助中心扩展","accept":["footer-my-account-link","footer-my-orders-link","footer-shipping-info-link","footer-returns-policy-link","footer-faq-link","footer-contact-service-link","layout-footer-help-links"],"multiple":true},"footer-language":{"name":"语言","accept":["language-switcher","language"],"max":1},"footer-currency":{"name":"货币","accept":["currency-switcher","currency"],"max":1},"footer-social":{"name":"社交媒体","accept":["footer-social","social"],"max":1},"footer-copyright":{"name":"版权信息","accept":["footer-copyright","copyright"],"max":1}}
- * @widget.default_injections {[{ "layout_type":"homepage", "slot":"footer", "area":"footer", "sort_order":0, "required":true, "exclusive":true, "reason":"整页脚主部件默认安装到全局 chrome 载体（homepage），非首页继承合并" }]}
  *
  * @widget.layout_source {Weline_Theme::css/widgets/footer-chrome-amazon.css,Weline_Theme::css/widgets/widget-container-footer-default.css}
  * @widget.source {Weline_Theme::css/widgets/footer-chrome-amazon.css,Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_Theme::js/widgets/widget-container-footer-default-0.js}
@@ -205,7 +204,9 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
                                             accept="footer-my-account-link,footer-my-orders-link,footer-shipping-info-link,footer-returns-policy-link,footer-faq-link,footer-contact-service-link,layout-footer-help-links"
                                             multiple="true"
                                             position="footer"
-                                            class="footer-section__extras"></w:slot>
+                                            class="footer-section__extras">
+                                        <w:widget type="footer" name="footer-faq-link" params='{"label":"FAQ/常见问题"}' />
+                                    </w:slot>
                                 <?php endif; ?>
                             </div>
                         <?php endif; ?>

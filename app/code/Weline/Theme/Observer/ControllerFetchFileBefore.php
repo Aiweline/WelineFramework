@@ -1545,9 +1545,7 @@ class ControllerFetchFileBefore implements ObserverInterface
             $theme = $this->themeContext->resolveTheme($area, null, $this->tokenPreviewSelectsTheme());
         }
         if (($theme === null || !$theme->getId()) && !$this->isEditorLayoutRequest()) {
-            $theme = clone $this->welineTheme;
-            $theme->clearData()->clearQuery();
-            $theme->getActiveTheme($area);
+            $theme = $this->themeContext->resolveRegisteredDefaultTheme($area);
         }
         if ($theme === null) {
             $theme = clone $this->welineTheme;

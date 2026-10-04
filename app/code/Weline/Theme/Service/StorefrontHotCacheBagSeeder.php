@@ -237,12 +237,12 @@ final class StorefrontHotCacheBagSeeder
         } catch (\Throwable) {
         }
 
-        // Theme-owned fallback (no cross-module Model): active frontend theme row.
+        // Theme-owned fallback: registered Default（不再读 is_active_frontend）。
         try {
-            /** @var WelineTheme $theme */
-            $theme = ObjectManager::getInstance(WelineTheme::class);
-            $theme->clearData()->clearQuery()->getActiveTheme('frontend');
-            $id = (int)$theme->getId();
+            /** @var ThemeContextService $context */
+            $context = ObjectManager::getInstance(ThemeContextService::class);
+            $theme = $context->resolveRegisteredDefaultTheme('frontend');
+            $id = (int)($theme?->getId() ?? 0);
             if ($id > 0) {
                 return $id;
             }

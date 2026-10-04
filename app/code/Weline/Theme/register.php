@@ -19,7 +19,8 @@ Register::register(
     ['Weline_Backend', 'Weline_Framework', 'Weline_I18n', 'Weline_Meta', 'Weline_SystemConfig', 'Weline_Widget']
 );
 
-// 注册默认主题 - 确保系统始终有一个可用的基础主题
+// Theme 模块即全局默认主题（磁盘权威）；Register::THEME 仅写入目录便于继承/列表，
+// 运行缺省不依赖库表 id（绝非固定 id=1），无目录行仍可用模块 view/theme。
 Register::register(
     Register::THEME,
     'Weline_Theme',
@@ -28,5 +29,5 @@ Register::register(
         'path' => __DIR__ . '/view/theme',
     ],
     '2.2.44',
-    'Weline Framework 默认主题，提供基础的前后台界面样式和布局。'
+    'Weline Framework 默认主题，提供基础的前后台界面样式和布局；系统全局默认，禁止当作可卸载业务主题。'
 );

@@ -59,7 +59,8 @@ final class StorefrontHotCacheBagWarmupProviderContractTest extends TestCase
         self::assertStringContainsString('seedPublishedHotCacheEager', $seeder);
         self::assertStringContainsString('renderPartials', $seeder);
         self::assertStringContainsString('theme.partials.fetch.header', $seeder);
-        self::assertStringContainsString('getActiveTheme', $seeder);
+        self::assertStringContainsString('resolveRegisteredDefaultTheme', $seeder);
+        self::assertStringNotContainsString('getActiveTheme', $seeder);
         self::assertStringContainsString('ensureFrontendThemeAssignedToTemplate', $seeder);
         self::assertStringContainsString('theme.layout_entity.chrome_slot_projection', $seeder);
         self::assertTrue(

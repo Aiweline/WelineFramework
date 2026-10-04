@@ -233,15 +233,15 @@ class ThemeEditor extends BackendController
             }
         }
         $themeListUrl = $this->_url->getBackendUrl('theme/backend');
-        // switchScope clears theme_id so the new Scope's theme_binding becomes authority.
-        // Resolve draft/effective binding (then published scoped theme) before bouncing to the list.
+        // switchScope clears theme_id so websites_theme_application (+ Theme Default) becomes authority.
+        // Resolve application theme (then registered Default) before bouncing to the list.
         if ($editingThemeId <= 0) {
             $editingThemeId = $this->resolveThemeIdFromScopeBinding($scopeContext, $editorArea);
         }
         if ($editingThemeId <= 0) {
             $this->getMessageManager()->addError(
                 $scopeContext !== null
-                    ? __('当前作用范围未绑定主题，请先在网站信息中绑定店面主题。')
+                    ? __('当前作用范围未配置店面主题应用，且无法解析注册默认主题。请先在网站信息中配置店面主题。')
                     : __('Missing theme ID')
             );
             return $this->redirect($themeListUrl);
@@ -250,6 +250,13 @@ class ThemeEditor extends BackendController
         if (!$editingTheme?->getId()) {
             $this->getMessageManager()->addError(__('Theme does not exist.'));
             return $this->redirect($themeListUrl);
+        }
+
+        if ($scopeContext instanceof ScopeContext) {
+            $assetInput = $this->prepareAssetEditorInput(['editor_context' => [
+                'theme_id' => $editingThemeId, 'area' => $editorArea, 'scope' => $scopeContext->toArray(),
+            ]]);
+            $scopeContext = \Weline\Theme\Api\Scoped\ThemeContentScope::fromArray($assetInput['editor_context']['scope']);
         }
 
         $frontendTheme = $editingTheme;
@@ -370,6 +377,7 @@ class ThemeEditor extends BackendController
                             : 'default',
                         targetType: (string)($layoutIdentity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL),
                         targetId: (int)($layoutIdentity['target_id'] ?? 0),
+                        application: \Weline\Framework\Runtime\ThemeApplicationContext::current($editorArea, 'asset'),
                     );
                     /** @var ThemeScopedWorkspaceInterface $scopedWorkspace */
                     $scopedWorkspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
@@ -663,7 +671,7 @@ class ThemeEditor extends BackendController
             if (\in_array($operation, ['publish', 'publish_batch'], true)) {
                 /** @var ThemeEditorContextFactory $factory */
                 $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-                $gateContext = $factory->fromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
+                $gateContext = $this->editorContextFromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
                 if ($this->hasPendingScopedChanges($gateContext)) {
                     return [
                         'success' => false,
@@ -3752,7 +3760,7 @@ class ThemeEditor extends BackendController
         try {
             /** @var ThemeEditorContextFactory $factory */
             $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-            $typedContext = $factory->fromInput(
+            $typedContext = $this->editorContextFromInput(
                 $editorPayload,
                 $locale === null || $locale === ''
                     ? ThemeEditorContext::RESOURCE_LAYOUT
@@ -4122,7 +4130,7 @@ class ThemeEditor extends BackendController
             if (array_key_exists('editor_context', $requestData)) {
                 /** @var ThemeEditorContextFactory $factory */
                 $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-                $typedContext = $factory->fromInput($requestData, ThemeEditorContext::RESOURCE_LAYOUT);
+                $typedContext = $this->editorContextFromInput($requestData, ThemeEditorContext::RESOURCE_LAYOUT);
             }
             $editorArea = $this->resolveRequestedEditorArea(PreviewContextService::AREA_FRONTEND);
             $layoutType = $this->normalizeLayoutType((string)$this->request->getParam(
@@ -4258,7 +4266,7 @@ class ThemeEditor extends BackendController
             if (array_key_exists('editor_context', $writeInput)) {
                 /** @var ThemeEditorContextFactory $factory */
                 $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-                $typedContext = $factory->fromInput(
+                $typedContext = $this->editorContextFromInput(
                     $writeInput,
                     $locale === null ? ThemeEditorContext::RESOURCE_META : ThemeEditorContext::RESOURCE_I18N,
                 );
@@ -4347,7 +4355,7 @@ class ThemeEditor extends BackendController
                 $validatedConfig[$paramName] = $value;
             }
 
-            $context = ObjectManager::getInstance(ThemeEditorContextFactory::class)->fromInput(
+            $context = $this->editorContextFromInput(
                 $writeInput, $locale === null ? ThemeEditorContext::RESOURCE_META : ThemeEditorContext::RESOURCE_I18N);
             if ($locale !== null) { $context = $context->withLocale($locale); }
             $saved = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedEditorSaveService::class)
@@ -4792,7 +4800,7 @@ class ThemeEditor extends BackendController
             $resourceMaterialization = null;
             if ((string)$this->request->getParam('resource_refresh', '') === '1'
                 || (string)$this->request->getParam('render', '') === 'html') {
-                $typed = ObjectManager::getInstance(ThemeEditorContextFactory::class)->fromInput(
+                $typed = $this->editorContextFromInput(
                     ['editor_context' => $this->request->getParam('editor_context', '')], ThemeEditorContext::RESOURCE_LAYOUT,
                 );
                 if ($typed->themeId !== $themeId || $typed->area !== $editorArea
@@ -5500,7 +5508,7 @@ class ThemeEditor extends BackendController
             if (array_key_exists('editor_context', $payload)) {
                 /** @var ThemeEditorContextFactory $factory */
                 $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-                $typedContext = $factory->fromInput($payload, ThemeEditorContext::RESOURCE_I18N);
+                $typedContext = $this->editorContextFromInput($payload, ThemeEditorContext::RESOURCE_I18N);
 
                 return $this->legacyScopeForEditorContext($typedContext);
             }
@@ -6138,7 +6146,7 @@ HTML;
         // context (for example backend editor_area) into the typed editor input.
         $syntheticParams = $this->request->getData('__theme_editor_request_params');
         if (is_array($syntheticParams)) {
-            return $syntheticParams;
+            return $this->prepareAssetEditorInput($syntheticParams);
         }
 
         $payload = [];
@@ -6159,7 +6167,34 @@ HTML;
             }
         }
 
-        return $payload;
+        return $this->prepareAssetEditorInput($payload);
+    }
+
+    /** 后台消费入口在既有 ACL 后解析范围；原始请求声明不直接安装上下文。 */
+    private function prepareAssetEditorInput(array $input): array
+    {
+        $raw = $input['editor_context'] ?? null;
+        if (is_string($raw) && trim($raw) !== '') {
+            $raw = json_decode($raw, true, flags: JSON_THROW_ON_ERROR);
+        }
+        if (!is_array($raw) || !is_array($raw['scope'] ?? null)) { return $input; }
+        return ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeAssetEditorRequestContext::class)->prepare(
+            $input, fn(array $identity): string => $this->resolveEditorWebsiteDefaultLocale($identity),
+        );
+    }
+
+    private function editorContextFromInput(array $input, ?string $resourceType = null): ThemeEditorContext
+    {
+        $resolved = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeAssetEditorRequestContext::class)->resolve(
+            $input, fn(array $identity): string => $this->resolveEditorWebsiteDefaultLocale($identity),
+        );
+        $application = $resolved['application'];
+        if (\Weline\Framework\Runtime\ThemeApplicationContext::current($application->area, 'asset') === null) {
+            $application->install();
+        }
+        return ObjectManager::getInstance(ThemeEditorContextFactory::class)->fromInput(
+            $resolved['input'], $resourceType, $application,
+        );
     }
 
     private function resolveEditorRequestTheme(string $editorArea, int $explicitThemeId = 0): WelineTheme
@@ -6394,7 +6429,7 @@ HTML;
         if (array_key_exists('editor_context', $typedPayload)) {
             /** @var ThemeEditorContextFactory $factory */
             $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-            $typedContext = $factory->fromInput(
+            $typedContext = $this->editorContextFromInput(
                 $typedPayload,
                 $locale === null ? ThemeEditorContext::RESOURCE_META : ThemeEditorContext::RESOURCE_I18N,
             );
@@ -6445,7 +6480,7 @@ HTML;
         if (array_key_exists('editor_context', $payload)) {
             /** @var ThemeEditorContextFactory $factory */
             $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-            $context = $factory->fromInput($payload, ThemeEditorContext::RESOURCE_META);
+            $context = $this->editorContextFromInput($payload, ThemeEditorContext::RESOURCE_META);
             /** @var ThemeMetaIdentityService $metaIdentityService */
             $metaIdentityService = ObjectManager::getInstance(ThemeMetaIdentityService::class);
 
@@ -7177,7 +7212,7 @@ HTML;
         if (array_key_exists('editor_context', $typedInput)) {
             /** @var ThemeEditorContextFactory $factory */
             $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-            $context = $factory->fromInput($typedInput, ThemeEditorContext::RESOURCE_LAYOUT);
+            $context = $this->editorContextFromInput($typedInput, ThemeEditorContext::RESOURCE_LAYOUT);
             $this->assertRawLayoutContextMatches($typedInput, $context);
 
             return $this->layoutIdentityFromEditorContext($context);
@@ -7572,7 +7607,7 @@ HTML;
         }
         /** @var ThemeEditorContextFactory $factory */
         $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-        $context = $factory->fromInput(
+        $context = $this->editorContextFromInput(
             ['editor_context' => $raw],
             ThemeEditorContext::RESOURCE_LAYOUT,
         );
@@ -9393,8 +9428,8 @@ HTML;
         try {
             /** @var ThemeEditorContextFactory $factory */
             $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-            $target = $factory->fromInput($data, ThemeEditorContext::RESOURCE_LAYOUT);
-            $sourceContext = $factory->fromInput($sourceInput, ThemeEditorContext::RESOURCE_LAYOUT);
+            $target = $this->editorContextFromInput($data, ThemeEditorContext::RESOURCE_LAYOUT);
+            $sourceContext = $this->editorContextFromInput($sourceInput, ThemeEditorContext::RESOURCE_LAYOUT);
             $sourceIdentity = $this->layoutIdentityFromEditorContext($sourceContext);
             $versionId = (int)($sourceInput['version_id'] ?? 0);
             $sourceVersion = $this->versionService->getVersion(
@@ -9746,7 +9781,7 @@ HTML;
             // Only typed editor_context is authoritative. Full previewContext also carries
             // PreviewContextService shell target_type=layout|path|page — never feed that
             // blob into resolveVersionLayoutIdentity / assertRawLayoutContextMatches.
-            $typedContext = $factory->fromInput(
+            $typedContext = $this->editorContextFromInput(
                 ['editor_context' => $typedClaims],
                 ThemeEditorContext::RESOURCE_LAYOUT,
             );
@@ -9938,8 +9973,8 @@ HTML;
     }
 
     /**
-     * Scope switch navigates without theme_id; recover the Scope's storefront theme_binding.
-     * Prefer draft, then effective/published payload, then ThemeContextService fallback.
+     * Scope switch navigates without theme_id; recover storefront theme from
+     * websites_theme_application, then Theme registered Default（不再读 theme_binding / is_active*）。
      */
     private function resolveThemeIdFromScopeBinding(?ScopeContext $scopeContext, string $editorArea): int
     {
@@ -9950,32 +9985,41 @@ HTML;
         $area = $editorArea === PreviewContextService::AREA_BACKEND
             ? PreviewContextService::AREA_BACKEND
             : PreviewContextService::AREA_FRONTEND;
+        $applicationArea = $area === PreviewContextService::AREA_BACKEND ? 'backend' : 'frontend';
 
         try {
-            $bindingContext = new ThemeEditorContext(
-                scope: $scopeContext,
-                area: $area,
-                resourceType: ThemeEditorContext::RESOURCE_THEME_BINDING,
-            );
-            /** @var ThemeScopedWorkspaceInterface $workspace */
-            $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
-            $state = $workspace->load($bindingContext, true);
-            foreach ([
-                (int)($state['draft_payload']['theme_id'] ?? 0),
-                (int)($state['effective_payload']['theme_id'] ?? 0),
-                (int)($state['published_payload']['theme_id'] ?? 0),
-            ] as $boundThemeId) {
-                if ($boundThemeId > 0) {
-                    return $boundThemeId;
+            $identity = $scopeContext->identity;
+            if ($identity instanceof ScopeIdentity
+                && interface_exists(\Weline\Websites\Api\Theme\ThemeApplicationInterface::class)
+            ) {
+                /** @var ScopeIdentityCatalogInterface $catalog */
+                $catalog = ObjectManager::getInstance(ScopeIdentityCatalogInterface::class);
+                /** @var ScopeHierarchyInterface $hierarchy */
+                $hierarchy = ObjectManager::getInstance(ScopeHierarchyInterface::class);
+                /** @var \Weline\Websites\Api\Theme\ThemeApplicationInterface $applications */
+                $applications = ObjectManager::getInstance(
+                    \Weline\Websites\Api\Theme\ThemeApplicationInterface::class,
+                );
+                $authoritative = $catalog->authoritativeIdentity($identity);
+                $keys = [];
+                $cursor = $authoritative;
+                do {
+                    $keys[] = $cursor->canonicalKey();
+                    $cursor = $hierarchy->parentIdentity($cursor);
+                } while ($cursor !== null);
+                $storeMode = $authoritative->storeMode ?? ScopeIdentity::MODE_NORMAL;
+                $resolution = $applications->resolve($keys, $storeMode, $applicationArea);
+                if ($resolution->reference !== null && $resolution->reference->themeId > 0) {
+                    return $resolution->reference->themeId;
                 }
             }
         } catch (\Throwable) {
-            // Fall through to published scoped theme resolution.
+            // Fall through to Theme registered Default.
         }
 
         try {
             $theme = ObjectManager::getInstance(ThemeContextService::class)
-                ->resolveThemeForScope($area, $scopeContext->identity);
+                ->resolveRegisteredDefaultTheme($applicationArea);
             if ($theme?->getId()) {
                 return (int)$theme->getId();
             }
@@ -10684,7 +10728,7 @@ HTML;
     ): ThemeEditorContext {
         /** @var ThemeEditorContextFactory $factory */
         $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-        $context = $factory->fromInput($input, $resourceType);
+        $context = $this->editorContextFromInput($input, $resourceType);
         if ($context->themeId !== $themeId || $context->area !== $area) {
             throw new \InvalidArgumentException('theme_editor_legacy_context_mismatch');
         }
@@ -10981,7 +11025,7 @@ HTML;
         }
         /** @var ThemeEditorContextFactory $factory */
         $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-        $context = $factory->fromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
+        $context = $this->editorContextFromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
         $this->assertRawLayoutContextMatches($input, $context);
         if (($expectedThemeId !== null && $expectedThemeId > 0 && $context->themeId !== $expectedThemeId)
             || ($expectedPageType !== null && $expectedPageType !== '' && $context->layoutType !== $expectedPageType)
@@ -11021,7 +11065,7 @@ HTML;
             }
             /** @var ThemeEditorContextFactory $factory */
             $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-            $context = $factory->fromInput($data, ThemeEditorContext::RESOURCE_LAYOUT);
+            $context = $this->editorContextFromInput($data, ThemeEditorContext::RESOURCE_LAYOUT);
         } catch (\Throwable) {
             return $data;
         }
@@ -11343,7 +11387,7 @@ HTML;
         }
         /** @var ThemeEditorContextFactory $factory */
         $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
-        $context = $factory->fromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
+        $context = $this->editorContextFromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
         $identity = $this->layoutIdentityFromEditorContext($context);
         $current = $this->versionService->getCurrentVersion($context->themeId, $context->layoutType, $identity);
         $versionId = $current instanceof ThemeLayoutVersion ? (int)$current->getVersionId() : 0;

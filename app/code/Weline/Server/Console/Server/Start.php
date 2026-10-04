@@ -2680,7 +2680,16 @@ class Start extends CommandAbstract
         // Master owns all child-process startup.
         $this->wlsChildProcessesMayExist = true;
         $this->installStartupListenerInCurrentMaster($instanceName, $config);
-        $this->runMasterProcess($instanceName, $config, $workerScript, '', '', $backendSslEnabled, $httpRedirectPort, $windowMode);
+        $this->runMasterProcess(
+            $instanceName,
+            $config,
+            $workerScript,
+            $backendSslEnabled ? $sslCert : '',
+            $backendSslEnabled ? $sslKey : '',
+            $backendSslEnabled,
+            $httpRedirectPort,
+            $windowMode
+        );
     }
 
     protected function shouldPersistGatewayCertificateSource(

@@ -359,6 +359,7 @@ component 负责：
 - **工程团队**：部件相关施工/复审分配给专席 **部件开发工程师**（MCP `widget_development` / `工程团队.md`）。
 - `position` / `page_layouts` / `slot` / `supports` 表示部件允许出现的位置和协议
 - `default_injections`：跨模块开箱进槽的**唯一合法路径**（经布局固化写入模板）；同模块若已布局内嵌则不得再写
+- 全局 chrome 自有部件（全部菜单、政策链接、整页脚、FAQ）由 Theme partial/部件模板原生内嵌；不得在部件 Meta 注解保留第二份默认注入。页脚业务链接仍由各拥有模块向标准空槽注入。
 - Dashboard 注入可选 `default_view`（`DashboardView.code`）：声明后才在对应视图身份就绪时自动挂载；删除后写 `user_deleted`，手动“应用”可恢复
 - Theme 监听 `Weline_Dashboard::layout_identity_ready`，只匹配 `default_view === view_code` 做一次性补齐
 - `accept="*"` 表示接受所有部件

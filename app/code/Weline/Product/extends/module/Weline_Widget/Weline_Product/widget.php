@@ -13,8 +13,18 @@ return [
         'page_layouts' => ['product'],
         'position' => ['content'],
         'slot' => 'product-main',
-        // placement=layout：product 布局已内嵌 <w:widget name="product-info" />；禁止再写 default_injections。
+        // 原生 Product 布局内嵌；外国 design 布局仅专用空槽接收下列注入关系。
         'placement' => 'layout',
+        'default_injections' => [[
+            'placement' => 'injection',
+            'layout_type' => 'product',
+            'layout_option' => 'default',
+            'slot' => 'design-product-main',
+            'area' => 'content',
+            'sort_order' => 0,
+            'required' => true,
+            'config' => ['show_brand' => true, 'show_supplier' => true],
+        ]],
         'is_container' => true,
         'slots' => [
             'product-purchase-actions' => [
@@ -65,16 +75,17 @@ return [
         'page_layouts' => ['product'],
         'position' => ['content'],
         'slot' => 'product-related-products',
-        'placement' => 'injection',
+        'placement' => 'layout',
         'supports' => [
             'layout-product-related-products',
             'related-products',
             'product-carousel',
         ],
         'default_injections' => [[
-            'layout_type' => 'product',
+            'placement' => 'injection',
+                'layout_type' => 'product',
             'layout_option' => 'default',
-            'slot' => 'product-related-products',
+            'slot' => 'design-product-related-products',
             'area' => 'content',
             'sort_order' => 0,
             'required' => true,
@@ -129,7 +140,7 @@ return [
         'page_layouts' => ['product'],
         'position' => ['content'],
         'slot' => 'product-you-may-like',
-        'placement' => 'injection',
+        'placement' => 'layout',
         'supports' => [
             'layout-product-you-may-like',
             'layout-product-related-products',
@@ -137,9 +148,10 @@ return [
             'product-carousel',
         ],
         'default_injections' => [[
-            'layout_type' => 'product',
+            'placement' => 'injection',
+                'layout_type' => 'product',
             'layout_option' => 'default',
-            'slot' => 'product-you-may-like',
+            'slot' => 'design-product-you-may-like',
             'area' => 'content',
             'sort_order' => 0,
             'required' => true,
@@ -210,7 +222,7 @@ return [
         'page_layouts' => ['product', 'cart'],
         'position' => ['content'],
         'slot' => 'product-cross-sell',
-        'placement' => 'injection',
+        'placement' => 'layout',
         'supports' => [
             'layout-product-cross-sell',
             'layout-cart-recommendations',
@@ -220,9 +232,10 @@ return [
         ],
         'default_injections' => [
             [
+                'placement' => 'injection',
                 'layout_type' => 'product',
                 'layout_option' => 'default',
-                'slot' => 'product-cross-sell',
+                'slot' => 'design-product-cross-sell',
                 'area' => 'content',
                 'sort_order' => 3,
                 'required' => true,
@@ -236,6 +249,7 @@ return [
                 ],
             ],
             [
+                'placement' => 'injection',
                 'layout_type' => 'cart',
                 'layout_option' => 'default',
                 'slot' => 'cart-recommendations',
@@ -281,7 +295,7 @@ return [
         'position' => ['content'],
         // 顶栏 slot 偏好 category；products → list-recommendations；404 → not-found-recommendations。
         'slot' => 'category-recommendations',
-        'placement' => 'injection',
+        'placement' => 'layout',
         'supports' => [
             'layout-category-recommendations',
             'layout-products-recommendations',
@@ -292,9 +306,10 @@ return [
         ],
         'default_injections' => [
             [
+                'placement' => 'injection',
                 'layout_type' => 'category',
                 'layout_option' => 'default',
-                'slot' => 'category-recommendations',
+                'slot' => 'design-category-recommendations',
                 'area' => 'content',
                 'sort_order' => 0,
                 'required' => true,
@@ -307,9 +322,10 @@ return [
                 ],
             ],
             [
+                'placement' => 'injection',
                 'layout_type' => 'products',
                 'layout_option' => 'default',
-                'slot' => 'list-recommendations',
+                'slot' => 'design-list-recommendations',
                 'area' => 'content',
                 'sort_order' => 0,
                 'required' => true,
@@ -322,6 +338,7 @@ return [
                 ],
             ],
             [
+                'placement' => 'injection',
                 'layout_type' => 'not_found',
                 'layout_option' => 'default',
                 'slot' => 'not-found-recommendations',

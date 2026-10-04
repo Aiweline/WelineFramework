@@ -16,7 +16,7 @@
 
 ## AOCI 与 Weline MCP（互补）
 
-可选并列挂载 AOCI-CODE（`aoci`）。**Weline MCP** 管硬规则 / 技能 / `prepare_project` / 验收；**AOCI** 管认知索引 / Baseline / 漂移。工程主链仍走 Weline；禁止用 AOCI 替代或绕过 `hard_constraints`。细则：`aoci_complements_weline_mcp` → `规则/00-MCP调用与会话.md` §1b。
+并列挂载 AOCI-CODE（`aoci`）。**Weline MCP** 管硬规则 / 技能 / `prepare_project` / 验收；**AOCI** 管认知索引 / Baseline / 漂移。工程主链仍走 Weline；禁止用 AOCI 替代或绕过 `hard_constraints`。**本机无 AOCI 程序时，ensure / `prepare_project` 必须自动安装**；装好后按 `aoci_installation.mcp_registration` 挂宿主。细则：`aoci_complements_weline_mcp` → `规则/00-MCP调用与会话.md` §1b / `AOCI自动安装.md`。
 
 ## 挂载与冷启动
 

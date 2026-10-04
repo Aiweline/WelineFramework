@@ -633,9 +633,9 @@ class Upgrade implements UpgradeInterface
     }
 
     /**
-     * Storefront resolves the published theme_binding / is_active_frontend theme,
-     * which can differ from legacy is_active (design child). Missing products
-     * page entities leave the Filters default_injection as a sidebar placeholder.
+     * One-time layout seed helper: pick themes marked is_active / is_active_frontend
+     * as migration candidates only（正式店面权威已改为 websites_theme_application → Default）.
+     * Missing products page entities leave the Filters default_injection as a sidebar placeholder.
      * Apply required defaults for homepage+category+product+products, then publish.
      */
     private function migratePublishActiveThemeCategoryFilters(): void

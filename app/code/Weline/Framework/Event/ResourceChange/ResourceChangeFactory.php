@@ -32,23 +32,27 @@ final class ResourceChangeFactory
         string|int $resourceId,
         string $action,
         int $revision,
-        int $websiteId,
-        string $websiteCode,
+        ?int $websiteId,
+        ?string $websiteCode,
         array $before,
         ?array $after,
         array $changedFields,
         array $impact,
         array $origin = [],
         ?string $previousWebsiteCode = null,
-        int $siteId = 0,
+        ?int $siteId = 0,
         ?string $resourceCode = null,
         ?string $resourceScope = null,
     ): ResourceChange {
-        $websiteCode = trim($websiteCode);
+        if (($websiteId === null) !== ($websiteCode === null)) {
+            throw new \InvalidArgumentException('resource_change_website_identity_incomplete');
+        }
+        $websiteCode = $websiteCode === null ? null : trim($websiteCode);
         $previousWebsiteCode = $previousWebsiteCode === null
             ? null
             : trim($previousWebsiteCode);
-        $context = $this->contextSnapshot->capture($websiteId, $websiteCode);
+        $context = $websiteId === null ? $this->contextSnapshot->captureNeutral()
+            : $this->contextSnapshot->capture($websiteId, $websiteCode);
         $triggerId = WelineEnv::get('user.id', null);
         $origin += [
             'area' => WelineEnv::getArea(),
@@ -81,8 +85,8 @@ final class ResourceChangeFactory
         if ($resourceCode !== null && $resourceCode !== '') {
             $resource['code'] = $resourceCode;
         }
-        $resourceScope = $resourceScope === null ? null : strtolower(trim($resourceScope));
-        if ($resourceScope === null || $resourceScope === '') {
+        $resourceScope = $resourceScope === null ? null : ($websiteId === null ? trim($resourceScope) : strtolower(trim($resourceScope)));
+        if ($websiteId !== null && ($resourceScope === null || $resourceScope === '')) {
             try {
                 if (class_exists(\Weline\FileManager\Service\MediaReference\MediaReferenceScopeResolver::class)) {
                     $resolved = ObjectManager::getInstance(
@@ -106,7 +110,7 @@ final class ResourceChangeFactory
             'event_name' => ResourceChange::EVENT_NAME,
             'occurred_at' => $this->utcMicrotime(),
             'resource' => $resource,
-            'website' => [
+            'website' => $websiteId === null ? null : [
                 'id' => $websiteId,
                 'code' => $websiteCode,
                 'previous_code' => $previousWebsiteCode,

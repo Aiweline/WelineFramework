@@ -17,6 +17,18 @@ return [
             'scope_identity' => ['type' => 'Weline\\Framework\\Runtime\\ScopeIdentity|null', 'required' => false, 'description' => __('当前已冻结范围身份。')],
         ],
     ],
+    'Weline_Framework::App::application_context_ready' => [
+        'name' => __('应用上下文就绪'),
+        'description' => __('店面范围冻结后、缓存查询前，供使用方安装当前请求的应用上下文。'),
+        'doc' => 'app/应用上下文就绪.md',
+        'version' => '1.0.0',
+        'type' => 'runtime',
+        'data_contract' => [
+            'area' => ['type' => 'string', 'required' => true, 'description' => __('当前区域。')],
+            'navigation_scope' => ['type' => 'Weline\\Framework\\Runtime\\StorefrontNavigationScope|null', 'required' => false, 'description' => __('当前店面导航范围。')],
+            'scope_identity' => ['type' => 'Weline\\Framework\\Runtime\\ScopeIdentity|null', 'required' => false, 'description' => __('当前已冻结范围身份。')],
+        ],
+    ],
     'Weline_Framework::App::run_before' => [
         'name' => __('应用运行前'),
         'description' => __('URL 已解析且 early response 未命中后、Session/Router 前执行。'),

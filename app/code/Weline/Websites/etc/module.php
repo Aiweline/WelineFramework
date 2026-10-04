@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Websites',
-    "version" => '1.8.54',
+    "version" => '1.8.58',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
@@ -19,8 +19,11 @@ return [
         'Weline_Ai' => '*',
         'Weline_Server' => '*',
         'Weline_Product' => '*',
+        'Weline_Theme' => '*',
     ],
     "provides" => [
+        \Weline\Websites\Api\Theme\ThemeApplicationRepositoryInterface::class => \Weline\Websites\Service\OrmThemeApplicationRepository::class,
+        \Weline\Websites\Api\Theme\ThemeApplicationInterface::class => \Weline\Websites\Service\ThemeApplicationService::class,
         \Weline\Websites\Api\WebsiteTargetLookupInterface::class => \Weline\Websites\Api\WebsiteTargetLookup::class,
         \Weline\Websites\Api\Catalog\WebsiteCatalogInterface::class => \Weline\Websites\Service\WebsiteCatalog::class,
         \Weline\Websites\Api\Catalog\StoreCatalogInterface::class => \Weline\Websites\Service\StoreCatalog::class,

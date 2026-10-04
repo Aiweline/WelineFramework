@@ -801,6 +801,13 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
                 }
                 // 挂载 path 已在 getBaseHost() 中；入参若仍带 mount，先剥掉再拼 currency/lang/站内路由
                 $path = self::peelWebsiteMountPathFromRelativePath($path);
+                // Auth return / PcController::redirect / ResponseRedirectBefore may hand a path
+                // that already carries /{currency}/{locale}/ (e.g. /bg_BG/?w_auth=1). Strip once
+                // before getPrefix() so storefront never emits /bg_BG/bg_BG/...
+                if ($path !== '' && !$this->isLink($path)) {
+                    $pathWithSlash = str_starts_with($path, '/') ? $path : '/' . ltrim($path, '/');
+                    $path = self::withoutStorefrontLocalizationPrefix($pathWithSlash);
+                }
                 $relative = self::getPrefix() . '/' . ltrim($path, '/');
                 $relative = self::removeExtraDoubleSlashes($relative);
                 if ($relative === '' || !str_starts_with($relative, '/')) {

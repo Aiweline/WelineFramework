@@ -408,20 +408,17 @@ class ThemeDirectoryResolver
 
         if ($this->themeContextService) {
             try {
-                $resolvedTheme = $this->themeContextService->resolveTheme($area);
+                $resolvedTheme = $this->themeContextService->resolveTheme($area)
+                    ?? $this->themeContextService->resolveRegisteredDefaultTheme($area);
                 if ($resolvedTheme && $resolvedTheme->getId()) {
                     return $resolvedTheme;
                 }
             } catch (\Throwable) {
-                // Ignore and fallback to active theme lookup.
+                // Ignore; no storefront theme available.
             }
         }
 
-        $activeTheme = clone $this->welineTheme;
-        $activeTheme->clearData()->clearQuery();
-        $activeTheme->getActiveTheme($area);
-
-        return $activeTheme->getId() ? $activeTheme : null;
+        return null;
     }
 
     private function normalizePath(string $path): string

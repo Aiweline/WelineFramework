@@ -969,7 +969,7 @@ MD;
    ```bash
    php bin/w theme:active {$themeName} frontend
    ```
-   正式店面还需配置 published theme_binding（优先于裸 is_active）。
+   正式店面权威为 websites_theme_application（网站信息→店面主题）；未配置时回落 Theme 注册 Default。
 
 ## 开发说明
 
@@ -1027,7 +1027,7 @@ MD;
         $this->printing->warning(__('下一步操作:'));
         $this->printing->note(__('1. 运行 php bin/w setup:upgrade 或 theme:install 安装主题'));
         $this->printing->note(__('2. 运行 php bin/w theme:active %{1} frontend 激活主题（不是 theme:activate）', [$themeName]));
-        $this->printing->note(__('3. 配置 Website/Scope published theme_binding；细节见主题开发.md Mode B'));
+        $this->printing->note(__('3. 在网站信息中配置 websites_theme_application（店面主题）；未配置时回落 Theme 注册 Default'));
         $this->printing->success(__('═══════════════════════════════════════════════════════'));
     }
 

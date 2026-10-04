@@ -275,9 +275,12 @@ final class ProductLayoutOptionService
 
                 return $theme->getId() ? $theme : null;
             }
-            $theme->clearData()->clearQuery()->getActiveTheme($area);
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            $resolved = $themeContext->resolveTheme($area)
+                ?? $themeContext->resolveRegisteredDefaultTheme($area);
 
-            return $theme->getId() ? $theme : null;
+            return $resolved instanceof WelineTheme && $resolved->getId() ? $resolved : null;
         } catch (\Throwable) {
             return null;
         }

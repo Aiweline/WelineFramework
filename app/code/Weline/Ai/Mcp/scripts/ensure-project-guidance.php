@@ -7,6 +7,10 @@ require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-runtime-time.php'
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-required-tools.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-host-editor-rules.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'GitSafetyPolicy.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Support.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Config.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'ProcessRunner.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'AociInstaller.php';
 
 /**
  * Step 0 bootstrap: verify Weline project guidance host state and auto-repair when possible.
@@ -116,6 +120,13 @@ if (($codexPlugin['ready'] ?? false) !== true) {
 }
 if (($codexPlugin['changed'] ?? false) === true) {
     $repairs[] = 'refreshed_codex_plugin_single_registration';
+}
+
+// AOCI binary: missing → Weline MUST auto-install (aoci_complements_weline_mcp).
+// Failure is reported; it does not by itself block Weline STDIO readiness.
+$aociInstallation = welineGuidanceEnsureAociInstallation($repoRoot);
+if (($aociInstallation['status'] ?? '') === 'ready' && !($aociInstallation['cached'] ?? false)) {
+    $repairs[] = 'installed_aoci_binary';
 }
 
 $stdio = welineGuidanceProbeStdioMcp($repoRoot, $mcpRoot);
@@ -239,6 +250,7 @@ welineGuidanceEmit([
     'cursor_mcp_bounce' => $cursorBounce,
     'mcp_host' => $activeHost,
     'host_mcp_install' => $hostMcpInstall,
+    'aoci_installation' => $aociInstallation,
     'ensure_mcp' => [
         'writes_host_config' => false,
         'primary_ready' => $hostReady,
@@ -256,6 +268,27 @@ function welineGuidanceEmit(array $payload, int $exitCode): never
 {
     echo json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
     exit($exitCode);
+}
+
+/** @return array<string,mixed> */
+function welineGuidanceEnsureAociInstallation(string $repoRoot): array
+{
+    try {
+        $installer = new \LearningMcp\AociInstaller(
+            \LearningMcp\Config::expandPath('~/.learning-mcp/tools/aoci'),
+            new \LearningMcp\ProcessRunner(),
+        );
+
+        return $installer->ensure($repoRoot);
+    } catch (\Throwable $exception) {
+        return [
+            'schema_version' => 'aoci-installation.v1',
+            'status' => 'failed',
+            'cached' => false,
+            'error' => $exception->getMessage(),
+            'next_action' => '修复 AOCI 自动安装失败原因后重跑 ensure-project-guidance / prepare_project。',
+        ];
+    }
 }
 
 function welineGuidanceResolveRepoRoot(string $mcpRoot): ?string

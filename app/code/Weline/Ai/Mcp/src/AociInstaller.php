@@ -227,7 +227,9 @@ final class AociInstaller
             'command' => $marker['binary'],
             'args' => ['--repo', $repository, 'mcp'],
         ];
-        $marker['next_action'] = '本机安装已就绪；宿主 MCP 挂载、项目初始化和索引建立是独立流程，不自动执行 scan。';
+        $marker['next_action'] = '本机 AOCI 程序已就绪（缺失时由 Weline ensure/prepare 自动安装）。'
+            . '若宿主会话尚无 aoci 工具，Agent 必须按 mcp_registration 写入宿主 MCP 配置并刷新会话；'
+            . '项目 init/scan/索引建立不自动执行。';
         return $marker;
     }
 }

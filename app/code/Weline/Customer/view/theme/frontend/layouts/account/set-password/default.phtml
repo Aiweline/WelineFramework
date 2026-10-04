@@ -317,10 +317,10 @@ layoutType=account/set-password，option=default → layouts/account/set-passwor
                                 </div>
                             <?php endif; ?>
                             <?php if ($isLoginAuthPage): ?>
-                            <!-- Theme 归属内嵌部件：主题编辑器可改背景图（Copy-on-Write），不走应用注入 -->
-                            <w:widget type="form" name="account-login" />
+                            <!-- Theme 外来部件由拥有模块向专用空槽默认注入。 -->
+                            <w:slot id="foreign-theme-account-login" name="account-login" accept="account-login,auth-form" multiple="false" exclusive="true" position="content"></w:slot>
                             <?php elseif ($isRegisterAuthPage): ?>
-                            <w:widget type="form" name="account-register" />
+                            <w:slot id="foreign-theme-account-register" name="account-register" accept="account-register,auth-form" multiple="false" exclusive="true" position="content"></w:slot>
                             <?php else: ?>
                             <if condition="meta.content">
                                 {{meta.content}}

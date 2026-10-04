@@ -18,18 +18,23 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
     $repoRoot = $context['repo_root'];
     $serverConfig = $context['server_config'];
     $serverName = WELINE_PROJECT_INTELLIGENCE_MCP_SERVER;
+    $aociRegistration = welineMcpInstallAociRegistration($repoRoot);
 
     $primaryHost = welineMcpInstallDetectPrimaryHost([], [], $hostKind);
     $inactiveHost = ['ready' => null, 'binary_found' => false, 'reason' => 'inactive_host_not_probed'];
     $cursorProbe = $primaryHost === 'cursor' ? welineMcpInstallProbeCursor($repoRoot) : $inactiveHost;
     $claudeProbe = $primaryHost === 'claude' ? welineMcpInstallProbeClaude($repoRoot) : $inactiveHost;
 
-    $cursorDocument = [
-        'mcpServers' => [
-            $serverName => $serverConfig,
-        ],
+    $cursorServers = [
+        $serverName => $serverConfig,
     ];
-    $vscodeDocument = welineMcpInstallVscodeDocument($serverConfig, $serverName);
+    if ($aociRegistration !== null) {
+        $cursorServers['aoci'] = $aociRegistration;
+    }
+    $cursorDocument = [
+        'mcpServers' => $cursorServers,
+    ];
+    $vscodeDocument = welineMcpInstallVscodeDocument($serverConfig, $serverName, $aociRegistration);
     $claudeAdd = welineMcpInstallClaudeAddCommand($serverName, $serverConfig, $context);
 
     $hosts = [
@@ -132,6 +137,7 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
         'server' => $serverName,
         'repository' => $repoRoot,
         'registration' => $serverConfig,
+        'aoci_registration' => $aociRegistration,
         'primary_host' => $primaryHost,
         'primary_ready' => $primaryReady,
         'hosts' => $hosts,
@@ -139,10 +145,49 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
     ];
 }
 
+/**
+ * Prefer the success marker written by AociInstaller; fall back to ~/.local/bin/aoci.
+ *
+ * @return array{command:string,args:list<string>}|null
+ */
+function welineMcpInstallAociRegistration(string $repoRoot): ?array
+{
+    $home = getenv('HOME') ?: '';
+    $binary = '';
+    if ($home !== '') {
+        $markerPath = $home . '/.learning-mcp/tools/aoci/installed.json';
+        if (is_file($markerPath)) {
+            $marker = json_decode((string) file_get_contents($markerPath), true);
+            if (is_array($marker)
+                && ($marker['status'] ?? '') === 'ready'
+                && is_string($marker['binary'] ?? null)
+                && $marker['binary'] !== ''
+                && is_file($marker['binary'])) {
+                $binary = (string) $marker['binary'];
+            }
+        }
+        if ($binary === '') {
+            $fallback = $home . '/.local/bin/aoci';
+            if (is_file($fallback) && (PHP_OS_FAMILY === 'Windows' || is_executable($fallback))) {
+                $binary = $fallback;
+            }
+        }
+    }
+    if ($binary === '') {
+        return null;
+    }
+
+    return [
+        'command' => $binary,
+        'args' => ['--repo', $repoRoot, 'mcp'],
+    ];
+}
+
 /** @param array<string,mixed> $serverConfig
+ *  @param array{command:string,args:list<string>}|null $aociRegistration
  *  @return array<string,mixed>
  */
-function welineMcpInstallVscodeDocument(array $serverConfig, string $serverName): array
+function welineMcpInstallVscodeDocument(array $serverConfig, string $serverName, ?array $aociRegistration = null): array
 {
     $entry = [
         'type' => 'stdio',
@@ -156,10 +201,19 @@ function welineMcpInstallVscodeDocument(array $serverConfig, string $serverName)
         $entry['env'] = $serverConfig['env'];
     }
 
+    $servers = [
+        $serverName => $entry,
+    ];
+    if ($aociRegistration !== null) {
+        $servers['aoci'] = [
+            'type' => 'stdio',
+            'command' => $aociRegistration['command'],
+            'args' => $aociRegistration['args'],
+        ];
+    }
+
     return [
-        'servers' => [
-            $serverName => $entry,
-        ],
+        'servers' => $servers,
     ];
 }
 

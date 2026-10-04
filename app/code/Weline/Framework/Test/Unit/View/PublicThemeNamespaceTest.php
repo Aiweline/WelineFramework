@@ -27,7 +27,9 @@ final class PublicThemeNamespaceTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->defaultNamespace = trim(str_replace('\\', '/', (string)Env::default_theme_DATA['path']), '/');
+        $this->defaultNamespace = PublicThemeNamespace::resolve(
+            (string)(Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme'),
+        );
         $this->designRoot = rtrim(str_replace('\\', '/', (string)Env::path_THEME_DESIGN_DIR), '/');
     }
 

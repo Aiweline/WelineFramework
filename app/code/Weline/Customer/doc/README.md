@@ -37,6 +37,8 @@
 
 ## 开发关注点
 
+- 登录、注册页面按各自路由通过 `account-auth-content` 独占槽输出认证内容；登录布局不得在槽外追加注册页面。注册入口保留到 `/customer/account/register` 的链接。
+
 - 存在 `Controller/`，说明模块有 HTTP 入口；控制器变更后记得同步路由升级和最接近的真实入口验证。
 - 存在 `Controller/Backend`，后台页面/行为变更时应同时检查菜单、ACL、返回地址和用户提示。
 - 存在 `Model/`，字段或索引变更需走模型 attribute + `setup:upgrade`，不要手改生成物。

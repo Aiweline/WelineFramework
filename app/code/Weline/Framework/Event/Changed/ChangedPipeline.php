@@ -196,7 +196,9 @@ class ChangedPipeline
             is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
             is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
         )));
-        $expanded = $this->urlMatrix->expand($base, $change->websiteId());
+        $expanded = $change->hasWebsiteContext()
+            ? $this->urlMatrix->expand($base, $change->websiteId())
+            : ['urls'=>$base, 'degraded'=>false];
         $payload = $effect->payload;
         $payload['urls'] = $expanded['urls'];
         $payload['degraded'] = $expanded['degraded'];

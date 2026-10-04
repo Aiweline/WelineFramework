@@ -174,14 +174,14 @@ final class StorefrontSsrChromeHealer
                 return $id;
             }
         } catch (\Throwable) {
-            // fall through to legacy active theme
+            // fall through to Theme registered Default
         }
         try {
-            /** @var WelineTheme $themes */
-            $themes = ObjectManager::getInstance(WelineTheme::class);
-            $active = $themes->getActiveTheme('frontend');
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            $default = $themeContext->resolveRegisteredDefaultTheme('frontend');
 
-            return (int)($active?->getId() ?? 0);
+            return (int)($default?->getId() ?? 0);
         } catch (\Throwable) {
             return 0;
         }

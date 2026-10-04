@@ -108,6 +108,11 @@ final class IntelligenceService
             $installation = $this->aociInstaller->ensure($index->root());
             $prepared = $this->readiness->prepare($index, $input);
             $prepared['agent_guidance']['aoci_installation'] = $installation;
+            $prepared['agent_guidance']['aoci_cognition'] = [
+                'state' => 'not_established',
+                'meaning' => 'AOCI installation and MCP registration do not establish project cognition.',
+                'next_step' => 'Use aoci_rules and aoci_overview when cognition is required, then follow AOCI governance before claiming reliable cognition.',
+            ];
             return $prepared;
         });
     }

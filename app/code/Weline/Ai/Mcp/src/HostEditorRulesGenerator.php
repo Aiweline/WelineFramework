@@ -52,7 +52,7 @@ alwaysApply: true
 5. **上下文丢失自愈**：本回合若已看不到 `hard_constraints` / MCP 引导被压缩或摘要丢掉，工程任务须**重新** `prepare_project`，不得凭记忆编造规则。
 6. 按需：`resolve_task_context` / `resolve_skill` / `get_skill`（检索仍可按需，**prepare 不可跳**）。
 7. MCP 挂不上：用宿主 Read 打开 `AI硬规则索引.md` 继续；不得编造规则，不得假装已遵守 MCP。
-8. **AOCI 互补（可选，`aoci_complements_weline_mcp`）**：可并列挂载 AOCI-CODE（`aoci`）；Weline=硬规则/技能/`prepare_project`，AOCI=认知索引/漂移。**禁止**用 AOCI 替代本表工程门禁。
+8. **AOCI 互补（`aoci_complements_weline_mcp`）**：可并列挂载 AOCI-CODE（`aoci`）；Weline=硬规则/技能/`prepare_project`，AOCI=认知索引/漂移。**本机无 AOCI 程序时，ensure/`prepare_project` 必须自动安装**；装好后按 `aoci_installation.mcp_registration` 挂宿主。**禁止**用 AOCI 替代本表工程门禁。
 
 ## 非工程
 

@@ -50,7 +50,7 @@ class Upgrade extends CommandAbstract
         $skipInvalidation = !empty($data[self::DATA_SKIP_INVALIDATION]);
 
         $modules    = Env::getInstance()->getActiveModules();
-        $theme      = Env::getInstance()->getConfig('theme', Env::default_theme_DATA);
+        $theme      = Env::getInstance()->getTheme();
         $staticRoot = PUB . 'static';
 
         // 主题命名空间必须与 /static/ URL 前缀同源。`theme.path` 可能是绝对源码路径或

@@ -132,7 +132,14 @@ class DefaultLayoutSeeder
      */
     public function seedActiveThemeLayout(?string $pageType = null, bool $forceReseed = false)
     {
-        $activeTheme = $this->welineTheme->getActiveTheme();
+        try {
+            /** @var ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            $activeTheme = $themeContext->resolveTheme('frontend')
+                ?? $themeContext->resolveRegisteredDefaultTheme('frontend');
+        } catch (\Throwable) {
+            $activeTheme = null;
+        }
         if (!$activeTheme || !$activeTheme->getId()) {
             return false;
         }
@@ -289,36 +296,7 @@ class DefaultLayoutSeeder
                     'config' => [],
                     'sort_order' => 10,
                 ],
-                // 相关产品推荐
-                [
-                    'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'product-related-products',
-                    'widget_code' => 'related-products',
-                    'widget_module' => 'Weline_Product',
-                    'widget_type' => 'product',
-                    'config' => [
-                        'title' => '同风格推荐',
-                        'limit' => 4,
-                        'columns' => 4,
-                    ],
-                    'sort_order' => 0,
-                ],
-                // 猜你喜欢（Weline_Product you-may-like default_injections → 常显槽）
-                [
-                    'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'product-you-may-like',
-                    'widget_code' => 'you-may-like',
-                    'widget_module' => 'Weline_Product',
-                    'widget_type' => 'product',
-                    'config' => [
-                        'title' => '猜你喜欢',
-                        'limit' => 8,
-                        'columns' => 4,
-                        'layout' => 'grid',
-                        'lazy_load' => true,
-                    ],
-                    'sort_order' => 0,
-                ],
+                // Product 自有相关推荐与猜你喜欢由原生布局内嵌，设计主题由专用槽关系注入。
                 // 最近浏览（Weline_RecentlyViewed default_injections → 常显槽）
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
@@ -352,59 +330,13 @@ class DefaultLayoutSeeder
             ],
 
             // ==================== 产品列表页默认布局 ====================
-            ThemeLayout::PAGE_TYPE_PRODUCT_LIST => [
-                [
-                    'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'list-recommendations',
-                    'widget_code' => 'recommended-products',
-                    'widget_module' => 'Weline_Product',
-                    'widget_type' => 'product',
-                    'config' => [
-                        'title' => '为你推荐',
-                        'limit' => 8,
-                        'columns' => '4',
-                        'layout' => 'grid',
-                    ],
-                    'sort_order' => 0,
-                ],
-            ],
+            ThemeLayout::PAGE_TYPE_PRODUCT_LIST => [],
 
             // ==================== 分类页默认布局 ====================
-            ThemeLayout::PAGE_TYPE_CATEGORY => [
-                // 推荐产品
-                [
-                    'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'category-recommendations',
-                    'widget_code' => 'recommended-products',
-                    'widget_module' => 'Weline_Product',
-                    'widget_type' => 'product',
-                    'config' => [
-                        'title' => '继续探索',
-                        'limit' => 8,
-                        'columns' => '4',
-                        'layout' => 'grid',
-                    ],
-                    'sort_order' => 0,
-                ],
-            ],
+            ThemeLayout::PAGE_TYPE_CATEGORY => [],
 
             // ==================== 购物车页默认布局 ====================
-            ThemeLayout::PAGE_TYPE_CART => [
-                // 交叉销售
-                [
-                    'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'cart-recommendations',
-                    'widget_code' => 'cross-sell',
-                    'widget_module' => 'Weline_Product',
-                    'widget_type' => 'product',
-                    'config' => [
-                        'title' => '搭配成套',
-                        'limit' => 4,
-                        'columns' => 4,
-                    ],
-                    'sort_order' => 0,
-                ],
-            ],
+            ThemeLayout::PAGE_TYPE_CART => [],
 
             // ==================== 搜索页默认布局 ====================
             ThemeLayout::PAGE_TYPE_SEARCH => [

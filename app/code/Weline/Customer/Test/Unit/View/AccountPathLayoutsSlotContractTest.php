@@ -65,15 +65,15 @@ final class AccountPathLayoutsSlotContractTest extends TestCase
         }
     }
 
-    public function testLoginLayoutEmbedsAccountLoginWidget(): void
+    public function testLoginLayoutExposesForeignThemeAuthenticationSlots(): void
     {
         $src = (string) file_get_contents(
             dirname(__DIR__, 3) . '/view/theme/frontend/layouts/account/login/default.phtml'
         );
-        self::assertMatchesRegularExpression(
-            '/<w:widget\\s+type="form"\\s+name="account-login"\\s*\\/>/',
-            $src
-        );
+        self::assertStringContainsString('<w:slot id="foreign-theme-account-login"', $src);
+        self::assertStringContainsString('<w:slot id="foreign-theme-account-register"', $src);
+        self::assertStringNotContainsString('<w:widget type="form" name="account-login"', $src);
+        self::assertStringNotContainsString('<w:widget type="form" name="account-register"', $src);
         self::assertStringContainsString("__force_login_stage'] = true", $src);
     }
 
@@ -83,5 +83,46 @@ final class AccountPathLayoutsSlotContractTest extends TestCase
             dirname(__DIR__, 3) . '/view/templates/frontend/account/login.phtml'
         );
         self::assertStringContainsString('<w:slot id="account-login-social-providers"', $src);
+    }
+
+    public function testLoginStageRendersOnlyItsOwnAuthenticationWidget(): void
+    {
+        $this->assertLoginStageHasOneAuthenticationWidget(
+            dirname(__DIR__, 3) . '/view/theme/frontend/layouts/account/login/default.phtml'
+        );
+    }
+
+    public function testHanfuLoginStageRendersOnlyItsOwnAuthenticationWidget(): void
+    {
+        $path = dirname(__DIR__, 7) . '/app/design/Weline/hanfu/frontend/layouts/account/login/default.phtml';
+        if (!is_file($path)) {
+            self::markTestSkipped('Hanfu design theme is installed separately from the framework repository.');
+        }
+        $this->assertLoginStageHasOneAuthenticationWidget($path);
+    }
+
+    private function assertLoginStageHasOneAuthenticationWidget(string $path): void
+    {
+        $src = (string) file_get_contents($path);
+        $start = strpos($src, '<main ');
+        $end = strpos($src, '</main>', $start);
+        self::assertNotFalse($start);
+        self::assertNotFalse($end);
+        $stage = substr($src, $start, $end + strlen('</main>') - $start);
+        $meta = [];
+        $isAuthStagePage = true;
+        $isLoginAuthPage = true;
+        $isRegisterAuthPage = false;
+        $showHeader = true;
+        ob_start();
+        try {
+            eval('?>' . $stage);
+            $html = (string) ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
+        preg_match_all('/<w:widget\s+type="form"\s+name="([^"]+)"\s*\/>/', $html, $widgets);
+        preg_match_all('/<w:slot\s+id="foreign-theme-(account-login|account-register|account-challenge)"/', $html, $foreignSlots);
+        self::assertSame(['account-login'], array_merge($widgets[1], $foreignSlots[1]), $path . ': login must expose exactly its own authentication instance through the native widget or foreign slot.');
     }
 }

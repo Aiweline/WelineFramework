@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd" xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <menu source="Weline_Inquiry::list" name="inquiry_forms" title="询盘表单" action="inquiry/backend/inquiry" parent="Weline_Backend::cms_group" icon="circle" order="45"/>
+    <menu source="Weline_Inquiry::submissions" name="inquiry_submissions" title="询盘提交记录" action="inquiry/backend/submission" parent="Weline_Backend::cms_group" icon="list" order="46"/>
 </menus>

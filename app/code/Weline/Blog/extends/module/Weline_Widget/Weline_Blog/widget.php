@@ -43,7 +43,7 @@ return [
     ],
     'blog-reviews' => [
         'name' => '博客评论',
-        'description' => '万能评论大部件：博客文章评论列表与图文提交；默认注入博客详情评论容器。',
+        'description' => '万能评论大部件：博客文章评论列表与图文提交；同模块博客布局内嵌。',
         'type' => 'comment',
         'code' => 'blog-reviews',
         'area' => 'frontend',
@@ -57,23 +57,8 @@ return [
             'review',
             'reviews',
         ],
-        'default_injections' => [[
-            'layout_type' => 'blog',
-            'layout_option' => 'default',
-            'slot' => 'blog-reviews',
-            'area' => 'content',
-            'sort_order' => 0,
-            'required' => true,
-            'reason' => '博客详情默认在评论容器槽展示万能评论大部件',
-            'config' => [
-                'title' => '博客评论',
-                'intro' => '支持文字、图片与视频，内容审核后公开。',
-                'page_size' => 10,
-                'layout_mode' => 'stack',
-                'form_position' => 'right',
-                'form_collapsed' => '1',
-            ],
-        ]],
+        'placement' => 'layout',
+        'default_injections' => [],
         'params' => [
             'title' => [
                 'default' => '博客评论',

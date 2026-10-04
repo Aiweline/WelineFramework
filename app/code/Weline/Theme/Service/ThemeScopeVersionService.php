@@ -634,45 +634,7 @@ final class ThemeScopeVersionService
     private function scopeAncestorChain(string $scope): array
     {
         $scope = $this->normalizeScope($scope);
-        if ($scope === '') {
-            return [];
-        }
-
-        try {
-            /** @var \Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface $scopes */
-            $scopes = \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface::class,
-            );
-            $identity = $scopes->fromStorageScope($scope, true);
-            if ($identity !== null) {
-                $chain = $scopes->chainFromIdentity($identity);
-                $out = [];
-                foreach ($chain as $candidate) {
-                    $candidate = $this->normalizeScope((string)$candidate);
-                    if ($candidate !== '' && !\in_array($candidate, $out, true)) {
-                        $out[] = $candidate;
-                    }
-                }
-                if ($out !== []) {
-                    return $out;
-                }
-            }
-        } catch (\Throwable) {
-            // Fall through to dotted trim only when hierarchy is unavailable.
-        }
-
-        $chain = [];
-        $current = $scope;
-        while ($current !== '') {
-            $chain[] = $current;
-            $pos = \strrpos($current, '.');
-            if ($pos === false) {
-                break;
-            }
-            $current = \substr($current, 0, $pos);
-        }
-
-        return $chain;
+        return $scope === '' ? [] : [$scope];
     }
 
     /**
