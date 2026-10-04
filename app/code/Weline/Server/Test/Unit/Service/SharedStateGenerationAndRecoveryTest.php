@@ -7,6 +7,7 @@ namespace Weline\Server\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\SharedSidecarWireContract;
 use Weline\Server\Service\SharedStateServiceManager;
 use Weline\Server\Service\SharedStateServiceRegistry;
 use Weline\Server\Service\SharedStateRuntimeScope;
@@ -318,6 +319,91 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
             },
             waitTimeoutSeconds: 1.0,
         );
+    }
+
+    public function testRuntimeWriteAlwaysStampsCurrentWireGenerationOnRenew(): void
+    {
+        $directory = $this->temporaryDirectory('wire-stamp-renew');
+        $runtimeFile = $directory . DIRECTORY_SEPARATOR . 'session.json';
+        $lifecycleLock = $directory . DIRECTORY_SEPARATOR . 'session.lifecycle.lock';
+        $registry = $this->registryAt(
+            $directory . DIRECTORY_SEPARATOR . 'registry.json',
+        );
+        $manager = new class($runtimeFile, $lifecycleLock, $registry) extends SharedStateServiceManager {
+            public function __construct(
+                private readonly string $runtimeFile,
+                private readonly string $lifecycleLock,
+                private readonly SharedStateServiceRegistry $registry,
+            ) {
+            }
+
+            /** @param array<string,mixed> $runtime */
+            public function publishRuntime(array $runtime): void
+            {
+                $this->writeRuntimeFile(
+                    ControlMessage::ROLE_SESSION_SERVER,
+                    $runtime,
+                );
+            }
+
+            /** @return array<string,mixed> */
+            public function loadRuntime(): array
+            {
+                return $this->readRuntimeFile(ControlMessage::ROLE_SESSION_SERVER);
+            }
+
+            protected function getRuntimeFilePath(string $role): string
+            {
+                return $this->runtimeFile;
+            }
+
+            protected function getRoleLifecycleLockPath(string $role): string
+            {
+                return $this->lifecycleLock;
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+        };
+
+        $base = [
+            'role' => ControlMessage::ROLE_SESSION_SERVER,
+            'host' => '127.0.0.1',
+            'port' => 19970,
+            'pid' => 51927,
+            'token_file_name' => 'session_server.token',
+            'started_at' => '2026-10-04T11:00:00+00:00',
+            'healthy_at' => '2026-10-04T11:00:00+00:00',
+            'process_name' => 'wls-session-wire-stamp',
+            'instance_name' => 'shared-session-wire-stamp',
+            'service_instance_name' => 'shared-session-wire-stamp',
+            'shared_service' => true,
+            'created_now' => true,
+            'reuse_existing' => false,
+        ];
+        $manager->publishRuntime($base);
+        $first = $manager->loadRuntime();
+        self::assertSame(
+            SharedSidecarWireContract::WIRE_GENERATION,
+            (int)($first['wire_generation'] ?? 0),
+        );
+
+        // Simulate an older consumer renew that omits wire_generation entirely.
+        $renew = $base;
+        $renew['created_now'] = false;
+        $renew['reuse_existing'] = true;
+        $renew['healthy_at'] = '2026-10-04T11:00:05+00:00';
+        unset($renew['wire_generation']);
+        $manager->publishRuntime($renew);
+        $second = $manager->loadRuntime();
+        self::assertSame(
+            SharedSidecarWireContract::WIRE_GENERATION,
+            (int)($second['wire_generation'] ?? 0),
+            'Consumer renew must never drop the shared sidecar wire generation.',
+        );
+        self::assertFalse(SharedSidecarWireContract::runtimeNeedsRotation($second));
     }
 
     public function testConsumerRenewalUpdatesOnlyTheRegistryAuthority(): void

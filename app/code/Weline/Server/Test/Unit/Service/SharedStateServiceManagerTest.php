@@ -1608,6 +1608,112 @@ final class SharedStateServiceManagerTest extends TestCase
         }
     }
 
+    public function testCmdlineProvesSelectedSidecarAcceptsCanonicalSharedSessionLine(): void
+    {
+        $manager = new SharedStateServiceManager();
+        $method = new \ReflectionMethod(SharedStateServiceManager::class, 'cmdlineProvesSelectedSidecar');
+        $method->setAccessible(true);
+        $cmdline = '/opt/homebrew/bin/php app/code/Weline/Server/bin/session_server.php 127.0.0.1 26277 '
+            . 'shared-session-p05113ef3-26277 --instance-name=shared-session-p05113ef3-26277 '
+            . '--token-file-name=session_server.token --shared-service=1 '
+            . '--name=weline-wls-session-p05113ef3-shared-26277';
+        self::assertTrue($method->invoke(
+            $manager,
+            $cmdline,
+            ControlMessage::ROLE_SESSION_SERVER,
+            26277,
+            'weline-wls-session-p05113ef3-shared-26277',
+            'session_server.token',
+            'shared-session-p05113ef3-26277',
+        ));
+        self::assertFalse($method->invoke(
+            $manager,
+            $cmdline,
+            ControlMessage::ROLE_MEMORY_SERVER,
+            26277,
+            'weline-wls-session-p05113ef3-shared-26277',
+            'session_server.token',
+            'shared-session-p05113ef3-26277',
+        ));
+    }
+
+    public function testUnhealthyPortHeldSidecarTerminatesWhenCmdlineMatches(): void
+    {
+        $manager = new class extends SharedStateServiceManager {
+            public array $signals = [];
+
+            public function forceStopForTest(array $record): bool
+            {
+                return $this->forceStopSharedService($record);
+            }
+
+            protected function probeRunningSharedService(array $definition, string $tokenFileName): bool
+            {
+                return false;
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                return [
+                    'in_use' => false,
+                    'reusable' => true,
+                    'pid' => 75620,
+                    'port' => (int)($definition['port'] ?? 0),
+                    'role' => (string)($definition['role'] ?? ''),
+                    'process_name' => 'weline-wls-session-p05113ef3-shared-26277',
+                    'instance_name' => 'shared-session-p05113ef3-26277',
+                    'token_file_name' => 'session_server.token',
+                    'command_line' => '',
+                ];
+            }
+
+            protected function probeTcpPortInUse(string $host, int $port, float $timeoutSec = 0.15): bool
+            {
+                return !\in_array('SIGTERM:' . 75620, $this->signals, true);
+            }
+
+            protected function signalProcess(int $pid, int $signal): bool
+            {
+                $label = $signal === (\defined('SIGKILL') ? \SIGKILL : 9) ? 'SIGKILL' : 'SIGTERM';
+                $this->signals[] = $label . ':' . $pid;
+
+                return true;
+            }
+
+            protected function terminateCmdlineBoundUnhealthySidecar(array $record, array $inspection): bool
+            {
+                $commandLine = '/opt/homebrew/bin/php app/code/Weline/Server/bin/session_server.php 127.0.0.1 26277 '
+                    . 'shared-session-p05113ef3-26277 --instance-name=shared-session-p05113ef3-26277 '
+                    . '--token-file-name=session_server.token --shared-service=1 '
+                    . '--name=weline-wls-session-p05113ef3-shared-26277';
+                if (!$this->cmdlineProvesSelectedSidecar(
+                    $commandLine,
+                    (string)$record['role'],
+                    (int)$record['port'],
+                    (string)$record['process_name'],
+                    (string)$record['token_file_name'],
+                    (string)$record['instance_name'],
+                )) {
+                    return false;
+                }
+
+                return $this->signalProcess(75620, \defined('SIGTERM') ? \SIGTERM : 15)
+                    && !$this->probeTcpPortInUse('127.0.0.1', 26277);
+            }
+        };
+
+        self::assertTrue($manager->forceStopForTest([
+            'role' => ControlMessage::ROLE_SESSION_SERVER,
+            'host' => '127.0.0.1',
+            'port' => 26277,
+            'pid' => 75620,
+            'token_file_name' => 'session_server.token',
+            'process_name' => 'weline-wls-session-p05113ef3-shared-26277',
+            'instance_name' => 'shared-session-p05113ef3-26277',
+        ]));
+        self::assertSame(['SIGTERM:75620'], $manager->signals);
+    }
+
     public function testFailedSharedSidecarStopRetainsRuntimeIdentityForRepair(): void
     {
         $manager = new class extends SharedStateServiceManager {

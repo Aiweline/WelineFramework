@@ -1314,6 +1314,19 @@ class SharedStateServiceManager
             'port' => $port,
         ], $tokenFileName);
         if (!$protocolHealthy || !(bool)($inspection['in_use'] ?? false)) {
+            // TCP accept + dead NDJSON leaves the port held while status shows Stopped.
+            // Rotate only when the live cmdline proves the selected sidecar identity.
+            if ($this->probeTcpPortInUse($host, $port)
+                && $this->terminateCmdlineBoundUnhealthySidecar($record, $inspection)
+            ) {
+                $this->noteStopReason(
+                    'cmdline_bound_unhealthy_sidecar_terminated',
+                    $host,
+                    $port,
+                    (int)($inspection['pid'] ?? $pid),
+                );
+                return true;
+            }
             $this->noteStopReason(
                 !$protocolHealthy ? 'protocol_unhealthy_or_absent' : 'listener_not_in_use',
                 $host,
@@ -1322,23 +1335,42 @@ class SharedStateServiceManager
             );
             return false;
         }
-        if (!$this->inspectionMatchesSelectedLifecycle($role, $record, $inspection)
-            || !$this->selectedLifecycleIsCurrent($role, $record)
-        ) {
-            WlsLogger::warning_(
-                '[SharedStateServiceManager] refusing graceful shutdown after lifecycle replacement: '
-                . 'role=' . $role
-                . ', selected_generation=' . (int)($record['lifecycle_generation'] ?? 0)
-                . ', selected_pid=' . (int)($record['pid'] ?? 0)
-                . ', observed_pid=' . (int)($inspection['pid'] ?? 0)
-            );
-            $this->noteStopReason(
-                'lifecycle_identity_mismatch',
-                $host,
+        $lifecycleMatched = $this->inspectionMatchesSelectedLifecycle($role, $record, $inspection)
+            && $this->selectedLifecycleIsCurrent($role, $record);
+        if (!$lifecycleMatched) {
+            // Inspector may report in_use without a reusable PID (platform port
+            // attribution gaps) while authenticated ping still proves the selected
+            // token owns the listener. Allow graceful shutdown only when the
+            // selected PID cmdline also proves the same sidecar identity.
+            $selectedCommandLine = $pid > 0 ? Processer::getProcessCommandLine($pid, true) : '';
+            $selectedCmdlineBound = $this->cmdlineProvesSelectedSidecar(
+                $selectedCommandLine,
+                $role,
                 $port,
-                (int)($inspection['pid'] ?? $pid),
+                \trim((string)($record['process_name'] ?? '')),
+                \basename(\trim((string)($record['token_file_name'] ?? $tokenFileName))),
+                \trim((string)($record['instance_name'] ?? '')),
             );
-            return false;
+            if (!$selectedCmdlineBound) {
+                WlsLogger::warning_(
+                    '[SharedStateServiceManager] refusing graceful shutdown after lifecycle replacement: '
+                    . 'role=' . $role
+                    . ', selected_generation=' . (int)($record['lifecycle_generation'] ?? 0)
+                    . ', selected_pid=' . (int)($record['pid'] ?? 0)
+                    . ', observed_pid=' . (int)($inspection['pid'] ?? 0)
+                );
+                $this->noteStopReason(
+                    'lifecycle_identity_mismatch',
+                    $host,
+                    $port,
+                    (int)($inspection['pid'] ?? $pid),
+                );
+                return false;
+            }
+            WlsLogger::warning_(
+                '[SharedStateServiceManager] inspector lifecycle mismatch; continuing shutdown with '
+                . 'selected cmdline+token proof: role=' . $role . ', pid=' . $pid . ', port=' . $port
+            );
         }
 
         $shutdownRequested = $this->sendSharedServiceServerShutdown($record);
@@ -1347,12 +1379,26 @@ class SharedStateServiceManager
             return true;
         }
 
-        // Authenticated PING and command/scope inspection prove which service
-        // answered, but the runtime record does not carry a host-boot-bound
-        // process-birth identity. After graceful shutdown fails, its numeric
-        // PID is therefore diagnostic only and cannot authorize a signal.
-        // Leave the sidecar in place and let an exact platform/credential tree
-        // recovery path handle it rather than risking a reused foreign PID.
+        // Authenticated PING proves token ownership; selected PID cmdline is the
+        // process-birth substitute when inspector attribution is incomplete.
+        $selectedCommandLine = $pid > 0 ? Processer::getProcessCommandLine($pid, true) : '';
+        if ($this->cmdlineProvesSelectedSidecar(
+            $selectedCommandLine,
+            $role,
+            $port,
+            \trim((string)($record['process_name'] ?? '')),
+            \basename(\trim((string)($record['token_file_name'] ?? $tokenFileName))),
+            \trim((string)($record['instance_name'] ?? '')),
+        ) && $this->terminateCmdlineBoundUnhealthySidecar($record, $inspection)) {
+            $this->noteStopReason(
+                'cmdline_bound_sidecar_terminated_after_shutdown_failure',
+                $host,
+                $port,
+                $pid,
+            );
+            return true;
+        }
+
         if ((bool)($inspection['reusable'] ?? false)) {
             WlsLogger::error_(
                 '[SharedStateServiceManager] graceful shutdown failed; refusing PID fallback '
@@ -1511,6 +1557,151 @@ class SharedStateServiceManager
         // must not block operator `server:shared:stop` / rotate.
         return (int)($authority['pid'] ?? 0) === (int)($selected['pid'] ?? 0)
             && (int)($authority['port'] ?? 0) === (int)($selected['port'] ?? 0);
+    }
+
+    /**
+     * Terminate a TCP-held sidecar whose NDJSON protocol is dead, only when the
+     * live process cmdline proves it is the selected shared Session/Memory.
+     *
+     * @param array<string, mixed> $record
+     * @param array<string, mixed> $inspection
+     */
+    protected function terminateCmdlineBoundUnhealthySidecar(array $record, array $inspection): bool
+    {
+        $role = $this->normalizeRoleName((string)($record['role'] ?? ''));
+        $host = \trim((string)($record['host'] ?? '127.0.0.1'));
+        $port = (int)($record['port'] ?? 0);
+        $expectedProcessName = \trim((string)($record['process_name'] ?? ''));
+        $expectedToken = \basename(\trim((string)($record['token_file_name'] ?? '')));
+        $expectedInstance = \trim((string)($record['instance_name'] ?? ''));
+        if ($role === '' || $host === '' || $port <= 0 || $expectedProcessName === '' || $expectedToken === '') {
+            return false;
+        }
+
+        $candidates = [];
+        foreach ([(int)($inspection['pid'] ?? 0), (int)($record['pid'] ?? 0)] as $candidatePid) {
+            if ($candidatePid > 0) {
+                $candidates[$candidatePid] = true;
+            }
+        }
+        $live = $this->inspectRunningSharedService(
+            ['role' => $role, 'host' => $host, 'port' => $port],
+            $expectedToken,
+        );
+        if ((bool)($live['reusable'] ?? false) && (int)($live['pid'] ?? 0) > 0) {
+            $candidates[(int)$live['pid']] = true;
+        }
+
+        foreach (\array_keys($candidates) as $pid) {
+            $commandLine = Processer::getProcessCommandLine((int)$pid, true);
+            if (!$this->cmdlineProvesSelectedSidecar(
+                $commandLine,
+                $role,
+                $port,
+                $expectedProcessName,
+                $expectedToken,
+                $expectedInstance,
+            )) {
+                continue;
+            }
+            WlsLogger::warning_(
+                '[SharedStateServiceManager] terminating cmdline-bound unhealthy shared sidecar: '
+                . 'role=' . $role . ', port=' . $port . ', pid=' . (int)$pid
+            );
+            if (!$this->signalProcess((int)$pid, \defined('SIGTERM') ? \SIGTERM : 15)) {
+                continue;
+            }
+            if ($this->waitForSharedServicePortRelease($host, $port, 3.0)) {
+                return true;
+            }
+            $commandLine = Processer::getProcessCommandLine((int)$pid, true);
+            if (!$this->cmdlineProvesSelectedSidecar(
+                $commandLine,
+                $role,
+                $port,
+                $expectedProcessName,
+                $expectedToken,
+                $expectedInstance,
+            )) {
+                return !$this->probeTcpPortInUse($host, $port);
+            }
+            $this->signalProcess((int)$pid, \defined('SIGKILL') ? \SIGKILL : 9);
+            if ($this->waitForSharedServicePortRelease($host, $port, 2.0)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @internal exposed for unit tests
+     */
+    protected function cmdlineProvesSelectedSidecar(
+        string $commandLine,
+        string $role,
+        int $port,
+        string $expectedProcessName,
+        string $expectedToken,
+        string $expectedInstance = '',
+    ): bool {
+        $commandLine = \trim($commandLine);
+        $expectedProcessName = \trim($expectedProcessName);
+        $expectedToken = \basename(\trim($expectedToken));
+        $role = $this->normalizeRoleName($role);
+        if ($commandLine === '' || $expectedProcessName === '' || $expectedToken === '' || $port <= 0) {
+            return false;
+        }
+        if (!\str_contains($commandLine, 'session_server.php')
+            || !\preg_match('/--shared-service(?:=1)?(?:\\s|$)/i', $commandLine)
+        ) {
+            return false;
+        }
+        if (!\preg_match('/(?:^|\\s)' . \preg_quote((string)$port, '/') . '(?:\\s|$)/', $commandLine)) {
+            return false;
+        }
+        if (!\preg_match('/--name=(?:"([^"]+)"|\'([^\']+)\'|([^\\s]+))/i', $commandLine, $nameMatch)) {
+            return false;
+        }
+        $liveName = \trim((string)($nameMatch[1] ?: $nameMatch[2] ?: $nameMatch[3] ?: ''), " \t\n\r\0\x0B\"'");
+        if ($liveName === '' || !\hash_equals($expectedProcessName, $liveName)) {
+            return false;
+        }
+        $liveToken = SharedSidecarInspector::extractTokenFileNameFromCommandLine($commandLine);
+        if ($liveToken === '' || !\hash_equals($expectedToken, \basename($liveToken))) {
+            return false;
+        }
+        if ($expectedInstance !== '') {
+            if (!\preg_match('/--instance-name=(?:"([^"]+)"|\'([^\']+)\'|([^\\s]+))/i', $commandLine, $instanceMatch)) {
+                return false;
+            }
+            $liveInstance = \trim((string)($instanceMatch[1] ?: $instanceMatch[2] ?: $instanceMatch[3] ?: ''), " \t\n\r\0\x0B\"'");
+            if ($liveInstance === '' || !\hash_equals($expectedInstance, $liveInstance)) {
+                return false;
+            }
+        }
+        $isMemory = \str_contains($commandLine, 'weline-wls-memory-')
+            || (bool)\preg_match('/--role=memory_server(?:\\s|$)/i', $commandLine);
+        if ($role === ControlMessage::ROLE_MEMORY_SERVER) {
+            return $isMemory;
+        }
+        if ($role === ControlMessage::ROLE_SESSION_SERVER) {
+            return !$isMemory && \str_contains($commandLine, 'weline-wls-session-');
+        }
+
+        return false;
+    }
+
+    protected function signalProcess(int $pid, int $signal): bool
+    {
+        if ($pid <= 0) {
+            return false;
+        }
+        if (\function_exists('posix_kill')) {
+            return @\posix_kill($pid, $signal);
+        }
+
+        return false;
     }
 
     private function waitForSharedServicePortRelease(string $host, int $port, float $timeoutSec): bool
@@ -2157,11 +2348,16 @@ class SharedStateServiceManager
             'registered' => (bool) ($runtime['registered'] ?? false),
             'consumer_count' => (int) ($runtime['consumer_count'] ?? 0),
             'shutdown_due_at' => $runtime['shutdown_due_at'] ?? null,
+            // Always stamp the current wire contract. Older Masters that share
+            // the same unscoped session.json (macOS) used to omit this field on
+            // consumer renew and race-wipe a newer writer's generation.
+            'wire_generation' => SharedSidecarWireContract::WIRE_GENERATION,
         ];
-        if ((bool)($runtime['created_now'] ?? false)) {
-            $payload['wire_generation'] = SharedSidecarWireContract::WIRE_GENERATION;
-        } elseif (\array_key_exists('wire_generation', $runtime)) {
-            $payload['wire_generation'] = (int)$runtime['wire_generation'];
+        if (\array_key_exists('wire_generation', $runtime)) {
+            $incoming = (int)$runtime['wire_generation'];
+            if ($incoming > $payload['wire_generation']) {
+                $payload['wire_generation'] = $incoming;
+            }
         }
         foreach ([
             'lifecycle_schema',
@@ -2175,6 +2371,26 @@ class SharedStateServiceManager
         if (!ServerInstanceManager::updateValidatedJsonFileAtomically(
             $path,
             static function (array $previous) use ($role, $payload): array {
+                $previousPid = (int)($previous['pid'] ?? 0);
+                $nextPid = (int)($payload['pid'] ?? 0);
+                $currentWire = SharedSidecarWireContract::WIRE_GENERATION;
+                $previousWire = \array_key_exists('wire_generation', $previous)
+                    ? (int)$previous['wire_generation']
+                    : 0;
+                $payloadWire = \array_key_exists('wire_generation', $payload)
+                    ? (int)$payload['wire_generation']
+                    : 0;
+                // Never publish below the contract floor; keep any higher stamp
+                // already present on disk or supplied by the caller.
+                $payload['wire_generation'] = \max($currentWire, $previousWire, $payloadWire);
+                if ((bool)($payload['created_now'] ?? false)
+                    || ($nextPid > 0 && $nextPid !== $previousPid)
+                ) {
+                    $payload['wire_generation'] = \max(
+                        $currentWire,
+                        (int)$payload['wire_generation'],
+                    );
+                }
                 $boundPayload = SharedStateServiceRegistry::bindLifecycleGeneration(
                     $role,
                     $payload,
