@@ -151,7 +151,7 @@ class AttackDetector
             'enabled' => true,
             'patterns' => [
                 // SQL 注入
-                '/(\bunion\b.*\bselect\b|\bor\b\s+\d+=\d+|\band\b\s+\d+=\d+|\'.*--)/i',
+                '/(\bunion\b.*\bselect\b|\bor\b\s+\d+=\d+|\band\b\s+\d+=\d+|\'\s*--)/i',
                 '/(\'|%27)\s*or\s*(\'|%27)\d+(\'|%27)\s*=\s*(\'|%27)\d+/i',
                 '/(\binformation_schema\b|\bsleep\s*\(|\bbenchmark\s*\(|\bload_file\s*\(|\binto\s+outfile\b|\binto\s+dumpfile\b)/i',
                 // XSS / 脚本注入
