@@ -3011,7 +3011,6 @@ final class ManagedNginxService
                 'certificate_source_digest',
                 'certificate_cert_sha256',
                 'certificate_key_sha256',
-                'certificate_chain_sha256',
             ] as $certificateHashField) {
                 if (\preg_match(
                     '/\A[a-f0-9]{64}\z/D',
@@ -3019,6 +3018,13 @@ final class ManagedNginxService
                 ) !== 1) {
                     return null;
                 }
+            }
+            // 自签证书没有独立证书链时 chain_sha256 合法为空；一旦有值仍必须是 64 位十六进制。
+            $certificateChainSha = \strtolower((string)($decoded['certificate_chain_sha256'] ?? ''));
+            if ($certificateChainSha !== ''
+                && \preg_match('/\A[a-f0-9]{64}\z/D', $certificateChainSha) !== 1
+            ) {
+                return null;
             }
         }
         $upstreamPorts = $decoded['upstream_ports'] ?? [(int)$decoded['upstream_port']];
