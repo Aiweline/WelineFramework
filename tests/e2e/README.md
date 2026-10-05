@@ -99,6 +99,16 @@ await gotoThemePreview(page, { pageType: 'homepage' });
 
 **Agent / MCP（硬，`e2e_playwright_formal_runner_only`）**：只允许本入口——`php bin/w e2e:run …` 或本目录下 `npx playwright test …`。禁止 `node -e` / 临时 `chromium.launch` 探活（易残留 `chrome-headless-shell`）。缺覆盖请补模块 `Test/e2e` / `test/e2e` 的 `.spec.js` 再跑正式 runner。
 
+**测试后清理（硬建议）**：`e2e:run` / Playwright `globalTeardown` 会自动清理自动化残留；Agent 验收 Browser 关完后还可补跑：
+
+```bash
+php bin/w e2e:cleanup-browsers
+php bin/w e2e:cleanup-browsers --close-acceptance-tabs   # 顺带关系统 Chrome 里 *.test.weline.com 标签
+php bin/w e2e:cleanup-browsers --dry-run
+```
+
+禁清：`PLAYWRIGHT_BROWSER_CLEANUP=0` 或 `WELINE_E2E_BROWSER_CLEANUP=0`。不退出日常 Google Chrome。
+
 **工作目录：** Playwright 必须在 `tests/e2e` 下解析 `node_modules`（与 `php bin/w e2e:run` 一致）。若在仓库根目录执行 `npx playwright test --config=tests/e2e/playwright.config.js`，可能加载到另一份 `@playwright/test`，报错：`Playwright Test did not expect test.describe() to be called here`。请优先用下面的 `e2e:run`，或先 `cd tests/e2e` 再 `npx playwright test --config=playwright.config.js`。
 
 ```bash

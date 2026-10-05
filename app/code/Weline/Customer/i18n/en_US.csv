@@ -511,8 +511,8 @@ Session标识,"Session ID"
 翻译全部收集词条，而非仅缺失项,"Translate all collected entries, not only missing ones"
 "忽略同 locale/provider 进行中的队列去重","Ignore in-progress queue dedupe for the same locale/provider"
 "JSON 输出","JSON output"
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
 "共 %{1} 个提供方","%{1} providers"
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 "按 kind 粗评是否命中分群（无 DB 分群表）","Coarse-check segment hit by kind (no DB segment table)"
 "无法连接 Google 或 Facebook 登录服务。请确认本机出站代理已启动，或在「顾客社媒登录 → 出站代理」填写可用代理。","Unable to reach Google or Facebook sign-in. Start your local outbound proxy, or set a working proxy under Customer social login → Outbound proxy."
 社媒登录暂时失败，请稍后重试。,"Social sign-in failed temporarily. Please try again."

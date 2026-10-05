@@ -1732,7 +1732,8 @@ class Core
                     }
                 }
 
-                $fpcBuildLock = $fpcCoordinator->acquireBuildLock($this->request->getMethod() ?: 'GET');
+                $method = $this->request->getMethod() ?: 'GET';
+                $fpcBuildLock = $fpcCoordinator->acquireBuildLock($method);
                 if ($fpcBuildLock === null) {
                     // Readers must soft-serve previous-generation immediately while the
                     // single-flight peer rebuilds. Deferring that soft-serve until after
@@ -1745,47 +1746,77 @@ class Core
                         return $previousGenerationSoftServe;
                     }
 
-                    $canBuild = $fpcCoordinator->canBuildCachedResponse($this->request->getMethod() ?: 'GET');
-                    if ($canBuild) {
-                        $buildDecision = $fpcCoordinator->waitForPublishedResponseOrBuildLock(
-                            $this->request->getMethod() ?: 'GET'
-                        );
-                        $cachedResponse = $buildDecision['response'];
-                        $fpcBuildLock = $buildDecision['lock'];
-                    } else {
-                        $cachedResponse = $fpcCoordinator->waitForPublishedResponse($this->request->getMethod() ?: 'GET');
-                    }
-                    if ($cachedResponse !== null) {
-                        $this->is_match = true;
-                        $routeProfile['fpc'] = 'wait_hit';
-                        $routeProfilePublish('fpc_wait_hit');
-                        return $cachedResponse;
-                    }
-                    // No published HIT and no build lock: never fall through into
-                    // wait_miss full SSR (cannot publish without the lock).
-                    if ($fpcBuildLock === null) {
-                        // Only spend the publish-only grace window when a peer still
-                        // holds the build lock. Waiting 30s+20s with no publisher just
-                        // strands the browser on Service Unavailable (category/men).
-                        $method = $this->request->getMethod() ?: 'GET';
-                        $graceMs = (int)Env::get('wls.performance.fpc_publish_grace_wait_ms', 10000);
-                        if ($graceMs > 0 && $fpcCoordinator->isBuildLockBusy($method)) {
-                            $cachedResponse = $fpcCoordinator->waitForPublishedResponse(
-                                $method,
-                                \max(500, $graceMs)
-                            );
+                    $canBuild = $fpcCoordinator->canBuildCachedResponse($method);
+                    $lockBusy = $fpcCoordinator->isBuildLockBusy($method);
+
+                    // Casual browsing must not park on a 15s peer-wait when nobody is
+                    // publishing. Long waits / "准备中" pages are only for real
+                    // single-flight contention (another Worker holds the build lock).
+                    if ($lockBusy) {
+                        if ($canBuild) {
+                            $buildDecision = $fpcCoordinator->waitForPublishedResponseOrBuildLock($method);
+                            $cachedResponse = $buildDecision['response'];
+                            $fpcBuildLock = $buildDecision['lock'];
+                        } else {
+                            $cachedResponse = $fpcCoordinator->waitForPublishedResponse($method);
+                        }
+                        if ($cachedResponse !== null) {
+                            $this->is_match = true;
+                            $routeProfile['fpc'] = 'wait_hit';
+                            $routeProfilePublish('fpc_wait_hit');
+                            return $cachedResponse;
+                        }
+                        if ($fpcBuildLock === null) {
+                            $graceMs = (int)Env::get('wls.performance.fpc_publish_grace_wait_ms', 10000);
+                            if ($graceMs > 0 && $fpcCoordinator->isBuildLockBusy($method)) {
+                                $cachedResponse = $fpcCoordinator->waitForPublishedResponse(
+                                    $method,
+                                    \max(500, $graceMs)
+                                );
+                                if ($cachedResponse !== null) {
+                                    $this->is_match = true;
+                                    $routeProfile['fpc'] = 'wait_hit';
+                                    $routeProfilePublish('fpc_wait_hit_grace');
+                                    return $cachedResponse;
+                                }
+                            }
+                            // Publisher may have finished/released during grace — take over.
+                            if ($canBuild) {
+                                $fpcBuildLock = $fpcCoordinator->acquireBuildLock($method);
+                            }
+                            if ($fpcBuildLock === null && $fpcCoordinator->isBuildLockBusy($method)) {
+                                $routeProfile['fpc'] = 'wait_timeout';
+                                $routeProfilePublish('fpc_wait_timeout');
+                                return $this->buildFpcWaitTimeoutResponse();
+                            }
+                            // Lock free again: fall through to SSR (with lock if acquired,
+                            // otherwise private wait_miss render) instead of a wait page.
+                        }
+                    } elseif ($canBuild) {
+                        // No publisher: retry acquire once (lost the initial race), then
+                        // only enter a peer-wait if that peer now holds the lock.
+                        $fpcBuildLock = $fpcCoordinator->acquireBuildLock($method);
+                        if ($fpcBuildLock === null && $fpcCoordinator->isBuildLockBusy($method)) {
+                            $buildDecision = $fpcCoordinator->waitForPublishedResponseOrBuildLock($method);
+                            $cachedResponse = $buildDecision['response'];
+                            $fpcBuildLock = $buildDecision['lock'];
                             if ($cachedResponse !== null) {
                                 $this->is_match = true;
                                 $routeProfile['fpc'] = 'wait_hit';
-                                $routeProfilePublish('fpc_wait_hit_grace');
+                                $routeProfilePublish('fpc_wait_hit');
                                 return $cachedResponse;
                             }
+                            if ($fpcBuildLock === null && $fpcCoordinator->isBuildLockBusy($method)) {
+                                $routeProfile['fpc'] = 'wait_timeout';
+                                $routeProfilePublish('fpc_wait_timeout');
+                                return $this->buildFpcWaitTimeoutResponse();
+                            }
+                            if ($fpcBuildLock === null && $canBuild) {
+                                $fpcBuildLock = $fpcCoordinator->acquireBuildLock($method);
+                            }
                         }
-
-                        $routeProfile['fpc'] = 'wait_timeout';
-                        $routeProfilePublish('fpc_wait_timeout');
-                        return $this->buildFpcWaitTimeoutResponse();
                     }
+                    // !lockBusy && !canBuild → private SSR fall-through (no empty peer-wait).
                 }
             }
         
@@ -2022,23 +2053,26 @@ class Core
 
         if (!$wantsHtml) {
             return Response::fromContent('Service Unavailable', 503, 'text/plain; charset=utf-8')
-                ->setHeader('Retry-After', '1')
+                ->setHeader('Retry-After', '3')
                 ->setHeader('Cache-Control', 'no-store');
         }
 
+        // Only reached under real build-lock contention. Back off harder than 1s so
+        // auto-retry tabs do not re-fill every Worker with empty peer-waits.
         $html = '<!DOCTYPE html><html lang="zh-Hans"><head><meta charset="utf-8">'
             . '<meta name="viewport" content="width=device-width, initial-scale=1">'
-            . '<meta http-equiv="refresh" content="1">'
+            . '<meta http-equiv="refresh" content="3">'
+            . '<meta name="robots" content="noindex, nofollow">'
             . '<title>页面加载中</title>'
             . '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
             . 'font:16px/1.5 system-ui,sans-serif;color:#1f2937;background:#f8fafc}'
             . 'p{margin:0;padding:1.5rem;text-align:center}</style></head><body>'
             . '<p>页面正在准备，即将自动重试…</p>'
-            . '<script>setTimeout(function(){location.reload()},1000)</script>'
+            . '<script>setTimeout(function(){location.reload()},3000)</script>'
             . '</body></html>';
 
         return Response::html($html, 503)
-            ->setHeader('Retry-After', '1')
+            ->setHeader('Retry-After', '3')
             ->setHeader('Cache-Control', 'no-store');
     }
 

@@ -34,7 +34,11 @@ async function expectAuthorizedScopedPreview(page) {
     if (frame.src.includes('theme/frontend/theme-preview/content')) return false;
     if (frame.src.includes('weline_preview_token=')) return false;
     try {
-      return frame.contentDocument?.readyState === 'complete';
+      const doc = frame.contentDocument;
+      if (!doc || doc.readyState !== 'complete') return false;
+      // 画布首次提交前 iframe 是 about:blank（同样 readyState=complete），
+      // 必须等真实店面文档带出编辑器插槽标记才算加载完成。
+      return doc.querySelectorAll('[data-wslot]').length > 0;
     } catch (error) {
       return false;
     }

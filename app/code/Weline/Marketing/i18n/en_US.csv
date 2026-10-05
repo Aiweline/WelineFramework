@@ -298,9 +298,6 @@ VIP等级,"VIP Level"
 包含任一标签,"Contains Any Tag"
 不包含任一标签,"Not Contains Any Tag"
 标签,Tag
-当前暂无进行中的活动，请稍后再来看看。,"There are no active campaigns right now. Please check back later."
-优惠券代码,"Coupon Code"
-应用,Apply
 优惠券,Coupon
 请输入优惠券代码,"Please enter a coupon code"
 该优惠券已应用,"This coupon is already applied"
@@ -310,6 +307,9 @@ VIP等级,"VIP Level"
 已移除优惠券,"Coupon removed"
 输入优惠券代码,"Enter coupon code"
 应用中...,Applying...
+当前暂无进行中的活动，请稍后再来看看。,"There are no active campaigns right now. Please check back later."
+优惠券代码,"Coupon Code"
+应用优惠券,Apply
 满额进度,"Spend progress"
 新客礼,"New customer gift"
 注册领取见面礼,"Register for welcome gift"
@@ -468,6 +468,7 @@ ID,ID
 按挽回活动配置的遗弃时限扫描过期结账报价并发送继续结账邮件,"Scan expired checkout quotes by win-back abandonment window and send continue-checkout emails"
 营销购物车遗弃挽回,"Marketing cart abandonment win-back"
 按挽回活动配置的遗弃时限扫描过期购物车并发送继续购物邮件,"Scan expired carts by win-back abandonment window and send continue-shopping emails"
+应用,Apply
 "活动时间：%{1} — %{2}","Campaign period: %{1} — %{2}"
 客户分群信号,"Customer segment signal"
 受众分群匹配；供挽回/生命周期活动过滤。,"Audience segment match; for win-back/lifecycle campaign filters."

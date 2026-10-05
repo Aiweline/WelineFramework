@@ -55,8 +55,13 @@ final class ThemeAssetEditorRequestContext
             $owner=ThemeContentScope::fromStoredOwner($storageScope,$validated->storeMode,$locale);
             $neutral=new ThemeContentScope($owner->provider,$owner->scopeKey,$owner->storeMode,'',$locale,$neutral);
         }
+        // theme_binding editor_context intentionally keeps theme_id=0 (resource identity).
+        // The selected Theme comes from the outer request theme_id (or a non-zero context claim).
         $themeId=(int)($raw['theme_id'] ?? 0);
-        $area=(string)($raw['area'] ?? $raw['editor_area'] ?? 'frontend');
+        if ($themeId < 1) {
+            $themeId=(int)($input['theme_id'] ?? 0);
+        }
+        $area=(string)($raw['area'] ?? $raw['editor_area'] ?? $input['editor_area'] ?? 'frontend');
         $version=$this->versions->getCurrent($themeId,$neutral->storageScope,$neutral->storeMode,$area);
         $identity=$version?->toVersionIdentity();
         $references=[];

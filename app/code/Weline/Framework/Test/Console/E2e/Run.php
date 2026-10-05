@@ -8,6 +8,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Test\Service\E2eBrowserCleanupService;
 use Weline\Framework\Test\Service\TestCollectionService;
 
 class Run extends CommandAbstract
@@ -75,6 +76,10 @@ class Run extends CommandAbstract
 
         $exitCode = $this->runPlaywrightCommand($e2eDir, $playwrightArgs, $extraEnv, $command);
 
+        // Always reap orphaned automation browsers even when the suite fails.
+        // Playwright globalTeardown also runs this; the PHP pass covers crashes / skipped teardown.
+        $this->cleanupOrphanedBrowsersAfterRun();
+
         echo "\n";
         if ($exitCode === 0) {
             $this->printer->success(__('E2E 测试执行成功。'));
@@ -83,6 +88,31 @@ class Run extends CommandAbstract
         }
 
         return (int)$exitCode;
+    }
+
+    private function cleanupOrphanedBrowsersAfterRun(): void
+    {
+        if (getenv('PLAYWRIGHT_BROWSER_CLEANUP') === '0' || getenv('WELINE_E2E_BROWSER_CLEANUP') === '0') {
+            return;
+        }
+        try {
+            /** @var E2eBrowserCleanupService $service */
+            $service = ObjectManager::getInstance(E2eBrowserCleanupService::class);
+            $report = $service->cleanup([
+                'dry_run' => false,
+                'close_acceptance_tabs' => getenv('WELINE_E2E_CLOSE_ACCEPTANCE_TABS') === '1',
+            ]);
+            $killed = count($report['killedPids'] ?? []);
+            $removed = count($report['removedPaths'] ?? []);
+            if ($killed > 0 || $removed > 0 || !empty($report['closedTabs'])) {
+                $this->printer->note(__(
+                    'E2E 后浏览器清理：killed=%{1} removed=%{2} closed_tabs=%{3}',
+                    [(string)$killed, (string)$removed, (string)($report['closedTabs'] ?? 0)]
+                ));
+            }
+        } catch (\Throwable $exception) {
+            $this->printer->warning(__('E2E 后浏览器清理失败：%{1}', [$exception->getMessage()]));
+        }
     }
 
     public function tip(): string

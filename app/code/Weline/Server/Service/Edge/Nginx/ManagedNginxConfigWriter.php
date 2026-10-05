@@ -24,6 +24,10 @@ final class ManagedNginxConfigWriter
     private const WRITER_LOCK_WAIT_SECONDS = 30.0;
     private const LEGACY_LIFECYCLE_LOCK_WAIT_SECONDS = 90.0;
     private const FALLBACK_MIME_TYPES = "types { text/html html htm; text/css css; application/javascript js; }\n";
+    /** Business HTML/API/static upstream waits. Keep below SSE's dedicated 300s. */
+    private const BUSINESS_PROXY_CONNECT_TIMEOUT_SEC = 5;
+    private const BUSINESS_PROXY_READ_TIMEOUT_SEC = 90;
+    private const BUSINESS_PROXY_SEND_TIMEOUT_SEC = 90;
 
     private readonly ManagedNginxPaths $paths;
     private readonly NginxConfigPublication $publication;
@@ -287,6 +291,9 @@ NGINX;
         $httpRedirectLocation = $ssl !== null
             ? "\n            if (\$scheme = http) { return 308 https://\$host{$httpsPortSuffix}\$request_uri; }"
             : '';
+        $businessProxyConnectTimeoutSec = self::BUSINESS_PROXY_CONNECT_TIMEOUT_SEC;
+        $businessProxyReadTimeoutSec = self::BUSINESS_PROXY_READ_TIMEOUT_SEC;
+        $businessProxySendTimeoutSec = self::BUSINESS_PROXY_SEND_TIMEOUT_SEC;
 
         // Catalog/media files live on disk under {BP}/pub/media. Serving them
         // through WLS means every listing thumbnail dies when workers drain or
@@ -326,6 +333,9 @@ NGINX;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header Cookie "";
             proxy_set_header Authorization "";
+            proxy_connect_timeout {$businessProxyConnectTimeoutSec}s;
+            proxy_read_timeout {$businessProxyReadTimeoutSec}s;
+            proxy_send_timeout {$businessProxySendTimeoutSec}s;
             proxy_buffering on;
             proxy_buffer_size 64k;
             proxy_buffers 32 64k;
@@ -472,6 +482,9 @@ http {
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
             proxy_set_header X-Real-IP \$remote_addr;
+            proxy_connect_timeout {$businessProxyConnectTimeoutSec}s;
+            proxy_read_timeout {$businessProxyReadTimeoutSec}s;
+            proxy_send_timeout {$businessProxySendTimeoutSec}s;
             proxy_buffering on;
             proxy_buffer_size 64k;
             proxy_buffers 32 64k;

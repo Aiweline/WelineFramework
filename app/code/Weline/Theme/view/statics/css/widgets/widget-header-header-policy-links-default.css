@@ -1,9 +1,10 @@
+/* 与 .categories-list / .category-link 同节奏：同 gap + 同水平 padding，避免「Hanfu|About Us」贴死 */
 .wc-theme_widget_header_policy_links.header-policy-links {
     display: flex;
     align-items: center;
     flex: 0 0 auto;
     flex-shrink: 0;
-    gap: var(--weline-space-5, var(--spacing-sm, 0.75rem));
+    gap: var(--spacing-sm, 0.5rem);
     width: auto;
     max-width: none;
     min-width: 0;
@@ -13,10 +14,15 @@
     min-height: var(--size-control-md);
 }
 .wc-theme_widget_header_policy_links .header-policy-links__inline {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    padding: var(--spacing-sm, 0.5rem) var(--weline-space-3, 0.75rem);
     color: inherit;
     text-decoration: none;
     font-weight: 500;
     white-space: nowrap;
+    border-radius: var(--border-radius-sm, 0.25rem);
 }
 .wc-theme_widget_header_policy_links .header-policy-links__inline:hover {
     text-decoration: underline;
@@ -30,12 +36,13 @@
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs, 0.25rem);
-    padding: var(--spacing-sm, 0.5rem) 0;
+    box-sizing: border-box;
+    padding: var(--spacing-sm, 0.5rem) var(--weline-space-3, 0.75rem);
     margin: 0;
     min-inline-size: 0;
-    padding-inline: 0;
     background: transparent;
     border: none;
+    border-radius: var(--border-radius-sm, 0.25rem);
     color: inherit;
     font: inherit;
     font-weight: 500;

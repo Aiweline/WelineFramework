@@ -95,6 +95,9 @@ final class ThemeScopeVersionService
             0,
             false,
         );
+        // 新建前 getCurrent() 会把「该 scope 无 is_current 版本」的否定结果 memo 进 RequestContext；
+        // 若此处不失效，随后的 getCurrent() 仍读到陈旧 null，快照捕获会误判为缺少历史头而 fail-closed。
+        $this->forgetFlagged($themeId, $scope, $version->getStoreMode(), $version->getArea());
 
         return $version;
     }

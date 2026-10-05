@@ -564,11 +564,9 @@ class WlsRequest extends Request
             $realIp = $headers['CF-Connecting-IP'] ?? ($headers['Weline-Real-Ip'] ?? '');
             $isHttps = ($originalScheme === 'https' || $originalSsl === 'on');
         } else {
-            // Trusted reverse proxies (Nginx → loopback WLS) may keep the
-            // upstream Host as 127.0.0.1:worker while placing the browser
-            // authority in X-Forwarded-Host. Only rewrite when the wire Host
-            // itself is loopback/internal so a client cannot inject Host via
-            // X-Forwarded-Host on a public wire Host.
+            // 受信反代（Nginx → loopback WLS）可能把上游 Host 保留为 127.0.0.1:worker，
+            // 而把浏览器 authority 放在 X-Forwarded-Host。仅当 wire Host 本身是回环/内网
+            // 时才改写，防止客户端在公网 wire Host 上注入 X-Forwarded-Host。
             if ($trustForwardedHeaders && self::isLoopbackOrUnspecifiedHostAuthority($originalHost)) {
                 $forwardedHost = \trim(\explode(',', (string)(
                     $headers['X-Forwarded-Host']
@@ -583,6 +581,11 @@ class WlsRequest extends Request
             $forwardedProto = $trustForwardedHeaders
                 ? \strtolower(\trim(\explode(',', $headers['X-Forwarded-Proto'] ?? '', 2)[0]))
                 : '';
+
+            // 明文回环入口（managed nginx / Dispatcher）必须优先于 env.php 的
+            // wls.https=true：那是服务器 TLS 监听开关，不是本次请求的传输事实。
+            // 曾因此把 Google OAuth redirect_uri 生成成 http://，触发线上
+            // Error 400 redirect_uri_mismatch。
             $realIp = $trustForwardedHeaders
                 ? ($headers['CF-Connecting-IP'] ?? ($headers['X-Real-IP'] ?? ''))
                 : '';
@@ -608,13 +611,20 @@ class WlsRequest extends Request
                 // just because env.php has wls.https=true — that desyncs the
                 // browser Origin from QueryBin assertSameOrigin().
                 $isHttps = false;
+            } elseif ($trustForwardedHeaders && $forwardedProto === 'http') {
+                // 受信边缘明确声明明文（nginx → loopback H1，无 REQUEST_SCHEME）：
+                // 按边缘事实保持 http，禁止落入 env.php 回退被提升为 https。
+                $isHttps = false;
+            } elseif ($trustForwardedHeaders && $forwardedProto === '') {
+                // 受信边缘（nginx → loopback 明文 H1）没有自报 scheme 时按明文处理；
+                // env.php 的 wls.https=true 只是服务器 TLS 监听开关，不得提升本请求。
+                $isHttps = false;
             } else {
-                // 回退检测：从 env.php 配置判断
-                // 如果服务器配置为 HTTPS 模式，即使直接访问 Worker 也应识别为 HTTPS
+                // 回退检测：仅直连（非受信代理）且无任何 scheme 信号时，
+                // 才允许按 env.php wls.https=true 识别为 HTTPS。
                 if (\defined('BP') && \file_exists(BP . 'etc/env.php')) {
                     $envConfig = include BP . 'etc/env.php';
                     $serverConfig = $envConfig['wls'] ?? [];
-                    // 检查服务器是否配置为 HTTPS 模式
                     if (isset($serverConfig['https']) && $serverConfig['https'] === true) {
                         $isHttps = true;
                     }

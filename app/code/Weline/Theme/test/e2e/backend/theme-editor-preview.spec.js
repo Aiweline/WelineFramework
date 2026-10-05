@@ -72,16 +72,14 @@ test.describe('Theme editor iframe preview integration', () => {
     });
 
     const frame = page.frameLocator('#previewFrame');
-    await frame.locator('html').first().waitFor({
-      state: 'attached',
-      timeout: 60000,
-    });
+    // 画布提交前 iframe 是 about:blank；先等真实店面文档把预览引擎标记为 full，
+    // 否则会读到一个空的初始文档。
+    await expect(frame.locator('html')).toHaveAttribute('data-w-editor-preview-engine', 'full', { timeout: 60000 });
 
     expect(await frame.locator('[data-wslot]').count()).toBeGreaterThan(0);
     await expect(frame.locator('#orphan-widgets-warning')).toHaveCount(0);
     await expect(frame.locator('link[href*="weline-theme-preview.css"]')).toHaveCount(1);
     await expect(frame.locator('script[src*="weline-theme-preview.js"]')).toHaveCount(1);
-    await expect(frame.locator('html')).toHaveAttribute('data-w-editor-preview-engine', 'full');
 
     const themeAssets = await frame.locator('link[href], script[src]').evaluateAll((nodes) => nodes
       .map((node) => node.getAttribute('href') || node.getAttribute('src') || '')
@@ -217,7 +215,8 @@ test.describe('Theme editor iframe preview integration', () => {
     const libraryWidget = page.locator('.widget-item.draggable').first();
     await libraryWidget.waitFor({ state: 'visible', timeout: 60000 });
     const frame = page.frameLocator('#previewFrame');
-    const slot = frame.locator('[data-wslot]').first();
+    // 首个 data-wslot 是空置的像素引导槽（合法隐藏），必须选实际可见的插槽。
+    const slot = frame.locator('[data-wslot]:visible').first();
     await slot.waitFor({ state: 'visible', timeout: 60000 });
 
     await libraryWidget.evaluate((element) => {

@@ -12,8 +12,10 @@ use Weline\Framework\Event\ResourceChange\ResourceChangeFactory;
 use Weline\Framework\Event\ResourceChange\ResourceRevisionService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\SystemConfig\Api\Scope\ScopeContext;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemePatchCommand;
@@ -1089,7 +1091,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     public function resolvePublishedTheme(ScopeContext $scope, string $area): ?ThemeResolvedValue
     {
         $context = new ThemeEditorContext(
-            scope: $scope,
+            scope: ThemeContentScope::fromStoredOwner($scope->storageScope, $scope->storeMode, 'default'),
             area: $area,
             resourceType: ThemeEditorContext::RESOURCE_THEME_BINDING,
         );
@@ -2700,6 +2702,9 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             [
                 ...$this->assetAccessClaims($context),
                 'content_scope' => $context->scope->toArray(),
+                // FileManager validators still require typed ScopeIdentity; ThemeContentScope
+                // is the Theme owner, so rehydrate the websites identity from storage.
+                'scope_identity' => $this->fileValidationScopeIdentity($context),
                 'locale_code' => $this->resolveFileAssetLocale($context),
                 'actor_id' => $fileActorId,
                 'roles' => $fileRoles,
@@ -2724,6 +2729,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
         $validationContext = [
             ...$this->assetAccessClaims($context),
             'content_scope' => $context->scope->toArray(),
+            'scope_identity' => $this->fileValidationScopeIdentity($context),
             'locale_code' => $localeCode,
             'actor_id' => $fileActorId,
             'roles' => $fileRoles,
@@ -2758,10 +2764,24 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             $localeCode = $context->scope->defaultLocale;
         }
         if ($localeCode === '' || strcasecmp($localeCode, 'default') === 0) {
+            $localeCode = trim((string)($context->application?->defaultLocale ?? ''));
+        }
+        if ($localeCode === '' || strcasecmp($localeCode, 'default') === 0) {
             throw new \InvalidArgumentException('theme_scope_file_locale_unresolved');
         }
 
         return $localeCode;
+    }
+
+    private function fileValidationScopeIdentity(ThemeEditorContext $context): ScopeIdentity
+    {
+        $identity = ObjectManager::getInstance(ScopeHierarchyInterface::class)
+            ->fromStorageScope($context->scope->storageScope, true);
+        if (!$identity instanceof ScopeIdentity) {
+            throw new \InvalidArgumentException('theme_scope_file_identity_unresolved');
+        }
+
+        return $identity;
     }
 
     private function assetAccessClaims(ThemeEditorContext $context): array

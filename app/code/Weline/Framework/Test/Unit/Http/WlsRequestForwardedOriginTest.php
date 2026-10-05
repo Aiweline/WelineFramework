@@ -271,6 +271,80 @@ final class WlsRequestForwardedOriginTest extends TestCase
     }
 
     /**
+     * managed nginx（loopback 明文 H1，无 REQUEST_SCHEME）不得被 env.php 的
+     * wls.https=true 提升为 https —— 曾把 Google OAuth redirect_uri 生成成
+     * http:// 导致线上 Error 400 redirect_uri_mismatch。
+     */
+    public function testTrustedLoopbackNginxWithoutSchemeIsNotPromotedByEnvHttps(): void
+    {
+        $envFile = (\defined('BP') ? \BP : '') . 'etc/env.php';
+        $existed = \is_file($envFile);
+        $backup = $existed ? (string)\file_get_contents($envFile) : '';
+        if (!$existed) {
+            @\mkdir(\dirname($envFile), 0777, true);
+        }
+        \file_put_contents($envFile, '<?php return ' . var_export(['wls' => ['https' => true]], true) . ';');
+        try {
+            $request = $this->createRequest(
+                "Host: 127.0.0.1:9555\r\n"
+                . "X-Forwarded-Proto: http\r\n",
+                [
+                    'WLS_TRUST_FORWARDED_HEADERS' => '1',
+                    'WLS_PORT' => 9555,
+                ],
+            );
+            self::assertFalse($request->isSecure(), 'XFP:http from trusted loopback edge must stay http');
+            self::assertSame('http', $_SERVER['REQUEST_SCHEME'] ?? null);
+
+            // 无任何 scheme 信号时同样不得被 env 提升（回环入口默认是明文）。
+            $requestNoSignals = $this->createRequest(
+                "Host: www.changhanfu.com\r\n",
+                [
+                    'WLS_TRUST_FORWARDED_HEADERS' => '1',
+                    'WLS_PORT' => 9555,
+                ],
+            );
+            self::assertFalse($requestNoSignals->isSecure(), 'scheme-less trusted edge admission must stay http');
+        } finally {
+            if ($existed) {
+                \file_put_contents($envFile, $backup);
+            } else {
+                @\unlink($envFile);
+            }
+        }
+    }
+
+    /**
+     * 直连 TLS Worker（无转发头、无 scheme 信号）仍允许按 env wls.https=true 识别为 https。
+     */
+    public function testDirectWorkerWithoutSignalsStillHonorsEnvHttps(): void
+    {
+        $envFile = (\defined('BP') ? \BP : '') . 'etc/env.php';
+        $existed = \is_file($envFile);
+        $backup = $existed ? (string)\file_get_contents($envFile) : '';
+        if (!$existed) {
+            @\mkdir(\dirname($envFile), 0777, true);
+        }
+        \file_put_contents($envFile, '<?php return ' . var_export(['wls' => ['https' => true]], true) . ';');
+        try {
+            $request = $this->createRequest(
+                "Host: p05113ef3.test.weline.com\r\n",
+                [
+                    'WLS_TRUST_FORWARDED_HEADERS' => '0',
+                    'WLS_PORT' => 9555,
+                ],
+            );
+            self::assertTrue($request->isSecure(), 'direct cleartext-less probe with wls.https=true keeps legacy https fallback');
+        } finally {
+            if ($existed) {
+                \file_put_contents($envFile, $backup);
+            } else {
+                @\unlink($envFile);
+            }
+        }
+    }
+
+    /**
      * @param array<string, mixed> $serverInfo
      */
     private function createRequest(string $headers, array $serverInfo = []): WlsRequest

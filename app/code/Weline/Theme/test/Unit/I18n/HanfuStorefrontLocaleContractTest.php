@@ -467,6 +467,7 @@ final class HanfuStorefrontLocaleContractTest extends TestCase
         self::assertSame('hi_IN', \Weline\Theme\Helper\WidgetI18n::localeFromRequestUri('/hi_IN/product/demo'));
         $widgetI18n = (string)file_get_contents(dirname(__DIR__, 3) . '/Helper/WidgetI18n.php');
         self::assertStringContainsString("'Weline_Faq'", $widgetI18n);
+        self::assertStringContainsString("'Weline_Search'", $widgetI18n);
         self::assertStringNotContainsString('return $localized;', $source);
     }
 

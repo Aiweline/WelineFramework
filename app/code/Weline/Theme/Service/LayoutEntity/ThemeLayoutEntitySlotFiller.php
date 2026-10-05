@@ -105,18 +105,71 @@ final class ThemeLayoutEntitySlotFiller
     { return false; }
 
     public function resolveRequestedPreviewEntity(int $themeId, string $pageType, string $area): ?array
-    { $service = ObjectManager::getInstance(\Weline\Theme\Service\PreviewContextService::class);
-        if (!$service->isEditorThemeRequest() && !$service->hasAuthoritativePreviewContext()) { return null; }
+    {
+        $service = ObjectManager::getInstance(\Weline\Theme\Service\PreviewContextService::class);
+        if (!$service->isEditorThemeRequest() && !$service->hasAuthoritativePreviewContext()) {
+            return null;
+        }
         $cursor = $service->getCurrentContext();
+        $storageScope = (string)($cursor['canonical_scope'] ?? $cursor['scope'] ?? 'default');
+        $storeMode = (string)($cursor['store_mode'] ?? 'normal');
         $versionId = (int)($cursor['theme_version_id'] ?? $cursor['version_id'] ?? 0);
-        if ($versionId < 1) { return null; }
-        $identity = ['scope' => $cursor['canonical_scope'] ?? $cursor['scope'] ?? 'default',
-            'store_mode' => $cursor['store_mode'] ?? 'normal', 'layout_option' => $cursor['layout_option'] ?? 'default',
-            'target_type' => $cursor['target_type'] ?? 'global', 'target_id' => $cursor['target_id'] ?? 0];
-        $resolved = ObjectManager::getInstance(\Weline\Theme\Service\ThemeVersionPreviewResolver::class)->resolve($themeId, $pageType, $area, $identity, $versionId, $cursor);
-        if (empty($resolved['resolved'])) { throw new \RuntimeException((string)$resolved['reason']); }
+        // Editor iframe URLs often omit version_id; PreviewContextService then clears
+        // the sticky session version. Fall back to the owner's current draft selection
+        // so the canvas keeps rendering the workspace draft after reload.
+        if ($versionId < 1) {
+            $current = ObjectManager::getInstance(ThemeScopeVersionService::class)
+                ->getCurrent($themeId, $storageScope, $storeMode, $area);
+            if ($current === null || (int)$current->getVersionId() < 1) {
+                return null;
+            }
+            $versionId = (int)$current->getVersionId();
+            $cursor['theme_version_id'] = $versionId;
+            $cursor['version_id'] = $versionId;
+            $cursor['mode'] = trim((string)($cursor['mode'] ?? '')) !== ''
+                ? (string)$cursor['mode']
+                : \Weline\Theme\Api\Version\ThemeVersionIdentity::MODE_DRAFT;
+            $cursor['content_revision'] = (int)($cursor['content_revision'] ?? 0) > 0
+                ? (int)$cursor['content_revision']
+                : max(1, (int)$current->getContentRevision());
+            $cursor['canonical_scope'] = $storageScope;
+            $cursor['store_mode'] = $storeMode;
+        }
+        $locale = trim((string)($cursor['locale'] ?? $cursor['locale_code'] ?? ''));
+        if ($locale === '' || strcasecmp($locale, 'default') === 0) {
+            $locale = trim((string)(
+                \Weline\Framework\Runtime\ThemeApplicationContext::current($area, 'preview')?->defaultLocale
+                ?? \Weline\Framework\Runtime\ThemeApplicationContext::current($area, 'editor')?->defaultLocale
+                ?? \Weline\Framework\Runtime\ThemeApplicationContext::current($area, 'runtime')?->defaultLocale
+                ?? 'zh_Hans_CN'
+            ));
+        }
+        // Pin the editor cursor owner explicitly. Otherwise buildContext() may walk
+        // ThemeContentScope up to application.versionOwnerScope (often global) and
+        // the canvas silently renders a different owner's draft/published payload.
+        $identity = [
+            'scope' => $storageScope,
+            'store_mode' => $storeMode,
+            'layout_option' => $cursor['layout_option'] ?? 'default',
+            'target_type' => $cursor['target_type'] ?? 'global',
+            'target_id' => $cursor['target_id'] ?? 0,
+            'content_scope' => \Weline\Theme\Api\Scoped\ThemeContentScope::fromStoredOwner(
+                $storageScope,
+                $storeMode,
+                $locale !== '' ? $locale : 'zh_Hans_CN',
+            ),
+            // purpose selects ThemeApplicationContext::current($area, $purpose).
+            'purpose' => 'runtime',
+        ];
+        $resolved = ObjectManager::getInstance(\Weline\Theme\Service\ThemeVersionPreviewResolver::class)
+            ->resolve($themeId, $pageType, $area, $identity, $versionId, $cursor);
+        if (empty($resolved['resolved'])) {
+            throw new \RuntimeException((string)$resolved['reason']);
+        }
         RequestContext::set('theme.layout_entity.preview_entity', $resolved);
-        return $resolved; }
+
+        return $resolved;
+    }
 
     public function purgePublishedPageEntityLocationCaches(int $themeId, string $scope): void
     {  }

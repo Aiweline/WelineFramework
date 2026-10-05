@@ -288,6 +288,7 @@ console.log('[playwright] proxy baseURL:', baseURL);
 console.log('[playwright] target origin:', runtimeInfo.runtime.target_origin);
 
 const globalSetupHostsPath = path.join(__dirname, 'global-setup-hosts.js');
+const globalTeardownBrowserCleanupPath = path.join(__dirname, 'global-teardown-browser-cleanup.js');
 
 // 截图、trace、失败产物等统一落在 tests/e2e/test-results（勿用仓库根 test-results）
 const e2eTestResultsDir = path.join(__dirname, 'test-results');
@@ -295,7 +296,11 @@ const e2eTestResultsDir = path.join(__dirname, 'test-results');
 module.exports = defineConfig({
   rootDir,
   globalSetup: process.env.PLAYWRIGHT_E2E_HOSTS_FQDN ? globalSetupHostsPath : undefined,
-  globalTeardown: undefined,
+  // Always reap orphaned chrome-headless-shell / Chrome for Testing / dead chrome-devtools-mcp.
+  // Disable with PLAYWRIGHT_BROWSER_CLEANUP=0 if an Agent needs to inspect leftovers.
+  globalTeardown: process.env.PLAYWRIGHT_BROWSER_CLEANUP === '0'
+    ? undefined
+    : globalTeardownBrowserCleanupPath,
   outputDir: e2eTestResultsDir,
   timeout: resolvedTimeout,
   expect: {

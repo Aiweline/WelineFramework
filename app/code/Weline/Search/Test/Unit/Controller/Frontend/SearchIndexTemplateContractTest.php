@@ -40,6 +40,9 @@ final class SearchIndexTemplateContractTest extends TestCase
         self::assertStringContainsString('data-testid="storefront-search-empty"', $template);
         self::assertStringContainsString('data-testid="storefront-search-product-empty"', $template);
         self::assertStringContainsString('商品 0 条', $template);
+        // Breadcrumb crumbs must re-localize (sidebar already does); never echo raw Chinese source.
+        self::assertStringContainsString('$resolveTypeLabel($crumbType)', $template);
+        self::assertStringContainsString('WidgetI18n::label(', $template);
         self::assertStringContainsString('storefront-search__results', $template);
         self::assertStringNotContainsString('search-layout__grid', $template);
         self::assertStringContainsString('search_hit_templates', $template);
@@ -54,6 +57,12 @@ final class SearchIndexTemplateContractTest extends TestCase
         self::assertStringContainsString('listTypes(area: \'frontend\')', $controller);
         self::assertStringContainsString("if (\$q === '')", $controller);
         self::assertStringContainsString('skip provider fan-out', $controller);
+
+        $hub = (string)file_get_contents(
+            BP . 'app/code/Weline/Search/Service/SearchHubService.php',
+        );
+        self::assertStringContainsString('SchedulerSystem::yield()', $hub);
+        self::assertStringContainsString('searchAll', $hub);
     }
 
     public function testSearchLayoutDefaultsChromeOnAndWebsiteBodyClass(): void

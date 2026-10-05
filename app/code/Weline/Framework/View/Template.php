@@ -689,6 +689,56 @@ class Template extends DataObject implements RequestLocalInterface
     }
 
     /**
+     * Stable compile dimensions shared by physical compile dirs and path maps.
+     *
+     * Must read live w_env (not StorefrontCacheKeyContext fence): early fence
+     * can freeze the wrong lang before route localization, and processViewFileCache
+     * would then hand a Hindi-baked <lang> compile to an en_US request.
+     *
+     * @return array{
+     *   compile_scope_schema:string,area:string,website_id:string,website_code:string,
+     *   lang:string,currency:string,website_url:string,theme:string,hooks_registry:string
+     * }
+     */
+    private function templateCompileScopeDimensions(): array
+    {
+        $dimension = static function (string $key, string $default, string $pattern): string {
+            $value = \function_exists('w_env') ? (string)\w_env($key, $default) : $default;
+            return \preg_match($pattern, $value) === 1 ? $value : $default;
+        };
+
+        return [
+            'compile_scope_schema' => self::TEMPLATE_COMPILE_SCOPE_SCHEMA,
+            'area' => $dimension('area', 'frontend', '/^[a-z][a-z0-9_-]{0,31}$/i'),
+            'website_id' => $dimension('website_id', '0', '/^[0-9]{1,10}$/'),
+            'website_code' => $dimension('website_code', 'default', '/^[a-z0-9][a-z0-9_.-]{0,63}$/i'),
+            'lang' => $dimension('user.lang', 'default', '/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/'),
+            'currency' => $dimension('user.currency', 'CNY', '/^[A-Z]{3}$/'),
+            'website_url' => \function_exists('w_env') ? (string)\w_env('website_url', '') : '',
+            'theme' => $this->resolveThemeCacheKeyForFetchFile($this->view_dir),
+            // Nested w:widget compile bakes <w:hook> output (header-account-links).
+            // New hooks.php → new ctx_ dir → miss → re-bake account dropdown menus.
+            'hooks_registry' => self::hooksRegistryCompileDigest(),
+        ];
+    }
+
+    /** Short identity shared by convertFetchFileName maps and compile directories. */
+    private function templateCompileScopeMapKey(): string
+    {
+        return $this->hashTemplateCompileScope($this->templateCompileScopeDimensions());
+    }
+
+    /**
+     * @param array<string, string> $scope
+     */
+    private function hashTemplateCompileScope(array $scope): string
+    {
+        $scopeJson = \json_encode($scope, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+
+        return \substr(\hash('sha256', \is_string($scopeJson) ? $scopeJson : \serialize($scope)), 0, 32);
+    }
+
+    /**
      * Keep compiled templates partitioned only by stable render dimensions.
      *
      * Request cookies, headers, Session IDs and tracking values must never
@@ -709,26 +759,8 @@ class Template extends DataObject implements RequestLocalInterface
             $base = $normalized;
         }
 
-        $dimension = static function (string $key, string $default, string $pattern): string {
-            $value = \function_exists('w_env') ? (string)\w_env($key, $default) : $default;
-            return \preg_match($pattern, $value) === 1 ? $value : $default;
-        };
-
-        $scope = [
-            'compile_scope_schema' => self::TEMPLATE_COMPILE_SCOPE_SCHEMA,
-            'area' => $dimension('area', 'frontend', '/^[a-z][a-z0-9_-]{0,31}$/i'),
-            'website_id' => $dimension('website_id', '0', '/^[0-9]{1,10}$/'),
-            'website_code' => $dimension('website_code', 'default', '/^[a-z0-9][a-z0-9_.-]{0,63}$/i'),
-            'lang' => $dimension('user.lang', 'default', '/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/'),
-            'currency' => $dimension('user.currency', 'CNY', '/^[A-Z]{3}$/'),
-            'website_url' => \function_exists('w_env') ? (string)\w_env('website_url', '') : '',
-            'theme' => $this->resolveThemeCacheKeyForFetchFile($this->view_dir),
-            // Nested w:widget compile bakes <w:hook> output (header-account-links).
-            // New hooks.php → new ctx_ dir → miss → re-bake account dropdown menus.
-            'hooks_registry' => self::hooksRegistryCompileDigest(),
-        ];
-        $scopeJson = \json_encode($scope, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
-        $scopeKey = \substr(\hash('sha256', \is_string($scopeJson) ? $scopeJson : \serialize($scope)), 0, 32);
+        $scope = $this->templateCompileScopeDimensions();
+        $scopeKey = $this->hashTemplateCompileScope($scope);
         $labelParts = [
             $scope['area'],
             'w' . $scope['website_id'],
@@ -753,8 +785,12 @@ class Template extends DataObject implements RequestLocalInterface
     public function convertFetchFileName(string $fileName): array
     {
         $absoluteSourcePath = $this->isAbsoluteTemplateSourcePath($fileName);
+        // Path maps must key by the same w_env compile scope as physical dirs.
+        // viewEnvironmentCacheSuffix alone can freeze an early Storefront fence
+        // lang and collide hi_IN / en_US onto one processViewFileCache entry.
         $templateContextKey = $this->viewEnvironmentCacheSuffix('template-file-map')
-            . '|' . $this->resolveThemeCacheKeyForFetchFile($this->view_dir . $fileName);
+            . '|' . $this->resolveThemeCacheKeyForFetchFile($this->view_dir . $fileName)
+            . '|compile_scope:' . $this->templateCompileScopeMapKey();
         $comFileName_cache_key = $this->view_dir . $fileName . '_comFileName|' . $templateContextKey;
         $tplFile_cache_key = $this->view_dir . $fileName . '_tplFile|' . $templateContextKey;
         $processViewFileCacheKey = $comFileName_cache_key . "\0" . $tplFile_cache_key;

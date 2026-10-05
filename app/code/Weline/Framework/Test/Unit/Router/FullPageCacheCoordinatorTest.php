@@ -439,6 +439,50 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
     }
 
+    public function testTimedOutFollowerTakesFreeBuildLockAfterPeerReleaseWithoutPublish(): void
+    {
+        $adapter = new class extends WlsMemoryAdapter {
+            /** @var array<string, mixed> */
+            private array $lockStore = [];
+
+            public function __construct()
+            {
+            }
+
+            public function compareAndSet(string $key, mixed $expected, mixed $value, int $ttl = 0): bool
+            {
+                $current = $this->lockStore[$key] ?? null;
+                if ($current !== $expected) {
+                    return false;
+                }
+
+                if ($value === null) {
+                    unset($this->lockStore[$key]);
+                } else {
+                    $this->lockStore[$key] = $value;
+                }
+
+                return true;
+            }
+        };
+
+        $pool = new InMemoryCachePool($adapter);
+        $coordinator = $this->coordinator($pool);
+
+        $held = $coordinator->acquireBuildLock('GET');
+        self::assertNotNull($held);
+        $empty = $coordinator->waitForPublishedResponseOrBuildLock('GET', 1);
+        self::assertNull($empty['response']);
+        self::assertNull($empty['lock']);
+        $coordinator->releaseBuildLock($held);
+
+        // Peer released without publishing — follower must take the free lock.
+        $takeover = $coordinator->waitForPublishedResponseOrBuildLock('GET', 1);
+        self::assertNull($takeover['response']);
+        self::assertNotNull($takeover['lock']);
+        $coordinator->releaseBuildLock($takeover['lock']);
+    }
+
     public function testPortQualifiedLoggedInSessionMayServePublicFpcButNeverBuild(): void
     {
         \Weline\Framework\Http\CookieScope::setPolicyResolverOverride(static fn(): array => [

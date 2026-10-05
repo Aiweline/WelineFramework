@@ -49,7 +49,11 @@ final class ThemeRuntimeCapability implements ChangedCapabilityInterface
             $themeId,
             'changed:' . $change->resourceType(),
         );
-        if (($result['failures'] ?? []) !== []) {
+        $failures = \is_array($result['failures'] ?? null) ? $result['failures'] : [];
+        // CDN has its own Changed recipe effect (allow_empty); local/dev without a
+        // CDN account must not fail theme publish after the DB release committed.
+        unset($failures['cdn_full_page_purge']);
+        if ($failures !== []) {
             throw new \RuntimeException(__('Theme 资源变更缓存刷新未全部成功'));
         }
     }

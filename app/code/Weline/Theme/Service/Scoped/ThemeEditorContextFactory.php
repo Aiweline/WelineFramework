@@ -62,16 +62,31 @@ final class ThemeEditorContextFactory
             throw new \InvalidArgumentException('theme_editor_context_resource_invalid');
         }
         $themeId = $this->nonNegativeInt($raw['theme_id'] ?? 0, 'theme_id');
-        if ($themeId !== $application->themeId) {
-            throw new \InvalidArgumentException('theme_editor_consumer_theme_mismatch');
+        // theme_binding keeps resource theme_id=0; the selected Theme lives on the
+        // installed ThemeApplicationContext (outer request theme_id / asset purpose).
+        if ($resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING) {
+            if ($themeId !== 0 && $themeId !== $application->themeId) {
+                throw new \InvalidArgumentException('theme_editor_consumer_theme_mismatch');
+            }
+            if ($application->themeId < 1) {
+                throw new \InvalidArgumentException('theme_editor_context_theme_required');
+            }
+            $themeId = 0;
+        } else {
+            if ($themeId !== $application->themeId) {
+                throw new \InvalidArgumentException('theme_editor_consumer_theme_mismatch');
+            }
+            if ($themeId <= 0) {
+                throw new \InvalidArgumentException('theme_editor_context_theme_required');
+            }
         }
-        if ($resourceType !== ThemeEditorContext::RESOURCE_THEME_BINDING && $themeId <= 0) {
-            throw new \InvalidArgumentException('theme_editor_context_theme_required');
-        }
-        if ($themeId > 0) {
+        $selectedThemeId = $resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING
+            ? $application->themeId
+            : $themeId;
+        if ($selectedThemeId > 0) {
             $theme = clone $this->themes;
-            $theme->clearData()->clearQuery()->load($themeId);
-            if ((int)$theme->getId() !== $themeId) {
+            $theme->clearData()->clearQuery()->load($selectedThemeId);
+            if ((int)$theme->getId() !== $selectedThemeId) {
                 throw new \InvalidArgumentException('theme_editor_context_theme_not_found');
             }
             if (!$this->themeContext->themeSupportsArea($theme, $area)) {

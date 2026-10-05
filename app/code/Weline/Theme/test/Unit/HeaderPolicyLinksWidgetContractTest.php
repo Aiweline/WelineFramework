@@ -84,4 +84,28 @@ final class HeaderPolicyLinksWidgetContractTest extends TestCase
         }
         self::assertStringContainsString('header-policy-links/default.phtml', $haystack);
     }
+
+    public function testPolicyLinksCssMatchesCategoryNavItemSpacing(): void
+    {
+        $cssPath = dirname(__DIR__, 2) . '/view/statics/css/widgets/widget-header-header-policy-links-default.css';
+        self::assertFileExists($cssPath);
+        $css = (string)file_get_contents($cssPath);
+
+        self::assertMatchesRegularExpression(
+            '/\.wc-theme_widget_header_policy_links\.header-policy-links\s*\{[^}]*gap:\s*var\(--spacing-sm/s',
+            $css,
+            '政策链 gap 须与 .categories-list 同用 --spacing-sm'
+        );
+        self::assertMatchesRegularExpression(
+            '/\.header-policy-links__inline\s*\{[^}]*padding:\s*var\(--spacing-sm[^;]*\)\s+var\(--weline-space-3/s',
+            $css,
+            'About Us 等 inline 链须与 .category-link 同水平 padding'
+        );
+        self::assertMatchesRegularExpression(
+            '/\.header-policy-links__trigger\s*\{[^}]*padding:\s*var\(--spacing-sm[^;]*\)\s+var\(--weline-space-3/s',
+            $css,
+            'Shopping Policy 触发器须与分类项同水平 padding'
+        );
+        self::assertStringNotContainsString('padding-inline: 0', $css);
+    }
 }

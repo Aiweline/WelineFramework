@@ -292,15 +292,26 @@ final class ThemeLayoutEntityBakeCoordinator
     public function refreshResourceArtifacts(ThemeEditorContext $context, string $status, int $versionId = 0): array
     {
         $identity = $this->resolveBakeIdentity($context->themeId, $context->scope->storageScope, $status === 'published', $versionId, $context->area, $context->scope->storeMode);
+        // 页产物路径：与 pageCandidates()/candidatePage() 同源（pageLayoutPhtml 内部会对路由段做幂等规范化）。
+        $pagePath = $this->paths()->pageLayoutPhtml($identity, $context->layoutType, $context->layoutOption, $context->targetType, $context->targetId ?: null);
         $candidates = ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $context): array {
             $candidates = $this->candidateForIdentity($identity, $context->layoutType, $context->layoutOption, $context->targetType, $context->targetId);
             $this->publish($identity, $candidates);
             return $candidates;
         });
         $artifacts = [];
-        foreach ($candidates as $path => $bytes) { if ($bytes !== null) { $artifacts[] = $this->resourceArtifactReceipt('phtml', $path); } }
+        // 回执按页/部件分型：消费方据 type==='page' 判定页面产物是否落地，不能统一报成 phtml。
+        foreach ($candidates as $path => $bytes) {
+            if ($bytes === null) { continue; }
+            $artifacts[] = $this->resourceArtifactReceipt($path === $pagePath ? 'page' : 'chrome', $path);
+        }
         $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode);
-        return ['status' => $status, 'version_id' => $identity->themeVersionId, 'content_revision' => $identity->contentRevision, 'entity_key' => '', 'artifacts' => $artifacts];
+        $workspace = ObjectManager::getInstance(\Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface::class)->load($context, true);
+        $entityKey = $status === 'published'
+            ? 'r' . (int)($workspace['effective_release_id'] ?? $workspace['published_release_id'] ?? 0)
+            : 'd' . (int)($workspace['draft_revision_id'] ?? 0);
+        // version_id 必须回显调用方选定的版本（未选定时为 null），不能冒充实际烘焙版本。
+        return ['status' => $status, 'version_id' => $versionId > 0 ? $versionId : null, 'content_revision' => $identity->contentRevision, 'entity_key' => $entityKey, 'artifacts' => $artifacts];
     }
 
     public function bakePublishArtifactsForVersion(ThemeEditorContext $context, int $themeVersionId, array $options = []): array
@@ -627,11 +638,17 @@ final class ThemeLayoutEntityBakeCoordinator
     private function publish(ThemeVersionIdentity $identity, array $candidates): void { (new ThemeLayoutEntityBatchPublisher())->publish($identity, $candidates); }
     private function snapshotService(): ThemeVersionResourceSnapshotService { return ObjectManager::getInstance(ThemeVersionResourceSnapshotService::class); }
     private function paths(): ThemeLayoutEntityPaths { return ObjectManager::getInstance(ThemeLayoutEntityPaths::class); }
+    /** Return verifiable output evidence without exposing a host filesystem path. */
     private function resourceArtifactReceipt(string $type, string $path): array
     {
         $digest = is_file($path) ? hash_file('sha256', $path) : false;
         if ($digest === false) { throw new \RuntimeException('theme_layout_entity_' . $type . '_bake_failed'); }
-        return ['type' => $type, 'artifact_id' => $digest, 'exists' => true];
+        $receipt = ['type' => $type, 'artifact_id' => $digest, 'exists' => true];
+        $root = defined('BP') ? rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR : '';
+        if ($root !== '' && str_starts_with($path, $root)) {
+            $receipt['relative_path'] = substr($path, strlen($root));
+        }
+        return $receipt;
     }
     private function bustPresentationCaches(int $themeId, ?string $scope = null, string $storeMode = 'normal'): void
     {

@@ -120,12 +120,19 @@ if ($breadcrumb === []) {
                         if (!is_array($crumb)) {
                             continue;
                         }
-                        $crumbLabel = trim((string)($crumb['label'] ?? ''));
+                        $crumbType = trim((string)($crumb['type'] ?? $type)) ?: $type;
+                        $crumbCategoryId = (int)($crumb['category_id'] ?? 0);
+                        // Controller breadcrumb labels may still be Chinese source
+                        // (registry __() / stale lang cache). Re-localize like the sidebar.
+                        $crumbLabel = $crumbCategoryId > 0
+                            ? \Weline\Theme\Helper\WidgetI18n::label(
+                                trim((string)($crumb['label'] ?? '')),
+                                trim((string)($crumb['label'] ?? '')),
+                            )
+                            : $resolveTypeLabel($crumbType);
                         if ($crumbLabel === '') {
                             continue;
                         }
-                        $crumbType = trim((string)($crumb['type'] ?? $type)) ?: $type;
-                        $crumbCategoryId = (int)($crumb['category_id'] ?? 0);
                         $isLast = $index === array_key_last($breadcrumb);
                         $crumbParams = [
                             'q' => $q,

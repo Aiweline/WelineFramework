@@ -17,7 +17,8 @@ const {
 
 const MODULE = 'Weline_Theme';
 const ROOT = path.resolve(__dirname, '../../../../../../..');
-const BASE = process.env.WELINE_E2E_BASE_URL || 'https://p05113ef3.test.weline.com:9555';
+// Public nginx host; do not default to :9555 worker port (ERR_TIMED_OUT behind managed TLS).
+const BASE = process.env.WELINE_E2E_BASE_URL || 'https://p05113ef3.test.weline.com';
 
 moduleDescribe(test, MODULE, 'e2e-closeout and e2e-plan-suite homepage required injection smoke', () => {
   test.setTimeout(180000);
@@ -40,7 +41,7 @@ moduleDescribe(test, MODULE, 'e2e-closeout and e2e-plan-suite homepage required 
     await expect(page.locator('header, .weline-header, [weline-code*="header"]').first()).toBeAttached();
   });
 
-  moduleCase(test, { module: MODULE, id: 'B-source-contract' }, '源码契约：必入部件声明 presence 标记', async () => {
+  moduleCase(test, { module: MODULE, id: 'B-source-contract' }, '源码契约：纯 PHTML 固化下 Overlay 禁运行时播种且部件声明保留', async () => {
     const allMenu = fs.readFileSync(
       path.join(ROOT, 'app/code/Weline/Theme/view/theme/frontend/widgets/navigation/all-menu/default.phtml'),
       'utf8',
@@ -65,7 +66,11 @@ moduleDescribe(test, MODULE, 'e2e-closeout and e2e-plan-suite homepage required 
     expect(allMenu).toContain('data-widget-code="all-menu"');
     expect(category).toContain('data-widget-code="category-menu"');
     expect(footer).toContain('data-widget-code="footer-container"');
-    expect(overlay).toContain('data-required-injection-presence');
+    // Pure-PHTML contract: storefront overlay is a no-op compatibility boundary
+    // (relationships are emitted into derived PHTML at save time only).
+    expect(overlay).toMatch(/Compatibility boundary:\s*layout relationships are emitted only into PHTML at save time/);
+    expect(overlay).toMatch(/:\s*string\s*\{\s*return\s+\$rendered;\s*\}/);
+    expect(overlay).not.toContain('data-required-injection-presence');
     expect(storeMusic).toContain('data-widget-code="store-music"');
     expect(storeMusic).toContain("presenceStub('inactive')");
   });

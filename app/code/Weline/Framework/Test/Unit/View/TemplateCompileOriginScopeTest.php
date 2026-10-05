@@ -88,6 +88,15 @@ final class TemplateCompileOriginScopeTest extends TestCase
             ]);
             $mapping = new ReflectionMethod(Template::class, 'viewEnvironmentCacheSuffix');
             self::assertNotSame($oldMappingKey, $mapping->invoke($template, 'template-file-map'), 'Old shared path mappings must not point back to directories compiled with the query accessor.');
+
+            // Fence can freeze the first lang; compile map keys must still follow live w_env.
+            $compileMapKey = new ReflectionMethod(Template::class, 'templateCompileScopeMapKey');
+            WelineEnv::set('user.lang', 'en_US', 'compile origin fixture');
+            $enMap = $compileMapKey->invoke($template);
+            WelineEnv::set('user.lang', 'hi_IN', 'compile origin fixture');
+            $hiMap = $compileMapKey->invoke($template);
+            self::assertNotSame($enMap, $hiMap, 'Compile path maps must shard by live w_env lang so baked <lang> cannot cross locales.');
+            WelineEnv::set('user.lang', 'en_US', 'compile origin fixture');
         } finally {
             $_GET = $previousGet;
             Context::leave();

@@ -156,6 +156,12 @@ prefer_background_non_preemptive_navigate → disable_http_cache_for_session →
 4. **例外**：仅当用户**明确**要求保留标签时可不关，并在汇报中注明「按用户要求保留 Browser」。
 5. 本回合从未打开过 Browser（纯逻辑 / N/A）：本门禁记 `N/A`。
 6. 违规形态：交付后仍挂着 Browser 标签导致 Renderer 空转占 CPU——视为收口未完成。
+7. **工具收口（推荐强制）**：除宿主 Browser 关标签外，Agent/CI 还应清理自动化残留进程：
+   - `php bin/w e2e:run …` 结束后会自动跑清理（Playwright `globalTeardown` + PHP 二次收口）
+   - 手动/验收后补清：`php bin/w e2e:cleanup-browsers`（可选 `--close-acceptance-tabs` 关闭系统 Chrome 里 `*.test.weline.com` 验收标签）
+   - 干跑：`php bin/w e2e:cleanup-browsers --dry-run`
+   - 清理对象：`chrome-headless-shell` / Chrome for Testing / 失效 `chrome-devtools-mcp`（9222 已死）/ `/tmp` 临时 profile；**不退出**用户日常 Google Chrome
+   - 禁清：`PLAYWRIGHT_BROWSER_CLEANUP=0` 或 `WELINE_E2E_BROWSER_CLEANUP=0`
 
 ## 会话纠正清单
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Search\Service;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Search\Dto\SearchHit;
 use Weline\Search\Dto\SearchRequest;
 use Weline\Search\Dto\SearchResult;
@@ -140,6 +141,10 @@ final class SearchHubService
         $sections = [];
         $totalHits = 0;
         foreach ($this->registry->all(area: $area) as $code => $provider) {
+            // Fan-out is sequential and each provider may take hundreds of ms.
+            // Yield between providers so WLS can keep accepting static/FPC peers
+            // instead of holding the Worker event loop for the full all-type search.
+            SchedulerSystem::yield();
             $sectionRequest = new SearchRequest(
                 q: $request->q,
                 type: $code,

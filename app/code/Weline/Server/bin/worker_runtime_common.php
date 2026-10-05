@@ -321,7 +321,7 @@ if (!\function_exists('wlsResetLongRunningExecutionLimit')) {
 /**
  * Resolve fiber admission defaults.
  *
- * Defaults (when keys omitted): max_active=12, queue_wait_ms=8000, queue_depth=max_active*3.
+ * Defaults (when keys omitted): max_active=12, queue_wait_ms=10000 (hard cap), queue_depth=max_active.
  * Explicit max_active=0 keeps unlimited concurrency (no queue).
  *
  * @param array<string, mixed> $wls

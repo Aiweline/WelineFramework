@@ -30,10 +30,12 @@ final class ThemeChangedType implements ChangedTypeInterface
         $impact = $change->toArray()['impact'] ?? [];
         $namespaces = $this->stringList($impact['namespaces'] ?? []);
         if ($namespaces === []) {
-            $code = $change->websiteCode();
+            // websiteCode() may be null on neutral ResourceChange; null !== '' is true in PHP
+            // and would produce invalid paths like website//theme.
+            $code = trim((string)($change->websiteCode() ?? ''));
             $namespaces = $code !== ''
                 ? ['website/' . $code . '/theme', 'website/' . $code]
-                : ['theme'];
+                : ['global/storefront/theme'];
         }
         return [
             'namespaces' => $namespaces,

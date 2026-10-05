@@ -2371,10 +2371,10 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 静态文件：weline.modules.js编译文件！,静态文件：weline.modules.js编译文件！
 "编译 Weline UI 2.0 静态资源包！","编译 Weline UI 2.0 静态资源包！"
 编译主题资源（less、weline.modules.js等）,编译主题资源（less、weline.modules.js等）
-个人中心,个人中心
 选择作用范围,选择作用范围
 搜索作用范围,搜索作用范围
 未找到匹配作用范围,未找到匹配作用范围
+个人中心,个人中心
 "3. 配置 Website/Scope published theme_binding；细节见主题开发.md Mode B","3. 配置 Website/Scope published theme_binding；细节见主题开发.md Mode B"
 主题异常：,主题异常：
 当前作用范围未绑定主题，请先在网站信息中绑定店面主题。,当前作用范围未绑定主题，请先在网站信息中绑定店面主题。

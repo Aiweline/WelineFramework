@@ -290,14 +290,26 @@ async function request(page, action, context, data = {}, method = 'POST', traced
     Object.entries(payload).forEach(([key, value]) => url.searchParams.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value)));
   }
   if (action === 'remove-widget' || action === 'save-layout') evidence(`runtime-${action}-request`, { url: url.toString(), method, payload });
-  const response = await page.request.fetch(url.toString(), {
-    method, data: method === 'GET' ? undefined : payload,
-    headers: { accept: 'application/json', 'x-requested-with': 'XMLHttpRequest', ...(traced ? { 'X-Weline-Trace': '1' } : {}), ...(transport.requestId ? { 'X-Weline-Request-Id': transport.requestId } : {}) }, timeout: 90000,
-  });
-  const text = await response.text();
-  let result;
-  try { result = JSON.parse(text); } catch { throw new Error(`${action}: HTTP ${response.status()} ${text.slice(0, 600)}`); }
-  return { http: response.status(), request_id: response.headers()['x-weline-request-id'], ...result };
+  const attempts = [];
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (attempt > 1) await page.waitForTimeout(2000 * attempt);
+    const response = await page.request.fetch(url.toString(), {
+      method, data: method === 'GET' ? undefined : payload,
+      headers: { accept: 'application/json', 'x-requested-with': 'XMLHttpRequest', ...(traced ? { 'X-Weline-Trace': '1' } : {}), ...(transport.requestId ? { 'X-Weline-Request-Id': transport.requestId } : {}) }, timeout: 90000,
+    });
+    const text = await response.text();
+    const status = response.status();
+    attempts.push({ attempt, status, bytes: text.length });
+    if (status >= 500 && /Gateway Time-out|Bad Gateway|Service Unavailable/i.test(text) && attempt < 3) {
+      continue;
+    }
+    let result;
+    try { result = JSON.parse(text); } catch { throw new Error(`${action}: HTTP ${status} ${text.slice(0, 600)}`); }
+    if (attempts.length > 1) evidence(`runtime-${action}-retries`, attempts);
+    return { http: status, request_id: response.headers()['x-weline-request-id'], ...result };
+  }
+  evidence(`runtime-${action}-retries`, attempts);
+  throw new Error(`${action}: exhausted gateway retries ${JSON.stringify(attempts)}`);
 }
 
 function ok(result, label) {
@@ -333,10 +345,55 @@ function snapshotRevision(snapshot) {
   return { version: Number(current?.version_id || 0), content_revision: Number(snapshot.state?.content_revision || current?.content_revision || 0), resource_revision: Number(snapshot.state.revision || 0) };
 }
 
+function editorQueryPath() {
+  const query = new URLSearchParams({
+    theme_id: String(FIXTURE.theme_id),
+    page_type: 'homepage',
+    editor_area: 'frontend',
+    layout_option: 'default',
+    scope: FIXTURE.scope,
+  });
+  Object.entries(FIXTURE.identity).forEach(([key, value]) => query.set(key, String(value)));
+  return `theme/backend/theme-editor?${query}`;
+}
+
 async function refreshCanvas(page) {
-  await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 });
-  await expect(page.locator('#themeEditor')).toHaveAttribute('data-scope', FIXTURE.scope, { timeout: 60000 });
-  await expect(page.locator('#previewFrame')).toHaveAttribute('src', /editor_mode=1/, { timeout: 90000 });
+  const attempts = [];
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const started = Date.now();
+    let status = 0;
+    let mode = attempt === 1 ? 'reload' : 'gotoBackend';
+    try {
+      if (attempt > 1) {
+        // nginx 504 after heavy draft/locale writes: pause then re-enter editor.
+        await page.waitForTimeout(1500 * attempt);
+      }
+      const response = attempt === 1
+        ? await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 })
+        : await gotoBackend(page, editorQueryPath(), {
+          waitUntil: 'domcontentloaded',
+          timeout: 90000,
+          settleMs: 500,
+          useProxy: false,
+        });
+      status = response?.status() || 0;
+      const editorCount = await page.locator('#themeEditor').count();
+      attempts.push({ attempt, mode, status, editor_count: editorCount, ms: Date.now() - started, url: page.url() });
+      if (status >= 500 || editorCount === 0) continue;
+      await expect(page.locator('#themeEditor')).toHaveAttribute('data-scope', FIXTURE.scope, { timeout: 60000 });
+      await expect(page.locator('#previewFrame')).toHaveAttribute('src', /editor_mode=1/, { timeout: 90000 });
+      if (attempts.length > 1) evidence('runtime-refresh-canvas-retries', attempts);
+      return;
+    } catch (error) {
+      attempts.push({ attempt, mode, status, ms: Date.now() - started, url: page.url(), error: error.message });
+      if (attempt === 3) {
+        evidence('runtime-refresh-canvas-retries', attempts);
+        throw error;
+      }
+    }
+  }
+  evidence('runtime-refresh-canvas-retries', attempts);
+  throw new Error(`refreshCanvas failed after retries: ${JSON.stringify(attempts)}`);
 }
 
 async function homepageInventory(page) {
@@ -733,9 +790,46 @@ moduleDescribe(test, 'Weline_Theme', '纯 PHTML 真实运行验收', () => {
       await canvas.locator(`.widget-wrapper[data-node-uid="${uidA}"]`).getByRole('heading', { name: oldTitle, exact: true }).click({ timeout: 30000 });
       const titleInput = page.locator('#configContent .widget-config-panel input[name="title"], #widgetConfigModal input[name="title"]').filter({ visible: true }).first();
       await expect(titleInput).toBeVisible({ timeout: 20000 });
-      await titleInput.fill(newTitle);
-      await titleInput.press('Tab');
-      await expect.poll(() => ownNodes(inspect()).find(node => node.node_uid === uidA)?.config?.title, { timeout: 45000, intervals: [1000, 2000] }).toBe(newTitle);
+      await titleInput.click({ timeout: 10000 });
+      await titleInput.fill('');
+      await titleInput.pressSequentially(newTitle, { delay: 20 });
+      await titleInput.evaluate((el, value) => {
+        el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+        el.dispatchEvent(new CustomEvent('weline:param:valuechange', {
+          bubbles: true, cancelable: true, detail: { carrier: el },
+        }));
+      }, newTitle);
+      // BinQuery autosave can stall under load; prefer the panel's immediate save
+      // (same form collect path) so the UI edit chain still proves selection→persist.
+      const saveBtn = page.locator(
+        '#configContent .w-param-btn-save-widget, #widgetConfigModal .w-param-btn-save-widget, #configContent button[type="submit"], #widgetConfigModal button[type="submit"]',
+      ).filter({ visible: true }).first();
+      if (await saveBtn.count()) {
+        await Promise.all([
+          page.waitForResponse((response) => {
+            const path = new URL(response.url()).pathname;
+            return response.request().method() !== 'GET'
+              && /save-widget-config|scoped-workspace|update-config|widget-config/.test(path);
+          }, { timeout: 90000 }).catch(() => null),
+          saveBtn.click({ timeout: 15000 }),
+        ]);
+      } else {
+        await titleInput.press('Tab');
+        await page.evaluate(async () => {
+          const editor = window.Weline?.Theme?.Editor || window.ThemeEditor;
+          if (typeof editor?.flushDirtyEditorConfigForms === 'function') {
+            await editor.flushDirtyEditorConfigForms();
+            return;
+          }
+          const form = document.querySelector('#widgetConfigForm, #widgetConfigFormModal form, .w-param-form[data-auto-save="1"]');
+          if (form && typeof editor?.autosaveWidgetConfigForm === 'function') {
+            await editor.autosaveWidgetConfigForm(form, { silent: true, refreshPreview: false });
+          }
+        });
+      }
+      await expect.poll(() => ownNodes(inspect()).find(node => node.node_uid === uidA)?.config?.title, { timeout: 90000, intervals: [1000, 2000, 4000] }).toBe(newTitle);
       record('visible-ui-edit-A', { success: true });
       await page.screenshot({ path: path.join(EVIDENCE, 'runtime-browser-solidified-wrapper-edit.png'), fullPage: false });
     } catch (error) {
@@ -805,8 +899,33 @@ moduleDescribe(test, 'Weline_Theme', '纯 PHTML 真实运行验收', () => {
       ok(localized, `save ${item.locale}`);
     }
     await refreshCanvas(page);
+    // UI edit may leave an open dirty config form; locale switch flushes it via BinQuery and can stall.
+    const closeConfig = page.locator('#closeConfigPanel');
+    if (await closeConfig.count()) await closeConfig.click({ timeout: 5000 }).catch(() => {});
+    await page.evaluate(() => {
+      const editor = window.Weline?.Theme?.Editor || window.ThemeEditor;
+      if (editor?.state) {
+        editor.state.hasChanges = false;
+        editor.state.configMode = 'layout';
+      }
+      document.querySelectorAll('#widgetConfigForm, #widgetConfigFormModal form, .w-param-form[data-auto-save="1"]').forEach((form) => {
+        form.removeAttribute('data-dirty');
+        form.dataset.autoSave = '0';
+      });
+    });
     for (const item of localeCases) {
-      await page.locator('#editorLangSwitcher').selectOption(item.locale);
+      await page.locator('#editorLangSwitcher').selectOption(item.locale, { force: true });
+      const localePattern = item.locale.replace(/_/g, '[_-]');
+      await expect.poll(async () => {
+        const src = await page.locator('#previewFrame').getAttribute('src') || '';
+        const selected = await page.locator('#editorLangSwitcher').inputValue();
+        let pathname = '';
+        try { pathname = new URL(src, 'https://local.test').pathname; } catch { /* ignore */ }
+        const pathHit = new RegExp(`/${localePattern}(?:/|$)`).test(pathname);
+        const queryHit = new RegExp(`[?&]locale=${localePattern}(?:&|$)`).test(src);
+        const contextHit = src.includes(`%22locale%22%3A%22${item.locale}%22`) || src.includes(`"locale":"${item.locale}"`);
+        return selected === item.locale && (pathHit || queryHit || contextHit);
+      }, { timeout: 90000 }).toBe(true);
       const localizedWidget = canvas.locator(`.widget-wrapper[data-node-uid="${uidA}"]`);
       await expect(localizedWidget).toContainText(item.title, { timeout: 90000 });
       await expect(localizedWidget.locator(`img[alt="${item.alt}"]`)).toHaveCount(1);

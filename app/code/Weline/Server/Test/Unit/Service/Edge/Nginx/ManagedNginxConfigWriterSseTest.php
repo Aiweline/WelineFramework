@@ -74,6 +74,11 @@ final class ManagedNginxConfigWriterSseTest extends TestCase
 
         $genericBlock = \substr($config, $genericStart);
         self::assertStringContainsString('proxy_buffering on;', $genericBlock);
+        // Business HTML/API keep a shorter upstream wait than SSE (300s).
+        // Leaving the nginx default (60s) made cold/contended SSR surface as 504.
+        self::assertStringContainsString('proxy_connect_timeout 5s;', $genericBlock);
+        self::assertStringContainsString('proxy_read_timeout 90s;', $genericBlock);
+        self::assertStringContainsString('proxy_send_timeout 90s;', $genericBlock);
         self::assertStringNotContainsString('proxy_read_timeout 300s;', $genericBlock);
         self::assertStringNotContainsString('proxy_send_timeout 300s;', $genericBlock);
     }

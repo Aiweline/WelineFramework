@@ -9,6 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
+use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\ThemeScopeVersion;
@@ -61,7 +62,9 @@ $scope = ObjectManager::getInstance(ScopeHierarchyInterface::class)
 if ($scope->storageScope !== (string)($fixture['scope'] ?? '')) {
     throw new RuntimeException('测试 fixture canonical scope 与 typed identity 不一致');
 }
-$context = new ThemeEditorContext($scope, 'frontend', 'layout', (int)$fixture['theme_id'], 'homepage', 'default');
+// ThemeEditorContext now owns ThemeContentScope (not SystemConfig ScopeContext).
+$contentScope = ThemeContentScope::fromStoredOwner($scope->storageScope, $scope->storeMode, 'default');
+$context = new ThemeEditorContext($contentScope, 'frontend', 'layout', (int)$fixture['theme_id'], 'homepage', 'default');
 $owner = new ThemeVersionIdentity((int)$fixture['theme_id'], $scope->storageScope, $scope->storeMode, 'frontend');
 $paths = ObjectManager::getInstance(ThemeLayoutEntityPaths::class);
 $ownerDir = $paths->ownerDir($owner);

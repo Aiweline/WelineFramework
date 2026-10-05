@@ -403,10 +403,27 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $waitStepMs = \min($waitStepMs * 2, self::LOCK_WAIT_MAX_STEP_MS);
         } while (\microtime(true) < $deadline);
 
-        return [
-            'response' => $this->getCachedResponse($method) ?? $this->getStaleCachedResponse($method),
-            'lock' => null,
-        ];
+        $response = $this->getCachedResponse($method) ?? $this->getStaleCachedResponse($method);
+        if ($response !== null) {
+            return ['response' => $response, 'lock' => null];
+        }
+
+        // Publisher may have released between the last probe and the deadline.
+        // One final acquire avoids stranding every follower on wait_timeout while
+        // the lock is actually free (casual category cold-load stampede).
+        $lock = $this->acquireBuildLock($method);
+        if ($lock !== null) {
+            $response = $this->getCachedResponse($method);
+            if ($response !== null) {
+                $this->releaseBuildLock($lock);
+
+                return ['response' => $response, 'lock' => null];
+            }
+
+            return ['response' => null, 'lock' => $lock];
+        }
+
+        return ['response' => null, 'lock' => null];
     }
 
     private function resolvePublishedResponseWaitTimeoutMs(int $timeoutMs): int

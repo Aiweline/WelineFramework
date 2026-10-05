@@ -27,6 +27,7 @@ final class WidgetI18n
         'Weline_Blog',
         'Weline_Review',
         'Weline_Product',
+        'Weline_Search',
         'Weline_Shipping',
         'Weline_Checkout',
         'Weline_B2B',

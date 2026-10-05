@@ -15,8 +15,6 @@ use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemeScopeVersionService;
 use Weline\Theme\Service\ThemeVersionPreviewResolver;
-use Weline\Theme\Service\Scoped\ThemeEditorContextFactory;
-
 /** Select ordinary template sources; execution always belongs to Template. */
 final class SolidifiedControllerTemplateResolver
 {
@@ -87,15 +85,32 @@ final class SolidifiedControllerTemplateResolver
                 }
             }
             $typed = $context['editor_context'] ?? null;
-            if ($typed !== null && $typed !== '') {
-                $editor = ObjectManager::getInstance(ThemeEditorContextFactory::class)->fromInput(['editor_context' => $typed], 'layout');
-                $themeId = $editor->themeId;
-                $area = $editor->area;
-                $scope = $editor->scope->storageScope;
-                $storeMode = $editor->scope->storeMode;
-                $layoutOption = $editor->layoutOption;
-                $targetType = $editor->targetType;
-                $targetId = $editor->targetId;
+            if (\is_string($typed) && trim($typed) !== '') {
+                $typed = json_decode($typed, true);
+            }
+            if (\is_array($typed)) {
+                // Storefront editor iframe only has runtime ThemeApplicationContext.
+                // ThemeEditorContextFactory requires editor/preview/asset purpose, so
+                // parse the typed cursor owner here without re-entering that gate.
+                $themeId = (int)($typed['theme_id'] ?? $themeId);
+                $area = (string)($typed['area'] ?? $typed['editor_area'] ?? $area);
+                $scopePayload = $typed['scope'] ?? null;
+                if (\is_array($scopePayload)) {
+                    $scope = (string)($scopePayload['storage_scope'] ?? $scopePayload['scope_key'] ?? '');
+                    $storeMode = (string)($scopePayload['store_mode'] ?? 'normal');
+                    if ($scope === '' && isset($scopePayload['identity']) && \is_array($scopePayload['identity'])) {
+                        $scope = $this->scopes->toStorageScope(
+                            ScopeIdentity::fromArray($scopePayload['identity'])
+                        );
+                        $storeMode = (string)($scopePayload['identity']['store_mode'] ?? $storeMode);
+                    }
+                } else {
+                    $scope = (string)($context['canonical_scope'] ?? $context['scope'] ?? 'default.default.default');
+                    $storeMode = (string)($context['store_mode'] ?? 'normal');
+                }
+                $layoutOption = (string)($typed['layout_option'] ?? $layoutOption);
+                $targetType = (string)($typed['target_type'] ?? $targetType);
+                $targetId = (int)($typed['target_id'] ?? $targetId ?? 0);
             } else {
                 $themeId = (int)($context['theme_id'] ?? $context[$area . '_theme_id'] ?? $themeId);
                 $scope = (string)($context['canonical_scope'] ?? $context['scope'] ?? 'default.default.default');
@@ -103,6 +118,9 @@ final class SolidifiedControllerTemplateResolver
                 $layoutOption = (string)($context['layout_option'] ?? $layoutOption);
                 $targetType = (string)($context['theme_layout_target_type'] ?? $context['theme_layout_source_target_type'] ?? $targetType);
                 $targetId = (int)($context['theme_layout_target_id'] ?? $context['theme_layout_source_target_id'] ?? $targetId ?? 0);
+            }
+            if ($scope === '') {
+                $scope = 'default.default.default';
             }
             $cursor = array_replace($context, ['theme_id'=>$themeId, 'canonical_scope'=>$scope, 'scope'=>$scope, 'store_mode'=>$storeMode, 'area'=>$area]);
             $versionId = (int)($cursor['theme_version_id'] ?? $cursor['version_id'] ?? 0);
@@ -112,10 +130,24 @@ final class SolidifiedControllerTemplateResolver
                     : $this->scopeVersions->getCurrent($themeId, $scope, $storeMode, $area);
                 if ($version === null) { return null; }
                 $versionId = $version->getVersionId();
+                $cursor['content_revision'] = (int)($cursor['content_revision'] ?? 0) > 0
+                    ? (int)$cursor['content_revision']
+                    : max(1, (int)$version->getContentRevision());
             }
             $cursor['mode'] = (string)($cursor['mode'] ?? (($cursor['status'] ?? 'draft') === 'published' ? 'formal' : 'draft'));
+            $locale = trim((string)($context['locale'] ?? (\is_array($typed) ? ($typed['locale'] ?? '') : '')));
+            if ($locale === '' || strcasecmp($locale, 'default') === 0) {
+                $locale = 'zh_Hans_CN';
+            }
             $layoutIdentity = new LayoutIdentity($layoutOption, $scope, $targetType, max(0, (int)$targetId), (string)($context['locale'] ?? ''));
-            $resolved = ObjectManager::getInstance(ThemeVersionPreviewResolver::class)->resolve($themeId, $layoutType, $area, $layoutIdentity->toArray() + ['store_mode'=>$storeMode], $versionId, $cursor);
+            // purpose selects ThemeApplicationContext::current($area, $purpose).
+            // Storefront iframe installs runtime, not preview/editor.
+            $resolveIdentity = $layoutIdentity->toArray() + [
+                'store_mode' => $storeMode,
+                'content_scope' => \Weline\Theme\Api\Scoped\ThemeContentScope::fromStoredOwner($scope, $storeMode, $locale),
+                'purpose' => 'runtime',
+            ];
+            $resolved = ObjectManager::getInstance(ThemeVersionPreviewResolver::class)->resolve($themeId, $layoutType, $area, $resolveIdentity, $versionId, $cursor);
             RequestContext::set(ThemeVersionPreviewResolver::REQUEST_KEY, $resolved);
             if (!($resolved['resolved'] ?? false) || !($resolved['version_identity'] ?? null) instanceof ThemeVersionIdentity) {
                 throw new \RuntimeException((string)($resolved['reason'] ?? 'theme_layout_preview_source_unresolved'));

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Scoped;
 
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Model\WelineTheme;
 
@@ -15,6 +17,7 @@ final class ThemeScopedBindingProjector
     public function __construct(
         private readonly WelineTheme $themes,
         private readonly ThemeScopedProjectionSupport $support,
+        private readonly ScopeHierarchyInterface $scopes,
     ) {
     }
 
@@ -43,7 +46,10 @@ final class ThemeScopedBindingProjector
     /** @param array<string,mixed> $payload */
     public function project(ThemeEditorContext $context, array $payload): void
     {
-        if (!$context->scope->identity->isGlobal()) {
+        // ThemeContentScope no longer carries ScopeIdentity; compare storage owner
+        // against the global sentinel. Non-global bindings stay in workspace releases.
+        $globalStorage = $this->scopes->toStorageScope(ScopeIdentity::global());
+        if ($context->scope->storageScope !== $globalStorage) {
             return;
         }
         $this->projectGlobalThemeBinding($context->area, (int)($payload['theme_id'] ?? 0));

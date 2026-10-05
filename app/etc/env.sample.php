@@ -258,8 +258,12 @@ return [
             'request_log_enabled' => null,
             // 错误日志开关；null 表示沿用现有 DEV 判断
             'error_log_enabled' => null,
-            // Wait for the single homepage publisher through a cold rebuild before admitting another renderer.
-            'fpc_build_wait_timeout_ms' => 60000,
+            // Peer wait for the single-flight publisher. Cover slow storefront SSR
+            // (category often 6–25s) but stay below Nginx/client ~60s upstream timeouts.
+            // Readers with previous-generation STALE soft-serve immediately and skip this wait.
+            'fpc_build_wait_timeout_ms' => 15000,
+            // Publish-only grace only while the per-URI build lock is still held.
+            'fpc_publish_grace_wait_ms' => 10000,
             // Serve stale public FPC during rebuild lock contention instead of blocking readers.
             'fpc_stale_ttl_seconds' => 86400,
             'fpc_serve_stale_before_build' => true,
@@ -542,7 +546,7 @@ return [
                                              // 建议：短连接 30s，长连接 120s（配合客户端 30-60s 心跳）
             'idle_ttl' => 0,                 // 非长连接 Fiber 闲置超时（秒），0=禁用
             'max_active' => 12,              // 每 Worker 最多同时执行的动态请求；0=无限制
-            'admission_queue_wait_ms' => 60000,
+            'admission_queue_wait_ms' => 10000, // Fiber 准入排队上限（硬顶 10s）
             'admission_queue_depth' => 1024,
         ],
         // Worker 自动扩缩容配置
