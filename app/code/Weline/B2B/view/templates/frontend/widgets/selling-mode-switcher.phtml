@@ -41,8 +41,94 @@ try {
 }
 $skuForGate = trim((string)($offerForFlags['sku'] ?? ''));
 
-// No active price-list tier: omit the widget. Do not hydrate EAV or selling-mode
-// config on this path — those queries only matter when wholesale UI can render.
+$siteTobEnabled = true;
+try {
+    /** @var SellingModePolicy $sitePolicy */
+    $sitePolicy = ObjectManager::getInstance(SellingModePolicy::class);
+    $siteTobEnabled = $sitePolicy->isModeEnabled(
+        SellingModePolicy::MODE_TOB,
+        $websiteId,
+        $storeId,
+        null
+    );
+} catch (\Throwable) {
+    $siteTobEnabled = true;
+}
+
+/**
+ * When site tob is on but this SKU cannot wholesale-display, emit a soft hint host
+ * (JS shows it only while preferredMode=tob). Do not invent wholesale pricing UI.
+ * Cart URL must be resolved outside the static closure: @url compiles to $this->getUrl()
+ * which fatals inside static function () (not in object context).
+ */
+$retailCartUrl = ObjectManager::getInstance(\Weline\Framework\Http\Url::class)->getUrl('cart');
+$emitRetailOnlyTobHint = static function () use ($escape, $websiteId, $retailCartUrl): void {
+    ?>
+<div class="b2b-retail-only-hint product-native-detail__price-label"
+     data-b2b-retail-only-hint="1"
+     data-website-id="<?= (int)$websiteId ?>"
+     data-weline-load="b2bSellingMode"
+     data-testid="b2b-retail-only-tob-hint"
+     role="status"
+     hidden>
+    <p class="b2b-retail-only-hint__text">
+        <lang>当前为批发浏览；本商品仅支持零售。加入购物车 / 立即结账将进入零售车。</lang>
+    </p>
+    <a class="b2b-retail-only-hint__link"
+       href="<?= $escape($retailCartUrl) ?>?cart_type=toc"
+       data-b2b-retail-only-cart-link
+       data-cart-type="toc"
+       data-testid="b2b-retail-only-view-toc-cart">
+        <lang>查看零售车</lang>
+    </a>
+</div>
+<script>
+(function (w, d) {
+    /* Inline boot: unhide when chrome/cookie is tob even if selling-mode.js cache is stale. */
+    function readChromeMode() {
+        try {
+            var htmlMode = String(d.documentElement.getAttribute('data-selling-mode') || '').toLowerCase();
+            if (htmlMode === 'tob' || htmlMode === 'toc') {
+                return htmlMode;
+            }
+        } catch (e0) {}
+        try {
+            var parts = String(d.cookie || '').split(';');
+            for (var i = 0; i < parts.length; i += 1) {
+                var pair = parts[i].split('=');
+                var key = String(pair[0] || '').trim();
+                if (key !== 'weline_selling_mode' && !/^weline_selling_mode_w\d+$/.test(key)) {
+                    continue;
+                }
+                var value = decodeURIComponent(String(pair[1] || '')).toLowerCase();
+                if (value === 'tob' || value === 'toc') {
+                    return value;
+                }
+            }
+        } catch (e1) {}
+        try {
+            var explicit = String(w.sessionStorage.getItem('weline_cart_type_explicit') || '').toLowerCase();
+            if (explicit === 'tob' || explicit === 'toc') {
+                return explicit;
+            }
+        } catch (e2) {}
+        return 'toc';
+    }
+    function applyRetailOnlyHints() {
+        var show = readChromeMode() === 'tob';
+        d.querySelectorAll('[data-b2b-retail-only-hint="1"]').forEach(function (el) {
+            el.hidden = !show;
+        });
+    }
+    applyRetailOnlyHints();
+    w.addEventListener('weline:selling-mode-changed', applyRetailOnlyHints);
+    w.addEventListener('weline:cart-type-changed', applyRetailOnlyHints);
+})(window, document);
+</script>
+    <?php
+};
+
+// No active price-list tier: omit wholesale switcher. Do not hydrate EAV on this path.
 try {
     /** @var \Weline\B2B\Service\ProductWholesaleEligibility $eligibility */
     $eligibility = ObjectManager::getInstance(\Weline\B2B\Service\ProductWholesaleEligibility::class);
@@ -56,6 +142,9 @@ try {
 if (!$tobEnabled) {
     if (RequestContext::isInitialized()) {
         RequestContext::set('b2b.pdp_wholesale_display', false);
+    }
+    if ($siteTobEnabled) {
+        $emitRetailOnlyTobHint();
     }
     return;
 }
@@ -81,6 +170,9 @@ try {
 if (!$tobEnabled) {
     if (RequestContext::isInitialized()) {
         RequestContext::set('b2b.pdp_wholesale_display', false);
+    }
+    if ($siteTobEnabled) {
+        $emitRetailOnlyTobHint();
     }
     return;
 }

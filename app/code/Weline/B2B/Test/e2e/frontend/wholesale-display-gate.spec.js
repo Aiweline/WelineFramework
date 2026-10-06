@@ -56,6 +56,10 @@ moduleDescribe(test, MODULE, '批发显示门禁', () => {
       expect(noBody.includes('data-testid="selling-mode-tob"')).toBe(false);
       expect(noBody.includes('data-testid="b2b-selling-mode"')).toBe(false);
       expect(noBody.includes('data-testid="b2b-qty-tiers"')).toBe(false);
+      // Soft retail-only hint host may be present (hidden until tob preference); never forged tiers.
+      if (noBody.includes('data-testid="b2b-retail-only-tob-hint"')) {
+        expect(noBody.includes('data-b2b-retail-only-hint="1"')).toBe(true);
+      }
 
       // Positive path (SKU with active tiers) is covered by fixture eligible_display=true
       // and VIP Browser probe on product 558; guest SSR host may differ by website scope.

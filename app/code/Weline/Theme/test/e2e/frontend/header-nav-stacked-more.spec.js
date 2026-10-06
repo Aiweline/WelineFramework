@@ -17,7 +17,17 @@ const {
 
 const MODULE = 'Weline_Theme';
 const ROOT = path.resolve(__dirname, '../../../../../../..');
-const BASE = process.env.WELINE_E2E_BASE_URL || 'https://p05113ef3.test.weline.com:9555';
+const BASE = process.env.WELINE_E2E_BASE_URL || 'https://p05113ef3.test.weline.com';
+
+// 溢出首算完成标记（解析期 init 打完即设）；断言前必须等到，禁止固定 sleep 撞首算窗口
+async function waitForNavOverflowReady(page) {
+  await page.waitForFunction(
+    () => !!document.querySelector('.header-main-nav-inner[data-nav-overflow-ready="1"]'),
+    null,
+    { timeout: 30000 }
+  );
+  await page.waitForTimeout(250);
+}
 
 function readNavState() {
   const inner = document.querySelector('.header-main-nav-inner');
@@ -92,7 +102,7 @@ moduleDescribe(test, MODULE, 'header stacked nav more full-width', () => {
   moduleCase(test, { module: MODULE, id: 'A-e2e-layout' }, '≤768 两行栈：More 可见当且仅当确有溢出项', async ({ page }) => {
     await page.setViewportSize({ width: 720, height: 900 });
     await page.goto(`${BASE}/?e2e_nav_more=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(450);
+    await waitForNavOverflowReady(page);
 
     const state = await page.evaluate(readNavState);
 
@@ -115,7 +125,7 @@ moduleDescribe(test, MODULE, 'header stacked nav more full-width', () => {
   moduleCase(test, { module: MODULE, id: 'A2-desktop-yield' }, '单行宽屏：同行不误判分行，右簇不被挤扁', async ({ page }) => {
     await page.setViewportSize({ width: 1100, height: 900 });
     await page.goto(`${BASE}/?e2e_nav_yield=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(500);
+    await waitForNavOverflowReady(page);
 
     const state = await page.evaluate(readNavState);
 
@@ -139,7 +149,7 @@ moduleDescribe(test, MODULE, 'header stacked nav more full-width', () => {
   moduleCase(test, { module: MODULE, id: 'A3-restore-no-hide-narrow' }, '收窄后再加宽：分类可吐回且不整块 hide-narrow', async ({ page }) => {
     await page.setViewportSize({ width: 800, height: 900 });
     await page.goto(`${BASE}/?e2e_nav_restore=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(500);
+    await waitForNavOverflowReady(page);
 
     const narrow = await page.evaluate(() => {
       const cats = document.querySelector('.header-categories');
@@ -171,7 +181,18 @@ moduleDescribe(test, MODULE, 'header stacked nav more full-width', () => {
     }
 
     await page.setViewportSize({ width: 1400, height: 900 });
-    await page.waitForTimeout(700);
+    // 加宽吐回受滞回（HYSTERESIS）与 load 重测影响，轮询直到收敛，禁止固定 sleep 抢跑
+    await expect.poll(async () => {
+      const v = await page.evaluate(() => {
+        const items = Array.from(document.querySelectorAll('.categories-list > .category-item'))
+          .filter((el) => !el.classList.contains('categories-overflow-wrapper'));
+        const policyUnits = Array.from(document.querySelectorAll(
+          '.header-policy-links-slot .header-policy-links__inline, .header-policy-links-slot .header-policy-links__menu-wrap'
+        ));
+        return items.concat(policyUnits).filter((c) => !c.classList.contains('hidden') && !c.classList.contains('is-nav-overflow-hidden')).length;
+      });
+      return v;
+    }, { timeout: 8000, intervals: [300, 500, 700] }).toBeGreaterThan(narrow.vis);
     const wide = await page.evaluate(() => {
       const cats = document.querySelector('.header-categories');
       const items = Array.from(document.querySelectorAll('.categories-list > .category-item'))
@@ -192,11 +213,47 @@ moduleDescribe(test, MODULE, 'header stacked nav more full-width', () => {
     expect(wide.vis + wide.hid).toBe(wide.total);
   });
 
+  moduleCase(test, { module: MODULE, id: 'A4-parse-init' }, '解析期首算：DCL 即 More 藏显就绪、无压扁窗口', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await page.goto(`${BASE}/?e2e_nav_parse=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    const early = await page.evaluate(() => {
+      const inner = document.querySelector('.header-main-nav-inner');
+      const catList = document.getElementById('categories-list');
+      const policyUnits = Array.from(document.querySelectorAll(
+        '.header-policy-links-slot .header-policy-links__inline, .header-policy-links-slot .header-policy-links__menu-wrap'
+      ));
+      const cats = catList
+        ? Array.from(catList.children).filter((el) => el.id !== 'categories-overflow-wrapper' && !el.classList.contains('categories-overflow-wrapper'))
+        : [];
+      const candidates = cats.concat(policyUnits);
+      const visible = candidates.filter((el) => !el.classList.contains('hidden') && !el.classList.contains('is-nav-overflow-hidden'));
+      const squished = visible.filter((el) => el.scrollWidth - el.clientWidth > 2 || el.getBoundingClientRect().width < 20);
+      const more = document.getElementById('categories-overflow-wrapper');
+      const moreVis = !!more && !more.hidden && getComputedStyle(more).display !== 'none'
+        && more.getBoundingClientRect().width > 1;
+      return {
+        ready: !!(inner && inner.getAttribute('data-nav-overflow-ready') === '1'),
+        squishedLabels: squished.map((el) => (el.textContent || '').trim().slice(0, 12)),
+        moreVis,
+        hiddenCount: candidates.length - visible.length,
+      };
+    });
+    expect(early.ready).toBeTruthy();
+    expect(early.squishedLabels).toEqual([]);
+    expect(early.moreVis).toBe(early.hiddenCount > 0);
+  });
+
   moduleCase(test, { module: MODULE, id: 'B-source-contract' }, '源码契约：分行全宽 + 左簇整体 More', async () => {
+    // 溢出计算实体在 statics JS；基础 partial 只负责加载它
     const header = fs.readFileSync(
+      path.join(ROOT, 'app/code/Weline/Theme/view/statics/js/partials/header-default.js'),
+      'utf8'
+    );
+    const partial = fs.readFileSync(
       path.join(ROOT, 'app/code/Weline/Theme/view/theme/frontend/partials/header/default.phtml'),
       'utf8'
     );
+    expect(partial).toContain('js/partials/header-default.js');
     expect(header).toContain('function clustersOnSeparateRows()');
     expect(header).toContain('rowThreshold');
     expect(header).toContain('跳过互让');
@@ -205,6 +262,12 @@ moduleDescribe(test, MODULE, 'header stacked nav more full-width', () => {
     expect(header).toContain('function collectLeftOverflowCandidates()');
     expect(header).toContain('header-left-cluster-more');
     expect(header).toContain('政策已列入溢出候选，不再单独预留');
+    // 槽内兜底计宽只算「非候选」链：已收候选的链再计一次会把左预算按当前可见项宽
+    // 逐轮吃掉（可见越多→扣得越多→长不回来），表现为中间大块空白却仍显示「更多」
+    expect(header).toContain("a.closest('.category-item')");
+    expect(header).toContain("a.closest('.header-policy-links__menu-wrap')");
+    expect(header).toContain("a.matches('a.header-policy-links__inline')");
+    expect(header).toContain('data-nav-overflow-ready');
     expect(header).not.toContain('const shouldHide = width < 200');
     expect(header).toMatch(/function measureNavAvailableWidth\(\)\s*\{[\s\S]*?clustersOnSeparateRows\(\)/);
     expect(header).toMatch(/function measureCatAvailableWidth\(\)\s*\{[\s\S]*?clustersOnSeparateRows\(\)/);

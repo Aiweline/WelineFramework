@@ -1165,6 +1165,28 @@ $copy = [
         return;
     }
 
+    /**
+     * Buy-now / retail-only handoff: ?cart_type=toc|tob wins for this page view.
+     * Sets data-cart-type-handoff so B2B chrome sync does not overwrite with tob cookie.
+     * Does not rewrite weline_selling_mode cookie (keep global wholesale preference).
+     */
+    function applyCartTypeHandoffFromUrl() {
+        try {
+            const params = new URLSearchParams(globalThis.location.search || '');
+            const raw = String(params.get('cart_type') || params.get('selling_mode') || '').toLowerCase();
+            if (raw !== 'toc' && raw !== 'tob') {
+                return '';
+            }
+            root.setAttribute('data-cart-type', raw);
+            root.setAttribute('data-cart-type-handoff', raw);
+            root.classList.toggle('is-cart-type-tob', raw === 'tob');
+            return raw;
+        } catch (eHandoff) {
+            return '';
+        }
+    }
+    applyCartTypeHandoffFromUrl();
+
     const form = root.querySelector('[data-checkout-form]');
     const formHost = root.querySelector('[data-checkout-form-host]');
     const message = root.querySelector('[data-checkout-message]');
@@ -2181,6 +2203,10 @@ $copy = [
         continuePayBinding = null;
         clearContinuePayQuoteToken();
         syncContinuePayChrome();
+        // Explicit type switch ends one-shot URL handoff.
+        try {
+            root.removeAttribute('data-cart-type-handoff');
+        } catch (eHandoffClear) {}
         if (bucket.cart_type === 'tob' || bucket.type_code === 'tob') {
             try {
                 document.cookie = 'weline_selling_mode=tob; path=/; max-age=31536000';
@@ -3432,6 +3458,19 @@ $copy = [
 
     function checkoutCartType() {
         try {
+            const handoff = String(root.getAttribute('data-cart-type-handoff') || '').toLowerCase();
+            if (handoff === 'tob' || handoff === 'toc') {
+                return handoff;
+            }
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                const fromQuery = String(params.get('cart_type') || params.get('selling_mode') || '').toLowerCase();
+                if (fromQuery === 'tob' || fromQuery === 'toc') {
+                    root.setAttribute('data-cart-type', fromQuery);
+                    root.setAttribute('data-cart-type-handoff', fromQuery);
+                    return fromQuery;
+                }
+            } catch (eQuery) {}
             const fromRoot = String((root && root.getAttribute('data-cart-type')) || '').toLowerCase();
             if (fromRoot === 'tob' || fromRoot === 'toc') {
                 return fromRoot;

@@ -154,18 +154,22 @@
         return normalized;
     }
 
-    function notifyCartUpdated(result) {
+    function notifyCartUpdated(result, opts) {
+        const options = opts && typeof opts === 'object' ? opts : {};
         const summary = normalizeCartSummary(unwrapCartPayload(result));
         const count = summary
             ? Number(summary.cart_count != null ? summary.cart_count : summary.item_count)
             : null;
+        const retailSiblingPreview = options.retailSiblingPreview === true;
 
         if (summary && global.WelineCart && typeof global.WelineCart.rememberSummary === 'function') {
             global.WelineCart.rememberSummary(summary);
         }
 
         global.dispatchEvent(new CustomEvent('weline:cart-updated', {
-            detail: summary || {},
+            detail: summary
+                ? Object.assign({}, summary, retailSiblingPreview ? { source: 'retail-only-add-preview' } : {})
+                : {},
         }));
 
         const detail = {
@@ -179,6 +183,10 @@
         // Ensure mini-cart listeners exist even when the module loads after add-to-cart.
         if (global.Weline && typeof global.Weline.load === 'function') {
             Promise.resolve(global.Weline.load('miniCartIcon')).then(function () {
+                if (retailSiblingPreview && summary) {
+                    previewRetailSiblingMiniCart(summary);
+                    return;
+                }
                 if (global.Weline && global.Weline.MiniCart
                     && typeof global.Weline.MiniCart.applyCachedSummary === 'function') {
                     global.Weline.MiniCart.applyCachedSummary();
@@ -451,16 +459,23 @@
         if (productAllowsWholesaleAdd(button) && requested !== 'tob') {
             return;
         }
-        try {
-            if (global.WelineCart && typeof global.WelineCart.requestCartType === 'function') {
-                global.WelineCart.requestCartType('toc', {
-                    source: 'retail-only-product-add',
-                    forceNetwork: true,
-                });
-            }
-        } catch (eSync) {
-            // Chrome can still hydrate on next open from toc summary cache.
+        // Keep tob preference. Requesting toc here permanently kicked shoppers out of
+        // wholesale mode after a retail-only sibling add ("跑到零售车").
+        // toc summary is already typed-cached via notifyCartUpdated / rememberSummary.
+        void button;
+        void requestedType;
+    }
+
+    function retailSiblingAddMessage(fallback) {
+        var lang = String(
+            document.documentElement.lang
+            || document.documentElement.getAttribute('data-lang')
+            || '',
+        ).toLowerCase();
+        if (lang.startsWith('zh')) {
+            return '该商品不支持批发，已加入零售车。';
         }
+        return fallback || 'This item is retail-only and was added to the retail cart.';
     }
 
     async function addOfferFromButton(button) {
@@ -783,6 +798,52 @@
         message.appendChild(link);
     }
 
+    function appendCheckoutCartTypeHandoff(url, cartType) {
+        const next = String(cartType || '').toLowerCase() === 'tob' ? 'tob' : 'toc';
+        const raw = String(url || '').trim();
+        if (raw === '') {
+            return raw;
+        }
+        try {
+            const resolved = new URL(raw, global.location.origin);
+            resolved.searchParams.set('cart_type', next);
+            return resolved.pathname + resolved.search + resolved.hash;
+        } catch (eUrl) {
+            const join = raw.indexOf('?') >= 0 ? '&' : '?';
+            return raw + join + 'cart_type=' + encodeURIComponent(next);
+        }
+    }
+
+    function previewRetailSiblingMiniCart(summary) {
+        const payload = summary && typeof summary === 'object'
+            ? Object.assign({}, summary, { cart_type: 'toc', selling_mode: 'toc', source: 'retail-only-add-preview' })
+            : { cart_type: 'toc', selling_mode: 'toc', source: 'retail-only-add-preview' };
+        try {
+            if (global.WelineB2BSellingMode && typeof global.WelineB2BSellingMode.syncMiniCartChrome === 'function') {
+                global.WelineB2BSellingMode.syncMiniCartChrome('toc');
+            }
+        } catch (eChrome) {}
+        global.dispatchEvent(new CustomEvent('weline:cart-updated', {
+            detail: payload,
+        }));
+        global.dispatchEvent(new CustomEvent('weline:cart-type-changed', {
+            detail: {
+                cart_type: 'toc',
+                selling_mode: 'toc',
+                source: 'retail-only-add-preview',
+                forceNetwork: false,
+            },
+        }));
+        if (global.Weline && typeof global.Weline.load === 'function') {
+            Promise.resolve(global.Weline.load('miniCartIcon')).then(function () {
+                // Re-paint toc summary after module boot; skip preferred tob cache wipe.
+                global.dispatchEvent(new CustomEvent('weline:cart-updated', {
+                    detail: payload,
+                }));
+            }).catch(function () {});
+        }
+    }
+
     function readOptions(button) {
         const scope = widgetRoot(button);
         const options = {
@@ -791,11 +852,18 @@
             errorText: scope ? (scope.dataset.purchaseError || '') : '',
         };
         if ((button.dataset.action || '') === 'buy-now') {
-            options.onSuccess = function (activeButton) {
-                const checkoutUrl = activeButton.dataset.checkoutUrl || '';
-                if (checkoutUrl) {
-                    global.location.href = checkoutUrl;
+            options.onSuccess = function (activeButton, _detail, meta) {
+                let checkoutUrl = activeButton.dataset.checkoutUrl || '';
+                if (!checkoutUrl) {
+                    return;
                 }
+                const handoff = meta && meta.checkoutCartTypeHandoff
+                    ? String(meta.checkoutCartTypeHandoff).toLowerCase()
+                    : '';
+                if (handoff === 'toc' || handoff === 'tob') {
+                    checkoutUrl = appendCheckoutCartTypeHandoff(checkoutUrl, handoff);
+                }
+                global.location.href = checkoutUrl;
             };
         }
         return options;
@@ -861,7 +929,7 @@
      * AJAX-injected, so product-native-detail.css (hero-grid / gallery / buybox) is
      * missing unless we ensure it here — same pattern as HelpPay ensureShareCss.
      */
-    const PRODUCT_INFO_ASSET_VER = '20260326-purchase-panel-css1';
+    const PRODUCT_INFO_ASSET_VER = '20261006-retail-only-hint1';
     const PRODUCT_INFO_CSS = [
         'Weline_Product::css/widgets/product-native-detail.css?v=' + PRODUCT_INFO_ASSET_VER,
         'Weline_Theme::css/widgets/widget-instance-styles.css?v=' + PRODUCT_INFO_ASSET_VER,
@@ -991,6 +1059,10 @@
         }
         if (raw === 'purchase_panel_failed' || raw === 'product_id_required' || raw === 'add_failed') {
             return fallback || (isZh ? '无法打开加购面板' : 'Could not open options.');
+        }
+        // Hide Theme/runtime internal codes from shoppers (e.g. theme_runtime_consumer_context_required).
+        if (/^theme_[a-z0-9_]+$/i.test(raw) || /^theme_[a-z0-9_]+$/i.test(code)) {
+            return fallback || (isZh ? '暂时无法打开加购面板，请稍后重试' : 'Options are temporarily unavailable. Please try again.');
         }
         return raw;
     }
@@ -1305,21 +1377,36 @@
 
             try {
                 const requestedMode = resolveAddCartType(button);
+                const preferredBeforeAdd = preferredSellingModeHint();
                 const result = await addOfferFromButton(button);
                 button.classList.remove('is-loading');
                 button.disabled = false;
+                const payload = unwrapCartPayload(result);
+                const cartSummary = normalizeCartSummary(payload);
+                const actualMode = String(
+                    (cartSummary && (cartSummary.cart_type || cartSummary.selling_mode))
+                    || '',
+                ).toLowerCase() === 'tob' ? 'tob' : 'toc';
+                const retailSiblingRemap = preferredBeforeAdd === 'tob' && actualMode === 'toc';
                 if (isAddToCart) {
-                    notifyCartUpdated(result);
-                    const payload = unwrapCartPayload(result);
-                    const cartSummary = normalizeCartSummary(payload);
+                    notifyCartUpdated(result, { retailSiblingPreview: retailSiblingRemap });
                     syncChromeAfterRetailOnlyAdd(
                         button,
-                        cartSummary && (cartSummary.cart_type || cartSummary.selling_mode),
+                        actualMode,
                         requestedMode,
                     );
-                    const successText = String(
-                        resolvedOptions.successText || (payload && payload.message) || '',
+                    let successText = String(
+                        (payload && payload.message)
+                        || resolvedOptions.successText
+                        || '',
                     ).trim();
+                    // Wholesale preference + landed in toc: retail-only / remapped sibling.
+                    if (retailSiblingRemap) {
+                        successText = String(
+                            (payload && payload.cart_type_remapped && payload.message)
+                            || retailSiblingAddMessage(successText),
+                        ).trim();
+                    }
                     showAddToCartSuccess(
                         message,
                         successText,
@@ -1341,7 +1428,14 @@
                     message.textContent = resolvedOptions.successText || '';
                 }
                 if (typeof resolvedOptions.onSuccess === 'function') {
-                    resolvedOptions.onSuccess(button, detailRoot(button));
+                    const successMeta = {};
+                    // Buy-now into toc while preferred tob → hand off checkout cart_type=toc (avoid empty tob).
+                    if (!isAddToCart && retailSiblingRemap) {
+                        successMeta.checkoutCartTypeHandoff = 'toc';
+                    } else if (!isAddToCart && preferredBeforeAdd === 'tob' && !productAllowsWholesaleAdd(button)) {
+                        successMeta.checkoutCartTypeHandoff = 'toc';
+                    }
+                    resolvedOptions.onSuccess(button, detailRoot(button), successMeta);
                 }
             } catch (error) {
                 button.classList.remove('is-loading');

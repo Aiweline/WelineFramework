@@ -209,6 +209,36 @@
     display: none !important;
 }
 
+/* Soft info: preferred tob + retail-only SKU (no wholesale tiers). */
+.b2b-retail-only-hint {
+    display: grid;
+    gap: 6px;
+    margin: 8px 0 10px;
+    padding: 10px 12px;
+    border-radius: var(--weline-radius-sm, 6px);
+    background: var(--weline-theme-surface-muted, var(--color-bg-secondary, #f7f4ef));
+    color: var(--weline-theme-text-muted, var(--color-text-secondary, #565959));
+    font-size: var(--weline-font-size-sm, 14px);
+    line-height: 1.45;
+}
+
+.b2b-retail-only-hint[hidden] {
+    display: none !important;
+}
+
+.b2b-retail-only-hint__text {
+    margin: 0;
+    color: var(--weline-theme-text, var(--color-text-primary, #0f1111));
+    font-weight: 550;
+}
+
+.b2b-retail-only-hint__link {
+    justify-self: start;
+    color: var(--weline-theme-link, var(--color-link, #0b57d0));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
 .b2b-selling-mode__cta {
     justify-self: start;
     width: auto;

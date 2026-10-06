@@ -478,7 +478,6 @@ SKU,SKU
 订单不存在或不可用,"Order does not exist or is unavailable"
 订单已不可继续支付,"Order can no longer continue payment"
 订单商品信息暂不可用。,"Order item information is temporarily unavailable."
-批发快捷支付请使用完整结账,"Wholesale express checkout requires full checkout"
 请选择支付方式,"Please select a payment method"
 购物车为空,"Cart is empty"
 当前地区暂无可用配送，请调整地址后重试或使用完整结账,"No shipping available for this region; adjust the address and retry, or use full checkout"
@@ -554,6 +553,7 @@ SKU,SKU
 当前收货国家：%{1}。,"Current destination country: %{1}."
 系统暂未返回可用的配送方案。请确认收货地址与商品信息，或联系客服了解具体原因（常见如商品缺重量/尺寸，或目的地限制）。,"No shipping options were returned. Please confirm the shipping address and product details, or contact support (common causes: missing weight/dimensions, or destination restrictions)."
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
+批发快捷支付请使用完整结账,"Wholesale express checkout requires full checkout"
 确认收货地址、配送方式和支付信息后即可提交订单。,"Review your shipping and payment details"
 本地测试支付,"Local test payment"
 仅用于本地开发验证，不会产生真实扣款。,"For local development verification only; no real charge is made."

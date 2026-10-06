@@ -73,8 +73,25 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringNotContainsString('data-testid="b2b-apply-guest-login"', $switcherContent);
         self::assertStringNotContainsString("<?= __('购买方式') ?>", $switcherContent);
 
+        self::assertStringContainsString('data-b2b-retail-only-hint="1"', $switcherContent);
+        self::assertStringContainsString('data-testid="b2b-retail-only-tob-hint"', $switcherContent);
+        self::assertStringContainsString('本商品仅支持零售', $switcherContent);
+        self::assertStringContainsString('查看零售车', $switcherContent);
+        self::assertStringContainsString('cart_type=toc', $switcherContent);
+        self::assertStringContainsString('Inline boot', $switcherContent);
+        self::assertStringContainsString('applyRetailOnlyHints', $switcherContent);
+
         $jsContent = (string)file_get_contents($js);
+        self::assertStringContainsString('syncRetailOnlyHints', $jsContent);
+        self::assertStringContainsString('chromeModeForRetailOnlyHint', $jsContent);
+        self::assertStringContainsString('syncRetailOnlyHintBuyboxMirrors', $jsContent);
+        self::assertStringContainsString('retail-only-add-preview', $jsContent);
+        self::assertStringContainsString('data-cart-type-handoff', $jsContent);
         self::assertStringContainsString('Weline.UI.drawer.open', $jsContent);
+
+        $modules = self::bp('app/code/Weline/B2B/view/statics/frontend/weline.modules.js');
+        $modulesContent = (string)file_get_contents($modules);
+        self::assertStringContainsString('selling-mode.js?v=20261006-retail-only-hint1', $modulesContent);
         self::assertStringNotContainsString('loginRedirect', $jsContent);
         self::assertStringNotContainsString('global.location.href = url.toString()', $jsContent);
         self::assertStringContainsString('openApplyFlow', $jsContent);

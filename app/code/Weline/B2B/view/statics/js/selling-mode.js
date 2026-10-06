@@ -157,6 +157,7 @@
         document.documentElement.setAttribute('data-selling-mode', mode);
         syncButtons(mode, root);
         syncQty(mode, root);
+        syncRetailOnlyHints(mode);
         // Adapter from Cart-owned Event uses emit:false to avoid preferCache race.
         if (opts.emit === false) {
             return;
@@ -168,6 +169,103 @@
         global.dispatchEvent(new CustomEvent('weline:cart-type-changed', {
             detail: { cart_type: mode, selling_mode: mode, source: 'b2b-setMode' }
         }));
+    }
+
+    /**
+     * Effective chrome mode for retail-only hints.
+     * Prefer preferredMode; also honor cookie / html[data-selling-mode] so the banner
+     * matches the mini-cart「批发」caption even when guest preferredMode forces toc.
+     */
+    function chromeModeForRetailOnlyHint(root) {
+        var preferred = preferredMode(root);
+        if (preferred === 'tob') {
+            return 'tob';
+        }
+        var fromHtml = String(document.documentElement.getAttribute('data-selling-mode') || '').toLowerCase();
+        if (fromHtml === 'tob') {
+            return 'tob';
+        }
+        var fromCookie = String(readCookie() || '').toLowerCase();
+        if (fromCookie === 'tob') {
+            return 'tob';
+        }
+        try {
+            var mini = document.querySelector('[data-w-mini-cart="1"]');
+            if (mini && String(mini.getAttribute('data-cart-type') || '').toLowerCase() === 'tob') {
+                return 'tob';
+            }
+        } catch (eMini) {}
+        return preferred === 'tob' ? 'tob' : 'toc';
+    }
+
+    /**
+     * Show soft retail-only banner when chrome is tob but the PDP/panel
+     * has no wholesale switcher (SKU not wholesale-display eligible).
+     */
+    function syncRetailOnlyHints(mode) {
+        if (mode !== 'tob' && mode !== 'toc') {
+            mode = chromeModeForRetailOnlyHint(null);
+        } else {
+            mode = mode === 'tob' ? 'tob' : 'toc';
+        }
+        // When caller passes toc but chrome still shows wholesale, keep hint visible.
+        if (mode !== 'tob' && chromeModeForRetailOnlyHint(null) === 'tob') {
+            mode = 'tob';
+        }
+        var show = mode === 'tob';
+        document.querySelectorAll('[data-b2b-retail-only-hint="1"]').forEach(function (el) {
+            el.hidden = !show;
+        });
+        syncRetailOnlyHintBuyboxMirrors(show);
+    }
+
+    /**
+     * Amazon buybox CTAs sit in a side column; mirror the soft hint above qty/actions
+     * so shoppers see「进零售车」next to 加入购物车 / 立即结账.
+     */
+    function syncRetailOnlyHintBuyboxMirrors(show) {
+        document.querySelectorAll(
+            '.product-native-detail, [data-testid="storefront-product-detail"]'
+        ).forEach(function (detail) {
+            var source = detail.querySelector('[data-b2b-retail-only-hint="1"]');
+            var buybox = detail.querySelector('.product-native-detail__buybox');
+            if (!buybox) {
+                return;
+            }
+            var mirror = buybox.querySelector('[data-b2b-retail-only-hint-mirror="1"]');
+            if (!show || !source) {
+                if (mirror) {
+                    mirror.hidden = true;
+                }
+                return;
+            }
+            if (!mirror) {
+                mirror = source.cloneNode(true);
+                mirror.setAttribute('data-b2b-retail-only-hint-mirror', '1');
+                mirror.removeAttribute('data-b2b-retail-only-hint');
+                mirror.removeAttribute('data-weline-load');
+                mirror.removeAttribute('data-testid');
+                mirror.setAttribute('data-testid', 'b2b-retail-only-tob-hint-buybox');
+                mirror.querySelectorAll('script').forEach(function (node) {
+                    node.parentNode && node.parentNode.removeChild(node);
+                });
+                var anchor = buybox.querySelector('.product-native-detail__qty-row')
+                    || buybox.querySelector('.product-native-detail__actions')
+                    || buybox.querySelector('[data-wslot="product-purchase-actions"]');
+                if (anchor && anchor.parentNode === buybox) {
+                    buybox.insertBefore(mirror, anchor);
+                } else {
+                    buybox.appendChild(mirror);
+                }
+            } else {
+                // Refresh text from source in case locale/panel reinjected.
+                mirror.innerHTML = source.innerHTML;
+                mirror.querySelectorAll('script').forEach(function (node) {
+                    node.parentNode && node.parentNode.removeChild(node);
+                });
+            }
+            mirror.hidden = false;
+        });
     }
 
     var FIRST_PROBE_MS = 45000;
@@ -1191,18 +1289,21 @@
     function syncCheckoutChrome(mode) {
         mode = mode === 'tob' ? 'tob' : 'toc';
         document.querySelectorAll('[data-weline-checkout], .weline-checkout').forEach(function (root) {
-            ensureMiniCartExtrasVisible(root, mode);
+            // One-shot buy-now / cart URL handoff: do not overwrite with preferred tob cookie.
+            var handoff = String(root.getAttribute('data-cart-type-handoff') || '').toLowerCase();
+            var effective = (handoff === 'toc' || handoff === 'tob') ? handoff : mode;
+            ensureMiniCartExtrasVisible(root, effective);
             if (global.WelineB2BCheckoutTob && typeof global.WelineB2BCheckoutTob.applyCartType === 'function') {
                 try {
-                    global.WelineB2BCheckoutTob.applyCartType(root, mode);
+                    global.WelineB2BCheckoutTob.applyCartType(root, effective);
                     return;
                 } catch (e) {
                     // fall through
                 }
             }
-            root.setAttribute('data-cart-type', mode);
-            root.classList.toggle('is-cart-type-tob', mode === 'tob');
-            syncMiniCartCouponAvailability(root, mode);
+            root.setAttribute('data-cart-type', effective);
+            root.classList.toggle('is-cart-type-tob', effective === 'tob');
+            syncMiniCartCouponAvailability(root, effective);
         });
     }
 
@@ -1343,21 +1444,25 @@
 
     function syncCartPageChrome(mode) {
         mode = mode === 'tob' ? 'tob' : 'toc';
-        var cartLabel = mode === 'tob' ? i18n('data-i18n-tob-cart', '批发车') : i18n('data-i18n-toc-cart', '零售车');
         document.querySelectorAll('[data-weline-cart]').forEach(function (root) {
-            root.setAttribute('data-cart-type', mode);
-            root.classList.toggle('is-cart-type-tob', mode === 'tob');
+            var handoff = String(root.getAttribute('data-cart-type-handoff') || '').toLowerCase();
+            var effective = (handoff === 'toc' || handoff === 'tob') ? handoff : mode;
+            var cartLabel = effective === 'tob'
+                ? i18n('data-i18n-tob-cart', '批发车')
+                : i18n('data-i18n-toc-cart', '零售车');
+            root.setAttribute('data-cart-type', effective);
+            root.classList.toggle('is-cart-type-tob', effective === 'tob');
             root.querySelectorAll('[data-cart-page-title]').forEach(function (el) {
                 el.textContent = cartLabel;
             });
             root.querySelectorAll('[data-b2b-mini-cart-type-option]').forEach(function (btn) {
                 var option = String(btn.getAttribute('data-b2b-mini-cart-type-option') || '').toLowerCase();
-                var active = option === mode;
+                var active = option === effective;
                 btn.classList.toggle('is-selected', active);
                 btn.setAttribute('aria-pressed', active ? 'true' : 'false');
                 btn.setAttribute('data-state', active ? 'active' : 'inactive');
             });
-            syncMiniCartCouponAvailability(root, mode);
+            syncMiniCartCouponAvailability(root, effective);
         });
     }
 
@@ -1438,6 +1543,7 @@
             enhanceMiniCarts: enhanceMiniCarts,
             syncMiniCartChrome: syncMiniCartChrome,
             syncCheckoutChrome: syncCheckoutChrome,
+            syncRetailOnlyHints: syncRetailOnlyHints,
             syncCouponAvailability: syncMiniCartCouponAvailability,
             i18n: i18n,
             bindAccountIdentities: bindAllAccountIdentities,
@@ -1446,6 +1552,7 @@
             readCookie: readCookie,
             writeCookie: writeCookie
         };
+        syncRetailOnlyHints(preferredMode(null));
         enhanceMiniCarts({ refresh: false });
         global.addEventListener('weline:selling-mode-changed', function (event) {
             var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
@@ -1454,6 +1561,12 @@
                 return;
             }
             var mode = String(detail.selling_mode || detail.cart_type || preferredMode(null)).toLowerCase();
+            syncRetailOnlyHints(mode === 'tob' ? 'tob' : 'toc');
+            // View-only retail sibling preview: paint toc chrome without flipping preference cookie.
+            if (detail.source === 'retail-only-add-preview') {
+                syncMiniCartChrome('toc');
+                return;
+            }
             syncMiniCartChrome(mode === 'tob' ? 'tob' : 'toc');
             syncCartPageChrome(mode === 'tob' ? 'tob' : 'toc');
             syncCheckoutChrome(mode === 'tob' ? 'tob' : 'toc');
@@ -1468,15 +1581,30 @@
             if (mode !== 'toc' && mode !== 'tob') {
                 return;
             }
+            // Soft preview after retail-only add: show toc mini-cart without writing tob→toc cookie.
+            if (detail.source === 'retail-only-add-preview') {
+                syncMiniCartChrome('toc');
+                syncRetailOnlyHints(preferredMode(null));
+                return;
+            }
+            // Explicit type switch clears page handoff so chrome follows the new preference.
+            document.querySelectorAll('[data-cart-type-handoff]').forEach(function (node) {
+                node.removeAttribute('data-cart-type-handoff');
+            });
             // Silent adapt: keep forceNetwork on the original Cart Event; do not re-emit.
             setMode(document.querySelector('[data-b2b-selling-mode="1"]'), mode, { emit: false });
             syncMiniCartChrome(mode);
             syncCartPageChrome(mode);
             syncCheckoutChrome(mode);
+            syncRetailOnlyHints(mode);
         });
         global.addEventListener('weline:cart-updated', function (event) {
             var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
             var mode = String(detail.cart_type || detail.selling_mode || preferredMode(null)).toLowerCase();
+            if (detail.source === 'retail-only-add-preview') {
+                syncMiniCartChrome('toc');
+                return;
+            }
             syncMiniCartChrome(mode === 'tob' ? 'tob' : 'toc');
             syncCheckoutChrome(mode === 'tob' ? 'tob' : 'toc');
         });
@@ -1494,6 +1622,7 @@
                 label: 'b2b-selling-mode',
                 onFlush: function () {
                     bindAllSellingModes();
+                    syncRetailOnlyHints(preferredMode(null));
                     enhanceMiniCarts({ refresh: false });
                     bindAllAccountIdentities();
                 }
