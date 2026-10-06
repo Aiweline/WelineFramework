@@ -19,9 +19,11 @@ final class ThemeFrontendContentGridContractTest extends TestCase
             $this->assertFileExists($path);
             $content = (string) file_get_contents($path);
 
-            $this->assertStringContainsString('.w-frontend-sidebar:blank,', $content, $path);
-            $this->assertStringContainsString('.w-frontend-sidebar:not(:has(*))', $content, $path);
-            $this->assertStringContainsString('.w-frontend-content-before:not(:has(*))', $content, $path);
+            // Never comma-mix :blank with :not(:has(*)) — unsupported :blank drops the whole rule in Chromium.
+            $this->assertStringContainsString('.w-frontend-sidebar:not(:has(*)),', $content, $path);
+            $this->assertStringContainsString('.w-frontend-content-before:not(:has(*)),', $content, $path);
+            $this->assertStringContainsString('.w-frontend-content-after:not(:has(*)) { display: none; }', $content, $path);
+            $this->assertStringNotContainsString('.w-frontend-sidebar:blank,', $content, $path);
             $this->assertStringContainsString(
                 '.w-frontend-content-grid:has(> .w-frontend-sidebar:has(*):first-child)',
                 $content,

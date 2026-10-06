@@ -61,12 +61,10 @@
     .w-frontend-page { display: grid; gap: var(--weline-space-6); padding-block: var(--weline-space-8); }
     .w-frontend-content-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--weline-space-6); align-items: start; }
     .w-frontend-content, .w-frontend-sidebar { min-width: 0; }
-    /* Empty chrome slots must not occupy a grid row/column (whitespace/:blank 不够时仍会留顶空). */
-    .w-frontend-sidebar:blank,
+    /* Empty chrome slots must not occupy a grid row/column.
+       Do NOT mix :blank into this list — unsupported :blank drops the whole rule in Chromium. */
     .w-frontend-sidebar:not(:has(*)),
-    .w-frontend-content-before:blank,
     .w-frontend-content-before:not(:has(*)),
-    .w-frontend-content-after:blank,
     .w-frontend-content-after:not(:has(*)) { display: none; }
     .w-frontend-header, .w-frontend-footer { background: var(--weline-theme-surface); color: var(--weline-theme-text); }
     .w-frontend-header { border-bottom: 1px solid var(--weline-theme-border); }
