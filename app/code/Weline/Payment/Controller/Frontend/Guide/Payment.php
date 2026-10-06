@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Payment\Controller\Frontend\Guide;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Phrase\Parser;
 use Weline\Payment\Service\PaymentCustomerGuideRegistry;
 
 /**
@@ -21,6 +22,10 @@ final class Payment extends FrontendController
 
     public function index(): string
     {
+        Parser::prefetchWords([
+            '支付方式指南',
+            '查看各支付供应商的客户支付指南与支付政策。',
+        ]);
         $title = (string) __('支付方式指南');
         // 不启用即隐藏：可用性由 Provider 层门闩判定，指南层只消费结果。
         $entries = $this->guideRegistry->listStorefrontPublishedEntries();

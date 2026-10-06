@@ -408,6 +408,15 @@ class Taglib
                 continue;
             }
 
+            // @lang/@trans 编译期烘焙：PHP 语境必须用 var_export，避免法语撇号等打断单引号字面量（ParseError → 500）
+            [$pos, $raw, $replacement] = $this->adjustBakedLangInlineReplacement(
+                $content,
+                $pos,
+                (string) $raw,
+                $replacement,
+                (string) $name
+            );
+
             // 替换原文中的 @tag{...} 为生成的 PHP 代码
             $content = substr($content, 0, $pos) . $replacement . substr($content, $pos + strlen($raw));
             $len = strlen($content);
@@ -416,6 +425,75 @@ class Taglib
         }
 
         return $content;
+    }
+
+    /**
+     * Keep compile-time baked lang/trans text PHP-parse-safe.
+     *
+     * HTML context keeps the raw translation (apostrophes are fine in markup).
+     * Inside <?php / <?= ... ?>, emit var_export(); if the token is wrapped as
+     * '@lang(...)' / "@lang(...)", consume the surrounding quotes so we do not
+     * produce ''...'...''.
+     *
+     * @return array{0:int,1:string,2:string} [replacePos, replaceRaw, replacement]
+     */
+    private function adjustBakedLangInlineReplacement(
+        string $content,
+        int $pos,
+        string $raw,
+        string $replacement,
+        string $tagName
+    ): array {
+        $normalized = strtolower(ltrim($tagName, 'w:'));
+        if ($normalized !== 'lang' && $normalized !== 'trans') {
+            return [$pos, $raw, $replacement];
+        }
+
+        // Dynamic/runtime lang already returns PHP echo stubs — leave untouched.
+        if (str_contains($replacement, '<?')) {
+            return [$pos, $raw, $replacement];
+        }
+
+        if (!$this->isOffsetInsidePhp($content, $pos)) {
+            return [$pos, $raw, $replacement];
+        }
+
+        $rawLen = strlen($raw);
+        $before = $pos > 0 ? $content[$pos - 1] : '';
+        $afterPos = $pos + $rawLen;
+        $after = $afterPos < strlen($content) ? $content[$afterPos] : '';
+        $exported = var_export($replacement, true);
+
+        if (($before === "'" && $after === "'") || ($before === '"' && $after === '"')) {
+            return [$pos - 1, $before . $raw . $after, $exported];
+        }
+
+        return [$pos, $raw, $exported];
+    }
+
+    /**
+     * Whether $offset sits inside an open PHP block (<?php / <?= / <? ... ?>).
+     */
+    private function isOffsetInsidePhp(string $content, int $offset): bool
+    {
+        $len = strlen($content);
+        $open = null;
+        $i = 0;
+        while ($i < $offset && $i < $len) {
+            if ($content[$i] === '<' && ($i + 1) < $len && $content[$i + 1] === '?') {
+                $open = $i;
+                $i += 2;
+                continue;
+            }
+            if ($open !== null && $content[$i] === '?' && ($i + 1) < $len && $content[$i + 1] === '>') {
+                $open = null;
+                $i += 2;
+                continue;
+            }
+            $i++;
+        }
+
+        return $open !== null;
     }
 
     /**

@@ -99,6 +99,11 @@ final class PaymentCustomerGuideStorefrontFilterTest extends TestCase
             $src,
             '指南 hub 必须用「不启用即隐藏」的列表，而不是全量列表。',
         );
+        self::assertStringContainsString(
+            'Parser::prefetchWords',
+            $src,
+            'hub 标题/副标题须先 prefetch，否则非中英语种会锁死中文源串。',
+        );
     }
 
     public function testMethodManagerOwnsStorefrontAvailabilityGate(): void
