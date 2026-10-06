@@ -106,7 +106,9 @@ final class IntelligenceService
     {
         return $this->withProject($input, false, function (ProjectIndex $index) use ($input): array {
             $installation = $this->aociInstaller->ensure($index->root());
+            $legacyPurge = (new DataDirLegacyPurge($this->config))->sweep();
             $prepared = $this->readiness->prepare($index, $input);
+            $prepared['storage_legacy_purge'] = $legacyPurge;
             $prepared['agent_guidance']['aoci_installation'] = $installation;
             $prepared['agent_guidance']['aoci_cognition'] = [
                 'state' => 'not_established',

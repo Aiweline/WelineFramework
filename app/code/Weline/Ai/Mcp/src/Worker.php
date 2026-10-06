@@ -27,6 +27,9 @@ final class Worker
         $indexGc = $scanIdleSessions
             ? (new IndexGarbageCollector($this->store, $this->config))->sweep(null, false)
             : ['maintenance_due' => false, 'quarantined' => 0, 'deleted' => 0];
+        $legacyPurge = $scanIdleSessions
+            ? (new DataDirLegacyPurge($this->config))->sweep()
+            : ['enabled' => false, 'removed' => [], 'errors' => []];
         $enqueued = $scanIdleSessions
             ? $this->store->enqueueIdleSessions($this->config->duration('scheduler.session_idle_after'))
             : [];
@@ -40,6 +43,7 @@ final class Worker
                 'processed' => false,
                 'lifecycle_maintenance' => $maintenance,
                 'index_gc' => $indexGc,
+                'storage_legacy_purge' => $legacyPurge,
                 'idle_jobs_enqueued' => $enqueued,
                 'learning_skill_jobs_enqueued' => $learningSkillJobs,
             ];
@@ -59,6 +63,7 @@ final class Worker
                     'job_type' => $job['job_type'],
                     'lifecycle_maintenance' => $maintenance,
                     'index_gc' => $indexGc,
+                    'storage_legacy_purge' => $legacyPurge,
                     'idle_jobs_enqueued' => $enqueued,
                     'learning_skill_jobs_enqueued' => $learningSkillJobs,
                 ];
@@ -78,6 +83,7 @@ final class Worker
                 'result' => $result,
                 'lifecycle_maintenance' => $maintenance,
                 'index_gc' => $indexGc,
+                'storage_legacy_purge' => $legacyPurge,
                 'idle_jobs_enqueued' => $enqueued,
                 'learning_skill_jobs_enqueued' => $learningSkillJobs,
             ];
@@ -91,6 +97,7 @@ final class Worker
                     'job_type' => $job['job_type'],
                     'lifecycle_maintenance' => $maintenance,
                     'index_gc' => $indexGc,
+                    'storage_legacy_purge' => $legacyPurge,
                     'idle_jobs_enqueued' => $enqueued,
                     'learning_skill_jobs_enqueued' => $learningSkillJobs,
                 ];

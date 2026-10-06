@@ -222,6 +222,11 @@ index:
     - .nyc_output/**
 
 # MCP 仅索引/技能/规则检索；未知/遗留配置键会被忽略。
+# File-edit snapshots and one-off git clones are not knowledge; purge them from data_dir.
+storage:
+  purge_legacy: true
+  # File-edit snapshots and cloned git backups expire; Worker / prepare_project delete them.
+  legacy_ttl: 1d
 
 knowledge:
   # Framework guidance comes directly from Framework/doc and app/code/*/*/doc.

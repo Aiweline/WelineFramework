@@ -418,6 +418,7 @@ final class Cli
                     $config,
                 ))->sweep($owner),
                 'index_gc' => (new IndexGarbageCollector($store, $config))->sweep($owner, true),
+                'storage_legacy_purge' => (new DataDirLegacyPurge($config))->sweep(),
             ]);
         } finally {
             $store->close();

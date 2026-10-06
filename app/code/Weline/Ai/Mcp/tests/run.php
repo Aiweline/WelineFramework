@@ -1150,6 +1150,7 @@ SH);
         'collector-event-storage.php',
         'relation-resolution-scope.php',
         'session-start-background-refresh.php',
+        'data-dir-legacy-purge.php',
     ] as $regression) {
         $result = $runner->run([PHP_BINARY, __DIR__ . '/' . $regression], $root, '', 30);
         check($result['exit_code'] === 0, 'targeted regression: ' . $regression);

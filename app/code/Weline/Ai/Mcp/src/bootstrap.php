@@ -22,6 +22,7 @@ require_once __DIR__ . '/ProcessRunner.php';
 require_once __DIR__ . '/AociInstaller.php';
 require_once __DIR__ . '/ProjectIndex.php';
 require_once __DIR__ . '/IndexGarbageCollector.php';
+require_once __DIR__ . '/DataDirLegacyPurge.php';
 require_once __DIR__ . '/SparseVectorizer.php';
 require_once __DIR__ . '/PhpTokenBuffer.php';
 require_once __DIR__ . '/PhpSymbolParser.php';

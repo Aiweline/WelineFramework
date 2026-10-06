@@ -251,6 +251,10 @@ final class Config
                 'lease' => '2m',
                 'auto_process_on_stop' => true,
             ],
+            'storage' => [
+                'purge_legacy' => true,
+                'legacy_ttl' => '1d',
+            ],
             'index' => [
                 'enabled' => true,
                 'auto_refresh' => true,
@@ -386,6 +390,10 @@ final class Config
                 'lease' => true,
                 'auto_process_on_stop' => true,
             ],
+            'storage' => [
+                'purge_legacy' => true,
+                'legacy_ttl' => true,
+            ],
             'index' => [
                 'enabled' => true,
                 'auto_refresh' => true,
@@ -512,6 +520,7 @@ final class Config
             'analysis.automatic_learning.enabled', 'analysis.automatic_learning.auto_validate',
             'retrieval.include_candidates', 'promotion.automatic',
             'privacy.redact_before_model', 'scheduler.auto_process_on_stop',
+            'storage.purge_legacy',
             'index.enabled', 'index.auto_refresh', 'index.sidecar_enabled', 'index.include_tests',
             'index.gc.enabled', 'index.gc.purge_unbound',
             'knowledge.auto_generate_skills', 'knowledge.auto_doc_sync',
@@ -545,6 +554,7 @@ final class Config
             'scheduler.session_idle_after', 'scheduler.launchd_interval', 'scheduler.lease',
             'index.refresh_interval', 'index.gc.retention', 'index.gc.dry_run_period',
             'index.gc.quarantine_period', 'index.gc.sweep_interval',
+            'storage.legacy_ttl',
             'knowledge.codex.timeout',
         ] as $duration) {
             self::durationSeconds((string) self::nested($values, $duration));
