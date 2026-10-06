@@ -52,6 +52,22 @@
     height: 100%;
 }
 
+.wc-theme_widget_account .account-avatar__letter {
+    font-weight: 700;
+    line-height: 1;
+    font-size: var(--weline-font-size-sm);
+}
+
+.wc-theme_widget_account .account-avatar__fallback[data-has-initial="1"] > :not([data-account-avatar-initial]) {
+    display: none !important;
+}
+
+.wc-theme_widget_account .dropdown-header .account-avatar--menu:has([data-has-initial="1"]) {
+    background: var(--color-primary);
+    color: var(--weline-theme-on-primary, var(--color-on-primary));
+    border-color: transparent;
+}
+
 .wc-theme_widget_account .account-name {
     font-weight: 500;
     max-width: var(--token-size-100px);

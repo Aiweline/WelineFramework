@@ -52,7 +52,9 @@ final class AccountSessionModuleContractTest extends TestCase
         self::assertStringContainsString('avatar.hidden = false', $js);
         self::assertStringContainsString('avatarFallback.hidden = true', $js);
         self::assertStringContainsString('avatar.removeAttribute(\'src\')', $js);
-        self::assertStringContainsString('user.avatar', $js);
+        self::assertStringContainsString('setAccountAvatarFallbackLabel', $js);
+        self::assertStringContainsString('data-account-avatar-initial', $js);
+        self::assertStringContainsString('data-has-initial', $js);
         self::assertStringContainsString('maybeStartSocialQuickPrompt', $js);
         self::assertStringContainsString('socialQuickPrompt', $js);
         self::assertStringContainsString('customerSocialQuick', $js);

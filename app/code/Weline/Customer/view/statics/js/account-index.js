@@ -860,6 +860,21 @@
             }
         ];
 
+        function showAvatarFallback(target) {
+            if (!target.image || !target.fallback) {
+                return;
+            }
+            if (target.failSafe) {
+                window.clearTimeout(target.failSafe);
+                target.failSafe = 0;
+            }
+            target.image.onload = null;
+            target.image.onerror = null;
+            target.image.removeAttribute('src');
+            target.image.hidden = true;
+            target.fallback.hidden = false;
+        }
+
         function syncAvatarPreview() {
             if (!avatarInput) {
                 return;
@@ -867,14 +882,7 @@
 
             var avatarUrl = avatarInput.value.trim();
             if (!avatarUrl) {
-                avatarTargets.forEach(function(target) {
-                    if (!target.image || !target.fallback) {
-                        return;
-                    }
-                    target.image.hidden = true;
-                    target.fallback.hidden = false;
-                    target.image.removeAttribute('src');
-                });
+                avatarTargets.forEach(showAvatarFallback);
                 return;
             }
 
@@ -882,21 +890,28 @@
                 if (!target.image || !target.fallback) {
                     return;
                 }
-                target.image.hidden = false;
-                target.fallback.hidden = true;
-                target.image.src = avatarUrl;
+                if (target.failSafe) {
+                    window.clearTimeout(target.failSafe);
+                    target.failSafe = 0;
+                }
+                target.fallback.hidden = false;
+                target.image.hidden = true;
+                target.image.onload = function() {
+                    window.clearTimeout(target.failSafe);
+                    target.image.hidden = false;
+                    target.fallback.hidden = true;
+                };
+                target.image.onerror = function() {
+                    showAvatarFallback(target);
+                };
+                target.failSafe = window.setTimeout(function() {
+                    if (target.image.hidden) {
+                        showAvatarFallback(target);
+                    }
+                }, 2500);
+                target.image.setAttribute('src', avatarUrl);
             });
         }
-
-        avatarTargets.forEach(function(target) {
-            if (!target.image || !target.fallback) {
-                return;
-            }
-            target.image.addEventListener('error', function() {
-                target.image.hidden = true;
-                target.fallback.hidden = false;
-            });
-        });
 
         if (avatarInput) {
             avatarInput.addEventListener('input', syncAvatarPreview);

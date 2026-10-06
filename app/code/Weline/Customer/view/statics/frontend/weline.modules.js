@@ -19,7 +19,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     customerAccount: {
         paths: [
-            "Weline_Customer::js/account-index.js?v=20260917-sidebar-empty-retry"
+            "Weline_Customer::js/account-index.js?v=20261006-avatar-initial-fallback-1"
         ],
         globalVar: "WelineCustomerAccount",
         description: "前台用户中心账户页交互"

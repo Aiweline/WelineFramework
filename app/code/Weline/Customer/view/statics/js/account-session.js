@@ -1081,6 +1081,7 @@
                     }
                     const avatar = wrap.querySelector('[data-account-avatar]');
                     const avatarFallback = wrap.querySelector('[data-account-avatar-fallback]');
+                    this.setAccountAvatarFallbackLabel(avatarFallback, altText);
                     if (!(avatar instanceof HTMLImageElement)) {
                         return;
                     }
@@ -1095,6 +1096,7 @@
             // Legacy single-slot markup without wrap.
             const avatar = root.querySelector('[data-account-avatar]');
             const avatarFallback = root.querySelector('[data-account-avatar-fallback]');
+            this.setAccountAvatarFallbackLabel(avatarFallback, altText);
             if (!(avatar instanceof HTMLImageElement)) {
                 return;
             }
@@ -1102,6 +1104,33 @@
                 this.applyAccountAvatar(avatar, avatarFallback, url, altText || '');
             } else {
                 this.clearAccountAvatar(avatar, avatarFallback);
+            }
+        }
+
+        /**
+         * Keep a readable initial in the fallback chip so empty photo slots
+         * never render as a blank circle.
+         */
+        setAccountAvatarFallbackLabel(fallback, displayName) {
+            if (!(fallback instanceof HTMLElement)) {
+                return;
+            }
+            const letter = String(displayName || '').trim().charAt(0).toUpperCase();
+            let initial = fallback.querySelector('[data-account-avatar-initial]');
+            if (!(initial instanceof HTMLElement)) {
+                initial = document.createElement('span');
+                initial.className = 'account-avatar__letter';
+                initial.setAttribute('data-account-avatar-initial', '');
+                fallback.insertBefore(initial, fallback.firstChild);
+            }
+            if (letter !== '') {
+                initial.textContent = letter;
+                initial.hidden = false;
+                fallback.setAttribute('data-has-initial', '1');
+            } else {
+                initial.textContent = '';
+                initial.hidden = true;
+                fallback.removeAttribute('data-has-initial');
             }
         }
 

@@ -21,8 +21,8 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') { $
 <div class="account-sidebar-wrapper" data-weline-load="customerLogout">
     <header class="account-sidebar__header">
         <div class="account-sidebar__avatar">
-            <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="sidebarAvatarPreview" class="account-sidebar__avatar-img"<?= $avatar ? '' : ' hidden' ?>>
-            <div class="account-sidebar__avatar-fallback" id="sidebarAvatarFallback"<?= $avatar ? ' hidden' : '' ?>><?= $avatarInitial ?></div>
+            <img<?= $avatar !== '' ? ' src="' . htmlspecialchars($avatar) . '"' : '' ?> alt="<?= htmlspecialchars($username) ?>" id="sidebarAvatarPreview" class="account-sidebar__avatar-img" hidden>
+            <div class="account-sidebar__avatar-fallback" id="sidebarAvatarFallback"><?= htmlspecialchars($avatarInitial) ?></div>
         </div>
         <div class="account-sidebar__user-info">
             <h4 class="account-sidebar__username"><?= htmlspecialchars($username) ?></h4>

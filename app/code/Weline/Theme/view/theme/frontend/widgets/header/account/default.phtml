@@ -81,6 +81,7 @@ if (empty($dropdownItems)) {
                          class="account-avatar__img"
                          <?= $userAvatar === '' ? 'hidden' : '' ?>>
                     <span class="account-avatar__fallback" data-account-avatar-fallback<?= $userAvatar !== '' ? ' hidden' : '' ?> aria-hidden="true">
+                        <span class="account-avatar__letter" data-account-avatar-initial hidden></span>
                         <w:icon name="user" size="sm"></w:icon>
                     </span>
                 </span>
@@ -109,6 +110,7 @@ if (empty($dropdownItems)) {
                              class="account-avatar__img"
                              <?= $userAvatar === '' ? 'hidden' : '' ?>>
                         <span class="account-avatar__fallback" data-account-avatar-fallback<?= $userAvatar !== '' ? ' hidden' : '' ?> aria-hidden="true">
+                            <span class="account-avatar__letter" data-account-avatar-initial hidden></span>
                             <w:icon name="user" size="sm"></w:icon>
                         </span>
                     </span>
