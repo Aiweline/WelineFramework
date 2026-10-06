@@ -96,7 +96,10 @@ class CertificateAutoRenew implements CronTaskInterface
                 return __('没有需要续签的证书');
             }
 
-            $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+            // Managed nginx proxies /.well-known/acme-challenge/ to the WLS
+            // backend, so physical PUB files are not reachable by the CA.
+            // The virtual webroot registers challenges through WLS itself.
+            $webroot = SslCertificateService::WEBROOT_WLS_VIRTUAL;
 
             foreach ($expiringCerts as $certData) {
                 $domain = $certData[SslCertificate::schema_fields_DOMAIN];

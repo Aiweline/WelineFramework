@@ -68,7 +68,7 @@ class Auto extends CommandAbstract
         $action = \in_array((string) $possibleAction, $actions, true) ? $possibleAction : 'status';
         $domain = $args['domain'] ?? $args['d'] ?? null;
         $email = $args['email'] ?? $args['e'] ?? $this->getDefaultEmail();
-        $webroot = $args['webroot'] ?? $args['w'] ?? BP . 'pub';
+        $webroot = $args['webroot'] ?? $args['w'] ?? SslCertificateService::WEBROOT_WLS_VIRTUAL;
         $provider = $args['provider'] ?? $args['p'] ?? SslCertificateService::PROVIDER_LETS_ENCRYPT;
         $staging = isset($args['staging']) || isset($args['test']);
         $renewDays = (int) ($args['renew-days'] ?? 30);

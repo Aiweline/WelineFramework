@@ -9086,6 +9086,21 @@ CNF;
             $this->waitForGatewayAcmePublishRetry($attempt++, $remainingSeconds);
         }
 
+        // The shared host gateway control plane is unavailable or this project
+        // is not enrolled on it (REGISTER_REPLAY_REQUIRED / unenrolled): fall
+        // back to pure-WLS serving, where the project desired state and
+        // per-domain compatibility projections are authoritative for the
+        // Dispatcher/worker HTTP-01 responders.
+        try {
+            $hostStatus = (new \Weline\Server\Service\Edge\Gateway\GatewayHostManager())
+                ->status(0.0, $deadline);
+        } catch (\Throwable) {
+            $hostStatus = ['ok' => false];
+        }
+        if (($hostStatus['ok'] ?? false) !== true) {
+            return true;
+        }
+
         if ($this->lastAcmeError === '') {
             $this->lastAcmeError = (string)__(
                 '网关未在 %{1} 秒内确认 ACME HTTP-01 challenge 发布。',
