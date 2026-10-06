@@ -658,3 +658,6 @@ China,China
 国内标快,"Domestic Express"
 国内重货,"Domestic heavy freight"
 国际重货,"International heavy freight"
+店面金额小计,"Storefront money summary"
+结账金额小计,"Checkout money summary"
+统一商品小计、运费、税费、优惠与应付行；各表面只算数并 paint,"Unified goods/shipping/tax/discount/payable rows; surfaces only compute then paint"

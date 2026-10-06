@@ -226,6 +226,9 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('mini-cart-drawer--amazon', $source);
         self::assertStringContainsString('data-mini-cart-loading', $source);
         self::assertStringContainsString('data-mini-cart-discount-breakdown', $source);
+        self::assertStringContainsString('data-mini-cart-tax-row', $source);
+        self::assertStringContainsString('data-i18n-tax', $source);
+        self::assertStringContainsString('data-i18n-note-shipping', $source);
         self::assertStringContainsString('data-mini-cart-checkout', $source);
         self::assertStringContainsString('data-i18n-checkout-loading', $source);
         self::assertStringNotContainsString('mini-cart-icon.js', $source);
@@ -233,6 +236,12 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('mini-cart-drawer__fs-progress', $css);
         self::assertStringContainsString('--amz-drawer-price:', $css);
         self::assertStringContainsString('--amz-drawer-cta-bg:', $css);
+        // Body must keep a floor so tall footer extras (tob credit/note) cannot starve line items.
+        self::assertStringContainsString('min-height: min(40vh, 12rem)', $css);
+        self::assertMatchesRegularExpression(
+            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*52%/s',
+            $css
+        );
     }
 
     public function testMiniCartEnglishCsvIncludesDrawerCopy(): void
@@ -240,6 +249,14 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         $csv = (string)file_get_contents(dirname(__DIR__, 2) . '/i18n/en_US.csv');
         self::assertMatchesRegularExpression(
             '/税费与运费将在结算时计算,("?)Taxes and shipping calculated at checkout\1/',
+            $csv,
+        );
+        self::assertMatchesRegularExpression(
+            '/运费将在结算时计算,("?)Shipping calculated at checkout\1/',
+            $csv,
+        );
+        self::assertMatchesRegularExpression(
+            '/税费（预估）,("?)Estimated tax\1/',
             $csv,
         );
         self::assertStringContainsString('Taxes and shipping calculated at checkout', $csv);

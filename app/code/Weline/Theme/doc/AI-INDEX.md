@@ -1,20 +1,18 @@
 <!-- weline:module-ai-index:auto-generated -->
 # Weline_Theme AI 开发入口
 
-> 本文件由 `dev/ai/scripts/generate-module-ai-indexes.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
+> 本文件由 `dev/ai/scripts/generate-module-docs.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
 
 ## 必读顺序
 
 1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
-3. `dev/ai/diagrams/08-module-docs-index.txt`
-4. 本文件：`app/code/Weline/Theme/doc/AI-INDEX.md`
-5. 模块说明：`app/code/Weline/Theme/doc/README.md`
-6. `app/code/Weline/Theme/doc/开发/Theme开发总指南.md`
-7. `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`
-8. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-9. `app/code/Weline/Taglib/doc/AI-INDEX.md`
-10. 只读取本次任务相关源码、配置和验证入口
+2. 全局硬规则与任务路由：`app/code/Weline/Ai/doc/AI硬规则索引.md`
+3. 本文件：`app/code/Weline/Theme/doc/AI-INDEX.md`
+4. 模块说明：`app/code/Weline/Theme/doc/README.md`
+5. `app/code/Weline/Theme/doc/AI-INDEX.md`
+6. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+7. `app/code/Weline/Taglib/doc/AI-INDEX.md`
+8. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -26,56 +24,65 @@
 ## 代码面清单
 
 入口/配置文件：
+- `app/code/Weline/Theme/composer.json`
 - `app/code/Weline/Theme/etc/backend/menu.xml`
 - `app/code/Weline/Theme/.module_config.json`
-- `app/code/Weline/Theme/composer.json`
 
-- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：26
+- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：46
 - `Block`：视图数据块。配合模板输出页面数据，变更前要读对应模板和 layout。 文件数：2
 - `Config`：配置读取、合并或 schema 支撑。涉及作用域配置时同时读 SystemConfig 文档。 文件数：2
-- `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：13
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：17
+- `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：19
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：20
 - `Controller/Router.php`：ModuleRouter 自定义 URL 匹配入口。只有自定义公网路径/动态路由匹配才改这里。 文件数：1
 - `Dto`：跨层传输结构。变更字段时同步接口/文档。 文件数：4
-- `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：36
+- `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：52
 - `Interface`：模块发布的接口契约。跨模块依赖优先使用这里的稳定契约。 文件数：4
-- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：8
-- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：23
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：68
-- `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：3
-- `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：17
-- `Ui`：后台/编辑器 UI 参数、schema 或渲染支撑。 文件数：1
-- `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：5
-- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：7
+- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：19
+- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：36
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：197
+- `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：7
+- `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：22
+- `Ui`：后台/编辑器 UI 参数、schema 或渲染支撑。 文件数：20
+- `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：6
+- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：18
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：17
-- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：28
-- `view/theme`：主题资源贡献层。读 Weline_Theme/doc/AI-INDEX.md 后按 layout/partial/component/widget 规则开发。 文件数：218
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：54
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：229
+- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：26
+- `view/theme`：主题资源贡献层。读 Weline_Theme/doc/AI-INDEX.md 后按 layout/partial/component/widget 规则开发。 文件数：246
 
 ## 从源码识别到的开发提示
 
-- 存在 `Controller/Router.php`，说明模块可能发布自定义 URL 匹配；不要用 `routes.xml` 代替。
-- 存在 `view/theme`，说明该模块向主题资源 catalog 贡献 layout/partial/component/widget/asset。
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
 - 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
+- 存在 `view/theme`，说明该模块向主题资源 catalog 贡献 layout/partial/component/widget/asset。
+- 存在 `Controller/Router.php`，说明模块可能发布自定义 URL 匹配；不要用 `routes.xml` 代替。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
-- 识别到 QueryProvider 相关 PHP 文件：Observer/WorkerBootstrapWarmup.php、extends/module/Weline_Framework/Query/ThemeQueryProvider.php、extends/module/Weline_Websites/WebsiteThemeSource/WelineThemeSource.php；前端/跨模块读数据先查 query 帮助。
+- 识别到 QueryProvider 入口：`extends/module/Weline_Framework/Query/ThemeQueryProvider.php`；前端/跨模块读数据先查 `php bin/w query:help`。
 
 ## doc 目录
 
-- `app/code/Weline/Theme/doc/DEVELOPMENT_NOTES.md`
 - `app/code/Weline/Theme/doc/HTML-lang属性BCP-47规范.md`
 - `app/code/Weline/Theme/doc/Hook使用指南.md`
+- `app/code/Weline/Theme/doc/Hook点位索引.md`
 - `app/code/Weline/Theme/doc/Partials配置系统使用指南.md`
 - `app/code/Weline/Theme/doc/README.md`
-- `app/code/Weline/Theme/doc/SOLID原则重构说明.md`
 - `app/code/Weline/Theme/doc/Theme.js使用指南.md`
+- `app/code/Weline/Theme/doc/backend/theme-editor/brand-basics-identity.md`
+- `app/code/Weline/Theme/doc/event/all_menu_category_candidates.md`
+- `app/code/Weline/Theme/doc/event/all_menu_page_candidates.md`
+- `app/code/Weline/Theme/doc/event/layout_resolve.md`
 - `app/code/Weline/Theme/doc/event/theme_editor_result_after.md`
 - `app/code/Weline/Theme/doc/frontend-section-weline-code.md`
+- `app/code/Weline/Theme/doc/hook/backend/layouts/base/body-end.md`
+- `app/code/Weline/Theme/doc/hook/backend/partials/theme-editor-brand-basics/identity.md`
 - `app/code/Weline/Theme/doc/hook/backend/partials/topbar/logo.md`
 - `app/code/Weline/Theme/doc/hook/frontend/account/sidebar-content.md`
+- `app/code/Weline/Theme/doc/hook/frontend/account/sidebar-group-addresses.md`
+- `app/code/Weline/Theme/doc/hook/frontend/account/sidebar-group-commerce.md`
+- `app/code/Weline/Theme/doc/hook/frontend/account/sidebar-group-connections.md`
+- `app/code/Weline/Theme/doc/hook/frontend/account/sidebar-group-developer.md`
+- `app/code/Weline/Theme/doc/hook/frontend/account/sidebar-group-security.md`
 - `app/code/Weline/Theme/doc/hook/frontend/account/sidebar.md`
 - `app/code/Weline/Theme/doc/hook/frontend/footer.md`
 - `app/code/Weline/Theme/doc/hook/frontend/header/account-links.md`
@@ -134,6 +141,7 @@
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/default/content.md`
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/default/head-after.md`
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/default/head-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/faq/extras.md`
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/body-end.md`
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/body-start.md`
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/content-after.md`
@@ -145,7 +153,338 @@
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/footer-before.md`
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/head-after.md`
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/head-before.md`
-- `... 另有 153 个文档，请按任务在该模块 doc/ 下继续查找`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/header-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/header-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/main-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/main-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/main-content-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/main-content-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/main-content.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/news-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/news-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/partners-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/partners-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/products-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/products-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/statistics-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/statistics-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/testimonials-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/homepage/testimonials-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/not-found/recommendations.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/bestsellers.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/body-end.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/body-start.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/breadcrumb-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/breadcrumb-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/content-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/content-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/cross-sell.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/footer-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/footer-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/head-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/head-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/header-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/header-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/main-content-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/main-content-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/main-content.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/personalization-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/personalization-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/recently-viewed.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/recommendations-content.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/related-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/related-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/related-products.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/sidebar-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/sidebar-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/tabs-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/tabs-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/tabs-content.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/tabs-slot-content.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product/you-may-like.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product_detail/body-end.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product_detail/body-start.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product_detail/content-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product_detail/content-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product_detail/head-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/product_detail/head-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/body-end.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/body-start.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/breadcrumb-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/breadcrumb-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/content-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/content-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/content.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/filters-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/filters-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/filters-sidebar.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/footer-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/footer-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/grid-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/grid-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/grid-content.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/head-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/head-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/header-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/header-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/pagination-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/pagination-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/pagination-content.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/recommendations-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/recommendations-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/toolbar-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/toolbar-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/layouts/products/toolbar-content.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/breadcrumb/items.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/above.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/brand.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/content-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/content-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/copyright-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/copyright-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/copyright.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/links.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/section-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/section-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/social-media-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/social-media-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/social-media-links-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/social-media-links-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/footer/social-media.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/head/favicon.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/head/module-declarations.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/account.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/actions-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/actions-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/announcement.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/cart.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/categories-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/categories-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/delivery.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/logo-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/logo-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/logo.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/nav-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/nav-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/navigation.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/notice-rights.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/search-after.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/search-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/search-form-before.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/header/search.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/product-card/add-to-cart.md`
+- `app/code/Weline/Theme/doc/hook/frontend/partials/product-card/buy-now.md`
+- `app/code/Weline/Theme/doc/layout-discovery-guide.md`
+- `app/code/Weline/Theme/doc/layout-slot-cache-keys.md`
+- `app/code/Weline/Theme/doc/preview-and-runtime-modes.md`
+- `app/code/Weline/Theme/doc/runtime-cache-invalidation.md`
+- `app/code/Weline/Theme/doc/storefront-image-placeholder.md`
+- `app/code/Weline/Theme/doc/theme-css-variables-only.md`
+- `app/code/Weline/Theme/doc/theme-font.md`
+- `app/code/Weline/Theme/doc/theme-hardcoded-visual-audit.md`
+- `app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md`
+- `app/code/Weline/Theme/doc/theme-layout-content-width.md`
+- `app/code/Weline/Theme/doc/theme-semantic-color-matrix.md`
+- `app/code/Weline/Theme/doc/theme-static-minify.md`
+- `app/code/Weline/Theme/doc/theme-storefront-token-consumption.md`
+- `app/code/Weline/Theme/doc/theme-surface-text-roles.md`
+- `app/code/Weline/Theme/doc/version-control/README.md`
+- `app/code/Weline/Theme/doc/version-control/api-reference.md`
+- `app/code/Weline/Theme/doc/version-control/architecture.md`
+- `app/code/Weline/Theme/doc/visual-editor/README.md`
+- `app/code/Weline/Theme/doc/visual-editor/component-library-filtering.md`
+- `app/code/Weline/Theme/doc/visual-editor/partial-refresh.md`
+- `app/code/Weline/Theme/doc/visual-editor/preview-frame-bus.md`
+- `app/code/Weline/Theme/doc/visual-editor/region-isolation.md`
+- `app/code/Weline/Theme/doc/visual-editor/scope-switching.md`
+- `app/code/Weline/Theme/doc/visual-editor/slot-nesting-rules.md`
+- `app/code/Weline/Theme/doc/visual-editor/testing.md`
+- `app/code/Weline/Theme/doc/visual-editor/weline-ui-2-capability-matrix.md`
+- `app/code/Weline/Theme/doc/widget-page-types.md`
+- `app/code/Weline/Theme/doc/widget-rules.md`
+- `app/code/Weline/Theme/doc/widget-slot-attributes.md`
+- `app/code/Weline/Theme/doc/widget-slot-system.md`
+- `app/code/Weline/Theme/doc/widget/sidebar/分类筛选侧栏.md`
+- `app/code/Weline/Theme/doc/widgets/all-menu-nav-tree.md`
+- `app/code/Weline/Theme/doc/widgets/anchored-float.md`
+- `app/code/Weline/Theme/doc/widgets/elevate-stack-layers.md`
+- `app/code/Weline/Theme/doc/widgets/mega-menu.md`
+- `app/code/Weline/Theme/doc/widgets/social-widget-configuration.md`
+- `app/code/Weline/Theme/doc/worker-view-warmup-contributions.md`
+- `app/code/Weline/Theme/doc/主题元数据工作流程.md`
+- `app/code/Weline/Theme/doc/前端JS模块加载规范.md`
+- `app/code/Weline/Theme/doc/功能现状.md`
+- `app/code/Weline/Theme/doc/布局固化与默认注入.md`
+- `app/code/Weline/Theme/doc/开发/Theme开发总指南.md`
+- `app/code/Weline/Theme/doc/开发/plan/widget-lifecycle-and-render-binding.md`
+- `app/code/Weline/Theme/doc/开发/session/hanfu-theme-editor-optimize.md`
+- `app/code/Weline/Theme/doc/开发/session/policy-copy-tone-soften.md`
+- `app/code/Weline/Theme/doc/开发/session/published-slot-assembly-uniformity.md`
+- `app/code/Weline/Theme/doc/开发/session/required-default-all-layouts.md`
+- `app/code/Weline/Theme/doc/开发/session/required-default-always-present.md`
+- `app/code/Weline/Theme/doc/开发/session/widget-assets-position-migration.md`
+- `app/code/Weline/Theme/doc/开发/session/widget-lifecycle-and-render-binding.md`
+- `app/code/Weline/Theme/doc/开发/spec/daocharms-3d.md`
+- `app/code/Weline/Theme/doc/开发/spec/daocharms-storefront-shentu-launch.md`
+- `app/code/Weline/Theme/doc/开发/spec/header-policy-links-widget.md`
+- `app/code/Weline/Theme/doc/开发/spec/layout-entity-per-version-isolation.md`
+- `app/code/Weline/Theme/doc/开发/spec/layout-footer-above-and-page-bottom-slots.md`
+- `app/code/Weline/Theme/doc/开发/spec/pdp-purchase-widgets-must-exist.md`
+- `app/code/Weline/Theme/doc/开发/spec/policy-copy-tone-soften.md`
+- `app/code/Weline/Theme/doc/开发/spec/required-default-all-layouts.md`
+- `app/code/Weline/Theme/doc/开发/spec/required-default-always-present.md`
+- `app/code/Weline/Theme/doc/开发/spec/theme-decoupling.md`
+- `app/code/Weline/Theme/doc/开发/spec/video-carousel.md`
+- `app/code/Weline/Theme/doc/开发/spec/visual-editor-theme-id-url-isolation.md`
+- `app/code/Weline/Theme/doc/开发/spec/widget-lifecycle-and-render-binding.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/acceptance-prototype.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/acceptance-ui.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/buyer-show-ops-acceptance.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/buyer-show-ops-review.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/buyer-show-p0-done.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/buyer-show-p1-03-done.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/buyer-show-p1-04-seed-done.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/buyer-show-p1-ops-acceptance.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/buyer-show-p1-rewire-done.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/evidence-theme-editor-500.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/golive-closeout.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/hanfu-theme-editor-ops-brief.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/hf-ed-p0-01-backend-done.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/homepage-p1-frontend-done.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/homepage-p1-frontend-rework.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/homepage-p1-i18n-done.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/homepage-p1-theme-done.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/homepage-p1-theme-rework.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/homepage-p1-widget-done.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/homepage-p1-widget-rework.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/ops-theme-editor-audit.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/p1-mall-feel-build.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/p1-reverify-evidence.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/pm-buyer-show-escalate.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/pm-buyer-show-p1.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/pm-p0-followup.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/pm-runtime-standdown.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/pm-theme-escalate-wls.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/qa01-fiber-ob-fix.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/qa03-qa04-ui-search-fix.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/qa05-qa09-cart-checkout-fix.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/qa06-qa09-form-taglib-fix.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/qa09-script-leak-hotfix.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/qa10-12-13-fix.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/sitewide-click-qa-issues.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/sitewide-qa-fix-plan.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channel/sitewide-qa-reverify.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/channels/pm-runtime-standdown.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/contracts.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/meetings/电商顾问-golive-review.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/meetings/翻译-review.md`
+- `app/code/Weline/Theme/doc/开发/team/hanfu-theme-editor-optimize/roster.md`
+- `app/code/Weline/Theme/doc/开发/team/link-block-select-bubble/meetings/汇审.md`
+- `app/code/Weline/Theme/doc/开发/team/pdp-purchase-widgets-must-exist/meetings/技术方案会.md`
+- `app/code/Weline/Theme/doc/开发/team/pdp-purchase-widgets-must-exist/meetings/汇审.md`
+- `app/code/Weline/Theme/doc/开发/team/pdp-purchase-widgets-must-exist/roster.md`
+- `app/code/Weline/Theme/doc/开发/team/policy-copy-tone-soften/channel/kickoff-ops-tone.md`
+- `app/code/Weline/Theme/doc/开发/team/policy-copy-tone-soften/contracts.md`
+- `app/code/Weline/Theme/doc/开发/team/policy-copy-tone-soften/deps.md`
+- `app/code/Weline/Theme/doc/开发/team/policy-copy-tone-soften/meetings/汇审.md`
+- `app/code/Weline/Theme/doc/开发/team/policy-copy-tone-soften/meetings/电商顾问-ops-brief.md`
+- `app/code/Weline/Theme/doc/开发/team/policy-copy-tone-soften/meetings/电商顾问-review.md`
+- `app/code/Weline/Theme/doc/开发/team/policy-copy-tone-soften/meetings/翻译-review.md`
+- `app/code/Weline/Theme/doc/开发/team/policy-copy-tone-soften/roster.md`
+- `app/code/Weline/Theme/doc/开发/team/published-slot-assembly-uniformity/channel/arch-probe-reply.md`
+- `app/code/Weline/Theme/doc/开发/team/published-slot-assembly-uniformity/channel/pm-arrange-fix.md`
+- `app/code/Weline/Theme/doc/开发/team/published-slot-assembly-uniformity/channel/pm-arrange-probe.md`
+- `app/code/Weline/Theme/doc/开发/team/published-slot-assembly-uniformity/channel/theme-fix-done.md`
+- `app/code/Weline/Theme/doc/开发/team/published-slot-assembly-uniformity/channel/theme-probe-reply.md`
+- `app/code/Weline/Theme/doc/开发/team/published-slot-assembly-uniformity/channel/widget-probe-reply.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-all-layouts/channel/test-matrix.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-all-layouts/channel/theme-fix.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-all-layouts/channel/widget-review.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-all-layouts/meetings/汇审-全布局必装店面验收-20260922.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-always-present/channel/arch-stance.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-always-present/channel/test-login.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-always-present/channel/theme-done.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-always-present/channel/widget-review.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-always-present/meetings/技术方案会-必装永远存在-20260922.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/技术方案会-同身份XOR-20260921.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/技术方案会-槽旁双路径闭环-20260921.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/技术方案会-槽清单先读再注入-20260921.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/技术方案会-重复部件-20260921.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/汇审-有部件必入声明槽-20260920.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/汇审-盯死有部件必入-20260921.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/汇审-真实闭环-20260921.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/汇审-零容忍-20260920.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/汇审-验收-去重-20260921.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/热修-登录社媒槽旁叠渲-20260921.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/用户纠偏-同部件XOR非硬强制-20260921.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/用户纠偏-固化后禁运行时注入与同名硬失败-20260926.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/立项波.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/设计共识-有槽必注.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/meetings/语义纠偏-部件主语-待确认.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/roster.md`
+- `app/code/Weline/Theme/doc/开发/team/required-default-injection/stop-work.md`
+- `app/code/Weline/Theme/doc/开发/team/required-injection-no-duplicate/meetings/汇审.md`
+- `app/code/Weline/Theme/doc/开发/team/storefront-policy-compliance/channel/merchant-leaning-returns.md`
+- `app/code/Weline/Theme/doc/开发/team/storefront-policy-compliance/channel/policy-compliance-remediation.md`
+- `app/code/Weline/Theme/doc/开发/team/storefront-policy-compliance/meetings/2026-09-22-policy-compliance-kickoff.md`
+- `app/code/Weline/Theme/doc/开发/team/storefront-policy-compliance/roster.md`
+- `app/code/Weline/Theme/doc/开发/team/theme-data-version-process-cache/meetings/architecture.md`
+- `app/code/Weline/Theme/doc/开发/team/theme-editor-back-return/meetings/汇审.md`
+- `app/code/Weline/Theme/doc/开发/team/theme-render-binding-20260923/progress.md`
+- `app/code/Weline/Theme/doc/开发/team/theme-visual-editor-arch/meetings/技术方案会.md`
+- `app/code/Weline/Theme/doc/开发/team/theme-visual-editor-arch/roster.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/channel/acceptance.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/channel/align-freeze.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/channel/construction-d1.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/channel/construction-d2.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/channel/construction-d346.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/channel/construction-d5.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/channel/kickoff.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/channel/review-arch.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/channel/review-security.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/components.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/contracts.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/deps.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/meetings/acceptance-prototype.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/meetings/acceptance-ui.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/meetings/复审-安全.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/meetings/复审-架构.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/meetings/对齐冻结-UI签注.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/meetings/对齐冻结.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/meetings/技术方案草案.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/meetings/汇审.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/meetings/立项-领域探查.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/meetings/验收证据.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/roster.md`
+- `app/code/Weline/Theme/doc/开发/team/video-carousel/surfaces.md`
+- `app/code/Weline/Theme/doc/开发/team/visual-editor-theme-id-url-isolation/meetings/tech-plan.md`
+- `app/code/Weline/Theme/doc/开发/team/visual-editor-theme-id-url-isolation/meetings/汇审.md`
+- `app/code/Weline/Theme/doc/开发/team/widget-assets-position-migration/acceptance-status.md`
+- `app/code/Weline/Theme/doc/开发/team/widget-engineer-compliance/meetings/文档-review.md`
+- `app/code/Weline/Theme/doc/开发/team/widget-engineer-compliance/meetings/架构师-review.md`
+- `app/code/Weline/Theme/doc/开发/team/widget-engineer-compliance/meetings/汇审.md`
+- `app/code/Weline/Theme/doc/开发/team/widget-engineer-compliance/meetings/测试-review.md`
+- `app/code/Weline/Theme/doc/开发/team/widget-engineer-compliance/meetings/部件开发工程师-review.md`
+- `app/code/Weline/Theme/doc/开发/team/widget-engineer-compliance/roster.md`
+- `app/code/Weline/Theme/doc/开发/team/widget-static-assets-bake-20260923/contracts.md`
+- `app/code/Weline/Theme/doc/开发/team/widget-static-assets-bake-20260923/deps.md`
+- `app/code/Weline/Theme/doc/开发/team/widget-static-assets-bake-20260923/meetings/架构-冻结.md`
+- `app/code/Weline/Theme/doc/开发/team/widget-static-assets-bake-20260923/surfaces.md`
+- `app/code/Weline/Theme/doc/开发/theme-layout-binding-v2-migration.md`
+- `app/code/Weline/Theme/doc/开发日志.md`
+- `app/code/Weline/Theme/doc/组件Meta信息使用示例.md`
+- `app/code/Weline/Theme/doc/组件Meta信息格式规范.md`
+- `app/code/Weline/Theme/doc/织艺谱系素材来源.md`
+- `app/code/Weline/Theme/doc/购物车共享SSR隔离.md`
+- `app/code/Weline/Theme/doc/运营/主题编辑器作用域切换.md`
+- `app/code/Weline/Theme/doc/通用建站部件库.md`
+- `app/code/Weline/Theme/doc/部件开发指南.md`
+- `app/code/Weline/Theme/doc/部件静态资源固化规范.md`
+- `app/code/Weline/Theme/doc/需求.md`
 
 ## 开发前门禁
 

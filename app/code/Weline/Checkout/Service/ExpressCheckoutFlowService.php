@@ -46,12 +46,8 @@ final class ExpressCheckoutFlowService
     public function start(array $params, callable $freezeQuote, callable $submitV2, callable $getData): array
     {
         $cartType = strtolower(trim((string) ($params['cart_type'] ?? $params['selling_mode'] ?? 'toc'))) ?: 'toc';
-        if ($cartType === 'tob') {
-            return [
-                'success' => false,
-                'message' => (string) __('批发快捷支付请使用完整结账'),
-                'error_code' => 'express_tob_use_full_checkout',
-            ];
+        if ($cartType !== 'tob') {
+            $cartType = 'toc';
         }
 
         $paymentMethod = strtolower(trim((string) ($params['payment_method'] ?? '')));

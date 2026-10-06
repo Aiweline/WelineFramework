@@ -20,9 +20,13 @@ final class PaymentCheckoutSessionPersistenceService
     public const CONTEXT_SHIPPING_METHOD_CODE = 'shipping_method_code';
     public const CONTEXT_SHIPPING_METHOD_LABEL = 'shipping_method_label';
     public const CONTEXT_DISCOUNT_LINES = 'discount_lines';
+    public const CONTEXT_WEBSITE_ID = 'website_id';
+    public const CONTEXT_WEBSITE_CODE = 'website_code';
+    public const CONTEXT_STOREFRONT_BASE_URL = 'storefront_base_url';
 
     public function __construct(
         private readonly ObjectManager $objectManager,
+        private readonly ?PaymentStorefrontLandingUrlService $storefrontUrls = null,
     ) {
     }
 
@@ -70,6 +74,7 @@ final class PaymentCheckoutSessionPersistenceService
         $shippingMethodLabel = trim((string) ($orderData['shipping_method_label'] ?? ''));
         $discountLines = $this->normalizeDiscountLines($orderData);
         $amountSnapshot = $this->buildAmountSnapshot($orderData, $currency, $amountMinor, $discountLines);
+        $websiteFreeze = $this->resolveWebsiteFreeze($orderData, $landingUrl);
 
         $snapshot = array_replace($session->getContextSnapshot(), [
             self::CONTEXT_BROWSER_LANDING_URL => $landingUrl,
@@ -81,6 +86,9 @@ final class PaymentCheckoutSessionPersistenceService
             self::CONTEXT_SHIPPING_METHOD_CODE => $shippingMethodCode,
             self::CONTEXT_SHIPPING_METHOD_LABEL => $shippingMethodLabel,
             self::CONTEXT_DISCOUNT_LINES => $discountLines,
+            self::CONTEXT_WEBSITE_ID => $websiteFreeze['website_id'],
+            self::CONTEXT_WEBSITE_CODE => $websiteFreeze['website_code'],
+            self::CONTEXT_STOREFRONT_BASE_URL => $websiteFreeze['storefront_base_url'],
         ]);
 
         $session
@@ -185,10 +193,25 @@ final class PaymentCheckoutSessionPersistenceService
 
         $params = $landingParams;
         $params[self::CONTEXT_TRANSACTION_NO] = $transactionNo;
-        $snapshot = array_replace($session->getContextSnapshot(), [
+        $existing = $session->getContextSnapshot();
+        $websiteFreeze = $this->resolveWebsiteFreeze(
+            array_replace(
+                \is_array($existing) ? $existing : [],
+                [
+                    self::CONTEXT_WEBSITE_ID => $existing[self::CONTEXT_WEBSITE_ID] ?? null,
+                    self::CONTEXT_WEBSITE_CODE => $existing[self::CONTEXT_WEBSITE_CODE] ?? null,
+                    self::CONTEXT_STOREFRONT_BASE_URL => $existing[self::CONTEXT_STOREFRONT_BASE_URL] ?? null,
+                ],
+            ),
+            $landingUrl,
+        );
+        $snapshot = array_replace($existing, [
             self::CONTEXT_BROWSER_LANDING_URL => $landingUrl,
             self::CONTEXT_BROWSER_LANDING_PARAMS => $params,
             self::CONTEXT_TRANSACTION_NO => $transactionNo,
+            self::CONTEXT_WEBSITE_ID => $websiteFreeze['website_id'],
+            self::CONTEXT_WEBSITE_CODE => $websiteFreeze['website_code'],
+            self::CONTEXT_STOREFRONT_BASE_URL => $websiteFreeze['storefront_base_url'],
         ]);
         $session
             ->setData(PaymentCheckoutSession::schema_fields_ACTIVE_INTENT_CODE, $transactionNo)
@@ -207,6 +230,9 @@ final class PaymentCheckoutSessionPersistenceService
                 }
                 $request['browser_landing_url'] = $landingUrl;
                 $request['browser_landing_params'] = $params;
+                $request[self::CONTEXT_WEBSITE_ID] = $websiteFreeze['website_id'];
+                $request[self::CONTEXT_WEBSITE_CODE] = $websiteFreeze['website_code'];
+                $request[self::CONTEXT_STOREFRONT_BASE_URL] = $websiteFreeze['storefront_base_url'];
                 $txn->setRequestData($request)->save();
             }
         } catch (\Throwable) {
@@ -239,15 +265,67 @@ final class PaymentCheckoutSessionPersistenceService
     public function landingSnapshot(PaymentCheckoutSession $session): array
     {
         $snapshot = $session->getContextSnapshot();
+        $landingUrl = trim((string) ($snapshot[self::CONTEXT_BROWSER_LANDING_URL] ?? ''));
+        $websiteId = max(0, (int) ($snapshot[self::CONTEXT_WEBSITE_ID] ?? 0));
+        $websiteCode = strtolower(trim((string) ($snapshot[self::CONTEXT_WEBSITE_CODE] ?? '')));
+        $storefrontBase = trim((string) ($snapshot[self::CONTEXT_STOREFRONT_BASE_URL] ?? ''));
+        if ($storefrontBase === '') {
+            $storefrontBase = $this->storefrontUrls()->resolveStorefrontBaseUrl($websiteId, '', $landingUrl);
+        }
+        if ($landingUrl !== '' && $storefrontBase !== '') {
+            $landingUrl = $this->storefrontUrls()->ensureLandingUnderBase($landingUrl, $storefrontBase);
+        }
 
         return [
-            'browser_landing_url' => trim((string) ($snapshot[self::CONTEXT_BROWSER_LANDING_URL] ?? '')),
+            'browser_landing_url' => $landingUrl,
             'browser_landing_params' => \is_array($snapshot[self::CONTEXT_BROWSER_LANDING_PARAMS] ?? null)
                 ? $snapshot[self::CONTEXT_BROWSER_LANDING_PARAMS]
                 : [],
             'browser_landing_ready' => (bool) ($snapshot[self::CONTEXT_BROWSER_LANDING_READY] ?? false),
             'checkout_session_code' => (string) $session->getData(PaymentCheckoutSession::schema_fields_CHECKOUT_SESSION_CODE),
+            'website_id' => $websiteId,
+            'website_code' => $websiteCode,
+            'storefront_base_url' => $storefrontBase,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $orderData
+     * @return array{website_id:int,website_code:string,storefront_base_url:string}
+     */
+    private function resolveWebsiteFreeze(array $orderData, string $landingUrl): array
+    {
+        $websiteId = max(0, (int) ($orderData[self::CONTEXT_WEBSITE_ID] ?? $orderData['website_id'] ?? 0));
+        $websiteCode = strtolower(trim((string) ($orderData[self::CONTEXT_WEBSITE_CODE] ?? $orderData['website_code'] ?? '')));
+        $storefrontBase = trim((string) (
+            $orderData[self::CONTEXT_STOREFRONT_BASE_URL]
+            ?? $orderData['storefront_base_url']
+            ?? ''
+        ));
+        $urls = $this->storefrontUrls();
+        if ($storefrontBase === '') {
+            $storefrontBase = $urls->resolveStorefrontBaseUrl($websiteId, '', $landingUrl);
+        } else {
+            $storefrontBase = $urls->normalizeBaseUrl($storefrontBase);
+        }
+        if ($websiteCode === '' && $websiteId >= 0) {
+            $websiteCode = $urls->loadWebsiteCode($websiteId);
+        }
+
+        return [
+            'website_id' => $websiteId,
+            'website_code' => $websiteCode,
+            'storefront_base_url' => $storefrontBase,
+        ];
+    }
+
+    private function storefrontUrls(): PaymentStorefrontLandingUrlService
+    {
+        if ($this->storefrontUrls !== null) {
+            return $this->storefrontUrls;
+        }
+
+        return $this->objectManager->getInstance(PaymentStorefrontLandingUrlService::class);
     }
 
     /**

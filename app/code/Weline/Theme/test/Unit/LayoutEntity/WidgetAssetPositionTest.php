@@ -25,6 +25,32 @@ final class WidgetAssetPositionTest extends TestCase
         self::assertSame(['Weline_Theme::js/shared.js'], $m['layout_js']);
         self::assertSame([], $m['source_js']);
     }
+
+    public function testSourceQueryStringDoesNotDropCssFromBucket(): void
+    {
+        $c = new ThemeLayoutEntityAssetCollector(null);
+        $m = $c->collectFromNodes([
+            [
+                'widget_type' => 'content',
+                'widget_code' => 'checkout-shipping-address',
+                'source' => 'Weline_Shipping::css/widgets/checkout-shipping-address.css?v=20260926-save-loading',
+                'source_position' => 'head',
+            ],
+        ]);
+        self::assertSame(
+            ['Weline_Shipping::css/widgets/checkout-shipping-address.css'],
+            $m['source_css'],
+        );
+        self::assertSame(
+            'head',
+            $m['source_positions']['Weline_Shipping::css/widgets/checkout-shipping-address.css'],
+        );
+        $m2 = $c->collectFromNodes([
+            ['source' => 'Weline_Theme::js/a.js?v=1#frag,Weline_Theme::css/b.css?cache=1'],
+        ]);
+        self::assertSame(['Weline_Theme::css/b.css'], $m2['source_css']);
+        self::assertSame(['Weline_Theme::js/a.js'], $m2['source_js']);
+    }
     public function testPositionAliasesAndEarliestSourceLocation(): void
     {
         $c = new ThemeLayoutEntityAssetCollector(null);

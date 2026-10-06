@@ -2452,13 +2452,21 @@ class WidgetDefaultInjectionService
         $localeCode = trim((string)($identity['locale_code'] ?? $identity['locale'] ?? ''));
         $targetType = trim((string)($identity['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL));
 
-        return [
+        $normalized = [
             'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
             'scope' => $scope !== '' ? $scope : 'default',
             'locale_code' => $localeCode === 'default' ? '' : $localeCode,
             'target_type' => $targetType !== '' ? $targetType : ThemeVirtualLayout::TARGET_GLOBAL,
             'target_id' => max(0, (int)($identity['target_id'] ?? 0)),
         ];
+        // Setup/CLI 与运行时调用方可能携带已校验的 ThemeApplicationContext / content_scope；不得剥掉。
+        foreach (['application_context', 'content_scope', 'purpose', 'store_mode', 'storage_scope'] as $key) {
+            if (\array_key_exists($key, $identity)) {
+                $normalized[$key] = $identity[$key];
+            }
+        }
+
+        return $normalized;
     }
 
     private function normalizeComponentArea(string $area): string

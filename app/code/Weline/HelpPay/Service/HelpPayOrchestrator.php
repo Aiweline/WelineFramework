@@ -26,7 +26,13 @@ final class HelpPayOrchestrator
      *   owner_customer_id?:int|null,
      *   payable_type?:string,
      *   payable_id?:string,
-     *   amount_minor:int,
+     *   amount_minor?:int,
+     *   goods_amount_minor?:int,
+     *   shipping_amount_minor?:int,
+     *   service_code?:string,
+     *   service_label?:string,
+     *   product_id?:int,
+     *   qty?:int,
      *   currency_code?:string,
      *   shipping_address:array<string,mixed>,
      *   address_confirmed:bool,
@@ -40,7 +46,6 @@ final class HelpPayOrchestrator
      */
     public function createHelpPay(array $input): array
     {
-        $this->assertTocOnly((string) ($input['cart_type'] ?? self::CART_TYPE_TOC));
         if (empty($input['rules_accepted'])) {
             throw new \InvalidArgumentException('helppay_rules_not_accepted');
         }
@@ -50,24 +55,76 @@ final class HelpPayOrchestrator
         $shipping = is_array($input['shipping_address'] ?? null) ? $input['shipping_address'] : [];
         $this->redaction->assertCompleteShipping($shipping);
 
+        $serviceCode = trim((string) ($input['service_code'] ?? $shipping['service_code'] ?? ''));
+        $serviceLabel = trim((string) ($input['service_label'] ?? $shipping['service_label'] ?? $shipping['label'] ?? ''));
+        $shippingMinor = max(0, (int) ($input['shipping_amount_minor'] ?? $shipping['shipping_amount_minor'] ?? 0));
+        $amountMinor = max(0, (int) ($input['amount_minor'] ?? 0));
+        if (array_key_exists('goods_amount_minor', $input)) {
+            $goodsMinor = max(0, (int) $input['goods_amount_minor']);
+            if (!array_key_exists('amount_minor', $input)) {
+                $amountMinor = $goodsMinor + $shippingMinor;
+            }
+        } else {
+            $goodsMinor = max(0, $amountMinor - $shippingMinor);
+        }
+        if ($amountMinor <= 0 && $goodsMinor > 0) {
+            $amountMinor = $goodsMinor + $shippingMinor;
+        }
+
+        $snapshot = $shipping;
+        if ($serviceCode !== '') {
+            $snapshot['service_code'] = $serviceCode;
+        }
+        if ($serviceLabel !== '') {
+            $snapshot['service_label'] = $serviceLabel;
+            $snapshot['label'] = $serviceLabel;
+        }
+        if ($shippingMinor > 0 || array_key_exists('shipping_amount_minor', $input)) {
+            $snapshot['shipping_amount_minor'] = $shippingMinor;
+        }
+
+        $lineSummary = is_array($input['line_summary'] ?? null) ? $input['line_summary'] : [];
+        $productId = max(0, (int) ($input['product_id'] ?? 0));
+        if ($productId > 0 && $lineSummary === []) {
+            $lineSummary = [[
+                'product_id' => $productId,
+                'qty' => max(1, (int) ($input['qty'] ?? 1)),
+                'row_total_minor' => $goodsMinor,
+            ]];
+        }
+
         $created = $this->links->create([
             'kind' => PaymentLinkServiceInterface::KIND_HELP_PAY,
             'payable_type' => (string) ($input['payable_type'] ?? 'order'),
             'payable_id' => (string) ($input['payable_id'] ?? ''),
             'owner_customer_id' => isset($input['owner_customer_id']) ? (int) $input['owner_customer_id'] : null,
-            'amount_minor' => (int) ($input['amount_minor'] ?? 0),
+            'amount_minor' => $amountMinor,
             'currency_code' => (string) ($input['currency_code'] ?? 'USD'),
             'shipping_locked' => true,
-            'shipping_snapshot' => $shipping,
+            'shipping_snapshot' => $snapshot,
             'meta' => [
-                'line_summary' => $input['line_summary'] ?? [],
+                'line_summary' => $lineSummary,
                 'discounts_disabled' => true,
                 'mode' => 'help_pay',
+                'goods_amount_minor' => $goodsMinor,
+                'shipping_amount_minor' => $shippingMinor,
+                'service_code' => $serviceCode,
+                'service_label' => $serviceLabel,
+                'product_id' => $productId,
+                'qty' => max(1, (int) ($input['qty'] ?? 1)),
+                'cart_type' => strtolower(trim((string) ($input['cart_type'] ?? ''))),
             ],
             'ttl_seconds' => (int) ($input['ttl_seconds'] ?? 86400 * 7),
         ], (string) ($input['public_origin'] ?? ''));
 
-        return $this->shareDeliveryPayload($created);
+        $payload = $this->shareDeliveryPayload($created);
+        $payload['amount_minor'] = $amountMinor;
+        $payload['goods_amount_minor'] = $goodsMinor;
+        $payload['shipping_amount_minor'] = $shippingMinor;
+        $payload['service_code'] = $serviceCode;
+        $payload['service_label'] = $serviceLabel;
+
+        return $payload;
     }
 
     /**
@@ -82,7 +139,6 @@ final class HelpPayOrchestrator
      */
     public function createSelectionShare(array $input): array
     {
-        $this->assertTocOnly((string) ($input['cart_type'] ?? self::CART_TYPE_TOC));
         $snapshot = is_array($input['selection_snapshot'] ?? null) ? $input['selection_snapshot'] : [];
         if ($snapshot === []) {
             throw new \InvalidArgumentException('helppay_selection_empty');
@@ -122,7 +178,6 @@ final class HelpPayOrchestrator
      */
     public function listQuickShippingOptions(array $input): array
     {
-        $this->assertTocOnly((string) ($input['cart_type'] ?? self::CART_TYPE_TOC));
         $shipping = is_array($input['shipping_address'] ?? null) ? $input['shipping_address'] : [];
         if ($shipping === [] && is_array($input['address'] ?? null)) {
             $shipping = $input['address'];
@@ -142,7 +197,6 @@ final class HelpPayOrchestrator
 
     public function createQuickPay(array $input): array
     {
-        $this->assertTocOnly((string) ($input['cart_type'] ?? self::CART_TYPE_TOC));
         $shipping = is_array($input['shipping_address'] ?? null) ? $input['shipping_address'] : [];
         $this->redaction->assertCompleteShipping($shipping);
 
@@ -238,7 +292,8 @@ final class HelpPayOrchestrator
     }
 
     /**
-     * Payer-facing resolve: no shipping, discounts disabled, billing allowed.
+     * Payer-facing resolve: no shipping address, discounts disabled, billing allowed.
+     * Includes goods/shipping breakdown + quoted options so the page can recalculate freight.
      *
      * @return array<string,mixed>|null
      */
@@ -248,13 +303,52 @@ final class HelpPayOrchestrator
         if ($row === null) {
             return null;
         }
+        $meta = is_array($row['meta'] ?? null) ? $row['meta'] : [];
+        $goodsMinor = $this->goodsAmountMinorFromLink($row);
+        $shippingMinor = max(0, (int) ($meta['shipping_amount_minor'] ?? 0));
+        $serviceCode = trim((string) ($meta['service_code'] ?? ''));
+        $serviceLabel = trim((string) ($meta['service_label'] ?? ''));
+        $quoted = $this->listPayerShippingOptions($token);
+        $options = is_array($quoted['options'] ?? null) ? $quoted['options'] : [];
+        if ($serviceCode !== '' && $options !== []) {
+            foreach ($options as $option) {
+                if (!is_array($option)) {
+                    continue;
+                }
+                if (trim((string) ($option['service_code'] ?? '')) === $serviceCode) {
+                    $shippingMinor = max(0, (int) ($option['amount_minor'] ?? $shippingMinor));
+                    if ($serviceLabel === '') {
+                        $serviceLabel = trim((string) ($option['label'] ?? ''));
+                    }
+                    break;
+                }
+            }
+        } elseif ($options !== [] && $shippingMinor <= 0) {
+            $first = $options[0];
+            if (is_array($first)) {
+                $serviceCode = trim((string) ($first['service_code'] ?? ''));
+                $serviceLabel = trim((string) ($first['label'] ?? ''));
+                $shippingMinor = max(0, (int) ($first['amount_minor'] ?? 0));
+            }
+        }
+        $amountMinor = $goodsMinor + $shippingMinor;
+        if ($amountMinor <= 0) {
+            $amountMinor = max(0, (int) ($row['amount_minor'] ?? 0));
+        }
 
         return $this->redaction->redactStorefront([
             'token' => $token,
             'payment_link_code' => $row['payment_link_code'] ?? '',
-            'amount_minor' => $row['amount_minor'] ?? 0,
+            'amount_minor' => $amountMinor,
+            'goods_amount_minor' => $goodsMinor,
+            'shipping_amount_minor' => $shippingMinor,
+            'service_code' => $serviceCode,
+            'service_label' => $serviceLabel,
+            'shipping_options' => $options,
+            'missing_weight' => !empty($quoted['missing_weight']),
+            'quote_diagnostics' => $quoted['quote_diagnostics'] ?? [],
             'currency_code' => $row['currency_code'] ?? 'USD',
-            'line_summary' => $row['meta']['line_summary'] ?? [],
+            'line_summary' => $meta['line_summary'] ?? [],
             'discounts_allowed' => false,
             'shipping_locked' => true,
             'billing_editable' => true,
@@ -264,6 +358,55 @@ final class HelpPayOrchestrator
             'session_isolation' => true,
             'load_payer_cart' => false,
         ], true);
+    }
+
+    /**
+     * Quote real shipping lanes for a help_pay token (address stays locked/redacted to payer).
+     *
+     * @return array{
+     *   options:list<array<string,mixed>>,
+     *   quote_diagnostics:array<string,mixed>,
+     *   missing_weight:bool,
+     *   goods_amount_minor:int,
+     *   currency_code:string
+     * }
+     */
+    public function listPayerShippingOptions(string $token): array
+    {
+        $token = trim($token);
+        $row = $this->links->resolve($token, PaymentLinkServiceInterface::KIND_HELP_PAY);
+        if ($row === null) {
+            throw new \InvalidArgumentException('helppay_link_invalid');
+        }
+        $shipping = $this->links->resolveShippingForFulfillment(
+            $token,
+            PaymentLinkServiceInterface::KIND_HELP_PAY
+        );
+        if (!is_array($shipping) || $shipping === []) {
+            throw new \InvalidArgumentException('helppay_shipping_incomplete');
+        }
+        $meta = is_array($row['meta'] ?? null) ? $row['meta'] : [];
+        $goodsMinor = $this->goodsAmountMinorFromLink($row);
+        $currency = strtoupper(trim((string) ($row['currency_code'] ?? 'USD'))) ?: 'USD';
+        $productId = max(0, (int) ($meta['product_id'] ?? 0));
+        $qty = max(1, (int) ($meta['qty'] ?? 1));
+        $quoted = $this->quickShipping()->listOptions([
+            'shipping_address' => $shipping,
+            'address' => $shipping,
+            'goods_amount_minor' => $goodsMinor,
+            'currency_code' => $currency,
+            'product_id' => $productId,
+            'qty' => $qty,
+            'line_summary' => is_array($meta['line_summary'] ?? null) ? $meta['line_summary'] : [],
+        ]);
+
+        return [
+            'options' => $quoted['options'],
+            'quote_diagnostics' => $quoted['quote_diagnostics'],
+            'missing_weight' => !empty($quoted['missing_weight']),
+            'goods_amount_minor' => $goodsMinor,
+            'currency_code' => $currency,
+        ];
     }
 
     /**
@@ -287,6 +430,8 @@ final class HelpPayOrchestrator
      * @param array{
      *   token:string,
      *   payment_method:string,
+     *   service_code?:string,
+     *   shipping_amount_minor?:int,
      *   billing_address?:array<string,mixed>,
      *   idempotency_key?:string
      * } $input
@@ -301,6 +446,8 @@ final class HelpPayOrchestrator
      * @param array{
      *   token:string,
      *   payment_method?:string,
+     *   service_code?:string,
+     *   shipping_amount_minor?:int,
      *   billing_address?:array<string,mixed>,
      *   idempotency_key?:string
      * } $input
@@ -328,12 +475,23 @@ final class HelpPayOrchestrator
         }
 
         $amountMinor = max(0, (int) ($row['amount_minor'] ?? 0));
-        if ($amountMinor <= 0) {
-            throw new \InvalidArgumentException('helppay_amount_invalid');
-        }
         $currency = strtoupper(trim((string) ($row['currency_code'] ?? 'USD')));
         if ($currency === '') {
             $currency = 'USD';
+        }
+
+        $selectedService = '';
+        $selectedShipMinor = 0;
+        $selectedShipLabel = '';
+        if ($kind === PaymentLinkServiceInterface::KIND_HELP_PAY) {
+            $priced = $this->resolvePayerPayableAmount($token, $input);
+            $amountMinor = $priced['amount_minor'];
+            $selectedService = $priced['service_code'];
+            $selectedShipMinor = $priced['shipping_amount_minor'];
+            $selectedShipLabel = $priced['service_label'];
+        }
+        if ($amountMinor <= 0) {
+            throw new \InvalidArgumentException('helppay_amount_invalid');
         }
 
         $billing = \is_array($input['billing_address'] ?? null) ? $input['billing_address'] : [];
@@ -359,7 +517,8 @@ final class HelpPayOrchestrator
         $idempotency = trim((string) ($input['idempotency_key'] ?? ''));
         if ($idempotency === '') {
             $idempotency = ($mode === 'quick_pay_self' ? 'quickpay_' : 'helppay_')
-                . $token . '_' . $method . '_' . $amountMinor;
+                . $token . '_' . $method . '_' . $amountMinor
+                . ($selectedService !== '' ? '_' . $selectedService : '');
         }
 
         $customerId = $this->resolvePayerCustomerId();
@@ -416,6 +575,10 @@ final class HelpPayOrchestrator
             'metadata' => [
                 'helppay_token' => $token,
                 'mode' => $mode,
+                'service_code' => $selectedService,
+                'service_label' => $selectedShipLabel,
+                'shipping_amount_minor' => $selectedShipMinor,
+                'goods_amount_minor' => max(0, $amountMinor - $selectedShipMinor),
             ],
         ];
         try {
@@ -452,7 +615,90 @@ final class HelpPayOrchestrator
             'success_url' => $paid ? $redirect : '',
             'requires_action' => $redirect !== '' && !$paid,
             'paid' => $paid,
+            'amount_minor' => $amountMinor,
+            'shipping_amount_minor' => $selectedShipMinor,
+            'service_code' => $selectedService,
+            'service_label' => $selectedShipLabel,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $input
+     * @return array{amount_minor:int,goods_amount_minor:int,shipping_amount_minor:int,service_code:string,service_label:string}
+     */
+    private function resolvePayerPayableAmount(string $token, array $input): array
+    {
+        $row = $this->links->resolve($token, PaymentLinkServiceInterface::KIND_HELP_PAY);
+        if ($row === null) {
+            throw new \InvalidArgumentException('helppay_link_invalid');
+        }
+        $goodsMinor = $this->goodsAmountMinorFromLink($row);
+        $quoted = $this->listPayerShippingOptions($token);
+        $options = is_array($quoted['options'] ?? null) ? $quoted['options'] : [];
+        $serviceCode = trim((string) ($input['service_code'] ?? ''));
+        $claimedShip = array_key_exists('shipping_amount_minor', $input)
+            ? max(0, (int) $input['shipping_amount_minor'])
+            : null;
+
+        if ($options === []) {
+            // Legacy links / missing weight: pay frozen goods (or original amount) without inventing lanes.
+            $amount = max(0, (int) ($row['amount_minor'] ?? $goodsMinor));
+            if ($goodsMinor > 0) {
+                $amount = $goodsMinor;
+            }
+
+            return [
+                'amount_minor' => $amount,
+                'goods_amount_minor' => $goodsMinor > 0 ? $goodsMinor : $amount,
+                'shipping_amount_minor' => 0,
+                'service_code' => '',
+                'service_label' => '',
+            ];
+        }
+
+        if ($serviceCode === '') {
+            throw new \InvalidArgumentException('helppay_shipping_required');
+        }
+        $matched = null;
+        foreach ($options as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            if (trim((string) ($option['service_code'] ?? '')) === $serviceCode) {
+                $matched = $option;
+                break;
+            }
+        }
+        if ($matched === null) {
+            throw new \InvalidArgumentException('helppay_shipping_unavailable');
+        }
+        $shipMinor = max(0, (int) ($matched['amount_minor'] ?? 0));
+        if ($claimedShip !== null && $claimedShip !== $shipMinor) {
+            throw new \InvalidArgumentException('helppay_shipping_mismatch');
+        }
+
+        return [
+            'amount_minor' => $goodsMinor + $shipMinor,
+            'goods_amount_minor' => $goodsMinor,
+            'shipping_amount_minor' => $shipMinor,
+            'service_code' => $serviceCode,
+            'service_label' => trim((string) ($matched['label'] ?? $matched['service_name'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     */
+    private function goodsAmountMinorFromLink(array $row): int
+    {
+        $meta = is_array($row['meta'] ?? null) ? $row['meta'] : [];
+        if (array_key_exists('goods_amount_minor', $meta)) {
+            return max(0, (int) $meta['goods_amount_minor']);
+        }
+        $amount = max(0, (int) ($row['amount_minor'] ?? 0));
+        $ship = max(0, (int) ($meta['shipping_amount_minor'] ?? 0));
+
+        return max(0, $amount - $ship);
     }
 
     /**
@@ -605,13 +851,6 @@ final class HelpPayOrchestrator
 
         return \in_array($scheme, ['http', 'https'], true)
             && filter_var($url, FILTER_VALIDATE_URL) !== false;
-    }
-
-    private function assertTocOnly(string $cartType): void
-    {
-        if (strtolower(trim($cartType)) !== self::CART_TYPE_TOC) {
-            throw new \InvalidArgumentException('helppay_toc_only');
-        }
     }
 
     private function quickShipping(): HelpPayQuickShippingQuoteService

@@ -201,6 +201,7 @@
     /**
      * Show soft retail-only banner when chrome is tob but the PDP/panel
      * has no wholesale switcher (SKU not wholesale-display eligible).
+     * Keep a single host in the product info column — do not mirror into buybox.
      */
     function syncRetailOnlyHints(mode) {
         if (mode !== 'tob' && mode !== 'toc') {
@@ -216,55 +217,11 @@
         document.querySelectorAll('[data-b2b-retail-only-hint="1"]').forEach(function (el) {
             el.hidden = !show;
         });
-        syncRetailOnlyHintBuyboxMirrors(show);
-    }
-
-    /**
-     * Amazon buybox CTAs sit in a side column; mirror the soft hint above qty/actions
-     * so shoppers see「进零售车」next to 加入购物车 / 立即结账.
-     */
-    function syncRetailOnlyHintBuyboxMirrors(show) {
-        document.querySelectorAll(
-            '.product-native-detail, [data-testid="storefront-product-detail"]'
-        ).forEach(function (detail) {
-            var source = detail.querySelector('[data-b2b-retail-only-hint="1"]');
-            var buybox = detail.querySelector('.product-native-detail__buybox');
-            if (!buybox) {
-                return;
+        // Drop any leftover buybox clones from older asset builds.
+        document.querySelectorAll('[data-b2b-retail-only-hint-mirror="1"]').forEach(function (mirror) {
+            if (mirror.parentNode) {
+                mirror.parentNode.removeChild(mirror);
             }
-            var mirror = buybox.querySelector('[data-b2b-retail-only-hint-mirror="1"]');
-            if (!show || !source) {
-                if (mirror) {
-                    mirror.hidden = true;
-                }
-                return;
-            }
-            if (!mirror) {
-                mirror = source.cloneNode(true);
-                mirror.setAttribute('data-b2b-retail-only-hint-mirror', '1');
-                mirror.removeAttribute('data-b2b-retail-only-hint');
-                mirror.removeAttribute('data-weline-load');
-                mirror.removeAttribute('data-testid');
-                mirror.setAttribute('data-testid', 'b2b-retail-only-tob-hint-buybox');
-                mirror.querySelectorAll('script').forEach(function (node) {
-                    node.parentNode && node.parentNode.removeChild(node);
-                });
-                var anchor = buybox.querySelector('.product-native-detail__qty-row')
-                    || buybox.querySelector('.product-native-detail__actions')
-                    || buybox.querySelector('[data-wslot="product-purchase-actions"]');
-                if (anchor && anchor.parentNode === buybox) {
-                    buybox.insertBefore(mirror, anchor);
-                } else {
-                    buybox.appendChild(mirror);
-                }
-            } else {
-                // Refresh text from source in case locale/panel reinjected.
-                mirror.innerHTML = source.innerHTML;
-                mirror.querySelectorAll('script').forEach(function (node) {
-                    node.parentNode && node.parentNode.removeChild(node);
-                });
-            }
-            mirror.hidden = false;
         });
     }
 
@@ -426,6 +383,15 @@
         var moqHint = root.querySelector('[data-b2b-tob-moq-hint]');
         if (moqHint) {
             moqHint.hidden = !(mode === 'tob' && loggedIn && membership);
+        }
+        // Retail mode: simple「支持批发」text CTA. Wholesale mode: segment pills.
+        var softCta = root.querySelector('[data-b2b-toc-wholesale-cta]');
+        var segmentWrap = root.querySelector('[data-b2b-selling-mode-segment]');
+        if (softCta) {
+            softCta.hidden = mode !== 'toc';
+        }
+        if (segmentWrap) {
+            segmentWrap.hidden = mode === 'toc';
         }
         var guestGate = root.querySelector('[data-b2b-apply-guest-gate]');
         var applyForm = root.querySelector('[data-b2b-apply-form]');
@@ -1362,17 +1328,20 @@
             }
         });
         document.querySelectorAll('[data-weline-cart], .weline-cart-shell').forEach(function (root) {
-            root.setAttribute('data-cart-type', mode);
-            root.classList.toggle('is-cart-type-tob', mode === 'tob');
-            ensureMiniCartExtrasVisible(root, mode);
+            // Cart/checkout URL handoff (?cart_type= / ?type=) owns this page view.
+            var handoff = String(root.getAttribute('data-cart-type-handoff') || '').toLowerCase();
+            var effective = (handoff === 'toc' || handoff === 'tob') ? handoff : mode;
+            root.setAttribute('data-cart-type', effective);
+            root.classList.toggle('is-cart-type-tob', effective === 'tob');
+            ensureMiniCartExtrasVisible(root, effective);
             if (global.WelineB2BCheckoutTob && typeof global.WelineB2BCheckoutTob.applyCartType === 'function') {
                 try {
-                    global.WelineB2BCheckoutTob.applyCartType(root, mode, { ensureQuote: mode === 'tob' });
+                    global.WelineB2BCheckoutTob.applyCartType(root, effective, { ensureQuote: effective === 'tob' });
                 } catch (eCartCredit) {
                     // ignore
                 }
             }
-            syncMiniCartCouponAvailability(root, mode);
+            syncMiniCartCouponAvailability(root, effective);
         });
         syncCheckoutChrome(mode);
     }
@@ -1488,8 +1457,13 @@
             var mode = preferredMode(null);
             // Compare BEFORE syncCartPageChrome mutates data-cart-type; otherwise mismatch
             // is erased and wholesale chrome can keep retail line items.
+            // URL handoff (?cart_type=toc) must not be treated as mismatch → preferred tob.
             var needsCartReload = false;
             document.querySelectorAll('[data-weline-cart], [data-w-mini-cart="1"]').forEach(function (root) {
+                var handoff = String(root.getAttribute('data-cart-type-handoff') || '').toLowerCase();
+                if (handoff === 'toc' || handoff === 'tob') {
+                    return;
+                }
                 var current = String(root.getAttribute('data-cart-type') || '').toLowerCase();
                 if (current && current !== mode) {
                     needsCartReload = true;

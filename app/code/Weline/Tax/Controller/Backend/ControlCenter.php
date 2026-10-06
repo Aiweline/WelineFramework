@@ -11,8 +11,11 @@ use Weline\Tax\Api\TaxEngineInterface;
 use Weline\Tax\Model\TaxClass;
 use Weline\Tax\Model\TaxRule;
 use Weline\Tax\Model\TaxRuleSetLkg;
+use Weline\SystemConfig\Api\ConfigReader;
+use Weline\Tax\Service\RateSync\TaxRateAggregateSyncService;
 use Weline\Tax\Service\TaxConfigurationAdminService;
 use Weline\Tax\Service\TaxRolloutGate;
+use Weline\Tax\Service\TaxScopeConfig;
 
 #[Acl(
     'Weline_Tax::commerce:tax-search:control-center',
@@ -98,6 +101,114 @@ final class ControlCenter extends BackendController
             'execution_policy' => 'registered_postgresql_full_clone_cli_only',
             'production_actions_exposed' => false,
         ]);
+    }
+
+    #[Acl('Weline_Tax::commerce:tax-search:ratesync', '税率同步', 'sync', '多源聚合税率同步')]
+    public function ratesync(): string
+    {
+        $status = $this->ratesyncStatus();
+
+        return $this->renderWorkspace('ratesync', '税率同步', [
+            '税率记录' => [TaxRule::class, ['tax_rule_id', 'website_id', 'class_code', 'jurisdiction_key', 'rate_bps', 'enabled', 'updated_at']],
+        ], $status, [
+            'kind' => 'ratesync',
+            'action' => 'tax/backend/control-center/run-rate-sync',
+            'config_deeplink' => $this->ratesyncConfigDeeplink(),
+        ]);
+    }
+
+    #[Acl('Weline_Tax::commerce:tax-search:ratesync:run', '立即同步税率', 'save', '立即执行多源税率同步')]
+    public function runRateSync()
+    {
+        try {
+            if (!$this->request->isPost()) {
+                throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
+            }
+            $websiteId = filter_var($this->request->getPost('website_id', 0), FILTER_VALIDATE_INT);
+            if ($websiteId === false || $websiteId < 0) {
+                $websiteId = 0;
+            }
+            /** @var TaxRateAggregateSyncService $sync */
+            $sync = ObjectManager::getInstance(TaxRateAggregateSyncService::class);
+            $result = $sync->sync((int)$websiteId, true);
+            if (!empty($result['ok'])) {
+                $this->getMessageManager()->addSuccess(__(
+                    '税率同步完成：合并 %{1} 条，新建 %{2}，更新 %{3}，冲突取高 %{4}，专业覆盖 %{5}。',
+                    [
+                        (int)($result['merged_count'] ?? 0),
+                        (int)($result['rules_created'] ?? 0),
+                        (int)($result['rules_updated'] ?? 0),
+                        (int)($result['conflict_max_count'] ?? 0),
+                        (int)($result['professional_overlay_count'] ?? 0),
+                    ],
+                ));
+            } else {
+                $this->getMessageManager()->addError((string)__('税率同步失败。'));
+            }
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError($throwable->getMessage());
+        }
+
+        return $this->redirect('tax/backend/controlcenter/ratesync');
+    }
+
+    /** @return array<string,mixed> */
+    private function ratesyncStatus(): array
+    {
+        try {
+            /** @var TaxRateAggregateSyncService $sync */
+            $sync = ObjectManager::getInstance(TaxRateAggregateSyncService::class);
+            $last = $sync->lastResult();
+            if ($last === []) {
+                return [
+                    'last_sync' => __('尚未同步'),
+                    'cron_enabled' => $sync->cronEnabled() ? __('是') : __('否'),
+                ];
+            }
+
+            return [
+                'last_sync' => (string)($last['finished_at'] ?? $last['started_at'] ?? ''),
+                'merged_count' => (int)($last['merged_count'] ?? 0),
+                'rules_created' => (int)($last['rules_created'] ?? 0),
+                'rules_updated' => (int)($last['rules_updated'] ?? 0),
+                'conflict_max_count' => (int)($last['conflict_max_count'] ?? 0),
+                'professional_overlay_count' => (int)($last['professional_overlay_count'] ?? 0),
+                'failed_sources' => (array)($last['failed_sources'] ?? []),
+                'source_stats' => (array)($last['source_stats'] ?? []),
+                'cron_enabled' => $sync->cronEnabled() ? __('是') : __('否'),
+            ];
+        } catch (\Throwable $throwable) {
+            return ['status_error' => $throwable->getMessage()];
+        }
+    }
+
+    /**
+     * SystemConfig deep link that auto-locates tax/ratesync fields (guide_key + guide_locate).
+     */
+    private function ratesyncConfigDeeplink(): string
+    {
+        $guideKey = TaxRateAggregateSyncService::KEY_MODE;
+        try {
+            return (string)$this->request->getUrlBuilder()->getBackendUrl(
+                'weline_systemconfig/backend/config',
+                [
+                    'module' => TaxScopeConfig::MODULE,
+                    'area' => TaxScopeConfig::AREA !== '' ? TaxScopeConfig::AREA : ConfigReader::area_BACKEND,
+                    'scope' => ConfigReader::SCOPE_GLOBAL,
+                    'target_scope' => ConfigReader::SCOPE_GLOBAL,
+                    'search' => 'tax/ratesync',
+                    'q' => 'tax/ratesync',
+                    'guide_key' => $guideKey,
+                    'guide_locate' => $guideKey,
+                    'guide_title' => (string)__('税率多源同步'),
+                    'guide_summary' => (string)__('免费并集取高 + 可选专业覆盖；密钥只保存在统一配置中心。'),
+                    'guide_return' => 'tax/backend/controlcenter/ratesync',
+                ],
+                false,
+            );
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /** @param array<string,array{0:class-string,1:list<string>}> $sources */

@@ -21,11 +21,21 @@ Object.assign(window.WelineModulesConfig.modules, {
         globalVar: "WelineCheckoutExpressReview",
         load: "lazy",
         description: "快捷支付回头确认页：摘要/缺口/确认收款"
+    },
+    storefrontMoneySummary: {
+        paths: [
+            "Weline_Checkout::js/widgets/storefront-money-summary.js?v=20261006-sms1"
+        ],
+        globalVar: "WelineStorefrontMoneySummary",
+        load: "eager",
+        description: "店面金额小计：统一 paint 商品/运费/税费/优惠/应付"
     }
 });
 
 Object.assign(window.WelineModulesConfig.moduleAliases, {
     checkout: "checkoutLifecycle",
     "WelineCheckout": "checkoutLifecycle",
-    checkoutExpressReview: "checkoutExpressReview"
+    checkoutExpressReview: "checkoutExpressReview",
+    storefrontMoneySummary: "storefrontMoneySummary",
+    "WelineStorefrontMoneySummary": "storefrontMoneySummary"
 });

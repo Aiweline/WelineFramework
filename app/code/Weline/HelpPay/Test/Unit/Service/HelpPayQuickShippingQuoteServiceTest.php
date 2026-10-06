@@ -34,6 +34,37 @@ final class HelpPayQuickShippingQuoteServiceTest extends TestCase
         self::assertSame(0, (int) ($out['lines'][0]['weight_minor'] ?? -1));
     }
 
+    public function testLineSummaryKeepsPerUnitWeightForShippingStack(): void
+    {
+        $svc = HelpPayQuickShippingQuoteService::forTesting(
+            CheckoutQuoteLineWeightResolver::forTesting(static fn (): int => 0),
+            [[
+                'service_code' => 'PUBLIC_STD_US',
+                'label' => '国际标快',
+                'amount_minor' => 29984,
+            ]],
+        );
+        $out = $svc->listOptions([
+            'goods_amount_minor' => 11845,
+            'currency_code' => 'USD',
+            'shipping_address' => [
+                'name' => 'A', 'line1' => '1', 'phone' => '1', 'country' => 'US',
+            ],
+            'line_summary' => [[
+                'title' => 'Yueyan',
+                'qty' => 5,
+                'product_id' => 1,
+                'weight_minor' => 300,
+                'weight_per_unit' => 1,
+                'row_total_minor' => 11845,
+            ]],
+        ]);
+        self::assertFalse($out['missing_weight']);
+        // Must stay per-unit (300g); pre-multiplying to 1500 would be charged as 7.5kg.
+        self::assertSame(300, (int) ($out['lines'][0]['weight_minor'] ?? 0));
+        self::assertSame(5, (int) ($out['lines'][0]['qty'] ?? 0));
+    }
+
     public function testQuotedLaneUsesCatalogWeightNotInventedHalfKg(): void
     {
         $svc = HelpPayQuickShippingQuoteService::forTesting(

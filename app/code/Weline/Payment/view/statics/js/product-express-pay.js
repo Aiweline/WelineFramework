@@ -242,10 +242,6 @@
       || ''
     );
     var cartType = resolveCartType(buyNow || button);
-    if (cartType === 'tob') {
-      throw new Error(text(section.getAttribute('data-tob-fallback-message'))
-        || '批发请使用完整结账');
-    }
     if (!global.Weline || !global.Weline.Api || typeof global.Weline.Api.resource !== 'function') {
       throw new Error('api_missing');
     }

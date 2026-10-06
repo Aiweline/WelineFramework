@@ -1,0 +1,31 @@
+```mermaid
+%% Weline 请求主链 + 模块分层简图（Mermaid 轻量版；权威源见 *.dot）
+%% 证据: index.php → pub/index.php → app/bootstrap.php → Framework/App.php:1334
+flowchart TB
+    Browser([浏览器/爬虫]) -->|HTTP| Nginx["nginx / WLS 服务器进程<br/>(Server 模块, 高置信)"]
+    Nginx --> Entry["index.php → pub/index.php<br/>→ app/bootstrap.php"]
+    Entry --> App["Framework\App::runWithRuntime()<br/>WlsRuntime | FpmRuntime"]
+    App --> Pipeline["RequestPipeline → Router\\Core"]
+    Pipeline --> Ctrl["模块 Controller / View(Template编译)<br/>+ FPC FullPageCacheCoordinator"]
+    Ctrl --> Resp([响应 HTML/JSON])
+
+    subgraph L3["L3 商务/交易/AI"]
+        direction LR
+        Commerce["Customer·Cart·Checkout·Payment<br/>Order·Shipping·Tax·Inventory<br/>Marketing·B2B·Vendor·Dropship·Ai"]
+    end
+    subgraph L2["L2 店面/内容/主题"]
+        direction LR
+        Storefront["Frontend·Theme·Widget·Eav<br/>Catalog→Product·Search·Seo<br/>Cms·Blog·FileManager·Media"]
+    end
+    subgraph L1["L1 平台/基础设施"]
+        direction LR
+        Platform["Backend(扇入63)·SystemConfig(37)·I18n(24)<br/>Websites(22)·Admin(17)·Queue·Acl·Cron"]
+    end
+    subgraph L0["L0 内核"]
+        Kernel["Weline_Framework (扇入78/120)<br/>Router·Http·View·Container·Module<br/>Cache·Db·Event·Hook·Runtime·Console"]
+    end
+    L3 --> L2 --> L1 --> L0
+    Ctrl -.运行期解析.-> Kernel
+    classDef layer fill:#e8f0fe,stroke:#1a73e8;
+    class Platform,Storefront,Commerce,Kernel layer;
+```

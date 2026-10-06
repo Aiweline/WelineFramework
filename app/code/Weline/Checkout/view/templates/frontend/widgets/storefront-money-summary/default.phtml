@@ -1,0 +1,181 @@
+<?php
+
+/**
+ * 店面金额小计（购物车 / 结账 / 快捷 / 代付共用行序）
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {storefront-money-summary}
+ * @widget.name {店面金额小计}
+ * @widget.description {统一商品小计、运费、税费、优惠与应付行；各表面只算数并 paint}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content","footer"]}
+ * @widget.page_layouts {["cart","checkout","mini-cart","*"]}
+ * @widget.supports {["storefront-money-summary","checkout-money-summary","money-summary"]}
+ * @widget.source {Weline_Checkout::css/widgets/storefront-money-summary.css,Weline_Checkout::js/widgets/storefront-money-summary.js}
+ *
+ * @param mode {default="checkout",type="select",label="表面模式",options="checkout,cart,mini-cart,express,helppay"}
+ * @param note {default="",type="string",label="摘要说明（空则隐藏）"}
+ * @param discounts_disabled {default=false,type="bool",label="禁用优惠行"}
+ */
+
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    (string) $value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
+
+$mode = strtolower(trim((string) ($this->getData('mode') ?? 'checkout')));
+$allowedModes = ['checkout', 'cart', 'mini-cart', 'express', 'helppay'];
+if (!in_array($mode, $allowedModes, true)) {
+    $mode = 'checkout';
+}
+
+$note = trim((string) ($this->getData('note') ?? ''));
+if ($note === '' && ($mode === 'cart' || $mode === 'mini-cart')) {
+    $note = (string) __('税费与运费将在结算时计算');
+}
+
+$discountsDisabled = (bool) ($this->getData('discounts_disabled') ?? false);
+$shippingPending = ($mode === 'cart' || $mode === 'mini-cart');
+$hideShippingInitially = $shippingPending;
+$showDiscountLinesHost = ($mode === 'cart' || $mode === 'mini-cart');
+
+$labelGoods = (string) __('商品小计');
+$labelShipping = (string) __('运费');
+$labelDiscount = (string) __('优惠');
+$labelDeposit = (string) __('批发定金');
+$labelCredit = (string) __('批发信用抵扣');
+$labelTax = (string) __('关税与税费（预估）');
+$labelCod = (string) __('货到付款手续费');
+$labelIncentive = (string) __('支付方式优惠');
+$labelPayable = (string) __('应付合计');
+if ($mode === 'cart' || $mode === 'mini-cart') {
+    $labelTax = (string) __('税费（预估）');
+    $labelPayable = (string) __('小计');
+}
+if ($mode === 'express' || $mode === 'helppay') {
+    $labelPayable = (string) __('应付');
+}
+?>
+<div class="w-storefront-money-summary"
+     data-money-summary
+     data-money-summary-mode="<?= $escape($mode) ?>"
+     data-weline-load="storefrontMoneySummary"
+     data-testid="storefront-money-summary"
+     <?php if ($discountsDisabled): ?>data-discounts-disabled="1"<?php endif; ?>
+     <?php if ($shippingPending): ?>data-shipping-pending="1"<?php endif; ?>
+     role="list"
+     weline-code="checkout.widget.storefront-money-summary">
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--goods"
+         role="listitem"
+         data-money-summary-row="goods"
+         data-cart-discount-breakdown>
+        <span data-money-summary-goods-label><?= $escape($labelGoods) ?></span>
+        <strong data-money-summary-goods
+                data-subtotal=""
+                data-cart-goods-subtotal
+                data-express-subtotal>—</strong>
+    </div>
+    <?php if ($showDiscountLinesHost): ?>
+        <div class="w-storefront-money-summary__discount-lines"
+             data-money-summary-discount-lines
+             data-cart-discount-lines
+             data-mini-cart-discount-lines
+             data-mini-cart-discount-breakdown></div>
+    <?php endif; ?>
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--shipping"
+         role="listitem"
+         data-money-summary-row="shipping"
+         <?= $hideShippingInitially ? 'hidden' : '' ?>>
+        <span data-money-summary-shipping-label
+              data-helppay-ship-label><?= $escape($labelShipping) ?></span>
+        <strong data-money-summary-shipping
+                data-shipping-amount=""
+                data-express-shipping
+                data-helppay-ship-amount
+                data-testid="helppay-payment-ship-amount">—</strong>
+    </div>
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--discount"
+         role="listitem"
+         data-money-summary-row="discount"
+         data-checkout-discount-row
+         hidden>
+        <span data-money-summary-discount-label
+              data-checkout-discount-label><?= $escape($labelDiscount) ?></span>
+        <strong data-money-summary-discount
+                data-discount-amount=""
+                data-express-discount>0.00</strong>
+    </div>
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--deposit"
+         role="listitem"
+         data-money-summary-row="deposit"
+         data-checkout-deposit-row
+         hidden>
+        <span><?= $escape($labelDeposit) ?></span>
+        <strong data-money-summary-deposit data-deposit-amount="">0.00</strong>
+    </div>
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--credit"
+         role="listitem"
+         data-money-summary-row="credit"
+         data-checkout-credit-row
+         hidden>
+        <span><?= $escape($labelCredit) ?></span>
+        <strong data-money-summary-credit data-credit-amount="">0.00</strong>
+    </div>
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--tax"
+         role="listitem"
+         data-money-summary-row="tax"
+         data-checkout-tax-row
+         data-cart-tax-row
+         data-mini-cart-tax-row
+         hidden>
+        <span data-money-summary-tax-label
+              data-cart-tax-label
+              data-mini-cart-tax-label><?= $escape($labelTax) ?></span>
+        <strong data-money-summary-tax
+                data-tax-amount=""
+                data-cart-tax-amount
+                data-express-tax>0.00</strong>
+    </div>
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--cod"
+         role="listitem"
+         data-money-summary-row="cod"
+         data-checkout-cod-fee-row
+         hidden>
+        <span><?= $escape($labelCod) ?></span>
+        <strong data-money-summary-cod data-cod-fee-amount="">0.00</strong>
+    </div>
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--incentive"
+         role="listitem"
+         data-money-summary-row="incentive"
+         data-checkout-payment-incentive-row
+         data-testid="checkout-payment-incentive-row"
+         hidden>
+        <span><?= $escape($labelIncentive) ?></span>
+        <strong data-money-summary-incentive data-payment-incentive-amount="">0.00</strong>
+    </div>
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--payable"
+         role="listitem"
+         data-money-summary-row="payable">
+        <span data-money-summary-payable-label
+              data-grand-total-label
+              data-cart-subtotal-label><?= $escape($labelPayable) ?></span>
+        <strong class="w-storefront-money-summary__grand total-amount"
+                data-money-summary-payable
+                data-grand-total=""
+                data-cart-grand-total
+                data-cart-total-amount
+                data-express-grand
+                data-helppay-total-amount
+                data-helppay-payable-amount
+                data-testid="helppay-payment-total">—</strong>
+    </div>
+    <p class="w-storefront-money-summary__note"
+       data-money-summary-note
+       data-cart-summary-note
+       data-mini-cart-note
+       dir="auto"
+       <?= $note === '' ? 'hidden' : '' ?>><?= $escape($note) ?></p>
+</div>

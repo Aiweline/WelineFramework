@@ -1,1 +1,2688 @@
 #AOCI-CODE-VOLUME: 1
+
+===/Users/weline/Project/Official/框架/===
+.claudeignore[FC3T]: F:声明Claude忽略vendor/generated/pub静态与缓存等路径 | R:- | A:- | S:-
+.dockerignore[OC4T]: F:声明Docker构建上下文排除git/文档/测试与运行时缓存 | R:code:Dockerfile | A:- | S:保留var/cache|log|session与generated的.gitkeep不被忽略
+.env.sample[FC3T]: F:示例Git部署环境变量模板含仓库凭证与备份开关 | R:- | A:- | S:须复制为根目录.env后修改；DEPLOY_DIR默认取.env所在目录
+.gitattributes[FV5T]: F:强制文本LF规范化并锁定WLS网关签名相关文件eol=lf | R:code:app/code/Weline/Server/bin/wls_gateway_controller.php,code:dev/tools/wls-gateway-package.php | A:- | S:网关signer与package-controller输入按字节哈希，禁止CRLF改写
+.gitignore[FV7M]: F:仓库级忽略媒体/预览截图/AI宿主私有配置与站点柜 | R:- | A:- | S:仅提交AGENTS.md；websites/与hanfu|daocharms设计主题本地柜不入库；.github/prompts可跟踪
+.gitnexusignore[XV3T]: F:收窄GitNexus扫描排除vendor/var/generated并强制纳入bin | R:- | A:- | S:!bin/**覆盖GitNexus默认忽略bin的行为
+.htaccess[RV7M]: F:Apache入口重写与安全头把请求导向pub/index | R:code:pub/index.php | A:- | S:-
+.htaccess_SAMPLE[SV3M]: F:根.htaccess可部署样本供对照复制 | R:code:.htaccess | A:- | S:-
+.php-cs-fixer.dist.php[XQ4T]: F:配置PHP-CS-Fixer规则集与扫描路径 | R:- | A:- | S:-
+404.html[EU2T]: F:静态404占位页 | R:- | A:- | S:-
+AGENTS.md[SI5S]: F:Weline AI 统一入口 | R:- | A:- | S:-
+AI-ENTRY.md[SG6S]: F:指向AGENTS与模块文档的AI入口导读 | R:code:AGENTS.md | A:- | S:-
+Dockerfile[OV6S]: F:定义PHP应用容器构建与运行层 | R:code:.dockerignore | A:- | S:-
+LICENSE[SZ3M]: F:项目开源许可正文 | R:- | A:- | S:-
+README.md[SG6S]: F:英文项目简介与安装入口说明 | R:code:README.zh-CN.md,code:Dockerfile | A:- | S:-
+README.zh-CN.md[SG6S]: F:中文项目简介与安装入口说明 | R:code:README.md | A:- | S:-
+
+===/Users/weline/Project/Official/框架/.githooks/===
+commit-msg[XV7S]: F:剥离Cursor/Claude归因trailer并校验提交主题含简体中文 | R:- | A:- | S:非merge/revert时主题摘要缺汉字则非零退出；禁止纯英文说明
+post-checkout[XV5T]: F:checkout后静默刷新多宿主MCP注册 | R:code:app/code/Weline/Ai/Mcp/scripts/ensure-host-mcp-registrations.php | A:- | S:脚本或php缺失时exit 0；失败吞掉不阻断checkout
+post-merge[XV5T]: F:merge后静默刷新多宿主MCP注册 | R:code:app/code/Weline/Ai/Mcp/scripts/ensure-host-mcp-registrations.php | A:- | S:脚本或php缺失时exit 0；失败吞掉不阻断merge
+
+===/Users/weline/Project/Official/框架/app/===
+.htaccess[RV2T]: F:禁止直接访问app目录的最小Apache规则 | R:- | A:- | S:-
+autoload.php[RG8S]: F:统一自动加载使app/code与generated/code优先于vendor | R:code:app/bootstrap.php | A:spl_autoload_register | S:加载顺序classmap再generated/code再app/code；Composer前prepend注册
+bootstrap.php[EG9S]: F:Web与CLI应用启动含安装锁检查异常引导与App运行 | R:code:app/autoload.php,code:app/code/Weline/Framework/Common/functions.php,code:setup/index.php | A:App::runWithRuntime | S:非CLI且缺setup/install.lock时进入setup并exit；ResponseTerminateException直接emit后exit0
+bootstrap_phpunit.php[TQ6S]: F:PHPUnit专用引导加载框架测试环境 | R:code:app/autoload.php | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/===
+.gitignore[FV2T]: F:忽略app/code下本地模块杂项 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/===
+.gitignore[FV1T]: F:Acl模块本地忽略清单 | R:- | A:- | S:-
+LICENSE[SZ2M]: F:Acl模块开源许可正文 | R:code:LICENSE | A:- | S:-
+composer.json[FV3T]: F:Acl模块Composer包清单 | R:- | A:- | S:-
+composer.lock[FV3T]: F:Acl模块Composer依赖锁定 | R:- | A:- | S:-
+event.php[DI5T]: F:event.php 职责定义 | R:- | A:- | S:-
+register.php[DI5T]: F:register.php 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Api/Auth/===
+BackendIdentityContextProviderInterface.php[DI6T]: F:后端身份上下文提供者接口边界 | R:- | A:- | S:-
+RememberLoginProviderInterface.php[DI5T]: F:记住登录提供者接口边界 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Api/Authorization/===
+AccessMode.php[DI4T]: F:授权访问模式枚举/常量 | R:- | A:- | S:-
+AuthorizationServiceInterface.php[DI8S]: F:路由与对象Scope动作授权服务契约 | R:code:app/code/Weline/Acl/Api/Authorization/ObjectAction.php | A:isRouteAllowed,isObjectActionAllowed,isObjectActionAllowedForSubmit | S:提交重鉴权要求expectedGrantVersion仍匹配当前授权版本
+AuthorizationServiceInterfaceFactory.php[DI5T]: F:AuthorizationServiceInterface的DI工厂契约 | R:code:app/code/Weline/Acl/Api/Authorization/AuthorizationServiceInterface.php | A:- | S:-
+BackendObjectAuthorizationGuardInterface.php[DI8T]: F:后台会话对象Scope授权守卫含Query固定403与提交重鉴权 | R:code:app/code/Weline/Acl/Api/Authorization/ObjectAuthorizationResult.php | A:check,checkForSubmit,requireForQuery,requireSubmitForQuery,denyForQuery | S:列表筛选用isAllowed避免逐对象拒绝噪声；写入DML前必须requireSubmitForQuery；缺失/外部对象与普通越权同形固定拒绝
+ObjectAction.php[DI8T]: F:对象Scope动作矩阵常量与读写判定 | R:- | A:isKnown,isWrite | S:default-deny；All Sites仅只读list/view/export；构造器私有不可实例化
+ObjectAuthorizationAuditInterface.php[DI6T]: F:对象Scope授权审计边界只记判定摘要 | R:- | A:record | S:实现不得记录请求体、配置值或对象内容
+ObjectAuthorizationResult.php[DI5T]: F:对象Scope授权判定结果载体 | R:- | A:- | S:内部诊断码不得直接回传给越权调用方
+ObjectAuthorizationServiceInterface.php[DI8T]: F:对象Scope授权契约与路由RBAC分离 | R:code:app/code/Weline/Acl/Api/Authorization/ObjectAction.php | A:authorize,authorizeForSubmit,isObjectActionAllowed | S:先校验动作在矩阵内再做角色授权与对象Scope匹配
+ObjectScopeGrantRecord.php[DI6T]: F:角色到对象Scope授权记录形状含covers与allowsAction | R:code:app/code/Weline/Acl/Api/Authorization/ObjectAction.php | A:covers,allowsAction | S:-
+ObjectScopeGrantStoreInterface.php[DI5T]: F:角色对象Scope授权存储接口 | R:code:app/code/Weline/Acl/Api/Authorization/ObjectScopeGrantRecord.php | A:findByRole | S:-
+ResourceAuthorizationServiceInterface.php[DI5T]: F:非路由传输的精确source_id授权边界 | R:- | A:isSourceAllowed | S:-
+RouteResource.php[DI5T]: F:路由资源身份值对象供RBAC查找 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Api/Resource/===
+MenuRegistryInterface.php[DI6T]: F:菜单资源注册表契约 | R:- | A:- | S:-
+MenuRegistryInterfaceFactory.php[DI4T]: F:MenuRegistryInterface的DI工厂 | R:code:app/code/Weline/Acl/Api/Resource/MenuRegistryInterface.php | A:- | S:-
+MenuResourceServiceInterface.php[DI6T]: F:菜单资源查询/装配服务契约 | R:code:app/code/Weline/Acl/Api/Resource/MenuRegistryInterface.php | A:- | S:-
+MenuResourceServiceInterfaceFactory.php[DI4T]: F:MenuResourceServiceInterface的DI工厂 | R:code:app/code/Weline/Acl/Api/Resource/MenuResourceServiceInterface.php | A:- | S:-
+MenuSourceProviderInterface.php[DI5T]: F:菜单source_id供给接口 | R:- | A:- | S:-
+WhitelistServiceInterface.php[DI6T]: F:ACL白名单资源服务契约 | R:- | A:- | S:-
+WhitelistServiceInterfaceFactory.php[DI4T]: F:WhitelistServiceInterface的DI工厂 | R:code:app/code/Weline/Acl/Api/Resource/WhitelistServiceInterface.php | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Api/===
+ResourceTreeServiceInterface.php[DI6T]: F:ACL资源树装配服务契约 | R:- | A:- | S:-
+ResourceTreeServiceInterfaceFactory.php[DI4T]: F:ResourceTreeServiceInterface的DI工厂 | R:code:app/code/Weline/Acl/Api/ResourceTreeServiceInterface.php | A:- | S:-
+Role.php[DI5T]: F:角色API门面/别名入口 | R:code:app/code/Weline/Acl/Model/Role.php | A:- | S:-
+RoleAccess.php[DI5T]: F:角色访问关系API门面 | R:code:app/code/Weline/Acl/Model/RoleAccess.php | A:- | S:-
+RoleIdentityInterface.php[DI5T]: F:角色身份解析契约 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Api/Role/===
+RoleAdministrationInterface.php[DI7T]: F:角色管理写操作契约 | R:code:app/code/Weline/Acl/Api/Role/RoleRecord.php | A:- | S:-
+RoleAdministrationInterfaceFactory.php[DI4T]: F:RoleAdministrationInterface的DI工厂 | R:code:app/code/Weline/Acl/Api/Role/RoleAdministrationInterface.php | A:- | S:-
+RoleCatalogInterface.php[DI6T]: F:角色目录查询契约 | R:code:app/code/Weline/Acl/Api/Role/RoleRecord.php | A:- | S:-
+RoleCatalogInterfaceFactory.php[DI4T]: F:RoleCatalogInterface的DI工厂 | R:code:app/code/Weline/Acl/Api/Role/RoleCatalogInterface.php | A:- | S:-
+RoleRecord.php[DI5T]: F:角色记录DTO形状 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Api/Runtime/===
+ProcessCacheResetter.php[RI5T]: F:进程级ACL缓存重置钩子 | R:- | A:- | S:-
+RequestResetter.php[RI5T]: F:请求级ACL运行时状态重置钩子 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Api/Scope/===
+ScopeCatalogInterface.php[DI6T]: F:对象Scope目录契约与授权域分离 | R:- | A:- | S:-
+ScopeCatalogInterfaceFactory.php[DI4T]: F:ScopeCatalogInterface的DI工厂 | R:code:app/code/Weline/Acl/Api/Scope/ScopeCatalogInterface.php | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Api/Statistics/===
+MenuStatisticsInterface.php[DI5T]: F:菜单ACL统计查询契约 | R:- | A:- | S:-
+MenuStatisticsInterfaceFactory.php[DI4T]: F:MenuStatisticsInterface的DI工厂 | R:code:app/code/Weline/Acl/Api/Statistics/MenuStatisticsInterface.php | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Controller/Backend/===
+Acl.php[EI7M]: F:后台ACL资源管理控制器入口 | R:code:app/code/Weline/Acl/Model/Acl.php | A:- | S:-
+IpWhitelist.php[EI6M]: F:后台IP白名单管理控制器 | R:code:app/code/Weline/Acl/Model/IpWhitelist.php | A:- | S:-
+SecurityLog.php[EI6T]: F:后台安全日志查询控制器 | R:code:app/code/Weline/Acl/Model/SecurityLog.php | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Controller/Backend/Acl/===
+Role.php[EI7L]: F:后台角色管理控制器 | R:code:app/code/Weline/Acl/Model/Role.php,code:app/code/Weline/Acl/Api/Role/RoleAdministrationInterface.php | A:- | S:-
+Tag.php[EI6S]: F:后台ACL标签管理控制器 | R:code:app/code/Weline/Acl/Model/AclTag.php | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Model/===
+Acl.php[PI7M]: F:ACL权限节点持久化模型 | R:- | A:- | S:-
+AclNode.php[PI6S]: F:ACL树节点持久化模型 | R:code:app/code/Weline/Acl/Model/Acl.php | A:- | S:-
+AclTag.php[PI5T]: F:ACL标签持久化模型 | R:- | A:- | S:-
+IpWhitelist.php[PI6T]: F:IP白名单持久化模型 | R:- | A:- | S:-
+ObjectScopeGrant.php[PI7T]: F:对象Scope授权持久化模型 | R:code:app/code/Weline/Acl/Api/Authorization/ObjectScopeGrantRecord.php | A:- | S:-
+Role.php[PI7S]: F:角色持久化模型 | R:- | A:- | S:-
+RoleAccess.php[PI6M]: F:角色资源访问关系持久化模型 | R:code:app/code/Weline/Acl/Model/Role.php,code:app/code/Weline/Acl/Model/Acl.php | A:- | S:-
+RoleTagGrant.php[PI5T]: F:角色标签授权关系持久化模型 | R:code:app/code/Weline/Acl/Model/Role.php,code:app/code/Weline/Acl/Model/AclTag.php | A:- | S:-
+SecurityLog.php[PI6T]: F:安全审计日志持久化模型 | R:- | A:- | S:-
+WhiteAclSource.php[PI5T]: F:白名单ACL source持久化模型 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Observer/===
+AfterRouteCollectionAclDiff.php[DI8T]: F:路由收集后按touched模块清理ACL孤儿 | R:code:app/code/Weline/Acl/Service/AclOrphanCleanupService.php | A:execute | S:touched显式空数组时跳过删除并清理registry；禁止跳扫后全量误删
+CleanupMissingModuleAclResidues.php[DI7T]: F:模块缺失时清理对应ACL残留 | R:code:app/code/Weline/Acl/Service/AclOrphanCleanupService.php | A:execute | S:module_names空则直接返回；异常写入event.result.success=false
+ClearCollectedAclRegistry.php[DI5T]: F:请求结束清理已收集ACL source登记 | R:code:app/code/Weline/Acl/Service/CollectedAclSourceIdsRegistry.php | A:execute | S:-
+CollectFrameworkAuthorizationCatalog.php[DI6S]: F:收集Framework授权目录进LiveSourceSet | R:code:app/code/Weline/Acl/Service/Resource/LiveSourceSet.php | A:execute | S:-
+ControllerAttributes.php[DI7L]: F:扫描Controller属性注册ACL source | R:code:app/code/Weline/Acl/Service/CollectedAclSourceIdsRegistry.php | A:execute | S:-
+RouteBefore.php[DI8L]: F:路由前执行ACL访问校验与无权限重定向 | R:code:app/code/Weline/Acl/Service/AclService.php | A:execute | S:-
+SetupUpgradeGrantSuperAdmin.php[DI7S]: F:升级时授予超级管理员全量路由ACL | R:code:app/code/Weline/Acl/Model/Role.php | A:execute | S:-
+SetupUpgradeGrantSuperAdminObjectScope.php[DI7S]: F:升级时授予超级管理员对象Scope全量 | R:code:app/code/Weline/Acl/Model/ObjectScopeGrant.php | A:execute | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Plugin/===
+ModuleUpgradeExecuteAfterPlugin.php[DI6T]: F:模块升级后触发ACL相关收尾插件 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Service/===
+AclCacheInvalidator.php[DI6T]: F:* Flush ACL permission caches immediately after role_access  | R:- | A:- | S:-
+AclOrphanCleanupService.php[DI8M]: F:按活动/touched模块清理ACL孤儿source | R:code:app/code/Weline/Acl/Model/Acl.php | A:cleanupByActiveModules,cleanupByModules | S:仅清理touched范围内孤儿，避免全量误删
+AclService.php[DI8L]: F:路由/菜单ACL主服务实现 | R:code:app/code/Weline/Acl/Service/AclServiceInterface.php | A:- | S:-
+AclServiceInterface.php[DI7T]: F:* 统一封装角色的 ACL 视图与权限判定逻辑。 * * - 不关心菜单布局，仅关心“角色能访问哪些资源/路由/方法/t | R:- | A:getRoleAclEntries,isRouteAllowed,isRouteAllowedByEntries,hasAnyAclEntries | S:-
+AclValidationService.php[DI7M]: F:* ACL 资源验证服务 * * 负责： * - 检测 parent_source 循环引用 * - 验证 parent | R:- | A:checkParentCycle,validateParentTypeRule,checkSourceIdConflict,canDeleteMenuResource | S:-
+ArrayObjectScopeGrantStore.php[DI6T]: F:测试/进程内授权存储。 | R:- | A:__construct,replaceAll,findByRole | S:-
+BackendObjectAuthorizationGuard.php[DI8S]: F:实现后台对象Scope守卫含Query403与提交版本校验 | R:code:app/code/Weline/Acl/Api/Authorization/BackendObjectAuthorizationGuardInterface.php,code:app/code/Weline/Acl/Service/ObjectAuthorizationService.php | A:requireForQuery,requireSubmitForQuery,denyForQuery | S:写入前必须requireSubmitForQuery；缺失对象与越权同形拒绝
+CliAclDiffService.php[DI6T]: F:* CLI 生命周期内的 ACL diff 服务。 * * 用法： * - 路由收集开始前清空本轮收集 registry | R:- | A:__construct,beginCollection,cleanupAfterCollection | S:-
+CollectedAclSourceIdsRegistry.php[DI6T]: F:Controller属性收集到的ACL source登记表 | R:- | A:getAll,clear | S:-
+IpWhitelistManagementService.php[DS7T]: F:* Owns IP whitelist validation and persistence shared by bac | R:- | A:create | S:-
+MenuRegistry.php[DI7M]: F:Acl MenuRegistry 实现 | R:- | A:__construct,listManagedMenus,countManagedMenus,deleteManagedMenus | S:-
+MenuResourceService.php[DI7S]: F:Acl模块MenuResourceService.php定义 | R:- | A:__construct,getBackendMenuTreeByRoleId,getEnabledBackendMenuRoutes,getAllMenuResources | S:-
+MenuSourceIds.php[DI6T]: F:Acl模块MenuSourceIds.php定义 | R:- | A:__construct,all | S:-
+MenuStatistics.php[DI6T]: F:Acl MenuStatistics 实现 | R:- | A:__construct,countActiveBackendMenus | S:-
+ModelObjectScopeGrantStore.php[DI7S]: F:* 持久化对象 Scope 授权读取。 * * 非法行（通配 *、All Sites 带写动作、残缺 Scope）在读取 | R:- | A:__construct,findByRole | S:-
+ObjectAuthorizationService.php[DI8T]: F:对象Scope授权核心实现含动作矩阵与grant匹配 | R:code:app/code/Weline/Acl/Api/Authorization/ObjectAction.php,code:app/code/Weline/Acl/Service/ModelObjectScopeGrantStore.php | A:authorize,authorizeForSubmit | S:先校验动作已知再匹配角色授权Scope
+ResourceAuthorizationService.php[DI7T]: F:* Authorizes one immutable ACL source without route or paren | R:- | A:isSourceAllowed | S:-
+ResourceTreeService.php[DI7L]: F:* ACL 资源树服务 * * 统一的资源树构建器，用于： * - 后台运行时菜单渲染 * - ACL 权限分配树 *  | R:- | A:getBackendMenuTree,getAclAssignmentTree,getEnabledBackendMenuRoutes,loadMenuResource | S:-
+ResourceTreeServiceInterface.php[DI6T]: F:* ACL 资源树服务接口 | R:- | A:- | S:-
+ResourceTreeServiceInterfaceFactory.php[DI5T]: F:* ACL 资源树服务接口工厂类 * * 将 ResourceTreeServiceInterface 映射到 Reso | R:- | A:create | S:-
+RoleAdministration.php[DI6T]: F:Acl RoleAdministration 实现 | R:- | A:__construct,ensure | S:-
+RoleCatalog.php[DI6T]: F:Acl RoleCatalog 实现 | R:- | A:__construct,find,findByName,list | S:-
+ScopeCatalog.php[DI6T]: F:Acl ScopeCatalog 实现 | R:- | A:listExposableRows,getExposableRowsBySourceIds,getEnabledRowsBySourceIds,normalizeAccessMode | S:-
+SecurityLogObjectAuthorizationAudit.php[DS6T]: F:Acl SecurityLogObjectAuthorizationAudit 实现 | R:- | A:record | S:-
+WhitelistService.php[DI6T]: F:Acl模块WhitelistService.php定义 | R:- | A:listPaths,upsertPaths | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Service/Resource/===
+AclResourcePresentation.php[DI7L]: F:Only leaves are authoritative selections; branch state is de | R:- | A:- | S:-
+AuthorizationResourceRegistry.php[DI7S]: F:* Persists Framework authorization catalog into weline_acl ( | R:- | A:__construct,upsertCatalog,persistCatalog | S:使用后须清理LiveSourceSet/registry
+LiveSourceSet.php[DI7T]: F:进程内live ACL source集合与touched模块登记 | R:- | A:all,touchedModules,clear | S:diff后须clear避免跨阶段残留
+RoleTagGrantSyncService.php[DI7S]: F:* Expands role_tag_grant subscriptions into role_access (add | R:- | A:syncAddOnly | S:-
+SourceIdRenameMap.php[DI6T]: F:* Canonical ACL source-id migrations shared by route and men | R:- | A:- | S:-
+SourceIdRenameMigrator.php[DI6T]: F:Renames role_access rows before orphan cleanup deletes old s | R:- | A:migrate | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Setup/===
+Install.php[OI6T]: F:* 安装时初始化默认角色（业务初始化，计划 3 | R:- | A:setup | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/Taglib/===
+Acl.php[EU6M]: F:模板ACL权限判断Taglib | R:code:app/code/Weline/Acl/Service/AclService.php | A:- | S:-
+TagSelect.php[EU5M]: F:ACL标签选择Taglib控件 | R:code:app/code/Weline/Acl/Model/AclTag.php | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/doc/===
+AI-INDEX.md[SI5T]: F:Weline_Acl AI 开发入口 | R:- | A:- | S:-
+README.md[SI5M]: F:Acl模块README.md定义 | R:- | A:index | S:-
+multi-resource-catalog.md[SI5S]: F:ACL 多资源编目 | R:- | A:- | S:-
+website-entitlement-events.md[SI5T]: F:站级能力天花板扩展事件（Acl 不感知 Website） | R:- | A:- | S:-
+功能现状.md[SI5T]: F:Weline_Acl 功能现状 | R:- | A:- | S:-
+开发日志.md[SI5S]: F:Weline_Acl 开发日志 | R:- | A:- | S:-
+需求.md[SI5T]: F:Weline_Acl 需求 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/doc/event/===
+无权限访问重定向前.md[SI5S]: F:* 执行观察者逻辑 * * @param Event $event * @return void | R:- | A:execute | S:-
+站级能力天花板.md[SI5T]: F:站级能力天花板扩展事件 | R:- | A:- | S:-
+角色检查.md[SI5T]: F:Weline Acl 模块 - 事件文档 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/doc/开发/team/menu-sources-slim-cache/meetings/===
+汇审.md[SI5T]: F:汇审 — 菜单源缓存瘦身 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/etc/backend/===
+menu.xml[FI5T]: F:menu.xml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/etc/===
+env.php[DI5T]: F:env.php 职责定义 | R:- | A:- | S:-
+event.xml[FI5T]: F:event.xml 职责定义 | R:- | A:- | S:-
+module.php[DI5T]: F:module.php 职责定义 | R:- | A:- | S:-
+plugin.xml[FI5T]: F:plugin.xml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/extends/module/Weline_Framework/Query/===
+AclAdminQueryProvider.php[DI5S]: F:AclAdminQueryProvider 职责定义 | R:- | A:getProviderName,execute,getDescriptor | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/i18n/===
+en_US.csv[FI3M]: F:i18n词条 en_US.csv | R:- | A:- | S:-
+zh_Hans_CN.csv[FI3M]: F:i18n词条 zh_Hans_CN.csv | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/css/===
+role-assign.css[EI5S]: F:role-assign.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/js/===
+role-assign.js[EI5M]: F:role-assign.js 职责定义 | R:- | A:- | S:-
+role-index.js[EI5T]: F:role-index.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/Groupable-Searchable-Dual-Listbox-Transfer/===
+.gitignore[EI5T]: F:.gitignore 职责定义 | R:- | A:- | S:-
+README.md[SI5S]: F:Introduction | R:- | A:- | S:-
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/Groupable-Searchable-Dual-Listbox-Transfer/css/===
+jquery.transfer.css[EI5L]: F:jquery.transfer.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/Groupable-Searchable-Dual-Listbox-Transfer/icon_font/css/===
+icon_font.css[EI5S]: F:icon_font.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/Groupable-Searchable-Dual-Listbox-Transfer/icon_font/font/===
+iconfont.svg[EI5M]: F:iconfont.svg 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/Groupable-Searchable-Dual-Listbox-Transfer/js/===
+jquery.transfer.js[EI5L]: F:jQuery transfer | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/vakata-jstree-3.3.14-0/.github/===
+FUNDING.yml[EI5T]: F:FUNDING.yml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/vakata-jstree-3.3.14-0/.github/workflows/===
+npm-publish.yml[EI5T]: F:npm-publish.yml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/vakata-jstree-3.3.14-0/===
+.gitignore[EI5T]: F:.gitignore 职责定义 | R:- | A:- | S:-
+LICENSE-MIT[EI5T]: F:LICENSE-MIT 职责定义 | R:- | A:- | S:-
+README.md[SI5T]: F:jstree | R:- | A:- | S:-
+bower.json[EI3T]: F:bower.json 职责定义 | R:- | A:- | S:-
+component.json[EI3T]: F:component.json 职责定义 | R:- | A:- | S:-
+composer.json[EI3T]: F:vakata-jstree-3.3.14-0 Composer清单 | R:- | A:- | S:-
+gruntfile.js[EI5M]: F:gruntfile.js 职责定义 | R:- | A:- | S:-
+jstree.jquery.json[EI3T]: F:jstree.jquery.json 职责定义 | R:- | A:- | S:-
+package-lock.json[EI3L]: F:package-lock.json 职责定义 | R:- | A:- | S:-
+package.json[EI3T]: F:package.json 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/vakata-jstree-3.3.14-0/demo/===
+README.md[SI5T]: F:文档README.md | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/vakata-jstree-3.3.14-0/demo/basic/===
+index.html[EU5S]: F:index.html 职责定义 | R:- | A:- | S:-
+root.json[EI3T]: F:root.json 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/vakata-jstree-3.3.14-0/src/===
+intro.js[EI5T]: F:intro.js 职责定义 | R:- | A:- | S:-
+jstree.changed.js[EI5T]: F:### Changed plugin * * This plugin adds more information to the `chang | R:- | A:- | S:-
+jstree.checkbox.js[EI5L]: F:### Checkbox plugin * * This plugin renders checkbox icons in front of | R:- | A:- | S:-
+jstree.conditionalselect.js[EI5T]: F:### Conditionalselect plugin * * This plugin allows defining a callbac | R:- | A:- | S:-
+jstree.contextmenu.js[EI5L]: F:### Contextmenu plugin * * Shows a context menu when a node is right-c | R:- | A:- | S:-
+jstree.dnd.js[EI5L]: F:### Drag'n'drop plugin * * Enables dragging and dropping of nodes in t | R:- | A:- | S:-
+jstree.js[EI5L]: F:### jsTree core functionality | R:- | A:- | S:-
+jstree.massload.js[EI5S]: F:### Massload plugin * * Adds massload functionality to jsTree, so that | R:- | A:- | S:-
+jstree.search.js[EI5L]: F:### Search plugin * * Adds search functionality to jsTree | R:- | A:- | S:-
+jstree.sort.js[EI5T]: F:### Sort plugin * * Automatically sorts all siblings in the tree accor | R:- | A:- | S:-
+jstree.state.js[EI5S]: F:### State plugin * * Saves the state of the tree (selected nodes, open | R:- | A:- | S:-
+jstree.types.js[EI5M]: F:### Types plugin * * Makes it possible to add predefined types for gro | R:- | A:- | S:-
+jstree.unique.js[EI5S]: F:### Unique plugin * * Enforces that no nodes with the same name can co | R:- | A:- | S:-
+jstree.wholerow.js[EI5S]: F:### Wholerow plugin * * Makes each node appear block level | R:- | A:- | S:-
+misc.js[EI5L]: F:### Node Customize plugin * * Allows to customize nodes when they are  | R:- | A:- | S:-
+outro.js[EI5T]: F:outro.js 职责定义 | R:- | A:- | S:-
+sample.js[EI5T]: F:sample.js 职责定义 | R:- | A:- | S:-
+vakata-jstree.js[EI5T]: F:vakata-jstree.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/vakata-jstree-3.3.14-0/src/themes/===
+base.less[EI5T]: F:base.less 职责定义 | R:- | A:- | S:-
+main.less[EI5T]: F:main.less 职责定义 | R:- | A:- | S:-
+mixins.less[EI5S]: F:mixins.less 职责定义 | R:- | A:- | S:-
+responsive.less[EI5T]: F:responsive.less 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/vakata-jstree-3.3.14-0/src/themes/default-dark/===
+style.css[EI5L]: F:style.css 职责定义 | R:- | A:- | S:-
+style.less[EI5T]: F:style.less 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/statics/libs/vakata-jstree-3.3.14-0/src/themes/default/===
+style.css[EI5L]: F:style.css 职责定义 | R:- | A:- | S:-
+style.less[EI5T]: F:style.less 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/templates/Backend/Acl/Role/===
+assign.phtml[EU5M]: F:var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+form.phtml[EU5T]: F:var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+index.phtml[EU5S]: F:var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/templates/Backend/Acl/Tag/===
+index.phtml[EU5L]: F:ACL 标签元数据管理 * @var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/templates/Backend/Acl/===
+assign.phtml[EU5T]: F:内容模板 * @var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+index.phtml[EU5S]: F:ACL 权限管理列表页 * @var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/templates/Backend/IpWhitelist/===
+index.phtml[EU5M]: F:IP白名单列表页面 - 内容模板 * * @var \Weline\Framework\View\Template $this * @var | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Acl/view/templates/Backend/SecurityLog/===
+index.phtml[EU5M]: F:安全日志列表页面 - 内容模板 * * @var \Weline\Framework\View\Template $this * @var  | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/===
+.gitignore[ZG5T]: F:.gitignore 职责定义 | R:- | A:- | S:-
+LICENSE[ZG5M]: F:name 职责定义 | R:- | A:- | S:-
+composer.json[FV3T]: F:Admin Composer清单 | R:- | A:- | S:-
+composer.lock[ZV3L]: F:composer.lock 依赖锁定 | R:- | A:- | S:-
+event.php[DG5T]: F:event.php 职责定义 | R:- | A:- | S:-
+hook.php[DG5T]: F:Weline_Admin 模块 Hook 规约文件 * * 定义后台首页（system_dashboard）的扩展点，允许像素统计等模块输出 | R:- | A:- | S:-
+register.php[DG5T]: F:register.php 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Api/Controller/===
+BaseController.php[EG7L]: F:var array<string, array{expires_at: float, html: string}> | R:- | A:clearRuntimeFullPageCache,__init | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Api/Localization/===
+BackendLocaleCatalogInterface.php[DG6T]: F:Optional locale selector contribution for the backend top bar | R:- | A:selectable | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Api/Notification/===
+SystemNotificationDirectoryInterface.php[DG6T]: F:SystemNotificationDirectoryInterface 职责定义 | R:- | A:listUnread | S:-
+SystemNotificationDirectoryInterfaceFactory.php[DG5T]: F:SystemNotificationDirectoryInterfaceFactory 职责定义 | R:- | A:create | S:-
+SystemNotificationRecord.php[DG5T]: F:Immutable notification projection for UI modules | R:- | A:__construct,getTitle,getContent,isRead,getIsImg | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Api/Rest/V1/===
+Index.php[DG5T]: F:Index 职责定义 | R:- | A:index | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Api/Runtime/===
+ProcessCacheResetter.php[DG5T]: F:ProcessCacheResetter 职责定义 | R:- | A:resetProcessCaches | S:-
+RequestResetter.php[DG5T]: F:RequestResetter 职责定义 | R:- | A:resetRequest | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Api/View/===
+ViewWarmupContributionProvider.php[DU5T]: F:ViewWarmupContributionProvider 职责定义 | R:- | A:contribution | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Block/Backend/Page/===
+Topbar.php[DG5S]: F:Topbar 职责定义 | R:- | A:__construct,__init,getAvatar,getUser | S:-
+Topnav.php[DG5T]: F:获取资源树服务 | R:- | A:__construct,__init,render,processMenu | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Block/Backend/===
+Total.php[DG5S]: F:throws Exception | R:- | A:__init | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Block/===
+LeftSiderbarMenu.php[DG5T]: F:var AuthenticatedSessionInterface $session | R:- | A:getMenuTree | S:-
+Menu.php[DG5T]: F:Menu 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Block/System/===
+Notification.php[DG5T]: F:DESC # 方法描述 * * @AUTH 秋枫雁飞 * @EMAIL aiweline@qq | R:- | A:getNotices | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Controller/Backend/===
+User.php[EG7L]: F:API: 保存用户（新增/编辑） | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Controller/===
+BaseController.php[EG6T]: F:deprecated Extend \Weline\Admin\Api\Controller\BaseController from oth | R:- | A:- | S:-
+Dashboard.php[EG6T]: F:后台仪表盘控制器 * * 路由 admin/dashboard 的入口，与 admin (Index::index) 渲染同一个仪表盘页面 | R:- | A:index | S:-
+Index.php[EG6T]: F:Index 职责定义 | R:- | A:index | S:-
+Login.php[EG7L]: F:登录页不使用布局系统，使用独立完整的模板 | R:- | A:__construct,index,postPost,logout,verificationCode | S:用后须清理registry/live set
+Maintenance.php[EG6T]: F:Maintenance 职责定义 | R:- | A:index | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Controller/System/===
+Cms.php[EG6T]: F:Cms 职责定义 | R:- | A:getIndex | S:-
+Events.php[EG6T]: F:Events 职责定义 | R:- | A:getIndex | S:-
+Menus.php[EG7M]: F:获取资源树服务 | R:- | A:index,postDelete,postSave,postUpdateOrder,getDetail | S:-
+Modules.php[EG6T]: F:Modules 职责定义 | R:- | A:getIndex,router | S:-
+Plugins.php[EG6T]: F:Plugins 职责定义 | R:- | A:getIndex | S:-
+Setting.php[EG6T]: F:Setting 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Helper/===
+Data.php[DG5T]: F:DESC # 返回管理员 * * @AUTH 秋枫雁飞 * @EMAIL aiweline@qq | R:- | A:__construct,getRequestBackendUser,getSessionUser,getUser | S:-
+MenuUrlValidator.php[DG5S]: F:缓存键名 | R:- | A:isMenuUrl,clearCache,resetRequestState,getWhitelistPaths,isWhitelistPath | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Integration/Acl/===
+RememberLoginProvider.php[DI5T]: F:RememberLoginProvider 职责定义 | R:- | A:__construct,restoreIfNeeded,consumeRestoredAclContext,consumeRestoredSession | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Integration/Backend/===
+BackendThemeCacheInvalidator.php[DG5T]: F:BackendThemeCacheInvalidator 职责定义 | R:- | A:invalidate | S:-
+LoginReturnUrlProvider.php[DG5T]: F:LoginReturnUrlProvider 职责定义 | R:- | A:__construct,shouldCaptureCurrentRequestReturnUrl,normalizeCandidateUrl,buildLoginUrlWithReturn | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Model/===
+MenuAccessLog.php[PG6M]: F:设置用户ID | R:- | A:setUserId,getUserId,setSourceId,getSourceId,setRoute | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Model/System/===
+SystemNotification.php[PG6T]: F:deprecated 使用 schema_fields_* | R:- | A:getTitle,setTitle,getContent,setContent,isRead | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Observer/===
+AclController.php[DG6T]: F:inheritDoc | R:- | A:execute | S:-
+BackendControllerInitAfter.php[DG7T]: F:inheritDoc | R:- | A:__construct,execute | S:-
+BackendMenuSearchIndexRebuildObserver.php[DG6T]: F:ACL / role_access 变更后重建后台菜单搜索索引 | R:- | A:execute | S:-
+BackendNoLoginRedirectUrl.php[DG6T]: F:inheritDoc | R:- | A:__construct,execute | S:-
+BackendWhitelistUrl.php[DS6T]: F:inheritDoc | R:- | A:__construct,execute | S:-
+Maintenance.php[DG7T]: F:inheritDoc | R:- | A:execute | S:-
+MenuAccessLogObserver.php[DG7S]: F:inheritDoc | R:- | A:__construct,execute | S:-
+NoAccessRedirectBefore.php[DG7S]: F:var \Weline\Framework\Http\Request | R:- | A:execute | S:-
+ResponseRedirectBefore.php[DG7T]: F:var Request | R:- | A:__construct,execute | S:-
+RoleChecker.php[DI6T]: F:inheritDoc | R:- | A:execute | S:-
+SystemNotificationObserver.php[DG7M]: F:DESC # 处理系统消息事件 * * @AUTH 秋枫雁飞 * @EMAIL aiweline@qq | R:- | A:execute | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Service/===
+BackendLoginReturnUrlService.php[DG7M]: F:BackendLoginReturnUrlService 职责定义 | R:- | A:__construct,buildLoginUrlWithReturn,shouldCaptureCurrentRequestReturnUrl,resolveForUser,normalizeCandidateUrl | S:-
+BackendMenuSearchIndexDocumentBuilder.php[DG5T]: F:Offline builder for backend_menu SearchProvider documents (cross-local | R:- | A:__construct,buildForRequest | S:-
+BackendMenuSearchIndexRebuilder.php[DG5T]: F:Rebuild backend_menu provider index after menu/ACL changes | R:- | A:rebuild | S:-
+BackendRememberLoginService.php[DG7L]: F:BackendRememberLoginService 职责定义 | R:- | A:__construct,restoreIfNeeded,configureRememberedLogin,clearAfterLogout,consumeRestoredSession | S:-
+BackendVerificationCodeGate.php[DG5T]: F:BackendVerificationCodeGate 职责定义 | R:- | A:shouldDisplayCaptcha,canAccessCaptcha,evaluate | S:-
+FastMenuRenderService.php[DG6T]: F:FastMenuRenderService 职责定义 | R:- | A:renderMenu,renderSubMenu | S:-
+MenuRenderService.php[DG7L]: F:菜单渲染服务 * * 遵循 SOLID 原则： * - 单一职责：专门负责菜单数据的获取和渲染逻辑 * - 开闭原则：可通过扩展修改渲染行为 | R:- | A:__construct,getCurrentUser,getMenuTree,getFrequentMenus,clearProcessCache | S:-
+SystemNotificationDirectory.php[DG5T]: F:SystemNotificationDirectory 职责定义 | R:- | A:__construct,listUnread | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/Setup/===
+Install.php[OV5T]: F:DESC # 安装函数：仅初次安装会执行 * * @AUTH 秋枫雁飞 * @EMAIL aiweline@qq | R:- | A:setup | S:-
+Upgrade.php[OV5T]: F:Upgrade 职责定义 | R:- | A:setup | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/dev/===
+git缩小项目.txt[SG5T]: F:git缩小项目.txt 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/doc/===
+AI-INDEX.md[SI5T]: F:Weline_Admin AI 开发入口 | R:- | A:- | S:-
+README.md[SI5M]: F:var EventsManager $eventsManager | R:- | A:sendNotification | S:-
+主题配色变量文档.md[SI5L]: F:Weline Framework 主题配色变量文档 | R:- | A:- | S:-
+功能现状.md[SI5T]: F:Weline_Admin 功能现状 | R:- | A:- | S:-
+开发日志.md[SI5M]: F:Weline_Admin 开发日志 | R:- | A:- | S:-
+登录页交互.md[SI5T]: F:后台登录页交互说明 | R:- | A:- | S:-
+需求.md[SI5T]: F:Weline_Admin 需求 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/doc/event/===
+系统消息通知.md[SI5M]: F:var EventsManager $eventsManager | R:- | A:sendNotification,updateOrderStatus,checkSystemHealth | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/doc/hook/backend/dashboard/===
+main-overview.md[SI5T]: F:后台首页主要概览（Weline_Admin::backend::layouts::dashboard::main-overview） | R:- | A:- | S:-
+main-tabs-content.md[SI5T]: F:后台首页标签页内容（Weline_Admin::backend::layouts::dashboard::main-tabs-content | R:- | A:- | S:-
+main-tabs.md[SI5T]: F:后台首页标签页导航（Weline_Admin::backend::layouts::dashboard::main-tabs） | R:- | A:- | S:-
+top-statistics.md[SI5T]: F:后台首页顶部统计卡片（Weline_Admin::backend::layouts::dashboard::top-statistics） | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/doc/hook/backend/login/===
+providers.md[SI5T]: F:Backend Login Providers | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/doc/开发/===
+plan.md[SI5T]: F:Weline_Admin 消息订阅通知系统 - 模块计划 | R:- | A:- | S:-
+task.md[SI5T]: F:Weline_Admin 消息订阅通知系统 - 任务进度 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/doc/开发/spec/===
+backend-menu-cross-locale-search.md[SI5T]: F:后台菜单多语言交叉搜索（DB 索引实现） | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/doc/开发/team/backend-menu-cross-locale-db-index/===
+channel.md[SI5T]: F:channel — backend-menu-cross-locale-db-index | R:- | A:- | S:-
+contracts.md[SI5T]: F:contracts — backend-menu-cross-locale-db-index | R:- | A:- | S:-
+roster.md[SI5T]: F:roster — backend-menu-cross-locale-db-index | R:- | A:- | S:-
+uc.md[SI5T]: F:UC — backend-menu-cross-locale-db-index | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/doc/开发/team/backend-menu-cross-locale-db-index/meetings/===
+汇审.md[SI5T]: F:汇审 — backend-menu-cross-locale-db-index | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/doc/开发/team/rendered-menu-cache-bounded/meetings/===
+汇审.md[SI5T]: F:汇审 — 菜单 HTML 进程缓存有界化 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/etc/backend/===
+menu.xml[FG5T]: F:menu.xml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/etc/===
+env.php[DG5T]: F:env.php 职责定义 | R:- | A:- | S:-
+event.xml[FG5T]: F:event.xml 职责定义 | R:- | A:- | S:-
+module.php[DG5T]: F:module.php 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/extends/module/Weline_Framework/Query/===
+AdminAdminQueryProvider.php[DG5S]: F:AdminAdminQueryProvider 职责定义 | R:- | A:getProviderName,execute,getDescriptor | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/extends/module/Weline_Search/Searcher/===
+BackendMenuSearchProvider.php[DG5S]: F:后台顶栏 / 侧栏菜单搜索：DB 索引交叉语种词，execute 时按当前角色 ACL 过滤 | R:- | A:__construct,code,label,sortOrder,areas | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/i18n/===
+en_US.csv[FL3L]: F:i18n词条 en_US.csv | R:- | A:- | S:-
+zh_Hans_CN.csv[FL3L]: F:i18n词条 zh_Hans_CN.csv | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/blocks/backend/public/===
+top-bar.phtml[EU5S]: F:var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+topbar.phtml[EU5L]: F:var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+topnav.phtml[EU5T]: F:var \Weline\Admin\Block\Backend\Page\Topnav $this | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/blocks/backend/===
+total-card.phtml[EU5T]: F:total-card.phtml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/blocks/header/===
+base.phtml[EU5T]: F:var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/blocks/system/===
+notification.phtml[EU5M]: F:var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/css/===
+app-dark.css[EU5L]: F:vertical timeline ************* | R:- | A:- | S:-
+app.css[EU5L]: F:vertical timeline ************* | R:- | A:- | S:-
+bootstrap-dark.css[EU5L]: F:bootstrap-dark.css 职责定义 | R:- | A:- | S:-
+bootstrap.css[EU5L]: F:bootstrap.css 职责定义 | R:- | A:- | S:-
+icons.css[EU5L]: F:icons.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/images/===
+logo-weline-default.svg[EU5T]: F:logo-weline-default.svg 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/js/===
+app.js[EU5L]: F:收起某个菜单项及其所有子菜单（强制立即收起，不依赖 MetisMenu API） * @param {jQuery} $li - 要收起的  | R:- | A:- | S:-
+origin-app.js[EU5M]: F:to 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/js/pages/===
+apex.init.js[EU5L]: F:apex.init.js 职责定义 | R:- | A:- | S:-
+calendar.init.js[EU5S]: F:calendar.init.js 职责定义 | R:- | A:- | S:-
+chartjs.init.js[EU5M]: F:chartjs.init.js 职责定义 | R:- | A:- | S:-
+coming-soon.init.js[EU5T]: F:coming-soon.init.js 职责定义 | R:- | A:- | S:-
+dashboard.init.js[EU5M]: F:dashboard.init.js 职责定义 | R:- | A:- | S:-
+datatables.init.js[EU5S]: F:datatables.init.js 职责定义 | R:- | A:- | S:-
+email-editor.init.js[EU5T]: F:email-editor.init.js 职责定义 | R:- | A:- | S:-
+flot.init.js[EU5L]: F:REAL TIME UPDATES ************* | R:- | A:- | S:-
+fontawesome.init.js[EU5T]: F:fontawesome.init.js 职责定义 | R:- | A:- | S:-
+form-advanced.init.js[EU5M]: F:form-advanced.init.js 职责定义 | R:- | A:- | S:-
+form-editor.init.js[EU5T]: F:form-editor.init.js 职责定义 | R:- | A:- | S:-
+form-mask.init.js[EU5T]: F:form-mask.init.js 职责定义 | R:- | A:- | S:-
+form-validation.init.js[EU5T]: F:form-validation.init.js 职责定义 | R:- | A:- | S:-
+form-wizard.init.js[EU5T]: F:form-wizard.init.js 职责定义 | R:- | A:- | S:-
+form-xeditable.init.js[EU5T]: F:form-xeditable.init.js 职责定义 | R:- | A:- | S:-
+gmaps.init.js[EU5T]: F:gmaps.init.js 职责定义 | R:- | A:- | S:-
+jquery-knob.init.js[EU5T]: F:jquery-knob.init.js 职责定义 | R:- | A:- | S:-
+lightbox.init.js[EU5S]: F:to 职责定义 | R:- | A:- | S:-
+materialdesign.init.js[EU5L]: F:materialdesign.init.js 职责定义 | R:- | A:- | S:-
+range-sliders.init.js[EU5S]: F:range-sliders.init.js 职责定义 | R:- | A:- | S:-
+rating.init.js[EU5T]: F:rating.init.js 职责定义 | R:- | A:- | S:-
+remix-icons-list.init.js[EU5T]: F:remix-icons-list.init.js 职责定义 | R:- | A:- | S:-
+session-timeout.init.js[EU5T]: F:session-timeout.init.js 职责定义 | R:- | A:- | S:-
+sparklines.init.js[EU5S]: F:sparklines.init.js 职责定义 | R:- | A:- | S:-
+sweet-alerts.init.js[EU5M]: F:sweet-alerts.init.js 职责定义 | R:- | A:- | S:-
+table-editable.init.js[EU5T]: F:table-editable.init.js 职责定义 | R:- | A:- | S:-
+table-responsive.init.js[EU5T]: F:table-responsive.init.js 职责定义 | R:- | A:- | S:-
+timline.init.js[EU5T]: F:timline.init.js 职责定义 | R:- | A:- | S:-
+vector-maps.init.js[EU5S]: F:vector-maps.init.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/js/pages/menus/===
+sweet-alerts.init.js[EU5T]: F:sweet-alerts.init.js 职责定义 | R:- | A:- | S:-
+table-editable.init.js[EU5T]: F:table-editable.init.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/@curiosityx/bootstrap-session-timeout/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/@fullcalendar/bootstrap/===
+LICENSE.txt[SU5T]: F:LICENSE.txt 职责定义 | R:- | A:- | S:-
+main.esm.js[EU5T]: F:class | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/@fullcalendar/core/===
+LICENSE.txt[SU5T]: F:LICENSE.txt 职责定义 | R:- | A:- | S:-
+main.esm.js[EU5L]: F:class | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/@fullcalendar/core/locales/===
+af.js[EU5T]: F:af.js 职责定义 | R:- | A:- | S:-
+ar-dz.js[EU5T]: F:ar-dz.js 职责定义 | R:- | A:- | S:-
+ar-kw.js[EU5T]: F:ar-kw.js 职责定义 | R:- | A:- | S:-
+ar-ly.js[EU5T]: F:ar-ly.js 职责定义 | R:- | A:- | S:-
+ar-ma.js[EU5T]: F:ar-ma.js 职责定义 | R:- | A:- | S:-
+ar-sa.js[EU5T]: F:ar-sa.js 职责定义 | R:- | A:- | S:-
+ar-tn.js[EU5T]: F:ar-tn.js 职责定义 | R:- | A:- | S:-
+ar.js[EU5T]: F:ar.js 职责定义 | R:- | A:- | S:-
+az.js[EU5T]: F:az.js 职责定义 | R:- | A:- | S:-
+bg.js[EU5T]: F:bg.js 职责定义 | R:- | A:- | S:-
+bs.js[EU5T]: F:bs.js 职责定义 | R:- | A:- | S:-
+ca.js[EU5T]: F:ca.js 职责定义 | R:- | A:- | S:-
+cs.js[EU5T]: F:cs.js 职责定义 | R:- | A:- | S:-
+da.js[EU5T]: F:da.js 职责定义 | R:- | A:- | S:-
+de.js[EU5T]: F:de.js 职责定义 | R:- | A:- | S:-
+el.js[EU5T]: F:el.js 职责定义 | R:- | A:- | S:-
+en-au.js[EU5T]: F:en-au.js 职责定义 | R:- | A:- | S:-
+en-gb.js[EU5T]: F:en-gb.js 职责定义 | R:- | A:- | S:-
+en-nz.js[EU5T]: F:en-nz.js 职责定义 | R:- | A:- | S:-
+es-us.js[EU5T]: F:es-us.js 职责定义 | R:- | A:- | S:-
+es.js[EU5T]: F:es.js 职责定义 | R:- | A:- | S:-
+et.js[EU5T]: F:et.js 职责定义 | R:- | A:- | S:-
+eu.js[EU5T]: F:eu.js 职责定义 | R:- | A:- | S:-
+fa.js[EU5T]: F:fa.js 职责定义 | R:- | A:- | S:-
+fi.js[EU5T]: F:fi.js 职责定义 | R:- | A:- | S:-
+fr-ca.js[EU5T]: F:fr-ca.js 职责定义 | R:- | A:- | S:-
+fr-ch.js[EU5T]: F:fr-ch.js 职责定义 | R:- | A:- | S:-
+fr.js[EU5T]: F:fr.js 职责定义 | R:- | A:- | S:-
+gl.js[EU5T]: F:gl.js 职责定义 | R:- | A:- | S:-
+he.js[EU5T]: F:he.js 职责定义 | R:- | A:- | S:-
+hi.js[EU5T]: F:hi.js 职责定义 | R:- | A:- | S:-
+hr.js[EU5T]: F:hr.js 职责定义 | R:- | A:- | S:-
+hu.js[EU5T]: F:hu.js 职责定义 | R:- | A:- | S:-
+id.js[EU5T]: F:id.js 职责定义 | R:- | A:- | S:-
+is.js[EU5T]: F:is.js 职责定义 | R:- | A:- | S:-
+it.js[EU5T]: F:it.js 职责定义 | R:- | A:- | S:-
+ja.js[EU5T]: F:ja.js 职责定义 | R:- | A:- | S:-
+ka.js[EU5T]: F:ka.js 职责定义 | R:- | A:- | S:-
+kk.js[EU5T]: F:kk.js 职责定义 | R:- | A:- | S:-
+ko.js[EU5T]: F:ko.js 职责定义 | R:- | A:- | S:-
+lb.js[EU5T]: F:lb.js 职责定义 | R:- | A:- | S:-
+lt.js[EU5T]: F:lt.js 职责定义 | R:- | A:- | S:-
+lv.js[EU5T]: F:lv.js 职责定义 | R:- | A:- | S:-
+mk.js[EU5T]: F:mk.js 职责定义 | R:- | A:- | S:-
+ms.js[EU5T]: F:ms.js 职责定义 | R:- | A:- | S:-
+nb.js[EU5T]: F:nb.js 职责定义 | R:- | A:- | S:-
+nl.js[EU5T]: F:nl.js 职责定义 | R:- | A:- | S:-
+nn.js[EU5T]: F:nn.js 职责定义 | R:- | A:- | S:-
+pl.js[EU5T]: F:pl.js 职责定义 | R:- | A:- | S:-
+pt-br.js[EU5T]: F:pt-br.js 职责定义 | R:- | A:- | S:-
+pt.js[EU5T]: F:pt.js 职责定义 | R:- | A:- | S:-
+ro.js[EU5T]: F:ro.js 职责定义 | R:- | A:- | S:-
+ru.js[EU5T]: F:ru.js 职责定义 | R:- | A:- | S:-
+sk.js[EU5T]: F:sk.js 职责定义 | R:- | A:- | S:-
+sl.js[EU5T]: F:sl.js 职责定义 | R:- | A:- | S:-
+sq.js[EU5T]: F:sq.js 职责定义 | R:- | A:- | S:-
+sr-cyrl.js[EU5T]: F:sr-cyrl.js 职责定义 | R:- | A:- | S:-
+sr.js[EU5T]: F:sr.js 职责定义 | R:- | A:- | S:-
+sv.js[EU5T]: F:sv.js 职责定义 | R:- | A:- | S:-
+th.js[EU5T]: F:th.js 职责定义 | R:- | A:- | S:-
+tr.js[EU5T]: F:tr.js 职责定义 | R:- | A:- | S:-
+ug.js[EU5T]: F:ug.js 职责定义 | R:- | A:- | S:-
+uk.js[EU5T]: F:uk.js 职责定义 | R:- | A:- | S:-
+uz.js[EU5T]: F:uz.js 职责定义 | R:- | A:- | S:-
+vi.js[EU5T]: F:vi.js 职责定义 | R:- | A:- | S:-
+zh-cn.js[EU5T]: F:zh-cn.js 职责定义 | R:- | A:- | S:-
+zh-tw.js[EU5T]: F:zh-tw.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/@fullcalendar/daygrid/===
+LICENSE.txt[SU5T]: F:LICENSE.txt 职责定义 | R:- | A:- | S:-
+main.esm.js[EU5L]: F:class | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/@fullcalendar/interaction/===
+LICENSE.txt[SU5T]: F:LICENSE.txt 职责定义 | R:- | A:- | S:-
+main.esm.js[EU5L]: F:class | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/@fullcalendar/timegrid/===
+LICENSE.txt[SU5T]: F:LICENSE.txt 职责定义 | R:- | A:- | S:-
+main.esm.js[EU5L]: F:class | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/admin-resources/jquery.vectormap/===
+jquery-jvectormap-1.2.2.css[EU5T]: F:jquery-jvectormap-1.2.2.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/admin-resources/jquery.vectormap/maps/===
+jquery-jvectormap-au-mill-en.js[EU5T]: F:jquery-jvectormap-au-mill-en.js 职责定义 | R:- | A:- | S:-
+jquery-jvectormap-ca-lcc-en.js[EU5T]: F:jquery-jvectormap-ca-lcc-en.js 职责定义 | R:- | A:- | S:-
+jquery-jvectormap-es-merc.js[EU5M]: F:jquery-jvectormap-es-merc.js 职责定义 | R:- | A:- | S:-
+jquery-jvectormap-es-mill.js[EU5M]: F:jquery-jvectormap-es-mill.js 职责定义 | R:- | A:- | S:-
+jquery-jvectormap-europe-mill-en.js[EU5M]: F:jquery-jvectormap-europe-mill-en.js 职责定义 | R:- | A:- | S:-
+jquery-jvectormap-fr-merc-en.js[EU5T]: F:jquery-jvectormap-fr-merc-en.js 职责定义 | R:- | A:- | S:-
+jquery-jvectormap-in-mill-en.js[EU5S]: F:jquery-jvectormap-in-mill-en.js 职责定义 | R:- | A:- | S:-
+jquery-jvectormap-map.js[EU5T]: F:jquery-jvectormap-map.js 职责定义 | R:- | A:- | S:-
+jquery-jvectormap-uk-mill-en.js[EU5T]: F:jquery-jvectormap-uk-mill-en.js 职责定义 | R:- | A:- | S:-
+jquery-jvectormap-us-il-chicago-mill-en.js[EU5M]: F:jquery-jvectormap-us-il-chicago-mill-en.js 职责定义 | R:- | A:- | S:-
+jquery-jvectormap-us-merc-en.js[EU5M]: F:jquery-jvectormap-us-merc-en.js 职责定义 | R:- | A:- | S:-
+jquery-jvectormap-world-mill-en.js[EU5L]: F:jquery-jvectormap-world-mill-en.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/apexcharts/===
+apexcharts.amd.js[EU5T]: F:as 职责定义 | R:- | A:- | S:-
+apexcharts.common.js[EU5T]: F:as 职责定义 | R:- | A:- | S:-
+apexcharts.css[EU5L]: F:apexcharts.css 职责定义 | R:- | A:- | S:-
+apexcharts.esm.js[EU5T]: F:as 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/apexcharts/locales/===
+ca.json[EU3T]: F:ca.json 职责定义 | R:- | A:- | S:-
+cs.json[EU3T]: F:cs.json 职责定义 | R:- | A:- | S:-
+de.json[EU3T]: F:de.json 职责定义 | R:- | A:- | S:-
+el.json[EU3T]: F:el.json 职责定义 | R:- | A:- | S:-
+en.json[EU3T]: F:en.json 职责定义 | R:- | A:- | S:-
+es.json[EU3T]: F:es.json 职责定义 | R:- | A:- | S:-
+fi.json[EU3T]: F:fi.json 职责定义 | R:- | A:- | S:-
+fr.json[EU3T]: F:fr.json 职责定义 | R:- | A:- | S:-
+he.json[EU3T]: F:he.json 职责定义 | R:- | A:- | S:-
+hi.json[EU3T]: F:hi.json 职责定义 | R:- | A:- | S:-
+hr.json[EU3T]: F:hr.json 职责定义 | R:- | A:- | S:-
+hy.json[EU3T]: F:hy.json 职责定义 | R:- | A:- | S:-
+id.json[EU3T]: F:id.json 职责定义 | R:- | A:- | S:-
+it.json[EU3T]: F:it.json 职责定义 | R:- | A:- | S:-
+ka.json[EU3T]: F:ka.json 职责定义 | R:- | A:- | S:-
+ko.json[EU3T]: F:ko.json 职责定义 | R:- | A:- | S:-
+lt.json[EU3T]: F:lt.json 职责定义 | R:- | A:- | S:-
+nb.json[EU3T]: F:nb.json 职责定义 | R:- | A:- | S:-
+nl.json[EU3T]: F:nl.json 职责定义 | R:- | A:- | S:-
+pl.json[EU3T]: F:pl.json 职责定义 | R:- | A:- | S:-
+pt-br.json[EU3T]: F:pt-br.json 职责定义 | R:- | A:- | S:-
+pt.json[EU3T]: F:pt.json 职责定义 | R:- | A:- | S:-
+rs.json[EU3T]: F:rs.json 职责定义 | R:- | A:- | S:-
+ru.json[EU3T]: F:ru.json 职责定义 | R:- | A:- | S:-
+se.json[EU3T]: F:se.json 职责定义 | R:- | A:- | S:-
+sk.json[EU3T]: F:sk.json 职责定义 | R:- | A:- | S:-
+sl.json[EU3T]: F:sl.json 职责定义 | R:- | A:- | S:-
+sq.json[EU3T]: F:sq.json 职责定义 | R:- | A:- | S:-
+th.json[EU3T]: F:th.json 职责定义 | R:- | A:- | S:-
+tr.json[EU3T]: F:tr.json 职责定义 | R:- | A:- | S:-
+ua.json[EU3T]: F:ua.json 职责定义 | R:- | A:- | S:-
+zh-cn.json[EU3T]: F:zh-cn.json 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/bootstrap-editable/css/===
+bootstrap-editable.css[EU5L]: F:bootstrap-editable.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/bootstrap-editable/js/===
+index.js[EU5L]: F:Form with single input element, two buttons and two states: normal/loa | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/bootstrap-rating/===
+bootstrap-rating.css[EU5T]: F:bootstrap-rating.css 职责定义 | R:- | A:- | S:-
+deploy.txt[SU5T]: F:deploy.txt 职责定义 | R:- | A:- | S:-
+index.html[EU5S]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/chartist-plugin-tooltips-updated/===
+chartist-plugin-tooltip.css[EU5T]: F:chartist-plugin-tooltip.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/datatables.net-buttons/===
+License.txt[SU5T]: F:License.txt 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/datatables.net-responsive/===
+License.txt[SU5T]: F:License.txt 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/datatables.net/===
+License.txt[SU5T]: F:License.txt 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/dropzone/===
+basic.css[EU5T]: F:basic.css 职责定义 | R:- | A:- | S:-
+dropzone-amd-module.js[EU5L]: F:Has to be specified on elements other than form (or when the form * do | R:- | A:- | S:-
+dropzone.css[EU5L]: F:dropzone.css 职责定义 | R:- | A:- | S:-
+dropzone.js[EU5L]: F:Has to be specified on elements other than form (or when the form * do | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/flot-charts/===
+LICENSE.txt[SU5T]: F:LICENSE.txt 职责定义 | R:- | A:- | S:-
+Makefile[EU5T]: F:Makefile 职责定义 | R:- | A:- | S:-
+component.json[EU3T]: F:component.json 职责定义 | R:- | A:- | S:-
+flot.jquery.json[EU3T]: F:flot.jquery.json 职责定义 | R:- | A:- | S:-
+jquery.colorhelpers.js[EU5S]: F:jquery.colorhelpers.js 职责定义 | R:- | A:- | S:-
+jquery.flot.canvas.js[EU5M]: F:jquery.flot.canvas.js 职责定义 | R:- | A:- | S:-
+jquery.flot.categories.js[EU5S]: F:jquery.flot.categories.js 职责定义 | R:- | A:- | S:-
+jquery.flot.crosshair.js[EU5S]: F:jquery.flot.crosshair.js 职责定义 | R:- | A:- | S:-
+jquery.flot.errorbars.js[EU5M]: F:jquery.flot.errorbars.js 职责定义 | R:- | A:- | S:-
+jquery.flot.fillbetween.js[EU5M]: F:jquery.flot.fillbetween.js 职责定义 | R:- | A:- | S:-
+jquery.flot.image.js[EU5M]: F:jquery.flot.image.js 职责定义 | R:- | A:- | S:-
+jquery.flot.js[EU5L]: F:jquery.flot.js 职责定义 | R:- | A:- | S:-
+jquery.flot.navigate.js[EU5L]: F:jquery.flot.navigate.js 职责定义 | R:- | A:- | S:-
+jquery.flot.pie.js[EU5L]: F:jquery.flot.pie.js 职责定义 | R:- | A:- | S:-
+jquery.flot.resize.js[EU5S]: F:jquery.flot.resize.js 职责定义 | R:- | A:- | S:-
+jquery.flot.selection.js[EU5M]: F:jquery.flot.selection.js 职责定义 | R:- | A:- | S:-
+jquery.flot.stack.js[EU5S]: F:jquery.flot.stack.js 职责定义 | R:- | A:- | S:-
+jquery.flot.symbol.js[EU5T]: F:jquery.flot.symbol.js 职责定义 | R:- | A:- | S:-
+jquery.flot.threshold.js[EU5S]: F:jquery.flot.threshold.js 职责定义 | R:- | A:- | S:-
+jquery.flot.time.js[EU5L]: F:jquery.flot.time.js 职责定义 | R:- | A:- | S:-
+jquery.js[EU5L]: F:Utility function for retrieving the text value of an array of DOM node | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/gmaps/===
+jsdoc.json[EU3T]: F:jsdoc.json 职责定义 | R:- | A:- | S:-
+umd.hbs[EU5T]: F:umd.hbs 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/gmaps/lib/===
+gmaps.controls.js[EU5S]: F:Add a custom control to the map UI | R:- | A:- | S:-
+gmaps.core.js[EU5L]: F:Creates a new GMaps instance, including a Google Maps map | R:- | A:- | S:-
+gmaps.events.js[EU5T]: F:gmaps.events.js 职责定义 | R:- | A:- | S:-
+gmaps.geofences.js[EU5T]: F:gmaps.geofences.js 职责定义 | R:- | A:- | S:-
+gmaps.geometry.js[EU5M]: F:gmaps.geometry.js 职责定义 | R:- | A:- | S:-
+gmaps.layers.js[EU5S]: F:gmaps.layers.js 职责定义 | R:- | A:- | S:-
+gmaps.map_types.js[EU5T]: F:gmaps.map_types.js 职责定义 | R:- | A:- | S:-
+gmaps.markers.js[EU5M]: F:gmaps.markers.js 职责定义 | R:- | A:- | S:-
+gmaps.native_extensions.js[EU5S]: F:gmaps.native_extensions.js 职责定义 | R:- | A:- | S:-
+gmaps.overlays.js[EU5S]: F:gmaps.overlays.js 职责定义 | R:- | A:- | S:-
+gmaps.routes.js[EU5M]: F:gmaps.routes.js 职责定义 | R:- | A:- | S:-
+gmaps.static.js[EU5M]: F:Map options * | R:- | A:- | S:-
+gmaps.streetview.js[EU5T]: F:gmaps.streetview.js 职责定义 | R:- | A:- | S:-
+gmaps.styles.js[EU5T]: F:gmaps.styles.js 职责定义 | R:- | A:- | S:-
+gmaps.utils.js[EU5T]: F:gmaps.utils.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/gulp-rtlcss/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+test.js[EU5T]: F:test.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/inputmask/bindings/===
+inputmask.binding.js[EU5T]: F:inputmask.binding.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/jquery-sparkline/===
+Changelog.txt[SU5M]: F:Changelog.txt 职责定义 | R:- | A:- | S:-
+build.js[EU5T]: F:build.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/jquery-ui-dist/===
+AUTHORS.txt[SI5M]: F:AUTHORS.txt 职责定义 | R:- | A:- | S:-
+LICENSE.txt[SU5T]: F:LICENSE.txt 职责定义 | R:- | A:- | S:-
+index.html[EU5L]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/jquery-ui-dist/external/jquery/===
+jquery.js[EU5L]: F:Create key-value caches of limited size * @returns {function(string, o | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/jquery.flot.tooltip/js/===
+jquery.flot.tooltip.source.js[EU5L]: F:open the tooltip (if not already open) and freeze it on the current po | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/jqvmap/maps/continents/===
+jquery.vmap.africa.js[EU5S]: F:Add World Map Data Points | R:- | A:- | S:-
+jquery.vmap.asia.js[EU5S]: F:Add World Map Data Points | R:- | A:- | S:-
+jquery.vmap.australia.js[EU5T]: F:Add World Map Data Points | R:- | A:- | S:-
+jquery.vmap.europe.js[EU5S]: F:Add World Map Data Points | R:- | A:- | S:-
+jquery.vmap.north-america.js[EU5T]: F:Add World Map Data Points | R:- | A:- | S:-
+jquery.vmap.south-america.js[EU5T]: F:Add World Map Data Points | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/jqvmap/maps/===
+jquery.vmap.algeria.js[EU5S]: F:Add Algeria Map Data Points | R:- | A:- | S:-
+jquery.vmap.argentina.js[EU5T]: F:jquery.vmap.argentina.js 职责定义 | R:- | A:- | S:-
+jquery.vmap.canada.js[EU5T]: F:Add Canada Map Data Points | R:- | A:- | S:-
+jquery.vmap.europe.js[EU5M]: F:Add Europe Map Data Points | R:- | A:- | S:-
+jquery.vmap.france.js[EU5M]: F:jquery.vmap.france.js 职责定义 | R:- | A:- | S:-
+jquery.vmap.germany.js[EU5T]: F:Add Germany Map Data Points | R:- | A:- | S:-
+jquery.vmap.greece.js[EU5T]: F:jquery.vmap.greece.js 职责定义 | R:- | A:- | S:-
+jquery.vmap.iran.js[EU5S]: F:Iran Vector Map Created By Mahmoud Eskandari E-mail:info@webafrooz | R:- | A:- | S:-
+jquery.vmap.iraq.js[EU5T]: F:jquery.vmap.iraq.js 职责定义 | R:- | A:- | S:-
+jquery.vmap.russia.js[EU5M]: F:Add Russia Map Data Points | R:- | A:- | S:-
+jquery.vmap.tunisia.js[EU5T]: F:JQVMap merc map for tunisia | R:- | A:- | S:-
+jquery.vmap.turkey.js[EU5M]: F:jquery.vmap.turkey.js 职责定义 | R:- | A:- | S:-
+jquery.vmap.usa.js[EU5M]: F:Add USA Map Data Points | R:- | A:- | S:-
+jquery.vmap.world.js[EU5L]: F:Add World Map Data Points | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/magnific-popup/===
+magnific-popup.css[EU5L]: F:Remove all paddings around the image on small screen | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/metismenu/cjs/===
+index.js[EU5M]: F:---------------------------------------------------------------------- | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/metismenu/modules/===
+index.js[EU5M]: F:---------------------------------------------------------------------- | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/moment/===
+ender.js[EU5T]: F:ender.js 职责定义 | R:- | A:- | S:-
+moment.js[EU5L]: F:Return a human readable representation of a moment that can * also be  | R:- | A:- | S:-
+package.js[EU5T]: F:package.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/moment/locale/===
+af.js[EU5T]: F:af.js 职责定义 | R:- | A:- | S:-
+ar-dz.js[EU5T]: F:ar-dz.js 职责定义 | R:- | A:- | S:-
+ar-kw.js[EU5T]: F:ar-kw.js 职责定义 | R:- | A:- | S:-
+ar-ly.js[EU5S]: F:ar-ly.js 职责定义 | R:- | A:- | S:-
+ar-ma.js[EU5T]: F:ar-ma.js 职责定义 | R:- | A:- | S:-
+ar-sa.js[EU5S]: F:ar-sa.js 职责定义 | R:- | A:- | S:-
+ar-tn.js[EU5T]: F:ar-tn.js 职责定义 | R:- | A:- | S:-
+ar.js[EU5S]: F:ar.js 职责定义 | R:- | A:- | S:-
+az.js[EU5S]: F:az.js 职责定义 | R:- | A:- | S:-
+be.js[EU5S]: F:be.js 职责定义 | R:- | A:- | S:-
+bg.js[EU5T]: F:bg.js 职责定义 | R:- | A:- | S:-
+bm.js[EU5T]: F:bm.js 职责定义 | R:- | A:- | S:-
+bn.js[EU5S]: F:bn.js 职责定义 | R:- | A:- | S:-
+bo.js[EU5S]: F:bo.js 职责定义 | R:- | A:- | S:-
+br.js[EU5S]: F:br.js 职责定义 | R:- | A:- | S:-
+bs.js[EU5S]: F:bs.js 职责定义 | R:- | A:- | S:-
+ca.js[EU5T]: F:ca.js 职责定义 | R:- | A:- | S:-
+cs.js[EU5S]: F:cs.js 职责定义 | R:- | A:- | S:-
+cv.js[EU5T]: F:cv.js 职责定义 | R:- | A:- | S:-
+cy.js[EU5T]: F:cy.js 职责定义 | R:- | A:- | S:-
+da.js[EU5T]: F:da.js 职责定义 | R:- | A:- | S:-
+de-at.js[EU5T]: F:de-at.js 职责定义 | R:- | A:- | S:-
+de-ch.js[EU5T]: F:de-ch.js 职责定义 | R:- | A:- | S:-
+de.js[EU5T]: F:de.js 职责定义 | R:- | A:- | S:-
+dv.js[EU5S]: F:dv.js 职责定义 | R:- | A:- | S:-
+el.js[EU5S]: F:el.js 职责定义 | R:- | A:- | S:-
+en-SG.js[EU5T]: F:en-SG.js 职责定义 | R:- | A:- | S:-
+en-au.js[EU5T]: F:en-au.js 职责定义 | R:- | A:- | S:-
+en-ca.js[EU5T]: F:en-ca.js 职责定义 | R:- | A:- | S:-
+en-gb.js[EU5T]: F:en-gb.js 职责定义 | R:- | A:- | S:-
+en-ie.js[EU5T]: F:en-ie.js 职责定义 | R:- | A:- | S:-
+en-il.js[EU5T]: F:en-il.js 职责定义 | R:- | A:- | S:-
+en-nz.js[EU5T]: F:en-nz.js 职责定义 | R:- | A:- | S:-
+eo.js[EU5T]: F:eo.js 职责定义 | R:- | A:- | S:-
+es-do.js[EU5T]: F:es-do.js 职责定义 | R:- | A:- | S:-
+es-us.js[EU5T]: F:es-us.js 职责定义 | R:- | A:- | S:-
+es.js[EU5T]: F:es.js 职责定义 | R:- | A:- | S:-
+et.js[EU5T]: F:et.js 职责定义 | R:- | A:- | S:-
+eu.js[EU5T]: F:eu.js 职责定义 | R:- | A:- | S:-
+fa.js[EU5S]: F:fa.js 职责定义 | R:- | A:- | S:-
+fi.js[EU5S]: F:fi.js 职责定义 | R:- | A:- | S:-
+fo.js[EU5T]: F:fo.js 职责定义 | R:- | A:- | S:-
+fr-ca.js[EU5T]: F:fr-ca.js 职责定义 | R:- | A:- | S:-
+fr-ch.js[EU5T]: F:fr-ch.js 职责定义 | R:- | A:- | S:-
+fr.js[EU5T]: F:fr.js 职责定义 | R:- | A:- | S:-
+fy.js[EU5T]: F:fy.js 职责定义 | R:- | A:- | S:-
+ga.js[EU5T]: F:ga.js 职责定义 | R:- | A:- | S:-
+gd.js[EU5T]: F:gd.js 职责定义 | R:- | A:- | S:-
+gl.js[EU5T]: F:gl.js 职责定义 | R:- | A:- | S:-
+gom-latn.js[EU5S]: F:gom-latn.js 职责定义 | R:- | A:- | S:-
+gu.js[EU5S]: F:gu.js 职责定义 | R:- | A:- | S:-
+he.js[EU5T]: F:he.js 职责定义 | R:- | A:- | S:-
+hi.js[EU5S]: F:hi.js 职责定义 | R:- | A:- | S:-
+hr.js[EU5S]: F:hr.js 职责定义 | R:- | A:- | S:-
+hu.js[EU5S]: F:hu.js 职责定义 | R:- | A:- | S:-
+hy-am.js[EU5T]: F:hy-am.js 职责定义 | R:- | A:- | S:-
+id.js[EU5T]: F:id.js 职责定义 | R:- | A:- | S:-
+is.js[EU5S]: F:is.js 职责定义 | R:- | A:- | S:-
+it-ch.js[EU5T]: F:it-ch.js 职责定义 | R:- | A:- | S:-
+it.js[EU5T]: F:it.js 职责定义 | R:- | A:- | S:-
+ja.js[EU5T]: F:ja.js 职责定义 | R:- | A:- | S:-
+jv.js[EU5T]: F:jv.js 职责定义 | R:- | A:- | S:-
+ka.js[EU5T]: F:ka.js 职责定义 | R:- | A:- | S:-
+kk.js[EU5T]: F:kk.js 职责定义 | R:- | A:- | S:-
+km.js[EU5S]: F:km.js 职责定义 | R:- | A:- | S:-
+kn.js[EU5S]: F:kn.js 职责定义 | R:- | A:- | S:-
+ko.js[EU5T]: F:ko.js 职责定义 | R:- | A:- | S:-
+ku.js[EU5S]: F:ku.js 职责定义 | R:- | A:- | S:-
+ky.js[EU5T]: F:ky.js 职责定义 | R:- | A:- | S:-
+lb.js[EU5S]: F:Returns true if the word before the given number loses the '-n' ending | R:- | A:- | S:-
+lo.js[EU5T]: F:lo.js 职责定义 | R:- | A:- | S:-
+lt.js[EU5S]: F:lt.js 职责定义 | R:- | A:- | S:-
+lv.js[EU5S]: F:lv.js 职责定义 | R:- | A:- | S:-
+me.js[EU5S]: F:me.js 职责定义 | R:- | A:- | S:-
+mi.js[EU5T]: F:mi.js 职责定义 | R:- | A:- | S:-
+mk.js[EU5T]: F:mk.js 职责定义 | R:- | A:- | S:-
+ml.js[EU5T]: F:ml.js 职责定义 | R:- | A:- | S:-
+mn.js[EU5S]: F:mn.js 职责定义 | R:- | A:- | S:-
+mr.js[EU5M]: F:mr.js 职责定义 | R:- | A:- | S:-
+ms-my.js[EU5T]: F:ms-my.js 职责定义 | R:- | A:- | S:-
+ms.js[EU5T]: F:ms.js 职责定义 | R:- | A:- | S:-
+mt.js[EU5T]: F:mt.js 职责定义 | R:- | A:- | S:-
+my.js[EU5T]: F:my.js 职责定义 | R:- | A:- | S:-
+nb.js[EU5T]: F:nb.js 职责定义 | R:- | A:- | S:-
+ne.js[EU5S]: F:ne.js 职责定义 | R:- | A:- | S:-
+nl-be.js[EU5T]: F:nl-be.js 职责定义 | R:- | A:- | S:-
+nl.js[EU5T]: F:nl.js 职责定义 | R:- | A:- | S:-
+nn.js[EU5T]: F:nn.js 职责定义 | R:- | A:- | S:-
+pa-in.js[EU5S]: F:pa-in.js 职责定义 | R:- | A:- | S:-
+pl.js[EU5S]: F:pl.js 职责定义 | R:- | A:- | S:-
+pt-br.js[EU5T]: F:pt-br.js 职责定义 | R:- | A:- | S:-
+pt.js[EU5T]: F:pt.js 职责定义 | R:- | A:- | S:-
+ro.js[EU5T]: F:ro.js 职责定义 | R:- | A:- | S:-
+ru.js[EU5S]: F:ru.js 职责定义 | R:- | A:- | S:-
+sd.js[EU5T]: F:sd.js 职责定义 | R:- | A:- | S:-
+se.js[EU5T]: F:se.js 职责定义 | R:- | A:- | S:-
+si.js[EU5T]: F:si.js 职责定义 | R:- | A:- | S:-
+sk.js[EU5S]: F:sk.js 职责定义 | R:- | A:- | S:-
+sl.js[EU5S]: F:sl.js 职责定义 | R:- | A:- | S:-
+sq.js[EU5T]: F:sq.js 职责定义 | R:- | A:- | S:-
+sr-cyrl.js[EU5S]: F:sr-cyrl.js 职责定义 | R:- | A:- | S:-
+sr.js[EU5S]: F:sr.js 职责定义 | R:- | A:- | S:-
+ss.js[EU5T]: F:ss.js 职责定义 | R:- | A:- | S:-
+sv.js[EU5T]: F:sv.js 职责定义 | R:- | A:- | S:-
+sw.js[EU5T]: F:sw.js 职责定义 | R:- | A:- | S:-
+ta.js[EU5S]: F:ta.js 职责定义 | R:- | A:- | S:-
+te.js[EU5T]: F:te.js 职责定义 | R:- | A:- | S:-
+tet.js[EU5T]: F:tet.js 职责定义 | R:- | A:- | S:-
+tg.js[EU5S]: F:tg.js 职责定义 | R:- | A:- | S:-
+th.js[EU5T]: F:th.js 职责定义 | R:- | A:- | S:-
+tl-ph.js[EU5T]: F:tl-ph.js 职责定义 | R:- | A:- | S:-
+tlh.js[EU5S]: F:tlh.js 职责定义 | R:- | A:- | S:-
+tr.js[EU5T]: F:tr.js 职责定义 | R:- | A:- | S:-
+tzl.js[EU5T]: F:tzl.js 职责定义 | R:- | A:- | S:-
+tzm-latn.js[EU5T]: F:tzm-latn.js 职责定义 | R:- | A:- | S:-
+tzm.js[EU5T]: F:tzm.js 职责定义 | R:- | A:- | S:-
+ug-cn.js[EU5S]: F:ug-cn.js 职责定义 | R:- | A:- | S:-
+uk.js[EU5S]: F:uk.js 职责定义 | R:- | A:- | S:-
+ur.js[EU5T]: F:ur.js 职责定义 | R:- | A:- | S:-
+uz-latn.js[EU5T]: F:uz-latn.js 职责定义 | R:- | A:- | S:-
+uz.js[EU5T]: F:uz.js 职责定义 | R:- | A:- | S:-
+vi.js[EU5T]: F:vi.js 职责定义 | R:- | A:- | S:-
+x-pseudo.js[EU5T]: F:x-pseudo.js 职责定义 | R:- | A:- | S:-
+yo.js[EU5T]: F:yo.js 职责定义 | R:- | A:- | S:-
+zh-cn.js[EU5S]: F:zh-cn.js 职责定义 | R:- | A:- | S:-
+zh-hk.js[EU5S]: F:zh-hk.js 职责定义 | R:- | A:- | S:-
+zh-tw.js[EU5S]: F:zh-tw.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/parsleyjs/i18n/===
+al.js[EL5T]: F:al.js 职责定义 | R:- | A:- | S:-
+ar.js[EL5T]: F:ar.js 职责定义 | R:- | A:- | S:-
+bg.js[EL5T]: F:bg.js 职责定义 | R:- | A:- | S:-
+ca.js[EL5T]: F:ca.js 职责定义 | R:- | A:- | S:-
+cs.extra.js[EL5T]: F:cs.extra.js 职责定义 | R:- | A:- | S:-
+cs.js[EL5T]: F:cs.js 职责定义 | R:- | A:- | S:-
+da.js[EL5T]: F:da.js 职责定义 | R:- | A:- | S:-
+de.extra.js[EL5T]: F:de.extra.js 职责定义 | R:- | A:- | S:-
+de.js[EL5T]: F:de.js 职责定义 | R:- | A:- | S:-
+el.extra.js[EL5T]: F:el.extra.js 职责定义 | R:- | A:- | S:-
+el.js[EL5T]: F:el.js 职责定义 | R:- | A:- | S:-
+en.extra.js[EL5T]: F:en.extra.js 职责定义 | R:- | A:- | S:-
+en.js[EL5T]: F:en.js 职责定义 | R:- | A:- | S:-
+es.js[EL5T]: F:es.js 职责定义 | R:- | A:- | S:-
+et.js[EL5T]: F:et.js 职责定义 | R:- | A:- | S:-
+eu.js[EL5T]: F:eu.js 职责定义 | R:- | A:- | S:-
+fa.js[EL5T]: F:fa.js 职责定义 | R:- | A:- | S:-
+fi.extra.js[EL5T]: F:fi.extra.js 职责定义 | R:- | A:- | S:-
+fi.js[EL5T]: F:fi.js 职责定义 | R:- | A:- | S:-
+fr.extra.js[EL5T]: F:fr.extra.js 职责定义 | R:- | A:- | S:-
+fr.js[EL5T]: F:fr.js 职责定义 | R:- | A:- | S:-
+he.extra.js[EL5T]: F:he.extra.js 职责定义 | R:- | A:- | S:-
+he.js[EL5T]: F:he.js 职责定义 | R:- | A:- | S:-
+hr.extra.js[EL5T]: F:hr.extra.js 职责定义 | R:- | A:- | S:-
+hr.js[EL5T]: F:hr.js 职责定义 | R:- | A:- | S:-
+hu.extra.js[EL5T]: F:hu.extra.js 职责定义 | R:- | A:- | S:-
+hu.js[EL5T]: F:hu.js 职责定义 | R:- | A:- | S:-
+id.extra.js[EL5T]: F:id.extra.js 职责定义 | R:- | A:- | S:-
+id.js[EL5T]: F:id.js 职责定义 | R:- | A:- | S:-
+it.extra.js[EL5T]: F:it.extra.js 职责定义 | R:- | A:- | S:-
+it.js[EL5T]: F:it.js 职责定义 | R:- | A:- | S:-
+ja.extra.js[EL5T]: F:ja.extra.js 职责定义 | R:- | A:- | S:-
+ja.js[EL5T]: F:ja.js 职责定义 | R:- | A:- | S:-
+ko.js[EL5T]: F:ko.js 职责定义 | R:- | A:- | S:-
+lt.extra.js[EL5T]: F:lt.extra.js 职责定义 | R:- | A:- | S:-
+lt.js[EL5T]: F:lt.js 职责定义 | R:- | A:- | S:-
+lv.extra.js[EL5T]: F:lv.extra.js 职责定义 | R:- | A:- | S:-
+lv.js[EL5T]: F:lv.js 职责定义 | R:- | A:- | S:-
+ms.extra.js[EL5T]: F:ms.extra.js 职责定义 | R:- | A:- | S:-
+ms.js[EL5T]: F:ms.js 职责定义 | R:- | A:- | S:-
+nl.extra.js[EL5T]: F:nl.extra.js 职责定义 | R:- | A:- | S:-
+nl.js[EL5T]: F:nl.js 职责定义 | R:- | A:- | S:-
+no.js[EL5T]: F:no.js 职责定义 | R:- | A:- | S:-
+pl.js[EL5T]: F:pl.js 职责定义 | R:- | A:- | S:-
+pt-br.js[EL5T]: F:pt-br.js 职责定义 | R:- | A:- | S:-
+pt-pt.js[EL5T]: F:pt-pt.js 职责定义 | R:- | A:- | S:-
+ro.extra.js[EL5T]: F:ro.extra.js 职责定义 | R:- | A:- | S:-
+ro.js[EL5T]: F:ro.js 职责定义 | R:- | A:- | S:-
+ru.extra.js[EL5T]: F:ru.extra.js 职责定义 | R:- | A:- | S:-
+ru.js[EL5T]: F:ru.js 职责定义 | R:- | A:- | S:-
+sk.extra.js[EL5T]: F:sk.extra.js 职责定义 | R:- | A:- | S:-
+sk.js[EL5T]: F:sk.js 职责定义 | R:- | A:- | S:-
+sl.extra.js[EL5T]: F:sl.extra.js 职责定义 | R:- | A:- | S:-
+sl.js[EL5T]: F:sl.js 职责定义 | R:- | A:- | S:-
+sq.js[EL5T]: F:sq.js 职责定义 | R:- | A:- | S:-
+sr.extra.js[EL5T]: F:sr.extra.js 职责定义 | R:- | A:- | S:-
+sr.js[EL5T]: F:sr.js 职责定义 | R:- | A:- | S:-
+sv.extra.js[EL5T]: F:sv.extra.js 职责定义 | R:- | A:- | S:-
+sv.js[EL5T]: F:sv.js 职责定义 | R:- | A:- | S:-
+th.extra.js[EL5T]: F:th.extra.js 职责定义 | R:- | A:- | S:-
+th.js[EL5T]: F:th.js 职责定义 | R:- | A:- | S:-
+tk.js[EL5T]: F:tk.js 职责定义 | R:- | A:- | S:-
+tr.js[EL5T]: F:tr.js 职责定义 | R:- | A:- | S:-
+ua.extra.js[EL5T]: F:ua.extra.js 职责定义 | R:- | A:- | S:-
+ua.js[EL5T]: F:ua.js 职责定义 | R:- | A:- | S:-
+uk.extra.js[EL5T]: F:uk.extra.js 职责定义 | R:- | A:- | S:-
+uk.js[EL5T]: F:uk.js 职责定义 | R:- | A:- | S:-
+ur.js[EL5T]: F:ur.js 职责定义 | R:- | A:- | S:-
+zh_cn.extra.js[EL5T]: F:zh_cn.extra.js 职责定义 | R:- | A:- | S:-
+zh_cn.js[EL5T]: F:zh_cn.js 职责定义 | R:- | A:- | S:-
+zh_tw.js[EL5T]: F:zh_tw.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/pdfmake/===
+webpack-standardfonts.config.js[EU5T]: F:webpack-standardfonts.config.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/raphael/dev/===
+banner.txt[SU5T]: F:banner.txt 职责定义 | R:- | A:- | S:-
+raphael.amd.js[EU5T]: F:raphael.amd.js 职责定义 | R:- | A:- | S:-
+raphael.core.js[EU5L]: F:raphael.core.js 职责定义 | R:- | A:- | S:-
+raphael.svg.js[EU5L]: F:Method that returns a 5 letter/digit id, enough for 36^5 = 60466176 el | R:- | A:- | S:-
+raphael.vml.js[EU5L]: F:raphael.vml.js 职责定义 | R:- | A:- | S:-
+raphaelTest.html[EU5T]: F:raphaelTest.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/raphael/===
+license.txt[SU5T]: F:license.txt 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/select2/js/i18n/===
+af.js[EL5T]: F:af.js 职责定义 | R:- | A:- | S:-
+ar.js[EL5T]: F:ar.js 职责定义 | R:- | A:- | S:-
+az.js[EL5T]: F:az.js 职责定义 | R:- | A:- | S:-
+bg.js[EL5T]: F:bg.js 职责定义 | R:- | A:- | S:-
+bn.js[EL5T]: F:bn.js 职责定义 | R:- | A:- | S:-
+bs.js[EL5T]: F:bs.js 职责定义 | R:- | A:- | S:-
+build.txt[SL5M]: F:build.txt 职责定义 | R:- | A:- | S:-
+ca.js[EL5T]: F:ca.js 职责定义 | R:- | A:- | S:-
+cs.js[EL5T]: F:cs.js 职责定义 | R:- | A:- | S:-
+da.js[EL5T]: F:da.js 职责定义 | R:- | A:- | S:-
+de.js[EL5T]: F:de.js 职责定义 | R:- | A:- | S:-
+dsb.js[EL5T]: F:dsb.js 职责定义 | R:- | A:- | S:-
+el.js[EL5T]: F:el.js 职责定义 | R:- | A:- | S:-
+en.js[EL5T]: F:en.js 职责定义 | R:- | A:- | S:-
+es.js[EL5T]: F:es.js 职责定义 | R:- | A:- | S:-
+et.js[EL5T]: F:et.js 职责定义 | R:- | A:- | S:-
+eu.js[EL5T]: F:eu.js 职责定义 | R:- | A:- | S:-
+fa.js[EL5T]: F:fa.js 职责定义 | R:- | A:- | S:-
+fi.js[EL5T]: F:fi.js 职责定义 | R:- | A:- | S:-
+fr.js[EL5T]: F:fr.js 职责定义 | R:- | A:- | S:-
+gl.js[EL5T]: F:gl.js 职责定义 | R:- | A:- | S:-
+he.js[EL5T]: F:he.js 职责定义 | R:- | A:- | S:-
+hi.js[EL5T]: F:hi.js 职责定义 | R:- | A:- | S:-
+hr.js[EL5T]: F:hr.js 职责定义 | R:- | A:- | S:-
+hsb.js[EL5T]: F:hsb.js 职责定义 | R:- | A:- | S:-
+hu.js[EL5T]: F:hu.js 职责定义 | R:- | A:- | S:-
+hy.js[EL5T]: F:hy.js 职责定义 | R:- | A:- | S:-
+id.js[EL5T]: F:id.js 职责定义 | R:- | A:- | S:-
+is.js[EL5T]: F:is.js 职责定义 | R:- | A:- | S:-
+it.js[EL5T]: F:it.js 职责定义 | R:- | A:- | S:-
+ja.js[EL5T]: F:ja.js 职责定义 | R:- | A:- | S:-
+ka.js[EL5T]: F:ka.js 职责定义 | R:- | A:- | S:-
+km.js[EL5T]: F:km.js 职责定义 | R:- | A:- | S:-
+ko.js[EL5T]: F:ko.js 职责定义 | R:- | A:- | S:-
+lt.js[EL5T]: F:lt.js 职责定义 | R:- | A:- | S:-
+lv.js[EL5T]: F:lv.js 职责定义 | R:- | A:- | S:-
+mk.js[EL5T]: F:mk.js 职责定义 | R:- | A:- | S:-
+ms.js[EL5T]: F:ms.js 职责定义 | R:- | A:- | S:-
+nb.js[EL5T]: F:nb.js 职责定义 | R:- | A:- | S:-
+ne.js[EL5T]: F:ne.js 职责定义 | R:- | A:- | S:-
+nl.js[EL5T]: F:nl.js 职责定义 | R:- | A:- | S:-
+pl.js[EL5T]: F:pl.js 职责定义 | R:- | A:- | S:-
+ps.js[EL5T]: F:ps.js 职责定义 | R:- | A:- | S:-
+pt-BR.js[EL5T]: F:pt-BR.js 职责定义 | R:- | A:- | S:-
+pt.js[EL5T]: F:pt.js 职责定义 | R:- | A:- | S:-
+ro.js[EL5T]: F:ro.js 职责定义 | R:- | A:- | S:-
+ru.js[EL5T]: F:ru.js 职责定义 | R:- | A:- | S:-
+sk.js[EL5T]: F:sk.js 职责定义 | R:- | A:- | S:-
+sl.js[EL5T]: F:sl.js 职责定义 | R:- | A:- | S:-
+sq.js[EL5T]: F:sq.js 职责定义 | R:- | A:- | S:-
+sr-Cyrl.js[EL5T]: F:sr-Cyrl.js 职责定义 | R:- | A:- | S:-
+sr.js[EL5T]: F:sr.js 职责定义 | R:- | A:- | S:-
+sv.js[EL5T]: F:sv.js 职责定义 | R:- | A:- | S:-
+th.js[EL5T]: F:th.js 职责定义 | R:- | A:- | S:-
+tk.js[EL5T]: F:tk.js 职责定义 | R:- | A:- | S:-
+tr.js[EL5T]: F:tr.js 职责定义 | R:- | A:- | S:-
+uk.js[EL5T]: F:uk.js 职责定义 | R:- | A:- | S:-
+vi.js[EL5T]: F:vi.js 职责定义 | R:- | A:- | S:-
+zh-CN.js[EL5T]: F:zh-CN.js 职责定义 | R:- | A:- | S:-
+zh-TW.js[EL5T]: F:zh-TW.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/simplebar/===
+simplebar.esm.js[EU5L]: F:SimpleBar | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/slick-slider/slick/===
+config.rb[EU5T]: F:config.rb 职责定义 | R:- | A:- | S:-
+slick-theme.css[EU5S]: F:slick-theme.css 职责定义 | R:- | A:- | S:-
+slick.css[EU5S]: F:slick.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/table-edits/===
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/===
+changelog.txt[SU5L]: F:on 职责定义 | R:- | A:- | S:-
+license.txt[SU5L]: F:definition 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/icons/default/===
+icons.js[EU5S]: F:icons.js 职责定义 | R:- | A:- | S:-
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/langs/===
+zh_CN.js[EU5L]: F:zh_CN.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/advlist/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5M]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/anchor/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5M]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/autolink/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5M]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/autoresize/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5S]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/autosave/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5M]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/bbcode/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5S]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/charmap/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/code/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/codesample/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/colorpicker/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/contextmenu/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/directionality/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/emoticons/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/emoticons/js/===
+emojiimages.js[EU5L]: F:emojiimages.js 职责定义 | R:- | A:- | S:-
+emojis.js[EU5L]: F:emojis.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/fullpage/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/fullscreen/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/help/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/hr/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/image/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/imagetools/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/importcss/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5M]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/insertdatetime/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5S]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/legacyoutput/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5M]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/link/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/lists/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/media/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/nonbreaking/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5S]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/noneditable/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5S]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/pagebreak/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5S]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/paste/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/preview/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5S]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/print/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/quickbars/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/save/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5S]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/searchreplace/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/spellchecker/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/tabfocus/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5S]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/table/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/template/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/textcolor/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/textpattern/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/toc/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5M]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/visualblocks/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5S]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/visualchars/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/plugins/wordcount/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+plugin.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/skins/content/dark/===
+content.css[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/skins/content/default/===
+content.css[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/skins/content/document/===
+content.css[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/skins/content/writer/===
+content.css[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/skins/ui/oxide-dark/===
+content.css[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+content.inline.css[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+content.mobile.css[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+skin.css[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+skin.mobile.css[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+skin.shadowdom.css[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/skins/ui/oxide/===
+content.css[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+content.inline.css[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+content.mobile.css[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+skin.css[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+skin.mobile.css[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+skin.shadowdom.css[EU5T]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/themes/mobile/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+theme.js[EU5L]: F:Copyright (c) Tiny Technologies, Inc | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/tinymce/themes/silver/===
+index.js[EU5T]: F:index.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/twitter-bootstrap-wizard/===
+MIT-LICENSE.txt[SU5T]: F:MIT-LICENSE.txt 职责定义 | R:- | A:- | S:-
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+prettify.css[EU5T]: F:prettify.css 职责定义 | R:- | A:- | S:-
+prettify.js[EU5T]: F:prettify.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/libs/twitter-bootstrap-wizard/bootstrap/js/===
+npm.js[EU5T]: F:npm.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/scss/===
+_variables-dark.scss[EU5L]: F:_variables-dark.scss 职责定义 | R:- | A:- | S:-
+_variables.scss[EU5L]: F:_variables.scss 职责定义 | R:- | A:- | S:-
+app-dark.scss[EU5T]: F:app-dark.scss 职责定义 | R:- | A:- | S:-
+app.scss[EU5T]: F:app.scss 职责定义 | R:- | A:- | S:-
+bootstrap-dark.scss[EU5T]: F:bootstrap-dark.scss 职责定义 | R:- | A:- | S:-
+bootstrap.scss[EU5T]: F:bootstrap.scss 职责定义 | R:- | A:- | S:-
+icons.scss[EU5T]: F:icons.scss 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/scss/custom/components/===
+_accordion.scss[EU5T]: F:_accordion.scss 职责定义 | R:- | A:- | S:-
+_avatar.scss[EU5T]: F:_avatar.scss 职责定义 | R:- | A:- | S:-
+_backgrounds.scss[EU5T]: F:_backgrounds.scss 职责定义 | R:- | A:- | S:-
+_badge.scss[EU5T]: F:_badge.scss 职责定义 | R:- | A:- | S:-
+_breadcrumb.scss[EU5T]: F:_breadcrumb.scss 职责定义 | R:- | A:- | S:-
+_buttons.scss[EU5T]: F:_buttons.scss 职责定义 | R:- | A:- | S:-
+_card.scss[EU5T]: F:_card.scss 职责定义 | R:- | A:- | S:-
+_demos.scss[EU5S]: F:_demos.scss 职责定义 | R:- | A:- | S:-
+_dropdown.scss[EU5T]: F:_dropdown.scss 职责定义 | R:- | A:- | S:-
+_forms.scss[EU5T]: F:_forms.scss 职责定义 | R:- | A:- | S:-
+_helper.scss[EU5S]: F:_helper.scss 职责定义 | R:- | A:- | S:-
+_nav.scss[EU5T]: F:_nav.scss 职责定义 | R:- | A:- | S:-
+_pagination.scss[EU5T]: F:_pagination.scss 职责定义 | R:- | A:- | S:-
+_print.scss[EU5T]: F:_print.scss 职责定义 | R:- | A:- | S:-
+_progress.scss[EU5T]: F:_progress.scss 职责定义 | R:- | A:- | S:-
+_reboot.scss[EU5T]: F:_reboot.scss 职责定义 | R:- | A:- | S:-
+_table.scss[EU5T]: F:_table.scss 职责定义 | R:- | A:- | S:-
+_waves.scss[EU5S]: F:_waves.scss 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/scss/custom/pages/===
+_authentication.scss[EU5S]: F:_authentication.scss 职责定义 | R:- | A:- | S:-
+_coming-soon.scss[EU5T]: F:_coming-soon.scss 职责定义 | R:- | A:- | S:-
+_email.scss[EU5S]: F:_email.scss 职责定义 | R:- | A:- | S:-
+_extras-pages.scss[EU5T]: F:Faqs ********************* | R:- | A:- | S:-
+_timeline.scss[EU5S]: F:vertical timeline ************* | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/scss/custom/plugins/===
+_apexcharts.scss[EU5T]: F:_apexcharts.scss 职责定义 | R:- | A:- | S:-
+_bootstrap-touchspin.scss[EU5T]: F:_bootstrap-touchspin.scss 职责定义 | R:- | A:- | S:-
+_calendar.scss[EU5S]: F:_calendar.scss 职责定义 | R:- | A:- | S:-
+_color-picker.scss[EU5T]: F:_color-picker.scss 职责定义 | R:- | A:- | S:-
+_custom-scrollbar.scss[EU5M]: F:_custom-scrollbar.scss 职责定义 | R:- | A:- | S:-
+_datatable.scss[EU5M]: F:_datatable.scss 职责定义 | R:- | A:- | S:-
+_datepicker.scss[EU5T]: F:_datepicker.scss 职责定义 | R:- | A:- | S:-
+_flot.scss[EU5T]: F:_flot.scss 职责定义 | R:- | A:- | S:-
+_form-editors.scss[EU5T]: F:_form-editors.scss 职责定义 | R:- | A:- | S:-
+_form-upload.scss[EU5T]: F:_form-upload.scss 职责定义 | R:- | A:- | S:-
+_form-wizard.scss[EU5T]: F:_form-wizard.scss 职责定义 | R:- | A:- | S:-
+_google-map.scss[EU5T]: F:_google-map.scss 职责定义 | R:- | A:- | S:-
+_icons.scss[EU5T]: F:_icons.scss 职责定义 | R:- | A:- | S:-
+_parsley.scss[EU5T]: F:_parsley.scss 职责定义 | R:- | A:- | S:-
+_range-slider.scss[EU5T]: F:_range-slider.scss 职责定义 | R:- | A:- | S:-
+_rating.scss[EU5T]: F:_rating.scss 职责定义 | R:- | A:- | S:-
+_responsive-table.scss[EU5S]: F:_responsive-table.scss 职责定义 | R:- | A:- | S:-
+_select2.scss[EU5S]: F:_select2.scss 职责定义 | R:- | A:- | S:-
+_session-timeout.scss[EU5T]: F:_session-timeout.scss 职责定义 | R:- | A:- | S:-
+_sparkline-chart.scss[EU5T]: F:_sparkline-chart.scss 职责定义 | R:- | A:- | S:-
+_sweatalert2.scss[EU5T]: F:_sweatalert2.scss 职责定义 | R:- | A:- | S:-
+_switch.scss[EU5S]: F:_switch.scss 职责定义 | R:- | A:- | S:-
+_table-editable.scss[EU5T]: F:_table-editable.scss 职责定义 | R:- | A:- | S:-
+_vector-maps.scss[EU5T]: F:_vector-maps.scss 职责定义 | R:- | A:- | S:-
+_x-editable.scss[EU5T]: F:_x-editable.scss 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/scss/custom/plugins/icons/===
+_dripicons.scss[EU5L]: F:_dripicons.scss 职责定义 | R:- | A:- | S:-
+_fontawesome-all.scss[EU5L]: F:_fontawesome-all.scss 职责定义 | R:- | A:- | S:-
+_materialdesignicons.scss[EU5L]: F:_materialdesignicons.scss 职责定义 | R:- | A:- | S:-
+_remixicon.scss[EU5L]: F:_remixicon.scss 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/assets/scss/custom/structure/===
+_footer.scss[EU5T]: F:_footer.scss 职责定义 | R:- | A:- | S:-
+_horizontal-nav.scss[EU5M]: F:_horizontal-nav.scss 职责定义 | R:- | A:- | S:-
+_layouts.scss[EU5T]: F:_layouts.scss 职责定义 | R:- | A:- | S:-
+_page-head.scss[EU5T]: F:_page-head.scss 职责定义 | R:- | A:- | S:-
+_right-sidebar.scss[EU5T]: F:_right-sidebar.scss 职责定义 | R:- | A:- | S:-
+_topbar.scss[EU5M]: F:_topbar.scss 职责定义 | R:- | A:- | S:-
+_vertical.scss[EU5L]: F:_vertical.scss 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-dist/css/===
+bootstrap-grid.css[EU5L]: F:bootstrap-grid.css 职责定义 | R:- | A:- | S:-
+bootstrap-grid.rtl.css[EU5L]: F:bootstrap-grid.rtl.css 职责定义 | R:- | A:- | S:-
+bootstrap-reboot.css[EU5L]: F:bootstrap-reboot.css 职责定义 | R:- | A:- | S:-
+bootstrap-reboot.rtl.css[EU5L]: F:bootstrap-reboot.rtl.css 职责定义 | R:- | A:- | S:-
+bootstrap-utilities.css[EU5L]: F:bootstrap-utilities.css 职责定义 | R:- | A:- | S:-
+bootstrap-utilities.rtl.css[EU5L]: F:bootstrap-utilities.rtl.css 职责定义 | R:- | A:- | S:-
+bootstrap.css[EU5L]: F:bootstrap.css 职责定义 | R:- | A:- | S:-
+bootstrap.rtl.css[EU5L]: F:bootstrap.rtl.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-dist/js/===
+bootstrap.bundle.js[EU5L]: F:---------------------------------------------------------------------- | R:- | A:- | S:-
+bootstrap.esm.js[EU5L]: F:---------------------------------------------------------------------- | R:- | A:- | S:-
+bootstrap.js[EU5L]: F:---------------------------------------------------------------------- | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/album-rtl/===
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/album/===
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/assets/brand/===
+bootstrap-logo-white.svg[EU5T]: F:bootstrap-logo-white.svg 职责定义 | R:- | A:- | S:-
+bootstrap-logo.svg[EU5T]: F:bootstrap-logo.svg 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/blog-rtl/===
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/blog/===
+blog.css[EU5S]: F:blog.css 职责定义 | R:- | A:- | S:-
+blog.rtl.css[EU5S]: F:blog.rtl.css 职责定义 | R:- | A:- | S:-
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/carousel-rtl/===
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/carousel/===
+carousel.css[EU5T]: F:carousel.css 职责定义 | R:- | A:- | S:-
+carousel.rtl.css[EU5T]: F:carousel.rtl.css 职责定义 | R:- | A:- | S:-
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/cheatsheet-rtl/===
+index.html[EU5L]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/cheatsheet/===
+cheatsheet.css[EU5S]: F:Bootstrap "Journal code" icon * @link https://icons | R:- | A:- | S:-
+cheatsheet.js[EU5T]: F:cheatsheet.js 职责定义 | R:- | A:- | S:-
+cheatsheet.rtl.css[EU5S]: F:Bootstrap "Journal code" icon * @link https://icons | R:- | A:- | S:-
+index.html[EU5L]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/checkout-rtl/===
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/checkout/===
+form-validation.css[EU5T]: F:form-validation.css 职责定义 | R:- | A:- | S:-
+form-validation.js[EU5T]: F:form-validation.js 职责定义 | R:- | A:- | S:-
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/cover/===
+cover.css[EU5T]: F:cover.css 职责定义 | R:- | A:- | S:-
+index.html[EU5T]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/dashboard-rtl/===
+dashboard.js[EU5T]: F:dashboard.js 职责定义 | R:- | A:- | S:-
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/dashboard/===
+dashboard.css[EU5S]: F:dashboard.css 职责定义 | R:- | A:- | S:-
+dashboard.js[EU5T]: F:dashboard.js 职责定义 | R:- | A:- | S:-
+dashboard.rtl.css[EU5T]: F:dashboard.rtl.css 职责定义 | R:- | A:- | S:-
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/dropdowns/===
+dropdowns.css[EU5T]: F:dropdowns.css 职责定义 | R:- | A:- | S:-
+index.html[EU5L]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/features/===
+features.css[EU5T]: F:features.css 职责定义 | R:- | A:- | S:-
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/footers/===
+footers.css[EU5T]: F:footers.css 职责定义 | R:- | A:- | S:-
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/grid/===
+grid.css[EU5T]: F:grid.css 职责定义 | R:- | A:- | S:-
+index.html[EU5M]: F:is 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/headers/===
+headers.css[EU5T]: F:headers.css 职责定义 | R:- | A:- | S:-
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/heroes/===
+heroes.css[EU5T]: F:heroes.css 职责定义 | R:- | A:- | S:-
+index.html[EU5S]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/jumbotron/===
+index.html[EU5T]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/list-groups/===
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+list-groups.css[EU5T]: F:list-groups.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/masonry/===
+index.html[EU5S]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/modals/===
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+modals.css[EU5T]: F:modals.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/navbar-bottom/===
+index.html[EU5T]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/navbar-fixed/===
+index.html[EU5T]: F:index.html 职责定义 | R:- | A:- | S:-
+navbar-top-fixed.css[EU5T]: F:navbar-top-fixed.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/navbar-static/===
+index.html[EU5T]: F:index.html 职责定义 | R:- | A:- | S:-
+navbar-top.css[EU5T]: F:navbar-top.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/navbars/===
+index.html[EU5L]: F:index.html 职责定义 | R:- | A:- | S:-
+navbar.css[EU5T]: F:navbar.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/offcanvas-navbar/===
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+offcanvas.css[EU5T]: F:offcanvas.css 职责定义 | R:- | A:- | S:-
+offcanvas.js[EU5T]: F:offcanvas.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/offcanvas/===
+index.html[EU5T]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/pricing/===
+index.html[EU5M]: F:index.html 职责定义 | R:- | A:- | S:-
+pricing.css[EU5T]: F:pricing.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/product/===
+index.html[EU5S]: F:index.html 职责定义 | R:- | A:- | S:-
+product.css[EU5T]: F:product.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/sidebars/===
+index.html[EU5L]: F:index.html 职责定义 | R:- | A:- | S:-
+sidebars.css[EU5S]: F:sidebars.css 职责定义 | R:- | A:- | S:-
+sidebars.js[EU5T]: F:sidebars.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/sign-in/===
+index.html[EU5T]: F:index.html 职责定义 | R:- | A:- | S:-
+signin.css[EU5T]: F:signin.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/starter-template/===
+index.html[EU5T]: F:index.html 职责定义 | R:- | A:- | S:-
+starter-template.css[EU5T]: F:starter-template.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/sticky-footer-navbar/===
+index.html[EU5T]: F:index.html 职责定义 | R:- | A:- | S:-
+sticky-footer-navbar.css[EU5T]: F:sticky-footer-navbar.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-examples/sticky-footer/===
+index.html[EU5T]: F:index.html 职责定义 | R:- | A:- | S:-
+sticky-footer.css[EU5T]: F:sticky-footer.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/font-awesome-4.7.0/===
+HELP-US-OUT.txt[SU5T]: F:HELP-US-OUT.txt 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/font-awesome-4.7.0/css/===
+font-awesome.css[EU5L]: F:font-awesome.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/font-awesome-4.7.0/less/===
+animated.less[EU5T]: F:animated.less 职责定义 | R:- | A:- | S:-
+bordered-pulled.less[EU5T]: F:bordered-pulled.less 职责定义 | R:- | A:- | S:-
+core.less[EU5T]: F:core.less 职责定义 | R:- | A:- | S:-
+fixed-width.less[EU5T]: F:fixed-width.less 职责定义 | R:- | A:- | S:-
+font-awesome.less[EU5T]: F:font-awesome.less 职责定义 | R:- | A:- | S:-
+icons.less[EU5L]: F:icons.less 职责定义 | R:- | A:- | S:-
+larger.less[EU5T]: F:larger.less 职责定义 | R:- | A:- | S:-
+list.less[EU5T]: F:list.less 职责定义 | R:- | A:- | S:-
+mixins.less[EU5T]: F:mixins.less 职责定义 | R:- | A:- | S:-
+path.less[EU5T]: F:path.less 职责定义 | R:- | A:- | S:-
+rotated-flipped.less[EU5T]: F:rotated-flipped.less 职责定义 | R:- | A:- | S:-
+screen-reader.less[EU5T]: F:screen-reader.less 职责定义 | R:- | A:- | S:-
+stacked.less[EU5T]: F:stacked.less 职责定义 | R:- | A:- | S:-
+variables.less[EU5L]: F:variables.less 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/lib/font-awesome-4.7.0/scss/===
+_animated.scss[EU5T]: F:_animated.scss 职责定义 | R:- | A:- | S:-
+_bordered-pulled.scss[EU5T]: F:_bordered-pulled.scss 职责定义 | R:- | A:- | S:-
+_core.scss[EU5T]: F:_core.scss 职责定义 | R:- | A:- | S:-
+_fixed-width.scss[EU5T]: F:_fixed-width.scss 职责定义 | R:- | A:- | S:-
+_icons.scss[EU5L]: F:_icons.scss 职责定义 | R:- | A:- | S:-
+_larger.scss[EU5T]: F:_larger.scss 职责定义 | R:- | A:- | S:-
+_list.scss[EU5T]: F:_list.scss 职责定义 | R:- | A:- | S:-
+_mixins.scss[EU5T]: F:_mixins.scss 职责定义 | R:- | A:- | S:-
+_path.scss[EU5T]: F:_path.scss 职责定义 | R:- | A:- | S:-
+_rotated-flipped.scss[EU5T]: F:_rotated-flipped.scss 职责定义 | R:- | A:- | S:-
+_screen-reader.scss[EU5T]: F:_screen-reader.scss 职责定义 | R:- | A:- | S:-
+_stacked.scss[EU5T]: F:_stacked.scss 职责定义 | R:- | A:- | S:-
+_variables.scss[EU5L]: F:_variables.scss 职责定义 | R:- | A:- | S:-
+font-awesome.scss[EU5T]: F:font-awesome.scss 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/backend/===
+weline.modules.js[EU5T]: F:Weline Admin 模块配置 * * 此文件定义Admin模块可用的JS模块 * 格式：JSON对象，包含 modules 和 mod | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/css/===
+dashboard.css[EU5S]: F:dashboard.css 职责定义 | R:- | A:- | S:-
+header.css[EU5T]: F:header.css 职责定义 | R:- | A:- | S:-
+index.css[EU5T]: F:index.css 职责定义 | R:- | A:- | S:-
+index.less[EU5T]: F:index.less 职责定义 | R:- | A:- | S:-
+login.css[EU5T]: F:login.css 职责定义 | R:- | A:- | S:-
+modern-admin-polish.css[EU5S]: F:modern-admin-polish.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/js/===
+login.js[EU5T]: F:login.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/libs/bootstrap-treeview-master/===
+.bowerrc[EU5T]: F:.bowerrc 职责定义 | R:- | A:- | S:-
+.gitattributes[EU5T]: F:.gitattributes 职责定义 | R:- | A:- | S:-
+.gitignore[EU5T]: F:.gitignore 职责定义 | R:- | A:- | S:-
+.jshintrc[EU5T]: F:.jshintrc 职责定义 | R:- | A:- | S:-
+.travis.yml[EU5T]: F:.travis.yml 职责定义 | R:- | A:- | S:-
+CHANGELOG.md[SU5T]: F:Change Log | R:- | A:- | S:-
+Gruntfile.js[EU5T]: F:Gruntfile.js 职责定义 | R:- | A:- | S:-
+LICENSE[EU5M]: F:name 职责定义 | R:- | A:- | S:-
+README.md[SU5L]: F:Bootstrap Tree View | R:- | A:- | S:-
+app.js[EU5T]: F:Module dependencies | R:- | A:- | S:-
+bower.json[EU3T]: F:bower.json 职责定义 | R:- | A:- | S:-
+package.json[EU3T]: F:package.json 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/libs/bootstrap-treeview-master/public/css/===
+bootstrap-treeview.css[EU5T]: F:bootstrap-treeview.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/libs/bootstrap-treeview-master/public/===
+example-dom.html[EU5T]: F:example-dom.html 职责定义 | R:- | A:- | S:-
+index.html[EU5L]: F:index.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/libs/bootstrap-treeview-master/public/js/===
+bootstrap-treeview.js[EU5L]: F:Returns a single node object that matches the given node id | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/libs/bootstrap-treeview-master/src/css/===
+bootstrap-treeview.css[EU5T]: F:bootstrap-treeview.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/libs/bootstrap-treeview-master/src/js/===
+bootstrap-treeview.js[EU5L]: F:Returns a single node object that matches the given node id | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/libs/jquery.mCustomScrollbar/===
+.gitignore[EU5T]: F:.gitignore 职责定义 | R:- | A:- | S:-
+LICENSE.txt[SU5T]: F:LICENSE.txt 职责定义 | R:- | A:- | S:-
+bower.json[EU3T]: F:bower.json 职责定义 | R:- | A:- | S:-
+jquery.mCustomScrollbar.css[EU5L]: F:jquery.mCustomScrollbar.css 职责定义 | R:- | A:- | S:-
+jquery.mCustomScrollbar.js[EU5L]: F:jquery.mCustomScrollbar.js 职责定义 | R:- | A:- | S:-
+package.json[EU3T]: F:package.json 职责定义 | R:- | A:- | S:-
+readme.md[SU5T]: F:文档readme.md | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/libs/jquery.mCustomScrollbar/js/uncompressed/===
+jquery.mCustomScrollbar.js[EU5L]: F:jquery.mCustomScrollbar.js 职责定义 | R:- | A:- | S:-
+jquery.mousewheel-3.0.6.js[EU5T]: F:jquery.mousewheel-3.0.6.js 职责定义 | R:- | A:- | S:-
+jquery.mousewheel.js[EU5M]: F:jquery.mousewheel.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/libs/loading/===
+index.html[EU5S]: F:index.html 职责定义 | R:- | A:- | S:-
+loading.css[EU5L]: F:loading.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/Backend/User/===
+assign_role.phtml[EU5T]: F:管理员角色分配页面（简化版） * * 直接在表格内选择角色并 AJAX 保存，无需独立提交按钮 * * @var \Weline\Frame | R:- | A:- | S:-
+form.phtml[EU5S]: F:管理员表单页面（内容模板） * * 只包含页面内容，由布局系统自动包裹 HTML 框架 * 布局由 BackendController::$ | R:- | A:- | S:-
+listing.phtml[EU5T]: F:管理员列表页面（内容模板） * * 简化版：所有操作在当前页面完成，编辑使用侧边抽屉 * * @var \Weline\Framework\ | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/Backend/page-layout/===
+main-content-after.phtml[EU5T]: F:main-content-after.phtml 职责定义 | R:- | A:- | S:-
+main-content-before.phtml[EU5T]: F:main-content-before.phtml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/Index/===
+index.phtml[EU5L]: F:后台首页 - Dashboard * * 此模板仅包含页面内容部分，由布局系统自动包装完整的 HTML 结构 * 布局类型：default | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/Login/===
+fast.phtml[EU5L]: F:fast.phtml 职责定义 | R:- | A:- | S:-
+footer.phtml[EU5T]: F:footer.phtml 职责定义 | R:- | A:- | S:-
+head.phtml[EU5T]: F:head.phtml 职责定义 | R:- | A:- | S:-
+index.phtml[EU5S]: F:index.phtml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/System/Cms/===
+getIndex.phtml[EU5T]: F:CMS内容管理页面（内容模板） * * @var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/System/Events/===
+getIndex.phtml[EU5T]: F:系统事件管理页面 * * @var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/System/Menus/===
+index.phtml[EU5T]: F:菜单管理页面 - 树状管理 * * @var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/System/Modules/===
+getIndex.phtml[EU5T]: F:模组管理页面（内容模板） * * @var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+router.phtml[EU5T]: F:路由管理页面 * * @var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/System/Plugins/===
+getIndex.phtml[EU5T]: F:插件管理页面 * * @var \Weline\Framework\View\Template $this | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/common/===
+footer.phtml[EU5T]: F:footer.phtml 职责定义 | R:- | A:- | S:-
+head.phtml[EU5T]: F:head.phtml 职责定义 | R:- | A:- | S:-
+left-sidebar.phtml[EU5T]: F:left-sidebar.phtml 职责定义 | R:- | A:- | S:-
+pages-maintenance.phtml[EU5S]: F:pages-maintenance.phtml 职责定义 | R:- | A:- | S:-
+right-sidebar.phtml[EU5T]: F:right-sidebar.phtml 职责定义 | R:- | A:- | S:-
+vendor-scripts.phtml[EU5T]: F:供应商脚本模板 * 用于在页面底部加载第三方供应商的 JavaScript 库 * * @var \Weline\Framework\Vie | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/common/page/===
+loading.phtml[EU5T]: F:loading.phtml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/templates/===
+maintenance.phtml[EU5T]: F:maintenance.phtml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/Controller/Backend/Affiliate/===
+Delete.php[EG6T]: F:Delete 职责定义 | R:- | A:__construct,get,post | S:-
+Index.php[EG6T]: F:Index 职责定义 | R:- | A:__construct,index | S:-
+Save.php[EG6T]: F:Save 职责定义 | R:- | A:__construct,post,index | S:-
+View.php[EG6T]: F:View 职责定义 | R:- | A:__construct,index | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/Controller/Backend/===
+Config.php[EG6T]: F:分销配置页：本页用 config:embed 嵌入店面分销分享启停开关，并支持 URL 范围 | R:- | A:index | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/Controller/Frontend/Affiliate/===
+Index.php[EG6T]: F:Index 职责定义 | R:- | A:index | S:-
+Redirect.php[EG6T]: F:Redirect 职责定义 | R:- | A:__construct,index | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/Controller/===
+Index.php[EG6T]: F:Index 职责定义 | R:- | A:index | S:-
+Redirect.php[EG6T]: F:Redirect 职责定义 | R:- | A:index | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/Model/===
+Affiliate.php[PG6T]: F:Affiliate account model | R:- | A:- | S:-
+AffiliateAttribution.php[PG6T]: F:AffiliateAttribution 职责定义 | R:- | A:- | S:-
+AffiliateCommission.php[PG6T]: F:AffiliateCommission 职责定义 | R:- | A:- | S:-
+AffiliateShare.php[PG6T]: F:AffiliateShare 职责定义 | R:- | A:- | S:-
+AffiliateTouch.php[PG6T]: F:AffiliateTouch 职责定义 | R:- | A:- | S:-
+AffiliateWithdrawal.php[PG6T]: F:AffiliateWithdrawal 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/Observer/===
+CartAddAfterObserver.php[DG6T]: F:CartAddAfterObserver 职责定义 | R:- | A:__construct,execute | S:-
+CheckoutOrderCreatedObserver.php[DG6T]: F:CheckoutOrderCreatedObserver 职责定义 | R:- | A:__construct,execute | S:-
+CustomerRegisteredObserver.php[DG6T]: F:CustomerRegisteredObserver 职责定义 | R:- | A:__construct,execute | S:-
+OrderCancelledObserver.php[DG6T]: F:OrderCancelledObserver 职责定义 | R:- | A:__construct,execute | S:-
+OrderPaymentStatusChangedObserver.php[DG6T]: F:OrderPaymentStatusChangedObserver 职责定义 | R:- | A:__construct,execute | S:-
+OrderStatusChangedObserver.php[DG6T]: F:OrderStatusChangedObserver 职责定义 | R:- | A:__construct,execute | S:-
+ProductViewedObserver.php[DG6T]: F:ProductViewedObserver 职责定义 | R:- | A:__construct,execute | S:-
+ReviewCreatedObserver.php[DG6T]: F:ReviewCreatedObserver 职责定义 | R:- | A:__construct,execute | S:-
+SocialShareAfterObserver.php[DG6T]: F:SocialShareAfterObserver 职责定义 | R:- | A:__construct,execute | S:-
+WishlistAddAfterObserver.php[DG6T]: F:WishlistAddAfterObserver 职责定义 | R:- | A:__construct,execute | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/Service/===
+AffiliateAdminPageDataService.php[DG7M]: F:AffiliateAdminPageDataService 职责定义 | R:- | A:__construct,getPageData,getSummary | S:-
+AffiliateAnalyticsService.php[DG7M]: F:分销漏斗与平台维度统计（前台账户中心 + 后台详情复用） | R:- | A:__construct,buildAffiliateAnalytics | S:-
+AffiliateOrderEventPayloadBuilder.php[DG5S]: F:Normalizes Weline Order events into AffiliateService checkout payloads | R:- | A:buildCheckoutPayload,buildPaymentPayload | S:-
+AffiliateScopeFormDataService.php[DG7S]: F:分销后台表单：Website / Store / Channel 选项与展示标签 | R:- | A:build,buildScopeLabel | S:-
+AffiliateScopeMatcher.php[DG5T]: F:分销账户 website / store / channel 范围匹配与优先级 | R:- | A:matches,specificityScore | S:-
+AffiliateScopeResolver.php[DG5T]: F:解析当前 website / store / channel 访问范围（前台优先走 CartScopeResolver 可信 scope） | R:- | A:resolve | S:-
+AffiliateService.php[DG7L]: F:AffiliateService 职责定义 | R:- | A:__construct,createAffiliate,calculateCommission,getProductShareLinks,getShareLink | S:-
+AffiliateStorefrontPolicy.php[DG5S]: F:Storefront affiliate surface switches (PDP share panel, etc | R:- | A:__construct,forConnection,forTesting,isProductShareEnabled,scopeKey | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/doc/===
+README.md[SI5T]: F:Weline_Affiliate | R:- | A:- | S:-
+功能现状.md[SI5T]: F:Weline_Affiliate 功能现状 | R:- | A:- | S:-
+开发日志.md[SI5M]: F:Weline_Affiliate 开发日志 | R:- | A:- | S:-
+需求.md[SI5T]: F:Weline_Affiliate 需求 | R:- | A:- | S:-
+AI-INDEX.md[SI5T]: F:Weline_Affiliate AI 开发入口 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/doc/hook/frontend/account/index/===
+affiliate.md[SI5T]: F:Weline_Affiliate::frontend::account::index::affiliate | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/doc/验收/===
+2026-05-27-分销服务产品架构迭代任务书.md[SI5S]: F:分销服务产品架构迭代任务书 | R:- | A:- | S:-
+2026-05-27-分销模块9502验收修复记录.md[SI5S]: F:分销模块 9502 验收修复记录 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/etc/backend/===
+menu.xml[FG5T]: F:menu.xml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/etc/===
+env.php[DG5T]: F:env.php 职责定义 | R:- | A:- | S:-
+event.xml[FG5T]: F:event.xml 职责定义 | R:- | A:- | S:-
+module.php[DG5T]: F:module.php 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/===
+event.php[DG5T]: F:event.php 职责定义 | R:- | A:- | S:-
+hook.php[DG5T]: F:hook.php 职责定义 | R:- | A:- | S:-
+register.php[DG5T]: F:register.php 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/extends/module/Weline_Framework/Query/===
+AffiliateAdminQueryProvider.php[DG5S]: F:AffiliateAdminQueryProvider 职责定义 | R:- | A:__construct,getProviderName,execute,getDescriptor | S:-
+AffiliateQueryProvider.php[DG5M]: F:AffiliateQueryProvider 职责定义 | R:- | A:__construct,getProviderName,execute,getDescriptor | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/extends/module/Weline_SystemConfig/Config/frontend/===
+product-share.phtml[EU5T]: F:meta | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/extends/module/Weline_Widget/Weline_Affiliate/===
+widget.php[DG5T]: F:widget.php 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/i18n/===
+en_US.csv[FL3M]: F:i18n词条 en_US.csv | R:- | A:- | S:-
+zh_Hans_CN.csv[FL3M]: F:i18n词条 zh_Hans_CN.csv | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/hooks/Weline_Affiliate/frontend/account/index/===
+affiliate.phtml[EU5T]: F:Account-center affiliate section content | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/hooks/Weline_Customer/frontend/account/discovery/===
+cards.phtml[EU5T]: F:Affiliate storefront account-center discovery card | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/hooks/Weline_Product/frontend/product/detail/===
+after-add-to-cart.phtml[EU5L]: F:Affiliate share in PDP buybox (after purchase CTAs), collapsed by defa | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/hooks/===
+account.sidebar.content.phtml[EU5T]: F:Account sidebar content bridge | R:- | A:- | S:-
+account.sidebar.group.commerce.phtml[EU5T]: F:Account sidebar affiliate entry (commerce group) | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/statics/css/===
+affiliate-account.css[EU5L]: F:affiliate-account.css 职责定义 | R:- | A:- | S:-
+affiliate-admin-index.css[EU5S]: F:分销后台列表页 * 模块：Weline_Affiliate * 前缀：affiliate-admin- * 使用主题变量，支持明暗模式 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/statics/frontend/===
+weline.modules.js[EU5T]: F:Weline Affiliate 前端 JS 模块注册 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/statics/js/===
+affiliate-account.js[EU5M]: F:Account-center affiliate workbench (AJAX sidebar + discovery card) | R:- | A:- | S:-
+affiliate-product-share.js[EU5L]: F:PDP / quick-add「分销分享」面板 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/statics/prototype/===
+pdp-share-placement.THROWAWAY.html[EU5M]: F:pdp-share-placement.THROWAWAY.html 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/templates/Backend/Affiliate/Index/===
+index.phtml[EU5L]: F:index.phtml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/templates/Backend/Affiliate/View/===
+index.phtml[EU5L]: F:index.phtml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/templates/Backend/Config/===
+index.phtml[EU5T]: F:分销配置：嵌入统一配置声明的商品分销分享启停开关（支持 URL 范围） | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/templates/frontend/account/===
+affiliate-summary-card.phtml[EU5M]: F:Shared account-center affiliate summary card | R:- | A:- | S:-
+affiliate-workbench-body.phtml[EU5M]: F:Affiliate account-center workbench details | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/view/templates/frontend/widgets/===
+affiliate-center.phtml[EU5T]: F:Affiliate center widget shell for account layouts | R:- | A:- | S:-
+footer-promote-link.phtml[EU5T]: F:页脚「合作信息」扩展：我要推广入口 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/Adapter/===
+AgentAdapter.php[DG5M]: F:Default Agent scenario adapter | R:- | A:getCode,getName,getDescription,getVersion,getSupportedModelTypes | S:-
+ITOpsAdapter.php[DG5S]: F:IT operations scenario adapter | R:- | A:getCode,getName,getDescription,getVersion,getSupportedModelTypes | S:-
+SEOAdapter.php[DG5S]: F:SEO scenario adapter | R:- | A:getCode,getName,getDescription,getVersion,getSupportedModelTypes | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/Controller/Api/V1/===
+Chat.php[EG7M]: F:聊天 API 控制器 | R:- | A:__construct,postSend,postStream,getHistory,postClear | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/Controller/Backend/===
+AgentHtmlSafeMutationTrait.php[EG6T]: F:HTML 浏览器提交时重定向列表，避免整页吐 JSON；XHR/JSON Accept 仍返回 JSON | R:- | A:- | S:-
+Chat.php[EG6T]: F:聊天控制台控制器 | R:- | A:__construct,getIndex | S:-
+Memory.php[EG6T]: F:Backend memory management | R:- | A:__construct,getList,listing | S:-
+Role.php[EI7L]: F:Backend role management | R:- | A:__construct,getList,listing,getAdd,getEdit | S:-
+Schedule.php[EG7S]: F:调度任务管理控制器 | R:- | A:__construct,getList,listing,getAdd,getEdit | S:-
+Session.php[EG6T]: F:会话管理控制器 | R:- | A:__construct,getList,listing,getView,postArchive | S:-
+Skill.php[EG6T]: F:技能管理控制器 | R:- | A:__construct,getList,listing,getView,postToggle | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/Cron/===
+MemoryCleanup.php[DG5T]: F:记忆清理任务 * * 清理过期和低价值的记忆 | R:- | A:__construct,name,execute_name,tip,cron_time | S:-
+ScheduleRunner.php[DG5S]: F:调度任务执行器 * * 定时检查并执行到期的 智能体调度任务 | R:- | A:__construct,name,execute_name,tip,cron_time | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/Interface/===
+ChannelAdapterInterface.php[DG6T]: F:渠道适配器接口 * * 用于对接不同的消息渠道（钉钉、飞书、Telegram 等） | R:- | A:getChannelCode,getChannelName,send,receive,verifySignature | S:-
+SkillInterface.php[DG7T]: F:技能接口 * * 所有技能必须实现此接口 | R:- | A:getCode,getName,getDescription,getCategory,getParameters | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/Model/===
+AgentChatMessage.php[PG6S]: F:聊天消息模型 * * 存储会话中的每条消息，支持 user/assistant/system/tool 角色 | R:- | A:_init,getIdFieldName,getToolCalls,setToolCalls,getSession | S:-
+AgentChatSession.php[PG6S]: F:聊天会话模型 * * 管理用户与 AI 的对话会话，支持多渠道、多上下文 | R:- | A:_init,getIdFieldName,getMetadata,setMetadata,getRole | S:-
+AgentMemoryEdge.php[PG6S]: F:记忆关系模型（知识图谱边） * * 存储记忆节点之间的关系，构建知识图谱 | R:- | A:_init,getIdFieldName,getMetadata,setMetadata,beforeSave | S:-
+AgentMemoryNode.php[PG6S]: F:记忆节点模型（知识图谱节点） * * 存储长期记忆，支持事实、偏好、实体、事件等类型 * 实现持久化记忆引擎的核心存储 | R:- | A:_init,getIdFieldName,getMetadata,setMetadata,incrementAccess | S:-
+AgentRole.php[PG6M]: F:智能体角色模型 * * 每个角色有独立的权限、技能集、提示词和工作空间配置 * 实现显式角色系统和沙盒化隔离 * * 复用 Weline_A | R:- | A:_init,getIdFieldName,getPermissions,setPermissions,getSkills | S:-
+AgentSchedule.php[PG6M]: F:智能体调度任务模型 * * 基于 Cron 的自动化调度执行 | R:- | A:_init,getIdFieldName,getContext,setContext,getRole | S:-
+AgentScheduleLog.php[PG6S]: F:调度任务执行日志模型 | R:- | A:_init,getIdFieldName,getContextSnapshot,calculateDuration,markSuccess | S:-
+AgentSkill.php[PG6S]: F:技能注册表模型 * * 管理所有可用技能的注册信息 | R:- | A:_init,getIdFieldName,getParameters,setParameters,getPermissionRequired | S:-
+AgentToolCall.php[PG6S]: F:Tool 调用记录模型 * * 记录 AI 调用技能的详细信息，用于审计和分析 | R:- | A:_init,getIdFieldName,getArguments,setArguments,markRunning | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/Query/===
+AgentQueryProvider.php[DG5M]: F:智能体模块查询提供者 * * 提供统一的智能体数据查询接口 * * 使用示例： * w_query('agent', 'getRole',  | R:- | A:__construct,getProviderName,execute,getDescriptor | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/Service/===
+AgentAdminService.php[DG7L]: F:Backend admin mutations shared by BinQuery + controllers | R:- | A:__construct,saveRole,suggestRole,deleteRole,toggleRole | S:-
+AgentEngine.php[DG5M]: F:AgentEngine 职责定义 | R:- | A:__construct,execute,executeStream | S:-
+ChatSessionManager.php[DG5M]: F:聊天会话管理器 * * 管理用户与 AI 的对话会话 | R:- | A:__construct,createSession,getOrCreateSession,getSession,addMessage | S:-
+ContextBuilder.php[DG5S]: F:上下文构建器 * * 构建发送给 AI 的完整上下文，包括： * - 系统提示词 * - 历史消息 * - 相关记忆 | R:- | A:__construct,build,buildCompact | S:-
+MemoryService.php[DG7M]: F:记忆服务 * * 管理 AI 的长期记忆，支持： * - 记忆提取（从对话中提取关键信息） * - 记忆存储（知识图谱节点和边） * - 记 | R:- | A:__construct,extractAndSave,getRelevantMemories,search,saveMemoryNode | S:-
+NaturalTimeParser.php[DG5M]: F:自然语言时间解析器 * * 将自然语言时间转换为 Cron 表达式 | R:- | A:parse,validate,toHumanReadable | S:-
+PermissionValidator.php[DG5M]: F:权限验证器 * * 验证角色是否有权限执行特定操作 | R:- | A:__construct,validate | S:-
+RoleConfigAssistant.php[DI5L]: F:Role configuration assistant | R:- | A:__construct,getTemplates,buildSuggestion | S:-
+SkillContext.php[DG5T]: F:技能执行上下文 * * 封装技能执行时的上下文信息 | R:- | A:__construct,getRole,getSession,getContextId,getChannel | S:-
+SkillPackageManager.php[DG5S]: F:SkillPackageManager 职责定义 | R:- | A:__construct,getSkill,getAllSkills,getSkillsForRole,getToolsForRole | S:-
+SkillResult.php[DG5T]: F:技能执行结果 | R:- | A:__construct,success,error,cancelled,getData | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/Service/CodingAgent/Tool/===
+CodebaseSearchTool.php[DG5S]: F:代码库语义搜索工具 * * 通过 w_query 跨模块调用：若 Weline_AiKnowledge 存在则使用其向量库检索； * 否则回 | R:- | A:getName,getDescription,getParameters,execute,isEnabled | S:-
+GlobFileSearchTool.php[DG5S]: F:全局文件搜索工具（Cursor 风格） * * 按 glob 模式查找文件 | R:- | A:getName,getDescription,getParameters,execute,isEnabled | S:-
+GrepTool.php[DG5S]: F:代码库搜索工具（Cursor 风格） * * 在工作区中按模式搜索文件内容 | R:- | A:getName,getDescription,getParameters,execute,isEnabled | S:-
+ListDirTool.php[DG5S]: F:列出目录工具（Cursor 风格） | R:- | A:getName,getDescription,getParameters,execute,isEnabled | S:-
+ReadFileTool.php[DG5S]: F:读取文件工具（Cursor 风格） * * 在工作区范围内读取文件内容 | R:- | A:getName,getDescription,getParameters,execute,isEnabled | S:-
+RunTerminalTool.php[DG5S]: F:终端命令执行工具（Cursor 风格） * * 安全执行 Shell 命令，受白名单限制 | R:- | A:getName,getDescription,getParameters,execute,isEnabled | S:-
+SearchReplaceTool.php[DG5S]: F:搜索替换工具（Cursor 风格） * * 在指定文件中搜索并替换文本 | R:- | A:getName,getDescription,getParameters,execute,isEnabled | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/Setup/===
+BotToAgentMigrator.php[OV5S]: F:将历史 Weline_Bot 表与场景适配器引用迁移到 Weline_Agent | R:- | A:migrate | S:-
+Install.php[OV5M]: F:Weline_Agent 模块安装脚本 | R:- | A:setup | S:-
+Upgrade.php[OV5T]: F:Weline_Agent 升级：Bot → Agent 数据迁移 | R:- | A:setup | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/Skill/===
+DatabaseSkill.php[DG5S]: F:数据库查询技能 * * 安全地执行数据库查询（仅支持 SELECT） | R:- | A:__construct,getCode,getName,getDescription,getCategory | S:-
+FilesystemSkill.php[DG5M]: F:文件系统技能 * * 提供文件读写能力 | R:- | A:getCode,getSubSkills,getName,getDescription,getCategory | S:-
+HttpSkill.php[DG5S]: F:HTTP 请求技能 * * 发送 HTTP 请求 | R:- | A:getCode,getName,getDescription,getCategory,getParameters | S:-
+ShellSkill.php[DG5M]: F:Shell 命令执行技能 * * 安全地执行 Shell 命令 | R:- | A:getCode,getName,getDescription,getCategory,getParameters | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/doc/===
+README.md[SI5T]: F:Weline_Agent（智能体） | R:- | A:- | S:-
+开发日志.md[SI5T]: F:Weline_Agent 开发日志 | R:- | A:- | S:-
+需求.md[SI5T]: F:Weline_Agent 需求 | R:- | A:- | S:-
+AI-INDEX.md[SI5T]: F:Weline_Agent AI 开发入口 | R:- | A:- | S:-
+功能现状.md[SI5T]: F:Weline_Agent 功能现状 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/doc/hook/backend/partials/chat/message-tools/===
+message-tools.md[SI5T]: F:Weline 智能体模块 - Hook 文档 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/doc/hook/backend/partials/chat/message/tools/===
+tools.md[SI5T]: F:Weline 智能体模块 - Hook 文档 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/doc/hook/backend/partials/chat/sidebar/===
+sidebar.md[SI5T]: F:Weline 智能体模块 - Hook 文档 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/doc/hook/chat/message/tools/===
+tools.md[SI5T]: F:Weline 智能体模块 - Hook 文档 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/doc/hook/chat/sidebar/===
+sidebar.md[SI5T]: F:Weline 智能体模块 - Hook 文档 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/doc/开发/spec/===
+backend-chat-console.md[SI5T]: F:后台聊天控制台可对话 | R:- | A:- | S:-
+bot-to-agent-rename.md[SI5T]: F:智能体模块重命名为智能体（Agent） | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/doc/开发/team/binquery-mutations/meetings/===
+汇审.md[SI5T]: F:汇审：Agent 写操作 BinQuery 收口 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/doc/开发/team/chat-console/meetings/===
+汇审.md[SI5T]: F:汇审：后台聊天控制台可对话 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/doc/开发/team/hidden-pages-ui/meetings/===
+汇审.md[SI5T]: F:汇审：智能体隐藏页（add/edit/view）UI 2.0 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/etc/backend/===
+menu.xml[FG5T]: F:menu.xml 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/etc/===
+env.php[DG5T]: F:Weline_Agent module environment config | R:- | A:- | S:-
+event.xml[FG5T]: F:event.xml 职责定义 | R:- | A:- | S:-
+module.php[DG5T]: F:module.php 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/===
+extends.php[DG5T]: F:Weline_Agent 扩展点定义 | R:- | A:- | S:-
+hook.php[DG5T]: F:Weline_Agent 模块 Hook 规约文件 * * 本文件定义了 Weline_Agent 模块提供的所有 Hook 扩展点 * H | R:- | A:- | S:-
+register.php[DG5T]: F:Weline_Agent 模块注册文件 * * AI 智能体模块 - 实现从"对话者"到"执行者"的转变 * * @author Welin | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/extends/module/Weline_Ai/Agent/===
+CodingAgent.php[DG5M]: F:编码智能体 * * 专为代码编写、编辑、分析设计的智能体，参考 Cursor 工具能力 | R:- | A:getCode,getName,getDescription,getVersion,getScenarios | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/extends/module/Weline_Framework/Query/===
+AgentQueryProvider.php[DG5M]: F:Agent BinQuery provider (reads + backend mutations) | R:- | A:__construct,getProviderName,execute,getDescriptor | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/i18n/===
+en_US.csv[FL3L]: F:i18n词条 en_US.csv | R:- | A:- | S:-
+zh_Hans_CN.csv[FL3L]: F:i18n词条 zh_Hans_CN.csv | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/view/statics/css/===
+agent-admin.css[EU5L]: F:agent-admin.css 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/view/statics/js/===
+agent-admin-api.js[EU5S]: F:Agent admin BinQuery helper — Weline | R:- | A:- | S:-
+agent-admin-chat.js[EU5M]: F:Agent backend chat console — BinQuery sendMessage / getChatHistory onl | R:- | A:- | S:-
+agent-admin-prototype.js[EU5T]: F:PROTOTYPE ONLY — floating variant switcher for Agent role listing | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/view/templates/Backend/Chat/===
+index.phtml[EU5S]: F:Agent chat console — selectable roles + BinQuery send/history | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/view/templates/Backend/Memory/===
+listing.phtml[EU5S]: F:Memory listing — humanized Weline UI 2 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/view/templates/Backend/Role/===
+form.phtml[EU5L]: F:Role add/edit form — Weline UI 2 | R:- | A:- | S:-
+listing.phtml[EU5M]: F:Role listing — UI prototype host (?variant=A/B/C) | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/view/templates/Backend/Schedule/===
+form.phtml[EU5S]: F:Schedule form — humanized Weline UI 2 | R:- | A:- | S:-
+listing.phtml[EU5S]: F:Schedule listing — humanized Weline UI 2 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/view/templates/Backend/Session/===
+listing.phtml[EU5S]: F:Session listing — humanized Weline UI 2 | R:- | A:- | S:-
+view.phtml[EU5S]: F:Session detail — humanized Weline UI 2 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Agent/view/templates/Backend/Skill/===
+listing.phtml[EU5S]: F:Skill listing — humanized Weline UI 2 | R:- | A:- | S:-
+view.phtml[EU5S]: F:Skill detail — humanized Weline UI 2 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/===
+.php-cs-fixer.php[DG5T]: F:.php-cs-fixer.php 职责定义 | R:- | A:- | S:-
+AI计划.md[SI5L]: F:AI助手工具模块开发计划 | R:- | A:__construct,getApiVersionAndLocale,processLanguageResponse,getVersionPath,loadVersionController | S:-
+README.md[SI5M]: F:Weline AI 模块 | R:- | A:- | S:-
+README_ADAPTER_SCAN.md[SI5M]: F:AI 场景适配器扫描功能说明 | R:- | A:getCode,getName,getDescription,getVersion,getSupportedModelTypes | S:-
+composer.json[FV3T]: F:Ai Composer清单 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Adapter/===
+ArticleGenerationAdapter.php[DG5L]: F:文章生成场景适配器 * * 专为内容模块设计的 AI 文章生成适配器： * - 支持多种文章类型（博客、新闻、产品介绍、落地页等） * -  | R:- | A:getDefaultModelBindings,getCode,getName,getDescription,getVersion | S:-
+CodeGenerationAdapter.php[DG5M]: F:代码生成适配器 * * 专门用于代码生成场景的适配器 * 特点： * - 针对编程语言优化提示词 * - 提取代码块 * - 支持多种编程语 | R:- | A:getCode,getName,getDescription,getVersion,getSupportedModelTypes | S:-
+DefaultAdapter.php[DG5M]: F:默认通用适配器 * * 这是一个最基础的适配器，不做任何处理，直接传递输入和输出 | R:- | A:getCode,getName,getDescription,getVersion,getSupportedModelTypes | S:-
+TranslationAdapter.php[DG5M]: F:翻译场景适配器 * * 功能： * - 专门优化AI翻译任务 * - 提供翻译专用提示词模板 * - 支持多种翻译策略 * - 优化翻译质量 | R:- | A:getCode,getName,getDescription,getVersion,getSupportedModelTypes | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Agent/===
+AgentResult.php[DG5S]: F:智能体执行结果封装 * * 封装智能体执行的完整结果，包括最终内容、工具调用记录、迭代轮次和消息历史 | R:- | A:__construct,toArray,failure | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Api/===
+AdapterModelBindingInterface.php[DG6T]: F:AdapterModelBindingInterface 职责定义 | R:- | A:getDefaultModelBindings | S:-
+AdapterSkillBindingInterface.php[DG6T]: F:AdapterSkillBindingInterface 职责定义 | R:- | A:getDefaultSkillCodes | S:-
+AdapterStyleBindingInterface.php[DG6T]: F:AdapterStyleBindingInterface 职责定义 | R:- | A:getDefaultStyleCodes | S:-
+AgentCatalogInterface.php[DG6T]: F:Public catalog for registered agents, description overrides, and tool  | R:- | A:listCatalog,findByCode,toolPolicy,syncToolsFromAgent,markMissingAgents | S:-
+AgentInterface.php[DG6T]: F:Public contract for module-provided AI agents | R:- | A:getCode,getName,getDescription,getVersion,getScenarios | S:-
+AgentModelExecutor.php[DG5T]: F:Weline_Ai-owned adapter around its internal provider implementations | R:- | A:__construct,generate | S:-
+AgentModelExecutorInterface.php[DG6T]: F:Public execution boundary for Agent implementations that already own a | R:- | A:generate | S:-
+AgentResult.php[DG5T]: F:Data-only result returned by module-provided agents | R:- | A:__construct,toArray,failure | S:-
+AiModel.php[DG5S]: F:Data-only model snapshot supplied to module-provided agents | R:- | A:__construct,fromArray,toArray,getData,getId | S:-
+AiRuntime.php[DG5T]: F:Thin public facade that keeps optional modules off the internal servic | R:- | A:__construct,generate,generateStream,executeAgent,getAgentsForScenario | S:-
+AiRuntimeInterface.php[DG6T]: F:Stable cross-module entry point for text generation and agent executio | R:- | A:generate,generateStream,executeAgent,getAgentsForScenario | S:-
+AiRuntimeInterfaceFactory.php[DG5T]: F:AiRuntimeInterfaceFactory 职责定义 | R:- | A:create | S:-
+ScenarioAdapterInterface.php[DG6T]: F:ScenarioAdapterInterface 职责定义 | R:- | A:getCode,getName,getDescription,getVersion,getSupportedModelTypes | S:-
+ScenarioImageGenerationInterface.php[DG6T]: F:Provider-neutral scenario image boundary published by Weline_Ai | R:- | A:inspectReadiness,generate | S:-
+ScenarioImageGenerationInterfaceFactory.php[DG5T]: F:ScenarioImageGenerationInterfaceFactory 职责定义 | R:- | A:create | S:-
+SecretStoreInterface.php[DG6T]: F:Stable cross-module boundary for encrypted configuration payloads | R:- | A:encryptConfig,decryptConfig | S:-
+SecretStoreInterfaceFactory.php[DG5T]: F:SecretStoreInterfaceFactory 职责定义 | R:- | A:create | S:-
+SkillProviderInterface.php[DG6T]: F:SkillProviderInterface 职责定义 | R:- | A:listSkills | S:-
+StyleProviderInterface.php[DG6T]: F:StyleProviderInterface 职责定义 | R:- | A:listStyles | S:-
+StyleRuntime.php[DG5T]: F:Public facade for the internal style-selection implementation | R:- | A:__construct,resolveSelectionForScope,buildSkillCatalog,buildStyleCatalog,resolveStyleSnapshot | S:-
+StyleRuntimeInterface.php[DG6T]: F:Public style-selection contract used by optional scenario modules | R:- | A:resolveSelectionForScope,buildSkillCatalog,buildStyleCatalog,resolveStyleSnapshot | S:-
+ToolInterface.php[DG6T]: F:ToolInterface 职责定义 | R:- | A:getName,getDescription,getParameters,execute,isEnabled | S:-
+TranslationService.php[DG6T]: F:Public name for the AI translation application service | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Api/Billing/===
+BillingAccountProviderInterface.php[DG6T]: F:Optional account storage used by Ai billing | R:- | A:debit,hasSufficientBalance | S:-
+BillingDebitResult.php[DG5T]: F:BillingDebitResult 职责定义 | R:- | A:accountMissing,insufficient,debited | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Api/Configuration/===
+ProviderAvailability.php[DG5T]: F:ProviderAvailability 职责定义 | R:- | A:__construct | S:-
+ScenarioConfigurationInterface.php[DG6T]: F:ScenarioConfigurationInterface 职责定义 | R:- | A:scenario,activeModels,model,bindModel,scanAdapters | S:-
+ScenarioConfigurationInterfaceFactory.php[DG5T]: F:ScenarioConfigurationInterfaceFactory 职责定义 | R:- | A:create | S:-
+ScenarioRecord.php[DG5T]: F:ScenarioRecord 职责定义 | R:- | A:__construct,getModelBinding | S:-
+UsageSummary.php[DG5T]: F:UsageSummary 职责定义 | R:- | A:__construct,toArray | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Api/Image/===
+ImageRuntime.php[DG5T]: F:ImageRuntime 职责定义 | R:- | A:__construct,resolveModel,generate | S:-
+ImageRuntimeInterface.php[DG6T]: F:ImageRuntimeInterface 职责定义 | R:- | A:resolveModel,generate | S:-
+ImageRuntimeInterfaceFactory.php[DG5T]: F:ImageRuntimeInterfaceFactory 职责定义 | R:- | A:create | S:-
+TextToImageScenarioBindingInterface.php[DG6T]: F:Ai-owned command boundary for resolving and binding text-to-image scen | R:- | A:resolveModelCode,bindIfNeeded | S:-
+TextToImageScenarioBindingInterfaceFactory.php[DG5T]: F:TextToImageScenarioBindingInterfaceFactory 职责定义 | R:- | A:create | S:-
+TextToImageScenarioBindingRequest.php[DG5T]: F:Data-only request for resolving and binding a text-to-image scenario | R:- | A:__construct,getScenarioCode,getReferenceScenarioCodes,getPlaceholderModelCode | S:-
+TextToImageScenarioBindingResult.php[DG5T]: F:Data-only result returned by the text-to-image scenario binding comman | R:- | A:__construct,isBound,getModelCode,getReason,toArray | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Api/Provider/===
+ProviderRuntimeInterface.php[DG6T]: F:Public provider-selection boundary; internal provider objects never es | R:- | A:getProvider | S:-
+ProviderRuntimeInterfaceFactory.php[DG5T]: F:ProviderRuntimeInterfaceFactory 职责定义 | R:- | A:create | S:-
+ProviderSessionInterface.php[DG6T]: F:A provider session bound to one selected provider family | R:- | A:generate,getProviderCode | S:-
+StreamingProviderSessionInterface.php[DG6T]: F:StreamingProviderSessionInterface 职责定义 | R:- | A:generateStreamFull | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Api/Rest/V1/===
+ApiKey.php[DG5S]: F:API Key Management Controller * * @package Weline_Ai | R:- | A:__construct,postIndex,getApiKey,deleteIndex | S:-
+Chat.php[DG5T]: F:Chat API Controller * * @package Weline_Ai | R:- | A:__construct,postIndex | S:-
+Model.php[DG5S]: F:Model API Controller * * @package Weline_Ai | R:- | A:__construct,getModel,postIndex,deleteIndex | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Api/Runtime/===
+RequestResetter.php[DG5T]: F:RequestResetter 职责定义 | R:- | A:resetRequest | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Block/===
+ModelSelect.php[DG5T]: F:ModelSelect 职责定义 | R:- | A:__init | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Console/Ai/Adapter/===
+Scan.php[DG5S]: F:场景适配器扫描CLI命令 * * 功能： * - 扫描并注册场景适配器 * - 更新适配器信息到数据库 * - 清理无效适配器 * - 显示 | R:- | A:__construct,tip,help,execute | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Console/Ai/Agent/===
+Scan.php[DG5S]: F:智能体扫描 CLI 命令 * * 扫描 extends/module/Weline_Ai/Agent/ 下所有模块的智能体实现， * 注册到 | R:- | A:__construct,tip,help,execute | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Console/Ai/===
+Debug.php[DG5M]: F:AI 调试诊断命令 | R:- | A:__construct,execute,tip,help | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Console/Ai/Model/===
+Collect.php[PG6S]: F:AI模型收集CLI命令 * * 功能： * - 扫描并收集AI模型配置 * - 更新模型信息到数据库 * - 显示收集统计信息 | R:- | A:__construct,tip,help,execute | S:-
+DefaultModel.php[PG6M]: F:默认模型管理CLI命令 * * 功能： * - 初始化默认模型配置 * - 验证默认模型配置 * - 显示默认模型信息 * - 清除缓存 | R:- | A:__construct,tip,help,execute | S:-
+Sync.php[PG6S]: F:AI模型同步CLI命令 * * 功能： * - 调用供应商模型列表 API * - 更新供应商 models 配置 * - 自动生成/更新  | R:- | A:__construct,tip,help,execute | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Console/Database/===
+CreateTables.php[DG5T]: F:Console command to manually create AI module database tables | R:- | A:execute,tip,help | S:-
+SeedData.php[DG5T]: F:Console command to seed test data for AI module | R:- | A:execute,tip,help | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Controller/Api/V1/===
+Chat.php[EG7M]: F:AI聊天API控制器 * * 提供类似OpenAI的Chat Completions API * 路径: /ai/api/v1/chat/c | R:- | A:__construct,completions | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Controller/Backend/===
+Adapter.php[EG7L]: F:场景适配器管理后台控制器 * * 功能： * - 场景适配器列表展示 * - 适配器详情查看 * - 适配器状态管理 * - 适配器扫描和更 | R:- | A:index,detailOffcanvas,detail,scan,toggleStatus | S:-
+Agent.php[EG7M]: F:Agent 职责定义 | R:- | A:index,getCatalog,postCatalog,postSave,postSetActive | S:-
+CustomVendor.php[EG7M]: F:本地/自定义 AI 供应商管理 | R:- | A:__construct,index,listJson,editOffcanvas,save | S:-
+DefaultModel.php[EG7L]: F:默认模型管理后台控制器 * * 功能： * - 默认模型配置管理 * - 服务类型模型分配 * - 模型保护状态查看 * - 默认模型验证 | R:- | A:index,postSetDefault,postRemoveDefault,getProtectionStatus,postInitialize | S:-
+Index.php[EG6T]: F:AI 中心默认入口：重定向到 Manager * * 处理 ai/backend/index 和 ai/backend 的访问，统一跳转到  | R:- | A:index | S:-
+Manager.php[EG6T]: F:AI 管理聚合页 * * 模型 / 适配器 / 智能体 / 技能 / 风格 / 供应商账户，URL 持久化 ?tab= * * @packa | R:- | A:index | S:-
+Model.php[EG7L]: F:AI模型管理后台控制器 * * 功能： * - AI模型列表展示 * - 模型详情查看 * - 模型状态管理 * - 模型收集和更新 | R:- | A:index,detail,detailOffcanvas,collect,toggleStatus | S:Query路径以异常拒绝
+Provider.php[EG7L]: F:Provider Account Management Controller * * @package Weline_Ai | R:- | A:__construct,index,getList,getAccountsForSelect,getRemoteModelsForSelect | S:-
+Skill.php[EG7M]: F:Skill 职责定义 | R:- | A:index,getCatalog,postCatalog,postAdapters,postSave | S:-
+Statistics.php[EG6T]: F:AI 使用量统计 * 每日/每周/每月/每年汇总，按模型倒序排名（tokens 最多在前） * * @package Weline_Ai | R:- | A:index,getStats | S:-
+Style.php[EG7M]: F:Style 职责定义 | R:- | A:index,getCatalog,postCatalog,postSave,postDisable | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Controller/Frontend/===
+AiController.php[EG7M]: F:前端AI服务控制器 * 处理前端用户的AI调用请求 | R:- | A:generate,getModels,setModelConfig,getBalance | S:-
+Center.php[EG7M]: F:用户个人中心控制器 * * 功能： * - 用户API密钥管理 * - 使用统计查看 * - 个人设置 | R:- | A:__construct,index,apiKeys,createApiKey,deleteApiKey | S:-
+Chat.php[EG7S]: F:AI聊天界面控制器 * * 功能： * - 提供聊天界面 * - 支持文本、图片、音频、视频等多媒体聊天 * - 通过可恢复后台任务提供流式 | R:- | A:__construct,index,history,clearHistory | S:-
+Index.php[EG7M]: F:AI工具介绍页面控制器 * * 功能： * - 展示AI助手工具功能介绍 * - 显示可用的AI模型列表 * - 显示场景适配器说明 * - | R:- | A:__construct,index,features,guide,pricing | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Cron/===
+ModelSync.php[DG5T]: F:AI模型自动同步任务 | R:- | A:name,execute_name,tip,cron_time,execute | S:-
+UsageAuditRecovery.php[DG5T]: F:Bounded recovery for provider usage records deferred outside SQLite | R:- | A:__construct,name,execute_name,tip,cron_time | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Exception/===
+AiBillingException.php[DG5T]: F:AI 供应商账户余额 / 配额 / 可用性类失败，携带稳定 billing_code 供上层分类 | R:- | A:__construct,getBillingCode,classifyMessageToCode,fromMessage | S:-
+AiTransportException.php[DG5T]: F:Local/remote AI HTTP transport failure (connect refused, DNS, reset, e | R:- | A:- | S:-
+ModelSelectionException.php[DG5T]: F:未解析到可用 AI 模型（场景默认 / 全局默认等均不可用） | R:- | A:- | S:-
+StreamCancelledException.php[DG5T]: F:StreamCancelledException 职责定义 | R:- | A:- | S:-
+TranslationBusyException.php[DG5T]: F:Expected single-flight contention on a translation lane | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Helper/===
+ErrorMessageHelper.php[DG5M]: F:错误消息辅助类 * * 用于生成包含配置链接的错误消息，方便其他模块集成时直接跳转配置 * * @package Weline_Ai | R:- | A:getErrorMessageWithConfigLink,getMissingApiKeyMessage,getMissingAccountMessage,getIncompleteAccountMessage,formatAiCallFailureMessage | S:-
+PerformanceHelper.php[DG5S]: F:性能辅助类 * * 提供通用的性能相关工具方法 * * @package Weline_Ai | R:- | A:formatBytes,calculateStats,formatStats,logPerformanceStats,measure | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Interface/===
+AdapterModelBindingInterface.php[DG6T]: F:Allows scenario adapters to declare first-install model bindings | R:- | A:getDefaultModelBindings | S:-
+AdapterSkillBindingInterface.php[DG6T]: F:deprecated Implement \Weline\Ai\Api\AdapterSkillBindingInterface | R:- | A:getDefaultSkillCodes | S:-
+AdapterStyleBindingInterface.php[DG6T]: F:deprecated Implement \Weline\Ai\Api\AdapterStyleBindingInterface | R:- | A:getDefaultStyleCodes | S:-
+AgentInterface.php[DG7S]: F:智能体接口 * * 功能： * - 定义智能体的标准接口 * - 支持 Tool 调用编排循环（plan → act → observe）  | R:- | A:getCode,getName,getDescription,getVersion,getScenarios | S:-
+ScenarioAdapterInterface.php[DG7S]: F:场景适配器接口 * * 功能： * - 定义场景适配器的标准接口 * - 提供场景专用的AI生成优化 * - 支持提示词模板和参数处理 *  | R:- | A:getCode,getName,getDescription,getVersion,getSupportedModelTypes | S:-
+SkillProviderInterface.php[DG6T]: F:deprecated Implement \Weline\Ai\Api\SkillProviderInterface | R:- | A:listSkills | S:-
+StyleProviderInterface.php[DG6T]: F:deprecated Implement \Weline\Ai\Api\StyleProviderInterface | R:- | A:listStyles | S:-
+ToolInterface.php[DG7T]: F:智能体工具接口 * * 功能： * - 定义 AI 智能体可调用的工具的标准接口 * - 工具名称、描述、参数定义供 AI function | R:- | A:getName,getDescription,getParameters,execute,isEnabled | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/===
+.gitattributes[ZG5T]: F:.gitattributes 职责定义 | R:- | A:- | S:-
+.gitignore[ZG5T]: F:.gitignore 职责定义 | R:- | A:- | S:-
+LICENSE[ZG5M]: F:name 职责定义 | R:- | A:- | S:-
+README.en.md[SI5T]: F:Weline Project Intelligence MCP | R:- | A:- | S:-
+README.ja.md[SI5T]: F:Weline Project Intelligence MCP | R:- | A:- | S:-
+README.md[SI5T]: F:Weline Project Intelligence MCP | R:- | A:- | S:-
+composer.json[FV3T]: F:Mcp Composer清单 | R:- | A:- | S:-
+config.example.yaml[FG5M]: F:- | R:- | A:- | S:-
+install.ps1[ZG5S]: F:install.ps1 职责定义 | R:- | A:- | S:-
+install.sh[ZG5T]: F:install.sh 职责定义 | R:- | A:- | S:-
+package.json[FG3T]: F:package.json 职责定义 | R:- | A:- | S:-
+start.bat[ZG5S]: F:start.bat 职责定义 | R:- | A:- | S:-
+start.sh[ZG5T]: F:start.sh 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/bin/===
+cursor-learning-hook[ZG5S]: F:cursor-learning-hook 职责定义 | R:- | A:- | S:-
+learning-mcp[ZG5T]: F:learning-mcp 职责定义 | R:- | A:- | S:-
+learningctl[ZG5T]: F:learningctl 职责定义 | R:- | A:- | S:-
+learningd[ZG5T]: F:learningd 职责定义 | R:- | A:- | S:-
+php-symbol-parser-worker[ZG5T]: F:php-symbol-parser-worker 职责定义 | R:- | A:- | S:-
+project-routing-guard.php[DG5T]: F:project-routing-guard.php 职责定义 | R:- | A:- | S:-
+weline-mcp-install[ZG5T]: F:weline-mcp-install 职责定义 | R:- | A:- | S:-
+weline-mcp.js[EG5T]: F:weline-mcp.js 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/docs/===
+ARCHITECTURE.md[SI5T]: F:Architecture | R:- | A:- | S:-
+IMPLEMENTATION-STATUS.md[SI5T]: F:Implementation status — 0.13.0 | R:- | A:- | S:-
+OPERATIONS.md[SI5S]: F:Operations | R:- | A:- | S:-
+PROJECT-INTELLIGENCE.md[SI5T]: F:Project Intelligence contracts | R:- | A:- | S:-
+SECURITY.md[SS5T]: F:Security boundary | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/docs/superpowers/plans/===
+2026-08-12-php-parser-memory.md[SI5S]: F:PHP Parser Memory and Isolation Implementation Plan | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/examples/===
+codex-config.toml[ZG5T]: F:codex-config.toml 职责定义 | R:- | A:- | S:-
+codex-hooks.json[FG3T]: F:codex-hooks.json 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/index-migrations/===
+001_project_intelligence.sql[ZG5M]: F:001_project_intelligence.sql 职责定义 | R:- | A:- | S:-
+002_indexed_file_contents.sql[ZG5T]: F:002_indexed_file_contents.sql 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/migrations/===
+001_initial.sql[ZG5M]: F:001_initial.sql 职责定义 | R:- | A:- | S:-
+003_data_lifecycle.sql[ZG5T]: F:003_data_lifecycle.sql 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/prompts/extractor/===
+system.txt[SG5T]: F:system.txt 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/prompts/verifier/===
+system.txt[SG5T]: F:system.txt 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/schemas/===
+doc-sync.v1.json[FG3S]: F:doc-sync.v1.json 职责定义 | R:- | A:- | S:-
+event.v1.json[FG3T]: F:event.v1.json 职责定义 | R:- | A:- | S:-
+experience.v1.json[FG3T]: F:experience.v1.json 职责定义 | R:- | A:- | S:-
+guidance-bundle.v1.json[FG3T]: F:guidance-bundle.v1.json 职责定义 | R:- | A:- | S:-
+learning-skills.v1.json[FG3T]: F:learning-skills.v1.json 职责定义 | R:- | A:- | S:-
+project-readiness.v1.json[FG3T]: F:project-readiness.v1.json 职责定义 | R:- | A:- | S:-
+proposal.v1.json[FG3T]: F:proposal.v1.json 职责定义 | R:- | A:- | S:-
+session-learning.v1.json[FG3S]: F:session-learning.v1.json 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/scripts/===
+bootstrap-windows.ps1.txt[SG5T]: F:bootstrap-windows.ps1.txt 职责定义 | R:- | A:- | S:-
+ensure-cursor-mcp.php[DG5T]: F:Cursor adapter: probe only — session installs MCP from guidance steps | R:- | A:- | S:-
+ensure-host-mcp-registrations.php[DG5T]: F:Multi-host MCP install guidance orchestrator | R:- | A:- | S:-
+ensure-project-guidance.php[DG5L]: F:Step 0 bootstrap: verify Weline project guidance host state and auto-r | R:- | A:- | S:-
+install.php[DG5L]: F:install.php 职责定义 | R:- | A:- | S:-
+project-guidance-host-editor-rules.php[DG5T]: F:Ensure helper: sync MCP-generated Cursor alwaysApply rules into the re | R:- | A:- | S:-
+project-guidance-mcp-install.php[DG5L]: F:Host MCP install guidance — probe host state and emit session-executab | R:- | A:- | S:-
+project-guidance-mcp-server.php[DG5L]: F:Shared Weline project-intelligence MCP registration builder for all ho | R:- | A:- | S:-
+project-guidance-reload-policy.php[DG5T]: F:Report MCP refresh needs without restarting the shared Codex app-serve | R:- | A:- | S:-
+project-guidance-required-tools.php[DG5T]: F:Host-visible MCP tools that every attached Cursor/Codex session must e | R:- | A:- | S:-
+project-guidance-runtime-time.php[DG5T]: F:Parse the portable `ps -o etime=` format: [[days-]hours:]minutes:secon | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Mcp/src/===
+Analyzer.php[DG5L]: F:ModelAnalyzer 职责定义 | R:- | A:extract,verify,metadata,__construct,extract | S:-
+AociInstaller.php[DG5M]: F:本机工具安装只执行一次；成功标志跨项目、跨宿主共享 | R:- | A:__construct,ensure | S:-
+Cli.php[DG5L]: F:Cli 职责定义 | R:- | A:runCtl,runDaemon,runMcp | S:-
+CodexInvoker.php[DG5L]: F:CodexInvoker 职责定义 | R:- | A:__construct,metadata,planDocumentation,extractSessionLearning,classifyLearningSkills | S:-
+Collector.php[DG5L]: F:Collector 职责定义 | R:- | A:__construct,ingest | S:-
+Config.php[DG5L]: F:Config 职责定义 | R:- | A:load,defaultPath,get,dataDir,duration | S:-
+ContextResponseBudget.php[DG5T]: F:Budget guidance at its serialized boundary; editable regions are never | R:- | A:estimate,fit | S:-
+CursorLearningHookAdapter.php[DG5S]: F:Maps Cursor Agent hook stdin JSON onto learningctl Collector payloads | R:- | A:adapt,mapEvent,defaultCursorResponse | S:-
+DocSkillCatalog.php[DG5L]: F:Extracts development skills from module doc skill indexes into MCP cat | R:- | A:extractSkills,extractCommands,greetingCatalog | S:-
+FrameworkBranchGuard.php[DG5S]: F:Enforces the framework repository dev/master delivery contract | R:- | A:developmentBlocker | S:-
+FrameworkPlanCandidates.php[DG5S]: F:Index/heuristic framework candidates for resolve_task_context | R:- | A:build | S:-
+GitSafetyPolicy.php[DG5S]: F:Fail-closed Git boundary for MCP-owned child processes | R:- | A:assertNonDestructive | S:-
+GuidanceWorkflowCatalog.php[DG5L]: F:Pinned workflow guidance merged into resolve_task_context (read-only g | R:- | A:pinnedDocumentPaths,sessionStartupNotices,closeoutDeliveryReminder,featureDeliveryUrls,chapterDelivery | S:-
+HardConstraintsCatalog.php[DG5L]: F:Compiles framework hard constraints from Ai/doc into MCP-facing hard-c | R:- | A:package,hostCodexDelegation,preamble,mcpInstructions,rules | S:-
+HostCursorHooksGenerator.php[DG5S]: F:MCP-owned Cursor hooks | R:- | A:sync | S:-
+HostEditorRulesGenerator.php[DG5S]: F:MCP-owned host editor rule artifacts (Cursor alwaysApply | R:- | A:coldStartMdc,syncCursorRules,syncCursorRulesAndHooks | S:-
+ImpactSurfacesCatalog.php[DG5M]: F:Cross-layer impact inventory for entity/field change requirements | R:- | A:detectsEntityFieldChange,implicitLooksEmptyOnly,buildImpactCandidates | S:-
+IndexGarbageCollector.php[DG5L]: F:IndexGarbageCollector 职责定义 | R:- | A:__construct,sweep | S:-
+IndexSidecar.php[DG5L]: F:Small local-only Unix-socket sidecar that coalesces Hook refresh event | R:- | A:enqueue,status | S:-
+IntelligenceService.php[DG7L]: F:Project-scoped facade for the persistent code, documentation, and skil | R:- | A:__construct,__destruct,call,metadata,assertProjectReadiness | S:-
+KnowledgeService.php[DG7M]: F:Compatibility facade for module-document freshness | R:- | A:__construct,moduleFor,checkDrift,prepareSync,afterIndexed | S:-
+LearningNoveltyService.php[DG7L]: F:Compare a session-derived experience with both the Experience store an | R:- | A:__construct,persist | S:-
+LearningSkillService.php[DG6T]: F:0 | R:- | A:__construct,projectionFingerprint,configuredOutputDirectory,configuredRepositoryOutputPrefix,isGeneratedSkillPath | S:-
+McpServer.php[DG5M]: F:McpServer 职责定义 | R:- | A:__construct,run,__construct | S:-
+McpSkillCatalog.php[DG5L]: F:MCP-native skill catalog served by resolve_skill / get_skill | R:- | A:policy,engineeringTeamSeatSkillMirrors,summary,definitions,workflowDefinitions | S:-
+OpenAIAnalyzer.php[DG5M]: F:OpenAIAnalyzer 职责定义 | R:- | A:__construct,extract,verify,metadata | S:-
+PhpParserResultDecoder.php[DG5M]: F:Floor for tiny payloads — enough for json_decode overhead, not a fake  | R:- | A:decode | S:-
+PhpSymbolParser.php[DG5L]: F:Tolerant token-based PHP/PHTML parser | R:- | A:parse | S:-
+PhpTokenBuffer.php[DG5T]: F:Memory-bounded random access over PHP's native tokenizer output | R:- | A:__construct,count,offsetExists,offsetGet,offsetSet | S:-
+ProcessRunner.php[DG5M]: F:Run an argv-only child process without involving a shell | R:- | A:run | S:-
+ProjectAutoContext.php[DG5S]: F:Builds the small, deterministic SessionStart routing context and start | R:- | A:__construct,describe,canSpawn,spawnIndex | S:-
+ProjectIndex.php[DG5L]: F:ProjectIndex 职责定义 | R:- | A:__construct,root,projectId,path,pdo | S:-
+ProjectIndexer.php[DG5L]: F:Hard safety excludes that are always kept outside editable scope and i | R:- | A:__construct,index,indexPaths,discoverContextPaths | S:-
+ProjectReadinessService.php[DG7L]: F:Session-bound readiness gate for Weline module knowledge | R:- | A:__construct,prepare,repair,assertReady | S:-
+ProjectResolver.php[DG5S]: F:ProjectResolver 职责定义 | R:- | A:resolve | S:-
+ProjectRetriever.php[DG5L]: F:ProjectRetriever 职责定义 | R:- | A:__construct,search,resolveContext,expectedContextRolesForTask,inspectSymbol | S:-
+ProjectRoutingGuard.php[DG5T]: F:Compatibility Hook adapter | R:- | A:__construct,handle | S:-
+RepositoryScope.php[DG5S]: F:Bounds MCP index/refresh/GC work to one attached project repository | R:- | A:projectDataDir,boundRepository,isAllowed,assertAllowed,boundGeneration | S:-
+Scheduler.php[DG5M]: F:Scheduler 职责定义 | R:- | A:__construct,label,plistPath,renderPlist,install | S:-
+SessionIdentity.php[DG5T]: F:SessionIdentity 职责定义 | R:- | A:__construct,hash | S:-
+SessionLifecycleService.php[DG7S]: F:SessionLifecycleService 职责定义 | R:- | A:__construct,archive,sweep | S:-
+SparseVectorizer.php[DG5S]: F:SparseVectorizer 职责定义 | R:- | A:__construct,dimensions,tokens,vectorize,vectorizeTokens | S:-
+Store.php[DG5L]: F:Internal shared connection for durable execution-run services | R:- | A:__construct,path,database,close,schemaVersion | S:-
+Support.php[DG5M]: F:Clock 职责定义 | R:- | A:now,resolve,isUsable,encode,object | S:-
+SystemConfigTermRouting.php[DG5S]: F:Single lexicon so MCP retrieval / role routing maps configuration voca | R:- | A:pathIntentNeedles,pathIntentPaths,queryExpansions,contextRoleNeedles,contextRoles | S:-
+ToolService.php[DG7L]: F:MCP server instructions: bootstrap + hard-constraints preamble (bodies | R:- | A:instructions,__construct,definitions,call | S:-
+Worker.php[DG5M]: F:Worker 职责定义 | R:- | A:__construct,runOnce,drain,run,spawnDrain | S:-
+bootstrap.php[DG9T]: F:bootstrap.php 职责定义 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Middleware/===
+ApiKeyMiddleware.php[DG5S]: F:API密钥验证中间件 * * 功能： * 1 | R:- | A:__construct,handle | S:-
+Auth.php[DI5S]: F:API 认证中间件 * * 功能： * - 验证 API Key 有效性 * - 检查配额限制 * - 记录使用情况 * - 设置认证上下文 | R:- | A:__construct,handle | S:-
+ComprehensiveErrorHandler.php[DG5L]: F:综合错误处理中间件 * 处理所有类型错误包括数据库、API、业务逻辑、网络、文件系统错误 * * @author WelineFramewo | R:- | A:__construct,process | S:-
+ContentSafety.php[DG5T]: F:内容安全检查中间件 | R:- | A:handle | S:-
+ErrorHandler.php[DG5T]: F:错误处理中间件 | R:- | A:handle | S:-
+Logging.php[DG5S]: F:请求/响应日志中间件 * * 功能： * - 记录 API 请求日志 * - 记录响应时间 * - 记录错误信息 * - 性能监控数据 *  | R:- | A:__construct,handle | S:-
+PerformanceMonitor.php[DG5T]: F:性能监控中间件 | R:- | A:handle | S:-
+RateLimit.php[DG5T]: F:限流中间件 | R:- | A:handle | S:-
+Security.php[DS5M]: F:CORS 和安全头中间件 * * 功能： * - 处理 CORS 跨域请求 * - 添加安全响应头 * - 防止 XSS 攻击 * - 防止 | R:- | A:__construct,handle,setAllowedOrigins | S:-
+SecurityScan.php[DS5T]: F:安全扫描中间件 | R:- | A:handle | S:-
+TenantContext.php[DG5T]: F:租户上下文中间件 | R:- | A:handle,mergeTenantContext,getTenantContext,resetRequestState | S:-
+TenantIsolation.php[DG5S]: F:多租户隔离中间件 * * 功能： * - 验证租户上下文 * - 设置租户数据隔离 * - 防止跨租户数据访问 * - 记录租户活动 * * | R:- | A:__construct,handle,getCurrentTenantId,hasTenantContext | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Model/===
+AiAdapterSkill.php[PG6T]: F:AiAdapterSkill 职责定义 | R:- | A:getId | S:-
+AiAdapterStyle.php[PG6T]: F:AiAdapterStyle 职责定义 | R:- | A:getId | S:-
+AiAgent.php[PG6S]: F:AI 智能体模型 * * 功能： * - 管理智能体注册信息 * - 存储智能体元数据（名称、描述、场景、版本等） * - 支持智能体的启用 | R:- | A:_init,getScenarios,supportsScenario,save_before | S:-
+AiAgentTool.php[PG6T]: F:AiAgentTool 职责定义 | R:- | A:_init,save_before | S:-
+AiApiCallLog.php[PG6T]: F:API调用日志模型 | R:- | A:_init | S:-
+AiApiKey.php[PG6S]: F:AI API Key Entity * * Manages API keys with quota tracking and status  | R:- | A:_init,getIdFieldName,isActive,isExpired,hasQuota | S:-
+AiBillingInvoice.php[PG6T]: F:AI Billing Invoice Entity * * Records billing invoices | R:- | A:- | S:-
+AiBillingPlan.php[PG6T]: F:AI Billing Plan Entity * * Defines billing plans and pricing strategie | R:- | A:- | S:-
+AiDefaultModel.php[PG6T]: F:AI Default Model Configuration Entity * * Manages default model config | R:- | A:_init,getIdFieldName,getModelCode,getServiceType,getPriority | S:-
+AiModel.php[PG6L]: F:AI Model Entity * * Represents an AI model with its metadata, configur | R:- | A:_init,getIdFieldName,isCopy,isOriginal,getOriginModelId | S:-
+AiScenarioAdapter.php[PG6M]: F:AI场景适配器模型 * * 功能： * - 管理场景适配器信息 * - 存储适配器配置和元数据 * - 支持适配器的启用/禁用 * - 提供 | R:- | A:_init,getSupportedModels,setSupportedModels,getParamTemplate,setParamTemplate | S:-
+AiSkill.php[PG6T]: F:AiSkill 职责定义 | R:- | A:getId,getCode,getStatus,isActive | S:-
+AiStyle.php[PG6S]: F:AiStyle 职责定义 | R:- | A:getId,getCode,getStatus | S:-
+AiTenant.php[PG6S]: F:AI Tenant Entity * * @package Weline_Ai | R:- | A:_init,getIdFieldName,isActive,getConfig,hasQuota | S:-
+AiTenantUser.php[PG6T]: F:AI Tenant User Entity * * Manages tenant-user associations | R:- | A:- | S:-
+AiUsageLog.php[PG6T]: F:AI Usage Log Entity * * Records detailed API call logs | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Model/Provider/===
+Account.php[PG6S]: F:AI Provider Account Model * * 管理AI供应商账户，包括API凭证、余额、连通性状态等 * * @package | R:- | A:_init,getIdFieldName,getDecryptedApiKey,setEncryptedApiKey,getProxyConfig | S:-
+CustomVendor.php[PG6T]: F:自定义/本地 AI 供应商定义（OpenAI 兼容） * * @package Weline_Ai | R:- | A:_init,getIdFieldName,getConfig,isActive | S:-
+UsageRecord.php[PG6S]: F:AI Provider Usage Record Model * * 记录AI供应商账户的使用记录，包括Token消耗、费用等 * * @p | R:- | A:_init,getIdFieldName,calculateCost | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Observer/===
+ModuleUpgradeAdapterScanObserver.php[DG7S]: F:模块升级后自动扫描场景适配器 Observer * * 功能： * - 监听模块升级事件 * - 自动扫描场景适配器 * - 注册新发现的适 | R:- | A:__construct,execute | S:-
+SetupUpgradeAfter.php[DG7S]: F:系统升级后自动扫描AI模块资源 Observer * * 功能： * - 监听系统升级完成事件（Weline_Framework_Setup | R:- | A:__construct,execute | S:-
+TranslationRequestObserver.php[DG7T]: F:AI-side implementation of the neutral I18n machine-translation request | R:- | A:__construct,execute | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Service/===
+AdapterScanner.php[DG5L]: F:场景适配器扫描器服务 * * 功能： * - 自动扫描适配器目录 * - 注册新发现的适配器 * - 更新适配器信息 * - 验证适配器有效 | R:- | A:__construct,scanAllAdapters,getDefaultModelCodeForAdapter,getAdapter,getAllActiveAdapters | S:-
+AgentScanner.php[DG5L]: F:智能体扫描器服务 * * 功能： * - 自动扫描 Agent 目录（内置 + 扩展模块） * - 注册/更新智能体到数据库 * - 按场景 | R:- | A:__construct,scanAllAgents,getAgent,getAgentsForScenario,getAllActiveAgents | S:-
+AiApiKeyService.php[DG7S]: F:AI API Key Service * * 功能： * - API 密钥生成和管理 * - 密钥加密存储 * - 密钥验证 * - 使用量 | R:- | A:__construct,createApiKey,validateToken,recordUsage,resetDailyUsage | S:-
+AiChatService.php[DG6T]: F:AiChatService 职责定义 | R:- | A:__construct,chat | S:-
+AiConversationFileSessionService.php[DG7M]: F:基于文件的轻量会话历史存储 | R:- | A:hasSessionId,buildHistoryMessages,appendTurn,getSession,clearSession | S:-
+AiModelService.php[DG7M]: F:AI Model Service * * Handles business logic for AI model management in | R:- | A:__construct,getById,getByCode,copyModel,deleteModel | S:-
+AiRuntimeContext.php[DG5T]: F:AiRuntimeContext 职责定义 | R:- | A:mergeDefaultParams,setDefaultParams,hasDefaultParams,getDefaultParams,removeDefaultParams | S:-
+AiService.php[DG7L]: F:AI服务核心类 * * 功能： * - 提供统一的AI服务接口 * - 支持多种服务模式（API和PHP静态方法） * - 集成场景适配器系 | R:- | A:__construct,generateText,generateTextStream,isStreamEnabled,getStreamConfig | S:-
+AiTenantService.php[DG6T]: F:AiTenantService 职责定义 | R:- | A:__construct,getById,getByDomain | S:-
+ArticleGenerationService.php[DG7S]: F:文章生成服务 * * 封装 AI 文章生成，基于 ArticleGenerationAdapter 和 AiService， * 供内容模块 | R:- | A:__construct,generateBlogArticle,generateArticle,generateArticleStream | S:-
+BillingManager.php[DG5L]: F:计费管理服务 * * 功能： * - 计费计划管理 * - 发票生成和管理 * - 支付处理 * - 使用量计费 * - 订阅管理 | R:- | A:__construct,getAllBillingPlans,getBillingPlan,createBillingPlan,generateInvoice | S:-
+BillingService.php[DG7M]: F:计费服务 | R:- | A:__construct,calculateCost,deductBalance,updateApiKeyUsage,checkQuota | S:-
+CacheService.php[DG7M]: F:缓存服务 * * 功能： * - 响应缓存 * - 模型缓存 * - 配置缓存 * - 性能优化 | R:- | A:__construct,getResponseCache,setResponseCache,getModelCache,setModelCache | S:-
+ConfigResolver.php[DG5M]: F:AI配置解析服务 * 处理多层级配置优先级： * 1 | R:- | A:resolveConfig,checkUserBalance,recordUsage | S:-
+DefaultModelManager.php[DG5M]: F:Default Model Manager Service * * Manages default model configurations | R:- | A:__construct,getDefaultModelForService,getAllByServiceType,setDefault,clearDefaults | S:-
+I18nIntegration.php[DG5M]: F:I18n模块集成服务 * * 功能： * - 与I18n模块集成 * - 获取支持的语言列表 * - 验证语言有效性 * - 提供语言信息查 | R:- | A:__construct,getSupportedLocales,getDefaultLocale,isLocaleSupported,getLocaleInfo | S:-
+ModelCollector.php[DG5L]: F:AI模型收集器服务 * * 功能： * - 自动扫描模型配置文件 * - 注册新发现的模型到数据库 * - 更新现有模型信息 * - 支持模 | R:- | A:__construct,collectAllModels,registerModelFromArray,deleteModel,batchDeleteModels | S:-
+ModelService.php[DG7S]: F:复制模型：默认复用原始供应商引用；当 options['clone_supplier'] = true 时创建新的供应商记录并引用它 | R:- | A:copyModel,deleteModel | S:-
+MultiTenantManager.php[DG5L]: F:多租户管理服务 * * 功能： * - 租户创建和管理 * - 租户用户管理 * - 租户权限控制 * - 资源配额管理 * - 租户数据隔 | R:- | A:__construct,createTenant,getTenant,setCurrentTenant,getCurrentTenant | S:-
+QueueService.php[DG7M]: F:队列服务 * * 功能： * - 异步任务处理 * - 延迟任务执行 * - 任务优先级管理 * - 失败重试机制 * * 注意：这是基于缓 | R:- | A:__construct,push,pop,complete,fail | S:-
+ScenarioImageGenerationGateway.php[DG5S]: F:The public scenario-only image boundary | R:- | A:__construct,inspectReadiness,generate | S:-
+SecretStoreService.php[DG7M]: F:SecretStore 加密服务 * * 功能： * - API 密钥加密/解密 * - 敏感数据保护 * - 密钥派生 * - 安全令牌生 | R:- | A:__construct,encryptApiKey,decryptApiKey,encrypt,decrypt | S:-
+SecurityService.php[DS7M]: F:安全服务 * * 功能： * - API密钥验证 * - 速率限制 * - 内容安全检查 * - 访问控制 | R:- | A:__construct,validateApiKey,checkRateLimit,checkContentSafety,checkPermission | S:-
+SkillStyleTrace.php[DG5T]: F:SkillStyleTrace 职责定义 | R:- | A:log | S:-
+TranslationConcurrencyGate.php[DG5M]: F:Single-flight gate for local/machine translation calls — **per product | R:- | A:acquire,release,isBusyMarker,isBusy | S:-
+TranslationHelper.php[DG5S]: F:AI模块翻译助手服务 * * 功能： * - 提供统一的翻译方法 * - 支持控制器和模板中的翻译 * - 集成Weline框架的翻译机制 | R:- | A:translate,getAiTranslation,getMessage | S:-
+TranslationService.php[DG7L]: F:翻译服务 * * 功能： * - 提供AI翻译功能 * - 支持翻译缓存 * - 多种翻译策略（轻量/高保真） * - 成本控制和并发限制 | R:- | A:__construct,translate,isJunkTranslation,batchTranslate,salvageCompleteJsonArrayItems | S:-
+UsageStatisticsService.php[DG7S]: F:AI 使用量统计服务 * 按日/周/月/年汇总 m_ai_usage_log，并支持按模型倒序排名（tokens 最多在前） | R:- | A:__construct,getPeriodRange,getPeriodSummary,getModelRanking,getStatsForPanel | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Service/Agent/===
+AgentCatalogService.php[DG7L]: F:AgentCatalogService 职责定义 | R:- | A:__construct,listCatalog,findByCode,toolPolicy,syncToolsFromAgent | S:Query路径以异常拒绝
+AgentExecutionContext.php[DG5T]: F:Request-scoped agent code for runtime tool governance | R:- | A:enter,leave,currentAgentCode,reset | S:-
+AgentGovernance.php[DG5S]: F:Applies catalog overrides and tool enablement to function-calling tool | R:- | A:__construct,governToolDefs,applyToToolDefs,applyPolicyToToolDefs | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Service/Configuration/===
+ScenarioConfiguration.php[DG5M]: F:ScenarioConfiguration 职责定义 | R:- | A:__construct,scenario,activeModels,model,bindModel | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Service/Image/===
+ImageGenerationSizeResolver.php[DG5S]: F:Derives a provider-safe request size when callers only supply aspect/t | R:- | A:resolve | S:-
+TextToImageScenarioBindingManager.php[DG5L]: F:Ai-owned implementation for selecting and binding a usable text-to-ima | R:- | A:__construct,resolveModelCode,bindIfNeeded | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Service/Provider/===
+AccountService.php[DG7L]: F:Provider Account Service * * 管理AI供应商账户的核心服务 * * @package Weline_Ai | R:- | A:__construct,getSupportedProviders,getProviderByModelCode,getProviderByModel,getAvailableAccount | S:Query路径以异常拒绝
+AnthropicProvider.php[DG5L]: F:Anthropic Claude API提供者 * * 功能： * - 调用Anthropic Claude API生成内容 * - 支持流 | R:- | A:__construct,generate,generateStream,supports,getProviderCode | S:-
+CustomVendorService.php[DG7L]: F:自定义/本地供应商登记与目录合成 | R:- | A:getPresets,normalizeCode,assertCodeAvailable,listRows,toVendorConfig | S:-
+GeminiProvider.php[DG5L]: F:GeminiProvider 职责定义 | R:- | A:generate,generateStream,generateImage,supports,getProviderCode | S:-
+ImageGenerationProviderInterface.php[DG6T]: F:ImageGenerationProviderInterface 职责定义 | R:- | A:generateImage | S:-
+ImageGenerationResponseNormalizer.php[DG5M]: F:ImageGenerationResponseNormalizer 职责定义 | R:- | A:normalize,fromOpenAiImageResponse,fromGeminiGenerateContentResponse | S:-
+MockProvider.php[DG5S]: F:模拟AI提供者 * * 功能： * - 用于测试和开发 * - 不调用实际的AI API * - 返回模拟数据 | R:- | A:generate,generateStream,supports,getProviderCode,getSupportedModels | S:-
+ModelListingProviderInterface.php[DG6T]: F:Providers expose their remote model listing here instead of duplicatin | R:- | A:supportsModelsApi,listRemoteModels | S:-
+ModelListingProviderTrait.php[DG5L]: F:ModelListingProviderTrait 职责定义 | R:- | A:supportsModelsApi,listRemoteModels | S:-
+ModelSyncService.php[DG7L]: F:AI 供应商模型同步服务 * * 功能： * - 调用供应商模型列表 API * - 将合并后的模型仅写入数据库（不写 etc/models | R:- | A:__construct,syncAllProviders,syncProvider,mergeModels,mergeModelMeta | S:-
+OpenAiProvider.php[DG5L]: F:OpenAI API提供者 * * 功能： * - 调用OpenAI API生成内容 * - 支持流式响应 * - 支持代理配置 * - 错 | R:- | A:__construct,generate,generateImage,generateStreamFull,generateStream | S:-
+ProviderConnectionTestInterface.php[DG6T]: F:ProviderConnectionTestInterface 职责定义 | R:- | A:testConnection | S:-
+ProviderConnectionTestTrait.php[DG5M]: F:ProviderConnectionTestTrait 职责定义 | R:- | A:testConnection | S:-
+ProviderFactory.php[DG5S]: F:AI提供者工厂 * * 功能： * - 根据模型选择合适的提供者 * - 管理提供者实例 * - 提供者注册和发现 | R:- | A:getProvider,create,registerProvider,getAllProviders | S:-
+ProviderInterface.php[DG7T]: F:AI提供者接口 * * 所有AI服务提供者必须实现此接口 | R:- | A:generate,generateStream,supports,getProviderCode,getSupportedModels | S:-
+ProviderRuntime.php[DG5T]: F:ProviderRuntime 职责定义 | R:- | A:__construct,getProvider | S:-
+ProviderSession.php[DG5T]: F:ProviderSession 职责定义 | R:- | A:__construct,generate,getProviderCode | S:-
+ProviderTimeoutPolicy.php[DG5S]: F:ProviderTimeoutPolicy 职责定义 | R:- | A:resolveRequestTimeout,resolveStreamTimeout,resolveImageGenerationTimeout,resolveExecutionTimeLimit,resolveLowSpeedTime | S:-
+StreamingProviderSession.php[DG5T]: F:StreamingProviderSession 职责定义 | R:- | A:generateStreamFull | S:-
+UsageAuditLegacyBackfill.php[DG5M]: F:One-time data migration for usage rows created before request-key audi | R:- | A:plan,planUnapplied,backfill | S:-
+UsageAuditOutbox.php[DG5L]: F:Filesystem fallback for provider usage writes that cannot reach the da | R:- | A:__construct,defer,acknowledge,recover,pendingCount | S:-
+VectorEngineProvider.php[DG5L]: F:VectorEngine provider | R:- | A:generate,generateStream,testConnection,generateImage,supports | S:-
+VendorConfigManager.php[DG5M]: F:供应商配置管理器 * * 负责动态读取和管理供应商配置文件，并合并 DB 自定义/本地供应商 * * @package Weline_Ai | R:- | A:getSupportedProviders,getBuiltinProviderCodes,isCustomProvider,getProviderConfig,isProviderSupported | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Service/Provider/Stream/===
+OpenAiStreamParser.php[DG5S]: F:OpenAI Chat Completions 流式响应解析器（SSE 风格） | R:- | A:__construct,ingest,flushTail,streamTerminatedNormally,hasValidChunk | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Service/Query/===
+AiAgentQuerySupport.php[DG5S]: F:AiAgentQuerySupport 职责定义 | R:- | A:execute,getOperationDescriptors,backendAclSourceId | S:-
+AiStyleSkillQuerySupport.php[DG5S]: F:First-class AI style/skill backend query ops for binquery / Frontend w | R:- | A:execute,getOperationDescriptors,backendAclSourceId | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Service/Resumable/===
+ChatGenerationTaskHandler.php[DG5M]: F:Detached, replayable frontend chat generation | R:- | A:__construct,typeCode,prepareStart,execute | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Service/Skill/===
+AdapterSkillRepository.php[DG5S]: F:AdapterSkillRepository 职责定义 | R:- | A:__construct,create,listBindings,listActiveSkillCodes,bind | S:-
+AdapterSkillResolver.php[DG5M]: F:AdapterSkillResolver 职责定义 | R:- | A:__construct,getLockedSkillCodes,resolveSkillBindings,buildSkillCatalog,buildPromptGuideText | S:-
+SkillExporter.php[DG5T]: F:SkillExporter 职责定义 | R:- | A:exportPackage | S:-
+SkillImporter.php[DG5M]: F:SkillImporter 职责定义 | R:- | A:__construct,importFromUrl,parseSkillPayload | S:-
+SkillNormalizer.php[DG5T]: F:SkillNormalizer 职责定义 | R:- | A:normalizeCode,normalizeBody,normalizeCodeList,hashBody | S:-
+SkillRegistry.php[DG5M]: F:SkillRegistry 职责定义 | R:- | A:__construct,listAvailableSkills,getSkill,resolveSelectedSkills,buildSkillSnapshots | S:-
+SkillRepository.php[DG5M]: F:SkillRepository 职责定义 | R:- | A:__construct,create,findByCode,listByCode,findArrayByCode | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Service/Style/===
+AdapterStyleRepository.php[DG5S]: F:AdapterStyleRepository 职责定义 | R:- | A:__construct,create,listBindings,listActiveStyleCodes,bind | S:-
+AdapterStyleResolver.php[DG5M]: F:AdapterStyleResolver 职责定义 | R:- | A:__construct,getDefaultStyleCodes,resolvePreferredStyle,buildStyleCatalog | S:-
+StyleNormalizer.php[DG5M]: F:StyleNormalizer 职责定义 | R:- | A:normalizeCode,normalizeCodeList,normalizeStringList,normalizeFlexibleStructuredField,normalizeNestedStructuredArray | S:-
+StyleRegistry.php[DG5M]: F:StyleRegistry 职责定义 | R:- | A:__construct,listAvailableStyles,getStyle,matchStyle,isReservedCode | S:-
+StyleRepository.php[DG5M]: F:StyleRepository 职责定义 | R:- | A:__construct,create,findByCode,listByCode,findArrayByCode | S:-
+StyleService.php[DG7L]: F:StyleService 职责定义 | R:- | A:__construct,listStyles,getStyle,saveCustom,disableCustom | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Setup/Db/Migration/===
+add_ai_multimodal_fields_20260430-v2.1.0.php[OV5T]: F:AddAiMultimodalFields20260430V210 职责定义 | R:- | A:getDescription,getVersion,getAffectedTables,install,uninstall | S:-
+add_token_price_fields_20250111-v1.1.0.php[OV5S]: F:添加 token_price_input 和 token_price_output 字段 * * 用于记录模型的输入和输出价格 * 类名须与 | R:- | A:getDescription,getVersion,install,uninstall | S:-
+add_user_balance_fields_20250114-v2.0.0.php[OV5T]: F:AddUserBalanceFields20250114V200 职责定义 | R:- | A:getDescription,getVersion,getDate,getAffectedTables,install | S:-
+create_table__ai_models_20250101-v1.0.0.php[OV5M]: F:创建AI模型表迁移 * * @author WelineFramework * @package Weline\Ai\Setup\Db\Mi | R:- | A:install,uninstall,getInfo,validate,getDependencies | S:-
+provider_usage_audit_identity_20260730-v1.1.1.php[OV5T]: F:ProviderUsageAuditIdentity20260730V111 职责定义 | R:- | A:__construct,getDescription,getVersion,getDate,getType | S:-
+update_api_key_quota_fields_20250114-v2.0.0.php[OV5T]: F:UpdateApiKeyQuotaFields20250114V200 职责定义 | R:- | A:getDescription,getVersion,getDate,getAffectedTables,install | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Setup/===
+Install.php[OV5S]: F:AI Module Installation Script * * Handles database schema creation and | R:- | A:setup | S:-
+Seed.php[OV5L]: F:Seed test data for Weline_Ai module | R:- | A:seed | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Taglib/===
+ModelSelect.php[EU5M]: F:Declarative AI model selector | R:- | A:name,tag,tag_start,tag_end,attr | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/Tool/===
+OrmValidator.php[DG5S]: F:ORM使用规范验证工具 * * @author WelineFramework * @package Weline\Ai\Tool | R:- | A:__construct,validateFile,validateDirectory,generateReport | S:-
+StaticAnalyzer.php[DG5M]: F:静态代码分析工具集成 * * @author WelineFramework * @package Weline\Ai\Tool | R:- | A:__construct,analyze,generateReport | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/===
+AI-INDEX.md[SI5M]: F:Weline_Ai AI 开发入口 | R:- | A:- | S:-
+AI工程交付流程.md[SI5M]: F:Weline AI 工程交付流程 | R:- | A:- | S:-
+AI开发治理.md[SI5T]: F:AI 开发治理 | R:- | A:- | S:-
+AI硬规则索引.md[SI5M]: F:` + 模块 `doc/ai/skills/**`；**禁止** prepare_project / resolve_skill / get | R:- | A:- | S:-
+AOCI自动安装.md[SI5T]: F:Weline MCP 准备阶段的 AOCI 自动安装 | R:- | A:- | S:-
+MCP索引与响应性能.md[SI5T]: F:MCP 索引与响应性能（参考） | R:- | A:- | S:-
+README.md[SI5S]: F:Weline_Ai 模块文档中心 | R:- | A:- | S:-
+功能现状.md[SI5M]: F:Weline_Ai 功能现状 | R:- | A:- | S:-
+开发日志.md[SI5L]: F:Weline_Ai 开发日志 | R:- | A:- | S:-
+文档索引.md[SI5T]: F:Weline 文档索引 | R:- | A:- | S:-
+智能体(Agent)增强计划.md[SI5T]: F:Weline_Ai 模块 - 智能体（Agent）增强计划 | R:- | A:- | S:-
+模块文档总览.md[SI5S]: F:Weline 模块文档总览 | R:- | A:- | S:-
+统一知识库与MCP协议.md[SI5S]: F:Weline 统一知识库与 MCP 协议 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/API/===
+API.md[SI5L]: F:Weline AI 模块 API 文档 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/event/===
+AI监控告警.md[SI5S]: F:执行观察者逻辑 * * @param Event $event * @return void | R:- | A:execute | S:-
+AI翻译调用.md[SI5M]: F:Weline AI 模块 - 机器翻译事件实现 | R:- | A:execute | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/===
+AI模块开发文档.md[SI5L]: F:AI模块开发文档 | R:- | A:getCode,getName,setup,setup,upgrade | S:-
+API文档.md[SI5M]: F:API 接口文档 | R:- | A:- | S:-
+Playwright测试指南.md[SI5L]: F:'); await expect(page) | R:- | A:- | S:-
+README.md[SI5T]: F:Weline_Ai 模块开发文档 | R:- | A:- | S:-
+单元测试指南.md[SI5L]: F:测试：Model实例化 | R:- | A:testModelInstantiation,testFieldConstants,testSetAndGetData,testCreateApiKey,testIndex | S:-
+后台控制器开发规范.md[SI5S]: F:确保模型对象有效 | R:- | A:__construct,__construct,index,index | S:-
+后台智能体管理.md[SI5T]: F:后台智能体管理 | R:- | A:- | S:-
+后台风格管理CRUD.md[SI5T]: F:后台风格管理 CRUD | R:- | A:- | S:-
+快速开始.md[SI5M]: F:快速开始指南 | R:- | A:getCode,getName,getDescription,adaptPrompt,processResponse | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/session/===
+requirement-session-dashboard.md[SI5T]: F:文档requirement-session-dashboard.md | R:- | A:- | S:-
+sitewide-translation-audit.md[SI5T]: F:SESSION — sitewide-translation-audit | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/acceptance-real-business-pathway/meetings/===
+汇审.md[SI5T]: F:汇审：acceptance_real_business_pathway | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/active-locale-target-language/meetings/===
+汇审.md[SI5T]: F:汇审 · MCP 活跃 locale 显示目标语硬规则 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/api-seat-charter/channel/===
+api-charter.md[SI5L]: F:thread: api-charter | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/api-seat-charter/meetings/===
+align-freeze.md[SI5T]: F:对齐冻结会 — API 席职责与 Query 核共用 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/api-seat-charter/===
+roster.md[SI5T]: F:roster — api-seat-charter | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/browser-strip-automation-flags/meetings/===
+提示词优化-design.md[SI5T]: F:提示词优化-design：browser_strip_automation_flags | R:- | A:- | S:-
+提示词优化-review.md[SI5T]: F:提示词优化 · 语义复审 — browser_strip_automation_flags | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/ecommerce-advisor-fit-review/channel/===
+fit-review.md[SI5T]: F:文档fit-review.md | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/ecommerce-advisor-fit-review/meetings/===
+汇审.md[SI5T]: F:汇审 — 电商顾问符合性复审 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/ecommerce-advisor-fit-review/===
+roster.md[SI5T]: F:roster — ecommerce-advisor-fit-review | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/ecommerce-advisor-ops-planner/channel/===
+buyer-show-ops-review-pointer.md[SI5T]: F:channel — 买家秀 ops 指针（电商顾问） | R:- | A:- | S:-
+crossborder-returns-apply-done.md[SI5T]: F:channel — 跨境退换 / 批发口径施工完成纪要 | R:- | A:- | S:-
+crossborder-returns-wholesale-ops-brief.md[SI5M]: F:channel — 跨境零售 / 批发退换口径运营 brief（电商顾问） | R:- | A:- | S:-
+hanfu-build-asset-01-done.md[SI5S]: F:channel — WO-BUILD-ASSET-01 完成（Hero P0 + 货架样张 · 实挂验收） | R:- | A:- | S:-
+hanfu-build-asset-02-core-done.md[SI5S]: F:channel — WO-BUILD-ASSET-02 完成（核心 SKU 货架样张主图挂载） | R:- | A:- | S:-
+hanfu-build-cart-checkout-reachability-done.md[SI5S]: F:channel — WO-BUILD-CART-CHECKOUT-REACHABILITY：前端可达性收口 | R:- | A:- | S:-
+hanfu-build-chk-01-done.md[SI5T]: F:channel — WO-BUILD-CHK-01：CART / CHECKOUT 可达修复（前端） | R:- | A:- | S:-
+hanfu-build-chk-browser.md[SI5S]: F:channel — WO-BUILD-CHK-BROWSER：CART / CHECKOUT 禁缓存眼检 | R:- | A:- | S:-
+hanfu-build-chk-payment-note.md[SI5S]: F:channel — WO-BUILD-CHK · 支付席诊断（结账入口不可达） | R:- | A:- | S:-
+hanfu-build-chk-perf-done.md[SI5S]: F:channel — WO-BUILD-CHK-PERF：cart/checkout 超时/`502` 诊断与药方 | R:- | A:- | S:-
+hanfu-build-fe-01-done.md[SI5T]: F:channel — WO-BUILD-FE-01 done（部件+前端 · 替换席） | R:- | A:- | S:-
+hanfu-build-home-zero-done.md[SI5T]: F:mini-cart-icon/com_default | R:- | A:- | S:-
+hanfu-build-minicart-chrome-zero-purge-done.md[SI5T]: F:partials/header/* | R:- | A:- | S:-
+hanfu-build-ops-browser-col-pdp.md[SI5S]: F:channel — WO-BUILD-OPS-BROWSER（COLLECTION + PDP 禁缓存补检） | R:- | A:- | S:-
+hanfu-build-theme-01-done.md[SI5T]: F:channel — WO-BUILD-THEME-01 回执 | R:- | A:- | S:-
+hanfu-defect-mall07-done.md[SI5T]: F:channel — WO-HP-P3-MALL-07 完成（默认访客中文） | R:- | A:- | S:-
+hanfu-defect-payment-hydrate-done.md[SI5T]: F:channel — 汉服缺陷波 · 支付水合 | R:- | A:- | S:-
+homepage-broken-layout-hotfix-done.md[SI5T]: F:channel — 坏版首页热修 done（父会话） | R:- | A:- | S:-
+homepage-broken-layout-ops-escalation.md[SI5T]: F:channel — 运营怒批坏版首页（顾问 → PM） | R:- | A:- | S:-
+homepage-continuous-review.md[SI5T]: F:channel — homepage continuous review（电商开发顾问） | R:- | A:- | S:-
+homepage-hotfix-theme-done.md[SI5T]: F:channel — 席 A 回执：`WO-HP-P0-HOTFIX-THEME` | R:- | A:- | S:-
+homepage-mall-feel-review.md[SI5T]: F:channel — 首页「不够商城」运营审查（电商顾问） | R:- | A:- | S:-
+homepage-wave1-advisor-review.md[SI5T]: F:channel — Wave-1 运营意图复审（电商顾问） | R:- | A:- | S:-
+homepage-wave1-backend-02-done.md[SI5T]: F:channel — WO-HP-P1-02 后端回执（三货架错开选题） | R:- | A:- | S:-
+homepage-wave1-ops-brief.md[SI5S]: F:channel — Wave-1 运营定档 brief（电商顾问） | R:- | A:- | S:-
+homepage-wave1-theme-01-done.md[SI5T]: F:channel — WO-HP-P1-01 主题席回执 | R:- | A:- | S:-
+homepage-wave1-widget-03-done.md[SI5T]: F:channel — WO-HP-P1-03 部件回执（评价去重 → UGC 图墙） | R:- | A:- | S:-
+homepage-wave2-advisor-review.md[SI5T]: F:channel — Wave-2 运营意图复审（电商顾问） | R:- | A:- | S:-
+homepage-wave2-ops-brief.md[SI5S]: F:channel — Wave-2 运营定档 brief（电商顾问） | R:- | A:- | S:-
+homepage-wave2-p1-04-done.md[SI5T]: F:channel — WO-HP-P1-04 done（locale 整页语言一致） | R:- | A:- | S:-
+homepage-wave2-p2-05-done.md[SI5T]: F:channel — WO-HP-P2-05 主题席回执 | R:- | A:- | S:-
+homepage-wave2-p2-06-done.md[SI5T]: F:channel — homepage-wave2 · WO-HP-P2-06 done | R:- | A:- | S:-
+homepage-wave2-p2-07-done.md[SI5T]: F:channel — WO-HP-P2-07 施工回执（迷你购物车包邮进度） | R:- | A:- | S:-
+homepage-wave2-p2-08-done.md[SI5T]: F:channel — WO-HP-P2-08 主题席回执 | R:- | A:- | S:-
+homepage-wave3-mall-01-done.md[SI5T]: F:channel — WO-HP-P3-MALL-01 席 A 回执 | R:- | A:- | S:-
+homepage-wave3-mall-02-done.md[SI5T]: F:channel — WO-HP-P3-MALL-02 席 A 回执 | R:- | A:- | S:-
+homepage-wave3-mall-03-done.md[SI5T]: F:channel — WO-HP-P3-MALL-03 席 A 回执 | R:- | A:- | S:-
+homepage-wave3-mall-04-done.md[SI5T]: F:channel — WO-HP-P3-MALL-04 done（席 B） | R:- | A:- | S:-
+homepage-wave3-mall-05-done.md[SI5T]: F:channel — WO-HP-P3-MALL-05 席 A 回执 | R:- | A:- | S:-
+homepage-wave3-mall-advisor-review.md[SI5T]: F:channel — Wave-3 商城感运营意图复审（电商顾问） | R:- | A:- | S:-
+homepage-wave3-mall-ops-brief.md[SI5S]: F:channel — Wave-3 商城感运营定档 brief（电商顾问） | R:- | A:- | S:-
+ops-acceptance-charter-hanfu-mall.md[SI5T]: F:channel — 汉服古风商城 · 运营验收宪章（escalate → PM） | R:- | A:- | S:-
+pm-arrange-hanfu-defect-fix.md[SI5T]: F:channel — PM 排期：汉服站遗留缺陷修复 | R:- | A:- | S:-
+pm-arrange-hanfu-mall-build.md[SI5T]: F:channel — PM 排期：汉服古风商城 · Wave 打造-1 | R:- | A:- | S:-
+pm-arrange-homepage-p1.md[SI5S]: F:channel — PM 排期：首页持续审查 P1 波 | R:- | A:- | S:-
+pm-arrange-homepage-wave2.md[SI5S]: F:channel — PM 排期：首页 Wave-2（P1-04 + P2 立刻开工） | R:- | A:- | S:-
+pm-arrange-homepage-wave3-mall.md[SI5S]: F:channel — PM 排期：首页 Wave-3 商城感（MALL-01…07） | R:- | A:- | S:-
+pm-arrange-sitewide-ops-acceptance.md[SI5T]: F:channel — PM 排期：全站汉风商城运营验收波 | R:- | A:- | S:-
+pm-arrange-zero-sitewide.md[SI5T]: F:channel — PM 安排：WO-BUILD-ZERO-SITEWIDE（全站迷你车禁 `$0.00`） | R:- | A:- | S:-
+pm-hanfu-mall-build-progress.md[SI5T]: F:channel — PM 进度：汉服古风商城 · Wave 打造-1 | R:- | A:- | S:-
+pm-hotfix-broken-home-progress.md[SI5T]: F:channel — P0 热修进度（首页布局塌陷） | R:- | A:- | S:-
+pm-hotfix-homepage-broken-layout.md[SI5S]: F:channel — P0 热修：首页发布后布局塌陷 / 叠层（PM 认账） | R:- | A:- | S:-
+pm-hotfix-homepage-broken-progress.md[SI5T]: F:channel — P0 热修首页塌陷进度（项目经理记账） | R:- | A:- | S:-
+pm-sitewide-ops-acceptance-progress.md[SI5T]: F:channel — PM 进度：全站运营验收波 | R:- | A:- | S:-
+pm-wave1-progress.md[SI5T]: F:channel — Wave-1 进度（项目经理记账） | R:- | A:- | S:-
+pm-wave2-progress.md[SI5T]: F:channel — Wave-2 进度（项目经理记账） | R:- | A:- | S:-
+pm-wave3-mall-progress.md[SI5T]: F:channel — Wave-3 商城感进度（项目经理记账） | R:- | A:- | S:-
+sitewide-ops-acceptance-report.md[SI5M]: F:channel — 全站汉风商城运营验收报告（Wave 打造-1） | R:- | A:- | S:-
+sitewide-ops-acceptance-rereview.md[SI5M]: F:channel — 全站汉风商城运营验收 · 终审复审 + COLLECTION 补签（WO-BUILD-OPS-03） | R:- | A:- | S:-
+social-gsc-platform-register-ops-brief.md[SI5S]: F:channel — 社媒 / GSC 分发渠道注册运营 brief（电商顾问） | R:- | A:- | S:-
+social-gsc-platform-register-progress.md[SI5T]: F:channel — 社媒开号进度（非抢占浏览器执行） | R:- | A:- | S:-
+social-hanfu-video-firstwave-ops-brief.md[SI5M]: F:channel — 汉服视频首波运营 brief（对标抖音 · 自有成片） | R:- | A:- | S:-
+soft-tone-returns.md[SI5T]: F:channel — 退换政策语气柔化（实质不变） | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/ecommerce-advisor-ops-planner/meetings/===
+提示词优化-design.md[SI5T]: F:提示词优化 · design（电商顾问运营扩权 · 合规复审轨） | R:- | A:- | S:-
+提示词优化-review.md[SI5T]: F:提示词优化 · review（电商顾问运营扩权 · 合规复审轨） | R:- | A:- | S:-
+汇审-hanfu-mall-build.md[SI5T]: F:汇审 — 汉服古风商城 · Wave 打造-1（全站运营过签） | R:- | A:- | S:-
+汇审-hotfix-broken-home.md[SI5T]: F:汇审补记 — P0 热修：首页布局塌陷（broken-home） | R:- | A:- | S:-
+汇审-wave1.md[SI5T]: F:汇审 — 首页 Wave-1（P1-01/02/03） | R:- | A:- | S:-
+汇审-wave2.md[SI5T]: F:汇审 — 首页 Wave-2（P1-04 + P2-05/06/07/08） | R:- | A:- | S:-
+汇审-wave3-mall.md[SI5T]: F:汇审 — 首页 Wave-3 商城感（MALL-01…05） | R:- | A:- | S:-
+汇审.md[SI5T]: F:汇审 — 电商顾问运营策划扩权 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/ecommerce-advisor-ops-planner/===
+roster.md[SI5T]: F:roster — ecommerce-advisor-ops-planner | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/engineering-team-flow-v1/meetings/===
+汇审.md[SI5T]: F:汇审：工程团队流水线（对齐冻结 → 依赖唤醒） | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/engineering-team-roster-v2/meetings/===
+汇审.md[SI5T]: F:汇审 · engineering-team-roster-v2 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/engineering-team-roster-v2/===
+roster.md[SI5T]: F:roster · engineering-team-roster-v2 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/one-seat-one-agent-peer-talk/meetings/===
+汇审.md[SI5T]: F:汇审 — 一席一智能体 + 席间互聊 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/prompt-i18n-compliance-gap/meetings/===
+提示词优化-design.md[SI5T]: F:提示词优化-design — prompt-i18n-compliance-gap | R:- | A:- | S:-
+提示词优化-review.md[SI5T]: F:提示词优化-review — prompt-i18n-compliance-gap | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/prompt-i18n-compliance-gap/===
+roster.md[SI5T]: F:roster — prompt-i18n-compliance-gap | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/sitewide-translation-audit/channel/===
+pm-arrange-p3.md[SI5T]: F:channel — PM 安排 P3 词典波 | R:- | A:- | S:-
+wave-chrome-en.md[SI5T]: F:wave-chrome-en · Team:翻译工程师: 并行施工回报 | R:- | A:- | S:-
+wave-p3-dict.md[SI5T]: F:channel — P3 词典补全波 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/sitewide-translation-audit/meetings/===
+shipping-method-label-i18n-20260922.md[SI5T]: F:配送方式名称 i18n（结账成功页 locale leak）— 2026-09-22 | R:- | A:- | S:-
+翻译-review.md[SI5T]: F:翻译-review（全站波 · 收口） | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/sitewide-translation-audit/===
+roster.md[SI5T]: F:roster — sitewide-translation-audit | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/team-closeout-related-web-urls/channel/===
+closeout-related-web-urls.md[SI5T]: F:channel — closeout-related-web-urls | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/team-closeout-related-web-urls/===
+contracts.md[SI5T]: F:contracts — team-closeout-related-web-urls | R:- | A:- | S:-
+deps.md[SI5T]: F:deps — team-closeout-related-web-urls | R:- | A:- | S:-
+roster.md[SI5T]: F:roster — team-closeout-related-web-urls | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/team-closeout-related-web-urls/meetings/===
+提示词优化-design.md[SI5T]: F:提示词优化 · design（team-closeout-related-web-urls · 施工轨） | R:- | A:- | S:-
+提示词优化-review.md[SI5T]: F:提示词优化 · review（team-closeout-related-web-urls · 语义复审轨） | R:- | A:- | S:-
+汇审.md[SI5T]: F:汇审 — team-closeout-related-web-urls | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/theme-arch-perf-review/channel/===
+perf-to-architect.md[SI5T]: F:channel — 性能检查 → 架构师（主题架构） | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/theme-arch-perf-review/meetings/===
+align-freeze.md[SI5T]: F:对齐冻结 — 主题架构性能复审 | R:- | A:- | S:-
+性能检查-design.md[SI5T]: F:性能检查-design — 主题开发架构 | R:- | A:- | S:-
+汇审.md[SI5T]: F:汇审 — 主题架构性能 | R:- | A:- | S:-
+路径memo-施工.md[SI5T]: F:路径 memo 施工纪要 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/theme-arch-perf-review/===
+roster.md[SI5T]: F:roster — theme-arch-perf-review | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/theme-engineer-charter/channel/===
+align-freeze.md[SI5T]: F:channel: align-freeze — 主题开发工程师定责 | R:- | A:- | S:-
+review-completeness.md[SI5T]: F:channel: review-completeness — 主题开发工程师技能完整度 | R:- | A:- | S:-
+席位底线补钉.md[SI5T]: F:channel — 席位底线补钉 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/theme-engineer-charter/meetings/===
+align-freeze.md[SI5T]: F:对齐冻结会 — 主题开发工程师定责定岗 | R:- | A:- | S:-
+席位底线补钉.md[SI5T]: F:对齐冻结补钉 — 主题席位底线 / 原则主权 | R:- | A:- | S:-
+技能完整度汇审.md[SI5T]: F:汇审 — 主题开发工程师技能完整度审查 | R:- | A:- | S:-
+提示词优化-review-席位底线.md[SI5T]: F:提示词优化复审 — 席位底线补钉 | R:- | A:- | S:-
+汇审-席位底线补钉.md[SI5T]: F:汇审 — 席位底线补钉 | R:- | A:- | S:-
+汇审.md[SI5T]: F:汇审 — 主题开发工程师定责定岗 | R:- | A:- | S:-
+缺口自查.md[SI5T]: F:文档缺口自查.md | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/theme-engineer-charter/===
+roster.md[SI5T]: F:roster — theme-engineer-charter | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/translation-engineer-charter/channel/===
+align.md[SI5T]: F:channel/align — translation-engineer-charter | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/translation-engineer-charter/meetings/===
+提示词优化-design.md[SI5T]: F:提示词优化 · design（翻译工程师席位升级） | R:- | A:- | S:-
+提示词优化-review.md[SI5T]: F:提示词优化 · review（翻译工程师席位升级） | R:- | A:- | S:-
+翻译-review.md[SI5S]: F:翻译 · review（全站漏译巡检） | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/translation-engineer-charter/===
+roster.md[SI5T]: F:roster — translation-engineer-charter | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/ui-prototype-gate-before-test/channel/===
+align-freeze.md[SI5T]: F:channel/align-freeze — ui-prototype-gate-before-test | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/ui-prototype-gate-before-test/meetings/===
+align-freeze.md[SI5T]: F:对齐冻结 — ui-prototype-gate-before-test | R:- | A:- | S:-
+提示词优化-review.md[SI5T]: F:提示词优化 · 语义复审 — ui_prototype_gate_before_test | R:- | A:- | S:-
+汇审.md[SI5T]: F:汇审 — ui-prototype-gate-before-test | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/开发/team/ui-prototype-gate-before-test/===
+roster.md[SI5T]: F:roster — ui-prototype-gate-before-test | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/用户/===
+AI模块使用手册.md[SI5M]: F:AI模块使用手册 | R:- | A:- | S:-
+
+===/Users/weline/Project/Official/框架/app/code/Weline/Ai/doc/规则/===
+00-MCP调用与会话.md[SI5S]: F:` + `app/code/ | R:- | A:- | S:-

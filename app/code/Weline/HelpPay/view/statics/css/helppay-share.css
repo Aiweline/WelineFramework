@@ -1002,6 +1002,16 @@ button[data-testid="product-quick-pay"][disabled] {
   top: var(--weline-space-6, var(--space-6, 1.5rem));
 }
 
+.w-helppay-payer__totals {
+  margin-block: var(--weline-space-4, var(--space-4));
+  padding-block: var(--weline-space-3, var(--space-3));
+  border-block: 1px solid var(--weline-color-border, var(--color-border, rgba(0, 0, 0, 0.08)));
+}
+
+.w-helppay-payer__totals .w-helppay-pay-summary__money {
+  margin: 0;
+}
+
 .w-helppay-quick__actions,
 .w-helppay-payer__actions {
   display: grid;

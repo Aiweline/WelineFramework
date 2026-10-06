@@ -18,6 +18,7 @@ final class PaymentBrowserHandoffReadinessService
 
     public function __construct(
         private readonly PaymentCheckoutSessionPersistenceService $sessionPersistence,
+        private readonly PaymentStorefrontLandingUrlService $storefrontUrls,
     ) {
     }
 
@@ -68,13 +69,30 @@ final class PaymentBrowserHandoffReadinessService
             $params[PaymentCheckoutSessionPersistenceService::CONTEXT_TRANSACTION_NO] = $transactionNo;
         }
 
+        $storefrontBase = trim((string) ($landing['storefront_base_url']
+            ?? $snapshot[PaymentCheckoutSessionPersistenceService::CONTEXT_STOREFRONT_BASE_URL]
+            ?? ''));
+        $websiteId = (int) ($landing['website_id']
+            ?? $snapshot[PaymentCheckoutSessionPersistenceService::CONTEXT_WEBSITE_ID]
+            ?? 0);
+
         // Express review is only for awaiting_confirm; after paid success, prefer checkout success.
-        $baseUrl = $landing['browser_landing_url'];
         if ($transactionReady && $this->isExpressReviewLanding($baseUrl)) {
             $successParams = $params;
             unset($successParams['source']);
-            $baseUrl = $this->buildCheckoutSuccessUrl($successParams, $transactionNo);
+            $baseUrl = $this->buildCheckoutSuccessUrl(
+                $successParams,
+                $transactionNo,
+                $baseUrl,
+                $storefrontBase,
+                $websiteId,
+            );
         }
+
+        $baseUrl = $this->storefrontUrls->ensureLandingUnderBase(
+            $baseUrl,
+            $this->storefrontUrls->resolveStorefrontBaseUrl($websiteId, $storefrontBase, $baseUrl),
+        );
 
         $landingUrl = $ready ? $this->mergeLandingUrl($baseUrl, $params, $degraded) : null;
 
@@ -99,8 +117,13 @@ final class PaymentBrowserHandoffReadinessService
     /**
      * @param array<string, mixed> $params
      */
-    private function buildCheckoutSuccessUrl(array $params, string $transactionNo): string
-    {
+    private function buildCheckoutSuccessUrl(
+        array $params,
+        string $transactionNo,
+        string $hintLandingUrl,
+        string $storefrontBaseUrl,
+        int $websiteId,
+    ): string {
         $query = [];
         foreach (['checkout_group_uuid', 'checkout_token', 'order_uuid'] as $key) {
             $value = trim((string) ($params[$key] ?? ''));
@@ -117,15 +140,23 @@ final class PaymentBrowserHandoffReadinessService
                 if ($orderUuid !== '') {
                     $query['order_uuid'] = $orderUuid;
                 }
+                if ($websiteId <= 0) {
+                    $request = $txn->getRequestData();
+                    if (\is_array($request)) {
+                        $websiteId = max(0, (int) ($request['website_id'] ?? 0));
+                    }
+                }
             } catch (\Throwable) {
             }
         }
-        $path = '/checkout/success';
-        if ($query !== []) {
-            $path .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
-        }
 
-        return $path;
+        return $this->storefrontUrls->buildAbsoluteRoute(
+            'checkout/success',
+            $query,
+            $storefrontBaseUrl,
+            $hintLandingUrl,
+            $websiteId,
+        );
     }
 
     private function isTransactionReady(PaymentCheckoutSession $session): bool

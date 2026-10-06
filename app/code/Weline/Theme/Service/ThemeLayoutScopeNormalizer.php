@@ -61,7 +61,7 @@ final class ThemeLayoutScopeNormalizer implements LayoutScopeNormalizerInterface
             }
         }
 
-        return [
+        $normalized = [
             'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
             'scope' => $this->encodeStorageScope($storageScope, $storeMode),
             'storage_scope' => $storageScope,
@@ -70,6 +70,14 @@ final class ThemeLayoutScopeNormalizer implements LayoutScopeNormalizerInterface
             'target_id' => max(0, (int)($identity['target_id'] ?? 0)),
             'locale_code' => $localeCode,
         ];
+        // 保留使用方已校验的应用/内容上下文，供 buildContext / Setup 种子路径消费。
+        foreach (['application_context', 'content_scope', 'purpose', 'scope_identity'] as $key) {
+            if (\array_key_exists($key, $identity)) {
+                $normalized[$key] = $identity[$key];
+            }
+        }
+
+        return $normalized;
     }
 
     private function normalizeLocaleCode(string $localeCode): string

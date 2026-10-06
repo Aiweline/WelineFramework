@@ -1,0 +1,78 @@
+// Weline 一次后台请求的运行逻辑流（current-state，节点标注源码行号）
+// 来源: Framework/Http/{Url,WlsRequest,Response}.php, Framework/Router/Core.php, Framework/App/{State,Controller/BackendController}.php,
+//       Framework/Controller/PcController.php, Acl/Observer/RouteBefore.php, Admin/etc/event.xml, generated/routers/backend_pc.php
+// 生成: 2026-10-05 · flow-visualizer + graphviz · 证据表见 flow-backend-evidence.md
+digraph weline_backend_flow {
+  graph [rankdir=TB, ranksep=0.42, nodesep=0.32, fontname="PingFang SC", labelloc=t, fontsize=18]
+  graph [label="Weline 后台请求执行流 /backendKey/[currency]/[language]/module/controller/action（紫=鉴权门禁，红=拒绝出口，绿虚线=事件扩展点，蓝=上下文冻结一次→后续只读）"]
+  node [shape=box, style="rounded,filled", fontsize=11, fillcolor="#e8f0fe", margin="0.14,0.07"]
+  edge [fontsize=10, arrowsize=0.8]
+
+  Client [shape=ellipse, label="管理员浏览器\n（携带 __Host-/backend 会话 Cookie）"]
+  Transport [label="① 传输层\nWLS worker / FPM；原始 URI 存入 server 变量\nWELINE_ORIGIN_REQUEST_URI (WlsRequest.php:777)"]
+  AreaParse [label="② Url::parser 区域识别\n首段查 area_routes 配置→Env::getAreaByRoutePrefix (Url.php:1975)\n命中 'backend' → WELINE_AREA=backend、array_shift 去掉 backendKey、AREA_ROUTE='' (:2005-2013)"]
+  NoGuess [shape=box, style="filled", fillcolor="#fff4e5", label="⚠ 不做路径字面量猜测\n未匹配前缀一律按 frontend 处理：不再用 URL 里的\n『admin』/『backend』判区域，避免绕过后台 (Url.php:2020-2026)"]
+  Locale [label="③ 货币/语言段解析\n最长倒序匹配 currency/language (Url.php:2038-2060)\nState::resolveLocalizationFromPathSegments 允许二者顺序互换、最多两段 (App/State.php:407-447)"]
+  Ctx [shape=cylinder, fillcolor="#d2e3fc", label="请求上下文 Context（纤程隔离）\narea/is_backend/route.path/currency/lang + ScopeIdentity + CacheKeyContext\n每次请求 RequestContext::init 重置 (App.php:143)"]
+  CtxFreeze [shape=hexagon, fillcolor="#d2e3fc", label="④b 后台上下文冻结：走「非店面」分支，只算一次\nScope provider 虽经 provides 装配（RegistryModulePresence 在场门禁），但 $isBackend 优先短路→\nfreezeLegacyDefault(websiteId=0/default/channel)（不解析真实 Channel、不查 DB）\n缓存键仍冻结为不可变 StorefrontCacheKeyContext·RenderContext installOnce (App.php:491-515)"]
+  Flag [label="④ 后台标志位\nis_backend = w_env('is_backend') 或 request_area 含 'backend'\n(Core.php:161-167；注释禁止用 empty() 短路，防跨请求沿用旧值)"]
+  SkipCache [label="⑤ processUrl 后台分支 (Core.php:585-611)\n显式跳过：统一路由缓存、generated 快路径(:308)、路由结果缓存(:419)\n派发 process_uri_before 事件→写回 rule→normalizeUrlTail"]
+  Dispatch [label="⑥ start()→按 request_area 分派 (Core.php:449-462)\nBackendController→Pc()；BackendRestController→Api()\n（前台才有的 default→StaticFile 分支后台不可达）"]
+  RouterFile [label="⑦ Pc() 载入生成的后台路由表 (Core.php:1317-1336)\nrouter_filepath = Env::path_BACKEND_PC_ROUTER_FILE\n= generated/routers/backend_pc.php（约 5.7 万行、route key→class 映射）"]
+  Match [label="⑧ matchGeneratedRouterEntry (Core.php:1221-1253)\n键格式 path::METHOD；'*' 通配优先→本方法→HEAD 回退 GET\n空路径默认路由 = 'admin'（前台是 'index/index'）(:1338)"]
+  NoRouteCache [label="⑨ 命中后 router['type']='pc'，但 is_pc_admin 时不写 _router_cache_key\n(Core.php:1345-1348)"]
+  NotFound [label="✗ 后台找不到路由＝直接 404 + 诊断日志\n(URL/Method/REQUEST_URI/WELINE_AREA/is_backend/area_router/\nrouter_file/file_exists) (Core.php:1356-1368)", fillcolor="#fce8e6"]
+  RouteGuard [label="⑩ route() 前置校验\n模块状态 getModuleStatus→noRouter (Core.php:1659-1664)\nheader_xss (:1668)；路由声明的 request_method 与请求方法不符→noRouter (:1752-1762)"]
+  FpcSkip [label="⑪ FPC 整段跳过\nif (!$this->is_backend && router_cache && frontend_cache) 才建 coordinator\n(Core.php:1618-1623,1681-1687)"]
+  CtrlResolve [label="⑫ getController：后台直取 class/method 不读控制器缓存\n(Core.php:1612-1616)；ObjectManager 实例化 +\n__setModuleInfo(router) (:1866-1875)"]
+  AttrLoop [label="⑬ 控制器 Attribute 链 execute (Core.php:1840-1852)\n#[Acl(...)] 是 #[Attribute] 类，实现 RouterAttributeInterface\n(Framework/Acl/Acl.php:22)；返回非空即短路响应"]
+  AclDispatch [label="⑬b Acl::execute 装载上下文并派发\n(Acl.php:221-236)\ntype/module/router/class/route ← request data\n→ dispatch 'Weline_Framework_Acl::dispatch'"]
+  LoginGate [label="⑭ BackendController::__init 门禁链 (BackendController.php:45-70)\nassertBackendAreaKey → normalizeBackendRuntimeContext →\nbackend_controller_init_before → createBackendSession + session->start(null)\n→ 强制 no-store 响应头 (:58-61) → backend_controller_init_after → loginCheck"]
+  AreaAssert [label="⑭a assertBackendAreaKey：对客户端原始 URI 再验一次\n取 WELINE_ORIGIN_REQUEST_URI，首段 hash_equals(配置的 backendKey)\n不匹配→noRouter；防止前端上下文被『提升』成后台 (BackendController.php:72-106)", fillcolor="#f3e8fd"]
+  Whitelist [label="⑭b loginCheck：未登录时先取白名单\n缓存 whitelist_url_cache_key，miss 则派发\n'Router::backend_whitelist_url' 由模块回填 (BackendController.php:143-153)\nAdmin 侧 observer: Admin/etc/event.xml:5-7"]
+  NotLoggedIn [label="✗ 未登录且不在白名单\n· SSE/类 SSE → 401 JSON + 丢弃未认证会话 cookie (:158-167)\n· 否则派发 'backend_no_login_redirect_url'→同域归一→redirect 带 returnUrl (:169-181)\n· redirect 未生效则 noRouter (:183)", fillcolor="#fce8e6"]
+  AclEnforce [label="⑮ ACL 权限校验（观察者，非基类）\nAcl/etc/event.xml:11-13 把 Weline_Framework_Router::route_before\n绑到 Acl\Observer\RouteBefore → isBackend||isApiBackend\n→ validateBackendAccess (RouteBefore.php:162,171+)", fillcolor="#f3e8fd"]
+  Denied [label="✗ 拒绝出口\nnot_logged_in：API→401 JSON；页面→撤 cookie+403(DEV)/404 (RouteBefore.php:486-497)\nuser_disabled：登出+403/404 (:500-511)\n无角色/无 scope/路由无权：先派发 'Weline_Acl::no_access_redirect_before' (:490,540,569,595)", fillcolor="#fce8e6"]
+  Csrf [label="⑯ PcController::isAllowed CSRF 校验 (PcController.php:315-346)\n写方法才校验；token 依次取 post[form_name] →\nX-CSRF-TOKEN 头 → param form_key → param t；不符→noRouter"]
+  Action [label="⑰ call_user_func([$dispatch,$method]) (Core.php:1893)\nFiberOutputBuffer::beginCapture 包裹 (:1885)"]
+  Render [label="⑱ 后台视图渲染\nlayoutType 默认 'default.default'（登录页等可覆盖/置 null）\nBackendController.php:42；模板 include+extract + view/hooks/*.phtml"]
+  SseBypass [label="⑰b SSE 分支：SseContext::isSseEnabled→丢弃缓冲直接回流\n(Core.php:1896-1901)，不经 FPC 发布"]
+  Publish [label="⑲ 响应返回：后台 canPublishResponse 恒 false\n(!$this->is_backend …) (Core.php:1986-1996)；run_after 仅正常路由响应触发"]
+  Err [label="✗ 异常→RendererFactory 500\n(app/bootstrap.php:66-77, WlsRuntime.php:8038)", fillcolor="#fce8e6"]
+
+  Client -> Transport -> AreaParse -> Locale -> Flag -> CtxFreeze -> SkipCache -> Dispatch -> RouterFile -> Match
+  CtxFreeze -> Ctx [label="install（写一次）", color="#1a5fb4", penwidth=1.6]
+  Ctx -> CtrlResolve [label="后续阶段一律只读上下文\n不再解析区域/货币/范围、不查 DB", color="#1a5fb4", style=dotted]
+  AreaParse -> NoGuess [style=dotted, color="#b06000"]
+  Match -> NoRouteCache [label="命中"]
+  Match -> NotFound [label="未命中", style=dotted, color="#c5221f"]
+  NoRouteCache -> RouteGuard -> FpcSkip -> CtrlResolve -> AttrLoop -> LoginGate
+  AttrLoop -> AclDispatch [label="属性为 #[Acl]", style=dashed, color="#2e7d32"]
+  LoginGate -> AreaAssert -> Whitelist -> AclEnforce
+  Whitelist -> NotLoggedIn [label="未登录且非白名单", style=dotted, color="#c5221f"]
+  AreaAssert -> NotLoggedIn [label="backendKey 不匹配→noRouter", style=dotted, color="#c5221f"]
+  AclEnforce -> Denied [label="拒绝", style=dotted, color="#c5221f"]
+  AclEnforce -> Csrf [label="通过"]
+  Csrf -> Action
+  Action -> Render -> Publish
+  Action -> SseBypass [label="流式响应", style=dotted, color="#b06000"]
+  Action -> Err [label="throw", style=dotted, color="#c5221f"]
+  Exit [shape=box, style="rounded,filled", fillcolor="#fce8e6", fontsize=12, label="拒绝 / 错误出口（逻辑聚合，非流程节点）\nnoRouter(code) 立即 flush session 并终止请求：Response.php:214-226\n· 404 后台路由未命中 (Core.php:1356-1368)　· 302/401 未登录且非白名单 (BackendController.php:157-183)\n· 401/403 ACL 拒绝 (RouteBefore.php:486-511,540,569,595)　· backendKey 二次校验失败 (BackendController.php:100-105)\n· 500 异常→RendererFactory (bootstrap.php:66-77, WlsRuntime.php:8038)"]
+  SseBypass -> Client [label="事件流", style=dotted, color="#b06000"]
+  Publish -> Transport [label="Response"]
+  Transport -> Client [label="请求", penwidth=1.4]
+  Client -> Transport [label="后台 HTML / JSON / 重定向", constraint=false, penwidth=1.4]
+  NotFound -> Exit [style=invis]
+
+  subgraph cluster_stores {
+    label="数据面"; style=filled; fillcolor="#f8f9fa"; fontsize=12;
+    RT [shape=cylinder, label="generated/routers/\nbackend_pc.php · backend_rest_api.php\n（静态产物，随 setup 重新生成）"]
+    BSes [shape=cylinder, label="后台 Session 存储\nAuthenticatedSession / remember-me"]
+    AclDb [shape=cylinder, label="ACL 角色·授权源\nw_cache('acl') + Model"]
+    Cfg [shape=cylinder, label="env area_routes\n后台 backendKey"]
+  }
+  RouterFile -> RT [label="loadGeneratedRouterFile", style=dotted]
+  LoginGate -> BSes [label="start/flush", style=dotted]
+  AclEnforce -> AclDb [label="取角色与授权项", style=dotted]
+  AreaAssert -> Cfg [label="getAreaRoutePrefix('backend')", style=dotted]
+}

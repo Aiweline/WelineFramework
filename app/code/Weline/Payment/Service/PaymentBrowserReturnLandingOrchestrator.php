@@ -20,6 +20,7 @@ final class PaymentBrowserReturnLandingOrchestrator
     public function __construct(
         private readonly PaymentCheckoutSessionPersistenceService $sessionPersistence,
         private readonly PaymentShellCallbackUrlCatalog $urlCatalog,
+        private readonly PaymentStorefrontLandingUrlService $storefrontUrls,
     ) {
     }
 
@@ -56,22 +57,30 @@ final class PaymentBrowserReturnLandingOrchestrator
 
         $session = $this->sessionPersistence->loadByTransaction($transaction);
         if ($session === null) {
-            return $this->terminalL1($transaction);
+            return $this->bindAbsoluteIfPossible(
+                $this->terminalL1($transaction),
+                $transaction,
+                null,
+            );
         }
 
         $landing = $this->sessionPersistence->landingSnapshot($session);
         if ($landing['browser_landing_url'] === '') {
-            return $this->terminalL1($transaction);
+            return $this->bindAbsoluteIfPossible(
+                $this->terminalL1($transaction),
+                $transaction,
+                $landing,
+            );
         }
 
-        return [
+        return $this->bindAbsoluteIfPossible([
             'decision' => self::DECISION_HANDOFF_L2,
             'redirect_path' => 'payment/handoff',
             'redirect_params' => [
                 'checkout_session_code' => $landing['checkout_session_code'],
             ],
             'absolute' => false,
-        ];
+        ], $transaction, $landing);
     }
 
     /**
@@ -91,7 +100,7 @@ final class PaymentBrowserReturnLandingOrchestrator
             $transactionNo = trim((string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO));
         }
 
-        return [
+        $decision = [
             'decision' => self::DECISION_EXPRESS_REVIEW,
             'redirect_path' => 'checkout/express-review',
             'redirect_params' => array_filter([
@@ -100,6 +109,8 @@ final class PaymentBrowserReturnLandingOrchestrator
             ], static fn ($v) => $v !== null && $v !== ''),
             'absolute' => false,
         ];
+
+        return $this->bindAbsoluteIfPossible($decision, $transaction, null);
     }
 
     private function expressCheckoutGroupUuid(?PaymentTransaction $transaction): string
@@ -156,6 +167,10 @@ final class PaymentBrowserReturnLandingOrchestrator
                             $cancelParams,
                         ),
                     );
+                    $base = (string) ($landing['storefront_base_url'] ?? '');
+                    if ($base !== '') {
+                        $url = $this->storefrontUrls->ensureLandingUnderBase($url, $base);
+                    }
 
                     return [
                         'decision' => self::DECISION_CHECKOUT_LANDING_CANCEL,
@@ -168,14 +183,14 @@ final class PaymentBrowserReturnLandingOrchestrator
 
             $orderUuid = trim((string) $transaction->getData(PaymentTransaction::schema_fields_ORDER_ID));
             if ($orderUuid !== '') {
-                return [
+                return $this->bindAbsoluteIfPossible([
                     'decision' => self::DECISION_CHECKOUT_LANDING_CANCEL,
                     'redirect_path' => 'checkout/success',
                     'redirect_params' => array_replace($cancelParams, [
                         'order_uuid' => $orderUuid,
                     ]),
                     'absolute' => false,
-                ];
+                ], $transaction, $session !== null ? $this->sessionPersistence->landingSnapshot($session) : null);
             }
 
             return $this->statusPage($cancelParams);
@@ -210,6 +225,61 @@ final class PaymentBrowserReturnLandingOrchestrator
                 'transaction_no' => (string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO),
             ],
             'absolute' => false,
+        ];
+    }
+
+    /**
+     * When storefront base is known, emit absolute redirect under that mount.
+     *
+     * @param array{decision:string,redirect_path:string,redirect_params:array<string,mixed>,absolute:bool} $decision
+     * @param array<string, mixed>|null $landing
+     * @return array{decision:string,redirect_path:string,redirect_params:array<string,mixed>,absolute:bool}
+     */
+    private function bindAbsoluteIfPossible(
+        array $decision,
+        ?PaymentTransaction $transaction,
+        ?array $landing,
+    ): array {
+        if (!empty($decision['absolute'])) {
+            return $decision;
+        }
+
+        $path = (string) ($decision['redirect_path'] ?? '');
+        if ($path === '' || str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $decision;
+        }
+
+        $websiteId = 0;
+        $storefrontBase = '';
+        if (\is_array($landing)) {
+            $websiteId = max(0, (int) ($landing['website_id'] ?? 0));
+            $storefrontBase = trim((string) ($landing['storefront_base_url'] ?? ''));
+        }
+        if ($transaction !== null && $transaction->getId()) {
+            $request = $transaction->getRequestData();
+            if (\is_array($request)) {
+                if ($websiteId <= 0) {
+                    $websiteId = max(0, (int) ($request['website_id'] ?? 0));
+                }
+                if ($storefrontBase === '') {
+                    $storefrontBase = trim((string) ($request['storefront_base_url'] ?? ''));
+                }
+            }
+        }
+
+        $base = $this->storefrontUrls->resolveStorefrontBaseUrl($websiteId, $storefrontBase);
+        if ($base === '') {
+            return $decision;
+        }
+
+        $params = \is_array($decision['redirect_params'] ?? null) ? $decision['redirect_params'] : [];
+        $absolute = $this->storefrontUrls->buildAbsoluteRoute($path, $params, $base, '', $websiteId);
+
+        return [
+            'decision' => $decision['decision'],
+            'redirect_path' => $absolute,
+            'redirect_params' => [],
+            'absolute' => true,
         ];
     }
 

@@ -375,13 +375,6 @@
       }
       var totals = data.totals || {};
       var currency = totals.currency || 'CNY';
-      var map = {
-        subtotal: '[data-express-subtotal]',
-        shipping: '[data-express-shipping]',
-        tax: '[data-express-tax]',
-        discount: '[data-express-discount]',
-        grand: '[data-express-grand]',
-      };
       var values = {
         subtotal: majorFromTotals(totals, 'subtotal', 'subtotal_minor'),
         shipping: majorFromTotals(totals, 'shipping_amount', 'shipping_amount_minor'),
@@ -389,12 +382,33 @@
         discount: majorFromTotals(totals, 'discount_amount', 'discount_amount_minor'),
         grand: majorFromTotals(totals, 'grand_total', 'grand_total_minor'),
       };
-      Object.keys(map).forEach(function (key) {
-        var el = root.querySelector(map[key]);
-        if (el) {
-          el.textContent = money(values[key], currency);
-        }
-      });
+      var sms = global.WelineStorefrontMoneySummary;
+      var smsRoot = root.querySelector('[data-money-summary]');
+      if (sms && typeof sms.paint === 'function' && smsRoot) {
+        sms.paint(smsRoot, {
+          mode: 'express',
+          currency: currency,
+          goods_subtotal_minor: Math.round(Number(values.subtotal || 0) * 100),
+          shipping_minor: Math.round(Number(values.shipping || 0) * 100),
+          tax_minor: Math.round(Number(values.tax || 0) * 100),
+          discount_minor: Math.round(Number(values.discount || 0) * 100),
+          payable_minor: Math.round(Number(values.grand || 0) * 100),
+        });
+      } else {
+        var map = {
+          subtotal: '[data-express-subtotal]',
+          shipping: '[data-express-shipping]',
+          tax: '[data-express-tax]',
+          discount: '[data-express-discount]',
+          grand: '[data-express-grand]',
+        };
+        Object.keys(map).forEach(function (key) {
+          var el = root.querySelector(map[key]);
+          if (el) {
+            el.textContent = money(values[key], currency);
+          }
+        });
+      }
 
       var shipBlock = root.querySelector('[data-express-shipping-block]');
       var shipList = root.querySelector('[data-express-shipping-list]');

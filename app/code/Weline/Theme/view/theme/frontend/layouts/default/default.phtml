@@ -59,11 +59,7 @@ $extraClasses = array_values(array_filter(
 
                 <div class="w-frontend-content-grid">
                     <w:slot id="sidebar-left" name="Left sidebar" accept="layout-sidebar,sidebar,filter,navigation,content" multiple="true" position="sidebar" class="w-frontend-sidebar">
-                        <w:hook>
-                            Weline_Theme::frontend::layouts::default::sidebar-left
-                            <else/>
-                            <w:widget type="content" name="contact-info" />
-                        </w:hook>
+                        <w:hook>Weline_Theme::frontend::layouts::default::sidebar-left</w:hook>
                     </w:slot>
 
                     <w:slot id="content" name="Content" accept="layout-default-content,content,container,banner,carousel,product,category,faq,video" reject="header,footer" multiple="true" position="content" class="w-frontend-content">
@@ -90,8 +86,12 @@ $extraClasses = array_values(array_filter(
                     </w:slot>
                 </div>
 
-                <w:slot id="content-after" name="Content after" accept="layout-content-after,layout-default-after,banner,content,container" multiple="true" append="true" position="content" class="w-frontend-content-after">
-                    <w:hook>Weline_Theme::frontend::layouts::default::content-after</w:hook>
+                <w:slot id="content-after" name="Content after" accept="layout-content-after,layout-default-after,banner,content,container,contact-info" multiple="true" append="true" position="content" class="w-frontend-content-after">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::default::content-after
+                        <else/>
+                        <w:widget type="content" name="contact-info" />
+                    </w:hook>
                     <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
                 </w:slot>
             </div>

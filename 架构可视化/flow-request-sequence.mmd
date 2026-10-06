@@ -1,0 +1,65 @@
+%% Weline 前台请求时序（行级证据见 flow-evidence.md）· Mermaid sequence 版
+sequenceDiagram
+    autonumber
+    participant B as 浏览器
+    participant N as nginx
+    participant T as Transport<br/>WlsRuntime/FpmRuntime
+    participant P as RequestPipeline
+    participant A as App
+    participant K as RequestContext+Context<br/>请求上下文/纤程隔离
+    participant S as ScopeResolver(DetectWebsite)<br/>Websites 模块
+    participant F as FullPageCacheCoordinator
+    participant R as Router\Core
+    participant C as Controller+View
+
+    B->>N: GET /product/...
+    N->>T: 转发（静态直出 pub/static 不进PHP）
+    T->>P: runWithRuntime→handle→execute
+    P->>A: bootstrapRequestCycle
+    A->>K: RequestContext::init() :143
+    Note over K: 每次请求重置 storage/cleanup 数组<br/>生成 requestId/connectionId/chainId
+    P->>A: dispatchPreRouteGate（维护模式门禁·事件观察者）
+    P->>A: parseUrl + applyParsedUrl
+    A->>K: synchronizeParsedLocalization：冻结访客 URI 的<br/>lang/currency（先于 Storefront 范围与一切缓存键）
+
+    rect rgb(232, 242, 255)
+        Note over A,S: 上下文计算段①——Scope 只算一次
+        A->>S: installStorefrontNavigationScope(App.php:781)<br/>经 provides DI 解析 StorefrontScopeInstallerInterface
+        S->>S: ScopeResolver 解析 Website→Store→Channel<br/>L2 路径匹配缓存 + L3 ScopeData
+        S->>K: RequestContext::installScopeIdentity(ScopeResolver.php:131)
+        Note over K: 发布不可变 ScopeIdentity（final readonly）<br/>先清空全部可变投影再写入，避免继承脏值<br/>二次改写不同身份 → LogicException「已冻结」
+        K-->>S: 已冻结身份只允许重入读取
+    end
+
+    A->>K: request.uri 换成 navigationScope.routePath :449-452
+    A-->>A: storefront_scope_ready_gate / application_context_ready 事件
+    rect rgb(232, 242, 255)
+        Note over A,K: 上下文计算段②——缓存键指纹只算一次
+        A->>K: StorefrontCacheKeyContextResolver::freezeCurrent(App.php:496)
+        Note over K: 先装 provisional fence，再解命名空间代次向量<br/>→ 不可变 StorefrontCacheKeyContext(SHA-256 指纹)<br/>身份/lang/currency/locale 链全一致则直接复用
+        A->>K: StorefrontRenderContextInstaller::installOnce :510
+    end
+
+    P->>F: getCachedResponse (Core.php:1707)
+    F->>K: 读 StorefrontCacheKeyContext::current() :1776
+    Note over K,F: 命中即返回：不再解析 Scope、不重建缓存键
+    alt FPC HIT / stale soft-serve
+        F-->>B: 缓存 Response（X-WLS-FPC-Status: HIT/stale）
+    else MISS
+        P->>F: acquireBuildLock（单飞；未抢到→waitForPublishedResponse）
+        P->>A: dispatchRunBefore（run_before 事件）
+        P->>A: startSessionIfNeeded（懒会话）
+        P->>R: initializeRouter→runRouter→start()
+        R->>K: 读 env.area / route.path / ScopeIdentity（无 DB、无重解析）
+        R->>R: generated路由快路径 + 统一路由缓存<br/>事件 router_before_start/process_uri_before/route_before
+        R->>C: Attribute链 execute（鉴权短路可返回）
+        R->>C: ObjectManager实例化控制器(provides DI)<br/>call_user_func([$dispatch,$method]) :1893
+        C->>K: getWelineWebsiteCode() 等直接从 scopeIdentity() 取值 :699-712
+        C->>C: Block.render→编译模板 include+extract<br/><hook> 执行各模块 view/hooks（priority/sort/solo）
+        C-->>R: HTML
+        R->>F: publishResponse(canPublish判定)→releaseBuildLock :2006/:2033
+        F->>K: 复用同一冻结 context 拼发布键
+        P->>A: dispatchRunAfter（仅正常路由响应）
+        P->>K: Runtime finally + RequestResetter 恰好一次清理上下文
+        P-->>B: 响应输出（异常走 handleException→RendererFactory 500）
+    end

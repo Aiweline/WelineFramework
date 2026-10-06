@@ -1,22 +1,18 @@
 <!-- weline:module-ai-index:auto-generated -->
 # Weline_Framework AI 开发入口
 
-> 本文件由 `dev/ai/scripts/generate-module-ai-indexes.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
+> 本文件由 `dev/ai/scripts/generate-module-docs.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
 
 ## 必读顺序
 
 1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
-3. `dev/ai/diagrams/08-module-docs-index.txt`
-4. 本文件：`app/code/Weline/Framework/doc/AI-INDEX.md`
-5. 模块说明：`app/code/Weline/Framework/doc/README.md`
-6. **Event 命名与注册**：`app/code/Weline/Framework/doc/3-开发/事件命名与注册规范.md`
-7. **模块版本与升级门禁**：`app/code/Weline/Framework/doc/3-开发/模块版本与升级门禁.md`
-8. 认证/设备任务：`app/code/Weline/Framework/doc/需求.md`、`app/code/Weline/Framework/doc/开发日志.md`、`app/code/Weline/SessionManager/doc/设备管理架构.md`
-9. `app/code/Weline/Theme/doc/AI-INDEX.md`
-10. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-11. `app/code/Weline/Taglib/doc/AI-INDEX.md`
-12. 只读取本次任务相关源码、配置和验证入口
+2. 全局硬规则与任务路由：`app/code/Weline/Ai/doc/AI硬规则索引.md`
+3. 本文件：`app/code/Weline/Framework/doc/AI-INDEX.md`
+4. 模块说明：`app/code/Weline/Framework/doc/README.md`
+5. `app/code/Weline/Theme/doc/AI-INDEX.md`
+6. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+7. `app/code/Weline/Taglib/doc/AI-INDEX.md`
+8. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -28,27 +24,27 @@
 ## 代码面清单
 
 入口/配置文件：
+- `app/code/Weline/Framework/composer.json`
 - `app/code/Weline/Framework/etc/backend/menu.xml`
 - `app/code/Weline/Framework/.module_config.json`
-- `app/code/Weline/Framework/composer.json`
 
 - `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：8
 - `Config`：配置读取、合并或 schema 支撑。涉及作用域配置时同时读 SystemConfig 文档。 文件数：1
-- `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：37
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：12
+- `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：40
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：19
 - `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：2
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：12
+- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：3
 - `Plugin`：插件扩展点。变更前确认被拦截对象和执行顺序。 文件数：15
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：53
-- `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：38
-- `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：2
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：57
+- `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：40
+- `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：5
 - `Ui`：后台/编辑器 UI 参数、schema 或渲染支撑。 文件数：1
 - `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：4
-- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：16
+- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：24
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：3
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：6
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：3
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
 
@@ -56,13 +52,10 @@
 - 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
-- 识别到 QueryProvider 相关 PHP 文件：Authorization/Resource/AuthorizationResourceCatalogBuilder.php、Common/functions.php、Compilation/FrameworkCompiler.php、Console/Console/Framework/Compile.php、Console/Console/Query/Help.php、Extends/module/Weline_Framework/Query/AsyncEventDeliveryQueryProvider.php、Extends/module/Weline_Framework/Query/FrameworkAdminQueryProvider.php、Extends/module/Weline_Framework/Query/QueryHelpProvider.php 等；前端/跨模块读数据先查 query 帮助。
+- 识别到 QueryProvider 入口：`Extends/module/Weline_Framework/Query/AsyncEventDeliveryQueryProvider.php`、`Extends/module/Weline_Framework/Query/FrameworkAdminQueryProvider.php`、`Extends/module/Weline_Framework/Query/QueryHelpProvider.php`、`Extends/module/Weline_Framework/Query/ResumableTaskQueryProvider.php`、`Extends/module/Weline_Framework/Query/TestQueryProvider.php`；前端/跨模块读数据先查 `php bin/w query:help`。
 
 ## doc 目录
 
-- `app/code/Weline/Framework/doc/需求.md`
-- `app/code/Weline/Framework/doc/开发日志.md`
-- `app/code/Weline/Framework/doc/0-简介/理念/WelineFramework框架设计目的！.txt`
 - `app/code/Weline/Framework/doc/1-部署/服务器部署.md`
 - `app/code/Weline/Framework/doc/2-快速开始/01-概述.md`
 - `app/code/Weline/Framework/doc/2-快速开始/02-快速创建模组-Hello World.md`
@@ -75,20 +68,24 @@
 - `app/code/Weline/Framework/doc/2-快速开始/09-模组管理.md`
 - `app/code/Weline/Framework/doc/2-快速开始/10-类规范.md`
 - `app/code/Weline/Framework/doc/2-快速开始/11-快速参考_常见错误和解决方案.md`
-- `app/code/Weline/Framework/doc/2-快速开始/快速建立一个模组.txt`
-- `app/code/Weline/Framework/doc/2-快速开始/控制器.txt`
 - `app/code/Weline/Framework/doc/3-开发/01-翻译函数使用指南.md`
 - `app/code/Weline/Framework/doc/3-开发/API接口开发规范.md`
 - `app/code/Weline/Framework/doc/3-开发/SSE可恢复后台任务架构.md`
 - `app/code/Weline/Framework/doc/3-开发/Scope限流.md`
+- `app/code/Weline/Framework/doc/3-开发/WLS-Fiber上下文与进程缓存边界.md`
+- `app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md`
 - `app/code/Weline/Framework/doc/3-开发/secret_ref凭据密封.md`
+- `app/code/Weline/Framework/doc/3-开发/事件命名与注册规范.md`
 - `app/code/Weline/Framework/doc/3-开发/事务协调与after-commit.md`
 - `app/code/Weline/Framework/doc/3-开发/安全响应头策略.md`
+- `app/code/Weline/Framework/doc/3-开发/开发标准与验收.md`
 - `app/code/Weline/Framework/doc/3-开发/异步事件死信运维.md`
 - `app/code/Weline/Framework/doc/3-开发/异步观察者与资源变更测试矩阵.md`
+- `app/code/Weline/Framework/doc/3-开发/扩展点选型.md`
 - `app/code/Weline/Framework/doc/3-开发/控制面资源变更目录.md`
 - `app/code/Weline/Framework/doc/3-开发/服务器事件系统.md`
 - `app/code/Weline/Framework/doc/3-开发/模块开发完整指南.md`
+- `app/code/Weline/Framework/doc/3-开发/模块版本与升级门禁.md`
 - `app/code/Weline/Framework/doc/3-开发/模型升级顺序规则.md`
 - `app/code/Weline/Framework/doc/3-开发/缓存使用指南.md`
 - `app/code/Weline/Framework/doc/3-开发/配置包AEAD信封.md`
@@ -110,16 +107,20 @@
 - `app/code/Weline/Framework/doc/BinQuery/README.md`
 - `app/code/Weline/Framework/doc/BinQuery/SDK使用指南.md`
 - `app/code/Weline/Framework/doc/BinQuery/协议对接指南.md`
+- `app/code/Weline/Framework/doc/Parser词典分层缓存.md`
 - `app/code/Weline/Framework/doc/README.md`
+- `app/code/Weline/Framework/doc/URL来源观测.md`
 - `app/code/Weline/Framework/doc/architecture/01-current.md`
 - `app/code/Weline/Framework/doc/architecture/02-target.md`
 - `app/code/Weline/Framework/doc/architecture/03-module-contract.md`
 - `app/code/Weline/Framework/doc/architecture/04-performance-budget.md`
 - `app/code/Weline/Framework/doc/architecture/README.md`
+- `app/code/Weline/Framework/doc/event/README.md`
 - `app/code/Weline/Framework/doc/event/acl/ACL分发.md`
 - `app/code/Weline/Framework/doc/event/app/URL解析后.md`
 - `app/code/Weline/Framework/doc/event/app/后端控制器初始化前.md`
 - `app/code/Weline/Framework/doc/event/app/后端控制器初始化后.md`
+- `app/code/Weline/Framework/doc/event/app/应用上下文就绪通知.md`
 - `app/code/Weline/Framework/doc/event/app/应用运行前.md`
 - `app/code/Weline/Framework/doc/event/app/应用运行后.md`
 - `app/code/Weline/Framework/doc/event/app/店面范围就绪门禁.md`
@@ -139,10 +140,187 @@
 - `app/code/Weline/Framework/doc/event/database/模型更新前.md`
 - `app/code/Weline/Framework/doc/event/database/模型更新后.md`
 - `app/code/Weline/Framework/doc/event/deploy/部署模式切换到生产环境后.md`
+- `app/code/Weline/Framework/doc/event/deploy/静态资源升级后.md`
 - `app/code/Weline/Framework/doc/event/fpc/缓存命中响应.md`
 - `app/code/Weline/Framework/doc/event/framework/resource_changed.md`
 - `app/code/Weline/Framework/doc/event/framework/系统消息通知.md`
-- `... 另有 66 个文档，请按任务在该模块 doc/ 下继续查找`
+- `app/code/Weline/Framework/doc/event/http/响应无路由前.md`
+- `app/code/Weline/Framework/doc/event/http/响应重定向前.md`
+- `app/code/Weline/Framework/doc/event/http/处理区域.md`
+- `app/code/Weline/Framework/doc/event/http/客户端IP头Keys收集.md`
+- `app/code/Weline/Framework/doc/event/http/最终响应就绪.md`
+- `app/code/Weline/Framework/doc/event/maintenance/维护模式.md`
+- `app/code/Weline/Framework/doc/event/model/模型保存前.md`
+- `app/code/Weline/Framework/doc/event/model/模型保存后.md`
+- `app/code/Weline/Framework/doc/event/model/模型删除前.md`
+- `app/code/Weline/Framework/doc/event/model/模型删除后.md`
+- `app/code/Weline/Framework/doc/event/model/模型加载前.md`
+- `app/code/Weline/Framework/doc/event/model/模型加载后.md`
+- `app/code/Weline/Framework/doc/event/module/控制器属性.md`
+- `app/code/Weline/Framework/doc/event/module/模块升级.md`
+- `app/code/Weline/Framework/doc/event/module/模块升级前.md`
+- `app/code/Weline/Framework/doc/event/module/模块卸载后.md`
+- `app/code/Weline/Framework/doc/event/module/模块安装后.md`
+- `app/code/Weline/Framework/doc/event/phrase/获取翻译文件.md`
+- `app/code/Weline/Framework/doc/event/phrase/词典批量翻译.md`
+- `app/code/Weline/Framework/doc/event/phrase/词典登记.md`
+- `app/code/Weline/Framework/doc/event/phrase/词典编译.md`
+- `app/code/Weline/Framework/doc/event/phrase/词典编译完成.md`
+- `app/code/Weline/Framework/doc/event/query/模块查询动态事件.md`
+- `app/code/Weline/Framework/doc/event/query/统一查询执行前.md`
+- `app/code/Weline/Framework/doc/event/query/统一查询执行后.md`
+- `app/code/Weline/Framework/doc/event/query/统一查询执行提供者.md`
+- `app/code/Weline/Framework/doc/event/register/注册安装器.md`
+- `app/code/Weline/Framework/doc/event/resource/资源编译后.md`
+- `app/code/Weline/Framework/doc/event/resource/资源编译器.md`
+- `app/code/Weline/Framework/doc/event/router/URI处理前.md`
+- `app/code/Weline/Framework/doc/event/router/后端未登录重定向URL.md`
+- `app/code/Weline/Framework/doc/event/router/后端白名单URL.md`
+- `app/code/Weline/Framework/doc/event/router/路由处理前.md`
+- `app/code/Weline/Framework/doc/event/router/路由处理后.md`
+- `app/code/Weline/Framework/doc/event/router/路由开始前.md`
+- `app/code/Weline/Framework/doc/event/server/服务器停止后.md`
+- `app/code/Weline/Framework/doc/event/server/服务器启动后.md`
+- `app/code/Weline/Framework/doc/event/setup/SchemaDiff提交前.md`
+- `app/code/Weline/Framework/doc/event/setup/系统升级后.md`
+- `app/code/Weline/Framework/doc/event/system/系统更新后.md`
+- `app/code/Weline/Framework/doc/event/template/标签配置后.md`
+- `app/code/Weline/Framework/doc/event/template/模板源码编译前.md`
+- `app/code/Weline/Framework/doc/event/template/模板编译后.md`
+- `app/code/Weline/Framework/doc/event/uninstall/卸载服务.md`
+- `app/code/Weline/Framework/doc/event/url/SEO解码.md`
+- `app/code/Weline/Framework/doc/event/url/URL生成参数.md`
+- `app/code/Weline/Framework/doc/event/url/URL生成重写.md`
+- `app/code/Weline/Framework/doc/event/url/检测网站.md`
+- `app/code/Weline/Framework/doc/event/url/检测语言.md`
+- `app/code/Weline/Framework/doc/event/url/检测货币.md`
+- `app/code/Weline/Framework/doc/event/view/w-form.md`
+- `app/code/Weline/Framework/doc/event/view/视图位置.md`
+- `app/code/Weline/Framework/doc/event/view/视图头部.md`
+- `app/code/Weline/Framework/doc/event/view/视图底部.md`
+- `app/code/Weline/Framework/doc/event/view/视图文件获取.md`
+- `app/code/Weline/Framework/doc/http/状态回执页渲染.md`
+- `app/code/Weline/Framework/doc/i18n-placeholder-usage.md`
+- `app/code/Weline/Framework/doc/migration-journal.md`
+- `app/code/Weline/Framework/doc/module-marketplace-meta-client.md`
+- `app/code/Weline/Framework/doc/pgsql-rollback-disconnected.md`
+- `app/code/Weline/Framework/doc/static-resource-versioning.md`
+- `app/code/Weline/Framework/doc/template/模板渲染后.md`
+- `app/code/Weline/Framework/doc/功能现状.md`
+- `app/code/Weline/Framework/doc/开发/FPC上收Framework与Store适配器.md`
+- `app/code/Weline/Framework/doc/开发/plan.md`
+- `app/code/Weline/Framework/doc/开发/session/fiber-ob-migrate-20260923.md`
+- `app/code/Weline/Framework/doc/开发/session/wls-perf-regression-20260923.md`
+- `app/code/Weline/Framework/doc/开发/spec/controller-extra-fpc.md`
+- `app/code/Weline/Framework/doc/开发/spec/fiber-task-batch-collectors.md`
+- `app/code/Weline/Framework/doc/开发/spec/process-l1-pressure-eviction.md`
+- `app/code/Weline/Framework/doc/开发/spec/prod-static-publish-complete.md`
+- `app/code/Weline/Framework/doc/开发/spec/setup-upgrade-theme-hang.md`
+- `app/code/Weline/Framework/doc/开发/spec/website-locale-static-error-pages.md`
+- `app/code/Weline/Framework/doc/开发/task.md`
+- `app/code/Weline/Framework/doc/开发/team/controller-extra-fpc/README.md`
+- `app/code/Weline/Framework/doc/开发/team/controller-extra-fpc/cards/00-arch-spine.md`
+- `app/code/Weline/Framework/doc/开发/team/controller-extra-fpc/meetings/汇审.md`
+- `app/code/Weline/Framework/doc/开发/team/controller-extra-fpc/roster.md`
+- `app/code/Weline/Framework/doc/开发/team/controller-extra-fpc/tasks.md`
+- `app/code/Weline/Framework/doc/开发/team/controller-extra-fpc/总逻辑.md`
+- `app/code/Weline/Framework/doc/开发/team/fiber-ob-migrate-20260923/channel/architect-pm.md`
+- `app/code/Weline/Framework/doc/开发/team/fiber-ob-migrate-20260923/channel/backend-pm.md`
+- `app/code/Weline/Framework/doc/开发/team/fiber-ob-migrate-20260923/channel/perf-pm.md`
+- `app/code/Weline/Framework/doc/开发/team/fiber-ob-migrate-20260923/channel/theme-pm.md`
+- `app/code/Weline/Framework/doc/开发/team/fiber-ob-migrate-20260923/contracts.md`
+- `app/code/Weline/Framework/doc/开发/team/fiber-ob-migrate-20260923/deps.md`
+- `app/code/Weline/Framework/doc/开发/team/fiber-ob-migrate-20260923/meetings/性能-复审.md`
+- `app/code/Weline/Framework/doc/开发/team/fiber-ob-migrate-20260923/meetings/架构-冻结.md`
+- `app/code/Weline/Framework/doc/开发/team/fiber-ob-migrate-20260923/roster.md`
+- `app/code/Weline/Framework/doc/开发/team/fiber-ob-migrate-20260923/session/fiber-ob-migrate-20260923.md`
+- `app/code/Weline/Framework/doc/开发/team/fiber-ob-migrate-20260923/surfaces.md`
+- `app/code/Weline/Framework/doc/开发/team/fpc-framework-ownership/meetings/汇审.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/channel/escalate-to-pm.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/channel/framework-unreasonable-audit.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/channel/perf-architect.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/channel/pm-arrange-wave1.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/channel/pm-arrange-wave2-status.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/arrange-20260922.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave3a-search-alias.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave3c-cold-ssr-design.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave4-cold-trace.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave6-cold-trace.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave7-7a-cold-gate.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave8-8a-cold-gate.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave8-8a2-solidified-template.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave8-8s5-solidified-shell.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave8-8v-cold-gate.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave8-8v2-cold-gate.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave8-closeout-solidified-template.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9a-a-axis.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9p-card-batch.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9s-storefront-head.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9s2-integrity.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9s3-chrome-graft.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9s4-chrome-all.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9s5-layoutslot-skip.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9s6-skip-hit.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9v-cold-gate.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9v2-cold-gate.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9v3-cold-gate.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9v4-cold-gate.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-9v5-cold-gate.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/wave9-closeout.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/主题-R3-design.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/性能检查-design.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/性能检查-review.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/meetings/框架不合理点-20260922.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/roster-unreasonable-audit.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/roster-wave2.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/roster-wave4.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/roster-wave5.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/roster-wave6.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/roster-wave7.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/roster-wave8.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/roster-wave9.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/roster.md`
+- `app/code/Weline/Framework/doc/开发/team/framework-perf-baseline-20260922/surfaces.md`
+- `app/code/Weline/Framework/doc/开发/team/phrase-translate-readonly/meetings/汇审.md`
+- `app/code/Weline/Framework/doc/开发/team/process-l1-pressure-eviction/meetings/技术方案会.md`
+- `app/code/Weline/Framework/doc/开发/team/process-l1-pressure-eviction/meetings/汇审.md`
+- `app/code/Weline/Framework/doc/开发/team/process-l1-pressure-eviction/roster.md`
+- `app/code/Weline/Framework/doc/开发/team/process-l1-pressure-eviction/surfaces.md`
+- `app/code/Weline/Framework/doc/开发/team/public-text-cache-admission/meetings/汇审.md`
+- `app/code/Weline/Framework/doc/开发/team/request-fence-no-shared-cache/meetings/汇审.md`
+- `app/code/Weline/Framework/doc/开发/team/response-observability-headers/meetings/汇审.md`
+- `app/code/Weline/Framework/doc/开发/team/setup-upgrade-theme-hang/meetings/技术方案会.md`
+- `app/code/Weline/Framework/doc/开发/team/setup-upgrade-theme-hang/meetings/汇审.md`
+- `app/code/Weline/Framework/doc/开发/team/setup-upgrade-theme-hang/roster.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/channel/perf-architect.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/contracts.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/deps.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/主题-construction-p5.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/主题-construction-p8.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/主题-construction.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/后端-construction-p5.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/后端-construction-p7.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/后端-construction-p8.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/后端-construction.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/性能检查-design.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/性能检查-p7-design.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/性能检查-review-p6.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/性能检查-review-p7.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/性能检查-review-p8.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/性能检查-review.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/架构-p7.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/架构-p8.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/架构-诊断.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/meetings/汇审.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/roster.md`
+- `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/surfaces.md`
+- `app/code/Weline/Framework/doc/开发日志.md`
+- `app/code/Weline/Framework/doc/性能诊断-20260908.md`
+- `app/code/Weline/Framework/doc/模块功能跟随模块禁用或者启用状态变更需求.md`
+- `app/code/Weline/Framework/doc/统一缓存范围与性能优化.md`
+- `app/code/Weline/Framework/doc/缓存环境来源.md`
+- `app/code/Weline/Framework/doc/编译缓存格式迁移.md`
+- `app/code/Weline/Framework/doc/需求.md`
 
 ## 开发前门禁
 

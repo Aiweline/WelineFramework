@@ -257,6 +257,7 @@ final class CartService
 
         $resolved = $this->resolveCartType($cartTypePreference, $customerId, $scope);
         $cartType = $resolved['code'];
+        $requestedCartType = $cartType;
 
         $snapshot = $this->registry->resolve($offer, $scope, $selection);
         if (!$snapshot->found) {
@@ -283,6 +284,7 @@ final class CartService
         }
 
         $cartType = $this->remapCartTypeForOffer($cartType, $snapshot, $scope, $customerId);
+        $cartTypeRemapped = $cartType !== $requestedCartType;
 
         $cartKey = $this->cartKey($scope, $guestToken, $customerId, $cartType);
         $cart = $this->loadCart($scope, $guestToken, $customerId, $cartType)
@@ -361,13 +363,22 @@ final class CartService
         }
 
         $this->store->set($cartKey, $cart);
-        $summary = $this->summary($cart, true, $adjusted
+        $addMessage = $adjusted
             ? (string)__('「%{1}」库存不足，已按当前可售数量加入购物车。', [$snapshot->name !== '' ? $snapshot->name : (string)__('该商品')])
-            : (string)__('已加入购物车。'), [
+            : (
+                $cartTypeRemapped
+                && $requestedCartType === 'tob'
+                && $cartType === CommerceCartTypeRegistry::CODE_TOC
+                    ? (string)__('该商品不支持批发，已加入零售车。')
+                    : (string)__('已加入购物车。')
+            );
+        $summary = $this->summary($cart, true, $addMessage, [
             'quantity_adjusted' => $adjusted,
             'requested_quantity' => $requested,
             'adjusted_quantity' => $qty,
             'selection_hash' => $serverHash,
+            'requested_cart_type' => $requestedCartType,
+            'cart_type_remapped' => $cartTypeRemapped,
         ], $scope);
         $this->dispatchTypedCartEvent('Weline_Cart::cart_item_added', $summary, [
             'selection_hash' => $serverHash,
@@ -1312,7 +1323,7 @@ final class CartService
                 $message = $blockingMessage;
             }
         }
-        return [
+        $summary = [
             'success' => $success,
             'message' => $message,
             'scope_key' => $cart['scope_key'],
@@ -1328,11 +1339,62 @@ final class CartService
             'distinct_count' => count($items),
             'subtotal_minor' => $subtotal,
             'grand_total_minor' => $subtotal,
+            'tax_amount_minor' => 0,
+            'tax_amount' => 0.0,
             'is_empty' => $items === [],
             'checkout_blocked' => $checkoutBlocked,
             'line_issues' => $lineIssues,
             'blocking_message' => $blockingMessage,
         ] + $extra;
+
+        return $this->enrichSummary($summary, $scope);
+    }
+
+    /**
+     * Allow optional modules (e.g. Tax) to enrich cart money fields without Cart coupling.
+     *
+     * @param array<string, mixed> $summary
+     * @return array<string, mixed>
+     */
+    private function enrichSummary(array $summary, ?ScopeIdentity $scope): array
+    {
+        try {
+            /** @var EventsManager $events */
+            $events = ObjectManager::getInstance(EventsManager::class);
+        } catch (\Throwable) {
+            return $summary;
+        }
+
+        $payload = [
+            'summary' => $summary,
+            'scope' => [
+                'website_id' => $scope?->websiteId ?? (int)RequestContext::getWelineWebsiteId(),
+                'store_id' => (int)RequestContext::getWelineStoreId(),
+                'channel_id' => (int)RequestContext::getWelineChannelId(),
+                'scope_key' => (string)($summary['scope_key'] ?? ''),
+            ],
+        ];
+        try {
+            $events->dispatch('Weline_Cart::cart_summary::enrich', $payload);
+        } catch (\Throwable) {
+            return $summary;
+        }
+
+        $enriched = $payload['summary'] ?? null;
+        if (!is_array($enriched)) {
+            return $summary;
+        }
+        $taxMinor = max(0, (int)($enriched['tax_amount_minor'] ?? 0));
+        $subtotalMinor = max(0, (int)($enriched['subtotal_minor'] ?? $summary['subtotal_minor'] ?? 0));
+        $enriched['tax_amount_minor'] = $taxMinor;
+        $enriched['tax_amount'] = round($taxMinor / 100, 2);
+        if (!isset($enriched['grand_total_minor']) || (int)$enriched['grand_total_minor'] < $subtotalMinor) {
+            $enriched['grand_total_minor'] = $subtotalMinor + $taxMinor;
+        }
+        $enriched['grand_total'] = round(((int)$enriched['grand_total_minor']) / 100, 2);
+        $enriched['subtotal'] = round($subtotalMinor / 100, 2);
+
+        return $enriched;
     }
 
     /**

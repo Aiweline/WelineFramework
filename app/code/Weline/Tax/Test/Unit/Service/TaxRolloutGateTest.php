@@ -30,6 +30,16 @@ final class TaxRolloutGateTest extends TestCase
             array_values($gate->configuration()['allowlist_rows']),
         );
 
+        $websiteGate = TaxRolloutGate::forTestingConfiguration();
+        $websiteGate->setMode('tax', CommerceRolloutGateInterface::MODE_ALLOWLIST, ['website:0']);
+        self::assertTrue($websiteGate->isEffectivelyOn('tax', 'website:0'));
+        self::assertTrue($websiteGate->isEffectivelyOn('tax', '0:1:1'));
+        self::assertFalse($websiteGate->isEffectivelyOn('tax', 'website:1'));
+        self::assertSame(
+            [['website_id' => 0]],
+            array_values($websiteGate->configuration()['allowlist_rows']),
+        );
+
         $gate->setMode('tax', CommerceRolloutGateInterface::MODE_OFF);
         self::assertSame([], $gate->configuration()['allowlist']);
         self::assertFalse($gate->isEffectivelyOn('tax', '0:1:1'));
@@ -40,7 +50,7 @@ final class TaxRolloutGateTest extends TestCase
         $gate = TaxRolloutGate::forTestingConfiguration();
         foreach (
             [
-                ['website:0'],
+                ['website'],
                 ['0:0:1'],
                 ['0:1:0'],
                 ['0:1:1', '0:1:1'],

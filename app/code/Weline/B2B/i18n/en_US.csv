@@ -148,6 +148,7 @@ settings,settings
 批发车需登录后使用,"Sign in to use the wholesale cart"
 开通批发身份后可使用批发车,"Activate wholesale membership to use the wholesale cart"
 批发不可用,"Unavailable for wholesale"
+批发身份,"Wholesale membership"
 批发起订与阶梯价,"Wholesale MOQ and tier pricing"
 "起订 %{1} · 步进 %{2}","MOQ %{1} · step %{2}"
 "%{1} 件 %{2} %{3}/件","%{1} pcs %{2} %{3}/pc"
@@ -179,7 +180,6 @@ settings,settings
 请输入密码,"Enter password"
 登录失败，请检查用户名和密码,"Login failed, please check your username and password"
 登录请求失败，请稍后重试,"Login request failed, please try again later"
-批发身份,"Wholesale membership"
 暂时无法读取迁移状态。,"Temporarily cannot read migration status."
 关闭（未启用）,"Off (disabled)"
 影子对照（只对比，不算新价）,"Shadow compare (compare only, not a new price)"
@@ -340,8 +340,10 @@ settings,settings
 发送,Send
 未读消息,"Unread messages"
 输入与商家/客户的沟通内容,"Enter chat content with merchant/customer"
-"当前为批发浏览；本商品仅支持零售。加入购物车 / 立即结账将进入零售车。","当前为批发浏览；本商品仅支持零售。加入购物车 / 立即结账将进入零售车。"
-查看零售车,查看零售车
+本商品不支持批发,"This item does not support wholesale"
+查看零售车,"View retail cart"
+支持批发,"Wholesale available"
+点击切换到批发模式,"Click to switch to wholesale mode"
 购买方式,"Purchase mode"
 批发起订,"Wholesale MOQ"
 件,pcs
@@ -572,6 +574,7 @@ settings,settings
 "apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID returned by apply (required for verify, allowlist, and rollback)"
 "目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the valid system default Website"
 显示本帮助,"Show this help"
+"当前为批发浏览；本商品仅支持零售。加入购物车 / 立即结账将进入零售车。","You are browsing wholesale; this item is retail-only. Add to cart / Buy now will go to the retail cart."
 批发订单适用与零售一致的质量与物流责任条款，另适用：正常范围内损耗不支持退货（例如运输导致的可熨烫褶皱、轻微线头、约定色差/公差内的批次差异）。确认的质量问题须按件/按批次提供凭证，经确认后按责任范围处理，不以「整单无理由」方式退货。详见「退换政策」。,"Wholesale orders follow the same quality and carrier-responsibility rules as retail, plus: normal in-range wear is not returnable (e.g. ironable transit wrinkles, minor threads, batch color variance within agreed tolerance). Confirmed quality issues require per-piece/batch evidence and are handled by responsibility scope—not as whole-order no-reason returns. See the Returns Policy."
 批发身份与信用说明,"Wholesale identity and credit guide"
 "VIP 等级、批发信用额度、定金与汇率换算说明","VIP tiers, wholesale credit limits, deposits and FX notes"

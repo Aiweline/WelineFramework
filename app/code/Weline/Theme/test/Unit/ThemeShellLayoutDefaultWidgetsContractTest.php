@@ -26,7 +26,15 @@ final class ThemeShellLayoutDefaultWidgetsContractTest extends TestCase
         self::assertStringContainsString('<w:widget type="content" name="text-block" />', $src);
         self::assertStringContainsString('<w:widget type="content" name="feature-list" />', $src);
         self::assertStringContainsString('<w:widget type="faq" name="faq-accordion" />', $src);
-        self::assertStringContainsString('<w:widget type="content" name="contact-info" />', $src);
+        // contact-info 须在 content-after（文末），禁止侧栏默认注入（窄屏会堆到顶部）
+        self::assertMatchesRegularExpression(
+            '/id="content-after"[\s\S]*<w:widget type="content" name="contact-info" \/>/',
+            $src
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/id="sidebar-left"[\s\S]*<w:widget type="content" name="contact-info" \/>[\s\S]*id="content"/',
+            $src
+        );
         self::assertStringNotContainsString('该页面尚未提供内容', $src);
     }
 

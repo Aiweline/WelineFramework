@@ -466,7 +466,22 @@ class Widget implements TaglibInterface
             $result = $template->fetchHtml($templatePath, $params);
             return is_string($result) ? $result : '';
         } catch (\Throwable $e) {
-            w_log_error("Widget 模板渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
+            if ($e instanceof \Weline\Framework\Runtime\RequestExitException) {
+                // 临时诊断：定位 RequestExit 在模板渲染期的真实抛出点（捕获点不含原栈）
+                w_log_error(
+                    "Widget 模板渲染错误: " . $e->getMessage()
+                    . " origin=" . $e->getFile() . ':' . $e->getLine()
+                    . ' trace=' . implode(' <- ', array_map(
+                        static fn (array $f): string => ($f['file'] ?? '?') . ':' . ($f['line'] ?? '?')
+                            . '#' . ($f['function'] ?? '?'),
+                        array_slice($e->getTrace(), 0, 12)
+                    )),
+                    [],
+                    'WidgetTaglib'
+                );
+            } else {
+                w_log_error("Widget 模板渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
+            }
             return '<!-- Widget 错误: ' . htmlspecialchars($e->getMessage()) . ' -->';
         } finally {
             $state = self::requestState();

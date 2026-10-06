@@ -2372,12 +2372,27 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 "可恢复任务 Runner 失败：%{1}","Resumable task Runner failed: %{1}"
 "可恢复任务 Runner 无法启动：%{1}","Resumable task Runner failed to start: %{1}"
 "执行一个已预占 fencing 的可恢复后台任务 Runner","Execute a resumable background task Runner that has preempted fencing"
+"棘轮基线已写入 %{1}（%{2} 条违规）。","棘轮基线已写入 %{1}（%{2} 条违规）。"
+架构基线文件不存在：%{1},架构基线文件不存在：%{1}
+"棘轮模式：对照基线 %{1}。","棘轮模式：对照基线 %{1}。"
+"已按 --ignore-file 排除 %{1} 条新增违规（不计入门禁）。","已按 --ignore-file 排除 %{1} 条新增违规（不计入门禁）。"
+"%{1} 消退 %{2} 条，建议 --update-baseline 收紧基线。","%{1} 消退 %{2} 条，建议 --update-baseline 收紧基线。"
+"其余 %{1} 条新增违规已省略，使用 --json 查看全部。","其余 %{1} 条新增违规已省略，使用 --json 查看全部。"
+"架构门禁失败：发现 %{1} 条基线之外的新增违规。","架构门禁失败：发现 %{1} 条基线之外的新增违规。"
+架构棘轮门禁通过：无新增违规。,架构棘轮门禁通过：无新增违规。
 "架构检查：%{1} 个模块，%{2} 个 PHP 文件，%{3} 条跨模块引用。","Schema check: %{1} modules, %{2} PHP files, %{3} cross-module references."
 "架构门禁失败：发现 %{1} 条违规。","Fabric access failed: %{1} violations found."
 架构门禁通过。,"Architectural access control passes."
+无法创建基线目录：%{1},无法创建基线目录：%{1}
+无法写入基线文件：%{1},无法写入基线文件：%{1}
 检查模块零耦合、依赖声明、循环依赖和请求链路阻塞调用,"Check for module zero coupling, dependency declarations, circular dependencies, and request link blocking calls"
 "迁移期允许从 register.php 读取模块元数据，仍会报告 manifest.missing","Module metadata is allowed to be read from register.php during the migration period, manifest.missing will still be reported"
+棘轮模式：仅阻断基线之外的新增违规,棘轮模式：仅阻断基线之外的新增违规
+棘轮模式：按路径子串排除特定文件的新增违规（用于并发会话未收口的改动，不计入门禁）,棘轮模式：按路径子串排除特定文件的新增违规（用于并发会话未收口的改动，不计入门禁）
+"把当前全部违规写入基线（配合 --baseline 指定路径）","把当前全部违规写入基线（配合 --baseline 指定路径）"
 生产门禁,"Production access control"
+棘轮门禁,棘轮门禁
+生成/收紧基线,生成/收紧基线
 迁移基线,"Migration baseline"
 成功关闭随机静态文件版本号！,"Successfully disabled random static file version numbers!"
 成功开启随机静态文件版本号！,"Successfully enabled random static file versioning!"

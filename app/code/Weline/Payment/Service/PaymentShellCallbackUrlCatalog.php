@@ -18,10 +18,13 @@ final class PaymentShellCallbackUrlCatalog
     public const QUERY_TRANSACTION_NO = 'transaction_no';
     public const QUERY_ENDPOINT_CODE = 'endpoint_code';
 
+    private string $activeStorefrontBase = '';
+
     public function __construct(
         private readonly Url $url,
         private readonly PayPalSandboxPublicOriginService $publicOrigin,
         private readonly PaymentBrowserCallbackTokenService $callbackToken,
+        private readonly ?PaymentStorefrontLandingUrlService $storefrontUrls = null,
     ) {
     }
 
@@ -154,12 +157,41 @@ final class PaymentShellCallbackUrlCatalog
             throw new \InvalidArgumentException('payment_shell_callback_payment_ref_required');
         }
 
-        return [
-            'return_url' => $this->browserReturn($storageScope, $methodCode, $transactionNo),
-            'cancel_url' => $this->browserCancel($storageScope, $methodCode, $transactionNo),
-            'notify_url' => $this->webhookNotify($endpointCode),
-            'failure_url' => $this->browserFailure($storageScope, $methodCode, $transactionNo),
-        ];
+        $storefrontBase = $this->resolveStorefrontBaseFromScope($scope);
+        $this->activeStorefrontBase = $storefrontBase;
+
+        try {
+            return [
+                'return_url' => $this->browserReturn($storageScope, $methodCode, $transactionNo),
+                'cancel_url' => $this->browserCancel($storageScope, $methodCode, $transactionNo),
+                'notify_url' => $this->webhookNotify($endpointCode),
+                'failure_url' => $this->browserFailure($storageScope, $methodCode, $transactionNo),
+            ];
+        } finally {
+            $this->activeStorefrontBase = '';
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolveStorefrontBaseFromScope(array $scope): string
+    {
+        $urls = $this->storefrontUrls();
+        $frozen = trim((string) ($scope['storefront_base_url'] ?? ''));
+        $websiteId = max(0, (int) ($scope['website_id'] ?? 0));
+
+        return $urls->resolveStorefrontBaseUrl($websiteId, $frozen);
+    }
+
+    private function storefrontUrls(): PaymentStorefrontLandingUrlService
+    {
+        if ($this->storefrontUrls !== null) {
+            return $this->storefrontUrls;
+        }
+
+        return \Weline\Framework\Manager\ObjectManager::getInstance()
+            ->getInstance(PaymentStorefrontLandingUrlService::class);
     }
 
     private function normalizeStorageScope(string $storageScope): string
@@ -177,6 +209,17 @@ final class PaymentShellCallbackUrlCatalog
 
     private function buildFrontendPathUrl(string $routePath): string
     {
+        if ($this->activeStorefrontBase !== '') {
+            $built = $this->storefrontUrls()->buildAbsoluteRoute(
+                $routePath,
+                [],
+                $this->activeStorefrontBase,
+            );
+            if ($built !== '' && str_starts_with($built, 'http')) {
+                return $built;
+            }
+        }
+
         $fixed = $this->publicOrigin->buildFrontendPathUrl($routePath);
         if ($fixed !== '') {
             return $fixed;

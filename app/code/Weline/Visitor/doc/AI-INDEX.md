@@ -1,19 +1,18 @@
 <!-- weline:module-ai-index:auto-generated -->
 # Weline_Visitor AI 开发入口
 
-> 本文件由 `dev/ai/scripts/generate-module-ai-indexes.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
+> 本文件由 `dev/ai/scripts/generate-module-docs.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
 
 ## 必读顺序
 
 1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
-3. `dev/ai/diagrams/08-module-docs-index.txt`
-4. 本文件：`app/code/Weline/Visitor/doc/AI-INDEX.md`
-5. 模块说明：`app/code/Weline/Visitor/doc/README.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-8. `app/code/Weline/Taglib/doc/AI-INDEX.md`
-9. 只读取本次任务相关源码、配置和验证入口
+2. 全局硬规则与任务路由：`app/code/Weline/Ai/doc/AI硬规则索引.md`
+3. 本文件：`app/code/Weline/Visitor/doc/AI-INDEX.md`
+4. 模块说明：`app/code/Weline/Visitor/doc/README.md`
+5. `app/code/Weline/Theme/doc/AI-INDEX.md`
+6. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+7. `app/code/Weline/Taglib/doc/AI-INDEX.md`
+8. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -21,43 +20,46 @@
 - 目录：`app/code/Weline/Visitor`
 - Vendor：`Weline`
 - Module：`Visitor`
-- **工程团队施工席**：`Team:数据分析:`（整模块；像素/报表；非框架 Event）→ `doc/ai/skills/visitor-data-analytics/SKILL.md`
 
 ## 代码面清单
 
 入口/配置文件：
-- `app/code/Weline/Visitor/etc/backend/menu.xml`
 - `app/code/Weline/Visitor/composer.json`
+- `app/code/Weline/Visitor/etc/backend/menu.xml`
 
-- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：7
+- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：8
 - `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：4
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：6
-- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：10
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：10
+- `Interface`：模块发布的接口契约。跨模块依赖优先使用这里的稳定契约。 文件数：2
+- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：13
 - `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：5
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：53
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：66
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：2
 - `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：1
 - `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：6
-- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：4
+- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：11
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：2
-- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：26
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：39
+- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：31
 
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
+- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
-- 识别到 QueryProvider 相关 PHP 文件：extends/module/Weline_Framework/Query/VisitorQueryProvider.php；前端/跨模块读数据先查 query 帮助。
+- 识别到 QueryProvider 入口：`extends/module/Weline_Framework/Query/VisitorQueryProvider.php`；前端/跨模块读数据先查 `php bin/w query:help`。
 
 ## doc 目录
 
-- `app/code/Weline/Visitor/doc/Visitor_Pixel_GTM_GA4_系统设计.md`（Pixel×GTM 冻结合同；**§10 热/温/冷数据层**）
-- `app/code/Weline/Visitor/doc/数据分析功能使用指南.md`（报表数据源边界、G01–G10、站点 taglib 筛选）
 - `app/code/Weline/Visitor/doc/GTM_Tag配置清单.md`
 - `app/code/Weline/Visitor/doc/README.md`
+- `app/code/Weline/Visitor/doc/Visitor_Pixel_GTM_GA4_系统设计.md`
 - `app/code/Weline/Visitor/doc/WebUI真实验收记录-Pixel-GTM.md`
+- `app/code/Weline/Visitor/doc/ai/skills/visitor-data-analytics/SKILL.md`
+- `app/code/Weline/Visitor/doc/event/事件链注册.md`
 - `app/code/Weline/Visitor/doc/event/访客像素标签.md`
+- `app/code/Weline/Visitor/doc/像素事件供应商管理-定稿合同.md`
 - `app/code/Weline/Visitor/doc/像素拓展使用指南.md`
 - `app/code/Weline/Visitor/doc/功能完善总结-数据分析.md`
 - `app/code/Weline/Visitor/doc/功能完善总结.md`
@@ -67,10 +69,18 @@
 - `app/code/Weline/Visitor/doc/功能检验报告-详细.md`
 - `app/code/Weline/Visitor/doc/功能检验报告.md`
 - `app/code/Weline/Visitor/doc/功能检验最终报告.md`
+- `app/code/Weline/Visitor/doc/功能现状.md`
 - `app/code/Weline/Visitor/doc/升级故障排除-traffic_split.md`
 - `app/code/Weline/Visitor/doc/多站点事件监听看板.md`
+- `app/code/Weline/Visitor/doc/开发/spec/conversion-event-dedupe.md`
+- `app/code/Weline/Visitor/doc/开发/spec/ga4-recommended-event-parity.md`
+- `app/code/Weline/Visitor/doc/开发/team/pixel-sandbox-init/channel/analytics-sandbox-init-done.md`
+- `app/code/Weline/Visitor/doc/开发日志.md`
 - `app/code/Weline/Visitor/doc/开发面板访问契约.md`
+- `app/code/Weline/Visitor/doc/数据分析功能使用指南.md`
 - `app/code/Weline/Visitor/doc/站点ID功能完善说明.md`
+- `app/code/Weline/Visitor/doc/错误监控与订阅闭环.md`
+- `app/code/Weline/Visitor/doc/需求.md`
 
 ## 开发前门禁
 

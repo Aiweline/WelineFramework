@@ -1043,6 +1043,34 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
+商品,Products
+查看规格图,"View spec images"
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+购物车是空的,"Shopping cart is empty"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+继续购物,"Continue shopping"
+小计,Subtotal
+去结算,"Proceed to Checkout"
+正在前往结算...,"Proceeding to checkout..."
+查看购物车,"View cart"
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+运费将在结算时计算,"Shipping calculated at checkout"
+税费（预估）,"Estimated tax"
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+"还差 %1 包邮","You're %1 away from free shipping"
+已享包邮,"You've unlocked free shipping"
+关闭通知,"Close notification"
 特价,Sale
 DEMO,DEMO
 热销,Hot
@@ -1051,9 +1079,6 @@ NEW,NEW
 加入收藏,"Add to Favorites"
 加入对比,"Add to Compare"
 快速查看,"Quick View"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
 视频,Video
 您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 件商品,"items of goods"
@@ -1072,35 +1097,12 @@ NEW,NEW
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
 官方社交媒体,"Official social media"
-商品,Products
-查看规格图,"View spec images"
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-购物车是空的,"Shopping cart is empty"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-继续购物,"Continue shopping"
-小计,Subtotal
-去结算,"Proceed to Checkout"
-正在前往结算...,"Proceeding to checkout..."
-查看购物车,"View cart"
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-"还差 %1 包邮","You're %1 away from free shipping"
-已享包邮,"You've unlocked free shipping"
-关闭通知,"Close notification"
 上一张,"Previous picture"
 下一张,Next
 第%d张,"Slide %d"
 剩余,Remaining
 天,Day(s)
 面包屑,"bread crumbs"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -4589,3 +4591,4 @@ Chiffon,Chiffon
 邮编,"Postal code"
 详细地址,"Street address"
 "门牌号 / 楼栋单元等","Building / unit number"
+迷你购物车金额小计,"Mini-cart money summary"

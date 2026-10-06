@@ -90,6 +90,13 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('data-testid="help-pay-payer-grid"', $tpl);
         self::assertStringContainsString('w-helppay-payer__main', $tpl);
         self::assertStringContainsString('w-helppay-payer__pay', $tpl);
+        self::assertStringContainsString('data-testid="help-pay-totals"', $tpl);
+        self::assertStringContainsString('data-helppay-shipping-method', $tpl);
+        self::assertStringContainsString('data-helppay-payable-amount', $tpl);
+        self::assertStringNotContainsString('value="standard"', $tpl);
+        self::assertStringNotContainsString('value="express"', $tpl);
+        self::assertStringNotContainsString('标准配送', $tpl);
+        self::assertStringNotContainsString('加急配送', $tpl);
         self::assertStringContainsString('data-weline-load="helpPayShare"', $tpl);
         self::assertStringContainsString('data-helppay-billing-mount', $tpl);
         self::assertStringContainsString('payment_methods_html', $tpl);

@@ -47,6 +47,10 @@ final class CartTypeSwitchDecoupleContractTest extends TestCase
         self::assertStringContainsString("forceNetwork: true", $cartPage);
         self::assertStringContainsString('weline-cart-shell__sibling-cta', $cartPage);
         self::assertStringNotContainsString('data-b2b-mini-cart-type-option', $cartPage);
+        self::assertStringContainsString('readCartTypeFromQuery', $cartPage);
+        self::assertStringContainsString('data-cart-type-handoff', $cartPage);
+        self::assertStringContainsString("params.get('type')", $cartPage);
+        self::assertStringContainsString("detail.source === 'enhanceMiniCarts'", $cartPage);
         // Empty preferCache must not terminal-return; sibling with items clears opposite empty bucket.
         self::assertStringContainsString('localCartSummaryHasItems', $cartPage);
         self::assertStringContainsString('invalidateEmptyCachesClaimedBySiblings', $cartPage);
@@ -64,6 +68,8 @@ final class CartTypeSwitchDecoupleContractTest extends TestCase
         self::assertStringContainsString('weline:cart-type-changed', $b2b);
         self::assertStringContainsString('data-cart-type-option', $b2b);
         self::assertStringContainsString('emit: false', $b2b);
+        self::assertStringContainsString('data-cart-type-handoff', $b2b);
+        self::assertStringNotContainsString('function syncRetailOnlyHintBuyboxMirrors', $b2b);
 
         self::assertStringContainsString('.weline-cart-shell__sibling-cta', $cartCss);
         self::assertStringContainsString('.weline-cart-shell__empty-actions', $cartCss);

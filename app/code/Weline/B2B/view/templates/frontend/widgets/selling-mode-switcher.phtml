@@ -72,7 +72,7 @@ $emitRetailOnlyTobHint = static function () use ($escape, $websiteId, $retailCar
      role="status"
      hidden>
     <p class="b2b-retail-only-hint__text">
-        <lang>当前为批发浏览；本商品仅支持零售。加入购物车 / 立即结账将进入零售车。</lang>
+        <lang>本商品不支持批发</lang>
     </p>
     <a class="b2b-retail-only-hint__link"
        href="<?= $escape($retailCartUrl) ?>?cart_type=toc"
@@ -227,32 +227,50 @@ $drawerId = 'b2b-membership-apply-' . substr(sha1((string)$websiteId . '-guest')
      data-login-url="@url{'customer/account/login'}"
      data-weline-load="b2bSellingMode"
      data-testid="b2b-selling-mode">
-    <?php /* 复用本页 product-native-detail 尺码/类型轴：同一套标签+胶囊选项，不另造按钮体系 */ ?>
-    <span class="product-native-detail__variant-axis-label" id="<?= $escape($drawerId) ?>-mode-label"><lang>购买方式</lang>:</span>
-    <div class="product-native-detail__variant-axis-options"
-         role="group"
-         aria-labelledby="<?= $escape($drawerId) ?>-mode-label"
-         data-testid="selling-mode-segment">
-        <?php if ($tocEnabled): ?>
-            <button type="button"
-                    class="product-native-detail__variant-option<?= $sellingMode === 'toc' ? ' is-selected' : '' ?>"
-                    data-selling-mode-option="toc"
-                    data-state="<?= $sellingMode === 'toc' ? 'active' : 'inactive' ?>"
-                    aria-pressed="<?= $sellingMode === 'toc' ? 'true' : 'false' ?>"
-                    data-testid="selling-mode-toc">
-                <lang>零售</lang>
-            </button>
-        <?php endif; ?>
-        <?php if ($tobEnabled): ?>
-            <button type="button"
-                    class="product-native-detail__variant-option<?= $sellingMode === 'tob' ? ' is-selected' : '' ?>"
-                    data-selling-mode-option="tob"
-                    data-state="<?= $sellingMode === 'tob' ? 'active' : 'inactive' ?>"
-                    aria-pressed="<?= $sellingMode === 'tob' ? 'true' : 'false' ?>"
-                    data-testid="selling-mode-tob">
-                <lang>批发</lang>
-            </button>
-        <?php endif; ?>
+    <?php /* toc：简短「支持批发」文字入口；tob：保留购买方式分段 */ ?>
+    <p class="b2b-selling-mode__soft-cta"
+       data-b2b-toc-wholesale-cta
+       data-testid="b2b-toc-wholesale-cta"
+       <?= $sellingMode === 'toc' ? '' : 'hidden' ?>>
+        <button type="button"
+                class="b2b-selling-mode__soft-link"
+                data-selling-mode-option="tob"
+                data-testid="selling-mode-soft-tob">
+            <lang>支持批发</lang>
+        </button>
+        <span class="b2b-selling-mode__soft-note"><lang>点击切换到批发模式</lang></span>
+    </p>
+    <div class="b2b-selling-mode__segment"
+         data-b2b-selling-mode-segment
+         <?= $sellingMode === 'toc' ? 'hidden' : '' ?>>
+        <span class="product-native-detail__variant-axis-label"
+              id="<?= $escape($drawerId) ?>-mode-label"
+              data-b2b-selling-mode-label><lang>购买方式</lang>:</span>
+        <div class="product-native-detail__variant-axis-options"
+             role="group"
+             aria-labelledby="<?= $escape($drawerId) ?>-mode-label"
+             data-testid="selling-mode-segment">
+            <?php if ($tocEnabled): ?>
+                <button type="button"
+                        class="product-native-detail__variant-option<?= $sellingMode === 'toc' ? ' is-selected' : '' ?>"
+                        data-selling-mode-option="toc"
+                        data-state="<?= $sellingMode === 'toc' ? 'active' : 'inactive' ?>"
+                        aria-pressed="<?= $sellingMode === 'toc' ? 'true' : 'false' ?>"
+                        data-testid="selling-mode-toc">
+                    <lang>零售</lang>
+                </button>
+            <?php endif; ?>
+            <?php if ($tobEnabled): ?>
+                <button type="button"
+                        class="product-native-detail__variant-option<?= $sellingMode === 'tob' ? ' is-selected' : '' ?>"
+                        data-selling-mode-option="tob"
+                        data-state="<?= $sellingMode === 'tob' ? 'active' : 'inactive' ?>"
+                        aria-pressed="<?= $sellingMode === 'tob' ? 'true' : 'false' ?>"
+                        data-testid="selling-mode-tob">
+                    <lang>批发</lang>
+                </button>
+            <?php endif; ?>
+        </div>
     </div>
     <p class="b2b-selling-mode__hint product-native-detail__price-label" data-b2b-tob-moq-hint <?= ($sellingMode === 'tob' && $loggedIn && $hasMembership) ? '' : 'hidden' ?>>
         <lang>批发起订</lang> <?= (int)$moq ?> <lang>件</lang> · <lang>步进</lang> <?= (int)$qtyStep ?>

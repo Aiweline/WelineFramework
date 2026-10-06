@@ -256,8 +256,8 @@
             description: "Geo定位模块（浏览器定位和IP定位）"
         },
         shippingCheckoutAddress: {
-            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20260926-save-loading"],
-            paths: ["Weline_Shipping::js/widgets/checkout-shipping-address.js?v=20260926-save-loading"],
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20261006-embed-css1"],
+            paths: ["Weline_Shipping::js/widgets/checkout-shipping-address.js?v=20261006-embed-css1"],
             globalVar: "WelineShippingCheckoutAddress",
             description: "结账收货地址部件"
         },
@@ -268,8 +268,8 @@
             description: "账户中心发货/收货地址维护"
         },
         cart: {
-            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js?v=20260923-remove-from-cart-pixel1", "app/code/Weline/Cart/view/statics/js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20260326-purchase-panel-css1"],
-            paths: ["Weline_Cart::js/cart.js?v=20260923-remove-from-cart-pixel1", "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "Weline_Cart::js/widgets/product-purchase-actions.js?v=20260326-purchase-panel-css1"],
+            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js?v=20260923-remove-from-cart-pixel1", "app/code/Weline/Cart/view/statics/js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js?v=20261006-tob-keep-pref1"],
+            paths: ["Weline_Cart::js/cart.js?v=20260923-remove-from-cart-pixel1", "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "Weline_Cart::js/widgets/product-purchase-actions.js?v=20261006-tob-keep-pref1"],
             globalVar: "WelineCartPurchaseActions",
             load: "defer",
             description: "万能购物车：优惠券事件 / 游客续期 / 加购交互 / remove_from_cart 像素标记"
@@ -288,15 +288,22 @@
             load: "lazy",
             description: "快捷支付回头确认页：摘要/缺口/确认收款"
         },
+        storefrontMoneySummary: {
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/widgets/storefront-money-summary.js?v=20261006-sms1"],
+            paths: ["Weline_Checkout::js/widgets/storefront-money-summary.js?v=20261006-sms1"],
+            globalVar: "WelineStorefrontMoneySummary",
+            load: "eager",
+            description: "店面金额小计：统一 paint 商品/运费/税费/优惠/应付"
+        },
         b2bSellingMode: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20260914-goods-sync1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20260914-no-cart-chooser"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20260914-goods-sync1", "Weline_B2B::js/selling-mode.js?v=20260914-no-cart-chooser"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261006-cart-type-handoff2", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261006-cart-type-handoff2"],
+            paths: ["Weline_B2B::js/checkout-tob.js?v=20261006-cart-type-handoff2", "Weline_B2B::js/selling-mode.js?v=20261006-cart-type-handoff2"],
             globalVar: "WelineB2BSellingMode",
             description: "B2B ToC/ToB selling mode + mini-cart/cart dual-type injection"
         },
         b2bCheckoutTob: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20260914-goods-sync1"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20260914-goods-sync1"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261006-cart-type-handoff2"],
+            paths: ["Weline_B2B::js/checkout-tob.js?v=20261006-cart-type-handoff2"],
             globalVar: "WelineB2BCheckoutTob",
             description: "B2B wholesale credit + checkout deposit note for tob carts"
         },
@@ -338,8 +345,8 @@
             description: "商品详情/加购弹窗分销分享（等账户会话后异步水合）"
         },
         helpPayShare: {
-            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20260925-no-dev-css1"],
-            paths: ["Weline_HelpPay::js/helppay-share.js?v=20260925-no-dev-css1"],
+            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20261006-sms1"],
+            paths: ["Weline_HelpPay::js/helppay-share.js?v=20261006-sms1"],
             globalVar: "WelineModules.helpPayShare",
             load: "defer",
             description: "帮我付 / 纯分享 / 快捷购买 / 商品找朋友代付：规则确认、出链双形态复制（样式由脚本注入主题 Token CSS）"
@@ -395,6 +402,7 @@
         paypalWalletButtons: "paypalWalletButtons",
         geolocation: "location",
         checkout: "checkoutLifecycle",
-        checkoutExpressReview: "checkoutExpressReview"
+        checkoutExpressReview: "checkoutExpressReview",
+        storefrontMoneySummary: "storefrontMoneySummary"
     });
 })();

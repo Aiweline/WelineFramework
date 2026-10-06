@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>Weline 架构可视化</title>
+<style>
+body{font-family:"PingFang SC",sans-serif;margin:0;background:#f5f5f5;overflow:hidden}
+header{padding:12px 24px;background:#fff;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:18px}
+a.tab{color:#1a73e8;text-decoration:none;font-weight:600;cursor:pointer}
+a.tab.on{border-bottom:2px solid #1a73e8}
+#hint{color:#888;font-size:12px;margin-left:auto}
+#stage{width:100vw;height:calc(100vh - 53px);overflow:hidden;cursor:grab;position:relative}
+#stage.drag{cursor:grabbing}
+#paper{transform-origin:0 0;position:absolute;top:0;left:0}
+#paper object{display:block}
+</style></head><body>
+<header>
+<a class="tab on" data-src="weline-core-overview.svg">核心骨架·机制视图（61 模块）</a>
+<a class="tab" data-src="weline-module-dependencies-full.svg">全量依赖·机制分类（120 模块）</a>
+<a class="tab" data-src="flow-request.svg">前台请求执行流</a>
+<a class="tab" data-src="flow-backend.svg">后台请求执行流·鉴权链</a>
+<a class="tab" data-src="flow-request-sequence.svg">请求时序图（泳道）</a>
+<span id="hint">滚轮=缩放 · 拖拽=平移 · 双击=适配宽度</span>
+</header>
+<div id="stage"><div id="paper"></div></div>
+<script>
+const stage=document.getElementById('stage'),paper=document.getElementById('paper');
+let scale=1,tx=0,ty=0;
+function apply(){paper.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`}
+function fitWidth(){
+  const svg=paper.querySelector('svg');if(!svg)return;
+  const w=parseFloat(svg.style.width),h=parseFloat(svg.style.height);
+  scale=Math.min((stage.clientWidth-60)/w,(stage.clientHeight-40)/h,1);
+  tx=(stage.clientWidth-w*scale)/2;ty=(stage.clientHeight-h*scale)/2;
+  if(tx<10)tx=30;if(ty<10)ty=10;apply();
+}
+function load(src){
+  paper.innerHTML='';
+  fetch(src).then(r=>r.text()).then(txt=>{
+    paper.innerHTML=txt;
+    const svg=paper.querySelector('svg');
+    // viewBox 优先：mermaid 输出 width="100%"，parseFloat 会得到无意义的 100
+    let w=svg.viewBox.baseVal.width,h=svg.viewBox.baseVal.height;
+    if(!(w>1)||!(h>1)){w=parseFloat(svg.getAttribute('width'))||0;h=parseFloat(svg.getAttribute('height'))||0;}
+    svg.style.width=w+'px';svg.style.height=h+'px';svg.style.maxWidth='none';
+    fitWidth();
+  });
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=e=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');load(t.dataset.src)});
+stage.addEventListener('wheel',e=>{e.preventDefault();
+  const f=e.deltaY<0?1.12:1/1.12,r=stage.getBoundingClientRect();
+  const mx=e.clientX-r.left,my=e.clientY-r.top;
+  tx=mx-(mx-tx)*f;ty=my-(my-ty)*f;scale*=f;apply()},{passive:false});
+let drag=null;
+stage.addEventListener('mousedown',e=>{drag=[e.clientX-tx,e.clientY-ty];stage.classList.add('drag')});
+addEventListener('mousemove',e=>{if(drag){tx=e.clientX-drag[0];ty=e.clientY-drag[1];apply()}});
+addEventListener('mouseup',()=>{drag=null;stage.classList.remove('drag')});
+stage.addEventListener('dblclick',fitWidth);
+addEventListener('resize',fitWidth);
+const initial=location.hash.slice(1);const t0=[...document.querySelectorAll('.tab')].find(x=>x.dataset.src===initial);if(t0){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t0.classList.add('on');load(initial)}else load('weline-core-overview.svg');
+</script>
+</body></html>

@@ -229,7 +229,7 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 - 通用建站部件库：[`通用建站部件库.md`](./通用建站部件库.md)
 - 购物车共享 SSR 隔离：[`购物车共享SSR隔离.md`](./购物车共享SSR隔离.md)
 - Hook 点位总索引：[`Hook点位索引.md`](./Hook点位索引.md)
-- 能力现状 / 需求口径：[`功能现状.md`](./功能现状.md)、[`需求.md`](./需求.md)；完整版需求（含原始验收口径）：[`需求文档-完整版.md`](./需求文档-完整版.md)
+- 能力现状 / 需求口径：[`功能现状.md`](./功能现状.md)、[`需求.md`](./需求.md)
 - 素材来源（织艺谱系）：[`织艺谱系素材来源.md`](./织艺谱系素材来源.md)
 
 ### 预留能力（已实现，当前无调用方；**非死码，勿误删**）
@@ -244,20 +244,11 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 
 **判定依据**：这些是通用控件/平台能力，"零调用"不等于废弃；`Taglib/ThemeAssetSource.php` 虽无标签调用，但它是 `theme:css`/`theme:js`/`theme:font` 的**内部 helper**（属间接在用），同样不要删。
 
-### 历史记录 / 设计稿 / 一次性报告（**非当前依据**）
+### 一次性验收快照（已清理）
 
-> 以下文档含"状态说明"或已被校订标注，**仅供追溯**，不得作为实现依据。
+> 非现行开发入口；只供对照验收证据。
 
-- [`layout-slot-cache-keys.md`](./layout-slot-cache-keys.md)（结构缓存键，部分待核）
-- 部件配置系列：[`widget-config-enhancement-plan.md`](./widget-config-enhancement-plan.md)、[`widget-config-ui-beautification.md`](./widget-config-ui-beautification.md)、[`widget-config-i18n-implementation-summary.md`](./widget-config-i18n-implementation-summary.md)、[`widget-config-i18n-testing.md`](./widget-config-i18n-testing.md)
-- 主题配置系列：[`主题配置方案.md`](./主题配置方案.md)（设计稿，已落地）、[`主题配置系统实施总结.md`](./主题配置系统实施总结.md)
-- 布局资源提取/编译：[`布局CSS_JS提取和编译系统实现总结.md`](./布局CSS_JS提取和编译系统实现总结.md)（**部分已失效**，见文首校订）
-- 元数据方案总结：[`组件Meta信息格式方案总结.md`](./组件Meta信息格式方案总结.md)
-- 预览图功能记录：[`preview-image-implementation.md`](./preview-image-implementation.md)（历史；与"预览三态"是不同功能）
-- 重构说明：[`SOLID原则重构说明.md`](./SOLID原则重构说明.md)
-- 虚拟布局规划稿：[`virtual-layout-scope-plan.md`](./virtual-layout-scope-plan.md)（头部称"规划中"，但 §143-149 三条 w_query 已落地——按节阅读）
-- 开发过程记录：[`DEVELOPMENT_NOTES.md`](./DEVELOPMENT_NOTES.md)
-- 自动生成（勿手改）：[`AI-INDEX.md`](./AI-INDEX.md)
+> 历史设计稿 / 过程总结 / 运营错位快照已用 `php bin/w git:rebase remove` 从工作区与 Git 历史删除，不再保留 `doc/历史/`。一次性验收快照 `doc/验收/**`（3 个）与原型 `doc/prototype/**`（2 个）于 2026-10-06 一并清理。
 
 ## 对外能力
 
@@ -321,7 +312,6 @@ Theme 对外提供 `w_query('theme', 'copyTargetLayoutData', ...)`，供 CMS 等
 
 ## 相关计划与专题文档
 
-- [`virtual-layout-scope-plan.md`](./virtual-layout-scope-plan.md)
 - [`widget-slot-system.md`](./widget-slot-system.md)
 - [`widget-page-types.md`](./widget-page-types.md)
 - [`visual-editor/`](./visual-editor/)

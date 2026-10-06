@@ -239,6 +239,49 @@
     text-underline-offset: 2px;
 }
 
+/* Retail mode: simple text CTA to enter wholesale (eligible SKUs only). */
+.b2b-selling-mode__soft-cta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin: 4px 0 8px;
+    font-size: var(--weline-font-size-sm, 14px);
+    line-height: 1.45;
+}
+
+.b2b-selling-mode__soft-cta[hidden],
+.b2b-selling-mode__segment[hidden] {
+    display: none !important;
+}
+
+.b2b-selling-mode__segment {
+    display: contents;
+}
+
+.b2b-selling-mode__soft-link {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--weline-theme-link, var(--color-link, #0b57d0));
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+
+.b2b-selling-mode__soft-link:hover,
+.b2b-selling-mode__soft-link:focus-visible {
+    color: var(--weline-theme-link-hover, var(--color-link-hover, #0842a0));
+}
+
+.b2b-selling-mode__soft-note {
+    color: var(--weline-theme-text-muted, var(--color-text-secondary, #565959));
+    font-weight: 400;
+}
+
 .b2b-selling-mode__cta {
     justify-self: start;
     width: auto;

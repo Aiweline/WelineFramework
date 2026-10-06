@@ -1,0 +1,36 @@
+%% Weline 模块装配机制总览（证据: Framework/Register/Register.php:890-940, Module/Dependency/Sort.php,
+%% Manager/ObjectManager.php:146-205/761, Extends/ExtendsScanner.php, Event/EventRegistry.php,
+%% Registry/Service/RegistryModulePresence.php, Hook/readme.txt）
+flowchart TB
+    subgraph Decl["声明层（每模块 etc/module.php + register.php）"]
+        REQ["requires<br/>唯一驱动加载拓扑排序"]
+        OPT["optional<br/>不参与排序；Composer suggest 对账"]
+        PROV["provides 接口=>实现<br/>编译进 ServiceProviderRegistry"]
+    end
+    subgraph Order["Framework\\Register::扫描"]
+        TOPO["dependenciesSort(requires) DFS<br/>决定模块 enable/加载顺序"]
+    end
+    subgraph Reg["注册表层（setup:upgrade 增量刷新 · generated/*.php）"]
+        EXT["ExtendsRegistry<br/>扫描 extends/module/&lt;Target&gt;/&lt;Point&gt;/<br/>按 extends.php 规约校验接口契约"]
+        EVR["EventRegistry<br/>解析 etc/event.xml 观察者<br/>sync/async+retry+coalesce"]
+        HKR["HookRegistry<br/>view/hooks/&lt;name&gt;.phtml"]
+    end
+    subgraph Gate["在场门禁 RegistryModulePresence::isActivePresent()"]
+        G1["目标模块 status+源码目录+register.php<br/>缺席 => 该装配整体跳过"]
+    end
+    subgraph Run["运行期"]
+        OM["ObjectManager.getInstance(接口)<br/>provides 为权威绑定；Factory 仅迁移桥"]
+        RPR["RuntimeProviderResolver<br/>可选能力 null-safe 解析"]
+        DISP["EventsManager 派发 / Hooker 渲染"]
+    end
+    REQ --> TOPO
+    OPT -.文档对账.-> Composer["composer.json suggest"]
+    PROV --> OM
+    EXT --> Gate
+    EVR --> Gate
+    HKR --> Gate
+    Gate -->|在场| OM
+    Gate -->|在场| RPR
+    Gate -->|在场| DISP
+    classDef decl fill:#e8f0fe; classDef reg fill:#e6f4ea; classDef run fill:#fce8e6;
+    class REQ,OPT,PROV,TOPO decl; class EXT,EVR,HKR,G1 reg; class OM,RPR,DISP run;

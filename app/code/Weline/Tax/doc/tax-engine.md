@@ -25,7 +25,18 @@
 | `Service/TaxRolloutGate` | Env lock / global SystemConfig durable rollout；精确三元组 allowlist |
 | `Service/TaxMigrationService` | checkpoint / shadow / allowlist / verify / rollback |
 | `Console/Commerce/MigrateP3bTax` | CLI `commerce:migrate-p3b-tax` |
-| `extends/.../Config/backend/tax.phtml` | SystemConfig Scope 字段 |
+| `Console/Tax/Ratesync` | CLI `tax:ratesync` 离线多源税率同步 |
+| `Cron/TaxRateSync` | 日级 Cron（optional `Weline_Cron`） |
+| `Api/TaxRateRemoteProviderInterface` | 税率远程/静态源 SPI（`free` / `professional`） |
+| `Service/RateSync/*` | Static / VATcomply / GenericHttp + AggregateSync |
+| `extends/.../Config/backend/tax.phtml` | SystemConfig Scope 字段 + ratesync 配置 |
+
+## 税率多源同步（离线）
+
+- **免费并集**：启用的 `tier=free` Provider 候选按 `(class_code, jurisdiction_key)` 去重，冲突取 **较高** `rate_bps`。
+- **专业覆盖**：`tax/ratesync/professional/enabled` 且 Provider 可用时，对其返回管辖区 **覆盖**（不再与免费取 max）。
+- **入口**：后台 ControlCenter「税率同步」、`php bin/w tax:ratesync [--website=0] [--force]`、Cron `tax_rate_aggregate_sync`（`0 3 * * *`）。
+- **禁止**结账/购物车热路径拉远程；只 upsert durable `TaxRule`。
 
 ## MIG-P3B
 
@@ -74,6 +85,6 @@ Checkout/Order/Invoice 接入由 **TASK-P3B-002** 实现：
 浏览器税额字段仍直接拒绝。完成 `MIG-P3B` 不等于生产 Tax 已切流；默认
 `off` 与显式生产 `on` 授权边界保持不变。
 
-模块版本：`2.1.3`（保留既有 Schema checkpoint，并加入 durable
+模块版本：`2.1.6`（多源税率同步；保留 Schema checkpoint 与 durable
 shadow/cutover 边界）。生产 apply 前必须由真实只读报价事实提供观察样本；
 CLI 空样本、schema clone、未知 clone 或缺 checkpoint 均 fail closed。

@@ -51,16 +51,34 @@
     display: none;
 }
 
-.weline-cart-shell--amazon .weline-cart-shell__type-host:not(:empty) {
-    margin: 0 0 12px;
+/* Tabs left · title block right (审图：标题做到右侧) */
+.weline-cart-shell--amazon .weline-cart-shell__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    column-gap: var(--weline-space-4, 1rem);
+    row-gap: 6px;
+    margin-bottom: 18px;
 }
 
-.weline-cart-shell--amazon .weline-cart-shell__type-host:empty {
-    display: none;
+.weline-cart-shell--amazon .weline-cart-shell__type-host {
+    margin: 0;
+    flex: 0 1 auto;
 }
 
 .weline-cart-shell--amazon .weline-cart-shell__type-host:not(:empty) {
-    margin: 0 0 12px;
+    margin: 0;
+}
+
+/* Preferred markup: heading wraps title + subtitle */
+.weline-cart-shell--amazon .weline-cart-shell__heading {
+    margin-left: auto;
+    text-align: right;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__heading h1 {
+    margin: 0;
 }
 
 .weline-cart-shell--amazon .weline-cart-shell__subtitle {
@@ -69,8 +87,27 @@
     color: var(--cart-text-secondary);
 }
 
-.weline-cart-shell--amazon .weline-cart-shell__header {
-    margin-bottom: 18px;
+/* Legacy bake (no .heading wrapper): h1 + subtitle are direct header children */
+.weline-cart-shell--amazon .weline-cart-shell__header > h1 {
+    margin-left: auto;
+    text-align: right;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__header > .weline-cart-shell__subtitle {
+    flex: 0 0 100%;
+    text-align: right;
+}
+
+/* No B2B tabs: title stays left (empty host still precedes heading/h1) */
+.weline-cart-shell--amazon .weline-cart-shell__type-host:empty + .weline-cart-shell__heading,
+.weline-cart-shell--amazon .weline-cart-shell__type-host:empty + h1 {
+    margin-left: 0;
+    text-align: start;
+    width: 100%;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__type-host:empty ~ .weline-cart-shell__subtitle {
+    text-align: start;
 }
 
 .weline-cart-shell--amazon .weline-cart-shell__state {
@@ -637,6 +674,26 @@
 
 .weline-cart-shell--amazon .weline-cart-shell__discount-line--stack {
     padding-left: 8px;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__summary-row--tax {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: var(--cart-text-secondary);
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__summary-row--tax[hidden] {
+    display: none;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__summary-row--tax [data-cart-tax-amount] {
+    font-weight: 600;
+    color: var(--cart-text-primary, inherit);
+    white-space: nowrap;
 }
 
 .weline-cart-shell--amazon .weline-cart-shell__summary-row.total,

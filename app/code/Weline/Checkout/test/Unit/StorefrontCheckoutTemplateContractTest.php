@@ -69,10 +69,11 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
     {
         $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
 
-        self::assertStringContainsString('<div class="weline-checkout__totals" role="list">', $template);
-        self::assertStringContainsString('<strong data-subtotal="">0.00</strong>', $template);
-        self::assertStringContainsString('<strong data-shipping-amount="">0.00</strong>', $template);
-        self::assertStringContainsString('<strong data-grand-total="">0.00</strong>', $template);
+        self::assertStringContainsString('<div class="weline-checkout__totals"', $template);
+        self::assertStringContainsString('storefront-money-summary/default.phtml', $template);
+        self::assertStringContainsString("'mode' => 'checkout'", $template);
+        self::assertStringContainsString('paintCheckoutMoneySummary', $template);
+        self::assertStringContainsString('WelineStorefrontMoneySummary', $template);
         self::assertStringNotContainsString('<dd', $template);
         self::assertStringContainsString('new Intl.NumberFormat(undefined, {', $template);
         self::assertStringContainsString('minimumFractionDigits: 2', $template);
@@ -240,8 +241,10 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('function checkoutCartType()', $template);
         self::assertStringContainsString('cart_type: checkoutCartType()', $template);
         self::assertStringContainsString('applyCartTypeHandoffFromUrl', $template);
+        self::assertStringContainsString('readCartTypeFromQuery', $template);
         self::assertStringContainsString('data-cart-type-handoff', $template);
         self::assertStringContainsString("params.get('cart_type')", $template);
+        self::assertStringContainsString("params.get('type')", $template);
         self::assertStringNotContainsString('Weline_Payment::templates/Frontend/widgets/checkout-express-payment.phtml', $template);
 
         $formPos = strpos($template, 'data-checkout-form');

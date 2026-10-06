@@ -273,10 +273,34 @@ final class ThemeLayoutEntityAssetCollector
             if (\preg_match('/^([A-Za-z0-9_]+):(?!:)(.+)$/', $part, $m) === 1) {
                 $part = $m[1] . '::' . \ltrim($m[2], '/');
             }
+            // Cache-bust query/hash is not part of the module static path; strip so
+            // extension bucketing (.css/.js) and fetchTagSource keep working.
+            $part = self::stripAssetPathNoise($part);
+            if ($part === '') {
+                continue;
+            }
             $out[] = $part;
         }
 
         return $out;
+    }
+
+    /**
+     * Drop ?query / #fragment (and accidental whitespace) from Module::relative paths.
+     * Versioning belongs to Template::fetchTagSource, not @widget.source literals.
+     */
+    public static function stripAssetPathNoise(string $path): string
+    {
+        $path = \trim($path);
+        if ($path === '') {
+            return '';
+        }
+        $cut = \strcspn($path, '?#');
+        if ($cut < \strlen($path)) {
+            $path = \substr($path, 0, $cut);
+        }
+
+        return \trim($path);
     }
 
     /**
@@ -291,6 +315,10 @@ final class ThemeLayoutEntityAssetCollector
         array &$js,
         array &$seen,
     ): void {
+        $path = self::stripAssetPathNoise($path);
+        if ($path === '') {
+            return;
+        }
         $key = \strtolower($path);
         if (isset($seen[$key])) {
             return;

@@ -1,16 +1,18 @@
 <!-- weline:module-ai-index:auto-generated -->
 # Weline_Base AI 开发入口
 
-> 本文件由 `dev/ai/scripts/generate-module-ai-indexes.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
+> 本文件由 `dev/ai/scripts/generate-module-docs.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
 
 ## 必读顺序
 
 1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
-3. `dev/ai/diagrams/08-module-docs-index.txt`
-4. 本文件：`app/code/Weline/Base/doc/AI-INDEX.md`
-5. 模块说明：`app/code/Weline/Base/doc/README.md`
-6. 只读取本次任务相关源码、配置和验证入口
+2. 全局硬规则与任务路由：`app/code/Weline/Ai/doc/AI硬规则索引.md`
+3. 本文件：`app/code/Weline/Base/doc/AI-INDEX.md`
+4. 模块说明：`app/code/Weline/Base/doc/README.md`
+5. `app/code/Weline/Theme/doc/AI-INDEX.md`
+6. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+7. `app/code/Weline/Taglib/doc/AI-INDEX.md`
+8. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -24,7 +26,6 @@
 入口/配置文件：
 - `app/code/Weline/Base/composer.json`
 
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
 
@@ -33,6 +34,9 @@
 ## doc 目录
 
 - `app/code/Weline/Base/doc/README.md`
+- `app/code/Weline/Base/doc/功能现状.md`
+- `app/code/Weline/Base/doc/开发日志.md`
+- `app/code/Weline/Base/doc/需求.md`
 
 ## 开发前门禁
 

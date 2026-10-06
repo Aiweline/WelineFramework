@@ -1010,6 +1010,18 @@
         return minor / Math.pow(10, precision);
     }
 
+    function taxAmountMajor(summary) {
+        if (!summary || typeof summary !== 'object') {
+            return 0;
+        }
+        var minor = Number(summary.tax_amount_minor);
+        if (isFinite(minor) && minor > 0) {
+            return minor / 100;
+        }
+        var major = Number(summary.tax_amount);
+        return isFinite(major) && major > 0 ? major : 0;
+    }
+
     function discountKindLabel(root, kind) {
         if (kind === 'stack') {
             return attr(root, 'data-i18n-discount-stack', '叠加优惠');
@@ -1020,11 +1032,34 @@
         return attr(root, 'data-i18n-discount-automatic', '自动优惠');
     }
 
+    function paintMiniCartMoneySummary(root, dto) {
+        var api = window.WelineStorefrontMoneySummary;
+        if (!api || typeof api.paint !== 'function') {
+            return false;
+        }
+        var host = root.querySelector('[data-money-summary]');
+        if (!host && typeof api.ensure === 'function') {
+            var slot = root.querySelector('.mini-cart-drawer__money-summary-slot, [data-wslot="money-summary"], #money-summary')
+                || root.querySelector('.mini-cart-drawer__footer');
+            if (slot) {
+                host = api.ensure(slot, { mode: 'mini-cart' });
+            }
+        }
+        if (!host) {
+            return false;
+        }
+        api.paint(host, Object.assign({ mode: 'mini-cart', shipping_pending: true }, dto || {}));
+        return true;
+    }
+
     function renderDiscountBreakdown(root, summary, currency) {
-        var breakdown = root.querySelector('[data-mini-cart-discount-breakdown]');
+        var breakdown = root.querySelector('[data-mini-cart-discount-breakdown], [data-money-summary-row="goods"]');
         var goodsEl = root.querySelector('[data-cart-goods-subtotal]');
-        var linesEl = root.querySelector('[data-mini-cart-discount-lines]');
-        if (!breakdown || !linesEl) {
+        var linesEl = root.querySelector('[data-mini-cart-discount-lines], [data-money-summary-discount-lines]');
+        if (!linesEl) {
+            if (goodsEl) {
+                text(goodsEl, formatMoney(Number(summary.subtotal || summary.grand_total || 0), currency));
+            }
             return;
         }
 
@@ -1045,16 +1080,10 @@
                 stackable: false,
             }];
         }
-        if (!items.length) {
-            breakdown.hidden = true;
-            // Keep goods text current for credit/deposit readers even while the row is hidden.
-            if (goodsEl) {
-                text(goodsEl, formatMoney(subtotal, currency));
-            }
-            return;
+        if (breakdown && breakdown.hasAttribute && breakdown.hasAttribute('data-mini-cart-discount-breakdown')) {
+            breakdown.hidden = false;
+            breakdown.removeAttribute('hidden');
         }
-
-        breakdown.hidden = false;
         if (goodsEl) {
             text(goodsEl, formatMoney(subtotal, currency));
         }
@@ -1087,6 +1116,38 @@
         });
     }
 
+    function renderTaxRow(root, summary, currency) {
+        if (root.querySelector('[data-money-summary]') && window.WelineStorefrontMoneySummary) {
+            return;
+        }
+        var row = root.querySelector('[data-mini-cart-tax-row]');
+        var amountEl = root.querySelector('[data-cart-tax-amount]');
+        var labelEl = root.querySelector('[data-mini-cart-tax-label]');
+        var note = root.querySelector('[data-mini-cart-note]');
+        var tax = taxAmountMajor(summary);
+        if (labelEl) {
+            labelEl.textContent = attr(root, 'data-i18n-tax', '税费（预估）');
+        }
+        if (row) {
+            if (tax > 0) {
+                row.hidden = false;
+                if (amountEl) {
+                    text(amountEl, formatMoney(tax, currency));
+                }
+            } else {
+                row.hidden = true;
+                if (amountEl) {
+                    text(amountEl, '');
+                }
+            }
+        }
+        if (note) {
+            note.textContent = tax > 0
+                ? attr(root, 'data-i18n-note-shipping', '运费将在结算时计算')
+                : attr(root, 'data-i18n-note', '税费与运费将在结算时计算');
+        }
+    }
+
     function applySummary(root, summary) {
         if (!summary || typeof summary !== 'object') return;
         if (!summaryCacheHasLineItems(summary)) {
@@ -1095,9 +1156,13 @@
         root.__welineLastSummary = summary;
         var count = Number(summary.cart_count || summary.item_count || 0);
         var currency = String(summary.currency || 'CNY');
-        var subtotal = Number(summary.subtotal || summary.grand_total || 0);
+        var subtotal = Number(summary.subtotal || 0);
+        if (!isFinite(subtotal) || subtotal <= 0) {
+            subtotal = Number(summary.grand_total || 0);
+        }
         var discountMajor = discountAmountMajor(summary);
-        var payable = Math.max(0, subtotal - discountMajor);
+        var taxMajor = taxAmountMajor(summary);
+        var payable = Math.max(0, subtotal - discountMajor + taxMajor);
         var formatted = formatMoney(payable, currency);
         var goodsFormatted = formatMoney(subtotal, currency);
         // WO-BUILD-OPS-02-HOME：空车不展示 $0.00 价签噪声
@@ -1130,10 +1195,24 @@
         }
         text(root.querySelector('[data-cart-subtotal-text]'), visibleFormatted);
         text(root.querySelector('[data-cart-item-count]'), String(count));
+        if (!emptyCart) {
+            paintMiniCartMoneySummary(root, {
+                currency: currency,
+                goods_subtotal_minor: Math.round(Number(subtotal || 0) * 100),
+                discount_minor: Math.round(Number(discountMajor || 0) * 100),
+                tax_minor: Math.round(Number(taxMajor || 0) * 100),
+                payable_minor: Math.round(Number(payable || 0) * 100),
+                note: taxMajor > 0
+                    ? attr(root, 'data-i18n-note-shipping', '运费将在结算时计算')
+                    : attr(root, 'data-i18n-note', '税费与运费将在结算时计算'),
+                tax_label: attr(root, 'data-i18n-tax', '税费（预估）'),
+            });
+        }
         text(root.querySelector('[data-cart-total-amount]'), visibleFormatted);
         // Always refresh goods node text — do not wait for discount lines to appear.
         text(root.querySelector('[data-cart-goods-subtotal]'), visibleGoodsFormatted);
-        renderDiscountBreakdown(root, summary, currency);
+        renderDiscountBreakdown(root, emptyCart ? { subtotal: 0 } : summary, currency);
+        renderTaxRow(root, emptyCart ? null : summary, currency);
         renderFreeShippingProgress(root, summary);
         renderItems(root, items.slice(0, 20), currency);
     }

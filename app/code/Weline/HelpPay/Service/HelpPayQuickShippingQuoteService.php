@@ -172,34 +172,106 @@ final class HelpPayQuickShippingQuoteService
      */
     public function buildQuoteLines(array $input): array
     {
-        $productId = max(0, (int) ($input['product_id'] ?? 0));
-        if ($productId <= 0 && is_array($input['line_summary'] ?? null)) {
-            foreach ($input['line_summary'] as $row) {
-                if (!is_array($row)) {
-                    continue;
-                }
-                $productId = max(0, (int) ($row['product_id'] ?? $row['id'] ?? 0));
-                if ($productId > 0) {
-                    break;
-                }
-            }
+        $fromSummary = $this->linesFromSummary($input);
+        if ($fromSummary !== []) {
+            return $this->weights->enrichLines($fromSummary);
         }
+
+        $productId = max(0, (int) ($input['product_id'] ?? 0));
         $qty = max(1, (int) ($input['qty'] ?? $input['qty_minor'] ?? 1));
         $goodsMinor = max(0, (int) ($input['goods_amount_minor'] ?? 0));
         $unit = $qty > 0 ? (int) max(0, (int) round($goodsMinor / $qty)) : $goodsMinor;
+        $weightMinor = max(0, (int) ($input['weight_minor'] ?? 0));
         $line = [
             'requires_shipping' => true,
             'qty' => $qty,
             'qty_minor' => $qty,
             'unit_price_minor' => $unit,
             'row_total_minor' => $goodsMinor,
-            'weight_minor' => 0,
-            'volume_minor' => 0,
+            'weight_minor' => $weightMinor,
+            'volume_minor' => max(0, (int) ($input['volume_minor'] ?? 0)),
             'product_id' => $productId,
         ];
-        $enriched = $this->weights->enrichLines([$line]);
 
-        return $enriched;
+        return $this->weights->enrichLines([$line]);
+    }
+
+    /**
+     * Prefer multi-line snapshots (cart / payer meta) with optional weight_minor.
+     *
+     * @param array<string,mixed> $input
+     * @return list<array<string,mixed>>
+     */
+    private function linesFromSummary(array $input): array
+    {
+        $summary = is_array($input['line_summary'] ?? null) ? $input['line_summary'] : [];
+        if ($summary === []) {
+            return [];
+        }
+        $goodsMinor = max(0, (int) ($input['goods_amount_minor'] ?? 0));
+        $lines = [];
+        $allocated = 0;
+        $shippable = 0;
+        foreach ($summary as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $productId = max(0, (int) ($row['product_id'] ?? $row['id'] ?? $row['legacy_product_id'] ?? 0));
+            $qty = max(1, (int) ($row['qty'] ?? $row['qty_minor'] ?? 1));
+            $rowTotal = max(0, (int) ($row['row_total_minor'] ?? $row['amount_minor'] ?? 0));
+            $unit = max(0, (int) ($row['unit_price_minor'] ?? 0));
+            if ($rowTotal <= 0 && $unit > 0) {
+                $rowTotal = $unit * $qty;
+            }
+            $weightMinor = max(0, (int) ($row['weight_minor'] ?? 0));
+            // Shipping quote lines use per-unit weight_minor; ChargeableWeight/PackingSplitter
+            // multiply by qty. Never pre-multiply unit snapshots (that double-counts).
+            if (isset($row['row_weight_minor'])) {
+                $lineWeight = max(0, (int) $row['row_weight_minor']);
+                $weightMinor = $qty > 0 ? (int) max(0, (int) round($lineWeight / $qty)) : $lineWeight;
+            } elseif (!empty($row['weight_is_line_total']) && $qty > 1 && $weightMinor > 0) {
+                $weightMinor = (int) max(0, (int) round($weightMinor / $qty));
+            }
+            $requires = array_key_exists('requires_shipping', $row)
+                ? (bool) $row['requires_shipping']
+                : true;
+            if ($requires) {
+                ++$shippable;
+            }
+            $lines[] = [
+                'requires_shipping' => $requires,
+                'qty' => $qty,
+                'qty_minor' => $qty,
+                'unit_price_minor' => $unit > 0 ? $unit : ($qty > 0 ? (int) max(0, (int) round($rowTotal / $qty)) : $rowTotal),
+                'row_total_minor' => $rowTotal,
+                'weight_minor' => $weightMinor,
+                'volume_minor' => max(0, (int) ($row['volume_minor'] ?? 0)),
+                'product_id' => $productId,
+            ];
+            $allocated += $rowTotal;
+        }
+        if ($lines === []) {
+            return [];
+        }
+        // When line money was omitted, allocate goods_amount_minor across shippable rows.
+        if ($goodsMinor > 0 && $allocated <= 0 && $shippable > 0) {
+            $per = (int) intdiv($goodsMinor, $shippable);
+            $rem = $goodsMinor - ($per * $shippable);
+            $i = 0;
+            foreach ($lines as &$line) {
+                if (empty($line['requires_shipping'])) {
+                    continue;
+                }
+                $rowTotal = $per + ($i === 0 ? $rem : 0);
+                $qty = max(1, (int) ($line['qty'] ?? 1));
+                $line['row_total_minor'] = $rowTotal;
+                $line['unit_price_minor'] = (int) max(0, (int) round($rowTotal / $qty));
+                ++$i;
+            }
+            unset($line);
+        }
+
+        return $lines;
     }
 
     /**

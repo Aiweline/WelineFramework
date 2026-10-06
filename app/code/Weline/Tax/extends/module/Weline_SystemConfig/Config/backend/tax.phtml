@@ -54,3 +54,85 @@
     code="tax_freeze"
     label="开卡冻结"
     description="管辖区键=country|region；舍入=half_up 按行再汇总；失败禁止回零税；仅同 schema+rule_set_hash 的已验证 LKG 可读。" />
+
+<w:config:group code="tax_ratesync" label="税率多源同步" description="离线聚合免费源并集（冲突取较高税率）；可选专业 HTTP 源覆盖已返回管辖区。不进入结账热路径。" sort="20">
+    <w:config:field
+        key="tax/ratesync/mode"
+        label="同步模式"
+        description="auto_free=允许 Cron/自动；manual_only=仅后台「立即同步」或 CLI --force。"
+        type="select"
+        value-type="string"
+        default="auto_free"
+        scope="global"
+        options="auto_free:自动免费聚合,manual_only:仅手动"
+        validation="required|in_options" />
+
+    <w:config:field
+        key="tax/ratesync/free_providers"
+        label="启用的免费源"
+        description="逗号分隔 provider code。默认 static,vatcomply。"
+        type="text"
+        value-type="string"
+        default="static,vatcomply"
+        scope="global"
+        validation="required|max:255" />
+
+    <w:config:field
+        key="tax/ratesync/cron_enabled"
+        label="启用日级 Cron 同步"
+        description="需安装 Weline_Cron；表达式默认每天 03:00 UTC。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global" />
+
+    <w:config:field
+        key="tax/ratesync/professional/enabled"
+        label="启用专业税率源"
+        description="开启后对其返回的管辖区覆盖免费并集（即使专业税率更低）。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global" />
+
+    <w:config:field
+        key="tax/ratesync/professional/provider"
+        label="专业源 Provider"
+        description="首版仅 generic_http（配置驱动 HTTP）。"
+        type="select"
+        value-type="string"
+        default="generic_http"
+        scope="global"
+        options="generic_http:通用 HTTP"
+        validation="required|in_options" />
+
+    <w:config:field
+        key="tax/ratesync/professional/base_url"
+        label="专业源 Base URL"
+        description="HTTPS JSON 端点；密钥勿写入 Git。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global"
+        validation="max:512" />
+
+    <w:config:field
+        key="tax/ratesync/professional/api_key"
+        label="专业源 API Key"
+        description="密文存储；日志禁止打印完整密钥。"
+        type="password"
+        value-type="string"
+        default=""
+        scope="global"
+        validation="max:512" />
+
+    <w:config:field
+        key="tax/ratesync/professional/mapping"
+        label="专业源 Mapping JSON"
+        description='示例 VATcomply：{"mode":"vatcomply_eu"}。候选列表：{"mode":"candidates","list_path":"rates","jurisdiction_field":"jurisdiction_key","class_field":"class_code","rate_bps_field":"rate_bps","rate_is_percent":false,"api_key_header":"Authorization","api_key_prefix":"Bearer "}。TaxJar 风格可把 list_path 指到 rates 并用 rate_is_percent=true。'
+        type="textarea"
+        value-type="string"
+        default='{"mode":"vatcomply_eu"}'
+        scope="global"
+        validation="max:4000" />
+</w:config:group>

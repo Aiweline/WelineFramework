@@ -1,17 +1,17 @@
 <!-- weline:module-ai-index:auto-generated -->
 # Weline_Server AI 开发入口
 
-> 本文件由 `dev/ai/scripts/generate-module-ai-indexes.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
+> 本文件由 `dev/ai/scripts/generate-module-docs.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
 
 ## 必读顺序
 
 1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
-3. `dev/ai/diagrams/08-module-docs-index.txt`
-4. 本文件：`app/code/Weline/Server/doc/AI-INDEX.md`
-5. 模块说明：`app/code/Weline/Server/doc/README.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+2. 全局硬规则与任务路由：`app/code/Weline/Ai/doc/AI硬规则索引.md`
+3. 本文件：`app/code/Weline/Server/doc/AI-INDEX.md`
+4. 模块说明：`app/code/Weline/Server/doc/README.md`
+5. `app/code/Weline/Theme/doc/AI-INDEX.md`
+6. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+7. `app/code/Weline/Taglib/doc/AI-INDEX.md`
 8. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
@@ -24,48 +24,49 @@
 ## 代码面清单
 
 入口/配置文件：
-- `app/code/Weline/Server/etc/backend/menu.xml`
 - `app/code/Weline/Server/composer.json`
+- `app/code/Weline/Server/etc/backend/menu.xml`
 
-- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：21
-- `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：62
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：13
-- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：6
-- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：11
+- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：22
+- `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：66
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：17
+- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：7
+- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：12
 - `Plugin`：插件扩展点。变更前确认被拦截对象和执行顺序。 文件数：2
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：281
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：311
 - `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：7
-- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：5
+- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：8
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：2
-- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：8
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：2
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：3
+- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：10
 
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
-- 识别到 QueryProvider 相关 PHP 文件：Test/Unit/Query/ServerQueryProviderHostsAddTest.php、Test/Unit/Query/SessionAndMemoryQueryProviderTest.php、extends/module/Weline_Framework/Query/MemoryQueryProvider.php、extends/module/Weline_Framework/Query/ServerQueryProvider.php、extends/module/Weline_Framework/Query/SessionQueryProvider.php；前端/跨模块读数据先查 query 帮助。
+- 识别到 QueryProvider 入口：`extends/module/Weline_Framework/Query/MemoryQueryProvider.php`、`extends/module/Weline_Framework/Query/ServerQueryProvider.php`、`extends/module/Weline_Framework/Query/SessionQueryProvider.php`、`extends/module/Weline_Framework/Query/WlsPanelLifecycleQueryProvider.php`；前端/跨模块读数据先查 `php bin/w query:help`。
 
 ## doc 目录
 
 - `app/code/Weline/Server/doc/Dispatcher分流架构设计.md`
 - `app/code/Weline/Server/doc/IPC控制通道架构.md`
 - `app/code/Weline/Server/doc/README.md`
-- `app/code/Weline/Server/doc/WLS当前能力与验收状态.md`
 - `app/code/Weline/Server/doc/SSE无阻塞检测方法.md`
+- `app/code/Weline/Server/doc/WLS-BOOTSTRAP-QUICK-REFERENCE.md`
 - `app/code/Weline/Server/doc/WLS-DISPATCHER-IDLE-SELECT-WAKEUP-FIX-2026-07-05.md`
 - `app/code/Weline/Server/doc/WLS-EventBuffer-SSL-Worker.md`
 - `app/code/Weline/Server/doc/WLS-FINAL-REPORT-2026-04-02.md`
 - `app/code/Weline/Server/doc/WLS-FIXES-2026-04-02.md`
 - `app/code/Weline/Server/doc/WLS-Gateway使用指南.md`
+- `app/code/Weline/Server/doc/WLS-HA-IPC-REDESIGN-2026-04-15.md`
 - `app/code/Weline/Server/doc/WLS-HA-IPC-REDESIGN-IMPLEMENTATION-CHECKLIST.md`
 - `app/code/Weline/Server/doc/WLS-ISSUES-2026-04-02.md`
 - `app/code/Weline/Server/doc/WLS-Lifecycle-IPC-Hardening-2026-05-23.md`
 - `app/code/Weline/Server/doc/WLS-MASTER-RESURRECT-QUEUE-SPIN-FIX-2026-07-05.md`
 - `app/code/Weline/Server/doc/WLS-MASTER-SELF-HEAL-HA-DESIGN-2026-04-23.md`
+- `app/code/Weline/Server/doc/WLS-ORCHESTRATOR-BOOTSTRAP-2026-04-13.md`
+- `app/code/Weline/Server/doc/WLS-PORT-CONFLICT-FIX.md`
 - `app/code/Weline/Server/doc/WLS-SUPERVISOR-PHASE-1-SCOPE-2026-04-23.md`
 - `app/code/Weline/Server/doc/WLS-Worker动态扩缩容架构设计.md`
 - `app/code/Weline/Server/doc/WLS-Worker扩缩容用户手册.md`
@@ -75,10 +76,16 @@
 - `app/code/Weline/Server/doc/WLS启动与关闭链路图.md`
 - `app/code/Weline/Server/doc/WLS安全与规则配置推演.md`
 - `app/code/Weline/Server/doc/WLS实例隔离机制.md`
+- `app/code/Weline/Server/doc/WLS当前能力与验收状态.md`
 - `app/code/Weline/Server/doc/WLS架构图.md`
 - `app/code/Weline/Server/doc/WLS模式部署指南.md`
+- `app/code/Weline/Server/doc/WLS连接超时排查与修复-2026-09-23.md`
+- `app/code/Weline/Server/doc/WLS高级模式与分流规划.md`
 - `app/code/Weline/Server/doc/Windows-event扩展编译.md`
+- `app/code/Weline/Server/doc/event/domain/local_domain_registered.md`
+- `app/code/Weline/Server/doc/event/domain/managed_domain_active.md`
 - `app/code/Weline/Server/doc/event/integration/security_rules_updated.md`
+- `app/code/Weline/Server/doc/event/lifecycle/服务器启动后.md`
 - `app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md`
 - `app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md`
 - `app/code/Weline/Server/doc/wls-panel-plan/20-plugin-tag-logic.md`
@@ -95,11 +102,13 @@
 - `app/code/Weline/Server/doc/wls-panel-plan/97-humanized-redesign-prototype.md`
 - `app/code/Weline/Server/doc/wls-panel-plan/98-humanized-redesign-atomic-workplan.md`
 - `app/code/Weline/Server/doc/wls-panel-plan/99-plugin-native-shell-embedding-evidence.md`
-- `app/code/Weline/Server/doc/wls-panel-plan/tools/deploy-current-local-development.json`
-- `app/code/Weline/Server/doc/wls-panel-plan/tools/deploy-current-production-default.json`
+- `app/code/Weline/Server/doc/功能现状.md`
 - `app/code/Weline/Server/doc/开发/plan.md`
 - `app/code/Weline/Server/doc/开发/pluggable-subprocess-architecture.md`
 - `app/code/Weline/Server/doc/开发/session-entry-migration-checklist.md`
+- `app/code/Weline/Server/doc/开发/spec/auto-direct-dispatcher-fallback.md`
+- `app/code/Weline/Server/doc/开发/spec/darwin-process-identity-without-ps.md`
+- `app/code/Weline/Server/doc/开发/spec/wls-startup-handoff-capability-gate.md`
 - `app/code/Weline/Server/doc/开发/ssl-dynamic-restore-plan.md`
 - `app/code/Weline/Server/doc/开发/task.md`
 - `app/code/Weline/Server/doc/开发日志.md`

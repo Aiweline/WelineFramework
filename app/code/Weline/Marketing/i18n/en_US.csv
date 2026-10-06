@@ -309,9 +309,10 @@ VIP等级,"VIP Level"
 应用中...,Applying...
 当前暂无进行中的活动，请稍后再来看看。,"There are no active campaigns right now. Please check back later."
 优惠券代码,"Coupon Code"
-应用优惠券,Apply
+应用,Apply
 满额进度,"Spend progress"
 新客礼,"New customer gift"
+应用优惠券,Apply
 注册领取见面礼,"Register for welcome gift"
 "配置遗弃时限并定时催付：未付订单、遗弃结账或购物车。事实面由 signals 提供，时限由本页决定。","Configure abandonment window and schedule reminders: unpaid orders, abandoned checkout or carts. Facts from signals; window set here."
 ID,ID
@@ -468,7 +469,6 @@ ID,ID
 按挽回活动配置的遗弃时限扫描过期结账报价并发送继续结账邮件,"Scan expired checkout quotes by win-back abandonment window and send continue-checkout emails"
 营销购物车遗弃挽回,"Marketing cart abandonment win-back"
 按挽回活动配置的遗弃时限扫描过期购物车并发送继续购物邮件,"Scan expired carts by win-back abandonment window and send continue-shopping emails"
-应用,Apply
 "活动时间：%{1} — %{2}","Campaign period: %{1} — %{2}"
 客户分群信号,"Customer segment signal"
 受众分群匹配；供挽回/生命周期活动过滤。,"Audience segment match; for win-back/lifecycle campaign filters."

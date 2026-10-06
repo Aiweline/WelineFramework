@@ -23,7 +23,7 @@ final class HelpPayQueryFrontendExposureContractTest extends TestCase
             $byName[(string) $op['name']] = $op;
         }
 
-        foreach (['createHelpPay', 'createSelectionShare', 'createQuickPay', 'listQuickShippingOptions', 'qrPng', 'revoke', 'resolveHelpPay', 'startPayerPayment', 'startQuickPayment'] as $name) {
+        foreach (['createHelpPay', 'createSelectionShare', 'createQuickPay', 'listQuickShippingOptions', 'listPayerShippingOptions', 'qrPng', 'revoke', 'resolveHelpPay', 'startPayerPayment', 'startQuickPayment'] as $name) {
             self::assertArrayHasKey($name, $byName, $name . ' missing');
             $op = $byName[$name];
             self::assertTrue(($op['frontend'] ?? false) === true, $name . ' must set frontend=true');
@@ -33,6 +33,7 @@ final class HelpPayQueryFrontendExposureContractTest extends TestCase
 
         self::assertSame('write', $byName['createQuickPay']['mode']);
         self::assertSame('read', $byName['listQuickShippingOptions']['mode']);
+        self::assertSame('read', $byName['listPayerShippingOptions']['mode']);
         self::assertSame('write', $byName['startPayerPayment']['mode']);
         self::assertSame('write', $byName['startQuickPayment']['mode']);
         self::assertSame('read', $byName['qrPng']['mode']);
@@ -52,6 +53,14 @@ final class HelpPayQueryFrontendExposureContractTest extends TestCase
             $byName['createHelpPay']['params'] ?? []
         );
         self::assertContains('currency_code', $helpPayParams);
+        self::assertContains('goods_amount_minor', $helpPayParams);
+        self::assertContains('product_id', $helpPayParams);
+        $payerPayParams = array_map(
+            static fn ($p) => \is_array($p) ? (string) ($p['name'] ?? '') : '',
+            $byName['startPayerPayment']['params'] ?? []
+        );
+        self::assertContains('service_code', $payerPayParams);
+        self::assertContains('shipping_amount_minor', $payerPayParams);
         $quickParams = array_map(
             static fn ($p) => \is_array($p) ? (string) ($p['name'] ?? '') : '',
             $byName['createQuickPay']['params'] ?? []
@@ -81,5 +90,9 @@ final class HelpPayQueryFrontendExposureContractTest extends TestCase
         self::assertIsArray($compiledQuickShip, 'framework:compile must register helpPay.listQuickShippingOptions');
         self::assertTrue(($compiledQuickShip['frontend'] ?? false) === true);
         self::assertSame('read', (string) ($compiledQuickShip['mode'] ?? ''));
+        $compiledPayerShip = $registry['operations']['helpPay']['listPayerShippingOptions'] ?? null;
+        self::assertIsArray($compiledPayerShip, 'framework:compile must register helpPay.listPayerShippingOptions');
+        self::assertTrue(($compiledPayerShip['frontend'] ?? false) === true);
+        self::assertSame('read', (string) ($compiledPayerShip['mode'] ?? ''));
     }
 }

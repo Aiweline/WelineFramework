@@ -7,6 +7,8 @@
 - P3B-001 Service：`TaxScopeConfig`、`TaxEngine`、`TaxShadowComparator`、`TaxLkgStore`、`TaxConflictException`
 - P3B-002 Service：`CheckoutTaxAdvisor`；当前 `etc/module.php` 发布 `TaxEngineInterface => TaxEngine` 与 `CheckoutTaxAdvisorInterface => CheckoutTaxAdvisor`
 - MIG-P3B Service：`TaxMigrationService`、`TaxRolloutGate`；Checkout adapter：`CheckoutTaxShadowQuoteSource`
-- Console：`commerce:migrate-p3b-tax`（`preflight/apply/verify/allowlist/rollback`）
-- SystemConfig：`extends/module/Weline_SystemConfig/Config/backend/tax.phtml`
-- Tests：`TaxEngineAndShadowTest`、`TaxCurrentSourceDatabaseIntegrationTest`（TEST-P3B-01）；Checkout `CheckoutTaxIntegrationTest`（TEST-P3B-02/03/04）；`TaxMigrationServiceTest`、`TaxRolloutGateTest`（TASK-MIG-P3B）
+- Console：`commerce:migrate-p3b-tax`（`preflight/apply/verify/allowlist/rollback`）；`tax:ratesync`；`tax:seed-defaults`
+- RateSync：`TaxRateRemoteProviderInterface` + Static/VATcomply/GenericHttp；`TaxRateAggregateSyncService`；Cron `TaxRateSync`
+- SystemConfig：`extends/module/Weline_SystemConfig/Config/backend/tax.phtml`（含 `tax/ratesync/*`）
+- ControlCenter：`ratesync` 工作区 + `runRateSync`
+- Tests：`TaxEngineAndShadowTest`、`TaxCurrentSourceDatabaseIntegrationTest`（TEST-P3B-01）；Checkout `CheckoutTaxIntegrationTest`（TEST-P3B-02/03/04）；`TaxMigrationServiceTest`、`TaxRolloutGateTest`（TASK-MIG-P3B）；`TaxRateAggregateSyncServiceTest`、`VatComplyEuTaxRateProviderTest`

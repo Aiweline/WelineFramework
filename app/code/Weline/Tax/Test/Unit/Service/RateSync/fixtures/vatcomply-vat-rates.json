@@ -1,0 +1,22 @@
+{
+  "rates": [
+    {
+      "country_code": "DE",
+      "country_name": "Germany",
+      "standard_rate": 19,
+      "reduced_rates": [7]
+    },
+    {
+      "country_code": "FR",
+      "country_name": "France",
+      "standard_rate": 20,
+      "reduced_rates": [5.5, 10]
+    },
+    {
+      "country_code": "EL",
+      "country_name": "Greece",
+      "standard_rate": 24,
+      "reduced_rates": []
+    }
+  ]
+}

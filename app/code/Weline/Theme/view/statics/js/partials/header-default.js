@@ -31,7 +31,13 @@
         });
     }
 
+    var headerInteractionsInited = false;
+
     function initHeaderInteractions() {
+        if (headerInteractionsInited) {
+            return;
+        }
+        headerInteractionsInited = true;
         ensureHeaderHamburgerTriggers();
         bindHeaderMegaMenu(document);
         bindDrawerFlyoutAlign(document);
@@ -146,6 +152,12 @@
                 leftHost.appendChild(categoriesOverflowWrapper);
             }
             categoriesOverflowWrapper.classList.add('header-left-cluster-more');
+        }
+
+        // SSR 生成的 More <li> 无直链样式（裸 li{display:list-item} 会渲染成黑圆点），
+        // JS 创建路径才有该内联样式；两路径统一置 none，由 applyCatVisibility 按需显隐
+        if (categoriesOverflowWrapper && !categoriesOverflowWrapper.style.display) {
+            categoriesOverflowWrapper.style.display = 'none';
         }
 
         // More Mega：与一级分类相同 bottom-start，打开后再贴一次触发器（内容撑开宽度后）
@@ -524,16 +536,22 @@
                 const leftGap = cachedLeftGap != null ? cachedLeftGap : 0;
                 // 已换两行：左簇独占第一行，按主栏 100% 内容宽算（不预留右簇自然宽）
                 if (clustersOnSeparateRows()) {
-                    let fullRow = Math.max(0, mainW - allW - gap - 8);
+                    // allW（全部分类按钮）在左簇内部，不吃 inner 簇间距 gap
+                    let fullRow = Math.max(0, mainW - allW - 8);
                     if (leftCluster) {
                         const layout = Math.max(0, leftCluster.clientWidth - allW - leftGap - 8);
                         fullRow = Math.max(fullRow, layout);
                     }
                     return fullRow;
                 }
-                const rightReserve = measureRightNaturalReserve();
-                if (rightReserve > 0) {
-                    return Math.max(0, mainW - allW - gap - rightReserve - 8);
+                // 单行左预算 = CSS 左簇上限 calc(100% - max(240px,30%)) − All − 左簇 gap。
+                // 禁止再用右自然宽扣左：右有 adjustNavLinks 自己藏项；互扣时右自然宽常 >30%，
+                // 左预算被压到 <70% 实宽，分类槽 flex-shrink+overflow:hidden 裁掉 Hanfu，
+                // 政策链叠上 →「Hanfu|About Us」间距塌缩。也不用 clientWidth（resize 未稳定会锁死 hideFrom）。
+                if (mainW > 0) {
+                    const cssRightFloor = Math.max(240, mainW * 0.3);
+                    const leftCeiling = Math.max(0, mainW - cssRightFloor - gap);
+                    return Math.max(0, leftCeiling - allW - leftGap - 8);
                 }
                 return Math.max(0, mainW - allW - gap - 8);
             }
@@ -547,17 +565,149 @@
                     })
                     : [];
                 const policyUnits = [];
-                const policyRoot = document.querySelector(
-                    '.header-policy-links-slot .header-policy-links, .header-policy-links-slot [data-testid="header-policy-links"]'
-                );
-                if (policyRoot) {
-                    Array.from(policyRoot.children).forEach(function(child) {
-                        if (child.matches('a.header-policy-links__inline, .header-policy-links__menu-wrap')) {
-                            policyUnits.push(child);
-                        }
-                    });
-                }
+                document.querySelectorAll(
+                    '.header-policy-links-slot a.header-policy-links__inline, '
+                    + '.header-policy-links-slot .header-policy-links__menu-wrap'
+                ).forEach(function(child) {
+                    policyUnits.push(child);
+                });
                 return cats.concat(policyUnits);
+            }
+
+            function measureSlotChainExtras() {
+                // 兜底：分类槽/政策槽内「非候选」的链接链（widget 壳被发布槽替换时
+                // collectLeftOverflowCandidates 会抓空）按可见直链逐条计宽并入预算，
+                // 保证 More 出现所需空间不被漏算 → 全簇不再被 flex 压扁裁字
+                const extras = [];
+                if (!leftCluster) {
+                    return extras;
+                }
+                ['.header-nav-left-slot', '.header-policy-links-slot'].forEach(function(sel) {
+                    const slot = leftCluster.querySelector(sel);
+                    if (!slot) {
+                        return;
+                    }
+                    slot.querySelectorAll('a').forEach(function(a) {
+                        const label = (a.textContent || '').trim();
+                        if (!label) {
+                            return;
+                        }
+                        if (a.closest('[data-w-popover-panel], [data-w-menu-panel], .w-popover, .w-mega-menu, .w-menu')) {
+                            return;
+                        }
+                        // 已被 collectLeftOverflowCandidates 收作候选的链不得再计一次：
+                        // 候选链的宽度已由 ensureCatNaturalMetrics 进入 prefix，重复相减会把
+                        // 左预算按「当前可见项宽」逐轮吃掉（可见越多 → 扣得越多 → 永远长不回），
+                        // 表现为中间大块空白却仍显示「更多」。只有非候选链才需要并入预算。
+                        if (a.closest('.category-item')) {
+                            return;
+                        }
+                        if (a.closest('.header-policy-links__menu-wrap')) {
+                            return;
+                        }
+                        if (a.matches('a.header-policy-links__inline')) {
+                            return;
+                        }
+                        const r = a.getBoundingClientRect();
+                        if (r.width < 1 && r.height < 1) {
+                            return;
+                        }
+                        const probe = a.cloneNode(true);
+                        probe.style.cssText = 'display:inline-block;width:auto;max-width:none;flex:0 0 auto;';
+                        const host = document.createElement('div');
+                        host.setAttribute('aria-hidden', 'true');
+                        host.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;white-space:nowrap;display:inline-flex;align-items:center;';
+                        host.appendChild(probe);
+                        document.body.appendChild(host);
+                        const natural = Math.ceil(probe.getBoundingClientRect().width);
+                        document.body.removeChild(host);
+                        extras.push({ el: a, w: natural });
+                    });
+                });
+                return extras;
+            }
+
+            function measureSlotChainExtrasTotal() {
+                const extras = measureSlotChainExtras();
+                if (!extras.length) {
+                    return 0;
+                }
+                let sum = 0;
+                for (let i = 0; i < extras.length; i++) {
+                    sum += extras[i].w + (i > 0 ? 8 : 0);
+                }
+                return sum;
+            }
+
+            // 真实溢出兜底：预算判定为不溢出、但分类槽/政策槽仍裁字或压扁时，
+            // 逐步把尾部候选收进 More。仅查 leftCluster.scrollWidth 会漏检——
+            // 子槽 overflow:hidden 时外层 scrollWidth≈clientWidth，汉服被裁、购物政策被压扁。
+            function leftClusterContentIsSquished() {
+                if (!leftCluster) {
+                    return false;
+                }
+                if (leftCluster.scrollWidth > leftCluster.clientWidth + 1) {
+                    return true;
+                }
+                const catsSlot = leftCluster.querySelector('.header-nav-left-slot, .header-categories');
+                const catsList = categoriesList || (catsSlot && catsSlot.querySelector('.categories-list'));
+                if (catsSlot && catsList && catsList.scrollWidth > catsSlot.clientWidth + 1) {
+                    return true;
+                }
+                const policySlot = leftCluster.querySelector('.header-policy-links-slot');
+                if (policySlot) {
+                    const policyRoot = policySlot.querySelector('.header-policy-links, [data-testid="header-policy-links"]') || policySlot;
+                    if (policyRoot.scrollWidth > policySlot.clientWidth + 1) {
+                        return true;
+                    }
+                    const units = policySlot.querySelectorAll(
+                        'a.header-policy-links__inline:not(.is-nav-overflow-hidden):not(.hidden),'
+                        + ' .header-policy-links__menu-wrap:not(.is-nav-overflow-hidden):not(.hidden)'
+                    );
+                    const slotRight = policySlot.getBoundingClientRect().right;
+                    for (let i = 0; i < units.length; i++) {
+                        const el = units[i];
+                        // 发布槽内容包在 .weline-template-widget（display:block）里，溢出被壳吞掉、
+                        // scrollWidth 查不到 → 按 rect 越出槽右边界判定
+                        if (el.getBoundingClientRect().right > slotRight + 0.5) {
+                            return true;
+                        }
+                        const trigger = el.matches('a') ? el : el.querySelector('.header-policy-links__trigger, [data-w-menu-trigger], a');
+                        const probe = trigger || el;
+                        if (probe.scrollWidth > probe.clientWidth + 1) {
+                            return true;
+                        }
+                    }
+                }
+                if (catsSlot && catsList) {
+                    const slotRight = catsSlot.getBoundingClientRect().right;
+                    const items = catsList.querySelectorAll(':scope > .category-item:not(.is-nav-overflow-hidden):not(.hidden)');
+                    for (let i = 0; i < items.length; i++) {
+                        if (items[i].getBoundingClientRect().right > slotRight + 0.5) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            function enforceLeftClusterNoSquish(candidates) {
+                if (!leftCluster || !candidates.length) {
+                    return -1;
+                }
+                if (clustersOnSeparateRows()) {
+                    return lastCatHideFrom;
+                }
+                if (!leftClusterContentIsSquished() && !policyUnitsAreSqueezed()) {
+                    return lastCatHideFrom;
+                }
+                let hideFrom = lastCatHideFrom >= 0 ? lastCatHideFrom : candidates.length;
+                let guard = candidates.length + 2;
+                while (hideFrom > 0 && (leftClusterContentIsSquished() || policyUnitsAreSqueezed()) && guard-- > 0) {
+                    hideFrom -= 1;
+                    applyCatVisibility(candidates, hideFrom);
+                }
+                return hideFrom;
             }
 
             function isLeftCategoryCandidate(el) {
@@ -567,7 +717,8 @@
             function measureFlexChildrenOffDom(elements, morePrototype, gap) {
                 const host = document.createElement('div');
                 host.setAttribute('aria-hidden', 'true');
-                host.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;display:flex;align-items:center;white-space:nowrap;gap:'
+                host.className = 'js-nav-offdom-host';
+                host.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;display:flex;align-items:center;white-space:nowrap;width:max-content;max-width:none;gap:'
                     + gap + 'px;';
                 const clones = [];
                 for (let i = 0; i < elements.length; i++) {
@@ -580,7 +731,15 @@
                     ).forEach(function(panel) {
                         panel.remove();
                     });
-                    clone.style.cssText = 'display:flex;position:static;visibility:visible;';
+                    clone.style.cssText = 'display:flex;position:static;visibility:visible;width:auto!important;max-width:none!important;flex:0 0 auto!important;min-width:0!important;';
+                    // 脱 DOM 后祖先百分比规则（.categories-list{width:100%} 等）仍命中克隆子级，
+                    // 量出的「自然宽」实为渲染宽 → 预算低估、全屏压扁。逐层钉死 auto/max-content。
+                    clone.querySelectorAll('*').forEach(function(node) {
+                        node.style.width = 'auto';
+                        node.style.maxWidth = 'none';
+                        node.style.flex = '0 0 auto';
+                        node.style.minWidth = '0';
+                    });
                     host.appendChild(clone);
                     clones.push(clone);
                 }
@@ -588,12 +747,19 @@
                 if (morePrototype) {
                     moreClone = morePrototype.cloneNode(true);
                     moreClone.hidden = false;
+                    moreClone.classList.remove('hidden', 'is-nav-overflow-hidden');
                     moreClone.querySelectorAll(
                         '.w-popover, .w-mega-menu, .header-category-panel, .categories-overflow-panel, [data-w-popover-panel], [data-w-menu-panel]'
                     ).forEach(function(panel) {
                         panel.remove();
                     });
-                    moreClone.style.cssText = 'display:flex;position:static;visibility:visible;';
+                    moreClone.style.cssText = 'display:flex;position:static;visibility:visible;width:auto!important;max-width:none!important;flex:0 0 auto!important;min-width:0!important;';
+                    moreClone.querySelectorAll('*').forEach(function(node) {
+                        node.style.width = 'auto';
+                        node.style.maxWidth = 'none';
+                        node.style.flex = '0 0 auto';
+                        node.style.minWidth = '0';
+                    });
                     host.appendChild(moreClone);
                 }
                 document.body.appendChild(host);
@@ -602,7 +768,159 @@
                 });
                 const moreW = moreClone ? (moreClone.getBoundingClientRect().width + gap) : 0;
                 document.body.removeChild(host);
-                return { widths: widths, moreW: moreW, gap: gap };
+                return { widths: widths, moreW: moreW, gap: gap, hostW: Math.ceil(host.getBoundingClientRect().width) };
+            }
+
+            // 左簇整簇自然宽：把 All + 分类槽 + 政策槽 + More 按真实 DOM 层级脱 DOM 克隆，
+            // 宿主链注入同构 class（.header-main-nav-inner>.header-nav-left-cluster），让既有
+            // 后代选择器继续生效；再逐层钉死宽度，避免祖先百分比污染。
+            // 返回 null 表示结构缺失（调用方回退旧逻辑）。
+            function measureLeftClusterNaturalWidth(catsSlot, policySlot) {
+                if (!leftCluster || !catsSlot || !policySlot) {
+                    return null;
+                }
+                const innerProto = mainNavInner || leftCluster.parentElement;
+                if (!innerProto) {
+                    return null;
+                }
+                const gap = parseFloat(window.getComputedStyle(leftCluster).columnGap || window.getComputedStyle(leftCluster).gap) || 0;
+                const host = document.createElement('div');
+                host.setAttribute('aria-hidden', 'true');
+                host.className = 'js-nav-offdom-host header-main-nav-inner '
+                    + (innerProto.classList.contains('is-nav-stacked') ? 'is-nav-stacked' : '');
+                // 内联 !important 压过 .header-main-nav-inner{max-width}；脱 DOM 宿主必须拿满内容宽
+                host.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;display:flex;flex-wrap:nowrap;align-items:center;width:max-content!important;max-width:none!important;'
+                    + 'padding-left:0!important;padding-right:0!important;'
+                    + 'gap:' + (parseFloat(window.getComputedStyle(innerProto).columnGap || window.getComputedStyle(innerProto).gap) || 0) + 'px;';
+                const cluster = document.createElement('div');
+                cluster.className = 'header-nav-left-cluster';
+                cluster.style.cssText = 'display:flex;align-items:center;flex:0 0 auto!important;width:max-content!important;max-width:none!important;min-width:0;overflow:visible;gap:' + gap + 'px;';
+
+                function cloneVisible(el) {
+                    const c = el.cloneNode(true);
+                    c.classList.remove('hidden', 'is-nav-overflow-hidden');
+                    c.removeAttribute('hidden');
+                    c.querySelectorAll('.hidden, .is-nav-overflow-hidden').forEach(function(node) {
+                        node.classList.remove('hidden', 'is-nav-overflow-hidden');
+                        node.removeAttribute('hidden');
+                    });
+                    c.querySelectorAll(
+                        '.w-popover, .w-mega-menu, .header-category-panel, .categories-overflow-panel, [data-w-popover-panel], [data-w-menu-panel]'
+                    ).forEach(function(panel) {
+                        panel.remove();
+                    });
+                    c.querySelectorAll('*').forEach(function(node) {
+                        node.style.width = 'auto';
+                        node.style.maxWidth = 'none';
+                        node.style.flex = '0 0 auto';
+                        node.style.minWidth = '0';
+                    });
+                    return c;
+                }
+
+                const allRoot = document.getElementById('header-nav-all-root');
+                if (allRoot) {
+                    cluster.appendChild(cloneVisible(allRoot));
+                }
+                // 克隆槽保持其在真实簇中的直接子节点身份（widget 壳→内容根），不得拍平包装层，
+                // 否则量出的是内容自然宽而非「含发布包装开销」的簇自然宽。
+                const catsClone = cloneVisible(catsSlot);
+                // 内层链（.categories-nav/.categories-list）必须 max-content：
+                // 既有 CSS 是 width:100%/max-width:100%，克隆父级钉成 max-content 时
+                // 百分比子级会解析回内容宽 → 量不到包装开销（此前 nat 恒等 prefix+all+more 的根因）
+                catsClone.querySelectorAll('.categories-nav, .categories-list').forEach(function(node) {
+                    node.style.setProperty('width', 'max-content', 'important');
+                    node.style.setProperty('maxWidth', 'none', 'important');
+                });
+                catsClone.style.cssText = catsClone.style.cssText + 'display:flex;align-items:center;flex:0 0 auto!important;width:max-content!important;max-width:none!important;min-width:0;overflow:visible;';
+                cluster.appendChild(catsClone);
+                const policyClone = cloneVisible(policySlot);
+                policyClone.querySelectorAll('.header-policy-links').forEach(function(node) {
+                    node.style.setProperty('width', 'max-content', 'important');
+                    node.style.setProperty('maxWidth', 'none', 'important');
+                });
+                policyClone.style.cssText = policyClone.style.cssText + 'display:flex;align-items:center;flex:0 0 auto!important;width:max-content!important;max-width:none!important;min-width:0;overflow:visible;';
+                cluster.appendChild(policyClone);
+                if (categoriesOverflowWrapper) {
+                    const moreClone = cloneVisible(categoriesOverflowWrapper);
+                    moreClone.style.display = 'flex';
+                    cluster.appendChild(moreClone);
+                }
+                host.appendChild(cluster);
+                document.body.appendChild(host);
+                const natural = Math.ceil(cluster.getBoundingClientRect().width);
+                document.body.removeChild(host);
+                return natural > 0 ? natural : null;
+            }
+
+            // 单元素自然宽（钉宽克隆）：识别「渲染宽 < 自然宽」的压扁。
+            function naturalWidthOf(el) {
+                if (!el) {
+                    return 0;
+                }
+                const clone = el.cloneNode(true);
+                clone.classList.remove('hidden', 'is-nav-overflow-hidden');
+                clone.removeAttribute('hidden');
+                clone.querySelectorAll('.hidden, .is-nav-overflow-hidden').forEach(function(node) {
+                    node.classList.remove('hidden', 'is-nav-overflow-hidden');
+                    node.removeAttribute('hidden');
+                });
+                clone.querySelectorAll(
+                    '.w-popover, .w-mega-menu, .header-category-panel, .categories-overflow-panel, [data-w-popover-panel], [data-w-menu-panel]'
+                ).forEach(function(panel) {
+                    panel.remove();
+                });
+                clone.style.cssText = 'display:inline-flex;position:static;visibility:visible;width:max-content!important;max-width:none!important;flex:0 0 auto!important;min-width:0!important;white-space:nowrap;';
+                clone.querySelectorAll('*').forEach(function(node) {
+                    node.style.width = 'auto';
+                    node.style.maxWidth = 'none';
+                    node.style.flex = '0 0 auto';
+                    node.style.minWidth = '0';
+                });
+                const host = document.createElement('div');
+                host.setAttribute('aria-hidden', 'true');
+                host.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;display:inline-flex;align-items:center;white-space:nowrap;width:max-content;max-width:none;';
+                host.appendChild(clone);
+                document.body.appendChild(host);
+                const w = Math.ceil(clone.getBoundingClientRect().width);
+                document.body.removeChild(host);
+                return w;
+            }
+
+            function visiblePolicyUnits() {
+                if (!leftCluster) {
+                    return [];
+                }
+                const policySlot = leftCluster.querySelector('.header-policy-links-slot');
+                if (!policySlot) {
+                    return [];
+                }
+                return Array.from(policySlot.querySelectorAll(
+                    'a.header-policy-links__inline:not(.is-nav-overflow-hidden):not(.hidden),'
+                    + ' .header-policy-links__menu-wrap:not(.is-nav-overflow-hidden):not(.hidden)'
+                ));
+            }
+
+            // 政策单元被压扁判定：widget 壳（display:block）会吞掉溢出，scrollWidth 查不到，
+            // 必须按「渲染宽 vs 钉宽克隆自然宽」或 rect 越出槽右边界来判。
+            function policyUnitsAreSqueezed() {
+                const units = visiblePolicyUnits();
+                if (!units.length) {
+                    return false;
+                }
+                const policySlot = leftCluster && leftCluster.querySelector('.header-policy-links-slot');
+                const slotRight = policySlot ? policySlot.getBoundingClientRect().right : Infinity;
+                for (let i = 0; i < units.length; i++) {
+                    const el = units[i];
+                    if (el.getBoundingClientRect().right > slotRight + 0.5) {
+                        return true;
+                    }
+                    const nat = naturalWidthOf(el);
+                    if (nat > 0 && el.getBoundingClientRect().width < nat - 2) {
+                        return true;
+                    }
+                }
+                return false;
             }
 
             function ensureNavNaturalMetrics(candidates) {
@@ -978,9 +1296,9 @@
                     return;
                 }
 
-                const availableWidth = measureCatAvailableWidth();
+                const availableWidth = measureCatAvailableWidth() - measureSlotChainExtrasTotal();
                 const metrics = ensureCatNaturalMetrics(candidates);
-                const hideFrom = resolveHideFromWithHysteresis(
+                let hideFrom = resolveHideFromWithHysteresis(
                     metrics.prefix,
                     metrics.moreW,
                     availableWidth,
@@ -988,14 +1306,60 @@
                     lastCatHideFrom
                 );
 
+                // 整簇自然宽封顶：候选 prefix 只覆盖「分类+政策」内容，All 按钮、槽内 widget 壳、
+                // 发布层额外包装都可能让真实簇宽超过 prefix 和。prefix 判定「装得下」但实际仍被
+                // flex-shrink 压扁裁字（全屏宽度典型表现）。以整簇克隆自然宽为准强制收项。
+                const catsSlotEl = leftCluster && leftCluster.querySelector('.header-nav-left-slot, .header-categories');
+                const policySlotEl = leftCluster && leftCluster.querySelector('.header-policy-links-slot');
+                let clusterNatW = measureLeftClusterNaturalWidth(catsSlotEl, policySlotEl);
+                if (clusterNatW != null) {
+                    // 克隆自然宽必须 ≥ 当前真实渲染宽（已收项后渲染含 More、克隆已强制显示 More），
+                    // 低于渲染值即测量污染，不可信 → 回退 prefix 和
+                    const renderedNat = leftCluster ? Math.ceil(leftCluster.getBoundingClientRect().width) : 0;
+                    const prefixBased = Math.ceil((metrics.prefix[candidates.length - 1] || 0) + metrics.moreW)
+                        + Math.ceil(measureAllButtonWidth() + (cachedLeftGap || 0));
+                    clusterNatW = Math.max(clusterNatW, prefixBased, renderedNat);
+                }
+                if (clusterNatW != null && clusterNatW > availableWidth) {
+                    const allReserve = measureAllButtonWidth() + (cachedLeftGap || 0);
+                    // prefixLast 已含尾部 More 预留；候选全装得下但整簇仍超宽（包装开销）时，
+                    // raw=-1 与「k≥candidates.length」都必须落 0（全收），禁止把 -1 当答案缓存。
+                    let k = candidates.length;
+                    while (k > 0) {
+                        const visibleW = (k === 0 ? 0 : metrics.prefix[k - 1]) + metrics.moreW + allReserve;
+                        if (visibleW <= availableWidth) {
+                            break;
+                        }
+                        k -= 1;
+                    }
+                    const capped = Math.min(k, candidates.length - 1);
+                    if (hideFrom < 0 || capped < hideFrom) {
+                        hideFrom = capped;
+                        // 封顶必须落进滞回缓存：只改局部值不写 lastCatHideFrom 时，
+                        // apply-if-changed 永不触发、enforce 见无压扁即放行 → 缓存毒化在「全显示」，
+                        // resize 后靠 flex-shrink 压扁裁字（全屏截图根因）。
+                        if (hideFrom !== lastCatHideFrom || candidates.length !== lastCatCandidateCount) {
+                            applyCatVisibility(candidates, hideFrom);
+                            lastCatHideFrom = hideFrom;
+                            lastCatCandidateCount = candidates.length;
+                        }
+                    }
+                }
+
                 if (hideFrom !== lastCatHideFrom || candidates.length !== lastCatCandidateCount) {
                     applyCatVisibility(candidates, hideFrom);
                     lastCatHideFrom = hideFrom;
                     lastCatCandidateCount = candidates.length;
                 }
 
-                if (!lightOnly && catMenuBuiltFor !== hideFrom) {
-                    rebuildCatMoreMenu(candidates, hideFrom);
+                const enforced = enforceLeftClusterNoSquish(candidates);
+                if (enforced !== lastCatHideFrom) {
+                    lastCatHideFrom = enforced;
+                    lastCatCandidateCount = candidates.length;
+                }
+
+                if (!lightOnly && catMenuBuiltFor !== lastCatHideFrom) {
+                    rebuildCatMoreMenu(candidates, lastCatHideFrom);
                 }
             }
 
@@ -1199,9 +1563,25 @@
                 void rightCluster.offsetWidth;
             }
             adjustNavLinks(false);
+            if (mainNavInner) {
+                mainNavInner.setAttribute('data-nav-overflow-ready', '1');
+            }
+
+            // 解析期首算可能量到回退字体宽：load / 字体就绪后作废自然宽缓存重算一次，
+            // 避免按回退宽度定死藏/显
+            var remeasureAfterResources = function () {
+                navNaturalCache = { key: '', widths: [], prefix: [], moreW: 0, gap: navNaturalCache.gap || 20 };
+                catNaturalCache = { key: '', widths: [], prefix: [], moreW: 0, gap: catNaturalCache.gap || 8 };
+                scheduleOverflowAdjust();
+            };
+            window.addEventListener('load', remeasureAfterResources, { once: true });
+            if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+                document.fonts.ready.then(remeasureAfterResources);
+            }
 
             // 只听 window.resize：拖窗足够。RO 会在改 class 后回环，造成一闪一闪。
             window.addEventListener('resize', scheduleOverflowAdjust, { passive: true });
+
             // 展开/关闭由 Weline.UI menu / popover 接管，不再手写 hover/click 层
         }
         
@@ -1777,12 +2157,19 @@
             setTimeout(run, 160);
         };
 
+        if (document.readyState === 'loading') {
+            // 本脚本位于顶栏导航 DOM 之后：解析到此处即可同步首算，
+            // 消除「首绘 → load+idle」窗口内 SSR 全显示被 flex 压扁/裁切
+            initHeaderInteractions();
+            return;
+        }
+
         if (document.readyState === 'complete') {
             scheduleIdle();
             return;
         }
 
-        window.addEventListener('load', scheduleIdle, { once: true });
+        scheduleIdle();
     }
 
     bindHeaderCategoryDrawer();
@@ -1790,4 +2177,13 @@
     bindDrawerFlyoutAlign(document);
     bindSidebarAccordions(document);
     scheduleHeaderInteractions();
+
+    // 解析期 init 只见到脚本以上的 DOM：DCL 后对全文档补绑一次（各 binder 自带 dataset 防重）
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () {
+            bindHeaderMegaMenu(document);
+            bindDrawerFlyoutAlign(document);
+            bindSidebarAccordions(document);
+        }, { once: true });
+    }
 })();

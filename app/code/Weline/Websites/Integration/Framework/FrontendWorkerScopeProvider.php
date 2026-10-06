@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Integration\Framework;
 
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Runtime\FrontendWorkerScopeException;
 use Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeContext;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Framework\Service\Query\Value\FrontendWorkerScopeBinding;
 use Weline\Framework\Service\Query\Value\FrontendWorkerScopeRolloutDecision;
 use Weline\Websites\Api\Catalog\Data\SalesChannelSummary;
@@ -35,6 +37,7 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
         private readonly StoreCatalogInterface $storeCatalog,
         private readonly SalesChannelCatalogInterface $channelCatalog,
         private readonly Website $website,
+        private readonly EventsManager $eventsManager,
     ) {
     }
 
@@ -408,6 +411,7 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
             RequestContext::installScopeIdentity($scope);
             ScopeContext::setScope($scope->toLegacyScopeString());
             WebsiteData::setWebsite($website);
+            $this->ensureThemeApplicationContextReady($scope);
         } catch (FrontendWorkerScopeException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {
@@ -420,6 +424,32 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
                 (string)__('Worker Scope 无法安装到当前请求'),
                 $exception,
             );
+        }
+    }
+
+    /**
+     * Query-bin defers App Scope install; application_context_ready already ran with
+     * null identity. After Worker restores Scope, re-dispatch so Website observers
+     * can install ThemeApplicationContext for Slot/theme runtime consumers.
+     */
+    private function ensureThemeApplicationContextReady(ScopeIdentity $scope): void
+    {
+        if (ThemeApplicationContext::current('frontend') !== null) {
+            return;
+        }
+
+        $payload = [
+            'area' => 'frontend',
+            'navigation_scope' => null,
+            'scope_identity' => $scope,
+        ];
+        $this->eventsManager->dispatch(
+            'Weline_Framework::App::application_context_ready',
+            $payload,
+        );
+
+        if (ThemeApplicationContext::current('frontend') === null) {
+            throw new \InvalidArgumentException('theme_runtime_consumer_context_required');
         }
     }
 

@@ -1,17 +1,18 @@
 <!-- weline:module-ai-index:auto-generated -->
 # Weline_Frontend AI 开发入口
 
-> 本文件由 `dev/ai/scripts/generate-module-ai-indexes.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
+> 本文件由 `dev/ai/scripts/generate-module-docs.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
 
 ## 必读顺序
 
 1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
-3. `dev/ai/diagrams/08-module-docs-index.txt`
-4. 本文件：`app/code/Weline/Frontend/doc/AI-INDEX.md`
-5. 模块说明：`app/code/Weline/Frontend/doc/README.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. 只读取本次任务相关源码、配置和验证入口
+2. 全局硬规则与任务路由：`app/code/Weline/Ai/doc/AI硬规则索引.md`
+3. 本文件：`app/code/Weline/Frontend/doc/AI-INDEX.md`
+4. 模块说明：`app/code/Weline/Frontend/doc/README.md`
+5. `app/code/Weline/Theme/doc/AI-INDEX.md`
+6. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+7. `app/code/Weline/Taglib/doc/AI-INDEX.md`
+8. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -23,24 +24,23 @@
 ## 代码面清单
 
 入口/配置文件：
-- `app/code/Weline/Frontend/etc/backend/menu.xml`
 - `app/code/Weline/Frontend/composer.json`
+- `app/code/Weline/Frontend/etc/backend/menu.xml`
 
 - `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：11
 - `Block`：视图数据块。配合模板输出页面数据，变更前要读对应模板和 layout。 文件数：4
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：3
-- `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：1
+- `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：2
 - `Interface`：模块发布的接口契约。跨模块依赖优先使用这里的稳定契约。 文件数：2
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：8
-- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：6
+- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：8
 - `Plugin`：插件扩展点。变更前确认被拦截对象和执行顺序。 文件数：1
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：7
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：8
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：2
 - `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：6
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：128
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：245
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：6
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
 
@@ -56,8 +56,10 @@
 - `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`
 - `app/code/Weline/Frontend/doc/event/account/前端账户注册后.md`
 - `app/code/Weline/Frontend/doc/event/account/前端账户登录后.md`
+- `app/code/Weline/Frontend/doc/event/静态错误页运行地址.md`
 - `app/code/Weline/Frontend/doc/hook/frontend/head.md`
 - `app/code/Weline/Frontend/doc/hook/frontend/layouts/base/head-before.md`
+- `app/code/Weline/Frontend/doc/worker-query-endpoint-website-scope.md`
 - `app/code/Weline/Frontend/doc/主题规划.md`
 - `app/code/Weline/Frontend/doc/主题设计/README.md`
 - `app/code/Weline/Frontend/doc/主题设计/assets目录文档.md`
@@ -72,6 +74,10 @@
 - `app/code/Weline/Frontend/doc/主题设计/变量与颜色主题区别说明.md`
 - `app/code/Weline/Frontend/doc/主题设计/模块加载系统使用指南.md`
 - `app/code/Weline/Frontend/doc/主题设计/配色.md`
+- `app/code/Weline/Frontend/doc/功能现状.md`
+- `app/code/Weline/Frontend/doc/开发日志.md`
+- `app/code/Weline/Frontend/doc/架构/DOM-Mutation观察总线.md`
+- `app/code/Weline/Frontend/doc/需求.md`
 
 ## 开发前门禁
 

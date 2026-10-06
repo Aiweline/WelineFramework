@@ -20,7 +20,7 @@ $esc = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
          data-checkout-group-uuid="<?= $esc($checkoutGroupUuid) ?>"
          data-already-paid="<?= $alreadyPaid ? '1' : '0' ?>"
          data-already-paid-redirect="<?= $esc($alreadyPaidRedirect) ?>"
-         data-weline-load="checkoutExpressReview">
+         data-weline-load="checkoutExpressReview,storefrontMoneySummary">
     <header class="w-express-review__header">
         <h1 class="w-express-review__title">
             <?= $esc((string) ($alreadyPaid ? __('订单已支付') : __('确认并付款'))) ?>
@@ -120,13 +120,13 @@ $esc = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
 
     <section class="w-express-review__card" weline-code="checkout.express-review.totals" data-express-totals-block>
         <h2 class="w-express-review__card-title"><?= $esc((string) __('应付合计')) ?></h2>
-        <dl class="w-express-review__totals">
-            <div><dt><?= $esc((string) __('小计')) ?></dt><dd data-express-subtotal>—</dd></div>
-            <div><dt><?= $esc((string) __('运费')) ?></dt><dd data-express-shipping>—</dd></div>
-            <div><dt><?= $esc((string) __('税费')) ?></dt><dd data-express-tax>—</dd></div>
-            <div><dt><?= $esc((string) __('优惠')) ?></dt><dd data-express-discount>—</dd></div>
-            <div class="w-express-review__grand"><dt><?= $esc((string) __('应付')) ?></dt><dd data-express-grand>—</dd></div>
-        </dl>
+        <div class="w-express-review__money-summary"
+             data-testid="express-money-summary"
+             weline-code="checkout.express-review.money_summary">
+            <?= $this->fetch('Weline_Checkout::templates/frontend/widgets/storefront-money-summary/default.phtml', [
+                'mode' => 'express',
+            ]) ?>
+        </div>
     </section>
 
     <div class="w-express-review__actions">

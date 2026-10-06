@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Tax',
-    'version' => '2.1.4',
+    'version' => '2.1.6',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -12,7 +12,9 @@ return [
         'Weline_Websites' => '*',
     ],
     'optional' => [
+        'Weline_Cart' => '*',
         'Weline_Checkout' => '*',
+        'Weline_Cron' => '*',
         'Weline_Order' => '*',
     ],
     'provides' => [

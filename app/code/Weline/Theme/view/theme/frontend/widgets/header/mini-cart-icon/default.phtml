@@ -211,7 +211,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-w-mini-cart="1"
          data-editor-interactive
-         data-weline-load="miniCartIcon,miniCartExtras"
+         data-weline-load="miniCartIcon,miniCartExtras,storefrontMoneySummary"
          data-demo-chrome="<?= $isDemoChrome ? '1' : '0' ?>"
          data-preview-mode="0"
          data-cart-count="<?= $cartQuantity ?>"
@@ -225,6 +225,8 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-i18n-checkout-loading="<?= $esc(__('正在前往结算...')) ?>"
          data-i18n-view-cart="<?= $esc(__('查看购物车')) ?>"
          data-i18n-note="<?= $esc(__('税费与运费将在结算时计算')) ?>"
+         data-i18n-note-shipping="<?= $esc(__('运费将在结算时计算')) ?>"
+         data-i18n-tax="<?= $esc(__('税费（预估）')) ?>"
          data-i18n-qty="<?= $esc(__('数量')) ?>"
          data-i18n-decrease="<?= $esc(__('减少数量')) ?>"
          data-i18n-increase="<?= $esc(__('增加数量')) ?>"
@@ -329,18 +331,15 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                 </div>
                 <p class="mini-cart-drawer__fs-progress-text" data-mini-cart-fs-text></p>
             </div>
-            <div class="mini-cart-drawer__totals" data-mini-cart-discount-breakdown hidden>
-                <div class="mini-cart-drawer__subtotal mini-cart-drawer__subtotal--goods">
-                    <span><?= __('商品小计') ?></span>
-                    <span data-cart-goods-subtotal><?= $esc($cartSubtotalVisible) ?></span>
-                </div>
-                <div class="mini-cart-drawer__discount-lines" data-mini-cart-discount-lines></div>
-            </div>
-            <div class="mini-cart-drawer__subtotal mini-cart-drawer__subtotal--payable">
-                <span><?= __('小计') ?></span>
-                <strong class="total-amount" data-cart-total-amount><?= $esc($cartSubtotalVisible) ?></strong>
-            </div>
-            <p class="mini-cart-drawer__note" dir="auto"><?= __('税费与运费将在结算时计算') ?></p>
+            <w:slot id="money-summary"
+                    name="<?= __('迷你购物车金额小计') ?>"
+                    accept="storefront-money-summary,checkout-money-summary,money-summary,cart-money-summary,checkout"
+                    exclusive="true"
+                    multiple="false"
+                    position="footer"
+                    class="mini-cart-drawer__money-summary-slot"
+                    weline-code="theme.mini-cart.money_summary_slot">
+            </w:slot>
             <div class="mini-cart-drawer__actions">
                 <a href="@url{'checkout'}"
                    class="mini-cart-drawer__btn mini-cart-drawer__btn--primary"

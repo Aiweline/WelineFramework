@@ -41,7 +41,7 @@ $copy = [
     'switch_checkout_type' => (string)__('切换结账'),
 ];
 ?>
-<section class="weline-checkout" data-weline-checkout data-checkout-view="loading" data-weline-load="cart,b2bCheckoutTob,checkoutLifecycle,paymentLifecycle" data-testid="checkout-form-page" aria-busy="true" weline-code="checkout.checkout.index.section_1">
+<section class="weline-checkout" data-weline-checkout data-checkout-view="loading" data-weline-load="cart,b2bCheckoutTob,checkoutLifecycle,paymentLifecycle,storefrontMoneySummary" data-testid="checkout-form-page" aria-busy="true" weline-code="checkout.checkout.index.section_1">
     <header class="weline-checkout__header">
         <div class="weline-checkout__header-title">
             <p class="weline-checkout__eyebrow"><?= __('安全结账') ?></p>
@@ -209,43 +209,12 @@ $copy = [
             </div>
             <?php // mini-cart-drawer.css：由 chrome @widget.layout_source bake→head，禁止 body @static 重复 ?>
             <w:hook>Weline_Checkout::frontend::layouts::checkout::summary-discount-after</w:hook>
-            <div class="weline-checkout__totals" role="list">
-                <div role="listitem">
-                    <span><?= __('商品小计') ?></span>
-                    <strong data-subtotal="">0.00</strong>
-                </div>
-                <div role="listitem">
-                    <span><?= __('运费') ?></span>
-                    <strong data-shipping-amount="">0.00</strong>
-                </div>
-                <div role="listitem" data-checkout-discount-row hidden>
-                    <span data-checkout-discount-label><?= __('优惠') ?></span>
-                    <strong data-discount-amount="">0.00</strong>
-                </div>
-                <div role="listitem" data-checkout-deposit-row hidden>
-                    <span><?= WidgetI18n::label('批发定金') ?></span>
-                    <strong data-deposit-amount="">0.00</strong>
-                </div>
-                <div role="listitem" data-checkout-credit-row hidden>
-                    <span><?= WidgetI18n::label('批发信用抵扣') ?></span>
-                    <strong data-credit-amount="">0.00</strong>
-                </div>
-                <div role="listitem" data-checkout-tax-row hidden>
-                    <span><?= __('关税与税费（预估）') ?></span>
-                    <strong data-tax-amount="">0.00</strong>
-                </div>
-                <div role="listitem" data-checkout-cod-fee-row hidden>
-                    <span><?= WidgetI18n::label('货到付款手续费') ?></span>
-                    <strong data-cod-fee-amount="">0.00</strong>
-                </div>
-                <div role="listitem" data-checkout-payment-incentive-row hidden data-testid="checkout-payment-incentive-row">
-                    <span><?= __('支付方式优惠') ?></span>
-                    <strong data-payment-incentive-amount="">0.00</strong>
-                </div>
-                <div class="weline-checkout__grand" role="listitem">
-                    <span data-grand-total-label><?= __('应付合计') ?></span>
-                    <strong data-grand-total="">0.00</strong>
-                </div>
+            <div class="weline-checkout__totals"
+                 data-testid="checkout-money-summary"
+                 weline-code="checkout.checkout.money_summary">
+                <?= $this->fetch('Weline_Checkout::templates/frontend/widgets/storefront-money-summary/default.phtml', [
+                    'mode' => 'checkout',
+                ]) ?>
             </div>
             <button class="weline-checkout__submit" type="submit" data-submit>
                 <?= htmlspecialchars($copy['submit'], ENT_QUOTES, 'UTF-8') ?>
@@ -1166,15 +1135,26 @@ $copy = [
     }
 
     /**
-     * Buy-now / retail-only handoff: ?cart_type=toc|tob wins for this page view.
+     * Buy-now / retail-only handoff: ?cart_type= | ?type= | ?selling_mode= toc|tob wins for this page view.
      * Sets data-cart-type-handoff so B2B chrome sync does not overwrite with tob cookie.
      * Does not rewrite weline_selling_mode cookie (keep global wholesale preference).
      */
-    function applyCartTypeHandoffFromUrl() {
+    function readCartTypeFromQuery() {
         try {
             const params = new URLSearchParams(globalThis.location.search || '');
-            const raw = String(params.get('cart_type') || params.get('selling_mode') || '').toLowerCase();
-            if (raw !== 'toc' && raw !== 'tob') {
+            const raw = String(
+                params.get('cart_type') || params.get('type') || params.get('selling_mode') || ''
+            ).toLowerCase();
+            return (raw === 'toc' || raw === 'tob') ? raw : '';
+        } catch (eQuery) {
+            return '';
+        }
+    }
+
+    function applyCartTypeHandoffFromUrl() {
+        try {
+            const raw = readCartTypeFromQuery();
+            if (!raw) {
                 return '';
             }
             root.setAttribute('data-cart-type', raw);
@@ -2900,69 +2880,55 @@ $copy = [
         }
     }
 
+    function moneySummaryApi() {
+        return window.WelineStorefrontMoneySummary || null;
+    }
+
+    function moneySummaryRoot() {
+        return root.querySelector('[data-money-summary]')
+            || (moneySummaryApi() && typeof moneySummaryApi().find === 'function'
+                ? moneySummaryApi().find(root)
+                : null);
+    }
+
+    function paintCheckoutMoneySummary(dto) {
+        const api = moneySummaryApi();
+        const host = moneySummaryRoot();
+        if (api && typeof api.paint === 'function' && host) {
+            api.paint(host, Object.assign({ mode: 'checkout' }, dto || {}));
+            return true;
+        }
+        return false;
+    }
+
     function applyContinuePayFrozenTotals(frozen) {
-        // 小计/运费必须始终写出，禁止只露优惠行让人看不懂账。
-        if (subtotalNode) {
-            const subRow = subtotalNode.closest('[role="listitem"]');
-            if (subRow) {
-                subRow.hidden = false;
-                subRow.removeAttribute('hidden');
-            }
-        }
-        if (shippingAmountNode) {
-            const shipRow = shippingAmountNode.closest('[role="listitem"]');
-            if (shipRow) {
-                shipRow.hidden = false;
-                shipRow.removeAttribute('hidden');
-            }
-        }
-        setText(subtotalNode, money(frozen.subtotal));
-        setText(shippingAmountNode, money(frozen.shipping));
         const couponCode = text(
             continuePayBinding
             && continuePayBinding.order
             && continuePayBinding.order.coupon_code
         ).trim().toUpperCase();
-        if (discountRowNode && discountAmountNode) {
-            if (frozen.discount > 0) {
-                discountRowNode.hidden = false;
-                setDiscountRowLabel(couponCode);
-                setText(discountAmountNode, '-' + money(frozen.discount));
-            } else {
-                discountRowNode.hidden = true;
-                setDiscountRowLabel('');
-                setText(discountAmountNode, money(0));
-            }
+        const discountLabel = frozen.discount > 0 && couponCode
+            ? (discountLabelDefault + ' · ' + couponCode)
+            : '';
+        const painted = paintCheckoutMoneySummary({
+            currency: checkoutState.currency || 'CNY',
+            goods_subtotal_minor: Math.round(Number(frozen.subtotal || 0) * 100),
+            shipping_minor: Math.round(Number(frozen.shipping || 0) * 100),
+            discount_minor: Math.round(Number(frozen.discount || 0) * 100),
+            discount_label: discountLabel,
+            tax_minor: Math.round(Number(frozen.tax || 0) * 100),
+            deposit_minor: 0,
+            credit_minor: 0,
+            cod_fee_minor: 0,
+            payment_incentive_minor: 0,
+            payable_minor: Math.round(Number(frozen.grand_total || 0) * 100),
+            payable_label: grandTotalLabelDefault || grandTotalLabelDeposit,
+        });
+        if (!painted) {
+            setText(subtotalNode, money(frozen.subtotal));
+            setText(shippingAmountNode, money(frozen.shipping));
+            setText(grandTotalNode, money(frozen.grand_total));
         }
-        if (depositRowNode && depositAmountNode) {
-            depositRowNode.hidden = true;
-            setText(depositAmountNode, money(0));
-        }
-        if (creditRowNode && creditAmountNode) {
-            creditRowNode.hidden = true;
-            setText(creditAmountNode, money(0));
-        }
-        if (taxRowNode && taxAmountNode) {
-            if (frozen.tax > 0) {
-                taxRowNode.hidden = false;
-                setText(taxAmountNode, money(frozen.tax));
-            } else {
-                taxRowNode.hidden = true;
-                setText(taxAmountNode, money(0));
-            }
-        }
-        if (codFeeRowNode && codFeeAmountNode) {
-            codFeeRowNode.hidden = true;
-            setText(codFeeAmountNode, money(0));
-        }
-        if (paymentIncentiveRowNode && paymentIncentiveAmountNode) {
-            paymentIncentiveRowNode.hidden = true;
-            setText(paymentIncentiveAmountNode, money(0));
-        }
-        if (grandTotalLabelNode) {
-            setText(grandTotalLabelNode, grandTotalLabelDefault || grandTotalLabelDeposit);
-        }
-        setText(grandTotalNode, money(frozen.grand_total));
         syncLifecycleDomFields({ amount: Number(frozen.grand_total || 0).toFixed(2) });
         if (frozen.discount > 0 && couponCode) {
             paintCheckoutCouponTag(
@@ -3014,83 +2980,39 @@ $copy = [
                 cashDepositMajor = Math.max(0, depositMajor - creditApplyMajor);
             }
         }
-        setText(subtotalNode, money(subtotal));
-        setText(shippingAmountNode, money(shipping));
-        if (discountRowNode && discountAmountNode) {
-            // tob 禁营销折：优惠行只展示零售券预览。
-            if (!tob && discount > 0) {
-                discountRowNode.hidden = false;
-                const previewCode = text(
-                    (checkoutState.cart && checkoutState.cart.discount_preview && checkoutState.cart.discount_preview.coupon_code)
-                    || pendingCouponCode
-                    || ''
-                ).trim().toUpperCase();
-                setDiscountRowLabel(previewCode);
-                setText(discountAmountNode, '-' + money(discount));
-            } else {
-                discountRowNode.hidden = true;
-                setDiscountRowLabel('');
-                setText(discountAmountNode, money(0));
-            }
-        }
-        if (depositRowNode && depositAmountNode) {
-            if (tob && depositMajor > 0) {
-                depositRowNode.hidden = false;
-                setText(depositAmountNode, money(depositMajor));
-            } else {
-                depositRowNode.hidden = true;
-                setText(depositAmountNode, money(0));
-            }
-        }
-        if (creditRowNode && creditAmountNode) {
-            if (tob && creditApplyMajor > 0) {
-                creditRowNode.hidden = false;
-                setText(creditAmountNode, '-' + money(creditApplyMajor));
-            } else {
-                creditRowNode.hidden = true;
-                setText(creditAmountNode, money(0));
-            }
-        }
         const tax = tob ? 0 : selectedTaxAmount();
-        if (taxRowNode && taxAmountNode) {
-            if (tax > 0) {
-                taxRowNode.hidden = false;
-                setText(taxAmountNode, money(tax));
-            } else {
-                taxRowNode.hidden = true;
-                setText(taxAmountNode, money(0));
-            }
-        }
         const codFee = tob ? 0 : selectedCodFeeAmount();
-        if (codFeeRowNode && codFeeAmountNode) {
-            if (codFee > 0) {
-                codFeeRowNode.hidden = false;
-                setText(codFeeAmountNode, money(codFee));
-            } else {
-                codFeeRowNode.hidden = true;
-                setText(codFeeAmountNode, money(0));
-            }
-        }
         const incentive = tob ? 0 : selectedIncentiveSavingsMajor();
-        if (paymentIncentiveRowNode && paymentIncentiveAmountNode) {
-            if (incentive > 0) {
-                paymentIncentiveRowNode.hidden = false;
-                setText(paymentIncentiveAmountNode, '-' + money(incentive));
-            } else {
-                paymentIncentiveRowNode.hidden = true;
-                setText(paymentIncentiveAmountNode, money(0));
-            }
-        }
-        if (grandTotalLabelNode) {
-            setText(
-                grandTotalLabelNode,
-                tob ? grandTotalLabelDeposit : (grandTotalLabelDefault || grandTotalLabelDeposit)
-            );
-        }
         const payable = tob
             ? Math.max(0, cashDepositMajor == null ? depositMajor : cashDepositMajor)
             : Math.max(0, subtotal + shipping - discount + tax + codFee - incentive);
-        setText(grandTotalNode, money(payable));
+        const previewCode = text(
+            (checkoutState.cart && checkoutState.cart.discount_preview && checkoutState.cart.discount_preview.coupon_code)
+            || pendingCouponCode
+            || ''
+        ).trim().toUpperCase();
+        const discountLabel = (!tob && discount > 0 && previewCode)
+            ? (discountLabelDefault + ' · ' + previewCode)
+            : '';
+        const painted = paintCheckoutMoneySummary({
+            currency: checkoutState.currency || 'CNY',
+            goods_subtotal_minor: Math.round(subtotal * 100),
+            shipping_minor: Math.round(shipping * 100),
+            discount_minor: tob ? 0 : Math.round(discount * 100),
+            discount_label: discountLabel,
+            deposit_minor: tob ? Math.round(depositMajor * 100) : 0,
+            credit_minor: tob ? Math.round(creditApplyMajor * 100) : 0,
+            tax_minor: Math.round(tax * 100),
+            cod_fee_minor: Math.round(codFee * 100),
+            payment_incentive_minor: Math.round(incentive * 100),
+            payable_minor: Math.round(payable * 100),
+            payable_label: tob ? grandTotalLabelDeposit : (grandTotalLabelDefault || grandTotalLabelDeposit),
+        });
+        if (!painted) {
+            setText(subtotalNode, money(subtotal));
+            setText(shippingAmountNode, money(shipping));
+            setText(grandTotalNode, money(payable));
+        }
         syncLifecycleDomFields({ amount: payable.toFixed(2) });
     }
 
@@ -3462,15 +3384,12 @@ $copy = [
             if (handoff === 'tob' || handoff === 'toc') {
                 return handoff;
             }
-            try {
-                const params = new URLSearchParams(window.location.search || '');
-                const fromQuery = String(params.get('cart_type') || params.get('selling_mode') || '').toLowerCase();
-                if (fromQuery === 'tob' || fromQuery === 'toc') {
-                    root.setAttribute('data-cart-type', fromQuery);
-                    root.setAttribute('data-cart-type-handoff', fromQuery);
-                    return fromQuery;
-                }
-            } catch (eQuery) {}
+            const fromQuery = readCartTypeFromQuery();
+            if (fromQuery) {
+                root.setAttribute('data-cart-type', fromQuery);
+                root.setAttribute('data-cart-type-handoff', fromQuery);
+                return fromQuery;
+            }
             const fromRoot = String((root && root.getAttribute('data-cart-type')) || '').toLowerCase();
             if (fromRoot === 'tob' || fromRoot === 'toc') {
                 return fromRoot;

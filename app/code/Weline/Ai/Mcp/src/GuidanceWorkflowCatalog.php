@@ -132,8 +132,8 @@ final class GuidanceWorkflowCatalog
                 'Forcing 127.0.0.1 when *.test.weline.com Host exists',
                 'Leaving acceptance Browser tabs/webviews open after the Delivery URLs section (idle Glass/Simple Browser/ide-browser)',
             ],
-            'summary_zh' => '每次向用户汇报功能完成或阶段性交付时：① 须已自行按验收层级验证（agent_self_verify_before_done：UT/RT/WB）；任何 feature 须 Agent 自跑 Playwright e2e PASS（ui_feature_requires_e2e），禁止请用户测试/刷新自验（forbid_user_manual_test_handoff）；功能/Web/UI 须含验收阶段审图（acceptance_phase_requires_shentu）；Web/UI 须用当前宿主可用的真实 Browser 按用例自测，且每次打开/导航前禁用 HTTP 缓存（未测或宿主无 Browser 只能报验收未完成）；② 回复须含「需求纠偏」小节（requirement_framework_scrutiny：无调整写「无调整/合理」，有纠偏则逐条列出原问题与更合理做法）；③ 回复须含「耦合提示」小节（framework_decoupled_only：无耦合写「无耦合」，有发现则逐条列出，禁止静默交付耦合写法）；④ 回复须含「汇审」小节（closeout_requires_huishen：对照需求/验收/(功能时)原型·UI·审图·e2e）；⑤ 回复末尾必须包含「交付地址」小节，列出探活过的前台/后台/API 可点击 http(s) Markdown 链接；本机默认 Host 为 `{project_hash}.test.weline.com`（例 http://p05113ef3.test.weline.com:9555/...），禁止把 `*.weline.test` 当主验收 Host；纯逻辑无 UI 写 N/A。禁止省略该小节。⑥ 写完「交付地址」后立即关闭本回合打开的验收 Browser 标签/webview（Cursor：unlock 后 browser_tabs close；用户明确要求保留除外）。',
-            'summary_en' => 'On every feature completion or stage handoff: (1) Agent must have self-verified by acceptance tier (agent_self_verify_before_done: UT/RT/WB) including Playwright e2e PASS for every feature (ui_feature_requires_e2e)—never ask the user to test (forbid_user_manual_test_handoff); include acceptance-phase 审图 when feature/UI; for Web/UI, run a host-available real Browser on agreed use cases with HTTP cache disabled on every open/navigate—otherwise only report WebUI incomplete; (2) include a 「需求纠偏」/Requirement correction section; (3) include a 「耦合提示」/Coupling tips section; (4) include a 「汇审」/Joint review section (closeout_requires_huishen); (5) end with a Delivery URLs section of probe-verified clickable http(s) Markdown links using default local Host {project_hash}.test.weline.com (never primary *.weline.test), or N/A when no UI. Never omit this section. (6) Immediately after that section, close every acceptance Browser tab/webview opened this turn, unless the user explicitly asks to keep them.',
+            'summary_zh' => '每次向用户汇报功能完成或阶段性交付时：① 须已自行按验收层级验证（agent_self_verify_before_done：UT/RT/WB）；任何 feature 须 Agent 自跑 Playwright e2e PASS（ui_feature_requires_e2e），禁止请用户测试/刷新自验（forbid_user_manual_test_handoff）；功能/Web/UI 须含验收阶段审图（acceptance_phase_requires_shentu）；Web/UI 须用当前宿主可用的真实 Browser 按用例自测，打开前 curl --max-time 探活，卡住则 fail-closed unlock+关标签（browser_operator_fail_closed_release），且每次打开/导航前禁用 HTTP 缓存（未测或宿主无 Browser 只能报验收未完成）；② 回复须含「需求纠偏」小节（requirement_framework_scrutiny：无调整写「无调整/合理」，有纠偏则逐条列出原问题与更合理做法）；③ 回复须含「耦合提示」小节（framework_decoupled_only：无耦合写「无耦合」，有发现则逐条列出，禁止静默交付耦合写法）；④ 回复须含「汇审」小节（closeout_requires_huishen：对照需求/验收/(功能时)原型·UI·审图·e2e）；⑤ 回复末尾必须包含「交付地址」小节，列出探活过的前台/后台/API 可点击 http(s) Markdown 链接；本机默认 Host 为 `{project_hash}.test.weline.com`（例 http://p05113ef3.test.weline.com:9555/...），禁止把 `*.weline.test` 当主验收 Host；纯逻辑无 UI 写 N/A。禁止省略该小节。⑥ 写完「交付地址」后立即关闭本回合打开的验收 Browser 标签/webview（Cursor：unlock 后 browser_tabs close；用户明确要求保留除外）。',
+            'summary_en' => 'On every feature completion or stage handoff: (1) Agent must have self-verified by acceptance tier (agent_self_verify_before_done: UT/RT/WB) including Playwright e2e PASS for every feature (ui_feature_requires_e2e)—never ask the user to test (forbid_user_manual_test_handoff); include acceptance-phase 审图 when feature/UI; for Web/UI, run a host-available real Browser on agreed use cases with curl --max-time probe before navigate and fail-closed unlock+close on hang (browser_operator_fail_closed_release), HTTP cache disabled on every open/navigate—otherwise only report WebUI incomplete; (2) include a 「需求纠偏」/Requirement correction section; (3) include a 「耦合提示」/Coupling tips section; (4) include a 「汇审」/Joint review section (closeout_requires_huishen); (5) end with a Delivery URLs section of probe-verified clickable http(s) Markdown links using default local Host {project_hash}.test.weline.com (never primary *.weline.test), or N/A when no UI. Never omit this section. (6) Immediately after that section, close every acceptance Browser tab/webview opened this turn, unless the user explicitly asks to keep them.',
             'browser_self_test_required_for_web' => true,
             'agent_self_verify_required' => true,
             'agent_self_verify_rule' => 'agent_self_verify_before_done',
@@ -163,11 +163,20 @@ final class GuidanceWorkflowCatalog
             'browser_cache_disabled_on_open_required' => true,
             'browser_operator_non_preemptive_required' => true,
             'browser_open_order' => [
+                'probe_http_with_max_time_before_navigate',
                 'prefer_background_non_preemptive_navigate',
                 'disable_http_cache_for_session',
                 'strip_automation_detection_flags',
                 'navigate_or_reload_ignore_cache',
                 'run_wb_op_and_optional_wb_vis',
+            ],
+            'browser_operator_fail_closed_release_required' => true,
+            'browser_fail_closed_order' => [
+                'probe_http_with_max_time_before_navigate',
+                'on_browser_error_or_timeout_unlock',
+                'close_all_acceptance_browser_tabs',
+                'optional_e2e_cleanup_browsers',
+                'report_webui_acceptance_incomplete',
             ],
             'browser_release_after_delivery_required' => true,
             'browser_release_order' => [
@@ -184,6 +193,7 @@ final class GuidanceWorkflowCatalog
                 'Verifying this turn UI/static assets against default browser disk cache without disable/ignoreCache',
                 'Treating reCAPTCHA/human-verification blocks caused by automation flags as WB-OP pass',
                 'Preemptive foreground Browser navigate (position:active) that steals IDE/chat focus without user request to watch',
+                'Opening Browser without curl --max-time probe, or waiting indefinitely on stuck Browser/lock instead of fail-closed unlock+close',
             ],
         ];
     }
@@ -1158,11 +1168,12 @@ final class GuidanceWorkflowCatalog
         return [
             'id' => self::SURFACE_WEBUI_BROWSER_CLOSEOUT,
             'label' => 'WebUI 浏览器验收与交付地址',
-            'description' => '页面/UI 任务收口前必须用当前宿主可用的真实 Browser 按用例自测；每次打开/导航前禁用 HTTP 缓存；交付汇报末尾必须列「交付地址」；写完交付地址后立即关闭本回合验收 Browser；本机默认 Host 为 {project_hash}.test.weline.com，禁止主链 *.weline.test。',
+            'description' => '页面/UI 任务收口前必须用当前宿主可用的真实 Browser 按用例自测；打开前 curl --max-time 探活；卡住则 fail-closed unlock+关标签；每次打开/导航前禁用 HTTP 缓存；交付汇报末尾必须列「交付地址」；写完交付地址后立即关闭本回合验收 Browser；本机默认 Host 为 {project_hash}.test.weline.com，禁止主链 *.weline.test。',
             'triggers' => [
                 'phtml', '页面', '后台', '前台', '验收', '交付', '完成', 'browser', 'webui',
                 '交付地址', '自测', '用例', '截图', 'wls', 'ui', 'test.weline.com', 'weline.test',
                 '关闭浏览器', 'close browser', 'webview', '缓存', 'cache', 'ignoreCache',
+                '卡住', 'hang', 'fail-closed', 'cleanup-browsers',
             ],
             'authoritative_skill' => 'local-browser-urls',
             'authoritative_doc' => 'app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md',
@@ -1175,6 +1186,7 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'wb_op_browser_self_test', 'summary' => 'AI 必须用当前宿主可用的真实 Browser 跑完约定用例；单测/curl 不能替代；不绑定 Cursor'],
                 ['id' => 'browser_operator_non_preemptive', 'summary' => 'WB-OP 默认非抢占后台：Cursor browser_navigate 省略 position；禁止默认 position:active 抢 IDE 焦点；后台≠免测；仅用户要求观看时前台'],
                 ['id' => 'browser_cache_disabled_on_open', 'summary' => '每次打开/导航验收 Browser 前禁用 HTTP 缓存（Cursor：Network.setCacheDisabled；失败则 Page.reload ignoreCache）；禁止用默认磁盘缓存验本回合静态资源'],
+                ['id' => 'browser_operator_fail_closed_release', 'summary' => '打开前 curl --max-time≤15 探活；Browser 超时/无 tab/锁死立即 unlock+关闭全部验收标签（可 e2e:cleanup-browsers）；导航重试≤2；禁止无限等待或跨长 shell 持 lock'],
                 ['id' => 'wb_vis_screenshots', 'summary' => '有视觉面且宿主可截图时：多断点截图存 doc/evidence/；有原型文档则对照'],
                 ['id' => 'delivery_urls_section', 'summary' => '每次功能完成汇报末尾必须有「交付地址」小节（主链 http(s) Markdown）'],
                 ['id' => 'delivery_default_host_test_weline_com', 'summary' => '本机主验收 Host 默认 {project_hash}.test.weline.com；禁止主链 *.weline.test；仅无前者时才用 127.0.0.1'],
@@ -1182,7 +1194,8 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'e2e_playwright_formal_runner_only', 'summary' => 'Playwright 仅 `php bin/w e2e:run` / `npx playwright test`；禁止 node -e / chromium.launch 探活残留 chrome-headless-shell'],
             ],
             'verification_commands' => [
-                'curl -I <probe_verified_acceptance_url>',
+                'curl --max-time 10 -I <probe_verified_acceptance_url>',
+                'php bin/w e2e:cleanup-browsers',
             ],
             'template_surface_rules' => [
                 'forbidden' => [
@@ -1198,9 +1211,11 @@ final class GuidanceWorkflowCatalog
                     'Opening acceptance Browser with default HTTP cache enabled when verifying this turn UI/static changes',
                     'Preemptive foreground Browser navigate (position:active) stealing IDE/chat focus without user request to watch',
                     'Ad-hoc node -e / chromium.launch Playwright probes instead of php bin/w e2e:run or npx playwright test',
+                    'Navigating Browser without curl --max-time probe, or waiting indefinitely on stuck Browser/lock instead of fail-closed unlock+close',
                 ],
                 'required' => [
                     'Define operator use cases (URL, steps, expected) before claiming Web done',
+                    'Before every acceptance Browser navigate: curl --max-time ≤15 probe; on Browser hang/timeout: unlock+close all acceptance tabs (fail-closed)',
                     'On every acceptance Browser open/navigate: prefer background non-preemptive navigate (omit position); disable HTTP cache (or ignoreCache reload fallback) before trusting the page',
                     'Run host-available real Browser on those use cases (WB-OP); collect WB-VIS when visual and screenshot-capable',
                     'End every feature/stage report with probe-verified http(s) Markdown Delivery URLs on {project_hash}.test.weline.com by default',

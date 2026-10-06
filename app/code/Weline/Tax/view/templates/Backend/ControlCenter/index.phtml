@@ -52,6 +52,47 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
     </div>
     <?php if ($form !== []): ?>
         <?php $kind = (string)($form['kind'] ?? ''); ?>
+        <?php if ($kind === 'ratesync'): ?>
+            <div class="w-card" data-testid="tax-ratesync-run-form" style="--w-mb:var(--weline-space-4);">
+                <div class="w-card__header"><h5 style="--w-mb:0;"><?= __('立即同步税率') ?></h5></div>
+                <div class="w-card__body">
+                    <w:form method="post" action="@backend-url{$formActionPath}">
+                        <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                            <div style="--w-span-md:4;"><label class="w-field__label"><?= __('网站') ?></label>
+                                <w:websites:website:select
+                                    id="tax-cc-ratesync-website"
+                                    name="website_id"
+                                    value="websiteSelectValue"
+                                    display="websiteSelectDisplay"
+                                    options="websiteSelectOptionsJson"
+                                    multiple="false"
+                                    allow-empty="false"
+                                    empty-label="@lang(请选择站点)"
+                                    placeholder="@lang(搜索站点名称或编码)"
+                                />
+                            </div>
+                            <div class="w-cluster" data-align="end" style="--w-span-md:3;">
+                                <button class="w-button" type="submit" data-testid="tax-ratesync-submit" data-w-width="full" data-tone="primary"><?= __('立即同步') ?></button>
+                            </div>
+                            <?php
+                            $configDeeplink = trim((string)($form['config_deeplink'] ?? ''));
+                            if ($configDeeplink !== ''):
+                            ?>
+                            <div class="w-cluster" data-align="end" style="--w-span-md:3;">
+                                <a class="w-button" data-variant="outline" data-w-width="full" data-testid="tax-ratesync-config-deeplink"
+                                   href="<?= $escape($configDeeplink) ?>" target="_blank" rel="noopener noreferrer">
+                                    <?= __('配置深度链接') ?>
+                                </a>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </w:form>
+                    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-3);">
+                        <?= __('免费源并集冲突取较高税率；配置专业源后对其返回管辖区覆盖。不同步到结账热路径。') ?>
+                    </div>
+                </div>
+            </div>
+        <?php else: ?>
         <div class="w-card" data-testid="tax-<?= $escape($code) ?>-create-form" style="--w-mb:var(--weline-space-4);">
             <div class="w-card__header"><h5 style="--w-mb:0;"><?= __('新增%{1}', $title) ?></h5></div>
             <div class="w-card__body">
@@ -110,6 +151,7 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
                 </w:form>
             </div>
         </div>
+        <?php endif; ?>
     <?php endif; ?>
     <?php if ($status !== []): ?>
         <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body"><div class="w-grid" style="--w-gap:var(--weline-space-4);">

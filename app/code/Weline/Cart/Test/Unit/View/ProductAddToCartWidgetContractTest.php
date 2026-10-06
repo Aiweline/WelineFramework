@@ -118,7 +118,7 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString('closePurchasePanel(dialog)', $script);
         self::assertStringContainsString('Weline.UI.dialog', $script);
         self::assertStringContainsString(
-            'product-purchase-actions.js?v=20260326-purchase-panel-css1',
+            'product-purchase-actions.js?v=20261006-tob-keep-pref1',
             $modules,
         );
     }
@@ -136,6 +136,8 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString('worker_timeout', $script);
         self::assertStringContainsString('worker request timed out', $script);
         self::assertStringContainsString('网络异常，无法打开加购面板，请稍后重试', $script);
+        self::assertStringContainsString('/^theme_[a-z0-9_]+$/i', $script);
+        self::assertStringContainsString('暂时无法打开加购面板，请稍后重试', $script);
         self::assertStringContainsString('showPurchasePanelError(body, msg)', $script);
     }
 
@@ -158,7 +160,7 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringNotContainsString('fetch(url.toString()', $script);
         self::assertStringNotContainsString('data-purchase-panel-url', $template);
         self::assertStringContainsString(
-            'product-purchase-actions.js?v=20260326-purchase-panel-css1',
+            'product-purchase-actions.js?v=20261006-tob-keep-pref1',
             $modules,
         );
     }
@@ -190,6 +192,14 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString('weline_cart_type_explicit', $script);
         self::assertStringContainsString('cart_type: sellingMode', $script);
         self::assertStringContainsString('syncChromeAfterRetailOnlyAdd', $script);
+        self::assertStringContainsString('Keep tob preference', $script);
+        self::assertStringContainsString('retailSiblingAddMessage', $script);
+        self::assertStringContainsString('appendCheckoutCartTypeHandoff', $script);
+        self::assertStringContainsString('checkoutCartTypeHandoff', $script);
+        self::assertStringContainsString('previewRetailSiblingMiniCart', $script);
+        self::assertStringContainsString('retailSiblingPreview', $script);
+        self::assertStringContainsString("source: 'retail-only-add-preview'", $script);
+        self::assertStringNotContainsString("source: 'retail-only-product-add'", $script);
         self::assertStringContainsString('var mode = preferred || fromButton || fromHtml || \'toc\'', $script);
         // Old FPC-first chain must stay gone.
         self::assertStringNotContainsString(

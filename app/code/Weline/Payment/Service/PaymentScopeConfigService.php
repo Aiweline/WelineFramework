@@ -34,33 +34,47 @@ class PaymentScopeConfigService
     private readonly ?ObjectManager $objectManager;
     private ?SystemConfig $systemConfig;
     private readonly ?\Closure $defaultEnvironmentReader;
+    private readonly ?PaymentStorefrontLandingUrlService $storefrontUrls;
 
     public function __construct(
         ?ObjectManager $objectManager = null,
         ?SystemConfig $systemConfig = null,
         ?callable $defaultEnvironmentReader = null,
+        ?PaymentStorefrontLandingUrlService $storefrontUrls = null,
     ) {
         $this->objectManager = $objectManager;
         $this->systemConfig = $systemConfig;
         $this->defaultEnvironmentReader = $defaultEnvironmentReader === null
             ? null
             : \Closure::fromCallable($defaultEnvironmentReader);
+        $this->storefrontUrls = $storefrontUrls;
     }
 
     /**
      * @param array<string, mixed> $context
-     * @return array{scope: string, environment: string, scope_chain: array<int, string>, scope_key: string}
+     * @return array{scope: string, environment: string, scope_chain: array<int, string>, scope_key: string, website_id?: int, website_code?: string, storefront_base_url?: string}
      */
     public function resolveScope(array $context = []): array
     {
         $scope = $this->resolveScopeStringFromContext($context);
-
-        return [
+        $resolved = [
             'scope' => $scope,
             'environment' => self::DEFAULT_ENVIRONMENT,
             'scope_chain' => $this->getScopeChain($scope),
             'scope_key' => $scope,
         ];
+        $websiteId = max(0, (int) ($context['website_id'] ?? 0));
+        $websiteCode = strtolower(trim((string) ($context['website_code'] ?? '')));
+        $storefrontBase = trim((string) ($context['storefront_base_url'] ?? ''));
+        $resolved['website_id'] = $websiteId;
+        if ($websiteCode !== '') {
+            $resolved['website_code'] = $websiteCode;
+        }
+        if ($storefrontBase !== '') {
+            $resolved['storefront_base_url'] = $storefrontBase;
+        }
+
+        return $resolved;
     }
 
     public function normalizeScope(string $scope): string
@@ -377,11 +391,33 @@ class PaymentScopeConfigService
 
         $websiteCode = strtolower(trim((string) ($context['website_code'] ?? '')));
         $storeCode = strtolower(trim((string) ($context['store_code'] ?? '')));
+        if ($websiteCode === '') {
+            $websiteId = (int) ($context['website_id'] ?? -1);
+            if ($websiteId >= 0) {
+                $websiteCode = $this->resolveWebsiteCodeFromId($websiteId);
+            }
+        }
         if ($websiteCode !== '') {
             return $this->normalizeScope($websiteCode . '.' . ($storeCode !== '' ? $storeCode : 'default') . '.default');
         }
 
         return self::DEFAULT_SCOPE;
+    }
+
+    private function resolveWebsiteCodeFromId(int $websiteId): string
+    {
+        try {
+            if ($this->storefrontUrls !== null) {
+                return $this->storefrontUrls->loadWebsiteCode($websiteId);
+            }
+            $om = $this->objectManager ?? ObjectManager::getInstance();
+            /** @var PaymentStorefrontLandingUrlService $urls */
+            $urls = $om->getInstance(PaymentStorefrontLandingUrlService::class);
+
+            return $urls->loadWebsiteCode($websiteId);
+        } catch (\Throwable) {
+            return $websiteId === 0 ? 'default' : '';
+        }
     }
 
     private function getSystemConfig(): SystemConfig

@@ -9,6 +9,8 @@
               action="tax/backend/controlcenter/classes" icon="circle" order="10"/>
         <menu source="Weline_Tax::commerce:tax-search:rates" name="tax_rates" title="税率"
               action="tax/backend/controlcenter/rates" icon="circle" order="15"/>
+        <menu source="Weline_Tax::commerce:tax-search:ratesync" name="tax_ratesync" title="税率同步"
+              action="tax/backend/controlcenter/ratesync" icon="sync" order="18"/>
         <menu source="Weline_Tax::commerce:tax-search:rules" name="tax_rules" title="税务规则"
               action="tax/backend/controlcenter/rules" icon="check" order="20"/>
         <menu source="Weline_Tax::commerce:tax-search:engine" name="tax_engine" title="税引擎状态"

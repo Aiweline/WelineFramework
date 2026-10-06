@@ -1,10 +1,61 @@
 (function () {
     'use strict';
 
+    /**
+     * Widget CSS is normally baked via @widget.source on checkout layout.
+     * HelpPay / dialog embeds fetch the phtml without bake — mount must attach CSS.
+     */
+    function resolveCheckoutShippingAddressCssHref() {
+        var modulePath = 'Weline_Shipping::css/widgets/checkout-shipping-address.css?v=20261006-embed-css1';
+        var loader = window.Weline && window.Weline.loader;
+        if (loader && typeof loader.resolveStaticPath === 'function') {
+            var resolved = loader.resolveStaticPath(modulePath);
+            if (resolved) {
+                return resolved;
+            }
+        }
+        var cur = document.currentScript && document.currentScript.src;
+        if (cur) {
+            var sibling = cur.replace(
+                /\/(?:frontend\/)?js\/widgets\/checkout-shipping-address\.js(\?.*)?$/i,
+                '/css/widgets/checkout-shipping-address.css$1'
+            );
+            if (sibling !== cur) {
+                return sibling;
+            }
+            sibling = cur.replace(
+                /\/js\/widgets\/checkout-shipping-address\.js(\?.*)?$/i,
+                '/css/widgets/checkout-shipping-address.css$1'
+            );
+            if (sibling !== cur) {
+                return sibling;
+            }
+        }
+        return '/static/Weline/Shipping/css/widgets/checkout-shipping-address.css?v=20261006-embed-css1';
+    }
+
+    function ensureCheckoutShippingAddressCss() {
+        var href = resolveCheckoutShippingAddressCssHref();
+        var existing = document.querySelector('link[data-shipping-checkout-address-css]');
+        if (existing) {
+            if (existing.getAttribute('href') !== href) {
+                existing.setAttribute('href', href);
+            }
+            return;
+        }
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.setAttribute('data-shipping-checkout-address-css', '1');
+        link.href = href;
+        document.head.appendChild(link);
+    }
+    ensureCheckoutShippingAddressCss();
+
     function mount(root) {
     if (!root || !root.querySelector) {
         return null;
     }
+    ensureCheckoutShippingAddressCss();
     if (root.getAttribute('data-shipping-mounted') === '1') {
         var existingApi = window.WelineShippingCheckoutAddress;
         if (existingApi && existingApi.root === root && typeof existingApi.syncChangeAddressLabel === 'function') {
@@ -2290,9 +2341,9 @@
         bootAddress();
     }
 
-    root.setAttribute('data-shipping-js-rev', '20260926-save-loading');
+    root.setAttribute('data-shipping-js-rev', '20261006-embed-css1');
     var api = {
-        rev: '20260926-save-loading',
+        rev: '20261006-embed-css1',
         root: root,
         mount: mount,
         getMode: mode,
@@ -2313,7 +2364,7 @@
     }
 
     window.WelineShippingCheckoutAddress = {
-        rev: '20260926-save-loading',
+        rev: '20261006-embed-css1',
         root: null,
         mount: mount,
         getMode: function () { return ''; },

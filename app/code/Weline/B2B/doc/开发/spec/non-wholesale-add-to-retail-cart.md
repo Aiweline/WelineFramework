@@ -28,6 +28,7 @@ updated: 2026-09-14
 2. WHEN 买家对支持批发的商品在 tob 模式下加购，系统 SHALL 仍写入 `tob` 购物车（本需求不改变）。
 3. WHEN 不支持批发的商品被 remap 进零售车，店面迷你车 SHALL **view-only** 展示零售桶摘要（不永久改写 `weline_selling_mode`）。
 4. WHEN 全局偏好为 tob 且当前商品不支持批发，PDP/加购弹层 SHALL 显示零售-only soft hint。
+5. WHEN 当前商品支持批发且偏好为 toc，PDP SHALL 在规格下方显示简短「支持批发」文字入口，点击后切换到批发模式。
 5. WHEN 上述商品在 tob 偏好下「立即结账」，系统 SHALL 跳转结账并手递 `cart_type=toc`，结账页 SHALL 加载 toc 车（非空 tob）。
 6. IF B2B 未安装或 Offer Routing SPI 未注册，Cart SHALL 保持原 `cart_type` 解析（零热路径探测税失败时 fail-soft）。
 

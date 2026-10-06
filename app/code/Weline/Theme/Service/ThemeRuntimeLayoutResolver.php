@@ -188,6 +188,11 @@ final class ThemeRuntimeLayoutResolver
     ): ThemeEditorContext {
         $application = $identity['application_context'] ?? ThemeApplicationContext::current($area, (string)($identity['purpose'] ?? 'runtime'));
         if (!$application instanceof ThemeApplicationContext) {
+            // CLI / setup:upgrade 等无 Request 装载时，允许用调用方已选定的显式 scope 合成系统上下文
+            // （与 LayoutEntity bake 同构）；空 identity 仍硬失败，禁止静默发明店面范围。
+            $application = $this->synthesizeSystemApplicationFromIdentity($themeId, $area, $identity);
+        }
+        if (!$application instanceof ThemeApplicationContext) {
             throw new \InvalidArgumentException('theme_runtime_consumer_context_required');
         }
         if ($application->themeId !== $themeId || $application->area !== $area) {
@@ -219,6 +224,68 @@ final class ThemeRuntimeLayoutResolver
             targetType: (string)$identity['target_type'],
             targetId: (int)$identity['target_id'],
             application: $application,
+        );
+    }
+
+    /**
+     * Setup/CLI 系统写入：调用方已给出 storage scope / content_scope 时，不依赖 HTTP ThemeApplicationContext。
+     *
+     * @param array<string,mixed> $identity
+     */
+    private function synthesizeSystemApplicationFromIdentity(
+        int $themeId,
+        string $area,
+        array $identity,
+    ): ?ThemeApplicationContext {
+        if (($identity['content_scope'] ?? null) instanceof ThemeContentScope) {
+            $scope = $identity['content_scope'];
+        } else {
+            $storageScope = \trim((string)($identity['storage_scope'] ?? ''));
+            $storeMode = \trim((string)($identity['store_mode'] ?? ''));
+            $rawScope = \trim((string)($identity['scope'] ?? ''));
+            if ($storageScope === '' && $rawScope !== '') {
+                if (\str_contains($rawScope, ThemeLayoutScopeNormalizer::MODE_SEPARATOR)) {
+                    [$scopePart, $modePart] = \explode(ThemeLayoutScopeNormalizer::MODE_SEPARATOR, $rawScope, 2);
+                    $storageScope = \trim($scopePart);
+                    if ($storeMode === '' && \trim($modePart) !== '') {
+                        $storeMode = \strtolower(\trim($modePart));
+                    }
+                } else {
+                    $storageScope = $rawScope;
+                }
+            }
+            if ($storageScope === '') {
+                return null;
+            }
+            if ($storeMode === '') {
+                $storeMode = 'normal';
+            }
+            try {
+                $scope = ThemeContentScope::fromStoredOwner($storageScope, $storeMode, 'default');
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        $purpose = (string)($identity['purpose'] ?? 'asset');
+        if (!\in_array($purpose, ['runtime', 'editor', 'preview', 'asset'], true)) {
+            $purpose = 'asset';
+        }
+        $resolvedArea = $area === 'backend' ? 'backend' : 'frontend';
+
+        return new ThemeApplicationContext(
+            provider: $scope->provider,
+            scopeKey: $scope->scopeKey,
+            storeMode: $scope->storeMode,
+            area: $resolvedArea,
+            themeId: $themeId,
+            versionOwnerScope: $scope->storageScope,
+            versionOwnerStoreMode: $scope->storeMode,
+            themeVersionId: 0,
+            contentRevision: 0,
+            defaultLocale: $scope->defaultLocale !== '' ? $scope->defaultLocale : 'default',
+            displayName: $scope->displayName,
+            purpose: $purpose,
         );
     }
 

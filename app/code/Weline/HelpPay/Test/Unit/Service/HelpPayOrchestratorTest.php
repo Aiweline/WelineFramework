@@ -53,6 +53,52 @@ final class HelpPayOrchestratorTest extends TestCase
         ]);
     }
 
+    public function testPayerResolveExposesQuotedShippingAndTotals(): void
+    {
+        $orch = $this->orch($this->shippingStub(500, 777));
+        $out = $orch->createHelpPay([
+            'goods_amount_minor' => 10000,
+            'currency_code' => 'USD',
+            'shipping_address' => [
+                'name' => 'Alice',
+                'line1' => 'Road 1',
+                'phone' => '13800000000',
+                'country' => 'US',
+                'country_code' => 'US',
+            ],
+            'address_confirmed' => true,
+            'rules_accepted' => true,
+            'product_id' => 88,
+            'qty' => 2,
+            'line_summary' => [[
+                'product_id' => 88,
+                'qty' => 2,
+                'title' => 'Mug',
+                'weight_minor' => 250,
+                'weight_per_unit' => 1,
+                'row_total_minor' => 10000,
+            ]],
+            'public_origin' => 'https://demo.test.weline.com',
+        ]);
+        $token = (string) ($out['token'] ?? '');
+        self::assertNotSame('', $token);
+
+        $quoted = $orch->listPayerShippingOptions($token);
+        self::assertFalse(!empty($quoted['missing_weight']));
+        self::assertNotEmpty($quoted['options']);
+        self::assertSame(10000, (int) ($quoted['goods_amount_minor'] ?? 0));
+        self::assertSame('SEED_LANE_AMERICAS', (string) ($quoted['options'][0]['service_code'] ?? ''));
+        self::assertSame(777, (int) ($quoted['options'][0]['amount_minor'] ?? 0));
+
+        $payer = $orch->resolveHelpPayForPayer($token);
+        self::assertNotNull($payer);
+        self::assertSame(10000, (int) ($payer['goods_amount_minor'] ?? 0));
+        self::assertSame(777, (int) ($payer['shipping_amount_minor'] ?? 0));
+        self::assertSame(10777, (int) ($payer['amount_minor'] ?? 0));
+        self::assertNotEmpty($payer['shipping_options'] ?? []);
+        self::assertArrayNotHasKey('shipping_address', $payer);
+    }
+
     public function testCreateHelpPayAndPayerResolveHasNoShipping(): void
     {
         $orch = $this->orch();
@@ -84,15 +130,15 @@ final class HelpPayOrchestratorTest extends TestCase
         self::assertFalse((bool) ($payer['load_payer_cart'] ?? true));
     }
 
-    public function testTobCartRejected(): void
+    public function testTobCartAllowedForSelectionShare(): void
     {
         $orch = $this->orch();
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('helppay_toc_only');
-        $orch->createSelectionShare([
+        $out = $orch->createSelectionShare([
             'selection_snapshot' => ['lines' => [['sku' => 'x']]],
             'cart_type' => 'tob',
+            'public_origin' => 'https://demo.test.weline.com',
         ]);
+        self::assertStringContainsString('/s/', (string) ($out['url'] ?? ''));
     }
 
     public function testSelectionShareAndQuickPayDualDelivery(): void

@@ -3,7 +3,7 @@
 /**
  * @widget.code {checkout-shipping-address}
  * @widget.default_injections {[{"layout_type":"checkout","layout_option":"default","slot":"checkout-shipping-address","area":"content","sort_order":10,"required":true,"reason":"结账收货信息默认由 Shipping 地址部件提供（theme:address + 已存地址选择）","config":{"title":"收货地址"}}]}
- * @widget.source {Weline_Shipping::css/widgets/checkout-shipping-address.css?v=20260926-save-loading}
+ * @widget.source {Weline_Shipping::css/widgets/checkout-shipping-address.css}
  */
 
 use Weline\Framework\Manager\ObjectManager;
@@ -300,11 +300,18 @@ $ui = [
                     <p class="w-shipping-checkout-address__message" data-shipping-message aria-live="polite" hidden></p>
                     <div class="w-shipping-checkout-address__editor-action-buttons">
                 <?php if ($hasSaved): ?>
-                <button type="button" class="w-shipping-checkout-address__secondary-btn" data-cancel-edit>
+                <button type="button"
+                        class="w-button w-shipping-checkout-address__secondary-btn"
+                        data-tone="neutral"
+                        data-variant="outline"
+                        data-cancel-edit>
                     <?= $esc($ui['cancel']) ?>
                 </button>
                 <?php endif; ?>
-                <button type="button" class="w-shipping-checkout-address__primary-btn" data-use-edited-address>
+                <button type="button"
+                        class="w-button w-shipping-checkout-address__primary-btn"
+                        data-variant="outline"
+                        data-use-edited-address>
                     <?= $esc($ui['save_use']) ?>
                 </button>
                     </div>
@@ -384,10 +391,18 @@ $ui = [
                 <div class="w-shipping-checkout-address__editor-action-row">
                     <p class="w-shipping-checkout-address__message" data-billing-message aria-live="polite" hidden></p>
                     <div class="w-shipping-checkout-address__editor-action-buttons">
-                        <button type="button" class="w-shipping-checkout-address__secondary-btn" data-cancel-billing-edit hidden>
+                        <button type="button"
+                                class="w-button w-shipping-checkout-address__secondary-btn"
+                                data-tone="neutral"
+                                data-variant="outline"
+                                data-cancel-billing-edit
+                                hidden>
                             <?= $esc($ui['cancel']) ?>
                         </button>
-                        <button type="button" class="w-shipping-checkout-address__primary-btn" data-use-billing-address>
+                        <button type="button"
+                                class="w-button w-shipping-checkout-address__primary-btn"
+                                data-variant="outline"
+                                data-use-billing-address>
                             <?= $esc($ui['save_use']) ?>
                         </button>
                     </div>

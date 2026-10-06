@@ -1,16 +1,18 @@
 <!-- weline:module-ai-index:auto-generated -->
 # Weline_Test AI 开发入口
 
-> 本文件由 `dev/ai/scripts/generate-module-ai-indexes.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
+> 本文件由 `dev/ai/scripts/generate-module-docs.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
 
 ## 必读顺序
 
 1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
-3. `dev/ai/diagrams/08-module-docs-index.txt`
-4. 本文件：`app/code/Weline/Test/doc/AI-INDEX.md`
-5. 本模块暂未发现 `doc/README.md`；只能把本文件当作代码结构索引，开发前必须补读相关源码。
-6. 只读取本次任务相关源码、配置和验证入口
+2. 全局硬规则与任务路由：`app/code/Weline/Ai/doc/AI硬规则索引.md`
+3. 本文件：`app/code/Weline/Test/doc/AI-INDEX.md`
+4. 模块说明：`app/code/Weline/Test/doc/README.md`
+5. `app/code/Weline/Theme/doc/AI-INDEX.md`
+6. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+7. `app/code/Weline/Taglib/doc/AI-INDEX.md`
+8. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 
@@ -21,8 +23,7 @@
 
 ## 代码面清单
 
-- `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：0
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
+- `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：1
 
 ## 从源码识别到的开发提示
 
@@ -30,7 +31,10 @@
 
 ## doc 目录
 
-- 未发现除本文件外的模块文档。行为变更、接口变更或跨模块约定变更时，先在本模块 `doc/` 下补长期文档。
+- `app/code/Weline/Test/doc/README.md`
+- `app/code/Weline/Test/doc/功能现状.md`
+- `app/code/Weline/Test/doc/开发日志.md`
+- `app/code/Weline/Test/doc/需求.md`
 
 ## 开发前门禁
 

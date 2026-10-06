@@ -456,6 +456,16 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), '交付地址')),
         false,
     ),
+    'hard_constraints include browser_operator_fail_closed_release' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'browser_operator_fail_closed_release'
+            && str_contains((string) ($rule['summary'] ?? ''), 'curl')
+            && str_contains((string) ($rule['summary'] ?? ''), 'max-time')
+            && str_contains((string) ($rule['summary'] ?? ''), 'fail-closed')
+            && str_contains((string) ($rule['summary'] ?? ''), 'unlock')),
+        false,
+    ),
     'hard_constraints include cursor_debug_csp_developer_tooling' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -1450,11 +1460,18 @@ $checks = [
     'closeout reminder requires browser cache disabled on open' => ($closeoutReminder['browser_cache_disabled_on_open_required'] ?? false) === true
         && ($closeoutReminder['browser_operator_non_preemptive_required'] ?? false) === true
         && is_array($closeoutReminder['browser_open_order'] ?? null)
+        && in_array('probe_http_with_max_time_before_navigate', $closeoutReminder['browser_open_order'], true)
         && in_array('prefer_background_non_preemptive_navigate', $closeoutReminder['browser_open_order'], true)
         && in_array('disable_http_cache_for_session', $closeoutReminder['browser_open_order'], true)
         && in_array('strip_automation_detection_flags', $closeoutReminder['browser_open_order'], true)
         && in_array('navigate_or_reload_ignore_cache', $closeoutReminder['browser_open_order'], true)
         && str_contains((string) ($closeoutReminder['summary_zh'] ?? ''), '缓存'),
+    'closeout reminder requires browser fail-closed release' => ($closeoutReminder['browser_operator_fail_closed_release_required'] ?? false) === true
+        && is_array($closeoutReminder['browser_fail_closed_order'] ?? null)
+        && in_array('probe_http_with_max_time_before_navigate', $closeoutReminder['browser_fail_closed_order'], true)
+        && in_array('on_browser_error_or_timeout_unlock', $closeoutReminder['browser_fail_closed_order'], true)
+        && in_array('close_all_acceptance_browser_tabs', $closeoutReminder['browser_fail_closed_order'], true)
+        && str_contains((string) ($closeoutReminder['summary_zh'] ?? ''), 'fail-closed'),
     'webui surface requires browser_cache_disabled_on_open norm' => array_reduce(
         is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'browser_cache_disabled_on_open'),
@@ -1463,6 +1480,11 @@ $checks = [
     'webui surface requires browser_operator_non_preemptive norm' => array_reduce(
         is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'browser_operator_non_preemptive'),
+        false,
+    ),
+    'webui surface requires browser_operator_fail_closed_release norm' => array_reduce(
+        is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'browser_operator_fail_closed_release'),
         false,
     ),
     'webui surface requires browser_release_after_delivery norm' => array_reduce(

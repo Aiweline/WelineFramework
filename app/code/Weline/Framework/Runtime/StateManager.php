@@ -424,8 +424,22 @@ class StateManager
         }
 
         try {
-            \Weline\Framework\View\Template::resetInstance();
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Template::class);
+            try {
+                \Weline\Framework\View\Template::resetInstance();
+            } catch (\ParseError $e) {
+                w_log_error(
+                    '[StateManager] persistent_entry template resetInstance ParseError: '
+                    . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine()
+                );
+            }
+            try {
+                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Template::class);
+            } catch (\ParseError $e) {
+                w_log_error(
+                    '[StateManager] persistent_entry template removeInstance ParseError: '
+                    . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine()
+                );
+            }
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Http\Response::class);
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\State::class);
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Router\Core::class);
@@ -749,9 +763,26 @@ class StateManager
         // Template 单例实例清理 — WLS 下 Template 使用 static 单例，init() 仅首次创建时调用。
         // _data 数组中的 title、req、env、local 以及 view_dir、template_dir 等目录路径
         // 全部是请求级数据，会残留到下一个请求，导致页面标题错乱、模板路径指向上个模块。
+        // ParseError during Template reset must NOT fail the whole request boundary:
+        // one poisoned include/opcache flake previously quarantined every Worker and
+        // surfaced only as 「请求边界清理失败」on /checkout after selling-mode switches.
         self::registerResetCallback('template_instance', function () {
-            \Weline\Framework\View\Template::resetInstance();
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Template::class);
+            try {
+                \Weline\Framework\View\Template::resetInstance();
+            } catch (\ParseError $e) {
+                w_log_error(
+                    '[StateManager] template_instance ParseError during resetInstance: '
+                    . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine()
+                );
+            }
+            try {
+                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Template::class);
+            } catch (\ParseError $e) {
+                w_log_error(
+                    '[StateManager] template_instance ParseError during removeInstance: '
+                    . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine()
+                );
+            }
         });
         
         // State 实例清理 — State::$is_backend 在构造函数中根据当前请求设置。

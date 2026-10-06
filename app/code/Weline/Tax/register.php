@@ -8,8 +8,8 @@ Register::register(
     Register::MODULE,
     'Weline_Tax',
     __DIR__,
-    '2.1.2',
-    'Scope tax engine, frozen checkout snapshots and exact-scope versioned LKG',
+    '2.1.6',
+    'Scope tax engine, multi-source rate sync, frozen checkout snapshots and LKG',
     [
         'Weline_Framework',
         'Weline_SystemConfig',

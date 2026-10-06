@@ -2288,17 +2288,28 @@ pending,等待中
 启动共享服务,启动共享服务
 "%{1} ready: %{2}:%{3} (pid=%{4}, token=%{5})","%{1} 准备就绪：%{2}:%{3}（pid=%{4}，令牌=%{5}）"
 "Weline Server",微线服务器
+"Master PID is running, but IPC status did not respond within 0.5s; the control plane may be busy or in an orchestrator full-restart cycle.","Master PID 已确认存活，但 IPC 状态在 0.5 秒内未响应；控制面可能正忙或处于 Orchestrator 整组重启周期。"
+直连,直连
+派遣器,派遣器
 服务器实例列表,服务器实例列表
+"总计: %{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}","总计： %{total} |  关注热线：●%{wrun} ○%{wstop} |  CLI：●%{clirun}"
 没有找到运行中的服务器实例,没有找到运行中的服务器实例
 没有找到任何服务器实例,没有找到任何服务器实例
-"总计: %{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}","总计： %{total} |  关注热线：●%{wrun} ○%{wstop} |  CLI：●%{clirun}"
-"[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)","[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)"
+"[WLS]=高性能  [GW]=共享网关  [nG]=托管Nginx  [--]=纯WLS  [CLI]=PHP内置","[WLS]=高性能  [GW]=共享网关  [nG]=托管Nginx  [--]=纯WLS  [CLI]=PHP内置"
+"合并列可在 cell 内换行：类型=[WLS]  |  运行面=拓扑/Worker(人数)/nG|GW  |  进程=PID·时长","合并列可在 cell 内换行：类型=[WLS]  |  运行面=拓扑/Worker(人数)/nG|GW  |  进程=PID·时长"
 ═══════════════════════════════════════════════════════════════════════════════,═══════════════════════════════════════════════════════════════════════════════
 服务器实例详细列表,服务器实例详细列表
 ───────────────────────────────────────────────────────────────────────────────,───────────────────────────────────────────────────────────────────────────────
 "[%{1}] ● 运行中","[%{1}] ● 运行中"
 "[%{1}] ○ 已停止","[%{1}] ○ 已停止"
 "├─ 服务类型   : %{1}","├─ 服务类型   : %{1}"
+"共享网关 [GW]","共享网关 [GW]"
+"托管 Nginx [nG]","托管 Nginx [nG]"
+"纯 WLS","纯 WLS"
+"├─ 边缘模式   : %{1}","├─ 边缘模式   : %{1}"
+"├─ 拓扑模式   : %{1}","├─ 拓扑模式   : %{1}"
+"├─ 端口说明   : %{1}","├─ 端口说明   : %{1}"
+"├─ Worker 地址 : %{1}:%{2}","├─ Worker 地址 : %{1}:%{2}"
 "├─ 监听地址   : %{1}:%{2}","├─ 监听地址   : %{1}:%{2}"
 "├─ Worker 数  : %{1}","├─ 工人人数：%{1}"
 "├─ 运行模式   : %{1}","├─ 运行模式   : %{1}"
@@ -2412,7 +2423,6 @@ Endpoint：,端点：
 首页预热：,首页预热：
 动态首渲染测量：,动态首渲染测量：
 未记录,未记录
-"Master PID is running, but IPC status did not respond within 0.5s; the control plane may be busy or in an orchestrator full-restart cycle.","Master PID 已确认存活，但 IPC 状态在 0.5 秒内未响应；控制面可能正忙或处于 Orchestrator 整组重启周期。"
 "查看 Weline Server 运行状态","查看 Weline Server 运行状态"
 "查看服务器实例状态，树形展示所有 Worker 进程","查看服务器实例状态，树形展示所有 Worker 进程"
 实例名称（默认显示所有实例）,实例名称（默认显示所有实例）
@@ -2911,6 +2921,7 @@ Previous：%{1},上一篇：%{1}
 无法证明受管代次时拒绝发送任何终止信号,无法证明受管代次时拒绝发送任何终止信号
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","已退役：console:server:start 不再启动 PHP 内置 Web Server。"
 "已退役：PHP 内置 Web Server 启动入口","已退役：PHP 内置 Web Server 启动入口"
+"[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)","[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)"
 "最大挂起 Fiber 数，0=不限制","最大挂起 Fiber 数，0=不限制"
 "HTTP 监听：%{1}，HTTPS 监听：%{2}（offset=%{3}）","HTTP 监听：%{1}，HTTPS 监听：%{2}（offset=%{3}）"
 强制停止：中止占用生命周期锁的同实例后台任务（purpose=%{1},pid=%{2}）。

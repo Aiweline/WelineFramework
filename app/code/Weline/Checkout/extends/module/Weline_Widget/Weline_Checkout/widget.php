@@ -104,6 +104,56 @@ return [
         ],
         'params' => [],
     ],
+    'storefront-money-summary' => [
+        'name' => '店面金额小计',
+        'description' => '统一商品小计、运费、税费、优惠与应付行；购物车/结账/快捷/代付共用 paint 契约。结账与快捷页同模块内嵌；购物车与迷你车走 JSON 注入。',
+        'type' => 'content',
+        'code' => 'storefront-money-summary',
+        'area' => 'frontend',
+        'template' => 'Weline_Checkout::templates/frontend/widgets/storefront-money-summary/default.phtml',
+        'page_layouts' => ['cart', 'checkout', 'mini-cart', '*'],
+        'position' => ['content', 'footer'],
+        'supports' => [
+            'storefront-money-summary',
+            'checkout-money-summary',
+            'money-summary',
+            'cart-money-summary',
+        ],
+        // 结账/快捷：同模块 fetch；购物车/代付：Controller fetch。
+        // 迷你车：Theme 槽 + JSON 注入（跨模块唯一合法路径）。
+        'default_injections' => [
+            [
+                'layout_type' => 'mini-cart',
+                'layout_option' => 'default',
+                'slot' => 'money-summary',
+                'area' => 'footer',
+                'sort_order' => 5,
+                'required' => true,
+                'reason' => '迷你购物车金额小计由 Checkout 统一部件注入',
+                'config' => [
+                    'mode' => 'mini-cart',
+                ],
+            ],
+        ],
+        'params' => [
+            'mode' => [
+                'default' => 'checkout',
+                'type' => 'select',
+                'label' => '表面模式',
+                'options' => 'checkout,cart,mini-cart,express,helppay',
+            ],
+            'note' => [
+                'default' => '',
+                'type' => 'string',
+                'label' => '摘要说明',
+            ],
+            'discounts_disabled' => [
+                'default' => false,
+                'type' => 'bool',
+                'label' => '禁用优惠行',
+            ],
+        ],
+    ],
     'product-buy-now' => [
         'name' => '立即结账',
         'description' => '产品主要信息购买操作槽：Cart 加购后跳转结账页。',

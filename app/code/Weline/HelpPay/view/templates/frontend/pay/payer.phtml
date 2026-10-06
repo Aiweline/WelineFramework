@@ -3,12 +3,58 @@
 $escape = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 /** @var array<string,mixed> $bill */
 $bill = is_array($this->getData('bill')) ? $this->getData('bill') : [];
-$amount = ((int) ($bill['amount_minor'] ?? 0)) / 100;
+$goodsMinor = max(0, (int) ($bill['goods_amount_minor'] ?? $bill['amount_minor'] ?? 0));
+$shipMinor = max(0, (int) ($bill['shipping_amount_minor'] ?? 0));
 $currency = (string) ($bill['currency_code'] ?? 'USD');
+$serviceCode = trim((string) ($bill['service_code'] ?? ''));
+$serviceLabel = trim((string) ($bill['service_label'] ?? ''));
+/** @var list<array<string,mixed>> $shippingOptions */
+$shippingOptions = is_array($bill['shipping_options'] ?? null) ? $bill['shipping_options'] : [];
+$missingWeight = !empty($bill['missing_weight']);
+$normalizedOptions = [];
+foreach ($shippingOptions as $option) {
+    if (!is_array($option)) {
+        continue;
+    }
+    $code = trim((string) ($option['service_code'] ?? $option['code'] ?? ''));
+    if ($code === '') {
+        continue;
+    }
+    $label = trim((string) ($option['label'] ?? $option['service_name'] ?? $option['title'] ?? $code));
+    $optShip = max(0, (int) ($option['amount_minor'] ?? 0));
+    $normalizedOptions[] = [
+        'service_code' => $code,
+        'label' => $label,
+        'amount_minor' => $optShip,
+    ];
+}
+if ($normalizedOptions !== []) {
+    $matched = null;
+    foreach ($normalizedOptions as $option) {
+        if ($serviceCode !== '' && $option['service_code'] === $serviceCode) {
+            $matched = $option;
+            break;
+        }
+    }
+    if ($matched === null) {
+        $matched = $normalizedOptions[0];
+    }
+    $serviceCode = (string) $matched['service_code'];
+    $serviceLabel = (string) $matched['label'];
+    $shipMinor = (int) $matched['amount_minor'];
+}
+$amountMinor = $goodsMinor + $shipMinor;
+if ($amountMinor <= 0) {
+    $amountMinor = max(0, (int) ($bill['amount_minor'] ?? 0));
+}
+$amount = $amountMinor / 100;
+$goods = $goodsMinor / 100;
+$ship = $shipMinor / 100;
 $rulesUrl = (string) ($this->getData('help_rules_url') ?? '/faq/help-pay-payer');
 $privacyUrl = (string) ($this->getData('privacy_url') ?? '/faq/help-pay-privacy');
 $token = (string) ($this->getData('token') ?? '');
 $billingHtml = (string) ($this->getData('billing_address_html') ?? '');
+$moneySummaryHtml = (string) ($this->getData('money_summary_html') ?? '');
 /** @var list<array{code:string,title:string,requires_billing:bool}> $paymentMethods */
 $paymentMethods = is_array($this->getData('payment_methods')) ? $this->getData('payment_methods') : [];
 $paymentMethodsHtml = (string) ($this->getData('payment_methods_html') ?? '');
@@ -19,7 +65,12 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
          data-testid="help-pay-payer"
          data-shipping-redacted="1"
          data-helppay-token="<?= $escape($token) ?>"
-         data-weline-load="helpPayShare"
+         data-helppay-currency="<?= $escape($currency) ?>"
+         data-helppay-goods-minor="<?= $escape((string) $goodsMinor) ?>"
+         data-helppay-ship-minor="<?= $escape((string) $shipMinor) ?>"
+         data-helppay-service-code="<?= $escape($serviceCode) ?>"
+         data-helppay-missing-weight="<?= $missingWeight ? '1' : '0' ?>"
+         data-weline-load="helpPayShare,storefrontMoneySummary"
          weline-code="helppay.payer.page">
     <header class="w-helppay-payer__head w-stack" style="--w-gap:var(--weline-space-2, var(--space-2));">
         <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><lang>帮我付</lang></p>
@@ -36,7 +87,7 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
             <div class="w-helppay-panel" data-testid="help-pay-summary">
                 <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;"><?= $escape(__('应付金额')) ?></p>
                 <p class="w-helppay-panel__amount" style="--w-m:0;">
-                    <strong><?= $escape($currency) ?> <?= $escape(number_format($amount, 2)) ?></strong>
+                    <strong data-helppay-payable-amount><?= $escape($currency) ?> <?= $escape(number_format($amount, 2)) ?></strong>
                 </p>
                 <p class="w-text" data-size="sm" data-tone="muted" data-testid="help-pay-shipping-redacted-note">
                     <?= $escape(__('收货地址已由发起人确认。')) ?>
@@ -48,13 +99,33 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
                 <p class="w-text" data-size="sm" data-tone="muted">
                     <?= $escape(__('请选择物流（仅影响运费，不展示收货地址）。')) ?>
                 </p>
-                <label class="w-field">
-                    <span class="w-field__label"><?= $escape(__('配送方式')) ?></span>
-                    <select class="w-select" data-helppay-shipping-method>
-                        <option value="standard"><?= $escape(__('标准配送')) ?></option>
-                        <option value="express"><?= $escape(__('加急配送')) ?></option>
-                    </select>
-                </label>
+                <?php if ($missingWeight): ?>
+                    <div class="w-alert" data-tone="warning" role="alert" data-testid="help-pay-shipping-missing-weight">
+                        <div class="w-alert__content">
+                            <p><?= $escape(__('商品缺少重量，无法计算运费。请联系发起人或客服后再试。')) ?></p>
+                        </div>
+                    </div>
+                <?php elseif ($normalizedOptions === []): ?>
+                    <div class="w-alert" data-tone="warning" role="alert" data-testid="help-pay-shipping-empty">
+                        <div class="w-alert__content">
+                            <p><?= $escape(__('该地址暂无可用配送方式，请联系发起人更换地址后重试。')) ?></p>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <label class="w-field">
+                        <span class="w-field__label"><?= $escape(__('配送方式')) ?></span>
+                        <select class="w-select" data-helppay-shipping-method data-testid="help-pay-shipping-select">
+                            <?php foreach ($normalizedOptions as $option): ?>
+                                <option value="<?= $escape((string) $option['service_code']) ?>"
+                                        data-amount-minor="<?= $escape((string) $option['amount_minor']) ?>"
+                                        <?= ((string) $option['service_code'] === $serviceCode) ? 'selected' : '' ?>>
+                                    <?= $escape((string) $option['label'] . ' · ' . $currency . ' ' . number_format(((int) $option['amount_minor']) / 100, 2)) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                    <p class="w-text" data-size="sm" data-tone="danger" data-helppay-shipping-msg hidden role="alert" data-testid="help-pay-shipping-msg"></p>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -109,6 +180,38 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
                     </div>
                 <?php endif; ?>
             </fieldset>
+
+            <div class="w-helppay-pay-summary w-helppay-payer__totals"
+                 data-testid="help-pay-totals"
+                 data-helppay-payment-summary
+                 data-helppay-money-summary-host>
+                <?php if ($moneySummaryHtml !== ''): ?>
+                    <?= $moneySummaryHtml ?>
+                <?php else: ?>
+                    <div class="w-helppay-pay-summary__money" data-testid="helppay-payment-money" data-money-summary data-money-summary-mode="helppay">
+                        <div class="w-storefront-money-summary__row" data-money-summary-row="goods">
+                            <span><?= $escape(__('商品小计')) ?></span>
+                            <strong data-money-summary-goods data-helppay-goods-amount data-testid="helppay-payment-goods-amount">
+                                <?= $escape($currency) ?> <?= $escape(number_format($goods, 2)) ?>
+                            </strong>
+                        </div>
+                        <div class="w-storefront-money-summary__row" data-money-summary-row="shipping">
+                            <span data-money-summary-shipping-label data-helppay-ship-label data-label-base="<?= $escape(__('运费')) ?>">
+                                <?= $escape(__('运费')) ?><?= $serviceLabel !== '' ? ' · ' . $escape($serviceLabel) : '' ?>
+                            </span>
+                            <strong data-money-summary-shipping data-helppay-ship-amount data-testid="helppay-payment-ship-amount">
+                                <?= $escape($currency) ?> <?= $escape(number_format($ship, 2)) ?>
+                            </strong>
+                        </div>
+                        <div class="w-storefront-money-summary__row w-storefront-money-summary__row--payable" data-money-summary-row="payable">
+                            <span data-money-summary-payable-label><?= $escape(__('应付')) ?></span>
+                            <strong data-money-summary-payable data-helppay-total-amount data-testid="helppay-payment-total">
+                                <?= $escape($currency) ?> <?= $escape(number_format($amount, 2)) ?>
+                            </strong>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
 
             <div class="w-stack w-helppay-payer__billing"
                  style="--w-gap:var(--weline-space-3, var(--space-3));"

@@ -1,0 +1,58 @@
+// Weline 架构风险/技术债关系图 · current-state · 2026-10-05
+// 产出: risk-quality-reviewer + graphviz · 证据见 weline-risk-review-v3.summary.md
+// 边语义: 红实线=直接导致, 橙虚线=恶化/放大, 紫点线=机制兜底缓解
+digraph weline_risk_debt {
+  rankdir=TB;
+  newnode="shape=box,style=rounded,fontname=Helvetica,fontsize=11";
+  node [shape=box, style="rounded,filled", fontname=Helvetica, fontsize=11];
+  edge [fontname=Helvetica, fontsize=9];
+
+  // ---- 运行失败面 (红色) ----
+  subgraph cluster_runtime {
+    label="运行失败面 (deployment-topology-analyzer)"; style=dashed; color="#9e9e9e"; fontsize=12;
+    R1 [label="R1 共享内存侧车单点\nFPC权威载荷+session 同挂\ndispatcher/gateway/session_server", fillcolor="#fce8e6", color="#d93025"];
+    R2 [label="R2 前缀URL STALE严格路径\nsoft-serve仅覆盖首页世代窗口\n(Core.php:1582)", fillcolor="#fce8e6", color="#d93025"];
+    R3 [label="R3 rebuild锁等待→503风暴\nmeta-refresh等待页\n(Core.php:2042)", fillcolor="#fce8e6", color="#d93025"];
+    R5 [label="R5 MemDiag硬反射Product\nKernel观测工具碎于模块卸载\n(MemDiag.php:215-248)", fillcolor="#fce8e6", color="#d93025"];
+  }
+
+  // ---- 结构债务 (紫色) ----
+  subgraph cluster_structural {
+    label="结构债务 (architecture:check 实测)"; style=dashed; color="#9e9e9e"; fontsize=12;
+    B1 [label="B1 framework_reverse ×102\nState/Timezone=软守卫(低危)\nMemDiag/Rebuild/Migrator=硬引用(高危)", fillcolor="#f3e8fd", color="#7b1fa2"];
+    B2 [label="B2 undeclared类引用 ×672 / 198对\nProduct→Storage×80 Smtp→Theme×23\nCheckout→B2B×21", fillcolor="#f3e8fd", color="#7b1fa2"];
+    B3 [label="B3 internal_api越界 ×1342\n跨模块直取非Api符号\nCheckoutQueryProvider×40 Theme Router×31", fillcolor="#f3e8fd", color="#7b1fa2"];
+    B4 [label="B4 实际引用图336环\nSystemConfig/Product/I18n强连通巨环\n(声明图仍DAG·v2结论修正)", fillcolor="#f3e8fd", color="#7b1fa2"];
+    B5 [label="B5 巨型文件+阻塞调用\nHostGatewayPackageManager≥19k行\nblocking_wait×38集中网关链", fillcolor="#f3e8fd", color="#7b1fa2"];
+    B6 [label="B6 治理工具盲区\ncomposer.missing×25(Dropship等)\noptional↔suggest对账失效", fillcolor="#fff3cd", color="#f9a825"];
+    B7 [label="B7 幽灵requires\nUrlManager→ModuleManager零引用\nv2至今仍在", fillcolor="#fff3cd", color="#f9a825"];
+  }
+
+  // ---- 缓解机制 (蓝) ----
+  G1 [label="在场门禁 RegistryModulePresence\n目标缺席→装配整体跳过", fillcolor="#e8f0fe", color="#1a73e8"];
+  G2 [label="extends/event/hook/provides\n四通道契约化装配", fillcolor="#e8f0fe", color="#1a73e8"];
+  G3 [label="棘轮门禁(建议)\nbaseline+只阻断新增违规", fillcolor="#e6f4ea", color="#188038"];
+
+  // ---- 后果节点 (灰) ----
+  C1 [label="模块可拆卸性差\n卸Product/Storage即碎", shape=note, fillcolor="#fafafa"];
+  C2 [label="变更爆炸半径不可估\n改一环动全身", shape=note, fillcolor="#fafafa"];
+  C3 [label="CI无法设架构门禁\nclean=false", shape=note, fillcolor="#fafafa"];
+
+  // 因果边
+  B1 -> R5 [color="#d93025", label="同一缺陷两视图"];
+  B1 -> C1 [color="#d93025"];
+  B2 -> B4 [color="#e37400", style=dashed, label="未声明边是环的载体"];
+  B3 -> C2 [color="#d93025", label="边界不可见"];
+  B4 -> C2 [color="#d93025"];
+  B2 -> C1 [color="#e37400", style=dashed];
+  B5 -> R3 [color="#e37400", style=dashed, label="运维链路阻塞放大风暴处置难度"];
+  R1 -> R3 [color="#d93025", label="锁池在单点内"];
+  R2 -> R3 [color="#d93025", label="STALE不恢复→持续MISS→重建"];
+  G1 -> B4 [color="#7b1fa2", style=dotted, label="环被运行时容忍"];
+  G2 -> B2 [color="#7b1fa2", style=dotted, label="机制边合法但欠声明"];
+  G3 -> B2 [color="#188038", label="止住增量"];
+  G3 -> B3 [color="#188038"];
+  G3 -> B1 [color="#188038"];
+  B6 -> B7 [color="#e37400", style=dashed, label="校验缺口使幽灵长期存活"];
+  B6 -> C3 [color="#e37400", style=dashed];
+}

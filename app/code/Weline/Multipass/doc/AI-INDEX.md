@@ -1,17 +1,17 @@
 <!-- weline:module-ai-index:auto-generated -->
 # Weline_Multipass AI 开发入口
 
-> 本文件由 `dev/ai/scripts/generate-module-ai-indexes.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
+> 本文件由 `dev/ai/scripts/generate-module-docs.php` 根据当前代码结构生成。它是 AI 进入模块前的导航入口；细节仍以本模块 `doc/`、实际源码和全局规则为准。
 
 ## 必读顺序
 
 1. `AI-ENTRY.md`
-2. `dev/ai/global-constraints.md`
-3. `dev/ai/diagrams/08-module-docs-index.txt`
-4. 本文件：`app/code/Weline/Multipass/doc/AI-INDEX.md`
-5. 模块说明：`app/code/Weline/Multipass/doc/README.md`
-6. `app/code/Weline/Theme/doc/AI-INDEX.md`
-7. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+2. 全局硬规则与任务路由：`app/code/Weline/Ai/doc/AI硬规则索引.md`
+3. 本文件：`app/code/Weline/Multipass/doc/AI-INDEX.md`
+4. 模块说明：`app/code/Weline/Multipass/doc/README.md`
+5. `app/code/Weline/Theme/doc/AI-INDEX.md`
+6. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+7. `app/code/Weline/Taglib/doc/AI-INDEX.md`
 8. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
@@ -24,8 +24,8 @@
 ## 代码面清单
 
 入口/配置文件：
-- `app/code/Weline/Multipass/etc/backend/menu.xml`
 - `app/code/Weline/Multipass/composer.json`
+- `app/code/Weline/Multipass/etc/backend/menu.xml`
 
 - `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：1
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：9
@@ -37,20 +37,21 @@
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：1
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：7
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：1
 
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
-- 识别到 QueryProvider 相关 PHP 文件：extends/module/Weline_Framework/Query/MultipassAdminQueryProvider.php；前端/跨模块读数据先查 query 帮助。
+- 识别到 QueryProvider 入口：`extends/module/Weline_Framework/Query/MultipassAdminQueryProvider.php`；前端/跨模块读数据先查 `php bin/w query:help`。
 
 ## doc 目录
 
 - `app/code/Weline/Multipass/doc/README.md`
 - `app/code/Weline/Multipass/doc/identity-bridge-product-development-plan.md`
+- `app/code/Weline/Multipass/doc/功能现状.md`
+- `app/code/Weline/Multipass/doc/开发日志.md`
+- `app/code/Weline/Multipass/doc/需求.md`
 
 ## 开发前门禁
 

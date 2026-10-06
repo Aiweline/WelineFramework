@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Cart\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Template;
 use Weline\Theme\Helper\WidgetI18n;
 
 /**
@@ -37,6 +39,7 @@ class Index extends FrontendController
         ]);
         $this->assign('cart', $cart);
         $this->assign('items', $cart['items'] ?? []);
+        $this->assign('money_summary_html', $this->renderMoneySummaryWidget());
         $meta = [
             'showHeader' => true,
             'showFooter' => true,
@@ -46,6 +49,26 @@ class Index extends FrontendController
         $this->assign('meta', $meta);
 
         return $this->fetch('Weline_Cart::templates/frontend/cart/index.phtml');
+    }
+
+    /**
+     * Checkout-owned money summary widget (controller fetch; avoids Theme layout XOR).
+     */
+    private function renderMoneySummaryWidget(): string
+    {
+        try {
+            /** @var Template $template */
+            $template = ObjectManager::getInstance(Template::class);
+
+            return trim((string) $template->fetch(
+                'Weline_Checkout::templates/frontend/widgets/storefront-money-summary/default.phtml',
+                [
+                    'mode' => 'cart',
+                ]
+            ));
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**

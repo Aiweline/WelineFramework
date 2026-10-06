@@ -7,7 +7,7 @@
 
   function resolveShareCssHref() {
     // Bust token on Module:: so PROD resolveStaticPath / flat publish picks it up.
-    var modulePath = 'Weline_HelpPay::css/helppay-share.css?v=20260925-no-dev-css1';
+    var modulePath = 'Weline_HelpPay::css/helppay-share.css?v=20261006-payer-ship1';
     var loader = w.Weline && w.Weline.loader;
     if (loader && typeof loader.resolveStaticPath === 'function') {
       var resolved = loader.resolveStaticPath(modulePath);
@@ -27,7 +27,7 @@
         return sibling;
       }
     }
-    return '/static/Weline/HelpPay/css/helppay-share.css?v=20260925-no-dev-css1';
+    return '/static/Weline/HelpPay/css/helppay-share.css?v=20261006-payer-ship1';
   }
 
   function ensureShareCss() {
@@ -1268,14 +1268,12 @@
     return false;
   }
 
-  function setPurchaseGate(btn, tob, unavailable, tobTitle) {
+  function setPurchaseGate(btn, unavailable) {
     if (!btn) return;
-    var disable = tob || unavailable;
-    btn.disabled = !!disable;
+    var disable = !!unavailable;
+    btn.disabled = disable;
     btn.setAttribute('aria-disabled', disable ? 'true' : 'false');
-    if (tob) {
-      btn.title = tobTitle;
-    } else if (unavailable) {
+    if (unavailable) {
       btn.title = '当前规格暂不可售';
     } else {
       btn.removeAttribute('title');
@@ -1283,13 +1281,12 @@
   }
 
   function syncQuickPayCtas() {
-    var tob = currentSellingMode() === 'tob';
     var unavailable = isPurchaseUnavailable();
     d.querySelectorAll('[data-helppay-quick-pay], [data-testid="product-quick-pay"]').forEach(function (btn) {
-      setPurchaseGate(btn, tob, unavailable, '快捷购买仅支持零售模式');
+      setPurchaseGate(btn, unavailable);
     });
     d.querySelectorAll('[data-helppay-product-help-pay], [data-testid="product-help-pay"] [data-helppay-open]').forEach(function (btn) {
-      setPurchaseGate(btn, tob, unavailable, '找朋友代付仅支持零售模式');
+      setPurchaseGate(btn, unavailable);
     });
   }
 
@@ -1345,17 +1342,73 @@
   }
 
   function readProductLineSummary(btn) {
-    return [
-      {
-        sku: readProductSku(btn),
-        qty: readSelectedQty(btn),
-        title: readProductTitle(),
-      },
-    ];
+    var qty = readSelectedQty(btn);
+    var productId = readQuickProductId(btn);
+    var row = {
+      sku: readProductSku(btn),
+      qty: qty,
+      title: readProductTitle(),
+    };
+    if (productId > 0) row.product_id = productId;
+    var weightNode = qs(d, '[data-weight-minor], [data-product-weight-minor]');
+    var weightMinor = Number(
+      (weightNode && (weightNode.getAttribute('data-weight-minor') || weightNode.getAttribute('data-product-weight-minor') || weightNode.value)) || 0
+    ) || 0;
+    if (weightMinor > 0) {
+      row.weight_minor = weightMinor;
+      row.weight_per_unit = 1;
+    }
+    return [row];
   }
 
   function readCartAmountMinor() {
     return Number((qs(d, '[data-cart-grand-total-minor], [data-grand-total-minor]') || {}).value || 0) || 0;
+  }
+
+  async function readCartHelpPayPayload() {
+    var goodsMinor = 0;
+    var lineSummary = [];
+    try {
+      if (w.Weline && w.Weline.Api && typeof w.Weline.Api.resource === 'function') {
+        var cart = await w.Weline.Api.resource('cart');
+        var raw = await cart.getData(
+          { cart_type: currentSellingMode(), selling_mode: currentSellingMode() },
+          { silent: true }
+        );
+        var data = (raw && (raw.data || raw)) || {};
+        var cartObj = data.cart || data;
+        var summary = data.summary || cartObj.summary || {};
+        goodsMinor =
+          Number(summary.subtotal_minor || cartObj.subtotal_minor || data.subtotal_minor || 0) || 0;
+        var items = cartObj.items || cartObj.lines || data.items || data.lines || [];
+        if (Array.isArray(items)) {
+          items.forEach(function (item) {
+            if (!item || typeof item !== 'object') return;
+            var productId = Number(item.product_id || item.legacy_product_id || 0) || 0;
+            var qty = Number(item.qty || item.qty_minor || 1) || 1;
+            var weightMinor = Number(item.weight_minor || 0) || 0;
+            lineSummary.push({
+              product_id: productId,
+              sku: String(item.sku || '').trim(),
+              title: String(item.name || item.title || '').trim(),
+              qty: qty,
+              row_total_minor: Number(item.row_total_minor || 0) || 0,
+              unit_price_minor: Number(item.unit_price_minor || 0) || 0,
+              weight_minor: weightMinor,
+              weight_per_unit: weightMinor > 0 ? 1 : 0,
+              requires_shipping: item.requires_shipping !== false,
+            });
+          });
+        }
+      }
+    } catch (err) {
+      goodsMinor = 0;
+      lineSummary = [];
+    }
+    if (!(goodsMinor > 0)) {
+      goodsMinor = readCartAmountMinor();
+    }
+    return { goods_amount_minor: goodsMinor, line_summary: lineSummary };
   }
 
   async function openHelpPayAddressStep(dialog) {
@@ -1376,9 +1429,6 @@
     try {
       var placement = dialog._helppayPlacement || 'cart';
       if (placement === 'product') {
-        if (currentSellingMode() === 'tob') {
-          throw new Error('helppay_toc_only');
-        }
         if (isPurchaseUnavailable()) {
           throw new Error('当前规格暂不可售，无法生成代付链接。');
         }
@@ -1393,10 +1443,6 @@
   function openProductHelpPayFlow(btn) {
     mergeShareI18n(btn);
     if (btn && btn.disabled) return;
-    if (currentSellingMode() === 'tob') {
-      openErrorDialog(humanizeApiError(new Error('helppay_toc_only')), btn);
-      return;
-    }
     if (isPurchaseUnavailable()) {
       openErrorDialog('当前规格暂不可售，无法生成代付链接。', btn);
       return;
@@ -1430,9 +1476,6 @@
         if (!btn || btn.disabled) {
           throw new Error('当前规格暂不可售，无法生成代付链接。');
         }
-        if (currentSellingMode() === 'tob') {
-          throw new Error('helppay_toc_only');
-        }
         if (isPurchaseUnavailable()) {
           throw new Error('当前规格暂不可售，无法生成代付链接。');
         }
@@ -1457,16 +1500,28 @@
       var amount = 0;
       var currency = readCurrencyCode();
       var lineSummary = [];
+      var goodsMinor = 0;
+      var productId = 0;
+      var qty = 1;
       if (placement === 'product') {
         amount = readAmountMinor(btn);
         if (!(amount > 0)) {
           throw new Error('无法读取商品金额，请刷新后重试。');
         }
+        goodsMinor = amount;
+        productId = readQuickProductId(btn);
+        qty = readSelectedQty(btn);
         lineSummary = readProductLineSummary(btn);
       } else {
-        amount = readCartAmountMinor();
+        var cartPayload = await readCartHelpPayPayload();
+        goodsMinor = Number(cartPayload.goods_amount_minor || 0) || 0;
+        amount = goodsMinor;
+        lineSummary = Array.isArray(cartPayload.line_summary) ? cartPayload.line_summary : [];
         var cartCurrency = (qs(d, '[data-cart-currency]') || {}).value;
         if (cartCurrency) currency = String(cartCurrency);
+        if (!(amount > 0)) {
+          throw new Error('无法读取购物车金额，请刷新后重试。');
+        }
       }
       showStep(dialog, 'result');
       var host = qs(dialog, '[data-helppay-step="result"]');
@@ -1476,8 +1531,10 @@
         '</p>';
       var result = null;
       if (w.Weline && w.Weline.Api && typeof w.Weline.Api.resource === 'function') {
-        result = await w.Weline.Api.resource('helpPay').createHelpPay({
+        var createPayload = {
           amount_minor: amount,
+          goods_amount_minor: goodsMinor,
+          shipping_amount_minor: 0,
           currency_code: currency,
           shipping_address: {
             name: addr.name,
@@ -1492,9 +1549,14 @@
           },
           address_confirmed: true,
           rules_accepted: true,
-          cart_type: 'toc',
+          cart_type: currentSellingMode(),
           line_summary: lineSummary,
-        });
+        };
+        if (productId > 0) {
+          createPayload.product_id = productId;
+          createPayload.qty = qty;
+        }
+        result = await w.Weline.Api.resource('helpPay').createHelpPay(createPayload);
       }
       if (!result || !result.url) {
         throw new Error('未返回分享链接');
@@ -1540,14 +1602,11 @@
     sku = String(sku).replace(/^SKU:\s*/i, '').trim() || 'SKU';
     var qty = Number(btn.getAttribute('data-qty') || 1) || 1;
     try {
-      if (currentSellingMode() === 'tob') {
-        throw new Error('helppay_toc_only');
-      }
       var result = null;
       if (w.Weline && w.Weline.Api && typeof w.Weline.Api.resource === 'function') {
         result = await w.Weline.Api.resource('helpPay').createSelectionShare({
           selection_snapshot: { lines: [{ sku: sku, qty: qty }] },
-          cart_type: 'toc',
+          cart_type: currentSellingMode(),
         });
       }
       if (!result || !result.url) {
@@ -1845,9 +1904,6 @@
     }
     setAddressPickMessage(dialog, '');
     try {
-      if (currentSellingMode() === 'tob') {
-        throw new Error('helppay_toc_only');
-      }
       if (isPurchaseUnavailable()) {
         throw new Error('当前规格暂不可售，无法生成快捷购买链接。');
       }
@@ -1966,7 +2022,7 @@
         qty: Math.max(1, readSelectedQty(btn) || 1),
         goods_amount_minor: goodsMinor,
         currency_code: currency,
-        cart_type: 'toc',
+        cart_type: currentSellingMode(),
       },
       { silent: true }
     );
@@ -2107,36 +2163,42 @@
           : '') +
         '</div>';
     }
-    var moneyHtml =
-      '<div class="w-helppay-pay-summary__money" data-testid="helppay-payment-money">' +
-      '<div class="w-helppay-pay-summary__row">' +
-      '<span class="w-text" data-size="sm" data-tone="muted">' +
-      escapeHtml(t('paySummaryGoods', '商品')) +
-      '</span>' +
-      '<span class="w-text" data-testid="helppay-payment-goods-amount">' +
-      escapeHtml(formatMoneyMajor(goods, currency)) +
-      '</span>' +
-      '</div>' +
-      '<div class="w-helppay-pay-summary__row">' +
-      '<span class="w-text" data-size="sm" data-tone="muted">' +
-      escapeHtml(t('paySummaryShipping', '运费')) +
-      (shipLabel !== '' ? ' · ' + escapeHtml(shipLabel) : '') +
-      '</span>' +
-      '<span class="w-text" data-testid="helppay-payment-ship-amount">' +
-      escapeHtml(formatMoneyMajor(ship, currency)) +
-      '</span>' +
-      '</div>' +
-      '<div class="w-helppay-pay-summary__row w-helppay-pay-summary__row--total">' +
-      '<span class="w-text" data-weight="strong">' +
-      escapeHtml(t('paySummaryTotal', '应付')) +
-      '</span>' +
-      '<span class="w-text w-helppay-panel__amount" data-weight="strong" data-testid="helppay-payment-total">' +
-      escapeHtml(formatMoneyMajor(total, currency)) +
-      '</span>' +
-      '</div>' +
-      '</div>';
     host.classList.add('w-helppay-pay-summary');
-    host.innerHTML = specHtml + addressHtml + moneyHtml;
+    host.innerHTML = specHtml + addressHtml + '<div data-helppay-money-mount data-testid="helppay-payment-money"></div>';
+    var moneyMount = qs(host, '[data-helppay-money-mount]');
+    var sms = w.WelineStorefrontMoneySummary;
+    if (sms && typeof sms.ensure === 'function' && typeof sms.paint === 'function' && moneyMount) {
+      var smsRoot = sms.ensure(moneyMount, { mode: 'helppay', discounts_disabled: true });
+      sms.paint(smsRoot, {
+        mode: 'helppay',
+        format: 'code',
+        currency: currency,
+        discounts_disabled: true,
+        goods_subtotal_minor: Math.round(goods * 100),
+        shipping_minor: Math.round(ship * 100),
+        shipping_service_label: shipLabel,
+        payable_minor: Math.round(total * 100),
+      });
+    } else if (moneyMount) {
+      moneyMount.innerHTML =
+        '<div class="w-helppay-pay-summary__money">' +
+        '<div class="w-helppay-pay-summary__row"><span>' +
+        escapeHtml(t('paySummaryGoods', '商品')) +
+        '</span><span data-testid="helppay-payment-goods-amount">' +
+        escapeHtml(formatMoneyMajor(goods, currency)) +
+        '</span></div>' +
+        '<div class="w-helppay-pay-summary__row"><span>' +
+        escapeHtml(t('paySummaryShipping', '运费')) +
+        (shipLabel !== '' ? ' · ' + escapeHtml(shipLabel) : '') +
+        '</span><span data-testid="helppay-payment-ship-amount">' +
+        escapeHtml(formatMoneyMajor(ship, currency)) +
+        '</span></div>' +
+        '<div class="w-helppay-pay-summary__row w-helppay-pay-summary__row--total"><span>' +
+        escapeHtml(t('paySummaryTotal', '应付')) +
+        '</span><span data-testid="helppay-payment-total">' +
+        escapeHtml(formatMoneyMajor(total, currency)) +
+        '</span></div></div>';
+    }
   }
 
   async function openQuickPaymentStep(dialog) {
@@ -2186,7 +2248,7 @@
           shipping_amount_minor: shipMinor,
           goods_amount_minor: goodsMinor,
         },
-        cart_type: 'toc',
+        cart_type: currentSellingMode(),
       });
       if (!result || !result.url) {
         throw new Error(t('quickPayCreateFailed', '未返回付款入口，请稍后重试。'));
@@ -2267,9 +2329,6 @@
     try {
       if (!btn || btn.disabled) {
         throw new Error('当前规格暂不可售，无法生成快捷购买链接。');
-      }
-      if (currentSellingMode() === 'tob') {
-        throw new Error('helppay_toc_only');
       }
       if (isPurchaseUnavailable()) {
         throw new Error('当前规格暂不可售，无法生成快捷购买链接。');
@@ -2558,11 +2617,23 @@
         setPayerPayMessage(root, t('payFailed', '无法发起支付，请刷新后重试。'), true);
         return;
       }
+      var select = qs(root, '[data-helppay-shipping-method]');
+      var hasOptions = !!(select && select.options && select.options.length);
+      var serviceCode = selectedPayerServiceCode(root);
+      if (hasOptions && !serviceCode) {
+        setPayerPayMessage(root, t('shippingRequired', '请选择配送方式。'), true);
+        return;
+      }
+      var shipMinor = Number(root.getAttribute('data-helppay-ship-minor') || 0) || 0;
       var payload = {
         token: token,
         payment_method: methodCode,
         idempotency_key: 'helppay_' + token + '_' + methodCode + '_' + Date.now(),
       };
+      if (serviceCode) {
+        payload.service_code = serviceCode;
+        payload.shipping_amount_minor = shipMinor;
+      }
       if (billing && !billing.skipped) {
         payload.billing_address = billing;
       }
@@ -2588,6 +2659,80 @@
     } finally {
       btn.disabled = false;
     }
+  }
+
+  function selectedPayerServiceCode(root) {
+    var select = qs(root, '[data-helppay-shipping-method]');
+    if (!select) return '';
+    return String(select.value || '').trim();
+  }
+
+  function updatePayerTotals(root) {
+    if (!root) return;
+    var currency = String(root.getAttribute('data-helppay-currency') || 'USD').trim() || 'USD';
+    var goodsMinor = Number(root.getAttribute('data-helppay-goods-minor') || 0) || 0;
+    var select = qs(root, '[data-helppay-shipping-method]');
+    var shipMinor = 0;
+    var label = '';
+    if (select && select.options && select.selectedIndex >= 0) {
+      var opt = select.options[select.selectedIndex];
+      shipMinor = Number((opt && opt.getAttribute('data-amount-minor')) || 0) || 0;
+      var text = String((opt && opt.textContent) || '').trim();
+      var cut = text.indexOf(' · ');
+      label = cut > 0 ? text.slice(0, cut) : text;
+      root.setAttribute('data-helppay-service-code', String(select.value || '').trim());
+    } else {
+      shipMinor = Number(root.getAttribute('data-helppay-ship-minor') || 0) || 0;
+    }
+    root.setAttribute('data-helppay-ship-minor', String(shipMinor));
+    var totalMinor = goodsMinor + shipMinor;
+    var formattedTotal = formatMoneyMajor(totalMinor / 100, currency);
+    // Left hero amount (outside money-summary widget).
+    root.querySelectorAll('[data-helppay-payable-amount]').forEach(function (el) {
+      if (!el.closest('[data-money-summary]')) {
+        el.textContent = formattedTotal;
+      }
+    });
+    var sms = w.WelineStorefrontMoneySummary;
+    var smsRoot = qs(root, '[data-money-summary]');
+    if (sms && typeof sms.paint === 'function' && smsRoot) {
+      sms.paint(smsRoot, {
+        mode: 'helppay',
+        format: 'code',
+        currency: currency,
+        discounts_disabled: true,
+        goods_subtotal_minor: goodsMinor,
+        shipping_minor: shipMinor,
+        shipping_service_label: label,
+        payable_minor: totalMinor,
+      });
+      return;
+    }
+    var goodsEl = qs(root, '[data-helppay-goods-amount]');
+    if (goodsEl) goodsEl.textContent = formatMoneyMajor(goodsMinor / 100, currency);
+    var shipEl = qs(root, '[data-helppay-ship-amount]');
+    if (shipEl) shipEl.textContent = formatMoneyMajor(shipMinor / 100, currency);
+    var totalEl = qs(root, '[data-helppay-total-amount]');
+    if (totalEl) totalEl.textContent = formattedTotal;
+    var shipRowLabel = qs(root, '[data-helppay-ship-label]');
+    if (shipRowLabel) {
+      shipRowLabel.textContent =
+        t('paySummaryShipping', '运费') + (label ? ' · ' + label : '');
+    }
+  }
+
+  function wirePayerShipping(root) {
+    if (!root || root._helppayShippingWired) return;
+    var select = qs(root, '[data-helppay-shipping-method]');
+    if (!select) {
+      updatePayerTotals(root);
+      return;
+    }
+    root._helppayShippingWired = true;
+    select.addEventListener('change', function () {
+      updatePayerTotals(root);
+    });
+    updatePayerTotals(root);
   }
 
   function onHelpPayDelegatedClick(ev) {
@@ -2642,6 +2787,7 @@
     var payerRoot = qs(d, '[data-testid="help-pay-payer"]');
     if (payerRoot) {
       wirePayerPaymentMethods(payerRoot);
+      wirePayerShipping(payerRoot);
       if (payerBillingRequired(payerRoot)) {
         ensurePayerBillingMounted(payerRoot)
           .then(function (api) {

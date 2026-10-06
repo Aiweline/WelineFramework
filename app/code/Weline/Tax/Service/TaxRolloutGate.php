@@ -127,7 +127,7 @@ final class TaxRolloutGate implements CommerceRolloutGateInterface
 
         return match ($configuration['mode']) {
             self::MODE_ON => true,
-            self::MODE_ALLOWLIST => isset($configuration['allowlist'][$subject]),
+            self::MODE_ALLOWLIST => $this->allowlistMatches($configuration['allowlist'], $subject),
             default => false,
         };
     }
@@ -148,7 +148,7 @@ final class TaxRolloutGate implements CommerceRolloutGateInterface
      * @return array{
      *     mode:string,
      *     allowlist:array<string,true>,
-     *     allowlist_rows:array<string,array{website_id:int,store_id:int,channel_id:int}>,
+     *     allowlist_rows:array<string,array{website_id:int,store_id?:int,channel_id?:int}>,
      *     shadow_sample_bp:int,
      *     env_locked:bool
      * }
@@ -204,7 +204,7 @@ final class TaxRolloutGate implements CommerceRolloutGateInterface
      * @return array{
      *     mode:string,
      *     allowlist:array<string,true>,
-     *     allowlist_rows:array<string,array{website_id:int,store_id:int,channel_id:int}>,
+     *     allowlist_rows:array<string,array{website_id:int,store_id?:int,channel_id?:int}>,
      *     shadow_sample_bp:int
      * }
      */
@@ -240,28 +240,37 @@ final class TaxRolloutGate implements CommerceRolloutGateInterface
             }
             $rowKeys = array_keys($row);
             sort($rowKeys, SORT_STRING);
-            if ($rowKeys !== ['channel_id', 'store_id', 'website_id']) {
+            if ($rowKeys === ['website_id']) {
+                $websiteId = $row['website_id'];
+                if (!is_int($websiteId) || $websiteId < 0) {
+                    throw new \RuntimeException('tax_rollout_config_invalid:allowlist_values');
+                }
+                $key = self::websiteKey($websiteId);
+                $normalizedRow = ['website_id' => $websiteId];
+            } elseif ($rowKeys === ['channel_id', 'store_id', 'website_id']) {
+                $websiteId = $row['website_id'];
+                $storeId = $row['store_id'];
+                $channelId = $row['channel_id'];
+                if (!is_int($websiteId) || $websiteId < 0
+                    || !is_int($storeId) || $storeId < 1
+                    || !is_int($channelId) || $channelId < 1
+                ) {
+                    throw new \RuntimeException('tax_rollout_config_invalid:allowlist_values');
+                }
+                $key = self::tupleKey($websiteId, $storeId, $channelId);
+                $normalizedRow = [
+                    'website_id' => $websiteId,
+                    'store_id' => $storeId,
+                    'channel_id' => $channelId,
+                ];
+            } else {
                 throw new \RuntimeException('tax_rollout_config_invalid:allowlist_fields');
             }
-            $websiteId = $row['website_id'];
-            $storeId = $row['store_id'];
-            $channelId = $row['channel_id'];
-            if (!is_int($websiteId) || $websiteId < 0
-                || !is_int($storeId) || $storeId < 1
-                || !is_int($channelId) || $channelId < 1
-            ) {
-                throw new \RuntimeException('tax_rollout_config_invalid:allowlist_values');
-            }
-            $key = self::tupleKey($websiteId, $storeId, $channelId);
             if (isset($allowlist[$key])) {
                 throw new \RuntimeException('tax_rollout_config_invalid:allowlist_duplicate');
             }
             $allowlist[$key] = true;
-            $rows[$key] = [
-                'website_id' => $websiteId,
-                'store_id' => $storeId,
-                'channel_id' => $channelId,
-            ];
+            $rows[$key] = $normalizedRow;
         }
         ksort($allowlist, SORT_STRING);
         ksort($rows, SORT_STRING);
@@ -276,22 +285,26 @@ final class TaxRolloutGate implements CommerceRolloutGateInterface
 
     /**
      * @param list<string> $subjects
-     * @return list<array{website_id:int,store_id:int,channel_id:int}>
+     * @return list<array{website_id:int,store_id?:int,channel_id?:int}>
      */
     private function normalizeSubjects(array $subjects): array
     {
         $rows = [];
         foreach ($subjects as $subject) {
             $subject = trim((string)$subject);
-            if (preg_match('/^(0|[1-9][0-9]*):([1-9][0-9]*):([1-9][0-9]*)$/D', $subject, $match) !== 1) {
+            if (preg_match('/^website:(0|[1-9][0-9]*)$/D', $subject, $match) === 1) {
+                $row = ['website_id' => (int)$match[1]];
+                $key = self::websiteKey($row['website_id']);
+            } elseif (preg_match('/^(0|[1-9][0-9]*):([1-9][0-9]*):([1-9][0-9]*)$/D', $subject, $match) === 1) {
+                $row = [
+                    'website_id' => (int)$match[1],
+                    'store_id' => (int)$match[2],
+                    'channel_id' => (int)$match[3],
+                ];
+                $key = self::tupleKey($row['website_id'], $row['store_id'], $row['channel_id']);
+            } else {
                 throw new \InvalidArgumentException('tax_rollout_subject_invalid:' . $subject);
             }
-            $row = [
-                'website_id' => (int)$match[1],
-                'store_id' => (int)$match[2],
-                'channel_id' => (int)$match[3],
-            ];
-            $key = self::tupleKey($row['website_id'], $row['store_id'], $row['channel_id']);
             if (isset($rows[$key])) {
                 throw new \InvalidArgumentException('tax_rollout_subject_duplicate:' . $subject);
             }
@@ -299,6 +312,23 @@ final class TaxRolloutGate implements CommerceRolloutGateInterface
         }
 
         return array_values($rows);
+    }
+
+    /**
+     * @param array<string,true> $allowlist
+     */
+    private function allowlistMatches(array $allowlist, string $subject): bool
+    {
+        $subject = trim($subject);
+        if ($subject !== '' && isset($allowlist[$subject])) {
+            return true;
+        }
+        // Exact tuple also matches a website-level allowlist entry for the same website.
+        if (preg_match('/^(0|[1-9][0-9]*):([1-9][0-9]*):([1-9][0-9]*)$/D', $subject, $match) === 1) {
+            return isset($allowlist[self::websiteKey((int)$match[1])]);
+        }
+
+        return false;
     }
 
     private function write(string $key, mixed $value): void
@@ -318,6 +348,15 @@ final class TaxRolloutGate implements CommerceRolloutGateInterface
     public static function tupleKey(int $websiteId, int $storeId, int $channelId): string
     {
         return $websiteId . ':' . $storeId . ':' . $channelId;
+    }
+
+    public static function websiteKey(int $websiteId): string
+    {
+        if ($websiteId < 0) {
+            throw new \InvalidArgumentException('tax_rollout_website_invalid');
+        }
+
+        return 'website:' . $websiteId;
     }
 
     private function configStore(): ConfigStore

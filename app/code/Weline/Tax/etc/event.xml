@@ -29,4 +29,13 @@
                   shared="false"
                   sort="200"/>
     </event>
+    <event name="Weline_Cart::cart_summary::enrich">
+        <observer name="Weline_Tax::cart_summary_enrich_tax"
+                  instance="Weline\Tax\Observer\CartSummaryEnrichTaxObserver"
+                  delivery="sync"
+                  failure="isolated"
+                  disabled="false"
+                  shared="false"
+                  sort="200"/>
+    </event>
 </config>

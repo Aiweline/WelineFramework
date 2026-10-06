@@ -56,6 +56,7 @@ final class Payer extends FrontendController
         $this->assign('payment_method_default_index', $defaultIndex);
         $this->assign('billing_required_initially', $billingRequired);
         $this->assign('billing_address_html', $this->renderBillingAddressWidget());
+        $this->assign('money_summary_html', $this->renderMoneySummaryWidget($bill));
         $this->assign('token', $token);
 
         return (string) $this->fetch('Weline_HelpPay::templates/frontend/pay/payer.phtml');
@@ -109,6 +110,29 @@ final class Payer extends FrontendController
                     'testid_prefix' => 'help-pay-method-',
                 ]
             );
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * Unified Checkout money-summary widget for payer totals (goods / shipping / payable).
+     *
+     * @param array<string, mixed> $bill
+     */
+    private function renderMoneySummaryWidget(array $bill): string
+    {
+        try {
+            /** @var Template $template */
+            $template = ObjectManager::getInstance(Template::class);
+
+            return trim((string) $template->fetch(
+                'Weline_Checkout::templates/frontend/widgets/storefront-money-summary/default.phtml',
+                [
+                    'mode' => 'helppay',
+                    'discounts_disabled' => true,
+                ]
+            ));
         } catch (\Throwable) {
             return '';
         }

@@ -1,0 +1,84 @@
+/**
+ * 店面金额小计 — Token only
+ */
+.w-storefront-money-summary {
+    display: grid;
+    gap: var(--weline-space-2, 0.5rem);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.w-storefront-money-summary__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--weline-space-3, 0.75rem);
+    color: var(--weline-theme-color-text, var(--color-text, #1a1a1a));
+    font-size: var(--weline-font-size-sm, 0.875rem);
+    line-height: 1.4;
+}
+
+.w-storefront-money-summary__row[hidden] {
+    display: none !important;
+}
+
+.w-storefront-money-summary__row span:first-child {
+    color: var(--weline-theme-color-text-muted, var(--color-text-muted, #666));
+    min-width: 0;
+}
+
+.w-storefront-money-summary__row strong {
+    font-weight: 600;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.w-storefront-money-summary__row--payable {
+    margin-top: var(--weline-space-1, 0.25rem);
+    padding-top: var(--weline-space-2, 0.5rem);
+    border-top: 1px solid var(--weline-theme-color-border, var(--color-border, #e5e5e5));
+    font-size: var(--weline-font-size-md, 1rem);
+}
+
+.w-storefront-money-summary__row--payable span:first-child {
+    color: var(--weline-theme-color-text, var(--color-text, #1a1a1a));
+    font-weight: 700;
+}
+
+.w-storefront-money-summary__grand {
+    font-size: 1.125em;
+    font-weight: 700;
+}
+
+.w-storefront-money-summary__discount-lines {
+    display: grid;
+    gap: var(--weline-space-1, 0.25rem);
+}
+
+.w-storefront-money-summary__discount-lines:empty {
+    display: none;
+}
+
+.w-storefront-money-summary__note {
+    margin: var(--weline-space-1, 0.25rem) 0 0;
+    color: var(--weline-theme-color-text-muted, var(--color-text-muted, #666));
+    font-size: var(--weline-font-size-xs, 0.75rem);
+    line-height: 1.4;
+}
+
+.w-storefront-money-summary__note[hidden] {
+    display: none !important;
+}
+
+/* 结账摘要壳兼容 */
+.weline-checkout__summary .w-storefront-money-summary {
+    margin-top: var(--weline-space-2, 0.5rem);
+}
+
+/* 迷你车 footer 兼容 */
+.mini-cart-drawer__footer .w-storefront-money-summary,
+.header-cart .w-storefront-money-summary {
+    width: 100%;
+}

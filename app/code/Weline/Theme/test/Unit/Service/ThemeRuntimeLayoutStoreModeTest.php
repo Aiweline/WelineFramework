@@ -4,31 +4,52 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
-use Weline\SystemConfig\Service\SystemConfigScopeResolver;
-use Weline\Theme\Service\ThemeLayoutScopeNormalizer;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Theme\Service\ThemeRuntimeLayoutResolver;
 
 final class ThemeRuntimeLayoutStoreModeTest extends TestCase
 {
-    public function testExplicitStoreModeReachesAuthoritativeCatalog(): void
+    protected function tearDown(): void
     {
+        foreach (['frontend.runtime', 'frontend.asset'] as $suffix) {
+            RequestContext::remove(ThemeApplicationContext::REQUEST_KEY_PREFIX . $suffix);
+        }
+    }
+
+    public function testExplicitStoreModeBuildsSystemContextWithoutRequestInstall(): void
+    {
+        $runtime = (new \ReflectionClass(ThemeRuntimeLayoutResolver::class))->newInstanceWithoutConstructor();
         foreach (['test', 'dev'] as $mode) {
-            $scopes = new SystemConfigScopeResolver();
-            $catalog = $this->createMock(ScopeIdentityCatalogInterface::class);
-            $catalog->expects(self::once())->method('authoritativeIdentity')
-                ->willReturnCallback(function (ScopeIdentity $identity) use ($mode): ScopeIdentity {
-                    self::assertSame($mode, $identity->storeMode);
-                    return $identity;
-                });
-            $runtime = (new \ReflectionClass(ThemeRuntimeLayoutResolver::class))->newInstanceWithoutConstructor();
-            foreach (['scopeNormalizer' => new ThemeLayoutScopeNormalizer($scopes), 'scopes' => $scopes, 'catalog' => $catalog] as $field => $value) {
-                (new \ReflectionProperty($runtime, $field))->setValue($runtime, $value);
-            }
-            $context = $runtime->buildContext(1, 'account/login', 'frontend', ['scope' => 'shop.main.app', 'store_mode' => $mode]);
+            $context = $runtime->buildContext(1, 'account/login', 'frontend', [
+                'scope' => 'shop.main.app',
+                'store_mode' => $mode,
+            ]);
             self::assertSame($mode, $context->scope->storeMode);
             self::assertSame('shop.main.app', $context->scope->storageScope);
+            self::assertSame(1, $context->application->themeId);
+            self::assertSame('asset', $context->application->purpose);
+            self::assertNull(ThemeApplicationContext::current('frontend'));
+            self::assertNull(ThemeApplicationContext::current('frontend', 'asset'));
         }
+    }
+
+    public function testEmptyIdentityWithoutConsumerContextStillFails(): void
+    {
+        $runtime = (new \ReflectionClass(ThemeRuntimeLayoutResolver::class))->newInstanceWithoutConstructor();
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('theme_runtime_consumer_context_required');
+        $runtime->buildContext(1, 'cart', 'frontend', []);
+    }
+
+    public function testEncodedScopeModeSuffixReachesStoreMode(): void
+    {
+        $runtime = (new \ReflectionClass(ThemeRuntimeLayoutResolver::class))->newInstanceWithoutConstructor();
+        $context = $runtime->buildContext(2, 'cart', 'frontend', [
+            'scope' => 'default.__store__.__channel__~test',
+        ]);
+        self::assertSame('test', $context->scope->storeMode);
+        self::assertSame('default.__store__.__channel__', $context->scope->storageScope);
+        self::assertSame(2, $context->themeId);
     }
 }

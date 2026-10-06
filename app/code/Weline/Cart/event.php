@@ -19,4 +19,8 @@ return [
         'name' => \__('游客车合并成功后'),
         'description' => \__('游客车合并进客户车成功后触发；追加 cart_type + type_payload（非破坏）。'),
     ],
+    'Weline_Cart::cart_summary::enrich' => [
+        'name' => \__('购物车摘要组装后'),
+        'description' => \__('CartService::summary 返回前触发；观察者可回写 summary（如税费预估），不得硬依赖 Tax 实现。'),
+    ],
 ];

@@ -22,25 +22,30 @@ $copy = [
     'mutationFailed' => (string)__('购物车更新失败，请重试。'),
     'guestTokenIssueFailed' => (string)__('无法创建游客购物车会话'),
     'shippingNote' => (string)__('税费与运费将在结算时计算'),
+    'shippingNoteOnly' => (string)__('运费将在结算时计算'),
+    'taxEstimate' => (string)__('税费（预估）'),
     'subtotalItems' => (string)__('小计（%1 件商品）'),
     'unitPrice' => (string)__('单价'),
     'siblingBrowse' => (string)__('浏览%1 %2件商品'),
 ];
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260923-qa05-view-mutex-1">
+      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20261006-header-title-right2">
 
 <section class="weline-cart-shell weline-cart-shell--amazon"
          data-cart-content="1"
          data-weline-cart
          data-cart-type="toc"
          data-cart-view="loading"
+         data-weline-load="storefrontMoneySummary"
          aria-busy="true"
          weline-code="cart.cart.section_1">
     <header class="weline-cart-shell__header">
         <div class="weline-cart-shell__type-host" data-cart-page-type-host></div>
-        <h1><span data-cart-page-title><?= __('购物车') ?></span></h1>
-        <p class="weline-cart-shell__subtitle" data-cart-subtitle hidden></p>
+        <div class="weline-cart-shell__heading">
+            <h1><span data-cart-page-title><?= __('购物车') ?></span></h1>
+            <p class="weline-cart-shell__subtitle" data-cart-subtitle hidden></p>
+        </div>
     </header>
 
     <?php /* Page-shell states only — do not reuse mini-cart drawer copy hooks here. */ ?>
@@ -107,20 +112,11 @@ $copy = [
                         weline-code="cart.cart.credit_slot">
                 </w:slot>
             </div>
-            <div class="weline-cart-shell__totals" data-cart-discount-breakdown hidden>
-                <div class="weline-cart-shell__summary-row weline-cart-shell__summary-row--goods">
-                    <span><?= __('商品小计') ?></span>
-                    <span data-cart-goods-subtotal>--</span>
-                </div>
-                <div class="weline-cart-shell__discount-lines" data-cart-discount-lines></div>
+            <div class="weline-cart-shell__money-summary"
+                 data-testid="cart-money-summary"
+                 weline-code="cart.cart.money_summary">
+                <?= (string) ($this->getData('money_summary_html') ?? '') ?>
             </div>
-            <div class="weline-cart-shell__summary-list">
-                <div class="weline-cart-shell__summary-row weline-cart-shell__summary-row--payable">
-                    <span data-cart-subtotal-label><?= $escape($copy['subtotal']) ?></span>
-                    <strong data-cart-grand-total>--</strong>
-                </div>
-            </div>
-            <p class="weline-cart-shell__summary-note"><?= $escape($copy['shippingNote']) ?></p>
             <a class="weline-cart-shell__checkout" data-cart-checkout href="@url{'checkout'}"><?= __('去结算') ?></a>
             <w:slot id="cart-summary-help-pay"
                     name="<?= __('购物车帮我付') ?>"
@@ -145,15 +141,43 @@ $copy = [
         return;
     }
 
+    /**
+     * Soft handoff from retail-only hint / buy-now sibling:
+     * ?cart_type=toc|tob | ?type=toc|tob | ?selling_mode=toc|tob for this view.
+     * Keeps global wholesale preference cookie intact.
+     */
+    function readCartTypeFromQuery() {
+        try {
+            const params = new URLSearchParams(window.location.search || '');
+            const raw = String(
+                params.get('cart_type') || params.get('type') || params.get('selling_mode') || ''
+            ).toLowerCase();
+            return (raw === 'toc' || raw === 'tob') ? raw : '';
+        } catch (eQuery) {
+            return '';
+        }
+    }
+
+    function applyCartTypeHandoffFromUrl() {
+        try {
+            const raw = readCartTypeFromQuery();
+            if (!raw) {
+                return '';
+            }
+            root.setAttribute('data-cart-type', raw);
+            root.setAttribute('data-cart-type-handoff', raw);
+            root.classList.toggle('is-cart-type-tob', raw === 'tob');
+            return raw;
+        } catch (eHandoff) {
+            return '';
+        }
+    }
+    applyCartTypeHandoffFromUrl();
+
     const copy = <?= json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     const stateNodes = Array.from(root.querySelectorAll('[data-cart-state]'));
     const itemsNode = root.querySelector('[data-cart-items]');
     const subtitleNode = root.querySelector('[data-cart-subtitle]');
-    const subtotalLabelNode = root.querySelector('[data-cart-subtotal-label]');
-    const grandTotalNode = root.querySelector('[data-cart-grand-total]');
-    const goodsSubtotalNode = root.querySelector('[data-cart-goods-subtotal]');
-    const discountBreakdownNode = root.querySelector('[data-cart-discount-breakdown]');
-    const discountLinesNode = root.querySelector('[data-cart-discount-lines]');
     const errorNode = root.querySelector('[data-cart-error]');
     const messageNode = root.querySelector('[data-cart-message]');
     const retryButton = root.querySelector('[data-cart-retry]');
@@ -164,6 +188,38 @@ $copy = [
     let cartApi = null;
     let guestToken = '';
     let cartLoadSeq = 0;
+
+    function moneySummaryRoot() {
+        return root.querySelector('[data-money-summary]')
+            || (summaryRoot && summaryRoot.querySelector('[data-money-summary]'))
+            || null;
+    }
+
+    function liveGoodsSubtotalNode() {
+        return root.querySelector('[data-cart-goods-subtotal]');
+    }
+
+    function liveGrandTotalNode() {
+        return root.querySelector('[data-cart-grand-total]');
+    }
+
+    function liveDiscountLinesNode() {
+        return root.querySelector('[data-cart-discount-lines], [data-money-summary-discount-lines]');
+    }
+
+    function liveDiscountBreakdownNode() {
+        return root.querySelector('[data-cart-discount-breakdown], [data-money-summary-row="goods"]');
+    }
+
+    function paintCartMoneySummary(dto) {
+        const api = window.WelineStorefrontMoneySummary;
+        const host = moneySummaryRoot();
+        if (api && typeof api.paint === 'function' && host) {
+            api.paint(host, Object.assign({ mode: 'cart', shipping_pending: true }, dto || {}));
+            return true;
+        }
+        return false;
+    }
 
     function discountPreview(summary) {
         if (!summary || typeof summary !== 'object' || !summary.discount_preview) {
@@ -185,6 +241,18 @@ $copy = [
         return minor / Math.pow(10, precision);
     }
 
+    function taxAmountMajor(summary) {
+        if (!summary || typeof summary !== 'object') {
+            return 0;
+        }
+        const minor = Number(summary.tax_amount_minor);
+        if (isFinite(minor) && minor > 0) {
+            return minor / 100;
+        }
+        const major = Number(summary.tax_amount);
+        return isFinite(major) && major > 0 ? major : 0;
+    }
+
     function discountKindLabel(kind) {
         if (kind === 'stack') {
             return text(summaryRoot && summaryRoot.getAttribute('data-i18n-discount-stack') || '叠加优惠');
@@ -196,7 +264,17 @@ $copy = [
     }
 
     function renderDiscountBreakdown(summary, currency, goodsSubtotal) {
-        if (!discountBreakdownNode || !discountLinesNode) {
+        const discountBreakdownNode = liveDiscountBreakdownNode();
+        const discountLinesNode = liveDiscountLinesNode();
+        const goodsSubtotalNode = liveGoodsSubtotalNode();
+        if (!discountLinesNode) {
+            setText(goodsSubtotalNode, money(goodsSubtotal, currency));
+            if (root) {
+                root.setAttribute(
+                    'data-cart-goods-subtotal-major',
+                    String(isFinite(Number(goodsSubtotal)) && Number(goodsSubtotal) > 0 ? Number(goodsSubtotal) : 0)
+                );
+            }
             return;
         }
         const preview = discountPreview(summary);
@@ -216,26 +294,16 @@ $copy = [
                 stackable: false,
             }];
         }
-        if (!lines.length) {
-            discountBreakdownNode.hidden = true;
-            // Keep goods subtotal current for B2B credit deposit base even when breakdown is hidden.
-            setText(goodsSubtotalNode, money(goodsSubtotal, currency));
-            if (root) {
-                root.setAttribute(
-                    'data-cart-goods-subtotal-major',
-                    String(isFinite(Number(goodsSubtotal)) && Number(goodsSubtotal) > 0 ? Number(goodsSubtotal) : 0)
-                );
-            }
-            return;
-        }
-
-        discountBreakdownNode.hidden = false;
         setText(goodsSubtotalNode, money(goodsSubtotal, currency));
         if (root) {
             root.setAttribute(
                 'data-cart-goods-subtotal-major',
                 String(isFinite(Number(goodsSubtotal)) && Number(goodsSubtotal) > 0 ? Number(goodsSubtotal) : 0)
             );
+        }
+        if (discountBreakdownNode && discountBreakdownNode.hasAttribute('data-cart-discount-breakdown')) {
+            discountBreakdownNode.hidden = false;
+            discountBreakdownNode.removeAttribute('hidden');
         }
 
         lines.forEach(function (item) {
@@ -264,6 +332,39 @@ $copy = [
             row.appendChild(amount);
             discountLinesNode.appendChild(row);
         });
+    }
+
+    function renderTaxRow(summary, currency) {
+        // Tax / note are painted by storefront-money-summary; keep for legacy fallback only.
+        if (moneySummaryRoot() && window.WelineStorefrontMoneySummary) {
+            return;
+        }
+        let taxRow = root.querySelector('[data-cart-tax-row]');
+        let taxAmountNode = root.querySelector('[data-cart-tax-amount]');
+        let taxLabelNode = root.querySelector('[data-cart-tax-label]');
+        let noteNode = root.querySelector('[data-cart-summary-note]')
+            || root.querySelector('.weline-cart-shell__summary-note');
+        const tax = taxAmountMajor(summary);
+        if (taxLabelNode) {
+            setText(taxLabelNode, copy.taxEstimate || '税费（预估）');
+        }
+        if (taxRow) {
+            if (tax > 0) {
+                taxRow.hidden = false;
+                setText(taxAmountNode, money(tax, currency));
+            } else {
+                taxRow.hidden = true;
+                setText(taxAmountNode, '');
+            }
+        }
+        if (noteNode) {
+            setText(
+                noteNode,
+                tax > 0
+                    ? (copy.shippingNoteOnly || '运费将在结算时计算')
+                    : (copy.shippingNote || '税费与运费将在结算时计算')
+            );
+        }
     }
 
     function readStoredGuestToken() {
@@ -418,6 +519,16 @@ $copy = [
     }
 
     function preferredCartType() {
+        const handoff = String(root.getAttribute('data-cart-type-handoff') || '').toLowerCase();
+        if (handoff === 'tob' || handoff === 'toc') {
+            return handoff;
+        }
+        const fromQuery = readCartTypeFromQuery();
+        if (fromQuery) {
+            root.setAttribute('data-cart-type', fromQuery);
+            root.setAttribute('data-cart-type-handoff', fromQuery);
+            return fromQuery;
+        }
         // Default / guest = retail. tob cookie is only a post-login preference hint.
         if (!isCustomerLoggedIn()) {
             return 'toc';
@@ -1093,14 +1204,30 @@ $copy = [
         const goodsSubtotal = amountFromMinor(summary, 'subtotal_minor', 'subtotal');
         const fallbackGrand = amountFromMinor(summary, 'grand_total_minor', 'grand_total');
         const discountMajor = discountAmountMajor(summary);
-        const payable = Math.max(0, (goodsSubtotal || fallbackGrand) - discountMajor);
+        const taxMajor = taxAmountMajor(summary);
+        const goodsMajor = goodsSubtotal || fallbackGrand;
+        const payable = Math.max(0, goodsMajor - discountMajor + taxMajor);
         if (subtitleNode) {
             setText(subtitleNode, subtotalItemsLabel(count));
             subtitleNode.hidden = false;
         }
-        setText(subtotalLabelNode, copy.subtotal);
-        setText(grandTotalNode, money(payable, currency));
-        renderDiscountBreakdown(summary, currency, goodsSubtotal || fallbackGrand);
+        const painted = paintCartMoneySummary({
+            currency: currency,
+            goods_subtotal_minor: Math.round(Number(goodsMajor || 0) * 100),
+            discount_minor: Math.round(Number(discountMajor || 0) * 100),
+            tax_minor: Math.round(Number(taxMajor || 0) * 100),
+            payable_minor: Math.round(Number(payable || 0) * 100),
+            payable_label: copy.subtotal,
+            note: taxMajor > 0
+                ? (copy.shippingNoteOnly || '运费将在结算时计算')
+                : (copy.shippingNote || '税费与运费将在结算时计算'),
+            tax_label: copy.taxEstimate || '税费（预估）',
+        });
+        if (!painted) {
+            setText(liveGrandTotalNode(), money(payable, currency));
+        }
+        renderDiscountBreakdown(summary, currency, goodsMajor);
+        renderTaxRow(summary, currency);
 
         const blocked = Boolean(summary && summary.checkout_blocked);
         const blockingMessage = text(summary && (summary.blocking_message || summary.message)).trim();
@@ -1394,6 +1521,20 @@ $copy = [
         if (detail.source === 'b2b-setMode') {
             // setMode already emits cart-type-changed; avoid double loadCart.
             return;
+        }
+        // URL handoff owns this cart view; do not let enhanceMiniCarts flip toc→tob cookie preference.
+        const handoff = String(root.getAttribute('data-cart-type-handoff') || '').toLowerCase();
+        if ((handoff === 'toc' || handoff === 'tob')
+            && (detail.source === 'enhanceMiniCarts' || detail.source === 'retail-only-add-preview')) {
+            applyCartTypeChrome(handoff);
+            return;
+        }
+        if ((handoff === 'toc' || handoff === 'tob') && detail.source !== 'cart-page-type-seg') {
+            const incoming = String(detail.selling_mode || detail.cart_type || '').toLowerCase();
+            if (incoming && incoming !== handoff) {
+                applyCartTypeChrome(handoff);
+                return;
+            }
         }
         const mode = String(detail.selling_mode || detail.cart_type || preferredCartType()).toLowerCase();
         const next = mode === 'tob' ? 'tob' : 'toc';

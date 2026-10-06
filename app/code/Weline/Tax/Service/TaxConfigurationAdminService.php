@@ -98,6 +98,91 @@ final class TaxConfigurationAdminService
         return $record->getData();
     }
 
+    /**
+     * Create or update the latest rule for website+class+jurisdiction (ratesync path).
+     *
+     * @param array<string,mixed> $input
+     * @return array{action:string,rule:array<string,mixed>}
+     */
+    public function upsertRule(array $input): array
+    {
+        $websiteId = $this->websiteId($input['website_id'] ?? 0);
+        $classCode = strtolower(trim((string)($input['class_code'] ?? '')));
+        $jurisdiction = strtoupper(trim((string)($input['jurisdiction_key'] ?? '')));
+        $rateBps = filter_var($input['rate_bps'] ?? null, FILTER_VALIDATE_INT);
+        $rounding = strtolower(trim((string)($input['rounding'] ?? TaxRule::ROUNDING_HALF_UP)));
+        $enabled = $this->enabled($input['enabled'] ?? 1);
+
+        if (preg_match(TaxClass::CLASS_CODE_PATTERN, $classCode) !== 1) {
+            throw new \InvalidArgumentException((string)__('税类代码格式无效。'));
+        }
+        if (preg_match(TaxRule::JURISDICTION_PATTERN, $jurisdiction) !== 1) {
+            throw new \InvalidArgumentException((string)__('管辖区必须使用 COUNTRY|REGION 格式。'));
+        }
+        if ($rateBps === false || $rateBps < TaxRule::RATE_BPS_MIN || $rateBps > TaxRule::RATE_BPS_MAX) {
+            throw new \InvalidArgumentException((string)__('税率基点必须在 0 到 10000 之间。'));
+        }
+        if (!in_array($rounding, TaxRule::ROUNDING_MODES, true)) {
+            throw new \InvalidArgumentException((string)__('舍入模式无效。'));
+        }
+
+        $class = clone $this->taxClasses;
+        $class->reset()->where(TaxClass::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(TaxClass::schema_fields_CLASS_CODE, $classCode)
+            ->where(TaxClass::schema_fields_ENABLED, 1)->find()->fetch();
+        if (!$class->getId()) {
+            $this->createClass([
+                'website_id' => $websiteId,
+                'class_code' => $classCode,
+                'name' => ucfirst($classCode),
+                'enabled' => 1,
+            ]);
+        }
+
+        $existing = clone $this->taxRules;
+        $rows = $existing->reset()
+            ->where(TaxRule::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(TaxRule::schema_fields_CLASS_CODE, $classCode)
+            ->where(TaxRule::schema_fields_JURISDICTION_KEY, $jurisdiction)
+            ->order(TaxRule::schema_fields_RULE_VERSION, 'DESC')
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+        $row = is_array($rows[0] ?? null) ? $rows[0] : null;
+        if ($row !== null) {
+            $id = (int)($row[TaxRule::schema_fields_ID] ?? 0);
+            $same = (int)($row[TaxRule::schema_fields_RATE_BPS] ?? -1) === $rateBps
+                && (int)($row[TaxRule::schema_fields_ENABLED] ?? 0) === $enabled
+                && strtolower((string)($row[TaxRule::schema_fields_ROUNDING] ?? '')) === $rounding;
+            if ($same) {
+                return ['action' => 'unchanged', 'rule' => $row];
+            }
+            $record = clone $this->taxRules;
+            $record->reset()->load($id);
+            if (!$record->getId()) {
+                throw new \RuntimeException('tax_rule_upsert_load_failed');
+            }
+            $record->setData(TaxRule::schema_fields_RATE_BPS, $rateBps);
+            $record->setData(TaxRule::schema_fields_ROUNDING, $rounding);
+            $record->setData(TaxRule::schema_fields_ENABLED, $enabled);
+            $record->save();
+
+            return ['action' => 'updated', 'rule' => $record->getData()];
+        }
+
+        $created = $this->createRule([
+            'website_id' => $websiteId,
+            'class_code' => $classCode,
+            'jurisdiction_key' => $jurisdiction,
+            'rate_bps' => $rateBps,
+            'rule_version' => 1,
+            'rounding' => $rounding,
+            'enabled' => $enabled,
+        ]);
+
+        return ['action' => 'created', 'rule' => $created];
+    }
+
     private function websiteId(mixed $value): int
     {
         $websiteId = filter_var($value, FILTER_VALIDATE_INT);

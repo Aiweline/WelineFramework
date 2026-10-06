@@ -48,13 +48,14 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('name="address1"', $template);
         self::assertStringContainsString('name="postal_code"', $template);
         self::assertStringContainsString('data-weline-load="shippingCheckoutAddress"', $template);
-        self::assertStringContainsString('checkout-shipping-address.js?v=20260926-save-loading', $modules);
+        self::assertStringContainsString('checkout-shipping-address.js?v=20261006-embed-css1', $modules);
         self::assertStringContainsString('WelineShippingCheckoutAddress', $modules);
         self::assertStringContainsString('data-field-error-for="phone"', $template);
         self::assertStringContainsString("'err_name'", $template);
         self::assertStringContainsString("'err_phone_invalid'", $template);
         self::assertStringContainsString('data-phone-field', $template);
-        self::assertStringContainsString('@widget.source {Weline_Shipping::css/widgets/checkout-shipping-address.css?v=20260926-save-loading}', $template);
+        self::assertStringContainsString('@widget.source {Weline_Shipping::css/widgets/checkout-shipping-address.css}', $template);
+        self::assertStringNotContainsString('checkout-shipping-address.css?v=', $template);
         self::assertStringContainsString('id="checkout-shipping-address-editor"', $template);
         self::assertStringContainsString('LazyCaptchaClientRuntime::onceScriptHtml', $template);
         self::assertStringNotContainsString('name="country_code" type="text"', $template);
@@ -113,12 +114,16 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('err_phone_invalid', $js);
 
         self::assertStringContainsString('data-use-edited-address', $template);
+        self::assertStringContainsString('class="w-button w-shipping-checkout-address__primary-btn"', $template);
+        self::assertStringContainsString('data-variant="outline"', $template);
         self::assertStringContainsString('ensureCaptchaTokenBeforeSave', $js);
         self::assertStringContainsString('setSaveButtonLoading', $js);
         self::assertStringContainsString("classList.toggle('is-loading'", $js);
         self::assertStringContainsString('aria-busy', $js);
         self::assertStringContainsString('.w-shipping-checkout-address__primary-btn.is-loading', $css);
         self::assertStringContainsString('.w-shipping-checkout-address .w-shipping-checkout-address__primary-btn.is-loading', $css);
+        self::assertStringContainsString('--checkout-cta-bg', $css);
+        self::assertStringNotContainsString('#f0c14b', $css);
         self::assertStringContainsString('w-shipping-checkout-address-spin', $css);
         self::assertStringContainsString('weline:form:prepare-submit', $js);
         self::assertStringContainsString('weline:captcha:degrade', $js);

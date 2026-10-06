@@ -192,6 +192,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **汇审（硬门槛，`closeout_requires_huishen`）**：收口前写 `huishen_notes` 并在用户汇报含「汇审」小节；缺则不得宣称完成。
 - **Browser 自测（硬门槛，含 Web 时）**：按约定用例用**当前宿主可用的真实 Browser**跑完操作员路径；**每次打开/导航前禁用 HTTP 缓存**（`browser_cache_disabled_on_open`）；未跑或宿主无 Browser 只能报「代码已改，WebUI 验收未完成」，禁止宣称完成。见 [WebUI浏览器验收与交付地址门禁.md](../../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
 - **交付后关闭 Browser（硬门槛，`browser_release_after_delivery`）**：面向用户写出「交付地址」小节之后，**立即关闭**本回合打开的全部验收 Browser 标签/webview（Cursor：`unlock` 后 `browser_tabs` close；其它宿主结束操作员会话）。禁止留下空转 Renderer。仅当用户明确要求保留时可例外并注明。从未打开过 Browser 记 `N/A`。
+- **卡住即 fail-closed（硬门槛，`browser_operator_fail_closed_release`）**：打开前 `curl --max-time ≤15` 探活；Browser 工具超时/无 tab/锁死时**立即** unlock+关闭本回合验收标签（可选 `php bin/w e2e:cleanup-browsers`），导航重试≤2；禁止无限等待或跨长 shell 持 lock，以免冻住宿主会话。
 - **文档对齐（硬门槛）**：打开归属模块 `doc/README.md`、`doc/需求.md`、`doc/开发日志.md` 及本次触及的专题文档，对照刚交付行为；有差异则改文档或回改代码，二者必须一致。
 - **交付地址清单（硬门槛）**：在面向用户的交付汇报**末尾**列出本功能涉及的全部入口，按表面分组：
   - **前台 / 后台主验收**：每行一条**可直接打开的 http(s) Markdown 链接**，格式 `[名称](http(s)://完整URL)`；链接文字用页面名（如「愿望清单」），**禁止**把 `command:simpleBrowser.api.open` 等宿主私有伪协议当作**唯一/主链**；禁止仅写不可点的「打开」变色字。
