@@ -695,7 +695,7 @@ SH;
             ],
             [
                 'id' => 'browser_cache_disabled_on_open',
-                'summary' => 'Every time AI opens or navigates an acceptance Browser for WB-OP/WB-VIS: MUST disable HTTP disk/memory cache for that session BEFORE trusting the page. Cursor ide-browser: CDP Network.enable then Network.setCacheDisabled({cacheDisabled:true}), then navigate (or Page.reload({ignoreCache:true})). If setCacheDisabled is denied by the host, fall back to ignoreCache reload for that load and note the degrade—never verify this turn’s CSS/JS/HTML against default browser cache. Clearing the whole browser profile cache is NOT required (often blocked).',
+                'summary' => 'Every time AI opens or navigates an acceptance Browser for WB-OP/WB-VIS: MUST disable HTTP disk/memory cache for that session BEFORE trusting the page. Cursor ide-browser: CDP Network.enable then Network.setCacheDisabled({cacheDisabled:true}), THEN browser_navigate (omit position). FORBIDDEN: browser_cdp Page.reload / Page.reload({ignoreCache:true})—on Cursor that reloads the ENTIRE workbench window and kills every in-flight agent (not the browser tab). If setCacheDisabled is denied: note the degrade and re-navigate via browser_navigate with a cache-busting query (_wb_nc=<unix_ms>) or close+reopen the acceptance tab—never Page.reload. Clearing the whole browser profile cache is NOT required (often blocked). Never verify this turn’s CSS/JS/HTML against default browser cache when setCacheDisabled succeeded.',
                 'doc' => 'app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md',
             ],
             [

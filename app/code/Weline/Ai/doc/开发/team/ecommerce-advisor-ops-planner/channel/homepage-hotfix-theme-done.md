@@ -34,7 +34,7 @@ php bin/w cache:flush      # 无过期文件可刷
 ## 3. 禁缓存 Browser 验收
 
 工具：Chrome DevTools MCP（Cursor ide-browser 本回合无法稳定建 tab；降级注明）。  
-每路径：`ignoreCache: true` + `initScript` 抹 `navigator.webdriver` + `?nocache=1`。
+每路径：`Network.setCacheDisabled` 后 navigate（禁止 Cursor `browser_cdp` `Page.reload`）+ `initScript` 抹 `navigator.webdriver` + `?nocache=1`/`_wb_nc=`。
 
 | 路径 | 主图铺满 | Hero CTA 完整 / 不与信任条叠 | 无 Illustrative scene |
 |------|----------|------------------------------|------------------------|

@@ -445,7 +445,8 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'browser_cache_disabled_on_open'
             && str_contains((string) ($rule['summary'] ?? ''), 'setCacheDisabled')
-            && str_contains((string) ($rule['summary'] ?? ''), 'ignoreCache')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Page.reload')),
         false,
     ),
     'hard_constraints include browser_release_after_delivery' => array_reduce(
@@ -1464,7 +1465,7 @@ $checks = [
         && in_array('prefer_background_non_preemptive_navigate', $closeoutReminder['browser_open_order'], true)
         && in_array('disable_http_cache_for_session', $closeoutReminder['browser_open_order'], true)
         && in_array('strip_automation_detection_flags', $closeoutReminder['browser_open_order'], true)
-        && in_array('navigate_or_reload_ignore_cache', $closeoutReminder['browser_open_order'], true)
+        && in_array('navigate_after_cache_disabled_never_page_reload', $closeoutReminder['browser_open_order'], true)
         && str_contains((string) ($closeoutReminder['summary_zh'] ?? ''), '缓存'),
     'closeout reminder requires browser fail-closed release' => ($closeoutReminder['browser_operator_fail_closed_release_required'] ?? false) === true
         && is_array($closeoutReminder['browser_fail_closed_order'] ?? null)

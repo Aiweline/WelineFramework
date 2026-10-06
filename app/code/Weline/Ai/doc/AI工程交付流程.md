@@ -144,7 +144,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 **收口高压线（凡含页面/UI）**：
 
 1. AI **必须**用**当前宿主可用的真实 Browser**（IDE Browser / Browser MCP / Playwright 等，**不绑定 Cursor**）**亲自按用例自测**（WB-OP）；单测 / curl **不能**替代。
-2. **每次打开/导航验收页前必须禁用 HTTP 缓存**（硬，`browser_cache_disabled_on_open`）：Cursor 先 `Network.setCacheDisabled`，失败则 `Page.reload({ignoreCache:true})`；禁止用默认磁盘缓存验本回合 CSS/JS/HTML。
+2. **每次打开/导航验收页前必须禁用 HTTP 缓存**（硬，`browser_cache_disabled_on_open`）：Cursor 先 `Network.setCacheDisabled` 再 `browser_navigate`；**禁止** `browser_cdp` `Page.reload`（会重载整个工作台并杀死全部智能体）；`setCacheDisabled` 被拒则 `_wb_nc=` 再 navigate 并注明降级。
 3. 面向用户的完成/阶段性汇报**末尾必须**有「交付地址」小节（探活过的 http(s) Markdown 链接）；禁止省略。
 4. 细则见 [WebUI浏览器验收与交付地址门禁.md](../../Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md)。
 

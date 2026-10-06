@@ -37,7 +37,7 @@
 3. **打开当前宿主可用的真实 Browser，且打开即禁用 HTTP 缓存（硬，`browser_cache_disabled_on_open`）**，再按用例逐步操作（点击、填写、提交、看 Toast/跳转）。
 3a. **操作员 Browser 默认非抢占 / 后台（硬，`browser_operator_non_preemptive`）**：WB-OP 可以在后台完成，**禁止**默认抢占用户 IDE/对话焦点。Cursor ide-browser：`browser_navigate` **省略** `position`（后台开页、保留焦点）；**禁止**默认传 `position:"active"` 或把 Browser 面板强行拉到前台。后台 ≠ 免测——仍须按用例跑完 WB-OP。仅当用户**明确**要求观看/聚焦 Browser 时才可前台（与 `e2e_playwright_headless_default` 同精神）。
 3b. **打开即抹掉自动化检测标志（硬，`browser_strip_automation_flags`）**：与禁缓存同序、在页面脚本跑人机验证之前执行。WB-OP / Playwright 必须像真人浏览器，否则云端 reCAPTCHA / 人机验证会按「自动化」拦截登录与提交。
-   - **宿主 Browser（Cursor ide-browser 等）**：CDP `Page.addScriptToEvaluateOnNewDocument`（或等价 init script）注入：把 `navigator.webdriver` 置为 `undefined`/`false`；需要时再 `Page.reload` 后交互。
+   - **宿主 Browser（Cursor ide-browser 等）**：CDP `Page.addScriptToEvaluateOnNewDocument`（或等价 init script）注入：把 `navigator.webdriver` 置为 `undefined`/`false`；再 `browser_navigate`（**禁止** `browser_cdp` `Page.reload`——在 Cursor 上会重载整个工作台窗口并杀死全部智能体）。
    - **正式 Playwright runner**：Chromium `launchOptions` 须含 `--disable-blink-features=AutomationControlled`，并用 `ignoreDefaultArgs` 去掉 `--enable-automation`；`context.addInitScript` 同样清掉 `navigator.webdriver`（仓库 `tests/e2e/playwright.config.js` 已默认开启）。
    - **禁止**：带着默认 `navigator.webdriver===true` / AutomationControlled 去点登录、提交、人机验证；禁止把「Human-machine verification failed / reCAPTCHA 拦自动化」写成 WB-OP pass 或甩测借口。
 4. **禁止替代物**：
@@ -69,14 +69,14 @@
 
 | 宿主示例 | 推荐动作（按序） |
 |----------|------------------|
-| Cursor ide-browser | `Network.enable` → `Network.setCacheDisabled({cacheDisabled:true})` → `browser_navigate`；若 `setCacheDisabled` 被拒，对该次加载 `Page.reload({ignoreCache:true})` 并注明降级 |
-| Playwright / Puppeteer / 其它 CDP | 等价 CDP `Network.setCacheDisabled`，或会话级禁用缓存后再导航 |
-| 无 CDP 能力 | 至少对验收 URL 使用强制绕过缓存的刷新；仍须在日志注明限制 |
+| Cursor ide-browser | `Network.enable` → `Network.setCacheDisabled({cacheDisabled:true})` → `browser_navigate`；若 `setCacheDisabled` 被拒：注明降级并用 `browser_navigate` 带 `_wb_nc=<unix_ms>` 缓存破坏参数（或关标签再开）；**禁止** `browser_cdp` `Page.reload`（会重载整个 Cursor 窗口、杀死全部智能体） |
+| Playwright / Puppeteer / 其它 CDP | 等价 CDP `Network.setCacheDisabled`，或会话级禁用缓存后再导航（Playwright 可用 `page.reload({waitUntil})`——那是页内 reload，不是 Cursor `browser_cdp`） |
+| 无 CDP 能力 | 对验收 URL 用带缓存破坏 query 的导航；仍须在日志注明限制 |
 
 打开顺序（机器契约 `closeout_delivery_reminder.browser_open_order`）：
 
 ```text
-probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_navigate → disable_http_cache_for_session → strip_automation_detection_flags → navigate_or_reload_ignore_cache → run_wb_op_and_optional_wb_vis
+probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_navigate → disable_http_cache_for_session → strip_automation_detection_flags → navigate_after_cache_disabled_never_page_reload → run_wb_op_and_optional_wb_vis
 ```
 
 ### 卡住即 fail-closed 释放（WB-FAIL，硬，`browser_operator_fail_closed_release`）
@@ -178,7 +178,8 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 |------|----------|
 | 「代码改完了」无 Browser | 补跑 WB-OP；未跑则改口为验收未完成 |
 | 只 curl 200 就交 UI | curl 只探活；交互必须真实 Browser |
-| 带着默认缓存验本回合 CSS/JS | 打开前 `setCacheDisabled` 或 `ignoreCache` 重载 |
+| 带着默认缓存验本回合 CSS/JS | 打开前 `setCacheDisabled` 再 `browser_navigate`；禁止 `browser_cdp` `Page.reload` |
+| `browser_cdp` `Page.reload`「清缓存」 | 会重载整个 Cursor 工作台；改用 `setCacheDisabled` 或 `_wb_nc=` 再 navigate |
 | 默认 `position:active` 抢焦点 | 省略 `position` 后台开页；仅用户要求观看时前台 |
 | 交付不写地址 | 末尾补「交付地址」小节 |
 | 让用户自己找路由 | AI 列出探活过的完整 http(s) 链接 |

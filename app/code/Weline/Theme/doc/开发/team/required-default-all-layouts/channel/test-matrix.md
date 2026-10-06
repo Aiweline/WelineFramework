@@ -61,7 +61,7 @@ Host：`https://p05113ef3.test.weline.com:9555`
 |------|------|
 | 宿主 | chrome-devtools（ide-browser 不可用） |
 | 非抢占 | `background:true` / 省略前台 |
-| 禁缓存 | `ignoreCache:true` 导航干净 PDP |
+| 禁缓存 | `Network.setCacheDisabled` 后 navigate（禁止 Cursor `browser_cdp` `Page.reload`；必要时 `_wb_nc=`） |
 | 抹自动化 | `initScript` 抹 `navigator.webdriver` |
 
 观测：

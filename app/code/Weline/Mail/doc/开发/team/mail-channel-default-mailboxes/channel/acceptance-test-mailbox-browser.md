@@ -18,7 +18,7 @@ MCP：`prepare_project` status=ready（receipt `weline-mcp-1790070752826-fac0cf1
 | 项 | 结果 |
 |---|---|
 | Browser | Chrome DevTools MCP（`cursor-ide-browser` 无可用 tab / navigate 报 No browser tab；改用已挂载本机会话的 DevTools） |
-| 禁缓存 | `navigate_page` + `ignoreCache=true` |
+| 禁缓存 | `Network.setCacheDisabled` 后 navigate（禁止 Cursor `browser_cdp` `Page.reload`；必要时 `_wb_nc=`） |
 | 抹自动化标志 | `initScript`: `navigator.webdriver → undefined`；探活 `navigator.webdriver` 为 falsy |
 | 登录 | 已有后台会话；落地标题 `Weline 管理后台`，非 `admin/login`；blocker≠need_login |
 | UI/原型 | 上游声明已过签；主题/前端 closed（本席仅 Browser 签收） |
@@ -73,7 +73,7 @@ MCP：`prepare_project` status=ready（receipt `weline-mcp-1790070752826-fac0cf1
 
 | 项 | 结果 |
 |---|---|
-| URL | 同主验收 URL；禁缓存 `ignoreCache=true` + `initScript` 抹 `navigator.webdriver` |
+| URL | 同主验收 URL；禁缓存 `setCacheDisabled`/`_wb_nc=` + `initScript` 抹 `navigator.webdriver`（禁止 Cursor `Page.reload`） |
 | 登录 | 本机会话；标题 `Weline 管理后台`；非 login |
 | Browser | Chrome DevTools MCP page（本回合新建后关闭） |
 
@@ -123,7 +123,7 @@ UI 声明：已去掉页内重复 h1「企业邮箱管理」。
 | 项 | 结果 |
 |---|---|
 | URL | `https://p05113ef3.test.weline.com:9555/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/weline_mail/backend?view=mailbox` |
-| 禁缓存 | `ignoreCache=true` + 抹 `navigator.webdriver` |
+| 禁缓存 | `setCacheDisabled`/`_wb_nc=` + 抹 `navigator.webdriver`（禁止 Cursor `Page.reload`） |
 | 登录 | 本机会话；非 login |
 
 ### 观察

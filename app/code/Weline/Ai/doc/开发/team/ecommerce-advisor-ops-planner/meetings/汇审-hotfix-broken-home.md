@@ -26,7 +26,7 @@
 | 无 `Illustrative scene`（正文+disclosure） | **PASS** | **PASS** |
 | 货架标题完整可读、头像不挡字（elementFromPoint） | **PASS**（Featured Products） | **PASS**（特色产品） |
 
-手段：`php bin/w cache:clear`（模板缓存已清）+ `navigate_page` `ignoreCache` + DOM 度量 + 视口截图。
+手段：`php bin/w cache:clear`（模板缓存已清）+ `Network.setCacheDisabled` 后 navigate（或 `_wb_nc=`；禁止 Cursor `browser_cdp` `Page.reload`）+ DOM 度量 + 视口截图。
 
 ## 硬规则补记（禁止再犯）
 
