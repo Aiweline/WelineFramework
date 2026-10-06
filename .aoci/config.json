@@ -731,6 +731,39 @@
         "created_by": "cursor-agent",
         "order": 260,
         "enabled": true
+      },
+      {
+        "rule_id": "weline-excl-var-nested",
+        "action": "exclude",
+        "pattern": "**/var/**",
+        "pattern_kind": "glob",
+        "reason": "nested module runtime throwaways (e.g. app/code/*/var/log); root var/** alone misses them; docs+code only",
+        "source": "user",
+        "created_by": "cursor-agent",
+        "order": 261,
+        "enabled": true
+      },
+      {
+        "rule_id": "weline-excl-generated-nested",
+        "action": "exclude",
+        "pattern": "**/generated/**",
+        "pattern_kind": "glob",
+        "reason": "nested generated trees if any; root generated/** alone is insufficient for docs+code-only scope",
+        "source": "user",
+        "created_by": "cursor-agent",
+        "order": 262,
+        "enabled": true
+      },
+      {
+        "rule_id": "weline-excl-tmp-nested",
+        "action": "exclude",
+        "pattern": "**/tmp/**",
+        "pattern_kind": "glob",
+        "reason": "any path segment tmp/ is Weline throwaway (align ProjectIndexer / OPERATIONS)",
+        "source": "user",
+        "created_by": "cursor-agent",
+        "order": 263,
+        "enabled": true
       }
     ]
   },

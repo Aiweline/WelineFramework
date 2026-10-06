@@ -1783,10 +1783,6 @@ AI-INDEX.md[SI5T]: F:Weline_Affiliate AI 开发入口 | R:- | A:- | S:-
 ===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/doc/hook/frontend/account/index/===
 affiliate.md[SI5T]: F:Weline_Affiliate::frontend::account::index::affiliate | R:- | A:- | S:-
 
-===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/doc/验收/===
-2026-05-27-分销服务产品架构迭代任务书.md[SI5S]: F:分销服务产品架构迭代任务书 | R:- | A:- | S:-
-2026-05-27-分销模块9502验收修复记录.md[SI5S]: F:分销模块 9502 验收修复记录 | R:- | A:- | S:-
-
 ===/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/etc/backend/===
 menu.xml[FG5T]: F:menu.xml 职责定义 | R:- | A:- | S:-
 
