@@ -2590,22 +2590,37 @@ $copy = [
         return 0;
     }
 
-    /** Server-enriched duty/tax on selected shipping method (never invent rates in browser). */
-    function selectedTaxAmount() {
-        const code = selectedValue('shipping_method');
-        const method = checkoutState.shippingMethods.find(function (entry) {
-            return entry && entry.code === code;
-        });
-        if (method) {
-            const minor = Number(method.tax_amount_minor || 0);
-            if (minor > 0) {
-                return minor / 100;
-            }
-            const major = Number(method.tax_amount || 0) || 0;
-            if (major > 0) {
-                return major;
-            }
+    /**
+     * Cart sales tax from server enrich (CartSummaryEnrichTaxObserver).
+     * Never invent rates in browser — only surface tax_amount_minor / sales_tax_amount_minor.
+     */
+    function cartSalesTaxAmount() {
+        const cart = checkoutState.cart && typeof checkoutState.cart === 'object'
+            ? checkoutState.cart
+            : {};
+        const summary = cart.summary && typeof cart.summary === 'object' ? cart.summary : cart;
+        const salesMinor = Number(
+            summary.sales_tax_amount_minor != null
+                ? summary.sales_tax_amount_minor
+                : (cart.sales_tax_amount_minor != null
+                    ? cart.sales_tax_amount_minor
+                    : (summary.tax_amount_minor != null
+                        ? summary.tax_amount_minor
+                        : (cart.tax_amount_minor != null ? cart.tax_amount_minor : 0)))
+        );
+        if (isFinite(salesMinor) && salesMinor > 0) {
+            return salesMinor / 100;
         }
+        const major = Number(summary.tax_amount != null ? summary.tax_amount : cart.tax_amount);
+        return isFinite(major) && major > 0 ? major : 0;
+    }
+
+    /**
+     * Server-enriched tax for money-summary:
+     * sales tax (cart) + duty/import on selected shipping method (Tax duty enrich).
+     * Prefer taxEstimate when present (combined quote). Never invent rates in browser.
+     */
+    function selectedTaxAmount() {
         const preview = checkoutState.taxEstimate;
         if (preview && typeof preview === 'object') {
             const previewMinor = Number(preview.tax_amount_minor || 0);
@@ -2613,7 +2628,23 @@ $copy = [
                 return previewMinor / 100;
             }
         }
-        return 0;
+        let dutyMajor = 0;
+        const code = selectedValue('shipping_method');
+        const method = checkoutState.shippingMethods.find(function (entry) {
+            return entry && entry.code === code;
+        });
+        if (method) {
+            const minor = Number(method.tax_amount_minor || 0);
+            if (minor > 0) {
+                dutyMajor = minor / 100;
+            } else {
+                const major = Number(method.tax_amount || 0) || 0;
+                if (major > 0) {
+                    dutyMajor = major;
+                }
+            }
+        }
+        return Math.max(0, cartSalesTaxAmount() + dutyMajor);
     }
 
     /**

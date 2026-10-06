@@ -43,13 +43,15 @@ if ($normalizedOptions !== []) {
     $serviceLabel = (string) $matched['label'];
     $shipMinor = (int) $matched['amount_minor'];
 }
-$amountMinor = $goodsMinor + $shipMinor;
+$taxMinor = max(0, (int) ($bill['tax_amount_minor'] ?? 0));
+$amountMinor = $goodsMinor + $shipMinor + $taxMinor;
 if ($amountMinor <= 0) {
     $amountMinor = max(0, (int) ($bill['amount_minor'] ?? 0));
 }
 $amount = $amountMinor / 100;
 $goods = $goodsMinor / 100;
 $ship = $shipMinor / 100;
+$tax = $taxMinor / 100;
 $rulesUrl = (string) ($this->getData('help_rules_url') ?? '/faq/help-pay-payer');
 $privacyUrl = (string) ($this->getData('privacy_url') ?? '/faq/help-pay-privacy');
 $token = (string) ($this->getData('token') ?? '');
@@ -188,14 +190,18 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
                 <?php if ($moneySummaryHtml !== ''): ?>
                     <?= $moneySummaryHtml ?>
                 <?php else: ?>
-                    <div class="w-helppay-pay-summary__money" data-testid="helppay-payment-money" data-money-summary data-money-summary-mode="helppay">
-                        <div class="w-storefront-money-summary__row" data-money-summary-row="goods">
+                    <div class="w-storefront-money-summary w-helppay-pay-summary__money"
+                         data-testid="helppay-payment-money"
+                         data-money-summary
+                         data-money-summary-mode="helppay"
+                         data-discounts-disabled="1">
+                        <div class="w-storefront-money-summary__row w-storefront-money-summary__row--goods" role="listitem" data-money-summary-row="goods">
                             <span><?= $escape(__('商品小计')) ?></span>
                             <strong data-money-summary-goods data-helppay-goods-amount data-testid="helppay-payment-goods-amount">
                                 <?= $escape($currency) ?> <?= $escape(number_format($goods, 2)) ?>
                             </strong>
                         </div>
-                        <div class="w-storefront-money-summary__row" data-money-summary-row="shipping">
+                        <div class="w-storefront-money-summary__row w-storefront-money-summary__row--shipping" role="listitem" data-money-summary-row="shipping">
                             <span data-money-summary-shipping-label data-helppay-ship-label data-label-base="<?= $escape(__('运费')) ?>">
                                 <?= $escape(__('运费')) ?><?= $serviceLabel !== '' ? ' · ' . $escape($serviceLabel) : '' ?>
                             </span>
@@ -203,7 +209,13 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
                                 <?= $escape($currency) ?> <?= $escape(number_format($ship, 2)) ?>
                             </strong>
                         </div>
-                        <div class="w-storefront-money-summary__row w-storefront-money-summary__row--payable" data-money-summary-row="payable">
+                        <div class="w-storefront-money-summary__row w-storefront-money-summary__row--tax" role="listitem" data-money-summary-row="tax" data-checkout-tax-row <?= $tax > 0 ? '' : 'hidden' ?>>
+                            <span data-money-summary-tax-label><?= $escape(__('税费（预估）')) ?></span>
+                            <strong data-money-summary-tax data-tax-amount="">
+                                <?= $escape($currency) ?> <?= $escape(number_format($tax, 2)) ?>
+                            </strong>
+                        </div>
+                        <div class="w-storefront-money-summary__row w-storefront-money-summary__row--payable" role="listitem" data-money-summary-row="payable">
                             <span data-money-summary-payable-label><?= $escape(__('应付')) ?></span>
                             <strong data-money-summary-payable data-helppay-total-amount data-testid="helppay-payment-total">
                                 <?= $escape($currency) ?> <?= $escape(number_format($amount, 2)) ?>

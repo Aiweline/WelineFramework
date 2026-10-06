@@ -62,8 +62,11 @@ if ($mode === 'express' || $mode === 'helppay') {
 // Optional SSR paint (HelpPay / express first paint before JS).
 $goodsText = trim((string) ($this->getData('goods_text') ?? ''));
 $shippingText = trim((string) ($this->getData('shipping_text') ?? ''));
+$taxText = trim((string) ($this->getData('tax_text') ?? ''));
 $payableText = trim((string) ($this->getData('payable_text') ?? ''));
 $shippingServiceLabel = trim((string) ($this->getData('shipping_service_label') ?? ''));
+$taxMinorSsr = max(0, (int) ($this->getData('tax_minor') ?? 0));
+$showTaxInitially = $taxText !== '' || $taxMinorSsr > 0;
 if ($shippingServiceLabel !== '') {
     $labelShipping = $labelShipping . ' · ' . $shippingServiceLabel;
 }
@@ -151,14 +154,14 @@ if ($payableText === '') {
          data-checkout-tax-row
          data-cart-tax-row
          data-mini-cart-tax-row
-         hidden>
+         <?= $showTaxInitially ? '' : 'hidden' ?>>
         <span data-money-summary-tax-label
               data-cart-tax-label
               data-mini-cart-tax-label><?= $escape($labelTax) ?></span>
         <strong data-money-summary-tax
                 data-tax-amount=""
                 data-cart-tax-amount
-                data-express-tax>0.00</strong>
+                data-express-tax><?= $escape($taxText !== '' ? $taxText : '0.00') ?></strong>
     </div>
     <div class="w-storefront-money-summary__row w-storefront-money-summary__row--cod"
          role="listitem"

@@ -117,7 +117,10 @@
     var discountMinor = toMinor(dto.discount_minor);
     var depositMinor = toMinor(dto.deposit_minor);
     var creditMinor = toMinor(dto.credit_minor);
-    var taxMinor = toMinor(dto.tax_minor);
+    // Accept tax_minor or server cart field tax_amount_minor (same paint contract).
+    var taxMinor = toMinor(
+      dto.tax_minor != null ? dto.tax_minor : dto.tax_amount_minor
+    );
     var codMinor = toMinor(dto.cod_fee_minor);
     var incentiveMinor = toMinor(dto.payment_incentive_minor);
     var payableMinor = dto.payable_minor != null
@@ -287,12 +290,14 @@
 
     root.setAttribute('data-money-summary-goods-minor', String(goodsMinor));
     root.setAttribute('data-money-summary-shipping-minor', String(shippingMinor));
+    root.setAttribute('data-money-summary-tax-minor', String(taxMinor));
     root.setAttribute('data-money-summary-payable-minor', String(payableMinor));
     root.setAttribute('data-money-summary-currency', currency);
 
     return {
       goods_subtotal_minor: goodsMinor,
       shipping_minor: shippingMinor,
+      tax_minor: taxMinor,
       payable_minor: payableMinor,
       currency: currency,
     };
@@ -322,28 +327,30 @@
     if (options && options.discounts_disabled) {
       wrap.setAttribute('data-discounts-disabled', '1');
     }
+    var payableLabel = mode === 'cart' || mode === 'mini-cart' ? '小计' : '应付';
+    var taxLabel = mode === 'checkout' ? '关税与税费（预估）' : '税费（预估）';
     wrap.innerHTML =
-      '<div class="w-storefront-money-summary__row" role="listitem" data-money-summary-row="goods">' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--goods" role="listitem" data-money-summary-row="goods">' +
       '<span data-money-summary-goods-label>商品小计</span>' +
       '<strong data-money-summary-goods data-subtotal="" data-helppay-goods-amount data-testid="helppay-payment-goods-amount">—</strong>' +
       '</div>' +
-      '<div class="w-storefront-money-summary__row" role="listitem" data-money-summary-row="shipping">' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--shipping" role="listitem" data-money-summary-row="shipping">' +
       '<span data-money-summary-shipping-label data-helppay-ship-label data-label-base="运费">运费</span>' +
       '<strong data-money-summary-shipping data-shipping-amount="" data-helppay-ship-amount data-testid="helppay-payment-ship-amount">—</strong>' +
       '</div>' +
-      '<div class="w-storefront-money-summary__row" role="listitem" data-money-summary-row="discount" data-checkout-discount-row hidden>' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--discount" role="listitem" data-money-summary-row="discount" data-checkout-discount-row hidden>' +
       '<span data-money-summary-discount-label data-checkout-discount-label>优惠</span>' +
       '<strong data-money-summary-discount data-discount-amount="">0.00</strong>' +
       '</div>' +
-      '<div class="w-storefront-money-summary__row" role="listitem" data-money-summary-row="tax" data-checkout-tax-row hidden>' +
-      '<span data-money-summary-tax-label>税费（预估）</span>' +
-      '<strong data-money-summary-tax data-tax-amount="">0.00</strong>' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--tax" role="listitem" data-money-summary-row="tax" data-checkout-tax-row data-cart-tax-row data-mini-cart-tax-row hidden>' +
+      '<span data-money-summary-tax-label data-cart-tax-label data-mini-cart-tax-label>' + taxLabel + '</span>' +
+      '<strong data-money-summary-tax data-tax-amount="" data-cart-tax-amount data-express-tax>0.00</strong>' +
       '</div>' +
       '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--payable" role="listitem" data-money-summary-row="payable">' +
-      '<span data-money-summary-payable-label data-grand-total-label>应付</span>' +
+      '<span data-money-summary-payable-label data-grand-total-label data-cart-subtotal-label>' + payableLabel + '</span>' +
       '<strong class="w-storefront-money-summary__grand" data-money-summary-payable data-grand-total="" data-helppay-total-amount data-helppay-payable-amount data-testid="helppay-payment-total">—</strong>' +
       '</div>' +
-      '<p class="w-storefront-money-summary__note" data-money-summary-note hidden></p>';
+      '<p class="w-storefront-money-summary__note" data-money-summary-note data-cart-summary-note data-mini-cart-note data-note-default="税费与运费将在结算时计算" data-note-shipping="运费将在结算时计算" hidden></p>';
     host.appendChild(wrap);
     return wrap;
   }

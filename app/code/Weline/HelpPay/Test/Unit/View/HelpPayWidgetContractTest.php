@@ -126,6 +126,9 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('storefront-money-summary/default.phtml', $src);
         self::assertStringContainsString("'goods_text'", $src);
         self::assertStringContainsString("'shipping_text'", $src);
+        self::assertStringContainsString("'tax_text'", $src);
+        self::assertStringContainsString("'tax_minor'", $src);
+        self::assertStringContainsString('tax_amount_minor', $src);
         self::assertStringContainsString("'payable_text'", $src);
         self::assertStringContainsString('checkout-shipping-address.phtml', $src);
         self::assertStringContainsString('data-session-isolation', $src);

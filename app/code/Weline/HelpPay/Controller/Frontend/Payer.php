@@ -152,7 +152,8 @@ final class Payer extends FrontendController
                     }
                 }
             }
-            $payableMinor = $goodsMinor + $shipMinor;
+            $taxMinor = max(0, (int) ($bill['tax_amount_minor'] ?? 0));
+            $payableMinor = $goodsMinor + $shipMinor + $taxMinor;
             $fmt = static function (int $minor) use ($currency): string {
                 return $currency . ' ' . number_format($minor / 100, 2, '.', '');
             };
@@ -167,6 +168,8 @@ final class Payer extends FrontendController
                     'discounts_disabled' => true,
                     'goods_text' => $fmt($goodsMinor),
                     'shipping_text' => $fmt($shipMinor),
+                    'tax_text' => $taxMinor > 0 ? $fmt($taxMinor) : '',
+                    'tax_minor' => $taxMinor,
                     'payable_text' => $fmt($payableMinor),
                     'shipping_service_label' => $serviceLabel,
                 ]

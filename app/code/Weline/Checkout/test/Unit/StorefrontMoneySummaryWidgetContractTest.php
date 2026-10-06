@@ -72,6 +72,9 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
         self::assertStringContainsString('function paint', $js);
         self::assertStringContainsString('discounts_disabled', $js);
         self::assertStringContainsString('shipping_service_label', $js);
+        self::assertStringContainsString('tax_amount_minor', $js);
+        self::assertStringContainsString('data-money-summary-tax-minor', $js);
+        self::assertStringContainsString('data-money-summary-row="tax"', $js);
         self::assertStringContainsString('storefrontMoneySummary', $modules);
         self::assertStringContainsString('storefront-money-summary.js', $modules);
     }
@@ -84,6 +87,10 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
         self::assertSame(
             'Weline_Checkout::templates/frontend/widgets/storefront-money-summary/default.phtml',
             $widget['template']
+        );
+        self::assertStringContainsString(
+            'storefront-money-summary.css',
+            (string) ($widget['source'] ?? '')
         );
         $slots = array_column($widget['default_injections'], 'slot');
         self::assertContains('money-summary', $slots);

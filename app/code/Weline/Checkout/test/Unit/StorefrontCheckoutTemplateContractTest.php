@@ -208,6 +208,8 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('data-checkout-credit-row', $template);
         self::assertStringContainsString('data-checkout-tax-row', $template);
         self::assertStringContainsString('selectedTaxAmount', $template);
+        self::assertStringContainsString('cartSalesTaxAmount', $template);
+        self::assertStringContainsString('sales_tax_amount_minor', $template);
         self::assertStringContainsString('data-grand-total-label', $template);
         self::assertStringContainsString('weline:b2b-credit-changed', $template);
         self::assertStringContainsString('WelineB2BCheckoutTob', $template);

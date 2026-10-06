@@ -113,6 +113,8 @@ return [
         'template' => 'Weline_Checkout::templates/frontend/widgets/storefront-money-summary/default.phtml',
         'page_layouts' => ['cart', 'checkout', 'mini-cart', '*'],
         'position' => ['content', 'footer'],
+        // Bake CSS/JS into head (widget_static_assets_bake_to_head); keep in sync with @widget.source.
+        'source' => 'Weline_Checkout::css/widgets/storefront-money-summary.css,Weline_Checkout::js/widgets/storefront-money-summary.js',
         'supports' => [
             'storefront-money-summary',
             'checkout-money-summary',
