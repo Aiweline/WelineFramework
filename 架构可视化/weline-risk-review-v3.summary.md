@@ -80,8 +80,9 @@
 
 ## 六、视图交付
 
-- `weline-risk-debt.dot|svg` — 风险/技术债关系图（Graphviz，risk-quality-reviewer + graphviz；节点大小≈违规量级，红色=运行失败面 R1-R5，紫色=结构债务 B1-B4，黄边=机制兜底缓解）
-- 阅读顺序：先 weline-assembly-mechanisms.mmd（机制）→ weline-core-overview.svg（结构）→ weline-risk-debt.svg（本评审新增）
+- `weline-risk-debt.dot` — 风险/技术债关系图（Graphviz，risk-quality-reviewer + graphviz；节点大小≈违规量级，红色=运行失败面 R1-R5，紫色=结构债务 B1-B4，黄边=机制兜底缓解）
+- 阅读顺序：先 weline-assembly-mechanisms.mmd（机制）→ weline-core-overview.dot（结构）→ weline-risk-debt.dot（本评审新增）
+- 渲染产物 `*.svg` 不入库，用 `dot -Tsvg <file>.dot -o <file>.svg` 现场重建。
 
 ## 七、不确定项
 

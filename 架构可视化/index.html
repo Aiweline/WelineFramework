@@ -1,60 +1,50 @@
 <!doctype html>
-<html lang="zh"><head><meta charset="utf-8"><title>Weline 架构可视化</title>
+<html lang="zh"><head><meta charset="utf-8"><title>Weline 架构可视化 · 图源</title>
 <style>
-body{font-family:"PingFang SC",sans-serif;margin:0;background:#f5f5f5;overflow:hidden}
-header{padding:12px 24px;background:#fff;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:18px}
-a.tab{color:#1a73e8;text-decoration:none;font-weight:600;cursor:pointer}
-a.tab.on{border-bottom:2px solid #1a73e8}
-#hint{color:#888;font-size:12px;margin-left:auto}
-#stage{width:100vw;height:calc(100vh - 53px);overflow:hidden;cursor:grab;position:relative}
-#stage.drag{cursor:grabbing}
-#paper{transform-origin:0 0;position:absolute;top:0;left:0}
-#paper object{display:block}
+body{font-family:"PingFang SC",sans-serif;margin:0;background:#f5f5f5;color:#222}
+main{max-width:880px;margin:0 auto;padding:32px 24px}
+h1{font-size:20px;margin:0 0 8px}
+p.note{color:#666;font-size:13px;line-height:1.7;margin:0 0 24px}
+section{background:#fff;border:1px solid #e2e2e2;border-radius:10px;padding:16px 20px;margin-bottom:16px}
+h2{font-size:14px;margin:0 0 10px;color:#555;font-weight:600}
+ul{margin:0;padding-left:18px;line-height:1.9}
+a{color:#1a73e8;text-decoration:none}
+a:hover{text-decoration:underline}
+code{background:#f0f0f0;border-radius:4px;padding:1px 5px;font-size:12px}
 </style></head><body>
-<header>
-<a class="tab on" data-src="weline-core-overview.svg">核心骨架·机制视图（61 模块）</a>
-<a class="tab" data-src="weline-module-dependencies-full.svg">全量依赖·机制分类（120 模块）</a>
-<a class="tab" data-src="flow-request.svg">前台请求执行流</a>
-<a class="tab" data-src="flow-backend.svg">后台请求执行流·鉴权链</a>
-<a class="tab" data-src="flow-request-sequence.svg">请求时序图（泳道）</a>
-<span id="hint">滚轮=缩放 · 拖拽=平移 · 双击=适配宽度</span>
-</header>
-<div id="stage"><div id="paper"></div></div>
-<script>
-const stage=document.getElementById('stage'),paper=document.getElementById('paper');
-let scale=1,tx=0,ty=0;
-function apply(){paper.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`}
-function fitWidth(){
-  const svg=paper.querySelector('svg');if(!svg)return;
-  const w=parseFloat(svg.style.width),h=parseFloat(svg.style.height);
-  scale=Math.min((stage.clientWidth-60)/w,(stage.clientHeight-40)/h,1);
-  tx=(stage.clientWidth-w*scale)/2;ty=(stage.clientHeight-h*scale)/2;
-  if(tx<10)tx=30;if(ty<10)ty=10;apply();
-}
-function load(src){
-  paper.innerHTML='';
-  fetch(src).then(r=>r.text()).then(txt=>{
-    paper.innerHTML=txt;
-    const svg=paper.querySelector('svg');
-    // viewBox 优先：mermaid 输出 width="100%"，parseFloat 会得到无意义的 100
-    let w=svg.viewBox.baseVal.width,h=svg.viewBox.baseVal.height;
-    if(!(w>1)||!(h>1)){w=parseFloat(svg.getAttribute('width'))||0;h=parseFloat(svg.getAttribute('height'))||0;}
-    svg.style.width=w+'px';svg.style.height=h+'px';svg.style.maxWidth='none';
-    fitWidth();
-  });
-}
-document.querySelectorAll('.tab').forEach(t=>t.onclick=e=>{
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');load(t.dataset.src)});
-stage.addEventListener('wheel',e=>{e.preventDefault();
-  const f=e.deltaY<0?1.12:1/1.12,r=stage.getBoundingClientRect();
-  const mx=e.clientX-r.left,my=e.clientY-r.top;
-  tx=mx-(mx-tx)*f;ty=my-(my-ty)*f;scale*=f;apply()},{passive:false});
-let drag=null;
-stage.addEventListener('mousedown',e=>{drag=[e.clientX-tx,e.clientY-ty];stage.classList.add('drag')});
-addEventListener('mousemove',e=>{if(drag){tx=e.clientX-drag[0];ty=e.clientY-drag[1];apply()}});
-addEventListener('mouseup',()=>{drag=null;stage.classList.remove('drag')});
-stage.addEventListener('dblclick',fitWidth);
-addEventListener('resize',fitWidth);
-const initial=location.hash.slice(1);const t0=[...document.querySelectorAll('.tab')].find(x=>x.dataset.src===initial);if(t0){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t0.classList.add('on');load(initial)}else load('weline-core-overview.svg');
-</script>
+<main>
+<h1>Weline 架构可视化</h1>
+<p class="note">本目录只保留图源（<code>.dot</code> / <code>.mmd</code>）与生成器脚本。渲染产物 <code>*.svg</code> / <code>*.png</code> 已移除——它们由 Graphviz / mmdc 外部生成，可随时重建，不入版本库。</p>
+
+<section><h2>Graphviz 图源（.dot）</h2><ul>
+<li><a href="weline-core-overview.dot">weline-core-overview.dot</a> — 核心骨架 / 机制视图</li>
+<li><a href="weline-module-dependencies-full.dot">weline-module-dependencies-full.dot</a> — 全量模块依赖</li>
+<li><a href="flow-request.dot">flow-request.dot</a> — 前台请求执行流</li>
+<li><a href="flow-backend.dot">flow-backend.dot</a> — 后台请求执行流 · 鉴权链</li>
+<li><a href="weline-risk-debt.dot">weline-risk-debt.dot</a> — 风险 / 技术债关系</li>
+</ul></section>
+
+<section><h2>Mermaid 图源（.mmd）</h2><ul>
+<li><a href="weline-overview.mmd">weline-overview.mmd</a> — 系统总览</li>
+<li><a href="flow-request-sequence.mmd">flow-request-sequence.mmd</a> — 请求时序（泳道）</li>
+<li><a href="weline-assembly-mechanisms.mmd">weline-assembly-mechanisms.mmd</a> — 装配机制</li>
+</ul></section>
+
+<section><h2>生成器</h2><ul>
+<li><a href="generate-module-dot.php">generate-module-dot.php</a></li>
+<li><a href="generate-module-dot-v2.php">generate-module-dot-v2.php</a></li>
+</ul></section>
+
+<section><h2>说明与证据</h2><ul>
+<li><a href="weline-risk-review-v3.summary.md">weline-risk-review-v3.summary.md</a></li>
+<li><a href="weline-system-model.architecture-understanding.md">weline-system-model.architecture-understanding.md</a></li>
+<li><a href="weline-system-model.evidence.md">weline-system-model.evidence.md</a></li>
+<li><a href="flow-evidence.md">flow-evidence.md</a></li>
+<li><a href="flow-backend-evidence.md">flow-backend-evidence.md</a></li>
+<li><a href="flow-context-evidence.md">flow-context-evidence.md</a></li>
+<li><a href="优化审查-上下文与哈希.md">优化审查-上下文与哈希.md</a></li>
+</ul></section>
+
+<p class="note">重建示例：<code>dot -Tsvg weline-core-overview.dot -o weline-core-overview.svg</code> · <code>mmdc -i weline-overview.mmd -o weline-overview.svg</code></p>
+</main>
 </body></html>

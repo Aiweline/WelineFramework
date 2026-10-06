@@ -31,7 +31,7 @@
 - `Controller/Router.php`：ModuleRouter 自定义 URL 匹配入口。只有自定义公网路径/动态路由匹配才改这里。 文件数：1
 - `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：3
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：2262
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：1231
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：76
 
 ## 从源码识别到的开发提示

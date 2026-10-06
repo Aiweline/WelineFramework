@@ -49,6 +49,7 @@ CLAUDE.local.md
 .claude/
 .claudeignore
 .mcp.json
+.mcp.json.backup.*
 .cursor/
 .cursorrules
 .cursorignore
@@ -203,11 +204,16 @@ tests/e2e/.smoke-publish-last.log
 /tests/var/codex-tmp/
 **/*-snapshots/
 
+# 架构可视化：图由 graphviz/mmdc 从 .dot/.mmd 外部生成，只留源与生成器
+/架构可视化/*.svg
+/架构可视化/*.png
+
 # 已迁出模块残留
 /app/code/WeShop/
 /app/design/WeShop/
 /tests/unit/specs/WeShop/
 /tests/unit/WeShop/
+composer.json_DEV
 
 # 模块测试证据 / 静态 evidence 倾倒（非产品文档）
 **/test/evidence/

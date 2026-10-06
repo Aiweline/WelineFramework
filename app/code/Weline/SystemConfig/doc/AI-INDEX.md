@@ -45,7 +45,6 @@
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 识别到 QueryProvider 入口：`extends/module/Weline_Framework/Query/SystemConfigQueryProvider.php`；前端/跨模块读数据先查 `php bin/w query:help`。

@@ -38,13 +38,12 @@
 - `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：4
 - `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：2
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
-- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：1333
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：1297
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：24
 
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
-- 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
 - 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 识别到 QueryProvider 入口：`extends/module/Weline_Framework/Query/AdminAdminQueryProvider.php`；前端/跨模块读数据先查 `php bin/w query:help`。
