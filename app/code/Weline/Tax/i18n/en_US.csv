@@ -4,6 +4,8 @@
 尚未同步,"Not synced yet"
 是,yes
 否,no
+税率多源同步,"Tax rate multi-source sync"
+"免费并集取高 + 可选专业覆盖；密钥只保存在统一配置中心。","免费并集取高 + 可选专业覆盖；密钥只保存在统一配置中心。"
 未知税务配置类型。,"Unknown tax configuration type."
 税务配置创建成功。,"The tax configuration is created successfully."
 税务管理,"tax management"
@@ -44,6 +46,7 @@ sync,sync
 "配置保存到当前数据库；生产迁移与切流仍只能通过受控 CLI 执行。","Configuration is saved to the current database; production migrations and cutoffs are still only performed through the controlled CLI."
 网站,website
 立即同步,"Sync now"
+配置深度链接,"Config deep link"
 免费源并集冲突取较高税率；配置专业源后对其返回管辖区覆盖。不同步到结账热路径。,"Free sources union with max rate on conflict; configured professional source overlays returned jurisdictions. Never on checkout hot path."
 新增%{1},"Added %{1}"
 税类代码,"tax code"
@@ -145,7 +148,6 @@ sync,sync
 "四舍五入（Half Up）","Half Up"
 开卡冻结,"Frozen Contract"
 "管辖区键=country|region；舍入=half_up 按行再汇总；失败禁止回零税；仅同 schema+rule_set_hash 的已验证 LKG 可读。","Jurisdiction uses country|region; round half-up per line then sum; failures never return zero tax; only a verified same-schema and same-rule-set LKG is readable."
-税率多源同步,"Tax rate multi-source sync"
 "离线聚合免费源并集（冲突取较高税率）；可选专业 HTTP 源覆盖已返回管辖区。不进入结账热路径。","Offline free-source union (max rate on conflict); optional professional HTTP overlay. Not on checkout hot path."
 同步模式,"Sync mode"
 "auto_free=允许 Cron/自动；manual_only=仅后台「立即同步」或 CLI --force。","auto_free allows Cron/auto; manual_only only Control Center Sync Now or CLI --force."
@@ -165,4 +167,3 @@ sync,sync
 "专业源 API Key","Professional API key"
 密文存储；日志禁止打印完整密钥。,"Stored as secret; never log the full key."
 "专业源 Mapping JSON","Professional mapping JSON"
-配置深度链接,"Config deep link"

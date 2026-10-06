@@ -137,6 +137,9 @@
         if (previous !== mode) {
             rememberCurrentQtys(root, previous);
         }
+        // Explicit preference change ends one-shot URL handoff (?cart_type=toc「查看零售车」).
+        // Otherwise syncCartPageChrome keeps forcing toc and「批发车」clicks look stuck.
+        clearCartTypeHandoff(mode);
         writeCookie(mode, root);
         try {
             global.sessionStorage.setItem(COOKIE_NAME, mode);
@@ -169,6 +172,40 @@
         global.dispatchEvent(new CustomEvent('weline:cart-type-changed', {
             detail: { cart_type: mode, selling_mode: mode, source: 'b2b-setMode' }
         }));
+    }
+
+    /**
+     * Drop page-view handoff attrs and strip cart_type|type|selling_mode from the URL
+     * so late enhanceMiniCarts / load re-assert cannot pin chrome to the old bucket.
+     */
+    function clearCartTypeHandoff(nextMode) {
+        nextMode = nextMode === 'tob' ? 'tob' : (nextMode === 'toc' ? 'toc' : '');
+        document.querySelectorAll('[data-cart-type-handoff]').forEach(function (node) {
+            var existing = String(node.getAttribute('data-cart-type-handoff') || '').toLowerCase();
+            if (nextMode && existing === nextMode) {
+                return;
+            }
+            node.removeAttribute('data-cart-type-handoff');
+        });
+        try {
+            var url = new URL(global.location.href);
+            var changed = false;
+            ['cart_type', 'type', 'selling_mode'].forEach(function (key) {
+                var value = String(url.searchParams.get(key) || '').toLowerCase();
+                if (value !== 'toc' && value !== 'tob') {
+                    return;
+                }
+                if (nextMode && value === nextMode) {
+                    return;
+                }
+                url.searchParams.delete(key);
+                changed = true;
+            });
+            if (changed && global.history && typeof global.history.replaceState === 'function') {
+                var next = url.pathname + (url.search || '') + (url.hash || '');
+                global.history.replaceState({}, '', next);
+            }
+        } catch (eUrl) {}
     }
 
     /**
@@ -1561,10 +1598,9 @@
                 syncRetailOnlyHints(preferredMode(null));
                 return;
             }
-            // Explicit type switch clears page handoff so chrome follows the new preference.
-            document.querySelectorAll('[data-cart-type-handoff]').forEach(function (node) {
-                node.removeAttribute('data-cart-type-handoff');
-            });
+            // Explicit type switch: setMode already cleared opposing handoff + URL params.
+            // Keep this path for Cart.requestCartType callers that skip setMode emit.
+            clearCartTypeHandoff(mode);
             // Silent adapt: keep forceNetwork on the original Cart Event; do not re-emit.
             setMode(document.querySelector('[data-b2b-selling-mode="1"]'), mode, { emit: false });
             syncMiniCartChrome(mode);

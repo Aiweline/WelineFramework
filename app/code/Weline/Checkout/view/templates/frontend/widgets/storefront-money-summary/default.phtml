@@ -58,6 +58,24 @@ if ($mode === 'cart' || $mode === 'mini-cart') {
 if ($mode === 'express' || $mode === 'helppay') {
     $labelPayable = (string) __('应付');
 }
+
+// Optional SSR paint (HelpPay / express first paint before JS).
+$goodsText = trim((string) ($this->getData('goods_text') ?? ''));
+$shippingText = trim((string) ($this->getData('shipping_text') ?? ''));
+$payableText = trim((string) ($this->getData('payable_text') ?? ''));
+$shippingServiceLabel = trim((string) ($this->getData('shipping_service_label') ?? ''));
+if ($shippingServiceLabel !== '') {
+    $labelShipping = $labelShipping . ' · ' . $shippingServiceLabel;
+}
+if ($goodsText === '') {
+    $goodsText = '—';
+}
+if ($shippingText === '') {
+    $shippingText = '—';
+}
+if ($payableText === '') {
+    $payableText = '—';
+}
 ?>
 <div class="w-storefront-money-summary"
      data-money-summary
@@ -76,7 +94,9 @@ if ($mode === 'express' || $mode === 'helppay') {
         <strong data-money-summary-goods
                 data-subtotal=""
                 data-cart-goods-subtotal
-                data-express-subtotal>—</strong>
+                data-express-subtotal
+                data-helppay-goods-amount
+                data-testid="helppay-payment-goods-amount"><?= $escape($goodsText) ?></strong>
     </div>
     <?php if ($showDiscountLinesHost): ?>
         <div class="w-storefront-money-summary__discount-lines"
@@ -90,12 +110,13 @@ if ($mode === 'express' || $mode === 'helppay') {
          data-money-summary-row="shipping"
          <?= $hideShippingInitially ? 'hidden' : '' ?>>
         <span data-money-summary-shipping-label
-              data-helppay-ship-label><?= $escape($labelShipping) ?></span>
+              data-helppay-ship-label
+              data-label-base="<?= $escape((string) __('运费')) ?>"><?= $escape($labelShipping) ?></span>
         <strong data-money-summary-shipping
                 data-shipping-amount=""
                 data-express-shipping
                 data-helppay-ship-amount
-                data-testid="helppay-payment-ship-amount">—</strong>
+                data-testid="helppay-payment-ship-amount"><?= $escape($shippingText) ?></strong>
     </div>
     <div class="w-storefront-money-summary__row w-storefront-money-summary__row--discount"
          role="listitem"
@@ -170,7 +191,7 @@ if ($mode === 'express' || $mode === 'helppay') {
                 data-express-grand
                 data-helppay-total-amount
                 data-helppay-payable-amount
-                data-testid="helppay-payment-total">—</strong>
+                data-testid="helppay-payment-total"><?= $escape($payableText) ?></strong>
     </div>
     <p class="w-storefront-money-summary__note"
        data-money-summary-note

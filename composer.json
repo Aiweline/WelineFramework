@@ -15,7 +15,7 @@
   "type": "project",
   "minimum-stability": "dev",
   "prefer-stable": true,
-  "license": "proprietary",
+  "license": "MIT",
   "composer": "^2.7",
   "authors": [
     {

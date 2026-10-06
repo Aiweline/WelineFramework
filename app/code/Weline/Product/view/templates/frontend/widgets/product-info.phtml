@@ -757,6 +757,33 @@ if ($productBreadcrumbs === []) {
                     <p class="product-native-detail__quote-price"><?= __('联系询价') ?></p>
                 <?php endif; ?>
 
+                <?php /* 售卖提示放价格下、规格上：简单文字不占规格区 */ ?>
+                <w:slot id="product-selling-mode"
+                        name="<?= $escape(__('售卖模式')) ?>"
+                        accept="layout-product-selling-mode,product-selling-mode,b2b-selling-mode"
+                        multiple="true"
+                        position="content"
+                        wrapper="div"
+                        class="product-native-detail__selling-mode"
+                        weline-code="product.frontend.detail.selling_mode">
+                    <?php
+                    // Fail-soft: optional B2B module template. Prefer slot widget injection when registered.
+                    $b2bModules = \Weline\Framework\App\Env::getInstance()->getModuleList();
+                    $b2bInstalled = isset($b2bModules['Weline_B2B']);
+                    $b2bSellingMode = BP . 'app/code/Weline/B2B/view/templates/frontend/widgets/selling-mode-switcher.phtml';
+                    if ($b2bInstalled && is_file($b2bSellingMode)) {
+                        // fetch so @static/<lang> process; raw include leaves tags unresolved
+                        echo $this->fetch('Weline_B2B::templates/frontend/widgets/selling-mode-switcher.phtml');
+                    } else {
+                        echo $this->getHook('Weline_Product::frontend::product::detail::after-price');
+                    }
+                    $b2bTiers = BP . 'app/code/Weline/B2B/view/templates/frontend/partials/qty-tiers.phtml';
+                    if ($b2bInstalled && is_file($b2bTiers)) {
+                        echo $this->fetch('Weline_B2B::templates/frontend/partials/qty-tiers.phtml');
+                    }
+                    ?>
+                </w:slot>
+
                 <?php if (is_array($shippingHint)): ?>
                     <div class="product-native-detail__shipping-hint" data-testid="product-shipping-hint">
                         <?php if (!empty($shippingHint['badge'])): ?>
@@ -910,33 +937,6 @@ if ($productBreadcrumbs === []) {
                         </button>
                     </form>
                 <?php endif; ?>
-
-                <?php /* 售卖模式提示放在规格/类型下方（零售「支持批发」文字入口对齐此位） */ ?>
-                <w:slot id="product-selling-mode"
-                        name="<?= $escape(__('售卖模式')) ?>"
-                        accept="layout-product-selling-mode,product-selling-mode,b2b-selling-mode"
-                        multiple="true"
-                        position="content"
-                        wrapper="div"
-                        class="product-native-detail__selling-mode"
-                        weline-code="product.frontend.detail.selling_mode">
-                    <?php
-                    // Fail-soft: optional B2B module template. Prefer slot widget injection when registered.
-                    $b2bModules = \Weline\Framework\App\Env::getInstance()->getModuleList();
-                    $b2bInstalled = isset($b2bModules['Weline_B2B']);
-                    $b2bSellingMode = BP . 'app/code/Weline/B2B/view/templates/frontend/widgets/selling-mode-switcher.phtml';
-                    if ($b2bInstalled && is_file($b2bSellingMode)) {
-                        // fetch so @static/<lang> process; raw include leaves tags unresolved
-                        echo $this->fetch('Weline_B2B::templates/frontend/widgets/selling-mode-switcher.phtml');
-                    } else {
-                        echo $this->getHook('Weline_Product::frontend::product::detail::after-price');
-                    }
-                    $b2bTiers = BP . 'app/code/Weline/B2B/view/templates/frontend/partials/qty-tiers.phtml';
-                    if ($b2bInstalled && is_file($b2bTiers)) {
-                        echo $this->fetch('Weline_B2B::templates/frontend/partials/qty-tiers.phtml');
-                    }
-                    ?>
-                </w:slot>
             </div>
 
             <aside class="product-native-detail__buybox"

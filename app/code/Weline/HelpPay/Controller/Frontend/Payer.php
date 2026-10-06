@@ -123,6 +123,40 @@ final class Payer extends FrontendController
     private function renderMoneySummaryWidget(array $bill): string
     {
         try {
+            $goodsMinor = max(0, (int) ($bill['goods_amount_minor'] ?? $bill['amount_minor'] ?? 0));
+            $shipMinor = max(0, (int) ($bill['shipping_amount_minor'] ?? 0));
+            $currency = trim((string) ($bill['currency_code'] ?? 'USD')) ?: 'USD';
+            $serviceLabel = trim((string) ($bill['service_label'] ?? ''));
+            $shippingOptions = is_array($bill['shipping_options'] ?? null) ? $bill['shipping_options'] : [];
+            $serviceCode = trim((string) ($bill['service_code'] ?? ''));
+            if ($shippingOptions !== []) {
+                $matched = null;
+                foreach ($shippingOptions as $option) {
+                    if (!is_array($option)) {
+                        continue;
+                    }
+                    $code = trim((string) ($option['service_code'] ?? $option['code'] ?? ''));
+                    if ($serviceCode !== '' && $code === $serviceCode) {
+                        $matched = $option;
+                        break;
+                    }
+                    if ($matched === null && $code !== '') {
+                        $matched = $option;
+                    }
+                }
+                if (is_array($matched)) {
+                    $shipMinor = max(0, (int) ($matched['amount_minor'] ?? $shipMinor));
+                    $label = trim((string) ($matched['label'] ?? $matched['service_name'] ?? $matched['title'] ?? ''));
+                    if ($label !== '') {
+                        $serviceLabel = $label;
+                    }
+                }
+            }
+            $payableMinor = $goodsMinor + $shipMinor;
+            $fmt = static function (int $minor) use ($currency): string {
+                return $currency . ' ' . number_format($minor / 100, 2, '.', '');
+            };
+
             /** @var Template $template */
             $template = ObjectManager::getInstance(Template::class);
 
@@ -131,6 +165,10 @@ final class Payer extends FrontendController
                 [
                     'mode' => 'helppay',
                     'discounts_disabled' => true,
+                    'goods_text' => $fmt($goodsMinor),
+                    'shipping_text' => $fmt($shipMinor),
+                    'payable_text' => $fmt($payableMinor),
+                    'shipping_service_label' => $serviceLabel,
                 ]
             ));
         } catch (\Throwable) {

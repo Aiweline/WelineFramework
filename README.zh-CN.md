@@ -17,7 +17,7 @@
 ![Runtime FPM + WLS](https://img.shields.io/badge/runtime-FPM%20%2B%20WLS-0f766e)
 ![WLS in-memory](https://img.shields.io/badge/WLS-in--memory%20runtime-0f766e)
 ![i18n first](https://img.shields.io/badge/i18n-first-2563eb)
-![License proprietary](https://img.shields.io/badge/license-proprietary-lightgrey)
+![License MIT](https://img.shields.io/badge/license-MIT-blue)
 
 [English](./README.md) |
 [简体中文](./README.zh-CN.md) |

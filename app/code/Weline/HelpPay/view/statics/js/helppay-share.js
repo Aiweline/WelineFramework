@@ -2733,6 +2733,22 @@
       updatePayerTotals(root);
     });
     updatePayerTotals(root);
+    // storefrontMoneySummary / modules may settle after helpPayShare; re-paint shortly.
+    w.setTimeout(function () { updatePayerTotals(root); }, 0);
+    w.setTimeout(function () { updatePayerTotals(root); }, 120);
+    if (!w.WelineStorefrontMoneySummary || typeof w.WelineStorefrontMoneySummary.paint !== 'function') {
+      var tries = 0;
+      var timer = w.setInterval(function () {
+        tries += 1;
+        if (
+          (w.WelineStorefrontMoneySummary && typeof w.WelineStorefrontMoneySummary.paint === 'function')
+          || tries >= 40
+        ) {
+          w.clearInterval(timer);
+          updatePayerTotals(root);
+        }
+      }, 50);
+    }
   }
 
   function onHelpPayDelegatedClick(ev) {
@@ -2780,57 +2796,60 @@
   }
 
   function boot() {
-    ensureShareCss();
-    mergeShareI18n(null);
-    revealCtas();
+    try {
+      ensureShareCss();
+      mergeShareI18n(null);
+      revealCtas();
 
-    var payerRoot = qs(d, '[data-testid="help-pay-payer"]');
-    if (payerRoot) {
-      wirePayerPaymentMethods(payerRoot);
-      wirePayerShipping(payerRoot);
-      if (payerBillingRequired(payerRoot)) {
-        ensurePayerBillingMounted(payerRoot)
-          .then(function (api) {
-            payerRoot._helppayBillingApi = api;
-          })
-          .catch(function () {});
+      var payerRoot = qs(d, '[data-testid="help-pay-payer"]');
+      if (payerRoot) {
+        wirePayerPaymentMethods(payerRoot);
+        wirePayerShipping(payerRoot);
+        if (payerBillingRequired(payerRoot)) {
+          ensurePayerBillingMounted(payerRoot)
+            .then(function (api) {
+              payerRoot._helppayBillingApi = api;
+            })
+            .catch(function () {});
+        }
+      }
+
+      if (bootBound) {
+        syncQuickPayCtas();
+        return;
+      }
+      bootBound = true;
+
+      d.addEventListener('click', onHelpPayDelegatedClick);
+
+      d.querySelectorAll('[data-testid="help-pay-share-result"]').forEach(function (root) {
+        wireShareResult(root);
+      });
+
+      w.addEventListener('weline:selling-mode-changed', syncQuickPayCtas);
+      w.addEventListener('weline:cart-type-changed', syncQuickPayCtas);
+      var observeRoot = qs(d, '.product-native-detail, [data-product-detail], main') || d.body;
+      if (w.MutationObserver && observeRoot) {
+        var mo = new MutationObserver(function () {
+          syncQuickPayCtas();
+        });
+        mo.observe(observeRoot, {
+          attributes: true,
+          subtree: true,
+          attributeFilter: ['disabled', 'hidden', 'data-selling-mode', 'data-stock-tone', 'class'],
+          childList: true,
+        });
+      }
+      // Late sync after PDP offer hydration / purchase-panel inject.
+      setTimeout(syncQuickPayCtas, 0);
+      setTimeout(syncQuickPayCtas, 400);
+      setTimeout(syncQuickPayCtas, 1200);
+    } catch (err) {
+      if (w.console && typeof w.console.error === 'function') {
+        w.console.error('[helpPayShare] boot failed', err);
       }
     }
-
-    if (bootBound) {
-      syncQuickPayCtas();
-      return;
-    }
-    bootBound = true;
-
-    d.addEventListener('click', onHelpPayDelegatedClick);
-
-    d.querySelectorAll('[data-testid="help-pay-share-result"]').forEach(function (root) {
-      wireShareResult(root);
-    });
-
-    w.addEventListener('weline:selling-mode-changed', syncQuickPayCtas);
-    w.addEventListener('weline:cart-type-changed', syncQuickPayCtas);
-    var observeRoot = qs(d, '.product-native-detail, [data-product-detail], main') || d.body;
-    if (w.MutationObserver && observeRoot) {
-      var mo = new MutationObserver(function () {
-        syncQuickPayCtas();
-      });
-      mo.observe(observeRoot, {
-        attributes: true,
-        subtree: true,
-        attributeFilter: ['disabled', 'hidden', 'data-selling-mode', 'data-stock-tone', 'class'],
-        childList: true,
-      });
-    }
-    // Late sync after PDP offer hydration / purchase-panel inject.
-    setTimeout(syncQuickPayCtas, 0);
-    setTimeout(syncQuickPayCtas, 400);
-    setTimeout(syncQuickPayCtas, 1200);
   }
-
-  if (d.readyState === 'loading') d.addEventListener('DOMContentLoaded', boot);
-  else boot();
 
   w.WelineModules = w.WelineModules || {};
   w.WelineModules.helpPayShare = {
@@ -2846,4 +2865,13 @@
     syncPayerBillingVisibility: syncPayerBillingVisibility,
     wirePayerPaymentMethods: wirePayerPaymentMethods,
   };
+
+  if (typeof w.Weline !== 'undefined' && typeof w.Weline.declare === 'function') {
+    w.Weline.declare('helpPayShare', function () {
+      return w.WelineModules.helpPayShare;
+    });
+  }
+
+  if (d.readyState === 'loading') d.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })(window, document);

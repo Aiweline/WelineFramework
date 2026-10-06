@@ -64,17 +64,15 @@ try {
 $retailCartUrl = ObjectManager::getInstance(\Weline\Framework\Http\Url::class)->getUrl('cart');
 $emitRetailOnlyTobHint = static function () use ($escape, $websiteId, $retailCartUrl): void {
     ?>
-<div class="b2b-retail-only-hint product-native-detail__price-label"
+<div class="b2b-retail-only-hint b2b-selling-mode__soft-cta"
      data-b2b-retail-only-hint="1"
      data-website-id="<?= (int)$websiteId ?>"
      data-weline-load="b2bSellingMode"
      data-testid="b2b-retail-only-tob-hint"
      role="status"
      hidden>
-    <p class="b2b-retail-only-hint__text">
-        <lang>本商品不支持批发</lang>
-    </p>
-    <a class="b2b-retail-only-hint__link"
+    <span class="b2b-selling-mode__soft-note"><lang>本商品不支持批发</lang></span>
+    <a class="b2b-selling-mode__soft-link"
        href="<?= $escape($retailCartUrl) ?>?cart_type=toc"
        data-b2b-retail-only-cart-link
        data-cart-type="toc"

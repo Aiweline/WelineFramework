@@ -1167,6 +1167,12 @@ $copy = [
     }
     applyCartTypeHandoffFromUrl();
 
+    window.addEventListener('load', function () {
+        if (readCartTypeFromQuery()) {
+            applyCartTypeHandoffFromUrl();
+        }
+    });
+
     const form = root.querySelector('[data-checkout-form]');
     const formHost = root.querySelector('[data-checkout-form-host]');
     const message = root.querySelector('[data-checkout-message]');

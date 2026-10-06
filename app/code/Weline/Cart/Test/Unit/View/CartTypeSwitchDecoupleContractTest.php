@@ -51,6 +51,7 @@ final class CartTypeSwitchDecoupleContractTest extends TestCase
         self::assertStringContainsString('data-cart-type-handoff', $cartPage);
         self::assertStringContainsString("params.get('type')", $cartPage);
         self::assertStringContainsString("detail.source === 'enhanceMiniCarts'", $cartPage);
+        self::assertStringContainsString('removeAttribute(\'data-cart-type-handoff\')', $cartPage);
         // Empty preferCache must not terminal-return; sibling with items clears opposite empty bucket.
         self::assertStringContainsString('localCartSummaryHasItems', $cartPage);
         self::assertStringContainsString('invalidateEmptyCachesClaimedBySiblings', $cartPage);

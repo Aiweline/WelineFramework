@@ -98,11 +98,12 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertStringContainsString('data-b2b-toc-wholesale-cta', $jsContent);
         self::assertStringContainsString('data-b2b-selling-mode-segment', $jsContent);
         self::assertStringContainsString('data-cart-type-handoff', $jsContent);
+        self::assertStringContainsString('clearCartTypeHandoff', $jsContent);
         self::assertStringContainsString("handoff === 'toc' || handoff === 'tob'", $jsContent);
 
         $modules = self::bp('app/code/Weline/B2B/view/statics/frontend/weline.modules.js');
         $modulesContent = (string)file_get_contents($modules);
-        self::assertStringContainsString('selling-mode.js?v=20261006-cart-type-handoff2', $modulesContent);
+        self::assertStringContainsString('selling-mode.js?v=20261006-wholesale-tab-fix1', $modulesContent);
         self::assertStringNotContainsString('loginRedirect', $jsContent);
         self::assertStringNotContainsString('global.location.href = url.toString()', $jsContent);
         self::assertStringContainsString('openApplyFlow', $jsContent);
@@ -265,11 +266,12 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         $sellingPos = strpos($productInfoContent, 'id="product-selling-mode"');
         self::assertNotFalse($variantPos);
         self::assertNotFalse($sellingPos);
-        self::assertGreaterThan($variantPos, $sellingPos, 'selling-mode slot must sit below variant axes');
+        self::assertLessThan($variantPos, $sellingPos, 'selling-mode slot must sit above variant axes (compact tip)');
 
         $cssContent = (string)file_get_contents($css);
         self::assertStringContainsString('.b2b-selling-mode__soft-cta', $cssContent);
         self::assertStringContainsString('.b2b-selling-mode__soft-link', $cssContent);
+        self::assertStringContainsString('.b2b-retail-only-hint', $cssContent);
 
         $miniCartContent = (string)file_get_contents($miniCart);
         // Theme mini-cart stays B2B-agnostic: host slots only; no tob segment markup.
