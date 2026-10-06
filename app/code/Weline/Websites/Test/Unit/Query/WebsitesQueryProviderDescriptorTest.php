@@ -69,5 +69,17 @@ final class WebsitesQueryProviderDescriptorTest extends TestCase
             ['kind' => 'source', 'source_id' => 'Weline_Websites::website_add'],
             $operations['createWebsite']['backend_acl'],
         );
+        $paramNames = \array_map(
+            static fn(array $p): string => (string)($p['name'] ?? ''),
+            $operations['createWebsite']['params'] ?? [],
+        );
+        self::assertContains('pool_id', $paramNames);
+        self::assertArrayHasKey('getDomainPoolList', $operations);
+        $poolParamNames = \array_map(
+            static fn(array $p): string => (string)($p['name'] ?? ''),
+            $operations['getDomainPoolList']['params'] ?? [],
+        );
+        self::assertContains('site_ready', $poolParamNames);
+        self::assertContains('exclude_site_created', $poolParamNames);
     }
 }

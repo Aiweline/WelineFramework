@@ -411,7 +411,8 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'graph'       => false,
                     'params'      => [
                         ['name' => 'name', 'type' => 'string', 'required' => true],
-                        ['name' => 'url', 'type' => 'string', 'required' => true],
+                        ['name' => 'url', 'type' => 'string', 'required' => false, 'description' => __('主地址；有 pool_id 时可省略，由池记录解析')],
+                        ['name' => 'pool_id', 'type' => 'int', 'required' => false, 'description' => __('域名池 ID（控制中心与后台同源；优先于手填 url）')],
                         ['name' => 'code', 'type' => 'string', 'required' => false],
                         ['name' => 'default_timezone', 'type' => 'string', 'required' => false],
                     ],
@@ -451,6 +452,8 @@ class WebsitesQueryProvider implements QueryProviderInterface
                         ['name' => 'status', 'type' => 'int|string|null', 'required' => false],
                         ['name' => 'limit', 'type' => 'int', 'required' => false],
                         ['name' => 'root_domain', 'type' => 'string', 'required' => false],
+                        ['name' => 'site_ready', 'type' => 'bool', 'required' => false, 'description' => __('仅返回 site_ready=1')],
+                        ['name' => 'exclude_site_created', 'type' => 'bool', 'required' => false, 'description' => __('排除已被站点占用的池记录')],
                     ],
                 ],
                 [
@@ -1530,7 +1533,8 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $status = $params['status'] ?? DomainPool::STATUS_ACTIVE;
         $limit = (int)($params['limit'] ?? 500);
         $rootDomain = \strtolower(\trim((string)($params['root_domain'] ?? '')));
-        $excludeSiteCreated = ($params['exclude_site_created'] ?? false);
+        $excludeSiteCreated = self::toBool($params['exclude_site_created'] ?? false);
+        $siteReadyOnly = self::toBool($params['site_ready'] ?? false);
         if ($limit <= 0) {
             $limit = 500;
         }
@@ -1544,7 +1548,8 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 $pool,
                 $status,
                 $rootDomain,
-                $excludeSiteCreated
+                $excludeSiteCreated,
+                $siteReadyOnly
             ): array {
                 $pageModel = clone $pool;
                 $query = $pageModel->clearQuery();
@@ -1553,6 +1558,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 }
                 if ($rootDomain !== '') {
                     $query->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain);
+                }
+                if ($siteReadyOnly) {
+                    $query->where(DomainPool::schema_fields_SITE_READY, 1);
                 }
                 if ($excludeSiteCreated) {
                     $query->where(DomainPool::schema_fields_SITE_CREATED, 0);
@@ -1576,9 +1584,24 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 'root_domain' => (string)($row[DomainPool::schema_fields_ROOT_DOMAIN] ?? ''),
                 'status' => (string)($row[DomainPool::schema_fields_STATUS] ?? ''),
                 'https_status' => (string)($row[DomainPool::schema_fields_HTTPS_STATUS] ?? ''),
+                'site_ready' => (int)($row[DomainPool::schema_fields_SITE_READY] ?? 0),
+                'site_created' => (int)($row[DomainPool::schema_fields_SITE_CREATED] ?? 0),
             ];
         }
         return $list;
+    }
+
+    private static function toBool(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (int)$value === 1;
+        }
+        $raw = \strtolower(\trim((string)$value));
+
+        return \in_array($raw, ['1', 'true', 'yes', 'on'], true);
     }
 
     /**

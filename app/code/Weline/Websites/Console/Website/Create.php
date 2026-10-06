@@ -17,6 +17,7 @@ class Create extends CommandAbstract
         $params = [
             'name' => (string)($args['name'] ?? ''),
             'url' => (string)($args['url'] ?? $args['domain'] ?? ''),
+            'pool_id' => (int)($args['pool-id'] ?? $args['pool_id'] ?? 0),
             'code' => (string)($args['code'] ?? ''),
             'default_timezone' => (string)($args['timezone'] ?? $args['default_timezone'] ?? 'Asia/Shanghai'),
         ];
@@ -54,6 +55,7 @@ class Create extends CommandAbstract
     public function help(): array|string
     {
         return [
+            'php bin/w website:create --name=店铺 --pool-id=12 --json' => (string)__('从域名池选择主地址创建（控制中心默认）'),
             'php bin/w website:create --name=店铺 --url=shop.example.com --json' => (string)__('按名称和地址创建站点；code 可省略'),
         ];
     }

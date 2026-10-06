@@ -42,15 +42,18 @@ final class WebsiteCreateService
         $name = \trim((string)($params['name'] ?? ''));
         $code = \trim((string)($params['code'] ?? ''));
         $url = \trim((string)($params['url'] ?? $params['domain'] ?? ''));
+        $poolId = (int)($params['pool_id'] ?? 0);
         $timezone = \trim((string)($params['default_timezone'] ?? 'Asia/Shanghai')) ?: 'Asia/Shanghai';
         if ($name === '') {
             throw new \InvalidArgumentException((string)__('站点名称不能为空'));
         }
-        if ($url === '') {
-            throw new \InvalidArgumentException((string)__('请填写网站地址'));
+        if ($poolId <= 0 && $url === '') {
+            throw new \InvalidArgumentException((string)__('请从域名池选择主地址，或填写网站地址'));
         }
 
-        $address = self::parsePrimaryAddress($url);
+        $address = $poolId > 0
+            ? $this->resolveAddressFromPool($poolId, $url)
+            : self::parsePrimaryAddress($url);
         $subPath = WebsiteSubPathValidator::fromLocalizationRegistry()->assertValid($address['sub_path']);
         $address['sub_path'] = $subPath;
         if ($code === '') {
@@ -168,6 +171,51 @@ final class WebsiteCreateService
             'domain' => $domain,
             'sub_path' => $subPath,
             'pool_id' => 0,
+        ];
+    }
+
+    /**
+     * 控制中心 / CLI：主地址来自域名池（与后台 domain:select site-ready-only 同口径）。
+     *
+     * @return array{domain:string,sub_path:string,pool_id:int}
+     */
+    private function resolveAddressFromPool(int $poolId, string $optionalUrl): array
+    {
+        $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+        $pool->clearQuery()->clearData()
+            ->where(DomainPool::schema_fields_ID, $poolId)
+            ->find()
+            ->fetch();
+        if (!(int)$pool->getData(DomainPool::schema_fields_ID)) {
+            throw new \InvalidArgumentException((string)__('域名池记录不存在'));
+        }
+        $status = (string)$pool->getData(DomainPool::schema_fields_STATUS);
+        if ($status !== '' && $status !== DomainPool::STATUS_ACTIVE) {
+            throw new \InvalidArgumentException((string)__('该域名池记录未启用'));
+        }
+        if ((int)$pool->getData(DomainPool::schema_fields_SITE_READY) !== 1) {
+            throw new \InvalidArgumentException((string)__('该域名尚未建站就绪，请到后台域名池处理'));
+        }
+        if ((int)$pool->getData(DomainPool::schema_fields_SITE_CREATED) === 1) {
+            throw new \InvalidArgumentException((string)__('该域名已被站点占用；子路径等复杂挂载请到后台处理'));
+        }
+        $domain = \strtolower(\trim((string)$pool->getData(DomainPool::schema_fields_DOMAIN)));
+        if ($domain === '') {
+            throw new \InvalidArgumentException((string)__('域名池记录缺少域名'));
+        }
+        $subPath = '';
+        if ($optionalUrl !== '') {
+            $parsed = self::parsePrimaryAddress($optionalUrl);
+            if ($parsed['domain'] !== $domain) {
+                throw new \InvalidArgumentException((string)__('填写的地址与所选域名池不一致'));
+            }
+            $subPath = $parsed['sub_path'];
+        }
+
+        return [
+            'domain' => $domain,
+            'sub_path' => $subPath,
+            'pool_id' => $poolId,
         ];
     }
 

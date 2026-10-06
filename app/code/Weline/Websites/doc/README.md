@@ -53,7 +53,7 @@ WLS 无路由错误页通过与普通响应共用的 `App::finalizeResponse()` �
 - 后台或 bootstrap 在安装完整 `WebsiteData` 快照前读取本地化信息时，`LocalizationProvider` 只在拥有真实 request id 的当前 `RequestContext` 内复用 language/currency 回退查询，并显式缓存空结果；非请求启动路径不建立进程级缓存。
 - URL 本地化兼容货币/语言单段和两种双段顺序，canonical 固定为 `currency -> locale`；后台 area key 必须是 URL 第一段。
 - Website 默认时区只写当前 `RequestContext`，不得修改 PHP 进程全局 timezone。`QueryBin` 成功响应的 `scope_meta` 只包含 Scope 身份、locale/currency/timezone 和 context version 等安全字段，不包含 Token、签名、bootstrap ID 或密钥。
-- 跨模块与前端调用网站能力时，优先使用已发布的 `w_query('websites', ...)`，不要直接依赖内部服务类。控制中心列出/新建站点走 `getWebsiteList` / `createWebsite`（CLI：`php bin/w website:listing --json`、`php bin/w website:create --name= --url= --json`；`--json` 只向 stdout 写纯 JSON）。
+- 跨模块与前端调用网站能力时，优先使用已发布的 `w_query('websites', ...)`，不要直接依赖内部服务类。控制中心列出/新建站点走 `getWebsiteList` / `getDomainPoolList` / `createWebsite`（CLI：`php bin/w website:listing --json`、`php bin/w website:domain-pool --json`、`php bin/w website:create --name= --pool-id= --json`；`--json` 只向 stdout 写纯 JSON）。控制中心新建主地址必须选自域名池（`site_ready=1` 且未占用）；子路径/多域等复杂配置进后台 `websites/admin/domain` / 网站表单。
 - 站点 / 范围 Taglib：
   - **作用范围（四级，首选）**：`<w:scope>` — Global → 网站 → 店铺 → 渠道树选；身份由 Websites Catalog 贡献，选择器由 Taglib + SystemConfig `ScopeSelectorCatalog` 组装。详文：[scope-select标签使用指南.md](./scope-select标签使用指南.md)。配置/仓映射/刊登等「范围」场景**禁止**拆成站+店+渠手写联动。
   - `<w:websites:website:select>`：站点搜索单选/多选；`allow-empty` 可表示 Global；筛选场景写 `auto-submit="true"`（选择即提交关联 form，对齐 LanguageSelect，不要再放「切换」按钮）。

@@ -36,4 +36,12 @@ final class WebsiteCreateAddressParseTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         WebsiteCreateService::parsePrimaryAddress('https://');
     }
+
+    public function testCreateRequiresPoolOrUrl(): void
+    {
+        $service = (new \ReflectionClass(WebsiteCreateService::class))->newInstanceWithoutConstructor();
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('域名池');
+        (new \ReflectionMethod(WebsiteCreateService::class, 'create'))->invoke($service, ['name' => 'Demo']);
+    }
 }
