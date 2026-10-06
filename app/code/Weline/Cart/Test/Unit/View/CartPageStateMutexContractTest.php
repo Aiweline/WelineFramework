@@ -34,4 +34,23 @@ final class CartPageStateMutexContractTest extends TestCase
         self::assertStringContainsString('[data-cart-view="error"] > [data-cart-state="error"]', $css);
         self::assertStringContainsString('[data-cart-view="ready"] > [data-cart-state="ready"]', $css);
     }
+
+    public function testCartHeaderTitleSitsRightOfTypeTabs(): void
+    {
+        $root = \dirname(__DIR__, 3);
+        $page = (string)\file_get_contents($root . '/view/templates/frontend/cart/index.phtml');
+        $css = (string)\file_get_contents($root . '/view/statics/css/cart-page-amazon.css');
+
+        self::assertStringContainsString('class="weline-cart-shell__heading"', $page);
+        self::assertStringContainsString('data-cart-page-type-host', $page);
+        self::assertStringContainsString('data-cart-page-title', $page);
+        self::assertStringContainsString('data-cart-subtitle', $page);
+        self::assertStringContainsString('v=20261006-header-title-right2', $page);
+
+        self::assertStringContainsString('.weline-cart-shell--amazon .weline-cart-shell__header', $css);
+        self::assertStringContainsString('justify-content: space-between', $css);
+        self::assertStringContainsString('.weline-cart-shell--amazon .weline-cart-shell__heading', $css);
+        self::assertStringContainsString('margin-left: auto', $css);
+        self::assertStringContainsString('text-align: right', $css);
+    }
 }

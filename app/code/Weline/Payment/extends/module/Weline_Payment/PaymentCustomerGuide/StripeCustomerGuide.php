@@ -20,27 +20,27 @@ final class StripeCustomerGuide implements PaymentCustomerGuideInterface
 
     public function getTitle(): string
     {
-        return (string) __('Stripe');
+        return 'Stripe';
     }
 
     public function getSummary(): string
     {
-        return (string) __('了解如何使用银行卡或本地支付方式通过 Stripe 完成支付，以及退款与争议处理规则。');
+        return '了解如何使用银行卡或本地支付方式通过 Stripe 完成支付，以及退款与争议处理规则。';
     }
 
     public function getGuideTitle(): string
     {
-        return (string) __('Stripe 支付指南');
+        return 'Stripe 支付指南';
     }
 
     public function getPolicyTitle(): string
     {
-        return (string) __('Stripe 支付政策');
+        return 'Stripe 支付政策';
     }
 
     public function getAgreementTitle(): string
     {
-        return (string) __('Stripe 用户协议');
+        return 'Stripe 用户协议';
     }
 
     public function getGuideTemplateCode(): string

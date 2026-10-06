@@ -446,6 +446,10 @@ COMMAND_LIST;
      */
     public function colorize($text, $status = 'Blue'): string
     {
+        if (!$this->colorEnabled()) {
+            return (string)$text;
+        }
+
         switch ($status) {
             case self::SUCCESS:
             case 'Green':
@@ -490,6 +494,22 @@ COMMAND_LIST;
      * 
      * @return bool
      */
+    private function colorEnabled(): bool
+    {
+        if (\getenv('NO_COLOR') !== false) {
+            return false;
+        }
+        if (\getenv('CLICOLOR') === '0' || \getenv('CLICOLOR_FORCE') === '0') {
+            return false;
+        }
+        $term = \getenv('TERM');
+        if ($term === 'dumb') {
+            return false;
+        }
+
+        return $this->isTerminal();
+    }
+
     private function isTerminal(): bool
     {
         if ($this->isTerminal === null) {

@@ -78,4 +78,29 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         self::assertArrayNotHasKey('coupon', $homepage);
         self::assertArrayHasKey('page', $homepage);
     }
+
+    public function testRebakeDedupesLayoutTargetsAndSkipsPageDependencies(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php';
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('function uniqueLayoutTargets', $source);
+        self::assertStringContainsString('page_dependency', $source);
+        self::assertStringContainsString('$expandCatalog = false', $source);
+        self::assertStringContainsString('function generatedPageMatchesInputs', $source);
+        self::assertStringContainsString('function scopeOwnsSolidify', $source);
+        self::assertStringContainsString('function hasOwnThemeApplication', $source);
+        self::assertStringContainsString('$includeSelectedDraft = true', $source);
+        $upgrade = dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityUpgradeSolidifyService.php';
+        self::assertStringContainsString('rebakeAfterInjectionCollect(null, [], $this->progress(...), false)', (string)file_get_contents($upgrade));
+        $coordinator = (new \ReflectionClass(ThemeLayoutEntityBakeCoordinator::class))->newInstanceWithoutConstructor();
+        $unique = new \ReflectionMethod($coordinator, 'uniqueLayoutTargets');
+        $out = $unique->invoke($coordinator, [
+            ['layout_type' => 'checkout', 'layout_option' => 'default', 'target_type' => 'global', 'target_id' => 0],
+            ['layout_type' => 'checkout', 'layout_option' => 'default', 'resource_type' => 'page_dependency', 'target_id' => null],
+            ['layout_type' => 'cart', 'layout_option' => 'default'],
+        ]);
+        self::assertCount(2, $out);
+        self::assertSame('checkout', $out[0]['layout_type']);
+        self::assertSame('cart', $out[1]['layout_type']);
+    }
 }

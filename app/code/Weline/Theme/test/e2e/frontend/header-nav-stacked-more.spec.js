@@ -271,6 +271,8 @@ moduleDescribe(test, MODULE, 'header stacked nav more full-width', () => {
     expect(header).not.toContain('const shouldHide = width < 200');
     expect(header).toMatch(/function measureNavAvailableWidth\(\)\s*\{[\s\S]*?clustersOnSeparateRows\(\)/);
     expect(header).toMatch(/function measureCatAvailableWidth\(\)\s*\{[\s\S]*?clustersOnSeparateRows\(\)/);
+    expect(header).not.toContain('cssRightFloor');
+    expect(header).toContain('右簇已改为内容宽');
   });
 
   moduleCase(test, { module: MODULE, id: 'e2e-plan-suite' }, '完整功能通路 e2e 汇总：Header stacked More 契约', async () => {

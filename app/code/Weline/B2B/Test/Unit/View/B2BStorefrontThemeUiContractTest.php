@@ -103,7 +103,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
 
         $modules = self::bp('app/code/Weline/B2B/view/statics/frontend/weline.modules.js');
         $modulesContent = (string)file_get_contents($modules);
-        self::assertStringContainsString('selling-mode.js?v=20261006-wholesale-tab-fix1', $modulesContent);
+        self::assertStringContainsString('selling-mode.js?v=20261006-mini-cart-type1', $modulesContent);
+        self::assertStringContainsString('function pageViewCartType', $jsContent);
+        self::assertStringContainsString('pageViewCartType(mode === \'tob\' ? \'tob\' : \'toc\')', $jsContent);
         self::assertStringNotContainsString('loginRedirect', $jsContent);
         self::assertStringNotContainsString('global.location.href = url.toString()', $jsContent);
         self::assertStringContainsString('openApplyFlow', $jsContent);
@@ -277,6 +279,9 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         // Theme mini-cart stays B2B-agnostic: host slots only; no tob segment markup.
         self::assertStringContainsString('data-mini-cart-type-host', $miniCartContent);
         self::assertStringContainsString('data-mini-cart-type-caption', $miniCartContent);
+        self::assertStringContainsString('cart-type-caption', $miniCartContent);
+        self::assertStringContainsString("__('零售')", $miniCartContent);
+        self::assertStringNotContainsString('data-mini-cart-type-caption hidden', $miniCartContent);
         self::assertStringContainsString('data-mini-cart-title', $miniCartContent);
         self::assertStringContainsString('b2b-checkout-credit', $miniCartContent);
         self::assertStringNotContainsString('data-mini-cart-type-seg', $miniCartContent);
@@ -289,6 +294,8 @@ final class B2BStorefrontThemeUiContractTest extends TestCase
         self::assertFileExists($miniCartJs);
         $miniCartJsContent = (string)file_get_contents($miniCartJs);
         self::assertStringContainsString('preferredCartType', $miniCartJsContent);
+        self::assertStringContainsString('cartTypeFromPageView', $miniCartJsContent);
+        self::assertStringContainsString('data-cart-type-handoff', $miniCartJsContent);
         self::assertStringContainsString('weline:cart-type-changed', $miniCartJsContent);
         self::assertStringContainsString('WelineCart.requestCartType', $miniCartJsContent);
         self::assertStringContainsString('weline:selling-mode-changed', $miniCartJsContent);

@@ -22,7 +22,7 @@
 - **订单沟通**：`b2b.orderChat.*` + `#b2b-order-chat` + `AccountMenuSignal` `b2b.order_chat`（不绑客服 ChatSession）。
 - **尾款协商改价**：`proposeBalanceRevision` / `confirmBalanceRevision`；`hang_revision_pending` 挡支付；确认后 `OrderFacadeInterface::reviseTobHangPayable`。
 - **数量档 / MOQ**：价目项 `min_qty`（旧行默认 1）；Engine `qty` 取最高档；tob 车默认 moq=5 / step=5（`B2BCartQtyPolicy`）；`2.6.69` 起仅对批发资格 SKU 强制。
-- **店面 Theme UI（2.6.0 / 双车 2.6.20）**：PDP 价格旁 ToC/ToB 切换（cookie `weline_selling_mode`）；tob 数量 MOQ/step=5；**迷你车/购物车「零售车|批发车」分段**（body-end boot 加载 `b2bSellingMode` 注入 type-host）；结账定金说明+禁券；账户订单 hang CTA（`purpose=deposit|balance`）。
+- **店面 Theme UI（2.6.0 / 双车 2.6.20 / 迷你车类型 2.6.98）**：PDP 价格旁 ToC/ToB 切换（cookie `weline_selling_mode`）；tob 数量 MOQ/step=5；**迷你车/购物车「零售车|批发车」分段**（body-end boot 加载 `b2bSellingMode` 注入 type-host）；顶栏迷你车副标「零售/批发」跟**当前页** `cart_type` 手递（购物车页零售车时显示「零售」），不跟残留 tob cookie；结账定金说明+禁券；账户订单 hang CTA（`purpose=deposit|balance`）。
 - **店面价**：`B2BStorefrontPriceAdjustmentProvider`；含价缓存 vary `selling_mode` + tob `group_id`（详见 Product `storefront-offer-price.md`）。
 - 需求正文：`doc/需求.md`（`REQ-B2B-0002`…`0007`）；Cart 键与摘要：`Weline_Cart/doc/cart.md`；事件追加字段：`Weline_Order/doc/event/order_created.md` 等。
 

@@ -11,14 +11,71 @@ namespace Weline\Framework\Manager {
 }
 namespace Weline\Framework\Runtime {
     class RequestContext { public static function getId(): ?string { return null; } }
+    class ThemeApplicationContext {
+        public function __construct(
+            public string $provider,
+            public string $scopeKey,
+            public string $storeMode,
+            public string $area,
+            public int $themeId,
+            public string $versionOwnerScope,
+            public string $versionOwnerStoreMode,
+            public int $themeVersionId,
+            public int $contentRevision,
+            public string $defaultLocale,
+            public string $displayName = '',
+            public array $contentScopes = [],
+            public string $purpose = 'runtime',
+            public array $assetAccessClaims = [],
+            public array $invalidationNamespaces = [],
+            public array $affectedContentContexts = [],
+        ) {}
+    }
 }
 namespace Weline\Theme\Api\Scoped {
+    class ThemeContentScope {
+        public string $provider = 'websites';
+        public string $scopeKey = '';
+        public string $storageScope = '';
+        public string $storeMode = 'normal';
+        public array $fallbackStorageScopes = [];
+        public static function fromStoredOwner(string $storageScope, string $storeMode, string $defaultLocale): self
+        {
+            $scope = new self();
+            $scope->scopeKey = $storageScope;
+            $scope->storageScope = $storageScope;
+            $scope->storeMode = $storeMode;
+            $scope->fallbackStorageScopes = [$storageScope];
+            return $scope;
+        }
+    }
     class ThemeEditorContext {
         public const RESOURCE_LAYOUT = 'layout', RESOURCE_META = 'meta', RESOURCE_I18N = 'i18n';
         public string $resourceType = 'layout', $area = 'frontend', $layoutType = 'homepage', $layoutOption = 'default', $locale = 'default', $targetType = 'global';
         public int $themeId = 999997, $targetId = 0;
         public object $scope;
-        public function __construct() { $this->scope = (object)['storageScope' => 'fixture.store.channel', 'storeMode' => \Weline\Theme\Model\ThemeScopeVersion::$mode]; }
+        public function __construct(
+            $scope = null,
+            $area = 'frontend',
+            $resourceType = 'layout',
+            $themeId = 999997,
+            $layoutType = 'homepage',
+            $layoutOption = 'default',
+            $locale = 'default',
+            $targetType = 'global',
+            $targetId = 0,
+            $application = null,
+        ) {
+            $this->scope = $scope ?? (object)['storageScope' => 'fixture.store.channel', 'storeMode' => \Weline\Theme\Model\ThemeScopeVersion::$mode];
+            $this->area = $area;
+            $this->resourceType = $resourceType;
+            $this->themeId = (int)$themeId;
+            $this->layoutType = $layoutType;
+            $this->layoutOption = $layoutOption;
+            $this->locale = $locale;
+            $this->targetType = $targetType;
+            $this->targetId = (int)$targetId;
+        }
         public function withResource(string $resource): self { $copy = clone $this; $copy->resourceType = $resource; return $copy; }
         public function withLocale(string $locale): self { $copy = clone $this; $copy->locale = $locale; return $copy; }
         public function identityHash(): string { return hash('sha256', $this->resourceType); }
@@ -64,7 +121,7 @@ namespace Weline\Theme\Service\Version {
     class ThemeVersionResourceSnapshotService {
         public function captureUnresolvedCurrentIntent($version, $context): ?\Weline\Theme\Api\Version\ThemeVersionIdentity { return null; }
         public function head($identity): array { return ['package_default_json' => '{"current_package_defaults":true}', 'chrome_intent_json' => '[]']; }
-        public function resources($identity): array { return [['resource_type' => 'layout', 'resource_key_json' => '{"layout_type":"homepage","layout_option":"default"}']]; }
+        public function resources($identity): array { return [['resource_type' => 'layout', 'resource_key_json' => '{"layout_type":"homepage","layout_option":"default","has_intent":true}']]; }
         public function read($identity, $context): array {
             return ['resolved' => true, 'has_intent' => true, 'payload' => $context->resourceType === 'layout'
                 ? ['nodes' => ['fixture' => ['node_uid' => 'fixture', 'config' => [], 'slot_id' => 'content']]] : ['values' => []]];
@@ -177,9 +234,10 @@ namespace {
         $historicalSealed = (new \Weline\Theme\Model\ThemeScopeVersion())->load(1114)->toVersionIdentity();
         $old = (new \Weline\Theme\Model\ThemeScopeVersion())->load(1117)->toVersionIdentity();
         $draftPath = $paths->pageLayoutPhtml($selected, 'homepage');
-        $result = ['shared_draft' => file_get_contents($draftPath),
+        $result = ['shared_draft' => is_file($draftPath) ? file_get_contents($draftPath) : '',
             'sealed_version' => file_get_contents($paths->pageLayoutPhtml($sealed, 'homepage')),
-            'historical_sealed_version' => file_get_contents($paths->pageLayoutPhtml($historicalSealed, 'homepage')),
+            'historical_sealed_path' => $paths->pageLayoutPhtml($historicalSealed, 'homepage'),
+            'historical_sealed_exists' => is_file($paths->pageLayoutPhtml($historicalSealed, 'homepage')),
             'rebake_generated_versions' => array_values(array_unique($materializer->generatedVersions))];
         $candidates = $coordinator->candidateForIdentity($old, 'homepage');
         $result['historical_candidate'] = $candidates[$draftPath];

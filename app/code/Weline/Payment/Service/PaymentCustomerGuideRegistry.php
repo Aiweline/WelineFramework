@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Weline\Payment\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\Parser;
 use Weline\Payment\Interface\PaymentCustomerGuideInterface;
 
 class PaymentCustomerGuideRegistry
@@ -23,9 +25,18 @@ class PaymentCustomerGuideRegistry
     private $availableCodesResolver;
 
     /**
+     * Worker 常驻：源串缓存（与 locale 无关）。
+     *
      * @var array<string, array<string, mixed>>|null
      */
-    private ?array $cachedEntries = null;
+    private ?array $cachedRawEntries = null;
+
+    /**
+     * Worker 常驻：按 locale 翻译后的条目。禁止跨语种复用，否则侧栏/面包屑会锁死首个请求的中文。
+     *
+     * @var array<string, array<string, array<string, mixed>>>
+     */
+    private array $cachedLocalizedEntries = [];
     private ?int $cachedExtendsMtime = null;
 
     /**
@@ -188,15 +199,61 @@ class PaymentCustomerGuideRegistry
      */
     private function getEntries(bool $forceReload = false): array
     {
+        $raw = $this->getRawEntries($forceReload);
+        $locale = trim((string) State::getLangLocal());
+        if ($locale === '') {
+            $locale = '_';
+        }
+        if (!$forceReload && isset($this->cachedLocalizedEntries[$locale])) {
+            return $this->cachedLocalizedEntries[$locale];
+        }
+
+        $phraseKeys = ['title', 'summary', 'guide_title', 'policy_title', 'agreement_title'];
+        $words = [];
+        foreach ($raw as $entry) {
+            foreach ($phraseKeys as $key) {
+                $word = trim((string) ($entry[$key] ?? ''));
+                if ($word !== '') {
+                    $words[] = $word;
+                }
+            }
+        }
+        try {
+            Parser::prefetchWords($words, $locale === '_' ? null : $locale);
+        } catch (\Throwable) {
+            // 单测/无词典 Provider 时保持源串，不得阻断指南渲染。
+        }
+
+        $localized = [];
+        foreach ($raw as $code => $entry) {
+            $localized[$code] = $entry;
+            foreach ($phraseKeys as $key) {
+                $word = (string) ($entry[$key] ?? '');
+                if ($word !== '') {
+                    $localized[$code][$key] = (string) __($word);
+                }
+            }
+        }
+        $this->cachedLocalizedEntries[$locale] = $localized;
+
+        return $localized;
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function getRawEntries(bool $forceReload = false): array
+    {
         $currentMtime = ExtendsData::getRegistryFileMtime();
         if (
             !$forceReload
-            && $this->cachedEntries !== null
+            && $this->cachedRawEntries !== null
             && $this->cachedExtendsMtime === $currentMtime
         ) {
-            return $this->cachedEntries;
+            return $this->cachedRawEntries;
         }
 
+        $this->cachedLocalizedEntries = [];
         $entries = [];
         foreach ($this->scanGuideDefinitions($forceReload) as $definition) {
             $className = (string) ($definition['class_name'] ?? '');
@@ -270,7 +327,7 @@ class PaymentCustomerGuideRegistry
             }
         }
 
-        $this->cachedEntries = $entries;
+        $this->cachedRawEntries = $entries;
         $this->cachedExtendsMtime = $currentMtime;
 
         return $entries;

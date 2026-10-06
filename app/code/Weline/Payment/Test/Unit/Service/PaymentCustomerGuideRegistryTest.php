@@ -75,4 +75,21 @@ final class PaymentCustomerGuideRegistryTest extends TestCase
         self::assertStringNotContainsString("'/' . \$this->buildPolicyRoute", $src);
         self::assertStringNotContainsString("'/' . \$this->buildAgreementRoute", $src);
     }
+
+    public function testGuideMetadataReturnsChineseSourceForDictionaryLookup(): void
+    {
+        $paypal = new PayPalCustomerGuide();
+        self::assertSame('PayPal 支付指南', $paypal->getGuideTitle());
+        self::assertSame('PayPal 支付政策', $paypal->getPolicyTitle());
+        self::assertSame('PayPal 用户协议', $paypal->getAgreementTitle());
+    }
+
+    public function testRegistryLocalizesAfterPrefetchAndDoesNotShareCacheAcrossLocales(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentCustomerGuideRegistry.php');
+        self::assertStringContainsString('cachedLocalizedEntries', $src);
+        self::assertStringContainsString('Parser::prefetchWords', $src);
+        self::assertStringContainsString('State::getLangLocal()', $src);
+        self::assertStringNotContainsString('private ?array $cachedEntries = null;', $src);
+    }
 }

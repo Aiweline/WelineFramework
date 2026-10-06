@@ -20,27 +20,27 @@ final class PayPalCustomerGuide implements PaymentCustomerGuideInterface
 
     public function getTitle(): string
     {
-        return (string) __('PayPal');
+        return 'PayPal';
     }
 
     public function getSummary(): string
     {
-        return (string) __('了解如何使用 PayPal 账户或银行卡完成支付，以及退款与争议处理规则。');
+        return '了解如何使用 PayPal 账户或银行卡完成支付，以及退款与争议处理规则。';
     }
 
     public function getGuideTitle(): string
     {
-        return (string) __('PayPal 支付指南');
+        return 'PayPal 支付指南';
     }
 
     public function getPolicyTitle(): string
     {
-        return (string) __('PayPal 支付政策');
+        return 'PayPal 支付政策';
     }
 
     public function getAgreementTitle(): string
     {
-        return (string) __('PayPal 用户协议');
+        return 'PayPal 用户协议';
     }
 
     public function getGuideTemplateCode(): string

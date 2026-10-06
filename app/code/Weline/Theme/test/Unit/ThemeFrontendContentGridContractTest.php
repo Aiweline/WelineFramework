@@ -19,14 +19,16 @@ final class ThemeFrontendContentGridContractTest extends TestCase
             $this->assertFileExists($path);
             $content = (string) file_get_contents($path);
 
-            $this->assertStringContainsString('.w-frontend-sidebar:blank { display: none; }', $content, $path);
+            $this->assertStringContainsString('.w-frontend-sidebar:blank,', $content, $path);
+            $this->assertStringContainsString('.w-frontend-sidebar:not(:has(*))', $content, $path);
+            $this->assertStringContainsString('.w-frontend-content-before:not(:has(*))', $content, $path);
             $this->assertStringContainsString(
-                '.w-frontend-content-grid:has(> .w-frontend-sidebar:not(:blank):first-child)',
+                '.w-frontend-content-grid:has(> .w-frontend-sidebar:has(*):first-child)',
                 $content,
                 $path
             );
             $this->assertStringNotContainsString(
-                '.w-frontend-content-grid:has(> .w-frontend-sidebar:not(:empty):first-child)',
+                '.w-frontend-content-grid:has(> .w-frontend-sidebar:not(:blank):first-child)',
                 $content,
                 $path
             );

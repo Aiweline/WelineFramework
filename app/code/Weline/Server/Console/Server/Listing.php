@@ -111,6 +111,11 @@ class Listing extends CommandAbstract
                     $raw,
                     $info->workerCount
                 );
+                $edgeIdentity = $this->resolveEdgeIdentity(
+                    $edgeFace['code'],
+                    $info->name,
+                    $raw
+                );
                 $status = [
                     'name' => $info->name,
                     'type' => 'weline',
@@ -120,6 +125,8 @@ class Listing extends CommandAbstract
                     'pid' => $info->masterPid > 0 ? $info->masterPid : null,
                     'host' => $info->host,
                     'port' => $info->port,
+                    'public_host' => \trim((string)($raw['public_host'] ?? '')),
+                    'public_origin' => \trim((string)($raw['public_origin'] ?? '')),
                     'worker_port' => $ports['worker_port'],
                     'edge_http_port' => $ports['edge_http_port'],
                     'edge_https_port' => $ports['edge_https_port'],
@@ -127,12 +134,16 @@ class Listing extends CommandAbstract
                     'port_lines' => $ports['port_lines'],
                     'topology' => $topology['topology'],
                     'topology_label' => $topology['topology_label'],
+                    'worker_direct' => $topology['topology'] === EffectiveTopology::Direct->value,
                     'count' => $info->workerCount,
                     'daemon' => true,
                     'started_at' => $info->startedAt,
                     'running_time' => $this->formatRunningTime($info->startedTimestamp),
                     'edge_face' => $edgeFace['code'],
                     'edge_face_label' => $edgeFace['label'],
+                    'edge_pid' => $edgeIdentity['edge_pid'],
+                    'edge_owner' => $edgeIdentity['edge_owner'],
+                    'edge_owner_self' => $edgeIdentity['edge_owner_self'],
                 ];
 
                 $allInstances[$name] = $status;
@@ -349,6 +360,37 @@ class Listing extends CommandAbstract
         return [
             'topology' => $code !== '' ? $code : 'unknown',
             'topology_label' => $label,
+        ];
+    }
+
+    /**
+     * Who owns the public edge, and which PID is listening there.
+     *
+     * @param array<string,mixed> $raw
+     * @return array{edge_pid:?int,edge_owner:string,edge_owner_self:bool}
+     */
+    protected function resolveEdgeIdentity(string $edgeFace, string $instanceName, array $raw): array
+    {
+        $owner = '';
+        $pid = null;
+        if ($edgeFace === 'managed_nginx') {
+            $snapshot = $this->managedNginxSnapshot();
+            if (\is_array($snapshot)) {
+                $owner = \trim((string)($snapshot['owner_instance'] ?? ''));
+                $pidValue = (int)($snapshot['pid'] ?? 0);
+                $pid = $pidValue > 0 ? $pidValue : null;
+            }
+        } elseif ($edgeFace === 'gateway') {
+            $gateway = \is_array($raw['gateway'] ?? null) ? $raw['gateway'] : [];
+            $owner = \trim((string)($gateway['instance_id'] ?? $gateway['owner_instance'] ?? ''));
+            $pidValue = (int)($gateway['pid'] ?? $gateway['master_pid'] ?? 0);
+            $pid = $pidValue > 0 ? $pidValue : null;
+        }
+
+        return [
+            'edge_pid' => $pid,
+            'edge_owner' => $owner,
+            'edge_owner_self' => $owner !== '' && \hash_equals($owner, $instanceName),
         ];
     }
 
@@ -685,6 +727,12 @@ class Listing extends CommandAbstract
             if ($topology !== '' && $topology !== '-') {
                 $lines[] = $topology;
             }
+            $owner = \trim((string) ($status['edge_owner'] ?? ''));
+            $edgeFace = (string) ($status['edge_face'] ?? '');
+            if ($owner !== '') {
+                $prefix = $edgeFace === 'gateway' ? 'GW@' : 'nG@';
+                $lines[] = $prefix . $owner;
+            }
         }
 
         $ports = (string) ($status['port_summary'] ?? '');
@@ -719,8 +767,15 @@ class Listing extends CommandAbstract
     {
         $pid = (string) ($status['pid'] ?? '-');
         $uptime = (string) ($status['running_time'] ?? '-');
+        $lines = ['PID:' . $pid . ' · ' . $uptime];
+        $edgePid = (int) ($status['edge_pid'] ?? 0);
+        if ($edgePid > 0) {
+            $edgeFace = (string) ($status['edge_face'] ?? '');
+            $prefix = $edgeFace === 'gateway' ? 'GW' : 'nG';
+            $lines[] = $prefix . ':' . $edgePid;
+        }
 
-        return ['PID:' . $pid . ' · ' . $uptime];
+        return $lines;
     }
 
     /**
@@ -946,6 +1001,14 @@ class Listing extends CommandAbstract
             }
             $this->printer->note(__('  ├─ PID         : %{1}', [$status['pid'] ?? '-']));
             if ($type === 'weline') {
+                $this->printer->note(__('  ├─ 网关归属   : %{1}', [
+                    \trim((string)($status['edge_owner'] ?? '')) !== ''
+                        ? (string)$status['edge_owner']
+                        : '-',
+                ]));
+                $this->printer->note(__('  ├─ 边缘 PID   : %{1}', [
+                    (int)($status['edge_pid'] ?? 0) > 0 ? (int)$status['edge_pid'] : '-',
+                ]));
                 $this->printer->note(__('  ├─ 端口说明   : %{1}', [
                     (string) ($status['port_summary'] ?? '-'),
                 ]));

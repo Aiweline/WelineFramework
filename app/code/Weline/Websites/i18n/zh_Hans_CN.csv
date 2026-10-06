@@ -81,6 +81,7 @@ follow_registrar|provider_account|none,follow_registrar|provider_account|无
 "根据 ID 获取站点信息","根据 ID 获取站点信息"
 根据代码获取站点信息,根据代码获取站点信息
 获取所有站点列表,获取所有站点列表
+"新建网站（控制中心 / CLI，契约对齐后台快速创建）","新建网站（控制中心 / CLI，契约对齐后台快速创建）"
 "获取 WebsiteSelect 标签选项（value/label/meta）","获取 WebsiteSelect 标签选项（value/label/meta）"
 "获取已启用的站点域名，无独立域名时回退到站点 URL","获取已启用的站点域名，无独立域名时回退到站点 URL"
 "获取站点绑定的域名（含协议、子路径、主域名标记），供 SEO/协议入口枚举公开 origin","获取站点绑定的域名（含协议、子路径、主域名标记），供 SEO/协议入口枚举公开 origin"
@@ -2307,6 +2308,9 @@ language,language
 管理员不存在,管理员不存在
 该站授权已收回，无法进入后台,该站授权已收回，无法进入后台
 您的账户尚未分配角色，无法登录后台,您的账户尚未分配角色，无法登录后台
+请填写网站地址,请填写网站地址
+网站创建后无法回读,网站创建后无法回读
+网站地址不是有效域名,网站地址不是有效域名
 "Domain %{1} uses the .localhost loopback suffix and does not need hosts injection","域 %{1} 使用 .localhost 环回后缀，不需要主机注入"
 "Only managed local WLS domains are allowed for automatic hosts injection","仅允许托管本地 WLS 域进行自动主机注入"
 "Weline Server is required for automatic hosts injection","自动主机注入需要Weline Server"
@@ -3220,6 +3224,11 @@ download,下载
 域名生命周期轮询失败：%{error},域名生命周期轮询失败：%{error}
 域名池证书健康（每日）,域名池证书健康（每日）
 "每日校验池内已签发证书 PEM；与 SSL 表续期通知节拍一致","每日校验池内已签发证书 PEM；与 SSL 表续期通知节拍一致"
+"新建网站（调用 websites.createWebsite）","新建网站（调用 websites.createWebsite）"
+"按名称和地址创建站点；code 可省略","按名称和地址创建站点；code 可省略"
+网站列表（%{1}）,网站列表（%{1}）
+"列出全部网站（调用 websites.getWebsiteList）","列出全部网站（调用 websites.getWebsiteList）"
+"JSON 输出，供控制中心读取","JSON 输出，供控制中心读取"
 "用法：scope:migrate-p1a preflight|apply|verify|rollback [--database=mig_clone_*]","常用：scope:migrate-p1a preflight|apply|verify|rollback [--database=mig_clone_*]"
 "MIG-P1A Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1A 范围迁移：预检/应用/验证/回滚（apply 必须 --database=mig_clone_*）"
 "开始 v1.6.0 域名池数据迁移...","开始 v1.6.0 域名池数据迁移..."

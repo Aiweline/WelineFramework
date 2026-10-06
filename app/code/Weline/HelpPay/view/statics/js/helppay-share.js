@@ -7,7 +7,7 @@
 
   function resolveShareCssHref() {
     // Bust token on Module:: so PROD resolveStaticPath / flat publish picks it up.
-    var modulePath = 'Weline_HelpPay::css/helppay-share.css?v=20261006-payer-ship1';
+    var modulePath = 'Weline_HelpPay::css/helppay-share.css?v=20261006-paygap1';
     var loader = w.Weline && w.Weline.loader;
     if (loader && typeof loader.resolveStaticPath === 'function') {
       var resolved = loader.resolveStaticPath(modulePath);
@@ -27,7 +27,7 @@
         return sibling;
       }
     }
-    return '/static/Weline/HelpPay/css/helppay-share.css?v=20261006-payer-ship1';
+    return '/static/Weline/HelpPay/css/helppay-share.css?v=20261006-paygap1';
   }
 
   function ensureShareCss() {
@@ -1258,6 +1258,32 @@
     return 'toc';
   }
 
+  function currentCartType() {
+    var page = qs(d, '[data-cart-content]');
+    var fromPage = page ? String(page.getAttribute('data-cart-type') || '').toLowerCase() : '';
+    if (fromPage === 'toc' || fromPage === 'tob') return fromPage;
+    return currentSellingMode();
+  }
+
+  function readNumericAttrOrValue(el, names) {
+    if (!el) return 0;
+    var i;
+    var n;
+    var v;
+    for (i = 0; i < names.length; i++) {
+      n = names[i];
+      v = el.getAttribute ? el.getAttribute(n) : null;
+      if (v != null && v !== '' && Number(v) > 0) {
+        return Number(v) || 0;
+      }
+    }
+    v = el.value;
+    if (v != null && v !== '' && Number(v) > 0) {
+      return Number(v) || 0;
+    }
+    return 0;
+  }
+
   function isPurchaseUnavailable() {
     var add = qs(d, '[data-action="add"], [data-action="buy-now"]');
     if (add && add.disabled) return true;
@@ -1362,7 +1388,75 @@
   }
 
   function readCartAmountMinor() {
-    return Number((qs(d, '[data-cart-grand-total-minor], [data-grand-total-minor]') || {}).value || 0) || 0;
+    var money = qs(d, '[data-money-summary]');
+    var goods = readNumericAttrOrValue(money, ['data-money-summary-goods-minor']);
+    if (goods > 0) return Math.round(goods);
+    var payable = readNumericAttrOrValue(money, ['data-money-summary-payable-minor']);
+    if (payable > 0) return Math.round(payable);
+    var hidden = qs(
+      d,
+      '[data-cart-grand-total-minor], [data-grand-total-minor], [data-cart-goods-subtotal-minor]'
+    );
+    var fromHidden = readNumericAttrOrValue(hidden, [
+      'data-cart-grand-total-minor',
+      'data-grand-total-minor',
+      'data-cart-goods-subtotal-minor',
+    ]);
+    if (fromHidden > 0) return Math.round(fromHidden);
+    var majorHost = qs(d, '[data-cart-goods-subtotal-major]');
+    var major = majorHost
+      ? Number(majorHost.getAttribute('data-cart-goods-subtotal-major') || majorHost.value || 0)
+      : 0;
+    if (major > 0) return Math.round(major * 100);
+    var root = qs(d, '[data-cart-content]');
+    var summary = root && root.__welineLastCartSummary;
+    if (summary && typeof summary === 'object') {
+      var minor = Number(summary.subtotal_minor || summary.grand_total_minor || 0) || 0;
+      if (minor > 0) return Math.round(minor);
+      var sub = Number(summary.subtotal || summary.grand_total || 0) || 0;
+      if (sub > 0) return Math.round(sub * 100);
+    }
+    return 0;
+  }
+
+  function extractCartSummary(raw) {
+    var data = raw && raw.data && typeof raw.data === 'object' ? raw.data : raw || {};
+    if (data.cart && typeof data.cart === 'object' && (data.cart.items || data.cart.subtotal_minor != null)) {
+      return data.cart;
+    }
+    return data;
+  }
+
+  function collectCartLineSummary(items) {
+    var lineSummary = [];
+    if (!Array.isArray(items)) return lineSummary;
+    items.forEach(function (item) {
+      if (!item || typeof item !== 'object') return;
+      var productId = Number(item.product_id || item.legacy_product_id || 0) || 0;
+      var qty = Number(item.qty || item.qty_minor || 1) || 1;
+      var weightMinor = Number(item.weight_minor || 0) || 0;
+      lineSummary.push({
+        product_id: productId,
+        sku: String(item.sku || '').trim(),
+        title: String(item.name || item.title || '').trim(),
+        qty: qty,
+        row_total_minor: Number(item.row_total_minor || 0) || 0,
+        unit_price_minor: Number(item.unit_price_minor || 0) || 0,
+        weight_minor: weightMinor,
+        weight_per_unit: weightMinor > 0 ? 1 : 0,
+        requires_shipping: item.requires_shipping !== false,
+      });
+    });
+    return lineSummary;
+  }
+
+  function goodsMinorFromCartSummary(summary) {
+    if (!summary || typeof summary !== 'object') return 0;
+    var minor = Number(summary.subtotal_minor || summary.grand_total_minor || 0) || 0;
+    if (minor > 0) return Math.round(minor);
+    var major = Number(summary.subtotal || summary.grand_total || 0) || 0;
+    if (major > 0) return Math.round(major * 100);
+    return 0;
   }
 
   async function readCartHelpPayPayload() {
@@ -1371,35 +1465,17 @@
     try {
       if (w.Weline && w.Weline.Api && typeof w.Weline.Api.resource === 'function') {
         var cart = await w.Weline.Api.resource('cart');
-        var raw = await cart.getData(
-          { cart_type: currentSellingMode(), selling_mode: currentSellingMode() },
+        if (typeof cart.getCart !== 'function') {
+          throw new Error('cart_getCart_unavailable');
+        }
+        var cartType = currentCartType();
+        var raw = await cart.getCart(
+          { cart_type: cartType, selling_mode: cartType },
           { silent: true }
         );
-        var data = (raw && (raw.data || raw)) || {};
-        var cartObj = data.cart || data;
-        var summary = data.summary || cartObj.summary || {};
-        goodsMinor =
-          Number(summary.subtotal_minor || cartObj.subtotal_minor || data.subtotal_minor || 0) || 0;
-        var items = cartObj.items || cartObj.lines || data.items || data.lines || [];
-        if (Array.isArray(items)) {
-          items.forEach(function (item) {
-            if (!item || typeof item !== 'object') return;
-            var productId = Number(item.product_id || item.legacy_product_id || 0) || 0;
-            var qty = Number(item.qty || item.qty_minor || 1) || 1;
-            var weightMinor = Number(item.weight_minor || 0) || 0;
-            lineSummary.push({
-              product_id: productId,
-              sku: String(item.sku || '').trim(),
-              title: String(item.name || item.title || '').trim(),
-              qty: qty,
-              row_total_minor: Number(item.row_total_minor || 0) || 0,
-              unit_price_minor: Number(item.unit_price_minor || 0) || 0,
-              weight_minor: weightMinor,
-              weight_per_unit: weightMinor > 0 ? 1 : 0,
-              requires_shipping: item.requires_shipping !== false,
-            });
-          });
-        }
+        var summary = extractCartSummary(raw);
+        goodsMinor = goodsMinorFromCartSummary(summary);
+        lineSummary = collectCartLineSummary(summary.items || summary.lines || []);
       }
     } catch (err) {
       goodsMinor = 0;
@@ -1851,9 +1927,12 @@
     var form = qs(mountHost, '[data-helppay-address-host]');
     if (form) {
       form.setAttribute('data-session-isolation', '1');
-      form.addEventListener('submit', function (ev) {
-        ev.preventDefault();
-      });
+      if (!form._helppaySubmitBound) {
+        form._helppaySubmitBound = true;
+        form.addEventListener('submit', function (ev) {
+          ev.preventDefault();
+        });
+      }
     }
     if (w.Weline && typeof w.Weline.load === 'function') {
       await w.Weline.load('shippingCheckoutAddress');
@@ -2379,6 +2458,25 @@
   }
 
   var bootBound = false;
+  var onceUiBound = false;
+
+  function bindPayerPayButton(root) {
+    var btn = qs(root, '[data-helppay-pay]');
+    if (!btn || btn._helppayPayBound) return;
+    btn._helppayPayBound = true;
+    btn.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return;
+      onPayerPayClick(btn);
+    });
+  }
+
+  function bindGlobalHelpPayClicks() {
+    if (bootBound) return;
+    bootBound = true;
+    d.addEventListener('click', onHelpPayDelegatedClick);
+  }
 
   function setBillingMessage(root, text, isError) {
     var msg = qs(root, '[data-helppay-billing-msg]');
@@ -2480,9 +2578,12 @@
     var form = qs(mount, '[data-helppay-billing-host]');
     if (form) {
       form.setAttribute('data-session-isolation', '1');
-      form.addEventListener('submit', function (ev) {
-        ev.preventDefault();
-      });
+      if (!form._helppaySubmitBound) {
+        form._helppaySubmitBound = true;
+        form.addEventListener('submit', function (ev) {
+          ev.preventDefault();
+        });
+      }
     }
     var addrRoot = qs(mount, '[data-shipping-checkout-address]');
     if (!addrRoot) return null;
@@ -2797,12 +2898,15 @@
 
   function boot() {
     try {
+      // Bind clicks before any payer wiring — a throw there used to skip 确认付款.
+      bindGlobalHelpPayClicks();
       ensureShareCss();
       mergeShareI18n(null);
       revealCtas();
 
       var payerRoot = qs(d, '[data-testid="help-pay-payer"]');
       if (payerRoot) {
+        bindPayerPayButton(payerRoot);
         wirePayerPaymentMethods(payerRoot);
         wirePayerShipping(payerRoot);
         if (payerBillingRequired(payerRoot)) {
@@ -2814,31 +2918,44 @@
         }
       }
 
-      if (bootBound) {
-        syncQuickPayCtas();
-        return;
-      }
-      bootBound = true;
-
-      d.addEventListener('click', onHelpPayDelegatedClick);
-
       d.querySelectorAll('[data-testid="help-pay-share-result"]').forEach(function (root) {
         wireShareResult(root);
       });
 
+      if (onceUiBound) {
+        syncQuickPayCtas();
+        return;
+      }
+      onceUiBound = true;
+
       w.addEventListener('weline:selling-mode-changed', syncQuickPayCtas);
       w.addEventListener('weline:cart-type-changed', syncQuickPayCtas);
-      var observeRoot = qs(d, '.product-native-detail, [data-product-detail], main') || d.body;
-      if (w.MutationObserver && observeRoot) {
-        var mo = new MutationObserver(function () {
-          syncQuickPayCtas();
-        });
-        mo.observe(observeRoot, {
+      // Payer / checkout pages have no product CTAs; skip MO.
+      // Do not observe `disabled`/`class`: setPurchaseGate writes them and would loop.
+      var observeRoot = qs(d, '.product-native-detail, [data-product-detail]');
+      if (w.MutationObserver && observeRoot && !qs(d, '[data-testid="help-pay-payer"]')) {
+        var moScheduled = false;
+        var moOpts = {
           attributes: true,
           subtree: true,
-          attributeFilter: ['disabled', 'hidden', 'data-selling-mode', 'data-stock-tone', 'class'],
+          attributeFilter: ['hidden', 'data-selling-mode', 'data-stock-tone'],
           childList: true,
+        };
+        var mo = new MutationObserver(function () {
+          if (moScheduled) return;
+          moScheduled = true;
+          var raf = w.requestAnimationFrame || function (cb) { return w.setTimeout(cb, 16); };
+          raf(function () {
+            moScheduled = false;
+            try { mo.disconnect(); } catch (eDisc) {}
+            try {
+              syncQuickPayCtas();
+            } finally {
+              try { mo.observe(observeRoot, moOpts); } catch (eObs) {}
+            }
+          });
         });
+        mo.observe(observeRoot, moOpts);
       }
       // Late sync after PDP offer hydration / purchase-panel inject.
       setTimeout(syncQuickPayCtas, 0);

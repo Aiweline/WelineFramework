@@ -7,15 +7,15 @@ window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
 Object.assign(window.WelineModulesConfig.modules, {
     b2bSellingMode: {
         paths: [
-            'Weline_B2B::js/checkout-tob.js?v=20261006-wholesale-tab-fix1',
-            'Weline_B2B::js/selling-mode.js?v=20261006-wholesale-tab-fix1'
+            'Weline_B2B::js/checkout-tob.js?v=20261006-mini-cart-type1',
+            'Weline_B2B::js/selling-mode.js?v=20261006-mini-cart-type1'
         ],
         globalVar: 'WelineB2BSellingMode',
         description: 'B2B ToC/ToB selling mode + mini-cart/cart dual-type injection'
     },
     b2bCheckoutTob: {
         paths: [
-            'Weline_B2B::js/checkout-tob.js?v=20261006-wholesale-tab-fix1'
+            'Weline_B2B::js/checkout-tob.js?v=20261006-mini-cart-type1'
         ],
         globalVar: 'WelineB2BCheckoutTob',
         description: 'B2B wholesale credit + checkout deposit note for tob carts'

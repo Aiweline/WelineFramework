@@ -143,6 +143,8 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('load can fire between the readyState check', $js);
         self::assertStringContainsString('Hard ceiling: never leave', $js);
         self::assertStringContainsString('isEmbeddedBrowserHost', $js);
+        self::assertStringContainsString('isPaymentQuietSurface', $js);
+        self::assertStringContainsString('never autoplay (native RSS leak)', $js);
         self::assertStringContainsString('host-detached', $js);
         self::assertStringContainsString('0×0 always means detached', $js);
         self::assertStringContainsString('poisoning want_play/user_stopped', $js);

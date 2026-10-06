@@ -23,6 +23,10 @@ Thumbs.db
 collected-tests.json
 .weline-e2e-target-origin
 
+# 本地证据镜像：spec 若用「相对」PHTML_SITEWIDE_EVIDENCE_DIR（如 dev/tmp/...）
+# 且 cwd=tests/e2e 运行，会把整棵证据树铺到这里（2026-10-06 曾误入库一个 css-network.json）
+dev/
+
 # 本地运行产物 / 调试（不入库）
 .last-playwright-tee.txt
 .smoke-publish-last.log

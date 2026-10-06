@@ -266,14 +266,15 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
             <span class="cart-info">
                 <span class="cart-label"><?= __('购物车') ?></span>
                 <span class="cart-meta" data-mini-cart-meta>
-                    <span data-mini-cart-type-caption hidden></span>
+                    <span class="cart-type-caption" data-mini-cart-type-caption><?= __('零售') ?></span>
+                    <span class="cart-meta__sep" aria-hidden="true"> · </span>
                     <span class="cart-subtotal" data-cart-subtotal-text><?= $esc($cartSubtotalVisible) ?></span>
                 </span>
             </span>
         <?php else: ?>
             <span class="cart-info">
                 <span class="cart-label"><?= __('购物车') ?></span>
-                <span data-mini-cart-type-caption hidden></span>
+                <span class="cart-type-caption" data-mini-cart-type-caption><?= __('零售') ?></span>
             </span>
         <?php endif; ?>
     </a>

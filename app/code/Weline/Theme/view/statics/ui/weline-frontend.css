@@ -61,8 +61,13 @@
     .w-frontend-page { display: grid; gap: var(--weline-space-6); padding-block: var(--weline-space-8); }
     .w-frontend-content-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--weline-space-6); align-items: start; }
     .w-frontend-content, .w-frontend-sidebar { min-width: 0; }
-    /* Whitespace-only sidebar slots must not reserve grid columns (default layout indentation bug). */
-    .w-frontend-sidebar:blank { display: none; }
+    /* Empty chrome slots must not occupy a grid row/column (whitespace/:blank 不够时仍会留顶空). */
+    .w-frontend-sidebar:blank,
+    .w-frontend-sidebar:not(:has(*)),
+    .w-frontend-content-before:blank,
+    .w-frontend-content-before:not(:has(*)),
+    .w-frontend-content-after:blank,
+    .w-frontend-content-after:not(:has(*)) { display: none; }
     .w-frontend-header, .w-frontend-footer { background: var(--weline-theme-surface); color: var(--weline-theme-text); }
     .w-frontend-header { border-bottom: 1px solid var(--weline-theme-border); }
     .w-frontend-footer { border-top: 1px solid var(--weline-theme-border); }
@@ -71,9 +76,9 @@
 
 @media (min-width: 64rem) {
     @layer layout {
-        .w-frontend-content-grid:has(> .w-frontend-sidebar:not(:blank):first-child) { grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr); }
-        .w-frontend-content-grid:has(> .w-frontend-sidebar:not(:blank):last-child) { grid-template-columns: minmax(0, 1fr) minmax(13rem, 18rem); }
-        .w-frontend-content-grid:has(> .w-frontend-sidebar:not(:blank):first-child):has(> .w-frontend-sidebar:not(:blank):last-child) { grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr) minmax(11rem, 15rem); }
+        .w-frontend-content-grid:has(> .w-frontend-sidebar:has(*):first-child) { grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr); }
+        .w-frontend-content-grid:has(> .w-frontend-sidebar:has(*):last-child) { grid-template-columns: minmax(0, 1fr) minmax(13rem, 18rem); }
+        .w-frontend-content-grid:has(> .w-frontend-sidebar:has(*):first-child):has(> .w-frontend-sidebar:has(*):last-child) { grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr) minmax(11rem, 15rem); }
     }
 }
 

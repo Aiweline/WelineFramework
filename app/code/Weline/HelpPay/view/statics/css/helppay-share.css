@@ -971,7 +971,6 @@ button[data-testid="product-quick-pay"][disabled] {
 .w-helppay-invalid {
   max-inline-size: min(100%, var(--weline-layout-content-max-width, 72rem));
   margin-inline: auto;
-  padding-block: var(--weline-space-5, var(--space-5));
   padding-inline: var(--weline-layout-content-padding-inline, var(--weline-space-4, var(--space-4)));
 }
 
@@ -979,11 +978,23 @@ button[data-testid="product-quick-pay"][disabled] {
 .w-helppay-selection,
 .w-helppay-invalid {
   max-inline-size: 40rem;
+  padding-block: var(--weline-space-5, var(--space-5));
+}
+
+.w-frontend-page:has(.w-helppay-payer) {
+  padding-block-start: var(--weline-space-3, var(--space-3));
+  gap: var(--weline-space-3, var(--space-3));
+}
+
+.w-frontend-page:has(.w-helppay-payer) .w-frontend-content-grid {
+  gap: 0;
 }
 
 .w-helppay-payer {
   display: grid;
   gap: var(--weline-space-5, var(--space-5));
+  padding-block-start: 0;
+  padding-block-end: var(--weline-space-5, var(--space-5));
 }
 
 .w-helppay-payer__grid {

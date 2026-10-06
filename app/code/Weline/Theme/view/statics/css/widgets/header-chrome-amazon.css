@@ -758,17 +758,18 @@
     width: 100%;
 }
 
-/* 与 partial 同构：左 max-content、右吃剩余（左空则右铺满） */
+/* 与 partial 同构：左吃剩余、右内容宽（禁止 flex:1 把空档定在右簇） */
 .weline-header .header-nav-left-cluster {
-    flex: 0 1 auto;
-    flex-grow: 0;
-    width: max-content;
+    flex: 1 1 auto;
     min-width: 0;
-    max-width: 100%;
+    width: auto;
+    max-width: none;
 }
 
 .weline-header .header-nav-right-cluster {
-    flex: 1 1 0%;
+    flex: 0 1 auto;
+    flex-grow: 0;
+    width: max-content;
     min-width: 0;
     justify-content: flex-end;
 }
@@ -1147,6 +1148,7 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 }
 
 .weline-header .header-cart .cart-type-caption,
+.weline-header .header-cart [data-mini-cart-type-caption],
 .weline-header .header-cart [data-cart-type-badge] {
     font-size: inherit;
     font-weight: 500;

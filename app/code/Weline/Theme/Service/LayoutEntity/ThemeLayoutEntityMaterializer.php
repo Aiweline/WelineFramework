@@ -63,6 +63,7 @@ final class ThemeLayoutEntityMaterializer
             'origin' => $origin, 'identity' => $identity->toArray(),
             'layout_type' => $layoutType, 'layout_option' => $layoutOption,
             'target_type' => $targetType, 'target_id' => $targetId,
+            'input_digest' => $this->pageInputDigest($origin),
         ])];
         $visited = [];
         while ($dependencies !== []) {
@@ -279,6 +280,20 @@ final class ThemeLayoutEntityMaterializer
             return '<?php ' . $php . $rest;
         }
         return '<?php ' . $php . ' ?>' . $source;
+    }
+
+    private function pageInputDigest(string $origin): string
+    {
+        try {
+            $plan = hash('sha256', json_encode(
+                ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class)->loadDeclarations(),
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES,
+            ));
+        } catch (\Throwable) {
+            $plan = hash('sha256', '[]');
+        }
+        $originHash = is_file($origin) ? (string)hash_file('sha256', $origin) : '';
+        return hash('sha256', $originHash . "\0" . $plan);
     }
 
     private function metadata(string $source, array $metadata): string

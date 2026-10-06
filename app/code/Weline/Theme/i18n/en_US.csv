@@ -1295,6 +1295,7 @@ Logo,Logo
 自动优惠,"Automatic discount"
 "还差 %1 包邮","You're %1 away from free shipping"
 已享包邮,"You've unlocked free shipping"
+零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
@@ -1928,6 +1929,7 @@ AI目录加载失败,"AI directory loading failed"
 "保存主题盘失败：配置值过长（%{len}/%{max}），请减少变更 Token 或缩短取值","Failed to save theme disk: configuration value is too long (%{len}/%{max}), please reduce the change token or shorten the value"
 "Theme 布局类型化值超过运行时解析上限。","Theme layout typed value exceeds the runtime resolution limit."
 "file-image 运行时适配器不可用。","The file-image runtime adapter is unavailable."
+主题布局预固化,"Solidifying theme layouts"
 "正在从已记录的版本意图生成 PHTML…","正在从已记录的版本意图生成 PHTML…"
 "可解析版本的主题布局 PHTML 已生成。","可解析版本的主题布局 PHTML 已生成。"
 "Theme 范围版本参数无效。","Theme scope version parameters are invalid."
@@ -3073,7 +3075,6 @@ Product,Product
 帮助支持,"Help & support"
 搜索帮助,"Search for help"
 搜索帮助主题，例如：退货、运费、发票,"Search for help topics, such as: returns, shipping costs, invoices"
-零售,Retail
 批发,Wholesale
 物流配送,Shipping
 发货时效、运费与配送范围,"Lead times, shipping fees & coverage"

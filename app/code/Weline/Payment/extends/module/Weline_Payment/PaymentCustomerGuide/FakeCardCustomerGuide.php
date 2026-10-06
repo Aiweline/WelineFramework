@@ -20,27 +20,27 @@ final class FakeCardCustomerGuide implements PaymentCustomerGuideInterface
 
     public function getTitle(): string
     {
-        return (string) __('本地测试支付');
+        return '本地测试支付';
     }
 
     public function getSummary(): string
     {
-        return (string) __('了解本地测试支付的开发验证流程、适用场景与注意事项。');
+        return '了解本地测试支付的开发验证流程、适用场景与注意事项。';
     }
 
     public function getGuideTitle(): string
     {
-        return (string) __('本地测试支付指南');
+        return '本地测试支付指南';
     }
 
     public function getPolicyTitle(): string
     {
-        return (string) __('本地测试支付政策');
+        return '本地测试支付政策';
     }
 
     public function getAgreementTitle(): string
     {
-        return (string) __('本地测试支付用户协议');
+        return '本地测试支付用户协议';
     }
 
     public function getGuideTemplateCode(): string

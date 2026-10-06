@@ -36,7 +36,14 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
         self::assertStringContainsString('data-cart-goods-subtotal', $template);
         self::assertStringContainsString('data-cart-grand-total', $template);
         self::assertStringContainsString('data-express-subtotal', $template);
+        self::assertStringContainsString('data-helppay-goods-amount', $template);
         self::assertStringContainsString('data-helppay-total-amount', $template);
+        self::assertStringContainsString("\$goodsText = trim((string) (\$this->getData('goods_text') ?? ''))", $template);
+        self::assertStringContainsString("\$shippingText = trim((string) (\$this->getData('shipping_text') ?? ''))", $template);
+        self::assertStringContainsString("\$payableText = trim((string) (\$this->getData('payable_text') ?? ''))", $template);
+        self::assertStringContainsString('<?= $escape($goodsText) ?>', $template);
+        self::assertStringContainsString('<?= $escape($shippingText) ?>', $template);
+        self::assertStringContainsString('<?= $escape($payableText) ?>', $template);
 
         self::assertLessThan(
             strpos($template, 'data-money-summary-row="shipping"'),

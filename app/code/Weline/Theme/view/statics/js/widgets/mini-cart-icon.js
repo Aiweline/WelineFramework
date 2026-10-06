@@ -126,10 +126,52 @@
     }
 
     /**
-     * Preferred cart_type from optional providers, then summary, else Cart SPI default 'toc'.
-     * Does not hardcode B2B dual-cart UI; Theme stays retail-only without those helpers.
+     * Opaque cart_type from this page's cart/checkout view (URL / handoff).
+     * Wins over leftover selling-mode cookie so 「查看零售车」 keeps mini-cart on toc.
+     */
+    function cartTypeFromPageView() {
+        try {
+            var page = document.querySelector('[data-weline-cart], [data-weline-checkout]');
+            if (page) {
+                var handoff = String(page.getAttribute('data-cart-type-handoff') || '').trim().toLowerCase();
+                if (handoff) {
+                    return handoff;
+                }
+                var painted = String(page.getAttribute('data-cart-type') || '').trim().toLowerCase();
+                if (painted) {
+                    return painted;
+                }
+            }
+            var path = String(window.location.pathname || '');
+            if (path.indexOf('/cart') === -1 && path.indexOf('/checkout') === -1) {
+                return '';
+            }
+            var params = new URLSearchParams(window.location.search || '');
+            var query = String(
+                params.get('cart_type') || params.get('type') || params.get('selling_mode') || ''
+            ).trim().toLowerCase();
+            if (query) {
+                return query;
+            }
+            if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.pageViewCartType === 'function') {
+                var fromPage = String(window.WelineB2BSellingMode.pageViewCartType() || '').trim().toLowerCase();
+                if (fromPage) {
+                    return fromPage;
+                }
+            }
+        } catch (ePage) {}
+        return '';
+    }
+
+    /**
+     * Preferred cart_type: page-view handoff first, then optional providers, then summary, else toc.
+     * Does not hardcode B2B dual-cart UI labels; Theme stays retail-only without those helpers.
      */
     function preferredCartType(summary) {
+        var fromView = cartTypeFromPageView();
+        if (fromView) {
+            return fromView;
+        }
         try {
             if (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function') {
                 var fromB2b = String(window.WelineB2BSellingMode.preferredMode() || '').trim().toLowerCase();

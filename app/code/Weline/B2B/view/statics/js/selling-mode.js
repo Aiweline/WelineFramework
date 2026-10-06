@@ -1310,8 +1310,37 @@
         });
     }
 
+    /**
+     * Cart page / checkout URL handoff owns this view (查看零售车 ?cart_type=toc).
+     * Mini-cart chrome must follow that bucket, not leftover tob cookie.
+     */
+    function pageViewCartType(fallback) {
+        var base = fallback === 'tob' ? 'tob' : 'toc';
+        try {
+            var page = document.querySelector('[data-weline-cart], [data-weline-checkout]');
+            if (page) {
+                var handoff = String(page.getAttribute('data-cart-type-handoff') || '').toLowerCase();
+                if (handoff === 'toc' || handoff === 'tob') {
+                    return handoff;
+                }
+                var painted = String(page.getAttribute('data-cart-type') || '').toLowerCase();
+                if (painted === 'toc' || painted === 'tob') {
+                    return painted;
+                }
+            }
+            var params = new URLSearchParams(global.location.search || '');
+            var query = String(
+                params.get('cart_type') || params.get('type') || params.get('selling_mode') || ''
+            ).toLowerCase();
+            if (query === 'toc' || query === 'tob') {
+                return query;
+            }
+        } catch (eView) {}
+        return base;
+    }
+
     function syncMiniCartChrome(mode) {
-        mode = mode === 'tob' ? 'tob' : 'toc';
+        mode = pageViewCartType(mode === 'tob' ? 'tob' : 'toc');
         var shortLabel = mode === 'tob' ? i18n('data-i18n-tob', '批发') : i18n('data-i18n-toc', '零售');
         var cartLabel = mode === 'tob' ? i18n('data-i18n-tob-cart', '批发车') : i18n('data-i18n-toc-cart', '零售车');
         document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
@@ -1331,6 +1360,7 @@
             }
             root.querySelectorAll('[data-mini-cart-type-caption]').forEach(function (el) {
                 el.hidden = false;
+                el.removeAttribute('hidden');
                 if (el.textContent !== shortLabel) {
                     el.textContent = shortLabel;
                 }
@@ -1347,6 +1377,23 @@
                 if (el.textContent !== cartLabel) {
                     el.textContent = cartLabel;
                 }
+            });
+            root.querySelectorAll('[data-mini-cart-trigger]').forEach(function (el) {
+                el.setAttribute('aria-label', cartLabel);
+            });
+            root.querySelectorAll('a.mini-cart-drawer__btn--secondary[href], a.cart-link[href]').forEach(function (link) {
+                try {
+                    var href = String(link.getAttribute('href') || '');
+                    if (!href || href.charAt(0) === '#') {
+                        return;
+                    }
+                    var url = new URL(href, global.location.origin);
+                    if (url.pathname.indexOf('/cart') === -1) {
+                        return;
+                    }
+                    url.searchParams.set('cart_type', mode);
+                    link.setAttribute('href', url.pathname + url.search + url.hash);
+                } catch (eHref) {}
             });
             root.querySelectorAll('[data-b2b-mini-cart-type-option]').forEach(function (btn) {
                 var option = String(btn.getAttribute('data-b2b-mini-cart-type-option') || '').toLowerCase();
@@ -1542,6 +1589,9 @@
         global.WelineB2BSellingMode = {
             preferredMode: function () {
                 return preferredMode(document.querySelector('[data-b2b-selling-mode="1"]'));
+            },
+            pageViewCartType: function () {
+                return pageViewCartType(preferredMode(null));
             },
             openApply: function () {
                 var root = document.querySelector('[data-b2b-selling-mode="1"]');

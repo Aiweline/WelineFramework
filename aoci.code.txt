@@ -1,7 +1,6 @@
 #AOCI-CODE-VOLUME: 1
 
 ===/Users/weline/Project/Official/框架/===
-.claudeignore[FC3T]: F:声明Claude忽略vendor/generated/pub静态与缓存等路径 | R:- | A:- | S:-
 .dockerignore[OC4T]: F:声明Docker构建上下文排除git/文档/测试与运行时缓存 | R:code:Dockerfile | A:- | S:保留var/cache|log|session与generated的.gitkeep不被忽略
 .env.sample[FC3T]: F:示例Git部署环境变量模板含仓库凭证与备份开关 | R:- | A:- | S:须复制为根目录.env后修改；DEPLOY_DIR默认取.env所在目录
 .gitattributes[FV5T]: F:强制文本LF规范化并锁定WLS网关签名相关文件eol=lf | R:code:app/code/Weline/Server/bin/wls_gateway_controller.php,code:dev/tools/wls-gateway-package.php | A:- | S:网关signer与package-controller输入按字节哈希，禁止CRLF改写

@@ -56,6 +56,20 @@ final class SearchSelectDisplayContractTest extends TestCase
         self::assertStringContainsString('.w-search-select-clear{position:absolute;top:50%;right:25px;transform:translateY(-50%)', $src);
     }
 
+    public function testSelectedOptionUsesBackendThemePrimaryAndOnPrimary(): void
+    {
+        $src = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Taglib/SearchSelect.php');
+
+        self::assertStringContainsString(
+            '.w-search-select-item.selected,.w-search-select-item.selected:hover,.w-search-select-item.selected.active{background:var(--weline-theme-primary,var(--backend-color-primary));color:var(--weline-theme-on-primary,var(--backend-color-on-primary))}',
+            $src,
+        );
+        self::assertStringNotContainsString('--weline-theme-primary-subtle', $src);
+        self::assertStringNotContainsString('#e9ecef', $src);
+        self::assertStringNotContainsString('#f8f9fa', $src);
+        self::assertStringNotContainsString('surface-raised,#fff', $src);
+    }
+
     public function testFailedSearchSetsEmptyCacheToPreventRequestStorm(): void
     {
         $src = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Taglib/SearchSelect.php');

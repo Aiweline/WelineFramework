@@ -32,6 +32,7 @@ use Weline\Websites\Service\DomainSyncService;
 use Weline\Websites\Service\DnsProviderDetector;
 use Weline\Websites\Service\ProvisioningQueryHandler;
 use Weline\Websites\Service\AiWorkbench\SiteBuilderWorkbenchQueryHandler;
+use Weline\Websites\Service\WebsiteCreateService;
 use Weline\Websites\Service\WebsiteSelectOptions;
 
 class WebsitesQueryProvider implements QueryProviderInterface
@@ -104,6 +105,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getWebsiteById'         => $this->getWebsiteById($params),
             'getWebsiteByCode'       => $this->getWebsiteByCode($params),
             'getWebsiteList'         => $this->getWebsiteList($params),
+            'createWebsite'          => $this->createWebsite($params),
             'getWebsiteSelectOptions' => WebsiteSelectOptions::fromRows($this->getWebsiteList($params)),
             'getActiveWebsiteDomains' => $this->getActiveWebsiteDomains($params),
             'getWebsiteDomains' => $this->getWebsiteDomains($params),
@@ -394,6 +396,25 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'name'        => 'getWebsiteList',
                     'description' => __('获取所有站点列表'),
                     'params'      => [],
+                ],
+                [
+                    'name'        => 'createWebsite',
+                    'description' => __('新建网站（控制中心 / CLI，契约对齐后台快速创建）'),
+                    'frontend'    => true,
+                    'auth'        => 'backend',
+                    'backend'     => true,
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Websites::website_add',
+                    ],
+                    'mode'        => 'write',
+                    'graph'       => false,
+                    'params'      => [
+                        ['name' => 'name', 'type' => 'string', 'required' => true],
+                        ['name' => 'url', 'type' => 'string', 'required' => true],
+                        ['name' => 'code', 'type' => 'string', 'required' => false],
+                        ['name' => 'default_timezone', 'type' => 'string', 'required' => false],
+                    ],
                 ],
                 [
                     'name'        => 'getWebsiteSelectOptions',
@@ -1317,6 +1338,17 @@ class WebsitesQueryProvider implements QueryProviderInterface
             $list[] = $this->normalizeWebsitePayload($w);
         }
         return $list;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function createWebsite(array $params): array
+    {
+        /** @var WebsiteCreateService $service */
+        $service = ObjectManager::getInstance(WebsiteCreateService::class);
+        return $service->create($params);
     }
 
     /**

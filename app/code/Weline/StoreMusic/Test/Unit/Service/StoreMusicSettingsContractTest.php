@@ -105,7 +105,8 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('BP . ', $hook);
 
         self::assertStringContainsString('storeMusic', $modulesJs);
-        self::assertStringContainsString('20260924-no-unload1', $modulesJs);
+        self::assertStringContainsString('20261006-payquiet1', $modulesJs);
+        self::assertStringNotContainsString('20260924-no-unload1', $modulesJs);
         self::assertStringNotContainsString('20260917-storemusic-speccenter2', $modulesJs);
         self::assertStringContainsString('load: "defer"', $modulesJs);
         self::assertStringContainsString('marketingAllowed', $js);

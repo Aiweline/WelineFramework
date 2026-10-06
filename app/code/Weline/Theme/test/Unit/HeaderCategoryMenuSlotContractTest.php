@@ -66,6 +66,23 @@ final class HeaderCategoryMenuSlotContractTest extends TestCase
 
         self::assertStringContainsString('.header-nav-left-cluster {', $css);
         self::assertStringContainsString('.header-nav-right-cluster {', $css);
+        self::assertDoesNotMatchRegularExpression(
+            '/\.header-nav-right-cluster \{[^}]*flex:\s*1\s+1\s+0%/s',
+            $css,
+            '右簇禁止 flex:1 吃中间空白，否则 More 按被定空的宽计算'
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/\.header-nav-right-cluster \{[^}]*min-width:\s*max\(240px,\s*30%\)/s',
+            $css
+        );
+        self::assertMatchesRegularExpression(
+            '/\.header-nav-right-cluster \{[^}]*flex-grow:\s*0;/s',
+            $css
+        );
+        self::assertMatchesRegularExpression(
+            '/\.header-nav-left-cluster \{[^}]*flex:\s*1\s+1\s+auto;/s',
+            $css
+        );
         self::assertStringContainsString('.header-nav-extensions {', $css);
         self::assertStringContainsString('.header-nav-extensions:empty {', $css);
         self::assertStringContainsString(

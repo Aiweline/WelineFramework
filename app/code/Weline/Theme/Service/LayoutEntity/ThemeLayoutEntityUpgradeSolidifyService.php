@@ -24,8 +24,27 @@ final class ThemeLayoutEntityUpgradeSolidifyService
         self::$hasRun = true;
         return $result;
     }
-    public function solidifyAllThemes(?string $area = null): int { return $this->bakeCoordinator->rebakeAfterInjectionCollect(null, []); }
-    public function solidifyTheme(int $themeId, ?string $area = null): int { return $themeId > 0 ? $this->bakeCoordinator->rebakeAfterInjectionCollect($themeId, []) : 0; }
+    public function solidifyAllThemes(?string $area = null): int
+    {
+        return $this->bakeCoordinator->rebakeAfterInjectionCollect(null, [], $this->progress(...), false);
+    }
+    public function solidifyTheme(int $themeId, ?string $area = null): int
+    {
+        return $themeId > 0 ? $this->bakeCoordinator->rebakeAfterInjectionCollect($themeId, [], $this->progress(...), false) : 0;
+    }
+    private function progress(int $index, int $total, object $identity): void
+    {
+        $this->printing->note(sprintf(
+            '%s [%d/%d] theme=%d V%d R%d %s',
+            (string)__('主题布局预固化'),
+            $index,
+            $total,
+            (int)($identity->themeId ?? 0),
+            (int)($identity->themeVersionId ?? 0),
+            (int)($identity->contentRevision ?? 0),
+            (string)($identity->canonicalScope ?? ''),
+        ));
+    }
     public function solidifyFromThemeCommand(?WelineTheme $theme): int
     {
         return $theme !== null && (int)$theme->getId() > 0 ? $this->solidifyTheme((int)$theme->getId()) : $this->solidifyAllThemes();
@@ -54,7 +73,12 @@ final class ThemeLayoutEntityUpgradeSolidifyService
                 throw new \RuntimeException('layout_entities_cache_clear_partial_failure:' . $step . '=' . $message);
             }
         }
-        $this->printing->success((string)__('可解析版本的主题布局 PHTML 已生成。'));
+        $this->printing->success(sprintf(
+            '%s migrated=%d skipped=%d',
+            (string)__('可解析版本的主题布局 PHTML 已生成。'),
+            (int)($report['migrated'] ?? $solidified),
+            (int)($report['skipped'] ?? 0),
+        ));
         return ['purged' => $purged, 'solidified' => $solidified, 'purged_legacy' => $legacy, 'unmapped' => $report['unmapped'] ?? []];
     }
     private function removeSidecars(?int $themeId): int

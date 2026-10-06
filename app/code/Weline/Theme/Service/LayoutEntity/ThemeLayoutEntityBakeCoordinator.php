@@ -16,7 +16,7 @@ use Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService;
 /** Save-time projection: database intent + current defaults -> ordinary PHTML. */
 final class ThemeLayoutEntityBakeCoordinator
 {
-    private array $lastRebakeReport = ['migrated' => 0, 'unmapped' => [], 'chrome_bootstrapped' => 0];
+    private array $lastRebakeReport = ['migrated' => 0, 'skipped' => 0, 'unmapped' => [], 'chrome_bootstrapped' => 0];
 
     public function __construct(
         private readonly ThemeScopeVersionService $scopeVersions,
@@ -386,20 +386,31 @@ final class ThemeLayoutEntityBakeCoordinator
         });
     }
 
-    /** Upgrade/default-plan changes affect the union of before and after targets in every proven version. */
-    public function rebakeAfterInjectionCollect(?int $themeId = null, array $changes = []): int
+    /** Upgrade/default-plan: current owner scopes only (website/global, own theme, or edited). */
+    public function rebakeAfterInjectionCollect(?int $themeId = null, array $changes = [], ?callable $progress = null, bool $includeSelectedDraft = true): int
     {
-        $this->lastRebakeReport = ['migrated' => 0, 'unmapped' => [], 'chrome_bootstrapped' => 0];
+        $this->lastRebakeReport = ['migrated' => 0, 'skipped' => 0, 'unmapped' => [], 'chrome_bootstrapped' => 0];
+        $planDigest = $this->injectionPlanDigest();
         $query = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery();
         if ($themeId !== null) { $query->where('theme_id', $themeId); }
         $rows = $query->select()->fetchArray();
         $rows = !is_array($rows) || $rows === [] ? [] : (array_is_list($rows) ? $rows : [$rows]);
+        $live = [];
         foreach ($rows as $row) {
             $version = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->setData($row);
             $identity = $version->toVersionIdentity();
-            // Every D shares the owner's one draft directory. Historical D is
-            // still available to candidateForIdentity, but never owns that path.
             if (!$this->ownsPublicationDirectory($identity)) { continue; }
+            if (!$this->isCurrentlyEffectiveScopeVersion($identity, $includeSelectedDraft)) { continue; }
+            if (!$this->scopeOwnsSolidify($identity)) { continue; }
+            $live[] = [$version, $identity];
+        }
+        $total = count($live);
+        $index = 0;
+        foreach ($live as [$version, $identity]) {
+            $index++;
+            if ($progress !== null) {
+                $progress($index, $total, $identity);
+            }
             $head = $this->snapshotService()->head($identity);
             $descriptor = json_decode((string)($head['package_default_json'] ?? '{}'), true);
             if ($identity->contentRevision < 1 || $head === null || empty($descriptor['current_package_defaults'])) {
@@ -436,10 +447,28 @@ final class ThemeLayoutEntityBakeCoordinator
                     if ($type !== '' && $type !== '*') { $targets[] = ['layout_type' => $type, 'layout_option' => ($declaration['layout_option'] ?? 'default') === '*' ? 'default' : ($declaration['layout_option'] ?? 'default')]; }
                 }
             }
-            $targets = array_merge($targets, $this->existingPageTargets($identity), $this->declaredPageTargets($identity, $changes));
-            if ($targets === []) { $targets[] = ['layout_type' => 'homepage', 'layout_option' => 'default']; }
+            $targets = $this->uniqueLayoutTargets(array_merge(
+                $targets,
+                $this->existingPageTargets($identity),
+                $this->declaredPageTargets($identity, $changes),
+            ));
+            if ($targets === []) { $targets[] = ['layout_type' => 'homepage', 'layout_option' => 'default', 'target_type' => 'global', 'target_id' => 0]; }
+            $pending = [];
+            foreach ($targets as $key) {
+                $type = (string)($key['layout_type'] ?? 'default');
+                $option = (string)($key['layout_option'] ?? 'default');
+                if (!ThemeLayoutEntityInjectionTargets::affects($changes, $type, $option)) { continue; }
+                $targetType = (string)($key['target_type'] ?? 'global');
+                $targetId = (int)($key['target_id'] ?? 0);
+                if ($this->generatedPageMatchesInputs($identity, $type, $option, $targetType, $targetId, $changes, $planDigest)) {
+                    $this->lastRebakeReport['skipped']++;
+                    continue;
+                }
+                $pending[] = ['layout_type' => $type, 'layout_option' => $option, 'target_type' => $targetType, 'target_id' => $targetId];
+            }
+            if ($pending === []) { continue; }
             try {
-                ThemeLayoutEntityOwnerLock::write($identity, function () use (&$identity, $targets, $changes): void {
+                ThemeLayoutEntityOwnerLock::write($identity, function () use (&$identity, $pending, $changes): void {
                     if (!$this->ownsPublicationDirectory($identity)) { return; }
                     if ($identity->mode === ThemeVersionIdentity::MODE_DRAFT) {
                         $version = $this->loadVersion($identity);
@@ -448,11 +477,15 @@ final class ThemeLayoutEntityBakeCoordinator
                             $this->context($identity, 'homepage', 'default', 'global', null)) ?? $identity;
                     }
                     $candidates = [];
-                    foreach ($targets as $key) {
-                        $type = (string)($key['layout_type'] ?? 'default'); $option = (string)($key['layout_option'] ?? 'default');
-                        if (!ThemeLayoutEntityInjectionTargets::affects($changes, $type, $option)) { continue; }
-                        $candidates = array_replace($candidates, $this->candidateForIdentity($identity, $type, $option,
-                            (string)($key['target_type'] ?? 'global'), (int)($key['target_id'] ?? 0), $changes));
+                    foreach ($pending as $key) {
+                        $candidates = array_replace($candidates, $this->candidateForIdentity(
+                            $identity,
+                            (string)$key['layout_type'],
+                            (string)$key['layout_option'],
+                            (string)$key['target_type'],
+                            (int)$key['target_id'],
+                            $changes,
+                        ));
                     }
                     $this->publish($identity, $candidates);
                     $this->lastRebakeReport['migrated'] += count($candidates);
@@ -470,6 +503,83 @@ final class ThemeLayoutEntityBakeCoordinator
         if ($identity->mode !== ThemeVersionIdentity::MODE_DRAFT) { return true; }
         return $this->scopeVersions->getCurrent($identity->themeId, $identity->canonicalScope, $identity->storeMode, $identity->area)
             ?->getVersionId() === $identity->themeVersionId;
+    }
+
+    /** One currently effective version per owner scope. Historical sealed/draft rows are not pre-baked. */
+    private function isCurrentlyEffectiveScopeVersion(ThemeVersionIdentity $identity, bool $includeSelectedDraft): bool
+    {
+        $published = $this->scopeVersions->getPublished($identity->themeId, $identity->canonicalScope, $identity->storeMode, $identity->area);
+        if ($published !== null && (int)$published->getVersionId() === $identity->themeVersionId) {
+            return true;
+        }
+        if (!$includeSelectedDraft) {
+            return false;
+        }
+        $current = $this->scopeVersions->getCurrent($identity->themeId, $identity->canonicalScope, $identity->storeMode, $identity->area);
+        return $current !== null && (int)$current->getVersionId() === $identity->themeVersionId;
+    }
+
+    /**
+     * Store/channel without an own theme application inherit the parent website
+     * artifact. Only website/global owners, own theme assignments, or edited
+     * scopes are pre-baked.
+     */
+    private function scopeOwnsSolidify(ThemeVersionIdentity $identity): bool
+    {
+        if ($this->versionHasEditIntent($identity)) {
+            return true;
+        }
+        $kind = $this->scopeKindOf($identity);
+        if ($kind === \Weline\Framework\Runtime\ScopeIdentity::KIND_GLOBAL
+            || $kind === \Weline\Framework\Runtime\ScopeIdentity::KIND_WEBSITE) {
+            return true;
+        }
+        return $this->hasOwnThemeApplication($identity);
+    }
+
+    private function versionHasEditIntent(ThemeVersionIdentity $identity): bool
+    {
+        foreach ($this->snapshotService()->resources($identity) as $resource) {
+            $key = json_decode((string)($resource['resource_key_json'] ?? '{}'), true);
+            if (is_array($key) && !empty($key['has_intent'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function scopeKindOf(ThemeVersionIdentity $identity): string
+    {
+        try {
+            return ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutScopeNormalizer::class)
+                ->identityFromEncodedScope($identity->canonicalScope)->scopeKind;
+        } catch (\Throwable) {
+            return \Weline\Framework\Runtime\ScopeIdentity::KIND_WEBSITE;
+        }
+    }
+
+    private function hasOwnThemeApplication(ThemeVersionIdentity $identity): bool
+    {
+        try {
+            $scope = ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutScopeNormalizer::class)
+                ->identityFromEncodedScope($identity->canonicalScope);
+            $own = ObjectManager::getInstance(\Weline\Websites\Api\Theme\ThemeApplicationInterface::class)
+                ->getOwn($scope->canonicalKey(), $identity->storeMode, $identity->area);
+            $reference = $own['reference'] ?? null;
+            if (!$reference instanceof \Weline\Websites\Api\Theme\ThemeApplicationReference) {
+                return false;
+            }
+            if ($reference->themeId !== $identity->themeId || $reference->area !== $identity->area) {
+                return false;
+            }
+            if ($reference->versionOwnerScope !== $identity->canonicalScope
+                || $reference->versionOwnerStoreMode !== $identity->storeMode) {
+                return false;
+            }
+            return $reference->themeVersionId === 0 || $reference->themeVersionId === $identity->themeVersionId;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function reportMissingSourceOrThrow(ThemeVersionIdentity $identity, \Throwable $error): void
@@ -549,6 +659,7 @@ final class ThemeLayoutEntityBakeCoordinator
             if (!$file->isFile() || $file->isLink() || $file->getExtension() !== 'phtml' || str_starts_with($file->getFilename(), '.')) { continue; }
             $meta = ThemeLayoutSourceSnapshot::metadata((string)file_get_contents($file->getPathname()));
             if ($meta === null || empty($meta['layout_type'])) { continue; }
+            if (in_array((string)($meta['resource_type'] ?? ''), ['page_dependency', 'partial', 'partial_dependency'], true)) { continue; }
             try { if (ThemeVersionIdentity::fromArray($meta['identity'])->ownerHash() !== $identity->ownerHash()) { continue; } }
             catch (\Throwable) { continue; }
             $out[] = $meta;
@@ -559,33 +670,103 @@ final class ThemeLayoutEntityBakeCoordinator
     /** Package catalog expands wildcard injection targets without creating a sidecar index. */
     private function declaredPageTargets(ThemeVersionIdentity $identity, array $changes): array
     {
-        $theme = (clone ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class))->clearData()->clearQuery()->load($identity->themeId);
-        $catalog = \Weline\Theme\Helper\LayoutScanner::scanLayouts($theme, $identity->area);
-        $targets = [];
-        foreach ($catalog as $type => $options) {
-            foreach ($options as $option) {
-                $option = is_array($option) ? (string)($option['value'] ?? 'default') : (string)$option;
-                $targets[$type . '|' . $option] = ['layout_type' => $type, 'layout_option' => $option];
-            }
-        }
         $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
         $declarations = $merger->loadDeclarations();
         foreach ($changes as $change) {
             if (!is_array($change)) { continue; }
             $declarations[] = ['default_injections' => array_merge($change['before'] ?? [], $change['after'] ?? [])];
         }
+        $targets = [];
+        $expandCatalog = false;
         foreach ($declarations as $declaration) {
             $injections = (array)($declaration['default_injections'] ?? []);
             if ($injections !== [] && !array_is_list($injections)) { $injections = [$injections]; }
             foreach ($injections as $injection) {
+                if (!is_array($injection)) { continue; }
                 $type = (string)($injection['layout_type'] ?? '*');
                 $option = (string)($injection['layout_option'] ?? 'default');
-                if ($type !== '' && $type !== '*' && $option !== '*') {
-                    $targets[$type . '|' . $option] = ['layout_type' => $type, 'layout_option' => $option];
+                if ($type === '' || $type === '*' || $option === '*') {
+                    $expandCatalog = true;
+                    continue;
+                }
+                $targets[$type . '|' . $option] = ['layout_type' => $type, 'layout_option' => $option];
+            }
+        }
+        if ($expandCatalog) {
+            $theme = (clone ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class))->clearData()->clearQuery()->load($identity->themeId);
+            $catalog = \Weline\Theme\Helper\LayoutScanner::scanLayouts($theme, $identity->area);
+            foreach ($catalog as $type => $options) {
+                foreach ($options as $option) {
+                    $option = is_array($option) ? (string)($option['value'] ?? 'default') : (string)$option;
+                    $key = $type . '|' . $option;
+                    if (!isset($targets[$key])) {
+                        $targets[$key] = ['layout_type' => $type, 'layout_option' => $option];
+                    }
                 }
             }
         }
         return array_values($targets);
+    }
+
+    /** @param list<array<string,mixed>> $targets @return list<array{layout_type:string,layout_option:string,target_type:string,target_id:int}> */
+    private function uniqueLayoutTargets(array $targets): array
+    {
+        $out = [];
+        foreach ($targets as $key) {
+            if (!is_array($key)) { continue; }
+            $type = (string)($key['layout_type'] ?? 'default');
+            $option = (string)($key['layout_option'] ?? 'default');
+            $targetType = (string)($key['target_type'] ?? 'global');
+            $targetId = (int)($key['target_id'] ?? 0);
+            $out[$type . '|' . $option . '|' . $targetType . '|' . $targetId] = [
+                'layout_type' => $type,
+                'layout_option' => $option,
+                'target_type' => $targetType,
+                'target_id' => $targetId,
+            ];
+        }
+        return array_values($out);
+    }
+
+    private function injectionPlanDigest(): string
+    {
+        try {
+            $declarations = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class)->loadDeclarations();
+        } catch (\Throwable) {
+            $declarations = [];
+        }
+        return hash('sha256', json_encode($declarations, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function generatedPageMatchesInputs(
+        ThemeVersionIdentity $identity,
+        string $layoutType,
+        string $layoutOption,
+        string $targetType,
+        int $targetId,
+        array $changes,
+        string $planDigest,
+    ): bool {
+        if ($changes !== []) { return false; }
+        $path = $this->paths()->pageLayoutPhtml($identity, $layoutType, $layoutOption, $targetType, $targetId ?: null);
+        if (!is_file($path)) { return false; }
+        $meta = ThemeLayoutSourceSnapshot::metadata((string)file_get_contents($path));
+        if (!is_array($meta)) { return false; }
+        $stored = $meta['identity'] ?? [];
+        if (!is_array($stored)
+            || (int)($stored['theme_version_id'] ?? 0) !== $identity->themeVersionId
+            || (int)($stored['content_revision'] ?? -1) !== $identity->contentRevision
+            || (string)($stored['canonical_scope'] ?? '') !== $identity->canonicalScope
+            || (string)($stored['store_mode'] ?? '') !== $identity->storeMode) {
+            return false;
+        }
+        $origin = (string)($meta['origin'] ?? '');
+        if ($origin === '' || !is_file($origin)) { return false; }
+        $digest = (string)($meta['input_digest'] ?? '');
+        if ($digest === '') { return false; }
+        $originHash = hash_file('sha256', $origin);
+        if (!is_string($originHash) || $originHash === '') { return false; }
+        return hash_equals($digest, hash('sha256', $originHash . "\0" . $planDigest));
     }
 
     private function context(ThemeVersionIdentity $identity, string $type, string $option, string $target, ?int $targetId): ThemeEditorContext

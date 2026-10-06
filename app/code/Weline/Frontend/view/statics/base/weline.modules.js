@@ -39,8 +39,8 @@
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20260923-ops02-zero-price"],
-            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20260923-ops02-zero-price"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261006-mini-cart-type1"],
+            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261006-mini-cart-type1"],
             globalVar: "WelineMiniCartIcon",
             description: "迷你购物车图标与抽屉"
         },
@@ -296,14 +296,14 @@
             description: "店面金额小计：统一 paint 商品/运费/税费/优惠/应付"
         },
         b2bSellingMode: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261006-wholesale-tab-fix1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261006-wholesale-tab-fix1"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20261006-wholesale-tab-fix1", "Weline_B2B::js/selling-mode.js?v=20261006-wholesale-tab-fix1"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261006-mini-cart-type1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261006-mini-cart-type1"],
+            paths: ["Weline_B2B::js/checkout-tob.js?v=20261006-mini-cart-type1", "Weline_B2B::js/selling-mode.js?v=20261006-mini-cart-type1"],
             globalVar: "WelineB2BSellingMode",
             description: "B2B ToC/ToB selling mode + mini-cart/cart dual-type injection"
         },
         b2bCheckoutTob: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261006-wholesale-tab-fix1"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20261006-wholesale-tab-fix1"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261006-mini-cart-type1"],
+            paths: ["Weline_B2B::js/checkout-tob.js?v=20261006-mini-cart-type1"],
             globalVar: "WelineB2BCheckoutTob",
             description: "B2B wholesale credit + checkout deposit note for tob carts"
         },
@@ -345,8 +345,8 @@
             description: "商品详情/加购弹窗分销分享（等账户会话后异步水合）"
         },
         helpPayShare: {
-            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20261006-sms3"],
-            paths: ["Weline_HelpPay::js/helppay-share.js?v=20261006-sms3"],
+            origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20261006-cartamt1"],
+            paths: ["Weline_HelpPay::js/helppay-share.js?v=20261006-cartamt1"],
             globalVar: "WelineModules.helpPayShare",
             load: "defer",
             description: "帮我付 / 纯分享 / 快捷购买 / 商品找朋友代付：规则确认、出链双形态复制（样式由脚本注入主题 Token CSS）"
@@ -364,8 +364,8 @@
             description: "顶栏收藏角标水合（SSR 游客空角标）"
         },
         storeMusic: {
-            origin_paths: ["app/code/Weline/StoreMusic/view/statics/js/store-music.js?v=20260924-no-unload1"],
-            paths: ["Weline_StoreMusic::js/store-music.js?v=20260924-no-unload1"],
+            origin_paths: ["app/code/Weline/StoreMusic/view/statics/js/store-music.js?v=20261006-payquiet1"],
+            paths: ["Weline_StoreMusic::js/store-music.js?v=20261006-payquiet1"],
             globalVar: "WelineStoreMusic",
             load: "defer",
             description: "进店音乐"

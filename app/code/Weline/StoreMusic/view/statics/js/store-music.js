@@ -7,6 +7,24 @@
 
     var ROOT_SEL = '[data-store-music]';
     var PAGE_HOST = String((global.location && global.location.host) || '');
+    /**
+     * HelpPay / 快捷购买付款页：禁止自动播、粘滞续播、整表 IDB 预热。
+     * Progressive decode + 19 首缓存会把原生 RSS 顶到数 GB（JS heap 仍很小），拖垮 Cursor Browser。
+     */
+    function isPaymentQuietSurface() {
+        try {
+            var path = String((global.location && global.location.pathname) || '');
+            if (/^\/h\/|^\/q\//.test(path)) {
+                return true;
+            }
+            if (document.querySelector('[data-testid="help-pay-payer"], [data-testid="quick-pay-self"]')) {
+                return true;
+            }
+        } catch (eQuiet) {
+            // ignore
+        }
+        return false;
+    }
     var CHANNEL_NAME = 'weline.storeMusic.audio.' + PAGE_HOST;
     var TAB_ID = 't' + String(Date.now()) + '-' + String(Math.random()).slice(2, 8);
     var ORIGIN_TAB_TTL_MS = 15000;
@@ -890,11 +908,16 @@
         this.bindConsentAutoplayRetry();
         this.syncHintVisibility();
         // Progressive stream first — do not fetch whole playlist into IDB on boot.
-        this.armDeferredAudioCacheWarm();
+        // Payment surfaces: never warm 19 tracks / never autoplay (native RSS leak).
+        if (!isPaymentQuietSurface()) {
+            this.armDeferredAudioCacheWarm();
+        }
         this.startOriginTabWatch();
         // Hidden/prerender boot must not autoplay (Cursor may keep detached webviews).
         if (document.visibilityState === 'hidden') {
             this.killAllPageAudio();
+        } else if (isPaymentQuietSurface()) {
+            this.setNeedGesture(true);
         } else {
             this.scheduleStart();
         }
@@ -4021,6 +4044,11 @@
         var self = this;
         var force = !!(opts && opts.force);
         var skipDelay = !!(opts && opts.skipDelay);
+        if (isPaymentQuietSurface()) {
+            this.setNeedGesture(true);
+            this.syncHintVisibility();
+            return;
+        }
         if (!this._docAlive) {
             return;
         }
@@ -4249,6 +4277,9 @@
 
     StoreMusic.prototype.warmAudioCache = function () {
         var self = this;
+        if (isPaymentQuietSurface()) {
+            return;
+        }
         if (!this.tracks.length || !global.fetch || !global.indexedDB) {
             return;
         }
@@ -4279,6 +4310,9 @@
      */
     StoreMusic.prototype.armDeferredAudioCacheWarm = function () {
         var self = this;
+        if (isPaymentQuietSurface()) {
+            return;
+        }
         if (this._warmArmed) {
             return;
         }

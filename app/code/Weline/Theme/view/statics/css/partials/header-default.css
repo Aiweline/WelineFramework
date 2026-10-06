@@ -1551,26 +1551,27 @@ textarea::-webkit-scrollbar-thumb:hover,
     width: 100%;
 }
 
-/* 左大簇：严格内容宽（max-content），永不吃中间空白；空白归右簇 */
+/* 左大簇：吃剩余宽；空白留在分类侧，More 按实宽算，禁止被右簇 flex-grow 定空 */
 .header-nav-left-cluster {
     display: flex;
     align-items: center;
-    flex: 0 1 auto;
-    flex-grow: 0;
-    width: max-content;
+    flex: 1 1 auto;
     min-width: 0;
-    max-width: calc(100% - max(240px, 30%));
+    width: auto;
+    max-width: none;
     gap: var(--spacing-sm);
     overflow: hidden;
 }
 
-/* 右大簇：吃剩余宽，右对齐；左空则右自动铺满，再在实宽内决定是否「更多」 */
+/* 右大簇：严格内容宽，禁止 flex:1 / 30% 地板把中间空白吃进右簇 */
 .header-nav-right-cluster {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    flex: 1 1 0%;
-    min-width: max(240px, 30%);
+    flex: 0 1 auto;
+    flex-grow: 0;
+    width: max-content;
+    min-width: 0;
     gap: var(--weline-space-5);
     overflow: hidden;
 }

@@ -97,7 +97,8 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringNotContainsString('value="express"', $tpl);
         self::assertStringNotContainsString('标准配送', $tpl);
         self::assertStringNotContainsString('加急配送', $tpl);
-        self::assertStringContainsString('data-weline-load="helpPayShare"', $tpl);
+        self::assertStringContainsString('data-weline-load="helpPayShare,storefrontMoneySummary"', $tpl);
+        self::assertStringContainsString('money_summary_html', $tpl);
         self::assertStringContainsString('data-helppay-billing-mount', $tpl);
         self::assertStringContainsString('payment_methods_html', $tpl);
         self::assertStringContainsString('weline-checkout__option--payment', $tpl);
@@ -121,6 +122,11 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('CheckoutPaymentMethodsProvider', $src);
         self::assertStringContainsString('CheckoutHtmlRenderer', $src);
         self::assertStringContainsString('renderPaymentMethodsHtml', $src);
+        self::assertStringContainsString('renderMoneySummaryWidget', $src);
+        self::assertStringContainsString('storefront-money-summary/default.phtml', $src);
+        self::assertStringContainsString("'goods_text'", $src);
+        self::assertStringContainsString("'shipping_text'", $src);
+        self::assertStringContainsString("'payable_text'", $src);
         self::assertStringContainsString('checkout-shipping-address.phtml', $src);
         self::assertStringContainsString('data-session-isolation', $src);
         self::assertStringNotContainsString('PaymentMethodManager', $src);
@@ -182,6 +188,10 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('openProductHelpPayFlow', $js);
         self::assertStringContainsString('confirmHelpPayFromAddress', $js);
         self::assertStringContainsString("placement === 'product'", $js);
+        self::assertStringContainsString('cart.getCart', $js);
+        self::assertStringContainsString('data-money-summary-goods-minor', $js);
+        self::assertStringContainsString('currentCartType', $js);
+        self::assertStringNotContainsString('cart.getData', $js);
         self::assertStringContainsString('applyDialogFlow', $js);
         self::assertStringContainsString('renderQuickCheckoutLaunch', $js);
         self::assertStringContainsString('launchQuickPayCheckout', $js);
@@ -208,10 +218,20 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringNotContainsString("resource('shippingInfo').listQuoteOptions", $js);
         self::assertStringContainsString('data-session-isolation', $js);
         self::assertStringContainsString('ensurePayerBillingMounted', $js);
+        self::assertStringContainsString('bindPayerPayButton', $js);
+        self::assertStringContainsString('bindGlobalHelpPayClicks', $js);
+        self::assertStringContainsString('_helppayPayBound', $js);
+        self::assertStringContainsString("attributeFilter: ['hidden', 'data-selling-mode', 'data-stock-tone']", $js);
+        self::assertStringNotContainsString("attributeFilter: ['disabled', 'hidden'", $js);
         self::assertStringContainsString('confirmPayerBilling', $js);
         self::assertStringContainsString('syncPayerBillingVisibility', $js);
         self::assertStringContainsString('payerBillingRequired', $js);
         self::assertStringContainsString('startPayerPayment', $js);
+        self::assertStringContainsString('updatePayerTotals', $js);
+        self::assertStringContainsString('WelineStorefrontMoneySummary', $js);
+        self::assertStringContainsString("mode: 'helppay'", $js);
+        self::assertStringContainsString('goods_subtotal_minor', $js);
+        self::assertStringContainsString('bindGlobalHelpPayClicks();', $js);
         self::assertStringContainsString('startQuickPayment', $js);
         self::assertStringContainsString('/payment/success?transaction_no=', $js);
         // 壳不得硬编码具体支付方式码：方式由服务端按 Provider 列表下发；
@@ -321,6 +341,7 @@ final class HelpPayWidgetContractTest extends TestCase
         $mod = (string) file_get_contents($base . '/view/statics/frontend/weline.modules.js');
         self::assertStringContainsString('helpPayShare', $mod);
         self::assertStringContainsString('helppay-share.js', $mod);
+        self::assertStringContainsString('20261006-cartamt1', $mod);
         self::assertStringNotContainsString('helppay-share.css', $mod);
         self::assertFileExists($base . '/view/statics/js/helppay-share.js');
         self::assertFileExists($base . '/view/statics/css/helppay-share.css');
@@ -338,8 +359,10 @@ final class HelpPayWidgetContractTest extends TestCase
         self::assertStringContainsString('revealDialog', $js);
         self::assertStringContainsString('hideDialog', $js);
         self::assertStringContainsString('Weline.UI.stack', $js);
+        self::assertStringContainsString('20261006-paygap1', $js);
         self::assertStringContainsString('ensureShareCss', $js);
         $css = (string) file_get_contents($base . '/view/statics/css/helppay-share.css');
+        self::assertStringContainsString('padding-block-start: 0', $css);
         self::assertStringContainsString('appearance: none', $css);
         self::assertStringContainsString('-webkit-appearance: none', $css);
         self::assertStringContainsString('.w-helppay-cta__link', $css);

@@ -186,4 +186,19 @@ final class CoreSecurityHeadersTest extends TestCase
         );
         self::assertSame('Origin', $collector->getHeader('Vary'));
     }
+
+    public function testHeaderXssOmitsFrameOptionsForLocalControlCenterWlsPanel(): void
+    {
+        Env::getInstance()->reload();
+        HeaderCollector::reset();
+        WelineEnv::setServer('REQUEST_URI', '/secret-admin/server/backend/wls-panel', 'unit-test');
+        WelineEnv::setServer('HTTP_REFERER', 'http://127.0.0.1:1420/', 'unit-test');
+
+        $router = new Core();
+        $router->header_xss();
+
+        $collector = HeaderCollector::getInstance();
+        self::assertNull($collector->getHeader('X-Frame-Options'));
+        self::assertSame('nosniff', $collector->getHeader('X-Content-Type-Options'));
+    }
 }

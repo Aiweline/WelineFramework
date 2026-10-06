@@ -51,4 +51,23 @@ final class WebsitesQueryProviderDescriptorTest extends TestCase
             $operations['manageWebsiteBackup']['backend_acl'],
         );
     }
+
+    public function testCreateWebsiteUsesWebsiteAddAcl(): void
+    {
+        $provider = (new ReflectionClass(WebsitesQueryProvider::class))->newInstanceWithoutConstructor();
+        $operations = [];
+        foreach ($provider->getDescriptor()['operations'] as $operation) {
+            $operations[(string)($operation['name'] ?? '')] = $operation;
+        }
+
+        self::assertArrayHasKey('createWebsite', $operations);
+        self::assertTrue($operations['createWebsite']['frontend']);
+        self::assertTrue($operations['createWebsite']['backend']);
+        self::assertSame('backend', $operations['createWebsite']['auth']);
+        self::assertSame('write', $operations['createWebsite']['mode']);
+        self::assertSame(
+            ['kind' => 'source', 'source_id' => 'Weline_Websites::website_add'],
+            $operations['createWebsite']['backend_acl'],
+        );
+    }
 }

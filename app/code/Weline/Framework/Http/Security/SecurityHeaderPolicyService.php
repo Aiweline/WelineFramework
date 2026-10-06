@@ -198,10 +198,12 @@ final class SecurityHeaderPolicyService
             $developerToolingEnabled ?? self::isDeveloperToolingEnabled(),
         );
         $headers = [
-            'X-Frame-Options' => 'SAMEORIGIN',
             'X-Content-Type-Options' => 'nosniff',
             'X-XSS-Protection' => '1; mode=block',
         ];
+        if (!$this->allowLocalControlCenterFrame()) {
+            $headers['X-Frame-Options'] = 'SAMEORIGIN';
+        }
 
         $includeCsp = $includeDocumentCsp ?? true;
         $delivery = $this->cspDelivery();
@@ -433,5 +435,38 @@ final class SecurityHeaderPolicyService
     public function lkgGate(): SecurityPolicyLkgGate
     {
         return $this->lkgGate;
+    }
+
+    /**
+     * Control Center embeds WLS panel from loopback / Tauri parents.
+     * X-Frame-Options SAMEORIGIN would otherwise render a blank iframe.
+     */
+    private function allowLocalControlCenterFrame(): bool
+    {
+        $uri = (string)WelineEnv::server(
+            'REQUEST_URI',
+            (string)($_SERVER['REQUEST_URI'] ?? ''),
+        );
+        if (!\preg_match('#(?:/server/backend/wls-panel(?:/|\?|$)|WlsPanel)#i', $uri)) {
+            return false;
+        }
+        $referer = \trim((string)WelineEnv::server(
+            'HTTP_REFERER',
+            (string)($_SERVER['HTTP_REFERER'] ?? ''),
+        ));
+        if ($referer === '') {
+            return false;
+        }
+        $parts = \parse_url($referer);
+        if (!\is_array($parts)) {
+            return false;
+        }
+        $scheme = \strtolower((string)($parts['scheme'] ?? ''));
+        $host = \strtolower((string)($parts['host'] ?? ''));
+        if ($scheme === 'tauri') {
+            return true;
+        }
+
+        return \in_array($host, ['127.0.0.1', 'localhost', 'tauri.localhost'], true);
     }
 }

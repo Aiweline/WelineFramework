@@ -127,6 +127,14 @@ final class ListingCommandTest extends TestCase
                 return $this->resolveTopologyPresentation($info, $raw);
             }
 
+            /**
+             * @return array{edge_pid:?int,edge_owner:string,edge_owner_self:bool}
+             */
+            public function identity(string $edgeFace, string $instanceName, array $raw): array
+            {
+                return $this->resolveEdgeIdentity($edgeFace, $instanceName, $raw);
+            }
+
             protected function managedNginxSnapshot(): ?array
             {
                 return [
@@ -134,6 +142,8 @@ final class ListingCommandTest extends TestCase
                     'owner_instance' => 'default',
                     'listen_http' => 80,
                     'listen_https' => 443,
+                    'pid' => 4242,
+                    'running' => true,
                 ];
             }
         };
@@ -163,6 +173,11 @@ final class ListingCommandTest extends TestCase
         $topology = $listing->topology($info, []);
         self::assertSame('direct', $topology['topology']);
         self::assertSame('直连', $topology['topology_label']);
+
+        $identity = $listing->identity('managed_nginx', 'default', []);
+        self::assertSame(4242, $identity['edge_pid']);
+        self::assertSame('default', $identity['edge_owner']);
+        self::assertTrue($identity['edge_owner_self']);
     }
 
     public function testDispatcherTopologyLabelAndGatewayPorts(): void
@@ -245,6 +260,12 @@ final class ListingCommandTest extends TestCase
             {
                 return $this->formatProcSummaryColumn($status);
             }
+
+            /** @return string[] */
+            public function procLines(array $status): array
+            {
+                return $this->formatProcSummaryLines($status);
+            }
         };
 
         self::assertSame(
@@ -254,20 +275,33 @@ final class ListingCommandTest extends TestCase
             ], 'weline')
         );
         self::assertSame(
-            ['直连', 'Worker:9555(4)', 'nG:80/443'],
+            ['直连', 'nG@default', 'Worker:9555(4)', 'nG:80/443'],
             $listing->runtimeLines([
                 'topology_label' => '直连',
+                'edge_face' => 'managed_nginx',
+                'edge_owner' => 'default',
                 'port_summary' => 'Worker:9555(4) nG:80/443',
                 'port_lines' => ['Worker:9555(4)', 'nG:80/443'],
             ], 'weline')
         );
         self::assertSame(
-            '直连 · Worker:9555(4) · nG:80/443',
+            '直连 · nG@default · Worker:9555(4) · nG:80/443',
             $listing->runtime([
                 'topology_label' => '直连',
+                'edge_face' => 'managed_nginx',
+                'edge_owner' => 'default',
                 'port_summary' => 'Worker:9555(4) nG:80/443',
                 'port_lines' => ['Worker:9555(4)', 'nG:80/443'],
             ], 'weline')
+        );
+        self::assertSame(
+            ['PID:46450 · 8m', 'nG:4242'],
+            $listing->procLines([
+                'pid' => 46450,
+                'running_time' => '8m',
+                'edge_face' => 'managed_nginx',
+                'edge_pid' => 4242,
+            ])
         );
         self::assertSame(
             'PID:46450 · 8m',

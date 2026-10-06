@@ -544,13 +544,11 @@
                     }
                     return fullRow;
                 }
-                // 单行左预算 = CSS 左簇上限 calc(100% - max(240px,30%)) − All − 左簇 gap。
-                // 禁止再用右自然宽扣左：右有 adjustNavLinks 自己藏项；互扣时右自然宽常 >30%，
-                // 左预算被压到 <70% 实宽，分类槽 flex-shrink+overflow:hidden 裁掉 Hanfu，
-                // 政策链叠上 →「Hanfu|About Us」间距塌缩。也不用 clientWidth（resize 未稳定会锁死 hideFrom）。
+                // 单行左预算 = 主栏 − 右自然内容宽 − 簇间距 − All − 左簇 gap。
+                // 右簇已改为内容宽（禁止 flex:1 / 30% 地板吃空档）；左按剩余实宽算 More。
                 if (mainW > 0) {
-                    const cssRightFloor = Math.max(240, mainW * 0.3);
-                    const leftCeiling = Math.max(0, mainW - cssRightFloor - gap);
+                    const rightReserve = measureRightNaturalReserve();
+                    const leftCeiling = Math.max(0, mainW - rightReserve - gap);
                     return Math.max(0, leftCeiling - allW - leftGap - 8);
                 }
                 return Math.max(0, mainW - allW - gap - 8);

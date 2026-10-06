@@ -62,8 +62,8 @@ final class SelectedDraftRebakePublicationTest extends TestCase
 
         self::assertSame('draft:1121:R1', $result['shared_draft'], 'A historical unselected draft must not overwrite the selected draft path.');
         self::assertSame('formal:1116:R8', $result['sealed_version']);
-        self::assertSame('formal:1114:R3', $result['historical_sealed_version']);
-        self::assertSame([1121, 1116, 1114], $result['rebake_generated_versions']);
+        self::assertFalse($result['historical_sealed_exists']);
+        self::assertSame([1121, 1116], $result['rebake_generated_versions']);
         self::assertSame('draft:1117:R4', $result['historical_candidate']);
         self::assertSame($result['shared_draft'], $result['shared_draft_after_historical_candidate']);
         self::assertTrue($result['version_rows_unchanged']);
