@@ -999,6 +999,7 @@ if ($useReusePort && !$supportsReusePort) {
 $socket = null;
 $reusePortBound = false;
 $sharedListenerBound = false;
+$sharedListenerSocket = null;
 $windowsListenerSocket = null;
 $windowsListenerProof = [];
 $windowsListenerAdopted = false;
@@ -1060,6 +1061,24 @@ if ($windowsListenerHandoffPresent) {
             . "{$expectedSharedEndpoint}, received {$actualSharedEndpoint}"
         );
         exit(1);
+    }
+    // php://fd produces a plain tcp_socket wrapper. stream_socket_accept
+    // clients cannot enable TLS on macOS ("This stream does not support
+    // SSL/crypto"). Keep the stream for readiness; accept via sockets and
+    // export each client so PHP builds a crypto-capable wrapper (same as
+    // worker_ssl defer-ssl inherited direct listener).
+    if (\function_exists('socket_import_stream')
+        && \function_exists('socket_accept')
+        && \function_exists('socket_export_stream')
+    ) {
+        $sharedListenerSocket = @\socket_import_stream($socket);
+        if (!$sharedListenerSocket instanceof \Socket) {
+            $sharedListenerSocket = null;
+            WlsLogger::warning_(
+                'Inherited direct listener could not be imported as a native socket; '
+                . 'TLS ClientHello bounce on :' . $port . ' will not be available'
+            );
+        }
     }
     $sharedListenerBound = true;
     WlsLogger::info_("Using inherited direct shared listener FD {$listenFd} on {$host}:{$port}");
@@ -3163,6 +3182,7 @@ while (true) {
             \PHP_OS_FAMILY,
             (string)($eventLoopMeta['resolved'] ?? $wlsLoopDriver),
         ),
+        $sharedListenerSocket,
     );
 
     // A single socket read may contain more than one keep-alive request. Once
@@ -3271,6 +3291,7 @@ while (true) {
             $wlsRuntimeTopology,
             $masterRuntimeCredential,
             $http1ContinueSent,
+            $port,
         );
         if (($readStep['closed'] ?? false) === true) {
             continue;
@@ -3786,6 +3807,7 @@ function wlsAcceptHttpConnections(
     array &$connectionTrustedProxy,
     bool $gatewayBackendIngressEnabled = false,
     int $maxAcceptPerLoop = 64,
+    mixed $nativeListenerSocket = null,
 ): void {
     if (!$socket || !\is_resource($socket) || !\in_array($socket, $read, true)) {
         return;
@@ -3802,11 +3824,24 @@ function wlsAcceptHttpConnections(
     $maxAcceptPerLoop = \max(1, \min(64, $maxAcceptPerLoop));
     $accepted = 0;
     while ($accepted < $maxAcceptPerLoop) {
-        $conn = @\stream_socket_accept($socket, 0);
-        if (!$conn) {
-            break;
+        if ($nativeListenerSocket instanceof \Socket) {
+            $acceptedSocket = @\socket_accept($nativeListenerSocket);
+            if (!$acceptedSocket instanceof \Socket) {
+                break;
+            }
+            $accepted++;
+            $conn = @\socket_export_stream($acceptedSocket);
+            if (!\is_resource($conn)) {
+                @\socket_close($acceptedSocket);
+                continue;
+            }
+        } else {
+            $conn = @\stream_socket_accept($socket, 0);
+            if (!$conn) {
+                break;
+            }
+            $accepted++;
         }
-        $accepted++;
         \stream_set_blocking($conn, false);
         $connId = \get_resource_id($conn);
         unset($connectionPeerIps[$connId], $connectionTrustedProxy[$connId]);
@@ -4322,6 +4357,234 @@ function wlsHttpWebSocketReadStep(
 }
 
 /**
+ * Peek for TLS ClientHello on a plaintext Worker; complete a short TLS session
+ * and 308 to WLS_PUBLIC_ORIGIN so HSTS/HTTPS-First browsers 跟跳 instead of
+ * ERR_CONNECTION_RESET.
+ *
+ * @param array<int, resource> $connections
+ * @param array<int, string> $requestBuffers
+ * @param array<int, float> $connectionLastActivity
+ * @param array<int, bool> $requestLogged
+ * @param array<int, bool> $http1ContinueSent
+ * @param array<int, string> $writeBuffers
+ * @param array<int, resource> $writableConnections
+ * @param array<int, true> $pendingClose
+ */
+function wlsHttpBounceTlsClientHelloToPublicOriginIfNeeded(
+    mixed $conn,
+    int $connId,
+    int $workerListenPort,
+    array &$connections,
+    array &$requestBuffers,
+    array &$connectionLastActivity,
+    array &$requestLogged,
+    array &$http1ContinueSent,
+    array &$writeBuffers,
+    array &$writableConnections,
+    array &$pendingClose,
+): bool {
+    if (!\is_resource($conn) || $workerListenPort < 1) {
+        return false;
+    }
+
+    $peek = '';
+    // Prefer STREAM_PEEK only. socket_import_stream on an accepted client can
+    // leave the PHP stream unreadable to later stream_select (macOS hang).
+    $wasBlockingPeek = true;
+    try {
+        $metaPeek = @\stream_get_meta_data($conn);
+        $wasBlockingPeek = (bool)($metaPeek['blocked'] ?? true);
+    } catch (\Throwable) {
+        $wasBlockingPeek = true;
+    }
+    @\stream_set_blocking($conn, false);
+    if (\defined('STREAM_PEEK')) {
+        $streamPeek = @\stream_socket_recvfrom($conn, 65536, \STREAM_PEEK);
+        if (\is_string($streamPeek) && $streamPeek !== '') {
+            $peek = $streamPeek;
+        }
+    }
+    @\stream_set_blocking($conn, $wasBlockingPeek);
+
+    if ($peek === '') {
+        // Data not here yet (eager post-accept read) — wait for next readable.
+        return false;
+    }
+
+    if (!\Weline\Server\Service\Edge\Nginx\PlaintextWorkerTlsPublicOriginBounce::isTlsHandshakePrefix($peek)) {
+        return false;
+    }
+
+    $publicOrigin = \trim((string)($_SERVER['WLS_PUBLIC_ORIGIN'] ?? ''));
+    $sni = \Weline\Server\Service\Edge\Nginx\PlaintextWorkerTlsPublicOriginBounce::sniFromClientHelloPeek($peek);
+    $fallbackHost = \Weline\Server\Service\Edge\Nginx\PlaintextWorkerTlsPublicOriginBounce::preferredHostFromPublicOrigin($publicOrigin);
+    $pair = \Weline\Server\Service\Edge\Nginx\PlaintextWorkerTlsPublicOriginBounce::resolveCertificatePair(
+        $sni !== '' ? $sni : $fallbackHost
+    );
+    if ($pair === null && $fallbackHost !== '' && $sni !== $fallbackHost) {
+        $pair = \Weline\Server\Service\Edge\Nginx\PlaintextWorkerTlsPublicOriginBounce::resolveCertificatePair($fallbackHost);
+    }
+
+    $rstClose = static function (
+        mixed $conn,
+        int $connId,
+        array &$connections,
+        array &$requestBuffers,
+        array &$connectionLastActivity,
+        array &$requestLogged,
+        array &$http1ContinueSent,
+        array &$writeBuffers,
+        array &$writableConnections,
+        array &$pendingClose,
+    ): void {
+        if (\function_exists('socket_import_stream')) {
+            $native = @\socket_import_stream($conn);
+            if ($native instanceof \Socket) {
+                @\socket_set_option($native, \SOL_SOCKET, \SO_LINGER, ['l_onoff' => 1, 'l_linger' => 0]);
+            }
+        }
+        @\fclose($conn);
+        unset(
+            $connections[$connId],
+            $requestBuffers[$connId],
+            $connectionLastActivity[$connId],
+            $requestLogged[$connId],
+            $http1ContinueSent[$connId],
+            $writeBuffers[$connId],
+            $writableConnections[$connId],
+            $pendingClose[$connId]
+        );
+    };
+
+    if ($pair === null) {
+        // No cert to speak TLS — fail closed fast (same as prior RST path).
+        $rstClose(
+            $conn,
+            $connId,
+            $connections,
+            $requestBuffers,
+            $connectionLastActivity,
+            $requestLogged,
+            $http1ContinueSent,
+            $writeBuffers,
+            $writableConnections,
+            $pendingClose,
+        );
+        return true;
+    }
+
+    $cryptoMethod = 0;
+    if (\defined('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER')) {
+        $cryptoMethod |= \STREAM_CRYPTO_METHOD_TLSv1_3_SERVER;
+    }
+    if (\defined('STREAM_CRYPTO_METHOD_TLSv1_2_SERVER')) {
+        $cryptoMethod |= \STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
+    }
+    if ($cryptoMethod === 0) {
+        $cryptoMethod = \STREAM_CRYPTO_METHOD_TLS_SERVER;
+    }
+
+    foreach ([
+        'local_cert' => $pair['local_cert'],
+        'local_pk' => $pair['local_pk'],
+        'verify_peer' => false,
+        'verify_peer_name' => false,
+        'allow_self_signed' => true,
+        'disable_compression' => true,
+        'SNI_enabled' => false,
+        'crypto_method' => $cryptoMethod,
+    ] as $opt => $val) {
+        @\stream_context_set_option($conn, 'ssl', $opt, $val);
+    }
+
+    @\stream_set_blocking($conn, true);
+    @\stream_set_timeout($conn, 2);
+    $cryptoOk = @\stream_socket_enable_crypto($conn, true, $cryptoMethod);
+    if ($cryptoOk !== true) {
+        $rstClose(
+            $conn,
+            $connId,
+            $connections,
+            $requestBuffers,
+            $connectionLastActivity,
+            $requestLogged,
+            $http1ContinueSent,
+            $writeBuffers,
+            $writableConnections,
+            $pendingClose,
+        );
+        return true;
+    }
+
+    // Best-effort: read request line/headers for path-preserving Location.
+    $raw = '';
+    $deadline = \microtime(true) + 1.0;
+    while (\microtime(true) < $deadline && !\str_contains($raw, "\r\n\r\n") && \strlen($raw) < 16384) {
+        $chunk = @\fread($conn, 8192);
+        if ($chunk === false || $chunk === '') {
+            break;
+        }
+        $raw .= $chunk;
+    }
+    $target = '/';
+    $hostHeader = $sni !== '' ? $sni . ':' . $workerListenPort : '';
+    if ($raw !== '') {
+        $lineEnd = \strpos($raw, "\r\n");
+        if ($lineEnd !== false) {
+            $requestLine = \substr($raw, 0, $lineEnd);
+            if (\preg_match('/\A[A-Z]+\s+(\S+)\s+HTTP\//', $requestLine, $m) === 1) {
+                $target = (string)$m[1];
+            }
+        }
+        if (\preg_match('/(?:^|\r\n)Host:\s*([^\r\n]+)/i', $raw, $hm) === 1) {
+            $hostHeader = \trim((string)$hm[1]);
+        }
+    }
+    if ($hostHeader === '' && $fallbackHost !== '') {
+        $hostHeader = $fallbackHost . ':' . $workerListenPort;
+    }
+
+    $location = \Weline\Server\Service\Edge\Nginx\PlaintextWorkerPublicHttpsRedirect::locationOrNull(
+        $hostHeader,
+        $workerListenPort,
+        $publicOrigin,
+        $target,
+    );
+    if ($location === null && $publicOrigin !== '') {
+        try {
+            $origin = \Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin::normalize($publicOrigin);
+        } catch (\Throwable) {
+            $origin = \rtrim($publicOrigin, '/');
+        }
+        $path = \str_starts_with($target, '/') ? $target : '/';
+        $location = $origin . ($path === '/' ? '/' : $path);
+    }
+    if (!\is_string($location) || $location === '') {
+        $location = $fallbackHost !== '' ? ('https://' . $fallbackHost . '/') : 'https://localhost/';
+    }
+
+    $response = "HTTP/1.1 308 Permanent Redirect\r\n"
+        . 'Location: ' . $location . "\r\n"
+        . "Cache-Control: no-store\r\n"
+        . "Content-Length: 0\r\n"
+        . "Connection: close\r\n\r\n";
+    @\fwrite($conn, $response);
+    @\fclose($conn);
+    unset(
+        $connections[$connId],
+        $requestBuffers[$connId],
+        $connectionLastActivity[$connId],
+        $requestLogged[$connId],
+        $http1ContinueSent[$connId],
+        $writeBuffers[$connId],
+        $writableConnections[$connId],
+        $pendingClose[$connId]
+    );
+
+    return true;
+}
+
+/**
  * Step-2: 普通 HTTP 连接读阶段推进。
  *
  * @param array<int, array<string, mixed>> $activeFibers
@@ -4356,6 +4619,7 @@ function wlsHttpReadStep(
     string $runtimeTopology,
     string $proxyAuthenticationSecret,
     array &$http1ContinueSent,
+    int $workerListenPort = 0,
 ): array {
     if (!\is_resource($conn) || !isset($connections[$connId]) || $connections[$connId] !== $conn) {
         unset(
@@ -4387,6 +4651,27 @@ function wlsHttpReadStep(
         isset($activeFibers[$connId])
     )) {
         return ['closed' => false, 'request_ready' => false];
+    }
+
+    // Empty buffer + TLS ClientHello: terminate TLS then 308 to public HTTPS.
+    // Do not fread first — enable_crypto needs ClientHello still in the kernel.
+    if (($requestBuffers[$connId] ?? '') === ''
+        && $workerListenPort > 0
+        && wlsHttpBounceTlsClientHelloToPublicOriginIfNeeded(
+            $conn,
+            $connId,
+            $workerListenPort,
+            $connections,
+            $requestBuffers,
+            $connectionLastActivity,
+            $requestLogged,
+            $http1ContinueSent,
+            $writeBuffers,
+            $writableConnections,
+            $pendingClose,
+        )
+    ) {
+        return ['closed' => true, 'request_ready' => false];
     }
 
     $bufferedFrame = null;
