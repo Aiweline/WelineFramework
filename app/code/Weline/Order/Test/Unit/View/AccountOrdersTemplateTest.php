@@ -156,6 +156,9 @@ final class AccountOrdersTemplateTest extends TestCase
                 'items' => [[
                     'name' => 'ZTOT Z6-MAX YBS300 PRO',
                     'sku' => 'ZTOT-Z6-MAX',
+                    'product_id' => 11,
+                    'image_src' => '/media/catalog/demo-z6.jpg',
+                    'image_fallback' => '/Weline/Theme/view/statics/images/storefront-placeholder/default.svg',
                     'qty_minor' => 1,
                     'unit_price_minor' => 289500,
                     'row_total_minor' => 289500,
@@ -186,6 +189,10 @@ final class AccountOrdersTemplateTest extends TestCase
         self::assertStringContainsString('0813194997', $html);
         self::assertStringContainsString('已支付', $html);
         self::assertStringContainsString('ZTOT Z6-MAX YBS300 PRO', $html);
+        self::assertStringContainsString('data-testid="account-order-item-product"', $html);
+        self::assertStringContainsString('data-testid="account-order-item-image"', $html);
+        self::assertStringContainsString('/media/catalog/demo-z6.jpg', $html);
+        self::assertStringContainsString('data-storefront-img="1"', $html);
         self::assertStringContainsString('ZTOT-Z6-MAX', $html);
         self::assertStringContainsString('USD 2,895.00', $html);
         self::assertStringContainsString('data-order-shipping-address="true"', $html);

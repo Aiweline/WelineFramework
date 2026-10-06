@@ -120,8 +120,37 @@ $statusLabel = static function (string $status): string {
                 </div>
                 <?php foreach ($detailItems as $item): ?>
                     <?php if (!is_array($item)) { continue; } ?>
-                    <div class="account-order-detail__row" role="row">
-                        <span class="account-order-detail__cell" role="cell" data-label="<?= __('商品') ?>"><?= $escape($item['name'] ?? '') ?></span>
+                    <?php
+                    $itemName = trim((string)($item['name'] ?? $item['product_name'] ?? ''));
+                    $itemImageSrc = trim((string)($item['image_src'] ?? $item['image'] ?? $item['image_url'] ?? $item['thumbnail'] ?? ''));
+                    $itemImageFallback = trim((string)($item['image_fallback'] ?? ''));
+                    $itemProductId = (int)($item['product_id'] ?? 0);
+                    if ($itemImageSrc === '' && class_exists(\Weline\Theme\Helper\StorefrontImagePlaceholder::class)) {
+                        $imageResolved = \Weline\Theme\Helper\StorefrontImagePlaceholder::resolve('', $itemProductId);
+                        $itemImageSrc = $imageResolved['src'];
+                        $itemImageFallback = $imageResolved['fallback'];
+                    } elseif ($itemImageFallback === '' && class_exists(\Weline\Theme\Helper\StorefrontImagePlaceholder::class)) {
+                        $itemImageFallback = \Weline\Theme\Helper\StorefrontImagePlaceholder::url($itemProductId);
+                    }
+                    ?>
+                    <div class="account-order-detail__row" role="row" data-order-item="1"<?php if ($itemProductId > 0): ?> data-product-id="<?= $escape((string)$itemProductId) ?>"<?php endif; ?>>
+                        <span class="account-order-detail__cell account-order-detail__cell--product" role="cell" data-label="<?= __('商品') ?>">
+                            <span class="account-order-detail__product" data-testid="account-order-item-product">
+                                <span class="account-order-detail__product-media" data-testid="account-order-item-image">
+                                    <?php if ($itemImageSrc !== ''): ?>
+                                    <img src="<?= $escape($itemImageSrc) ?>"
+                                         alt=""
+                                         width="48"
+                                         height="48"
+                                         data-storefront-img="1"
+                                         data-fallback="<?= $escape($itemImageFallback !== '' ? $itemImageFallback : $itemImageSrc) ?>"
+                                         loading="lazy"
+                                         decoding="async">
+                                    <?php endif; ?>
+                                </span>
+                                <span class="account-order-detail__product-name"><?= $escape($itemName) ?></span>
+                            </span>
+                        </span>
                         <span class="account-order-detail__cell" role="cell" data-label="<?= __('SKU') ?>"><?= $escape($item['sku'] ?? '') ?></span>
                         <span class="account-order-detail__cell" role="cell" data-label="<?= __('数量') ?>"><?= $escape($item['qty_minor'] ?? 0) ?></span>
                         <span class="account-order-detail__cell" role="cell" data-label="<?= __('单价') ?>"><?= $escape($formatMoney($detailCurrency, $item['unit_price_minor'] ?? 0)) ?></span>

@@ -91,7 +91,11 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $this->assertStringContainsString('data-partial-expanded="true"', $orders);
         $this->assertStringContainsString('data-account-order-tracking="true"', $orders);
         $this->assertStringContainsString('data-order-tracking-summary="true"', $orders);
+        $this->assertStringContainsString('data-testid="account-order-item-image"', $orders);
+        $this->assertStringContainsString('account-order-detail__product-media', $orders);
+        $this->assertStringContainsString('data-storefront-img="1"', $orders);
         $this->assertStringContainsString('AccountCheckoutGroupPresenter', $orders);
+        $this->assertStringContainsString('.account-order-detail__product-media', $css);
         $this->assertStringNotContainsString('fetch(', $orders);
         $this->assertStringNotContainsString('axios', $orders);
 
