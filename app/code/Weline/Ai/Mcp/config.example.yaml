@@ -172,6 +172,7 @@ index:
     - **/node_modules/**
     - generated/**
     - var/**
+    - app/var/**
     - pub/static/**
     - pub/media/**
     - **/view/tpl/**
@@ -187,6 +188,7 @@ index:
     - .github/**
     - build/**
     - tmp/**
+    - **/tmp/**
     - dev/tmp/**
     - test-results/**
     - evidence/**

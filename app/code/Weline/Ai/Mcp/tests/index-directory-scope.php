@@ -92,9 +92,14 @@ try {
             'direct excluded or symlink directory selection stays excluded: ' . $denied);
     }
     $put('dev/tmp/Dump.json', '{"throwaway":true}');
-    $throwaway = $indexer->indexPaths(['dev/tmp']);
-    $check($throwaway['discovered'] === 0 && $paths() === $expected,
-        'dev/tmp throwaways stay outside the index even when selected explicitly');
+    $put('app/var/tmp/geo.txt', 'geonames dump');
+    $put('websites/site/tmp/dump.csv', 'csv dump');
+    $put('tmp/root.txt', 'root tmp');
+    foreach (['dev/tmp', 'app/var/tmp', 'websites/site/tmp', 'tmp'] as $denied) {
+        $result = $indexer->indexPaths([$denied]);
+        $check($result['discovered'] === 0 && $paths() === $expected,
+            'throwaway tmp trees stay outside the index even when selected explicitly: ' . $denied);
+    }
 
     unlink($root . '/target/nested/Keep.txt');
     rmdir($root . '/target/nested');

@@ -283,11 +283,11 @@ final class Config
                 ],
                 'excluded_paths' => [
                     '.git/**', '.gitnexus/**', '.codex/code-intelligence/**', 'vendor/**', '**/vendor/**',
-                    'node_modules/**', '**/node_modules/**', 'generated/**', 'var/**', 'pub/static/**',
+                    'node_modules/**', '**/node_modules/**', 'generated/**', 'var/**', 'app/var/**', 'pub/static/**',
                     'pub/media/**', '**/view/tpl/**', '**/static/libs/**',
                     '**/test/**', '**/tests/**', '**/Test/**', '**/*.min.*', '**/*.map',
                     '.cursor/**', '.claude/**', '.agents/**', '.github/**',
-                    'build/**', 'tmp/**', 'dev/tmp/**', 'test-results/**', 'evidence/**', 'private/**', '.superpowers/**',
+                    'build/**', 'tmp/**', '**/tmp/**', 'dev/tmp/**', 'test-results/**', 'evidence/**', 'private/**', '.superpowers/**',
                     'Users/**', 'pub/errors/**', 'pub/readme/**', 'pub/source/**', 'pub/sitemaps/**',
                     'pub/theme_previews/**', 'setup/static/**', 'setup/server_installer/**',
                     'setup/step/**', 'docs/assets/**', '**/extends/**/server/**',
