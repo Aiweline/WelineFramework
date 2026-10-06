@@ -5,8 +5,7 @@
     "type": "weline-module",
     "require": {
         "php": "^8.4",
-        "weline/module-admin": "@dev",
-        "weline/module-module-manager": "@dev"
+        "weline/module-admin": "@dev"
     },
     "authors": [
         {

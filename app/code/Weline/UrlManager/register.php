@@ -15,5 +15,5 @@ Register::register(
     __DIR__,
     '1.0.3',
     '<a href="https://bbs.aiweline.com">官网</a>提供URL管理。',
-    ['Weline_ModuleManager', 'Weline_Admin']
+    ['Weline_Admin']
 );

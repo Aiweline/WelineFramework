@@ -26,4 +26,12 @@ final readonly class Finding
             'line' => $this->line,
         ];
     }
+
+    /**
+     * 位置不入库：行号会随无关编辑漂移；身份 = 规则 + 文件 + 消息。
+     */
+    public function fingerprint(): string
+    {
+        return hash('sha256', $this->file . "\0" . $this->message);
+    }
 }

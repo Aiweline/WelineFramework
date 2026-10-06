@@ -2,10 +2,9 @@
 
 return [
     "name" => 'Weline_UrlManager',
-    "version" => '1.0.10',
+    "version" => '1.0.11',
     "requires" => [
         'Weline_Admin' => '*',
-        'Weline_ModuleManager' => '*',
     ],
     "optional" => [
     ],
