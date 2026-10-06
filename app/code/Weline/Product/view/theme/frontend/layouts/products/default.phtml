@@ -381,8 +381,10 @@ $this->assign('meta', $meta);
         border-radius: 0;
         box-shadow: none;
         position: sticky;
-        top: calc(var(--header-height, 64px) + var(--spacing-3, 0.75rem));
-        max-height: calc(100vh - var(--header-height, 64px) - var(--spacing-6, 1.5rem));
+        /* 只留小间距。勿再叠 --header-height：顶栏悬浮菜单易打断自身 sticky，
+           预留高度会在「部门」上方留下空洞。 */
+        top: var(--spacing-3, 0.75rem);
+        max-height: calc(100vh - var(--spacing-6, 1.5rem));
         overflow-y: auto;
         overscroll-behavior: contain;
     }
@@ -640,7 +642,12 @@ $this->assign('meta', $meta);
             flex: 1;
             overflow-y: auto;
             overscroll-behavior: contain;
-            padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
+            /* 抽屉标题栏已有 padding；避免再与 .w-filters padding-block 叠成大块空白 */
+            padding: var(--spacing-2, 0.5rem) var(--spacing-5, 1.25rem) var(--spacing-4, 1rem);
+        }
+
+        .products-layout__sidebar.is-open .w-filters {
+            padding-block-start: var(--spacing-2, 0.5rem);
         }
 
         .products-layout__overlay {

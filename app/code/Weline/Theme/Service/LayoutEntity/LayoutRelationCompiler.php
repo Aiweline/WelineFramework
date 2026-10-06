@@ -338,6 +338,9 @@ final class LayoutRelationCompiler
             if (!isset($used[$i])) { $calls .= $binding['php']; }
         }
         if ($calls === '') { return $out; }
+        // Editor preview placeholders stay in layout source; once real placements
+        // compile into the derived PHTML they must not remain visible on storefront.
+        $out = self::stripSlotEditorPlaceholders($out, $attrs);
         if (self::flag($attrs, 'prepend') || self::flag($attrs, 'data-wslot-prepend')) { return $calls . $out; }
         if (self::flag($attrs, 'append') || self::flag($attrs, 'data-wslot-append')) { return $out . $calls; }
         $exclusive = self::flag($attrs, 'exclusive') || self::flag($attrs, 'data-wslot-exclusive');
@@ -352,6 +355,22 @@ final class LayoutRelationCompiler
         }, static fn(array $element, string $whole): ?string => self::slotId($element) !== null ? $whole : null);
         if ($hookInserted) { return $withHook; }
         return $exclusive ? self::exclusiveFallback($out, $calls) : $out . $calls;
+    }
+
+    /** Drop design-time slot placeholders once compiled placements own the slot. */
+    private static function stripSlotEditorPlaceholders(string $html, array $attrs): string
+    {
+        $slotId = (string)($attrs['id'] ?? $attrs['data-wslot'] ?? '');
+        if ($html === '' || $slotId === '' || !str_contains($html, 'data-placeholder')) {
+            return $html;
+        }
+        $quoted = preg_quote($slotId, '/');
+        $stripped = preg_replace(
+            '/<(div|span|aside|section)\b[^>]*\bdata-placeholder\s*=\s*(["\'])' . $quoted . '\2[^>]*>.*?<\/\1\s*>/is',
+            '',
+            $html
+        );
+        return is_string($stripped) ? $stripped : $html;
     }
 
     /** The source fallback remains intact, while this derived file explicitly selects the saved placement. */
