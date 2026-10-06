@@ -56,7 +56,9 @@ class BackendLoginReturnUrlService
     public function shouldCaptureCurrentRequestReturnUrl(?Request $request = null, string $currentUrl = ''): bool
     {
         $request ??= $this->request;
-        if (!$request->isDocumentNavigationRequest()) {
+        // Document top-level navigations and HTML iframe embeds (Control Center
+        // WLS panel) both need return_url; AJAX / non-HTML fetches must not.
+        if (!$request->isDocumentNavigationRequest() && !$this->isHtmlIframeNavigationRequest($request)) {
             return false;
         }
 
@@ -66,6 +68,44 @@ class BackendLoginReturnUrlService
         }
 
         return !$this->isApiOrInterfacePath($path);
+    }
+
+    /**
+     * Control Center embeds /server/backend/wls-panel with Sec-Fetch-Dest=iframe.
+     * isDocumentNavigationRequest() excludes iframes, which previously dropped
+     * return_url and left the login page X-Frame-Options: SAMEORIGIN → blank.
+     */
+    private function isHtmlIframeNavigationRequest(Request $request): bool
+    {
+        $method = strtoupper((string)$request->getMethod());
+        if ($method !== 'GET' && $method !== 'HEAD') {
+            return false;
+        }
+        if ($request->isAjax() || !$request->isIframe()) {
+            return false;
+        }
+
+        $accept = '';
+        try {
+            $header = $request->getHeader('Accept');
+            if (\is_array($header)) {
+                $accept = strtolower(trim((string)($header[0] ?? '')));
+            } else {
+                $accept = strtolower(trim((string)($header ?? '')));
+            }
+        } catch (\Throwable) {
+            $accept = '';
+        }
+        if ($accept === '') {
+            $accept = strtolower(trim((string)$request->getServer('HTTP_ACCEPT')));
+        }
+
+        if ($accept === '' || $accept === '*/*') {
+            return true;
+        }
+
+        return str_contains($accept, 'text/html')
+            || str_contains($accept, 'application/xhtml+xml');
     }
 
     public function resolveForUser(BackendLoginAccount $user, string $explicitReturnUrl = ''): ?string

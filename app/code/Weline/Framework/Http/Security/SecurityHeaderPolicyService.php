@@ -440,6 +440,12 @@ final class SecurityHeaderPolicyService
     /**
      * Control Center embeds WLS panel from loopback / Tauri parents.
      * X-Frame-Options SAMEORIGIN would otherwise render a blank iframe.
+     *
+     * Cover both the panel URL and the login redirect it triggers: after a
+     * 302 to /admin/login, Referer becomes the panel host (not Tauri), so
+     * return_url=*wls-panel* (query or GET bag) is the durable embed signal.
+     * WLS Url::parser rewrites REQUEST_URI to a pure route without query —
+     * always merge QUERY_STRING / origin URI / getGet('return_url').
      */
     private function allowLocalControlCenterFrame(): bool
     {
@@ -447,9 +453,86 @@ final class SecurityHeaderPolicyService
             'REQUEST_URI',
             (string)($_SERVER['REQUEST_URI'] ?? ''),
         );
-        if (!\preg_match('#(?:/server/backend/wls-panel(?:/|\?|$)|WlsPanel)#i', $uri)) {
-            return false;
+        $originUri = (string)WelineEnv::server(
+            'WELINE_ORIGIN_REQUEST_URI',
+            (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? ''),
+        );
+        $query = (string)WelineEnv::server(
+            'QUERY_STRING',
+            (string)($_SERVER['QUERY_STRING'] ?? ''),
+        );
+        // Match REQUEST_URI and origin separately — never concatenate (origin
+        // may be "/" and would break `#login(?:/|\?|$)` anchors).
+        $candidates = [$this->joinPathAndQuery($uri, $query)];
+        if ($originUri !== '' && $originUri !== '/' && $originUri !== $uri) {
+            $candidates[] = $this->joinPathAndQuery($originUri, $query);
         }
+
+        $returnUrl = \trim((string)WelineEnv::getGet('return_url', ''));
+        $returnUrlSignalsPanel = $returnUrl !== ''
+            && (bool)\preg_match('#wls-panel#i', $returnUrl);
+
+        $isWlsPanel = false;
+        $isLogin = false;
+        $querySignalsPanel = false;
+        foreach ($candidates as $pathAndQuery) {
+            $isWlsPanel = $isWlsPanel || (bool)\preg_match(
+                '#(?:/server/backend/wls-panel(?:/|\?|$)|WlsPanel)#i',
+                $pathAndQuery,
+            );
+            $isLogin = $isLogin || (bool)\preg_match(
+                '#/(?:admin/)?login(?:/|\?|$)#i',
+                $pathAndQuery,
+            );
+            $querySignalsPanel = $querySignalsPanel || (bool)\preg_match(
+                '#(?:^|&|[?])return_url=[^&]*wls-panel#i',
+                $pathAndQuery,
+            );
+        }
+        $isPanelLoginReturn = $isLogin && ($returnUrlSignalsPanel || $querySignalsPanel);
+        if (!$isWlsPanel && !$isPanelLoginReturn) {
+            // Iframe login without return_url (legacy redirect) still needs
+            // loopback/Tauri parent — otherwise ordinary admin login stays framed.
+            if (!$isLogin || !$this->isLocalControlCenterParent()) {
+                return false;
+            }
+            if (!$this->isIframeFetchDest()) {
+                return false;
+            }
+
+            return true;
+        }
+
+        // Login return_url already proves Control Center embed intent; do not
+        // require a Tauri Referer (redirects rewrite Referer to the panel host).
+        if ($isPanelLoginReturn) {
+            return true;
+        }
+
+        return $this->isLocalControlCenterParent() || $this->isIframeFetchDest();
+    }
+
+    private function joinPathAndQuery(string $path, string $query): string
+    {
+        if ($query === '' || \str_contains($path, '?')) {
+            return $path;
+        }
+
+        return $path . '?' . $query;
+    }
+
+    private function isIframeFetchDest(): bool
+    {
+        $dest = \strtolower(\trim((string)WelineEnv::server(
+            'HTTP_SEC_FETCH_DEST',
+            (string)($_SERVER['HTTP_SEC_FETCH_DEST'] ?? ''),
+        )));
+
+        return $dest === 'iframe';
+    }
+
+    private function isLocalControlCenterParent(): bool
+    {
         $referer = \trim((string)WelineEnv::server(
             'HTTP_REFERER',
             (string)($_SERVER['HTTP_REFERER'] ?? ''),

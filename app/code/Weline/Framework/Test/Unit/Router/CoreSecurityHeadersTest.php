@@ -201,4 +201,81 @@ final class CoreSecurityHeadersTest extends TestCase
         self::assertNull($collector->getHeader('X-Frame-Options'));
         self::assertSame('nosniff', $collector->getHeader('X-Content-Type-Options'));
     }
+
+    public function testHeaderXssOmitsFrameOptionsForWlsPanelLoginReturnUrl(): void
+    {
+        Env::getInstance()->reload();
+        HeaderCollector::reset();
+        WelineEnv::setServer(
+            'REQUEST_URI',
+            '/secret-admin/admin/login?no_access_reason=not_logged_in'
+                . '&return_url=%2Fsecret-admin%2Fserver%2Fbackend%2Fwls-panel',
+            'unit-test',
+        );
+        // Redirects rewrite Referer to the panel host — must not require Tauri.
+        WelineEnv::setServer(
+            'HTTP_REFERER',
+            'https://p05113ef3.test.weline.com/secret-admin/server/backend/wls-panel',
+            'unit-test',
+        );
+
+        $router = new Core();
+        $router->header_xss();
+
+        $collector = HeaderCollector::getInstance();
+        self::assertNull($collector->getHeader('X-Frame-Options'));
+    }
+
+    public function testHeaderXssOmitsFrameOptionsWhenReturnUrlOnlyInGetBag(): void
+    {
+        Env::getInstance()->reload();
+        HeaderCollector::reset();
+        // WLS Url::parser leaves REQUEST_URI as pure route without query.
+        WelineEnv::setServer('REQUEST_URI', '/admin/login', 'unit-test');
+        WelineEnv::setServer('QUERY_STRING', '', 'unit-test');
+        WelineEnv::replaceGet([
+            'no_access_reason' => 'not_logged_in',
+            'return_url' => '/secret-admin/server/backend/wls-panel',
+        ]);
+        WelineEnv::setServer(
+            'HTTP_REFERER',
+            'http://127.0.0.1:9555/secret-admin/server/backend/wls-panel',
+            'unit-test',
+        );
+
+        $router = new Core();
+        $router->header_xss();
+
+        $collector = HeaderCollector::getInstance();
+        self::assertNull($collector->getHeader('X-Frame-Options'));
+    }
+
+    public function testHeaderXssOmitsFrameOptionsForIframeLoginFromLoopbackParent(): void
+    {
+        Env::getInstance()->reload();
+        HeaderCollector::reset();
+        WelineEnv::setServer('REQUEST_URI', '/admin/login', 'unit-test');
+        WelineEnv::setServer('HTTP_SEC_FETCH_DEST', 'iframe', 'unit-test');
+        WelineEnv::setServer('HTTP_REFERER', 'http://127.0.0.1:1420/', 'unit-test');
+
+        $router = new Core();
+        $router->header_xss();
+
+        $collector = HeaderCollector::getInstance();
+        self::assertNull($collector->getHeader('X-Frame-Options'));
+    }
+
+    public function testHeaderXssKeepsFrameOptionsForOrdinaryAdminLogin(): void
+    {
+        Env::getInstance()->reload();
+        HeaderCollector::reset();
+        WelineEnv::setServer('REQUEST_URI', '/secret-admin/admin/login', 'unit-test');
+        WelineEnv::setServer('HTTP_REFERER', 'https://evil.example/', 'unit-test');
+
+        $router = new Core();
+        $router->header_xss();
+
+        $collector = HeaderCollector::getInstance();
+        self::assertSame('SAMEORIGIN', $collector->getHeader('X-Frame-Options'));
+    }
 }

@@ -6,9 +6,10 @@ namespace Weline\Admin\Test\Unit\Service;
 
 use ReflectionMethod;
 use PHPUnit\Framework\TestCase;
-use Weline\Acl\Service\AclService;
+use Weline\Acl\Api\Authorization\AuthorizationServiceInterface;
+use Weline\Acl\Api\Authorization\RouteResource;
 use Weline\Admin\Service\BackendLoginReturnUrlService;
-use Weline\Backend\Service\MenuServiceInterface;
+use Weline\Backend\Api\Menu\MenuReaderInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 
@@ -89,6 +90,23 @@ final class BackendLoginReturnUrlServiceTest extends TestCase
         self::assertStringNotContainsString('return_url=', $loginUrl);
     }
 
+    public function testHtmlIframeNavigationCapturesReturnUrlForWlsPanel(): void
+    {
+        $service = new BackendLoginReturnUrlService(
+            $this->createAclServiceStub(),
+            $this->createMenuServiceStub(),
+            $this->createRequestStub(documentNavigation: false, iframe: true),
+            $this->createUrlStub()
+        );
+
+        $url = '/server/backend/wls-panel';
+
+        self::assertTrue($service->shouldCaptureCurrentRequestReturnUrl(null, $url));
+        $loginUrl = $service->buildLoginUrlWithReturn('http://admin.test/admin/login', $url, 'not_logged_in');
+        self::assertStringContainsString('return_url=', $loginUrl);
+        self::assertStringContainsString('wls-panel', urldecode($loginUrl));
+    }
+
     public function testApiPathDoesNotCaptureReturnUrlEvenForDocumentRequest(): void
     {
         $service = new BackendLoginReturnUrlService(
@@ -115,11 +133,17 @@ final class BackendLoginReturnUrlServiceTest extends TestCase
         return (bool)$method->invoke($this->service, $routePath);
     }
 
-    private function createAclServiceStub(): AclService
+    private function createAclServiceStub(): AuthorizationServiceInterface
     {
-        return new class() extends AclService {
-            public function __construct()
+        return new class() implements AuthorizationServiceInterface {
+            public function findRouteResource(string $className, string $httpMethod, string $routePath): ?RouteResource
             {
+                return null;
+            }
+
+            public function isRouteAllowed(int $roleId, string $routePath, string $httpMethod): bool
+            {
+                return true;
             }
 
             public function isRouteProtected(string $routePath): bool
@@ -130,12 +154,41 @@ final class BackendLoginReturnUrlServiceTest extends TestCase
                     'weline_dbmanager/backend/wls-db-manager/edit',
                 ], true);
             }
+
+            public function hasAnyPermission(int $roleId): bool
+            {
+                return true;
+            }
+
+            public function hasMenuPermission(int $roleId): bool
+            {
+                return true;
+            }
+
+            public function getDefaultRouteFromAcl(int $roleId): ?string
+            {
+                return null;
+            }
+
+            public function isObjectActionAllowed(int $roleId, string $action, array $objectScope): bool
+            {
+                return true;
+            }
+
+            public function isObjectActionAllowedForSubmit(
+                int $roleId,
+                string $action,
+                array $objectScope,
+                int $expectedGrantVersion,
+            ): bool {
+                return true;
+            }
         };
     }
 
-    private function createMenuServiceStub(): MenuServiceInterface
+    private function createMenuServiceStub(): MenuReaderInterface
     {
-        return new class() implements MenuServiceInterface {
+        return new class() implements MenuReaderInterface {
             public function getMenuTreeByRoleId(int $roleId): array
             {
                 return [];
@@ -163,14 +216,15 @@ final class BackendLoginReturnUrlServiceTest extends TestCase
         };
     }
 
-    private function createRequestStub(bool $documentNavigation = true): Request
+    private function createRequestStub(bool $documentNavigation = true, bool $iframe = false): Request
     {
         $urlBuilder = $this->createUrlStub();
 
-        return new class($urlBuilder, $documentNavigation) extends Request {
+        return new class($urlBuilder, $documentNavigation, $iframe) extends Request {
             public function __construct(
                 private readonly Url $urlBuilder,
-                private readonly bool $documentNavigation
+                private readonly bool $documentNavigation,
+                private readonly bool $iframe
             )
             {
             }
@@ -178,6 +232,30 @@ final class BackendLoginReturnUrlServiceTest extends TestCase
             public function isDocumentNavigationRequest(): bool
             {
                 return $this->documentNavigation;
+            }
+
+            public function isIframe(): bool
+            {
+                return $this->iframe;
+            }
+
+            public function isAjax(): bool
+            {
+                return false;
+            }
+
+            public function getMethod(): string
+            {
+                return 'GET';
+            }
+
+            public function getHeader(string $key = ''): array|string|null
+            {
+                if ($key === '' || strcasecmp($key, 'Accept') === 0) {
+                    return 'text/html,application/xhtml+xml';
+                }
+
+                return null;
             }
 
             public function isSecure(): bool
@@ -190,6 +268,7 @@ final class BackendLoginReturnUrlServiceTest extends TestCase
                 $server = [
                     'HTTP_HOST' => 'admin.test',
                     'SERVER_NAME' => 'admin.test',
+                    'HTTP_ACCEPT' => 'text/html,application/xhtml+xml',
                 ];
 
                 if ($key === '') {
