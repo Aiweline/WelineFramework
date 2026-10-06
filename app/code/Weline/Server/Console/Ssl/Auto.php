@@ -64,7 +64,7 @@ class Auto extends CommandAbstract
     {
         // 解析参数（args[0] 为命令名 ssl:auto，子命令 request/renew/list 等在 args[1]）
         $possibleAction = $args[1] ?? $args[0] ?? 'status';
-        $actions = ['request', 'apply', 'renew', 'list', 'ls', 'sync', 'enable', 'disable', 'status'];
+        $actions = ['request', 'apply', 'renew', 'list', 'ls', 'sync', 'enable', 'disable', 'delete', 'rm', 'status'];
         $action = \in_array((string) $possibleAction, $actions, true) ? $possibleAction : 'status';
         $domain = $args['domain'] ?? $args['d'] ?? null;
         $email = $args['email'] ?? $args['e'] ?? $this->getDefaultEmail();
@@ -73,6 +73,8 @@ class Auto extends CommandAbstract
         $staging = isset($args['staging']) || isset($args['test']);
         $renewDays = (int) ($args['renew-days'] ?? 30);
         $forceAcme = isset($args['force-acme']) || isset($args['force_acme']) || isset($args['f']);
+        $confirm = isset($args['confirm']) || isset($args['yes']) || isset($args['y']);
+        $asJson = isset($args['json']);
         
         // 设置环境
         if ($staging) {
@@ -110,6 +112,11 @@ class Auto extends CommandAbstract
                 
             case 'disable':
                 $this->toggleHttps($domain, false);
+                break;
+
+            case 'delete':
+            case 'rm':
+                $this->deleteCertificate($domain, $confirm, $asJson);
                 break;
         }
     }
@@ -333,6 +340,7 @@ $this->printer->note('  ssl:auto list                    ' . __('- 查看证书�
             $this->printer->note('  ssl:auto sync                    ' . __('- 同步网站域名'));
             $this->printer->note('  ssl:auto enable -d example.com   ' . __('- 启用 HTTPS'));
             $this->printer->note('  ssl:auto disable -d example.com  ' . __('- 禁用 HTTPS'));
+            $this->printer->note('  ssl:auto delete -d example.com   ' . __('- 删除证书（被站点引用时需 --confirm）'));
     }
     
     /**
@@ -419,6 +427,141 @@ $this->printer->note('  ssl:auto list                    ' . __('- 查看证书�
     }
     
     /**
+     * 删除托管证书；若域名仍被站点引用，未带 --confirm/--yes 时要求二次确认。
+     */
+    protected function deleteCertificate(?string $domain, bool $confirm, bool $asJson): void
+    {
+        $domain = \strtolower(\trim((string)$domain));
+        if ($domain === '') {
+            $payload = [
+                'success' => false,
+                'needs_confirmation' => false,
+                'domain' => '',
+                'message' => (string)__('请指定域名：--domain example.com'),
+                'referencing_sites' => [],
+            ];
+            $this->emitDeleteResult($payload, $asJson, true);
+            return;
+        }
+
+        $cert = $this->certModel->clearQuery()->loadByDomain($domain);
+        if (!$cert->getCertId()) {
+            $payload = [
+                'success' => false,
+                'needs_confirmation' => false,
+                'domain' => $domain,
+                'message' => (string)__('未找到域名证书：%{1}', [$domain]),
+                'referencing_sites' => [],
+            ];
+            $this->emitDeleteResult($payload, $asJson, true);
+            return;
+        }
+
+        $references = $this->findWebsiteReferencesForDomain($domain);
+        if ($references !== [] && !$confirm) {
+            $names = \array_values(\array_unique(\array_filter(\array_map(
+                static fn (array $row): string => \trim((string)($row['label'] ?? '')),
+                $references,
+            ))));
+            $payload = [
+                'success' => false,
+                'needs_confirmation' => true,
+                'domain' => $domain,
+                'message' => (string)__(
+                    '域名 %{1} 仍被站点引用：%{2}。确认删除请加 --confirm（或 --yes）。',
+                    [$domain, $names === [] ? (string)$domain : \implode(', ', $names)],
+                ),
+                'referencing_sites' => $references,
+            ];
+            $this->emitDeleteResult($payload, $asJson, true);
+            return;
+        }
+
+        $result = $this->sslService->deleteManagedCertificate(
+            $domain,
+            (string)__('控制中心/CLI 删除'),
+        );
+        $payload = [
+            'success' => (bool)($result['success'] ?? false),
+            'needs_confirmation' => false,
+            'domain' => $domain,
+            'message' => (string)($result['message'] ?? (
+                ($result['success'] ?? false)
+                    ? __('证书已删除')
+                    : __('证书删除失败')
+            )),
+            'referencing_sites' => $references,
+            'phase' => $result['phase'] ?? null,
+        ];
+        $this->emitDeleteResult($payload, $asJson, !($payload['success']));
+    }
+
+    /**
+     * @return list<array{domain:string,website_id:int,source:string,label:string}>
+     */
+    protected function findWebsiteReferencesForDomain(string $domain): array
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return [];
+        }
+
+        $references = [];
+        $seen = [];
+        foreach ($this->sslService->requestDomainList([]) as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $candidate = \strtolower(\trim((string)($row['domain'] ?? '')));
+            if ($candidate !== $domain) {
+                continue;
+            }
+            $source = (string)($row['source'] ?? '');
+            $websiteId = (int)($row['website_id'] ?? 0);
+            // 仅「站点域名」算被站点引用；域名池未绑定站点不算。
+            if ($source !== '' && $source !== 'website_domain') {
+                continue;
+            }
+            if ($source === '' && $websiteId <= 0 && !\array_key_exists('website_id', $row)) {
+                continue;
+            }
+            $identity = $candidate . '|' . $websiteId . '|' . ($source !== '' ? $source : 'website_domain');
+            if (isset($seen[$identity])) {
+                continue;
+            }
+            $seen[$identity] = true;
+            $label = $websiteId === 0
+                ? (string)__('默认站')
+                : (string)__('网站 #%{1}', [$websiteId]);
+            $references[] = [
+                'domain' => $candidate,
+                'website_id' => $websiteId,
+                'source' => $source !== '' ? $source : 'website_domain',
+                'label' => $label,
+            ];
+        }
+
+        return $references;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     */
+    protected function emitDeleteResult(array $payload, bool $asJson, bool $isError): void
+    {
+        if ($asJson) {
+            echo \json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
+            return;
+        }
+        $message = (string)($payload['message'] ?? '');
+        if ($isError) {
+            $this->printer->error($message !== '' ? $message : (string)__('证书删除失败'));
+            return;
+        }
+        $this->printer->success($message !== '' ? $message : (string)__('证书已删除'));
+    }
+
+    /**
      * 获取默认邮箱
      */
     protected function getDefaultEmail(): string
@@ -437,7 +580,7 @@ $this->printer->note('  ssl:auto list                    ' . __('- 查看证书�
             'ssl:auto [action]',
             __('使用 Let\'s Encrypt / LiteSSL 自动管理 SSL 证书'),
             [
-                '[action]' => __('操作：status/list/request/renew/sync/enable/disable'),
+                '[action]' => __('操作：status/list/request/renew/sync/enable/disable/delete'),
                 '-d, --domain <domain>' => __('指定域名'),
                 '-e, --email <email>' => __('联系邮箱（Let\'s Encrypt 要求）'),
                 '-w, --webroot <path>' => __('Webroot 路径（默认：pub/）'),
@@ -445,6 +588,8 @@ $this->printer->note('  ssl:auto list                    ' . __('- 查看证书�
                 '-f, --force-acme' => __('强制执行 ACME（忽略本地未过期证书）'),
                 '--renew-days <days>' => __('提前续签天数（默认：30）'),
                 '--staging' => __('使用 Let\'s Encrypt 测试环境'),
+                '--confirm, --yes' => __('删除时确认：即使域名仍被站点引用也继续删除'),
+                '--json' => __('以 JSON 输出删除结果（供控制中心解析）'),
             ],
             [
                 'status' => __('显示证书状态概览（默认）'),
@@ -454,6 +599,7 @@ $this->printer->note('  ssl:auto list                    ' . __('- 查看证书�
                 'sync' => __('同步网站域名并申请证书'),
                 'enable' => __('启用指定域名的 HTTPS'),
                 'disable' => __('禁用指定域名的 HTTPS'),
+                'delete' => __('删除托管证书（被站点引用时需 --confirm）'),
             ],
             [
                 __('查看状态') => 'php bin/w ssl:auto',
@@ -463,6 +609,8 @@ $this->printer->note('  ssl:auto list                    ' . __('- 查看证书�
                 __('同步并申请') => 'php bin/w ssl:auto sync -e admin@example.com',
                 __('启用 HTTPS') => 'php bin/w ssl:auto enable -d example.com',
                 __('禁用 HTTPS') => 'php bin/w ssl:auto disable -d example.com',
+                __('删除证书') => 'php bin/w ssl:auto delete -d example.com --json',
+                __('确认删除被站点引用的证书') => 'php bin/w ssl:auto delete -d example.com --confirm --json',
             ]
         );
     }

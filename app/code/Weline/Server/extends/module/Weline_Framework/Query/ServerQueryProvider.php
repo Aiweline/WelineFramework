@@ -1043,28 +1043,57 @@ class ServerQueryProvider implements QueryProviderInterface
     {
         $domain = \strtolower(\trim((string)($params['domain'] ?? '')));
         if ($domain === '') {
-            return ['success' => false, 'message' => __('请指定域名')];
+            return ['success' => false, 'needs_confirmation' => false, 'message' => __('请指定域名'), 'referencing_sites' => []];
         }
         if (\in_array($domain, ['localhost', '127.0.0.1', '::1'], true)) {
-            return ['success' => false, 'message' => __('本地域名证书不允许删除')];
+            return ['success' => false, 'needs_confirmation' => false, 'message' => __('本地域名证书不允许删除'), 'referencing_sites' => []];
         }
-        $cert = $this->sslCertModel->clearQuery()->loadByDomain($domain);
-        if (!$cert->getCertId()) {
-            return ['success' => false, 'message' => __('未找到证书记录')];
-        }
-        if ($cert->isHttpsEnabled()) {
-            $cert->setHttpsEnabled(false)->save();
-        }
-        $certDir = $cert->getCertificateDir();
-        if (\is_dir($certDir)) {
-            $files = \glob($certDir . '*');
-            foreach ($files as $file) {
-                @\unlink($file);
+
+        $confirm = !empty($params['confirm']) || !empty($params['yes']);
+        $references = [];
+        foreach ($this->sslCertificateService->requestDomainList([]) as $row) {
+            if (!\is_array($row)) {
+                continue;
             }
-            @\rmdir($certDir);
+            $candidate = \strtolower(\trim((string)($row['domain'] ?? '')));
+            $source = (string)($row['source'] ?? '');
+            if ($candidate !== $domain || ($source !== '' && $source !== 'website_domain')) {
+                continue;
+            }
+            $websiteId = (int)($row['website_id'] ?? 0);
+            $references[] = [
+                'domain' => $candidate,
+                'website_id' => $websiteId,
+                'source' => $source !== '' ? $source : 'website_domain',
+                'label' => $websiteId === 0
+                    ? (string)__('默认站')
+                    : (string)__('网站 #%{1}', [$websiteId]),
+            ];
         }
-        $cert->clearQuery()->where(CertModel::schema_fields_ID, $cert->getCertId())->delete()->fetch();
-        return ['success' => true, 'message' => __('证书已删除')];
+        if ($references !== [] && !$confirm) {
+            return [
+                'success' => false,
+                'needs_confirmation' => true,
+                'domain' => $domain,
+                'message' => (string)__('域名 %{1} 仍被站点引用，请确认后再删除', [$domain]),
+                'referencing_sites' => $references,
+            ];
+        }
+
+        $result = $this->sslCertificateService->deleteManagedCertificate(
+            $domain,
+            (string)__('QueryProvider 删除'),
+        );
+        return [
+            'success' => (bool)($result['success'] ?? false),
+            'needs_confirmation' => false,
+            'domain' => $domain,
+            'message' => (string)($result['message'] ?? (
+                ($result['success'] ?? false) ? __('证书已删除') : __('证书删除失败')
+            )),
+            'referencing_sites' => $references,
+            'phase' => $result['phase'] ?? null,
+        ];
     }
 
     private function stripSensitiveCertificateFields(array $certificate): array
