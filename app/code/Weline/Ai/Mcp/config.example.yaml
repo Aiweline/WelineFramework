@@ -6,6 +6,12 @@ collector:
   redact_secrets: true
   allow_cross_project: false
   max_event_bytes: 8388608
+  stored_event_chars: 8192
+  persist_event_types:
+    - user_message
+    - session_started
+    - session_stopped
+    - manual_annotation
 
 analysis:
   # The local Codex CLI extracts bounded, redacted session learning without an
@@ -181,6 +187,7 @@ index:
     - .github/**
     - build/**
     - tmp/**
+    - dev/tmp/**
     - test-results/**
     - evidence/**
     - private/**

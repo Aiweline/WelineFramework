@@ -175,6 +175,15 @@ final class Config
                 'redact_secrets' => true,
                 'allow_cross_project' => false,
                 'max_event_bytes' => 8_388_608,
+                // Stdin may be large; only this many UTF-8 chars are persisted per allowed event.
+                'stored_event_chars' => 8_192,
+                // Learning stores distilled experiences. Session/tool firehose is never durable knowledge.
+                'persist_event_types' => [
+                    'user_message',
+                    'session_started',
+                    'session_stopped',
+                    'manual_annotation',
+                ],
             ],
             'analysis' => [
                 'provider' => 'codex',
@@ -278,7 +287,7 @@ final class Config
                     'pub/media/**', '**/view/tpl/**', '**/static/libs/**',
                     '**/test/**', '**/tests/**', '**/Test/**', '**/*.min.*', '**/*.map',
                     '.cursor/**', '.claude/**', '.agents/**', '.github/**',
-                    'build/**', 'tmp/**', 'test-results/**', 'evidence/**', 'private/**', '.superpowers/**',
+                    'build/**', 'tmp/**', 'dev/tmp/**', 'test-results/**', 'evidence/**', 'private/**', '.superpowers/**',
                     'Users/**', 'pub/errors/**', 'pub/readme/**', 'pub/source/**', 'pub/sitemaps/**',
                     'pub/theme_previews/**', 'setup/static/**', 'setup/server_installer/**',
                     'setup/step/**', 'docs/assets/**', '**/extends/**/server/**',
@@ -323,6 +332,8 @@ final class Config
                 'redact_secrets' => true,
                 'allow_cross_project' => true,
                 'max_event_bytes' => true,
+                'stored_event_chars' => true,
+                'persist_event_types' => true,
             ],
             'analysis' => [
                 'provider' => true,
@@ -540,6 +551,7 @@ final class Config
         }
         foreach ([
             'collector.max_event_bytes' => [1_024, 67_108_864],
+            'collector.stored_event_chars' => [256, 65_536],
             'analysis.max_session_tokens' => [1_000, 1_000_000],
             'analysis.automatic_learning.max_candidates' => [1, 12],
             'analysis.automatic_learning.max_existing_experiences' => [1, 100],
@@ -597,7 +609,7 @@ final class Config
         if (!is_array($targets) || $targets === [] || !array_is_list($targets)) {
             throw new RuntimeException('promotion.allowed_targets must be a non-empty list');
         }
-        foreach (['index.allowed_extensions', 'index.excluded_paths'] as $listPath) {
+        foreach (['index.allowed_extensions', 'index.excluded_paths', 'collector.persist_event_types'] as $listPath) {
             $items = self::nested($values, $listPath);
             if (!is_array($items) || !array_is_list($items) || $items === []) {
                 throw new RuntimeException($listPath . ' must be a non-empty list');

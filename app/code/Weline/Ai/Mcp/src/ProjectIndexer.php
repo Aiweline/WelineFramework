@@ -43,6 +43,7 @@ final class ProjectIndexer
         '~^nbproject(?:/|$)~',
         '~^\.nyc_output(?:/|$)~',
         '~^tmp(?:/|$)~',
+        '~^dev/tmp(?:/|$)~',
         '~^build(?:/|$)~',
         '~^test-results(?:/|$)~',
         '~^evidence(?:/|$)~',

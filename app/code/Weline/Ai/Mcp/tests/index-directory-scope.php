@@ -91,6 +91,10 @@ try {
         $check($result['discovered'] === 0 && $paths() === $expected,
             'direct excluded or symlink directory selection stays excluded: ' . $denied);
     }
+    $put('dev/tmp/Dump.json', '{"throwaway":true}');
+    $throwaway = $indexer->indexPaths(['dev/tmp']);
+    $check($throwaway['discovered'] === 0 && $paths() === $expected,
+        'dev/tmp throwaways stay outside the index even when selected explicitly');
 
     unlink($root . '/target/nested/Keep.txt');
     rmdir($root . '/target/nested');

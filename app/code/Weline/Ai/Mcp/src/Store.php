@@ -226,7 +226,7 @@ final class Store
     }
 
     /** @param array<string, mixed> $event
-     *  @return array{id:string,inserted:bool}
+     *  @return array{id:string,inserted:bool,skipped?:bool,skip_reason?:string}
      */
     public function insertEvent(array $event): array
     {
@@ -254,6 +254,20 @@ final class Store
             if ($session['lifecycle_state'] !== 'active') {
                 throw new ToolException('SESSION_ARCHIVING', 'Session is frozen for archival', true);
             }
+            if (!$this->eventTypePersisted((string) $event['type'])) {
+                $this->db->exec('COMMIT');
+                return [
+                    'id' => (string) $event['event_id'],
+                    'inserted' => false,
+                    'skipped' => true,
+                    'skip_reason' => 'event_type_not_persisted',
+                ];
+            }
+            $stored = self::boundedEventPayload(
+                (string) ($event['content_redacted'] ?? ''),
+                $event['metadata'] ?? [],
+                (int) $this->config->get('collector.stored_event_chars', 8_192),
+            );
             $statement = $this->execute(
                 'INSERT INTO events(id, schema_version, project_id, session_id, turn_id, episode_id, event_type,
                     source, role, content_redacted, content_hash, dedup_key, raw_ref, trust_class, trust_score,
@@ -270,14 +284,14 @@ final class Store
                     $event['type'],
                     (string) ($event['source'] ?? 'codex_hook'),
                     self::nullable($event['role'] ?? ''),
-                    (string) ($event['content_redacted'] ?? ''),
+                    $stored['content'],
                     $event['content_hash'],
                     $event['dedup_key'],
                     self::nullable($event['raw_ref'] ?? ''),
                     (string) ($trust['class'] ?? 'unclassified'),
                     $score,
                     Json::encode($event['context'] ?? []),
-                    Json::encode($event['metadata'] ?? []),
+                    Json::encode($stored['metadata']),
                     $observedAt,
                     self::now(),
                 ],
@@ -304,6 +318,60 @@ final class Store
             }
             throw $exception;
         }
+    }
+
+    /**
+     * Persist a bounded excerpt plus compact metadata. Hook stdin may be megabytes;
+     * durable learning only needs a short redacted slice, not a second copy of tool I/O.
+     *
+     * @param mixed $metadata
+     * @return array{content:string,metadata:array<string,mixed>}
+     */
+    private static function boundedEventPayload(string $content, mixed $metadata, int $limit): array
+    {
+        $limit = max(256, min(65_536, $limit));
+        $originalBytes = strlen($content);
+        $truncated = mb_strlen($content, 'UTF-8') > $limit;
+        $stored = $truncated ? Text::truncate($content, $limit) : $content;
+        $meta = is_array($metadata) ? $metadata : [];
+        $compact = [];
+        foreach ([
+            'hook_event_name', 'host', 'model', 'turn_id', 'tool_name', 'tool_use_id',
+            'composer_mode', 'is_background_agent', 'redaction_count', 'quarantined',
+            'transcript_ref_available', 'learning_classification',
+        ] as $key) {
+            if (array_key_exists($key, $meta)) {
+                $compact[$key] = $meta[$key];
+            }
+        }
+        if (isset($meta['tool_input']) && is_array($meta['tool_input'])) {
+            $compact['tool_input_keys'] = array_slice(array_keys($meta['tool_input']), 0, 32);
+        }
+        $compact['original_content_bytes'] = $originalBytes;
+        $compact['content_truncated'] = $truncated;
+
+        return ['content' => $stored, 'metadata' => $compact];
+    }
+
+    public function eventTypePersisted(string $type): bool
+    {
+        $type = trim($type);
+        if ($type === '') {
+            return false;
+        }
+        $allowed = (array) $this->config->get('collector.persist_event_types', [
+            'user_message',
+            'session_started',
+            'session_stopped',
+            'manual_annotation',
+        ]);
+        foreach ($allowed as $item) {
+            if (is_string($item) && trim($item) === $type) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function closeSession(string $sessionId, string $outcome, string $closedAt): void

@@ -139,29 +139,33 @@ final class Collector
             'closed_at' => $eventName === 'stop' ? $observedAt : null,
         ];
         $this->store->upsertSession($session);
-        $insert = $this->store->insertEvent([
-            'schema_version' => 'event.v1',
-            'event_id' => $eventId,
-            'project_id' => $projectId,
-            'session_id' => $sessionId,
-            'turn_id' => (string) ($redacted['turn_id'] ?? ''),
-            'observed_at' => $observedAt,
-            'source' => $eventSource,
-            'type' => $eventType,
-            'role' => $role,
-            'content_redacted' => $content,
-            'content_hash' => $contentHash,
-            'dedup_key' => $dedupKey,
-            'trust' => $trust,
-            'context' => $context,
-            'metadata' => $metadata,
-        ]);
+        $insert = ['id' => $eventId, 'inserted' => false, 'skipped' => true, 'skip_reason' => 'event_type_not_persisted'];
+        if ($this->store->eventTypePersisted($eventType)) {
+            $insert = $this->store->insertEvent([
+                'schema_version' => 'event.v1',
+                'event_id' => $eventId,
+                'project_id' => $projectId,
+                'session_id' => $sessionId,
+                'turn_id' => (string) ($redacted['turn_id'] ?? ''),
+                'observed_at' => $observedAt,
+                'source' => $eventSource,
+                'type' => $eventType,
+                'role' => $role,
+                'content_redacted' => $content,
+                'content_hash' => $contentHash,
+                'dedup_key' => $dedupKey,
+                'trust' => $trust,
+                'context' => $context,
+                'metadata' => $metadata,
+            ]);
+        }
         $result = [
             'event_id' => $insert['id'],
             'project_id' => $projectId,
             'session_id' => $sessionId,
-            'inserted' => $insert['inserted'],
-            'skipped' => false,
+            'inserted' => (bool) ($insert['inserted'] ?? false),
+            'skipped' => (bool) ($insert['skipped'] ?? false),
+            'skip_reason' => (string) ($insert['skip_reason'] ?? ''),
             'redaction_count' => $redactionCount,
             'quarantined' => $quarantined,
             'content_redacted' => $content,

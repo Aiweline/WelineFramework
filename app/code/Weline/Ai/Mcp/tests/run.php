@@ -1147,6 +1147,7 @@ SH);
         'project-guidance-reload-policy.php',
         'readiness-incremental-scope.php',
         'index-directory-scope.php',
+        'collector-event-storage.php',
         'relation-resolution-scope.php',
         'session-start-background-refresh.php',
     ] as $regression) {
