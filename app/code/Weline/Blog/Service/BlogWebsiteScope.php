@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Blog\Service;
 
-/** Website scope helpers: website_id=0 means global/default content. */
+/** Website scope: each post belongs to exactly one website_id; 0 = default site only, not a global fallback. */
 final class BlogWebsiteScope
 {
     /**
@@ -12,19 +12,11 @@ final class BlogWebsiteScope
      */
     public static function websiteIdsForQuery(int $scopedWebsiteId): array
     {
-        if ($scopedWebsiteId <= 0) {
-            return [0];
-        }
-
-        return [$scopedWebsiteId, 0];
+        return [max(0, $scopedWebsiteId)];
     }
 
     public static function matchesWebsite(int $scopedWebsiteId, int $documentWebsiteId): bool
     {
-        if ($documentWebsiteId <= 0) {
-            return true;
-        }
-
-        return $scopedWebsiteId <= 0 || $documentWebsiteId === $scopedWebsiteId;
+        return max(0, $scopedWebsiteId) === max(0, $documentWebsiteId);
     }
 }

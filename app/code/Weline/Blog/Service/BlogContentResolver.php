@@ -130,7 +130,10 @@ final class BlogContentResolver implements BlogSitemapContentSourceInterface
      */
     public function listCategories(int $websiteId = 0, string $locale = ''): array
     {
-        $tree = $this->categoryAdmin->tree($websiteId, $locale);
+        // Storefront taxonomy is brand-facing: never merge default-site categories onto other websites.
+        $tree = $websiteId > 0
+            ? $this->categoryAdmin->treeOwnedOnly($websiteId, $locale)
+            : $this->categoryAdmin->tree($websiteId, $locale);
 
         $map = function (array $nodes) use (&$map): array {
             $out = [];
@@ -399,6 +402,7 @@ final class BlogContentResolver implements BlogSitemapContentSourceInterface
         if (!is_array($row)
             || $row === []
             || (int)($row[Post::schema_fields_ID] ?? 0) <= 0
+            || !$this->isPublishedRowForWebsite($row, $websiteId)
         ) {
             RequestContext::set($missKey, true);
 
@@ -459,7 +463,10 @@ final class BlogContentResolver implements BlogSitemapContentSourceInterface
         $priority = array_flip($this->contentLocaleCandidates($locale));
         $bestBySlug = [];
         foreach (\is_array($rows) ? $rows : [] as $row) {
-            if (!\is_array($row) || (int)($row[Post::schema_fields_ID] ?? 0) <= 0) {
+            if (!\is_array($row)
+                || (int)($row[Post::schema_fields_ID] ?? 0) <= 0
+                || !$this->isPublishedRowForWebsite($row, $websiteId)
+            ) {
                 continue;
             }
             $slug = \trim(\strtolower((string)($row[Post::schema_fields_SLUG] ?? '')));
@@ -516,6 +523,17 @@ final class BlogContentResolver implements BlogSitemapContentSourceInterface
     private function postSlugContextKey(int $websiteId, string $locale, string $slug): string
     {
         return self::CTX_POST_BY_SLUG . $websiteId . '.' . $locale . '.' . $slug;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function isPublishedRowForWebsite(array $row, int $websiteId): bool
+    {
+        return BlogWebsiteScope::matchesWebsite(
+            $websiteId,
+            (int)($row[Post::schema_fields_WEBSITE_ID] ?? 0),
+        );
     }
 
     /**

@@ -38,7 +38,7 @@ final class Index extends FrontendController
         $seo = $this->seoFacts->buildListProfile($articles, $this->getUrl('blog'));
         $title = trim((string)($seo['title'] ?? ''));
         if ($title === '') {
-            $title = WidgetI18n::label('汉服博客 | 穿搭灵感与文化指南');
+            $title = WidgetI18n::label('博客');
         }
         $this->layoutType = 'blog_category';
         $this->request->setGet('page_type', 'blog_list');

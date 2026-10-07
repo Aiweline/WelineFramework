@@ -56,7 +56,7 @@ Slug：小写短横线，主题稳定（例 `textile-yunjin`）。英文存储�
   → upsert-blog-locale-packs.php
 ```
 
-- `website_id=0`；`status=published`  
+- `website_id=0` 表示默认站（非全站广播）；其它站须显式选对应 website_id；`status=published`  
 - 幂等：已存在则 update，勿盲目 purge  
 - 默认站语种以本地 DB `WebsiteLanguage::getWebsiteLanguageCodes(0)` 为准（常见含 zh_Hans_CN、en_US、ar_SA、bn_BD、es_ES、fr_FR、hi_IN、id_ID、pt_BR、ur_PK）  
 - **禁止**为译写拉起 Ollama（用户本回合明确要求除外）

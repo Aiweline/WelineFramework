@@ -24,7 +24,7 @@ final class BlogContentReadBehaviorTest extends TestCase
         StorefrontScopeHotCache::resetProcessCache();
     }
 
-    public function testGlobalFallbackIsReusedUnderRequestedWebsite(): void
+    public function testForeignWebsitePostIsNotVisibleOnAnotherWebsite(): void
     {
         $reads = 0;
         $row = ['post_id' => 91, 'website_id' => 0, 'locale' => 'en_US', 'slug' => 'global-news', 'status' => 'published', 'content' => 'Body'];
@@ -43,9 +43,9 @@ final class BlogContentReadBehaviorTest extends TestCase
         (new \ReflectionProperty($resolver, 'contentCache'))->setValue($resolver, $this->cache());
         (new \ReflectionProperty($resolver, 'postModel'))->setValue($resolver, $post);
         $find = new \ReflectionMethod($resolver, 'findPublishedPost');
-        self::assertSame($row, $find->invoke($resolver, 7, 'en_US', 'global-news'));
-        self::assertSame($row, $find->invoke($resolver, 7, 'en_US', 'global-news'));
-        self::assertSame(1, $reads, 'A resolved global row must satisfy the same scoped lookup without another persistence read.');
+        self::assertNull($find->invoke($resolver, 7, 'en_US', 'global-news'));
+        self::assertNull($find->invoke($resolver, 7, 'en_US', 'global-news'));
+        self::assertSame(1, $reads, 'Default-site rows must not satisfy a foreign website lookup.');
     }
 
     public function testLocalizedKeywordResultAndMissAreReused(): void
@@ -83,11 +83,17 @@ final class BlogContentReadBehaviorTest extends TestCase
         self::assertSame(2, $reads, 'Languages must remain separate.');
     }
 
-    public function testChangedScopesIncludeGlobalFallbackAndPreviousWebsite(): void
+    public function testChangedScopesInvalidatePreviousWebsiteWithoutCrossSiteFallback(): void
     {
         self::assertTrue(method_exists(BlogContentCache::class, 'changedPaths'));
-        self::assertSame(['global/storefront/blog/content/website/0', 'global/storefront/blog/content/website/7'],
-            BlogContentCache::changedPaths(7, 0));
+        self::assertSame(
+            [
+                'global/storefront/blog',
+                'global/storefront/blog/content/website/0',
+                'global/storefront/blog/content/website/7',
+            ],
+            BlogContentCache::changedPaths(7, 0),
+        );
         $versions = [];
         $cache = $this->cache($versions);
         $reads = 0;
@@ -98,8 +104,8 @@ final class BlogContentReadBehaviorTest extends TestCase
         self::assertSame(3, $cache->remember(7, 'en_US', 'post_slug', ['news'], $builder));
         self::assertSame(2, $cache->remember(8, 'en_US', 'post_slug', ['news'], $builder));
         foreach (BlogContentCache::changedPaths(0, 0) as $path) { $versions[$path] = 1; }
-        self::assertSame(4, $cache->remember(7, 'en_US', 'post_slug', ['news'], $builder));
-        self::assertSame(5, $cache->remember(8, 'en_US', 'post_slug', ['news'], $builder));
+        self::assertSame(3, $cache->remember(7, 'en_US', 'post_slug', ['news'], $builder));
+        self::assertSame(2, $cache->remember(8, 'en_US', 'post_slug', ['news'], $builder));
     }
 
     public function testKeywordsAreFetchedOnceForDistinctIdsIncludingMissingTranslations(): void

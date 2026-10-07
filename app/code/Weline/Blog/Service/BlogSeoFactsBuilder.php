@@ -147,11 +147,7 @@ final class BlogSeoFactsBuilder
             }
         }
 
-        $title = WidgetI18n::label('汉服博客');
-        if ($shareImage === '') {
-            // Stable storefront share asset when the list has no cover yet.
-            $shareImage = '/pub/media/catalog/hanfu/r2/homepage/taoyuan-qingmeng.webp';
-        }
+        $title = WidgetI18n::label('博客');
         if ($shareAlt === '') {
             $shareAlt = $title;
         }
@@ -159,7 +155,7 @@ final class BlogSeoFactsBuilder
         return [
             'page_type' => 'blog_list',
             'title' => $title,
-            'description' => WidgetI18n::label('阅读汉服穿搭灵感、形制科普与节日搭配指南，系统了解明制、宋制、唐制与马面裙的选购要点、穿着建议、保养提醒与礼仪场景搭配方法，帮助你更快做出更合适且更安心的选择。'),
+            'description' => WidgetI18n::label('阅读本站精选文章与分类内容，了解选购要点、使用建议与相关指南。'),
             'canonical_url' => $listCanonical,
             'robots' => 'index,follow',
             'image' => $shareImage,

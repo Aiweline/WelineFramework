@@ -55,8 +55,8 @@ final class Category extends FrontendController
             : WidgetI18n::label('博客分类');
         // Leaf for <title>: keep composed length in soft SERP budget (30-65) after site suffix.
         $title = $active !== null
-            ? WidgetI18n::label('「%{1}」分类博客 · 穿搭与选购', '', [$heading])
-            : WidgetI18n::label('汉服博客分类 · 穿搭灵感与选购指南');
+            ? WidgetI18n::label('「%{1}」分类 · 博客文章', '', [$heading])
+            : WidgetI18n::label('博客分类');
 
         $this->layoutType = 'blog_category';
         $this->request->setGet('page_type', 'blog_category');
@@ -67,8 +67,8 @@ final class Category extends FrontendController
         $this->assign(
             'blog_page_subtitle',
             $active !== null
-                ? WidgetI18n::label('浏览「%{1}」分类下的汉服穿搭、形制科普与选购避坑文章，帮助你更快做出合适选择。', '', [$heading])
-                : WidgetI18n::label('按分类浏览汉服穿搭灵感、形制科普与选购指南，快速找到适合日常与礼仪场合的内容。'),
+                ? WidgetI18n::label('浏览「%{1}」分类下的文章，快速找到你需要的内容。', '', [$heading])
+                : WidgetI18n::label('按分类浏览本站文章与指南。'),
         );
         $this->assign('blog_active_category_id', $categoryId);
         $this->assign('blog_active_category_slug', $slug);
@@ -94,7 +94,7 @@ final class Category extends FrontendController
         if (mb_strlen((string)$seo['description']) < 50) {
             $seo['description'] = rtrim((string)$seo['description'], "。.;； ")
                 . '。'
-                . WidgetI18n::label('阅读穿搭灵感、形制科普与选购避坑，帮助你更快做出合适选择。');
+                . WidgetI18n::label('阅读精选文章与实用指南，帮助你更快找到需要的内容。');
         }
         if (mb_strlen((string)$seo['description']) > 320) {
             $seo['description'] = mb_substr((string)$seo['description'], 0, 320);

@@ -111,7 +111,7 @@
 返回列表,"Back to list"
 预览,Preview
 文章设置,"Post Settings"
-"站点、语言与 slug 决定前台访问路径；保存后可在下方编辑正文。","Website, locale, and slug define the public URL; save here before editing body content below."
+"站点为发布归属，仅在该站前台可见；语言与 slug 决定访问路径。保存后可在下方编辑正文。","站点为发布归属，仅在该站前台可见；语言与 slug 决定访问路径。保存后可在下方编辑正文。"
 站点,Website
 标题,Title
 Slug,Slug
@@ -161,22 +161,20 @@ Slug,Slug
 技术分享,"Tech Sharing"
 产品动态,"Product Updates"
 公司新闻,"Company News"
+"站点、语言与 slug 决定前台访问路径；保存后可在下方编辑正文。","Website, locale, and slug define the public URL; save here before editing body content below."
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 "博客文章 sitemap URL 提供器","Blog post sitemap URL provider"
 最新博客文章,"Latest blog posts"
 分类「%{1}」的最新文章,"Latest articles in category ""%{1}"""
-"「%{1}」分类博客 · 穿搭与选购","""%{1}"" category blog · styling & buying"
-"汉服博客分类 · 穿搭灵感与选购指南","Hanfu blog categories · styling inspiration and buying guides"
-浏览「%{1}」分类下的汉服穿搭、形制科普与选购避坑文章，帮助你更快做出合适选择。,"Browse Hanfu styling, form explainers, and buying guides under ""%{1}"" to choose faster."
-按分类浏览汉服穿搭灵感、形制科普与选购指南，快速找到适合日常与礼仪场合的内容。,"Browse Hanfu styling inspiration, form explainers, and buying guides by category for daily and ceremonial looks."
-阅读穿搭灵感、形制科普与选购避坑，帮助你更快做出合适选择。,"Read styling tips, form explainers, and buying pitfalls to choose faster."
+"「%{1}」分类 · 博客文章","""%{1}"" category · blog posts"
+浏览「%{1}」分类下的文章，快速找到你需要的内容。,"Browse posts in ""%{1}"" and find what you need faster."
+按分类浏览本站文章与指南。,"Browse this site's articles and guides by category."
+阅读精选文章与实用指南，帮助你更快找到需要的内容。,"Read featured articles and practical guides to find what you need faster."
 首页,Home
 "订阅本分类 RSS","Subscribe to this category RSS"
-"汉服博客 | 穿搭灵感与文化指南","Hanfu Blog | Styling inspiration & cultural guides"
 精选文章与分类阅读,"Featured articles and category reading"
 "订阅博客 RSS","Subscribe to blog RSS"
-汉服博客,"Hanfu Blog"
-阅读汉服穿搭灵感、形制科普与节日搭配指南，系统了解明制、宋制、唐制与马面裙的选购要点、穿着建议、保养提醒与礼仪场景搭配方法，帮助你更快做出更合适且更安心的选择。,"Read Hanfu outfit inspiration, silhouette guides, and festival styling tips—covering Ming, Song, Tang styles and mamian skirts, with care notes—so you can choose with confidence."
+阅读本站精选文章与分类内容，了解选购要点、使用建议与相关指南。,"Read featured posts and category guides covering buying tips and practical advice."
 "博客 RSS","Blog RSS"
 "「%{1}」分类 RSS","""%{1}"" category RSS"
 "博客分类 RSS","Blog category RSS"

@@ -65,7 +65,7 @@ sequenceDiagram
 
 ## 7. 公共内容缓存与事实变更
 
-`BlogContentCache` 是 Blog 原生公共读取缓存 Owner，使用 Framework `StorefrontScopeHotCache::rememberPolicy`。策略使用显式查询网站 ID（包括 0）、locale、资源类型、分类/slug/数量等参数；不从当前前台请求推断后台、Sitemap 或 CLI 查询的网站。底层使用 global 存储策略，逻辑键保留业务网站范围；`global/storefront/blog/content/website/{id}` 是该网站原生事实的 generation 依赖。网站 N 的内容查询同时依赖 N 和全局 0，0 变更无需枚举消费者即可使回退结果失效。店铺/渠道当前不参与 Blog 原生查询，不添加无关维度。
+`BlogContentCache` 是 Blog 原生公共读取缓存 Owner，使用 Framework `StorefrontScopeHotCache::rememberPolicy`。策略使用显式查询网站 ID（包括 0）、locale、资源类型、分类/slug/数量等参数；不从当前前台请求推断后台、Sitemap 或 CLI 查询的网站。底层使用 global 存储策略，逻辑键保留业务网站范围；`global/storefront/blog/content/website/{id}` 是该网站原生事实的 generation 依赖。每篇文章只属一个 `website_id`；`0` 表示默认站内容，**不会**向其它站合并回退。店铺/渠道当前不参与 Blog 原生查询，不添加无关维度。
 
 原始行和本地化关键词共享，最终 canonical URL、CSV fallback 名称留在请求内。分类 EAV 值继续由 EntityAttributeStore 管理其缓存与失效；Blog 只缓存原生分类行。CMS 页面继续通过官方 `w_query`，不复制其缓存层。请求 Context 保存已解析文章、实际查询 slug 别名、分类 meta 和关键词（包括 null）；控制器沿已查正文快照读取。
 
