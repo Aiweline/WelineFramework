@@ -1,0 +1,32 @@
+/* Layout-critical budget (storefront). Full rules live in weline-frontend.css / foundation. */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; line-height: 1.5; }
+body {
+    margin: 0;
+    background: var(--weline-theme-body-bg, var(--weline-chrome-body-bg, var(--color-bg-canvas, var(--weline-theme-canvas, #ffffff))));
+    color: var(--weline-theme-body-text, var(--color-text-primary, #0f1111));
+}
+.weline-page-wrapper {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+}
+.weline-main-content {
+    flex: 1 0 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 80vh;
+}
+.w-frontend-shell { display: flex; min-height: 100vh; flex-direction: column; }
+.w-frontend-main { flex: 1 0 auto; min-width: 0; }
+.w-frontend-page { display: grid; gap: var(--weline-space-6, 1.5rem); padding-block: var(--weline-space-8, 2rem); }
+.w-frontend-content-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--weline-space-6, 1.5rem); align-items: start; }
+.w-frontend-content, .w-frontend-sidebar { min-width: 0; }
+.w-frontend-header, .w-frontend-footer {
+    background: var(--weline-theme-surface, #ffffff);
+    color: var(--weline-theme-text, #182230);
+}
+.w-frontend-header { border-bottom: 1px solid var(--weline-theme-border, #d7dde7); }
+.w-frontend-footer { border-top: 1px solid var(--weline-theme-border, #d7dde7); }
+.w-maintenance-shell { display: grid; min-height: 100vh; place-items: center; padding: var(--weline-space-5, 1.25rem); }

@@ -14,6 +14,8 @@ try {
     $diskOverrideHtml = '';
 }
 ?>
+<w:template>Weline_Theme::templates/partials/head/css-fouc-bootstrap.phtml</w:template>
+<theme:layout-critical area="backend"/>
 <script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)"></script>
 <w:theme:font src="Weline_Theme::NotoSansSC-Regular.ttf" family="Noto Sans SC" weight="400" display="swap"/>
 <w:theme:font src="Weline_Theme::NotoSansSC-Bold.ttf" family="Noto Sans SC" weight="700" display="swap"/>
@@ -21,6 +23,7 @@ try {
 <theme:css>Weline_Theme::theme/backend/colors/_default.css</theme:css>
 <theme:css>Weline_Theme::theme/backend/colors/_dark.css</theme:css>
 <?php echo $diskOverrideHtml; ?>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-backend.css)">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)" data-weline-layout-css>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-backend.css)" data-weline-layout-css>
+<script src="@static(Weline_Theme::ui/weline-css-ready.js)"></script>
 <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>

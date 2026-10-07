@@ -256,13 +256,16 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 
 ## 对外能力
 
-### Theme 资源标签族（`theme:css` / `theme:js` / `theme:font`）
+### Theme 资源标签族（`theme:css` / `theme:js` / `theme:font` / `theme:layout-critical`）
 
 | 标签 | 作用 | 路径约定 | 算法归属 |
 |------|------|----------|----------|
 | `theme:css` | 主题样式 URL | `{Module}/view/theme/`，默认模块 `Weline_Theme` | 生产 minify：`Theme/Minify` |
 | `theme:js` | 主题脚本 URL | 同上 | 生产 minify：`Theme/Minify` |
 | `theme:font` | 语言子集 `@font-face` | `{Module}/view/fonts/`，默认模块 `Weline_Theme` | `Theme/Font` |
+| `theme:layout-critical` | 内联 layout-critical CSS（防 FOUC） | 基线 `view/ui/css/layout-critical-{area}.css`；活动主题可覆盖 `theme/{area}/assets/css/layout-critical.css` | `LayoutCriticalCssService` |
+
+前后台 head 默认顺序：`css-fouc-bootstrap`（`data-weline-css=pending`）→ `theme:layout-critical` → `weline-theme-prepaint.js` → 色盘 / 外链布局 CSS（`data-weline-layout-css`）→ `weline-css-ready.js`（就绪后 `data-weline-css=ready`，1.8s fail-open）。
 
 三者路径同形：省略模块 → 默认 `Weline_Theme`；写 `Vendor_Module::相对路径` → 指定模块。模块 `view/statics` 继续用 `@static(...)`（或内置 `<css>` / `<js>`），不要改写成 theme 标签。
 

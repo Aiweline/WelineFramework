@@ -28,6 +28,11 @@
       "output": "weline-theme-prepaint.js",
       "sources": ["js/theme-prepaint.js"]
     },
+    "css-ready": {
+      "type": "js",
+      "output": "weline-css-ready.js",
+      "sources": ["js/weline-css-ready.js"]
+    },
     "ui-advanced": {
       "type": "js",
       "output": "weline-ui-advanced.js",

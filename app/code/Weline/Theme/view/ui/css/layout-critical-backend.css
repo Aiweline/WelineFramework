@@ -1,0 +1,27 @@
+/* Layout-critical budget (backend). Full rules live in weline-backend.css / foundation. */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; line-height: 1.5; }
+body {
+    margin: 0;
+    background: var(--backend-theme-canvas, #f1f5f9);
+    color: var(--backend-theme-text, #182230);
+}
+.w-backend-shell {
+    display: grid;
+    min-height: 100vh;
+    grid-template-columns: var(--backend-theme-sidebar-width, 16rem) minmax(0, 1fr);
+    grid-template-rows: var(--backend-theme-topbar-height, 3.5rem) minmax(0, 1fr);
+    grid-template-areas: "sidebar topbar" "sidebar main";
+}
+.w-backend-sidebar { grid-area: sidebar; }
+.w-backend-topbar { grid-area: topbar; }
+.w-backend-main {
+    grid-area: main;
+    min-width: 0;
+    max-width: 100%;
+    padding-block: var(--backend-layout-block, var(--weline-space-6, 1.5rem));
+    padding-inline: var(--backend-layout-inline, var(--weline-space-5, 1.25rem));
+    overflow-x: clip;
+}
+.w-backend-page { display: grid; gap: var(--weline-space-5, 1.25rem); min-width: 0; max-width: 100%; }
+.w-backend-standalone { display: grid; min-block-size: 100vh; align-content: start; background: var(--backend-theme-canvas, #f1f5f9); }
