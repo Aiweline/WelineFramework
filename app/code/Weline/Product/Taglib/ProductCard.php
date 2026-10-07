@@ -12,13 +12,13 @@ use Weline\Product\Service\ProductCardRenderer;
 /**
  * 前台统一商品卡片。
  *
- * <w:product:card
- *     product="product"
- *     show-price="true"
- *     show-rating="false"
- *     show-add-to-cart="false"
- *     density="shelf"
- * />
+ * 单卡：
+ * <w:product:card product="product" show-price="true" density="shelf" />
+ *
+ * 批量（不写 foreach）：ids 只传 product_id 列表变量；卡片内部 cardsByIds + 批渲。
+ * <w:product:card ids="productIds" density="compact" />
+ * <w:product:card product="product" ids="products.id" density="shelf" />
+ * （ids 根变量名取点号前一段，如 products.id → $products）
  */
 final class ProductCard implements TaglibInterface
 {
@@ -45,7 +45,10 @@ final class ProductCard implements TaglibInterface
     public static function attr(): array
     {
         return [
-            'product' => true,
+            // Optional when ids= is set (batch). Kept for single-card callers.
+            'product' => false,
+            // Batch: variable name of product_id list (root before first ".").
+            'ids' => false,
             'show-price' => false,
             'show-rating' => false,
             'show-add-to-cart' => false,
@@ -64,18 +67,10 @@ final class ProductCard implements TaglibInterface
     {
         return static function ($tagKey, $config, $tagData, $attributes): string {
             unset($tagKey, $config, $tagData);
-            $productAttr = trim((string)($attributes['product'] ?? 'product'));
-            // Prefer bare PHP variable name (product / item) so arrays are not string-cast.
-            if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $productAttr) === 1) {
-                $productExpr = '(isset($' . $productAttr . ') && is_array($' . $productAttr . ') ? $' . $productAttr . ' : [])';
-                unset($attributes['product']);
-            } else {
-                $productExpr = '[]';
-            }
-            $code = AttributeCodeCompiler::attributes($attributes);
+            $idsAttr = trim((string)($attributes['ids'] ?? ''));
+            unset($attributes['ids']);
 
-            return '<?php ' . $code . ' echo \\Weline\\Product\\Service\\ProductCardRenderer::renderFromTaglib('
-                . $productExpr . ', ['
+            $optionsLiteral = '['
                 . "'show_price' => \$Taglib__show_price ?? true,"
                 . "'show_rating' => \$Taglib__show_rating ?? false,"
                 . "'show_add_to_cart' => \$Taglib__show_add_to_cart ?? true,"
@@ -87,7 +82,36 @@ final class ProductCard implements TaglibInterface
                 . "'density' => \$Taglib__density ?? 'standard',"
                 . "'class' => \$Taglib__class ?? '',"
                 . "'wishlist_pixel' => \$Taglib__wishlist_pixel ?? false,"
-                . ']); ?>';
+                . ']';
+
+            if ($idsAttr !== '') {
+                // ids="productIds" | ids="products.id" → root var holding id list.
+                $idsRoot = trim((string)(explode('.', $idsAttr, 2)[0] ?? ''));
+                if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $idsRoot) === 1) {
+                    $idsExpr = '(isset($' . $idsRoot . ') && is_array($' . $idsRoot
+                        . ') ? array_values($' . $idsRoot . ') : [])';
+                } else {
+                    $idsExpr = '[]';
+                }
+                unset($attributes['product']);
+                $code = AttributeCodeCompiler::attributes($attributes);
+
+                return '<?php ' . $code . ' echo \\Weline\\Product\\Service\\ProductCardRenderer::projectFromIds('
+                    . $idsExpr . ', ' . $optionsLiteral . '); ?>';
+            }
+
+            $productAttr = trim((string)($attributes['product'] ?? 'product'));
+            // Prefer bare PHP variable name (product / item) so arrays are not string-cast.
+            if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $productAttr) === 1) {
+                $productExpr = '(isset($' . $productAttr . ') && is_array($' . $productAttr . ') ? $' . $productAttr . ' : [])';
+                unset($attributes['product']);
+            } else {
+                $productExpr = '[]';
+            }
+            $code = AttributeCodeCompiler::attributes($attributes);
+
+            return '<?php ' . $code . ' echo \\Weline\\Product\\Service\\ProductCardRenderer::renderFromTaglib('
+                . $productExpr . ', ' . $optionsLiteral . '); ?>';
         };
     }
 
@@ -104,12 +128,7 @@ final class ProductCard implements TaglibInterface
                 return '';
             }
 
-            $product = $attributes['product'] ?? [];
-            if (!\is_array($product)) {
-                $product = [];
-            }
-
-            return ProductCardRenderer::renderFromTaglib($product, [
+            $options = [
                 'show_price' => $attributes['show-price'] ?? true,
                 'show_rating' => $attributes['show-rating'] ?? false,
                 'show_add_to_cart' => $attributes['show-add-to-cart'] ?? true,
@@ -121,7 +140,19 @@ final class ProductCard implements TaglibInterface
                 'density' => $attributes['density'] ?? 'standard',
                 'class' => $attributes['class'] ?? '',
                 'wishlist_pixel' => $attributes['wishlist-pixel'] ?? false,
-            ]);
+            ];
+
+            $ids = $attributes['ids'] ?? null;
+            if (\is_array($ids)) {
+                return ProductCardRenderer::projectFromIds(array_values($ids), $options);
+            }
+
+            $product = $attributes['product'] ?? [];
+            if (!\is_array($product)) {
+                $product = [];
+            }
+
+            return ProductCardRenderer::renderFromTaglib($product, $options);
         };
     }
 
@@ -142,6 +173,10 @@ final class ProductCard implements TaglibInterface
 
     public static function document(): string
     {
-        return htmlentities('<w:product:card product="product" show-price="true" show-rating="true" density="standard" />');
+        return htmlentities(
+            '<w:product:card product="product" show-price="true" density="standard" />'
+            . "\n"
+            . '<w:product:card ids="productIds" show-price="true" density="shelf" />'
+        );
     }
 }

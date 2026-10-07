@@ -5,6 +5,9 @@ use Weline\Product\Service\ProductCardRenderer;
 /**
  * Single storefront offer card (catalog / search shared markup).
  *
+ * Prefer ProductCardRenderer::render over Taglib so callers that still
+ * fetch this partial per hit skip Taglib parse overhead.
+ *
  * @var array<string,mixed> $offer
  */
 $offer = $this->getData('offer') ?? [];
@@ -14,5 +17,16 @@ if ((int)($product['id'] ?? 0) <= 0) {
     return;
 }
 ?>
-<?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
-<w:product:card product="product" show-price="true" show-rating="true" show-add-to-cart="true" show-wishlist="true" show-compare="true" show-quickview="true" show-labels="true" show-sku="true" density="standard" class="wpc-listing-card" wishlist-pixel="true" />
+<?= ProductCardRenderer::render($product, [
+    'density' => 'standard',
+    'show_price' => true,
+    'show_rating' => true,
+    'show_add_to_cart' => true,
+    'show_wishlist' => true,
+    'show_compare' => true,
+    'show_quickview' => true,
+    'show_labels' => true,
+    'show_sku' => true,
+    'class' => 'wpc-listing-card',
+    'wishlist_pixel' => true,
+]) ?>

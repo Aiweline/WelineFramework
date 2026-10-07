@@ -64,6 +64,28 @@ foreach ($products as &$product) {
 }
 unset($product);
 
+$batchProducts = [];
+foreach ($products as $index => $product) {
+    $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
+    $product['is_demo'] = !empty($labelFlags['is_demo']);
+    $product['is_new'] = !empty($labelFlags['is_new']);
+    $product['is_sale'] = !empty($labelFlags['is_sale']);
+    $product['card_index'] = $index;
+    $batchProducts[] = $product;
+}
+$batchCardOptions = [
+    'density' => 'standard',
+    'show_price' => $showPrice,
+    'show_rating' => $showRating,
+    'show_add_to_cart' => $showAddToCart,
+    'show_wishlist' => $cardShowWishlist,
+    'show_compare' => $cardShowCompare,
+    'show_quickview' => $cardShowQuickview,
+    'show_labels' => true,
+    'wishlist_pixel' => true,
+];
+$cardHtmlById = ProductCardRenderer::projectHtmlByProductId($batchProducts, $batchCardOptions);
+
 $labelOverrides = ProductLabelStyle::widgetOverridesFromTemplate($this);
 $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 
@@ -82,26 +104,26 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
     
     <div class="cross-sell-container">
         <div class="cross-sell-products">
-            <?php foreach ($products as $index => $product): ?>
-                <?php if ($index > 0): ?>
+            <?php $crossRendered = 0; foreach ($batchProducts as $product): ?>
+                <?php
+                $productId = (int)($product['id'] ?? 0);
+                $cardHtml = (string)($cardHtmlById[$productId] ?? '');
+                if ($cardHtml === '') {
+                    continue;
+                }
+                if ($crossRendered > 0): ?>
                     <span class="plus-sign">+</span>
-                <?php endif; ?>
+                <?php endif; $crossRendered++; ?>
                 <div class="cross-product">
                     <div class="product-checkbox">
                         <input type="checkbox"
-                               id="cross-product-<?= (int)($product['id'] ?? 0) ?>"
+                               id="cross-product-<?= $productId ?>"
                                class="cross-checkbox"
                                data-price="<?= (float)($product['price'] ?? 0) ?>"
                                <?= !empty($product['selected']) ? 'checked' : '' ?>>
-                        <label for="cross-product-<?= (int)($product['id'] ?? 0) ?>"></label>
+                        <label for="cross-product-<?= $productId ?>"></label>
                     </div>
-                    <?php
-                    $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
-                    $product['is_demo'] = !empty($labelFlags['is_demo']);
-                    $product['is_new'] = !empty($labelFlags['is_new']);
-                    $product['is_sale'] = !empty($labelFlags['is_sale']);
-                    ?>
-                    <w:product:card product="product" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" density="standard" wishlist-pixel="true" />
+                    <?= $cardHtml ?>
                 </div>
             <?php endforeach; ?>
         </div>

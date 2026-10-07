@@ -97,8 +97,8 @@ final class StorefrontProductCardFragmentCache implements ProcessSharedInterface
             $this->storefrontOriginSegment(),
         ];
 
-        // v4: 无评也渲染灰星+(0)，旧 v3 片段缺评分行会导致网格价签错位
-        return 'theme.product_card.html.v4.'
+        // v5: shelf 密度走 product-card-shelf.phtml（瘦 SSR；与 v4 标准卡 DOM 等价）
+        return 'theme.product_card.html.v5.'
             . $this->storefrontLocaleSegment()
             . '.'
             . $productId

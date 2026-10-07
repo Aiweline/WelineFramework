@@ -29,44 +29,77 @@ $showQuickview = true;
             <lang>当前网站暂无已发布的热销商品。</lang>
         </div>
     <?php else: ?>
+        <?php
+        $batchProducts = [];
+        $metaById = [];
+        foreach ($items as $index => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $product = $item;
+            $productId = max(0, (int)($product['product_id'] ?? $product['id'] ?? 0));
+            if ($productId <= 0) {
+                continue;
+            }
+            $rank = max(1, (int)($product['rank'] ?? ($index + 1)));
+            $sales = max(0, (int)($product['sales_count'] ?? 0));
+            $product['id'] = $productId;
+            $product['product_id'] = $productId;
+            $product['rank'] = $rank;
+            $productLink = ProductCardUrl::splitForTaglib((string)($product['url'] ?? ''));
+            $product['url'] = $productLink['url'];
+            $product['url_path'] = $productLink['url_path'];
+            $labelFlags = ProductLabelStyle::resolveFlags($product, (int)$index);
+            $product['is_demo'] = !empty($labelFlags['is_demo']);
+            $product['is_new'] = !empty($labelFlags['is_new']);
+            $product['is_sale'] = !empty($labelFlags['is_sale']) || !empty($product['has_deal']);
+            $product['card_index'] = (int)$index;
+            $batchProducts[] = $product;
+            $metaById[$productId] = [
+                'rank' => $rank,
+                'sales' => $sales,
+                'rank_class' => $rank <= 3
+                    ? 'best-sellers-page__item--top best-sellers-page__item--' . $rank
+                    : 'best-sellers-page__item--rest',
+            ];
+        }
+        $cardHtmlById = ProductCardRenderer::projectHtmlByProductId($batchProducts, [
+            'density' => 'standard',
+            'show_price' => $showPrice,
+            'show_rating' => $showRating,
+            'show_add_to_cart' => $showAddToCart,
+            'show_wishlist' => $showWishlist,
+            'show_compare' => $showCompare,
+            'show_quickview' => $showQuickview,
+            'show_labels' => true,
+            'show_sku' => true,
+            'class' => 'wpc-listing-card',
+            'wishlist_pixel' => true,
+        ]);
+        ?>
         <div class="best-sellers-page__grid weline-product-card-shelf"
              data-testid="storefront-best-sellers-grid"
              role="list"
              aria-label="<?= $escape(__('热销商品')) ?>">
-            <?php foreach ($items as $index => $item): ?>
+            <?php foreach ($batchProducts as $product): ?>
                 <?php
-                if (!is_array($item)) {
+                $productId = (int)($product['id'] ?? 0);
+                $cardHtml = (string)($cardHtmlById[$productId] ?? '');
+                $meta = $metaById[$productId] ?? null;
+                if ($cardHtml === '' || !is_array($meta)) {
                     continue;
                 }
-                $product = $item;
-                $productId = max(0, (int)($product['product_id'] ?? $product['id'] ?? 0));
-                if ($productId <= 0) {
-                    continue;
-                }
-                $rank = max(1, (int)($product['rank'] ?? ($index + 1)));
-                $sales = max(0, (int)($product['sales_count'] ?? 0));
-                $product['id'] = $productId;
-                $product['product_id'] = $productId;
-                $product['rank'] = $rank;
-                $productLink = ProductCardUrl::splitForTaglib((string)($product['url'] ?? ''));
-                $product['url'] = $productLink['url'];
-                $product['url_path'] = $productLink['url_path'];
-                $labelFlags = ProductLabelStyle::resolveFlags($product, (int)$index);
-                $product['is_demo'] = !empty($labelFlags['is_demo']);
-                $product['is_new'] = !empty($labelFlags['is_new']);
-                $product['is_sale'] = !empty($labelFlags['is_sale']) || !empty($product['has_deal']);
-                $rankClass = $rank <= 3
-                    ? 'best-sellers-page__item--top best-sellers-page__item--' . $rank
-                    : 'best-sellers-page__item--rest';
+                $rank = (int)$meta['rank'];
+                $sales = (int)$meta['sales'];
                 ?>
-                <div class="best-sellers-page__item <?= $escape($rankClass) ?>"
+                <div class="best-sellers-page__item <?= $escape((string)$meta['rank_class']) ?>"
                      role="listitem"
                      data-testid="storefront-best-sellers-card"
                      data-rank="<?= $rank ?>"
                      data-product-id="<?= $productId ?>">
                     <span class="best-sellers-page__rank"
                           aria-label="<?= $escape(__('排名') . ' ' . $rank) ?>">#<?= $rank ?></span>
-                    <w:product:card product="product" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="showWishlist" show-compare="showCompare" show-quickview="showQuickview" show-labels="true" show-sku="true" density="standard" class="wpc-listing-card" wishlist-pixel="true" />
+                    <?= $cardHtml ?>
                     <?php if ($sales > 0): ?>
                         <p class="best-sellers-page__sales"><?= __('已售 %{1}', [$sales]) ?></p>
                     <?php endif; ?>

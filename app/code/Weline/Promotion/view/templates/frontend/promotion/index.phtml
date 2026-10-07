@@ -74,30 +74,46 @@ $heroCtaUrl = $pageType === 'index'
         </div>
         <w:hook name="Weline_Promotion::frontend::layouts::promotion::page-before"/>
         <?php if ($items !== []): ?>
+            <?php
+            $batchProducts = [];
+            foreach ($items as $index => $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $price = (float)($item['price'] ?? 0);
+                $originalPrice = (float)($item['original_price'] ?? 0);
+                $hasDeal = !empty($item['has_deal']) && $originalPrice > $price && $price > 0;
+                $batchProducts[] = ProductCardRenderer::normalizeProduct([
+                    'product_id' => (int)($item['product_id'] ?? 0),
+                    'name' => (string)($item['name'] ?? ''),
+                    'url' => (string)($item['url'] ?? ''),
+                    'image' => trim((string)($item['image'] ?? '')),
+                    'price' => $price,
+                    'original_price' => $hasDeal ? $originalPrice : 0.0,
+                    'currency' => trim((string)($item['currency'] ?? 'CNY')) ?: 'CNY',
+                    'sku' => trim((string)($item['sku'] ?? '')),
+                    'sellable' => array_key_exists('sellable', $item) ? !empty($item['sellable']) : true,
+                    'global_offer_uuid' => trim((string)($item['global_offer_uuid'] ?? '')),
+                    'is_sale' => $hasDeal,
+                    'campaign_label' => trim((string)($item['campaign_label'] ?? '')),
+                    'campaign_url' => trim((string)($item['campaign_url'] ?? '')),
+                    'card_index' => (int)$index,
+                ]);
+            }
+            ?>
             <div class="products-grid" data-columns="4">
-                <?php foreach ($items as $item): ?>
-                    <?php
-                    $price = (float)($item['price'] ?? 0);
-                    $originalPrice = (float)($item['original_price'] ?? 0);
-                    $hasDeal = !empty($item['has_deal']) && $originalPrice > $price && $price > 0;
-                    $product = ProductCardRenderer::normalizeProduct([
-                        'product_id' => (int)($item['product_id'] ?? 0),
-                        'name' => (string)($item['name'] ?? ''),
-                        'url' => (string)($item['url'] ?? ''),
-                        'image' => trim((string)($item['image'] ?? '')),
-                        'price' => $price,
-                        'original_price' => $hasDeal ? $originalPrice : 0.0,
-                        'currency' => trim((string)($item['currency'] ?? 'CNY')) ?: 'CNY',
-                        'sku' => trim((string)($item['sku'] ?? '')),
-                        'sellable' => array_key_exists('sellable', $item) ? !empty($item['sellable']) : true,
-                        'global_offer_uuid' => trim((string)($item['global_offer_uuid'] ?? '')),
-                        'is_sale' => $hasDeal,
-                        'campaign_label' => trim((string)($item['campaign_label'] ?? '')),
-                        'campaign_url' => trim((string)($item['campaign_url'] ?? '')),
-                    ]);
-                    ?>
-                    <w:product:card product="product" show-price="true" show-rating="false" show-add-to-cart="true" show-wishlist="true" show-compare="true" show-quickview="true" show-labels="true" density="standard" class="wpc-promo-card" wishlist-pixel="true" />
-                <?php endforeach; ?>
+                <?= ProductCardRenderer::projectFromProducts($batchProducts, [
+                    'density' => 'standard',
+                    'show_price' => true,
+                    'show_rating' => false,
+                    'show_add_to_cart' => true,
+                    'show_wishlist' => true,
+                    'show_compare' => true,
+                    'show_quickview' => true,
+                    'show_labels' => true,
+                    'class' => 'wpc-promo-card',
+                    'wishlist_pixel' => true,
+                ]) ?>
             </div>
         <?php else: ?>
             <div class="w-promotion-page__empty">

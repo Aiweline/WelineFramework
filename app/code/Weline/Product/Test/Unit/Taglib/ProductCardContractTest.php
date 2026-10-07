@@ -15,9 +15,19 @@ final class ProductCardContractTest extends TestCase
         self::assertSame('product:card', ProductCard::name());
         self::assertTrue(ProductCard::tag_self_close());
         self::assertArrayHasKey('product', ProductCard::attr());
+        self::assertArrayHasKey('ids', ProductCard::attr());
         self::assertArrayHasKey('show-price', ProductCard::attr());
         self::assertArrayHasKey('density', ProductCard::attr());
         self::assertTrue(method_exists(ProductCard::class, 'runtimeCallback'));
+
+        $callback = ProductCard::callback();
+        $compiled = $callback('tag-self-close-with-attrs', [], [], [
+            'ids' => 'relatedProductIds',
+            'density' => 'compact',
+        ]);
+        self::assertStringContainsString('ProductCardRenderer::projectFromIds(', $compiled);
+        self::assertStringContainsString('$relatedProductIds', $compiled);
+        self::assertStringNotContainsString('renderFromTaglib(', $compiled);
     }
 
     public function testRendererNormalizesFlagsAndSkipsEmptyProduct(): void
@@ -206,6 +216,9 @@ final class ProductCardContractTest extends TestCase
         self::assertStringContainsString('StorefrontProductCardFragmentCache', $renderer);
         self::assertStringContainsString("'defer_card_css' => true", $renderer);
         self::assertStringContainsString('projectFromOffers', $renderer);
+        self::assertStringContainsString('projectFromIds', $renderer);
+        self::assertStringContainsString('projectFromProducts', $renderer);
+        self::assertStringContainsString('projectHtmlByProductId', $renderer);
         self::assertStringContainsString('bucketCardIndexForFragmentReuse', $renderer);
         self::assertStringContainsString('emitStylesheetLinkOnce() . $html', $renderer);
     }

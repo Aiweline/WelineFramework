@@ -33,13 +33,14 @@ final class WishlistPageTemplateContractTest extends TestCase
         $source = (string)file_get_contents($templateFile);
         $css = (string)file_get_contents($cssFile);
 
-        self::assertStringContainsString('<w:product:card', $source);
+        self::assertStringContainsString('ProductCardRenderer::projectHtmlByProductId', $source);
+        self::assertStringNotContainsString('<w:product:card', $source);
         self::assertStringContainsString('ProductCardRenderer', $source);
         self::assertStringContainsString('emitStylesheetLinkOnce()', $source);
-        self::assertStringContainsString('show-wishlist="true"', $source);
-        self::assertStringContainsString('show-compare="true"', $source);
-        self::assertStringContainsString('show-quickview="true"', $source);
-        self::assertStringContainsString('wishlist-pixel="true"', $source);
+        self::assertStringContainsString("'show_wishlist' => true", $source);
+        self::assertStringContainsString("'show_compare' => true", $source);
+        self::assertStringContainsString("'show_quickview' => true", $source);
+        self::assertStringContainsString("'wishlist_pixel' => true", $source);
         self::assertStringContainsString('data-wishlist-remove', $source);
         self::assertStringContainsString('storefront-wishlist__slot', $source);
         self::assertStringContainsString('account-card', $source);

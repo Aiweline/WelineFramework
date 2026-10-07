@@ -80,22 +80,9 @@ $products = [];
 try {
     if (class_exists(StorefrontProductWidgetCatalog::class)) {
         // 首页三货架错开：Featured 走场景精选池（WO-HP-P1-02）
-        // WO-BUILD-HOME-ZERO：再兜底剥掉零价卡，避免精选 SSR 出 $0.00
-        $rawFeatured = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
-            ->homepageFeaturedCards(max($limit * 3, 12));
-        $products = [];
-        foreach ($rawFeatured as $card) {
-            if (!is_array($card) || (float)($card['price'] ?? 0) <= 0.0) {
-                continue;
-            }
-            if (!empty($card['currency_unavailable']) || !empty($card['quote_only'])) {
-                continue;
-            }
-            $products[] = $card;
-            if (count($products) >= $limit) {
-                break;
-            }
-        }
+        // 冷路径：按部件配置 limit 取数；评价聚合仅在展示评分时拉取
+        $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
+            ->homepageFeaturedCards($limit, $showRating);
     }
 } catch (\Throwable) {
     $products = [];
@@ -155,6 +142,31 @@ $cardShowWishlist = !empty($shopperActions['show_wishlist']);
 $cardShowCompare = !empty($shopperActions['show_compare']);
 $cardShowQuickview = !empty($shopperActions['show_quickview']);
 
+$shelfProducts = [];
+foreach ($products as $index => $product) {
+    $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
+    $product['is_demo'] = !empty($labelFlags['is_demo']);
+    $product['is_new'] = !empty($labelFlags['is_new']);
+    $product['is_sale'] = !empty($labelFlags['is_sale']);
+    $product['is_hot'] = !empty($labelFlags['is_hot']);
+    $product['free_shipping'] = !empty($labelFlags['is_free_shipping']);
+    $product['discount_percent'] = (int)($labelFlags['discount_percent'] ?? 0);
+    $product['sale_badge_text'] = (string)($labelFlags['sale_text'] ?? '');
+    $product['card_index'] = $index;
+    $shelfProducts[] = $product;
+}
+$shelfCardOptions = [
+    'density' => 'shelf',
+    'show_price' => $showPrice,
+    'show_rating' => $showRating,
+    'show_add_to_cart' => $showAddToCart,
+    'show_wishlist' => $cardShowWishlist,
+    'show_compare' => $cardShowCompare,
+    'show_quickview' => $cardShowQuickview,
+    'show_labels' => true,
+    'wishlist_pixel' => true,
+];
+
 ?>
 <section class="<?= $esc($wc) ?> weline-product-card-shelf<?= $isPreviewMode ? ' is-preview' : '' ?>"
          id="homepage-featured"
@@ -184,19 +196,7 @@ $cardShowQuickview = !empty($shopperActions['show_quickview']);
         
         <div class="products-wrapper">
             <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
-                <?php foreach ($products as $index => $product): ?>
-                    <?php
-                    $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
-                    $product['is_demo'] = !empty($labelFlags['is_demo']);
-                    $product['is_new'] = !empty($labelFlags['is_new']);
-                    $product['is_sale'] = !empty($labelFlags['is_sale']);
-                    $product['is_hot'] = !empty($labelFlags['is_hot']);
-                    $product['free_shipping'] = !empty($labelFlags['is_free_shipping']);
-                    $product['discount_percent'] = (int)($labelFlags['discount_percent'] ?? 0);
-                    $product['sale_badge_text'] = (string)($labelFlags['sale_text'] ?? '');
-                    ?>
-                    <w:product:card product="product" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" density="shelf" wishlist-pixel="true" />
-                <?php endforeach; ?>
+                <?= ProductCardRenderer::projectFromProducts($shelfProducts, $shelfCardOptions) ?>
             </div>
         </div>
         

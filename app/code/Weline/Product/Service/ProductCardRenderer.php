@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Weline\Product\Service;
 
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\View\Template;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Theme\Helper\ProductCardUrl;
+use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 
 /**
@@ -120,6 +122,244 @@ final class ProductCardRenderer
     }
 
     /**
+     * Taglib / widget batch entry: product_id list → catalog cardsByIds → HTML.
+     * Callers only pass IDs; hydration stays inside Product.
+     *
+     * @param list<mixed> $productIds ints, numeric strings, or accidental card rows
+     * @param array<string, mixed> $options
+     */
+    public static function projectFromIds(array $productIds, array $options = []): string
+    {
+        $orderedIds = [];
+        $seen = [];
+        foreach ($productIds as $raw) {
+            if (\is_array($raw)) {
+                $productId = max(0, (int)($raw['product_id'] ?? $raw['id'] ?? 0));
+            } else {
+                $productId = max(0, (int)$raw);
+            }
+            if ($productId <= 0 || isset($seen[$productId])) {
+                continue;
+            }
+            $seen[$productId] = true;
+            $orderedIds[] = $productId;
+        }
+        if ($orderedIds === []) {
+            return self::emitStylesheetLinkOnce();
+        }
+
+        $products = self::cardsForIds($orderedIds);
+
+        return self::projectFromProducts($products, $options);
+    }
+
+    /**
+     * Resolve storefront card rows for product_ids (request-memoized per id).
+     *
+     * @param list<int> $orderedIds
+     * @return list<array<string, mixed>>
+     */
+    private static function cardsForIds(array $orderedIds): array
+    {
+        $bagKey = 'product.card.rows_by_id';
+        /** @var array<int, array<string, mixed>> $bag */
+        $bag = [];
+        if (RequestContext::isInitialized() && RequestContext::has($bagKey)) {
+            $existing = RequestContext::get($bagKey);
+            if (\is_array($existing)) {
+                $bag = $existing;
+            }
+        }
+
+        $missing = [];
+        foreach ($orderedIds as $productId) {
+            if (!isset($bag[$productId])) {
+                $missing[] = $productId;
+            }
+        }
+
+        if ($missing !== [] && \class_exists(StorefrontProductWidgetCatalog::class)) {
+            try {
+                /** @var StorefrontProductWidgetCatalog $catalog */
+                $catalog = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class);
+                $fetched = $catalog->cardsByIds($missing, min(24, max(12, \count($missing))));
+            } catch (\Throwable) {
+                $fetched = [];
+            }
+            foreach ($fetched as $index => $product) {
+                if (!\is_array($product)) {
+                    continue;
+                }
+                $productId = max(0, (int)($product['product_id'] ?? $product['id'] ?? 0));
+                if ($productId <= 0) {
+                    continue;
+                }
+                $product['id'] = $productId;
+                $product['product_id'] = $productId;
+                $route = trim((string)($product['url'] ?? ''));
+                $productLink = ProductCardUrl::splitForTaglib($route);
+                $product['url'] = $productLink['url'];
+                $product['url_path'] = $productLink['url_path'];
+                if (\class_exists(ProductLabelStyle::class)) {
+                    $labelFlags = ProductLabelStyle::resolveFlags($product, (int)$index);
+                    $product['is_demo'] = !empty($labelFlags['is_demo']);
+                    $product['is_new'] = !empty($labelFlags['is_new']);
+                    $product['is_sale'] = !empty($labelFlags['is_sale']);
+                }
+                $bag[$productId] = $product;
+            }
+            // Remember misses as empty so we do not re-query the same id this request.
+            foreach ($missing as $productId) {
+                if (!isset($bag[$productId])) {
+                    $bag[$productId] = [];
+                }
+            }
+            if (RequestContext::isInitialized()) {
+                RequestContext::set($bagKey, $bag);
+            }
+        }
+
+        $ordered = [];
+        foreach ($orderedIds as $productId) {
+            $row = $bag[$productId] ?? null;
+            if (\is_array($row) && $row !== [] && (int)($row['id'] ?? 0) > 0) {
+                $ordered[] = $row;
+            }
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * Widget / pre-mapped card batch path: product-card-shaped arrays → HTML in one
+     * measurePhase. Skips per-card Taglib. Caller owns pricing/rating hydration
+     * (e.g. StorefrontProductWidgetCatalog::cardsByIds); this does not re-map offers.
+     *
+     * @param list<mixed> $products
+     * @param array<string, mixed> $options
+     */
+    public static function projectFromProducts(array $products, array $options = []): string
+    {
+        $flags = self::normalizeOptions($options);
+        $html = (string)RequestLifecycleTrace::measurePhase(
+            'product.card.render',
+            static function () use ($products, $flags): string {
+                return self::renderNormalizedProductsHtml($products, $flags);
+            },
+            [
+                'density' => $flags['density'],
+                'show_price' => $flags['show_price'],
+                'show_add_to_cart' => $flags['show_add_to_cart'],
+                'show_sku' => $flags['show_sku'],
+                'batch' => true,
+                'product_count' => \count($products),
+            ],
+        );
+
+        return self::emitStylesheetLinkOnce() . $html;
+    }
+
+    /**
+     * Same batch SSR as projectFromProducts, keyed by product_id for dialog/shelf
+     * reuse without re-entering Taglib or re-rendering the same SKU twice.
+     *
+     * @param list<mixed> $products
+     * @param array<string, mixed> $options
+     * @return array<int, string>
+     */
+    public static function projectHtmlByProductId(array $products, array $options = []): array
+    {
+        $flags = self::normalizeOptions($options);
+
+        /** @var array<int, string> $map */
+        $map = RequestLifecycleTrace::measurePhase(
+            'product.card.render',
+            static function () use ($products, $flags): array {
+                $out = [];
+                $index = 0;
+                foreach ($products as $product) {
+                    if (!\is_array($product)) {
+                        continue;
+                    }
+                    if (!\array_key_exists('card_index', $product)) {
+                        $product['card_index'] = $index;
+                    }
+                    $row = self::normalizeProduct($product);
+                    $productId = (int)($row['id'] ?? 0);
+                    if ($productId <= 0) {
+                        ++$index;
+                        continue;
+                    }
+                    if (($flags['density'] ?? 'standard') === 'shelf'
+                        && empty($row['currency_unavailable'])
+                        && ((float)($row['price'] ?? 0) <= 0 || !empty($row['quote_only']))
+                    ) {
+                        ++$index;
+                        continue;
+                    }
+                    if (!isset($out[$productId])) {
+                        $out[$productId] = self::renderCachedBody(
+                            self::bucketCardIndexForFragmentReuse($row),
+                            $flags,
+                        );
+                    }
+                    ++$index;
+                }
+
+                return $out;
+            },
+            [
+                'density' => $flags['density'],
+                'show_price' => $flags['show_price'],
+                'show_add_to_cart' => $flags['show_add_to_cart'],
+                'show_sku' => $flags['show_sku'],
+                'batch' => true,
+                'keyed' => true,
+                'product_count' => \count($products),
+            ],
+        );
+
+        return \is_array($map) ? $map : [];
+    }
+
+    /**
+     * @param list<mixed> $products
+     * @param array<string, mixed> $flags
+     */
+    private static function renderNormalizedProductsHtml(array $products, array $flags): string
+    {
+        $parts = [];
+        $index = 0;
+        foreach ($products as $product) {
+            if (!\is_array($product)) {
+                continue;
+            }
+            if (!\array_key_exists('card_index', $product)) {
+                $product['card_index'] = $index;
+            }
+            $row = self::normalizeProduct($product);
+            if ((int)($row['id'] ?? 0) <= 0) {
+                ++$index;
+                continue;
+            }
+            if (($flags['density'] ?? 'standard') === 'shelf'
+                && empty($row['currency_unavailable'])
+                && ((float)($row['price'] ?? 0) <= 0 || !empty($row['quote_only']))
+            ) {
+                ++$index;
+                continue;
+            }
+            $parts[] = self::renderCachedBody(
+                self::bucketCardIndexForFragmentReuse($row),
+                $flags,
+            );
+            ++$index;
+        }
+
+        return \implode('', $parts);
+    }
+
+    /**
      * Collapse card_index into eager/lazy buckets so fragment Policy keys reuse
      * across list positions (same product+flags; loading attrs stay correct).
      *
@@ -148,11 +388,14 @@ final class ProductCardRenderer
     private static function renderCachedBody(array $normalized, array $flags): string
     {
         $template = Template::getInstance();
-        $build = static function () use ($normalized, $flags, $template): string {
+        $partial = ($flags['density'] ?? 'standard') === 'shelf'
+            ? 'Weline_Product::templates/frontend/partials/product-card-shelf.phtml'
+            : 'Weline_Product::templates/frontend/partials/product-card.phtml';
+        $build = static function () use ($normalized, $flags, $template, $partial): string {
             // CSS is request-once outside the Policy bag so HIT bodies never
             // embed/omit a stale <style> relative to emitStylesheetLinkOnce().
             return (string)$template->fetch(
-                'Weline_Product::templates/frontend/partials/product-card.phtml',
+                $partial,
                 [
                     'product' => $normalized,
                     'show_price' => $flags['show_price'],

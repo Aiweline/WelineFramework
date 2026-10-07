@@ -54,11 +54,12 @@ final class VideoCarouselWidgetContractTest extends TestCase
         self::assertStringContainsString('data-testid="video-carousel"', $source);
         self::assertStringContainsString('VideoEmbedResolver', $source);
         self::assertStringContainsString('resolveBilibiliId', $source);
-        self::assertStringContainsString('trustedEmbedHosts()', $source);
-        self::assertStringContainsString('cardsByIds', $source);
+        self::assertStringContainsString('sanitizeEmbedHtml', $source);
+        self::assertStringContainsString('<w:product:card ids="relatedProductIds"', $source);
+        self::assertStringNotContainsString('StorefrontProductWidgetCatalog', $source);
+        self::assertStringNotContainsString('cardsByIds', $source);
         self::assertStringContainsString('data-w-component="dialog"', $source);
         self::assertStringContainsString('class="w-dialog', $source);
-        self::assertStringContainsString('<w:product:card', $source);
         self::assertStringContainsString('data-action="carousel-next"', $source);
         self::assertStringContainsString('data-carousel-field="author"', $source);
         self::assertStringContainsString('data-carousel-field="description"', $source);

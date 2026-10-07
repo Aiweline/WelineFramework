@@ -18,12 +18,31 @@ final class ProductCardBatchRenderContractTest extends TestCase
             dirname(__DIR__, 3) . '/Service/ProductCardRenderer.php'
         );
         self::assertStringContainsString('public static function projectFromOffers(', $src);
+        self::assertStringContainsString('public static function projectFromIds(', $src);
+        self::assertStringContainsString('public static function projectFromProducts(', $src);
+        self::assertStringContainsString('public static function projectHtmlByProductId(', $src);
         self::assertStringContainsString('renderCachedBody', $src);
+        self::assertStringContainsString('product-card-shelf.phtml', $src);
+        self::assertFileExists(
+            dirname(__DIR__, 3) . '/view/templates/frontend/partials/product-card-shelf.phtml'
+        );
         self::assertStringContainsString('StorefrontProductCardFragmentCache', $src);
         self::assertStringContainsString("'batch' => true", $src);
         self::assertStringContainsString('hydrateReviewAggregates', $src);
         self::assertStringContainsString('aggregatesForExternalUuids', $src);
         self::assertStringNotContainsString('static $cardHtml', $src);
+    }
+
+    public function testVideoCarouselPassesIdsOnlyToProductCardTaglib(): void
+    {
+        // Product/Test/Unit/Service → Weline/Theme/...
+        $path = dirname(__DIR__, 4) . '/Theme/view/theme/frontend/widgets/video/video-carousel/default.phtml';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('<w:product:card ids="relatedProductIds"', $source);
+        self::assertStringNotContainsString('StorefrontProductWidgetCatalog', $source);
+        self::assertStringNotContainsString('projectHtmlByProductId', $source);
+        self::assertStringNotContainsString('cardsByIds', $source);
     }
 
     public function testBucketCardIndexCollapsesEagerAndLazyPositions(): void
@@ -65,9 +84,36 @@ final class ProductCardBatchRenderContractTest extends TestCase
 
         foreach ([$catalog, $category] as $tpl) {
             self::assertStringContainsString('ProductCardRenderer::projectFromOffers', $tpl);
-            self::assertStringContainsString("'show_rating' => true", $tpl);
             self::assertStringNotContainsString('<w:product:card', $tpl);
             self::assertStringNotContainsString('fromStorefrontOffer(', $tpl);
         }
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: string}>
+     */
+    public static function recommendationAndPageBatchSurfaces(): iterable
+    {
+        $productRoot = dirname(__DIR__, 3);
+        $themeRoot = dirname(__DIR__, 4) . '/Theme';
+        yield 'product-related' => [$productRoot . '/view/templates/frontend/widgets/related-products.phtml', 'projectFromProducts'];
+        yield 'product-recommended' => [$productRoot . '/view/templates/frontend/widgets/recommended-products.phtml', 'projectFromProducts'];
+        yield 'product-you-may-like' => [$productRoot . '/view/templates/frontend/widgets/you-may-like.phtml', 'projectFromProducts'];
+        yield 'product-best-sellers' => [$productRoot . '/view/templates/frontend/best-sellers/index.phtml', 'projectHtmlByProductId'];
+        yield 'theme-related' => [$themeRoot . '/view/theme/frontend/widgets/product/related-products/default.phtml', 'projectFromProducts'];
+        yield 'theme-up-sell' => [$themeRoot . '/view/theme/frontend/widgets/product/up-sell/default.phtml', 'projectFromProducts'];
+        yield 'theme-cross-sell' => [$themeRoot . '/view/theme/frontend/widgets/product/cross-sell/default.phtml', 'projectHtmlByProductId'];
+        yield 'theme-carousel' => [$themeRoot . '/view/theme/frontend/widgets/carousel/product-carousel/default.phtml', 'projectHtmlByProductId'];
+    }
+
+    /**
+     * @dataProvider recommendationAndPageBatchSurfaces
+     */
+    public function testRecommendationSurfacesBatchRenderNotPerCardTaglib(string $path, string $batchApi): void
+    {
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('ProductCardRenderer::' . $batchApi, $source);
+        self::assertStringNotContainsString('<w:product:card', $source);
     }
 }

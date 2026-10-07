@@ -61,6 +61,28 @@ if ($title === '') {
     $title = __('精选轮播');
 }
 
+$batchProducts = [];
+foreach ($products as $index => $product) {
+    $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
+    $product['is_demo'] = !empty($labelFlags['is_demo']);
+    $product['is_new'] = !empty($labelFlags['is_new']);
+    $product['is_sale'] = !empty($labelFlags['is_sale']);
+    $product['card_index'] = $index;
+    $batchProducts[] = $product;
+}
+$batchCardOptions = [
+    'density' => 'standard',
+    'show_price' => $showPrice,
+    'show_rating' => $showRating,
+    'show_add_to_cart' => $showAddToCart,
+    'show_wishlist' => $cardShowWishlist,
+    'show_compare' => $cardShowCompare,
+    'show_quickview' => $cardShowQuickview,
+    'show_labels' => true,
+    'wishlist_pixel' => true,
+];
+$cardHtmlById = ProductCardRenderer::projectHtmlByProductId($batchProducts, $batchCardOptions);
+
 $labelOverrides = ProductLabelStyle::widgetOverridesFromTemplate($this);
 $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 ?>
@@ -88,15 +110,16 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 
         <div class="carousel-viewport">
             <div class="carousel-track">
-                <?php foreach ($products as $index => $product): ?>
+                <?php foreach ($batchProducts as $product): ?>
+                    <?php
+                    $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
+                    $cardHtml = (string)($cardHtmlById[$productId] ?? '');
+                    if ($cardHtml === '') {
+                        continue;
+                    }
+                    ?>
                     <div class="carousel-slide">
-                        <?php
-                        $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
-                        $product['is_demo'] = !empty($labelFlags['is_demo']);
-                        $product['is_new'] = !empty($labelFlags['is_new']);
-                        $product['is_sale'] = !empty($labelFlags['is_sale']);
-                        ?>
-                        <w:product:card product="product" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" density="standard" wishlist-pixel="true" />
+                        <?= $cardHtml ?>
                     </div>
                 <?php endforeach; ?>
             </div>

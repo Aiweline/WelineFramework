@@ -34,6 +34,7 @@
 use Weline\Product\Service\ProductCardRenderer;
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\ProductCardUrl;
 use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
@@ -79,21 +80,8 @@ try {
             \Weline\Product\Service\StorefrontProductWidgetCatalog::class
         );
         // 首页三货架错开：仅真实折扣≥15%或限时标（WO-HP-P1-02）；不足不借其它货架
-        // WO-BUILD-HOME-ZERO：特价货架再兜底剥零价卡
-        $rawDeals = $catalog->homepageDealsCards(max($limit * 3, 12));
-        $products = [];
-        foreach ($rawDeals as $card) {
-            if (!is_array($card) || (float)($card['price'] ?? 0) <= 0.0) {
-                continue;
-            }
-            if (!empty($card['currency_unavailable']) || !empty($card['quote_only'])) {
-                continue;
-            }
-            $products[] = $card;
-            if (count($products) >= $limit) {
-                break;
-            }
-        }
+        // 冷路径：按部件配置 limit 取数（catalog 内已剥零价/询价；禁止 *3 超取）
+        $products = $catalog->homepageDealsCards($limit);
     }
 } catch (\Throwable) {
     $products = [];
@@ -156,6 +144,42 @@ if ($products === []) {
 $labelOverrides = ProductLabelStyle::widgetOverridesFromTemplate($this);
 $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 
+$shelfProducts = [];
+foreach ($products as $index => $product) {
+    $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
+    $product['id'] = $productId;
+    $product['product_id'] = $productId;
+    $route = trim((string)($product['url'] ?? ''));
+    $productLink = ProductCardUrl::splitForTaglib($route);
+    $product['url'] = $productLink['url'];
+    $product['url_path'] = $productLink['url_path'];
+    $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
+    $product['is_demo'] = !empty($labelFlags['is_demo']);
+    $product['is_new'] = !empty($labelFlags['is_new']);
+    $product['is_sale'] = !empty($labelFlags['is_sale']);
+    $product['is_hot'] = !empty($labelFlags['is_hot']);
+    $product['free_shipping'] = !empty($labelFlags['is_free_shipping']);
+    $product['discount_percent'] = (int)($labelFlags['discount_percent'] ?? ($product['discount_percent'] ?? 0));
+    if ($showDiscountPercent && $product['discount_percent'] > 0) {
+        $product['sale_badge_text'] = '-' . $product['discount_percent'] . '%';
+    } else {
+        $product['sale_badge_text'] = (string)($labelFlags['sale_text'] ?? '特价');
+    }
+    $product['card_index'] = $index;
+    $shelfProducts[] = $product;
+}
+$shelfCardOptions = [
+    'density' => 'shelf',
+    'show_price' => $showPrice,
+    'show_rating' => $showRating,
+    'show_add_to_cart' => $showAddToCart,
+    'show_wishlist' => $cardShowWishlist,
+    'show_compare' => $cardShowCompare,
+    'show_quickview' => $cardShowQuickview,
+    'show_labels' => true,
+    'wishlist_pixel' => true,
+];
+
 ?>
 
 
@@ -203,23 +227,7 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
     
     <div class="products-container">
         <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
-            <?php foreach ($products as $index => $product): ?>
-                <?php
-                $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
-                $product['is_demo'] = !empty($labelFlags['is_demo']);
-                $product['is_new'] = !empty($labelFlags['is_new']);
-                $product['is_sale'] = !empty($labelFlags['is_sale']);
-                $product['is_hot'] = !empty($labelFlags['is_hot']);
-                $product['free_shipping'] = !empty($labelFlags['is_free_shipping']);
-                $product['discount_percent'] = (int)($labelFlags['discount_percent'] ?? ($product['discount_percent'] ?? 0));
-                if ($showDiscountPercent && $product['discount_percent'] > 0) {
-                    $product['sale_badge_text'] = '-' . $product['discount_percent'] . '%';
-                } else {
-                    $product['sale_badge_text'] = (string)($labelFlags['sale_text'] ?? '特价');
-                }
-                ?>
-                <w:product:card product="product" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" density="shelf" wishlist-pixel="true" />
-            <?php endforeach; ?>
+            <?= ProductCardRenderer::projectFromProducts($shelfProducts, $shelfCardOptions) ?>
         </div>
     </div>
 

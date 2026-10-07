@@ -87,12 +87,13 @@ final class BestSellersPageContractTest extends TestCase
         self::assertStringContainsString('storefront-best-sellers-grid', $template);
         self::assertStringContainsString('storefront-best-sellers-card', $template);
         self::assertStringContainsString('best-sellers-page__rank', $template);
-        self::assertStringContainsString('<w:product:card', $template);
+        self::assertStringContainsString('ProductCardRenderer::projectHtmlByProductId', $template);
+        self::assertStringNotContainsString('<w:product:card', $template);
         self::assertStringNotContainsString('best-sellers-hero.phtml', $template);
         self::assertStringContainsString('ProductCardRenderer::emitStylesheetLinkOnce()', $template);
         self::assertStringContainsString('weline-product-card-shelf', $template);
         self::assertStringContainsString('ProductCardUrl::splitForTaglib', $template);
-        self::assertStringContainsString('show-sku="true"', $template);
+        self::assertStringContainsString("'show_sku' => true", $template);
         self::assertStringNotContainsString('best-sellers-page__hero', $template);
         self::assertStringNotContainsString('storefront-best-sellers-podium', $template);
         self::assertStringNotContainsString('ProductCardAddToCartParams::fetchDictionary', $template);

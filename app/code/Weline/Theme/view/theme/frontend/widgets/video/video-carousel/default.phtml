@@ -20,13 +20,9 @@
  * @param subtitle {default="滑动浏览穿搭视频，查看关联商品",type="string",label="副标题"}
  */
 
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Service\ProductCardRenderer;
-use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\LegacyMediaUrl;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
-use Weline\Theme\Helper\ProductCardUrl;
-use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\VideoEmbedResolver;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
@@ -270,69 +266,7 @@ if ($items === [] && \Weline\Theme\Helper\StorefrontHanfuDemoCatalog::allowed())
     }
 }
 
-$catalog = null;
-try {
-    if (class_exists(StorefrontProductWidgetCatalog::class)) {
-        $catalog = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class);
-    }
-} catch (Throwable) {
-    $catalog = null;
-}
-
-$prepareCards = static function (array $productIds) use ($catalog): array {
-    if ($productIds === [] || !$catalog instanceof StorefrontProductWidgetCatalog) {
-        return [];
-    }
-    try {
-        // One catalog round-trip for the whole carousel (not per-slide).
-        $products = $catalog->cardsByIds($productIds, min(24, max(12, count($productIds))));
-    } catch (Throwable) {
-        $products = [];
-    }
-    foreach ($products as $index => &$product) {
-        $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
-        $product['id'] = $productId;
-        $product['product_id'] = $productId;
-        $route = trim((string)($product['url'] ?? ''));
-        $productLink = ProductCardUrl::splitForTaglib($route);
-        $product['url'] = $productLink['url'];
-        $product['url_path'] = $productLink['url_path'];
-        $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
-        $product['is_demo'] = !empty($labelFlags['is_demo']);
-        $product['is_new'] = !empty($labelFlags['is_new']);
-        $product['is_sale'] = !empty($labelFlags['is_sale']);
-    }
-    unset($product);
-
-    return $products;
-};
-
-$allProductIds = [];
-foreach ($items as $slide) {
-    foreach (($slide['product_ids'] ?? []) as $productId) {
-        $productId = (int)$productId;
-        if ($productId > 0) {
-            $allProductIds[$productId] = $productId;
-        }
-    }
-}
-$cardsByProductId = [];
-foreach ($prepareCards(array_values($allProductIds)) as $card) {
-    $productId = (int)($card['product_id'] ?? $card['id'] ?? 0);
-    if ($productId > 0 && !isset($cardsByProductId[$productId])) {
-        $cardsByProductId[$productId] = $card;
-    }
-}
-
 foreach ($items as $index => &$slide) {
-    $orderedCards = [];
-    foreach (($slide['product_ids'] ?? []) as $productId) {
-        $productId = (int)$productId;
-        if ($productId > 0 && isset($cardsByProductId[$productId])) {
-            $orderedCards[] = $cardsByProductId[$productId];
-        }
-    }
-    $slide['cards'] = $orderedCards;
     $slide['dialog_id'] = 'theme-video-carousel-products-' . $uid . '-' . $index;
 }
 unset($slide);
@@ -432,7 +366,7 @@ $showControls = $itemCount >= 2;
                         <p class="video-carousel__description" data-carousel-field="description"><?= $esc($slide['description']) ?></p>
                     <?php endif; ?>
 
-                    <?php if ($slide['cards'] !== []): ?>
+                    <?php if (($slide['product_ids'] ?? []) !== []): ?>
                         <button type="button"
                                 class="w-button video-carousel__cta"
                                 data-variant="primary"
@@ -479,9 +413,12 @@ $showControls = $itemCount >= 2;
     <?php endif; ?>
 
     <?php foreach ($items as $slide): ?>
-        <?php if ($slide['cards'] === []) {
+        <?php
+        $relatedProductIds = $slide['product_ids'] ?? [];
+        if ($relatedProductIds === []) {
             continue;
-        } ?>
+        }
+        ?>
         <dialog id="<?= $esc($slide['dialog_id']) ?>"
                 class="w-dialog video-carousel__dialog"
                 data-w-component="dialog"
@@ -504,9 +441,7 @@ $showControls = $itemCount >= 2;
                 </header>
                 <div class="w-dialog__body video-carousel__dialog-body">
                     <div class="video-carousel__products weline-product-card-shelf">
-                        <?php foreach ($slide['cards'] as $product): ?>
-                            <w:product:card product="product" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" density="compact" wishlist-pixel="true" />
-                        <?php endforeach; ?>
+                        <w:product:card ids="relatedProductIds" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" density="compact" wishlist-pixel="true" />
                     </div>
                 </div>
             </div>
