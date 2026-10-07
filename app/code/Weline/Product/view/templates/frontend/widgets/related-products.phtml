@@ -157,18 +157,7 @@ if ($products === []) {
 
         <div class="wpr-viewport" data-wpr-viewport>
             <div class="wpr-track columns-<?= $esc($columns) ?> layout-<?= $esc($layout) ?>" data-wpr-track>
-                <?= ProductCardRenderer::projectFromProducts($products, [
-                    'density' => 'standard',
-                    'show_price' => true,
-                    'show_rating' => true,
-                    'show_add_to_cart' => true,
-                    'show_wishlist' => $cardShowWishlist,
-                    'show_compare' => $cardShowCompare,
-                    'show_quickview' => $cardShowQuickview,
-                    'show_labels' => true,
-                    'class' => 'wpr-card',
-                    'wishlist_pixel' => true,
-                ]) ?>
+                <w:product:card ids="products" density="standard" show-price="true" show-rating="true" show-add-to-cart="true" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" class="wpr-card" wishlist-pixel="true" />
             </div>
         </div>
 

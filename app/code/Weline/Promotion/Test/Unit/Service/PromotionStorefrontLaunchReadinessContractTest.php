@@ -101,8 +101,8 @@ final class PromotionStorefrontLaunchReadinessContractTest extends TestCase
             '<main class="w-promotion-page weline-product-card-shelf"',
             $template,
         );
-        self::assertStringContainsString('ProductCardRenderer::projectFromProducts', $template);
-        self::assertStringNotContainsString('<w:product:card', $template);
+        self::assertStringContainsString('<w:product:card ids="batchProducts"', $template);
+        self::assertStringNotContainsString('ProductCardRenderer::projectFromProducts', $template);
         self::assertStringContainsString('ProductCardRenderer::emitStylesheetLinkOnce()', $template);
         self::assertStringNotContainsString('amazon-product-card.css', $template);
     }

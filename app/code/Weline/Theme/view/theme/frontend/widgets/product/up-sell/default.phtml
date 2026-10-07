@@ -67,18 +67,6 @@ foreach ($products as $index => $product) {
     $product['card_index'] = $index;
     $batchProducts[] = $product;
 }
-$batchCardOptions = [
-    'density' => 'standard',
-    'show_price' => $showPrice,
-    'show_rating' => $showRating,
-    'show_add_to_cart' => $showAddToCart,
-    'show_wishlist' => $cardShowWishlist,
-    'show_compare' => $cardShowCompare,
-    'show_quickview' => $cardShowQuickview,
-    'show_labels' => true,
-    'wishlist_pixel' => true,
-];
-
 $labelOverrides = ProductLabelStyle::widgetOverridesFromTemplate($this);
 $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 
@@ -106,7 +94,7 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
         
         <div class="products-wrapper">
             <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
-                <?= ProductCardRenderer::projectFromProducts($batchProducts, $batchCardOptions) ?>
+                <w:product:card ids="batchProducts" density="standard" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" wishlist-pixel="true" />
             </div>
         </div>
         

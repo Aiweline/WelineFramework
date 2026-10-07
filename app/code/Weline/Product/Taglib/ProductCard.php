@@ -15,10 +15,13 @@ use Weline\Product\Service\ProductCardRenderer;
  * 单卡：
  * <w:product:card product="product" show-price="true" density="shelf" />
  *
- * 批量（不写 foreach）：ids 只传 product_id 列表变量；卡片内部 cardsByIds + 批渲。
- * <w:product:card ids="productIds" density="compact" />
- * <w:product:card product="product" ids="products.id" density="shelf" />
- * （ids 根变量名取点号前一段，如 products.id → $products）
+ * 批量（禁止 foreach 解标签）：ids 指向变量名（根段，点号前）。
+ * - id 列表：内部 cardsByIds + 批渲
+ * - 已映射卡数组：直接批渲（不重拉）
+ *
+ * <w:product:card ids="relatedProductIds" density="compact" />
+ * <w:product:card ids="shelfProducts" density="shelf" show-price="showPrice" />
+ * <w:product:card ids="products.id" density="shelf" />
  */
 final class ProductCard implements TaglibInterface
 {
@@ -45,9 +48,7 @@ final class ProductCard implements TaglibInterface
     public static function attr(): array
     {
         return [
-            // Optional when ids= is set (batch). Kept for single-card callers.
             'product' => false,
-            // Batch: variable name of product_id list (root before first ".").
             'ids' => false,
             'show-price' => false,
             'show-rating' => false,
@@ -85,7 +86,6 @@ final class ProductCard implements TaglibInterface
                 . ']';
 
             if ($idsAttr !== '') {
-                // ids="productIds" | ids="products.id" → root var holding id list.
                 $idsRoot = trim((string)(explode('.', $idsAttr, 2)[0] ?? ''));
                 if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $idsRoot) === 1) {
                     $idsExpr = '(isset($' . $idsRoot . ') && is_array($' . $idsRoot
@@ -101,7 +101,6 @@ final class ProductCard implements TaglibInterface
             }
 
             $productAttr = trim((string)($attributes['product'] ?? 'product'));
-            // Prefer bare PHP variable name (product / item) so arrays are not string-cast.
             if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $productAttr) === 1) {
                 $productExpr = '(isset($' . $productAttr . ') && is_array($' . $productAttr . ') ? $' . $productAttr . ' : [])';
                 unset($attributes['product']);
@@ -176,7 +175,9 @@ final class ProductCard implements TaglibInterface
         return htmlentities(
             '<w:product:card product="product" show-price="true" density="standard" />'
             . "\n"
-            . '<w:product:card ids="productIds" show-price="true" density="shelf" />'
+            . '<w:product:card ids="productIds" density="compact" />'
+            . "\n"
+            . '<w:product:card ids="shelfProducts" density="shelf" show-price="showPrice" />'
         );
     }
 }

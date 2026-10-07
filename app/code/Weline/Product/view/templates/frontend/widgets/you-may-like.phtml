@@ -155,19 +155,7 @@ unset($product);
 $cardShowWishlist = !empty($shopperActions['show_wishlist']);
 $cardShowCompare = !empty($shopperActions['show_compare']);
 $cardShowQuickview = !empty($shopperActions['show_quickview']);
-$batchCardOptions = [
-    'density' => 'standard',
-    'show_price' => true,
-    'show_rating' => false,
-    'show_add_to_cart' => true,
-    'show_wishlist' => $cardShowWishlist,
-    'show_compare' => $cardShowCompare,
-    'show_quickview' => $cardShowQuickview,
-    'show_labels' => true,
-    'show_sku' => true,
-    'class' => 'wpc-listing-card wym-card',
-    'wishlist_pixel' => true,
-];
+$cardClass = 'wpc-listing-card wym-card';
 
 if ($products === []) {
     ?>
@@ -207,7 +195,7 @@ if ($products === []) {
 
         <div class="wym-viewport" data-wym-viewport>
             <div class="wym-track columns-<?= $esc($columns) ?> layout-<?= $esc($layout) ?>" data-wym-track>
-                <?= ProductCardRenderer::projectFromProducts($products, $batchCardOptions) ?>
+                <w:product:card ids="products" density="standard" show-price="true" show-rating="false" show-add-to-cart="true" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" show-sku="true" class="cardClass" wishlist-pixel="true" />
             </div>
         </div>
 

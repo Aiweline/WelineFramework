@@ -41,14 +41,15 @@ final class StorefrontOfferPriceAssemblerContractTest extends TestCase
         self::assertStringNotContainsString('1.08 + (($productId % 4) * 0.04)', $widget);
 
         $recommended = (string) file_get_contents($root . '/view/templates/frontend/widgets/recommended-products.phtml');
-        self::assertStringContainsString('<w:product:card', $recommended);
+        self::assertStringContainsString('<w:product:card ids="products"', $recommended);
+        self::assertStringNotContainsString('ProductCardRenderer::projectFromProducts', $recommended);
         $card = (string) file_get_contents($root . '/view/templates/frontend/partials/product-card.phtml');
         self::assertStringContainsString('wpc-campaign', $card);
         self::assertStringContainsString('wpc-price-was', $card);
 
         $category = (string) file_get_contents($root . '/view/templates/frontend/category/index.phtml');
-        self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $category);
-        self::assertStringContainsString('<w:product:card', $category);
+        self::assertStringContainsString('ProductCardRenderer::projectFromOffers', $category);
+        self::assertStringNotContainsString('<w:product:card', $category);
 
         $pdp = (string) file_get_contents($root . '/view/templates/frontend/widgets/product-info.phtml');
         self::assertStringContainsString('StorefrontOfferPriceAssemblerInterface', $pdp);

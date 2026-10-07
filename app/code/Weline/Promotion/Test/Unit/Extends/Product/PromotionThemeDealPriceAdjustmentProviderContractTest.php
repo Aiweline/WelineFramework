@@ -26,8 +26,8 @@ final class PromotionThemeDealPriceAdjustmentProviderContractTest extends TestCa
         self::assertStringNotContainsString('applyDealPricing', $page);
 
         $tpl = (string) file_get_contents($root . '/view/templates/frontend/promotion/index.phtml');
-        self::assertStringContainsString('ProductCardRenderer::projectFromProducts', $tpl);
-        self::assertStringNotContainsString('<w:product:card', $tpl);
+        self::assertStringContainsString('<w:product:card ids="batchProducts"', $tpl);
+        self::assertStringNotContainsString('ProductCardRenderer::projectFromProducts', $tpl);
         self::assertStringContainsString('campaign_label', $tpl);
         self::assertStringContainsString('ProductCardRenderer', $tpl);
         $card = dirname($root) . '/Product/view/templates/frontend/partials/product-card.phtml';

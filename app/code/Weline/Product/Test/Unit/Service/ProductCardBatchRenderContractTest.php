@@ -90,30 +90,58 @@ final class ProductCardBatchRenderContractTest extends TestCase
     }
 
     /**
+     * 简单网格：声明式 ids 批渲（Taglib → projectFromIds），禁止模板内 projectFromProducts。
+     *
      * @return iterable<string, array{0: string, 1: string}>
      */
-    public static function recommendationAndPageBatchSurfaces(): iterable
+    public static function recommendationTaglibBatchSurfaces(): iterable
     {
         $productRoot = dirname(__DIR__, 3);
         $themeRoot = dirname(__DIR__, 4) . '/Theme';
-        yield 'product-related' => [$productRoot . '/view/templates/frontend/widgets/related-products.phtml', 'projectFromProducts'];
-        yield 'product-recommended' => [$productRoot . '/view/templates/frontend/widgets/recommended-products.phtml', 'projectFromProducts'];
-        yield 'product-you-may-like' => [$productRoot . '/view/templates/frontend/widgets/you-may-like.phtml', 'projectFromProducts'];
-        yield 'product-best-sellers' => [$productRoot . '/view/templates/frontend/best-sellers/index.phtml', 'projectHtmlByProductId'];
-        yield 'theme-related' => [$themeRoot . '/view/theme/frontend/widgets/product/related-products/default.phtml', 'projectFromProducts'];
-        yield 'theme-up-sell' => [$themeRoot . '/view/theme/frontend/widgets/product/up-sell/default.phtml', 'projectFromProducts'];
-        yield 'theme-cross-sell' => [$themeRoot . '/view/theme/frontend/widgets/product/cross-sell/default.phtml', 'projectHtmlByProductId'];
-        yield 'theme-carousel' => [$themeRoot . '/view/theme/frontend/widgets/carousel/product-carousel/default.phtml', 'projectHtmlByProductId'];
+        yield 'product-related' => [$productRoot . '/view/templates/frontend/widgets/related-products.phtml', 'ids="products"'];
+        yield 'product-recommended' => [$productRoot . '/view/templates/frontend/widgets/recommended-products.phtml', 'ids="products"'];
+        yield 'product-you-may-like' => [$productRoot . '/view/templates/frontend/widgets/you-may-like.phtml', 'ids="products"'];
+        yield 'theme-related' => [$themeRoot . '/view/theme/frontend/widgets/product/related-products/default.phtml', 'ids="batchProducts"'];
+        yield 'theme-up-sell' => [$themeRoot . '/view/theme/frontend/widgets/product/up-sell/default.phtml', 'ids="batchProducts"'];
     }
 
     /**
-     * @dataProvider recommendationAndPageBatchSurfaces
+     * @dataProvider recommendationTaglibBatchSurfaces
      */
-    public function testRecommendationSurfacesBatchRenderNotPerCardTaglib(string $path, string $batchApi): void
+    public function testRecommendationSurfacesUseIdsProductCardTaglib(string $path, string $idsAttr): void
     {
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
-        self::assertStringContainsString('ProductCardRenderer::' . $batchApi, $source);
+        self::assertStringContainsString('<w:product:card ' . $idsAttr, $source);
+        self::assertStringNotContainsString('ProductCardRenderer::projectFromProducts', $source);
+        self::assertDoesNotMatchRegularExpression(
+            '/foreach\s*\([^)]+\)\s*\{[^}]*<w:product:card\s+product=/s',
+            $source
+        );
+    }
+
+    /**
+     * 按 id 分桶接线（轮播/交叉销售等）：仍用 projectHtmlByProductId。
+     *
+     * @return iterable<string, array{0: string}>
+     */
+    public static function keyedBatchSurfaces(): iterable
+    {
+        $productRoot = dirname(__DIR__, 3);
+        $themeRoot = dirname(__DIR__, 4) . '/Theme';
+        yield 'product-best-sellers' => [$productRoot . '/view/templates/frontend/best-sellers/index.phtml'];
+        yield 'theme-cross-sell' => [$themeRoot . '/view/theme/frontend/widgets/product/cross-sell/default.phtml'];
+        yield 'theme-carousel' => [$themeRoot . '/view/theme/frontend/widgets/carousel/product-carousel/default.phtml'];
+    }
+
+    /**
+     * @dataProvider keyedBatchSurfaces
+     */
+    public function testKeyedSurfacesUseProjectHtmlByProductIdNotPerCardTaglib(string $path): void
+    {
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('ProductCardRenderer::projectHtmlByProductId', $source);
         self::assertStringNotContainsString('<w:product:card', $source);
     }
 }

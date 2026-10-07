@@ -67,7 +67,8 @@ final class HomepageShelfLimitFetchContractTest extends TestCase
         $path = dirname(__DIR__, 3) . '/' . $relativePath;
         $source = (string)file_get_contents($path);
 
-        self::assertStringContainsString('ProductCardRenderer::projectFromProducts($shelfProducts, $shelfCardOptions)', $source);
-        self::assertStringNotContainsString('<w:product:card', $source);
+        self::assertStringContainsString('<w:product:card ids="shelfProducts"', $source);
+        self::assertStringContainsString('density="shelf"', $source);
+        self::assertStringNotContainsString('ProductCardRenderer::projectFromProducts', $source);
     }
 }

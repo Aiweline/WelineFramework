@@ -73,7 +73,7 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         self::assertStringContainsString('publishedOfferSummaries($fetchLimit)', $source);
         self::assertStringContainsString('shouldUseListingProjection', $source);
         self::assertStringContainsString('publishedOffers($fetchLimit, true)', $source);
-        self::assertStringContainsString('publishedOfferSummaries(max($limit * 3, 48))', $source);
+        self::assertStringContainsString('publishedOfferSummaries(max($limit * 2, $limit))', $source);
         self::assertStringContainsString('publishedOfferSummaries(max($limit * 4, 16))', $source);
         self::assertStringContainsString(
             '$this->catalog->publishedOffersForProductIds([$seedProductId], 4, false)',
@@ -86,18 +86,21 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
     {
         $method = new ReflectionMethod(StorefrontProductWidgetCatalog::class, 'newArrivalCards');
         self::assertTrue($method->isPublic());
-        self::assertSame(2, $method->getNumberOfParameters());
+        self::assertSame(3, $method->getNumberOfParameters());
 
         $source = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/StorefrontProductWidgetCatalog.php'
         );
-        self::assertStringContainsString('function newArrivalCards(int $limit = 8, int $days = 30)', $source);
+        self::assertStringContainsString(
+            'function newArrivalCards(int $limit = 8, int $days = 30, bool $withReviews = true)',
+            $source,
+        );
         self::assertStringContainsString('listRecentPublishedCreatedAt', $source);
         self::assertStringContainsString('publishedOffersForProductIds', $source);
         self::assertStringContainsString('New-arrivals: prefer HF-* then fill non-HF published offers', $source);
         self::assertStringContainsString('$fallbackProductId', $source);
         self::assertStringContainsString('Day-window empty or no sellable offers: stable catalog fallback', $source);
-        self::assertStringContainsString('$this->cards($limit)', $source);
+        self::assertStringContainsString('$this->cards($limit, $withReviews)', $source);
     }
 
     public function testWidgetRegistrationPinsDefaultInjectionSlot(): void
@@ -161,10 +164,11 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         self::assertStringContainsString('data-testid="storefront-related-products"', $source);
         self::assertStringContainsString('Weline_Product::css/widgets/related-products.css', $source);
         self::assertStringContainsString('data-weline-load="relatedProducts"', $source);
-        self::assertStringContainsString('<w:product:card', $source);
+        self::assertStringContainsString('<w:product:card ids="products"', $source);
         self::assertStringContainsString('class="wpr-card"', $source);
         self::assertStringContainsString('class="wpr-header"', $source);
         self::assertStringNotContainsString('class="wpc-header"', $source);
+        self::assertStringNotContainsString('ProductCardRenderer::projectFromProducts', $source);
         self::assertStringNotContainsString('ProductCardRenderer::render', $source);
         self::assertStringNotContainsString('<script>', $source);
         self::assertStringContainsString('relatedCards(', $source);
@@ -202,10 +206,11 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         self::assertStringContainsString('->cards($limit)', $source);
         self::assertStringContainsString('Url::getPrefix()', $source);
         self::assertStringNotContainsString('$this->getUrl(ltrim($route', $source);
-        self::assertStringContainsString('<w:product:card', $source);
+        self::assertStringContainsString('<w:product:card ids="products"', $source);
         self::assertStringContainsString('class="wpr-card"', $source);
         self::assertStringContainsString('class="wpr-header"', $source);
         self::assertStringNotContainsString('class="wpc-header"', $source);
+        self::assertStringNotContainsString('ProductCardRenderer::projectFromProducts', $source);
         self::assertStringContainsString('wishlist-pixel="true"', $source);
         self::assertStringNotContainsString('ProductCardAddToCartParams::fetchDictionary', $source);
         self::assertStringNotContainsString('Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml', $source);

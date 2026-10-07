@@ -168,18 +168,6 @@ foreach ($products as $index => $product) {
     $product['card_index'] = $index;
     $shelfProducts[] = $product;
 }
-$shelfCardOptions = [
-    'density' => 'shelf',
-    'show_price' => $showPrice,
-    'show_rating' => $showRating,
-    'show_add_to_cart' => $showAddToCart,
-    'show_wishlist' => $cardShowWishlist,
-    'show_compare' => $cardShowCompare,
-    'show_quickview' => $cardShowQuickview,
-    'show_labels' => true,
-    'wishlist_pixel' => true,
-];
-
 ?>
 
 
@@ -227,7 +215,7 @@ $shelfCardOptions = [
     
     <div class="products-container">
         <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
-            <?= ProductCardRenderer::projectFromProducts($shelfProducts, $shelfCardOptions) ?>
+            <w:product:card ids="shelfProducts" density="shelf" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" wishlist-pixel="true" />
         </div>
     </div>
 

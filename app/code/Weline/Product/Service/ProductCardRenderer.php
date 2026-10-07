@@ -122,17 +122,27 @@ final class ProductCardRenderer
     }
 
     /**
-     * Taglib / widget batch entry: product_id list → catalog cardsByIds → HTML.
-     * Callers only pass IDs; hydration stays inside Product.
+     * Taglib ids= entry: accept product_id scalars OR already-mapped card rows.
+     * Card-shaped lists go to projectFromProducts (no re-fetch); id lists hydrate via cardsByIds.
      *
-     * @param list<mixed> $productIds ints, numeric strings, or accidental card rows
+     * @param list<mixed> $items
      * @param array<string, mixed> $options
      */
-    public static function projectFromIds(array $productIds, array $options = []): string
+    public static function projectFromIds(array $items, array $options = []): string
     {
+        $items = \array_values($items);
+        if ($items === []) {
+            return self::emitStylesheetLinkOnce();
+        }
+
+        $first = $items[0];
+        if (\is_array($first) && self::looksLikeCardRow($first)) {
+            return self::projectFromProducts($items, $options);
+        }
+
         $orderedIds = [];
         $seen = [];
-        foreach ($productIds as $raw) {
+        foreach ($items as $raw) {
             if (\is_array($raw)) {
                 $productId = max(0, (int)($raw['product_id'] ?? $raw['id'] ?? 0));
             } else {
@@ -148,9 +158,21 @@ final class ProductCardRenderer
             return self::emitStylesheetLinkOnce();
         }
 
-        $products = self::cardsForIds($orderedIds);
+        return self::projectFromProducts(self::cardsForIds($orderedIds), $options);
+    }
 
-        return self::projectFromProducts($products, $options);
+    /**
+     * @param array<string, mixed> $row
+     */
+    private static function looksLikeCardRow(array $row): bool
+    {
+        return isset($row['name'])
+            || isset($row['price'])
+            || isset($row['image'])
+            || isset($row['url'])
+            || isset($row['url_path'])
+            || isset($row['global_offer_uuid'])
+            || isset($row['unit_price_minor']);
     }
 
     /**

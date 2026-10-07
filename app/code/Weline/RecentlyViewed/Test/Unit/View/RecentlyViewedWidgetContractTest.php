@@ -45,8 +45,8 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertStringContainsString('Never return a blank string', $source);
         self::assertStringContainsString('Keep visually hidden', $source);
         self::assertStringContainsString('RecentlyViewedService', $source);
-        self::assertStringContainsString('ProductCardRenderer::projectFromProducts', $source);
-        self::assertStringNotContainsString('<w:product:card', $source);
+        self::assertStringContainsString('<w:product:card ids="products"', $source);
+        self::assertStringNotContainsString('ProductCardRenderer::projectFromProducts', $source);
         self::assertStringContainsString('data-weline-load="recentlyViewed"', $source);
         self::assertStringContainsString('StorefrontPdpShelfDeferral::shouldDeferCardAssembly', $source);
         self::assertStringContainsString('data-testid="recently-viewed-deferred"', $source);
@@ -56,9 +56,10 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertStringContainsString('@param limit {default=6', $source);
         self::assertStringContainsString('data-wrv-track', $source);
         self::assertStringContainsString('wrv-stage', $source);
-        self::assertStringContainsString("'density' => 'standard'", $source);
-        self::assertStringContainsString("'class' => 'wpc-listing-card wrv-card'", $source);
-        self::assertStringContainsString("'show_sku' => true", $source);
+        self::assertStringContainsString('density="standard"', $source);
+        self::assertStringContainsString("\$cardClass = 'wpc-listing-card wrv-card'", $source);
+        self::assertStringContainsString('class="cardClass"', $source);
+        self::assertStringContainsString('show-sku="true"', $source);
         self::assertStringContainsString('ProductCardRenderer::emitStylesheetLinkOnce()', $source);
         self::assertStringNotContainsString("'density' => 'shelf'", $source);
         self::assertStringNotContainsString('ProductCardRenderer::render', $source);

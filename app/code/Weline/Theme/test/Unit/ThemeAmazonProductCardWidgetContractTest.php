@@ -30,9 +30,9 @@ final class ThemeAmazonProductCardWidgetContractTest extends TestCase
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('weline-product-card-shelf', $content);
-        $this->assertStringContainsString('ProductCardRenderer::projectFromProducts', $content);
-        $this->assertStringContainsString("'density' => 'shelf'", $content);
-        $this->assertStringNotContainsString('<w:product:card', $content);
+        $this->assertStringContainsString('<w:product:card ids="shelfProducts"', $content);
+        $this->assertStringContainsString('density="shelf"', $content);
+        $this->assertStringNotContainsString('ProductCardRenderer::projectFromProducts', $content);
         $this->assertStringContainsString('ProductCardRenderer::emitStylesheetLinkOnce()', $content);
         $this->assertStringContainsString('查看更多', $content);
         // CSS 必须落在 section 内；写在 wrapper 外层会被槽位装配剥掉。

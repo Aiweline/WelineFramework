@@ -81,18 +81,6 @@ unset($product);
 $cardShowWishlist = !empty($shopperActions['show_wishlist']);
 $cardShowCompare = !empty($shopperActions['show_compare']);
 $cardShowQuickview = !empty($shopperActions['show_quickview']);
-$batchCardOptions = [
-    'density' => 'standard',
-    'show_price' => true,
-    'show_add_to_cart' => true,
-    'show_wishlist' => $cardShowWishlist,
-    'show_compare' => $cardShowCompare,
-    'show_quickview' => $cardShowQuickview,
-    'show_labels' => true,
-    'class' => 'wpr-card',
-    'wishlist_pixel' => true,
-];
-
 if ($products === []) {
     // Never return a blank string: DEV WidgetHtmlHealthInspector treats empty
     // HTML as a warning toast. Keep visually hidden so storefront still "hides".
@@ -135,7 +123,7 @@ if ($products === []) {
 
         <div class="wpr-viewport" data-wpr-viewport>
             <div class="wpr-track columns-<?= $esc($columns) ?> layout-<?= $esc($layout) ?>" data-wpr-track>
-                <?= ProductCardRenderer::projectFromProducts($products, $batchCardOptions) ?>
+                <w:product:card ids="products" density="standard" show-price="true" show-add-to-cart="true" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" class="wpr-card" wishlist-pixel="true" />
             </div>
         </div>
 
