@@ -3218,7 +3218,7 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
     $wlsEnv
 ): void {
     if ($readyGateWorkerBootstrapWarmupCompleted) {
-        if ($runtimeError === null && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
+        if ($runtimeError === null && $runtime instanceof \Weline\Server\Runtime\WlsRuntime) {
             $runtime->assertFrontendWorkerCredentialStoreReady();
         }
         return;
@@ -3231,7 +3231,7 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
         $readyGateWorkerBootstrapWarmupCompleted = true;
         return;
     }
-    if ($runtimeError !== null || !$runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
+    if ($runtimeError !== null || !$runtime instanceof \Weline\Server\Runtime\WlsRuntime) {
         return;
     }
 
@@ -4613,7 +4613,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
             if ($role !== \Weline\Server\IPC\ControlMessage::ROLE_WORKER) {
                 return;
             }
-            if ($runtimeError !== null || !$runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
+            if ($runtimeError !== null || !$runtime instanceof \Weline\Server\Runtime\WlsRuntime) {
                 throw new \RuntimeException('Worker runtime is unavailable for the READY credential-store guard.');
             }
             $runtime->assertFrontendWorkerCredentialStoreReady();
@@ -5364,7 +5364,7 @@ while (true) {
             WlsLogger::warning_("[ConnectionPoolWarmup] async shared-state prewarm start failed worker={$workerId}: " . $e->getMessage());
         }
     }
-    if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+    if ($runtime instanceof \Weline\Server\Runtime\WlsRuntime
         && wlsWorkerDeferredWarmupMayStart(
             $deferredWorkerBootstrapWarmupStarted,
             $workerLoopStartedSent,
@@ -5495,9 +5495,9 @@ while (true) {
     }
     $homepageMemoryPressure = $maxMemoryBytes > 0
         && \memory_get_usage(true) >= (int)($maxMemoryBytes * 0.70);
-    $homepageProofRecoveryDue = $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+    $homepageProofRecoveryDue = $runtime instanceof \Weline\Server\Runtime\WlsRuntime
         && $runtime->shouldScheduleHomepageProofRecovery($ipcDraining, $homepageMemoryPressure);
-    if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+    if ($runtime instanceof \Weline\Server\Runtime\WlsRuntime
         && $workerLoopStartedSent
         && !$isMaintenanceWorker
         && !$ipcReceivedShutdown
@@ -11377,7 +11377,7 @@ function wlsSslCanonicalStaticResponse(
 
 function handleRequest(
     string $rawRequest,
-    ?\Weline\Framework\Runtime\WlsRuntime $runtime,
+    ?\Weline\Server\Runtime\WlsRuntime $runtime,
     ?string $runtimeError,
     \Weline\Server\Runtime\Async\AsyncBizAdapters $asyncBizAdapters,
     string $instanceName,

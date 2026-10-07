@@ -199,8 +199,9 @@ foreach ($slides as $slideIndex => $slide) {
     }
 }
 
-if (empty($slides)) {
+if (empty($slides) && \Weline\Theme\Helper\StorefrontHanfuDemoCatalog::allowed()) {
     // 素材：人物抠图 + 自衣饰母题发散的水墨山水底（r2/homepage/{slug}(.|-mobile).webp）
+    // 仅已知汉服站 website code 启用；grocery/daocharms 等新站禁止串入。
     $defaults = [
         [
             'slug' => 'taoyuan-qingmeng',
@@ -267,8 +268,10 @@ if (empty($slides)) {
 }
 
 // 运营配置帧若仅有主按钮：补顾问次 CTA；旧「浏览系列→/products」归一到 Featured。
+// 汉服场景次 CTA（/category/hanfu/occasion）仅汉服站注入。
 $advisorPrimaryText = $translateDefaultCopy('浏览精选', 'Shop Featured');
 $advisorSecondaryText = $translateDefaultCopy('按场景选', 'Shop by Occasion');
+$allowHanfuAdvisorCta = \Weline\Theme\Helper\StorefrontHanfuDemoCatalog::allowed();
 foreach ($slides as $slideIndex => $slide) {
     if (!is_array($slide)) {
         continue;
@@ -282,7 +285,7 @@ foreach ($slides as $slideIndex => $slide) {
         $slides[$slideIndex]['button_text'] = $advisorPrimaryText;
         $slides[$slideIndex]['link'] = '#homepage-featured';
     }
-    if (trim((string)($slides[$slideIndex]['secondary_button_text'] ?? '')) === '') {
+    if ($allowHanfuAdvisorCta && trim((string)($slides[$slideIndex]['secondary_button_text'] ?? '')) === '') {
         $slides[$slideIndex]['secondary_button_text'] = $advisorSecondaryText;
         $slides[$slideIndex]['secondary_link'] = '/category/hanfu/occasion';
     }

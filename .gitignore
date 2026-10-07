@@ -293,7 +293,7 @@ app/code/Weline/Ai/Test/Http/Backend/batch-test-results.json
 # 例：websites/changanhanfu.com/
 /websites/
 
-# Site-specific design themes (local only; owned by websites/*/ vault docs)
-# 长安汉服 → hanfu；DaoCharms → daocharms。勿入库。
-/app/design/Weline/hanfu/
-/app/design/Weline/daocharms/
+# Design themes under app/design/ are local developer skins only.
+# Never commit theme directory contents (hanfu / daocharms / grocery / …);
+# they are authored locally and uploaded per websites/*/ vault. 勿入库。
+/app/design/

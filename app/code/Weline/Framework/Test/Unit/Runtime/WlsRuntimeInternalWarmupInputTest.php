@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 
 final class WlsRuntimeInternalWarmupInputTest extends TestCase
 {

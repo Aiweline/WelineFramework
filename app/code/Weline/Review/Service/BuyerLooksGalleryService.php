@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Review\Service;
 
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Review\Api\BuyerLooksGalleryInterface;
@@ -14,8 +15,13 @@ use Weline\Review\Model\ProductReview;
  */
 final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
 {
+    private const CACHE_POOL = 'review.buyer_looks';
+    private const FRESH_TTL_SECONDS = 120;
+    private const STALE_TTL_SECONDS = 600;
+
     public function __construct(
         private readonly ReviewMediaService $media,
+        private readonly ?StorefrontScopeHotCache $hotCache = null,
     ) {
     }
 
@@ -33,6 +39,38 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
             $websiteId = max(0, $websiteId);
         }
 
+        $logicalKey = 'w' . $websiteId . ':l' . $limit . ':e' . $entityUuid;
+        $hotCache = $this->hotCache();
+
+        try {
+            /** @var list<array<string,mixed>> $items */
+            $items = $hotCache->rememberForRequest(
+                self::CACHE_POOL . '.request',
+                $logicalKey,
+                fn(): array => $hotCache->remember(
+                    self::CACHE_POOL,
+                    $logicalKey,
+                    self::FRESH_TTL_SECONDS,
+                    fn(): array => $this->buildGalleryItems($limit, $websiteId, $entityUuid),
+                    ['website' => true],
+                    self::STALE_TTL_SECONDS,
+                ),
+            );
+            if (\is_array($items)) {
+                return $items;
+            }
+        } catch (\Throwable) {
+            // Fail open to uncached build — storefront must still render.
+        }
+
+        return $this->buildGalleryItems($limit, $websiteId, $entityUuid);
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function buildGalleryItems(int $limit, int $websiteId, string $entityUuid): array
+    {
         // Oversample: many approved reviews may be text-only (no images).
         $oversample = min(80, max($limit * 5, $limit));
 
@@ -48,20 +86,44 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
         $query->pagination(1, $oversample);
         $rows = $query->select()->fetchArray();
 
-        $items = [];
-        $seenImages = [];
+        $candidateRows = [];
+        $reviewIds = [];
         foreach ($rows as $row) {
-            if (!is_array($row)) {
+            if (!\is_array($row)) {
                 continue;
             }
             $reviewId = (int)($row[ProductReview::schema_fields_ID] ?? 0);
             if ($reviewId <= 0) {
                 continue;
             }
-            $mediaRows = $this->media->forReview($reviewId);
+            $title = trim((string)($row[ProductReview::schema_fields_TITLE] ?? ''));
+            $content = trim((string)($row[ProductReview::schema_fields_CONTENT] ?? ''));
+            // 框架/E2E 验收夹具不得进买家秀图墙（会露出「[框架验收]…」与坏图）
+            if (!$this->isStorefrontLooksSafe($title, $content)) {
+                continue;
+            }
+            $candidateRows[] = $row;
+            $reviewIds[] = $reviewId;
+        }
+
+        $mediaByReview = $this->media->forReviews($reviewIds);
+        $entityUuids = [];
+        foreach ($candidateRows as $row) {
+            $uuid = trim((string)($row[ProductReview::schema_fields_ENTITY_UUID] ?? ''));
+            if ($uuid !== '') {
+                $entityUuids[$uuid] = $uuid;
+            }
+        }
+        $productIdByUuid = $this->resolveStorefrontProductIds(\array_values($entityUuids), $websiteId);
+
+        $items = [];
+        $seenImages = [];
+        foreach ($candidateRows as $row) {
+            $reviewId = (int)($row[ProductReview::schema_fields_ID] ?? 0);
+            $mediaRows = $mediaByReview[$reviewId] ?? [];
             $imageUrl = '';
             foreach ($mediaRows as $mediaRow) {
-                if (!is_array($mediaRow)) {
+                if (!\is_array($mediaRow)) {
                     continue;
                 }
                 if ((string)($mediaRow['kind'] ?? '') !== 'image') {
@@ -78,13 +140,9 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
                 continue;
             }
 
-            $entityUuid = trim((string)($row[ProductReview::schema_fields_ENTITY_UUID] ?? ''));
+            $rowEntityUuid = trim((string)($row[ProductReview::schema_fields_ENTITY_UUID] ?? ''));
             $title = trim((string)($row[ProductReview::schema_fields_TITLE] ?? ''));
             $content = trim((string)($row[ProductReview::schema_fields_CONTENT] ?? ''));
-            // 框架/E2E 验收夹具不得进买家秀图墙（会露出「[框架验收]…」与坏图）
-            if (!$this->isStorefrontLooksSafe($title, $content)) {
-                continue;
-            }
             if ($title === '') {
                 $title = $this->truncate($content, 24);
             }
@@ -93,7 +151,7 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
             }
 
             // 店面 PDP 用 product_id（或 slug），不是 identity registry_id（entity_id）
-            $productId = $this->resolveStorefrontProductId($entityUuid, $websiteId);
+            $productId = max(0, (int)($productIdByUuid[$rowEntityUuid] ?? 0));
             $link = $productId > 0
                 ? '/product/' . $productId . '#product-reviews'
                 : '';
@@ -106,10 +164,10 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
                 'link' => $link,
                 'link_label' => (string)__('查看商品'),
                 'review_id' => $reviewId,
-                'entity_uuid' => $entityUuid,
+                'entity_uuid' => $rowEntityUuid,
                 'product_id' => $productId,
             ];
-            if (count($items) >= $limit) {
+            if (\count($items) >= $limit) {
                 break;
             }
         }
@@ -120,28 +178,47 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
     /**
      * Map review entity_uuid (global_product_uuid) → storefront product_id.
      * Soft-deps Product; missing catalog keeps link empty (no wrong /product/{registry_id}).
+     *
+     * @param list<string> $entityUuids
+     * @return array<string, int>
      */
-    private function resolveStorefrontProductId(string $entityUuid, int $websiteId): int
+    private function resolveStorefrontProductIds(array $entityUuids, int $websiteId): array
     {
-        $entityUuid = trim($entityUuid);
-        if ($entityUuid === '' || !class_exists(\Weline\Product\Repository\ProductRepository::class)) {
-            return 0;
+        $normalized = [];
+        foreach ($entityUuids as $uuid) {
+            $uuid = trim((string)$uuid);
+            if ($uuid !== '') {
+                $normalized[$uuid] = $uuid;
+            }
         }
+        if ($normalized === [] || !\class_exists(\Weline\Product\Repository\ProductRepository::class)) {
+            return [];
+        }
+
+        $out = [];
         try {
             /** @var \Weline\Product\Repository\ProductRepository $products */
             $products = ObjectManager::getInstance(\Weline\Product\Repository\ProductRepository::class);
-            $product = $products->findByGlobalUuid($websiteId, $entityUuid);
-            if ($product === null && $websiteId !== 0) {
-                $product = $products->findByGlobalUuid(0, $entityUuid);
+            foreach ($normalized as $uuid) {
+                $product = $products->findByGlobalUuid($websiteId, $uuid);
+                if ($product === null && $websiteId !== 0) {
+                    $product = $products->findByGlobalUuid(0, $uuid);
+                }
+                if ($product === null) {
+                    continue;
+                }
+                $out[$uuid] = max(0, (int)$product->getId());
             }
-            if ($product === null) {
-                return 0;
-            }
-
-            return max(0, (int)$product->getId());
         } catch (\Throwable) {
-            return 0;
+            return [];
         }
+
+        return $out;
+    }
+
+    private function hotCache(): StorefrontScopeHotCache
+    {
+        return $this->hotCache ?? ObjectManager::getInstance(StorefrontScopeHotCache::class);
     }
 
     private function truncate(string $value, int $maxChars): string
@@ -150,18 +227,18 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
         if ($value === '') {
             return '';
         }
-        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+        if (\function_exists('mb_strlen') && \function_exists('mb_substr')) {
             if (mb_strlen($value, 'UTF-8') <= $maxChars) {
                 return $value;
             }
 
             return rtrim(mb_substr($value, 0, $maxChars, 'UTF-8')) . '…';
         }
-        if (strlen($value) <= $maxChars) {
+        if (\strlen($value) <= $maxChars) {
             return $value;
         }
 
-        return rtrim(substr($value, 0, $maxChars)) . '…';
+        return rtrim(\substr($value, 0, $maxChars)) . '…';
     }
 
     /**

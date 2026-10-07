@@ -12,7 +12,7 @@ use Weline\Framework\Http\Fpc\FpcBypassFactsBuilder;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Router\FullPageCacheCoordinator;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 use Weline\Server\Security\WorkerPolicyDecision;
 
 /**

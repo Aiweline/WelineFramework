@@ -10,6 +10,14 @@ if (!\function_exists(__NAMESPACE__ . '\w_log_error')) {
     }
 }
 
+namespace Weline\Server\Runtime;
+
+if (!\function_exists(__NAMESPACE__ . '\w_log_error')) {
+    function w_log_error(string $message, array $context = [], ?string $channel = null): void
+    {
+    }
+}
+
 namespace Weline\Server\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
@@ -19,7 +27,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestResetException;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\StateManager;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 use Weline\Framework\Runtime\WlsRuntimeAdapterInterface;
 use Weline\Framework\Runtime\WlsRuntimeAdapterResolver;
 use Weline\Server\Service\WorkerResponseMemoryGuard;

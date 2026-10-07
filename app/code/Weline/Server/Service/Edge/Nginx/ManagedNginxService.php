@@ -52,6 +52,102 @@ final class ManagedNginxService
     }
 
     /**
+     * @return array<string,mixed>|null
+     */
+    public function ownerSnapshot(): ?array
+    {
+        return $this->readOwner();
+    }
+
+    /**
+     * Expand local managed hosts into server_names and rebind TLS to the shared
+     * local wildcard certificate when available. Safe to call after a new
+     * *.test.weline.com DomainPool entry is provisioned.
+     *
+     * @return array{ok:bool,message:string,details?:array<string,mixed>}
+     */
+    public function syncLocalManagedHosts(
+        ?ManagedNginxLocalHostCatalog $catalog = null,
+    ): array {
+        if (!$this->isEdgeNginxManaged()) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx edge is not the active adapter',
+            ];
+        }
+        $owner = $this->readOwner();
+        if (!\is_array($owner)) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx owner is unavailable',
+            ];
+        }
+        $instance = \trim((string)($owner['instance_name'] ?? ''));
+        $upstreamPort = (int)($owner['upstream_port'] ?? 0);
+        $upstreamHost = \strtolower(\trim((string)($owner['upstream_host'] ?? '127.0.0.1')));
+        if ($instance === '' || $upstreamPort < 1 || $upstreamPort > 65535) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx owner identity is incomplete',
+            ];
+        }
+
+        $manager = new ServerInstanceManager();
+        $endpoint = $manager->getRawInstanceData($instance);
+        if (!\is_array($endpoint)
+            || (int)($endpoint['port'] ?? $endpoint['main_port'] ?? 0) !== $upstreamPort
+            || (string)($endpoint['edge_adapter'] ?? '') !== EdgeAdapterInterface::NAME_NGINX
+        ) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx owner no longer matches a running Nginx-edge WLS instance',
+            ];
+        }
+
+        $publicHost = \trim((string)($endpoint['public_host'] ?? ''));
+        if ($publicHost === '') {
+            $publicHost = \trim((string)($endpoint['host'] ?? ''));
+        }
+        $seed = $publicHost !== '' ? [$publicHost] : [];
+        foreach ((array)($owner['server_names'] ?? []) as $name) {
+            $seed[] = (string)$name;
+        }
+        $catalog ??= new ManagedNginxLocalHostCatalog();
+        $serverNames = $catalog->expandServerNames($seed);
+        if ($serverNames === []) {
+            return [
+                'ok' => false,
+                'message' => 'no server_names available for managed nginx local sync',
+            ];
+        }
+
+        $preferred = null;
+        $boundDomain = \strtolower(\trim((string)($owner['certificate_domain'] ?? '')));
+        if ($boundDomain !== '') {
+            try {
+                $preferred = (new ProjectCertificateGenerationStore($this->paths->projectRoot()))
+                    ->active($boundDomain);
+            } catch (\Throwable) {
+                $preferred = null;
+            }
+        }
+        $certificate = $catalog->resolveEdgeCertificate(
+            \is_array($preferred) ? $preferred : null,
+            $serverNames,
+            new ProjectCertificateGenerationStore($this->paths->projectRoot()),
+        );
+
+        return $this->prepareAndStart(
+            $upstreamPort,
+            $upstreamHost !== '' ? $upstreamHost : '127.0.0.1',
+            $serverNames,
+            $instance,
+            EdgeAdapterInterface::NAME_NGINX,
+            $certificate,
+        );
+    }
+
+    /**
      * @return array{ok:bool,message:string,manifest?:array<string,mixed>}
      */
     public function install(bool $force = false): array

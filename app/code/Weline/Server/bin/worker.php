@@ -767,7 +767,7 @@ try {
             \fwrite(STDOUT, $tip . "\n");
         }
     }
-    $runtime = new \Weline\Framework\Runtime\WlsRuntime();
+    $runtime = new \Weline\Server\Runtime\WlsRuntime();
     $runtime->bootstrap();
     $fpcFastPath = new \Weline\Server\Service\WorkerFullPageCacheFastPath(
         \Weline\Framework\Manager\ObjectManager::getInstance(
@@ -1345,7 +1345,7 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
     $memoryTokenFileName
 ): void {
     if ($readyGateWorkerBootstrapWarmupCompleted) {
-        if ($runtimeError === null && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
+        if ($runtimeError === null && $runtime instanceof \Weline\Server\Runtime\WlsRuntime) {
             $runtime->assertFrontendWorkerCredentialStoreReady();
         }
         return;
@@ -1355,7 +1355,7 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
         $readyGateWorkerBootstrapWarmupCompleted = true;
         return;
     }
-    if ($runtimeError !== null || !$runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
+    if ($runtimeError !== null || !$runtime instanceof \Weline\Server\Runtime\WlsRuntime) {
         return;
     }
 
@@ -1776,7 +1776,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
             if ($role !== \Weline\Server\IPC\ControlMessage::ROLE_WORKER) {
                 return;
             }
-            if ($runtimeError !== null || !$runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
+            if ($runtimeError !== null || !$runtime instanceof \Weline\Server\Runtime\WlsRuntime) {
                 throw new \RuntimeException('Worker runtime is unavailable for the READY credential-store guard.');
             }
             $runtime->assertFrontendWorkerCredentialStoreReady();
@@ -2443,7 +2443,7 @@ while (true) {
     }
 
     // ========== Deferred worker bootstrap warmup ==========
-    if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+    if ($runtime instanceof \Weline\Server\Runtime\WlsRuntime
         && wlsWorkerDeferredWarmupMayStart(
             $deferredWorkerBootstrapWarmupStarted,
             $workerLoopStartedSent,
@@ -2517,7 +2517,7 @@ while (true) {
     if (\Weline\Server\Service\Memory\WorkerHostPressureApplier::shouldSkipKeepWarm()) {
         $homepageMemoryPressure = true;
     }
-    if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+    if ($runtime instanceof \Weline\Server\Runtime\WlsRuntime
         && $workerLoopStartedSent
         && !$isMaintenanceWorker
         && !$ipcReceivedShutdown
@@ -5952,7 +5952,7 @@ function wlsWorkerReadStableEdgeSecret(string $file): ?string
 
 function handleRequest(
     string $rawRequest,
-    ?\Weline\Framework\Runtime\WlsRuntime $runtime,
+    ?\Weline\Server\Runtime\WlsRuntime $runtime,
     ?string $runtimeError,
     \Weline\Server\Runtime\Async\AsyncBizAdapters $asyncBizAdapters,
     string $instanceName,

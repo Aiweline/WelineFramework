@@ -13,7 +13,7 @@ final class WlsRuntimeDeferredHotCacheBagPrimeContractTest extends TestCase
 {
     public function testDeferredCriticalSealPrimesHotCacheBagsBeforeLocales(): void
     {
-        $source = (string)\file_get_contents(BP . 'app/code/Weline/Framework/Runtime/WlsRuntime.php');
+        $source = (string)\file_get_contents(BP . 'app/code/Weline/Server/Runtime/WlsRuntime.php');
 
         self::assertStringContainsString('primeDeferredStorefrontHotCacheBags', $source);
         self::assertStringContainsString('hot_cache_bags_primed', $source);
@@ -176,12 +176,55 @@ final class WlsRuntimeDeferredHotCacheBagPrimeContractTest extends TestCase
         self::assertStringContainsString('currency_bag_prime_done', $source);
         self::assertStringContainsString('storefront_currency_bag_prime_max_currencies', $source);
         self::assertStringContainsString('resolveDeferredWarmupWebsiteCurrencyCodes', $source);
+        self::assertStringContainsString('resolveDeferredWarmupWebsiteScopes', $source);
+        self::assertStringContainsString('storefront_deferred_warmup_max_websites', $source);
+        self::assertStringContainsString('runBoundedDeferredPrimeShards', $source);
+        self::assertStringContainsString('ActiveCertificateDomainSourceInterface', $source);
+        self::assertStringContainsString('website_scopes_error', $source);
+        self::assertStringContainsString('_error', $source);
         $currencyBagPrimeCallPos = \strpos($source, '$this->runCurrencyBagPrimeShards()', (int)$localeBagPrimeCallPos);
         self::assertNotFalse($currencyBagPrimeCallPos);
         self::assertTrue(
             $currencyBagPrimeCallPos > $localeBagPrimeCallPos,
             'currency_bag_prime must run after locale_bag_prime'
         );
+        // category_surface_prime: top /category/** FPC seal after currency bags.
+        self::assertStringContainsString('runCategorySurfaceFpcPrimeShards', $source);
+        self::assertStringContainsString('category_surface_prime', $source);
+        self::assertStringContainsString('category_surface_prime_done', $source);
+        self::assertStringContainsString('storefront_category_surface_prime_max_paths', $source);
+        self::assertStringContainsString('resolveCategorySurfaceWarmupPaths', $source);
+        // Framework Runtime must not hardcode Product catalog slugs.
+        self::assertStringNotContainsString('/category/women', $source);
+        self::assertStringNotContainsString('/category/hanfu', $source);
+        self::assertStringContainsString('FpcWarmupProviderInterface', $source);
+        $categorySurfaceCallPos = \strpos(
+            $source,
+            '$this->runCategorySurfaceFpcPrimeShards()',
+            (int)$currencyBagPrimeCallPos
+        );
+        self::assertNotFalse($categorySurfaceCallPos);
+        self::assertTrue(
+            $categorySurfaceCallPos > $currencyBagPrimeCallPos,
+            'category_surface_prime must run after currency_bag_prime'
+        );
+        // DRY: bounded helper used by locale / currency / category shard runners.
+        $localeBody = $this->extractMethodBody($source, 'runLocaleBagPrimeShards');
+        $currencyBody = $this->extractMethodBody($source, 'runCurrencyBagPrimeShards');
+        $categoryBody = $this->extractMethodBody($source, 'runCategorySurfaceFpcPrimeShards');
+        self::assertStringContainsString('runBoundedDeferredPrimeShards', $localeBody);
+        self::assertStringContainsString('runBoundedDeferredPrimeShards', $currencyBody);
+        self::assertStringContainsString('runBoundedDeferredPrimeShards', $categoryBody);
+        self::assertStringContainsString('resolveDeferredWarmupWebsiteScopes', $localeBody);
+        self::assertStringContainsString('resolveDeferredWarmupWebsiteScopes', $currencyBody);
+        self::assertStringContainsString('resolveDeferredWarmupWebsiteScopes', $categoryBody);
+        // Language/currency resolvers take website_id (not sole hard-coded ID_DEFAULT path).
+        $langResolve = $this->extractMethodBody($source, 'resolveDeferredWarmupWebsiteLanguageCodes');
+        $curResolve = $this->extractMethodBody($source, 'resolveDeferredWarmupWebsiteCurrencyCodes');
+        self::assertStringContainsString('$websiteId', $langResolve);
+        self::assertStringContainsString('$websiteId', $curResolve);
+        self::assertStringContainsString('readSharedSnapshotById($websiteId)', $langResolve);
+        self::assertStringContainsString('readSharedSnapshotById($websiteId)', $curResolve);
         $peerHydrateBody = $this->extractMethodBody($source, 'runDeferredStorefrontPeerHotCacheBagHydrate');
         self::assertStringContainsString(
             'runLocaleBagPrimeShards',
@@ -193,11 +236,28 @@ final class WlsRuntimeDeferredHotCacheBagPrimeContractTest extends TestCase
             $peerHydrateBody,
             'peer Workers must run currency_bag_prime after peer_hydrate (not owner-only)'
         );
+        self::assertStringNotContainsString(
+            'runCategorySurfaceFpcPrimeShards',
+            $peerHydrateBody,
+            'category_surface_prime must stay owner-only (peer concurrent seal thrash)'
+        );
+        // Failed critical path must still run post-done primes (not locale-only).
+        $criticalBody = $this->extractMethodBody($source, 'runDeferredStorefrontCriticalWarmup');
+        $failedPos = \strpos($criticalBody, "logDeferredStorefrontWarmupStage('failed'");
+        self::assertNotFalse($failedPos);
+        $failedTail = \substr($criticalBody, (int)$failedPos);
+        $failedReturnPos = \strpos($failedTail, 'return;');
+        self::assertNotFalse($failedReturnPos);
+        $failedSlice = \substr($failedTail, 0, (int)$failedReturnPos);
+        self::assertStringContainsString('runLocaleBagPrimeShards', $failedSlice);
+        self::assertStringContainsString('runCurrencyBagPrimeShards', $failedSlice);
+        self::assertStringContainsString('runCategorySurfaceFpcPrimeShards', $failedSlice);
         // Must not fold multi-locale bag prime into post_critical_heavy.
         $heavyBodyEnd = (int)$localeRunPos;
         $heavySlice = \substr($source, (int)$heavyPos, \max(0, $heavyBodyEnd - (int)$heavyPos));
         self::assertStringNotContainsString('runLocaleBagPrimeShards', $heavySlice);
         self::assertStringNotContainsString('runCurrencyBagPrimeShards', $heavySlice);
+        self::assertStringNotContainsString('runCategorySurfaceFpcPrimeShards', $heavySlice);
     }
 
     public function testBagWarmupInterfaceDeclaresCapabilityPrefix(): void
@@ -214,7 +274,7 @@ final class WlsRuntimeDeferredHotCacheBagPrimeContractTest extends TestCase
 
     public function testBagPrimeFallsBackWhenCompiledRegistryLags(): void
     {
-        $source = (string)\file_get_contents(BP . 'app/code/Weline/Framework/Runtime/WlsRuntime.php');
+        $source = (string)\file_get_contents(BP . 'app/code/Weline/Server/Runtime/WlsRuntime.php');
         $body = $this->extractMethodBody($source, 'invokeStorefrontHotCacheBagProviders');
         self::assertStringContainsString('class_exists($implementation)', $body);
         self::assertStringContainsString('no_bag_warmup_providers', $body);

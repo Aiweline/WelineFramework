@@ -39,7 +39,7 @@ final class ResponseObservabilityLeanContractTest extends TestCase
 
     public function testRedirectCookieDiagHeaderIsGated(): void
     {
-        $runtime = \file_get_contents(BP . 'app/code/Weline/Framework/Runtime/WlsRuntime.php');
+        $runtime = \file_get_contents(BP . 'app/code/Weline/Server/Runtime/WlsRuntime.php');
         self::assertIsString($runtime);
         $headerPos = \strpos($runtime, "setHeader('X-WLS-Redirect-Cookies'");
         self::assertNotFalse($headerPos);

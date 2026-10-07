@@ -35,6 +35,27 @@ final class HeaderCommerceDataHanfuDefaultsTest extends TestCase
         self::assertNotContains('马面裙', HeaderCommerceData::defaultHotWords('daocharms'));
     }
 
+    public function testFallbackHotWordsDescribeGroceryStorefront(): void
+    {
+        self::assertSame(
+            ['今日特价', '米面粮油', '日用百货', '休闲零食', '新鲜果蔬'],
+            HeaderCommerceData::defaultHotWords('grocery'),
+        );
+        self::assertSame(
+            HeaderCommerceData::groceryDefaultHotWords(),
+            HeaderCommerceData::defaultHotWords('grocery'),
+        );
+        self::assertNotContains('马面裙', HeaderCommerceData::defaultHotWords('grocery'));
+        self::assertNotContains('明制汉服', HeaderCommerceData::defaultHotWords('grocery'));
+    }
+
+    public function testUnknownWebsiteDoesNotInheritHanfuHotWords(): void
+    {
+        $words = HeaderCommerceData::defaultHotWords('brand-new-site');
+        self::assertSame(HeaderCommerceData::neutralDefaultHotWords(), $words);
+        self::assertNotContains('马面裙', $words);
+    }
+
     public function testDefaultHeaderKeepsEditorSlotsAndUsesInkPaletteTokens(): void
     {
         $template = file_get_contents(

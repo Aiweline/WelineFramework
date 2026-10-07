@@ -7,7 +7,7 @@
 ## 方案
 
 - 契约：`StaticMirrorCapableInterface::tryStaticMirror` + `CompileTimeStaticMirror`
-- 高优落地：`theme:css` / `theme:js`、`icon`、`file:image`（条件）
+- 高优落地：`theme:css` / `theme:js`、`theme:font`、`icon`、`file:image`（条件）
 
 ## EARS
 
@@ -35,3 +35,9 @@
 
 1. 全字面 + width/height（或 aspect_ratio）+ 可解析 Scope/locale → 直出 `<img>`
 2. 否则回落 `FileImageRenderer` PHP
+
+## UC-05 字面量 theme:font
+
+1. `<w:theme:font src="NotoSansSC-Regular.ttf" family="Noto Sans SC" lang="en" weight="400" display="swap" />`
+2. 编译产物含最终 `<style data-weline-font>` / `@font-face` / `/pub/media/font-subset/`，不含 `<?php` / `FontFaceService`
+3. `lang` 含 `<?= … ?>` 时仍吐运行期 PHP

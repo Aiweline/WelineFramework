@@ -14,7 +14,7 @@ use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 
 /**
  * 页头商务数据：优先 Query 真实数据；仅在无数据/不可用时回落主题演示默认值。
- * Demo 热搜按当前 website code 分流，禁止 DaoCharms 等非汉服站回落马面裙/明制汉服。
+ * Demo 热搜按当前 website code 分流；非汉服站禁止回落马面裙/明制汉服。
  */
 final class HeaderCommerceData
 {
@@ -27,8 +27,14 @@ final class HeaderCommerceData
         if ($code === 'daocharms') {
             return self::daocharmsDefaultHotWords();
         }
+        if ($code === 'grocery') {
+            return self::groceryDefaultHotWords();
+        }
+        if (StorefrontHanfuDemoCatalog::allowed($code)) {
+            return self::hanfuDefaultHotWords();
+        }
 
-        return self::hanfuDefaultHotWords();
+        return self::neutralDefaultHotWords();
     }
 
     /**
@@ -49,6 +55,26 @@ final class HeaderCommerceData
     public static function daocharmsDefaultHotWords(): array
     {
         return ['黑曜石', '阴阳', '八卦', '平安扣', '玉石'];
+    }
+
+    /**
+     * Neighborhood grocery storefront demo keywords (Chinese sources).
+     *
+     * @return list<string>
+     */
+    public static function groceryDefaultHotWords(): array
+    {
+        return ['今日特价', '米面粮油', '日用百货', '休闲零食', '新鲜果蔬'];
+    }
+
+    /**
+     * Neutral ecommerce demo keywords for unknown / new website codes.
+     *
+     * @return list<string>
+     */
+    public static function neutralDefaultHotWords(): array
+    {
+        return ['今日特价', '热销榜', '新品上市', '精选好物', '客户服务'];
     }
 
     /**

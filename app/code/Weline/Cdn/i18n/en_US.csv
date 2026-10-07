@@ -315,46 +315,6 @@ Tag列表不能为空,"Tag list cannot be empty"
 秒,second
 分钟,Minutes
 小时,Hour
-"CDN 运维","CDN Ops"
-"CDN 域名","CDN 域名"
-"管理站点与 CDN Zone 的映射、启用状态与缓存清理。","管理站点与 CDN Zone 的映射、启用状态与缓存清理。"
-域名操作,域名操作
-域名列表,域名列表
-"共 %{1} 条","%{1} total"
-搜索域名,"Search Domain"
-所有适配器,"All Adapters"
-全部状态,"All Statuses"
-搜索,Search
-重置,Reset
-暂无域名数据,暂无域名数据
-"点击「添加域名」绑定第一个站点与 CDN Zone","点击「添加域名」绑定第一个站点与 CDN Zone"
-ID,ID
-网站名称,"Site Name"
-适配器,Adapter
-"Zone ID","Zone ID"
-操作,Operation
-未知网站,"Unknown website"
-清理缓存,"Clean cache"
-"确定要删除域名 ""%{1}"" 吗？此操作不可恢复！","Are you sure you want to delete the domain ""%{1}""? This action cannot be undone!"
-删除,Delete
-"共 %{1} 条记录，第 %{2}/%{3} 页","Total %{1} Records, Page %{2}/%{3}"
-分页,Pagination
-上一页,"Previous page"
-下一页,"Next page"
-确认,确认
-取消,Cancel
-"缺少 data-provider / data-operation","缺少 data-provider / data-operation"
-删除失败,"Deletion failed"
-删除请求失败,删除请求失败
-确认删除吗？,确认删除吗？
-确认组件不可用，请刷新页面后重试。,"Confirm that the component is unavailable, please refresh the page and try again."
-成功,Success
-操作失败,"Operation failed"
-确定,Confirm
-确认清理缓存,"Confirm Clear Cache"
-确定要清理该域名的所有缓存吗？,"Are you sure you want to clear all caches for this domain?"
-确定清理,"Confirm cleanup"
-清理失败,"Cleanup Failed"
 "本页嵌入 CDN 模块在统一配置中心声明的字段。Cloudflare OAuth Client ID / Secret 在此填写并保存后，再到「账户管理」点击连接或重新授权。切换作用范围后按新范围加载。","This page embeds CDN module fields declared in the unified config center. Fill Cloudflare OAuth Client ID/Secret here and save, then open Account Management to connect or re-authorize. Switching scope reloads settings for that scope."
 去账户管理授权,"Go to Account Management to authorize"
 在统一配置中心打开,"Open in unified config center"
@@ -362,6 +322,7 @@ ID,ID
 今日攻击,"Today's attacks"
 本周攻击,"Attacks this week"
 本月攻击,"Attacks This Month"
+"CDN 运维","CDN Ops"
 攻击日志,"Attack Log"
 "查看 CDN 攻击检测记录，支持筛选、导出与历史清理。","查看 CDN 攻击检测记录，支持筛选、导出与历史清理。"
 批量删除,"Batch delete"
@@ -369,17 +330,25 @@ ID,ID
 导出CSV,"Export CSV"
 攻击概览,攻击概览
 日志列表,日志列表
+"共 %{1} 条","%{1} total"
 搜索域名或IP,"Search Domain or IP"
 所有状态,"All Statuses"
 所有类型,"All Types"
 开始日期,"Start date"
 结束日期,"End date"
+搜索,Search
+重置,Reset
 暂无攻击日志,"No attack logs"
 系统正常运行中，未检测到攻击,"The system is running normally, no attacks detected"
 全选,全选
+ID,ID
 次数,Count
+操作,Operation
 选择日志,选择日志
 查看详情,"View Details"
+删除,Delete
+"共 %{1} 条记录，第 %{2}/%{3} 页","Total %{1} Records, Page %{2}/%{3}"
+分页,Pagination
 清理历史日志,"Clear History Log"
 关闭,Close
 清理多少天前的日志,"Clear Logs Older Than How Many Days"
@@ -388,10 +357,12 @@ ID,ID
 60天前,"60 days ago"
 90天前,"90 days ago"
 此操作不可恢复，请谨慎操作！,"This operation cannot be undone, please proceed with caution!"
+取消,Cancel
 确认清理,"Confirm Cleanup"
 确定删除？,"Confirm deletion?"
 此操作不可恢复！,"This operation cannot be undone!"
 确定删除,"Confirm deletion"
+成功,Success
 失败,Failed
 请先选择要删除的日志,"Please select the log to delete first"
 确定批量删除？,"Confirm batch deletion?"
@@ -479,6 +450,7 @@ HTTP抽样验证,"HTTP sample verification"
 待处理,"To process"
 处理中,Processing
 已完成,Completed
+操作失败,"Operation failed"
 重试,Retries
 已安排重试，请查看阶段回执。,"Retry scheduled. Check the stage receipts."
 "暂无 FPC 声明。可重新收集控制器声明；未声明的方法仍按现有缓存资格处理。","No FPC declarations. Collect controller declarations; undeclared methods retain their existing cache eligibility."
@@ -506,12 +478,15 @@ HTTP抽样未通过,"HTTP samples did not pass"
 阶段回执,"Stage receipts"
 "待同步 v%{1}","Awaiting sync v%{1}"
 "第 %{1} / %{2} 页","Page %{1} / %{2}"
+上一页,"Previous page"
+下一页,"Next page"
 "另 %{1} 条路径","Additional paths: %{1}"
 只读,"Read only"
 确认收集规则,"Confirm rule collection"
 "确定要重新收集规则吗？这将扫描所有 Api 和 Controller 目录。","Collect rules again? This scans all Api and Controller directories."
 确认删除,"Confirm deletion"
 确定要删除这条规则吗？,"Are you sure you want to delete this rule?"
+确定,Confirm
 全部模块,"All Modules"
 全部,All
 定时推送,"Scheduled Push"
@@ -539,6 +514,7 @@ HTTP抽样未通过,"HTTP samples did not pass"
 启用规则,"Enable rule"
 删除规则,"Delete rule"
 请重试,"Please try again."
+删除失败,"Deletion failed"
 "CDN 规则","CDN 规则"
 "编辑全局或按域名的缓存规则，保存后推送到 CDN 方可生效。","编辑全局或按域名的缓存规则，保存后推送到 CDN 方可生效。"
 选择域名,"Select Domain"
@@ -576,6 +552,7 @@ JSON格式错误,"JSON format error"
 该账户暂无关联的域名,"This account has no associated domains"
 "可在 CDN 域名管理中绑定此账户。","Bind this account from CDN domain management."
 域名ID,"Domain ID"
+适配器,Adapter
 编辑,Edit
 "%{1} OAuth 未能开始","%{1} OAuth could not start"
 "发起授权时出错。请先看下方凭据状态；若 Client ID / Secret 已正确，可再点「%{1}」。","Could not start authorization. Check credential status below; if Client ID / Secret are correct, click “%{1}” again."
@@ -615,6 +592,7 @@ JSON格式错误,"JSON format error"
 账户列表,"Account list"
 搜索账户,"Search accounts"
 搜索账户名称或描述,"Search account name or description"
+所有适配器,"All Adapters"
 暂无账户数据,"No account data"
 "点击「添加账户」或「连接 Cloudflare」创建第一个 CDN 账户","Click Add Account or Connect Cloudflare to create your first CDN account"
 激活,Activate
@@ -640,6 +618,7 @@ JSON格式错误,"JSON format error"
 "库里还没有 Token。可粘贴 API Token，或切换鉴权方式为 Global API Key。","No token stored yet. Paste an API Token, or switch auth mode to Global API Key."
 "库里已有 Global API Key（不回显）。请确认邮箱与 Key 同属一个 Cloudflare 账户。","A Global API Key is already stored (hidden). Confirm the email and key belong to the same Cloudflare account."
 "库里还没有 Global API Key。请粘贴后保存再测。","No Global API Key stored yet. Paste, save, then test."
+确认组件不可用，请刷新页面后重试。,"Confirm that the component is unavailable, please refresh the page and try again."
 "回调 URL 已复制","Callback URL copied"
 复制失败，请手动选中黄框整段复制,"Copy failed; select the yellow-box URL and copy manually"
 确定要设置此账户为默认账户吗？,"Are you sure you want to set this account as the default account?"
@@ -675,6 +654,23 @@ JSON格式错误,"JSON format error"
 "添加 CDN 账户","Add CDN account"
 "Cloudflare 推荐先走 OAuth 一键授权；也可在此手工填写 API Token。","Prefer Cloudflare OAuth one-click auth; you can also enter an API Token here."
 返回账户列表,"Back to account list"
+"CDN 域名","CDN 域名"
+"管理站点与 CDN Zone 的映射、启用状态与缓存清理。","管理站点与 CDN Zone 的映射、启用状态与缓存清理。"
+域名操作,域名操作
+域名列表,域名列表
+搜索域名,"Search Domain"
+全部状态,"All Statuses"
+暂无域名数据,暂无域名数据
+"点击「添加域名」绑定第一个站点与 CDN Zone","点击「添加域名」绑定第一个站点与 CDN Zone"
+网站名称,"Site Name"
+"Zone ID","Zone ID"
+未知网站,"Unknown website"
+清理缓存,"Clean cache"
+"确定要删除域名 ""%{1}"" 吗？此操作不可恢复！","Are you sure you want to delete the domain ""%{1}""? This action cannot be undone!"
+确认清理缓存,"Confirm Clear Cache"
+确定要清理该域名的所有缓存吗？,"Are you sure you want to clear all caches for this domain?"
+确定清理,"Confirm cleanup"
+清理失败,"Cleanup Failed"
 请选择网站,"Please select a website"
 从Weline_Websites模块选择网站,"Select website from Weline_Websites module"
 例如：example.com,"e.g., example.com"
@@ -831,6 +827,10 @@ CDN域名创建成功：%{1},"CDN domain name created successfully: %{1}"
 "规则导入成功，共导入 %{1} 条规则","Rule import succeeded, imported %{1} rules"
 规则已保存为域名覆盖规则,"Rule saved as domain override rule"
 规则导入失败：%{1},"Rule import failed: %{1}"
+确认,确认
+"缺少 data-provider / data-operation","缺少 data-provider / data-operation"
+删除请求失败,删除请求失败
+确认删除吗？,确认删除吗？
 折叠,折叠
 展开,展开
 未找到匹配作用范围,未找到匹配作用范围

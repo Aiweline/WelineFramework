@@ -256,8 +256,8 @@
             description: "Geo定位模块（浏览器定位和IP定位）"
         },
         shippingCheckoutAddress: {
-            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20261006-embed-css1"],
-            paths: ["Weline_Shipping::js/widgets/checkout-shipping-address.js?v=20261006-embed-css1"],
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20261007-address-pay-local"],
+            paths: ["Weline_Shipping::js/widgets/checkout-shipping-address.js?v=20261007-address-pay-local"],
             globalVar: "WelineShippingCheckoutAddress",
             description: "结账收货地址部件"
         },

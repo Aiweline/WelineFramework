@@ -98,6 +98,7 @@
     --color-success-focus-ring-color: rgba(74, 222, 128, 0.32);
     --color-danger-focus-ring-color: rgba(253, 164, 175, 0.32);
     --color-surface-hover: #2d3b4f;
+    --color-on-dark-soft: rgba(255, 255, 255, 0.08);
     --color-text-on-dark: #f8fafc;
     --color-text-on-dark-muted: #cbd5e1;
     --shadow-xs: 0 1px 1px rgb(2 6 23 / 0.28); --shadow-sm: 0 3px 10px rgb(2 6 23 / 0.30); --shadow-md: 0 18px 40px rgb(2 6 23 / 0.42); --shadow-lg: 0 28px 60px rgb(2 6 23 / 0.55);

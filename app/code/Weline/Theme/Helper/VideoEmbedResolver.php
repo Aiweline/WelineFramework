@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
+use DOMDocument;
+use DOMElement;
+use DOMXPath;
+use Weline\Framework\Runtime\RequestContext;
+
 /**
  * Resolve YouTube / Vimeo / Bilibili ids and source URLs for Theme video widgets.
  *
@@ -11,6 +16,152 @@ namespace Weline\Theme\Helper;
  */
 final class VideoEmbedResolver
 {
+    /** @var array<string, string> */
+    private static array $sanitizeProcessCache = [];
+
+    /**
+     * Sanitize editor/storefront embed HTML (iframe/video/source/embed only).
+     * Memoized per process + request so carousel slides do not re-parse DOMDocument.
+     */
+    public static function sanitizeEmbedHtml(mixed $html): string
+    {
+        $html = trim((string)$html);
+        if ($html === '') {
+            return '';
+        }
+
+        $cacheKey = hash('xxh3', $html);
+        if (isset(self::$sanitizeProcessCache[$cacheKey])) {
+            return self::$sanitizeProcessCache[$cacheKey];
+        }
+
+        $requestKey = 'theme.video_embed.sanitize.' . $cacheKey;
+        if (RequestContext::isInitialized() && RequestContext::has($requestKey)) {
+            $cached = RequestContext::get($requestKey);
+            if (\is_string($cached)) {
+                return self::$sanitizeProcessCache[$cacheKey] = $cached;
+            }
+        }
+
+        $safe = self::sanitizeEmbedHtmlUncached($html);
+        self::$sanitizeProcessCache[$cacheKey] = $safe;
+        if (RequestContext::isInitialized()) {
+            RequestContext::set($requestKey, $safe);
+        }
+        // Bound process cache growth for long-lived WLS workers.
+        if (\count(self::$sanitizeProcessCache) > 256) {
+            self::$sanitizeProcessCache = \array_slice(self::$sanitizeProcessCache, -128, null, true);
+        }
+
+        return $safe;
+    }
+
+    private static function sanitizeEmbedHtmlUncached(string $html): string
+    {
+        $allowedTags = ['iframe' => true, 'video' => true, 'source' => true, 'embed' => true];
+        $allowedAttrs = [
+            'iframe' => ['src', 'width', 'height', 'title', 'allow', 'allowfullscreen', 'loading', 'referrerpolicy', 'class'],
+            'video' => ['src', 'poster', 'width', 'height', 'controls', 'autoplay', 'muted', 'loop', 'playsinline', 'preload', 'class'],
+            'source' => ['src', 'type', 'media'],
+            'embed' => ['src', 'type', 'width', 'height', 'class'],
+        ];
+        $trustedIframeHosts = self::trustedEmbedHosts();
+
+        $previous = \libxml_use_internal_errors(true);
+        try {
+            $wrapped = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>' . $html . '</body></html>';
+            if (\function_exists('mb_encode_numericentity')) {
+                $wrapped = \mb_encode_numericentity($wrapped, [0x80, 0x10FFFF, 0, 0xFFFF], 'UTF-8');
+            }
+            $doc = new DOMDocument('1.0', 'UTF-8');
+            $doc->loadHTML($wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+            $xpath = new DOMXPath($doc);
+
+            $nodes = [];
+            foreach ($xpath->query('//body//*') as $node) {
+                if ($node instanceof DOMElement) {
+                    $nodes[] = $node;
+                }
+            }
+
+            foreach ($nodes as $node) {
+                if (!$node->parentNode) {
+                    continue;
+                }
+                $tag = \strtolower($node->tagName);
+                if (!isset($allowedTags[$tag])) {
+                    if (!\in_array($tag, ['script', 'style', 'object'], true)) {
+                        while ($node->firstChild) {
+                            $node->parentNode->insertBefore($node->firstChild, $node);
+                        }
+                    }
+                    $node->parentNode?->removeChild($node);
+                    continue;
+                }
+
+                $toRemove = [];
+                foreach ($node->attributes as $attr) {
+                    $name = \strtolower($attr->name);
+                    $value = (string)$attr->value;
+                    if (\str_starts_with($name, 'on') || $name === 'style' || $name === 'srcdoc' || !\in_array($name, $allowedAttrs[$tag], true)) {
+                        $toRemove[] = $attr->name;
+                        continue;
+                    }
+
+                    if (\in_array($name, ['src', 'poster'], true)) {
+                        $safeUrl = self::safeHttpUrl($value);
+                        if ($safeUrl === '') {
+                            $toRemove[] = $attr->name;
+                            continue;
+                        }
+                        if ($tag === 'iframe') {
+                            $host = \strtolower((string)\parse_url($safeUrl, PHP_URL_HOST));
+                            if (!\in_array($host, $trustedIframeHosts, true)) {
+                                $toRemove[] = $attr->name;
+                                continue;
+                            }
+                        }
+                        $node->setAttribute($attr->name, $safeUrl);
+                    } elseif ($name === 'class') {
+                        $node->setAttribute($attr->name, \trim((string)\preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $value)));
+                    } elseif (\in_array($name, ['width', 'height'], true) && !\preg_match('/^\d{1,4}(?:\.\d{1,2})?%?$/', $value)) {
+                        $toRemove[] = $attr->name;
+                    } elseif ($name === 'allow') {
+                        $node->setAttribute($attr->name, \preg_replace('/[^a-zA-Z0-9;,\-\s]/', '', $value) ?: '');
+                    }
+                }
+                foreach ($toRemove as $name) {
+                    $node->removeAttribute($name);
+                }
+
+                if (($tag === 'iframe' || $tag === 'embed') && !$node->hasAttribute('src')) {
+                    $node->parentNode?->removeChild($node);
+                    continue;
+                }
+                if ($tag === 'iframe') {
+                    $node->setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+                    $node->setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+                    $node->setAttribute('loading', 'lazy');
+                }
+            }
+
+            $body = $doc->getElementsByTagName('body')->item(0);
+            $safeHtml = '';
+            if ($body) {
+                foreach ($body->childNodes as $child) {
+                    $safeHtml .= $doc->saveHTML($child);
+                }
+            }
+
+            return $safeHtml;
+        } catch (\Throwable) {
+            return '';
+        } finally {
+            \libxml_clear_errors();
+            \libxml_use_internal_errors($previous);
+        }
+    }
+
     public static function safeHttpUrl(mixed $url): string
     {
         $url = trim((string)$url);

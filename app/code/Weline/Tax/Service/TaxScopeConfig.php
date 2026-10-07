@@ -142,48 +142,78 @@ final class TaxScopeConfig
             $store->storeMode,
         );
         $reader = $this->configReader();
+        // Pass locale + default positionally (6 args). Named-only `default:` is easy to
+        // mis-forward through ConfigReader wrappers; also pin LOCALE_DEFAULT so storefront
+        // RequestContext lang cannot skew typed resolution.
+        $locale = ConfigReader::LOCALE_DEFAULT;
         $enabled = $reader->resolveTypedConfig(
             self::KEY_ENABLED,
             self::MODULE,
             self::AREA,
             $identity,
-            default: false,
+            $locale,
+            false,
         );
         $jurisdiction = $reader->resolveTypedConfig(
             self::KEY_DEFAULT_JURISDICTION,
             self::MODULE,
             self::AREA,
             $identity,
-            default: 'CN|',
+            $locale,
+            'CN|',
         );
         $schema = $reader->resolveTypedConfig(
             self::KEY_SCHEMA_VERSION,
             self::MODULE,
             self::AREA,
             $identity,
-            default: TaxEngine::SCHEMA_VERSION,
+            $locale,
+            TaxEngine::SCHEMA_VERSION,
         );
         $rounding = $reader->resolveTypedConfig(
             self::KEY_ROUNDING,
             self::MODULE,
             self::AREA,
             $identity,
-            default: TaxRule::ROUNDING_HALF_UP,
+            $locale,
+            TaxRule::ROUNDING_HALF_UP,
         );
         $pricesIncludeTax = $reader->resolveTypedConfig(
             self::KEY_PRICES_INCLUDE_TAX,
             self::MODULE,
             self::AREA,
             $identity,
-            default: true,
+            $locale,
+            true,
         );
         $collectSalesTaxCountries = $reader->resolveTypedConfig(
             self::KEY_COLLECT_SALES_TAX_COUNTRIES,
             self::MODULE,
             self::AREA,
             $identity,
-            default: '',
+            $locale,
+            '',
         );
+        $collectValue = trim((string)$collectSalesTaxCountries->value);
+        $collectSource = $collectSalesTaxCountries->source->toArray();
+        // WLS workers keep system_config in wls_memory. Stale typed envelopes can keep a
+        // previous non-empty collect allowlist (e.g. "US") after the DB row is cleared to
+        // "" — or the inverse. Always reconcile with the authoritative single-row read.
+        try {
+            $row = ObjectManager::getInstance(\Weline\SystemConfig\Model\SystemConfig::class)
+                ->getScopedConfigRow(
+                    self::KEY_COLLECT_SALES_TAX_COUNTRIES,
+                    self::MODULE,
+                    self::AREA,
+                    ConfigReader::SCOPE_GLOBAL,
+                    ConfigReader::LOCALE_DEFAULT,
+                );
+            if (is_array($row) && array_key_exists('v', $row)) {
+                $collectValue = trim((string)$row['v']);
+            }
+        } catch (\Throwable) {
+            // Keep typed value when the exact-row reader is unavailable.
+        }
 
         return $this->validateResolved([
             'website_id' => $websiteId,
@@ -194,14 +224,14 @@ final class TaxScopeConfig
             'schema_version' => $schema->value,
             'rounding' => $rounding->value,
             'prices_include_tax' => $this->boolValue($pricesIncludeTax->value),
-            'collect_sales_tax_countries' => trim((string)$collectSalesTaxCountries->value),
+            'collect_sales_tax_countries' => $collectValue,
             'sources' => [
                 self::KEY_ENABLED => $enabled->source->toArray(),
                 self::KEY_DEFAULT_JURISDICTION => $jurisdiction->source->toArray(),
                 self::KEY_SCHEMA_VERSION => $schema->source->toArray(),
                 self::KEY_ROUNDING => $rounding->source->toArray(),
                 self::KEY_PRICES_INCLUDE_TAX => $pricesIncludeTax->source->toArray(),
-                self::KEY_COLLECT_SALES_TAX_COUNTRIES => $collectSalesTaxCountries->source->toArray(),
+                self::KEY_COLLECT_SALES_TAX_COUNTRIES => $collectSource,
             ],
         ], $websiteId, $storeId);
     }

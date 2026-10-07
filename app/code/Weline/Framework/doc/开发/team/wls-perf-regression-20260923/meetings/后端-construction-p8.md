@@ -47,7 +47,7 @@ critical `/`+`/products` seal
 
 | 路径 | 变更 |
 |------|------|
-| `Framework/Runtime/WlsRuntime.php` | O1：`$localeSsrRan` 门控；skip → `post_locale_skipped`；保留 B′ |
+| `Server/Runtime/WlsRuntime.php` | O1：`$localeSsrRan` 门控；skip → `post_locale_skipped`；保留 B′ |
 | `Framework/Test/Unit/Runtime/WlsRuntimeDeferredHotCacheBagPrimeContractTest.php` | 钉 UC-post-locale（gate + skipped stage） |
 | `Framework/Test/Unit/Runtime/WlsRuntimeAdoptHomepageFpcMetaContractTest.php` | 钉 skipped / gated prime |
 | `Framework/etc/module.php` | **2.5.170 → 2.5.171** |

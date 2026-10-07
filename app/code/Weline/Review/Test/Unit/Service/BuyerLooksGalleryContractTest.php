@@ -21,10 +21,16 @@ final class BuyerLooksGalleryContractTest extends TestCase
         self::assertStringContainsString("ProductReview::STATUS_APPROVED", $source);
         self::assertStringContainsString("!== 'image'", $source);
         self::assertStringContainsString('#product-reviews', $source);
-        self::assertStringContainsString('resolveStorefrontProductId', $source);
+        self::assertStringContainsString('forReviews', $source);
+        self::assertStringContainsString('resolveStorefrontProductIds', $source);
+        self::assertStringContainsString('StorefrontScopeHotCache', $source);
         self::assertStringContainsString('findByGlobalUuid', $source);
         self::assertTrue(method_exists(BuyerLooksGalleryService::class, 'galleryItems'));
         self::assertTrue(method_exists(BuyerLooksGalleryInterface::class, 'galleryItems'));
+
+        $mediaSource = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/ReviewMediaService.php');
+        self::assertStringContainsString('public function forReviews(array $reviewIds): array', $mediaSource);
+        self::assertStringContainsString("'IN'", $mediaSource);
     }
 
     public function testModuleProvidesBuyerLooksGallery(): void

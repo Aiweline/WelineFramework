@@ -63,6 +63,7 @@
     --color-surface-muted: var(--color-bg-tertiary);
     --color-surface-hover: #f3f4f6;
     --color-surface-disabled: #f3f4f6;
+    --color-on-dark-soft: rgba(255, 255, 255, 0.08);
 
     /* ========== 边框色（默认可继承） ========== */
     --color-border-default: #e5e7eb;

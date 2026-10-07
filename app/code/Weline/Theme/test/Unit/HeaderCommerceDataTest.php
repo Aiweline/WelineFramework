@@ -25,6 +25,11 @@ final class HeaderCommerceDataTest extends TestCase
         self::assertNotEmpty($dao);
         self::assertContains('黑曜石', $dao);
         self::assertNotContains('马面裙', $dao);
+
+        $grocery = HeaderCommerceData::defaultHotWords('grocery');
+        self::assertNotEmpty($grocery);
+        self::assertContains('今日特价', $grocery);
+        self::assertNotContains('马面裙', $grocery);
     }
 
     public function testRepeatedHeaderQueriesUseRequestMemo(): void

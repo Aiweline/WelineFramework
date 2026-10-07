@@ -30,7 +30,7 @@
 | `app/code/Weline/Product/Service/StorefrontHotCacheBagSeeder.php` | peek_only / seed_sharded / light_only；禁 pre_critical 冷 1000 |
 | `app/code/Weline/Product/Test/Unit/Api/Runtime/StorefrontHotCacheBagWarmupProviderContractTest.php` | 契约对齐 A |
 | `app/code/Weline/Product/etc/module.php` | **1.0.299 → 1.0.300** |
-| `app/code/Weline/Framework/Runtime/WlsRuntime.php` | localeBudget=0 + deferred idle；`post_critical_heavy` stage；D 埋点 |
+| `app/code/Weline/Server/Runtime/WlsRuntime.php` | localeBudget=0 + deferred idle；`post_critical_heavy` stage；D 埋点 |
 | `app/code/Weline/Framework/Test/Unit/Runtime/WlsRuntimeDeferredHotCacheBagPrimeContractTest.php` | heavy after seal + D |
 | `app/code/Weline/Framework/Test/Unit/Runtime/WlsRuntimeAdoptHomepageFpcMetaContractTest.php` | localeBudget=0 + idle |
 | `app/code/Weline/Framework/etc/module.php` | **2.5.164 → 2.5.165** |

@@ -49,11 +49,16 @@ $translateDefaultCopy = static function (string $source, string $english) use ($
     return $isChineseLocale ? $source : $english;
 };
 
+$allowHanfuDemo = \Weline\Theme\Helper\StorefrontHanfuDemoCatalog::allowed();
 $titleSource = trim((string)($this->getData('title') ?? ''));
 $subtitleSource = trim((string)($this->getData('subtitle') ?? ''));
-$title = in_array($titleSource, ['', '热门分类', '按汉服品类选购'], true)
-    ? $translateDefaultCopy('按汉服品类选购', 'Shop Hanfu by Category')
-    : WidgetI18n::label($titleSource);
+if ($allowHanfuDemo && in_array($titleSource, ['', '热门分类', '按汉服品类选购'], true)) {
+    $title = $translateDefaultCopy('按汉服品类选购', 'Shop Hanfu by Category');
+} elseif (in_array($titleSource, ['', '热门分类', '按汉服品类选购'], true)) {
+    $title = $translateDefaultCopy('热门分类', 'Shop by Category');
+} else {
+    $title = WidgetI18n::label($titleSource);
+}
 $subtitle = in_array($subtitleSource, ['', '浏览我们的商品分类', '从准确形制开始选择'], true)
     ? ''
     : WidgetI18n::label($subtitleSource);
@@ -152,20 +157,22 @@ try {
     $categoryDisplayNames = [];
 }
 $categories = [];
-foreach (array_slice($categoryNames, 0, $limit) as $category) {
-    $code = (string)$category['code'];
-    $localizedName = trim((string)($categoryDisplayNames[$code] ?? ''));
-    $iconCode = explode('/', $code)[0];
-    $categories[] = [
-        'id' => (int)$category['id'],
-        'name' => $localizedName !== ''
-            ? $localizedName
-            : ($isChineseLocale ? (string)$category['name_zh'] : (string)$category['name_en']),
-        'alt' => $translateDefaultCopy($category['alt_zh'], $category['alt_en']),
-        'url' => '/category/' . $code,
-        'image' => '/pub/media/catalog/hanfu/r2/categories/icons/' . $iconCode . '.webp',
-        'count' => 0,
-    ];
+if ($allowHanfuDemo) {
+    foreach (array_slice($categoryNames, 0, $limit) as $category) {
+        $code = (string)$category['code'];
+        $localizedName = trim((string)($categoryDisplayNames[$code] ?? ''));
+        $iconCode = explode('/', $code)[0];
+        $categories[] = [
+            'id' => (int)$category['id'],
+            'name' => $localizedName !== ''
+                ? $localizedName
+                : ($isChineseLocale ? (string)$category['name_zh'] : (string)$category['name_en']),
+            'alt' => $translateDefaultCopy($category['alt_zh'], $category['alt_en']),
+            'url' => '/category/' . $code,
+            'image' => '/pub/media/catalog/hanfu/r2/categories/icons/' . $iconCode . '.webp',
+            'count' => 0,
+        ];
+    }
 }
 $allLabel = $translateDefaultCopy('全部', 'All');
 $allUrl = \Weline\Theme\Helper\HeaderNavFragment::localizeHref('/products');

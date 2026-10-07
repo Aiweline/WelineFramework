@@ -31,6 +31,6 @@ return [
     ],
     'Weline_Theme_Font::warmup_collect' => [
         'name' => __('字体子集预热收集'),
-        'description' => __('系统升级预热前触发。默认已自动扫描各模块 view/fonts；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。'),
+        'description' => __('系统升级预热前触发。默认已自动扫描各模块 view/fonts，语言列表为 charset 文件 ∪ 网站已启用语种；可向 fonts / languages 追加额外路径或语言。已有语言子集会跳过重建。'),
     ],
 ];

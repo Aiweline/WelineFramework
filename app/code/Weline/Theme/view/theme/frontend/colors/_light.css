@@ -117,6 +117,7 @@
     --color-success-focus-ring-color: rgba(21, 128, 61, 0.32);
     --color-danger-focus-ring-color: rgba(185, 28, 28, 0.32);
     --color-surface-hover: #f3f3f3;
+    --color-on-dark-soft: rgba(255, 255, 255, 0.08);
     --color-text-on-dark: #f8fafc;
     --color-text-on-dark-muted: #cbd5e1;
     --color-product-label-new-bg: #e6f2e6;

@@ -44,6 +44,30 @@ final class WebsiteCreateService
         $url = \trim((string)($params['url'] ?? $params['domain'] ?? ''));
         $poolId = (int)($params['pool_id'] ?? 0);
         $timezone = \trim((string)($params['default_timezone'] ?? 'Asia/Shanghai')) ?: 'Asia/Shanghai';
+        $defaultLanguage = \trim((string)($params['default_language'] ?? 'zh_Hans_CN')) ?: 'zh_Hans_CN';
+        $defaultCurrency = \trim((string)($params['default_currency'] ?? 'CNY')) ?: 'CNY';
+        $languageCodes = $params['language_codes'] ?? [$defaultLanguage, 'en_US'];
+        $currencyCodes = $params['currency_codes'] ?? [$defaultCurrency, 'USD'];
+        if (!\is_array($languageCodes) || $languageCodes === []) {
+            $languageCodes = [$defaultLanguage, 'en_US'];
+        }
+        if (!\is_array($currencyCodes) || $currencyCodes === []) {
+            $currencyCodes = [$defaultCurrency, 'USD'];
+        }
+        $languageCodes = \array_values(\array_unique(\array_filter(\array_map(
+            static fn ($code): string => \trim((string)$code),
+            $languageCodes
+        ))));
+        $currencyCodes = \array_values(\array_unique(\array_filter(\array_map(
+            static fn ($code): string => \strtoupper(\trim((string)$code)),
+            $currencyCodes
+        ))));
+        if (!\in_array($defaultLanguage, $languageCodes, true)) {
+            \array_unshift($languageCodes, $defaultLanguage);
+        }
+        if (!\in_array($defaultCurrency, $currencyCodes, true)) {
+            \array_unshift($currencyCodes, $defaultCurrency);
+        }
         if ($name === '') {
             throw new \InvalidArgumentException((string)__('站点名称不能为空'));
         }
@@ -76,7 +100,19 @@ final class WebsiteCreateService
         $connection = $this->website->getConnection();
         $websiteId = $this->transactions->runWrite(
             $connection,
-            function () use ($connection, $name, $code, $primaryUrl, $timezone, $addressList, $params): int {
+            function () use (
+                $connection,
+                $name,
+                $code,
+                $primaryUrl,
+                $timezone,
+                $defaultLanguage,
+                $defaultCurrency,
+                $languageCodes,
+                $currencyCodes,
+                $addressList,
+                $params
+            ): int {
                 $this->cacheInvalidation->beginDeferred($connection);
                 $newWebsite = ObjectManager::getInstance(Website::class, [], false);
                 $newWebsite->setConnection($connection);
@@ -84,7 +120,9 @@ final class WebsiteCreateService
                     ->setData(Website::schema_fields_NAME, $name)
                     ->setData(Website::schema_fields_CODE, $code)
                     ->setData(Website::schema_fields_URL, $primaryUrl)
-                    ->setData(Website::schema_fields_DEFAULT_TIMEZONE, $timezone);
+                    ->setData(Website::schema_fields_DEFAULT_TIMEZONE, $timezone)
+                    ->setData(Website::schema_fields_DEFAULT_LANGUAGE, $defaultLanguage)
+                    ->setData(Website::schema_fields_DEFAULT_CURRENCY, $defaultCurrency);
                 if ($newWebsite->hasData(Website::schema_fields_ID)) {
                     $newWebsite->unsetData(Website::schema_fields_ID);
                 }
@@ -95,17 +133,18 @@ final class WebsiteCreateService
                 }
                 $this->saveWebsiteDomains($connection, $websiteId, $addressList);
                 $this->websiteCurrency->setConnection($connection);
-                $this->websiteCurrency->setWebsiteCurrencies($websiteId, []);
+                $this->websiteCurrency->setWebsiteCurrencies($websiteId, $currencyCodes);
                 $this->websiteLanguage->setConnection($connection);
-                $this->websiteLanguage->setWebsiteLanguages($websiteId, []);
-                $this->events->dispatch('Weline_Websites::website_save_after', [
+                $this->websiteLanguage->setWebsiteLanguages($websiteId, $languageCodes);
+                $eventData = [
                     'website_id' => $websiteId,
                     'website' => $newWebsite->getData(),
                     'post_data' => $params,
                     'address_list' => $addressList,
                     'action' => 'add',
                     'connection' => $connection,
-                ]);
+                ];
+                $this->events->dispatch('Weline_Websites::website_save_after', $eventData);
                 $after = $this->snapshots->capture($websiteId, $connection);
                 if ($after === null) {
                     throw new \RuntimeException((string)__('网站保存后快照不存在'));

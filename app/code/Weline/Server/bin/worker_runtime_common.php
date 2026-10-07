@@ -80,9 +80,9 @@ if (!\function_exists('wlsWorkerListenerHasPendingConnection')) {
  */
 
 if (!\function_exists('wlsBootstrapFrameworkRuntime')) {
-    function wlsBootstrapFrameworkRuntime(): \Weline\Framework\Runtime\WlsRuntime
+    function wlsBootstrapFrameworkRuntime(): \Weline\Server\Runtime\WlsRuntime
     {
-        $runtime = new \Weline\Framework\Runtime\WlsRuntime();
+        $runtime = new \Weline\Server\Runtime\WlsRuntime();
         $runtime->bootstrap();
         return $runtime;
     }
@@ -90,7 +90,7 @@ if (!\function_exists('wlsBootstrapFrameworkRuntime')) {
 
 if (!\function_exists('wlsCreateWorkerFullPageCacheFastPath')) {
     function wlsCreateWorkerFullPageCacheFastPath(
-        \Weline\Framework\Runtime\WlsRuntime $runtime
+        \Weline\Server\Runtime\WlsRuntime $runtime
     ): \Weline\Server\Service\WorkerFullPageCacheFastPath {
         return new \Weline\Server\Service\WorkerFullPageCacheFastPath(
             \Weline\Framework\Manager\ObjectManager::getInstance(

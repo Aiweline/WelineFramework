@@ -45,7 +45,7 @@ final class ProjectSuperglobalUsageGuardTest extends TestCase
         'app/code/Weline/Framework/Runtime/RequestContext.php',
         'app/code/Weline/Framework/Runtime/TelemetryBroadcaster.php',
         'app/code/Weline/Framework/Runtime/WlsFiberContext.php',
-        'app/code/Weline/Framework/Runtime/WlsRuntime.php',
+        'app/code/Weline/Server/Runtime/WlsRuntime.php',
         'app/code/Weline/Framework/Router/Core.php',
         'app/code/Weline/Framework/System/File/Uploader.php',
         'app/code/Weline/Framework/View/Taglib/Generator/CodeGenerator.php',

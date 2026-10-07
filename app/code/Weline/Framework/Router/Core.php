@@ -1626,9 +1626,26 @@ class Core
         ];
         $routeProfileMark = static function (string $name) use (&$routeProfile, &$routeProfileLast, $routeProfileStart): void {
             $now = \microtime(true);
-            $routeProfile[$name . '_ms'] = \round(($now - $routeProfileLast) * 1000, 2);
+            $deltaMs = \round(($now - $routeProfileLast) * 1000, 2);
+            $routeProfile[$name . '_ms'] = $deltaMs;
             $routeProfileLast = $now;
             $routeProfile['elapsed_ms'] = \round(($now - $routeProfileStart) * 1000, 2);
+            // Panel / lifecycle 细粒度：挂在 router_start 下，锁定 action/fpc/模板前各切片。
+            if ($deltaMs > 0.0 && RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::recordSpan(
+                    'router.route::' . $name,
+                    $deltaMs,
+                    'router',
+                    'router_start',
+                    [
+                        'operation' => $name,
+                        'stage' => (string)($routeProfile['stage'] ?? ''),
+                        'module' => (string)($routeProfile['module'] ?? ''),
+                        'controller' => (string)($routeProfile['controller'] ?? ''),
+                        'action' => (string)($routeProfile['action'] ?? ''),
+                    ]
+                );
+            }
         };
         $routeProfilePublish = static function (string $stage = 'return') use (&$routeProfile, $routeProfileStart): void {
             $now = \microtime(true);

@@ -165,27 +165,63 @@ final class ReviewMediaService
         if ($reviewId <= 0) {
             return [];
         }
+
+        return $this->forReviews([$reviewId])[$reviewId] ?? [];
+    }
+
+    /**
+     * Batch attached media for many reviews (homepage buyer-looks wall must not N+1).
+     *
+     * @param list<int> $reviewIds
+     * @return array<int, list<array<string,mixed>>>
+     */
+    public function forReviews(array $reviewIds): array
+    {
+        $normalized = [];
+        foreach ($reviewIds as $rawId) {
+            $reviewId = (int)$rawId;
+            if ($reviewId > 0) {
+                $normalized[$reviewId] = $reviewId;
+            }
+        }
+        if ($normalized === []) {
+            return [];
+        }
+
         /** @var ReviewMedia $media */
         $media = ObjectManager::getInstance(ReviewMedia::class);
         $rows = $media->clear()
-            ->where(ReviewMedia::schema_fields_REVIEW_ID, $reviewId)
+            ->where(ReviewMedia::schema_fields_REVIEW_ID, array_values($normalized), 'IN')
             ->where(ReviewMedia::schema_fields_STATUS, ReviewMedia::STATUS_ATTACHED)
             ->order(ReviewMedia::schema_fields_ID, 'ASC')
             ->select()->fetchArray();
-        return array_map(function (array $row): array {
+
+        $out = [];
+        foreach ($normalized as $reviewId) {
+            $out[$reviewId] = [];
+        }
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $reviewId = (int)($row[ReviewMedia::schema_fields_REVIEW_ID] ?? 0);
+            if ($reviewId <= 0 || !isset($out[$reviewId])) {
+                continue;
+            }
             $path = $this->preferExistingRelativePath((string)($row[ReviewMedia::schema_fields_PATH] ?? ''));
             $mime = (string)($row[ReviewMedia::schema_fields_MIME_TYPE] ?? '');
             if (str_ends_with(strtolower($path), '.webp') && $mime !== '' && !str_contains($mime, 'webp')) {
                 $mime = 'image/webp';
             }
-
-            return [
+            $out[$reviewId][] = [
                 'kind' => (string)($row[ReviewMedia::schema_fields_MEDIA_KIND] ?? ''),
                 'url' => '/media/' . $this->encodePath($path),
                 'mime_type' => $mime,
                 'name' => (string)($row[ReviewMedia::schema_fields_ORIGINAL_NAME] ?? ''),
             ];
-        }, $rows);
+        }
+
+        return $out;
     }
 
     private function plainFilename(string $name): string

@@ -19,7 +19,7 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 
 /** Real Coordinator publication/file storage and Runtime transaction; no shared sidecar. */
 final class WlsRuntimeHomepagePublishedReceiptRecoveryTest extends TestCase

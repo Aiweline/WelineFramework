@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-03T14:37:17Z",
-  "updated_at": "2026-10-07T01:39:59Z",
+  "updated_at": "2026-10-07T05:15:33Z",
   "files": {
     ".dockerignore": {
       "role": "index",
@@ -77,9 +77,9 @@
     },
     "AGENTS.md": {
       "role": "index",
-      "sha256": "6b1a39d84060229a476f793bd1f2e667c83d0d674566ed6bc7a99bd246b03ec1",
-      "size": 18538,
-      "normalized_sha256": "6b1a39d84060229a476f793bd1f2e667c83d0d674566ed6bc7a99bd246b03ec1"
+      "sha256": "53f7f26bbd68a6b5115546f44f3ecbac708a56d29d1ac06735f1f6d24c7c3e59",
+      "size": 18684,
+      "normalized_sha256": "53f7f26bbd68a6b5115546f44f3ecbac708a56d29d1ac06735f1f6d24c7c3e59"
     },
     "AI-ENTRY.md": {
       "role": "index",
@@ -113,9 +113,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "c4867fae9cf41c594acaed01803829e4f3424bab99e5828527ea2c419065d67a",
-      "size": 1815674,
-      "normalized_sha256": "c4867fae9cf41c594acaed01803829e4f3424bab99e5828527ea2c419065d67a"
+      "sha256": "114ddb79ef13c6cb905e555f74019b6dd44df15e6142dc1fc8451c8ba01677d1",
+      "size": 2233163,
+      "normalized_sha256": "114ddb79ef13c6cb905e555f74019b6dd44df15e6142dc1fc8451c8ba01677d1"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -1645,9 +1645,9 @@
     },
     "app/code/Weline/Admin/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "199ff8327536178d05392a47aca42df5a8e6c06513e5fa55d956b275cbc6a546",
-      "size": 5235,
-      "normalized_sha256": "199ff8327536178d05392a47aca42df5a8e6c06513e5fa55d956b275cbc6a546"
+      "sha256": "39dde28658170308aedecc8f058c447e328b0e50811d99769755789d8a1e0523",
+      "size": 5145,
+      "normalized_sha256": "39dde28658170308aedecc8f058c447e328b0e50811d99769755789d8a1e0523"
     },
     "app/code/Weline/Admin/doc/README.md": {
       "role": "index",
@@ -1825,15 +1825,15 @@
     },
     "app/code/Weline/Admin/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "b5ce53a4f711d27836a3c865f9a315f7eab3d5c0f11fdb562d7d32ccc3a9b8d7",
+      "sha256": "31e81299471554930780aa2f3cf1b158d40c005dfcfdfb16b525b62c14ad2ec8",
       "size": 25199,
-      "normalized_sha256": "b5ce53a4f711d27836a3c865f9a315f7eab3d5c0f11fdb562d7d32ccc3a9b8d7"
+      "normalized_sha256": "31e81299471554930780aa2f3cf1b158d40c005dfcfdfb16b525b62c14ad2ec8"
     },
     "app/code/Weline/Admin/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "8c8fbdb29f31cafec7c47358e037e56425d71cc23b6c47e49c2a3ef87b810dc7",
+      "sha256": "e7aaf3f1df9377a2d9908e5c89cda0ecea96ab0a7771dd77d00cf122e982fa05",
       "size": 22132,
-      "normalized_sha256": "8c8fbdb29f31cafec7c47358e037e56425d71cc23b6c47e49c2a3ef87b810dc7"
+      "normalized_sha256": "e7aaf3f1df9377a2d9908e5c89cda0ecea96ab0a7771dd77d00cf122e982fa05"
     },
     "app/code/Weline/Admin/register.php": {
       "role": "index",
@@ -9730,15 +9730,15 @@
     },
     "app/code/Weline/Ai/Mcp/src/GuidanceWorkflowCatalog.php": {
       "role": "index",
-      "sha256": "f41e680f8875da9c02bdd77274e314d08199896ecb7b5e9905a20941eb872089",
-      "size": 201600,
-      "normalized_sha256": "f41e680f8875da9c02bdd77274e314d08199896ecb7b5e9905a20941eb872089"
+      "sha256": "d6fa02d1b4b9fd244a1075afc6f7c15a94b1a772466220ffe5663a5cbb9f4312",
+      "size": 201967,
+      "normalized_sha256": "d6fa02d1b4b9fd244a1075afc6f7c15a94b1a772466220ffe5663a5cbb9f4312"
     },
     "app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php": {
       "role": "index",
-      "sha256": "f95e360966129aadad4c35930423025fabf96ff87c584f16feae0c3ebbfe7543",
-      "size": 190186,
-      "normalized_sha256": "f95e360966129aadad4c35930423025fabf96ff87c584f16feae0c3ebbfe7543"
+      "sha256": "bd8338fe64cc1487183e51624d7b9f293db4974eec3be34560fddf2ed46bacd5",
+      "size": 193832,
+      "normalized_sha256": "bd8338fe64cc1487183e51624d7b9f293db4974eec3be34560fddf2ed46bacd5"
     },
     "app/code/Weline/Ai/Mcp/src/HostCursorHooksGenerator.php": {
       "role": "index",
@@ -9748,9 +9748,9 @@
     },
     "app/code/Weline/Ai/Mcp/src/HostEditorRulesGenerator.php": {
       "role": "index",
-      "sha256": "7113acc107ac6a5ad6c4a6ef20737552498c64c8b6e1a2c7dcc379803d8b84e9",
-      "size": 7483,
-      "normalized_sha256": "7113acc107ac6a5ad6c4a6ef20737552498c64c8b6e1a2c7dcc379803d8b84e9"
+      "sha256": "00c731f0187634ebfb7404014eb257a2701501671ad07565921ab7256c926c61",
+      "size": 7669,
+      "normalized_sha256": "00c731f0187634ebfb7404014eb257a2701501671ad07565921ab7256c926c61"
     },
     "app/code/Weline/Ai/Mcp/src/ImpactSurfacesCatalog.php": {
       "role": "index",
@@ -10696,9 +10696,9 @@
     },
     "app/code/Weline/Ai/doc/AI工程交付流程.md": {
       "role": "index",
-      "sha256": "3a6c51c092adc2f0fb2dc20b3ce807a69c0110ac9fcf2762173be40cbd20c6c9",
-      "size": 44337,
-      "normalized_sha256": "3a6c51c092adc2f0fb2dc20b3ce807a69c0110ac9fcf2762173be40cbd20c6c9"
+      "sha256": "c2133bcb985a9e7ce355f05534478ef43890ffb9d699e4f1857db9106532807b",
+      "size": 44588,
+      "normalized_sha256": "c2133bcb985a9e7ce355f05534478ef43890ffb9d699e4f1857db9106532807b"
     },
     "app/code/Weline/Ai/doc/AI开发治理.md": {
       "role": "index",
@@ -10708,9 +10708,9 @@
     },
     "app/code/Weline/Ai/doc/AI硬规则索引.md": {
       "role": "index",
-      "sha256": "9e747bc5a7ec5abe2fd9b1f4ad6a54859db4f2a97e1121bfc4613dc42cf5e6a2",
-      "size": 60230,
-      "normalized_sha256": "9e747bc5a7ec5abe2fd9b1f4ad6a54859db4f2a97e1121bfc4613dc42cf5e6a2"
+      "sha256": "ca8ef66feeaa3ba633ba59feab08a9764c8a655aa923f90aac6893abb3baea9a",
+      "size": 61635,
+      "normalized_sha256": "ca8ef66feeaa3ba633ba59feab08a9764c8a655aa923f90aac6893abb3baea9a"
     },
     "app/code/Weline/Ai/doc/AOCI自动安装.md": {
       "role": "index",
@@ -11596,15 +11596,15 @@
     },
     "app/code/Weline/Ai/doc/开发日志.md": {
       "role": "index",
-      "sha256": "7816d771e95cb66e4a11d29032e6c61bbadfcea2b19c67ecfa9ea847f6820f5c",
-      "size": 154306,
-      "normalized_sha256": "7816d771e95cb66e4a11d29032e6c61bbadfcea2b19c67ecfa9ea847f6820f5c"
+      "sha256": "f518d3738dbb7ddf3bcd212e464c53373c778266c1885daebe827b2b27cdd351",
+      "size": 157546,
+      "normalized_sha256": "f518d3738dbb7ddf3bcd212e464c53373c778266c1885daebe827b2b27cdd351"
     },
     "app/code/Weline/Ai/doc/文档索引.md": {
       "role": "index",
-      "sha256": "e96b4e46cf5b228751d5cf0fddef841ba4f28f67e371afaba6157041974bddfd",
-      "size": 4891,
-      "normalized_sha256": "e96b4e46cf5b228751d5cf0fddef841ba4f28f67e371afaba6157041974bddfd"
+      "sha256": "5e33489f3586809357dae61ffa071669917fcf289de82354f14af6e53345065e",
+      "size": 5014,
+      "normalized_sha256": "5e33489f3586809357dae61ffa071669917fcf289de82354f14af6e53345065e"
     },
     "app/code/Weline/Ai/doc/智能体(Agent)增强计划.md": {
       "role": "index",
@@ -11632,15 +11632,15 @@
     },
     "app/code/Weline/Ai/doc/规则/00-MCP调用与会话.md": {
       "role": "index",
-      "sha256": "1bf27fe8397e323ebeae0d664d7e8c71ba762c3017e6a83e9c6434f9d7d777e1",
-      "size": 20780,
-      "normalized_sha256": "1bf27fe8397e323ebeae0d664d7e8c71ba762c3017e6a83e9c6434f9d7d777e1"
+      "sha256": "2718572d1ce30bf6d3490f4e7294793769e3f28d0c0554f0ed1b537926253dc6",
+      "size": 21934,
+      "normalized_sha256": "2718572d1ce30bf6d3490f4e7294793769e3f28d0c0554f0ed1b537926253dc6"
     },
     "app/code/Weline/Ai/doc/规则/10-工程流程与验收.md": {
       "role": "index",
-      "sha256": "ad8df23785d1f3103d9c6c4c48a13548e7d5f2e5e19fd0748ac6c07094863827",
-      "size": 29451,
-      "normalized_sha256": "ad8df23785d1f3103d9c6c4c48a13548e7d5f2e5e19fd0748ac6c07094863827"
+      "sha256": "9fd28e48c031cfaed1ab3dd67e026fea44c398403aa3ef8c4d68aa33d8766b14",
+      "size": 29502,
+      "normalized_sha256": "9fd28e48c031cfaed1ab3dd67e026fea44c398403aa3ef8c4d68aa33d8766b14"
     },
     "app/code/Weline/Ai/doc/规则/20-前端与主题.md": {
       "role": "index",
@@ -11650,9 +11650,9 @@
     },
     "app/code/Weline/Ai/doc/规则/30-后端与数据.md": {
       "role": "index",
-      "sha256": "3c3a38b9fbc764ce39fe2ff5af9352ff840b883d4e50009bdd187d35a6fff75e",
-      "size": 12456,
-      "normalized_sha256": "3c3a38b9fbc764ce39fe2ff5af9352ff840b883d4e50009bdd187d35a6fff75e"
+      "sha256": "9ac4de523a2203e49e87edde97f50ab2f61ed502c0ca9d686b5d8d7dad163c16",
+      "size": 14092,
+      "normalized_sha256": "9ac4de523a2203e49e87edde97f50ab2f61ed502c0ca9d686b5d8d7dad163c16"
     },
     "app/code/Weline/Ai/doc/规则/40-集成与运维.md": {
       "role": "index",
@@ -11782,9 +11782,9 @@
     },
     "app/code/Weline/Ai/etc/module.php": {
       "role": "index",
-      "sha256": "0d8b5047cc86172d762c0f55b9274f37776c67699a1170e8933fe2b7efcfce93",
+      "sha256": "eecd5edfe7e21db3df78542a899e2748c06db9a98b75171380fe8d3710b0d56c",
       "size": 1275,
-      "normalized_sha256": "0d8b5047cc86172d762c0f55b9274f37776c67699a1170e8933fe2b7efcfce93"
+      "normalized_sha256": "eecd5edfe7e21db3df78542a899e2748c06db9a98b75171380fe8d3710b0d56c"
     },
     "app/code/Weline/Ai/etc/resumable_tasks.php": {
       "role": "index",
@@ -14092,15 +14092,15 @@
     },
     "app/code/Weline/B2B/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "7fadf9f5a6069a3dd33b2a4a4c1688073aec8bb8f2a13986f224299686de31a2",
+      "sha256": "c33f53eae95a5e597d5761b82cac9090fa29628594cc690b350016a420a93dde",
       "size": 73575,
-      "normalized_sha256": "7fadf9f5a6069a3dd33b2a4a4c1688073aec8bb8f2a13986f224299686de31a2"
+      "normalized_sha256": "c33f53eae95a5e597d5761b82cac9090fa29628594cc690b350016a420a93dde"
     },
     "app/code/Weline/B2B/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "5d0c5b0702c9a996fc01781d933c5d0bf87d0b4a4a841d23a9d3d0087661b342",
+      "sha256": "05064a5ae69c9ddcf2a53a406a50b28ef5d31a2bcc608b0193d653fc91efb84c",
       "size": 68809,
-      "normalized_sha256": "5d0c5b0702c9a996fc01781d933c5d0bf87d0b4a4a841d23a9d3d0087661b342"
+      "normalized_sha256": "05064a5ae69c9ddcf2a53a406a50b28ef5d31a2bcc608b0193d653fc91efb84c"
     },
     "app/code/Weline/B2B/register.php": {
       "role": "index",
@@ -15316,9 +15316,9 @@
     },
     "app/code/Weline/Backend/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "8e9a2847a5aebcc9ea63e1cab1f119970dd67c25597a97648cbee3a518b6f257",
-      "size": 4630,
-      "normalized_sha256": "8e9a2847a5aebcc9ea63e1cab1f119970dd67c25597a97648cbee3a518b6f257"
+      "sha256": "1189ca3d88a5c17afa95e3b3768c180f9975fee0d19bdb4a328653bffbe509b2",
+      "size": 4536,
+      "normalized_sha256": "1189ca3d88a5c17afa95e3b3768c180f9975fee0d19bdb4a328653bffbe509b2"
     },
     "app/code/Weline/Backend/doc/README.md": {
       "role": "index",
@@ -15334,9 +15334,9 @@
     },
     "app/code/Weline/Backend/doc/hook/backend/partials/dashboard/ai-usage-stats.md": {
       "role": "index",
-      "sha256": "0ddcdcb331ef691286dea76d0c2b60283a1dd915459d3435ce7c29d29c26b7d1",
-      "size": 980,
-      "normalized_sha256": "0ddcdcb331ef691286dea76d0c2b60283a1dd915459d3435ce7c29d29c26b7d1"
+      "sha256": "8bcfd255f251744019b6b1d1cea80b82e109de52192be4b693a21ba21e5f94a8",
+      "size": 972,
+      "normalized_sha256": "8bcfd255f251744019b6b1d1cea80b82e109de52192be4b693a21ba21e5f94a8"
     },
     "app/code/Weline/Backend/doc/menu-acl-and-backend-entry-conventions.md": {
       "role": "index",
@@ -15346,9 +15346,9 @@
     },
     "app/code/Weline/Backend/doc/功能现状.md": {
       "role": "index",
-      "sha256": "10ce8a668caaf047727dda07db63800bc76cc2eb7e9e9997fdd1cccac3499429",
-      "size": 9407,
-      "normalized_sha256": "10ce8a668caaf047727dda07db63800bc76cc2eb7e9e9997fdd1cccac3499429"
+      "sha256": "75d45c37c97c9971b1ba946146eee6337d4d187ba35e86b8b4357fd5ecccbde4",
+      "size": 9391,
+      "normalized_sha256": "75d45c37c97c9971b1ba946146eee6337d4d187ba35e86b8b4357fd5ecccbde4"
     },
     "app/code/Weline/Backend/doc/开发/plan.md": {
       "role": "index",
@@ -15370,9 +15370,9 @@
     },
     "app/code/Weline/Backend/doc/开发日志.md": {
       "role": "index",
-      "sha256": "088930d9ca85198674f5b2eaecdea03b72c6248ad5644a38e99239b3cf41daf4",
-      "size": 26700,
-      "normalized_sha256": "088930d9ca85198674f5b2eaecdea03b72c6248ad5644a38e99239b3cf41daf4"
+      "sha256": "1485b1cfbd7d05a24d8a2880777139ffea39a47e49ba8dd9a8c8a99f1ecd64e3",
+      "size": 27585,
+      "normalized_sha256": "1485b1cfbd7d05a24d8a2880777139ffea39a47e49ba8dd9a8c8a99f1ecd64e3"
     },
     "app/code/Weline/Backend/doc/需求.md": {
       "role": "index",
@@ -15388,9 +15388,9 @@
     },
     "app/code/Weline/Backend/etc/backend/menu.xml": {
       "role": "index",
-      "sha256": "b57ab1e9b16fc1a0d6944d48a1b4f7252b04fbe5861aab2fed011f435144b2f9",
-      "size": 11283,
-      "normalized_sha256": "b57ab1e9b16fc1a0d6944d48a1b4f7252b04fbe5861aab2fed011f435144b2f9"
+      "sha256": "25ba8af7844a668ce199fc4116599631fa297311706918cb2f5dc69d1d808f55",
+      "size": 10830,
+      "normalized_sha256": "25ba8af7844a668ce199fc4116599631fa297311706918cb2f5dc69d1d808f55"
     },
     "app/code/Weline/Backend/etc/env.php": {
       "role": "index",
@@ -15406,9 +15406,9 @@
     },
     "app/code/Weline/Backend/etc/module.php": {
       "role": "index",
-      "sha256": "e9b8208f533221c9faf8c7ef5018992a325ad25b2bfdd6e09e042e6b5d2c6ad7",
+      "sha256": "0ba1f824808945eecffafd48c57999f7576571b118885c52f39b399022afd9b6",
       "size": 3042,
-      "normalized_sha256": "e9b8208f533221c9faf8c7ef5018992a325ad25b2bfdd6e09e042e6b5d2c6ad7"
+      "normalized_sha256": "0ba1f824808945eecffafd48c57999f7576571b118885c52f39b399022afd9b6"
     },
     "app/code/Weline/Backend/etc/xsd/menu.xsd": {
       "role": "index",
@@ -15442,15 +15442,15 @@
     },
     "app/code/Weline/Backend/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "fdd2aaff81999104452c54df5410030b19028d276bfc486279749914685fb5cd",
-      "size": 46518,
-      "normalized_sha256": "fdd2aaff81999104452c54df5410030b19028d276bfc486279749914685fb5cd"
+      "sha256": "da38326311ca647f64d1a0b4e9cbd56befaa242c9c6843c39e9c0530151f27d1",
+      "size": 45609,
+      "normalized_sha256": "da38326311ca647f64d1a0b4e9cbd56befaa242c9c6843c39e9c0530151f27d1"
     },
     "app/code/Weline/Backend/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "befea9a39f7097a70d024532196f5c4aaf8d6cae4a79d38f68d64a8e60af7762",
-      "size": 41219,
-      "normalized_sha256": "befea9a39f7097a70d024532196f5c4aaf8d6cae4a79d38f68d64a8e60af7762"
+      "sha256": "6f769d140e9b9e4b6ef1ab70cdc0f5b0bb50fc0d076a91974cad9c866ae19292",
+      "size": 40409,
+      "normalized_sha256": "6f769d140e9b9e4b6ef1ab70cdc0f5b0bb50fc0d076a91974cad9c866ae19292"
     },
     "app/code/Weline/Backend/register.php": {
       "role": "index",
@@ -15646,6 +15646,12 @@
       "size": 65559,
       "normalized_sha256": "30e234d6318353cedeeb89886aab4673a34641a173abed651d91c15696ef1a7f"
     },
+    "app/code/Weline/Backend/view/templates/AccessLog/index.phtml": {
+      "role": "index",
+      "sha256": "2aafa56746456bead5d027fdba75ebe12f92d12634b1eb3235c5d8727107eac3",
+      "size": 4730,
+      "normalized_sha256": "2aafa56746456bead5d027fdba75ebe12f92d12634b1eb3235c5d8727107eac3"
+    },
     "app/code/Weline/Backend/view/templates/Backend/AccessLog/index.phtml": {
       "role": "index",
       "sha256": "2aafa56746456bead5d027fdba75ebe12f92d12634b1eb3235c5d8727107eac3",
@@ -15789,6 +15795,48 @@
       "sha256": "5fa9e26b850e045074dd87a9c2b5febcf690df6123c4288e8cd8a0f2462d5b65",
       "size": 13602,
       "normalized_sha256": "5fa9e26b850e045074dd87a9c2b5febcf690df6123c4288e8cd8a0f2462d5b65"
+    },
+    "app/code/Weline/Backend/view/templates/Maintenance/index.phtml": {
+      "role": "index",
+      "sha256": "184e9db604b850ad752253d7584f6258ac825b35bc2dd50bbebe35b466a816cc",
+      "size": 6601,
+      "normalized_sha256": "184e9db604b850ad752253d7584f6258ac825b35bc2dd50bbebe35b466a816cc"
+    },
+    "app/code/Weline/Backend/view/templates/Monitor/index.phtml": {
+      "role": "index",
+      "sha256": "ff2275beb5a921ef108065897e52d8c8970ad4700b72a9c1cb4d97c12c6fa085",
+      "size": 2815,
+      "normalized_sha256": "ff2275beb5a921ef108065897e52d8c8970ad4700b72a9c1cb4d97c12c6fa085"
+    },
+    "app/code/Weline/Backend/view/templates/Settings/Api/index.phtml": {
+      "role": "index",
+      "sha256": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+      "size": 1,
+      "normalized_sha256": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068"
+    },
+    "app/code/Weline/Backend/view/templates/Settings/Basic/index.phtml": {
+      "role": "index",
+      "sha256": "f649891ad293ce8561cb71719e6f7f7877ca681e084acfd72630df66a06ffd97",
+      "size": 5601,
+      "normalized_sha256": "f649891ad293ce8561cb71719e6f7f7877ca681e084acfd72630df66a06ffd97"
+    },
+    "app/code/Weline/Backend/view/templates/Settings/Email/index.phtml": {
+      "role": "index",
+      "sha256": "08df48648218120f4bb6050e45a5e4e1a0068ab4eb2f3782d3f0bfa1525b8ad9",
+      "size": 1095,
+      "normalized_sha256": "08df48648218120f4bb6050e45a5e4e1a0068ab4eb2f3782d3f0bfa1525b8ad9"
+    },
+    "app/code/Weline/Backend/view/templates/Settings/Storage/index.phtml": {
+      "role": "index",
+      "sha256": "7d2fcabc071ca4d469d14a56ae04873504fed309489c774ab4cd6431732ecdee",
+      "size": 1095,
+      "normalized_sha256": "7d2fcabc071ca4d469d14a56ae04873504fed309489c774ab4cd6431732ecdee"
+    },
+    "app/code/Weline/Backend/view/templates/Statistics/index.phtml": {
+      "role": "index",
+      "sha256": "ed7ed561a2430002f8c8070763d82d5e5d0db176cfa11994c1616019dc90d918",
+      "size": 2692,
+      "normalized_sha256": "ed7ed561a2430002f8c8070763d82d5e5d0db176cfa11994c1616019dc90d918"
     },
     "app/code/Weline/Backend/view/templates/public/footer.phtml": {
       "role": "index",
@@ -28206,9 +28254,9 @@
     },
     "app/code/Weline/Captcha/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "db084ed0ba63452e585695d0a2d6cfa438baa66820d4bdd8aff80da6f98456f7",
-      "size": 4201,
-      "normalized_sha256": "db084ed0ba63452e585695d0a2d6cfa438baa66820d4bdd8aff80da6f98456f7"
+      "sha256": "b30389abc7dba08892e646fef58cfaf12384e5c308659039d2511b63cfae7ed3",
+      "size": 4276,
+      "normalized_sha256": "b30389abc7dba08892e646fef58cfaf12384e5c308659039d2511b63cfae7ed3"
     },
     "app/code/Weline/Captcha/doc/README.md": {
       "role": "index",
@@ -29886,15 +29934,15 @@
     },
     "app/code/Weline/Cdn/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "f87d1b93d51b9abd14d8eb386fa2f8f4d8c46be17b90e684950b5553a03338a7",
+      "sha256": "01495e1509a4cccc48fa701642ec346d3d347ca064fe593c64e978dff241f9c1",
       "size": 95965,
-      "normalized_sha256": "f87d1b93d51b9abd14d8eb386fa2f8f4d8c46be17b90e684950b5553a03338a7"
+      "normalized_sha256": "01495e1509a4cccc48fa701642ec346d3d347ca064fe593c64e978dff241f9c1"
     },
     "app/code/Weline/Cdn/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "8706baa461242e80112a000d38ec0229d21b5e46f38b9afc066c68b56a808027",
+      "sha256": "a793c17930fc359ac5c4afb9399740ca7dae42cfe88c4bd5aa5d0461d81555c2",
       "size": 96031,
-      "normalized_sha256": "8706baa461242e80112a000d38ec0229d21b5e46f38b9afc066c68b56a808027"
+      "normalized_sha256": "a793c17930fc359ac5c4afb9399740ca7dae42cfe88c4bd5aa5d0461d81555c2"
     },
     "app/code/Weline/Cdn/register.php": {
       "role": "index",
@@ -30084,9 +30132,9 @@
     },
     "app/code/Weline/Checkout/Controller/Frontend/Checkout.php": {
       "role": "index",
-      "sha256": "260a298aacd5429c6c4c85fdb2bb827ddb57bddebd6f3aaf71514032899120fd",
-      "size": 8468,
-      "normalized_sha256": "260a298aacd5429c6c4c85fdb2bb827ddb57bddebd6f3aaf71514032899120fd"
+      "sha256": "02d59bc3301e5a0cd34b3744ea18b727902ff9e10c08e141665fb11a4e65cc39",
+      "size": 9390,
+      "normalized_sha256": "02d59bc3301e5a0cd34b3744ea18b727902ff9e10c08e141665fb11a4e65cc39"
     },
     "app/code/Weline/Checkout/Controller/Frontend/Order.php": {
       "role": "index",
@@ -30096,9 +30144,9 @@
     },
     "app/code/Weline/Checkout/Controller/Index.php": {
       "role": "index",
-      "sha256": "9d5d835097284b0a6b761f48bef858170f5dde3658c058ee36cb4809e8a60b80",
-      "size": 2790,
-      "normalized_sha256": "9d5d835097284b0a6b761f48bef858170f5dde3658c058ee36cb4809e8a60b80"
+      "sha256": "8de139fd7c8acbfa5a7538d325781ac69ead2044fd9ea0780525f2ded16585b9",
+      "size": 3394,
+      "normalized_sha256": "8de139fd7c8acbfa5a7538d325781ac69ead2044fd9ea0780525f2ded16585b9"
     },
     "app/code/Weline/Checkout/Controller/ProcessPayment.php": {
       "role": "index",
@@ -30186,9 +30234,9 @@
     },
     "app/code/Weline/Checkout/Service/CheckoutGroupSubmitService.php": {
       "role": "index",
-      "sha256": "493f68e700a78eb831d422f991ae62c609cce8f6836ebbc017ef8a7681f740c2",
-      "size": 71833,
-      "normalized_sha256": "493f68e700a78eb831d422f991ae62c609cce8f6836ebbc017ef8a7681f740c2"
+      "sha256": "dcaca035fe41a03c4f5ba94c93350dd39d5c3ec4ecee1668a9826df4e1fb76b1",
+      "size": 73993,
+      "normalized_sha256": "dcaca035fe41a03c4f5ba94c93350dd39d5c3ec4ecee1668a9826df4e1fb76b1"
     },
     "app/code/Weline/Checkout/Service/CheckoutHtmlRenderer.php": {
       "role": "index",
@@ -30285,6 +30333,12 @@
       "sha256": "2eab4e49f26a8f23762d252612984e78da4bcf1f3e0c5c8abb17e9051edd3883",
       "size": 4406,
       "normalized_sha256": "2eab4e49f26a8f23762d252612984e78da4bcf1f3e0c5c8abb17e9051edd3883"
+    },
+    "app/code/Weline/Checkout/Service/CheckoutStorefrontSsrService.php": {
+      "role": "index",
+      "sha256": "f6076c938ba85acf7ec01d3c20f29a4a71b8797385fdac798b77f29ba3dbbb23",
+      "size": 8952,
+      "normalized_sha256": "f6076c938ba85acf7ec01d3c20f29a4a71b8797385fdac798b77f29ba3dbbb23"
     },
     "app/code/Weline/Checkout/Service/CheckoutSuccessPresentationService.php": {
       "role": "index",
@@ -30945,9 +30999,9 @@
     },
     "app/code/Weline/Checkout/doc/开发日志.md": {
       "role": "index",
-      "sha256": "cf18815ee9f1c667baddbeb76f62e00d5bc2e57659099454df83f6f94b727b36",
-      "size": 110611,
-      "normalized_sha256": "cf18815ee9f1c667baddbeb76f62e00d5bc2e57659099454df83f6f94b727b36"
+      "sha256": "6f056fbd014e28102dbcb0233f925f8b5dc481e9ddaf9beab9c54515801193fc",
+      "size": 118909,
+      "normalized_sha256": "6f056fbd014e28102dbcb0233f925f8b5dc481e9ddaf9beab9c54515801193fc"
     },
     "app/code/Weline/Checkout/doc/需求.md": {
       "role": "index",
@@ -30975,9 +31029,9 @@
     },
     "app/code/Weline/Checkout/etc/module.php": {
       "role": "index",
-      "sha256": "520bd7b451654e1376bd929d3a33917fc033a21c1395e52779f40ba3d0491318",
+      "sha256": "2dd0ae3f1717570c0ba7e195ca6384be40bb13a8f941bfe7dbff516f8ec46cd3",
       "size": 1070,
-      "normalized_sha256": "520bd7b451654e1376bd929d3a33917fc033a21c1395e52779f40ba3d0491318"
+      "normalized_sha256": "2dd0ae3f1717570c0ba7e195ca6384be40bb13a8f941bfe7dbff516f8ec46cd3"
     },
     "app/code/Weline/Checkout/etc/module.xml": {
       "role": "index",
@@ -30999,9 +31053,9 @@
     },
     "app/code/Weline/Checkout/extends/module/Weline_Framework/Query/CheckoutQueryProvider.php": {
       "role": "index",
-      "sha256": "675a30f7afc76fc8d4f0bc0849b6a784a443656ff3c6da737ceca8ceb2bec8fb",
-      "size": 134284,
-      "normalized_sha256": "675a30f7afc76fc8d4f0bc0849b6a784a443656ff3c6da737ceca8ceb2bec8fb"
+      "sha256": "7db2595cfa23e4ce7734682003e119a30bb981b1e2567469631a0f0965b4f0b0",
+      "size": 138008,
+      "normalized_sha256": "7db2595cfa23e4ce7734682003e119a30bb981b1e2567469631a0f0965b4f0b0"
     },
     "app/code/Weline/Checkout/extends/module/Weline_Framework/Query/CheckoutSignalsQueryProvider.php": {
       "role": "index",
@@ -31065,9 +31119,9 @@
     },
     "app/code/Weline/Checkout/view/frontend/checkout/index.phtml": {
       "role": "index",
-      "sha256": "2c8f6d3b8bbdf352b1886fa44441d92545ecddc136aa96bce2bfa7aba78c0aa5",
-      "size": 186142,
-      "normalized_sha256": "2c8f6d3b8bbdf352b1886fa44441d92545ecddc136aa96bce2bfa7aba78c0aa5"
+      "sha256": "427a3485b5d0801f61e4b9e9056a706efd0881dec1187a601be9736d086b6501",
+      "size": 198436,
+      "normalized_sha256": "427a3485b5d0801f61e4b9e9056a706efd0881dec1187a601be9736d086b6501"
     },
     "app/code/Weline/Checkout/view/frontend/checkout/partials/items.phtml": {
       "role": "index",
@@ -31491,9 +31545,9 @@
     },
     "app/code/Weline/Cms/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "3c6dc929f4034d7bacf45eec5721013d7cdf34705439ea337b0a27f8562fd50f",
-      "size": 4190,
-      "normalized_sha256": "3c6dc929f4034d7bacf45eec5721013d7cdf34705439ea337b0a27f8562fd50f"
+      "sha256": "44460d837a6b1860167031122147d08785c58be4def002640275fa395a972407",
+      "size": 4105,
+      "normalized_sha256": "44460d837a6b1860167031122147d08785c58be4def002640275fa395a972407"
     },
     "app/code/Weline/Cms/doc/README.md": {
       "role": "index",
@@ -35845,15 +35899,15 @@
     },
     "app/code/Weline/Database/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "6628978c8c4e352318496eed977018ef14a1386c94d8f3bbb42c3f087952176c",
-      "size": 4283,
-      "normalized_sha256": "6628978c8c4e352318496eed977018ef14a1386c94d8f3bbb42c3f087952176c"
+      "sha256": "be3482c004200381a96fb5547f650ae5fa823841c0921aa6a75d0ebf6dc94eea",
+      "size": 4110,
+      "normalized_sha256": "be3482c004200381a96fb5547f650ae5fa823841c0921aa6a75d0ebf6dc94eea"
     },
     "app/code/Weline/Database/doc/README.md": {
       "role": "index",
-      "sha256": "41716cabb53044f791914151ef9def28f7731917bb649d0669fabbde92fa3e00",
-      "size": 5402,
-      "normalized_sha256": "41716cabb53044f791914151ef9def28f7731917bb649d0669fabbde92fa3e00"
+      "sha256": "5ea33de285bf2da01b51058e73cad868a5e4fb58602cdfc9f6a3baeb8a96d36c",
+      "size": 5306,
+      "normalized_sha256": "5ea33de285bf2da01b51058e73cad868a5e4fb58602cdfc9f6a3baeb8a96d36c"
     },
     "app/code/Weline/Database/doc/功能现状.md": {
       "role": "index",
@@ -39263,15 +39317,15 @@
     },
     "app/code/Weline/ElFinderFileManager/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "6074500c17a653dc2714084f6ce3fbaa8bccbcb36a7b42677d0ac8c1aa18b3ac",
-      "size": 3409,
-      "normalized_sha256": "6074500c17a653dc2714084f6ce3fbaa8bccbcb36a7b42677d0ac8c1aa18b3ac"
+      "sha256": "d458519169373d684b55064cfca11053ebe8d1259c43502d81e5a60ac16b536f",
+      "size": 3291,
+      "normalized_sha256": "d458519169373d684b55064cfca11053ebe8d1259c43502d81e5a60ac16b536f"
     },
     "app/code/Weline/ElFinderFileManager/doc/README.md": {
       "role": "index",
-      "sha256": "642408a402f726184d6a944c1f97da7a69b144b1ad35c40911155700743132b1",
-      "size": 3277,
-      "normalized_sha256": "642408a402f726184d6a944c1f97da7a69b144b1ad35c40911155700743132b1"
+      "sha256": "b7015d196d96ef5892fa1c9cc70510e116e7ed42460e738a4a17ebd3005859c3",
+      "size": 3159,
+      "normalized_sha256": "b7015d196d96ef5892fa1c9cc70510e116e7ed42460e738a4a17ebd3005859c3"
     },
     "app/code/Weline/ElFinderFileManager/doc/功能现状.md": {
       "role": "index",
@@ -41863,9 +41917,9 @@
     },
     "app/code/Weline/FileManager/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "3e8d50ca081366930704bf949c245c01d8bda157e349e5ed0168fb3964dcb4b6",
-      "size": 4712,
-      "normalized_sha256": "3e8d50ca081366930704bf949c245c01d8bda157e349e5ed0168fb3964dcb4b6"
+      "sha256": "43a2e1fdd6f4c2190e7e033a937efc4d9549cd95bde0456a07f696d911e61653",
+      "size": 4532,
+      "normalized_sha256": "43a2e1fdd6f4c2190e7e033a937efc4d9549cd95bde0456a07f696d911e61653"
     },
     "app/code/Weline/FileManager/doc/README.md": {
       "role": "index",
@@ -42835,9 +42889,9 @@
     },
     "app/code/Weline/Framework/Controller/Api/QueryBin.php": {
       "role": "index",
-      "sha256": "c6dec0b6a326906b679006e1ebe53768ac3995523a173e4308102eba2881f691",
-      "size": 44048,
-      "normalized_sha256": "c6dec0b6a326906b679006e1ebe53768ac3995523a173e4308102eba2881f691"
+      "sha256": "56b8938b2747719a661f27115ba9572e35df53b699aa4a595c476776a6c5098f",
+      "size": 46188,
+      "normalized_sha256": "56b8938b2747719a661f27115ba9572e35df53b699aa4a595c476776a6c5098f"
     },
     "app/code/Weline/Framework/Controller/Api/Stream.php": {
       "role": "index",
@@ -45712,11 +45766,17 @@
       "size": 930,
       "normalized_sha256": "4ce5f8f34c56ccd7c99acf845d444081b13cb251801df53b508dabc3eb5a5127"
     },
+    "app/code/Weline/Framework/Phrase/PageDictionaryPrefetchCoordinator.php": {
+      "role": "index",
+      "sha256": "8833b2ea6d7fda403329e73cb29e8a24ef0e7ebf84561ffd2d7175075a741f68",
+      "size": 9797,
+      "normalized_sha256": "8833b2ea6d7fda403329e73cb29e8a24ef0e7ebf84561ffd2d7175075a741f68"
+    },
     "app/code/Weline/Framework/Phrase/Parser.php": {
       "role": "index",
-      "sha256": "6ca7c7add5a207b5c881c6698fe59e525eee847fcdf134f00c087b99cd886720",
-      "size": 108290,
-      "normalized_sha256": "6ca7c7add5a207b5c881c6698fe59e525eee847fcdf134f00c087b99cd886720"
+      "sha256": "cc5088067a016b3d597e3ab96824b16beaa09d922d84f0b211314ae7500b2b7a",
+      "size": 109327,
+      "normalized_sha256": "cc5088067a016b3d597e3ab96824b16beaa09d922d84f0b211314ae7500b2b7a"
     },
     "app/code/Weline/Framework/Phrase/ParserRequestState.php": {
       "role": "index",
@@ -46445,9 +46505,9 @@
     },
     "app/code/Weline/Framework/Runtime/RequestContext.php": {
       "role": "index",
-      "sha256": "8113f1c18f0c39dc255a2cc542ee756c26f048c96fe91addc3e36a30294bb009",
-      "size": 54088,
-      "normalized_sha256": "8113f1c18f0c39dc255a2cc542ee756c26f048c96fe91addc3e36a30294bb009"
+      "sha256": "ab9eb5bd4884cb042431db0b596720189482d22405966e29cea93cf133d85f79",
+      "size": 54770,
+      "normalized_sha256": "ab9eb5bd4884cb042431db0b596720189482d22405966e29cea93cf133d85f79"
     },
     "app/code/Weline/Framework/Runtime/RequestExitException.php": {
       "role": "index",
@@ -47021,9 +47081,9 @@
     },
     "app/code/Weline/Framework/Runtime/StorefrontWidgetRuntimeSchedule.php": {
       "role": "index",
-      "sha256": "9dfe8e11f469b297af91a39aedce4a3066aaf408077f3fe7f668b6eb75310168",
-      "size": 6701,
-      "normalized_sha256": "9dfe8e11f469b297af91a39aedce4a3066aaf408077f3fe7f668b6eb75310168"
+      "sha256": "4d4d04be3420e60460b4264da2ce275a297500ec69a8aab6932c3364224d1968",
+      "size": 9857,
+      "normalized_sha256": "4d4d04be3420e60460b4264da2ce275a297500ec69a8aab6932c3364224d1968"
     },
     "app/code/Weline/Framework/Runtime/System.php": {
       "role": "index",
@@ -47063,9 +47123,9 @@
     },
     "app/code/Weline/Framework/Runtime/WlsRuntime.php": {
       "role": "index",
-      "sha256": "38e8bc1bbe5723303652058af5237bd7cb0ed28ccf4c07cab5c39eeb587840cf",
-      "size": 399379,
-      "normalized_sha256": "38e8bc1bbe5723303652058af5237bd7cb0ed28ccf4c07cab5c39eeb587840cf"
+      "sha256": "9d6ffb131263379c461e71988ab2b2991af1a652f0ec5f2ffe544629057d87ce",
+      "size": 450172,
+      "normalized_sha256": "9d6ffb131263379c461e71988ab2b2991af1a652f0ec5f2ffe544629057d87ce"
     },
     "app/code/Weline/Framework/Runtime/WlsRuntimeAdapterInterface.php": {
       "role": "index",
@@ -48699,9 +48759,9 @@
     },
     "app/code/Weline/Framework/View/Template.php": {
       "role": "index",
-      "sha256": "bca3be80e5d53a458f49a0ea15727c7458129481edd05e3774a650ec77be293f",
-      "size": 135361,
-      "normalized_sha256": "bca3be80e5d53a458f49a0ea15727c7458129481edd05e3774a650ec77be293f"
+      "sha256": "d1c569f2c93a069d36a23c3c1318de66fef8ddbfdc0fc34287a4b667140eec48",
+      "size": 135736,
+      "normalized_sha256": "d1c569f2c93a069d36a23c3c1318de66fef8ddbfdc0fc34287a4b667140eec48"
     },
     "app/code/Weline/Framework/View/TemplateCacheManager.php": {
       "role": "index",
@@ -48973,6 +49033,12 @@
       "size": 54196,
       "normalized_sha256": "79407ae3228b3bdac98fb0082b408944f85329f617dcb7e3e77e000f340b5207"
     },
+    "app/code/Weline/Framework/doc/3-开发/RequestContext请求级Memo约定.md": {
+      "role": "index",
+      "sha256": "ce50012b528eeb55a770262e56dfe73674b8380250a876b0daf88999abeaf94d",
+      "size": 1904,
+      "normalized_sha256": "ce50012b528eeb55a770262e56dfe73674b8380250a876b0daf88999abeaf94d"
+    },
     "app/code/Weline/Framework/doc/3-开发/SSE可恢复后台任务架构.md": {
       "role": "index",
       "sha256": "0bed628e832f5012f269fdcb852b7a0558fb52c490dd175f1cc79da312cf0b0f",
@@ -49173,9 +49239,9 @@
     },
     "app/code/Weline/Framework/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "b7fa7710ea0283807a700aeea335b0a2a260b70963b7bc7296cb64ce10a01703",
-      "size": 26124,
-      "normalized_sha256": "b7fa7710ea0283807a700aeea335b0a2a260b70963b7bc7296cb64ce10a01703"
+      "sha256": "519fe723d7342edf4786cf7854789685e32f4ded076d967290229c12ef18cce3",
+      "size": 26106,
+      "normalized_sha256": "519fe723d7342edf4786cf7854789685e32f4ded076d967290229c12ef18cce3"
     },
     "app/code/Weline/Framework/doc/BinQuery/Provider开发指南.md": {
       "role": "index",
@@ -49203,9 +49269,9 @@
     },
     "app/code/Weline/Framework/doc/Parser词典分层缓存.md": {
       "role": "index",
-      "sha256": "41666bd7dd6b8b68fba1561dfbf78b8c66aed270d2ce9d0b918bcca3d04ae957",
-      "size": 9375,
-      "normalized_sha256": "41666bd7dd6b8b68fba1561dfbf78b8c66aed270d2ce9d0b918bcca3d04ae957"
+      "sha256": "82d963415406ac77980928671a0b872f4e32bca5266bf7b4bb7baec7e11407c1",
+      "size": 9923,
+      "normalized_sha256": "82d963415406ac77980928671a0b872f4e32bca5266bf7b4bb7baec7e11407c1"
     },
     "app/code/Weline/Framework/doc/README.md": {
       "role": "index",
@@ -49239,9 +49305,9 @@
     },
     "app/code/Weline/Framework/doc/architecture/04-performance-budget.md": {
       "role": "index",
-      "sha256": "a12f2bff294d9b5b4011fc082fdd89acb432fa2ddfeaa9705234c4df0a59ea46",
-      "size": 27531,
-      "normalized_sha256": "a12f2bff294d9b5b4011fc082fdd89acb432fa2ddfeaa9705234c4df0a59ea46"
+      "sha256": "1b535fd95649d78f5cb5f80d2bc37645574d432f7f3ffed27df2da6a1d1ca376",
+      "size": 27765,
+      "normalized_sha256": "1b535fd95649d78f5cb5f80d2bc37645574d432f7f3ffed27df2da6a1d1ca376"
     },
     "app/code/Weline/Framework/doc/architecture/README.md": {
       "role": "index",
@@ -50331,9 +50397,9 @@
     },
     "app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/contracts.md": {
       "role": "index",
-      "sha256": "90f995ed7cce729928128cc036b9bd3014fb80cf4d0a42ce25fa2a39c54cf843",
-      "size": 2923,
-      "normalized_sha256": "90f995ed7cce729928128cc036b9bd3014fb80cf4d0a42ce25fa2a39c54cf843"
+      "sha256": "db6659a90373165e6ef96298ec5b91a2ce7dc4aa8ffa025a328d72f6d7fa1722",
+      "size": 3100,
+      "normalized_sha256": "db6659a90373165e6ef96298ec5b91a2ce7dc4aa8ffa025a328d72f6d7fa1722"
     },
     "app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/deps.md": {
       "role": "index",
@@ -50505,15 +50571,15 @@
     },
     "app/code/Weline/Framework/doc/开发/冷访问五阶段排查-20261007.md": {
       "role": "index",
-      "sha256": "d63189368b1f085173a2c25a8330bb10cf6f7796f608d82ab40ba612efee835f",
-      "size": 4331,
-      "normalized_sha256": "d63189368b1f085173a2c25a8330bb10cf6f7796f608d82ab40ba612efee835f"
+      "sha256": "d2960242aecc91cb96eef0773707ca9936be288d3d58147e269610d8e18d723a",
+      "size": 11528,
+      "normalized_sha256": "d2960242aecc91cb96eef0773707ca9936be288d3d58147e269610d8e18d723a"
     },
     "app/code/Weline/Framework/doc/开发日志.md": {
       "role": "index",
-      "sha256": "09415670c620570b79139785ec7f24c2184782e356c8477996f1b4554cf06337",
-      "size": 173291,
-      "normalized_sha256": "09415670c620570b79139785ec7f24c2184782e356c8477996f1b4554cf06337"
+      "sha256": "968a30ea5c244bb777e736835e161f9c841a3a0bf29ae075333e574532295ef4",
+      "size": 178345,
+      "normalized_sha256": "968a30ea5c244bb777e736835e161f9c841a3a0bf29ae075333e574532295ef4"
     },
     "app/code/Weline/Framework/doc/快速开始/Event/事件申明文件.png": {
       "role": "index",
@@ -50611,9 +50677,9 @@
     },
     "app/code/Weline/Framework/doc/需求.md": {
       "role": "index",
-      "sha256": "f8260e331e3f8331f658ac08baca3446d438474d27c96e7e78c845cbce501eab",
-      "size": 20753,
-      "normalized_sha256": "f8260e331e3f8331f658ac08baca3446d438474d27c96e7e78c845cbce501eab"
+      "sha256": "1889482f7743ffa6182d0fe1db2e0011cc3f9209ae8270abb37e211f70066ec5",
+      "size": 21283,
+      "normalized_sha256": "1889482f7743ffa6182d0fe1db2e0011cc3f9209ae8270abb37e211f70066ec5"
     },
     "app/code/Weline/Framework/env/requirements.php": {
       "role": "index",
@@ -50647,9 +50713,9 @@
     },
     "app/code/Weline/Framework/etc/module.php": {
       "role": "index",
-      "sha256": "cdc203c544e6614b2a4f0635c95b0ac2981920fe47882e571c628845c6c36b37",
+      "sha256": "ede44f5ab97ad71187066faec5c69b2224972253a3ff2dfb9726e22ef7e86906",
       "size": 1752,
-      "normalized_sha256": "cdc203c544e6614b2a4f0635c95b0ac2981920fe47882e571c628845c6c36b37"
+      "normalized_sha256": "ede44f5ab97ad71187066faec5c69b2224972253a3ff2dfb9726e22ef7e86906"
     },
     "app/code/Weline/Framework/event.php": {
       "role": "index",
@@ -51320,9 +51386,9 @@
     },
     "app/code/Weline/Frontend/view/statics/base/weline.modules.js": {
       "role": "index",
-      "sha256": "e1ede23cabfe2fc2a454e0e8a0310968ea952efd66b6beb37fa9b569c279f72d",
-      "size": 21971,
-      "normalized_sha256": "e1ede23cabfe2fc2a454e0e8a0310968ea952efd66b6beb37fa9b569c279f72d"
+      "sha256": "28e415cbcf464b628ec865e5b0fd624b471216d1a8d55f55123b6a3c46153c96",
+      "size": 21985,
+      "normalized_sha256": "28e415cbcf464b628ec865e5b0fd624b471216d1a8d55f55123b6a3c46153c96"
     },
     "app/code/Weline/Frontend/view/statics/css/weline-switcher.css": {
       "role": "index",
@@ -53573,15 +53639,15 @@
     },
     "app/code/Weline/HelpPay/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "65a1eb363558b958e41e21003aafc8ea366b6a2a24d54b5e0502bfe83c2b0e34",
+      "sha256": "0f743967d8e5e48fa716125517ff927a622929300b26c08c565e5fb45cb4d0d4",
       "size": 14569,
-      "normalized_sha256": "65a1eb363558b958e41e21003aafc8ea366b6a2a24d54b5e0502bfe83c2b0e34"
+      "normalized_sha256": "0f743967d8e5e48fa716125517ff927a622929300b26c08c565e5fb45cb4d0d4"
     },
     "app/code/Weline/HelpPay/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "f325c603821e185a5904ab943628eec4e9fd5191f641cd9753e0ee858d2033ef",
+      "sha256": "4eaa12534851d0deb108cc70017666985dc0528147848ed55bb429708bbfdb74",
       "size": 13803,
-      "normalized_sha256": "f325c603821e185a5904ab943628eec4e9fd5191f641cd9753e0ee858d2033ef"
+      "normalized_sha256": "4eaa12534851d0deb108cc70017666985dc0528147848ed55bb429708bbfdb74"
     },
     "app/code/Weline/HelpPay/register.php": {
       "role": "index",
@@ -53966,9 +54032,9 @@
     },
     "app/code/Weline/I18n/Api/Localization/GlobalDictionaryProvider.php": {
       "role": "index",
-      "sha256": "269630cfa26f40c301a9791eb26cbfc6b7f7e0c02abdf5de9b1331ce290ba2e6",
-      "size": 6809,
-      "normalized_sha256": "269630cfa26f40c301a9791eb26cbfc6b7f7e0c02abdf5de9b1331ce290ba2e6"
+      "sha256": "35eda53a41103c40b4888dbd2a56e52c9911d0ec5430b9635ee02d1935d76ba5",
+      "size": 7809,
+      "normalized_sha256": "35eda53a41103c40b4888dbd2a56e52c9911d0ec5430b9635ee02d1935d76ba5"
     },
     "app/code/Weline/I18n/Api/Localization/InstalledLocaleCatalog.php": {
       "role": "index",
@@ -54584,9 +54650,9 @@
     },
     "app/code/Weline/I18n/Service/ActiveLocaleCodeProvider.php": {
       "role": "index",
-      "sha256": "85fdd9dd52e7ce2e3aa15243f0c085a9b2ff99c4355ee1a90ed95076d39b58a2",
-      "size": 4310,
-      "normalized_sha256": "85fdd9dd52e7ce2e3aa15243f0c085a9b2ff99c4355ee1a90ed95076d39b58a2"
+      "sha256": "c8083e8d27ab830df971f74148910aa38145ec74a22ec9fa68a26c7b1552123b",
+      "size": 6458,
+      "normalized_sha256": "c8083e8d27ab830df971f74148910aa38145ec74a22ec9fa68a26c7b1552123b"
     },
     "app/code/Weline/I18n/Service/AiTranslationBatchLock.php": {
       "role": "index",
@@ -54854,9 +54920,9 @@
     },
     "app/code/Weline/I18n/Taglib/LanguageSwitcher.php": {
       "role": "index",
-      "sha256": "5dab5c5e0b1a104c14fce56128ef1c60ccc159f72779d4277c587730885a0191",
-      "size": 75232,
-      "normalized_sha256": "5dab5c5e0b1a104c14fce56128ef1c60ccc159f72779d4277c587730885a0191"
+      "sha256": "dd74cfe4d0b038da49009b1014b7b7da36f6673293dcdc2e8a3f01df5da5a1e5",
+      "size": 77421,
+      "normalized_sha256": "dd74cfe4d0b038da49009b1014b7b7da36f6673293dcdc2e8a3f01df5da5a1e5"
     },
     "app/code/Weline/I18n/Taglib/Local.php": {
       "role": "index",
@@ -54884,9 +54950,9 @@
     },
     "app/code/Weline/I18n/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "d0056bcf7d403a3f6ad4f854fad7dd27c46f7d1427e69e5f49c9131865df46f8",
-      "size": 7424,
-      "normalized_sha256": "d0056bcf7d403a3f6ad4f854fad7dd27c46f7d1427e69e5f49c9131865df46f8"
+      "sha256": "a434228ef81502dfb7aecaa3fcd132760aff7ea12045dfa09ccf3b2e1383bbe2",
+      "size": 7263,
+      "normalized_sha256": "a434228ef81502dfb7aecaa3fcd132760aff7ea12045dfa09ccf3b2e1383bbe2"
     },
     "app/code/Weline/I18n/doc/AI翻译功能说明.md": {
       "role": "index",
@@ -54950,9 +55016,9 @@
     },
     "app/code/Weline/I18n/doc/功能现状.md": {
       "role": "index",
-      "sha256": "1bd244918cc715ada2cc2435ae3cc3f70c48e920d6369b22255b7484ae906247",
-      "size": 18861,
-      "normalized_sha256": "1bd244918cc715ada2cc2435ae3cc3f70c48e920d6369b22255b7484ae906247"
+      "sha256": "4ddd587e0b17412cec40eaddf75145bbb67243d18240e3bf64fe87c1a03116eb",
+      "size": 18851,
+      "normalized_sha256": "4ddd587e0b17412cec40eaddf75145bbb67243d18240e3bf64fe87c1a03116eb"
     },
     "app/code/Weline/I18n/doc/国际化SEO能力实施计划.md": {
       "role": "index",
@@ -55082,9 +55148,9 @@
     },
     "app/code/Weline/I18n/doc/开发日志.md": {
       "role": "index",
-      "sha256": "93ddf9d7a7e546f9b14a3091c7517259d8740f496b48f2ae1a9759cb437c3424",
-      "size": 82555,
-      "normalized_sha256": "93ddf9d7a7e546f9b14a3091c7517259d8740f496b48f2ae1a9759cb437c3424"
+      "sha256": "b16f2494d8e4010bd69dc7ba401c897ed848db266bc4e602d942c47fd0bb738d",
+      "size": 83827,
+      "normalized_sha256": "b16f2494d8e4010bd69dc7ba401c897ed848db266bc4e602d942c47fd0bb738d"
     },
     "app/code/Weline/I18n/doc/模块翻译CSV规范.md": {
       "role": "index",
@@ -55112,9 +55178,9 @@
     },
     "app/code/Weline/I18n/doc/需求.md": {
       "role": "index",
-      "sha256": "3670a6c26845ec306c4b69c23002986b455a77b870421af5cc4aeedf101b61b7",
-      "size": 4731,
-      "normalized_sha256": "3670a6c26845ec306c4b69c23002986b455a77b870421af5cc4aeedf101b61b7"
+      "sha256": "8fc4c0f642138c8a457f9f6087421aa99bdd618d48beaf728df794a4ffe9bc58",
+      "size": 5310,
+      "normalized_sha256": "8fc4c0f642138c8a457f9f6087421aa99bdd618d48beaf728df794a4ffe9bc58"
     },
     "app/code/Weline/I18n/env/requirements.php": {
       "role": "index",
@@ -55142,9 +55208,9 @@
     },
     "app/code/Weline/I18n/etc/module.php": {
       "role": "index",
-      "sha256": "6e163c853cc9ea6ac6ebd760a9a5df4bb467e07f3808c9d0c5b3243ab22949c0",
+      "sha256": "edce02e48d6d361d29881a93f1a468aa887a72e9d119047fecec0b55aab5ac57",
       "size": 2633,
-      "normalized_sha256": "6e163c853cc9ea6ac6ebd760a9a5df4bb467e07f3808c9d0c5b3243ab22949c0"
+      "normalized_sha256": "edce02e48d6d361d29881a93f1a468aa887a72e9d119047fecec0b55aab5ac57"
     },
     "app/code/Weline/I18n/etc/resumable_tasks.php": {
       "role": "index",
@@ -57302,9 +57368,9 @@
     },
     "app/code/Weline/Mail/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "67fbccf61bebd074d5b48ed82a5e3353289cc2e3fd2255ccb7c093472084a0f0",
-      "size": 5075,
-      "normalized_sha256": "67fbccf61bebd074d5b48ed82a5e3353289cc2e3fd2255ccb7c093472084a0f0"
+      "sha256": "f8d17104b261efe10c05859a6386ee3b954f2ff2af6650e0f4207c170583c7c3",
+      "size": 5000,
+      "normalized_sha256": "f8d17104b261efe10c05859a6386ee3b954f2ff2af6650e0f4207c170583c7c3"
     },
     "app/code/Weline/Mail/doc/README.md": {
       "role": "index",
@@ -57740,9 +57806,9 @@
     },
     "app/code/Weline/Maintenance/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "f75a5cf3ea2f064b8741e20a2766175639a2d1cd0f5a8276e94bd46b29721fb9",
-      "size": 3870,
-      "normalized_sha256": "f75a5cf3ea2f064b8741e20a2766175639a2d1cd0f5a8276e94bd46b29721fb9"
+      "sha256": "c18b540a375b04ecff1a587c2fe0e83f53b6a78fe3fd67de664ace3e4a3628d3",
+      "size": 3945,
+      "normalized_sha256": "c18b540a375b04ecff1a587c2fe0e83f53b6a78fe3fd67de664ace3e4a3628d3"
     },
     "app/code/Weline/Maintenance/doc/README.md": {
       "role": "index",
@@ -61499,9 +61565,9 @@
     },
     "app/code/Weline/Order/Service/OrderFacade.php": {
       "role": "index",
-      "sha256": "4db8d443015fdfb774c7408ed42474bc3b396235b4c6dde228ebc6eb716e8806",
-      "size": 73854,
-      "normalized_sha256": "4db8d443015fdfb774c7408ed42474bc3b396235b4c6dde228ebc6eb716e8806"
+      "sha256": "97aa999fc6f1976a8968e132b8b00b4a8098fadc62269cb67b2c4e2edf2abd09",
+      "size": 77453,
+      "normalized_sha256": "97aa999fc6f1976a8968e132b8b00b4a8098fadc62269cb67b2c4e2edf2abd09"
     },
     "app/code/Weline/Order/Service/OrderFacadeConflictException.php": {
       "role": "index",
@@ -62028,9 +62094,9 @@
     },
     "app/code/Weline/Order/doc/开发日志.md": {
       "role": "index",
-      "sha256": "cec9abd6819365aa0f6942be58c27dc64badb28efc9ef00de8ddc8da7b2589ba",
-      "size": 34424,
-      "normalized_sha256": "cec9abd6819365aa0f6942be58c27dc64badb28efc9ef00de8ddc8da7b2589ba"
+      "sha256": "41dc4743a8627e20778ae67ff348f71a6a3572bb43e9ce4e8f81b7b07464cda1",
+      "size": 35118,
+      "normalized_sha256": "41dc4743a8627e20778ae67ff348f71a6a3572bb43e9ce4e8f81b7b07464cda1"
     },
     "app/code/Weline/Order/doc/订单状态机说明.md": {
       "role": "index",
@@ -62070,9 +62136,9 @@
     },
     "app/code/Weline/Order/etc/module.php": {
       "role": "index",
-      "sha256": "fcd4e7836452497f39f7e5f4aea4adec6ab7eb09c61df181401679cbc02522d2",
+      "sha256": "5d6a540709fccab17854d9aca3ae8cdfc0daadc4c99ca6916f5c83f7c0db4851",
       "size": 1065,
-      "normalized_sha256": "fcd4e7836452497f39f7e5f4aea4adec6ab7eb09c61df181401679cbc02522d2"
+      "normalized_sha256": "5d6a540709fccab17854d9aca3ae8cdfc0daadc4c99ca6916f5c83f7c0db4851"
     },
     "app/code/Weline/Order/etc/module.xml": {
       "role": "index",
@@ -62166,15 +62232,15 @@
     },
     "app/code/Weline/Order/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "51d174455aacb2d18a8a4262a99400097f5f1ce66e0bbbc48a87c776c9c59691",
-      "size": 53454,
-      "normalized_sha256": "51d174455aacb2d18a8a4262a99400097f5f1ce66e0bbbc48a87c776c9c59691"
+      "sha256": "190d6ebdab2860d0d43bc3b3e7e05821867196459bea171a9044e720bc8492ea",
+      "size": 53534,
+      "normalized_sha256": "190d6ebdab2860d0d43bc3b3e7e05821867196459bea171a9044e720bc8492ea"
     },
     "app/code/Weline/Order/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "11cc15b8bf6f22c7f015cfce2f03626c303dc72aba66242cf16377a0253e3590",
-      "size": 47827,
-      "normalized_sha256": "11cc15b8bf6f22c7f015cfce2f03626c303dc72aba66242cf16377a0253e3590"
+      "sha256": "192ae9bc8a77d60b7d3138b047359909102c7573996f9dfdff3a6548ef27ce06",
+      "size": 47907,
+      "normalized_sha256": "192ae9bc8a77d60b7d3138b047359909102c7573996f9dfdff3a6548ef27ce06"
     },
     "app/code/Weline/Order/register.php": {
       "role": "index",
@@ -64651,15 +64717,15 @@
     },
     "app/code/Weline/Payment/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "8ef2b7b9aa97559273391af070175d7f8afa5f610aef76472f8efddbc32d73b3",
+      "sha256": "9af9e8059f09d5f715c59510b2f35f6e2b6685a2a064532f236dbc36db6f32ad",
       "size": 83009,
-      "normalized_sha256": "8ef2b7b9aa97559273391af070175d7f8afa5f610aef76472f8efddbc32d73b3"
+      "normalized_sha256": "9af9e8059f09d5f715c59510b2f35f6e2b6685a2a064532f236dbc36db6f32ad"
     },
     "app/code/Weline/Payment/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "b3c829897d243ee0a95e61b1134409434d592c045e8d0b58bba2ad44514f60a4",
+      "sha256": "ce34d767feecb816181efb05a947a9ea890c5ffdb394e469fa8143afbab55702",
       "size": 76170,
-      "normalized_sha256": "b3c829897d243ee0a95e61b1134409434d592c045e8d0b58bba2ad44514f60a4"
+      "normalized_sha256": "ce34d767feecb816181efb05a947a9ea890c5ffdb394e469fa8143afbab55702"
     },
     "app/code/Weline/Payment/register.php": {
       "role": "index",
@@ -65605,9 +65671,9 @@
     },
     "app/code/Weline/Product/Api/View/ViewWarmupContributionProvider.php": {
       "role": "index",
-      "sha256": "c695003f06c0b56fd513ad8f4855eb039ad3fa2d9827a49ff399e15ddbe77e06",
-      "size": 3287,
-      "normalized_sha256": "c695003f06c0b56fd513ad8f4855eb039ad3fa2d9827a49ff399e15ddbe77e06"
+      "sha256": "7b445f797bd614dd014554e65fd088538cbe9e7a88b92a77b14445242e69c822",
+      "size": 6738,
+      "normalized_sha256": "7b445f797bd614dd014554e65fd088538cbe9e7a88b92a77b14445242e69c822"
     },
     "app/code/Weline/Product/Console/Commerce/MigrateProductV2.php": {
       "role": "index",
@@ -65905,9 +65971,9 @@
     },
     "app/code/Weline/Product/Model/Shard/Offer.php": {
       "role": "index",
-      "sha256": "9977a2c760b647837a40548ee851182232b2550161aaa76b83a9977595e4f1f5",
-      "size": 1879,
-      "normalized_sha256": "9977a2c760b647837a40548ee851182232b2550161aaa76b83a9977595e4f1f5"
+      "sha256": "316f8f2f14de4bb3ed478c5c82fccb7393c176a1338bd9002ca7e0f574cf93a5",
+      "size": 2047,
+      "normalized_sha256": "316f8f2f14de4bb3ed478c5c82fccb7393c176a1338bd9002ca7e0f574cf93a5"
     },
     "app/code/Weline/Product/Model/Shard/Price.php": {
       "role": "index",
@@ -66325,9 +66391,9 @@
     },
     "app/code/Weline/Product/Service/ProductAdminCommandService.php": {
       "role": "index",
-      "sha256": "088a3493490a8716d1df458b4355f1c95489835969551eb480b4b3210af07649",
-      "size": 118843,
-      "normalized_sha256": "088a3493490a8716d1df458b4355f1c95489835969551eb480b4b3210af07649"
+      "sha256": "980b2d2821dfddc2861879ae8bcdd4c1d9212fbcf5f4ba28a2c9a8cceef5211f",
+      "size": 121680,
+      "normalized_sha256": "980b2d2821dfddc2861879ae8bcdd4c1d9212fbcf5f4ba28a2c9a8cceef5211f"
     },
     "app/code/Weline/Product/Service/ProductAdminMediaPresenter.php": {
       "role": "index",
@@ -66475,9 +66541,9 @@
     },
     "app/code/Weline/Product/Service/ProductIdentityCutoverService.php": {
       "role": "index",
-      "sha256": "c608a6c08515c3df0239fb3243fe05b9847a0e39a4c8968cb435c76ef8b40ef0",
-      "size": 16668,
-      "normalized_sha256": "c608a6c08515c3df0239fb3243fe05b9847a0e39a4c8968cb435c76ef8b40ef0"
+      "sha256": "292637885aa55b4fe63be2cda42410cfd853b7943897d43ee31602ef8e6afdb2",
+      "size": 17345,
+      "normalized_sha256": "292637885aa55b4fe63be2cda42410cfd853b7943897d43ee31602ef8e6afdb2"
     },
     "app/code/Weline/Product/Service/ProductIdentityV2Service.php": {
       "role": "index",
@@ -66607,9 +66673,9 @@
     },
     "app/code/Weline/Product/Service/ProductShardSchemaCatalog.php": {
       "role": "index",
-      "sha256": "d0fa1b42e90f2c2203437f89ecb4b1e51b20cb70caee1f1f68f0b7e556869ee0",
-      "size": 27756,
-      "normalized_sha256": "d0fa1b42e90f2c2203437f89ecb4b1e51b20cb70caee1f1f68f0b7e556869ee0"
+      "sha256": "7a6c0e669b16e99d6f28eea1229d8a4841cd43cb2a6ab034249a89af2f4f9cc7",
+      "size": 27910,
+      "normalized_sha256": "7a6c0e669b16e99d6f28eea1229d8a4841cd43cb2a6ab034249a89af2f4f9cc7"
     },
     "app/code/Weline/Product/Service/ProductSiteContentAdminService.php": {
       "role": "index",
@@ -66811,9 +66877,9 @@
     },
     "app/code/Weline/Product/Service/StorefrontHotCacheBagSeeder.php": {
       "role": "index",
-      "sha256": "c2140e13773f0b7087f732579703c9ba0ee7112f6681ea2b9f3045f18f8fa7b1",
-      "size": 8752,
-      "normalized_sha256": "c2140e13773f0b7087f732579703c9ba0ee7112f6681ea2b9f3045f18f8fa7b1"
+      "sha256": "aa61f2ae924ad8d0ba73761b6de07e536d2af1dc6c5acd5d67ea408f06144cb5",
+      "size": 10098,
+      "normalized_sha256": "aa61f2ae924ad8d0ba73761b6de07e536d2af1dc6c5acd5d67ea408f06144cb5"
     },
     "app/code/Weline/Product/Service/StorefrontListingPager.php": {
       "role": "index",
@@ -67261,9 +67327,9 @@
     },
     "app/code/Weline/Product/doc/开发日志.md": {
       "role": "index",
-      "sha256": "33970fd89050db6de0ab0ede18c729c70da0a0e2e70e422df102848a8e18d239",
-      "size": 367080,
-      "normalized_sha256": "33970fd89050db6de0ab0ede18c729c70da0a0e2e70e422df102848a8e18d239"
+      "sha256": "c5081b956ad3ba9890ff2233d87ffa0b4ff0a07044f22682b37d1a28c5096407",
+      "size": 368904,
+      "normalized_sha256": "c5081b956ad3ba9890ff2233d87ffa0b4ff0a07044f22682b37d1a28c5096407"
     },
     "app/code/Weline/Product/doc/批量店面读取.md": {
       "role": "index",
@@ -67291,9 +67357,9 @@
     },
     "app/code/Weline/Product/doc/需求.md": {
       "role": "index",
-      "sha256": "bf3bc0a6d5567b3dd64fdd6144a71bf44d9d7f8dc45f0964bda13d815efc92c1",
-      "size": 53309,
-      "normalized_sha256": "bf3bc0a6d5567b3dd64fdd6144a71bf44d9d7f8dc45f0964bda13d815efc92c1"
+      "sha256": "683dbc195610211bdd2b0c5b9ae844ea1c679268d01b07541c6fe8e718cfea98",
+      "size": 53651,
+      "normalized_sha256": "683dbc195610211bdd2b0c5b9ae844ea1c679268d01b07541c6fe8e718cfea98"
     },
     "app/code/Weline/Product/etc/backend/menu.xml": {
       "role": "index",
@@ -67309,9 +67375,9 @@
     },
     "app/code/Weline/Product/etc/module.php": {
       "role": "index",
-      "sha256": "1fa8b41c98998ade1ae8658a6f5f700124fcda27cbab51e2d6163e9fd9744426",
+      "sha256": "ab54799b8218634d84e35af7e38af3342fdde8eed19c08319d826d3c15e1b635",
       "size": 2936,
-      "normalized_sha256": "1fa8b41c98998ade1ae8658a6f5f700124fcda27cbab51e2d6163e9fd9744426"
+      "normalized_sha256": "ab54799b8218634d84e35af7e38af3342fdde8eed19c08319d826d3c15e1b635"
     },
     "app/code/Weline/Product/event.php": {
       "role": "index",
@@ -67339,9 +67405,9 @@
     },
     "app/code/Weline/Product/extends/module/Weline_Cart/CartItemSnapshotProvider/ProductCatalogCartItemSnapshotResolver.php": {
       "role": "index",
-      "sha256": "3ee8acb13170378bb07a22015fccac6cb21e7543852287e073800de09a77d519",
-      "size": 65050,
-      "normalized_sha256": "3ee8acb13170378bb07a22015fccac6cb21e7543852287e073800de09a77d519"
+      "sha256": "d9aa1766ea3b607701feaee93a702cc0facef59d433654c3d1e529ca33f3af53",
+      "size": 65720,
+      "normalized_sha256": "d9aa1766ea3b607701feaee93a702cc0facef59d433654c3d1e529ca33f3af53"
     },
     "app/code/Weline/Product/extends/module/Weline_Catalog/Space/ProductCatalogSpaceProvider.php": {
       "role": "index",
@@ -67477,15 +67543,15 @@
     },
     "app/code/Weline/Product/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "d753cfa81e11a053363bb49550f23c39d7b3b28e4d7061c2a274e892f4a4a8b6",
-      "size": 107937,
-      "normalized_sha256": "d753cfa81e11a053363bb49550f23c39d7b3b28e4d7061c2a274e892f4a4a8b6"
+      "sha256": "a2b0c585ffd2351a620e31d5dc697d6b5cb711f965a4b0d0ba9dc50d8c20c50b",
+      "size": 108380,
+      "normalized_sha256": "a2b0c585ffd2351a620e31d5dc697d6b5cb711f965a4b0d0ba9dc50d8c20c50b"
     },
     "app/code/Weline/Product/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "f84e481b8796dfc52ded307862a155f3d5297ed84267a4ea1dcd82586deb3057",
-      "size": 94988,
-      "normalized_sha256": "f84e481b8796dfc52ded307862a155f3d5297ed84267a4ea1dcd82586deb3057"
+      "sha256": "111e50335e3463c8494602889236af369f4baed011a01cacf70c75f5d2b85a48",
+      "size": 95446,
+      "normalized_sha256": "111e50335e3463c8494602889236af369f4baed011a01cacf70c75f5d2b85a48"
     },
     "app/code/Weline/Product/prototype/detail-size-chart-layout.html": {
       "role": "index",
@@ -68665,15 +68731,15 @@
     },
     "app/code/Weline/Product/view/templates/backend/catalog/edit.phtml": {
       "role": "index",
-      "sha256": "50b7850af7bc64386584ef22f57bffc76a7cd5f4b9025a08ef5a24ebfadbc3a4",
-      "size": 166482,
-      "normalized_sha256": "50b7850af7bc64386584ef22f57bffc76a7cd5f4b9025a08ef5a24ebfadbc3a4"
+      "sha256": "3d296f861e66fbe34ecd5f6b6935428cede20488db96314902471886665ff401",
+      "size": 170197,
+      "normalized_sha256": "3d296f861e66fbe34ecd5f6b6935428cede20488db96314902471886665ff401"
     },
     "app/code/Weline/Product/view/templates/backend/catalog/index.phtml": {
       "role": "index",
-      "sha256": "e9082de3e10e8bc27d506f6b827ca27076979c05d8ef73644d8ece2bac5fc938",
-      "size": 84362,
-      "normalized_sha256": "e9082de3e10e8bc27d506f6b827ca27076979c05d8ef73644d8ece2bac5fc938"
+      "sha256": "d6302ed91bb88e7ebab42798f3d9982d7d04920369af5f91342ee32aac03a025",
+      "size": 85433,
+      "normalized_sha256": "d6302ed91bb88e7ebab42798f3d9982d7d04920369af5f91342ee32aac03a025"
     },
     "app/code/Weline/Product/view/templates/backend/catalog/suppliers.phtml": {
       "role": "index",
@@ -72355,9 +72421,9 @@
     },
     "app/code/Weline/Seo/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "6b17bb1302fb7b4646b96cbebcfebca4e58a796f352c1a94c710881d161f9c70",
-      "size": 7769,
-      "normalized_sha256": "6b17bb1302fb7b4646b96cbebcfebca4e58a796f352c1a94c710881d161f9c70"
+      "sha256": "ba44cbe7564afa0eb80e1863dc21ebdd1e98b163779e0e2ae7b3a2b8d80329a6",
+      "size": 7683,
+      "normalized_sha256": "ba44cbe7564afa0eb80e1863dc21ebdd1e98b163779e0e2ae7b3a2b8d80329a6"
     },
     "app/code/Weline/Seo/doc/AI优化实时控制中心.md": {
       "role": "index",
@@ -72367,9 +72433,9 @@
     },
     "app/code/Weline/Seo/doc/README.md": {
       "role": "index",
-      "sha256": "d314d300da6cfa6f9ed7d95d00bf2df39aa0c71aff25408d92f881fca51669c5",
-      "size": 6237,
-      "normalized_sha256": "d314d300da6cfa6f9ed7d95d00bf2df39aa0c71aff25408d92f881fca51669c5"
+      "sha256": "737575f0964a348e0b9eef375c2ad64188924d224fed964d0c2d405b9eef9e18",
+      "size": 6151,
+      "normalized_sha256": "737575f0964a348e0b9eef375c2ad64188924d224fed964d0c2d405b9eef9e18"
     },
     "app/code/Weline/Seo/doc/SEO-CDN上线配置与验收.md": {
       "role": "index",
@@ -73399,9 +73465,9 @@
     },
     "app/code/Weline/Server/Console/Server/Doctor.php": {
       "role": "index",
-      "sha256": "ebd7d02d10a40ccbf7432ea77577a1fee774d9b789041c30d2a05dfc02197e8d",
-      "size": 36257,
-      "normalized_sha256": "ebd7d02d10a40ccbf7432ea77577a1fee774d9b789041c30d2a05dfc02197e8d"
+      "sha256": "c2a719865ae53e479b02b3d71feec7eb33f2c48df2d42b1ab97a013bffc04325",
+      "size": 38176,
+      "normalized_sha256": "c2a719865ae53e479b02b3d71feec7eb33f2c48df2d42b1ab97a013bffc04325"
     },
     "app/code/Weline/Server/Console/Server/Gateway/AbstractGatewayCommand.php": {
       "role": "index",
@@ -73579,9 +73645,9 @@
     },
     "app/code/Weline/Server/Console/Server/Nginx/Start.php": {
       "role": "index",
-      "sha256": "7a1a4548ae9c8d8a75c6b99a0e5eac52ba4ca62d845589416c30fb588776b076",
-      "size": 3695,
-      "normalized_sha256": "7a1a4548ae9c8d8a75c6b99a0e5eac52ba4ca62d845589416c30fb588776b076"
+      "sha256": "55d2c28ea81c984c2487c95fcec0b581782865d81db4e85d188cff61c45da1ac",
+      "size": 3939,
+      "normalized_sha256": "55d2c28ea81c984c2487c95fcec0b581782865d81db4e85d188cff61c45da1ac"
     },
     "app/code/Weline/Server/Console/Server/Nginx/Status.php": {
       "role": "index",
@@ -73681,9 +73747,9 @@
     },
     "app/code/Weline/Server/Console/Server/Start.php": {
       "role": "index",
-      "sha256": "20e81fab0b7c40a57211c6d835689c493a70ebea2a9d2e64349a7244fc93a6cc",
-      "size": 654918,
-      "normalized_sha256": "20e81fab0b7c40a57211c6d835689c493a70ebea2a9d2e64349a7244fc93a6cc"
+      "sha256": "de7ba14bfe4f98657707283e5efddc379df36b0588aebec266a4dd64e2a0189a",
+      "size": 655716,
+      "normalized_sha256": "de7ba14bfe4f98657707283e5efddc379df36b0588aebec266a4dd64e2a0189a"
     },
     "app/code/Weline/Server/Console/Server/StartupChangingArgsInspector.php": {
       "role": "index",
@@ -75365,6 +75431,12 @@
       "size": 125288,
       "normalized_sha256": "d80c6c578d38a3a11aabfc3270d8e32d0af7dd3eeaed419f00440f98e32c3dc5"
     },
+    "app/code/Weline/Server/Service/Edge/Nginx/ManagedNginxLocalHostCatalog.php": {
+      "role": "index",
+      "sha256": "25196cfcaf36fa3420578b53d862dfcf70f7cb084294fa7778cfe6fca7352981",
+      "size": 7163,
+      "normalized_sha256": "25196cfcaf36fa3420578b53d862dfcf70f7cb084294fa7778cfe6fca7352981"
+    },
     "app/code/Weline/Server/Service/Edge/Nginx/ManagedNginxPaths.php": {
       "role": "index",
       "sha256": "59cf5b17c7fb28bda5b6fadb695726a97cb7cd21105b2e3404e6e29f5d254c40",
@@ -75403,9 +75475,9 @@
     },
     "app/code/Weline/Server/Service/Edge/Nginx/ManagedNginxService.php": {
       "role": "index",
-      "sha256": "18f717529b6371ca60300a336aa2c33ce400feec5103172deba9deb49b574044",
-      "size": 241870,
-      "normalized_sha256": "18f717529b6371ca60300a336aa2c33ce400feec5103172deba9deb49b574044"
+      "sha256": "432f414a0d7a77ba25aa69c94541430e616e6f2e20549e88858fea27dff8dc5a",
+      "size": 245403,
+      "normalized_sha256": "432f414a0d7a77ba25aa69c94541430e616e6f2e20549e88858fea27dff8dc5a"
     },
     "app/code/Weline/Server/Service/Edge/Nginx/ManagedNginxTlsSessionResumptionVerifier.php": {
       "role": "index",
@@ -76831,9 +76903,9 @@
     },
     "app/code/Weline/Server/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "2e4f6849710c29d2d0a3cfb448a851eadf27be110bf41fc8cb232d8266184e2a",
-      "size": 8442,
-      "normalized_sha256": "2e4f6849710c29d2d0a3cfb448a851eadf27be110bf41fc8cb232d8266184e2a"
+      "sha256": "73cbac1d63eebd36a5358abddc088120352ba0c150cdf4ec2601f81d59562843",
+      "size": 8284,
+      "normalized_sha256": "73cbac1d63eebd36a5358abddc088120352ba0c150cdf4ec2601f81d59562843"
     },
     "app/code/Weline/Server/doc/Dispatcher分流架构设计.md": {
       "role": "index",
@@ -77341,9 +77413,9 @@
     },
     "app/code/Weline/Server/doc/开发日志.md": {
       "role": "index",
-      "sha256": "17acaf172ebc45a23d50207b6cfbbbdfd6c2d15887f514c003f3e0e8253ef50f",
-      "size": 138459,
-      "normalized_sha256": "17acaf172ebc45a23d50207b6cfbbbdfd6c2d15887f514c003f3e0e8253ef50f"
+      "sha256": "0efc79477b58b8c655e12733fb017887a755a48805466d7af7749f3e42a7f072",
+      "size": 140207,
+      "normalized_sha256": "0efc79477b58b8c655e12733fb017887a755a48805466d7af7749f3e42a7f072"
     },
     "app/code/Weline/Server/doc/计划-AI建站-w_query与本机hosts.md": {
       "role": "index",
@@ -77359,9 +77431,9 @@
     },
     "app/code/Weline/Server/doc/需求.md": {
       "role": "index",
-      "sha256": "7e960d7a20256c99bae1bb617e201eefad0c1cea63e4b6b9ee39583cd36e0ddd",
-      "size": 44086,
-      "normalized_sha256": "7e960d7a20256c99bae1bb617e201eefad0c1cea63e4b6b9ee39583cd36e0ddd"
+      "sha256": "d899432e9642f07ed3b37d71f631bfee4898b8ce933f7531db2df23ec7aedea3",
+      "size": 44377,
+      "normalized_sha256": "d899432e9642f07ed3b37d71f631bfee4898b8ce933f7531db2df23ec7aedea3"
     },
     "app/code/Weline/Server/env/gateway/launchd.plist.template": {
       "role": "index",
@@ -77443,9 +77515,9 @@
     },
     "app/code/Weline/Server/etc/module.php": {
       "role": "index",
-      "sha256": "cdc57024dbb0c7caa45feb181916a2d7ffb6b123909c51fbc743311e93e3b8ea",
+      "sha256": "4b4ad31301a3c1c0aa2c72a7c0c2452cbc6ae16dca3582cbe6e4e5eb0eb6e630",
       "size": 2354,
-      "normalized_sha256": "cdc57024dbb0c7caa45feb181916a2d7ffb6b123909c51fbc743311e93e3b8ea"
+      "normalized_sha256": "4b4ad31301a3c1c0aa2c72a7c0c2452cbc6ae16dca3582cbe6e4e5eb0eb6e630"
     },
     "app/code/Weline/Server/etc/plugin.xml": {
       "role": "index",
@@ -77491,9 +77563,9 @@
     },
     "app/code/Weline/Server/extends/module/Weline_Framework/Query/ServerQueryProvider.php": {
       "role": "index",
-      "sha256": "414614c61467b6b5ad090c0e673a81eadf02ded1eebcc7449e3506891d93cf65",
-      "size": 65294,
-      "normalized_sha256": "414614c61467b6b5ad090c0e673a81eadf02ded1eebcc7449e3506891d93cf65"
+      "sha256": "9315b8031e3cb03ff2a139ddf43776d6f79da06802f29974980d4e138cc5d380",
+      "size": 67615,
+      "normalized_sha256": "9315b8031e3cb03ff2a139ddf43776d6f79da06802f29974980d4e138cc5d380"
     },
     "app/code/Weline/Server/extends/module/Weline_Framework/Query/SessionQueryProvider.php": {
       "role": "index",
@@ -82101,9 +82173,9 @@
     },
     "app/code/Weline/Shipping/doc/开发日志.md": {
       "role": "index",
-      "sha256": "1459b39b9427b83cd930d26a141c3e1c6c2f39a87b2f2d15aa59693d90a6595f",
-      "size": 95874,
-      "normalized_sha256": "1459b39b9427b83cd930d26a141c3e1c6c2f39a87b2f2d15aa59693d90a6595f"
+      "sha256": "efa19d7baec12d56f2217fdcd8656cc242f2ad57260512c85cb108fed4fe1343",
+      "size": 96944,
+      "normalized_sha256": "efa19d7baec12d56f2217fdcd8656cc242f2ad57260512c85cb108fed4fe1343"
     },
     "app/code/Weline/Shipping/doc/配置说明.md": {
       "role": "index",
@@ -82137,9 +82209,9 @@
     },
     "app/code/Weline/Shipping/etc/module.php": {
       "role": "index",
-      "sha256": "14164bfc58f5cd797ea9249be99f79c736f28f977bb089456632301bf3de6d6e",
+      "sha256": "290a6e595bd4440534e0ddb6e55859605285b68a4199d9df64785acc0433ab65",
       "size": 1631,
-      "normalized_sha256": "14164bfc58f5cd797ea9249be99f79c736f28f977bb089456632301bf3de6d6e"
+      "normalized_sha256": "290a6e595bd4440534e0ddb6e55859605285b68a4199d9df64785acc0433ab65"
     },
     "app/code/Weline/Shipping/etc/module.xml": {
       "role": "index",
@@ -82233,15 +82305,15 @@
     },
     "app/code/Weline/Shipping/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "48c029f51269dce03b5612c6a6bdaefb60ca713d32ba70abbdb4bd9de275c29e",
+      "sha256": "66128ff4be5a11999224905f06865c06d84b5efcf2d544a8d18a9b7e01dce4d5",
       "size": 119653,
-      "normalized_sha256": "48c029f51269dce03b5612c6a6bdaefb60ca713d32ba70abbdb4bd9de275c29e"
+      "normalized_sha256": "66128ff4be5a11999224905f06865c06d84b5efcf2d544a8d18a9b7e01dce4d5"
     },
     "app/code/Weline/Shipping/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "3c7dfeb02ab937b436709405680e85667be4d5a253fc45a45c208c93cbc5e3d5",
+      "sha256": "25121961dfface0b5dcb738b7741596326f3988638170757f59d9ea4e7ab58e2",
       "size": 107938,
-      "normalized_sha256": "3c7dfeb02ab937b436709405680e85667be4d5a253fc45a45c208c93cbc5e3d5"
+      "normalized_sha256": "25121961dfface0b5dcb738b7741596326f3988638170757f59d9ea4e7ab58e2"
     },
     "app/code/Weline/Shipping/register.php": {
       "role": "index",
@@ -82419,9 +82491,9 @@
     },
     "app/code/Weline/Shipping/view/statics/frontend/weline.modules.js": {
       "role": "index",
-      "sha256": "753198cab4758599e70696b10745b1a4c323f628d39c421120100ab636442633",
-      "size": 960,
-      "normalized_sha256": "753198cab4758599e70696b10745b1a4c323f628d39c421120100ab636442633"
+      "sha256": "d12890f30e4f5b36de6ef1e640e7ebeca84ef6b779dd2833150d9b707c0e5c2d",
+      "size": 967,
+      "normalized_sha256": "d12890f30e4f5b36de6ef1e640e7ebeca84ef6b779dd2833150d9b707c0e5c2d"
     },
     "app/code/Weline/Shipping/view/statics/js/backend/shipping-work-scope.js": {
       "role": "index",
@@ -82431,9 +82503,9 @@
     },
     "app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js": {
       "role": "index",
-      "sha256": "fc3ec1545b9cdea88aca64052e2c548963766a6c71ebde2032ae919a0c75cd50",
-      "size": 96201,
-      "normalized_sha256": "fc3ec1545b9cdea88aca64052e2c548963766a6c71ebde2032ae919a0c75cd50"
+      "sha256": "acc53f4b60df8f7fad09249d247bb3f8658a1a6b6d4cee27f2a61b627db22238",
+      "size": 98504,
+      "normalized_sha256": "acc53f4b60df8f7fad09249d247bb3f8658a1a6b6d4cee27f2a61b627db22238"
     },
     "app/code/Weline/Shipping/view/templates/Backend/Carrier/edit.phtml": {
       "role": "index",
@@ -84135,15 +84207,15 @@
     },
     "app/code/Weline/Sticker/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "f33cc375d4f6833f32871ed6b3428cf0300b6e83d8003ef754d22a67a4a930e4",
-      "size": 3711,
-      "normalized_sha256": "f33cc375d4f6833f32871ed6b3428cf0300b6e83d8003ef754d22a67a4a930e4"
+      "sha256": "8723e1181e89e20cf2b25a0ff35f288995638060e6d7b400f2235824283a4012",
+      "size": 3617,
+      "normalized_sha256": "8723e1181e89e20cf2b25a0ff35f288995638060e6d7b400f2235824283a4012"
     },
     "app/code/Weline/Sticker/doc/README.md": {
       "role": "index",
-      "sha256": "11d6cb3fb6c06e410bba07a84c967af703eddb0cca87b11d24943019e694ac8b",
-      "size": 3126,
-      "normalized_sha256": "11d6cb3fb6c06e410bba07a84c967af703eddb0cca87b11d24943019e694ac8b"
+      "sha256": "7bfd5b2d2f4f9bffddc5ccce366b345f85acf9219ee11aa5927e4ad22ffc2a1c",
+      "size": 3032,
+      "normalized_sha256": "7bfd5b2d2f4f9bffddc5ccce366b345f85acf9219ee11aa5927e4ad22ffc2a1c"
     },
     "app/code/Weline/Sticker/doc/development.md": {
       "role": "index",
@@ -86291,9 +86363,9 @@
     },
     "app/code/Weline/Tax/Service/CheckoutTaxAdvisor.php": {
       "role": "index",
-      "sha256": "c618a596e8c1c6ea21183588be5416253cbce22798380fd36bede50c2d8c725e",
-      "size": 22572,
-      "normalized_sha256": "c618a596e8c1c6ea21183588be5416253cbce22798380fd36bede50c2d8c725e"
+      "sha256": "21469fe723f012888ced4b2dde10c3864d332c7bf01a5b4fc3b3aa5803f7b888",
+      "size": 24467,
+      "normalized_sha256": "21469fe723f012888ced4b2dde10c3864d332c7bf01a5b4fc3b3aa5803f7b888"
     },
     "app/code/Weline/Tax/Service/DutyEstimateService.php": {
       "role": "index",
@@ -86357,9 +86429,9 @@
     },
     "app/code/Weline/Tax/Service/TaxEngine.php": {
       "role": "index",
-      "sha256": "9b29380ffe11bd3e2175d0fb554d796b0fc09ee2c2be4df8719245b23b035af1",
-      "size": 27696,
-      "normalized_sha256": "9b29380ffe11bd3e2175d0fb554d796b0fc09ee2c2be4df8719245b23b035af1"
+      "sha256": "a4b5be74c88c9401da5c6b2c8326800243c4dce7bd1e06fa49a961f0de489637",
+      "size": 28183,
+      "normalized_sha256": "a4b5be74c88c9401da5c6b2c8326800243c4dce7bd1e06fa49a961f0de489637"
     },
     "app/code/Weline/Tax/Service/TaxLkgStore.php": {
       "role": "index",
@@ -86381,15 +86453,15 @@
     },
     "app/code/Weline/Tax/Service/TaxScopeConfig.php": {
       "role": "index",
-      "sha256": "f45c8a6ed6af5cb53f9749569bb809681ce50bc290af093e932ace2acf4e31df",
-      "size": 10816,
-      "normalized_sha256": "f45c8a6ed6af5cb53f9749569bb809681ce50bc290af093e932ace2acf4e31df"
+      "sha256": "43a0ebb55189e660a226caa53ee3668b973326bba26fdf4bf0679c6eb07a599e",
+      "size": 12169,
+      "normalized_sha256": "43a0ebb55189e660a226caa53ee3668b973326bba26fdf4bf0679c6eb07a599e"
     },
     "app/code/Weline/Tax/Service/TaxSeedRateCatalog.php": {
       "role": "index",
-      "sha256": "eda39643c9fabeb39e7f691b427d2000e1ca0abf8527da6145429040d9febb55",
-      "size": 4436,
-      "normalized_sha256": "eda39643c9fabeb39e7f691b427d2000e1ca0abf8527da6145429040d9febb55"
+      "sha256": "7e9515cc171799786fb2554e6b972ce36fa717176f3076a1532fa0daa0393ba7",
+      "size": 4926,
+      "normalized_sha256": "7e9515cc171799786fb2554e6b972ce36fa717176f3076a1532fa0daa0393ba7"
     },
     "app/code/Weline/Tax/Service/TaxShadowComparator.php": {
       "role": "index",
@@ -86435,9 +86507,9 @@
     },
     "app/code/Weline/Tax/doc/开发日志.md": {
       "role": "index",
-      "sha256": "125257d57bdca919efb9f4838dd196461fe82025d8ba37cd0b0fbeba5fb6d6c3",
-      "size": 11458,
-      "normalized_sha256": "125257d57bdca919efb9f4838dd196461fe82025d8ba37cd0b0fbeba5fb6d6c3"
+      "sha256": "abd800355cb1d41bd3af1b8163ee7889221bd47efdea373a4c2e535048467169",
+      "size": 13578,
+      "normalized_sha256": "abd800355cb1d41bd3af1b8163ee7889221bd47efdea373a4c2e535048467169"
     },
     "app/code/Weline/Tax/doc/需求.md": {
       "role": "index",
@@ -86465,9 +86537,9 @@
     },
     "app/code/Weline/Tax/etc/module.php": {
       "role": "index",
-      "sha256": "1c1b9230bc5d90b627f8f0d39210cbf4f5d983b7d6c776bf619d74052e7e924a",
-      "size": 802,
-      "normalized_sha256": "1c1b9230bc5d90b627f8f0d39210cbf4f5d983b7d6c776bf619d74052e7e924a"
+      "sha256": "359387a8ae0293dc6674100c31ad2af3fb941596938aef691896c3d1008cd130",
+      "size": 803,
+      "normalized_sha256": "359387a8ae0293dc6674100c31ad2af3fb941596938aef691896c3d1008cd130"
     },
     "app/code/Weline/Tax/extends.php": {
       "role": "index",
@@ -86944,9 +87016,9 @@
     },
     "app/code/Weline/Theme/Block/Partials.php": {
       "role": "index",
-      "sha256": "90984f5bc2eb7d8f5231f2f90f006c0d985506ce98e3128a747aeb294bba8606",
-      "size": 78555,
-      "normalized_sha256": "90984f5bc2eb7d8f5231f2f90f006c0d985506ce98e3128a747aeb294bba8606"
+      "sha256": "9d6babe753a8199fd8f8ade03bbd30647a77d2e3a29be4f1ab87e0964117a4b5",
+      "size": 78767,
+      "normalized_sha256": "9d6babe753a8199fd8f8ade03bbd30647a77d2e3a29be4f1ab87e0964117a4b5"
     },
     "app/code/Weline/Theme/Config/Reader/Less.php": {
       "role": "index",
@@ -87586,9 +87658,9 @@
     },
     "app/code/Weline/Theme/Helper/CssVariableScanner.php": {
       "role": "index",
-      "sha256": "ef0e6543a0ecea2dd500e2e6fdbefa6377906bc281cd0449c7edcb98625880ff",
-      "size": 13414,
-      "normalized_sha256": "ef0e6543a0ecea2dd500e2e6fdbefa6377906bc281cd0449c7edcb98625880ff"
+      "sha256": "0118421f3f668fc250efde5c6e66856c9e85a76e0e542e6fa90b9958d1f6ed0a",
+      "size": 13785,
+      "normalized_sha256": "0118421f3f668fc250efde5c6e66856c9e85a76e0e542e6fa90b9958d1f6ed0a"
     },
     "app/code/Weline/Theme/Helper/FooterCopyrightHelper.php": {
       "role": "index",
@@ -87610,9 +87682,9 @@
     },
     "app/code/Weline/Theme/Helper/HeaderCommerceData.php": {
       "role": "index",
-      "sha256": "d78f7bd974451f3acc2e7ce87d585511bd653bcf95352d68e29815f0c9561a5d",
-      "size": 28066,
-      "normalized_sha256": "d78f7bd974451f3acc2e7ce87d585511bd653bcf95352d68e29815f0c9561a5d"
+      "sha256": "c1d825537b79c4f2bf4afb87ad86c6bdfeb40fe5d10e9d562a67063962eb87a5",
+      "size": 28848,
+      "normalized_sha256": "c1d825537b79c4f2bf4afb87ad86c6bdfeb40fe5d10e9d562a67063962eb87a5"
     },
     "app/code/Weline/Theme/Helper/HeaderDefaultNavItems.php": {
       "role": "index",
@@ -87776,6 +87848,12 @@
       "size": 5009,
       "normalized_sha256": "ca47cf5f0edada508cec9a6f4d6d7a66af8418d8bf9c427f666c95cf99e8ce49"
     },
+    "app/code/Weline/Theme/Helper/StorefrontHanfuDemoCatalog.php": {
+      "role": "index",
+      "sha256": "7a14a22b70589504fa565de59aab6b83f75119eb86bbc053be7e02d67d0d2b7f",
+      "size": 1438,
+      "normalized_sha256": "7a14a22b70589504fa565de59aab6b83f75119eb86bbc053be7e02d67d0d2b7f"
+    },
     "app/code/Weline/Theme/Helper/StorefrontHref.php": {
       "role": "index",
       "sha256": "24ac450a3385f947b06e3a45857ea2e9533c27b33eb64b7a5d06c3e82f3b0043",
@@ -87808,9 +87886,9 @@
     },
     "app/code/Weline/Theme/Helper/ThemeData.php": {
       "role": "index",
-      "sha256": "0f6e1572d6042b152023eda50df67a68e38ef8dcecc715b17194c531916d534e",
-      "size": 110443,
-      "normalized_sha256": "0f6e1572d6042b152023eda50df67a68e38ef8dcecc715b17194c531916d534e"
+      "sha256": "3bf0c8c7ff412ef6917123fcb6092d09674cd807fa51a65c62e668828fd45742",
+      "size": 110369,
+      "normalized_sha256": "3bf0c8c7ff412ef6917123fcb6092d09674cd807fa51a65c62e668828fd45742"
     },
     "app/code/Weline/Theme/Helper/ThemeDemoCatalog.php": {
       "role": "index",
@@ -87844,9 +87922,9 @@
     },
     "app/code/Weline/Theme/Helper/WidgetI18n.php": {
       "role": "index",
-      "sha256": "9ae7c27f9980d91239e5a2e385f8bfa610166440b5000b23338dba3158235700",
-      "size": 10114,
-      "normalized_sha256": "9ae7c27f9980d91239e5a2e385f8bfa610166440b5000b23338dba3158235700"
+      "sha256": "3d016810d85480c57f3d59c55a075b7130fa1ec2a24f6ef9eee207911f0d668c",
+      "size": 10139,
+      "normalized_sha256": "3d016810d85480c57f3d59c55a075b7130fa1ec2a24f6ef9eee207911f0d668c"
     },
     "app/code/Weline/Theme/Helper/WidgetUiScope.php": {
       "role": "index",
@@ -88114,9 +88192,9 @@
     },
     "app/code/Weline/Theme/Observer/ControllerFetchFileBefore.php": {
       "role": "index",
-      "sha256": "38363f90f848e714fd4587bcbda5c09ac9d625b53759f85f6faa4802fb1ed108",
-      "size": 80897,
-      "normalized_sha256": "38363f90f848e714fd4587bcbda5c09ac9d625b53759f85f6faa4802fb1ed108"
+      "sha256": "7aea18a823def337220b1039d3d29a1eb24f97f10f80f6c909f8a8cc58ec56ee",
+      "size": 81193,
+      "normalized_sha256": "7aea18a823def337220b1039d3d29a1eb24f97f10f80f6c909f8a8cc58ec56ee"
     },
     "app/code/Weline/Theme/Observer/ErrorPageAssets.php": {
       "role": "index",
@@ -88150,9 +88228,9 @@
     },
     "app/code/Weline/Theme/Observer/PartialsFetchFileBefore.php": {
       "role": "index",
-      "sha256": "03bfcc038c13ba9f605b978988ec4f5e2f632b39953500aec940dfd3e727f630",
-      "size": 8735,
-      "normalized_sha256": "03bfcc038c13ba9f605b978988ec4f5e2f632b39953500aec940dfd3e727f630"
+      "sha256": "47f60eb894710a3c4ed6fc41eb41066b65b29f425c90e169da1d740e13c1ddf5",
+      "size": 8639,
+      "normalized_sha256": "47f60eb894710a3c4ed6fc41eb41066b65b29f425c90e169da1d740e13c1ddf5"
     },
     "app/code/Weline/Theme/Observer/PlaceWidgetAssets.php": {
       "role": "index",
@@ -88192,9 +88270,9 @@
     },
     "app/code/Weline/Theme/Observer/ResolveThemeCacheSuffix.php": {
       "role": "index",
-      "sha256": "7f3c1865fe25660e8bac686e255285a8577d946f405243dfba75c9052e723d68",
-      "size": 7334,
-      "normalized_sha256": "7f3c1865fe25660e8bac686e255285a8577d946f405243dfba75c9052e723d68"
+      "sha256": "dcb8d95b8210a2d12d9f1dd040d44d489172933818275d7827f4bbe817502870",
+      "size": 7341,
+      "normalized_sha256": "dcb8d95b8210a2d12d9f1dd040d44d489172933818275d7827f4bbe817502870"
     },
     "app/code/Weline/Theme/Observer/ScopedWorkspaceBindingKeyDdlBefore.php": {
       "role": "index",
@@ -88252,9 +88330,9 @@
     },
     "app/code/Weline/Theme/Observer/TemplateFetchFile.php": {
       "role": "index",
-      "sha256": "8e84b3d9079fc4210857684b07c3c4bc5954feaf3777b7a26c2e1d6c50d26595",
-      "size": 10823,
-      "normalized_sha256": "8e84b3d9079fc4210857684b07c3c4bc5954feaf3777b7a26c2e1d6c50d26595"
+      "sha256": "60d56b4b464e0271a97c7498f517d678d37a13056fc0964103f758b1d6b4e91a",
+      "size": 10539,
+      "normalized_sha256": "60d56b4b464e0271a97c7498f517d678d37a13056fc0964103f758b1d6b4e91a"
     },
     "app/code/Weline/Theme/Observer/UpgradeCompiler.php": {
       "role": "index",
@@ -88276,9 +88354,9 @@
     },
     "app/code/Weline/Theme/Observer/WebsiteSaveAfter.php": {
       "role": "index",
-      "sha256": "8969693aa8df00d1f757456ff3f6cc3207ee55b2d64b64c5464bee6939854a92",
-      "size": 2301,
-      "normalized_sha256": "8969693aa8df00d1f757456ff3f6cc3207ee55b2d64b64c5464bee6939854a92"
+      "sha256": "465b1f021b9b4c926223ee4dc57e66561426244729fdaf6e33c6568d219f205a",
+      "size": 2311,
+      "normalized_sha256": "465b1f021b9b4c926223ee4dc57e66561426244729fdaf6e33c6568d219f205a"
     },
     "app/code/Weline/Theme/Observer/WorkerBootstrapWarmup.php": {
       "role": "index",
@@ -88390,9 +88468,9 @@
     },
     "app/code/Weline/Theme/Service/DefaultLayoutSeeder.php": {
       "role": "index",
-      "sha256": "321b58f739cd5444f601c2c959e88d7815495ec63dd7ea9283ea226b8b1aa1df",
-      "size": 22643,
-      "normalized_sha256": "321b58f739cd5444f601c2c959e88d7815495ec63dd7ea9283ea226b8b1aa1df"
+      "sha256": "2b977545bae39777f5ae3b41827fb1e8c6dfb390dae8c80ec00d4176185263c1",
+      "size": 19961,
+      "normalized_sha256": "2b977545bae39777f5ae3b41827fb1e8c6dfb390dae8c80ec00d4176185263c1"
     },
     "app/code/Weline/Theme/Service/Disk/ThemeDiskCompileService.php": {
       "role": "index",
@@ -88408,9 +88486,9 @@
     },
     "app/code/Weline/Theme/Service/Disk/ThemeDiskHeadService.php": {
       "role": "index",
-      "sha256": "cf43ab2af6da699878e70592e4daa3501a0fcd99ffa10d243173149bcd0a8cef",
-      "size": 6027,
-      "normalized_sha256": "cf43ab2af6da699878e70592e4daa3501a0fcd99ffa10d243173149bcd0a8cef"
+      "sha256": "a2b7e9965f45358e67f9bb9be9070ad846a520f67c0653dd9b2da6a263f79b1f",
+      "size": 6283,
+      "normalized_sha256": "a2b7e9965f45358e67f9bb9be9070ad846a520f67c0653dd9b2da6a263f79b1f"
     },
     "app/code/Weline/Theme/Service/Disk/ThemeDiskKeys.php": {
       "role": "index",
@@ -88450,15 +88528,15 @@
     },
     "app/code/Weline/Theme/Service/LayoutEntity/EntityRenderBinding.php": {
       "role": "index",
-      "sha256": "af056dd2f33e8f7e9392dd88bcd16b6b4ad298c79be85100731e77d1480ade84",
-      "size": 3008,
-      "normalized_sha256": "af056dd2f33e8f7e9392dd88bcd16b6b4ad298c79be85100731e77d1480ade84"
+      "sha256": "536c4c8776363163a04ea714145b5bda0320d5b3ac3191b25675a1d70296b613",
+      "size": 3072,
+      "normalized_sha256": "536c4c8776363163a04ea714145b5bda0320d5b3ac3191b25675a1d70296b613"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/LayoutRelationCompiler.php": {
       "role": "index",
-      "sha256": "62645ff30d498b67b406294a0d309856ced2829286b810a5f52290abba2279f2",
-      "size": 29876,
-      "normalized_sha256": "62645ff30d498b67b406294a0d309856ced2829286b810a5f52290abba2279f2"
+      "sha256": "52e00116937d3116c360ba7e8c25374c012d548de8b1fda9740ed45ffcd17dab",
+      "size": 30796,
+      "normalized_sha256": "52e00116937d3116c360ba7e8c25374c012d548de8b1fda9740ed45ffcd17dab"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/RequiredDefaultInjectionBakeMerger.php": {
       "role": "index",
@@ -88498,15 +88576,15 @@
     },
     "app/code/Weline/Theme/Service/LayoutEntity/SolidifiedControllerTemplateResolver.php": {
       "role": "index",
-      "sha256": "1516d12dbd48b1c35ad7a064d886eec65e06da489ac7125e12285a046f39c47e",
-      "size": 8998,
-      "normalized_sha256": "1516d12dbd48b1c35ad7a064d886eec65e06da489ac7125e12285a046f39c47e"
+      "sha256": "de0906827ae807f84c277f817aab1072435c0a29c291f8599c243ec66c5cd955",
+      "size": 11106,
+      "normalized_sha256": "de0906827ae807f84c277f817aab1072435c0a29c291f8599c243ec66c5cd955"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutConfigurationSnapshot.php": {
       "role": "index",
-      "sha256": "27f8a36c8b80f3a079e694c1d717560597f155a4c6583f9d01972e0775c3ad4d",
-      "size": 6049,
-      "normalized_sha256": "27f8a36c8b80f3a079e694c1d717560597f155a4c6583f9d01972e0775c3ad4d"
+      "sha256": "c90a3f9c455e42416d395ca70bd6e63374950fc33e5cdd8717d83f4ef283f5a9",
+      "size": 6048,
+      "normalized_sha256": "c90a3f9c455e42416d395ca70bd6e63374950fc33e5cdd8717d83f4ef283f5a9"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutConfigurationWriter.php": {
       "role": "index",
@@ -88516,15 +88594,15 @@
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityAssetCollector.php": {
       "role": "index",
-      "sha256": "eb6e3a118db587dbd66cda11374b274ca65c0e4027a18eeefeda1de9f167587e",
-      "size": 14769,
-      "normalized_sha256": "eb6e3a118db587dbd66cda11374b274ca65c0e4027a18eeefeda1de9f167587e"
+      "sha256": "eb2b823c40e36a8f0a8a2beb6cc159e0edb4345de0c663658eb01b532aabb751",
+      "size": 15688,
+      "normalized_sha256": "eb2b823c40e36a8f0a8a2beb6cc159e0edb4345de0c663658eb01b532aabb751"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php": {
       "role": "index",
-      "sha256": "43e0fe85e61ac64ea184cb63f5314ac8612a98d6610680e334eb0c97fb653adc",
-      "size": 40996,
-      "normalized_sha256": "43e0fe85e61ac64ea184cb63f5314ac8612a98d6610680e334eb0c97fb653adc"
+      "sha256": "ee333dd31531519a6a88df8733b3f017774a593a83b83f8eb53e1697a3be918a",
+      "size": 51530,
+      "normalized_sha256": "ee333dd31531519a6a88df8733b3f017774a593a83b83f8eb53e1697a3be918a"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityBatchPublisher.php": {
       "role": "index",
@@ -88534,9 +88612,9 @@
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityBindingStore.php": {
       "role": "index",
-      "sha256": "f0d4b83aa3e13963cf7db38110629de7d25845b98a121e983df5de348b36dc1f",
-      "size": 1640,
-      "normalized_sha256": "f0d4b83aa3e13963cf7db38110629de7d25845b98a121e983df5de348b36dc1f"
+      "sha256": "c1a82d71481438d77923a51bb0f0d891fb510fc2309bd9146a3569123e9a14b2",
+      "size": 1754,
+      "normalized_sha256": "c1a82d71481438d77923a51bb0f0d891fb510fc2309bd9146a3569123e9a14b2"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityChrome.php": {
       "role": "index",
@@ -88546,15 +88624,15 @@
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityConfigStore.php": {
       "role": "index",
-      "sha256": "4e192928d0b3b33362c3da02825b9210005fbbe4740d85154002f11fff6065a2",
-      "size": 2086,
-      "normalized_sha256": "4e192928d0b3b33362c3da02825b9210005fbbe4740d85154002f11fff6065a2"
+      "sha256": "5cc93de32b2c64afef815eb34eaf2ff656e209c2a2f8aea575d09f3aee37c231",
+      "size": 2188,
+      "normalized_sha256": "5cc93de32b2c64afef815eb34eaf2ff656e209c2a2f8aea575d09f3aee37c231"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityDocumentShellBaker.php": {
       "role": "index",
-      "sha256": "7c7b6f62109e80151aa16da64e139a2b7eb16ee21ae7ccc974d464b35bc79aa3",
-      "size": 19005,
-      "normalized_sha256": "7c7b6f62109e80151aa16da64e139a2b7eb16ee21ae7ccc974d464b35bc79aa3"
+      "sha256": "751d522f3fe6d9170f90d3bd7705af5f3062a69876501fefa4cf1c011d4f49f8",
+      "size": 19387,
+      "normalized_sha256": "751d522f3fe6d9170f90d3bd7705af5f3062a69876501fefa4cf1c011d4f49f8"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityInjectionTargets.php": {
       "role": "index",
@@ -88570,9 +88648,9 @@
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityMaterializer.php": {
       "role": "index",
-      "sha256": "f634e25f6b70a93fca865d213cb30ed475f9a02aa95e82a9704ec5b179c59701",
-      "size": 16301,
-      "normalized_sha256": "f634e25f6b70a93fca865d213cb30ed475f9a02aa95e82a9704ec5b179c59701"
+      "sha256": "78a8c550338b17fa30f25a848de25d35bded3c86012ad6ee30129e9cc3f2dd0c",
+      "size": 16911,
+      "normalized_sha256": "78a8c550338b17fa30f25a848de25d35bded3c86012ad6ee30129e9cc3f2dd0c"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityOwnerLock.php": {
       "role": "index",
@@ -88588,9 +88666,9 @@
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityPointerResolver.php": {
       "role": "index",
-      "sha256": "799281657d016376b56a3ba154fc014a008372f2ce4c80b90d05dbba7766bb8d",
-      "size": 9728,
-      "normalized_sha256": "799281657d016376b56a3ba154fc014a008372f2ce4c80b90d05dbba7766bb8d"
+      "sha256": "0739422d6561e2d429b3d5e3b31570e4dce8559d51f23dad76333cc68ac386f9",
+      "size": 4927,
+      "normalized_sha256": "0739422d6561e2d429b3d5e3b31570e4dce8559d51f23dad76333cc68ac386f9"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityPublishedSlotHost.php": {
       "role": "index",
@@ -88600,9 +88678,9 @@
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityRuntime.php": {
       "role": "index",
-      "sha256": "b4e761acde75df15f0a77850b47df98cb2fa1e0fbaaafc7a25a24b9fae6ca15a",
-      "size": 2230,
-      "normalized_sha256": "b4e761acde75df15f0a77850b47df98cb2fa1e0fbaaafc7a25a24b9fae6ca15a"
+      "sha256": "ff3e593d62890a9b20b64df421503fb039e9012b6cfc0b24329df6b52ca58356",
+      "size": 2095,
+      "normalized_sha256": "ff3e593d62890a9b20b64df421503fb039e9012b6cfc0b24329df6b52ca58356"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntitySaveException.php": {
       "role": "index",
@@ -88612,9 +88690,9 @@
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntitySlotFiller.php": {
       "role": "index",
-      "sha256": "4f40e61b91f9f3d8e8c6381205a826c6b6c8e7dbe4d84e2defe90d86bb56e9df",
-      "size": 5062,
-      "normalized_sha256": "4f40e61b91f9f3d8e8c6381205a826c6b6c8e7dbe4d84e2defe90d86bb56e9df"
+      "sha256": "f4ce61f877ac4ab43f087b41114b623cf2f75372abead4d7febb195dbffc3790",
+      "size": 7619,
+      "normalized_sha256": "f4ce61f877ac4ab43f087b41114b623cf2f75372abead4d7febb195dbffc3790"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityUpgradePurgeService.php": {
       "role": "index",
@@ -88624,15 +88702,15 @@
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityUpgradeSolidifyService.php": {
       "role": "index",
-      "sha256": "f55c13fde6c3c43aa5ca4bcbd9ce1a9a3e9e1455afc9943451fab5bff4917f0d",
-      "size": 4136,
-      "normalized_sha256": "f55c13fde6c3c43aa5ca4bcbd9ce1a9a3e9e1455afc9943451fab5bff4917f0d"
+      "sha256": "e25fb0ebe37d34b7a07b511d4a4db37b8c138c7c8dc93e848a21ce435ddf9403",
+      "size": 4876,
+      "normalized_sha256": "e25fb0ebe37d34b7a07b511d4a4db37b8c138c7c8dc93e848a21ce435ddf9403"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutEntityWidgetRenderer.php": {
       "role": "index",
-      "sha256": "90e2d6ca023dab68d63809e9949e8c120b3a39e1355d480d7d0225583ce800c9",
-      "size": 12672,
-      "normalized_sha256": "90e2d6ca023dab68d63809e9949e8c120b3a39e1355d480d7d0225583ce800c9"
+      "sha256": "d53347e2ea963bb95da711bba55c783c6b37bfc94485d48b7eb362c85b76c0b5",
+      "size": 7525,
+      "normalized_sha256": "d53347e2ea963bb95da711bba55c783c6b37bfc94485d48b7eb362c85b76c0b5"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutSlotTreeBuilder.php": {
       "role": "index",
@@ -88648,9 +88726,9 @@
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutStorefrontHeadAssets.php": {
       "role": "index",
-      "sha256": "6d5dd81d400574bba337be9f00b1dc26d7d4fc16d4f2adbccb0e49ca7d22e826",
-      "size": 11712,
-      "normalized_sha256": "6d5dd81d400574bba337be9f00b1dc26d7d4fc16d4f2adbccb0e49ca7d22e826"
+      "sha256": "e7314c6dd809040fcf07efffd754f6f9315f3ddd3452587c535abe8a0d6be76d",
+      "size": 4374,
+      "normalized_sha256": "e7314c6dd809040fcf07efffd754f6f9315f3ddd3452587c535abe8a0d6be76d"
     },
     "app/code/Weline/Theme/Service/LayoutEntity/ThemeLayoutTemplateDependencies.php": {
       "role": "index",
@@ -88720,9 +88798,9 @@
     },
     "app/code/Weline/Theme/Service/PreviewContextService.php": {
       "role": "index",
-      "sha256": "e3ed7cf177877a024169249454188856b0fb48d5441ef63e2c8c637fc7849509",
-      "size": 35949,
-      "normalized_sha256": "e3ed7cf177877a024169249454188856b0fb48d5441ef63e2c8c637fc7849509"
+      "sha256": "74797b09df49fb92c9e189786e87dcb7733c88d8402cb90e67cc389e8478c324",
+      "size": 36199,
+      "normalized_sha256": "74797b09df49fb92c9e189786e87dcb7733c88d8402cb90e67cc389e8478c324"
     },
     "app/code/Weline/Theme/Service/PreviewExitService.php": {
       "role": "index",
@@ -88768,9 +88846,9 @@
     },
     "app/code/Weline/Theme/Service/ProductLayoutOptionService.php": {
       "role": "index",
-      "sha256": "a670835f44c0751682903654d7e104ce7cfce8c6c1454e4b26378798b908afaa",
-      "size": 10366,
-      "normalized_sha256": "a670835f44c0751682903654d7e104ce7cfce8c6c1454e4b26378798b908afaa"
+      "sha256": "df57d4fb0d63e09a8ca97b34fa047e0661ab2a7463df3d2ae3e1574f671b3f1a",
+      "size": 10611,
+      "normalized_sha256": "df57d4fb0d63e09a8ca97b34fa047e0661ab2a7463df3d2ae3e1574f671b3f1a"
     },
     "app/code/Weline/Theme/Service/ProductLayoutResolveService.php": {
       "role": "index",
@@ -88846,9 +88924,9 @@
     },
     "app/code/Weline/Theme/Service/Resumable/ThemeVirtualThemeRuntimeService.php": {
       "role": "index",
-      "sha256": "306e483a57e311ebf7b7a74ab4e6547e0e81cd7f3483acd537378aad7b3fb936",
-      "size": 40747,
-      "normalized_sha256": "306e483a57e311ebf7b7a74ab4e6547e0e81cd7f3483acd537378aad7b3fb936"
+      "sha256": "095ce3736f80a53da381d892b330ab0048e9d7d6b4d16a80e0910bd398dfb5a5",
+      "size": 41128,
+      "normalized_sha256": "095ce3736f80a53da381d892b330ab0048e9d7d6b4d16a80e0910bd398dfb5a5"
     },
     "app/code/Weline/Theme/Service/RuntimeTemplateMaterializer.php": {
       "role": "index",
@@ -88876,9 +88954,9 @@
     },
     "app/code/Weline/Theme/Service/Scoped/ThemeEditorContextFactory.php": {
       "role": "index",
-      "sha256": "2844b684c038bd4a9568b2a2a8fbc692a5d577827ace4b3dc3ac2f6bd80c6b6d",
-      "size": 6990,
-      "normalized_sha256": "2844b684c038bd4a9568b2a2a8fbc692a5d577827ace4b3dc3ac2f6bd80c6b6d"
+      "sha256": "348f0c9d54f80ac184370b1724cbc1934de9f707785711671bfeacc64d2ea253",
+      "size": 7185,
+      "normalized_sha256": "348f0c9d54f80ac184370b1724cbc1934de9f707785711671bfeacc64d2ea253"
     },
     "app/code/Weline/Theme/Service/Scoped/ThemeLayoutPayloadDiffer.php": {
       "role": "index",
@@ -88924,9 +89002,9 @@
     },
     "app/code/Weline/Theme/Service/Scoped/ThemeScopedBindingProjector.php": {
       "role": "index",
-      "sha256": "74c4c8840ca9b2932fa13e77bd0c5a09f6911a5923864982d45ab2ed08e91477",
-      "size": 2796,
-      "normalized_sha256": "74c4c8840ca9b2932fa13e77bd0c5a09f6911a5923864982d45ab2ed08e91477"
+      "sha256": "6b3adff18c1aaef762f7bb00915f3a8a02256171a300859fcd36aa85cb44b6fb",
+      "size": 3220,
+      "normalized_sha256": "6b3adff18c1aaef762f7bb00915f3a8a02256171a300859fcd36aa85cb44b6fb"
     },
     "app/code/Weline/Theme/Service/Scoped/ThemeScopedEditorSaveService.php": {
       "role": "index",
@@ -88960,9 +89038,9 @@
     },
     "app/code/Weline/Theme/Service/Scoped/ThemeScopedProjectionSupport.php": {
       "role": "index",
-      "sha256": "3120a82a5c43b397758c1f1865673e643c2eec95bfbfffe8ad2bbe96ebb9a5a7",
-      "size": 4828,
-      "normalized_sha256": "3120a82a5c43b397758c1f1865673e643c2eec95bfbfffe8ad2bbe96ebb9a5a7"
+      "sha256": "383f22f0037865b3890bf9cb8d3b65be87f9cf4af9c4b4113aaabc051e5fc388",
+      "size": 5094,
+      "normalized_sha256": "383f22f0037865b3890bf9cb8d3b65be87f9cf4af9c4b4113aaabc051e5fc388"
     },
     "app/code/Weline/Theme/Service/Scoped/ThemeScopedReleaseBatch.php": {
       "role": "index",
@@ -88978,9 +89056,9 @@
     },
     "app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspace.php": {
       "role": "index",
-      "sha256": "23d925012f76a54a34707d1da0bce13229d83909f0231ea0c585cabcd76cfd4f",
-      "size": 153227,
-      "normalized_sha256": "23d925012f76a54a34707d1da0bce13229d83909f0231ea0c585cabcd76cfd4f"
+      "sha256": "fdd97dbfe353570d19b3d3d9d0de94f17dc305fc6dcecc8d9df3339fdf355687",
+      "size": 151592,
+      "normalized_sha256": "fdd97dbfe353570d19b3d3d9d0de94f17dc305fc6dcecc8d9df3339fdf355687"
     },
     "app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspaceRequestService.php": {
       "role": "index",
@@ -89020,9 +89098,9 @@
     },
     "app/code/Weline/Theme/Service/SlotRendererService.php": {
       "role": "index",
-      "sha256": "6f493b9c8ac9cbb14e6c56123296b192d69c5467a4bb5bc902c6e5b67d2681de",
-      "size": 186254,
-      "normalized_sha256": "6f493b9c8ac9cbb14e6c56123296b192d69c5467a4bb5bc902c6e5b67d2681de"
+      "sha256": "271a6a7b8e7a5790e7e2feda574dbc45773b4dabdd95b5a8c72fc28fa1a1c89f",
+      "size": 184287,
+      "normalized_sha256": "271a6a7b8e7a5790e7e2feda574dbc45773b4dabdd95b5a8c72fc28fa1a1c89f"
     },
     "app/code/Weline/Theme/Service/Storefront/StorefrontRenderContextBag.php": {
       "role": "index",
@@ -89032,9 +89110,15 @@
     },
     "app/code/Weline/Theme/Service/Storefront/StorefrontWidgetRuntimeAssetPrimer.php": {
       "role": "index",
-      "sha256": "b2b792c592372eb26d39f9b4c2b0948ce0748208779d7694e5a2f95168b6e16f",
-      "size": 6828,
-      "normalized_sha256": "b2b792c592372eb26d39f9b4c2b0948ce0748208779d7694e5a2f95168b6e16f"
+      "sha256": "652d14a6ee45dcfeed613efb795f815d22f41b7e8e9a03c769ffe761c9cb67dc",
+      "size": 5556,
+      "normalized_sha256": "652d14a6ee45dcfeed613efb795f815d22f41b7e8e9a03c769ffe761c9cb67dc"
+    },
+    "app/code/Weline/Theme/Service/Storefront/ThemePathResolvePagePrefetch.php": {
+      "role": "index",
+      "sha256": "d1aca19133ba87078870bd8d1b2ac06d7e8f5adff63f40470d3f030db3209b6e",
+      "size": 7341,
+      "normalized_sha256": "d1aca19133ba87078870bd8d1b2ac06d7e8f5adff63f40470d3f030db3209b6e"
     },
     "app/code/Weline/Theme/Service/StorefrontFpcWarmer.php": {
       "role": "index",
@@ -89044,21 +89128,21 @@
     },
     "app/code/Weline/Theme/Service/StorefrontHeaderNavFragmentCache.php": {
       "role": "index",
-      "sha256": "86628f3a96a6c014c2807948209ab90606ff6723f9ceeadf0dda23ccb9c16344",
-      "size": 17016,
-      "normalized_sha256": "86628f3a96a6c014c2807948209ab90606ff6723f9ceeadf0dda23ccb9c16344"
+      "sha256": "4496e1d261dd44bda2e2fa6ac3449788b2fc493fa0a5f200fa48755df4becf8e",
+      "size": 17712,
+      "normalized_sha256": "4496e1d261dd44bda2e2fa6ac3449788b2fc493fa0a5f200fa48755df4becf8e"
     },
     "app/code/Weline/Theme/Service/StorefrontHotCacheBagSeeder.php": {
       "role": "index",
-      "sha256": "4b977af141e56e59b2b52af5e7977efad3df93c8eaf2ab4f5d3f2d5ac23670a0",
-      "size": 11303,
-      "normalized_sha256": "4b977af141e56e59b2b52af5e7977efad3df93c8eaf2ab4f5d3f2d5ac23670a0"
+      "sha256": "70e171ec8cba8607f12d5e7d1a4e8162bd5ba809e9aff6bd1ad6f6f25633d657",
+      "size": 11335,
+      "normalized_sha256": "70e171ec8cba8607f12d5e7d1a4e8162bd5ba809e9aff6bd1ad6f6f25633d657"
     },
     "app/code/Weline/Theme/Service/StorefrontNotFoundStaticGenerator.php": {
       "role": "index",
-      "sha256": "a234fae5a467c8b7a97dd12d50a9e7abb39bd887191bcdd56f4d592a5916078b",
-      "size": 26246,
-      "normalized_sha256": "a234fae5a467c8b7a97dd12d50a9e7abb39bd887191bcdd56f4d592a5916078b"
+      "sha256": "e57211920126985db5d77f4fd8818ecef50bdf839cb30810c86e26922d0d1ace",
+      "size": 21683,
+      "normalized_sha256": "e57211920126985db5d77f4fd8818ecef50bdf839cb30810c86e26922d0d1ace"
     },
     "app/code/Weline/Theme/Service/StorefrontProductCardFragmentCache.php": {
       "role": "index",
@@ -89068,9 +89152,9 @@
     },
     "app/code/Weline/Theme/Service/StorefrontSsrChromeHealer.php": {
       "role": "index",
-      "sha256": "523582e82a3c8f117a9a9a5f68b8852f14e226226f23d89c3f6dcc20ba672781",
-      "size": 7385,
-      "normalized_sha256": "523582e82a3c8f117a9a9a5f68b8852f14e226226f23d89c3f6dcc20ba672781"
+      "sha256": "dfc101368e7a72c4b56087f6b9bf4ea9ce70c74ceddb42f33694c964e54a1ffb",
+      "size": 7441,
+      "normalized_sha256": "dfc101368e7a72c4b56087f6b9bf4ea9ce70c74ceddb42f33694c964e54a1ffb"
     },
     "app/code/Weline/Theme/Service/StorefrontThemeCacheCoordinator.php": {
       "role": "index",
@@ -89110,9 +89194,9 @@
     },
     "app/code/Weline/Theme/Service/ThemeBrandResolver.php": {
       "role": "index",
-      "sha256": "8c9e01d8d0ff0427f6a644970f8d620ed5d2a4dab6f500cea3f88a66d90d48e9",
-      "size": 10946,
-      "normalized_sha256": "8c9e01d8d0ff0427f6a644970f8d620ed5d2a4dab6f500cea3f88a66d90d48e9"
+      "sha256": "7177d22f8bc2527ee09d938531c099b0634f8c1d486ccca5b036cba000947fce",
+      "size": 10727,
+      "normalized_sha256": "7177d22f8bc2527ee09d938531c099b0634f8c1d486ccca5b036cba000947fce"
     },
     "app/code/Weline/Theme/Service/ThemeBuilderSchemaService.php": {
       "role": "index",
@@ -89146,21 +89230,21 @@
     },
     "app/code/Weline/Theme/Service/ThemeContextService.php": {
       "role": "index",
-      "sha256": "d637c42b7c23242969235e651f63d7ed9c93fa328e914ac139a3ecf18c6525b5",
-      "size": 30729,
-      "normalized_sha256": "d637c42b7c23242969235e651f63d7ed9c93fa328e914ac139a3ecf18c6525b5"
+      "sha256": "1a3b6792c495e6b2d60fc18c2bbca127dbd0e4d2cb8843bf6acdd2356aa007d2",
+      "size": 26588,
+      "normalized_sha256": "1a3b6792c495e6b2d60fc18c2bbca127dbd0e4d2cb8843bf6acdd2356aa007d2"
     },
     "app/code/Weline/Theme/Service/ThemeDirectoryResolver.php": {
       "role": "index",
-      "sha256": "ceeaa0676a391142537c7f4a61ad1803f04a30e68960b3e311eb1267ebe962e2",
-      "size": 18532,
-      "normalized_sha256": "ceeaa0676a391142537c7f4a61ad1803f04a30e68960b3e311eb1267ebe962e2"
+      "sha256": "73ec817b3d64889f095436ad5ed6bdac7d0c7a12b720c2913a041016d1c5f751",
+      "size": 18432,
+      "normalized_sha256": "73ec817b3d64889f095436ad5ed6bdac7d0c7a12b720c2913a041016d1c5f751"
     },
     "app/code/Weline/Theme/Service/ThemeEditorDraftResetService.php": {
       "role": "index",
-      "sha256": "60bbd63890aec319e68d1342879c3ec31a5a7a44b6fe707896ec73d69a80fb56",
-      "size": 9942,
-      "normalized_sha256": "60bbd63890aec319e68d1342879c3ec31a5a7a44b6fe707896ec73d69a80fb56"
+      "sha256": "90d2848d8100220aa921ee5e6b763be6dd1b690810a1da99d2c2af6e942cf09f",
+      "size": 9905,
+      "normalized_sha256": "90d2848d8100220aa921ee5e6b763be6dd1b690810a1da99d2c2af6e942cf09f"
     },
     "app/code/Weline/Theme/Service/ThemeFactoryResetService.php": {
       "role": "index",
@@ -89188,9 +89272,9 @@
     },
     "app/code/Weline/Theme/Service/ThemeLayoutScopeNormalizer.php": {
       "role": "index",
-      "sha256": "df11c8e9ea696355e83a18f9ca6e473887a531f9e536856a595eb415daba2584",
-      "size": 10074,
-      "normalized_sha256": "df11c8e9ea696355e83a18f9ca6e473887a531f9e536856a595eb415daba2584"
+      "sha256": "2e7394fccb05114700ccf6d73061295cc95dfe05738c8ede3fd174296597a3b9",
+      "size": 10449,
+      "normalized_sha256": "2e7394fccb05114700ccf6d73061295cc95dfe05738c8ede3fd174296597a3b9"
     },
     "app/code/Weline/Theme/Service/ThemeLayoutService.php": {
       "role": "index",
@@ -89218,9 +89302,9 @@
     },
     "app/code/Weline/Theme/Service/ThemePageTypeResolver.php": {
       "role": "index",
-      "sha256": "bb6520d3c71bf5a450797481229c95be9dae14d5edaccb6490ea5cbf6cca7d4b",
-      "size": 21216,
-      "normalized_sha256": "bb6520d3c71bf5a450797481229c95be9dae14d5edaccb6490ea5cbf6cca7d4b"
+      "sha256": "41553c8fdb8117267c0c3763aa4b92f114be34e38499bb836182e0fd19439ec0",
+      "size": 22169,
+      "normalized_sha256": "41553c8fdb8117267c0c3763aa4b92f114be34e38499bb836182e0fd19439ec0"
     },
     "app/code/Weline/Theme/Service/ThemePdpBudgetPhases.php": {
       "role": "index",
@@ -89272,27 +89356,27 @@
     },
     "app/code/Weline/Theme/Service/ThemeResourceGateway.php": {
       "role": "index",
-      "sha256": "ccf066da9d5ec777f9deae520d42512076b8f2af5df706473f823ca1aa98cab6",
-      "size": 23356,
-      "normalized_sha256": "ccf066da9d5ec777f9deae520d42512076b8f2af5df706473f823ca1aa98cab6"
+      "sha256": "c5bc3ff39c803a41ab9c289a1717523d3b5f4b3978399aa2606bced31ea15f70",
+      "size": 23377,
+      "normalized_sha256": "c5bc3ff39c803a41ab9c289a1717523d3b5f4b3978399aa2606bced31ea15f70"
     },
     "app/code/Weline/Theme/Service/ThemeRuntimeCacheCleaner.php": {
       "role": "index",
-      "sha256": "c034caf37c324b73da2968888b5ee1a54a0aa3490777b27218102e182c87f062",
-      "size": 38790,
-      "normalized_sha256": "c034caf37c324b73da2968888b5ee1a54a0aa3490777b27218102e182c87f062"
+      "sha256": "679e0608ba03331c474b4c44206031ae57e8f795c486fc0ba74865affe7bf333",
+      "size": 39901,
+      "normalized_sha256": "679e0608ba03331c474b4c44206031ae57e8f795c486fc0ba74865affe7bf333"
     },
     "app/code/Weline/Theme/Service/ThemeRuntimeLayoutResolver.php": {
       "role": "index",
-      "sha256": "61a6f9d65e51599e4a1faff286c356bfdcd189d29a63c34b26b587ff2d5e7288",
-      "size": 18520,
-      "normalized_sha256": "61a6f9d65e51599e4a1faff286c356bfdcd189d29a63c34b26b587ff2d5e7288"
+      "sha256": "0c70953b5536ad244abf509fa014aa556734b11925d02a40e595e92fc85a3b5f",
+      "size": 20261,
+      "normalized_sha256": "0c70953b5536ad244abf509fa014aa556734b11925d02a40e595e92fc85a3b5f"
     },
     "app/code/Weline/Theme/Service/ThemeScopeVersionService.php": {
       "role": "index",
-      "sha256": "93abfb7f1b06c780cef704152bae56ed336c186f23bdfa88d3ab814efbeebb62",
-      "size": 29891,
-      "normalized_sha256": "93abfb7f1b06c780cef704152bae56ed336c186f23bdfa88d3ab814efbeebb62"
+      "sha256": "0f6d87dce9ec06539525925564c904c6181134f5d03c9ef601a11628ac66ce06",
+      "size": 28931,
+      "normalized_sha256": "0f6d87dce9ec06539525925564c904c6181134f5d03c9ef601a11628ac66ce06"
     },
     "app/code/Weline/Theme/Service/ThemeSlotContractService.php": {
       "role": "index",
@@ -89314,9 +89398,9 @@
     },
     "app/code/Weline/Theme/Service/ThemeStaticNamespaceService.php": {
       "role": "index",
-      "sha256": "6634c83673adcb52210419c5e2b4a06f1c0e260fa43f803cc9eda1764017e4cb",
-      "size": 6236,
-      "normalized_sha256": "6634c83673adcb52210419c5e2b4a06f1c0e260fa43f803cc9eda1764017e4cb"
+      "sha256": "9dc5e39a6fd2d4aebc5a799214ff445fd0fea8c60ebf5210a051484bfa7b7401",
+      "size": 6216,
+      "normalized_sha256": "9dc5e39a6fd2d4aebc5a799214ff445fd0fea8c60ebf5210a051484bfa7b7401"
     },
     "app/code/Weline/Theme/Service/ThemeTargetIdentityResolver.php": {
       "role": "index",
@@ -89338,9 +89422,9 @@
     },
     "app/code/Weline/Theme/Service/ThemeVirtualLayoutService.php": {
       "role": "index",
-      "sha256": "7a0d36af35247dcd4983d64f0048ad7d429004a6ffceb25c9dfd9dc2a40f20b1",
-      "size": 69315,
-      "normalized_sha256": "7a0d36af35247dcd4983d64f0048ad7d429004a6ffceb25c9dfd9dc2a40f20b1"
+      "sha256": "75e93d48183f35a1c9354bb944816a1ec069d7a73e2a1bab69a9a76ece0e3c94",
+      "size": 69514,
+      "normalized_sha256": "75e93d48183f35a1c9354bb944816a1ec069d7a73e2a1bab69a9a76ece0e3c94"
     },
     "app/code/Weline/Theme/Service/ThemeVirtualThemeManifestService.php": {
       "role": "index",
@@ -89410,9 +89494,9 @@
     },
     "app/code/Weline/Theme/Service/Version/ThemeVersionResourceSnapshotService.php": {
       "role": "index",
-      "sha256": "3e53fc53bb83525fbba675c9f7448d115840e31ff58302359a01e6701e5f1810",
-      "size": 41968,
-      "normalized_sha256": "3e53fc53bb83525fbba675c9f7448d115840e31ff58302359a01e6701e5f1810"
+      "sha256": "083243ec18f97adf748bf195eb0123c21263ececf514526b9067fe69ee49df9c",
+      "size": 43570,
+      "normalized_sha256": "083243ec18f97adf748bf195eb0123c21263ececf514526b9067fe69ee49df9c"
     },
     "app/code/Weline/Theme/Service/Version/ThemeVersionScopePropagator.php": {
       "role": "index",
@@ -89440,15 +89524,15 @@
     },
     "app/code/Weline/Theme/Service/WebsiteThemeBindingService.php": {
       "role": "index",
-      "sha256": "c89338c9a96609e94a3742bdd960908bfc23a4187abdb14908f93e6a64b6372b",
-      "size": 15659,
-      "normalized_sha256": "c89338c9a96609e94a3742bdd960908bfc23a4187abdb14908f93e6a64b6372b"
+      "sha256": "c26a441937004bb5a6dc4f9da63c2e62f4502a88e5d440b9dfec6c9d3956b4dd",
+      "size": 16228,
+      "normalized_sha256": "c26a441937004bb5a6dc4f9da63c2e62f4502a88e5d440b9dfec6c9d3956b4dd"
     },
     "app/code/Weline/Theme/Service/WidgetDefaultInjectionService.php": {
       "role": "index",
-      "sha256": "bf8068c27b55064190bd5157a39be69e783ab90bc070b900ce6ed2e5e1dca1a2",
-      "size": 104923,
-      "normalized_sha256": "bf8068c27b55064190bd5157a39be69e783ab90bc070b900ce6ed2e5e1dca1a2"
+      "sha256": "c4eacc8bba171eed49ca55c9838ba9d4f2e02cfef88df4e8655699710de6aae0",
+      "size": 105326,
+      "normalized_sha256": "c4eacc8bba171eed49ca55c9838ba9d4f2e02cfef88df4e8655699710de6aae0"
     },
     "app/code/Weline/Theme/Service/WidgetHtmlHealthInspector.php": {
       "role": "index",
@@ -89518,9 +89602,9 @@
     },
     "app/code/Weline/Theme/Setup/Upgrade.php": {
       "role": "index",
-      "sha256": "756e03ad47cadd5c9efe73e83433406b17e0d590079a8b38d0b264c757c11386",
-      "size": 54254,
-      "normalized_sha256": "756e03ad47cadd5c9efe73e83433406b17e0d590079a8b38d0b264c757c11386"
+      "sha256": "c955e9c69c5fcf46d21d2721f77cb175e1632c26b1e8286ad059af3eb45ed40c",
+      "size": 52511,
+      "normalized_sha256": "c955e9c69c5fcf46d21d2721f77cb175e1632c26b1e8286ad059af3eb45ed40c"
     },
     "app/code/Weline/Theme/Taglib/Address.php": {
       "role": "index",
@@ -89577,9 +89661,9 @@
     },
     "app/code/Weline/Theme/Taglib/SearchSelect.php": {
       "role": "index",
-      "sha256": "11bcee7b4d902dd78a409e5d8a0387fe28033740fd376810f71b9feaaa2ee966",
-      "size": 36633,
-      "normalized_sha256": "11bcee7b4d902dd78a409e5d8a0387fe28033740fd376810f71b9feaaa2ee966"
+      "sha256": "a482cc016898bf2817e4e9479292ff63b234ce85c611e477d3399acd36059176",
+      "size": 37140,
+      "normalized_sha256": "a482cc016898bf2817e4e9479292ff63b234ce85c611e477d3399acd36059176"
     },
     "app/code/Weline/Theme/Taglib/Slot.php": {
       "role": "index",
@@ -89787,9 +89871,9 @@
     },
     "app/code/Weline/Theme/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "3c0f78610e6f54b26848e5a2c7c1c9c7ebd06452d5c39ae3302ad2f6e82e4eb8",
-      "size": 11127,
-      "normalized_sha256": "3c0f78610e6f54b26848e5a2c7c1c9c7ebd06452d5c39ae3302ad2f6e82e4eb8"
+      "sha256": "bc761111fc585b37b6ef1cd60bed65843c09c6e0143b8a7516bf6a681b26fefa",
+      "size": 38948,
+      "normalized_sha256": "bc761111fc585b37b6ef1cd60bed65843c09c6e0143b8a7516bf6a681b26fefa"
     },
     "app/code/Weline/Theme/doc/HTML-lang属性BCP-47规范.md": {
       "role": "index",
@@ -89817,9 +89901,9 @@
     },
     "app/code/Weline/Theme/doc/README.md": {
       "role": "index",
-      "sha256": "cf36a2e9429fb8f9189e73244b97f5ac45cdc33bde55b50655ac5e97bf837983",
-      "size": 24787,
-      "normalized_sha256": "cf36a2e9429fb8f9189e73244b97f5ac45cdc33bde55b50655ac5e97bf837983"
+      "sha256": "03e3f04e32f52473481b0201b45280c35279a8e69d0888e6a78af64cb70ea4a9",
+      "size": 23713,
+      "normalized_sha256": "03e3f04e32f52473481b0201b45280c35279a8e69d0888e6a78af64cb70ea4a9"
     },
     "app/code/Weline/Theme/doc/Theme.js使用指南.md": {
       "role": "index",
@@ -91074,9 +91158,9 @@
     },
     "app/code/Weline/Theme/doc/layout-slot-cache-keys.md": {
       "role": "index",
-      "sha256": "25814876937a6b427377072243a9a98b18d42cd47d7efdf58dcad86f206e0656",
-      "size": 4563,
-      "normalized_sha256": "25814876937a6b427377072243a9a98b18d42cd47d7efdf58dcad86f206e0656"
+      "sha256": "8adcb3eb8d4ed5fdbf23a1d079699df82cdc3e892e6acca5e2da8038bc60cbe9",
+      "size": 4923,
+      "normalized_sha256": "8adcb3eb8d4ed5fdbf23a1d079699df82cdc3e892e6acca5e2da8038bc60cbe9"
     },
     "app/code/Weline/Theme/doc/preview-and-runtime-modes.md": {
       "role": "index",
@@ -91116,9 +91200,9 @@
     },
     "app/code/Weline/Theme/doc/theme-inheritance-and-file-conventions.md": {
       "role": "index",
-      "sha256": "bcbbb53713b45f8b7e5cf18104beb0c8e45a56bef0fbc2f52fcd4fd84a6f0645",
-      "size": 12484,
-      "normalized_sha256": "bcbbb53713b45f8b7e5cf18104beb0c8e45a56bef0fbc2f52fcd4fd84a6f0645"
+      "sha256": "dfced4a8286e9ddf733bda8c8d133399968c2791dff830d0b67b633646d4b774",
+      "size": 12616,
+      "normalized_sha256": "dfced4a8286e9ddf733bda8c8d133399968c2791dff830d0b67b633646d4b774"
     },
     "app/code/Weline/Theme/doc/theme-layout-content-width.md": {
       "role": "index",
@@ -91146,9 +91230,9 @@
     },
     "app/code/Weline/Theme/doc/theme-surface-text-roles.md": {
       "role": "index",
-      "sha256": "5b0cfa7ef235363c0566ce20165cf0a509c8b3aafc4722c0e1a1d9c03a2b1283",
-      "size": 4111,
-      "normalized_sha256": "5b0cfa7ef235363c0566ce20165cf0a509c8b3aafc4722c0e1a1d9c03a2b1283"
+      "sha256": "9170e59015bf6d51aa099101a47e4bf335b56ff945fd6e72bd5a0958383b2edd",
+      "size": 4432,
+      "normalized_sha256": "9170e59015bf6d51aa099101a47e4bf335b56ff945fd6e72bd5a0958383b2edd"
     },
     "app/code/Weline/Theme/doc/version-control/README.md": {
       "role": "index",
@@ -91302,21 +91386,21 @@
     },
     "app/code/Weline/Theme/doc/功能现状.md": {
       "role": "index",
-      "sha256": "0f8307bc38b236b4693b602344e8c6a6016c9ec5c9fc17f9e7a3e84c015996c8",
-      "size": 33295,
-      "normalized_sha256": "0f8307bc38b236b4693b602344e8c6a6016c9ec5c9fc17f9e7a3e84c015996c8"
+      "sha256": "f5ca7e32f3d25951125f93cb1e503b1966a229c9087aa7397c48e05ab3ddf546",
+      "size": 81669,
+      "normalized_sha256": "f5ca7e32f3d25951125f93cb1e503b1966a229c9087aa7397c48e05ab3ddf546"
     },
     "app/code/Weline/Theme/doc/布局固化与默认注入.md": {
       "role": "index",
-      "sha256": "822292b9da2b05106ed5bab4ba355131cf93689fe5bf6167a563dbfeca1cdf6f",
-      "size": 19721,
-      "normalized_sha256": "822292b9da2b05106ed5bab4ba355131cf93689fe5bf6167a563dbfeca1cdf6f"
+      "sha256": "7f720f5d1c3c68eaf622cd8c1f5332764958b69996f74788a934a4999bfda2b7",
+      "size": 19857,
+      "normalized_sha256": "7f720f5d1c3c68eaf622cd8c1f5332764958b69996f74788a934a4999bfda2b7"
     },
     "app/code/Weline/Theme/doc/开发/Theme开发总指南.md": {
       "role": "index",
-      "sha256": "6f57c32d7035bc3346594fbff6deadc8c97ba6b429440013ec92ddee7cf6b490",
-      "size": 28277,
-      "normalized_sha256": "6f57c32d7035bc3346594fbff6deadc8c97ba6b429440013ec92ddee7cf6b490"
+      "sha256": "fd8bf02e92ef3cf39b3a950033d3d8443239819cf94c8bbb12f5779f24851c40",
+      "size": 28522,
+      "normalized_sha256": "fd8bf02e92ef3cf39b3a950033d3d8443239819cf94c8bbb12f5779f24851c40"
     },
     "app/code/Weline/Theme/doc/开发/plan/widget-lifecycle-and-render-binding.md": {
       "role": "index",
@@ -91710,9 +91794,9 @@
     },
     "app/code/Weline/Theme/doc/开发/team/pdp-purchase-widgets-must-exist/meetings/汇审.md": {
       "role": "index",
-      "sha256": "c84096f7896178b06f1c12b77071fd2c18fe77e8bdeaa8eb8b04bc7a61138501",
-      "size": 4139,
-      "normalized_sha256": "c84096f7896178b06f1c12b77071fd2c18fe77e8bdeaa8eb8b04bc7a61138501"
+      "sha256": "38a0a693fec0a45788060e0270870dcced91f56de3b0c173cc7589a2788258d4",
+      "size": 4179,
+      "normalized_sha256": "38a0a693fec0a45788060e0270870dcced91f56de3b0c173cc7589a2788258d4"
     },
     "app/code/Weline/Theme/doc/开发/team/pdp-purchase-widgets-must-exist/roster.md": {
       "role": "index",
@@ -91806,9 +91890,9 @@
     },
     "app/code/Weline/Theme/doc/开发/team/required-default-all-layouts/channel/test-matrix.md": {
       "role": "index",
-      "sha256": "1a68cdfb70c31e7376013c65f718a88a96b7756bedfd3585a338f432b1944034",
-      "size": 3505,
-      "normalized_sha256": "1a68cdfb70c31e7376013c65f718a88a96b7756bedfd3585a338f432b1944034"
+      "sha256": "710dc4f170f82afae4451438276434799c17f6124a93bfe03fdc75c95b1b9fdb",
+      "size": 3578,
+      "normalized_sha256": "710dc4f170f82afae4451438276434799c17f6124a93bfe03fdc75c95b1b9fdb"
     },
     "app/code/Weline/Theme/doc/开发/team/required-default-all-layouts/channel/theme-fix.md": {
       "role": "index",
@@ -92274,9 +92358,9 @@
     },
     "app/code/Weline/Theme/doc/开发日志.md": {
       "role": "index",
-      "sha256": "cc961caf17bdb00a58658a62631ef88b8ca74af0937f83043d7403047aeaa2f8",
-      "size": 756017,
-      "normalized_sha256": "cc961caf17bdb00a58658a62631ef88b8ca74af0937f83043d7403047aeaa2f8"
+      "sha256": "c32b5d59bb4f491fdc71e720eb056e3d8707e9b0062645b33100503df5670cf8",
+      "size": 783230,
+      "normalized_sha256": "c32b5d59bb4f491fdc71e720eb056e3d8707e9b0062645b33100503df5670cf8"
     },
     "app/code/Weline/Theme/doc/组件Meta信息使用示例.md": {
       "role": "index",
@@ -92322,9 +92406,9 @@
     },
     "app/code/Weline/Theme/doc/部件静态资源固化规范.md": {
       "role": "index",
-      "sha256": "4634fe8e99d080e66b08501c514ce83f98d8f7da14b3466c2fa187ed6111ea34",
-      "size": 7834,
-      "normalized_sha256": "4634fe8e99d080e66b08501c514ce83f98d8f7da14b3466c2fa187ed6111ea34"
+      "sha256": "f31a690c6cc3963fb857f65e0ae32a74e3719052b83c67207b73a600b120e4ca",
+      "size": 8045,
+      "normalized_sha256": "f31a690c6cc3963fb857f65e0ae32a74e3719052b83c67207b73a600b120e4ca"
     },
     "app/code/Weline/Theme/doc/需求.md": {
       "role": "index",
@@ -92346,15 +92430,15 @@
     },
     "app/code/Weline/Theme/etc/event.xml": {
       "role": "index",
-      "sha256": "e38f60bed6a7dbf85ce1be3742c0b61c4c5a281537d8f95a6a9aa24ce662c442",
-      "size": 13199,
-      "normalized_sha256": "e38f60bed6a7dbf85ce1be3742c0b61c4c5a281537d8f95a6a9aa24ce662c442"
+      "sha256": "ee9c5944c39243cd44983d9d4254ec46fb4f6ab81ad57b5600e8fe52544f085e",
+      "size": 13203,
+      "normalized_sha256": "ee9c5944c39243cd44983d9d4254ec46fb4f6ab81ad57b5600e8fe52544f085e"
     },
     "app/code/Weline/Theme/etc/module.php": {
       "role": "index",
-      "sha256": "6247e2e72ddf47e4667f440e0ceae463995eff1b419c15e8fb00eaf3621879d8",
-      "size": 3759,
-      "normalized_sha256": "6247e2e72ddf47e4667f440e0ceae463995eff1b419c15e8fb00eaf3621879d8"
+      "sha256": "5d3a0bbe6c78d9e7994e60691f1cafd485332a4d88201e2624a0e7ac30a8bb05",
+      "size": 4025,
+      "normalized_sha256": "5d3a0bbe6c78d9e7994e60691f1cafd485332a4d88201e2624a0e7ac30a8bb05"
     },
     "app/code/Weline/Theme/etc/resumable_tasks.php": {
       "role": "index",
@@ -92364,9 +92448,9 @@
     },
     "app/code/Weline/Theme/etc/weline-ui-assets.json": {
       "role": "index",
-      "sha256": "70712411eaf8c0c5bbb3da92f8c81917233a3eee1f4e965a8700faa6f7f03516",
-      "size": 33221,
-      "normalized_sha256": "70712411eaf8c0c5bbb3da92f8c81917233a3eee1f4e965a8700faa6f7f03516"
+      "sha256": "560696ae5fa4b3bdc26257506066b277cc5e00bfefb319858bbe05a731eb5724",
+      "size": 32975,
+      "normalized_sha256": "560696ae5fa4b3bdc26257506066b277cc5e00bfefb319858bbe05a731eb5724"
     },
     "app/code/Weline/Theme/event.php": {
       "role": "index",
@@ -92406,21 +92490,21 @@
     },
     "app/code/Weline/Theme/extends/module/Weline_Framework/Changed/Capability/ThemeRuntimeCapability.php": {
       "role": "index",
-      "sha256": "afde5b26213a0892a22a03a1fadaf3ed350c75ace2bb6c6d99ecc527e771d1e6",
-      "size": 1808,
-      "normalized_sha256": "afde5b26213a0892a22a03a1fadaf3ed350c75ace2bb6c6d99ecc527e771d1e6"
+      "sha256": "dbfbe8488f92d71817781e71a93c5e8ac0ef6d7c51c82df474ffe9e39350ca8c",
+      "size": 2093,
+      "normalized_sha256": "dbfbe8488f92d71817781e71a93c5e8ac0ef6d7c51c82df474ffe9e39350ca8c"
     },
     "app/code/Weline/Theme/extends/module/Weline_Framework/Changed/Type/ThemeChangedType.php": {
       "role": "index",
-      "sha256": "ff392945742b06a1b2dcd9ae4a4f038411322dc10c6decbe2e24fb3b16836844",
-      "size": 4019,
-      "normalized_sha256": "ff392945742b06a1b2dcd9ae4a4f038411322dc10c6decbe2e24fb3b16836844"
+      "sha256": "761962ae63cdf6edbe307e78f2ca1efb0264464599972aae5ff879a957e66839",
+      "size": 4222,
+      "normalized_sha256": "761962ae63cdf6edbe307e78f2ca1efb0264464599972aae5ff879a957e66839"
     },
     "app/code/Weline/Theme/extends/module/Weline_Framework/Changed/Type/ThemeLayoutChangedType.php": {
       "role": "index",
-      "sha256": "a0f2fbcf0cfd717db24ef17756d43c52dba4acb4d13246a450d6714504843574",
-      "size": 4039,
-      "normalized_sha256": "a0f2fbcf0cfd717db24ef17756d43c52dba4acb4d13246a450d6714504843574"
+      "sha256": "3a86a3cee3c65ee931e9a174d09f9b520f4d9e21b855eb35cf416397b1d256c2",
+      "size": 4242,
+      "normalized_sha256": "3a86a3cee3c65ee931e9a174d09f9b520f4d9e21b855eb35cf416397b1d256c2"
     },
     "app/code/Weline/Theme/extends/module/Weline_Framework/Fpc/Bypass/ThemeEditorFpcBypassProvider.php": {
       "role": "index",
@@ -92430,9 +92514,9 @@
     },
     "app/code/Weline/Theme/extends/module/Weline_Framework/Query/ThemeQueryProvider.php": {
       "role": "index",
-      "sha256": "b8f736fee4ab0e1c4a2220efe6a1f2205dce29f44298f0e735a2167e78e31e2b",
-      "size": 88948,
-      "normalized_sha256": "b8f736fee4ab0e1c4a2220efe6a1f2205dce29f44298f0e735a2167e78e31e2b"
+      "sha256": "687b905de21967d4bab5058082ca7a512f8e21684be8bc64a28bd86e1a86ac90",
+      "size": 88785,
+      "normalized_sha256": "687b905de21967d4bab5058082ca7a512f8e21684be8bc64a28bd86e1a86ac90"
     },
     "app/code/Weline/Theme/extends/module/Weline_Framework/Security/Csp/ThemeVideoEmbedCsp.php": {
       "role": "index",
@@ -92490,9 +92574,9 @@
     },
     "app/code/Weline/Theme/extends/module/Weline_Widget/Weline_Theme/widget.php": {
       "role": "index",
-      "sha256": "83420a4e060af2a412c4fbdae83a5963fea2caf74efd7a8df21fb54fded52a2e",
-      "size": 18061,
-      "normalized_sha256": "83420a4e060af2a412c4fbdae83a5963fea2caf74efd7a8df21fb54fded52a2e"
+      "sha256": "ee064a769eec2d6750cd99be1af0a8ec525919c6bd9097c9d05edd950896c83b",
+      "size": 23084,
+      "normalized_sha256": "ee064a769eec2d6750cd99be1af0a8ec525919c6bd9097c9d05edd950896c83b"
     },
     "app/code/Weline/Theme/hook.php": {
       "role": "index",
@@ -92502,21 +92586,21 @@
     },
     "app/code/Weline/Theme/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "d331c4ca076bb7791d1bc0b8ae31282af49a6df79605f583b19f5764f1af07f6",
-      "size": 432116,
-      "normalized_sha256": "d331c4ca076bb7791d1bc0b8ae31282af49a6df79605f583b19f5764f1af07f6"
+      "sha256": "261b71206f41299d81d927654e44fd5e6dcf9823734f6de0ededaceff040cd1d",
+      "size": 434160,
+      "normalized_sha256": "261b71206f41299d81d927654e44fd5e6dcf9823734f6de0ededaceff040cd1d"
     },
     "app/code/Weline/Theme/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "27f80d0d8234b68f214521f76e6978e88c15643e335d38964faea5ae54df2682",
-      "size": 392996,
-      "normalized_sha256": "27f80d0d8234b68f214521f76e6978e88c15643e335d38964faea5ae54df2682"
+      "sha256": "f21a1e1084f7a7701790a708e032a3cfaa3dd356d8cf89ffe3400aca0f3810f0",
+      "size": 395036,
+      "normalized_sha256": "f21a1e1084f7a7701790a708e032a3cfaa3dd356d8cf89ffe3400aca0f3810f0"
     },
     "app/code/Weline/Theme/register.php": {
       "role": "index",
-      "sha256": "674cb473905bc6c2d9c749254176f0e3536ceffd7faf3ba89487832fb5b940db",
-      "size": 861,
-      "normalized_sha256": "674cb473905bc6c2d9c749254176f0e3536ceffd7faf3ba89487832fb5b940db"
+      "sha256": "c310d6cd9731b4494048d0ffe6822420c1ce7db6e1c6fb44495c6ce51c389e31",
+      "size": 1057,
+      "normalized_sha256": "c310d6cd9731b4494048d0ffe6822420c1ce7db6e1c6fb44495c6ce51c389e31"
     },
     "app/code/Weline/Theme/view/fonts/LXGWWenKai-Medium.ttf": {
       "role": "observe",
@@ -92603,9 +92687,9 @@
     },
     "app/code/Weline/Theme/view/hooks/Weline_Websites/backend/website/form/sections-after.phtml": {
       "role": "index",
-      "sha256": "3c3fd2f86b00c03475a15b764a07ba7baf128df384ff61a817f86244897a97ed",
-      "size": 8505,
-      "normalized_sha256": "3c3fd2f86b00c03475a15b764a07ba7baf128df384ff61a817f86244897a97ed"
+      "sha256": "35a2e140bc5b8e7c56053d74737e3031e002973cff98de24c600b5a6765b6fc8",
+      "size": 8511,
+      "normalized_sha256": "35a2e140bc5b8e7c56053d74737e3031e002973cff98de24c600b5a6765b6fc8"
     },
     "app/code/Weline/Theme/view/hooks/header-account.phtml": {
       "role": "index",
@@ -92627,9 +92711,9 @@
     },
     "app/code/Weline/Theme/view/statics/css/partials/header-default.css": {
       "role": "index",
-      "sha256": "950a66cdbe33515f2de661926f6fc09d0a80d97943e8b432e4ef3e693d53b0df",
-      "size": 96214,
-      "normalized_sha256": "950a66cdbe33515f2de661926f6fc09d0a80d97943e8b432e4ef3e693d53b0df"
+      "sha256": "e764ed68c3ad142def21c39eb0b54b46728014c7b3e3400e12de8f60d6b41f35",
+      "size": 97463,
+      "normalized_sha256": "e764ed68c3ad142def21c39eb0b54b46728014c7b3e3400e12de8f60d6b41f35"
     },
     "app/code/Weline/Theme/view/statics/css/partials/product-card-purchase-actions.css": {
       "role": "index",
@@ -92675,9 +92759,9 @@
     },
     "app/code/Weline/Theme/view/statics/css/widgets/header-chrome-amazon.css": {
       "role": "index",
-      "sha256": "67a51a1c30782eac7d9be0ea6fb223de5ec60fccbe298a393ad5bb071e571687",
-      "size": 42117,
-      "normalized_sha256": "67a51a1c30782eac7d9be0ea6fb223de5ec60fccbe298a393ad5bb071e571687"
+      "sha256": "86e25169191f23ea7d6c339e64c47c00ea46f1bcbc4d0e87c4d206084e143e65",
+      "size": 42430,
+      "normalized_sha256": "86e25169191f23ea7d6c339e64c47c00ea46f1bcbc4d0e87c4d206084e143e65"
     },
     "app/code/Weline/Theme/view/statics/css/widgets/header-search-amazon.css": {
       "role": "index",
@@ -92687,9 +92771,9 @@
     },
     "app/code/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css": {
       "role": "index",
-      "sha256": "0a9c25af3836efea4284467bdaf39fef47fcd080de7c1b93a1ac974b34b16030",
-      "size": 27503,
-      "normalized_sha256": "0a9c25af3836efea4284467bdaf39fef47fcd080de7c1b93a1ac974b34b16030"
+      "sha256": "472fce09e59a2c4de10addcc5a216a3ca1ddd0f057fdfe5c4c76bba9f243f6a4",
+      "size": 28531,
+      "normalized_sha256": "472fce09e59a2c4de10addcc5a216a3ca1ddd0f057fdfe5c4c76bba9f243f6a4"
     },
     "app/code/Weline/Theme/view/statics/css/widgets/site-blocks.css": {
       "role": "index",
@@ -92867,9 +92951,9 @@
     },
     "app/code/Weline/Theme/view/statics/css/widgets/widget-header-account-default.css": {
       "role": "index",
-      "sha256": "34cff9e3c9c39f494f870fc8a739802ba75d41eeedd4021fba040edb684144e4",
-      "size": 9351,
-      "normalized_sha256": "34cff9e3c9c39f494f870fc8a739802ba75d41eeedd4021fba040edb684144e4"
+      "sha256": "3edbdc5467ebaf5aaec8e0869222291c7fbb992e7fd72298e0c5b5929beb52ee",
+      "size": 9870,
+      "normalized_sha256": "3edbdc5467ebaf5aaec8e0869222291c7fbb992e7fd72298e0c5b5929beb52ee"
     },
     "app/code/Weline/Theme/view/statics/css/widgets/widget-header-full-header-default.css": {
       "role": "index",
@@ -92879,9 +92963,9 @@
     },
     "app/code/Weline/Theme/view/statics/css/widgets/widget-header-header-policy-links-default.css": {
       "role": "index",
-      "sha256": "b72f188c15196d74a0ac180c49fd3b1c7db19ce2d482054f85cfd39e86810c3f",
-      "size": 2053,
-      "normalized_sha256": "b72f188c15196d74a0ac180c49fd3b1c7db19ce2d482054f85cfd39e86810c3f"
+      "sha256": "2f4b49b71bed915bd5e890e352c25233d611737cbef8048880521e0062b7ba4a",
+      "size": 2438,
+      "normalized_sha256": "2f4b49b71bed915bd5e890e352c25233d611737cbef8048880521e0062b7ba4a"
     },
     "app/code/Weline/Theme/view/statics/css/widgets/widget-header-help-center-link-default.css": {
       "role": "index",
@@ -93087,9 +93171,9 @@
     },
     "app/code/Weline/Theme/view/statics/frontend/weline.modules.js": {
       "role": "index",
-      "sha256": "a4e2dc650233507c5cfdad0bfcc68caeef2c992c6e7200131a9ccfe5b18bfeed",
-      "size": 2250,
-      "normalized_sha256": "a4e2dc650233507c5cfdad0bfcc68caeef2c992c6e7200131a9ccfe5b18bfeed"
+      "sha256": "bcb4c8de17b51e03261b43d3ccba9aa843c34e0afd552cd6babf2609a016104d",
+      "size": 2249,
+      "normalized_sha256": "bcb4c8de17b51e03261b43d3ccba9aa843c34e0afd552cd6babf2609a016104d"
     },
     "app/code/Weline/Theme/view/statics/images/storefront-placeholder/default.svg": {
       "role": "index",
@@ -93165,9 +93249,9 @@
     },
     "app/code/Weline/Theme/view/statics/js/partials/header-default.js": {
       "role": "index",
-      "sha256": "87d7835208f5ac247379fb3d524037e8d7af643d218151744975067752b6a287",
-      "size": 87285,
-      "normalized_sha256": "87d7835208f5ac247379fb3d524037e8d7af643d218151744975067752b6a287"
+      "sha256": "c74ee45bb630e3cc2251d554f8d3dcf4092b4b9fefb91f93de0a4c8d6de278a9",
+      "size": 113194,
+      "normalized_sha256": "c74ee45bb630e3cc2251d554f8d3dcf4092b4b9fefb91f93de0a4c8d6de278a9"
     },
     "app/code/Weline/Theme/view/statics/js/partials/prototype-flexprobe-a.html": {
       "role": "index",
@@ -93255,9 +93339,9 @@
     },
     "app/code/Weline/Theme/view/statics/js/theme-editor.js": {
       "role": "index",
-      "sha256": "8b42bbd764eae19451d2f7b9b30645621f543abbdf5648e20d72361a8ef5c9c1",
-      "size": 1009280,
-      "normalized_sha256": "8b42bbd764eae19451d2f7b9b30645621f543abbdf5648e20d72361a8ef5c9c1"
+      "sha256": "18f92c644eda9f0d38ce16b573da1967f943ede224f3bb2997598eb9744e1999",
+      "size": 1009739,
+      "normalized_sha256": "18f92c644eda9f0d38ce16b573da1967f943ede224f3bb2997598eb9744e1999"
     },
     "app/code/Weline/Theme/view/statics/js/widgets/footer-social-float.js": {
       "role": "index",
@@ -93279,9 +93363,9 @@
     },
     "app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js": {
       "role": "index",
-      "sha256": "983b36f466b173ad93cb356f13bec9d32ede7d707f4b24881c3733142680e5c2",
-      "size": 88295,
-      "normalized_sha256": "983b36f466b173ad93cb356f13bec9d32ede7d707f4b24881c3733142680e5c2"
+      "sha256": "b6930662d91efb24fdad8600ffb7f21b69317cb2844fdece1b619556225af37a",
+      "size": 93733,
+      "normalized_sha256": "b6930662d91efb24fdad8600ffb7f21b69317cb2844fdece1b619556225af37a"
     },
     "app/code/Weline/Theme/view/statics/js/widgets/site-blocks.js": {
       "role": "index",
@@ -93585,9 +93669,9 @@
     },
     "app/code/Weline/Theme/view/statics/ui/manifest.json": {
       "role": "index",
-      "sha256": "09742a5f27d24061a117ed7f619bc69c8f0431ad42e58ff82cf315b66eadde38",
-      "size": 44886,
-      "normalized_sha256": "09742a5f27d24061a117ed7f619bc69c8f0431ad42e58ff82cf315b66eadde38"
+      "sha256": "43511e2ad51d3611df628317023b27c60762670258bb332b2f39c60a68b08330",
+      "size": 44532,
+      "normalized_sha256": "43511e2ad51d3611df628317023b27c60762670258bb332b2f39c60a68b08330"
     },
     "app/code/Weline/Theme/view/statics/ui/pages/weline-acl-role-assign.css": {
       "role": "index",
@@ -93669,9 +93753,9 @@
     },
     "app/code/Weline/Theme/view/statics/ui/pages/weline-customer-account-login.js": {
       "role": "index",
-      "sha256": "0f14e99c528fe2e3e5038c1d5bddb0033115fffd908c170fdab86db65e80a718",
-      "size": 13873,
-      "normalized_sha256": "0f14e99c528fe2e3e5038c1d5bddb0033115fffd908c170fdab86db65e80a718"
+      "sha256": "e076e9d4e708c07d26f69042fd1ae6f118febb14c8bfdee0f1094e4deaf8d578",
+      "size": 14099,
+      "normalized_sha256": "e076e9d4e708c07d26f69042fd1ae6f118febb14c8bfdee0f1094e4deaf8d578"
     },
     "app/code/Weline/Theme/view/statics/ui/pages/weline-customer-account-recovery.css": {
       "role": "index",
@@ -93681,9 +93765,9 @@
     },
     "app/code/Weline/Theme/view/statics/ui/pages/weline-customer-account-recovery.js": {
       "role": "index",
-      "sha256": "737d42cc43e4b498b309a381ede9a990cef640bd3c4ef13f25ec33c381fbf550",
-      "size": 6145,
-      "normalized_sha256": "737d42cc43e4b498b309a381ede9a990cef640bd3c4ef13f25ec33c381fbf550"
+      "sha256": "29c2733b0b8e3abba89c3868b27803be7e5cda934443b5f35ac5c48ba97862be",
+      "size": 6371,
+      "normalized_sha256": "29c2733b0b8e3abba89c3868b27803be7e5cda934443b5f35ac5c48ba97862be"
     },
     "app/code/Weline/Theme/view/statics/ui/pages/weline-datatable-demo-admin.js": {
       "role": "index",
@@ -93957,9 +94041,9 @@
     },
     "app/code/Weline/Theme/view/statics/ui/weline-frontend.css": {
       "role": "index",
-      "sha256": "5f30412938526c51b332b4dba0538b759bb46aeaf67a47cba2d05f55e62eaa09",
-      "size": 11801,
-      "normalized_sha256": "5f30412938526c51b332b4dba0538b759bb46aeaf67a47cba2d05f55e62eaa09"
+      "sha256": "b3e1b0322564843abc2f22aa32971ebb4a6aad16b06e3a33e646a8d6a3690e4a",
+      "size": 11934,
+      "normalized_sha256": "b3e1b0322564843abc2f22aa32971ebb4a6aad16b06e3a33e646a8d6a3690e4a"
     },
     "app/code/Weline/Theme/view/statics/ui/weline-icons.svg": {
       "role": "index",
@@ -94125,9 +94209,9 @@
     },
     "app/code/Weline/Theme/view/templates/backend/index.phtml": {
       "role": "index",
-      "sha256": "279adc0f1798af9a92d127fa14cfbb07226779ea39cc519d7bf0267b85655271",
-      "size": 80593,
-      "normalized_sha256": "279adc0f1798af9a92d127fa14cfbb07226779ea39cc519d7bf0267b85655271"
+      "sha256": "93f4701ce68abcdb369e0130957b0fe56710af31e7d3b26195a469a64b51a31d",
+      "size": 80622,
+      "normalized_sha256": "93f4701ce68abcdb369e0130957b0fe56710af31e7d3b26195a469a64b51a31d"
     },
     "app/code/Weline/Theme/view/templates/partials/head/site-favicon.phtml": {
       "role": "index",
@@ -94538,9 +94622,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/assets/css/theme.css": {
       "role": "index",
-      "sha256": "03ecb9531db169f8e5baf3616941265c309aa6db8a4172cf80b9da570fe3282c",
-      "size": 126851,
-      "normalized_sha256": "03ecb9531db169f8e5baf3616941265c309aa6db8a4172cf80b9da570fe3282c"
+      "sha256": "51a3020f0a0b59ec6ce8d838ace75c772491ac310f76bc2b6cda736f793e0fe9",
+      "size": 127428,
+      "normalized_sha256": "51a3020f0a0b59ec6ce8d838ace75c772491ac310f76bc2b6cda736f793e0fe9"
     },
     "app/code/Weline/Theme/view/theme/frontend/assets/images/ink/ox-cloth-caravan.webp": {
       "role": "index",
@@ -94835,9 +94919,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/layouts/default/default.phtml": {
       "role": "index",
-      "sha256": "97f0343abf57dd049e8be10fe2b6f7edf0c2d70aa37cf0f7f4bbe75fe604d5d1",
-      "size": 7338,
-      "normalized_sha256": "97f0343abf57dd049e8be10fe2b6f7edf0c2d70aa37cf0f7f4bbe75fe604d5d1"
+      "sha256": "2baff623ba230ee52667a472a372047a5969f81f83f6a5b94679d64866299622",
+      "size": 7335,
+      "normalized_sha256": "2baff623ba230ee52667a472a372047a5969f81f83f6a5b94679d64866299622"
     },
     "app/code/Weline/Theme/view/theme/frontend/layouts/error/default.phtml": {
       "role": "index",
@@ -94973,9 +95057,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/partials/footer/default.phtml": {
       "role": "index",
-      "sha256": "b9fa1d9cd2cdb8c79ea32ae98153b679dcdb04bf4502f520681588b86d25f848",
-      "size": 3866,
-      "normalized_sha256": "b9fa1d9cd2cdb8c79ea32ae98153b679dcdb04bf4502f520681588b86d25f848"
+      "sha256": "c0bcdf1cee56fd7e097e3c09c2d9516f7224fee32da56c32a76d301b0e1556b8",
+      "size": 3709,
+      "normalized_sha256": "c0bcdf1cee56fd7e097e3c09c2d9516f7224fee32da56c32a76d301b0e1556b8"
     },
     "app/code/Weline/Theme/view/theme/frontend/partials/footer/minimal.phtml": {
       "role": "index",
@@ -95039,9 +95123,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/partials/header/default.phtml": {
       "role": "index",
-      "sha256": "6ea800c66b8617f8aa972c0c2b1ba2907eae4a2d7924b77e3fea7c187cb016f7",
-      "size": 47305,
-      "normalized_sha256": "6ea800c66b8617f8aa972c0c2b1ba2907eae4a2d7924b77e3fea7c187cb016f7"
+      "sha256": "c762252c6602437092caaabf2d6b2ac400fe4d18c6b3a766a6faf23b3c4da9d3",
+      "size": 47325,
+      "normalized_sha256": "c762252c6602437092caaabf2d6b2ac400fe4d18c6b3a766a6faf23b3c4da9d3"
     },
     "app/code/Weline/Theme/view/theme/frontend/partials/header/mega-menu-panel.phtml": {
       "role": "index",
@@ -95171,9 +95255,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/banner/hero-slider/default.phtml": {
       "role": "index",
-      "sha256": "cf6c42cdbe433e0bfd347a4913253792d9ff317d03e9763992589ab18d61e642",
-      "size": 20558,
-      "normalized_sha256": "cf6c42cdbe433e0bfd347a4913253792d9ff317d03e9763992589ab18d61e642"
+      "sha256": "da8d826f97b9b80588ade7d76502eccf87a74de069bf9dae4ba6a21341045466",
+      "size": 20894,
+      "normalized_sha256": "da8d826f97b9b80588ade7d76502eccf87a74de069bf9dae4ba6a21341045466"
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/banner/promo-banner/default.phtml": {
       "role": "index",
@@ -95195,9 +95279,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/category/category-grid/default.phtml": {
       "role": "index",
-      "sha256": "14ed9293b3bbfdac35435a7ddf0ad2d03b8d889155d6e10f929e02545aa9a3d8",
-      "size": 10788,
-      "normalized_sha256": "14ed9293b3bbfdac35435a7ddf0ad2d03b8d889155d6e10f929e02545aa9a3d8"
+      "sha256": "4ab6baba720842e437cce6dfe6ffeff70d501e6822f06190ab55ae1548e552d1",
+      "size": 11155,
+      "normalized_sha256": "4ab6baba720842e437cce6dfe6ffeff70d501e6822f06190ab55ae1548e552d1"
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/category/category-list/default.phtml": {
       "role": "index",
@@ -95219,9 +95303,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/container/footer/default.phtml": {
       "role": "index",
-      "sha256": "4b352a4b63eac5e699fb6bd7a3146c888562663527a6954d4fc2d4d08ab6cf67",
-      "size": 19698,
-      "normalized_sha256": "4b352a4b63eac5e699fb6bd7a3146c888562663527a6954d4fc2d4d08ab6cf67"
+      "sha256": "750f999fbf34d1aed32a70f90e65b566c8d49707bbd29d2d9a4a39a5c7c6971c",
+      "size": 19611,
+      "normalized_sha256": "750f999fbf34d1aed32a70f90e65b566c8d49707bbd29d2d9a4a39a5c7c6971c"
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/container/header/default.phtml": {
       "role": "index",
@@ -95231,9 +95315,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/content/brand-logos/default.phtml": {
       "role": "index",
-      "sha256": "6577d877c6051a7b92549d399d36f04171973193c50b5eb9a98f8bf0d7e4fb76",
-      "size": 9030,
-      "normalized_sha256": "6577d877c6051a7b92549d399d36f04171973193c50b5eb9a98f8bf0d7e4fb76"
+      "sha256": "e1d9b38f1339d78a1ff7faf926c73f077d5ab24fad954e8271245debfd3db773",
+      "size": 9238,
+      "normalized_sha256": "e1d9b38f1339d78a1ff7faf926c73f077d5ab24fad954e8271245debfd3db773"
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/content/button-group/default.phtml": {
       "role": "index",
@@ -95351,9 +95435,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/footer/footer-faq-link/default.phtml": {
       "role": "index",
-      "sha256": "821a6a39534a82025b04bd404b434b9c98bb7714452544fe987f8bcd1c580521",
-      "size": 1551,
-      "normalized_sha256": "821a6a39534a82025b04bd404b434b9c98bb7714452544fe987f8bcd1c580521"
+      "sha256": "5c05024ba5542500d6ea6e99e5bc9f539f3edf1fa962c5e0f4748f165eda6316",
+      "size": 1283,
+      "normalized_sha256": "5c05024ba5542500d6ea6e99e5bc9f539f3edf1fa962c5e0f4748f165eda6316"
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/footer/footer-links/default.phtml": {
       "role": "index",
@@ -95387,9 +95471,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/header/account/default.phtml": {
       "role": "index",
-      "sha256": "e4a39864387c8a04dae97709e568243574c33e1c5a5dbc516bd7bea5e85cc66d",
-      "size": 9142,
-      "normalized_sha256": "e4a39864387c8a04dae97709e568243574c33e1c5a5dbc516bd7bea5e85cc66d"
+      "sha256": "716cb1cf0281ef9fb517b0f20a16cc8d426c428e6192e3c48afbc5398d53e805",
+      "size": 9354,
+      "normalized_sha256": "716cb1cf0281ef9fb517b0f20a16cc8d426c428e6192e3c48afbc5398d53e805"
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/header/currency-switcher/default.phtml": {
       "role": "index",
@@ -95405,9 +95489,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/header/header-policy-links/default.phtml": {
       "role": "index",
-      "sha256": "c1327374072d5f70b86864f0a5583abcb0b5cafce7006c23758c8f21bea6370a",
-      "size": 6772,
-      "normalized_sha256": "c1327374072d5f70b86864f0a5583abcb0b5cafce7006c23758c8f21bea6370a"
+      "sha256": "bc96d0fa7a4eb7527bb614f35ca80e5f81de0104206193f96272acbf81eb54f9",
+      "size": 6509,
+      "normalized_sha256": "bc96d0fa7a4eb7527bb614f35ca80e5f81de0104206193f96272acbf81eb54f9"
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/header/help-center-link/default.phtml": {
       "role": "index",
@@ -95429,9 +95513,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml": {
       "role": "index",
-      "sha256": "1a9fea3eb9a55cddfaf7fcde175323e3bc3fb4dd9de2945c09b72485af5476e9",
-      "size": 18359,
-      "normalized_sha256": "1a9fea3eb9a55cddfaf7fcde175323e3bc3fb4dd9de2945c09b72485af5476e9"
+      "sha256": "85947ef4e02251bdd84aba66628ebee6fcd7698d7bbd08a906ca74ef758f9d7c",
+      "size": 18312,
+      "normalized_sha256": "85947ef4e02251bdd84aba66628ebee6fcd7698d7bbd08a906ca74ef758f9d7c"
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/header/notice-right-link/default.phtml": {
       "role": "index",
@@ -95453,9 +95537,9 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/navigation/all-menu/default.phtml": {
       "role": "index",
-      "sha256": "c4f24ca262081cb089d001c80af92337d06c413f4d7b21a1d6f5d5b64b30cf16",
-      "size": 3816,
-      "normalized_sha256": "c4f24ca262081cb089d001c80af92337d06c413f4d7b21a1d6f5d5b64b30cf16"
+      "sha256": "90bcf87779b96437c536de11c9f48f56cf0f35ad7c864bb91c3fe42a50bfc992",
+      "size": 3610,
+      "normalized_sha256": "90bcf87779b96437c536de11c9f48f56cf0f35ad7c864bb91c3fe42a50bfc992"
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/navigation/category-menu/default.phtml": {
       "role": "index",
@@ -95573,15 +95657,15 @@
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/testimonial/testimonials/default.phtml": {
       "role": "index",
-      "sha256": "ff6196d843b9b2d1ce430c2deb3b7c2df07a5babb04045b4ea75e26eb23792b0",
-      "size": 6459,
-      "normalized_sha256": "ff6196d843b9b2d1ce430c2deb3b7c2df07a5babb04045b4ea75e26eb23792b0"
+      "sha256": "5ea7acc5d36b9b630e71029e6b6981a4b02e525d352839df8ef5c309732dd351",
+      "size": 6521,
+      "normalized_sha256": "5ea7acc5d36b9b630e71029e6b6981a4b02e525d352839df8ef5c309732dd351"
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/video/video-carousel/default.phtml": {
       "role": "index",
-      "sha256": "d0b00c800723f9d3316488b1fb55b0506fbaac9d8f443285af24c25da73d949a",
-      "size": 27844,
-      "normalized_sha256": "d0b00c800723f9d3316488b1fb55b0506fbaac9d8f443285af24c25da73d949a"
+      "sha256": "fe4148b2cd46cf8e74aac633a5d15ba64c3219f67bd46b5cdba0f098bd83d553",
+      "size": 27984,
+      "normalized_sha256": "fe4148b2cd46cf8e74aac633a5d15ba64c3219f67bd46b5cdba0f098bd83d553"
     },
     "app/code/Weline/Theme/view/theme/frontend/widgets/video/video-player/default.phtml": {
       "role": "index",
@@ -95609,9 +95693,9 @@
     },
     "app/code/Weline/Theme/view/ui/css/frontend.css": {
       "role": "index",
-      "sha256": "077314220844727a221fad3dc86810554da97342b3db11ac9514b95d5f9d4afb",
-      "size": 11760,
-      "normalized_sha256": "077314220844727a221fad3dc86810554da97342b3db11ac9514b95d5f9d4afb"
+      "sha256": "27ccc8cc318fe6f96b2c8ecc85b77f7ffcc0604c52c90448312e6e7165659318",
+      "size": 11893,
+      "normalized_sha256": "27ccc8cc318fe6f96b2c8ecc85b77f7ffcc0604c52c90448312e6e7165659318"
     },
     "app/code/Weline/Theme/view/ui/css/pages/theme-editor-brand-chrome.css": {
       "role": "index",
@@ -95711,9 +95795,9 @@
     },
     "app/code/Weline/ThemeFancy/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "333a0241e38a0ee8ef361acc862b9de72aa8de3d03b87583113ff48dfcf62b43",
-      "size": 3170,
-      "normalized_sha256": "333a0241e38a0ee8ef361acc862b9de72aa8de3d03b87583113ff48dfcf62b43"
+      "sha256": "0f39488723355865dff4d57ac017e4598b3399cde759644c14a76acd153a7b21",
+      "size": 3203,
+      "normalized_sha256": "0f39488723355865dff4d57ac017e4598b3399cde759644c14a76acd153a7b21"
     },
     "app/code/Weline/ThemeFancy/doc/README.md": {
       "role": "index",
@@ -101377,9 +101461,9 @@
     },
     "app/code/Weline/TranslationService/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "735f79b4581b981b1eebb344e41edbd076c8a226322d22ae6fba1ac336d118d1",
-      "size": 4263,
-      "normalized_sha256": "735f79b4581b981b1eebb344e41edbd076c8a226322d22ae6fba1ac336d118d1"
+      "sha256": "5c58e63a45b79f97a14e532857e32e0be85dcaaea2456822467a825beb996e0f",
+      "size": 4290,
+      "normalized_sha256": "5c58e63a45b79f97a14e532857e32e0be85dcaaea2456822467a825beb996e0f"
     },
     "app/code/Weline/TranslationService/doc/AI翻译标签使用指南.md": {
       "role": "index",
@@ -101413,9 +101497,9 @@
     },
     "app/code/Weline/TranslationService/doc/功能现状.md": {
       "role": "index",
-      "sha256": "8350df5eed724deed8740e9c4a0919e6455542d77890d6faf6c6def2176e9c99",
-      "size": 4309,
-      "normalized_sha256": "8350df5eed724deed8740e9c4a0919e6455542d77890d6faf6c6def2176e9c99"
+      "sha256": "c67ae7478af2342b1064bb94ca47bcdb28535fab88005ccddde8803180c3f6e6",
+      "size": 4249,
+      "normalized_sha256": "c67ae7478af2342b1064bb94ca47bcdb28535fab88005ccddde8803180c3f6e6"
     },
     "app/code/Weline/TranslationService/doc/开发日志.md": {
       "role": "index",
@@ -101557,9 +101641,9 @@
     },
     "app/code/Weline/Trash/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "8216df1bb660446f940963696cb5d4bb454bf712940a169b6dae9379cab1527b",
-      "size": 3251,
-      "normalized_sha256": "8216df1bb660446f940963696cb5d4bb454bf712940a169b6dae9379cab1527b"
+      "sha256": "112513a43ae558d6dd7eb96172b401cb3f56f071e6f6e02988bb91c396b8984e",
+      "size": 3472,
+      "normalized_sha256": "112513a43ae558d6dd7eb96172b401cb3f56f071e6f6e02988bb91c396b8984e"
     },
     "app/code/Weline/Trash/doc/README.md": {
       "role": "index",
@@ -101569,9 +101653,9 @@
     },
     "app/code/Weline/Trash/doc/功能现状.md": {
       "role": "index",
-      "sha256": "3c2996806fb4e1f6b54ac97ce243716ff329d2378d5904a7763c9ac07818c9ab",
-      "size": 3120,
-      "normalized_sha256": "3c2996806fb4e1f6b54ac97ce243716ff329d2378d5904a7763c9ac07818c9ab"
+      "sha256": "ce280655c91ccce2206aac62afc3bc4c472a7df59079cc10dcb7c56507d78439",
+      "size": 3105,
+      "normalized_sha256": "ce280655c91ccce2206aac62afc3bc4c472a7df59079cc10dcb7c56507d78439"
     },
     "app/code/Weline/Trash/doc/开发日志.md": {
       "role": "index",
@@ -101811,9 +101895,9 @@
     },
     "app/code/Weline/TwoFactorAuth/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "0dd9897925610cbccaafe5c2e5925144a543891dc693dcbc0a38709f6efdb964",
-      "size": 4110,
-      "normalized_sha256": "0dd9897925610cbccaafe5c2e5925144a543891dc693dcbc0a38709f6efdb964"
+      "sha256": "f1d4639684d57471ba5959f29f73312366db1bbc5493da4643c87a15934dfef6",
+      "size": 4153,
+      "normalized_sha256": "f1d4639684d57471ba5959f29f73312366db1bbc5493da4643c87a15934dfef6"
     },
     "app/code/Weline/TwoFactorAuth/doc/README.md": {
       "role": "index",
@@ -101843,9 +101927,9 @@
     },
     "app/code/Weline/TwoFactorAuth/doc/功能现状.md": {
       "role": "index",
-      "sha256": "71490c75c3b038b5fc8dfb48dc0c8f9919e45941304a8aa460e78d4b159381b8",
-      "size": 5537,
-      "normalized_sha256": "71490c75c3b038b5fc8dfb48dc0c8f9919e45941304a8aa460e78d4b159381b8"
+      "sha256": "4c0766a39588a30734ee45b3576f6821615d6e89aa5ed19842433ae13a3652e2",
+      "size": 5487,
+      "normalized_sha256": "4c0766a39588a30734ee45b3576f6821615d6e89aa5ed19842433ae13a3652e2"
     },
     "app/code/Weline/TwoFactorAuth/doc/开发日志.md": {
       "role": "index",
@@ -102133,15 +102217,15 @@
     },
     "app/code/Weline/UrlManager/composer.json": {
       "role": "index",
-      "sha256": "76ce0027a8a21e36ad149240e88ca9a2b029c4a0951e10af7b76d637ce9d2b56",
-      "size": 520,
-      "normalized_sha256": "76ce0027a8a21e36ad149240e88ca9a2b029c4a0951e10af7b76d637ce9d2b56"
+      "sha256": "74360cae73559c04fec631b14d85c35fd29267e7a0caeded3d33fca017328dc0",
+      "size": 472,
+      "normalized_sha256": "74360cae73559c04fec631b14d85c35fd29267e7a0caeded3d33fca017328dc0"
     },
     "app/code/Weline/UrlManager/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "77eb1734c8b7961ab0fb72839048132c621fa05245b1a42333f4828087bebe64",
-      "size": 3579,
-      "normalized_sha256": "77eb1734c8b7961ab0fb72839048132c621fa05245b1a42333f4828087bebe64"
+      "sha256": "2b5230dd77af366991d88abdd94c624b11eb873e45f6c2f03ce394840d9e34e9",
+      "size": 3508,
+      "normalized_sha256": "2b5230dd77af366991d88abdd94c624b11eb873e45f6c2f03ce394840d9e34e9"
     },
     "app/code/Weline/UrlManager/doc/README.md": {
       "role": "index",
@@ -102163,9 +102247,9 @@
     },
     "app/code/Weline/UrlManager/doc/功能现状.md": {
       "role": "index",
-      "sha256": "721a6ccf61dcd9987c919652dfab4755f7787c0b169972b88610c22732949655",
-      "size": 4464,
-      "normalized_sha256": "721a6ccf61dcd9987c919652dfab4755f7787c0b169972b88610c22732949655"
+      "sha256": "1270204645a963443c69bba0fcbbcb7c2059a590556d65eaf0f268557fc10962",
+      "size": 5173,
+      "normalized_sha256": "1270204645a963443c69bba0fcbbcb7c2059a590556d65eaf0f268557fc10962"
     },
     "app/code/Weline/UrlManager/doc/开发日志.md": {
       "role": "index",
@@ -102199,9 +102283,9 @@
     },
     "app/code/Weline/UrlManager/etc/module.php": {
       "role": "index",
-      "sha256": "133ee097248b4692f7997a625af3672247c3a666a11cabb8fed60775fc9d4fd0",
-      "size": 483,
-      "normalized_sha256": "133ee097248b4692f7997a625af3672247c3a666a11cabb8fed60775fc9d4fd0"
+      "sha256": "c6f29ba51e1c6a63bc85904c16c94b23e4be5214dad8c7a376860dee892c2dcc",
+      "size": 444,
+      "normalized_sha256": "c6f29ba51e1c6a63bc85904c16c94b23e4be5214dad8c7a376860dee892c2dcc"
     },
     "app/code/Weline/UrlManager/etc/plugin.xml": {
       "role": "index",
@@ -102223,9 +102307,9 @@
     },
     "app/code/Weline/UrlManager/register.php": {
       "role": "index",
-      "sha256": "7e677cb8ad72edf109a190f6992965c80d50391e61bce1490bdf46c871f28199",
-      "size": 432,
-      "normalized_sha256": "7e677cb8ad72edf109a190f6992965c80d50391e61bce1490bdf46c871f28199"
+      "sha256": "e31a7e27ab2598e200bf9ce52b97c0a418a1f1094729701447341d78c812fc7a",
+      "size": 408,
+      "normalized_sha256": "e31a7e27ab2598e200bf9ce52b97c0a418a1f1094729701447341d78c812fc7a"
     },
     "app/code/Weline/UrlManager/view/templates/Backend/Rewriter.phtml": {
       "role": "index",
@@ -102595,9 +102679,9 @@
     },
     "app/code/Weline/Visitor/Service/PixelBootstrapHtmlService.php": {
       "role": "index",
-      "sha256": "81b029d2b84f6f7f95dcb62e0e1dbdc7d8490b4f088c78c76c223c0fac52d819",
-      "size": 15600,
-      "normalized_sha256": "81b029d2b84f6f7f95dcb62e0e1dbdc7d8490b4f088c78c76c223c0fac52d819"
+      "sha256": "926de69fe2d13fb099802ab36e67c7596eecfc128e7a53e4a02ff4fa9707aa38",
+      "size": 15609,
+      "normalized_sha256": "926de69fe2d13fb099802ab36e67c7596eecfc128e7a53e4a02ff4fa9707aa38"
     },
     "app/code/Weline/Visitor/Service/PixelChannelCreateService.php": {
       "role": "index",
@@ -102739,9 +102823,9 @@
     },
     "app/code/Weline/Visitor/Service/PixelEventVendorManager.php": {
       "role": "index",
-      "sha256": "4ae8c241602522ff855c022778b339ccb7ef161ff9c85bec6267dca6f1e8953d",
-      "size": 24300,
-      "normalized_sha256": "4ae8c241602522ff855c022778b339ccb7ef161ff9c85bec6267dca6f1e8953d"
+      "sha256": "fd1bbabf972c359173b218f0522856cad747f6e18d1865b62ea3293a1a2fe5ef",
+      "size": 25555,
+      "normalized_sha256": "fd1bbabf972c359173b218f0522856cad747f6e18d1865b62ea3293a1a2fe5ef"
     },
     "app/code/Weline/Visitor/Service/PixelEventVendorScanner.php": {
       "role": "index",
@@ -102907,9 +102991,9 @@
     },
     "app/code/Weline/Visitor/Service/VisitorPanelBootstrapHtmlService.php": {
       "role": "index",
-      "sha256": "e14c56e7324bd56aedbe6352bf0387a15050c8454e626702962aec9e8ba0c284",
-      "size": 7074,
-      "normalized_sha256": "e14c56e7324bd56aedbe6352bf0387a15050c8454e626702962aec9e8ba0c284"
+      "sha256": "496ca9ad98f26c3b3f80bce3e4e7277300bcfe7941aa97361dc3b3ba42a33201",
+      "size": 7083,
+      "normalized_sha256": "496ca9ad98f26c3b3f80bce3e4e7277300bcfe7941aa97361dc3b3ba42a33201"
     },
     "app/code/Weline/Visitor/Service/VisitorTrackingConfig.php": {
       "role": "index",
@@ -102949,9 +103033,9 @@
     },
     "app/code/Weline/Visitor/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "73880900b11c61649323e2f024345a4e401d1b43dff27d299df1c7f0a3751149",
-      "size": 5263,
-      "normalized_sha256": "73880900b11c61649323e2f024345a4e401d1b43dff27d299df1c7f0a3751149"
+      "sha256": "8b72175f5f05423bbb5e172de5d759b8199057397446ab7cd1709a7b873cfddd",
+      "size": 5833,
+      "normalized_sha256": "8b72175f5f05423bbb5e172de5d759b8199057397446ab7cd1709a7b873cfddd"
     },
     "app/code/Weline/Visitor/doc/GTM_Tag配置清单.md": {
       "role": "index",
@@ -103057,9 +103141,9 @@
     },
     "app/code/Weline/Visitor/doc/功能现状.md": {
       "role": "index",
-      "sha256": "0e607484b50af56e8e8e05785b8d22dd7c5e18ee9fdde2c80e1934763c16f8f3",
-      "size": 8896,
-      "normalized_sha256": "0e607484b50af56e8e8e05785b8d22dd7c5e18ee9fdde2c80e1934763c16f8f3"
+      "sha256": "6e142f710603333250931ef8b73ee3c806ae243f0ae6cd02039da1ef7cc1d6c3",
+      "size": 13530,
+      "normalized_sha256": "6e142f710603333250931ef8b73ee3c806ae243f0ae6cd02039da1ef7cc1d6c3"
     },
     "app/code/Weline/Visitor/doc/升级故障排除-traffic_split.md": {
       "role": "index",
@@ -103093,9 +103177,9 @@
     },
     "app/code/Weline/Visitor/doc/开发日志.md": {
       "role": "index",
-      "sha256": "6167867b9b292692b8b8af716ad7f04032aed2a416325e5ec9c5639a5c6727d6",
-      "size": 70930,
-      "normalized_sha256": "6167867b9b292692b8b8af716ad7f04032aed2a416325e5ec9c5639a5c6727d6"
+      "sha256": "48f0aff783d52633ae9eb51b07d09a92223020287d2829164fe65381bc035acf",
+      "size": 71389,
+      "normalized_sha256": "48f0aff783d52633ae9eb51b07d09a92223020287d2829164fe65381bc035acf"
     },
     "app/code/Weline/Visitor/doc/开发面板访问契约.md": {
       "role": "index",
@@ -103123,9 +103207,9 @@
     },
     "app/code/Weline/Visitor/doc/需求.md": {
       "role": "index",
-      "sha256": "b6cc254f5c762997822808565b42ecc53557850c447e7ec0f9e6a2a0045229e6",
-      "size": 4374,
-      "normalized_sha256": "b6cc254f5c762997822808565b42ecc53557850c447e7ec0f9e6a2a0045229e6"
+      "sha256": "710240e0e686bffc052b9d71d4188361a3e1e3ea58c1e52a8eee8adadab7791f",
+      "size": 4806,
+      "normalized_sha256": "710240e0e686bffc052b9d71d4188361a3e1e3ea58c1e52a8eee8adadab7791f"
     },
     "app/code/Weline/Visitor/etc/backend/menu.xml": {
       "role": "index",
@@ -103153,9 +103237,9 @@
     },
     "app/code/Weline/Visitor/etc/module.php": {
       "role": "index",
-      "sha256": "1a8d53a62a4ff176da78bf20ea34cd0e9640291fd0a9ac2a6db0cc81c3c09206",
+      "sha256": "28573367409aafb7391783e5fc78c4c9b739194cfca7568ef2200c915ca91955",
       "size": 393,
-      "normalized_sha256": "1a8d53a62a4ff176da78bf20ea34cd0e9640291fd0a9ac2a6db0cc81c3c09206"
+      "normalized_sha256": "28573367409aafb7391783e5fc78c4c9b739194cfca7568ef2200c915ca91955"
     },
     "app/code/Weline/Visitor/etc/report_catalog.json": {
       "role": "index",
@@ -103741,9 +103825,9 @@
     },
     "app/code/Weline/Vue/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "aaf31bd9d7676d6d8f7a294e5b25c5600520222d210ae0f000711c04eb6f4f90",
-      "size": 2269,
-      "normalized_sha256": "aaf31bd9d7676d6d8f7a294e5b25c5600520222d210ae0f000711c04eb6f4f90"
+      "sha256": "a76a1e72e8e007c4563215553fd137640701e8ed8253988adc936e0575243cf0",
+      "size": 2326,
+      "normalized_sha256": "a76a1e72e8e007c4563215553fd137640701e8ed8253988adc936e0575243cf0"
     },
     "app/code/Weline/Vue/doc/README.md": {
       "role": "index",
@@ -103753,9 +103837,9 @@
     },
     "app/code/Weline/Vue/doc/功能现状.md": {
       "role": "index",
-      "sha256": "e66287a80061633426f067bd7bc90f02cdf497bb107acdb2e3712717d80296c0",
-      "size": 2600,
-      "normalized_sha256": "e66287a80061633426f067bd7bc90f02cdf497bb107acdb2e3712717d80296c0"
+      "sha256": "ea35aef280870d6710aaabe53a458958e444f69cd9b80f736fcf15139eef1e15",
+      "size": 2584,
+      "normalized_sha256": "ea35aef280870d6710aaabe53a458958e444f69cd9b80f736fcf15139eef1e15"
     },
     "app/code/Weline/Vue/doc/开发日志.md": {
       "role": "index",
@@ -103799,9 +103883,9 @@
     },
     "app/code/Weline/WarmCache/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "d89ef7dd5730964d6d63d85081965f7fb129ebc43de5b0413a029195b82ffba1",
-      "size": 2286,
-      "normalized_sha256": "d89ef7dd5730964d6d63d85081965f7fb129ebc43de5b0413a029195b82ffba1"
+      "sha256": "b2ce72f3d24aca18c19873a8349d31bef3670a83f8c0600cc51bf7f3b21102ee",
+      "size": 2405,
+      "normalized_sha256": "b2ce72f3d24aca18c19873a8349d31bef3670a83f8c0600cc51bf7f3b21102ee"
     },
     "app/code/Weline/WarmCache/doc/README.md": {
       "role": "index",
@@ -103811,9 +103895,9 @@
     },
     "app/code/Weline/WarmCache/doc/功能现状.md": {
       "role": "index",
-      "sha256": "aa96480ec55c5e645967b217bad70c99bab76b1b85f82bb9caee7915b9197b6b",
-      "size": 2630,
-      "normalized_sha256": "aa96480ec55c5e645967b217bad70c99bab76b1b85f82bb9caee7915b9197b6b"
+      "sha256": "85a38edb767a66f305fddf81fa6cf70ab9328bf86bff303277ab3fc48fbb72b7",
+      "size": 2665,
+      "normalized_sha256": "85a38edb767a66f305fddf81fa6cf70ab9328bf86bff303277ab3fc48fbb72b7"
     },
     "app/code/Weline/WarmCache/doc/开发日志.md": {
       "role": "index",
@@ -103875,9 +103959,9 @@
     },
     "app/code/Weline/WebsiteMonitoring/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "8d6c78b81def23f40b78d983e71823c109f014a82370ac0924439fc4c82e8276",
-      "size": 2760,
-      "normalized_sha256": "8d6c78b81def23f40b78d983e71823c109f014a82370ac0924439fc4c82e8276"
+      "sha256": "ab560a0aa99c9f1e149a6f73927c4891890e7835d1f44e80c040533ca8b0abcb",
+      "size": 2814,
+      "normalized_sha256": "ab560a0aa99c9f1e149a6f73927c4891890e7835d1f44e80c040533ca8b0abcb"
     },
     "app/code/Weline/WebsiteMonitoring/doc/README.md": {
       "role": "index",
@@ -103887,9 +103971,9 @@
     },
     "app/code/Weline/WebsiteMonitoring/doc/功能现状.md": {
       "role": "index",
-      "sha256": "69a26a545c4202b60b53449d41084b0abbe7f49566c504d35ed8995f1a205602",
-      "size": 2834,
-      "normalized_sha256": "69a26a545c4202b60b53449d41084b0abbe7f49566c504d35ed8995f1a205602"
+      "sha256": "77660f83c02d68b79787585eb332f275c197c941ffa5d2ab4ce70c5bb8833f04",
+      "size": 2802,
+      "normalized_sha256": "77660f83c02d68b79787585eb332f275c197c941ffa5d2ab4ce70c5bb8833f04"
     },
     "app/code/Weline/WebsiteMonitoring/doc/开发日志.md": {
       "role": "index",
@@ -104287,9 +104371,9 @@
     },
     "app/code/Weline/Websites/Console/Website/Create.php": {
       "role": "index",
-      "sha256": "710f6eb6221d6f88928a693f73f2ee28b6a53e1d4731ead38c48d71672c2e17a",
-      "size": 2082,
-      "normalized_sha256": "710f6eb6221d6f88928a693f73f2ee28b6a53e1d4731ead38c48d71672c2e17a"
+      "sha256": "c7edbdab7f03bdad0e48584fc097f5446e47541aad1bb0ebca1ad371da5af21c",
+      "size": 2306,
+      "normalized_sha256": "c7edbdab7f03bdad0e48584fc097f5446e47541aad1bb0ebca1ad371da5af21c"
     },
     "app/code/Weline/Websites/Console/Website/DomainPool.php": {
       "role": "index",
@@ -104305,9 +104389,9 @@
     },
     "app/code/Weline/Websites/Controller/Admin/Domain.php": {
       "role": "index",
-      "sha256": "4d1a21ce3dbf85578b47cb24dc71805b50bec62bb0814ff20529caabda17f131",
-      "size": 174687,
-      "normalized_sha256": "4d1a21ce3dbf85578b47cb24dc71805b50bec62bb0814ff20529caabda17f131"
+      "sha256": "add11251af83354271a23ff5c301c75447865f9db5d8a316685e34887c815a94",
+      "size": 180822,
+      "normalized_sha256": "add11251af83354271a23ff5c301c75447865f9db5d8a316685e34887c815a94"
     },
     "app/code/Weline/Websites/Controller/Admin/StoreCopy.php": {
       "role": "index",
@@ -104509,9 +104593,9 @@
     },
     "app/code/Weline/Websites/Integration/Framework/FrontendWorkerScopeProvider.php": {
       "role": "index",
-      "sha256": "03992cd911b578801912bbfee9030f41ff9f1f142991bc3555adbbbfcea05ace",
-      "size": 16990,
-      "normalized_sha256": "03992cd911b578801912bbfee9030f41ff9f1f142991bc3555adbbbfcea05ace"
+      "sha256": "f10abcfe488f9219cdef5499b54221b713ee213dedff20e9346e4f93365e8967",
+      "size": 18797,
+      "normalized_sha256": "f10abcfe488f9219cdef5499b54221b713ee213dedff20e9346e4f93365e8967"
     },
     "app/code/Weline/Websites/Integration/Server/AcmeDnsTxtPollPolicyProvider.php": {
       "role": "index",
@@ -104803,9 +104887,9 @@
     },
     "app/code/Weline/Websites/Observer/FrontendWorkerScopeBootstrapResponse.php": {
       "role": "index",
-      "sha256": "549d49d4f482d386478f2767c91e5292be9bb77861f8166a74521787a83b7146",
-      "size": 3767,
-      "normalized_sha256": "549d49d4f482d386478f2767c91e5292be9bb77861f8166a74521787a83b7146"
+      "sha256": "7d19ca9d15f7569547d2ac4edb0bc8ef196f5b3bff17c2c321d020a7f68b2a4d",
+      "size": 3948,
+      "normalized_sha256": "7d19ca9d15f7569547d2ac4edb0bc8ef196f5b3bff17c2c321d020a7f68b2a4d"
     },
     "app/code/Weline/Websites/Observer/InstallThemeApplicationContext.php": {
       "role": "index",
@@ -105175,9 +105259,9 @@
     },
     "app/code/Weline/Websites/Service/DomainParserService.php": {
       "role": "index",
-      "sha256": "90a02dee5d76e183d263de656bda870bd48190c57599d117d83b852483ad81e7",
-      "size": 8814,
-      "normalized_sha256": "90a02dee5d76e183d263de656bda870bd48190c57599d117d83b852483ad81e7"
+      "sha256": "4b5db9056cd55bbf208e332269b2aa521313c1926725e5d4024a109a162de3be",
+      "size": 9647,
+      "normalized_sha256": "4b5db9056cd55bbf208e332269b2aa521313c1926725e5d4024a109a162de3be"
     },
     "app/code/Weline/Websites/Service/DomainPoolFlowLogService.php": {
       "role": "index",
@@ -105193,9 +105277,9 @@
     },
     "app/code/Weline/Websites/Service/DomainPoolMaintenanceService.php": {
       "role": "index",
-      "sha256": "26cf04f7273866cfe4ade3005f73fa3e976d5668e034cd78db9bcc73bbb7ec3a",
-      "size": 7546,
-      "normalized_sha256": "26cf04f7273866cfe4ade3005f73fa3e976d5668e034cd78db9bcc73bbb7ec3a"
+      "sha256": "4d7dd12f648aa8d5bc7b82fe3e2390d4297ba09d972167ea53b3edb8b370860f",
+      "size": 12728,
+      "normalized_sha256": "4d7dd12f648aa8d5bc7b82fe3e2390d4297ba09d972167ea53b3edb8b370860f"
     },
     "app/code/Weline/Websites/Service/DomainPoolResolveService.php": {
       "role": "index",
@@ -105247,9 +105331,9 @@
     },
     "app/code/Weline/Websites/Service/FrontendWorkerScopeBootstrapResponseService.php": {
       "role": "index",
-      "sha256": "6b496682b15b2f82fdcecd9c058e99b9f5f8d8964c79ca92ca0f796de275204e",
-      "size": 23563,
-      "normalized_sha256": "6b496682b15b2f82fdcecd9c058e99b9f5f8d8964c79ca92ca0f796de275204e"
+      "sha256": "21182c56e567f2cc58417d98a1002b0388cf80f09ba0f8a73957582e259065ca",
+      "size": 23790,
+      "normalized_sha256": "21182c56e567f2cc58417d98a1002b0388cf80f09ba0f8a73957582e259065ca"
     },
     "app/code/Weline/Websites/Service/HealthCheckInfrastructureSyncService.php": {
       "role": "index",
@@ -105292,6 +105376,12 @@
       "sha256": "a2e46f36517d17af9f5f9c54995b7a1b135c06f80523ca52bb5a60bcd31dd7fd",
       "size": 8703,
       "normalized_sha256": "a2e46f36517d17af9f5f9c54995b7a1b135c06f80523ca52bb5a60bcd31dd7fd"
+    },
+    "app/code/Weline/Websites/Service/ManagedLocalDomainProvisionService.php": {
+      "role": "index",
+      "sha256": "7e5ee4856d3fcbd81a64de4bf39c35ecacf5ba980f4ddfab91d4e33ec71ac944",
+      "size": 9455,
+      "normalized_sha256": "7e5ee4856d3fcbd81a64de4bf39c35ecacf5ba980f4ddfab91d4e33ec71ac944"
     },
     "app/code/Weline/Websites/Service/OrmScopeMaintenanceRepository.php": {
       "role": "index",
@@ -105529,9 +105619,9 @@
     },
     "app/code/Weline/Websites/Service/WebsiteCreateService.php": {
       "role": "index",
-      "sha256": "faf17f6ba2fcfe92cac9ae2bd586a2177812bfc6984916be85eb066421d2334a",
-      "size": 11527,
-      "normalized_sha256": "faf17f6ba2fcfe92cac9ae2bd586a2177812bfc6984916be85eb066421d2334a"
+      "sha256": "7984afd997edc2a9b3b934c24f368a6d4e14ae547404a05a8febdf1333a6e88e",
+      "size": 15571,
+      "normalized_sha256": "7984afd997edc2a9b3b934c24f368a6d4e14ae547404a05a8febdf1333a6e88e"
     },
     "app/code/Weline/Websites/Service/WebsiteEntryUrlService.php": {
       "role": "index",
@@ -105619,9 +105709,9 @@
     },
     "app/code/Weline/Websites/Setup/Upgrade.php": {
       "role": "index",
-      "sha256": "6ec3d463a5d6b3ede8aec55633a55cb3a48f5dd726222fa9cb66029a66ecec97",
-      "size": 2852,
-      "normalized_sha256": "6ec3d463a5d6b3ede8aec55633a55cb3a48f5dd726222fa9cb66029a66ecec97"
+      "sha256": "85b87ed29621e1064f598de53157bd2972832bbe049da9d588148224deaa393b",
+      "size": 4042,
+      "normalized_sha256": "85b87ed29621e1064f598de53157bd2972832bbe049da9d588148224deaa393b"
     },
     "app/code/Weline/Websites/Taglib/BuildSite.php": {
       "role": "index",
@@ -105685,15 +105775,15 @@
     },
     "app/code/Weline/Websites/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "d4a01dfcac006cf6dcff270a4ac64167d1dd404e67e15ac6288951809235fbe7",
-      "size": 5902,
-      "normalized_sha256": "d4a01dfcac006cf6dcff270a4ac64167d1dd404e67e15ac6288951809235fbe7"
+      "sha256": "0d8f237376dd1678e0743734017db40bf3b8c864608ea4aedac080d6731ec157",
+      "size": 5857,
+      "normalized_sha256": "0d8f237376dd1678e0743734017db40bf3b8c864608ea4aedac080d6731ec157"
     },
     "app/code/Weline/Websites/doc/README.md": {
       "role": "index",
-      "sha256": "6123db60013af637cf172dd48e6bd2dc6d1a768466ca4e86ec99791da750ab56",
-      "size": 15459,
-      "normalized_sha256": "6123db60013af637cf172dd48e6bd2dc6d1a768466ca4e86ec99791da750ab56"
+      "sha256": "7f9012cd26fc4d8bf773d660e7b981ca9206e8a47af80c073a2f918c82106b29",
+      "size": 15898,
+      "normalized_sha256": "7f9012cd26fc4d8bf773d660e7b981ca9206e8a47af80c073a2f918c82106b29"
     },
     "app/code/Weline/Websites/doc/Scope维护门禁.md": {
       "role": "index",
@@ -105799,9 +105889,9 @@
     },
     "app/code/Weline/Websites/doc/功能现状.md": {
       "role": "index",
-      "sha256": "4d8e3c304dcb66e9258b596732387381e527fc91f88aa331da7ad6118dbb851d",
-      "size": 12437,
-      "normalized_sha256": "4d8e3c304dcb66e9258b596732387381e527fc91f88aa331da7ad6118dbb851d"
+      "sha256": "6ceb40bff1a84f4b06995b89ccca096ba343c191599c82d8ae51ba80a82ec4e7",
+      "size": 13773,
+      "normalized_sha256": "6ceb40bff1a84f4b06995b89ccca096ba343c191599c82d8ae51ba80a82ec4e7"
     },
     "app/code/Weline/Websites/doc/域名管理架构.md": {
       "role": "index",
@@ -105877,9 +105967,9 @@
     },
     "app/code/Weline/Websites/doc/开发日志.md": {
       "role": "index",
-      "sha256": "c9090d19d40b9bd5f6074629347769427cece2dd972b18b7358d89aedf99002f",
-      "size": 32443,
-      "normalized_sha256": "c9090d19d40b9bd5f6074629347769427cece2dd972b18b7358d89aedf99002f"
+      "sha256": "7f2bc44ebe237b9e5decb1638a246983d6ae7c3a748e13df3b268b254f9494b2",
+      "size": 38727,
+      "normalized_sha256": "7f2bc44ebe237b9e5decb1638a246983d6ae7c3a748e13df3b268b254f9494b2"
     },
     "app/code/Weline/Websites/doc/网站备份.md": {
       "role": "index",
@@ -105913,15 +106003,15 @@
     },
     "app/code/Weline/Websites/etc/event.xml": {
       "role": "index",
-      "sha256": "eec3ad23f34638fab86831dbdbf7572461d4b20da00363927251c5eafc64fa6f",
-      "size": 9454,
-      "normalized_sha256": "eec3ad23f34638fab86831dbdbf7572461d4b20da00363927251c5eafc64fa6f"
+      "sha256": "e41965fb31e0d55ee95f63a495fc9762f95e179df57cf766796ceaa0d01b823c",
+      "size": 9757,
+      "normalized_sha256": "e41965fb31e0d55ee95f63a495fc9762f95e179df57cf766796ceaa0d01b823c"
     },
     "app/code/Weline/Websites/etc/module.php": {
       "role": "index",
-      "sha256": "e0bc8488e0671ff105d82ec82ebd2337461d6286e73cbe1bcea6299bbba7b7eb",
-      "size": 3294,
-      "normalized_sha256": "e0bc8488e0671ff105d82ec82ebd2337461d6286e73cbe1bcea6299bbba7b7eb"
+      "sha256": "e9e845b74115256f68b94bd5dcedcb8a5c448f1f605b5306a1d4dd9155b13ab9",
+      "size": 3597,
+      "normalized_sha256": "e9e845b74115256f68b94bd5dcedcb8a5c448f1f605b5306a1d4dd9155b13ab9"
     },
     "app/code/Weline/Websites/event.php": {
       "role": "index",
@@ -106003,9 +106093,9 @@
     },
     "app/code/Weline/Websites/extends/module/Weline_Framework/Query/WebsitesQueryProvider.php": {
       "role": "index",
-      "sha256": "f7ef655749951bc3b5c0b2126f9d6ad1ecd6a03d27f72cb7b1b86db039d96568",
-      "size": 106872,
-      "normalized_sha256": "f7ef655749951bc3b5c0b2126f9d6ad1ecd6a03d27f72cb7b1b86db039d96568"
+      "sha256": "942624079498cdd35e14c908fef08e144d4db21de3bea66e83307ff8c4ece972",
+      "size": 109681,
+      "normalized_sha256": "942624079498cdd35e14c908fef08e144d4db21de3bea66e83307ff8c4ece972"
     },
     "app/code/Weline/Websites/extends/module/Weline_SiteSetupAssistant/SetupTask/WebsitesDomainHttpsSetupTaskProvider.php": {
       "role": "index",
@@ -106039,15 +106129,15 @@
     },
     "app/code/Weline/Websites/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "c555a3c36489e907500fc4abeaaaec5aefc4b08741a286eede0267ce249898ee",
-      "size": 311762,
-      "normalized_sha256": "c555a3c36489e907500fc4abeaaaec5aefc4b08741a286eede0267ce249898ee"
+      "sha256": "63c6eda14b3bf9b82bcb20ae1362869d7764396f341bf035b710c121c6b454ab",
+      "size": 315497,
+      "normalized_sha256": "63c6eda14b3bf9b82bcb20ae1362869d7764396f341bf035b710c121c6b454ab"
     },
     "app/code/Weline/Websites/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "a4bcc213d32c53f97a8a2a56fd0ae401286a61d98bdb77f5c6e2bebb98f39f11",
-      "size": 277508,
-      "normalized_sha256": "a4bcc213d32c53f97a8a2a56fd0ae401286a61d98bdb77f5c6e2bebb98f39f11"
+      "sha256": "063b5c9be317780e290698e0892ceca092f89eacee60258a929b19fffe437e9b",
+      "size": 281090,
+      "normalized_sha256": "063b5c9be317780e290698e0892ceca092f89eacee60258a929b19fffe437e9b"
     },
     "app/code/Weline/Websites/register.php": {
       "role": "index",
@@ -106159,15 +106249,15 @@
     },
     "app/code/Weline/Websites/view/templates/Admin/Domain/domain_list_tab.phtml": {
       "role": "index",
-      "sha256": "4efff0e45bcebbd4c977b4480b7fbfecfe5ed871d604a764e414e14345b23c9a",
-      "size": 151538,
-      "normalized_sha256": "4efff0e45bcebbd4c977b4480b7fbfecfe5ed871d604a764e414e14345b23c9a"
+      "sha256": "ca98ee3608917c5d67305e91b66d9aa027b163a83c44faea7c2939653cc7abe6",
+      "size": 150881,
+      "normalized_sha256": "ca98ee3608917c5d67305e91b66d9aa027b163a83c44faea7c2939653cc7abe6"
     },
     "app/code/Weline/Websites/view/templates/Admin/Domain/domain_pool_tab.phtml": {
       "role": "index",
-      "sha256": "1a316d72c440dd2a276531e93cd9fd1c3f1cda308f520ef3812d609cc9b38ce5",
-      "size": 30388,
-      "normalized_sha256": "1a316d72c440dd2a276531e93cd9fd1c3f1cda308f520ef3812d609cc9b38ce5"
+      "sha256": "760269f1bfe710b13b37e5ad19ad40a1fe7feefbc5b1d5bd853d4bfb6d24a6d2",
+      "size": 40729,
+      "normalized_sha256": "760269f1bfe710b13b37e5ad19ad40a1fe7feefbc5b1d5bd853d4bfb6d24a6d2"
     },
     "app/code/Weline/Websites/view/templates/Admin/Domain/index.phtml": {
       "role": "index",
@@ -106585,9 +106675,9 @@
     },
     "app/code/Weline/Widget/Taglib/Widget.php": {
       "role": "index",
-      "sha256": "e35df4473814d3e2ad3b3047b42ca65afe353f4fe0fd4520a146fd259d5e21a7",
-      "size": 24382,
-      "normalized_sha256": "e35df4473814d3e2ad3b3047b42ca65afe353f4fe0fd4520a146fd259d5e21a7"
+      "sha256": "1f3676f6048e4f15114cbaac54b4c71bed45485f904d3508cb618084cc0e851e",
+      "size": 25174,
+      "normalized_sha256": "1f3676f6048e4f15114cbaac54b4c71bed45485f904d3508cb618084cc0e851e"
     },
     "app/code/Weline/Widget/Ui/ParamType/AbstractParamType.php": {
       "role": "index",
@@ -106699,9 +106789,9 @@
     },
     "app/code/Weline/Widget/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "0413216dcbc34811eaea7644c9a45a86dd4ef748911e28ac518978057688c392",
-      "size": 4477,
-      "normalized_sha256": "0413216dcbc34811eaea7644c9a45a86dd4ef748911e28ac518978057688c392"
+      "sha256": "654c4155c2e6e935a29f648f8cb137fff10724c0898a8b1de69b1570c437935c",
+      "size": 4882,
+      "normalized_sha256": "654c4155c2e6e935a29f648f8cb137fff10724c0898a8b1de69b1570c437935c"
     },
     "app/code/Weline/Widget/doc/AI注册缓存.md": {
       "role": "index",
@@ -106729,9 +106819,9 @@
     },
     "app/code/Weline/Widget/doc/功能现状.md": {
       "role": "index",
-      "sha256": "e750013e2403c8acedc65396efa8573b1d1dc5a6b80e658a9de146d6c5379564",
-      "size": 6135,
-      "normalized_sha256": "e750013e2403c8acedc65396efa8573b1d1dc5a6b80e658a9de146d6c5379564"
+      "sha256": "9937adefd647eb2ea052d25ea60abea749e6932e1d23e3eba2df6933ae2eb286",
+      "size": 7404,
+      "normalized_sha256": "9937adefd647eb2ea052d25ea60abea749e6932e1d23e3eba2df6933ae2eb286"
     },
     "app/code/Weline/Widget/doc/单事件查询API与架构.md": {
       "role": "index",
@@ -106969,9 +107059,9 @@
     },
     "app/code/Weline/WidgetDemo/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "d93cb2494b866a8586ec305f95180070a80a63546b338d82b2c5cf17724c8608",
-      "size": 2519,
-      "normalized_sha256": "d93cb2494b866a8586ec305f95180070a80a63546b338d82b2c5cf17724c8608"
+      "sha256": "182fd6eedff072cd3f1f26c389bd4df4a136127f6eb8278db48747772017af46",
+      "size": 2656,
+      "normalized_sha256": "182fd6eedff072cd3f1f26c389bd4df4a136127f6eb8278db48747772017af46"
     },
     "app/code/Weline/WidgetDemo/doc/README.md": {
       "role": "index",
@@ -106981,9 +107071,9 @@
     },
     "app/code/Weline/WidgetDemo/doc/功能现状.md": {
       "role": "index",
-      "sha256": "07239815a01227fcee7553ec943ccc0af929c508d674735cffd41206250c4b26",
-      "size": 2842,
-      "normalized_sha256": "07239815a01227fcee7553ec943ccc0af929c508d674735cffd41206250c4b26"
+      "sha256": "01ad2666c1c8fa8ed3c31eb5bde19c8f8ad043004db0e471ecb4b6cc9e78bc4c",
+      "size": 2917,
+      "normalized_sha256": "01ad2666c1c8fa8ed3c31eb5bde19c8f8ad043004db0e471ecb4b6cc9e78bc4c"
     },
     "app/code/Weline/WidgetDemo/doc/开发日志.md": {
       "role": "index",
@@ -107119,15 +107209,15 @@
     },
     "app/code/Weline/Wishlist/i18n/en_US.csv": {
       "role": "index",
-      "sha256": "f2f3f684471e277bdfe3b75dc5f94306b90765d779bbe7ae4559a2fcd3254f8d",
+      "sha256": "4f71abe558c33c649282cb826bede494a28782e827130479fb1925918b48d67c",
       "size": 1479,
-      "normalized_sha256": "f2f3f684471e277bdfe3b75dc5f94306b90765d779bbe7ae4559a2fcd3254f8d"
+      "normalized_sha256": "4f71abe558c33c649282cb826bede494a28782e827130479fb1925918b48d67c"
     },
     "app/code/Weline/Wishlist/i18n/zh_Hans_CN.csv": {
       "role": "index",
-      "sha256": "ca0d681ea20b8f763c9219e7b26c3feac9e0507f6f8ea64a4f2af06804771588",
+      "sha256": "c46717e1624d9d7fb36250f02a56fc1dd8960b8a4fb4048386637d750a53562e",
       "size": 1427,
-      "normalized_sha256": "ca0d681ea20b8f763c9219e7b26c3feac9e0507f6f8ea64a4f2af06804771588"
+      "normalized_sha256": "c46717e1624d9d7fb36250f02a56fc1dd8960b8a4fb4048386637d750a53562e"
     },
     "app/code/Weline/Wishlist/register.php": {
       "role": "index",
@@ -107215,9 +107305,9 @@
     },
     "app/code/Weline/WlsDemoPlugin/doc/AI-INDEX.md": {
       "role": "index",
-      "sha256": "896600233f4b49f3bb9efcf42f92150885ef847bd67cd0cb4594e2e6b4c763a2",
-      "size": 2021,
-      "normalized_sha256": "896600233f4b49f3bb9efcf42f92150885ef847bd67cd0cb4594e2e6b4c763a2"
+      "sha256": "487f2be62d380f7284197fedefb886e10452f14d57ef8c236ab0ba422a895f7c",
+      "size": 2113,
+      "normalized_sha256": "487f2be62d380f7284197fedefb886e10452f14d57ef8c236ab0ba422a895f7c"
     },
     "app/code/Weline/WlsDemoPlugin/doc/README.md": {
       "role": "index",
@@ -107227,9 +107317,9 @@
     },
     "app/code/Weline/WlsDemoPlugin/doc/功能现状.md": {
       "role": "index",
-      "sha256": "0ec1723a9cf54985401ea2286a7b9946cd45cd410f0995da41f3d6028ae99a4c",
-      "size": 2484,
-      "normalized_sha256": "0ec1723a9cf54985401ea2286a7b9946cd45cd410f0995da41f3d6028ae99a4c"
+      "sha256": "748358374bae9aa0f21220a6b06874b4986cbea2252f74923a4360c91af8dd54",
+      "size": 2468,
+      "normalized_sha256": "748358374bae9aa0f21220a6b06874b4986cbea2252f74923a4360c91af8dd54"
     },
     "app/code/Weline/WlsDemoPlugin/doc/开发日志.md": {
       "role": "index",
@@ -107281,9 +107371,9 @@
     },
     "app/design/Weline/daocharms-3d/frontend/layouts/product/default.phtml": {
       "role": "index",
-      "sha256": "c2808e4fbcc3a6e5765799b9312902bc5e4c728331f6d3beb1b6200a6cf5ea97",
-      "size": 32875,
-      "normalized_sha256": "c2808e4fbcc3a6e5765799b9312902bc5e4c728331f6d3beb1b6200a6cf5ea97"
+      "sha256": "98ca3fcc8d8656d6b2b7d3827097f38411bfdb116861604a9c3afd6b3d433a83",
+      "size": 33390,
+      "normalized_sha256": "98ca3fcc8d8656d6b2b7d3827097f38411bfdb116861604a9c3afd6b3d433a83"
     },
     "app/design/Weline/daocharms-3d/frontend/partials/head/daocharms-skin.phtml": {
       "role": "index",
@@ -107309,6 +107399,90 @@
       "size": 406,
       "normalized_sha256": "32fe30ee6872a6949b20427b0457522452b37a44b81341a2b8faae1f4e30d8d6"
     },
+    "app/design/Weline/grocery/doc/README.md": {
+      "role": "index",
+      "sha256": "21bbe281c830677cc3f3e875730241a28cf86f2f3a39aff1bafe8a13a9889acc",
+      "size": 265,
+      "normalized_sha256": "21bbe281c830677cc3f3e875730241a28cf86f2f3a39aff1bafe8a13a9889acc"
+    },
+    "app/design/Weline/grocery/doc/功能现状.md": {
+      "role": "index",
+      "sha256": "95d66ba5061ea0699bd54a0d226d9b3bd95a1b17fc6905bb8034869b3993bbb1",
+      "size": 996,
+      "normalized_sha256": "95d66ba5061ea0699bd54a0d226d9b3bd95a1b17fc6905bb8034869b3993bbb1"
+    },
+    "app/design/Weline/grocery/doc/开发日志.md": {
+      "role": "index",
+      "sha256": "8a2beb3f671e6a135229228a8ea3c7de4f7c9b890ca8a790ec60c66a760ad45c",
+      "size": 1747,
+      "normalized_sha256": "8a2beb3f671e6a135229228a8ea3c7de4f7c9b890ca8a790ec60c66a760ad45c"
+    },
+    "app/design/Weline/grocery/doc/需求.md": {
+      "role": "index",
+      "sha256": "daeea98b02e16a8ad51c85c3232ff101523a05add615421a44068278b884f726",
+      "size": 482,
+      "normalized_sha256": "daeea98b02e16a8ad51c85c3232ff101523a05add615421a44068278b884f726"
+    },
+    "app/design/Weline/grocery/frontend/assets/css/grocery-chrome.css": {
+      "role": "index",
+      "sha256": "9892bbd31603588c00bb822861f0ca4bb3e0f758a9c2ee0a31b0e40f0df397cb",
+      "size": 6145,
+      "normalized_sha256": "9892bbd31603588c00bb822861f0ca4bb3e0f758a9c2ee0a31b0e40f0df397cb"
+    },
+    "app/design/Weline/grocery/frontend/assets/css/grocery-shelf.css": {
+      "role": "index",
+      "sha256": "04e964e927ff28e7345028e117e309055f7ab23082a6f456aef78411df84287f",
+      "size": 6315,
+      "normalized_sha256": "04e964e927ff28e7345028e117e309055f7ab23082a6f456aef78411df84287f"
+    },
+    "app/design/Weline/grocery/frontend/colors/_grocery-shelf.css": {
+      "role": "index",
+      "sha256": "9e7e5e0ddca3206aafdb27a46e7c83ed1219a899a7e9846847af925d61438235",
+      "size": 3343,
+      "normalized_sha256": "9e7e5e0ddca3206aafdb27a46e7c83ed1219a899a7e9846847af925d61438235"
+    },
+    "app/design/Weline/grocery/frontend/layouts/homepage/default.phtml": {
+      "role": "index",
+      "sha256": "69c426af91980e0a6ef25fbc60c154de1d8bb75772bd8f5f0f3b554c85b5d477",
+      "size": 37757,
+      "normalized_sha256": "69c426af91980e0a6ef25fbc60c154de1d8bb75772bd8f5f0f3b554c85b5d477"
+    },
+    "app/design/Weline/grocery/frontend/partials/footer/default.phtml": {
+      "role": "index",
+      "sha256": "ab6832a2924e2cd1939f9cb6179ff23f7d744d67dfdad57ee590a931312ffbb8",
+      "size": 1462,
+      "normalized_sha256": "ab6832a2924e2cd1939f9cb6179ff23f7d744d67dfdad57ee590a931312ffbb8"
+    },
+    "app/design/Weline/grocery/frontend/partials/head/assets-suffix.phtml": {
+      "role": "index",
+      "sha256": "05806a0e858899a4d5122c55775217f10d961810ee81fc1de75de65d1ba71aa2",
+      "size": 2447,
+      "normalized_sha256": "05806a0e858899a4d5122c55775217f10d961810ee81fc1de75de65d1ba71aa2"
+    },
+    "app/design/Weline/grocery/frontend/partials/head/default.phtml": {
+      "role": "index",
+      "sha256": "a52751fbced12b6b0e2ed9712ca5dd4576315b9e2d2c3fe0c2cde436bbb560f3",
+      "size": 2371,
+      "normalized_sha256": "a52751fbced12b6b0e2ed9712ca5dd4576315b9e2d2c3fe0c2cde436bbb560f3"
+    },
+    "app/design/Weline/grocery/frontend/partials/head/grocery-skin.phtml": {
+      "role": "index",
+      "sha256": "7494a129733af3fcd5d262c8d0a274ebd24ccccc07cb3cfc2f6a1bffbd31b945",
+      "size": 410,
+      "normalized_sha256": "7494a129733af3fcd5d262c8d0a274ebd24ccccc07cb3cfc2f6a1bffbd31b945"
+    },
+    "app/design/Weline/grocery/frontend/variables/_grocery-shelf.css": {
+      "role": "index",
+      "sha256": "8afd640c61432af6d03b3c24364e2052204f881d2f99e9bf4c7c647df44d5155",
+      "size": 1178,
+      "normalized_sha256": "8afd640c61432af6d03b3c24364e2052204f881d2f99e9bf4c7c647df44d5155"
+    },
+    "app/design/Weline/grocery/register.php": {
+      "role": "index",
+      "sha256": "cf38e734f975a11f33a77feb5c4192e2d34a5bdb42e1f6636edb057a4d78ad51",
+      "size": 423,
+      "normalized_sha256": "cf38e734f975a11f33a77feb5c4192e2d34a5bdb42e1f6636edb057a4d78ad51"
+    },
     "app/etc/.gitignore": {
       "role": "index",
       "sha256": "044e76d334ed1a87d7616c0ed66e6f3eec492b84cb905c8ce2fb29458fabd7cf",
@@ -107317,9 +107491,9 @@
     },
     "app/etc/env.sample.php": {
       "role": "index",
-      "sha256": "d43611b3331c27a73cd190c924a3251627586977daeccc9a605752abf58c9743",
-      "size": 44144,
-      "normalized_sha256": "d43611b3331c27a73cd190c924a3251627586977daeccc9a605752abf58c9743"
+      "sha256": "781edc63cd59c11eedf795b7195b0b5512f82781d5d3e66126587b62ff733caf",
+      "size": 46123,
+      "normalized_sha256": "781edc63cd59c11eedf795b7195b0b5512f82781d5d3e66126587b62ff733caf"
     },
     "app/i18n/Weline/zh_Hans_CN/register.php": {
       "role": "index",
@@ -107425,9 +107599,9 @@
     },
     "composer.json": {
       "role": "index",
-      "sha256": "324c08b43521ff8dd19b3d37618e88897a16d56dc4b486410f4080a239d7dee0",
-      "size": 2345,
-      "normalized_sha256": "324c08b43521ff8dd19b3d37618e88897a16d56dc4b486410f4080a239d7dee0"
+      "sha256": "184546902dc1220bdc08ca8bfb17ab10d893e91d23e9b32d233471a5bd738155",
+      "size": 2337,
+      "normalized_sha256": "184546902dc1220bdc08ca8bfb17ab10d893e91d23e9b32d233471a5bd738155"
     },
     "composer.lock": {
       "role": "index",
@@ -107455,15 +107629,15 @@
     },
     "dev/ai-command/ai/主题开发.md": {
       "role": "index",
-      "sha256": "40e87db68b17d3d705b3492c5be35e6d7fa8ec37de3b3a755ca422352cb35078",
-      "size": 37277,
-      "normalized_sha256": "40e87db68b17d3d705b3492c5be35e6d7fa8ec37de3b3a755ca422352cb35078"
+      "sha256": "86f6646221a94541912a3d45cc5dd4c1c38f7dec8eea19f6d40c66e4667e35f0",
+      "size": 37908,
+      "normalized_sha256": "86f6646221a94541912a3d45cc5dd4c1c38f7dec8eea19f6d40c66e4667e35f0"
     },
     "dev/ai-command/ai/工程团队.md": {
       "role": "index",
-      "sha256": "3a755f9d57ff4db6dc4cad2c6dc8aafd8ab60c8e65530c68974500dffae2b641",
-      "size": 72907,
-      "normalized_sha256": "3a755f9d57ff4db6dc4cad2c6dc8aafd8ab60c8e65530c68974500dffae2b641"
+      "sha256": "80a1d33bf2d47336175f76e2f03d2ef2f1bdad4a240becf37ef0b62746f88956",
+      "size": 73038,
+      "normalized_sha256": "80a1d33bf2d47336175f76e2f03d2ef2f1bdad4a240becf37ef0b62746f88956"
     },
     "dev/ai-command/ai/性能检查.md": {
       "role": "index",
@@ -108487,9 +108661,9 @@
     },
     "架构可视化/index.html": {
       "role": "index",
-      "sha256": "a069f756d1cce034664ec99f6cbbb09176c855ed4297ea68389b0b0db8a4fca4",
-      "size": 3427,
-      "normalized_sha256": "a069f756d1cce034664ec99f6cbbb09176c855ed4297ea68389b0b0db8a4fca4"
+      "sha256": "7544b2540388ef55993453dad77a8a63f65426213be164379b45941f361584de",
+      "size": 2989,
+      "normalized_sha256": "7544b2540388ef55993453dad77a8a63f65426213be164379b45941f361584de"
     },
     "架构可视化/weline-assembly-mechanisms.mmd": {
       "role": "index",
@@ -108523,9 +108697,9 @@
     },
     "架构可视化/weline-risk-review-v3.summary.md": {
       "role": "index",
-      "sha256": "da4296fc6910b4f220efcdd2fb1c367de37f27e7864d11df9d471fbd2696b249",
-      "size": 17170,
-      "normalized_sha256": "da4296fc6910b4f220efcdd2fb1c367de37f27e7864d11df9d471fbd2696b249"
+      "sha256": "2ab9883d7ad144485925918498dd2ad1f701253552903698b89f3ddd9f41bf9c",
+      "size": 17258,
+      "normalized_sha256": "2ab9883d7ad144485925918498dd2ad1f701253552903698b89f3ddd9f41bf9c"
     },
     "架构可视化/weline-system-model.architecture-understanding.md": {
       "role": "index",

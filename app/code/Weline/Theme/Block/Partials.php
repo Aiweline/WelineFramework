@@ -417,22 +417,25 @@ class Partials extends Block
         ThemeData::setCurrentArea($normalizedArea);
         /** @var ThemeDirectoryResolver $dirResolver */
         $dirResolver = ObjectManager::getInstance(ThemeDirectoryResolver::class);
-        $partialPath = 'theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
-        $resolvedPath = $dirResolver->resolveThemeTemplatePath($partialPath, $theme);
-        if ($resolvedPath !== $partialPath) {
+        // Must use Weline_Theme::theme/{area}/... so design overlays under
+        // app/design/{Vendor}/{theme}/{area}/partials/... resolve (bare theme/... does not).
+        $modulePath = 'Weline_Theme::theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
+        $resolvedPath = $dirResolver->resolveThemeTemplatePath($modulePath, $theme);
+        if (\is_string($resolvedPath) && $resolvedPath !== '' && $resolvedPath !== $modulePath) {
             $isAbsolutePath = \strpos($resolvedPath, '://') === false
                 && (\preg_match('/^[A-Z]:/i', $resolvedPath)
                     || \strpos($resolvedPath, '/') === 0
                     || \strpos($resolvedPath, '\\') === 0);
+            // Prefer the absolute design/theme path so compose + assets cache
+            // fingerprints track the real override file (not only the module fallback).
             if ($isAbsolutePath && \is_file($resolvedPath)) {
-                return 'Weline_Theme::' . $partialPath;
+                return $resolvedPath;
             }
-            if (\is_string($resolvedPath) && $resolvedPath !== '' && \is_file($resolvedPath)) {
+            if (\is_file($resolvedPath)) {
                 return $resolvedPath;
             }
         }
 
-        $modulePath = 'Weline_Theme::theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
         $absolute = $this->resolveModulePath($modulePath);
 
         return (\is_string($absolute) && \is_file($absolute)) ? $modulePath : null;
@@ -452,17 +455,16 @@ class Partials extends Block
         $themeId = \is_object($theme) && \method_exists($theme, 'getId') ? (string)$theme->getId() : '';
         $fingerprints = [];
         foreach ([$prefixPath, $suffixPath] as $modulePath) {
-            $sourceFile = $this->resolveModulePath($modulePath);
-            if ((!(\is_string($sourceFile) && $sourceFile !== '' && \is_file($sourceFile)))
-                && \is_string($modulePath)
-                && \is_file($modulePath)
-            ) {
+            $sourceFile = null;
+            if (\is_string($modulePath) && $modulePath !== '' && \is_file($modulePath)) {
                 $sourceFile = $modulePath;
+            } else {
+                $sourceFile = $this->resolveModulePath($modulePath);
             }
             $stat = \is_string($sourceFile) ? @\stat($sourceFile) : false;
             $fingerprints[] = \is_array($stat)
-                ? (int)$stat['mtime'] . '|' . (int)$stat['size']
-                : '0|0';
+                ? (int)$stat['mtime'] . '|' . (int)$stat['size'] . '|' . \basename((string)$sourceFile)
+                : '0|0|';
         }
         $colorsFp = \is_array($dictionary['colors'] ?? null)
             ? \sha1((string)\json_encode(

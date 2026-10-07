@@ -74,7 +74,7 @@ Website 候选同时来自 `Website.url` 和启用的 `WebsiteDomain` 绑定，�
 
 前台路径若剥掉货币/语言段后剩余为空（例如 `/`、`/en_US`、`/USD/zh_Hans_CN`，或带站点路径前缀的 `/{websitePrefix}/en_US`），与空路径同属首页根：
 
-- `Weline\Framework\Runtime\WlsRuntime` 的 `isRootRequestUri` / `isWebsiteRootRequestUri` 会触发 start-page 映射，并尽量保留当前 URI 上的本地化前缀。
+- `Weline\Server\Runtime\WlsRuntime` 的 `isRootRequestUri` / `isWebsiteRootRequestUri` 会触发 start-page 映射，并尽量保留当前 URI 上的本地化前缀。
 - `Weline\Framework\Router\Core::isFrontendRootRequest()` 同样按「无 area + remaining 为空」判定，避免语言切换器生成的 `/en_US` 冷路由 404。
 
 ## 4. 读取当前站点

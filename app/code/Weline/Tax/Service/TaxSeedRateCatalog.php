@@ -13,12 +13,15 @@ namespace Weline\Tax\Service;
  */
 final class TaxSeedRateCatalog
 {
-    public const SEED_REVISION = 3;
+    public const SEED_REVISION = 4;
+
+    public const CLASS_EXEMPT = 'exempt';
 
     /** @var list<array{class_code:string,name:string}> */
     public const CLASSES = [
         ['class_code' => 'standard', 'name' => 'Standard'],
         ['class_code' => 'reduced', 'name' => 'Reduced'],
+        ['class_code' => self::CLASS_EXEMPT, 'name' => 'Exempt'],
     ];
 
     /**
@@ -27,12 +30,15 @@ final class TaxSeedRateCatalog
     public static function rules(): array
     {
         $out = [];
+        $exemptKeys = [];
         foreach (self::standardCountryRates() as $country => $bps) {
+            $key = strtoupper($country) . '|';
             $out[] = [
                 'class_code' => 'standard',
-                'jurisdiction_key' => strtoupper($country) . '|',
+                'jurisdiction_key' => $key,
                 'rate_bps' => $bps,
             ];
+            $exemptKeys[$key] = true;
         }
         foreach (self::reducedCountryRates() as $country => $bps) {
             $out[] = [
@@ -42,10 +48,19 @@ final class TaxSeedRateCatalog
             ];
         }
         foreach (self::regionalStandardRates() as $jurisdiction => $bps) {
+            $key = strtoupper($jurisdiction);
             $out[] = [
                 'class_code' => 'standard',
-                'jurisdiction_key' => strtoupper($jurisdiction),
+                'jurisdiction_key' => $key,
                 'rate_bps' => $bps,
+            ];
+            $exemptKeys[$key] = true;
+        }
+        foreach (array_keys($exemptKeys) as $key) {
+            $out[] = [
+                'class_code' => self::CLASS_EXEMPT,
+                'jurisdiction_key' => $key,
+                'rate_bps' => 0,
             ];
         }
 

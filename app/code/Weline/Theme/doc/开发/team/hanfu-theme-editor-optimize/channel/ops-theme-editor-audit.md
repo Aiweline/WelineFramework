@@ -61,7 +61,7 @@ body:
 ### evidence
 
 1. 本机 curl + Browser：后台前缀与 `theme_id=3` 主题编辑器草稿 URL 均 **HTTP 500**。  
-2. 异常：`RequestResetException` / `hot_cache_bag_prime` → 未定义方法 `Weline\Framework\Runtime\WlsRuntime::isHotCacheBagPrimePendingForCurrentFiber()`（约 `WlsRuntime.php:6807`）。  
+2. 异常：`RequestResetException` / `hot_cache_bag_prime` → 未定义方法 `Weline\Server\Runtime\WlsRuntime::isHotCacheBagPrimePendingForCurrentFiber()`（约 `WlsRuntime.php:6807`）。  
 3. 因此 **无法登录后台、无法审草稿预览**（Hero/货架/信任/导航零像素）；纪律遵守：未用已发布店面 `/` 顶替验收。  
 4. 落盘：`channel/hanfu-theme-editor-ops-brief.md` · `channel/evidence-theme-editor-500.md`  
 5. 只读旁证：磁盘 `app/design/Weline/hanfu/.../homepage/default.phtml` 已有 Wave-3 槽序/压矮 CSS，**不能**替代编辑器草稿实体验收。

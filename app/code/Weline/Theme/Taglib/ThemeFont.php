@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Taglib\AttributeCodeCompiler;
+use Weline\Framework\Taglib\CompileTimeStaticMirror;
+use Weline\Framework\Taglib\StaticMirrorCapableInterface;
 use Weline\Framework\Taglib\TaglibInterface;
+use Weline\Theme\Font\FontFaceService;
 
 /**
  * Load a module font with language (or custom chars) subsetting.
@@ -13,8 +17,11 @@ use Weline\Framework\Taglib\TaglibInterface;
  * Source files live in `{Module}/view/fonts/`.
  * - `Relative/Path.ttf` — defaults to Weline_Theme
  * - `Vendor_Module::Relative/Path.ttf` — explicit module
+ *
+ * Literal attributes bake the final `<style>@font-face` HTML at Taglib/com_*
+ * compile time (same contract as theme:css / @lang). Dynamic embeds still emit PHP.
  */
-final class ThemeFont implements TaglibInterface
+final class ThemeFont implements TaglibInterface, StaticMirrorCapableInterface
 {
     public static function name(): string
     {
@@ -43,9 +50,15 @@ final class ThemeFont implements TaglibInterface
     public static function callback(): callable
     {
         return static function ($tagKey, $config, $tagData, $attributes): string {
-            $code = AttributeCodeCompiler::attributes($attributes);
+            $attrs = is_array($attributes) ? $attributes : [];
+            $mirrored = self::tryStaticMirror((string)$tagKey, is_array($tagData) ? $tagData : [], $attrs);
+            if ($mirrored !== null) {
+                return $mirrored;
+            }
+
+            $code = AttributeCodeCompiler::attributes($attrs);
             // Only pass chars when the attribute is present on THIS tag (avoid leak across tags).
-            $charsExpr = array_key_exists('chars', $attributes)
+            $charsExpr = array_key_exists('chars', $attrs)
                 ? '(string)($Taglib__chars ?? \'\')'
                 : "''";
 
@@ -64,19 +77,59 @@ final class ThemeFont implements TaglibInterface
         };
     }
 
+    public static function tryStaticMirror(string $tagKey, array $tagData, array $attributes): ?string
+    {
+        if ($tagKey !== 'tag-self-close' && $tagKey !== 'tag-self-close-with-attrs' && $tagKey !== 'tag') {
+            return null;
+        }
+
+        $keys = ['src', 'family', 'lang', 'chars', 'weight', 'style', 'display', 'unicode-range', 'unicode_range'];
+        if (!CompileTimeStaticMirror::attributesAreLiteral($attributes, $keys)) {
+            return null;
+        }
+
+        $src = CompileTimeStaticMirror::literalString($attributes['src'] ?? '');
+        if ($src === '') {
+            return null;
+        }
+
+        $options = [
+            'src' => $src,
+            'family' => CompileTimeStaticMirror::literalString($attributes['family'] ?? ''),
+            'lang' => CompileTimeStaticMirror::literalString($attributes['lang'] ?? ''),
+            'chars' => array_key_exists('chars', $attributes)
+                ? CompileTimeStaticMirror::literalString($attributes['chars'] ?? '')
+                : '',
+            'weight' => CompileTimeStaticMirror::literalString($attributes['weight'] ?? '', '400'),
+            'style' => CompileTimeStaticMirror::literalString($attributes['style'] ?? '', 'normal'),
+            'display' => CompileTimeStaticMirror::literalString($attributes['display'] ?? '', 'swap'),
+            'unicode-range' => CompileTimeStaticMirror::literalString(
+                $attributes['unicode-range'] ?? $attributes['unicode_range'] ?? ''
+            ),
+        ];
+
+        /** @var FontFaceService $face */
+        $face = ObjectManager::getInstance(FontFaceService::class);
+
+        return $face->renderStyleTag($options);
+    }
+
     public static function document(): string
     {
         return <<<'DOC'
 按语言或指定字符子集化加载模块字体（源文件在 Module/view/fonts/）。
 省略模块时默认 Weline_Theme；写 Vendor_Module:: 可指定其他模块。
 
-按语言（省略 lang 则跟 State::getLangLocal()）：
+字面量 src/family/lang/chars/… 在 Taglib/com_* 编译期烘焙最终 <style>@font-face（对齐 theme:css / @lang）；
+动态属性仍吐运行期 PHP。布局实体关系固化不处理本标签。
+
+按语言（省略 lang 则跟编译时 State::getLangLocal()）：
 <w:theme:font src="NotoSansSC-Regular.ttf" family="Noto Sans SC" weight="400" display="swap" />
 
 只提取属性 chars 里的字符（忽略语言表）：
 <w:theme:font src="NotoSansSC-Regular.ttf" family="Brand" chars="仅这些字ABC" weight="700" />
 
-升级时会预热 view/fonts 下全部字体 × 语言；chars 子集在首次渲染时生成并缓存。详见 Theme/doc/theme-font.md
+升级/网站语种变更会预热 view/fonts 下字体 × 语种；chars 子集在首次编译烘焙时生成并缓存。详见 Theme/doc/theme-font.md
 DOC;
     }
 

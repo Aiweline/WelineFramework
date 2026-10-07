@@ -14,9 +14,9 @@
 ```json
 {
   "error": true,
-  "message": "Request reset boundary wls_request_finalization failed in 1 stage(s): hot_cache_bag_prime=Error(Call to undefined method Weline\\Framework\\Runtime\\WlsRuntime::isHotCacheBagPrimePendingForCurrentFiber())",
+  "message": "Request reset boundary wls_request_finalization failed in 1 stage(s): hot_cache_bag_prime=Error(Call to undefined method Weline\\Server\\Runtime\\WlsRuntime::isHotCacheBagPrimePendingForCurrentFiber())",
   "exception": "Weline\\Framework\\Runtime\\RequestResetException",
-  "file": ".../app/code/Weline/Framework/Runtime/WlsRuntime.php",
+  "file": ".../app/code/Weline/Server/Runtime/WlsRuntime.php",
   "line": 6807
 }
 ```

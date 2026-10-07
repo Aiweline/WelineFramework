@@ -1699,6 +1699,7 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                     }
                     $currentIsFreeShipping = false;
                     $currentFreeShippingMinAmount = '0';
+                    $currentTaxClassCode = 'standard';
                     foreach ($offers as $offerRow) {
                         if (!is_array($offerRow)) {
                             continue;
@@ -1718,8 +1719,64 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                                 '',
                             ), '0'), '.') ?: '0';
                         }
+                        if ($currentTaxClassCode === 'standard') {
+                            $fromOffer = strtolower(trim((string)($offerRow['tax_class_code'] ?? '')));
+                            if ($fromOffer !== '') {
+                                $currentTaxClassCode = $fromOffer;
+                            }
+                        }
+                    }
+                    $editTaxClasses = [
+                        ['class_code' => 'standard', 'name' => (string)__('标准')],
+                        ['class_code' => 'exempt', 'name' => (string)__('免税')],
+                    ];
+                    try {
+                        if (class_exists(\Weline\Tax\Model\TaxClass::class)) {
+                            /** @var \Weline\Tax\Model\TaxClass $taxClassModel */
+                            $taxClassModel = \Weline\Framework\Manager\ObjectManager::getInstance(
+                                \Weline\Tax\Model\TaxClass::class,
+                            );
+                            $taxRows = $taxClassModel->clear()
+                                ->where(\Weline\Tax\Model\TaxClass::schema_fields_WEBSITE_ID, (int)$websiteId)
+                                ->where(\Weline\Tax\Model\TaxClass::schema_fields_ENABLED, 1)
+                                ->order(\Weline\Tax\Model\TaxClass::schema_fields_CLASS_CODE, 'ASC')
+                                ->select()
+                                ->fetchArray();
+                            if (is_array($taxRows) && $taxRows !== []) {
+                                $editTaxClasses = [];
+                                foreach ($taxRows as $taxRow) {
+                                    if (!is_array($taxRow)) {
+                                        continue;
+                                    }
+                                    $c = strtolower(trim((string)($taxRow['class_code'] ?? '')));
+                                    if ($c === '') {
+                                        continue;
+                                    }
+                                    $editTaxClasses[] = [
+                                        'class_code' => $c,
+                                        'name' => trim((string)($taxRow['name'] ?? $c)) ?: $c,
+                                    ];
+                                }
+                            }
+                        }
+                    } catch (\Throwable) {
+                        // keep standard/exempt fallback
                     }
                     ?>
+                    <div class="w-field" style="margin-top:1rem" data-testid="product-edit-tax-class">
+                        <label class="w-field__label" for="product-edit-tax-class"><lang>销售税税类</lang></label>
+                        <select class="w-input" id="product-edit-tax-class" name="tax_class_code"
+                                <?= $canEditBusiness ? '' : 'disabled' ?>>
+                            <?php foreach ($editTaxClasses as $taxClass): ?>
+                                <?php $c = (string)($taxClass['class_code'] ?? ''); ?>
+                                <option value="<?= $escape($c) ?>" <?= $c === $currentTaxClassCode ? 'selected' : '' ?>>
+                                    <?= $escape((string)($taxClass['name'] ?? $c)) ?>
+                                    <?php if ($c !== ''): ?> (<?= $escape($c) ?>)<?php endif; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="w-field__help"><lang>仅影响目的地销售税；免税不清空进口关税/进口税费预估。保存后写入全部 Offer。</lang></p>
+                    </div>
                     <?php if (!empty($provider['capabilities']['shipping'])): ?>
                         <div class="w-field" style="margin-top:1rem" data-testid="product-edit-shipping-profile">
                             <label class="w-field__label" for="product-edit-shipping-profile"><lang>配送方案</lang></label>

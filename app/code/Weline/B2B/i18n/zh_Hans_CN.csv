@@ -141,7 +141,6 @@ settings,settings
 "B2B price list amount_minor 非法：%{1}","B2B价目表 amount_minor 非法：%{1}"
 "B2B price list min_qty 必须 ≥ 1：%{1}","B2B price list min_qty 必须 ≥ 1：%{1}"
 "B2B membership 数据非法","B2B membership 数据非法"
-批发身份,批发身份
 零售,零售
 零售车,零售车
 批发车,批发车
@@ -149,6 +148,7 @@ settings,settings
 批发车需登录后使用,批发车需登录后使用
 开通批发身份后可使用批发车,开通批发身份后可使用批发车
 批发不可用,批发不可用
+批发身份,批发身份
 批发起订与阶梯价,批发起订与阶梯价
 "起订 %{1} · 步进 %{2}","起订 %{1} · 步进 %{2}"
 "%{1} 件 %{2} %{3}/件","%{1} 件 %{2} %{3}/件"

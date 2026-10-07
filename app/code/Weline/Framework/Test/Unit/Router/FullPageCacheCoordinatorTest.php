@@ -1043,7 +1043,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertSame('fr_FR', $receipt['default_locale']);
         self::assertSame(['de_DE', 'en_US', 'fr_FR'], $receipt['translation_locales']);
 
-        $runtime = (new \ReflectionClass(\Weline\Framework\Runtime\WlsRuntime::class))->newInstanceWithoutConstructor();
+        $runtime = (new \ReflectionClass(\Weline\Server\Runtime\WlsRuntime::class))->newInstanceWithoutConstructor();
         self::assertSame($receipt, (new \ReflectionMethod(
             $runtime, 'normalizeHomepageWarmupReceipt',
         ))->invoke($runtime, $receipt), 'READY/IPC normalization preserves the publication snapshot.');

@@ -63,6 +63,8 @@ Theme 已内置（`Weline_Theme/view/fonts/`，OFL）：
 
 未写 `lang` 时，使用 `State::getLangLocal()`（与站点/请求语言一致，不要在标签侧再造一套解析）。
 
+**编译期静态镜像（对齐 `theme:css` / `@lang`）**：`src` / `family` / `lang` / `chars` / `weight` 等属性均为字面量时，Taglib 在 com_* 编译期直接烘焙最终 `<style>`（并 ensure 子集缓存），请求期不再跑 `FontFaceService` PHP。任一属性含动态嵌入则仍吐运行期路径。布局实体关系固化**不**处理本标签。
+
 ### 按指定字符临时子集
 
 适合标题、品牌短句等小字符集。在标签上写 `chars="…"`，只提取这些字符（忽略语言表）：
@@ -108,9 +110,10 @@ body { font-family: "Noto Sans SC", sans-serif; }
 同批还有生产静态发布：`SetupUpgradeAfterDeployStatic`（`!DEV`，sort 130）→ `deploy:upgrade`，经中立变换事件压缩 css/js（见 `Theme/Minify`）。
 
 1. 自动收集各模块 `view/fonts/**`
-2. 语言列表默认来自 `Theme/Font/charset/*.txt`（如 `en`、`zh_Hans`、`zh_Hant`、`ja`）
+2. 语言列表 = `Theme/Font/charset/*.txt`（如 `en`、`zh_Hans`、`zh_Hant`、`ja`）∪ **网站已启用语种**（`getWebsiteLanguageCodes` / 关联表去重）
 3. 对每个「字体 × 语言」调用 `ensureLangSubset`：**已有子集跳过**，没有才生成
 4. 产物目录：`pub/media/font-subset/`（可被 `/pub/media/font-subset/...` 访问）
+5. 网站语种写入（`WebsiteLanguage::setWebsiteLanguages` / `WebsiteLanguageAssignment`）薄钩可选调用 `FontWarmupService::warmup($codes)`，不阻断语种保存
 
 可选扩展（一般不需要）：
 

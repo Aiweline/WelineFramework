@@ -21,6 +21,8 @@ final class Offer extends AbstractWebsiteShardModel
     public const schema_fields_IS_FREE_SHIPPING = 'is_free_shipping';
     /** Major-unit threshold for this offer line; 0 = no minimum once enabled. */
     public const schema_fields_FREE_SHIPPING_MIN_AMOUNT = 'free_shipping_min_amount';
+    /** Sales-tax class code (Tax module); default standard. Does not affect import duty estimate. */
+    public const schema_fields_TAX_CLASS_CODE = 'tax_class_code';
     public const schema_fields_TYPE_CONFIG_JSON = 'type_config_json';
     public const schema_fields_STATUS = 'status';
     public const schema_fields_PUBLISH_VERSION = 'publish_version';

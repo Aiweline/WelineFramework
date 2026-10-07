@@ -1340,21 +1340,25 @@ textarea::-webkit-scrollbar-thumb:hover,
 
 .cart-count {
     position: absolute;
-    top: var(--spacing-neg-0_5);
-    right: var(--spacing-neg-0_5);
+    inset-block-start: calc(var(--spacing-0_5, 0.125rem) * -1);
+    inset-inline-end: calc(var(--spacing-0_5, 0.125rem) * -1);
+    z-index: 1;
     background-color: var(--color-primary);
-    color: var(--color-text-primary);
-    font-size: var(--spacing-0_7);
+    color: var(--color-on-primary, var(--color-text-primary));
+    font-size: var(--font-size-xs, 0.75rem);
     font-weight: 700;
-    padding: 0;
-    width: var(--font-size-xl);
-    height: var(--font-size-xl);
-    display: flex;
+    line-height: 1;
+    padding: 0 0.2rem;
+    min-width: var(--spacing-4_5, 1.125rem);
+    height: var(--spacing-4_5, 1.125rem);
+    width: auto;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: 999px;
     box-shadow: 0 var(--spacing-0_5) var(--spacing-xs) var(--token-color-rgba-0-0-0-0-2);
     transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events: none;
 }
 
 .header-cart:hover .cart-count {
@@ -3420,11 +3424,14 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
 
     .cart-count,
     [data-cart-count-badge] {
-        display: flex !important;
+        display: inline-flex !important;
         background-color: var(--color-primary);
-        color: var(--color-text-primary);
-        top: var(--token-size-4px);
-        right: var(--token-size-6px);
+        color: var(--color-on-primary, var(--color-text-primary));
+        /* Avoid --token-size-4px/-6px (auto-literals may be negative or duplicated). */
+        inset-block-start: calc(var(--spacing-0_5, 0.125rem) * -1);
+        inset-inline-end: calc(var(--spacing-0_5, 0.125rem) * -1);
+        top: auto;
+        right: auto;
     }
 
     .mini-cart-dropdown {

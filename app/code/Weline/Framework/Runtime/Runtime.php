@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
+use Weline\Framework\Compilation\ServiceProviderRegistry;
+
 /**
  * 运行时辅助类
  * 
@@ -21,7 +23,7 @@ namespace Weline\Framework\Runtime;
  * - Runtime::isWls() 检测 WLS 模式
  * - Runtime::isFpm() 检测 FPM 模式
  * - Runtime::isCli() 检测 CLI 模式
- * - Runtime::createRuntime() 按当前环境返回 WlsRuntime 或 FpmRuntime
+ * - Runtime::createRuntime() 按当前环境返回 WlsRuntime（Server Provider）或 FpmRuntime
  */
 class Runtime
 {
@@ -37,12 +39,31 @@ class Runtime
     public const CLI = RuntimeInterface::MODE_CLI;
 
     /**
-     * 按当前进程检测结果构造 RuntimeInterface：WLS 为 WlsRuntime，否则为 FpmRuntime（含 CLI 下走 FpmRuntime 的入口）。
+     * 按当前进程检测结果构造 RuntimeInterface：
+     * WLS 经编译表 RuntimeProviderInterface（Weline_Server）创建，否则 FpmRuntime。
+     * WLS 解析仅读 generated modules.php + 零参 new Provider，不经 ObjectManager。
      */
     public static function createRuntime(): RuntimeInterface
     {
         if (self::isWls()) {
-            return new WlsRuntime();
+            $providerClass = (new ServiceProviderRegistry())
+                ->implementationFor(RuntimeProviderInterface::class);
+            if ($providerClass === null
+                || !\is_a($providerClass, RuntimeProviderInterface::class, true)
+            ) {
+                throw new \RuntimeException(
+                    'WLS mode requires RuntimeProviderInterface from Weline_Server. Run: php bin/w framework:compile'
+                );
+            }
+            /** @var RuntimeProviderInterface $provider */
+            $provider = new $providerClass();
+            if (!$provider->supports(RuntimeInterface::MODE_WLS)) {
+                throw new \RuntimeException(
+                    'RuntimeProviderInterface implementation does not support WLS mode: ' . $providerClass
+                );
+            }
+
+            return $provider->create(RuntimeInterface::MODE_WLS);
         }
 
         return new FpmRuntime();

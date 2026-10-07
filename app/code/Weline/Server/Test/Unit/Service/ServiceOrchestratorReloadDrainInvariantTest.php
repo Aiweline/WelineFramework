@@ -35,9 +35,9 @@ final class ServiceOrchestratorReloadDrainInvariantTest extends TestCase
             [$masterWait],
         );
 
-        // Pure-WLS H2 flush floor (45) outranks the short Nginx keepalive floor (15).
-        self::assertSame(45.0, $masterWait);
-        self::assertSame(40.0, $workerSoft);
+        // Pure-WLS H2 flush floor (120) outranks the short Nginx keepalive floor (15).
+        self::assertSame(120.0, $masterWait);
+        self::assertSame(115.0, $workerSoft);
         self::assertGreaterThan(
             GatewayPaths::UPSTREAM_KEEPALIVE_TIMEOUT_SEC,
             $workerSoft,
@@ -62,9 +62,9 @@ final class ServiceOrchestratorReloadDrainInvariantTest extends TestCase
             [$masterWait],
         );
 
-        // keepalive 30 → soft floor 35 / master floor 40, then pure-WLS floor 45 wins.
-        self::assertSame(45.0, $masterWait);
-        self::assertSame(40.0, $workerSoft);
+        // keepalive 30 → soft floor 35 / master floor 40, then pure-WLS floor 120 wins.
+        self::assertSame(120.0, $masterWait);
+        self::assertSame(115.0, $workerSoft);
     }
 
     public function testVeryLongNginxKeepaliveStillRaisesAbovePureWlsFloor(): void
@@ -84,8 +84,9 @@ final class ServiceOrchestratorReloadDrainInvariantTest extends TestCase
             [$masterWait],
         );
 
-        self::assertSame(70.0, $masterWait);
-        self::assertSame(65.0, $workerSoft);
+        // keepalive 60 → soft/master floors 65/70, but pure-WLS floor 120 wins.
+        self::assertSame(120.0, $masterWait);
+        self::assertSame(115.0, $workerSoft);
     }
 
     public function testPureWlsDirectReloadDoesNotInheritNginxDrainFloor(): void
@@ -103,8 +104,8 @@ final class ServiceOrchestratorReloadDrainInvariantTest extends TestCase
         );
 
         // Pure WLS must still floor high enough for H2 GOAWAY body flush under load.
-        self::assertSame(45.0, $masterWait);
-        self::assertSame(40.0, $workerSoft);
+        self::assertSame(120.0, $masterWait);
+        self::assertSame(115.0, $workerSoft);
     }
 
     public function testDirectNewFirstUsesBoundedBatchesUnlessForceWasExplicit(): void

@@ -40,7 +40,11 @@ final class Start extends CommandAbstract
         }
         $publicHost = \trim((string)($endpoint['public_host'] ?? ''));
         $publicHost = $publicHost !== '' ? $publicHost : \trim((string)($endpoint['host'] ?? ''));
-        $serverNames = $publicHost !== '' ? [$publicHost] : [];
+        $catalog = new \Weline\Server\Service\Edge\Nginx\ManagedNginxLocalHostCatalog();
+        $serverNames = $catalog->expandServerNames(
+            $publicHost !== '' ? [$publicHost] : [],
+        );
+        $certificate = $catalog->resolveEdgeCertificate(null, $serverNames);
 
         $service = ManagedNginxService::fromEnv();
         $result = $service->prepareAndStart(
@@ -49,6 +53,7 @@ final class Start extends CommandAbstract
             $serverNames,
             $owner,
             \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX,
+            $certificate,
         );
         if (!($result['ok'] ?? false)) {
             $this->printer->error((string)$result['message']);

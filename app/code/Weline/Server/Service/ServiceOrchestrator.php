@@ -149,10 +149,11 @@ class ServiceOrchestrator
     private const WORKER_RELOAD_SOFT_DRAIN_MARGIN_SEC = 5.0;
     /**
      * Pure WLS Direct has no Nginx upstream keepalive floor. Reload still must
-     * outlive in-flight HTTP/2 bodies (homepage ~100KB+ under c1000), otherwise
-     * Workers FORCE-close mid-DATA and clients see goaway_incomplete_stream.
+     * outlive in-flight HTTP/2 bodies under c1000 (homepage ~1MB, p95 multi-second):
+     * soak 20261007-121955 showed Batch drain timeout at 45s → FORCE mid-DATA →
+     * mass goaway_incomplete_stream. Floor 120s covers slow GOAWAY flush under load.
      */
-    private const PURE_WLS_RELOAD_DRAIN_FLOOR_SEC = 45.0;
+    private const PURE_WLS_RELOAD_DRAIN_FLOOR_SEC = 120.0;
     private const SLOT_GENERATIONS_KEY = 'slot_generations';
     private const STARTUP_PORT_PREFLIGHT_ROLES = [
         ControlMessage::ROLE_DISPATCHER => true,

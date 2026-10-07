@@ -7,7 +7,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\Router\Core as RouterCore;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 use Weline\Framework\View\Template;
 
 final class WlsRuntimeRequestBoundaryYieldTest extends TestCase

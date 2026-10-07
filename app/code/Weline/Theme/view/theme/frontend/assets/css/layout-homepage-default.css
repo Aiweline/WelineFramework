@@ -1,0 +1,413 @@
+/* Homepage layout shell CSS (extracted from layouts/homepage/default.phtml).
+ * Keep selectors scoped under .theme-layout-homepage. Do not put PHP here.
+ */
+.theme-layout-homepage .homepage-main {
+            overflow-x: clip;
+        }
+
+        /*
+         * Shell B：homepage 未包 .w-container；部件按契约 padding-inline:0。
+         * 非全宽 Hero/Promo 区由布局提供版心 max-width + 左右 gutter，避免推荐/新品/分类顶边。
+         * Hero/Promo 本身 padding-block:0，避免默认 Banner 顶部出现白缝。
+         * 区块竖向节奏用 lg→2xl，避免 soft 区连续叠加后出现「织绣↔推荐」大空白。
+         */
+        .theme-layout-homepage .homepage-section {
+            padding-block: clamp(var(--weline-layout-spacing-lg), 3.5vw, var(--weline-layout-spacing-2xl));
+            padding-inline: 0;
+        }
+
+        .theme-layout-homepage .homepage-section--soft + .homepage-section--soft {
+            padding-block-start: var(--weline-layout-spacing-lg);
+        }
+
+        .theme-layout-homepage .homepage-hero,
+        .theme-layout-homepage .homepage-promo,
+        .theme-layout-homepage .homepage-section:has([data-widget-code="hero-slider"]),
+        .theme-layout-homepage .homepage-section:has([data-widget-code="promo-banner"]) {
+            padding-block: 0;
+        }
+
+        .theme-layout-homepage .homepage-section:has([data-testid="textile-heritage"]),
+        .theme-layout-homepage .homepage-section:has([data-site-block="brand-logos"]),
+        .theme-layout-homepage .homepage-section:has([data-site-block="testimonials"]),
+        .theme-layout-homepage .homepage-section:has([data-site-block="image-gallery"][data-variant="looks"]) {
+            padding-block-end: 0;
+        }
+
+        .theme-layout-homepage .homepage-section:has([data-testid="textile-heritage"]) + .homepage-section,
+        .theme-layout-homepage .homepage-section:has([data-site-block="brand-logos"]) + .homepage-section {
+            padding-block-start: var(--weline-layout-spacing-md);
+        }
+
+        .theme-layout-homepage .homepage-section:not(.homepage-hero):not(.homepage-promo) > * {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
+        }
+
+        /* Editor preview may flatten widgets into content when nested shells are lost.
+           Keep the same版心 gutter for direct children (exclude full-bleed hero/promo). */
+        .theme-layout-homepage .homepage-content-slot > .widget-wrapper:not([data-widget-code="hero-slider"]):not([data-widget-code="promo-banner"]) {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
+        }
+
+        .theme-layout-homepage .homepage-section--soft {
+            background: var(--weline-theme-surface-subtle);
+        }
+
+        /* Empty widget shells stay for DEV HTML health; collapse the slot section. */
+        .theme-layout-homepage .homepage-section:has([data-testid="new-arrivals-empty"]) {
+            display: none;
+        }
+
+        /*
+         * WO-BUILD-THEME-01 · work_mode=default_theme（与 hanfu design 壳对齐 · 气质加固）
+         * 矮 Hero + 信任下精选；禁 .wpc-media 有限 max-height；气质服从可买。
+         */
+        .theme-layout-homepage .homepage-hero {
+            border-block-end: var(--hanfu-rule-width, 1px) solid color-mix(
+                in srgb,
+                var(--color-primary, var(--weline-theme-primary)) 42%,
+                var(--color-border-default, var(--weline-theme-border)) 58%
+            );
+        }
+
+        .theme-layout-homepage .homepage-hero .wc-theme_widget_hero_slider,
+        .theme-layout-homepage .homepage-hero [data-widget-code="hero-slider"],
+        .theme-layout-homepage .homepage-hero .slider-container {
+            max-height: none;
+            overflow: visible;
+        }
+
+        .theme-layout-homepage .homepage-hero .slide.active {
+            max-height: min(40vh, 20rem);
+            overflow: hidden;
+        }
+
+        .theme-layout-homepage .homepage-hero .slide-media,
+        .theme-layout-homepage .homepage-hero .slide-media :is(picture, img),
+        .theme-layout-homepage .homepage-hero .slide-media img {
+            max-height: min(40vh, 20rem) !important;
+            width: 100%;
+            height: min(40vh, 20rem) !important;
+            object-fit: cover !important;
+            object-position: center 28%;
+        }
+
+        .theme-layout-homepage .homepage-hero .slide-overlay {
+            background:
+                linear-gradient(
+                    105deg,
+                    color-mix(in srgb, var(--color-bg-canvas, var(--weline-theme-canvas)) 82%, transparent) 0%,
+                    color-mix(in srgb, var(--color-bg-canvas, var(--weline-theme-canvas)) 34%, transparent) 40%,
+                    transparent 66%
+                ),
+                linear-gradient(
+                    180deg,
+                    transparent 55%,
+                    color-mix(in srgb, var(--color-bg-canvas, var(--weline-theme-canvas)) 28%, transparent) 100%
+                ),
+                color-mix(in srgb, var(--color-text, var(--weline-theme-text)) 14%, transparent);
+            opacity: 1;
+        }
+
+        /* 文案/CTA 叠在媒体内垂直居中，避免贴底被裁 */
+        .theme-layout-homepage .homepage-hero .slide-content {
+            align-items: center;
+            padding-block: var(--weline-space-2);
+        }
+
+        .theme-layout-homepage .homepage-hero .slide-title,
+        .theme-layout-homepage .homepage-hero .hero-title {
+            font-family: var(--weline-layout-font-family-display, var(--font-family-display, serif));
+            font-size: clamp(var(--weline-font-size-xl, 1.25rem), 2.4vw, var(--weline-font-size-2xl, 1.5rem));
+            letter-spacing: var(--hanfu-label-tracking, 0.09em);
+            margin-block-end: var(--weline-space-2);
+            text-shadow: 0 1px 0 color-mix(in srgb, var(--color-bg-canvas, #fff) 55%, transparent);
+        }
+
+        .theme-layout-homepage .homepage-hero .slide-kicker,
+        .theme-layout-homepage .homepage-hero .slide .slide-kicker {
+            letter-spacing: var(--hanfu-heading-tracking, 0.14em);
+            color: var(--color-primary, var(--weline-theme-primary));
+        }
+
+        .theme-layout-homepage .homepage-hero .hanfu-hero-disclosure {
+            display: none; /* 店面隐藏「场景演绎/Illustrative scene」占位标 */
+        }
+
+        .theme-layout-homepage .homepage-hero + .homepage-section--trust-strip {
+            padding-block: var(--weline-space-1);
+            max-height: none;
+            overflow: visible;
+            background: color-mix(
+                in srgb,
+                var(--color-bg-canvas, var(--weline-theme-canvas)) 92%,
+                var(--color-primary, var(--weline-theme-primary)) 8%
+            );
+        }
+
+        .theme-layout-homepage .homepage-section--trust-strip .wc-theme_widget_trust_badges,
+        .theme-layout-homepage .homepage-section--trust-strip [data-widget-code="trust-badges"] {
+            padding-block: var(--weline-space-1) !important;
+            border-block-start: none;
+            border-block-end: var(--hanfu-rule-width, 1px) solid var(--color-border-subtle, var(--weline-theme-border-subtle, var(--weline-theme-border)));
+        }
+
+        .theme-layout-homepage .homepage-section--trust-strip .badge-title,
+        .theme-layout-homepage .homepage-section--trust-strip .badge-text {
+            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+        }
+
+        .theme-layout-homepage .homepage-section--trust-strip [data-widget-code="trust-badges"] .badge-icon {
+            border-radius: var(--hanfu-round, 2px);
+            background: var(--color-bg-primary, var(--weline-theme-surface));
+            border: var(--hanfu-rule-width, 1px) solid var(--color-primary, var(--weline-theme-primary));
+            color: var(--color-primary, var(--weline-theme-primary));
+            box-shadow: inset 0 0 0 var(--hanfu-rule-width, 1px) color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 30%, transparent);
+        }
+
+        .theme-layout-homepage .homepage-section--trust-strip + .homepage-section--featured-lead {
+            padding-block-start: var(--weline-space-2);
+            padding-block-end: var(--weline-space-2);
+            background:
+                linear-gradient(
+                    180deg,
+                    color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 6%, transparent) 0%,
+                    transparent 2.25rem
+                ),
+                var(--weline-theme-surface-subtle, var(--color-bg-secondary, transparent));
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-4 {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: var(--weline-space-3);
+        }
+
+        /*
+         * 热修：方图锁必须 absolute 铺满。现网 .wpc-image 被算成 static，
+         * 与 padding-top 方盒叠加 → 顶条图 + 中部空白（运营附图）。
+         * THEME-01：禁对 .wpc-media 写有限 max-height；媒体锁 1:1（禁 68% 横幅致「压扁」）。
+         */
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card {
+            border: var(--hanfu-rule-width, 1px) solid var(--color-border-subtle, var(--weline-theme-border-subtle, var(--weline-theme-border)));
+            border-radius: var(--hanfu-round, 2px);
+            background: color-mix(
+                in srgb,
+                var(--color-bg-primary, var(--weline-theme-surface)) var(--hanfu-panel-opacity, 96%),
+                transparent
+            );
+            box-shadow: none;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card:hover {
+            border-color: color-mix(
+                in srgb,
+                var(--color-border-default, var(--weline-theme-border)) 55%,
+                var(--color-primary, var(--weline-theme-primary)) 45%
+            );
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-media,
+        .theme-layout-homepage .homepage-section--featured-lead .wc-theme_widget_featured_products .weline-product-card .wpc-media {
+            position: relative;
+            height: 0;
+            padding-top: 100%;
+            max-height: none; /* WO-BUILD-THEME-01：禁止有限 max-height 压塌 */
+            overflow: hidden;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-media-link {
+            position: absolute;
+            inset: 0;
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-image,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-image,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-media img {
+            position: absolute !important;
+            inset: 0 !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            max-height: none !important;
+            object-fit: cover !important;
+            object-position: center top;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .widget-title {
+            position: relative;
+            padding-inline-start: calc(var(--hanfu-heading-mark, 0.32rem) + var(--weline-space-2));
+            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+            font-family: var(--weline-layout-font-family-display, var(--font-family-display, serif));
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .widget-title::before,
+        .theme-layout-homepage [data-widget-code="deals-of-day"] .widget-title::before,
+        .theme-layout-homepage [data-widget-code="new-arrivals"] .widget-title::before,
+        .theme-layout-homepage [data-widget-code="bestsellers"] .widget-title::before {
+            content: "";
+            position: absolute;
+            inset-block: 0.2em 0.2em;
+            inset-inline-start: 0;
+            width: var(--hanfu-heading-mark, 0.32rem);
+            background: var(--color-primary, var(--weline-theme-primary));
+            border-radius: var(--hanfu-round, 2px);
+        }
+
+        .theme-layout-homepage [data-widget-code="deals-of-day"] .widget-title,
+        .theme-layout-homepage [data-widget-code="new-arrivals"] .widget-title,
+        .theme-layout-homepage [data-widget-code="bestsellers"] .widget-title {
+            position: relative;
+            padding-inline-start: calc(var(--hanfu-heading-mark, 0.32rem) + var(--weline-space-2));
+            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-price,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-price-now,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-price {
+            color: var(--color-primary, var(--weline-theme-primary));
+            font-family: var(--weline-layout-font-family-display, var(--font-family-display, serif));
+            font-weight: var(--font-weight-semibold, 600);
+            letter-spacing: 0.02em;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-title,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-name {
+            letter-spacing: var(--hanfu-label-tracking, 0.04em);
+        }
+
+        /* 店音乐悬浮头像勿挡货架标题：略缩小；face 随 avatar 100% 填满，须同步 --w-spectrum-r */
+        .theme-layout-homepage .w-store-music__avatar {
+            width: 3.75rem;
+            height: 3.75rem;
+            aspect-ratio: 1;
+            --w-spectrum-r: 1.875rem;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-actions,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-actions {
+            padding-block: var(--weline-space-1);
+        }
+
+        /* THEME-01 build-02：精选 CTA 墨线主钮（与 design 对齐） */
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-actions .w-button--primary,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-actions .w-button--primary,
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card [data-action="add-to-cart"],
+        .theme-layout-homepage .homepage-section--featured-lead .weline-product-card [data-action="buy-now"] {
+            border: var(--hanfu-rule-width, 1px) solid var(--color-primary-border, var(--color-primary, var(--weline-theme-primary)));
+            border-radius: var(--hanfu-round, 2px);
+            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+            min-height: var(--control-height-md, 2.25rem);
+        }
+
+        .theme-layout-homepage .homepage-hero .slide-button,
+        .theme-layout-homepage .homepage-hero .slide-button.w-button--primary {
+            border-radius: var(--hanfu-round, 2px);
+            letter-spacing: var(--hanfu-label-tracking, 0.08em);
+            box-shadow: none;
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .widget-header,
+        .theme-layout-homepage .homepage-section--featured-lead .widget-subtitle {
+            margin-block-end: var(--weline-space-1);
+        }
+
+        .theme-layout-homepage .homepage-section--featured-lead .widget-subtitle {
+            display: none;
+        }
+
+        /* 已发布实体若仍吐出多行精选：首页首屏只露 1 行×4，保证特价 ≤1.5 屏（MALL-01/02） */
+        .theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-4 > :nth-child(n + 5),
+        .theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-5 > :nth-child(n + 6),
+        .theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-6 > :nth-child(n + 5) {
+            display: none;
+        }
+
+        /* WO-HP-P3-MALL-03 + THEME-01：品类矮磁贴条 · 墨线气质 */
+        .theme-layout-homepage .homepage-section--category-strip {
+            padding-block: var(--weline-space-2);
+        }
+
+        .theme-layout-homepage .homepage-section--category-strip .grid-title {
+            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+        }
+
+        .theme-layout-homepage .homepage-section--category-strip [data-widget-code="category-grid"] .category-card {
+            box-shadow: none;
+            border-color: color-mix(
+                in srgb,
+                var(--color-border-default, var(--weline-theme-border)) 70%,
+                var(--color-primary, var(--weline-theme-primary)) 30%
+            );
+            background: color-mix(
+                in srgb,
+                var(--color-bg-primary, var(--weline-theme-surface)) 94%,
+                var(--color-primary, var(--weline-theme-primary)) 6%
+            );
+        }
+
+        .theme-layout-homepage .homepage-section--category-strip [data-widget-code="category-grid"] .category-card:hover {
+            transform: none;
+            border-color: var(--color-primary, var(--weline-theme-primary));
+        }
+
+        /* WO-HP-P3-MALL-05：内容装饰压缩；视频靠页底 */
+        .theme-layout-homepage .homepage-section--content-compact {
+            padding-block: var(--weline-space-4) var(--weline-space-3);
+        }
+
+        .theme-layout-homepage .homepage-section--content-compact [data-widget-code="brand-logos"],
+        .theme-layout-homepage .homepage-section--content-compact [data-testid="textile-heritage"],
+        .theme-layout-homepage .homepage-section--content-compact [data-site-block="brand-logos"] {
+            padding-block: var(--weline-space-3) !important;
+        }
+
+        .theme-layout-homepage .homepage-section--content-compact [data-widget-code="image-gallery"] .sb-grid,
+        .theme-layout-homepage .homepage-section--content-compact [data-site-block="image-gallery"] .sb-grid {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+
+        .theme-layout-homepage .homepage-section--content-compact [data-widget-code="image-gallery"] .sb-grid > :nth-child(n+7),
+        .theme-layout-homepage .homepage-section--content-compact [data-site-block="image-gallery"] .sb-grid > :nth-child(n+7) {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .theme-layout-homepage .homepage-hero .slide.active {
+                max-height: min(42vh, 18rem);
+            }
+
+            .theme-layout-homepage .homepage-hero .slide-media :is(picture, img),
+            .theme-layout-homepage .homepage-hero .slide-media img {
+                max-height: min(42vh, 18rem) !important;
+                height: min(42vh, 18rem) !important;
+            }
+
+            .theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-4 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .theme-layout-homepage .homepage-section--content-compact [data-widget-code="image-gallery"] .sb-grid,
+            .theme-layout-homepage .homepage-section--content-compact [data-site-block="image-gallery"] .sb-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .theme-layout-homepage .homepage-section--content-compact [data-widget-code="image-gallery"] .sb-grid > :nth-child(n+7),
+            .theme-layout-homepage .homepage-section--content-compact [data-site-block="image-gallery"] .sb-grid > :nth-child(n+7) {
+                display: none;
+            }
+        }

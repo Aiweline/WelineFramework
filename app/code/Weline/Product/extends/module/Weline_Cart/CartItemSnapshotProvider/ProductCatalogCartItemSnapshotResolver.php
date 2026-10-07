@@ -220,6 +220,10 @@ final class ProductCatalogCartItemSnapshotResolver
         $shippingHazardClass = trim((string)$offer->getData(Offer::schema_fields_SHIPPING_HAZARD_CLASS));
         $isFreeShipping = !empty($offer->getData(Offer::schema_fields_IS_FREE_SHIPPING));
         $freeShippingMinAmount = (float)$offer->getData(Offer::schema_fields_FREE_SHIPPING_MIN_AMOUNT);
+        $taxClassCode = strtolower(trim((string)$offer->getData(Offer::schema_fields_TAX_CLASS_CODE)));
+        if ($taxClassCode === '' || preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/D', $taxClassCode) !== 1) {
+            $taxClassCode = 'standard';
+        }
         $fulfillmentMetadata = [];
         if ($shippingProfileCode !== '') {
             $fulfillmentMetadata['shipping_profile_code'] = $shippingProfileCode;
@@ -288,6 +292,7 @@ final class ProductCatalogCartItemSnapshotResolver
                 offerId: $offerId,
                 productId: $productId,
                 requiresShipping: $requiresShipping,
+                taxClassCode: $taxClassCode,
                 fulfillmentMetadata: $fulfillmentMetadata,
                 options: $this->buildOptions($websiteId, $productId, $selection, $scope, $locale, $campaignLabel),
                 compareAtMinor: $compareAtMinor,
@@ -316,6 +321,7 @@ final class ProductCatalogCartItemSnapshotResolver
             productId: $productId,
             requiresShipping: $requiresShipping,
             weightMinor: $weightMinor,
+            taxClassCode: $taxClassCode,
             fulfillmentMetadata: $fulfillmentMetadata,
             options: $this->buildOptions($websiteId, $productId, $selection, $scope, $locale, $campaignLabel),
             compareAtMinor: $compareAtMinor,
@@ -666,6 +672,10 @@ final class ProductCatalogCartItemSnapshotResolver
                     fn() => $this->buildOptions($websiteId, $productId, [], $scope, $this->locale()),
                 );
             }
+            $batchTaxClass = strtolower(trim((string)($offerRow[Offer::schema_fields_TAX_CLASS_CODE] ?? '')));
+            if ($batchTaxClass === '' || preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/D', $batchTaxClass) !== 1) {
+                $batchTaxClass = 'standard';
+            }
             $snapshots[] = new CartItemSnapshot(
                 offer: $identity,
                 name: (string)$facts['name'],
@@ -688,6 +698,7 @@ final class ProductCatalogCartItemSnapshotResolver
                 sourceApp: 'Weline',
                 offerId: $offerId,
                 productId: $productId,
+                taxClassCode: $batchTaxClass,
                 fulfillmentMetadata: $fxUnavailable ? ['currency_unavailable' => '1'] : [],
                 options: $options,
                 slug: (string)($facts['slug'] ?? ''),

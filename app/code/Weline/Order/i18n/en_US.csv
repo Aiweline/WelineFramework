@@ -583,6 +583,7 @@ Outbox,Outbox
 "none Tax 快照必须为零税且不得包含引擎行","A none Tax snapshot must be zero and contain no engine lines"
 "订单行与 Tax 快照行无法一一对应","Order lines and Tax snapshot lines do not match one-to-one"
 "Tax 快照包含订单中不存在的行","The Tax snapshot contains a line not present in the order"
+订单级税额无法分配到空拆单,订单级税额无法分配到空拆单
 "Order Tax 分配与 Group 税额不守恒","Allocated Order Tax does not conserve the Checkout Group total"
 订单金额乘法溢出,"Order amount multiplication overflow"
 订单金额加法溢出,"Order amount addition overflows"

@@ -1039,6 +1039,7 @@ final class OrderFacade implements OrderFacadeInterface
         }
 
         $taxByLine = [];
+        $orderLevelTaxMinor = 0;
         if ($groupTaxSnapshot->mode === 'engine') {
             if ($groupTaxSnapshot->engine === 'none'
                 || preg_match('/^[a-f0-9]{64}$/D', $groupTaxSnapshot->ruleSetHash) !== 1
@@ -1066,6 +1067,11 @@ final class OrderFacade implements OrderFacadeInterface
                     );
                 }
                 $lineTaxTotal = $this->checkedAdd($lineTaxTotal, $lineTax);
+                // Duty/import estimate lines are order-level (not cart line_uuid).
+                if (str_starts_with($lineId, 'duty:')) {
+                    $orderLevelTaxMinor = $this->checkedAdd($orderLevelTaxMinor, $lineTax);
+                    continue;
+                }
                 $taxByLine[$lineId] = $line;
             }
             if ($lineTaxTotal !== $groupTax) {
@@ -1075,6 +1081,8 @@ final class OrderFacade implements OrderFacadeInterface
                     ['line_tax_total' => $lineTaxTotal, 'group_tax_total' => $groupTax],
                 );
             }
+        } elseif ($this->isOrderLevelTaxSnapshot($groupTaxSnapshot, $groupTax)) {
+            $orderLevelTaxMinor = $groupTax;
         } elseif ($groupTax !== 0
             || $groupTaxSnapshot->engine !== 'none'
             || $groupTaxSnapshot->lines !== []
@@ -1244,6 +1252,25 @@ final class OrderFacade implements OrderFacadeInterface
             ];
         }
 
+        // DDU duty / import VAT (and similar) sit on the shipping-charge owner order.
+        if ($orderLevelTaxMinor > 0) {
+            if ($orders === []) {
+                throw new OrderFacadeConflictException(
+                    self::ERROR_INVALID_COMMAND,
+                    \__('订单级税额无法分配到空拆单'),
+                );
+            }
+            $ownerIdx = $ownerIndex ?? 0;
+            $orders[$ownerIdx]['tax_amount_minor'] = $this->checkedAdd(
+                (int)$orders[$ownerIdx]['tax_amount_minor'],
+                $orderLevelTaxMinor,
+            );
+            $orders[$ownerIdx]['grand_total_minor'] = $this->checkedAdd(
+                (int)$orders[$ownerIdx]['grand_total_minor'],
+                $orderLevelTaxMinor,
+            );
+        }
+
         $allocatedTax = 0;
         foreach ($orders as $order) {
             $allocatedTax = $this->checkedAdd($allocatedTax, (int) $order['tax_amount_minor']);
@@ -1257,6 +1284,58 @@ final class OrderFacade implements OrderFacadeInterface
         }
 
         return ['orders' => $orders, 'owner_index' => $ownerIndex];
+    }
+
+    /**
+     * Policy / duty-estimate snapshots: non-engine mode with conserved order-level tax
+     * (customs duty + import VAT lines keyed duty:*).
+     */
+    private function isOrderLevelTaxSnapshot(TaxSnapshot $snapshot, int $groupTax): bool
+    {
+        if ($groupTax !== $snapshot->taxAmountMinor) {
+            return false;
+        }
+        if ($snapshot->engine !== 'none') {
+            return false;
+        }
+        $mode = trim($snapshot->mode);
+        $allowed = [
+            'duty_estimate',
+            'import_at_border',
+            'duty_only',
+            'collect_destination_tax',
+            'domestic_inclusive',
+            'no_extra_tax',
+            'policy_soft_zero',
+        ];
+        if (!in_array($mode, $allowed, true)) {
+            return false;
+        }
+        if ($groupTax === 0) {
+            return $snapshot->lines === [];
+        }
+        if ($snapshot->lines === []) {
+            // Order-level tax without line breakdown is acceptable for duty totals.
+            return true;
+        }
+        $sum = 0;
+        foreach ($snapshot->lines as $line) {
+            if (!is_array($line)) {
+                return false;
+            }
+            $lineId = trim((string)($line['line_id'] ?? ''));
+            $lineTax = (int)($line['tax_amount_minor'] ?? -1);
+            if ($lineTax < 0) {
+                return false;
+            }
+            if ($lineId !== '' && !str_starts_with($lineId, 'duty:')) {
+                // Cart-line tax belongs in engine mode.
+                return false;
+            }
+            $sum = $this->checkedAdd($sum, $lineTax);
+        }
+
+        return $sum === $groupTax;
     }
 
     private function checkedMultiply(int $left, int $right): int
@@ -1618,18 +1697,32 @@ final class OrderFacade implements OrderFacadeInterface
                     $lineIds[$lineId] = true;
                 }
             }
-            $lines = [];
-            $lineTaxTotal = 0;
+            $cartLines = [];
+            $dutyLines = [];
+            $cartTaxTotal = 0;
+            $dutyTaxTotal = 0;
             foreach ($snap->lines as $line) {
                 $lineId = (string) ($line['line_id'] ?? '');
+                $lineTax = (int) ($line['tax_amount_minor'] ?? 0);
+                if (str_starts_with($lineId, 'duty:')) {
+                    $dutyLines[] = $line;
+                    $dutyTaxTotal = $this->checkedAdd($dutyTaxTotal, $lineTax);
+                    continue;
+                }
                 if (!isset($lineIds[$lineId])) {
                     continue;
                 }
-                $lines[] = $line;
-                $lineTaxTotal = $this->checkedAdd(
-                    $lineTaxTotal,
-                    (int) ($line['tax_amount_minor'] ?? 0),
-                );
+                $cartLines[] = $line;
+                $cartTaxTotal = $this->checkedAdd($cartTaxTotal, $lineTax);
+            }
+            $lines = $cartLines;
+            $lineTaxTotal = $cartTaxTotal;
+            // Shipping-owner order carries DDU duty/import lines (order-level).
+            if ($lineTaxTotal !== $amountMinor
+                && $this->checkedAdd($cartTaxTotal, $dutyTaxTotal) === $amountMinor
+            ) {
+                $lines = array_merge($cartLines, $dutyLines);
+                $lineTaxTotal = $amountMinor;
             }
             if ($lineTaxTotal !== $amountMinor) {
                 throw new OrderFacadeConflictException(

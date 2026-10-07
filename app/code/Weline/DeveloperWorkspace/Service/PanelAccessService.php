@@ -62,6 +62,15 @@ class PanelAccessService
         return $this->hasValidSession() || ($request !== null && $this->hasValidBearerToken($request));
     }
 
+    /**
+     * 是否持有有效的面板 Cookie 会话（不含「开发模式即放行」）。
+     * DevTool memory_limit 翻倍必须用此判定，否则 local/dev 店面压测会把 512M Worker 抬到 1G 后 OOM。
+     */
+    public function hasActivePanelSession(): bool
+    {
+        return $this->hasValidSession();
+    }
+
     public function canAccessApi(?Request $request = null): bool
     {
         return $this->canAccessPanel($request);

@@ -46,7 +46,7 @@ $translateDefaultCopy = static function (string $source, string $english) use ($
     return $isChineseLocale ? $source : $english;
 };
 
-if ($items === []) {
+if ($items === [] && \Weline\Theme\Helper\StorefrontHanfuDemoCatalog::allowed()) {
     $items = [
         [
             'content' => $translateDefaultCopy(

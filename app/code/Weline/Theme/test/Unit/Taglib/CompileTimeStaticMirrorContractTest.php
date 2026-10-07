@@ -13,15 +13,17 @@ use Weline\Framework\View\Taglib;
 use Weline\Framework\View\Template;
 use Weline\Theme\Taglib\Icon;
 use Weline\Theme\Taglib\ThemeCss;
+use Weline\Theme\Taglib\ThemeFont;
 use Weline\Theme\Taglib\ThemeJs;
 
 class CompileTimeStaticMirrorContractTest extends TestCase
 {
-    public function testThemeCssAndJsAndIconImplementStaticMirrorCapable(): void
+    public function testThemeCssAndJsAndIconAndFontImplementStaticMirrorCapable(): void
     {
         self::assertTrue(is_a(ThemeCss::class, StaticMirrorCapableInterface::class, true));
         self::assertTrue(is_a(ThemeJs::class, StaticMirrorCapableInterface::class, true));
         self::assertTrue(is_a(Icon::class, StaticMirrorCapableInterface::class, true));
+        self::assertTrue(is_a(ThemeFont::class, StaticMirrorCapableInterface::class, true));
     }
 
     public function testThemeCssLiteralPathBakesLinkWithoutPhp(): void
@@ -115,5 +117,38 @@ class CompileTimeStaticMirrorContractTest extends TestCase
         self::assertStringNotContainsString('<theme:css>', $result);
         self::assertStringContainsString('<link', $result);
         self::assertStringNotContainsString('<?php', $result);
+    }
+
+    public function testThemeFontLiteralAttrsBakeStyleWithoutPhp(): void
+    {
+        $callback = ThemeFont::callback();
+        $result = $callback('tag-self-close-with-attrs', [], [], [
+            'src' => 'NotoSansSC-Regular.ttf',
+            'family' => 'Noto Sans SC',
+            'lang' => 'en',
+            'weight' => '400',
+            'display' => 'swap',
+        ]);
+
+        self::assertIsString($result);
+        self::assertStringContainsString('data-weline-font', $result);
+        self::assertStringContainsString('@font-face', $result);
+        self::assertStringContainsString('/pub/media/font-subset/', $result);
+        self::assertStringNotContainsString('<?php', $result, 'literal theme:font must bake HTML, not emit PHP');
+        self::assertStringNotContainsString('FontFaceService', $result);
+    }
+
+    public function testThemeFontDynamicLangStillEmitsPhp(): void
+    {
+        $callback = ThemeFont::callback();
+        $result = $callback('tag-self-close-with-attrs', [], [], [
+            'src' => 'NotoSansSC-Regular.ttf',
+            'family' => 'Noto Sans SC',
+            'lang' => '<?= $lang ?>',
+            'weight' => '400',
+        ]);
+
+        self::assertStringContainsString('<?php', $result);
+        self::assertStringContainsString('FontFaceService', $result);
     }
 }

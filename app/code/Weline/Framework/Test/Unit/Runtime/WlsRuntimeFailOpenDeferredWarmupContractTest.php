@@ -7,7 +7,7 @@ namespace Weline\Framework\Test\Unit\Runtime;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionProperty;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 
 /**
  * Fail-open homepage READY must still schedule deferred storefront critical

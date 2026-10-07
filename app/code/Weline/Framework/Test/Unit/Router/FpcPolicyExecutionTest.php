@@ -19,7 +19,7 @@ use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 
 final class FpcPolicyExecutionTest extends TestCase
 {

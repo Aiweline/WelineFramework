@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Server',
-    "version" => '2.0.133',
+    "version" => '2.0.139',
     "requires" => [
         'Weline_Framework' => '*',
     ],
@@ -12,6 +12,7 @@ return [
     ],
     "provides" => [
         \Weline\Framework\Runtime\RuntimeEdgeCacheInvalidatorInterface::class => \Weline\Server\Api\Runtime\RuntimeEdgeCacheInvalidator::class,
+        \Weline\Framework\Runtime\RuntimeProviderInterface::class => \Weline\Server\Api\Runtime\WlsRuntimeProvider::class,
         'cache.adapter_provider.200.Weline_Server' => \Weline\Server\Api\Cache\WlsMemoryAdapterProvider::class,
         'cache.edge_adapter.200.wls_memory' => \Weline\Server\Api\Cache\WlsMemory::class,
         'request_resetter.Weline_Server' => \Weline\Server\Api\Runtime\RequestResetter::class,

@@ -8,6 +8,7 @@ use Throwable;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Service\DatabaseTransactionRunnerInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Product\Api\ProductIdentityCutoverPolicyInterface;
 use Weline\Product\Model\ProductIdentityCutoverState;
 
@@ -17,6 +18,7 @@ use Weline\Product\Model\ProductIdentityCutoverState;
 final class ProductIdentityCutoverService implements ProductIdentityCutoverPolicyInterface
 {
     private const STATE_KEY = 'product_identity_v2';
+    public const REQUEST_SNAPSHOT_KEY = 'product.identity_cutover.snapshot.v1';
 
     /** @var (\Closure(): ProductIdentityCutoverState)|null */
     private readonly mixed $stateFactory;
@@ -48,12 +50,14 @@ final class ProductIdentityCutoverService implements ProductIdentityCutoverPolic
      */
     public function current(): array
     {
-        try {
-            $row = $this->load();
-            return $row === null ? $this->defaultSnapshot(false) : $this->snapshot($row);
-        } catch (Throwable) {
-            return $this->defaultSnapshot(false);
-        }
+        return RequestContext::remember(self::REQUEST_SNAPSHOT_KEY, function (): array {
+            try {
+                $row = $this->load();
+                return $row === null ? $this->defaultSnapshot(false) : $this->snapshot($row);
+            } catch (Throwable) {
+                return $this->defaultSnapshot(false);
+            }
+        });
     }
 
     /** @return array<string, int|string|bool|null> */
@@ -61,7 +65,7 @@ final class ProductIdentityCutoverService implements ProductIdentityCutoverPolic
     {
         $sourceDigest = $this->digest($sourceDigest);
 
-        return $this->transactions->run(
+        return $this->publishRequestSnapshot($this->transactions->run(
             $this->connectionFactory,
             function () use ($sourceDigest): array {
                 $row = $this->load();
@@ -112,7 +116,7 @@ final class ProductIdentityCutoverService implements ProductIdentityCutoverPolic
                     ],
                 );
             },
-        );
+        ));
     }
 
     /** @return array<string, int|string|bool|null> */
@@ -128,7 +132,7 @@ final class ProductIdentityCutoverService implements ProductIdentityCutoverPolic
         }
         $success = $success && $errorCount === 0;
 
-        return $this->transactions->run(
+        return $this->publishRequestSnapshot($this->transactions->run(
             $this->connectionFactory,
             function () use ($sourceDigest, $success, $verifiedCount, $errorCount): array {
                 $row = $this->requireState();
@@ -155,7 +159,7 @@ final class ProductIdentityCutoverService implements ProductIdentityCutoverPolic
                     ],
                 );
             },
-        );
+        ));
     }
 
     /** @return array<string, int|string|bool|null> */
@@ -163,7 +167,7 @@ final class ProductIdentityCutoverService implements ProductIdentityCutoverPolic
     {
         $currentSourceDigest = $this->digest($currentSourceDigest);
 
-        return $this->transactions->run(
+        return $this->publishRequestSnapshot($this->transactions->run(
             $this->connectionFactory,
             function () use ($currentSourceDigest, $expectedVersion): array {
                 $row = $this->requireState();
@@ -207,7 +211,7 @@ final class ProductIdentityCutoverService implements ProductIdentityCutoverPolic
                     ],
                 );
             },
-        );
+        ));
     }
 
     /** @return array<string, int|string|bool|null> */
@@ -219,7 +223,7 @@ final class ProductIdentityCutoverService implements ProductIdentityCutoverPolic
             throw new \InvalidArgumentException('product_v2_rollback_mode_invalid');
         }
 
-        return $this->transactions->run(
+        return $this->publishRequestSnapshot($this->transactions->run(
             $this->connectionFactory,
             function () use ($expectedVersion, $targetMode): array {
                 $row = $this->requireState();
@@ -240,7 +244,18 @@ final class ProductIdentityCutoverService implements ProductIdentityCutoverPolic
                     ],
                 );
             },
-        );
+        ));
+    }
+
+    /**
+     * @param array<string, int|string|bool|null> $snapshot
+     * @return array<string, int|string|bool|null>
+     */
+    private function publishRequestSnapshot(array $snapshot): array
+    {
+        RequestContext::set(self::REQUEST_SNAPSHOT_KEY, $snapshot);
+
+        return $snapshot;
     }
 
     /**

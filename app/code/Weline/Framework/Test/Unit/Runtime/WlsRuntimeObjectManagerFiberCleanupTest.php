@@ -6,7 +6,7 @@ namespace Weline\Framework\Test\Unit\Runtime;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 
 final class WlsRuntimeObjectManagerFiberCleanupTest extends TestCase
 {

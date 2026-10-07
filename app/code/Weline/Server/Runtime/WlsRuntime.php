@@ -2,15 +2,15 @@
 declare(strict_types=1);
 
 /**
- * Weline Framework - WLS 运行时
- * 
- * Weline Server 常驻内存模式的运行时实现
- * 
+ * Weline Server - WLS 运行时
+ *
+ * Weline Server 常驻内存模式的运行时实现（由 RuntimeProviderInterface 提供）。
+ *
  * @author Aiweline
  * @email aiweline@qq.com
  */
 
-namespace Weline\Framework\Runtime;
+namespace Weline\Server\Runtime;
 
 use Weline\Framework\App;
 use Weline\Framework\App\Env;
@@ -23,6 +23,8 @@ use Weline\Framework\Context;
 use Weline\Framework\Container\ContainerRuntime;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
@@ -33,14 +35,41 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser as PhraseParser;
 use Weline\Framework\Router\Core as Router;
 use Weline\Framework\Router\FullPageCacheCoordinator;
+use Weline\Framework\Runtime\BackendWarmupProviderInterface;
+use Weline\Framework\Runtime\DeveloperAccessPolicy;
+use Weline\Framework\Runtime\DictionaryWarmupProviderInterface;
+use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\FpcWarmupProviderInterface;
+use Weline\Framework\Runtime\GlobalsEmulator;
+use Weline\Framework\Runtime\HomepageCanonicalPublicationBroker;
+use Weline\Framework\Runtime\InternalHomepagePrime;
+use Weline\Framework\Runtime\MemDiag;
+use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\Preload\WorkerPreloadContext;
 use Weline\Framework\Runtime\Preload\WorkerPreloadManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\RequestPipeline;
+use Weline\Framework\Runtime\RequestPipelineInterface;
+use Weline\Framework\Runtime\RequestPipelineStageListenerInterface;
+use Weline\Framework\Runtime\RequestResetException;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolution;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\Runtime\StartPageRouteProviderInterface;
 use Weline\Framework\Runtime\StateManager;
-use Weline\Framework\Session\Session;
-use Weline\Framework\Env\WelineEnv;
-use Weline\Framework\Extends\ExtendsData;
+use Weline\Framework\Runtime\StorefrontHotCacheBagWarmupProviderInterface;
+use Weline\Framework\Runtime\StorefrontWebsiteContext;
+use Weline\Framework\Runtime\StorefrontWebsiteContextResolverInterface;
+use Weline\Framework\Runtime\TelemetryBroadcaster;
+use Weline\Framework\Runtime\WlsConcurrency;
+use Weline\Framework\Runtime\WlsRuntimeAdapterInterface;
+use Weline\Framework\Runtime\WlsRuntimeAdapterResolver;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
 use Weline\Framework\Service\Query\QueryProviderRegistry;
+use Weline\Framework\Session\Session;
 /**
  * WLS 运行时
  * 
@@ -113,6 +142,21 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     /** wave8-8c7: stage survives ServerBag strip of WLS_PRIME_HOT_CACHE_BAGS_STAGE. */
     private string $deferredHotCacheBagPrimeStage = '';
+
+    /**
+     * Process-local deferred warmup website scopes (default + capped managed locals).
+     * RequestContext may be absent outside handle(); keep an instance bag instead.
+     *
+     * @var list<array{
+     *   website_id:int,
+     *   host:string,
+     *   default_language:string,
+     *   default_currency:string,
+     *   language_codes:list<string>,
+     *   currency_codes:list<string>
+     * }>|null
+     */
+    private ?array $deferredWarmupWebsiteScopesCache = null;
 
     /**
      * P5-fiber-yield O2: bag-prime latch must be Fiber-local. A live peer Fiber's
@@ -218,6 +262,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             \define('WLS_MODE', true);
         }
         Runtime::setMode(RuntimeInterface::MODE_WLS);
+        HomepageCanonicalPublicationBroker::register(
+            [self::class, 'noteCanonicalHomepagePublication']
+        );
 
         // Cold-start fail-closed gate. Registry loading and validation happen
         // once per Worker before App bootstrap; requests only read the cached
@@ -1486,6 +1533,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         // (debug 8f7f40: /CNY/ ~1.5s, /en_US/ ~2.6s build_lock).
         $this->runLocaleBagPrimeShards([]);
         $this->runCurrencyBagPrimeShards();
+        // category_surface_prime stays owner-only: concurrent peer seal races
+        // Shared/build_lock (probe MISS thrash). Peers hydrate via Shared HIT.
 
         if (\function_exists('w_log_info')) {
             \w_log_info('[WlsRuntime] deferred storefront peer bag hydrate worker='
@@ -1742,7 +1791,10 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
             $this->adoptDeferredHomepageWarmupProof($hosts, $result);
             // Out of UC-deferred mandatory wall clock (done already logged above as failed).
+            // Same post-done bag/FPC primes as the success path — incomplete must not skip them.
             $this->runLocaleBagPrimeShards($localeDeferred);
+            $this->runCurrencyBagPrimeShards();
+            $this->runCategorySurfaceFpcPrimeShards();
             return;
         }
 
@@ -1771,6 +1823,10 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         // currency_bag_prime: primary language × non-default enabled currencies
         // (chrome + product_card_html vary currency — cold /CNY/ evidence 8f7f40).
         $this->runCurrencyBagPrimeShards();
+        // category_surface_prime: top /category/** FPC seal (own budget).
+        // Evidence 8f7f40: category MISS 1–2.9s vs HIT ~0.2–0.5s; critical
+        // warmup only seals `/`+`/products` (localeBudget=0 drops provider extras).
+        $this->runCategorySurfaceFpcPrimeShards();
     }
 
     /**
@@ -1783,9 +1839,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private function runLocaleBagPrimeShards(array $preferredLocalePaths = []): void
     {
         $startedAt = \microtime(true);
-        $defaults = $this->resolveDeferredWarmupWebsiteDefaults();
-        $currency = \trim((string)($defaults['currency'] ?? ''));
-        $defaultLanguage = $this->normalizeDeferredWarmupLocaleCode((string)($defaults['language'] ?? ''));
+        $scopes = $this->resolveDeferredWarmupWebsiteScopes();
 
         $maxLocalesRaw = Env::get('wls.worker.storefront_locale_bag_prime_max_locales', null);
         if ($maxLocalesRaw === null || $maxLocalesRaw === '') {
@@ -1808,62 +1862,83 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return;
         }
 
-        // Prefer Provider-declared locale homes (same ledger as locale_deferred_paths),
-        // then fill from WebsiteLanguage — avoid alphabetical-only first-K miss (e.g. ru_RU).
-        $targets = [];
-        foreach ($preferredLocalePaths as $rawPath) {
-            $locale = $this->extractLocaleCodeFromWarmupPath((string)$rawPath);
-            $normalized = $this->normalizeDeferredWarmupLocaleCode($locale);
-            if ($normalized === '' || ($defaultLanguage !== '' && $normalized === $defaultLanguage)) {
-                continue;
-            }
-            $targets[$normalized] = $locale;
-            if (\count($targets) >= $maxLocales) {
-                break;
-            }
-        }
-        if (\count($targets) < $maxLocales) {
-            $enabled = [];
-            foreach ($this->resolveDeferredWarmupWebsiteLanguageCodes() as $locale) {
+        $items = [];
+        $allLocales = [];
+        foreach ($scopes as $scope) {
+            $defaultLanguage = $this->normalizeDeferredWarmupLocaleCode((string)($scope['default_language'] ?? ''));
+            $currency = \trim((string)($scope['default_currency'] ?? ''));
+            $targets = [];
+            foreach ($preferredLocalePaths as $rawPath) {
+                $locale = $this->extractLocaleCodeFromWarmupPath((string)$rawPath);
                 $normalized = $this->normalizeDeferredWarmupLocaleCode($locale);
                 if ($normalized === '' || ($defaultLanguage !== '' && $normalized === $defaultLanguage)) {
                     continue;
                 }
-                $enabled[$normalized] = $locale;
-            }
-            // Traffic-biased fill after Provider paths (covers /ru_RU cold accept).
-            $priority = [
-                'en_us', 'ru_ru', 'es_es', 'fr_fr', 'de_de', 'ja_jp', 'pt_br', 'ar_sa',
-                'ko_kr', 'it_it', 'zh_hant_tw', 'zh_hant_hk',
-            ];
-            foreach ($priority as $normalized) {
-                if (!isset($enabled[$normalized]) || isset($targets[$normalized])) {
-                    continue;
+                $enabledOnScope = false;
+                foreach ($scope['language_codes'] as $code) {
+                    if ($this->normalizeDeferredWarmupLocaleCode((string)$code) === $normalized) {
+                        $targets[$normalized] = (string)$code;
+                        $enabledOnScope = true;
+                        break;
+                    }
                 }
-                $targets[$normalized] = $enabled[$normalized];
+                if (!$enabledOnScope && $locale !== '') {
+                    // Provider path may name a locale not yet listed — still try once.
+                    $targets[$normalized] = $locale;
+                }
                 if (\count($targets) >= $maxLocales) {
                     break;
                 }
             }
             if (\count($targets) < $maxLocales) {
-                foreach ($enabled as $normalized => $locale) {
-                    if (isset($targets[$normalized])) {
+                $enabled = [];
+                foreach ($scope['language_codes'] as $locale) {
+                    $normalized = $this->normalizeDeferredWarmupLocaleCode((string)$locale);
+                    if ($normalized === '' || ($defaultLanguage !== '' && $normalized === $defaultLanguage)) {
                         continue;
                     }
-                    $targets[$normalized] = $locale;
+                    $enabled[$normalized] = (string)$locale;
+                }
+                $priority = [
+                    'en_us', 'ru_ru', 'es_es', 'fr_fr', 'de_de', 'ja_jp', 'pt_br', 'ar_sa',
+                    'ko_kr', 'it_it', 'zh_hant_tw', 'zh_hant_hk',
+                ];
+                foreach ($priority as $normalized) {
+                    if (!isset($enabled[$normalized]) || isset($targets[$normalized])) {
+                        continue;
+                    }
+                    $targets[$normalized] = $enabled[$normalized];
                     if (\count($targets) >= $maxLocales) {
                         break;
                     }
                 }
+                if (\count($targets) < $maxLocales) {
+                    foreach ($enabled as $normalized => $locale) {
+                        if (isset($targets[$normalized])) {
+                            continue;
+                        }
+                        $targets[$normalized] = $locale;
+                        if (\count($targets) >= $maxLocales) {
+                            break;
+                        }
+                    }
+                }
+            }
+            foreach ($targets as $locale) {
+                $items[] = [
+                    'website_id' => (int)$scope['website_id'],
+                    'host' => (string)$scope['host'],
+                    'locale' => (string)$locale,
+                    'currency' => $currency,
+                ];
+                $allLocales[$this->normalizeDeferredWarmupLocaleCode((string)$locale)] = (string)$locale;
             }
         }
-        $targets = \array_values($targets);
 
-        if ($targets === []) {
+        if ($items === []) {
             $this->logDeferredStorefrontWarmupStage('locale_bag_prime_skipped', [
                 'reason' => 'no_extra_locales',
-                'default_language' => $defaultLanguage,
-                'currency' => $currency,
+                'scopes_count' => \count($scopes),
                 'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
             ]);
 
@@ -1871,67 +1946,66 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         $this->logDeferredStorefrontWarmupStage('locale_bag_prime', [
-            'locales' => $targets,
-            'currency' => $currency,
+            'items' => \array_map(static fn(array $i): array => [
+                'website_id' => $i['website_id'],
+                'host' => $i['host'],
+                'locale' => $i['locale'],
+                'currency' => $i['currency'],
+            ], $items),
+            'scopes_count' => \count($scopes),
             'max_locales' => $maxLocales,
             'elapsed_cap_ms' => $elapsedCapMs,
-            'default_language' => $defaultLanguage,
         ]);
 
-        $seeded = [];
-        $errors = [];
-        $truncated = false;
-        foreach ($targets as $index => $locale) {
-            $elapsedMs = (\microtime(true) - $startedAt) * 1000;
-            if ($elapsedMs >= $elapsedCapMs) {
-                $truncated = true;
-                break;
-            }
-            if ($index > 0) {
-                try {
-                    SchedulerSystem::yieldDelay(15);
-                } catch (\Throwable) {
-                }
-            }
-            try {
+        $bounded = $this->runBoundedDeferredPrimeShards(
+            'locale_bag_prime',
+            $items,
+            $elapsedCapMs,
+            15,
+            function (array $item): array {
                 $prime = $this->primeDeferredStorefrontHotCacheBags(
                     'locale_bag_prime',
-                    $locale,
-                    $currency,
+                    (string)$item['locale'],
+                    (string)$item['currency'],
+                    (string)$item['host'],
+                    (int)$item['website_id'],
                 );
-                $seeded[] = [
-                    'locale' => $locale,
-                    'currency' => $currency,
-                    'seeded' => (int)($prime['seeded'] ?? 0),
-                    'peeked' => (int)($prime['peeked'] ?? 0),
-                    'bags' => \array_slice(
-                        \is_array($prime['bags'] ?? null) ? $prime['bags'] : [],
-                        0,
-                        12
-                    ),
-                    'elapsed_ms' => (float)($prime['elapsed_ms'] ?? 0.0),
-                ];
+                $errors = [];
                 foreach (\is_array($prime['errors'] ?? null) ? $prime['errors'] : [] as $error) {
-                    $errors[] = (string)$locale . ':' . (string)$error;
+                    $errors[] = (string)$item['website_id'] . ':' . (string)$item['locale'] . ':' . (string)$error;
                 }
-            } catch (\Throwable $e) {
-                $errors[] = (string)$locale . ':' . $e->getMessage();
-            }
-        }
 
-        // P1/P2: phrase Shared chrome modules + switcher catalog (same locale set; out of UC-deferred).
-        $aux = $this->primeDeferredLocalePhraseAndSwitcher($targets);
+                return [
+                    'sample' => [
+                        'website_id' => (int)$item['website_id'],
+                        'host' => (string)$item['host'],
+                        'locale' => (string)$item['locale'],
+                        'currency' => (string)$item['currency'],
+                        'seeded' => (int)($prime['seeded'] ?? 0),
+                        'peeked' => (int)($prime['peeked'] ?? 0),
+                        'bags' => \array_slice(
+                            \is_array($prime['bags'] ?? null) ? $prime['bags'] : [],
+                            0,
+                            12
+                        ),
+                        'elapsed_ms' => (float)($prime['elapsed_ms'] ?? 0.0),
+                    ],
+                    'errors' => $errors,
+                ];
+            },
+        );
+
+        $aux = $this->primeDeferredLocalePhraseAndSwitcher(\array_values($allLocales));
 
         $this->logDeferredStorefrontWarmupStage(
-            $truncated ? 'locale_bag_prime_truncated' : 'locale_bag_prime_done',
+            !empty($bounded['truncated']) ? 'locale_bag_prime_truncated' : 'locale_bag_prime_done',
             [
-                'locales' => $targets,
-                'seeded_locales' => $seeded,
-                'seeded_count' => \count($seeded),
-                'truncated' => $truncated,
-                'currency' => $currency,
-                'errors' => \array_slice($errors, 0, 8),
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+                'scopes_count' => \count($scopes),
+                'seeded_locales' => $bounded['samples'],
+                'seeded_count' => \count($bounded['samples']),
+                'truncated' => (bool)$bounded['truncated'],
+                'errors' => \array_slice($bounded['errors'], 0, 8),
+                'elapsed_ms' => (float)$bounded['elapsed_ms'],
                 'elapsed_cap_ms' => $elapsedCapMs,
                 'phrase_prime' => $aux['phrase'] ?? [],
                 'switcher_prime' => $aux['switcher'] ?? [],
@@ -2018,9 +2092,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private function runCurrencyBagPrimeShards(): void
     {
         $startedAt = \microtime(true);
-        $defaults = $this->resolveDeferredWarmupWebsiteDefaults();
-        $defaultLanguage = \trim((string)($defaults['language'] ?? ''));
-        $defaultCurrency = \strtoupper(\trim((string)($defaults['currency'] ?? '')));
+        $scopes = $this->resolveDeferredWarmupWebsiteScopes();
 
         $maxCurrenciesRaw = Env::get('wls.worker.storefront_currency_bag_prime_max_currencies', null);
         if ($maxCurrenciesRaw === null || $maxCurrenciesRaw === '') {
@@ -2034,102 +2106,112 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
         $elapsedCapMs = \max(500, \min(60000, (int)$elapsedCapRaw));
 
-        if ($maxCurrencies <= 0 || $defaultLanguage === '') {
+        if ($maxCurrencies <= 0) {
             $this->logDeferredStorefrontWarmupStage('currency_bag_prime_skipped', [
-                'reason' => $maxCurrencies <= 0 ? 'max_currencies_zero' : 'default_language_empty',
+                'reason' => 'max_currencies_zero',
                 'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
             ]);
 
             return;
         }
 
-        $targets = [];
-        foreach ($this->resolveDeferredWarmupWebsiteCurrencyCodes() as $code) {
-            $normalized = \strtoupper(\trim((string)$code));
-            if ($normalized === '' || ($defaultCurrency !== '' && $normalized === $defaultCurrency)) {
+        $items = [];
+        foreach ($scopes as $scope) {
+            $defaultLanguage = \trim((string)($scope['default_language'] ?? ''));
+            $defaultCurrency = \strtoupper(\trim((string)($scope['default_currency'] ?? '')));
+            if ($defaultLanguage === '') {
                 continue;
             }
-            $targets[$normalized] = $normalized;
-            if (\count($targets) >= $maxCurrencies) {
-                break;
-            }
-        }
-        $targets = \array_values($targets);
-
-        if ($targets === []) {
-            $this->logDeferredStorefrontWarmupStage('currency_bag_prime_skipped', [
-                'reason' => 'no_extra_currencies',
-                'default_language' => $defaultLanguage,
-                'default_currency' => $defaultCurrency,
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
-            ]);
-
-            return;
-        }
-
-        // Cross product: traffic langs × non-default currencies.
-        // locale_bag_prime is lang×primaryCurrency only — /en_US/CNY/ stayed cold (5s).
-        $languages = [];
-        if ($defaultLanguage !== '') {
-            $languages[$this->normalizeDeferredWarmupLocaleCode($defaultLanguage)] = $defaultLanguage;
-        }
-        foreach (['en_US', 'ru_RU', 'es_ES'] as $extraLang) {
-            $normalized = $this->normalizeDeferredWarmupLocaleCode($extraLang);
-            if ($normalized === '' || isset($languages[$normalized])) {
-                continue;
-            }
-            $enabled = false;
-            foreach ($this->resolveDeferredWarmupWebsiteLanguageCodes() as $code) {
-                if ($this->normalizeDeferredWarmupLocaleCode($code) === $normalized) {
-                    $languages[$normalized] = $code;
-                    $enabled = true;
+            $targets = [];
+            foreach ($scope['currency_codes'] as $code) {
+                $normalized = \strtoupper(\trim((string)$code));
+                if ($normalized === '' || ($defaultCurrency !== '' && $normalized === $defaultCurrency)) {
+                    continue;
+                }
+                $targets[$normalized] = $normalized;
+                if (\count($targets) >= $maxCurrencies) {
                     break;
                 }
             }
-            if (!$enabled) {
+            if ($targets === []) {
                 continue;
             }
-            if (\count($languages) >= 3) {
-                break;
-            }
-        }
-        $languages = \array_values($languages);
-
-        $this->logDeferredStorefrontWarmupStage('currency_bag_prime', [
-            'currencies' => $targets,
-            'languages' => $languages,
-            'max_currencies' => $maxCurrencies,
-            'elapsed_cap_ms' => $elapsedCapMs,
-            'default_currency' => $defaultCurrency,
-        ]);
-
-        $seeded = [];
-        $errors = [];
-        $truncated = false;
-        $shardIndex = 0;
-        foreach ($languages as $language) {
-            foreach ($targets as $currency) {
-                $elapsedMs = (\microtime(true) - $startedAt) * 1000;
-                if ($elapsedMs >= $elapsedCapMs) {
-                    $truncated = true;
-                    break 2;
+            $languages = [];
+            $languages[$this->normalizeDeferredWarmupLocaleCode($defaultLanguage)] = $defaultLanguage;
+            foreach (['en_US', 'ru_RU', 'es_ES'] as $extraLang) {
+                $normalized = $this->normalizeDeferredWarmupLocaleCode($extraLang);
+                if ($normalized === '' || isset($languages[$normalized])) {
+                    continue;
                 }
-                if ($shardIndex > 0) {
-                    try {
-                        SchedulerSystem::yieldDelay(15);
-                    } catch (\Throwable) {
+                foreach ($scope['language_codes'] as $code) {
+                    if ($this->normalizeDeferredWarmupLocaleCode((string)$code) === $normalized) {
+                        $languages[$normalized] = (string)$code;
+                        break;
                     }
                 }
-                $shardIndex++;
-                try {
-                    $prime = $this->primeDeferredStorefrontHotCacheBags(
-                        'currency_bag_prime',
-                        $language,
-                        $currency,
-                    );
-                    $seeded[] = [
-                        'currency' => $currency,
-                        'language' => $language,
+                if (\count($languages) >= 3) {
+                    break;
+                }
+            }
+            foreach (\array_values($languages) as $language) {
+                foreach (\array_values($targets) as $currency) {
+                    $items[] = [
+                        'website_id' => (int)$scope['website_id'],
+                        'host' => (string)$scope['host'],
+                        'language' => (string)$language,
+                        'currency' => (string)$currency,
+                    ];
+                }
+            }
+        }
+
+        if ($items === []) {
+            $this->logDeferredStorefrontWarmupStage('currency_bag_prime_skipped', [
+                'reason' => 'no_extra_currencies',
+                'scopes_count' => \count($scopes),
+                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+            ]);
+
+            return;
+        }
+
+        $this->logDeferredStorefrontWarmupStage('currency_bag_prime', [
+            'items' => \array_map(static fn(array $i): array => [
+                'website_id' => $i['website_id'],
+                'host' => $i['host'],
+                'language' => $i['language'],
+                'currency' => $i['currency'],
+            ], $items),
+            'scopes_count' => \count($scopes),
+            'max_currencies' => $maxCurrencies,
+            'elapsed_cap_ms' => $elapsedCapMs,
+        ]);
+
+        $bounded = $this->runBoundedDeferredPrimeShards(
+            'currency_bag_prime',
+            $items,
+            $elapsedCapMs,
+            15,
+            function (array $item): array {
+                $prime = $this->primeDeferredStorefrontHotCacheBags(
+                    'currency_bag_prime',
+                    (string)$item['language'],
+                    (string)$item['currency'],
+                    (string)$item['host'],
+                    (int)$item['website_id'],
+                );
+                $errors = [];
+                foreach (\is_array($prime['errors'] ?? null) ? $prime['errors'] : [] as $error) {
+                    $errors[] = (string)$item['website_id'] . ':'
+                        . (string)$item['language'] . '/' . (string)$item['currency'] . ':' . (string)$error;
+                }
+
+                return [
+                    'sample' => [
+                        'website_id' => (int)$item['website_id'],
+                        'host' => (string)$item['host'],
+                        'currency' => (string)$item['currency'],
+                        'language' => (string)$item['language'],
                         'seeded' => (int)($prime['seeded'] ?? 0),
                         'peeked' => (int)($prime['peeked'] ?? 0),
                         'bags' => \array_slice(
@@ -2138,46 +2220,427 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                             12
                         ),
                         'elapsed_ms' => (float)($prime['elapsed_ms'] ?? 0.0),
-                    ];
-                    foreach (\is_array($prime['errors'] ?? null) ? $prime['errors'] : [] as $error) {
-                        $errors[] = (string)$language . '/' . (string)$currency . ':' . (string)$error;
-                    }
-                } catch (\Throwable $e) {
-                    $errors[] = (string)$language . '/' . (string)$currency . ':' . $e->getMessage();
-                }
-            }
-        }
+                    ],
+                    'errors' => $errors,
+                ];
+            },
+        );
 
         $this->logDeferredStorefrontWarmupStage(
-            $truncated ? 'currency_bag_prime_truncated' : 'currency_bag_prime_done',
+            !empty($bounded['truncated']) ? 'currency_bag_prime_truncated' : 'currency_bag_prime_done',
             [
-                'currencies' => $targets,
-                'languages' => $languages,
-                'seeded_currencies' => $seeded,
-                'seeded_count' => \count($seeded),
-                'truncated' => $truncated,
-                'errors' => \array_slice($errors, 0, 8),
-                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+                'scopes_count' => \count($scopes),
+                'seeded_currencies' => $bounded['samples'],
+                'seeded_count' => \count($bounded['samples']),
+                'truncated' => (bool)$bounded['truncated'],
+                'errors' => \array_slice($bounded['errors'], 0, 8),
+                'elapsed_ms' => (float)$bounded['elapsed_ms'],
                 'elapsed_cap_ms' => $elapsedCapMs,
             ]
         );
     }
 
     /**
-     * WebsiteCurrency codes for default website (Shared snapshot first).
+     * After currency_bag_prime: seal a bounded set of anonymous `/categories` +
+     * `/category/**` FPC surfaces (own max_paths + elapsed cap). Out of
+     * UC-deferred wall clock. Fail-open; Fiber yield between paths.
+     */
+    private function runCategorySurfaceFpcPrimeShards(): void
+    {
+        $startedAt = \microtime(true);
+
+        $maxPathsRaw = Env::get('wls.worker.storefront_category_surface_prime_max_paths', null);
+        if ($maxPathsRaw === null || $maxPathsRaw === '') {
+            $maxPathsRaw = Env::get('storefront_category_surface_prime_max_paths', 8);
+        }
+        $maxPaths = \max(0, \min(16, (int)$maxPathsRaw));
+
+        $elapsedCapRaw = Env::get('wls.worker.storefront_category_surface_prime_elapsed_cap_ms', null);
+        if ($elapsedCapRaw === null || $elapsedCapRaw === '') {
+            $elapsedCapRaw = Env::get('storefront_category_surface_prime_elapsed_cap_ms', 20000);
+        }
+        $elapsedCapMs = \max(1000, \min(120000, (int)$elapsedCapRaw));
+
+        if ($maxPaths <= 0) {
+            $this->logDeferredStorefrontWarmupStage('category_surface_prime_skipped', [
+                'reason' => 'max_paths_zero',
+                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+            ]);
+
+            return;
+        }
+
+        $scopes = $this->resolveDeferredWarmupWebsiteScopes();
+        $scopeCount = \max(1, \count($scopes));
+        $pathsPerScope = \max(1, (int)\intdiv($maxPaths, $scopeCount));
+        $items = [];
+        foreach ($scopes as $scope) {
+            $paths = $this->resolveCategorySurfaceWarmupPaths($pathsPerScope, (int)$scope['website_id']);
+            foreach ($paths as $path) {
+                $items[] = [
+                    'website_id' => (int)$scope['website_id'],
+                    'host' => (string)$scope['host'],
+                    'path' => (string)$path,
+                ];
+            }
+        }
+        if ($items === []) {
+            $this->logDeferredStorefrontWarmupStage('category_surface_prime_skipped', [
+                'reason' => 'no_category_paths',
+                'scopes_count' => \count($scopes),
+                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+            ]);
+
+            return;
+        }
+
+        $this->logDeferredStorefrontWarmupStage('category_surface_prime', [
+            'items' => $items,
+            'scopes_count' => \count($scopes),
+            'max_paths' => $maxPaths,
+            'paths_per_scope' => $pathsPerScope,
+            'elapsed_cap_ms' => $elapsedCapMs,
+        ]);
+
+        $warmed = 0;
+        $failed = 0;
+        $bounded = $this->runBoundedDeferredPrimeShards(
+            'category_surface_prime',
+            $items,
+            $elapsedCapMs,
+            20,
+            function (array $item) use (&$warmed, &$failed): array {
+                $host = \trim((string)$item['host']);
+                $hosts = $host !== '' ? [$host] : $this->resolveProcessLocalDynamicWarmupHosts();
+                $result = $this->runStorefrontFpcWarmupInternal([(string)$item['path']], $hosts, true);
+                $warmed += (int)($result['warmed'] ?? 0);
+                $failed += (int)($result['failed'] ?? 0);
+                $errors = [];
+                foreach (\is_array($result['errors'] ?? null) ? $result['errors'] : [] as $error) {
+                    $errors[] = (string)$item['website_id'] . ':' . (string)$item['path'] . ':' . (string)$error;
+                }
+                $sample = null;
+                foreach (\is_array($result['samples'] ?? null) ? $result['samples'] : [] as $row) {
+                    if (\is_array($row)) {
+                        $sample = $row + [
+                            'website_id' => (int)$item['website_id'],
+                            'host' => (string)$item['host'],
+                            'path' => (string)$item['path'],
+                        ];
+                        break;
+                    }
+                }
+                if ($sample === null) {
+                    $sample = [
+                        'website_id' => (int)$item['website_id'],
+                        'host' => (string)$item['host'],
+                        'path' => (string)$item['path'],
+                        'warmed' => (int)($result['warmed'] ?? 0),
+                        'failed' => (int)($result['failed'] ?? 0),
+                    ];
+                }
+
+                return ['sample' => $sample, 'errors' => $errors];
+            },
+        );
+
+        $this->logDeferredStorefrontWarmupStage(
+            !empty($bounded['truncated']) ? 'category_surface_prime_truncated' : 'category_surface_prime_done',
+            [
+                'scopes_count' => \count($scopes),
+                'warmed' => $warmed,
+                'failed' => $failed,
+                'attempted' => (int)$bounded['attempted'],
+                'truncated' => (bool)$bounded['truncated'],
+                'errors' => \array_slice($bounded['errors'], 0, 8),
+                'samples' => \array_slice($bounded['samples'], 0, 8),
+                'elapsed_ms' => (float)$bounded['elapsed_ms'],
+                'elapsed_cap_ms' => $elapsedCapMs,
+            ]
+        );
+    }
+
+    /**
+     * Category FPC surfaces come only from FpcWarmupProvider (Product contribution).
+     * Framework never invents catalog slugs — it only selects provider paths whose
+     * path shape is the Product category route contract (`/categories`, `/category/**`).
      *
      * @return list<string>
      */
-    private function resolveDeferredWarmupWebsiteCurrencyCodes(): array
+    private function resolveCategorySurfaceWarmupPaths(int $maxPaths, ?int $websiteId = null): array
     {
+        $paths = [];
+        try {
+            $warmup = $this->runtimeProvider(FpcWarmupProviderInterface::class);
+            if (!$warmup instanceof FpcWarmupProviderInterface) {
+                return [];
+            }
+            foreach ($warmup->warmupPaths() as $rawPath) {
+                $path = $this->filterDeferredStorefrontWarmupPath((string)$rawPath, $websiteId);
+                if ($path === null || $path === '' || $path === '/') {
+                    continue;
+                }
+                $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
+                if ($pathOnly !== '/categories' && !\str_starts_with($pathOnly, '/category/')) {
+                    continue;
+                }
+                $paths[$path] = $path;
+            }
+        } catch (\Throwable $e) {
+            $this->logDeferredStorefrontWarmupStage('category_surface_paths_error', [
+                'website_id' => $websiteId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+
+        return \array_slice(\array_values($paths), 0, \max(0, $maxPaths));
+    }
+
+    /**
+     * Bounded deferred prime loop shared by locale/currency/category shards.
+     *
+     * @param list<array<string,mixed>> $items
+     * @param callable(array<string,mixed>):array{sample?:array<string,mixed>|null,errors?:list<string>} $each
+     * @return array{truncated:bool,attempted:int,errors:list<string>,samples:list<array<string,mixed>>,elapsed_ms:float}
+     */
+    private function runBoundedDeferredPrimeShards(
+        string $stage,
+        array $items,
+        int $elapsedCapMs,
+        int $yieldMs,
+        callable $each,
+    ): array {
+        $startedAt = \microtime(true);
+        $truncated = false;
+        $attempted = 0;
+        $errors = [];
+        $samples = [];
+        foreach ($items as $index => $item) {
+            $elapsedMs = (\microtime(true) - $startedAt) * 1000;
+            if ($elapsedMs >= $elapsedCapMs) {
+                $truncated = true;
+                break;
+            }
+            if ($index > 0 && $yieldMs > 0) {
+                try {
+                    SchedulerSystem::yieldDelay($yieldMs);
+                } catch (\Throwable) {
+                    // Cooperative yield interrupt — expected; keep empty.
+                }
+            }
+            $attempted++;
+            try {
+                $result = $each(\is_array($item) ? $item : []);
+                if (\is_array($result['sample'] ?? null)) {
+                    $samples[] = $result['sample'];
+                }
+                foreach (\is_array($result['errors'] ?? null) ? $result['errors'] : [] as $error) {
+                    $errors[] = (string)$error;
+                }
+            } catch (\Throwable $e) {
+                $errors[] = $stage . ':' . $e->getMessage();
+                $this->logDeferredStorefrontWarmupStage($stage . '_error', [
+                    'error' => $e->getMessage(),
+                    'item_index' => $index,
+                ]);
+            }
+        }
+
+        return [
+            'truncated' => $truncated,
+            'attempted' => $attempted,
+            'errors' => $errors,
+            'samples' => $samples,
+            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+        ];
+    }
+
+    /**
+     * Default website + capped managed-local website scopes for deferred bag/FPC prime.
+     *
+     * @return list<array{
+     *   website_id:int,
+     *   host:string,
+     *   default_language:string,
+     *   default_currency:string,
+     *   language_codes:list<string>,
+     *   currency_codes:list<string>
+     * }>
+     */
+    private function resolveDeferredWarmupWebsiteScopes(): array
+    {
+        if ($this->deferredWarmupWebsiteScopesCache !== null) {
+            return $this->deferredWarmupWebsiteScopesCache;
+        }
+
+        // Prefer request memo when a Context exists; else process instance bag.
+        if (\class_exists(RequestContext::class) && RequestContext::has('wls.deferred_warmup.website_scopes.v1')) {
+            $cached = RequestContext::get('wls.deferred_warmup.website_scopes.v1');
+            if (\is_array($cached)) {
+                /** @var list<array{website_id:int,host:string,default_language:string,default_currency:string,language_codes:list<string>,currency_codes:list<string>}> $cached */
+                $this->deferredWarmupWebsiteScopesCache = $cached;
+
+                return $cached;
+            }
+        }
+
+        $maxWebsitesRaw = Env::get('wls.worker.storefront_deferred_warmup_max_websites', null);
+        if ($maxWebsitesRaw === null || $maxWebsitesRaw === '') {
+            $maxWebsitesRaw = Env::get('storefront_deferred_warmup_max_websites', 3);
+        }
+        $maxWebsites = \max(1, \min(8, (int)$maxWebsitesRaw));
+
+        $defaultWebsiteId = 0;
+        if (\class_exists(\Weline\Websites\Model\Website::class)) {
+            $defaultWebsiteId = (int)\Weline\Websites\Model\Website::ID_DEFAULT;
+        }
+
+        $defaultHosts = $this->resolveProcessLocalDynamicWarmupHosts();
+        $defaultHost = \trim((string)($defaultHosts[0] ?? ''));
+        if ($defaultHost === '') {
+            $defaultHost = '127.0.0.1';
+        }
+
+        $scopesById = [];
+        $scopesById[$defaultWebsiteId] = $this->buildDeferredWarmupWebsiteScope($defaultWebsiteId, $defaultHost);
+
+        try {
+            if (\interface_exists(\Weline\Server\Api\Tls\ActiveCertificateDomainSourceInterface::class)
+                && \class_exists(\Weline\Server\Api\Domain\LocalDomainPolicy::class)
+            ) {
+                /** @var \Weline\Server\Api\Tls\ActiveCertificateDomainSourceInterface $source */
+                $source = ObjectManager::getInstance(
+                    \Weline\Server\Api\Tls\ActiveCertificateDomainSourceInterface::class
+                );
+                $rows = $source->getActiveCertificateDomains(64);
+                // Prefer managed local domains first.
+                \usort($rows, static function (array $a, array $b): int {
+                    $aLocal = \Weline\Server\Api\Domain\LocalDomainPolicy::isManagedLocalDomain(
+                        (string)($a['domain'] ?? '')
+                    ) ? 0 : 1;
+                    $bLocal = \Weline\Server\Api\Domain\LocalDomainPolicy::isManagedLocalDomain(
+                        (string)($b['domain'] ?? '')
+                    ) ? 0 : 1;
+
+                    return $aLocal <=> $bLocal;
+                });
+                foreach ($rows as $row) {
+                    if (\count($scopesById) >= $maxWebsites) {
+                        break;
+                    }
+                    if (!\is_array($row)) {
+                        continue;
+                    }
+                    $domain = \strtolower(\trim((string)($row['domain'] ?? '')));
+                    $websiteId = (int)($row['website_id'] ?? -1);
+                    if ($domain === '' || $websiteId < $defaultWebsiteId || isset($scopesById[$websiteId])) {
+                        continue;
+                    }
+                    if (!\Weline\Server\Api\Domain\LocalDomainPolicy::isManagedLocalDomain($domain)
+                        && !\Weline\Server\Api\Domain\LocalDomainPolicy::isManagedWildcardDomain($domain)
+                    ) {
+                        continue;
+                    }
+                    $host = $this->attachDeferredWarmupPublicPort($domain);
+                    if ($host === '') {
+                        continue;
+                    }
+                    $scopesById[$websiteId] = $this->buildDeferredWarmupWebsiteScope($websiteId, $host);
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->logDeferredStorefrontWarmupStage('website_scopes_error', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $scopes = \array_values($scopesById);
+        $this->deferredWarmupWebsiteScopesCache = $scopes;
+        if (\class_exists(RequestContext::class)) {
+            try {
+                RequestContext::remember(
+                    'wls.deferred_warmup.website_scopes.v1',
+                    static fn() => $scopes,
+                );
+            } catch (\Throwable $e) {
+                $this->logDeferredStorefrontWarmupStage('website_scopes_remember_error', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $scopes;
+    }
+
+    /**
+     * @return array{
+     *   website_id:int,
+     *   host:string,
+     *   default_language:string,
+     *   default_currency:string,
+     *   language_codes:list<string>,
+     *   currency_codes:list<string>
+     * }
+     */
+    private function buildDeferredWarmupWebsiteScope(int $websiteId, string $host): array
+    {
+        $defaults = $this->resolveDeferredWarmupWebsiteDefaults($websiteId);
+
+        return [
+            'website_id' => $websiteId,
+            'host' => $host,
+            'default_language' => (string)($defaults['language'] ?? ''),
+            'default_currency' => (string)($defaults['currency'] ?? ''),
+            'language_codes' => $this->resolveDeferredWarmupWebsiteLanguageCodes($websiteId),
+            'currency_codes' => $this->resolveDeferredWarmupWebsiteCurrencyCodes($websiteId),
+        ];
+    }
+
+    private function attachDeferredWarmupPublicPort(string $domainHost): string
+    {
+        $domainHost = \trim($domainHost);
+        if ($domainHost === '') {
+            return '';
+        }
+        $normalized = $this->normalizeInternalWarmupHost($domainHost);
+        if ($normalized === null) {
+            return '';
+        }
+        if (\str_contains($normalized, ':')) {
+            return $normalized;
+        }
+        $public = $this->resolveWorkerPublicOrigin();
+        $publicHost = \is_array($public) ? (string)($public['host'] ?? '') : '';
+        if ($publicHost !== '' && \preg_match('/:(\\d+)$/', $publicHost, $m) === 1) {
+            return $normalized . ':' . $m[1];
+        }
+        $instance = $this->readCurrentInstanceWarmupMetadata();
+        $port = (int)($instance['main_port'] ?? $instance['port'] ?? 0);
+        if ($port > 0) {
+            return $normalized . ':' . $port;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * WebsiteCurrency codes for a website (Shared snapshot first).
+     *
+     * @return list<string>
+     */
+    private function resolveDeferredWarmupWebsiteCurrencyCodes(?int $websiteId = null): array
+    {
+        $websiteId = $websiteId ?? (
+            \class_exists(\Weline\Websites\Model\Website::class)
+                ? (int)\Weline\Websites\Model\Website::ID_DEFAULT
+                : 0
+        );
         $codes = [];
         try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)
-                && \class_exists(\Weline\Websites\Model\Website::class)
-            ) {
-                $snapshot = \Weline\Websites\Data\WebsiteData::readSharedSnapshotById(
-                    \Weline\Websites\Model\Website::ID_DEFAULT
-                );
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $snapshot = \Weline\Websites\Data\WebsiteData::readSharedSnapshotById($websiteId);
                 $raw = \is_array($snapshot['currency_codes'] ?? null)
                     ? $snapshot['currency_codes']
                     : [];
@@ -2188,26 +2651,30 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     }
                 }
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            $this->logDeferredStorefrontWarmupStage('currency_codes_error', [
+                'website_id' => $websiteId,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         if ($codes === []) {
             try {
-                if (\class_exists(\Weline\Websites\Model\WebsiteCurrency::class)
-                    && \class_exists(\Weline\Websites\Model\Website::class)
-                ) {
+                if (\class_exists(\Weline\Websites\Model\WebsiteCurrency::class)) {
                     /** @var \Weline\Websites\Model\WebsiteCurrency $model */
                     $model = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteCurrency::class);
-                    foreach ($model->getWebsiteCurrencyCodes(
-                        \Weline\Websites\Model\Website::ID_DEFAULT
-                    ) as $code) {
+                    foreach ($model->getWebsiteCurrencyCodes($websiteId) as $code) {
                         $code = \strtoupper(\trim((string)$code));
                         if ($code !== '') {
                             $codes[$code] = $code;
                         }
                     }
                 }
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
+                $this->logDeferredStorefrontWarmupStage('currency_codes_model_error', [
+                    'website_id' => $websiteId,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 
@@ -2215,20 +2682,21 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
-     * WebsiteLanguage codes for default website (Shared snapshot first).
+     * WebsiteLanguage codes for a website (Shared snapshot first).
      *
      * @return list<string>
      */
-    private function resolveDeferredWarmupWebsiteLanguageCodes(): array
+    private function resolveDeferredWarmupWebsiteLanguageCodes(?int $websiteId = null): array
     {
+        $websiteId = $websiteId ?? (
+            \class_exists(\Weline\Websites\Model\Website::class)
+                ? (int)\Weline\Websites\Model\Website::ID_DEFAULT
+                : 0
+        );
         $codes = [];
         try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)
-                && \class_exists(\Weline\Websites\Model\Website::class)
-            ) {
-                $snapshot = \Weline\Websites\Data\WebsiteData::readSharedSnapshotById(
-                    \Weline\Websites\Model\Website::ID_DEFAULT
-                );
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $snapshot = \Weline\Websites\Data\WebsiteData::readSharedSnapshotById($websiteId);
                 $raw = \is_array($snapshot['language_codes'] ?? null)
                     ? $snapshot['language_codes']
                     : [];
@@ -2239,26 +2707,30 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     }
                 }
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            $this->logDeferredStorefrontWarmupStage('language_codes_error', [
+                'website_id' => $websiteId,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         if ($codes === []) {
             try {
-                if (\class_exists(\Weline\Websites\Model\WebsiteLanguage::class)
-                    && \class_exists(\Weline\Websites\Model\Website::class)
-                ) {
+                if (\class_exists(\Weline\Websites\Model\WebsiteLanguage::class)) {
                     /** @var \Weline\Websites\Model\WebsiteLanguage $model */
                     $model = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteLanguage::class);
-                    foreach ($model->getWebsiteLanguageCodes(
-                        \Weline\Websites\Model\Website::ID_DEFAULT
-                    ) as $code) {
+                    foreach ($model->getWebsiteLanguageCodes($websiteId) as $code) {
                         $code = \trim((string)$code);
                         if ($code !== '') {
                             $codes[$this->normalizeDeferredWarmupLocaleCode($code)] = $code;
                         }
                     }
                 }
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
+                $this->logDeferredStorefrontWarmupStage('language_codes_model_error', [
+                    'website_id' => $websiteId,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 
@@ -2319,14 +2791,20 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         string $stage,
         string $language = '',
         string $currency = '',
+        string $host = '',
+        ?int $websiteId = null,
     ): array {
         $startedAt = \microtime(true);
         $drained = 0;
         try {
             // Flush wave7 PostResponse chrome.rendered seeds before public hit.
             $drained = PostResponseTaskQueue::drain(250.0, 64);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             $drained = 0;
+            $this->logDeferredStorefrontWarmupStage('hot_cache_bag_prime_drain_error', [
+                'stage' => $stage,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         // Bag prime must run with frozen storefront scope (CachePolicy keys).
@@ -2347,13 +2825,19 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'wls_duration_ms' => 0.0,
             'language' => \trim($language),
             'currency' => \trim($currency),
+            'host' => \trim($host),
+            'website_id' => $websiteId,
         ];
         try {
-            $hosts = $this->resolveProcessLocalDynamicWarmupHosts();
-            $host = \trim((string)($hosts[0] ?? ''));
+            $host = \trim($host);
+            if ($host === '') {
+                $hosts = $this->resolveProcessLocalDynamicWarmupHosts();
+                $host = \trim((string)($hosts[0] ?? ''));
+            }
             if ($host === '') {
                 $host = '127.0.0.1';
             }
+            $payload['host'] = $host;
             $this->beginHotCacheBagPrimeLatch($stage);
             try {
                 $this->runStorefrontFpcWarmupAttemptWithBagPrime(
@@ -2362,6 +2846,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     $stage,
                     $language,
                     $currency,
+                    $websiteId,
                 );
             } finally {
                 // Keep Fiber-local capture; only drop the pending latch.
@@ -2379,6 +2864,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         $stage,
                         $language,
                         $currency,
+                        $websiteId,
                     );
                 } finally {
                     $this->clearHotCacheBagPrimePendingLatch();
@@ -2439,8 +2925,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         string $stage,
         string $language = '',
         string $currency = '',
+        ?int $websiteId = null,
     ): array {
-        $defaults = $this->resolveDeferredWarmupWebsiteDefaults();
+        $defaults = $this->resolveDeferredWarmupWebsiteDefaults($websiteId);
         $language = \trim($language) !== '' ? \trim($language) : (string)($defaults['language'] ?? '');
         $currency = \trim($currency) !== '' ? \trim($currency) : (string)($defaults['currency'] ?? '');
         $serverOverrides = [
@@ -2448,6 +2935,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'WLS_PRIME_HOT_CACHE_BAGS' => '1',
             'WLS_PRIME_HOT_CACHE_BAGS_STAGE' => $stage,
         ];
+        if ($websiteId !== null) {
+            $serverOverrides['WELINE_WEBSITE_ID'] = (string)$websiteId;
+        }
         if ($language !== '') {
             $serverOverrides['WELINE_WEBSITE_LANGUAGE'] = $language;
         }
@@ -6376,7 +6866,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      * Keep trailing-slash locale homes, but drop paths that would 301 under the
      * storefront default-language/currency strip contract.
      */
-    private function filterDeferredStorefrontWarmupPath(string $rawPath): ?string
+    private function filterDeferredStorefrontWarmupPath(string $rawPath, ?int $websiteId = null): ?string
     {
         try {
             $path = $this->normalizeInternalWarmupPath($rawPath);
@@ -6389,7 +6879,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $pathOnly = '/';
         }
 
-        $defaults = $this->resolveDeferredWarmupWebsiteDefaults();
+        $defaults = $this->resolveDeferredWarmupWebsiteDefaults($websiteId);
         $canonical = \Weline\Framework\App\State::canonicalizeStorefrontLocalizationPath(
             $pathOnly,
             $defaults['language'],
@@ -6412,26 +6902,34 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      *
      * @return array{language:string,currency:string}
      */
-    private function resolveDeferredWarmupWebsiteDefaults(): array
+    private function resolveDeferredWarmupWebsiteDefaults(?int $websiteId = null): array
     {
+        $websiteId = $websiteId ?? (
+            \class_exists(\Weline\Websites\Model\Website::class)
+                ? (int)\Weline\Websites\Model\Website::ID_DEFAULT
+                : 0
+        );
         $language = '';
         $currency = '';
 
         try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)
-                && \class_exists(\Weline\Websites\Model\Website::class)
-            ) {
-                $snapshot = \Weline\Websites\Data\WebsiteData::readSharedSnapshotById(
-                    \Weline\Websites\Model\Website::ID_DEFAULT
-                );
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $snapshot = \Weline\Websites\Data\WebsiteData::readSharedSnapshotById($websiteId);
                 $website = \is_array($snapshot['website'] ?? null) ? $snapshot['website'] : [];
                 $language = \trim((string)($website['default_language'] ?? ''));
                 $currency = \trim((string)($website['default_currency'] ?? ''));
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            $this->logDeferredStorefrontWarmupStage('website_defaults_error', [
+                'website_id' => $websiteId,
+                'error' => $e->getMessage(),
+            ]);
         }
 
-        if ($language === '') {
+        $isDefaultWebsite = !\class_exists(\Weline\Websites\Model\Website::class)
+            || $websiteId === (int)\Weline\Websites\Model\Website::ID_DEFAULT;
+
+        if ($language === '' && $isDefaultWebsite) {
             try {
                 $language = \trim((string)(
                     \Weline\Framework\Env\WelineEnv::get('website.language', '')
@@ -6439,11 +6937,15 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     ?: Env::get('website.language', null)
                     ?: ''
                 ));
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
                 $language = \trim((string)(Env::get('website.language', null) ?: ''));
+                $this->logDeferredStorefrontWarmupStage('website_defaults_env_language_error', [
+                    'website_id' => $websiteId,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
-        if ($currency === '') {
+        if ($currency === '' && $isDefaultWebsite) {
             try {
                 $currency = \trim((string)(
                     \Weline\Framework\Env\WelineEnv::get('website.currency', '')
@@ -6451,21 +6953,33 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     ?: Env::get('website.currency', null)
                     ?: ''
                 ));
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
                 $currency = \trim((string)(Env::get('website.currency', null) ?: ''));
+                $this->logDeferredStorefrontWarmupStage('website_defaults_env_currency_error', [
+                    'website_id' => $websiteId,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 
-        if ($language === '') {
+        if ($language === '' && $isDefaultWebsite) {
             try {
                 $language = \trim(\Weline\Framework\App\State::resolveWebsiteDefaultLanguage());
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
+                $this->logDeferredStorefrontWarmupStage('website_defaults_state_language_error', [
+                    'website_id' => $websiteId,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
-        if ($currency === '') {
+        if ($currency === '' && $isDefaultWebsite) {
             try {
                 $currency = \trim(\Weline\Framework\App\State::resolveWebsiteDefaultCurrency());
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
+                $this->logDeferredStorefrontWarmupStage('website_defaults_state_currency_error', [
+                    'website_id' => $websiteId,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 
@@ -7297,10 +7811,10 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $timing['url_parser_perf'] = $parse['_perf'];
             }
             if ($timing['run_before_ms'] > 100) {
-                w_log_warning('[WLS Performance Warning] run_before event took ' . $timing['run_before_ms'] . 'ms');
+                \w_log_warning('[WLS Performance Warning] run_before event took ' . $timing['run_before_ms'] . 'ms');
             }
             if ($timing['run_after_ms'] > 100) {
-                w_log_warning('[WLS Performance Warning] run_after event took ' . $timing['run_after_ms'] . 'ms');
+                \w_log_warning('[WLS Performance Warning] run_after event took ' . $timing['run_after_ms'] . 'ms');
             }
 
             $cachedFpcResponse = $pipelineExecution->earlyResponse;
@@ -7517,7 +8031,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             
             // 如果重定向次数过多，记录警告
             if ($redirectCount > 5) {
-                w_log_warning("[WLS Redirect Warning] Too many redirects: {$redirectCount}, current URI: {$currentUri}, redirect to: {$redirectUrl}");
+                \w_log_warning("[WLS Redirect Warning] Too many redirects: {$redirectCount}, current URI: {$currentUri}, redirect to: {$redirectUrl}");
             }
             
             // 创建重定向响应，并立即把 HeaderCollector 中的 Cookie 写入响应（登录 302 必须带 Set-Cookie，不依赖 Worker 合并）
@@ -7609,7 +8123,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 } catch (\Throwable) {
                     $compaction = [];
                 }
-                w_log_warning(
+                \w_log_warning(
                     '[WlsRuntime] Fiber output capture overflow; worker will drain after response. '
                     . 'memory_usage=' . \memory_get_usage(true)
                     . ' memory_peak=' . \memory_get_peak_usage(true)
@@ -7622,7 +8136,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             if ($isDev) {
                 $this->logWlsError($e);
             } else {
-                w_log_error('[WlsRuntime] Request error: ' . $e->getMessage());
+                \w_log_error('[WlsRuntime] Request error: ' . $e->getMessage());
             }
             
             // 返回错误响应
@@ -7644,7 +8158,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
             if (Runtime::isPersistent() && WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0
                 && \defined('DEV') && DEV) {
-                w_log_debug(
+                \w_log_debug(
                     '[WlsRuntime] request ended with other suspended fibers=' . WlsConcurrency::getOtherSuspendedRequestFiberCount(),
                     [],
                     'wls'
@@ -7774,12 +8288,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     $this->recordPerformanceTiming($timing, $isDev);
                 }
             } catch (\Throwable $e) {
-                w_log_error('[WlsRuntime] Request timing finalization error: ' . $e->getMessage());
+                \w_log_error('[WlsRuntime] Request timing finalization error: ' . $e->getMessage());
             }
             try {
                 $this->wlsRuntimeAdapter()?->flushLogs();
             } catch (\Throwable $e) {
-                w_log_error('[WlsRuntime] Log flush error: ' . $e->getMessage());
+                \w_log_error('[WlsRuntime] Log flush error: ' . $e->getMessage());
             }
             unset(
                 $timing,
@@ -8210,7 +8724,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $threshold = (float)(Env::get('wls.memory_guard.phase_compact_threshold', 0.70) ?: 0.70);
             $compaction = $adapter->compactResponseMemoryIfPressure($threshold);
             if ($compaction !== null && \defined('DEV') && DEV && $adapter->isVerboseLog()) {
-                w_log_debug(
+                \w_log_debug(
                     '[WlsRuntime] phase memory compact phase=' . $phase
                     . ' memory_usage=' . \memory_get_usage(true)
                     . ' compaction=' . (\json_encode($compaction, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}'),
@@ -8372,7 +8886,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         // 防御性检查：如果 parse 缺少 server 字段（如 parserMatchs 早期返回），
         // 则使用 Url::$parserServer 或当前 $_SERVER 作为基础，避免后续代码访问 null
         if (!isset($parse['server']) || !is_array($parse['server'])) {
-            w_log_warning('[WlsRuntime] processUrlParse: parse[server] is missing! URL parse data may be incomplete. '
+            \w_log_warning('[WlsRuntime] processUrlParse: parse[server] is missing! URL parse data may be incomplete. '
                 . 'area=' . ($parse['area'] ?? '(none)') 
                 . ', uri=' . ($parse['uri'] ?? '(none)')
                 . ', REQUEST_URI=' . ($this->requestServer('REQUEST_URI') ?? '(none)')
@@ -9050,8 +9564,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $timing['telemetry_ms'] ?? 0,
                 $timing['dev_tool_ms'] ?? 0
             );
-            w_log_debug($performanceSummary);
-            w_log_debug('[WLS Performance Detail] ' . \json_encode($timing, \JSON_UNESCAPED_UNICODE));
+            \w_log_debug($performanceSummary);
+            \w_log_debug('[WLS Performance Detail] ' . \json_encode($timing, \JSON_UNESCAPED_UNICODE));
         }
 
         // 进入本方法前已由 shouldLog 过滤；timing 文件记录慢请求与全量调试场景
@@ -9078,7 +9592,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $analysis[] = "dev_tool闈㈡澘鑰楁椂杩囬暱: {$timing['dev_tool_ms']}ms";
             }
             if (!empty($analysis)) {
-                w_log_debug('[WLS Performance Analysis] ' . implode('; ', $analysis));
+                \w_log_debug('[WLS Performance Analysis] ' . implode('; ', $analysis));
             }
         }
     }
@@ -9867,7 +10381,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $this->eventManager->resetRequestState();
                 $this->eventManager->dispatch('Weline_Framework::Runtime::reset');
             } catch (\Throwable $e) {
-                w_log_error('[WlsRuntime] Reset event error: ' . $e->getMessage());
+                \w_log_error('[WlsRuntime] Reset event error: ' . $e->getMessage());
                 RequestResetException::append($failures, 'reset_event', $e);
             }
         }
@@ -9911,13 +10425,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $adapter->requestDrainAfterResponse($reason);
             }
         } catch (\Throwable $adapterFailure) {
-            w_log_error(
-                '[WlsRuntime] Failed to request Worker drain after reset failure: '
-                . $adapterFailure->getMessage(),
-            );
+            if (\function_exists(__NAMESPACE__ . '\\w_log_error') || \function_exists('w_log_error')) {
+                w_log_error(
+                    '[WlsRuntime] Failed to request Worker drain after reset failure: '
+                    . $adapterFailure->getMessage(),
+                );
+            }
         }
 
-        w_log_error('[WlsRuntime] Worker quarantine requested: ' . $failure->getMessage());
+        if (\function_exists(__NAMESPACE__ . '\\w_log_error') || \function_exists('w_log_error')) {
+            w_log_error('[WlsRuntime] Worker quarantine requested: ' . $failure->getMessage());
+        }
     }
 
     private function bindProcessScopedServicesForCurrentRequest(): void
@@ -9941,7 +10459,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             try {
                 $this->eventManager->dispatch('Weline_Framework::Runtime::terminate');
             } catch (\Throwable $e) {
-                w_log_error('[WlsRuntime] Terminate event error: ' . $e->getMessage());
+                \w_log_error('[WlsRuntime] Terminate event error: ' . $e->getMessage());
             }
         }
         

@@ -99,6 +99,12 @@ Setup Provider 也必须自述所属模块。例如 EAV schema Provider 通过
 `object` 并读取必要身份，不得引用 Theme Service 或 Model。该契约只负责解析已经存在的
 主题上下文，不允许 Framework 反向探测或加载任何具体主题模块。
 
+持久运行时（WLS）由 Server 通过 `RuntimeProviderInterface` 自提供：Framework 只保留
+`RuntimeInterface` / `FpmRuntime` / `Runtime::createRuntime()` 的引导期安全解析
+（读编译 `provides`、零参 `new` Provider，不经 ObjectManager），不得再内置 `WlsRuntime`
+实现类。首页 Shared HIT 回执经 `HomepageCanonicalPublicationBroker` 中立 sink 通知，
+具体 sink 由 Server `WlsRuntime::bootstrap` 注册。
+
 ## QueryProvider 编译契约
 
 QueryProvider 是跨模块读契约，不是运行期扫描插件。`framework:compile` 会在控制面

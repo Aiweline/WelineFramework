@@ -7,7 +7,7 @@ namespace Weline\Framework\Test\Unit\Architecture;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\App;
 use Weline\Framework\Runtime\RequestPipeline;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 
 final class RequestPipelineDispatchOnceTest extends TestCase
 {

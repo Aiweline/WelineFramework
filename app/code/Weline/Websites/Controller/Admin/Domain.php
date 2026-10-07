@@ -33,6 +33,7 @@ use Weline\Websites\Service\DomainParserService;
 use Weline\Websites\Service\DomainOriginMatchService;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\DomainSyncService;
+use Weline\Websites\Service\ManagedLocalDomainProvisionService;
 use Weline\Websites\Service\ServerIpService;
 
 #[Acl('Weline_Websites::domain_service', '域名服务', 'globe', '域名服务管理', 'Weline_Websites::website_service')]
@@ -3953,12 +3954,13 @@ class Domain extends BackendController
 
             /** @var DomainModel $rootDomainModel */
             $rootDomainModel = ObjectManager::getInstance(DomainModel::class, [], false);
-            $rootDomainModel->clearQuery()
+            $rootDomainModel->clearData()->clearQuery()
                 ->where(DomainModel::schema_fields_DOMAIN, $rootDomain)
                 ->find()
                 ->fetch();
 
             if (!$rootDomainModel->getDomainId()) {
+                $rootDomainModel->clearData()->clearQuery();
                 $rootDomainModel->setAccountId(0)
                     ->setDomain($rootDomain)
                     ->setStatus(DomainModel::STATUS_ACTIVE)
@@ -4022,6 +4024,39 @@ class Domain extends BackendController
                     \Weline\Websites\Model\DomainPoolFlowLog::KIND_POOL_CREATED,
                     __('后台手动添加：%{1}', [\trim($domain)])
                 );
+            }
+
+            /** @var ManagedLocalDomainProvisionService $localProvision */
+            $localProvision = ObjectManager::getInstance(ManagedLocalDomainProvisionService::class);
+            if ($localProvision->isManagedLocalDomain($domain)) {
+                $localReady = $localProvision->ensureForManualCreate($domain, 0);
+                $poolModel->clearQuery()
+                    ->where(DomainPool::schema_fields_DOMAIN, $domain)
+                    ->find()
+                    ->fetch();
+
+                return $this->fetchJson([
+                    'code' => (($localReady['authorization_pending'] ?? false) === true)
+                        ? 202
+                        : ((($localReady['local_ready'] ?? false) === true) ? 200 : 500),
+                    'msg' => \trim((string)($localReady['message'] ?? ''))
+                        ?: ((($localReady['local_ready'] ?? false) === true)
+                            ? __('本地域名创建成功，hosts 与证书已就绪')
+                            : __('本地域名已入池，但 hosts/证书就绪未完成')),
+                    'data' => [
+                        'domain' => $domain,
+                        'root_domain' => $rootDomain,
+                        'domain_id' => $rootDomainModel->getDomainId(),
+                        'pool_id' => $poolModel->getPoolId(),
+                        'https_mode' => 'local_wildcard',
+                        'local_ready' => (bool)($localReady['local_ready'] ?? false),
+                        'authorization_pending' => (bool)($localReady['authorization_pending'] ?? false),
+                        'authorization_already_started' => (bool)($localReady['authorization_already_started'] ?? false),
+                        'hosts' => $localReady['hosts'] ?? null,
+                        'certificate' => $localReady['certificate'] ?? null,
+                        'https_result' => $localReady['certificate'] ?? null,
+                    ],
+                ]);
             }
 
             $httpsMode = \strtolower(\trim($httpsMode));

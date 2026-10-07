@@ -13,11 +13,11 @@ namespace Weline\Server\Test\Unit\Runtime;
 \defined('PUB') || \define('PUB', BP . 'pub' . DS);
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 
 final class WlsRuntimeStorefrontWarmupContractTest extends TestCase
 {
-    private const RUNTIME = __DIR__ . '/../../../../Framework/Runtime/WlsRuntime.php';
+    private const RUNTIME = __DIR__ . '/../../../Runtime/WlsRuntime.php';
     private const ENV_SAMPLE = __DIR__ . '/../../../../../../etc/env.sample.php';
     private const WORKER_COMMON = __DIR__ . '/../../../bin/worker_runtime_common.php';
 

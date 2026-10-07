@@ -59,7 +59,7 @@ critical_sealed
 
 | 路径 | 变更 |
 |------|------|
-| `Framework/Runtime/WlsRuntime.php` | idle-gate · Fiber latch · localeIdleSlice · capture_retry |
+| `Server/Runtime/WlsRuntime.php` | idle-gate · Fiber latch · localeIdleSlice · capture_retry |
 | `Framework/Test/Unit/Runtime/WlsRuntimeDeferredHotCacheBagPrimeContractTest.php` | O2 契约 |
 | `Framework/Test/Unit/Runtime/WlsRuntimeAdoptHomepageFpcMetaContractTest.php` | idle 序 |
 | `Framework/etc/module.php` | **2.5.167 → 2.5.168** |

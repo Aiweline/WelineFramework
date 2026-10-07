@@ -6,7 +6,7 @@ namespace Weline\Framework\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\App\Env;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 use Weline\Server\Log\LogConfig;
 
 final class WlsRuntimeRequestLogConfigTest extends TestCase

@@ -64,6 +64,8 @@
     --color-surface-muted: var(--color-bg-tertiary);
     --color-surface-hover: #f0ebe3;
     --color-surface-disabled: #ede9e1;
+    /* Dark header / inverse chrome ghost hover (must stay translucent, not paper surface). */
+    --color-on-dark-soft: rgba(247, 244, 239, 0.10);
 
     /* ========== 边框色（淡墨线） ========== */
     --color-border-default: #d4cfc5;

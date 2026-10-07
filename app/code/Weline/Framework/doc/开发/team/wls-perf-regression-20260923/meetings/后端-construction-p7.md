@@ -44,7 +44,7 @@ critical `/`+`/products` seal
 
 | 路径 | 变更 |
 |------|------|
-| `Framework/Runtime/WlsRuntime.php` | B′：`localeIdleBudget` env 默认 0；`locale_idle_skipped`；非 near-virgin 亦禁默认 locale SSR |
+| `Server/Runtime/WlsRuntime.php` | B′：`localeIdleBudget` env 默认 0；`locale_idle_skipped`；非 near-virgin 亦禁默认 locale SSR |
 | `Framework/Test/Unit/Runtime/WlsRuntimeDeferredHotCacheBagPrimeContractTest.php` | 钉 skipped / 禁 inherit |
 | `Framework/Test/Unit/Runtime/WlsRuntimeAdoptHomepageFpcMetaContractTest.php` | budget=0→skipped；budget>0 仍可 begin |
 | `Framework/etc/module.php` | **2.5.169 → 2.5.170** |

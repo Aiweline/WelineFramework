@@ -514,6 +514,76 @@ class Doctor extends CommandAbstract
     }
 
     /**
+     * Fiber 准入 vs DB 连接池不变量（含实例级 wls.servers.<name>.fiber 覆盖）。
+     *
+     * c1000 soak 曾在 pool_size=48 < max_active=128 时打出 homepage
+     * ConnectionPoolExhaustedException；server:start 与 doctor 共用此判定。
+     *
+     * @return array{
+     *   ok: bool,
+     *   pool_size: int,
+     *   fiber_max_active: int,
+     *   fiber_max_active_configured: bool,
+     *   message: string|null
+     * }
+     */
+    public static function resolveFiberVsPool(string $instanceName): array
+    {
+        try {
+            $env = Env::getInstance()->getConfig() ?: [];
+        } catch (\Throwable) {
+            return self::resolveFiberVsPoolFromConfig($instanceName, []);
+        }
+
+        return self::resolveFiberVsPoolFromConfig($instanceName, \is_array($env) ? $env : []);
+    }
+
+    /**
+     * @param array<string, mixed> $env
+     * @return array{
+     *   ok: bool,
+     *   pool_size: int,
+     *   fiber_max_active: int,
+     *   fiber_max_active_configured: bool,
+     *   message: string|null
+     * }
+     */
+    public static function resolveFiberVsPoolFromConfig(string $instanceName, array $env): array
+    {
+        $wls = \is_array($env['wls'] ?? null) ? $env['wls'] : [];
+        $fiber = \is_array($wls['fiber'] ?? null) ? $wls['fiber'] : [];
+        $serverConfig = \is_array($wls['servers'][$instanceName] ?? null) ? $wls['servers'][$instanceName] : [];
+        $instanceFiber = \is_array($serverConfig['fiber'] ?? null) ? $serverConfig['fiber'] : [];
+        if ($instanceFiber !== []) {
+            $fiber = \array_replace($fiber, $instanceFiber);
+        }
+
+        // 权威默认值在 worker_runtime_common.php::wlsResolveFiberAdmissionConfig()：
+        // 未配置 max_active 时按 12 处理。
+        $configured = \array_key_exists('max_active', $fiber);
+        $maxActive = $configured ? \max(0, (int)$fiber['max_active']) : 12;
+        $dbConfig = \is_array($env['db']['master'] ?? null) ? $env['db']['master'] : [];
+        $poolSize = (int)($dbConfig['pool_size'] ?? 10);
+        $ok = $maxActive === 0 || $poolSize >= $maxActive;
+        $message = null;
+        if (!$ok) {
+            $message = 'db.master.pool_size (' . $poolSize . ') 小于实例 [' . $instanceName
+                . '] 的 wls.fiber.max_active (' . $maxActive
+                . ')：并发取连接上限高于池上限，必然产生 ConnectionPoolExhaustedException。'
+                . ' 请提高 pool_size，或降低该实例 fiber.max_active；'
+                . ' 并保证 PostgreSQL max_connections ≥ Worker 峰值 × pool_size。';
+        }
+
+        return [
+            'ok' => $ok,
+            'pool_size' => $poolSize,
+            'fiber_max_active' => $maxActive,
+            'fiber_max_active_configured' => $configured,
+            'message' => $message,
+        ];
+    }
+
+    /**
      * 运行时配置一致性自检。
      *
      * 以下组合曾在生产上直接把局部过载放大成整站不可用，必须在只读诊断里可见：
@@ -533,31 +603,17 @@ class Doctor extends CommandAbstract
         }
 
         $wls = \is_array($env['wls'] ?? null) ? $env['wls'] : [];
-        $fiber = \is_array($wls['fiber'] ?? null) ? $wls['fiber'] : [];
         $performance = \is_array($wls['performance'] ?? null) ? $wls['performance'] : [];
-        $serverConfig = \is_array($wls['servers'][$instanceName] ?? null) ? $wls['servers'][$instanceName] : [];
-        $instanceFiber = \is_array($serverConfig['fiber'] ?? null) ? $serverConfig['fiber'] : [];
-        if ($instanceFiber !== []) {
-            $fiber = \array_replace($fiber, $instanceFiber);
-        }
 
-        // 权威默认值在 worker_runtime_common.php::wlsResolveFiberAdmissionConfig()：
-        // 未配置 max_active 时按 12 处理。此处只做只读比对，不改变运行行为。
-        $maxActive = \array_key_exists('max_active', $fiber)
-            ? \max(0, (int)$fiber['max_active'])
-            : 12;
-        $dbConfig = \is_array($env['db']['master'] ?? null) ? $env['db']['master'] : [];
-        $poolSize = (int)($dbConfig['pool_size'] ?? 10);
-
+        $fiberPool = self::resolveFiberVsPool($instanceName);
         $checks['fiber_vs_pool'] = [
-            'pool_size' => $poolSize,
-            'fiber_max_active' => $maxActive,
-            'fiber_max_active_configured' => \array_key_exists('max_active', $fiber),
-            'ok' => $maxActive === 0 || $poolSize >= $maxActive,
+            'pool_size' => $fiberPool['pool_size'],
+            'fiber_max_active' => $fiberPool['fiber_max_active'],
+            'fiber_max_active_configured' => $fiberPool['fiber_max_active_configured'],
+            'ok' => $fiberPool['ok'],
         ];
-        if ($maxActive > 0 && $poolSize < $maxActive) {
-            $warnings[] = 'pool_size (' . $poolSize . ') 小于 wls.fiber.max_active (' . $maxActive
-                . ')，并发取连接上限高于池上限，必然产生池满等待。';
+        if ($fiberPool['message'] !== null) {
+            $warnings[] = $fiberPool['message'];
         }
 
         try {

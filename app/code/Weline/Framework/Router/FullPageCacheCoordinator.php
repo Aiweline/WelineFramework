@@ -1848,7 +1848,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if (Runtime::isWls()) {
             $receipt = self::$processLocalizedHomepageReceipts[\hash('sha256', $fullUri)] ?? null;
             if (\is_array($receipt) && ($receipt['cache_key'] ?? '') === $cacheKey) {
-                \Weline\Framework\Runtime\WlsRuntime::noteCanonicalHomepagePublication($receipt);
+                \Weline\Framework\Runtime\HomepageCanonicalPublicationBroker::note($receipt);
             }
         }
     }

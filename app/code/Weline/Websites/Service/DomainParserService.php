@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Websites\Service;
 
 use Pdp\Rules;
+use Weline\Server\Api\Domain\LocalDomainPolicy;
 
 /**
  * 域名解析服务
@@ -66,6 +67,15 @@ class DomainParserService
     public function parseRootDomain(string $domain): string
     {
         $domain = $this->normalizeDomain($domain);
+
+        // Managed WLS local roots (test.weline.com / weline.test / …) must win over
+        // both the generic .test short-circuit and PSL (grocery.test.weline.com → weline.com).
+        if (\class_exists(LocalDomainPolicy::class)) {
+            $managedRoot = LocalDomainPolicy::resolveRootDomain($domain);
+            if ($managedRoot !== null && $managedRoot !== '') {
+                return $managedRoot;
+            }
+        }
         
         // 本地/特殊域名直接返回
         if ($this->isLocalDomain($domain)) {
@@ -147,6 +157,14 @@ class DomainParserService
         // .localhost 后缀
         if (\str_ends_with($domain, '.localhost')) {
             return true;
+        }
+
+        if (\class_exists(LocalDomainPolicy::class)
+            && LocalDomainPolicy::isManagedLocalDomain($domain)
+        ) {
+            // Managed multi-label roots are not single-host locals; keep false so
+            // parseRootDomain can return the policy root (test.weline.com) instead of the FQDN.
+            return false;
         }
         
         return false;

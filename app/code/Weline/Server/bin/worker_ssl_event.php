@@ -993,7 +993,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $ipcClient = $kernel->getClient();
         if (!$isMaintenanceWorker
             && $runtimeError === null
-            && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+            && $runtime instanceof \Weline\Server\Runtime\WlsRuntime
         ) {
             \Weline\Server\Log\WlsLogger::info_("[WorkerWarmup] EventBuffer READY-gate warmup start worker={$workerId}");
             try {
@@ -1268,7 +1268,7 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
     if ($homepageKeepWarmMayRun
         && $homepageKeepWarmFiber === null
         && \Weline\Server\Service\Policy\WorkerPolicyControl::isApplicationGateOpen()
-        && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+        && $runtime instanceof \Weline\Server\Runtime\WlsRuntime
         && $runtime->shouldScheduleHomepageKeepWarm(0, false, false)
     ) {
         $fiberScheduler->registerFiber();
@@ -1530,7 +1530,7 @@ function wlsEventExtractCompleteRequest(string $buffer): array
 function wlsEventDrainBufferedMaintenanceRequests(
     array &$connections,
     array &$stats,
-    ?\Weline\Framework\Runtime\WlsRuntime $runtime,
+    ?\Weline\Server\Runtime\WlsRuntime $runtime,
     ?string $runtimeError,
     ?\Weline\Server\Service\WorkerFullPageCacheFastPath $fpcFastPath,
     \Weline\Server\Runtime\Async\AsyncBizAdapters $asyncBizAdapters,
@@ -1727,7 +1727,7 @@ function wlsEventBadRequestResponse(): string
 
 function wlsEventHandleRequest(
     string $rawRequest,
-    ?\Weline\Framework\Runtime\WlsRuntime $runtime,
+    ?\Weline\Server\Runtime\WlsRuntime $runtime,
     ?string $runtimeError,
     ?\Weline\Server\Service\WorkerFullPageCacheFastPath $fpcFastPath,
     float $requestStartedAt,
@@ -1967,7 +1967,7 @@ function wlsEventRequestContextLeave(): void
     }
 }
 
-function wlsEventMergeRuntimeCookies(string $response, \Weline\Framework\Runtime\WlsRuntime $runtime): string
+function wlsEventMergeRuntimeCookies(string $response, \Weline\Server\Runtime\WlsRuntime $runtime): string
 {
     $headerEnd = \strpos($response, "\r\n\r\n");
     if ($headerEnd === false) {

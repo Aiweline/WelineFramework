@@ -1326,7 +1326,7 @@ class App
     }
 
     /**
-     * 运行时抽象层入口：Runtime::createRuntime() 按当前进程检测选用 WlsRuntime 或 FpmRuntime，再 bootstrap → handle → terminate。
+     * 运行时抽象层入口：Runtime::createRuntime() 按当前进程检测选用 WLS Provider（Server WlsRuntime）或 FpmRuntime，再 bootstrap → handle → terminate。
      *
      * @return string 响应内容
      * @throws Exception

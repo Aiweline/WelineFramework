@@ -75,6 +75,7 @@ final class WebsiteLanguageAssignment implements WebsiteLanguageAssignmentInterf
                 static function () use ($websiteLanguage, $websiteId, $localeCodes): void {
                     $websiteLanguage->clearWebsiteLanguageCaches($websiteId);
                     self::syncI18nTranslationTargets($localeCodes);
+                    self::syncThemeFontWarmup($localeCodes);
                 },
             );
 
@@ -82,6 +83,7 @@ final class WebsiteLanguageAssignment implements WebsiteLanguageAssignmentInterf
         }
         $this->websiteLanguage->clearWebsiteLanguageCaches($websiteId);
         self::syncI18nTranslationTargets(\array_keys($rows));
+        self::syncThemeFontWarmup(\array_keys($rows));
     }
 
     /**
@@ -97,6 +99,32 @@ final class WebsiteLanguageAssignment implements WebsiteLanguageAssignmentInterf
                 ->onWebsiteLocalesChanged($localeCodes, 'website_language_assignment');
         } catch (\Throwable) {
             // Translation sync must not roll back language assignment.
+        }
+    }
+
+    /**
+     * @param list<string> $localeCodes
+     */
+    private static function syncThemeFontWarmup(array $localeCodes): void
+    {
+        if (!\class_exists(\Weline\Theme\Font\FontWarmupService::class)) {
+            return;
+        }
+        $codes = [];
+        foreach ($localeCodes as $code) {
+            $code = \trim((string)$code);
+            if ($code !== '') {
+                $codes[] = $code;
+            }
+        }
+        if ($codes === []) {
+            return;
+        }
+        try {
+            ObjectManager::getInstance(\Weline\Theme\Font\FontWarmupService::class)
+                ->warmup($codes);
+        } catch (\Throwable) {
+            // Font warmup must not roll back language assignment.
         }
     }
 }

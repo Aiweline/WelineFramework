@@ -323,8 +323,16 @@ final class CheckoutTaxAdvisor implements CheckoutTaxAdvisorInterface
             $sales['destination_policy'] = $policy;
             $sales['destination_tax_profile'] = (string)($policy['profile'] ?? '');
         }
-        if ($dutyCharged > 0 && (string)($sales['note'] ?? '') === 'mode_off_stub') {
-            $sales['note'] = 'mode_off_stub_plus_duty_estimate';
+        // OrderFacade rejects mode=none with non-zero tax/lines; promote to policy/duty mode.
+        if ($dutyCharged > 0) {
+            $mode = (string)($sales['mode'] ?? '');
+            if ($mode === 'none' || $mode === 'stub_zero' || $mode === '') {
+                $profile = is_array($policy) ? trim((string)($policy['profile'] ?? '')) : '';
+                $sales['mode'] = $profile !== '' ? $profile : 'duty_estimate';
+            }
+            if ((string)($sales['note'] ?? '') === 'mode_off_stub') {
+                $sales['note'] = 'mode_off_stub_plus_duty_estimate';
+            }
         }
 
         return $sales;
@@ -501,10 +509,54 @@ final class CheckoutTaxAdvisor implements CheckoutTaxAdvisorInterface
      */
     private function jurisdictionFromAddress(array $address): string
     {
-        $country = strtoupper(trim((string) ($address['country'] ?? $address['country_code'] ?? 'CN')));
-        $region = strtoupper(trim((string) ($address['region'] ?? $address['region_code'] ?? '')));
+        $country = strtoupper(trim((string) ($address['country_code'] ?? $address['country'] ?? 'CN')));
+        $regionCode = strtoupper(trim((string) (
+            $address['region_code']
+            ?? $address['province_code']
+            ?? $address['state_code']
+            ?? ''
+        )));
+        $regionName = strtoupper(trim((string) (
+            $address['region']
+            ?? $address['province']
+            ?? $address['state']
+            ?? ''
+        )));
+        $region = '';
+        if (preg_match('/^[A-Z]{2}$/', $regionCode) === 1) {
+            $region = $regionCode;
+        } elseif (preg_match('/^[A-Z]{2}$/', $regionName) === 1) {
+            $region = $regionName;
+        } elseif ($country === 'US') {
+            $region = $this->normalizeUsRegionAlias($regionCode !== '' ? $regionCode : $regionName);
+        } else {
+            $region = $regionCode !== '' ? $regionCode : $regionName;
+        }
 
         return $country . '|' . $region;
+    }
+
+    private function normalizeUsRegionAlias(string $region): string
+    {
+        $region = strtoupper(trim($region));
+        if ($region === '' || preg_match('/^[A-Z]{2}$/', $region) === 1) {
+            return $region;
+        }
+        // Common storefront labels → ISO2 (seed rules use US|CA etc.).
+        static $aliases = [
+            'CALIFORNIA' => 'CA',
+            'NEW YORK' => 'NY',
+            '纽约州' => 'NY',
+            'TEXAS' => 'TX',
+            'FLORIDA' => 'FL',
+            'WASHINGTON' => 'WA',
+            'ILLINOIS' => 'IL',
+            'PENNSYLVANIA' => 'PA',
+            'OHIO' => 'OH',
+            'GEORGIA' => 'GA',
+        ];
+
+        return $aliases[$region] ?? $region;
     }
 
     /**

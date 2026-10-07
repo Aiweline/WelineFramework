@@ -15,7 +15,7 @@ use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 use Weline\Server\Security\WorkerPolicyDecision;
 use Weline\Server\Service\WorkerFullPageCacheFastPath;
 

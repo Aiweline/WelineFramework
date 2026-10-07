@@ -124,6 +124,94 @@ final class WlsPerformanceTraceStoreTest extends TestCase
         self::assertArrayNotHasKey('token', $timingMeta);
     }
 
+    public function testAppendsRouterProfilePhaseSpansUnderRouterStart(): void
+    {
+        $store = $this->store(['max_recent' => 5]);
+
+        self::assertTrue($store->record($this->telemetry('req-router-profile-01'), [
+            'request_id' => 'req-router-profile-01',
+            'method' => 'GET',
+            'uri' => '/',
+            'host' => 'demo.test.weline.com',
+            'status' => 200,
+            'total_ms' => 126.0,
+            'router_start_call_ms' => 118.0,
+            'router_profile' => [
+                'stage' => 'return',
+                'module' => 'Weline_Theme',
+                'controller' => 'Weline\\Theme\\Controller\\Index',
+                'action' => 'index',
+                'fpc' => 'wait_miss',
+                'fpc_probe_ms' => 2.5,
+                'controller_resolve_ms' => 1.1,
+                'action_execute_ms' => 98.4,
+                'route_after_ms' => 12.0,
+                'elapsed_ms' => 118.0,
+                'total_ms' => 118.0,
+            ],
+        ]));
+
+        $detail = $store->getDetail('req-router-profile-01');
+        $spans = $detail['trace']['spans'] ?? [];
+        self::assertIsArray($spans);
+
+        $byName = [];
+        foreach ($spans as $span) {
+            if (!\is_array($span)) {
+                continue;
+            }
+            $byName[(string)($span['name'] ?? '')] = $span;
+        }
+
+        self::assertSame(118.0, (float)($byName['wls.worker.router_start']['duration_ms'] ?? 0));
+        self::assertSame(98.4, (float)($byName['wls.router.action_execute']['duration_ms'] ?? 0));
+        self::assertSame('wls.worker.router_start', (string)($byName['wls.router.action_execute']['parent'] ?? ''));
+        self::assertSame(12.0, (float)($byName['wls.router.route_after']['duration_ms'] ?? 0));
+        self::assertArrayNotHasKey('wls.router.elapsed', $byName);
+        self::assertArrayNotHasKey('wls.router.total', $byName);
+    }
+
+    public function testAppendsTemplateProfileSpansUnderActionExecute(): void
+    {
+        $store = $this->store(['max_recent' => 5]);
+
+        self::assertTrue($store->record($this->telemetry('req-template-profile-01'), [
+            'request_id' => 'req-template-profile-01',
+            'method' => 'GET',
+            'uri' => '/',
+            'host' => 'demo.test.weline.com',
+            'status' => 200,
+            'total_ms' => 200.0,
+            'router_start_call_ms' => 180.0,
+            'router_profile' => [
+                'action_execute_ms' => 160.0,
+                'stage' => 'return',
+            ],
+            'template_profile' => [
+                [
+                    'file' => 'app/code/Weline/Theme/view/tpl/x/theme/frontend/layouts/homepage/com_default.phtml',
+                    'total_ms' => 120.5,
+                ],
+                [
+                    'file' => 'app/code/Weline/Theme/view/tpl/x/theme/frontend/widgets/video/video-carousel/com_default.phtml',
+                    'total_ms' => 40.2,
+                ],
+            ],
+        ]));
+
+        $spans = $store->getDetail('req-template-profile-01')['trace']['spans'] ?? [];
+        $byName = [];
+        foreach ($spans as $span) {
+            if (\is_array($span)) {
+                $byName[(string)($span['name'] ?? '')] = $span;
+            }
+        }
+
+        self::assertSame(120.5, (float)($byName['wls.template.layouts.homepage']['duration_ms'] ?? 0));
+        self::assertSame('wls.router.action_execute', (string)($byName['wls.template.layouts.homepage']['parent'] ?? ''));
+        self::assertSame(40.2, (float)($byName['wls.template.widgets.video.video-carousel']['duration_ms'] ?? 0));
+    }
+
     public function testRingBufferAndSlowOnlyFiltering(): void
     {
         $store = $this->store([

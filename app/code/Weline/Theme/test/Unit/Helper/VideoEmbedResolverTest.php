@@ -116,4 +116,17 @@ final class VideoEmbedResolverTest extends TestCase
         );
         self::assertSame('', VideoEmbedResolver::bilibiliEmbedUrl('not-a-bili-id'));
     }
+
+    public function testSanitizeEmbedHtmlKeepsTrustedIframeAndIsIdempotent(): void
+    {
+        $html = '<iframe src="https://www.youtube.com/embed/Xv6HAscPv24" onclick="alert(1)" style="x:1"></iframe>'
+            . '<script>evil()</script>';
+        $once = VideoEmbedResolver::sanitizeEmbedHtml($html);
+        $twice = VideoEmbedResolver::sanitizeEmbedHtml($html);
+        self::assertSame($once, $twice);
+        self::assertStringContainsString('youtube.com/embed/Xv6HAscPv24', $once);
+        self::assertStringContainsString('sandbox=', $once);
+        self::assertStringNotContainsString('onclick', $once);
+        self::assertStringNotContainsString('<script', $once);
+    }
 }

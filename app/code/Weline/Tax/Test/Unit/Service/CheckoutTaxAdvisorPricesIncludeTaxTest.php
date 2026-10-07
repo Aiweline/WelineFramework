@@ -181,6 +181,69 @@ final class CheckoutTaxAdvisorPricesIncludeTaxTest extends TestCase
         self::assertSame('server_calculated_tax', (string)$tax['note']);
     }
 
+    public function testCollectAllowlistExemptClearsSalesTaxKeepsDuty(): void
+    {
+        $advisor = CheckoutTaxAdvisor::forTestingActive(
+            pricesIncludeTax: true,
+            collectSalesTaxCountries: 'US',
+        );
+        $ship = [
+            'origin_country' => 'CN',
+            'duty_notice' => 'duties_taxes_not_included_in_shipping',
+            'shipping_amount_minor' => 500,
+            'goods_subtotal_minor' => 10000,
+        ];
+        $stdOrders = [[
+            'items' => [[
+                'line_uuid' => 'line-1',
+                'tax_class_code' => 'standard',
+                'row_total_minor' => 10000,
+            ]],
+        ]];
+        $exOrders = [[
+            'items' => [[
+                'line_uuid' => 'line-1',
+                'tax_class_code' => 'exempt',
+                'row_total_minor' => 10000,
+            ]],
+        ]];
+        $addr = ['country_code' => 'US', 'region_code' => 'CA'];
+        $scope = ['website_id' => 0, 'store_id' => 0, 'channel_id' => 0];
+        $std = $advisor->quoteTax($stdOrders, $scope, $addr, 'USD', $ship);
+        $ex = $advisor->quoteTax($exOrders, $scope, $addr, 'USD', $ship);
+
+        self::assertSame(725, (int)$std['sales_tax_amount_minor']);
+        self::assertSame(0, (int)$ex['sales_tax_amount_minor']);
+        self::assertGreaterThan(0, (int)$std['duty_amount_minor']);
+        self::assertSame((int)$std['duty_amount_minor'], (int)$ex['duty_amount_minor']);
+    }
+
+    public function testCollectAllowlistMapsCaliforniaAliasToUsCaRate(): void
+    {
+        $advisor = CheckoutTaxAdvisor::forTestingActive(
+            pricesIncludeTax: true,
+            collectSalesTaxCountries: 'US',
+        );
+
+        $orders = [[
+            'items' => [[
+                'line_uuid' => 'line-1',
+                'tax_class_code' => 'standard',
+                'row_total_minor' => 10000,
+            ]],
+        ]];
+        $tax = $advisor->quoteTax(
+            $orders,
+            ['website_id' => 0, 'store_id' => 0, 'channel_id' => 0],
+            ['country_code' => 'US', 'region' => 'California'],
+            'USD',
+            ['origin_country' => 'CN', 'duty_notice' => ''],
+        );
+
+        self::assertSame(725, (int)$tax['sales_tax_amount_minor']);
+        self::assertSame('US|CA', (string)$tax['jurisdiction_key']);
+    }
+
     public function testConfigFieldDeclaresPricesIncludeTax(): void
     {
         $src = (string)file_get_contents(

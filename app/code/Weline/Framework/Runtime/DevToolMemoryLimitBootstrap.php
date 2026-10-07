@@ -52,13 +52,27 @@ final class DevToolMemoryLimitBootstrap
         self::multiplyFromBaseline($multiplier);
     }
 
+    /**
+     * 仅在真实面板 Cookie 会话下放大 memory_limit。
+     * 禁止用 canAccessPanel()：开发模式对其恒 true，会导致全部店面请求把
+     * Worker 基线（如 512M）翻倍到 1G，c1000 soak 后期 OOM → GOAWAY incomplete。
+     */
     private static function isLikelyDevToolSession(): bool
     {
         try {
-            return ObjectManager::getInstance(DeveloperAccessPolicy::class)->canAccessPanel();
+            if (\class_exists(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)) {
+                /** @var \Weline\DeveloperWorkspace\Service\PanelAccessService $access */
+                $access = ObjectManager::getInstance(
+                    \Weline\DeveloperWorkspace\Service\PanelAccessService::class
+                );
+
+                return $access->hasActivePanelSession();
+            }
         } catch (\Throwable) {
             return false;
         }
+
+        return false;
     }
 
     private static function multiplyFromBaseline(float $multiplier): void

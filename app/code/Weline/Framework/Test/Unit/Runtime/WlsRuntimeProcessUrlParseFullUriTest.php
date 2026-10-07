@@ -10,7 +10,7 @@ use Weline\Framework\Http\WlsRequest;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeInterface;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 
 final class WlsRuntimeProcessUrlParseFullUriTest extends TestCase
 {

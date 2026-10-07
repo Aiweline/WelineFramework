@@ -528,7 +528,104 @@ class WlsPerformanceTraceStore
             ];
         }
 
+        $routerProfile = $timing['router_profile'] ?? null;
+        if (\is_array($routerProfile)) {
+            foreach ($routerProfile as $key => $value) {
+                if (!\is_string($key) || !\str_ends_with($key, '_ms') || !\is_numeric($value)) {
+                    continue;
+                }
+                // Aggregate clocks only — phase deltas are the actionable slices.
+                if ($key === 'elapsed_ms' || $key === 'total_ms') {
+                    continue;
+                }
+                $duration = (float)$value;
+                if ($duration <= 0.0) {
+                    continue;
+                }
+                $phase = \substr($key, 0, -\strlen('_ms'));
+                if ($phase === '') {
+                    continue;
+                }
+                $spans[] = [
+                    'name' => 'wls.router.' . $phase,
+                    'duration_ms' => \round($duration, 2),
+                    'category' => 'wls',
+                    'parent' => 'wls.worker.router_start',
+                    'meta' => $this->sanitizeMeta([
+                        'operation' => $phase,
+                        'source' => (string)($routerProfile['stage'] ?? ''),
+                    ], 'wls'),
+                ];
+            }
+        }
+
+        $templateProfile = $timing['template_profile'] ?? null;
+        if (\is_array($templateProfile)) {
+            $templateRows = [];
+            foreach ($templateProfile as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $duration = (float)($row['total_ms'] ?? 0.0);
+                if ($duration <= 0.0) {
+                    continue;
+                }
+                $file = (string)($row['file'] ?? '');
+                $label = $this->templateProfileLabel($file);
+                if ($label === '') {
+                    continue;
+                }
+                $templateRows[] = [
+                    'label' => $label,
+                    'duration_ms' => $duration,
+                    'source' => $file !== '' ? \basename(\str_replace('\\', '/', $file)) : '',
+                ];
+            }
+            \usort(
+                $templateRows,
+                static fn(array $a, array $b): int => ((float)$b['duration_ms']) <=> ((float)$a['duration_ms'])
+            );
+            foreach (\array_slice($templateRows, 0, 12) as $row) {
+                $spans[] = [
+                    'name' => 'wls.template.' . $row['label'],
+                    'duration_ms' => \round((float)$row['duration_ms'], 2),
+                    'category' => 'wls',
+                    'parent' => 'wls.router.action_execute',
+                    'meta' => $this->sanitizeMeta([
+                        'operation' => 'template',
+                        'source' => (string)$row['source'],
+                    ], 'wls'),
+                ];
+            }
+        }
+
         return $spans;
+    }
+
+    private function templateProfileLabel(string $file): string
+    {
+        $normalized = \str_replace('\\', '/', $file);
+        if ($normalized === '') {
+            return '';
+        }
+        // layouts/{name} · widgets/{type}/{name} · partials/{name}
+        if (\preg_match('#theme/frontend/layouts/([^/]+)#', $normalized, $m) === 1) {
+            return 'layouts.' . $m[1];
+        }
+        if (\preg_match('#theme/frontend/widgets/([^/]+)/([^/]+)#', $normalized, $m) === 1) {
+            return 'widgets.' . $m[1] . '.' . $m[2];
+        }
+        if (\preg_match('#theme/frontend/partials/([^/]+)#', $normalized, $m) === 1) {
+            return 'partials.' . $m[1];
+        }
+        if (\preg_match('#hooks/([^/]+)#', $normalized, $m) === 1) {
+            return 'hook.' . $m[1];
+        }
+        $base = \basename($normalized);
+        $base = \preg_replace('/\.(phtml|html|php)$/i', '', $base) ?: $base;
+        $base = \preg_replace('/[^a-zA-Z0-9._-]+/', '_', $base) ?: 'template';
+
+        return $base;
     }
 
     /**

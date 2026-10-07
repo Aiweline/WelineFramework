@@ -70,7 +70,11 @@ if (!in_array($layout, ['grid', 'carousel'], true)) {
 }
 
 // 兼容已发布布局中仍挂着空 brands 的 brand-logos：数据权威在 Theme TextileHeritageCatalog。
-if ($usesCraftDirectory && class_exists(\Weline\Theme\Service\TextileHeritageCatalog::class)) {
+// 织艺谱系是汉服站壳层目录；非汉服站禁止空列表回落云锦/宋锦等。
+if ($usesCraftDirectory
+    && \Weline\Theme\Helper\StorefrontHanfuDemoCatalog::allowed()
+    && class_exists(\Weline\Theme\Service\TextileHeritageCatalog::class)
+) {
     foreach (\Weline\Theme\Service\TextileHeritageCatalog::items() as $item) {
         $displayName = $translateDefaultCopy($item['name'], $item['caption_en']);
         $brands[] = [
@@ -80,6 +84,8 @@ if ($usesCraftDirectory && class_exists(\Weline\Theme\Service\TextileHeritageCat
             'link' => $item['link'],
         ];
     }
+} else {
+    $usesCraftDirectory = false;
 }
 ?>
 

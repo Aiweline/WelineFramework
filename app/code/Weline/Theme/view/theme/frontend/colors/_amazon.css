@@ -49,6 +49,7 @@
     --color-bg-dark-secondary: #131921;
     --color-bg-dark-tertiary: #232f3e;
     --color-surface-hover: #f3f3f3;
+    --color-on-dark-soft: rgba(255, 255, 255, 0.08);
 
     /* 边框色 - Amazon风格 */
     --color-border-default: #ddd;

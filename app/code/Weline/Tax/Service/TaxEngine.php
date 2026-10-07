@@ -22,6 +22,8 @@ final class TaxEngine implements TaxEngineInterface
     public const SOURCE_ENGINE = 'engine';
     public const SOURCE_LKG = 'lkg';
     public const MAX_LINES = 1000;
+    /** Sales-tax exempt class: always 0 rate when the class is enabled. */
+    public const CLASS_EXEMPT = TaxSeedRateCatalog::CLASS_EXEMPT;
 
     /** @var array<string,array<string,mixed>>|null */
     private ?array $classes = null;
@@ -66,9 +68,12 @@ final class TaxEngine implements TaxEngineInterface
         $engine->lkg = $lkg;
         $engine->seedClass(0, 'standard', 'Standard');
         $engine->seedClass(0, 'reduced', 'Reduced');
+        $engine->seedClass(0, self::CLASS_EXEMPT, 'Exempt');
         $engine->seedRule(0, 'standard', 'CN|', 1300, 1);
         $engine->seedRule(0, 'reduced', 'CN|', 900, 1);
         $engine->seedRule(0, 'standard', 'US|CA', 725, 1);
+        $engine->seedRule(0, self::CLASS_EXEMPT, 'CN|', 0, 1);
+        $engine->seedRule(0, self::CLASS_EXEMPT, 'US|CA', 0, 1);
 
         return $engine;
     }
@@ -264,7 +269,11 @@ final class TaxEngine implements TaxEngineInterface
                     ['class_code' => $classCode],
                 );
             }
-            $rule = $this->resolveRule($snapshot['rules'], $classCode, $validated['jurisdiction_key']);
+            if ($classCode === self::CLASS_EXEMPT) {
+                $rule = ['rate_bps' => 0, 'rule_version' => 0];
+            } else {
+                $rule = $this->resolveRule($snapshot['rules'], $classCode, $validated['jurisdiction_key']);
+            }
             $taxMinor = $this->lineTaxHalfUp($line['taxable_amount_minor'], $rule['rate_bps']);
             if ($taxMinor > 0 && $total > PHP_INT_MAX - $taxMinor) {
                 throw new TaxConflictException(

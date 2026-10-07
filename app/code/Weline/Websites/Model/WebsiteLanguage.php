@@ -138,6 +138,7 @@ class WebsiteLanguage extends Model
 
         $this->clearWebsiteLanguageCaches($websiteId);
         $this->syncI18nTranslationTargets($languageCodes);
+        $this->syncThemeFontWarmup($languageCodes);
 
         return $this;
     }
@@ -154,6 +155,34 @@ class WebsiteLanguage extends Model
             ObjectManager::getInstance(\Weline\I18n\Service\WebsiteLocaleTranslationSync::class)
                 ->onWebsiteLocalesChanged($languageCodes, 'website_language_set');
         } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * Optional Theme font subset warmup for newly enabled locales (non-request path).
+     *
+     * @param list<string>|array<int|string, mixed> $languageCodes
+     */
+    private function syncThemeFontWarmup(array $languageCodes): void
+    {
+        if (!\class_exists(\Weline\Theme\Font\FontWarmupService::class)) {
+            return;
+        }
+        $codes = [];
+        foreach ($languageCodes as $code) {
+            $code = \trim((string)$code);
+            if ($code !== '') {
+                $codes[] = $code;
+            }
+        }
+        if ($codes === []) {
+            return;
+        }
+        try {
+            ObjectManager::getInstance(\Weline\Theme\Font\FontWarmupService::class)
+                ->warmup($codes);
+        } catch (\Throwable) {
+            // Font warmup must not roll back language assignment.
         }
     }
 

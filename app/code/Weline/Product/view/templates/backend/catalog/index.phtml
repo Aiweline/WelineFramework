@@ -589,6 +589,16 @@ foreach ($websiteOptionsForScope as $websiteOpt) {
                                                 <option value="powder"><lang>粉末</lang></option>
                                             </select>
                                         </div>
+                                        <div class="w-field" data-span="full" data-testid="product-create-tax-class">
+                                            <label class="w-field__label" for="product-create-tax-class"><lang>销售税税类</lang></label>
+                                            <select class="w-input" id="product-create-tax-class" name="tax_class_code"
+                                                    scope="product_create_draft">
+                                                <option value="standard" selected><lang>标准</lang> (standard)</option>
+                                                <option value="exempt"><lang>免税</lang> (exempt)</option>
+                                                <option value="reduced"><lang>减税</lang> (reduced)</option>
+                                            </select>
+                                            <p class="w-field__help"><lang>仅影响目的地销售税；免税不清空进口关税/进口税费预估。</lang></p>
+                                        </div>
                                     </section>
 
                                     <section class="w-product-create__basics-block w-stack" data-gap="sm" data-basics-section="content">

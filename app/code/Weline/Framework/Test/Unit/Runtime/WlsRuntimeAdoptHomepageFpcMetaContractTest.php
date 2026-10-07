@@ -16,7 +16,7 @@ final class WlsRuntimeAdoptHomepageFpcMetaContractTest extends TestCase
 {
     public function testAdoptCallsWorkerReadinessMarkBusinessHomepageHot(): void
     {
-        $source = \file_get_contents(BP . 'app/code/Weline/Framework/Runtime/WlsRuntime.php');
+        $source = \file_get_contents(BP . 'app/code/Weline/Server/Runtime/WlsRuntime.php');
         self::assertIsString($source);
         self::assertStringContainsString(
             'publishAdoptedHomepageFpcProofToWorkerReadiness',
@@ -34,7 +34,7 @@ final class WlsRuntimeAdoptHomepageFpcMetaContractTest extends TestCase
 
     public function testDeferredWarmupAdoptsHomepageImmediatelyAndPrefersCatalogSlot(): void
     {
-        $source = (string)\file_get_contents(BP . 'app/code/Weline/Framework/Runtime/WlsRuntime.php');
+        $source = (string)\file_get_contents(BP . 'app/code/Weline/Server/Runtime/WlsRuntime.php');
         self::assertStringContainsString(
             "if (\$path === '/' && !(bool)(\$this->readyGateHomepageFpcProof['hit'] ?? false))",
             $source,
@@ -51,7 +51,7 @@ final class WlsRuntimeAdoptHomepageFpcMetaContractTest extends TestCase
 
     public function testDeferredWarmupSkipsLocalesAfterConsecutiveProbeFailures(): void
     {
-        $source = (string)\file_get_contents(BP . 'app/code/Weline/Framework/Runtime/WlsRuntime.php');
+        $source = (string)\file_get_contents(BP . 'app/code/Weline/Server/Runtime/WlsRuntime.php');
         self::assertStringContainsString('$localeFailSkipThreshold = 2', $source);
         self::assertStringContainsString('$skipRemainingLocales = true', $source);
         self::assertStringContainsString("\$isCriticalPath = (\$path === '/' || \$path === '/products')", $source);
@@ -59,7 +59,7 @@ final class WlsRuntimeAdoptHomepageFpcMetaContractTest extends TestCase
 
     public function testDeferredWarmupForcesProductsAndSealsCriticalBeforeLocales(): void
     {
-        $source = (string)\file_get_contents(BP . 'app/code/Weline/Framework/Runtime/WlsRuntime.php');
+        $source = (string)\file_get_contents(BP . 'app/code/Weline/Server/Runtime/WlsRuntime.php');
         self::assertStringContainsString("\$paths['/products'] = '/products';", $source);
         self::assertStringContainsString('critical_sealed', $source);
         self::assertStringContainsString('retouchDeferredCriticalProcessL1', $source);

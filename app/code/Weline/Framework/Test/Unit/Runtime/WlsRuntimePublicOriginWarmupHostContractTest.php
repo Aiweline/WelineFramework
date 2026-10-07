@@ -7,7 +7,7 @@ namespace Weline\Framework\Test\Unit\Runtime;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 
 /**
  * Deferred storefront FPC warmup must publish under the public edge authority

@@ -836,7 +836,8 @@
   "automation": {
     "mode": "auto"
   },
-  "code_cognition_batch_entries": 50,
+  "code_cognition_batch_entries": 200,
+  "maintain_transport_budget_bytes": 196608,
   "ai": {
     "enabled": false,
     "provider": "openai-compatible",

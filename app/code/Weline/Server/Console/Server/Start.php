@@ -432,6 +432,15 @@ class Start extends CommandAbstract
             return 1;
         }
 
+        // Fail-closed: pool_size < fiber.max_active (incl. per-instance override)
+        // caused c1000 homepage ConnectionPoolExhaustedException during soak.
+        $fiberVsPool = Doctor::resolveFiberVsPool($instanceName);
+        if (!(bool)($fiberVsPool['ok'] ?? false)) {
+            $this->printer->error((string)($fiberVsPool['message']
+                ?? __('db.master.pool_size 小于 wls.fiber.max_active，拒绝启动。')));
+            return 1;
+        }
+
         // Explicit clean-start is intentionally targeted. Without -f it stays
         // fail-closed and never signals processes. With -f the operator accepts
         // a stop-then-force-retire path that can clear corrupt endpoints and
@@ -14470,7 +14479,14 @@ PHP;
             if ($publicHost === '' && \is_array($endpoint)) {
                 $publicHost = \trim((string)($endpoint['host'] ?? ''));
             }
-            $serverNames = $publicHost !== '' ? [$publicHost] : [];
+            $localHostCatalog = new \Weline\Server\Service\Edge\Nginx\ManagedNginxLocalHostCatalog();
+            $serverNames = $localHostCatalog->expandServerNames(
+                $publicHost !== '' ? [$publicHost] : [],
+            );
+            $edgeCertificate = $localHostCatalog->resolveEdgeCertificate(
+                $activeCertificate,
+                $serverNames,
+            );
             if ($edgeAdapterName !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX) {
                 $this->printer->error(__('运行态实例不是 Nginx-only 边缘，已拒绝发布。'));
                 return false;
@@ -14495,7 +14511,7 @@ PHP;
                 $serverNames,
                 $instanceName,
                 $edgeAdapterName,
-                $activeCertificate,
+                $edgeCertificate,
             );
             if (!($result['ok'] ?? false)) {
                 $this->printer->warning(__('托管 Nginx 启动失败：%{1}', [(string)$result['message']]));

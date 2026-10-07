@@ -10,7 +10,7 @@ use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 
 \defined('BP') || \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
 \defined('DS') || \define('DS', \DIRECTORY_SEPARATOR);

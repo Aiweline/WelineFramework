@@ -8,7 +8,7 @@ use Weline\Framework\Context;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\WlsRequest;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\WlsRuntime;
+use Weline\Server\Runtime\WlsRuntime;
 
 final class WlsRuntimePendingResponseStatusTest extends TestCase
 {

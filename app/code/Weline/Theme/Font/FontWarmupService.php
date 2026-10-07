@@ -43,11 +43,33 @@ class FontWarmupService
     }
 
     /**
-     * Languages from built-in charset files (en, zh_Hans, …).
+     * Languages from built-in charset files (en, zh_Hans, …)
+     * union enabled website locale codes when Websites is available.
      *
      * @return list<string>
      */
     public function defaultLanguages(): array
+    {
+        $langs = $this->charsetFileLanguages();
+        foreach ($this->collectWebsiteLanguageCodes() as $code) {
+            $langs[] = $code;
+        }
+        $langs = array_values(array_unique(array_filter(
+            array_map(
+                fn (string $lang): string => $this->subsetService->getCharsetResolver()->normalize($lang),
+                $langs
+            ),
+            static fn (string $lang): bool => $lang !== ''
+        )));
+        sort($langs);
+
+        return $langs !== [] ? $langs : [Env::default_LANGUAGE_CODE];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function charsetFileLanguages(): array
     {
         $dir = LanguageCharsetResolver::CHARSET_DIR;
         if (!is_dir($dir)) {
@@ -61,6 +83,61 @@ class FontWarmupService
         sort($langs);
 
         return $langs !== [] ? $langs : [Env::default_LANGUAGE_CODE];
+    }
+
+    /**
+     * Soft-read enabled website locales (default site + distinct table codes).
+     * Missing Websites / DB failures return [] — charset files remain the floor.
+     *
+     * @return list<string>
+     */
+    public function collectWebsiteLanguageCodes(): array
+    {
+        $codes = [];
+
+        if (\function_exists('w_query')) {
+            try {
+                $defaultId = 0;
+                if (\class_exists(\Weline\Websites\Model\Website::class)) {
+                    $defaultId = (int)\Weline\Websites\Model\Website::ID_DEFAULT;
+                }
+                $row = \w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $defaultId]);
+                if (\is_array($row)) {
+                    foreach ($row as $code) {
+                        $code = \trim((string)$code);
+                        if ($code !== '') {
+                            $codes[] = $code;
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        if (\class_exists(\Weline\Websites\Model\WebsiteLanguage::class)) {
+            try {
+                /** @var \Weline\Websites\Model\WebsiteLanguage $model */
+                $model = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteLanguage::class);
+                $items = $model->clearQuery()
+                    ->fields(\Weline\Websites\Model\WebsiteLanguage::schema_fields_LANGUAGE_CODE)
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                foreach ($items as $item) {
+                    $code = \trim((string)(
+                        \is_object($item) && \method_exists($item, 'getLanguageCode')
+                            ? $item->getLanguageCode()
+                            : ($item[\Weline\Websites\Model\WebsiteLanguage::schema_fields_LANGUAGE_CODE] ?? '')
+                    ));
+                    if ($code !== '') {
+                        $codes[] = $code;
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return \array_values(\array_unique($codes));
     }
 
     /**

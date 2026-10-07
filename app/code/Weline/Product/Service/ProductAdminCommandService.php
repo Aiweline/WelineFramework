@@ -553,6 +553,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     $this->writeOfferShippingHazards($command->websiteId, $productId, $payload);
                     $this->writeOfferIsFreeShipping($command->websiteId, $productId, $payload);
                     $this->writeOfferFreeShippingMinAmount($command->websiteId, $productId, $payload);
+                    $this->writeOfferTaxClassCode($command->websiteId, $productId, $payload);
                     $this->writeTaxonomyAndMedia($command->websiteId, $productId, $payload);
                     if (array_key_exists('store_ids', $payload)) {
                         $selected = $this->selectedStoreIds($command->websiteId, $payload);
@@ -1719,6 +1720,80 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 $offerId,
                 $version,
                 [Offer::schema_fields_SHIPPING_PROFILE_CODE => $code],
+            );
+        }
+    }
+
+    /**
+     * Null = field absent. Must match an enabled TaxClass for the website (or standard).
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function normalizeTaxClassCode(int $websiteId, array $payload): ?string
+    {
+        if (!array_key_exists('tax_class_code', $payload)) {
+            return null;
+        }
+        $code = strtolower(trim((string)$payload['tax_class_code']));
+        if ($code === '') {
+            $code = 'standard';
+        }
+        if (preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/D', $code) !== 1) {
+            throw new \InvalidArgumentException('tax_class_code_invalid');
+        }
+        if ($code === 'standard') {
+            return $code;
+        }
+        if (!class_exists(\Weline\Tax\Model\TaxClass::class)) {
+            if (in_array($code, ['standard', 'reduced', 'exempt'], true)) {
+                return $code;
+            }
+            throw new \InvalidArgumentException('tax_class_code_invalid');
+        }
+        try {
+            /** @var \Weline\Tax\Model\TaxClass $model */
+            $model = ObjectManager::getInstance(\Weline\Tax\Model\TaxClass::class);
+            $rows = $model->clear()
+                ->where(\Weline\Tax\Model\TaxClass::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(\Weline\Tax\Model\TaxClass::schema_fields_ENABLED, 1)
+                ->where(\Weline\Tax\Model\TaxClass::schema_fields_CLASS_CODE, $code)
+                ->select()
+                ->fetchArray();
+            if (is_array($rows) && $rows !== []) {
+                return $code;
+            }
+        } catch (Throwable) {
+            if (in_array($code, ['standard', 'reduced', 'exempt'], true)) {
+                return $code;
+            }
+        }
+        throw new \InvalidArgumentException('tax_class_code_invalid');
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function writeOfferTaxClassCode(int $websiteId, int $productId, array $payload): void
+    {
+        $code = $this->normalizeTaxClassCode($websiteId, $payload);
+        if ($code === null) {
+            return;
+        }
+        $offers = $this->offers->listByProductIds($websiteId, [$productId]);
+        foreach ($offers as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $offerId = (int)($row['offer_id'] ?? $row['id'] ?? 0);
+            $version = (int)($row['publish_version'] ?? $row['offer_version'] ?? 0);
+            if ($offerId <= 0) {
+                continue;
+            }
+            $this->offers->updateVersioned(
+                $websiteId,
+                $offerId,
+                $version,
+                [Offer::schema_fields_TAX_CLASS_CODE => $code],
             );
         }
     }

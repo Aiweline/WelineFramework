@@ -18,6 +18,7 @@ use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Control\SharedStateAdminService;
 use Weline\Server\Service\HealthAllowCookieService;
+use Weline\Server\Service\AdministratorAuthorizationSession;
 use Weline\Server\Service\HostsFileManager;
 use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\OptimizationGuideService;
@@ -738,10 +739,77 @@ class ServerQueryProvider implements QueryProviderInterface
             ];
         }
 
-        return HostsFileManager::addDomain($domain, $ip) + [
+        $result = HostsFileManager::addDomain($domain, $ip) + [
             'domain' => $domain,
             'ip' => $ip,
         ];
+        if (($result['success'] ?? false) === true
+            || ($result['needs_admin'] ?? false) !== true
+            || PHP_OS_FAMILY === 'Windows'
+        ) {
+            return $result;
+        }
+
+        // Escalate once via macOS askpass / sudo ticket + bounded privileged editor.
+        $privileged = $this->publishHostsWithAdministratorAuthorization($domain);
+        if (($privileged['success'] ?? false) === true) {
+            return $privileged + [
+                'domain' => $domain,
+                'ip' => $ip,
+                'privileged' => true,
+            ];
+        }
+
+        return $result + [
+            'authorization_pending' => true,
+            'privileged_attempt' => $privileged,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function publishHostsWithAdministratorAuthorization(string $domain): array
+    {
+        $phpBinary = @\realpath(PHP_BINARY);
+        $editorCandidate = \dirname(__DIR__, 4)
+            . DIRECTORY_SEPARATOR
+            . 'bin'
+            . DIRECTORY_SEPARATOR
+            . 'wls_hosts_privileged_editor.php';
+        $editor = @\realpath($editorCandidate);
+        if (!\is_string($phpBinary)
+            || $phpBinary === ''
+            || !\is_file($phpBinary)
+            || !\is_executable($phpBinary)
+            || !\is_string($editor)
+            || $editor === ''
+            || !\is_file($editor)
+            || \is_link($editorCandidate)
+        ) {
+            return [
+                'success' => false,
+                'needs_admin' => true,
+                'message' => (string)__('The bounded privileged hosts editor is unavailable.'),
+            ];
+        }
+
+        $session = new AdministratorAuthorizationSession();
+        if (!$session->runPrivileged([
+            $phpBinary,
+            '-n',
+            $editor,
+            '--domain=' . $domain,
+        ])) {
+            return [
+                'success' => false,
+                'needs_admin' => true,
+                'authorization_pending' => true,
+                'message' => (string)__('Administrator authorization or privileged hosts publication failed.'),
+            ];
+        }
+
+        return HostsFileManager::addDomain($domain, HostsFileManager::LOOPBACK_IPV4);
     }
 
     private function ensureLocalWelineWildcardCertificate(array $params): array
