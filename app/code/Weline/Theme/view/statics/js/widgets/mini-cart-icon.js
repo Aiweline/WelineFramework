@@ -2304,7 +2304,7 @@
 
     function ensureCartQtyHitCss(assetVersion) {
         // Cart-owned qty hit-target gate — Theme only ensures the sheet is present.
-        var stamp = '20261007-cart-qty-hit-v1';
+        var stamp = '20261007-cart-qty-hit-v3';
         var href = '/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css?v=' + stamp;
         if (assetVersion) {
             href += '&_weline_dev=' + encodeURIComponent(assetVersion);
@@ -2329,7 +2329,7 @@
             return;
         }
         drawerCssReady = true;
-        var cssStamp = '20261007-minicart-shell-pad-v14';
+        var cssStamp = '20261007-minicart-sheet-grow-v19';
         var assetVersion = '';
         try {
             var cfgNode = document.getElementById('weline-frontend-runtime-config');

@@ -7,7 +7,7 @@ namespace Weline\Cart\Test\Unit\View;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Cart owns the mini-cart qty hit-target floor; Theme chrome must not encode it.
+ * Cart owns mini-cart qty stacking; Theme owns footer −100px growth cap.
  */
 final class MiniCartQtyHitGateContractTest extends TestCase
 {
@@ -24,22 +24,33 @@ final class MiniCartQtyHitGateContractTest extends TestCase
             dirname($root) . '/Theme/view/statics/css/widgets/mini-cart-drawer.css'
         );
 
-        self::assertStringContainsString('min-height: min(40vh, 12rem)', $css);
-        self::assertStringContainsString(
+        // Stacking only — expanded body floor blocked sheet growth to −100px.
+        self::assertStringContainsString('z-index: 1', $css);
+        self::assertStringNotContainsString('min-height: min(40vh, 12rem)', $css);
+        self::assertStringNotContainsString(
             'max-height: calc(100% - min(40vh, 12rem) - 5.5rem)',
+            $css
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height\\s*:/s',
             $css
         );
         self::assertStringContainsString('ensureMiniCartQtyHitCss', $cartJs);
         self::assertStringContainsString('mini-cart-drawer-qty-hit.css', $cartJs);
-        self::assertStringContainsString('20261007-cart-qty-hit-v1', $modules);
+        self::assertStringContainsString('20261007-cart-qty-hit-v3', $modules);
         self::assertStringContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $themeWidget);
-        // Theme base footer cap stays 100px; Cart sheet overrides the interaction floor.
+        // Theme owns drawer − 100px footer cap + content-sized details.
         self::assertMatchesRegularExpression(
-            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*calc\\(100%\\s*-\\s*100px\\)/s',
+            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*calc\\(\\s*100%\\s*-\\s*100px/s',
             $themeDrawerCss
         );
-        self::assertDoesNotMatchRegularExpression(
-            '/\\.header-cart \\.mini-cart-drawer__body\\s*\\{[^}]*min-height:\\s*min\\(40vh,\\s*12rem\\)/s',
+        self::assertMatchesRegularExpression(
+            '/\\.header-cart \\.mini-cart-drawer__footer-details\\s*\\{[^}]*flex:\\s*0\\s+1\\s+auto/s',
+            $themeDrawerCss
+        );
+        // Collapsed-only body floor remains Theme-owned.
+        self::assertMatchesRegularExpression(
+            '/\\.header-cart\\.is-footer-collapsed \\.mini-cart-drawer__body\\s*\\{[^}]*min-height:\\s*min\\(40vh,\\s*12rem\\)/s',
             $themeDrawerCss
         );
     }

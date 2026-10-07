@@ -296,7 +296,11 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         // Collapsed footer still keeps a Theme body floor; expanded qty-hit gate is Cart-owned.
         self::assertStringContainsString('min-height: min(40vh, 12rem)', $css);
         self::assertMatchesRegularExpression(
-            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*calc\\(100%\\s*-\\s*100px\\)/s',
+            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*calc\\(\\s*100%\\s*-\\s*100px/s',
+            $css
+        );
+        self::assertMatchesRegularExpression(
+            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*safe-area-inset-bottom/s',
             $css
         );
         self::assertStringContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $source);
@@ -316,14 +320,25 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('data-i18n-footer-collapse', $source);
         self::assertStringContainsString('data-i18n-footer-expand', $source);
         self::assertStringContainsString('is-footer-collapsed', $css);
-        self::assertStringContainsString('max-height: calc(100% - 100px)', $css);
+        self::assertMatchesRegularExpression(
+            '/max-height:\\s*calc\\(\\s*100%\\s*-\\s*100px/s',
+            $css
+        );
         self::assertStringContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $source);
         self::assertStringContainsString('setFooterCollapsed', $js);
         self::assertStringContainsString('aria-hidden', $js);
         self::assertStringContainsString('drawerContentIsFresh', $js);
         self::assertStringContainsString('skipItems', $js);
         self::assertStringContainsString('drawerCssReady', $js);
-        self::assertStringContainsString('minicart-shell-pad-v14', $js);
+        self::assertStringContainsString('minicart-sheet-grow-v19', $js);
+        self::assertMatchesRegularExpression(
+            '/\\.header-cart \\.mini-cart-drawer__body\\s*\\{[^}]*flex:\\s*1\\s+1\\s+auto/s',
+            $css
+        );
+        self::assertMatchesRegularExpression(
+            '/\\.header-cart \\.mini-cart-drawer__footer-details\\s*\\{[^}]*flex:\\s*0\\s+1\\s+auto/s',
+            $css
+        );
         self::assertStringContainsString('ensureCartQtyHitCss', $js);
         self::assertStringContainsString('mini-cart-drawer-qty-hit.css', $js);
         self::assertStringContainsString("source: 'mini-cart-mutate'", $js);
@@ -331,7 +346,7 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('lineItemsSignature', $js);
         self::assertStringContainsString('domLineItemsSignature', $js);
         self::assertMatchesRegularExpression(
-            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*flex:\\s*0\\s+1\\s+auto/s',
+            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*flex:\\s*0\\s+0\\s+auto/s',
             $css
         );
         // Bottom inset = open-drawer ::after flex spacer (not nested footer padding).

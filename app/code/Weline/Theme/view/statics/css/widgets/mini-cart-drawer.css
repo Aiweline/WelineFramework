@@ -294,9 +294,12 @@
 }
 
 .header-cart .mini-cart-drawer__body {
-    /* Shrinks as the footer sheet grows with content (up to drawer − 100px).
-     * Qty hit-target floor lives in Weline_Cart::css/mini-cart-drawer-qty-hit.css. */
-    flex: 1 1 0;
+    /*
+     * flex-basis:auto so the body yields real space when the footer sheet grows
+     * (basis:0 made the footer overflow the drawer while body stayed ~32px).
+     * Qty stacking z-index lives in Weline_Cart::css/mini-cart-drawer-qty-hit.css.
+     */
+    flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -678,14 +681,20 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
 
 .header-cart .mini-cart-drawer__footer {
     /*
-     * Dynamic bottom sheet height = content height.
-     * Cap at drawer − 100px; flex-shrink so header+body remainder cannot shove
-     * the sheet past the drawer. Qty hit-target floor override lives in
-     * Weline_Cart::css/mini-cart-drawer-qty-hit.css (Cart-owned). Bottom inset
-     * lives on the open drawer shell (padding-bottom), not here.
+     * Bottom sheet = content height (coupon tags / money lines push the body up).
+     * flex:0 0 auto — do NOT shrink under body; body yields until this sheet
+     * hits the cap. Cap = drawer − 100px − bottom ::after inset, so CTA is not
+     * clipped by the shell. Details scroll only after the cap. Cart must not
+     * tighten this rule.
      */
-    flex: 0 1 auto;
-    max-height: calc(100% - 100px);
+    flex: 0 0 auto;
+    height: auto;
+    /* 100px top leave + ::after inset + body padding floor (~space-8) so CTA fits. */
+    max-height: calc(
+        100% - 100px
+        - max(var(--weline-space-6, 1.5rem), env(safe-area-inset-bottom, 0px))
+        - var(--weline-space-8, 2rem)
+    );
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -782,9 +791,12 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
 }
 
 .header-cart .mini-cart-drawer__footer-details {
-    /* Height follows content; scrolls only after footer hits calc(100% − 100px).
-     * flex-grow:1 so extras absorb squeeze and pin CTA + bottom inset. */
-    flex: 1 1 auto;
+    /*
+     * Content-sized (flex-grow:0) so tags/totals push the sheet up.
+     * flex-shrink:1 + overflow-y:auto only kick in after footer hits
+     * calc(100% − 100px); CTA stays flex:0 0 auto below.
+     */
+    flex: 0 1 auto;
     min-height: 0;
     height: auto;
     max-height: none;

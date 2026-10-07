@@ -1020,7 +1020,7 @@
             if (!global.document || !global.document.head) {
                 return;
             }
-            var stamp = '20261007-cart-qty-hit-v1';
+            var stamp = '20261007-cart-qty-hit-v3';
             var href = '/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css?v=' + stamp;
             var existing = global.document.querySelector(
                 'link[data-weline-cart-mini-cart-qty-hit="1"], link[rel="stylesheet"][href*="mini-cart-drawer-qty-hit.css"]'
