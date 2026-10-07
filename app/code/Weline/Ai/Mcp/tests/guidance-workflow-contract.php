@@ -500,6 +500,20 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'architecture')),
         false,
     ),
+    'hard_constraints include architecture_grade_change_only' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'architecture_grade_change_only'
+            && str_contains((string) ($rule['summary'] ?? ''), 'SERIOUS')
+            && str_contains((string) ($rule['summary'] ?? ''), 'CONTEXT-CARRIED')
+            && str_contains((string) ($rule['summary'] ?? ''), 'architecture-grade')
+            && str_contains((string) ($rule['summary'] ?? ''), 're-call prepare_project')),
+        false,
+    ),
+    'mcpInstructions carry architecture_grade_change_only' => str_contains(
+        (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),
+        'architecture_grade_change_only'
+    ),
     'hard_constraints include requirement_framework_scrutiny' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -514,6 +528,16 @@ $checks = [
             && ($rule['id'] ?? '') === 'framework_decoupled_only'
             && str_contains((string) ($rule['summary'] ?? ''), 'decoupled')
             && str_contains((string) ($rule['summary'] ?? ''), '耦合提示')),
+        false,
+    ),
+    'hard_constraints include runtime_orchestrator_no_business_hardcode' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'runtime_orchestrator_no_business_hardcode'
+            && str_contains((string) ($rule['summary'] ?? ''), 'SERIOUS')
+            && str_contains((string) ($rule['summary'] ?? ''), 'WlsRuntime')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FpcWarmupProvider')
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT hardcode')),
         false,
     ),
     'hard_constraints include shell_provider_business_isomorph' => array_reduce(

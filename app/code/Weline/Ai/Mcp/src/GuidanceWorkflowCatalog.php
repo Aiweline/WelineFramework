@@ -93,7 +93,7 @@ final class GuidanceWorkflowCatalog
     public static function sessionStartupNotices(): array
     {
         return [
-            '工程入口：必须 ensure → prepare_project → 阅读并遵守 hard_constraints（hard-constraints.v1）。权威为 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则走 resolve_task_context，技能走 mcp_skills + resolve_skill/get_skill。编码使用宿主原生编辑。',
+            '工程入口：必须 ensure → prepare_project → 阅读并遵守 hard_constraints（hard-constraints.v1）。权威为 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则走 resolve_task_context，技能走 mcp_skills + resolve_skill/get_skill。编码使用宿主原生编辑。改码须架构级（architecture_grade_change_only）：mechanism+owning_module；禁 Runtime 硬编码业务路径；上下文丢 hard_constraints 须重新 prepare。',
             '公共底线：preserve_dirty_workspace；不得用 git checkout/restore/clean/stash 擦脏，编辑前 dirty-load 当前磁盘内容。内容运营走 content_ops_skills_skip_mcp。功能验收与交付地址见 feature_delivery_urls。AOCI 安装状态不等于项目认知已建立。',
         ];
 
