@@ -14,12 +14,32 @@ use Weline\Shipping\Model\ShippingService;
  */
 final class CarrierCoverageMatchService
 {
+    private const PROCESS_BAG_MAX = 128;
+
+    /** @var list<array{id:int,sort_order:int,name:string}>|null */
+    private static ?array $processActiveCarriers = null;
+
+    /** @var array<int, list<array<string, mixed>>> */
+    private static array $processRulesByCarrierId = [];
+
     public function __construct(
         private readonly ObjectManager $objectManager,
         private readonly EmbargoService $embargoService,
         private readonly DestinationService $destinationService,
         private readonly CoverageRuleMatcher $ruleMatcher,
     ) {
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processActiveCarriers = null;
+        self::$processRulesByCarrierId = [];
+        \Weline\Framework\Cache\Service\ScopeSharedMemo::forgetScoped(
+            'shipping',
+            'shipping.carriers.active',
+            \Weline\Framework\Runtime\ScopeIdentity::global(),
+        );
+        \Weline\Framework\Cache\Service\ScopeSharedMemo::purgeProcessPrefix('shipping.carrier_rules.');
     }
 
     /**
@@ -125,26 +145,9 @@ final class CarrierCoverageMatchService
      */
     public function matchingCarrierIds(array $address): array
     {
-        /** @var Carrier $carrierModel */
-        $carrierModel = $this->objectManager->getInstance(Carrier::class);
-        try {
-            $carriers = $carrierModel->reset()
-                ->where(Carrier::schema_fields_IS_ACTIVE, 1)
-                ->order(Carrier::schema_fields_SORT_ORDER, 'ASC')
-                ->order(Carrier::schema_fields_CARRIER_NAME, 'ASC')
-                ->select()
-                ->fetch()
-                ->getItems();
-        } catch (\Throwable) {
-            return [];
-        }
-
         $matched = [];
-        foreach ($carriers as $carrier) {
-            if (!$carrier instanceof Carrier) {
-                continue;
-            }
-            $carrierId = (int)$carrier->getId();
+        foreach ($this->loadActiveCarriers() as $carrier) {
+            $carrierId = (int)($carrier['id'] ?? 0);
             if ($carrierId <= 0) {
                 continue;
             }
@@ -161,35 +164,114 @@ final class CarrierCoverageMatchService
     }
 
     /**
+     * @return list<array{id:int,sort_order:int,name:string}>
+     */
+    private function loadActiveCarriers(): array
+    {
+        if (self::$processActiveCarriers !== null) {
+            return self::$processActiveCarriers;
+        }
+
+        $out = \Weline\Framework\Cache\Service\ScopeSharedMemo::rememberScoped(
+            'shipping',
+            'shipping.carriers.active',
+            function (): array {
+                /** @var Carrier $carrierModel */
+                $carrierModel = $this->objectManager->getInstance(Carrier::class);
+                try {
+                    $carriers = $carrierModel->reset()
+                        ->where(Carrier::schema_fields_IS_ACTIVE, 1)
+                        ->order(Carrier::schema_fields_SORT_ORDER, 'ASC')
+                        ->order(Carrier::schema_fields_CARRIER_NAME, 'ASC')
+                        ->select()
+                        ->fetch()
+                        ->getItems();
+                } catch (\Throwable) {
+                    return [];
+                }
+
+                $rows = [];
+                foreach ($carriers as $carrier) {
+                    if (!$carrier instanceof Carrier) {
+                        continue;
+                    }
+                    $carrierId = (int)$carrier->getId();
+                    if ($carrierId <= 0) {
+                        continue;
+                    }
+                    $rows[] = [
+                        'id' => $carrierId,
+                        'sort_order' => (int)$carrier->getData(Carrier::schema_fields_SORT_ORDER),
+                        'name' => (string)$carrier->getData(Carrier::schema_fields_CARRIER_NAME),
+                    ];
+                }
+
+                return $rows;
+            },
+            \Weline\Framework\Runtime\ScopeIdentity::global(),
+            600,
+        );
+
+        return self::$processActiveCarriers = \is_array($out) ? $out : [];
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     private function loadCarrierRules(int $carrierId): array
     {
-        try {
-            /** @var CarrierRegion $model */
-            $model = $this->objectManager->getInstance(CarrierRegion::class);
-            $items = $model->reset()
-                ->where(CarrierRegion::schema_fields_CARRIER_ID, $carrierId)
-                ->where(CarrierRegion::schema_fields_IS_ACTIVE, 1)
-                ->select()
-                ->fetch()
-                ->getItems();
-        } catch (\Throwable) {
-            return [];
+        if (isset(self::$processRulesByCarrierId[$carrierId])) {
+            return self::$processRulesByCarrierId[$carrierId];
         }
-        $out = [];
-        foreach ($items as $item) {
-            if (!$item instanceof CarrierRegion) {
-                continue;
+
+        $out = \Weline\Framework\Cache\Service\ScopeSharedMemo::rememberScoped(
+            'shipping',
+            'shipping.carrier_rules.' . $carrierId,
+            function () use ($carrierId): array {
+                try {
+                    /** @var CarrierRegion $model */
+                    $model = $this->objectManager->getInstance(CarrierRegion::class);
+                    $items = $model->reset()
+                        ->where(CarrierRegion::schema_fields_CARRIER_ID, $carrierId)
+                        ->where(CarrierRegion::schema_fields_IS_ACTIVE, 1)
+                        ->select()
+                        ->fetch()
+                        ->getItems();
+                } catch (\Throwable) {
+                    return [];
+                }
+                $rows = [];
+                foreach ($items as $item) {
+                    if (!$item instanceof CarrierRegion) {
+                        continue;
+                    }
+                    $rows[] = [
+                        'region_type' => (string)$item->getData(CarrierRegion::schema_fields_REGION_TYPE),
+                        'country_code' => (string)$item->getData(CarrierRegion::schema_fields_COUNTRY_CODE),
+                        'region_id' => (int)$item->getData(CarrierRegion::schema_fields_REGION_ID),
+                        'region_code' => (string)$item->getData(CarrierRegion::schema_fields_REGION_CODE),
+                        'street_id' => (int)$item->getData(CarrierRegion::schema_fields_STREET_ID),
+                    ];
+                }
+
+                return $rows;
+            },
+            \Weline\Framework\Runtime\ScopeIdentity::global(),
+            600,
+        );
+        if (!\is_array($out)) {
+            $out = [];
+        }
+
+        if (!isset(self::$processRulesByCarrierId[$carrierId])
+            && \count(self::$processRulesByCarrierId) >= self::PROCESS_BAG_MAX
+        ) {
+            $first = \array_key_first(self::$processRulesByCarrierId);
+            if ($first !== null) {
+                unset(self::$processRulesByCarrierId[$first]);
             }
-            $out[] = [
-                'region_type' => (string)$item->getData(CarrierRegion::schema_fields_REGION_TYPE),
-                'country_code' => (string)$item->getData(CarrierRegion::schema_fields_COUNTRY_CODE),
-                'region_id' => (int)$item->getData(CarrierRegion::schema_fields_REGION_ID),
-                'region_code' => (string)$item->getData(CarrierRegion::schema_fields_REGION_CODE),
-                'street_id' => (int)$item->getData(CarrierRegion::schema_fields_STREET_ID),
-            ];
         }
+        self::$processRulesByCarrierId[$carrierId] = $out;
 
         return $out;
     }

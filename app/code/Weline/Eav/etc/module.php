@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Eav',
-    "version" => '1.2.8',
+    "version" => '1.2.10',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -19,5 +19,6 @@ return [
         \Weline\Eav\Api\Attribute\Type\AttributeTypeRegistryInterface::class => \Weline\Eav\Service\AttributeTypeRegistry::class,
         \Weline\Eav\Api\Attribute\AttributeDependenceResolverInterface::class => \Weline\Eav\Service\AttributeDependenceResolver::class,
         \Weline\Eav\Api\Options\EavOptionsQueryInterface::class => \Weline\Eav\Service\EavOptionsQuery::class,
+        'process_cache_resetter.Weline_Eav' => \Weline\Eav\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

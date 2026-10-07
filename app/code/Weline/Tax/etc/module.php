@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Tax',
-    'version' => '2.1.18',
+    'version' => '2.1.21',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -24,5 +24,6 @@ return [
             => \Weline\Tax\Service\CheckoutTaxAdvisor::class,
         \Weline\Tax\Api\TaxIdentitySchemaProviderInterface::class
             => \Weline\Tax\Service\BuyerTaxIdentityService::class,
+        'process_cache_resetter.Weline_Tax' => \Weline\Tax\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

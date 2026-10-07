@@ -2,20 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Weline\SystemConfig\Api\Runtime;
+namespace Weline\Tax\Api\Runtime;
 
 use Weline\Framework\Runtime\ProcessCacheResetContext;
 use Weline\Framework\Runtime\ProcessCacheResetterInterface;
-use Weline\SystemConfig\Model\SystemConfig;
-use Weline\SystemConfig\Service\SystemConfigSecurityHeaderPolicyOverrideProvider;
+use Weline\Tax\Service\TaxEngine;
 
 final class ProcessCacheResetter implements ProcessCacheResetterInterface
 {
     public function resetProcessCaches(ProcessCacheResetContext $context): int
     {
-        SystemConfig::clearProcessCache();
-        SystemConfigSecurityHeaderPolicyOverrideProvider::clearProcessCache();
+        TaxEngine::clearProcessCache();
 
-        return 2;
+        return 1;
     }
 }

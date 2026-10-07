@@ -13,9 +13,36 @@ use Weline\Shipping\Model\EmbargoRegion;
  */
 final class EmbargoService
 {
+    private const PROCESS_BAG_MAX = 64;
+
+    /** @var array<string, list<array<string, mixed>>> */
+    private static array $processRulesByScope = [];
+
     public function __construct(
         private readonly ObjectManager $objectManager
     ) {
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processRulesByScope = [];
+        \Weline\Framework\Cache\Service\ScopeSharedMemo::purgeProcessPrefix('shipping.embargo|');
+    }
+
+    /** Drop L1 + L2 shipping read models after embargo/carrier writes. */
+    public static function invalidateSharedCache(): void
+    {
+        self::clearProcessCache();
+        DestinationService::clearProcessCache();
+        CarrierCoverageMatchService::clearProcessCache();
+        WarehouseShippingOriginService::clearProcessCache();
+        RegionLocalNameResolver::clearProcessCache();
+        try {
+            \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Cache\CacheManager::class
+            )->pool('shipping')->clear();
+        } catch (\Throwable) {
+        }
     }
 
     /**
@@ -210,48 +237,80 @@ final class EmbargoService
      */
     private function loadActiveRules(array $ctx): array
     {
-        try {
-            /** @var EmbargoRegion $model */
-            $model = $this->objectManager->getInstance(EmbargoRegion::class);
-        } catch (\Throwable) {
-            return [];
+        $processKey = (int)$ctx['website_id'] . '|' . (int)$ctx['store_id'] . '|' . (int)$ctx['channel_id'];
+        if (isset(self::$processRulesByScope[$processKey])) {
+            return self::$processRulesByScope[$processKey];
         }
-        $scopes = [
-            [EmbargoRegion::SCOPE_SYSTEM, 0],
-            [EmbargoRegion::SCOPE_WEBSITE, $ctx['website_id']],
-            [EmbargoRegion::SCOPE_STORE, $ctx['store_id']],
-            [EmbargoRegion::SCOPE_CHANNEL, $ctx['channel_id']],
-        ];
-        $out = [];
-        foreach ($scopes as [$type, $id]) {
-            try {
-                $items = $model->reset()
-                    ->where(EmbargoRegion::schema_fields_SCOPE_TYPE, $type)
-                    ->where(EmbargoRegion::schema_fields_SCOPE_ID, (int)$id)
-                    ->where(EmbargoRegion::schema_fields_IS_ACTIVE, 1)
-                    ->select()
-                    ->fetch()
-                    ->getItems();
-            } catch (\Throwable) {
-                return [];
-            }
-            foreach ($items as $item) {
-                if (!$item instanceof EmbargoRegion) {
-                    continue;
+
+        $out = \Weline\Framework\Cache\Service\ScopeSharedMemo::rememberScoped(
+            'shipping',
+            'shipping.embargo',
+            function () use ($ctx): array {
+                try {
+                    /** @var EmbargoRegion $model */
+                    $model = $this->objectManager->getInstance(EmbargoRegion::class);
+                } catch (\Throwable) {
+                    return [];
                 }
-                $out[] = [
-                    'embargo_id' => (int)$item->getId(),
-                    'scope_type' => (string)$item->getData(EmbargoRegion::schema_fields_SCOPE_TYPE),
-                    'scope_id' => (int)$item->getData(EmbargoRegion::schema_fields_SCOPE_ID),
-                    'region_type' => (string)$item->getData(EmbargoRegion::schema_fields_REGION_TYPE),
-                    'country_code' => (string)$item->getData(EmbargoRegion::schema_fields_COUNTRY_CODE),
-                    'region_id' => (int)$item->getData(EmbargoRegion::schema_fields_REGION_ID),
-                    'region_code' => (string)$item->getData(EmbargoRegion::schema_fields_REGION_CODE),
-                    'street_id' => (int)$item->getData(EmbargoRegion::schema_fields_STREET_ID),
-                    'reason_code' => (string)$item->getData(EmbargoRegion::schema_fields_REASON_CODE),
+                $scopes = [
+                    [EmbargoRegion::SCOPE_SYSTEM, 0],
+                    [EmbargoRegion::SCOPE_WEBSITE, $ctx['website_id']],
+                    [EmbargoRegion::SCOPE_STORE, $ctx['store_id']],
+                    [EmbargoRegion::SCOPE_CHANNEL, $ctx['channel_id']],
                 ];
+                $rows = [];
+                foreach ($scopes as [$type, $id]) {
+                    try {
+                        $items = $model->reset()
+                            ->where(EmbargoRegion::schema_fields_SCOPE_TYPE, $type)
+                            ->where(EmbargoRegion::schema_fields_SCOPE_ID, (int)$id)
+                            ->where(EmbargoRegion::schema_fields_IS_ACTIVE, 1)
+                            ->select()
+                            ->fetch()
+                            ->getItems();
+                    } catch (\Throwable) {
+                        return [];
+                    }
+                    foreach ($items as $item) {
+                        if (!$item instanceof EmbargoRegion) {
+                            continue;
+                        }
+                        $rows[] = [
+                            'embargo_id' => (int)$item->getId(),
+                            'scope_type' => (string)$item->getData(EmbargoRegion::schema_fields_SCOPE_TYPE),
+                            'scope_id' => (int)$item->getData(EmbargoRegion::schema_fields_SCOPE_ID),
+                            'region_type' => (string)$item->getData(EmbargoRegion::schema_fields_REGION_TYPE),
+                            'country_code' => (string)$item->getData(EmbargoRegion::schema_fields_COUNTRY_CODE),
+                            'region_id' => (int)$item->getData(EmbargoRegion::schema_fields_REGION_ID),
+                            'region_code' => (string)$item->getData(EmbargoRegion::schema_fields_REGION_CODE),
+                            'street_id' => (int)$item->getData(EmbargoRegion::schema_fields_STREET_ID),
+                            'reason_code' => (string)$item->getData(EmbargoRegion::schema_fields_REASON_CODE),
+                        ];
+                    }
+                }
+
+                return $rows;
+            },
+            \Weline\Framework\Runtime\ScopeIdentity::fromLayerIds(
+                (int)$ctx['website_id'],
+                (int)$ctx['store_id'],
+                (int)$ctx['channel_id'],
+            ),
+            600,
+        );
+        if (!\is_array($out)) {
+            $out = [];
+        }
+
+        if (!isset(self::$processRulesByScope[$processKey])
+            && \count(self::$processRulesByScope) >= self::PROCESS_BAG_MAX
+        ) {
+            $first = \array_key_first(self::$processRulesByScope);
+            if ($first !== null) {
+                unset(self::$processRulesByScope[$first]);
             }
         }
+        self::$processRulesByScope[$processKey] = $out;
 
         return $out;
     }

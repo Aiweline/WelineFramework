@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Shipping',
-    "version" => '2.9.41',
+    "version" => '2.9.43',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Currency' => '*',
@@ -32,5 +32,6 @@ return [
             => \Weline\Shipping\Integration\Order\OrderShippingMethodCatalog::class,
         \Weline\Order\Api\OrderShippingFulfillmentGatewayInterface::class
             => \Weline\Shipping\Integration\Order\OrderShippingFulfillmentGateway::class,
+        'process_cache_resetter.Weline_Shipping' => \Weline\Shipping\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

@@ -6,17 +6,29 @@ namespace Weline\Currency\Service;
 
 use Weline\Currency\Model\Currency;
 use Weline\Currency\Model\Currency\LocalDescription;
+use Weline\Framework\Cache\Service\ScopeSharedMemo;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\I18n\Api\Localization\LocaleRepositoryInterface;
 
 class CurrencyLocalDescriptionService
 {
     private const DEFAULT_LOCALE_CODES = ['zh_Hans_CN', 'en_US'];
+    private const PROCESS_BAG_MAX = 128;
+
+    /** @var array<int, array<string, string>> currency_id → locale → name */
+    private static array $processLocalNamesByCurrencyId = [];
 
     public function __construct(
         private readonly LocalDescription $localDescription,
         private readonly RuntimeProviderResolver $runtimeProviders,
     ) {
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processLocalNamesByCurrencyId = [];
+        ScopeSharedMemo::purgeProcessPrefix('currency.local_names.');
     }
 
     /**
@@ -77,25 +89,51 @@ class CurrencyLocalDescriptionService
         if ($currencyId <= 0) {
             return [];
         }
-
-        $rows = $this->localDescription->clear()
-            ->where(LocalDescription::schema_fields_ID, $currencyId)
-            ->select()
-            ->fetchArray();
-
-        $names = [];
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-
-            $localeCode = trim((string)($row[LocalDescription::schema_fields_local_code] ?? ''));
-            if (!$this->isValidLocaleCode($localeCode)) {
-                continue;
-            }
-
-            $names[$localeCode] = (string)($row[LocalDescription::schema_fields_name] ?? '');
+        if (\array_key_exists($currencyId, self::$processLocalNamesByCurrencyId)) {
+            return self::$processLocalNamesByCurrencyId[$currencyId];
         }
+
+        $names = ScopeSharedMemo::rememberScoped(
+            'currency',
+            'currency.local_names.' . $currencyId,
+            function () use ($currencyId): array {
+                $rows = $this->localDescription->clear()
+                    ->where(LocalDescription::schema_fields_ID, $currencyId)
+                    ->select()
+                    ->fetchArray();
+
+                $out = [];
+                foreach ($rows as $row) {
+                    if (!\is_array($row)) {
+                        continue;
+                    }
+
+                    $localeCode = \trim((string)($row[LocalDescription::schema_fields_local_code] ?? ''));
+                    if (!$this->isValidLocaleCode($localeCode)) {
+                        continue;
+                    }
+
+                    $out[$localeCode] = (string)($row[LocalDescription::schema_fields_name] ?? '');
+                }
+
+                return $out;
+            },
+            ScopeIdentity::global(),
+            600,
+        );
+        if (!\is_array($names)) {
+            $names = [];
+        }
+
+        if (!\array_key_exists($currencyId, self::$processLocalNamesByCurrencyId)
+            && \count(self::$processLocalNamesByCurrencyId) >= self::PROCESS_BAG_MAX
+        ) {
+            $first = \array_key_first(self::$processLocalNamesByCurrencyId);
+            if ($first !== null) {
+                unset(self::$processLocalNamesByCurrencyId[$first]);
+            }
+        }
+        self::$processLocalNamesByCurrencyId[$currencyId] = $names;
 
         return $names;
     }
@@ -129,7 +167,9 @@ class CurrencyLocalDescriptionService
                 ->save();
         }
 
-        w_cache('currency')->clear();
+        self::clearProcessCache();
+        \Weline\Currency\Data\CurrencyData::clearCache();
+        \Weline\Currency\Helper\CurrencySymbol::clearProcessCache();
     }
 
     public function deleteLocalNames(int $currencyId): void
@@ -142,7 +182,9 @@ class CurrencyLocalDescriptionService
             ->where(LocalDescription::schema_fields_ID, $currencyId)
             ->delete();
 
-        w_cache('currency')->clear();
+        self::clearProcessCache();
+        \Weline\Currency\Data\CurrencyData::clearCache();
+        \Weline\Currency\Helper\CurrencySymbol::clearProcessCache();
     }
 
     /**

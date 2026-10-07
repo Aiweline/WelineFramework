@@ -34,6 +34,7 @@ final class AttributeMetadataCatalogCacheTest extends TestCase
     protected function setUp(): void
     {
         require_once dirname((new ReflectionClass(Context::class))->getFileName()) . '/Common/functions.php';
+        AttributeMetadataCatalog::clearProcessCache();
         $this->originalInstances = ObjectManager::getInstances();
         $manager = new ReflectionProperty(ObjectManager::class, 'instance');
         $this->originalManager = $manager->getValue();
@@ -70,6 +71,7 @@ final class AttributeMetadataCatalogCacheTest extends TestCase
 
     protected function tearDown(): void
     {
+        AttributeMetadataCatalog::clearProcessCache();
         if (Context::hasCurrent()) {
             Context::leave();
         }

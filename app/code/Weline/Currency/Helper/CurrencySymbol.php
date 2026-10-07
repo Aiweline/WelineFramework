@@ -12,6 +12,9 @@ use Weline\Websites\Data\WebsiteData;
  *
  * Prefer configured symbol, then a curated glyph map, then ICU. Never inflate
  * buy-box / card prices with a bare ISO code when a real glyph exists.
+ *
+ * Resolved glyphs are process-memoized until clearProcessCache / clearCache /
+ * process_cache_resetter — same website currency reads are static in-process.
  */
 final class CurrencySymbol
 {
@@ -54,6 +57,12 @@ final class CurrencySymbol
         'IDR' => 'Rp',
     ];
 
+    /** @var array<string, string> ISO → glyph */
+    private static array $processGlyphByCode = [];
+
+    /** @var array<string, string> ISO → left|right */
+    private static array $processPositionByCode = [];
+
     public static function forCode(?string $currencyCode): string
     {
         $code = strtoupper(trim((string)$currencyCode));
@@ -61,21 +70,25 @@ final class CurrencySymbol
             $code = 'CNY';
         }
 
+        if (isset(self::$processGlyphByCode[$code])) {
+            return self::$processGlyphByCode[$code];
+        }
+
         $configured = self::configuredSymbol($code);
         if (self::isUsableGlyph($configured, $code)) {
-            return $configured;
+            return self::$processGlyphByCode[$code] = $configured;
         }
 
         if (isset(self::GLYPHS[$code])) {
-            return self::GLYPHS[$code];
+            return self::$processGlyphByCode[$code] = self::GLYPHS[$code];
         }
 
         $intl = self::intlSymbol($code);
         if (self::isUsableGlyph($intl, $code)) {
-            return $intl;
+            return self::$processGlyphByCode[$code] = $intl;
         }
 
-        return $code;
+        return self::$processGlyphByCode[$code] = $code;
     }
 
     /**
@@ -116,8 +129,25 @@ final class CurrencySymbol
             : $symbol . $formatted;
     }
 
+    public static function clearProcessCache(): void
+    {
+        self::$processGlyphByCode = [];
+        self::$processPositionByCode = [];
+    }
+
     private static function configuredSymbol(string $code): string
     {
+        // Website request/process snapshot first — already memoized for this site.
+        try {
+            if (WebsiteData::hasCurrencySnapshot()) {
+                $symbol = trim((string)(WebsiteData::getCurrencySymbol($code) ?? ''));
+                if ($symbol !== '') {
+                    return $symbol;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
         try {
             $currency = CurrencyData::getCurrency($code);
             if (is_array($currency)) {
@@ -170,17 +200,34 @@ final class CurrencySymbol
 
     private static function positionFor(string $code): string
     {
+        if (isset(self::$processPositionByCode[$code])) {
+            return self::$processPositionByCode[$code];
+        }
+
         try {
-            $currency = CurrencyData::getCurrency($code);
-            if (is_array($currency)) {
-                $position = strtolower(trim((string)($currency['position'] ?? 'left')));
-                if ($position === 'right') {
-                    return 'right';
+            if (WebsiteData::hasCurrencySnapshot()) {
+                $position = strtolower(trim((string)(WebsiteData::getCurrencyPosition($code) ?? '')));
+                if ($position === 'right' || $position === 'left') {
+                    return self::$processPositionByCode[$code] = $position;
                 }
             }
         } catch (\Throwable) {
         }
 
-        return $code === 'EUR' ? 'right' : 'left';
+        try {
+            $currency = CurrencyData::getCurrency($code);
+            if (is_array($currency)) {
+                $position = strtolower(trim((string)($currency['position'] ?? 'left')));
+                if ($position === 'right') {
+                    return self::$processPositionByCode[$code] = 'right';
+                }
+                if ($position === 'left') {
+                    return self::$processPositionByCode[$code] = 'left';
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return self::$processPositionByCode[$code] = ($code === 'EUR' ? 'right' : 'left');
     }
 }

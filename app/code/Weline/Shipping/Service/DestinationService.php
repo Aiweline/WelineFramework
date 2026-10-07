@@ -14,9 +14,20 @@ use Weline\Shipping\Model\DestinationRegion;
  */
 final class DestinationService
 {
+    private const PROCESS_BAG_MAX = 64;
+
+    /** @var array<string, list<array<string, mixed>>> */
+    private static array $processRulesByScope = [];
+
     public function __construct(
         private readonly ObjectManager $objectManager,
     ) {
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processRulesByScope = [];
+        \Weline\Framework\Cache\Service\ScopeSharedMemo::purgeProcessPrefix('shipping.destination|');
     }
 
     /**
@@ -48,46 +59,78 @@ final class DestinationService
     public function loadActiveRules(?array $context = null): array
     {
         $ctx = $this->resolveContext($context);
-        try {
-            /** @var DestinationRegion $model */
-            $model = $this->objectManager->getInstance(DestinationRegion::class);
-        } catch (\Throwable) {
-            return [];
+        $processKey = (int)$ctx['website_id'] . '|' . (int)$ctx['store_id'] . '|' . (int)$ctx['channel_id'];
+        if (isset(self::$processRulesByScope[$processKey])) {
+            return self::$processRulesByScope[$processKey];
         }
-        $scopes = [
-            [DestinationRegion::SCOPE_WEBSITE, $ctx['website_id']],
-            [DestinationRegion::SCOPE_STORE, $ctx['store_id']],
-            [DestinationRegion::SCOPE_CHANNEL, $ctx['channel_id']],
-        ];
-        $out = [];
-        foreach ($scopes as [$type, $id]) {
-            try {
-                $items = $model->reset()
-                    ->where(DestinationRegion::schema_fields_SCOPE_TYPE, $type)
-                    ->where(DestinationRegion::schema_fields_SCOPE_ID, (int)$id)
-                    ->where(DestinationRegion::schema_fields_IS_ACTIVE, 1)
-                    ->select()
-                    ->fetch()
-                    ->getItems();
-            } catch (\Throwable) {
-                return [];
-            }
-            foreach ($items as $item) {
-                if (!$item instanceof DestinationRegion) {
-                    continue;
+
+        $out = \Weline\Framework\Cache\Service\ScopeSharedMemo::rememberScoped(
+            'shipping',
+            'shipping.destination',
+            function () use ($ctx): array {
+                try {
+                    /** @var DestinationRegion $model */
+                    $model = $this->objectManager->getInstance(DestinationRegion::class);
+                } catch (\Throwable) {
+                    return [];
                 }
-                $out[] = [
-                    'destination_id' => (int)$item->getId(),
-                    'scope_type' => (string)$item->getData(DestinationRegion::schema_fields_SCOPE_TYPE),
-                    'scope_id' => (int)$item->getData(DestinationRegion::schema_fields_SCOPE_ID),
-                    'region_type' => (string)$item->getData(DestinationRegion::schema_fields_REGION_TYPE),
-                    'country_code' => (string)$item->getData(DestinationRegion::schema_fields_COUNTRY_CODE),
-                    'region_id' => (int)$item->getData(DestinationRegion::schema_fields_REGION_ID),
-                    'region_code' => (string)$item->getData(DestinationRegion::schema_fields_REGION_CODE),
-                    'street_id' => (int)$item->getData(DestinationRegion::schema_fields_STREET_ID),
+                $scopes = [
+                    [DestinationRegion::SCOPE_WEBSITE, $ctx['website_id']],
+                    [DestinationRegion::SCOPE_STORE, $ctx['store_id']],
+                    [DestinationRegion::SCOPE_CHANNEL, $ctx['channel_id']],
                 ];
+                $rows = [];
+                foreach ($scopes as [$type, $id]) {
+                    try {
+                        $items = $model->reset()
+                            ->where(DestinationRegion::schema_fields_SCOPE_TYPE, $type)
+                            ->where(DestinationRegion::schema_fields_SCOPE_ID, (int)$id)
+                            ->where(DestinationRegion::schema_fields_IS_ACTIVE, 1)
+                            ->select()
+                            ->fetch()
+                            ->getItems();
+                    } catch (\Throwable) {
+                        return [];
+                    }
+                    foreach ($items as $item) {
+                        if (!$item instanceof DestinationRegion) {
+                            continue;
+                        }
+                        $rows[] = [
+                            'destination_id' => (int)$item->getId(),
+                            'scope_type' => (string)$item->getData(DestinationRegion::schema_fields_SCOPE_TYPE),
+                            'scope_id' => (int)$item->getData(DestinationRegion::schema_fields_SCOPE_ID),
+                            'region_type' => (string)$item->getData(DestinationRegion::schema_fields_REGION_TYPE),
+                            'country_code' => (string)$item->getData(DestinationRegion::schema_fields_COUNTRY_CODE),
+                            'region_id' => (int)$item->getData(DestinationRegion::schema_fields_REGION_ID),
+                            'region_code' => (string)$item->getData(DestinationRegion::schema_fields_REGION_CODE),
+                            'street_id' => (int)$item->getData(DestinationRegion::schema_fields_STREET_ID),
+                        ];
+                    }
+                }
+
+                return $rows;
+            },
+            \Weline\Framework\Runtime\ScopeIdentity::fromLayerIds(
+                (int)$ctx['website_id'],
+                (int)$ctx['store_id'],
+                (int)$ctx['channel_id'],
+            ),
+            600,
+        );
+        if (!\is_array($out)) {
+            $out = [];
+        }
+
+        if (!isset(self::$processRulesByScope[$processKey])
+            && \count(self::$processRulesByScope) >= self::PROCESS_BAG_MAX
+        ) {
+            $first = \array_key_first(self::$processRulesByScope);
+            if ($first !== null) {
+                unset(self::$processRulesByScope[$first]);
             }
         }
+        self::$processRulesByScope[$processKey] = $out;
 
         return $out;
     }

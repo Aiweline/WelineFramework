@@ -35,4 +35,22 @@ final class CurrencySymbolTest extends TestCase
         self::assertSame('$', $map['USD']);
         self::assertSame('£', $map['GBP']);
     }
+
+    public function testProcessMemoSurvivesRepeatedForCodeUntilCleared(): void
+    {
+        CurrencySymbol::clearProcessCache();
+        self::assertSame('$', CurrencySymbol::forCode('USD'));
+        self::assertSame('$', CurrencySymbol::forCode('USD'));
+        CurrencySymbol::clearProcessCache();
+        self::assertSame('$', CurrencySymbol::forCode('USD'));
+    }
+
+    public function testSourcePinsProcessMemoAndWebsiteSnapshotPreference(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Helper/CurrencySymbol.php';
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('function clearProcessCache', $source);
+        self::assertStringContainsString('$processGlyphByCode', $source);
+        self::assertStringContainsString('WebsiteData::hasCurrencySnapshot()', $source);
+    }
 }

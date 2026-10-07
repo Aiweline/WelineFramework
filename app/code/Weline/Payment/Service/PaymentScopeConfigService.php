@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Payment\Service;
 
+use Weline\Framework\Cache\Service\ScopeSharedMemo;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\ConfigReader as SystemConfig;
+use Weline\SystemConfig\Service\SystemConfigScopeResolver;
 
 class PaymentScopeConfigService
 {
@@ -16,6 +19,16 @@ class PaymentScopeConfigService
 
     private const SCOPE_PATTERN = '/^[a-z0-9_-]+(?:\.[a-z0-9_-]+){0,2}$/';
     private const METHOD_CONFIG_PREFIX = 'payment/method/';
+    private const PROCESS_BAG_MAX = 64;
+    private const SHARED_POOL = 'payment';
+    private const SHARED_TTL = 600;
+
+    /** @var array<string, array<string, array<string, mixed>>> scope|env → method overrides */
+    private static array $processOverridesByScopeEnv = [];
+
+    /** @var array<string, array<string, mixed>> module|area|scope → config map */
+    private static array $processSystemConfigMaps = [];
+
     private const LIST_KEYS = [
         'supported_currencies',
         'supported_countries',
@@ -48,6 +61,25 @@ class PaymentScopeConfigService
             ? null
             : \Closure::fromCallable($defaultEnvironmentReader);
         $this->storefrontUrls = $storefrontUrls;
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processOverridesByScopeEnv = [];
+        self::$processSystemConfigMaps = [];
+        ScopeSharedMemo::purgeProcessPrefix('payment.overrides.');
+        ScopeSharedMemo::purgeProcessPrefix('payment.sysmap.');
+    }
+
+    public static function invalidateSharedCache(): void
+    {
+        self::clearProcessCache();
+        try {
+            ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class)
+                ->pool(self::SHARED_POOL)
+                ->clear();
+        } catch (\Throwable) {
+        }
     }
 
     /**
@@ -98,6 +130,21 @@ class PaymentScopeConfigService
         }
 
         return implode('.', array_slice($parts, 0, 3));
+    }
+
+    private function scopeIdentity(string $scope): ScopeIdentity
+    {
+        try {
+            /** @var SystemConfigScopeResolver $resolver */
+            $resolver = ObjectManager::getInstance(SystemConfigScopeResolver::class);
+            $identity = $resolver->fromStorageScope($scope, true);
+            if ($identity instanceof ScopeIdentity) {
+                return $identity;
+            }
+        } catch (\Throwable) {
+        }
+
+        return ScopeIdentity::global();
     }
 
     public function normalizeEnvironment(string $environment): string
@@ -167,22 +214,49 @@ class PaymentScopeConfigService
     {
         $scope = $this->normalizeScope($scope);
         $environment = $this->normalizeEnvironment($environment);
+        $processKey = $scope . '|' . $environment;
+        if (isset(self::$processOverridesByScopeEnv[$processKey])) {
+            return self::$processOverridesByScopeEnv[$processKey];
+        }
 
-        $overrides = [];
-        foreach ([self::MODULE_WELINE_PAYMENT, self::MODULE_WESHOP_PAYMENT] as $module) {
-            foreach ($this->extractMethodConfigsFromModule($module, $scope) as $methodCode => $config) {
-                $previousConfig = \is_array($overrides[$methodCode]['config'] ?? null)
-                    ? $overrides[$methodCode]['config']
-                    : [];
-                $overrides[$methodCode] = $this->buildRuntimeOverride(
-                    $methodCode,
-                    array_replace($previousConfig, $config),
-                    $scope,
-                    $environment,
-                    $module
-                );
+        $overrides = ScopeSharedMemo::rememberScoped(
+            self::SHARED_POOL,
+            'payment.overrides.' . $environment,
+            function () use ($scope, $environment): array {
+                $built = [];
+                foreach ([self::MODULE_WELINE_PAYMENT, self::MODULE_WESHOP_PAYMENT] as $module) {
+                    foreach ($this->extractMethodConfigsFromModule($module, $scope) as $methodCode => $config) {
+                        $previousConfig = \is_array($built[$methodCode]['config'] ?? null)
+                            ? $built[$methodCode]['config']
+                            : [];
+                        $built[$methodCode] = $this->buildRuntimeOverride(
+                            $methodCode,
+                            array_replace($previousConfig, $config),
+                            $scope,
+                            $environment,
+                            $module
+                        );
+                    }
+                }
+
+                return $built;
+            },
+            $this->scopeIdentity($scope),
+            self::SHARED_TTL,
+        );
+        if (!\is_array($overrides)) {
+            $overrides = [];
+        }
+
+        if (!isset(self::$processOverridesByScopeEnv[$processKey])
+            && \count(self::$processOverridesByScopeEnv) >= self::PROCESS_BAG_MAX
+        ) {
+            $first = \array_key_first(self::$processOverridesByScopeEnv);
+            if ($first !== null) {
+                unset(self::$processOverridesByScopeEnv[$first]);
             }
         }
+        self::$processOverridesByScopeEnv[$processKey] = $overrides;
 
         return $overrides;
     }
@@ -304,12 +378,42 @@ class PaymentScopeConfigService
      */
     private function getSystemConfigMap(string $module, string $area, string $scope): array
     {
-        try {
-            return $this->getSystemConfig()->getConfigMapByModule($module, $area, $scope);
-        } catch (\Throwable $throwable) {
-            w_log_error('读取支付 SystemConfig 配置失败: ' . $module . ', ' . $throwable->getMessage());
-            return [];
+        $processKey = $module . '|' . $area . '|' . $scope;
+        if (isset(self::$processSystemConfigMaps[$processKey])) {
+            return self::$processSystemConfigMaps[$processKey];
         }
+
+        $map = ScopeSharedMemo::rememberScoped(
+            self::SHARED_POOL,
+            'payment.sysmap.' . $module . '.' . $area,
+            function () use ($module, $area, $scope): array {
+                try {
+                    $loaded = $this->getSystemConfig()->getConfigMapByModule($module, $area, $scope);
+                } catch (\Throwable $throwable) {
+                    w_log_error('读取支付 SystemConfig 配置失败: ' . $module . ', ' . $throwable->getMessage());
+                    $loaded = [];
+                }
+
+                return \is_array($loaded) ? $loaded : [];
+            },
+            $this->scopeIdentity($scope),
+            self::SHARED_TTL,
+        );
+        if (!\is_array($map)) {
+            $map = [];
+        }
+
+        if (!isset(self::$processSystemConfigMaps[$processKey])
+            && \count(self::$processSystemConfigMaps) >= self::PROCESS_BAG_MAX
+        ) {
+            $first = \array_key_first(self::$processSystemConfigMaps);
+            if ($first !== null) {
+                unset(self::$processSystemConfigMaps[$first]);
+            }
+        }
+        self::$processSystemConfigMaps[$processKey] = $map;
+
+        return $map;
     }
 
     private function normalizeConfigValue(string $key, mixed $value): mixed

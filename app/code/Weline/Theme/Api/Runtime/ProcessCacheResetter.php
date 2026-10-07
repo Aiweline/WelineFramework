@@ -14,6 +14,7 @@ use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Observer\ControllerFetchFileBefore;
 use Weline\Theme\Service\RuntimeTemplateMaterializer;
 use Weline\Theme\Service\SlotRendererService;
+use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Taglib\ThemeTemplate;
 use Weline\Framework\View\Template;
 
@@ -30,9 +31,10 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             ThemeTemplate::clearProcessCache();
             LayoutDependencyTracker::clearCache();
             RuntimeTemplateMaterializer::clearProcessCache();
+            ThemeContextService::clearProcessCache();
             \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
             Template::clearProcessViewFileCache();
-            return 8;
+            return 9;
         }
 
         // Hard memory pressure (keep-warm Worker): drop rebuildable process L1.
@@ -44,10 +46,11 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             ThemeTemplate::clearProcessCache();
             LayoutDependencyTracker::clearCache();
             RuntimeTemplateMaterializer::clearProcessCache();
+            ThemeContextService::clearProcessCache();
             \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
             Template::clearProcessViewFileCache();
 
-            return 7;
+            return 8;
         }
 
         // Soft pressure: reclaim chrome HTML + HotCache process bag; keep lighter meta.
@@ -106,6 +109,7 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
         ThemeTemplate::clearProcessCache();
         LayoutDependencyTracker::clearCache();
         RuntimeTemplateMaterializer::clearProcessCache();
+        ThemeContextService::clearProcessCache();
         \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
         Template::clearProcessViewFileCache();
     }

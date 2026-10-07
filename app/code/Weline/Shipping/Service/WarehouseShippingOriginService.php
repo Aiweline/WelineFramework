@@ -11,8 +11,19 @@ use Weline\Shipping\Model\WarehouseShippingOrigin;
 
 final class WarehouseShippingOriginService implements WarehouseShippingOriginInterface
 {
+    private const PROCESS_BAG_MAX = 128;
+
+    /** @var array<string, int> website|warehouse → shipping_address_id (0 = miss) */
+    private static array $processOriginByKey = [];
+
     public function __construct(private readonly ObjectManager $objectManager)
     {
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processOriginByKey = [];
+        \Weline\Framework\Cache\Service\ScopeSharedMemo::purgeProcessPrefix('shipping.origin.');
     }
 
     public function requireShippingAddressId(int $websiteId, int $warehouseId): int
@@ -32,33 +43,60 @@ final class WarehouseShippingOriginService implements WarehouseShippingOriginInt
         if ($warehouseId <= 0) {
             return null;
         }
-        $candidates = [$websiteId];
-        if ($websiteId !== 0) {
-            // Seed/default warehouse origins live on website:0; storefront websites
-            // without a copied bind must fall back the same way as service lanes.
-            $candidates[] = 0;
-        }
-        /** @var WarehouseShippingOrigin $model */
-        $model = $this->objectManager->getInstance(WarehouseShippingOrigin::class, [], false);
-        foreach ($candidates as $candidateWebsiteId) {
-            $items = $model->reset()
-                ->where(WarehouseShippingOrigin::schema_fields_WEBSITE_ID, $candidateWebsiteId)
-                ->where(WarehouseShippingOrigin::schema_fields_WAREHOUSE_ID, $warehouseId)
-                ->where(WarehouseShippingOrigin::schema_fields_IS_ACTIVE, 1)
-                ->select()
-                ->fetch()
-                ->getItems();
-            $row = is_array($items) ? ($items[0] ?? null) : null;
-            if (!$row instanceof WarehouseShippingOrigin || !(int)$row->getId()) {
-                continue;
-            }
-            $addressId = (int)$row->getData(WarehouseShippingOrigin::schema_fields_SHIPPING_ADDRESS_ID);
-            if ($addressId > 0) {
-                return $addressId;
-            }
+        $processKey = $websiteId . '|' . $warehouseId;
+        if (\array_key_exists($processKey, self::$processOriginByKey)) {
+            $cached = self::$processOriginByKey[$processKey];
+
+            return $cached > 0 ? $cached : null;
         }
 
-        return null;
+        $addressId = (int)\Weline\Framework\Cache\Service\ScopeSharedMemo::rememberScoped(
+            'shipping',
+            'shipping.origin.' . $warehouseId,
+            function () use ($websiteId, $warehouseId): int {
+                $candidates = [$websiteId];
+                if ($websiteId !== 0) {
+                    // Seed/default warehouse origins live on website:0; storefront websites
+                    // without a copied bind must fall back the same way as service lanes.
+                    $candidates[] = 0;
+                }
+                /** @var WarehouseShippingOrigin $model */
+                $model = $this->objectManager->getInstance(WarehouseShippingOrigin::class, [], false);
+                foreach ($candidates as $candidateWebsiteId) {
+                    $items = $model->reset()
+                        ->where(WarehouseShippingOrigin::schema_fields_WEBSITE_ID, $candidateWebsiteId)
+                        ->where(WarehouseShippingOrigin::schema_fields_WAREHOUSE_ID, $warehouseId)
+                        ->where(WarehouseShippingOrigin::schema_fields_IS_ACTIVE, 1)
+                        ->select()
+                        ->fetch()
+                        ->getItems();
+                    $row = \is_array($items) ? ($items[0] ?? null) : null;
+                    if (!$row instanceof WarehouseShippingOrigin || !(int)$row->getId()) {
+                        continue;
+                    }
+                    $found = (int)$row->getData(WarehouseShippingOrigin::schema_fields_SHIPPING_ADDRESS_ID);
+                    if ($found > 0) {
+                        return $found;
+                    }
+                }
+
+                return 0;
+            },
+            \Weline\Framework\Runtime\ScopeIdentity::websiteById($websiteId),
+            600,
+        );
+
+        if (!\array_key_exists($processKey, self::$processOriginByKey)
+            && \count(self::$processOriginByKey) >= self::PROCESS_BAG_MAX
+        ) {
+            $first = \array_key_first(self::$processOriginByKey);
+            if ($first !== null) {
+                unset(self::$processOriginByKey[$first]);
+            }
+        }
+        self::$processOriginByKey[$processKey] = $addressId;
+
+        return $addressId > 0 ? $addressId : null;
     }
 
     public function bind(int $websiteId, int $warehouseId, int $shippingAddressId, bool $active = true): array
@@ -92,6 +130,7 @@ final class WarehouseShippingOriginService implements WarehouseShippingOriginInt
             WarehouseShippingOrigin::schema_fields_IS_ACTIVE => $active ? 1 : 0,
             WarehouseShippingOrigin::schema_fields_UPDATED_AT => $now,
         ];
+        self::clearProcessCache();
         if ($existing instanceof WarehouseShippingOrigin && (int)$existing->getId() > 0) {
             $existing->setData($payload)->save();
             $id = (int)$existing->getId();

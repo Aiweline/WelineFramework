@@ -20,6 +20,8 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
         // or an empty [] entry can hide newly saved grants until process recycle.
         \Weline\Websites\Service\WebsiteAclGrantService::clearRequestCache();
         \Weline\Websites\Data\WebsiteData::clearProcessCache();
+        \Weline\Websites\Service\WebsiteCatalog::clearProcessCache();
+        \Weline\Websites\Service\ScopeMaintenanceGate::clearProcessCache();
         \Weline\Websites\Service\ScopePathMatchCache::clearProcessCache();
         \Weline\Websites\Api\Localization\LocalizationProvider::clearProcessCache();
         \Weline\Framework\App\State::clearProcessLocalizationCaches();

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Payment',
-    "version" => '1.9.108',
+    "version" => '1.9.110',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Backend' => '*',
@@ -33,5 +33,6 @@ return [
         \Weline\Payment\Api\PaymentLinkServiceInterface::class => \Weline\Payment\Service\PaymentLinkService::class,
         \Weline\Payment\Api\PaymentExpressFacadeInterface::class => \Weline\Payment\Service\ExpressCheckoutOrchestrator::class,
         \Weline\Order\Api\OrderPaymentMethodCatalogInterface::class => \Weline\Payment\Integration\Order\OrderPaymentMethodCatalog::class,
+        'process_cache_resetter.Weline_Payment' => \Weline\Payment\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

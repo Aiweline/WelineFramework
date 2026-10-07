@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Payment\Service;
 
+use Weline\Framework\Cache\Service\ScopeSharedMemo;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Payment\Interface\ProviderInterface;
 use Weline\Payment\Model\PaymentMethod;
 use Weline\Payment\Model\PaymentMethodConfig;
@@ -14,6 +16,12 @@ class PaymentMethodManager
 {
     private const INTERNAL_PROVIDER_CONFIG_KEY = '_provider';
     private const SORT_STEP = 10;
+    private const SHARED_POOL = 'payment';
+    private const RESOURCE_METHODS = 'payment.methods.public';
+    private const SHARED_TTL = 600;
+
+    /** @var list<array<string, mixed>>|null Full PaymentMethod rows for this Worker (may include config). */
+    private static ?array $processMethodRows = null;
 
     public function __construct(
         private readonly PaymentProviderScanner $providerScanner,
@@ -22,6 +30,20 @@ class PaymentMethodManager
         private ?PaymentMethodIconResolver $iconResolver = null,
         private ?ConfigStore $configStore = null,
     ) {
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processMethodRows = null;
+        ScopeSharedMemo::purgeProcessPrefix('payment.methods.');
+        PaymentScopeConfigService::clearProcessCache();
+    }
+
+    public static function invalidateSharedCache(): void
+    {
+        self::clearProcessCache();
+        ScopeSharedMemo::forgetScoped(self::SHARED_POOL, self::RESOURCE_METHODS, ScopeIdentity::global());
+        PaymentScopeConfigService::invalidateSharedCache();
     }
 
     public function registerAllProviders(): int
@@ -84,6 +106,7 @@ class PaymentMethodManager
         }
 
         $paymentMethod->save();
+        self::invalidateSharedCache();
 
         return $paymentMethod;
     }
@@ -93,18 +116,15 @@ class PaymentMethodManager
      */
     public function getActiveMethods(array $context = []): array
     {
-        /** @var PaymentMethod $paymentMethod */
-        $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class, [], false);
-        $methods = $paymentMethod
-            ->order(PaymentMethod::schema_fields_SORT_ORDER, 'ASC')
-            ->select()
-            ->fetch();
-
-        if (\is_object($methods) && method_exists($methods, 'getItems')) {
-            $methods = $methods->getItems();
-        }
-        if (!\is_array($methods)) {
-            return [];
+        $methods = [];
+        foreach ($this->loadAllMethodRows() as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            /** @var PaymentMethod $method */
+            $method = $this->objectManager->getInstance(PaymentMethod::class, [], false);
+            $method->clearData()->clearQuery()->setData($row);
+            $methods[] = $method;
         }
 
         $methods = array_values(array_filter($methods, function (mixed $method) use ($context): bool {
@@ -123,6 +143,48 @@ class PaymentMethodManager
         });
 
         return $methods;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadAllMethodRows(): array
+    {
+        if (self::$processMethodRows !== null) {
+            return self::$processMethodRows;
+        }
+
+        // L2 shared holds public columns only (config stripped). Same Worker L1
+        // reuses that payload; provider secrets stay out of shared memory.
+        $publicRows = ScopeSharedMemo::rememberScoped(
+            self::SHARED_POOL,
+            self::RESOURCE_METHODS,
+            function (): array {
+                /** @var PaymentMethod $paymentMethod */
+                $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class, [], false);
+                $rows = $paymentMethod
+                    ->order(PaymentMethod::schema_fields_SORT_ORDER, 'ASC')
+                    ->select()
+                    ->fetchArray();
+                if (!\is_array($rows)) {
+                    return [];
+                }
+                $public = [];
+                foreach ($rows as $row) {
+                    if (!\is_array($row)) {
+                        continue;
+                    }
+                    unset($row[PaymentMethod::schema_fields_CONFIG]);
+                    $public[] = $row;
+                }
+
+                return $public;
+            },
+            ScopeIdentity::global(),
+            self::SHARED_TTL,
+        );
+
+        return self::$processMethodRows = \is_array($publicRows) ? $publicRows : [];
     }
 
     /**
@@ -157,17 +219,17 @@ class PaymentMethodManager
      */
     public function listMethodsForAdmin(array $context = []): array
     {
-        /** @var PaymentMethod $paymentMethod */
-        $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class, [], false);
-        $methods = $paymentMethod
-            ->order(PaymentMethod::schema_fields_SORT_ORDER, 'ASC')
-            ->select()
-            ->fetch();
-
-        if (\is_object($methods) && method_exists($methods, 'getItems')) {
-            $methods = $methods->getItems();
+        $methods = [];
+        foreach ($this->loadAllMethodRows() as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            /** @var PaymentMethod $method */
+            $method = $this->objectManager->getInstance(PaymentMethod::class, [], false);
+            $method->clearData()->clearQuery()->setData($row);
+            $methods[] = $method;
         }
-        if (!\is_array($methods)) {
+        if ($methods === []) {
             return [];
         }
 
@@ -244,6 +306,8 @@ class PaymentMethodManager
             $sortOrders[$code] = $weight;
             $index++;
         }
+
+        self::invalidateSharedCache();
 
         return [
             'success' => true,

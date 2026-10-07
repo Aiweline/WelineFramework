@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Seo',
-    "version" => '1.2.109',
+    "version" => '1.2.112',
     "requires" => [
         'Weline_Ai' => '*',
         'Weline_Backend' => '*',
@@ -19,5 +19,6 @@ return [
         \Weline\Seo\Api\Head\PageContextResolverInterface::class => \Weline\Seo\Api\Head\PageContextResolver::class,
         \Weline\Seo\Api\Protocol\WebsiteProtocolResolverInterface::class => \Weline\Seo\Api\Protocol\WebsiteProtocolResolver::class,
         \Weline\Seo\Api\Sitemap\WebsiteDirectoryInterface::class => \Weline\Seo\Api\Sitemap\WebsiteDirectory::class,
+        'process_cache_resetter.Weline_Seo' => \Weline\Seo\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

@@ -35,6 +35,33 @@ final class ScopeIdentityTest extends TestCase
         self::assertSame(0, $identities[1]->websiteId);
     }
 
+    public function testWebsiteByIdAndFromLayerIdsBuildMemoPartitions(): void
+    {
+        self::assertSame(
+            ScopeIdentity::website(0, 'default')->canonicalKey(),
+            ScopeIdentity::websiteById(0)->canonicalKey(),
+        );
+        self::assertSame(
+            ScopeIdentity::website(3, 'id-3')->canonicalKey(),
+            ScopeIdentity::websiteById(3)->canonicalKey(),
+        );
+
+        $channel = ScopeIdentity::fromLayerIds(2, 5, 9);
+        self::assertSame(ScopeIdentity::KIND_CHANNEL, $channel->scopeKind);
+        self::assertSame(2, $channel->websiteId);
+        self::assertSame('id-2', $channel->websiteCode);
+        self::assertSame('id-5', $channel->storeCode);
+        self::assertSame('id-9', $channel->channelCode);
+
+        $store = ScopeIdentity::fromLayerIds(2, 5, 0);
+        self::assertSame(ScopeIdentity::KIND_STORE, $store->scopeKind);
+        self::assertSame('id-5', $store->storeCode);
+
+        $website = ScopeIdentity::fromLayerIds(2, 0, 0);
+        self::assertSame(ScopeIdentity::KIND_WEBSITE, $website->scopeKind);
+        self::assertSame('id-2', $website->websiteCode);
+    }
+
     public function testFromArrayRejectsEveryMissingSerializedField(): void
     {
         $canonical = ScopeIdentity::channel(

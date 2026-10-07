@@ -17,6 +17,11 @@ class WebsiteProtocolConfig extends Model
     public const schema_primary_key = 'id';
     public array $_unit_primary_keys = ['id'];
 
+    private const PROCESS_BAG_MAX = 64;
+
+    /** @var array<int, array<string, mixed>> website_id → row snapshot (empty = miss) */
+    private static array $processRowsByWebsiteId = [];
+
     #[Col('int', 0, nullable: false, primaryKey: true, autoIncrement: true, comment: 'ID')]
     public const schema_fields_ID = 'id';
 
@@ -51,12 +56,68 @@ class WebsiteProtocolConfig extends Model
         return self::schema_fields_ID;
     }
 
+    public static function clearProcessCache(): void
+    {
+        self::$processRowsByWebsiteId = [];
+        \Weline\Framework\Cache\Service\ScopeSharedMemo::purgeProcessPrefix('seo.protocol|');
+    }
+
+    public static function invalidateSharedCache(): void
+    {
+        self::clearProcessCache();
+        try {
+            \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Cache\CacheManager::class
+            )->pool('seo')->clear();
+        } catch (\Throwable) {
+        }
+    }
+
     public function loadByWebsiteId(int $websiteId): self
     {
-        $this->reset()
-            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
-            ->find()
-            ->fetch();
+        $websiteId = max(0, $websiteId);
+        if (\array_key_exists($websiteId, self::$processRowsByWebsiteId)) {
+            $row = self::$processRowsByWebsiteId[$websiteId];
+            $this->reset()->clearData();
+            if ($row !== []) {
+                $this->setData($row);
+            }
+
+            return $this;
+        }
+
+        $snapshot = \Weline\Framework\Cache\Service\ScopeSharedMemo::rememberScoped(
+            'seo',
+            'seo.protocol',
+            function () use ($websiteId): array {
+                $this->reset()
+                    ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+                    ->find()
+                    ->fetch();
+
+                return $this->getId() ? (array)$this->getData() : [];
+            },
+            \Weline\Framework\Runtime\ScopeIdentity::websiteById($websiteId),
+            600,
+        );
+        if (!\is_array($snapshot)) {
+            $snapshot = [];
+        }
+
+        $this->reset()->clearData();
+        if ($snapshot !== []) {
+            $this->setData($snapshot);
+        }
+
+        if (!\array_key_exists($websiteId, self::$processRowsByWebsiteId)
+            && \count(self::$processRowsByWebsiteId) >= self::PROCESS_BAG_MAX
+        ) {
+            $first = \array_key_first(self::$processRowsByWebsiteId);
+            if ($first !== null) {
+                unset(self::$processRowsByWebsiteId[$first]);
+            }
+        }
+        self::$processRowsByWebsiteId[$websiteId] = $snapshot;
 
         return $this;
     }
@@ -66,7 +127,11 @@ class WebsiteProtocolConfig extends Model
      */
     public function saveForWebsite(int $websiteId, array $data): self
     {
-        $this->loadByWebsiteId($websiteId);
+        self::invalidateSharedCache();
+        $this->reset()
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->find()
+            ->fetch();
         if (!$this->getId()) {
             $this->setData(self::schema_fields_WEBSITE_ID, $websiteId);
             $this->setData(self::schema_fields_CREATED_AT, date('Y-m-d H:i:s'));
@@ -78,6 +143,8 @@ class WebsiteProtocolConfig extends Model
             ->setData(self::schema_fields_ROBOTS_EXTRA, $this->normalizeRobotsExtra((string)($data['robots_extra'] ?? '')))
             ->setData(self::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
             ->save();
+
+        self::invalidateSharedCache();
 
         return $this;
     }

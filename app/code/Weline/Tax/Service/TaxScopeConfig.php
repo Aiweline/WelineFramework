@@ -31,7 +31,18 @@ final class TaxScopeConfig
     /** Optional ISO2 allowlist to collect destination sales/GST at checkout (IOSS/LVG/nexus). */
     public const KEY_COLLECT_SALES_TAX_COUNTRIES = TaxDestinationCheckoutPolicy::KEY_COLLECT_SALES_TAX_COUNTRIES;
 
+    private const PROCESS_BAG_MAX = 128;
+
+    /** @var array<string, array<string,mixed>> */
+    private static array $processResolvedByScope = [];
+
     private readonly ?\Closure $resolver;
+
+    public static function clearProcessCache(): void
+    {
+        self::$processResolvedByScope = [];
+        \Weline\Framework\Cache\Service\ScopeSharedMemo::purgeProcessPrefix('tax.flags|');
+    }
 
     /**
      * @param (callable(int,int,int):array<string,mixed>)|null $resolver Explicit test/frozen-snapshot adapter.
@@ -128,6 +139,40 @@ final class TaxScopeConfig
             );
         }
 
+        $processKey = $websiteId . '|' . $storeId . '|' . $channelId;
+        if (isset(self::$processResolvedByScope[$processKey])) {
+            return self::$processResolvedByScope[$processKey];
+        }
+
+        $resolved = \Weline\Framework\Cache\Service\ScopeSharedMemo::rememberScoped(
+            'tax',
+            'tax.flags',
+            fn (): array => $this->resolveFlagsFromCatalogs($websiteId, $storeId, $channelId),
+            ScopeIdentity::fromLayerIds($websiteId, $storeId, $channelId),
+            600,
+        );
+        if (!\is_array($resolved)) {
+            $resolved = $this->resolveFlagsFromCatalogs($websiteId, $storeId, $channelId);
+        }
+
+        if (!isset(self::$processResolvedByScope[$processKey])
+            && \count(self::$processResolvedByScope) >= self::PROCESS_BAG_MAX
+        ) {
+            $first = \array_key_first(self::$processResolvedByScope);
+            if ($first !== null) {
+                unset(self::$processResolvedByScope[$first]);
+            }
+        }
+        self::$processResolvedByScope[$processKey] = $resolved;
+
+        return $resolved;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function resolveFlagsFromCatalogs(int $websiteId, int $storeId, int $channelId): array
+    {
         $website = null;
         foreach ($this->websiteCatalog()->all() as $candidate) {
             if ($candidate->id === $websiteId) {

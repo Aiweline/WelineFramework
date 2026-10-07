@@ -25,15 +25,22 @@ use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Eav\Model\EavEntity;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
+use Weline\Framework\Cache\Service\ScopeSharedMemo;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 
 /**
  * Eav-owned read model. Consumers receive DTOs and never Eav ORM objects.
  */
 final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterface, AttributeMetadataPrefetchInterface, AttributeOptionIdentityCatalogInterface, \Weline\Eav\Api\Metadata\AttributeProductOptionIdentityCatalogInterface, \Weline\Eav\Api\Metadata\AttributeMetadataCodeIndexInterface, \Weline\Eav\Api\Metadata\AttributeMetadataOptionTokenIndexInterface
 {
+    private const PROCESS_BAG_MAX = 256;
+
+    /** @var array<string, mixed> Worker process memo for metadata read models */
+    private static array $processBag = [];
+
     public function __construct(
         private readonly EavEntity $entityModel,
         private readonly Set $setModel,
@@ -44,6 +51,23 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
         private readonly Placement $placementModel,
         private readonly ?StorefrontScopeHotCache $requestCache = null,
     ) {
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processBag = [];
+        ScopeSharedMemo::purgeProcessPrefix('eav.metadata.');
+    }
+
+    public static function invalidateSharedCache(): void
+    {
+        self::clearProcessCache();
+        try {
+            ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class)
+                ->pool('eav')
+                ->clear();
+        } catch (\Throwable) {
+        }
     }
 
     /** @var array<string, array<int, string>> */
@@ -1182,8 +1206,33 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
 
     private function rememberRequest(string $logicalKey, callable $builder): mixed
     {
-        $cache = $this->requestCache ?? ObjectManager::getInstance(StorefrontScopeHotCache::class);
-        return $cache->rememberForRequest('eav.metadata', $logicalKey, $builder);
+        if (\array_key_exists($logicalKey, self::$processBag)) {
+            return self::$processBag[$logicalKey];
+        }
+
+        $value = ScopeSharedMemo::rememberScoped(
+            'eav',
+            'eav.metadata.' . $logicalKey,
+            function () use ($logicalKey, $builder): mixed {
+                $cache = $this->requestCache ?? ObjectManager::getInstance(StorefrontScopeHotCache::class);
+
+                return $cache->rememberForRequest('eav.metadata', $logicalKey, $builder);
+            },
+            ScopeIdentity::global(),
+            600,
+        );
+
+        if (!\array_key_exists($logicalKey, self::$processBag)
+            && \count(self::$processBag) >= self::PROCESS_BAG_MAX
+        ) {
+            $first = \array_key_first(self::$processBag);
+            if ($first !== null) {
+                unset(self::$processBag[$first]);
+            }
+        }
+        self::$processBag[$logicalKey] = $value;
+
+        return $value;
     }
 
     /**

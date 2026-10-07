@@ -552,6 +552,22 @@ if (!function_exists('w_scope')) {
     }
 }
 
+if (!function_exists('w_scope_key')) {
+    /**
+     * 范围缓存 logical key（框架权威）：{@code {resource}|{ScopeIdentity::canonicalKey()}}。
+     * 模块禁止手拼 website/store/channel；全局事实传 {@see ScopeIdentity::global()}。
+     * 与 {@see w_scope()}（媒体引用身份）分工不同，勿混用。
+     *
+     * @param \Weline\Framework\Runtime\ScopeIdentity|null $scope null → 当前请求身份，否则 global
+     */
+    function w_scope_key(
+        string $resource,
+        ?\Weline\Framework\Runtime\ScopeIdentity $scope = null,
+    ): string {
+        return \Weline\Framework\Cache\Service\ScopeSharedMemo::logicalKey($resource, $scope);
+    }
+}
+
 if (!function_exists('w_cache')) {
     /**
      * 获取缓存池

@@ -6,10 +6,12 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\CachePolicy;
+use Weline\Framework\Cache\Service\ScopeSharedMemo;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Framework\Runtime\ThemeContextProviderInterface;
@@ -23,11 +25,34 @@ class ThemeContextService implements ThemeContextProviderInterface
     public const AREA_BACKEND = 'backend';
     public const AREA_GLOBAL = 'global';
 
+    private const PROCESS_BAG_MAX = 64;
+
+    /** @var array<string, array<string, mixed>> Worker process memo for runtime theme rows (no preview). */
+    private static array $processThemeRows = [];
+
     public function __construct(
         private readonly WelineTheme $welineTheme,
         private readonly ?PreviewContextService $previewContextService = null,
         private readonly ?StorefrontScopeHotCache $hotCache = null,
     ) {
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processThemeRows = [];
+        ScopeSharedMemo::purgeProcessPrefix('theme.runtime.');
+    }
+
+    /** Drop L1 + L2 theme runtime rows after activation / application writes. */
+    public static function invalidateSharedCache(): void
+    {
+        self::clearProcessCache();
+        try {
+            ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class)
+                ->pool('theme')
+                ->clear();
+        } catch (\Throwable) {
+        }
     }
 
     public function normalizeArea(?string $area, string $default = self::AREA_FRONTEND): string
@@ -273,179 +298,6 @@ class ThemeContextService implements ThemeContextProviderInterface
         }
     }
 
-    public function activateTheme(WelineTheme $theme, ?string $area = null): WelineTheme
-    {
-        $theme->setData($this->getActivationField($area), 1);
-        $theme->save();
-        $this->clearActivationRuntimeCaches($theme, $area);
-
-        return $theme;
-    }
-
-    /**
-     * @return array{success:bool,status:string,message:string,theme_id?:int,area?:?string}
-     */
-    public function activateThemeForArea(int $themeId, ?string $area = null): array
-    {
-        if ($themeId <= 0) {
-            return [
-                'success' => false,
-                'status' => 'error',
-                'message' => (string)__('请选择主题'),
-            ];
-        }
-
-        $area = \strtolower(\trim((string)$area));
-        $normalizedArea = \in_array($area, [self::AREA_FRONTEND, self::AREA_BACKEND], true)
-            ? $area
-            : null;
-
-        $theme = $this->newThemeModel();
-        $theme->clearData()->clearQuery()->load($themeId);
-        if (!$theme->getId()) {
-            return [
-                'success' => false,
-                'status' => 'error',
-                'message' => (string)__('主题不存在'),
-            ];
-        }
-
-        if ($normalizedArea !== null && !$this->themeSupportsArea($theme, $normalizedArea)) {
-            return [
-                'success' => false,
-                'status' => 'error',
-                'message' => (string)__('主题不支持 %{1} 区域', [$normalizedArea]),
-            ];
-        }
-
-        try {
-            if ($normalizedArea === self::AREA_FRONTEND) {
-                if ($this->safeToggleAreaThemeActivation($theme, $themeId, WelineTheme::schema_fields_IS_ACTIVE_FRONTEND)) {
-                    $theme->_cache->delete('theme_frontend');
-                } else {
-                    $this->activateThemeFallback($theme, $themeId);
-                }
-            } elseif ($normalizedArea === self::AREA_BACKEND) {
-                if ($this->safeToggleAreaThemeActivation($theme, $themeId, WelineTheme::schema_fields_IS_ACTIVE_BACKEND)) {
-                    $theme->_cache->delete('theme_backend');
-                } else {
-                    $this->activateThemeFallback($theme, $themeId);
-                }
-            } else {
-                $this->activateThemeFallback($theme, $themeId);
-            }
-
-            $theme->_cache->delete('theme');
-            $theme->_cache->delete('theme_parent_' . $themeId);
-            $this->clearActivationRuntimeCaches($theme, $normalizedArea);
-
-            if ($normalizedArea === null || $normalizedArea === self::AREA_FRONTEND) {
-                $this->syncPublishedFrontendThemeBinding($themeId);
-                $this->ensureStorefrontHomepageLayoutSeeded($themeId);
-            }
-
-            $message = (string)__('主题激活成功');
-            if ($normalizedArea === self::AREA_FRONTEND) {
-                $message = (string)__('已更新前台资产标记。店面权威为网站应用引用；未配置时回落 Theme 注册 Default，主题列表不再改各站应用。');
-            }
-
-            return [
-                'success' => true,
-                'status' => 'success',
-                'message' => $message,
-                'theme_id' => $themeId,
-                'area' => $normalizedArea,
-            ];
-        } catch (\Throwable $throwable) {
-            return [
-                'success' => false,
-                'status' => 'error',
-                'message' => (string)__('激活失败：%{1}', [$throwable->getMessage()]),
-            ];
-        }
-    }
-
-    /**
-     * Storefront HTTP resolves Theme via websites_theme_application, then Theme registered Default.
-     * Theme-list / CLI frontend activation must NOT rewrite website applications.
-     */
-    private function syncPublishedFrontendThemeBinding(int $themeId): void
-    {
-        // Intentionally no-op: storefront authority is website application + Theme Default.
-        unset($themeId);
-    }
-
-    /**
-     * Ensure storefront homepage layout exists for the activated theme.
-     * Does not overwrite an existing draft/published homepage layout.
-     */
-    private function ensureStorefrontHomepageLayoutSeeded(int $themeId): void
-    {
-        if ($themeId <= 0) {
-            return;
-        }
-
-        try {
-            /** @var DefaultLayoutSeeder $seeder */
-            $seeder = ObjectManager::getInstance(DefaultLayoutSeeder::class);
-            $seeder->seedDefaultLayout($themeId, 'homepage', false);
-        } catch (\Throwable) {
-        }
-    }
-
-    private function safeToggleAreaThemeActivation(WelineTheme $theme, int $themeId, string $field): bool
-    {
-        try {
-            $theme->clearQuery();
-            $theme->where($field, 1)
-                ->update([$field => 0])->fetch();
-            $theme->clearQuery();
-            $theme->where(WelineTheme::schema_fields_ID, $themeId)
-                ->update([$field => 1])->fetch();
-
-            return true;
-        } catch (\Throwable $throwable) {
-            if ($this->isMissingThemeActivationFieldError($throwable, $field)) {
-                return false;
-            }
-
-            throw $throwable;
-        }
-    }
-
-    private function activateThemeFallback(WelineTheme $theme, int $themeId): void
-    {
-        $theme->clearQuery();
-        $theme->where(WelineTheme::schema_fields_IS_ACTIVE, 1)
-            ->update([WelineTheme::schema_fields_IS_ACTIVE => 0])->fetch();
-        $theme->clearQuery();
-        $theme->where(WelineTheme::schema_fields_ID, $themeId)
-            ->update([WelineTheme::schema_fields_IS_ACTIVE => 1])->fetch();
-    }
-
-    private function isMissingThemeActivationFieldError(\Throwable $throwable, string $field): bool
-    {
-        $message = \strtolower($throwable->getMessage());
-        if (!\str_contains($message, \strtolower($field))) {
-            return false;
-        }
-
-        return \str_contains($message, 'undefined column')
-            || \str_contains($message, 'does not exist')
-            || \str_contains($message, 'column');
-    }
-
-    private function clearActivationRuntimeCaches(WelineTheme $theme, ?string $area): void
-    {
-        try {
-            ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(
-                (int)$theme->getId(),
-                'theme_context_activate_' . ($this->normalizeActivationArea($area) ?? self::AREA_GLOBAL)
-            );
-        } catch (\Throwable) {
-        }
-    }
-
     public function themeSupportsArea(WelineTheme $theme, string $area): bool
     {
         $area = $this->normalizeArea($area);
@@ -567,9 +419,47 @@ class ThemeContextService implements ThemeContextProviderInterface
 
     private function rememberThemeForRequest(string $key, callable $builder): array
     {
-        return $this->canReuseTheme()
-            ? $this->themeHotCache()->rememberForRequest('theme.runtime_model', $key, $builder)
-            : $builder();
+        $requestOnly = \str_starts_with($key, 'editor|') || \str_starts_with($key, 'token|');
+        if (!$requestOnly && \array_key_exists($key, self::$processThemeRows)) {
+            return self::$processThemeRows[$key];
+        }
+
+        if ($requestOnly) {
+            $data = $this->canReuseTheme()
+                ? $this->themeHotCache()->rememberForRequest('theme.runtime_model', $key, $builder)
+                : $builder();
+
+            return \is_array($data) ? $data : [];
+        }
+
+        $data = ScopeSharedMemo::rememberScoped(
+            'theme',
+            'theme.runtime.' . $key,
+            function () use ($key, $builder): array {
+                $built = $this->canReuseTheme()
+                    ? $this->themeHotCache()->rememberForRequest('theme.runtime_model', $key, $builder)
+                    : $builder();
+
+                return \is_array($built) ? $built : [];
+            },
+            ScopeIdentity::global(),
+            600,
+        );
+        if (!\is_array($data)) {
+            $data = [];
+        }
+
+        if (!\array_key_exists($key, self::$processThemeRows)
+            && \count(self::$processThemeRows) >= self::PROCESS_BAG_MAX
+        ) {
+            $first = \array_key_first(self::$processThemeRows);
+            if ($first !== null) {
+                unset(self::$processThemeRows[$first]);
+            }
+        }
+        self::$processThemeRows[$key] = $data;
+
+        return $data;
     }
 
     private function newThemeModel(): WelineTheme

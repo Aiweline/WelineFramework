@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Tax\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Tax\Api\TaxEngineInterface;
 use Weline\Tax\Model\TaxClass;
 use Weline\Tax\Model\TaxRule;
@@ -25,6 +26,14 @@ final class TaxEngine implements TaxEngineInterface
     /** Sales-tax exempt class: always 0 rate when the class is enabled. */
     public const CLASS_EXEMPT = TaxSeedRateCatalog::CLASS_EXEMPT;
 
+    private const PROCESS_RULESET_BAG_MAX = 64;
+
+    /** @var array<string, list<array<string,mixed>>> website_id → enabled class rows */
+    private static array $processClassesByWebsite = [];
+
+    /** @var array<string, list<array<string,mixed>>> website_id → enabled rule rows */
+    private static array $processRulesByWebsite = [];
+
     /** @var array<string,array<string,mixed>>|null */
     private ?array $classes = null;
 
@@ -32,6 +41,27 @@ final class TaxEngine implements TaxEngineInterface
     private ?array $rules = null;
 
     private readonly TaxScopeConfig $scopeConfig;
+
+    public static function clearProcessCache(): void
+    {
+        self::$processClassesByWebsite = [];
+        self::$processRulesByWebsite = [];
+        \Weline\Framework\Cache\Service\ScopeSharedMemo::purgeProcessPrefix('tax.classes|');
+        \Weline\Framework\Cache\Service\ScopeSharedMemo::purgeProcessPrefix('tax.rules|');
+        TaxScopeConfig::clearProcessCache();
+    }
+
+    /** Drop L1 + L2 tax read models after admin/ruleset writes. */
+    public static function invalidateSharedCache(): void
+    {
+        self::clearProcessCache();
+        try {
+            \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Cache\CacheManager::class
+            )->pool('tax')->clear();
+        } catch (\Throwable) {
+        }
+    }
     /** @var (\Closure():TaxClass)|null */
     private readonly ?\Closure $classFactory;
     /** @var (\Closure():TaxRule)|null */
@@ -514,15 +544,33 @@ final class TaxEngine implements TaxEngineInterface
                     && (int) ($row[TaxClass::schema_fields_ENABLED] ?? 0) === 1,
             ));
         }
-        $rows = $this->newTaxClass()
-            ->clear()
-            ->where(TaxClass::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(TaxClass::schema_fields_ENABLED, 1)
-            ->order(TaxClass::schema_fields_CLASS_CODE, 'ASC')
-            ->select()
-            ->fetchArray();
+        $key = (string)$websiteId;
+        if (isset(self::$processClassesByWebsite[$key])) {
+            return self::$processClassesByWebsite[$key];
+        }
+        $list = \Weline\Framework\Cache\Service\ScopeSharedMemo::rememberScoped(
+            'tax',
+            'tax.classes',
+            function () use ($websiteId): array {
+                $rows = $this->newTaxClass()
+                    ->clear()
+                    ->where(TaxClass::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(TaxClass::schema_fields_ENABLED, 1)
+                    ->order(TaxClass::schema_fields_CLASS_CODE, 'ASC')
+                    ->select()
+                    ->fetchArray();
 
-        return is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
+                return \is_array($rows) ? \array_values(\array_filter($rows, 'is_array')) : [];
+            },
+            ScopeIdentity::websiteById($websiteId),
+            600,
+        );
+        if (!\is_array($list)) {
+            $list = [];
+        }
+        self::rememberProcessRuleset(self::$processClassesByWebsite, $key, $list);
+
+        return $list;
     }
 
     /**
@@ -537,17 +585,50 @@ final class TaxEngine implements TaxEngineInterface
                     && (int) ($row[TaxRule::schema_fields_ENABLED] ?? 0) === 1,
             ));
         }
-        $rows = $this->newTaxRule()
-            ->clear()
-            ->where(TaxRule::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(TaxRule::schema_fields_ENABLED, 1)
-            ->order(TaxRule::schema_fields_CLASS_CODE, 'ASC')
-            ->order(TaxRule::schema_fields_JURISDICTION_KEY, 'ASC')
-            ->order(TaxRule::schema_fields_RULE_VERSION, 'ASC')
-            ->select()
-            ->fetchArray();
+        $key = (string)$websiteId;
+        if (isset(self::$processRulesByWebsite[$key])) {
+            return self::$processRulesByWebsite[$key];
+        }
+        $list = \Weline\Framework\Cache\Service\ScopeSharedMemo::rememberScoped(
+            'tax',
+            'tax.rules',
+            function () use ($websiteId): array {
+                $rows = $this->newTaxRule()
+                    ->clear()
+                    ->where(TaxRule::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(TaxRule::schema_fields_ENABLED, 1)
+                    ->order(TaxRule::schema_fields_CLASS_CODE, 'ASC')
+                    ->order(TaxRule::schema_fields_JURISDICTION_KEY, 'ASC')
+                    ->order(TaxRule::schema_fields_RULE_VERSION, 'ASC')
+                    ->select()
+                    ->fetchArray();
 
-        return is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
+                return \is_array($rows) ? \array_values(\array_filter($rows, 'is_array')) : [];
+            },
+            ScopeIdentity::websiteById($websiteId),
+            600,
+        );
+        if (!\is_array($list)) {
+            $list = [];
+        }
+        self::rememberProcessRuleset(self::$processRulesByWebsite, $key, $list);
+
+        return $list;
+    }
+
+    /**
+     * @param array<string, list<array<string,mixed>>> $bag
+     * @param list<array<string,mixed>> $rows
+     */
+    private static function rememberProcessRuleset(array &$bag, string $key, array $rows): void
+    {
+        if (!isset($bag[$key]) && \count($bag) >= self::PROCESS_RULESET_BAG_MAX) {
+            $first = \array_key_first($bag);
+            if ($first !== null) {
+                unset($bag[$first]);
+            }
+        }
+        $bag[$key] = $rows;
     }
 
     /**

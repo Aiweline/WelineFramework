@@ -41,7 +41,7 @@ final class ProcessCacheResetterMemoryPressureTest extends TestCase
             new ProcessCacheResetContext(ProcessCacheResetContext::REASON_MEMORY_PRESSURE, true),
         );
 
-        self::assertSame(7, $cleared);
+        self::assertSame(8, $cleared);
         self::assertSame(0, $this->partialOutputCount());
 
         $rp = new \ReflectionProperty(StorefrontScopeHotCache::class, 'processCache');

@@ -2,20 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Weline\SystemConfig\Api\Runtime;
+namespace Weline\Eav\Api\Runtime;
 
+use Weline\Eav\Service\AttributeMetadataCatalog;
 use Weline\Framework\Runtime\ProcessCacheResetContext;
 use Weline\Framework\Runtime\ProcessCacheResetterInterface;
-use Weline\SystemConfig\Model\SystemConfig;
-use Weline\SystemConfig\Service\SystemConfigSecurityHeaderPolicyOverrideProvider;
 
 final class ProcessCacheResetter implements ProcessCacheResetterInterface
 {
     public function resetProcessCaches(ProcessCacheResetContext $context): int
     {
-        SystemConfig::clearProcessCache();
-        SystemConfigSecurityHeaderPolicyOverrideProvider::clearProcessCache();
+        AttributeMetadataCatalog::clearProcessCache();
 
-        return 2;
+        return 1;
     }
 }

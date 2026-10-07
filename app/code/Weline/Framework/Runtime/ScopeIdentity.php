@@ -63,6 +63,60 @@ final class ScopeIdentity
         return new self(self::KIND_WEBSITE, $websiteId, $websiteCode, null, null, null, $contextVersion);
     }
 
+    /**
+     * Website partition when only numeric id is known (cache / memo keys).
+     * Prefer {@see self::website()} with a real code when available.
+     * id=0 → code {@code default}；其它 → {@code id-{n}}（禁止业务当站码持久化）。
+     */
+    public static function websiteById(int $websiteId, string $contextVersion = self::CONTEXT_VERSION): self
+    {
+        $websiteId = \max(0, $websiteId);
+        $code = $websiteId === 0 ? 'default' : 'id-' . $websiteId;
+
+        return self::website($websiteId, $code, $contextVersion);
+    }
+
+    /**
+     * Memo partition from numeric layer ids when codes are unknown.
+     * Prefer RequestContext / catalog-backed factories when codes exist.
+     * Placeholder codes use {@code id-{n}} (valid segment form; not for persistence).
+     */
+    public static function fromLayerIds(
+        int $websiteId,
+        int $storeId = 0,
+        int $channelId = 0,
+        string $contextVersion = self::CONTEXT_VERSION,
+    ): self {
+        $websiteId = \max(0, $websiteId);
+        $storeId = \max(0, $storeId);
+        $channelId = \max(0, $channelId);
+        $websiteCode = $websiteId === 0 ? 'default' : 'id-' . $websiteId;
+
+        if ($channelId > 0) {
+            $storeCode = $storeId === 0 ? 'default' : 'id-' . $storeId;
+
+            return self::channel(
+                $websiteId,
+                $websiteCode,
+                $storeCode,
+                'id-' . $channelId,
+                self::MODE_NORMAL,
+                $contextVersion,
+            );
+        }
+        if ($storeId > 0) {
+            return self::store(
+                $websiteId,
+                $websiteCode,
+                'id-' . $storeId,
+                self::MODE_NORMAL,
+                $contextVersion,
+            );
+        }
+
+        return self::website($websiteId, $websiteCode, $contextVersion);
+    }
+
     public static function store(
         int $websiteId,
         string $websiteCode,
