@@ -142,6 +142,31 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('mini-cart-drawer__swatch-preview', $styles);
     }
 
+    /**
+     * 迷你车行：缩略图放大预览；标题进 PDP；禁止默认跳 /cart。
+     */
+    public function testMiniCartLineThumbZoomsAndTitleGoesToProduct(): void
+    {
+        $themeRoot = dirname(__DIR__, 2);
+        $phtml = (string)file_get_contents($themeRoot . '/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml');
+        $js = (string)file_get_contents($themeRoot . '/view/statics/js/widgets/mini-cart-icon.js');
+        $css = (string)file_get_contents($themeRoot . '/view/statics/css/widgets/mini-cart-drawer.css');
+
+        self::assertStringContainsString('data-mini-cart-swatch-src', $phtml);
+        self::assertStringContainsString('查看商品图', $phtml);
+        self::assertStringContainsString("data-i18n-image-preview", $phtml);
+        self::assertStringNotContainsString("\$url = (string)(\$item['url'] ?? '/cart')", $phtml);
+        self::assertStringContainsString('/product/', $phtml);
+
+        self::assertStringContainsString('resolveLineProductUrl', $js);
+        self::assertStringContainsString('isCartChromeFallbackUrl', $js);
+        self::assertStringContainsString("createElement('button')", $js);
+        self::assertStringContainsString("data-i18n-image-preview", $js);
+        self::assertStringNotContainsString("item.url || '/cart'", $js);
+
+        self::assertStringContainsString('cursor: zoom-in', $css);
+    }
+
     public function testMiniCartExtrasTabsScriptBuildsHorizontalSwitcher(): void
     {
         $path = dirname(__DIR__, 2) . '/view/statics/js/widgets/mini-cart-extras-tabs.js';

@@ -801,6 +801,47 @@
         return true;
     }
 
+    /** True when a cart line url is the old /cart fallback — never treat as PDP. */
+    function isCartChromeFallbackUrl(value) {
+        var raw = String(value || '').trim();
+        if (!raw) {
+            return true;
+        }
+        var path = raw;
+        try {
+            if (/^https?:\/\//i.test(raw)) {
+                path = new URL(raw, window.location.origin).pathname || '';
+            }
+        } catch (e) {
+            path = raw;
+        }
+        path = path.split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+        return path === '/cart' || path === 'cart';
+    }
+
+    /**
+     * PDP path for mini-cart title. Prefer item.url, else /product/{slug|id}.
+     * Never fall back to /cart — that sent shoppers to the cart page by mistake.
+     */
+    function resolveLineProductUrl(item) {
+        if (!item || typeof item !== 'object') {
+            return '';
+        }
+        var raw = String(item.url || '').trim();
+        if (raw && !isCartChromeFallbackUrl(raw)) {
+            return raw;
+        }
+        var slug = String(item.slug || '').trim().toLowerCase();
+        if (slug) {
+            return '/product/' + encodeURIComponent(slug);
+        }
+        var productId = Number(item.product_id || item.legacy_product_id || 0);
+        if (productId > 0) {
+            return '/product/' + String(productId);
+        }
+        return '';
+    }
+
     function buildLine(root, item, currency) {
         var row = document.createElement('article');
         row.className = 'mini-cart-drawer__line';
@@ -818,28 +859,42 @@
                 image = '';
             }
         }
-        var url = String(item.url || '/cart');
+        var url = resolveLineProductUrl(item);
         var name = String(item.name || '');
         var qty = Math.max(1, Number(item.qty || item.quantity || 1));
 
-        var media = document.createElement('a');
+        // Thumbnail zooms in-drawer (reuse swatch preview); must not navigate to /cart.
+        var media = document.createElement('button');
+        media.type = 'button';
         media.className = 'mini-cart-drawer__line-media';
-        media.href = url;
-        media.tabIndex = -1;
-        media.setAttribute('aria-hidden', 'true');
         if (image) {
+            media.setAttribute('data-mini-cart-swatch-trigger', '1');
+            media.setAttribute('data-mini-cart-swatch-src', image);
+            media.setAttribute(
+                'aria-label',
+                attr(root, 'data-i18n-image-preview', attr(root, 'data-i18n-swatch-preview', '查看商品图'))
+            );
             var img = document.createElement('img');
             img.src = image;
             img.alt = '';
             media.appendChild(img);
+        } else {
+            media.disabled = true;
+            media.setAttribute('aria-hidden', 'true');
+            media.tabIndex = -1;
         }
 
         var details = document.createElement('div');
         details.className = 'mini-cart-drawer__line-details';
 
-        var title = document.createElement('a');
+        var title;
+        if (url) {
+            title = document.createElement('a');
+            title.href = url;
+        } else {
+            title = document.createElement('span');
+        }
         title.className = 'mini-cart-drawer__line-title';
-        title.href = url;
         title.textContent = name;
         details.appendChild(title);
 
@@ -2274,7 +2329,7 @@
             return;
         }
         drawerCssReady = true;
-        var cssStamp = '20261007-minicart-dedupe-v9';
+        var cssStamp = '20261007-minicart-pdp-zoom-v15';
         var assetVersion = '';
         try {
             var cfgNode = document.getElementById('weline-frontend-runtime-config');
@@ -2285,19 +2340,20 @@
         } catch (err) {
             assetVersion = '';
         }
-        if (!document.querySelector(
-            'link[data-weline-mini-cart-drawer-live="1"], link[href*="' + cssStamp + '"],'
-            + ' link[rel="stylesheet"][href*="mini-cart-drawer.css"]'
-        )) {
-            var href = '/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css?v=' + cssStamp;
-            if (assetVersion) {
-                href += '&_weline_dev=' + encodeURIComponent(assetVersion);
+        var href = '/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css?v=' + cssStamp;
+        if (assetVersion) {
+            href += '&_weline_dev=' + encodeURIComponent(assetVersion);
+        }
+        var existing = document.querySelector(
+            'link[data-weline-mini-cart-drawer-live="1"], link[rel="stylesheet"][href*="mini-cart-drawer.css"]'
+        );
+        if (existing) {
+            if (String(existing.getAttribute('href') || '').indexOf(cssStamp) === -1) {
+                existing.setAttribute('href', href);
+                existing.setAttribute('data-weline-mini-cart-drawer-live', '1');
             }
-            var link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = href;
-            link.setAttribute('data-weline-mini-cart-drawer-live', '1');
-            document.head.appendChild(link);
+        } else {
+            appendStylesheet(href, 'data-weline-mini-cart-drawer-live');
         }
         ensureCartQtyHitCss(assetVersion);
     }

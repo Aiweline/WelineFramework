@@ -586,7 +586,9 @@ final class HeaderCommerceData
                         'qty' => 1,
                         'quantity' => 1,
                         'row_total' => 99.0,
-                        'url' => (string)($product['url'] ?? '/cart'),
+                        'url' => (string)($product['url'] ?? ''),
+                        'slug' => (string)($product['slug'] ?? ''),
+                        'product_id' => (int)($product['product_id'] ?? $product['id'] ?? 0),
                     ]],
                 ];
             }
@@ -609,7 +611,8 @@ final class HeaderCommerceData
                 'qty' => 1,
                 'quantity' => 1,
                 'row_total' => 99.0,
-                'url' => '/cart',
+                // Demo chrome without a real PDP — empty url (never /cart).
+                'url' => '',
             ]],
         ];
     }

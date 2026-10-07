@@ -74,7 +74,19 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
         ? HeaderCommerceData::formatMoney($originalPrice * max(1, $qty), (string)$cart['currency'])
         : '';
     $itemId = (string)($item['item_id'] ?? '');
-    $url = (string)($item['url'] ?? '/cart');
+    // PDP only — never fall back to /cart (that sent title/thumb clicks to the cart page).
+    $url = trim((string)($item['url'] ?? ''));
+    if ($url === '' || $url === '/cart' || preg_match('#^https?://[^/]+/cart/?$#i', $url) === 1) {
+        $slug = strtolower(trim((string)($item['slug'] ?? '')));
+        $productId = (int)($item['product_id'] ?? $item['legacy_product_id'] ?? 0);
+        if ($slug !== '') {
+            $url = '/product/' . rawurlencode($slug);
+        } elseif ($productId > 0) {
+            $url = '/product/' . $productId;
+        } else {
+            $url = '';
+        }
+    }
     $options = is_array($item['options'] ?? null) ? $item['options'] : [];
     $optionRows = [];
     foreach ($options as $option) {
@@ -125,13 +137,23 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
     <article class="mini-cart-drawer__line"
              data-mini-cart-line="1"
              <?= $itemId !== '' ? 'data-item-id="' . $esc($itemId) . '"' : '' ?>>
-        <a href="<?= $esc($url) ?>" class="mini-cart-drawer__line-media" tabindex="-1" aria-hidden="true">
-            <?php if ($image !== ''): ?>
+        <?php if ($image !== ''): ?>
+            <button type="button"
+                    class="mini-cart-drawer__line-media"
+                    data-mini-cart-swatch-trigger
+                    data-mini-cart-swatch-src="<?= $esc($image) ?>"
+                    aria-label="<?= $esc(__('查看商品图')) ?>">
                 <img src="<?= $esc($image) ?>" alt="">
-            <?php endif; ?>
-        </a>
+            </button>
+        <?php else: ?>
+            <button type="button" class="mini-cart-drawer__line-media" disabled aria-hidden="true" tabindex="-1"></button>
+        <?php endif; ?>
         <div class="mini-cart-drawer__line-details">
-            <a href="<?= $esc($url) ?>" class="mini-cart-drawer__line-title"><?= $esc($name) ?></a>
+            <?php if ($url !== ''): ?>
+                <a href="<?= $esc($url) ?>" class="mini-cart-drawer__line-title"><?= $esc($name) ?></a>
+            <?php else: ?>
+                <span class="mini-cart-drawer__line-title"><?= $esc($name) ?></span>
+            <?php endif; ?>
             <?php if ($optionRows !== []): ?>
                 <ul class="mini-cart-drawer__line-options">
                     <?php foreach ($optionRows as $optionRow): ?>
@@ -233,6 +255,7 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-i18n-loading="<?= $esc(__('正在加载购物车...')) ?>"
          data-i18n-updating="<?= $esc(__('正在更新购物车...')) ?>"
          data-i18n-swatch-preview="<?= $esc(__('查看规格图')) ?>"
+         data-i18n-image-preview="<?= $esc(__('查看商品图')) ?>"
          data-i18n-swatch-preview-close="<?= $esc(__('关闭')) ?>"
          data-i18n-goods-subtotal="<?= $esc(__('商品小计')) ?>"
          data-i18n-discount-coupon="<?= $esc(__('优惠券')) ?>"

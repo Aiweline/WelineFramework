@@ -1404,6 +1404,8 @@ final class CartService
                 'compare_at_minor' => max(0, $snapshot->compareAtMinor),
                 'currency' => $snapshot->currency,
             ];
+        $productId = (int)($snapshot->productId ?? $snapshot->offer->legacyProductId ?? 0);
+        $slug = strtolower(trim($snapshot->slug));
         $line = [
             'item_id' => 'v2-' . substr($selectionHash, 0, 16),
             'selection_hash' => $selectionHash,
@@ -1424,7 +1426,10 @@ final class CartService
             'source_module' => $snapshot->sourceModule,
             'source_app' => $snapshot->sourceApp,
             'offer_id' => $snapshot->offerId ?? $snapshot->offer->legacyProductId ?? 0,
-            'product_id' => $snapshot->productId ?? $snapshot->offer->legacyProductId ?? 0,
+            'product_id' => $productId,
+            'slug' => $slug,
+            // Storefront PDP path for mini-cart / cart chrome — never fall back to /cart.
+            'url' => $this->storefrontProductUrl($slug, $productId),
             'split_key' => trim($snapshot->splitKey) ?: 'default',
             'legal_entity' => trim($snapshot->legalEntity) ?: 'default',
             'requires_shipping' => $snapshot->requiresShipping,
@@ -1793,12 +1798,44 @@ final class CartService
                 if ($snapshot->stock !== null) {
                     $item['stock'] = $snapshot->stock;
                 }
+                $slug = strtolower(trim($snapshot->slug));
+                $productId = (int)($snapshot->productId ?? $snapshot->offer->legacyProductId ?? 0);
+                if ($productId > 0) {
+                    $item['product_id'] = $productId;
+                }
+                if ($slug !== '') {
+                    $item['slug'] = $slug;
+                }
+                $pdpUrl = $this->storefrontProductUrl(
+                    (string)($item['slug'] ?? $slug),
+                    (int)($item['product_id'] ?? $productId),
+                );
+                if ($pdpUrl !== '') {
+                    $item['url'] = $pdpUrl;
+                }
             }
         } else {
             $item['options'] = $this->presentLineOptions($item, $scope);
         }
 
         return $item;
+    }
+
+    /**
+     * Canonical storefront PDP path for cart chrome (mini-cart title / cards).
+     * Prefer slug handle; fall back to product id. Empty when neither exists — never /cart.
+     */
+    private function storefrontProductUrl(string $slug, int $productId): string
+    {
+        $slug = strtolower(trim($slug));
+        if ($slug !== '') {
+            return '/product/' . rawurlencode($slug);
+        }
+        if ($productId > 0) {
+            return '/product/' . $productId;
+        }
+
+        return '';
     }
 
     private function humanizeSnapshotMessage(CartItemSnapshot $snapshot): string

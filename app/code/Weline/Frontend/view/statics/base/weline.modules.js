@@ -39,8 +39,8 @@
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261007-minicart-dedupe-v9"],
-            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261007-minicart-dedupe-v9"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261007-minicart-pdp-zoom-v15"],
+            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261007-minicart-pdp-zoom-v15"],
             globalVar: "WelineMiniCartIcon",
             description: "迷你购物车图标与抽屉"
         },
