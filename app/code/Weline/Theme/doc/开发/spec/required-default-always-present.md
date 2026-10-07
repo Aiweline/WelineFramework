@@ -25,7 +25,7 @@
 
 - Bake / Materializer：布局文件 + 编辑信息 + required 默认注入 → 固定模板；跳过 `user_deleted`。
 - 注入收集后：`rebakeAfterInjectionCollect` 刷新涉及布局（全主题）。
-- 请求期：选择派生或原始模板，复用普通 Template/Taglib/语言 `com_*`；正常命中不从数据库重播种部件位置，禁止 Overlay 替代固化。
+- 请求期：选择派生或原始模板，复用普通 Template/Taglib/语言 `com_*`；正常命中不从数据库重播种部件位置，禁止 Overlay 替代固化。指纹/必装过期时走 `ThemeLayoutEntityRequestSolidifyGate`：**异步队列重固** + 期间回落原模板（同 serial_key 串行；异 layout Fiber 并发）。
 - XOR：拥有模块自选 `placement=injection` + 空槽，或 `placement=layout` 内嵌；Theme 不得代持外模块主内容 required 注入。
 
 ## UC

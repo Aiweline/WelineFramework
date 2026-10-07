@@ -650,6 +650,54 @@ final class ThemeLayoutEntityBakeCoordinator
         });
     }
 
+    /**
+     * Request/queue solidify: bake one layout for an explicit version id (formal path).
+     * Used when selection points at a row that still needs sealing / package-defaults materialization.
+     */
+    public function rematerializeVersionPageAt(
+        int $themeId,
+        string $scope,
+        int $versionId,
+        string $pageType,
+        string $layoutOption = 'default',
+        string $area = 'frontend',
+        string $storeMode = 'normal',
+    ): string {
+        if ($themeId < 1 || $versionId < 1 || trim($pageType) === '') {
+            return '';
+        }
+        $identity = $this->resolveBakeIdentity($themeId, $scope, true, $versionId, $area, $storeMode);
+        return ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $pageType, $layoutOption): string {
+            $version = $this->loadVersion($identity);
+            $head = $this->snapshotService()->head($identity);
+            $descriptor = json_decode((string)($head['package_default_json'] ?? '{}'), true);
+            if ($identity->contentRevision < 1 || $head === null || empty($descriptor['current_package_defaults'])) {
+                $initial = $version->getContentRevision() < 1;
+                if ($initial) {
+                    $version->setContentRevision(1)->save();
+                }
+                $identity = $version->toVersionIdentity()->withVersion(
+                    $version->getVersionId(),
+                    'formal',
+                    max(1, (int)$version->getContentRevision()),
+                );
+                $this->snapshotService()->captureCurrent(
+                    $version,
+                    $this->context($identity, $pageType, $layoutOption, 'global', null),
+                    $initial,
+                );
+                $identity = $version->toVersionIdentity()->withVersion(
+                    $version->getVersionId(),
+                    'formal',
+                    max(1, (int)$version->getContentRevision()),
+                );
+            }
+            $this->publish($identity, $this->candidateForIdentity($identity, $pageType, $layoutOption));
+            $path = $this->paths()->pageLayoutPhtml($identity, $pageType, $layoutOption);
+            return is_file($path) ? $path : '';
+        });
+    }
+
     private function existingPageTargets(ThemeVersionIdentity $identity): array
     {
         $root = $this->paths()->versionModeDir($identity) . 'pages';

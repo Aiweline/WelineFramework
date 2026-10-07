@@ -21,7 +21,9 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\View\Template;
+use Weline\Theme\Api\DefaultThemeInterface;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\ThemeModeResolver;
@@ -422,7 +424,62 @@ class ControllerFetchFileBefore implements ObserverInterface
             // Select a normal source snapshot; original layout is the fallback when no derived source is needed.
             $solidifiedExecutablePath = null;
             $usedSolidifiedControllerTemplate = false;
-            if ($area === 'frontend' && (int)$themeId > 0 && \trim((string)$layoutType) !== '') {
+            $layoutEntityThemeId = 0;
+            $forceOriginalSolidifyGate = false;
+            if ($area === 'frontend') {
+                try {
+                    $layoutEntityThemeId = ObjectManager::getInstance(DefaultThemeInterface::class)
+                        ->resolveLayoutEntityCatalogThemeId($theme);
+                } catch (\Throwable) {
+                    $layoutEntityThemeId = (int)$themeId > 0 ? (int)$themeId : 0;
+                }
+            }
+            // Async solidify gate: stale/pending → enqueue + original template (do not read old derived).
+            if ($area === 'frontend' && $layoutEntityThemeId > 0 && \trim((string)$layoutType) !== '') {
+                try {
+                    $editorMode = \trim((string)$request->getParam('editor_mode', ''));
+                    $isEditorOrPreview = ($editorMode === '1' || \strtolower($editorMode) === 'true');
+                    if (!$isEditorOrPreview) {
+                        try {
+                            $isEditorOrPreview = ObjectManager::getInstance(
+                                \Weline\Theme\Service\PreviewTokenService::class,
+                            )->isPreviewMode();
+                        } catch (\Throwable) {
+                            $isEditorOrPreview = false;
+                        }
+                    }
+                    if (!$isEditorOrPreview) {
+                        /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRequestSolidifyGate $solidifyGate */
+                        $solidifyGate = ObjectManager::getInstance(
+                            \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityRequestSolidifyGate::class,
+                        );
+                        $storeMode = 'normal';
+                        try {
+                            $identity = RequestContext::scopeIdentity();
+                            if ($identity !== null) {
+                                $mode = \trim((string)($identity->storeMode ?? ''));
+                                if ($mode !== '') {
+                                    $storeMode = $mode;
+                                }
+                            }
+                        } catch (\Throwable) {
+                            // keep normal
+                        }
+                        $decision = $solidifyGate->evaluate(
+                            $layoutEntityThemeId,
+                            (string)$area,
+                            (string)$scope,
+                            $storeMode,
+                            (string)$layoutType,
+                            (string)($layoutOption ?: 'default'),
+                        );
+                        $forceOriginalSolidifyGate = (bool)($decision['use_original_template'] ?? false);
+                    }
+                } catch (\Throwable $gateError) {
+                    Env::log_error('theme/request_solidify_gate', $gateError->getMessage());
+                }
+            }
+            if ($area === 'frontend' && $layoutEntityThemeId > 0 && \trim((string)$layoutType) !== '' && !$forceOriginalSolidifyGate) {
                 try {
                     if (!$didPerformanceLoad) {
                         ThemeData::setCurrentTheme($theme);
@@ -435,7 +492,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                     $sourceTargets = $this->resolveVirtualLayoutTargets($request);
                     $sourceTarget = $sourceTargets[0] ?? ['target_type' => 'global', 'target_id' => 0];
                     $solidifiedExecutablePath = $solidifiedResolver->resolveExecutableLayoutPath(
-                        (int)$themeId,
+                        $layoutEntityThemeId,
                         (string)$layoutType,
                         (string)$layoutOption,
                         (string)$area,
@@ -443,6 +500,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                         (int)$sourceTarget['target_id'],
                     );
                     // 无固化物：不在热路径强造 bake（msg-3：双无用原布局）；升级/编辑/注入收集才 bake。
+                    // 指纹过期由 RequestSolidifyGate 入队异步重固，本请求已强制原模板。
                     if (\is_string($solidifiedExecutablePath) && $solidifiedExecutablePath !== '' ) {
                         $usedSolidifiedControllerTemplate = true;
                         \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPublishedSlotHost
@@ -467,7 +525,13 @@ class ControllerFetchFileBefore implements ObserverInterface
                     $usedSolidifiedControllerTemplate = false;
                 }
             }
-
+            $this->recordSolidifiedLayoutSelection(
+                $usedSolidifiedControllerTemplate,
+                $solidifiedExecutablePath,
+                $layoutEntityThemeId,
+                (int)$themeId,
+                (string)$layoutType,
+            );
             $virtualLayout = null;
             $virtualLayoutFilePath = null;
             $resolvedLayoutPath = null;
@@ -1378,6 +1442,42 @@ class ControllerFetchFileBefore implements ObserverInterface
     /**
      * deploy=dev 时记录本次请求解析到的布局，便于对照「实际命中的 layout」与 header/footer 链路。
      */
+    private function recordSolidifiedLayoutSelection(
+        bool $selected,
+        ?string $executablePath,
+        int $layoutEntityThemeId,
+        int $displayThemeId,
+        string $layoutType,
+    ): void {
+        if (!RequestLifecycleTrace::isEnabled()) {
+            return;
+        }
+        $fallbackReason = '';
+        if (!$selected) {
+            if ($layoutEntityThemeId < 1) {
+                $fallbackReason = 'no_layout_entity_theme_id';
+            } elseif ($executablePath === null || $executablePath === '') {
+                $fallbackReason = 'no_sealed_page_source';
+            } else {
+                $fallbackReason = 'unknown';
+            }
+        }
+        RequestLifecycleTrace::recordSpan(
+            'theme.layout.solidified_selection',
+            0.0,
+            'theme',
+            null,
+            [
+                'outcome' => $selected ? 'solidified_selected' : 'fallback_original',
+                'layout_entity_theme_id' => $layoutEntityThemeId,
+                'display_theme_id' => $displayThemeId,
+                'layout_type' => $layoutType,
+                'executable_path' => is_string($executablePath) ? $executablePath : '',
+                'fallback_reason' => $fallbackReason,
+            ],
+        );
+    }
+
     private function logThemeLayoutResolved(
         DataObject $eventData,
         string $contentTemplate,
