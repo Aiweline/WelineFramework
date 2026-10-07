@@ -96,10 +96,31 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 |------|------|
 | 把**可复用、应约束后续工作**的用户立场判为 **知识（学习意图）**；一次性交付任务判为 **需求**；改框架架构/策略的需求落地后可再沉淀为知识候选 | 把所有闲聊当知识，或把明确的长期规矩当一次性需求后忘掉 |
 | Cursor/Codex 学习 Hook 写入 Learning SQLite；`prepare_project.agent_guidance.learning_conflicts` 与 `resolve_task_context.rules`（validated / contested / contradiction）视为项目记忆 | 静默覆盖已 validated / contested 知识或未关闭 contradiction |
-| 改动将与既有知识冲突时：**停工汇报**（旧规则 vs 新要求、≥2 选项、建议），等用户决策 | 未汇报、未决策就按新说法改掉旧知识 |
-| 用户确认知识后用 `learningctl` 记录证据；用户取代时标 contested/revised 并等决策后再动 | 内容运营技能回合仍套用本门禁 |
+| 改动将与既有知识冲突时：**停工汇报**并等用户决策 | 未汇报、未决策就按新说法改掉旧知识 |
+| 用户确认知识后用 `learningctl` 记录证据；用户取代时标 contested/revised 并等决策后再动 | 把内容运营技能回合也当成可静默覆盖知识的借口 |
 
-权威：`HardConstraintsCatalog::mcpOperationalRules()` → `session_learning_knowledge_conflict_gate`。
+### 6.1 冲突汇报必须让人能裁决（硬 · 裁决可读）
+
+SessionStart / `prepare_project.agent_guidance.learning_conflicts` 出现 `user_decision_required`，或 Agent 需要用户拍板知识冲突时，**每一条**冲突面向用户必须用白话写清，读完就能选，不必自己查库。
+
+**每条必含：**
+
+1. **争议主题**（一句）  
+2. **甲方主张**：经验标题 + `reusable_rule` 白话（可附 experience_id）  
+3. **乙方主张**：同上  
+4. **为何被标成冲突**：真对立 / 近重复误配 / 与当前任务相撞  
+5. **选 A / B 的影响**  
+6. **≥2 个可执行选项 + 推荐**
+
+**禁止：**
+
+- 只丢 `contradiction_id` / `experience_id`  
+- 只报计数（如「contested=2, open_contradictions=2」）  
+- 只写「有冲突，请裁决」却不说争什么  
+
+`learning_conflicts` 载荷里已有 `left_title` / `left_rule` / `right_title` / `right_rule`（及 `user_facing_report_schema`），汇报时必须展开给人看，不得原样甩 JSON 给用户。
+
+权威：`HardConstraintsCatalog` → `session_learning_knowledge_conflict_gate`；`prepare_project.agent_guidance.learning_conflicts`。
 
 ## 7. 工作区不可丢弃（`preserve_dirty_workspace`，严重）
 

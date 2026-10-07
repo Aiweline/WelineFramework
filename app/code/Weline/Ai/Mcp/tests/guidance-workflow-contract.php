@@ -1329,6 +1329,38 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'theme.js')),
         false,
     ),
+    'hard_constraints include theme_mechanism_not_foreign_content' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_mechanism_not_foreign_content'
+            && str_contains((string) ($rule['summary'] ?? ''), 'ABSTRACT')
+            && str_contains((string) ($rule['summary'] ?? ''), 'MECHANISM')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'FORBID')
+                || str_contains((string) ($rule['summary'] ?? ''), '禁止'))
+            && str_contains((string) ($rule['summary'] ?? ''), 'owning')),
+        false,
+    ),
+    'hard_constraints include theme_design_must_inherit_not_mutate_source_widgets' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_design_must_inherit_not_mutate_source_widgets'
+            && str_contains((string) ($rule['summary'] ?? ''), 'design_theme')
+            && str_contains((string) ($rule['summary'] ?? ''), 'app/design')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'FORBID')
+                || str_contains((string) ($rule['summary'] ?? ''), '禁止'))
+            && str_contains((string) ($rule['summary'] ?? ''), 'widgets')),
+        false,
+    ),
+    'mcp_operational include session_learning_knowledge_conflict_gate report schema' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'session_learning_knowledge_conflict_gate'
+            && str_contains((string) ($rule['summary'] ?? ''), 'user-facing conflict report')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBID reporting only')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'options')
+                || str_contains((string) ($rule['summary'] ?? ''), '推荐'))),
+        false,
+    ),
     'hard_constraints include analytics_engineer_for_visitor_work' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)

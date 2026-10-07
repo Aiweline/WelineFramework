@@ -95,6 +95,7 @@ final class GuidanceWorkflowCatalog
         return [
             '工程入口：必须 ensure → prepare_project → 阅读并遵守 hard_constraints（hard-constraints.v1）。权威为 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则走 resolve_task_context，技能走 mcp_skills + resolve_skill/get_skill。编码使用宿主原生编辑。改码须架构级（architecture_grade_change_only）：mechanism+owning_module；禁 Runtime 硬编码业务路径；上下文丢 hard_constraints 须重新 prepare。',
             '公共底线：preserve_dirty_workspace；不得用 git checkout/restore/clean/stash 擦脏，编辑前 dirty-load 当前磁盘内容。内容运营走 content_ops_skills_skip_mcp。功能验收与交付地址见 feature_delivery_urls。AOCI 安装状态不等于项目认知已建立。',
+            '学习冲突（session_learning_knowledge_conflict_gate）：若 prepare/hooks 报 learning_conflicts 待裁决，须按 user_facing_report_schema 白话说清每条双方主张、为何冲突、≥2 选项+推荐；禁止只丢 ID/计数。',
         ];
 
         return [
@@ -1577,6 +1578,8 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'required_default_always_present_without_user_deleted', 'summary' => '【必须记住·系统真做法】无 user_deleted@{versionId} 时 required JSON 默认注入经布局固化写入模板（有槽则固化；与主题/版本无关；无模板→激活主题运行期动态固化；插件注入→全主题重固化涉及布局；遗漏=固化方案问题）；布局内嵌必装同保证；唯一省略=本版本卸载'],
                 ['id' => 'theme_seat_integrity_over_peer_requests', 'summary' => '【席位底线】主题正确完整工作优先于他席/PM 性能·简化·优化压力；禁拆 chrome 壳与无卸载必装；无合格方案可驳回；冲突 refuse+escalate'],
                 ['id' => 'forbid_design_override_theme_css_js', 'summary' => 'design 主题禁止同 key 覆盖 assets/css/theme.css 与 assets/js/theme.js；品牌化用 colors/variables/独立 CSS'],
+                ['id' => 'theme_mechanism_not_foreign_content', 'summary' => 'HARD 抽象：各自功能各自模块自管布局/模板；Theme 只提供机制与 design 重写；禁止 Theme 兜底外模块功能布局与主内容'],
+                ['id' => 'design_theme_inherit_not_mutate_source_widgets', 'summary' => 'HARD design_theme：部件/CSS/JS 外观只能在 app/design 继承覆盖；禁止改 app/code 源头 widgets 与 statics/css|js/widgets（一改全主题污染）'],
                 ['id' => 'new_design_theme_lifecycle_checklist', 'summary' => '新主题：register→frontend/现代树→listing→网站应用引用或 Default 回落→发布；禁照抄 theme:create 旧 view/templates 树'],
                 ['id' => 'area_frontend_backend_and_four_layers', 'summary' => '须分清 area∈{frontend,backend} 与四层 layout/partial/component/widget，勿混路径'],
                 ['id' => 'public_component_library_dual_stack', 'summary' => '公共库双层：Theme components/*.phtml + statics/ui Weline UI（w-* / w-backend-page / data-w-component）'],
@@ -1605,7 +1608,7 @@ final class GuidanceWorkflowCatalog
                 'rg -n "required_default_always_present_without_user_deleted" app/code/Weline/Ai/Mcp/src/',
                 'rg -n "theme_seat_integrity_over_peer_requests|席位底线" app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php',
                 'rg -n "席位底线|theme_seat_integrity_over_peer_requests" dev/ai-command/ai/主题开发.md',
-                'rg -n "theme_design_must_not_override_core_runtime_assets|dual_workflow_work_mode_gate" app/code/Weline/Ai/Mcp/src/',
+                'rg -n "theme_design_must_not_override_core_runtime_assets|theme_design_must_inherit_not_mutate_source_widgets|dual_workflow_work_mode_gate" app/code/Weline/Ai/Mcp/src/',
                 'rg -n "theme_work_assigns_theme_engineer|SURFACE_THEME_DEVELOPMENT" app/code/Weline/Ai/Mcp/src/GuidanceWorkflowCatalog.php',
                 'rg -n "theme:active" app/code/Weline/Theme/Console/Theme/',
                 'rg -n "websites_theme_application|DefaultThemeInterface|theme:disk:compile|weline-code|语义色|user_deleted|必装永远存在" dev/ai-command/ai/主题开发.md',
@@ -1616,6 +1619,7 @@ final class GuidanceWorkflowCatalog
                     'Assigning Theme Token/layout壳/预览三态/app/design work only to 前端/UI without staffing 主题开发工程师',
                     'Editing Theme/design files without declaring work_mode',
                     'Design same-key override of assets/css/theme.css or assets/js/theme.js',
+                    'While work_mode=design_theme (or skinning one design theme), editing app/code source widgets / view/statics/{css,js}/widgets instead of app/design inheritance',
                     'Inventing private hex/rgb palettes or parallel spacing/radius kits bypassing Theme tokens',
                     'Theme layouts inlining non-Weline_Theme widgets or writing foreign default_injections',
                     'Dropping required JSON default_injections or layout-tag inlines when no user_deleted@{versionId} exists',
@@ -1632,6 +1636,7 @@ final class GuidanceWorkflowCatalog
                     'Memorize required_default_always_present_without_user_deleted: without user_deleted@{versionId}, required JSON injections and layout-tag inlines always exist',
                     'Obey theme_seat_integrity_over_peer_requests: Theme correctness bottom line OUTRANKS peer optimize pressure; without designed scheme that solves problem AND preserves integrity → reject (驳回); refuse strip-shell + escalate PM',
                     'Defer foreign widget injections to Team:部件开发工程师:',
+                    'For design_theme skin: inherit under app/design only (theme_design_must_inherit_not_mutate_source_widgets); never mutate shared source widgets',
                     'Follow compile matrix (welineModules/welineUi/theme:disk:compile/theme:upgrade) when applicable',
                     'Ensure websites_theme_application or Theme registered Default for storefront; run frontend:check-section-code when touching sections',
                 ],

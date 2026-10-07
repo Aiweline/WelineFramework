@@ -4,6 +4,8 @@
 >
 > **先判 `work_mode`（硬）**：维护默认主题 / 新开 design / Theme PHP 运行时是三件事。工程团队主题席须先声明 `work_mode∈{default_theme,design_theme,theme_module_runtime}` 再落文件——完整双模式手册见 [主题开发.md](../../../../../../dev/ai-command/ai/主题开发.md)；新建 design 操作摘要见 [theme-inheritance「新建设计主题」](../theme-inheritance-and-file-conventions.md#新建设计主题操作摘要)。
 >
+> **`design_theme` 继承硬禁（`theme_design_must_inherit_not_mutate_source_widgets`）**：已有 `app/design/{Vendor}/{theme}` 时，改部件 CSS/JS/PHTML 外观**只能**在 design 树继承覆盖；**禁止**改 `app/code` 源头部件（一改影响所有使用该部件的主题）。
+>
 > 适用范围：WelineFramework 当前主题开发、布局开发、部件开发、主题覆盖、前端请求链路、Taglib 与可视化编辑器相关开发。
 >
 > MCP / AI 侧将本指南视为 **`frontend_development`（前端开发规范）** 表面；其中「前台 section 身份属性（`weline-code`）」只是规范条目之一，不是独立技能名。
@@ -348,17 +350,27 @@ component 负责：
 - `@widget.*`：部件元数据
 - `@param`：部件配置字段
 
+### 6.0 Theme 只负责机制（严重 · 抽象通则）
+
+**各自功能各自模块自己管理布局与模板；`Weline_Theme` 只提供主题机制（含让 `app/design` 主题继承/重写），禁止 Theme 兜底其它业务模块的功能布局与主内容模板。**（MCP：`theme_mechanism_not_foreign_content`）
+
+- **负责**：布局发现与 design 覆盖、slot 宿主、固化 / 默认注入**运行时**、chrome/partial、Theme **自有**部件与皮肤 Token；给外国模块预留**空扩展槽**（槽在 Theme，注入声明在拥有模块）。
+- **不负责**：任意业务模块 path 页的主内容与功能布局（登录/商品/结账等只是举例，规则是模块边界通则）。
+- **禁止兜底 / 空挂**：不得用 Theme **required** `default_injections`、Theme 树内「代管」模板，去填外模块布局主内容或把外模块功能塞进 Theme。
+- **正确**：拥有模块自管布局 + 本模块 content / `fetch`；外观定制走 design **继承重写**；其它模块向 Theme chrome 空槽自声明注入（如 Visitor → `header-pixel-bootstrap`）。Theme 可选舞台部件可保留编辑器拖拽，但 **`default_injections` 必须为空**，不得成为店面有无业务主内容的前提。
+- 权威短规格：[theme-mechanism-not-foreign-content.md](./spec/theme-mechanism-not-foreign-content.md)。
+
 重点规则：
 
 - **硬规则（本模块才可标签内嵌）**：`<w:widget>` / `fetch(.../widgets/...)` **只能**引用**本模块**部件。Theme 布局仅可内嵌 `Weline_Theme`；Customer/Product 等自有布局亦同理——禁止布局标签拉第三方部件。
 - **同模块 XOR**：同一模块下，布局/宿主已用标签内嵌某部件 ↔ **禁止**再在该部件 JSON 写 `default_injections`（二选一，否则会重复出现两个）。布局已提供 → 清空 JSON 并标 `placement=layout`；走注入 → 布局只留空 `<w:slot>` + `placement=injection`。禁止用页级 presence / 槽内 count 等运行时「只留一份」打补丁。**同码叠渲必须硬失败**（`required_default_injection_duplicate` / Seeder×placement=layout 门禁），禁止 soft-skip。门禁：`php bin/w frontend:check-required-injection-sibling-fetch`（`setup:upgrade` 致命）。
 - **固化完备（纯 PHTML）**：原布局、编辑意图与默认注入生成派生模板，落盘 **`generated/theme-layout-entities/`**；已有对应文件时优先选择，否则使用原模板，统一经过普通 Template/Taglib/语言 `com_*`。装卸、移动、参数及语言配置变更均同步重生成。固化目录仅保存 PHTML，语言差异随参数进入同一 PHTML；升级按受影响布局重建。店面不通过 Overlay 或重播种修补缺件。权威：[布局固化与默认注入.md](../布局固化与默认注入.md) §0。
-- **硬规则（跨模块禁布局互调 · 只走 JSON）**：不同模块之间 **禁止**在布局/partial 里互相 `<w:widget>` / `fetch` 调用对方部件；外国部件**只能**经拥有模块的 JSON `default_injections`（应用部件默认注入）+ 空槽进入。门禁：`php bin/w frontend:check-theme-layout-widgets`。
-- **硬规则（默认注入 · 固化进布局模板 · 必须记住）**：JSON 应用部件默认注入在**固化布局模板**时写入；只要目标槽存在且无 `user_deleted@{versionId}`，就必须固化进去——不得用激活态/版本号省略。唯一省略=人工卸载。店面遗漏 → **固化方案/触发出问题**。权威：[布局固化与默认注入.md](../布局固化与默认注入.md)。MCP：`required_default_always_present_without_user_deleted`；短规格：`doc/开发/spec/required-default-always-present.md`。
+- **硬规则（跨模块禁布局互调 · 只走 JSON）**：不同模块之间 **禁止**在布局/partial 里互相 `<w:widget>` / `fetch` 调用对方部件；外国部件**只能**经**拥有该部件的模块**的 JSON `default_injections` + 空槽进入——**不是**经 Theme 代持外模块主内容。门禁：`php bin/w frontend:check-theme-layout-widgets`。
+- **硬规则（默认注入 · 固化进布局模板 · 必须记住）**：JSON 应用部件默认注入在**固化布局模板**时写入；只要目标槽存在且无 `user_deleted@{versionId}`，就必须固化进去——不得用激活态/版本号省略。唯一省略=人工卸载。店面遗漏 → **固化方案/触发出问题**。权威：[布局固化与默认注入.md](../布局固化与默认注入.md)。MCP：`required_default_always_present_without_user_deleted`；短规格：`doc/开发/spec/required-default-always-present.md`。**前提**：注入声明落在正确拥有模块；Theme 不得用本规则把外模块主内容「合法化」空挂到自己。
 - **硬规则（固化 = 模板）**：PHTML 中的显式部件调用顺序表达布局关系，命名子槽回调表达嵌套；保留主题组件、虚拟模板与 Block 分派。运行时处理动态业务和语言选择，不读取布局配置侧车或把首次请求 HTML 当作模板。原 PHP、Hook、条件、Partial 与资源上下文保持正常模板语义。
 - **工程团队**：部件相关施工/复审分配给专席 **部件开发工程师**（MCP `widget_development` / `工程团队.md`）。
 - `position` / `page_layouts` / `slot` / `supports` 表示部件允许出现的位置和协议
-- `default_injections`：跨模块开箱进槽的**唯一合法路径**（经布局固化写入模板）；同模块若已布局内嵌则不得再写
+- `default_injections`：跨模块开箱进槽的**唯一合法路径**（经布局固化写入模板；**声明在拥有模块**）；同模块若已布局内嵌则不得再写；Theme 不得把 required 注入当作外模块 path 页主内容唯一来源
 - 全局 chrome 自有部件（全部菜单、政策链接、整页脚、FAQ）由 Theme partial/部件模板原生内嵌；不得在部件 Meta 注解保留第二份默认注入。页脚业务链接仍由各拥有模块向标准空槽注入。
 - Dashboard 注入可选 `default_view`（`DashboardView.code`）：声明后才在对应视图身份就绪时自动挂载；删除后写 `user_deleted`，手动“应用”可恢复
 - Theme 监听 `Weline_Dashboard::layout_identity_ready`，只匹配 `default_view === view_code` 做一次性补齐

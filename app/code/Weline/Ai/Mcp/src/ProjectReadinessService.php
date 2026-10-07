@@ -427,6 +427,26 @@ final class ProjectReadinessService
             $report['agent_action'] = $report['user_decision_required']
                 ? 'STOP_AND_REPORT_FOR_USER_DECISION'
                 : 'none';
+            // HARD: user must be able to adjudicate from the chat text alone (not IDs/counts).
+            $report['user_facing_report_required'] = (bool) ($report['user_decision_required'] ?? false);
+            $report['user_facing_report_schema'] = [
+                'per_conflict' => [
+                    'topic' => '争议主题（一句白话）',
+                    'side_a' => '甲方主张：标题 + reusable_rule 白话（可附 experience_id）',
+                    'side_b' => '乙方主张：同上',
+                    'why_flagged' => '为何冲突：真对立 / 近重复误配 / 与当前任务相撞',
+                    'impact' => '选 A 或 B 的影响',
+                    'options_and_recommendation' => '≥2 可执行选项 + 推荐',
+                ],
+                'forbid' => [
+                    'only_ids',
+                    'only_counts',
+                    'bare_有冲突请裁决',
+                ],
+            ];
+            $report['agent_report_instruction'] = $report['user_decision_required']
+                ? '向用户汇报学习冲突时必须按 user_facing_report_schema 逐条说清楚主张与选项；禁止只丢 contradiction_id / experience_id 或 contested 计数。'
+                : 'none';
 
             return $report;
         } catch (Throwable) {
