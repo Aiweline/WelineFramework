@@ -1889,14 +1889,26 @@ class Template extends DataObject implements RequestLocalInterface
         }
 
         $tone = $totalMs >= 500.0 ? '#b91c1c' : ($totalMs >= 100.0 ? '#c2410c' : '#a16207');
+        $totalLabel = \number_format($totalMs, 1, '.', '');
         $dbPart = \sprintf('db %sms(%dq)', \number_format($io['db_duration_ms'], 1, '.', ''), $io['db_span_count']);
         $wlsPart = \sprintf('wls %sms(%d)', \number_format($io['wls_duration_ms'], 1, '.', ''), $io['wls_span_count']);
         $phpPart = \sprintf('php %sms', \number_format($io['php_ms'], 1, '.', ''));
         $bytesLabel = $this->formatTemplatePerfBytes($bytes);
+        // 剪贴板用完整路径 + 全套指标（展示仍用 short）。
+        $copyText = \sprintf(
+            '⏱ %s · total %sms · %s · %s · %s · %s',
+            $path,
+            $totalLabel,
+            $dbPart,
+            $wlsPart,
+            $phpPart,
+            $bytesLabel
+        );
         $badge = \sprintf(
-            '<div class="wls-tpl-perf" data-wls-tpl-file="%s" data-wls-tpl-ms="%s" data-wls-tpl-db-ms="%s" data-wls-tpl-php-ms="%s" data-wls-tpl-wls-ms="%s" data-wls-tpl-db-q="%d" data-wls-tpl-bytes="%d" style="position:relative;z-index:2147483000;display:inline-block;margin:2px 0;padding:2px 8px;border-radius:4px;background:%s;color:#fff;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;box-shadow:0 1px 4px rgba(0,0,0,.25);max-width:100%%;word-break:break-all;">⏱ %s · total %sms · %s · %s · %s · %s</div>',
+            '<div class="wls-tpl-perf" role="button" tabindex="0" title="点击复制整条耗时信息" data-wls-tpl-copy="%s" data-wls-tpl-file="%s" data-wls-tpl-ms="%s" data-wls-tpl-db-ms="%s" data-wls-tpl-php-ms="%s" data-wls-tpl-wls-ms="%s" data-wls-tpl-db-q="%d" data-wls-tpl-bytes="%d" style="position:relative;z-index:2147483000;display:inline-block;margin:2px 0;padding:2px 8px;border-radius:4px;background:%s;color:#fff;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;box-shadow:0 1px 4px rgba(0,0,0,.25);max-width:100%%;word-break:break-all;cursor:pointer;user-select:none;">⏱ <span class="wls-tpl-perf__path">%s</span> · total %sms · %s · %s · %s · %s</div>',
+            \htmlspecialchars($copyText, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars($path, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
-            \htmlspecialchars(\number_format($totalMs, 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            \htmlspecialchars($totalLabel, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars(\number_format($io['db_duration_ms'], 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars(\number_format($io['php_ms'], 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars(\number_format($io['wls_duration_ms'], 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
@@ -1904,12 +1916,13 @@ class Template extends DataObject implements RequestLocalInterface
             $bytes,
             $tone,
             \htmlspecialchars($short, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
-            \htmlspecialchars(\number_format($totalMs, 1, '.', ''), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+            \htmlspecialchars($totalLabel, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars($dbPart, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars($wlsPart, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars($phpPart, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
             \htmlspecialchars($bytesLabel, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
         );
+        $badge .= $this->templatePerfOverlayCopyBootstrap();
 
         // 完整文档：插到 <body> 后，避免破坏 doctype/head。
         if (\preg_match('/<body\b[^>]*>/i', $html, $bodyMatch, \PREG_OFFSET_CAPTURE) === 1) {
@@ -1941,6 +1954,47 @@ class Template extends DataObject implements RequestLocalInterface
         }
 
         return \rtrim(\rtrim(\number_format($bytes / (1024 * 1024), 2, '.', ''), '0'), '.') . ' MB';
+    }
+
+    /**
+     * 同请求只注入一次：点击 / Enter / Space 复制整条耗时信息（完整路径 + 指标）。
+     */
+    private function templatePerfOverlayCopyBootstrap(): string
+    {
+        if (RequestContext::isInitialized()) {
+            if (RequestContext::get('view.template.overlay_copy_script') === true) {
+                return '';
+            }
+            RequestContext::set('view.template.overlay_copy_script', true);
+        }
+
+        // data-wls-tpl-perf-copy=4：版本化安装；FPC 拼进旧脚本时也能被新脚本 AbortController 覆盖。
+        return '<script data-wls-tpl-perf-copy="4">'
+            . '(function(){var VER=4;if(window.__WLS_TPL_PERF_COPY__===VER)return;window.__WLS_TPL_PERF_COPY__=VER;'
+            . 'if(window.__WLS_TPL_PERF_COPY_AC__){try{window.__WLS_TPL_PERF_COPY_AC__.abort();}catch(e0){}}'
+            . 'var ac=new AbortController();window.__WLS_TPL_PERF_COPY_AC__=ac;var sig=ac.signal;'
+            . 'function legacy(t){try{var a=document.createElement("textarea");a.value=t;a.setAttribute("readonly","");'
+            . 'a.style.cssText="position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;";'
+            . 'document.body.appendChild(a);a.focus();a.select();a.setSelectionRange(0,a.value.length);'
+            . 'var ok=document.execCommand("copy");document.body.removeChild(a);return !!ok;}catch(e){return false;}}'
+            . 'function write(t){if(navigator.clipboard&&navigator.clipboard.writeText){'
+            . 'return navigator.clipboard.writeText(t).then(function(){return true;},function(){return legacy(t);});}'
+            . 'return Promise.resolve(legacy(t));}'
+            . 'function payload(el){var t=el.getAttribute("data-wls-tpl-copy")||"";'
+            . 'if(t)return t;return String(el.innerText||el.textContent||"").replace(/\\s+/g," ").trim();}'
+            . 'function selectAll(el){try{var r=document.createRange();r.selectNodeContents(el);'
+            . 'var s=window.getSelection();s.removeAllRanges();s.addRange(r);}catch(e1){}}'
+            . 'function flash(el){var prevOutline=el.style.outline;el.title="已复制整条信息";'
+            . 'el.style.outline="2px solid #fff";setTimeout(function(){el.style.outline=prevOutline;'
+            . 'el.title="点击复制整条耗时信息";},1200);}'
+            . 'function act(el){var t=payload(el);if(!t)return;'
+            . 'write(t).then(function(ok){if(ok){flash(el);}else{selectAll(el);el.title="已选中整条信息，请按 Cmd+C / Ctrl+C 复制";}});}'
+            . 'document.addEventListener("click",function(e){var el=e.target&&e.target.closest&&e.target.closest(".wls-tpl-perf");'
+            . 'if(!el)return;e.preventDefault();act(el);},{capture:true,signal:sig});'
+            . 'document.addEventListener("keydown",function(e){if(e.key!=="Enter"&&e.key!==" ")return;'
+            . 'var el=e.target&&e.target.closest&&e.target.closest(".wls-tpl-perf");'
+            . 'if(!el)return;e.preventDefault();act(el);},{capture:true,signal:sig});'
+            . '})();</script>';
     }
 
     /**

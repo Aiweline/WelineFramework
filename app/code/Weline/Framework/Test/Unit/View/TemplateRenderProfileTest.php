@@ -173,6 +173,18 @@ final class TemplateRenderProfileTest extends TestCase
             ]
         );
         self::assertStringContainsString('class="wls-tpl-perf"', $out);
+        self::assertStringContainsString('role="button"', $out);
+        self::assertStringContainsString('title="点击复制整条耗时信息"', $out);
+        self::assertStringContainsString('cursor:pointer', $out);
+        self::assertStringContainsString('class="wls-tpl-perf__path"', $out);
+        self::assertStringContainsString('data-wls-tpl-copy="', $out);
+        self::assertStringContainsString(
+            '⏱ app/code/Weline/Product/view/templates/frontend/widgets/com_recently-viewed.phtml · total 640.5ms · db 400.0ms(12q) · wls 25.0ms(2) · php 215.5ms · 159.2 KB',
+            $out
+        );
+        self::assertStringContainsString('data-wls-tpl-perf-copy="4"', $out);
+        self::assertStringContainsString('function legacy', $out);
+        self::assertStringContainsString('data-wls-tpl-copy', $out);
         self::assertStringContainsString('data-wls-tpl-ms="640.5"', $out);
         self::assertStringContainsString('data-wls-tpl-db-ms="400.0"', $out);
         self::assertStringContainsString('data-wls-tpl-php-ms="215.5"', $out);
