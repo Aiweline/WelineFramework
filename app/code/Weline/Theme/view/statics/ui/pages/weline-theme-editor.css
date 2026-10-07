@@ -1840,8 +1840,7 @@ body:has(.theme-editor-container) .w-backend-main {
     z-index: 10;
 }
 
-.preview-loading::after {
-    content: '加载预览...';
+.preview-loading-text {
     color: var(--w-theme-editor-text-secondary);
     font-size: 13px;
 }

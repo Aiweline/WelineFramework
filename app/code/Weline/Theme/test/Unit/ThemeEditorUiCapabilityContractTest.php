@@ -331,6 +331,9 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString("data.type === 'link-block'", $engine);
         self::assertStringContainsString('bindNolinkClickGuard', $engine);
         self::assertStringContainsString('bindEditorIdentityHrefCarry', $engine);
+        self::assertStringContainsString('bindCanvasNavigatingSignal', $engine);
+        self::assertStringContainsString('isCanvasPageNavigationAnchor', $engine);
+        self::assertStringContainsString("postPreviewMessage('canvas-navigating'", $engine);
         self::assertStringContainsString('appendEditorIdentityToHref', $engine);
         self::assertStringContainsString('rewriteStorefrontAnchors', $engine);
         self::assertStringContainsString('data-w-editor-identity-carried', $engine);
@@ -357,6 +360,11 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         }
         self::assertStringContainsString('function isNativeStorefrontActivationTarget(', $editor);
         self::assertStringContainsString('Header account / dropdown anchors are real page links', $editor);
+        self::assertStringContainsString('id="previewLoadingText"', $template);
+        self::assertStringContainsString('preview-loading-text', $template);
+        self::assertStringContainsString('function showCanvasNavigatingFeedback(', $editor);
+        self::assertStringContainsString("case 'canvas-navigating'", $editor);
+        self::assertStringContainsString("window.__('正在跳转新页面…')", $editor);
 
         self::assertStringContainsString('data-w-editor-selection-target="slot"', $styles);
         self::assertStringContainsString('data-w-editor-selection-target="widget"', $styles);

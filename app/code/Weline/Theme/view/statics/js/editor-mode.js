@@ -377,6 +377,104 @@
         rewriteStorefrontAnchors(document);
     }
 
+    function normalizeCanvasNavigationPath(path) {
+        return String(path || '/').replace(/\/+$/, '') || '/';
+    }
+
+    /**
+     * True when clicking this anchor will leave the current canvas document
+     * (full page / route change). Fragment-only and shopper flyout targets skip.
+     */
+    function isCanvasPageNavigationAnchor(link) {
+        if (!link || typeof link.getAttribute !== 'function') {
+            return false;
+        }
+        if (isLinkBlockEnabled()) {
+            return false;
+        }
+        if (isShopperRuntimeEventTarget(link) || link.closest('.slot-toolbar, .widget-hover-actions')) {
+            return false;
+        }
+        if (link.hasAttribute('download')) {
+            return false;
+        }
+        const targetAttr = String(link.getAttribute('target') || '').trim().toLowerCase();
+        if (targetAttr === '_blank') {
+            return false;
+        }
+        const href = String(link.getAttribute('href') || '').trim();
+        if (href === '' || href === '#') {
+            return false;
+        }
+        const lower = href.toLowerCase();
+        if (
+            lower.startsWith('#')
+            || lower.startsWith('javascript:')
+            || lower.startsWith('mailto:')
+            || lower.startsWith('tel:')
+            || lower.startsWith('data:')
+        ) {
+            return false;
+        }
+        try {
+            const url = new URL(href, window.location.href);
+            const current = new URL(window.location.href);
+            if (
+                url.origin === current.origin
+                && normalizeCanvasNavigationPath(url.pathname) === normalizeCanvasNavigationPath(current.pathname)
+                && url.search === current.search
+            ) {
+                // Same path+query: only hash / account-flyout in-page activation — not a canvas page change.
+                if (url.hash !== '' || link.hasAttribute('data-account-nav-link')) {
+                    return false;
+                }
+                // Identical URL click usually no-ops; avoid false busy flash.
+                if (url.hash === current.hash) {
+                    return false;
+                }
+            }
+        } catch (error) {
+            // Malformed href still may navigate; announce so ops get feedback.
+        }
+        return true;
+    }
+
+    /**
+     * Tell the parent Theme Editor that the canvas is about to navigate,
+     * so #previewLoading can show「正在跳转」instead of a dead silent iframe.
+     */
+    function bindCanvasNavigatingSignal() {
+        if (document.body._canvasNavigatingSignalBound) {
+            return;
+        }
+        document.body._canvasNavigatingSignalBound = true;
+        document.addEventListener('click', function(e) {
+            if (e.defaultPrevented) {
+                return;
+            }
+            // Middle-click / modified clicks open other contexts — do not flash canvas overlay.
+            if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+                return;
+            }
+            // Language switch is parent-driven (preventDefault + locale-change); skip busy flash.
+            if (typeof isEditorLanguageOption === 'function' && isEditorLanguageOption(e.target)) {
+                return;
+            }
+            const link = e.target && e.target.closest && e.target.closest('a[href]');
+            if (!isCanvasPageNavigationAnchor(link)) {
+                return;
+            }
+            rewriteAnchorEditorIdentity(link);
+            let href = '';
+            try {
+                href = new URL(String(link.getAttribute('href') || ''), window.location.href).toString();
+            } catch (error) {
+                href = String(link.getAttribute('href') || '');
+            }
+            postPreviewMessage('canvas-navigating', { href: href });
+        }, true);
+    }
+
     function applyInteractionMode(mode) {
         interactionMode = mode === 'preview' ? 'preview' : 'edit';
         document.documentElement.dataset.wEditorInteraction = interactionMode;
@@ -2211,6 +2309,7 @@
         bindSlotHoverTargetEvents();
         bindNolinkClickGuard();
         bindEditorIdentityHrefCarry();
+        bindCanvasNavigatingSignal();
         document.querySelectorAll('[data-wslot]').forEach(initSingleSlot);
 
         // 初始化不在插槽内的独立占位符

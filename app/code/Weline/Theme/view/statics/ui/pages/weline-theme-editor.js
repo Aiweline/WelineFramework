@@ -6557,6 +6557,7 @@
                 cancelPreviewDragSession();
                 if (elements.previewLoading) {
                     elements.previewLoading.classList.add('hidden');
+                    resetPreviewLoadingMessage();
                 }
 
                 // 预览 load 时若部件库尚未就绪则兜底初始化（正常路径已在 deferWidgetLibraryLoad 并行发起）
@@ -7965,6 +7966,10 @@
             }
             case 'preview-exit':
                 void handlePreviewExitFromIframe();
+                break;
+            case 'canvas-navigating':
+                // iframe <a> page change: show busy overlay immediately so ops know it is not stuck.
+                showCanvasNavigatingFeedback(data.href || '');
                 break;
             case 'widget-health': {
                 const severity = String(data.severity || 'warning');
@@ -21902,6 +21907,42 @@
         } catch (error) {
             return String(urlString || '');
         }
+    }
+
+    function resolvePreviewLoadingTextEl() {
+        return elements.previewLoadingText
+            || elements.previewLoading?.querySelector?.('.preview-loading-text')
+            || null;
+    }
+
+    function resetPreviewLoadingMessage() {
+        const textEl = resolvePreviewLoadingTextEl();
+        if (textEl) {
+            textEl.textContent = window.__('加载预览...');
+        }
+        if (elements.previewLoading) {
+            delete elements.previewLoading.dataset.loadingReason;
+            delete elements.previewLoading.dataset.navigatingHref;
+        }
+    }
+
+    /**
+     * Canvas iframe is navigating to another storefront page (clicked <a>).
+     * Show the existing preview overlay with an explicit「正在跳转」cue.
+     */
+    function showCanvasNavigatingFeedback(href) {
+        if (!elements.previewLoading) {
+            return;
+        }
+        const textEl = resolvePreviewLoadingTextEl();
+        if (textEl) {
+            textEl.textContent = window.__('正在跳转新页面…');
+        }
+        elements.previewLoading.dataset.loadingReason = 'canvas-navigating';
+        if (href) {
+            elements.previewLoading.dataset.navigatingHref = String(href);
+        }
+        elements.previewLoading.classList.remove('hidden');
     }
 
     function isNativeStorefrontActivationTarget(target) {
