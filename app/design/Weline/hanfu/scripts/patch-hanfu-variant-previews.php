@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * 禁止把商品图同步到全局 EAV 选项；EAV 只提供「可填图」能力与抽象色值。
  *
- * Usage: php app/code/Weline/Product/scripts/patch-hanfu-variant-previews.php [website_id]
+ * Usage: php app/design/Weline/hanfu/scripts/patch-hanfu-variant-previews.php [website_id]
  */
 
 use Weline\Framework\Manager\ObjectManager;

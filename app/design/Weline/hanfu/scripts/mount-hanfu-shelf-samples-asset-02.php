@@ -6,7 +6,7 @@ declare(strict_types=1);
  * WO-BUILD-ASSET-02：将货架样张轮换挂到首页可见核心 SKU 主图（replaceContent）。
  * 禁 Ollama；不再生图。样张源：pub/media/catalog/hanfu/r2/shelf-samples/
  *
- * Usage: php app/code/Weline/Product/scripts/mount-hanfu-shelf-samples-asset-02.php [--dry-run]
+ * Usage: php app/design/Weline/hanfu/scripts/mount-hanfu-shelf-samples-asset-02.php [--dry-run]
  */
 
 use Weline\FileManager\Api\Data\FileAccessContext;

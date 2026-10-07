@@ -6,7 +6,7 @@ declare(strict_types=1);
  * 长安汉服（website_id=0）全部商品价格 ×10（amount_minor）。
  *
  * Usage:
- *   php app/code/Weline/Product/scripts/scale-hanfu-prices-x10.php [--dry-run]
+ *   php app/design/Weline/hanfu/scripts/scale-hanfu-prices-x10.php [--dry-run]
  */
 
 use Weline\Framework\Manager\ObjectManager;

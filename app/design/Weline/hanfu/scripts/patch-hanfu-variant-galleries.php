@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * 校对汉服规格图库：按颜色/类型绑定真实商品图，移除淘宝店铺混图。
  *
- * Usage: php app/code/Weline/Product/scripts/patch-hanfu-variant-galleries.php [website_id]
+ * Usage: php app/design/Weline/hanfu/scripts/patch-hanfu-variant-galleries.php [website_id]
  */
 
 use Weline\Eav\Model\EavAttribute;

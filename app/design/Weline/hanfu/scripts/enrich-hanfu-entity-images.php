@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * 下载公开可核验的品牌主图 / 供应商展厅图，写入 pub/media 并回填 logo_url / image_url。
  *
- * Usage: php app/code/Weline/Product/scripts/enrich-hanfu-entity-images.php [website_id]
+ * Usage: php app/design/Weline/hanfu/scripts/enrich-hanfu-entity-images.php [website_id]
  */
 
 use Weline\Framework\Manager\ObjectManager;

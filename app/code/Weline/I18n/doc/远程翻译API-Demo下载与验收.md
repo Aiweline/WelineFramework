@@ -125,7 +125,7 @@ curl -sk -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application
 改完 Service/Query 后可先跑（不依赖 zip）：
 
 ```bash
-php app/code/Weline/I18n/scripts/smoke-remote-translation-rest.php
+php dev/tmp/migrated-from-module-scripts/Weline/I18n/scripts/smoke-remote-translation-rest.php
 # 证据：generated/tmp/remote-translation-rest-smoke.json → ok=true
 # 覆盖：phrase/meta/local_model pending、collect+local_model 422、phrase ingest skip
 ```

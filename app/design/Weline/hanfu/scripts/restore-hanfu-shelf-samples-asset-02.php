@@ -6,7 +6,7 @@ declare(strict_types=1);
  * 回滚 WO-BUILD-ASSET-02：把被 AI 货架样张覆盖的主图恢复为备份实拍，
  * 并删除 shelf-mounted / shelf-samples 乱加图。
  *
- * Usage: php app/code/Weline/Product/scripts/restore-hanfu-shelf-samples-asset-02.php [--dry-run]
+ * Usage: php app/design/Weline/hanfu/scripts/restore-hanfu-shelf-samples-asset-02.php [--dry-run]
  */
 
 use Weline\FileManager\Api\Data\FileAccessContext;

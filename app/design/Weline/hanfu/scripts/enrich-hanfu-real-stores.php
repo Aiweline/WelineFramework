@@ -8,7 +8,7 @@ declare(strict_types=1);
  * 来源：1688 工厂黄页 title 核验、美和官网、菁莱依官网、淘宝/天猫公开旗舰店主机名。
  * 不编造电话/邮箱；无法核验 title 的链接不写入。
  *
- * Usage: php app/code/Weline/Product/scripts/enrich-hanfu-real-stores.php [website_id]
+ * Usage: php app/design/Weline/hanfu/scripts/enrich-hanfu-real-stores.php [website_id]
  */
 
 use Weline\Framework\Manager\ObjectManager;

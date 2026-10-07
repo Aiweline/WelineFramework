@@ -9,7 +9,7 @@ declare(strict_types=1);
  * 提升子节点后，仅将汉服根设为 inactive（或确认无子后再删）。
  *
  * Usage:
- *   php app/code/Weline/Product/scripts/flatten-hanfu-root-categories.php [website_id] [locale]
+ *   php app/design/Weline/hanfu/scripts/flatten-hanfu-root-categories.php [website_id] [locale]
  */
 
 use Weline\Framework\Manager\ObjectManager;

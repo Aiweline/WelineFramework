@@ -22,11 +22,11 @@ UC: UC-1 / UC-2 / UC-3（`mail-template-all-locales.md`）
 
 ```bash
 # 全矩阵（约 40×36=1440）
-php app/code/Weline/Smtp/scripts/mail-template-locale-matrix.php \
+php dev/tmp/migrated-from-module-scripts/Weline/Smtp/scripts/mail-template-locale-matrix.php \
   --json-out=app/code/Weline/Smtp/test/evidence/matrix-latest.json
 
 # ≥5 locale × ≥3 channel 落库预览
-php app/code/Weline/Smtp/scripts/mail-template-locale-matrix.php \
+php dev/tmp/migrated-from-module-scripts/Weline/Smtp/scripts/mail-template-locale-matrix.php \
   --persist-preview \
   --preview-locales=de_DE,it_IT,ru_RU,pl_PL,nl_NL \
   --preview-channels=Weline_Newsletter::subscribe_gift,Weline_Newsletter::subscribe_welcome,Weline_Order::order_created \

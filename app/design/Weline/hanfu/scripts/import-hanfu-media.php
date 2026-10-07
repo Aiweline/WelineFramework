@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * 从淘宝公开 listing 拉图并写入 pub/media，补全汉服商品图库。
  *
- * Usage: php app/code/Weline/Product/scripts/import-hanfu-media.php [website_id]
+ * Usage: php app/design/Weline/hanfu/scripts/import-hanfu-media.php [website_id]
  */
 
 use Weline\Framework\Manager\ObjectManager;

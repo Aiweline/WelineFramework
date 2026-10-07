@@ -5,8 +5,8 @@ declare(strict_types=1);
 /**
  * Apply exported detail magazine HTML + missing file_asset rows on changanhanfu production.
  *
- * php app/code/Weline/Product/scripts/apply-hanfu-detail-i18n-sync.php --pack=/path/to/hanfu-detail-sync-YYYYMMDD --dry-run
- * php app/code/Weline/Product/scripts/apply-hanfu-detail-i18n-sync.php --pack=... --apply --website=0
+ * php app/design/Weline/hanfu/scripts/apply-hanfu-detail-i18n-sync.php --pack=/path/to/hanfu-detail-sync-YYYYMMDD --dry-run
+ * php app/design/Weline/hanfu/scripts/apply-hanfu-detail-i18n-sync.php --pack=... --apply --website=0
  */
 
 use Weline\Framework\Manager\ObjectManager;

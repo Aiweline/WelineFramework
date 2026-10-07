@@ -5,8 +5,8 @@ declare(strict_types=1);
 /**
  * Fill missing en_US product names from reviewed Hanfu source titles.
  *
- * php app/code/Weline/Product/scripts/remediate-hanfu-product-en-names.php --dry-run
- * php app/code/Weline/Product/scripts/remediate-hanfu-product-en-names.php --apply
+ * php app/design/Weline/hanfu/scripts/remediate-hanfu-product-en-names.php --dry-run
+ * php app/design/Weline/hanfu/scripts/remediate-hanfu-product-en-names.php --apply
  * Optional: --website=0. The default is a read-only dry run.
  * Existing locale text, cleared overlays and store-specific values are preserved.
  */

@@ -9,9 +9,9 @@ declare(strict_types=1);
  * Does not create categories, change tree shape, or touch product media.
  *
  * Usage:
- *   php app/code/Weline/Product/scripts/remediate-hanfu-legacy-category-images.php --dry-run
- *   php app/code/Weline/Product/scripts/remediate-hanfu-legacy-category-images.php --apply
- *   php app/code/Weline/Product/scripts/remediate-hanfu-legacy-category-images.php --verify
+ *   php app/design/Weline/hanfu/scripts/remediate-hanfu-legacy-category-images.php --dry-run
+ *   php app/design/Weline/hanfu/scripts/remediate-hanfu-legacy-category-images.php --apply
+ *   php app/design/Weline/hanfu/scripts/remediate-hanfu-legacy-category-images.php --verify
  */
 
 use Weline\Framework\Manager\ObjectManager;

@@ -10,10 +10,10 @@ declare(strict_types=1);
  * only the exact superseded files after verification proves zero live references.
  *
  * Usage:
- *   php app/code/Weline/Product/scripts/remediate-hanfu-commerce-media-r2.php --dry-run [--website=0]
- *   php app/code/Weline/Product/scripts/remediate-hanfu-commerce-media-r2.php --apply [--website=0]
- *   php app/code/Weline/Product/scripts/remediate-hanfu-commerce-media-r2.php --verify [--website=0]
- *   php app/code/Weline/Product/scripts/remediate-hanfu-commerce-media-r2.php --cleanup [--website=0]
+ *   php app/design/Weline/hanfu/scripts/remediate-hanfu-commerce-media-r2.php --dry-run [--website=0]
+ *   php app/design/Weline/hanfu/scripts/remediate-hanfu-commerce-media-r2.php --apply [--website=0]
+ *   php app/design/Weline/hanfu/scripts/remediate-hanfu-commerce-media-r2.php --verify [--website=0]
+ *   php app/design/Weline/hanfu/scripts/remediate-hanfu-commerce-media-r2.php --cleanup [--website=0]
  */
 
 use Weline\FileManager\Api\Data\FileAccessContext;

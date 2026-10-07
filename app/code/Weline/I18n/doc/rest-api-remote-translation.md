@@ -72,7 +72,7 @@ Body：`{ "website_id":0, "type":"phrase" }`
 ## 本机冒烟
 
 ```bash
-php app/code/Weline/I18n/scripts/smoke-remote-translation-rest.php
+php dev/tmp/migrated-from-module-scripts/Weline/I18n/scripts/smoke-remote-translation-rest.php
 # 证据：generated/tmp/remote-translation-rest-smoke.json（须 ok=true）
 ```
 
