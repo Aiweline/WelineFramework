@@ -96,4 +96,34 @@ final class HeaderCategoryMenuSlotContractTest extends TestCase
         );
         self::assertStringContainsString('header-default.css', $header);
     }
+
+    public function testLeftClusterMoreCapDoesNotUseFlexBoxWidthAsNaturalFloor(): void
+    {
+        $jsPath = dirname(__DIR__, 2) . '/view/statics/js/partials/header-default.js';
+        self::assertFileExists($jsPath);
+        $js = (string)file_get_contents($jsPath);
+
+        self::assertStringContainsString('function measureLeftClusterNaturalWidth', $js);
+        self::assertStringContainsString('禁止用 leftCluster.getBoundingClientRect().width 当地板', $js);
+        self::assertStringContainsString('k >= candidates.length ? -1 : k', $js);
+        self::assertStringContainsString('function leftClusterHasSpareRoom', $js);
+        self::assertStringContainsString('左簇 flex:1 吃剩余时，中间常有大片空档', $js);
+        // 旧毒化写法：flex 盒宽当地板 + capped=min(k,length-1) → 宽屏空档仍出「更多」
+        self::assertStringNotContainsString(
+            'clusterNatW = Math.max(clusterNatW, prefixBased, renderedNat)',
+            $js
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/const capped = Math\.min\(k,\s*candidates\.length\s*-\s*1\)/',
+            $js
+        );
+
+        $cssPath = dirname(__DIR__, 2) . '/view/statics/css/partials/header-default.css';
+        $css = (string)file_get_contents($cssPath);
+        self::assertMatchesRegularExpression(
+            '/\.header-policy-links-slot \{[^}]*flex:\s*0\s+0\s+auto;/s',
+            $css,
+            '政策槽禁止 flex-shrink，空档在簇尾由 More 收项'
+        );
+    }
 }

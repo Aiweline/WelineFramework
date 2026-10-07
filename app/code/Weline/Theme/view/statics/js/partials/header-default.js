@@ -689,11 +689,54 @@
                 return false;
             }
 
+            function measureLeftClusterContentWidth() {
+                if (!leftCluster) {
+                    return 0;
+                }
+                const gap = cachedLeftGap != null
+                    ? cachedLeftGap
+                    : (parseFloat(window.getComputedStyle(leftCluster).columnGap
+                        || window.getComputedStyle(leftCluster).gap) || 0);
+                const children = Array.from(leftCluster.children).filter(function(child) {
+                    if (child.hidden) {
+                        return false;
+                    }
+                    const style = window.getComputedStyle(child);
+                    if (style.display === 'none' || style.visibility === 'hidden') {
+                        return false;
+                    }
+                    // 零占位 More 不计入内容宽
+                    if ((style.width === '0px' || style.flexGrow === '0' && style.flexBasis === '0px')
+                        && child.getBoundingClientRect().width < 1) {
+                        return false;
+                    }
+                    return child.getBoundingClientRect().width >= 1;
+                });
+                let sum = 0;
+                for (let i = 0; i < children.length; i++) {
+                    sum += children[i].getBoundingClientRect().width + (i > 0 ? gap : 0);
+                }
+                return sum;
+            }
+
+            function leftClusterHasSpareRoom(minSpare) {
+                if (!leftCluster) {
+                    return false;
+                }
+                const spare = leftCluster.clientWidth - measureLeftClusterContentWidth();
+                return spare >= (minSpare != null ? minSpare : 16);
+            }
+
             function enforceLeftClusterNoSquish(candidates) {
                 if (!leftCluster || !candidates.length) {
                     return -1;
                 }
                 if (clustersOnSeparateRows()) {
+                    return lastCatHideFrom;
+                }
+                // 左簇 flex:1 吃剩余时，中间常有大片空档。此时禁止因克隆宽±数 px
+                // 误判「政策压扁」把末项收回更多（宽屏空档仍出「更多」的第二根因）。
+                if (leftClusterHasSpareRoom(16)) {
                     return lastCatHideFrom;
                 }
                 if (!leftClusterContentIsSquished() && !policyUnitsAreSqueezed()) {
@@ -914,7 +957,8 @@
                         return true;
                     }
                     const nat = naturalWidthOf(el);
-                    if (nat > 0 && el.getBoundingClientRect().width < nat - 2) {
+                    // 克隆与实渲染常差数 px（字偶/亚像素）；2px 过严会在仍有空档时误收「更多」
+                    if (nat > 0 && el.getBoundingClientRect().width < nat - 8) {
                         return true;
                     }
                 }
@@ -1306,22 +1350,23 @@
 
                 // 整簇自然宽封顶：候选 prefix 只覆盖「分类+政策」内容，All 按钮、槽内 widget 壳、
                 // 发布层额外包装都可能让真实簇宽超过 prefix 和。prefix 判定「装得下」但实际仍被
-                // flex-shrink 压扁裁字（全屏宽度典型表现）。以整簇克隆自然宽为准强制收项。
+                // flex-shrink 压扁裁字时，以脱 DOM 克隆自然宽为准强制收项。
+                //
+                // 禁止用 leftCluster.getBoundingClientRect().width 当地板：左簇 flex:1 吃剩余，
+                // 盒宽≈主栏−右自然宽，几乎恒 ≥ available → 误进封顶；再加
+                // capped=min(k, length-1) 会在「全装得下」(k===length) 时强制藏末项，
+                // 表现为中间大片空档仍显示「更多」（宽屏审图复现）。
                 const catsSlotEl = leftCluster && leftCluster.querySelector('.header-nav-left-slot, .header-categories');
                 const policySlotEl = leftCluster && leftCluster.querySelector('.header-policy-links-slot');
                 let clusterNatW = measureLeftClusterNaturalWidth(catsSlotEl, policySlotEl);
                 if (clusterNatW != null) {
-                    // 克隆自然宽必须 ≥ 当前真实渲染宽（已收项后渲染含 More、克隆已强制显示 More），
-                    // 低于渲染值即测量污染，不可信 → 回退 prefix 和
-                    const renderedNat = leftCluster ? Math.ceil(leftCluster.getBoundingClientRect().width) : 0;
                     const prefixBased = Math.ceil((metrics.prefix[candidates.length - 1] || 0) + metrics.moreW)
                         + Math.ceil(measureAllButtonWidth() + (cachedLeftGap || 0));
-                    clusterNatW = Math.max(clusterNatW, prefixBased, renderedNat);
+                    // 克隆若被百分比祖先污染偏小，用 prefix+All+More 抬地板；勿用 flex 盒宽。
+                    clusterNatW = Math.max(clusterNatW, prefixBased);
                 }
                 if (clusterNatW != null && clusterNatW > availableWidth) {
                     const allReserve = measureAllButtonWidth() + (cachedLeftGap || 0);
-                    // prefixLast 已含尾部 More 预留；候选全装得下但整簇仍超宽（包装开销）时，
-                    // raw=-1 与「k≥candidates.length」都必须落 0（全收），禁止把 -1 当答案缓存。
                     let k = candidates.length;
                     while (k > 0) {
                         const visibleW = (k === 0 ? 0 : metrics.prefix[k - 1]) + metrics.moreW + allReserve;
@@ -1330,8 +1375,9 @@
                         }
                         k -= 1;
                     }
-                    const capped = Math.min(k, candidates.length - 1);
-                    if (hideFrom < 0 || capped < hideFrom) {
+                    // k===length → 带 More 预留仍全装得下 → 不收（-1）；否则 hideFrom=k
+                    const capped = k >= candidates.length ? -1 : k;
+                    if (capped >= 0 && (hideFrom < 0 || capped < hideFrom)) {
                         hideFrom = capped;
                         // 封顶必须落进滞回缓存：只改局部值不写 lastCatHideFrom 时，
                         // apply-if-changed 永不触发、enforce 见无压扁即放行 → 缓存毒化在「全显示」，

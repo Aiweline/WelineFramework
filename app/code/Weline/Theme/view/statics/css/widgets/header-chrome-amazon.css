@@ -774,6 +774,10 @@
     justify-content: flex-end;
 }
 
+.weline-header .header-policy-links-slot {
+    flex: 0 0 auto;
+}
+
 .weline-header .header-nav-all {
     flex: 0 0 auto;
     display: flex;

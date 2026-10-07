@@ -1605,11 +1605,11 @@ textarea::-webkit-scrollbar-thumb:hover,
     position: relative;
 }
 
-/* 分类后政策槽：与分类同属左簇溢出候选，隐藏项不占宽 */
+/* 分类后政策槽：与分类同属左簇溢出候选；不收缩（空档在簇尾，由 JS More 收项） */
 .header-policy-links-slot {
     display: flex;
     align-items: center;
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     min-width: 0;
     max-width: none;
     width: auto;
