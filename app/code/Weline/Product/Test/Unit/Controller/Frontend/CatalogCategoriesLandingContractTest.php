@@ -37,8 +37,20 @@ final class CatalogCategoriesLandingContractTest extends TestCase
         self::assertStringContainsString('data-testid="storefront-categories-hub"', $template);
         self::assertStringContainsString('data-testid="storefront-categories-hub-grid"', $template);
         self::assertStringContainsString("@url{'products'}", $template);
+        self::assertStringContainsString('align-items: start', $template);
+        self::assertStringNotContainsString('height: 100%', $template);
         self::assertStringNotContainsString('storefront-product-catalog', $template);
         self::assertStringNotContainsString('ProductCardRenderer', $template);
+
+        $layout = (string)file_get_contents(
+            $root . '/view/theme/frontend/layouts/category/default.phtml'
+        );
+        self::assertStringContainsString('category-layout__container--no-filters', $layout);
+        self::assertStringContainsString('grid-template-columns: minmax(0, 1fr)', $layout);
+        self::assertStringContainsString(
+            '.category-layout__container:has(> .category-layout__sidebar)',
+            $layout
+        );
     }
 
     public function testCategoryViewServiceExposesRootLanding(): void

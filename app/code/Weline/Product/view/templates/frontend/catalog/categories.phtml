@@ -13,21 +13,57 @@ $lede = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefron
 $children = StorefrontPageAssignBag::coalesce($this->getData('storefront_category_children'), 'storefront_category_children', []);
 $children = is_array($children) ? $children : [];
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$mosaic = [];
+foreach ($children as $child) {
+    if (!is_array($child)) {
+        continue;
+    }
+    $name = trim((string)($child['name'] ?? ''));
+    $url = trim((string)($child['url'] ?? ''));
+    $image = trim((string)($child['image'] ?? $child['banner'] ?? ''));
+    if ($name === '' || $url === '' || $image === '') {
+        continue;
+    }
+    $mosaic[] = ['name' => $name, 'url' => $url, 'image' => $image];
+    if (count($mosaic) >= 4) {
+        break;
+    }
+}
 ?>
 <section class="storefront-categories-hub"
          data-testid="storefront-categories-hub"
          data-surface="categories"
          weline-code="product.frontend.catalog.categories_hub">
-    <header class="storefront-categories-hub__header">
-        <h1 class="storefront-categories-hub__title"><?= $escape($heading) ?></h1>
-        <?php if ($lede !== ''): ?>
-            <p class="storefront-categories-hub__lede"><?= $escape($lede) ?></p>
+    <header class="storefront-categories-hub__header<?= $mosaic !== [] ? ' storefront-categories-hub__header--split' : '' ?>">
+        <div class="storefront-categories-hub__intro">
+            <h1 class="storefront-categories-hub__title"><?= $escape($heading) ?></h1>
+            <?php if ($lede !== ''): ?>
+                <p class="storefront-categories-hub__lede"><?= $escape($lede) ?></p>
+            <?php endif; ?>
+            <p class="storefront-categories-hub__actions">
+                <a class="storefront-categories-hub__cta"
+                   data-testid="storefront-categories-hub-products"
+                   href="@url{'products'}"><?= $escape(__('浏览全部商品')) ?></a>
+            </p>
+        </div>
+        <?php if ($mosaic !== []): ?>
+            <ul class="storefront-categories-hub__mosaic" aria-label="<?= $escape(__('热门部门')) ?>">
+                <?php foreach ($mosaic as $tile): ?>
+                    <li>
+                        <a class="storefront-categories-hub__mosaic-link" href="<?= $escape($tile['url']) ?>">
+                            <img src="<?= $escape($tile['image']) ?>"
+                                 alt=""
+                                 width="280"
+                                 height="200"
+                                 loading="lazy"
+                                 decoding="async">
+                            <span><?= $escape($tile['name']) ?></span>
+                        </a>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
         <?php endif; ?>
-        <p class="storefront-categories-hub__actions">
-            <a class="storefront-categories-hub__cta"
-               data-testid="storefront-categories-hub-products"
-               href="@url{'products'}"><?= $escape(__('浏览全部商品')) ?></a>
-        </p>
     </header>
 
     <?php if ($children === []): ?>
@@ -52,13 +88,17 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 <li class="storefront-categories-hub__card">
                     <a class="storefront-categories-hub__link" href="<?= $escape($url) ?>">
                         <?php if ($image !== ''): ?>
-                            <img class="storefront-categories-hub__media"
-                                 src="<?= $escape($image) ?>"
-                                 alt=""
-                                 width="320"
-                                 height="200"
-                                 loading="lazy"
-                                 decoding="async">
+                            <span class="storefront-categories-hub__media-wrap">
+                                <img class="storefront-categories-hub__media"
+                                     src="<?= $escape($image) ?>"
+                                     alt=""
+                                     width="480"
+                                     height="320"
+                                     loading="lazy"
+                                     decoding="async">
+                            </span>
+                        <?php else: ?>
+                            <span class="storefront-categories-hub__media-wrap storefront-categories-hub__media-wrap--empty" aria-hidden="true"></span>
                         <?php endif; ?>
                         <span class="storefront-categories-hub__name"><?= $escape($name) ?></span>
                     </a>
@@ -87,38 +127,218 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     <?php endif; ?>
 </section>
 <style data-theme-inline="storefront-categories-hub">
-    .storefront-categories-hub { width: min(100%, var(--weline-layout-content-max-width, 1280px)); margin: 0 auto; padding: 1rem 1rem 2.5rem; }
-    .storefront-categories-hub__header { margin: 0 0 1.5rem; max-width: 42rem; }
-    .storefront-categories-hub__title { margin: 0 0 0.55rem; font-size: clamp(1.65rem, 2.2vw, 2.2rem); line-height: 1.2; }
-    .storefront-categories-hub__lede { margin: 0 0 1rem; line-height: 1.55; opacity: 0.9; }
+    /* 根落地无筛选侧栏：父级 category 布局若仍为 220px|1fr，唯一子项会落入首列变窄条 */
+    .category-layout__container:has(.storefront-categories-hub) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .storefront-categories-hub {
+        width: min(100%, var(--weline-layout-content-max-width, 1280px));
+        margin: 0 auto;
+        padding: var(--spacing-3, 0.75rem) 0 var(--spacing-6, 2rem);
+        box-sizing: border-box;
+    }
+    .storefront-categories-hub__header {
+        display: grid;
+        gap: var(--spacing-4, 1rem);
+        margin: 0 0 var(--spacing-5, 1.5rem);
+        padding: var(--spacing-5, 1.25rem) var(--spacing-4, 1rem);
+        border: 1px solid var(--weline-theme-border, #d8d2c8);
+        border-radius: var(--weline-theme-radius-md, var(--weline-theme-radius-sm, 4px));
+        background: var(--weline-theme-surface-muted, var(--color-bg-secondary, #f3efe8));
+        box-sizing: border-box;
+    }
+    .storefront-categories-hub__header--split {
+        grid-template-columns: minmax(0, 1.15fr) minmax(12rem, 0.85fr);
+        align-items: stretch;
+    }
+    .storefront-categories-hub__intro {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
+        max-width: 36rem;
+    }
+    .storefront-categories-hub__title {
+        margin: 0 0 var(--spacing-2, 0.5rem);
+        font-size: clamp(1.7rem, 2.4vw, 2.35rem);
+        line-height: 1.18;
+        letter-spacing: -0.01em;
+        color: var(--color-text-primary, inherit);
+    }
+    .storefront-categories-hub__lede {
+        margin: 0 0 var(--spacing-4, 1rem);
+        line-height: 1.6;
+        color: var(--color-text-secondary, inherit);
+        opacity: 0.95;
+    }
     .storefront-categories-hub__actions { margin: 0; }
     .storefront-categories-hub__cta {
-        display: inline-flex; align-items: center; min-height: 2.4rem; padding: 0.45rem 1rem;
-        border-radius: var(--weline-theme-radius-sm, 4px); background: var(--weline-theme-accent, #b84a3c);
-        color: #fff; text-decoration: none; font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.5rem;
+        padding: 0.5rem 1.15rem;
+        border-radius: var(--weline-theme-radius-sm, 4px);
+        background: var(--weline-theme-accent, var(--color-primary, #b84a3c));
+        color: var(--color-text-on-accent, #fff);
+        text-decoration: none;
+        font-weight: 650;
+        transition: filter 0.15s ease, transform 0.15s ease;
+    }
+    .storefront-categories-hub__cta:hover {
+        filter: brightness(1.05);
+    }
+    .storefront-categories-hub__cta:focus-visible {
+        outline: 2px solid var(--weline-theme-accent, #b84a3c);
+        outline-offset: 2px;
+    }
+    .storefront-categories-hub__mosaic {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.45rem;
+        min-height: 11.5rem;
+        align-items: start;
+    }
+    .storefront-categories-hub__mosaic > li { margin: 0; min-width: 0; }
+    .storefront-categories-hub__mosaic-link {
+        position: relative;
+        display: block;
+        height: 100%;
+        min-height: 5.5rem;
+        overflow: hidden;
+        border-radius: var(--weline-theme-radius-sm, 4px);
+        text-decoration: none;
+        color: #fff;
+        background: var(--weline-theme-surface, #fff);
+        border: 1px solid var(--weline-theme-border, #d8d2c8);
+    }
+    .storefront-categories-hub__mosaic-link img {
+        width: 100%;
+        height: 100%;
+        min-height: 5.5rem;
+        object-fit: cover;
+        display: block;
+        aspect-ratio: 4 / 3;
+        transition: transform 0.25s ease;
+    }
+    .storefront-categories-hub__mosaic-link span {
+        position: absolute;
+        inset: auto 0 0 0;
+        padding: 0.45rem 0.55rem;
+        font-size: 0.82rem;
+        font-weight: 650;
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent);
+    }
+    .storefront-categories-hub__mosaic-link:hover img {
+        transform: scale(1.04);
     }
     .storefront-categories-hub__empty { margin: 1.5rem 0; opacity: 0.85; }
     .storefront-categories-hub__grid {
-        list-style: none; margin: 0; padding: 0;
-        display: grid; gap: 1.1rem;
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: var(--spacing-4, 1.15rem);
+        align-items: start;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
     }
-    .storefront-categories-hub__card { margin: 0; }
+    .storefront-categories-hub__card {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+        align-self: start;
+        height: auto;
+    }
     .storefront-categories-hub__link {
-        display: flex; flex-direction: column; gap: 0.45rem; height: 100%;
-        text-decoration: none; color: inherit;
+        position: relative;
+        display: block;
+        height: auto;
+        flex: 0 0 auto;
+        text-decoration: none;
+        color: inherit;
         border: 1px solid var(--weline-theme-border, #d8d2c8);
         border-radius: var(--weline-theme-radius-sm, 4px);
-        overflow: hidden; background: var(--weline-theme-surface, #fff);
+        overflow: hidden;
+        background: var(--weline-theme-surface, #fff);
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
-    .storefront-categories-hub__media { width: 100%; aspect-ratio: 8 / 5; object-fit: cover; display: block; background: #f3efe8; }
-    .storefront-categories-hub__name { font-weight: 650; padding: 0.85rem; }
+    .storefront-categories-hub__link:hover {
+        border-color: var(--weline-theme-accent, #b84a3c);
+        box-shadow: var(--weline-theme-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+    }
+    .storefront-categories-hub__media-wrap {
+        display: block;
+        aspect-ratio: 4 / 3;
+        overflow: hidden;
+        background: var(--weline-theme-surface-muted, #f3efe8);
+    }
+    .storefront-categories-hub__media-wrap--empty { min-height: 10rem; }
+    .storefront-categories-hub__media {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        flex: 0 0 auto;
+        transition: transform 0.25s ease;
+    }
+    .storefront-categories-hub__link:hover .storefront-categories-hub__media {
+        transform: scale(1.03);
+    }
+    .storefront-categories-hub__name {
+        display: block;
+        font-weight: 700;
+        font-size: 1.05rem;
+        padding: 0.85rem 0.95rem;
+        flex: 0 0 auto;
+        letter-spacing: 0.01em;
+    }
     .storefront-categories-hub__chips {
-        list-style: none; margin: 0.55rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        align-items: start;
     }
     .storefront-categories-hub__chips a {
-        display: inline-flex; align-items: center; min-height: 1.75rem; padding: 0.15rem 0.55rem;
-        border: 1px solid var(--weline-theme-border, #d8d2c8); border-radius: 999px;
-        text-decoration: none; color: inherit; font-size: 0.82rem;
+        display: inline-flex;
+        align-items: center;
+        min-height: 1.75rem;
+        padding: 0.15rem 0.6rem;
+        border: 1px solid var(--weline-theme-border, #d8d2c8);
+        border-radius: var(--weline-theme-radius-sm, 4px);
+        text-decoration: none;
+        color: var(--color-text-secondary, inherit);
+        font-size: 0.82rem;
+        background: var(--weline-theme-surface, #fff);
+        transition: border-color 0.15s ease, color 0.15s ease;
+    }
+    .storefront-categories-hub__chips a:hover {
+        border-color: var(--weline-theme-accent, #b84a3c);
+        color: var(--weline-theme-accent, #b84a3c);
+    }
+    @media (max-width: 720px) {
+        .storefront-categories-hub__header--split {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .storefront-categories-hub__mosaic {
+            min-height: 0;
+        }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .storefront-categories-hub__cta,
+        .storefront-categories-hub__mosaic-link img,
+        .storefront-categories-hub__media,
+        .storefront-categories-hub__link {
+            transition: none;
+        }
+        .storefront-categories-hub__mosaic-link:hover img,
+        .storefront-categories-hub__link:hover .storefront-categories-hub__media {
+            transform: none;
+        }
     }
 </style>

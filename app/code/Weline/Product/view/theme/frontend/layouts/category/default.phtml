@@ -91,7 +91,7 @@ $this->assign('title', $title);
             <main class="category-layout__main <?= htmlspecialchars($class ?? '') ?>" id="category-layout-main" data-layout="category" data-columns="<?= (int)$gridColumns ?>">
                 <w:hook>Weline_Theme::frontend::layouts::category::main-before</w:hook>
 
-                <div class="category-layout__container">
+                <div class="category-layout__container<?= !empty($showFilters) ? ' category-layout__container--with-filters' : ' category-layout__container--no-filters' ?>">
                     <!-- 移动端筛选切换按钮 -->
                     <if condition="meta.showFilters">
                         <button type="button" class="category-layout__filter-toggle" aria-label="@lang{筛选条件}" aria-expanded="false" data-filter-toggle>
@@ -276,16 +276,22 @@ $this->assign('title', $title);
         padding: var(--spacing-3, 0.75rem) 0 var(--spacing-5, 1.25rem);
     }
 
+    /* 无侧栏（根 /category 落地等）必须单列：否则唯一子项会落入首列 220px，正文被挤成窄条 */
     .category-layout__container {
         width: min(100%, var(--weline-layout-content-max-width));
         max-width: 100%;
         margin: 0 auto;
         display: grid;
-        grid-template-columns: 220px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
         gap: var(--spacing-4, 1rem);
         align-items: start;
         padding: 0 var(--weline-layout-content-padding-inline);
         box-sizing: border-box;
+    }
+
+    .category-layout__container--with-filters,
+    .category-layout__container:has(> .category-layout__sidebar) {
+        grid-template-columns: 220px minmax(0, 1fr);
     }
 
     /* ---- 筛选侧边栏（Amazon 密度：轻边框、少阴影） ---- */
@@ -398,16 +404,19 @@ $this->assign('title', $title);
     .category-layout__overlay {
         position: fixed;
         inset: 0;
+        grid-column: 1 / -1;
         background-color: color-mix(in srgb, var(--weline-theme-text) 50%, transparent);
         z-index: var(--z-index-overlay);
         opacity: 0;
         visibility: hidden;
         transition: opacity 0.3s ease, visibility 0.3s ease;
+        pointer-events: none;
     }
 
     .category-layout__overlay.is-visible {
         opacity: 1;
         visibility: visible;
+        pointer-events: auto;
     }
 
     /* ---- 内容区域 ---- */
