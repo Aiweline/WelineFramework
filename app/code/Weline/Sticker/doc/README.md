@@ -47,8 +47,6 @@
 - `app/code/Weline/Sticker/doc/development.md`
 - `app/code/Weline/Sticker/doc/requirements.md`
 - `app/code/Weline/Sticker/doc/usage.md`
-- `app/code/Weline/Sticker/doc/开发/plan.md`
-- `app/code/Weline/Sticker/doc/开发/task.md`
 
 ## 维护规则
 

@@ -28,12 +28,12 @@
 - `app/code/Weline/Websites/etc/backend/menu.xml`
 
 - `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：39
-- `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：3
+- `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：7
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后优先跑完整 `setup:upgrade`；仅需重建路由图时可用 `setup:upgrade --route`（选填）。 文件数：12
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：32
 - `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：27
 - `Queue`：队列生产/消费入口。读 Queue 技能和模块文档后再改。 文件数：1
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：115
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：117
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：5
 - `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：8
 - `etc`：模块配置。禁止 routes.xml；路由由控制器发现，完整 `setup:upgrade` 会同步；仅路由图变更时可用 `--route`（选填）。 文件数：4
@@ -71,17 +71,7 @@
 - `app/code/Weline/Websites/doc/store-saleschannel-scope.md`
 - `app/code/Weline/Websites/doc/功能现状.md`
 - `app/code/Weline/Websites/doc/域名管理架构.md`
-- `app/code/Weline/Websites/doc/开发/adapter-refactor-plan.md`
-- `app/code/Weline/Websites/doc/开发/adapter-refactor-task.md`
-- `app/code/Weline/Websites/doc/开发/notification-plan.md`
-- `app/code/Weline/Websites/doc/开发/notification-task.md`
-- `app/code/Weline/Websites/doc/开发/plan.md`
 - `app/code/Weline/Websites/doc/开发/spec/website-scope-tree-management.md`
-- `app/code/Weline/Websites/doc/开发/task.md`
-- `app/code/Weline/Websites/doc/开发/域名选择器滚动搜索回填修复.md`
-- `app/code/Weline/Websites/doc/开发/站点首页开始路由配置.md`
-- `app/code/Weline/Websites/doc/开发/网站表单保存结果页路由修复.md`
-- `app/code/Weline/Websites/doc/开发/网站表单手风琴折叠兜底控制.md`
 - `app/code/Weline/Websites/doc/开发日志.md`
 - `app/code/Weline/Websites/doc/网站备份.md`
 - `app/code/Weline/Websites/doc/计划-AI建站工作台-Websites侧.md`

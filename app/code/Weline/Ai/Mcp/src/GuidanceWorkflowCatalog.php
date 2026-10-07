@@ -1355,7 +1355,7 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'seat_closed_reports_related_web_urls', 'summary' => '席位 result=closed 回报必须填 related_web_urls；PM 汇审后向用户汇报须写「交付地址」汇总各席+测试探活地址（见 feature_delivery_urls / closeout_delivery_reminder）；纯逻辑写 N/A'],
                 ['id' => 'stop_on_architecture_conflict', 'summary' => '无人能拍板或重大架构矛盾：停工汇报，确认前禁止 PHP/phtml/CSS'],
                 ['id' => 'persist_team_minutes', 'summary' => '总控落盘 dev/session/{slug}.md；明细落盘 dev/team/{slug}/（含 roster+channel）；禁止写入模块 doc/；子智能体 closed 不是交付'],
-                ['id' => 'module_doc_forbids_ephemeral_work_artifacts', 'summary' => '一次性/临时工作资料禁入模块 doc/；SESSION/team/scratch 写仓库根 dev/'],
+                ['id' => 'module_doc_forbids_ephemeral_work_artifacts', 'summary' => '一次性/临时工作资料禁入模块 doc/（含 plan.md/task.md/*排查*/一次性修复笔记）；SESSION/计划/team/scratch 写仓库根 dev/'],
             ],
             'verification_commands' => [
                 'test -f dev/ai-command/ai/工程团队.md',

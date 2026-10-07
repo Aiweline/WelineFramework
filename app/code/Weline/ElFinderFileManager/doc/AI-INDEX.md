@@ -44,8 +44,6 @@
 
 - `app/code/Weline/ElFinderFileManager/doc/README.md`
 - `app/code/Weline/ElFinderFileManager/doc/功能现状.md`
-- `app/code/Weline/ElFinderFileManager/doc/开发/plan.md`
-- `app/code/Weline/ElFinderFileManager/doc/开发/task.md`
 - `app/code/Weline/ElFinderFileManager/doc/开发日志.md`
 - `app/code/Weline/ElFinderFileManager/doc/需求.md`
 

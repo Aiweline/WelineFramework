@@ -70,6 +70,7 @@
 - `app/code/Weline/Framework/doc/2-快速开始/11-快速参考_常见错误和解决方案.md`
 - `app/code/Weline/Framework/doc/3-开发/01-翻译函数使用指南.md`
 - `app/code/Weline/Framework/doc/3-开发/API接口开发规范.md`
+- `app/code/Weline/Framework/doc/3-开发/RequestContext请求级Memo约定.md`
 - `app/code/Weline/Framework/doc/3-开发/SSE可恢复后台任务架构.md`
 - `app/code/Weline/Framework/doc/3-开发/Scope限流.md`
 - `app/code/Weline/Framework/doc/3-开发/WLS-Fiber上下文与进程缓存边界.md`
@@ -208,7 +209,6 @@
 - `app/code/Weline/Framework/doc/template/模板渲染后.md`
 - `app/code/Weline/Framework/doc/功能现状.md`
 - `app/code/Weline/Framework/doc/开发/FPC上收Framework与Store适配器.md`
-- `app/code/Weline/Framework/doc/开发/plan.md`
 - `app/code/Weline/Framework/doc/开发/session/fiber-ob-migrate-20260923.md`
 - `app/code/Weline/Framework/doc/开发/session/wls-perf-regression-20260923.md`
 - `app/code/Weline/Framework/doc/开发/spec/controller-extra-fpc.md`
@@ -217,7 +217,6 @@
 - `app/code/Weline/Framework/doc/开发/spec/prod-static-publish-complete.md`
 - `app/code/Weline/Framework/doc/开发/spec/setup-upgrade-theme-hang.md`
 - `app/code/Weline/Framework/doc/开发/spec/website-locale-static-error-pages.md`
-- `app/code/Weline/Framework/doc/开发/task.md`
 - `app/code/Weline/Framework/doc/开发/team/controller-extra-fpc/README.md`
 - `app/code/Weline/Framework/doc/开发/team/controller-extra-fpc/cards/00-arch-spine.md`
 - `app/code/Weline/Framework/doc/开发/team/controller-extra-fpc/meetings/汇审.md`

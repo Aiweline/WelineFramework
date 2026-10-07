@@ -59,9 +59,7 @@
 - `app/code/Weline/Admin/doc/hook/backend/login/providers.md`
 - `app/code/Weline/Admin/doc/主题配色变量文档.md`
 - `app/code/Weline/Admin/doc/功能现状.md`
-- `app/code/Weline/Admin/doc/开发/plan.md`
 - `app/code/Weline/Admin/doc/开发/spec/backend-menu-cross-locale-search.md`
-- `app/code/Weline/Admin/doc/开发/task.md`
 - `app/code/Weline/Admin/doc/开发/team/backend-menu-cross-locale-db-index/channel.md`
 - `app/code/Weline/Admin/doc/开发/team/backend-menu-cross-locale-db-index/contracts.md`
 - `app/code/Weline/Admin/doc/开发/team/backend-menu-cross-locale-db-index/meetings/汇审.md`

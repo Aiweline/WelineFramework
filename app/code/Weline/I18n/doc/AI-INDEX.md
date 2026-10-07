@@ -67,9 +67,7 @@
 - `app/code/Weline/I18n/doc/translation-batch.md`
 - `app/code/Weline/I18n/doc/功能现状.md`
 - `app/code/Weline/I18n/doc/国际化SEO能力实施计划.md`
-- `app/code/Weline/I18n/doc/开发/plan.md`
 - `app/code/Weline/I18n/doc/开发/spec/remote-translation-rest.md`
-- `app/code/Weline/I18n/doc/开发/task.md`
 - `app/code/Weline/I18n/doc/开发/team/remote-translation-rest/channel/align-freeze.md`
 - `app/code/Weline/I18n/doc/开发/team/remote-translation-rest/contracts.md`
 - `app/code/Weline/I18n/doc/开发/team/remote-translation-rest/deps.md`
@@ -86,7 +84,6 @@
 - `app/code/Weline/I18n/doc/开发/team/remote-translation-sdk-demo/channel/msg-20260922-architect-source-api-demo.md`
 - `app/code/Weline/I18n/doc/开发/team/remote-translation-sdk-demo/channel/msg-20260922-i18n-demo-slice-done.md`
 - `app/code/Weline/I18n/doc/开发/team/remote-translation-sdk-demo/meetings/架构-demo目录约定.md`
-- `app/code/Weline/I18n/doc/开发/语言选择器弹层层级修复.md`
 - `app/code/Weline/I18n/doc/开发日志.md`
 - `app/code/Weline/I18n/doc/模块翻译CSV规范.md`
 - `app/code/Weline/I18n/doc/翻译包创建指南.md`

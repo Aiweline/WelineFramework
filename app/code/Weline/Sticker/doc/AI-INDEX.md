@@ -51,8 +51,6 @@
 - `app/code/Weline/Sticker/doc/requirements.md`
 - `app/code/Weline/Sticker/doc/usage.md`
 - `app/code/Weline/Sticker/doc/功能现状.md`
-- `app/code/Weline/Sticker/doc/开发/plan.md`
-- `app/code/Weline/Sticker/doc/开发/task.md`
 - `app/code/Weline/Sticker/doc/开发日志.md`
 - `app/code/Weline/Sticker/doc/需求.md`
 

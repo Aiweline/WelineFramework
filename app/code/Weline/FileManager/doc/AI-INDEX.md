@@ -57,10 +57,7 @@
 - `app/code/Weline/FileManager/doc/file-manager-选图与file-image出图.md`
 - `app/code/Weline/FileManager/doc/media-reference-identity-protocol.md`
 - `app/code/Weline/FileManager/doc/功能现状.md`
-- `app/code/Weline/FileManager/doc/开发/plan.md`
 - `app/code/Weline/FileManager/doc/开发/spec/media-reference-identity.md`
-- `app/code/Weline/FileManager/doc/开发/task.md`
-- `app/code/Weline/FileManager/doc/开发/汇审-媒体引用身份协议.md`
 - `app/code/Weline/FileManager/doc/开发日志.md`
 - `app/code/Weline/FileManager/doc/需求.md`
 

@@ -52,7 +52,6 @@
 
 - `app/code/Weline/Cms/doc/README.md`
 - `app/code/Weline/Cms/doc/功能现状.md`
-- `app/code/Weline/Cms/doc/开发/2026-07-29-CMS多语言Theme联动实施计划.md`
 - `app/code/Weline/Cms/doc/开发/2026-07-29-CMS多语言Theme联动设计.md`
 - `app/code/Weline/Cms/doc/开发日志.md`
 - `app/code/Weline/Cms/doc/需求.md`

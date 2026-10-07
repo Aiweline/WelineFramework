@@ -39,7 +39,7 @@
 - `Interface`：模块发布的接口契约。跨模块依赖优先使用这里的稳定契约。 文件数：4
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：19
 - `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：36
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：197
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：198
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：7
 - `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：22
 - `Ui`：后台/编辑器 UI 参数、schema 或渲染支撑。 文件数：20
@@ -320,7 +320,6 @@
 - `app/code/Weline/Theme/doc/功能现状.md`
 - `app/code/Weline/Theme/doc/布局固化与默认注入.md`
 - `app/code/Weline/Theme/doc/开发/Theme开发总指南.md`
-- `app/code/Weline/Theme/doc/开发/plan/widget-lifecycle-and-render-binding.md`
 - `app/code/Weline/Theme/doc/开发/session/hanfu-theme-editor-optimize.md`
 - `app/code/Weline/Theme/doc/开发/session/policy-copy-tone-soften.md`
 - `app/code/Weline/Theme/doc/开发/session/published-slot-assembly-uniformity.md`

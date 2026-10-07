@@ -57,9 +57,7 @@
 - `app/code/Weline/Widget/doc/功能现状.md`
 - `app/code/Weline/Widget/doc/单事件查询API与架构.md`
 - `app/code/Weline/Widget/doc/常见问题.md`
-- `app/code/Weline/Widget/doc/开发/plan.md`
 - `app/code/Weline/Widget/doc/开发/spec/media-item-fields.md`
-- `app/code/Weline/Widget/doc/开发/task.md`
 - `app/code/Weline/Widget/doc/开发/team/media-item-fields/meetings/技术方案会.md`
 - `app/code/Weline/Widget/doc/开发/team/media-item-fields/meetings/技术方案波.md`
 - `app/code/Weline/Widget/doc/开发/team/media-item-fields/meetings/立项波.md`

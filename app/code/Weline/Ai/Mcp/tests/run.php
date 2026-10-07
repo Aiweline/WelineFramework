@@ -825,8 +825,10 @@ try {
         str_contains($ephemeralDocRule, 'dev/session')
             && str_contains($ephemeralDocRule, 'dev/team')
             && str_contains($ephemeralDocRule, 'FORBIDDEN')
-            && str_contains($ephemeralDocRule, 'app/code/*/doc/'),
-        'module_doc_forbids_ephemeral_work_artifacts routes temp work to dev/',
+            && str_contains($ephemeralDocRule, 'app/code/*/doc/')
+            && str_contains($ephemeralDocRule, 'plan.md')
+            && (str_contains($ephemeralDocRule, '排查') || str_contains($ephemeralDocRule, 'investigation')),
+        'module_doc_forbids_ephemeral_work_artifacts routes temp work to dev/ and forbids plan.md/排查 dumps',
     );
     check(
         str_contains(HardConstraintsCatalog::mcpInstructions(), 'module_doc_forbids_ephemeral_work_artifacts'),

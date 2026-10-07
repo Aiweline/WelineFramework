@@ -158,17 +158,19 @@ SSH 主机映射只解决「要连生产时连哪台」，不改变查询目标�
 
 ## 9. 模块 doc 禁放一次性工作资料（`module_doc_forbids_ephemeral_work_artifacts`，强制）
 
-| 允许写入模块 `app/code/*/doc/` | 禁止写入模块 `doc/`（改写到仓库根 `dev/`） |
+| 允许写入模块 `app/code/*/doc/` | 禁止写入模块 `doc/`（改写到仓库根 `dev/`；`dev/` 默认 gitignore） |
 |------|------|
-| 三文档契约：`需求.md` / `功能现状.md` / `开发日志.md`、README | SESSION 总控、team roster/channel/meetings、停工汇报波次文件 |
-| 耐久指南 / API / 架构说明、`doc/ai/skills/**` | 一次性 ops brief、scratch、临时调查笔记、可弃验收日志 |
-| 耐久功能规格：`doc/开发/spec/{slug}.md`；已沉淀为产品知识的长期章程 | 把临时操作文件「归档」进模块 doc 冒充耐久文档 |
+| 三文档契约：`需求.md` / `功能现状.md` / `开发日志.md`、README | SESSION 总控、`plan.md` / `task.md` / `*-plan.md` / `*-task.md`、team roster/channel/meetings、停工汇报波次文件 |
+| 耐久指南 / API / 架构说明、`doc/ai/skills/**` | 一次性 ops brief、scratch、临时调查/排查笔记（含性能 timing 五阶段稿）、可弃验收/烟测日志 |
+| 耐久功能规格：`doc/开发/spec/{slug}.md`；已沉淀为产品知识的长期章程 | 一次性「\*修复\*.md」会话笔记；把临时操作文件「归档」进模块 doc 冒充耐久文档 |
 
-权威路径：`dev/session/{slug}.md`、`dev/team/{slug}/`、抛掷物 `dev/tmp/`。历史已落在模块 `doc/开发/team|session` 的文件可只读延续；**新建写入必须进 `dev/`**。
+权威路径：`dev/session/{slug}.md`（含工程计划与任务勾选）、`dev/team/{slug}/`、抛掷物 `dev/tmp/`。  
+**禁止**再写模块 `doc/开发/plan.md` / `doc/开发/task.md`——旧交付流程若仍出现该路径，以本条与 `requirement_session_dashboard` 为准。  
+耐久结论可**摘要**进归属模块 `doc/开发日志.md`；**禁止**把整份排查/计划稿留在模块 `doc/开发/`。  
+历史已落在模块 `doc/开发/team|session` 的文件可只读延续；**新建写入必须进 `dev/`**。
 
-> **禁止迁移历史纪要（血泪教训）**：`doc/开发/team|session` 下**已入库**的历史纪要属上句的「只读延续」豁免——**它们不与本规则冲突，保持原地不动**。
-> - **禁止**迁进 `dev/`：`dev/.gitignore` 首行为 `*`（`dev/` 是本机工作区、按设计不入 Git），迁入会让**已入库**纪要脱离版本控制。
-> - **禁止**改名归档到模块内新路径（如 `doc/开发/纪要/{slug}/`）：那正是上表最后一行禁止的「把临时操作文件『归档』进模块 doc 冒充耐久文档」。
+> **禁止迁移历史 team/session 纪要（血泪教训）**：`doc/开发/team|session` 下**已入库**的历史纪要属「只读延续」豁免——**保持原地不动**（勿批量迁进 `dev/` 让已入库纪要脱版本控制）。
+> - **例外（用户明示 / 本条纠偏批次）**：`doc/开发/` **根级**误放的一次性资料（`plan.md`/`task.md`/`*排查*`/一次性`*修复*`等）**应当**迁到 `dev/session/` 或 `dev/tmp/` 并从 Git 取消跟踪；**禁止**在模块内改名归档（如 `doc/开发/纪要/`）。
 > - 动 `dev/` 前必须先 `git check-ignore` / `git ls-files` 验证目标目录是否受版本控制。
 
 工程团队路径见 [工程团队.md](../../../../../../dev/ai-command/ai/工程团队.md)。

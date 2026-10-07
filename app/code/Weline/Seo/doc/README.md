@@ -75,8 +75,6 @@
 - `app/code/Weline/Seo/doc/事件系统设计文档.md`
 - `app/code/Weline/Seo/doc/前端使用指南.md`
 - `app/code/Weline/Seo/doc/平台绑定功能说明.md`
-- `app/code/Weline/Seo/doc/开发/plan.md`
-- `app/code/Weline/Seo/doc/开发/task.md`
 - `app/code/Weline/Seo/doc/扩展规约说明.md`
 - `app/code/Weline/Seo/doc/站点SEO配置说明.md`
 - `app/code/Weline/Seo/doc/海外搜索引擎对接指南.md`

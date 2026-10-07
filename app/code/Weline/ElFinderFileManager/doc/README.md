@@ -50,8 +50,6 @@
 
 ## 本模块文档资产
 
-- `app/code/Weline/ElFinderFileManager/doc/开发/plan.md`
-- `app/code/Weline/ElFinderFileManager/doc/开发/task.md`
 
 ## 维护规则
 

@@ -57,8 +57,6 @@
 
 ## 本模块文档资产
 
-- `app/code/Weline/Database/doc/开发/plan.md`
-- `app/code/Weline/Database/doc/开发/task.md`
 - `app/code/Weline/Database/doc/开发/数据库管理后台路由烟测.md`
 - `app/code/Weline/Database/doc/开发/数据库迁移系统开发文档.md`
 - `app/code/Weline/Database/doc/开发/模块代码与数据库一致性回滚.md`
