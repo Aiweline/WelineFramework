@@ -50,5 +50,20 @@ final class AccountAvatarFallbackContractTest extends TestCase
         self::assertStringContainsString('target.fallback.hidden = false', $js);
         self::assertStringContainsString('2500', $js);
         self::assertStringNotContainsString("target.fallback.hidden = true;\n                target.image.src = avatarUrl", $js);
+        // SSR avatar seeds trusted browser session so other signed-in pages paint header locally.
+        self::assertStringContainsString('seedSessionAvatarFromPage', $js);
+        self::assertStringContainsString('applyFrontendProfileUpdate', $js);
+        self::assertStringContainsString('isBrowserSignedInSnapshot', $js);
+        self::assertStringContainsString('syncPersonalCenterBrowserSession', $js);
+        self::assertStringContainsString('syncSessionAtPersonalCenter', $js);
+    }
+
+    public function testAccountIndexConfigEmbedsSessionUserForBrowserSync(): void
+    {
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/account/index.phtml'
+        );
+        self::assertStringContainsString("'sessionUser'", $source);
+        self::assertStringContainsString('getDisplayName', $source);
     }
 }

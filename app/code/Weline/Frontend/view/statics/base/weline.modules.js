@@ -120,15 +120,15 @@
             description: "Cookie操作工具函数"
         },
         account: {
-            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-session.js"],
-            paths: ["Weline_Customer::js/account-session.js"],
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-session.js?v=20261007-near-expiry-js-check-1"],
+            paths: ["Weline_Customer::js/account-session.js?v=20261007-near-expiry-js-check-1"],
             globalVar: "WelineAccountModule",
             load: "defer",
             description: "前台账户会话与顶栏账户 chrome"
         },
         customerAccount: {
-            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js?v=20261006-avatar-initial-fallback-1"],
-            paths: ["Weline_Customer::js/account-index.js?v=20261006-avatar-initial-fallback-1"],
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js?v=20261007-personal-center-session-sync-1"],
+            paths: ["Weline_Customer::js/account-index.js?v=20261007-personal-center-session-sync-1"],
             globalVar: "WelineCustomerAccount",
             description: "前台用户中心账户页交互"
         },

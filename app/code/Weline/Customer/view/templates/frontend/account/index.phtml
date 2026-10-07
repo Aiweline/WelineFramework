@@ -14,8 +14,32 @@ $avatarInitial = $username !== '' ? strtoupper(mb_substr($username, 0, 1)) : '?'
 $userId = is_object($user) && method_exists($user, 'getId') ? $user->getId() : '';
 $loginIp = is_object($user) && method_exists($user, 'getLoginIp') ? (string)($user->getLoginIp() ?? '') : '';
 $sessionId = is_object($user) && method_exists($user, 'getSessionId') ? (string)($user->getSessionId() ?? '') : '';
-$accountIndexAssetVersion = '20261006-avatar-initial-fallback-1';
-$accountIndexConfigJson = json_encode([ 'i18n' => [ 'saving' => (string) __('保存中...'), 'changing' => (string) __('修改中...'), 'profileUpdateFailed' => (string) __('更新失败，请稍后重试'), 'securityUpdateFailed' => (string) __('修改失败，请稍后重试'), 'fillAllFields' => (string) __('请填写所有字段'), 'passwordTooShort' => (string) __('新密码长度不能少于 6 位'), 'passwordMismatch' => (string) __('两次输入的新密码不一致'), 'invalidServerResponse' => (string) __('服务器返回了无效响应，请稍后重试'), 'endpointNotFound' => (string) __('保存接口不存在，页面脚本或路由需要同步修复'), 'sectionLoading' => (string) __('加载中...'), 'sectionLoadFailed' => (string) __('分区加载失败，请重试'), ],
+$accountIndexAssetVersion = '20261007-personal-center-session-sync-1';
+$sessionUserPayload = [];
+if ($user instanceof \Weline\Customer\Model\Customer && (int)$user->getId() > 0) {
+    $sessionUserPayload = [
+        'user_id' => (int)$user->getId(),
+        'username' => (string)($user->getUsername() ?? ''),
+        'display_name' => (string)($user->getDisplayName() ?? ''),
+        'email' => (string)($user->getEmail() ?? ''),
+        'avatar' => (string)($user->getAvatar() ?? ''),
+    ];
+}
+$accountIndexConfigJson = json_encode([
+    'i18n' => [
+        'saving' => (string) __('保存中...'),
+        'changing' => (string) __('修改中...'),
+        'profileUpdateFailed' => (string) __('更新失败，请稍后重试'),
+        'securityUpdateFailed' => (string) __('修改失败，请稍后重试'),
+        'fillAllFields' => (string) __('请填写所有字段'),
+        'passwordTooShort' => (string) __('新密码长度不能少于 6 位'),
+        'passwordMismatch' => (string) __('两次输入的新密码不一致'),
+        'invalidServerResponse' => (string) __('服务器返回了无效响应，请稍后重试'),
+        'endpointNotFound' => (string) __('保存接口不存在，页面脚本或路由需要同步修复'),
+        'sectionLoading' => (string) __('加载中...'),
+        'sectionLoadFailed' => (string) __('分区加载失败，请重试'),
+    ],
+    'sessionUser' => $sessionUserPayload,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 if (!is_string($accountIndexConfigJson) || $accountIndexConfigJson === '') { $accountIndexConfigJson = '{}';
 }

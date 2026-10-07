@@ -51,10 +51,23 @@
         var sidebarContentReady = true;
         var accountApiPromise = null;
 
-        if (window.Weline && window.Weline.Api && window.Weline.Api.Account
-            && typeof window.Weline.Api.Account.refreshAccountMenuSignals === 'function') {
-            window.Weline.Api.Account.refreshAccountMenuSignals().catch(function () {});
-        }
+        /**
+         * 个人中心专属：用 SSR 用户信息写入浏览器会话，再 account.current 核对一次。
+         * 其它页面不查账户状态，只读 localStorage 画顶栏。
+         */
+        (function syncPersonalCenterBrowserSession() {
+            var mod = window.WelineAccountModule;
+            if (!mod) {
+                return;
+            }
+            var pageUser = accountConfig.sessionUser;
+            if (pageUser && typeof pageUser === 'object' && typeof mod.applyFrontendProfileUpdate === 'function') {
+                mod.applyFrontendProfileUpdate(pageUser);
+            }
+            if (typeof mod.syncSessionAtPersonalCenter === 'function') {
+                mod.syncSessionAtPersonalCenter().catch(function () {});
+            }
+        })();
 
         function welineDecodeHtmlEntities(message) {
             var s = String(message || '');
@@ -917,6 +930,28 @@
             avatarInput.addEventListener('input', syncAvatarPreview);
             avatarInput.addEventListener('change', syncAvatarPreview);
             syncAvatarPreview();
+            // Logged-in session lives in the browser until logout. Seed / refresh the
+            // local session snapshot from this page's SSR avatar so every other
+            // signed-in page can paint the header from localStorage (no re-query).
+            (function seedSessionAvatarFromPage() {
+                var pageAvatar = avatarInput.value.trim();
+                if (!pageAvatar
+                    || !window.WelineAccountModule
+                    || typeof window.WelineAccountModule.applyFrontendProfileUpdate !== 'function'
+                    || typeof window.WelineAccountModule.readFrontendSessionCache !== 'function'
+                    || typeof window.WelineAccountModule.isBrowserSignedInSnapshot !== 'function') {
+                    return;
+                }
+                var cached = window.WelineAccountModule.readFrontendSessionCache();
+                if (!window.WelineAccountModule.isBrowserSignedInSnapshot(cached)) {
+                    return;
+                }
+                var cachedAvatar = cached.user && String(cached.user.avatar || '').trim();
+                if (cachedAvatar === pageAvatar) {
+                    return;
+                }
+                window.WelineAccountModule.applyFrontendProfileUpdate({ avatar: pageAvatar });
+            })();
         }
 
         var profileForm = document.getElementById('profileForm');

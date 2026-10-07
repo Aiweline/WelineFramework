@@ -74,26 +74,48 @@
                 Number(this.config.guestRecheckMs) || DEFAULT_KEYS.guestRecheckMs
             );
             this._storageBound = false;
-            this._chromeClickBound = false;
-            this._chromeNavInFlight = null;
+            this._nearExpiryTimer = null;
+            this._nearExpiryInFlight = null;
             this.bindFrontendSessionStorageSync();
-            this.bindAccountChromeInteraction();
             const cached = this.readFrontendSessionCache();
-            if (this.isTrustedSignedInCache(cached)) {
+            if (this.isBrowserSignedInSnapshot(cached)) {
                 this.frontendUser = cached.user || null;
             }
         }
 
         /**
-         * Trusted signed-in snapshot: fresh TTL + real identity.
-         * Stale or identity-less cache must not paint「已登录」chrome
-         * (avatar gone / name ghost while session already dead).
+         * Browser signed-in snapshot (login → logout). Identity only — no TTL.
+         * Silent pages paint / trust this without account.current until:
+         * personal center, w_auth, auth pages, editor, or near-expiry JS check.
          */
-        isTrustedSignedInCache(cache) {
+        isBrowserSignedInSnapshot(cache) {
             return !!(cache
                 && cache.isLogin
-                && this.isFrontendSessionCacheFresh(cache)
                 && this.resolveUserIdentity(cache.user));
+        }
+
+        /**
+         * Fresh trusted snapshot (TTL still valid). Used where renew skew matters;
+         * silent browse must NOT require this — use isBrowserSignedInSnapshot.
+         */
+        isTrustedSignedInCache(cache) {
+            return !!(this.isBrowserSignedInSnapshot(cache)
+                && this.isFrontendSessionCacheFresh(cache));
+        }
+
+        /**
+         * 临近退出：signed-in 快照已到 renewAt（TTL 末尾 renewSkew 窗口）。
+         * 非个人操作页只在此时才发 account.current；平时不查。
+         */
+        isNearSessionExpiry(cache) {
+            if (!this.isBrowserSignedInSnapshot(cache)) {
+                return false;
+            }
+            const renewAt = Number(cache.renewAt) || 0;
+            if (!renewAt) {
+                return false;
+            }
+            return Date.now() >= renewAt;
         }
 
         computeFrontendSessionRenewAt(isLogin, verifiedAt) {
@@ -201,6 +223,7 @@
             this.clearFrontendSessionCache();
             this.clearAccountMenuSignals();
             this.frontendUser = null;
+            this.stopNearExpirySessionCheck();
             if (kind === 'logout' || kind === 'login' || kind === 'switch') {
                 document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
                     this.applyHeaderGuest(root);
@@ -387,7 +410,8 @@
             const skipGuestNegativeCache = !!(options && options.skipGuestNegativeCache);
             if (!force) {
                 const cached = this.readFrontendSessionCache();
-                if (this.isTrustedSignedInCache(cached)) {
+                // Signed-in until logout: never re-hit account.current just because TTL skew passed.
+                if (this.isBrowserSignedInSnapshot(cached)) {
                     this.frontendUser = cached.user || null;
                     return {
                         isLogin: true,
@@ -442,6 +466,7 @@
         paintHeaderGuestChrome() {
             this.frontendUser = null;
             this.stopOnlineKeepalive();
+            this.stopNearExpirySessionCheck();
             this.clearAccountMenuSignals();
             document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
                 this.applyHeaderGuest(root);
@@ -531,7 +556,7 @@
 
         /**
          * Silent keepalive disabled (anonymous SSR interactive-auth contract).
-         * Session renew happens on interactive BinQuery / ensureLogin only.
+         * Continuous poll forbidden. Near-expiry uses scheduleNearExpirySessionCheck only.
          */
         startOnlineKeepalive() {
             this.stopOnlineKeepalive();
@@ -556,6 +581,62 @@
             }
             // No snapshot yet: wait a full renew window, not a short poll.
             return Math.max(this._renewSkewMs, this._sessionTtlMs - this._renewSkewMs);
+        }
+
+        stopNearExpirySessionCheck() {
+            if (this._nearExpiryTimer) {
+                clearTimeout(this._nearExpiryTimer);
+                this._nearExpiryTimer = null;
+            }
+        }
+
+        /**
+         * Non-personal pages: one JS timer until renewAt. Fires once near expiry →
+         * account.current; if still signed in, rewrite snapshot + reschedule; if dead, guest.
+         */
+        scheduleNearExpirySessionCheck() {
+            this.stopNearExpirySessionCheck();
+            const cached = this.readFrontendSessionCache();
+            if (!this.isBrowserSignedInSnapshot(cached)) {
+                return;
+            }
+            if (this.isNearSessionExpiry(cached)) {
+                this.renewSessionNearExpiry().catch(() => {});
+                return;
+            }
+            const delay = Math.max(1000, this.msUntilSessionRenew());
+            this._nearExpiryTimer = setTimeout(() => {
+                this._nearExpiryTimer = null;
+                this.renewSessionNearExpiry().catch(() => {});
+            }, delay);
+        }
+
+        renewSessionNearExpiry() {
+            if (this._nearExpiryInFlight) {
+                return this._nearExpiryInFlight;
+            }
+            this._nearExpiryInFlight = this.checkFrontendUserLogin({ force: true })
+                .then((status) => {
+                    const user = status && (status.user || this.frontendUser);
+                    if (status && status.isLogin && this.resolveUserIdentity(user)) {
+                        this.frontendUser = user;
+                        document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
+                            this.applyHeaderSignedIn(root, user);
+                        });
+                        this.scheduleNearExpirySessionCheck();
+                        return { renewed: true, isLogin: true, user };
+                    }
+                    this.paintHeaderGuestChrome();
+                    return { renewed: true, isLogin: false };
+                })
+                .catch((error) => {
+                    console.warn('[WelineApi.Account] near-expiry session check failed:', error);
+                    return { renewed: false, error };
+                })
+                .finally(() => {
+                    this._nearExpiryInFlight = null;
+                });
+            return this._nearExpiryInFlight;
         }
 
         bindOnlineKeepaliveEvents() {
@@ -650,13 +731,19 @@
         handleAuthRefreshSignal() {
             const editorPreview = this.isThemeEditorPreview();
             const hasSignal = this.isLoginAuthSignal() || this.isLogoutAuthSignal();
+            // Network now: editor / w_auth / auth forms. 个人中心由 account-index.js 同步会话.
+            // Other pages: paintOnly + schedule near-expiry JS check (临近退出才 account.current).
             if (editorPreview || hasSignal || this.hasAuthPending() || this.isStorefrontAuthPage()) {
                 return this.syncHeaderAccountChrome({
                     force: editorPreview,
                     fromAuthSignal: true,
                 });
             }
-            return this.syncHeaderAccountChrome({ paintOnly: true });
+            return Promise.resolve(this.syncHeaderAccountChrome({ paintOnly: true }))
+                .then((result) => {
+                    this.scheduleNearExpirySessionCheck();
+                    return result;
+                });
         }
 
         isThemeEditorPreview() {
@@ -722,15 +809,15 @@
             });
 
             const cached = this.readFrontendSessionCache();
-            // Interactive-only network: force / w_auth / auth-pending / auth pages.
-            // Stale localStorage is acceptable until the shopper interacts.
+            // Network only at allowed stages: force / w_auth / auth-pending / auth forms.
             const needsNetwork = !paintOnly && (force || hasSignal || authPending || onAuthPage);
 
             if (!needsNetwork) {
                 if (cached) {
-                    // Only paint signed-in from a trusted snapshot. Stale / identity-less
-                    // localStorage must not claim login (session may already be dead).
-                    const isLogin = this.isTrustedSignedInCache(cached);
+                    // Paint signed-in from browser snapshot until logout / allowed reconcile.
+                    // Do not drop chrome when renewAt skew passes — that would force more
+                    // account.current traffic against the silent-browse contract.
+                    const isLogin = this.isBrowserSignedInSnapshot(cached);
                     const user = isLogin ? (cached.user || null) : null;
                     this.frontendUser = user;
                     Array.from(roots).forEach((root) => {
@@ -767,7 +854,7 @@
                     synced: !!cached,
                     refreshed: false,
                     fromCache: !!cached,
-                    isLogin: this.isTrustedSignedInCache(cached),
+                    isLogin: this.isBrowserSignedInSnapshot(cached),
                     reason: paintOnly
                         ? 'paint_only'
                         : (needsMenuReconcile ? 'cache_menu_reconcile' : 'cache_or_guest_ssr'),
@@ -936,6 +1023,44 @@
             } catch (_error) {
                 return false;
             }
+        }
+
+        resolveAccountLoginUrl() {
+            const root = document.querySelector('[data-w-header-account="1"]');
+            const fromWidget = root && root.getAttribute('data-login-url');
+            if (fromWidget) {
+                return String(fromWidget).trim();
+            }
+            return '/customer/account/login';
+        }
+
+        /**
+         * Personal center only (account-index.js): one account.current to refresh browser
+         * snapshot + header. Session dead → clear local chrome and go login.
+         */
+        async syncSessionAtPersonalCenter() {
+            let status = null;
+            try {
+                status = await this.checkFrontendUserLogin({ force: true });
+            } catch (_error) {
+                status = { isLogin: false, user: null };
+            }
+            const user = status && (status.user || this.frontendUser);
+            if (!status || !status.isLogin || !this.resolveUserIdentity(user)) {
+                this.beginAuthBoundary('logout');
+                try {
+                    window.location.assign(this.resolveAccountLoginUrl());
+                } catch (_nav) {
+                    // ignore
+                }
+                return { synced: false, isLogin: false, redirected: true };
+            }
+            this.frontendUser = user;
+            document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
+                this.applyHeaderSignedIn(root, user);
+            });
+            this.refreshAccountMenuSignals().catch(() => {});
+            return { synced: true, isLogin: true, user };
         }
 
         resolveSignedInLeaveUrl() {
@@ -1156,14 +1281,19 @@
         }
 
         /**
-         * Only accept absolute http(s) avatar URLs. Relative Google photo tokens
-         * (e.g. "ACg8…=s96-c") resolve against the storefront origin and make WLS
-         * return a multi-MB HTML 404 that stalls the browser connection pool.
+         * Accept http(s) avatar URLs and data:image/* (account page SSR uses the same).
+         * Relative Google photo tokens (e.g. "ACg8…=s96-c") resolve against the
+         * storefront origin and make WLS return a multi-MB HTML 404 that stalls
+         * the browser connection pool — reject those.
          */
         normalizeAccountAvatarUrl(raw) {
             const value = String(raw || '').trim();
             if (value === '') {
                 return '';
+            }
+            // Inline uploads stored as data URLs (account page shows them raw).
+            if (/^data:image\/[a-z0-9.+-]+;/i.test(value)) {
+                return value;
             }
             try {
                 const parsed = new URL(value, window.location.origin);
@@ -1211,14 +1341,15 @@
                 this.clearAccountAvatar(avatar, avatarFallback);
                 return;
             }
-            let failSafe = 0;
-            avatar.onload = () => {
+            const reveal = () => {
                 window.clearTimeout(failSafe);
                 avatar.hidden = false;
                 if (avatarFallback instanceof HTMLElement) {
                     avatarFallback.hidden = true;
                 }
             };
+            let failSafe = 0;
+            avatar.onload = reveal;
             avatar.onerror = () => {
                 window.clearTimeout(failSafe);
                 this.clearAccountAvatar(avatar, avatarFallback);
@@ -1226,7 +1357,9 @@
             avatar.setAttribute('alt', altText || '');
             avatar.setAttribute('referrerpolicy', 'no-referrer');
             avatar.setAttribute('decoding', 'async');
-            avatar.setAttribute('loading', 'lazy');
+            // Header chrome is above-the-fold. lazy + [hidden]{display:none} never starts
+            // the request (account page works because account-index.js does not use lazy).
+            avatar.setAttribute('loading', 'eager');
             // Hide until load succeeds so a hanging remote host does not flash broken chrome.
             avatar.hidden = true;
             if (avatarFallback instanceof HTMLElement) {
@@ -1240,6 +1373,10 @@
                 }
             }, 2500);
             avatar.setAttribute('src', url);
+            // Cached images may skip onload; complete+naturalWidth means paint now.
+            if (avatar.complete && avatar.naturalWidth > 0) {
+                reveal();
+            }
         }
 
         /**
@@ -1662,14 +1799,26 @@
         }
 
         /**
-         * Interactive login gate. Checks session (force network when asked), otherwise
-         * mounts customer/login-panel. Call only from user actions / 401 recovery.
+         * Interactive login gate. Default: trust browser signed-in snapshot (no network).
+         * Pass force:true only at allowed stages (personal-center reconcile, auth recovery).
          */
         async ensureLogin(options = {}) {
             const opts = options && typeof options === 'object' ? options : {};
+            const forceNetwork = opts.force === true;
+            if (!forceNetwork) {
+                const cached = this.readFrontendSessionCache();
+                if (this.isBrowserSignedInSnapshot(cached)) {
+                    const user = cached.user || this.frontendUser;
+                    this.frontendUser = user;
+                    document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
+                        this.applyHeaderSignedIn(root, user);
+                    });
+                    return { ok: true, already: true, fromCache: true, user };
+                }
+            }
             let status = null;
             try {
-                status = await this.checkFrontendUserLogin({ force: opts.force !== false });
+                status = await this.checkFrontendUserLogin({ force: forceNetwork });
             } catch (_error) {
                 status = { isLogin: false, user: null };
             }
@@ -1680,8 +1829,7 @@
                 return { ok: true, already: true, user };
             }
 
-            // Session dead while local chrome still claimed signed-in: flip guest now
-            // (same-tab; do not wait for a later paint / redirect).
+            // Forced check found session dead: flip guest now (same-tab).
             this.paintHeaderGuestChrome();
 
             const scopeRoot = opts.root instanceof Element ? opts.root : document;
@@ -1712,89 +1860,6 @@
             return { ok: false, prompted: true, host };
         }
 
-        /**
-         * Clicking header「个人中心」while local chrome says signed-in must reconcile
-         * with account.current before navigation — otherwise dead sessions keep
-         * showing logged-in until a server redirect feels like「自己掉线」.
-         */
-        bindAccountChromeInteraction() {
-            if (this._chromeClickBound) {
-                return;
-            }
-            this._chromeClickBound = true;
-            document.addEventListener('click', (event) => {
-                if (!(event instanceof MouseEvent) || event.defaultPrevented || event.button !== 0) {
-                    return;
-                }
-                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-                    return;
-                }
-                const target = event.target;
-                if (!(target instanceof Element)) {
-                    return;
-                }
-                const root = target.closest('[data-w-header-account="1"]');
-                if (!(root instanceof Element) || root.getAttribute('data-auth-state') !== 'signed-in') {
-                    return;
-                }
-                const link = target.closest('a[data-account-home-link], a[data-account-nav-link], [data-account-menu] a[href]');
-                if (!(link instanceof HTMLAnchorElement) || !root.contains(link)) {
-                    return;
-                }
-                if (link.hasAttribute('data-account-logout-confirm')
-                    || link.classList.contains('logout-link')) {
-                    return;
-                }
-                const href = String(link.getAttribute('href') || '').trim();
-                if (!href || href === '#' || /^javascript:/i.test(href)) {
-                    return;
-                }
-                const isAccountHome = link.hasAttribute('data-account-home-link');
-                const isAccountPath = /customer\/account/i.test(href);
-                if (!isAccountHome && !isAccountPath) {
-                    return;
-                }
-                event.preventDefault();
-                event.stopPropagation();
-                this.reconcileSignedInChromeNavigation(href);
-            }, true);
-        }
-
-        reconcileSignedInChromeNavigation(href) {
-            if (this._chromeNavInFlight) {
-                return this._chromeNavInFlight;
-            }
-            this._chromeNavInFlight = Promise.resolve()
-                .then(async () => {
-                    let status = null;
-                    try {
-                        status = await this.checkFrontendUserLogin({ force: true });
-                    } catch (_error) {
-                        status = { isLogin: false, user: null };
-                    }
-                    const user = status && (status.user || this.frontendUser);
-                    if (status && status.isLogin && this.resolveUserIdentity(user)) {
-                        document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
-                            this.applyHeaderSignedIn(root, user);
-                        });
-                        if (href) {
-                            window.location.assign(href);
-                        }
-                        return { ok: true, navigated: true };
-                    }
-                    this.paintHeaderGuestChrome();
-                    return this.ensureLogin({ force: false });
-                })
-                .catch((error) => {
-                    console.warn('[WelineApi.Account] account chrome reconcile failed:', error);
-                    this.paintHeaderGuestChrome();
-                    return this.ensureLogin({ force: false });
-                })
-                .finally(() => {
-                    this._chromeNavInFlight = null;
-                });
-            return this._chromeNavInFlight;
-        }
     }
 
     const accountManager = new AccountManager(getAccountConfig());
@@ -1808,8 +1873,9 @@
         handleAuthRefreshSignal: () => accountManager.handleAuthRefreshSignal(),
         syncHeaderAccountChrome: (options) => accountManager.syncHeaderAccountChrome(options || {}),
         ensureLogin: (options) => accountManager.ensureLogin(options || {}),
-        reconcileSignedInChromeNavigation: (href) => accountManager.reconcileSignedInChromeNavigation(href),
+        syncSessionAtPersonalCenter: () => accountManager.syncSessionAtPersonalCenter(),
         isTrustedSignedInCache: (cache) => accountManager.isTrustedSignedInCache(cache || null),
+        isBrowserSignedInSnapshot: (cache) => accountManager.isBrowserSignedInSnapshot(cache || null),
         paintHeaderGuestChrome: () => accountManager.paintHeaderGuestChrome(),
         maybeStartSocialQuickPrompt: (...args) => accountManager.maybeStartSocialQuickPrompt(...args),
         scanMounts: (...args) => accountManager.scanMounts(...args),
@@ -1819,6 +1885,9 @@
         startOnlineKeepalive: () => accountManager.startOnlineKeepalive(),
         stopOnlineKeepalive: () => accountManager.stopOnlineKeepalive(),
         isOnlineKeepaliveActive: () => accountManager.isOnlineKeepaliveActive(),
+        isNearSessionExpiry: (cache) => accountManager.isNearSessionExpiry(cache || null),
+        scheduleNearExpirySessionCheck: () => accountManager.scheduleNearExpirySessionCheck(),
+        renewSessionNearExpiry: () => accountManager.renewSessionNearExpiry(),
         getFrontendUser: () => accountManager.getFrontendUser(),
         readFrontendSessionCache: () => accountManager.readFrontendSessionCache(),
         clearFrontendSessionCache: () => accountManager.clearFrontendSessionCache(),
@@ -1902,7 +1971,7 @@
         boot();
     })();
 
-    // Header account: silent paint from localStorage; network only for editor / w_auth / auth pages.
+    // Non-personal pages: paint from localStorage; JS near-expiry timer may check once.
     (function bootstrapHeaderAuthRefresh() {
         const run = () => {
             if (!document.querySelector('[data-w-header-account="1"]')) {
@@ -1930,6 +1999,7 @@
             user: user || accountManager.frontendUser,
         });
         accountManager.markAuthPending();
+        accountManager.scheduleNearExpirySessionCheck();
         accountManager.refreshAccountMenuSignals().catch(() => {});
     });
     window.addEventListener('weline:account:frontend:logout', () => {

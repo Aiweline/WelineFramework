@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * 前台账户会话 JS 归属 Customer（account-session.js），禁止再放 Frontend。
- * 静默浏览：仅 localStorage 画顶栏；交互才 ensureLogin / account.current。
+ * 静默浏览：仅 localStorage 画顶栏；account.current 仅 w_auth/认证页/个人中心 account-index。
  */
 final class AccountSessionModuleContractTest extends TestCase
 {
@@ -55,6 +55,11 @@ final class AccountSessionModuleContractTest extends TestCase
         self::assertStringContainsString('setAccountAvatarFallbackLabel', $js);
         self::assertStringContainsString('data-account-avatar-initial', $js);
         self::assertStringContainsString('data-has-initial', $js);
+        // Header chrome: eager load + complete cache reveal (lazy+[hidden] never fetches).
+        self::assertStringContainsString("setAttribute('loading', 'eager')", $js);
+        self::assertStringContainsString('avatar.complete && avatar.naturalWidth > 0', $js);
+        self::assertStringContainsString('data:image/', $js);
+        self::assertStringNotContainsString("setAttribute('loading', 'lazy')", $js);
         self::assertStringContainsString('maybeStartSocialQuickPrompt', $js);
         self::assertStringContainsString('socialQuickPrompt', $js);
         self::assertStringContainsString('customerSocialQuick', $js);
@@ -76,16 +81,29 @@ final class AccountSessionModuleContractTest extends TestCase
         self::assertStringContainsString('accountManager.handleAuthRefreshSignal()', $js);
         self::assertStringNotContainsString('bootstrapOnlineKeepalive', $js);
         self::assertStringNotContainsString("reason: 'already_aligned'", $js);
-        // Silent keepalive disabled.
+        // Silent keepalive disabled; near-expiry one-shot JS check only.
         self::assertStringContainsString('Silent keepalive disabled', $js);
+        self::assertStringContainsString('isNearSessionExpiry', $js);
+        self::assertStringContainsString('scheduleNearExpirySessionCheck', $js);
+        self::assertStringContainsString('renewSessionNearExpiry', $js);
+        self::assertStringContainsString('临近退出', $js);
         self::assertStringContainsString('fromAuthSignal: true', $js);
         self::assertStringContainsString('isLogoutAuthSignal', $js);
         self::assertStringContainsString('skipGuestNegativeCache', $js);
         self::assertStringContainsString('optimistic_keep_login_signal', $js);
         self::assertStringContainsString('isTrustedSignedInCache', $js);
+        self::assertStringContainsString('isBrowserSignedInSnapshot', $js);
+        self::assertStringContainsString('syncSessionAtPersonalCenter', $js);
+        self::assertStringContainsString('个人中心由 account-index.js 同步会话', $js);
+        self::assertStringNotContainsString('isStorefrontAccountArea', $js);
+        self::assertStringNotContainsString('onAccountArea', $js);
+        self::assertStringNotContainsString('bindAccountChromeInteraction', $js);
+        self::assertStringNotContainsString('reconcileSignedInChromeNavigation', $js);
+        // Signed-in browser snapshot skips account.current; force only at allowed stages.
+        self::assertStringContainsString('forceNetwork', $js);
+        self::assertStringContainsString('opts.force === true', $js);
+        self::assertStringNotContainsString('opts.force !== false', $js);
         self::assertStringContainsString('paintHeaderGuestChrome', $js);
-        self::assertStringContainsString('bindAccountChromeInteraction', $js);
-        self::assertStringContainsString('reconcileSignedInChromeNavigation', $js);
         self::assertStringContainsString('resolveUserIdentity(rawUser)', $js);
         self::assertStringContainsString('guest current returns', $js);
         self::assertStringContainsString('success:true with isLogin:false', $js);

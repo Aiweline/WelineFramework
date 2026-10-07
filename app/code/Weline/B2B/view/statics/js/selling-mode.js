@@ -816,7 +816,8 @@
             || isCustomerLoggedIn(root);
         if (!loggedIn) {
             if (global.Weline && global.Weline.Account && typeof global.Weline.Account.ensureLogin === 'function') {
-                Promise.resolve(global.Weline.Account.ensureLogin({ force: true, root: root }))
+                // No force: trust browser session; account.current only at allowed stages.
+                Promise.resolve(global.Weline.Account.ensureLogin({ root: root }))
                     .then(function () {
                         requestFrameworkMountScan(root);
                     })
