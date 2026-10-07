@@ -82,3 +82,50 @@
 .header-cart .w-storefront-money-summary {
     width: 100%;
 }
+
+/*
+ * Inverse header belt remaps ink to on-dark; drawer rebinds tokens, but beat
+ * `[data-surface=inverse] :is(span)` with drawer-local ink so 商品小计/合计
+ * never paint cream-on-cream (审图 2026-10-07).
+ */
+.header-cart .mini-cart-drawer .w-storefront-money-summary,
+[data-surface="inverse"] .mini-cart-drawer .w-storefront-money-summary,
+.w-surface-inverse .mini-cart-drawer .w-storefront-money-summary {
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+}
+
+.header-cart .mini-cart-drawer .w-storefront-money-summary__row,
+[data-surface="inverse"] .mini-cart-drawer .w-storefront-money-summary__row,
+.w-surface-inverse .mini-cart-drawer .w-storefront-money-summary__row {
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+}
+
+.header-cart .mini-cart-drawer .w-storefront-money-summary__row span:first-child,
+[data-surface="inverse"] .mini-cart-drawer .w-storefront-money-summary__row span:first-child,
+.w-surface-inverse .mini-cart-drawer .w-storefront-money-summary__row span:first-child {
+    color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #565959));
+}
+
+.header-cart .mini-cart-drawer .w-storefront-money-summary__row strong,
+.header-cart .mini-cart-drawer .w-storefront-money-summary__grand,
+.header-cart .mini-cart-drawer .w-storefront-money-summary__row--payable span:first-child,
+[data-surface="inverse"] .mini-cart-drawer .w-storefront-money-summary__row strong,
+[data-surface="inverse"] .mini-cart-drawer .w-storefront-money-summary__grand,
+[data-surface="inverse"] .mini-cart-drawer .w-storefront-money-summary__row--payable span:first-child,
+.w-surface-inverse .mini-cart-drawer .w-storefront-money-summary__row strong,
+.w-surface-inverse .mini-cart-drawer .w-storefront-money-summary__grand,
+.w-surface-inverse .mini-cart-drawer .w-storefront-money-summary__row--payable span:first-child {
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+}
+
+.header-cart .mini-cart-drawer .w-storefront-money-summary__row--payable .w-storefront-money-summary__grand,
+[data-surface="inverse"] .mini-cart-drawer .w-storefront-money-summary__row--payable .w-storefront-money-summary__grand,
+.w-surface-inverse .mini-cart-drawer .w-storefront-money-summary__row--payable .w-storefront-money-summary__grand {
+    color: var(--amz-drawer-price, var(--color-primary, #b12704));
+}
+
+.header-cart .mini-cart-drawer .w-storefront-money-summary__note,
+[data-surface="inverse"] .mini-cart-drawer .w-storefront-money-summary__note,
+.w-surface-inverse .mini-cart-drawer .w-storefront-money-summary__note {
+    color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #565959));
+}

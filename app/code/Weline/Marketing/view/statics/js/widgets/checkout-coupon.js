@@ -547,6 +547,22 @@
                 }
                 return;
             }
+            // Mini-cart mutate/open already returned a full cart payload — do not re-quote
+            // (quote → soft notify used to trigger a second getCart wipe).
+            if (detail && detail.source === 'mini-cart-mutate') {
+                var mutateCode = String(
+                    detail.coupon_code
+                    || (detail.discount_preview && detail.discount_preview.coupon_code)
+                    || ''
+                ).trim();
+                if (mutateCode) {
+                    syncAppliedState(mutateCode, detail.discount_preview || detail.discount || null);
+                } else if (detail.cart_count != null && Number(detail.cart_count) >= 0
+                    && !(detail.discount_preview && Number(detail.discount_preview.amount_minor || 0) > 0)) {
+                    clearAppliedState();
+                }
+                return;
+            }
             if (resolveCartType(root) === 'toc') {
                 hydrateForCurrentType('toc');
             }

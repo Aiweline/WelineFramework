@@ -240,6 +240,8 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-i18n-discount-automatic="<?= $esc(__('自动优惠')) ?>"
          data-i18n-fs-remaining="<?= $esc(__('还差 %1 包邮')) ?>"
          data-i18n-fs-qualified="<?= $esc(__('已享包邮')) ?>"
+         data-i18n-footer-collapse="<?= $esc(__('收起明细')) ?>"
+         data-i18n-footer-expand="<?= $esc(__('展开明细')) ?>"
          data-fs-threshold-usd="49"
          data-placeholder-image="<?= $esc($placeholder) ?>">
     <a href="@url{'cart'}"
@@ -314,33 +316,55 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
             </div>
         </div>
 
-        <footer class="mini-cart-drawer__footer" data-mini-cart-footer hidden>
-            <w:slot id="footer-extras"
-                    layout="mini-cart"
-                    name="底部扩展区"
-                    accept="layout-mini-cart-footer-extras,mini-cart-coupon,checkout-coupon,order-notice,marketing,order,b2b-checkout-credit,b2b-deposit-note,b2b"
-                    multiple="true"
-                    position="footer"
-                    class="mini-cart-drawer__extras"></w:slot>
-            <div class="mini-cart-drawer__fs-progress"
-                 data-mini-cart-fs-progress
-                 hidden
-                 role="status"
-                 aria-live="polite">
-                <div class="mini-cart-drawer__fs-progress-track" aria-hidden="true">
-                    <div class="mini-cart-drawer__fs-progress-bar" data-mini-cart-fs-bar data-widget-style-class="beb8cfc5edbbbf39"></div>
+        <footer class="mini-cart-drawer__footer"
+                data-mini-cart-footer
+                hidden>
+            <button type="button"
+                    class="mini-cart-drawer__footer-toggle"
+                    data-mini-cart-footer-toggle
+                    aria-expanded="true"
+                    aria-controls="mini-cart-footer-details">
+                <span class="mini-cart-drawer__footer-toggle-label"
+                      data-mini-cart-footer-toggle-label><?= __('收起明细') ?></span>
+                <span class="mini-cart-drawer__footer-compact"
+                      data-mini-cart-footer-compact
+                      hidden>
+                    <span class="mini-cart-drawer__footer-compact-label"><?= __('小计') ?></span>
+                    <strong class="mini-cart-drawer__footer-compact-amount"
+                            data-cart-total-amount></strong>
+                </span>
+                <span class="mini-cart-drawer__footer-chevron" aria-hidden="true"></span>
+            </button>
+            <div id="mini-cart-footer-details"
+                 class="mini-cart-drawer__footer-details"
+                 data-mini-cart-footer-details>
+                <w:slot id="footer-extras"
+                        layout="mini-cart"
+                        name="底部扩展区"
+                        accept="layout-mini-cart-footer-extras,mini-cart-coupon,checkout-coupon,order-notice,marketing,order,b2b-checkout-credit,b2b-deposit-note,b2b"
+                        multiple="true"
+                        position="footer"
+                        class="mini-cart-drawer__extras"></w:slot>
+                <div class="mini-cart-drawer__fs-progress"
+                     data-mini-cart-fs-progress
+                     hidden
+                     role="status"
+                     aria-live="polite">
+                    <div class="mini-cart-drawer__fs-progress-track" aria-hidden="true">
+                        <div class="mini-cart-drawer__fs-progress-bar" data-mini-cart-fs-bar data-widget-style-class="beb8cfc5edbbbf39"></div>
+                    </div>
+                    <p class="mini-cart-drawer__fs-progress-text" data-mini-cart-fs-text></p>
                 </div>
-                <p class="mini-cart-drawer__fs-progress-text" data-mini-cart-fs-text></p>
+                <w:slot id="money-summary"
+                        name="<?= __('迷你购物车金额小计') ?>"
+                        accept="storefront-money-summary,checkout-money-summary,money-summary,cart-money-summary,checkout"
+                        exclusive="true"
+                        multiple="false"
+                        position="footer"
+                        class="mini-cart-drawer__money-summary-slot"
+                        weline-code="theme.mini-cart.money_summary_slot">
+                </w:slot>
             </div>
-            <w:slot id="money-summary"
-                    name="<?= __('迷你购物车金额小计') ?>"
-                    accept="storefront-money-summary,checkout-money-summary,money-summary,cart-money-summary,checkout"
-                    exclusive="true"
-                    multiple="false"
-                    position="footer"
-                    class="mini-cart-drawer__money-summary-slot"
-                    weline-code="theme.mini-cart.money_summary_slot">
-            </w:slot>
             <div class="mini-cart-drawer__actions">
                 <a href="@url{'checkout'}"
                    class="mini-cart-drawer__btn mini-cart-drawer__btn--primary"

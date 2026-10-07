@@ -39,8 +39,8 @@
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261006-mini-cart-type1"],
-            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261006-mini-cart-type1"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261007-minicart-dedupe-v9"],
+            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261007-minicart-dedupe-v9"],
             globalVar: "WelineMiniCartIcon",
             description: "迷你购物车图标与抽屉"
         },
@@ -157,8 +157,8 @@
             description: "账户中心两步验证面板"
         },
         checkoutCoupon: {
-            origin_paths: ["app/code/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20260922-cpay-coupon-paint1"],
-            paths: ["Weline_Marketing::js/widgets/checkout-coupon.js?v=20260922-cpay-coupon-paint1"],
+            origin_paths: ["app/code/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20261007-coupon-no-double-hydrate"],
+            paths: ["Weline_Marketing::js/widgets/checkout-coupon.js?v=20261007-coupon-no-double-hydrate"],
             globalVar: null,
             description: "结账/迷你购物车优惠券部件"
         },

@@ -4,6 +4,8 @@
     var guestTokenStorageKey = 'weline.cart.guest_token';
     var openClass = 'is-drawer-open';
     var cartRefreshTimer = null;
+    // One-shot CSS ensure — never rip baked mini-cart-drawer.css on every open (FOUC).
+    var drawerCssReady = false;
     // Ignore backdrop closes briefly after line mutate — DOM refresh / busy pointer-events
     // can retarget the same gesture onto the full-screen overlay and collapse the drawer.
     var suppressBackdropCloseUntil = 0;
@@ -127,7 +129,7 @@
 
     /**
      * Opaque cart_type from this page's cart/checkout view (URL / handoff).
-     * Wins over leftover selling-mode cookie so 「查看零售车」 keeps mini-cart on toc.
+     * Wins over leftover selling-mode cookie so ?cart_type=toc handoff keeps mini-cart on toc.
      */
     function cartTypeFromPageView() {
         try {
@@ -246,13 +248,14 @@
 
     function promptEnsureLogin() {
         try {
+            // Trust browser signed-in snapshot; do not force account.current on every cart click.
             if (window.Weline && window.Weline.Account && typeof window.Weline.Account.ensureLogin === 'function') {
-                return Promise.resolve(window.Weline.Account.ensureLogin({ force: true })).catch(function () {
+                return Promise.resolve(window.Weline.Account.ensureLogin()).catch(function () {
                     return null;
                 });
             }
             if (window.WelineAccountModule && typeof window.WelineAccountModule.ensureLogin === 'function') {
-                return Promise.resolve(window.WelineAccountModule.ensureLogin({ force: true })).catch(function () {
+                return Promise.resolve(window.WelineAccountModule.ensureLogin()).catch(function () {
                     return null;
                 });
             }
@@ -544,7 +547,7 @@
                 if (isDemoChromeOnly(root)) {
                     return;
                 }
-                applySummary(root, cached);
+                applySummary(root, cached, { skipItems: drawerContentIsFresh(root, cached) });
             });
             if (window.Weline && window.Weline.MiniCart) {
                 window.Weline.MiniCart.__lastPaintHit = true;
@@ -1190,8 +1193,78 @@
         }
     }
 
-    function applySummary(root, summary) {
+    /**
+     * Stable signature of cart lines (id+qty). Used so soft open / background sync
+     * can skip wipe/rebuild when the list is already correct — including qty edits.
+     */
+    function lineItemsSignature(items) {
+        if (!Array.isArray(items) || !items.length) {
+            return '';
+        }
+        var parts = [];
+        var limit = Math.min(items.length, 20);
+        for (var i = 0; i < limit; i++) {
+            var item = items[i] || {};
+            var id = String(item.item_id || item.id || '').trim();
+            var qty = Math.max(1, Number(item.qty || item.quantity || 1));
+            parts.push(id + ':' + qty);
+        }
+        return parts.join('|');
+    }
+
+    function domLineItemsSignature(root) {
+        if (!root) {
+            return '';
+        }
+        var lines = root.querySelectorAll('[data-mini-cart-line]');
+        if (!lines.length) {
+            return '';
+        }
+        var parts = [];
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            var id = String(line.getAttribute('data-item-id') || '').trim();
+            var input = line.querySelector('[data-qty-input]');
+            var qty = Math.max(1, Number(input && input.value ? input.value : 1));
+            parts.push(id + ':' + qty);
+        }
+        return parts.join('|');
+    }
+
+    /**
+     * True when the drawer already shows this summary's lines — open/sync must not
+     * wipe/rebuild the item list (looks like “刷了一下购物车”).
+     */
+    function drawerContentIsFresh(root, summary) {
+        if (!root || !summary || typeof summary !== 'object') {
+            return false;
+        }
+        var count = Number(summary.cart_count || summary.item_count || 0);
+        var mode = normalizeCartType(summary.cart_type || summary.selling_mode || preferredCartType());
+        var shownCount = Number(root.getAttribute('data-cart-count') || 0);
+        var shownType = normalizeCartType(root.getAttribute('data-cart-type') || '');
+        var lines = root.querySelectorAll('[data-mini-cart-line]').length;
+        var emptyNode = root.querySelector('[data-mini-cart-empty]');
+        if (count <= 0) {
+            return !!(emptyNode && shownCount === 0 && lines === 0);
+        }
+        if (shownCount !== count || shownType !== mode || lines <= 0) {
+            return false;
+        }
+        var items = Array.isArray(summary.items) ? summary.items : [];
+        if (!items.length) {
+            // Count matches but payload has no lines — cannot prove DOM is current.
+            return false;
+        }
+        var want = lineItemsSignature(items);
+        var have = domLineItemsSignature(root);
+        return !!(want && have && want === have);
+    }
+
+    function applySummary(root, summary, options) {
         if (!summary || typeof summary !== 'object') return;
+        options = options || {};
+        var skipItems = options.skipItems === true;
         if (!summaryCacheHasLineItems(summary)) {
             invalidateEmptyCachesClaimedBySiblings(summary);
         }
@@ -1258,6 +1331,13 @@
         renderDiscountBreakdown(root, emptyCart ? { subtotal: 0 } : summary, currency);
         renderTaxRow(root, emptyCart ? null : summary, currency);
         renderFreeShippingProgress(root, summary);
+        if (skipItems) {
+            var footer = root.querySelector('[data-mini-cart-footer]');
+            if (footer) {
+                footer.hidden = emptyCart;
+            }
+            return;
+        }
         renderItems(root, items.slice(0, 20), currency);
     }
 
@@ -1302,6 +1382,61 @@
         return root.classList.contains(openClass);
     }
 
+    function isFooterCollapsed(root) {
+        return !!(root && root.classList.contains('is-footer-collapsed'));
+    }
+
+    function setFooterCollapsed(root, collapsed) {
+        if (!root) {
+            return;
+        }
+        var next = !!collapsed;
+        root.classList.toggle('is-footer-collapsed', next);
+        var toggle = root.querySelector('[data-mini-cart-footer-toggle]');
+        var details = root.querySelector('[data-mini-cart-footer-details]');
+        var compact = root.querySelector('[data-mini-cart-footer-compact]');
+        var label = root.querySelector('[data-mini-cart-footer-toggle-label]');
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', next ? 'false' : 'true');
+        }
+        if (details) {
+            // Prefer aria-hidden + CSS max-height (not [hidden]) so the sheet can
+            // animate upward instead of vanishing with display:none.
+            details.hidden = false;
+            details.removeAttribute('hidden');
+            details.setAttribute('aria-hidden', next ? 'true' : 'false');
+        }
+        if (compact) {
+            compact.hidden = !next;
+        }
+        if (label) {
+            label.textContent = next
+                ? attr(root, 'data-i18n-footer-expand', '展开明细')
+                : attr(root, 'data-i18n-footer-collapse', '收起明细');
+            // Collapsed bar shows compact total; keep label text for SR via toggle aria.
+            label.hidden = next;
+        }
+    }
+
+    function bindFooterToggle(root) {
+        var toggle = root.querySelector('[data-mini-cart-footer-toggle]');
+        if (!toggle || toggle.getAttribute('data-bound') === '1') {
+            return;
+        }
+        toggle.setAttribute('data-bound', '1');
+        // Default: expanded (all coupons / money lines). User may collapse to free line height.
+        setFooterCollapsed(root, false);
+        toggle.addEventListener('click', function (event) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+            if (event && typeof event.stopPropagation === 'function') {
+                event.stopPropagation();
+            }
+            setFooterCollapsed(root, !isFooterCollapsed(root));
+        });
+    }
+
     function bindDrawer(root) {
         var els = drawerElements(root);
         if (!els.drawer || !els.trigger) {
@@ -1328,6 +1463,8 @@
                 setDrawerOpen(root, false);
             });
         }
+
+        bindFooterToggle(root);
 
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape' && isDrawerOpen(root)) {
@@ -1401,7 +1538,7 @@
             if (cached && cached.success !== false
                 && normalizeCartType(cached.cart_type || cached.selling_mode) === mode
                 && summaryCacheHasLineItems(cached)) {
-                applySummary(root, cached);
+                applySummary(root, cached, { skipItems: drawerContentIsFresh(root, cached) });
                 return;
             }
         }
@@ -1468,7 +1605,10 @@
                     pendingCouponCode = String(normalized.discount_preview.coupon_code).trim().toUpperCase();
                 }
             }
-            applySummary(root, normalized);
+            applySummary(root, normalized, {
+                // Keep money/badge updates; never wipe lines that already match.
+                skipItems: drawerContentIsFresh(root, normalized),
+            });
             rememberSummaryCache(normalized);
             if (options.forceNetwork && window.WelineCart
                 && typeof window.WelineCart.consumeNeedsOriginRefresh === 'function') {
@@ -1479,7 +1619,9 @@
                 window.WelineCart.markCartActive();
             }
         };
-        if (options.drawerBusy && isDrawerOpen(root)) {
+        // Open drawer: never put a busy overlay on a background badge/sync — that flash
+        // looks like “刷了一下购物车”. Mutations use runWithDrawerBusy separately.
+        if (options.drawerBusy && isDrawerOpen(root) && options.forceItems === true) {
             return runWithDrawerBusy(root, task);
         }
         try {
@@ -1524,8 +1666,13 @@
             summary.selling_mode = summary.cart_type;
             applySummary(root, summary);
             rememberSummaryCache(summary);
+            // Already painted from the mutation response — mark refresh:false so Marketing
+            // hydrate / scheduleCartRefreshFromEvent cannot kick a second getCart wipe.
             window.dispatchEvent(new CustomEvent('weline:cart-updated', {
-                detail: summary,
+                detail: Object.assign({}, summary, {
+                    source: 'mini-cart-mutate',
+                    refresh: false,
+                }),
             }));
             // On checkout, close the drawer so the refreshed order summary is visible
             // and the two surfaces do not appear out of sync.
@@ -1818,23 +1965,28 @@
             return;
         }
         options = options || {};
-        if (!options.forceNetwork
-            && window.WelineCart && typeof window.WelineCart.needsOriginRefresh === 'function'
-            && window.WelineCart.needsOriginRefresh()) {
-            options.forceNetwork = true;
-        }
         var mode = preferredCartType();
-        // Empty typed cache cannot short-circuit: sibling may claim the other cart still has lines.
+        var needsOrigin = !!(window.WelineCart
+            && typeof window.WelineCart.needsOriginRefresh === 'function'
+            && window.WelineCart.needsOriginRefresh());
+        // Soft open paint from typed cache first — avoid wipe/rebuild flash.
         if (!options.forceNetwork) {
-            var cached = normalizeSummary(readSummaryCache(mode));
-            if (cached && cached.success !== false
-                && normalizeCartType(cached.cart_type || cached.selling_mode) === mode
-                && summaryCacheHasLineItems(cached)) {
-                applySummary(root, cached);
-                return;
+            var cachedSoft = normalizeSummary(readSummaryCache(mode));
+            if (cachedSoft && cachedSoft.success !== false
+                && normalizeCartType(cachedSoft.cart_type || cachedSoft.selling_mode) === mode
+                && summaryCacheHasLineItems(cachedSoft)) {
+                applySummary(root, cachedSoft, { skipItems: drawerContentIsFresh(root, cachedSoft) });
+                if (!needsOrigin) {
+                    return;
+                }
+                // Stale-origin flag: revalidate in background without busy overlay wipe.
+                options.forceNetwork = true;
+                options.softRevalidate = true;
+            } else if (needsOrigin) {
+                options.forceNetwork = true;
             }
         }
-        return runWithDrawerBusy(root, async function () {
+        var run = async function () {
             try {
                 var api = await withTimeout(waitForCartApi(), 8000, 'cart api wait timeout');
                 var token = guestToken();
@@ -1893,16 +2045,24 @@
                         pendingCouponCode = String(normalized.discount_preview.coupon_code).trim().toUpperCase();
                     }
                 }
-                applySummary(root, normalized);
+                applySummary(root, normalized, {
+                    skipItems: !!(options.softRevalidate && drawerContentIsFresh(root, normalized)),
+                });
                 rememberSummaryCache(normalized);
                 if (options.forceNetwork && window.WelineCart
                     && typeof window.WelineCart.consumeNeedsOriginRefresh === 'function') {
                     window.WelineCart.consumeNeedsOriginRefresh();
                 }
             } catch (e) {
-                applySummary(root, emptySummaryForType(mode));
+                if (!options.softRevalidate) {
+                    applySummary(root, emptySummaryForType(mode));
+                }
             }
-        });
+        };
+        if (options.softRevalidate) {
+            return run().catch(function () {});
+        }
+        return runWithDrawerBusy(root, run);
     }
 
     async function refreshBadge(root) {
@@ -1928,6 +2088,7 @@
             // Never short-circuit on stale summary_cache — that hides discount_preview lines.
             var forceRefresh = !!(summary && typeof summary === 'object'
                 && (summary.refresh === true || summary.forceNetwork === true));
+            var softOnly = !!(summary && typeof summary === 'object' && summary.refresh === false);
             if (summary && typeof summary === 'object') {
                 if (summary.clear_discount === true) {
                     pendingCouponCode = '';
@@ -1948,25 +2109,64 @@
                 && normalized.success !== false
                 && (normalized.cart_count != null || Array.isArray(normalized.items)));
             var roots = document.querySelectorAll('[data-w-mini-cart="1"]');
-            // Optimistic: paint chip quote onto current summary before network returns.
-            if (forceRefresh && (pendingDiscountPreview || summary && summary.clear_discount === true)) {
+            var clearDiscount = !!(summary && summary.clear_discount === true);
+            var hasDiscountHint = !!(pendingDiscountPreview || clearDiscount
+                || (summary && String(summary.coupon_code || '').trim()));
+
+            function paintDiscountOntoRoots() {
                 roots.forEach(function (root) {
+                    if (isDemoChromeOnly(root)) {
+                        return;
+                    }
                     var base = root.__welineLastSummary
                         || normalizeSummary(readSummaryCache(preferredCartType()))
                         || null;
                     if (!base) {
                         return;
                     }
-                    applySummary(root, mergeDiscountPreviewIntoSummary(
+                    var merged = mergeDiscountPreviewIntoSummary(
                         base,
                         pendingDiscountPreview,
-                        !!(summary && summary.clear_discount === true)
-                    ));
+                        clearDiscount
+                    );
+                    applySummary(root, merged, {
+                        skipItems: drawerContentIsFresh(root, merged),
+                    });
                 });
+            }
+
+            // Soft discount / mutate echo: merge totals only — never fall through to getCart.
+            if (softOnly) {
+                if (hasCartPayload) {
+                    roots.forEach(function (root) {
+                        if (isDemoChromeOnly(root)) {
+                            return;
+                        }
+                        var painted = clearDiscount || pendingDiscountPreview
+                            ? mergeDiscountPreviewIntoSummary(normalized, pendingDiscountPreview, clearDiscount)
+                            : normalized;
+                        applySummary(root, painted, {
+                            skipItems: drawerContentIsFresh(root, painted),
+                        });
+                        rememberSummaryCache(painted);
+                    });
+                    return;
+                }
+                if (hasDiscountHint) {
+                    paintDiscountOntoRoots();
+                }
+                return;
+            }
+
+            // Optimistic: paint chip quote onto current summary before network returns.
+            if (forceRefresh && hasDiscountHint) {
+                paintDiscountOntoRoots();
             }
             roots.forEach(function (root) {
                 if (!forceRefresh && hasCartPayload) {
-                    applySummary(root, normalized);
+                    applySummary(root, normalized, {
+                        skipItems: drawerContentIsFresh(root, normalized),
+                    });
                     rememberSummaryCache(normalized);
                 }
             });
@@ -1975,6 +2175,11 @@
                 return;
             }
             if (!forceRefresh && applyCachedSummaryToRoots()) {
+                return;
+            }
+            // Only explicit forceRefresh may hit the network. Soft/empty echoes must not
+            // “过一会儿又 reload 一次” via loadDrawer(forceNetwork).
+            if (!forceRefresh) {
                 return;
             }
             roots.forEach(function (root) {
@@ -2032,6 +2237,19 @@
     };
 
     function ensureDrawerCss() {
+        // Opening the drawer used to remove baked layout_source sheets and re-inject —
+        // that FOUC looked like the cart “刷了一下”. Ensure at most once per page.
+        if (drawerCssReady) {
+            return;
+        }
+        drawerCssReady = true;
+        var cssStamp = '20261007-minicart-dedupe-v9';
+        if (document.querySelector(
+            'link[data-weline-mini-cart-drawer-live="1"], link[href*="' + cssStamp + '"],'
+            + ' link[rel="stylesheet"][href*="mini-cart-drawer.css"]'
+        )) {
+            return;
+        }
         var assetVersion = '';
         try {
             var cfgNode = document.getElementById('weline-frontend-runtime-config');
@@ -2042,23 +2260,9 @@
         } catch (err) {
             assetVersion = '';
         }
-        // 换戳必须同步改：旧 &v= 的抽屉样式会被浏览器缓存，层叠修复不会生效。
-        var cssStamp = '20261003-minicart-header-stacking-lift';
         var href = '/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css?v=' + cssStamp;
         if (assetVersion) {
             href += '&_weline_dev=' + encodeURIComponent(assetVersion);
-        }
-        // Drop stale drawer sheets (old &v=) so the current Theme generic sheet wins.
-        document.querySelectorAll('link[rel="stylesheet"][href*="mini-cart-drawer.css"]').forEach(function (node) {
-            var current = String(node.getAttribute('href') || '');
-            if (current.indexOf(cssStamp) === -1) {
-                if (node.parentNode) {
-                    node.parentNode.removeChild(node);
-                }
-            }
-        });
-        if (document.querySelector('link[data-weline-mini-cart-drawer-live="1"], link[href*="' + cssStamp + '"]')) {
-            return;
         }
         var link = document.createElement('link');
         link.rel = 'stylesheet';
@@ -2157,6 +2361,9 @@
     }
 
     function boot() {
+        // Closed drawer must load the current sheet on first paint — waiting until
+        // open leaves stale translateX(100%)/100vw CSS expanding the page gutter.
+        ensureDrawerCss();
         if (window.Weline.MiniCart.__booted) {
             bootMiniCartRoots({ paintCache: true });
             return;
@@ -2196,12 +2403,11 @@
                     return;
                 }
                 applyCartTypeAttr(root, { cart_type: mode });
-                syncCartState(root, { forceNetwork: forceNetwork, drawerBusy: isDrawerOpen(root) }).then(function () {
-                    if (isDrawerOpen(root)) {
-                        return loadDrawer(root, { forceNetwork: forceNetwork });
-                    }
-                    return null;
-                }).catch(function () {});
+                if (isDrawerOpen(root)) {
+                    loadDrawer(root, { forceNetwork: forceNetwork }).catch(function () {});
+                    return;
+                }
+                syncCartState(root, { forceNetwork: forceNetwork }).catch(function () {});
             });
         });
 
@@ -2218,12 +2424,11 @@
                     return;
                 }
                 applyCartTypeAttr(root, { cart_type: mode });
-                syncCartState(root, { forceNetwork: forceNetwork, drawerBusy: isDrawerOpen(root) }).then(function () {
-                    if (isDrawerOpen(root)) {
-                        return loadDrawer(root, { forceNetwork: forceNetwork });
-                    }
-                    return null;
-                }).catch(function () {});
+                if (isDrawerOpen(root)) {
+                    loadDrawer(root, { forceNetwork: forceNetwork }).catch(function () {});
+                    return;
+                }
+                syncCartState(root, { forceNetwork: forceNetwork }).catch(function () {});
             });
         });
 

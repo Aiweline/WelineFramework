@@ -269,12 +269,12 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('--amz-drawer-price:', $css);
         self::assertStringContainsString('--amz-drawer-cta-bg:', $css);
         // Body must keep a floor so tall footer extras (tob credit/note) cannot starve line items.
-        self::assertStringContainsString('min-height: min(28vh, 8rem)', $css);
+        self::assertStringContainsString('min-height: min(40vh, 12rem)', $css);
         self::assertMatchesRegularExpression(
-            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*58%/s',
+            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*calc\\(100%\\s*-\\s*100px\\)/s',
             $css
         );
-        self::assertStringContainsString('min-height: min(22vh, 10rem)', $css);
+        self::assertStringNotContainsString('max-height: min(40vh', $css);
     }
 
     public function testMiniCartFooterSheetCollapsesToTotalAndCheckout(): void
@@ -290,10 +290,29 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('data-i18n-footer-collapse', $source);
         self::assertStringContainsString('data-i18n-footer-expand', $source);
         self::assertStringContainsString('is-footer-collapsed', $css);
-        self::assertStringContainsString('min-height: min(22vh, 10rem)', $css);
+        self::assertStringContainsString('max-height: calc(100% - 100px)', $css);
         self::assertStringContainsString('setFooterCollapsed', $js);
         self::assertStringContainsString('aria-hidden', $js);
-        self::assertStringContainsString('minicart-footer-sheet-v2', $js);
+        self::assertStringContainsString('drawerContentIsFresh', $js);
+        self::assertStringContainsString('skipItems', $js);
+        self::assertStringContainsString('drawerCssReady', $js);
+        self::assertStringContainsString('minicart-dedupe-v9', $js);
+        self::assertStringContainsString("source: 'mini-cart-mutate'", $js);
+        self::assertStringContainsString('softOnly', $js);
+        self::assertStringContainsString('lineItemsSignature', $js);
+        self::assertStringContainsString('domLineItemsSignature', $js);
+        self::assertMatchesRegularExpression(
+            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*flex:\\s*0\\s+1\\s+auto/s',
+            $css
+        );
+        self::assertMatchesRegularExpression(
+            '/\\.header-cart \\.mini-cart-drawer__footer \\.mini-cart-drawer__actions\\s*\\{[^}]*padding-bottom:\\s*max\\(/s',
+            $css
+        );
+        self::assertMatchesRegularExpression(
+            '/\\.header-cart \\.mini-cart-drawer__footer \\.mini-cart-drawer__actions\\s*\\{[^}]*padding-bottom:\\s*max\\(/s',
+            $css
+        );
     }
 
     public function testMiniCartDrawerRebindsPaperInkUnderInverseChrome(): void

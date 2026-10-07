@@ -113,4 +113,28 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
         self::assertNotContains('cart-money-summary', $slots);
         self::assertNotContains('checkout-money-summary', $slots);
     }
+
+    public function testMiniCartCssBeatsInverseChromeInkForSubtotalContrast(): void
+    {
+        $css = (string) file_get_contents(
+            $this->moduleRoot() . '/view/statics/css/widgets/storefront-money-summary.css'
+        );
+
+        self::assertStringContainsString(
+            '[data-surface="inverse"] .mini-cart-drawer .w-storefront-money-summary__row strong',
+            $css
+        );
+        self::assertStringContainsString(
+            'color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111))',
+            $css
+        );
+        self::assertStringContainsString(
+            '.w-storefront-money-summary__row--payable .w-storefront-money-summary__grand',
+            $css
+        );
+        self::assertStringContainsString(
+            'color: var(--amz-drawer-price, var(--color-primary, #b12704))',
+            $css
+        );
+    }
 }

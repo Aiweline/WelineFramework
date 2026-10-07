@@ -276,16 +276,16 @@
 }
 
 .header-cart .mini-cart-drawer__body {
-    /* Product lines are the primary content: shrink when footer sheet expands upward. */
+    /* Shrinks as the footer sheet grows with content (up to drawer − 100px). */
     flex: 1 1 0;
-    min-height: min(28vh, 8rem);
+    min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: var(--weline-space-4, 1rem) var(--weline-space-5, 1.25rem);
 }
 
 .header-cart.is-footer-collapsed .mini-cart-drawer__body {
-    min-height: min(52vh, 14rem);
+    min-height: min(40vh, 12rem);
 }
 
 .header-cart .mini-cart-drawer__empty {
@@ -646,21 +646,22 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
 
 .header-cart .mini-cart-drawer__footer {
     /*
-     * Bottom sheet: expand grows upward into the line list (body flex-shrinks).
-     * flex:0 0 auto + content-sized details — never flex-shrink details to 0
-     * (that left “收起明细” with empty space above 去结算).
+     * Dynamic bottom sheet height = content height.
+     * Cap at drawer − 100px; flex-shrink so header+body remainder cannot shove
+     * the sheet past the drawer (overflow:hidden was clipping CTA bottom inset).
+     * Bottom inset lives on .actions (not footer padding) so clip cannot eat it.
      */
-    flex: 0 0 auto;
-    max-height: 58%;
+    flex: 0 1 auto;
+    max-height: calc(100% - 100px);
     display: flex;
     flex-direction: column;
+    min-height: 0;
     overflow: hidden;
     overscroll-behavior: contain;
-    padding: var(--weline-space-2, 0.5rem) var(--weline-space-5, 1.25rem) var(--weline-space-5, 1.25rem);
+    padding: var(--weline-space-2, 0.5rem) var(--weline-space-5, 1.25rem) 0;
     border-top: var(--border-width-thin, 1px) solid var(--weline-theme-border, #e5e7eb);
     background: var(--weline-theme-surface-raised, #ffffff);
     box-shadow: 0 -8px 24px color-mix(in srgb, #0f1111 8%, transparent);
-    transition: max-height 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .header-cart.is-footer-collapsed .mini-cart-drawer__footer {
@@ -748,30 +749,27 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
 }
 
 .header-cart .mini-cart-drawer__footer-details {
-    /* Expanded: occupy real height so sheet pushes the line list upward. */
-    flex: 0 1 auto;
-    min-height: min(22vh, 10rem);
-    max-height: min(40vh, 18rem);
+    /* Height follows content; scrolls only after footer hits calc(100% − 100px).
+     * flex-grow:1 so extras absorb squeeze and pin CTA + bottom inset. */
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    max-height: none;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
     opacity: 1;
-    transform: translateY(0);
-    transition: max-height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-        min-height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-        opacity 0.2s ease,
-        transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .header-cart.is-footer-collapsed .mini-cart-drawer__footer-details {
-    display: block;
+    flex: 0 0 auto;
+    height: 0;
     min-height: 0;
     max-height: 0;
     margin: 0;
     padding: 0;
     opacity: 0;
     overflow: hidden;
-    transform: translateY(0.5rem);
     pointer-events: none;
     visibility: hidden;
 }
@@ -779,11 +777,11 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
 .header-cart .mini-cart-drawer__footer .mini-cart-drawer__actions {
     flex: 0 0 auto;
     margin-top: var(--weline-space-3, 0.75rem);
-}
-
-.header-cart .mini-cart-drawer__money-summary-slot,
-.header-cart .mini-cart-drawer__footer-details .w-storefront-money-summary {
-    min-height: 2.5rem;
+    /* Non-shrinking inset: survives footer max-height + overflow clip. */
+    padding-bottom: max(
+        var(--weline-space-5, 1.25rem),
+        env(safe-area-inset-bottom, 0px)
+    );
 }
 
 .header-cart .mini-cart-drawer__extras {
