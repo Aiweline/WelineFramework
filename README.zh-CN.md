@@ -71,6 +71,20 @@ php bin/w command:upgrade
 - **WLS 常驻内存运行时**：Worker、Session/Memory 与热重载让应用常驻进程；需要时仍可走经典 FPM。
 - **开发者可运维**：`bin/w` 覆盖安装、升级、缓存、模块、迁移、路由、WLS、队列、邮局、SMTP 和诊断。
 
+## 控制中心（GUI）
+
+Weline 控制中心是**独立**多端桌面/代理 UI（与本仓同级，不在框架目录内）。通过 `php bin/w` 与 Agent HTTP 管理本机/远程 WLS。
+
+- 仓库：[https://gitee.com/aiweline/weline-gui](https://gitee.com/aiweline/weline-gui)
+- **安装包（推荐）**：[Gitee Releases v0.1.0-packages](https://gitee.com/aiweline/weline-gui/releases/tag/v0.1.0-packages) · [GitHub Releases](https://github.com/Aiweline/weline-gui/releases/tag/v0.1.0-packages)
+- [点击下载 macOS DMG（Apple Silicon）](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-macos-aarch64.dmg)
+- [点击下载 Windows setup.exe（x64）](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-windows-x64-setup.exe)
+- [点击下载 Linux DEB（amd64）](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-linux-amd64.deb)
+- [点击下载 Linux AppImage（amd64）](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-linux-amd64.AppImage)
+- 源码克隆（开发者）：`git clone https://gitee.com/aiweline/weline-gui.git`
+
+本机可选同级目录：`../框架GUI`。
+
 ## 继续阅读
 
 - [开发者入口](./docs/weline/开发者入口.md)：完整能力介绍、安装说明、开发路径和命令速查。

@@ -34,6 +34,7 @@ final class DutyEstimateService
      * @var array<string, array{duty_bps:int, vat_bps:int}>
      */
     private const DEFAULT_RATES = [
+        // EU apparel-ish baseline (phase-1; HS refinement later)
         'DE' => ['duty_bps' => 1200, 'vat_bps' => 1900],
         'FR' => ['duty_bps' => 1200, 'vat_bps' => 2000],
         'IT' => ['duty_bps' => 1200, 'vat_bps' => 2200],
@@ -44,13 +45,49 @@ final class DutyEstimateService
         'IE' => ['duty_bps' => 1200, 'vat_bps' => 2300],
         'SE' => ['duty_bps' => 1200, 'vat_bps' => 2500],
         'PL' => ['duty_bps' => 1200, 'vat_bps' => 2300],
+        'PT' => ['duty_bps' => 1200, 'vat_bps' => 2300],
+        'FI' => ['duty_bps' => 1200, 'vat_bps' => 2550],
+        'DK' => ['duty_bps' => 1200, 'vat_bps' => 2500],
+        'GR' => ['duty_bps' => 1200, 'vat_bps' => 2400],
+        'CZ' => ['duty_bps' => 1200, 'vat_bps' => 2100],
+        'HU' => ['duty_bps' => 1200, 'vat_bps' => 2700],
+        'RO' => ['duty_bps' => 1200, 'vat_bps' => 1900],
+        'BG' => ['duty_bps' => 1200, 'vat_bps' => 2000],
+        'HR' => ['duty_bps' => 1200, 'vat_bps' => 2500],
+        'SK' => ['duty_bps' => 1200, 'vat_bps' => 2300],
+        'SI' => ['duty_bps' => 1200, 'vat_bps' => 2200],
+        'LT' => ['duty_bps' => 1200, 'vat_bps' => 2100],
+        'LV' => ['duty_bps' => 1200, 'vat_bps' => 2100],
+        'EE' => ['duty_bps' => 1200, 'vat_bps' => 2200],
+        'LU' => ['duty_bps' => 1200, 'vat_bps' => 1700],
+        'MT' => ['duty_bps' => 1200, 'vat_bps' => 1800],
+        'CY' => ['duty_bps' => 1200, 'vat_bps' => 1900],
         'GB' => ['duty_bps' => 1000, 'vat_bps' => 2000],
+        'CH' => ['duty_bps' => 500, 'vat_bps' => 810],
+        'NO' => ['duty_bps' => 1000, 'vat_bps' => 2500],
+        'IS' => ['duty_bps' => 1000, 'vat_bps' => 2400],
         'US' => ['duty_bps' => 800, 'vat_bps' => 0],
         'CA' => ['duty_bps' => 800, 'vat_bps' => 500],
+        'MX' => ['duty_bps' => 1000, 'vat_bps' => 1600],
+        'BR' => ['duty_bps' => 1500, 'vat_bps' => 1700],
+        'CL' => ['duty_bps' => 600, 'vat_bps' => 1900],
+        'AR' => ['duty_bps' => 1500, 'vat_bps' => 2100],
         'AU' => ['duty_bps' => 500, 'vat_bps' => 1000],
+        'NZ' => ['duty_bps' => 500, 'vat_bps' => 1500],
         'JP' => ['duty_bps' => 600, 'vat_bps' => 1000],
         'KR' => ['duty_bps' => 800, 'vat_bps' => 1000],
         'SG' => ['duty_bps' => 0, 'vat_bps' => 900],
+        'IN' => ['duty_bps' => 1000, 'vat_bps' => 1800],
+        'TH' => ['duty_bps' => 1000, 'vat_bps' => 700],
+        'MY' => ['duty_bps' => 800, 'vat_bps' => 800],
+        'ID' => ['duty_bps' => 1000, 'vat_bps' => 1100],
+        'PH' => ['duty_bps' => 1000, 'vat_bps' => 1200],
+        'VN' => ['duty_bps' => 1000, 'vat_bps' => 1000],
+        'AE' => ['duty_bps' => 500, 'vat_bps' => 500],
+        'SA' => ['duty_bps' => 500, 'vat_bps' => 1500],
+        'TR' => ['duty_bps' => 1000, 'vat_bps' => 2000],
+        'IL' => ['duty_bps' => 800, 'vat_bps' => 1700],
+        'ZA' => ['duty_bps' => 1000, 'vat_bps' => 1500],
     ];
 
     /**
@@ -60,7 +97,9 @@ final class DutyEstimateService
      *   destination_country?:string,
      *   origin_country?:string,
      *   duty_notice?:string,
-     *   currency?:string
+     *   currency?:string,
+     *   charge_customs_duty?:bool,
+     *   charge_import_vat?:bool
      * } $input
      * @return array{
      *   charged_minor:int,
@@ -83,6 +122,12 @@ final class DutyEstimateService
         $currency = strtoupper(trim((string)($input['currency'] ?? 'CNY'))) ?: 'CNY';
         $goods = max(0, (int)($input['goods_subtotal_minor'] ?? 0));
         $shipping = max(0, (int)($input['shipping_amount_minor'] ?? 0));
+        $chargeCustoms = array_key_exists('charge_customs_duty', $input)
+            ? (bool)$input['charge_customs_duty']
+            : true;
+        $chargeImportVat = array_key_exists('charge_import_vat', $input)
+            ? (bool)$input['charge_import_vat']
+            : true;
         $crossBorder = $dest !== '' && $dest !== $origin;
 
         $empty = [
@@ -121,9 +166,10 @@ final class DutyEstimateService
         }
 
         if (!$crossBorder) {
+            // Domestic lanes must not keep DDU/DAP copy — that reads as import duty on 国内标快.
             return array_merge($empty, [
                 'reason' => self::REASON_DOMESTIC,
-                'duty_notice' => $dutyNotice,
+                'duty_notice' => '',
             ]);
         }
 
@@ -135,8 +181,8 @@ final class DutyEstimateService
             ]);
         }
 
-        $dutyBps = max(0, (int)$rates['duty_bps']);
-        $vatBps = max(0, (int)$rates['vat_bps']);
+        $dutyBps = $chargeCustoms ? max(0, (int)$rates['duty_bps']) : 0;
+        $vatBps = $chargeImportVat ? max(0, (int)$rates['vat_bps']) : 0;
         $cif = $goods + $shipping;
         $dutyMinor = $this->halfUp($cif, $dutyBps);
         $vatMinor = $this->halfUp($cif + $dutyMinor, $vatBps);

@@ -18,6 +18,9 @@ if (!is_array($poolRows)) {
 }
 
 $poolListPath = '*/admin/domain/get-domain-pool-list';
+$poolDetailPath = '*/admin/domain/get-pool-detail';
+$poolUpdatePath = '*/admin/domain/update-pool-domain';
+$poolDeletePath = '*/admin/domain/delete-pool-domain';
 $cleanInvalidPath = '*/admin/domain/clean-pool-invalid-domains';
 $cleanMispointedPath = '*/admin/domain/clean-pool-mispointed-apex-dns';
 $formKey = (string) $this->getFormKeyValue();
@@ -68,6 +71,14 @@ $formKey = (string) $this->getFormKeyValue();
 .weline-pool-flow-cell {
     min-width: 15rem;
     vertical-align: top;
+}
+.weline-pool-actions-cell {
+    min-width: 7.5rem;
+    white-space: nowrap;
+    text-align: end;
+}
+.weline-pool-actions-cell .w-button {
+    margin-inline-start: 0.2rem;
 }
 </style>
 
@@ -146,12 +157,13 @@ $formKey = (string) $this->getFormKeyValue();
             <th><?= __('服务商') ?></th>
             <th><?= __('状态') ?></th>
             <th style="min-width:14rem;"><?= __('流转') ?></th>
+            <th class="w-text" data-align="end"><?= __('操作') ?></th>
         </tr>
         </thead>
         <tbody id="weline-pool-tbody">
         <?php if ($poolTotal === 0): ?>
             <tr>
-                <td colspan="4" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
+                <td colspan="5" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
                     <w:icon name="minus" size="sm"></w:icon>
                     <p style="--w-mb:0;--w-mt:var(--weline-space-2);"><?= __('域名池暂无数据') ?></p>
                     <small><?= __('请先在「域名列表」中转存到域名池，或执行 DNS 查询/解析自动入池') ?></small>
@@ -168,6 +180,7 @@ $formKey = (string) $this->getFormKeyValue();
                 $siteReady = (int) ($row[DomainPool::schema_fields_SITE_READY] ?? 0) === 1;
                 $siteCreated = (int) ($row[DomainPool::schema_fields_SITE_CREATED] ?? 0) === 1;
                 $poolId = (int) ($row[DomainPool::schema_fields_ID] ?? 0);
+                $poolStatus = (string) ($row[DomainPool::schema_fields_STATUS] ?? DomainPool::STATUS_ACTIVE);
                 $flowHtml = (string) ($row['_flow_html'] ?? '');
                 $registrarName = (string) ($row['_registrar_name'] ?? '-');
                 $dnsProviderName = (string) ($row['_dns_provider_name'] ?? '-');
@@ -183,6 +196,9 @@ $formKey = (string) $this->getFormKeyValue();
                             <strong><?= \htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') ?></strong>
                             <?php if ($rootDomain !== '' && $rootDomain !== $domain): ?>
                                 <span class="weline-pool-domain-sub"><?= \htmlspecialchars($rootDomain, ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
+                            <?php if ($poolStatus === DomainPool::STATUS_DISABLED): ?>
+                                <div class="weline-pool-summary-row"><span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('已停用') ?></span></div>
                             <?php endif; ?>
                         </div>
                     </td>
@@ -239,6 +255,18 @@ $formKey = (string) $this->getFormKeyValue();
                             </div>
                         <?php endif; ?>
                     </td>
+                    <td class="weline-pool-actions-cell w-text" data-align="end">
+                        <?php if ($poolId > 0): ?>
+                            <button type="button" class="w-button" title="<?= __('管理') ?>" data-pool-action="manage" data-pool-id="<?= (int) $poolId ?>" data-domain="<?= \htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                <w:icon name="edit" size="sm"></w:icon>
+                            </button>
+                            <button type="button" class="w-button" title="<?= __('删除') ?>" data-pool-action="delete" data-pool-id="<?= (int) $poolId ?>" data-domain="<?= \htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') ?>" data-site-created="<?= $siteCreated ? '1' : '0' ?>" data-tone="danger" data-variant="outline" data-size="sm">
+                                <w:icon name="trash" size="sm"></w:icon>
+                            </button>
+                        <?php else: ?>
+                            <span class="w-text" data-tone="muted">—</span>
+                        <?php endif; ?>
+                    </td>
                 </tr>
             <?php endforeach; ?>
         <?php endif; ?>
@@ -254,6 +282,9 @@ $formKey = (string) $this->getFormKeyValue();
 (function(){
 'use strict';
 var poolListUrl = "@url{$poolListPath}";
+var poolDetailUrl = "@url{$poolDetailPath}";
+var poolUpdateUrl = "@url{$poolUpdatePath}";
+var poolDeleteUrl = "@url{$poolDeletePath}";
 var cleanInvalidUrl = "@url{$cleanInvalidPath}";
 var cleanMispointedUrl = "@url{$cleanMispointedPath}";
 var formKey = <?= json_encode($formKey) ?>;
@@ -304,7 +335,20 @@ function rowHtml(row) {
         '<div class="weline-pool-summary-row">' + resolveBadge + httpsBadge + localBadge + '</div>' +
         '<div class="weline-pool-summary-row">' + readyBadge + createdBadge + connCell + '</div>' +
         '</div>';
-    return '<tr><td>' + domainCell + '</td><td>' + providerCell + '</td><td>' + summaryCell + '</td><td class="weline-pool-flow-cell">' + flowCell + '</td></tr>';
+    var st = row.status || 'active';
+    var statusBadge = st === 'disabled'
+        ? '<span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('已停用') ?></span> '
+        : '';
+    domainCell = '<div class="weline-pool-domain-cell"><strong>' + escapeHtml(d) + '</strong>' +
+        ((r && r !== d) ? '<span class="weline-pool-domain-sub">' + escapeHtml(r) + '</span>' : '') +
+        (statusBadge ? '<div class="weline-pool-summary-row">' + statusBadge + '</div>' : '') +
+        '</div>';
+    var actions = '—';
+    if (pid > 0) {
+        actions = '<button type="button" class="w-button" title="<?= __('管理') ?>" data-pool-action="manage" data-pool-id="' + pid + '" data-domain="' + escapeHtml(d) + '" data-tone="primary" data-variant="outline" data-size="sm"><w:icon name="edit" size="sm"></w:icon></button> '
+            + '<button type="button" class="w-button" title="<?= __('删除') ?>" data-pool-action="delete" data-pool-id="' + pid + '" data-domain="' + escapeHtml(d) + '" data-site-created="' + (sc ? '1' : '0') + '" data-tone="danger" data-variant="outline" data-size="sm"><w:icon name="trash" size="sm"></w:icon></button>';
+    }
+    return '<tr><td>' + domainCell + '</td><td>' + providerCell + '</td><td>' + summaryCell + '</td><td class="weline-pool-flow-cell">' + flowCell + '</td><td class="weline-pool-actions-cell w-text" data-align="end">' + actions + '</td></tr>';
 }
 function openWelinePoolFlowLogModal(title, htmlInner) {
     var overlay = document.createElement('div');
@@ -337,11 +381,11 @@ function loadPage(page) {
     currentPage = page || 1;
     var tbody = document.getElementById('weline-pool-tbody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="4" class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><w:icon name="circle" size="sm"></w:icon> <?= __('加载中...') ?></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><w:icon name="circle" size="sm"></w:icon> <?= __('加载中...') ?></td></tr>';
     var u = poolListUrl + (poolListUrl.indexOf('?') >= 0 ? '&' : '?') + 'page=' + encodeURIComponent(currentPage) + '&page_size=' + encodeURIComponent(pageSize);
     Weline.adminRequest('websites', u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
         if (data.code !== 200 || !data.data) {
-            tbody.innerHTML = '<tr><td colspan="4" class="w-text" data-align="center" data-tone="danger" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">' + escapeHtml(data.msg || 'Error') + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="w-text" data-align="center" data-tone="danger" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">' + escapeHtml(data.msg || 'Error') + '</td></tr>';
             return;
         }
         var d = data.data;
@@ -354,13 +398,13 @@ function loadPage(page) {
             : '<?= __('暂无数据') ?>';
         var items = d.items || [];
         if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="minus" size="sm"></w:icon><p style="--w-mb:0;--w-mt:var(--weline-space-2);"><?= __('域名池暂无数据') ?></p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><w:icon name="minus" size="sm"></w:icon><p style="--w-mb:0;--w-mt:var(--weline-space-2);"><?= __('域名池暂无数据') ?></p></td></tr>';
         } else {
             tbody.innerHTML = items.map(rowHtml).join('');
         }
         renderPager(parseInt(d.page, 10) || 1, pages);
     }).catch(function(){
-        tbody.innerHTML = '<tr><td colspan="4" class="w-text" data-align="center" data-tone="danger" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('请求失败') ?></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="w-text" data-align="center" data-tone="danger" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('请求失败') ?></td></tr>';
     });
 }
 function renderPager(page, lastPage) {
@@ -472,6 +516,105 @@ function runDryThenCommit(url, titleDry) {
         });
     });
 }
+
+function postPoolForm(url, fields) {
+    var fd = new FormData();
+    Object.keys(fields || {}).forEach(function(k){ fd.append(k, fields[k]); });
+    if (formKey) fd.append('form_key', formKey);
+    return Weline.adminRequest('websites', url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); });
+}
+function openPoolManageDialog(poolId, domainHint) {
+    var loading = '<p class="w-text" data-tone="muted"><?= __('加载中...') ?></p>';
+    openWelinePoolFlowLogModal('<?= __('管理域名池') ?> · ' + (domainHint || ('#' + poolId)), loading);
+    var body = document.querySelector('.weline-pool-flow-body');
+    if (!body) return;
+    var u = poolDetailUrl + (poolDetailUrl.indexOf('?') >= 0 ? '&' : '?') + 'pool_id=' + encodeURIComponent(poolId);
+    Weline.adminRequest('websites', u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
+        if (data.code !== 200 || !data.data || !data.data.item) {
+            body.innerHTML = '<p class="w-text" data-tone="danger">' + escapeHtml(data.msg || 'Error') + '</p>';
+            return;
+        }
+        var item = data.data.item;
+        var bindings = data.data.bindings || [];
+        var domain = item.domain || domainHint || '';
+        var desc = item.description || '';
+        var status = item.status || 'active';
+        var bindHtml = '';
+        if (bindings.length) {
+            bindHtml = '<div class="w-alert" data-tone="warning" style="--w-mb:var(--weline-space-3);"><strong><?= __('已被网站绑定') ?></strong><ul style="--w-mb:0;">';
+            bindings.forEach(function(b){
+                bindHtml += '<li>' + escapeHtml(b.website_name || ('#' + b.website_id)) + ' · ' + escapeHtml(b.domain || '') + (b.sub_path ? (' ' + escapeHtml(b.sub_path)) : '') + '</li>';
+            });
+            bindHtml += '</ul></div>';
+        } else {
+            bindHtml = '<p class="w-text" data-tone="muted" data-size="sm"><?= __('当前未被网站绑定，可安全删除或停用。') ?></p>';
+        }
+        body.innerHTML =
+            '<p class="w-text" style="--w-mb:var(--weline-space-2);"><strong><?= __('域名') ?></strong>：' + escapeHtml(domain) + '</p>' +
+            '<p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);"><?= __('主机名不可在此直接改名；需要换名请删除后重新入池，或到网站设置换绑。') ?></p>' +
+            bindHtml +
+            '<div style="--w-mb:var(--weline-space-3);"><label class="w-field__label"><?= __('备注') ?></label>' +
+            '<textarea class="w-textarea" id="weline-pool-edit-description" rows="3" data-w-width="full">' + escapeHtml(desc) + '</textarea></div>' +
+            '<div style="--w-mb:var(--weline-space-3);"><label class="w-field__label"><?= __('状态') ?></label>' +
+            '<select class="w-select" id="weline-pool-edit-status" data-w-width="full">' +
+            '<option value="active"' + (status === 'active' ? ' selected' : '') + '><?= __('启用') ?></option>' +
+            '<option value="disabled"' + (status === 'disabled' ? ' selected' : '') + '><?= __('停用') ?></option>' +
+            '</select></div>' +
+            '<div class="w-cluster" data-justify="end" style="--w-gap:var(--weline-space-2);">' +
+            '<button type="button" class="w-button" id="weline-pool-edit-save" data-tone="primary"><?= __('保存') ?></button>' +
+            '</div>';
+        var saveBtn = document.getElementById('weline-pool-edit-save');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function(){
+                var nextDesc = (document.getElementById('weline-pool-edit-description') || {}).value || '';
+                var nextStatus = (document.getElementById('weline-pool-edit-status') || {}).value || 'active';
+                postPoolForm(poolUpdateUrl, { pool_id: String(poolId), description: nextDesc, status: nextStatus }).then(function(resp){
+                    if (resp.code !== 200) {
+                        toastError(resp.msg || 'Error');
+                        return;
+                    }
+                    toastSuccess(resp.msg || '<?= __('保存成功') ?>');
+                    var overlay = body.closest('div[style*="position:fixed"]');
+                    if (overlay) overlay.remove();
+                    document.body.style.overflow = '';
+                    loadPage(currentPage);
+                }).catch(function(){ toastError('<?= __('请求失败') ?>'); });
+            });
+        }
+    }).catch(function(){
+        body.innerHTML = '<p class="w-text" data-tone="danger"><?= __('请求失败') ?></p>';
+    });
+}
+function deletePoolRow(poolId, domain, siteCreated) {
+    var warn = siteCreated
+        ? ('<?= __('「%{1}」标记为已建站。若仍被网站绑定将无法删除；确认从域名池移除？') ?>'.replace('%{1}', domain || ('#' + poolId)))
+        : ('<?= __('确认从域名池删除「%{1}」？此操作不可撤销。') ?>'.replace('%{1}', domain || ('#' + poolId)));
+    backendConfirmPromise(warn, { title: '<?= __('删除域名池记录') ?>', type: 'danger', confirmText: '<?= __('删除') ?>' }).then(function(ok){
+        if (!ok) return;
+        postPoolForm(poolDeleteUrl, { pool_id: String(poolId) }).then(function(data){
+            if (data.code !== 200) {
+                toastError(data.msg || 'Error');
+                return;
+            }
+            toastSuccess(data.msg || '<?= __('删除成功') ?>');
+            loadPage(currentPage);
+        }).catch(function(){ toastError('<?= __('请求失败') ?>'); });
+    });
+}
+document.addEventListener('click', function(e){
+    var btn = e.target && e.target.closest ? e.target.closest('[data-pool-action]') : null;
+    if (!btn) return;
+    var action = btn.getAttribute('data-pool-action') || '';
+    var pid = parseInt(btn.getAttribute('data-pool-id') || '0', 10) || 0;
+    var domain = btn.getAttribute('data-domain') || '';
+    if (!pid) return;
+    if (action === 'manage') {
+        openPoolManageDialog(pid, domain);
+    } else if (action === 'delete') {
+        deletePoolRow(pid, domain, btn.getAttribute('data-site-created') === '1');
+    }
+});
+
 document.getElementById('weline-pool-btn-clean-invalid').addEventListener('click', function(){
     runDryThenCommit(cleanInvalidUrl, '<?= __('将列出含 [] 的非法池记录（不删除）。继续？') ?>');
 });

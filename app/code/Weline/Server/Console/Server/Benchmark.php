@@ -560,7 +560,7 @@ class Benchmark extends CommandAbstract
         // evidence; fall back to the backend health endpoint before refusing a
         // benchmark run.
         if ($runningWorkerCount < $expectedWorkerCount) {
-            if ($this->probeBenchmarkHealthEndpoint($info)) {
+            if ($this->probeBenchmarkHealthEndpoint($info, $target)) {
                 $this->printer->note(__('实例 [%{1}] 的 WLS health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过当前边缘身份门禁。', [
                     $instanceName,
                     $runningWorkerCount,
@@ -681,21 +681,35 @@ class Benchmark extends CommandAbstract
         return \max(1, $persistedWorkers);
     }
 
-    private function probeBenchmarkHealthEndpoint(ServerInstanceInfo $info): bool
+    /**
+     * @param array<string, mixed> $target
+     */
+    private function probeBenchmarkHealthEndpoint(ServerInstanceInfo $info, array $target = []): bool
     {
-        if ($info->port <= 0 || $info->port > 65535) {
+        $port = (int)($target['port'] ?? $info->port);
+        if ($port <= 0 || $port > 65535) {
             return false;
         }
-        $scheme = $info->sslEnabled ? 'https' : 'http';
-        $host = $this->formatTargetUrlHost($this->normalizeConnectHost($info->host !== '' ? $info->host : '127.0.0.1'));
-        $url = $scheme . '://' . $host . ':' . $info->port . '/_wls/health';
+        $sslEnabled = \array_key_exists('ssl', $target)
+            ? (bool)$target['ssl']
+            : $info->sslEnabled;
+        $connectHost = $this->normalizeConnectHost(
+            (string)($target['host'] ?? ($info->host !== '' ? $info->host : '127.0.0.1')),
+        );
+        $authorityHost = $this->normalizeAuthorityHost(
+            (string)($target['authority_host'] ?? ''),
+            $connectHost,
+        );
+        $scheme = $sslEnabled ? 'https' : 'http';
+        $urlHost = $this->formatTargetUrlHost($authorityHost);
+        $url = $scheme . '://' . $urlHost . ':' . $port . '/_wls/health';
 
         if (\function_exists('curl_init')) {
             $ch = \curl_init($url);
             if ($ch === false) {
                 return false;
             }
-            \curl_setopt_array($ch, [
+            $options = [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_HEADER => false,
                 CURLOPT_NOBODY => false,
@@ -704,7 +718,25 @@ class Benchmark extends CommandAbstract
                 CURLOPT_SSL_VERIFYPEER => false,
                 CURLOPT_SSL_VERIFYHOST => 0,
                 CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            ]);
+                CURLOPT_NOPROXY => '*',
+                CURLOPT_PROXY => '',
+            ];
+            // Pure-WLS TLS binds on loopback but requires the public Host/SNI.
+            // Probe with CURLOPT_RESOLVE so readiness does not false-fail on
+            // https://127.0.0.1 without authority (curl status 000).
+            if ($authorityHost !== ''
+                && $connectHost !== ''
+                && \strcasecmp(\trim($authorityHost, '[]'), \trim($connectHost, '[]')) !== 0
+            ) {
+                $resolveAddress = \trim($connectHost, '[]');
+                if (\str_contains($resolveAddress, ':')) {
+                    $resolveAddress = '[' . $resolveAddress . ']';
+                }
+                $options[CURLOPT_RESOLVE] = [
+                    \trim($authorityHost, '[]') . ':' . $port . ':' . $resolveAddress,
+                ];
+            }
+            \curl_setopt_array($ch, $options);
             $body = \curl_exec($ch);
             $status = (int)\curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             \curl_close($ch);
@@ -712,8 +744,16 @@ class Benchmark extends CommandAbstract
         }
 
         $context = \stream_context_create([
-            'http' => ['timeout' => 1.5, 'ignore_errors' => true],
-            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+            'http' => [
+                'timeout' => 1.5,
+                'ignore_errors' => true,
+                'header' => 'Host: ' . \trim($authorityHost, '[]') . "\r\n",
+            ],
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'peer_name' => \trim($authorityHost, '[]'),
+            ],
         ]);
         $body = @\file_get_contents($url, false, $context);
         return $this->isBenchmarkHealthBody($body);

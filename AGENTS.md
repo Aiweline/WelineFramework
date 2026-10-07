@@ -2,6 +2,8 @@
 
 本仓库的 **Weline 项目智能 MCP**（`weline_project_intelligence`，源码 `app/code/Weline/Ai/Mcp`，本地 STDIO，无 OAuth）提供技能索引、代码地图与**领域硬规则下发**。
 
+**控制中心 GUI** 为独立仓（与本框架同级，不合仓）：[Gitee aiweline/weline-gui](https://gitee.com/aiweline/weline-gui) · [多端安装包 Releases](https://gitee.com/aiweline/weline-gui/releases/tag/v0.1.0-packages) · [macOS DMG](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-macos-aarch64.dmg) · [Windows setup](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-windows-x64-setup.exe) · [Linux DEB](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-linux-amd64.deb) · 本机可选 `../框架GUI`。
+
 **编码与改文件仍用宿主原生编辑工具**（Read / Write / ApplyPatch / Shell 等）。MCP **没有**写仓工具；但工程任务在 MCP 已挂载/可挂载时**必须**先 `prepare_project` 并遵守 `hard_constraints`。
 
 ## 调用范围（先判再调）

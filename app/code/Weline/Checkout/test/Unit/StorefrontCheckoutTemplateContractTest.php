@@ -141,7 +141,7 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         $rememberSession = strpos($template, 'rememberGuestSession', $issueGuestToken ?: 0);
         $loadCheckoutWithToken = strpos($template, 'guest_token: await ensureGuestToken()', $issueGuestToken ?: 0);
 
-        self::assertStringContainsString('data-weline-load="cart,b2bCheckoutTob,checkoutLifecycle,paymentLifecycle"', $template);
+        self::assertStringContainsString('data-weline-load="cart,b2bCheckoutTob,checkoutLifecycle,paymentLifecycle,storefrontMoneySummary"', $template);
         self::assertIsInt($ensureGuestToken);
         self::assertIsInt($loadCartModule, 'Checkout must load the shared Cart browser session first.');
         self::assertIsInt($rereadGuestToken, 'Checkout must re-read the token after Cart initializes.');
@@ -209,7 +209,15 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('data-checkout-tax-row', $template);
         self::assertStringContainsString('selectedTaxAmount', $template);
         self::assertStringContainsString('cartSalesTaxAmount', $template);
+        self::assertStringContainsString('selectedDutyAmount', $template);
+        self::assertStringContainsString('selectedCustomsDutyAmount', $template);
+        self::assertStringContainsString('selectedImportTaxAmount', $template);
         self::assertStringContainsString('sales_tax_amount_minor', $template);
+        self::assertStringContainsString('sales_tax_minor:', $template);
+        self::assertStringContainsString('customs_duty_minor:', $template);
+        self::assertStringContainsString('import_tax_minor:', $template);
+        self::assertStringContainsString('sales_tax_label:', $template);
+        self::assertStringContainsString('moneySummaryTaxNote', $template);
         self::assertStringContainsString('data-grand-total-label', $template);
         self::assertStringContainsString('weline:b2b-credit-changed', $template);
         self::assertStringContainsString('WelineB2BCheckoutTob', $template);

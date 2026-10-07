@@ -25,7 +25,10 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
         self::assertStringContainsString('data-money-summary-row="discount"', $template);
         self::assertStringContainsString('data-money-summary-row="deposit"', $template);
         self::assertStringContainsString('data-money-summary-row="credit"', $template);
-        self::assertStringContainsString('data-money-summary-row="tax"', $template);
+        self::assertStringContainsString('data-money-summary-row="sales_tax"', $template);
+        self::assertStringContainsString('data-money-summary-row-legacy="tax"', $template);
+        self::assertStringContainsString('data-money-summary-row="customs_duty"', $template);
+        self::assertStringContainsString('data-money-summary-row="import_tax"', $template);
         self::assertStringContainsString('data-money-summary-row="cod"', $template);
         self::assertStringContainsString('data-money-summary-row="incentive"', $template);
         self::assertStringContainsString('data-money-summary-row="payable"', $template);
@@ -50,12 +53,20 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
             strpos($template, 'data-money-summary-row="goods"')
         );
         self::assertLessThan(
-            strpos($template, 'data-money-summary-row="tax"'),
+            strpos($template, 'data-money-summary-row="sales_tax"'),
             strpos($template, 'data-money-summary-row="shipping"')
         );
         self::assertLessThan(
+            strpos($template, 'data-money-summary-row="customs_duty"'),
+            strpos($template, 'data-money-summary-row="sales_tax"')
+        );
+        self::assertLessThan(
+            strpos($template, 'data-money-summary-row="import_tax"'),
+            strpos($template, 'data-money-summary-row="customs_duty"')
+        );
+        self::assertLessThan(
             strpos($template, 'data-money-summary-row="payable"'),
-            strpos($template, 'data-money-summary-row="tax"')
+            strpos($template, 'data-money-summary-row="import_tax"')
         );
     }
 
@@ -73,8 +84,13 @@ final class StorefrontMoneySummaryWidgetContractTest extends TestCase
         self::assertStringContainsString('discounts_disabled', $js);
         self::assertStringContainsString('shipping_service_label', $js);
         self::assertStringContainsString('tax_amount_minor', $js);
+        self::assertStringContainsString('sales_tax_minor', $js);
+        self::assertStringContainsString('customs_duty_minor', $js);
+        self::assertStringContainsString('import_tax_minor', $js);
         self::assertStringContainsString('data-money-summary-tax-minor', $js);
-        self::assertStringContainsString('data-money-summary-row="tax"', $js);
+        self::assertStringContainsString('data-money-summary-row="sales_tax"', $js);
+        self::assertStringContainsString('data-money-summary-row="customs_duty"', $js);
+        self::assertStringContainsString('data-money-summary-row="import_tax"', $js);
         self::assertStringContainsString('storefrontMoneySummary', $modules);
         self::assertStringContainsString('storefront-money-summary.js', $modules);
     }

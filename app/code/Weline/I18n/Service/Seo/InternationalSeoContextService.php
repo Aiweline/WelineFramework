@@ -45,10 +45,15 @@ class InternationalSeoContextService
             self::DEFAULT_LOCALE,
         ]));
         $websiteLocaleCodes = $this->websiteLocaleCodes($template, $context, $seo);
-        try {
-            $activeLocaleCodes = $this->activeLocaleCodeProvider->getInstalledActiveCodes();
-        } catch (\Throwable) {
-            $activeLocaleCodes = [];
+        // Website language codes already scope hreflang. Skip platform ActiveLocale
+        // (w_i18n_locale + w_i18n_locals) — cold homepage paid ~85ms for unused rows.
+        $activeLocaleCodes = [];
+        if ($websiteLocaleCodes === []) {
+            try {
+                $activeLocaleCodes = $this->activeLocaleCodeProvider->getInstalledActiveCodes();
+            } catch (\Throwable) {
+                $activeLocaleCodes = [];
+            }
         }
         $locales = $this->uniqueLocales(array_merge(
             [$defaultLocale],

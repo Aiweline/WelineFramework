@@ -337,6 +337,11 @@ SKU,SKU
 结账批发信用,"Checkout wholesale credit"
 结账帮我付,"Checkout pay-for-me"
 本次应付定金,"Deposit due now"
+商品价格已含税，结账无需另付销售税,"Catalog prices include tax; no extra sales tax at checkout"
+进口关税与进口税费按所选配送方式计入应付，与销售税分开计算,"Import duty and import tax are added by shipping method and calculated separately from sales tax"
+销售税,"Sales tax"
+进口关税,"Import duty"
+进口税费,"Import tax"
 错误代码,"Error code"
 重试结算,"Retry checkout"
 返回结账,"Return to checkout"
@@ -374,10 +379,8 @@ SKU,SKU
 税费与运费将在结算时计算,税费与运费将在结算时计算
 批发定金,"Wholesale deposit"
 批发信用抵扣,"Wholesale credit applied"
-关税与税费（预估）,"Duties & taxes (estimate)"
 货到付款手续费,"Cash on delivery fee"
 支付方式优惠,"Payment method discount"
-税费（预估）,税费（预估）
 应付,"Amount due"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 全部,All
@@ -558,6 +561,9 @@ SKU,SKU
 收货地址暂未匹配到可用的配送服务。请确认国家或地区是否正确，或联系客服确认是否可送达。,"No shipping service matched this address. Please confirm the country or region, or contact support about delivery coverage."
 当前收货国家：%{1}。,"Current destination country: %{1}."
 系统暂未返回可用的配送方案。请确认收货地址与商品信息，或联系客服了解具体原因（常见如商品缺重量/尺寸，或目的地限制）。,"No shipping options were returned. Please confirm the shipping address and product details, or contact support (common causes: missing weight/dimensions, or destination restrictions)."
+关税与税费,"Duties & taxes"
+关税与税费（预估）,"Duties & taxes (estimate)"
+税费（预估）,税费（预估）
 批发快捷支付请使用完整结账,"Wholesale express checkout requires full checkout"
 确认收货地址、配送方式和支付信息后即可提交订单。,"Review your shipping and payment details"
 本地测试支付,"Local test payment"

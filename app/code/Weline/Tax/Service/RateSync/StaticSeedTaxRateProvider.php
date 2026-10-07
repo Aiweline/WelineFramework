@@ -21,7 +21,7 @@ final class StaticSeedTaxRateProvider implements TaxRateRemoteProviderInterface
 
     public function label(): string
     {
-        return (string)__('静态种子税率（CN/US 基线）');
+        return (string)__('静态种子税率（多国 VAT/GST 基线）');
     }
 
     public function tier(): string
@@ -32,13 +32,16 @@ final class StaticSeedTaxRateProvider implements TaxRateRemoteProviderInterface
     public function fetchCandidates(int $websiteId): array
     {
         $out = [];
-        foreach (TaxDefaultSeedService::RULES as $rule) {
+        foreach (TaxDefaultSeedService::rules() as $rule) {
             $out[] = [
                 'jurisdiction_key' => strtoupper((string)$rule['jurisdiction_key']),
                 'class_code' => strtolower((string)$rule['class_code']),
                 'rate_bps' => (int)$rule['rate_bps'],
                 'source' => self::CODE,
-                'source_meta' => ['website_id' => max(0, $websiteId)],
+                'source_meta' => [
+                    'website_id' => max(0, $websiteId),
+                    'seed_revision' => TaxDefaultSeedService::SEED_REVISION,
+                ],
             ];
         }
 

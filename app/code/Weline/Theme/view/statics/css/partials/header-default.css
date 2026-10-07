@@ -1138,6 +1138,34 @@ textarea::-webkit-scrollbar-thumb:hover,
     position: relative;
 }
 
+/*
+ * Dark header language/currency triggers must stay ghost.
+ * Unlayered theme.css `.w-button` defaults to `--weline-component-primary`;
+ * /static theme.css may lag behind WLS static-cache HIT — this live partial
+ * path is the storefront-loaded shield (same rank as account/wishlist).
+ */
+.weline-header .w-language-switcher__trigger.w-button,
+.weline-header .w-currency-switcher__trigger.w-button,
+.weline-header .header-actions .w-button[data-tone="quiet"],
+.weline-header .header-user-area .w-button[data-tone="quiet"] {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    color: var(--w-surface-fg, var(--weline-theme-header-text, var(--weline-theme-text-on-dark)));
+}
+
+.weline-header .w-language-switcher__trigger.w-button:hover,
+.weline-header .w-currency-switcher__trigger.w-button:hover,
+.weline-header .header-actions .w-button[data-tone="quiet"]:hover,
+.weline-header .header-user-area .w-button[data-tone="quiet"]:hover {
+    background: var(--color-on-dark-soft, rgba(255, 255, 255, 0.08));
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    color: var(--w-surface-fg, var(--weline-theme-header-text, var(--weline-theme-text-on-dark)));
+}
+
 .language-switcher,
 .currency-switcher {
     position: relative;

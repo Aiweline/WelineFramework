@@ -127,8 +127,8 @@
             description: "前台账户会话与顶栏账户 chrome"
         },
         customerAccount: {
-            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js?v=20260917-sidebar-empty-retry"],
-            paths: ["Weline_Customer::js/account-index.js?v=20260917-sidebar-empty-retry"],
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js?v=20261006-avatar-initial-fallback-1"],
+            paths: ["Weline_Customer::js/account-index.js?v=20261006-avatar-initial-fallback-1"],
             globalVar: "WelineCustomerAccount",
             description: "前台用户中心账户页交互"
         },
@@ -289,8 +289,8 @@
             description: "快捷支付回头确认页：摘要/缺口/确认收款"
         },
         storefrontMoneySummary: {
-            origin_paths: ["app/code/Weline/Checkout/view/statics/js/widgets/storefront-money-summary.js?v=20261006-sms3"],
-            paths: ["Weline_Checkout::js/widgets/storefront-money-summary.js?v=20261006-sms3"],
+            origin_paths: ["app/code/Weline/Checkout/view/statics/js/widgets/storefront-money-summary.js?v=20261006-sms5"],
+            paths: ["Weline_Checkout::js/widgets/storefront-money-summary.js?v=20261006-sms5"],
             globalVar: "WelineStorefrontMoneySummary",
             load: "eager",
             description: "店面金额小计：统一 paint 商品/运费/税费/优惠/应付"

@@ -138,6 +138,8 @@ final class TaxCurrentSourceDatabaseIntegrationTest extends TestCase
                 'tax/general/default_jurisdiction',
                 'tax/general/rule_schema_version',
                 'tax/general/rounding',
+                'tax/general/prices_include_tax',
+                'tax/general/collect_sales_tax_countries',
             ],
             $template['field_keys'],
         );

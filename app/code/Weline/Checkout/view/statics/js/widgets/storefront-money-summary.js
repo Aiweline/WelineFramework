@@ -1,5 +1,6 @@
 /**
  * Storefront money summary — shared paint contract for cart/checkout/express/helppay.
+ * Sales tax / customs duty / import tax are separate rows (never muddled as one「税费」).
  */
 (function (global) {
   'use strict';
@@ -94,6 +95,62 @@
     return mode === 'helppay' ? 'code' : 'symbol';
   }
 
+  /**
+   * Resolve sales / customs / import minors.
+   * Legacy: only tax_minor → treat as sales tax.
+   * Split: any of sales_tax_minor / duty_minor / customs_duty_minor / import_tax_minor present.
+   */
+  function resolveTaxParts(dto) {
+    var hasSplit = dto.sales_tax_minor != null
+      || dto.duty_minor != null
+      || dto.customs_duty_minor != null
+      || dto.import_tax_minor != null;
+    var legacyTax = toMinor(
+      dto.tax_minor != null ? dto.tax_minor : dto.tax_amount_minor
+    );
+    var salesTaxMinor = hasSplit
+      ? toMinor(dto.sales_tax_minor)
+      : legacyTax;
+    var customsDutyMinor = toMinor(
+      dto.customs_duty_minor != null ? dto.customs_duty_minor : dto.duty_minor
+    );
+    var importTaxMinor = toMinor(dto.import_tax_minor);
+    return {
+      sales_tax_minor: Math.max(0, salesTaxMinor),
+      customs_duty_minor: Math.max(0, customsDutyMinor),
+      import_tax_minor: Math.max(0, importTaxMinor),
+      tax_minor: Math.max(0, salesTaxMinor + customsDutyMinor + importTaxMinor),
+    };
+  }
+
+  function paintTaxRow(root, rowKey, amountSel, labelSels, amountMinor, labelOverride, currency, style) {
+    var row = qs(root, '[data-money-summary-row="' + rowKey + '"]');
+    if (!row && rowKey === 'sales_tax') {
+      row = qs(root, '[data-money-summary-row="tax"]')
+        || qs(root, '[data-money-summary-row-legacy="tax"]');
+    }
+    if (labelOverride) {
+      var labelEl = null;
+      var sels = Array.isArray(labelSels) ? labelSels : [labelSels];
+      for (var i = 0; i < sels.length; i++) {
+        labelEl = qs(root, sels[i]);
+        if (labelEl) {
+          break;
+        }
+      }
+      setText(labelEl || (row && qs(row, 'span')), labelOverride);
+    }
+    var amountEl = qs(root, amountSel)
+      || (rowKey === 'sales_tax' ? qs(root, '[data-money-summary-tax]') : null);
+    if (amountMinor > 0) {
+      setHidden(row, false);
+      setText(amountEl, formatMoney(majorFromMinor(amountMinor), currency, style));
+    } else {
+      setHidden(row, true);
+      setText(amountEl, formatMoney(0, currency, style));
+    }
+  }
+
   function paint(target, dto) {
     var root = resolveRoot(target);
     if (!root || !dto || typeof dto !== 'object') {
@@ -117,10 +174,11 @@
     var discountMinor = toMinor(dto.discount_minor);
     var depositMinor = toMinor(dto.deposit_minor);
     var creditMinor = toMinor(dto.credit_minor);
-    // Accept tax_minor or server cart field tax_amount_minor (same paint contract).
-    var taxMinor = toMinor(
-      dto.tax_minor != null ? dto.tax_minor : dto.tax_amount_minor
-    );
+    var taxParts = resolveTaxParts(dto);
+    var salesTaxMinor = taxParts.sales_tax_minor;
+    var customsDutyMinor = taxParts.customs_duty_minor;
+    var importTaxMinor = taxParts.import_tax_minor;
+    var taxMinor = taxParts.tax_minor;
     var codMinor = toMinor(dto.cod_fee_minor);
     var incentiveMinor = toMinor(dto.payment_incentive_minor);
     var payableMinor = dto.payable_minor != null
@@ -200,21 +258,37 @@
       setText(qs(root, '[data-money-summary-credit]'), formatMoney(0, currency, style));
     }
 
-    var taxRow = qs(root, '[data-money-summary-row="tax"]');
-    var taxLabel = text(dto.tax_label).trim();
-    if (taxLabel) {
-      setText(qs(root, '[data-money-summary-tax-label]'), taxLabel);
-    }
-    if (taxMinor > 0) {
-      setHidden(taxRow, false);
-      setText(
-        qs(root, '[data-money-summary-tax]'),
-        formatMoney(majorFromMinor(taxMinor), currency, style)
-      );
-    } else {
-      setHidden(taxRow, true);
-      setText(qs(root, '[data-money-summary-tax]'), formatMoney(0, currency, style));
-    }
+    var salesTaxLabel = text(dto.sales_tax_label || dto.tax_label).trim();
+    paintTaxRow(
+      root,
+      'sales_tax',
+      '[data-money-summary-sales-tax]',
+      ['[data-money-summary-sales-tax-label]', '[data-money-summary-tax-label]'],
+      salesTaxMinor,
+      salesTaxLabel,
+      currency,
+      style
+    );
+    paintTaxRow(
+      root,
+      'customs_duty',
+      '[data-money-summary-customs-duty]',
+      ['[data-money-summary-customs-duty-label]'],
+      customsDutyMinor,
+      text(dto.customs_duty_label || dto.duty_label).trim(),
+      currency,
+      style
+    );
+    paintTaxRow(
+      root,
+      'import_tax',
+      '[data-money-summary-import-tax]',
+      ['[data-money-summary-import-tax-label]'],
+      importTaxMinor,
+      text(dto.import_tax_label).trim(),
+      currency,
+      style
+    );
 
     var codRow = qs(root, '[data-money-summary-row="cod"]');
     if (codMinor > 0) {
@@ -290,6 +364,9 @@
 
     root.setAttribute('data-money-summary-goods-minor', String(goodsMinor));
     root.setAttribute('data-money-summary-shipping-minor', String(shippingMinor));
+    root.setAttribute('data-money-summary-sales-tax-minor', String(salesTaxMinor));
+    root.setAttribute('data-money-summary-customs-duty-minor', String(customsDutyMinor));
+    root.setAttribute('data-money-summary-import-tax-minor', String(importTaxMinor));
     root.setAttribute('data-money-summary-tax-minor', String(taxMinor));
     root.setAttribute('data-money-summary-payable-minor', String(payableMinor));
     root.setAttribute('data-money-summary-currency', currency);
@@ -297,6 +374,9 @@
     return {
       goods_subtotal_minor: goodsMinor,
       shipping_minor: shippingMinor,
+      sales_tax_minor: salesTaxMinor,
+      customs_duty_minor: customsDutyMinor,
+      import_tax_minor: importTaxMinor,
       tax_minor: taxMinor,
       payable_minor: payableMinor,
       currency: currency,
@@ -328,7 +408,6 @@
       wrap.setAttribute('data-discounts-disabled', '1');
     }
     var payableLabel = mode === 'cart' || mode === 'mini-cart' ? '小计' : '应付';
-    var taxLabel = mode === 'checkout' ? '关税与税费（预估）' : '税费（预估）';
     wrap.innerHTML =
       '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--goods" role="listitem" data-money-summary-row="goods">' +
       '<span data-money-summary-goods-label>商品小计</span>' +
@@ -342,9 +421,17 @@
       '<span data-money-summary-discount-label data-checkout-discount-label>优惠</span>' +
       '<strong data-money-summary-discount data-discount-amount="">0.00</strong>' +
       '</div>' +
-      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--tax" role="listitem" data-money-summary-row="tax" data-checkout-tax-row data-cart-tax-row data-mini-cart-tax-row hidden>' +
-      '<span data-money-summary-tax-label data-cart-tax-label data-mini-cart-tax-label>' + taxLabel + '</span>' +
-      '<strong data-money-summary-tax data-tax-amount="" data-cart-tax-amount data-express-tax>0.00</strong>' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--sales-tax" role="listitem" data-money-summary-row="sales_tax" data-money-summary-row-legacy="tax" data-checkout-tax-row data-cart-tax-row data-mini-cart-tax-row hidden>' +
+      '<span data-money-summary-sales-tax-label data-money-summary-tax-label data-cart-tax-label data-mini-cart-tax-label>销售税</span>' +
+      '<strong data-money-summary-sales-tax data-money-summary-tax data-tax-amount="" data-cart-tax-amount data-express-tax>0.00</strong>' +
+      '</div>' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--customs-duty" role="listitem" data-money-summary-row="customs_duty" data-checkout-customs-duty-row hidden>' +
+      '<span data-money-summary-customs-duty-label>进口关税</span>' +
+      '<strong data-money-summary-customs-duty>0.00</strong>' +
+      '</div>' +
+      '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--import-tax" role="listitem" data-money-summary-row="import_tax" data-checkout-import-tax-row hidden>' +
+      '<span data-money-summary-import-tax-label>进口税费</span>' +
+      '<strong data-money-summary-import-tax>0.00</strong>' +
       '</div>' +
       '<div class="w-storefront-money-summary__row w-storefront-money-summary__row--payable" role="listitem" data-money-summary-row="payable">' +
       '<span data-money-summary-payable-label data-grand-total-label data-cart-subtotal-label>' + payableLabel + '</span>' +

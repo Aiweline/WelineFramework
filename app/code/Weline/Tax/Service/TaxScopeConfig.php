@@ -22,6 +22,10 @@ final class TaxScopeConfig
     public const KEY_DEFAULT_JURISDICTION = 'tax/general/default_jurisdiction';
     public const KEY_SCHEMA_VERSION = 'tax/general/rule_schema_version';
     public const KEY_ROUNDING = 'tax/general/rounding';
+    /** Catalog / cart line amounts already include home-jurisdiction VAT (价内税). */
+    public const KEY_PRICES_INCLUDE_TAX = 'tax/general/prices_include_tax';
+    /** Optional ISO2 allowlist to collect destination sales/GST at checkout (IOSS/LVG/nexus). */
+    public const KEY_COLLECT_SALES_TAX_COUNTRIES = TaxDestinationCheckoutPolicy::KEY_COLLECT_SALES_TAX_COUNTRIES;
 
     private readonly ?\Closure $resolver;
 
@@ -51,6 +55,8 @@ final class TaxScopeConfig
                 'default_jurisdiction' => 'CN|',
                 'schema_version' => TaxEngine::SCHEMA_VERSION,
                 'rounding' => TaxRule::ROUNDING_HALF_UP,
+                'prices_include_tax' => true,
+                'collect_sales_tax_countries' => '',
                 'sources' => [],
             ];
 
@@ -89,6 +95,8 @@ final class TaxScopeConfig
      *   default_jurisdiction:string,
      *   schema_version:string,
      *   rounding:string,
+     *   prices_include_tax:bool,
+     *   collect_sales_tax_countries:string,
      *   sources:array<string,mixed>
      * }
      */
@@ -162,6 +170,20 @@ final class TaxScopeConfig
             $identity,
             default: TaxRule::ROUNDING_HALF_UP,
         );
+        $pricesIncludeTax = $reader->resolveTypedConfig(
+            self::KEY_PRICES_INCLUDE_TAX,
+            self::MODULE,
+            self::AREA,
+            $identity,
+            default: true,
+        );
+        $collectSalesTaxCountries = $reader->resolveTypedConfig(
+            self::KEY_COLLECT_SALES_TAX_COUNTRIES,
+            self::MODULE,
+            self::AREA,
+            $identity,
+            default: '',
+        );
 
         return $this->validateResolved([
             'website_id' => $websiteId,
@@ -171,11 +193,15 @@ final class TaxScopeConfig
             'default_jurisdiction' => $jurisdiction->value,
             'schema_version' => $schema->value,
             'rounding' => $rounding->value,
+            'prices_include_tax' => $this->boolValue($pricesIncludeTax->value),
+            'collect_sales_tax_countries' => trim((string)$collectSalesTaxCountries->value),
             'sources' => [
                 self::KEY_ENABLED => $enabled->source->toArray(),
                 self::KEY_DEFAULT_JURISDICTION => $jurisdiction->source->toArray(),
                 self::KEY_SCHEMA_VERSION => $schema->source->toArray(),
                 self::KEY_ROUNDING => $rounding->source->toArray(),
+                self::KEY_PRICES_INCLUDE_TAX => $pricesIncludeTax->source->toArray(),
+                self::KEY_COLLECT_SALES_TAX_COUNTRIES => $collectSalesTaxCountries->source->toArray(),
             ],
         ], $websiteId, $storeId);
     }
@@ -212,6 +238,9 @@ final class TaxScopeConfig
             'default_jurisdiction' => $jurisdiction,
             'schema_version' => $schema,
             'rounding' => $rounding,
+            // Default true: Chinese B2C catalog amounts are VAT-inclusive (价内税).
+            'prices_include_tax' => $this->boolValue($resolved['prices_include_tax'] ?? true),
+            'collect_sales_tax_countries' => trim((string)($resolved['collect_sales_tax_countries'] ?? '')),
             'sources' => is_array($resolved['sources'] ?? null) ? $resolved['sources'] : [],
         ];
     }

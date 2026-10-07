@@ -17,11 +17,13 @@
 | `Model/TaxRuleSetLkg` | 持久化、可重放规则集快照 |
 | `Api/TaxEngineInterface` | 算税契约 |
 | `Api/TaxShadowQuoteSourceInterface` | 只读、规范化、去身份的 Checkout shadow 事实源契约 |
-| `Service/TaxScopeConfig` | SystemConfig typed Scope adapter |
-| `Service/TaxEngine` | ORM production engine；memory/frozen snapshot 仅显式测试 |
+| `Service/TaxScopeConfig` | SystemConfig typed Scope adapter（价内税 / 代收国名单） |
+| `Service/TaxEngine` | ORM production engine；region→country 税则回落 |
 | `Service/TaxShadowComparator` | ORM current source vs frozen snapshot 观察窗（TEST-P3B-01） |
 | `Service/TaxLkgStore` | Scope + Schema + rule hash 的持久规则集 LKG |
-| `Service/CheckoutTaxAdvisor` | Checkout 可靠回退、稳定行映射和 Quote 固定版本校验 |
+| `Service/TaxDestinationCheckoutPolicy` | 国别结账加收策略（国内价内 / 进口预估 / 代收） |
+| `Service/TaxSeedRateCatalog` | 可上线静态多国 VAT/GST 种子矩阵 |
+| `Service/CheckoutTaxAdvisor` | Checkout 顾问：策略 + 销售税 + DDU 进口税/关税 |
 | `Service/TaxRolloutGate` | Env lock / global SystemConfig durable rollout；精确三元组 allowlist |
 | `Service/TaxMigrationService` | checkpoint / shadow / allowlist / verify / rollback |
 | `Console/Commerce/MigrateP3bTax` | CLI `commerce:migrate-p3b-tax` |

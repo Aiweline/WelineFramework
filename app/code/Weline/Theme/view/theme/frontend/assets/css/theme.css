@@ -465,19 +465,33 @@ input[disabled].btn {
     text-decoration: underline;
 }
 
-/* ========== Header language / currency triggers（inverse chrome，跟随主题浅色 Token） ========== */
+/* ========== Header language / currency triggers（inverse chrome，跟随主题浅色 Token） ==========
+ * Unlayered `.w-button` defaults to `--weline-component-primary` fill; layered quiet
+ * tone loses. Dark chrome must stay ghost (same rank as account/wishlist), not brand chips.
+ */
+[data-surface="inverse"] .w-button[data-tone="quiet"],
+.w-surface-inverse .w-button[data-tone="quiet"],
 [data-surface="inverse"] .w-language-switcher__trigger.w-button,
 [data-surface="inverse"] .w-currency-switcher__trigger.w-button,
 .w-surface-inverse .w-language-switcher__trigger.w-button,
 .w-surface-inverse .w-currency-switcher__trigger.w-button {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
     color: var(--w-surface-fg, var(--weline-theme-header-text, var(--weline-theme-text-on-dark)));
 }
 
+[data-surface="inverse"] .w-button[data-tone="quiet"]:hover,
+.w-surface-inverse .w-button[data-tone="quiet"]:hover,
 [data-surface="inverse"] .w-language-switcher__trigger.w-button:hover,
 [data-surface="inverse"] .w-currency-switcher__trigger.w-button:hover,
 .w-surface-inverse .w-language-switcher__trigger.w-button:hover,
 .w-surface-inverse .w-currency-switcher__trigger.w-button:hover {
     background: var(--color-on-dark-soft);
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
     color: var(--w-surface-fg, var(--weline-theme-header-text, var(--weline-theme-text-on-dark)));
 }
 

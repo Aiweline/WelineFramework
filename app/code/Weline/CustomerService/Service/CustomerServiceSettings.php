@@ -38,9 +38,18 @@ final class CustomerServiceSettings
 
     private bool $legacyMigrated = false;
 
+    /** Process-level: legacy scan finished or proven unnecessary (SystemConfig already owns keys). */
+    private static bool $processLegacySettled = false;
+
     public function __construct(
         private readonly ConfigReader $config,
     ) {
+    }
+
+    /** @internal tests / process cache reset */
+    public static function clearProcessLegacySettlement(): void
+    {
+        self::$processLegacySettled = false;
     }
 
     public function isServiceEnabled(): bool
@@ -144,21 +153,39 @@ final class CustomerServiceSettings
 
     private function migrateLegacyOnce(): void
     {
-        if ($this->legacyMigrated) {
+        if ($this->legacyMigrated || self::$processLegacySettled) {
+            $this->legacyMigrated = true;
+
             return;
         }
         $this->legacyMigrated = true;
 
         try {
+            /** @var SystemConfig $store */
+            $store = ObjectManager::getInstance(SystemConfig::class);
+            // Cold homepage paid ~64ms SELECT * on customer_service_config even when
+            // SystemConfig already holds the unified keys. Skip the legacy table entirely.
+            if ($store->getScopedConfigRow(
+                self::KEY_ENABLED,
+                self::MODULE,
+                self::AREA,
+                ConfigReader::SCOPE_GLOBAL,
+                ConfigReader::LOCALE_DEFAULT,
+            ) !== null) {
+                self::$processLegacySettled = true;
+
+                return;
+            }
+
             /** @var CustomerServiceConfig $legacy */
             $legacy = ObjectManager::getInstance(CustomerServiceConfig::class);
             $rows = $legacy->reset()->select()->fetch()->getItems();
             if ($rows === []) {
+                self::$processLegacySettled = true;
+
                 return;
             }
 
-            /** @var SystemConfig $store */
-            $store = ObjectManager::getInstance(SystemConfig::class);
             foreach ($rows as $row) {
                 $legacyKey = trim((string)($row['key'] ?? ''));
                 $unifiedKey = self::LEGACY_MAP[$legacyKey] ?? '';
@@ -185,8 +212,10 @@ final class CustomerServiceSettings
                     ConfigReader::LOCALE_DEFAULT,
                 );
             }
+            self::$processLegacySettled = true;
         } catch (\Throwable) {
             // Legacy table may be absent; SystemConfig remains source of truth.
+            self::$processLegacySettled = true;
         }
     }
 }

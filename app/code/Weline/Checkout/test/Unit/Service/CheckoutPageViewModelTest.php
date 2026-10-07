@@ -37,6 +37,35 @@ final class CheckoutPageViewModelTest extends TestCase
         self::assertSame(1, $data['item_count']);
         self::assertFalse($data['is_empty']);
         self::assertNull($data['discount_preview']);
+        self::assertSame(0, $data['tax_amount_minor']);
+        self::assertSame(0, $data['sales_tax_amount_minor']);
+    }
+
+    public function testForwardsSalesTaxFieldsFromTrustedCartSummary(): void
+    {
+        $data = (new CheckoutPageViewModel())->fromQueryResult([
+            'data' => [
+                'currency' => 'USD',
+                'subtotal_minor' => 73606,
+                'grand_total_minor' => 83175,
+                'tax_amount_minor' => 9569,
+                'sales_tax_amount_minor' => 9569,
+                'tax_amount' => 95.69,
+                'duty_amount_minor' => 0,
+                'items' => [[
+                    'name' => 'Taxed Offer',
+                    'qty' => 1,
+                    'unit_price_minor' => 73606,
+                    'row_total_minor' => 73606,
+                ]],
+            ],
+        ]);
+
+        self::assertSame(9569, $data['tax_amount_minor']);
+        self::assertSame(9569, $data['sales_tax_amount_minor']);
+        self::assertSame(95.69, $data['tax_amount']);
+        self::assertSame(0, $data['duty_amount_minor']);
+        self::assertSame(831.75, $data['grand_total']);
     }
 
     public function testPreservesDiscountPreviewFromTrustedCartSummary(): void

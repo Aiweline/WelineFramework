@@ -12,8 +12,13 @@ namespace Weline\Server\Shared\Connection;
  */
 final class SharedStatePoolDefaults
 {
-    public const MEMORY_POOL_SIZE = 8;
-    public const MEMORY_MIN_IDLE = 0;
+    /**
+     * Per-Worker Memory client pool. Under high concurrency (c1000+, shared
+     * sidecar), 8 slots + 50ms IO budgets produce systematic read timeouts and
+     * wls_cache_cas remote_unavailable; keep fail-fast but sized for contention.
+     */
+    public const MEMORY_POOL_SIZE = 32;
+    public const MEMORY_MIN_IDLE = 2;
 
     /**
      * @return array{
@@ -30,11 +35,13 @@ final class SharedStatePoolDefaults
     public static function memoryClientOptions(bool $wlsMode = true): array
     {
         return [
-            'connect_timeout' => $wlsMode ? 0.05 : 1.0,
-            'timeout' => $wlsMode ? 0.05 : 2.0,
+            // Local shared-state p99 is sub-ms when idle; under Worker×Fiber
+            // contention the Memory sidecar queue routinely exceeds 50ms.
+            'connect_timeout' => $wlsMode ? 0.15 : 1.0,
+            'timeout' => $wlsMode ? 0.25 : 2.0,
             'pool_size' => self::MEMORY_POOL_SIZE,
             'pool_min_idle' => self::MEMORY_MIN_IDLE,
-            'acquire_timeout' => $wlsMode ? 0.01 : 0.2,
+            'acquire_timeout' => $wlsMode ? 0.1 : 0.2,
             'idle_timeout' => 86400.0,
             'pool_health_ping_idle' => false,
             'fail_fast_on_cooldown' => $wlsMode,

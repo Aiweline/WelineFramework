@@ -72,6 +72,8 @@ final class CheckoutShippingMethodsEnrichDutyObserver implements ObserverInterfa
             $method['tax_amount_minor'] = $charged;
             $method['tax_amount'] = $charged / 100;
             $method['duty_estimate_reason'] = (string)$estimate['reason'];
+            // Prefer Tax estimate notice (cleared for domestic) over seed DDU on CN→CN lanes.
+            $method['duty_notice'] = (string)($estimate['duty_notice'] ?? '');
             $out[] = $method;
         }
 

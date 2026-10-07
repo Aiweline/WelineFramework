@@ -36,6 +36,25 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
         self::assertStringContainsString('--weline-theme-text-on-dark', $themeCss);
         self::assertStringContainsString('[data-surface="inverse"] .w-language-switcher__trigger.w-button', $themeCss);
         self::assertStringContainsString('[data-surface="inverse"] .w-currency-switcher__trigger.w-button', $themeCss);
+        self::assertMatchesRegularExpression(
+            '/\[data-surface="inverse"\] \.w-language-switcher__trigger\.w-button[\s\S]{0,400}?background:\s*transparent/s',
+            $themeCss
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/\[data-surface="inverse"\] \.w-language-switcher__trigger\.w-button[\s\S]{0,400}?background:\s*var\(--weline-component-primary\)/s',
+            $themeCss
+        );
+
+        // Live-loaded partial path: shields when /static theme.css is WLS-stale.
+        $headerDefault = $this->read('app/code/Weline/Theme/view/statics/css/partials/header-default.css');
+        self::assertMatchesRegularExpression(
+            '/\.weline-header \.w-language-switcher__trigger\.w-button[\s\S]{0,400}?background:\s*transparent/s',
+            $headerDefault
+        );
+        self::assertMatchesRegularExpression(
+            '/\.weline-header \.w-currency-switcher__trigger\.w-button[\s\S]{0,400}?background:\s*transparent/s',
+            $headerDefault
+        );
     }
 
     public function testMegaMenuIsRegisteredAsLazyUiComponent(): void

@@ -11,9 +11,13 @@ function safeStorefrontDestination(target, fallback) {
     const segments = window.location.pathname.split('/').filter(Boolean);
     const customerIndex = segments.findIndex((segment) => segment.toLowerCase() === 'customer');
     const prefix = customerIndex > 0 ? `/${segments.slice(0, customerIndex).join('/')}` : '';
-    return prefix && destination !== prefix && !destination.startsWith(`${prefix}/`)
-        ? `${prefix}${destination}`
-        : destination;
+    // Treat /bg_BG?w_auth=1 the same as /bg_BG/... so we never emit /bg_BG/bg_BG?...
+    const hasPrefix = !prefix
+        || destination === prefix
+        || destination.startsWith(`${prefix}/`)
+        || destination.startsWith(`${prefix}?`)
+        || destination.startsWith(`${prefix}#`);
+    return prefix && !hasPrefix ? `${prefix}${destination}` : destination;
 }
 
 export function register(UI) {

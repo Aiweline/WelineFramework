@@ -1040,10 +1040,13 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 .weline-header .header-actions .w-button[data-tone="quiet"],
 .weline-header .header-user-area .w-button[data-tone="quiet"],
 .weline-header .w-header-account__trigger,
+.weline-header .w-language-switcher__trigger,
 .weline-header .w-currency-switcher__trigger {
     color: var(--weline-chrome-text-light, #ffffff);
     border-color: transparent;
     background: transparent;
+    box-shadow: none;
+    transform: none;
     gap: var(--spacing-sm, 0.5rem);
     padding: var(--spacing-sm, 0.5rem);
     min-height: auto;
@@ -1053,9 +1056,12 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 .weline-header .header-actions .w-button[data-tone="quiet"]:hover,
 .weline-header .header-user-area .w-button[data-tone="quiet"]:hover,
 .weline-header .w-header-account__trigger:hover,
+.weline-header .w-language-switcher__trigger:hover,
 .weline-header .w-currency-switcher__trigger:hover {
-    border-color: var(--weline-chrome-text-light, #ffffff);
+    border-color: transparent;
     background: var(--color-on-dark-soft, rgba(255, 255, 255, 0.08));
+    box-shadow: none;
+    transform: none;
     color: var(--weline-chrome-text-light, #ffffff);
 }
 

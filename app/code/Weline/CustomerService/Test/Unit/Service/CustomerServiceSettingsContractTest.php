@@ -37,6 +37,9 @@ final class CustomerServiceSettingsContractTest extends TestCase
         self::assertStringContainsString('ConfigReader', $settings);
         self::assertStringContainsString('WebsiteData::getDefaultLanguage', $settings);
         self::assertStringContainsString('migrateLegacyOnce', $settings);
+        self::assertStringContainsString('processLegacySettled', $settings);
+        self::assertStringContainsString('getScopedConfigRow', $settings);
+        self::assertStringContainsString('KEY_ENABLED', $settings);
 
         self::assertStringContainsString('SystemConfigTargetScopeService', $configController);
         self::assertStringContainsString('return $this->fetch()', $configController);

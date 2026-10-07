@@ -43,6 +43,7 @@ final class DutyEstimateServiceTest extends TestCase
 
         self::assertSame(0, $out['charged_minor']);
         self::assertSame(DutyEstimateService::REASON_DOMESTIC, $out['reason']);
+        self::assertSame('', $out['duty_notice']);
     }
 
     public function testDapNotCollectedAtCheckout(): void

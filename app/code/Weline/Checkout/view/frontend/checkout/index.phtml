@@ -2616,9 +2616,75 @@ $copy = [
     }
 
     /**
-     * Server-enriched tax for money-summary:
-     * sales tax (cart) + duty/import on selected shipping method (Tax duty enrich).
-     * Prefer taxEstimate when present (combined quote). Never invent rates in browser.
+     * Import lane parts from taxEstimate or selected shipping method. Never invent rates.
+     * customs duty and import tax/VAT are separate — do not collapse with ||.
+     */
+    function selectedImportLaneParts() {
+        const empty = { customs_duty: 0, import_tax: 0 };
+        const preview = checkoutState.taxEstimate;
+        if (preview && typeof preview === 'object') {
+            const dutyMinor = Number(preview.duty_amount_minor || 0);
+            const importMinor = Number(preview.import_tax_amount_minor || 0);
+            if (dutyMinor > 0 || importMinor > 0) {
+                return {
+                    customs_duty: Math.max(0, dutyMinor) / 100,
+                    import_tax: Math.max(0, importMinor) / 100,
+                };
+            }
+            // Legacy combined only: tax_amount_minor − sales ≈ import lane (uncategorized → import tax).
+            const salesMinor = Number(preview.sales_tax_amount_minor || 0);
+            const totalMinor = Number(preview.tax_amount_minor || 0);
+            if (totalMinor > salesMinor) {
+                return {
+                    customs_duty: 0,
+                    import_tax: (totalMinor - salesMinor) / 100,
+                };
+            }
+        }
+        const code = selectedValue('shipping_method');
+        const method = checkoutState.shippingMethods.find(function (entry) {
+            return entry && entry.code === code;
+        });
+        if (!method) {
+            return empty;
+        }
+        const dutyMinor = Number(method.duty_amount_minor || 0);
+        const importMinor = Number(method.import_tax_amount_minor || 0);
+        if (dutyMinor > 0 || importMinor > 0) {
+            return {
+                customs_duty: Math.max(0, dutyMinor) / 100,
+                import_tax: Math.max(0, importMinor) / 100,
+            };
+        }
+        const combinedMinor = Number(method.tax_amount_minor || 0);
+        if (combinedMinor > 0) {
+            return { customs_duty: 0, import_tax: combinedMinor / 100 };
+        }
+        const combinedMajor = Number(method.tax_amount || 0) || 0;
+        return combinedMajor > 0
+            ? { customs_duty: 0, import_tax: combinedMajor }
+            : empty;
+    }
+
+    function selectedCustomsDutyAmount() {
+        return selectedImportLaneParts().customs_duty;
+    }
+
+    function selectedImportTaxAmount() {
+        return selectedImportLaneParts().import_tax;
+    }
+
+    /**
+     * Import lane total (customs + import tax/VAT) for payable math.
+     */
+    function selectedDutyAmount() {
+        const parts = selectedImportLaneParts();
+        return Math.max(0, parts.customs_duty + parts.import_tax);
+    }
+
+    /**
+     * Total tax charged at checkout: sales tax + customs duty + import tax.
+     * Prefer taxEstimate.tax_amount_minor when it already includes all parts.
      */
     function selectedTaxAmount() {
         const preview = checkoutState.taxEstimate;
@@ -2628,23 +2694,27 @@ $copy = [
                 return previewMinor / 100;
             }
         }
-        let dutyMajor = 0;
-        const code = selectedValue('shipping_method');
-        const method = checkoutState.shippingMethods.find(function (entry) {
-            return entry && entry.code === code;
-        });
-        if (method) {
-            const minor = Number(method.tax_amount_minor || 0);
-            if (minor > 0) {
-                dutyMajor = minor / 100;
-            } else {
-                const major = Number(method.tax_amount || 0) || 0;
-                if (major > 0) {
-                    dutyMajor = major;
-                }
-            }
+        return Math.max(
+            0,
+            cartSalesTaxAmount() + selectedCustomsDutyAmount() + selectedImportTaxAmount()
+        );
+    }
+
+    /**
+     * Clarifying note under money summary — sales vs import lanes are not the same charge.
+     */
+    function moneySummaryTaxNote(salesMajor, customsMajor, importMajor) {
+        const parts = [];
+        if (salesMajor <= 0 && customsMajor <= 0 && importMajor <= 0) {
+            return '<?= addslashes((string)__('商品价格已含税，结账无需另付销售税')) ?>';
         }
-        return Math.max(0, cartSalesTaxAmount() + dutyMajor);
+        if (salesMajor <= 0 && (customsMajor > 0 || importMajor > 0)) {
+            parts.push('<?= addslashes((string)__('商品价格已含税，结账无需另付销售税')) ?>');
+        }
+        if (customsMajor > 0 || importMajor > 0) {
+            parts.push('<?= addslashes((string)__('进口关税与进口税费按所选配送方式计入应付，与销售税分开计算')) ?>');
+        }
+        return parts.join(' ');
     }
 
     /**
@@ -3017,7 +3087,10 @@ $copy = [
                 cashDepositMajor = Math.max(0, depositMajor - creditApplyMajor);
             }
         }
-        const tax = tob ? 0 : selectedTaxAmount();
+        const salesTaxMajor = tob ? 0 : cartSalesTaxAmount();
+        const customsDutyMajor = tob ? 0 : selectedCustomsDutyAmount();
+        const importTaxMajor = tob ? 0 : selectedImportTaxAmount();
+        const tax = tob ? 0 : Math.max(0, salesTaxMajor + customsDutyMajor + importTaxMajor);
         const codFee = tob ? 0 : selectedCodFeeAmount();
         const incentive = tob ? 0 : selectedIncentiveSavingsMajor();
         const payable = tob
@@ -3031,6 +3104,8 @@ $copy = [
         const discountLabel = (!tob && discount > 0 && previewCode)
             ? (discountLabelDefault + ' · ' + previewCode)
             : '';
+        // Split rows: 销售税 / 进口关税 / 进口税费 — never muddle into one label.
+        const taxNote = tob ? '' : moneySummaryTaxNote(salesTaxMajor, customsDutyMajor, importTaxMajor);
         const painted = paintCheckoutMoneySummary({
             currency: checkoutState.currency || 'CNY',
             goods_subtotal_minor: Math.round(subtotal * 100),
@@ -3039,7 +3114,15 @@ $copy = [
             discount_label: discountLabel,
             deposit_minor: tob ? Math.round(depositMajor * 100) : 0,
             credit_minor: tob ? Math.round(creditApplyMajor * 100) : 0,
+            sales_tax_minor: Math.round(salesTaxMajor * 100),
+            duty_minor: Math.round(customsDutyMajor * 100),
+            customs_duty_minor: Math.round(customsDutyMajor * 100),
+            import_tax_minor: Math.round(importTaxMajor * 100),
             tax_minor: Math.round(tax * 100),
+            sales_tax_label: '<?= addslashes((string)__('销售税')) ?>',
+            customs_duty_label: '<?= addslashes((string)__('进口关税')) ?>',
+            import_tax_label: '<?= addslashes((string)__('进口税费')) ?>',
+            note: taxNote,
             cod_fee_minor: Math.round(codFee * 100),
             payment_incentive_minor: Math.round(incentive * 100),
             payable_minor: Math.round(payable * 100),

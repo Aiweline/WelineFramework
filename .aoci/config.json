@@ -771,9 +771,9 @@
     "version": "cognition-budget-policy/v1",
     "mode": "enforce",
     "whole_index": {
-      "target_tokens": 200000,
-      "warning_tokens": 300000,
-      "max_tokens": 400000
+      "target_tokens": 500000,
+      "warning_tokens": 700000,
+      "max_tokens": 1000000
     },
     "r": [
       {

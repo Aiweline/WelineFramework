@@ -93,6 +93,20 @@ php bin/w command:upgrade
 - Run hot paths on **WLS in-memory**; keep FPM where ops already know it.
 - Close the loop with **webhook auto-deploy** and a single `bin/w` ops surface.
 
+## Control Center (GUI)
+
+Weline Control Center is a **separate** multi-platform desktop/agent UI (sibling repo, not inside this tree). It drives local/remote WLS via `php bin/w` and Agent HTTP.
+
+- Repository: [https://gitee.com/aiweline/weline-gui](https://gitee.com/aiweline/weline-gui)
+- **Installers (recommended)**: [Gitee Releases v0.1.0-packages](https://gitee.com/aiweline/weline-gui/releases/tag/v0.1.0-packages) · [GitHub Releases](https://github.com/Aiweline/weline-gui/releases/tag/v0.1.0-packages)
+- [macOS DMG (Apple Silicon)](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-macos-aarch64.dmg)
+- [Windows setup.exe (x64)](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-windows-x64-setup.exe)
+- [Linux DEB (amd64)](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-linux-amd64.deb)
+- [Linux AppImage (amd64)](https://gitee.com/aiweline/weline-gui/releases/download/v0.1.0-packages/Weline-Control-Center-0.1.0-linux-amd64.AppImage)
+- Source clone (developers): `git clone https://gitee.com/aiweline/weline-gui.git`
+
+Local sibling checkout (optional): `../框架GUI` next to this framework root.
+
 ## Read Next
 
 - [Simplified Chinese README](./README.zh-CN.md): Chinese entry for local developers.

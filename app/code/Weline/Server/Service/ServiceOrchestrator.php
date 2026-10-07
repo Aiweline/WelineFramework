@@ -147,6 +147,12 @@ class ServiceOrchestrator
      * 以便 Worker 在软期限关闭空闲 keep-alive 并上报 drained 后，Master 仍有余量收齐。
      */
     private const WORKER_RELOAD_SOFT_DRAIN_MARGIN_SEC = 5.0;
+    /**
+     * Pure WLS Direct has no Nginx upstream keepalive floor. Reload still must
+     * outlive in-flight HTTP/2 bodies (homepage ~100KB+ under c1000), otherwise
+     * Workers FORCE-close mid-DATA and clients see goaway_incomplete_stream.
+     */
+    private const PURE_WLS_RELOAD_DRAIN_FLOOR_SEC = 45.0;
     private const SLOT_GENERATIONS_KEY = 'slot_generations';
     private const STARTUP_PORT_PREFLIGHT_ROLES = [
         ControlMessage::ROLE_DISPATCHER => true,
@@ -9716,7 +9722,13 @@ class ServiceOrchestrator
         // Nginx keepalive sockets remain physically attached to the retiring
         // Worker. The Worker soft deadline must outlive the upstream idle
         // cache, and Master must then retain a separate acknowledgement margin.
-        $effective = \max(10.0, \min(300.0, $requested), $masterDrainFloor);
+        // Pure WLS Direct uses PURE_WLS_RELOAD_DRAIN_FLOOR_SEC so GOAWAY can
+        // finish pre-last-stream DATA before FORCE (see REQ-SERVER-0022 soak).
+        $effective = \max(
+            self::PURE_WLS_RELOAD_DRAIN_FLOOR_SEC,
+            \min(300.0, $requested),
+            $masterDrainFloor,
+        );
         if ($nginxUpstreamIdleTimeout > 0.0) {
             WlsLogger::info_(
                 '[Orchestrator][ReloadDrainInvariant] requested_sec=' . \round($requested, 3)

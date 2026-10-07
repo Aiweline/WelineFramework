@@ -114,6 +114,14 @@ final class CheckoutPageViewModel
         $discountPreview = \is_array($cart['discount_preview'] ?? null)
             ? $cart['discount_preview']
             : null;
+        $taxAmountMinor = max(0, (int)($cart['tax_amount_minor'] ?? 0));
+        $salesTaxAmountMinor = max(0, (int)($cart['sales_tax_amount_minor'] ?? 0));
+        if ($salesTaxAmountMinor <= 0) {
+            $salesTaxAmountMinor = $taxAmountMinor;
+        }
+        $taxAmount = \array_key_exists('tax_amount', $cart)
+            ? (float)$cart['tax_amount']
+            : round($taxAmountMinor / 100.0, 2);
 
         return [
             'items' => $items,
@@ -127,6 +135,11 @@ final class CheckoutPageViewModel
             'checkout_blocked' => !empty($cart['checkout_blocked']) || $this->itemsHaveBlockingIssues($items),
             'line_issues' => \is_array($cart['line_issues'] ?? null) ? $cart['line_issues'] : [],
             'blocking_message' => trim((string)($cart['blocking_message'] ?? '')),
+            // Forward CartSummaryEnrichTaxObserver fields for storefront-money-summary.
+            'tax_amount_minor' => $taxAmountMinor,
+            'sales_tax_amount_minor' => $salesTaxAmountMinor,
+            'tax_amount' => $taxAmount,
+            'duty_amount_minor' => max(0, (int)($cart['duty_amount_minor'] ?? 0)),
         ];
     }
 
@@ -194,6 +207,10 @@ final class CheckoutPageViewModel
             'checkout_blocked' => false,
             'line_issues' => [],
             'blocking_message' => '',
+            'tax_amount_minor' => 0,
+            'sales_tax_amount_minor' => 0,
+            'tax_amount' => 0.0,
+            'duty_amount_minor' => 0,
         ];
     }
 }

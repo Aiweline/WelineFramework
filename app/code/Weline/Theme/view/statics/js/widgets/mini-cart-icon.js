@@ -1168,7 +1168,7 @@
         var note = root.querySelector('[data-mini-cart-note]');
         var tax = taxAmountMajor(summary);
         if (labelEl) {
-            labelEl.textContent = attr(root, 'data-i18n-tax', '税费（预估）');
+            labelEl.textContent = attr(root, 'data-i18n-tax', '税费');
         }
         if (row) {
             if (tax > 0) {
@@ -1242,12 +1242,14 @@
                 currency: currency,
                 goods_subtotal_minor: Math.round(Number(subtotal || 0) * 100),
                 discount_minor: Math.round(Number(discountMajor || 0) * 100),
+                sales_tax_minor: Math.round(Number(taxMajor || 0) * 100),
                 tax_minor: Math.round(Number(taxMajor || 0) * 100),
                 payable_minor: Math.round(Number(payable || 0) * 100),
                 note: taxMajor > 0
                     ? attr(root, 'data-i18n-note-shipping', '运费将在结算时计算')
                     : attr(root, 'data-i18n-note', '税费与运费将在结算时计算'),
-                tax_label: attr(root, 'data-i18n-tax', '税费（预估）'),
+                sales_tax_label: attr(root, 'data-i18n-sales-tax', attr(root, 'data-i18n-tax', '销售税')),
+                tax_label: attr(root, 'data-i18n-sales-tax', attr(root, 'data-i18n-tax', '销售税')),
             });
         }
         text(root.querySelector('[data-cart-total-amount]'), visibleFormatted);

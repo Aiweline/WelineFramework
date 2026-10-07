@@ -11,26 +11,21 @@ use Weline\Tax\Model\TaxClass;
 use Weline\Tax\Model\TaxRule;
 
 /**
- * Idempotent local/default-site Tax seed: classes, rules, Scope switches, rollout allowlist.
+ * Idempotent production-ready Tax seed: classes, multi-country rules, Scope, rollout.
  */
 final class TaxDefaultSeedService
 {
     public const WEBSITE_ID = 0;
+    public const SEED_REVISION = TaxSeedRateCatalog::SEED_REVISION;
 
     /** @var list<array{class_code:string,name:string}> */
-    public const CLASSES = [
-        ['class_code' => 'standard', 'name' => 'Standard'],
-        ['class_code' => 'reduced', 'name' => 'Reduced'],
-    ];
+    public const CLASSES = TaxSeedRateCatalog::CLASSES;
 
-    /** @var list<array{class_code:string,jurisdiction_key:string,rate_bps:int}> */
-    public const RULES = [
-        ['class_code' => 'standard', 'jurisdiction_key' => 'CN|', 'rate_bps' => 1300],
-        ['class_code' => 'reduced', 'jurisdiction_key' => 'CN|', 'rate_bps' => 900],
-        // Country-level US fallback when region is empty; CA keeps a more specific rate.
-        ['class_code' => 'standard', 'jurisdiction_key' => 'US|', 'rate_bps' => 700],
-        ['class_code' => 'standard', 'jurisdiction_key' => 'US|CA', 'rate_bps' => 725],
-    ];
+    /**
+     * @deprecated Keep for BC callers; prefer TaxSeedRateCatalog::rules().
+     * @var list<array{class_code:string,jurisdiction_key:string,rate_bps:int}>
+     */
+    public const RULES = [];
 
     private ?ConfigStore $configStore = null;
     private ?TaxRolloutGate $rolloutGate = null;
@@ -47,12 +42,22 @@ final class TaxDefaultSeedService
     }
 
     /**
+     * @return list<array{class_code:string,jurisdiction_key:string,rate_bps:int}>
+     */
+    public static function rules(): array
+    {
+        return TaxSeedRateCatalog::rules();
+    }
+
+    /**
      * @return array{
      *   ok:bool,
+     *   seed_revision:int,
      *   classes_created:int,
      *   classes_skipped:int,
      *   rules_created:int,
-     *   rules_skipped:int,
+     *   rules_updated:int,
+     *   rules_unchanged:int,
      *   config_updated:bool,
      *   rollout_mode:string,
      *   rollout_allowlist:list<string>
@@ -77,22 +82,25 @@ final class TaxDefaultSeedService
         }
 
         $rulesCreated = 0;
-        $rulesSkipped = 0;
-        foreach (self::RULES as $rule) {
-            if ($this->ruleExists($websiteId, $rule['class_code'], $rule['jurisdiction_key'])) {
-                ++$rulesSkipped;
-                continue;
-            }
-            $this->admin->createRule([
+        $rulesUpdated = 0;
+        $rulesUnchanged = 0;
+        foreach (self::rules() as $rule) {
+            $result = $this->admin->upsertRule([
                 'website_id' => $websiteId,
                 'class_code' => $rule['class_code'],
                 'jurisdiction_key' => $rule['jurisdiction_key'],
                 'rate_bps' => $rule['rate_bps'],
-                'rule_version' => 1,
                 'rounding' => TaxRule::ROUNDING_HALF_UP,
                 'enabled' => 1,
             ]);
-            ++$rulesCreated;
+            $action = (string)($result['action'] ?? '');
+            if ($action === 'created') {
+                ++$rulesCreated;
+            } elseif ($action === 'updated') {
+                ++$rulesUpdated;
+            } else {
+                ++$rulesUnchanged;
+            }
         }
 
         $configUpdated = $this->ensureScopeConfig();
@@ -101,10 +109,12 @@ final class TaxDefaultSeedService
 
         return [
             'ok' => true,
+            'seed_revision' => self::SEED_REVISION,
             'classes_created' => $classesCreated,
             'classes_skipped' => $classesSkipped,
             'rules_created' => $rulesCreated,
-            'rules_skipped' => $rulesSkipped,
+            'rules_updated' => $rulesUpdated,
+            'rules_unchanged' => $rulesUnchanged,
             'config_updated' => $configUpdated,
             'rollout_mode' => (string)$configuration['mode'],
             'rollout_allowlist' => array_keys($configuration['allowlist']),
@@ -123,20 +133,6 @@ final class TaxDefaultSeedService
         return (bool)$row->getId();
     }
 
-    private function ruleExists(int $websiteId, string $classCode, string $jurisdictionKey): bool
-    {
-        $row = clone $this->taxRules;
-        $row->reset()
-            ->where(TaxRule::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(TaxRule::schema_fields_CLASS_CODE, $classCode)
-            ->where(TaxRule::schema_fields_JURISDICTION_KEY, strtoupper($jurisdictionKey))
-            ->where(TaxRule::schema_fields_RULE_VERSION, 1)
-            ->find()
-            ->fetch();
-
-        return (bool)$row->getId();
-    }
-
     private function ensureScopeConfig(): bool
     {
         $store = $this->configStore();
@@ -146,6 +142,8 @@ final class TaxDefaultSeedService
             TaxScopeConfig::KEY_DEFAULT_JURISDICTION => ['CN|', 'string'],
             TaxScopeConfig::KEY_SCHEMA_VERSION => [TaxEngine::SCHEMA_VERSION, 'string'],
             TaxScopeConfig::KEY_ROUNDING => [TaxRule::ROUNDING_HALF_UP, 'string'],
+            TaxScopeConfig::KEY_PRICES_INCLUDE_TAX => [true, 'bool'],
+            TaxScopeConfig::KEY_COLLECT_SALES_TAX_COUNTRIES => ['', 'string'],
         ];
         foreach ($writes as $key => [$value, $valueType]) {
             $resolved = $store->resolveConfig(
@@ -172,7 +170,7 @@ final class TaxDefaultSeedService
                 ConfigReader::LOCALE_DEFAULT,
                 [
                     'value_type' => $valueType,
-                    'reason' => 'tax_default_seed',
+                    'reason' => 'tax_default_seed_r' . self::SEED_REVISION,
                 ],
             )) {
                 throw new \RuntimeException('tax_default_seed_config_write_failed:' . $key);

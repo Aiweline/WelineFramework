@@ -15,26 +15,6 @@
 快捷购买,"Buy now"
 跨设备支付,"Pay on another device"
 复制链接或二维码，在另一台设备上打开并完成支付。,"Copy the link or QR code, open it on another device, and complete payment."
-付款说明,"Payment guide"
-隐私说明,"Privacy notes"
-应付金额,"Amount due"
-收货地址已由发起人确认。,"The shipping address was confirmed by the requester."
-物流方式,"Shipping method"
-请选择物流（仅影响运费，不展示收货地址）。,"Choose shipping (affects shipping cost only; address is hidden)."
-商品缺少重量，无法计算运费。请联系发起人或客服后再试。,"Product weight is missing, so shipping cannot be calculated. Please contact the initiator or support."
-该地址暂无可用配送方式，请联系发起人更换地址后重试。,该地址暂无可用配送方式，请联系发起人更换地址后重试。
-配送方式,"Delivery method"
-支付方式,"Payment method"
-请选择适合您的支付方式完成付款。,"Choose a payment method that works for you to complete payment."
-选择支付方式,"Choose payment method"
-暂无可用支付方式,"No payment methods available"
-商品小计,商品小计
-运费,Shipping
-应付,Due
-卡支付时填写付款人自己的账单地址，不会写回收货地址。,"For card payments, enter the payer’s own billing address. It will not overwrite the shipping address."
-账单地址组件暂不可用，请稍后重试。,"Billing address is temporarily unavailable. Please try again later."
-确认付款,"Confirm payment"
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
 找朋友代付,"Ask a friend to pay"
 这与「帮我付」不同：朋友打开分享链接后，规格会进入朋友自己的购物车，由朋友自己填写地址、自己下单付款，订单归朋友。,"Unlike Help Pay: when a friend opens the share link, the options go into their cart. They enter their address, place the order, and own it."
 同样支持复制链接或复制二维码图片分享。,"You can also copy the link or QR image to share."
@@ -51,6 +31,26 @@
 不能做什么,"What you cannot do"
 代付人不能使用优惠券/积分，不能修改收货地址，也不能把代付当成自己的购物车。,"The payer cannot use coupons or points, change the shipping address, or treat Help Pay as their own cart."
 帮我付,"Help Pay"
+付款说明,"Payment guide"
+隐私说明,"Privacy notes"
+应付金额,"Amount due"
+收货地址已由发起人确认。,"The shipping address was confirmed by the requester."
+物流方式,"Shipping method"
+请选择物流（仅影响运费，不展示收货地址）。,"Choose shipping (affects shipping cost only; address is hidden)."
+商品缺少重量，无法计算运费。请联系发起人或客服后再试。,"Product weight is missing, so shipping cannot be calculated. Please contact the initiator or support."
+该地址暂无可用配送方式，请联系发起人更换地址后重试。,该地址暂无可用配送方式，请联系发起人更换地址后重试。
+配送方式,"Delivery method"
+支付方式,"Payment method"
+请选择适合您的支付方式完成付款。,"Choose a payment method that works for you to complete payment."
+选择支付方式,"Choose payment method"
+暂无可用支付方式,"No payment methods available"
+商品小计,商品小计
+运费,Shipping
+税费,Tax
+应付,Due
+卡支付时填写付款人自己的账单地址，不会写回收货地址。,"For card payments, enter the payer’s own billing address. It will not overwrite the shipping address."
+账单地址组件暂不可用，请稍后重试。,"Billing address is temporarily unavailable. Please try again later."
+确认付款,"Confirm payment"
 返回首页,"Back to home"
 本人快捷购买,"Buy now for yourself"
 订单归属你本人。请在此页完成支付。,"This order belongs to you. Complete payment on this page."
@@ -147,6 +147,8 @@
 分享,Share
 付款,Pay
 快捷购买买家,"Express-buy buyer"
+税费（预估）,"Estimated tax"
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 标准配送,"Standard shipping"
 加急配送,"Express shipping"
 分享给朋友（帮选规格）,"Share with friends (help pick options)"

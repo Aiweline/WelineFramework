@@ -256,7 +256,7 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
             $csv,
         );
         self::assertMatchesRegularExpression(
-            '/税费（预估）,("?)Estimated tax\1/',
+            '/税费,("?)Tax\1/',
             $csv,
         );
         self::assertStringContainsString('Taxes and shipping calculated at checkout', $csv);

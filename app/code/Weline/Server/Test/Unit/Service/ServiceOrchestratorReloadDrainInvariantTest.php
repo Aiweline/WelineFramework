@@ -35,13 +35,14 @@ final class ServiceOrchestratorReloadDrainInvariantTest extends TestCase
             [$masterWait],
         );
 
-        self::assertSame(20.0, $masterWait);
-        self::assertSame(15.0, $workerSoft);
+        // Pure-WLS H2 flush floor (45) outranks the short Nginx keepalive floor (15).
+        self::assertSame(45.0, $masterWait);
+        self::assertSame(40.0, $workerSoft);
         self::assertGreaterThan(
             GatewayPaths::UPSTREAM_KEEPALIVE_TIMEOUT_SEC,
             $workerSoft,
         );
-        self::assertGreaterThan($workerSoft, $masterWait);
+        self::assertLessThan($masterWait, $workerSoft);
     }
 
     public function testLongerManagedNginxKeepaliveRaisesBothDrainDeadlines(): void
@@ -61,8 +62,30 @@ final class ServiceOrchestratorReloadDrainInvariantTest extends TestCase
             [$masterWait],
         );
 
-        self::assertSame(40.0, $masterWait);
-        self::assertSame(35.0, $workerSoft);
+        // keepalive 30 → soft floor 35 / master floor 40, then pure-WLS floor 45 wins.
+        self::assertSame(45.0, $masterWait);
+        self::assertSame(40.0, $workerSoft);
+    }
+
+    public function testVeryLongNginxKeepaliveStillRaisesAbovePureWlsFloor(): void
+    {
+        $orchestrator = $this->createOrchestratorWithContext([
+            'wls.orchestrator.reload_drain_timeout_sec' => 5.0,
+            'wls.edge.adapter' => 'nginx',
+            'wls.edge.nginx' => [
+                'upstream_keepalive_timeout_sec' => 60,
+            ],
+        ]);
+
+        $masterWait = $this->invokePrivate($orchestrator, 'resolveWorkerReloadDrainTimeout');
+        $workerSoft = $this->invokePrivate(
+            $orchestrator,
+            'resolveWorkerReloadSoftDrainTimeout',
+            [$masterWait],
+        );
+
+        self::assertSame(70.0, $masterWait);
+        self::assertSame(65.0, $workerSoft);
     }
 
     public function testPureWlsDirectReloadDoesNotInheritNginxDrainFloor(): void
@@ -79,8 +102,9 @@ final class ServiceOrchestratorReloadDrainInvariantTest extends TestCase
             [$masterWait],
         );
 
-        self::assertSame(10.0, $masterWait);
-        self::assertSame(5.0, $workerSoft);
+        // Pure WLS must still floor high enough for H2 GOAWAY body flush under load.
+        self::assertSame(45.0, $masterWait);
+        self::assertSame(40.0, $workerSoft);
     }
 
     public function testDirectNewFirstUsesBoundedBatchesUnlessForceWasExplicit(): void

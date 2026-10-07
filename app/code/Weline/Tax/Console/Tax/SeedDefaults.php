@@ -63,7 +63,7 @@ class SeedDefaults extends CommandAbstract
 
     public function tip(): string
     {
-        return (string)__('幂等写入默认站税类/税率，并开启 tax rollout allowlist（website:N）');
+        return (string)__('幂等 upsert 默认可上线多国税类/税率种子，并开启 tax rollout allowlist（website:N）');
     }
 
     public function help(): array|string

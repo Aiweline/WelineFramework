@@ -5763,6 +5763,16 @@ while (true) {
                     }
                 }
                 $terminatedDrainCounters = wlsDrainConnectionCounters($terminatedLongLived);
+                if ($forcedDrain && $http2ConnectionAdapters !== []) {
+                    // Last-chance flush: hard deadline still tries to push queued
+                    // H2 DATA/END_STREAM before TCP close so clients do not see
+                    // goaway_incomplete_stream for bodies already encoded.
+                    wlsSslFlushHttp2PendingBeforeForcedDrain(
+                        $http2ConnectionAdapters,
+                        $connections,
+                        $writeBuffers,
+                    );
+                }
                 $closedResourceIds = [];
                 $closeDrainResource = static function (mixed $drainConnection) use (&$closedResourceIds): void {
                     if (!\is_resource($drainConnection)) {
@@ -11277,6 +11287,58 @@ function wlsHttp2LiveConnectionCount(array $adapters, array $connections): int
         }
     }
     return $count;
+}
+
+/**
+ * Best-effort push of already-encoded H2 response bytes before a hard-deadline
+ * TCP close. Does not admit new streams; only drains pendingResponses and
+ * writeBuffers that GOAWAY already promised (stream_id ≤ last_stream_id).
+ *
+ * @param array<int|string,mixed> $http2ConnectionAdapters
+ * @param array<int|string,mixed> $connections
+ * @param array<int|string,string> $writeBuffers
+ */
+function wlsSslFlushHttp2PendingBeforeForcedDrain(
+    array $http2ConnectionAdapters,
+    array $connections,
+    array &$writeBuffers,
+): void {
+    $writable = [];
+    wlsSslArmHttp2PendingResponseWrites(
+        $http2ConnectionAdapters,
+        $connections,
+        $writeBuffers,
+        $writable,
+    );
+    $deadline = (\hrtime(true) / 1_000_000_000) + 0.25;
+    foreach ($http2ConnectionAdapters as $connId => $adapter) {
+        if (!$adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter) {
+            continue;
+        }
+        $conn = $connections[$connId] ?? null;
+        if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+            continue;
+        }
+        $guard = 0;
+        while ($guard < 32 && (\hrtime(true) / 1_000_000_000) < $deadline) {
+            if ($adapter->hasPendingResponseData()) {
+                $batch = $adapter->drainPendingResponseData();
+                if ($batch !== '') {
+                    $writeBuffers[$connId] = (string)($writeBuffers[$connId] ?? '') . $batch;
+                }
+            }
+            $buffer = (string)($writeBuffers[$connId] ?? '');
+            if ($buffer === '') {
+                break;
+            }
+            $written = @\fwrite($conn, $buffer);
+            if ($written === false || $written === 0) {
+                break;
+            }
+            $writeBuffers[$connId] = \substr($buffer, (int)$written);
+            $guard++;
+        }
+    }
 }
 
 function wlsSslCanonicalStaticResponse(

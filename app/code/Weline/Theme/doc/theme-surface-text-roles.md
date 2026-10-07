@@ -83,9 +83,9 @@ Surface 会设置 `--w-surface-fg` / `--w-surface-fg-muted`，供子级 Text 类
 - `.w-language-switcher__trigger`
 - `.w-currency-switcher__trigger`
 
-颜色走 `--w-surface-fg` / `--weline-theme-header-text` / `--weline-theme-text-on-dark`；foundation 的 `.w-button[data-tone="quiet"]` 亦读取 `--w-surface-fg`。下拉面板须自带 `default`/`body` surface，保持深色正文。
+颜色走 `--w-surface-fg` / `--weline-theme-header-text` / `--weline-theme-text-on-dark`；foundation 的 `.w-button[data-tone="quiet"]` 亦读取 `--w-surface-fg`。暗色 chrome 上这两个触发器必须 **透明底**（与账户/收藏同级），禁止落到 unlayered `.w-button` 的 `--weline-component-primary` 实心填色。hover 只用 `--color-on-dark-soft`。下拉面板须自带 `default`/`body` surface，保持深色正文。
 
-样式定义在 `view/theme/frontend/assets/css/theme.css`（Theme UI 默认），业务模块只挂类名，不私写裸按钮黑字样式。
+样式定义在 `view/theme/frontend/assets/css/theme.css`（Theme UI 默认）与实加载的 `view/statics/css/partials/header-default.css`（顶栏盾，防 `/static` theme.css WLS 滞后），业务模块只挂类名，不私写裸按钮黑字样式。
 
 ## 验收
 

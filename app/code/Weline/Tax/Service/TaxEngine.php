@@ -541,10 +541,26 @@ final class TaxEngine implements TaxEngineInterface
      */
     private function resolveRule(array $rules, string $classCode, string $jurisdictionKey): array
     {
+        $keys = [$jurisdictionKey];
+        // Region miss → country-level fallback (US|NY → US|).
+        if (str_contains($jurisdictionKey, '|')) {
+            [$country, $region] = array_pad(explode('|', $jurisdictionKey, 2), 2, '');
+            $country = strtoupper(trim($country));
+            $region = strtoupper(trim($region));
+            if ($country !== '' && $region !== '') {
+                $keys[] = $country . '|';
+            }
+        }
+
         $candidates = [];
-        foreach ($rules as $row) {
-            if ($row['class_code'] === $classCode && $row['jurisdiction_key'] === $jurisdictionKey) {
-                $candidates[] = $row;
+        foreach ($keys as $key) {
+            foreach ($rules as $row) {
+                if ($row['class_code'] === $classCode && $row['jurisdiction_key'] === $key) {
+                    $candidates[] = $row;
+                }
+            }
+            if ($candidates !== []) {
+                break;
             }
         }
         if ($candidates === []) {

@@ -94,13 +94,20 @@ class InternationalSeoContextServiceTest extends TestCase
         ObjectManager::setInstance(FrameworkQueryService::class, $queryService);
 
         try {
-            $service = $this->service(['zh_Hans_CN', 'en_US', 'de_DE']);
+            $provider = $this->getMockBuilder(ActiveLocaleCodeProvider::class)
+                ->disableOriginalConstructor()
+                ->onlyMethods(['getInstalledActiveCodes'])
+                ->getMock();
+            $provider->expects(self::never())->method('getInstalledActiveCodes');
+            $service = new InternationalSeoContextService($provider, new LocalizedUrlBuilder());
             $template = new InternationalSeoTemplateStub([
                 'website_id' => 0,
             ]);
 
+            // Explicit website codes (and Query mock below) must skip platform ActiveLocale.
             $context = $service->build($template, [
                 'locale' => 'en_US',
+                'website_language_codes' => ['zh_Hans_CN', 'en_US'],
                 'canonical_url' => 'https://example.com/en_US/products/item',
             ]);
 

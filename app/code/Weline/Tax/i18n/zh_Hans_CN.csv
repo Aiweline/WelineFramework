@@ -59,7 +59,7 @@ sync,同步
 创建,创建
 当前没有记录。,当前没有记录。
 "通用 HTTP 专业税率源","通用 HTTP 专业税率源"
-"静态种子税率（CN/US 基线）","静态种子税率（CN/US 基线）"
+"静态种子税率（多国 VAT/GST 基线）","静态种子税率（多国 VAT/GST 基线）"
 "VATcomply 欧盟 VAT（免费）","VATcomply 欧盟 VAT（免费）"
 "税务不可用且无同版本同 Scope 的 LKG，新结账已阻断","税务不可用且无同版本同 Scope 的 LKG，新结账已阻断"
 "税务不可用且同版本 LKG 无法安全回放，新结账已阻断","税务不可用且同版本 LKG 无法安全回放，新结账已阻断"
@@ -123,10 +123,12 @@ sync,同步
 "目标 Store ID，必须 >=1","目标 Store ID，必须 >=1"
 "目标 Channel ID，必须 >=1","目标 Channel ID，必须 >=1"
 显示本帮助,显示本帮助
-"幂等写入默认站税类/税率，并开启 tax rollout allowlist（website:N）","幂等写入默认站税类/税率，并开启 tax rollout allowlist（website:N）"
+"幂等 upsert 默认可上线多国税类/税率种子，并开启 tax rollout allowlist（website:N）","幂等 upsert 默认可上线多国税类/税率种子，并开启 tax rollout allowlist（website:N）"
 "Website ID，默认 0","Website ID，默认 0"
 "多源聚合税率同步（免费并集取高 + 可选专业覆盖）","多源聚合税率同步（免费并集取高 + 可选专业覆盖）"
 "忽略 manual_only 模式强制同步","忽略 manual_only 模式强制同步"
+"静态种子税率（CN/US 基线）","静态种子税率（CN/US 基线）"
+"幂等写入默认站税类/税率，并开启 tax rollout allowlist（website:N）","幂等写入默认站税类/税率，并开启 tax rollout allowlist（website:N）"
 "欧盟 VAT 税号（B2B 可选）","欧盟 VAT 税号（B2B 可选）"
 "账单国家为欧盟时显示；格式校验由税收模块负责，不写入 Checkout EAV。","账单国家为欧盟时显示；格式校验由税收模块负责，不写入 Checkout EAV。"
 """仅允许 POST 请求。""","""仅允许 POST 请求。"""

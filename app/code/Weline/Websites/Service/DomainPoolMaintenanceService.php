@@ -11,6 +11,8 @@ namespace Weline\Websites\Service;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain as DomainModel;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Model\Website;
+use Weline\Websites\Model\WebsiteDomain;
 
 class DomainPoolMaintenanceService
 {
@@ -203,5 +205,140 @@ class DomainPoolMaintenanceService
             }
         }
         return $n;
+    }
+
+    /**
+     * 列出占用该池记录的网站绑定。
+     *
+     * @return list<array{website_id:int,website_name:string,domain:string,sub_path:string}>
+     */
+    public function listPoolWebsiteBindings(int $poolId): array
+    {
+        if ($poolId <= 0) {
+            return [];
+        }
+        $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
+        $rows = $websiteDomain->clearQuery()
+            ->where(WebsiteDomain::schema_fields_POOL_ID, $poolId)
+            ->select()
+            ->fetchArray();
+        if ($rows === []) {
+            return [];
+        }
+        $out = [];
+        $website = ObjectManager::getInstance(Website::class);
+        foreach ($rows as $row) {
+            $websiteId = (int) ($row[WebsiteDomain::schema_fields_WEBSITE_ID] ?? 0);
+            $name = (string) $websiteId;
+            if ($websiteId >= Website::ID_DEFAULT) {
+                $websiteRow = $website->clearQuery()->clearData()
+                    ->where(Website::schema_fields_ID, $websiteId)
+                    ->find()
+                    ->fetchArray();
+                if (\is_array($websiteRow) && isset($websiteRow[Website::schema_fields_NAME])) {
+                    $name = (string) $websiteRow[Website::schema_fields_NAME];
+                }
+            }
+            $out[] = [
+                'website_id' => $websiteId,
+                'website_name' => $name,
+                'domain' => (string) ($row[WebsiteDomain::schema_fields_DOMAIN] ?? ''),
+                'sub_path' => (string) ($row[WebsiteDomain::schema_fields_SUB_PATH] ?? ''),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * 从域名池删除单条记录（被网站绑定时拒绝）。
+     *
+     * @return array{ok:bool,msg:string,bindings?:list<array{website_id:int,website_name:string,domain:string,sub_path:string}>}
+     */
+    public function deletePoolEntry(int $poolId): array
+    {
+        if ($poolId <= 0) {
+            return ['ok' => false, 'msg' => 'pool_id 不能为空'];
+        }
+        $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+        $pool->load($poolId);
+        if (!$pool->getPoolId()) {
+            return ['ok' => false, 'msg' => '域名不存在'];
+        }
+        $bindings = $this->listPoolWebsiteBindings($poolId);
+        if ($bindings !== []) {
+            $names = \array_values(\array_unique(\array_map(
+                static fn (array $b): string => (string) ($b['website_name'] ?? $b['website_id']),
+                $bindings
+            )));
+
+            return [
+                'ok' => false,
+                'msg' => '该域名正在被网站使用，无法删除：' . \implode(', ', $names),
+                'bindings' => $bindings,
+            ];
+        }
+        $domain = (string) $pool->getDomain();
+        $pool->delete()->fetch();
+
+        return [
+            'ok' => true,
+            'msg' => '已从域名池删除：' . ($domain !== '' ? $domain : (string) $poolId),
+        ];
+    }
+
+    /**
+     * 轻量更新池记录：描述 / 启用停用（不改域名字符串）。
+     *
+     * @return array{ok:bool,msg:string,data?:array<string,mixed>}
+     */
+    public function updatePoolEntry(int $poolId, ?string $description = null, ?string $status = null): array
+    {
+        if ($poolId <= 0) {
+            return ['ok' => false, 'msg' => 'pool_id 不能为空'];
+        }
+        $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+        $pool->load($poolId);
+        if (!$pool->getPoolId()) {
+            return ['ok' => false, 'msg' => '域名不存在'];
+        }
+        $changed = false;
+        if ($description !== null) {
+            $pool->setDescription(\mb_substr(\trim($description), 0, 500));
+            $changed = true;
+        }
+        if ($status !== null) {
+            $status = \strtolower(\trim($status));
+            if ($status !== DomainPool::STATUS_ACTIVE && $status !== DomainPool::STATUS_DISABLED) {
+                return ['ok' => false, 'msg' => '状态仅支持 active / disabled'];
+            }
+            if ($status === DomainPool::STATUS_DISABLED) {
+                $bindings = $this->listPoolWebsiteBindings($poolId);
+                if ($bindings !== []) {
+                    return [
+                        'ok' => false,
+                        'msg' => '该域名正在被网站使用，无法停用',
+                        'bindings' => $bindings,
+                    ];
+                }
+            }
+            $pool->setStatus($status);
+            $changed = true;
+        }
+        if (!$changed) {
+            return ['ok' => false, 'msg' => '没有可更新的字段'];
+        }
+        $pool->save();
+
+        return [
+            'ok' => true,
+            'msg' => '保存成功',
+            'data' => [
+                'pool_id' => (int) $pool->getPoolId(),
+                'domain' => (string) $pool->getDomain(),
+                'description' => (string) $pool->getDescription(),
+                'status' => (string) ($pool->getStatus() ?: DomainPool::STATUS_ACTIVE),
+            ],
+        ];
     }
 }

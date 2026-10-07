@@ -1126,6 +1126,21 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 $currency,
             );
 
+        $taxEstimate = $this->resolveTaxDutyEstimatePreview(
+            $shippingMethods,
+            $items,
+            $shippingAddress,
+            $currency,
+        );
+        // Cart enrich supplies sales tax; duty preview is shipping-lane only — combine for money-summary.
+        $salesTaxMinor = max(0, (int)($cart['sales_tax_amount_minor'] ?? 0));
+        if ($salesTaxMinor <= 0) {
+            $salesTaxMinor = max(0, (int)($cart['tax_amount_minor'] ?? 0));
+        }
+        $dutyChargedMinor = max(0, (int)($taxEstimate['tax_amount_minor'] ?? 0));
+        $taxEstimate['sales_tax_amount_minor'] = $salesTaxMinor;
+        $taxEstimate['tax_amount_minor'] = $salesTaxMinor + $dutyChargedMinor;
+
         return $this->ok(
             $checkoutBlocked ? $blockingMessage : (string)__('结账信息已加载'),
             [
@@ -1153,17 +1168,16 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'checkout_blocked' => $checkoutBlocked,
                 'line_issues' => \is_array($cart['line_issues'] ?? null) ? $cart['line_issues'] : [],
                 'blocking_message' => $blockingMessage,
+                // Storefront money-summary reads these (never invent rates in browser).
+                'tax_amount_minor' => max(0, (int)($cart['tax_amount_minor'] ?? 0)),
+                'sales_tax_amount_minor' => $salesTaxMinor,
+                'tax_amount' => (float)($cart['tax_amount'] ?? round(max(0, (int)($cart['tax_amount_minor'] ?? 0)) / 100, 2)),
             ],
             'items' => $items,
             'shipping_methods' => $shippingMethods,
             'shipping_quote_diagnostics' => $quoteDiagnostics,
             'shipping_unavailable' => $shippingEmpty,
-            'tax_estimate' => $this->resolveTaxDutyEstimatePreview(
-                $shippingMethods,
-                $items,
-                $shippingAddress,
-                $currency,
-            ),
+            'tax_estimate' => $taxEstimate,
             'payment_methods' => $paymentMethods,
             // P2E-003：服务端 HTML；JS 只注入，不 createElement 拼商品/选项 DOM
             'items_html' => $html->renderItems($items, $currency, (string)__('购物车为空，请先加入商品。')),
@@ -1963,8 +1977,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ];
         }
 
-        return [
-            'methods' => $this->enrichShippingMethods(
+        $enriched = $this->enrichShippingMethods(
             $methods,
             $lines,
             $shippingAddress,
@@ -1974,10 +1987,68 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'channel_id' => (int)RequestContext::getWelineChannelId(),
             ],
             $currency !== '' ? $currency : 'CNY',
-            ),
+        );
+
+        return [
+            // Tax may clear domestic DDU notice after description was built — sync copy.
+            'methods' => $this->syncShippingMethodDutyDescription($enriched),
             'quote_diagnostics' => $quoteDiagnostics,
             'quote_lines' => $lines,
         ];
+    }
+
+    /**
+     * When Tax clears duty_notice (e.g. CN→CN), drop stale DDU human copy from description.
+     *
+     * @param list<array<string, mixed>> $methods
+     * @return list<array<string, mixed>>
+     */
+    private function syncShippingMethodDutyDescription(array $methods): array
+    {
+        $incoterm = new ShippingIncotermService();
+        $dropLabels = [];
+        foreach ([
+            ShippingIncotermService::NOTICE_DDU,
+            ShippingIncotermService::NOTICE_DAP,
+            ShippingIncotermService::NOTICE_DDP,
+        ] as $code) {
+            $label = trim((string)__($incoterm->labelForDutyNoticeCode($code)));
+            if ($label !== '') {
+                $dropLabels[$label] = true;
+            }
+            $dropLabels[$code] = true;
+        }
+        if ($dropLabels === []) {
+            return $methods;
+        }
+
+        $out = [];
+        foreach ($methods as $method) {
+            if (!\is_array($method)) {
+                continue;
+            }
+            if (trim((string)($method['duty_notice'] ?? '')) !== '') {
+                $out[] = $method;
+                continue;
+            }
+            $desc = trim((string)($method['description'] ?? ''));
+            if ($desc === '') {
+                $out[] = $method;
+                continue;
+            }
+            $parts = [];
+            foreach (explode(' · ', $desc) as $part) {
+                $part = trim($part);
+                if ($part === '' || isset($dropLabels[$part])) {
+                    continue;
+                }
+                $parts[] = $part;
+            }
+            $method['description'] = implode(' · ', $parts);
+            $out[] = $method;
+        }
+
+        return $out;
     }
 
     /**

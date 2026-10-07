@@ -224,10 +224,10 @@ class Domain extends BackendController
         $poolLimit = 20;
         $poolPage = max(1, (int) $this->request->getGet('pool_page', 1));
         $poolTotal = (int) $poolModel->clearQuery()
-            ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
+            ->where(DomainPool::schema_fields_STATUS, [DomainPool::STATUS_ACTIVE, DomainPool::STATUS_DISABLED], 'IN')
             ->count();
         $poolRows = $poolModel->clearQuery()
-            ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
+            ->where(DomainPool::schema_fields_STATUS, [DomainPool::STATUS_ACTIVE, DomainPool::STATUS_DISABLED], 'IN')
             ->order(DomainPool::schema_fields_ROOT_DOMAIN, 'ASC')
             ->order(DomainPool::schema_fields_DOMAIN, 'ASC')
             ->pagination($poolPage, $poolLimit)
@@ -253,10 +253,10 @@ class Domain extends BackendController
             $pageSize = min(100, max(5, (int) ($this->request->getGet('page_size') ?: $this->request->getGet('limit', 20))));
             $poolModel = ObjectManager::getInstance(DomainPool::class);
             $total = (int) $poolModel->clearQuery()
-                ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
+                ->where(DomainPool::schema_fields_STATUS, [DomainPool::STATUS_ACTIVE, DomainPool::STATUS_DISABLED], 'IN')
                 ->count();
             $poolRows = $poolModel->clearQuery()
-                ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
+                ->where(DomainPool::schema_fields_STATUS, [DomainPool::STATUS_ACTIVE, DomainPool::STATUS_DISABLED], 'IN')
                 ->order(DomainPool::schema_fields_ROOT_DOMAIN, 'ASC')
                 ->order(DomainPool::schema_fields_DOMAIN, 'ASC')
                 ->pagination($page, $pageSize)
@@ -315,6 +315,108 @@ class Domain extends BackendController
             return $this->fetchJson([
                 'code' => 500,
                 'msg' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 域名池单条详情（含网站占用）
+     */
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'globe', '域名管理首页')]
+    public function getPoolDetail()
+    {
+        try {
+            $poolId = (int) $this->request->getGet('pool_id', 0);
+            if ($poolId <= 0) {
+                return $this->fetchJson(['code' => 400, 'msg' => __('参数错误')]);
+            }
+            $poolModel = ObjectManager::getInstance(DomainPool::class, [], false);
+            $poolModel->load($poolId);
+            if (!$poolModel->getPoolId()) {
+                return $this->fetchJson(['code' => 404, 'msg' => __('域名不存在')]);
+            }
+            $row = $poolModel->getData();
+            $enriched = $this->enrichDomainPoolRows([$row]);
+            $item = $enriched[0] ?? $row;
+            $svc = ObjectManager::getInstance(DomainPoolMaintenanceService::class);
+            $bindings = $svc->listPoolWebsiteBindings($poolId);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'data' => [
+                    'item' => $item,
+                    'bindings' => $bindings,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('获取详情失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 更新域名池记录（描述 / 启用停用；不改域名字符串）
+     */
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'globe', '域名管理首页')]
+    public function postUpdatePoolDomain()
+    {
+        try {
+            $poolId = (int) $this->request->getPost('pool_id', 0);
+            $hasDescription = $this->request->getPost('description') !== null;
+            $hasStatus = $this->request->getPost('status') !== null;
+            $description = $hasDescription ? (string) $this->request->getPost('description', '') : null;
+            $status = $hasStatus ? (string) $this->request->getPost('status', '') : null;
+            $svc = ObjectManager::getInstance(DomainPoolMaintenanceService::class);
+            $r = $svc->updatePoolEntry($poolId, $description, $status);
+            if (!$r['ok']) {
+                return $this->fetchJson([
+                    'code' => 400,
+                    'msg' => $r['msg'],
+                    'data' => ['bindings' => $r['bindings'] ?? []],
+                ]);
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $r['msg'],
+                'data' => $r['data'] ?? [],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('保存失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 从域名池删除单条（被网站绑定时拒绝）
+     */
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'globe', '域名管理首页')]
+    public function postDeletePoolDomain()
+    {
+        try {
+            $poolId = (int) $this->request->getPost('pool_id', 0);
+            $svc = ObjectManager::getInstance(DomainPoolMaintenanceService::class);
+            $r = $svc->deletePoolEntry($poolId);
+            if (!$r['ok']) {
+                return $this->fetchJson([
+                    'code' => 409,
+                    'msg' => $r['msg'],
+                    'data' => ['bindings' => $r['bindings'] ?? []],
+                ]);
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $r['msg'],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('删除失败：%{1}', [$e->getMessage()]),
             ]);
         }
     }

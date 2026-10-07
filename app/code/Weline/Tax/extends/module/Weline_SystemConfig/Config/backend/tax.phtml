@@ -48,6 +48,25 @@
         scope="global,website,store"
         options="half_up:四舍五入（Half Up）"
         validation="required|in_options" />
+
+    <w:config:field
+        key="tax/general/prices_include_tax"
+        label="商品价格已含税（价内税）"
+        description="开启后：目录价含默认管辖区增值税。国内不再价外加收；跨境默认按目的地进口税/关税预估（避免与销售税双计）。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="tax/general/collect_sales_tax_countries"
+        label="结账代收目的地销售税的国家"
+        description="逗号分隔 ISO2。仅当已开通 IOSS/LVG/nexus 等代收义务时填写（例：US,AU）。默认留空：跨境只走进口税/关税预估。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:255" />
 </w:config:group>
 
 <w:config:hint

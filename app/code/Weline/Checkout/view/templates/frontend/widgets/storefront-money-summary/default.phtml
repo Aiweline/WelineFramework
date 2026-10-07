@@ -47,12 +47,18 @@ $labelShipping = (string) __('运费');
 $labelDiscount = (string) __('优惠');
 $labelDeposit = (string) __('批发定金');
 $labelCredit = (string) __('批发信用抵扣');
-$labelTax = (string) __('关税与税费（预估）');
+// 销售税 / 进口关税 / 进口税费分开展示，避免混成一行让买家疑惑。
+$labelSalesTax = (string) __('销售税');
+$labelCustomsDuty = (string) __('进口关税');
+$labelImportTax = (string) __('进口税费');
+$salesTaxLabelOverride = trim((string) ($this->getData('sales_tax_label') ?? $this->getData('tax_label') ?? ''));
+if ($salesTaxLabelOverride !== '') {
+    $labelSalesTax = $salesTaxLabelOverride;
+}
 $labelCod = (string) __('货到付款手续费');
 $labelIncentive = (string) __('支付方式优惠');
 $labelPayable = (string) __('应付合计');
 if ($mode === 'cart' || $mode === 'mini-cart') {
-    $labelTax = (string) __('税费（预估）');
     $labelPayable = (string) __('小计');
 }
 if ($mode === 'express' || $mode === 'helppay') {
@@ -62,11 +68,22 @@ if ($mode === 'express' || $mode === 'helppay') {
 // Optional SSR paint (HelpPay / express first paint before JS).
 $goodsText = trim((string) ($this->getData('goods_text') ?? ''));
 $shippingText = trim((string) ($this->getData('shipping_text') ?? ''));
-$taxText = trim((string) ($this->getData('tax_text') ?? ''));
+$salesTaxText = trim((string) ($this->getData('sales_tax_text') ?? $this->getData('tax_text') ?? ''));
+$customsDutyText = trim((string) ($this->getData('duty_text') ?? ''));
+$importTaxText = trim((string) ($this->getData('import_tax_text') ?? ''));
 $payableText = trim((string) ($this->getData('payable_text') ?? ''));
 $shippingServiceLabel = trim((string) ($this->getData('shipping_service_label') ?? ''));
+$salesTaxMinorSsr = max(0, (int) ($this->getData('sales_tax_minor') ?? 0));
+$dutyMinorSsr = max(0, (int) ($this->getData('duty_minor') ?? 0));
+$importTaxMinorSsr = max(0, (int) ($this->getData('import_tax_minor') ?? 0));
+// Legacy SSR: combined tax_minor with no split → treat as sales tax only.
 $taxMinorSsr = max(0, (int) ($this->getData('tax_minor') ?? 0));
-$showTaxInitially = $taxText !== '' || $taxMinorSsr > 0;
+if ($salesTaxMinorSsr === 0 && $dutyMinorSsr === 0 && $importTaxMinorSsr === 0 && $taxMinorSsr > 0) {
+    $salesTaxMinorSsr = $taxMinorSsr;
+}
+$showSalesTaxInitially = $salesTaxText !== '' || $salesTaxMinorSsr > 0;
+$showDutyInitially = $customsDutyText !== '' || $dutyMinorSsr > 0;
+$showImportTaxInitially = $importTaxText !== '' || $importTaxMinorSsr > 0;
 if ($shippingServiceLabel !== '') {
     $labelShipping = $labelShipping . ' · ' . $shippingServiceLabel;
 }
@@ -148,20 +165,39 @@ if ($payableText === '') {
         <span><?= $escape($labelCredit) ?></span>
         <strong data-money-summary-credit data-credit-amount="">0.00</strong>
     </div>
-    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--tax"
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--sales-tax"
          role="listitem"
-         data-money-summary-row="tax"
+         data-money-summary-row="sales_tax"
+         data-money-summary-row-legacy="tax"
          data-checkout-tax-row
          data-cart-tax-row
          data-mini-cart-tax-row
-         <?= $showTaxInitially ? '' : 'hidden' ?>>
-        <span data-money-summary-tax-label
+         <?= $showSalesTaxInitially ? '' : 'hidden' ?>>
+        <span data-money-summary-sales-tax-label
+              data-money-summary-tax-label
               data-cart-tax-label
-              data-mini-cart-tax-label><?= $escape($labelTax) ?></span>
-        <strong data-money-summary-tax
+              data-mini-cart-tax-label><?= $escape($labelSalesTax) ?></span>
+        <strong data-money-summary-sales-tax
+                data-money-summary-tax
                 data-tax-amount=""
                 data-cart-tax-amount
-                data-express-tax><?= $escape($taxText !== '' ? $taxText : '0.00') ?></strong>
+                data-express-tax><?= $escape($salesTaxText !== '' ? $salesTaxText : '0.00') ?></strong>
+    </div>
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--customs-duty"
+         role="listitem"
+         data-money-summary-row="customs_duty"
+         data-checkout-customs-duty-row
+         <?= $showDutyInitially ? '' : 'hidden' ?>>
+        <span data-money-summary-customs-duty-label><?= $escape($labelCustomsDuty) ?></span>
+        <strong data-money-summary-customs-duty><?= $escape($customsDutyText !== '' ? $customsDutyText : '0.00') ?></strong>
+    </div>
+    <div class="w-storefront-money-summary__row w-storefront-money-summary__row--import-tax"
+         role="listitem"
+         data-money-summary-row="import_tax"
+         data-checkout-import-tax-row
+         <?= $showImportTaxInitially ? '' : 'hidden' ?>>
+        <span data-money-summary-import-tax-label><?= $escape($labelImportTax) ?></span>
+        <strong data-money-summary-import-tax><?= $escape($importTaxText !== '' ? $importTaxText : '0.00') ?></strong>
     </div>
     <div class="w-storefront-money-summary__row w-storefront-money-summary__row--cod"
          role="listitem"

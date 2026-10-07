@@ -597,8 +597,9 @@ return [
             'drain_timeout_sec' => 5,
             // stop_all_drain_wait_sec：实例主动停机的连接感知排空硬截止（秒）；默认 8（与 Worker stop 短超时对齐），Master 额外保留 1 秒收取最终计数 ACK。显式配置可提高到 7200。
             'stop_all_drain_wait_sec' => 8,
-            // reload_drain_timeout_sec：代码重载专用 DRAIN 上限。长连接会主动断开重连，不允许把滚动重载拖到分钟级。
-            'reload_drain_timeout_sec' => 1,
+            // reload_drain_timeout_sec：代码重载专用 DRAIN 上限（秒）。纯 WLS Direct 编排器地板 ≥45s，
+            // 以便 HTTP/2 GOAWAY 排空 last_stream 前正文；勿降到个位数（会 goaway_incomplete_stream）。
+            'reload_drain_timeout_sec' => 45,
             // maintenance_connection_drain_timeout_sec：启用维护时，Dispatcher 已切至维护 Worker 后，等待各业务 Worker 排空存量 TCP 再 ACK 的上限（秒）。
             'maintenance_connection_drain_timeout_sec' => 300,
             // maintenance_ready_timeout_sec：维护 Worker 子进程全部 READY 的等待上限（秒）。

@@ -5,18 +5,30 @@ declare(strict_types=1);
 namespace Weline\Visitor\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\SystemConfig\Api\ConfigReader as SystemConfig;
 use Weline\Visitor\Interface\PixelEventVendorInterface;
 use Weline\Visitor\Model\PixelEventVendor;
 
 class PixelEventVendorManager
 {
+    private const REQUEST_RUNTIME_KEY_PREFIX = 'visitor.pixel_event_vendors.runtime.v1.';
+
+    /** @var array<int, list<array<string, mixed>>> */
+    private static array $processRuntimeVendors = [];
+
     public function __construct(
         private readonly PixelEventVendorScanner $scanner,
         private readonly ObjectManager $objectManager,
         private readonly ?SystemConfig $systemConfig = null,
         private readonly ?EventDictionaryService $eventDictionary = null,
     ) {
+    }
+
+    /** @internal tests / process cache reset */
+    public static function clearProcessVendorCache(): void
+    {
+        self::$processRuntimeVendors = [];
     }
 
     /**
@@ -97,6 +109,8 @@ class PixelEventVendorManager
             }
         }
 
+        self::clearProcessVendorCache();
+
         return [
             'synced' => $created + $updated,
             'created' => $created,
@@ -146,6 +160,21 @@ class PixelEventVendorManager
      */
     public function listRuntimeVendors(int $websiteId = 0): array
     {
+        $requestKey = self::REQUEST_RUNTIME_KEY_PREFIX . $websiteId;
+        if (RequestContext::has($requestKey)) {
+            $fromRequest = RequestContext::get($requestKey, null);
+            if (\is_array($fromRequest)) {
+                /** @var list<array<string, mixed>> $fromRequest */
+                return $fromRequest;
+            }
+        }
+        if (isset(self::$processRuntimeVendors[$websiteId])) {
+            $cached = self::$processRuntimeVendors[$websiteId];
+            RequestContext::set($requestKey, $cached);
+
+            return $cached;
+        }
+
         $rows = $this->listForWebsite($websiteId);
         if ($rows === []) {
             try {
@@ -161,7 +190,11 @@ class PixelEventVendorManager
             $vendors[] = $row->toRuntimeVendor();
         }
 
-        return $this->applyDualInjectGuard($vendors);
+        $vendors = $this->applyDualInjectGuard($vendors);
+        self::$processRuntimeVendors[$websiteId] = $vendors;
+        RequestContext::set($requestKey, $vendors);
+
+        return $vendors;
     }
 
     public function findByWebsiteCode(int $websiteId, string $code): ?PixelEventVendor
@@ -302,6 +335,7 @@ class PixelEventVendorManager
 
         $this->assertNoDualInject($websiteId, $row);
         $row->save();
+        self::clearProcessVendorCache();
 
         return $row;
     }
@@ -316,6 +350,7 @@ class PixelEventVendorManager
             throw new \InvalidArgumentException((string)__('模块供应商不可删除，只能停用'));
         }
         $row->delete();
+        self::clearProcessVendorCache();
 
         return true;
     }
