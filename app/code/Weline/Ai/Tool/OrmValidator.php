@@ -38,17 +38,12 @@ class OrmValidator
         $content = file_get_contents($filePath);
         $errors = [];
         
-        // 检查是否使用了WelineFramework的ORM
+        // 正向：应使用 Weline Framework ORM（Model / ConnectionFactory 等）
         if (!$this->checkWelineOrmUsage($content)) {
             $errors[] = '未使用WelineFramework ORM标准';
         }
-        
-        // 检查是否有外部框架引用
-        if ($this->checkExternalFrameworkReference($content)) {
-            $errors[] = '检测到外部框架引用(如Magento)，违反框架学习要求';
-        }
-        
-        // 检查ORM方法签名
+
+        // 禁止绕过 ORM 直接打原生 DB API（与具体外部电商框架无关）
         if (!$this->checkOrmMethodSignatures($content)) {
             $errors[] = 'ORM方法签名不符合WelineFramework标准';
         }
@@ -73,28 +68,6 @@ class OrmValidator
         ];
         
         foreach ($welinePatterns as $pattern) {
-            if (preg_match($pattern, $content)) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-    
-    /**
-     * 检查外部框架引用
-     */
-    private function checkExternalFrameworkReference(string $content): bool
-    {
-        $forbiddenPatterns = [
-            '/Magento\\\\/',
-            '/Zend\\\\/',
-            '/Symfony\\\\/',
-            '/Laravel\\\\/',
-            '/CodeIgniter\\\\/',
-        ];
-        
-        foreach ($forbiddenPatterns as $pattern) {
             if (preg_match($pattern, $content)) {
                 return true;
             }

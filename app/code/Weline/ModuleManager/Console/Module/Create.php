@@ -2227,7 +2227,9 @@ HTML;
 
         $content = <<<XML
 <?xml version="1.0"?>
-<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Event/etc/events.xsd">
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
     <event name="{$eventName}">
 {$observers}    </event>
 </config>
@@ -2253,20 +2255,32 @@ XML;
         }
 
         $plugins = $this->moduleConfig['plugins'] ?? [];
-        $pluginNodes = '';
+        $grouped = [];
         foreach ($plugins as $plugin) {
-            $pluginNodes .= "        <plugin name=\"{$plugin['method']}\" type=\"{$namespace}\\Plugin\\{$plugin['method']}\" sortOrder=\"10\"/>\n";
+            $targetClass = (string)($plugin['target_class'] ?? 'default');
+            $method = (string)($plugin['method'] ?? 'plugin');
+            $grouped[$targetClass][] = $method;
         }
 
-        // 在 heredoc 外部计算目标类名，避免语法错误
-        $targetClass = !empty($plugins[0]['target_class']) ? $plugins[0]['target_class'] : 'default';
+        $pluginBlocks = '';
+        $moduleName = str_replace('\\', '_', $namespace);
+        foreach ($grouped as $targetClass => $methods) {
+            $pluginName = $moduleName . '::' . strtolower(str_replace('\\', '_', $targetClass)) . '_plugin';
+            $interceptors = '';
+            foreach ($methods as $method) {
+                $interceptorName = $moduleName . '::interceptor_' . $method;
+                $instance = $namespace . '\\Plugin\\' . $method;
+                $interceptors .= "        <interceptor name=\"{$interceptorName}\" instance=\"{$instance}\" disabled=\"false\" sort=\"10\"/>\n";
+            }
+            $pluginBlocks .= "    <plugin name=\"{$pluginName}\" class=\"{$targetClass}\">\n{$interceptors}    </plugin>\n";
+        }
 
         $content = <<<XML
 <?xml version="1.0"?>
-<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
-    <type name="{$targetClass}">
-{$pluginNodes}    </type>
-</config>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd"
+        xmlns="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd">
+{$pluginBlocks}</config>
 XML;
 
         file_put_contents($pluginFile, $content);

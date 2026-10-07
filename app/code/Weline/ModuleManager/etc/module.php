@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_ModuleManager',
-    "version" => '1.1.2',
+    "version" => '1.1.3',
     "requires" => [
         'Weline_Admin' => '*',
         'Weline_Database' => '^1.2.0',

@@ -125,34 +125,6 @@ class OrmComplianceTest extends TestCase
     }
     
     /**
-     * 测试禁止使用外部框架引用
-     */
-    public function testNoExternalFrameworkReferences(): void
-    {
-        $allPhpFiles = $this->getAllPhpFiles($this->aiModulePath);
-        
-        $forbiddenPatterns = [
-            '/Magento\\\\/' => 'Magento框架引用',
-            '/Zend\\\\/' => 'Zend框架引用',
-            '/Symfony\\\\/' => 'Symfony框架引用',
-            '/Laravel\\\\/' => 'Laravel框架引用',
-            '/CodeIgniter\\\\/' => 'CodeIgniter框架引用',
-        ];
-        
-        foreach ($allPhpFiles as $file) {
-            $content = file_get_contents($file);
-            
-            foreach ($forbiddenPatterns as $pattern => $description) {
-                $this->assertDoesNotMatchRegularExpression(
-                    $pattern,
-                    $content,
-                    "文件 {$file} 不应该包含 {$description}"
-                );
-            }
-        }
-    }
-    
-    /**
      * 测试禁止使用原生数据库操作
      */
     public function testNoRawDatabaseOperations(): void

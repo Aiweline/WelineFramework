@@ -508,9 +508,7 @@ php bin/w phpunit:run --module=Weline_Order --filter=Integration
 
 ## 参考标准
 
-- Shopify订单管理系统
-- Magento订单管理架构
-- WooCommerce订单流程
+- 业界常见订单管理深度（只读摘要 / 行 / 地址 / 金额；本仓以 Weline 自有「管理订单」契约为准，不克隆外部框架编辑器）
 - ISO 8601日期时间标准
 - ISO 4217货币代码标准
 

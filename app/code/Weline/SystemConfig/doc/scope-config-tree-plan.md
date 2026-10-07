@@ -388,7 +388,7 @@ default
 
 ## 后台统一配置界面
 
-后台提供一个统一的 SystemConfig 配置中心，行为类似 Magento 的 scope 配置，但 scope 由 Weline Framework 统一定义。
+后台提供一个统一的 SystemConfig 配置中心；配置作用域（全局 / 站点 / 店铺等）由 Weline Framework 统一定义与解析。
 
 ### 顶部配置上下文
 

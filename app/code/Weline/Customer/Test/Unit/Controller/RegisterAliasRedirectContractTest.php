@@ -7,7 +7,7 @@ namespace Weline\Customer\Test\Unit\Controller;
 use PHPUnit\Framework\TestCase;
 
 /**
- * QA-13: Magento-style /customer/account/create → 301 register.
+ * QA-13: Legacy /customer/account/create → 301 register.
  */
 final class RegisterAliasRedirectContractTest extends TestCase
 {

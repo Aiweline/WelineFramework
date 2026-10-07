@@ -159,7 +159,7 @@ final class BackendOrderListPresenter
     }
 
     /**
-     * Flatten checkout shipping/billing JSON into display lines (Magento/Shopify-style cards).
+     * Flatten checkout shipping/billing JSON into display lines for order manage cards.
      *
      * @param array<string, mixed> $address
      * @return list<string>

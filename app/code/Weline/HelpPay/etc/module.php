@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_HelpPay',
-    'version' => '1.0.28',
+    'version' => '1.0.29',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Frontend' => '*',

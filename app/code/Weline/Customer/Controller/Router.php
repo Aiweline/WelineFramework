@@ -17,7 +17,7 @@ final class Router implements RouterInterface
     private const VIEW_ROUTE = 'customer/frontend/guide/social-login/view';
     private const POLICY_ROUTE = 'customer/frontend/guide/social-login/policy';
 
-    /** Magento-style register alias → canonical customer/account/register (QA-13). */
+    /** Legacy register alias → canonical customer/account/register (QA-13). */
     private const REGISTER_ALIASES = [
         'customer/account/create',
     ];

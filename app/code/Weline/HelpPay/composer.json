@@ -1,7 +1,7 @@
 {
   "name": "weline/module-helppay",
   "description": "Help pay / selection share / quick pay orchestration",
-  "type": "magento2-module",
+  "type": "weline-module",
   "require": {
     "php": ">=8.2",
     "endroid/qr-code": "^6.0"

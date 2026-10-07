@@ -10,7 +10,7 @@ use Weline\Order\Model\Order;
 use Weline\Order\Model\OrderItem;
 
 /**
- * Read-only money / line accumulation for Magento-like order manage cards.
+ * Read-only money / line accumulation for backend order manage cards.
  */
 final class BackendOrderTotalsPresenter
 {
