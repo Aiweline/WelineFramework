@@ -276,7 +276,8 @@
 }
 
 .header-cart .mini-cart-drawer__body {
-    /* Shrinks as the footer sheet grows with content (up to drawer − 100px). */
+    /* Shrinks as the footer sheet grows with content (up to drawer − 100px).
+     * Qty hit-target floor lives in Weline_Cart::css/mini-cart-drawer-qty-hit.css. */
     flex: 1 1 0;
     min-height: 0;
     overflow-y: auto;
@@ -648,8 +649,9 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
     /*
      * Dynamic bottom sheet height = content height.
      * Cap at drawer − 100px; flex-shrink so header+body remainder cannot shove
-     * the sheet past the drawer (overflow:hidden was clipping CTA bottom inset).
-     * Bottom inset lives on .actions (not footer padding) so clip cannot eat it.
+     * the sheet past the drawer. Qty hit-target floor override lives in
+     * Weline_Cart::css/mini-cart-drawer-qty-hit.css (Cart-owned). Bottom inset
+     * lives on the open drawer shell / spacer — not encoded here as qty gate.
      */
     flex: 0 1 auto;
     max-height: calc(100% - 100px);

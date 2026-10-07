@@ -2236,6 +2236,37 @@
         });
     };
 
+    function appendStylesheet(href, liveAttr) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        if (liveAttr) {
+            link.setAttribute(liveAttr, '1');
+        }
+        document.head.appendChild(link);
+        return link;
+    }
+
+    function ensureCartQtyHitCss(assetVersion) {
+        // Cart-owned qty hit-target gate — Theme only ensures the sheet is present.
+        var stamp = '20261007-cart-qty-hit-v1';
+        var href = '/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css?v=' + stamp;
+        if (assetVersion) {
+            href += '&_weline_dev=' + encodeURIComponent(assetVersion);
+        }
+        var existing = document.querySelector(
+            'link[data-weline-cart-mini-cart-qty-hit="1"], link[rel="stylesheet"][href*="mini-cart-drawer-qty-hit.css"]'
+        );
+        if (existing) {
+            if (String(existing.getAttribute('href') || '').indexOf(stamp) === -1) {
+                existing.setAttribute('href', href);
+                existing.setAttribute('data-weline-cart-mini-cart-qty-hit', '1');
+            }
+            return;
+        }
+        appendStylesheet(href, 'data-weline-cart-mini-cart-qty-hit');
+    }
+
     function ensureDrawerCss() {
         // Opening the drawer used to remove baked layout_source sheets and re-inject —
         // that FOUC looked like the cart “刷了一下”. Ensure at most once per page.
@@ -2244,12 +2275,6 @@
         }
         drawerCssReady = true;
         var cssStamp = '20261007-minicart-dedupe-v9';
-        if (document.querySelector(
-            'link[data-weline-mini-cart-drawer-live="1"], link[href*="' + cssStamp + '"],'
-            + ' link[rel="stylesheet"][href*="mini-cart-drawer.css"]'
-        )) {
-            return;
-        }
         var assetVersion = '';
         try {
             var cfgNode = document.getElementById('weline-frontend-runtime-config');
@@ -2260,15 +2285,21 @@
         } catch (err) {
             assetVersion = '';
         }
-        var href = '/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css?v=' + cssStamp;
-        if (assetVersion) {
-            href += '&_weline_dev=' + encodeURIComponent(assetVersion);
+        if (!document.querySelector(
+            'link[data-weline-mini-cart-drawer-live="1"], link[href*="' + cssStamp + '"],'
+            + ' link[rel="stylesheet"][href*="mini-cart-drawer.css"]'
+        )) {
+            var href = '/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css?v=' + cssStamp;
+            if (assetVersion) {
+                href += '&_weline_dev=' + encodeURIComponent(assetVersion);
+            }
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            link.setAttribute('data-weline-mini-cart-drawer-live', '1');
+            document.head.appendChild(link);
         }
-        var link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = href;
-        link.setAttribute('data-weline-mini-cart-drawer-live', '1');
-        document.head.appendChild(link);
+        ensureCartQtyHitCss(assetVersion);
     }
 
     /**

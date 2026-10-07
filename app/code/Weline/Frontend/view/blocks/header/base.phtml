@@ -109,12 +109,14 @@ $accountJsMtime = @filemtime(BP . 'app/code/Weline/Customer/view/statics/js/acco
 $welineJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline.js');
 $miniCartJsMtime = @filemtime(BP . 'app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js');
 $miniCartCssMtime = @filemtime(BP . 'app/code/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css');
+$miniCartQtyHitCssMtime = @filemtime(BP . 'app/code/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css');
 $frontendJsMtime = max(
     (int)$apiJsMtime,
     (int)$accountJsMtime,
     (int)$welineJsMtime,
     (int)$miniCartJsMtime,
     (int)$miniCartCssMtime,
+    (int)$miniCartQtyHitCssMtime,
     (int)$workerJsMtime
 );
 $frontendAssetVersion = $deployVersion . ($frontendJsMtime > 0 ? ('-' . (string)$frontendJsMtime) : '');

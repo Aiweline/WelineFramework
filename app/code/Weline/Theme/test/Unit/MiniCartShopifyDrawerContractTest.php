@@ -268,12 +268,13 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('mini-cart-drawer__fs-progress', $css);
         self::assertStringContainsString('--amz-drawer-price:', $css);
         self::assertStringContainsString('--amz-drawer-cta-bg:', $css);
-        // Body must keep a floor so tall footer extras (tob credit/note) cannot starve line items.
+        // Collapsed footer still keeps a Theme body floor; expanded qty-hit gate is Cart-owned.
         self::assertStringContainsString('min-height: min(40vh, 12rem)', $css);
         self::assertMatchesRegularExpression(
             '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*calc\\(100%\\s*-\\s*100px\\)/s',
             $css
         );
+        self::assertStringContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $source);
         self::assertStringNotContainsString('max-height: min(40vh', $css);
     }
 
@@ -291,7 +292,10 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('data-i18n-footer-expand', $source);
         self::assertStringContainsString('is-footer-collapsed', $css);
         self::assertStringContainsString('max-height: calc(100% - 100px)', $css);
+        self::assertStringContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $source);
         self::assertStringContainsString('setFooterCollapsed', $js);
+        self::assertStringContainsString('ensureCartQtyHitCss', $js);
+        self::assertStringContainsString('mini-cart-drawer-qty-hit.css', $js);
         self::assertStringContainsString('aria-hidden', $js);
         self::assertStringContainsString('drawerContentIsFresh', $js);
         self::assertStringContainsString('skipItems', $js);

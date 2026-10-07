@@ -1,0 +1,20 @@
+/**
+ * Cart-owned mini-cart qty hit-target gate (global storefront).
+ *
+ * Theme chrome may shrink .mini-cart-drawer__body to ~header remainder when
+ * footer extras expand (max-height: calc(100% - 100px)). Line qty +/- then
+ * paint under .mini-cart-drawer__extras-tablist and clicks miss the buttons.
+ *
+ * Owning module: Weline_Cart. Theme drawer shell must not encode this gate.
+ */
+.header-cart .mini-cart-drawer__body {
+    min-height: min(40vh, 12rem);
+    position: relative;
+    z-index: 1;
+}
+
+.header-cart .mini-cart-drawer__footer {
+    max-height: calc(100% - min(40vh, 12rem) - 5.5rem);
+    position: relative;
+    z-index: 0;
+}

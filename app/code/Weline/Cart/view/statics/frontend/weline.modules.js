@@ -8,7 +8,7 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     cart: {
         paths: [
-            "Weline_Cart::js/cart.js?v=20260923-remove-from-cart-pixel1",
+            "Weline_Cart::js/cart.js?v=20261007-cart-qty-hit-v1",
             "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2",
             "Weline_Cart::js/widgets/product-purchase-actions.js?v=20261006-tob-keep-pref1"
         ],

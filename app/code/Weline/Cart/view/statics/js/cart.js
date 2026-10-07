@@ -1011,8 +1011,40 @@
 
     global.WelineCart = api;
 
+    /**
+     * Cart-owned mini-cart qty hit-target gate. Theme chrome may bake this via
+     * layout_source; Cart also ensures the sheet wherever WelineCart boots.
+     */
+    function ensureMiniCartQtyHitCss() {
+        try {
+            if (!global.document || !global.document.head) {
+                return;
+            }
+            var stamp = '20261007-cart-qty-hit-v1';
+            var href = '/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css?v=' + stamp;
+            var existing = global.document.querySelector(
+                'link[data-weline-cart-mini-cart-qty-hit="1"], link[rel="stylesheet"][href*="mini-cart-drawer-qty-hit.css"]'
+            );
+            if (existing) {
+                if (String(existing.getAttribute('href') || '').indexOf(stamp) === -1) {
+                    existing.setAttribute('href', href);
+                    existing.setAttribute('data-weline-cart-mini-cart-qty-hit', '1');
+                }
+                return;
+            }
+            var link = global.document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            link.setAttribute('data-weline-cart-mini-cart-qty-hit', '1');
+            global.document.head.appendChild(link);
+        } catch (eCss) {}
+    }
+
+    api.ensureMiniCartQtyHitCss = ensureMiniCartQtyHitCss;
+
     function bootWithPixelStamp() {
         try {
+            ensureMiniCartQtyHitCss();
             boot();
         } catch (eBoot) {}
         observeRemoveFromCartMarkers();
