@@ -1,7 +1,7 @@
 .wc-theme_widget_wishlist_icon .wishlist-link {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-1_5, .375rem);
+    gap: 0;
     color: inherit;
     text-decoration: none;
     padding: var(--spacing-sm, 0.5rem);
@@ -51,6 +51,4 @@
     font-weight: 700;
 }
 .wc-theme_widget_wishlist_icon .wishlist-count[hidden] { display: none !important; }
-.wc-theme_widget_wishlist_icon .wishlist-label { font-size: var(--font-size-sm, .875rem); font-weight: 600; }
-/* 顶栏工具区压缩：收藏仅图标+角标，文案留 title/aria */
-.wc-theme_widget_wishlist_icon .wishlist-info { display: none; }
+/* Icon-only: label removed from markup; tip = data-w-tooltip / title / aria-label */

@@ -64,6 +64,12 @@ final class WishlistHeaderWishlistIconHookTemplateTest extends TestCase
         self::assertStringContainsString('data-weline-load="api,wishlistHeader"', $source);
         self::assertStringNotContainsString('WishlistService', $source);
         self::assertStringContainsString('$wishlistCount = $isPreviewMode ? 2 : 0;', $source);
+        // Icon-only chrome: no visible 「收藏」 label; hover tip via tooltip + aria/title.
+        self::assertStringNotContainsString('wishlist-label', $source);
+        self::assertStringNotContainsString('wishlist-info', $source);
+        self::assertStringContainsString('data-w-component="tooltip"', $source);
+        self::assertStringContainsString('data-w-tooltip=', $source);
+        self::assertStringContainsString('aria-label=', $source);
 
         $jsSource = (string)file_get_contents($js);
         self::assertStringContainsString("api.count()", $jsSource);
@@ -72,5 +78,18 @@ final class WishlistHeaderWishlistIconHookTemplateTest extends TestCase
         $moduleSource = (string)file_get_contents($modules);
         self::assertStringContainsString('wishlistHeader', $moduleSource);
         self::assertStringContainsString('wishlist-header.js', $moduleSource);
+    }
+
+    public function testHanfuDesignWishlistIconIsIconOnlyWithTooltip(): void
+    {
+        // app/code/Weline/Wishlist/test/Unit/View → six levels up = app/
+        $path = dirname(__DIR__, 6) . '/design/Weline/hanfu/frontend/widgets/header/wishlist-icon/default.phtml';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        self::assertStringNotContainsString('wishlist-label', $source);
+        self::assertStringNotContainsString('wishlist-info', $source);
+        self::assertStringContainsString('data-w-component="tooltip"', $source);
+        self::assertStringContainsString('data-w-tooltip=', $source);
+        self::assertStringContainsString('aria-label=', $source);
     }
 }

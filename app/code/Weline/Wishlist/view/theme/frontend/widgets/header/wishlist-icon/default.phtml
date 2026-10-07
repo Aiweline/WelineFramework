@@ -31,6 +31,7 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 // Always SSR an empty badge. Session wishlist count is applied client-side by
 // wishlistHeader (wishlist.count) so FPC / guest chrome never paints shopper-specific totals.
 $wishlistCount = $isPreviewMode ? 2 : 0;
+$wishlistTip = WidgetI18n::label('收藏');
 
 ?>
 
@@ -42,7 +43,13 @@ $wishlistCount = $isPreviewMode ? 2 : 0;
          data-w-wishlist-icon="1"
          data-header-wishlist-ssr="guest-v1"
          data-wishlist-total="<?= $wishlistCount ?>">
-    <a href="@url{'customer/account/index'}#wishlist" class="wishlist-link" title="<?= $esc(WidgetI18n::label('我的收藏')) ?>">
+    <?php /* Icon-only chrome: tip via Weline tooltip + title fallback; no visible 「收藏」 label. */ ?>
+    <a href="@url{'customer/account/index'}#wishlist"
+       class="wishlist-link"
+       data-w-component="tooltip"
+       data-w-tooltip="<?= $esc($wishlistTip) ?>"
+       aria-label="<?= $esc($wishlistTip) ?>"
+       title="<?= $esc($wishlistTip) ?>">
         <span class="wishlist-icon-wrapper">
             <span class="header-wishlist-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="20" height="20" focusable="false" aria-hidden="true">
@@ -58,9 +65,6 @@ $wishlistCount = $isPreviewMode ? 2 : 0;
                     <?= $wishlistCount > 99 ? '99+' : $wishlistCount ?>
                 </span>
             <?php endif; ?>
-        </span>
-        <span class="wishlist-info">
-            <span class="wishlist-label"><?= $esc(WidgetI18n::label('收藏')) ?></span>
         </span>
     </a>
 </section>
