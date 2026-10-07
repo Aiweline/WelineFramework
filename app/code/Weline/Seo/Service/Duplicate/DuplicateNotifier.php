@@ -17,11 +17,8 @@ class DuplicateNotifier
             return;
         }
         $summary = (string)__(
-            '站点 #%1 检出重复 %2、疑似 %3。查看报告：%4',
-            $websiteId,
-            $duplicate,
-            $suspect,
-            $reportUrl
+            '站点 #%{1} 检出重复 %{2}、疑似 %{3}。查看报告：%{4}',
+            [$websiteId, $duplicate, $suspect, $reportUrl]
         );
         w_msg(
             self::TOPIC,

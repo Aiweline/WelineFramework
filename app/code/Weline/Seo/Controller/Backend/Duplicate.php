@@ -53,10 +53,12 @@ class Duplicate extends BackendPageController
                 $result = $scanner->scan($scope);
                 $lastReportUrl = (string)($result['report_url'] ?? '');
                 $message = (string)__(
-                    '扫描完成：重复 %1，疑似 %2。报告：%3',
-                    (int)($result['stats']['duplicate'] ?? 0),
-                    (int)($result['stats']['suspect'] ?? 0),
-                    $lastReportUrl
+                    '扫描完成：重复 %{1}，疑似 %{2}。报告：%{3}',
+                    [
+                        (int)($result['stats']['duplicate'] ?? 0),
+                        (int)($result['stats']['suspect'] ?? 0),
+                        $lastReportUrl,
+                    ]
                 );
                 if (!empty($result['run_id'])) {
                     $this->redirect($urlBuilder->pathForRun((int)$result['run_id']));
@@ -116,7 +118,7 @@ class Duplicate extends BackendPageController
             $this->assign('run', null);
             $this->assign('pairs', []);
             $this->assign('grade_filter', $grade);
-            $this->assign('error', (string)__('报告不存在：run_id=%1', $runId));
+            $this->assign('error', (string)__('报告不存在：run_id=%{1}', [$runId]));
             $this->assign('report_path', $runId > 0 ? $urlBuilder->pathForRun($runId, $gradeOrNull) : '');
             $this->assign('report_url', $runId > 0 ? $urlBuilder->absoluteForRun($runId, null, $gradeOrNull) : '');
             $this->assign('panel_path', $panelPath);

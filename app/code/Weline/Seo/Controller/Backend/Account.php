@@ -664,7 +664,7 @@ class Account extends BackendController
             if (!$bindingId) {
                 return $this->jsonResponse([
                     'success' => false,
-                    'message' => __('未找到该绑定关系 (website_id=%1, account_id=%2)', $websiteId, $accountId),
+                    'message' => __('未找到该绑定关系 (website_id=%{1}, account_id=%{2})', [$websiteId, $accountId]),
                 ]);
             }
             
