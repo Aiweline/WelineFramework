@@ -102,6 +102,19 @@ final class StorefrontCatalogSurfaceResolverTest extends TestCase
         self::assertSame('', $surface['share_image'] ?? null);
     }
 
+    public function testGroceryWebsiteUsesNeighborhoodShelfCopyWithoutHanfuShareImage(): void
+    {
+        $surface = $this->resolver->resolve('/products', 'zh_Hans_CN', 'grocery');
+
+        self::assertSame('products', $surface['code']);
+        self::assertSame('全部货架', $surface['heading']);
+        self::assertSame('邻里货架 | 生鲜日用杂货', $surface['seo_title']);
+        self::assertStringNotContainsString('汉服', $surface['heading']);
+        self::assertStringNotContainsString('汉服', $surface['seo_title']);
+        self::assertStringNotContainsString('马面', $surface['seo_description']);
+        self::assertSame('', $surface['share_image'] ?? null);
+    }
+
     public function testDefaultWebsiteKeepsHanfuCopyWhenWebsiteCodeEmpty(): void
     {
         $surface = $this->resolver->resolve('/products', 'en_US', '');

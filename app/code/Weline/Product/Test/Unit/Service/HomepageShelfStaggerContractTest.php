@@ -83,6 +83,28 @@ final class HomepageShelfStaggerContractTest extends TestCase
         self::assertSame([99], $this->ids($plan['deals']));
     }
 
+    public function testThinCatalogKeepsFeaturedDisjointFromHot(): void
+    {
+        $pool = [];
+        for ($id = 1; $id <= 8; $id++) {
+            $pool[] = $this->card($id, 100.0 + $id, 100.0 + $id, reviewCount: 20 - $id);
+        }
+
+        $plan = HomepageShelfStagger::select($pool, [], $pool, 8, 4, 8);
+
+        self::assertNotSame([], $plan['featured']);
+        self::assertNotSame([], $plan['hot']);
+        self::assertSame([], array_values(array_intersect(
+            $this->ids($plan['featured']),
+            $this->ids($plan['hot']),
+        )));
+        self::assertSame([], $plan['deals']);
+        self::assertCount(8, array_unique(array_merge(
+            $this->ids($plan['featured']),
+            $this->ids($plan['hot']),
+        )));
+    }
+
     public function testZeroPriceCardsAreExcludedFromAllShelves(): void
     {
         $featured = [

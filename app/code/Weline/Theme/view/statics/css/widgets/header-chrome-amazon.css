@@ -1190,8 +1190,11 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
 .weline-header .header-cart .cart-count,
 .weline-header .header-cart [data-cart-count-badge] {
     position: absolute;
-    top: calc(var(--spacing-0_5, 0.125rem) * -1);
-    right: calc(var(--spacing-0_5, 0.125rem) * -1);
+    inset-block-start: calc(var(--spacing-2, 0.5rem) * -1);
+    inset-inline-end: calc(var(--spacing-2, 0.5rem) * -1);
+    top: auto;
+    right: auto;
+    z-index: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1205,6 +1208,7 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     background-color: var(--weline-chrome-primary, var(--color-primary));
     color: var(--weline-chrome-text-primary, #111111);
     border: var(--border-width-thin, 1px) solid var(--weline-chrome-bg-dark, var(--color-bg-dark-secondary));
+    pointer-events: none;
 }
 
 .weline-header .header-cart {

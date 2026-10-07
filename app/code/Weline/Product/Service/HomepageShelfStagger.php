@@ -52,6 +52,37 @@ final class HomepageShelfStagger
         $featuredExclude = $dealsTop4 + $hotTop8;
         $featured = self::takeUnique($featuredCandidates, $featuredLimit, $featuredExclude);
 
+        // Thin catalog: Hot must not monopolize every SKU and leave Featured empty.
+        // Keep shelves disjoint by shrinking Hot's take, never by copying Hot cards into Featured.
+        if ($featured === [] && $featuredCandidates !== []) {
+            $union = self::takeUnique(
+                array_merge($featuredCandidates, $hotCandidates),
+                PHP_INT_MAX,
+                $dealsTop4,
+            );
+            if ($union !== []) {
+                $featuredShare = max(1, min($featuredLimit, (int)ceil(count($union) / 2)));
+                $hotShare = max(1, min($hotLimit, count($union) - $featuredShare));
+                $hot = self::takeUnique($hotCandidates, $hotShare, $dealsTop4);
+                if (count($hot) < $hotShare) {
+                    $hot = self::takeUnique($union, $hotShare, $dealsTop4);
+                }
+                $hotTop4 = self::ids(array_slice($hot, 0, 4));
+                $featured = self::takeUnique(
+                    $featuredCandidates,
+                    $featuredLimit,
+                    $dealsTop4 + self::ids($hot),
+                );
+                if ($featured === []) {
+                    $featured = self::takeUnique(
+                        $union,
+                        $featuredLimit,
+                        $dealsTop4 + self::ids($hot),
+                    );
+                }
+            }
+        }
+
         // Safety: drop any residual top-4 collisions without borrowing from other shelves.
         $featured = self::dropIntersectingPrefix($featured, 4, $dealsTop4 + $hotTop4);
 

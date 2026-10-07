@@ -50,8 +50,9 @@
 .wc-theme_widget_mini_cart_icon .cart-count {
     /* Do NOT use --token-size-Npx here: auto-literals may be negative / missing (e.g. 4px=-4px, 2px undefined). */
     position: absolute;
-    inset-block-start: calc(var(--weline-space-1, 0.25rem) * -1);
-    inset-inline-end: calc(var(--weline-space-1, 0.25rem) * -1);
+    /* Hang outside the icon box (Amazon-style); keep most of the cart glyph visible. */
+    inset-block-start: calc(var(--weline-space-2, 0.5rem) * -1);
+    inset-inline-end: calc(var(--weline-space-2, 0.5rem) * -1);
     z-index: 1;
     min-width: var(--spacing-4_5, 1.125rem);
     height: var(--spacing-4_5, 1.125rem);
