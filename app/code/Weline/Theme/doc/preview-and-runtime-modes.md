@@ -160,8 +160,17 @@
 | Policy 包装 | 真实 `theme/frontend/layouts/{type}/{option}.phtml`（不再走 content 桩） |
 | 发布实体路径 | `ThemeLayoutEntitySlotFiller` + 目标版本解析器（同 owner/V/mode/R） |
 
+## 主题卡预览图（安装态截图 · 与公网域名解耦）
+
+主题列表卡缩略图与 `theme/backend/theme-preview/image` **只收** `theme_id` + `website_id`，产物是当前版本（`preview_mode=version`）店面首页的 **静态 PNG**。
+
+- 截图基址由 `InstallLocalStorefrontBaseResolver` 解析：**本机安装 Host**（或 `*.test.weline.com` Host-only 站）+ 域名行 `sub_path` 挂载；**禁止**用 `Website.URL` 的公网域名（如 `daocharms.com`）作 capture Host。
+- Headless 仍经 `theme/frontend/theme-preview/gateway`（`preview_gen` + HMAC）落到真实店面 homepage（parity）；后台 UI 只展示媒体 URL，不 iframe 公网店面。
+- 入口：`ThemePreviewGenerator::ensureFrontendPreviewImage()` / `Controller/Backend/ThemePreview/Image.php`。
+
 ## 修订记录
 
+- 2026-10-07：主题卡预览图改为安装态基址 + `theme_id`/`website_id` ensure；与 Website 公网域名解耦。
 - 2026-09-25：按待实施的主题版本方案统一 owner/V/mode/R；去除 page release 路径权威，历史 Token 可读 formal，缺文件只在已选版本重建。
 
 - 2026-09-21：态 2 bootstrap 禁止仅 sessionStorage 回种 Cookie；退出须清 `weline_live_preview_token`。

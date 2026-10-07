@@ -57,10 +57,17 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
             throw new \InvalidArgumentException('A single Theme preview task requires area.');
         }
         $force = $this->normalizeBoolean($input['force'] ?? true, 'force');
-        $captureBaseUrl = ThemePreviewGenerator::normalizeCaptureBaseUrl(
-            isset($input['capture_base_url']) ? (string)$input['capture_base_url'] : null
-        );
-        $targets = $this->processor->freezeTargets($themeId, $area, $force, $captureBaseUrl);
+        $websiteIdRaw = $input['website_id'] ?? null;
+        $websiteId = ($websiteIdRaw === null || $websiteIdRaw === '')
+            ? null
+            : max(0, (int)$websiteIdRaw);
+        // When a website is selected, prefer server-side bound origin; ignore admin Host.
+        $captureBaseUrl = $websiteId !== null
+            ? ThemePreviewGenerator::resolveCaptureBaseUrlForWebsite($websiteId)
+            : ThemePreviewGenerator::normalizeCaptureBaseUrl(
+                isset($input['capture_base_url']) ? (string)$input['capture_base_url'] : null
+            );
+        $targets = $this->processor->freezeTargets($themeId, $area, $force, $captureBaseUrl, $websiteId);
 
         return new TaskStartRequest(
             input: [
@@ -68,6 +75,7 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
                 'scope' => $scope,
                 'force' => $force,
                 'capture_base_url' => $captureBaseUrl,
+                'website_id' => $websiteId,
                 'targets' => $targets,
             ],
             businessKey: 'theme.preview_batch:' . $owner->principal . ':' . $requestId,
@@ -279,6 +287,10 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
             $key = (string)($target['key'] ?? '');
             $rawCaptureBaseUrl = trim((string)($target['capture_base_url'] ?? ''));
             $captureBaseUrl = ThemePreviewGenerator::normalizeCaptureBaseUrl($rawCaptureBaseUrl);
+            $websiteIdRaw = $target['website_id'] ?? null;
+            $websiteId = ($websiteIdRaw === null || $websiteIdRaw === '')
+                ? null
+                : max(0, (int)$websiteIdRaw);
             if ($themeId <= 0 || !in_array($area, ['frontend', 'backend'], true)
                 || $key !== 'theme_' . $themeId . '_' . $area
                 || ($rawCaptureBaseUrl !== '' && $captureBaseUrl === null)) {
@@ -290,6 +302,7 @@ final class ThemePreviewBatchTaskHandler implements ResumableTaskStartHandlerInt
                 'area' => $area,
                 'force' => (bool)($target['force'] ?? false),
                 'capture_base_url' => $captureBaseUrl,
+                'website_id' => $websiteId,
             ];
         }
         return $targets;

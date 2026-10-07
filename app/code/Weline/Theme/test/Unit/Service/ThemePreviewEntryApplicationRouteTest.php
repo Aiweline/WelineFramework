@@ -19,9 +19,9 @@ final class ThemePreviewEntryApplicationRouteTest extends TestCase
         $resolver = new ThemePageTypeResolver();
 
         self::assertSame('account', $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_ACCOUNT));
-        self::assertSame('account/login', $resolver->getFrontendUrlPathForPreview('account/login'));
+        self::assertSame('customer/account/login', $resolver->getFrontendUrlPathForPreview('account/login'));
         self::assertSame(
-            'account/forgot-password',
+            'customer/account/forgot-password',
             $resolver->getFrontendUrlPathForPreview('account/forgot-password')
         );
         self::assertSame('products', $resolver->getFrontendUrlPathForPreview(ThemeLayout::PAGE_TYPE_PRODUCT_LIST));
@@ -85,6 +85,143 @@ final class ThemePreviewEntryApplicationRouteTest extends TestCase
             "getBackendUrl('weline_dashboard/backend/dashboard'",
             $source
         );
+    }
+
+    public function testThemePreviewEntryApplicationRewritesFrontendBaseForWebsiteOrigin(): void
+    {
+        $root = \dirname(__DIR__, 7);
+        $source = (string) file_get_contents(
+            $root . '/app/code/Weline/Theme/Service/ThemePreviewEntryApplication.php'
+        );
+        $indexSource = (string) file_get_contents(
+            $root . '/app/code/Weline/Theme/Controller/Backend/Index.php'
+        );
+        $listSource = (string) file_get_contents(
+            $root . '/app/code/Weline/Theme/view/templates/backend/index.phtml'
+        );
+
+        self::assertStringContainsString('rewriteFrontendBaseForWebsite(', $source);
+        self::assertStringContainsString('normalizeStorefrontPreviewBaseUrl(', $source);
+        self::assertStringContainsString('stripBackendAreaMountFromUrl(', $source);
+        self::assertStringContainsString("getAreaRoutePrefix('backend')", $source);
+        self::assertStringContainsString('InstallLocalStorefrontBaseResolver', $source);
+        self::assertStringContainsString('appendWebsiteQueryParams(', $source);
+        self::assertStringContainsString("?int \$websiteId = null", $source);
+        self::assertStringContainsString("?string \$websiteCode = null", $source);
+        self::assertStringContainsString("getParam('website_id'", $indexSource);
+        self::assertStringContainsString("getParam('website_code'", $indexSource);
+        self::assertStringContainsString('$websiteId,', $indexSource);
+        self::assertStringContainsString('$websiteCode,', $indexSource);
+        self::assertStringContainsString("getPost('website_id'", $indexSource);
+        self::assertStringContainsString('ensureFrontendPreviewImage', $indexSource);
+        self::assertStringContainsString("'website_id' => \$websiteId", $indexSource);
+        self::assertStringContainsString("'preview_mode' => 'version'", $listSource);
+    }
+
+    public function testNormalizeStorefrontPreviewBaseUrlStripsBackendMountAndRewritesOrigin(): void
+    {
+        $entry = new \Weline\Theme\Service\ThemePreviewEntryApplication(
+            $this->createMock(\Weline\Theme\Service\ThemeContextService::class)
+        );
+        $backendMount = \trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        self::assertNotSame('', $backendMount, 'backend area mount must be configured for this contract');
+
+        $adminFrontend = 'https://p05113ef3.test.weline.com/' . $backendMount . '/';
+        $stripped = $entry->normalizeStorefrontPreviewBaseUrl($adminFrontend, null, null);
+        self::assertSame('https://p05113ef3.test.weline.com/', $stripped);
+        self::assertStringNotContainsString($backendMount, $stripped);
+
+        $withPath = 'https://p05113ef3.test.weline.com/' . $backendMount . '/account';
+        self::assertSame(
+            'https://p05113ef3.test.weline.com/account',
+            $entry->normalizeStorefrontPreviewBaseUrl($withPath, null, null)
+        );
+
+        $rewritten = $entry->normalizeStorefrontPreviewBaseUrl($adminFrontend, 544, 'grocery');
+        self::assertStringNotContainsString($backendMount, $rewritten);
+        self::assertStringNotContainsString('daocharms.com', $rewritten);
+        try {
+            $origin = \trim((string)(\Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\InstallLocalStorefrontBaseResolver::class
+            )->resolveForWebsite(544, 'grocery') ?? ''));
+        } catch (\Throwable) {
+            $origin = '';
+        }
+        if ($origin !== '') {
+            self::assertStringStartsWith(\rtrim($origin, '/'), $rewritten);
+        }
+    }
+
+    public function testThemeEditorBuildFrontendPreviewUrlNormalizesStorefrontBase(): void
+    {
+        $root = \dirname(__DIR__, 7);
+        $source = (string) file_get_contents(
+            $root . '/app/code/Weline/Theme/Controller/Backend/ThemeEditor.php'
+        );
+        $js = (string) file_get_contents(
+            $root . '/app/code/Weline/Theme/view/statics/js/theme-editor.js'
+        );
+        $siteBrand = (string) file_get_contents(
+            $root . '/app/code/Weline/Theme/Helper/SiteBrand.php'
+        );
+
+        self::assertStringContainsString('normalizeStorefrontPreviewBaseUrl(', $source);
+        self::assertStringContainsString('getStorefrontCanvasOrigin() !== window.location.origin', $js);
+        self::assertStringContainsString('shouldUseBackendBrandIdentity()', $siteBrand);
+        self::assertStringContainsString('resolveFrontendLogoUrl', $siteBrand);
+    }
+
+    public function testPreparePreviewRedirectGroceryOmitsBackendMount(): void
+    {
+        $theme = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Model\WelineTheme::class
+        );
+        $theme->load(7);
+        $themeId = (int)$theme->getId();
+        if ($themeId < 1 || \strtolower(\trim((string)$theme->getName())) !== 'grocery') {
+            self::markTestSkipped('grocery theme id=7 not present in this environment');
+        }
+
+        $session = $this->createStub(\Weline\Framework\Session\Auth\AuthenticatedSessionInterface::class);
+        $session->method('set')->willReturnCallback(static function (): void {
+        });
+        $session->method('get')->willReturn(null);
+
+        $entry = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Service\ThemePreviewEntryApplication::class
+        );
+        $result = $entry->preparePreviewRedirect(
+            $themeId,
+            'frontend',
+            $session,
+            true,
+            null,
+            'homepage',
+            null,
+            'draft',
+            'frontend',
+            'version',
+            544,
+            'grocery',
+        );
+        self::assertTrue($result['ok'] ?? false, (string)($result['message'] ?? 'preview redirect failed'));
+        $redirect = (string)($result['redirect'] ?? '');
+        self::assertNotSame('', $redirect);
+        $backendMount = \trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        self::assertNotSame('', $backendMount);
+        self::assertStringNotContainsString('/' . $backendMount, $redirect);
+        try {
+            $origin = \trim((string)(\Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\InstallLocalStorefrontBaseResolver::class
+            )->resolveForWebsite(544, 'grocery') ?? ''));
+        } catch (\Throwable) {
+            $origin = '';
+        }
+        self::assertStringNotContainsString('daocharms.com', $redirect);
+        if ($origin !== '') {
+            self::assertStringStartsWith(\rtrim($origin, '/'), $redirect);
+        }
+        self::assertStringContainsString('weline_preview_token=', $redirect);
     }
 
     public function testFrontendUrlPathForPreviewNeverPassesEmptyString(): void

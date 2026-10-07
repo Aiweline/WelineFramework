@@ -21,10 +21,15 @@ class ThemePreviewTaskProcessor
     }
 
     /**
-     * @return list<array{key:string,theme_id:int,area:string,force:bool,capture_base_url:?string}>
+     * @return list<array{key:string,theme_id:int,area:string,force:bool,capture_base_url:?string,website_id:?int}>
      */
-    public function freezeTargets(?int $themeId, ?string $area, bool $force, ?string $captureBaseUrl = null): array
-    {
+    public function freezeTargets(
+        ?int $themeId,
+        ?string $area,
+        bool $force,
+        ?string $captureBaseUrl = null,
+        ?int $websiteId = null,
+    ): array {
         $areas = $this->areas($area);
         $captureBaseUrl = ThemePreviewGenerator::normalizeCaptureBaseUrl($captureBaseUrl);
         if ($themeId !== null) {
@@ -33,7 +38,7 @@ class ThemePreviewTaskProcessor
                 throw new \InvalidArgumentException((string)__('主题不存在'));
             }
 
-            return $this->targetsForTheme($theme, $areas, $force, $captureBaseUrl);
+            return $this->targetsForTheme($theme, $areas, $force, $captureBaseUrl, $websiteId);
         }
 
         $items = (clone $this->themeModel)->clearData()->clearQuery()->select()->fetch()->getItems();
@@ -45,7 +50,10 @@ class ThemePreviewTaskProcessor
             if ($id <= 0) {
                 continue;
             }
-            $targets = array_merge($targets, $this->targetsForTheme($this->loadTheme($id), $areas, $force, $captureBaseUrl));
+            $targets = array_merge(
+                $targets,
+                $this->targetsForTheme($this->loadTheme($id), $areas, $force, $captureBaseUrl, null),
+            );
         }
 
         usort($targets, static fn(array $left, array $right): int => [$left['theme_id'], $left['area']] <=> [$right['theme_id'], $right['area']]);
@@ -72,12 +80,29 @@ class ThemePreviewTaskProcessor
             throw new \InvalidArgumentException((string)__('主题不支持 %{1} 区域', [$area]));
         }
 
+        $websiteIdRaw = $target['website_id'] ?? null;
+        $websiteId = ($websiteIdRaw === null || $websiteIdRaw === '')
+            ? null
+            : max(0, (int)$websiteIdRaw);
+        if ($area === 'frontend' && $websiteId === null) {
+            $websiteId = ThemePreviewGenerator::resolveDefaultCaptureWebsiteId($themeId);
+        }
+        $captureBaseUrl = isset($target['capture_base_url']) ? (string)$target['capture_base_url'] : null;
+        if ($area === 'frontend' && $websiteId !== null) {
+            // Install-local Host + mount — never Website public domain.
+            $boundOrigin = ThemePreviewGenerator::resolveCaptureBaseUrlForWebsite($websiteId);
+            if ($boundOrigin !== null) {
+                $captureBaseUrl = $boundOrigin;
+            }
+        }
+
         $heartbeat?->__invoke();
         $imagePath = ThemePreviewGenerator::generatePreviewImage(
             $theme,
             $area,
             (bool)($target['force'] ?? false),
-            isset($target['capture_base_url']) ? (string)$target['capture_base_url'] : null,
+            $captureBaseUrl,
+            $area === 'frontend' ? $websiteId : null,
         );
         $heartbeat?->__invoke();
         if ($imagePath === false) {
@@ -91,14 +116,20 @@ class ThemePreviewTaskProcessor
             $theme->setFrontendPreviewImage($relativePath)->setPreviewImage($relativePath);
         }
         $theme->save();
+        $publicUrl = ThemePreviewGenerator::getPreviewImagePublicUrl(
+            $themeId,
+            $area,
+            $area === 'frontend' ? $websiteId : null,
+        );
 
         return [
             'key' => $this->targetKey($themeId, $area),
             'theme_id' => $themeId,
             'area' => $area,
+            'website_id' => $websiteId,
             'success' => true,
             'image_path' => $relativePath,
-            'image_url' => '/' . $relativePath,
+            'image_url' => $publicUrl !== '' ? $publicUrl : ('/' . $relativePath),
         ];
     }
 
@@ -111,10 +142,15 @@ class ThemePreviewTaskProcessor
 
     /**
      * @param list<string> $areas
-     * @return list<array{key:string,theme_id:int,area:string,force:bool,capture_base_url:?string}>
+     * @return list<array{key:string,theme_id:int,area:string,force:bool,capture_base_url:?string,website_id:?int}>
      */
-    private function targetsForTheme(WelineTheme $theme, array $areas, bool $force, ?string $captureBaseUrl = null): array
-    {
+    private function targetsForTheme(
+        WelineTheme $theme,
+        array $areas,
+        bool $force,
+        ?string $captureBaseUrl = null,
+        ?int $websiteId = null,
+    ): array {
         if (!$theme->getId()) {
             return [];
         }
@@ -124,8 +160,18 @@ class ThemePreviewTaskProcessor
             if (!$this->themeSupportsArea($theme, $area)) {
                 continue;
             }
+            $resolvedWebsiteId = $area === 'frontend'
+                ? ($websiteId ?? ThemePreviewGenerator::resolveDefaultCaptureWebsiteId((int)$theme->getId()))
+                : null;
+            $resolvedCapture = $captureBaseUrl;
+            if ($area === 'frontend' && $resolvedWebsiteId !== null) {
+                $boundOrigin = ThemePreviewGenerator::resolveCaptureBaseUrlForWebsite($resolvedWebsiteId);
+                if ($boundOrigin !== null) {
+                    $resolvedCapture = $boundOrigin;
+                }
+            }
             // force=false：已有预览文件且库中已登记路径时跳过，供页面自动补缺使用。
-            if (!$force && $this->themeAlreadyHasPreview($theme, $area)) {
+            if (!$force && $this->themeAlreadyHasPreview($theme, $area, $resolvedWebsiteId)) {
                 continue;
             }
             $targets[] = [
@@ -133,7 +179,8 @@ class ThemePreviewTaskProcessor
                 'theme_id' => (int)$theme->getId(),
                 'area' => $area,
                 'force' => $force,
-                'capture_base_url' => $captureBaseUrl,
+                'capture_base_url' => $resolvedCapture,
+                'website_id' => $resolvedWebsiteId,
             ];
         }
         return $targets;
@@ -170,11 +217,15 @@ class ThemePreviewTaskProcessor
             || is_dir($basePath . DS . 'theme' . DS . $area);
     }
 
-    private function themeAlreadyHasPreview(WelineTheme $theme, string $area): bool
+    private function themeAlreadyHasPreview(WelineTheme $theme, string $area, ?int $websiteId = null): bool
     {
         $themeId = (int)$theme->getId();
         if ($themeId <= 0) {
             return false;
+        }
+
+        if ($area === 'frontend' && $websiteId !== null) {
+            return is_file(ThemePreviewGenerator::getPreviewImagePath($themeId, $area, $websiteId));
         }
 
         $dbPath = $area === 'backend'

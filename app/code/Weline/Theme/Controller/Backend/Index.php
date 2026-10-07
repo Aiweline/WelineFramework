@@ -20,10 +20,8 @@ use Weline\Theme\Helper\MetaTranslation;
 use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
-use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemePreviewEntryApplication;
 use Weline\Theme\Service\ThemePreviewGenerator;
-use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Framework\Http\Sse\SseWriter;
 
 /**
@@ -39,8 +37,12 @@ class Index extends BackendController
         /** @var WelineTheme $themeModel */
         $themeModel = ObjectManager::getInstance(WelineTheme::class);
         
-        // 获取所有主题（包含 preview_image 字段）
-        $themes = $themeModel->select()->fetch()->getItems();
+        // 获取所有主题（包含 preview_image 字段）；id 倒序，新主题在前
+        $themes = $themeModel
+            ->order(WelineTheme::schema_fields_ID, 'DESC')
+            ->select()
+            ->fetch()
+            ->getItems();
         
         // 为每个主题获取父主题信息
         foreach ($themes as &$theme) {
@@ -81,21 +83,52 @@ class Index extends BackendController
         }
         unset($theme); // 解除引用
 
-        /** @var WelineTheme $activeQuery */
-        $activeQuery = ObjectManager::getInstance(WelineTheme::class);
-        $activeFrontend = $this->safeLoadActiveThemeId($activeQuery, WelineTheme::schema_fields_IS_ACTIVE_FRONTEND);
-        $activeBackend = $this->safeLoadActiveThemeId($activeQuery, WelineTheme::schema_fields_IS_ACTIVE_BACKEND);
-        if (!$activeFrontend && !$activeBackend) {
-            $fallbackActive = $this->safeLoadActiveThemeId($activeQuery, WelineTheme::schema_fields_IS_ACTIVE);
-            if ($fallbackActive) {
-                $activeFrontend = $fallbackActive;
-                $activeBackend = $fallbackActive;
+        /** @var \Weline\Theme\Service\ThemeApplicationUsageService $usage */
+        $usage = ObjectManager::getInstance(\Weline\Theme\Service\ThemeApplicationUsageService::class);
+        $themeWebsiteBindings = $usage->frontendWebsiteBindingsByThemeId();
+        $themeWebsiteUsage = [];
+        $themeEditWebsites = [];
+        foreach ($themeWebsiteBindings as $boundThemeId => $bindings) {
+            $themeWebsiteUsage[$boundThemeId] = \array_column($bindings, 'website_code');
+        }
+        foreach ($themes as $themeRow) {
+            $boundThemeId = (int)($themeRow['id'] ?? 0);
+            if ($boundThemeId < 1) {
+                continue;
+            }
+            $themeEditWebsites[$boundThemeId] = $themeWebsiteBindings[$boundThemeId][0]
+                ?? $usage->resolveEditWebsiteForTheme(0);
+        }
+        $backendApplicationThemeId = $usage->backendApplicationThemeId();
+        $openAiThemeId = 0;
+        $registeredDefaultBackendThemeId = 0;
+        try {
+            /** @var \Weline\Theme\Api\DefaultThemeInterface $defaults */
+            $defaults = ObjectManager::getInstance(\Weline\Theme\Api\DefaultThemeInterface::class);
+            $openAiThemeId = (int)($defaults->getRegisteredDefault('frontend')['id'] ?? 0);
+            $registeredDefaultBackendThemeId = (int)($defaults->getRegisteredDefault('backend')['id'] ?? 0);
+        } catch (\Throwable) {
+            $openAiThemeId = 0;
+            $registeredDefaultBackendThemeId = 0;
+        }
+        if ($openAiThemeId < 1) {
+            foreach ($themes as $themeRow) {
+                if (!empty($themeRow['has_frontend'])) {
+                    $openAiThemeId = (int)($themeRow['id'] ?? 0);
+                    if ($openAiThemeId > 0) {
+                        break;
+                    }
+                }
             }
         }
-        
+
         $this->assign('themes', $themes);
-        $this->assign('active_frontend_id', $activeFrontend);
-        $this->assign('active_backend_id', $activeBackend);
+        $this->assign('theme_website_usage', $themeWebsiteUsage);
+        $this->assign('theme_website_bindings', $themeWebsiteBindings);
+        $this->assign('theme_edit_websites', $themeEditWebsites);
+        $this->assign('backend_application_theme_id', $backendApplicationThemeId);
+        $this->assign('registered_default_backend_theme_id', $registeredDefaultBackendThemeId);
+        $this->assign('open_ai_theme_id', $openAiThemeId);
         $this->assign('page_title', __('主题管理'));
         
         return $this->fetch('Weline_Theme::templates/backend/index.phtml');
@@ -181,6 +214,14 @@ class Index extends BackendController
         $versionId = (int)$this->request->getParam('version_id', 0);
         $status = (string)$this->request->getParam('status', 'draft');
         $previewMode = (string)$this->request->getParam('preview_mode', 'default');
+        $websiteIdRaw = $this->request->getParam('website_id', null);
+        $websiteId = ($websiteIdRaw === null || $websiteIdRaw === '')
+            ? null
+            : max(0, (int)$websiteIdRaw);
+        $websiteCode = \strtolower(\trim((string)$this->request->getParam('website_code', '')));
+        if ($websiteCode === '') {
+            $websiteCode = null;
+        }
 
         /** @var ThemePreviewEntryApplication $previewEntry */
         $previewEntry = ObjectManager::getInstance(ThemePreviewEntryApplication::class);
@@ -195,6 +236,8 @@ class Index extends BackendController
             $status,
             (string)$area,
             $previewMode,
+            $websiteId,
+            $websiteCode,
         );
 
         if (!$result['ok']) {
@@ -208,27 +251,6 @@ class Index extends BackendController
 
 
     /**
-     * 激活主题（异步），按区域：frontend 前台 / backend 后台
-     */
-    public function postActivate()
-    {
-        $themeId = (int)$this->request->getPost('theme_id');
-        $area = $this->request->getPost('area');
-        if (!in_array($area, ['frontend', 'backend'], true)) {
-            $area = null;
-        }
-
-        $result = ObjectManager::getInstance(ThemeContextService::class)
-            ->activateThemeForArea($themeId, $area);
-
-        if (!empty($result['success'])) {
-            return $this->fetchJson($this->success((string)($result['message'] ?? __('主题激活成功'))));
-        }
-
-        return $this->fetchJson($this->error((string)($result['message'] ?? __('激活失败'))));
-    }
-
-    /**
      * 生成主题预览图片（AJAX调用）
      */
     public function postGeneratePreviewImage()
@@ -237,6 +259,11 @@ class Index extends BackendController
         $area = $this->request->getPost('area', 'frontend');
         $area = $area === 'backend' ? 'backend' : 'frontend';
         $force = (bool)$this->request->getPost('force', false);
+        $websiteIdRaw = $this->request->getPost('website_id', null);
+        $websiteId = ($websiteIdRaw === null || $websiteIdRaw === '')
+            ? null
+            : max(0, (int)$websiteIdRaw);
+        $websiteCode = \strtolower(\trim((string)$this->request->getPost('website_code', '')));
 
         if (!$themeId) {
             return $this->fetchJson($this->error(__('请选择主题')));
@@ -255,20 +282,54 @@ class Index extends BackendController
         }
 
         try {
-            $imagePath = ThemePreviewGenerator::generatePreviewImage($theme, $area, $force);
-
-            if ($imagePath) {
-                // 更新数据库中的 preview_image 字段
-                $relativePath = ThemePreviewGenerator::normalizePreviewRelativePath($imagePath);
+            if ($area === 'frontend') {
+                if ($websiteId === null) {
+                    $websiteId = ThemePreviewGenerator::resolveDefaultCaptureWebsiteId((int)$themeId) ?? 0;
+                }
+                $ensured = ThemePreviewGenerator::ensureFrontendPreviewImage(
+                    (int)$themeId,
+                    $websiteId,
+                    $force,
+                );
+                if (!($ensured['ok'] ?? false)) {
+                    return $this->fetchJson($this->error(
+                        (string)($ensured['message'] ?? __('预览图生成失败'))
+                    ));
+                }
+                $relativePath = (string)$ensured['image_path'];
                 $this->persistThemePreviewImage($theme, $area, $relativePath);
 
                 return $this->fetchJson($this->success(__('预览图生成成功'), [
-                    'image_url' => '/' . $relativePath,
-                    'image_path' => $imagePath,
+                    'image_url' => $ensured['image_url'],
+                    'preview_image_url' => $ensured['image_url'],
+                    'image_path' => $relativePath,
+                    'website_id' => $websiteId,
+                    'website_code' => $websiteCode,
                 ]));
-            } else {
-                return $this->fetchJson($this->error(__('预览图生成失败')));
             }
+
+            // Backend area: still local Admin Host capture (no Website public domain).
+            $imagePath = ThemePreviewGenerator::generatePreviewImage(
+                $theme,
+                $area,
+                $force,
+                null,
+                null,
+            );
+
+            if ($imagePath) {
+                $relativePath = ThemePreviewGenerator::normalizePreviewRelativePath($imagePath);
+                $this->persistThemePreviewImage($theme, $area, $relativePath);
+                $publicUrl = ThemePreviewGenerator::getPreviewImagePublicUrl((int)$themeId, $area, null);
+
+                return $this->fetchJson($this->success(__('预览图生成成功'), [
+                    'image_url' => $publicUrl !== '' ? $publicUrl : ('/' . $relativePath),
+                    'image_path' => $imagePath,
+                    'website_id' => null,
+                ]));
+            }
+
+            return $this->fetchJson($this->error(__('预览图生成失败')));
         } catch (\Exception $e) {
             Env::log_error('theme_preview', __('生成预览图失败：%{1}', [$e->getMessage()]));
             return $this->fetchJson($this->error(__('生成失败：%{1}', [$e->getMessage()])));
@@ -852,76 +913,6 @@ class Index extends BackendController
             ];
         }
         return $result;
-    }
-
-    private function safeLoadActiveThemeId(WelineTheme $theme, string $field): ?int
-    {
-        $theme->clearData()->clearQuery();
-        try {
-            $theme->load($field, 1);
-            return $theme->getId() ? (int)$theme->getId() : null;
-        } catch (\Throwable $throwable) {
-            if ($this->isMissingThemeActivationFieldError($throwable, $field)) {
-                return null;
-            }
-            throw $throwable;
-        }
-    }
-
-    private function isMissingThemeActivationFieldError(\Throwable $throwable, string $field): bool
-    {
-        $message = strtolower($throwable->getMessage());
-        if (!str_contains($message, strtolower($field))) {
-            return false;
-        }
-
-        return str_contains($message, 'undefined column')
-            || str_contains($message, 'does not exist')
-            || str_contains($message, 'column');
-    }
-
-    private function safeToggleAreaThemeActivation(WelineTheme $theme, int $themeId, string $field): bool
-    {
-        try {
-            $theme->clearQuery();
-            $theme->where($field, 1)
-                ->update([$field => 0])->fetch();
-            $theme->clearQuery();
-            $theme->where(WelineTheme::schema_fields_ID, $themeId)
-                ->update([$field => 1])->fetch();
-            return true;
-        } catch (\Throwable $throwable) {
-            if ($this->isMissingThemeActivationFieldError($throwable, $field)) {
-                return false;
-            }
-            throw $throwable;
-        }
-    }
-
-    private function activateThemeFallback(WelineTheme $theme, int $themeId): void
-    {
-        $theme->clearQuery();
-        $theme->where(WelineTheme::schema_fields_IS_ACTIVE, 1)
-            ->update([WelineTheme::schema_fields_IS_ACTIVE => 0])->fetch();
-        $theme->clearQuery();
-        $theme->where(WelineTheme::schema_fields_ID, $themeId)
-            ->update([WelineTheme::schema_fields_IS_ACTIVE => 1])->fetch();
-    }
-
-    private function clearActivationRuntimeCaches(int $themeId, ?string $area): void
-    {
-        try {
-            ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(
-                $themeId,
-                'theme_backend_activate_' . ($area ?: 'global')
-            );
-        } catch (\Throwable) {
-        }
-    }
-
-    private function themeSupportsArea(WelineTheme $theme, string $area): bool
-    {
-        return $this->themeHasArea($theme->getPath(), $area);
     }
 
     private function themeHasArea(string $themePath, string $area): bool

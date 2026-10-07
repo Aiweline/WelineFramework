@@ -31,6 +31,8 @@ final class ThemePreviewEntryApplication
         string $status = 'draft',
         string $editorArea = 'frontend',
         string $previewMode = 'default',
+        ?int $websiteId = null,
+        ?string $websiteCode = null,
     ): array {
         if ($themeId <= 0) {
             return ['ok' => false, 'message' => __('请选择主题')];
@@ -166,16 +168,160 @@ final class ThemePreviewEntryApplication
             return ['ok' => false, 'message' => __('Preview token is required')];
         }
 
+        // "/" for homepage — getFrontendUrl('') reuses REQUEST_URI (query-bin).
+        $frontendPath = $themePageTypeResolver->getFrontendUrlPathForPreview($resolvedPageType);
+        $frontendBase = $this->normalizeStorefrontPreviewBaseUrl(
+            $url->getFrontendUrl($frontendPath),
+            $websiteId,
+            $websiteCode,
+        );
+
+        $redirect = $previewTokenService->getPreviewUrl($frontendBase, $previewToken);
+        $redirect = $this->appendWebsiteQueryParams($redirect, $websiteId, $websiteCode);
+
         return [
             'ok' => true,
-            'redirect' => $previewTokenService->getPreviewUrl(
-                $url->getFrontendUrl(
-                    // "/" for homepage — getFrontendUrl('') reuses REQUEST_URI (query-bin).
-                    $themePageTypeResolver->getFrontendUrlPathForPreview($resolvedPageType)
-                ),
-                $previewToken
-            ),
+            'redirect' => $redirect,
         ];
+    }
+
+    /**
+     * Admin-context getFrontendUrl embeds backend mount; Host-only sites need their origin.
+     */
+    public function normalizeStorefrontPreviewBaseUrl(
+        string $frontendBase,
+        ?int $websiteId = null,
+        ?string $websiteCode = null,
+    ): string {
+        $frontendBase = $this->stripBackendAreaMountFromUrl($frontendBase);
+
+        return $this->rewriteFrontendBaseForWebsite($frontendBase, $websiteId, $websiteCode);
+    }
+
+    /**
+     * Peel area_routes.backend prefix from an absolute URL path.
+     * Admin getFrontendUrl() otherwise yields /{backendMount}/… which is not a storefront route.
+     */
+    private function stripBackendAreaMountFromUrl(string $absoluteUrl): string
+    {
+        $prefix = \trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        if ($prefix === '') {
+            return $absoluteUrl;
+        }
+
+        $parts = \parse_url($absoluteUrl);
+        if (!\is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return $absoluteUrl;
+        }
+
+        $path = (string)($parts['path'] ?? '/');
+        if ($path === '') {
+            $path = '/';
+        }
+        $mount = '/' . $prefix;
+        $pathLower = \strtolower($path);
+        $mountLower = \strtolower($mount);
+        if ($pathLower !== $mountLower && !\str_starts_with($pathLower, $mountLower . '/')) {
+            return $absoluteUrl;
+        }
+
+        $remainder = \substr($path, \strlen($mount));
+        if ($remainder === false || $remainder === '') {
+            $remainder = '/';
+        }
+        if ($remainder[0] !== '/') {
+            $remainder = '/' . $remainder;
+        }
+
+        $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
+        $query = !empty($parts['query']) ? '?' . (string)$parts['query'] : '';
+        $fragment = !empty($parts['fragment']) ? '#' . (string)$parts['fragment'] : '';
+
+        return \strtolower((string)$parts['scheme']) . '://' . \strtolower((string)$parts['host'])
+            . $port . $remainder . $query . $fragment;
+    }
+
+    /**
+     * Host-only websites must preview on their primary origin, not the admin Host.
+     * Path must already be storefront-relative (backend mount stripped).
+     */
+    private function rewriteFrontendBaseForWebsite(
+        string $frontendBase,
+        ?int $websiteId,
+        ?string $websiteCode,
+    ): string {
+        $code = \strtolower(\trim((string)$websiteCode));
+        $id = $websiteId !== null ? (int)$websiteId : -1;
+        if ($id < 0 && $code === '') {
+            return $frontendBase;
+        }
+        if ($id < 0) {
+            $id = 0;
+        }
+
+        try {
+            /** @var InstallLocalStorefrontBaseResolver $resolver */
+            $resolver = ObjectManager::getInstance(InstallLocalStorefrontBaseResolver::class);
+            $origin = \trim((string)($resolver->resolveForWebsite($id, $code) ?? ''));
+        } catch (\Throwable) {
+            return $frontendBase;
+        }
+        if ($origin === '') {
+            return $frontendBase;
+        }
+
+        $parts = \parse_url($frontendBase);
+        $path = \is_array($parts) && isset($parts['path']) ? (string)$parts['path'] : '/';
+        if ($path === '') {
+            $path = '/';
+        }
+        // Install base may already include site mount (/daocharms); keep only the
+        // storefront route after the mount when rewriting Host.
+        $originParts = \parse_url($origin);
+        $mount = \is_array($originParts) && isset($originParts['path'])
+            ? \rtrim((string)$originParts['path'], '/')
+            : '';
+        if ($mount !== '' && $mount !== '/') {
+            $mountLower = \strtolower($mount);
+            $pathLower = \strtolower($path);
+            if ($pathLower === $mountLower || \str_starts_with($pathLower, $mountLower . '/')) {
+                $path = \substr($path, \strlen($mount));
+                if ($path === false || $path === '') {
+                    $path = '/';
+                }
+                if ($path[0] !== '/') {
+                    $path = '/' . $path;
+                }
+            }
+        }
+        $query = \is_array($parts) && !empty($parts['query']) ? '?' . (string)$parts['query'] : '';
+        $fragment = \is_array($parts) && !empty($parts['fragment']) ? '#' . (string)$parts['fragment'] : '';
+
+        return \rtrim($origin, '/') . ($path === '/' ? '/' : $path) . $query . $fragment;
+    }
+
+    private function appendWebsiteQueryParams(
+        string $url,
+        ?int $websiteId,
+        ?string $websiteCode,
+    ): string {
+        $code = \strtolower(\trim((string)$websiteCode));
+        $id = $websiteId !== null ? (int)$websiteId : -1;
+        if ($id < 0 && $code === '') {
+            return $url;
+        }
+
+        $separator = \str_contains($url, '?') ? '&' : '?';
+        $params = [];
+        if ($id >= 0) {
+            $params['website_id'] = (string)$id;
+        }
+        if ($code !== '') {
+            $params['website_code'] = $code;
+            $params['scope_kind'] = 'website';
+        }
+
+        return $url . $separator . \http_build_query($params);
     }
 
     private function resolvePreviewVersionId(int $themeId, string $pageType, string $status): ?int

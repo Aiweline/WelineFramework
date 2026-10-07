@@ -34,6 +34,7 @@ class ThemePreviewGenerator
         string $area = 'frontend',
         bool $force = false,
         ?string $captureBaseUrl = null,
+        ?int $websiteId = null,
     ): string|false {
         $themeId = $theme->getId();
         if (!$themeId) {
@@ -44,18 +45,63 @@ class ThemePreviewGenerator
             throw new \Exception(__('Theme does not support %{1} area.', [$area]));
         }
 
-        $previewPath = self::getPreviewImagePath($themeId, $area);
+        if ($area === 'frontend' && $websiteId === null) {
+            // Unbound themes capture against Website::ID_DEFAULT (0).
+            $websiteId = self::resolveDefaultCaptureWebsiteId((int)$themeId) ?? 0;
+        }
+
+        $previewPath = self::getPreviewImagePath($themeId, $area, $websiteId);
         if (!$force && is_file($previewPath)) {
             return $previewPath;
         }
 
-        $previewUrl = self::getPreviewUrl($themeId, $area, $captureBaseUrl);
+        if ($captureBaseUrl === null && $area === 'frontend' && $websiteId !== null) {
+            $captureBaseUrl = self::resolveCaptureBaseUrlForWebsite($websiteId);
+        }
+
+        $previewUrl = self::getPreviewUrl(
+            (int)$themeId,
+            $area,
+            $captureBaseUrl,
+            $area === 'frontend' ? $websiteId : null,
+        );
 
         try {
-            return self::captureScreenshot($previewUrl, $previewPath);
+            $saved = self::captureScreenshot($previewUrl, $previewPath);
+            // Keep legacy theme-level alias in sync with the selected/default website shot.
+            if ($area === 'frontend' && $websiteId !== null) {
+                $alias = self::getPreviewImagePath($themeId, $area, null);
+                if ($alias !== $previewPath && is_file($saved)) {
+                    @copy($saved, $alias);
+                }
+            }
+
+            return $saved;
         } catch (\Exception $e) {
             Env::log_error('theme_preview', __('生成主题预览图失败：%{1}', [$e->getMessage()]));
             throw $e;
+        }
+    }
+
+    /**
+     * Bound-website primary origin for frontend capture when caller omits captureBaseUrl.
+     * Avoids painting the default Host (e.g. 长安汉服) onto a Host-only site theme (e.g. grocery).
+     */
+    public static function resolveBoundWebsiteCaptureBaseUrl(int $themeId): ?string
+    {
+        if ($themeId < 1) {
+            return null;
+        }
+
+        try {
+            $websiteId = self::resolveDefaultCaptureWebsiteId($themeId);
+            if ($websiteId === null) {
+                return null;
+            }
+
+            return self::resolveCaptureBaseUrlForWebsite($websiteId);
+        } catch (\Throwable) {
+            return null;
         }
     }
 
@@ -213,7 +259,14 @@ class ThemePreviewGenerator
             return null;
         }
 
-        $previewPath = self::getPreviewImagePath($themeId, $area);
+        $websiteId = isset($task['website_id']) && $task['website_id'] !== null
+            ? max(0, (int)$task['website_id'])
+            : null;
+        $previewPath = self::getPreviewImagePath(
+            $themeId,
+            $area,
+            $area === 'frontend' ? $websiteId : null,
+        );
 
         if (!$force && is_file($previewPath)) {
             return null;
@@ -224,10 +277,16 @@ class ThemePreviewGenerator
             return null;
         }
 
+        $captureBase = isset($task['capture_base_url']) ? (string)$task['capture_base_url'] : null;
+        if (($captureBase === null || $captureBase === '') && $area === 'frontend' && $websiteId !== null) {
+            $captureBase = self::resolveCaptureBaseUrlForWebsite($websiteId);
+        }
+
         $previewUrl = self::getPreviewUrl(
             $themeId,
             $area,
-            isset($task['capture_base_url']) ? (string)$task['capture_base_url'] : null,
+            $captureBase,
+            $area === 'frontend' ? $websiteId : null,
         );
         $timestamp = time();
         $fullUrl = $previewUrl . (str_contains($previewUrl, '?') ? '&' : '?') . 't=' . $timestamp;
@@ -367,11 +426,142 @@ class ThemePreviewGenerator
         return $finished;
     }
 
-    public static function getPreviewImagePath(int $themeId, string $area = 'frontend'): string
+    public static function getPreviewImagePath(int $themeId, string $area = 'frontend', ?int $websiteId = null): string
     {
         $uploadDir = PUB . self::PREVIEW_DIR;
-        $filename = "theme_{$themeId}_{$area}.png";
+        $area = $area === 'backend' ? 'backend' : 'frontend';
+        if ($area === 'frontend' && $websiteId !== null && $websiteId >= 0) {
+            $filename = "theme_{$themeId}_{$area}_w{$websiteId}.png";
+        } else {
+            $filename = "theme_{$themeId}_{$area}.png";
+        }
+
         return $uploadDir . DS . $filename;
+    }
+
+    /**
+     * Public relative URL for a theme preview shot (leading slash).
+     */
+    public static function getPreviewImagePublicUrl(int $themeId, string $area = 'frontend', ?int $websiteId = null): string
+    {
+        // Website-scoped cards must not fall back to the legacy shared PNG —
+        // that paints another bound site (e.g. Hanfu) onto grocery Host cards.
+        $abs = self::getPreviewImagePath($themeId, $area, $websiteId);
+        if (!is_file($abs)) {
+            return '';
+        }
+        $relative = self::normalizePreviewRelativePath($abs);
+        $url = '/' . ltrim($relative, '/');
+        $url .= '?v=' . (string)filemtime($abs);
+
+        return $url;
+    }
+
+    /**
+     * Install-local storefront base for capture (Host of this install + site mount).
+     * Never uses Website.URL's public domain as screenshot Host.
+     */
+    public static function resolveCaptureBaseUrlForWebsite(int $websiteId, string $websiteCode = ''): ?string
+    {
+        if ($websiteId < 0) {
+            return null;
+        }
+        try {
+            /** @var InstallLocalStorefrontBaseResolver $resolver */
+            $resolver = ObjectManager::getInstance(InstallLocalStorefrontBaseResolver::class);
+
+            return self::normalizeCaptureBaseUrl(
+                $resolver->resolveForWebsite($websiteId, $websiteCode),
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Ensure frontend homepage preview PNG for theme + website (current version).
+     * Caller supplies only theme_id + website_id — no public domain.
+     *
+     * @return array{ok:bool,image_url:string,image_path:string,theme_id:int,website_id:int,message?:string}
+     */
+    public static function ensureFrontendPreviewImage(
+        int $themeId,
+        int $websiteId,
+        bool $force = false,
+    ): array {
+        if ($themeId < 1 || $websiteId < 0) {
+            return [
+                'ok' => false,
+                'image_url' => '',
+                'image_path' => '',
+                'theme_id' => $themeId,
+                'website_id' => $websiteId,
+                'message' => (string)__('theme_id and website_id are required'),
+            ];
+        }
+
+        /** @var WelineTheme $theme */
+        $theme = ObjectManager::getInstance(WelineTheme::class);
+        $theme->load($themeId);
+        if ((int)$theme->getId() !== $themeId) {
+            return [
+                'ok' => false,
+                'image_url' => '',
+                'image_path' => '',
+                'theme_id' => $themeId,
+                'website_id' => $websiteId,
+                'message' => (string)__('主题不存在'),
+            ];
+        }
+
+        try {
+            $imagePath = self::generatePreviewImage($theme, 'frontend', $force, null, $websiteId);
+            if ($imagePath === false || !\is_file((string)$imagePath)) {
+                return [
+                    'ok' => false,
+                    'image_url' => '',
+                    'image_path' => '',
+                    'theme_id' => $themeId,
+                    'website_id' => $websiteId,
+                    'message' => (string)__('预览图生成失败'),
+                ];
+            }
+            $relative = self::normalizePreviewRelativePath((string)$imagePath);
+            $publicUrl = self::getPreviewImagePublicUrl($themeId, 'frontend', $websiteId);
+
+            return [
+                'ok' => true,
+                'image_url' => $publicUrl !== '' ? $publicUrl : ('/' . \ltrim($relative, '/')),
+                'image_path' => $relative,
+                'theme_id' => $themeId,
+                'website_id' => $websiteId,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'image_url' => '',
+                'image_path' => '',
+                'theme_id' => $themeId,
+                'website_id' => $websiteId,
+                'message' => $e->getMessage() !== '' ? $e->getMessage() : (string)__('预览图生成失败'),
+            ];
+        }
+    }
+
+    public static function resolveDefaultCaptureWebsiteId(int $themeId): ?int
+    {
+        if ($themeId < 1) {
+            return null;
+        }
+        try {
+            /** @var ThemeApplicationUsageService $usage */
+            $usage = ObjectManager::getInstance(ThemeApplicationUsageService::class);
+            $edit = $usage->resolveEditWebsiteForTheme($themeId);
+
+            return max(0, (int)($edit['website_id'] ?? 0));
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public static function normalizePreviewRelativePath(string $path): string
@@ -394,8 +584,12 @@ class ThemePreviewGenerator
         return \ltrim($normalized, '/');
     }
 
-    public static function getPreviewUrl(int $themeId, string $area = 'frontend', ?string $captureBaseUrl = null): string
-    {
+    public static function getPreviewUrl(
+        int $themeId,
+        string $area = 'frontend',
+        ?string $captureBaseUrl = null,
+        ?int $websiteId = null,
+    ): string {
         $area = $area === 'backend' ? 'backend' : 'frontend';
         $query = $area === 'backend'
             ? [
@@ -409,11 +603,23 @@ class ThemePreviewGenerator
                 'preview_area' => 'frontend',
                 'editor_area' => 'frontend',
                 'page_type' => 'homepage',
+                // Current draft when present, else live — card/screenshot contract.
+                'preview_mode' => 'version',
                 'preview_gen' => '1',
             ];
+        if ($area === 'frontend' && $websiteId !== null && $websiteId >= 0) {
+            $query['website_id'] = $websiteId;
+        }
         $query = self::appendCaptureSignature($query, $themeId, $area);
 
         $base = self::normalizeCaptureBaseUrl($captureBaseUrl);
+        if ($base === null && $area === 'frontend') {
+            $base = self::resolveBoundWebsiteCaptureBaseUrl($themeId);
+        }
+        // Headless Runner has no HTTP Host — never fall back to a relative Url::getFrontendUrl.
+        if ($base === null && $area === 'frontend') {
+            $base = self::resolveCaptureBaseUrlForWebsite(0);
+        }
         if ($base !== null) {
             if ($area === 'backend') {
                 $backendPrefix = \trim((string)Env::getAreaRoutePrefix('backend'), '/');
@@ -422,7 +628,7 @@ class ThemePreviewGenerator
                 $path = '/theme/frontend/theme-preview/gateway';
             }
 
-            return $base . $path . '?' . \http_build_query($query);
+            return \rtrim($base, '/') . $path . '?' . \http_build_query($query);
         }
 
         /** @var \Weline\Framework\Http\Url $url */
@@ -453,8 +659,12 @@ class ThemePreviewGenerator
 
         $host = (string)$parts['host'];
         $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
+        $path = isset($parts['path']) ? \rtrim((string)$parts['path'], '/') : '';
+        if ($path === '/' || $path === '') {
+            $path = '';
+        }
 
-        return $scheme . '://' . $host . $port;
+        return $scheme . '://' . $host . $port . $path;
     }
 
     /**

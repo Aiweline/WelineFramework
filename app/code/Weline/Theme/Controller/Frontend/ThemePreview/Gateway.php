@@ -70,7 +70,18 @@ class Gateway extends FrontendController
         $versionId = (int)$this->request->getParam('version_id', 0);
         $status = (string)$this->request->getParam('status', 'draft');
         $previewMode = (string)$this->request->getParam('preview_mode', 'default');
+        if ($this->isTrustedPreviewCapture() && $previewMode === 'default') {
+            $previewMode = 'version';
+        }
         $scopeStr = $scope !== null && $scope !== '' ? trim((string)$scope) : null;
+        $websiteIdRaw = $this->request->getParam('website_id', null);
+        $websiteId = ($websiteIdRaw === null || $websiteIdRaw === '')
+            ? null
+            : \max(0, (int)$websiteIdRaw);
+        $websiteCode = \strtolower(\trim((string)$this->request->getParam('website_code', '')));
+        if ($websiteCode === '') {
+            $websiteCode = null;
+        }
 
         /** @var ThemePreviewEntryApplication $app */
         $app = ObjectManager::getInstance(ThemePreviewEntryApplication::class);
@@ -85,6 +96,8 @@ class Gateway extends FrontendController
             $status,
             $editorArea,
             $previewMode,
+            $websiteId,
+            $websiteCode,
         );
 
         if (!$result['ok']) {
