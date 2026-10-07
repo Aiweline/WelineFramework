@@ -40,6 +40,16 @@
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(address));
             localStorage.setItem(SYNC_FLAG_KEY, 'false'); // 标记为未同步
+            try {
+                const code = String(
+                    (address && (address.country_code || address.countryCode)) || ''
+                ).replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 2);
+                window.dispatchEvent(new CustomEvent('weline:delivery-country-changed', {
+                    detail: { country_code: code, source: 'shipping-location' }
+                }));
+            } catch (evErr) {
+                // ignore listeners
+            }
         } catch (e) {
             console.error('保存地址到浏览器失败:', e);
         }

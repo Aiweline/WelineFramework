@@ -1,0 +1,96 @@
+<?php
+/**
+ * PDP 买盒配送模式徽章（仓国 × 配送目的国；文案由部件 JS 改写）。
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {product-delivery-mode}
+ * @widget.name {商品配送模式提示}
+ * @widget.description {产品主要信息：按履约仓国与配送至国家显示快送/跨境/标准配送徽章}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["product"]}
+ * @widget.supports {["layout-product-delivery-mode","product-delivery-mode","shipping-delivery-mode"]}
+ * @widget.default_injections {[{"layout_type":"product","layout_option":"default","slot":"product-delivery-mode","area":"content","sort_order":10,"required":true,"reason":"产品买盒配送徽章由 Shipping 提供","config":{}}]}
+ * @widget.source {Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_Shipping::css/widgets/product-delivery-mode.css,Weline_Shipping::js/widgets/widget-product-delivery-mode-1.js}
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Shipping\Service\StorefrontOfferOriginCountryService;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('product-delivery-mode');
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    (string)$value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
+    || (bool)($this->getData('editor_mode') ?? false);
+
+$offer = [];
+try {
+    if (class_exists(StorefrontOfferResolver::class)) {
+        $offer = StorefrontOfferResolver::resolve($this);
+    }
+} catch (\Throwable) {
+    $offer = [];
+}
+
+$sellable = !empty($offer['sellable']);
+$quoteOnly = !empty($offer['quote_only']);
+$requiresShipping = !isset($offer['requires_shipping']) || !empty($offer['requires_shipping']);
+$showShell = $isPreviewMode || ($sellable && $requiresShipping && !$quoteOnly);
+if (!$showShell) {
+    return;
+}
+
+$offerId = max(0, (int)($offer['offer_id'] ?? $offer['product_offer_id'] ?? 0));
+$originCountry = '';
+try {
+    $originCountry = ObjectManager::getInstance(StorefrontOfferOriginCountryService::class)
+        ->resolveForOffer($offerId);
+} catch (\Throwable) {
+    $originCountry = '';
+}
+
+$labels = [
+    'local_fast' => [
+        'badge' => WidgetI18n::label('快送'),
+        'helper' => WidgetI18n::label('同仓发往本地区，通常更快送达（时效以结算页为准）'),
+    ],
+    'cross_border' => [
+        'badge' => WidgetI18n::label('跨境配送'),
+        'helper' => WidgetI18n::label('制作或备货时间与国际运输时间分开计算'),
+    ],
+    'standard' => [
+        'badge' => WidgetI18n::label('标准配送'),
+        'helper' => WidgetI18n::label('运费与预计时效以结算页为准'),
+    ],
+];
+$note = WidgetI18n::label('下单前请联系客服核实所选款式及目的地的预计发货与运输时间');
+?>
+<div class="shipping-delivery-mode <?= $escape($scope->cssClass) ?>"
+     data-widget-module="Weline_Shipping"
+     data-widget-code="product-delivery-mode"
+     data-uid="<?= $escape($scope->uid) ?>"
+     data-js-ns="<?= $escape($scope->jsNs) ?>"
+     data-testid="product-delivery-mode"
+     data-shipping-delivery-mode
+     data-origin-country="<?= $escape($originCountry) ?>"
+     weline-code="<?= $escape($scope->code) ?>">
+    <p class="shipping-delivery-mode__prime" data-shipping-delivery-prime>
+        <span class="shipping-delivery-mode__badge" data-shipping-delivery-badge></span>
+        <span class="shipping-delivery-mode__helper" data-shipping-delivery-helper></span>
+    </p>
+    <p class="shipping-delivery-mode__note" data-shipping-delivery-note><?= $escape($note) ?></p>
+</div>
+<span hidden
+      data-widget-script="shipping-product-delivery-mode-1"
+      data-v0="<?= $escape((string)json_encode($labels, $jsonFlags)) ?>"
+      data-v1="<?= $escape($originCountry) ?>"></span>

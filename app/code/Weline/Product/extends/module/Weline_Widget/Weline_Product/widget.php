@@ -45,6 +45,12 @@ return [
                 'slot_type' => 'layout-product-selling-mode',
                 'max' => 3,
             ],
+            'product-delivery-mode' => [
+                'name' => '配送模式提示',
+                'accepts' => ['shipping', 'product', 'delivery-mode'],
+                'slot_type' => 'layout-product-delivery-mode',
+                'max' => 2,
+            ],
         ],
         'supports' => [
             'layout-product-main',

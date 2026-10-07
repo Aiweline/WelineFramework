@@ -11,7 +11,7 @@ use Weline\Theme\Helper\WidgetI18n;
  * @widget.name {产品主要信息}
  * @widget.description {商品详情主信息：图库、标题、SKU、价格、购买操作槽与规格详情}
  * @widget.is_container {true}
- * @widget.slots {"product-purchase-actions":{"name":"购买操作","accepts":["product","cart","checkout"],"slot_type":"layout-product-purchase-actions","max":6},"product-express-payment":{"name":"快捷支付","accepts":["payment","express-checkout","express-payment","product-express-payment"],"slot_type":"layout-product-express-payment","max":3},"product-selling-mode":{"name":"售卖模式","accepts":["product","b2b","selling-mode"],"slot_type":"layout-product-selling-mode","max":3}}
+ * @widget.slots {"product-purchase-actions":{"name":"购买操作","accepts":["product","cart","checkout"],"slot_type":"layout-product-purchase-actions","max":6},"product-express-payment":{"name":"快捷支付","accepts":["payment","express-checkout","express-payment","product-express-payment"],"slot_type":"layout-product-express-payment","max":3},"product-selling-mode":{"name":"售卖模式","accepts":["product","b2b","selling-mode"],"slot_type":"layout-product-selling-mode","max":3},"product-delivery-mode":{"name":"配送模式提示","accepts":["shipping","product","delivery-mode"],"slot_type":"layout-product-delivery-mode","max":2}}
  * @widget.type {product}
  * @widget.area {frontend}
  * @widget.position {["content"]}
@@ -440,7 +440,6 @@ $stockTone = ($currencyUnavailable && $stock > 0) || (!$quoteOnly && $stock > 0 
     ? 'in-stock'
     : 'out-stock';
 $requiresShipping = !isset($offer['requires_shipping']) || !empty($offer['requires_shipping']);
-$showPrimeBadge = $sellable && $requiresShipping && !$quoteOnly;
 $maxQty = $quoteOnly ? 1 : max(1, min(30, $stock > 0 ? $stock : 30));
 $tobMoq = 5;
 $tobStep = 5;
@@ -983,19 +982,24 @@ if ($productBreadcrumbs === []) {
                 <p class="product-native-detail__stock product-native-detail__stock--<?= $escape($stockTone) ?>">
                     <?= $escape($stockLabel) ?>
                 </p>
-                <?php if ($showPrimeBadge): ?>
-                    <p class="product-native-detail__prime">
-                        <span class="product-native-detail__prime-badge"><?= __('跨境配送') ?></span>
-                        <span><?= __('制作或备货时间与国际运输时间分开计算') ?></span>
-                    </p>
-                <?php endif; ?>
+                <w:slot id="product-delivery-mode"
+                        name="<?= $escape(__('配送模式提示')) ?>"
+                        accept="layout-product-delivery-mode,product-delivery-mode,shipping-delivery-mode"
+                        multiple="true"
+                        position="content"
+                        wrapper="div"
+                        class="product-native-detail__delivery-mode"
+                        weline-code="product.frontend.detail.delivery_mode">
+                </w:slot>
+                <?php if ($currencyUnavailable || !$sellable): ?>
                 <p class="product-native-detail__delivery">
                     <?php if ($currencyUnavailable): ?>
                         <?= __('当前货币暂不可用') ?>
                     <?php else: ?>
-                        <?= $sellable ? __('下单前请联系客服核实所选款式及目的地的预计发货与运输时间') : __('当前规格暂不可售') ?>
+                        <?= __('当前规格暂不可售') ?>
                     <?php endif; ?>
                 </p>
+                <?php endif; ?>
 
                 <?php
                     $offerMessage = trim((string)($offer['message'] ?? ''));

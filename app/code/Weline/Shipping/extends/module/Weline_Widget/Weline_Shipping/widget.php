@@ -3,6 +3,34 @@
 declare(strict_types=1);
 
 return [
+    'product-delivery-mode' => [
+        'name' => '商品配送模式提示',
+        'description' => '产品主要信息：按履约仓国与配送至国家显示快送/跨境/标准配送徽章；文案由部件 JS 改写。',
+        'type' => 'product',
+        'code' => 'product-delivery-mode',
+        'area' => 'frontend',
+        'template' => 'Weline_Shipping::templates/frontend/widgets/product-delivery-mode.phtml',
+        'page_layouts' => ['product'],
+        'position' => ['content'],
+        'slot' => 'product-delivery-mode',
+        'supports' => [
+            'layout-product-delivery-mode',
+            'product-delivery-mode',
+            'shipping-delivery-mode',
+        ],
+        'placement' => 'injection',
+        'default_injections' => [[
+            'layout_type' => 'product',
+            'layout_option' => 'default',
+            'slot' => 'product-delivery-mode',
+            'area' => 'content',
+            'sort_order' => 10,
+            'required' => true,
+            'reason' => '产品买盒配送徽章由 Shipping 提供',
+            'config' => [],
+        ]],
+        'params' => [],
+    ],
     'checkout-shipping-address' => [
         'name' => '结账收货地址',
         'description' => '结账页收货信息：已存地址选择标签 + 主题地址级联。',
