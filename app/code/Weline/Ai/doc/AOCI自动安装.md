@@ -39,6 +39,8 @@
 
 此安装流程不修改项目 AOCI 规则、不执行 `init` 或 `scan`，不自动构建代码语义索引。Weline 继续提供硬规则、技能和准备流程；AOCI 的项目认知索引与漂移维护仍为独立能力。
 
+**项目认知资产不进 Git**：`aoci.txt` / `aoci.code.txt` / `aoci.meta.txt` / `.aoci/baseline.json` / `.aoci/config.json` 等由本机 `aoci` 生成与维护；新环境靠自动安装程序后再本地 bootstrap/maintain 重建，禁止把大索引当仓库正文提交。
+
 ## 验证
 
 针对性用例：`php app/code/Weline/Ai/Mcp/tests/aoci-installation.php`。

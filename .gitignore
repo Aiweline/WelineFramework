@@ -307,3 +307,9 @@ app/code/Weline/Ai/Test/Http/Backend/batch-test-results.json
 !/app/design/Weline/*/scripts/**
 !/app/design/Weline/*/Sample/
 !/app/design/Weline/*/Sample/**
+
+# AOCI 仓库级认知资产（本机生成；ensure/prepare 只装程序，索引不进 Git）
+/aoci.txt
+/aoci.code.txt
+/aoci.meta.txt
+/aoci.database.txt

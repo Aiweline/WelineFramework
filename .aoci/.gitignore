@@ -8,8 +8,5 @@
 # 本边界文件自身必须进入 Git。
 !.gitignore
 
-# AOCI 正式认知与治理资产。
-!baseline.json
-!database-baseline.json
-!config.json
-!curation.json
+# 正式认知正文、Baseline、本机 config/curation 均留本机生成与维护，不进 Git。
+# （ensure/prepare 装程序；索引由 aoci init/maintain 现场生成，可重建。）
