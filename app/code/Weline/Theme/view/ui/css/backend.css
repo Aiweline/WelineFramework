@@ -35,8 +35,8 @@
         padding-inline: var(--backend-layout-inline, var(--weline-space-5));
     }
     .w-backend-sidebar { grid-area: sidebar; position: sticky; inset-block-start: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; overscroll-behavior: contain; border-inline-end: 1px solid var(--backend-theme-border); background: var(--backend-theme-sidebar-bg); }
-    .w-backend-topbar { grid-area: topbar; position: sticky; inset-block-start: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: var(--weline-space-3); padding-inline: var(--backend-layout-inline, var(--weline-space-5)); border-bottom: 1px solid var(--backend-theme-border); background: color-mix(in srgb, var(--backend-theme-header-bg) 94%, transparent); backdrop-filter: blur(12px); }
-    .w-backend-main { grid-area: main; min-width: 0; max-width: 100%; padding-block: var(--backend-layout-block, var(--weline-space-6)); padding-inline: var(--backend-layout-inline, var(--weline-space-5)); overflow-x: clip; }
+    .w-backend-topbar { grid-area: topbar; position: sticky; inset-block-start: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: var(--weline-space-3); min-width: 0; max-width: 100%; padding-inline-start: var(--backend-layout-inline, var(--weline-space-5)); padding-inline-end: var(--backend-layout-inline, var(--weline-space-5)); border-bottom: 1px solid var(--backend-theme-border); background: color-mix(in srgb, var(--backend-theme-header-bg) 94%, transparent); backdrop-filter: blur(12px); }
+    .w-backend-main { grid-area: main; min-width: 0; max-width: 100%; padding-block: var(--backend-layout-block, var(--weline-space-6)); padding-inline-start: var(--backend-layout-inline, var(--weline-space-5)); padding-inline-end: var(--backend-layout-inline, var(--weline-space-5)); overflow-x: clip; scrollbar-gutter: stable both-edges; }
     .w-backend-page { display: grid; gap: var(--weline-space-5); min-width: 0; max-width: 100%; }
     .w-backend-page > * { min-width: 0; max-width: 100%; }
     .w-backend-page__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--weline-space-3); min-width: 0; max-width: 100%; }
@@ -364,7 +364,8 @@
     .w-backend-topbar__logo--small, .w-backend-topbar__logo--dark { display: none; }
     [data-theme="dark"] .w-backend-topbar__logo--light { display: none; }
     [data-theme="dark"] .w-backend-topbar__logo--dark { display: block; }
-    .w-backend-topbar__actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: var(--weline-space-1); }
+    .w-backend-topbar__actions { display: flex; flex: 0 1 auto; min-width: 0; align-items: center; justify-content: flex-end; gap: var(--weline-space-1); flex-wrap: nowrap; }
+    .w-backend-topbar__actions > * { flex: 0 0 auto; }
     .w-backend-topbar__menu { position: relative; }
     .w-backend-topbar__label { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .w-backend-sidebar-toggle { display: none; }
@@ -806,7 +807,11 @@
     @layer components {
         .w-backend-topbar__label { display: none; }
         .w-backend-topbar__brand > span { display: none; }
-        .w-backend-topbar__actions { gap: 0; }
+        .w-backend-topbar__center { display: none; }
+        .w-backend-topbar__actions { gap: var(--weline-space-1); max-width: 100%; overflow: hidden; }
+        /* 窄屏顶栏：语种只留旗标，用户只留头像，避免图标互相叠压 */
+        .w-backend-topbar__actions .w-language-switcher__current { display: none; }
+        .w-backend-topbar__actions .w-backend-user > .w-icon:last-child { display: none; }
         .w-dashboard-layout-grid { grid-template-columns: minmax(0, 1fr); }
         .w-dashboard-region-summary,
         .w-dashboard-region-analysis,

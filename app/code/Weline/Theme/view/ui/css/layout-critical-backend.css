@@ -1,4 +1,7 @@
-/* Layout-critical budget (backend). Full rules live in weline-backend.css / foundation. */
+/* Layout-critical budget (backend). Full rules live in weline-backend.css / foundation.
+ * Unlayered on purpose (FOUC): must mirror backend.css shell breakpoints, or this file
+ * beats @layer layout and leaves wrong column widths (empty mobile rail / uncollapsed desktop).
+ */
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; line-height: 1.5; }
 body {
@@ -14,14 +17,57 @@ body {
     grid-template-areas: "sidebar topbar" "sidebar main";
 }
 .w-backend-sidebar { grid-area: sidebar; }
-.w-backend-topbar { grid-area: topbar; }
+.w-backend-topbar {
+    grid-area: topbar;
+    min-width: 0;
+    max-width: 100%;
+    /* 与 main 共用同一 inline token，左右对称 */
+    padding-inline-start: var(--backend-layout-inline, var(--weline-space-5, 1.25rem));
+    padding-inline-end: var(--backend-layout-inline, var(--weline-space-5, 1.25rem));
+}
 .w-backend-main {
     grid-area: main;
     min-width: 0;
     max-width: 100%;
     padding-block: var(--backend-layout-block, var(--weline-space-6, 1.5rem));
-    padding-inline: var(--backend-layout-inline, var(--weline-space-5, 1.25rem));
+    padding-inline-start: var(--backend-layout-inline, var(--weline-space-5, 1.25rem));
+    padding-inline-end: var(--backend-layout-inline, var(--weline-space-5, 1.25rem));
     overflow-x: clip;
+    /* 滚动条占位左右对称，避免右侧被 scrollbar 吃掉 gutter */
+    scrollbar-gutter: stable both-edges;
 }
 .w-backend-page { display: grid; gap: var(--weline-space-5, 1.25rem); min-width: 0; max-width: 100%; }
+.w-backend-page > * { min-width: 0; max-width: 100%; }
 .w-backend-standalone { display: grid; min-block-size: 100vh; align-content: start; background: var(--backend-theme-canvas, #f1f5f9); }
+
+/* 桌面收起：critical 必须自带，否则无层桌面双列压过 @layer 的 collapsed 宽 */
+@media (min-width: 64rem) {
+    html[data-backend-sidebar-collapsed="true"] .w-backend-shell,
+    .w-backend-shell[data-sidebar-collapsed="true"] {
+        grid-template-columns: var(--backend-theme-sidebar-collapsed-width, 4.375rem) minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 63.99rem) {
+    .w-backend-shell {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "topbar" "main";
+    }
+    .w-backend-sidebar {
+        position: fixed;
+        inset-block: 0;
+        inset-inline-start: 0;
+        z-index: 40;
+        width: min(var(--backend-theme-sidebar-width, 16rem), 88vw);
+        translate: -100% 0;
+        visibility: hidden;
+    }
+}
+
+/* 与 backend.css @media (max-width: 47.99rem) 对齐：内联无层，击败旧静态版本里 @layer 的顶栏规则 */
+@media (max-width: 47.99rem) {
+    .w-backend-topbar__center { display: none; }
+    .w-backend-topbar__label { display: none; }
+    .w-backend-topbar__actions .w-language-switcher__current { display: none; }
+    .w-backend-topbar__actions .w-backend-user > .w-icon:last-child { display: none; }
+}
