@@ -198,6 +198,69 @@
         root._wNotificationKeyHandler = onKey;
     }
 
+    function applyReadTransitionBadge(root) {
+        const badge = root.querySelector('.w-notification-detail__read-badge');
+        if (!(badge instanceof HTMLElement)) {
+            return;
+        }
+        const label = root.getAttribute('data-w-read-transition-label') || '';
+        if (!label) {
+            return;
+        }
+        badge.setAttribute('data-tone', 'success');
+        // Keep any leading icon SVG; replace trailing text nodes with transition label.
+        const nodes = Array.from(badge.childNodes);
+        nodes.forEach(function (node) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                badge.removeChild(node);
+            }
+        });
+        badge.appendChild(document.createTextNode(label));
+    }
+
+    function markDetailViewIfNeeded(root) {
+        if ((root.getAttribute('data-w-mode') || '') !== 'detail') {
+            return;
+        }
+        if (root.getAttribute('data-w-was-unread') !== '1') {
+            return;
+        }
+        if (root.getAttribute('data-w-server-marked') === '1') {
+            applyReadTransitionBadge(root);
+            return;
+        }
+        const url = root.getAttribute('data-w-mark-url') || '';
+        const notificationId = root.getAttribute('data-w-notification-id') || '';
+        if (!url || !notificationId) {
+            return;
+        }
+        if (root.dataset.wNotificationMarking === '1') {
+            return;
+        }
+        root.dataset.wNotificationMarking = '1';
+        postForm(url, { notification_id: String(notificationId) })
+            .then(function () {
+                root.setAttribute('data-w-server-marked', '1');
+                applyReadTransitionBadge(root);
+                // Soft-refresh chrome unread: drop badge digits by one when present.
+                document.querySelectorAll('.w-notification-trigger__badge').forEach(function (node) {
+                    const raw = String(node.textContent || '').trim();
+                    if (raw === '99+') {
+                        return;
+                    }
+                    const n = parseInt(raw, 10);
+                    if (!Number.isFinite(n) || n <= 1) {
+                        node.remove();
+                        return;
+                    }
+                    node.textContent = String(n - 1);
+                });
+            })
+            .catch(function () {
+                root.dataset.wNotificationMarking = '0';
+            });
+    }
+
     function bindRoot(root) {
         if (!(root instanceof HTMLElement) || root.dataset.wNotificationBound === '1') {
             return;
@@ -222,6 +285,7 @@
         });
 
         bindKeyboard(root);
+        markDetailViewIfNeeded(root);
     }
 
     function start() {

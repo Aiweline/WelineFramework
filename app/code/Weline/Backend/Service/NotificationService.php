@@ -11,6 +11,7 @@ use Weline\Backend\Model\SystemNotification;
 use Weline\Backend\Model\UserNotificationStatus;
 use Weline\Backend\Model\UserNotificationSubscription;
 use Weline\Backend\Model\NotificationChannel;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Theme\Block\Partials;
 
@@ -116,7 +117,7 @@ class NotificationService
                 'avatar'            => $data['avatar'] ?? 'bell',
                 'is_icon'           => (bool) ($data['is_icon'] ?? true),
                 'is_img'            => (bool) ($data['is_img'] ?? false),
-                'is_read'           => (bool) ($data['is_read'] ?? false),
+                'is_read'           => self::normalizeIsReadFlag($data['is_read'] ?? 0),
                 'read_at'           => $data['read_at'] ?? null,
                 'notification_time' => $data['notification_time'] ?? '',
                 'external_channels' => json_decode($data['external_channels'] ?? '[]', true) ?: [],
@@ -280,15 +281,15 @@ class NotificationService
     /**
      * Drop process-local notification snapshots and bump a session revision so
      * chrome topbar partial cache keys miss across WLS workers after mark-as-read.
+     *
+     * Order matters for the same HTTP response that opens a detail page:
+     * bump inbox rev → drop request-memoized auth context → clear partial HTML,
+     * otherwise chrome may rebuild with a stale RequestContext auth memo that
+     * still embeds the pre-read inbox revision and keep the old unread badge.
      */
     private function invalidateInboxPresentation(int $userId): void
     {
         NotificationBlock::clearCache($userId > 0 ? $userId : null);
-        try {
-            Partials::clearOutputCache();
-        } catch (\Throwable) {
-            // Theme partial cache is best-effort for the current worker.
-        }
 
         try {
             $session = SessionFactory::getInstance()->createBackendSession();
@@ -300,6 +301,21 @@ class NotificationService
             }
         } catch (\Throwable) {
             // Session may be unavailable in CLI / warmup contexts.
+        }
+
+        try {
+            Partials::clearBackendPartialAuthContextMemo();
+        } catch (\Throwable) {
+            // Theme owns the memo keys; fall through to clearOutputCache.
+            RequestContext::remove('theme.backend_partial_auth_context');
+            RequestContext::remove('theme.backend_partial_auth_context.user');
+            RequestContext::remove('theme.backend_partial_auth_context.role');
+        }
+
+        try {
+            Partials::clearOutputCache();
+        } catch (\Throwable) {
+            // Theme partial cache is best-effort for the current worker.
         }
     }
 
@@ -461,12 +477,29 @@ class NotificationService
             'avatar'            => $data['avatar'] ?? 'bell',
             'is_icon'           => (bool) ($data['is_icon'] ?? true),
             'is_img'            => (bool) ($data['is_img'] ?? false),
-            'is_read'           => (bool) ($data['is_read'] ?? false),
+            'is_read'           => self::normalizeIsReadFlag($data['is_read'] ?? 0),
             'read_at'           => $data['read_at'] ?? null,
             'notification_time' => $data['notification_time'] ?? '',
             'external_channels' => json_decode($data['external_channels'] ?? '[]', true) ?: [],
             'metadata'          => json_decode($data['metadata'] ?? '[]', true) ?: [],
         ];
+    }
+
+    /**
+     * PDO may return is_read as int 0 or string "0". Never use (bool)$value:
+     * (bool)"0" === true in PHP and would treat unread as read.
+     */
+    private static function normalizeIsReadFlag(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return ((int) $value) === 1;
+        }
+        $raw = \strtolower(\trim((string) $value));
+
+        return $raw === '1' || $raw === 'true' || $raw === 'yes';
     }
 
     /**

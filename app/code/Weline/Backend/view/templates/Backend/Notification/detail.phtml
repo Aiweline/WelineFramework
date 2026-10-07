@@ -27,9 +27,25 @@ $contentHtml = \nl2br($h($content));
 $notificationTime = (string)($notification['notification_time'] ?? '');
 $displayTime = \preg_replace('/\.\d+$/', '', $notificationTime) ?? $notificationTime;
 $isRead = !empty($notification['is_read']);
-$readTone = $isRead ? 'success' : 'info';
-$readIcon = $isRead ? 'check' : 'circle';
-$readLabel = $isRead ? (string)__('已读') : (string)__('未读');
+$wasUnread = !empty($notification['was_unread']);
+$justMarkedRead = !empty($notification['just_marked_read']);
+$serverMarkedRead = !empty($notification['server_marked_read']);
+$notificationId = (int)($notification['notification_id'] ?? 0);
+// Server-marked real view →「未读→已读」; already-read →「已读」;
+// prefetch of unread may still be unread so show「未读」until client marks.
+if ($justMarkedRead || ($wasUnread && $serverMarkedRead)) {
+    $readTone = 'success';
+    $readIcon = 'check';
+    $readLabel = (string)__('未读') . '→' . (string)__('已读');
+} elseif ($wasUnread && !$serverMarkedRead) {
+    $readTone = 'info';
+    $readIcon = 'circle';
+    $readLabel = (string)__('未读');
+} else {
+    $readTone = 'success';
+    $readIcon = 'check';
+    $readLabel = (string)__('已读');
+}
 $topicCode = (string)($notification['topic_code'] ?? '');
 $topicName = (string)($notification['topic_name'] ?? $topicCode);
 $hasTopicCode = $topicCode !== '';
@@ -105,6 +121,10 @@ $hasChannels = $channelLabels !== [];
     class="w-notification-detail w-stack"
     data-w-component="notification-center"
     data-w-mode="detail"
+    data-w-notification-id="<?= (int)$notificationId ?>"
+    data-w-was-unread="<?= $wasUnread ? '1' : '0' ?>"
+    data-w-server-marked="<?= $serverMarkedRead ? '1' : '0' ?>"
+    data-w-mark-url="@backend-url{'system/backend/notification/markRead'}"
     data-w-prev-url="<?php if ($hasPrev): ?>@backend-url{'system/backend/notification/detail'|['id' => $prevId]}<?php endif; ?>"
     data-w-next-url="<?php if ($hasNext): ?>@backend-url{'system/backend/notification/detail'|['id' => $nextId]}<?php endif; ?>"
     data-w-mark-topic-url="@backend-url{'system/backend/notification/markTopicRead'}"
@@ -112,12 +132,13 @@ $hasChannels = $channelLabels !== [];
     data-w-success-message="<?= $attrSuccessMessage ?>"
     data-w-failure-message="<?= $attrFailureMessage ?>"
     data-w-request-failure-message="<?= $attrRequestFailureMessage ?>"
+    data-w-read-transition-label="<?= $h((string)__('未读') . '→' . (string)__('已读')) ?>"
 >
     <header class="w-notification-detail__chrome">
         <a href="@backend-url{'system/backend/notification'}" class="w-notification-detail__back"><?php echo $iconArrowLeft; ?><lang>返回通知中心</lang></a>
         <nav class="w-notification-detail__pager" aria-label="<?= $attrAdjacentNav ?>">
 <?php if ($hasPrev) { ?>
-            <a href="@backend-url{'system/backend/notification/detail'|['id' => $prevId]}" class="w-button" title="<?= $attrPrevTitle ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+            <a href="@backend-url{'system/backend/notification/detail'|['id' => $prevId]}" class="w-button" title="<?= $attrPrevTitle ?>" data-tone="neutral" data-variant="outline" data-size="sm" rel="nofollow">
                 <?php echo $iconArrowLeft; ?><lang>上一条</lang>
             </a>
 <?php } else { ?>
@@ -126,7 +147,7 @@ $hasChannels = $channelLabels !== [];
             </span>
 <?php } ?>
 <?php if ($hasNext) { ?>
-            <a href="@backend-url{'system/backend/notification/detail'|['id' => $nextId]}" class="w-button" title="<?= $attrNextTitle ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+            <a href="@backend-url{'system/backend/notification/detail'|['id' => $nextId]}" class="w-button" title="<?= $attrNextTitle ?>" data-tone="neutral" data-variant="outline" data-size="sm" rel="nofollow">
                 <lang>下一条</lang><?php echo $iconArrowRight; ?>
             </a>
 <?php } else { ?>
@@ -145,7 +166,7 @@ $hasChannels = $channelLabels !== [];
                     <h1 class="w-notification-detail__title"><?= $attrTitle ?></h1>
                     <div class="w-notification-detail__meta">
                         <span class="w-badge" data-tone="<?= $attrTone ?>"><?= $attrTypeLabel ?></span>
-                        <span class="w-badge" data-tone="<?= $attrReadTone ?>"><?php echo $iconRead; ?><?= $attrReadLabel ?></span>
+                        <span class="w-badge w-notification-detail__read-badge" data-tone="<?= $attrReadTone ?>"><?php echo $iconRead; ?><?= $attrReadLabel ?></span>
                         <span class="w-notification-detail__time"><?php echo $iconClock; ?><?= $attrTime ?></span>
 <?php if ($showTopicInMeta) { ?>
                         <span class="w-notification-detail__topic"><?php echo $iconTag; ?><?= $attrTopicName ?></span>

@@ -9,10 +9,14 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\SessionFactory;
 
 #[Acl('Weline_Backend::notification', '通知中心', 'bell', '查看系统通知', 'Weline_Backend::notification_settings')]
 class Notification extends BackendController
 {
+    private const JUST_MARKED_SESSION_KEY = 'backend_notification_just_marked';
+    private const JUST_MARKED_TTL_SECONDS = 45.0;
+
     private NotificationService $notificationService;
 
     public function __construct()
@@ -69,7 +73,31 @@ class Notification extends BackendController
             return $this->fetch('Weline_Backend::templates/Backend/Notification/error.phtml');
         }
 
-        $this->notificationService->markAsRead($userId, $notificationId);
+        // Peek first. Browser may prefetch/prerender「下一条」—those requests must NOT
+        // persist read, or the real click only sees「已读」and never「未读→已读」.
+        // Duplicate document requests (navigate+prefetch race) also need a short
+        // session flash so the second response still renders「未读→已读」.
+        $wasUnread = empty($notification['is_read']);
+        $serverMarked = false;
+        if ($wasUnread && $this->allowsNotificationReadMutation()) {
+            $this->notificationService->markAsRead($userId, $notificationId);
+            $notification['is_read'] = true;
+            $notification['read_at'] = date('Y-m-d H:i:s');
+            $serverMarked = true;
+            $this->pushJustMarkedReadFlash($notificationId);
+            $showTransition = true;
+        } else {
+            // Follow-up document request after a sibling/prefetch race already marked.
+            // Prefer DB read_at freshness (shared across WLS workers); session flash
+            // is a same-worker best-effort complement.
+            $showTransition = $this->isRecentlyMarkedRead($notification)
+                || $this->pullJustMarkedReadFlash($notificationId);
+        }
+        // Carry flags on the notification bag (layout extract is unreliable for
+        // ad-hoc assign keys); template + data-* must see the same peek result.
+        $notification['was_unread'] = $wasUnread || $showTransition;
+        $notification['just_marked_read'] = $showTransition;
+        $notification['server_marked_read'] = $serverMarked || $showTransition;
 
         $adjacent = $this->notificationService->getAdjacentNotifications($userId, $notificationId);
         $this->assign('notification', $notification);
@@ -80,6 +108,105 @@ class Notification extends BackendController
         $this->assignDetailPageTitle();
 
         return $this->fetch();
+    }
+
+    /**
+     * Persist inbox read only for real user document views—not prefetch/prerender.
+     */
+    private function allowsNotificationReadMutation(): bool
+    {
+        $purpose = strtolower(trim((string) (
+            $this->request->getServer('HTTP_SEC_PURPOSE')
+            ?? $this->request->getServer('HTTP_PURPOSE')
+            ?? ''
+        )));
+        if ($purpose !== '' && (
+            str_contains($purpose, 'prefetch')
+            || str_contains($purpose, 'prerender')
+        )) {
+            return false;
+        }
+
+        $dest = strtolower(trim((string) ($this->request->getServer('HTTP_SEC_FETCH_DEST') ?? '')));
+        // Prefetch commonly uses Sec-Fetch-Dest: empty.
+        if ($dest === 'empty') {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $notification
+     */
+    private function isRecentlyMarkedRead(array $notification): bool
+    {
+        if (empty($notification['is_read'])) {
+            return false;
+        }
+        $readAt = \trim((string) ($notification['read_at'] ?? ''));
+        if ($readAt === '') {
+            return false;
+        }
+        $ts = \strtotime($readAt);
+
+        return $ts !== false && (\time() - $ts) <= (int) self::JUST_MARKED_TTL_SECONDS;
+    }
+
+    private function pushJustMarkedReadFlash(int $notificationId): void
+    {
+        if ($notificationId <= 0) {
+            return;
+        }
+        try {
+            $session = SessionFactory::getInstance()->createBackendSession();
+            $bag = [];
+            if (\method_exists($session, 'getData')) {
+                $raw = $session->getData(self::JUST_MARKED_SESSION_KEY);
+                $bag = \is_array($raw) ? $raw : [];
+            }
+            $now = \microtime(true);
+            $bag[(string) $notificationId] = $now;
+            foreach ($bag as $id => $ts) {
+                if (!\is_numeric($ts) || ($now - (float) $ts) > self::JUST_MARKED_TTL_SECONDS) {
+                    unset($bag[$id]);
+                }
+            }
+            if (\method_exists($session, 'setData')) {
+                $session->setData(self::JUST_MARKED_SESSION_KEY, $bag);
+            }
+        } catch (\Throwable) {
+            // Session may be unavailable in CLI / warmup.
+        }
+    }
+
+    private function pullJustMarkedReadFlash(int $notificationId): bool
+    {
+        if ($notificationId <= 0) {
+            return false;
+        }
+        try {
+            $session = SessionFactory::getInstance()->createBackendSession();
+            if (!\method_exists($session, 'getData')) {
+                return false;
+            }
+            $raw = $session->getData(self::JUST_MARKED_SESSION_KEY);
+            $bag = \is_array($raw) ? $raw : [];
+            $key = (string) $notificationId;
+            $ts = $bag[$key] ?? null;
+            $now = \microtime(true);
+            $hit = \is_numeric($ts) && ($now - (float) $ts) <= self::JUST_MARKED_TTL_SECONDS;
+            if (isset($bag[$key])) {
+                unset($bag[$key]);
+                if (\method_exists($session, 'setData')) {
+                    $session->setData(self::JUST_MARKED_SESSION_KEY, $bag);
+                }
+            }
+
+            return $hit;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function assignDetailPageTitle(): void

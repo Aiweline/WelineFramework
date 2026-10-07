@@ -44,10 +44,23 @@ final class NotificationInboxCacheInvalidationContractTest extends TestCase
 
         self::assertStringContainsString('invalidateInboxPresentation', $service);
         self::assertStringContainsString('NotificationBlock::clearCache', $service);
+        self::assertStringContainsString('Partials::clearBackendPartialAuthContextMemo', $service);
         self::assertStringContainsString('Partials::clearOutputCache', $service);
         self::assertStringContainsString('INBOX_REVISION_SESSION_KEY', $service);
         self::assertStringContainsString('backend_notification_inbox_rev', $partials);
+        self::assertStringContainsString('clearBackendPartialAuthContextMemo', $partials);
+        self::assertStringContainsString('theme.backend_partial_auth_context.user', $partials);
         self::assertStringContainsString('clearNotificationBadges', $script);
         self::assertStringContainsString('w-notification-trigger__badge', $script);
+
+        $bumpRev = strpos($service, 'INBOX_REVISION_SESSION_KEY');
+        $clearAuthMemo = strpos($service, 'Partials::clearBackendPartialAuthContextMemo');
+        $clearOutput = strpos($service, 'Partials::clearOutputCache');
+        self::assertIsInt($bumpRev);
+        self::assertIsInt($clearAuthMemo);
+        self::assertIsInt($clearOutput);
+        // Same-response chrome miss requires: bump rev → drop auth memo → clear HTML.
+        self::assertLessThan($clearAuthMemo, $bumpRev);
+        self::assertLessThan($clearOutput, $clearAuthMemo);
     }
 }

@@ -77,6 +77,18 @@ class Partials extends Block
         self::$partialOutputCacheBytes = 0;
     }
 
+    /**
+     * Drop request-memoized backend chrome auth context so a bumped inbox
+     * revision (backend_notification_inbox_rev) can participate in partial
+     * cache keys on the same response after mark-as-read.
+     */
+    public static function clearBackendPartialAuthContextMemo(): void
+    {
+        RequestContext::remove('theme.backend_partial_auth_context');
+        RequestContext::remove('theme.backend_partial_auth_context.user');
+        RequestContext::remove('theme.backend_partial_auth_context.role');
+    }
+
     public static function clearAllCaches(): void
     {
         self::clearMetaCache();
