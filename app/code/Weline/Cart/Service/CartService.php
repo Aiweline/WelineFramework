@@ -34,6 +34,9 @@ final class CartService
     private readonly CommerceCartTypeRegistry $typeRegistry;
     private readonly SellingTypeResolver $sellingTypeResolver;
 
+    /** @var null|callable(int,string,string):(?int) */
+    private $priceMinorConverter = null;
+
     public function __construct(
         private readonly CartItemSnapshotProviderRegistry $registry,
         ?CartStoreInterface $store = null,
@@ -50,10 +53,11 @@ final class CartService
         CartItemSnapshotProviderRegistry $registry,
         ?CommerceCartTypeRegistry $typeRegistry = null,
         ?SellingTypeResolver $sellingTypeResolver = null,
+        ?callable $priceMinorConverter = null,
     ): self {
         $types = $typeRegistry ?? CommerceCartTypeRegistry::forTesting();
 
-        return new self(
+        $instance = new self(
             $registry,
             new CartMemoryStore(),
             $types,
@@ -62,6 +66,9 @@ final class CartService
                 static fn (string $_code): bool => true,
             ),
         );
+        $instance->priceMinorConverter = $priceMinorConverter;
+
+        return $instance;
     }
 
     public function registry(): CartItemSnapshotProviderRegistry
@@ -289,14 +296,19 @@ final class CartService
         $cartKey = $this->cartKey($scope, $guestToken, $customerId, $cartType);
         $cart = $this->loadCart($scope, $guestToken, $customerId, $cartType)
             ?? $this->newCart($scope, $guestToken, $customerId, $currency ?? $snapshot->currency, $cartType);
-        if ($cart['currency'] !== '' && $cart['currency'] !== $snapshot->currency) {
-            throw new CartConflictException(
-                self::ERROR_CROSS_CURRENCY,
-                __('跨币种购物车不可合并'),
-                ['cart_currency' => $cart['currency'], 'item_currency' => $snapshot->currency],
-            );
+        // 跨币种：以最后一次重算币为准（展示币优先且 FX 可用 → 显式 → 快照 → 车头），重算后写入，不再拒绝。
+        $targetCurrency = $this->resolvePersistCurrency(
+            (string)($cart['currency'] ?? ''),
+            $snapshot->currency,
+            (string)($currency ?? ''),
+        );
+        $cartCurrency = strtoupper(trim((string)($cart['currency'] ?? '')));
+        if ($cartCurrency !== '' && $cartCurrency !== $targetCurrency) {
+            $this->rebaseCartToCurrency($cart, $targetCurrency);
+        } elseif ($this->cartHasMixedLineCurrencies($cart)) {
+            $this->rebaseCartToCurrency($cart, $targetCurrency);
         }
-        $cart['currency'] = $snapshot->currency;
+        $cart['currency'] = $targetCurrency;
         $cart['cart_type'] = $cartType;
 
         $adjusted = false;
@@ -338,13 +350,17 @@ final class CartService
             (int)($snapshot->productId ?? 0),
         );
 
+        $priced = $this->snapshotPricesInCurrency($snapshot, $targetCurrency);
+
         $merged = false;
         foreach ($cart['items'] as &$row) {
             if ((string)$row['selection_hash'] !== $serverHash) {
                 continue;
             }
             $row['qty'] = (int)$row['qty'] + $qty;
-            $row['unit_price_minor'] = $snapshot->unitPriceMinor;
+            $row['unit_price_minor'] = $priced['unit_price_minor'];
+            $row['compare_at_minor'] = $priced['compare_at_minor'];
+            $row['currency'] = $priced['currency'];
             $row['name'] = $snapshot->name;
             $row['sku'] = $snapshot->sku;
             // Refresh presentation fields so stale asset:// snapshots do not stick after re-add.
@@ -359,7 +375,13 @@ final class CartService
         unset($row);
 
         if (!$merged) {
-            $cart['items'][] = $this->lineFromSnapshot($snapshot, $selection, $serverHash, $qty);
+            $cart['items'][] = $this->lineFromSnapshot(
+                $snapshot,
+                $selection,
+                $serverHash,
+                $qty,
+                $targetCurrency,
+            );
         }
 
         $this->store->set($cartKey, $cart);
@@ -431,24 +453,27 @@ final class CartService
             if ($customer !== null) {
                 $this->assertCartTypeMatch($customer, $cartType);
             }
-            $guestCurrency = $this->validatedCartCurrency($guest, self::OWNER_GUEST);
+            $guestCurrency = $this->declaredCartCurrency($guest);
             $customerCurrency = $customer === null
                 ? ''
-                : $this->validatedCartCurrency($customer, self::OWNER_CUSTOMER);
-            if ($guestCurrency !== ''
-                && $customerCurrency !== ''
-                && $guestCurrency !== $customerCurrency
-            ) {
-                throw new CartConflictException(
-                    self::ERROR_CROSS_CURRENCY,
-                    __('跨币种购物车不可合并'),
-                    [
-                        'guest_currency' => $guestCurrency,
-                        'customer_currency' => $customerCurrency,
-                    ],
-                );
+                : $this->declaredCartCurrency($customer);
+            // 跨币种：以最后一次重算币为准（展示币优先且 FX 可用 → 游客车 → 客户车），双方对齐后再合。
+            $mergedCurrency = $this->resolvePersistCurrency(
+                $customerCurrency,
+                $guestCurrency,
+            );
+            if ($guestCurrency !== '' && $guestCurrency !== $mergedCurrency) {
+                $this->rebaseCartToCurrency($guest, $mergedCurrency);
+            } elseif ($this->cartHasMixedLineCurrencies($guest)) {
+                $this->rebaseCartToCurrency($guest, $mergedCurrency);
             }
-            $mergedCurrency = $customerCurrency !== '' ? $customerCurrency : $guestCurrency;
+            if ($customer !== null) {
+                if ($customerCurrency !== '' && $customerCurrency !== $mergedCurrency) {
+                    $this->rebaseCartToCurrency($customer, $mergedCurrency);
+                } elseif ($this->cartHasMixedLineCurrencies($customer)) {
+                    $this->rebaseCartToCurrency($customer, $mergedCurrency);
+                }
+            }
             $customer ??= $this->newCart($scope, null, $customerId, $mergedCurrency, $cartType);
             $customer['currency'] = $mergedCurrency;
             $customer['cart_type'] = $cartType;
@@ -525,35 +550,193 @@ final class CartService
     }
 
     /**
-     * Validate all line currencies before merge mutates either cart.
+     * Declared cart currency (header, else first non-empty line). Mixed lines are
+     * normalized by rebaseCartToCurrency — callers must pass a last-recalc target.
      *
      * @param array<string, mixed> $cart
      */
-    private function validatedCartCurrency(array $cart, string $ownerKind): string
+    private function declaredCartCurrency(array $cart): string
     {
         $currency = strtoupper(trim((string)($cart['currency'] ?? '')));
+        if ($currency !== '') {
+            return $currency;
+        }
+        foreach ($cart['items'] ?? [] as $line) {
+            $lineCurrency = strtoupper(trim((string)($line['currency'] ?? '')));
+            if ($lineCurrency !== '') {
+                return $lineCurrency;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Persist currency for cross-currency writes: prefer active display currency when
+     * FX can rebase every involved currency into it; otherwise fall through the
+     * write/session fallbacks (snapshot / guest / explicit / cart header).
+     */
+    private function resolvePersistCurrency(string ...$involvedAndFallbacks): string
+    {
+        $involved = [];
+        foreach ($involvedAndFallbacks as $candidate) {
+            $currency = strtoupper(trim($candidate));
+            if ($currency !== '' && !in_array($currency, $involved, true)) {
+                $involved[] = $currency;
+            }
+        }
+        $preferred = [];
+        $display = strtoupper(trim(RequestContext::getWelineUserCurrency()));
+        if ($display !== '') {
+            $preferred[] = $display;
+        }
+        foreach ($involved as $currency) {
+            if (!in_array($currency, $preferred, true)) {
+                $preferred[] = $currency;
+            }
+        }
+        if ($preferred === []) {
+            return 'CNY';
+        }
+        foreach ($preferred as $candidate) {
+            $ok = true;
+            foreach ($involved as $from) {
+                if (!$this->canConvertCurrency($from, $candidate)) {
+                    $ok = false;
+                    break;
+                }
+            }
+            if ($ok) {
+                return $candidate;
+            }
+        }
+
+        return $preferred[0];
+    }
+
+    private function canConvertCurrency(string $fromCurrency, string $toCurrency): bool
+    {
+        $from = strtoupper(trim($fromCurrency));
+        $to = strtoupper(trim($toCurrency));
+        if ($from === '' || $to === '' || $from === $to) {
+            return true;
+        }
+
+        return $this->convertPriceMinor(100, $from, $to) !== null;
+    }
+
+    /**
+     * @param array<string, mixed> $cart
+     */
+    private function cartHasMixedLineCurrencies(array $cart): bool
+    {
+        $seen = '';
         foreach ($cart['items'] ?? [] as $line) {
             $lineCurrency = strtoupper(trim((string)($line['currency'] ?? '')));
             if ($lineCurrency === '') {
                 continue;
             }
-            if ($currency === '') {
-                $currency = $lineCurrency;
+            if ($seen === '') {
+                $seen = $lineCurrency;
                 continue;
             }
-            if ($currency !== $lineCurrency) {
+            if ($seen !== $lineCurrency) {
+                return true;
+            }
+        }
+        $header = strtoupper(trim((string)($cart['currency'] ?? '')));
+        if ($header !== '' && $seen !== '' && $header !== $seen) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Persist cart minors into $toCurrency via FX. Fail closed only when FX is unavailable.
+     *
+     * @param array<string, mixed> $cart
+     */
+    private function rebaseCartToCurrency(array &$cart, string $toCurrency): void
+    {
+        $to = strtoupper(trim($toCurrency));
+        if ($to === '') {
+            return;
+        }
+        $headerFrom = strtoupper(trim((string)($cart['currency'] ?? ''))) ?: $to;
+        foreach ($cart['items'] as &$line) {
+            $from = strtoupper(trim((string)($line['currency'] ?? $headerFrom))) ?: $headerFrom;
+            if ($from === $to) {
+                $line['currency'] = $to;
+                continue;
+            }
+            $unit = max(0, (int)($line['unit_price_minor'] ?? 0));
+            $convertedUnit = $this->convertPriceMinor($unit, $from, $to);
+            if ($convertedUnit === null) {
                 throw new CartConflictException(
                     self::ERROR_CROSS_CURRENCY,
-                    __('购物车包含跨币种商品，禁止合并'),
+                    __('跨币种汇率不可用，无法重算购物车'),
                     [
-                        'owner_kind' => $ownerKind,
-                        'cart_currency' => $currency,
-                        'line_currency' => $lineCurrency,
+                        'from_currency' => $from,
+                        'to_currency' => $to,
+                        'unit_price_minor' => $unit,
                     ],
                 );
             }
+            $qty = max(0, (int)($line['qty'] ?? 0));
+            $line['unit_price_minor'] = $convertedUnit;
+            $line['row_total_minor'] = $qty * $convertedUnit;
+            if (isset($line['compare_at_minor'])) {
+                $convertedCompare = $this->convertPriceMinor(
+                    max(0, (int)$line['compare_at_minor']),
+                    $from,
+                    $to,
+                );
+                if ($convertedCompare !== null) {
+                    $line['compare_at_minor'] = $convertedCompare;
+                }
+            }
+            $line['currency'] = $to;
         }
-        return $currency;
+        unset($line);
+        $cart['currency'] = $to;
+    }
+
+    /**
+     * @return array{unit_price_minor:int,compare_at_minor:int,currency:string}
+     */
+    private function snapshotPricesInCurrency(CartItemSnapshot $snapshot, string $toCurrency): array
+    {
+        $to = strtoupper(trim($toCurrency)) ?: 'CNY';
+        $from = strtoupper(trim($snapshot->currency)) ?: $to;
+        $unit = max(0, $snapshot->unitPriceMinor);
+        $compare = max(0, $snapshot->compareAtMinor);
+        if ($from === $to) {
+            return [
+                'unit_price_minor' => $unit,
+                'compare_at_minor' => $compare,
+                'currency' => $to,
+            ];
+        }
+        $convertedUnit = $this->convertPriceMinor($unit, $from, $to);
+        if ($convertedUnit === null) {
+            throw new CartConflictException(
+                self::ERROR_CROSS_CURRENCY,
+                __('跨币种汇率不可用，无法重算购物车'),
+                [
+                    'from_currency' => $from,
+                    'to_currency' => $to,
+                    'unit_price_minor' => $unit,
+                ],
+            );
+        }
+        $convertedCompare = $this->convertPriceMinor($compare, $from, $to);
+
+        return [
+            'unit_price_minor' => $convertedUnit,
+            'compare_at_minor' => $convertedCompare ?? $compare,
+            'currency' => $to,
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -1209,10 +1392,18 @@ final class CartService
         array $selection,
         string $selectionHash,
         int $qty,
+        ?string $forceCurrency = null,
     ): array {
         $options = $this->normalizeOptions(
             $snapshot->options !== [] ? $snapshot->options : $this->optionsFromSelection($selection),
         );
+        $priced = $forceCurrency !== null && trim($forceCurrency) !== ''
+            ? $this->snapshotPricesInCurrency($snapshot, $forceCurrency)
+            : [
+                'unit_price_minor' => max(0, $snapshot->unitPriceMinor),
+                'compare_at_minor' => max(0, $snapshot->compareAtMinor),
+                'currency' => $snapshot->currency,
+            ];
         $line = [
             'item_id' => 'v2-' . substr($selectionHash, 0, 16),
             'selection_hash' => $selectionHash,
@@ -1222,9 +1413,9 @@ final class CartService
             'name' => $snapshot->name,
             'sku' => $snapshot->sku,
             'image' => $snapshot->image,
-            'currency' => $snapshot->currency,
-            'unit_price_minor' => $snapshot->unitPriceMinor,
-            'compare_at_minor' => max(0, $snapshot->compareAtMinor),
+            'currency' => $priced['currency'],
+            'unit_price_minor' => $priced['unit_price_minor'],
+            'compare_at_minor' => $priced['compare_at_minor'],
             'campaign_label' => trim($snapshot->campaignLabel),
             'campaign_url' => trim($snapshot->campaignUrl),
             'qty' => $qty,
@@ -1240,7 +1431,7 @@ final class CartService
             'weight_minor' => max(0, $snapshot->weightMinor),
             'volume_minor' => max(0, $snapshot->volumeMinor),
             'tax_class_code' => trim($snapshot->taxClassCode) ?: 'standard',
-            'row_total_minor' => $qty * $snapshot->unitPriceMinor,
+            'row_total_minor' => $qty * (int)$priced['unit_price_minor'],
         ];
         if ($snapshot->fulfillmentMetadata !== []) {
             $line['fulfillment_metadata'] = $snapshot->fulfillmentMetadata;
@@ -1432,6 +1623,11 @@ final class CartService
         if ($minor === 0 || $from === $to) {
             return max(0, $minor);
         }
+        if ($this->priceMinorConverter !== null) {
+            $converted = ($this->priceMinorConverter)($minor, $from, $to);
+
+            return $converted === null ? null : max(0, (int)$converted);
+        }
         try {
             /** @var \Weline\Currency\Service\CurrencyRateService $rates */
             $rates = ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class);
@@ -1530,8 +1726,8 @@ final class CartService
                     if ($snapshot->currency !== '') {
                         $item['currency'] = $snapshot->currency;
                     }
-                    // tob：即使无批发价行，也必须把快照币金额换到展示币，避免币种标签与数字 1:1 混用。
-                    if ($cartType === 'tob' && $displayCurrency !== '') {
+                    // 展示币与快照币不一致时 FX 到展示币（toc/tob），避免币种标签与数字 1:1 混用。
+                    if ($displayCurrency !== '') {
                         $fromCurrency = strtoupper(trim((string)($item['currency'] ?? $snapshot->currency ?? ''))) ?: 'CNY';
                         if ($displayCurrency !== $fromCurrency) {
                             $convertedUnit = $this->convertPriceMinor(

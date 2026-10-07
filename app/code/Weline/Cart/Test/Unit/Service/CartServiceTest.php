@@ -21,6 +21,12 @@ use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider\ProductCa
  */
 final class CartServiceTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('');
+        parent::tearDown();
+    }
+
     private function scopeA(): ScopeIdentity
     {
         return ScopeIdentity::store(0, 'default', 'a', ScopeIdentity::MODE_NORMAL);
@@ -31,11 +37,38 @@ final class CartServiceTest extends TestCase
         return ScopeIdentity::store(0, 'default', 'b', ScopeIdentity::MODE_NORMAL);
     }
 
-    private function service(array $catalog): CartService
+    /**
+     * Deterministic FX for unit isolation (PHPUnit often has no live rate table).
+     *
+     * @return callable(int,string,string):(?int)
+     */
+    private function testFxConverter(): callable
+    {
+        $toCny = ['CNY' => 1.0, 'USD' => 7.0, 'EUR' => 7.5];
+
+        return static function (int $minor, string $from, string $to) use ($toCny): ?int {
+            $from = strtoupper(trim($from)) ?: 'CNY';
+            $to = strtoupper(trim($to)) ?: $from;
+            if ($minor === 0 || $from === $to) {
+                return max(0, $minor);
+            }
+            if (!isset($toCny[$from], $toCny[$to])) {
+                return null;
+            }
+            $inCny = ($minor / 100.0) * $toCny[$from];
+
+            return max(0, (int)round(($inCny / $toCny[$to]) * 100));
+        };
+    }
+
+    private function service(array $catalog, bool $withFx = false): CartService
     {
         $provider = ProductCartItemSnapshotProvider::forTesting($catalog);
         $registry = CartItemSnapshotProviderRegistry::forTesting([$provider]);
-        return CartService::forTesting($registry);
+        return CartService::forTesting(
+            $registry,
+            priceMinorConverter: $withFx ? $this->testFxConverter() : null,
+        );
     }
 
     public function testScopeIsolationDoesNotLeakAcrossCarts(): void
@@ -83,7 +116,7 @@ final class CartServiceTest extends TestCase
                 'stock' => 10,
                 'sellable' => true,
             ],
-        ]);
+        ], withFx: true);
         $offer = new OfferIdentity('product', $offerUuid, legacyProductId: 98);
         $guest = $svc->issueGuestToken();
         $scope = $this->scopeA();
@@ -96,8 +129,9 @@ final class CartServiceTest extends TestCase
         try {
             $after = $svc->getCart($scope, $guest);
             self::assertSame('USD', $after['currency']);
+            self::assertSame('USD', strtoupper((string)($after['items'][0]['currency'] ?? '')));
         } finally {
-            \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('CNY');
+            \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('');
         }
     }
     public function testGetCartStripsAssetProtocolImagesFromSummary(): void
@@ -355,7 +389,7 @@ final class CartServiceTest extends TestCase
         }
     }
 
-    public function testCrossCurrencyMergeFailsBeforeEitherCartIsMutated(): void
+    public function testCrossCurrencyMergeRebasesToLastRecalcCurrency(): void
     {
         $cnyOfferUuid = '56565656-5656-4565-8565-565656565656';
         $usdOfferUuid = '57575757-5757-4575-8575-575757575757';
@@ -374,7 +408,7 @@ final class CartServiceTest extends TestCase
                 'stock' => 5,
                 'sellable' => true,
             ],
-        ]);
+        ], withFx: true);
         $scope = $this->scopeA();
         $guestToken = $svc->issueGuestToken();
         $svc->add(
@@ -392,19 +426,68 @@ final class CartServiceTest extends TestCase
             customerId: 9,
         );
 
+        \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('USD');
         try {
-            $svc->mergeGuestIntoCustomer($scope, $guestToken, 9);
-            self::fail('cross-currency merge must fail');
-        } catch (CartConflictException $exception) {
-            self::assertSame(CartService::ERROR_CROSS_CURRENCY, $exception->errorCode());
+            $merged = $svc->mergeGuestIntoCustomer($scope, $guestToken, 9);
+            self::assertSame('USD', $merged['currency']);
+            self::assertSame(3, $merged['item_count']);
+            $guestAfter = $svc->getCart($scope, $guestToken);
+            self::assertSame(0, $guestAfter['item_count']);
+            $customerAfter = $svc->getCart($scope, customerId: 9);
+            self::assertSame(3, $customerAfter['item_count']);
+            self::assertSame('USD', $customerAfter['currency']);
+        } finally {
+            \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('');
         }
+    }
 
-        $guestAfter = $svc->getCart($scope, $guestToken);
-        $customerAfter = $svc->getCart($scope, customerId: 9);
-        self::assertSame(2, $guestAfter['item_count']);
-        self::assertSame('CNY', $guestAfter['currency']);
-        self::assertSame(1, $customerAfter['item_count']);
-        self::assertSame('USD', $customerAfter['currency']);
+    public function testCrossCurrencyAddRebasesCartToDisplayCurrency(): void
+    {
+        $cnyOfferUuid = '58585858-5858-4585-8585-585858585858';
+        $usdOfferUuid = '59595959-5959-4595-8595-595959595959';
+        $svc = $this->service([
+            $cnyOfferUuid => [
+                'name' => 'CNY Offer',
+                'unit_price_minor' => 10800,
+                'currency' => 'CNY',
+                'stock' => 10,
+                'sellable' => true,
+            ],
+            $usdOfferUuid => [
+                'name' => 'USD Offer',
+                'unit_price_minor' => 2000,
+                'currency' => 'USD',
+                'stock' => 10,
+                'sellable' => true,
+            ],
+        ], withFx: true);
+        $scope = $this->scopeA();
+        $guest = $svc->issueGuestToken();
+        $svc->add(
+            $scope,
+            new OfferIdentity('product', $cnyOfferUuid, legacyProductId: 58),
+            [],
+            1,
+            $guest,
+        );
+
+        \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('USD');
+        try {
+            $added = $svc->add(
+                $scope,
+                new OfferIdentity('product', $usdOfferUuid, legacyProductId: 59),
+                [],
+                1,
+                $guest,
+            );
+            self::assertSame('USD', $added['currency']);
+            self::assertSame(2, $added['item_count']);
+            foreach ($added['items'] as $item) {
+                self::assertSame('USD', strtoupper((string)($item['currency'] ?? '')));
+            }
+        } finally {
+            \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('');
+        }
     }
 
     public function testDuplicateProviderCodeFailsClosed(): void

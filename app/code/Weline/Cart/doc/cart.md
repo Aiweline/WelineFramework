@@ -10,7 +10,9 @@
 - 客户端伪造 hash → `cart_selection_hash_mismatch`；非法 selection → `cart_selection_invalid`
 - 跨模块统一使用 `Api/CartSelectionHash`；`Service/CartSelectionHash` 保留为
   Cart 内部实现，Product 不直接依赖 Cart Service
-- 跨 Scope / 跨币种不合并；同 Scope guest→customer 合车并按可售上限截断
+- 跨 Scope 不合并；同 Scope guest→customer 合车并按可售上限截断
+- 跨币种：以最后一次重算币为准（店面展示币优先且 FX 可用，其次本次写入快照/游客车），经 FX 重算后写入；汇率不可用时仍 fail-closed（`cart_cross_currency_forbidden`）
+- `presentLine`：展示币与行/快照币不一致时 FX 到展示币（toc/tob），禁止币种标签与金额 1:1 混用
 - 前台 `customer_id` 不是身份凭据：`add/add/mergeGuest/getCart` 只使用
   `CartCurrentCustomerResolver` 从公开
   `CustomerAccountFacadeInterface::current()` 得到的服务端登录身份
