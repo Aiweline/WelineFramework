@@ -2329,7 +2329,7 @@
             return;
         }
         drawerCssReady = true;
-        var cssStamp = '20261007-minicart-pdp-zoom-v15';
+        var cssStamp = '20261007-minicart-shell-pad-v14';
         var assetVersion = '';
         try {
             var cfgNode = document.getElementById('weline-frontend-runtime-config');

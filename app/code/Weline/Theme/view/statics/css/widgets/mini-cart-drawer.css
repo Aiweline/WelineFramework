@@ -110,6 +110,7 @@
     transition: width 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.32s ease, box-shadow 0.32s ease;
     overflow: hidden;
     isolation: isolate;
+    box-sizing: border-box;
     padding: 0;
     border: none;
     /* Never inflate header-actions / document scrollport when closed */
@@ -185,13 +186,30 @@
     width: min(var(--size-panel-400, 25rem), 100%) !important;
     max-width: 100% !important;
     min-width: 0 !important;
-    padding: unset;
+    padding: 0;
     border: unset;
     box-shadow: var(--weline-shadow-lg);
     overflow: hidden;
     visibility: visible !important;
     pointer-events: auto !important;
     content-visibility: visible;
+}
+
+/*
+ * Bottom inset as a non-shrinking flex sibling of header/body/footer.
+ * Padding alone still looked flush under overflow+sheet layout; ::after
+ * reserves real column space that cannot be eaten by nested overflow.
+ */
+.header-cart.is-drawer-open .mini-cart-drawer::after,
+.header-cart.is-drawer-open .mini-cart-drawer.is-open::after,
+.header-cart .mini-cart-drawer[aria-hidden="false"]::after {
+    content: '';
+    flex: 0 0 auto;
+    height: max(
+        var(--weline-space-6, 1.5rem),
+        env(safe-area-inset-bottom, 0px)
+    );
+    pointer-events: none;
 }
 
 @media (max-width: 768px) {
@@ -664,7 +682,7 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
      * Cap at drawer − 100px; flex-shrink so header+body remainder cannot shove
      * the sheet past the drawer. Qty hit-target floor override lives in
      * Weline_Cart::css/mini-cart-drawer-qty-hit.css (Cart-owned). Bottom inset
-     * lives on the open drawer shell / spacer — not encoded here as qty gate.
+     * lives on the open drawer shell (padding-bottom), not here.
      */
     flex: 0 1 auto;
     max-height: calc(100% - 100px);
@@ -792,11 +810,8 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
 .header-cart .mini-cart-drawer__footer .mini-cart-drawer__actions {
     flex: 0 0 auto;
     margin-top: var(--weline-space-3, 0.75rem);
-    /* Non-shrinking inset: survives footer max-height + overflow clip. */
-    padding-bottom: max(
-        var(--weline-space-5, 1.25rem),
-        env(safe-area-inset-bottom, 0px)
-    );
+    /* Shell owns bottom inset; keep a token gap above the drawer padding edge. */
+    padding-bottom: var(--weline-space-2, 0.5rem);
 }
 
 .header-cart .mini-cart-drawer__extras {

@@ -319,13 +319,13 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('max-height: calc(100% - 100px)', $css);
         self::assertStringContainsString('Weline_Cart::css/mini-cart-drawer-qty-hit.css', $source);
         self::assertStringContainsString('setFooterCollapsed', $js);
-        self::assertStringContainsString('ensureCartQtyHitCss', $js);
-        self::assertStringContainsString('mini-cart-drawer-qty-hit.css', $js);
         self::assertStringContainsString('aria-hidden', $js);
         self::assertStringContainsString('drawerContentIsFresh', $js);
         self::assertStringContainsString('skipItems', $js);
         self::assertStringContainsString('drawerCssReady', $js);
-        self::assertStringContainsString('minicart-dedupe-v9', $js);
+        self::assertStringContainsString('minicart-shell-pad-v14', $js);
+        self::assertStringContainsString('ensureCartQtyHitCss', $js);
+        self::assertStringContainsString('mini-cart-drawer-qty-hit.css', $js);
         self::assertStringContainsString("source: 'mini-cart-mutate'", $js);
         self::assertStringContainsString('softOnly', $js);
         self::assertStringContainsString('lineItemsSignature', $js);
@@ -334,14 +334,16 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
             '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*flex:\\s*0\\s+1\\s+auto/s',
             $css
         );
+        // Bottom inset = open-drawer ::after flex spacer (not nested footer padding).
         self::assertMatchesRegularExpression(
-            '/\\.header-cart \\.mini-cart-drawer__footer \\.mini-cart-drawer__actions\\s*\\{[^}]*padding-bottom:\\s*max\\(/s',
+            '/\\.header-cart\\.is-drawer-open \\.mini-cart-drawer::after[^{]*\\{[^}]*flex:\\s*0\\s+0\\s+auto/s',
             $css
         );
         self::assertMatchesRegularExpression(
-            '/\\.header-cart \\.mini-cart-drawer__footer \\.mini-cart-drawer__actions\\s*\\{[^}]*padding-bottom:\\s*max\\(/s',
+            '/\\.header-cart\\.is-drawer-open \\.mini-cart-drawer::after[^{]*\\{[^}]*height:\\s*max\\(/s',
             $css
         );
+        self::assertStringContainsString('box-sizing: border-box', $css);
     }
 
     public function testMiniCartDrawerRebindsPaperInkUnderInverseChrome(): void
