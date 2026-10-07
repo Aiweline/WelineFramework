@@ -60,7 +60,9 @@ $apiDocsUrl = '/dev/tool/docs/api';
         position: fixed;
         top: 0;
         left: 0;
-        z-index: 999999;
+        /* Above storefront resident floats (StoreMusic/CS 2147483001, mini-cart 2147483010);
+         * below theme-editor / preview chrome (2147483100+) and panel-token (2147483600). */
+        z-index: 2147483050;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         pointer-events: none; /* 防止遮挡页面内容 */
     }
