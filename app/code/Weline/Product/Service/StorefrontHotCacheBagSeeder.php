@@ -16,6 +16,7 @@ use Weline\Framework\Runtime\ScopeIdentity;
  * wls-perf-regression-20260923 A (architect msg-5):
  * - pre_critical: Shared peek-only for heavy catalog bags (禁冷 publishedOffers(1000))
  * - post_critical_heavy: peek-miss 才冷种；袋间 Fiber yield 分片
+ * - locale_bag_prime: light summary + homepage featured shelf only（禁 full×locales）
  * - other stages: light summary only
  * Fail-open; no Model shortcuts; no fake HIT; no parallel bags.
  */
@@ -65,6 +66,29 @@ final class StorefrontHotCacheBagSeeder
             }
         } catch (\Throwable $e) {
             $errors[] = 'catalog_offers_summary:' . $e->getMessage();
+        }
+
+        // locale/currency_bag_prime allowlist: homepage featured shelf (summary/targeted).
+        // Never publishedOffers(1000) here — resolveHeavyMode keeps light_only.
+        // currency_bag_prime fills product_card_html for non-default currencies (vary).
+        // peer_hydrate: default-currency Process L1 for shelf plan (owner Shared may miss).
+        // locale/currency_bag_prime: vary-dimension shards.
+        if ($stage === 'locale_bag_prime'
+            || $stage === 'currency_bag_prime'
+            || $stage === 'peer_hydrate'
+            || $stage === 'critical'
+        ) {
+            try {
+                /** @var StorefrontProductWidgetCatalog $widgetCatalog */
+                $widgetCatalog = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class);
+                $cards = $widgetCatalog->homepageFeaturedCards(8);
+                if (\is_array($cards)) {
+                    $seeded++;
+                    $bags[] = 'product.homepage.featured_cards';
+                }
+            } catch (\Throwable $e) {
+                $errors[] = 'homepage_featured_cards:' . $e->getMessage();
+            }
         }
 
         if ($heavyMode !== 'light_only') {
@@ -244,13 +268,15 @@ final class StorefrontHotCacheBagSeeder
 
     /**
      * Heavy cold rebuild only on post_critical_heavy (after `/`+`/products` seal).
-     * Empty stage must stay light (peer_hydrate must never thrash catalog.full).
+     * locale_bag_prime / peer_hydrate / empty stage must stay light (禁 full×locales).
      */
     private function resolveHeavyMode(string $stage): string
     {
         return match ($stage) {
             'pre_critical' => 'peek_only',
             'post_critical_heavy' => 'seed_sharded',
+            'locale_bag_prime' => 'light_only',
+            'currency_bag_prime' => 'light_only',
             default => 'light_only',
         };
     }

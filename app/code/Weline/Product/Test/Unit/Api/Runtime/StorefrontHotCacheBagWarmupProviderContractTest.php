@@ -39,11 +39,62 @@ final class StorefrontHotCacheBagWarmupProviderContractTest extends TestCase
         self::assertStringContainsString('resolveHeavyMode', $source);
         self::assertStringContainsString("'pre_critical' => 'peek_only'", $source);
         self::assertStringContainsString("'post_critical_heavy' => 'seed_sharded'", $source);
+        self::assertStringContainsString("'locale_bag_prime' => 'light_only'", $source);
+        self::assertStringContainsString("'currency_bag_prime' => 'light_only'", $source);
+        self::assertStringContainsString('homepageFeaturedCards', $source);
+        self::assertStringContainsString('product.homepage.featured_cards', $source);
         self::assertStringContainsString('SchedulerSystem::yield', $source);
         self::assertStringContainsString('SchedulerSystem::yieldDelay(15)', $source);
         self::assertStringContainsString('wls.storefront_hot_cache_bag_prime.stage', $source);
         // Must NOT cold-seed heavy on pre_critical via shouldRunHeavyCatalogSeed===pre_critical alone.
         self::assertStringNotContainsString("return \$stage === 'pre_critical';", $source);
         self::assertStringNotContainsString('new \\Weline\\Product\\Model\\', $source);
+
+        // locale_bag_prime must never enter seed_sharded / publishedOffers(1000) path.
+        $heavyModeBody = $this->extractMethodBody($source, 'resolveHeavyMode');
+        self::assertStringContainsString("'locale_bag_prime' => 'light_only'", $heavyModeBody);
+        self::assertStringContainsString("'currency_bag_prime' => 'light_only'", $heavyModeBody);
+        self::assertStringNotContainsString(
+            "'locale_bag_prime' => 'seed_sharded'",
+            $heavyModeBody,
+        );
+        self::assertStringContainsString('currency_bag_prime', $source);
+        self::assertStringContainsString('peer_hydrate', $source);
+        self::assertStringContainsString('homepageFeaturedCards', $source);
+    }
+
+    public function testHomepageWidgetCatalogPrefersSummariesNotFullThousand(): void
+    {
+        $source = (string)\file_get_contents(
+            BP . 'app/code/Weline/Product/Service/StorefrontProductWidgetCatalog.php'
+        );
+        self::assertStringContainsString('publishedOfferSummaries($fetchLimit)', $source);
+        self::assertStringContainsString('shouldUseListingProjection', $source);
+        // Homepage shelves must not hard-code publishedOffers(1000).
+        self::assertStringNotContainsString('publishedOffers(1000', $source);
+    }
+
+    private function extractMethodBody(string $source, string $method): string
+    {
+        $start = \strpos($source, 'function ' . $method . '(');
+        self::assertNotFalse($start, $method . ' missing');
+        $brace = \strpos($source, '{', $start);
+        self::assertNotFalse($brace);
+        $depth = 0;
+        $len = \strlen($source);
+        for ($i = $brace; $i < $len; $i++) {
+            $ch = $source[$i];
+            if ($ch === '{') {
+                $depth++;
+            } elseif ($ch === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return \substr($source, $brace, $i - $brace + 1);
+                }
+            }
+        }
+        self::fail('unclosed method ' . $method);
+
+        return '';
     }
 }

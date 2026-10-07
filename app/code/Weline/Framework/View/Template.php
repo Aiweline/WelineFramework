@@ -2645,11 +2645,15 @@ class Template extends DataObject implements RequestLocalInterface
             if ($dictionaryModules !== []) {
                 $dictionaryModules = \array_values($dictionaryModules);
                 \sort($dictionaryModules);
-                RequestLifecycleTrace::measurePhase(
-                    'view.hook.dictionary_prefetch',
-                    static fn() => \Weline\Framework\Phrase\Parser::prefetchGlobalDictionaryModules($dictionaryModules),
-                    ['hook' => $name, 'modules' => \count($dictionaryModules), 'module_set_hash' => \sha1(\implode('|', $dictionaryModules))],
-                );
+                // Page-level prime already covered these modules — skip per-hook phase/MGET.
+                if (!\Weline\Framework\Phrase\PageDictionaryPrefetchCoordinator::coversModules($dictionaryModules)) {
+                    RequestLifecycleTrace::measurePhase(
+                        'view.hook.dictionary_prefetch',
+                        static fn() => \Weline\Framework\Phrase\Parser::prefetchGlobalDictionaryModules($dictionaryModules),
+                        ['hook' => $name, 'modules' => \count($dictionaryModules), 'module_set_hash' => \sha1(\implode('|', $dictionaryModules))],
+                    );
+                    \Weline\Framework\Phrase\PageDictionaryPrefetchCoordinator::noteAdditionalModules($dictionaryModules);
+                }
             }
         }
 

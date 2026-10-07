@@ -152,6 +152,28 @@ class RequestContext
         $context->set(self::INITIALIZED_PATH, true);
     }
 
+    /**
+     * Request-scoped memo: compute once per Fiber request, reuse downstream.
+     *
+     * Use for request-stable facts without a CachePolicy (DB snapshots, resolved
+     * codes). Shareable L2 storefront facts still use StorefrontScopeHotCache.
+     * Keys should be dotted + versioned (e.g. `product.identity_cutover.snapshot.v1`).
+     *
+     * @template T
+     * @param callable(): T $builder
+     * @return T
+     */
+    public static function remember(string $key, callable $builder): mixed
+    {
+        if (self::has($key)) {
+            return self::get($key);
+        }
+        $value = $builder();
+        self::set($key, $value);
+
+        return $value;
+    }
+
     public static function get(string $key, mixed $default = null): mixed
     {
         $context = Context::getCurrent();

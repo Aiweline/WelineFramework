@@ -1813,6 +1813,38 @@ class Parser
         if (!Runtime::isPersistent() || $modules === [] || self::translationResolutionDepth() > 0 || self::requestState()->isLoadingWords) {
             return;
         }
+        $locale = LocaleFallbackChain::normalize(State::getLangLocal());
+        if ($locale === '' || EventDictionary::isExclusive($locale)) {
+            return;
+        }
+        // 只读已冻结对象；没有对象或局部语言不同，继续使用 Parser 原来的回退链。
+        $context = \Weline\Framework\Cache\StorefrontCacheKeyContext::current();
+        $locales = $context !== null && LocaleFallbackChain::normalize($context->lang) === $locale
+            ? $context->translationLocales
+            : self::localeChain($locale);
+        self::prefetchGlobalDictionaryModulesForLocales($modules, $locales);
+    }
+
+    /**
+     * Cold-locale P1: seed phrase Shared module/global maps for explicit locales
+     * (chrome union). Does not open N× hook phases; fail-open; no layer activate.
+     *
+     * @param list<string> $modules
+     * @param list<string> $locales
+     */
+    public static function prefetchGlobalDictionaryModulesForLocales(array $modules, array $locales): void
+    {
+        if (!Runtime::isPersistent() || $modules === [] || $locales === []
+            || self::translationResolutionDepth() > 0
+        ) {
+            return;
+        }
+        // Outside a request latch, skip isLoadingWords guard so deferred prime can run.
+        if (RequestContext::isInitialized() && RequestContext::getId() !== null
+            && self::requestState()->isLoadingWords
+        ) {
+            return;
+        }
         $modules = \array_values(\array_unique(\array_map(
             static fn(string $module): string => self::getFullModuleName(\trim($module)),
             \array_values(\array_filter($modules, static fn(mixed $module): bool => \is_string($module) && \trim($module) !== '')),
@@ -1821,8 +1853,16 @@ class Parser
             return;
         }
         \sort($modules);
-        $locale = LocaleFallbackChain::normalize(State::getLangLocal());
-        if ($locale === '' || EventDictionary::isExclusive($locale)) {
+        $normalizedLocales = [];
+        foreach ($locales as $locale) {
+            $locale = LocaleFallbackChain::normalize((string)$locale);
+            if ($locale === '' || EventDictionary::isExclusive($locale)) {
+                continue;
+            }
+            $normalizedLocales[$locale] = $locale;
+        }
+        $normalizedLocales = \array_values($normalizedLocales);
+        if ($normalizedLocales === [] || DictionaryCacheNamespace::fingerprint($normalizedLocales) === null) {
             return;
         }
 
@@ -1832,22 +1872,11 @@ class Parser
             if (!$provider instanceof ModuleGlobalDictionaryProviderInterface) {
                 return;
             }
-            // 只读已冻结对象；没有对象或局部语言不同，继续使用 Parser 原来的回退链。
-            $context = \Weline\Framework\Cache\StorefrontCacheKeyContext::current();
-            $locales = $context !== null && LocaleFallbackChain::normalize($context->lang) === $locale
-                ? $context->translationLocales
-                : self::localeChain($locale);
-            if (DictionaryCacheNamespace::fingerprint($locales) === null) {
-                return;
-            }
-            // Prefetch is speculative: a successful module only needs one eager read
-            // per request. If its Worker bag is later evicted, normal translation
-            // resolution still reloads on demand; failed prefetches remain retryable.
             $state = RequestContext::isInitialized() && RequestContext::getId() !== null
                 ? self::requestState()
                 : null;
             $requested = self::withNullSourceGlobalModule($modules);
-            foreach ($locales as $candidateLocale) {
+            foreach ($normalizedLocales as $candidateLocale) {
                 $alreadyPrefetched = $state?->prefetchedGlobalModules[$candidateLocale] ?? [];
                 $needed = \array_values(\array_filter(
                     $requested,

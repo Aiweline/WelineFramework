@@ -128,5 +128,10 @@ final class WlsRuntimeAdoptHomepageFpcMetaContractTest extends TestCase
             $primeFinalPos > $localeRunPos,
             'post_locale retouch call site must remain after locale FPC (gated by localeSsrRan)'
         );
+        // Cold-locale: locale_bag_prime is after done, not inside heavy.
+        $donePos = \strpos($source, "logDeferredStorefrontWarmupStage('done'", (int)$heavyPos);
+        self::assertNotFalse($donePos);
+        $localeBagPos = \strpos($source, 'runLocaleBagPrimeShards', (int)$donePos);
+        self::assertNotFalse($localeBagPos);
     }
 }

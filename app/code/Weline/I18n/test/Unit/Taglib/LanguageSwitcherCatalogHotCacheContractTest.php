@@ -36,5 +36,18 @@ final class LanguageSwitcherCatalogHotCacheContractTest extends TestCase
             '/rememberPolicy\([\s\S]{0,400}buildHtmlCacheKey|rememberPolicy\([\s\S]{0,400}\$htmlCache/',
             $taglib,
         );
+
+        // P2: storefront catalog warm exists; dead getLanguageOptions path removed.
+        self::assertStringContainsString('function warmStorefrontCatalogCaches', $taglib);
+        self::assertStringContainsString('buildLanguagesFromScope', $taglib);
+        self::assertStringContainsString('LocaleCatalogScopeResolver', $taglib);
+        self::assertStringNotContainsString('getLanguageOptions(', $taglib);
+        self::assertStringContainsString('warmBackendCaches', $taglib);
+        // Warm must not write path-bound HTML cache.
+        $warmBodyStart = strpos($taglib, 'function warmStorefrontCatalogCaches');
+        self::assertNotFalse($warmBodyStart);
+        $warmSlice = substr($taglib, $warmBodyStart, 1200);
+        self::assertStringNotContainsString('$htmlCache', $warmSlice);
+        self::assertStringNotContainsString('buildHtmlCacheKey', $warmSlice);
     }
 }

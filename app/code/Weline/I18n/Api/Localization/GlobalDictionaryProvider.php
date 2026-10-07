@@ -91,6 +91,24 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
      */
     private function globalWords(string $locale): array
     {
+        $locale = \trim($locale);
+        if ($locale === '') {
+            return [];
+        }
+        // Same-request memo: avoid N× full-table NULL source_module scans on cold paths.
+        $memoKey = 'i18n.global_dictionary.null_source.v1.' . $locale;
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)
+                && \Weline\Framework\Runtime\RequestContext::isInitialized()
+            ) {
+                $memo = \Weline\Framework\Runtime\RequestContext::get($memoKey);
+                if (\is_array($memo)) {
+                    return $memo;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
         $pdoWords = [];
         try {
             $model = ObjectManager::getInstance(Dictionary::class)->reset();
@@ -116,6 +134,15 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
             }
         } catch (\Throwable) {
             // Fall through to empty — module-scoped path still works.
+        }
+
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)
+                && \Weline\Framework\Runtime\RequestContext::isInitialized()
+            ) {
+                \Weline\Framework\Runtime\RequestContext::set($memoKey, $pdoWords);
+            }
+        } catch (\Throwable) {
         }
 
         return $pdoWords;

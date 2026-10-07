@@ -8,7 +8,7 @@ P8 纪要：`meetings/架构-p8.md` · 性能复审：`meetings/性能检查-rev
 | id | 意图 | 证据 |
 |----|------|------|
 | UC-warm | 公网 cookieless `/` `/products` 暖路径 FPC HIT+edge HIT，TTFB 稳 &lt;50ms | curl 头+TTFB |
-| UC-deferred | reload 后 deferred：pre_critical **禁止**冷 `publishedOffers(1000)` 同步；**必跑墙钟** `done≤5000`（推荐 ≤3000；禁伪加速比）；默认不含多语全量 SSR；**P8 O1**：`locale_idle_skipped`（或未跑 locale SSR）后 **不得**默认同成本 `post_locale` 全量 bag（允许 skip/peek/noop stage） | warmup.log stage elapsed |
+| UC-deferred | reload 后 deferred：pre_critical **禁止**冷 `publishedOffers(1000)` 同步；**必跑墙钟** `done≤5000`（推荐 ≤3000；禁伪加速比）；默认不含多语全量 SSR；**P8 O1**：`locale_idle_skipped`（或未跑 locale SSR）后 **不得**默认同成本 `post_locale` 全量 bag（允许 skip/peek/noop stage）；**`locale_bag_prime` 在 `done` 之后**（有界轻袋×启用 locale×主推 currency；**不计入**必跑墙钟；禁 `full×locales`；禁塞进 `post_critical_heavy`） | warmup.log stage elapsed |
 | UC-locale | fail-open 近处女窗 `localeBudget=0`；**P7 B′** 默认 `locale_idle_budget=0`（Provider 仍可声明→`locale_deferred_paths`；禁默认全量 HTML SSR）；critical `/`+`/products` 先 seal | warmup paths/order · idle skipped |
 | UC-post-locale | **P8**：仅当本轮实际跑过 locale FPC SSR 才允许有界 `post_locale` retouch；skip 路径须见 `post_locale_skipped`（或等价）而非秒级全量 primed | warmup.log · UT |
 | UC-peer | peer hydrate：ScopeIdentity 齐；chrome miss 短路径合规（禁假 HIT）；delay 调整须 Shared 就绪证据 | warmup peer errors↓ |

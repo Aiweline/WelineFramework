@@ -51,6 +51,10 @@ Root 已通过 43 tests / 171 assertions 有效回归，并统一编译、滚动
 
 `ParserModulePrefetchTest.php` 覆盖非激活行为、旧层和同名词优先级、后续消费零词表 I/O、跨 Worker L2、语言及父代次、失败恢复，以及渐进模块加载的内存增长。真实冷请求收益由统一编译后的页面 trace 验证，不能用预取 fixture 或整页缓存命中代替。
 
+## 页级模块并集预取（2026-10-07）
+
+布局 fetch 前 `StorefrontWidgetRuntimeSchedule` 调用 `PageDictionaryPrefetchCoordinator::primeBeforeLayoutFetch`：合并店面 base hooks + 编译模板中的 `getHook('…')` 名，解析 source modules，一次 `view.page.dictionary_prefetch`，闩 `phrase.page_dictionary_union.primed.v1` / `phrase.page_dictionary_modules.v1`。随后 `Template::getHook` 若 modules ⊆ 页级集合则**跳过** `view.hook.dictionary_prefetch`。嵌套新模块仍增量预取并 `noteAdditionalModules`。
+
 ## Hook 文件批次预取
 
 `Template::getHook()` 在 HookReader 已解析文件、完成 `solo` 筛选之后，使用 `TraitTemplate::processModuleSourceFilePath('hooks', $file)` 获取实际文件来源模块，并统一调用上述非激活预取 API。注册模块可能指向另一个 `Module::path`，不能直接把注册列表键当作来源模块。预取仅排序去重后的模块副本，原文件集合与执行顺序不变；真正激活仍由逐文件 `fetchHookHtml()` 完成。兼容旧 Worker 未提供预取方法的滚动发布。

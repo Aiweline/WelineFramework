@@ -64,6 +64,25 @@ PHP;
         self::assertStringContainsString('StorefrontWidgetRuntimeAssetPrimer', $scheduleSrc);
     }
 
+    public function testHotCachePathPrefetchRunsBeforeGetFetchFileScan(): void
+    {
+        $scheduleSrc = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Runtime/StorefrontWidgetRuntimeSchedule.php'
+        );
+        $hotPos = strpos($scheduleSrc, 'delegateHotCachePagePrefetch($template, ...$templateRefs)');
+        $dictPos = strpos($scheduleSrc, 'delegatePageDictionaryPrefetch($template, ...$templateRefs)');
+        $scanPos = strpos($scheduleSrc, '$this->scanTemplateRefs($template, ...$templateRefs)');
+        self::assertNotFalse($hotPos);
+        self::assertNotFalse($dictPos);
+        self::assertNotFalse($scanPos);
+        self::assertLessThan($dictPos, $hotPos, 'HotCache/path prefetch must run before dictionary prime');
+        self::assertLessThan($scanPos, $dictPos, 'dictionary prime must run before getFetchFile scan');
+        self::assertStringContainsString(
+            'delegateHotCachePagePrefetch($template, ...$templateRefs)',
+            $scheduleSrc
+        );
+    }
+
     public function testThemeHookPrimesBeforeLayoutFetch(): void
     {
         $observer = (string)file_get_contents(

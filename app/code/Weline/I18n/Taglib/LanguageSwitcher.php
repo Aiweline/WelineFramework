@@ -504,12 +504,39 @@ class LanguageSwitcher implements TaglibInterface
     }
 
     /**
+     * Seed catalog HotCache for display locales (backend/admin warm).
+     * Catalog logicalKey includes displayLocale; never folds current URL / DOM ids.
+     *
      * @param string[] $displayLocales
      */
     public static function warmBackendCaches(array $displayLocales = []): void
     {
+        self::warmStorefrontCatalogCaches($displayLocales);
+    }
+
+    /**
+     * Cold-locale P2: storefront-symmetric catalog prime for enabled display locales.
+     * Only `i18n.language_switcher.catalog` bags — never path-bound `$htmlCache`.
+     *
+     * @param string[] $displayLocales
+     */
+    public static function warmStorefrontCatalogCaches(array $displayLocales = []): void
+    {
         if ($displayLocales === []) {
-            $displayLocales = [State::getLangLocal(), 'zh_Hans_CN', 'en_US'];
+            try {
+                $displayLocales = [State::getLangLocal(), 'zh_Hans_CN', 'en_US'];
+            } catch (\Throwable) {
+                $displayLocales = ['zh_Hans_CN', 'en_US'];
+            }
+        }
+
+        $websiteId = 0;
+        try {
+            if (\class_exists(\Weline\Websites\Model\Website::class)) {
+                $websiteId = (int)\Weline\Websites\Model\Website::ID_DEFAULT;
+            }
+        } catch (\Throwable) {
+            $websiteId = 0;
         }
 
         $seen = [];
@@ -518,12 +545,42 @@ class LanguageSwitcher implements TaglibInterface
             if ($displayLocale === '') {
                 continue;
             }
-            $cacheKey = \strtolower($displayLocale);
+            $cacheKey = \strtolower(\str_replace('-', '_', $displayLocale));
             if (isset($seen[$cacheKey])) {
                 continue;
             }
             $seen[$cacheKey] = true;
-            self::getLanguageOptions($displayLocale, true, 0);
+            try {
+                /** @var LocaleCatalogScopeResolver $resolver */
+                $resolver = ObjectManager::getInstance(LocaleCatalogScopeResolver::class);
+                $scope = $resolver->resolve(
+                    false,
+                    $websiteId,
+                    [],
+                    $displayLocale,
+                    null,
+                    $websiteId,
+                );
+                self::buildLanguagesFromScope($scope, $displayLocale);
+                $chromeSources = [
+                    '搜索国家、语言或代码...',
+                    '切换语言',
+                    '没有匹配的语言',
+                    '申请支持其他语言',
+                    '正在加载语言目录与人机验证...',
+                    '申请表加载失败',
+                    '重新加载',
+                    '加载失败，请稍后重试',
+                    '关闭',
+                    '未分组国家',
+                ];
+                try {
+                    Parser::prefetchWords($chromeSources, $displayLocale);
+                } catch (\Throwable) {
+                }
+            } catch (\Throwable) {
+                // Fail-open: cold switcher still builds on demand.
+            }
         }
     }
 

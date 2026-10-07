@@ -56,6 +56,9 @@ return [
             'charset' => 'utf8',
             'collate' => 'utf8_general_ci',
             'persistent' => true,
+            // 必须 ≥ 目标实例 wls.fiber.max_active（含 wls.servers.<name>.fiber 覆盖）。
+            // server:start 对违规 fail-closed。c1000 / max_active=128 时建议 ≥128，
+            // 且 PostgreSQL max_connections ≥ Worker 峰值（含 new-first reload 翻倍）× pool_size。
             'pool_size' => 16,
             'timeout' => 30,
         ],
@@ -303,6 +306,10 @@ return [
             'storefront_deferred_warmup_peer_wait_ms' => 5000,
             // 只有指定 Worker 执行冷构建，其余 Worker 复用共享 FPC；设为 0 可恢复全 Worker 预热。
             'storefront_deferred_warmup_owner_worker_id' => 1,
+            // UC-deferred done 之后：按启用 locale×主推 currency 有界种 homepage critical 轻袋（禁 full×locales）。
+            // 不计入 done≤5s 必跑墙钟；0=跳过；elapsed_cap 超限 → locale_bag_prime_truncated。
+            'storefront_locale_bag_prime_max_locales' => 8,
+            'storefront_locale_bag_prime_elapsed_cap_ms' => 8000,
             // READY 前每个业务 Worker 必须完成真实首页动态渲染并建立缓存。
             // dynamic_target_ms 默认是发布性能门禁，不作为进程存活条件；仅诊断时显式开启严格阻断。
             'dynamic_ready_gate_fail_open' => true,
