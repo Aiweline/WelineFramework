@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Theme',
-    "version" => '2.2.710',
+    "version" => '2.2.730',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '>=2.5.0',

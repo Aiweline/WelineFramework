@@ -136,9 +136,31 @@
             width: 100%;
             min-height: 0;
         }
+        /* Bare Customer auth form (no stage widget): breathe from header/footer */
         .account-auth-shell.auth-login-card {
-            padding-block: 0;
+            padding-block: clamp(3.5rem, 8vh, 5rem);
+            padding-inline: clamp(0.75rem, 3vw, 1.5rem);
+            box-sizing: border-box;
+            justify-content: center;
+            align-items: center;
             background: transparent;
+        }
+        .account-auth-shell.auth-login-card .account-auth__content-root-slot,
+        .account-auth-shell.auth-login-card .account-auth__content-slot {
+            justify-content: center;
+            align-items: center;
+        }
+        /* Stage widget already owns padding — avoid double gutter */
+        .account-auth-shell.auth-login-card:has(.account-login-widget) {
+            padding-block: 0;
+            padding-inline: 0;
+            justify-content: stretch;
+            align-items: stretch;
+        }
+        .account-auth-shell.auth-login-card:has(.account-login-widget) .account-auth__content-root-slot,
+        .account-auth-shell.auth-login-card:has(.account-login-widget) .account-auth__content-slot {
+            justify-content: stretch;
+            align-items: stretch;
         }
         /* First-paint: adaptive grid stage (widget only; no absolute clip) */
         .account-login-widget {
@@ -301,8 +323,18 @@
                                     </div>
                                 </div>
                             <?php endif; ?>
-                            <!-- Theme 归属内嵌部件：主题编辑器可改背景图/广告文案（Copy-on-Write） -->
-                            <w:slot id="foreign-theme-account-challenge" name="account-challenge" accept="account-challenge,auth-form" multiple="false" exclusive="true" position="content"></w:slot>
+                            <?php
+                            // 两步验证主内容归属 Customer。
+                            ?>
+                            <if condition="meta.content">
+                                {{meta.content}}
+                                <elseif condition="content"/>
+                                {{content}}
+                                <elseif condition="meta.contentTemplate"/>
+                                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                                <else/>
+                                <?php echo $this->fetch('Weline_Customer::templates/frontend/account/challenge.phtml'); ?>
+                            </if>
                             </w:slot>
                         </w:slot>
                     </div>

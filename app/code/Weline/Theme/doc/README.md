@@ -12,6 +12,7 @@
 6. 按任务继续读：
    - 布局：[`layout-discovery-guide.md`](./layout-discovery-guide.md)
    - **布局固化与应用部件默认注入（权威 · 纯 PHTML）**：[`布局固化与默认注入.md`](./布局固化与默认注入.md) — 原模板、默认注入和编辑意图生成派生 PHTML；结构、参数、语言配置变更均重固；有派生文件优先选它，否则用原模板，统一走正常 Template/Taglib/语言 `com_*`；固化目录不保留侧车；仅人工卸载可省略必装。
+   - **Theme 机制边界（严重）**：[`开发/spec/theme-mechanism-not-foreign-content.md`](./开发/spec/theme-mechanism-not-foreign-content.md) — Theme 只负责机制；禁止外模块主内容空挂 Theme required 注入。
    - **主题固化物版本模型与历史实施记录**：[`开发/spec/layout-entity-per-version-isolation.md`](./开发/spec/layout-entity-per-version-isolation.md) — 版本独占、持久修订、单页发布与 Scope 继承；当前产物及读取合同以纯 PHTML 权威文为准，历史测试不代表本次改造已验收。
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
    - **前台 section `weline-code`（强约束）**：[`frontend-section-weline-code.md`](./frontend-section-weline-code.md) — 字面 `<section>` 与 `w:slot wrapper="section"` 必须非空语义 code；改模板后跑 `php bin/w frontend:check-section-code`
@@ -32,14 +33,17 @@
 
 ## 模块职责
 
-`Weline_Theme` 负责：
+`Weline_Theme` 负责**主题机制**（不是业务模块页面主内容）：
 
 - 默认主题源目录 `view/theme/{frontend|backend}`
-- 布局发现与覆盖优先级
+- 布局发现与覆盖优先级；slot 宿主与固化 / 默认注入**运行时**
 - partial / component / widget / variables / colors / assets 组织
 - 主题配置读取与运行时主题选择
 - 可视化编辑器使用的 layout / slot / widget 元数据
 - `Theme.js` 前端运行时
+- Theme **自有** chrome / 可复用内容部件；给外国模块的**空扩展槽**（注入声明在拥有模块）
+
+**不负责**：Customer 登录/注册、Product PDP 主购区、Checkout 主流程等外模块 path 主内容。禁止用 Theme required `default_injections` 把外模块布局「空挂」到 Theme。权威：[开发/spec/theme-mechanism-not-foreign-content.md](./开发/spec/theme-mechanism-not-foreign-content.md)；总指南 §6.0。
 
 ## 当前开发要点
 

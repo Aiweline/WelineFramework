@@ -45,7 +45,7 @@ $heading = trim((string)($this->getData('login_widget_title') ?? ''));
 $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
 // Do not pass params via w:widget attribute (short-echo PHP inside attrs breaks Taglib).
 ?>
-<section class="w-card w-auth-login w-auth-login--amazon" data-w-component="account-login"
+<section class="w-card w-auth-login w-auth-login--amazon w-auth-login--split" data-w-component="account-login"
          data-w-auth-return="<?= $safe($redirectUrl) ?>"
          data-weline-load="api,account"
          weline-code="customer.account.login"
@@ -75,104 +75,109 @@ $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
         <div class="w-alert" data-w-login-feedback role="alert" hidden></div>
     </div>
 
-    <div class="w-auth-login__social w-auth-login__social--quick">
-        <p class="w-auth-login__social-title"><lang>快捷登录</lang></p>
-        <?php
-        // Same-module social login is embedded once in this slot.
-        // The owning module declares placement=layout without default_injections.
-        // redirect_url stays on the login root (data-w-auth-return); the widget resolves return URL itself.
-        ?>
-        <w:slot id="account-login-social-providers"
-                weline-code="customer.account.login.social_providers"
-                name="社媒登录入口"
-                accept="account-login-social-providers,layout-account-login-social-providers,social-login"
-                reject="header,footer"
-                multiple="false"
-                exclusive="false"
-                position="content"
-                class="w-auth-login__social-slot">
-            <w:widget type="form" name="account-social-login" />
-        </w:slot>
-        <w:hook name="Weline_Customer::frontend::account::login::providers"/>
+    <?php
+    // Split: 左快捷 / 右账密，压低单栏高度。无社媒提供者时 CSS :has 收成单栏。
+    // Same-module social login is embedded once in this slot.
+    // redirect_url stays on the login root (data-w-auth-return); the widget resolves return URL itself.
+    ?>
+    <div class="w-auth-login__split">
+        <aside class="w-auth-login__social w-auth-login__social--quick" aria-label="<?= $safe(__('快捷登录')) ?>">
+            <p class="w-auth-login__social-title"><lang>快捷登录</lang></p>
+            <w:slot id="account-login-social-providers"
+                    weline-code="customer.account.login.social_providers"
+                    name="社媒登录入口"
+                    accept="account-login-social-providers,layout-account-login-social-providers,social-login"
+                    reject="header,footer"
+                    multiple="false"
+                    exclusive="false"
+                    position="content"
+                    class="w-auth-login__social-slot">
+                <w:widget type="form" name="account-social-login" />
+            </w:slot>
+            <w:hook name="Weline_Customer::frontend::account::login::providers"/>
+        </aside>
+
+        <div class="w-auth-login__split-rule" role="presentation" aria-hidden="true">
+            <span class="w-auth-login__split-rule-text w-auth-login__split-rule-text--short"><lang>或</lang></span>
+            <span class="w-auth-login__split-rule-text w-auth-login__split-rule-text--long"><lang>或使用账户登录</lang></span>
+        </div>
+
+        <w:form id="loginForm" action="@url{'customer/account/login'}" method="post"
+                class="w-form w-auth-login__form" csrf="off" captcha="lazy" intent="customer.login"
+                data-w-login-form>
+            <?= $this->getFormKey('customer/account/login') ?>
+            <input type="hidden" name="redirect_url" value="<?= $safe($redirectUrl) ?>">
+
+            <div class="w-field">
+                <label class="w-field__label" for="username">
+                    <w:icon name="user" size="md"></w:icon><lang>用户名或邮箱</lang>
+                </label>
+                <input class="w-input" type="text" id="username" name="username"
+                       placeholder="<?= $safe(__('请输入用户名或邮箱')) ?>"
+                       required autocomplete="username" autofocus>
+            </div>
+
+            <div class="w-field">
+                <label class="w-field__label" for="password">
+                    <w:icon name="lock" size="md"></w:icon><lang>密码</lang>
+                </label>
+                <div class="w-auth-login__password">
+                    <input class="w-input" type="password" id="password" name="password"
+                           placeholder="<?= $safe(__('请输入密码')) ?>"
+                           required autocomplete="current-password">
+                    <button type="button" class="w-button" data-w-password-toggle data-w-password-target="password"
+                            data-label-show="<?= $safe(__('显示密码')) ?>" data-label-hide="<?= $safe(__('隐藏密码')) ?>"
+                            data-tone="quiet" data-size="sm" aria-label="<?= $safe(__('显示密码')) ?>" aria-pressed="false">
+                        <span data-w-password-show>
+                            <w:icon name="eye" size="md"></w:icon>
+                        </span>
+                        <span data-w-password-hide hidden>
+                            <w:icon name="eye-off" size="md"></w:icon>
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="w-auth-login__meta">
+                <div class="w-auth-login__meta-tools">
+                    <div class="w-field w-auth-login__remember">
+                        <label class="w-field__label" for="remember_duration">
+                            <w:icon name="clock" size="md"></w:icon><lang>记住</lang>
+                        </label>
+                        <select class="w-select" id="remember_duration" name="remember_duration" aria-label="<?= $safe(__('记住登录状态')) ?>">
+                            <option value="0"><lang>本次会话</lang></option>
+                            <option value="21600"><lang>6小时</lang></option>
+                            <option value="86400"><lang>1天</lang></option>
+                            <option value="604800" selected><lang>1周</lang></option>
+                            <option value="2592000"><lang>1个月</lang></option>
+                        </select>
+                    </div>
+                    <div class="w-auth-login__forgot">
+                        <?php if ($redirectUrl !== ''): ?>
+                            <a href="@url{'customer/account/forgot-password'|['redirect_url' => $redirectUrl]}" class="w-auth-login__forgot-link">
+                                <lang>忘记密码？</lang>
+                            </a>
+                        <?php else: ?>
+                            <a href="@url{'customer/account/forgot-password'}" class="w-auth-login__forgot-link">
+                                <lang>忘记密码？</lang>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div data-weline-form-captcha-slot></div>
+
+            <button type="submit" id="loginBtn" class="w-button w-auth-login__submit" data-w-login-submit data-tone="primary">
+                <span data-w-login-idle-label>
+                    <w:icon name="login" size="md"></w:icon><span><lang>登录</lang></span>
+                </span>
+                <span data-w-login-busy-label hidden>
+                    <span><lang>登录中...</lang></span>
+                </span>
+            </button>
+        </w:form>
     </div>
-
-    <p class="w-auth-login__social-divider" role="presentation"><span><lang>或使用账户登录</lang></span></p>
-
-    <w:form id="loginForm" action="@url{'customer/account/login'}" method="post"
-            class="w-form w-auth-login__form" csrf="off" captcha="lazy" intent="customer.login"
-            data-w-login-form>
-        <?= $this->getFormKey('customer/account/login') ?>
-        <input type="hidden" name="redirect_url" value="<?= $safe($redirectUrl) ?>">
-
-        <div class="w-field">
-            <label class="w-field__label" for="username">
-                <w:icon name="user" size="md"></w:icon><lang>用户名或邮箱</lang>
-            </label>
-            <input class="w-input" type="text" id="username" name="username"
-                   placeholder="<?= $safe(__('请输入用户名或邮箱')) ?>"
-                   required autocomplete="username" autofocus>
-        </div>
-
-        <div class="w-field">
-            <label class="w-field__label" for="password">
-                <w:icon name="lock" size="md"></w:icon><lang>密码</lang>
-            </label>
-            <div class="w-auth-login__password">
-                <input class="w-input" type="password" id="password" name="password"
-                       placeholder="<?= $safe(__('请输入密码')) ?>"
-                       required autocomplete="current-password">
-                <button type="button" class="w-button" data-w-password-toggle data-w-password-target="password"
-                        data-label-show="<?= $safe(__('显示密码')) ?>" data-label-hide="<?= $safe(__('隐藏密码')) ?>"
-                        data-tone="quiet" data-size="sm" aria-label="<?= $safe(__('显示密码')) ?>" aria-pressed="false">
-                    <span data-w-password-show>
-                        <w:icon name="eye" size="md"></w:icon>
-                    </span>
-                    <span data-w-password-hide hidden>
-                        <w:icon name="eye-off" size="md"></w:icon>
-                    </span>
-                </button>
-            </div>
-        </div>
-
-        <div class="w-auth-login__meta">
-            <div class="w-auth-login__meta-tools">
-                <div class="w-field w-auth-login__remember">
-                    <label class="w-field__label" for="remember_duration">
-                        <w:icon name="clock" size="md"></w:icon><lang>记住</lang>
-                    </label>
-                    <select class="w-select" id="remember_duration" name="remember_duration" aria-label="<?= $safe(__('记住登录状态')) ?>">
-                        <option value="0"><lang>本次会话</lang></option>
-                        <option value="21600"><lang>6小时</lang></option>
-                        <option value="86400"><lang>1天</lang></option>
-                        <option value="604800" selected><lang>1周</lang></option>
-                        <option value="2592000"><lang>1个月</lang></option>
-                    </select>
-                </div>
-                <div class="w-auth-login__forgot">
-                    <?php if ($redirectUrl !== ''): ?>
-                        <a href="@url{'customer/account/forgot-password'|['redirect_url' => $redirectUrl]}" class="w-auth-login__forgot-link">
-                            <lang>忘记密码？</lang>
-                        </a>
-                    <?php else: ?>
-                        <a href="@url{'customer/account/forgot-password'}" class="w-auth-login__forgot-link">
-                            <lang>忘记密码？</lang>
-                        </a>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-
-        <div data-weline-form-captcha-slot></div>
-
-        <button type="submit" id="loginBtn" class="w-button w-auth-login__submit" data-w-login-submit data-tone="primary">
-            <span data-w-login-idle-label>
-                <w:icon name="login" size="md"></w:icon><span><lang>登录</lang></span>
-            </span>
-            <span data-w-login-busy-label hidden>
-                <span><lang>登录中...</lang></span>
-            </span>
-        </button>
-    </w:form>
 
     <footer class="w-auth-login__footer">
         <p class="w-auth-login__divider" role="presentation"><span><lang>新客户？</lang></span></p>

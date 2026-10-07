@@ -1,4 +1,73 @@
-/* Critical login layout — keep in sync with account-login.css meta row (Theme UI pack may cache). */
+/* Critical login layout — keep in sync with account-login.css (Theme UI pack may cache). */
+/* Split: 左快捷 / 右账密；≤39.99rem 账密优先再快捷。 */
+
+[data-w-component="account-login"].w-auth-login--amazon.w-auth-login--split{
+    width:min(40rem,calc(100% - 2rem))!important;
+    max-width:40rem;
+}
+
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split{
+    display:grid;
+    grid-template-columns:minmax(8.75rem,.88fr) auto minmax(16rem,1.4fr);
+    align-items:stretch;
+    column-gap:0;
+    width:100%;
+    min-width:0;
+    box-sizing:border-box;
+}
+
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:.5rem;
+    margin:0;
+    padding:.75rem .35rem;
+    color:#565959;
+    font-size:.75rem;
+    line-height:1.2;
+    white-space:nowrap;
+}
+
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule::before,
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule::after{
+    content:"";
+    flex:1 1 auto;
+    width:1px;
+    min-height:1.25rem;
+    background:var(--color-border,var(--weline-theme-border-color,#d5d9d9));
+}
+
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule-text--long{display:none;}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule-text--short{display:inline;}
+
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social{
+    display:flex!important;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:.55rem;
+    margin:0!important;
+    padding:1rem .85rem 1rem 1.15rem!important;
+    min-width:0;
+    text-align:center;
+}
+
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social-title{
+    display:block;
+    margin:0;
+    color:#565959;
+    font-size:.8125rem;
+    text-align:center;
+}
+
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__form{
+    gap:.7rem;
+    min-width:0;
+    padding:.35rem 1.25rem 1rem 1rem!important;
+}
+
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta{
     display:block!important;width:100%;min-width:0;
 }
@@ -43,14 +112,44 @@
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__password>.w-button{
     border:0!important;background:transparent!important;box-shadow:none!important;color:var(--color-link)!important;
 }
-[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__form{gap:.7rem;}
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__header{padding:1.15rem 1.25rem .35rem;gap:.25rem;}
-[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social{padding:.15rem 1.25rem .2rem;}
-[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social-title{
-    display:block;margin:0;color:#565959;font-size:.8125rem;text-align:center;
+
+/* 无社媒入口：收成单栏账密 */
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split:not(:has(.auth-form__provider,.account-social-login__item,.account-social-login__btn--logo)){
+    grid-template-columns:1fr;
 }
-[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social-divider{margin:.35rem 1.25rem .15rem;}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split:not(:has(.auth-form__provider,.account-social-login__item,.account-social-login__btn--logo)) .w-auth-login__social,
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split:not(:has(.auth-form__provider,.account-social-login__item,.account-social-login__btn--logo)) .w-auth-login__split-rule{
+    display:none!important;
+}
+
 @media (max-width:39.99rem){
+    [data-w-component="account-login"].w-auth-login--amazon.w-auth-login--split{
+        width:min(100% - 1rem,24rem)!important;
+    }
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split{
+        grid-template-columns:1fr;
+    }
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__form{order:1;padding-inline:1rem!important;}
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule{
+        order:2;
+        flex-direction:row;
+        padding:.35rem 1rem;
+        gap:.65rem;
+    }
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule::before,
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule::after{
+        width:auto;
+        height:1px;
+        min-height:0;
+        flex:1 1 auto;
+    }
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule-text--short{display:none;}
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule-text--long{display:inline;}
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social{
+        order:3;
+        padding:0 1rem 1rem!important;
+    }
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta-tools{flex-wrap:wrap!important;}
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember{max-width:none!important;}
 }

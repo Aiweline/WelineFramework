@@ -7,83 +7,73 @@ namespace Weline\Customer\Test\Unit\View;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Customer 登录表单由 Theme 布局内嵌 account-login 部件承载；本模块只保留表单与 shell。
+ * 登录表单归属 Customer：控制器 fetch login.phtml；布局走 content，不依赖 Theme 必装注入。
  */
 final class AccountLoginWidgetContractTest extends TestCase
 {
-    public function testLoginShellLeavesStageToThemeInlineWidget(): void
+    public function testLoginOwnedByCustomerLayoutAndController(): void
     {
-        $shell = \dirname(__DIR__, 3) . '/view/templates/frontend/account/login-shell.phtml';
         $loginForm = \dirname(__DIR__, 3) . '/view/templates/frontend/account/login.phtml';
+        $loginLayout = \dirname(__DIR__, 3) . '/view/theme/frontend/layouts/account/login/default.phtml';
+        $authLayout = \dirname(__DIR__, 3) . '/view/theme/frontend/layouts/account/auth.phtml';
         $customerWidgetPhp = \dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Customer/widget.php';
         $themeWidget = \dirname(__DIR__, 4) . '/Theme/view/theme/frontend/widgets/form/account-login/default.phtml';
-        $authLayout = \dirname(__DIR__, 3) . '/view/theme/frontend/layouts/account/auth.phtml';
-        $loginLayout = \dirname(__DIR__, 3) . '/view/theme/frontend/layouts/account/login/default.phtml';
 
-        self::assertFileExists($shell);
         self::assertFileExists($loginForm);
+        self::assertFileExists($loginLayout);
+        self::assertFileExists($authLayout);
         self::assertFileExists($customerWidgetPhp);
         self::assertFileExists($themeWidget);
-        self::assertFileExists($authLayout);
-        self::assertFileExists($loginLayout);
 
-        $customerWidgetSource = (string)\file_get_contents($customerWidgetPhp);
-        self::assertStringContainsString("'account-social-login'", $customerWidgetSource);
-        self::assertStringContainsString('account-login-social-providers', $customerWidgetSource);
-
-        $themeSource = (string)\file_get_contents($themeWidget);
-        self::assertStringContainsString('@widget.code {account-login}', $themeSource);
-        self::assertStringContainsString('type="media_image"', $themeSource);
-        self::assertStringContainsString('account-login-widget__backdrop', $themeSource);
-        self::assertStringContainsString('account-login-widget__rail', $themeSource);
-        self::assertStringContainsString('account-login-widget__dock', $themeSource);
-        self::assertDoesNotMatchRegularExpression(
-            '/account-login-widget__dock[^>]*data-w-component\\s*=\\s*["\']account-login["\']/',
-            $themeSource
-        );
-        $loginFormSource = (string)\file_get_contents($loginForm);
+        $loginFormSource = (string) \file_get_contents($loginForm);
         self::assertMatchesRegularExpression(
             '/data-w-component\\s*=\\s*["\']account-login["\']/',
             $loginFormSource
         );
         self::assertStringContainsString('data-weline-load="api,account"', $loginFormSource);
-        self::assertStringContainsString('promo_title', $themeSource);
-        self::assertStringContainsString('promo_subtitle', $themeSource);
-        self::assertStringContainsString('promo_eyebrow', $themeSource);
-        self::assertStringContainsString('promo_trust', $themeSource);
-        self::assertStringContainsString('accent_color', $themeSource);
-        self::assertStringNotContainsString('account-login-widget__card', $themeSource);
-        self::assertStringNotContainsString('account-login-widget__float', $themeSource);
-        self::assertStringNotContainsString('account-login-widget--split', $themeSource);
+        self::assertStringContainsString('account-login-social-providers', $loginFormSource);
 
-        $widgetPhp = (string)\file_get_contents(
+        $customerWidgetSource = (string) \file_get_contents($customerWidgetPhp);
+        self::assertStringContainsString("'account-social-login'", $customerWidgetSource);
+        self::assertStringContainsString('account-login-social-providers', $customerWidgetSource);
+
+        foreach ([$loginLayout, $authLayout] as $layoutPath) {
+            $layoutSource = (string) \file_get_contents($layoutPath);
+            self::assertStringNotContainsString('foreign-theme-account-login', $layoutSource);
+            self::assertStringNotContainsString('<w:widget type="form" name="account-login"', $layoutSource);
+            self::assertStringContainsString(
+                "Weline_Customer::templates/frontend/account/login.phtml",
+                $layoutSource
+            );
+            self::assertStringContainsString('{{meta.content}}', $layoutSource);
+        }
+
+        $loginLayoutSource = (string) \file_get_contents($loginLayout);
+        self::assertStringContainsString('account/login', $loginLayoutSource);
+        self::assertStringContainsString('__force_login_stage', $loginLayoutSource);
+
+        // Theme 舞台部件可保留作编辑器可选，但不得再声明 required default_injections。
+        $themeSource = (string) \file_get_contents($themeWidget);
+        self::assertStringContainsString('@widget.code {account-login}', $themeSource);
+        self::assertStringContainsString(
+            'Weline_Customer::templates/frontend/account/login.phtml',
+            $themeSource
+        );
+
+        $widgetPhp = (string) \file_get_contents(
             \dirname(__DIR__, 4) . '/Theme/extends/module/Weline_Widget/Weline_Theme/widget.php'
         );
         self::assertStringContainsString('account-login/default.phtml', $widgetPhp);
-        self::assertStringContainsString("'promo_title'", $widgetPhp);
-        self::assertStringContainsString("'promo_subtitle'", $widgetPhp);
-        self::assertStringContainsString("'promo_eyebrow'", $widgetPhp);
-        self::assertStringContainsString("'promo_trust'", $widgetPhp);
-        self::assertStringNotContainsString('default_injections', $themeSource);
-        self::assertStringContainsString('Weline_Customer::templates/frontend/account/login.phtml', $themeSource);
+        self::assertStringNotContainsString('foreign-theme-account-login', $widgetPhp);
 
-        $authSource = (string)\file_get_contents($authLayout);
-        self::assertMatchesRegularExpression(
-            '/<w:widget\\s+type="form"\\s+name="account-login"\\s*\\/>/',
-            $authSource
-        );
-        self::assertStringNotContainsString('account-auth-layout__placeholder', $authSource);
-        self::assertStringNotContainsString('@widget.default_injections', $authSource);
-
-        $loginLayoutSource = (string)\file_get_contents($loginLayout);
-        self::assertStringContainsString('account/login', $loginLayoutSource);
-        self::assertStringContainsString('__force_login_stage', $loginLayoutSource);
-        self::assertStringContainsString('layouts/account/auth.phtml', $loginLayoutSource);
-
-        $loginController = (string)\file_get_contents(
+        $loginController = (string) \file_get_contents(
             \dirname(__DIR__, 3) . '/Controller/Account/Login.php'
         );
         self::assertStringContainsString("layoutType = 'account/login'", $loginController);
-        self::assertStringContainsString('login-shell.phtml', $loginController);
+        self::assertStringContainsString(
+            'Weline_Customer::templates/frontend/account/login.phtml',
+            $loginController
+        );
+        self::assertStringNotContainsString('login-shell.phtml', $loginController);
     }
 }

@@ -151,9 +151,31 @@ layoutType=account/set-password，option=default → layouts/account/set-passwor
             width: 100%;
             min-height: 0;
         }
+        /* Bare Customer auth form (no stage widget): breathe from header/footer */
         .account-auth-shell.auth-login-card {
-            padding-block: 0;
+            padding-block: clamp(3.5rem, 8vh, 5rem);
+            padding-inline: clamp(0.75rem, 3vw, 1.5rem);
+            box-sizing: border-box;
+            justify-content: center;
+            align-items: center;
             background: transparent;
+        }
+        .account-auth-shell.auth-login-card .account-auth__content-root-slot,
+        .account-auth-shell.auth-login-card .account-auth__content-slot {
+            justify-content: center;
+            align-items: center;
+        }
+        /* Stage widget already owns padding — avoid double gutter */
+        .account-auth-shell.auth-login-card:has(.account-login-widget) {
+            padding-block: 0;
+            padding-inline: 0;
+            justify-content: stretch;
+            align-items: stretch;
+        }
+        .account-auth-shell.auth-login-card:has(.account-login-widget) .account-auth__content-root-slot,
+        .account-auth-shell.auth-login-card:has(.account-login-widget) .account-auth__content-slot {
+            justify-content: stretch;
+            align-items: stretch;
         }
         /* First-paint: adaptive grid stage (widget only; no absolute clip) */
         .account-login-widget {
@@ -316,20 +338,25 @@ layoutType=account/set-password，option=default → layouts/account/set-passwor
                                     </div>
                                 </div>
                             <?php endif; ?>
-                            <?php if ($isLoginAuthPage): ?>
-                            <!-- Theme 外来部件由拥有模块向专用空槽默认注入。 -->
-                            <w:slot id="foreign-theme-account-login" name="account-login" accept="account-login,auth-form" multiple="false" exclusive="true" position="content"></w:slot>
-                            <?php elseif ($isRegisterAuthPage): ?>
-                            <w:slot id="foreign-theme-account-register" name="account-register" accept="account-register,auth-form" multiple="false" exclusive="true" position="content"></w:slot>
-                            <?php else: ?>
+                            <?php
+                            // 认证主内容归属 Customer（控制器 fetch → content）。
+                            // 禁止依赖 Theme foreign 槽必装注入；Theme 未固化时不得整页空白。
+                            ?>
                             <if condition="meta.content">
                                 {{meta.content}}
                                 <elseif condition="content"/>
                                 {{content}}
                                 <elseif condition="meta.contentTemplate"/>
                                 <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                                <else/>
+                                <?php
+                                if (!empty($isLoginAuthPage)) {
+                                    echo $this->fetch('Weline_Customer::templates/frontend/account/login.phtml');
+                                } elseif (!empty($isRegisterAuthPage)) {
+                                    echo $this->fetch('Weline_Customer::templates/frontend/account/register.phtml');
+                                }
+                                ?>
                             </if>
-                            <?php endif; ?>
                             </w:slot>
                         </w:slot>
                     </div>

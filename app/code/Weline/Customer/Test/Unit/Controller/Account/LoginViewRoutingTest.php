@@ -71,8 +71,8 @@ class LoginViewRoutingTest extends TestCase
             });
         $controller->expects($this->once())
             ->method('fetch')
-            ->with('Weline_Customer::templates/frontend/account/login-shell.phtml')
-            ->willReturn('rendered-theme-login-page');
+            ->with('Weline_Customer::templates/frontend/account/login.phtml')
+            ->willReturn('rendered-customer-login-page');
         $controller->expects($this->never())
             ->method('redirect');
 
@@ -84,7 +84,7 @@ class LoginViewRoutingTest extends TestCase
         $this->setProtectedProperty($controller, 'request', $request);
         $this->setProtectedProperty($controller, 'session', $authSession);
 
-        $this->assertSame('rendered-theme-login-page', $controller->getIndex());
+        $this->assertSame('rendered-customer-login-page', $controller->getIndex());
     }
 
     public function testLayoutTypeMatchesPathAlignedAccountLoginLayout(): void

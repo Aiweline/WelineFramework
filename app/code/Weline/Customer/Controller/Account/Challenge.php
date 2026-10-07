@@ -48,8 +48,8 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
             'showFooter' => true,
         ]);
 
-        // Stage UI is Theme-inline account-challenge widget (background configurable).
-        return $this->fetch('Weline_Customer::templates/frontend/account/challenge-shell.phtml');
+        // 两步验证表单归属 Customer；布局 account.challenge 渲染本模块 content。
+        return $this->fetch('Weline_Customer::templates/frontend/account/challenge.phtml');
     }
 
     public function postIndex(): string

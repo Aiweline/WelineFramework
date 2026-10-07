@@ -72,8 +72,8 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             'showFooter' => true,
         ]);
 
-        // Form UI is rendered by Theme-inline account-login widget (background configurable in Theme Editor).
-        return $this->fetch('Weline_Customer::templates/frontend/account/login-shell.phtml');
+        // 登录表单归属 Customer；布局 account/login 渲染本模块 content。
+        return $this->fetch('Weline_Customer::templates/frontend/account/login.phtml');
     }
 
     public function postIndex()
