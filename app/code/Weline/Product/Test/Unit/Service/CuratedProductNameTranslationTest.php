@@ -32,7 +32,7 @@ final class CuratedProductNameTranslationTest extends TestCase
 
     public function testTheCuratedCatalogProvidesActualEnglishProductNames(): void
     {
-        $path = dirname(__DIR__, 3) . '/data/hanfu-product-en-names.php';
+        $path = dirname(__DIR__, 6) . '/design/Weline/hanfu/data/hanfu-product-en-names.php';
         self::assertFileExists($path);
         $names = require $path;
         $copy = new CuratedProductNameTranslation($names);

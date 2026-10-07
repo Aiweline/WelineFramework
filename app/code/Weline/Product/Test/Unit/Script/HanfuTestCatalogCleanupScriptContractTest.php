@@ -74,7 +74,7 @@ final class HanfuTestCatalogCleanupScriptContractTest extends TestCase
      */
     private function runScript(array $arguments): array
     {
-        $script = dirname(__DIR__, 3) . '/scripts/cleanup-hanfu-test-catalog.php';
+        $script = dirname(__DIR__, 6) . '/design/Weline/hanfu/scripts/cleanup-hanfu-test-catalog.php';
         $command = [PHP_BINARY, $script, ...$arguments];
         $descriptors = [
             0 => ['pipe', 'r'],

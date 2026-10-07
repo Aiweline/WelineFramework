@@ -11,7 +11,7 @@ final class HanfuR2CommerceMediaRemediationContractTest extends TestCase
     public function testCommerceRemediationRegistersEveryAssetWithBilingualProvenance(): void
     {
         $script = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/scripts/remediate-hanfu-commerce-media-r2.php',
+            dirname(__DIR__, 6) . '/design/Weline/hanfu/scripts/remediate-hanfu-commerce-media-r2.php',
         );
 
         foreach ([
@@ -47,7 +47,7 @@ final class HanfuR2CommerceMediaRemediationContractTest extends TestCase
     public function testCleanupIsExactAndGatedByVerification(): void
     {
         $script = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/scripts/remediate-hanfu-commerce-media-r2.php',
+            dirname(__DIR__, 6) . '/design/Weline/hanfu/scripts/remediate-hanfu-commerce-media-r2.php',
         );
 
         $verifyPosition = strpos($script, '$verification = hanfuR2VerifyState(');
@@ -88,7 +88,7 @@ final class HanfuR2CommerceMediaRemediationContractTest extends TestCase
 
     public function testCategorySeedPointsToReviewedR2WebpPaths(): void
     {
-        $seed = (string)file_get_contents(dirname(__DIR__, 3) . '/data/seed-hanfu-categories.php');
+        $seed = (string)file_get_contents(dirname(__DIR__, 6) . '/design/Weline/hanfu/data/seed-categories.php');
 
         self::assertStringContainsString(
             "const MEDIA_BASE = '/pub/media/catalog/hanfu/r2/categories';",

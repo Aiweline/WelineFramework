@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Test\Unit\Sample\Hanfu1688;
 
+require_once dirname(__DIR__, 7) . '/design/Weline/hanfu/scripts/_autoload.php';
+
 use PHPUnit\Framework\TestCase;
 
 final class Import1688HanfuCatalogContractTest extends TestCase
@@ -11,7 +13,7 @@ final class Import1688HanfuCatalogContractTest extends TestCase
     public function testImporterPersistsLocalizedPublicDetailWithoutSyntheticDescription(): void
     {
         $script = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/scripts/import-1688-hanfu-catalog.php',
+            dirname(__DIR__, 7) . '/design/Weline/hanfu/scripts/import-1688-hanfu-catalog.php',
         );
 
         self::assertStringContainsString('->enrichDescriptions($collected, $classifier)', $script);
@@ -30,7 +32,7 @@ final class Import1688HanfuCatalogContractTest extends TestCase
 
     public function testImporterCanPublishEveryAcceptedHanfuProduct(): void
     {
-        $script = file_get_contents(dirname(__DIR__, 4) . '/scripts/import-1688-hanfu-catalog.php');
+        $script = file_get_contents(dirname(__DIR__, 7) . '/design/Weline/hanfu/scripts/import-1688-hanfu-catalog.php');
         self::assertIsString($script);
 
         self::assertStringContainsString("'publish-all'", $script);
@@ -41,7 +43,7 @@ final class Import1688HanfuCatalogContractTest extends TestCase
     public function testImporterUsesFormalEavVariantsAndSemanticPublicIdentity(): void
     {
         $script = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/scripts/import-1688-hanfu-catalog.php',
+            dirname(__DIR__, 7) . '/design/Weline/hanfu/scripts/import-1688-hanfu-catalog.php',
         );
         $command = (string)file_get_contents(
             dirname(__DIR__, 4) . '/Service/ProductAdminCommandService.php',
@@ -89,7 +91,7 @@ final class Import1688HanfuCatalogContractTest extends TestCase
             $script,
         );
         self::assertStringContainsString('compactSkuToken', (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Sample/Hanfu1688/OfferEavMapper.php',
+            dirname(__DIR__, 7) . '/design/Weline/hanfu/Sample/Hanfu1688/OfferEavMapper.php',
         ));
         self::assertStringContainsString("foreach (['', 'zh_Hans_CN'] as \$locale)", $script);
         self::assertStringContainsString("'brand' => trim(\$brandName)", $script);
@@ -99,7 +101,7 @@ final class Import1688HanfuCatalogContractTest extends TestCase
         self::assertStringNotContainsString("'slug' => 'hanfu-1688-'", $script);
         self::assertStringNotContainsString('new PublicInventoryResolver', $script);
         self::assertStringContainsString("'role' => 'variant'", (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Sample/Hanfu1688/MediaImporter.php',
+            dirname(__DIR__, 7) . '/design/Weline/hanfu/Sample/Hanfu1688/MediaImporter.php',
         ));
         self::assertStringContainsString('schema_fields_COMBINATION_KEY', (string)file_get_contents(
             dirname(__DIR__, 4) . '/Model/Shard/Media.php',
@@ -147,7 +149,7 @@ final class Import1688HanfuCatalogContractTest extends TestCase
     public function testMediaImporterCapacityCoversCompleteSellerDetailSet(): void
     {
         $source = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Sample/Hanfu1688/MediaImporter.php',
+            dirname(__DIR__, 7) . '/design/Weline/hanfu/Sample/Hanfu1688/MediaImporter.php',
         );
 
         self::assertStringContainsString('private const MAX_IMAGES = 128;', $source);
@@ -156,7 +158,7 @@ final class Import1688HanfuCatalogContractTest extends TestCase
 
     public function testImporterAuditsExplicitlySkippedSellerDetailMedia(): void
     {
-        $script = (string)file_get_contents(dirname(__DIR__, 4) . '/scripts/import-1688-hanfu-catalog.php');
+        $script = (string)file_get_contents(dirname(__DIR__, 7) . '/design/Weline/hanfu/scripts/import-1688-hanfu-catalog.php');
         self::assertStringContainsString("\$skippedDetailMedia = is_array(\$media['skipped_detail_media'] ?? null)", $script);
         self::assertStringContainsString("'skipped_detail_media_count' => count(\$skippedDetailMedia)", $script);
         self::assertStringContainsString('$skippedDetailUrls,', $script);
@@ -167,7 +169,7 @@ final class Import1688HanfuCatalogContractTest extends TestCase
         if (!defined('WELINE_HANFU_IMPORT_HELPERS_ONLY')) {
             define('WELINE_HANFU_IMPORT_HELPERS_ONLY', true);
         }
-        require_once dirname(__DIR__, 4) . '/scripts/import-1688-hanfu-catalog.php';
+        require_once dirname(__DIR__, 7) . '/design/Weline/hanfu/scripts/import-1688-hanfu-catalog.php';
 
         $legacy = new class {
             public function getData(string $key): mixed
@@ -206,7 +208,7 @@ final class Import1688HanfuCatalogContractTest extends TestCase
         if (!defined('WELINE_HANFU_IMPORT_HELPERS_ONLY')) {
             define('WELINE_HANFU_IMPORT_HELPERS_ONLY', true);
         }
-        require_once dirname(__DIR__, 4) . '/scripts/import-1688-hanfu-catalog.php';
+        require_once dirname(__DIR__, 7) . '/design/Weline/hanfu/scripts/import-1688-hanfu-catalog.php';
         self::assertSame(
             ['code' => 'menghuihantang', 'name' => '梦绘汉唐', 'source' => true],
             hanfu1688OfferBrandIdentity(

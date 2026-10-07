@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Test\Unit\Sample\HanfuCleanup;
 
+require_once dirname(__DIR__, 7) . '/design/Weline/hanfu/scripts/_autoload.php';
+
 use PHPUnit\Framework\TestCase;
 use Weline\FileManager\Api\Data\FileAccessContext;
 use Weline\FileManager\Api\FileAssetLibraryInterface;

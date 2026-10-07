@@ -70,7 +70,7 @@ final class ProductScopedOptionContractTest extends TestCase
     public function testImportAllowsUnresolvedOptionsForPrivateEnsure(): void
     {
         $source = file_get_contents(
-            dirname(__DIR__, 3) . '/scripts/import-1688-hanfu-catalog.php',
+            dirname(__DIR__, 6) . '/design/Weline/hanfu/scripts/import-1688-hanfu-catalog.php',
         );
         self::assertIsString($source);
         self::assertStringContainsString(

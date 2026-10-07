@@ -540,6 +540,22 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'MUST NOT hardcode')),
         false,
     ),
+    'hard_constraints include website_concept_seed_not_in_modules' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'website_concept_seed_not_in_modules'
+            && str_contains((string) ($rule['summary'] ?? ''), 'SERIOUS')
+            && str_contains((string) ($rule['summary'] ?? ''), 'CONTEXT-CARRIED')
+            && str_contains((string) ($rule['summary'] ?? ''), 'ABSTRACT')
+            && str_contains((string) ($rule['summary'] ?? ''), 'NOT a denylist')
+            && str_contains((string) ($rule['summary'] ?? ''), 'future website/theme')
+            && str_contains((string) ($rule['summary'] ?? ''), 'app/design')),
+        false,
+    ),
+    'mcpInstructions carry website_concept_seed_not_in_modules' => str_contains(
+        (string) \LearningMcp\HardConstraintsCatalog::mcpInstructions(),
+        'website_concept_seed_not_in_modules'
+    ),
     'hard_constraints include shell_provider_business_isomorph' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)

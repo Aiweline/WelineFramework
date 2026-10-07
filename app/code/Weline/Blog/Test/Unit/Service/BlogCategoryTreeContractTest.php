@@ -55,7 +55,7 @@ final class BlogCategoryTreeContractTest extends TestCase
     public function testEthnicSeedRemountsUnderChinaEthnicDress(): void
     {
         $source = (string)file_get_contents(
-            dirname(__DIR__, 3) . '/data/seed-china-ethnic-categories.php',
+            dirname(__DIR__, 6) . '/design/Weline/hanfu/data/seed-china-ethnic-categories.php',
         );
 
         self::assertStringContainsString('remountEthnicChildren', $source);

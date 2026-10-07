@@ -293,7 +293,17 @@ app/code/Weline/Ai/Test/Http/Backend/batch-test-results.json
 # 例：websites/changanhanfu.com/
 /websites/
 
-# Design themes under app/design/ are local developer skins only.
-# Never commit theme directory contents (hanfu / daocharms / grocery / …);
-# they are authored locally and uploaded per websites/*/ vault. 勿入库。
-/app/design/
+# Design theme *skins* under app/design/ stay local (frontend CSS/phtml/register/doc evidence…).
+# Website-concept openers (data/scripts/Sample) ARE versioned — hard rule
+# website_concept_seed_not_in_modules: seeds live with the theme package, not in app/code modules.
+/app/design/*
+!/app/design/Weline/
+/app/design/Weline/*
+!/app/design/Weline/*/
+/app/design/Weline/*/*
+!/app/design/Weline/*/data/
+!/app/design/Weline/*/data/**
+!/app/design/Weline/*/scripts/
+!/app/design/Weline/*/scripts/**
+!/app/design/Weline/*/Sample/
+!/app/design/Weline/*/Sample/**

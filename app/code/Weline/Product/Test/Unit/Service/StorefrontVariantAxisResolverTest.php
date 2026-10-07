@@ -17,7 +17,7 @@ final class StorefrontVariantAxisResolverTest extends TestCase
             BP . 'app/code/Weline/Product/Service/ProductCatalogEavBootstrap.php',
         );
         $previewPatch = (string)file_get_contents(
-            BP . 'app/code/Weline/Product/scripts/patch-hanfu-variant-previews.php',
+            BP . 'app/design/Weline/hanfu/scripts/patch-hanfu-variant-previews.php',
         );
 
         self::assertStringContainsString('全局 EAV 选项图板仅表示', $resolver);

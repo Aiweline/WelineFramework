@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Test\Unit\Sample\Hanfu1688;
 
+require_once dirname(__DIR__, 7) . '/design/Weline/hanfu/scripts/_autoload.php';
+
 use PHPUnit\Framework\TestCase;
 use Weline\Product\Sample\Hanfu1688\FactoryPageParser;
 

@@ -54,7 +54,7 @@ description: >-
 | 项 | 路径 |
 |----|------|
 | 指令 | `dev/ai-command/blog/新建文章.md` |
-| 内容数据/种子 | `app/code/Weline/Blog/data/seed-*-articles.php`、`*-content.php` |
+| 内容数据/种子 | `app/design/Weline/hanfu/data/seed-*-articles.php`、站内容配套（website-concept；禁回 Blog 模块） |
 | 语种包 | `app/code/Weline/Blog/data/locale-packs/{locale}/batch-*.json` |
 | upsert | `app/code/Weline/Blog/data/upsert-blog-locale-packs.php` |
 | 先例 | 织艺谱系 `textile-heritage-*`；民族服饰 `seed-china-ethnic-articles.php` |
