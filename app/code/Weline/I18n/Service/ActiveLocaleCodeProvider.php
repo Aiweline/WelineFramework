@@ -81,8 +81,32 @@ class ActiveLocaleCodeProvider
             return $cached;
         }
 
+        $codes = $this->loadInstalledActiveCodesFromDb();
+        $codes = DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey] = $codes;
+        RequestContext::set(self::REQUEST_CONTEXT_KEY, $codes);
+
+        return $codes;
+    }
+
+    /**
+     * Single UNION ALL round-trip (locale then locals); fall back to dual fetchArray.
+     *
+     * @return list<string>
+     */
+    private function loadInstalledActiveCodesFromDb(): array
+    {
         $codes = [];
         $seen = [];
+        try {
+            foreach ($this->fetchInstalledActiveCodesUnion() as $code) {
+                $this->pushCode($codes, $seen, $code);
+            }
+
+            return $codes;
+        } catch (\Throwable) {
+            // Single-table absence / driver quirks: keep dual query-builder path.
+        }
+
         foreach ($this->fetchInstalledActiveRows($this->locale) as $code) {
             $this->pushCode($codes, $seen, $code);
         }
@@ -90,8 +114,44 @@ class ActiveLocaleCodeProvider
             $this->pushCode($codes, $seen, $code);
         }
 
-        $codes = DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey] = $codes;
-        RequestContext::set(self::REQUEST_CONTEXT_KEY, $codes);
+        return $codes;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function fetchInstalledActiveCodesUnion(): array
+    {
+        if (!\method_exists($this->locale, 'getConnection') || !\method_exists($this->locale, 'getTable')
+            || !\method_exists($this->locals, 'getTable')
+        ) {
+            throw new \RuntimeException('ActiveLocale models lack getTable/getConnection');
+        }
+
+        $localeTable = \trim((string)$this->locale->getTable());
+        $localsTable = \trim((string)$this->locals->getTable());
+        if ($localeTable === '' || $localsTable === '') {
+            throw new \RuntimeException('ActiveLocale table names empty');
+        }
+
+        $connector = $this->locale->getConnection()->getConnector();
+        // Locale rows first, then Locals — PHP pushCode keeps first-seen casing/order.
+        $sql = 'SELECT ' . self::FIELD_CODE . ' FROM ' . $localeTable
+            . ' WHERE (' . self::FIELD_IS_INSTALL . ' = 1) AND (' . self::FIELD_IS_ACTIVE . ' = 1)'
+            . ' UNION ALL '
+            . 'SELECT ' . self::FIELD_CODE . ' FROM ' . $localsTable
+            . ' WHERE (' . self::FIELD_IS_INSTALL . ' = 1) AND (' . self::FIELD_IS_ACTIVE . ' = 1)';
+
+        $codes = [];
+        foreach ($connector->query($sql)->fetchIterator() as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $code = \trim((string)($row[self::FIELD_CODE] ?? ''));
+            if ($code !== '') {
+                $codes[] = $code;
+            }
+        }
 
         return $codes;
     }

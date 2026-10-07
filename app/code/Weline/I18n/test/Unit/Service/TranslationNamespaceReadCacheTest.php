@@ -94,9 +94,10 @@ final class TranslationNamespaceReadCacheTest extends TestCase
 
     public function testInstalledLocaleMemoFollowsCommittedGeneration(): void
     {
+        ActiveLocaleCodeProvider::clearProcessCache();
         $rows = [['code' => 'en_US']];
-        $locale = $this->query(Locale::class, static function () use (&$rows): array { return $rows; });
-        $locals = $this->query(Locals::class, static fn(): array => []);
+        $locale = $this->unionLocaleModel(static function () use (&$rows): array { return $rows; });
+        $locals = $this->unionCompanion(Locals::class, 'w_i18n_locals');
         $provider = new ActiveLocaleCodeProvider($locals, $locale);
         self::assertSame(['en_US'], $provider->getInstalledActiveCodes());
         $rows[] = ['code' => 'fr_FR'];
@@ -237,6 +238,65 @@ final class TranslationNamespaceReadCacheTest extends TestCase
             ->addMethods(['clearQuery', 'where', 'select', 'fetchArray'])->getMock();
         foreach (['clearQuery', 'where', 'select'] as $method) { $model->method($method)->willReturnSelf(); }
         $model->method('fetchArray')->willReturnCallback($rows);
+        return $model;
+    }
+
+    /** ActiveLocale UNION primary path: locale model supplies getTable + connector.query. */
+    private function unionLocaleModel(callable $rows): object
+    {
+        $model = $this->getMockBuilder(Locale::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getTable', 'getConnection'])
+            ->getMock();
+        $model->method('getTable')->willReturn('w_i18n_locale');
+        $connector = new class($rows) {
+            public function __construct(private $rows)
+            {
+            }
+
+            public function query(string $sql): object
+            {
+                \PHPUnit\Framework\Assert::assertStringContainsString('UNION ALL', $sql);
+                $batch = ($this->rows)();
+
+                return new class($batch) {
+                    public function __construct(private array $rows)
+                    {
+                    }
+
+                    public function fetchIterator(): \Generator
+                    {
+                        yield from $this->rows;
+                    }
+                };
+            }
+        };
+        $connection = new class($connector) {
+            public function __construct(private object $connector)
+            {
+            }
+
+            public function getConnector(): object
+            {
+                return $this->connector;
+            }
+        };
+        $model->method('getConnection')->willReturn($connection);
+
+        return $model;
+    }
+
+    /**
+     * @param class-string $class
+     */
+    private function unionCompanion(string $class, string $table): object
+    {
+        $model = $this->getMockBuilder($class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getTable'])
+            ->getMock();
+        $model->method('getTable')->willReturn($table);
+
         return $model;
     }
 }

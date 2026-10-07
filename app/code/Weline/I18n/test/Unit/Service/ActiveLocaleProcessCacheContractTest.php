@@ -14,6 +14,8 @@ final class ActiveLocaleProcessCacheContractTest extends TestCase
         self::assertStringContainsString('private static array $processInstalledActiveCodes', $src);
         self::assertStringContainsString('function clearProcessCache', $src);
         self::assertStringContainsString('self::clearProcessCache()', $src);
+        self::assertStringContainsString('UNION ALL', $src);
+        self::assertStringContainsString('fetchInstalledActiveCodesUnion', $src);
     }
 
     public function testLocaleCatalogChangeClearsActiveLocale(): void
