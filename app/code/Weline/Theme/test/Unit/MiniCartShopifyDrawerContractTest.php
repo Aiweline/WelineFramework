@@ -217,6 +217,38 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         );
     }
 
+    /**
+     * Closed off-canvas + mobile width must not use 100vw + translateX(100%),
+     * which expands document scrollWidth (~2× viewport) and looks like the page spilled out.
+     */
+    public function testMiniCartDrawerClosedStateDoesNotExpandDocumentScrollWithViewportWidth(): void
+    {
+        $css = (string)file_get_contents(dirname(__DIR__, 2) . '/view/statics/css/widgets/mini-cart-drawer.css');
+
+        self::assertStringContainsString('inset-inline-start: auto', $css);
+        self::assertStringContainsString('width: 0 !important', $css);
+        self::assertStringContainsString('overflow-x: clip', $css);
+        self::assertStringContainsString('.weline-page-wrapper', $css);
+        self::assertStringContainsString('width: min(var(--size-panel-400, 25rem), 100%) !important', $css);
+        self::assertStringContainsString('visibility: visible !important', $css);
+        // Closed default must not park with translateX(100%) / 100vw.
+        self::assertDoesNotMatchRegularExpression(
+            '/\.header-cart \.mini-cart-drawer\s*\{[^}]*transform:\s*translate/s',
+            $css,
+            'Base closed drawer must not use translateX park (expands document scrollWidth)',
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/@media\s*\(\s*max-width:\s*768px\s*\)\s*\{[^}]*width:\s*100vw/s',
+            $css,
+            'Mobile drawer must not use width:100vw (scrollbar / transform scroll bleed)',
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/@media\s*\(\s*max-width:\s*768px\s*\)\s*\{[^}]*\.header-cart \.mini-cart-drawer\s*\{[^}]*width:\s*100%/s',
+            $css,
+            'Mobile media must not force width:100% on closed drawer base selector',
+        );
+    }
+
     public function testMiniCartIconUsesAmazonDrawerSurface(): void
     {
         $path = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml';
@@ -225,8 +257,8 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
 
         self::assertStringContainsString('mini-cart-drawer--amazon', $source);
         self::assertStringContainsString('data-mini-cart-loading', $source);
-        self::assertStringContainsString('data-mini-cart-discount-breakdown', $source);
-        self::assertStringContainsString('data-mini-cart-tax-row', $source);
+        // Money lines live in storefront-money-summary slot (not inline drawer markup).
+        self::assertStringContainsString('id="money-summary"', $source);
         self::assertStringContainsString('data-i18n-tax', $source);
         self::assertStringContainsString('data-i18n-note-shipping', $source);
         self::assertStringContainsString('data-mini-cart-checkout', $source);
@@ -237,11 +269,43 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('--amz-drawer-price:', $css);
         self::assertStringContainsString('--amz-drawer-cta-bg:', $css);
         // Body must keep a floor so tall footer extras (tob credit/note) cannot starve line items.
-        self::assertStringContainsString('min-height: min(40vh, 12rem)', $css);
+        self::assertStringContainsString('min-height: min(28vh, 8rem)', $css);
         self::assertMatchesRegularExpression(
-            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*52%/s',
+            '/\\.header-cart \\.mini-cart-drawer__footer\\s*\\{[^}]*max-height:\\s*58%/s',
             $css
         );
+        self::assertStringContainsString('min-height: min(22vh, 10rem)', $css);
+    }
+
+    public function testMiniCartFooterSheetCollapsesToTotalAndCheckout(): void
+    {
+        $path = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml';
+        $source = (string)file_get_contents($path);
+        $css = (string)file_get_contents(dirname(__DIR__, 2) . '/view/statics/css/widgets/mini-cart-drawer.css');
+        $js = (string)file_get_contents(dirname(__DIR__, 2) . '/view/statics/js/widgets/mini-cart-icon.js');
+
+        self::assertStringContainsString('data-mini-cart-footer-toggle', $source);
+        self::assertStringContainsString('data-mini-cart-footer-details', $source);
+        self::assertStringContainsString('data-cart-total-amount', $source);
+        self::assertStringContainsString('data-i18n-footer-collapse', $source);
+        self::assertStringContainsString('data-i18n-footer-expand', $source);
+        self::assertStringContainsString('is-footer-collapsed', $css);
+        self::assertStringContainsString('min-height: min(22vh, 10rem)', $css);
+        self::assertStringContainsString('setFooterCollapsed', $js);
+        self::assertStringContainsString('aria-hidden', $js);
+        self::assertStringContainsString('minicart-footer-sheet-v2', $js);
+    }
+
+    public function testMiniCartDrawerRebindsPaperInkUnderInverseChrome(): void
+    {
+        $css = (string)file_get_contents(dirname(__DIR__, 2) . '/view/statics/css/widgets/mini-cart-drawer.css');
+
+        // Raised cream drawer must not inherit header-belt on-dark --color-text.
+        self::assertStringContainsString('--_paper-text: var(--amz-drawer-text)', $css);
+        self::assertStringContainsString('--color-text: var(--_paper-text)', $css);
+        self::assertStringContainsString('--weline-theme-color-text: var(--_paper-text)', $css);
+        self::assertStringContainsString('--_inverse-text: var(--_paper-text)', $css);
+        self::assertStringContainsString('--color-text-muted: var(--_paper-muted)', $css);
     }
 
     public function testMiniCartEnglishCsvIncludesDrawerCopy(): void

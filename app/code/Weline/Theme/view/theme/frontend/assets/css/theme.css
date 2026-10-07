@@ -7,11 +7,20 @@
  */
 
 /* ========== 基础页面结构 ========== */
+/* Off-canvas chrome (mini-cart etc.) must never create a horizontal page gutter. */
+html,
+body {
+    overflow-x: clip;
+    max-width: 100%;
+}
+
 .weline-page-wrapper {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     background: transparent;
+    overflow-x: clip;
+    max-width: 100%;
 }
 
 .weline-main-content {
@@ -3073,4 +3082,143 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
         inset-inline: max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-right)) !important;
         width: auto !important;
     }
+}
+
+/*
+ * Inverse / on-dark storefront surfaces (WO-UI-CONTRAST-INVERSE).
+ * Global h1/h2/a rules (and design skins like hanfu-ink) bind headings to
+ * --color-text / --weline-theme-text (paper ink). Dark heroes must rebind those
+ * tokens with non-zero specificity and hard on-dark fallbacks — never chain
+ * through --color-text-light (circular once rebound).
+ */
+[data-surface="inverse"],
+.amazon-about__hero,
+.amazon-about__cta,
+.amazon-terms__hero,
+.amazon-faq__hero,
+.amazon-policy__hero,
+.sitemap-page__hero {
+    --_inverse-text: var(--color-text-on-dark, #f7f4ef);
+    --_inverse-muted: var(--color-text-on-dark-muted, #d4cfc5);
+    --weline-theme-text: var(--_inverse-text);
+    --weline-theme-text-secondary: var(--_inverse-muted);
+    --weline-theme-text-muted: var(--_inverse-muted);
+    --weline-theme-body-text: var(--_inverse-text);
+    --weline-theme-body-text-secondary: var(--_inverse-muted);
+    --weline-theme-body-text-heading: var(--_inverse-text);
+    --weline-layout-text-primary: var(--_inverse-text);
+    --weline-layout-text-secondary: var(--_inverse-muted);
+    --bs-heading-color: var(--_inverse-text);
+    --bs-body-color: var(--_inverse-text);
+    --color-text: var(--_inverse-text);
+    --color-text-primary: var(--_inverse-text);
+    --color-text-secondary: var(--_inverse-muted);
+    --color-text-light: var(--_inverse-text);
+    --color-text-light-secondary: var(--_inverse-muted);
+    --color-link: var(--color-primary-light, #d4786a);
+    --weline-theme-link: var(--color-link);
+    color: var(--_inverse-text);
+}
+
+[data-surface="inverse"] :is(h1, h2, h3, h4, h5, h6),
+.amazon-about__hero :is(h1, h2, h3, h4, h5, h6),
+.amazon-about__cta :is(h1, h2, h3, h4, h5, h6),
+.amazon-terms__hero :is(h1, h2, h3, h4, h5, h6),
+.amazon-faq__hero :is(h1, h2, h3, h4, h5, h6),
+.amazon-policy__hero :is(h1, h2, h3, h4, h5, h6),
+.sitemap-page__hero :is(h1, h2, h3, h4, h5, h6) {
+    color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
+}
+
+[data-surface="inverse"] :is(p, li, small, span),
+.amazon-about__hero :is(p, li, small),
+.amazon-about__cta :is(p, li, small),
+.amazon-terms__hero :is(p, li, small),
+.amazon-faq__hero :is(p, li, small),
+.amazon-policy__hero :is(p, li, small) {
+    color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
+}
+
+/* Light search chip: inverse span rule must not paint category/query labels on-dark. */
+[data-surface="inverse"] .header-search-form :is(p, li, small, span),
+[data-surface="inverse"] .w-search-form :is(p, li, small, span),
+[data-surface="inverse"] .search-suggestions :is(p, li, small, span),
+[data-surface="inverse"] .w-search-suggestions :is(p, li, small, span),
+.w-surface-inverse .header-search-form :is(p, li, small, span),
+.w-surface-inverse .w-search-form :is(p, li, small, span),
+.w-surface-inverse .search-suggestions :is(p, li, small, span),
+.w-surface-inverse .w-search-suggestions :is(p, li, small, span) {
+    color: inherit;
+}
+
+.amazon-about__hero a.amazon-about__btn--ghost,
+.amazon-about__cta a.amazon-about__btn--ghost,
+[data-surface="inverse"] a.amazon-about__btn--ghost {
+    color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
+    border-color: color-mix(in srgb, var(--_inverse-text, #f7f4ef) 55%, transparent);
+}
+
+.amazon-about__hero a.amazon-about__btn--ghost:hover,
+.amazon-about__cta a.amazon-about__btn--ghost:hover,
+[data-surface="inverse"] a.amazon-about__btn--ghost:hover {
+    color: var(--color-primary-light, #d4786a);
+    border-color: var(--color-primary-light, #d4786a);
+}
+
+.amazon-about__hero a.amazon-about__btn--primary,
+.amazon-about__cta a.amazon-about__btn--primary,
+[data-surface="inverse"] a.amazon-about__btn--primary {
+    color: var(--color-on-primary, #f7f4ef);
+}
+
+/*
+ * Raised light panels nested under inverse chrome (WO-UI-CONTRAST-INVERSE side-effect).
+ * Header belt remaps --weline-theme-text / --_inverse-* to on-dark; account menu,
+ * mini-cart, and the white search chip sit on surface-raised and must restore paper
+ * ink or copy vanishes (category "全部" + query value).
+ * Fallbacks match mini-cart --amz-drawer-text / --amz-drawer-muted (no new palette).
+ */
+[data-surface="inverse"] .account-dropdown,
+[data-surface="inverse"] .mini-cart-drawer,
+[data-surface="inverse"] .mini-cart-drawer--amazon,
+[data-surface="inverse"] .header-search-form,
+[data-surface="inverse"] .w-search-form,
+[data-surface="inverse"] .search-suggestions,
+[data-surface="inverse"] .w-search-suggestions,
+.w-surface-inverse .account-dropdown,
+.w-surface-inverse .mini-cart-drawer,
+.w-surface-inverse .mini-cart-drawer--amazon,
+.w-surface-inverse .header-search-form,
+.w-surface-inverse .w-search-form,
+.w-surface-inverse .search-suggestions,
+.w-surface-inverse .w-search-suggestions {
+    --_paper-text: var(--amz-drawer-text, #0f1111);
+    --_paper-muted: var(--amz-drawer-muted, #565959);
+    --_inverse-text: var(--_paper-text);
+    --_inverse-muted: var(--_paper-muted);
+    --weline-theme-text: var(--_paper-text);
+    --weline-theme-text-secondary: var(--_paper-muted);
+    --weline-theme-text-muted: var(--_paper-muted);
+    --weline-theme-body-text: var(--_paper-text);
+    --weline-theme-body-text-secondary: var(--_paper-muted);
+    --weline-theme-body-text-muted: var(--_paper-muted);
+    --weline-theme-body-text-heading: var(--_paper-text);
+    --weline-layout-text-primary: var(--_paper-text);
+    --weline-layout-text-secondary: var(--_paper-muted);
+    --bs-heading-color: var(--_paper-text);
+    --bs-body-color: var(--_paper-text);
+    --color-text: var(--_paper-text);
+    --color-text-primary: var(--_paper-text);
+    --color-text-secondary: var(--_paper-muted);
+    --color-text-muted: var(--_paper-muted);
+    --color-text-placeholder: var(--_paper-muted);
+    --weline-chrome-text-primary: var(--_paper-text);
+    --weline-chrome-text-secondary: var(--_paper-muted);
+    --weline-chrome-text-muted: var(--_paper-muted);
+    --weline-theme-color-text: var(--_paper-text);
+    --weline-theme-color-text-muted: var(--_paper-muted);
+    --w-surface-fg: var(--_paper-text);
+    --w-surface-fg-muted: var(--_paper-muted);
+    --w-surface-fg-subtle: var(--_paper-muted);
+    color: var(--_paper-text);
 }

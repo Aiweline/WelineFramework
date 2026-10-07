@@ -401,10 +401,17 @@
     position: relative;
 }
 
-/* Inverse surface must not bleach the search bar */
+/* Inverse surface must not bleach the search bar.
+ * Paper ink on raised search chip (WO-UI-CONTRAST-INVERSE): header-belt remaps
+ * --color-text / --_inverse-* / chrome text tokens to on-dark; white category +
+ * input still consume those tokens → near-invisible copy when focus-within.
+ * Same local rebind as account-dropdown / mini-cart-drawer (unconditional). */
 .weline-header [data-surface="inverse"] .header-search-form,
 .weline-header .w-surface-inverse .header-search-form,
-.weline-header .header-search-form {
+.weline-header [data-surface="inverse"] .w-search-form,
+.weline-header .w-surface-inverse .w-search-form,
+.weline-header .header-search-form,
+.weline-header .w-search-form {
     position: relative;
     display: flex;
     flex-direction: row;
@@ -414,6 +421,26 @@
     border-radius: var(--weline-theme-radius-md);
     transition: box-shadow 0.2s ease;
     background: transparent;
+    --_paper-text: var(--amz-drawer-text, #0f1111);
+    --_paper-muted: var(--amz-drawer-muted, #565959);
+    --_inverse-text: var(--_paper-text);
+    --_inverse-muted: var(--_paper-muted);
+    --color-text: var(--_paper-text);
+    --color-text-primary: var(--_paper-text);
+    --color-text-secondary: var(--_paper-muted);
+    --color-text-muted: var(--_paper-muted);
+    --color-text-placeholder: var(--_paper-muted);
+    --weline-chrome-text-primary: var(--_paper-text);
+    --weline-chrome-text-secondary: var(--_paper-muted);
+    --weline-chrome-text-muted: var(--_paper-muted);
+    --weline-theme-text: var(--_paper-text);
+    --weline-theme-text-secondary: var(--_paper-muted);
+    --weline-theme-text-muted: var(--_paper-muted);
+    --weline-theme-color-text: var(--_paper-text);
+    --weline-theme-color-text-muted: var(--_paper-muted);
+    --w-surface-fg: var(--_paper-text);
+    --w-surface-fg-muted: var(--_paper-muted);
+    color: var(--_paper-text);
 }
 
 .weline-header .header-search-form:focus-within,
@@ -614,7 +641,7 @@
     font-size: var(--font-size-xs, 0.75rem);
     line-height: 1.4;
     /* Light search chip on dark header: never inherit inverse chrome light text */
-    color: var(--weline-chrome-text-primary, #111111);
+    color: var(--_paper-text, var(--weline-chrome-text-primary, #0f1111));
     white-space: nowrap;
 }
 
@@ -622,12 +649,13 @@
 .weline-header .search-type-facade:hover,
 .weline-header .search-type-trigger.search-category-facade:hover {
     background-color: var(--weline-chrome-bg-tertiary, #e7e7e7);
-    color: var(--weline-chrome-text-primary, #111111);
+    color: var(--_paper-text, var(--weline-chrome-text-primary, #0f1111));
 }
 
 .weline-header .search-category-label,
 .weline-header .search-type-label {
     white-space: nowrap;
+    color: inherit;
 }
 
 .weline-header .search-input-wrapper,
@@ -651,7 +679,9 @@
     border-right: none;
     border-radius: 0;
     background: var(--weline-chrome-bg-primary, #ffffff) !important;
-    color: var(--weline-chrome-text-primary, #111111) !important;
+    color: var(--_paper-text, var(--weline-chrome-text-primary, #0f1111)) !important;
+    -webkit-text-fill-color: var(--_paper-text, var(--weline-chrome-text-primary, #0f1111));
+    caret-color: var(--_paper-text, var(--weline-chrome-text-primary, #0f1111));
     font-family: inherit;
     font-size: var(--font-size-sm, 0.875rem);
     line-height: 1.4;
@@ -661,12 +691,23 @@
     appearance: none;
 }
 
+.weline-header .header-search-form .search-input::placeholder,
+.weline-header .header-search-form .w-search-input::placeholder,
+.weline-header .w-search-form .search-input::placeholder,
+.weline-header .w-search-form .w-search-input::placeholder {
+    color: var(--_paper-muted, var(--weline-chrome-text-muted, #565959));
+    -webkit-text-fill-color: var(--_paper-muted, var(--weline-chrome-text-muted, #565959));
+    opacity: 1;
+}
+
 .weline-header .header-search-form .search-input:focus,
 .weline-header .header-search-form .w-search-input:focus,
 .weline-header .w-search-form .search-input:focus,
 .weline-header .w-search-form .w-search-input:focus {
     border-color: var(--weline-chrome-border-focus, var(--color-border-focus));
     box-shadow: none;
+    color: var(--_paper-text, var(--weline-chrome-text-primary, #0f1111)) !important;
+    -webkit-text-fill-color: var(--_paper-text, var(--weline-chrome-text-primary, #0f1111));
 }
 
 /* 朱砂实底 + on-primary；覆盖亚马逊黄钮默认，服务水墨主题对比 */

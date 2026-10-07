@@ -115,4 +115,29 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
         self::assertStringContainsString('.weline-footer .footer-locale .w-language-switcher__trigger', $footerChrome);
         self::assertStringContainsString('.weline-footer .footer-locale .w-currency-switcher__trigger', $footerChrome);
     }
+
+    public function testHeaderSearchFormRebindsPaperInkUnderInverseChrome(): void
+    {
+        $themeCss = $this->read('app/code/Weline/Theme/view/theme/frontend/assets/css/theme.css');
+        self::assertStringContainsString('[data-surface="inverse"] .header-search-form', $themeCss);
+        self::assertStringContainsString('[data-surface="inverse"] .w-search-form', $themeCss);
+        self::assertStringContainsString(
+            '[data-surface="inverse"] .header-search-form :is(p, li, small, span)',
+            $themeCss
+        );
+
+        $chrome = $this->read('app/code/Weline/Theme/view/statics/css/widgets/header-chrome-amazon.css');
+        self::assertStringContainsString('--_paper-text: var(--amz-drawer-text, #0f1111)', $chrome);
+        self::assertStringContainsString('--weline-chrome-text-primary: var(--_paper-text)', $chrome);
+        self::assertStringContainsString('-webkit-text-fill-color: var(--_paper-text', $chrome);
+
+        // Published layout head loads this partial; chrome-amazon may be absent.
+        $headerDefault = $this->read('app/code/Weline/Theme/view/statics/css/partials/header-default.css');
+        self::assertStringContainsString('--_paper-text: var(--amz-drawer-text, #0f1111)', $headerDefault);
+        self::assertStringContainsString('.header-search-form .search-input::placeholder', $headerDefault);
+        self::assertMatchesRegularExpression(
+            '/\.header-search-form \.search-input\s*\{[^}]*-webkit-text-fill-color:\s*var\(--_paper-text/s',
+            $headerDefault
+        );
+    }
 }

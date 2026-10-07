@@ -31,6 +31,36 @@
     --amz-drawer-secondary-bg: linear-gradient(180deg, #f7f8f8 0%, #e3e6e6 100%);
     --amz-drawer-secondary-border: #adb1b8;
     --amz-drawer-secondary-text: #0f1111;
+    /*
+     * Paper ink on raised drawer (WO-UI-CONTRAST-INVERSE).
+     * Header belt [data-surface=inverse] remaps --color-text / --_inverse-* to
+     * on-dark; money-summary paints with those tokens → cream-on-cream “missing”
+     * subtotal. Same local rebind as account-dropdown (unconditional).
+     */
+    --_paper-text: var(--amz-drawer-text);
+    --_paper-muted: var(--amz-drawer-muted);
+    --_inverse-text: var(--_paper-text);
+    --_inverse-muted: var(--_paper-muted);
+    --weline-theme-text: var(--_paper-text);
+    --weline-theme-text-secondary: var(--_paper-muted);
+    --weline-theme-text-muted: var(--_paper-muted);
+    --weline-theme-body-text: var(--_paper-text);
+    --weline-theme-body-text-secondary: var(--_paper-muted);
+    --weline-theme-body-text-muted: var(--_paper-muted);
+    --weline-theme-body-text-heading: var(--_paper-text);
+    --weline-theme-color-text: var(--_paper-text);
+    --weline-theme-color-text-muted: var(--_paper-muted);
+    --weline-layout-text-primary: var(--_paper-text);
+    --weline-layout-text-secondary: var(--_paper-muted);
+    --bs-heading-color: var(--_paper-text);
+    --bs-body-color: var(--_paper-text);
+    --color-text: var(--_paper-text);
+    --color-text-primary: var(--_paper-text);
+    --color-text-secondary: var(--_paper-muted);
+    --color-text-muted: var(--_paper-muted);
+    --w-surface-fg: var(--_paper-text);
+    --w-surface-fg-muted: var(--_paper-muted);
+    --w-surface-fg-subtle: var(--_paper-muted);
     color: var(--amz-drawer-text);
 }
 
@@ -53,10 +83,17 @@
 
 .header-cart .mini-cart-drawer {
     position: fixed !important;
+    /* Default CLOSED geometry: width 0 at the inline-end edge.
+     * Never default to width:100vw/panel + translateX(100%) — that expands
+     * document scrollWidth (~2× viewport) and shows a blank right gutter. */
     inset-block: 0;
     inset-inline-end: 0;
-    width: min(var(--size-panel-400, 25rem), 100vw);
-    max-width: 100vw;
+    inset-inline-start: auto;
+    left: auto;
+    right: 0;
+    width: 0;
+    max-width: 0;
+    min-width: 0;
     height: 100vh;
     height: 100dvh;
     max-height: 100vh;
@@ -65,23 +102,38 @@
     flex-direction: column;
     background: var(--amz-drawer-surface, var(--weline-theme-surface-raised, #ffffff));
     color: var(--amz-drawer-text, var(--weline-theme-text, #111111));
-    box-shadow: var(--weline-shadow-lg);
+    box-shadow: none;
     z-index: calc(var(--weline-z-overlay, 1200) + 2);
-    transform: translateX(100%);
+    transform: none;
     visibility: hidden;
     pointer-events: none;
-    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.32s ease;
+    transition: width 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.32s ease, box-shadow 0.32s ease;
     overflow: hidden;
     isolation: isolate;
-    /* Never inflate header-actions when closed — even if a late stylesheet races */
-    contain: layout style;
+    padding: 0;
+    border: none;
+    /* Never inflate header-actions / document scrollport when closed */
+    contain: layout style paint;
 }
 
-/* Closed by default: never occupy header flow even if transform is overridden */
+/* Closed (explicit): keep geometry collapsed even if a late sheet races. */
 .header-cart .mini-cart-drawer[aria-hidden="true"] {
     visibility: hidden !important;
     pointer-events: none !important;
-    transform: translateX(100%) !important;
+    transform: none !important;
+    inset-inline-start: auto !important;
+    inset-inline-end: 0 !important;
+    left: auto !important;
+    right: 0 !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+    content-visibility: hidden;
+    clip-path: inset(0 0 0 0);
 }
 
 .header-cart .mini-cart-drawer__busy-overlay {
@@ -127,10 +179,28 @@
 }
 
 .header-cart.is-drawer-open .mini-cart-drawer,
-.header-cart.is-drawer-open .mini-cart-drawer.is-open {
-    transform: translateX(0);
-    visibility: visible;
-    pointer-events: auto;
+.header-cart.is-drawer-open .mini-cart-drawer.is-open,
+.header-cart .mini-cart-drawer[aria-hidden="false"] {
+    transform: none !important;
+    width: min(var(--size-panel-400, 25rem), 100%) !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: unset;
+    border: unset;
+    box-shadow: var(--weline-shadow-lg);
+    overflow: hidden;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    content-visibility: visible;
+}
+
+@media (max-width: 768px) {
+    .header-cart.is-drawer-open .mini-cart-drawer,
+    .header-cart.is-drawer-open .mini-cart-drawer.is-open,
+    .header-cart .mini-cart-drawer[aria-hidden="false"] {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
 }
 
 .header-cart .mini-cart-drawer__header {
@@ -206,12 +276,16 @@
 }
 
 .header-cart .mini-cart-drawer__body {
-    /* Product lines are the primary content: never let footer extras starve this pane. */
-    flex: 1 1 auto;
-    min-height: min(40vh, 12rem);
+    /* Product lines are the primary content: shrink when footer sheet expands upward. */
+    flex: 1 1 0;
+    min-height: min(28vh, 8rem);
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: var(--weline-space-4, 1rem) var(--weline-space-5, 1.25rem);
+}
+
+.header-cart.is-footer-collapsed .mini-cart-drawer__body {
+    min-height: min(52vh, 14rem);
 }
 
 .header-cart .mini-cart-drawer__empty {
@@ -571,16 +645,145 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
 }
 
 .header-cart .mini-cart-drawer__footer {
-    /* Shrink before body when viewport is short or tob extras grow (credit / note tabs). */
+    /*
+     * Bottom sheet: expand grows upward into the line list (body flex-shrinks).
+     * flex:0 0 auto + content-sized details — never flex-shrink details to 0
+     * (that left “收起明细” with empty space above 去结算).
+     */
+    flex: 0 0 auto;
+    max-height: 58%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    padding: var(--weline-space-2, 0.5rem) var(--weline-space-5, 1.25rem) var(--weline-space-5, 1.25rem);
+    border-top: var(--border-width-thin, 1px) solid var(--weline-theme-border, #e5e7eb);
+    background: var(--weline-theme-surface-raised, #ffffff);
+    box-shadow: 0 -8px 24px color-mix(in srgb, #0f1111 8%, transparent);
+    transition: max-height 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.header-cart.is-footer-collapsed .mini-cart-drawer__footer {
+    max-height: none;
+    box-shadow: none;
+}
+
+.header-cart .mini-cart-drawer__footer-toggle {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-3, 0.75rem);
+    width: 100%;
+    margin: 0 0 var(--weline-space-2, 0.5rem);
+    padding: var(--weline-space-2, 0.5rem) 0;
+    border: 0;
+    border-radius: var(--weline-radius-sm, 4px);
+    background: transparent;
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+    font: inherit;
+    font-size: var(--weline-font-size-sm, 0.875rem);
+    font-weight: 600;
+    text-align: start;
+    cursor: pointer;
+}
+
+.header-cart .mini-cart-drawer__footer-toggle:focus-visible {
+    outline: 2px solid var(--weline-theme-primary, #111111);
+    outline-offset: 2px;
+}
+
+.header-cart .mini-cart-drawer__footer-toggle-label {
+    color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #565959));
+    font-weight: 600;
+}
+
+.header-cart.is-footer-collapsed .mini-cart-drawer__footer-toggle-label {
+    display: none;
+}
+
+.header-cart .mini-cart-drawer__footer-compact {
+    display: none;
+    align-items: baseline;
+    gap: var(--weline-space-2, 0.5rem);
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.header-cart .mini-cart-drawer__footer-compact[hidden] {
+    display: none !important;
+}
+
+.header-cart.is-footer-collapsed .mini-cart-drawer__footer-compact:not([hidden]) {
+    display: inline-flex;
+}
+
+.header-cart .mini-cart-drawer__footer-compact-label {
+    color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #565959));
+    font-weight: 600;
+}
+
+.header-cart .mini-cart-drawer__footer-compact-amount {
+    font-size: var(--weline-font-size-lg, 1.125rem);
+    font-weight: 700;
+    color: var(--amz-drawer-price, var(--color-primary, #b12704));
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.header-cart .mini-cart-drawer__footer-chevron {
+    flex: 0 0 auto;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-inline-end: 2px solid currentColor;
+    border-block-end: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+    color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #565959));
+}
+
+/* Expanded: chevron points down (collapse). Collapsed: points up (expand). */
+.header-cart.is-footer-collapsed .mini-cart-drawer__footer-chevron {
+    transform: rotate(-135deg);
+}
+
+.header-cart .mini-cart-drawer__footer-details {
+    /* Expanded: occupy real height so sheet pushes the line list upward. */
     flex: 0 1 auto;
-    min-height: 0;
-    max-height: 52%;
+    min-height: min(22vh, 10rem);
+    max-height: min(40vh, 18rem);
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: var(--weline-space-4, 1rem) var(--weline-space-5, 1.25rem) var(--weline-space-5, 1.25rem);
-    border-top: var(--border-width-thin, 1px) solid var(--weline-theme-border, #e5e7eb);
-    background: var(--weline-theme-surface-raised, #ffffff);
+    opacity: 1;
+    transform: translateY(0);
+    transition: max-height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+        min-height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.2s ease,
+        transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.header-cart.is-footer-collapsed .mini-cart-drawer__footer-details {
+    display: block;
+    min-height: 0;
+    max-height: 0;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    overflow: hidden;
+    transform: translateY(0.5rem);
+    pointer-events: none;
+    visibility: hidden;
+}
+
+.header-cart .mini-cart-drawer__footer .mini-cart-drawer__actions {
+    flex: 0 0 auto;
+    margin-top: var(--weline-space-3, 0.75rem);
+}
+
+.header-cart .mini-cart-drawer__money-summary-slot,
+.header-cart .mini-cart-drawer__footer-details .w-storefront-money-summary {
+    min-height: 2.5rem;
 }
 
 .header-cart .mini-cart-drawer__extras {
@@ -910,8 +1113,12 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
     display: none !important;
 }
 
-@media (max-width: 768px) {
-    .header-cart .mini-cart-drawer {
-        width: 100vw;
-    }
+/* Belt: storefront must not grow a horizontal page scrollbar from off-canvas chrome. */
+html,
+body {
+    overflow-x: clip;
+}
+.weline-page-wrapper {
+    overflow-x: clip;
+    max-width: 100%;
 }
