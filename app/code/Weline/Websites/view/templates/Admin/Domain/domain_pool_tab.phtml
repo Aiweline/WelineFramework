@@ -21,6 +21,7 @@ $poolListPath = '*/admin/domain/get-domain-pool-list';
 $poolDetailPath = '*/admin/domain/get-pool-detail';
 $poolUpdatePath = '*/admin/domain/update-pool-domain';
 $poolDeletePath = '*/admin/domain/delete-pool-domain';
+$poolFlowLogPath = '*/admin/domain/get-pool-flow-log';
 $cleanInvalidPath = '*/admin/domain/clean-pool-invalid-domains';
 $cleanMispointedPath = '*/admin/domain/clean-pool-mispointed-apex-dns';
 $formKey = (string) $this->getFormKeyValue();
@@ -285,6 +286,7 @@ var poolListUrl = "@url{$poolListPath}";
 var poolDetailUrl = "@url{$poolDetailPath}";
 var poolUpdateUrl = "@url{$poolUpdatePath}";
 var poolDeleteUrl = "@url{$poolDeletePath}";
+var poolFlowLogUrl = "@url{$poolFlowLogPath}";
 var cleanInvalidUrl = "@url{$cleanInvalidPath}";
 var cleanMispointedUrl = "@url{$cleanMispointedPath}";
 var formKey = <?= json_encode($formKey) ?>;
@@ -352,6 +354,7 @@ function rowHtml(row) {
 }
 function openWelinePoolFlowLogModal(title, htmlInner) {
     var overlay = document.createElement('div');
+    overlay.className = 'weline-pool-flow-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10002;display:flex;align-items:center;justify-content:center;padding:1rem;';
     var dlg = document.createElement('div');
     dlg.style.cssText = 'background:var(--backend-color-card-bg,#fff);border-radius:.75rem;padding:1.25rem;max-width:90vw;width:720px;max-height:85vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);';
@@ -412,17 +415,17 @@ function renderPager(page, lastPage) {
     if (!nav) return;
     var h = '';
     if (lastPage > 1) {
-        h += '<li class="w-pagination__item ' + (page <= 1 ? 'disabled' : '')"><a class="w-pagination__link" href="#" data-p="' + (page - 1) + '">&laquo;</a></li>';
+        h += '<li class="w-pagination__item ' + (page <= 1 ? 'disabled' : '') + '"><a class="w-pagination__link" href="#" data-p="' + (page - 1) + '">&laquo;</a></li>';
         var s = Math.max(1, page - 2), e = Math.min(lastPage, page + 2);
         for (var i = s; i <= e; i++) {
-            h += '<li class="w-pagination__item ' + (i === page ? 'active' : '')"><a class="w-pagination__link" href="#" data-p="' + i + '">' + i + '</a></li>';
+            h += '<li class="w-pagination__item ' + (i === page ? 'active' : '') + '"><a class="w-pagination__link" href="#" data-p="' + i + '">' + i + '</a></li>';
         }
-        h += '<li class="w-pagination__item ' + (page >= lastPage ? 'disabled' : '')"><a class="w-pagination__link" href="#" data-p="' + (page + 1) + '">&raquo;</a></li>';
+        h += '<li class="w-pagination__item ' + (page >= lastPage ? 'disabled' : '') + '"><a class="w-pagination__link" href="#" data-p="' + (page + 1) + '">&raquo;</a></li>';
     } else if (totalRows > 0) {
         h = '<li class="w-pagination__item" aria-disabled="true"><span class="w-pagination__link"><?= __('共 1 页') ?></span></li>';
     }
     nav.innerHTML = h;
-    nav.querySelectorAll('a.page-link[data-p]').forEach(function(a){
+    nav.querySelectorAll('a.w-pagination__link[data-p]').forEach(function(a){
         a.addEventListener('click', function(e){
             e.preventDefault();
             var p = parseInt(a.getAttribute('data-p'), 10);
@@ -521,7 +524,14 @@ function postPoolForm(url, fields) {
     var fd = new FormData();
     Object.keys(fields || {}).forEach(function(k){ fd.append(k, fields[k]); });
     if (formKey) fd.append('form_key', formKey);
-    return Weline.adminRequest('websites', url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); });
+    // keepBusinessResult：绑站删除/停用返回 409 时仍走 then，便于 toast 真实原因（否则 SDK 直接 reject）
+    return Weline.adminRequest('websites', url, {
+        method: 'POST',
+        body: fd,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        keepBusinessResult: true,
+        silent: true
+    }).then(function(r){ return r && typeof r.json === 'function' ? r.json() : r; });
 }
 function openPoolManageDialog(poolId, domainHint) {
     var loading = '<p class="w-text" data-tone="muted"><?= __('加载中...') ?></p>';
@@ -569,16 +579,16 @@ function openPoolManageDialog(poolId, domainHint) {
                 var nextDesc = (document.getElementById('weline-pool-edit-description') || {}).value || '';
                 var nextStatus = (document.getElementById('weline-pool-edit-status') || {}).value || 'active';
                 postPoolForm(poolUpdateUrl, { pool_id: String(poolId), description: nextDesc, status: nextStatus }).then(function(resp){
-                    if (resp.code !== 200) {
-                        toastError(resp.msg || 'Error');
+                    if (!resp || resp.code !== 200) {
+                        toastError((resp && resp.msg) || '<?= __('请求失败') ?>');
                         return;
                     }
                     toastSuccess(resp.msg || '<?= __('保存成功') ?>');
-                    var overlay = body.closest('div[style*="position:fixed"]');
+                    var overlay = body.closest('.weline-pool-flow-overlay');
                     if (overlay) overlay.remove();
                     document.body.style.overflow = '';
                     loadPage(currentPage);
-                }).catch(function(){ toastError('<?= __('请求失败') ?>'); });
+                }).catch(function(err){ toastError((err && err.message) || '<?= __('请求失败') ?>'); });
             });
         }
     }).catch(function(){
@@ -586,19 +596,21 @@ function openPoolManageDialog(poolId, domainHint) {
     });
 }
 function deletePoolRow(poolId, domain, siteCreated) {
+    // __() 默认第二参是 ''，会把 %{1} 先吃掉；PHP 注入哨兵再交给 JS 替换
+    var name = domain || ('#' + poolId);
     var warn = siteCreated
-        ? ('<?= __('「%{1}」标记为已建站。若仍被网站绑定将无法删除；确认从域名池移除？') ?>'.replace('%{1}', domain || ('#' + poolId)))
-        : ('<?= __('确认从域名池删除「%{1}」？此操作不可撤销。') ?>'.replace('%{1}', domain || ('#' + poolId)));
+        ? ('<?= __('「%{1}」标记为已建站。若仍被网站绑定将无法删除；确认从域名池移除？', ['__DOMAIN__']) ?>'.split('__DOMAIN__').join(name))
+        : ('<?= __('确认从域名池删除「%{1}」？此操作不可撤销。', ['__DOMAIN__']) ?>'.split('__DOMAIN__').join(name));
     backendConfirmPromise(warn, { title: '<?= __('删除域名池记录') ?>', type: 'danger', confirmText: '<?= __('删除') ?>' }).then(function(ok){
         if (!ok) return;
         postPoolForm(poolDeleteUrl, { pool_id: String(poolId) }).then(function(data){
-            if (data.code !== 200) {
-                toastError(data.msg || 'Error');
+            if (!data || data.code !== 200) {
+                toastError((data && data.msg) || '<?= __('请求失败') ?>');
                 return;
             }
             toastSuccess(data.msg || '<?= __('删除成功') ?>');
             loadPage(currentPage);
-        }).catch(function(){ toastError('<?= __('请求失败') ?>'); });
+        }).catch(function(err){ toastError((err && err.message) || '<?= __('请求失败') ?>'); });
     });
 }
 document.addEventListener('click', function(e){

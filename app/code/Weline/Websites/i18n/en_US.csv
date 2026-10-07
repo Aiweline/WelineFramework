@@ -699,6 +699,7 @@ Weline（本地）,"Weline (local)"
 "Weline_Theme 可通过此扩展点输出 layouts 派生的主题候选。","Weline_Theme can output layouts-derived theme candidates through this extension point."
 获取域名池列表失败：%{1},"Domain pool list failed: %{1}"
 参数错误,"Parameter error"
+获取详情失败：%{1},获取详情失败：%{1}
 "试运行：发现 %{1} 条可清理记录","Dry run: %{1} row(s) can be removed"
 "已清理 %{1} 条非法域名池记录","Removed %{1} invalid pool row(s)"
 清理失败：%{1},"Cleanup failed: %{1}"
@@ -1398,6 +1399,139 @@ lock,lock
 删除渠道前必须加载明确的渠道记录,"Explicit channel records must be loaded before deleting a channel"
 "删除渠道前必须提供有效渠道 ID（0 是系统默认渠道）","A valid channel ID is required before deletion (0 is the system default channel)"
 要删除的渠道不存在,"The channel to be deleted does not exist"
+请先保存网站，再配置本站联系地址/电话/服务时间。,"Save the website first, then configure this site's contact address/phone/hours."
+"本组写入当前网站范围；未覆盖的字段继承 Global 默认。","This group writes to current website scope; uncovered fields inherit Global defaults."
+请先保存渠道，再配置本渠道联系信息。,"Save the channel first, then configure channel contact info."
+"本组写入当前渠道范围；未覆盖时继承 Store → Website → Global。","This group writes to current channel scope; when uncovered inherits Store → Website → Global."
+请先保存商店，再配置本店联系信息。,"Save the store first, then configure store contact info."
+"本组写入当前商店范围；未覆盖时继承 Website → Global。","This group writes to current store scope; when uncovered inherits Website → Global."
+渠道代码,"channel code"
+渠道名称,"Channel name"
+访问入口,"Access entry"
+"语言 / 货币","Language / Currency"
+"Store / Channel","Store / Channel"
+商店代码,"store code"
+商店名称,"store name"
+模式,model
+"独立 URL","Standalone URL"
+"按 Website → Store → Channel 树管理站点范围","Manage site scopes by Website → Store → Channel tree"
+过滤站点,"Filter sites"
+过滤,Filter
+清除,Clear
+站点范围树,"Site scope tree"
+暂无网站,"No websites"
+折叠/展开,Collapse/Expand
+只读,Read-only
+保存后可翻译多语言,"Save the theme first to translate locales"
+"前台品牌字标权威来源；留空或系统占位名时前台不展示硬编码品牌。已选语言将默认 LocalModel 翻译。","Authoritative storefront brand wordmark; blank or system placeholder names are not hardcoded. Selected languages default to LocalModel translate."
+网站简介,"Website description."
+"网站范围品牌/SEO 叙述，前台与主题基础信息共用；已选语言默认 LocalModel 翻译。","Website-scope brand/SEO narrative shared by storefront and theme basics; selected languages default to LocalModel translate."
+可由选择域名自动生成（域名转下划线），可修改,"Auto-generated from first selected domain (dots to underscores)"
+网站子路径,"Site Subpath"
+"可选；留空表示直接使用域名根路径，填写后会应用到当前选择的所有域名。禁止使用语言编码或货币编码（如 usd、en_US）。","Optional; leave empty to use the domain root. Applied to all selected domains. Language and currency codes (e.g. usd, en_US) are not allowed."
+"Store / SalesChannel 只读目录","Read-only Store / SalesChannel Directory"
+"此处仅展示目录。Store 模式、生命周期与 SalesChannel 不会随 Website 表单保存而修改。","This directory is read-only. Store mode, lifecycle, and SalesChannel data are not changed when the Website form is saved."
+"保存 Website 后，系统会在升级与站点保存流程中建立默认 Store 和 SalesChannel。","After the Website is saved, the upgrade and website-save flows create its default Store and SalesChannel."
+"当前 Website 暂无 Store/Channel 目录，请运行 setup:upgrade 补齐默认目录。","This Website has no Store/Channel directory. Run setup:upgrade to restore the default directory."
+默认,Default
+"此 Store 暂无 SalesChannel","This Store has no SalesChannel"
+选择域名,"Select Domain"
+从域名池选择已就绪的域名（可多选）；选择后网站代码将自动填充，子路径由上方统一控制。,"Select ready domains from the domain pool (multi-select allowed); after selection, the site code will be auto-filled, and the sub-path is controlled uniformly from above."
+默认时区,"Default Time Zone"
+搜索时区...,"Search Timezone..."
+点击选择时区，可输入关键词搜索,"Click to select a timezone; type keywords to search"
+保存,Save
+返回,Back
+网站子路径不允许使用语言编码,"Website sub-paths do not allow the use of language codes."
+网站子路径不允许使用货币编码,"Website sub-paths do not allow the use of currency codes."
+子路径首段为保留字，请更换。,"The first segment of the subpath is a reserved word, please change it."
+子路径格式无效。,"The subpath format is invalid."
+正式,Normal
+开发,Development
+测试,Test
+活动,Active
+墓碑,Tombstone
+"业务范围 (Scope)",Scope
+如：catalog,"For example: catalog"
+用于标识站点的业务来源，留空表示通用站点。由系统自动设置。,"Used to identify the business source of the site; leave blank for a general site. Set automatically by the system."
+首页入口路由,"Homepage entry route"
+继承全局首页配置,"Inherit global homepage configuration"
+选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。,"When selected, this site's root path enters this frontend route; leave empty to inherit the global start route."
+"Store 与 SalesChannel 只读目录","Read-only Store and SalesChannel directory"
+启用,Enable
+停用,Disabled
+"SalesChannel 列表","SalesChannel list"
+点击选择时区,"Click to select timezone"
+"爬虫拦截 / 放行","Crawler block / allow"
+"由本网站自行管理爬虫策略。每条可选择拦截或放行；命中即拒绝本次请求，不额外封 IP。保存后同步到 WLS 对应域名。","This website manages crawler policy itself. Each rule may block or allow; a hit rejects the request without extra IP ban. After save, sync to the matching WLS domain."
+启用本站爬虫策略,"Enable site crawler policy"
+查找,Search
+上一页,"Previous page"
+下一页,"Next page"
+添加条目,"Add entry"
+名称,Name
+"UA 正则","UA regex"
+动作,Action
+说明,Description
+"名称 / UA / 说明","Name / UA / notes"
+放行,Release
+拦截,Intercept
+无匹配条目,"No matching entries"
+"第 {page}/{pages} 页 · 共 {total} 条","Page {page}/{pages} · {total} items total"
+当前账号无权编辑该节点,"Current account cannot edit this node"
+请从左侧选择网站、商店或渠道,"Select website, store or channel on the left"
+"Store 商品复制向导","Store Product Copy Wizard"
+"目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","The activity store for the target website has all options selected by default, but users can deselect them as needed. A preview is required before submitting. The default inventory is 0, and the quantity will only be copied if the user explicitly checks the corresponding box."
+持久化事务模式,"Persistence transaction model"
+复制范围,"copy range"
+入口,Entrance
+"目标 Website","Target Website"
+"目标 Store","Target Store"
+"默认选中该 Website 下全部活动 Store；取消勾选即可排除，至少保留一个。","By default, all stores under this website are selected. You can deselect to exclude them, but you must keep at least one selected."
+"来源 Website","Source Website"
+"来源 Store","Source Store"
+"分类 ID","Category ID"
+"排除分类 ID","Exclude category ID"
+复制分类下商品,"Copy products under category"
+重复复制策略,"Duplicate strategy"
+字段包,"field pack"
+"显式复制库存数量（不勾选时目标 on_hand=0）","Explicitly copy inventory quantity (target on_hand=0 when unchecked)"
+创建草稿并预览,"Create a draft and preview it"
+提交复制,"Submit copy"
+取消草稿,"Cancel draft"
+预览与提交结果,"Preview and submit results"
+"正在加载 Website/Store 选项…","Loading Website/Store options…"
+分类,Classification
+商品,Products
+Offer,Offer
+"创建 / 跳过 / 更新",Create/Skip/Update
+复制库存数量,"Copy stock quantity"
+契约要点,"Key points of the contract"
+"分类树：勾父默认含子孙；excluded_category_ids 取消完整子树；include_products 控制是否带品。","Category tree: The hook parent includes descendants by default; excluded_category_ids cancels the complete subtree; include_products controls whether to include products."
+"库存：含 inventory 包时默认 on_hand=0；仅 inventory_copy_qty=true 才复制数量。","Inventory: Default on_hand=0 when including inventory package; quantity is copied only when inventory_copy_qty=true."
+"跨 Website：目录只建一次，所选 Store 在同一目标 Website 事务内整体写入；任一失败则全部回滚。","Cross-Website: The directory is created only once, and the selected store is written as a whole within the same target website transaction; any failure results in a complete rollback."
+"同来源重复复制：默认 skip；update_selected_fields 只更新勾选字段包，不删未选字段。","Repeated copying from the same source: skip by default; update_selected_fields only updates the checked field package and does not delete unselected fields."
+详细契约见,"See the detailed contract"
+复制服务暂不可用，请刷新页面后重试,"The replication service is temporarily unavailable, please refresh the page and try again."
+"Website/Store 选项加载失败","Website/Store option failed to load"
+请选择复制范围，然后创建草稿并预览,"Please select the copy range, then create a draft and preview it"
+正在创建草稿并计算预览…,"Creating draft and calculating preview..."
+预览已就绪，请核对统计后提交,"The preview is ready, please check the statistics before submitting"
+复制预览失败,"Copy preview failed"
+"正在原子提交目录、Store 覆盖与库存…","Atomic commits to catalog, store coverage and inventory..."
+复制提交成功,"Copy submission successful"
+复制提交失败,"Copy commit failed"
+正在取消草稿…,"Canceling draft…"
+草稿已取消,"Draft canceled"
+取消草稿失败,"Cancel draft failed"
+"请选择目标 Website，并至少保留一个目标 Store","Please select the target website and keep at least one target store."
+"当前入口需要选择来源 Website 与 Store","The current entry needs to select the source Website and Store"
+"当前入口需要选择来源 Website","The current entry needs to select the source Website"
+"该 Website 没有可用 Store","There is no Store available for this Website"
+草稿,draft
+错误码,"error code"
+逗号分隔；留空表示全部分类,"Comma separated; leave blank to indicate all categories"
+逗号分隔；排除所选分类及完整子树,"Comma separated; exclude selected categories and complete subtrees"
 Other,Other
 "DNS 服务商","DNS service provider"
 刷新服务器IP,"Refresh Server IP"
@@ -1629,7 +1763,6 @@ DNS管理,"DNS management"
 清理失败,"Cleanup Failed"
 鍔犺浇璐︽埛鍒楄〃澶辫触,"Load account list failed"
 清除（使用注册商账户）,"Clear (using registrar account)"
-清除,Clear
 其他,Other
 批量购买域名,"Bulk Domain Purchase"
 选择域名商账号,"Select Registrar Account"
@@ -1710,6 +1843,10 @@ DNS管理,"DNS management"
 订单号,"Order No."
 数量,Count
 时间,Time
+后台,Backend
+域名池,"Domain Pool"
+域名商管理,"Registrar Management"
+域名购买,"Domain Purchase"
 域名商账号管理,"Registrar Account Management"
 添加账号,"Add Account"
 "暂无域名商账号，请点击""添加账号""配置域名服务商。","No domain provider account. Please click ""Add Account"" to configure a domain service provider."
@@ -1721,8 +1858,6 @@ DNS管理,"DNS management"
 域名商渠道,"Registrar Provider"
 请选择域名商,"Select a registrar"
 如：主账号、生产环境,"e.g. Primary Account, Production"
-启用,Enable
-保存,Save
 添加域名商账号,"Add Registrar Account"
 编辑域名商账号,"Edit Registrar Account"
 （不修改请留空）,"(Leave blank if no changes)"
@@ -1736,10 +1871,6 @@ DNS管理,"DNS management"
 正在测试连接...,"Testing connection..."
 连接失败,"Connection failed"
 测试失败,"Test failed"
-后台,Backend
-域名池,"Domain Pool"
-域名商管理,"Registrar Management"
-域名购买,"Domain Purchase"
 "共 %{1} 条","Total %{1} Entries"
 清理含非法字符的误同步池记录,"Remove pool rows with invalid chars (sync errors)"
 清理误同步池记录,"Clean invalid pool sync rows"
@@ -1758,8 +1889,10 @@ Windows,Windows
 流转,Transfer
 域名池暂无数据,"No data in domain pool"
 "请先在「域名列表」中转存到域名池，或执行 DNS 查询/解析自动入池","Please first transfer to the domain pool in the ""Domain List"", or perform a DNS query/resolution to automatically add to the pool"
+已停用,已停用
 解析中,Parsing
 时间线,Timeline
+管理,管理
 页，每页,"pages · per page"
 条，合计,"items · total"
 "共 1 页","1 page"
@@ -1768,140 +1901,18 @@ Windows,Windows
 开始试运行,"Run dry run"
 试运行已完成。是否正式执行删除？此操作不可撤销。,"Dry run done. Execute for real? This cannot be undone."
 正式执行？,"Execute for real?"
+管理域名池,管理域名池
+已被网站绑定,已被网站绑定
+当前未被网站绑定，可安全删除或停用。,当前未被网站绑定，可安全删除或停用。
+主机名不可在此直接改名；需要换名请删除后重新入池，或到网站设置换绑。,主机名不可在此直接改名；需要换名请删除后重新入池，或到网站设置换绑。
+备注,备注
+「%{1}」标记为已建站。若仍被网站绑定将无法删除；确认从域名池移除？,「%{1}」标记为已建站。若仍被网站绑定将无法删除；确认从域名池移除？
+确认从域名池删除「%{1}」？此操作不可撤销。,确认从域名池删除「%{1}」？此操作不可撤销。
+删除域名池记录,删除域名池记录
 "将列出含 [] 的非法池记录（不删除）。继续？","List invalid pool rows (dry run). Continue?"
 "将检查根域 @ 的 A/AAAA 是否指向本机公网（橙云代理不删）。继续试运行？","Dry-run: check apex A/AAAA vs server IP (CF proxied skipped). Continue?"
 暂无记录,"No records"
 流转记录,"Transfer Records"
-请先保存网站，再配置本站联系地址/电话/服务时间。,"Save the website first, then configure this site's contact address/phone/hours."
-"本组写入当前网站范围；未覆盖的字段继承 Global 默认。","This group writes to current website scope; uncovered fields inherit Global defaults."
-请先保存渠道，再配置本渠道联系信息。,"Save the channel first, then configure channel contact info."
-"本组写入当前渠道范围；未覆盖时继承 Store → Website → Global。","This group writes to current channel scope; when uncovered inherits Store → Website → Global."
-请先保存商店，再配置本店联系信息。,"Save the store first, then configure store contact info."
-"本组写入当前商店范围；未覆盖时继承 Website → Global。","This group writes to current store scope; when uncovered inherits Website → Global."
-渠道代码,"channel code"
-渠道名称,"Channel name"
-访问入口,"Access entry"
-"语言 / 货币","Language / Currency"
-"Store / Channel","Store / Channel"
-商店代码,"store code"
-商店名称,"store name"
-模式,model
-"独立 URL","Standalone URL"
-"按 Website → Store → Channel 树管理站点范围","Manage site scopes by Website → Store → Channel tree"
-过滤站点,"Filter sites"
-过滤,Filter
-站点范围树,"Site scope tree"
-暂无网站,"No websites"
-折叠/展开,Collapse/Expand
-只读,Read-only
-保存后可翻译多语言,"Save the theme first to translate locales"
-"前台品牌字标权威来源；留空或系统占位名时前台不展示硬编码品牌。已选语言将默认 LocalModel 翻译。","Authoritative storefront brand wordmark; blank or system placeholder names are not hardcoded. Selected languages default to LocalModel translate."
-网站简介,"Website description."
-"网站范围品牌/SEO 叙述，前台与主题基础信息共用；已选语言默认 LocalModel 翻译。","Website-scope brand/SEO narrative shared by storefront and theme basics; selected languages default to LocalModel translate."
-可由选择域名自动生成（域名转下划线），可修改,"Auto-generated from first selected domain (dots to underscores)"
-网站子路径,"Site Subpath"
-"可选；留空表示直接使用域名根路径，填写后会应用到当前选择的所有域名。禁止使用语言编码或货币编码（如 usd、en_US）。","Optional; leave empty to use the domain root. Applied to all selected domains. Language and currency codes (e.g. usd, en_US) are not allowed."
-"Store / SalesChannel 只读目录","Read-only Store / SalesChannel Directory"
-"此处仅展示目录。Store 模式、生命周期与 SalesChannel 不会随 Website 表单保存而修改。","This directory is read-only. Store mode, lifecycle, and SalesChannel data are not changed when the Website form is saved."
-"保存 Website 后，系统会在升级与站点保存流程中建立默认 Store 和 SalesChannel。","After the Website is saved, the upgrade and website-save flows create its default Store and SalesChannel."
-"当前 Website 暂无 Store/Channel 目录，请运行 setup:upgrade 补齐默认目录。","This Website has no Store/Channel directory. Run setup:upgrade to restore the default directory."
-默认,Default
-"此 Store 暂无 SalesChannel","This Store has no SalesChannel"
-选择域名,"Select Domain"
-从域名池选择已就绪的域名（可多选）；选择后网站代码将自动填充，子路径由上方统一控制。,"Select ready domains from the domain pool (multi-select allowed); after selection, the site code will be auto-filled, and the sub-path is controlled uniformly from above."
-默认时区,"Default Time Zone"
-搜索时区...,"Search Timezone..."
-点击选择时区，可输入关键词搜索,"Click to select a timezone; type keywords to search"
-返回,Back
-网站子路径不允许使用语言编码,"Website sub-paths do not allow the use of language codes."
-网站子路径不允许使用货币编码,"Website sub-paths do not allow the use of currency codes."
-子路径首段为保留字，请更换。,"The first segment of the subpath is a reserved word, please change it."
-子路径格式无效。,"The subpath format is invalid."
-正式,Normal
-开发,Development
-测试,Test
-活动,Active
-墓碑,Tombstone
-"业务范围 (Scope)",Scope
-如：catalog,"For example: catalog"
-用于标识站点的业务来源，留空表示通用站点。由系统自动设置。,"Used to identify the business source of the site; leave blank for a general site. Set automatically by the system."
-首页入口路由,"Homepage entry route"
-继承全局首页配置,"Inherit global homepage configuration"
-选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。,"When selected, this site's root path enters this frontend route; leave empty to inherit the global start route."
-"Store 与 SalesChannel 只读目录","Read-only Store and SalesChannel directory"
-停用,Disabled
-"SalesChannel 列表","SalesChannel list"
-点击选择时区,"Click to select timezone"
-"爬虫拦截 / 放行","Crawler block / allow"
-"由本网站自行管理爬虫策略。每条可选择拦截或放行；命中即拒绝本次请求，不额外封 IP。保存后同步到 WLS 对应域名。","This website manages crawler policy itself. Each rule may block or allow; a hit rejects the request without extra IP ban. After save, sync to the matching WLS domain."
-启用本站爬虫策略,"Enable site crawler policy"
-查找,Search
-上一页,"Previous page"
-下一页,"Next page"
-添加条目,"Add entry"
-名称,Name
-"UA 正则","UA regex"
-动作,Action
-说明,Description
-"名称 / UA / 说明","Name / UA / notes"
-放行,Release
-拦截,Intercept
-无匹配条目,"No matching entries"
-"第 {page}/{pages} 页 · 共 {total} 条","Page {page}/{pages} · {total} items total"
-当前账号无权编辑该节点,"Current account cannot edit this node"
-请从左侧选择网站、商店或渠道,"Select website, store or channel on the left"
-"Store 商品复制向导","Store Product Copy Wizard"
-"目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","The activity store for the target website has all options selected by default, but users can deselect them as needed. A preview is required before submitting. The default inventory is 0, and the quantity will only be copied if the user explicitly checks the corresponding box."
-持久化事务模式,"Persistence transaction model"
-复制范围,"copy range"
-入口,Entrance
-"目标 Website","Target Website"
-"目标 Store","Target Store"
-"默认选中该 Website 下全部活动 Store；取消勾选即可排除，至少保留一个。","By default, all stores under this website are selected. You can deselect to exclude them, but you must keep at least one selected."
-"来源 Website","Source Website"
-"来源 Store","Source Store"
-"分类 ID","Category ID"
-"排除分类 ID","Exclude category ID"
-复制分类下商品,"Copy products under category"
-重复复制策略,"Duplicate strategy"
-字段包,"field pack"
-"显式复制库存数量（不勾选时目标 on_hand=0）","Explicitly copy inventory quantity (target on_hand=0 when unchecked)"
-创建草稿并预览,"Create a draft and preview it"
-提交复制,"Submit copy"
-取消草稿,"Cancel draft"
-预览与提交结果,"Preview and submit results"
-"正在加载 Website/Store 选项…","Loading Website/Store options…"
-分类,Classification
-商品,Products
-Offer,Offer
-"创建 / 跳过 / 更新",Create/Skip/Update
-复制库存数量,"Copy stock quantity"
-契约要点,"Key points of the contract"
-"分类树：勾父默认含子孙；excluded_category_ids 取消完整子树；include_products 控制是否带品。","Category tree: The hook parent includes descendants by default; excluded_category_ids cancels the complete subtree; include_products controls whether to include products."
-"库存：含 inventory 包时默认 on_hand=0；仅 inventory_copy_qty=true 才复制数量。","Inventory: Default on_hand=0 when including inventory package; quantity is copied only when inventory_copy_qty=true."
-"跨 Website：目录只建一次，所选 Store 在同一目标 Website 事务内整体写入；任一失败则全部回滚。","Cross-Website: The directory is created only once, and the selected store is written as a whole within the same target website transaction; any failure results in a complete rollback."
-"同来源重复复制：默认 skip；update_selected_fields 只更新勾选字段包，不删未选字段。","Repeated copying from the same source: skip by default; update_selected_fields only updates the checked field package and does not delete unselected fields."
-详细契约见,"See the detailed contract"
-复制服务暂不可用，请刷新页面后重试,"The replication service is temporarily unavailable, please refresh the page and try again."
-"Website/Store 选项加载失败","Website/Store option failed to load"
-请选择复制范围，然后创建草稿并预览,"Please select the copy range, then create a draft and preview it"
-正在创建草稿并计算预览…,"Creating draft and calculating preview..."
-预览已就绪，请核对统计后提交,"The preview is ready, please check the statistics before submitting"
-复制预览失败,"Copy preview failed"
-"正在原子提交目录、Store 覆盖与库存…","Atomic commits to catalog, store coverage and inventory..."
-复制提交成功,"Copy submission successful"
-复制提交失败,"Copy commit failed"
-正在取消草稿…,"Canceling draft…"
-草稿已取消,"Draft canceled"
-取消草稿失败,"Cancel draft failed"
-"请选择目标 Website，并至少保留一个目标 Store","Please select the target website and keep at least one target store."
-"当前入口需要选择来源 Website 与 Store","The current entry needs to select the source Website and Store"
-"当前入口需要选择来源 Website","The current entry needs to select the source Website"
-"该 Website 没有可用 Store","There is no Store available for this Website"
-草稿,draft
-错误码,"error code"
-逗号分隔；留空表示全部分类,"Comma separated; leave blank to indicate all categories"
-逗号分隔；排除所选分类及完整子树,"Comma separated; exclude selected categories and complete subtrees"
 站点联系信息,"Site contact info"
 "修改即时保存到当前范围；留空可继承上级（Global → Website → Store → Channel）。","Edits save immediately to current scope; blank may inherit parent (Global → Website → Store → Channel)."
 请先保存后再配置联系信息。,"Please save before configuring contact info."
