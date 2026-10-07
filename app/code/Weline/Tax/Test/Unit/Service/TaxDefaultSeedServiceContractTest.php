@@ -14,7 +14,13 @@ final class TaxDefaultSeedServiceContractTest extends TestCase
     {
         self::assertSame(0, TaxDefaultSeedService::WEBSITE_ID);
         self::assertSame(TaxSeedRateCatalog::SEED_REVISION, TaxDefaultSeedService::SEED_REVISION);
-        self::assertSame(4, TaxSeedRateCatalog::SEED_REVISION);
+        self::assertSame(6, TaxSeedRateCatalog::SEED_REVISION);
+        self::assertSame('', TaxSeedRateCatalog::seedCollectSalesTaxCountriesCsv());
+        $suggested = TaxSeedRateCatalog::suggestedCollectSalesTaxCountryCodes();
+        self::assertNotContains('CN', $suggested);
+        self::assertContains('US', $suggested);
+        self::assertContains('JP', $suggested);
+        self::assertGreaterThanOrEqual(40, count($suggested));
         self::assertCount(3, TaxDefaultSeedService::CLASSES);
         self::assertSame('exempt', TaxSeedRateCatalog::CLASS_EXEMPT);
 

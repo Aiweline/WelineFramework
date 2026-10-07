@@ -104,7 +104,22 @@ final class CheckoutTaxAdvisor implements CheckoutTaxAdvisorInterface
             ? TaxRolloutGate::tupleKey($websiteId, $storeId, $channelId)
             : 'website:' . $websiteId;
 
-        return $this->rollout->isEffectivelyOn(self::CAPABILITY, $subject);
+        if (!$this->rollout->isEffectivelyOn(self::CAPABILITY, $subject)) {
+            return false;
+        }
+
+        // Business switch: SystemConfig tax/general/enabled (global/website/store/channel).
+        try {
+            $resolved = $this->scopeConfig->resolve(
+                max(0, $websiteId),
+                max(0, $storeId),
+                max(0, $channelId),
+            );
+
+            return (bool)($resolved['enabled'] ?? false);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -581,11 +596,16 @@ final class CheckoutTaxAdvisor implements CheckoutTaxAdvisorInterface
         array $scope,
         array $shippingContext,
     ): array {
+        $channelId = (int)($scope['channel_id'] ?? 0);
         $pricesIncludeTax = true;
         $collectCountries = null;
         $defaultJurisdiction = 'CN|';
         try {
-            $resolved = $this->scopeConfig->resolve(max(0, $websiteId), max(0, $storeId));
+            $resolved = $this->scopeConfig->resolve(
+                max(0, $websiteId),
+                max(0, $storeId),
+                max(0, $channelId),
+            );
             $pricesIncludeTax = $this->boolValue($resolved['prices_include_tax'] ?? true);
             $collectCountries = $resolved['collect_sales_tax_countries'] ?? null;
             $defaultJurisdiction = (string)($resolved['default_jurisdiction'] ?? 'CN|');

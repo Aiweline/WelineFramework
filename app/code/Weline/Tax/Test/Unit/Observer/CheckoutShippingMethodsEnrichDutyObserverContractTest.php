@@ -63,4 +63,37 @@ final class CheckoutShippingMethodsEnrichDutyObserverContractTest extends TestCa
         self::assertSame(DutyEstimateService::REASON_DOMESTIC, (string)$methods[0]['duty_estimate_reason']);
         self::assertSame('', (string)$methods[0]['duty_notice']);
     }
+
+    public function testCollectDestinationTaxZerosImportVatOnDutyLane(): void
+    {
+        $observer = new CheckoutShippingMethodsEnrichDutyObserver(
+            new DutyEstimateService(),
+            new \Weline\Tax\Service\TaxDestinationCheckoutPolicy(),
+            \Weline\Tax\Service\TaxScopeConfig::forTesting([
+                'enabled' => true,
+                'prices_include_tax' => true,
+                'collect_sales_tax_countries' => 'DE',
+            ]),
+        );
+        $event = new Event('Weline_Checkout::checkout::shipping_methods::enrich', [
+            'methods' => [[
+                'code' => 'PUBLIC_STD_DE',
+                'amount_minor' => 500,
+                'duty_notice' => DutyEstimateService::NOTICE_DDU,
+            ]],
+            'lines' => [[
+                'row_total_minor' => 10000,
+            ]],
+            'address' => ['country_code' => 'DE'],
+            'scope' => ['origin_country' => 'CN', 'website_id' => 0],
+            'currency' => 'USD',
+        ]);
+
+        $observer->execute($event);
+        $methods = $event->getData('methods');
+        self::assertIsArray($methods);
+        self::assertGreaterThan(0, (int)$methods[0]['duty_amount_minor']);
+        self::assertSame(0, (int)$methods[0]['import_tax_amount_minor']);
+        self::assertSame((int)$methods[0]['duty_amount_minor'], (int)$methods[0]['tax_amount_minor']);
+    }
 }

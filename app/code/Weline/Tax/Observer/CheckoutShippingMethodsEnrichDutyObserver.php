@@ -6,16 +6,22 @@ namespace Weline\Tax\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Tax\Service\DutyEstimateService;
+use Weline\Tax\Service\TaxDestinationCheckoutPolicy;
+use Weline\Tax\Service\TaxScopeConfig;
 
 /**
  * Attach Tax-owned duty estimates onto checkout shipping method rows.
  * Does not change shipping amount_minor (Shipping Incoterm contract).
+ * Respects destination collect policy (no import VAT when collecting destination sales tax).
  */
 final class CheckoutShippingMethodsEnrichDutyObserver implements ObserverInterface
 {
     public function __construct(
         private readonly DutyEstimateService $duty = new DutyEstimateService(),
+        private readonly ?TaxDestinationCheckoutPolicy $destinationPolicy = null,
+        private readonly ?TaxScopeConfig $scopeConfig = null,
     ) {
     }
 
@@ -48,6 +54,7 @@ final class CheckoutShippingMethodsEnrichDutyObserver implements ObserverInterfa
             ?? $scope['seller_country']
             ?? 'CN'
         ))) ?: 'CN';
+        $policy = $this->resolvePolicy($dest, $origin, $scope);
 
         $out = [];
         foreach ($methods as $method) {
@@ -65,6 +72,8 @@ final class CheckoutShippingMethodsEnrichDutyObserver implements ObserverInterfa
                 'origin_country' => $origin,
                 'duty_notice' => (string)($method['duty_notice'] ?? ''),
                 'currency' => $currency,
+                'charge_customs_duty' => (bool)($policy['charge_customs_duty'] ?? true),
+                'charge_import_vat' => (bool)($policy['charge_import_vat'] ?? true),
             ]);
             $charged = (int)$estimate['charged_minor'];
             $method['duty_amount_minor'] = (int)$estimate['duty_amount_minor'];
@@ -78,6 +87,38 @@ final class CheckoutShippingMethodsEnrichDutyObserver implements ObserverInterfa
         }
 
         $event->setData('methods', $out);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array{charge_customs_duty:bool,charge_import_vat:bool}
+     */
+    private function resolvePolicy(string $dest, string $origin, array $scope): array
+    {
+        $pricesInclude = true;
+        $collect = null;
+        try {
+            $cfg = $this->scopeConfig ?? ObjectManager::getInstance(TaxScopeConfig::class);
+            if ($cfg instanceof TaxScopeConfig) {
+                $resolved = $cfg->resolve(
+                    max(0, (int)($scope['website_id'] ?? 0)),
+                    max(0, (int)($scope['store_id'] ?? 0)),
+                    max(0, (int)($scope['channel_id'] ?? 0)),
+                );
+                $pricesInclude = !empty($resolved['prices_include_tax']);
+                $collect = (string)($resolved['collect_sales_tax_countries'] ?? '');
+            }
+        } catch (\Throwable) {
+            // Fall through to policy defaults (empty collect).
+        }
+
+        $policy = ($this->destinationPolicy ?? new TaxDestinationCheckoutPolicy())
+            ->resolve($dest, $origin, $pricesInclude, $collect);
+
+        return [
+            'charge_customs_duty' => (bool)($policy['charge_customs_duty'] ?? true),
+            'charge_import_vat' => (bool)($policy['charge_import_vat'] ?? true),
+        ];
     }
 
     /**

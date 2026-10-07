@@ -2,7 +2,14 @@
 
 declare(strict_types=1);
 
+use Weline\SiteSetupAssistant\Api\SetupTaskProviderInterface;
+use Weline\Tax\Extends\Module\Weline_SiteSetupAssistant\SetupTask\TaxSetupTaskProvider;
+
 return [
+    SetupTaskProviderInterface::class => [
+        TaxSetupTaskProvider::class,
+    ],
+
     'type' => 'module',
     'documentation' => 'doc/README.md',
     'extends' => [

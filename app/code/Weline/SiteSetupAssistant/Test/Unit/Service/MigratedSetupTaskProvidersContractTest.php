@@ -28,6 +28,7 @@ final class MigratedSetupTaskProvidersContractTest extends TestCase
             'Websites' => 'WebsitesDomainHttpsSetupTaskProvider',
             'Smtp' => 'SmtpSetupTaskProvider',
             'Mail' => 'MailSetupTaskProvider',
+            'Tax' => 'TaxSetupTaskProvider',
         ];
 
         foreach ($expected as $module => $class) {

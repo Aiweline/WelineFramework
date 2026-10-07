@@ -13,7 +13,7 @@ namespace Weline\Tax\Service;
  */
 final class TaxSeedRateCatalog
 {
-    public const SEED_REVISION = 4;
+    public const SEED_REVISION = 6;
 
     public const CLASS_EXEMPT = 'exempt';
 
@@ -111,6 +111,49 @@ final class TaxSeedRateCatalog
             'ES' => 1000, 'SE' => 1200, 'GB' => 500, 'CH' => 260, 'NO' => 1500, 'IS' => 1100,
             'CA' => 0, 'AU' => 0, 'NZ' => 0, 'JP' => 800, 'SG' => 0, 'IN' => 500,
         ];
+    }
+
+    /**
+     * Generic seed default for checkout collect allowlist: empty.
+     * CN-origin B2C without IOSS / GST registration / US nexus must NOT auto-collect.
+     * Rates stay seeded; add ISO2 only after a real collection obligation.
+     */
+    public static function seedCollectSalesTaxCountriesCsv(): string
+    {
+        return '';
+    }
+
+    /**
+     * Reference ISO2 list (rates table minus CN) for docs / SSA tips — NOT the seed default.
+     *
+     * @return list<string> ISO2 uppercase
+     */
+    public static function suggestedCollectSalesTaxCountryCodes(): array
+    {
+        $codes = array_keys(self::standardCountryRates());
+        $out = [];
+        foreach ($codes as $code) {
+            $iso = strtoupper(trim((string)$code));
+            if ($iso === '' || $iso === 'CN') {
+                continue;
+            }
+            $out[] = $iso;
+        }
+        sort($out, SORT_STRING);
+
+        return $out;
+    }
+
+    /** @deprecated Use suggestedCollectSalesTaxCountryCodes(); seed default is empty. */
+    public static function defaultCollectSalesTaxCountryCodes(): array
+    {
+        return self::suggestedCollectSalesTaxCountryCodes();
+    }
+
+    /** @deprecated Use seedCollectSalesTaxCountriesCsv() for seed writes. */
+    public static function defaultCollectSalesTaxCountriesCsv(): string
+    {
+        return implode(',', self::suggestedCollectSalesTaxCountryCodes());
     }
 
     /**

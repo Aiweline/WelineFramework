@@ -17,7 +17,7 @@
 | `Model/TaxRuleSetLkg` | 持久化、可重放规则集快照 |
 | `Api/TaxEngineInterface` | 算税契约 |
 | `Api/TaxShadowQuoteSourceInterface` | 只读、规范化、去身份的 Checkout shadow 事实源契约 |
-| `Service/TaxScopeConfig` | SystemConfig typed Scope adapter（价内税 / 代收国名单） |
+| `Service/TaxScopeConfig` | SystemConfig typed Scope adapter（价内税 / 代收国名单；`resolve(website,store,channel)`） |
 | `Service/TaxEngine` | ORM production engine；region→country 税则回落 |
 | `Service/TaxShadowComparator` | ORM current source vs frozen snapshot 观察窗（TEST-P3B-01） |
 | `Service/TaxLkgStore` | Scope + Schema + rule hash 的持久规则集 LKG |

@@ -143,7 +143,11 @@ final class TaxDefaultSeedService
             TaxScopeConfig::KEY_SCHEMA_VERSION => [TaxEngine::SCHEMA_VERSION, 'string'],
             TaxScopeConfig::KEY_ROUNDING => [TaxRule::ROUNDING_HALF_UP, 'string'],
             TaxScopeConfig::KEY_PRICES_INCLUDE_TAX => [true, 'bool'],
-            TaxScopeConfig::KEY_COLLECT_SALES_TAX_COUNTRIES => ['', 'string'],
+            // Generic CN-export B2C: rates seeded, collect allowlist empty until obligation.
+            TaxScopeConfig::KEY_COLLECT_SALES_TAX_COUNTRIES => [
+                TaxSeedRateCatalog::seedCollectSalesTaxCountriesCsv(),
+                'string',
+            ],
         ];
         foreach ($writes as $key => [$value, $valueType]) {
             $resolved = $store->resolveConfig(

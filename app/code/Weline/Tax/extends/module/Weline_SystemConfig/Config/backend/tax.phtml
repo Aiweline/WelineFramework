@@ -12,11 +12,11 @@
     <w:config:field
         key="tax/general/enabled"
         label="启用税务引擎"
-        description="关闭时保持 checkout stub；开启后由服务端 TaxEngine 算税（P3B-002 接入）。"
+        description="关闭时保持 checkout stub；开启后由服务端 TaxEngine 算税。可在 Global / 网站 / 店铺 / 渠道级开关（渠道覆盖店铺）。另需 commerce rollout tax 放行。"
         type="switch"
         value-type="bool"
         default="0"
-        scope="global,website,store" />
+        scope="global,website,store,channel" />
 
     <w:config:field
         key="tax/general/default_jurisdiction"
@@ -25,7 +25,7 @@
         type="text"
         value-type="string"
         default="CN|"
-        scope="global,website,store"
+        scope="global,website,store,channel"
         validation="required|max:64" />
 
     <w:config:field
@@ -35,7 +35,7 @@
         type="text"
         value-type="string"
         default="tax-schema-v1"
-        scope="global,website,store"
+        scope="global,website,store,channel"
         validation="required|max:64" />
 
     <w:config:field
@@ -45,7 +45,7 @@
         type="select"
         value-type="string"
         default="half_up"
-        scope="global,website,store"
+        scope="global,website,store,channel"
         options="half_up:四舍五入（Half Up）"
         validation="required|in_options" />
 
@@ -56,16 +56,16 @@
         type="switch"
         value-type="bool"
         default="1"
-        scope="global,website,store" />
+        scope="global,website,store,channel" />
 
     <w:config:field
         key="tax/general/collect_sales_tax_countries"
         label="结账代收目的地销售税的国家"
-        description="逗号分隔 ISO2。仅当已开通 IOSS/LVG/nexus 等代收义务时填写（例：US,AU）。默认留空：跨境只走进口税/关税预估。"
+        description="逗号分隔 ISO2。通用默认留空：只种子税率，结账不代收目的地销售税（跨境关税/进口税仍可按 DDU 预估）。仅当已注册义务时填写——例：欧盟 IOSS 填 EU 各国；英国 VAT 填 GB；澳/新 GST 填 AU,NZ；美国某州 nexus 再填 US。整站不算税：关闭「启用税务引擎」；单品免税：tax_class=exempt。"
         type="text"
         value-type="string"
         default=""
-        scope="global,website,store"
+        scope="global,website,store,channel"
         validation="max:255" />
 </w:config:group>
 

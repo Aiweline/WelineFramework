@@ -7,12 +7,16 @@ namespace Weline\Tax\Service;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\ConfigReader;
+use Weline\SystemConfig\Service\SystemConfigScopeResolver;
 use Weline\Tax\Model\TaxRule;
+use Weline\Websites\Api\Catalog\SalesChannelCatalogInterface;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 use Weline\Websites\Api\Catalog\WebsiteCatalogInterface;
 
 /**
  * Tax-owned adapter over the public typed SystemConfig and Websites APIs.
+ *
+ * Resolve order uses SystemConfig inheritance: channel → store → website → global.
  */
 final class TaxScopeConfig
 {
@@ -30,12 +34,14 @@ final class TaxScopeConfig
     private readonly ?\Closure $resolver;
 
     /**
-     * @param (callable(int,int):array<string,mixed>)|null $resolver Explicit test/frozen-snapshot adapter.
+     * @param (callable(int,int,int):array<string,mixed>)|null $resolver Explicit test/frozen-snapshot adapter.
      */
     public function __construct(
         private readonly ?ConfigReader $reader = null,
         private readonly ?WebsiteCatalogInterface $websites = null,
         private readonly ?StoreCatalogInterface $stores = null,
+        private readonly ?SalesChannelCatalogInterface $channels = null,
+        private readonly ?SystemConfigScopeResolver $scopeResolver = null,
         ?callable $resolver = null,
     ) {
         $this->resolver = $resolver === null ? null : \Closure::fromCallable($resolver);
@@ -46,11 +52,12 @@ final class TaxScopeConfig
      */
     public static function forTesting(array $overrides = []): self
     {
-        return new self(resolver: static function (int $websiteId, int $storeId) use ($overrides): array {
+        return new self(resolver: static function (int $websiteId, int $storeId, int $channelId = 0) use ($overrides): array {
             $defaults = [
                 'website_id' => $websiteId,
                 'store_id' => $storeId,
-                'scope_key' => 'test|' . $websiteId . '|' . $storeId,
+                'channel_id' => $channelId,
+                'scope_key' => 'test|' . $websiteId . '|' . $storeId . '|' . $channelId,
                 'enabled' => false,
                 'default_jurisdiction' => 'CN|',
                 'schema_version' => TaxEngine::SCHEMA_VERSION,
@@ -63,6 +70,7 @@ final class TaxScopeConfig
             return array_merge($defaults, $overrides, [
                 'website_id' => $websiteId,
                 'store_id' => $storeId,
+                'channel_id' => $channelId,
             ]);
         });
     }
@@ -72,9 +80,11 @@ final class TaxScopeConfig
      */
     public static function fromResolved(array $resolved): self
     {
-        return new self(resolver: static function (int $websiteId, int $storeId) use ($resolved): array {
+        return new self(resolver: static function (int $websiteId, int $storeId, int $channelId = 0) use ($resolved): array {
+            $resolvedChannel = (int) ($resolved['channel_id'] ?? 0);
             if ((int) ($resolved['website_id'] ?? -1) !== $websiteId
                 || (int) ($resolved['store_id'] ?? -1) !== $storeId
+                || ($resolvedChannel > 0 && $resolvedChannel !== $channelId)
             ) {
                 throw new TaxConflictException(
                     \Weline\Tax\Api\TaxEngineInterface::ERROR_INVALID_REQUEST,
@@ -82,7 +92,7 @@ final class TaxScopeConfig
                 );
             }
 
-            return $resolved;
+            return $resolved + ['channel_id' => $channelId];
         });
     }
 
@@ -90,6 +100,7 @@ final class TaxScopeConfig
      * @return array{
      *   website_id:int,
      *   store_id:int,
+     *   channel_id:int,
      *   scope_key:string,
      *   enabled:bool,
      *   default_jurisdiction:string,
@@ -100,16 +111,21 @@ final class TaxScopeConfig
      *   sources:array<string,mixed>
      * }
      */
-    public function resolve(int $websiteId, int $storeId): array
+    public function resolve(int $websiteId, int $storeId, int $channelId = 0): array
     {
-        if ($websiteId < 0 || $storeId < 0) {
+        if ($websiteId < 0 || $storeId < 0 || $channelId < 0) {
             throw new TaxConflictException(
                 \Weline\Tax\Api\TaxEngineInterface::ERROR_INVALID_REQUEST,
                 __('Tax Scope ID 不能为负数'),
             );
         }
         if ($this->resolver !== null) {
-            return $this->validateResolved(($this->resolver)($websiteId, $storeId), $websiteId, $storeId);
+            return $this->validateResolved(
+                ($this->resolver)($websiteId, $storeId, $channelId),
+                $websiteId,
+                $storeId,
+                $channelId,
+            );
         }
 
         $website = null;
@@ -119,28 +135,78 @@ final class TaxScopeConfig
                 break;
             }
         }
-        $store = $this->storeCatalog()->byId($storeId);
-        if ($website === null || $store === null || $store->websiteId !== $websiteId) {
+        if ($website === null) {
             throw new TaxConflictException(
                 \Weline\Tax\Api\TaxEngineInterface::ERROR_INVALID_REQUEST,
-                __('Tax Scope Website/Store 不存在或不匹配'),
-                ['website_id' => $websiteId, 'store_id' => $storeId],
-            );
-        }
-        if (!$store->enabled || $store->lifecycleStatus !== 'active' || $store->tombstonedAt !== null) {
-            throw new TaxConflictException(
-                \Weline\Tax\Api\TaxEngineInterface::ERROR_INVALID_REQUEST,
-                __('Tax Scope Store 已停用或不在 active 生命周期'),
-                ['website_id' => $websiteId, 'store_id' => $storeId],
+                __('Tax Scope Website 不存在'),
+                ['website_id' => $websiteId],
             );
         }
 
-        $identity = ScopeIdentity::store(
-            $websiteId,
-            $website->code,
-            $store->code,
-            $store->storeMode,
-        );
+        $identity = null;
+        if ($storeId === 0) {
+            $identity = ScopeIdentity::website($websiteId, $website->code);
+        } else {
+            $store = $this->storeCatalog()->byId($storeId);
+            if ($store === null || $store->websiteId !== $websiteId) {
+                throw new TaxConflictException(
+                    \Weline\Tax\Api\TaxEngineInterface::ERROR_INVALID_REQUEST,
+                    __('Tax Scope Website/Store 不存在或不匹配'),
+                    ['website_id' => $websiteId, 'store_id' => $storeId],
+                );
+            }
+            if (!$store->enabled || $store->lifecycleStatus !== 'active' || $store->tombstonedAt !== null) {
+                throw new TaxConflictException(
+                    \Weline\Tax\Api\TaxEngineInterface::ERROR_INVALID_REQUEST,
+                    __('Tax Scope Store 已停用或不在 active 生命周期'),
+                    ['website_id' => $websiteId, 'store_id' => $storeId],
+                );
+            }
+
+            if ($channelId >= 1) {
+                $channel = $this->channelCatalog()->byId($channelId);
+                if ($channel === null
+                    || $channel->websiteId !== $websiteId
+                    || $channel->storeId !== $storeId
+                ) {
+                    throw new TaxConflictException(
+                        \Weline\Tax\Api\TaxEngineInterface::ERROR_INVALID_REQUEST,
+                        __('Tax Scope Channel 不存在或不匹配'),
+                        [
+                            'website_id' => $websiteId,
+                            'store_id' => $storeId,
+                            'channel_id' => $channelId,
+                        ],
+                    );
+                }
+                if (!$channel->effectiveEnabled) {
+                    throw new TaxConflictException(
+                        \Weline\Tax\Api\TaxEngineInterface::ERROR_INVALID_REQUEST,
+                        __('Tax Scope Channel 已停用'),
+                        [
+                            'website_id' => $websiteId,
+                            'store_id' => $storeId,
+                            'channel_id' => $channelId,
+                        ],
+                    );
+                }
+                $identity = ScopeIdentity::channel(
+                    $websiteId,
+                    $website->code,
+                    $store->code,
+                    $channel->code,
+                    $store->storeMode,
+                );
+            } else {
+                $identity = ScopeIdentity::store(
+                    $websiteId,
+                    $website->code,
+                    $store->code,
+                    $store->storeMode,
+                );
+            }
+        }
+
         $reader = $this->configReader();
         // Pass locale + default positionally (6 args). Named-only `default:` is easy to
         // mis-forward through ConfigReader wrappers; also pin LOCALE_DEFAULT so storefront
@@ -197,15 +263,16 @@ final class TaxScopeConfig
         $collectValue = trim((string)$collectSalesTaxCountries->value);
         $collectSource = $collectSalesTaxCountries->source->toArray();
         // WLS workers keep system_config in wls_memory. Stale typed envelopes can keep a
-        // previous non-empty collect allowlist (e.g. "US") after the DB row is cleared to
-        // "" — or the inverse. Always reconcile with the authoritative single-row read.
+        // previous non-empty collect allowlist after the exact scope row is cleared to "".
+        // Reconcile against the same storage scope as the identity (not always Global).
         try {
+            $storageScope = $this->scopeResolver()->toStorageScope($identity);
             $row = ObjectManager::getInstance(\Weline\SystemConfig\Model\SystemConfig::class)
                 ->getScopedConfigRow(
                     self::KEY_COLLECT_SALES_TAX_COUNTRIES,
                     self::MODULE,
                     self::AREA,
-                    ConfigReader::SCOPE_GLOBAL,
+                    $storageScope,
                     ConfigReader::LOCALE_DEFAULT,
                 );
             if (is_array($row) && array_key_exists('v', $row)) {
@@ -218,6 +285,7 @@ final class TaxScopeConfig
         return $this->validateResolved([
             'website_id' => $websiteId,
             'store_id' => $storeId,
+            'channel_id' => $channelId,
             'scope_key' => $identity->canonicalKey(),
             'enabled' => $this->boolValue($enabled->value),
             'default_jurisdiction' => $jurisdiction->value,
@@ -233,15 +301,19 @@ final class TaxScopeConfig
                 self::KEY_PRICES_INCLUDE_TAX => $pricesIncludeTax->source->toArray(),
                 self::KEY_COLLECT_SALES_TAX_COUNTRIES => $collectSource,
             ],
-        ], $websiteId, $storeId);
+        ], $websiteId, $storeId, $channelId);
     }
 
     /**
      * @param array<string,mixed> $resolved
      * @return array<string,mixed>
      */
-    private function validateResolved(array $resolved, int $websiteId, int $storeId): array
-    {
+    private function validateResolved(
+        array $resolved,
+        int $websiteId,
+        int $storeId,
+        int $channelId = 0,
+    ): array {
         $scopeKey = trim((string) ($resolved['scope_key'] ?? ''));
         $jurisdiction = strtoupper(trim((string) ($resolved['default_jurisdiction'] ?? '')));
         $schema = trim((string) ($resolved['schema_version'] ?? ''));
@@ -256,13 +328,18 @@ final class TaxScopeConfig
             throw new TaxConflictException(
                 \Weline\Tax\Api\TaxEngineInterface::ERROR_INVALID_REQUEST,
                 __('Tax Scope 配置无效'),
-                ['website_id' => $websiteId, 'store_id' => $storeId],
+                [
+                    'website_id' => $websiteId,
+                    'store_id' => $storeId,
+                    'channel_id' => $channelId,
+                ],
             );
         }
 
         return [
             'website_id' => $websiteId,
             'store_id' => $storeId,
+            'channel_id' => $channelId,
             'scope_key' => $scopeKey,
             'enabled' => $this->boolValue($resolved['enabled'] ?? false),
             'default_jurisdiction' => $jurisdiction,
@@ -283,6 +360,7 @@ final class TaxScopeConfig
         if (is_int($value)) {
             return $value === 1;
         }
+
         return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'on'], true);
     }
 
@@ -291,12 +369,18 @@ final class TaxScopeConfig
         return $this->reader ?? ObjectManager::getInstance(ConfigReader::class);
     }
 
+    private function scopeResolver(): SystemConfigScopeResolver
+    {
+        return $this->scopeResolver ?? ObjectManager::getInstance(SystemConfigScopeResolver::class);
+    }
+
     private function websiteCatalog(): WebsiteCatalogInterface
     {
         $catalog = $this->websites ?? ObjectManager::getInstance(WebsiteCatalogInterface::class);
         if (!$catalog instanceof WebsiteCatalogInterface) {
             throw new \LogicException('WebsiteCatalogInterface binding is unavailable');
         }
+
         return $catalog;
     }
 
@@ -306,6 +390,17 @@ final class TaxScopeConfig
         if (!$catalog instanceof StoreCatalogInterface) {
             throw new \LogicException('StoreCatalogInterface binding is unavailable');
         }
+
+        return $catalog;
+    }
+
+    private function channelCatalog(): SalesChannelCatalogInterface
+    {
+        $catalog = $this->channels ?? ObjectManager::getInstance(SalesChannelCatalogInterface::class);
+        if (!$catalog instanceof SalesChannelCatalogInterface) {
+            throw new \LogicException('SalesChannelCatalogInterface binding is unavailable');
+        }
+
         return $catalog;
     }
 }

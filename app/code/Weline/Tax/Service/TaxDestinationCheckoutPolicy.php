@@ -23,7 +23,7 @@ final class TaxDestinationCheckoutPolicy
      * Countries where merchant may collect destination sales/GST at checkout
      * (IOSS / LVG / nexus). Comma-list override via config.
      *
-     * Default empty: CN export B2C collects import tax via DDU estimate instead.
+     * Generic seed default empty (rates still seeded). Fill only after IOSS/GST/nexus obligation.
      */
     public const KEY_COLLECT_SALES_TAX_COUNTRIES = 'tax/general/collect_sales_tax_countries';
 

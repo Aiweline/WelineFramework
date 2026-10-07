@@ -136,6 +136,7 @@ final class TaxEngine implements TaxEngineInterface
             $engine->scopeConfig->resolve(
                 (int) ($scope['website_id'] ?? -1),
                 (int) ($scope['store_id'] ?? -1),
+                max(0, (int) ($scope['channel_id'] ?? 0)),
             ),
         );
         if (!hash_equals(
@@ -233,7 +234,12 @@ final class TaxEngine implements TaxEngineInterface
         }
 
         $validated = $this->validateRequest($request);
-        $scopeConfig = $this->scopeConfig->resolve($validated['website_id'], $validated['store_id']);
+        $channelId = max(0, (int)($request['channel_id'] ?? 0));
+        $scopeConfig = $this->scopeConfig->resolve(
+            $validated['website_id'],
+            $validated['store_id'],
+            $channelId,
+        );
         if ($validated['rule_schema_version'] !== self::SCHEMA_VERSION
             || $validated['rule_schema_version'] !== $scopeConfig['schema_version']
         ) {
