@@ -121,8 +121,17 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
         $themeCss = $this->read('app/code/Weline/Theme/view/theme/frontend/assets/css/theme.css');
         self::assertStringContainsString('[data-surface="inverse"] .header-search-form', $themeCss);
         self::assertStringContainsString('[data-surface="inverse"] .w-search-form', $themeCss);
+        self::assertStringContainsString('[data-surface="inverse"] .w-language-switcher__menu', $themeCss);
+        self::assertStringContainsString(
+            '[data-surface="inverse"] .w-dialog[data-language-request-modal]',
+            $themeCss
+        );
         self::assertStringContainsString(
             '[data-surface="inverse"] .header-search-form :is(p, li, small, span)',
+            $themeCss
+        );
+        self::assertStringContainsString(
+            '[data-surface="inverse"] .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2)',
             $themeCss
         );
 
@@ -138,6 +147,29 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
         self::assertMatchesRegularExpression(
             '/\.header-search-form \.search-input\s*\{[^}]*-webkit-text-fill-color:\s*var\(--_paper-text/s',
             $headerDefault
+        );
+
+        $foundation = $this->read('app/code/Weline/Theme/view/ui/css/foundation.css');
+        self::assertStringContainsString('.w-language-switcher__menu', $foundation);
+        self::assertStringContainsString(
+            '.w-dialog[data-language-request-modal]',
+            $foundation
+        );
+        self::assertStringContainsString(
+            '--_paper-text: var(--amz-drawer-text, #0f1111)',
+            $foundation
+        );
+        self::assertStringContainsString(
+            '--weline-theme-text-subtle: var(--_paper-muted)',
+            $foundation
+        );
+        self::assertStringContainsString(
+            '-webkit-text-fill-color: var(--weline-theme-text)',
+            $foundation
+        );
+        self::assertStringContainsString(
+            '.w-input:-webkit-autofill',
+            $foundation
         );
     }
 }

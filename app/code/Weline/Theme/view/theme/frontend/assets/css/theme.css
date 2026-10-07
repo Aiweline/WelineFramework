@@ -3144,10 +3144,16 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 [data-surface="inverse"] .w-search-form :is(p, li, small, span),
 [data-surface="inverse"] .search-suggestions :is(p, li, small, span),
 [data-surface="inverse"] .w-search-suggestions :is(p, li, small, span),
+[data-surface="inverse"] .w-language-switcher__menu :is(p, li, small, span),
+[data-surface="inverse"] .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
+[data-surface="inverse"] dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
 .w-surface-inverse .header-search-form :is(p, li, small, span),
 .w-surface-inverse .w-search-form :is(p, li, small, span),
 .w-surface-inverse .search-suggestions :is(p, li, small, span),
-.w-surface-inverse .w-search-suggestions :is(p, li, small, span) {
+.w-surface-inverse .w-search-suggestions :is(p, li, small, span),
+.w-surface-inverse .w-language-switcher__menu :is(p, li, small, span),
+.w-surface-inverse .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
+.w-surface-inverse dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2) {
     color: inherit;
 }
 
@@ -3174,8 +3180,8 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 /*
  * Raised light panels nested under inverse chrome (WO-UI-CONTRAST-INVERSE side-effect).
  * Header belt remaps --weline-theme-text / --_inverse-* to on-dark; account menu,
- * mini-cart, and the white search chip sit on surface-raised and must restore paper
- * ink or copy vanishes (category "全部" + query value).
+ * mini-cart, white search chip, language switcher menu, and language-request dialog
+ * sit on surface-raised and must restore paper ink or copy vanishes.
  * Fallbacks match mini-cart --amz-drawer-text / --amz-drawer-muted (no new palette).
  */
 [data-surface="inverse"] .account-dropdown,
@@ -3185,13 +3191,19 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 [data-surface="inverse"] .w-search-form,
 [data-surface="inverse"] .search-suggestions,
 [data-surface="inverse"] .w-search-suggestions,
+[data-surface="inverse"] .w-language-switcher__menu,
+[data-surface="inverse"] .w-dialog[data-language-request-modal],
+[data-surface="inverse"] dialog.w-dialog[data-language-request-modal],
 .w-surface-inverse .account-dropdown,
 .w-surface-inverse .mini-cart-drawer,
 .w-surface-inverse .mini-cart-drawer--amazon,
 .w-surface-inverse .header-search-form,
 .w-surface-inverse .w-search-form,
 .w-surface-inverse .search-suggestions,
-.w-surface-inverse .w-search-suggestions {
+.w-surface-inverse .w-search-suggestions,
+.w-surface-inverse .w-language-switcher__menu,
+.w-surface-inverse .w-dialog[data-language-request-modal],
+.w-surface-inverse dialog.w-dialog[data-language-request-modal] {
     --_paper-text: var(--amz-drawer-text, #0f1111);
     --_paper-muted: var(--amz-drawer-muted, #565959);
     --_inverse-text: var(--_paper-text);
@@ -3199,6 +3211,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
     --weline-theme-text: var(--_paper-text);
     --weline-theme-text-secondary: var(--_paper-muted);
     --weline-theme-text-muted: var(--_paper-muted);
+    --weline-theme-text-subtle: var(--_paper-muted);
     --weline-theme-body-text: var(--_paper-text);
     --weline-theme-body-text-secondary: var(--_paper-muted);
     --weline-theme-body-text-muted: var(--_paper-muted);
@@ -3221,4 +3234,5 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
     --w-surface-fg-muted: var(--_paper-muted);
     --w-surface-fg-subtle: var(--_paper-muted);
     color: var(--_paper-text);
+    color-scheme: light;
 }

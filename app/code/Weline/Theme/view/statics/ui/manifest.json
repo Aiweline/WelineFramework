@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "2dbdf0efbdf8395b8948a08f8e8a79ca35a54eaac58371ee72aa00195795216d",
+    "build_id": "047aae1015620b6b294b849ad12ccaa437c2235d5fcd2e917d325164b0f6db04",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2931,
@@ -140,10 +140,10 @@
             "type": "js"
         },
         "customer-account-login-css": {
-            "bytes": 33576,
+            "bytes": 36996,
             "file": "pages/weline-customer-account-login.css",
-            "gzip_bytes": 5465,
-            "sha256": "10eeb2808540c79e22b26b47fc4d8019c2757d7884f0d20c2ab06d93e3daab76",
+            "gzip_bytes": 5847,
+            "sha256": "3c807d396708c1fe70bccdcf24b06af708dbbfeea638d7ce19bdd31ba32c7602",
             "type": "css"
         },
         "customer-account-login-js": {
@@ -329,10 +329,10 @@
             "type": "js"
         },
         "foundation": {
-            "bytes": 119169,
+            "bytes": 124007,
             "file": "weline-foundation.css",
-            "gzip_bytes": 17526,
-            "sha256": "6a518b96e40e4fcd45b3c75acc9d9c880bf8af72630adcdcb178fccc748d3d2e",
+            "gzip_bytes": 18430,
+            "sha256": "13acec40eca297fb59fbb764057160e4a77635fa2cbaadf48bcbae5cd81728ff",
             "type": "css"
         },
         "frontend": {

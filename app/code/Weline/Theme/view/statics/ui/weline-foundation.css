@@ -908,6 +908,11 @@
         border-radius: var(--weline-radius-md);
         background: var(--weline-theme-surface);
         color: var(--weline-theme-text);
+        /* Match search-chip contract: fill color must follow theme text Token.
+         * Inverse chrome / autofill can leave a light -webkit-text-fill-color that
+         * paints over `color` → prefilled values look like washed-out placeholders. */
+        -webkit-text-fill-color: var(--weline-theme-text);
+        caret-color: var(--weline-theme-text);
         transition: border-color var(--weline-motion-fast), box-shadow var(--weline-motion-fast);
     }
     /* Native select chevron: keep inset from the trailing edge (not flush). */
@@ -922,7 +927,25 @@
     }
     :where(.w-input, .w-select)[data-size="sm"] { min-height: var(--weline-control-height-sm); padding-block: var(--weline-space-1); font-size: var(--weline-font-size-sm); }
     .w-textarea { min-height: 7rem; resize: vertical; }
-    .w-input::placeholder, .w-textarea::placeholder { color: var(--weline-theme-text-subtle); }
+    .w-input::placeholder, .w-textarea::placeholder {
+        color: var(--weline-theme-text-subtle);
+        -webkit-text-fill-color: var(--weline-theme-text-subtle);
+        opacity: 1;
+    }
+    /* Autofill must keep theme ink on light surfaces (WO-UI-CONTRAST / inverse nest). */
+    .w-input:-webkit-autofill,
+    .w-input:-webkit-autofill:hover,
+    .w-input:-webkit-autofill:focus,
+    .w-input:-webkit-autofill:active,
+    .w-textarea:-webkit-autofill,
+    .w-textarea:-webkit-autofill:hover,
+    .w-textarea:-webkit-autofill:focus,
+    .w-textarea:-webkit-autofill:active {
+        -webkit-text-fill-color: var(--weline-theme-text) !important;
+        caret-color: var(--weline-theme-text);
+        box-shadow: 0 0 0 1000px var(--weline-theme-surface) inset;
+        transition: background-color 99999s ease-out 0s;
+    }
     /* Floating label: rest = label is the cue (hide native placeholder); float/focus = show placeholder hint. */
     .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
         :has(> .w-check),
@@ -956,7 +979,13 @@
     .w-input:hover, .w-select:hover, .w-textarea:hover { border-color: var(--weline-theme-primary); }
     .w-input:focus, .w-select:focus, .w-textarea:focus { border-color: var(--weline-theme-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--weline-theme-focus) 20%, transparent); outline: 0; }
     :where(.w-input, .w-select, .w-textarea)[aria-invalid="true"] { border-color: var(--weline-theme-danger); }
-    :where(.w-input, .w-select, .w-textarea):disabled { background: var(--weline-theme-surface-muted); color: var(--weline-theme-text-muted); cursor: not-allowed; }
+    :where(.w-input, .w-select, .w-textarea):disabled {
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text-muted);
+        -webkit-text-fill-color: var(--weline-theme-text-muted);
+        caret-color: var(--weline-theme-text-muted);
+        cursor: not-allowed;
+    }
     .w-check { display: inline-flex; align-items: center; gap: var(--weline-space-2); cursor: pointer; }
     .w-check > input { inline-size: 1.1rem; block-size: 1.1rem; accent-color: var(--weline-theme-primary); }
     .w-switch { display: inline-flex; align-items: center; gap: var(--weline-space-2); cursor: pointer; }
@@ -1567,6 +1596,75 @@
         overscroll-behavior: contain;
         background-color: var(--weline-theme-surface-raised, #ffffff);
         background: var(--weline-theme-surface-raised, #ffffff);
+        /*
+         * Paper ink on raised switcher panel (WO-UI-CONTRAST-INVERSE).
+         * Header/footer [data-surface=inverse] remaps --weline-theme-text to
+         * on-dark; this menu is surface-raised cream → must restore ink locally
+         * (same contract as account-dropdown / mini-cart-drawer).
+         */
+        --_paper-text: var(--amz-drawer-text, #0f1111);
+        --_paper-muted: var(--amz-drawer-muted, #565959);
+        --_inverse-text: var(--_paper-text);
+        --_inverse-muted: var(--_paper-muted);
+        --weline-theme-text: var(--_paper-text);
+        --weline-theme-text-secondary: var(--_paper-muted);
+        --weline-theme-text-muted: var(--_paper-muted);
+        --weline-theme-text-subtle: var(--_paper-muted);
+        --weline-theme-body-text: var(--_paper-text);
+        --weline-theme-body-text-secondary: var(--_paper-muted);
+        --weline-theme-body-text-muted: var(--_paper-muted);
+        --weline-theme-body-text-heading: var(--_paper-text);
+        --weline-theme-color-text: var(--_paper-text);
+        --weline-theme-color-text-muted: var(--_paper-muted);
+        --color-text: var(--_paper-text);
+        --color-text-primary: var(--_paper-text);
+        --color-text-secondary: var(--_paper-muted);
+        --color-text-muted: var(--_paper-muted);
+        --color-text-placeholder: var(--_paper-muted);
+        --w-surface-fg: var(--_paper-text);
+        --w-surface-fg-muted: var(--_paper-muted);
+        --w-surface-fg-subtle: var(--_paper-muted);
+        color: var(--_paper-text);
+        color-scheme: light;
+    }
+    /*
+     * Language-support request dialog is a native <dialog> still nested under
+     * inverse chrome in the DOM; without local paper rebind, title/labels/hints
+     * paint on-dark on surface-raised (白字白底). w-field/w-input consume these
+     * Tokens — keep subtle/placeholder + light color-scheme so theme controls stay readable.
+     */
+    .w-dialog[data-language-request-modal],
+    dialog.w-dialog[data-language-request-modal] {
+        /*
+         * Paper ink on raised switcher panel (WO-UI-CONTRAST-INVERSE).
+         * Header/footer [data-surface=inverse] remaps --weline-theme-text to
+         * on-dark; this menu is surface-raised cream → must restore ink locally
+         * (same contract as account-dropdown / mini-cart-drawer).
+         */
+        --_paper-text: var(--amz-drawer-text, #0f1111);
+        --_paper-muted: var(--amz-drawer-muted, #565959);
+        --_inverse-text: var(--_paper-text);
+        --_inverse-muted: var(--_paper-muted);
+        --weline-theme-text: var(--_paper-text);
+        --weline-theme-text-secondary: var(--_paper-muted);
+        --weline-theme-text-muted: var(--_paper-muted);
+        --weline-theme-text-subtle: var(--_paper-muted);
+        --weline-theme-body-text: var(--_paper-text);
+        --weline-theme-body-text-secondary: var(--_paper-muted);
+        --weline-theme-body-text-muted: var(--_paper-muted);
+        --weline-theme-body-text-heading: var(--_paper-text);
+        --weline-theme-color-text: var(--_paper-text);
+        --weline-theme-color-text-muted: var(--_paper-muted);
+        --color-text: var(--_paper-text);
+        --color-text-primary: var(--_paper-text);
+        --color-text-secondary: var(--_paper-muted);
+        --color-text-muted: var(--_paper-muted);
+        --color-text-placeholder: var(--_paper-muted);
+        --w-surface-fg: var(--_paper-text);
+        --w-surface-fg-muted: var(--_paper-muted);
+        --w-surface-fg-subtle: var(--_paper-muted);
+        color: var(--_paper-text);
+        color-scheme: light;
     }
     .w-language-switcher__search-wrap {
         position: relative;
