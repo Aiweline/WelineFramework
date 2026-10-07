@@ -129,8 +129,9 @@ final class LearningNoveltyService
                     (string) $storedExperience['experience_id'],
                     [
                         'detected_by' => 'automatic-learning',
-                        'reason' => 'Opposing reusable rules matched above the configured conflict threshold.',
+                        'reason' => (string) ($match['conflict_reason'] ?? 'Same-topic opposing reusable rules matched above the conflict gate.'),
                         'score' => (float) ($match['conflict_score'] ?? $match['score'] ?? 0.0),
+                        'topic_overlap' => (float) ($match['topic_overlap'] ?? 0.0),
                     ],
                 );
             }
@@ -206,13 +207,15 @@ final class LearningNoveltyService
         $related = (float) $this->config->get('analysis.automatic_learning.related_similarity', 0.55);
         $projectDuplicate = (float) $this->config->get('analysis.automatic_learning.project_duplicate_similarity', 0.9);
 
+        // Similarity search may still rank near-misses; only same-topic opposing
+        // claims (or reconsidering rejected/deprecated knowledge) may contest.
         foreach ($existing as $match) {
-            if (($match['conflict'] ?? false) === true) {
+            if (self::isActionableConflictMatch($match)) {
                 return ['decision' => 'conflict', 'match' => $match];
             }
         }
         foreach ($project as $match) {
-            if (($match['conflict'] ?? false) === true) {
+            if (self::isActionableConflictMatch($match)) {
                 return ['decision' => 'conflict', 'match' => $match];
             }
         }
@@ -258,6 +261,14 @@ final class LearningNoveltyService
         $candidateText = self::experienceText($experience);
         $candidateRule = (string) ($experience['reusable_rule'] ?? '');
         $matches = [];
+        $conflictSimilarity = (float) $this->config->get(
+            'analysis.automatic_learning.conflict_similarity',
+            0.72,
+        );
+        $topicOverlapMin = (float) $this->config->get(
+            'analysis.automatic_learning.conflict_topic_overlap',
+            0.32,
+        );
         foreach ($result['experiences'] as $stored) {
             $storedRule = (string) ($stored['reusable_rule'] ?? '');
             $score = max(
@@ -268,11 +279,13 @@ final class LearningNoveltyService
                 self::symmetricSimilarity(self::withoutNegation($candidateRule), self::withoutNegation($storedRule)),
                 self::symmetricSimilarity(self::withoutNegation($candidateText), self::withoutNegation(self::experienceText($stored))),
             );
-            $conflict = self::opposingPolarity($candidateRule, $storedRule)
-                && $conflictScore >= (float) $this->config->get(
-                    'analysis.automatic_learning.conflict_similarity',
-                    0.62,
-                );
+            $conflictJudgment = self::judgeExperienceConflict(
+                $experience,
+                $stored,
+                $conflictScore,
+                $conflictSimilarity,
+                $topicOverlapMin,
+            );
             $matches[] = [
                 'source' => 'experience',
                 'experience_id' => (string) $stored['experience_id'],
@@ -282,7 +295,9 @@ final class LearningNoveltyService
                 'status' => (string) $stored['status'],
                 'score' => round($score, 6),
                 'conflict_score' => round($conflictScore, 6),
-                'conflict' => $conflict,
+                'topic_overlap' => (float) ($conflictJudgment['topic_overlap'] ?? 0.0),
+                'conflict' => (bool) ($conflictJudgment['conflict'] ?? false),
+                'conflict_reason' => (string) ($conflictJudgment['reason'] ?? ''),
             ];
         }
         usort($matches, static function (array $left, array $right): int {
@@ -336,11 +351,20 @@ final class LearningNoveltyService
                 $snippet = (string) ($item['snippet'] ?? '');
                 $score = Text::similarity($query, $snippet);
                 $conflictScore = Text::similarity(self::withoutNegation($query), self::withoutNegation($snippet));
+                $topicOverlap = self::topicOverlap($query, $snippet);
+                $similarityFloor = max(
+                    0.8,
+                    (float) $this->config->get('analysis.automatic_learning.project_duplicate_similarity', 0.9),
+                );
+                $topicMin = (float) $this->config->get(
+                    'analysis.automatic_learning.conflict_topic_overlap',
+                    0.32,
+                );
+                // Project-index: search/compare OK; contest only with shared topic tokens.
                 $conflict = self::opposingPolarity($query, $snippet)
-                    && $conflictScore >= max(
-                        0.8,
-                        (float) $this->config->get('analysis.automatic_learning.project_duplicate_similarity', 0.9),
-                    );
+                    && $conflictScore >= $similarityFloor
+                    && $topicOverlap >= $topicMin
+                    && self::sharedContentTokenCount($query, $snippet) >= 3;
                 $matches[] = [
                     'source' => 'project_index',
                     'path' => (string) ($item['relative_path'] ?? ''),
@@ -349,7 +373,11 @@ final class LearningNoveltyService
                     'end_line' => (int) ($item['end_line'] ?? 0),
                     'score' => round($score, 6),
                     'conflict_score' => round($conflictScore, 6),
+                    'topic_overlap' => round($topicOverlap, 6),
                     'conflict' => $conflict,
+                    'conflict_reason' => $conflict
+                        ? 'project_index_same_topic_opposing_polarity'
+                        : '',
                 ];
             }
             usort($matches, static function (array $left, array $right): int {
@@ -474,6 +502,169 @@ final class LearningNoveltyService
         return min(Text::similarity($left, $right), Text::similarity($right, $left));
     }
 
+    /**
+     * Auto-conflict only when claims share a topic AND oppose each other.
+     * Polarity + bag-of-words similarity alone produced unrelated false positives
+     * (e.g. FPC debugging vs deprecated-brand guidance).
+     *
+     * @param array<string, mixed> $candidate
+     * @param array<string, mixed> $stored
+     * @return array{conflict:bool,reason:string,topic_overlap:float}
+     */
+    public static function judgeExperienceConflict(
+        array $candidate,
+        array $stored,
+        float $conflictScore,
+        float $conflictSimilarity,
+        float $topicOverlapMin,
+    ): array {
+        $candidateRule = (string) ($candidate['reusable_rule'] ?? '');
+        $storedRule = (string) ($stored['reusable_rule'] ?? '');
+        $topicOverlap = self::topicOverlap(
+            self::topicText($candidate),
+            self::topicText($stored),
+        );
+        if ($conflictScore < $conflictSimilarity) {
+            return [
+                'conflict' => false,
+                'reason' => 'below_conflict_similarity',
+                'topic_overlap' => round($topicOverlap, 6),
+            ];
+        }
+        if (!self::opposingPolarity($candidateRule, $storedRule)) {
+            return [
+                'conflict' => false,
+                'reason' => 'same_polarity',
+                'topic_overlap' => round($topicOverlap, 6),
+            ];
+        }
+        $candidateCategory = trim((string) ($candidate['category'] ?? ''));
+        $storedCategory = trim((string) ($stored['category'] ?? ''));
+        if ($candidateCategory !== '' && $storedCategory !== '' && $candidateCategory !== $storedCategory) {
+            return [
+                'conflict' => false,
+                'reason' => 'category_mismatch',
+                'topic_overlap' => round($topicOverlap, 6),
+            ];
+        }
+        if ($topicOverlap < $topicOverlapMin) {
+            return [
+                'conflict' => false,
+                'reason' => 'topic_misaligned',
+                'topic_overlap' => round($topicOverlap, 6),
+            ];
+        }
+        if (self::sharedContentTokenCount(self::topicText($candidate), self::topicText($stored)) < 3) {
+            return [
+                'conflict' => false,
+                'reason' => 'insufficient_shared_topic_tokens',
+                'topic_overlap' => round($topicOverlap, 6),
+            ];
+        }
+
+        return [
+            'conflict' => true,
+            'reason' => 'same_topic_opposing_polarity',
+            'topic_overlap' => round($topicOverlap, 6),
+        ];
+    }
+
+    /**
+     * Fail-closed: lexical similarity alone must never become a contested mark.
+     *
+     * @param array<string, mixed> $match
+     */
+    public static function isActionableConflictMatch(array $match): bool
+    {
+        if (($match['conflict'] ?? false) !== true) {
+            return false;
+        }
+        $reason = trim((string) ($match['conflict_reason'] ?? ''));
+
+        return in_array($reason, [
+            'same_topic_opposing_polarity',
+            'project_index_same_topic_opposing_polarity',
+            'matches previously rejected or deprecated knowledge',
+        ], true);
+    }
+
+    /** @param array<string, mixed> $experience */
+    private static function topicText(array $experience): string
+    {
+        return implode(' ', [
+            $experience['title'] ?? '',
+            $experience['problem_pattern'] ?? '',
+            $experience['trigger'] ?? '',
+            $experience['reusable_rule'] ?? '',
+        ]);
+    }
+
+    public static function topicOverlap(string $left, string $right): float
+    {
+        $leftTokens = self::contentTokens($left);
+        $rightTokens = self::contentTokens($right);
+        if ($leftTokens === [] || $rightTokens === []) {
+            return 0.0;
+        }
+        $leftSet = array_fill_keys($leftTokens, true);
+        $rightSet = array_fill_keys($rightTokens, true);
+        $intersection = 0;
+        foreach ($leftSet as $token => $_true) {
+            if (isset($rightSet[$token])) {
+                ++$intersection;
+            }
+        }
+        $union = count($leftSet) + count($rightSet) - $intersection;
+
+        return $union > 0 ? $intersection / $union : 0.0;
+    }
+
+    public static function sharedContentTokenCount(string $left, string $right): int
+    {
+        $leftSet = array_fill_keys(self::contentTokens($left), true);
+        $rightSet = array_fill_keys(self::contentTokens($right), true);
+        $shared = 0;
+        foreach ($leftSet as $token => $_true) {
+            if (isset($rightSet[$token])) {
+                ++$shared;
+            }
+        }
+
+        return $shared;
+    }
+
+    /**
+     * Content tokens for topic gating. Strips negation and generic boilerplate so
+     * "do not … framework path" does not fake-overlap unrelated project rules.
+     *
+     * @return list<string>
+     */
+    public static function contentTokens(string $value): array
+    {
+        $value = self::withoutNegation(mb_strtolower($value, 'UTF-8'));
+        if (preg_match_all('/[a-z][a-z0-9_+-]{2,}|[\x{4e00}-\x{9fff}]{2,}/u', $value, $matches) < 1) {
+            return [];
+        }
+        $stop = [
+            'the', 'and', 'for', 'with', 'from', 'into', 'that', 'this', 'when', 'then',
+            'before', 'after', 'as', 'into', 'onto', 'over', 'under', 'than', 'also',
+            'project', 'framework', 'runtime', 'signal', 'treat', 'usage', 'recommendation',
+            'recommended', 'guidance', 'instructions', 'rule', 'rules', 'path', 'paths',
+            'should', 'must', 'will', 'can', 'may', 'only', 'same', 'other', 'elsewhere',
+            'first', 'later', 'using', 'used', 'use', 'how', 'what', 'where', 'which',
+            'ai', 'agent', 'session', 'knowledge', 'experience',
+        ];
+        $tokens = [];
+        foreach ($matches[0] as $token) {
+            if (in_array($token, $stop, true)) {
+                continue;
+            }
+            $tokens[] = $token;
+        }
+
+        return array_values(array_unique($tokens));
+    }
+
     private static function opposingPolarity(string $left, string $right): bool
     {
         return self::hasNegation($left) !== self::hasNegation($right);
@@ -511,7 +702,8 @@ final class LearningNoveltyService
 
         return array_intersect_key($match, array_flip([
             'source', 'experience_id', 'title', 'category', 'status', 'path', 'kind',
-            'start_line', 'end_line', 'score', 'conflict_score', 'conflict', 'conflict_reason',
+            'start_line', 'end_line', 'score', 'conflict_score', 'topic_overlap',
+            'conflict', 'conflict_reason',
         ]));
     }
 }

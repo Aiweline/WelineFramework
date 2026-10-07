@@ -36,7 +36,10 @@ analysis:
     max_project_matches: 12
     duplicate_similarity: 0.86
     related_similarity: 0.55
-    conflict_similarity: 0.62
+    # Lexical similarity after stripping negation — not sufficient alone.
+    conflict_similarity: 0.72
+    # Same-topic gate (Jaccard of content tokens). Unrelated domains must not contest.
+    conflict_topic_overlap: 0.32
     project_duplicate_similarity: 0.9
     minimum_validation_confidence: 0.9
 

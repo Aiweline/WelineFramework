@@ -202,7 +202,11 @@ final class Config
                     'max_project_matches' => 12,
                     'duplicate_similarity' => 0.86,
                     'related_similarity' => 0.55,
-                    'conflict_similarity' => 0.62,
+                    // Similarity alone is not enough; see conflict_topic_overlap.
+                    'conflict_similarity' => 0.72,
+                    // Jaccard overlap of content tokens (title/problem/rule). Blocks
+                    // unrelated polarity false positives (FPC debugging vs brand guidance).
+                    'conflict_topic_overlap' => 0.32,
                     'project_duplicate_similarity' => 0.9,
                     'minimum_validation_confidence' => 0.9,
                 ],
@@ -357,6 +361,7 @@ final class Config
                     'duplicate_similarity' => true,
                     'related_similarity' => true,
                     'conflict_similarity' => true,
+                    'conflict_topic_overlap' => true,
                     'project_duplicate_similarity' => true,
                     'minimum_validation_confidence' => true,
                 ],
@@ -594,6 +599,7 @@ final class Config
             'analysis.automatic_learning.duplicate_similarity' => [0.5, 1.0],
             'analysis.automatic_learning.related_similarity' => [0.1, 0.95],
             'analysis.automatic_learning.conflict_similarity' => [0.3, 1.0],
+            'analysis.automatic_learning.conflict_topic_overlap' => [0.1, 0.95],
             'analysis.automatic_learning.project_duplicate_similarity' => [0.5, 1.0],
             'analysis.automatic_learning.minimum_validation_confidence' => [0.78, 1.0],
         ] as $path => [$minimum, $maximum]) {
