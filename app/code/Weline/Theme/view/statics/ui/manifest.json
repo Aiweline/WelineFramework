@@ -846,17 +846,6 @@
                 "app/code/Weline/Api/view/templates/framework/worker-smoke.phtml"
             ]
         },
-        "backend.settings.basic": {
-            "area": "backend",
-            "bundles": [
-                "language-select-css",
-                "language-select-js"
-            ],
-            "engines": [],
-            "templates": [
-                "app/code/Weline/Backend/view/templates/Backend/Settings/Basic/index.phtml"
-            ]
-        },
         "cms.page.edit": {
             "area": "backend",
             "bundles": [

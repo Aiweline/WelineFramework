@@ -20,8 +20,7 @@ moduleDescribe(test, BACKEND_MODULE, 'Weline Backend backend smoke', () => {
       const candidateRoutes = [
         buildModuleBackendRoute(BACKEND_MODULE, 'system/config'),
         buildModuleBackendRoute(BACKEND_MODULE, 'statistics'),
-        buildModuleBackendRoute(BACKEND_MODULE, 'settings/basic'),
-        buildModuleBackendRoute(BACKEND_MODULE, 'settings/email'),
+        buildModuleBackendRoute(BACKEND_MODULE, 'backend/config'),
         buildModuleBackendRoute(BACKEND_MODULE),
       ];
 

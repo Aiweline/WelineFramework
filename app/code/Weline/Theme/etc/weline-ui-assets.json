@@ -755,12 +755,6 @@
       "bundles": ["language-select-css", "language-select-js"],
       "engines": []
     },
-    "backend.settings.basic": {
-      "area": "backend",
-      "templates": ["app/code/Weline/Backend/view/templates/Backend/Settings/Basic/index.phtml"],
-      "bundles": ["language-select-css", "language-select-js"],
-      "engines": []
-    },
     "customer-service.agent": {
       "area": "backend",
       "templates": ["app/code/Weline/CustomerService/view/templates/Backend/Agent/index.phtml"],

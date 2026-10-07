@@ -105,11 +105,8 @@
         
         <!-- 系统配置 -->
         <menu source="Weline_Backend::system_config_group" name="system_config_group" title="系统配置" icon="circle" order="200">
-            <!-- Controllers live under Settings/*, not Backend/Settings — * → system, 勿再写 /backend -->
-            <menu source="Weline_Backend::basic_settings" name="basic_settings" title="基础设置" action="*/settings/basic" icon="settings" order="10"/>
+            <!-- 占位 Settings/{Basic,Email,Storage} 已移除；真配置走配置中心 / 外观与 Logo / 各业务模块 -->
             <menu source="Weline_Backend::backend_config" name="backend_config" title="外观与 Logo" action="*/backend/config" icon="image" order="20"/>
-            <menu source="Weline_Backend::email_settings" name="email_settings" title="邮件设置" action="*/settings/email" icon="mail" order="30"/>
-            <menu source="Weline_Backend::storage_settings" name="storage_settings" title="存储设置" action="*/settings/storage" icon="settings" order="40"/>
             <menu source="Weline_Backend::notification_settings" name="notification_settings" title="消息通知" icon="bell" order="50">
                 <menu source="Weline_Backend::notification" name="notification" title="通知中心" action="*/backend/notification" icon="bell" order="5"/>
                 <menu source="Weline_Backend::notification_channel" name="notification_channel" title="渠道配置" action="*/backend/notificationchannel" icon="circle" order="30"/>

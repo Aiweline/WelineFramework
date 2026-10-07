@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * menu.xml action 经星号替换为 backend_router(system) 后必须命中已注册路由。
- * 回归：Settings/Maintenance 等 Controller 根路径勿再多写 /backend 段。
+ * 回归：Maintenance 等 Controller 根路径勿再多写 /backend 段；占位 Settings/* 已移除。
  */
 final class MenuActionRouterContractTest extends TestCase
 {
@@ -18,14 +18,21 @@ final class MenuActionRouterContractTest extends TestCase
     private static function expectedLeafActions(): array
     {
         return [
-            'Weline_Backend::basic_settings' => '*/settings/basic',
-            'Weline_Backend::email_settings' => '*/settings/email',
-            'Weline_Backend::storage_settings' => '*/settings/storage',
             'Weline_Backend::system_maintenance_mode' => '*/maintenance',
             'Weline_Backend::system_backup' => '*/backup',
             'Weline_Backend::system_monitor' => '*/monitor',
             'Weline_Backend::access_log' => '*/access-log',
             'Weline_Backend::backend_config' => '*/backend/config',
+        ];
+    }
+
+    /** @return list<string> */
+    private static function removedPlaceholderSources(): array
+    {
+        return [
+            'Weline_Backend::basic_settings',
+            'Weline_Backend::email_settings',
+            'Weline_Backend::storage_settings',
         ];
     }
 
@@ -61,6 +68,13 @@ final class MenuActionRouterContractTest extends TestCase
                 $routes,
                 \sprintf('Menu %s action "%s" → "%s" is not registered in backend_pc routers', $source, $action, $path)
             );
+        }
+
+        foreach (self::removedPlaceholderSources() as $source) {
+            self::assertArrayNotHasKey($source, $actions, 'Placeholder menu must be removed: ' . $source);
+        }
+        foreach (['system/settings/basic', 'system/settings/email', 'system/settings/storage'] as $gone) {
+            self::assertArrayNotHasKey($gone, $routes, 'Placeholder route must be unregistered: ' . $gone);
         }
     }
 

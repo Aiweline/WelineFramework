@@ -23,4 +23,4 @@
 
 ## 使用位置
 
-- `app/code/Weline/Backend/view/templates/Backend/Statistics/index.phtml` 中通过 `getHook('Weline_Backend::backend::partials::dashboard::ai-usage-stats')` 调用。
+- `app/code/Weline/Backend/view/templates/Statistics/index.phtml` 中通过 `getHook('Weline_Backend::backend::partials::dashboard::ai-usage-stats')` 调用。
