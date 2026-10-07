@@ -24,7 +24,7 @@ final class CheckoutShippingAddressMountContractTest extends TestCase
             "document.querySelector('[data-shipping-checkout-address]')",
             $src,
         );
-        self::assertStringContainsString('20261006-embed-css1', $src);
+        self::assertStringContainsString('20261007-address-pay-local', $src);
         self::assertStringContainsString('ensureCheckoutShippingAddressCss', $src);
         self::assertStringContainsString('data-shipping-checkout-address-css', $src);
         self::assertStringContainsString('checkout-shipping-address.css', $src);

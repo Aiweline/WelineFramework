@@ -48,7 +48,7 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('name="address1"', $template);
         self::assertStringContainsString('name="postal_code"', $template);
         self::assertStringContainsString('data-weline-load="shippingCheckoutAddress"', $template);
-        self::assertStringContainsString('checkout-shipping-address.js?v=20261006-embed-css1', $modules);
+        self::assertStringContainsString('checkout-shipping-address.js?v=20261007-address-pay-local', $modules);
         self::assertStringContainsString('WelineShippingCheckoutAddress', $modules);
         self::assertStringContainsString('data-field-error-for="phone"', $template);
         self::assertStringContainsString("'err_name'", $template);
@@ -104,6 +104,15 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('openBillingPicker', $js);
         self::assertStringContainsString('selectBillingSaved', $js);
         self::assertStringContainsString('openBillingNew', $js);
+        self::assertStringContainsString('beginCheckoutReloadSuppress', $js);
+        self::assertStringContainsString('data-checkout-suppress-reload', $js);
+        self::assertStringContainsString('keepCountry', $js);
+        self::assertStringContainsString('async function selectSaved(card)', $js);
+        // 选已存地址：suppress 程序化回填，再派 address-updated 做 soft 局部刷新
+        $selectSaved = (string)preg_replace('/.*async function selectSaved\(card\)/s', 'async function selectSaved(card)', $js);
+        $selectSaved = (string)preg_replace('/\n    function openEdit\(card\).*/s', '', $selectSaved);
+        self::assertStringContainsString('beginCheckoutReloadSuppress', $selectSaved);
+        self::assertStringContainsString("weline:checkout:address-updated", $selectSaved);
         self::assertStringContainsString('activateBillingBook', $js);
         self::assertStringContainsString('selectDeliveryAddress', $js);
         // 账单选址不得改写收货配送会话

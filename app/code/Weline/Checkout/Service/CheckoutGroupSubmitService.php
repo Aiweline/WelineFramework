@@ -55,13 +55,14 @@ final class CheckoutGroupSubmitService
     private ?WarehouseInventoryCapabilityInterface $warehouseInventory;
     private ?DiscountQuoteServiceInterface $discountQuotes;
     private ?SplitShippingQuoteServiceInterface $splitShippingQuotes;
+    private ?CheckoutTaxAdvisorInterface $taxAdvisor;
 
     public function __construct(
         private readonly ShippingQuoteServiceInterface $shippingQuotes,
         private readonly ShippingAllocationService $allocation,
         private readonly OrderFacadeInterface $orderFacade,
         private readonly CheckoutSessionStoreInterface $sessionStore,
-        private readonly ?CheckoutTaxAdvisorInterface $taxAdvisor = null,
+        ?CheckoutTaxAdvisorInterface $taxAdvisor = null,
         ?InventoryCapabilityInterface $inventory = null,
         ?DefaultWarehouseResolverInterface $defaultWarehouseResolver = null,
         ?WarehouseInventoryCapabilityInterface $warehouseInventory = null,
@@ -72,7 +73,9 @@ final class CheckoutGroupSubmitService
         private readonly bool $resolveRuntimeDiscount = true,
         ?SplitShippingQuoteServiceInterface $splitShippingQuotes = null,
         private readonly bool $resolveRuntimeSplitShipping = true,
+        private readonly bool $resolveRuntimeTax = true,
     ) {
+        $this->taxAdvisor = $taxAdvisor;
         $this->inventory = $inventory;
         $this->defaultWarehouseResolver = $defaultWarehouseResolver;
         $this->warehouseInventory = $warehouseInventory;
@@ -105,12 +108,44 @@ final class CheckoutGroupSubmitService
             resolveRuntimeDiscount: false,
             splitShippingQuotes: $splitShippingQuotes,
             resolveRuntimeSplitShipping: false,
+            resolveRuntimeTax: false,
         );
     }
 
     public function taxAdvisor(): ?CheckoutTaxAdvisorInterface
     {
-        return $this->taxAdvisor;
+        return $this->taxAdvisorService();
+    }
+
+    /**
+     * ObjectManager keeps `?CheckoutTaxAdvisorInterface $taxAdvisor = null` as null
+     * (nullable class default). Resolve at runtime like discount/inventory when Tax is installed.
+     */
+    private function taxAdvisorService(): ?CheckoutTaxAdvisorInterface
+    {
+        if ($this->taxAdvisor instanceof CheckoutTaxAdvisorInterface) {
+            return $this->taxAdvisor;
+        }
+        if (!$this->resolveRuntimeTax) {
+            return null;
+        }
+        if (!interface_exists(CheckoutTaxAdvisorInterface::class)) {
+            return null;
+        }
+        try {
+            $resolved = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolve(CheckoutTaxAdvisorInterface::class);
+            if (!$resolved instanceof CheckoutTaxAdvisorInterface) {
+                $resolved = ObjectManager::getInstance(CheckoutTaxAdvisorInterface::class);
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!$resolved instanceof CheckoutTaxAdvisorInterface) {
+            return null;
+        }
+
+        return $this->taxAdvisor = $resolved;
     }
 
     public function quoteCallCount(): int
@@ -353,12 +388,28 @@ final class CheckoutGroupSubmitService
 
         $alloc = $this->allocation->allocate($orders, $amountMinor);
         try {
-            $tax = $this->taxAdvisor !== null
-                ? $this->taxAdvisor->quoteTax($orders, $scope, $address, $currency, [
-                    'duty_notice' => (string)($quoteArray['duty_notice'] ?? ''),
+            $taxAdvisor = $this->taxAdvisorService();
+            // Align with getData preview: cross-border + empty notice → DDU so freeze/order
+            // do not silently drop duty that the money summary already showed.
+            $dutyNotice = trim((string)($quoteArray['duty_notice'] ?? ''));
+            $destCountry = strtoupper(trim((string)($address['country_code'] ?? $address['country'] ?? '')));
+            $originCountry = strtoupper(trim((string)(
+                $scope['origin_country'] ?? $scope['seller_country'] ?? 'CN'
+            ))) ?: 'CN';
+            if (
+                $dutyNotice === ''
+                && $destCountry !== ''
+                && $destCountry !== $originCountry
+                && class_exists(\Weline\Tax\Service\DutyEstimateService::class)
+            ) {
+                $dutyNotice = \Weline\Tax\Service\DutyEstimateService::NOTICE_DDU;
+            }
+            $tax = $taxAdvisor !== null
+                ? $taxAdvisor->quoteTax($orders, $scope, $address, $currency, [
+                    'duty_notice' => $dutyNotice,
                     'incoterm' => (string)($quoteArray['incoterm'] ?? ''),
                     'shipping_amount_minor' => $amountMinor,
-                    'origin_country' => (string)($scope['origin_country'] ?? $scope['seller_country'] ?? 'CN'),
+                    'origin_country' => $originCountry,
                 ])
                 : [
                     'mode' => self::TAX_STUB_MODE,
@@ -656,9 +707,10 @@ final class CheckoutGroupSubmitService
         }
 
         $tax = is_array($session['tax'] ?? null) ? $session['tax'] : ['mode' => self::TAX_STUB_MODE, 'tax_amount_minor' => 0];
-        if ($this->taxAdvisor !== null) {
+        $taxAdvisor = $this->taxAdvisorService();
+        if ($taxAdvisor !== null) {
             try {
-                $this->taxAdvisor->assertRuleVersion(
+                $taxAdvisor->assertRuleVersion(
                     $tax,
                     $session['orders'],
                     $session['scope'],

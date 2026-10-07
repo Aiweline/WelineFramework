@@ -1132,10 +1132,20 @@ class CheckoutQueryProvider implements QueryProviderInterface
             $shippingAddress,
             $currency,
         );
-        // Cart enrich supplies sales tax; duty preview is shipping-lane only — combine for money-summary.
+        // Cart enrich often estimates against default jurisdiction (CN|); checkout must
+        // re-quote sales tax against the resolved shipping destination (collect / nexus).
         $salesTaxMinor = max(0, (int)($cart['sales_tax_amount_minor'] ?? 0));
         if ($salesTaxMinor <= 0) {
             $salesTaxMinor = max(0, (int)($cart['tax_amount_minor'] ?? 0));
+        }
+        $destinationSales = $this->resolveCheckoutDestinationSalesTaxMinor(
+            $items,
+            $shippingAddress,
+            $currency,
+            $shippingMethods,
+        );
+        if ($destinationSales !== null) {
+            $salesTaxMinor = $destinationSales;
         }
         $dutyChargedMinor = max(0, (int)($taxEstimate['tax_amount_minor'] ?? 0));
         $taxEstimate['sales_tax_amount_minor'] = $salesTaxMinor;
@@ -2049,6 +2059,94 @@ class CheckoutQueryProvider implements QueryProviderInterface
         }
 
         return $out;
+    }
+
+    /**
+     * Quote destination sales tax for checkout money-summary.
+     * Returns null when Tax module missing / address country unknown / quote blocked.
+     *
+     * @param list<array<string,mixed>> $items
+     * @param array<string,mixed> $address
+     * @param list<array<string,mixed>> $methods
+     */
+    private function resolveCheckoutDestinationSalesTaxMinor(
+        array $items,
+        array $address,
+        string $currency,
+        array $methods = [],
+    ): ?int {
+        $dest = strtoupper(trim((string)($address['country_code'] ?? $address['country'] ?? '')));
+        if ($dest === '' || !interface_exists(\Weline\Tax\Api\CheckoutTaxAdvisorInterface::class)) {
+            return null;
+        }
+
+        $taxLines = [];
+        foreach ($items as $index => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $lineId = trim((string)($item['line_uuid'] ?? $item['item_id'] ?? ''));
+            if ($lineId === '') {
+                $lineId = 'checkout-line-' . $index;
+            }
+            $rowMinor = 0;
+            if (isset($item['row_total_minor'])) {
+                $rowMinor = max(0, (int)$item['row_total_minor']);
+            } else {
+                $qty = (float)($item['qty'] ?? $item['quantity'] ?? 1);
+                $price = (float)($item['price'] ?? 0);
+                $row = (float)($item['row_total'] ?? ($qty * $price));
+                $rowMinor = (int)round($row * 100);
+            }
+            if ($rowMinor <= 0) {
+                continue;
+            }
+            $taxLines[] = [
+                'line_uuid' => $lineId,
+                'tax_class_code' => trim((string)($item['tax_class_code'] ?? 'standard')) ?: 'standard',
+                'row_total_minor' => $rowMinor,
+            ];
+        }
+        if ($taxLines === []) {
+            return null;
+        }
+
+        $shippingMinor = 0;
+        $dutyNotice = '';
+        foreach ($methods as $method) {
+            if (!is_array($method)) {
+                continue;
+            }
+            $shippingMinor = max($shippingMinor, (int)($method['amount_minor'] ?? 0));
+            $candidate = trim((string)($method['duty_notice'] ?? ''));
+            if ($candidate !== '') {
+                $dutyNotice = $candidate;
+            }
+        }
+
+        try {
+            /** @var \Weline\Tax\Api\CheckoutTaxAdvisorInterface $advisor */
+            $advisor = ObjectManager::getInstance(\Weline\Tax\Api\CheckoutTaxAdvisorInterface::class);
+            $quoted = $advisor->quoteTax(
+                [['items' => $taxLines]],
+                [
+                    'website_id' => (int)(\Weline\Framework\Runtime\RequestContext::getWelineWebsiteId() ?? 0),
+                    'store_id' => (int)(\Weline\Framework\Runtime\RequestContext::getWelineStoreId() ?? 0),
+                    'channel_id' => (int)(\Weline\Framework\Runtime\RequestContext::getWelineChannelId() ?? 0),
+                ],
+                $address,
+                $currency,
+                [
+                    'origin_country' => 'CN',
+                    'shipping_amount_minor' => $shippingMinor,
+                    'duty_notice' => $dutyNotice,
+                ],
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return max(0, (int)($quoted['sales_tax_amount_minor'] ?? 0));
     }
 
     /**

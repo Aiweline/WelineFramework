@@ -99,8 +99,10 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString("@url{'products'}", $template);
         self::assertStringContainsString('data-checkout-empty hidden', $template);
         self::assertStringContainsString('weline-code="checkout.checkout.empty.section_1"', $template);
-        self::assertStringContainsString('data-checkout-form-host hidden', $template);
-        self::assertStringContainsString('data-checkout-form hidden', $template);
+        // 传统结账首屏即 ready：form-host 默认可见；空车由 showCheckoutShell('empty') 隐藏。
+        self::assertStringContainsString('data-checkout-form-host', $template);
+        self::assertStringNotContainsString('data-checkout-form-host hidden', $template);
+        self::assertStringContainsString('data-checkout-form', $template);
         self::assertStringContainsString("const emptyState = root.querySelector('[data-checkout-empty]');", $template);
         self::assertStringContainsString('function showCheckoutShell(mode)', $template);
         self::assertStringContainsString('function setFormVisible(visible)', $template);
@@ -209,6 +211,8 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('data-checkout-tax-row', $template);
         self::assertStringContainsString('selectedTaxAmount', $template);
         self::assertStringContainsString('cartSalesTaxAmount', $template);
+        self::assertStringContainsString('taxEstimate', $template);
+        self::assertStringContainsString('prefer getData tax_estimate', $template);
         self::assertStringContainsString('selectedDutyAmount', $template);
         self::assertStringContainsString('selectedCustomsDutyAmount', $template);
         self::assertStringContainsString('selectedImportTaxAmount', $template);
@@ -222,7 +226,14 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('weline:b2b-credit-changed', $template);
         self::assertStringContainsString('WelineB2BCheckoutTob', $template);
         self::assertStringContainsString("weline:checkout:address-updated", $template);
-        self::assertStringContainsString("scheduleReload({ hardOnFailure: false, busyShipping: true })", $template);
+        self::assertStringContainsString('isCheckoutReloadSuppressed', $template);
+        self::assertStringContainsString('data-checkout-suppress-reload', $template);
+        self::assertStringContainsString('const soft = opts.soft === true', $template);
+        self::assertStringContainsString('loadCheckoutWithRetry({ soft: soft, panels: panels })', $template);
+        self::assertStringContainsString('items: false, shipping: true, payment: true, address: false', $template);
+        self::assertStringContainsString('hardOnFailure: false', $template);
+        self::assertStringContainsString('busyShipping: true', $template);
+        self::assertStringContainsString("panels: { items: false, shipping: true, payment: true, address: false }", $template);
         self::assertStringContainsString('setShippingMethodsBusy', $template);
         self::assertStringContainsString('Weline.UI.setBusy', $template);
         self::assertStringContainsString('loading_shipping', $template);
@@ -426,7 +437,8 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
 
         self::assertStringContainsString("window.addEventListener('weline:cart-updated'", $template);
-        self::assertStringContainsString('scheduleReload({ hardOnFailure: true })', $template);
+        self::assertStringContainsString('hardOnFailure: true', $template);
+        self::assertStringContainsString("panels: { items: true, shipping: true, payment: true, address: false }", $template);
         self::assertStringContainsString("source === 'checkout-empty'", $template);
         self::assertStringContainsString('emptyCartInvalidateDone', $template);
         self::assertStringContainsString("reason: 'checkout-empty'", $template);

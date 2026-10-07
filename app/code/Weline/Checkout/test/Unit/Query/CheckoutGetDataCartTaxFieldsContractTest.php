@@ -25,6 +25,8 @@ final class CheckoutGetDataCartTaxFieldsContractTest extends TestCase
             "\$taxEstimate['tax_amount_minor'] = \$salesTaxMinor + \$dutyChargedMinor",
             $src
         );
+        self::assertStringContainsString('resolveCheckoutDestinationSalesTaxMinor', $src);
+        self::assertStringContainsString('CheckoutTaxAdvisorInterface', $src);
 
         $viewModel = (string) file_get_contents(
             dirname(__DIR__, 3) . '/Service/CheckoutPageViewModel.php'

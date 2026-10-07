@@ -13,6 +13,7 @@ namespace Weline\Checkout\Controller\Frontend;
 
 use Weline\Checkout\Service\CheckoutIdentityService;
 use Weline\Checkout\Service\CheckoutService;
+use Weline\Checkout\Service\CheckoutStorefrontSsrService;
 use Weline\Checkout\Service\PaymentService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
@@ -21,6 +22,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 前端结账控制器
  *
  * The normal layout lifecycle selects captured body/chrome sources and wraps once.
+ * First paint SSR: items / shipping / payment / money summary.
  */
 class Checkout extends FrontendController
 {
@@ -40,7 +42,7 @@ class Checkout extends FrontendController
 
     /**
      * 结账页面
-     * 
+     *
      * @return string
      */
     public function index(): string
@@ -59,15 +61,20 @@ class Checkout extends FrontendController
         $this->assign('title', __($checkoutTitle));
         $this->layoutType = 'checkout';
 
-        // P0: SSR empty shell — no currentCart/QueryBin hang; keep chrome.
-        $cart = [
-            'items' => [],
-            'currency' => 'USD',
-            'is_empty' => true,
-        ];
-        $this->assign('checkout_items', $cart['items']);
-        $this->assign('checkout_currency', $cart['currency']);
+        /** @var CheckoutStorefrontSsrService $ssr */
+        $ssr = ObjectManager::getInstance(CheckoutStorefrontSsrService::class);
+        $payload = $ssr->build();
+        $this->assign('checkout_items', \is_array($payload['items'] ?? null) ? $payload['items'] : []);
+        $this->assign('checkout_currency', (string)($payload['currency'] ?? 'USD'));
         $this->assign('checkout_items_empty_message', __($emptyCartMessage));
+        $this->assign('checkout_shipping_methods_html', (string)($payload['shipping_methods_html'] ?? ''));
+        $this->assign('checkout_payment_methods_html', (string)($payload['payment_methods_html'] ?? ''));
+        $this->assign('checkout_ssr_ready', !empty($payload['ready']));
+        $this->assign('checkout_ssr_quote_token', (string)($payload['quote_token'] ?? ''));
+        $this->assign('checkout_ssr_goods_text', (string)($payload['goods_text'] ?? ''));
+        $this->assign('checkout_ssr_shipping_text', (string)($payload['shipping_text'] ?? ''));
+        $this->assign('checkout_ssr_payable_text', (string)($payload['payable_text'] ?? ''));
+        $this->assign('checkout_ssr_cart', \is_array($payload['cart'] ?? null) ? $payload['cart'] : []);
         $this->assign(
             'checkout_page_subtitle',
             (string)__($checkoutSubtitle)

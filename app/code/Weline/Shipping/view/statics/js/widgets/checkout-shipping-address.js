@@ -6,7 +6,7 @@
      * HelpPay / dialog embeds fetch the phtml without bake — mount must attach CSS.
      */
     function resolveCheckoutShippingAddressCssHref() {
-        var modulePath = 'Weline_Shipping::css/widgets/checkout-shipping-address.css?v=20261006-embed-css1';
+        var modulePath = 'Weline_Shipping::css/widgets/checkout-shipping-address.css?v=20261007-address-pay-local';
         var loader = window.Weline && window.Weline.loader;
         if (loader && typeof loader.resolveStaticPath === 'function') {
             var resolved = loader.resolveStaticPath(modulePath);
@@ -31,7 +31,7 @@
                 return sibling;
             }
         }
-        return '/static/Weline/Shipping/css/widgets/checkout-shipping-address.css?v=20261006-embed-css1';
+        return '/static/Weline/Shipping/css/widgets/checkout-shipping-address.css?v=20261007-address-pay-local';
     }
 
     function ensureCheckoutShippingAddressCss() {
@@ -573,7 +573,7 @@
 
     function fillShipping(address, opts) {
         if (!address || typeof address !== 'object') {
-            return;
+            return Promise.resolve(false);
         }
         var clearEmpty = !!(opts && opts.clearEmpty);
         ['name', 'phone', 'email', 'address1', 'postal_code'].forEach(function (field) {
@@ -586,7 +586,29 @@
         if (address.street && text(address.address1 || '').trim() === '') {
             setField('address1', address.street);
         }
-        applyCascade(address);
+        return Promise.resolve(applyCascade(address));
+    }
+
+    /**
+     * 程序化清表/回填时抑制结账页对地址字段 change 的 scheduleReload。
+     * 嵌套安全：用计数属性，避免并发 fill 提前解除。
+     */
+    function beginCheckoutReloadSuppress() {
+        var host = document.querySelector('[data-weline-checkout]');
+        if (!host) {
+            return function () {};
+        }
+        var depth = Number(host.getAttribute('data-checkout-suppress-reload') || '0') || 0;
+        host.setAttribute('data-checkout-suppress-reload', String(depth + 1));
+        return function endCheckoutReloadSuppress() {
+            var next = Number(host.getAttribute('data-checkout-suppress-reload') || '0') || 0;
+            next -= 1;
+            if (next <= 0) {
+                host.removeAttribute('data-checkout-suppress-reload');
+            } else {
+                host.setAttribute('data-checkout-suppress-reload', String(next));
+            }
+        };
     }
 
     function markSelected(id) {
@@ -617,30 +639,43 @@
             payload = {};
         }
         markSelected(id);
-        fillShipping(payload);
         root.removeAttribute('data-user-address-editing');
         setMode('collapsed');
-        // Quick-buy / HelpPay modal: local selection only — do not rewrite universal checkout delivery.
-        if (isSessionIsolated()) {
-            return;
-        }
-        if (!id || !window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
-            return;
-        }
+        // 程序化回填会派 country/postal change；suppress 掉以免整页 getData loading。
+        var endSuppress = beginCheckoutReloadSuppress();
+        var ctx = null;
         try {
-            var api = await window.Weline.Api.resource('checkout');
-            if (!api || typeof api.selectDeliveryAddress !== 'function') {
+            await Promise.resolve(fillShipping(payload));
+            // Quick-buy / HelpPay modal: local selection only — do not rewrite universal checkout delivery.
+            if (isSessionIsolated()) {
                 return;
             }
-            var result = await api.selectDeliveryAddress({id: id, address_purpose: 'checkout'}, {silent: true});
-            var ctx = (result && (result.data || result)) || {};
-            if (ctx.checkout_address) {
-                fillShipping(Object.assign({}, payload, ctx.checkout_address, {
-                    district: (ctx.selected && ctx.selected.district) || payload.district || ''
-                }));
+            if (!id || !window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                return;
             }
-        } catch (e) {
-            // 本地回填已完成
+            try {
+                var api = await window.Weline.Api.resource('checkout');
+                if (!api || typeof api.selectDeliveryAddress !== 'function') {
+                    return;
+                }
+                var result = await api.selectDeliveryAddress({id: id, address_purpose: 'checkout'}, {silent: true});
+                ctx = (result && (result.data || result)) || {};
+                if (ctx.checkout_address) {
+                    await Promise.resolve(fillShipping(Object.assign({}, payload, ctx.checkout_address, {
+                        district: (ctx.selected && ctx.selected.district) || payload.district || ''
+                    })));
+                }
+            } catch (e) {
+                // 本地回填已完成
+            }
+        } finally {
+            endSuppress();
+        }
+        // 会话已切址：只通知结账页 soft 刷新配送/税费/摘要（不闪整页 loading）。
+        if (!isSessionIsolated()) {
+            window.dispatchEvent(new CustomEvent('weline:checkout:address-updated', {
+                detail: ctx || {selected: {id: id}, checkout_address: payload},
+            }));
         }
     }
 
@@ -675,18 +710,27 @@
             card.classList.remove('is-selected');
         });
         root.setAttribute('data-selected-id', '');
-        fillShipping({
+        // 保留当前结账国家：硬刷 CN + 清空邮编会派 change→整页 getData，体验极差。
+        var snap = readShippingSnapshot();
+        var keepCountry = text(snap.country_code || initial.country_code || 'CN').toUpperCase() || 'CN';
+        var keepCountryName = text(snap.country || initial.country || '');
+        var endSuppress = beginCheckoutReloadSuppress();
+        Promise.resolve(fillShipping({
             name: '',
             phone: '',
-            email: text(initial.email || ''),
-            country_code: 'CN',
-            country: '',
+            email: text(initial.email || snap.email || ''),
+            country_code: keepCountry,
+            country: keepCountryName,
             province: '',
             city: '',
             district: '',
             address1: '',
             postal_code: ''
-        }, {clearEmpty: true});
+        }, {clearEmpty: true})).catch(function () {
+            return false;
+        }).then(function () {
+            endSuppress();
+        });
         resetAlsoUseReceivingDefault();
         setMessage('', false);
         if (editor && typeof editor.scrollIntoView === 'function') {
@@ -2341,9 +2385,9 @@
         bootAddress();
     }
 
-    root.setAttribute('data-shipping-js-rev', '20261006-embed-css1');
+    root.setAttribute('data-shipping-js-rev', '20261007-address-pay-local');
     var api = {
-        rev: '20261006-embed-css1',
+        rev: '20261007-address-pay-local',
         root: root,
         mount: mount,
         getMode: mode,
@@ -2364,7 +2408,7 @@
     }
 
     window.WelineShippingCheckoutAddress = {
-        rev: '20261006-embed-css1',
+        rev: '20261007-address-pay-local',
         root: null,
         mount: mount,
         getMode: function () { return ''; },

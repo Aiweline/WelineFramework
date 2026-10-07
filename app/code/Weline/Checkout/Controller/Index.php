@@ -4,17 +4,16 @@ declare(strict_types=1);
 
 namespace Weline\Checkout\Controller;
 
+use Weline\Checkout\Service\CheckoutStorefrontSsrService;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * Storefront checkout page.
  *
  * HARD: keep Theme Partials header/footer chrome (theme_seat_integrity).
- * Bare HTML shells that omit chrome are rejected as a performance "fix".
- *
- * SSR remains a client shell with no currentCart/getCart/summary call. The normal
- * layout lifecycle selects the captured body and chrome before one layout wrap.
- * Address, shipping and payment hydrate via QueryBin after first paint.
+ * First paint SSR: items / shipping / payment / money summary via CheckoutStorefrontSsrService.
+ * Async getData only after shopper changes address / methods / cart.
  */
 class Index extends FrontendController
 {
@@ -34,11 +33,10 @@ class Index extends FrontendController
         $this->request->setGet('layout_type', 'checkout');
         $this->request->setGet('layout_option', 'default');
 
-        // Empty SSR payload — browser QueryBin is the source of truth.
-        $cart = $this->emptyCurrentCart();
-        $this->assign('checkout_items', $cart['items']);
-        $this->assign('checkout_currency', $cart['currency']);
-        $this->assign('checkout_items_empty_message', __($emptyCartMessage));
+        /** @var CheckoutStorefrontSsrService $ssr */
+        $ssr = ObjectManager::getInstance(CheckoutStorefrontSsrService::class);
+        $payload = $ssr->build();
+        $this->assignCheckoutSsr($payload, (string)__($emptyCartMessage));
         $this->assign(
             'checkout_page_subtitle',
             (string)__($checkoutSubtitle)
@@ -55,18 +53,21 @@ class Index extends FrontendController
     }
 
     /**
-     * @return array{items:list<array<string,mixed>>,currency:string,is_empty:bool,item_count:int,subtotal:float,grand_total:float,discount_preview:?array}
+     * @param array<string, mixed> $payload
      */
-    private function emptyCurrentCart(): array
+    private function assignCheckoutSsr(array $payload, string $emptyCartMessage): void
     {
-        return [
-            'items' => [],
-            'currency' => 'USD',
-            'is_empty' => true,
-            'item_count' => 0,
-            'subtotal' => 0.0,
-            'grand_total' => 0.0,
-            'discount_preview' => null,
-        ];
+        $this->assign('checkout_items', \is_array($payload['items'] ?? null) ? $payload['items'] : []);
+        $this->assign('checkout_currency', (string)($payload['currency'] ?? 'USD'));
+        $this->assign('checkout_items_empty_message', $emptyCartMessage);
+        $this->assign('checkout_shipping_methods_html', (string)($payload['shipping_methods_html'] ?? ''));
+        $this->assign('checkout_payment_methods_html', (string)($payload['payment_methods_html'] ?? ''));
+        $this->assign('checkout_ssr_ready', !empty($payload['ready']));
+        $this->assign('checkout_ssr_quote_token', (string)($payload['quote_token'] ?? ''));
+        $this->assign('checkout_ssr_goods_text', (string)($payload['goods_text'] ?? ''));
+        $this->assign('checkout_ssr_shipping_text', (string)($payload['shipping_text'] ?? ''));
+        $this->assign('checkout_ssr_payable_text', (string)($payload['payable_text'] ?? ''));
+        $cart = \is_array($payload['cart'] ?? null) ? $payload['cart'] : [];
+        $this->assign('checkout_ssr_cart', $cart);
     }
 }
