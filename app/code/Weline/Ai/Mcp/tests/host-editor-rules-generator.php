@@ -35,6 +35,13 @@ $checks['coldstart mdc forbids nested Codex recursion'] = str_contains($mdc, '�
     || str_contains($mdc, 'Codex 原生宿主禁止嵌套');
 $checks['coldstart mdc notes content-ops exemption and CLI fallback'] = str_contains($mdc, '内容运营')
     && str_contains($mdc, 'CLI 不可用则回退');
+$checks['coldstart mdc hard-default-use AOCI after prepare'] = str_contains($mdc, '强制使用 AOCI')
+    && str_contains($mdc, 'HARD DEFAULT USE')
+    && str_contains($mdc, 'aoci_rules')
+    && str_contains($mdc, 'aoci_overview')
+    && str_contains($mdc, '禁止')
+    && str_contains($mdc, '可选');
+
 
 $tmpRoot = sys_get_temp_dir() . '/weline-host-editor-rules-' . bin2hex(random_bytes(4));
 mkdir($tmpRoot, 0775, true);

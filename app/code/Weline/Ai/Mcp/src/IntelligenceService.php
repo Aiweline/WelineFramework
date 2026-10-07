@@ -113,7 +113,8 @@ final class IntelligenceService
             $prepared['agent_guidance']['aoci_cognition'] = [
                 'state' => 'not_established',
                 'meaning' => 'AOCI installation and MCP registration do not establish project cognition.',
-                'next_step' => 'Use aoci_rules and aoci_overview when cognition is required, then follow AOCI governance before claiming reliable cognition.',
+                'policy' => 'HARD DEFAULT USE (engineering): AOCI cognition is mandatory after prepare_project, not optional.',
+                'next_step' => 'After prepare_project and before host-native edits: MUST call aoci_rules; when complete cognition is unreliable MUST call ordinary aoci_overview; after managed objects stabilize call aoci_maintain once. Content-ops/chat EXEMPT. Do not pretend AOCI was obeyed if skipped.',
             ];
             return $prepared;
         });
