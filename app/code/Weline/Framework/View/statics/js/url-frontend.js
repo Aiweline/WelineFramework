@@ -209,18 +209,35 @@
      */
     const WelineString = window.WelineString || {
         startsWith: (str, prefix, ignoreCase = true) => {
+            str = String(str ?? '');
+            prefix = String(prefix ?? '');
+            if (!prefix) {
+                return false;
+            }
             if (ignoreCase) {
-                str = str.toLowerCase();
-                prefix = prefix.toLowerCase();
+                return str.toLowerCase().lastIndexOf(prefix.toLowerCase(), 0) === 0;
             }
             return str.lastIndexOf(prefix, 0) === 0;
         },
+        // Compare case-insensitively when asked, but never rewrite the remainder of
+        // the original string (currency switch must keep bg_BG, not emit bg_bg).
         replaceStartsWith: (str, prefix, value, ignoreCase = true) => {
-            if (ignoreCase) {
-                str = str.toLowerCase();
-                prefix = prefix.toLowerCase();
+            str = String(str ?? '');
+            prefix = String(prefix ?? '');
+            value = String(value ?? '');
+            if (!prefix) {
+                return str;
             }
-            return str.replace(new RegExp('^' + prefix), value);
+            if (ignoreCase) {
+                if (str.toLowerCase().lastIndexOf(prefix.toLowerCase(), 0) !== 0) {
+                    return str;
+                }
+                return value + str.slice(prefix.length);
+            }
+            if (str.lastIndexOf(prefix, 0) !== 0) {
+                return str;
+            }
+            return value + str.slice(prefix.length);
         }
     };
 
@@ -650,8 +667,10 @@
             }
         }
 
-        if (WelineString.startsWith(path, '/' + (getCookie('WELINE_WEBSITE_CODE') || ''))) {
-            path = WelineString.replaceStartsWith(path, '/' + (getCookie('WELINE_WEBSITE_CODE') || ''), '/');
+        const websiteCode = String(getCookie('WELINE_WEBSITE_CODE') || '').trim();
+        // Empty cookie must not match bare "/" — that used to lowercase the whole path.
+        if (websiteCode !== '' && WelineString.startsWith(path, '/' + websiteCode)) {
+            path = WelineString.replaceStartsWith(path, '/' + websiteCode, '/');
         }
 
         if ('website' === type && code) {

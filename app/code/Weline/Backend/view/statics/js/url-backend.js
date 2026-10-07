@@ -58,21 +58,33 @@
         startsWith: (str, prefix, ignoreCase = true) => {
             str = String(str ?? '');
             prefix = String(prefix ?? '');
+            if (!prefix) {
+                return false;
+            }
             if (ignoreCase) {
-                str = str.toLowerCase();
-                prefix = prefix.toLowerCase();
+                return str.toLowerCase().lastIndexOf(prefix.toLowerCase(), 0) === 0;
             }
             return str.lastIndexOf(prefix, 0) === 0;
         },
+        // Compare case-insensitively when asked, but never rewrite the remainder of
+        // the original string (currency switch must keep bg_BG, not emit bg_bg).
         replaceStartsWith: (str, prefix, value, ignoreCase = true) => {
             str = String(str ?? '');
             prefix = String(prefix ?? '');
             value = String(value ?? '');
-            if (ignoreCase) {
-                str = str.toLowerCase();
-                prefix = prefix.toLowerCase();
+            if (!prefix) {
+                return str;
             }
-            return str.replace(new RegExp('^' + prefix), value);
+            if (ignoreCase) {
+                if (str.toLowerCase().lastIndexOf(prefix.toLowerCase(), 0) !== 0) {
+                    return str;
+                }
+                return value + str.slice(prefix.length);
+            }
+            if (str.lastIndexOf(prefix, 0) !== 0) {
+                return str;
+            }
+            return value + str.slice(prefix.length);
         }
     };
 
@@ -413,13 +425,17 @@
             || normalizeCurrencyCode(config.currentCurrency || '');
         const currentCurrency = isSupportedCurrencyCode(rawCurrentCurrency, config) ? normalizeCurrencyCode(rawCurrentCurrency) : '';
 
-        if (WelineString.startsWith(path, getCookie('WELINE_WEBSITE_URL') || '')) {
-            path = WelineString.replaceStartsWith(path, getCookie('WELINE_WEBSITE_URL') || '', '');
-        } else {
-            path = WelineString.replaceStartsWith(path, config.baseRouter, '');
+        const websiteUrl = String(getCookie('WELINE_WEBSITE_URL') || '').trim();
+        const websiteCode = String(getCookie('WELINE_WEBSITE_CODE') || '').trim();
+        const baseRouter = String(config.baseRouter || '').trim();
+        // Empty prefixes must not match — empty replaceStartsWith used to lowercase the path.
+        if (websiteUrl !== '' && WelineString.startsWith(path, websiteUrl)) {
+            path = WelineString.replaceStartsWith(path, websiteUrl, '');
+        } else if (baseRouter !== '') {
+            path = WelineString.replaceStartsWith(path, baseRouter, '');
         }
-        if (WelineString.startsWith(path, '/' + (getCookie('WELINE_WEBSITE_CODE') || ''))) {
-            path = WelineString.replaceStartsWith(path, '/' + (getCookie('WELINE_WEBSITE_CODE') || ''), '/');
+        if (websiteCode !== '' && WelineString.startsWith(path, '/' + websiteCode)) {
+            path = WelineString.replaceStartsWith(path, '/' + websiteCode, '/');
         }
         if ('website' === type && code) {
             prePath = code;

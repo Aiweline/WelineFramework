@@ -3,6 +3,38 @@
  * Run: node app/code/Weline/Framework/Test/Unit/View/url-frontend-path-mount-contract.mjs
  */
 
+function startsWith(str, prefix, ignoreCase = true) {
+    str = String(str ?? '');
+    prefix = String(prefix ?? '');
+    if (!prefix) {
+        return false;
+    }
+    if (ignoreCase) {
+        return str.toLowerCase().lastIndexOf(prefix.toLowerCase(), 0) === 0;
+    }
+    return str.lastIndexOf(prefix, 0) === 0;
+}
+
+/** Case-insensitive match must not rewrite the remainder of the path. */
+function replaceStartsWith(str, prefix, value, ignoreCase = true) {
+    str = String(str ?? '');
+    prefix = String(prefix ?? '');
+    value = String(value ?? '');
+    if (!prefix) {
+        return str;
+    }
+    if (ignoreCase) {
+        if (str.toLowerCase().lastIndexOf(prefix.toLowerCase(), 0) !== 0) {
+            return str;
+        }
+        return value + str.slice(prefix.length);
+    }
+    if (str.lastIndexOf(prefix, 0) !== 0) {
+        return str;
+    }
+    return value + str.slice(prefix.length);
+}
+
 function normalizeWebsiteMountPath(url, config = {}) {
     const rawUrl = String(url || '').trim();
     if (!rawUrl) {
@@ -75,5 +107,35 @@ assertEq(injectLang('/aisite_accept_ok/about', 'hi_IN', site), '/aisite_accept_o
 assertEq(injectLang('/about', 'hi_IN', site), '/aisite_accept_ok/hi_IN/about', 'relative after mount');
 assertEq(injectLang('/aisite_accept_ok/hi_IN/about', 'en_US', site), '/aisite_accept_ok/about', 'default lang omits locale');
 assertEq(injectLang('/aisite_accept_ok/about', 'hi_IN', site) !== '/hi_IN/aisite_accept_ok/about', true, 'never locale-before-mount');
+
+// Empty prefix must be a no-op. Legacy bug: empty WELINE_WEBSITE_CODE made
+// startsWith(path, '/') true, then replaceStartsWith lowercased the whole path
+// (bg_BG → bg_bg) during currency switch rebuild.
+assertEq(startsWith('/bg_BG/product/x', ''), false, 'empty prefix is not a startsWith match');
+assertEq(replaceStartsWith('/bg_BG/product/x', '', '/'), '/bg_BG/product/x', 'empty replaceStartsWith preserves casing');
+assertEq(
+    replaceStartsWith('/USD/bg_BG/product/x', '/usd', ''),
+    '/bg_BG/product/x',
+    'case-insensitive strip keeps locale casing'
+);
+assertEq(
+    replaceStartsWith('/bg_BG/product/x', '/', '/'),
+    '/bg_BG/product/x',
+    'slash-only replace keeps locale casing (currency-switch regression)'
+);
+
+// Reproduce the empty-cookie currency rebuild path without lowercasing locale.
+(function currencySwitchKeepsLocaleCasing() {
+    const websiteCode = '';
+    let path = '/bg_BG/product/ming-yue';
+    if (websiteCode !== '' && startsWith(path, '/' + websiteCode)) {
+        path = replaceStartsWith(path, '/' + websiteCode, '/');
+    } else if (websiteCode === '') {
+        // Legacy mistake: treat bare "/" as the website prefix.
+        // Fixed replaceStartsWith must still preserve casing even if that runs.
+        path = replaceStartsWith(path, '/', '/');
+    }
+    assertEq(path, '/bg_BG/product/ming-yue', 'empty website cookie rebuild keeps bg_BG');
+})();
 
 console.log('url-frontend-path-mount-contract: OK');
