@@ -16,6 +16,7 @@ const PDP = process.env.TAX_WBOP_PDP
 const OUT = process.env.MATRIX_OUT
   || path.resolve(__dirname, '../../../../../../../var/log/tax-lanes-country-wbop.json');
 
+// Generic seed: collect list empty → no destination sales tax; DDU duty/import by policy.
 const CASES = JSON.parse(process.env.TAX_WBOP_CASES_JSON || 'null') || [
   {
     id: 'T1_CN',

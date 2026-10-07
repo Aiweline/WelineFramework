@@ -118,6 +118,7 @@ final class CheckoutStorefrontSsrService
             'shipping_text' => $this->money($currency, $shippingAmount),
             'payable_text' => $this->money($currency, $grand),
             'quote_token' => trim((string)($data['quote_token'] ?? '')),
+            'tax_estimate' => \is_array($data['tax_estimate'] ?? null) ? $data['tax_estimate'] : null,
         ];
     }
 
@@ -174,6 +175,7 @@ final class CheckoutStorefrontSsrService
             'shipping_text' => $this->money($currency, 0),
             'payable_text' => $this->money($currency, $grand),
             'quote_token' => '',
+            'tax_estimate' => null,
         ];
     }
 
@@ -200,6 +202,7 @@ final class CheckoutStorefrontSsrService
             'shipping_text' => '',
             'payable_text' => '',
             'quote_token' => '',
+            'tax_estimate' => null,
         ];
     }
 

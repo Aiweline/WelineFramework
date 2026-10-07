@@ -1138,14 +1138,24 @@ class CheckoutQueryProvider implements QueryProviderInterface
         if ($salesTaxMinor <= 0) {
             $salesTaxMinor = max(0, (int)($cart['tax_amount_minor'] ?? 0));
         }
-        $destinationSales = $this->resolveCheckoutDestinationSalesTaxMinor(
+        $destinationTax = $this->resolveCheckoutDestinationTaxMeta(
             $items,
             $shippingAddress,
             $currency,
             $shippingMethods,
         );
-        if ($destinationSales !== null) {
-            $salesTaxMinor = $destinationSales;
+        if ($destinationTax !== null) {
+            $salesTaxMinor = max(0, (int)$destinationTax['sales_tax_amount_minor']);
+            $taxEstimate['note'] = (string)$destinationTax['note'];
+            $taxEstimate['mode'] = (string)$destinationTax['mode'];
+            $taxEstimate['destination_tax_profile'] = (string)$destinationTax['destination_tax_profile'];
+            if (\is_array($destinationTax['destination_policy'] ?? null)) {
+                $taxEstimate['destination_policy'] = $destinationTax['destination_policy'];
+            }
+            // Prefer Tax advisor duty/import (policy-aware) over shipping-row preview alone.
+            $taxEstimate['duty_amount_minor'] = max(0, (int)$destinationTax['duty_amount_minor']);
+            $taxEstimate['import_tax_amount_minor'] = max(0, (int)$destinationTax['import_tax_amount_minor']);
+            $taxEstimate['tax_amount_minor'] = max(0, (int)$destinationTax['duty_charged_minor']);
         }
         $dutyChargedMinor = max(0, (int)($taxEstimate['tax_amount_minor'] ?? 0));
         $taxEstimate['sales_tax_amount_minor'] = $salesTaxMinor;
@@ -1995,6 +2005,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'website_id' => (int)RequestContext::getWelineWebsiteId(),
                 'store_id' => (int)RequestContext::getWelineStoreId(),
                 'channel_id' => (int)RequestContext::getWelineChannelId(),
+                'origin_country' => 'CN',
             ],
             $currency !== '' ? $currency : 'CNY',
         );
@@ -2069,12 +2080,27 @@ class CheckoutQueryProvider implements QueryProviderInterface
      * @param array<string,mixed> $address
      * @param list<array<string,mixed>> $methods
      */
-    private function resolveCheckoutDestinationSalesTaxMinor(
+    /**
+     * Destination sales-tax quote + TaxDestinationCheckoutPolicy meta for storefront notes.
+     * Amounts stay Tax-owned; Checkout only forwards profile/note (never invent rates).
+     *
+     * @param list<array<string, mixed>> $items
+     * @param array<string, mixed> $address
+     * @param list<array<string, mixed>> $methods
+     * @return array{
+     *   sales_tax_amount_minor:int,
+     *   note:string,
+     *   mode:string,
+     *   destination_tax_profile:string,
+     *   destination_policy:array<string,mixed>|null
+     * }|null
+     */
+    private function resolveCheckoutDestinationTaxMeta(
         array $items,
         array $address,
         string $currency,
         array $methods = [],
-    ): ?int {
+    ): ?array {
         $dest = strtoupper(trim((string)($address['country_code'] ?? $address['country'] ?? '')));
         if ($dest === '' || !interface_exists(\Weline\Tax\Api\CheckoutTaxAdvisorInterface::class)) {
             return null;
@@ -2146,7 +2172,26 @@ class CheckoutQueryProvider implements QueryProviderInterface
             return null;
         }
 
-        return max(0, (int)($quoted['sales_tax_amount_minor'] ?? 0));
+        $policy = \is_array($quoted['destination_policy'] ?? null)
+            ? $quoted['destination_policy']
+            : null;
+        $profile = trim((string)($quoted['destination_tax_profile'] ?? ''));
+        if ($profile === '' && $policy !== null) {
+            $profile = trim((string)($policy['profile'] ?? ''));
+        }
+
+        return [
+            'sales_tax_amount_minor' => max(0, (int)($quoted['sales_tax_amount_minor'] ?? 0)),
+            'duty_amount_minor' => max(0, (int)($quoted['duty_amount_minor'] ?? 0)),
+            'import_tax_amount_minor' => max(0, (int)($quoted['import_tax_amount_minor'] ?? 0)),
+            'duty_charged_minor' => max(0, (int)($quoted['duty_charged_minor'] ?? (
+                (int)($quoted['duty_amount_minor'] ?? 0) + (int)($quoted['import_tax_amount_minor'] ?? 0)
+            ))),
+            'note' => (string)($quoted['note'] ?? ''),
+            'mode' => (string)($quoted['mode'] ?? ''),
+            'destination_tax_profile' => $profile,
+            'destination_policy' => $policy,
+        ];
     }
 
     /**

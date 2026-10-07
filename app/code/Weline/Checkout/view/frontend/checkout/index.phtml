@@ -54,11 +54,15 @@ $ssrCurrency = strtoupper(trim((string)($this->getData('checkout_currency') ?? (
 if (!preg_match('/^[A-Z]{3}$/', $ssrCurrency)) {
     $ssrCurrency = 'USD';
 }
+$ssrTaxEstimate = \is_array($this->getData('checkout_ssr_tax_estimate'))
+    ? $this->getData('checkout_ssr_tax_estimate')
+    : null;
 $ssrBootStateJson = json_encode(
     [
         'currency' => $ssrCurrency,
         'cart' => $ssrCart,
         'ready' => $ssrReady,
+        'tax_estimate' => $ssrTaxEstimate,
     ],
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 );
@@ -1490,6 +1494,9 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                 checkoutState.currency = cartCurrency;
             }
         }
+        if (boot.tax_estimate && typeof boot.tax_estimate === 'object') {
+            checkoutState.taxEstimate = boot.tax_estimate;
+        }
         return true;
     }
 
@@ -2864,19 +2871,37 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
 
     /**
-     * Clarifying note under money summary — sales vs import lanes are not the same charge.
+     * Clarifying note under money summary — only 价内税 domestic lane gets a sales-tax sentence;
+     * non-collection is configured via tax scope / product class, not shopper-facing disclaimers.
      */
     function moneySummaryTaxNote(salesMajor, customsMajor, importMajor) {
-        const parts = [];
-        if (salesMajor <= 0 && customsMajor <= 0 && importMajor <= 0) {
+        const preview = checkoutState.taxEstimate && typeof checkoutState.taxEstimate === 'object'
+            ? checkoutState.taxEstimate
+            : {};
+        const policy = preview.destination_policy && typeof preview.destination_policy === 'object'
+            ? preview.destination_policy
+            : {};
+        const profile = text(
+            policy.profile
+            || preview.destination_tax_profile
+            || preview.mode
+            || ''
+        ).trim();
+        const noteCode = text(preview.note || policy.note || '').trim();
+        const domesticInclusive = profile === 'domestic_inclusive'
+            || noteCode === 'prices_include_tax_no_extra_charge';
+
+        if (domesticInclusive && salesMajor <= 0) {
             return '<?= addslashes((string)__('商品价格已含税，结账无需另付销售税')) ?>';
         }
-        if (salesMajor <= 0 && (customsMajor > 0 || importMajor > 0)) {
-            parts.push('<?= addslashes((string)__('商品价格已含税，结账无需另付销售税')) ?>');
-        }
+
+        const parts = [];
         if (customsMajor > 0 || importMajor > 0) {
             parts.push('<?= addslashes((string)__('进口关税与进口税费按所选配送方式计入应付，与销售税分开计算')) ?>');
+        } else if (profile === 'duty_only' || profile === 'import_at_border') {
+            parts.push('<?= addslashes((string)__('进口关税与进口税费按所选配送方式另计（如有）')) ?>');
         }
+
         return parts.join(' ');
     }
 

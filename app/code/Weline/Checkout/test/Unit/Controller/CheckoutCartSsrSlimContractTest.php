@@ -58,6 +58,7 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
         self::assertStringContainsString('fromCartOnly', $src);
         self::assertStringContainsString('shipping_methods_html', $src);
         self::assertStringContainsString('payment_methods_html', $src);
+        self::assertStringContainsString("'tax_estimate'", $src);
     }
 
     public function testCheckoutTemplatePaintsSsrMethodsAndSkipsBootHydrate(): void
@@ -76,6 +77,8 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
         self::assertStringContainsString('data-checkout-ssr-boot', $template);
         self::assertStringContainsString('hydrateCheckoutStateFromSsr', $template);
         self::assertStringContainsString('normalizeCartMoney', $template);
+        self::assertStringContainsString('checkout_ssr_tax_estimate', $template);
+        self::assertStringContainsString('boot.tax_estimate', $template);
     }
 
     public function testStorefrontSsrServiceNormalizesMinorMoney(): void

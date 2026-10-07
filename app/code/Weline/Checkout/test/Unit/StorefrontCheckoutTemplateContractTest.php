@@ -222,6 +222,11 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('import_tax_minor:', $template);
         self::assertStringContainsString('sales_tax_label:', $template);
         self::assertStringContainsString('moneySummaryTaxNote', $template);
+        self::assertStringContainsString('domestic_inclusive', $template);
+        self::assertStringNotContainsString('本站暂不代收美国销售税', $template);
+        self::assertStringNotContainsString('本站不另收目的地销售税', $template);
+        self::assertStringContainsString('destination_policy', $template);
+        self::assertStringContainsString('checkout_ssr_tax_estimate', $template);
         self::assertStringContainsString('data-grand-total-label', $template);
         self::assertStringContainsString('weline:b2b-credit-changed', $template);
         self::assertStringContainsString('WelineB2BCheckoutTob', $template);

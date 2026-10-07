@@ -339,6 +339,7 @@ SKU,SKU
 本次应付定金,"Deposit due now"
 商品价格已含税，结账无需另付销售税,"Catalog prices include tax; no extra sales tax at checkout"
 进口关税与进口税费按所选配送方式计入应付，与销售税分开计算,"Import duty and import tax are added by shipping method and calculated separately from sales tax"
+进口关税与进口税费按所选配送方式另计（如有）,"Import duty and import tax are charged with the selected shipping method when applicable"
 销售税,"Sales tax"
 进口关税,"Import duty"
 进口税费,"Import tax"
@@ -382,7 +383,8 @@ SKU,SKU
 货到付款手续费,"Cash on delivery fee"
 支付方式优惠,"Payment method discount"
 应付,"Amount due"
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
+本站暂不代收美国销售税,本站暂不代收美国销售税
+本站不另收目的地销售税,本站不另收目的地销售税
 全部,All
 请输入订单号,"Please enter order number"
 搜索,Search
@@ -561,6 +563,7 @@ SKU,SKU
 收货地址暂未匹配到可用的配送服务。请确认国家或地区是否正确，或联系客服确认是否可送达。,"No shipping service matched this address. Please confirm the country or region, or contact support about delivery coverage."
 当前收货国家：%{1}。,"Current destination country: %{1}."
 系统暂未返回可用的配送方案。请确认收货地址与商品信息，或联系客服了解具体原因（常见如商品缺重量/尺寸，或目的地限制）。,"No shipping options were returned. Please confirm the shipping address and product details, or contact support (common causes: missing weight/dimensions, or destination restrictions)."
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 关税与税费,"Duties & taxes"
 关税与税费（预估）,"Duties & taxes (estimate)"
 税费（预估）,税费（预估）

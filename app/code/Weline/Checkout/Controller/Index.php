@@ -69,5 +69,9 @@ class Index extends FrontendController
         $this->assign('checkout_ssr_payable_text', (string)($payload['payable_text'] ?? ''));
         $cart = \is_array($payload['cart'] ?? null) ? $payload['cart'] : [];
         $this->assign('checkout_ssr_cart', $cart);
+        $this->assign(
+            'checkout_ssr_tax_estimate',
+            \is_array($payload['tax_estimate'] ?? null) ? $payload['tax_estimate'] : null
+        );
     }
 }
