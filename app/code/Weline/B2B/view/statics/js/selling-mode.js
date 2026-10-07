@@ -71,6 +71,11 @@
             document.cookie = name + '=' + encodeURIComponent(mode)
                 + '; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
         });
+        // Drop legacy bare cookie that can fight website-scoped preference.
+        try {
+            document.cookie = 'selling_mode=' + encodeURIComponent(mode)
+                + '; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
+        } catch (eLegacy) {}
     }
 
     function isCustomerLoggedIn(root) {
@@ -137,7 +142,7 @@
         if (previous !== mode) {
             rememberCurrentQtys(root, previous);
         }
-        // Explicit preference change ends one-shot URL handoff (?cart_type=toc「查看零售车」).
+        // Explicit preference change ends one-shot URL handoff (?cart_type=toc).
         // Otherwise syncCartPageChrome keeps forcing toc and「批发车」clicks look stuck.
         clearCartTypeHandoff(mode);
         writeCookie(mode, root);
@@ -241,13 +246,17 @@
      * Keep a single host in the product info column — do not mirror into buybox.
      */
     function syncRetailOnlyHints(mode) {
-        if (mode !== 'tob' && mode !== 'toc') {
+        var explicit = (mode === 'tob' || mode === 'toc') ? mode : '';
+        if (!explicit) {
             mode = chromeModeForRetailOnlyHint(null);
         } else {
-            mode = mode === 'tob' ? 'tob' : 'toc';
+            mode = explicit;
         }
-        // When caller passes toc but chrome still shows wholesale, keep hint visible.
-        if (mode !== 'tob' && chromeModeForRetailOnlyHint(null) === 'tob') {
+        // Explicit toc preference must win: lagging mini-cart data-cart-type=tob
+        // must not keep「切换成零售车」visible after the user already switched.
+        if (mode === 'toc' && preferredMode(null) === 'toc') {
+            mode = 'toc';
+        } else if (mode !== 'tob' && chromeModeForRetailOnlyHint(null) === 'tob') {
             mode = 'tob';
         }
         var show = mode === 'tob';
@@ -262,6 +271,19 @@
         });
     }
 
+    /**
+     * Retail-only PDP CTA: switch preference to toc without opening /cart.
+     * Safe when [data-b2b-selling-mode] root is absent on non-wholesale SKUs.
+     */
+    function switchToRetailCart() {
+        var root = document.querySelector('[data-b2b-selling-mode="1"]');
+        setMode(root, 'toc');
+        syncMiniCartChrome('toc');
+        syncCartPageChrome('toc');
+        syncCheckoutChrome('toc');
+        syncRetailOnlyHints('toc');
+    }
+
     var FIRST_PROBE_MS = 45000;
     var POLL_INTERVAL_MS = 300000;
     var pollTimers = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
@@ -270,10 +292,48 @@
         return String((root && root.getAttribute('data-membership-ui-state')) || '').toLowerCase();
     }
 
+    function membershipResolved(root) {
+        return !!(root && String(root.getAttribute('data-membership-resolved') || '0') === '1');
+    }
+
+    /**
+     * Guest-safe SSR leaves data-membership-ui-state=need_login even for cached sessions.
+     * After identity hydrate proves login + membership row is known, clear the stale gate.
+     * NEVER invent can_apply before membership.status resolves — VIP members would see
+     * 「申请批发身份」until/unless the probe finishes.
+     */
+    function reconcileGuestSafeUiState(root) {
+        if (!root) {
+            return false;
+        }
+        var loggedIn = String(root.getAttribute('data-customer-logged-in') || '0') === '1'
+            || isCustomerLoggedIn(root);
+        if (!loggedIn) {
+            return false;
+        }
+        if (String(root.getAttribute('data-customer-logged-in') || '0') !== '1') {
+            root.setAttribute('data-customer-logged-in', '1');
+        }
+        var state = uiStateOf(root);
+        if (state !== 'need_login' && state !== '') {
+            return false;
+        }
+        if (String(root.getAttribute('data-has-membership') || '0') === '1') {
+            root.setAttribute('data-membership-ui-state', 'active');
+            return true;
+        }
+        if (!membershipResolved(root)) {
+            return false;
+        }
+        root.setAttribute('data-membership-ui-state', 'can_apply');
+        return true;
+    }
+
     function canOpenApply(root) {
         if (!root) {
             return false;
         }
+        reconcileGuestSafeUiState(root);
         var state = uiStateOf(root);
         if (state === 'active' || state === 'pending') {
             return false;
@@ -281,7 +341,13 @@
         if (String(root.getAttribute('data-has-membership') || '0') === '1' && state !== 'inactive') {
             return false;
         }
-        // need_login | can_apply | rejected | inactive | empty legacy
+        // Logged-in but membership.status not yet resolved: do not treat as can_apply.
+        var loggedIn = String(root.getAttribute('data-customer-logged-in') || '0') === '1'
+            || isCustomerLoggedIn(root);
+        if (loggedIn && !membershipResolved(root) && (state === 'need_login' || state === '')) {
+            return false;
+        }
+        // need_login (guest) | can_apply | rejected | inactive | empty legacy
         return true;
     }
 
@@ -295,6 +361,35 @@
         return String(root.getAttribute('data-i18n-apply') || '申请批发身份');
     }
 
+    function isMembershipActive(root) {
+        if (!root) {
+            return false;
+        }
+        if (uiStateOf(root) === 'active') {
+            return true;
+        }
+        return String(root.getAttribute('data-has-membership') || '0') === '1'
+            && uiStateOf(root) !== 'inactive';
+    }
+
+    function announceAlreadyMember(root) {
+        if (!root) {
+            return;
+        }
+        var msg = String(root.getAttribute('data-i18n-already-member') || '您已开通批发身份，无需再申请');
+        var hint = root.querySelector('[data-b2b-membership-active-hint]');
+        if (hint) {
+            hint.textContent = String(root.getAttribute('data-i18n-active-hint') || '已开通批发身份');
+            hint.hidden = false;
+            hint.removeAttribute('hidden');
+        }
+        try {
+            global.dispatchEvent(new CustomEvent('weline:toast', {
+                detail: { message: msg, tone: 'info', type: 'info' }
+            }));
+        } catch (eToast) {}
+    }
+
     function applyStatusSnapshot(root, status) {
         if (!root || !status || typeof status !== 'object') {
             return;
@@ -306,6 +401,7 @@
         root.setAttribute('data-should-poll', status.should_poll ? '1' : '0');
         root.setAttribute('data-can-submit', status.can_submit ? '1' : '0');
         root.setAttribute('data-has-membership', status.membership_active ? '1' : '0');
+        root.setAttribute('data-membership-resolved', '1');
         syncApplyPanels(root, preferredMode(root));
         scheduleMembershipPoll(root);
         if (state === 'active' && prev !== 'active') {
@@ -402,16 +498,39 @@
         if (!root) {
             return;
         }
+        reconcileGuestSafeUiState(root);
         var membership = String(root.getAttribute('data-has-membership') || '0') === '1';
-        var loggedIn = String(root.getAttribute('data-customer-logged-in') || '0') === '1';
+        var loggedIn = String(root.getAttribute('data-customer-logged-in') || '0') === '1'
+            || isCustomerLoggedIn(root);
         var state = uiStateOf(root);
+        var activeMember = isMembershipActive(root);
+        var resolved = membershipResolved(root);
         var applyCta = root.querySelector('[data-b2b-open-apply]');
         if (applyCta) {
-            var showCta = mode === 'tob' && state !== 'active';
+            // Active members never see「申请」. Logged-in until status resolves: also hide
+            // (avoid false「申请批发身份」for VIP). Guests may apply without a status probe.
+            // Pending keeps a disabled wait CTA.
+            var eligibleApply = canOpenApply(root);
+            var showCta = mode === 'tob' && !activeMember && (
+                state === 'pending'
+                || (!loggedIn && eligibleApply)
+                || (loggedIn && resolved && eligibleApply)
+            );
             applyCta.hidden = !showCta;
             applyCta.disabled = state === 'pending';
             applyCta.setAttribute('aria-disabled', state === 'pending' ? 'true' : 'false');
             applyCta.textContent = applyCtaLabel(root, state || (membership ? 'active' : 'can_apply'));
+        }
+        var activeHint = root.querySelector('[data-b2b-membership-active-hint]');
+        if (activeHint) {
+            var showActiveHint = mode === 'tob' && activeMember;
+            activeHint.hidden = !showActiveHint;
+            if (showActiveHint) {
+                activeHint.textContent = String(root.getAttribute('data-i18n-active-hint') || '已开通批发身份');
+                activeHint.removeAttribute('hidden');
+            } else {
+                activeHint.setAttribute('hidden', '');
+            }
         }
         var guestHint = root.querySelector('[data-b2b-guest-tob-hint]');
         if (guestHint) {
@@ -436,12 +555,23 @@
         if (guestGate) {
             guestGate.hidden = !(mode === 'tob' && !loggedIn);
         }
-        var showForm = loggedIn && canOpenApply(root) && state !== 'need_login';
+        // Logged-in + stale need_login already reconciled above; never leave both panels hidden.
+        var showForm = loggedIn && !activeMember && canOpenApply(root) && state !== 'need_login';
         if (applyWrap) {
             applyWrap.hidden = !showForm;
         }
         if (applyForm) {
             applyForm.hidden = !showForm;
+        }
+        // Race: open while can_apply, then membership.status → active/pending hides both panels.
+        // Closing the empty shell beats a title-only drawer.
+        var drawer = root.querySelector('[data-b2b-apply-drawer]');
+        if (drawer && !drawer.hidden && String(drawer.getAttribute('data-state') || '') === 'open') {
+            var gateOpen = !!(guestGate && !guestGate.hidden);
+            var formOpen = !!(applyWrap && !applyWrap.hidden);
+            if (!gateOpen && !formOpen) {
+                closeDrawer(drawer);
+            }
         }
     }
 
@@ -802,19 +932,28 @@
         setTimeout(finish, 800);
     }
 
-    function openApplyFlow(root) {
-        if (!root) {
-            return;
-        }
-        if (!canOpenApply(root)) {
+    function openApplyDrawerForEligible(root) {
+        if (!root || !canOpenApply(root) || isMembershipActive(root)) {
             return;
         }
         // Apply drawer is always ToB context — do not hide guest gate via preferredMode=toc.
         syncApplyPanels(root, 'tob');
         openDrawer(root.querySelector('[data-b2b-apply-drawer]'));
+    }
+
+    function openApplyFlow(root) {
+        if (!root) {
+            return;
+        }
+        hydrateIdentityAttrs(root);
+        reconcileGuestSafeUiState(root);
         var loggedIn = String(root.getAttribute('data-customer-logged-in') || '0') === '1'
             || isCustomerLoggedIn(root);
         if (!loggedIn) {
+            if (!canOpenApply(root)) {
+                return;
+            }
+            openApplyDrawerForEligible(root);
             if (global.Weline && global.Weline.Account && typeof global.Weline.Account.ensureLogin === 'function') {
                 // No force: trust browser session; account.current only at allowed stages.
                 Promise.resolve(global.Weline.Account.ensureLogin({ root: root }))
@@ -827,7 +966,20 @@
                 return;
             }
             requestFrameworkMountScan(root);
+            return;
         }
+        // Logged-in: resolve membership BEFORE opening — avoids flash open/close for VIP members.
+        fetchMembershipStatus(root).then(function () {
+            syncApplyPanels(root, 'tob');
+            if (isMembershipActive(root)) {
+                announceAlreadyMember(root);
+                return;
+            }
+            openApplyDrawerForEligible(root);
+        }).catch(function () {
+            // Fail closed: never invent can_apply / open apply for logged-in on probe error.
+            syncApplyPanels(root, 'tob');
+        });
     }
 
     async function submitMembership(root, form) {
@@ -984,9 +1136,13 @@
             if (websiteId !== '') {
                 root.setAttribute('data-website-id', websiteId);
             }
+            reconcileGuestSafeUiState(root);
             var mode = preferredMode(root);
             syncButtons(mode, root);
             syncQty(mode, root);
+            if (loggedIn) {
+                fetchMembershipStatus(root);
+            }
         });
         var boot = bootConfig();
         if (boot) {
@@ -1048,6 +1204,7 @@
                 membership = true;
             }
         });
+        reconcileGuestSafeUiState(root);
     }
 
     function bindRoot(root) {
@@ -1056,6 +1213,10 @@
         }
         root.setAttribute('data-b2b-selling-bound', '1');
         hydrateIdentityAttrs(root);
+        reconcileGuestSafeUiState(root);
+        if (String(root.getAttribute('data-customer-logged-in') || '0') === '1') {
+            fetchMembershipStatus(root);
+        }
         var mode = preferredMode(root);
         var tocEnabled = String(root.getAttribute('data-toc-enabled') || '1') !== '0';
         var tobEnabled = String(root.getAttribute('data-tob-enabled') || '1') !== '0';
@@ -1312,7 +1473,7 @@
     }
 
     /**
-     * Cart page / checkout URL handoff owns this view (查看零售车 ?cart_type=toc).
+     * Cart page / checkout URL handoff owns this view (?cart_type=toc).
      * Mini-cart chrome must follow that bucket, not leftover tob cookie.
      */
     function pageViewCartType(fallback) {
@@ -1594,6 +1755,10 @@
             pageViewCartType: function () {
                 return pageViewCartType(preferredMode(null));
             },
+            setMode: function (mode, opts) {
+                setMode(document.querySelector('[data-b2b-selling-mode="1"]'), mode, opts);
+            },
+            switchToRetailCart: switchToRetailCart,
             openApply: function () {
                 var root = document.querySelector('[data-b2b-selling-mode="1"]');
                 if (root) {
@@ -1614,6 +1779,22 @@
             readCookie: readCookie,
             writeCookie: writeCookie
         };
+        // Retail-only hint lives outside [data-b2b-selling-mode]; capture-phase so
+        // sticky buybar / buybox overlays cannot swallow the CTA before we switch.
+        if (!document.documentElement.getAttribute('data-b2b-retail-only-switch-bound')) {
+            document.documentElement.setAttribute('data-b2b-retail-only-switch-bound', '1');
+            document.addEventListener('click', function (event) {
+                var switchBtn = event.target && event.target.closest
+                    ? event.target.closest('[data-b2b-retail-only-switch-toc]')
+                    : null;
+                if (!switchBtn) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                switchToRetailCart();
+            }, true);
+        }
         syncRetailOnlyHints(preferredMode(null));
         enhanceMiniCarts({ refresh: false });
         global.addEventListener('weline:selling-mode-changed', function (event) {

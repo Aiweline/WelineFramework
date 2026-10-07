@@ -58,11 +58,9 @@ try {
 /**
  * When site tob is on but this SKU cannot wholesale-display, emit a soft hint host
  * (JS shows it only while preferredMode=tob). Do not invent wholesale pricing UI.
- * Cart URL must be resolved outside the static closure: @url compiles to $this->getUrl()
- * which fatals inside static function () (not in object context).
+ * CTA switches selling mode to toc (same as「支持批发」→ tob); do not open /cart.
  */
-$retailCartUrl = ObjectManager::getInstance(\Weline\Framework\Http\Url::class)->getUrl('cart');
-$emitRetailOnlyTobHint = static function () use ($escape, $websiteId, $retailCartUrl): void {
+$emitRetailOnlyTobHint = static function () use ($escape, $websiteId): void {
     ?>
 <div class="b2b-retail-only-hint b2b-selling-mode__soft-cta"
      data-b2b-retail-only-hint="1"
@@ -72,17 +70,16 @@ $emitRetailOnlyTobHint = static function () use ($escape, $websiteId, $retailCar
      role="status"
      hidden>
     <span class="b2b-selling-mode__soft-note"><lang>本商品不支持批发</lang></span>
-    <a class="b2b-selling-mode__soft-link"
-       href="<?= $escape($retailCartUrl) ?>?cart_type=toc"
-       data-b2b-retail-only-cart-link
-       data-cart-type="toc"
-       data-testid="b2b-retail-only-view-toc-cart">
-        <lang>查看零售车</lang>
-    </a>
+    <button type="button"
+            class="b2b-selling-mode__soft-link"
+            data-b2b-retail-only-switch-toc
+            data-testid="b2b-retail-only-switch-toc">
+        <lang>切换成零售车</lang>
+    </button>
 </div>
 <script>
 (function (w, d) {
-    /* Inline boot: unhide when chrome/cookie is tob even if selling-mode.js cache is stale. */
+    /* Inline boot: unhide + switch CTA even if selling-mode.js cache is stale. */
     function readChromeMode() {
         try {
             var htmlMode = String(d.documentElement.getAttribute('data-selling-mode') || '').toLowerCase();
@@ -95,7 +92,7 @@ $emitRetailOnlyTobHint = static function () use ($escape, $websiteId, $retailCar
             for (var i = 0; i < parts.length; i += 1) {
                 var pair = parts[i].split('=');
                 var key = String(pair[0] || '').trim();
-                if (key !== 'weline_selling_mode' && !/^weline_selling_mode_w\d+$/.test(key)) {
+                if (key !== 'weline_selling_mode' && !/^weline_selling_mode_w\d+$/.test(key) && key !== 'selling_mode') {
                     continue;
                 }
                 var value = decodeURIComponent(String(pair[1] || '')).toLowerCase();
@@ -112,11 +109,108 @@ $emitRetailOnlyTobHint = static function () use ($escape, $websiteId, $retailCar
         } catch (e2) {}
         return 'toc';
     }
-    function applyRetailOnlyHints() {
-        var show = readChromeMode() === 'tob';
+    function writeTocPreference() {
+        var maxAge = 30 * 24 * 60 * 60;
+        var secure = w.location && String(w.location.protocol) === 'https:' ? '; Secure' : '';
+        var names = ['weline_selling_mode', 'selling_mode'];
+        try {
+            var wid = '';
+            var hint = d.querySelector('[data-b2b-retail-only-hint="1"][data-website-id]');
+            if (hint) {
+                wid = String(hint.getAttribute('data-website-id') || '').trim();
+            }
+            if (!wid && w.site) {
+                wid = String(w.site.website_id || w.site.websiteId || '').trim();
+            }
+            if (wid && /^\d+$/.test(wid)) {
+                names.unshift('weline_selling_mode_w' + wid);
+            }
+        } catch (eWid) {}
+        names.forEach(function (name) {
+            d.cookie = name + '=toc; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
+        });
+        try {
+            w.sessionStorage.setItem('weline_selling_mode', 'toc');
+            w.sessionStorage.setItem('weline_cart_type_explicit', 'toc');
+        } catch (eSs) {}
+        try {
+            d.documentElement.setAttribute('data-selling-mode', 'toc');
+        } catch (eHtml) {}
+    }
+    function paintRetailChrome() {
+        d.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
+            root.setAttribute('data-cart-type', 'toc');
+            root.classList.remove('is-cart-type-tob');
+            root.querySelectorAll('[data-mini-cart-type-caption]').forEach(function (el) {
+                el.hidden = false;
+                el.removeAttribute('hidden');
+                el.textContent = '零售';
+            });
+            root.querySelectorAll('[data-mini-cart-title]').forEach(function (el) {
+                el.textContent = '零售车';
+            });
+            root.querySelectorAll('[data-mini-cart-trigger]').forEach(function (el) {
+                el.setAttribute('aria-label', '零售车');
+            });
+        });
+    }
+    function switchToRetailCart(ev) {
+        if (ev) {
+            try { ev.preventDefault(); } catch (ePrev) {}
+            try { ev.stopPropagation(); } catch (eStop) {}
+        }
+        if (w.WelineB2BSellingMode && typeof w.WelineB2BSellingMode.switchToRetailCart === 'function') {
+            w.WelineB2BSellingMode.switchToRetailCart();
+            return;
+        }
+        if (w.WelineB2BSellingMode && typeof w.WelineB2BSellingMode.setMode === 'function') {
+            w.WelineB2BSellingMode.setMode('toc');
+            if (typeof w.WelineB2BSellingMode.syncMiniCartChrome === 'function') {
+                w.WelineB2BSellingMode.syncMiniCartChrome('toc');
+            }
+            if (typeof w.WelineB2BSellingMode.syncRetailOnlyHints === 'function') {
+                w.WelineB2BSellingMode.syncRetailOnlyHints('toc');
+            }
+            return;
+        }
+        writeTocPreference();
+        paintRetailChrome();
+        d.querySelectorAll('[data-b2b-retail-only-hint="1"]').forEach(function (el) {
+            el.hidden = true;
+        });
+        try {
+            w.dispatchEvent(new CustomEvent('weline:selling-mode-changed', {
+                detail: { selling_mode: 'toc', cart_type: 'toc', source: 'retail-only-inline' }
+            }));
+            w.dispatchEvent(new CustomEvent('weline:cart-type-changed', {
+                detail: { selling_mode: 'toc', cart_type: 'toc', source: 'retail-only-inline' }
+            }));
+        } catch (eEv) {}
+    }
+    function applyRetailOnlyHints(ev) {
+        var mode = '';
+        if (ev && ev.detail && typeof ev.detail === 'object') {
+            mode = String(ev.detail.selling_mode || ev.detail.cart_type || '').toLowerCase();
+        }
+        if (mode !== 'tob' && mode !== 'toc') {
+            mode = readChromeMode();
+        }
+        var show = mode === 'tob';
         d.querySelectorAll('[data-b2b-retail-only-hint="1"]').forEach(function (el) {
             el.hidden = !show;
         });
+    }
+    if (!d.documentElement.getAttribute('data-b2b-retail-only-inline-bound')) {
+        d.documentElement.setAttribute('data-b2b-retail-only-inline-bound', '1');
+        d.addEventListener('click', function (ev) {
+            var btn = ev.target && ev.target.closest
+                ? ev.target.closest('[data-b2b-retail-only-switch-toc]')
+                : null;
+            if (!btn) {
+                return;
+            }
+            switchToRetailCart(ev);
+        }, true);
     }
     applyRetailOnlyHints();
     w.addEventListener('weline:selling-mode-changed', applyRetailOnlyHints);
@@ -218,6 +312,8 @@ $drawerId = 'b2b-membership-apply-' . substr(sha1((string)$websiteId . '-guest')
      data-i18n-waiting="<?= $escape(__('等待申请通过')) ?>"
      data-i18n-reapply="<?= $escape(__('修改后重新提交')) ?>"
      data-i18n-apply="<?= $escape(__('申请批发身份')) ?>"
+     data-i18n-already-member="<?= $escape(__('您已开通批发身份，无需再申请')) ?>"
+     data-i18n-active-hint="<?= $escape(__('已开通批发身份')) ?>"
      data-i18n-submit-failed="<?= $escape(__('申请提交失败')) ?>"
      data-i18n-login-required="<?= $escape(__('请先登录后再提交申请')) ?>"
      data-i18n-login-chooser-missing="<?= $escape(__('快捷登录暂不可用，请前往登录页。')) ?>"
@@ -275,6 +371,13 @@ $drawerId = 'b2b-membership-apply-' . substr(sha1((string)$websiteId . '-guest')
     </p>
     <p class="b2b-selling-mode__hint product-native-detail__price-label" data-b2b-guest-tob-hint <?= ($sellingMode === 'tob' && !$loggedIn) ? '' : 'hidden' ?>>
         <lang>切换批发需先登录</lang>
+    </p>
+    <p class="b2b-selling-mode__hint product-native-detail__price-label"
+       data-b2b-membership-active-hint
+       data-testid="b2b-membership-active-hint"
+       role="status"
+       hidden>
+        <lang>已开通批发身份</lang>
     </p>
     <button type="button"
             class="product-native-detail__variant-submit b2b-selling-mode__cta"
@@ -372,16 +475,16 @@ $drawerId = 'b2b-membership-apply-' . substr(sha1((string)$websiteId . '-guest')
                             <textarea class="w-textarea" id="<?= $escape($drawerId) ?>-notes" name="notes" rows="3" maxlength="2000"><?= $escape((string)($application['notes'] ?? '')) ?></textarea>
                         </div>
                     </div>
-                    <div class="w-alert" data-tone="info" data-testid="b2b-membership-tier-info" data-widget-style-class="39137a73cd2f2659">
-                        <p class="w-text" data-size="sm" data-widget-style-class="ae51788a61972142">
-                            <lang>批发等级从 VIP0 初级起（批准后默认入门档）。开启批发信用后，系统按等级目标额度向您的批发信用钱包补差额，仅可用于批发（ToB）订单优惠抵扣；同档消费后不会自动回补。</lang>
-                        </p>
-                    </div>
                     <p class="b2b-selling-mode__hint" data-b2b-apply-status aria-live="polite"></p>
                     <div class="w-drawer__footer" data-widget-style-class="1fcd95b0a5bce98b">
                         <button type="submit" class="w-button" data-variant="primary" data-testid="b2b-membership-submit">
                             <?= $escape($submitLabel) ?>
                         </button>
+                    </div>
+                    <div class="w-alert" data-tone="info" data-testid="b2b-membership-tier-info" data-widget-style-class="39137a73cd2f2659">
+                        <p class="w-text" data-size="sm" data-widget-style-class="ae51788a61972142">
+                            <lang>批发等级从 VIP0 初级起（批准后默认入门档）。开启批发信用后，系统按等级目标额度向您的批发信用钱包补差额，仅可用于批发（ToB）订单优惠抵扣；同档消费后不会自动回补。</lang>
+                        </p>
                     </div>
                 </form>
             </div>

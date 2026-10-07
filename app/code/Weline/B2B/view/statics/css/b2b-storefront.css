@@ -211,6 +211,8 @@
 
 /* Soft info: preferred tob + retail-only SKU — same compact text line as soft CTA. */
 .b2b-retail-only-hint {
+    position: relative;
+    z-index: 3; /* above sticky buybar / buybox so「切换成零售车」receives clicks */
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;

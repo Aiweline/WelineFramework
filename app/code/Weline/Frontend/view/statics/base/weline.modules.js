@@ -296,8 +296,8 @@
             description: "店面金额小计：统一 paint 商品/运费/税费/优惠/应付"
         },
         b2bSellingMode: {
-            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261006-mini-cart-type1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261006-mini-cart-type1"],
-            paths: ["Weline_B2B::js/checkout-tob.js?v=20261006-mini-cart-type1", "Weline_B2B::js/selling-mode.js?v=20261006-mini-cart-type1"],
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261006-mini-cart-type1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261007-switch-retail2"],
+            paths: ["Weline_B2B::js/checkout-tob.js?v=20261006-mini-cart-type1", "Weline_B2B::js/selling-mode.js?v=20261007-switch-retail2"],
             globalVar: "WelineB2BSellingMode",
             description: "B2B ToC/ToB selling mode + mini-cart/cart dual-type injection"
         },
