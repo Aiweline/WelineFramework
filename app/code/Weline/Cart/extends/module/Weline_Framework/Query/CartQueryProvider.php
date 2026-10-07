@@ -721,7 +721,8 @@ class CartQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'params' => $this->guestTokenParam() + $this->sellingModeParams(),
+                    // MiniCart cartQueryParams may pass pendingCouponCode for discount_preview.
+                    'params' => $this->guestTokenParam() + $this->couponCodeParam() + $this->sellingModeParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Read cart summary',
                 ],
@@ -826,14 +827,13 @@ class CartQueryProvider implements QueryProviderInterface
                         'guest_token' => ['type' => 'string', 'max_length' => 64],
                         // Optional: coupon widget may pass the just-applied code so discount_preview
                         // does not depend solely on Marketing session stickiness across workers.
-                        'coupon_code' => ['type' => 'string', 'max_length' => 64],
                         'website_id' => ['type' => 'int', 'min' => 0],
                         'website_code' => ['type' => 'string', 'max_length' => 64],
                         'store_code' => ['type' => 'string', 'max_length' => 64],
                         'channel_code' => ['type' => 'string', 'max_length' => 64],
                         'store_mode' => ['type' => 'string', 'max_length' => 32],
                         'scope' => ['type' => 'array', 'max_items' => 7],
-                    ] + $this->sellingModeParams(),
+                    ] + $this->couponCodeParam() + $this->sellingModeParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Read the current guest or authenticated customer cart',
                 ],
@@ -942,10 +942,20 @@ class CartQueryProvider implements QueryProviderInterface
             'channel_code' => ['type' => 'string', 'max_length' => 64],
             'store_mode' => ['type' => 'string', 'max_length' => 32],
             'scope' => ['type' => 'array', 'max_items' => 7],
-        ] + $this->sellingModeParams();
+            // MiniCart cartQueryParams may keep pendingCouponCode on update/remove so
+            // mutateCart → enrichSummaryWithDiscountPreview can refresh discount_preview.
+        ] + $this->couponCodeParam() + $this->sellingModeParams();
         if ($includeQty) {
             $params['qty'] = ['type' => 'int', 'min' => 1, 'max' => 999];
         }
         return $params;
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    private function couponCodeParam(): array
+    {
+        return [
+            'coupon_code' => ['type' => 'string', 'max_length' => 64],
+        ];
     }
 }

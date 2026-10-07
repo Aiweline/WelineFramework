@@ -213,6 +213,13 @@ final class CartQueryProviderSecurityTest extends TestCase
         }
         self::assertSame('write', $operations['update']['mode']);
         self::assertSame('write', $operations['remove']['mode']);
+        foreach (['summary', 'getCart', 'update', 'remove'] as $couponOp) {
+            self::assertArrayHasKey(
+                'coupon_code',
+                $operations[$couponOp]['params'],
+                $couponOp . ' must accept coupon_code when MiniCart keeps pending coupon',
+            );
+        }
         self::assertArrayHasKey('cart_type', $operations['previewDiscount']['params']);
         self::assertArrayHasKey('selling_mode', $operations['previewDiscount']['params']);
         foreach ($operations as $operationName => $operation) {

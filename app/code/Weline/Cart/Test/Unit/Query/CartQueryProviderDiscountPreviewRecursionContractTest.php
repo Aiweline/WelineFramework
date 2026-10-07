@@ -38,5 +38,15 @@ final class CartQueryProviderDiscountPreviewRecursionContractTest extends TestCa
             "/'name'\\s*=>\\s*'getCart'[\\s\\S]*?'coupon_code'\\s*=>\\s*\\['type'\\s*=>\\s*'string'/",
             $source
         );
+        // update/remove share mutationParams; MiniCart cartQueryParams may pass pending coupon.
+        self::assertStringContainsString('function couponCodeParam()', $source);
+        self::assertMatchesRegularExpression(
+            "/'name'\\s*=>\\s*'summary'[\\s\\S]*?couponCodeParam\\(\\)/",
+            $source
+        );
+        self::assertMatchesRegularExpression(
+            "/function mutationParams\\(bool \\\$includeQty = false\\): array[\\s\\S]*?couponCodeParam\\(\\)/",
+            $source
+        );
     }
 }
