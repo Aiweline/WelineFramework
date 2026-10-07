@@ -974,17 +974,19 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     color: var(--amz-drawer-cta-text, var(--color-on-primary, #f7f4ef));
 }
 
-/* Raised account panel sits on light surface; do not inherit chrome light text. */
+/* Raised account panel sits on light surface; do not inherit chrome light text.
+ * Prefer panel-local --amz-drawer-text (set on .account-dropdown) over remapped
+ * --weline-theme-text from [data-surface=inverse] (WO-UI-CONTRAST-INVERSE). */
 .weline-header .header-actions .account-dropdown,
 .weline-header .header-user-area .account-dropdown {
-    color: var(--weline-theme-text);
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
 }
 
 .weline-header .header-actions .account-dropdown a,
 .weline-header .header-actions .account-dropdown a:visited,
 .weline-header .header-user-area .account-dropdown a,
 .weline-header .header-user-area .account-dropdown a:visited {
-    color: var(--weline-theme-text);
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
 }
 
 .weline-header .header-actions .account-dropdown a.logout-link,

@@ -145,8 +145,28 @@
     z-index: 1000;
     /* Visual gap only; ::before keeps :hover while the pointer crosses it. */
     margin-top: var(--weline-space-3);
-    /* Isolate from header chrome light text (inherit white on dark). */
-    color: var(--weline-theme-text);
+    /*
+     * Paper ink on raised panel. Parent header [data-surface=inverse] remaps
+     * --weline-theme-text / --_inverse-* to on-dark (WO-UI-CONTRAST-INVERSE);
+     * without local rebind, menu links paint white-on-white.
+     * Same ink pair as mini-cart --amz-drawer-text / --amz-drawer-muted.
+     */
+    --amz-drawer-text: #0f1111;
+    --amz-drawer-muted: #565959;
+    --_inverse-text: var(--amz-drawer-text);
+    --_inverse-muted: var(--amz-drawer-muted);
+    --weline-theme-text: var(--amz-drawer-text);
+    --weline-theme-text-secondary: var(--amz-drawer-muted);
+    --weline-theme-text-muted: var(--amz-drawer-muted);
+    --weline-theme-body-text: var(--amz-drawer-text);
+    --weline-theme-body-text-secondary: var(--amz-drawer-muted);
+    --weline-theme-body-text-muted: var(--amz-drawer-muted);
+    --color-text: var(--amz-drawer-text);
+    --color-text-primary: var(--amz-drawer-text);
+    --color-text-secondary: var(--amz-drawer-muted);
+    --w-surface-fg: var(--amz-drawer-text);
+    --w-surface-fg-muted: var(--amz-drawer-muted);
+    color: var(--amz-drawer-text);
 }
 
 /* Invisible hit bridge across margin-top so the menu does not dismiss mid-move. */
