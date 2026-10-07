@@ -30,6 +30,9 @@ final class RouterTest extends TestCase
     {
         return [
             'products' => ['products'],
+            // Root category aliases share Catalog; surface resolver selects the landing.
+            'category root' => ['category'],
+            'categories root' => ['categories'],
         ];
     }
 

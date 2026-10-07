@@ -29,6 +29,51 @@ final class StorefrontCategoryViewService
      *     breadcrumbs: list<array{label:string,url:string}>
      * }|null
      */
+    /**
+     * Root /category|/categories landing: public top-level departments (and one
+     * child level for chips). Not a product PLP — that stays on /products and
+     * /category/{slug}.
+     *
+     * @return array{
+     *     children: list<array<string, mixed>>,
+     *     tree: list<array<string, mixed>>,
+     *     breadcrumbs: list<array{label:string,url:string}>
+     * }
+     */
+    public function resolveRootLanding(): array
+    {
+        $websiteId = (int)$this->currentScope()->websiteId;
+        $children = [];
+        foreach ($this->tree->childrenOf($websiteId, 0) as $row) {
+            if (!is_array($row) || StorefrontCategoryPublicFilter::shouldHideFromCustomers($row)) {
+                continue;
+            }
+            $categoryId = (int)($row['id'] ?? 0);
+            $kids = [];
+            if ($categoryId > 0) {
+                foreach ($this->tree->childrenOf($websiteId, $categoryId) as $child) {
+                    if (!is_array($child) || StorefrontCategoryPublicFilter::shouldHideFromCustomers($child)) {
+                        continue;
+                    }
+                    $kids[] = $child;
+                }
+            }
+            $row['children'] = $kids;
+            $children[] = $row;
+        }
+
+        return [
+            'children' => $children,
+            'tree' => $this->filterPublicNestedTree($this->tree->nestedRoots($websiteId)),
+            'breadcrumbs' => [
+                [
+                    'label' => (string)__('分类'),
+                    'url' => '',
+                ],
+            ],
+        ];
+    }
+
     public function resolvePage(string $publicPath): ?array
     {
         $slugPath = $this->normalizePublicPath($publicPath);
@@ -207,6 +252,25 @@ final class StorefrontCategoryViewService
         }
 
         return $breadcrumbs;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $nodes
+     * @return list<array<string, mixed>>
+     */
+    private function filterPublicNestedTree(array $nodes): array
+    {
+        $out = [];
+        foreach ($nodes as $node) {
+            if (!is_array($node) || StorefrontCategoryPublicFilter::shouldHideFromCustomers($node)) {
+                continue;
+            }
+            $kids = $node['children'] ?? [];
+            $node['children'] = is_array($kids) ? $this->filterPublicNestedTree(array_values($kids)) : [];
+            $out[] = $node;
+        }
+
+        return $out;
     }
 
     private function displayNameFromPath(string $path): string

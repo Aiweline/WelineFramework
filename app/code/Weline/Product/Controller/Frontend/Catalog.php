@@ -12,11 +12,15 @@ use Weline\Product\Helper\StorefrontPageAssignBag;
 use Weline\Product\Service\StorefrontCatalogSurfaceResolver;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontCategoryListingFilter;
+use Weline\Product\Service\StorefrontCategoryViewService;
 use Weline\Product\Service\StorefrontListingPager;
 use Weline\Product\Service\StorefrontSeoListingFacts;
 
 /**
- * 店面目录列表（/products、/category、/categories）。
+ * 店面目录列表（/products）与分类根落地（/category、/categories）。
+ *
+ * IA：根 /category|/categories = 分类网格落地（非全量商品 PLP）；
+ * 商品列表保留 /products；叶子 PLP 在 Category（/category/{path}）。
  *
  * @Extra type=fpc enabled=true ttl=600 namespaces=website/default/catalog public_path_patterns=/products,/category,/categories
  */
@@ -27,6 +31,7 @@ final class Catalog extends FrontendController
         private readonly StorefrontCategoryListingFilter $listingFilter,
         private readonly StorefrontCatalogSurfaceResolver $surfaceResolver,
         private readonly StorefrontListingPager $listingPager,
+        private readonly StorefrontCategoryViewService $categoryView,
         private readonly EventsManager $events,
     ) {
     }
@@ -44,6 +49,80 @@ final class Catalog extends FrontendController
             (string)RequestContext::getWelineWebsiteCode(),
         );
 
+        if (($surface['code'] ?? '') === 'categories') {
+            return $this->renderCategoriesLanding($surface);
+        }
+
+        return $this->renderProductListing($surface);
+    }
+
+    /**
+     * @param array<string, string> $surface
+     */
+    private function renderCategoriesLanding(array $surface): string
+    {
+        $this->layoutType = $surface['layout_type'];
+        $this->request->setGet('page_type', $surface['page_type']);
+        $this->request->setGet('layout_type', $surface['layout_type']);
+        $this->request->setGet('layout_option', 'default');
+        $this->request->setGet('theme_page_title', $surface['title']);
+        // Root landing is a department grid — hide PLP filter chrome.
+        $this->assign('showFilters', false);
+        $this->assign('showToolbar', false);
+
+        $landing = $this->categoryView->resolveRootLanding();
+        $children = is_array($landing['children'] ?? null) ? $landing['children'] : [];
+        $tree = is_array($landing['tree'] ?? null) ? $landing['tree'] : [];
+        $breadcrumbs = is_array($landing['breadcrumbs'] ?? null) ? $landing['breadcrumbs'] : [];
+
+        $this->assign('page_title', $surface['title']);
+        $this->assign('storefront_heading', $surface['heading']);
+        $this->assign('storefront_lede', $surface['lede']);
+        $this->assign('storefront_surface', $surface['code']);
+        $this->assign('storefront_category_children', $children);
+        $this->assign('storefront_category_tree', $tree);
+        $this->assign('storefront_category_breadcrumbs', $breadcrumbs);
+        $this->assign('storefront_offers', []);
+        $this->assign('storefront_offers_unfiltered', []);
+        StorefrontPageAssignBag::replace([
+            'page_title' => $surface['title'],
+            'storefront_heading' => $surface['heading'],
+            'storefront_lede' => $surface['lede'],
+            'storefront_surface' => $surface['code'],
+            'storefront_category_children' => $children,
+            'storefront_category_tree' => $tree,
+            'storefront_category_breadcrumbs' => $breadcrumbs,
+            'storefront_offers' => [],
+            'storefront_offers_unfiltered' => [],
+        ]);
+
+        $listingFacts = new StorefrontSeoListingFacts();
+        $this->assign('seo', [
+            'page_type' => $surface['page_type'],
+            'title' => $surface['seo_title'] !== '' ? $surface['seo_title'] : $surface['title'],
+            'description' => $surface['seo_description'],
+            'keywords' => $surface['seo_keywords'] ?? '',
+            'image' => $surface['share_image'] ?? StorefrontCatalogSurfaceResolver::SHARE_IMAGE,
+            'image_alt' => $surface['share_image_alt'] ?? '',
+            'item_list' => [],
+            'item_list_total' => 0,
+            'item_list_page' => 1,
+            'breadcrumbs' => $listingFacts->withHomeBreadcrumb([
+                [
+                    'name' => $surface['title'] !== '' ? $surface['title'] : $surface['heading'],
+                    'url' => '/' . ltrim((string)$surface['public_route'], '/'),
+                ],
+            ]),
+        ]);
+
+        return (string)$this->fetch('Weline_Product::templates/frontend/catalog/categories.phtml');
+    }
+
+    /**
+     * @param array<string, string> $surface
+     */
+    private function renderProductListing(array $surface): string
+    {
         $this->layoutType = $surface['layout_type'];
         $this->request->setGet('page_type', $surface['page_type']);
         $this->request->setGet('layout_type', $surface['layout_type']);

@@ -1,0 +1,124 @@
+<?php
+
+use Weline\Product\Helper\StorefrontPageAssignBag;
+
+/**
+ * Root category landing (/category, /categories): department grid, not a PLP.
+ *
+ * @var list<array<string,mixed>> $storefront_category_children
+ */
+
+$heading = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_heading'), 'storefront_heading', __('汉服分类')));
+$lede = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_lede'), 'storefront_lede', __('按形制探索分类，再进入商品列表选购。')));
+$children = StorefrontPageAssignBag::coalesce($this->getData('storefront_category_children'), 'storefront_category_children', []);
+$children = is_array($children) ? $children : [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<section class="storefront-categories-hub"
+         data-testid="storefront-categories-hub"
+         data-surface="categories"
+         weline-code="product.frontend.catalog.categories_hub">
+    <header class="storefront-categories-hub__header">
+        <h1 class="storefront-categories-hub__title"><?= $escape($heading) ?></h1>
+        <?php if ($lede !== ''): ?>
+            <p class="storefront-categories-hub__lede"><?= $escape($lede) ?></p>
+        <?php endif; ?>
+        <p class="storefront-categories-hub__actions">
+            <a class="storefront-categories-hub__cta"
+               data-testid="storefront-categories-hub-products"
+               href="@url{'products'}"><?= $escape(__('浏览全部商品')) ?></a>
+        </p>
+    </header>
+
+    <?php if ($children === []): ?>
+        <p class="storefront-categories-hub__empty" data-testid="storefront-categories-hub-empty">
+            <?= $escape(__('暂无可用分类，请先从全部商品浏览。')) ?>
+        </p>
+    <?php else: ?>
+        <ul class="storefront-categories-hub__grid" data-testid="storefront-categories-hub-grid">
+            <?php foreach ($children as $child): ?>
+                <?php
+                if (!is_array($child)) {
+                    continue;
+                }
+                $name = trim((string)($child['name'] ?? ''));
+                $url = trim((string)($child['url'] ?? ''));
+                $image = trim((string)($child['image'] ?? $child['banner'] ?? ''));
+                $kids = is_array($child['children'] ?? null) ? $child['children'] : [];
+                if ($name === '' || $url === '') {
+                    continue;
+                }
+                ?>
+                <li class="storefront-categories-hub__card">
+                    <a class="storefront-categories-hub__link" href="<?= $escape($url) ?>">
+                        <?php if ($image !== ''): ?>
+                            <img class="storefront-categories-hub__media"
+                                 src="<?= $escape($image) ?>"
+                                 alt=""
+                                 width="320"
+                                 height="200"
+                                 loading="lazy"
+                                 decoding="async">
+                        <?php endif; ?>
+                        <span class="storefront-categories-hub__name"><?= $escape($name) ?></span>
+                    </a>
+                    <?php if ($kids !== []): ?>
+                        <ul class="storefront-categories-hub__chips" aria-label="<?= $escape(__('子分类')) ?>">
+                            <?php foreach (array_slice($kids, 0, 8) as $kid): ?>
+                                <?php
+                                if (!is_array($kid)) {
+                                    continue;
+                                }
+                                $kidName = trim((string)($kid['name'] ?? ''));
+                                $kidUrl = trim((string)($kid['url'] ?? ''));
+                                if ($kidName === '' || $kidUrl === '') {
+                                    continue;
+                                }
+                                ?>
+                                <li>
+                                    <a href="<?= $escape($kidUrl) ?>"><?= $escape($kidName) ?></a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+</section>
+<style data-theme-inline="storefront-categories-hub">
+    .storefront-categories-hub { width: min(100%, var(--weline-layout-content-max-width, 1280px)); margin: 0 auto; padding: 1rem 1rem 2.5rem; }
+    .storefront-categories-hub__header { margin: 0 0 1.5rem; max-width: 42rem; }
+    .storefront-categories-hub__title { margin: 0 0 0.55rem; font-size: clamp(1.65rem, 2.2vw, 2.2rem); line-height: 1.2; }
+    .storefront-categories-hub__lede { margin: 0 0 1rem; line-height: 1.55; opacity: 0.9; }
+    .storefront-categories-hub__actions { margin: 0; }
+    .storefront-categories-hub__cta {
+        display: inline-flex; align-items: center; min-height: 2.4rem; padding: 0.45rem 1rem;
+        border-radius: var(--weline-theme-radius-sm, 4px); background: var(--weline-theme-accent, #b84a3c);
+        color: #fff; text-decoration: none; font-weight: 600;
+    }
+    .storefront-categories-hub__empty { margin: 1.5rem 0; opacity: 0.85; }
+    .storefront-categories-hub__grid {
+        list-style: none; margin: 0; padding: 0;
+        display: grid; gap: 1.1rem;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+    }
+    .storefront-categories-hub__card { margin: 0; }
+    .storefront-categories-hub__link {
+        display: flex; flex-direction: column; gap: 0.45rem; height: 100%;
+        text-decoration: none; color: inherit;
+        border: 1px solid var(--weline-theme-border, #d8d2c8);
+        border-radius: var(--weline-theme-radius-sm, 4px);
+        overflow: hidden; background: var(--weline-theme-surface, #fff);
+    }
+    .storefront-categories-hub__media { width: 100%; aspect-ratio: 8 / 5; object-fit: cover; display: block; background: #f3efe8; }
+    .storefront-categories-hub__name { font-weight: 650; padding: 0.85rem; }
+    .storefront-categories-hub__chips {
+        list-style: none; margin: 0.55rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem;
+    }
+    .storefront-categories-hub__chips a {
+        display: inline-flex; align-items: center; min-height: 1.75rem; padding: 0.15rem 0.55rem;
+        border: 1px solid var(--weline-theme-border, #d8d2c8); border-radius: 999px;
+        text-decoration: none; color: inherit; font-size: 0.82rem;
+    }
+</style>
