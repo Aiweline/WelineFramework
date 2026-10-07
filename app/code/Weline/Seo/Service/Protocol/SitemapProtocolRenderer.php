@@ -50,6 +50,7 @@ final class SitemapProtocolRenderer
     /**
      * Serve a generated sitemap index/shard under /sitemaps/{code}/{target}/{file}.xml
      * with loopback origins rewritten to the live public base.
+     * Only current stable shard filenames are served; legacy hashed names 404.
      *
      * @return array{body:string,status:int}
      */

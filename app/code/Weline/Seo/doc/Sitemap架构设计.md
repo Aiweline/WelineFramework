@@ -106,12 +106,13 @@ Provider URL 行：
 
 ```text
 pub/sitemaps/{website_code}/canonical/sitemap.xml
-pub/sitemaps/{website_code}/canonical/sitemap_{provider}_{locale}_{sequence}_{hash}.xml
+pub/sitemaps/{website_code}/canonical/sitemap_{provider}_{locale}_{sequence}.xml
 ```
 
 - 输入按 `module + scope + locale` 分桶，再按完整身份和规范 URL 稳定排序。
-- 文件 token 是可读 slug + 原值 hash；空 locale 显示 `default`。
-- shard 文件名包最终 XML bytes SHA-256，同样数据不产生新文件。
+- 文件 token 仅为可读 slug（`module-scope` / locale 规范化），**不含内容 hash、不含身份指纹**；空 locale 显示 `default`。slug 冲突 fail-closed。
+- **公开分片路径是稳定身份名**（provider slug + locale slug + sequence）。内容变更时原地原子覆盖同名文件；XML bytes SHA-256 只写入 `.manifest.json` 的 `shards[].hash`，**不进入公开 URL**。
+- 历史内容寻址名 / 带指纹的旧名不再生成；发布后按索引差量清理磁盘残留。协议层**不**对旧名做 301，只服务当前稳定文件。
 - 标准上限是每个 urlset/index 50,000 条、50 MiB 未压缩 XML；平台只能收紧。
 - 预检发现跨 Provider 重复 canonical URL、非同源 URL 或任何越界数据时零发布。
 
@@ -120,16 +121,18 @@ pub/sitemaps/{website_code}/canonical/sitemap_{provider}_{locale}_{sequence}_{ha
 1. 持有 website+target 非阻塞锁，先根据 old/new index hash 恢复未完成 journal。
 2. 读取旧 `sitemap.xml` 真实引用，物化完整 URL 快照。
 3. 在临时目录写入并解析验证所有 shard 与候选 index。
-4. 将不可变 shard 移入目标目录。
+4. 将稳定名 shard 原子覆盖进目标目录（内容未变可跳过写入）。
 5. 以 temp+rename+flush 原子写 cleanup journal。
 6. 最后原子替换固定 `sitemap.xml`。
-7. 只清理“旧 index 曾引用且新 index 不再引用”的 shard，然后删 journal。
+7. 清理“旧 index 曾引用且新 index 不再引用”的 shard，并删除残留 legacy hashed 文件，然后删 journal。
 
 当前 index hash 既不等于 journal old hash 也不等于 new hash 时 fail-closed，不删除无法证明归属的文件。
 
 ## 5. 协议入口
 
 `SitemapProtocolRenderer` 先读取 `canonical/sitemap.xml`，检查 XML、namespace、条目数、字节数和同源引用。
+
+`/sitemaps/{code}/{target}/{file}.xml`：仅当前稳定分片读盘 200；旧 hashed / 指纹文件名若不在磁盘则 404（无 301）。
 
 文件不存在时，只有全部 active DB URL 可在一个合法且未超限的 urlset 中完整输出才允许 fallback；
 任何非法行、重复 loc 或超限都返回 HTTP 503，不截断为部分 Sitemap。

@@ -12,12 +12,45 @@ final class AtomicSitemapPublisher
 {
     public const STANDARD_MAX_URLS = 50000;
     public const STANDARD_MAX_BYTES = 52428800;
-    private const GENERATED_FILE_PATTERN = '/^sitemap_[a-z0-9-]+_[a-z0-9-]+_\d+_[a-f0-9]{12}\.xml$/D';
+
+    /** Stable public shard identity: provider + locale + sequence (no content hash). */
+    private const GENERATED_FILE_PATTERN = '/^sitemap_[a-z0-9-]+_[a-z0-9-]+_\d+\.xml$/D';
+
+    /** Legacy content-addressed shard names — no longer published; cleaned on regenerate. */
+    private const LEGACY_HASHED_FILE_PATTERN = '/^sitemap_[a-z0-9-]+_[a-z0-9-]+_\d+_[a-f0-9]{12}\.xml$/D';
 
     public function __construct(
         private readonly SitemapOperationLock $operationLock,
         private readonly SitemapXmlExtensionRenderer $extensionRenderer,
     ) {
+    }
+
+    public static function isStableShardFilename(string $filename): bool
+    {
+        return preg_match(self::GENERATED_FILE_PATTERN, $filename) === 1;
+    }
+
+    public static function isLegacyHashedShardFilename(string $filename): bool
+    {
+        return preg_match(self::LEGACY_HASHED_FILE_PATTERN, $filename) === 1;
+    }
+
+    /**
+     * Strip trailing content-hash suffix from a legacy shard name.
+     * Returns null when the name is not a legacy hashed shard.
+     */
+    public static function stabilizeLegacyShardFilename(string $filename): ?string
+    {
+        $filename = trim($filename);
+        if (!self::isLegacyHashedShardFilename($filename)) {
+            return null;
+        }
+        $stable = (string)preg_replace('/_[a-f0-9]{12}(\.xml)$/D', '$1', $filename);
+        if ($stable === '' || $stable === $filename || !self::isStableShardFilename($stable)) {
+            return null;
+        }
+
+        return $stable;
     }
 
     /**
@@ -123,12 +156,14 @@ final class AtomicSitemapPublisher
             foreach ($prepared['shards'] as $shard) {
                 $source = $temporaryDirectory . '/' . $shard['filename'];
                 $destination = $targetDirectory . '/' . $shard['filename'];
-                if (is_file($destination)) {
-                    if (!hash_equals((string)hash_file('sha256', $destination), hash('sha256', $shard['xml']))) {
-                        throw new \RuntimeException((string)__('内容寻址 Sitemap 文件发生哈希冲突'));
-                    }
+                $contentHash = (string)$shard['hash'];
+                if (is_file($destination) && hash_equals((string)hash_file('sha256', $destination), $contentHash)) {
                     unlink($source);
                     continue;
+                }
+                // Stable identity path: atomically overwrite when content changed.
+                if (is_file($destination) && !unlink($destination)) {
+                    throw new \RuntimeException((string)__('无法覆盖 Sitemap shard：%{1}', $shard['filename']));
                 }
                 if (!rename($source, $destination)) {
                     throw new \RuntimeException((string)__('无法发布 Sitemap shard：%{1}', $shard['filename']));
@@ -159,6 +194,7 @@ final class AtomicSitemapPublisher
             }
 
             $removed = $this->removeUnreferenced($targetDirectory, $stale, $newReferenced);
+            $removed += $this->removeLegacyHashedShards($targetDirectory, $newReferenced);
             $manifest = [
                 'version' => 1,
                 'generation_id' => $generationId,
@@ -251,12 +287,19 @@ final class AtomicSitemapPublisher
             foreach ($chunks as $index => $chunk) {
                 $xml = $this->buildUrlset($chunk);
                 $filename = sprintf(
-                    'sitemap_%s_%s_%d_%s.xml',
+                    'sitemap_%s_%s_%d.xml',
                     $providerToken,
                     $localeToken,
                     $index + 1,
-                    substr(hash('sha256', $xml), 0, 12),
                 );
+                if (!self::isStableShardFilename($filename)) {
+                    throw new \RuntimeException((string)__('Sitemap 稳定文件名无效：%{1}', $filename));
+                }
+                foreach ($shards as $existing) {
+                    if ((string)($existing['filename'] ?? '') === $filename) {
+                        throw new \RuntimeException((string)__('Sitemap 稳定文件名冲突：%{1}', $filename));
+                    }
+                }
                 $lastmod = $this->maxLastmod($chunk);
                 $shard = [
                     'filename' => $filename,
@@ -414,7 +457,7 @@ final class AtomicSitemapPublisher
         $references = [];
         foreach ($xpath->query('/s:sitemapindex/s:sitemap/s:loc') as $node) {
             $filename = basename((string)(parse_url(trim($node->textContent), PHP_URL_PATH) ?: ''));
-            if ($this->isGeneratedFilename($filename)) {
+            if ($this->isRemovableShardFilename($filename)) {
                 $references[$filename] = $filename;
             }
         }
@@ -455,7 +498,7 @@ final class AtomicSitemapPublisher
         $referencedMap = array_fill_keys($referenced, true);
         $removed = 0;
         foreach (array_values(array_unique(array_map('strval', $candidates))) as $filename) {
-            if (!$this->isGeneratedFilename($filename) || isset($referencedMap[$filename])) {
+            if (!$this->isRemovableShardFilename($filename) || isset($referencedMap[$filename])) {
                 continue;
             }
             $path = $directory . '/' . $filename;
@@ -463,6 +506,31 @@ final class AtomicSitemapPublisher
                 $removed++;
             }
         }
+        return $removed;
+    }
+
+    /**
+     * Drop leftover content-addressed shard files after switching to stable names.
+     *
+     * @param list<string> $referenced
+     */
+    private function removeLegacyHashedShards(string $directory, array $referenced): int
+    {
+        $referencedMap = array_fill_keys($referenced, true);
+        $removed = 0;
+        foreach (scandir($directory) ?: [] as $item) {
+            if ($item === '.' || $item === '..' || isset($referencedMap[$item])) {
+                continue;
+            }
+            if (!self::isLegacyHashedShardFilename($item)) {
+                continue;
+            }
+            $path = $directory . '/' . $item;
+            if (is_file($path) && unlink($path)) {
+                $removed++;
+            }
+        }
+
         return $removed;
     }
 
@@ -537,16 +605,23 @@ final class AtomicSitemapPublisher
         return $value;
     }
 
+    /**
+     * Public path token: readable slug only (no content hash, no identity fingerprint).
+     * Collisions fail closed via duplicate stable filename detection in prepareShards.
+     */
     private function fileToken(string $value, string $fallback): string
     {
         $slug = strtolower(trim((string)preg_replace('/[^a-z0-9]+/i', '-', $value), '-'));
-        $slug = substr($slug !== '' ? $slug : $fallback, 0, 40);
-        return $slug . '-' . substr(hash('sha256', $value), 0, 16);
+        if ($slug === '') {
+            $slug = $fallback;
+        }
+
+        return substr($slug, 0, 80);
     }
 
-    private function isGeneratedFilename(string $filename): bool
+    private function isRemovableShardFilename(string $filename): bool
     {
-        return preg_match(self::GENERATED_FILE_PATTERN, $filename) === 1;
+        return self::isStableShardFilename($filename) || self::isLegacyHashedShardFilename($filename);
     }
 
     private function assertBaseUrl(string $baseUrl): void
