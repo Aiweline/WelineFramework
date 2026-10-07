@@ -22,7 +22,16 @@ final class CartEmptySiblingUiContractTest extends TestCase
         self::assertStringContainsString('data-cart-empty-lead', $page);
         self::assertStringContainsString('siblingBrowse', $page);
         self::assertStringContainsString('siblingBrowseLabel', $page);
+        self::assertStringContainsString('facingCartLabel', $page);
+        self::assertStringContainsString("'tocCart'", $page);
+        self::assertStringContainsString("'tobCart'", $page);
         self::assertStringContainsString('浏览%1 %2件商品', $page);
+        // toc/tob facing labels come from SSR copy — not API sibling.label (zh leak).
+        self::assertStringContainsString('facingCartLabel(type)', $page);
+        self::assertStringNotContainsString(
+            "row.label || (type === 'tob' ? '批发车' : '零售车')",
+            $page,
+        );
         // Any sibling with stock gets a twin button — including gate/non-switchable rows.
         self::assertStringContainsString("btn.setAttribute('data-cart-sibling'", $page);
         self::assertStringNotContainsString('登录后可查看批发车', $page);
@@ -58,7 +67,10 @@ final class CartEmptySiblingUiContractTest extends TestCase
             $js,
         );
         self::assertStringContainsString('data-i18n-sibling-browse', $js);
+        self::assertStringContainsString('data-i18n-toc-cart', $js);
+        self::assertStringContainsString('data-i18n-tob-cart', $js);
         self::assertStringContainsString('浏览%1 %2件商品', $js);
+        self::assertStringNotContainsString('String(row.label || type)', $js);
         self::assertStringNotContainsString("label + '还有 '", $js);
         self::assertStringNotContainsString('--color-primary-bg-subtle', $drawer);
         self::assertStringNotContainsString('border-inline-start', $drawer);
@@ -67,6 +79,8 @@ final class CartEmptySiblingUiContractTest extends TestCase
             $theme . '/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml'
         );
         self::assertStringContainsString('data-i18n-sibling-browse', $phtml);
+        self::assertStringContainsString('data-i18n-toc-cart', $phtml);
+        self::assertStringContainsString('data-i18n-tob-cart', $phtml);
         self::assertStringContainsString('浏览%1 %2件商品', $phtml);
     }
 }

@@ -1023,7 +1023,10 @@
                     return;
                 }
                 var type = String(row.cart_type || '').toLowerCase() === 'tob' ? 'tob' : 'toc';
-                var label = String(row.label || type).trim() || type;
+                // Prefer SSR i18n attrs — API sibling.label often stays Chinese for non-zh/en.
+                var label = type === 'tob'
+                    ? attr(root, 'data-i18n-tob-cart', '批发车')
+                    : attr(root, 'data-i18n-toc-cart', '零售车');
                 var count = Number(row.item_count || row.cart_count || 0);
                 if (row.switchable === false) {
                     return;

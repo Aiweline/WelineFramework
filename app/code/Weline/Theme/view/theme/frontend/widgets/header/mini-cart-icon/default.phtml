@@ -240,6 +240,8 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-cart-subtotal="<?= $esc($cartSubtotalAttr) ?>"
          data-i18n-empty="<?= $esc(__('购物车是空的')) ?>"
          data-i18n-sibling-browse="<?= $esc(__('浏览%1 %2件商品')) ?>"
+         data-i18n-toc-cart="<?= $esc(__('零售车')) ?>"
+         data-i18n-tob-cart="<?= $esc(__('批发车')) ?>"
          data-i18n-continue="<?= $esc(__('继续购物')) ?>"
          data-i18n-remove="<?= $esc(__('移除')) ?>"
          data-i18n-subtotal="<?= $esc(__('小计')) ?>"
