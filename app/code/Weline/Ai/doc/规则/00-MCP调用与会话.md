@@ -31,9 +31,11 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 
 **自动安装（硬）**：本机缺少 AOCI 程序时，Weline 必须在 `ensure-project-guidance` 与/或 `prepare_project`（`AociInstaller`）中自动安装；结果见 `aoci_installation`。安装失败须可见汇报，**禁止**当作「可选跳过」；失败本身不单独阻断 Weline 就绪。装好后 Agent 须按 `mcp_registration` 把 `aoci` 挂进宿主（会话缺 AOCI 工具时）。细则：[AOCI自动安装.md](../AOCI自动安装.md)。
 
+**工程默认强制认知（硬，`HARD DEFAULT USE`）**：编码/工程在 `prepare_project` 之后、宿主原生编辑之前，若会话无与当前仓库根/索引版本匹配的可靠 AOCI 运行合同，必须先 `aoci_rules`；无可靠完整认知时再普通 `aoci_overview`（压缩恢复按 AOCI `context_compaction` 合同）。受管对象达到本次最终稳定状态后调用一次 `aoci_maintain`（纯只读且无受管对象变更可免）。`aoci` 工具不可用时须按 `mcp_registration` 挂载并可见汇报；AOCI 认知失败**不**单独阻断 Weline 就绪，但工程 Agent **不得**假装已遵守 AOCI 认知合同。
+
 **路由约定**：流程 / 规则 / 技能 → Weline；结构认知 / 漂移 / 索引 → AOCI。禁止用 AOCI 覆盖或假装已遵守 Weline 硬规则。
 
-**挂载**：Cursor 可并列注册两套 MCP；`aoci` 配置须用本机绝对路径（二进制 + `--repo` 仓库根），host 配置**勿提交 Git**；大仓首次 `scan`/建索引成本高，未经明示或范围计划不得自动全仓扫描。内容运营与闲聊豁免 AOCI 认知调用（走 prepare 时仍可触发安装）。
+**挂载**：Cursor 可并列注册两套 MCP；`aoci` 配置须用本机绝对路径（二进制 + `--repo` 仓库根），host 配置**勿提交 Git**；大仓首次 `scan`/建索引成本高，未经明示或范围计划不得自动全仓扫描。**EXEMPT**：内容运营与纯闲聊豁免 AOCI 认知调用（走 prepare 时仍可触发安装）。
 
 权威：`HardConstraintsCatalog::mcpOperationalRules()` → `aoci_complements_weline_mcp`。
 

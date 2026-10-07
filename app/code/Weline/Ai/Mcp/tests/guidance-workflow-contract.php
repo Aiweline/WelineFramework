@@ -1734,7 +1734,10 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'prepare_project')
             && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')
             && str_contains((string) ($rule['summary'] ?? ''), 'HARD AUTO-INSTALL')
-            && str_contains((string) ($rule['summary'] ?? ''), 'MUST auto-install')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'MUST auto-install')
+            && str_contains((string) ($rule['summary'] ?? ''), 'HARD DEFAULT USE')
+            && str_contains((string) ($rule['summary'] ?? ''), 'aoci_rules')
+            && str_contains((string) ($rule['summary'] ?? ''), 'EXEMPT')),
         false,
     ),
     'content_ops_skills_skip_mcp forbids prepare on product/blog ops' => array_reduce(
