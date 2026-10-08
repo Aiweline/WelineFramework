@@ -377,7 +377,8 @@ class SiteBrand
             }
             $default = ObjectManager::getInstance(\Weline\Websites\Model\Website::class)
                 ->load(\Weline\Websites\Model\Website::ID_DEFAULT);
-            if (!$default || !(int)$default->getId()) {
+            // Website::ID_DEFAULT is 0 — never treat falsy id as "not loaded".
+            if (!$default instanceof \Weline\Websites\Model\Website) {
                 return false;
             }
             $defaultHost = strtolower((string)(parse_url((string)$default->getData('url'), PHP_URL_HOST) ?: ''));
