@@ -19,6 +19,7 @@ use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Helper\SmtpSender;
 use Weline\Smtp\Service\MailAccountTransportProvisioner;
 use Weline\Smtp\Service\MailChannelCollector;
+use Weline\Smtp\Service\MailSmtpBootstrapService;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
 
@@ -63,6 +64,8 @@ class Config extends BackendController
         $channelCollector = ObjectManager::getInstance(MailChannelCollector::class);
         /** @var MailAccountTransportProvisioner $provisioner */
         $provisioner = ObjectManager::getInstance(MailAccountTransportProvisioner::class);
+        /** @var MailSmtpBootstrapService $bootstrap */
+        $bootstrap = ObjectManager::getInstance(MailSmtpBootstrapService::class);
         $this->assign('senders', $senders);
         $this->assign('mail_accounts', $mailAccounts);
         $this->assign('sender_contacts', $contacts);
@@ -71,10 +74,21 @@ class Config extends BackendController
         $this->assign('channel_bindings', $this->data->getChannelBindings($module, $storageScope));
         $this->assign('smtp_send_path', $provisioner->detectSendPath($storageScope));
         $this->assign('smtp_unbound_channels', $provisioner->unboundChannels($storageScope));
+        $this->assign('mail_bootstrap_ready', $bootstrap->canEnsure());
+        $this->assign('mail_has_routing', $bootstrap->hasMailboxRouting($storageScope));
         $configUrl = $this->scopedConfigUrl($workScope);
         $this->assign(
             'ensure_mail_url',
             $configUrl . (str_contains($configUrl, '?') ? '&' : '?') . 'ensure_mail=1'
+        );
+        $this->assign(
+            'route_mailbox_url',
+            $this->_url->getBackendUrl('smtp/backend/config/routeMailbox', [
+                'target_scope' => $storageScope,
+                'website_code' => (string)($workScope['website_code'] ?? ''),
+                'store_code' => (string)($workScope['store_code'] ?? ''),
+                'channel_code' => (string)($workScope['channel_code'] ?? ''),
+            ])
         );
         $this->assignScopeVars($workScope);
         return $this->fetch('Weline_Smtp::Backend/Config');
@@ -90,6 +104,45 @@ class Config extends BackendController
             return !empty($result['success'])
                 ? $this->jsonSuccess((string)($result['message'] ?? __('完成')))
                 : $this->jsonError((string)($result['message'] ?? __('失败')));
+        }
+        $this->redirect($this->scopedConfigUrl($workScope));
+
+        return '';
+    }
+
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function postRouteMailbox(): string
+    {
+        $workScope = $this->resolveWorkScope(false);
+        $storageScope = (string)$workScope['storage_scope'];
+        $localPart = trim((string)$this->request->getPost('local_part', ''));
+        $displayName = trim((string)$this->request->getPost('display_name', ''));
+        $domainId = (int)$this->request->getPost('domain_id', 0);
+        $rawChannels = $this->request->getPost('channel_codes', []);
+        if (is_string($rawChannels)) {
+            $rawChannels = preg_split('/[\s,]+/', $rawChannels) ?: [];
+        }
+        if (!is_array($rawChannels)) {
+            $rawChannels = [];
+        }
+        /** @var MailSmtpBootstrapService $bootstrap */
+        $bootstrap = ObjectManager::getInstance(MailSmtpBootstrapService::class);
+        $result = $bootstrap->routeMailboxToChannels(
+            $storageScope,
+            $localPart,
+            array_values(array_map('strval', $rawChannels)),
+            $domainId,
+            $displayName
+        );
+        if ($this->wantsJsonResponse()) {
+            return !empty($result['success'])
+                ? $this->jsonSuccess((string)($result['message'] ?? __('完成')))
+                : $this->jsonError((string)($result['message'] ?? __('失败')));
+        }
+        if (!empty($result['success'])) {
+            $this->getMessageManager()->addSuccess((string)($result['message'] ?? __('分流邮箱已挂接')));
+        } else {
+            $this->getMessageManager()->addError((string)($result['message'] ?? __('分流挂接失败')));
         }
         $this->redirect($this->scopedConfigUrl($workScope));
 
@@ -477,18 +530,24 @@ class Config extends BackendController
      */
     private function runEnsureMailAccountTransport(string $storageScope, array $workScope, bool $flash = true): array
     {
-        /** @var MailAccountTransportProvisioner $provisioner */
-        $provisioner = ObjectManager::getInstance(MailAccountTransportProvisioner::class);
-        $accountId = (int)$this->request->getGet('mail_account_id', 0);
-        if ($accountId <= 0 && $this->request->isPost()) {
-            $accountId = (int)$this->request->getPost('mail_account_id', 0);
+        /** @var MailSmtpBootstrapService $bootstrap */
+        $bootstrap = ObjectManager::getInstance(MailSmtpBootstrapService::class);
+        $domainId = (int)$this->request->getGet('domain_id', 0);
+        if ($domainId <= 0 && $this->request->isPost()) {
+            $domainId = (int)$this->request->getPost('domain_id', 0);
         }
-        // 默认切全渠道；显式 rebind=0 时仅补未绑定
+        // 智能默认：已有分流时不冲绑；显式 rebind=0/1 覆盖
+        $rebindAll = null;
         $rebindRaw = $this->request->isPost()
-            ? (string)$this->request->getPost('rebind', $this->request->getGet('rebind', '1'))
-            : (string)$this->request->getGet('rebind', '1');
-        $rebindAll = !in_array(strtolower(trim($rebindRaw)), ['0', 'false', 'no', 'off'], true);
-        $result = $provisioner->ensure($storageScope, $accountId, $rebindAll);
+            ? (string)$this->request->getPost('rebind', $this->request->getGet('rebind', ''))
+            : (string)$this->request->getGet('rebind', '');
+        $rebindRaw = strtolower(trim($rebindRaw));
+        if (in_array($rebindRaw, ['0', 'false', 'no', 'off'], true)) {
+            $rebindAll = false;
+        } elseif (in_array($rebindRaw, ['1', 'true', 'yes', 'on'], true)) {
+            $rebindAll = true;
+        }
+        $result = $bootstrap->ensureDefaultContactPath($storageScope, $domainId, $rebindAll);
         if ($flash) {
             if (!empty($result['success'])) {
                 $this->getMessageManager()->addSuccess((string)($result['message'] ?? __('自建邮局传输已配置')));

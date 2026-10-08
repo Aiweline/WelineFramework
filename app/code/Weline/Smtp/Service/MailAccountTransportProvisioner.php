@@ -376,7 +376,7 @@ class MailAccountTransportProvisioner
             return null;
         }
 
-        $preferredLocals = ['noreply', 'no-reply', 'system', 'notify', 'orders', 'mailer'];
+        $preferredLocals = ['contact', 'noreply', 'no-reply', 'system', 'notify', 'orders', 'mailer'];
         $scored = [];
         foreach ($items as $item) {
             if (!is_array($item)) {

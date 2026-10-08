@@ -26,8 +26,15 @@ final class SmtpSiteSetupTaskContractTest extends TestCase
             $smtpRoot . '/extends/module/Weline_SiteSetupAssistant/SetupTask/SmtpSetupTaskProvider.php'
         );
         $provisioner = (string)file_get_contents($smtpRoot . '/Service/MailAccountTransportProvisioner.php');
+        $bootstrap = (string)file_get_contents($smtpRoot . '/Service/MailSmtpBootstrapService.php');
         $config = (string)file_get_contents($smtpRoot . '/Controller/Backend/Config.php');
         $view = (string)file_get_contents($smtpRoot . '/view/Backend/Config.phtml');
+        $mailQuery = (string)file_get_contents(
+            dirname($smtpRoot) . '/Mail/extends/module/Weline_Framework/Query/MailQueryProvider.php'
+        );
+        $mailEnsure = (string)file_get_contents(
+            dirname($smtpRoot) . '/Mail/Service/MailAccountEnsureService.php'
+        );
         $coverage = (string)file_get_contents($smtpRoot . '/Service/MailTemplateSetupCoverage.php');
         $smtpExtends = (string)file_get_contents($smtpRoot . '/extends.php');
         $command = (string)file_get_contents(
@@ -50,14 +57,32 @@ final class SmtpSiteSetupTaskContractTest extends TestCase
         self::assertStringContainsString('smtp_mail_template', $provider);
         self::assertStringContainsString('smtp_mail_template_i18n', $provider);
         self::assertStringContainsString('MailAccountTransportProvisioner', $provider);
+        self::assertStringContainsString('MailSmtpBootstrapService', $provider);
+        self::assertStringContainsString('canBootstrapMail', $provider);
+        self::assertStringContainsString('contact@', $provider);
         self::assertStringContainsString('class MailAccountTransportProvisioner', $provisioner);
         self::assertStringContainsString('TRANSPORT_CODE', $provisioner);
         self::assertStringContainsString('bindAllChannels', $provisioner);
         self::assertStringContainsString('rebindAll', $provisioner);
+        self::assertStringContainsString("'contact'", $provisioner);
+        self::assertStringContainsString('class MailSmtpBootstrapService', $bootstrap);
+        self::assertStringContainsString('ensureDefaultContactPath', $bootstrap);
+        self::assertStringContainsString('routeMailboxToChannels', $bootstrap);
+        self::assertStringContainsString('hasMailboxRouting', $bootstrap);
+        self::assertStringContainsString("w_query('mail'", $bootstrap);
+        self::assertStringNotContainsString('MailAccountManagementService', $bootstrap);
+        self::assertStringContainsString('ensureContactAccount', $mailQuery);
+        self::assertStringContainsString('ensureMailbox', $mailQuery);
+        self::assertStringContainsString('class MailAccountEnsureService', $mailEnsure);
+        self::assertStringContainsString('LOCAL_CONTACT', $mailEnsure);
         self::assertStringContainsString('ensure_mail', $config);
         self::assertStringContainsString('runEnsureMailAccountTransport', $config);
+        self::assertStringContainsString('MailSmtpBootstrapService', $config);
+        self::assertStringContainsString('postRouteMailbox', $config);
         self::assertStringContainsString('smtp-ensure-mail-btn', $view);
         self::assertStringContainsString('用自建邮局一键配置', $view);
+        self::assertStringContainsString('smtp-route-mailbox-form', $view);
+        self::assertStringContainsString('contact@', $view);
         self::assertStringContainsString('class MailTemplateSetupCoverage', $coverage);
         self::assertStringContainsString('SystemConfig::SCOPE_GLOBAL', $coverage);
         self::assertStringContainsString('localesByChannel', $coverage);

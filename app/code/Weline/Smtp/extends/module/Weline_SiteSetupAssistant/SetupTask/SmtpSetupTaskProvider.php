@@ -8,12 +8,13 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\SiteSetupAssistant\Api\AbstractSetupTaskProvider;
 use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Service\MailAccountTransportProvisioner;
+use Weline\Smtp\Service\MailSmtpBootstrapService;
 use Weline\Smtp\Service\MailTemplateSetupCoverage;
 use Weline\Websites\Model\Website;
 
 /**
  * Smtp 建站任务：发信路径、传输确认、渠道绑定、模板与多语言（自声明 + 自检）。
- * 自建邮局传输/绑定由 Smtp 自管（MailAccountTransportProvisioner）；助手只检测并深链。
+ * 自建邮局由 MailSmtpBootstrapService（contact@ 一键 + 分流）自管；助手只检测并深链。
  */
 class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
 {
@@ -21,6 +22,7 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
         private readonly Data $data,
         private readonly ?MailTemplateSetupCoverage $coverage = null,
         private readonly ?MailAccountTransportProvisioner $provisioner = null,
+        private readonly ?MailSmtpBootstrapService $bootstrap = null,
     ) {
     }
 
@@ -32,6 +34,11 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
     private function provisioner(): MailAccountTransportProvisioner
     {
         return $this->provisioner ?? ObjectManager::getInstance(MailAccountTransportProvisioner::class);
+    }
+
+    private function bootstrap(): MailSmtpBootstrapService
+    {
+        return $this->bootstrap ?? ObjectManager::getInstance(MailSmtpBootstrapService::class);
     }
 
     public function provideTasks(array $context = []): array
@@ -57,14 +64,16 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
     private function sendPathTask(string $scope): array
     {
         $href = $this->backendPath('smtp/backend/config');
+        $ensureHref = $this->backendPath('smtp/backend/config?ensure_mail=1');
         $pathInfo = $this->provisioner()->detectSendPath($scope);
         $path = (string)($pathInfo['path'] ?? 'none');
-        $hasMailAccounts = $this->hasUsableMailAccounts();
+        $canBootstrap = $this->canBootstrapMail();
+        $confirmed = $this->data->isSetupConfirmed('Weline_Smtp', $scope);
 
         if ($path === 'none') {
-            $tip = $hasMailAccounts
-                ? (string)__('请选择发信方式：在 Smtp配置 使用「外部 SMTP」，或点「用自建邮局一键配置」由 Smtp 自动挂接邮局账号并绑定渠道。')
-                : (string)__('请选择发信方式：在 Smtp配置 添加「外部 SMTP」；若要用本站域名邮箱，请先完成企业邮箱（引擎/域名/账号）再建传输。');
+            $tip = $canBootstrap
+                ? (string)__('推荐自建邮局：点「用自建邮局一键配置」自动确保 contact@、写传输并绑全渠，再测试发信。也可手工添加外部 SMTP。')
+                : (string)__('请先在企业邮箱完成引擎/域名（及 DNS），或在此添加外部 SMTP。自建路径就绪后可一键确保 contact@。');
 
             return [
                 'code' => 'smtp_send_path',
@@ -75,12 +84,10 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
                 'title' => (string)__('选择发信方式'),
                 'tip' => $tip,
                 'status' => 'todo',
-                'href' => $hasMailAccounts
-                    ? $this->backendPath('smtp/backend/config?ensure_mail=1')
-                    : $href,
+                'href' => $canBootstrap ? $ensureHref : $href,
                 'meta' => [
                     'path' => $path,
-                    'has_mail_accounts' => $hasMailAccounts,
+                    'can_bootstrap' => $canBootstrap,
                 ],
             ];
         }
@@ -93,14 +100,31 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
                 'category' => (string)__('通信'),
                 'module' => 'Weline_Smtp',
                 'title' => (string)__('选择发信方式'),
-                'tip' => (string)__('当前为自建邮局路径（mail_account）。传输与渠道绑定由 Smtp 自管，请完成测试确认。'),
+                'tip' => $confirmed
+                    ? (string)__('当前为自建邮局（mail_account / contact@）。分流发件请用配置页「分流」区建箱挂渠道。')
+                    : (string)__('当前为自建邮局路径。请对 mail_default 点「测试」确认发信；真实账号须先填 SMTP 密码。'),
                 'status' => 'done',
                 'href' => $href,
-                'meta' => ['path' => $path, 'has_mail_accounts' => $hasMailAccounts],
+                'meta' => ['path' => $path, 'can_bootstrap' => $canBootstrap, 'confirmed' => $confirmed],
             ];
         }
 
         if ($path === 'external') {
+            if ($canBootstrap) {
+                return [
+                    'code' => 'smtp_send_path',
+                    'parent_code' => 'smtp',
+                    'sort' => 5,
+                    'category' => (string)__('通信'),
+                    'module' => 'Weline_Smtp',
+                    'title' => (string)__('选择发信方式'),
+                    'tip' => (string)__('当前为外部 SMTP。生产请改走自建邮局：点「用自建邮局一键配置」确保 contact@ 并挂渠，再测发；旧外部账户会保留。'),
+                    'status' => 'doing',
+                    'href' => $ensureHref,
+                    'meta' => ['path' => $path, 'can_bootstrap' => true],
+                ];
+            }
+
             return [
                 'code' => 'smtp_send_path',
                 'parent_code' => 'smtp',
@@ -108,12 +132,10 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
                 'category' => (string)__('通信'),
                 'module' => 'Weline_Smtp',
                 'title' => (string)__('选择发信方式'),
-                'tip' => $hasMailAccounts
-                    ? (string)__('当前为外部 SMTP。若要改走本站邮局，可打开 Smtp配置 点「用自建邮局一键配置」。')
-                    : (string)__('当前为外部 SMTP 路径。'),
+                'tip' => (string)__('当前为外部 SMTP。若要本站域名邮箱，请先完成企业邮箱引擎/域名/DNS，再回此页一键配置。'),
                 'status' => 'done',
                 'href' => $href,
-                'meta' => ['path' => $path, 'has_mail_accounts' => $hasMailAccounts],
+                'meta' => ['path' => $path, 'can_bootstrap' => false],
             ];
         }
 
@@ -124,10 +146,10 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
             'category' => (string)__('通信'),
             'module' => 'Weline_Smtp',
             'title' => (string)__('选择发信方式'),
-            'tip' => (string)__('同时存在外部 SMTP 与自建邮局传输。建议统一路径后，再确认渠道绑定与测试发信。'),
+            'tip' => (string)__('同时存在外部 SMTP 与自建邮局。建议渠道统一绑到 mail_default（contact@），测发通过后再删外部账户；需要时可 URL 加 rebind=1 强制全渠切回。'),
             'status' => 'doing',
-            'href' => $href,
-            'meta' => ['path' => $path, 'has_mail_accounts' => $hasMailAccounts],
+            'href' => $ensureHref,
+            'meta' => ['path' => $path, 'can_bootstrap' => $canBootstrap],
         ];
     }
 
@@ -190,14 +212,20 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
         }
 
         $tip = match ($path) {
-            'mail_account' => (string)__('自建邮局传输已就绪，请打开配置页点「测试」发送确认邮件（真实账号需先填 SMTP 密码）。'),
-            'external' => !empty($provenance['inherited'])
-                ? (string)__('已检测到继承自 %{1} 的外部 SMTP，请打开配置页发送测试邮件确认。', [(string)$provenance['source_scope']])
-                : (string)__('已检测到外部 SMTP 配置，请发送测试邮件确认后再上线。'),
+            'mail_account' => (string)__('自建邮局传输已就绪（默认 contact@ / mail_default）。请打开配置页点「测试」发确认邮件；真实账号须先填 SMTP 密码。'),
+            'external' => $this->canBootstrapMail()
+                ? (string)__('仍是外部 SMTP。请先一键改走自建邮局（确保 contact@），再测发确认。')
+                : (!empty($provenance['inherited'])
+                    ? (string)__('已检测到继承自 %{1} 的外部 SMTP，请打开配置页发送测试邮件确认。', [(string)$provenance['source_scope']])
+                    : (string)__('已检测到外部 SMTP 配置，请发送测试邮件确认后再上线。')),
+            'mixed' => (string)__('混合路径：请确认渠道已绑 mail_default，对自建传输测发通过后再考虑移除外部 SMTP。'),
             default => !empty($provenance['inherited'])
                 ? (string)__('已检测到继承自 %{1} 的 SMTP 配置，请打开配置页发送测试邮件确认。', [(string)$provenance['source_scope']])
                 : (string)__('已检测到当前范围的 SMTP 配置，请发送测试邮件确认后再上线。'),
         };
+        $transportHref = ($path === 'external' || $path === 'mixed') && $this->canBootstrapMail()
+            ? $this->backendPath('smtp/backend/config?ensure_mail=1')
+            : $href;
 
         return [
             'code' => 'smtp_transport',
@@ -208,7 +236,7 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
             'title' => (string)__('配置 SMTP 发信'),
             'tip' => $tip,
             'status' => 'doing',
-            'href' => $href,
+            'href' => $transportHref,
             'meta' => [
                 'source_scope' => (string)$provenance['source_scope'],
                 'inherited' => !empty($provenance['inherited']),
@@ -236,9 +264,11 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
                 'category' => (string)__('通信'),
                 'module' => 'Weline_Smtp',
                 'title' => (string)__('绑定发信渠道'),
-                'tip' => (string)__('请先配置传输账户；自建邮局可用一键配置自动绑定全部已注册渠道。'),
+                'tip' => (string)__('请先配置传输账户；自建邮局一键会自动确保 contact@ 并绑定全部已注册渠道。'),
                 'status' => 'todo',
-                'href' => $href,
+                'href' => $this->canBootstrapMail()
+                    ? $this->backendPath('smtp/backend/config?ensure_mail=1')
+                    : $href,
                 'meta' => ['missing_channels' => $missing, 'path' => $path],
             ];
         }
@@ -246,7 +276,7 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
         if ($missing !== []) {
             $sample = implode(', ', array_slice($missing, 0, 5));
             $more = count($missing) > 5 ? '…' : '';
-            $ensureHref = $path === 'mail_account' || $this->hasUsableMailAccounts()
+            $ensureHref = $path === 'mail_account' || $this->canBootstrapMail()
                 ? $this->backendPath('smtp/backend/config?ensure_mail=1')
                 : $href;
 
@@ -257,7 +287,7 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
                 'category' => (string)__('通信'),
                 'module' => 'Weline_Smtp',
                 'title' => (string)__('绑定发信渠道'),
-                'tip' => (string)__('尚有 %{1} 个发信渠道未绑定传输：%{2}%{3}', [
+                'tip' => (string)__('尚有 %{1} 个发信渠道未绑定：%{2}%{3}。点一键可补绑到 contact@ 传输（已有分流不会被冲掉）。', [
                     (string)count($missing),
                     $sample,
                     $more,
@@ -275,7 +305,7 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
             'category' => (string)__('通信'),
             'module' => 'Weline_Smtp',
             'title' => (string)__('绑定发信渠道'),
-            'tip' => (string)__('全部已注册发信渠道均已绑定传输账户。'),
+            'tip' => (string)__('全部已注册发信渠道均已绑定。需要独立 From 时用「分流」新建邮箱并挂指定渠道。'),
             'status' => 'done',
             'href' => $href,
             'meta' => ['missing_channels' => [], 'path' => $path],
@@ -423,8 +453,13 @@ class SmtpSetupTaskProvider extends AbstractSetupTaskProvider
         };
     }
 
-    private function hasUsableMailAccounts(): bool
+    private function canBootstrapMail(): bool
     {
+        try {
+            return $this->bootstrap()->canEnsure();
+        } catch (\Throwable) {
+        }
+
         try {
             $result = w_query('mail', 'getSmtpAccounts', ['limit' => 5]);
             if (is_array($result) && !empty($result['success']) && is_array($result['items'] ?? null)) {

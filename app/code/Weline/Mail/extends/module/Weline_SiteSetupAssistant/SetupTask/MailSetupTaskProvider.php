@@ -34,7 +34,7 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
             $this->domainTask($href, $activeDomains, $domains),
             $this->dnsTask($href, $activeDomains, $fakeOnly),
             $this->accountTask($href, $accounts, $activeDomains !== []),
-            $this->handOffSmtpTask($accounts !== []),
+            $this->handOffSmtpTask($accounts !== [], $activeDomains !== []),
         ]);
     }
 
@@ -258,7 +258,7 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
                 'category' => (string)__('通信'),
                 'module' => 'Weline_Mail',
                 'title' => (string)__('开通邮局账号'),
-                'tip' => (string)__('已有 %{1} 个 active 邮箱账号（例：%{2}）。建议至少保留 noreply@ 供系统发信。', [
+                'tip' => (string)__('已有 %{1} 个 active 邮箱账号（例：%{2}）。默认发信用 contact@（Smtp 一键可自动确保）；分流业务再单独建箱挂渠道。', [
                     (string)count($accounts),
                     $sample,
                 ]),
@@ -290,7 +290,7 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
             'category' => (string)__('通信'),
             'module' => 'Weline_Mail',
             'title' => (string)__('开通邮局账号'),
-            'tip' => (string)__('域名已就绪，但尚无 active 邮箱账号。请创建 noreply@ 或业务邮箱并启用。'),
+            'tip' => (string)__('域名已就绪，尚无 active 账号。可跳过手工建箱：下一步「交给 Smtp」一键会自动确保 contact@ 并挂渠道；也可在此先建业务邮箱。'),
             'status' => 'todo',
             'href' => $href,
             'meta' => ['active_count' => 0],
@@ -300,11 +300,12 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
     /**
      * @return array<string, mixed>
      */
-    private function handOffSmtpTask(bool $hasAccounts): array
+    private function handOffSmtpTask(bool $hasAccounts, bool $hasActiveDomain): array
     {
         $scope = 'default.default.default';
         $smtpPath = 'none';
         $smtpConfirmed = false;
+        $canBootstrap = false;
         try {
             if (class_exists(\Weline\Smtp\Service\MailAccountTransportProvisioner::class)) {
                 /** @var \Weline\Smtp\Service\MailAccountTransportProvisioner $provisioner */
@@ -316,8 +317,18 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
                 $smtpData = ObjectManager::getInstance(\Weline\Smtp\Helper\Data::class);
                 $smtpConfirmed = $smtpData->isSetupConfirmed('Weline_Smtp', $scope);
             }
+            if (class_exists(\Weline\Smtp\Service\MailSmtpBootstrapService::class)) {
+                /** @var \Weline\Smtp\Service\MailSmtpBootstrapService $bootstrap */
+                $bootstrap = ObjectManager::getInstance(\Weline\Smtp\Service\MailSmtpBootstrapService::class);
+                $canBootstrap = $bootstrap->canEnsure();
+            }
         } catch (\Throwable) {
         }
+        if (!$canBootstrap) {
+            $canBootstrap = $hasAccounts || $hasActiveDomain;
+        }
+        $ensureHref = $this->backendPath('smtp/backend/config?ensure_mail=1');
+        $configHref = $this->backendPath('smtp/backend/config');
 
         if ($smtpPath === 'mail_account' && $smtpConfirmed) {
             return [
@@ -327,10 +338,15 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
                 'category' => (string)__('通信'),
                 'module' => 'Weline_Mail',
                 'title' => (string)__('交给 Smtp 自管发信'),
-                'tip' => (string)__('Smtp 已挂接自建邮局并完成测试确认。'),
+                'tip' => (string)__('Smtp 已挂接自建邮局（默认 contact@）并完成测试确认。需要分流发件身份时，在 Smtp配置「分流」区新建邮箱并挂渠道。'),
                 'status' => 'done',
-                'href' => $this->backendPath('smtp/backend/config'),
-                'meta' => ['has_accounts' => $hasAccounts, 'smtp_path' => $smtpPath, 'confirmed' => true],
+                'href' => $configHref,
+                'meta' => [
+                    'has_accounts' => $hasAccounts,
+                    'smtp_path' => $smtpPath,
+                    'confirmed' => true,
+                    'can_bootstrap' => $canBootstrap,
+                ],
             ];
         }
 
@@ -342,14 +358,19 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
                 'category' => (string)__('通信'),
                 'module' => 'Weline_Mail',
                 'title' => (string)__('交给 Smtp 自管发信'),
-                'tip' => (string)__('Smtp 已挂接自建邮局传输，请打开 Smtp配置 发送测试邮件完成确认。'),
+                'tip' => (string)__('已挂接自建邮局传输。请打开 Smtp配置，对 mail_default/contact@ 点「测试」发一封确认邮件；真实账号须先填 SMTP 密码。'),
                 'status' => 'doing',
-                'href' => $this->backendPath('smtp/backend/config'),
-                'meta' => ['has_accounts' => $hasAccounts, 'smtp_path' => $smtpPath, 'confirmed' => false],
+                'href' => $configHref,
+                'meta' => [
+                    'has_accounts' => $hasAccounts,
+                    'smtp_path' => $smtpPath,
+                    'confirmed' => false,
+                    'can_bootstrap' => $canBootstrap,
+                ],
             ];
         }
 
-        if ($hasAccounts) {
+        if ($smtpPath === 'external' && $canBootstrap) {
             return [
                 'code' => 'mail_smtp_handoff',
                 'parent_code' => 'mail',
@@ -357,10 +378,33 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
                 'category' => (string)__('通信'),
                 'module' => 'Weline_Mail',
                 'title' => (string)__('交给 Smtp 自管发信'),
-                'tip' => (string)__('邮局账号已就绪。请打开 Smtp配置，使用「用自建邮局一键配置」由 Smtp 自动写传输并绑渠道，再测试发信确认。'),
+                'tip' => (string)__('当前仍是外部 SMTP。生产请点「用自建邮局一键配置」：自动确保 contact@、写 mail_account 传输并绑全渠（旧外部账户保留），再测发确认。'),
                 'status' => 'doing',
-                'href' => $this->backendPath('smtp/backend/config?ensure_mail=1'),
-                'meta' => ['has_accounts' => true, 'smtp_path' => $smtpPath],
+                'href' => $ensureHref,
+                'meta' => [
+                    'has_accounts' => $hasAccounts,
+                    'smtp_path' => $smtpPath,
+                    'can_bootstrap' => true,
+                ],
+            ];
+        }
+
+        if ($canBootstrap) {
+            return [
+                'code' => 'mail_smtp_handoff',
+                'parent_code' => 'mail',
+                'sort' => 50,
+                'category' => (string)__('通信'),
+                'module' => 'Weline_Mail',
+                'title' => (string)__('交给 Smtp 自管发信'),
+                'tip' => (string)__('邮局域名/账号已可用。请打开 Smtp配置 点「用自建邮局一键配置」：自动确保 contact@、写入传输并绑定全部发信渠道，然后点「测试」跑通发信。'),
+                'status' => 'doing',
+                'href' => $ensureHref,
+                'meta' => [
+                    'has_accounts' => $hasAccounts,
+                    'smtp_path' => $smtpPath,
+                    'can_bootstrap' => true,
+                ],
             ];
         }
 
@@ -371,10 +415,14 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
             'category' => (string)__('通信'),
             'module' => 'Weline_Mail',
             'title' => (string)__('交给 Smtp 自管发信'),
-            'tip' => (string)__('完成引擎/域名/DNS/账号后，由 Smtp 一键挂接 mail_account 传输；本任务不代替 Smtp 测试确认。'),
+            'tip' => (string)__('请先完成：① 安装启动邮局引擎 ② 开通并启用真实域名 ③ 配好 MX/SPF/DKIM。完成后本任务会引导 Smtp 一键确保 contact@ 并测发。'),
             'status' => 'todo',
-            'href' => $this->backendPath('smtp/backend/config'),
-            'meta' => ['has_accounts' => false, 'smtp_path' => $smtpPath],
+            'href' => $configHref,
+            'meta' => [
+                'has_accounts' => false,
+                'smtp_path' => $smtpPath,
+                'can_bootstrap' => false,
+            ],
         ];
     }
 

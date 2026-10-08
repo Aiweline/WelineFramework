@@ -4,20 +4,20 @@
 slug: mail-channel-default-mailboxes
 module: Weline_Mail
 mode: team
-wave: clarifying
+wave: implementing
 status: open
-updated: 2026-09-22
-last_checked_by: 项目经理
+updated: 2026-10-08
+last_checked_by: 宿主Agent
 spec_path: ../spec/mail-channel-default-mailboxes.md
 team_path: ../team/mail-channel-default-mailboxes/
 ---
 
 ## 当前阶段
 
-- 交付流程阶段：`1b 澄清` → 等用户拍板 OQ 后进 `align_freeze`
-- team 波次：`clarifying`（立项双席已交；`align_freeze_eligible=false`）
-- 一句话进度：企业邮箱「邮箱」页 UI 已 Browser 复测 **pass**；主需求仍卡 OQ-1/2/4/5。
-- team 波次：`mail-admin-ui-inbox` closed；主链仍 `clarifying`
+- 交付流程阶段：实现中（本波：contact@ 一键 + 分流挂渠）
+- team 波次：`implementing`（OQ-1/2/5 已按用户表述冻结；OQ-4 生产引擎另波）
+- 一句话进度：`MailAccountEnsureService` + `MailSmtpBootstrapService` 已落盘；本机 fake RT + Smtp Config WB-OP UI 已验。
+- team 波次：`mail-admin-ui-inbox` closed
 
 ## 计划项表
 
@@ -38,13 +38,13 @@ team_path: ../team/mail-channel-default-mailboxes/
 - 下一波：清理 `index.phtml` 旧 inbox `#hex` 平行皮肤
 - （mail-admin-ui-inbox 已 closed）
 
-### 待拍板 OQ（来自规格）
+### OQ 冻结（2026-10-08 · 用户表述）
 
-1. **OQ-1** 每渠道独立邮箱 vs 共享角色邮箱（noreply/orders/support）vs 混合 — **未拍**
-2. **OQ-2** 全自动 / 一键 / 仅 Setup / 组合 — **未拍**
-3. **OQ-3** QQ 迁移 — **用户已表态（2026-09-22）**：本机继续 QQ；线上靠 `deploy.env-map` **按档位替换**（不是清空删库）；旧 QQ 配置在 prod 被新值盖掉。细节「新值=外发域名 SMTP 还是 mail_account」仍待对齐冻结。
-4. **OQ-4** 生产邮箱域名 + Stalwart/DNS — **未拍**
-5. **OQ-5** Global vs Website — **未拍**
+1. **OQ-1** 默认共享 `contact@`；分流 = 显式新建邮箱 + 挂指定渠道 — **已冻**
+2. **OQ-2** 扩展现有一键/`ensure_mail`（幂等）；不加域名 Observer — **已冻**
+3. **OQ-3** QQ 迁移 — **用户已表态（2026-09-22）**：本机可继续 QQ；线上 `deploy.env-map` 按档位替换（另波）
+4. **OQ-4** 生产邮箱域名 + Stalwart/DNS — **另波**（本波仅本机 fake）
+5. **OQ-5** 沿用 Smtp Config `storage_scope` — **已冻**
 
 ### 用户澄清摘录（配置面）
 

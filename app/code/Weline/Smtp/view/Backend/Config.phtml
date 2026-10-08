@@ -219,7 +219,7 @@ $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig
         <div class="w-alert" data-w-border="none" data-tone="info" style="--w-mb:var(--weline-space-4);">
             <strong><?= __('说明') ?></strong>
             <ul style="--w-mb:0;--w-mt:var(--weline-space-1);">
-                <li><?= __('<strong>发信路径</strong>：外部 SMTP 手工填连接；自建邮局由 Smtp「一键配置」自动写传输账户并补齐渠道绑定。') ?></li>
+                <li><?= __('<strong>发信路径</strong>：外部 SMTP 手工填连接；自建邮局一键会确保 contact@ 并写 mail_account 传输、挂接渠道（已有分流时默认不冲绑）。') ?></li>
                 <li><?= __('<strong>传输账户管理</strong>：录入 SMTP 连接；可在账户上直接用标签绑定发信渠道。') ?></li>
                 <li><?= __('<strong>发信渠道绑定</strong>：按渠道选择传输账户；也可稍后在此集中调整。') ?></li>
                 <li><?= __('上方用 Tab 切换两个分区，无需整页上下翻找。') ?></li>
@@ -229,19 +229,24 @@ $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig
         </div>
         <?php
         $mailAccountsCount = is_array($mail_accounts ?? null) ? count($mail_accounts) : 0;
+        $bootstrapReady = !empty($mail_bootstrap_ready) || $mailAccountsCount > 0;
         $ensureMailUrl = (string)($ensure_mail_url ?? '');
+        $routeMailboxUrl = (string)($route_mailbox_url ?? '');
         $sendPath = is_array($smtp_send_path ?? null) ? (string)($smtp_send_path['path'] ?? 'none') : 'none';
         $unboundCount = is_array($smtp_unbound_channels ?? null) ? count($smtp_unbound_channels) : 0;
+        $hasRouting = !empty($mail_has_routing);
+        $mailChannels = is_array($mail_channels ?? null) ? $mail_channels : [];
         ?>
-        <?php if ($mailAccountsCount > 0 && $ensureMailUrl !== ''): ?>
+        <?php if ($bootstrapReady && $ensureMailUrl !== ''): ?>
             <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);" data-testid="smtp-ensure-mail-bar">
                 <p class="w-text" data-size="sm" style="--w-m:0;">
-                    <lang>检测到可用自建邮局账号。点一键后 Smtp 会写入 mail_account 传输，并把全部发信渠道切到该传输（旧外部 SMTP 账户仍保留，可自行删除）。</lang>
+                    <lang>一键确保 contact@ 域名邮箱，写入 mail_account 传输并挂接渠道。已有分流邮箱时默认只补未绑定，不会冲掉分流；需要全渠切回 contact 时在 URL 加 rebind=1。</lang>
                     <?php if ($sendPath !== 'none'): ?>
                         <span class="w-text" data-tone="muted">
                             （<?= htmlspecialchars((string)__('当前路径'), ENT_QUOTES, 'UTF-8') ?>:
                             <?= htmlspecialchars($sendPath, ENT_QUOTES, 'UTF-8') ?><?php if ($unboundCount > 0): ?>,
-                            <?= htmlspecialchars((string)__('未绑定渠道 %{1} 个', [(string)$unboundCount]), ENT_QUOTES, 'UTF-8') ?><?php endif; ?>）
+                            <?= htmlspecialchars((string)__('未绑定渠道 %{1} 个', [(string)$unboundCount]), ENT_QUOTES, 'UTF-8') ?><?php endif; ?><?php if ($hasRouting): ?>,
+                            <?= htmlspecialchars((string)__('已有分流'), ENT_QUOTES, 'UTF-8') ?><?php endif; ?>）
                         </span>
                     <?php endif; ?>
                 </p>
@@ -251,6 +256,60 @@ $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig
                     <w:icon name="mail" size="sm"></w:icon>
                     <lang>用自建邮局一键配置</lang>
                 </a>
+            </div>
+        <?php endif; ?>
+        <?php if ($bootstrapReady && $routeMailboxUrl !== '' && $mailChannels !== []): ?>
+            <div class="w-card" data-testid="smtp-route-mailbox-card" style="--w-mb:var(--weline-space-4);">
+                <div class="w-card__header">
+                    <h3 class="w-heading" data-level="5" style="--w-m:0;"><lang>分流：新建邮局邮箱并挂渠道</lang></h3>
+                </div>
+                <div class="w-card__body">
+                    <p class="w-text" data-size="sm" data-tone="muted">
+                        <lang>默认全渠走 contact@。若某业务要独立发件身份，填写 local_part、勾选渠道后提交即可。</lang>
+                    </p>
+                    <form method="post" action="<?= htmlspecialchars($routeMailboxUrl, ENT_QUOTES, 'UTF-8') ?>" data-testid="smtp-route-mailbox-form">
+                        <div class="w-stack" style="--w-gap:var(--weline-space-3);">
+                            <label class="w-field">
+                                <span class="w-field__label"><lang>邮箱 local_part</lang></span>
+                                <input class="w-input" type="text" name="local_part" required
+                                       pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}"
+                                       placeholder="orders"
+                                       data-testid="smtp-route-local-part"/>
+                            </label>
+                            <label class="w-field">
+                                <span class="w-field__label"><lang>显示名称（可选）</lang></span>
+                                <input class="w-input" type="text" name="display_name"
+                                       data-testid="smtp-route-display-name"/>
+                            </label>
+                            <fieldset class="w-field" data-testid="smtp-route-channels">
+                                <legend class="w-field__label"><lang>挂接渠道</lang></legend>
+                                <div class="w-stack" style="--w-gap:var(--weline-space-1); max-block-size:12rem; overflow:auto;">
+                                    <?php foreach ($mailChannels as $ch): ?>
+                                        <?php
+                                        if (!is_array($ch)) {
+                                            continue;
+                                        }
+                                        $chCode = trim((string)($ch['code'] ?? ''));
+                                        if ($chCode === '') {
+                                            continue;
+                                        }
+                                        $chLabel = trim((string)($ch['name'] ?? $ch['label'] ?? $chCode));
+                                        ?>
+                                        <label class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                            <input type="checkbox" name="channel_codes[]"
+                                                   value="<?= htmlspecialchars($chCode, ENT_QUOTES, 'UTF-8') ?>"/>
+                                            <span class="w-text" data-size="sm"><?= htmlspecialchars($chLabel . ' (' . $chCode . ')', ENT_QUOTES, 'UTF-8') ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                            </fieldset>
+                            <button class="w-button" data-tone="primary" data-size="sm" type="submit"
+                                    data-testid="smtp-route-mailbox-submit">
+                                <lang>创建并挂接</lang>
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         <?php endif; ?>
     </div>
