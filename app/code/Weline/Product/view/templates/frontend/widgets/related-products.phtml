@@ -24,7 +24,6 @@
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
  */
 
-use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Service\ProductCardRenderer;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
@@ -98,17 +97,21 @@ if ($products === [] && ($isPreviewMode || (bool)($this->getData('editor_mode') 
 foreach ($products as &$product) {
     $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
     $product['id'] = $productId;
-    $route = trim((string)($product['url'] ?? ''));
-    if (str_starts_with($route, 'http://') || str_starts_with($route, 'https://') || str_starts_with($route, '//')) {
+    $route = trim((string)($product['url'] ?? $product['url_path'] ?? ''));
+    if ($route === '') {
+        $slug = strtolower(trim((string)($product['slug'] ?? '')));
+        $route = $slug !== '' ? 'product/' . $slug : ($productId > 0 ? 'product/' . $productId : '');
+    }
+    if ($route === '') {
+        $product['url'] = '';
+        continue;
+    }
+    // Absolute external links keep as-is; storefront paths must go through Url helper
+    // (mount + locale). Never splice Url::getPrefix alone — that drops /daocharms mounts.
+    if (preg_match('#^(?:https?:)?//#i', $route) === 1) {
         $product['url'] = $route;
     } else {
-        $path = '/' . ltrim($route, '/');
-        $prefix = rtrim(Url::getPrefix(), '/');
-        $hasCurrentPrefix = $prefix !== ''
-            && ($path === $prefix || str_starts_with($path, $prefix . '/'));
-        $product['url'] = $hasCurrentPrefix
-            ? $path
-            : ($prefix !== '' ? $prefix : '') . $path;
+        $product['url'] = ProductCardRenderer::buildStorefrontCardHref($route);
     }
 }
 unset($product);

@@ -204,7 +204,8 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         $source = (string)file_get_contents($tpl);
         self::assertStringContainsString('data-testid="storefront-recommended-products"', $source);
         self::assertStringContainsString('->cards($limit)', $source);
-        self::assertStringContainsString('Url::getPrefix()', $source);
+        self::assertStringContainsString('ProductCardRenderer::buildStorefrontCardHref', $source);
+        self::assertStringNotContainsString('Url::getPrefix()', $source);
         self::assertStringNotContainsString('$this->getUrl(ltrim($route', $source);
         self::assertStringContainsString('<w:product:card ids="products"', $source);
         self::assertStringContainsString('class="wpr-card"', $source);

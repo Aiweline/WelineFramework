@@ -37,12 +37,37 @@
       : '';
   }
 
+  function storefrontProductHref(card, id) {
+    var fromServer = String((card && card.url) || '').trim();
+    if (fromServer) {
+      return fromServer;
+    }
+    var path = 'product/' + id;
+    try {
+      var build = (global.Weline && global.Weline.Url && typeof global.Weline.Url.frontend === 'function')
+        ? global.Weline.Url.frontend
+        : (typeof global.frontend_url === 'function' ? global.frontend_url : null);
+      if (typeof build === 'function') {
+        var resolved = String(build(path) || '').trim();
+        if (resolved) {
+          return resolved;
+        }
+      }
+    } catch (_e) {
+      // fall through
+    }
+    // Last resort: keep current website mount from the open PDP path.
+    var parts = String((global.location && global.location.pathname) || '/').split('/').filter(Boolean);
+    var mount = parts.length && parts[0] !== 'product' ? '/' + parts[0] : '';
+    return mount + '/' + path;
+  }
+
   function cardHtml(card, cardClass) {
     var id = parseInt(card && (card.id || card.product_id), 10) || 0;
     if (id <= 0) {
       return '';
     }
-    var url = String((card && card.url) || ('/product/' + id));
+    var url = storefrontProductHref(card, id);
     var name = String((card && card.name) || '');
     var image = String((card && (card.image || card.thumbnail)) || '');
     var priceLabel = formatCardPrice(card);

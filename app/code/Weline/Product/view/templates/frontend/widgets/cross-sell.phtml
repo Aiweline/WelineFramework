@@ -24,8 +24,8 @@
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
  */
 
-use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Product\Service\StorefrontPdpShelfDeferral;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
@@ -111,13 +111,17 @@ if ($deferCards) {
 foreach ($products as &$product) {
     $productId = (int)($product['product_id'] ?? $product['id'] ?? 0);
     $product['id'] = $productId;
-    $route = trim((string)($product['url'] ?? ''));
-    if (str_starts_with($route, 'http://') || str_starts_with($route, 'https://') || str_starts_with($route, '//')) {
+    $route = trim((string)($product['url'] ?? $product['url_path'] ?? ''));
+    if ($route === '') {
+        $slug = strtolower(trim((string)($product['slug'] ?? '')));
+        $route = $slug !== '' ? 'product/' . $slug : ($productId > 0 ? 'product/' . $productId : '');
+    }
+    if ($route === '') {
+        $product['url'] = '';
+    } elseif (preg_match('#^(?:https?:)?//#i', $route) === 1) {
         $product['url'] = $route;
     } else {
-        $path = '/' . ltrim($route, '/');
-        $prefix = rtrim(Url::getPrefix(), '/');
-        $product['url'] = ($prefix !== '' ? $prefix : '') . $path;
+        $product['url'] = ProductCardRenderer::buildStorefrontCardHref($route);
     }
     $product['selected'] = array_key_exists('selected', $product) ? (bool)$product['selected'] : true;
 }

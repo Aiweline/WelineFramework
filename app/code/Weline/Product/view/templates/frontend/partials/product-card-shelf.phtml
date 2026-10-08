@@ -65,22 +65,23 @@ $isFreeShipping = !empty($product['free_shipping']);
 $saleBadgeText = (string)($product['sale_badge_text'] ?? '');
 
 $classes = trim('weline-product-card product-card density-shelf' . ($extraClass !== '' ? ' ' . $extraClass : ''));
-if ($productUrl !== '') {
-    $resolvedHref = $productUrl;
-} elseif ($productUrlPath !== '') {
-    $pathOnly = $productUrlPath;
+$hrefCandidate = $productUrl !== '' ? $productUrl : $productUrlPath;
+if ($hrefCandidate !== '' && preg_match('#^(?:https?:)?//#i', $hrefCandidate) === 1) {
+    $resolvedHref = $hrefCandidate;
+} elseif ($hrefCandidate !== '') {
+    $pathOnly = $hrefCandidate;
     $hrefParams = [];
-    if (str_contains($productUrlPath, '?')) {
-        [$pathOnly, $queryPart] = explode('?', $productUrlPath, 2);
+    if (str_contains($hrefCandidate, '?')) {
+        [$pathOnly, $queryPart] = explode('?', $hrefCandidate, 2);
         parse_str(trim($queryPart), $hrefParams);
         if (!\is_array($hrefParams)) {
             $hrefParams = [];
         }
     }
-    $resolvedHref = (string)$this->getUrl(ltrim($pathOnly, '/'), $hrefParams);
-    if ($resolvedHref === '') {
-        $resolvedHref = ProductCardRenderer::buildStorefrontCardHref($pathOnly, $hrefParams !== [] ? '?' . http_build_query($hrefParams) : '');
-    }
+    $resolvedHref = ProductCardRenderer::buildStorefrontCardHref(
+        $pathOnly,
+        $hrefParams !== [] ? '?' . http_build_query($hrefParams) : ''
+    );
 } else {
     $resolvedHref = '#';
 }

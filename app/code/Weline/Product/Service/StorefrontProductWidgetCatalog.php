@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Weline\Product\Service;
 
 use Weline\Framework\Context;
-use Weline\Framework\Http\Url;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -832,9 +831,10 @@ final class StorefrontProductWidgetCatalog
         $image = $resolved['src'];
         $fallback = $resolved['fallback'];
 
-        // Preserve the active locale while remaining host-agnostic.
-        $productPath = $slug !== '' ? '/product/' . $slug : '/product/' . $productId;
-        $route = rtrim(Url::getPrefix(), '/') . $productPath;
+        // Website mount + locale/currency via Url helper — never splice getPrefix alone
+        // (that omits /daocharms-style mounts and yields /product/{slug} on multi-site hosts).
+        $productPath = $slug !== '' ? 'product/' . $slug : 'product/' . $productId;
+        $route = ProductCardRenderer::buildStorefrontCardHref($productPath);
 
         $quoteOnly = !empty($offer['quote_only']) || $priceMinor <= 0;
         $sellable = !empty($offer['sellable'])

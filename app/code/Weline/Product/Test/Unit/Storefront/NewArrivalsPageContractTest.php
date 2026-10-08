@@ -37,7 +37,7 @@ final class NewArrivalsPageContractTest extends TestCase
         self::assertSame('new-arrivals', $en['public_route'] ?? null);
     }
 
-    public function testProductCardsPreserveTheCurrentLocalePrefixExactlyOnce(): void
+    public function testProductCardsUseUrlHelperForWebsiteMountNotPrefixSplice(): void
     {
         $catalog = new ReflectionClass(StorefrontProductWidgetCatalog::class);
         $source = file_get_contents($catalog->getFileName());
@@ -45,11 +45,13 @@ final class NewArrivalsPageContractTest extends TestCase
         $templatePaths = [
             $moduleRoot . '/view/templates/frontend/widgets/recommended-products.phtml',
             $moduleRoot . '/view/templates/frontend/widgets/related-products.phtml',
+            $moduleRoot . '/view/templates/frontend/widgets/you-may-like.phtml',
+            $moduleRoot . '/view/templates/frontend/widgets/cross-sell.phtml',
         ];
 
         self::assertIsString($source);
-        self::assertStringContainsString('Url::getPrefix()', $source);
-        self::assertStringContainsString(
+        self::assertStringContainsString('ProductCardRenderer::buildStorefrontCardHref($productPath)', $source);
+        self::assertStringNotContainsString(
             '$route = rtrim(Url::getPrefix(), \'/\') . $productPath;',
             $source,
         );
@@ -59,11 +61,12 @@ final class NewArrivalsPageContractTest extends TestCase
             $templateSource = file_get_contents($templatePath);
             self::assertIsString($templateSource);
             self::assertStringContainsString(
-                '$hasCurrentPrefix = $prefix !== \'\'',
+                'ProductCardRenderer::buildStorefrontCardHref($route)',
                 $templateSource,
             );
-            self::assertStringContainsString(
-                'str_starts_with($path, $prefix . \'/\')',
+            self::assertStringNotContainsString('Url::getPrefix()', $templateSource);
+            self::assertStringNotContainsString(
+                '$hasCurrentPrefix = $prefix !== \'\'',
                 $templateSource,
             );
         }

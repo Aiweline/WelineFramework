@@ -2,24 +2,29 @@
 
 ## 摘要
 
+**站内地址只能由 Url 模块生成，禁止字符串拼接。** MCP 硬规则：`storefront_internal_url_via_url_helper`。
+
+| 层 | **推荐** | 允许的等价入口 | **禁止** |
+|----|----------|----------------|----------|
+| **前端模板**（`.phtml` / 主题 / 部件） | `@url{'path'}` / `<url path="..."/>` 等同族标签 | `<?php ?>` 数据准备块内 `$this->getUrl()` / `$this->getFrontendUrl()`（算出变量后再注入） | HTML 属性硬编码 `/path`；`<?= $this->getUrl() ?>` 写进属性；`Url::getPrefix() . $path`；`'/' . $route` |
+| **后端 PHP**（Service / Query / Controller / JSON 店面 href） | `Weline\Framework\Http\Url::getUrl` / `getFrontendUrl` / `getBackendUrl` | `$this->getUrl` 族；薄封装且**内部必须调用**上述 Url API（如卡片 `buildStorefrontCardHref`） | `'/' . $route`；`rtrim(Url::getPrefix(),'/').$path`；手写 `/module/action`；只拼 mount / locale 片段 |
+
 模板中生成路由 URL 有**两种一等写法**，效果等价，按场景选用：
 
 1. **XML 标签**：`<url>` / `<frontend-url>` / `<backend-url>` / `<admin-url>` / `<api>` / `<backend-api>`
 2. **`@` 内联**：`@url(...)` / `@url{...}` / `@url{'...'}`（以及 `@frontend-url`、`@backend-url`、`@api` 等同族）
 
-前端主题与业务模板**优先**使用 `@url{'path'}`（花括号 + 单引号路径）。禁止在 HTML 属性里硬编码 `/path`，也禁止用 `<?= $this->getUrl() ?>` 代替标签。`<?php ?>` 数据准备块里若必须先算出完整 URL 再注入变量，可保留 `$this->getUrl()` / `$this->getFrontendUrl()`。
+前端主题与业务模板**优先**使用 `@url{'path'}`（花括号 + 单引号路径）。权威对照：[Taglib 场景映射表](../../../Taglib/doc/场景映射表.md)。
 
-权威对照：[Taglib 场景映射表](../../../Taglib/doc/场景映射表.md)。
+## 为什么必须走 Url / url 标签
 
-## 为什么需要 url 标签
-
-- 自动走框架路由与站点前缀（含语言/货币等上下文）
+- 自动带上 **website mount**（如 `/daocharms`）与语言/货币前缀；`Url::getPrefix()` **只含** locale/currency，**不含**站点挂载——用它拼 href 会丢 mount
 - 区分前台 / 后台 / API
 - 参数编码与 XSS 防护由框架处理
 
 ## PHP / Service（与标签等价）
 
-模板外（Query、HTML 字符串拼接、JSON 里给店面 href）**必须**用 `Weline\Framework\Http\Url`：
+模板外（Query、HTML 字符串、JSON 里给店面 href）**必须**用 `Weline\Framework\Http\Url`：
 
 ```php
 $url->getUrl('guide/payment/paypal');
@@ -27,7 +32,7 @@ $url->getFrontendUrl('customer/account/index', ['order_uuid' => $uuid]);
 $url->getBackendUrl('order/backend/order/view', ['id' => $id]);
 ```
 
-禁止 `'/' . $route`、手写 `/guide/payment/paypal` 这类缺语言/货币前缀的站内 path。外链 `http(s)://` 可原样。MCP 硬规则：`storefront_internal_url_via_url_helper`。
+外链 `http(s)://` 可原样。薄封装允许，但不得自己拼前缀——内部须调用 `getUrl` 族。
 
 ## 标签族
 
@@ -113,7 +118,7 @@ $url->getBackendUrl('order/backend/order/view', ['id' => $id]);
 | 独立块、属性拆分 | `<url path="..."/>` |
 | 路径来自 PHP 变量 | `@url{$routeVar}` |
 
-## 禁止
+## 禁止（含拼接）
 
 ```html
 <!-- 禁止：硬编码站点路径 -->
@@ -124,12 +129,24 @@ $url->getBackendUrl('order/backend/order/view', ['id' => $id]);
 <a href="<?= $this->getUrl('cart') ?>">购物车</a>
 ```
 
+```php
+// 禁止：任意前缀拼接当店面 href（会丢 website mount / 语种合同）
+$href = '/' . ltrim($route, '/');
+$href = rtrim(Url::getPrefix(), '/') . '/' . ltrim($route, '/');
+$href = $mount . '/product/' . $slug;
+```
+
 应改为：
 
 ```html
 <a href="@url{'blog'}">博客</a>
 <form action="@url{'search'}">
 <a href="@url{'cart'}">购物车</a>
+```
+
+```php
+$href = $url->getUrl('product/' . $slug);
+// 或模板：@url{$productPath}（$productPath 只存路由片段，不含 mount）
 ```
 
 JS 输出上下文（`<script>` 内）同样用 `@` 内联，编译后会变成 PHP echo 写入字符串：

@@ -73,22 +73,26 @@ $isFreeShipping = !empty($labelFlags['is_free_shipping']);
 $saleBadgeText = (string)($labelFlags['sale_text'] ?? '');
 
 $classes = trim('weline-product-card product-card density-' . $density . ($extraClass !== '' ? ' ' . $extraClass : ''));
-if ($productUrl !== '') {
-    $resolvedHref = $productUrl;
-} elseif ($productUrlPath !== '') {
-    $pathOnly = $productUrlPath;
+// Absolute http(s)/protocol-relative keep as-is. Any storefront-relative path
+// (including callers that already spliced Url::getPrefix) must go through the
+// Url helper so website mounts like /daocharms are never dropped.
+$hrefCandidate = $productUrl !== '' ? $productUrl : $productUrlPath;
+if ($hrefCandidate !== '' && preg_match('#^(?:https?:)?//#i', $hrefCandidate) === 1) {
+    $resolvedHref = $hrefCandidate;
+} elseif ($hrefCandidate !== '') {
+    $pathOnly = $hrefCandidate;
     $hrefParams = [];
-    if (str_contains($productUrlPath, '?')) {
-        [$pathOnly, $queryPart] = explode('?', $productUrlPath, 2);
+    if (str_contains($hrefCandidate, '?')) {
+        [$pathOnly, $queryPart] = explode('?', $hrefCandidate, 2);
         parse_str(trim($queryPart), $hrefParams);
         if (!is_array($hrefParams)) {
             $hrefParams = [];
         }
     }
-    $resolvedHref = (string)$this->getUrl(ltrim($pathOnly, '/'), $hrefParams);
-    if ($resolvedHref === '') {
-        $resolvedHref = ProductCardRenderer::buildStorefrontCardHref($pathOnly, $hrefParams !== [] ? '?' . http_build_query($hrefParams) : '');
-    }
+    $resolvedHref = ProductCardRenderer::buildStorefrontCardHref(
+        $pathOnly,
+        $hrefParams !== [] ? '?' . http_build_query($hrefParams) : ''
+    );
 } else {
     $resolvedHref = '#';
 }

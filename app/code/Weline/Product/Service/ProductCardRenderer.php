@@ -747,28 +747,40 @@ final class ProductCardRenderer
      */
     public static function buildStorefrontCardHref(string $path, string $querySuffix = ''): string
     {
-        $path = ltrim(trim($path), '/');
-        if ($path === '') {
+        $raw = trim($path);
+        if ($raw === '') {
             return '';
         }
 
+        // Already absolute / protocol-relative: keep as-is (optional query merge).
+        if (preg_match('#^(?:https?:)?//#i', $raw) === 1) {
+            if ($querySuffix === '') {
+                return $raw;
+            }
+            $join = str_contains($raw, '?') ? '&' : '?';
+
+            return $raw . $join . ltrim($querySuffix, '?&');
+        }
+
         $queryParams = [];
-        if ($querySuffix !== '') {
-            parse_str(ltrim($querySuffix, '?'), $queryParams);
+        if (str_contains($raw, '?')) {
+            [$raw, $embeddedQuery] = explode('?', $raw, 2);
+            parse_str(trim($embeddedQuery), $queryParams);
             if (!\is_array($queryParams)) {
                 $queryParams = [];
             }
         }
-
-        try {
-            $href = (string)Template::getInstance()->getUrl($path, $queryParams);
-            if ($href !== '') {
-                return $href;
+        if ($querySuffix !== '') {
+            $extra = [];
+            parse_str(ltrim($querySuffix, '?'), $extra);
+            if (\is_array($extra) && $extra !== []) {
+                $queryParams = array_merge($queryParams, $extra);
             }
-        } catch (\Throwable) {
-            // Template / request unavailable (CLI, isolated unit) → static fallback.
         }
 
+        // Idempotent: strip current website mount + locale/currency prefix so
+        // catalog→widget→card re-entry never produces /daocharms/daocharms/...
+        $path = ltrim($raw, '/');
         $mount = '';
         try {
             $mount = trim(Url::resolveCurrentWebsiteMountPath(), '/');
@@ -781,6 +793,25 @@ final class ProductCardRenderer
         } catch (\Throwable) {
             $locale = '';
         }
+        if ($mount !== '' && (strcasecmp($path, $mount) === 0 || stripos($path, $mount . '/') === 0)) {
+            $path = ltrim(substr($path, strlen($mount)), '/');
+        }
+        if ($locale !== '' && (strcasecmp($path, $locale) === 0 || stripos($path, $locale . '/') === 0)) {
+            $path = ltrim(substr($path, strlen($locale)), '/');
+        }
+        if ($path === '') {
+            return '';
+        }
+
+        try {
+            $href = (string)Template::getInstance()->getUrl($path, $queryParams);
+            if ($href !== '') {
+                return $href;
+            }
+        } catch (\Throwable) {
+            // Template / request unavailable (CLI, isolated unit) → static fallback.
+        }
+
         $segments = [];
         if ($mount !== '') {
             $segments[] = $mount;
