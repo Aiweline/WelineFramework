@@ -76,6 +76,14 @@ class Checkout extends FrontendController
         $this->assign('checkout_ssr_payable_text', (string)($payload['payable_text'] ?? ''));
         $this->assign('checkout_ssr_cart', \is_array($payload['cart'] ?? null) ? $payload['cart'] : []);
         $this->assign(
+            'checkout_ssr_shipping_methods',
+            \is_array($payload['shipping_methods'] ?? null) ? $payload['shipping_methods'] : []
+        );
+        $this->assign(
+            'checkout_ssr_payment_methods',
+            \is_array($payload['payment_methods'] ?? null) ? $payload['payment_methods'] : []
+        );
+        $this->assign(
             'checkout_ssr_tax_estimate',
             \is_array($payload['tax_estimate'] ?? null) ? $payload['tax_estimate'] : null
         );

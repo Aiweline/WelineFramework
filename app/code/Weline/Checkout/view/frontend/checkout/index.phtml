@@ -57,12 +57,21 @@ if (!preg_match('/^[A-Z]{3}$/', $ssrCurrency)) {
 $ssrTaxEstimate = \is_array($this->getData('checkout_ssr_tax_estimate'))
     ? $this->getData('checkout_ssr_tax_estimate')
     : null;
+$ssrShippingMethods = \is_array($this->getData('checkout_ssr_shipping_methods'))
+    ? $this->getData('checkout_ssr_shipping_methods')
+    : [];
+$ssrPaymentMethods = \is_array($this->getData('checkout_ssr_payment_methods'))
+    ? $this->getData('checkout_ssr_payment_methods')
+    : [];
 $ssrBootStateJson = json_encode(
     [
         'currency' => $ssrCurrency,
         'cart' => $ssrCart,
         'ready' => $ssrReady,
         'tax_estimate' => $ssrTaxEstimate,
+        // SSR 跳过 getData 时 renderTotals 仍须扣支付激励/COD/运费扁字段。
+        'shipping_methods' => $ssrShippingMethods,
+        'payment_methods' => $ssrPaymentMethods,
     ],
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 );
@@ -1497,6 +1506,12 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         if (boot.tax_estimate && typeof boot.tax_estimate === 'object') {
             checkoutState.taxEstimate = boot.tax_estimate;
         }
+        if (Array.isArray(boot.shipping_methods)) {
+            checkoutState.shippingMethods = boot.shipping_methods;
+        }
+        if (Array.isArray(boot.payment_methods)) {
+            checkoutState.paymentMethods = boot.payment_methods;
+        }
         return true;
     }
 
@@ -2744,12 +2759,21 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         const method = checkoutState.paymentMethods.find(function (entry) {
             return entry && entry.code === code;
         });
-        if (!method || !method.incentive_available) {
-            return 0;
+        if (method && method.incentive_available) {
+            const minor = Number(method.incentive_savings_minor || 0);
+            if (minor > 0) {
+                return minor / 100;
+            }
         }
-        const minor = Number(method.incentive_savings_minor || 0);
-        if (minor > 0) {
-            return minor / 100;
+        // SSR skip-hydrate 兜底：徽章已写 data-incentive-savings-minor，摘要不得丢扣减。
+        const input = form
+            ? form.querySelector('input[name="payment_method"]:checked')
+            : null;
+        if (input) {
+            const domMinor = Number(input.getAttribute('data-incentive-savings-minor') || 0);
+            if (domMinor > 0) {
+                return domMinor / 100;
+            }
         }
         return 0;
     }

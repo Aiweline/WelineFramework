@@ -79,6 +79,32 @@ final class CheckoutCartSsrSlimContractTest extends TestCase
         self::assertStringContainsString('normalizeCartMoney', $template);
         self::assertStringContainsString('checkout_ssr_tax_estimate', $template);
         self::assertStringContainsString('boot.tax_estimate', $template);
+        // SSR ready 跳过 getData：boot 必须带支付/配送扁字段，否则激励徽章有、应付不扣。
+        self::assertStringContainsString('checkout_ssr_payment_methods', $template);
+        self::assertStringContainsString('checkout_ssr_shipping_methods', $template);
+        self::assertStringContainsString("'payment_methods' => \$ssrPaymentMethods", $template);
+        self::assertStringContainsString('boot.payment_methods', $template);
+        self::assertStringContainsString('boot.shipping_methods', $template);
+        self::assertStringContainsString('data-incentive-savings-minor', $template);
+    }
+
+    public function testStorefrontSsrPayloadIncludesPaymentMethodsForSkipHydrate(): void
+    {
+        $src = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/CheckoutStorefrontSsrService.php'
+        );
+        self::assertStringContainsString("'payment_methods' => \$paymentMethods", $src);
+        self::assertStringContainsString("'shipping_methods' => \$shippingMethods", $src);
+        self::assertStringContainsString('function defaultPaymentMoneyDelta', $src);
+        self::assertStringContainsString('incentive_savings_minor', $src);
+        self::assertStringContainsString('array_merge($cart', $src);
+        self::assertStringNotContainsString("'cart' => \$cart + [", $src);
+
+        foreach (['/Index.php', '/Frontend/Checkout.php'] as $rel) {
+            $controller = (string)file_get_contents(dirname(__DIR__, 3) . '/Controller' . $rel);
+            self::assertStringContainsString('checkout_ssr_payment_methods', $controller, $rel);
+            self::assertStringContainsString('checkout_ssr_shipping_methods', $controller, $rel);
+        }
     }
 
     public function testStorefrontSsrServiceNormalizesMinorMoney(): void

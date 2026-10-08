@@ -88,6 +88,16 @@ final class CheckoutPaymentMethodSelectionPersistContractTest extends TestCase
         );
     }
 
+    public function testSelectedIncentiveFallsBackToDomSavingsWhenSsrSkipsGetData(): void
+    {
+        $src = $this->templateSource();
+        $body = $this->extractFunctionBody($src, 'function selectedIncentiveSavingsMajor()');
+        self::assertNotSame('', $body);
+        self::assertStringContainsString('incentive_savings_minor', $body);
+        self::assertStringContainsString('data-incentive-savings-minor', $body);
+        self::assertStringContainsString('input[name="payment_method"]:checked', $body);
+    }
+
     private function extractFunctionBody(string $src, string $signature): string
     {
         $start = strpos($src, $signature);

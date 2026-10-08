@@ -25,6 +25,8 @@ final class CheckoutStorefrontSsrService
      *   items: list<array<string,mixed>>,
      *   currency: string,
      *   cart: array<string,mixed>,
+     *   shipping_methods: list<array<string,mixed>>,
+     *   payment_methods: list<array<string,mixed>>,
      *   shipping_methods_html: string,
      *   payment_methods_html: string,
      *   items_html: string,
@@ -75,6 +77,7 @@ final class CheckoutStorefrontSsrService
         $paymentHtml = trim((string)($data['payment_methods_html'] ?? ''));
         $itemsHtml = trim((string)($data['items_html'] ?? ''));
         $shippingMethods = \is_array($data['shipping_methods'] ?? null) ? $data['shipping_methods'] : [];
+        $paymentMethods = \is_array($data['payment_methods'] ?? null) ? $data['payment_methods'] : [];
         $shippingAmount = 0.0;
         if ($shippingMethods !== [] && \is_array($shippingMethods[0] ?? null)) {
             $shippingAmount = (float)($shippingMethods[0]['amount'] ?? $shippingMethods[0]['fee'] ?? 0);
@@ -89,6 +92,8 @@ final class CheckoutStorefrontSsrService
             'amount',
             'amount_minor'
         );
+        // SSR HTML 默认勾选首项支付；跳过 getData 时 JS 仍须用同套扁字段扣激励/COD。
+        $paymentDelta = $this->defaultPaymentMoneyDelta($paymentMethods);
         $grand = $this->majorAmount($cart, 'grand_total', 'grand_total_minor');
         if ($grand <= 0.0) {
             $grand = max(0.0, $subtotal + $shippingAmount - $discount);
@@ -96,6 +101,7 @@ final class CheckoutStorefrontSsrService
         if ($shippingAmount > 0 && $grand <= $subtotal + 0.0001 && $discount <= 0.0) {
             $grand = $subtotal + $shippingAmount;
         }
+        $grand = max(0.0, $grand - $paymentDelta['incentive_major'] + $paymentDelta['cod_major']);
 
         $ready = $items !== []
             || $shippingHtml !== ''
@@ -105,12 +111,15 @@ final class CheckoutStorefrontSsrService
             'ready' => $ready,
             'items' => $items,
             'currency' => $currency,
-            'cart' => $cart + [
+            // array_merge：后写覆盖 — cart 自带 grand_total 不得盖掉已扣激励的应付。
+            'cart' => array_merge($cart, [
                 'subtotal' => $subtotal,
                 'grand_total' => $grand,
                 'currency' => $currency,
                 'is_empty' => $items === [],
-            ],
+            ]),
+            'shipping_methods' => $shippingMethods,
+            'payment_methods' => $paymentMethods,
             'shipping_methods_html' => $shippingHtml,
             'payment_methods_html' => $paymentHtml,
             'items_html' => $itemsHtml,
@@ -151,6 +160,7 @@ final class CheckoutStorefrontSsrService
             ? (string)__('请先加入商品后再选择支付方式。')
             : (string)__('暂无可用支付方式。');
         $paymentHtml = '';
+        $methods = [];
         try {
             /** @var CheckoutPaymentMethodsProvider $payments */
             $payments = \Weline\Framework\Manager\ObjectManager::getInstance(CheckoutPaymentMethodsProvider::class);
@@ -161,13 +171,18 @@ final class CheckoutStorefrontSsrService
             $paymentHtml = $html->renderPaymentMethodOptions($methods, 'payment_method', $payEmpty);
         } catch (\Throwable) {
             $paymentHtml = '';
+            $methods = [];
         }
+        $paymentDelta = $this->defaultPaymentMoneyDelta($methods);
+        $grand = max(0.0, $grand - $paymentDelta['incentive_major'] + $paymentDelta['cod_major']);
 
         return [
             'ready' => $items !== [] || $paymentHtml !== '',
             'items' => $items,
             'currency' => $currency,
             'cart' => $cart,
+            'shipping_methods' => [],
+            'payment_methods' => $methods,
             'shipping_methods_html' => '',
             'payment_methods_html' => $paymentHtml,
             'items_html' => $itemsHtml,
@@ -195,6 +210,8 @@ final class CheckoutStorefrontSsrService
                 'subtotal' => 0.0,
                 'grand_total' => 0.0,
             ],
+            'shipping_methods' => [],
+            'payment_methods' => [],
             'shipping_methods_html' => '',
             'payment_methods_html' => '',
             'items_html' => '',
@@ -203,6 +220,31 @@ final class CheckoutStorefrontSsrService
             'payable_text' => '',
             'quote_token' => '',
             'tax_estimate' => null,
+        ];
+    }
+
+    /**
+     * 与 HtmlRenderer 默认 selected_index=0 对齐：首项激励/COD 进入 SSR 应付与 boot 扁字段。
+     *
+     * @param list<array<string,mixed>> $paymentMethods
+     * @return array{incentive_major:float,cod_major:float}
+     */
+    private function defaultPaymentMoneyDelta(array $paymentMethods): array
+    {
+        $empty = ['incentive_major' => 0.0, 'cod_major' => 0.0];
+        if ($paymentMethods === [] || !\is_array($paymentMethods[0] ?? null)) {
+            return $empty;
+        }
+        $method = $paymentMethods[0];
+        $incentive = 0.0;
+        if (!empty($method['incentive_available'])) {
+            $incentive = max(0, (int)($method['incentive_savings_minor'] ?? 0)) / 100.0;
+        }
+        $cod = max(0, (int)($method['cod_fee_amount_minor'] ?? 0)) / 100.0;
+
+        return [
+            'incentive_major' => $incentive,
+            'cod_major' => $cod,
         ];
     }
 
