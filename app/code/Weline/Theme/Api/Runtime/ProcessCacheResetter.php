@@ -68,6 +68,16 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
         return min($this->getMaxMemory(), $this->getMemoryItemCount() * 1024);
     }
 
+    public function diagCounts(): array
+    {
+        return [
+            'theme_process_cache_items' => $this->getMemoryItemCount(),
+            'theme_partial_output' => Partials::processPartialOutputCacheItemCount(),
+            'theme_compiled' => RuntimeTemplateMaterializer::processCacheItemCount(),
+            'theme_data_runtime' => ThemeData::processCacheItemCount(),
+        ];
+    }
+
     public function getMemoryItemCount(): int
     {
         return ThemeData::processCacheItemCount()

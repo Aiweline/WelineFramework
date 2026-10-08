@@ -61,7 +61,11 @@ PHP;
         self::assertStringContainsString('不是第二套 RequestContext 渲染权威袋', $scheduleSrc);
         self::assertStringNotContainsString('getMultipleCustom', $scheduleSrc);
         self::assertStringContainsString('primeBeforeLayoutFetch', $scheduleSrc);
-        self::assertStringContainsString('StorefrontWidgetRuntimeAssetPrimer', $scheduleSrc);
+        self::assertStringContainsString('StorefrontPagePrefetchContributionRegistry', $scheduleSrc);
+        self::assertStringNotContainsString(
+            'Weline\\\\Theme\\\\Service\\\\Storefront\\\\StorefrontWidgetRuntimeAssetPrimer',
+            $scheduleSrc
+        );
     }
 
     public function testHotCachePathPrefetchRunsBeforeGetFetchFileScan(): void

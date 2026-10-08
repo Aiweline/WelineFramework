@@ -43,6 +43,37 @@ final class ModuleProcessCacheResetterRegistry
         return $cleared;
     }
 
+    /**
+     * Merge owning-module ProcessCacheResetter diagCounts for MemDiag.
+     *
+     * @return array<string, int>
+     */
+    public function diagCounts(): array
+    {
+        try {
+            $implementations = $this->providers->implementationsWithPrefix(self::CAPABILITY_PREFIX);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($implementations as $capability => $implementation) {
+            try {
+                $resetter = ObjectManager::getInstance($implementation);
+                if (!$resetter instanceof ProcessCacheResetterInterface) {
+                    continue;
+                }
+                foreach ($resetter->diagCounts() as $key => $value) {
+                    $out[(string)$key] = (int)$value;
+                }
+            } catch (\Throwable $throwable) {
+                $this->logFailure((string)$capability, (string)$implementation, $throwable);
+            }
+        }
+
+        return $out;
+    }
+
     private function logFailure(string $capability, string $implementation, \Throwable $throwable): void
     {
         if (!\function_exists('w_log_error')) {

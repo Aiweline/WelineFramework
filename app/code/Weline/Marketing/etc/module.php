@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Marketing',
-    "version" => '1.3.8',
+    "version" => '1.3.9',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Currency' => '*',
@@ -20,6 +20,8 @@ return [
         'Weline_Cron' => '*',
     ],
     "provides" => [
+        'schedule_window_utc_migration.Weline_Marketing'
+            => \Weline\Marketing\Api\Runtime\ScheduleWindowUtcMigrationContribution::class,
         \Weline\Marketing\Api\Rule\ActionCatalogInterface::class => \Weline\Marketing\Service\ActionCatalog::class,
         \Weline\Marketing\Api\Quote\DiscountQuoteServiceInterface::class => \Weline\Marketing\Service\DiscountQuoteService::class,
         \Weline\Marketing\Api\Deal\ExternalDealDiscountProviderInterface::class => \Weline\Marketing\Service\ExternalDealDiscountProvider::class,

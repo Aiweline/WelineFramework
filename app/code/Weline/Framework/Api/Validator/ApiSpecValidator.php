@@ -311,7 +311,7 @@ class ApiSpecValidator
         // 检查是否继承BackendRestController
         $parentClass = $reflection->getParentClass();
         while ($parentClass) {
-            if ($parentClass->getName() === 'Weline\Framework\App\Controller\BackendRestController') {
+            if ($parentClass->getName() === 'Weline\Backend\Controller\BackendRestController') {
                 return true;
             }
             $parentClass = $parentClass->getParentClass();

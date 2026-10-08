@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Controller\Backend\Api;
 
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 use Weline\Framework\Service\Query\FrameworkQueryService;
 
 class Query extends BackendRestController

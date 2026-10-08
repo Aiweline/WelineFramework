@@ -24,4 +24,9 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
 
         return 5;
     }
+    public function diagCounts(): array
+    {
+        return [];
+    }
+
 }

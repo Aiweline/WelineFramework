@@ -19,4 +19,9 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
         // soft / hard / explicit cache_clear all reclaim menu HTML process caches.
         return 2;
     }
+    public function diagCounts(): array
+    {
+        return [];
+    }
+
 }

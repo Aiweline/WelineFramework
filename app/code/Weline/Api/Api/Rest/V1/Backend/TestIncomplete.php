@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Api\Api\Rest\V1\Backend;
 
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 
 /**
  * 注释不完整的测试API控制器

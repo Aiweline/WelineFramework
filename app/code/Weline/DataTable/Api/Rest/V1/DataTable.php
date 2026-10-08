@@ -2,7 +2,7 @@
 
 namespace Weline\DataTable\Api\Rest\V1;
 
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 use Weline\DataTable\Exception\DataTableException;
 use Weline\DataTable\Helper\ErrorHandler;
 use Weline\DataTable\Service\ModelMetadataRegistry;

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Router\Test;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Cache\Adapter\WlsMemoryAdapter;
+use Weline\Server\Cache\Adapter\WlsMemoryAdapter;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Env\WelineEnv;

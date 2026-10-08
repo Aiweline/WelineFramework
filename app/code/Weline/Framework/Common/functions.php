@@ -542,11 +542,13 @@ if (!function_exists('w_scope')) {
         string $type,
         string $code,
         array $other = [],
-    ): \Weline\FileManager\Service\MediaReference\MediaReferenceIdentity {
-        /** @var \Weline\FileManager\Service\MediaReference\MediaReferenceIdentityBuilder $builder */
+    ): \Weline\Framework\Media\MediaReferenceIdentityInterface {
         $builder = ObjectManager::getInstance(
-            \Weline\FileManager\Service\MediaReference\MediaReferenceIdentityBuilder::class
+            \Weline\Framework\Media\MediaReferenceIdentityBuilderInterface::class
         );
+        if (!$builder instanceof \Weline\Framework\Media\MediaReferenceIdentityBuilderInterface) {
+            throw new \RuntimeException('MediaReferenceIdentityBuilderInterface provider is not available.');
+        }
 
         return $builder->build($scope, $type, $code, $other);
     }

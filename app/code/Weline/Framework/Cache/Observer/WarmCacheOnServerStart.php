@@ -78,11 +78,7 @@ class WarmCacheOnServerStart implements ObserverInterface
         if (!$registry->has('framework.cache_pool_health')) {
             $registry->register(new CachePoolHealthWarmer());
         }
-        if (\class_exists(\Weline\Theme\Service\StorefrontFpcWarmer::class)
-            && !$registry->has('theme.storefront_fpc')
-        ) {
-            $registry->register(ObjectManager::getInstance(\Weline\Theme\Service\StorefrontFpcWarmer::class));
-        }
+        // Storefront FPC warmer comes from provides cache.warmer.* (or start_after Observer).
         return $registry;
     }
 }

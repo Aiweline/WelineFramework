@@ -31,6 +31,7 @@ final class DeveloperAccessPolicyTest extends TestCase
         self::assertFalse($policy->shouldInjectBootstrap());
         self::assertFalse($policy->canAccessPanel());
         self::assertFalse($policy->canAccessApi());
+        self::assertFalse($policy->hasActivePanelSession());
     }
 
     public function testDelegatesToCompiledDeveloperProvider(): void
@@ -42,6 +43,7 @@ final class DeveloperAccessPolicyTest extends TestCase
         self::assertTrue($policy->shouldInjectBootstrap());
         self::assertTrue($policy->canAccessPanel());
         self::assertTrue($policy->canAccessApi());
+        self::assertTrue($policy->hasActivePanelSession());
     }
 
     /** @param array<string, class-string> $provides */
@@ -64,4 +66,5 @@ final class AllowDeveloperAccessProvider implements DeveloperAccessProviderInter
     public function shouldInjectBootstrap(): bool { return true; }
     public function canAccessPanel(?Request $request = null): bool { return true; }
     public function canAccessApi(?Request $request = null): bool { return true; }
+    public function hasActivePanelSession(): bool { return true; }
 }

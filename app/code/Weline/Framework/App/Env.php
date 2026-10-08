@@ -991,13 +991,11 @@ class Env extends DataObject
         if (is_array($configured) && $configured !== []) {
             return $configured;
         }
-        $interface = 'Weline\\Theme\\Api\\DefaultThemeInterface';
-        if (!interface_exists($interface)) {
-            return [];
-        }
         try {
-            $provider = ObjectManager::getInstance($interface);
-            if (!is_object($provider) || !method_exists($provider, 'getRegisteredDefault')) {
+            $provider = ObjectManager::getInstance(
+                \Weline\Framework\Runtime\DefaultThemeConfigProviderInterface::class
+            );
+            if (!$provider instanceof \Weline\Framework\Runtime\DefaultThemeConfigProviderInterface) {
                 return [];
             }
             $registered = $provider->getRegisteredDefault();

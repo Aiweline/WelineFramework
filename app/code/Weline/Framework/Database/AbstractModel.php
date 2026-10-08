@@ -1382,7 +1382,6 @@ abstract class AbstractModel extends DataObject
         }
         $objClass = new \ReflectionClass($this::class);
         $arrConst = $objClass->getConstants();
-        //        if ($this::class === \Weline\Theme\Model\WelineTheme::class) p($arrConst,1);
         $_fields = [];
         foreach ($arrConst as $key => $val) {
             if ($val && str_starts_with($key, 'schema_fields_')) {

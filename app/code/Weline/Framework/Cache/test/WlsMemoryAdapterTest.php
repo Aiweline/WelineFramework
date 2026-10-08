@@ -7,7 +7,7 @@ namespace Weline\Framework\Cache\test;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
-use Weline\Framework\Cache\Adapter\WlsMemoryAdapter;
+use Weline\Server\Cache\Adapter\WlsMemoryAdapter;
 use Weline\Server\Service\MemoryStateFacade;
 
 class WlsMemoryAdapterTest extends TestCase

@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Async\Controller\Backend\Api;
 
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Async\Model\SyncHost;
 use Weline\Async\Service\SyncService;

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Observer;
 
+use Weline\Backend\Config\MenuXmlReader;
 use Weline\Backend\Service\MenuCollector;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -31,9 +32,28 @@ class UpgradeMenu implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        $this->applyForceMenuFromSetupEvent($event);
         // 系统级菜单严格以 menu.xml 为唯一来源，升级后始终全量收集。
         $this->collectMenus([]);
         // 注意：Observer 的 execute 方法应该返回 void，返回值被忽略
+    }
+
+    /**
+     * Setup Upgrade puts force_menu in before_route_collection eventData (no Framework→MenuXmlReader FQCN).
+     */
+    private function applyForceMenuFromSetupEvent(Event $event): void
+    {
+        if (!$event->getData('force_menu')) {
+            return;
+        }
+        $reason = \trim((string)$event->getData('force_menu_reason'));
+        if ($reason === '') {
+            $reason = 'setup:upgrade';
+        }
+        if (MenuXmlReader::forceFullHoldDepth() === 0) {
+            MenuXmlReader::beginForceFullHold();
+        }
+        MenuXmlReader::requestForceFull($reason);
     }
 
     /**

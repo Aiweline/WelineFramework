@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http;
 
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Php\FiberTaskBatch;
 use Weline\Framework\Php\FiberTaskRunner;
 
@@ -252,89 +251,27 @@ final class StaticErrorPagePublisher
      */
     public function discoverPublishTargets(): array
     {
-        $targets = [];
-        $hostMap = [];
-        $skipped = [];
-
         try {
-            if (!\class_exists(\Weline\Websites\Model\Website::class)) {
+            if (!\function_exists('w_query')) {
+                return $this->fallbackDefaultOnlyTargets();
+            }
+            $result = \w_query('websites', 'getStaticErrorPublishTargets', [], 'backend');
+            if (!\is_array($result)) {
+                return $this->fallbackDefaultOnlyTargets();
+            }
+            $targets = $result['targets'] ?? null;
+            if (!\is_array($targets) || $targets === []) {
                 return $this->fallbackDefaultOnlyTargets();
             }
 
-            /** @var \Weline\Websites\Model\Website $websiteModel */
-            $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-            $rows = $websiteModel->reset()->select()->fetchArray();
-            if (!\is_array($rows) || $rows === []) {
-                return $this->fallbackDefaultOnlyTargets();
-            }
-
-            $domainsByWebsite = $this->loadDomainsByWebsiteId();
-
-            foreach ($rows as $row) {
-                if (!\is_array($row)) {
-                    continue;
-                }
-                $websiteId = (int)($row[\Weline\Websites\Model\Website::schema_fields_ID] ?? -1);
-                $rawCode = (string)($row[\Weline\Websites\Model\Website::schema_fields_CODE] ?? '');
-                $code = StaticErrorPageMap::sanitizeWebsiteCode($rawCode);
-                if ($code === '') {
-                    if ($rawCode !== '') {
-                        $skipped[] = $rawCode;
-                    }
-                    continue;
-                }
-                $url = (string)($row[\Weline\Websites\Model\Website::schema_fields_URL] ?? '');
-                $defaultLang = \trim((string)($row[\Weline\Websites\Model\Website::schema_fields_DEFAULT_LANGUAGE] ?? ''));
-                if ($defaultLang === '') {
-                    $defaultLang = MaintenanceStaticPage::DEFAULT_LANG;
-                }
-
-                foreach ($this->localesForWebsite($websiteId, $defaultLang) as $lang) {
-                    $targets[] = [
-                        'website_id' => $websiteId,
-                        'website_code' => $code,
-                        'lang' => $lang,
-                        'website_url' => $url,
-                        'default_language' => $defaultLang,
-                    ];
-                }
-
-                foreach ($domainsByWebsite[$websiteId] ?? [] as $domainRow) {
-                    $host = StaticErrorPageMap::normalizeHost((string)($domainRow['domain'] ?? ''));
-                    if ($host === '') {
-                        continue;
-                    }
-                    $sub = StaticErrorPageMap::normalizeSubPath((string)($domainRow['sub_path'] ?? ''));
-                    $key = StaticErrorPageMap::mapKey($host, $sub);
-                    if ($key !== '') {
-                        $hostMap[$key] = $code;
-                    }
-                }
-
-                // Also map website URL host when no domain rows exist.
-                if (($domainsByWebsite[$websiteId] ?? []) === [] && $url !== '') {
-                    $parts = \parse_url($url);
-                    $host = StaticErrorPageMap::normalizeHost((string)($parts['host'] ?? ''));
-                    $sub = StaticErrorPageMap::normalizeSubPath((string)($parts['path'] ?? ''));
-                    $key = StaticErrorPageMap::mapKey($host, $sub);
-                    if ($key !== '') {
-                        $hostMap[$key] = $code;
-                    }
-                }
-            }
+            return [
+                'targets' => $targets,
+                'host_map' => \is_array($result['host_map'] ?? null) ? $result['host_map'] : [],
+                'skipped' => \is_array($result['skipped'] ?? null) ? \array_values($result['skipped']) : [],
+            ];
         } catch (\Throwable) {
             return $this->fallbackDefaultOnlyTargets();
         }
-
-        if ($targets === []) {
-            return $this->fallbackDefaultOnlyTargets();
-        }
-
-        return [
-            'targets' => $targets,
-            'host_map' => $hostMap,
-            'skipped' => $skipped,
-        ];
     }
 
     /**
@@ -349,13 +286,16 @@ final class StaticErrorPagePublisher
 
         $assigned = [];
         try {
-            if (\class_exists(\Weline\Websites\Model\WebsiteLanguage::class)) {
-                /** @var \Weline\Websites\Model\WebsiteLanguage $wl */
-                $wl = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteLanguage::class);
-                foreach ($wl->getWebsiteLanguageCodes($websiteId) as $code) {
-                    $code = \trim((string)$code);
-                    if ($code !== '' && \preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $code) === 1) {
-                        $assigned[] = $code;
+            if (\function_exists('w_query') && $websiteId >= 0) {
+                $codes = \w_query('websites', 'getWebsiteLanguageCodes', [
+                    'website_id' => $websiteId,
+                ], 'backend');
+                if (\is_array($codes)) {
+                    foreach ($codes as $code) {
+                        $code = \trim((string)$code);
+                        if ($code !== '' && \preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $code) === 1) {
+                            $assigned[] = $code;
+                        }
                     }
                 }
             }
@@ -374,48 +314,6 @@ final class StaticErrorPagePublisher
             $minimal,
             static fn(string $c): bool => $c !== '' && \preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $c) === 1
         )));
-    }
-
-    /**
-     * @return array<int, list<array{domain: string, sub_path: string}>>
-     */
-    private function loadDomainsByWebsiteId(): array
-    {
-        $byWebsite = [];
-        try {
-            if (!\class_exists(\Weline\Websites\Model\WebsiteDomain::class)) {
-                return [];
-            }
-            /** @var \Weline\Websites\Model\WebsiteDomain $domainModel */
-            $domainModel = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteDomain::class);
-            $rows = $domainModel->reset()->select()->fetchArray();
-            if (!\is_array($rows)) {
-                return [];
-            }
-            foreach ($rows as $row) {
-                if (!\is_array($row)) {
-                    continue;
-                }
-                $status = (string)($row[\Weline\Websites\Model\WebsiteDomain::schema_fields_STATUS] ?? 'active');
-                if ($status !== '' && $status !== 'active') {
-                    continue;
-                }
-                $websiteId = (int)($row[\Weline\Websites\Model\WebsiteDomain::schema_fields_WEBSITE_ID] ?? -1);
-                $domain = (string)($row[\Weline\Websites\Model\WebsiteDomain::schema_fields_DOMAIN] ?? '');
-                $subPath = (string)($row[\Weline\Websites\Model\WebsiteDomain::schema_fields_SUB_PATH] ?? '');
-                if ($websiteId < 0 || \trim($domain) === '') {
-                    continue;
-                }
-                $byWebsite[$websiteId][] = [
-                    'domain' => $domain,
-                    'sub_path' => $subPath,
-                ];
-            }
-        } catch (\Throwable) {
-            return [];
-        }
-
-        return $byWebsite;
     }
 
     /**

@@ -6,7 +6,7 @@ namespace Weline\Framework\Router\Test;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\App\State;
-use Weline\Framework\Cache\Adapter\WlsMemoryAdapter;
+use Weline\Server\Cache\Adapter\WlsMemoryAdapter;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
 use Weline\Framework\Cache\KeyBuilder;

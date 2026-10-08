@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\I18n\Api\Rest\V1;
 
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 
 /**
  * 远程协助翻译 REST（薄壳 → i18n_remote_translation Query）。

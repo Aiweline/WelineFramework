@@ -4,17 +4,19 @@ declare(strict_types=1);
 
 namespace Weline\Framework\DateTime;
 
+use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
  * One-shot: treat existing naive schedule windows as website-local, rewrite to UTC.
+ * Table targets come from owning-module {@see ScheduleWindowUtcMigrationContributionInterface} provides.
  */
 final class ScheduleWindowUtcMigrator
 {
     public const MARKER_PATH_SUFFIX = '/var/schedule_windows_utc_migrated_v1';
 
     /**
-     * @return array{skipped:bool,reason?:string,updated:array<string,int>,dry_run:bool}
+     * @return array{skipped:bool,reason?:string,updated:array<string,int>,dry_run:bool,timezone?:string}
      */
     public function migrate(bool $dryRun = false, ?string $timezone = null): array
     {
@@ -29,39 +31,36 @@ final class ScheduleWindowUtcMigrator
         }
 
         $tz = Timezone::resolveWebsiteTimezone($timezone);
-        $updated = [
-            'marketing_campaign' => $this->migrateTableColumns(
-                'Weline\\Marketing\\Model\\Campaign\\Campaign',
-                ['start_date', 'end_date'],
-                $tz,
-                $dryRun,
-            ),
-            'marketing_rule' => $this->migrateTableColumns(
-                'Weline\\Marketing\\Model\\Rule\\Rule',
-                ['start_date', 'end_date'],
-                $tz,
-                $dryRun,
-            ),
-            'marketing_coupon' => $this->migrateTableColumns(
-                'Weline\\Marketing\\Model\\Coupon\\Coupon',
-                ['start_date', 'end_date'],
-                $tz,
-                $dryRun,
-            ),
-            'theme_layout_schedule' => $this->migrateTableColumns(
-                'Weline\\Theme\\Model\\ThemeLayoutSchedule',
-                ['starts_at', 'ends_at'],
-                $tz,
-                $dryRun,
-                ['timezone' => $tz],
-            ),
-            'promotion_activity_theme' => $this->migrateTableColumns(
-                'Weline\\Promotion\\Model\\PromotionActivityTheme',
-                ['starts_at', 'ends_at'],
-                $tz,
-                $dryRun,
-            ),
-        ];
+        $updated = [];
+        foreach ($this->contributions() as $contribution) {
+            try {
+                foreach ($contribution->targets($tz) as $target) {
+                    if (!\is_array($target)) {
+                        continue;
+                    }
+                    $id = \trim((string)($target['id'] ?? ''));
+                    $model = (string)($target['model'] ?? '');
+                    $columns = $target['columns'] ?? [];
+                    if ($id === '' || $model === '' || !\is_array($columns) || $columns === []) {
+                        continue;
+                    }
+                    $extra = $target['extra'] ?? [];
+                    if (!\is_array($extra)) {
+                        $extra = [];
+                    }
+                    /** @var list<string> $columnList */
+                    $columnList = \array_values(\array_filter(\array_map('strval', $columns)));
+                    /** @var array<string, string> $extraSet */
+                    $extraSet = [];
+                    foreach ($extra as $k => $v) {
+                        $extraSet[(string)$k] = (string)$v;
+                    }
+                    $updated[$id] = $this->migrateTableColumns($model, $columnList, $tz, $dryRun, $extraSet);
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
 
         if (!$dryRun) {
             $dir = dirname($marker);
@@ -77,6 +76,35 @@ final class ScheduleWindowUtcMigrator
             'dry_run' => $dryRun,
             'timezone' => $tz,
         ];
+    }
+
+    /**
+     * @return list<ScheduleWindowUtcMigrationContributionInterface>
+     */
+    private function contributions(): array
+    {
+        $out = [];
+        try {
+            $registry = ObjectManager::getInstance(ServiceProviderRegistry::class);
+            if (!$registry instanceof ServiceProviderRegistry) {
+                return [];
+            }
+            $prefix = ScheduleWindowUtcMigrationContributionInterface::CAPABILITY_PREFIX;
+            foreach ($registry->implementationsWithPrefix($prefix) as $implementation) {
+                try {
+                    $instance = ObjectManager::getInstance($implementation);
+                    if ($instance instanceof ScheduleWindowUtcMigrationContributionInterface) {
+                        $out[] = $instance;
+                    }
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return $out;
     }
 
     /**

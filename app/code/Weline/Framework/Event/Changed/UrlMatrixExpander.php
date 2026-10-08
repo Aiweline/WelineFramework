@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Event\Changed;
 
-use Weline\Framework\Manager\ObjectManager;
-
 /**
  * urls∪previous_urls → canonicalize → × 站语种 × 站货币；始终 ≤256 降级。
  */
@@ -115,20 +113,7 @@ final class UrlMatrixExpander
             }
         } catch (\Throwable) {
         }
-        try {
-            $class = \Weline\Websites\Model\WebsiteLanguage::class;
-            if (class_exists($class)) {
-                /** @var object $model */
-                $model = ObjectManager::getInstance($class);
-                if (method_exists($model, 'getWebsiteLanguageCodes')) {
-                    $codes = $model->getWebsiteLanguageCodes($websiteId);
-                    if (is_array($codes)) {
-                        return array_values(array_filter(array_map('strval', $codes)));
-                    }
-                }
-            }
-        } catch (\Throwable) {
-        }
+        // No WebsiteLanguage FQCN soft-pull — websites Query is the only read path.
         return ['zh_Hans_CN', 'en_US'];
     }
 

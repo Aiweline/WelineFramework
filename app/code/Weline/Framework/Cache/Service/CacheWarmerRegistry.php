@@ -15,17 +15,26 @@ declare(strict_types=1);
 namespace Weline\Framework\Cache\Service;
 
 use Weline\Framework\Cache\Contract\CacheWarmerInterface;
+use Weline\Framework\Compilation\ServiceProviderRegistry;
+use Weline\Framework\Manager\ObjectManager;
 
 class CacheWarmerRegistry
 {
+    public const CAPABILITY_PREFIX = 'cache.warmer.';
+
     /** @var array<string, CacheWarmerInterface> */
     private array $warmers = [];
 
+    private bool $compiledWarmersLoaded = false;
+
     /**
      * @param array<int, CacheWarmerInterface> $warmers 初始 Warmer 列表（测试常用）
+     * @param bool $autoloadCompiled When false, skip module provides (unit tests with fakes).
      */
-    public function __construct(array $warmers = [])
-    {
+    public function __construct(
+        array $warmers = [],
+        private readonly bool $autoloadCompiled = true,
+    ) {
         foreach ($warmers as $warmer) {
             $this->register($warmer);
         }
@@ -43,6 +52,8 @@ class CacheWarmerRegistry
 
     public function has(string $name): bool
     {
+        $this->ensureCompiledWarmers();
+
         return isset($this->warmers[$name]);
     }
 
@@ -51,7 +62,38 @@ class CacheWarmerRegistry
      */
     public function all(): array
     {
+        $this->ensureCompiledWarmers();
+
         return $this->warmers;
+    }
+
+    /**
+     * Load owning-module CacheWarmerInterface implementations from module provides.
+     * Framework must not soft-pull Theme/Storefront FQCNs.
+     */
+    private function ensureCompiledWarmers(): void
+    {
+        if ($this->compiledWarmersLoaded || !$this->autoloadCompiled) {
+            return;
+        }
+        $this->compiledWarmersLoaded = true;
+        try {
+            $serviceProviders = ObjectManager::getInstance(ServiceProviderRegistry::class);
+            if (!$serviceProviders instanceof ServiceProviderRegistry) {
+                return;
+            }
+            foreach ($serviceProviders->implementationsWithPrefix(self::CAPABILITY_PREFIX) as $implementation) {
+                try {
+                    $warmer = ObjectManager::getInstance($implementation);
+                    if ($warmer instanceof CacheWarmerInterface && !isset($this->warmers[$warmer->getName()])) {
+                        $this->register($warmer);
+                    }
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+        } catch (\Throwable) {
+        }
     }
 
     /**
@@ -74,6 +116,7 @@ class CacheWarmerRegistry
      */
     public function warmUp(?string $onlyPool = null): array
     {
+        $this->ensureCompiledWarmers();
         $startedAt = \time();
         $startUs = \microtime(true);
 

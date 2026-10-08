@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Websites\Api\Rest\V1;
 
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 use Weline\Websites\Model\Website;
 
 /**

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Promotion',
-    'version' => '1.1.32',
+    'version' => '1.1.33',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Backend' => '*',
@@ -19,5 +19,9 @@ return [
         'Weline_CustomerService' => '*',
         'Weline_Seo' => '*',
         'Weline_Widget' => '*',
+    ],
+    'provides' => [
+        'schedule_window_utc_migration.Weline_Promotion'
+            => \Weline\Promotion\Api\Runtime\ScheduleWindowUtcMigrationContribution::class,
     ],
 ];

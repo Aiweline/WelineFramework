@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\Framework\App\Controller;
+namespace Weline\Backend\Controller;
 
 use Weline\Framework\Controller\AbstractRestController;
 use Weline\Framework\Http\PublicApiAuthRouteMatcher;
@@ -17,6 +17,10 @@ use Weline\Framework\Session\Auth\BackendSessionUserProviderInterface;
 use Weline\Framework\Session\Auth\Device\AuthenticatedDeviceRegistryInterface;
 use Weline\Framework\Session\SessionFactory;
 
+/**
+ * Backend-area REST gate (session + Admin Bearer).
+ * Owning module: Weline_Backend.
+ */
 class BackendRestController extends AbstractRestController
 {
     protected AuthenticatedSessionInterface $session;

@@ -9,7 +9,7 @@
 
 namespace Weline\Admin\Api\Rest\V1;
 
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 
 class Index extends BackendRestController
 {

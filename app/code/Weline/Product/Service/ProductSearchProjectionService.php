@@ -46,6 +46,16 @@ final class ProductSearchProjectionService
      */
     private static array $snapshotProcessCache = [];
 
+    public static function processSnapshotCacheCount(): int
+    {
+        return \count(self::$snapshotProcessCache);
+    }
+
+    public static function clearProcessSnapshotCache(): void
+    {
+        self::$snapshotProcessCache = [];
+    }
+
     public function __construct(
         private readonly ProductRepository $products,
         private readonly StoreProductRepository $storeProducts,

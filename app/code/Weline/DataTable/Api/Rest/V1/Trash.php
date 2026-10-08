@@ -2,7 +2,7 @@
 
 namespace Weline\DataTable\Api\Rest\V1;
 
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 
 /**
  * 回收站管理API

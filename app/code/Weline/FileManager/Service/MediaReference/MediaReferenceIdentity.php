@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\FileManager\Service\MediaReference;
 
+use Weline\Framework\Media\MediaReferenceIdentityInterface;
+
 /**
  * Immutable media reference identity built by w_scope / MediaReferenceIdentityBuilder.
  */
-final readonly class MediaReferenceIdentity
+final readonly class MediaReferenceIdentity implements MediaReferenceIdentityInterface
 {
     /**
      * @param array<string, string> $tags

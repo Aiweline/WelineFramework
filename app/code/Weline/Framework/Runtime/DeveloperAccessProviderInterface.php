@@ -13,4 +13,10 @@ interface DeveloperAccessProviderInterface
     public function canAccessPanel(?Request $request = null): bool;
 
     public function canAccessApi(?Request $request = null): bool;
+
+    /**
+     * True only when a real panel Cookie session is active.
+     * Must not alias {@see canAccessPanel()} (dev mode makes that always true).
+     */
+    public function hasActivePanelSession(): bool;
 }

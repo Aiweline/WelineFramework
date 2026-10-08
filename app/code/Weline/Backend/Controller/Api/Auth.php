@@ -4,7 +4,7 @@ namespace Weline\Backend\Controller\Api;
 
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Service\BackendTokenService;
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 

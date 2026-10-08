@@ -12,7 +12,7 @@ use Weline\Framework\View\Template;
 
 /**
  * Request-level HotCache residual batch: collapse cold shared_read singles into
- * prefetchPolicy MGET before layout. Soft-deps Websites/Theme policy factories.
+ * prefetchPolicy MGET before layout. Theme path.resolve via page_prefetch provides.
  */
 final class StorefrontHotCachePagePrefetch
 {
@@ -46,13 +46,16 @@ final class StorefrontHotCachePagePrefetch
 
     private function prefetchSalesChannelCatalog(): int
     {
-        $coordinator = 'Weline\\Websites\\Service\\StorefrontScopeCatalogCacheCoordinator';
-        if (!\class_exists($coordinator) || !\method_exists($coordinator, 'channelPolicy')) {
-            return 0;
-        }
         try {
-            /** @var CachePolicy $policy */
-            $policy = $coordinator::channelPolicy();
+            // Same CachePolicy identity as Websites StorefrontScopeCatalogCacheCoordinator::channelPolicy().
+            $policy = new CachePolicy(
+                resource: 'websites.sales_channel_catalog',
+                pool: 'website',
+                scope: 'store',
+                dependencies: ['catalog'],
+                freshTtlSeconds: 600,
+                staleTtlSeconds: 3600,
+            );
             $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
             if (!$hotCache instanceof StorefrontScopeHotCache) {
                 return 0;
@@ -104,21 +107,19 @@ final class StorefrontHotCachePagePrefetch
     }
 
     /**
-     * Soft-dep Theme path.resolve page prefetch (nested literal fetches → MGET).
+     * Theme path.resolve via {@see \Weline\Framework\Runtime\StorefrontPagePrefetchContributionInterface}.
      */
     private function prefetchThemePathResolve(?Template $template, string ...$templateRefs): int
     {
-        $class = 'Weline\\Theme\\Service\\Storefront\\ThemePathResolvePagePrefetch';
-        if (!\class_exists($class)) {
-            return 0;
-        }
         try {
-            $prefetch = ObjectManager::getInstance($class);
-            if (!\is_object($prefetch) || !\method_exists($prefetch, 'primeBeforeLayoutFetch')) {
+            $registry = ObjectManager::getInstance(
+                \Weline\Framework\Runtime\StorefrontPagePrefetchContributionRegistry::class
+            );
+            if (!$registry instanceof \Weline\Framework\Runtime\StorefrontPagePrefetchContributionRegistry) {
                 return 0;
             }
 
-            return (int)$prefetch->primeBeforeLayoutFetch($template, ...$templateRefs);
+            return $registry->primeBeforeLayoutFetch($template, ...$templateRefs);
         } catch (\Throwable) {
             return 0;
         }

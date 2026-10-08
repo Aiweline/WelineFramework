@@ -13,7 +13,7 @@ final class RequestLocatorUsageGuardTest extends TestCase
      */
     private const ALLOWLIST = [
         'app/code/Weline/Framework/App/Controller/BackendController.php',
-        'app/code/Weline/Framework/App/Controller/BackendRestController.php',
+        'app/code/Weline/Backend/Controller/BackendRestController.php',
         'app/code/Weline/Framework/Controller/AbstractRestController.php',
         'app/code/Weline/Framework/Controller/Core.php',
         'app/code/Weline/Framework/Controller/PcController.php',

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\FileManager\Service\MediaReference;
 
+use Weline\Framework\Media\MediaReferenceIdentityBuilderInterface;
+use Weline\Framework\Media\MediaReferenceIdentityInterface;
+
 /**
  * Builds MediaReferenceIdentity.v1 path + tags. Prefer w_scope() over hand-built paths.
  */
-final class MediaReferenceIdentityBuilder
+final class MediaReferenceIdentityBuilder implements MediaReferenceIdentityBuilderInterface
 {
     /** @var array<string, string> root => default identity code key */
     private const CODE_KEYS = [
@@ -33,7 +36,7 @@ final class MediaReferenceIdentityBuilder
     /**
      * @param array<string, mixed> $slot
      */
-    public function build(?string $scope, string $type, string $code, array $slot = []): MediaReferenceIdentity
+    public function build(?string $scope, string $type, string $code, array $slot = []): MediaReferenceIdentityInterface
     {
         $type = strtolower(trim($type));
         $code = trim($code);

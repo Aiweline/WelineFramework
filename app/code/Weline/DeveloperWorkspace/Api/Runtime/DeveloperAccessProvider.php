@@ -31,6 +31,11 @@ final class DeveloperAccessProvider implements DeveloperAccessProviderInterface,
         return $this->access->canAccessApi($request);
     }
 
+    public function hasActivePanelSession(): bool
+    {
+        return $this->access->hasActivePanelSession();
+    }
+
     public function canAccessRawHttp(string $rawRequest): bool
     {
         return $this->access->canAccessRawHttp($rawRequest);

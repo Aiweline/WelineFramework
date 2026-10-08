@@ -131,12 +131,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         try {
             $registry = $this->cacheWarmerRegistry
                 ??= ObjectManager::getInstance(CacheWarmerRegistry::class);
-            if (!$registry->has('theme.storefront_fpc')) {
-                if (!\class_exists(\Weline\Theme\Service\StorefrontFpcWarmer::class)) {
-                    return;
-                }
-                $registry->register(ObjectManager::getInstance(\Weline\Theme\Service\StorefrontFpcWarmer::class));
-            }
+            // Owning modules register via provides cache.warmer.* (no Theme FQCN soft-pull).
             $result = $registry->warmUp('fpc');
             $warmed = (int)($result['warmed'] ?? 0);
             if ($warmed > 0) {

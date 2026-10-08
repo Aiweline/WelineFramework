@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\FileManager\Service\MediaReference;
 
+use Weline\Framework\Media\MediaReferenceScopeResolverInterface;
 use Weline\Framework\Runtime\RequestContext;
 
 /**
  * Resolve storage_scope from ambient/request context when callers omit it.
  */
-final class MediaReferenceScopeResolver
+final class MediaReferenceScopeResolver implements MediaReferenceScopeResolverInterface
 {
     public const REQUEST_KEY = 'media_ref.storage_scope';
     public const AMBIENT_KEY = 'media_ref.ambient';

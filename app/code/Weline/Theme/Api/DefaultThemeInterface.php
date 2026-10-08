@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Api;
 
+use Weline\Framework\Runtime\DefaultThemeConfigProviderInterface;
+
 /**
  * Theme 模块即系统全局默认主题权威（view/theme），始终可用，不依赖库表注册。
  * Env / Websites 不得另持一份默认主题身份。
  * 目录里若有「Default 默认主题」行，仅作编辑/版本 catalog id（任意正整数，绝非固定 id=1）；
  * 无目录行时 theme_id=0 表示模块包默认（package_defaults）。
  */
-interface DefaultThemeInterface
+interface DefaultThemeInterface extends DefaultThemeConfigProviderInterface
 {
     public const REGISTERED_NAME = 'Default 默认主题';
     public const REGISTERED_MODULE = 'Weline_Theme';
@@ -19,21 +21,6 @@ interface DefaultThemeInterface
     public const MODULE_ORIGIN = 'Weline_Theme::view/theme';
     /** 无目录行时的应用引用 theme_id（模块包默认，不是库主键）。 */
     public const MODULE_DEFAULT_THEME_ID = 0;
-
-    /**
-     * @return array{
-     *   id:int,
-     *   name:string,
-     *   module_name:string,
-     *   path:string,
-     *   parent_id?:int|null,
-     *   is_active?:int|bool,
-     *   is_active_frontend?:int|bool,
-     *   is_active_backend?:int|bool,
-     *   source?:string
-     * }
-     */
-    public function getRegisteredDefault(?string $area = null): array;
 
     /**
      * 无网站/范围应用引用时的 package_defaults 应用引用（theme_version_id=0, content_revision=0）。

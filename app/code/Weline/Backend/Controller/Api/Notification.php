@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Backend\Controller\Api;
 
 use Weline\Backend\Service\NotificationService;
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 

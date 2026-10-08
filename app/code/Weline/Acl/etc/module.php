@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Acl',
-    "version" => '1.1.11',
+    "version" => '1.1.12',
     "requires" => [
         'Weline_Framework' => '*',
     ],
@@ -10,6 +10,7 @@ return [
     ],
     "provides" => [
         \Weline\Acl\Service\AclServiceInterface::class => \Weline\Acl\Service\AclService::class,
+        \Weline\Framework\Acl\RoleAclEntriesProviderInterface::class => \Weline\Acl\Service\AclService::class,
         \Weline\Acl\Api\Authorization\AuthorizationServiceInterface::class => \Weline\Acl\Service\AclService::class,
         \Weline\Acl\Api\Authorization\ResourceAuthorizationServiceInterface::class => \Weline\Acl\Service\ResourceAuthorizationService::class,
         \Weline\Acl\Api\Authorization\ObjectAuthorizationServiceInterface::class => \Weline\Acl\Service\ObjectAuthorizationService::class,

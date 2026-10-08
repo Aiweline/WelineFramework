@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Order\Controller\Api;
 
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Service\OrderService;
 use Weline\Order\Service\OrderStateMachine;

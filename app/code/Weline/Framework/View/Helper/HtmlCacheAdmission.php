@@ -75,27 +75,26 @@ final class HtmlCacheAdmission
         return \str_contains($body, 'data-weline-product-card-css');
     }
 
+    /**
+     * Framework-only heal tag: marker required by {@see storefrontProductCardCssOk}.
+     * Product owns richer emission (version / instance styles) at render time —
+     * admission must not soft-pull Product FQCN.
+     */
     private static function buildProductCardStyleTag(): string
     {
-        if (\class_exists(\Weline\Product\Service\ProductCardRenderer::class, false)
-            || \class_exists(\Weline\Product\Service\ProductCardRenderer::class)
-        ) {
-            try {
-                $tag = \Weline\Product\Service\ProductCardRenderer::buildProductCardStyleTag();
-                if (\is_string($tag) && $tag !== '') {
-                    return $tag;
-                }
-            } catch (\Throwable) {
-            }
-        }
-
         try {
             $url = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\View\Template::class)
                 ->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Product::css/frontend/product-card.css');
+            $url = \trim((string)$url);
+            if ($url === '') {
+                return '';
+            }
+
             return '<link rel="stylesheet" data-weline-product-card-css="1" data-weline-widget-asset="source" data-weline-source-position="head" href="'
-                . htmlspecialchars((string)$url, ENT_QUOTES, 'UTF-8') . '">' . "\n";
+                . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . "\n";
         } catch (\Throwable) {
             return '';
         }
     }
 }
+

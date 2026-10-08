@@ -1000,6 +1000,25 @@ final class StorefrontProductDetailProjector
         \Weline\Framework\Runtime\RequestContext::set($markerKey, $requestId);
     }
 
+    /** MemDiag / ProcessCacheResetter: drop request-scoped label/axis bags. */
+    public function clearProcessDiagCaches(): void
+    {
+        $this->labelsByProductId = [];
+        $this->axesByProductId = [];
+        $this->bulkProjectionContext = null;
+    }
+
+    /**
+     * @return array{pdp_labels_by_product:int, pdp_axes_by_product:int}
+     */
+    public function diagProcessCacheCounts(): array
+    {
+        return [
+            'pdp_labels_by_product' => \count($this->labelsByProductId),
+            'pdp_axes_by_product' => \count($this->axesByProductId),
+        ];
+    }
+
     private function labels(): StorefrontEavLabelResolver
     {
         return $this->eavLabels ??= ObjectManager::getInstance(StorefrontEavLabelResolver::class);

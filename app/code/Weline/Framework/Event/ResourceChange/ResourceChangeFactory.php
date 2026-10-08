@@ -88,10 +88,11 @@ final class ResourceChangeFactory
         $resourceScope = $resourceScope === null ? null : ($websiteId === null ? trim($resourceScope) : strtolower(trim($resourceScope)));
         if ($websiteId !== null && ($resourceScope === null || $resourceScope === '')) {
             try {
-                if (class_exists(\Weline\FileManager\Service\MediaReference\MediaReferenceScopeResolver::class)) {
-                    $resolved = ObjectManager::getInstance(
-                        \Weline\FileManager\Service\MediaReference\MediaReferenceScopeResolver::class
-                    )->fromContext();
+                $resolver = ObjectManager::getInstance(
+                    \Weline\Framework\Media\MediaReferenceScopeResolverInterface::class
+                );
+                if ($resolver instanceof \Weline\Framework\Media\MediaReferenceScopeResolverInterface) {
+                    $resolved = $resolver->fromContext();
                     if (is_string($resolved) && $resolved !== '') {
                         $resourceScope = $resolved;
                     }

@@ -4,7 +4,7 @@ namespace Weline\Api\Api\Rest\V1\Backend;
 
 use Weline\Backend\Api\Auth\BackendApiAuthenticationInterface;
 use Weline\Backend\Api\Auth\BackendApiLoginResult;
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 

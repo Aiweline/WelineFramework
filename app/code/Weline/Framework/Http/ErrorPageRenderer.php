@@ -227,17 +227,7 @@ final class ErrorPageRenderer
         if ($text === '') {
             return '';
         }
-        try {
-            if (\class_exists(\Weline\Theme\Helper\WidgetI18n::class, false)
-                || \class_exists(\Weline\Theme\Helper\WidgetI18n::class)) {
-                $translated = \trim(\Weline\Theme\Helper\WidgetI18n::label($text));
-                if ($translated !== '') {
-                    return $translated;
-                }
-            }
-        } catch (\Throwable) {
-            // Fall through to Phrase __.
-        }
+        // Phrase __() + State/StorefrontRenderContext locale — no Theme WidgetI18n soft-pull.
         try {
             if (\function_exists('__')) {
                 return (string)__($text);

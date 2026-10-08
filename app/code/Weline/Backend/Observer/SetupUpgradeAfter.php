@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Observer;
 
+use Weline\Backend\Config\MenuXmlReader;
 use Weline\Backend\Service\ChannelAdapterCollector;
 use Weline\Backend\Setup\EnsureAdmin;
 use Weline\Framework\Event\Event;
@@ -26,6 +27,10 @@ class SetupUpgradeAfter implements ObserverInterface
 {
     public function execute(Event &$event): void
     {
+        if ($event->getData('force_menu_release')) {
+            MenuXmlReader::resetForceFullState();
+        }
+
         /** @var EnsureAdmin $ensureAdmin */
         $ensureAdmin = ObjectManager::getInstance(EnsureAdmin::class);
         $ensureAdmin->ensure();

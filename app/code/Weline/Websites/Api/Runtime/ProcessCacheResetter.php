@@ -35,4 +35,9 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
 
         return $context->isExplicitCacheClear() ? 3 : 2;
     }
+    public function diagCounts(): array
+    {
+        return [];
+    }
+
 }

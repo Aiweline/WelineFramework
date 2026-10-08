@@ -611,9 +611,6 @@ class Template extends DataObject implements RequestLocalInterface
      */
     private function publishAssignedSeoPageProfile(array $assigned): void
     {
-        if (!class_exists(\Weline\Seo\Service\Head\SeoPageProfileBag::class)) {
-            return;
-        }
         if (!isset($assigned['seo']) || !is_array($assigned['seo'])) {
             return;
         }
@@ -631,7 +628,7 @@ class Template extends DataObject implements RequestLocalInterface
             $seo['page_type'] = 'product';
         }
 
-        \Weline\Seo\Service\Head\SeoPageProfileBag::replace($seo);
+        \Weline\Framework\Http\Seo\SeoPageProfileBag::replace($seo);
     }
 
     /**

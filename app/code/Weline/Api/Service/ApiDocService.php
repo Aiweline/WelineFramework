@@ -401,7 +401,7 @@ class ApiDocService implements ApiDocumentationProviderInterface
         }
         
         // 判断是前端API还是后端API
-        $isBackendApi = $reflection->isSubclassOf(\Weline\Framework\App\Controller\BackendRestController::class);
+        $isBackendApi = $reflection->isSubclassOf(\Weline\Backend\Controller\BackendRestController::class);
         
         // 获取模块路由前缀
         $moduleRouter = $module['router'] ?? strtolower($module['name'] ?? '');

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Api;
 
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 use Weline\Framework\Controller\AbstractRestController;
 
 /**

@@ -184,23 +184,19 @@ final class StorefrontWidgetRuntimeSchedule
     }
 
     /**
-     * Soft-dep Theme primer：解析 widget→module_source → prefetchPolicy(theme.widget_asset_source)。
+     * Inline widget assets via {@see StorefrontPagePrefetchContributionInterface} provides.
      *
      * @param list<array{type:string,name:string,code:string,module:string}> $specs
      */
     private function delegateAssetPrefetch(array $specs): int
     {
-        $primerClass = 'Weline\\Theme\\Service\\Storefront\\StorefrontWidgetRuntimeAssetPrimer';
-        if (!class_exists($primerClass)) {
-            return 0;
-        }
         try {
-            $primer = ObjectManager::getInstance($primerClass);
-            if (!\is_object($primer) || !method_exists($primer, 'prefetchForInlineSpecs')) {
+            $registry = ObjectManager::getInstance(StorefrontPagePrefetchContributionRegistry::class);
+            if (!$registry instanceof StorefrontPagePrefetchContributionRegistry) {
                 return 0;
             }
 
-            return (int)$primer->prefetchForInlineSpecs($specs);
+            return $registry->prefetchInlineWidgetAssets($specs);
         } catch (\Throwable) {
             return 0;
         }

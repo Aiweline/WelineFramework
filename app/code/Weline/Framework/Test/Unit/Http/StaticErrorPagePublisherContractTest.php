@@ -22,6 +22,10 @@ final class StaticErrorPagePublisherContractTest extends TestCase
         self::assertStringContainsString('writeHostMapAtomic', $source);
         self::assertStringContainsString('WELINE_STATIC_ERROR_CONCURRENCY', $source);
         self::assertStringContainsString('localesForWebsite', $source);
+        self::assertStringContainsString("w_query('websites', 'getStaticErrorPublishTargets'", $source);
+        self::assertStringNotContainsString('Weline\\Websites\\Model\\Website::', $source);
+        self::assertStringNotContainsString('WebsiteLanguage::', $source);
+        self::assertStringNotContainsString('WebsiteDomain::', $source);
         // Must not claim multi-core parallelism in progress copy.
         self::assertStringNotContainsString('多核并行', $source);
     }

@@ -23,4 +23,9 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
         ResourceTreeService::clearProcessCache();
         return 6;
     }
+    public function diagCounts(): array
+    {
+        return [];
+    }
+
 }

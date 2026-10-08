@@ -104,11 +104,7 @@ class Warm implements CommandInterface
         if (!$registry->has('framework.cache_pool_health')) {
             $registry->register(new CachePoolHealthWarmer());
         }
-        if (class_exists(\Weline\Theme\Service\StorefrontFpcWarmer::class)
-            && !$registry->has('theme.storefront_fpc')
-        ) {
-            $registry->register(ObjectManager::getInstance(\Weline\Theme\Service\StorefrontFpcWarmer::class));
-        }
+        // Storefront FPC warmer: owning-module provides cache.warmer.* (no soft-pull).
 
         if (isset($data['list']) || isset($args['list']) || in_array('--list', $args, true) || in_array('-l', $args, true)) {
             $this->renderRegistryList($registry);

@@ -60,12 +60,8 @@ final class DevToolMemoryLimitBootstrap
     private static function isLikelyDevToolSession(): bool
     {
         try {
-            if (\class_exists(\Weline\DeveloperWorkspace\Service\PanelAccessService::class)) {
-                /** @var \Weline\DeveloperWorkspace\Service\PanelAccessService $access */
-                $access = ObjectManager::getInstance(
-                    \Weline\DeveloperWorkspace\Service\PanelAccessService::class
-                );
-
+            $access = ObjectManager::getInstance(DeveloperAccessProviderInterface::class);
+            if ($access instanceof DeveloperAccessProviderInterface) {
                 return $access->hasActivePanelSession();
             }
         } catch (\Throwable) {

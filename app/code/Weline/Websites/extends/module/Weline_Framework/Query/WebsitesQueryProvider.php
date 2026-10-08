@@ -5,6 +5,8 @@ namespace Weline\Websites\Extends\Module\Weline_Framework\Query;
 
 use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Acl\Api\Authorization\BackendObjectAuthorizationGuardInterface;
+use Weline\Framework\Http\MaintenanceStaticPage;
+use Weline\Framework\Http\StaticErrorPageMap;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
@@ -110,6 +112,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getActiveWebsiteDomains' => $this->getActiveWebsiteDomains($params),
             'getWebsiteDomains' => $this->getWebsiteDomains($params),
             'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
+            'getStaticErrorPublishTargets' => $this->getStaticErrorPublishTargets($params),
             'getWebsiteCurrencyCodes' => $this->getWebsiteCurrencyCodes($params),
             'getDomainPoolList'      => $this->getDomainPoolList($params),
             'getDnsRecords'          => $this->getDnsRecords($params),
@@ -446,6 +449,11 @@ class WebsitesQueryProvider implements QueryProviderInterface
                         ['name' => 'website_id', 'type' => 'int', 'required' => true],
                         ['name' => 'force_reload', 'type' => 'bool', 'required' => false],
                     ],
+                ],
+                [
+                    'name'        => 'getStaticErrorPublishTargets',
+                    'description' => __('静态错误页发布目标（网站×语种 + host_map）'),
+                    'params'      => [],
                 ],
                 [
                     'name'        => 'getWebsiteCurrencyCodes',
@@ -1537,6 +1545,127 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $forceReload = (bool)($params['force_reload'] ?? false);
 
         return WebsiteData::languageCodesForWebsite($websiteId, $forceReload);
+    }
+
+    /**
+     * Catalog for Framework StaticErrorPagePublisher (website×locale + host map).
+     *
+     * @return array{
+     *     targets: list<array{
+     *         website_id: int,
+     *         website_code: string,
+     *         lang: string,
+     *         website_url: string,
+     *         default_language: string
+     *     }>,
+     *     host_map: array<string, string>,
+     *     skipped: list<string>
+     * }
+     */
+    private function getStaticErrorPublishTargets(array $params): array
+    {
+        $targets = [];
+        $hostMap = [];
+        $skipped = [];
+        $domainsByWebsite = [];
+
+        foreach ($this->getWebsiteDomains(['status' => WebsiteDomain::STATUS_ACTIVE, 'limit' => 2000]) as $domainRow) {
+            $websiteId = (int)($domainRow['website_id'] ?? -1);
+            if ($websiteId < self::DEFAULT_WEBSITE_ID) {
+                continue;
+            }
+            $domainsByWebsite[$websiteId][] = [
+                'domain' => (string)($domainRow['domain'] ?? ''),
+                'sub_path' => (string)($domainRow['sub_path'] ?? ''),
+            ];
+        }
+
+        foreach ($this->getWebsiteList([]) as $website) {
+            if (!\is_array($website)) {
+                continue;
+            }
+            $websiteId = (int)($website['website_id'] ?? -1);
+            $rawCode = (string)($website['code'] ?? '');
+            $code = StaticErrorPageMap::sanitizeWebsiteCode($rawCode);
+            if ($code === '') {
+                if ($rawCode !== '') {
+                    $skipped[] = $rawCode;
+                }
+                continue;
+            }
+            $url = (string)($website['url'] ?? '');
+            $defaultLang = \trim((string)($website['default_language'] ?? ''));
+            if ($defaultLang === '') {
+                $defaultLang = MaintenanceStaticPage::DEFAULT_LANG;
+            }
+
+            foreach ($this->staticErrorLocalesForWebsite($websiteId, $defaultLang) as $lang) {
+                $targets[] = [
+                    'website_id' => $websiteId,
+                    'website_code' => $code,
+                    'lang' => $lang,
+                    'website_url' => $url,
+                    'default_language' => $defaultLang,
+                ];
+            }
+
+            foreach ($domainsByWebsite[$websiteId] ?? [] as $domainRow) {
+                $host = StaticErrorPageMap::normalizeHost((string)($domainRow['domain'] ?? ''));
+                if ($host === '') {
+                    continue;
+                }
+                $sub = StaticErrorPageMap::normalizeSubPath((string)($domainRow['sub_path'] ?? ''));
+                $key = StaticErrorPageMap::mapKey($host, $sub);
+                if ($key !== '') {
+                    $hostMap[$key] = $code;
+                }
+            }
+
+            if (($domainsByWebsite[$websiteId] ?? []) === [] && $url !== '') {
+                $parts = \parse_url($url);
+                $host = StaticErrorPageMap::normalizeHost((string)($parts['host'] ?? ''));
+                $sub = StaticErrorPageMap::normalizeSubPath((string)($parts['path'] ?? ''));
+                $key = StaticErrorPageMap::mapKey($host, $sub);
+                if ($key !== '') {
+                    $hostMap[$key] = $code;
+                }
+            }
+        }
+
+        return [
+            'targets' => $targets,
+            'host_map' => $hostMap,
+            'skipped' => $skipped,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function staticErrorLocalesForWebsite(int $websiteId, string $defaultLanguage): array
+    {
+        $defaultLanguage = \trim($defaultLanguage);
+        if ($defaultLanguage === '') {
+            $defaultLanguage = MaintenanceStaticPage::DEFAULT_LANG;
+        }
+
+        $assigned = [];
+        foreach ($this->getWebsiteLanguageCodes(['website_id' => $websiteId]) as $code) {
+            $code = \trim((string)$code);
+            if ($code !== '' && \preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $code) === 1) {
+                $assigned[] = $code;
+            }
+        }
+        if ($assigned !== []) {
+            return \array_values(\array_unique($assigned));
+        }
+
+        $minimal = [$defaultLanguage, 'en_US', MaintenanceStaticPage::DEFAULT_LANG];
+
+        return \array_values(\array_unique(\array_filter(
+            $minimal,
+            static fn(string $c): bool => $c !== '' && \preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $c) === 1
+        )));
     }
 
     private function getWebsiteCurrencyCodes(array $params): array

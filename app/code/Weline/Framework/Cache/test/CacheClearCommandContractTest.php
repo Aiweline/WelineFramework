@@ -38,6 +38,15 @@ final class CacheClearCommandContractTest extends TestCase
         $this->assertSame(['view'], $cleared);
     }
 
+    public function testDoesNotSoftPullThemeStorefrontFpcWarmerFqcn(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__) . '/Console/Cache/Clear.php'
+        );
+        self::assertStringNotContainsString('StorefrontFpcWarmer', $source);
+        self::assertStringContainsString('warmUp(\'fpc\')', $source);
+    }
+
     public function testForceClearsPermanentPools(): void
     {
         $cleared = [];

@@ -22,12 +22,12 @@ final class CacheWarmCommandRegistryContractTest extends TestCase
         self::assertStringContainsString("isset(\$data['list'])", $source);
     }
 
-    public function testStorefrontFpcWarmerIsRegisteredForCentralWarmup(): void
+    public function testDoesNotSoftPullThemeStorefrontFpcWarmerFqcn(): void
     {
         $source = file_get_contents(self::COMMAND);
 
         self::assertIsString($source);
-        self::assertStringContainsString('theme.storefront_fpc', $source);
-        self::assertStringContainsString('StorefrontFpcWarmer', $source);
+        self::assertStringNotContainsString('StorefrontFpcWarmer', $source);
+        self::assertStringContainsString('CacheWarmerRegistry', $source);
     }
 }

@@ -3,22 +3,16 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Service;
 
+use Weline\Framework\Acl\RoleAclEntriesProviderInterface;
+
 /**
  * 统一封装角色的 ACL 视图与权限判定逻辑。
  *
  * - 不关心菜单布局，仅关心“角色能访问哪些资源/路由/方法/type”
  * - 供 RouteBefore、菜单服务、调试工具等复用
  */
-interface AclServiceInterface
+interface AclServiceInterface extends RoleAclEntriesProviderInterface
 {
-    /**
-     * 返回角色的所有 ACL 记录（含 route/method/type/module 等字段），用于调试或上层过滤。
-     *
-     * @param int $roleId
-     * @return array
-     */
-    public function getRoleAclEntries(int $roleId): array;
-
     /**
      * 判断角色是否对给定路由+HTTP 方法有访问权限。
      *

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Websites\Api\Rest\V1;
 
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\App\Controller\BackendRestController;
+use Weline\Backend\Controller\BackendRestController;
 
 #[Acl('Weline_Websites::rest_v1_provisioning', '编排REST接口', 'code', 'Websites 编排 REST V1 接口', 'Weline_Websites::provisioning')]
 class Provisioning extends BackendRestController

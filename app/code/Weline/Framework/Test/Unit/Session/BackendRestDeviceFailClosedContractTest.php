@@ -10,7 +10,7 @@ final class BackendRestDeviceFailClosedContractTest extends TestCase
 {
     public function testLegacySessionIdRecoveryIsRestrictedToAnAbsentDeviceRegistry(): void
     {
-        $path = dirname(__DIR__, 3) . '/App/Controller/BackendRestController.php';
+        $path = dirname(__DIR__, 4) . '/Backend/Controller/BackendRestController.php';
         $source = (string)file_get_contents($path);
 
         self::assertStringContainsString(

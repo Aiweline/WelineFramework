@@ -211,69 +211,15 @@ final class MemDiag
             }
         } catch (\Throwable) {
         }
+        // Product/Theme process-cache probes live on owning-module ProcessCacheResetter::diagCounts().
         try {
-            $rp = new \ReflectionProperty(\Weline\Product\Service\ProductSearchProjectionService::class, 'snapshotProcessCache');
-            $rp->setAccessible(true);
-            $val = $rp->getValue();
-            $out['projection_snapshot_keys'] = \is_array($val) ? \count($val) : 0;
-            if (\is_array($val)) {
-                $bytes = self::estimateBytes($val);
-                $out['projection_snapshot_bytes'] = $bytes;
-                $tracked += $bytes;
-            }
-        } catch (\Throwable) {
-        }
-        try {
-            $projector = \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Product\Service\StorefrontProductDetailProjector::class,
+            $resetters = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Runtime\ModuleProcessCacheResetterRegistry::class,
             );
-            $rp = new \ReflectionProperty($projector, 'labelsByProductId');
-            $rp->setAccessible(true);
-            $labels = $rp->getValue($projector);
-            $rp2 = new \ReflectionProperty($projector, 'axesByProductId');
-            $rp2->setAccessible(true);
-            $axes = $rp2->getValue($projector);
-            $out['pdp_labels_by_product'] = \is_array($labels) ? \count($labels) : 0;
-            $out['pdp_axes_by_product'] = \is_array($axes) ? \count($axes) : 0;
-        } catch (\Throwable) {
-        }
-        try {
-            if (\method_exists(
-                \Weline\Product\Service\StorefrontProductMediaUrlResolver::class,
-                'processReferenceCacheCount',
-            )) {
-                $out['media_ref_cache'] = (int)\Weline\Product\Service\StorefrontProductMediaUrlResolver::processReferenceCacheCount();
-            } else {
-                $media = \Weline\Framework\Manager\ObjectManager::getInstance(
-                    \Weline\Product\Service\StorefrontProductMediaUrlResolver::class,
-                );
-                $rp = new \ReflectionProperty($media, 'resolvedReferenceCache');
-                $rp->setAccessible(true);
-                $cache = $rp->getValue($media);
-                $out['media_ref_cache'] = \is_array($cache) ? \count($cache) : 0;
-            }
-        } catch (\Throwable) {
-        }
-        try {
-            $eav = \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Product\Service\StorefrontEavLabelResolver::class,
-            );
-            foreach (['attributeMetadataByCode' => 'eav_attr_meta', 'privateOptionCache' => 'eav_private_opts'] as $prop => $key) {
-                $rp = new \ReflectionProperty($eav, $prop);
-                $rp->setAccessible(true);
-                $val = $rp->getValue($eav);
-                $out[$key] = \is_array($val) ? \count($val) : 0;
-                if (\is_array($val)) {
-                    $bytes = self::estimateBytes($val);
-                    $out[$key . '_bytes'] = $bytes;
-                    $tracked += $bytes;
+            if ($resetters instanceof \Weline\Framework\Runtime\ModuleProcessCacheResetterRegistry) {
+                foreach ($resetters->diagCounts() as $key => $value) {
+                    $out[(string)$key] = (int)$value;
                 }
-            }
-        } catch (\Throwable) {
-        }
-        try {
-            if (\class_exists(\Weline\Theme\Api\Runtime\ProcessCacheResetter::class)) {
-                $out['theme_process_cache_items'] = (int)\Weline\Theme\Api\Runtime\ProcessCacheResetter::processCacheItemCount();
             }
         } catch (\Throwable) {
         }
@@ -330,7 +276,7 @@ final class MemDiag
                     } catch (\Throwable) {
                         continue;
                     }
-                    if (!$adapter instanceof \Weline\Framework\Cache\Adapter\WlsMemoryAdapter) {
+                    if (!$adapter instanceof \Weline\Framework\Cache\Contract\MemoryStoreInterface) {
                         continue;
                     }
                     $adapterPools++;
@@ -383,9 +329,6 @@ final class MemDiag
         } catch (\Throwable) {
         }
         foreach ([
-            [\Weline\Theme\Block\Partials::class, 'partialOutputCache', 'theme_partial_output'],
-            [\Weline\Theme\Service\RuntimeTemplateMaterializer::class, 'workerCompiledCache', 'theme_compiled'],
-            [\Weline\Theme\Helper\ThemeData::class, 'runtimeCache', 'theme_data_runtime'],
             [\Weline\Framework\Phrase\Parser::class, 'workerLayeredWordsCache', 'phrase_layered'],
             [\Weline\Framework\Phrase\Parser::class, 'workerMaterializedWordsCache', 'phrase_materialized'],
             [\Weline\Framework\Phrase\Parser::class, 'workerTranslatedWordsCache', 'phrase_translated'],

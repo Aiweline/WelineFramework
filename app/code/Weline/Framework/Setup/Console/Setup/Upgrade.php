@@ -198,6 +198,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     /** -f/--force-menu：本轮升级必须强制菜单全量重收集 */
     private bool $forceMenuThisRun = false;
 
+    private string $forceMenuReason = '';
+
     function __construct(
         private Printing $printing
     )
@@ -975,19 +977,27 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             ? '-f/--force + --force-menu'
             : ($forceMenu ? '--force-menu' : '-f/--force');
         $this->forceMenuThisRun = true;
-        \Weline\Backend\Config\MenuXmlReader::beginForceFullHold();
-        \Weline\Backend\Config\MenuXmlReader::requestForceFull($reason);
+        $this->forceMenuReason = $reason;
+        // Force-full menu is applied by Backend Observer via before_route_collection eventData.
     }
 
     /**
-     * 每次真正派发菜单收集前再清指纹并保持 sticky（防止中途 collect 写回指纹后假命中）。
+     * Merge force_menu payload into Setup before_route_collection event data.
+     *
+     * @param array<string, mixed> $eventData
+     * @return array<string, mixed>
      */
-    private function assertForceMenuBeforeCollect(): void
+    private function withForceMenuEventData(array $eventData): array
     {
         if (!$this->forceMenuThisRun) {
-            return;
+            return $eventData;
         }
-        \Weline\Backend\Config\MenuXmlReader::requestForceFull('setup:upgrade menu-collect');
+        $eventData['force_menu'] = true;
+        $eventData['force_menu_reason'] = $this->forceMenuReason !== ''
+            ? $this->forceMenuReason
+            : 'setup:upgrade menu-collect';
+
+        return $eventData;
     }
 
     private function releaseForceMenuHold(): void
@@ -995,8 +1005,16 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if (!$this->forceMenuThisRun) {
             return;
         }
-        \Weline\Backend\Config\MenuXmlReader::resetForceFullState();
+        try {
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after', [
+                'force_menu_release' => true,
+            ]);
+        } catch (\Throwable) {
+        }
         $this->forceMenuThisRun = false;
+        $this->forceMenuReason = '';
     }
 
     private function shouldSkipComposerDump(array $args): bool
@@ -2348,8 +2366,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
             /** @var EventsManager $eventsManager */
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $beforeRouteCollectionEventData = [];
-            $this->assertForceMenuBeforeCollect();
+            $beforeRouteCollectionEventData = $this->withForceMenuEventData([]);
             $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $beforeRouteCollectionEventData);
 
             // 更新路由（支持指定模块）
@@ -2954,8 +2971,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('   - 收集菜单（路由全跳仍需 menu.xml / 启停集合同步）...'));
             try {
                 $eventsManager = ObjectManager::getInstance(EventsManager::class);
-                $menuEventData = [];
-                $this->assertForceMenuBeforeCollect();
+                $menuEventData = $this->withForceMenuEventData([]);
                 $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $menuEventData);
             } catch (\Throwable $e) {
                 $this->printing->warning(__('菜单预收集失败（可能影响 ACL 断言）：%{1}', [$e->getMessage()]));
@@ -3017,8 +3033,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('   - 收集菜单（先于路由，供 ACL 断言校验 parent_source）...'));
             try {
                 $eventsManager = ObjectManager::getInstance(EventsManager::class);
-                $menuEventData = [];
-                $this->assertForceMenuBeforeCollect();
+                $menuEventData = $this->withForceMenuEventData([]);
                 $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $menuEventData);
             } catch (\Throwable $e) {
                 $this->printing->warning(__('菜单预收集失败（可能影响 ACL 断言）：%{1}', [$e->getMessage()]));

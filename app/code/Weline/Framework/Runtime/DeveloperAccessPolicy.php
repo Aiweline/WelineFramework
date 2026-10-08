@@ -33,6 +33,11 @@ final class DeveloperAccessPolicy implements DeveloperAccessProviderInterface
         return $this->provider()?->canAccessApi($request) ?? false;
     }
 
+    public function hasActivePanelSession(): bool
+    {
+        return $this->provider()?->hasActivePanelSession() ?? false;
+    }
+
     public function canAccessRawHttp(string $rawRequest): bool
     {
         $provider = $this->provider();

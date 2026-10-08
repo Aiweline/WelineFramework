@@ -10,6 +10,11 @@ use Weline\Framework\Cache\Service\CacheWarmerRegistry;
 
 class CacheWarmerRegistryTest extends TestCase
 {
+    public function testCapabilityPrefixIsCacheWarmerDot(): void
+    {
+        self::assertSame('cache.warmer.', CacheWarmerRegistry::CAPABILITY_PREFIX);
+    }
+
     public function testWarmersExecuteInPriorityOrder(): void
     {
         $order = [];
@@ -17,7 +22,7 @@ class CacheWarmerRegistryTest extends TestCase
             new CacheWarmerOrderingFake('low', 'a', 100, $order),
             new CacheWarmerOrderingFake('high', 'a', 0, $order),
             new CacheWarmerOrderingFake('mid', 'a', 50, $order),
-        ]);
+        ], false);
 
         $result = $registry->warmUp();
 
@@ -34,7 +39,7 @@ class CacheWarmerRegistryTest extends TestCase
         $registry = new CacheWarmerRegistry([
             new CacheWarmerOrderingFake('skip-me', 'a', 0, $order, canWarm: false),
             new CacheWarmerOrderingFake('run-me', 'a', 1, $order),
-        ]);
+        ], false);
         $result = $registry->warmUp();
         $this->assertSame(1, $result['ran']);
         $this->assertSame(1, $result['skipped']);
@@ -47,7 +52,7 @@ class CacheWarmerRegistryTest extends TestCase
         $registry = new CacheWarmerRegistry([
             new CacheWarmerOrderingFake('boom', 'a', 0, $order, throwMessage: 'boom!'),
             new CacheWarmerOrderingFake('after', 'a', 1, $order),
-        ]);
+        ], false);
         $result = $registry->warmUp();
         $this->assertSame(1, $result['ran']);
         $this->assertCount(1, $result['errors']);
@@ -62,7 +67,7 @@ class CacheWarmerRegistryTest extends TestCase
         $registry = new CacheWarmerRegistry([
             new CacheWarmerOrderingFake('router-warmer', 'router', 0, $order),
             new CacheWarmerOrderingFake('config-warmer', 'config', 0, $order),
-        ]);
+        ], false);
 
         $result = $registry->warmUp(onlyPool: 'router');
         $this->assertSame(1, $result['ran']);
@@ -74,7 +79,7 @@ class CacheWarmerRegistryTest extends TestCase
         $order = [];
         $registry = new CacheWarmerRegistry([
             new CacheWarmerOrderingFake('dup', 'a', 0, $order),
-        ]);
+        ], false);
         $registry->register(new CacheWarmerOrderingFake('dup', 'a', 0, $order));
         $this->assertCount(1, $registry->all());
     }
@@ -85,7 +90,7 @@ class CacheWarmerRegistryTest extends TestCase
         $registry = new CacheWarmerRegistry([
             new CacheWarmerOrderingFake('one', 'a', 0, $order),
             new CacheWarmerOrderingFake('two', 'a', 1, $order),
-        ]);
+        ], false);
         $registry->unregister('one');
         $this->assertFalse($registry->has('one'));
         $this->assertTrue($registry->has('two'));

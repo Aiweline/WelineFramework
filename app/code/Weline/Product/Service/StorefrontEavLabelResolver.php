@@ -653,6 +653,23 @@ class StorefrontEavLabelResolver
         $this->privateOptionCache = [];
     }
 
+    /** MemDiag / ProcessCacheResetter: drop process-local EAV label bags. */
+    public function clearProcessDiagCaches(): void
+    {
+        $this->clearCaches();
+    }
+
+    /**
+     * @return array{eav_attr_meta:int, eav_private_opts:int}
+     */
+    public function diagProcessCacheCounts(): array
+    {
+        return [
+            'eav_attr_meta' => \count($this->attributeMetadataByCode),
+            'eav_private_opts' => \count($this->privateOptionCache),
+        ];
+    }
+
     /** @return list<AttributeSetMetadata> */
     private function metadataCatalog(): array
     {

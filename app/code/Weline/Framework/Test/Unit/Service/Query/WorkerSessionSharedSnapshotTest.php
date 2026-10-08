@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Service\Query;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Cache\Adapter\WlsMemoryAdapter;
+use Weline\Server\Cache\Adapter\WlsMemoryAdapter;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\Store\LockedCacheFrontendWorkerStateStore;

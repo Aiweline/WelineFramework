@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Event\Async\Admin;
 
+use Weline\Framework\Acl\RoleAclEntriesProviderInterface;
 use Weline\Framework\Event\Async\AsyncErrorRedactor;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
@@ -174,12 +175,12 @@ final class DeliveryAccessPolicy
         if ($roleId === 1) {
             return true;
         }
-        $class = 'Weline\\Acl\\Service\\AclService';
-        if (!class_exists($class)) {
+        try {
+            $service = ObjectManager::getInstance(RoleAclEntriesProviderInterface::class);
+        } catch (\Throwable) {
             throw new \RuntimeException((string)__('ACL 服务当前不可用'));
         }
-        $service = ObjectManager::getInstance($class);
-        if (!is_object($service) || !method_exists($service, 'getRoleAclEntries')) {
+        if (!$service instanceof RoleAclEntriesProviderInterface) {
             throw new \RuntimeException((string)__('ACL 服务契约无效'));
         }
         foreach ((array)$service->getRoleAclEntries($roleId) as $entry) {

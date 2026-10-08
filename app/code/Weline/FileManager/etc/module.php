@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_FileManager',
-    "version" => '1.1.18',
+    "version" => '1.1.20',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Eav' => '*',
@@ -20,6 +20,8 @@ return [
     ],
     "provides" => [
         'storage.disk_usage_guard.file_assets' => \Weline\FileManager\Service\FileAssetStorageUsageGuard::class,
+        \Weline\Framework\Media\MediaReferenceIdentityBuilderInterface::class => \Weline\FileManager\Service\MediaReference\MediaReferenceIdentityBuilder::class,
+        \Weline\Framework\Media\MediaReferenceScopeResolverInterface::class => \Weline\FileManager\Service\MediaReference\MediaReferenceScopeResolver::class,
         \Weline\FileManager\Api\FileAssetManagerInterface::class => \Weline\FileManager\Service\FileAssetManager::class,
         \Weline\FileManager\Api\FileAssetLibraryInterface::class => \Weline\FileManager\Service\FileAssetLibrary::class,
         \Weline\FileManager\Api\FileAssetLocaleTranslationInterface::class => \Weline\FileManager\Service\FileAssetLocaleTranslationService::class,

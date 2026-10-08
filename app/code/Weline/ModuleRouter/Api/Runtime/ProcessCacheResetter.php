@@ -19,4 +19,9 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
         ProcessUrlBefore::clearCache();
         return 1;
     }
+    public function diagCounts(): array
+    {
+        return [];
+    }
+
 }

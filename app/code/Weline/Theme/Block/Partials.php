@@ -102,6 +102,11 @@ class Partials extends Block
             + count(self::$chromePolicyCache);
     }
 
+    public static function processPartialOutputCacheItemCount(): int
+    {
+        return count(self::$partialOutputCache);
+    }
+
     public static function processPartialOutputCacheBytes(): int
     {
         return self::$partialOutputCacheBytes;
