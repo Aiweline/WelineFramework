@@ -239,6 +239,15 @@ class HookReader extends ModuleFileReader
         ];
     }
 
+    /**
+     * Shared snapshot of generated/hooks.php (process-cached by mtime).
+     * Prefer this over a raw include — re-including a returned-array file yields true.
+     */
+    public static function getRegistrySnapshot(): array
+    {
+        return self::getGeneratedHookRegistry();
+    }
+
     private static function getGeneratedHookRegistry(): array
     {
         $registryFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';

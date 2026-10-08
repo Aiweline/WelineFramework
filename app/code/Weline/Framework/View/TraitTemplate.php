@@ -849,16 +849,77 @@ trait TraitTemplate
     }
 
     /**
-     * Stable digest of generated/hooks.php for template-compile cache keys.
-     * mtime+size is enough: hook:rebuild / setup:upgrade always rewrites the file.
+     * Stable digest of generated/hooks.php + contributor hook sources for
+     * template-compile cache keys. Production com may bake include() of hook
+     * contributor com paths; contributor mtime/size must invalidate parents.
+     *
+     * Memoized per process for a given hooks.php identity (mtime:size).
      */
-    protected static function hooksRegistryCompileDigest(): string
+    public static function hooksRegistryCompileDigest(): string
     {
+        static $memoId = null;
+        static $memoDigest = null;
+
         $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
         if (!\is_file($file)) {
+            $memoId = null;
+            $memoDigest = null;
+
             return 'missing';
         }
 
-        return (string)((int)@\filemtime($file)) . ':' . (string)((int)@\filesize($file));
+        $fileIdentity = (string)((int)@\filemtime($file)) . ':' . (string)((int)@\filesize($file));
+        if ($memoId === $fileIdentity && \is_string($memoDigest)) {
+            return $memoDigest;
+        }
+
+        $parts = [];
+        try {
+            $registry = \Weline\Framework\Hook\Config\HookReader::getRegistrySnapshot();
+            $hooks = $registry['hooks'] ?? [];
+            $modules = \Weline\Framework\App\Env::getInstance()->getModuleList();
+            if (\is_array($hooks)) {
+                foreach ($hooks as $hookInfo) {
+                    if (!\is_array($hookInfo)) {
+                        continue;
+                    }
+                    $implementations = $hookInfo['implementations'] ?? [];
+                    if (!\is_array($implementations)) {
+                        continue;
+                    }
+                    foreach ($implementations as $module => $impl) {
+                        if (!\is_array($impl)) {
+                            continue;
+                        }
+                        $rel = \ltrim(\str_replace('\\', '/', (string)($impl['file'] ?? '')), '/');
+                        if ($rel === '') {
+                            continue;
+                        }
+                        $base = \rtrim(\str_replace('\\', '/', (string)($modules[(string)$module]['base_path'] ?? '')), '/');
+                        if ($base === '') {
+                            $parts[] = $rel . ':nomodule';
+                            continue;
+                        }
+                        $path = $base . '/view/hooks/' . $rel;
+                        if (\is_file($path)) {
+                            $parts[] = $rel . ':' . (string)((int)@\filemtime($path)) . ':' . (string)((int)@\filesize($path));
+                        } else {
+                            $parts[] = $rel . ':missing';
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            $parts = [];
+        }
+
+        \sort($parts);
+        $contrib = $parts === []
+            ? 'empty'
+            : \substr(\hash('sha256', \implode('|', $parts)), 0, 16);
+        $memoId = $fileIdentity;
+        $memoDigest = $fileIdentity . '#' . $contrib;
+
+        return $memoDigest;
     }
 }

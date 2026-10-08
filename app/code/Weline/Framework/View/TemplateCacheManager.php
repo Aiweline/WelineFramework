@@ -576,16 +576,11 @@ class TemplateCacheManager
 
     private function sourceCacheEnvironmentHash(): string
     {
-        $hooksFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
-        $hooksRegistry = \is_file($hooksFile)
-            ? ((string)((int)@\filemtime($hooksFile)) . ':' . (string)((int)@\filesize($hooksFile)))
-            : 'missing';
-
         return KeyBuilder::environmentHash([
             'scope' => 'template-compile',
             // Keep enhanced template cache aligned with TraitTemplate/Template:
-            // baked w:widget hook HTML must invalidate when hooks.php changes.
-            'hooks_registry' => $hooksRegistry,
+            // hooks.php + contributor sources invalidate baked hook include parents.
+            'hooks_registry' => Template::hooksRegistryCompileDigest(),
         ]);
     }
 

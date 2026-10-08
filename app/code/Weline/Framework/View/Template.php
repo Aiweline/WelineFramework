@@ -1107,6 +1107,8 @@ class Template extends DataObject implements RequestLocalInterface
         $compiled = str_starts_with($compiled, '<?php')
             ? '<?php /* hash:' . $sourceHash . ' */' . substr($compiled, 5)
             : '<?php /* hash:' . $sourceHash . ' */ ?>' . $compiled;
+        // Production: collapse HTML whitespace / strip safe PHP comments in com_*.
+        $compiled = CompiledTemplateMinifier::minify($compiled);
         $directory = dirname($compiledPath);
         if (!is_dir($directory) && !@mkdir($directory, 0770, true) && !is_dir($directory)) {
             throw new Exception('Failed to create template compile directory: ' . $directory);

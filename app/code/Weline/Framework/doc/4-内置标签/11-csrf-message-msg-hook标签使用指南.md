@@ -169,6 +169,13 @@ class Index extends FrontendController
 
 ## hook 标签
 
+### 生产编译：Hook 贡献 com PHP 内联（非 HTML 快照）
+
+- **DEV**：`<w:hook>` 仍编译为 `<?= $this->getHook('…') ?>`，便于调试与 decorate。
+- **生产（非 DEV）**：在贡献者可解析且非 `runtime` / 编辑器预览态时，编译期把各贡献模块已编译的 `com_*.phtml` 以有序 `include` 烤进父模板 com（标记 `/* baked-hook:… */`）。烤的是 **PHP include**，不是渲染后的 HTML 快照。
+- **回退**：`runtime="1"`、编辑器/预览上下文、解析失败或重入过深时仍生成 `getHook()`。
+- **失效**：编译环境摘要含 `generated/hooks.php` 身份 + 贡献源文件 mtime/size digest；贡献变更会让父 com 重编。生产写 com 时另做空白压缩（保留 `hash:` 头注释）。
+
 ### 语法格式
 
 ```html

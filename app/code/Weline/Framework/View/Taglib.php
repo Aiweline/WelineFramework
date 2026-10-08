@@ -50,7 +50,7 @@ class Taglib
      * Bumped when compiled Taglib output shape changes (e.g. form body capture).
      * Embedded into Template compile hash so view/tpl cannot keep stale PHP.
      */
-    public const COMPILER_GENERATION = '20260923-if-condition-getdata-form-hidden-v4';
+    public const COMPILER_GENERATION = '20261008-prod-hook-php-inline-minify-v1';
 
     // PHP 标签常量，避免在回调函数中重复定义
     private const PHP_OPEN_TAG = '<' . '?';
@@ -846,6 +846,22 @@ class Taglib
         self::$compiledRegexCache = [];
         self::setCachedTagsValue(null);
         self::setCompileDepthValue(0);
+    }
+
+    /**
+     * Production: bake ordered include() of hook contributor com PHP into parent com.
+     * DEV / runtime / editor / preview: keep <?= $this->getHook() ?>.
+     *
+     * @param array<string, mixed> $attributes
+     */
+    private static function emitCompiledHookPhp(string $hookName, array $attributes = [], string $prefix = ''): string
+    {
+        $inline = HookCompiledPhpInliner::tryEmit($hookName, $attributes);
+        if ($inline !== null) {
+            return $prefix . $inline;
+        }
+
+        return $prefix . self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hookName . '\')' . self::PHP_CLOSE_TAG;
     }
     
     /**
@@ -1736,12 +1752,18 @@ class Taglib
                                             $hook_comment .= "-->\n";
                                             
                                             if (!$has_else) {
-                                                return $hook_comment . self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hook_name . '\')' . self::PHP_CLOSE_TAG;
+                                                return self::emitCompiledHookPhp($hook_name, $attributes, $hook_comment);
                                             }
                                         }
                                     } catch (\Throwable $e) {
                                         // 如果获取文件列表失败，继续执行但不添加注释
                                     }
+                                }
+
+                                // Production bake: inline contributor com PHP (never HTML snapshots).
+                                $baked = HookCompiledPhpInliner::tryEmit($hook_name, $attributes);
+                                if ($baked !== null) {
+                                    return $hook_comment . $baked;
                                 }
 
                                 // 有实现文件且声明了 <else/>：运行时 opt-in fallback（structured HookResult；非 debug 触发）
@@ -1757,7 +1779,7 @@ class Taglib
                                         . self::PHP_CLOSE_TAG;
                                 }
                                 
-                                return self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hook_name . '\')' . self::PHP_CLOSE_TAG;
+                                return self::emitCompiledHookPhp($hook_name, $attributes);
                             } else {
                                 // hook 不存在或没有实现文件，返回 else 内容
                                 // 注意：<else/> 在 hook 标签中只用作切分，不需要转换为 PHP else
@@ -1904,12 +1926,13 @@ class Taglib
                             $hook_comment .= "  Hover 展开: 检查 CSS 中是否有 .header-{$hook_name}:hover 或相关 hover 样式\n";
                             $hook_comment .= "-->\n";
                             
-                            return $hook_comment . self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hook_name . '\')' . self::PHP_CLOSE_TAG;
+                            return self::emitCompiledHookPhp($hook_name, $attributes, $hook_comment);
                         }
                         
                         // 始终生成 PHP 代码，让运行时处理 hook 文件查找
                         // 即使编译时没有找到文件，运行时可能能找到（因为缓存可能已更新）
-                        return self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hook_name . '\')' . self::PHP_CLOSE_TAG;
+                        // Production may bake include() of contributor com PHP instead of getHook().
+                        return self::emitCompiledHookPhp($hook_name, $attributes);
                         }
                     }
             ],
