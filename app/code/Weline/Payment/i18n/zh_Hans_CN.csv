@@ -730,10 +730,10 @@ More,更多的
 "PayPal Developer Sandbox REST App Client ID","PayPal Developer Sandbox REST App Client ID"
 "PayPal Developer Sandbox REST App Secret","PayPal Developer Sandbox REST App Secret"
 仅检查平台沙箱凭据是否已就绪,仅检查平台沙箱凭据是否已就绪
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 了解本地测试支付的开发验证流程、适用场景与注意事项。,了解本地测试支付的开发验证流程、适用场景与注意事项。
 "了解如何使用银行卡或本地支付方式通过 Stripe 完成支付，以及退款与争议处理规则。","了解如何使用银行卡或本地支付方式通过 Stripe 完成支付，以及退款与争议处理规则。"
 "了解如何使用 PayPal 账户或银行卡完成支付，以及退款与争议处理规则。","了解如何使用 PayPal 账户或银行卡完成支付，以及退款与争议处理规则。"
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
 "共 %{1} 个支付供应商","共 %{1} 个支付供应商"
 环境,环境
 """Payment Webhook Inbox 已接收""","Payment Webhook Inbox 已接收"

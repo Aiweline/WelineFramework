@@ -161,8 +161,8 @@ Slug,Slug
 技术分享,"Tech Sharing"
 产品动态,"Product Updates"
 公司新闻,"Company News"
-"站点、语言与 slug 决定前台访问路径；保存后可在下方编辑正文。","Website, locale, and slug define the public URL; save here before editing body content below."
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
+"站点、语言与 slug 决定前台访问路径；保存后可在下方编辑正文。","Website, locale, and slug define the public URL; save here before editing body content below."
 "博客文章 sitemap URL 提供器","Blog post sitemap URL provider"
 最新博客文章,"Latest blog posts"
 分类「%{1}」的最新文章,"Latest articles in category ""%{1}"""

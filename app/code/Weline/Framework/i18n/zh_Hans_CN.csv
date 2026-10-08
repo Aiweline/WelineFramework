@@ -311,6 +311,8 @@ URL生成重写,URL生成重写
 在生成URL重写规则时触发，允许其他模块自定义URL重写规则。,在生成URL重写规则时触发，允许其他模块自定义URL重写规则。
 URL生成参数,URL生成参数
 "在 URL 字符串生成完成后始终触发（与是否开启 SEO 重写无关）。用于追加 query 身份参数；禁止在此改写 path。","在 URL 字符串生成完成后始终触发（与是否开启 SEO 重写无关）。用于追加 query 身份参数；禁止在此改写 path。"
+规范化访客URI,规范化访客URI
+"在网站匹配与 SEO 解码之前触发。观察者可保留访客 origin_uri，同时改写 routing_uri（例如剥除 /~preview/{token}/ 命名空间）。","在网站匹配与 SEO 解码之前触发。观察者可保留访客 origin_uri，同时改写 routing_uri（例如剥除 /~preview/{token}/ 命名空间）。"
 SEO解码,SEO解码
 "在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。","在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。"
 视图文件获取,视图文件获取
@@ -408,6 +410,7 @@ ACL分发,ACL分发
 注册安装器,注册安装器
 在注册模块安装器时触发，允许其他模块自定义安装器路径。,在注册模块安装器时触发，允许其他模块自定义安装器路径。
 客户端IP头Keys收集,客户端IP头Keys收集
+共享响应缓存已禁止,共享响应缓存已禁止
 "HTTP Cookie 作用域解析","HTTP Cookie 作用域解析"
 "在解析 Cookie 名/Path 作用域时触发。Framework 默认不做站点隔离；模块通过中立字段贡献 name_suffix、mount_path、expire_unscoped_aliases 等，禁止在 Framework 内硬编码 Website 业务语义。","在解析 Cookie 名/Path 作用域时触发。Framework 默认不做站点隔离；模块通过中立字段贡献 name_suffix、mount_path、expire_unscoped_aliases 等，禁止在 Framework 内硬编码 Website 业务语义。"
 处理区域,处理区域
@@ -809,16 +812,10 @@ dev=true,开发=真
 堆栈跟踪：,堆栈跟踪：
 可用的模块列表：,可用的模块列表：
 "StorefrontRenderContext.locale_catalog 必须含 active/installed 列表","StorefrontRenderContext.locale_catalog 必须含 active/installed 列表"
-"WLS 下载临时文件清理失败。","WLS 下载临时文件清理失败。"
-"SSE 会话已失效，请重新登录后重试。","SSE 会话已失效，请重新登录后重试。"
-"当前账号无权限执行该 SSE 操作。","当前账号无权限执行该 SSE 操作。"
-"SSE 请求处理失败，请稍后重试。","SSE 请求处理失败，请稍后重试。"
-站点导航上下文服务暂不可用,站点导航上下文服务暂不可用
-"SSE 请求被终止。","SSE 请求被终止。"
-"SSE 请求失败。","SSE 请求失败。"
 "StorefrontRenderContext 尚未安装（袋键 storefront.render_context.v1）","StorefrontRenderContext 尚未安装（袋键 storefront.render_context.v1）"
 "当前请求的 ScopeIdentity 已冻结，禁止二次改写","当前请求的 ScopeIdentity 已冻结，禁止二次改写"
 "Provider %{1} 未实现 %{2}","Provider %{1} 未实现 %{2}"
+"拒绝%{1}：WLS soak 排他锁生效（%{2}，age=%{3}s）。请等待 soak 结束或删除 %{4} 后再开维护/升级。","拒绝%{1}：WLS soak 排他锁生效（%{2}，age=%{3}s）。请等待 soak 结束或删除 %{4} 后再开维护/升级。"
 "无效的模块语义版本: %{1}","无效的模块语义版本: %{1}"
 "模块 %{1} 版本 %{2} 的 Schema checkpoint 状态或类型无效","模块 %{1} 版本 %{2} 的 Schema checkpoint 状态或类型无效"
 "模块 %{1} 版本 %{2} 的 Schema checkpoint 数据损坏","模块 %{1} 版本 %{2} 的 Schema checkpoint 数据损坏"
@@ -2488,6 +2485,13 @@ Operation：%{1}.%{2},操作：%{1}.%{2}
 路由路径,路由路径
 HTTP方法,HTTP方法
 控制器,控制器
+"WLS 下载临时文件清理失败。","WLS 下载临时文件清理失败。"
+"SSE 会话已失效，请重新登录后重试。","SSE 会话已失效，请重新登录后重试。"
+"当前账号无权限执行该 SSE 操作。","当前账号无权限执行该 SSE 操作。"
+"SSE 请求处理失败，请稍后重试。","SSE 请求处理失败，请稍后重试。"
+站点导航上下文服务暂不可用,站点导航上下文服务暂不可用
+"SSE 请求被终止。","SSE 请求被终止。"
+"SSE 请求失败。","SSE 请求失败。"
 "用 git filter-repo --invert-paths 删除路径；默认从「文件第一次出现」的父 commit 起做局部重写，并在成功后自动 cleanup","用 git filter-repo --invert-paths 删除路径；默认从「文件第一次出现」的父 commit 起做局部重写，并在成功后自动 cleanup"
 "无法写入 Extra 侧车","无法写入 Extra 侧车"
 "模板文件：%{1} START","模板文件：%{1} START"

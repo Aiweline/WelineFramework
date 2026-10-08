@@ -398,6 +398,8 @@ Weline（本地）,"Weline (local)"
 "站点记录缺少 website_id（0 仅在显式存在时合法）","Site record is missing website_id (0 is only legal if explicitly present)"
 "站点 website_id 必须是规范非负整数","Site website_id must be a canonical non-negative integer"
 站点请求上下文不完整或不规范,"Site request context is incomplete or non-standard"
+项目壳站点入口路径无效,项目壳站点入口路径无效
+项目壳站点代码不存在：%{1},项目壳站点代码不存在：%{1}
 网站入口路径配置无效,"Website entry path configuration is invalid"
 "可信请求 URL 路径无效","Trusted request URL path is invalid"
 "站点或域名记录缺少显式 website_id","Site or domain record is missing an explicit website_id"
