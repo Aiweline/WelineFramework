@@ -47,7 +47,7 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 
 | 类 | 典型动作 | 范围门禁 |
 |----|----------|----------|
-| Local CA 信任 | `security add-trusted-cert` / `delete-certificate`；写入 System / login keychain | 仅允许**当前仓** `var/server/_local_ca/rootCA.pem`，且用户**本回合明示**「信任本仓 CA / 修钥匙串」 |
+| Local CA 信任 | `security add-trusted-cert` / `delete-certificate`；写入 System / login keychain | 仅允许**当前仓** `var/server/_local_ca/rootCA.pem`，且用户**本回合明示**「信任本仓 CA / 修钥匙串」。**WLS 运行时**亦同：`delete-certificate` 只许删本仓 `retired_sha1_fingerprints.txt` 登记指纹，禁止按同名 CN 清掉兄弟仓 CA |
 | MCP / AOCI 绑定 | 改 `LEARNING_MCP_BOUND_REPOSITORY`、learning-mcp 路径、`aoci --repo` | ensure/prepare 仅当目标根 == **当前工作区根**；跨仓改绑须用户本回合明示切换项目/工作区 |
 
 ### 允许
@@ -64,7 +64,7 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 |------|
 | 把**非本仓**的 `rootCA.pem` / `.trust-*.pem` 装进 System/login keychain |
 | 假定「CN 都叫 Weline Local Development CA」就能共用一把钥——**必须核对指纹**等于当前仓 `rootCA.pem` |
-| 钥匙串已有同名但指纹不同的 CA 时**静默替换**（会破坏其他仓 HTTPS）——须停手说明影响，等用户明示保留哪一把 |
+| 钥匙串已有同名但指纹不同的 CA 时**静默替换/删除**（会破坏其他仓 HTTPS）——Agent 须停手说明影响；WLS 启动同步**禁止**把非本仓 retired 名单内的同名 CA 当 stale 删除 |
 | 任务在仓 A、IDE 工作区是仓 A，却把全局 Weline/AOCI MCP 改绑到仓 B（「顺手帮兄弟仓绑 MCP」） |
 | 未明示就 `add-trusted-cert`；或为修兄弟仓 HTTPS 而污染当前仓信任链 |
 

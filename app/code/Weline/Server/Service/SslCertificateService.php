@@ -65,6 +65,8 @@ class SslCertificateService
     private const LOCAL_CA_CERT_FILENAME = 'rootCA.pem';
     private const LOCAL_CA_KEY_FILENAME = 'rootCA.key';
     private const LOCAL_CA_SERIAL_FILENAME = 'serial.txt';
+    /** Workspace-owned SHA-1 fingerprints previously issued by THIS project; only these may be deleted from the shared macOS keychain. */
+    private const LOCAL_CA_RETIRED_FINGERPRINTS_FILENAME = 'retired_sha1_fingerprints.txt';
     private const GLOBAL_LOCAL_CA_VENDOR_DIR = 'Weline';
     private const GLOBAL_LOCAL_CA_APP_DIR = 'WLS';
 
@@ -2436,6 +2438,85 @@ CNF;
         return $this->getLocalCaDir() . self::LOCAL_CA_SERIAL_FILENAME;
     }
 
+    protected function getLocalCaRetiredFingerprintsPath(): string
+    {
+        return $this->getLocalCaDir() . self::LOCAL_CA_RETIRED_FINGERPRINTS_FILENAME;
+    }
+
+    /**
+     * Fingerprints this workspace previously owned and may remove from the shared keychain.
+     * Sibling repos share the same CN but different keys — their fingerprints never appear here.
+     *
+     * @return list<string>
+     */
+    protected function loadLocalCaRetiredFingerprints(): array
+    {
+        $path = $this->getLocalCaRetiredFingerprintsPath();
+        $raw = self::readRegularFileNoFollow(
+            $path,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            false,
+            true,
+        );
+        if (!\is_string($raw) || $raw === '') {
+            return [];
+        }
+
+        $fingerprints = [];
+        foreach (\preg_split('/\R/', $raw) ?: [] as $line) {
+            $normalized = $this->normalizeCertificateFingerprint((string) $line);
+            if ($normalized === '') {
+                continue;
+            }
+            $fingerprints[$normalized] = $normalized;
+        }
+
+        return \array_values($fingerprints);
+    }
+
+    protected function recordLocalCaRetiredFingerprint(string $fingerprint): void
+    {
+        $fingerprint = $this->normalizeCertificateFingerprint($fingerprint);
+        if ($fingerprint === '') {
+            return;
+        }
+
+        $existing = $this->loadLocalCaRetiredFingerprints();
+        if (\in_array($fingerprint, $existing, true)) {
+            return;
+        }
+
+        $existing[] = $fingerprint;
+        $body = \implode("\n", $existing) . "\n";
+        try {
+            $this->writeLocalCaStateAtomically(
+                $this->getLocalCaRetiredFingerprintsPath(),
+                $body,
+                0600,
+            );
+        } catch (\Throwable) {
+            // Retirement bookkeeping must not block CA regeneration.
+        }
+    }
+
+    /**
+     * Before this workspace replaces its on-disk Local CA, remember the old fingerprint
+     * so keychain cleanup may remove only that prior generation — never a sibling project's CA.
+     */
+    protected function retireExistingLocalCaFingerprintIfPresent(string $certPath): void
+    {
+        if ($certPath === '' || !\is_file($certPath)) {
+            return;
+        }
+
+        $fingerprint = $this->getCertificateSha1Fingerprint($certPath);
+        if ($fingerprint === '') {
+            return;
+        }
+
+        $this->recordLocalCaRetiredFingerprint($fingerprint);
+    }
+
     protected function getGlobalLocalCaDir(bool $create = true): string
     {
         $configured = '';
@@ -3059,6 +3140,9 @@ CNF;
             if (!$certPem || !$keyPem) {
                 throw new \RuntimeException('OpenSSL returned empty local CA material.');
             }
+            // Workspace-scoped retirement: only THIS project's prior fingerprint may later
+            // be deleted from the shared macOS keychain. Sibling repos must keep theirs.
+            $this->retireExistingLocalCaFingerprintIfPresent($certPath);
             $this->writeLocalCaStateAtomically($certPath, $certPem, 0644);
             $this->writeLocalCaStateAtomically($keyPath, $keyPem, 0600);
         } catch (\Throwable $throwable) {
@@ -3842,6 +3926,13 @@ CNF;
         ];
     }
 
+    /**
+     * Remove only Local CA fingerprints this workspace previously retired.
+     *
+     * HARD (machine_shared_side_effects_require_workspace_scope): same CN across sibling
+     * repos does NOT mean ownership. Never delete a fingerprint that is not listed in
+     * this project's `var/server/_local_ca/retired_sha1_fingerprints.txt`.
+     */
     protected function removeStaleLocalCertificateAuthoritiesFromMacosKeychain(
         string $keychainPath,
         string $currentFingerprint,
@@ -3870,9 +3961,17 @@ CNF;
             return '';
         }
 
+        $retireable = \array_fill_keys($this->loadLocalCaRetiredFingerprints(), true);
         $messages = [];
         foreach ($this->parseMacosKeychainCertificateFingerprints($output) as $fingerprint) {
             if ($fingerprint === $currentFingerprint) {
+                continue;
+            }
+
+            if (!isset($retireable[$fingerprint])) {
+                // Sibling-project or unknown same-CN CA — leave it alone.
+                $messages[] = 'Preserved foreign/sibling Weline Local Development CA in keychain'
+                    . ' (not owned by this workspace): ' . $fingerprint;
                 continue;
             }
 
@@ -3882,8 +3981,9 @@ CNF;
                 ? $this->runPrivilegedTrustMutation($deleteCommand, $deleteExitCode)
                 : $this->runTrustCommand($deleteCommand, $deleteExitCode);
             $messages[] = $deleteExitCode === 0
-                ? 'Removed stale Weline Local Development CA from macOS keychain: ' . $fingerprint
-                : 'Failed to remove stale Weline Local Development CA ' . $fingerprint . ': ' . \trim($deleteOutput);
+                ? 'Removed retired workspace-owned Weline Local Development CA from macOS keychain: ' . $fingerprint
+                : 'Failed to remove retired workspace-owned Weline Local Development CA '
+                    . $fingerprint . ': ' . \trim($deleteOutput);
         }
 
         return \implode("\n", $messages);

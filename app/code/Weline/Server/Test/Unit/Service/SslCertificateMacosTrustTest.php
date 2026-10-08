@@ -48,7 +48,7 @@ final class SslCertificateMacosTrustTest extends TestCase
         );
     }
 
-    public function testMacosTrustImportReusesAdministratorSessionAndRemovesStaleFingerprints(): void
+    public function testMacosTrustImportPreservesForeignSameCnFingerprints(): void
     {
         $caPath = $this->writeTempFile('rootCA.pem', 'current-ca');
         $leafPath = $this->writeTempFile('fullchain.pem', 'current-leaf');
@@ -57,6 +57,64 @@ final class SslCertificateMacosTrustTest extends TestCase
             '/Library/Keychains/System.keychain' => [self::SYSTEM_STALE_FINGERPRINT],
             '/Users/unit/Library/Keychains/login.keychain-db' => [self::LOGIN_STALE_FINGERPRINT],
         ];
+        $service->retiredFingerprints = [];
+        $service->caSelfVerifyTrusted = true;
+        $service->leafSystemVerifyTrusted = false;
+        $service->opensslChainValid = true;
+
+        $sessionCommands = [];
+        $session = new AdministratorAuthorizationSession(
+            commandRunner: static function (array $command, ?array $environment = null) use (&$sessionCommands): int {
+                $sessionCommands[] = $command;
+
+                return 0;
+            },
+            interactiveProbe: static fn (): bool => true,
+            effectiveUidProbe: static fn (): int => 501,
+            sudoBinary: '/usr/bin/sudo',
+            osFamily: 'Darwin',
+        );
+        $service->setAdministratorAuthorizationSession($session);
+
+        $result = $service->trust($caPath);
+
+        self::assertTrue((bool)($result['trusted'] ?? false));
+        self::assertSame([], $service->deletedFingerprints, 'Sibling/foreign same-CN CAs must never be deleted.');
+        self::assertContains(
+            self::SYSTEM_STALE_FINGERPRINT,
+            $service->keychainFingerprints['/Library/Keychains/System.keychain'] ?? [],
+        );
+        self::assertContains(
+            self::LOGIN_STALE_FINGERPRINT,
+            $service->keychainFingerprints['/Users/unit/Library/Keychains/login.keychain-db'] ?? [],
+        );
+
+        $addTrusted = null;
+        foreach ($sessionCommands as $command) {
+            if (\in_array('add-trusted-cert', $command, true)) {
+                $addTrusted = $command;
+                break;
+            }
+        }
+        self::assertNotNull($addTrusted, 'Current CA must still be imported without deleting siblings.');
+        self::assertContains($caPath, $addTrusted);
+        self::assertContains($leafPath, $service->verifyCertTargets);
+    }
+
+    public function testMacosTrustImportRemovesOnlyWorkspaceRetiredFingerprints(): void
+    {
+        $caPath = $this->writeTempFile('rootCA.pem', 'current-ca');
+        $leafPath = $this->writeTempFile('fullchain.pem', 'current-leaf');
+        $service = $this->macosTrustService($caPath, $leafPath);
+        $service->keychainFingerprints = [
+            '/Library/Keychains/System.keychain' => [
+                self::SYSTEM_STALE_FINGERPRINT,
+                self::LOGIN_STALE_FINGERPRINT,
+            ],
+            '/Users/unit/Library/Keychains/login.keychain-db' => [self::LOGIN_STALE_FINGERPRINT],
+        ];
+        // Only the prior generation of THIS workspace may be deleted.
+        $service->retiredFingerprints = [self::SYSTEM_STALE_FINGERPRINT];
         $service->caSelfVerifyTrusted = true;
         $service->leafSystemVerifyTrusted = false;
         $service->opensslChainValid = true;
@@ -85,6 +143,12 @@ final class SslCertificateMacosTrustTest extends TestCase
         self::assertSame('--', $privileged[2] ?? null);
         self::assertContains('delete-certificate', $privileged);
         self::assertContains(self::SYSTEM_STALE_FINGERPRINT, $privileged);
+        self::assertContains(self::SYSTEM_STALE_FINGERPRINT, $service->deletedFingerprints);
+        self::assertNotContains(
+            self::LOGIN_STALE_FINGERPRINT,
+            $service->deletedFingerprints,
+            'Fingerprints not in this workspace retired list must be preserved.',
+        );
 
         $addTrusted = null;
         foreach ($sessionCommands as $command) {
@@ -96,7 +160,6 @@ final class SslCertificateMacosTrustTest extends TestCase
         self::assertNotNull($addTrusted, 'Current CA must be imported through the start authorization session.');
         self::assertContains('/Library/Keychains/System.keychain', $addTrusted);
         self::assertContains($caPath, $addTrusted);
-        self::assertContains(self::LOGIN_STALE_FINGERPRINT, $service->deletedFingerprints);
         self::assertContains($leafPath, $service->verifyCertTargets);
         foreach ($service->commands as $command) {
             self::assertNotContains(
@@ -165,6 +228,8 @@ final class MacosTrustSslCertificateService extends SslCertificateService
     public array $verifyCertTargets = [];
     /** @var list<string> */
     public array $deletedFingerprints = [];
+    /** @var list<string> */
+    public array $retiredFingerprints = [];
     public bool $caSelfVerifyTrusted = false;
     public bool $leafSystemVerifyTrusted = false;
     public bool $opensslChainValid = true;
@@ -216,6 +281,16 @@ final class MacosTrustSslCertificateService extends SslCertificateService
         unset($certPath);
 
         return $this->currentFingerprint;
+    }
+
+    protected function loadLocalCaRetiredFingerprints(): array
+    {
+        return \array_values(\array_unique(\array_map(
+            static fn (string $fingerprint): string => \strtoupper(
+                (string) \preg_replace('/[^A-F0-9]/i', '', $fingerprint)
+            ),
+            $this->retiredFingerprints,
+        )));
     }
 
     protected function resolveLocalDevelopmentProbeLeafPath(): string

@@ -1881,6 +1881,8 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'SERIOUS')
             && str_contains((string) ($rule['summary'] ?? ''), 'keychain')
             && str_contains((string) ($rule['summary'] ?? ''), 'add-trusted-cert')
+            && str_contains((string) ($rule['summary'] ?? ''), 'delete-certificate')
+            && str_contains((string) ($rule['summary'] ?? ''), 'retired_sha1_fingerprints.txt')
             && str_contains((string) ($rule['summary'] ?? ''), 'LEARNING_MCP_BOUND_REPOSITORY')
             && str_contains((string) ($rule['summary'] ?? ''), 'aoci --repo')
             && str_contains((string) ($rule['summary'] ?? ''), 'sibling')
