@@ -109,12 +109,13 @@ class ThemeEditor extends BackendController
     private ParamFormRendererInterface $paramFormRenderer;
     private ThemeEditorMarkupRenderer $editorMarkupRenderer;
 
-    private function useFullscreenEditorLayout(): void
+    private function useThemeEditorShellLayout(): void
     {
-        $this->layoutType = 'fullscreen.default';
+        $this->layoutType = 'theme-editor.default';
 
         $meta = $this->getTemplate()->getData('meta');
-        $meta = is_array($meta) ? $meta : [];        $meta['showHeader'] = false;
+        $meta = is_array($meta) ? $meta : [];
+        $meta['showHeader'] = false;
         $meta['showSidebar'] = false;
         $meta['showFooter'] = false;
         $meta['showRightSidebar'] = false;
@@ -209,7 +210,7 @@ class ThemeEditor extends BackendController
      */
     public function index()
     {
-        $this->useFullscreenEditorLayout();
+        $this->useThemeEditorShellLayout();
 
         $previewContextService = $this->getPreviewContextService();
         $editingThemeId = (int)$this->request->getParam('theme_id', 0);

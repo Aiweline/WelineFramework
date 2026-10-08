@@ -251,8 +251,28 @@ return [
     ],
     'Weline_Theme::backend::layouts::base::body-end' => [
         'name' => __('后台基础布局 Body 结束'),
-        'description' => __('在后台通用壳布局 </body> 前触发，允许其他模块注入全局悬浮层或脚本。适用于 default / dashboard / fullscreen 等引用该 hook 的后台布局。'),
+        'description' => __('在后台通用壳布局 </body> 前触发，允许其他模块注入全局悬浮层或脚本。适用于 default / dashboard / fullscreen 等引用该 hook 的后台布局；主题编辑器壳 theme-editor 不引用本 hook。'),
         'doc' => 'backend/layouts/base/body-end.md',
+    ],
+    'Weline_Theme::backend::layouts::theme-editor::head-before' => [
+        'name' => __('主题编辑器壳头部之前'),
+        'description' => __('主题编辑器专用布局 <head> 起始；仅编辑器壳资源，禁止挂后台通用悬浮层。'),
+        'doc' => 'backend/layouts/theme-editor/head-before.md',
+    ],
+    'Weline_Theme::backend::layouts::theme-editor::head-after' => [
+        'name' => __('主题编辑器壳头部之后'),
+        'description' => __('主题编辑器专用布局 </head> 前；仅编辑器壳资源。'),
+        'doc' => 'backend/layouts/theme-editor/head-after.md',
+    ],
+    'Weline_Theme::backend::layouts::theme-editor::body-start' => [
+        'name' => __('主题编辑器壳 Body 开始'),
+        'description' => __('主题编辑器专用布局 <body> 起始；无后台 topbar/侧栏。'),
+        'doc' => 'backend/layouts/theme-editor/body-start.md',
+    ],
+    'Weline_Theme::backend::layouts::theme-editor::body-end' => [
+        'name' => __('主题编辑器壳 Body 结束'),
+        'description' => __('主题编辑器专用布局 </body> 前；禁止挂 backend-shell-float（建站助手等须走 base::body-end）。'),
+        'doc' => 'backend/layouts/theme-editor/body-end.md',
     ],
     'Weline_Theme::frontend::layouts::base::header-before' => [
         'name' => __('基础布局页头之前'),

@@ -1,0 +1,36 @@
+<?php
+/**
+ * @meta.name {default="主题编辑器壳布局",name="主题编辑器壳布局"}
+ * @meta.description {default="Theme Editor owned shell: admin head assets only, no backend chrome or base body-end floats.",name="主题编辑器自有壳：仅后台 head 资产，无通用顶栏/页脚，不挂 base::body-end 全局悬浮"}
+ * @param.class {default="",name="额外 Weline CSS 类"}
+ * @var \Weline\Framework\View\Template $this
+ *
+ * owning=Weline_Theme；不挂后台通用壳 body-end（建站助手等 shell float）。
+ * 页内 chrome 由 ThemeEditor/index.phtml 自管。
+ */
+$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class);
+$meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+$classes = array_values(array_filter(
+    preg_split('/\s+/', trim((string)($meta['class'] ?? ''))) ?: [],
+    static fn(string $class): bool => preg_match('/^w-[a-z0-9_-]+$/', $class) === 1
+));
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-weline-shell="theme-editor" <?= $themeConfig->getThemeHtmlAttributes() ?>>
+<head>
+    <w:hook>Weline_Theme::backend::layouts::theme-editor::head-before</w:hook>
+    <w:template>Weline_Admin::common/head.phtml</w:template>
+    <w:block class="Weline\Theme\Block\Partials" area="backend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::backend::layouts::theme-editor::head-after</w:hook>
+</head>
+<body class="w-theme-editor-shell" data-layout-size="theme-editor">
+    <w:hook>Weline_Theme::backend::layouts::theme-editor::body-start</w:hook>
+    <div class="w-backend-standalone w-theme-editor-shell__stage" data-layout-size="theme-editor">
+        <?php
+        $layoutMainClass = trim('w-backend-page w-backend-standalone__content w-theme-editor-shell__content ' . implode(' ', $classes));
+        echo $this->fetch('Weline_Theme::theme/backend/partials/layout/main-content.phtml');
+        ?>
+    </div>
+    <w:hook>Weline_Theme::backend::layouts::theme-editor::body-end</w:hook>
+</body>
+</html>

@@ -18,5 +18,6 @@
 
 ## 注意事项
 
-- 登录 / minimal / print 等未引用此 hook 的布局不会执行
+- 登录 / minimal / print / **theme-editor** 等未引用此 hook 的布局不会执行
+- 主题编辑器使用 `backend::layouts::theme-editor::*`，刻意隔离通用壳悬浮层
 - 实现方须在 Owner（Theme）已声明规约后再挂 `view/hooks/` 文件

@@ -9,7 +9,7 @@ declare(strict_types=1);
 return [
     'site-setup-assistant-float' => [
         'name' => '建站助手（悬浮）',
-        'description' => '按站点展示上线/迁站贴士与任务进度；右下角悬浮，完成后不展示。由 backend base::body-end hook 挂载。',
+        'description' => '按站点展示上线/迁站贴士与任务进度；右下角悬浮，完成后不展示。由 backend base::body-end hook 挂载（主题编辑器自有壳 theme-editor 不挂）。',
         'type' => 'float',
         'code' => 'site-setup-assistant-float',
         'area' => 'backend',
