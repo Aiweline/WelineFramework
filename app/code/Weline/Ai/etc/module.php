@@ -1,7 +1,7 @@
 <?php
 return array (
   'name' => 'Weline_Ai',
-  'version' => '1.3.37',
+  'version' => '1.3.38',
   'requires' => 
   array (
     'Weline_Admin' => '*',

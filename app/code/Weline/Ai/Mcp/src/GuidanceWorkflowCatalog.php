@@ -1187,7 +1187,7 @@ final class GuidanceWorkflowCatalog
             'norms' => [
                 ['id' => 'wb_op_browser_self_test', 'summary' => 'AI 必须用当前宿主可用的真实 Browser 跑完约定用例；单测/curl 不能替代；不绑定 Cursor'],
                 ['id' => 'browser_operator_non_preemptive', 'summary' => 'WB-OP 默认非抢占后台：Cursor browser_navigate 省略 position；禁止默认 position:active 抢 IDE 焦点；后台≠免测；仅用户要求观看时前台'],
-                ['id' => 'browser_cache_disabled_on_open', 'summary' => '每次打开/导航验收 Browser 前禁用 HTTP 缓存（Cursor：Network.setCacheDisabled 后 browser_navigate）；禁止 browser_cdp Page.reload（会重载整个 Cursor 窗口并杀死全部智能体）；setCacheDisabled 被拒则 cache-bust 再 navigate 并注明降级'],
+                ['id' => 'browser_cache_disabled_on_open', 'summary' => '每次打开/导航验收 Browser 前禁用 HTTP 缓存（默认缓存会造成假 PASS）；Cursor：Network.setCacheDisabled 后 browser_navigate；本回合改静态须再加 _wb_nc= 并抽检正文；禁止 browser_cdp Page.reload；禁止仅 Runtime.evaluate 冒充操作员点击；setCacheDisabled 被拒则 cache-bust 再 navigate 并注明降级'],
                 ['id' => 'browser_operator_fail_closed_release', 'summary' => '打开前 curl --max-time≤15 探活；Browser 超时/无 tab/锁死立即 unlock+关闭全部验收标签（可 e2e:cleanup-browsers）；导航重试≤2；禁止无限等待或跨长 shell 持 lock'],
                 ['id' => 'wb_vis_screenshots', 'summary' => '有视觉面且宿主可截图时：多断点截图存 doc/evidence/；有原型文档则对照'],
                 ['id' => 'delivery_urls_section', 'summary' => '每次功能完成汇报末尾必须有「交付地址」小节（主链 http(s) Markdown）'],

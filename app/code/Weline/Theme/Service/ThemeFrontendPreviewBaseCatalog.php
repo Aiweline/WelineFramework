@@ -157,6 +157,25 @@ final class ThemeFrontendPreviewBaseCatalog
             return null;
         }
 
+        // Defense: non-default scopes must keep /~site/{code} on the project Host.
+        $websiteCode = \strtolower(\trim($websiteCode));
+        if ($websiteId > Website::ID_DEFAULT && $websiteCode !== '') {
+            $mount = ProjectHostSiteMount::editorMountPath($websiteId, $websiteCode);
+            if ($mount !== '' && !\str_contains(\parse_url($base, PHP_URL_PATH) ?: '', '/~site/')) {
+                $parts = \parse_url($base);
+                $host = \strtolower((string)($parts['host'] ?? ''));
+                if ($host !== ''
+                    && \class_exists(LocalDomainPolicy::class)
+                    && LocalDomainPolicy::isStandardProjectHost($host)
+                ) {
+                    $scheme = \strtolower((string)($parts['scheme'] ?? 'https'));
+                    $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
+
+                    return $scheme . '://' . $host . $port . $mount;
+                }
+            }
+        }
+
         return $base;
     }
 

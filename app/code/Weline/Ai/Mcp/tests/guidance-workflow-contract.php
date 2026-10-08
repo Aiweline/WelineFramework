@@ -446,7 +446,9 @@ $checks = [
             && ($rule['id'] ?? '') === 'browser_cache_disabled_on_open'
             && str_contains((string) ($rule['summary'] ?? ''), 'setCacheDisabled')
             && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')
-            && str_contains((string) ($rule['summary'] ?? ''), 'Page.reload')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'Page.reload')
+            && str_contains((string) ($rule['summary'] ?? ''), '_wb_nc')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FALSE PASS')),
         false,
     ),
     'hard_constraints include browser_release_after_delivery' => array_reduce(
@@ -1003,7 +1005,9 @@ $checks = [
         }
         $body = (string) file_get_contents($themeCmdPath);
 
-        return str_contains($body, 'work_mode') && str_contains($body, 'theme:active');
+        return str_contains($body, 'work_mode')
+            && str_contains($body, 'theme:active')
+            && str_contains($body, 'websites_theme_application');
     })(),
     'theme_development command doc covers required_default_always_present' => (static function (): bool {
         $themeCmdPath = dirname(__DIR__, 6) . '/dev/ai-command/ai/主题开发.md';

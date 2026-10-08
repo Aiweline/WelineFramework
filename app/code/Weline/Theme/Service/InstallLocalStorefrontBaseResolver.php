@@ -70,28 +70,39 @@ final class InstallLocalStorefrontBaseResolver
         $installHost = $this->hostFromOrigin($installOrigin);
 
         try {
-            /** @var Website $probe */
-            $probe = ObjectManager::getInstance(Website::class);
-            $row = (clone $probe)->clearData()->clearQuery()->load($websiteId);
-            $loadedId = $row->hasData(Website::schema_fields_ID)
-                ? (int)$row->getData(Website::schema_fields_ID)
-                : -1;
-            if ($loadedId !== $websiteId) {
-                return null;
-            }
-            if ($websiteCode !== '') {
-                $code = \strtolower(\trim($row->getCode()));
-                if ($code !== '' && $code !== $websiteCode) {
-                    return null;
+            $rowCode = $websiteCode;
+            $row = null;
+            try {
+                /** @var Website $probe */
+                $probe = ObjectManager::getInstance(Website::class);
+                $row = (clone $probe)->clearData()->clearQuery()->load($websiteId);
+                $loadedId = $row->hasData(Website::schema_fields_ID)
+                    ? (int)$row->getData(Website::schema_fields_ID)
+                    : -1;
+                if ($loadedId !== $websiteId) {
+                    $row = null;
+                } elseif ($websiteCode !== '') {
+                    $code = \strtolower(\trim($row->getCode()));
+                    if ($code !== '' && $code !== $websiteCode) {
+                        return null;
+                    }
                 }
+            } catch (\Throwable) {
+                $row = null;
             }
 
-            $rowCode = \strtolower(\trim($row->getCode()));
-            if ($rowCode === '' && $websiteCode !== '') {
-                $rowCode = $websiteCode;
+            if ($row !== null) {
+                $rowCode = \strtolower(\trim($row->getCode()));
+                if ($rowCode === '' && $websiteCode !== '') {
+                    $rowCode = $websiteCode;
+                }
+            } elseif ($websiteCode === '') {
+                // No Website row and no caller code — cannot invent a mount.
+                return null;
             }
 
             // 0) Standard project Host: synthetic /~site/{code} (no WebsiteDomain row).
+            // Works even when sandbox/DB has no websites table, as long as code is known.
             if ($installHost !== ''
                 && \class_exists(LocalDomainPolicy::class)
                 && LocalDomainPolicy::isStandardProjectHost($installHost)
@@ -105,6 +116,10 @@ final class InstallLocalStorefrontBaseResolver
                 ) {
                     return $installOrigin;
                 }
+            }
+
+            if ($row === null) {
+                return null;
             }
 
             $domains = WebsiteData::domainsForWebsite($websiteId);

@@ -114,8 +114,7 @@ class ThemeEditor extends BackendController
         $this->layoutType = 'fullscreen.default';
 
         $meta = $this->getTemplate()->getData('meta');
-        $meta = is_array($meta) ? $meta : [];
-        $meta['showHeader'] = false;
+        $meta = is_array($meta) ? $meta : [];        $meta['showHeader'] = false;
         $meta['showSidebar'] = false;
         $meta['showFooter'] = false;
         $meta['showRightSidebar'] = false;
@@ -9889,6 +9888,9 @@ HTML;
             $this->getPreviewContextService()->persistContext($context);
 
             $previewBaseUrl = \trim((string)($data['preview_base_url'] ?? ''));
+            // Raw $data identity — NOT getEditorJsonPayload(): prepare() rewrites
+            // editor_context.scope and drops ScopeIdentity claims needed for shell join.
+            [$previewWebsiteId, $previewWebsiteCode] = $this->resolvePreviewWebsiteFromRequestData($data);
 
             return $this->fetchJson([
                 'success' => true,
@@ -9900,6 +9902,8 @@ HTML;
                         $pageType,
                         $layoutOption,
                         $previewBaseUrl !== '' ? $previewBaseUrl : null,
+                        $previewWebsiteId >= 0 ? $previewWebsiteId : null,
+                        $previewWebsiteCode !== '' ? $previewWebsiteCode : null,
                     ),
                     'context' => $context,
                     'expires_in' => 3600,
@@ -9934,11 +9938,38 @@ HTML;
     }
 
     /**
+     * Resolve website for start-preview / shell join from the raw request body.
+     *
+     * Prefer explicit website_* and raw editor_context.scope.identity — after
+     * ThemeAssetEditorRequestContext::prepare(), scope is ThemeContentScope and
+     * no longer carries scope_kind/website_id for resolveEditorScopeIdentityPayload().
+     *
      * @param array<string, mixed> $data
-     * @return array{0: int, 1: string}
+     * @return array{0: int, 1: string} website_id (-1 unknown) and website_code
      */
     private function resolvePreviewWebsiteFromRequestData(array $data): array
     {
+        if (\array_key_exists('website_id', $data) && $data['website_id'] !== null && $data['website_id'] !== '') {
+            return [
+                \max(0, (int)$data['website_id']),
+                \strtolower(\trim((string)($data['website_code'] ?? ''))),
+            ];
+        }
+
+        $rawIdentity = $data['editor_context']['scope']['identity'] ?? null;
+        if (\is_array($rawIdentity) && $rawIdentity !== []) {
+            $kind = \strtolower(\trim((string)($rawIdentity['scope_kind'] ?? '')));
+            if ($kind === ScopeIdentity::KIND_WEBSITE || $kind === 'website'
+                || $kind === ScopeIdentity::KIND_STORE || $kind === 'store'
+                || $kind === ScopeIdentity::KIND_CHANNEL || $kind === 'channel'
+            ) {
+                return [
+                    \max(0, (int)($rawIdentity['website_id'] ?? 0)),
+                    \strtolower(\trim((string)($rawIdentity['website_code'] ?? ''))),
+                ];
+            }
+        }
+
         $scopePayload = $this->resolveEditorScopeIdentityPayload();
         if (\is_array($scopePayload) && $scopePayload !== []) {
             $kind = \strtolower(\trim((string)($scopePayload['scope_kind'] ?? '')));
@@ -9946,20 +9977,19 @@ HTML;
                 || $kind === ScopeIdentity::KIND_STORE || $kind === 'store'
                 || $kind === ScopeIdentity::KIND_CHANNEL || $kind === 'channel'
             ) {
-                $websiteId = \max(0, (int)($scopePayload['website_id'] ?? 0));
-                $websiteCode = \strtolower(\trim((string)($scopePayload['website_code'] ?? '')));
-
-                return [$websiteId, $websiteCode];
+                return [
+                    \max(0, (int)($scopePayload['website_id'] ?? 0)),
+                    \strtolower(\trim((string)($scopePayload['website_code'] ?? ''))),
+                ];
             }
         }
 
-        $websiteId = isset($data['website_id']) ? (int)$data['website_id'] : -1;
         $websiteCode = \strtolower(\trim((string)($data['website_code'] ?? '')));
-        if ($websiteId < 0 && $websiteCode === '') {
-            return [-1, ''];
+        if ($websiteCode !== '') {
+            return [0, $websiteCode];
         }
 
-        return [\max(0, $websiteId), $websiteCode];
+        return [-1, ''];
     }
 
     public function postResolveNavigation()
@@ -10605,6 +10635,8 @@ HTML;
         string $pageType,
         string $layoutOption = 'default',
         ?string $previewBaseUrl = null,
+        ?int $websiteId = null,
+        ?string $websiteCode = null,
     ): string {
         $token = \trim((string)($context['preview_token'] ?? ''));
         if ($token === '') {
@@ -10615,27 +10647,39 @@ HTML;
         $baseUrl = $this->_url->getFrontendUrl(
             $this->getThemePageTypeResolver()->getFrontendUrlPathForPreview($pageType, $layoutOption)
         );
-        $scopePayload = $this->resolveEditorScopeIdentityPayload();
-        $websiteId = null;
-        $websiteCode = null;
-        if (\is_array($scopePayload) && $scopePayload !== []) {
-            $kind = \strtolower(\trim((string)($scopePayload['scope_kind'] ?? '')));
-            if ($kind === ScopeIdentity::KIND_WEBSITE || $kind === 'website'
-                || $kind === ScopeIdentity::KIND_STORE || $kind === 'store'
-                || $kind === ScopeIdentity::KIND_CHANNEL || $kind === 'channel'
-            ) {
-                $websiteId = \max(0, (int)($scopePayload['website_id'] ?? 0));
-                $websiteCode = \strtolower(\trim((string)($scopePayload['website_code'] ?? '')));
-                if ($websiteCode === '') {
-                    $websiteCode = null;
+        if ($websiteId === null) {
+            $scopePayload = $this->resolveEditorScopeIdentityPayload();
+            if (\is_array($scopePayload) && $scopePayload !== []) {
+                $kind = \strtolower(\trim((string)($scopePayload['scope_kind'] ?? '')));
+                if ($kind === ScopeIdentity::KIND_WEBSITE || $kind === 'website'
+                    || $kind === ScopeIdentity::KIND_STORE || $kind === 'store'
+                    || $kind === ScopeIdentity::KIND_CHANNEL || $kind === 'channel'
+                ) {
+                    $websiteId = \max(0, (int)($scopePayload['website_id'] ?? 0));
+                    $websiteCode = \strtolower(\trim((string)($scopePayload['website_code'] ?? '')));
+                }
+            }
+        }
+        $websiteCode = $websiteCode !== null ? \strtolower(\trim($websiteCode)) : null;
+        if ($websiteCode === '') {
+            $websiteCode = null;
+        }
+
+        /** @var \Weline\Theme\Service\ThemeFrontendPreviewBaseCatalog $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Theme\Service\ThemeFrontendPreviewBaseCatalog::class);
+        $chosenBase = \trim((string)$previewBaseUrl);
+        // Local theme edit/preview defaults to project-Host /~site/{code} — other
+        // domains are opt-in via the allowlisted preview_base_url picker only.
+        if ($chosenBase === '' && $websiteId !== null) {
+            foreach ($catalog->listForWebsite($websiteId, (string)$websiteCode) as $item) {
+                if (($item['kind'] ?? '') === 'local_shell' && !empty($item['url'])) {
+                    $chosenBase = (string)$item['url'];
+                    break;
                 }
             }
         }
 
-        $chosenBase = \trim((string)$previewBaseUrl);
         if ($chosenBase !== '' && $websiteId !== null) {
-            /** @var \Weline\Theme\Service\ThemeFrontendPreviewBaseCatalog $catalog */
-            $catalog = ObjectManager::getInstance(\Weline\Theme\Service\ThemeFrontendPreviewBaseCatalog::class);
             $normalizedChosen = $catalog->normalizeBaseUrl($chosenBase);
             if ($normalizedChosen === ''
                 || !$catalog->isAllowedBaseUrl($normalizedChosen, $websiteId, (string)$websiteCode)

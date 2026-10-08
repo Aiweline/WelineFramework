@@ -1050,6 +1050,29 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('async function buildAuthorizedCanvasUrl(', $editor);
         self::assertStringContainsString("url.searchParams.delete('weline_preview_token')", $editor);
         self::assertStringContainsString('async function openFrontendPreview()', $editor);
+        self::assertStringContainsString('openFrontendPreviewBaseDialog(', $editor);
+        self::assertStringContainsString('Critical layout is inlined', $editor);
+        self::assertStringContainsString('single body scroll', $editor);
+        self::assertStringContainsString('max-height:min(86dvh,calc(100dvh - 2rem))', $editor);
+        self::assertStringContainsString('display:flex;width:100%', $editor);
+        self::assertStringContainsString('config.apiPreviewBases', $editor);
+        self::assertStringContainsString('preview_base_url: chosenBaseUrl', $editor);
+        self::assertMatchesRegularExpression(
+            '/apiStartPreview[\s\S]*?website_id:\s*state\.scopeIdentity\?\.website_id/s',
+            $editor,
+            'start-preview must send top-level website_id so shell join survives prepare().',
+        );
+        self::assertMatchesRegularExpression(
+            '/apiStartPreview[\s\S]*?website_code:\s*state\.scopeIdentity\?\.website_code/s',
+            $editor,
+            'start-preview must send top-level website_code so shell join survives prepare().',
+        );
+        self::assertStringContainsString('data-api-preview-bases=', $template);
+        self::assertMatchesRegularExpression(
+            '/async function openFrontendPreview\(\)\s*\{[\s\S]*?await apiJson\(config\.apiPreviewBases/s',
+            $editor,
+            'Frontend preview must load allowlisted bases before start-preview.',
+        );
         self::assertMatchesRegularExpression(
             '/async function openFrontendPreview\(\)\s*\{[\s\S]*?await apiJson\(config\.apiStartPreview/s',
             $editor,

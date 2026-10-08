@@ -20837,6 +20837,13 @@
                     preview_mode: 'live',
                     status: previewStatus,
                     locale: getPreviewLocaleForRequest(),
+                    // Top-level website_* required: prepare() drops scope.identity claims.
+                    website_id: state.scopeIdentity?.website_id
+                        ?? getCurrentWindowParam('website_id')
+                        ?? '',
+                    website_code: state.scopeIdentity?.website_code
+                        ?? getCurrentWindowParam('website_code')
+                        ?? '',
                     preview_base_url: chosenBaseUrl,
                     editor_context: buildTypedEditorContext('layout', {
                         area: 'frontend',
@@ -20876,7 +20883,24 @@
             container.dataset.size = 'md';
             container.dataset.wClosable = 'true';
             container.dataset.wBackdrop = 'dismissible';
+            // Critical layout is inlined: flex column + single body scroll so title/options
+            // are never clipped by nested max-height/overflow on dialog+surface+list.
             container.innerHTML = `
+                <style>
+                    dialog.w-theme-editor-preview-base-dialog{display:flex;flex-direction:column;box-sizing:border-box;width:min(36rem,calc(100dvw - 2rem));max-width:calc(100dvw - 2rem);max-height:min(86dvh,calc(100dvh - 2rem));margin:auto;padding:0;overflow:hidden}
+                    dialog.w-theme-editor-preview-base-dialog > .w-dialog__surface{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;width:100%;max-width:none;max-height:none;max-block-size:none;overflow:hidden;border:0;border-radius:0;box-shadow:none;background:transparent}
+                    dialog.w-theme-editor-preview-base-dialog .w-dialog__header,
+                    dialog.w-theme-editor-preview-base-dialog .w-dialog__footer{flex:0 0 auto}
+                    dialog.w-theme-editor-preview-base-dialog .w-dialog__body.w-theme-editor-preview-base-dialog__body{display:flex;flex-direction:column;gap:.75rem;flex:1 1 auto;min-height:0;max-height:none;overflow:auto;overscroll-behavior:contain}
+                    .w-theme-editor-preview-base-dialog__notice{margin:0;padding:.75rem;border-radius:.5rem;background:var(--weline-color-surface-muted,#f5f5f5);color:var(--weline-color-text-secondary,#555);font-size:.875rem;line-height:1.45;flex:0 0 auto}
+                    .w-theme-editor-preview-base-dialog__list{display:flex;flex-direction:column;gap:.5rem;width:100%;max-height:none;overflow:visible}
+                    .w-theme-editor-preview-base-dialog__option{display:flex;flex-direction:row;align-items:flex-start;gap:.75rem;width:100%;box-sizing:border-box;margin:0;padding:.75rem;border:1px solid var(--weline-color-border,#ddd);border-radius:.5rem;cursor:pointer}
+                    .w-theme-editor-preview-base-dialog__option:has(input:checked){border-color:var(--weline-color-primary,#2f6b4f);background:color-mix(in srgb,var(--weline-color-primary,#2f6b4f) 8%,transparent)}
+                    .w-theme-editor-preview-base-dialog__option-main{display:flex;flex-direction:column;gap:.25rem;min-width:0;flex:1}
+                    .w-theme-editor-preview-base-dialog__option-title{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}
+                    .w-theme-editor-preview-base-dialog__option-url{display:block;overflow-wrap:anywhere;font-size:.8125rem;color:var(--weline-color-text-secondary,#555)}
+                    .w-theme-editor-preview-base-dialog__option-hint{font-size:.75rem;color:var(--weline-color-text-tertiary,#777)}
+                </style>
                 <div class="w-dialog__surface">
                     <header class="w-dialog__header">
                         <h2 class="w-dialog__title">${escapeHtml(window.__('选择预览地址'))}</h2>
@@ -20892,14 +20916,14 @@
                                 const checked = url === defaultUrl ? ' checked' : '';
                                 const badge = String(item?.badge || '');
                                 const hint = String(item?.hint || '');
-                                return `<label class="w-theme-editor-preview-base-dialog__option" for="${id}">
+                                return `<label class="w-theme-editor-preview-base-dialog__option" for="${id}" style="display:flex;width:100%;box-sizing:border-box">
                                     <input type="radio" name="preview_base_url" id="${id}" value="${escapeHtml(url)}"${checked}>
-                                    <span class="w-theme-editor-preview-base-dialog__option-main">
+                                    <span class="w-theme-editor-preview-base-dialog__option-main" style="display:flex;flex-direction:column;min-width:0;flex:1">
                                         <span class="w-theme-editor-preview-base-dialog__option-title">
                                             <strong>${escapeHtml(String(item?.label || url))}</strong>
                                             ${badge ? `<span class="w-badge" data-tone="${item?.is_default ? 'success' : 'neutral'}">${escapeHtml(badge)}</span>` : ''}
                                         </span>
-                                        <code class="w-theme-editor-preview-base-dialog__option-url">${escapeHtml(url)}</code>
+                                        <code class="w-theme-editor-preview-base-dialog__option-url" style="display:block">${escapeHtml(url)}</code>
                                         ${hint ? `<span class="w-theme-editor-preview-base-dialog__option-hint">${escapeHtml(hint)}</span>` : ''}
                                     </span>
                                 </label>`;
@@ -20934,6 +20958,12 @@
             });
             if (!getEditorUi().dialog.open(container)) {
                 finish();
+            } else {
+                const body = container.querySelector('.w-theme-editor-preview-base-dialog__body');
+                if (body) {
+                    body.scrollTop = 0;
+                }
+                container.scrollTop = 0;
             }
         });
     }

@@ -65,18 +65,20 @@
 
 ### 打开即禁用缓存（WB-CACHE，硬）
 
-每次**打开或导航**验收页之前必须禁用该会话的 HTTP 缓存；不要求清空整个浏览器用户配置缓存（宿主常禁止）。
+每次**打开或导航**验收页之前必须禁用该会话的 HTTP 缓存；**默认磁盘缓存会导致本回合 CSS/JS/HTML 误判 PASS**（旧 bundle 仍画出「已修好」的假象）。不要求清空整个浏览器用户配置缓存（宿主常禁止）。
 
 | 宿主示例 | 推荐动作（按序） |
 |----------|------------------|
-| Cursor ide-browser | `Network.enable` → `Network.setCacheDisabled({cacheDisabled:true})` → `browser_navigate`；若 `setCacheDisabled` 被拒：注明降级并用 `browser_navigate` 带 `_wb_nc=<unix_ms>` 缓存破坏参数（或关标签再开）；**禁止** `browser_cdp` `Page.reload`（会重载整个 Cursor 窗口、杀死全部智能体） |
-| Playwright / Puppeteer / 其它 CDP | 等价 CDP `Network.setCacheDisabled`，或会话级禁用缓存后再导航（Playwright 可用 `page.reload({waitUntil})`——那是页内 reload，不是 Cursor `browser_cdp`） |
-| 无 CDP 能力 | 对验收 URL 用带缓存破坏 query 的导航；仍须在日志注明限制 |
+| Cursor ide-browser | `Network.enable` → `Network.setCacheDisabled({cacheDisabled:true})` → `browser_navigate`；**本回合改过静态资源时，导航 URL 还必须带 `_wb_nc=<unix_ms>`**，并抽检已加载脚本/样式正文含本回合标记（`fetch(...,{cache:'no-store'})` 或 curl `Cache-Control: no-cache`）；若 `setCacheDisabled` 被拒：注明降级并用 `_wb_nc=` 再 navigate（或关标签再开）；**禁止** `browser_cdp` `Page.reload`（会重载整个 Cursor 窗口、杀死全部智能体） |
+| Playwright / Puppeteer / 其它 CDP | 等价 CDP `Network.setCacheDisabled`，或会话级禁用缓存后再导航；本回合改静态时同样 cache-bust query + 正文抽检（Playwright 页内 `page.reload` 可用——不是 Cursor `browser_cdp`） |
+| 无 CDP 能力 | 对验收 URL **必须**带缓存破坏 query；仍须在日志注明限制 |
+
+**禁止假 PASS**：跳过禁缓存就宣称 WB-OP PASS；仅用 CDP `Runtime.evaluate` 触发 UI、却从未用操作员 `browser_click` 证明同路径；未抽检本回合静态正文却声称「已加载新 JS/CSS」。
 
 打开顺序（机器契约 `closeout_delivery_reminder.browser_open_order`）：
 
 ```text
-probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_navigate → disable_http_cache_for_session → strip_automation_detection_flags → navigate_after_cache_disabled_never_page_reload → run_wb_op_and_optional_wb_vis
+probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_navigate → disable_http_cache_for_session → strip_automation_detection_flags → navigate_after_cache_disabled_never_page_reload → prove_this_turn_static_when_changed → run_wb_op_and_optional_wb_vis
 ```
 
 ### 卡住即 fail-closed 释放（WB-FAIL，硬，`browser_operator_fail_closed_release`）
