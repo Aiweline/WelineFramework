@@ -248,11 +248,12 @@ class MailTemplateShellComposer
         }
 
         try {
-            /** @var \Weline\Theme\Model\WelineTheme $theme */
-            $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
-            $theme->clearData()->clearQuery()->getActiveTheme('frontend');
+            /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+            $theme = $themeContext->resolveTheme('frontend', null, false)
+                ?? $themeContext->resolveRegisteredDefaultTheme('frontend');
 
-            return $theme->getId() ? clone $theme : null;
+            return ($theme !== null && $theme->getId()) ? clone $theme : null;
         } catch (\Throwable) {
             return null;
         }

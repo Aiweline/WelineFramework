@@ -348,13 +348,14 @@ class MailBrandContextService
         } catch (\Throwable) {
         }
 
-        // 回落：激活 design/模块主题 frontend
+        // 回落：应用上下文 / 注册 Default 的 design/模块主题 frontend
         try {
-            if (class_exists(\Weline\Theme\Model\WelineTheme::class)) {
-                /** @var \Weline\Theme\Model\WelineTheme $theme */
-                $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
-                $theme->clearData()->clearQuery()->getActiveTheme('frontend');
-                $rel = trim(str_replace('\\', '/', (string)$theme->getData('path')));
+            if (class_exists(\Weline\Theme\Service\ThemeContextService::class)) {
+                /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
+                $themeContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+                $theme = $themeContext->resolveTheme('frontend', null, false)
+                    ?? $themeContext->resolveRegisteredDefaultTheme('frontend');
+                $rel = trim(str_replace('\\', '/', (string)($theme?->getData('path') ?? '')));
                 if ($rel !== '' && !str_contains($rel, '..') && preg_match('#^[A-Za-z0-9_./-]+$#', $rel) === 1) {
                     $design = rtrim((string)BP, '/\\') . '/app/design/' . $rel . '/frontend';
                     if (is_dir($design)) {

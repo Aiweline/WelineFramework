@@ -25,11 +25,12 @@ final class MailShellHanfuDefaultsService
             if (!class_exists(\Weline\Theme\Model\WelineTheme::class)) {
                 return false;
             }
-            /** @var \Weline\Theme\Model\WelineTheme $theme */
-            $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
-            $theme->clearData()->clearQuery()->getActiveTheme('frontend');
-            $path = strtolower(str_replace('\\', '/', (string)$theme->getData('path')));
-            $name = strtolower((string)$theme->getData('name'));
+            /** @var \Weline\Theme\Service\ThemeContextService $themeContext */
+            $themeContext = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+            $theme = $themeContext->resolveTheme('frontend', null, false)
+                ?? $themeContext->resolveRegisteredDefaultTheme('frontend');
+            $path = strtolower(str_replace('\\', '/', (string)($theme?->getData('path') ?? '')));
+            $name = strtolower((string)($theme?->getData('name') ?? ''));
 
             return str_contains($path, 'hanfu') || $name === 'hanfu';
         } catch (\Throwable) {
