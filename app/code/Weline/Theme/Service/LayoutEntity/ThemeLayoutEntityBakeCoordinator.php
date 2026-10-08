@@ -117,16 +117,22 @@ final class ThemeLayoutEntityBakeCoordinator
             $context->layoutType, $context->layoutOption, $context->targetType, $context->targetId ?: null, $locales, $params);
     }
 
-    private function chromeCandidates(ThemeScopeVersion $version, array $locales = [], array $options = [], array $changes = [], array $partialParams = []): array
+    /**
+     * Resolve chrome nodes for bake/solidify: version payload + required homepage/mini-cart
+     * injections (honouring frozen omissions), then chrome filter + theme-configured placements.
+     *
+     * @param array<int|string, mixed> $changes
+     * @return array<string, array<string, mixed>>
+     */
+    private function resolveChromeNodesForBake(ThemeScopeVersion $version, array $changes = [], string $headerOption = 'default'): array
     {
         $merger = ObjectManager::getInstance(RequiredDefaultInjectionBakeMerger::class);
-        $original = $version->getChromePayload();
         $identity = $version->toVersionIdentity();
         // Homepage owns root chrome; mini-cart drawer footer-extras (coupon/留言) is a nested
         // chrome extension declared layout_type=mini-cart. Homepage merge alone never seeds it,
         // and runtime SlotFiller is a no-op under pure-PHTML bake — so chrome must merge both.
         $nodes = $merger->mergeIntoNodes(
-            $original,
+            $version->getChromePayload(),
             $version->getThemeId(),
             'homepage',
             $version->getVersionId(),
@@ -142,10 +148,18 @@ final class ThemeLayoutEntityBakeCoordinator
             $this->frozenOmissions($identity, 'mini-cart'),
         );
         $nodes = $this->slotTree->filterChromeNodes($nodes);
+        $nodes = $this->attachHeaderNativeMiniCartOwners($identity, $nodes, $headerOption);
+
+        return $this->themeConfiguredNodes($identity, (new ThemeLayoutEntityInputResolver())->placements($nodes));
+    }
+
+    private function chromeCandidates(ThemeScopeVersion $version, array $locales = [], array $options = [], array $changes = [], array $partialParams = []): array
+    {
+        $original = $version->getChromePayload();
         $options = $options ?: ['header' => 'default', 'footer' => 'default', 'sidebar' => 'default'];
-        $nodes = $this->attachHeaderNativeMiniCartOwners($identity, $nodes, (string)($options['header'] ?? 'default'));
+        $nodes = $this->resolveChromeNodesForBake($version, $changes, (string)($options['header'] ?? 'default'));
         $version = clone $version;
-        $version->setChromePayload($this->themeConfiguredNodes($identity, (new ThemeLayoutEntityInputResolver())->placements($nodes)));
+        $version->setChromePayload($nodes);
         $partialLocaleKeys = array_fill_keys(array_map(static fn(string $type): string => 'partials.' . $type, array_keys($options)), true);
         $hasLocaleParams = array_filter($locales, static fn(array $values): bool => array_intersect_key($values, $partialLocaleKeys) !== []) !== [];
         if ($original === [] && $nodes === [] && !array_filter($partialParams) && !$hasLocaleParams && !array_filter($options, static fn($option): bool => $option !== 'default')) {
@@ -154,6 +168,24 @@ final class ThemeLayoutEntityBakeCoordinator
             return $out;
         }
         return $this->materializer->candidateChrome($version, $locales, $options, $partialParams);
+    }
+
+    /**
+     * Storefront fillEmptyNestedChromeSlots reads chrome_payload_json. Solidify historically
+     * only materialized PHTML from in-memory intent/merge, leaving an empty version row after
+     * stamp clear — float shells stayed empty. Bootstrap when the row payload is empty.
+     */
+    private function persistChromePayloadIfEmpty(ThemeVersionIdentity $identity): void
+    {
+        $version = $this->loadVersion($identity);
+        if ($version->getChromePayload() !== []) {
+            return;
+        }
+        $nodes = $this->resolveChromeNodesForBake($version);
+        if ($nodes === []) {
+            return;
+        }
+        $this->scopeVersions->setChromePayload($version, $nodes);
     }
 
     /**
@@ -387,6 +419,7 @@ final class ThemeLayoutEntityBakeCoordinator
                     $candidates = \array_replace($candidates, $this->candidateWorkset($prime, $context));
                 }
                 $this->publish($identity, $candidates);
+                $this->persistChromePayloadIfEmpty($identity);
 
                 return [
                     'ok' => true,
@@ -481,7 +514,9 @@ final class ThemeLayoutEntityBakeCoordinator
         $identity = $this->resolveBakeIdentity($themeId, $scope, false, $versionId, 'frontend', $storeMode);
         return ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $nodes, $invalidate): string {
             $version = $this->loadVersion($identity);
-            $version->setChromePayload($this->slotTree->filterChromeNodes($nodes));
+            // Persist chrome_payload_json (+ structure_key). In-memory setData alone leaves
+            // storefront fillEmptyNestedChromeSlots reading [] after stamp clear / re-solidify.
+            $this->scopeVersions->setChromePayload($version, $this->slotTree->filterChromeNodes($nodes));
             $candidates = $this->chromeCandidates($version);
             $this->publish($identity, $candidates);
             if ($invalidate) { $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode); }

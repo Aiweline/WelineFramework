@@ -1,0 +1,30 @@
+<?php
+/**
+ * injectprobe Footer — INTENTIONALLY omits #w-storefront-float-layer.
+ *
+ * Stress test for required default_injections: Theme Materializer must restore
+ * float destinations at bake time; RuntimeSafetyNet must still inject
+ * store-music / customer-service-float if destinations vanish.
+ *
+ * @meta.cache.mode {default="chrome",name="缓存模式"}
+ * @meta.cache.auth {default="guest",name="鉴权维度"}
+ * @meta.name {default="injectprobe Footer（无悬浮层）",name="injectprobe Footer"}
+ * @meta.description {default="故意裁掉 storefront-float；验收 required 固化/注入",name="页面底部区域"}
+ * @param.class {default="",name="额外CSS类"}
+ */
+?>
+<!-- theme-partial:footer option=default -->
+<!-- injectprobe:floatless — DO NOT add storefront-float-* here on purpose -->
+<w:slot id="footer"
+        name="整体底部"
+        accept="layout-global-footer,footer-container"
+        exclusive="true"
+        position="footer"
+        class="weline-footer-slot injectprobe-footer--floatless">
+
+    <w:hook>Weline_Theme::frontend::partials::footer::before</w:hook>
+    <w:widget type="footer" name="footer-container" />
+    <w:hook>footer</w:hook>
+    <w:hook>Weline_Theme::frontend::partials::footer::after</w:hook>
+
+</w:slot>

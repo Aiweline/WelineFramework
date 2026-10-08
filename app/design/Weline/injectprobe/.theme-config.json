@@ -1,0 +1,11 @@
+{
+    "theme_name": "injectprobe",
+    "version": "1.0.0",
+    "description": "注入探针：故意裁掉 float 层，验收 required 固化\/注入",
+    "parent_theme": "Default 默认主题",
+    "create_template": false,
+    "created_at": "2026-10-08 02:48:06",
+    "updated_at": "2026-10-08 02:48:06",
+    "status": "completed",
+    "theme_path": "\/Users\/weline\/Project\/Official\/框架\/app\/design\/Weline\/injectprobe"
+}

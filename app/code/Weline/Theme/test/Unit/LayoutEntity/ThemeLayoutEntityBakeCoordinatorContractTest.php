@@ -97,6 +97,24 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         self::assertStringContainsString('theme_scope_draft_solidify_failed', $editor);
     }
 
+    public function testChromeBakeAndSolidifyPersistChromePayloadForStorefrontFill(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php';
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('function resolveChromeNodesForBake', $source);
+        self::assertStringContainsString('function persistChromePayloadIfEmpty', $source);
+        self::assertStringContainsString('$this->persistChromePayloadIfEmpty($identity)', $source);
+        self::assertMatchesRegularExpression(
+            '/function bakeChromeFromNodes.*?scopeVersions->setChromePayload\(\$version,/s',
+            $source,
+        );
+        // Must not leave chrome bake as in-memory setData only (storefront fill reads DB row).
+        self::assertDoesNotMatchRegularExpression(
+            '/function bakeChromeFromNodes.*?\$version->setChromePayload\(\$this->slotTree->filterChromeNodes/s',
+            $source,
+        );
+    }
+
     public function testRebakeDedupesLayoutTargetsAndSkipsPageDependencies(): void
     {
         $path = dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php';

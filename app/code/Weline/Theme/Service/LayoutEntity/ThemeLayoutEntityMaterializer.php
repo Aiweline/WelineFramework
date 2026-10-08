@@ -254,6 +254,13 @@ final class ThemeLayoutEntityMaterializer
     {
         $source = file_get_contents($path);
         if (!is_string($source)) { throw new \RuntimeException('theme_layout_source_unreadable: ' . $path); }
+        // Design themes that rewrite footer and drop float destinations still need
+        // storefront-float-* shells for required default_injections at bake time.
+        $norm = str_replace('\\', '/', $path);
+        if (str_contains($norm, '/partials/footer/') || str_contains($norm, '/partials/footer\\')) {
+            $source = StorefrontFloatLayerHost::ensureInSourceTemplate($source);
+        }
+
         return $source;
     }
 

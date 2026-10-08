@@ -170,7 +170,21 @@ class LayoutSlotRenderer implements ObserverInterface
             // keep strip path
         }
 
+        // Promote data-wslot → data-slot-id before required-injection safety net
+        // (reactive shells only expose data-wslot until strip).
         $html = SlotBoundaryMarkers::strip($html);
+
+        // Required default_injections: always present unless user_deleted — even when
+        // solidify fell back or a design theme rewrote layouts / dropped destinations.
+        try {
+            /** @var \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionRuntimeSafetyNet $requiredNet */
+            $requiredNet = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionRuntimeSafetyNet::class
+            );
+            $html = $requiredNet->ensure($html);
+        } catch (\Throwable) {
+            // soft — never 500 the storefront for injection safety net
+        }
 
         // Design themes (hanfu/daocharms) may omit data-pdp-budget-phase; stamp for armed samples.
         $html = \Weline\Theme\Service\ThemePdpBudgetPhases::stampSectionAttributes($html);
@@ -2169,12 +2183,28 @@ HTML;
         } catch (e) {}
     }
 
+    function stripLivePreviewPathMount(pathname) {
+        try {
+            return String(pathname || '').replace(
+                /^\/~preview\/(?:pv_[A-Za-z0-9_-]{43}|pv_[1-9][0-9]{0,18}_[0-9]{9,12}_[a-f0-9]{16})(?=\/|$)/,
+                ''
+            ) || '/';
+        } catch (e) {
+            return pathname || '/';
+        }
+    }
+
     function stripPreviewTokenFromUrl() {
         try {
             var url = new URL(window.location.href);
             var changed = false;
             if (url.searchParams.has('weline_preview_token')) {
                 url.searchParams.delete('weline_preview_token');
+                changed = true;
+            }
+            var nextPath = stripLivePreviewPathMount(url.pathname);
+            if (nextPath !== url.pathname) {
+                url.pathname = nextPath;
                 changed = true;
             }
             return changed ? url.toString() : '';
@@ -2196,6 +2226,7 @@ HTML;
         try {
             var current = new URL(window.location.href);
             current.searchParams.delete('weline_preview_token');
+            current.pathname = stripLivePreviewPathMount(current.pathname);
             return current.pathname + current.search + current.hash;
         } catch (e) {
             return window.location.pathname + window.location.search + window.location.hash;

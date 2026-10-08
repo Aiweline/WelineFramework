@@ -56,27 +56,36 @@ final class StorefrontSsrChromeHealer
         // W4: empty chrome shells are not healed from chrome.rendered disk snapshots.
         // Safety-net fill for incomplete shells still runs when gate says so — via
         // healPublishedPlaceholderShell (fill / Overlay), never locale rendered HTML.
-        if (!ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
-            return SlotBoundaryMarkers::strip($html);
+        if (ThemeLayoutEntityPublishedSlotHost::shellNeedsRuntimeSafetyNetFill($html)) {
+            try {
+                $themeId = $this->resolveFrontendThemeId();
+                if ($themeId > 0) {
+                    $pageType = $this->resolvePageType();
+                    if ($pageType === '') {
+                        $pageType = ThemeLayout::PAGE_TYPE_HOME;
+                    }
+                    /** @var ThemeLayoutEntitySlotFiller $filler */
+                    $filler = ObjectManager::getInstance(ThemeLayoutEntitySlotFiller::class);
+                    $html = $filler->healPublishedPlaceholderShell($html, $themeId, $pageType, 'frontend');
+                }
+            } catch (\Throwable) {
+                // soft
+            }
         }
 
+        // Strip/promote first so required-injection safety net sees data-slot-id destinations.
+        $html = SlotBoundaryMarkers::strip($html);
         try {
-            $themeId = $this->resolveFrontendThemeId();
-            if ($themeId < 1) {
-                return SlotBoundaryMarkers::strip($html);
-            }
-            $pageType = $this->resolvePageType();
-            if ($pageType === '') {
-                $pageType = ThemeLayout::PAGE_TYPE_HOME;
-            }
-            /** @var ThemeLayoutEntitySlotFiller $filler */
-            $filler = ObjectManager::getInstance(ThemeLayoutEntitySlotFiller::class);
-            $html = $filler->healPublishedPlaceholderShell($html, $themeId, $pageType, 'frontend');
+            /** @var \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionRuntimeSafetyNet $requiredNet */
+            $requiredNet = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionRuntimeSafetyNet::class
+            );
+            $html = $requiredNet->ensure($html);
         } catch (\Throwable) {
             // soft
         }
 
-        return SlotBoundaryMarkers::strip($html);
+        return $html;
     }
 
     /**

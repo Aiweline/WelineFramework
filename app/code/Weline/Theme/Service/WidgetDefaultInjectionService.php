@@ -424,11 +424,122 @@ class WidgetDefaultInjectionService
         $applied = ($pageType === null || trim($pageType) === '')
             ? $this->applyMissingForAllPageTypes($themeId, $identity, $componentArea, ThemeLayout::STATUS_DRAFT, true)
             : $this->applyMissingForLayout($themeId, $pageType, $identity, $componentArea, ThemeLayout::STATUS_DRAFT, true);
+        // Required widgets may already sit in the slot with polluted config
+        // (e.g. store-music enabled=false + full default playlist). applyMissing
+        // skips those; force-reapply declaration config so reset+solidify shows
+        // required floats again.
+        $repaired = ($pageType === null || trim($pageType) === '')
+            ? $this->reapplyRequiredInjectionConfigsForAllPageTypes(
+                $themeId,
+                $identity,
+                $componentArea,
+                ThemeLayout::STATUS_DRAFT,
+            )
+            : $this->reapplyRequiredInjectionConfigsForLayout(
+                $themeId,
+                $pageType,
+                $identity,
+                $componentArea,
+                ThemeLayout::STATUS_DRAFT,
+            );
 
         return [
             'cleared_user_deleted' => $cleared,
-            'applied_defaults' => $applied,
+            'applied_defaults' => $applied + $repaired,
+            'repaired_defaults' => $repaired,
         ];
+    }
+
+    /**
+     * Force-write required default_injection config onto widgets already present.
+     *
+     * @param array<string,mixed> $identity
+     */
+    public function reapplyRequiredInjectionConfigsForLayout(
+        int $themeId,
+        string $pageType,
+        array $identity = [],
+        string $componentArea = PreviewContextService::AREA_FRONTEND,
+        string $status = ThemeLayout::STATUS_DRAFT,
+    ): int {
+        $theme = $this->loadTheme($themeId);
+        if (!$theme || trim($pageType) === '') {
+            return 0;
+        }
+
+        $identity = $this->normalizeIdentity($identity);
+        $componentArea = $this->normalizeComponentArea($componentArea);
+        $repaired = 0;
+
+        foreach ($this->collectDeclarations($theme, $componentArea, $pageType, $identity) as $item) {
+            if (empty($item['required'])) {
+                continue;
+            }
+            if ($this->hasUserDeletedDecision($themeId, $item)) {
+                continue;
+            }
+            if ($status === ThemeLayout::STATUS_PUBLISHED) {
+                continue;
+            }
+            $applied = $this->resolveAppliedLayoutNode(
+                $themeId,
+                $pageType,
+                $identity,
+                $status,
+                $item,
+                $componentArea,
+            );
+            if ($applied === null) {
+                continue;
+            }
+            if ($this->resolveInstallBlocker($themeId, $item, $status, $componentArea) !== null) {
+                continue;
+            }
+            $editorArea = $componentArea === PreviewContextService::AREA_BACKEND ? 'backend' : 'frontend';
+            try {
+                $context = $this->runtimeLayoutResolver->buildContext(
+                    $themeId,
+                    $pageType,
+                    $editorArea,
+                    $identity,
+                );
+                $this->layoutWriter->updateWidgetConfig(
+                    $context,
+                    (string)$applied['node_uid'],
+                    \is_array($item['config'] ?? null) ? $item['config'] : [],
+                    'system:widget-default-injection-repair',
+                    '',
+                );
+                $repaired++;
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return $repaired;
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     */
+    public function reapplyRequiredInjectionConfigsForAllPageTypes(
+        int $themeId,
+        array $identity = [],
+        string $componentArea = PreviewContextService::AREA_FRONTEND,
+        string $status = ThemeLayout::STATUS_DRAFT,
+    ): int {
+        $repaired = 0;
+        foreach (\array_keys(ThemeLayout::getPageTypes()) as $pageType) {
+            $repaired += $this->reapplyRequiredInjectionConfigsForLayout(
+                $themeId,
+                (string)$pageType,
+                $identity,
+                $componentArea,
+                $status,
+            );
+        }
+
+        return $repaired;
     }
 
     /**

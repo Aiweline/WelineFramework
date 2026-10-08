@@ -8,10 +8,10 @@ declare(strict_types=1);
  * 保证「恢复原始布局」后应用 Tab / 默认注入回填仍保留。
  * 曲目与播放行为在主题编辑器「部件配置」中编辑（params）；SystemConfig / 后台页作配置回退。
  *
- * HARD: default_injection / params 必须 enabled=false + tracks=[]。
- * 非空默认歌单会绕过 hookOwnedWidgetConfig 的 annotation 污染剥离，
- * 导致编辑器草稿「未启用」却带着歌单 → 永远 inactive，左下角不显示。
- * 默认歌单只放 etc/default-tracks.php / SystemConfig，部件曲目为空时回退。
+ * HARD: default_injection / params 的 tracks 必须 []。
+ * 默认歌单只放 etc/default-tracks.php / SystemConfig；部件曲目为空时回退。
+ * enabled 默认 true：重置/required 回填后左下角应可见（SystemConfig 有歌单时）。
+ * 禁止再写 enabled=false + 非空歌单——会绕过污染剥离，固化物永久 inactive。
  */
 
 return [
@@ -31,29 +31,29 @@ return [
             'content',
         ],
         'default_injections' => [[
-            'layout_type' => 'homepage',
+            'layout_type' => '*',
             'slot' => 'storefront-float-start',
             'area' => 'footer',
             'sort_order' => 100,
             'required' => true,
-            'reason' => '店面默认左侧悬浮进店音乐；恢复原始布局后 required 回填',
+            'reason' => '店面任意布局默认左侧悬浮进店音乐；主题重写布局仍注入，仅可视化卸载可省略',
             'config' => [
-                'enabled' => false,
+                'enabled' => true,
                 'tracks' => [],
                 'delay_seconds' => 3,
                 'try_autoplay' => true,
                 'loop' => true,
                 'default_volume' => 8,
                 'avatar_spin' => false,
-                'waveform_default' => false,
+                'waveform_default' => true,
             ],
         ]],
         'params' => [
             'enabled' => [
-                'default' => false,
+                'default' => true,
                 'type' => 'bool',
                 'label' => '启用进店音乐',
-                'description' => '关闭后前台不再展示进店音乐浮层；需至少一首曲目才会显示。默认关闭；曲目为空时回退系统配置歌单与启用状态。',
+                'description' => '关闭后前台不再展示进店音乐浮层；需至少一首曲目才会显示。默认开启；曲目为空时回退系统配置歌单。',
                 'group' => 'basic',
                 'i18n' => false,
             ],
@@ -149,10 +149,10 @@ return [
                 'i18n' => false,
             ],
             'waveform_default' => [
-                'default' => false,
+                'default' => true,
                 'type' => 'bool',
                 'label' => '默认开启波形背景',
-                'description' => '开启后访客首次进入默认打开全页波形；仍可在浮层上关闭。',
+                'description' => '开启后访客首次进入默认打开 body 底部全页音乐柱；仍可在浮层上关闭。',
                 'group' => 'style',
                 'i18n' => false,
             ],

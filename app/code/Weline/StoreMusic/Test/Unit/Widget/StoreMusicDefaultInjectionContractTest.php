@@ -23,13 +23,13 @@ class StoreMusicDefaultInjectionContractTest extends TestCase
         self::assertSame('Weline_StoreMusic::templates/frontend/widgets/store-music.phtml', $widget['template'] ?? null);
         self::assertSame('storefront-float-start', $widget['slot'] ?? null);
         $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('homepage', $injection['layout_type'] ?? null);
+        self::assertSame('*', $injection['layout_type'] ?? null);
         self::assertSame('storefront-float-start', $injection['slot'] ?? null);
         self::assertSame('footer', $injection['area'] ?? null);
         self::assertTrue(!empty($injection['required']));
-        self::assertSame(false, $injection['config']['enabled'] ?? null);
-        // Empty tracks required: non-empty defaults defeat hookOwnedWidgetConfig
-        // pollution strip and leave editor drafts permanently inactive.
+        self::assertSame(true, $injection['config']['enabled'] ?? null);
+        // Empty tracks required: non-empty defaults with enabled=false permanently
+        // inactive the float after reset/solidify; playlist lives in SystemConfig.
         self::assertSame([], $injection['config']['tracks'] ?? null);
         self::assertSame(true, $injection['config']['try_autoplay'] ?? null);
         self::assertContains('layout-storefront-float-start', $widget['supports'] ?? []);
@@ -53,9 +53,11 @@ class StoreMusicDefaultInjectionContractTest extends TestCase
         ] as $key) {
             self::assertArrayHasKey($key, $params, "missing param {$key}");
         }
-        self::assertSame(false, $params['enabled']['default'] ?? null);
+        self::assertSame(true, $params['enabled']['default'] ?? null);
         self::assertSame([], $params['tracks']['default'] ?? null);
         self::assertSame(true, $params['try_autoplay']['default'] ?? null);
+        self::assertSame(true, $params['waveform_default']['default'] ?? null);
+        self::assertSame(true, $widgets['store-music']['default_injections'][0]['config']['waveform_default'] ?? null);
         self::assertSame('array', $params['tracks']['type'] ?? null);
         self::assertSame('media_image', $params['tracks']['item_schema']['url']['type'] ?? null);
         self::assertSame('audio', $params['tracks']['item_schema']['url']['media_options']['kind'] ?? null);

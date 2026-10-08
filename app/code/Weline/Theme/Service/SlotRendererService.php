@@ -1159,12 +1159,6 @@ class SlotRendererService
         if ($html === '' || $themeId < 1) {
             return $html;
         }
-        if (!\str_contains($html, 'storefront-float-')
-            && !\str_contains($html, 'data-wslot="storefront-float')
-            && !\str_contains($html, 'data-slot-id="storefront-float')
-        ) {
-            return $html;
-        }
 
         $chrome = $this->loadSharedChromeSlotWidgetsFromEntity($themeId, $area);
         if ($chrome === []) {
@@ -1181,6 +1175,12 @@ class SlotRendererService
         }
         if ($targets === []) {
             return $html;
+        }
+
+        // Design themes may have dropped the float layer entirely — synthesize hosts
+        // so chrome_payload widgets still have destinations (required unless unloaded).
+        if (!\Weline\Theme\Service\LayoutEntity\StorefrontFloatLayerHost::htmlHasFloatDestinations($html)) {
+            $html = \Weline\Theme\Service\LayoutEntity\StorefrontFloatLayerHost::ensureInHtml($html);
         }
 
         return $this->withRenderPass(
