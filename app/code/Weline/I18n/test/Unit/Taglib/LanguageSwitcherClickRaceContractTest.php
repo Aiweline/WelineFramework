@@ -61,6 +61,9 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
         self::assertStringContainsString('writeLanguagePreference(locale', $runtime);
         self::assertStringContainsString('resolveLanguageNavigationHref', $runtime);
         self::assertStringContainsString('rebuildPathWithLocale', $runtime);
+        self::assertStringContainsString('peelLivePreviewPathMount', $runtime);
+        self::assertStringContainsString('LIVE_PREVIEW_TOKEN_PATTERN', $runtime);
+        self::assertStringContainsString('never re-stack', $runtime);
         self::assertStringContainsString('refreshLanguageOptionHrefs', $runtime);
         self::assertStringContainsString('window.urlWithLang', $runtime);
         self::assertStringContainsString('navigateLanguageOption', $runtime);

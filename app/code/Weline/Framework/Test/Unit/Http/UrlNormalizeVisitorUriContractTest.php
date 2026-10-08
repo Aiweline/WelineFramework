@@ -30,21 +30,24 @@ final class UrlNormalizeVisitorUriContractTest extends TestCase
         self::assertSame('/~site/daocharms/about', $normalized['origin_uri']);
     }
 
-    public function testAppInstallsStorefrontScopeFromRoutingUriNotOrigin(): void
+    public function testAppInstallsStorefrontScopeFromOriginUriSoMountsSurvive(): void
     {
         $root = dirname(__DIR__, 3);
         $app = (string)file_get_contents($root . '/App.php');
         self::assertStringContainsString('$routingFullRequestUri', $app);
+        self::assertStringContainsString('$originFullRequestUri', $app);
+        self::assertStringContainsString('$scopeInstallUri', $app);
         self::assertStringContainsString(
             '$this->installStorefrontNavigationScope(',
             $app
         );
+        // DetectWebsite re-resolves Website from the install URL — origin keeps
+        // /~site/{code}; peeled routing "/" would bind the project-Host default.
         self::assertMatchesRegularExpression(
-            '/\\$routingFullRequestUri =[\\s\\S]*?installStorefrontNavigationScope\\(\\s*\\$routingFullRequestUri/',
+            '/\\$scopeInstallUri = \\$originFullRequestUri !== \'\' \\? \\$originFullRequestUri : \\$routingFullRequestUri;[\\s\\S]*?installStorefrontNavigationScope\\(\\s*\\$scopeInstallUri/',
             $app
         );
-        // Origin full URI is kept for visitor identity / FULL_REQUEST_URI.
-        self::assertStringContainsString('$originFullRequestUri', $app);
         self::assertStringContainsString('WELINE_FULL_REQUEST_URI', $app);
+        self::assertStringContainsString('DetectWebsite::installNavigationScope re-resolves', $app);
     }
 }

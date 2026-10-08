@@ -14,6 +14,8 @@ final class CloudflareHttpClient
     private const REVOKE_URL = 'https://dash.cloudflare.com/oauth2/revoke';
 
     /**
+     * Bearer API Token 调用（OAuth access_token / 手工 API Token）。
+     *
      * @param array<string, scalar> $query
      * @param array<string, mixed>|null $body
      * @return array<string, mixed>
@@ -28,6 +30,36 @@ final class CloudflareHttpClient
         if (trim($accessToken) === '') {
             throw new \RuntimeException((string)__('Cloudflare 账户未配置可用令牌。'));
         }
+
+        return $this->apiWithCredentials(
+            ['auth_mode' => 'token', 'api_token' => $accessToken],
+            $method,
+            $path,
+            $query,
+            $body,
+        );
+    }
+
+    /**
+     * CDN 账户凭据调用：支持 API Token（Bearer）与 Global API Key（邮箱 + X-Auth-Key）。
+     * 业务侧 Cloudflare v4 请求的唯一入口；禁止平行自写鉴权 curl。
+     *
+     * @param array<string, mixed> $credentials
+     * @param array<string, scalar> $query
+     * @param array<string, mixed>|null $body
+     * @return array<string, mixed>
+     */
+    public function apiWithCredentials(
+        array $credentials,
+        string $method,
+        string $path,
+        array $query = [],
+        ?array $body = null,
+        bool $requireEnvelopeSuccess = true,
+    ): array {
+        if (!\Weline\Cdn\Adapter\Cloudflare::hasUsableCredentials($credentials)) {
+            throw new \RuntimeException((string)__('Cloudflare 账户未配置可用令牌。'));
+        }
         if (!str_starts_with($path, '/')) {
             throw new \InvalidArgumentException('Cloudflare API path must be absolute.');
         }
@@ -40,16 +72,15 @@ final class CloudflareHttpClient
             ? null
             : json_encode($body, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
 
+        $headers = \Weline\Cdn\Adapter\Cloudflare::buildAuthHeaders($credentials);
+        $headers[] = 'Accept: application/json';
+
         return $this->request(
             strtoupper($method),
             $url,
-            [
-                'Authorization: Bearer ' . $accessToken,
-                'Accept: application/json',
-                'Content-Type: application/json',
-            ],
+            $headers,
             $payload,
-            true,
+            $requireEnvelopeSuccess,
         );
     }
 
@@ -213,8 +244,7 @@ final class CloudflareHttpClient
             throw new \RuntimeException(
                 (string)__(
                     'Cloudflare 请求失败（HTTP %{1}，代码 %{2}）。',
-                    $status,
-                    $this->publicErrorCode($decoded),
+                    [$status, $this->publicErrorCode($decoded)],
                 )
             );
         }

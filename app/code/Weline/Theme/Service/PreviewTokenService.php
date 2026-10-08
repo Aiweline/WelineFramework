@@ -13,6 +13,7 @@ use Weline\Framework\Http\CookieScope;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Session\SessionCookieNameResolver;
 
 /**
@@ -93,6 +94,11 @@ class PreviewTokenService
             $context['file_access_actor_id'],
             $context['file_access_policy_revision'],
         );
+        // Publish-and-exit requires typed editor_context. Mint paths that only
+        // carry PreviewContext shell fields (ThemePreviewEntryApplication,
+        // Query preview-token, start-preview without client claims) must still
+        // embed reconstructable layout identity — never leave editor_context null.
+        $context = $this->ensureTypedEditorContext($themeId, $pageType, $context);
         $context = $this->bindAuthenticatedFileAccessActor($context);
         $context = $this->boundedContext($context);
 
@@ -113,6 +119,23 @@ class PreviewTokenService
         $area = \trim((string)($context['area'] ?? $context['editor_area'] ?? ''));
         if ($area !== '' && !\in_array($area, ['frontend', 'backend'], true)) {
             $area = '';
+        }
+        // 嵌套 context 必须与顶层 theme_id / scope 一致，否则反解析会拿到错主题/站。
+        $context['frontend_theme_id'] = $themeId;
+        if ($area === 'backend') {
+            $context['backend_theme_id'] = $themeId;
+            $context['editor_area'] = 'backend';
+            $context['area'] = 'backend';
+        } else {
+            $context['editor_area'] = 'frontend';
+            $context['area'] = $area !== '' ? $area : 'frontend';
+        }
+        if ($canonicalScope !== '') {
+            $context['scope'] = $canonicalScope;
+            $context['canonical_scope'] = $canonicalScope;
+        }
+        if ($storeMode !== '') {
+            $context['store_mode'] = $storeMode;
         }
         $ownerHash = \trim((string)($context['owner_hash'] ?? ''));
         if ($ownerHash === '' && $themeId > 0 && $canonicalScope !== '' && $storeMode !== '' && $area !== '') {
@@ -484,10 +507,74 @@ class PreviewTokenService
      * Live preview entry URL under /~preview/{token}/… (formal path stays cache-isolated).
      *
      * Legacy query `?weline_preview_token=` is no longer minted here.
+     * Visible URLs must not stack /~site/{code}; Token must carry website identity for rehydrate.
      */
     public function getPreviewUrl(string $baseUrl, string $token): string
     {
+        $path = (string)(\parse_url($baseUrl, \PHP_URL_PATH) ?: '/');
+        if ($path === '') {
+            $path = '/';
+        }
+        $hadSiteMount = ThemeLivePreviewPathMount::stripProjectHostSiteMountFromPath($path) !== $path;
+        if ($hadSiteMount) {
+            $payload = $this->validateToken($token);
+            $code = self::extractWebsiteCodeFromPayload(\is_array($payload) ? $payload : []);
+            if ($code === null || $code === '' || $code === 'default') {
+                throw new \InvalidArgumentException(
+                    (string)__('真实预览 Token 缺少网站代码，无法去掉 /~site 挂载')
+                );
+            }
+        }
+
         return ThemeLivePreviewPathMount::joinPreviewPath($baseUrl, $token);
+    }
+
+    /**
+     * Website code for project-Host routing rehydrate (Token-authoritative).
+     */
+    public function resolveWebsiteCodeFromLivePreviewToken(string $token): ?string
+    {
+        $payload = $this->validateToken($token);
+        if (!\is_array($payload)) {
+            return null;
+        }
+
+        return self::extractWebsiteCodeFromPayload($payload);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    public static function extractWebsiteCodeFromPayload(array $payload): ?string
+    {
+        $context = $payload['context'] ?? null;
+        if (!\is_array($context)) {
+            $context = [];
+        }
+
+        $editorContext = $context['editor_context'] ?? null;
+        if (\is_array($editorContext)) {
+            $identity = $editorContext['scope']['identity'] ?? null;
+            if (\is_array($identity)) {
+                $fromIdentity = \strtolower(\trim((string)($identity['website_code'] ?? '')));
+                if ($fromIdentity !== '') {
+                    return $fromIdentity;
+                }
+            }
+        }
+
+        $canonical = \trim((string)($payload['canonical_scope']
+            ?? $context['canonical_scope']
+            ?? $context['scope']
+            ?? ''));
+        if ($canonical !== '' && \str_contains($canonical, '.')) {
+            $first = \strtolower(\trim((string)\explode('.', $canonical, 2)[0]));
+            if ($first !== '') {
+                return $first;
+            }
+        }
+
+        return null;
     }
 
     /** @return array{path:string,secure:bool,httponly:bool,samesite:string} */
@@ -544,6 +631,48 @@ class PreviewTokenService
         return strlen($layoutType) <= 128
             && !str_contains($layoutType, '..')
             && preg_match('#^[A-Za-z0-9][A-Za-z0-9_.-]*(?:/[A-Za-z0-9][A-Za-z0-9_.-]*)*$#D', $layoutType) === 1;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function ensureTypedEditorContext(int $themeId, string $pageType, array $context): array
+    {
+        try {
+            /** @var ThemePreviewTypedEditorContextBinder $binder */
+            $binder = ObjectManager::getInstance(ThemePreviewTypedEditorContextBinder::class);
+            $bound = $binder->bindIntoPreviewContext($themeId, $pageType, $context);
+            if (\is_array($bound['editor_context'] ?? null)) {
+                return $bound;
+            }
+        } catch (\Throwable) {
+            // Fall through to minimal claims (unit isolation / DI cool-down).
+        }
+
+        if (\is_array($context['editor_context'] ?? null)
+            && \is_array(($context['editor_context']['scope'] ?? null))
+        ) {
+            return $context;
+        }
+
+        $layoutOption = \trim((string)($context['layout_option'] ?? 'default'));
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+        $context['editor_context'] = [
+            'scope' => ['identity' => ScopeIdentity::global()->toArray()],
+            'area' => 'frontend',
+            'resource_type' => 'layout',
+            'theme_id' => $themeId,
+            'layout_type' => $pageType,
+            'layout_option' => $layoutOption,
+            'locale' => 'default',
+            'target_type' => 'global',
+            'target_id' => 0,
+        ];
+
+        return $context;
     }
 
     /** @param array<string,mixed> $context @return array<string,mixed> */

@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\LayoutEntity;
 
-use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Helper\ThemeData;
-use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\ThemeContextService;
 
 /**
@@ -27,9 +25,12 @@ final class RequiredFilterSlotFallbackInjector
 
     public function ensure(string $html): string
     {
-        if ($html === '' || $this->isEditorCanvas()) {
+        if ($html === '') {
             return $html;
         }
+        // Editor canvas may still render Product source layouts (declaration
+        // placeholders) when draft bake is not selected; after theme-switch
+        // solidify the canvas must not keep 「由 Filters 部件默认注入」.
 
         $needs = false;
         foreach (self::FILTER_SLOTS as $slotId) {
@@ -57,30 +58,6 @@ final class RequiredFilterSlotFallbackInjector
         }
 
         return $this->stripDeclarationPlaceholdersWhenFiltersPresent($html);
-    }
-
-    private function isEditorCanvas(): bool
-    {
-        try {
-            $request = ObjectManager::getInstance(Request::class);
-            $flag = trim((string)$request->getParam('editor_mode', ''));
-            if ($flag === '1' || strtolower($flag) === 'true') {
-                return true;
-            }
-        } catch (\Throwable) {
-            // ignore
-        }
-        try {
-            /** @var PreviewContextService $preview */
-            $preview = ObjectManager::getInstance(PreviewContextService::class);
-            if ($preview->isEditorThemeRequest()) {
-                return true;
-            }
-        } catch (\Throwable) {
-            // ignore
-        }
-
-        return false;
     }
 
     private function slotNeedsFilters(string $html, string $slotId): bool

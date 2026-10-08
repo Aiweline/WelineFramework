@@ -30,8 +30,14 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
 {
     public function ensure(string $html): string
     {
-        if ($html === '' || $this->isEditorCanvas()) {
+        if ($html === '') {
             return $html;
+        }
+        // Theme-switch solidify gate: editor canvas still needs Filters XOR when
+        // source layouts show declaration placeholders. Full required Overlay stays
+        // storefront-only so edit chrome is not flooded with every injection.
+        if ($this->isEditorCanvas()) {
+            return $this->finishFiltersXor($html);
         }
 
         // Theme-rewritten footers may omit float destinations entirely.

@@ -20,8 +20,9 @@ use Weline\Websites\Service\Value\CanonicalStorefrontUrl;
 final class InstallLocalStorefrontBaseResolver
 {
     /**
-     * Absolute storefront base for preview capture (scheme://host[:port][/mount]).
-     * Path-mount sites share install Host; Host-only local sites use *.test.weline.com.
+     * Absolute storefront base for local edit / preview capture (scheme://host[:port][/mount]).
+     * On the standard project Host: always prefer synthetic /~site/{code}.
+     * Do not default to WebsiteDomain sibling hosts (*.test.weline.com / *.weline.test).
      * Never uses production public domains (e.g. daocharms.com).
      */
     public function resolveForWebsite(int $websiteId, string $websiteCode = ''): ?string
@@ -101,12 +102,14 @@ final class InstallLocalStorefrontBaseResolver
                 return null;
             }
 
-            // 0) Standard project Host: synthetic /~site/{code} (no WebsiteDomain row).
-            // Works even when sandbox/DB has no websites table, as long as code is known.
-            if ($installHost !== ''
+            $domains = $row !== null ? WebsiteData::domainsForWebsite($websiteId) : [];
+            $onStandardProjectHost = $installHost !== ''
                 && \class_exists(LocalDomainPolicy::class)
-                && LocalDomainPolicy::isStandardProjectHost($installHost)
-            ) {
+                && LocalDomainPolicy::isStandardProjectHost($installHost);
+
+            // 0) 本地编辑主通道：标准项目 Host → 合成 /~site/{code}。
+            // 禁止默认拼 WebsiteDomain 独立域名（grocery.test / ai-test-*.weline.test）。
+            if ($onStandardProjectHost) {
                 $synthetic = ProjectHostSiteMount::editorMountPath($websiteId, $rowCode);
                 if ($synthetic !== '') {
                     return \rtrim($installOrigin, '/') . $synthetic;
@@ -118,13 +121,8 @@ final class InstallLocalStorefrontBaseResolver
                 }
             }
 
-            if ($row === null) {
-                return null;
-            }
-
-            $domains = WebsiteData::domainsForWebsite($websiteId);
             // 1) Path-mount on this install Host (legacy WebsiteDomain sub_path).
-            if ($installHost !== '') {
+            if ($installHost !== '' && $row !== null) {
                 foreach ($domains as $domainRow) {
                     if (!\is_array($domainRow)) {
                         continue;
@@ -147,13 +145,17 @@ final class InstallLocalStorefrontBaseResolver
                 }
             }
 
-            // 2) Host-only local acceptance domain (grocery.test.weline.com).
+            // 2) Host-only 主验收域（*.test.weline.com）——仅当项目 Host 无法挂 /~site 时。
+            // 预览基址白名单 / 非标准安装 Host 仍可用；本地编辑默认不走这里。
             foreach ($domains as $domainRow) {
                 if (!\is_array($domainRow)) {
                     continue;
                 }
                 $domain = \strtolower(\trim((string)($domainRow['domain'] ?? '')));
-                if ($domain === '' || !$this->isLocalAcceptanceHost($domain)) {
+                if ($domain === '' || !$this->isPrimaryLocalAcceptanceHost($domain)) {
+                    continue;
+                }
+                if ($installHost !== '' && $this->hostsMatch($domain, $installHost)) {
                     continue;
                 }
                 $subPath = CanonicalStorefrontUrl::canonicalPath(
@@ -168,6 +170,36 @@ final class InstallLocalStorefrontBaseResolver
                 }
 
                 return \rtrim($origin, '/') . $subPath;
+            }
+
+            // 2b) Legacy Host-only *.weline.test — last resort only.
+            foreach ($domains as $domainRow) {
+                if (!\is_array($domainRow)) {
+                    continue;
+                }
+                $domain = \strtolower(\trim((string)($domainRow['domain'] ?? '')));
+                if ($domain === '' || !$this->isLegacyLocalAcceptanceHost($domain)) {
+                    continue;
+                }
+                if ($installHost !== '' && $this->hostsMatch($domain, $installHost)) {
+                    continue;
+                }
+                $subPath = CanonicalStorefrontUrl::canonicalPath(
+                    (string)($domainRow['sub_path'] ?? '/')
+                );
+                $origin = $this->formatOrigin('https', $domain, null);
+                if ($origin === '') {
+                    continue;
+                }
+                if ($subPath === '/' || $subPath === '') {
+                    return $origin;
+                }
+
+                return \rtrim($origin, '/') . $subPath;
+            }
+
+            if ($row === null) {
+                return null;
             }
 
             // 3) Website.URL only when its host is already a local acceptance Host.
@@ -189,15 +221,37 @@ final class InstallLocalStorefrontBaseResolver
 
     private function isLocalAcceptanceHost(string $host): bool
     {
+        return $this->isPrimaryLocalAcceptanceHost($host)
+            || $this->isLegacyLocalAcceptanceHost($host)
+            || $this->isLoopbackAcceptanceHost($host);
+    }
+
+    /** 主验收 Host：*.test.weline.com（含 grocery.test.weline.com）。 */
+    private function isPrimaryLocalAcceptanceHost(string $host): bool
+    {
         $host = \strtolower(\trim($host));
-        if ($host === '') {
+
+        return $host !== '' && \str_ends_with($host, '.test.weline.com');
+    }
+
+    /**
+     * 遗留本机 Host：*.weline.test。不得压过项目 Host 的 path-mount / /~site/{code}。
+     */
+    private function isLegacyLocalAcceptanceHost(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+        if ($host === '' || \str_ends_with($host, '.test.weline.com')) {
             return false;
         }
 
-        return \str_ends_with($host, '.test.weline.com')
-            || \str_ends_with($host, '.weline.test')
-            || $host === 'localhost'
-            || $host === '127.0.0.1';
+        return \str_ends_with($host, '.weline.test');
+    }
+
+    private function isLoopbackAcceptanceHost(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+
+        return $host === 'localhost' || $host === '127.0.0.1';
     }
 
     private function originFromCurrentRequest(): ?string

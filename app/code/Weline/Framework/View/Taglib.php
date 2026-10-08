@@ -17,6 +17,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Taglib\CompileTimeStaticMirror;
 use Weline\Framework\View\Block\Csrf;
 use Weline\Framework\View\Exception\TemplateException;
 
@@ -50,7 +51,7 @@ class Taglib
      * Bumped when compiled Taglib output shape changes (e.g. form body capture).
      * Embedded into Template compile hash so view/tpl cannot keep stale PHP.
      */
-    public const COMPILER_GENERATION = '20261008-prod-hook-php-inline-minify-v1';
+    public const COMPILER_GENERATION = '20261008-url-literal-bake-v1';
 
     // PHP 标签常量，避免在回调函数中重复定义
     private const PHP_OPEN_TAG = '<' . '?';
@@ -408,8 +409,8 @@ class Taglib
                 continue;
             }
 
-            // @lang/@trans 编译期烘焙：PHP 语境必须用 var_export，避免法语撇号等打断单引号字面量（ParseError → 500）
-            [$pos, $raw, $replacement] = $this->adjustBakedLangInlineReplacement(
+            // @lang/@trans/@url 族编译期烘焙：PHP 语境必须用 var_export，避免撇号等打断单引号字面量（ParseError → 500）
+            [$pos, $raw, $replacement] = $this->adjustBakedStaticInlineReplacement(
                 $content,
                 $pos,
                 (string) $raw,
@@ -428,16 +429,16 @@ class Taglib
     }
 
     /**
-     * Keep compile-time baked lang/trans text PHP-parse-safe.
+     * Keep compile-time baked lang/trans/url-family text PHP-parse-safe.
      *
-     * HTML context keeps the raw translation (apostrophes are fine in markup).
+     * HTML context keeps the raw bake (apostrophes are fine in markup).
      * Inside <?php / <?= ... ?>, emit var_export(); if the token is wrapped as
-     * '@lang(...)' / "@lang(...)", consume the surrounding quotes so we do not
+     * '@lang(...)' / "@url{...}", consume the surrounding quotes so we do not
      * produce ''...'...''.
      *
      * @return array{0:int,1:string,2:string} [replacePos, replaceRaw, replacement]
      */
-    private function adjustBakedLangInlineReplacement(
+    private function adjustBakedStaticInlineReplacement(
         string $content,
         int $pos,
         string $raw,
@@ -445,11 +446,19 @@ class Taglib
         string $tagName
     ): array {
         $normalized = strtolower(ltrim($tagName, 'w:'));
-        if ($normalized !== 'lang' && $normalized !== 'trans') {
+        static $bakeTags = [
+            'lang' => true,
+            'trans' => true,
+            'url' => true,
+            'frontend-url' => true,
+            'api' => true,
+            'frontend-api' => true,
+        ];
+        if (!isset($bakeTags[$normalized])) {
             return [$pos, $raw, $replacement];
         }
 
-        // Dynamic/runtime lang already returns PHP echo stubs — leave untouched.
+        // Dynamic/runtime stubs already return PHP echo — leave untouched.
         if (str_contains($replacement, '<?')) {
             return [$pos, $raw, $replacement];
         }
@@ -469,6 +478,177 @@ class Taglib
         }
 
         return [$pos, $raw, $exported];
+    }
+
+    /**
+     * @deprecated Use adjustBakedStaticInlineReplacement (lang + url family).
+     * @return array{0:int,1:string,2:string}
+     */
+    private function adjustBakedLangInlineReplacement(
+        string $content,
+        int $pos,
+        string $raw,
+        string $replacement,
+        string $tagName
+    ): array {
+        return $this->adjustBakedStaticInlineReplacement($content, $pos, $raw, $replacement, $tagName);
+    }
+
+    /**
+     * When path (+ optional params) are compile-time literals, resolve via Template
+     * Url helpers and bake the final string into com_*. Dynamic path/params keep PHP stubs.
+     *
+     * @param 'getUrl'|'getFrontendUrl'|'getApi' $method
+     * @param array<string, mixed> $attributes
+     * @param array<int, mixed> $tagData
+     */
+    private function tryBakeUrlFamily(
+        Template $template,
+        string $method,
+        string $tagKey,
+        array $tagData,
+        array $attributes,
+    ): ?string {
+        if ($tagKey === 'tag-start' || $tagKey === 'tag-end') {
+            return null;
+        }
+
+        $path = null;
+        $params = [];
+
+        if ($tagKey === 'tag'
+            || $tagKey === 'tag-self-close'
+            || $tagKey === 'tag-self-close-with-attrs'
+        ) {
+            if (isset($attributes['path'])) {
+                $path = $this->extractLiteralUrlPath((string)$attributes['path']);
+                if ($path === null) {
+                    return null;
+                }
+                if (isset($attributes['params']) && (string)$attributes['params'] !== '') {
+                    $parsed = $this->tryParseLiteralUrlParams((string)$attributes['params']);
+                    if ($parsed === null) {
+                        return null;
+                    }
+                    $params = $parsed;
+                }
+            } else {
+                $body = trim((string)($tagData[2] ?? ''));
+                if ($body === '') {
+                    return null;
+                }
+                $parts = explode('|', str_replace(' ', '', $body), 2);
+                $path = $this->extractLiteralUrlPath((string)($parts[0] ?? ''));
+                if ($path === null) {
+                    return null;
+                }
+                if (isset($parts[1]) && trim((string)$parts[1]) !== '') {
+                    $parsed = $this->tryParseLiteralUrlParams((string)$parts[1]);
+                    if ($parsed === null) {
+                        return null;
+                    }
+                    $params = $parsed;
+                }
+            }
+        } else {
+            // @url{'path'} / @url{'path'|['k'=>1]} / @url{$route}
+            $raw = str_replace(' ', '', (string)($tagData[1] ?? ''));
+            $parts = explode('|', $raw, 2);
+            $path = $this->extractLiteralUrlPath((string)($parts[0] ?? ''));
+            if ($path === null) {
+                return null;
+            }
+            if (isset($parts[1]) && trim((string)$parts[1]) !== '') {
+                $parsed = $this->tryParseLiteralUrlParams((string)$parts[1]);
+                if ($parsed === null) {
+                    return null;
+                }
+                $params = $parsed;
+            }
+        }
+
+        if ($path === null || $path === '') {
+            return null;
+        }
+
+        try {
+            $url = match ($method) {
+                'getFrontendUrl' => $template->getFrontendUrl($path, $params),
+                'getApi' => $template->getApi($path, $params),
+                default => $template->getUrl($path, $params),
+            };
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (!is_string($url) || $url === '') {
+            return null;
+        }
+
+        return $url;
+    }
+
+    private function extractLiteralUrlPath(string $pathExpr): ?string
+    {
+        $pathExpr = trim($pathExpr);
+        if ($pathExpr === '') {
+            return null;
+        }
+        if (
+            (str_starts_with($pathExpr, "'") && str_ends_with($pathExpr, "'") && strlen($pathExpr) >= 2)
+            || (str_starts_with($pathExpr, '"') && str_ends_with($pathExpr, '"') && strlen($pathExpr) >= 2)
+        ) {
+            $inner = substr($pathExpr, 1, -1);
+            if (!CompileTimeStaticMirror::isLiteralMarkup($inner) || str_contains($inner, '$')) {
+                return null;
+            }
+
+            return $inner;
+        }
+        if (!CompileTimeStaticMirror::isLiteralAttributeValue($pathExpr)) {
+            return null;
+        }
+        if (str_starts_with($pathExpr, '$')) {
+            return null;
+        }
+
+        return CompileTimeStaticMirror::literalString($pathExpr);
+    }
+
+    /**
+     * @return array<string, mixed>|null null = dynamic / unparseable (keep PHP stub)
+     */
+    private function tryParseLiteralUrlParams(string $paramsExpr): ?array
+    {
+        $paramsExpr = trim($paramsExpr);
+        if ($paramsExpr === '') {
+            return [];
+        }
+        if (!CompileTimeStaticMirror::isLiteralMarkup($paramsExpr) || str_contains($paramsExpr, '$')) {
+            return null;
+        }
+        if (str_starts_with($paramsExpr, '[')) {
+            try {
+                /** @var mixed $value */
+                $value = eval('return ' . $paramsExpr . ';');
+            } catch (\Throwable) {
+                return null;
+            }
+            if (!is_array($value)) {
+                return null;
+            }
+
+            return $value;
+        }
+        // XML params="id=1&name=test"
+        $normalized = html_entity_decode($paramsExpr, ENT_QUOTES | ENT_HTML5);
+        if (str_contains($normalized, '<?') || str_contains($normalized, '$')) {
+            return null;
+        }
+        $out = [];
+        parse_str(str_replace('&amp;', '&', $normalized), $out);
+
+        return is_array($out) ? $out : null;
     }
 
     /**
@@ -2468,12 +2648,23 @@ class Taglib
                 'tag' => 1,
                 'tag-start' => 1,
                 'tag-end' => 1,
+                'tag-self-close-with-attrs' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                        $baked = $this->tryBakeUrlFamily($template, 'getUrl', (string)$tag_key, $tag_data, $attributes);
+                        if ($baked !== null) {
+                            return $baked;
+                        }
                         $result = '';
                         switch ($tag_key) {
                             case 'tag':
-                                $data = explode('|', $tag_data[2]);
+                            case 'tag-self-close-with-attrs':
+                                $pathAttr = isset($attributes['path']) ? trim((string)$attributes['path']) : '';
+                                if ($pathAttr !== '' && !str_contains($pathAttr, '<?') && !str_starts_with($pathAttr, '$')) {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getUrl(\'' . addslashes($pathAttr) . '\')' . self::PHP_CLOSE_TAG;
+                                    break;
+                                }
+                                $data = explode('|', (string)($tag_data[2] ?? ''));
                                 $var = $data[0] ?? '';
                                 $var = trim($var, "'\"");
                                 $var = str_replace(' ', '', $var);
@@ -2512,11 +2703,22 @@ class Taglib
                 'tag' => 1,
                 'tag-start' => 1,
                 'tag-end' => 1,
+                'tag-self-close-with-attrs' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                        $baked = $this->tryBakeUrlFamily($template, 'getFrontendUrl', (string)$tag_key, $tag_data, $attributes);
+                        if ($baked !== null) {
+                            return $baked;
+                        }
                         $result = '';
                         switch ($tag_key) {
                             case 'tag':
+                            case 'tag-self-close-with-attrs':
+                                $pathAttr = isset($attributes['path']) ? trim((string)$attributes['path']) : '';
+                                if ($pathAttr !== '') {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getFrontendUrl(\'' . addslashes($pathAttr) . '\')' . self::PHP_CLOSE_TAG;
+                                    break;
+                                }
                                 $data = explode('|', $tag_data[2]);
                                 $var = $data[0] ?? '';
                                 $var = trim($var, "'\"");
@@ -2554,11 +2756,22 @@ class Taglib
                 'tag' => 1,
                 'tag-start' => 1,
                 'tag-end' => 1,
+                'tag-self-close-with-attrs' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                        $baked = $this->tryBakeUrlFamily($template, 'getApi', (string)$tag_key, $tag_data, $attributes);
+                        if ($baked !== null) {
+                            return $baked;
+                        }
                         $result = '';
                         switch ($tag_key) {
                             case 'tag':
+                            case 'tag-self-close-with-attrs':
+                                $pathAttr = isset($attributes['path']) ? trim((string)$attributes['path']) : '';
+                                if ($pathAttr !== '') {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getApi(\'' . addslashes($pathAttr) . '\')' . self::PHP_CLOSE_TAG;
+                                    break;
+                                }
                                 $data = explode('|', $tag_data[2]);
                                 $var = $data[0] ?? '';
                                 $var = trim($var, "'\"");

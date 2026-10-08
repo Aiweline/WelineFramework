@@ -204,6 +204,10 @@ $checks = [
             && ($rule['id'] ?? '') === 'storefront_internal_url_via_url_helper'
             && str_contains((string) ($rule['summary'] ?? ''), '@url')
             && str_contains((string) ($rule['summary'] ?? ''), 'getUrl')
+            && str_contains((string) ($rule['summary'] ?? ''), 'getPrefix')
+            && (str_contains((string) ($rule['summary'] ?? ''), '禁止拼接')
+                || str_contains((string) ($rule['summary'] ?? ''), 'never string-concatenated')
+                || str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN'))
             && str_contains((string) ($rule['doc'] ?? ''), '06-url')),
         false,
     ),
@@ -1902,16 +1906,6 @@ $checks = [
     'host coldstart mdc mentions machine_shared_side_effects_require_workspace_scope' => str_contains(
         HostEditorRulesGenerator::coldStartMdc(),
         'machine_shared_side_effects_require_workspace_scope'
-    ),
-    'MCP hard constraints require runtime status query local-first' => array_reduce(
-        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
-        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
-            && ($rule['id'] ?? '') === 'runtime_status_query_local_first'
-            && str_contains((string) ($rule['summary'] ?? ''), 'LOCAL')
-            && str_contains((string) ($rule['summary'] ?? ''), 'production')
-            && str_contains((string) ($rule['summary'] ?? ''), 'default profile')
-            && str_contains((string) ($rule['summary'] ?? ''), 'translation')),
-        false,
     ),
     'MCP hard constraints require runtime status query local-first' => array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],

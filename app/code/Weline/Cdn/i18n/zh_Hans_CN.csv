@@ -190,9 +190,8 @@ URL列表不能为空,URL列表不能为空
 "Cloudflare 攻击防护模式已关闭","Cloudflare 攻击防护模式已关闭"
 关闭攻击防护模式失败,关闭攻击防护模式失败
 "关闭攻击防护模式异常: %{1}","关闭攻击防护模式异常: %{1}"
-"请求失败: %{1}","请求失败: %{1}"
-"HTTP错误: %{1}","HTTP错误: %{1}"
-"Cloudflare 返回无效响应","Cloudflare 返回无效响应"
+"Cloudflare 请求 URL 非法。","Cloudflare 请求 URL 非法。"
+%{1},%{1}
 "连接或重新授权 Cloudflare","连接或重新授权 Cloudflare"
 "已保存，但 Client ID 与 Secret 填成一样了","已保存，但 Client ID 与 Secret 填成一样了"
 "系统已读到两项配置，但内容完全相同（通常是把 Client ID 粘进了 Secret）。这样无法跳转授权；到 Cloudflare 会报 invalid_client。","系统已读到两项配置，但内容完全相同（通常是把 Client ID 粘进了 Secret）。这样无法跳转授权；到 Cloudflare 会报 invalid_client。"
@@ -827,6 +826,9 @@ CDN域名创建成功：%{1},CDN域名创建成功：%{1}
 "规则导入成功，共导入 %{1} 条规则","规则导入成功，共导入 %{1} 条规则"
 规则已保存为域名覆盖规则,规则已保存为域名覆盖规则
 规则导入失败：%{1},规则导入失败：%{1}
+"请求失败: %{1}","请求失败: %{1}"
+"HTTP错误: %{1}","HTTP错误: %{1}"
+"Cloudflare 返回无效响应","Cloudflare 返回无效响应"
 确认,确认
 "缺少 data-provider / data-operation","缺少 data-provider / data-operation"
 删除请求失败,删除请求失败

@@ -54,24 +54,69 @@ function shortLocale(locale) {
 
 const LOCALE_PATH_PATTERN = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
 const CURRENCY_PATH_PATTERN = /^[A-Z]{3}$/;
+/** Matches ThemeLivePreviewPathMount opaque bearer segment. */
+const LIVE_PREVIEW_TOKEN_PATTERN = /^pv_(?:[A-Za-z0-9_-]{43}|[1-9][0-9]{0,18}_[0-9]{9,12}_[a-f0-9]{16})$/;
+
+/**
+ * Peel /~preview/{token}/… (and inverted /~site/…/~preview/{token}/…) from a pathname.
+ * @returns {{token: string, path: string}}
+ */
+function peelLivePreviewPathMount(pathname) {
+    const parts = String(pathname || '/')
+        .split('/')
+        .filter(Boolean);
+    if (parts.length === 0) {
+        return { token: '', path: '/' };
+    }
+    const previewIdx = parts.indexOf('~preview');
+    if (previewIdx >= 0
+        && parts[previewIdx + 1]
+        && LIVE_PREVIEW_TOKEN_PATTERN.test(String(parts[previewIdx + 1]))
+    ) {
+        const token = String(parts[previewIdx + 1]);
+        const after = parts.slice(previewIdx + 2);
+        return {
+            token,
+            path: after.length === 0 ? '/' : `/${after.join('/')}`,
+        };
+    }
+    return { token: '', path: String(pathname || '/') || '/' };
+}
 
 /**
  * Rebuild pathname with a new locale while keeping backend prefix / currency / page.
  * Backend chrome is cached across routes; option.href may point at a stale page
  * (e.g. /dev/tool/docs). Always prefer the live location when swapping language.
+ *
+ * Live preview: visible path must stay /~preview/{token}/… — never re-stack
+ * data-website-mount (/~site/{code}) in front of the preview mount.
  */
 function rebuildPathWithLocale(pathname, locale, websiteMount = '') {
     const targetLang = String(locale || '').trim();
     if (!targetLang || !LOCALE_PATH_PATTERN.test(targetLang)) {
         return String(pathname || '/') || '/';
     }
-    const mount = String(websiteMount || '').replace(/^\/+|\/+$/g, '');
-    const parts = String(pathname || '/')
+    const live = peelLivePreviewPathMount(pathname);
+    const mount = live.token
+        ? ''
+        : String(websiteMount || '').replace(/^\/+|\/+$/g, '');
+    const mountParts = mount === ''
+        ? []
+        : mount.split('/').filter(Boolean);
+    const parts = String(live.path || '/')
         .split('/')
         .filter(Boolean);
     const remain = [];
     let currency = '';
-    for (const part of parts) {
+    let index = 0;
+    if (mountParts.length > 0
+        && parts.length >= mountParts.length
+        && mountParts.every((segment, i) => String(parts[i]).toLowerCase() === String(segment).toLowerCase())
+    ) {
+        index = mountParts.length;
+    }
+    for (; index < parts.length; index += 1) {
+        const part = parts[index];
         if (LOCALE_PATH_PATTERN.test(part)) {
             continue;
         }
@@ -79,15 +124,14 @@ function rebuildPathWithLocale(pathname, locale, websiteMount = '') {
             currency = part.toUpperCase();
             continue;
         }
-        if (mount !== '' && remain.length === 0 && part.toLowerCase() === mount.toLowerCase()) {
-            // Defer mount to explicit out placement.
+        if (part === '~preview' || part === '~site' || LIVE_PREVIEW_TOKEN_PATTERN.test(part)) {
             continue;
         }
         remain.push(part);
     }
     const out = [];
-    if (mount !== '') {
-        out.push(mount);
+    if (mountParts.length > 0) {
+        out.push(...mountParts);
     } else if (remain.length > 0) {
         const maybeBackend = remain[0];
         // Opaque backend area key (not a short route token like "dev" / "media").
@@ -100,7 +144,11 @@ function rebuildPathWithLocale(pathname, locale, websiteMount = '') {
     }
     out.push(targetLang);
     out.push(...remain);
-    return `/${out.join('/')}`;
+    const rebuilt = `/${out.join('/')}`;
+    if (live.token) {
+        return `/~preview/${live.token}${rebuilt === '/' ? '' : rebuilt}`;
+    }
+    return rebuilt;
 }
 
 function normalizeLangCode(value) {

@@ -4,7 +4,7 @@
 > MCP 技能：`get_skill(weline-theme-development)` / surface `frontend_development`。  
 > 同构硬规则：MCP `preview_storefront_delivery_parity`（业务逻辑与交付路径与正式店面一致；本文件只区分**身份/参数权威**，不授权预览专用抽空逻辑）。
 
-> 版本身份见[主题固化物实施方案](./开发/spec/layout-entity-per-version-isolation.md)。固化与加载以[纯 PHTML 合同](./布局固化与默认注入.md)为准：三态只改变身份来源，共用正常 Template/Taglib/语言 com_*。
+> 版本身份见[主题固化物实施方案](./开发/spec/layout-entity-per-version-isolation.md)。固化与加载以[纯 PHTML 合同](./布局固化与默认注入.md)为准：三态只改变身份来源；共用 **关系固化产物 + Taglib 编译 `com_*`**（两步勿混，见权威文 §0.0）。
 
 ## 一句话对照
 
@@ -16,7 +16,7 @@
 
 三种状态**业务渲染链路必须同构**；差别只在「这次请求的主题身份从哪来」。
 
-源选择后固定本次页面与公共 Partial 的源字节，经普通 Template 编译执行。旧 Token 的 R 必须经已有资源快照映射到准确资源修订，不能把内容修订号当资源行主键，也不能读取最新草稿补历史。固化 PHTML 同时携带基础配置和语言差异；普通 com_* 不替代编辑器配置的语言专属图片。
+源选择后固定本次页面与公共 Partial 的源字节，再经 **Taglib 编译**执行。旧 Token 的 R 必须经已有资源快照映射到准确资源修订，不能把内容修订号当资源行主键，也不能读取最新草稿补历史。固化 PHTML（关系模板）同时携带基础配置和语言差异；Taglib 编译出的 `com_*` 不替代编辑器配置的语言专属图片。
 
 ---
 
@@ -82,6 +82,10 @@
 
 实现锚点：`ThemeLivePreviewPathMount` + `NormalizeVisitorUriLivePreviewPath`；`PreviewContextService::getCurrentContext()`（token 合并在 request 之后、作为身份终裁）；`PreviewTokenService`（path > query > header，不读 Cookie）。
 
+**发布并退出（严重）**：Token 载荷必须带 typed `editor_context`（布局身份）。`PreviewTokenService::generateToken` 经 `ThemePreviewTypedEditorContextBinder` 在签发时补齐；`publish-and-exit` 优先读请求体 / Token 内 claims，缺省再按 Token shell 重建。禁止把 PreviewContext shell 的 `target_type=layout|path|page` 喂进布局身份断言。
+
+**店面同域发布（严重）**：预览浮层 `发布并退出` 必须 POST 店面同源 `theme/frontend/theme-preview/publish-and-exit`（Token 载荷 `file_access_actor_id` + `ThemePreviewPublishActorBinder`），再委托 `ThemeEditor::postPublishAndExit`。禁止浮层默认打后台 `theme/backend/theme-editor/publish-and-exit`——兄弟站 Host（如 `grocery.*`）无项目后台 Cookie，会 302 登录页或被当成 404。
+
 ### 正确用法
 
 - 仅 `#btnFrontendPreview`（及文档标明的真实预览入口）调用 `start-preview`
@@ -96,7 +100,8 @@
 ### Path 命名空间 / bootstrap 边界（短）
 
 - **真实预览主通道**：`/~preview/{token}/…`（与正式店面 path **缓存键隔离**）。`start-preview` / `getPreviewUrl` 只发此前缀，不再以 `?weline_preview_token=` 为主。
-- Url 早钩 `normalize_visitor_uri`（`Url::normalizeVisitorUri`）：路由用 remainder（可继续 `/~site/{code}/…`），访客 origin 保留 `/~preview/{token}/…`；**站点探测 / Scope 安装 / start-page 网站上下文必须吃 routing_uri**，禁止用带 `/~preview/` 的 ORIGIN 去 `DetectWebsite`；生成店面链时 `UrlGenerateParamsCarryLivePreviewPath` 继续挂前缀。
+- **禁止叠挂 `/~site`**：可见预览 URL **不得**写成 `/~preview/{token}/~site/{code}/…`。本机壳站身份写进 Token（`editor_context.scope.identity`）；`NormalizeVisitorUriLivePreviewPath` 剥 preview 后把 `/~site/{code}` **回灌进 `routing_uri`** 供 `DetectWebsite`。旧书签叠挂 URL 仍兼容（remainder 已含 `/~site` 则不二次回灌）。默认站仍无 `/~site/default`。
+- Url 早钩 `normalize_visitor_uri`（`Url::normalizeVisitorUri`）：路由用 remainder（回灌后可含 `/~site/{code}/…`），访客 origin 保留 `/~preview/{token}/…`（无叠 `/~site`）；**站点探测 / Scope 安装 / 入口一致性校验必须吃 routing_uri**（`Url::applyVisitorUriNormalizeToUrl`），禁止用带 `/~preview/` 的 ORIGIN 去对 `website.url`；生成店面链时 `UrlGenerateParamsCarryLivePreviewPath` 续挂 preview 并剥掉 `/~site`。
 - Header / 旧 query token 仅兼容（XHR、旧书签）；**Cookie 不读不种**（退出可 drain 残留）。`preview-bootstrap` 认 path mount，**禁止**把地址栏折叠成正式 path。
 - **禁止**仅凭 `sessionStorage` 回种身份。退出：剥 `/~preview/{token}` 前缀 + gateway `exit`（可顺带 `clearPreviewCookie`）。
 

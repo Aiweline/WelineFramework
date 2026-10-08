@@ -198,7 +198,7 @@ class DomainRegistrarAccount extends Model
     public function getCredentials(): array
     {
         $extraConfig = $this->getExtraConfig();
-        return [
+        $out = [
             'api_key' => $this->getApiKey(),
             'api_secret' => $this->getApiSecret(),
             'region' => $this->getRegion(),
@@ -206,6 +206,18 @@ class DomainRegistrarAccount extends Model
             'extra' => $extraConfig, // 兼容旧代码
             'account_id' => $extraConfig['account_id'] ?? '', // Cloudflare 特殊需要
         ];
+        // Cloudflare Global API Key：email / auth_mode 存在 extra_config，供 Adapter 双鉴权读取
+        $email = \trim((string) ($extraConfig['email'] ?? $extraConfig['api_email'] ?? ''));
+        if ($email !== '') {
+            $out['email'] = $email;
+            $out['api_email'] = $email;
+        }
+        $authMode = \strtolower(\trim((string) ($extraConfig['auth_mode'] ?? '')));
+        if ($authMode === 'global' || $authMode === 'token') {
+            $out['auth_mode'] = $authMode;
+        }
+
+        return $out;
     }
     /**
      * 获取带域名商信息的全部账号列表

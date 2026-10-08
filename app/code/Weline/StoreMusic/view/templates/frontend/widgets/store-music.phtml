@@ -28,6 +28,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\StoreMusic\Service\StoreMusicRenderGate;
 use Weline\StoreMusic\Service\StoreMusicSettings;
+use Weline\Theme\Helper\WidgetI18n;
 
 /** @var StoreMusicSettings $settings */
 $settings = ObjectManager::getInstance(StoreMusicSettings::class);
@@ -66,9 +67,9 @@ try {
 }
 
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-// Prefer runtime __() over compile-time lang tags so storefront locales
-// translate; keep Chinese source keys.
-$t = static fn (string $word): string => $esc((string)__($word));
+// Path-aware WidgetI18n (not State-lagging __()) so /{locale}/ float chrome
+// matches storefront locale on WLS Fiber; keep Chinese source keys.
+$t = static fn (string $word): string => $esc(WidgetI18n::label($word));
 $configJson = $esc((string)json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 $defaultVol = (int)$payload['default_volume'];
 $hostCssUrl = '';

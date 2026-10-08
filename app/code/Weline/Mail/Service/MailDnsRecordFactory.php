@@ -6,6 +6,7 @@ namespace Weline\Mail\Service;
 
 /**
  * Builds only real, user-confirmed mail DNS targets. It never invents a DKIM key.
+ * 公钥为空时可先同步 A/MX/SPF/DMARC；有公钥后再写入 DKIM。
  */
 final class MailDnsRecordFactory
 {
@@ -36,7 +37,6 @@ final class MailDnsRecordFactory
             throw new \DomainException((string)__('DKIM 选择器格式无效。'));
         }
 
-        $dkim = $this->normalizeDkim($dkimPublicKey);
         $records = [
             [
                 'type' => 'MX',
@@ -53,17 +53,21 @@ final class MailDnsRecordFactory
             ],
             [
                 'type' => 'TXT',
-                'name' => $selector . '._domainkey.' . $domain,
-                'content' => $dkim,
-                'ttl' => 1,
-            ],
-            [
-                'type' => 'TXT',
                 'name' => '_dmarc.' . $domain,
                 'content' => 'v=DMARC1; p=quarantine; rua=mailto:postmaster@' . $domain . '; adkim=s; aspf=s',
                 'ttl' => 1,
             ],
         ];
+
+        $dkimPublicKey = trim($dkimPublicKey);
+        if ($dkimPublicKey !== '') {
+            $records[] = [
+                'type' => 'TXT',
+                'name' => $selector . '._domainkey.' . $domain,
+                'content' => $this->normalizeDkim($dkimPublicKey),
+                'ttl' => 1,
+            ];
+        }
 
         $originIp = trim($originIp);
         if ($originIp !== '') {
@@ -84,9 +88,18 @@ final class MailDnsRecordFactory
             ];
         }
 
+        $smtpHost = 'smtp.' . $domain;
+        $records[] = [
+            'type' => 'CNAME',
+            'name' => $smtpHost,
+            'content' => $hostname,
+            'ttl' => 1,
+            'proxied' => false,
+        ];
+
         return [
             'desired_records' => $records,
-            'dns_only_hosts' => [$hostname],
+            'dns_only_hosts' => array_values(array_unique([$hostname, $smtpHost])),
         ];
     }
 

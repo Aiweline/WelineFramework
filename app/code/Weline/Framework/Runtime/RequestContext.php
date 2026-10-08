@@ -608,6 +608,61 @@ class RequestContext
     }
 
     /**
+     * Temporary Website + frontend-area pin for offline Template/Taglib compile
+     * (e.g. Theme Formal locale → com_* bake of literal @url).
+     *
+     * Unfreezes any prior ScopeIdentity for the duration, installs $identity,
+     * pins website_url + frontend area, then restores previous projections.
+     *
+     * @template T
+     * @param callable(): T $fn
+     * @return T
+     */
+    public static function runWithCompileTimeWebsitePin(
+        ScopeIdentity $identity,
+        string $websiteUrl,
+        callable $fn,
+    ): mixed {
+        $context = self::ensureContext();
+        $previousIdentity = self::scopeIdentity();
+        $previousWebsiteUrl = self::getWelineWebsiteUrl();
+        $previousArea = self::getWelineArea();
+        $previousStoreId = self::getWelineStoreId();
+        $previousChannelId = self::getWelineChannelId();
+
+        $context->set(self::SCOPE_IDENTITY_PATH, null);
+        $context->set(self::SCOPE_STORE_ID_PATH, null);
+        $context->set(self::SCOPE_CHANNEL_ID_PATH, null);
+        $context->set(self::STOREFRONT_ROUTE_PATH, null);
+        $context->set(self::LEGACY_STOREFRONT_ROUTE_PATH, null);
+
+        try {
+            self::installScopeIdentity($identity);
+            self::setWelineWebsiteUrl($websiteUrl);
+            self::setWelineArea(self::AREA_FRONTEND);
+
+            return $fn();
+        } finally {
+            $context->set(self::SCOPE_IDENTITY_PATH, null);
+            $context->set(self::SCOPE_STORE_ID_PATH, null);
+            $context->set(self::SCOPE_CHANNEL_ID_PATH, null);
+            $context->set(self::STOREFRONT_ROUTE_PATH, null);
+            $context->set(self::LEGACY_STOREFRONT_ROUTE_PATH, null);
+            if ($previousIdentity instanceof ScopeIdentity) {
+                if ($previousStoreId > 0) {
+                    self::setWelineStoreId($previousStoreId);
+                }
+                if ($previousChannelId > 0) {
+                    self::setWelineChannelId($previousChannelId);
+                }
+                self::installScopeIdentity($previousIdentity);
+            }
+            self::setWelineWebsiteUrl($previousWebsiteUrl);
+            self::setWelineArea($previousArea);
+        }
+    }
+
+    /**
      * Replace the navigation-derived Store/Channel only after QueryBin has
      * installed the matching server-constructed Worker execution context.
      *

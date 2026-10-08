@@ -173,9 +173,27 @@ final class Oauth extends BackendController
     private function redirectRoute(string $route, array $query = []): string
     {
         $this->request->getResponse()->redirect(
-            $this->request->getUrlBuilder()->getBackendUrl($route, $query)
+            $this->request->getUrlBuilder()->getBackendUrl(
+                $route,
+                $this->returnRouteQuery($route, $query)
+            )
         );
 
         return '';
+    }
+
+    /**
+     * 邮件后台回跳时带上 view=domains，避免落到邮箱页看不到 OAuth 告警与 DNS 清单。
+     *
+     * @param array<string, scalar|null> $query
+     * @return array<string, scalar|null>
+     */
+    private function returnRouteQuery(string $route, array $query = []): array
+    {
+        if ($route === 'weline_mail/backend' && !isset($query['view'])) {
+            $query['view'] = 'domains';
+        }
+
+        return $query;
     }
 }

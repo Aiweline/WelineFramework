@@ -24,7 +24,7 @@ final class MailDnsRecordFactoryTest extends TestCase
             str_repeat('Q', 64),
         );
 
-        self::assertSame(['mail.example.com'], $result['dns_only_hosts']);
+        self::assertSame(['mail.example.com', 'smtp.example.com'], $result['dns_only_hosts']);
         $address = array_values(array_filter(
             $result['desired_records'],
             static fn(array $record): bool => $record['type'] === 'A',
@@ -37,6 +37,14 @@ final class MailDnsRecordFactoryTest extends TestCase
         ))[0];
         self::assertSame('stalwart._domainkey.example.com', $dkim['name']);
         self::assertStringContainsString('p=' . str_repeat('Q', 64), $dkim['content']);
+
+        $smtp = array_values(array_filter(
+            $result['desired_records'],
+            static fn(array $record): bool => ($record['type'] ?? '') === 'CNAME',
+        ))[0];
+        self::assertSame('smtp.example.com', $smtp['name']);
+        self::assertSame('mail.example.com', $smtp['content']);
+        self::assertFalse($smtp['proxied']);
     }
 
     public function testPrivateKeyIsRejected(): void
@@ -51,5 +59,27 @@ final class MailDnsRecordFactoryTest extends TestCase
             'default',
             '-----BEGIN PRIVATE KEY-----',
         );
+    }
+
+    public function testEmptyDkimOmitsDkimRecordButKeepsMxSpfDmarcA(): void
+    {
+        $factory = new MailDnsRecordFactory();
+        $result = $factory->build(
+            'example.com',
+            'mail.example.com',
+            '8.8.8.8',
+            'default',
+            '',
+        );
+
+        $types = array_map(static fn(array $r): string => $r['type'] . ':' . $r['name'], $result['desired_records']);
+        self::assertContains('MX:example.com', $types);
+        self::assertContains('TXT:example.com', $types);
+        self::assertContains('TXT:_dmarc.example.com', $types);
+        self::assertContains('A:mail.example.com', $types);
+        self::assertContains('CNAME:smtp.example.com', $types);
+        foreach ($result['desired_records'] as $record) {
+            self::assertStringNotContainsString('._domainkey.', (string)$record['name']);
+        }
     }
 }

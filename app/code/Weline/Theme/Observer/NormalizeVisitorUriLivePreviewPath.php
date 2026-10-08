@@ -8,12 +8,16 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemeLivePreviewPathMount;
 
 /**
  * Early URI normalize: /~preview/{token}/… → routing remainder + lock origin under preview mount.
+ *
+ * Visible live-preview URLs omit /~site/{code}; when remainder has no site mount, rehydrate
+ * /~site/{code} into routing_uri from Token website identity for DetectWebsite.
  */
 class NormalizeVisitorUriLivePreviewPath implements ObserverInterface
 {
@@ -41,8 +45,11 @@ class NormalizeVisitorUriLivePreviewPath implements ObserverInterface
         }
 
         $token = $parsed['token'];
+        $remainder = $parsed['remainder'] !== '' ? $parsed['remainder'] : '/';
+        $routing = $this->rehydrateRoutingFromToken($remainder, $token);
+
         $data->setData('origin_uri', $uri);
-        $data->setData('routing_uri', $parsed['remainder'] !== '' ? $parsed['remainder'] : '/');
+        $data->setData('routing_uri', $routing);
         $data->setData('live_preview_token', $token);
 
         try {
@@ -61,5 +68,18 @@ class NormalizeVisitorUriLivePreviewPath implements ObserverInterface
             WelineEnv::setGet(PreviewTokenService::TOKEN_KEY, $token);
         } catch (\Throwable) {
         }
+    }
+
+    private function rehydrateRoutingFromToken(string $remainder, string $token): string
+    {
+        try {
+            /** @var PreviewTokenService $tokens */
+            $tokens = ObjectManager::getInstance(PreviewTokenService::class);
+            $code = $tokens->resolveWebsiteCodeFromLivePreviewToken($token);
+        } catch (\Throwable) {
+            $code = null;
+        }
+
+        return ThemeLivePreviewPathMount::rehydrateSiteMountIntoRouting($remainder, $code);
     }
 }

@@ -54,16 +54,15 @@ class Helper
                     ->fetch();
                 $type_id = (int)$type->getId();
                 if ($type_id) {
-                    $type->reset()->clearData();
-                    $type->where($type::schema_fields_ID, $type_id);
-                    $type->update([
+                    // Keep PK in model data so AbstractModel::update can form WHERE when AST wheres were cleared by reset/clearData.
+                    $type->reset()->clearData()->setData([
+                        Type::schema_fields_ID => $type_id,
                         Type::schema_fields_name => $queue->name(),
                         Type::schema_fields_module_name => $module['name'],
                         Type::schema_fields_tip => $queue->tip(),
                         Type::schema_fields_class => $queue::class,
-                        Type::schema_fields_enable => method_exists($queue, 'enable') ? $queue->enable() : true
-                    ])
-                        ->fetch();
+                        Type::schema_fields_enable => method_exists($queue, 'enable') ? $queue->enable() : true,
+                    ])->save();
                 } else {
                     $type->reset()->clearData();
                     $type_id = $type->setModelFieldsData([

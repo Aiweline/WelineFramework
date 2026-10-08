@@ -918,6 +918,7 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/inherit-version' => ($themeEditor ??= $this->createDirectThemeEditor())->postInheritVersion(),
                 '/theme/backend/theme-editor/clear-theme-cache' => ($themeEditor ??= $this->createDirectThemeEditor())->clearThemeCachePayload(),
                 '/theme/backend/theme-editor/reset-draft-resources' => ($themeEditor ??= $this->createDirectThemeEditor())->resetDraftResourcesPayload(),
+                '/theme/backend/theme-editor/solidify-scope-version' => ($themeEditor ??= $this->createDirectThemeEditor())->solidifyScopeVersionPayload(),
                 '/theme/backend/theme-editor/factory-reset' => ($themeEditor ??= $this->createDirectThemeEditor())->factoryResetPayload(),
                 '/theme/backend/theme-editor/delete-version' => ($themeEditor ??= $this->createDirectThemeEditor())->deleteVersionPayload(),
                 '/theme/backend/theme-editor/theme-tokens' => ($themeEditor ??= $this->createDirectThemeEditor())->getThemeTokens(),

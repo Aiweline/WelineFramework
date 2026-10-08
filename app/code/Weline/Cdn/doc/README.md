@@ -18,6 +18,7 @@ Weline_Cdn 是一个多适配器 CDN 管理模块，支持多种 CDN 提供商�
 - ✅ **缓存预热**：自动或手动预热 CDN 缓存，提升访问速度
 - ✅ **HTTP API**：提供 RESTful API 接口，支持程序化调用
 - ✅ **命令行工具**：提供 CLI 工具，支持批量操作
+- ✅ **Cloudflare 统一鉴权传输**：`CloudflareHttpClient::apiWithCredentials` 是 Cloudflare v4 业务请求唯一入口；同时支持 API Token（Bearer）与 Global API Key（`X-Auth-Email` + `X-Auth-Key`）。CDN Adapter、邮局 Mail DNS、Websites Registrar（有 CDN 时）均委托该客户端，禁止业务侧再自写鉴权 curl。
 
 ### Scope 账户绑定（开发入口）
 

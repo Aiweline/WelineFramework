@@ -597,7 +597,6 @@ end,结尾
 "exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec","exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec"
 "WelineFramework Admin",Weline框架管理员
 WelineFramework,WelineFramework
-请先登录,请先登录
 未登录或登录已过期,未登录或登录已过期
 无法创建部署版本目录：%{1},无法创建部署版本目录：%{1}
 无法写入部署版本文件,无法写入部署版本文件
@@ -1284,18 +1283,9 @@ play,玩
 code,代码
 查看模块单元/集成测试用例,查看模块单元/集成测试用例
 运行单元测试,运行单元测试
-查询成功,查询成功
-查询失败：%{1},查询失败：%{1}
 "无法创建 Extra 侧车目录","无法创建 Extra 侧车目录"
 "控制器 %{class}::%{method} 的 @Extra 缺少 type","控制器 %{class}::%{method} 的 @Extra 缺少 type"
 "未知 Extra type=%{type}（已注册：%{registered}）于 %{class}::%{method}","未知 Extra type=%{type}（已注册：%{registered}）于 %{class}::%{method}"
-"BinQuery Gateway",Bin查询网关
-"External BinQuery binary gateway","外部 BinQuery 二进制网关"
-edit,编辑
-framework,框架
-"BinQuery Connect Query Call Graph","BinQuery Connect Query Call Graph"
-"Connect, inspect, call and graph through /bin/query","通过 /bin/query 连接、检查、调用和绘制图表"
-后台页面凭证已失效，请刷新页面后重试。,后台页面凭证已失效，请刷新页面后重试。
 "Frontend JSON query is deprecated. Use the Weline frontend worker API.","前端 JSON 查询已弃用。使用 Weline 前端工作 API。"
 环境初始化检测中...,环境初始化检测中...
 未设置环境需求,未设置环境需求
@@ -2014,6 +2004,7 @@ Transport,运输
 后台实时流证明无效，请刷新页面后重试。,后台实时流证明无效，请刷新页面后重试。
 后台实时流暂未启用，请使用普通后台请求。,后台实时流暂未启用，请使用普通后台请求。
 "商城 Scope 已过期，请刷新页面后重试","商城 Scope 已过期，请刷新页面后重试"
+后台页面凭证已失效，请刷新页面后重试。,后台页面凭证已失效，请刷新页面后重试。
 后台权限服务暂不可用。,后台权限服务暂不可用。
 后台页面凭证服务暂不可用。,后台页面凭证服务暂不可用。
 "Operation authorization requirements are not satisfied.",不满足操作授权要求。
@@ -2485,6 +2476,15 @@ Operation：%{1}.%{2},操作：%{1}.%{2}
 路由路径,路由路径
 HTTP方法,HTTP方法
 控制器,控制器
+查询成功,查询成功
+查询失败：%{1},查询失败：%{1}
+"BinQuery Gateway",Bin查询网关
+"External BinQuery binary gateway","外部 BinQuery 二进制网关"
+edit,编辑
+framework,框架
+"BinQuery Connect Query Call Graph","BinQuery Connect Query Call Graph"
+"Connect, inspect, call and graph through /bin/query","通过 /bin/query 连接、检查、调用和绘制图表"
+请先登录,请先登录
 "WLS 下载临时文件清理失败。","WLS 下载临时文件清理失败。"
 "SSE 会话已失效，请重新登录后重试。","SSE 会话已失效，请重新登录后重试。"
 "当前账号无权限执行该 SSE 操作。","当前账号无权限执行该 SSE 操作。"

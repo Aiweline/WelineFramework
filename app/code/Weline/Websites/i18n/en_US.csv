@@ -90,10 +90,12 @@ follow_registrar|provider_account|none,follow_registrar|provider_account|none
 "站点 ID；省略则返回全部活跃绑定","Site ID; omitting returns all active bindings"
 "域名状态，默认 active","Domain name status, default active"
 获取站点关联的语言代码列表,"Fetch list of site-associated language codes"
+"静态错误页发布目标（网站×语种 + host_map）","静态错误页发布目标（网站×语种 + host_map）"
 获取站点关联的货币代码列表,获取站点关联的货币代码列表
 "获取域名池列表（用于 SSL/建站选择）","Get domain pool list (for SSL/website selection)"
 "仅返回 site_ready=1","Only return site_ready=1 rows"
 排除已被站点占用的池记录,"Exclude pool rows already bound to a site"
+"公网 DNS 已通主机名：入域名池、绑定 DNS/CDN 服务商，并立即申请 DNS-01 证书（不依赖 cron）","公网 DNS 已通主机名：入域名池、绑定 DNS/CDN 服务商，并立即申请 DNS-01 证书（不依赖 cron）"
 "获取域名 DNS 记录（查询层自动同步域名池）","Retrieved domain DNS records (query layer auto-syncs domain pool)"
 "添加 ACME DNS-01 验证 TXT 记录","Add ACME DNS-01 verification TXT record"
 "解析 ACME 挑战将使用的 DNS 供应商代码（与 addAcmeTxtRecord 同源，供证书模块轮询时长等）","Parse the DNS provider code to be used for ACME challenges (same origin as addAcmeTxtRecord, used for certificate module polling duration, etc.)"
@@ -523,9 +525,10 @@ Weline（本地）,"Weline (local)"
 "根域或 www 下未找到已开启代理的 A/AAAA/CNAME 记录","No A/AAAA/CNAME records with proxy enabled found under the root domain or www"
 "无法调用 Registrar API 或域名无记录；检测到 DNS，可能已被注册","Registrar API unavailable or no data; DNS records found — likely already registered"
 "无法调用 Registrar API；未检测到 DNS，可能可注册（请用控制台或换注册商确认）","Registrar API unavailable; no DNS found — may be available (confirm in dashboard or another registrar)"
-"Cloudflare API Token 不能为空","Cloudflare API Token cannot be empty"
+"Cloudflare 凭证不完整：请提供 API Token，或 Global API Key（邮箱+密钥）","Cloudflare 凭证不完整：请提供 API Token，或 Global API Key（邮箱+密钥）"
 网络请求失败：%{1},"Network request failed: %{1}"
 "API 响应格式错误","API response format error"
+"Cloudflare Global API Key 需同时填写登录邮箱与密钥","Cloudflare Global API Key 需同时填写登录邮箱与密钥"
 "该供应商适配器未开放 DNS 记录 API，不能作为域名的 DNS/CDN 管理账户使用","This vendor adapter does not expose a DNS record API and cannot be used as a DNS/CDN management account for domain names."
 "FQDN 与 Zone 根域不匹配","FQDN does not match Zone root domain"
 "Current registrar does not support creating zones via API.","Current registrar does not support creating zones via API."
@@ -2456,6 +2459,21 @@ AI建站域名准备,"AI website building domain name preparation"
 "Store 引用了非法 website_id","Store references an illegal website_id"
 "无法为店铺墓碑解析所属 Website","Unable to parse the website belonging to the store tombstone"
 "无法为店铺墓碑解析 Website code","Unable to parse Website code for store tombstone"
+根域名不能为空,根域名不能为空
+主机名列表不能为空,主机名列表不能为空
+"主机名 %{1} 不属于根域 %{2}","主机名 %{1} 不属于根域 %{2}"
+"无法绑定 DNS 服务商账户（%{1}）。请在 CDN/域名商中配置可用凭据。","无法绑定 DNS 服务商账户（%{1}）。请在 CDN/域名商中配置可用凭据。"
+根域保存失败,根域保存失败
+"公网 DNS 主机已入域名池%{1}","公网 DNS 主机已入域名池%{1}"
+并已申请证书,并已申请证书
+部分主机入池/证书失败：%{1},部分主机入池/证书失败：%{1}
+"公网 DNS 入池失败：%{1}","公网 DNS 入池失败：%{1}"
+"公网 DNS 通后自动入池（%{1}）","公网 DNS 通后自动入池（%{1}）"
+域名池保存失败,域名池保存失败
+"公网 DNS 通后自动入池：%{1}","公网 DNS 通后自动入池：%{1}"
+"公网 DNS 通后立即申请证书：%{1}","公网 DNS 通后立即申请证书：%{1}"
+证书有效：%{1},"Certificate Valid: %{1}"
+已入池,Pooled
 "HTTP 可访问（%{1} 重定向）","HTTP accessible (%{1} redirect)"
 "HTTP 可访问（%{1}）","HTTP accessible (%{1})"
 "HTTPS 可连通（未校验证书，%{1} 重定向）","HTTPS connectable (unverified certificate, %{1} redirect)"
@@ -2623,7 +2641,6 @@ download,download
 本地测试域名解析到了非回环地址，已阻止启动。,"The local test domain name resolves to a non-loopback address and is blocked from starting."
 "本地 *.test.weline.com 通配证书未激活或已过期。","The local *.test.weline.com wildcard certificate is inactive or has expired."
 本地测试域名解析与通配证书均已就绪。,"Local test domain name resolution and wildcard certificates are ready."
-已入池,Pooled
 入池,"Add to Pool"
 解析,Parse
 "已解析到 IP","Resolved to IP"
@@ -3177,7 +3194,6 @@ download,download
 "开始向 CA 申请证书（%{1}），阻塞直至申请完成","Applying for certificate from CA (%{1}), blocking until complete"
 开始同步申请证书：%{1}，阻塞直至申请完成,"Starting certificate application: %{1}, blocking until complete"
 "调用统一证书申请入口，等待 CA 响应…","Calling the unified certificate application endpoint, waiting for CA response…"
-证书有效：%{1},"Certificate Valid: %{1}"
 已满足可建站条件,"Conditions met for site creation"
 "证书申请成功，已更新 HTTPS 状态与可建站","Certificate application successful, HTTPS status and site creation capability updated"
 证书申请结束：%{1}，成功，已更新为可建站,"Certificate application completed: %{1}, successful, updated to allow site creation"
@@ -3296,6 +3312,7 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
+"Cloudflare API Token 不能为空","Cloudflare API Token cannot be empty"
 "本地域名 hosts 与通配证书已就绪","本地域名 hosts 与通配证书已就绪"
 点击选择货币（可多选）,"Click to select currencies (multiple selection allowed)"
 点击选择货币,"Click to select a currency"

@@ -294,6 +294,75 @@ class PreviewContextServiceTest extends TestCase
         $this->assertSame(PreviewContextService::SHELL_THEME_EDITOR, $context['shell']);
     }
 
+    public function testThemeEditorCanvasIgnoresStickyWrongPreviewToken(): void
+    {
+        $this->setRequestUri(
+            '/~site/daocharms/terms?theme_id=4&frontend_theme_id=4&editor_mode=1&shell=theme-editor'
+            . '&weline_preview_token=pv_8e59I2n85YPIHBSlsrX4uabH2Ky76YzF54r7GXxCVlg'
+        );
+
+        $service = $this->createService(
+            [
+                'theme_id' => 4,
+                'frontend_theme_id' => 4,
+                'editor_mode' => '1',
+                'shell' => PreviewContextService::SHELL_THEME_EDITOR,
+                'weline_preview_token' => 'pv_8e59I2n85YPIHBSlsrX4uabH2Ky76YzF54r7GXxCVlg',
+                'scope' => 'daocharms.default.default',
+            ],
+            [
+                'token' => 'pv_8e59I2n85YPIHBSlsrX4uabH2Ky76YzF54r7GXxCVlg',
+                'theme_id' => 1,
+                'canonical_scope' => 'default.default.default',
+                'context' => [
+                    'frontend_theme_id' => 1,
+                    'preview_token' => 'pv_8e59I2n85YPIHBSlsrX4uabH2Ky76YzF54r7GXxCVlg',
+                    'scope' => 'default.default.default',
+                    'shell' => PreviewContextService::SHELL_PREVIEW,
+                ],
+            ]
+        );
+
+        $context = $service->getCurrentContext();
+
+        $this->assertSame(4, $context['frontend_theme_id']);
+        $this->assertSame('', $context['preview_token']);
+        $this->assertSame(PreviewContextService::SHELL_THEME_EDITOR, $context['shell']);
+        $this->assertNotSame('default.default.default', $context['scope']);
+    }
+
+    public function testTokenTopLevelThemeAndScopeOverrideNestedContextBlob(): void
+    {
+        $this->setRequestUri('/~preview/pv_good_token/terms?weline_preview_token=pv_good_token&shell=preview');
+
+        $service = $this->createService(
+            [
+                'weline_preview_token' => 'pv_good_token',
+                'shell' => PreviewContextService::SHELL_PREVIEW,
+            ],
+            [
+                'token' => 'pv_good_token',
+                'theme_id' => 4,
+                'canonical_scope' => 'daocharms.default.default',
+                'store_mode' => 'normal',
+                'area' => 'frontend',
+                'context' => [
+                    'frontend_theme_id' => 1,
+                    'scope' => 'default.default.default',
+                    'preview_token' => 'pv_good_token',
+                    'shell' => PreviewContextService::SHELL_PREVIEW,
+                ],
+            ]
+        );
+
+        $context = $service->getCurrentContext();
+
+        $this->assertSame(4, $context['frontend_theme_id']);
+        $this->assertSame('daocharms.default.default', $context['scope']);
+        $this->assertSame('pv_good_token', $context['preview_token']);
+        $this->assertSame(PreviewContextService::SHELL_PREVIEW, $context['shell']);
+    }
+
     private function setRequestUri(string $uri): void
     {
         $_SERVER['REQUEST_URI'] = $uri;

@@ -100,6 +100,36 @@ final class LanguageSwitcherPublicRouteTest extends TestCase
         self::assertSame('/about', $this->resolvePublicFrontendPath($request));
     }
 
+    public function testPublicFrontendRoutePeelsLivePreviewMountBeforeStorefrontPath(): void
+    {
+        if (!\class_exists(\Weline\Theme\Service\ThemeLivePreviewPathMount::class)) {
+            self::markTestSkipped('Weline_Theme not available');
+        }
+
+        $token = 'pv_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG';
+        $request = $this->createMock(Request::class);
+        $request->method('getGet')->willReturnCallback(static function (string $key, mixed $default = null) {
+            return $default;
+        });
+        $request->method('getServer')->willReturnCallback(static function (string $key, mixed $default = null) use ($token) {
+            return match ($key) {
+                'WELINE_ORIGIN_REQUEST_URI' => '/~preview/' . $token . '/CNY/terms',
+                'REQUEST_URI' => '/CNY/terms',
+                'WELINE_WEBSITE_URL' => 'https://p05113ef3.test.weline.com/~site/grocery',
+                default => is_string($default) || is_array($default) ? $default : '',
+            };
+        });
+        $request->method('getUrlPath')->willReturn('/terms');
+
+        $path = $this->resolvePublicFrontendPath($request);
+        // Currency may remain when localization does not peel it before preview peel;
+        // critical contract: live-preview namespace is gone and ~site is not introduced.
+        self::assertSame('/CNY/terms', $path);
+        self::assertStringNotContainsString('~preview', $path);
+        self::assertStringNotContainsString('~site', $path);
+        self::assertStringNotContainsString($token, $path);
+    }
+
     private function resolvePublicFrontendPath(Request $request): string
     {
         $method = new ReflectionMethod(LanguageSwitcher::class, 'resolvePublicFrontendPath');

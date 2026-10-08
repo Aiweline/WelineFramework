@@ -877,16 +877,11 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
     }
 
     /**
-     * @DESC          # 发送API请求
+     * 统一走 CloudflareHttpClient（Token Bearer / Global Key 双模式），禁止本 Adapter 再自写鉴权请求。
      *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * 
-     * @param string $method HTTP方法
-     * @param string $url 请求URL
-     * @param array $data 请求数据
-     * @param array $credentials 凭据
-     * @return array
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $credentials
+     * @return array<string, mixed>
      * @throws Core
      */
     private function makeRequest(string $method, string $url, array $data = [], array $credentials = []): array
@@ -895,118 +890,45 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
             $credentials = $this->credentials;
         }
 
-        $headers = self::buildAuthHeaders($credentials);
-
-        // 初始化cURL
-        $ch = curl_init($url);
-
-        // 配置 SSL 选项
-        $sslVerifyPeer = true;
-        $sslVerifyHost = 2;
-        
-        // 检查是否在开发环境或配置了禁用 SSL 验证
-        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
-        $disableSslVerify = getenv('CDN_DISABLE_SSL_VERIFY') === '1' || 
-                           getenv('APP_ENV') === 'development' ||
-                           ($isWindows && getenv('APP_ENV') !== 'production');
-        
-        // 如果启用 SSL 验证，尝试设置 CA 证书路径
-        if (!$disableSslVerify) {
-            // 常见的 CA 证书包路径
-            $caPaths = [
-                ini_get('curl.cainfo'),
-                ini_get('openssl.cafile'),
-                '/etc/ssl/certs/ca-certificates.crt', // Debian/Ubuntu
-                '/etc/pki/tls/certs/ca-bundle.crt',   // CentOS/RHEL
-                '/usr/local/etc/openssl/cert.pem',    // macOS (Homebrew)
-                '/etc/ssl/cert.pem',                  // macOS (系统)
-                BP . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'certs' . DIRECTORY_SEPARATOR . 'ca-bundle.crt'
-            ];
-            
-            // Windows 特定路径
-            if ($isWindows) {
-                $caPaths = array_merge($caPaths, [
-                    getenv('WINDIR') . '\\System32\\curl-ca-bundle.crt',
-                    getenv('WINDIR') . '\\System32\\ca-bundle.crt',
-                    getenv('LOCALAPPDATA') . '\\cacert.pem'
-                ]);
-            }
-            
-            $caBundlePath = null;
-            foreach ($caPaths as $path) {
-                if ($path && file_exists($path)) {
-                    $caBundlePath = $path;
-                    break;
-                }
-            }
-            
-            if ($caBundlePath) {
-                curl_setopt($ch, CURLOPT_CAINFO, $caBundlePath);
-            } else {
-                // 如果找不到 CA 证书包，在非生产环境禁用验证（仅警告）
-                if (getenv('APP_ENV') !== 'production') {
-                    $sslVerifyPeer = false;
-                    $sslVerifyHost = 0;
-                    w_log_warning('Warning: CA certificate bundle not found, SSL verification disabled for Cloudflare API requests. ' .
-                             'To fix this, set CDN_DISABLE_SSL_VERIFY=1 or configure curl.cainfo in php.ini');
-                }
-            }
-        } else {
-            // 开发环境或 Windows 非生产环境禁用 SSL 验证
-            $sslVerifyPeer = false;
-            $sslVerifyHost = 0;
-        }
-        
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_SSL_VERIFYPEER => $sslVerifyPeer,
-            CURLOPT_SSL_VERIFYHOST => $sslVerifyHost,
-            // 与 Framework Http Request 一致：禁用本机 HTTP(S)_PROXY（常见 Clash 残留 127.0.0.1 无端口 → 秒失败）
-            CURLOPT_PROXY => '',
-            CURLOPT_PROXYUSERPWD => '',
-            CURLOPT_PROXYTYPE => CURLPROXY_HTTP,
-        ]);
-
-        // 如果是POST或PUT，添加请求体
-        if (in_array($method, ['POST', 'PUT', 'PATCH']) && !empty($data)) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data, JSON_UNESCAPED_UNICODE));
+        $base = self::API_BASE_URL;
+        if (!str_starts_with($url, $base)) {
+            throw new Core(__('Cloudflare 请求 URL 非法。'));
         }
 
-        // 执行请求
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        
-        curl_close($ch);
-
-        if ($error) {
-            throw new Core(__('请求失败: %{1}', [$error]));
+        $rest = substr($url, strlen($base));
+        $path = $rest;
+        $query = [];
+        if (str_contains($rest, '?')) {
+            [$path, $qs] = explode('?', $rest, 2);
+            parse_str($qs, $query);
+        }
+        if ($path === '' || $path[0] !== '/') {
+            $path = '/' . ltrim((string)$path, '/');
         }
 
-        $decodedResponse = json_decode($response, true);
-        
-        if ($httpCode < 200 || $httpCode >= 300) {
-            // 收集所有错误信息
-            $errorMessages = [];
-            if (isset($decodedResponse['errors']) && is_array($decodedResponse['errors'])) {
-                foreach ($decodedResponse['errors'] as $err) {
-                    $errorMessages[] = $err['message'] ?? '未知错误';
-                }
-            }
-            $errorMessage = !empty($errorMessages) 
-                ? implode('; ', $errorMessages)
-                : __('HTTP错误: %{1}', [$httpCode]);
-            throw new Core($errorMessage);
+        $method = strtoupper($method);
+        $body = null;
+        if (in_array($method, ['POST', 'PUT', 'PATCH'], true) && $data !== []) {
+            $body = $data;
+        } elseif ($method === 'GET' && $data !== []) {
+            $query = array_merge($query, $data);
         }
 
-        if (!is_array($decodedResponse) || !array_key_exists('success', $decodedResponse)) {
-            throw new Core(__('Cloudflare 返回无效响应'));
+        try {
+            /** @var \Weline\Cdn\Service\CloudflareHttpClient $http */
+            $http = ObjectManager::getInstance(\Weline\Cdn\Service\CloudflareHttpClient::class);
+
+            return $http->apiWithCredentials(
+                $credentials,
+                $method,
+                $path,
+                $query,
+                $body,
+                false,
+            );
+        } catch (\Throwable $e) {
+            throw new Core(__('%{1}', [$e->getMessage()]));
         }
-        return $decodedResponse;
     }
 
     public function supportsOneClickOauth(): bool

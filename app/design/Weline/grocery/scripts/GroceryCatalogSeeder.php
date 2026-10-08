@@ -424,6 +424,10 @@ final class GroceryCatalogSeeder
             if (str_starts_with($sku, 'GROCERY-')) {
                 continue;
             }
+            // Keep dropship (CJ) listings if ops replaced the demo shelf with CJ catalog.
+            if (str_starts_with($sku, 'DS-CJ') || str_starts_with($sku, 'DS-')) {
+                continue;
+            }
             $version = (int)($row['publish_version'] ?? 0);
             try {
                 $this->products->transition($websiteId, $productId, $version, Product::STATUS_DISABLED);

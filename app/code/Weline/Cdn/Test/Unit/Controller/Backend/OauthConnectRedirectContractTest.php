@@ -25,6 +25,8 @@ final class OauthConnectRedirectContractTest extends TestCase
         self::assertStringContainsString('throw new RedirectException($authorizationUrl, 302);', $source);
         self::assertStringContainsString('catch (ResponseTerminateException $terminate)', $source);
         self::assertStringContainsString('oauthFailureQuery', $source);
+        self::assertStringContainsString('returnRouteQuery', $source);
+        self::assertStringContainsString("view'] = 'domains'", $source);
         self::assertStringContainsString('oauth_adapter', $source);
         self::assertStringContainsString('oauth_cf_error', $source);
         self::assertStringNotContainsString('->redirect($authorizationUrl)', $source);

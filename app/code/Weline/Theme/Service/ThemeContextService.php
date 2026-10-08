@@ -233,14 +233,29 @@ class ThemeContextService implements ThemeContextProviderInterface
         if ($theme !== null && $theme->getId()) {
             return $this->themeSupportsArea($theme, $area) ? $theme : null;
         }
-        $application = ThemeApplicationContext::current($area);
-        if ($application === null) {
-            // 无使用方应用上下文时，权威回落 Theme 模块全局默认（磁盘，不依赖库 id）。
-            return $this->resolveRegisteredDefaultTheme($area);
+
+        // 态 1 画布：URL/request 上的 theme_id 优先于 ThemeApplication（防粘滞 Token/默认站壳）。
+        if ($allowPreview && $this->getPreviewContextService()->isEditorThemeRequest()) {
+            $previewTheme = $this->resolvePreviewTheme($area);
+            if ($previewTheme !== null && $previewTheme->getId() && $this->themeSupportsArea($previewTheme, $area)) {
+                return $previewTheme;
+            }
         }
-        if (!$allowPreview && $application->purpose !== 'runtime') { return null; }
-        return $this->resolveThemeForScope($area, $application)
-            ?? $this->resolveRegisteredDefaultTheme($area);
+
+        // 态 2 真实预览：Token 反解析出的 theme_id 是权威（店面 URL 通常不带 theme_id）。
+        if ($allowPreview) {
+            $tokenTheme = $this->loadTokenPreviewTheme($area);
+            if ($tokenTheme !== null && $tokenTheme->getId() && $this->themeSupportsArea($tokenTheme, $area)) {
+                return $tokenTheme;
+            }
+        }
+
+        $scopedTheme = $this->resolvePublishedScopedTheme($area, $allowPreview);
+        if ($scopedTheme !== null && $scopedTheme->getId()) {
+            return $scopedTheme;
+        }
+
+        return $this->resolveRegisteredDefaultTheme($area);
     }
 
     public function resolveThemeForScope(string $area, ThemeApplicationContext $application): ?WelineTheme
@@ -325,7 +340,11 @@ class ThemeContextService implements ThemeContextProviderInterface
     {
         try {
             $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
-            $themeId = (int)$request->getParam('theme_id', 0);
+            // RAW query 优先：避免 syncRequest / 粘滞 Token 把 bag 里的 frontend_theme_id 改成错主题。
+            $themeId = $this->readRawQueryThemeId();
+            if ($themeId <= 0) {
+                $themeId = (int)$request->getParam('theme_id', 0);
+            }
             if ($themeId <= 0) {
                 $themeId = (int)$request->getParam('frontend_theme_id', 0);
             }
@@ -357,10 +376,18 @@ class ThemeContextService implements ThemeContextProviderInterface
     {
         try {
             $preview = $this->getPreviewContextService();
-            if (!$preview->hasAuthoritativePreviewContext()) {
+            // 仅合法 Bearer Token 可驱动主题；后台登录 alone 不得冒充 Token 预览。
+            if ($preview->isEditorThemeRequest()) {
                 return null;
             }
-            $themeId = $preview->getThemeIdForArea($area);
+            $tokenData = ObjectManager::getInstance(PreviewTokenService::class)->getCurrentPreviewData();
+            if (!\is_array($tokenData)) {
+                return null;
+            }
+            $themeId = (int)($tokenData['theme_id'] ?? 0);
+            if ($themeId <= 0) {
+                $themeId = $preview->getThemeIdForArea($area);
+            }
             if ($themeId <= 0) {
                 return null;
             }
@@ -381,12 +408,44 @@ class ThemeContextService implements ThemeContextProviderInterface
     }
 
     /**
-     * Resolve the immutable published Theme binding for the authoritative request Scope.
-     *
-     * Request parameters and editor Session state are deliberately excluded here. During
-     * a rolling upgrade, missing scoped tables/services fall back to the legacy active
-     * Theme so the last known runtime remains available.
+     * 正式店面：ThemeApplicationContext 中的已发布绑定（网站级应用选择）。
+     * 编辑器 Session / URL 参数不得介入此路径。
      */
+    private function resolvePublishedScopedTheme(string $area, bool $allowPreview = true): ?WelineTheme
+    {
+        $application = ThemeApplicationContext::current($area);
+        if ($application === null) {
+            return null;
+        }
+        if (!$allowPreview && $application->purpose !== 'runtime') {
+            return null;
+        }
+
+        return $this->resolveThemeForScope($area, $application);
+    }
+
+    private function readRawQueryThemeId(): int
+    {
+        $uri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: '');
+        if ($uri === '') {
+            return 0;
+        }
+        $query = \parse_url($uri, \PHP_URL_QUERY);
+        if (!\is_string($query) || $query === '') {
+            return 0;
+        }
+        $params = [];
+        \parse_str($query, $params);
+        foreach (['theme_id', 'frontend_theme_id', 'preview_theme', 'weline_theme_id'] as $key) {
+            $value = (int)($params[$key] ?? 0);
+            if ($value > 0) {
+                return $value;
+            }
+        }
+
+        return 0;
+    }
+
     /**
      * 获取预览区域的标识符
      * 用于当无法从模板路径确定区域时使用

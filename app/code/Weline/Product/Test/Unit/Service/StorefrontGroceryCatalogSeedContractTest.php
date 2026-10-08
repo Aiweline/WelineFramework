@@ -44,6 +44,7 @@ final class StorefrontGroceryCatalogSeedContractTest extends TestCase
         self::assertStringContainsString('notifyCatalogChanged', $source);
         self::assertStringContainsString('disableForeignPublishedProducts', $source);
         self::assertStringContainsString("str_starts_with(\$sku, 'GROCERY-')", $source);
+        self::assertStringContainsString("str_starts_with(\$sku, 'DS-CJ')", $source);
         self::assertStringNotContainsString('is_demo', $source);
     }
 

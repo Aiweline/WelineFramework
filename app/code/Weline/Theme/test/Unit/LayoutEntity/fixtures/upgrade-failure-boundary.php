@@ -41,6 +41,10 @@ namespace Weline\Theme\Service {
         public function identityFromEncodedScope($scope): object { return (object)['websiteCode'=>'fixture']; }
     }
     class ThemeRuntimeCacheCleaner { public function clearAllThemeRelatedCaches(...$args): array { return []; } }
+    /** Fixture stub: upgrade solidify scopes to website-bound themes only. */
+    class ThemeApplicationUsageService {
+        public function themesForDefaultUpgrade(): array { return []; }
+    }
     class ThemeRuntimeLayoutResolver {
         public function buildContext(...$args): never {
             if ($GLOBALS['scenario'] === 'write') {
@@ -84,7 +88,8 @@ namespace {
     $bad_candidate = $paths->root() . '1/frontend/scope/fixture/store/channel/mode/normal/v1/' . str_repeat('x',260) . '.phtml';
     $coordinator = (new \ReflectionClass(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class))->newInstanceWithoutConstructor();
     $service = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityUpgradeSolidifyService($paths,$coordinator,
-        new \Weline\Theme\Service\ThemeRuntimeCacheCleaner(),new \Weline\Framework\Output\Cli\Printing());
+        new \Weline\Theme\Service\ThemeRuntimeCacheCleaner(),new \Weline\Framework\Output\Cli\Printing(),
+        new \Weline\Theme\Service\ThemeApplicationUsageService());
     try {
         $result = $service->cutoverFromThemeCommand(null);
         $error = null;

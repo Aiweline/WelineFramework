@@ -158,6 +158,16 @@ final class DetectWebsiteProjectHostSiteCodeTest extends TestCase
         );
     }
 
+    public function testProcessSiteNormalizesRequestUrlBeforeScopeConflictCheck(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $source = (string)file_get_contents($root . '/Observer/DetectWebsite.php');
+        self::assertMatchesRegularExpression(
+            '/function processSite\\([\\s\\S]*?applyVisitorUriNormalizeToUrl\\(\\$requestUrl\\)[\\s\\S]*?scopeRequestTargetWithoutLocalization\\(/',
+            $source
+        );
+    }
+
     public function testLivePreviewOriginResolvesProjectHostSiteAfterThemeNormalize(): void
     {
         if (!\class_exists(\Weline\Theme\Service\ThemeLivePreviewPathMount::class)) {

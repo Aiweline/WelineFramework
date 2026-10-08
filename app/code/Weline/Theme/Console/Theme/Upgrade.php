@@ -73,7 +73,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->upgradeOneTheme($theme, $modules);
         }
 
-        // C-RP-07 / migrate-disk-cutover: purge 旧哈希树 + 重固（-t 指定主题，否则全部）
+        // C-RP-07：-t 指定主题；无 -t 时 cutover(null)→仅站点已绑定主题当前生效版（见 UpgradeSolidifyService）
         $this->printing->warning(__('开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…'));
         $cutover = $this->layoutSolidifyService->cutoverFromThemeCommand(
             $theme_name !== '' ? ($themes[0] ?? null) : null

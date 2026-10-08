@@ -16,6 +16,7 @@ use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Framework\View\Template;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeVirtualLayout;
@@ -25,6 +26,7 @@ use Weline\Theme\Service\SlotBoundaryMarkers;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Service\DefaultWebsiteService;
 use Weline\Websites\Service\ScopeResolver;
+use Weline\Websites\Service\ThemeApplicationContextProducer;
 
 /**
  * Generates storefront 404 HTML snapshots under pub/errors/storefront-not-found/.
@@ -127,7 +129,9 @@ final class StorefrontNotFoundStaticGenerator
                     ));
                 }
             },
-            ['extensions' => ['html']],
+            // concurrency=1: RequestContext + ThemeApplicationContext are process-global;
+            // Fiber yield mid-render would otherwise bake the wrong site chrome into siblings.
+            ['extensions' => ['html'], 'concurrency' => 1],
         );
 
         $labels = [];
@@ -268,10 +272,14 @@ final class StorefrontNotFoundStaticGenerator
 
         State::setRequestLanguageOverride($lang);
         try {
-            // Fiber / 多站串行发布共用进程：清掉上一站的 Scope 热缓存、请求 memo 与 header chrome 输出缓存，避免 brand/logo 串站。
+            // Fiber / 多站串行发布共用进程：清掉上一站的 Scope 热缓存、请求 memo、应用上下文与 header chrome，避免 brand/logo 串站。
             StorefrontScopeHotCache::resetProcessCache();
             \Weline\Theme\Block\Partials::clearOutputCache();
             RequestContext::resetWelineVars();
+            // resetWelineVars does not clear ThemeApplicationContext keys — remove explicitly.
+            RequestContext::remove(ThemeApplicationContext::REQUEST_KEY_PREFIX . 'frontend.runtime');
+            RequestContext::remove(ThemeApplicationContext::REQUEST_KEY_PREFIX . 'frontend.editor');
+            RequestContext::remove(ThemeApplicationContext::REQUEST_KEY_PREFIX . 'frontend.preview');
             // resetWelineVars may clear storage — re-assert publish flag for hooks.
             RequestContext::set(StaticErrorPagePublisher::CTX_PUBLISHING, true);
             RequestContext::installScopeIdentity($this->authoritativeWebsiteIdentity($websiteId, $websiteCode));
@@ -416,7 +424,10 @@ final class StorefrontNotFoundStaticGenerator
             }
         }
 
-        $theme = $this->themeContext->resolveThemeForScope(PreviewContextService::AREA_FRONTEND, $identity);
+        $application = $this->installWebsiteThemeApplication($identity, $websiteId);
+        $theme = $application !== null
+            ? $this->themeContext->resolveThemeForScope(PreviewContextService::AREA_FRONTEND, $application)
+            : null;
         if (!$theme || !$theme->getId()) {
             $theme = $this->themeContext->resolveTheme(PreviewContextService::AREA_FRONTEND, null, false);
         }
@@ -461,12 +472,51 @@ final class StorefrontNotFoundStaticGenerator
         );
     }
 
+    /**
+     * Build + install Website ThemeApplicationContext for the target site.
+     * resolveThemeForScope requires ThemeApplicationContext — never pass ScopeIdentity.
+     */
+    private function installWebsiteThemeApplication(ScopeIdentity $identity, int $websiteId): ?ThemeApplicationContext
+    {
+        try {
+            /** @var Website $website */
+            $website = ObjectManager::getInstance(Website::class);
+            $website = (clone $website)->load($websiteId, null, true);
+            if (!$website->hasData(Website::schema_fields_ID)
+                && $websiteId !== Website::ID_DEFAULT) {
+                return null;
+            }
+            $locale = \trim((string)$website->getDefaultLanguage());
+            if ($locale === '') {
+                $locale = 'zh_Hans_CN';
+            }
+            $storeMode = $identity->storeMode ?? ScopeIdentity::MODE_NORMAL;
+            /** @var ThemeApplicationContextProducer $producer */
+            $producer = ObjectManager::getInstance(ThemeApplicationContextProducer::class);
+            $application = $producer->build(
+                identity: $identity,
+                storeMode: $storeMode,
+                defaultLocale: $locale,
+                displayName: (string)$website->getName(),
+                purpose: 'runtime',
+            );
+            $application->install();
+
+            return $application;
+        } catch (\Throwable) {
+            return ThemeApplicationContext::current(PreviewContextService::AREA_FRONTEND);
+        }
+    }
+
     private function fallbackShellHtml(): string
     {
+        // Never reload published storefront-not-found snapshots during generation —
+        // that loop baked default-site (汉服) HTML into grocery and other websites.
         return ErrorPageRenderer::render(404, '', [
             'prefer_json' => false,
             'is_dev' => false,
             'home_href' => '/',
+            'skip_static' => true,
         ]);
     }
 

@@ -87,7 +87,12 @@ final class PreviewContextService
         $context = $this->getDefaultContext();
         $shouldUseStoredContext = $this->shouldUseStoredContext();
         $tokenContext = null;
-        $tokenData = $shouldUseStoredContext
+        // 态 1 画布只认 RAW query（editor_mode / shell=theme-editor）。
+        // 禁止用 syncRequest 注入的 bag 冒充画布，否则态 2 真实预览会被误伤丢 Token。
+        // 错误 Token payload（theme_id=1 + default.default.default）会压过 /~site/{code}
+        // 的 ThemeApplication，把 DaoCharms 画布染成默认站 hanfu 壳。
+        $editorCanvas = $this->isRawThemeEditorLiveCanvasRequest();
+        $tokenData = ($shouldUseStoredContext && !$editorCanvas)
             ? $this->previewTokenService->getCurrentPreviewData()
             : null;
         $authorized = \is_array($tokenData) || $this->isBackendUserLoggedIn();
@@ -106,13 +111,15 @@ final class PreviewContextService
         if ($mergeRequest && $authorized) {
             $context = \array_replace($context, $this->extractContextFromRequest());
         }
-        // A valid preview token is the immutable server-side authority for
-        // Theme/Scope/Store/target identity. URL theme/scope fields cannot override
-        // a token. Locale is the exception: theme-editor language switching only
-        // changes Phrase/chrome via State::setRequestLanguageOverride and must not
-        // be trapped by a sticky token locale (still never writes WELINE_USER_LANG).
-        if (\is_array($tokenContext)) {
+        // 态 2 真实预览：合法 Token 是 Theme/Scope/Store/target 的不可变服务端权威；
+        // URL theme/scope 不能覆盖 Token。Locale 例外见 applyExplicitLocaleOverride。
+        // 态 1 画布：永不应用 Token 覆盖（即便 request bag 被 syncRequest 注入旧 Token）。
+        if (\is_array($tokenContext) && !$editorCanvas) {
             $context = \array_replace($context, $tokenContext);
+        }
+        if ($editorCanvas) {
+            $context['preview_token'] = '';
+            $context['shell'] = self::SHELL_THEME_EDITOR;
         }
         if ($mergeRequest && $authorized) {
             $context = $this->applyExplicitLocaleOverride($context);
@@ -393,7 +400,10 @@ final class PreviewContextService
             $params['version_id'] = (int)$context['version_id'];
         }
 
-        if (!empty($context['preview_token'])) {
+        // 态 1 画布禁止把 Token 写回 query / syncRequest，避免粘滞污染下一跳画布。
+        if (!empty($context['preview_token'])
+            && (string)($context['shell'] ?? '') !== self::SHELL_THEME_EDITOR
+        ) {
             $params[PreviewTokenService::TOKEN_KEY] = (string)$context['preview_token'];
         }
 
@@ -496,9 +506,38 @@ final class PreviewContextService
             ];
         }
 
+        // Token 顶层身份字段是不可变权威；嵌套 context blob 不得带错 theme/scope。
+        $themeId = (int)($tokenData['theme_id'] ?? 0);
+        if ($themeId > 0) {
+            $area = \strtolower(\trim((string)($tokenData['area']
+                ?? $context['editor_area']
+                ?? $context['area']
+                ?? self::AREA_FRONTEND)));
+            if ($area === self::AREA_BACKEND) {
+                $context['backend_theme_id'] = $themeId;
+                $context['editor_area'] = self::AREA_BACKEND;
+            } else {
+                $context['frontend_theme_id'] = $themeId;
+                $context['editor_area'] = self::AREA_FRONTEND;
+            }
+        }
+        $canonicalScope = \trim((string)($tokenData['canonical_scope'] ?? ''));
+        if ($canonicalScope !== '') {
+            $context['scope'] = $canonicalScope;
+            $context['canonical_scope'] = $canonicalScope;
+        }
+        $storeMode = \trim((string)($tokenData['store_mode'] ?? ''));
+        if ($storeMode !== '') {
+            $context['store_mode'] = $storeMode;
+        }
+
         $context['preview_token'] = (string)($tokenData['token'] ?? ($context['preview_token'] ?? ''));
+        $context['shell'] = self::SHELL_PREVIEW;
         if (!isset($context['version_id']) && !empty($tokenData['version_id'])) {
             $context['version_id'] = (int)$tokenData['version_id'];
+        }
+        if (!isset($context['version_id']) && !empty($tokenData['theme_version_id'])) {
+            $context['version_id'] = (int)$tokenData['theme_version_id'];
         }
 
         return $context;
@@ -968,6 +1007,12 @@ final class PreviewContextService
                 continue;
             }
             $this->request->setGet($key, $value);
+        }
+        // 态 1：显式清掉 bag 里残留的 Token，防止后续 getTokenFromRequest 读到粘滞能力。
+        if ((string)($context['shell'] ?? '') === self::SHELL_THEME_EDITOR
+            || $this->isRawThemeEditorLiveCanvasRequest()
+        ) {
+            $this->request->setGet(PreviewTokenService::TOKEN_KEY, '');
         }
     }
 

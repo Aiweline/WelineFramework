@@ -29,11 +29,33 @@ final class ThemePreviewPublishAndExitContextContractTest extends TestCase
             $fn,
             'Full previewContext carries shell target_type=layout and false-fails assertRawLayoutContextMatches'
         );
+        self::assertStringContainsString('resolvePreviewPublishTypedClaims(', $fn);
         self::assertStringContainsString("['editor_context' => \$typedClaims]", $fn);
         self::assertStringContainsString('PreviewContextService shell target_type', $fn);
         self::assertStringContainsString('runStandardLayoutPublish($typedContext', $fn);
         self::assertStringContainsString('Do not clear preview token on version-gate', $fn);
         self::assertStringNotContainsString('createAndPublishScopedLayoutVersion(', $fn);
+        self::assertStringNotContainsString('theme_preview_typed_context_required', $fn);
+    }
+
+    public function testPublishAndExitFallsBackToMaterializedTypedClaims(): void
+    {
+        $path = dirname(__DIR__, 4) . '/Controller/Backend/ThemeEditor.php';
+        $source = (string)file_get_contents($path);
+        $start = strpos($source, 'function resolvePreviewPublishTypedClaims(');
+        self::assertNotFalse($start);
+        $end = strpos($source, "\n    private function ", $start + 1);
+        if ($end === false) {
+            $end = strpos($source, "\n    public function ", $start + 1);
+        }
+        self::assertNotFalse($end);
+        $fn = substr($source, $start, $end - $start);
+
+        self::assertStringContainsString('ThemePreviewTypedEditorContextBinder', $fn);
+        self::assertStringContainsString('decodeClaims(', $fn);
+        self::assertStringContainsString('materializeClaims(', $fn);
+        self::assertStringContainsString("\$data['editor_context']", $fn);
+        self::assertStringContainsString("\$previewContext['editor_context']", $fn);
     }
 
     public function testAssertRawLayoutContextSkipsPreviewShellTargetTypes(): void

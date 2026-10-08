@@ -22,14 +22,14 @@ final class ThemeLivePreviewPathMountTest extends TestCase
         self::assertSame('/~site/grocery/about?keep=1', $parsed['remainder']);
     }
 
-    public function testJoinPreviewPathMountsStorefrontUrl(): void
+    public function testJoinPreviewPathStripsProjectHostSiteMount(): void
     {
         $url = ThemeLivePreviewPathMount::joinPreviewPath(
             'https://p05113ef3.test.weline.com/~site/grocery/about',
             self::SAMPLE_TOKEN,
         );
         self::assertSame(
-            'https://p05113ef3.test.weline.com/~preview/' . self::SAMPLE_TOKEN . '/~site/grocery/about',
+            'https://p05113ef3.test.weline.com/~preview/' . self::SAMPLE_TOKEN . '/about',
             $url
         );
     }
@@ -44,6 +44,58 @@ final class ThemeLivePreviewPathMountTest extends TestCase
         self::assertStringContainsString('keep=1', $url);
         self::assertStringNotContainsString('weline_preview_token=', $url);
         self::assertStringNotContainsString('editor_mode=', $url);
+    }
+
+    public function testPrefixStorefrontUrlAlsoStripsSiteMount(): void
+    {
+        $url = ThemeLivePreviewPathMount::prefixStorefrontUrl(
+            'https://p05113ef3.test.weline.com/~site/grocery/CNY/terms',
+            self::SAMPLE_TOKEN,
+        );
+        self::assertSame(
+            'https://p05113ef3.test.weline.com/~preview/' . self::SAMPLE_TOKEN . '/CNY/terms',
+            $url
+        );
+    }
+
+    public function testJoinPreviewPathUnwrapsInvertedSiteThenPreviewStack(): void
+    {
+        // Language switcher bug shape: website mount + nested preview path.
+        $url = ThemeLivePreviewPathMount::joinPreviewPath(
+            'https://p05113ef3.test.weline.com/~site/grocery/~preview/' . self::SAMPLE_TOKEN . '/CNY/terms',
+            self::SAMPLE_TOKEN,
+        );
+        self::assertSame(
+            'https://p05113ef3.test.weline.com/~preview/' . self::SAMPLE_TOKEN . '/CNY/terms',
+            $url
+        );
+        self::assertStringNotContainsString('/~site/', $url);
+    }
+
+    public function testRehydrateSiteMountIntoRouting(): void
+    {
+        self::assertSame(
+            '/~site/grocery/CNY/terms',
+            ThemeLivePreviewPathMount::rehydrateSiteMountIntoRouting('/CNY/terms', 'grocery')
+        );
+        self::assertSame(
+            '/~site/daocharms/about?keep=1',
+            ThemeLivePreviewPathMount::rehydrateSiteMountIntoRouting('/about?keep=1', 'daocharms')
+        );
+        // Already mounted — no double prefix.
+        self::assertSame(
+            '/~site/grocery/about',
+            ThemeLivePreviewPathMount::rehydrateSiteMountIntoRouting('/~site/grocery/about', 'grocery')
+        );
+        // Default website stays bare on project Host.
+        self::assertSame(
+            '/CNY/terms',
+            ThemeLivePreviewPathMount::rehydrateSiteMountIntoRouting('/CNY/terms', 'default')
+        );
+        self::assertSame(
+            '/CNY/terms',
+            ThemeLivePreviewPathMount::rehydrateSiteMountIntoRouting('/CNY/terms', null)
+        );
     }
 
     public function testParseRejectsInvalidToken(): void

@@ -138,7 +138,23 @@ class LayoutSlotRenderer implements ObserverInterface
 
         // Visual-editor canvas loads the real storefront route with editor_mode=1.
         // Inject editor assets here (ThemePreview\Content is no longer the canvas shell).
+        // Theme-switch solidify acceptance: still run Filters XOR before editor assets so
+        // source-layout declaration placeholders do not remain on the canvas.
         if ($this->isEditorCanvasRequest()) {
+            try {
+                $html = SlotBoundaryMarkers::strip($html);
+            } catch (\Throwable) {
+                // keep going
+            }
+            try {
+                /** @var \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionRuntimeSafetyNet $requiredNet */
+                $requiredNet = ObjectManager::getInstance(
+                    \Weline\Theme\Service\LayoutEntity\RequiredDefaultInjectionRuntimeSafetyNet::class
+                );
+                $html = $requiredNet->ensure($html);
+            } catch (\Throwable) {
+                // soft — never 500 the editor canvas for injection safety net
+            }
             try {
                 /** @var \Weline\Theme\Service\EditorModeAssetInjector $injector */
                 $injector = ObjectManager::getInstance(\Weline\Theme\Service\EditorModeAssetInjector::class);
@@ -1634,7 +1650,8 @@ HTML;
         
         // 前台预览网关退出（Token 鉴权，已注册路由，无需后台登录）
         $exitPreviewUrl = $this->url->getFrontendUrl('theme/frontend/theme-preview/gateway', ['exit' => '1']);
-        $publishAndExitUrl = $this->url->getBackendUrl('theme/backend/theme-editor/publish-and-exit');
+        // 店面同域发布：Token file_access_actor_id 鉴权，避免兄弟 Host 无后台 Cookie 时打到 admin 得到 302/404
+        $publishAndExitUrl = $this->url->getFrontendUrl('theme/frontend/theme-preview/publish-and-exit');
         $previewMessageJsonFlags = \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT;
         $previewExitFailedJson = \json_encode((string)__('退出预览失败'), $previewMessageJsonFlags) ?: '"退出预览失败"';
         $previewPublishFailedJson = \json_encode((string)__('发布失败'), $previewMessageJsonFlags) ?: '"发布失败"';

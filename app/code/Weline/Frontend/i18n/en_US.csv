@@ -6,6 +6,14 @@
 首页,Homepage
 欢迎访问,Welcome
 "这是 WelineFramework 的默认首页","This is the default homepage of WelineFramework"
+"BinQuery Gateway","BinQuery Gateway"
+circle,circle
+"External BinQuery binary gateway","External BinQuery binary gateway"
+edit,edit
+framework,framework
+"BinQuery Connect Query Call Graph","BinQuery Connect Query Call Graph"
+"Connect, inspect, call and graph through /bin/query","Connect, inspect, call and graph through /bin/query"
+后台页面凭证已失效，请刷新页面后重试。,后台页面凭证已失效，请刷新页面后重试。
 模块不存在，请检查模块名称!,"Module does not exist, please check the module name!"
 通知,Notification
 暂无通知,"No notification yet"

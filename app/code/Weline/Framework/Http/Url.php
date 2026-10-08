@@ -2707,6 +2707,12 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         if ($remainder !== '' && $remainder[0] !== '/' && $remainder[0] !== '?') {
             return ['matched' => false, 'remainder' => $url];
         }
+        // Exact mount hit with directory slash (/~site/grocery/) ≡ empty remainder.
+        // Leaving "/" forces the long parser path, peels REQUEST_URI to "/", and
+        // DetectWebsite scope-install then rebinds the project Host to default.
+        if ($remainder === '/') {
+            $remainder = '';
+        }
 
         return ['matched' => true, 'remainder' => $remainder];
     }

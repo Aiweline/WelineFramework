@@ -1,0 +1,20 @@
+{
+  "module": "Weline_Websites",
+  "skills": [
+    {
+      "skill_id": "doc:website-delete-purge",
+      "name": "website-delete-purge",
+      "aliases": [
+        "website-delete-purge",
+        "删站",
+        "删除网站",
+        "清理站点",
+        "website delete",
+        "purge website",
+        "weline-website-delete"
+      ],
+      "path": "app/code/Weline/Websites/doc/ai/skills/website-delete-purge/SKILL.md",
+      "description": "Delete a named website (local default; online only when explicit). Full purge: site graph, orphan scoped config, unreferenced static via cross-ref graph. Abstract—no concrete shop/SSH defaults."
+    }
+  ]
+}

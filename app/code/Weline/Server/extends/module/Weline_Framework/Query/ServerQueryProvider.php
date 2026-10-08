@@ -395,6 +395,7 @@ class ServerQueryProvider implements QueryProviderInterface
             }
         }
 
+        $forceReissue = !empty($params['force_reissue']);
         $result = $this->sslCertificateService->requestCertificate(
             $requestedDomain,
             $webroot,
@@ -404,6 +405,7 @@ class ServerQueryProvider implements QueryProviderInterface
             $challengeStrategy,
             $poolId,
             $domainId,
+            $forceReissue,
             $onProgress
         );
 

@@ -411,6 +411,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-restore-scope-defaults="@url{'theme/backend/theme-editor/restore-scope-defaults'}"
      data-api-clear-theme-cache="@url{'theme/backend/theme-editor/clear-theme-cache'}"
      data-api-reset-draft-resources="@url{'theme/backend/theme-editor/reset-draft-resources'}"
+     data-api-solidify-scope-version="@url{'theme/backend/theme-editor/solidify-scope-version'}"
      data-api-factory-reset="@url{'theme/backend/theme-editor/factory-reset'}"
      data-api-delete-version="@url{'theme/backend/theme-editor/delete-version'}"
      data-api-preview-bases="@url{'theme/backend/theme-editor/preview-bases'}"
@@ -626,10 +627,10 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
             </div>
 
             <div class="w-toolbar-overflow__items" data-w-toolbar-overflow-items>
-                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-icon-only="true" id="btnPreview" data-w-component="tooltip" data-w-tooltip="@lang{预览}" data-w-placement="bottom" title="@lang{预览}" aria-label="@lang{预览}">
+                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-icon-only="true" id="btnPreview" data-w-component="tooltip" data-w-tooltip="@lang{画布预览（本机壳 /~site）}" data-w-placement="bottom" title="@lang{画布预览（本机壳 /~site）}" aria-label="@lang{画布预览（本机壳 /~site）}">
                     <w:icon name="eye" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{预览}</span>
                 </button>
-                <button type="button" class="w-button" data-tone="info" data-variant="outline" data-icon-only="true" id="btnFrontendPreview" data-w-component="tooltip" data-w-tooltip="@lang{前端预览}" data-w-placement="bottom" title="@lang{前端预览}" aria-label="@lang{前端预览}">
+                <button type="button" class="w-button" data-tone="info" data-variant="outline" data-icon-only="true" id="btnFrontendPreview" data-w-component="tooltip" data-w-tooltip="@lang{前端预览：默认本机壳可预览待发布版本；可选外部域名}" data-w-placement="bottom" title="@lang{前端预览：默认本机壳可预览待发布版本；可选外部域名}" aria-label="@lang{前端预览：默认本机壳可预览待发布版本；可选外部域名}">
                     <w:icon name="external-link" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{前端预览}</span>
                 </button>
                 <button type="button" class="w-button" data-tone="primary" data-variant="outline" data-icon-only="true" id="btnSave" data-w-component="tooltip" data-w-tooltip="@lang{保存版本}" data-w-placement="bottom" title="@lang{保存版本}" aria-label="@lang{保存版本}">

@@ -203,6 +203,9 @@ class DetectWebsite implements
                     400,
                 );
             }
+            // Same peel as resolveMatchedSite: origin may still carry /~preview/{token}/…
+            // while website.url is /~site/{code}. Conflict check must use routing URL.
+            $requestUrl = Url::applyVisitorUriNormalizeToUrl($requestUrl);
 
             $identity = RequestContext::scopeIdentity();
             if ($identity instanceof ScopeIdentity) {

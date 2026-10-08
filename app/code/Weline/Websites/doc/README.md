@@ -13,7 +13,8 @@ SEO Head 使用当前 Store 的名称和独立入口覆盖 Website 默认值，�
 2. `app/code/Weline/Websites/doc/store-saleschannel-scope.md`（Store/渠道/三段 Scope，商城内核 P1a）
 3. `app/code/Weline/Websites/doc/scope-select标签使用指南.md`（后台 **`<w:scope>`** 四级范围选择：Global/网站/店铺/渠道）
 4. `app/code/Weline/Websites/doc/WebsiteData类使用文档.md`
-5. 涉及主题目标、建站工作台时，让同一 Guidance Bundle 同时检索 Theme 文档
+5. 删站 / 孤儿清理：`网站删除与孤儿清理.md` + 技能 `doc/ai/skills/website-delete-purge/` + 指令 `dev/ai-command/sitesetup/删站.md`（站名必填；默认本地；禁止具象默认目标）
+6. 涉及主题目标、建站工作台时，让同一 Guidance Bundle 同时检索 Theme 文档
 
 ## 模块定位
 

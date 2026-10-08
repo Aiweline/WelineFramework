@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Websites',
-    "version" => '1.8.82',
+    "version" => '1.8.84',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
@@ -17,6 +17,7 @@ return [
     ],
     "optional" => [
         'Weline_Ai' => '*',
+        'Weline_Cdn' => '*',
         'Weline_Server' => '*',
         'Weline_Product' => '*',
         'Weline_Theme' => '*',

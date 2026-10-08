@@ -52,8 +52,50 @@ $translateDefaultCopy = static function (string $source, string $english) use ($
 };
 
 /**
- * Drop looks config rows whose /product/{id} is not on the current website.
- * Prevents Theme-module / other-site seed from bleeding into grocery (etc.).
+ * Resolve looks website: theme-editor canvas prefers typed editor_context
+ * scope identity (作用范围), then DetectWebsite RequestContext.
+ * Prevents default-Host canvas (/ without /~site/{code}) from showing another
+ * site's Review/config wall while the editor chrome shows grocery/etc.
+ */
+$resolveLooksWebsiteId = static function (): int {
+    try {
+        /** @var \Weline\Framework\Http\Request $request */
+        $request = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Http\Request::class
+        );
+        $editorMode = \strtolower(\trim((string)$request->getParam('editor_mode', '')));
+        $shell = \strtolower(\trim((string)$request->getParam('shell', '')));
+        $isEditorCanvas = $editorMode === '1' || $editorMode === 'true'
+            || $shell === 'theme-editor';
+        if ($isEditorCanvas) {
+            $raw = $request->getParam('editor_context', null);
+            $decoded = null;
+            if (\is_string($raw) && $raw !== '') {
+                $decoded = \json_decode($raw, true);
+            } elseif (\is_array($raw)) {
+                $decoded = $raw;
+            }
+            if (\is_array($decoded)) {
+                $identity = $decoded['scope']['identity'] ?? null;
+                if (\is_array($identity) && \array_key_exists('website_id', $identity)
+                    && \is_numeric($identity['website_id'])
+                ) {
+                    return \max(0, (int)$identity['website_id']);
+                }
+            }
+        }
+    } catch (\Throwable) {
+    }
+    try {
+        return \max(0, \Weline\Framework\Runtime\RequestContext::getWelineWebsiteId());
+    } catch (\Throwable) {
+        return 0;
+    }
+};
+
+/**
+ * Drop looks config rows that are not verifiably on the current website.
+ * Requires /product/{id} + findById — linkless / other-site seed never bleeds.
  *
  * @param list<array<string,mixed>> $rows
  * @return list<array<string,mixed>>
@@ -63,7 +105,7 @@ $filterLooksItemsForWebsite = static function (array $rows, int $websiteId): arr
         return [];
     }
     if (!\class_exists(\Weline\Product\Repository\ProductRepository::class)) {
-        return $rows;
+        return [];
     }
     try {
         /** @var \Weline\Product\Repository\ProductRepository $products */
@@ -71,7 +113,7 @@ $filterLooksItemsForWebsite = static function (array $rows, int $websiteId): arr
             \Weline\Product\Repository\ProductRepository::class
         );
     } catch (\Throwable) {
-        return $rows;
+        return [];
     }
 
     $out = [];
@@ -80,18 +122,20 @@ $filterLooksItemsForWebsite = static function (array $rows, int $websiteId): arr
             continue;
         }
         $link = trim((string)($cfg['link'] ?? ''));
-        if ($link !== '' && preg_match('#/product/(\d+)#', $link, $m) === 1) {
-            $productId = (int)$m[1];
-            if ($productId <= 0) {
+        if ($link === '' || preg_match('#/product/(\d+)#', $link, $m) !== 1) {
+            // Unverifiable looks row — never pass through as cross-site seed.
+            continue;
+        }
+        $productId = (int)$m[1];
+        if ($productId <= 0) {
+            continue;
+        }
+        try {
+            if ($products->findById($websiteId, $productId) === null) {
                 continue;
             }
-            try {
-                if ($products->findById($websiteId, $productId) === null) {
-                    continue;
-                }
-            } catch (\Throwable) {
-                continue;
-            }
+        } catch (\Throwable) {
+            continue;
         }
         $out[] = $cfg;
     }
@@ -108,12 +152,7 @@ if ($isLooks) {
         $subtitle = '晒出你的穿搭';
     }
 
-    $looksWebsiteId = 0;
-    try {
-        $looksWebsiteId = max(0, \Weline\Framework\Runtime\RequestContext::getWelineWebsiteId());
-    } catch (\Throwable) {
-        $looksWebsiteId = 0;
-    }
+    $looksWebsiteId = $resolveLooksWebsiteId();
 
     // WO-BUYER-SHOW-03：运行时优先已审含图评论；静态 items 仅聚合为空时兜底（且须属本站）
     $configuredItems = $filterLooksItemsForWebsite($items, $looksWebsiteId);
@@ -141,7 +180,9 @@ if ($isLooks) {
     }
     if ($looksGallery !== null && method_exists($looksGallery, 'galleryItems')) {
         try {
-            $liveRaw = $looksGallery->galleryItems(max(1, (int)$columns));
+            // Always pass resolved website — do not rely solely on RequestContext
+            // (editor canvas may lack /~site/{code} while editor_context has scope).
+            $liveRaw = $looksGallery->galleryItems(max(1, (int)$columns), $looksWebsiteId);
             if (is_array($liveRaw)) {
                 foreach ($liveRaw as $liveRow) {
                     if (!is_array($liveRow)) {
@@ -218,6 +259,7 @@ if ($isLooks) {
         $looksSource = 'config';
     } else {
         // 买家秀空配置：6 格占位图墙（无星级、无证言短评，禁止回退成评价三卡）
+        // Must replace $items — filtered-away cross-site seed must not remain and append.
         $usingLooksPlaceholders = true;
         $looksSource = 'placeholder';
         $placeholder = StorefrontImagePlaceholder::url();
@@ -229,6 +271,7 @@ if ($isLooks) {
             ['title' => '校园问候', 'title_en' => 'Campus greeting'],
             ['title' => '雅集留影', 'title_en' => 'Gathering snapshot'],
         ];
+        $items = [];
         foreach ($lookScenes as $scene) {
             $items[] = [
                 'image' => $placeholder,

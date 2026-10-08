@@ -77,7 +77,7 @@
 |-----------|---------|------|------|
 | `.phtml`、模板、Taglib、`<w:` | [Taglib/doc/README.md](../../Taglib/doc/README.md)、[场景映射表.md](../../Taglib/doc/场景映射表.md)、[如何自定义Tag.md](../../Taglib/doc/如何自定义Tag.md) | 手写领域 select/input；`w:*` 属性内 `<?=` / `<?php`；**Taglib callback 返回 HTML 里写裸 `@static(...)`** | — |
 | 写 HTML 标签、页面控件、**选择性输入**（下拉/单选/多选/chips/枚举） | [场景映射表.md](../../Taglib/doc/场景映射表.md)、[标签全量索引.md](../../Taglib/doc/标签全量索引.md)、[Framework/doc/4-内置标签/README.md](../../Framework/doc/4-内置标签/README.md)；MCP `taglib_before_hand_rolled_controls` | **未先查标签库**就手写 `<select>` / ISO text / 自造 chips；能用 `<w:*>` / `<lang>` / `<w:hook>` 时用裸 HTML | 选择性控件优先标签；无标签则在数据拥有模块新增 Taglib，禁止业务页临时拼装 |
-| **站内跳转、href、action、查看详情链接、guide_url** | [06-url标签使用指南.md](../../Framework/doc/4-内置标签/06-url标签使用指南.md)；MCP `storefront_internal_url_via_url_helper` | `'/' . $route`；手写 `/guide/payment/x`；JSON/HTML 拼裸 path 当店面 href | 模板 `@url`/`<url>`；Service `Url::getUrl`；外链 http(s) 可原样 |
+| **站内跳转、href、action、查看详情链接、guide_url、URL 拼接、getPrefix** | [06-url标签使用指南.md](../../Framework/doc/4-内置标签/06-url标签使用指南.md)；MCP `storefront_internal_url_via_url_helper` | **禁止拼接**：`'/' . $route`；`Url::getPrefix().$path`（无 website mount）；手写 `/guide/payment/x`；JSON/HTML 拼裸 path | **前端推荐** `@url`/`<url>`；**后端推荐** `Url::getUrl`/`getFrontendUrl`/`getBackendUrl`；薄封装须内部调 Url；外链 http(s) 可原样 |
 | 新建 Hook、`view/hooks` | [Hook创建规范.md](../../Hook/doc/Hook创建规范.md)、[Hook使用指南.md](../../Theme/doc/Hook使用指南.md) | 只有 `.phtml` 无 `hook.php` + `doc/hook/*.md`；**type 段发明 `theme-editor`/`checkout` 等功能名**（须 `partials` 或 `layouts`） | `php bin/w setup:upgrade --route` |
 | **新建 Event、Observer、`event.xml`** | [事件命名与注册规范.md](../../Framework/doc/3-开发/事件命名与注册规范.md)、[event/README.md](../../Framework/doc/event/README.md) | 发明未文档化事件名；跨模块直调 Service | 检索 `doc/event/` 与 dispatch 一致 |
 | **配置、统一配置、统一配置中心、系统配置、嵌入配置、配置嵌入、`<w:config:*>`、SystemConfig、Weline_SystemConfig** | [SystemConfig README](../../SystemConfig/doc/README.md)、[config-embed标签使用指南.md](../../SystemConfig/doc/config-embed标签使用指南.md)；MCP `systemconfig_unified_config_terms` / `SystemConfigTermRouting` | 自造业务配置表/私有 Config Service/平行设置页；把「配置」落到 MCP host/`env.php`/模块 `etc` 语义而忽略统一配置中心 | 业务配置走 SystemConfig；业务页用 `<w:config:embed>`；检索词表命中 SystemConfig 文档 |
@@ -125,7 +125,7 @@
 1. 用户可见文案？     → **源串写简体中文** + <lang> / @lang()；禁止 HTML 内 __()；禁止英文当默认源串
    · 源文含逗号？     → 必须 <lang>…</lang> 或加引号 @lang('a, b')；禁止 @lang{a, b}（逗号当参数分隔，编译 ParseError）
 2. 领域/选择性控件？ → **先**查 Taglib 场景映射表 + 标签全量索引；禁止裸 <select>/<input>/ISO text；无现成标签则在拥有模块新增 Taglib
-2b. 站内跳转 href/action/data-*-url？ → 模板 `@url`/`<url>`；PHP `Url::getUrl`/`getFrontendUrl`/`getBackendUrl`；禁止 `'/' . $path`
+2b. 站内跳转 href/action/data-*-url？ → **前端推荐** `@url`/`<url>`；**后端推荐** `Url::getUrl`/`getFrontendUrl`/`getBackendUrl`；**禁止拼接**（含 `'/' . $path`、`Url::getPrefix().$path`）
 3. 页面插槽/可运营块？ → Hook 或 Widget
 4. 布局骨架？         → layout/partial/component/widget 分层，读 Theme 总指南
 5. 内容区宽度/容器？  → 先读 theme-layout-content-width.md：已在 .w-container 内用壳层 A（width:100% + padding-inline:0）；独立壳用壳层 B（--weline-layout-content-* / .w-theme-content-width）。禁止自写第三套容器或像素字面量版心

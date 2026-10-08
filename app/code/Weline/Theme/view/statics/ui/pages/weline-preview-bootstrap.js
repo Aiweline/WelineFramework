@@ -1,4 +1,5 @@
 /* Weline UI source: ui/js/pages/preview-bootstrap.js */
+/* Weline UI source: ui/js/pages/preview-bootstrap.js */
 const TOKEN_KEY = 'weline_preview_token';
 const STORAGE_KEY = 'weline_live_preview_token';
 

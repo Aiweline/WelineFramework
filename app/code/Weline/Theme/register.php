@@ -14,7 +14,7 @@ Register::register(
     Register::MODULE,
     'Weline_Theme',
     __DIR__,
-    '2.2.836',
+    '2.2.837',
     '<a href="https://bbs.aiweline.com">官网</a>提供主题功能的模块。',
     ['Weline_Backend', 'Weline_Framework', 'Weline_I18n', 'Weline_Meta', 'Weline_SystemConfig', 'Weline_Widget']
 );

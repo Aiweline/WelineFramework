@@ -10,8 +10,8 @@
 (function (window, document) {
     'use strict';
 
-    // 防止重复初始化（版本 bump：portal 后货币点击 + 作用域 Cookie 同步）
-    if (window.WelineCurrency && window.WelineCurrency.__initialized === 2) {
+    // 防止重复初始化（版本 bump：live preview peel + portal 货币点击）
+    if (window.WelineCurrency && window.WelineCurrency.__initialized === 3) {
         return;
     }
 
@@ -227,17 +227,51 @@
         return lang !== '' && !sameLang(lang, defaultLang);
     }
 
+    /** Matches Theme /~preview/{token}/ opaque bearer (path mount). */
+    const LIVE_PREVIEW_TOKEN_PATTERN = /^pv_(?:[A-Za-z0-9_-]{43}|[1-9][0-9]{0,18}_[0-9]{9,12}_[a-f0-9]{16})$/;
+
+    /**
+     * Peel /~preview/{token}/… (and inverted stacks). Visible live-preview URLs
+     * must stay /~preview/{token}/… — never leave token segments in the remain.
+     */
+    function peelLivePreviewPathMount(pathname) {
+        const parts = String(pathname || '/').split('/').filter(Boolean);
+        if (parts.length === 0) {
+            return { token: '', path: '/' };
+        }
+        const previewIdx = parts.indexOf('~preview');
+        if (previewIdx >= 0
+            && parts[previewIdx + 1]
+            && LIVE_PREVIEW_TOKEN_PATTERN.test(String(parts[previewIdx + 1]))
+        ) {
+            const token = String(parts[previewIdx + 1]);
+            const after = parts.slice(previewIdx + 2);
+            return {
+                token,
+                path: after.length === 0 ? '/' : `/${after.join('/')}`,
+            };
+        }
+        return { token: '', path: String(pathname || '/') || '/' };
+    }
+
     function buildCurrencyUrlFromPath(pathOnly, search, currency, lang) {
         const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
         const safeSearch = sanitizeSwitchSearch(search || '');
         const config = getThemeConfig();
-        const pathParts = String(pathOnly || '/').split('/').filter(Boolean);
-        const filteredParts = pathParts.filter(part => !isSupportedCurrencyCode(part, config) && !langPattern.test(part));
+        const live = peelLivePreviewPathMount(pathOnly);
+        const pathParts = String(live.path || '/').split('/').filter(Boolean);
+        const filteredParts = pathParts.filter((part) => {
+            if (part === '~preview' || part === '~site' || LIVE_PREVIEW_TOKEN_PATTERN.test(part)) {
+                return false;
+            }
+            return !isSupportedCurrencyCode(part, config) && !langPattern.test(part);
+        });
         const targetCurrency = normalizeCurrencyCode(currency);
         const targetLang = normalizeLangCode(lang);
         const outputParts = [];
 
-        if (isBackendLocalizedPath(pathParts) && filteredParts.length > 0) {
+        // Backend area prefix only when not under live preview (token owns site identity).
+        if (!live.token && isBackendLocalizedPath(pathParts) && filteredParts.length > 0) {
             const prefix = filteredParts.shift();
             outputParts.push(prefix);
         }
@@ -252,7 +286,11 @@
             outputParts.push(...filteredParts);
         }
 
-        return '/' + outputParts.join('/') + safeSearch;
+        const rebuilt = outputParts.length === 0 ? '/' : `/${outputParts.join('/')}`;
+        if (live.token) {
+            return `/~preview/${live.token}${rebuilt === '/' ? '' : rebuilt}${safeSearch}`;
+        }
+        return rebuilt + safeSearch;
     }
 
     function getCurrentCurrency() {
@@ -545,7 +583,7 @@
 
     // 导出模块 API
     window.WelineCurrency = {
-        __initialized: 2,
+        __initialized: 3,
         getCurrentCurrency: getCurrentCurrency,
         updateCurrentCurrencyDisplay: updateCurrentCurrencyDisplay,
         updateCurrencySwitcherLinks: updateCurrencySwitcherLinks,

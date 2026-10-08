@@ -64,8 +64,8 @@ final class HeaderCommerceData
      */
     public static function groceryDefaultHotWords(): array
     {
-        // Align with grocery nav / seed categories (not legacy alias labels).
-        return ['今日特价', '生鲜蔬果', '粮油调味', '零食饮料', '日用清洁'];
+        // Align with grocery CJ catalog roots (demo grocery-* aisle copy retired).
+        return ['今日特价', '家居收纳', '女装', '玩具童趣', '美妆护理'];
     }
 
     /**

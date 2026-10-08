@@ -25,7 +25,6 @@ $domainLookup = $domain_lookup ?? [];
 $websiteOptions = $website_domain_options ?? [];
 $managementReady = (bool)($management_ready ?? false);
 $basePath = 'weline_mail/backend';
-$cloudflareConnectParams = ['adapter' => 'cloudflare', 'return_route' => 'weline_mail/backend'];
 $composeOpen = (bool)($compose_open ?? false);
 $composeTo = (string)($compose_to ?? '');
 $composeSubject = (string)($compose_subject ?? '');
@@ -40,6 +39,31 @@ $navItems = [
     'accounts' => __('用户与账号'),
     'domains' => __('域名与 DNS'),
 ];
+$dnsLiveChecks = $dns_live_checks ?? [];
+$detectedOriginIp = trim((string)($detected_origin_ip ?? ''));
+$cloudflareTokenReady = (bool)($cloudflare_token_ready ?? false);
+$oauthError = trim((string)$this->request->getGet('oauth_error', '')) === '1';
+$oauthCfError = strtolower(trim((string)$this->request->getGet('oauth_cf_error', '')));
+$oauthCfDesc = trim((string)$this->request->getGet('oauth_cf_desc', ''));
+$oauthErrorTitle = (string)__('Cloudflare OAuth 未能完成');
+$oauthErrorBody = (string)__('授权回跳失败。请核对 OAuth Client 权限与回调 URL 后重试。');
+if ($oauthCfError === 'invalid_scope') {
+    $oauthErrorTitle = (string)__('Cloudflare 拒绝了本次授权（scope 不匹配）');
+    $oauthErrorBody = (string)__('权限要在 Cloudflare 控制台勾，不在本页填写。打开 OAuth clients → 编辑该 Client →「选择权限范围」，勾选 Zone Read、DNS Write、Cache Purge、Cache Settings Write 并保存，再点「连接或重新授权 Cloudflare」。');
+} elseif ($oauthCfError === 'access_denied') {
+    $oauthErrorTitle = (string)__('Cloudflare 授权已取消');
+    $oauthErrorBody = (string)__('你在授权页拒绝了授权。若要继续，请再点「连接或重新授权 Cloudflare」。');
+} elseif (in_array($oauthCfError, ['invalid_request', 'redirect_uri_mismatch'], true)
+    || str_contains(strtolower($oauthCfDesc), 'redirect_uri')
+) {
+    $oauthErrorTitle = (string)__('Cloudflare 拒绝了本次授权（回调 URL 不匹配）');
+    $oauthErrorBody = (string)__('请到 CDN → 账户 查看黄框回调 URL，原样粘进 Cloudflare OAuth Client 的 Redirect URLs 后再连。');
+} elseif ($oauthCfError === 'invalid_client') {
+    $oauthErrorTitle = (string)__('Cloudflare 拒绝了本次授权（invalid_client）');
+    $oauthErrorBody = (string)__('Client ID / Secret 无效或填错。请到系统配置 → Cloudflare OAuth 核对。');
+} elseif ($oauthCfDesc !== '') {
+    $oauthErrorBody = $oauthCfDesc;
+}
 ?>
 <style data-no-extract="true">
 /* Mail enterprise layout only — tokens: --weline-theme-* / --weline-space-* / --weline-radius-* / --weline-font-* */
@@ -102,6 +126,11 @@ $navItems = [
     gap: var(--weline-space-2);
     flex-wrap: wrap;
 }
+.mail-enterprise__domain-lifecycle {
+    display: grid;
+    gap: var(--weline-space-2);
+    margin-top: var(--weline-space-3);
+}
 .mail-enterprise__domains {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -114,13 +143,83 @@ $navItems = [
     padding: 0;
     list-style: none;
 }
-.mail-enterprise__dns li {
-    padding: var(--weline-space-3);
+.mail-enterprise__dns-item {
     border: 1px solid var(--weline-theme-border);
     border-radius: var(--weline-radius-md);
-    word-break: break-all;
     background: var(--weline-theme-surface);
     color: var(--weline-theme-text);
+    overflow: clip;
+}
+.mail-enterprise__dns-item > summary {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: var(--weline-space-3);
+    align-items: start;
+    padding: var(--weline-space-3);
+    cursor: pointer;
+    list-style: none;
+    word-break: break-all;
+}
+.mail-enterprise__dns-item > summary::-webkit-details-marker {
+    display: none;
+}
+.mail-enterprise__dns-chevron {
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm);
+    line-height: 1.5rem;
+}
+.mail-enterprise__dns-item[open] > summary .mail-enterprise__dns-chevron {
+    transform: rotate(180deg);
+}
+.mail-enterprise__dns-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    font-size: var(--weline-font-size-sm);
+    font-weight: 700;
+    line-height: 1;
+}
+.mail-enterprise__dns-item[data-ok="1"] {
+    border-color: color-mix(in srgb, var(--weline-theme-success, #16a34a) 45%, var(--weline-theme-border));
+}
+.mail-enterprise__dns-item[data-ok="1"] .mail-enterprise__dns-mark {
+    color: var(--weline-theme-success-contrast, #fff);
+    background: var(--weline-theme-success, #16a34a);
+}
+.mail-enterprise__dns-item[data-ok="0"] .mail-enterprise__dns-mark {
+    color: var(--weline-theme-danger-contrast, #fff);
+    background: var(--weline-theme-danger, #dc2626);
+}
+.mail-enterprise__dns-item[data-ok=""] .mail-enterprise__dns-mark {
+    color: var(--weline-theme-text-muted);
+    background: var(--weline-theme-surface-hover, transparent);
+    border: 1px solid var(--weline-theme-border);
+}
+.mail-enterprise__dns-copy {
+    min-width: 0;
+}
+.mail-enterprise__dns-guide {
+    padding: 0 var(--weline-space-3) var(--weline-space-3);
+    border-top: 1px solid var(--weline-theme-border);
+    display: grid;
+    gap: var(--weline-space-2);
+}
+.mail-enterprise__dns-guide p {
+    margin: 0;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm);
+    line-height: 1.55;
+}
+.mail-enterprise__dns-guide code {
+    display: block;
+    padding: var(--weline-space-2);
+    border-radius: var(--weline-radius-sm);
+    background: var(--weline-theme-surface-muted, color-mix(in srgb, var(--weline-theme-surface) 88%, #000));
+    word-break: break-all;
+    font-size: var(--weline-font-size-sm);
 }
 .mail-enterprise details > summary {
     cursor: pointer;
@@ -251,6 +350,27 @@ $navItems = [
             <?php endforeach; ?>
         </div>
     </nav>
+
+    <?php if ($oauthError): ?>
+        <div class="w-alert" data-tone="danger" data-testid="mail-oauth-error" style="--w-mb:var(--weline-space-4);">
+            <div class="w-alert__content" style="gap:var(--weline-space-2);">
+                <strong class="w-alert__title"><?= $escape($oauthErrorTitle) ?></strong>
+                <p class="w-text" data-size="sm" style="--w-mb:0;"><?= $escape($oauthErrorBody) ?></p>
+                <?php if ($oauthCfError !== '' && $oauthCfDesc !== '' && $oauthCfError !== 'invalid_scope'): ?>
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;">
+                        <?= $escape(__('供应商原文：%{1}', $oauthCfDesc)) ?>
+                    </p>
+                <?php endif; ?>
+                <?php if ($oauthCfError === 'invalid_scope'): ?>
+                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                        <a class="w-button" href="https://dash.cloudflare.com/?to=/:account/oauth-clients" target="_blank" rel="noopener noreferrer" data-tone="primary" data-size="sm" data-testid="mail-oauth-open-cf-clients">
+                            <?= __('去 Cloudflare 勾选权限') ?>
+                        </a>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endif; ?>
 
     <?php if ($view === 'mailbox'): ?>
         <?php
@@ -634,56 +754,201 @@ $navItems = [
                 </div>
             <?php endif; ?>
             <?php foreach ($domains as $domain):
+                $domainId = (int)$domain->getId();
                 $domainName = (string)$domain->getData(MailDomain::schema_fields_DOMAIN_NAME);
                 $host = (string)$domain->getData(MailDomain::schema_fields_HOSTNAME);
-                $originIp = (string)$domain->getData(MailDomain::schema_fields_ORIGIN_IP);
-                $selector = (string)$domain->getData(MailDomain::schema_fields_DKIM_SELECTOR);
-                $publicKey = (string)$domain->getData(MailDomain::schema_fields_DKIM_PUBLIC_KEY);
+                $storedOriginIp = trim((string)$domain->getData(MailDomain::schema_fields_ORIGIN_IP));
+                $originIp = $storedOriginIp !== '' ? $storedOriginIp : $detectedOriginIp;
+                $selector = trim((string)$domain->getData(MailDomain::schema_fields_DKIM_SELECTOR));
+                if ($selector === '') {
+                    $selector = 'default';
+                }
+                $publicKey = trim((string)$domain->getData(MailDomain::schema_fields_DKIM_PUBLIC_KEY));
+                $dkimHost = $selector . '._domainkey.' . $domainName;
+                $dkimSummary = $publicKey !== ''
+                    ? ('v=DKIM1; k=rsa; p=' . (strlen($publicKey) > 28 ? substr($publicKey, 0, 20) . '…' : $publicKey))
+                    : (string)__('本机邮局公钥待生成');
+                $dkimFull = $publicKey !== ''
+                    ? ('v=DKIM1; k=rsa; p=' . $publicKey)
+                    : (string)__('本机 Stalwart 为该域启用 DKIM 签名后，把公钥粘到下方「一键 DNS」表单；也可在 Stalwart 管理端复制。');
+                $aSummaryTarget = $originIp !== '' ? $originIp : (string)__('本机公网 IP 待检测');
+                $live = $dnsLiveChecks[$domainId] ?? null;
+                $liveByCode = [];
+                if (is_array($live) && !empty($live['records']) && is_array($live['records'])) {
+                    foreach ($live['records'] as $row) {
+                        if (!empty($row['code'])) {
+                            $liveByCode[(string)$row['code']] = $row;
+                        }
+                    }
+                }
+                $dnsItems = [
+                    [
+                        'code' => 'a',
+                        'label' => 'A / AAAA',
+                        'text' => $host . ' → ' . $aSummaryTarget . ' · DNS-only',
+                        'guide' => (string)__('把邮件主机 A/AAAA 指到本机邮局公网 IP，并保持 DNS-only（灰云）。SMTP/IMAP 不能走 CDN 代理。'),
+                        'record' => $originIp !== '' ? ($host . ' A ' . $originIp) : ($host . ' A <public-ipv4>'),
+                    ],
+                    [
+                        'code' => 'mx',
+                        'label' => 'MX',
+                        'text' => $domainName . ' → ' . $host . ' · priority 10',
+                        'guide' => (string)__('根域 MX 指向邮件主机，优先级建议 10。MX 目标必须是 A/AAAA，不能是 CNAME。'),
+                        'record' => $domainName . ' MX 10 ' . $host,
+                    ],
+                    [
+                        'code' => 'spf',
+                        'label' => 'TXT SPF',
+                        'text' => $domainName . ' → v=spf1 mx -all',
+                        'guide' => (string)__('根域 TXT 声明仅允许 MX 主机代发。若已有其它 SPF，需合并为一条，不要并存多条 v=spf1。'),
+                        'record' => $domainName . ' TXT "v=spf1 mx -all"',
+                    ],
+                    [
+                        'code' => 'dkim',
+                        'label' => 'TXT DKIM',
+                        'text' => $dkimHost . ' → ' . $dkimSummary,
+                        'guide' => (string)__('选择器默认 default。公钥来自本机 Stalwart；未生成前清单会显示「公钥待生成」，生成后摘要与完整值会出现在此。'),
+                        'record' => $dkimHost . ' TXT "' . $dkimFull . '"',
+                    ],
+                    [
+                        'code' => 'dmarc',
+                        'label' => 'TXT DMARC',
+                        'text' => '_dmarc.' . $domainName . ' → v=DMARC1; p=quarantine; rua=mailto:postmaster@' . $domainName,
+                        'guide' => (string)__('一键同步默认写入 p=quarantine；确认对齐后可再升级 reject。'),
+                        'record' => '_dmarc.' . $domainName . ' TXT "v=DMARC1; p=quarantine; rua=mailto:postmaster@' . $domainName . '; adkim=s; aspf=s"',
+                    ],
+                    [
+                        'code' => 'smtp_cname',
+                        'label' => (string)__('可选'),
+                        'text' => 'smtp.' . $domainName . ' CNAME ' . $host . ' · DNS-only',
+                        'guide' => (string)__('可选友好别名。若配置，同样必须 DNS-only，且证书需覆盖该主机名。'),
+                        'record' => 'smtp.' . $domainName . ' CNAME ' . $host,
+                    ],
+                ];
+                $requiredOk = is_array($live) ? !empty($live['ok']) : false;
+                $formOriginIp = $originIp;
                 ?>
-                <article class="w-card">
+                <article class="w-card" data-testid="mail-domain-card-<?= $domainId ?>">
                     <header class="w-card__header">
                         <h2 class="w-card__title"><?= $escape($domainName) ?></h2>
                         <div class="mail-enterprise__meta" style="--w-mt:var(--weline-space-2);">
                             <span><?= $escape($host) ?></span>
-                            <span class="w-badge" data-tone="neutral"><?= $escape($domain->getData(MailDomain::schema_fields_STATUS)) ?></span>
+                            <?php if ($originIp !== ''): ?>
+                                <span class="w-badge" data-tone="neutral" data-testid="mail-domain-origin-ip-<?= $domainId ?>">
+                                    <?= $escape(__('本机邮局 IP %{1}', [$originIp])) ?>
+                                </span>
+                            <?php endif; ?>
+                            <span class="w-badge" data-tone="<?= $requiredOk ? 'success' : 'neutral' ?>" data-testid="mail-domain-dns-badge-<?= $domainId ?>">
+                                <?= $requiredOk ? __('DNS 已通过') : $escape($domain->getData(MailDomain::schema_fields_STATUS)) ?>
+                            </span>
                         </div>
                     </header>
                     <div class="w-card__body">
-                        <ul class="mail-enterprise__dns">
-                            <li><strong>A / AAAA</strong> · <?= $escape($host) ?> → <?= $escape($originIp ?: __('源站公网 IP')) ?> · <strong>DNS-only</strong></li>
-                            <li><strong>MX</strong> · <?= $escape($domainName) ?> → <?= $escape($host) ?> · priority 10</li>
-                            <li><strong>TXT SPF</strong> · <?= $escape($domainName) ?> → v=spf1 mx -all</li>
-                            <li><strong>TXT DKIM</strong> · <?= $escape(($selector ?: 'default') . '._domainkey.' . $domainName) ?> → <?= $escape($publicKey ? 'v=DKIM1; k=rsa; p=' . $publicKey : __('填写 Stalwart 实际公钥')) ?></li>
-                            <li><strong>TXT DMARC</strong> · <?= $escape('_dmarc.' . $domainName) ?> → v=DMARC1; p=none; rua=mailto:postmaster@<?= $escape($domainName) ?></li>
-                            <li><strong><?= __('可选') ?></strong> · smtp.<?= $escape($domainName) ?> CNAME <?= $escape($host) ?> · DNS-only</li>
-                        </ul>
+                        <div class="mail-enterprise__dns" data-testid="mail-domain-dns-checklist-<?= $domainId ?>">
+                            <?php foreach ($dnsItems as $item):
+                                $probe = $liveByCode[$item['code']] ?? null;
+                                $okAttr = '';
+                                $mark = '·';
+                                $detail = '';
+                                if (is_array($probe)) {
+                                    $ok = !empty($probe['ok']);
+                                    $okAttr = $ok ? '1' : '0';
+                                    $mark = $ok ? '✓' : '✕';
+                                    $detail = (string)($probe['detail'] ?? '');
+                                }
+                                ?>
+                                <details class="mail-enterprise__dns-item" data-ok="<?= $escape($okAttr) ?>" data-dns-code="<?= $escape($item['code']) ?>">
+                                    <summary>
+                                        <span class="mail-enterprise__dns-mark" aria-hidden="true"><?= $escape($mark) ?></span>
+                                        <span class="mail-enterprise__dns-copy">
+                                            <strong><?= $escape($item['label']) ?></strong> · <?= $escape($item['text']) ?>
+                                        </span>
+                                        <span class="mail-enterprise__dns-chevron" aria-hidden="true">▾</span>
+                                    </summary>
+                                    <div class="mail-enterprise__dns-guide">
+                                        <p><?= $escape($item['guide']) ?></p>
+                                        <p><?= $escape(__('期望记录')) ?></p>
+                                        <code><?= $escape($item['record']) ?></code>
+                                        <?php if ($detail !== '' && $detail !== 'fake'): ?>
+                                            <p><?= $escape(__('线上探测：%{1}', $detail)) ?></p>
+                                        <?php elseif ($okAttr === ''): ?>
+                                            <p><?= $escape(__('打开本页时会自动探测公网 DNS；刷新可更新打钩状态。')) ?></p>
+                                        <?php endif; ?>
+                                    </div>
+                                </details>
+                            <?php endforeach; ?>
+                        </div>
                         <p class="w-text" data-tone="muted" data-size="sm">
                             <?= __('TLS 证书必须有效，但不要求购买商业证书：可由 Stalwart/ACME 自动申请 Let’s Encrypt，也可使用自有证书。') ?>
                         </p>
-                        <div class="mail-enterprise__actions">
-                            <a class="w-button" data-variant="outline" data-size="sm"
-                               href="@backend-url{'cdn/backend/oauth/connect'|$cloudflareConnectParams}"><?= __('连接或重新授权 Cloudflare') ?></a>
-                        </div>
-                        <details>
-                            <summary class="w-text" data-size="sm"><?= __('Cloudflare 一键 DNS 配置') ?></summary>
+                        <?php if ($cloudflareTokenReady && $formOriginIp !== ''): ?>
+                            <div class="w-alert" data-tone="success" data-size="sm" style="--w-mb:var(--weline-space-3);" data-testid="mail-cf-token-ready-<?= $domainId ?>">
+                                <p class="w-text" data-size="sm" style="--w-mb:0;">
+                                    <?= __('已检测到 CDN 全局 Cloudflare 凭据。一键同步会本机自动生成 DKIM（无需手填），并写入 A/MX/SPF/DKIM/DMARC 与可选 smtp CNAME（无需再 OAuth）。') ?>
+                                </p>
+                            </div>
+                            <div class="mail-enterprise__actions">
+                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/configure-cloudflare-dns'}">
+                                    <input type="hidden" name="return_view" value="domains">
+                                    <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
+                                    <input type="hidden" name="origin_ip" value="<?= $escape($formOriginIp) ?>">
+                                    <input type="hidden" name="dkim_selector" value="<?= $escape($selector) ?>">
+                                    <input type="hidden" name="dkim_public_key" value="<?= $escape($publicKey) ?>">
+                                    <input type="hidden" name="confirm_public_origin" value="1">
+                                    <input type="hidden" name="apply" value="1">
+                                    <button class="w-button" data-tone="primary" data-size="sm" type="submit" data-testid="mail-cf-one-click-apply-<?= $domainId ?>">
+                                        <?= __('一键同步 DNS 到 Cloudflare') ?>
+                                    </button>
+                                </w:form>
+                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/configure-cloudflare-dns'}">
+                                    <input type="hidden" name="return_view" value="domains">
+                                    <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
+                                    <input type="hidden" name="origin_ip" value="<?= $escape($formOriginIp) ?>">
+                                    <input type="hidden" name="dkim_selector" value="<?= $escape($selector) ?>">
+                                    <input type="hidden" name="dkim_public_key" value="<?= $escape($publicKey) ?>">
+                                    <input type="hidden" name="confirm_public_origin" value="1">
+                                    <input type="hidden" name="apply" value="0">
+                                    <button class="w-button" data-variant="outline" data-size="sm" type="submit"><?= __('仅预览') ?></button>
+                                </w:form>
+                            </div>
+                        <?php elseif ($cloudflareTokenReady): ?>
+                            <p class="w-text" data-tone="warning" data-size="sm"><?= __('已有 Cloudflare 令牌，但本机邮局 IP 尚未检测到，请先确认源站公网 IP。') ?></p>
+                        <?php else: ?>
+                            <p class="w-text" data-tone="muted" data-size="sm"><?= __('尚未检测到 CDN 全局 Cloudflare 令牌。可先到 CDN → 账户配置 API Token，或使用下方 OAuth。') ?></p>
+                            <div class="mail-enterprise__actions">
+                                <w:form method="post" action="@backend-url{'cdn/backend/oauth/connect'}">
+                                    <input type="hidden" name="adapter" value="cloudflare">
+                                    <input type="hidden" name="return_route" value="weline_mail/backend">
+                                    <button class="w-button" type="submit" data-tone="primary" data-variant="outline" data-size="sm"><?= __('连接或重新授权 Cloudflare') ?></button>
+                                </w:form>
+                            </div>
+                        <?php endif; ?>
+                        <details<?= $cloudflareTokenReady ? '' : ' open' ?>>
+                            <summary class="w-text" data-size="sm"><?= __('高级：手动 DNS / 补 DKIM / OAuth') ?></summary>
                             <w:form method="post" action="@backend-url{'weline_mail/backend/index/configure-cloudflare-dns'}">
                                 <input type="hidden" name="return_view" value="domains">
                                 <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
                                 <label class="w-field">
                                     <span class="w-field__label"><?= __('源站公网 IP') ?></span>
-                                    <input class="w-input" type="text" name="origin_ip" value="<?= $escape($originIp) ?>">
+                                    <input class="w-input" type="text" name="origin_ip" value="<?= $escape($formOriginIp) ?>" placeholder="<?= $escape(__('本机公网 IPv4')) ?>">
                                 </label>
                                 <label class="w-field">
                                     <span class="w-field__label"><?= __('DKIM 选择器') ?></span>
                                     <input class="w-input" type="text" name="dkim_selector" value="<?= $escape($selector) ?>">
                                 </label>
-                                <label class="w-field">
-                                    <span class="w-field__label"><?= __('DKIM 公钥（只填公钥正文）') ?></span>
-                                    <textarea class="w-textarea" name="dkim_public_key" rows="4"><?= $escape($publicKey) ?></textarea>
-                                </label>
+                                <div class="w-alert" data-tone="neutral" data-size="sm" data-testid="mail-dkim-auto-note-<?= $domainId ?>">
+                                    <p class="w-text" data-size="sm" style="--w-mb:0;">
+                                        <?php if ($publicKey !== ''): ?>
+                                            <?= __('DKIM 公钥已就绪（本机自动生成或已保存）。一键/应用 DNS 时会一并推到 Cloudflare，无需手填。') ?>
+                                        <?php else: ?>
+                                            <?= __('DKIM 公钥由本机自动生成，不必手填。点「一键同步」或「应用 DNS」时会生成并推送。') ?>
+                                        <?php endif; ?>
+                                    </p>
+                                </div>
+                                <input type="hidden" name="dkim_public_key" value="">
                                 <label class="w-field">
                                     <span class="w-field__label">
-                                        <input type="checkbox" name="confirm_public_origin" value="1">
+                                        <input type="checkbox" name="confirm_public_origin" value="1"<?= $formOriginIp !== '' ? ' checked' : '' ?>>
                                         <?= __('我确认 mail 主机必须 DNS-only，源站公网 IP 将可见') ?>
                                     </span>
                                 </label>
@@ -692,15 +957,29 @@ $navItems = [
                                     <button class="w-button" data-tone="primary" data-size="sm" type="submit" name="apply" value="1"><?= __('应用 DNS') ?></button>
                                 </div>
                             </w:form>
+                            <?php if ($cloudflareTokenReady): ?>
+                                <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-3);">
+                                    <w:form method="post" action="@backend-url{'cdn/backend/oauth/connect'}">
+                                        <input type="hidden" name="adapter" value="cloudflare">
+                                        <input type="hidden" name="return_route" value="weline_mail/backend">
+                                        <button class="w-button" type="submit" data-variant="outline" data-size="sm"><?= __('改用 OAuth 重新授权（可选）') ?></button>
+                                    </w:form>
+                                </div>
+                            <?php endif; ?>
                         </details>
-                        <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-domain-status'}">
-                            <input type="hidden" name="return_view" value="domains">
-                            <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
-                            <input type="hidden" name="status" value="<?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? 'suspended' : 'active' ?>">
-                            <button class="w-button" data-variant="outline" data-size="sm" type="submit">
-                                <?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? __('暂停域名') : __('启用域名') ?>
-                            </button>
-                        </w:form>
+                        <div class="mail-enterprise__domain-lifecycle">
+                            <p class="w-text" data-tone="muted" data-size="sm">
+                                <?= __('启用域名时会自动开通 contact@ 联系邮箱并生成一次性 SMTP 密码（仅成功提示中显示一次）。') ?>
+                            </p>
+                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-domain-status'}">
+                                <input type="hidden" name="return_view" value="domains">
+                                <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
+                                <input type="hidden" name="status" value="<?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? 'suspended' : 'active' ?>">
+                                <button class="w-button" data-variant="outline" data-size="sm" type="submit">
+                                    <?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? __('暂停域名') : __('启用域名') ?>
+                                </button>
+                            </w:form>
+                        </div>
                     </div>
                 </article>
             <?php endforeach; ?>

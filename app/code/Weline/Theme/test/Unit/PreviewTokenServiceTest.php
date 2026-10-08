@@ -23,7 +23,11 @@ final class PreviewTokenServiceTest extends TestCase
         $service = $this->serviceWithCaches($cache, $fallback);
         foreach (['account/login', 'checkout/success', 'module/nested-page', 'cms_page'] as $layout) {
             $token = $service->generateToken(1, $layout);
-            self::assertSame($layout, $service->validateToken($token)['page_type']);
+            $validated = $service->validateToken($token);
+            self::assertSame($layout, $validated['page_type']);
+            self::assertIsArray($validated['context']['editor_context'] ?? null, 'mint must embed typed editor_context');
+            self::assertSame($layout, $validated['context']['editor_context']['layout_type'] ?? null);
+            self::assertSame(1, (int)($validated['context']['editor_context']['theme_id'] ?? 0));
         }
     }
 

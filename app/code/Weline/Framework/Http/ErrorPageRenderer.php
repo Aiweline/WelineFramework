@@ -45,7 +45,9 @@ final class ErrorPageRenderer
             return self::renderJson($statusCode, $statusText, $message, $context);
         }
 
-        if ($statusCode === 404) {
+        // skip_static: static 404 generators must never re-load published snapshots
+        // (would bake default-site HTML into every website folder on TypeError fallback).
+        if ($statusCode === 404 && empty($context['skip_static'])) {
             $staticHtml = self::loadStorefrontNotFoundStaticHtml($context);
             if ($staticHtml !== null) {
                 return $staticHtml;

@@ -32,13 +32,12 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
         }
 
         $credentials = $this->oauth->credentialsForAccount($account);
-        $token = trim((string)($credentials['api_token'] ?? ''));
-        if ($token === '') {
+        if (!\Weline\Cdn\Adapter\Cloudflare::hasUsableCredentials($credentials)) {
             throw new \DomainException((string)__('Cloudflare 账户未配置可用令牌。'));
         }
 
-        $zoneId = $this->resolveZoneId($token, $domain);
-        $existing = $this->listRecords($token, $zoneId);
+        $zoneId = $this->resolveZoneId($credentials, $domain);
+        $existing = $this->listRecords($credentials, $zoneId);
         $internalPlan = $this->planner->buildPlan($domain, $existing, $desiredRecords, $dnsOnlyHosts);
         $publicPlan = $this->publicPlan($internalPlan);
 
@@ -72,12 +71,12 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
                 $currentOperation = $operation;
                 $completed[] = [
                     'operation' => $operation,
-                    'result' => $this->execute($token, $zoneId, $operation),
+                    'result' => $this->execute($credentials, $zoneId, $operation),
                 ];
                 $currentOperation = null;
             }
 
-            $verifiedRecords = $this->listRecords($token, $zoneId);
+            $verifiedRecords = $this->listRecords($credentials, $zoneId);
             $verification = $this->planner->buildPlan(
                 $domain,
                 $verifiedRecords,
@@ -88,7 +87,7 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
                 throw new \RuntimeException((string)__('Cloudflare DNS 写入后校验未收敛。'));
             }
         } catch (\Throwable) {
-            $residual = $this->rollback($token, $zoneId, $completed);
+            $residual = $this->rollback($credentials, $zoneId, $completed);
             if (is_array($currentOperation)) {
                 $record = (array)($currentOperation['record'] ?? $currentOperation['before'] ?? []);
                 array_unshift($residual, [
@@ -119,10 +118,13 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
         ]);
     }
 
-    private function resolveZoneId(string $token, string $domain): string
+    /**
+     * @param array<string, mixed> $credentials
+     */
+    private function resolveZoneId(array $credentials, string $domain): string
     {
         $domain = strtolower(rtrim(trim($domain), '.'));
-        $response = $this->http->api($token, 'GET', '/zones', [
+        $response = $this->http->apiWithCredentials($credentials, 'GET', '/zones', [
             'name' => $domain,
             'status' => 'active',
             'per_page' => 50,
@@ -144,15 +146,16 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
     }
 
     /**
+     * @param array<string, mixed> $credentials
      * @return array<int, array<string, mixed>>
      */
-    private function listRecords(string $token, string $zoneId): array
+    private function listRecords(array $credentials, string $zoneId): array
     {
         $records = [];
         $page = 1;
         do {
-            $response = $this->http->api(
-                $token,
+            $response = $this->http->apiWithCredentials(
+                $credentials,
                 'GET',
                 '/zones/' . rawurlencode($zoneId) . '/dns_records',
                 ['page' => $page, 'per_page' => 5000],
@@ -177,25 +180,26 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
     }
 
     /**
+     * @param array<string, mixed> $credentials
      * @param array<string, mixed> $operation
      * @return array<string, mixed>
      */
-    private function execute(string $token, string $zoneId, array $operation): array
+    private function execute(array $credentials, string $zoneId, array $operation): array
     {
         $base = '/zones/' . rawurlencode($zoneId) . '/dns_records';
         $record = $this->apiPayload((array)($operation['record'] ?? []));
 
         return match ((string)$operation['action']) {
-            'create' => $this->http->api($token, 'POST', $base, [], $record),
-            'update' => $this->http->api(
-                $token,
+            'create' => $this->http->apiWithCredentials($credentials, 'POST', $base, [], $record),
+            'update' => $this->http->apiWithCredentials(
+                $credentials,
                 'PATCH',
                 $base . '/' . rawurlencode((string)$operation['record_id']),
                 [],
                 $record,
             ),
-            'delete' => $this->http->api(
-                $token,
+            'delete' => $this->http->apiWithCredentials(
+                $credentials,
                 'DELETE',
                 $base . '/' . rawurlencode((string)$operation['record_id']),
             ),
@@ -204,10 +208,11 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
     }
 
     /**
+     * @param array<string, mixed> $credentials
      * @param array<int, array{operation: array<string, mixed>, result: array<string, mixed>}> $completed
      * @return array<int, array<string, string>>
      */
-    private function rollback(string $token, string $zoneId, array $completed): array
+    private function rollback(array $credentials, string $zoneId, array $completed): array
     {
         $residual = [];
         $base = '/zones/' . rawurlencode($zoneId) . '/dns_records';
@@ -220,18 +225,18 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
                     if ($createdId === '') {
                         throw new \RuntimeException('Missing created record id.');
                     }
-                    $this->http->api($token, 'DELETE', $base . '/' . rawurlencode($createdId));
+                    $this->http->apiWithCredentials($credentials, 'DELETE', $base . '/' . rawurlencode($createdId));
                 } elseif ($operation['action'] === 'update') {
-                    $this->http->api(
-                        $token,
+                    $this->http->apiWithCredentials(
+                        $credentials,
                         'PATCH',
                         $base . '/' . rawurlencode((string)$operation['record_id']),
                         [],
                         $this->apiPayload((array)$operation['before']),
                     );
                 } elseif ($operation['action'] === 'delete') {
-                    $this->http->api(
-                        $token,
+                    $this->http->apiWithCredentials(
+                        $credentials,
                         'POST',
                         $base,
                         [],

@@ -112,9 +112,9 @@ generated/theme-layout-entities/
       theme/partials/{type}/{option}.phtml
 ```
 
-原模板仍是源。主题编辑（包括参数和语言差异）或有效 JSON 注入触发生成派生 PHTML。没有相应意图/注入时使用原模板；已有固化模板经正常 Template/Taglib/语言 com_* 执行。固化目录不保留结构/配置/绑定/资源 JSON、结构 JS、永久 R 目录或按语言烘焙的公开 HTML。
+原模板仍是源。主题编辑（包括参数和语言差异）或有效 JSON 注入触发生成派生 PHTML（**布局/部件关系固化**）。没有相应意图/注入时使用原模板；已有固化模板再经 **Taglib 编译** 得到 `com_*` 后执行。固化目录不保留结构/配置/绑定/资源 JSON、结构 JS、永久 R 目录或按语言烘焙的公开 HTML。两步分工见 [布局固化与默认注入.md](../../布局固化与默认注入.md) §0.0。
 
-PHTML 显式调用现有组件渲染器，参数在生成时按指定 owner/V/R 合并，运行期不被当前配置补写。公共 Partial 与页面同一请求固定读取，业务数据正常实时执行。模板源与编译摘要必须来自同一次读取，编译文件完整替换。
+PHTML 显式调用现有组件渲染器，参数在生成时按指定 owner/V/R 合并，运行期不被当前配置补写。公共 Partial 与页面同一请求固定读取，业务数据正常实时执行。模板源与 Taglib 编译摘要必须来自同一次读取，`com_*` 完整替换。
 
 现有版本资源快照记录 V/R 的 intent_revision_id/release_id 和首版可重放基线；内容修订 R 不等于资源修订主键。旧 Token 缓存缺失时从其真实历史引用重编，不得改读最新草稿。D 转正式重新生成 vN 文件，不通过改名 draft 目录发布。
 
@@ -199,7 +199,7 @@ DB 与缓存不是一个跨系统原子事务：提交前已开始的请求可�
 
 默认注入变更按变更前后涉及布局的并集处理相关主题、正式版本和草稿。每个 owner 下页面与公共 Partial 候选全部生成后统一替换；在途请求使用此前已固定的完整源字节。全主题批次可以逐 owner 执行，不承诺全站同时替换，但必须如实报告每个目标结果。无剩余编辑意图、参数覆盖和有效注入时删除派生 PHTML；显式卸载全部节点仍是有效意图。
 
-`setup:upgrade` / `deploy:upgrade` / `core:update` 成功收尾走 **`ThemeLayoutEntityUpgradeSolidifyService`**：迁旧 var 树（若有）→ **全主题预固化**到 `generated/theme-layout-entities/` → 清遗留 var → 失效 Theme/FPC。生成与保存共用 owner 互斥，候选全部成功后再替换；**不得**以「只 purge + 首访重建」代替 R5。DB 版本、草稿、release、决定和源码不在删除范围。普通请求缺派生文件时选择原模板；授权历史预览仅凭精确 V/R 的既有引用重编内存候选，缺历史依据明确报告。
+`setup:upgrade` / `deploy:upgrade` / `core:update` 成功收尾走 **`ThemeLayoutEntityUpgradeSolidifyService`**：迁旧 var 树（若有）→ **仅站点已绑定主题**（+ 后台应用 + 注册 Default）的**当前生效正式版**预固化到 `generated/theme-layout-entities/`（publish 门禁含 Taglib→`com_*`）→ 清遗留 var → 失效 Theme/FPC。未绑定站的安装主题不进升级预固。生成与保存共用 owner 互斥，候选全部成功后再替换；**不得**以「只 purge + 首访重建」代替 R5。DB 版本、草稿、release、决定和源码不在删除范围。普通请求缺派生文件时选择原模板；授权历史预览仅凭精确 V/R 的既有引用重编内存候选，缺历史依据明确报告。
 
 ### 10. 缓存与清理
 

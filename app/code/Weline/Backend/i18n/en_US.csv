@@ -301,6 +301,8 @@ Token已撤销,"Token has been revoked"
 Token无效,"Token is invalid"
 获取token信息成功,"Successfully got token information"
 获取token信息失败：%{1},"Failed to get token information: %{1}"
+查询成功,查询成功
+查询失败：%{1},查询失败：%{1}
 消息主题不能为空,"Message subject cannot be empty"
 消息标题不能为空,"Message title cannot be empty"
 消息内容不能为空,"Message content cannot be empty"

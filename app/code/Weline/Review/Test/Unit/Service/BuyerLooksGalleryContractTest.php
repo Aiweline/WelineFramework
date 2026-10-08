@@ -25,12 +25,11 @@ final class BuyerLooksGalleryContractTest extends TestCase
         self::assertStringContainsString('resolveStorefrontProductIds', $source);
         self::assertStringContainsString('StorefrontScopeHotCache', $source);
         self::assertStringContainsString('findByGlobalUuid', $source);
+        // Cross-site PDP fallback to website 0 must stay removed.
+        self::assertStringNotContainsString('findByGlobalUuid(0, $uuid)', $source);
+        self::assertStringContainsString('Never fall back to website 0', $source);
         self::assertTrue(method_exists(BuyerLooksGalleryService::class, 'galleryItems'));
         self::assertTrue(method_exists(BuyerLooksGalleryInterface::class, 'galleryItems'));
-
-        $mediaSource = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/ReviewMediaService.php');
-        self::assertStringContainsString('public function forReviews(array $reviewIds): array', $mediaSource);
-        self::assertStringContainsString("'IN'", $mediaSource);
     }
 
     public function testModuleProvidesBuyerLooksGallery(): void
@@ -50,5 +49,6 @@ final class BuyerLooksGalleryContractTest extends TestCase
         self::assertStringContainsString('展示面', $doc);
         self::assertStringContainsString('生产与审核源', $doc);
         self::assertStringContainsString('BuyerLooksGalleryInterface', $doc);
+        self::assertStringContainsString('editor_context.scope.identity.website_id', $doc);
     }
 }

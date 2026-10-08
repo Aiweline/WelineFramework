@@ -100,7 +100,9 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('data-weline-load="storeMusic"', $widget);
         self::assertStringContainsString('data-testid="store-music-widget"', $widget);
         self::assertStringContainsString('data-store-music-intro', $widget);
-        self::assertStringContainsString("\$t = static fn (string \$word): string => \$esc((string)__(\$word))", $widget);
+        self::assertStringContainsString('use Weline\\Theme\\Helper\\WidgetI18n;', $widget);
+        self::assertStringContainsString("\$t = static fn (string \$word): string => \$esc(WidgetI18n::label(\$word))", $widget);
+        self::assertStringNotContainsString("\$esc((string)__(\$word))", $widget);
         self::assertStringNotContainsString('CustomerService', $widget);
         self::assertStringContainsString('storefront-float-start', $widget);
         self::assertStringContainsString("'slot' => 'storefront-float-start'", $widgetRegistry);

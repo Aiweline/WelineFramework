@@ -115,6 +115,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getStaticErrorPublishTargets' => $this->getStaticErrorPublishTargets($params),
             'getWebsiteCurrencyCodes' => $this->getWebsiteCurrencyCodes($params),
             'getDomainPoolList'      => $this->getDomainPoolList($params),
+            'ensurePublicDnsHostnamesInPool' => $this->ensurePublicDnsHostnamesInPool($params),
             'getDnsRecords'          => $this->getDnsRecords($params),
             'addAcmeTxtRecord'         => $this->addAcmeTxtRecord($params),
             'getAcmeDnsProviderCode'   => $this->getAcmeDnsProviderCode($params),
@@ -472,6 +473,25 @@ class WebsitesQueryProvider implements QueryProviderInterface
                         ['name' => 'root_domain', 'type' => 'string', 'required' => false],
                         ['name' => 'site_ready', 'type' => 'bool', 'required' => false, 'description' => __('仅返回 site_ready=1')],
                         ['name' => 'exclude_site_created', 'type' => 'bool', 'required' => false, 'description' => __('排除已被站点占用的池记录')],
+                    ],
+                ],
+                [
+                    'name'        => 'ensurePublicDnsHostnamesInPool',
+                    'description' => __('公网 DNS 已通主机名：入域名池、绑定 DNS/CDN 服务商，并立即申请 DNS-01 证书（不依赖 cron）'),
+                    'backend'     => true,
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Websites::domain_service',
+                    ],
+                    'mode'        => 'write',
+                    'params'      => [
+                        ['name' => 'root_domain', 'type' => 'string', 'required' => false],
+                        ['name' => 'hostnames', 'type' => 'array|string', 'required' => true],
+                        ['name' => 'origin_ip', 'type' => 'string', 'required' => false],
+                        ['name' => 'dns_provider', 'type' => 'string', 'required' => false],
+                        ['name' => 'cdn_account_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'request_certificate', 'type' => 'bool', 'required' => false],
+                        ['name' => 'source', 'type' => 'string', 'required' => false],
                     ],
                 ],
                 [
@@ -1740,6 +1760,28 @@ class WebsitesQueryProvider implements QueryProviderInterface
             ];
         }
         return $list;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function ensurePublicDnsHostnamesInPool(array $params): array
+    {
+        /** @var \Weline\Websites\Service\PublicDnsHostnamePoolEnsureService $service */
+        $service = ObjectManager::getInstance(
+            \Weline\Websites\Service\PublicDnsHostnamePoolEnsureService::class
+        );
+
+        return $service->ensure([
+            'root_domain' => (string)($params['root_domain'] ?? ''),
+            'hostnames' => $params['hostnames'] ?? [],
+            'origin_ip' => (string)($params['origin_ip'] ?? ''),
+            'dns_provider' => (string)($params['dns_provider'] ?? 'cloudflare'),
+            'cdn_account_id' => (int)($params['cdn_account_id'] ?? 0),
+            'request_certificate' => self::toBool($params['request_certificate'] ?? true),
+            'source' => (string)($params['source'] ?? 'public_dns'),
+        ]);
     }
 
     private static function toBool(mixed $value): bool

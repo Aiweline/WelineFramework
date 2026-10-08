@@ -11,7 +11,7 @@
 5. [`../view/theme/README.md`](../view/theme/README.md)
 6. 按任务继续读：
    - 布局：[`layout-discovery-guide.md`](./layout-discovery-guide.md)
-   - **布局固化与应用部件默认注入（权威 · 纯 PHTML）**：[`布局固化与默认注入.md`](./布局固化与默认注入.md) — 原模板、默认注入和编辑意图生成派生 PHTML；结构、参数、语言配置变更均重固；有派生文件优先选它，否则用原模板，统一走正常 Template/Taglib/语言 `com_*`；固化目录不保留侧车；仅人工卸载可省略必装。
+   - **布局固化与应用部件默认注入（权威 · 纯 PHTML）**：[`布局固化与默认注入.md`](./布局固化与默认注入.md) — **两步勿混**：①关系固化（槽位/部件→派生 PHTML）；②Taglib 编译（源/派生→按语种 `com_*`）。结构、参数、语言配置变更均重固；有派生文件优先选它，否则用原模板；固化目录不保留侧车；仅人工卸载可省略必装。
    - **Theme 机制边界（严重）**：[`开发/spec/theme-mechanism-not-foreign-content.md`](./开发/spec/theme-mechanism-not-foreign-content.md) — Theme 只负责机制；禁止外模块主内容空挂 Theme required 注入。
    - **主题固化物版本模型与历史实施记录**：[`开发/spec/layout-entity-per-version-isolation.md`](./开发/spec/layout-entity-per-version-isolation.md) — 版本独占、持久修订、单页发布与 Scope 继承；当前产物及读取合同以纯 PHTML 权威文为准，历史测试不代表本次改造已验收。
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
@@ -109,10 +109,12 @@ Theme 采用“基础 palette → Weline 语义 Token → Bootstrap adapter”�
 
 主题编辑器顶层页面固定使用 `shell=theme-editor`，进入页面时必须把继承自旧 Session 的 `preview_token` 清空。
 
+**Host 口径**：画布固定项目壳 **`/~site/{网站 code}`**（保证随时可视化编辑）。「前端预览」弹窗默认也是本机壳，才能正确预览**待发布版本**；正式/外部域名可选，但线上可能看不到本机草稿。细则见 [preview-and-runtime-modes.md §0](./preview-and-runtime-modes.md)。
+
 两条预览入口不得混用：
 
-- `#btnPreview`（后台预览 / 抛弃外框）与编辑器 iframe：打开**真实店面 path** + `editor_mode=1` / `shell=theme-editor` / typed `editor_context`（`buildCanvasStorefrontPreviewUrl`）。**禁止**用 `theme-preview/content` 或 `layout-preview` 代替店面地址；**禁止**调用 `start-preview`，**禁止**挂载或持久化 `weline_preview_token` / 预览 Cookie / `shell=preview`，因此也不得出现真实店面「预览模式」退出浮窗。
-- `#btnFrontendPreview`（前端预览）：才允许 `postStartPreview` 生成 Token、种 HttpOnly Cookie、`persist shell=preview`，并打开真实店面 URL；此时才注入可拖动的退出/发布浮窗。
+- `#btnPreview`（后台预览 / 抛弃外框）与编辑器 iframe：打开**真实店面 path**（项目壳 `/~site/{code}`）+ `editor_mode=1` / `shell=theme-editor` / typed `editor_context`（`buildCanvasStorefrontPreviewUrl`）。**禁止**用 `theme-preview/content` 或 `layout-preview` 代替店面地址；**禁止**调用 `start-preview`，**禁止**挂载或持久化 `weline_preview_token` / 预览 Cookie / `shell=preview`，因此也不得出现真实店面「预览模式」退出浮窗。
+- `#btnFrontendPreview`（前端预览）：才允许 `postStartPreview` 生成 Token、`persist shell=preview`，并打开真实店面 URL（默认本机壳；外部域名可选）；此时才注入可拖动的退出/发布浮窗。
 
 退出真实预览必须经过前台 preview gateway 清理服务端上下文、Token 能力与 HttpOnly Cookie；返回后台编辑器的重定向必须是经同源校验后的绝对 HTTPS URL，避免被前台 locale 路由加上语言前缀。
 

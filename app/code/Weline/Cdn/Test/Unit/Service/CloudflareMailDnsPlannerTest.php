@@ -73,6 +73,22 @@ final class CloudflareMailDnsPlannerTest extends TestCase
         self::assertFalse((bool)$mailAddresses[0]['proxied']);
     }
 
+    public function testMissingDkimIsAllowedUntilPublicKeyExists(): void
+    {
+        $planner = new CloudflareMailDnsPlanner();
+        $desired = array_values(array_filter(
+            $this->desired(),
+            static fn(array $record): bool =>
+                !($record['type'] === 'TXT' && str_contains((string)$record['name'], '._domainkey.')),
+        ));
+        $plan = $planner->buildPlan('example.com', [], $desired, ['mail.example.com']);
+        self::assertGreaterThan(0, $plan['operation_count']);
+        foreach ($plan['operations'] as $operation) {
+            $name = (string)(($operation['record']['name'] ?? '') ?: ($operation['before']['name'] ?? ''));
+            self::assertStringNotContainsString('._domainkey.', $name);
+        }
+    }
+
     public function testLockedEmailRoutingRecordStopsBeforeWriting(): void
     {
         $planner = new CloudflareMailDnsPlanner();

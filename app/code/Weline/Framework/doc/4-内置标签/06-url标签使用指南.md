@@ -105,7 +105,7 @@ $url->getBackendUrl('order/backend/order/view', ['id' => $id]);
 </script>
 ```
 
-> 写在 HTML 属性或 `<script>` 输出上下文中的 `@url{'...'}`，会在模板编译期展开为 `<?= $this->getUrl('...') ?>`，运行时写入页面。不要把 `@url` 塞进 `<?php $x = "..."; ?>` 字符串赋值。
+> **编译期烘焙（2026-10-08）**：path（及可选 params）均为编译期字面量时，`url` / `frontend-url` / `api`（含 `@` 内联与 `<url path="…"/>`）在 Taglib→`com_*` 编译期直接调用 `Template::getUrl` / `getFrontendUrl` / `getApi`，把最终 URL 字符串烤进产物（HTML 直出；PHP 语境 `var_export`）。动态 path（如 `@url{$route}`）或动态 params 仍展开为 `<?= $this->getUrl(...) ?>` 运行时桩。正式发布 Formal 编译前会按 identity scope 钉住 Website，避免 mount 烤成默认站。不要把 `@url` 塞进未烘焙的 `<?php $x = "..."; ?>` 字符串赋值（若落在 PHP 语境且已烘焙，会 `var_export`）。
 
 ## 选用建议
 

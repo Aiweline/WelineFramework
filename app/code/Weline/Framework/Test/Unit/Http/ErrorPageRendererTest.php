@@ -48,6 +48,31 @@ final class ErrorPageRendererTest extends TestCase
         self::assertStringNotContainsString('w-error', $html);
     }
 
+    public function testSkipStaticBypassesPublishedStorefront404Snapshot(): void
+    {
+        if (!\defined('BP')) {
+            self::markTestSkipped('BP not defined');
+        }
+
+        $file = StorefrontNotFoundStaticPage::staticFilePath('zh_Hans_CN');
+        $dir = \dirname($file);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+        $marker = '<main data-testid="must-not-reuse-static-404">';
+        @\file_put_contents($file, '<!DOCTYPE html><html><body>' . $marker . '</body></html>');
+
+        $html = ErrorPageRenderer::render(404, '未知的路由！', [
+            'prefer_json' => false,
+            'is_dev' => false,
+            'home_href' => '/',
+            'skip_static' => true,
+        ]);
+
+        self::assertStringNotContainsString($marker, $html);
+        self::assertStringContainsString('404', $html);
+    }
+
     public function testRenderHtmlPrefersStorefrontStatic404ForBackendArea(): void
     {
         if (!\defined('BP')) {

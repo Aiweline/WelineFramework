@@ -65,11 +65,22 @@ final class CloudflareMailDnsPlanner
                     && $record['name'] === '_dmarc.' . $domain
                     && str_starts_with(strtolower($record['content']), 'v=dmarc1'),
             ],
+            [
+                'label' => 'SMTP_CNAME',
+                'optional' => true,
+                'matches' => static fn(array $record): bool =>
+                    $record['type'] === 'CNAME'
+                    && $record['name'] === 'smtp.' . $domain,
+            ],
         ];
 
         foreach ($specifications as $specification) {
             $matches = $specification['matches'];
             $wanted = array_values(array_filter($desired, $matches));
+            // DKIM 公钥未生成前可先同步 A/MX/SPF/DMARC；有公钥后再写入 DKIM
+            if ($wanted === [] && ($specification['label'] === 'DKIM' || !empty($specification['optional']))) {
+                continue;
+            }
             if (count($wanted) !== 1) {
                 throw new \DomainException(
                     (string)__('邮箱 DNS 计划必须包含且仅包含一条 %{1} 记录。', $specification['label'])
@@ -324,11 +335,14 @@ final class CloudflareMailDnsPlanner
         if ($type === 'MX') {
             $content = $this->name($content);
         }
-        if ($desired && !in_array($type, ['A', 'AAAA', 'MX', 'TXT'], true)) {
+        if ($desired && !in_array($type, ['A', 'AAAA', 'MX', 'TXT', 'CNAME'], true)) {
             throw new \DomainException((string)__('邮箱 DNS 计划包含不支持的记录类型：%{1}', $type));
         }
         if ($type === '' || $name === '' || $content === '') {
             throw new \DomainException((string)__('邮箱 DNS 记录缺少 type、name 或 content。'));
+        }
+        if ($type === 'CNAME') {
+            $content = $this->name($content);
         }
 
         $normalized = [
@@ -342,7 +356,7 @@ final class CloudflareMailDnsPlanner
         if ($type === 'MX') {
             $normalized['priority'] = (int)($record['priority'] ?? 10);
         }
-        if (in_array($type, ['A', 'AAAA'], true)) {
+        if (in_array($type, ['A', 'AAAA', 'CNAME'], true)) {
             $normalized['proxied'] = (bool)($record['proxied'] ?? false);
         }
         if (array_key_exists('comment', $record)) {
@@ -395,7 +409,7 @@ final class CloudflareMailDnsPlanner
             return false;
         }
         if (
-            in_array($wanted['type'], ['A', 'AAAA'], true)
+            in_array($wanted['type'], ['A', 'AAAA', 'CNAME'], true)
             && ($current['proxied'] ?? false) !== ($wanted['proxied'] ?? false)
         ) {
             return false;

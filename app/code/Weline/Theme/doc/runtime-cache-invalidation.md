@@ -54,7 +54,7 @@
 
 ## SlotRenderer 与已发布布局读模型
 
-- 正常命中派生 PHTML 时，关系和参数来自模板内显式调用，走正常 Template / Taglib / 语言编译。以下结构读模型说明仅适用于尚需原模板或编辑器数据的入口。
+- 正常命中派生 PHTML 时，关系和参数来自模板内显式调用；随后走 **Taglib 编译** 得到 `com_*` 再执行。以下结构读模型说明仅适用于尚需原模板或编辑器数据的入口。
 - 前台 `SlotRendererService` **不**缓存 layout.data / widget.output（无请求 L1、无进程 L1、无 theme_runtime get/set）。
 - 插槽渲染 = 向 `ThemeRuntimeLayoutResolver` 取结构 → 普通部件模板/Component 渲染。
 - 已发布非 target 布局结构 HotCache（`publishedLayoutStructurePolicy`）挂在 **`ThemeRuntimeLayoutResolver`**（读模型），不挂在 SlotRenderer。

@@ -21,7 +21,6 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Adapter;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait;
 use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
@@ -1338,90 +1337,207 @@ class CloudflareRegistrar implements DomainRegistrarInterface
     }
 
     /**
-     * 验证凭据
+     * 验证凭据：与 CDN 同一套 Token / Global API Key 双模式。
+     *
+     * @param array<string, mixed> $credentials
      */
     private function validateCredentials(array $credentials): void
     {
-        $apiToken = $credentials['api_token'] ?? $credentials['api_secret'] ?? '';
-        if ($apiToken === '') {
-            throw new \InvalidArgumentException(__('Cloudflare API Token 不能为空'));
+        $credentials = $this->normalizeCloudflareCredentials($credentials);
+        if (\class_exists(\Weline\Cdn\Adapter\Cloudflare::class)) {
+            if (!\Weline\Cdn\Adapter\Cloudflare::hasUsableCredentials($credentials)) {
+                throw new \InvalidArgumentException(
+                    (string)__('Cloudflare 凭证不完整：请提供 API Token，或 Global API Key（邮箱+密钥）')
+                );
+            }
+
+            return;
+        }
+
+        if (!$this->hasUsableFallbackCredentials($credentials)) {
+            throw new \InvalidArgumentException(
+                (string)__('Cloudflare 凭证不完整：请提供 API Token，或 Global API Key（邮箱+密钥）')
+            );
         }
     }
 
     /**
-     * 发起 API 请求
+     * @param array<string, mixed> $credentials
+     * @return array<string, mixed>
+     */
+    private function normalizeCloudflareCredentials(array $credentials): array
+    {
+        if (!isset($credentials['api_token']) && isset($credentials['api_secret'])) {
+            $credentials['api_token'] = $credentials['api_secret'];
+        }
+
+        return $credentials;
+    }
+
+    /**
+     * 发起 API 请求：优先走 CDN 统一传输（双鉴权）；无 CDN 模块时才退回 Bearer。
+     *
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $credentials
+     * @return array<string, mixed>
      */
     private function makeRequest(string $endpoint, string $method, array $params, array $credentials): array
     {
-        $apiToken = $credentials['api_token'] ?? $credentials['api_secret'] ?? '';
-        $url = self::API_BASE_URL . $endpoint;
+        $credentials = $this->normalizeCloudflareCredentials($credentials);
+        $endpoint = $endpoint === '' || $endpoint[0] === '/' ? $endpoint : '/' . $endpoint;
+        $method = \strtoupper($method);
 
-        $headers = [
-            'Authorization: Bearer ' . $apiToken,
-            'Content-Type: application/json',
-        ];
+        if (
+            \class_exists(\Weline\Cdn\Service\CloudflareHttpClient::class)
+            && \class_exists(\Weline\Cdn\Adapter\Cloudflare::class)
+        ) {
+            try {
+                /** @var \Weline\Cdn\Service\CloudflareHttpClient $http */
+                $http = ObjectManager::getInstance(\Weline\Cdn\Service\CloudflareHttpClient::class);
+                $query = $method === 'GET' ? $params : [];
+                $body = $method === 'GET' ? null : $params;
 
-        $ch = \curl_init();
+                return $http->apiWithCredentials(
+                    $credentials,
+                    $method,
+                    $endpoint,
+                    $query,
+                    $body,
+                    false,
+                );
+            } catch (\Throwable $e) {
+                w_log_warning('Cloudflare 统一客户端请求失败: ' . $e->getMessage(), [], 'cloudflare_api');
 
-        if ($method === 'GET' && !empty($params)) {
-            $url .= '?' . \http_build_query($params);
+                return [
+                    'success' => false,
+                    'errors' => [['message' => $e->getMessage()]],
+                ];
+            }
         }
 
-        // 开发环境下禁用 SSL 验证（解决本地 CA 证书问题）
-        // 临时强制禁用 SSL 验证以排查问题
-        $deployMode = Env::system('deploy') ?? 'prod';
-        $isDev = \in_array($deployMode, ['dev', 'development', 'local'], true);
-        
-        // 强制禁用 SSL 验证（Windows 开发环境经常缺少 CA 证书）
+        // CDN 模块不可用：本地双模式鉴权回退（与 Adapter::buildAuthHeaders 语义对齐）
+        try {
+            $headers = $this->buildFallbackAuthHeaders($credentials);
+        } catch (\InvalidArgumentException $e) {
+            return [
+                'success' => false,
+                'errors' => [['message' => $e->getMessage()]],
+            ];
+        }
+        $headers[] = 'Accept: application/json';
+
+        $url = self::API_BASE_URL . $endpoint;
+        $ch = \curl_init();
+        if ($method === 'GET' && $params !== []) {
+            $url .= '?' . \http_build_query($params);
+        }
         \curl_setopt_array($ch, [
             CURLOPT_URL => $url,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_TIMEOUT => self::REQUEST_TIMEOUT,
             CURLOPT_CONNECTTIMEOUT => self::CONNECT_TIMEOUT,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_PROXY => '',
+            CURLOPT_CUSTOMREQUEST => $method,
         ]);
-
-        if ($method === 'POST') {
-            \curl_setopt($ch, CURLOPT_POST, true);
+        if (\in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
             \curl_setopt($ch, CURLOPT_POSTFIELDS, \json_encode($params));
-        } elseif ($method === 'PUT') {
-            \curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
-            \curl_setopt($ch, CURLOPT_POSTFIELDS, \json_encode($params));
-        } elseif ($method === 'DELETE') {
-            \curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
         }
-
         $responseBody = \curl_exec($ch);
-        $httpCode = \curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpCode = (int)\curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = \curl_error($ch);
         \curl_close($ch);
-
         if ($curlError !== '') {
-            w_log_error("cURL 错误: {$curlError}, URL: {$url}", [], 'cloudflare_api');
             return [
                 'success' => false,
-                'errors' => [['message' => __('网络请求失败：%{1}', [$curlError])]],
+                'errors' => [['message' => (string)__('网络请求失败：%{1}', [$curlError])]],
             ];
         }
-
-        $response = \json_decode($responseBody, true);
+        $response = \json_decode((string)$responseBody, true);
         if (!\is_array($response)) {
-            w_log_error("JSON 解析失败, HTTP Code: {$httpCode}, Body: " . \substr($responseBody, 0, 500), [], 'cloudflare_api');
             return [
                 'success' => false,
-                'errors' => [['message' => __('API 响应格式错误')]],
+                'errors' => [['message' => (string)__('API 响应格式错误') . " (HTTP {$httpCode})"]],
             ];
-        }
-
-        if (!($response['success'] ?? false)) {
-            $errors = $response['errors'] ?? [];
-            $errorMsg = !empty($errors) ? ($errors[0]['message'] ?? '') : '';
-            w_log_warning("API 错误: {$errorMsg}, Endpoint: {$endpoint}, HTTP Code: {$httpCode}", [], 'cloudflare_api');
         }
 
         return $response;
+    }
+
+    /**
+     * 与 CDN Adapter::resolveAuthMode 同语义（无 CDN 类时本地回退）。
+     *
+     * @param array<string, mixed> $credentials
+     */
+    private function resolveFallbackAuthMode(array $credentials): string
+    {
+        $mode = \strtolower(\trim((string)($credentials['auth_mode'] ?? '')));
+        if ($mode === 'global' || $mode === 'token') {
+            return $mode;
+        }
+        $token = \trim((string)($credentials['api_token'] ?? $credentials['api_secret'] ?? ''));
+        if ($token !== '') {
+            return 'token';
+        }
+        $email = \trim((string)($credentials['email'] ?? $credentials['api_email'] ?? ''));
+        $key = \trim((string)($credentials['api_key'] ?? $credentials['global_api_key'] ?? ''));
+        if ($email !== '' && $key !== '') {
+            return 'global';
+        }
+
+        return 'token';
+    }
+
+    /**
+     * @param array<string, mixed> $credentials
+     */
+    private function hasUsableFallbackCredentials(array $credentials): bool
+    {
+        if ($this->resolveFallbackAuthMode($credentials) === 'global') {
+            $email = \trim((string)($credentials['email'] ?? $credentials['api_email'] ?? ''));
+            $key = \trim((string)($credentials['api_key'] ?? $credentials['global_api_key'] ?? ''));
+
+            return $email !== '' && $key !== '';
+        }
+
+        return \trim((string)($credentials['api_token'] ?? $credentials['api_secret'] ?? '')) !== '';
+    }
+
+    /**
+     * @param array<string, mixed> $credentials
+     * @return list<string>
+     */
+    private function buildFallbackAuthHeaders(array $credentials): array
+    {
+        if ($this->resolveFallbackAuthMode($credentials) === 'global') {
+            $email = \trim((string)($credentials['email'] ?? $credentials['api_email'] ?? ''));
+            $key = \trim((string)($credentials['api_key'] ?? $credentials['global_api_key'] ?? ''));
+            if ($email === '' || $key === '') {
+                throw new \InvalidArgumentException(
+                    (string)__('Cloudflare Global API Key 需同时填写登录邮箱与密钥')
+                );
+            }
+
+            return [
+                'X-Auth-Email: ' . $email,
+                'X-Auth-Key: ' . $key,
+                'Content-Type: application/json',
+            ];
+        }
+
+        $token = \trim((string)($credentials['api_token'] ?? $credentials['api_secret'] ?? ''));
+        if ($token === '') {
+            throw new \InvalidArgumentException(
+                (string)__('Cloudflare 凭证不完整：请提供 API Token，或 Global API Key（邮箱+密钥）')
+            );
+        }
+
+        return [
+            'Authorization: Bearer ' . $token,
+            'Content-Type: application/json',
+        ];
     }
 
     /**

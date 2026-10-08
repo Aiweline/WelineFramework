@@ -11,12 +11,14 @@ use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemePreviewPublishActorBinder;
 use Weline\Theme\Service\Scoped\ThemeAssetEditorContextProducer;
 
 final class ThemeAssetEditorContextProducerTest extends TestCase
 {
     protected function tearDown(): void
     {
+        ThemePreviewPublishActorBinder::clear();
         foreach (['frontend.asset','backend.runtime'] as $key) { RequestContext::remove(ThemeApplicationContext::REQUEST_KEY_PREFIX.$key); }
     }
 
@@ -47,6 +49,25 @@ final class ThemeAssetEditorContextProducerTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('theme_asset_editor_actor_required');
         $this->producer(false)->build(3,'frontend',new ThemeContentScope('websites','default.__website__.default','normal','','en_US'));
+    }
+
+    public function testPreviewPublishBinderActorProducesWhenSessionMissing(): void
+    {
+        self::assertTrue(class_exists(ThemeAssetEditorContextProducer::class), 'Asset editor consumer missing');
+        ThemePreviewPublishActorBinder::install(new BackendUserContext(42, 'preview-publisher', '', '', 2, true, false));
+        $actors = $this->createStub(BackendUserContextProviderInterface::class);
+        $actors->method('current')->willReturn(null);
+        $themes = $this->getMockBuilder(WelineTheme::class)->disableOriginalConstructor()->onlyMethods(['clearData', 'load', 'getId'])->addMethods(['clearQuery'])->getMock();
+        $themes->method('clearData')->willReturnSelf();
+        $themes->method('clearQuery')->willReturnSelf();
+        $themes->method('load')->willReturnSelf();
+        $themes->method('getId')->willReturn(3);
+        $themeContext = $this->getMockBuilder(ThemeContextService::class)->disableOriginalConstructor()->onlyMethods(['themeSupportsArea'])->getMock();
+        $themeContext->method('themeSupportsArea')->willReturn(true);
+        $application = (new ThemeAssetEditorContextProducer($actors, $themes, $themeContext))
+            ->build(3, 'frontend', new ThemeContentScope('websites', 'default.__website__.default', 'normal', '', 'en_US'));
+        self::assertSame(3, $application->themeId);
+        self::assertSame('frontend', $application->area);
     }
 
     public function testVersionFromAnotherOwnerCannotSelectThisAssetDraft(): void

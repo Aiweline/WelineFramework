@@ -633,7 +633,39 @@
         return lang !== '' && !sameLang(lang, resolveDefaultLang(config));
     }
 
+    /** Matches Theme /~preview/{token}/ opaque bearer (path mount). */
+    const LIVE_PREVIEW_TOKEN_PATTERN = /^pv_(?:[A-Za-z0-9_-]{43}|[1-9][0-9]{0,18}_[0-9]{9,12}_[a-f0-9]{16})$/;
+
+    /**
+     * Peel /~preview/{token}/… and inverted /~site/…/~preview/{token}/… stacks.
+     * Live preview: visible path must stay /~preview/{token}/… — never re-stack
+     * data-website-mount (/~site/{code}) in front of the preview mount.
+     */
+    function peelLivePreviewPathMount(pathname) {
+        const parts = String(pathname || '/').split('/').filter(Boolean);
+        if (parts.length === 0) {
+            return { token: '', path: '/' };
+        }
+        const previewIdx = parts.indexOf('~preview');
+        if (previewIdx >= 0
+            && parts[previewIdx + 1]
+            && LIVE_PREVIEW_TOKEN_PATTERN.test(String(parts[previewIdx + 1]))
+        ) {
+            const token = String(parts[previewIdx + 1]);
+            const after = parts.slice(previewIdx + 2);
+            return {
+                token,
+                path: after.length === 0 ? '/' : `/${after.join('/')}`,
+            };
+        }
+        return { token: '', path: String(pathname || '/') || '/' };
+    }
+
     function resolveThemeWebsiteMountPath() {
+        // Under live preview, site identity is Token-authoritative — do not re-stack /~site.
+        if (peelLivePreviewPathMount(window.location.pathname || '/').token) {
+            return '';
+        }
         const node = document.querySelector('[data-website-mount], [data-i18n-switcher][data-website-mount]');
         const fromDom = node ? String(node.getAttribute('data-website-mount') || '').trim() : '';
         const raw = String(fromDom || (window.site && (window.site.website_url || window.site.base_host)) || '').trim();
@@ -679,12 +711,16 @@
 
     function buildLocalizedFrontendPath(pathOnly, currency, lang) {
         const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-        const mountPath = resolveThemeWebsiteMountPath();
-        const relativePath = peelThemeWebsiteMountPrefix(pathOnly, mountPath);
+        const live = peelLivePreviewPathMount(pathOnly);
+        const mountPath = live.token ? '' : resolveThemeWebsiteMountPath();
+        const relativePath = peelThemeWebsiteMountPrefix(live.path || pathOnly, mountPath);
         const pathParts = String(relativePath || '/').split('/').filter(Boolean);
         const config = window.__WelineThemeConfig || runtimeConfig || {};
         const mountSegment = mountPath ? mountPath.replace(/^\/+|\/+$/g, '').toLowerCase() : '';
         const filteredParts = pathParts.filter(part => {
+            if (part === '~preview' || part === '~site' || LIVE_PREVIEW_TOKEN_PATTERN.test(part)) {
+                return false;
+            }
             if (mountSegment && String(part).toLowerCase() === mountSegment) {
                 return false;
             }
@@ -707,7 +743,11 @@
             outputParts.push(...filteredParts);
         }
 
-        return '/' + outputParts.join('/');
+        const rebuilt = outputParts.length === 0 ? '/' : `/${outputParts.join('/')}`;
+        if (live.token) {
+            return `/~preview/${live.token}${rebuilt === '/' ? '' : rebuilt}`;
+        }
+        return rebuilt;
     }
 
     function getUrlConfig() {

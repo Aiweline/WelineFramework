@@ -597,7 +597,6 @@ end,end
 "exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec","The exec() function needs to be unlocked: please find disable_function in php.ini and delete exec"
 "WelineFramework Admin","WelineFramework Admin"
 WelineFramework,WelineFramework
-请先登录,"Please log in first"
 未登录或登录已过期,"Not logged in or session expired"
 无法创建部署版本目录：%{1},无法创建部署版本目录：%{1}
 无法写入部署版本文件,无法写入部署版本文件
@@ -1284,18 +1283,9 @@ play,play
 code,code
 查看模块单元/集成测试用例,"View module unit/integration test cases"
 运行单元测试,"Run unit tests"
-查询成功,"Query succeeded"
-查询失败：%{1},"Query failed: %{1}"
 "无法创建 Extra 侧车目录","Unable to create Extra sidecar directory"
 "控制器 %{class}::%{method} 的 @Extra 缺少 type","@Extra on controller %{class}::%{method} is missing type"
 "未知 Extra type=%{type}（已注册：%{registered}）于 %{class}::%{method}","Unknown Extra type=%{type} (registered: %{registered}) at %{class}::%{method}"
-"BinQuery Gateway","BinQuery Gateway"
-"External BinQuery binary gateway","External BinQuery binary gateway"
-edit,edit
-framework,framework
-"BinQuery Connect Query Call Graph","BinQuery Connect Query Call Graph"
-"Connect, inspect, call and graph through /bin/query","Connect, inspect, call and graph through /bin/query"
-后台页面凭证已失效，请刷新页面后重试。,"The background page credentials have expired. Please refresh the page and try again."
 "Frontend JSON query is deprecated. Use the Weline frontend worker API.","Frontend JSON query is deprecated. Use the Weline frontend worker API."
 环境初始化检测中...,"Initializing environment check..."
 未设置环境需求,"Environment requirements not set"
@@ -2014,6 +2004,7 @@ Transport,Transport
 后台实时流证明无效，请刷新页面后重试。,"The background live stream proves invalid, please refresh the page and try again."
 后台实时流暂未启用，请使用普通后台请求。,"Background real-time streaming is not enabled yet, please use ordinary background requests."
 "商城 Scope 已过期，请刷新页面后重试","The mall scope has expired, please refresh the page and try again"
+后台页面凭证已失效，请刷新页面后重试。,"The background page credentials have expired. Please refresh the page and try again."
 后台权限服务暂不可用。,"The background permission service is temporarily unavailable."
 后台页面凭证服务暂不可用。,"The background page certificate service is temporarily unavailable."
 "Operation authorization requirements are not satisfied.","Operation authorization requirements are not satisfied."
@@ -2485,6 +2476,15 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 路由路径,"Route path"
 HTTP方法,"HTTP method"
 控制器,Controller
+查询成功,"Query succeeded"
+查询失败：%{1},"Query failed: %{1}"
+"BinQuery Gateway","BinQuery Gateway"
+"External BinQuery binary gateway","External BinQuery binary gateway"
+edit,edit
+framework,framework
+"BinQuery Connect Query Call Graph","BinQuery Connect Query Call Graph"
+"Connect, inspect, call and graph through /bin/query","Connect, inspect, call and graph through /bin/query"
+请先登录,"Please log in first"
 "WLS 下载临时文件清理失败。","WLS failed to clean up a download temporary file."
 "SSE 会话已失效，请重新登录后重试。","The SSE session has expired, please log in again and try again."
 "当前账号无权限执行该 SSE 操作。","The current account does not have permission to perform this SSE operation."

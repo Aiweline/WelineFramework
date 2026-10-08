@@ -67,6 +67,14 @@ final class PreviewExitFloatNavigateContractTest extends TestCase
         self::assertStringContainsString('publishNeedsLogin', $fn);
         self::assertStringNotContainsString('editorRequest', $fn);
         self::assertStringNotContainsString("Api.resource('theme')", $fn);
+        self::assertStringContainsString(
+            "getFrontendUrl('theme/frontend/theme-preview/publish-and-exit')",
+            $source,
+        );
+        self::assertStringNotContainsString(
+            "getBackendUrl('theme/backend/theme-editor/publish-and-exit')",
+            $source,
+        );
         self::assertStringContainsString('frontend Worker', $source);
         self::assertStringContainsString('AREA_BACKEND', $source);
     }

@@ -54,4 +54,35 @@ final class NormalizeVisitorUriLivePreviewPathContractTest extends TestCase
         );
         self::assertNotNull(ThemeLivePreviewPathMount::parseFromUri($uri));
     }
+
+    public function testRehydrateHelperPrefixesSiteWhenTokenHasCode(): void
+    {
+        self::assertSame(
+            '/~site/grocery/CNY/terms',
+            ThemeLivePreviewPathMount::rehydrateSiteMountIntoRouting('/CNY/terms', 'grocery')
+        );
+    }
+
+    public function testExtractWebsiteCodeFromTokenPayload(): void
+    {
+        $code = \Weline\Theme\Service\PreviewTokenService::extractWebsiteCodeFromPayload([
+            'context' => [
+                'editor_context' => [
+                    'scope' => [
+                        'identity' => [
+                            'website_id' => 544,
+                            'website_code' => 'grocery',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        self::assertSame('grocery', $code);
+
+        $fromCanonical = \Weline\Theme\Service\PreviewTokenService::extractWebsiteCodeFromPayload([
+            'canonical_scope' => 'daocharms.default.default',
+            'context' => [],
+        ]);
+        self::assertSame('daocharms', $fromCanonical);
+    }
 }

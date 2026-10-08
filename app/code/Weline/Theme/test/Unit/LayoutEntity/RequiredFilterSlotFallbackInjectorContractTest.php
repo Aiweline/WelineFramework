@@ -47,6 +47,16 @@ final class RequiredFilterSlotFallbackInjectorContractTest extends TestCase
         self::assertFileExists($injector);
         $injSrc = (string)file_get_contents($injector);
         self::assertStringContainsString('data-wslot', $injSrc);
+        // Must not early-return on editor canvas (theme-switch solidify acceptance).
+        self::assertStringNotContainsString(
+            'if ($html === \'\' || $this->isEditorCanvas())',
+            $injSrc,
+        );
+
+        $net = dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionRuntimeSafetyNet.php';
+        $netEditor = (string)file_get_contents($net);
+        self::assertStringContainsString('if ($this->isEditorCanvas())', $netEditor);
+        self::assertStringContainsString('return $this->finishFiltersXor($html);', $netEditor);
 
         $obs = dirname(__DIR__, 3) . '/Observer/LayoutSlotRenderer.php';
         $obsSrc = (string)file_get_contents($obs);
@@ -56,7 +66,17 @@ final class RequiredFilterSlotFallbackInjectorContractTest extends TestCase
         $ensurePos = strpos($obsSrc, 'requiredNet->ensure($html)');
         self::assertNotFalse($stripPos);
         self::assertNotFalse($ensurePos);
-        self::assertLessThan($ensurePos, $stripPos, 'Required ensure must run after SlotBoundaryMarkers::strip');
+        self::assertLessThan($stripPos, $ensurePos, 'Required ensure must run after SlotBoundaryMarkers::strip');
+        // Editor canvas finalizeFrontendHtml must run Filters XOR before editor assets.
+        self::assertMatchesRegularExpression(
+            '/function finalizeFrontendHtml\([\s\S]*?'
+            . 'if \(\$this->isEditorCanvasRequest\(\)\) \{[\s\S]*?'
+            . 'requiredNet->ensure\(\$html\)[\s\S]*?'
+            . 'EditorModeAssetInjector[\s\S]*?'
+            . 'return \$injector->inject\(\$html\)/',
+            $obsSrc,
+            'Editor canvas Filters ensure must run before EditorModeAssetInjector',
+        );
 
         $healer = dirname(__DIR__, 3) . '/Service/StorefrontSsrChromeHealer.php';
         $healerSrc = (string)file_get_contents($healer);
@@ -65,10 +85,11 @@ final class RequiredFilterSlotFallbackInjectorContractTest extends TestCase
         $hEnsure = strpos($healerSrc, 'requiredNet->ensure($html)');
         self::assertNotFalse($hStrip);
         self::assertNotFalse($hEnsure);
-        self::assertLessThan($hEnsure, $hStrip, 'Healer required ensure must run after strip');
+        self::assertLessThan($hStrip, $hEnsure, 'Healer required ensure must run after strip');
 
-        $net = dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionRuntimeSafetyNet.php';
-        $netSrc = (string)file_get_contents($net);
+        $netSrc = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/LayoutEntity/RequiredDefaultInjectionRuntimeSafetyNet.php'
+        );
         self::assertStringContainsString('RequiredFilterSlotFallbackInjector', $netSrc);
 
         self::assertTrue(class_exists(ThemeLayoutEntityRequestSolidifyGate::class));

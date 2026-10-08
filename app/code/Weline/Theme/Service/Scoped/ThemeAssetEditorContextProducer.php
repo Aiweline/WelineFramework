@@ -2,12 +2,14 @@
 declare(strict_types=1);
 namespace Weline\Theme\Service\Scoped;
 
+use Weline\Backend\Api\Auth\BackendUserContext;
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Theme\Api\Scoped\ThemeContentScope;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemePreviewPublishActorBinder;
 
 /** 后台 ACL 成功后调用；范围来自消费方已验证的目录，不从原始 URL 或业务模型发现来源。 */
 final class ThemeAssetEditorContextProducer
@@ -21,7 +23,7 @@ final class ThemeAssetEditorContextProducer
     public function build(int $themeId, string $area, ThemeContentScope $scope,
         ?ThemeVersionIdentity $version = null, array $resourceReferences = []): ThemeApplicationContext
     {
-        $actor=$this->actors->current();
+        $actor=$this->resolveActor();
         // 与既有工作区写边界相同的正式后台身份条件，不把客户端身份当作认证。
         if ($actor === null || $actor->getId()<1 || !$actor->getIsEnabled()) {
             throw new \RuntimeException('theme_asset_editor_actor_required');
@@ -47,5 +49,19 @@ final class ThemeAssetEditorContextProducer
             themeVersionId:$version?->themeVersionId ?? 0, contentRevision:$version?->contentRevision ?? 0,
             defaultLocale:$scope->defaultLocale, displayName:$scope->displayName, contentScopes:$scopes, purpose:'asset',
         );
+    }
+
+    /**
+     * Prefer the authenticated backend session; fall back only to a request-scoped
+     * actor installed after Frontend preview Token validation (sibling Host publish).
+     */
+    private function resolveActor(): ?BackendUserContext
+    {
+        $actor = $this->actors->current();
+        if ($actor !== null && $actor->getId() > 0 && $actor->getIsEnabled()) {
+            return $actor;
+        }
+
+        return ThemePreviewPublishActorBinder::current();
     }
 }

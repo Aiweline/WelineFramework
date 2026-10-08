@@ -644,7 +644,7 @@ final class GuidanceWorkflowCatalog
                 ],
                 [
                     'id' => 'storefront_internal_url_via_url_helper',
-                    'summary' => '【高压线】站内跳转 href/action/data-*-url 必须用 @url/<url>/@backend-url 或 Url::getUrl/getFrontendUrl/getBackendUrl；禁止 \'/\'.$path 或手写 /module/action；外链 http(s) 可原样',
+                    'summary' => '【高压线·禁止拼接】站内跳转必须由 Url 模块或 url 标签生成：前端推荐 @url/<url>；后端推荐 Url::getUrl/getFrontendUrl/getBackendUrl；禁止 \'/\'.$path、手写 /module/action、Url::getPrefix().$path（getPrefix 无 website mount）；外链 http(s) 可原样',
                     'detail_doc' => 'app/code/Weline/Framework/doc/4-内置标签/06-url标签使用指南.md',
                 ],
                 [

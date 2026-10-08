@@ -200,10 +200,9 @@ final class BuyerLooksGalleryService implements BuyerLooksGalleryInterface
             /** @var \Weline\Product\Repository\ProductRepository $products */
             $products = ObjectManager::getInstance(\Weline\Product\Repository\ProductRepository::class);
             foreach ($normalized as $uuid) {
+                // Never fall back to website 0 — that re-links grocery/other scopes
+                // to default-site (汉服) PDP ids when Review rows somehow cross-bind.
                 $product = $products->findByGlobalUuid($websiteId, $uuid);
-                if ($product === null && $websiteId !== 0) {
-                    $product = $products->findByGlobalUuid(0, $uuid);
-                }
                 if ($product === null) {
                     continue;
                 }

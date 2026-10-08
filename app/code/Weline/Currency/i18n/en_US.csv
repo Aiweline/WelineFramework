@@ -97,6 +97,12 @@ save,save
 货币名称不能为空,"Currency name cannot be empty"
 汇率必须在0到1000000之间,"Exchange rate must be between 0 and 1000000"
 货币符号位置必须是left或right,"Currency symbol position must be left or right"
+收起悬浮,收起悬浮
+展开悬浮,展开悬浮
+"当前基准货币为 %{1}。","The current base currency is %{1}."
+汇率来源模式：%{1}。,"Exchange-rate mode: %{1}."
+符号：%{1},"Symbol: %{1}"
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 汇率政策,"Exchange-rate policy"
 商品基准价按站点基准货币存储；前台按当前浏览货币换算后展示。,"Catalog prices are stored in the site base currency and converted for the active browsing currency."
 手动模式下各币种汇率由运营维护；自动模式下可由授权渠道同步更新。,"In manual mode operators maintain rates; in automatic mode authorized providers may sync updates."
@@ -256,10 +262,6 @@ API返回数据格式错误,"API return data format error"
 "无法获取新基准货币的汇率: %{1}","Unable to get exchange rate for new base currency: %{1}"
 新基准货币的汇率无效，无法重新计算,"New base currency exchange rate is invalid, cannot recalculate"
 货币汇率无效,"Currency exchange rate is invalid"
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
-"当前基准货币为 %{1}。","The current base currency is %{1}."
-汇率来源模式：%{1}。,"Exchange-rate mode: %{1}."
-符号：%{1},"Symbol: %{1}"
 查看本站支持的结算货币、基准币与汇率政策说明。,"View supported storefront currencies, the base currency, and exchange-rate policy."
 "共 %{1} 个货币，其中 %{2} 个将纠正写入。确认前不会修改数据库。","%{1} currencies in total, %{2} will be corrected and written. The database is not modified before confirmation."
 配置保存失败,"Configuration save failed"

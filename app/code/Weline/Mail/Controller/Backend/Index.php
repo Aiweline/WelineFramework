@@ -4,11 +4,13 @@ declare(strict_types=1);
 namespace Weline\Mail\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Mail\Model\MailAccount;
 use Weline\Mail\Model\MailDomain;
 use Weline\Mail\Model\MailMessage;
 use Weline\Mail\Service\DnsRecordAdvisor;
+use Weline\Mail\Service\MailOriginIpResolver;
 use Weline\Mail\Service\StalwartEngineAdapter;
 
 #[\Weline\Framework\Acl\Acl(
@@ -22,6 +24,12 @@ class Index extends BackendController
     public function index(): string
     {
         $requestedView = strtolower(trim((string)$this->request->getParam('view', 'mailbox')));
+        // CDN OAuth 回跳到邮件后台时强制进「域名与 DNS」，否则错误参数在邮箱页看不见。
+        if (trim((string)$this->request->getGet('oauth_error', '')) === '1'
+            || trim((string)$this->request->getGet('oauth_adapter', '')) !== ''
+        ) {
+            $requestedView = 'domains';
+        }
         $mailView = match ($requestedView) {
             'config', 'domains' => 'domains',
             'accounts' => 'accounts',
@@ -150,6 +158,18 @@ class Index extends BackendController
             ObjectManager::getInstance(\Weline\Mail\Service\StalwartManagementAdapter::class)
                 ->hasManagementCredential()
         );
+        $detectedOriginIp = '';
+        $cloudflareTokenReady = false;
+        if ($mailView === 'domains') {
+            $detectedOriginIp = ObjectManager::getInstance(MailOriginIpResolver::class)->resolve('');
+            $cloudflareTokenReady = $this->isCloudflareDefaultTokenReady();
+        }
+        $this->assign('detected_origin_ip', $detectedOriginIp);
+        $this->assign('cloudflare_token_ready', $cloudflareTokenReady);
+        $this->assign('dns_live_checks', $mailView === 'domains'
+            ? $this->buildLiveDnsChecks($domains, $detectedOriginIp)
+            : []
+        );
 
         $compose = $this->resolveComposeContext($selectedAccountId, $mailboxAccounts);
         $this->assign('compose_open', $compose['open']);
@@ -258,7 +278,49 @@ class Index extends BackendController
             ->setData(MailDomain::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
             ->save();
 
-        return $this->respondFormResult(200, __('邮箱域名状态已更新'));
+        $message = (string)__('邮箱域名状态已更新');
+        // 启用域名时幂等开通 contact@，新建则带回一次性 SMTP 密码（仅此一次展示）
+        if ($status === 'active') {
+            try {
+                /** @var \Weline\Mail\Service\MailAccountEnsureService $ensure */
+                $ensure = ObjectManager::getInstance(
+                    \Weline\Mail\Service\MailAccountEnsureService::class
+                );
+                $contact = $ensure->ensureContactAccount($domainId);
+                if (!empty($contact['success'])) {
+                    $email = (string)($contact['email'] ?? '');
+                    $once = (string)($contact['smtp_password_once'] ?? '');
+                    if (!empty($contact['created']) && $once !== '') {
+                        $message = (string)__(
+                            '域名已启用；已自动开通 %{1}，SMTP 密码（仅显示一次）：%{2}',
+                            [$email, $once]
+                        );
+                    } elseif ($email !== '') {
+                        $message = (string)__(
+                            '域名已启用；联系邮箱 %{1} 已就绪。',
+                            [$email]
+                        );
+                    }
+                } else {
+                    $detail = (string)($contact['message'] ?? '');
+                    $message = $detail !== ''
+                        ? (string)__('域名已启用，但自动开通 contact@ 失败：%{1}', [$detail])
+                        : (string)__('域名已启用，但自动开通 contact@ 失败。');
+                }
+            } catch (\Throwable $e) {
+                w_log_error(
+                    '[Mail] ' . __('启用域名后自动开通 contact@ 失败：%{1}', [$e->getMessage()]),
+                    [],
+                    'mail'
+                );
+                $message = (string)__(
+                    '域名已启用，但自动开通 contact@ 异常：%{1}',
+                    [$e->getMessage()]
+                );
+            }
+        }
+
+        return $this->respondFormResult(200, $message);
     }
 
     /**
@@ -574,8 +636,44 @@ class Index extends BackendController
             }
 
             $originIp = trim((string)$this->request->getPost('origin_ip', ''));
+            if ($originIp === '') {
+                $originIp = trim((string)$domain->getData(
+                    \Weline\Mail\Model\MailDomain::schema_fields_ORIGIN_IP
+                ));
+            }
+            if ($originIp === '') {
+                /** @var \Weline\Mail\Service\MailOriginIpResolver $originResolver */
+                $originResolver = ObjectManager::getInstance(
+                    \Weline\Mail\Service\MailOriginIpResolver::class
+                );
+                $originIp = $originResolver->resolve('');
+            }
             $selector = trim((string)$this->request->getPost('dkim_selector', ''));
+            if ($selector === '') {
+                $selector = trim((string)$domain->getData(
+                    \Weline\Mail\Model\MailDomain::schema_fields_DKIM_SELECTOR
+                ));
+            }
+            if ($selector === '') {
+                $selector = 'default';
+            }
             $publicKey = trim((string)$this->request->getPost('dkim_public_key', ''));
+            if ($publicKey === '') {
+                $publicKey = trim((string)$domain->getData(
+                    \Weline\Mail\Model\MailDomain::schema_fields_DKIM_PUBLIC_KEY
+                ));
+            }
+            /** @var \Weline\Mail\Service\MailDkimLocalEnsureService $dkimEnsure */
+            $dkimEnsure = ObjectManager::getInstance(
+                \Weline\Mail\Service\MailDkimLocalEnsureService::class
+            );
+            $ensured = $dkimEnsure->ensure(
+                (string)$domain->getData(\Weline\Mail\Model\MailDomain::schema_fields_DOMAIN_NAME),
+                $selector,
+                $publicKey,
+            );
+            $selector = $ensured['selector'];
+            $publicKey = $ensured['public_key'];
 
             $factory = \Weline\Framework\Manager\ObjectManager::getInstance(
                 \Weline\Mail\Service\MailDnsRecordFactory::class
@@ -622,12 +720,27 @@ class Index extends BackendController
                 );
             }
 
-            return $this->respondFormResult(
-                200,
-                (string)($result['message'] ?? (
-                    $apply ? __('Cloudflare DNS 已同步。') : __('Cloudflare DNS 预览完成。')
-                ))
-            );
+            $poolMsg = '';
+            if ($apply) {
+                $poolMsg = $this->ensureMailHostnamesInDomainPool(
+                    (string)$domain->getData(\Weline\Mail\Model\MailDomain::schema_fields_DOMAIN_NAME),
+                    (string)$domain->getData(\Weline\Mail\Model\MailDomain::schema_fields_HOSTNAME),
+                    $originIp,
+                    is_array($targets['dns_only_hosts'] ?? null) ? $targets['dns_only_hosts'] : [],
+                );
+            }
+
+            $baseMsg = (string)($result['message'] ?? (
+                $apply ? __('Cloudflare DNS 已同步。') : __('Cloudflare DNS 预览完成。')
+            ));
+            if ($poolMsg !== '') {
+                $baseMsg .= ' ' . $poolMsg;
+            }
+
+            return $this->respondFormResult(200, $baseMsg);
+        } catch (ResponseTerminateException $terminate) {
+            // respondFormResult → redirect() 以 302 终止；不可当成业务失败 flash
+            throw $terminate;
         } catch (\DomainException|\InvalidArgumentException $e) {
             return $this->respondFormResult(422, $e->getMessage());
         } catch (\Throwable $e) {
@@ -672,6 +785,141 @@ class Index extends BackendController
     private function isFakeTestDomain(string $domain): bool
     {
         return str_ends_with($domain, '.invalid') || str_ends_with($domain, '.test');
+    }
+
+    /**
+     * DNS 应用成功后：入域名池并申请 HTTPS（经 websites Query，不直连 Websites 模型）。
+     *
+     * @param list<string> $dnsOnlyHosts
+     */
+    private function ensureMailHostnamesInDomainPool(
+        string $rootDomain,
+        string $hostname,
+        string $originIp,
+        array $dnsOnlyHosts,
+    ): string {
+        $rootDomain = strtolower(rtrim(trim($rootDomain), '.'));
+        $hostname = strtolower(rtrim(trim($hostname), '.'));
+        $hostnames = [];
+        foreach ($dnsOnlyHosts as $h) {
+            $n = strtolower(rtrim(trim((string)$h), '.'));
+            if ($n !== '') {
+                $hostnames[] = $n;
+            }
+        }
+        if ($hostname !== '') {
+            $hostnames[] = $hostname;
+        }
+        if ($rootDomain !== '') {
+            $hostnames[] = 'smtp.' . $rootDomain;
+        }
+        $hostnames = array_values(array_unique(array_filter($hostnames)));
+        if ($hostnames === []) {
+            return '';
+        }
+
+        try {
+            $pool = w_query('websites', 'ensurePublicDnsHostnamesInPool', [
+                'root_domain' => $rootDomain,
+                'hostnames' => $hostnames,
+                'origin_ip' => $originIp,
+                'dns_provider' => 'cloudflare',
+                'request_certificate' => true,
+                'source' => 'mail_dns',
+            ]);
+            if (!is_array($pool)) {
+                return (string)__('域名池同步返回异常。');
+            }
+            if (($pool['success'] ?? false) === true) {
+                return (string)($pool['message'] ?? __('已入域名池并申请证书。'));
+            }
+
+            return (string)($pool['message'] ?? __('域名池/证书同步未完成。'));
+        } catch (\Throwable $e) {
+            w_log_error(
+                '[Mail] ' . __('DNS 通后入域名池失败：%{1}', [$e->getMessage()]),
+                [],
+                'mail'
+            );
+
+            return (string)__('DNS 已同步，但入域名池/证书失败：%{1}', [$e->getMessage()]);
+        }
+    }
+
+    /**
+     * CDN 默认 Cloudflare 账户已有可用 api_token（含手动全局 Token）时，邮局一键 DNS 无需再走 OAuth。
+     */
+    private function isCloudflareDefaultTokenReady(): bool
+    {
+        if (!class_exists(\Weline\Cdn\Service\AccountManager::class)) {
+            return false;
+        }
+        try {
+            /** @var \Weline\Cdn\Service\AccountManager $accounts */
+            $accounts = ObjectManager::getInstance(\Weline\Cdn\Service\AccountManager::class);
+            $account = $accounts->getDefaultAccount('cloudflare');
+            if (!$account instanceof \Weline\Cdn\Model\Account) {
+                return false;
+            }
+            /** @var \Weline\Cdn\Service\CloudflareOAuthService $oauth */
+            $oauth = ObjectManager::getInstance(\Weline\Cdn\Service\CloudflareOAuthService::class);
+            $credentials = $oauth->credentialsForAccount($account);
+
+            return \Weline\Cdn\Adapter\Cloudflare::hasUsableCredentials($credentials);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * 域名页实时探测公网 DNS，供清单打钩（fake 域跳过探测）。
+     *
+     * @param list<object> $domains
+     * @return array<int, array{ok:bool,records:list<array<string,mixed>>}>
+     */
+    private function buildLiveDnsChecks(array $domains, string $fallbackOriginIp = ''): array
+    {
+        /** @var DnsRecordAdvisor $advisor */
+        $advisor = ObjectManager::getInstance(DnsRecordAdvisor::class);
+        /** @var MailOriginIpResolver $originResolver */
+        $originResolver = ObjectManager::getInstance(MailOriginIpResolver::class);
+        $out = [];
+        foreach ($domains as $domain) {
+            $id = (int)$domain->getId();
+            $name = strtolower(trim((string)$domain->getData(MailDomain::schema_fields_DOMAIN_NAME)));
+            $host = strtolower(trim((string)$domain->getData(MailDomain::schema_fields_HOSTNAME)));
+            $engine = strtolower(trim((string)$domain->getData(MailDomain::schema_fields_ENGINE)));
+            if ($id <= 0 || $name === '' || $host === '') {
+                continue;
+            }
+            $selector = (string)$domain->getData(MailDomain::schema_fields_DKIM_SELECTOR);
+            if ($engine === 'fake' || $this->isFakeTestDomain($name)) {
+                $expected = $advisor->expectedRecords($name, $host, $selector);
+                foreach ($expected as &$row) {
+                    $row['ok'] = true;
+                    $row['detail'] = 'fake';
+                }
+                unset($row);
+                $out[$id] = ['ok' => true, 'records' => $expected];
+                continue;
+            }
+            $originIp = $originResolver->resolve((string)$domain->getData(MailDomain::schema_fields_ORIGIN_IP));
+            if ($originIp === '') {
+                $originIp = trim($fallbackOriginIp);
+            }
+            $result = $advisor->check(
+                $name,
+                $host,
+                $selector,
+                $originIp,
+            );
+            $out[$id] = [
+                'ok' => (bool)$result['ok'],
+                'records' => $result['records'],
+            ];
+        }
+
+        return $out;
     }
 
     /**
