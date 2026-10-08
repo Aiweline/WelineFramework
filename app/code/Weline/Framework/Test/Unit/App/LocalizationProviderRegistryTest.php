@@ -9,6 +9,9 @@ use Weline\Framework\App\Localization\LocalizationProviderInterface;
 use Weline\Framework\App\Localization\LocalizationProviderRegistry;
 use Weline\Framework\Compilation\ServiceProviderRegistry;
 
+\defined('BP') || \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
+\defined('DS') || \define('DS', \DIRECTORY_SEPARATOR);
+
 final class LocalizationProviderRegistryTest extends TestCase
 {
     private string $registryFile;

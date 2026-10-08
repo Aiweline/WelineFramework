@@ -24,7 +24,7 @@ final class Timezone
     public static function resolveWebsiteTimezone(?string $explicit = null): string
     {
         // Website timezone is written into RequestContext by owning module (DetectWebsite).
-        // Framework must not soft-pull WebsiteData.
+        // Framework must not soft-pull website service FQCNs.
         $candidates = [
             trim((string)$explicit),
             trim(RequestContext::getWelineTimezone()),

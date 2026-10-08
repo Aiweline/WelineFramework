@@ -13,6 +13,13 @@ final class LocalizationProviderRegistry implements ProcessSharedInterface
 {
     public const CAPABILITY_PREFIX = 'localization_provider.';
 
+    /**
+     * Providers at this priority and above are backend-tier only.
+     * Storefront/website defaults must use preferredDefaultLanguage() (excludes this tier);
+     * backend personal language uses preferredDefaultLanguageWithMinPriority(self::BACKEND_TIER_MIN_PRIORITY).
+     */
+    public const BACKEND_TIER_MIN_PRIORITY = 200;
+
     /** @var list<LocalizationProviderInterface>|null */
     private ?array $providers = null;
 
@@ -46,11 +53,14 @@ final class LocalizationProviderRegistry implements ProcessSharedInterface
     }
 
     /**
-     * First non-empty default language from providers (narrow scope wins by priority).
+     * First non-empty website/storefront default language (excludes backend tier ≥ BACKEND_TIER_MIN_PRIORITY).
      */
     public function preferredDefaultLanguage(): ?string
     {
         foreach ($this->providers() as $provider) {
+            if ($provider->priority() >= self::BACKEND_TIER_MIN_PRIORITY) {
+                continue;
+            }
             $codes = $this->normalizeLanguageCodes([(string)($provider->defaultLanguage() ?? '')]);
             if ($codes !== []) {
                 return $codes[0];
@@ -61,11 +71,14 @@ final class LocalizationProviderRegistry implements ProcessSharedInterface
     }
 
     /**
-     * First non-empty default currency from providers (narrow scope wins by priority).
+     * First non-empty website/storefront default currency (excludes backend tier ≥ BACKEND_TIER_MIN_PRIORITY).
      */
     public function preferredDefaultCurrency(): ?string
     {
         foreach ($this->providers() as $provider) {
+            if ($provider->priority() >= self::BACKEND_TIER_MIN_PRIORITY) {
+                continue;
+            }
             $codes = $this->normalizeCurrencyCodes([(string)($provider->defaultCurrency() ?? '')]);
             if ($codes !== []) {
                 return $codes[0];

@@ -182,7 +182,9 @@ class State extends DataObject
         try {
             $personal = \Weline\Framework\Manager\ObjectManager::getInstance(
                 \Weline\Framework\App\Localization\LocalizationProviderRegistry::class
-            )->preferredDefaultLanguageWithMinPriority(200);
+            )->preferredDefaultLanguageWithMinPriority(
+                \Weline\Framework\App\Localization\LocalizationProviderRegistry::BACKEND_TIER_MIN_PRIORITY
+            );
             if (\is_string($personal) && $personal !== '') {
                 return $personal;
             }

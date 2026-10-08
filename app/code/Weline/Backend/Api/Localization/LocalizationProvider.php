@@ -24,6 +24,9 @@ final class LocalizationProvider implements LocalizationProviderInterface
 
     public function languageCodes(): array
     {
+        if (!$this->isBackendArea()) {
+            return [];
+        }
         $code = $this->personalLanguage();
         return $code !== '' ? [$code] : [];
     }

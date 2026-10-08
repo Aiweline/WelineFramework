@@ -12,6 +12,9 @@ use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 
+\defined('BP') || \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
+\defined('DS') || \define('DS', \DIRECTORY_SEPARATOR);
+
 class BackendPersonalLanguagePriorityTest extends TestCase
 {
     private string $registryFile = '';
