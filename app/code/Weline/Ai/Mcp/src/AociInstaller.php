@@ -228,7 +228,9 @@ final class AociInstaller
             'args' => ['--repo', $repository, 'mcp'],
         ];
         $marker['next_action'] = '本机 AOCI 程序已就绪（缺失时由 Weline ensure/prepare 自动安装）。'
-            . '若宿主会话尚无 aoci 工具，Agent 必须按 mcp_registration 写入宿主 MCP 配置并刷新会话；'
+            . '若宿主会话尚无 aoci 工具：仅当 mcp_registration 与目标文件不等价时写入；'
+            . 'Cursor 只写 ~/.cursor/mcp.json 的 aoci（禁止同会话再写项目 .mcp.json 的 aoci）；'
+            . '已等价则禁止 rewrite/touch，只新开 Agent 回合；禁止 Developer: Reload Window；'
             . '项目 init/scan/索引建立不自动执行。';
         return $marker;
     }

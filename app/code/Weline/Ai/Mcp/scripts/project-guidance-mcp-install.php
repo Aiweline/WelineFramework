@@ -10,6 +10,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-mcp-server.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-cursor-mcp-stability.php';
 
 /** @return array<string,mixed> */
 function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = null): array
@@ -25,17 +26,49 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
     $cursorProbe = $primaryHost === 'cursor' ? welineMcpInstallProbeCursor($repoRoot) : $inactiveHost;
     $claudeProbe = $primaryHost === 'claude' ? welineMcpInstallProbeClaude($repoRoot) : $inactiveHost;
 
-    $cursorServers = [
-        $serverName => $serverConfig,
+    // Cursor project config: Weline only. AOCI lives in user ~/.cursor/mcp.json (single落点).
+    $cursorWelineDocument = [
+        'mcpServers' => [
+            $serverName => $serverConfig,
+        ],
     ];
+    $cursorAociDocument = $aociRegistration === null ? null : [
+        'mcpServers' => [
+            'aoci' => $aociRegistration,
+        ],
+    ];
+    // Unknown-host fallback document may include both for hosts that use one file.
+    $cursorDocument = $cursorWelineDocument;
     if ($aociRegistration !== null) {
-        $cursorServers['aoci'] = $aociRegistration;
+        $cursorDocument['mcpServers']['aoci'] = $aociRegistration;
     }
-    $cursorDocument = [
-        'mcpServers' => $cursorServers,
-    ];
     $vscodeDocument = welineMcpInstallVscodeDocument($serverConfig, $serverName, $aociRegistration);
     $claudeAdd = welineMcpInstallClaudeAddCommand($serverName, $serverConfig, $context);
+
+    $cursorInstallSteps = [
+        welineMcpInstallBuildWriteJsonStep(
+            '.cursor/mcp.json',
+            $cursorWelineDocument,
+            rtrim($repoRoot, "/\\") . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'mcp.json',
+            ['aoci'],
+        ),
+    ];
+    if ($cursorAociDocument !== null) {
+        $userCursorMcp = welineMcpInstallResolveConfigPath('~/.cursor/mcp.json');
+        $cursorInstallSteps[] = array_merge(
+            welineMcpInstallBuildWriteJsonStep('~/.cursor/mcp.json', $cursorAociDocument, $userCursorMcp),
+            [
+                'merge_servers' => true,
+                'summary' => 'Mount aoci only into user ~/.cursor/mcp.json when session lacks AOCI tools and registration is not already equivalent. Do not also write project .mcp.json aoci. Skip rewrite when noop=true.',
+            ],
+        );
+    }
+    $cursorInstallSteps[] = [
+        'kind' => 'shell',
+        'command' => 'cursor-agent mcp enable ' . $serverName,
+        'cwd' => $repoRoot,
+        'optional' => false,
+    ];
 
     $hosts = [
         'codex' => welineMcpInstallHostEnvelope(
@@ -48,20 +81,8 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
             $cursorProbe,
             $cursorProbe['ready'] !== false ? null : [
                 'mode' => 'session_install',
-                'summary' => 'Write project Cursor MCP config, then approve/enable via cursor-agent.',
-                'steps' => [
-                    [
-                        'kind' => 'write_json',
-                        'path' => '.cursor/mcp.json',
-                        'document' => $cursorDocument,
-                    ],
-                    [
-                        'kind' => 'shell',
-                        'command' => 'cursor-agent mcp enable ' . $serverName,
-                        'cwd' => $repoRoot,
-                        'optional' => false,
-                    ],
-                ],
+                'summary' => 'Write project Cursor MCP for Weline (idempotent); mount aoci only into ~/.cursor/mcp.json when missing/unequal; then approve/enable via cursor-agent. Skip any write_json step with noop=true. Never Reload Window—new Agent turn only.',
+                'steps' => $cursorInstallSteps,
             ],
         ),
         'claude' => welineMcpInstallHostEnvelope(
@@ -85,13 +106,13 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
             ['ready' => true, 'reason' => 'manual_workspace_attach'],
             [
                 'mode' => 'session_install',
-                'summary' => 'Write VS Code workspace MCP config when using Copilot Agent.',
+                'summary' => 'Write VS Code workspace MCP config when using Copilot Agent (skip write when noop).',
                 'steps' => [
-                    [
-                        'kind' => 'write_json',
-                        'path' => '.vscode/mcp.json',
-                        'document' => $vscodeDocument,
-                    ],
+                    welineMcpInstallBuildWriteJsonStep(
+                        '.vscode/mcp.json',
+                        $vscodeDocument,
+                        rtrim($repoRoot, "/\\") . DIRECTORY_SEPARATOR . '.vscode' . DIRECTORY_SEPARATOR . 'mcp.json',
+                    ),
                 ],
             ],
         ),
@@ -102,14 +123,14 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
             ['ready' => null, 'reason' => 'host_not_in_supported_table'],
             [
                 'mode' => 'agent_resolve_host_config',
-                'summary' => 'This host is not in the supported table: the agent resolves the host MCP config location itself, writes registration (command/args/env) into it, enables the server inside the host, then opens a new session. Do not ask the user to hand-edit Settings.',
+                'summary' => 'This host is not in the supported table: the agent resolves the host MCP config location itself, writes registration (command/args/env) into it only when not semantically equivalent, enables the server inside the host, then opens a new session (never Reload Window). Do not ask the user to hand-edit Settings.',
                 'steps' => [
                     [
                         'kind' => 'resolve_host_mcp_config',
                         'required' => true,
                         'document' => $cursorDocument,
                         'known_targets' => welineMcpInstallHostConfigTargets(),
-                        'fallback' => 'When the host is not listed, locate its MCP config from the host documentation, write registration there, enable the server, then reopen the session.',
+                        'fallback' => 'When the host is not listed, locate its MCP config from the host documentation, write registration there only if unequal, enable the server, then open a new session.',
                     ],
                     [
                         'kind' => 'verify_session_tools',
@@ -125,9 +146,9 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
     $primaryReady = $hosts[$primaryHost]['host']['ready'] ?? null;
     $nextAction = 'Verify the current session exposes the required Weline tools, then call prepare_project. Local host guidance cannot observe the session tool catalog.';
     if ($primaryReady === false) {
-        $nextAction = 'Execute host_mcp_install.hosts.' . $primaryHost . '.install.steps in this session (do not ask the user to open Settings), rerun ensure-project-guidance, then prepare_project.';
+        $nextAction = 'Execute host_mcp_install.hosts.' . $primaryHost . '.install.steps in this session (skip write_json when noop=true; do not ask the user to open Settings; do not Reload Window), rerun ensure-project-guidance, then prepare_project.';
     } elseif ($primaryHost === 'unknown') {
-        $nextAction = 'primary_host=unknown means this host is not in the supported table, not "nothing to do": resolve the host MCP config location yourself, write host_mcp_install.registration (command/args/env) into it, enable the server inside the host, then open a new session and verify every mcp_required_tool is exposed before prepare_project. Do not ask the user to hand-edit Settings.';
+        $nextAction = 'primary_host=unknown means this host is not in the supported table, not "nothing to do": resolve the host MCP config location yourself, write host_mcp_install.registration (command/args/env) into it only when not semantically equivalent, enable the server inside the host, then open a new session and verify every mcp_required_tool is exposed before prepare_project. Do not ask the user to hand-edit Settings or Reload Window.';
     }
 
     return [
@@ -138,6 +159,13 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
         'repository' => $repoRoot,
         'registration' => $serverConfig,
         'aoci_registration' => $aociRegistration,
+        'aoci_cursor_mount' => [
+            'path' => '~/.cursor/mcp.json',
+            'single_mount_point' => true,
+            'forbid_project_mcp_json_aoci' => true,
+            'semantic_idempotent' => true,
+            'refresh' => 'new_agent_turn_only',
+        ],
         'primary_host' => $primaryHost,
         'primary_ready' => $primaryReady,
         'hosts' => $hosts,
@@ -148,7 +176,11 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
 /**
  * Prefer the success marker written by AociInstaller; fall back to ~/.local/bin/aoci.
  *
- * @return array{command:string,args:list<string>}|null
+ * Cursor STDIO (current Helper) speaks NDJSON — same framing as Weline learning-mcp
+ * and bare `aoci mcp`. Do NOT wrap with aoci-mcp-cursor-bridge (Content-Length↔NDJSON):
+ * that bridge leaves Cursor stuck in connecting with zero tools.
+ *
+ * @return array{command:string,args:list<string>,startup_timeout_sec?:int,tool_timeout_sec?:int}|null
  */
 function welineMcpInstallAociRegistration(string $repoRoot): ?array
 {
@@ -180,6 +212,8 @@ function welineMcpInstallAociRegistration(string $repoRoot): ?array
     return [
         'command' => $binary,
         'args' => ['--repo', $repoRoot, 'mcp'],
+        'startup_timeout_sec' => 120,
+        'tool_timeout_sec' => 300,
     ];
 }
 

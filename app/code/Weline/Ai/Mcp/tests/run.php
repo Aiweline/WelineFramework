@@ -1145,6 +1145,7 @@ SH);
     foreach ([
         'aoci-installation.php',
         'context-response-budget.php',
+        'cursor-mcp-stability.php',
         'host-detection.php',
         'project-guidance-reload-policy.php',
         'readiness-incremental-scope.php',

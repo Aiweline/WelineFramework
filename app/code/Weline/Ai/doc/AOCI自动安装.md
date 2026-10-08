@@ -35,7 +35,12 @@
 
 成功结果包含 `status=ready`、`binary`、`version`、`source`、`verification`、`cached` 和 `marker_path`。`mcp_registration` 提供绝对程序路径与当前项目对应的 `--repo <项目根> mcp` 参数。
 
-安装 AOCI 程序不等于编辑器已经挂载 AOCI MCP。`status=ready` 时返回 `mcp_registration`（绝对程序路径 + `--repo <项目根> mcp`）；ensure 的 `host_mcp_install` 文档在 AOCI 已就绪时也会带上 `aoci` 条目。Agent 发现会话无 AOCI 工具时，必须按该登记写入宿主 MCP 配置并刷新会话；已有会话可能需要新开 Agent 回合或 Reload Window。
+安装 AOCI 程序不等于编辑器已经挂载 AOCI MCP。`status=ready` 时返回 `mcp_registration`（绝对程序路径 + `--repo <项目根> mcp`）；ensure 的 `host_mcp_install` 在 AOCI 已就绪时也会带上 Cursor 用户级 `aoci` 挂载步骤。Agent 发现会话无 AOCI 工具时：
+
+1. **语义幂等**：目标文件已有等价 `aoci`（command/args 一致）→ **禁止** rewrite / `touch`，只汇报「已挂载」。
+2. **Cursor 单落点**：只写入用户级 `~/.cursor/mcp.json`；**禁止**同一会话再写项目 `.mcp.json` / 项目 `.cursor/mcp.json` 的 `aoci`（避免双挂载/幽灵配置抢连接）。
+3. **Cursor 挂裸 `aoci`（NDJSON）**：现行 Cursor MCP Helper 与 Weline `learning-mcp` 一样走 NDJSON stdio。`mcp_registration` / 用户 mcp 的 `command` 须为 aoci 绝对路径 + `--repo <根> mcp`。**禁止**再把 `aoci-mcp-cursor-bridge`（Content-Length↔NDJSON）写进 Cursor 配置——bridge 会导致一直 `connecting`、工具数为 0。
+4. **刷新**：只**新开 Agent 回合**；**禁止** Developer: Reload Window（会杀死全部智能体）。
 
 此安装流程不修改项目 AOCI 规则、不执行 `init` 或 `scan`，不自动构建代码语义索引。Weline 继续提供硬规则、技能和准备流程；AOCI 的项目认知索引与漂移维护仍为独立能力。
 

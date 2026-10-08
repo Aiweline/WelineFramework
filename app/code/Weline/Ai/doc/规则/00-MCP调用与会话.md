@@ -35,7 +35,7 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 
 **路由约定**：流程 / 规则 / 技能 → Weline；结构认知 / 漂移 / 索引 → AOCI。禁止用 AOCI 覆盖或假装已遵守 Weline 硬规则。
 
-**挂载**：Cursor 须并列注册两套 MCP（工程任务）；`aoci` 配置须用本机绝对路径（二进制 + `--repo` 仓库根），host 配置**勿提交 Git**；大仓首次 `scan`/建索引成本高，未经明示或范围计划不得自动全仓扫描。**EXEMPT**：内容运营与纯闲聊豁免 AOCI 认知调用（走 prepare 时仍可触发安装）。
+**挂载与宿主配置稳定（硬）**：Cursor 须并列注册两套 MCP（工程任务）；`aoci` 配置须用本机绝对路径（二进制 + `--repo` 仓库根），host 配置**勿提交 Git**。**语义幂等**：`mcp_registration` 的 command/args 与目标文件已有 `aoci` 条目等价时，**禁止** rewrite / `touch` / 整文件重写；只汇报「已挂载」并**新开 Agent 回合**。**Cursor 单落点**：`aoci` 只维护用户级 `~/.cursor/mcp.json`；**禁止**同一会话再写项目 `.mcp.json` 的 `aoci`（项目 `.mcp.json` 留给 Claude Code 等其它宿主）。**禁止**用 Developer: Reload Window 刷新 MCP/规则/目录（会杀死全部智能体）。大仓首次 `scan`/建索引成本高，未经明示或范围计划不得自动全仓扫描。**EXEMPT**：内容运营与纯闲聊豁免 AOCI 认知调用（走 prepare 时仍可触发安装）。
 
 权威：`HardConstraintsCatalog::mcpOperationalRules()` → `aoci_complements_weline_mcp`。
 

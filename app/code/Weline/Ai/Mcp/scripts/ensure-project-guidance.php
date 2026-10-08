@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-reload-policy.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-cursor-mcp-stability.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-runtime-time.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-required-tools.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-host-editor-rules.php';
@@ -208,8 +209,10 @@ if (!$branchOk) {
 } elseif ($cursorBounceRequired) {
     $status = 'host_repair_needed';
     $nextAction = (($cursorBounce['bounced'] ?? false) === true)
-        ? 'Cursor Helper mcp-process was bounced so tools/list can refresh. Start a new Agent turn in this workspace (or Developer: Reload Window if CallDynamicTool still times out), rerun ensure-project-guidance, verify index/skill tools are visible, then prepare_project (mandatory for engineering).'
-        : 'Cursor MCP tool catalog is stale or incomplete. Start a new Agent turn after ensure-project-guidance; for engineering, prepare_project remains mandatory once tools reappear.';
+        ? 'Cursor Helper mcp-process was bounced so tools/list can refresh. Start a new Agent turn in this workspace, rerun ensure-project-guidance, verify index/skill tools are visible, then prepare_project (mandatory for engineering). Do NOT use Developer: Reload Window (kills all agents).'
+        : ((($cursorBounce['deferred'] ?? false) === true)
+            ? 'Cursor MCP bounce was debounced (recent repair). Start a new Agent turn only; do not touch mcp.json or Reload Window. Rerun ensure-project-guidance after the new turn, then prepare_project.'
+            : 'Cursor MCP tool catalog is stale or incomplete. Start a new Agent turn after ensure-project-guidance; for engineering, prepare_project remains mandatory once tools reappear. Do NOT use Developer: Reload Window.');
 }
 
 welineGuidanceEmit([
@@ -556,35 +559,6 @@ function welineGuidanceCursorMcpProcessState(int $latestSourceMtime): array
     }
 
     return ['kind' => 'cursor_mcp_process', 'pid' => 0, 'current' => true, 'reason' => 'not_running'];
-}
-
-/**
- * @param array<string,mixed> $cursorMcpProcess
- * @return array<string,mixed>
- */
-function welineGuidanceBounceCursorMcpProcess(array $cursorMcpProcess, ?string $userMcpPath): array
-{
-    $pid = (int) ($cursorMcpProcess['pid'] ?? 0);
-    $result = [
-        'attempted' => true,
-        'bounced' => false,
-        'pid' => $pid,
-        'signal' => 'SIGTERM',
-        'touched_user_mcp' => false,
-    ];
-    if ($pid > 1) {
-        $killed = @posix_kill($pid, SIGTERM);
-        $result['kill_ok'] = $killed === true;
-        $result['bounced'] = $killed === true;
-    }
-    if (is_string($userMcpPath) && $userMcpPath !== '' && is_file($userMcpPath)) {
-        $result['touched_user_mcp'] = @touch($userMcpPath) === true;
-        if ($result['touched_user_mcp']) {
-            $result['bounced'] = true;
-        }
-    }
-
-    return $result;
 }
 
 function welineGuidanceConfigPath(string $mcpRoot): ?string

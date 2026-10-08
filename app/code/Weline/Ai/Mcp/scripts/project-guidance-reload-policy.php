@@ -12,8 +12,10 @@ declare(strict_types=1);
  * Cursor IDE Agent snapshots tools/list at chat start. When the Cursor Helper
  * mcp-process is older than MCP source, has no learning-mcp child (orphan
  * Transport), or the STDIO probe is missing required index/skill tools,
- * agents must bounce the helper and open a new Agent turn —
+ * agents must bounce the helper (SIGTERM) and open a new Agent turn —
  * continuing on a stale catalog yields HOST_MCP_NOT_ATTACHED.
+ * Bounce does NOT require touching mcp.json when kill succeeds; debounce avoids
+ * repeated kill/touch. Never advise Developer: Reload Window (kills all agents).
  *
  * @param array<string,mixed> $hostRuntime
  * @param array<string,mixed>|null $cursorMcpProcess

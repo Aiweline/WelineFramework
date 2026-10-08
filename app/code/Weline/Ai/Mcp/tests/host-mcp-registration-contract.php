@@ -60,6 +60,12 @@ $checks['no duplicate CLAUDE bootstrap file'] = !is_file(($repoRoot ?? getcwd())
 $checks['no .cursorrules duplicate bootstrap'] = !is_file(($repoRoot ?? getcwd()) . '/.cursorrules');
 $checks['ensure syncs host editor rules'] = str_contains($guidance, 'welineGuidanceSyncHostEditorRules')
     && str_contains($guidance, 'host_editor_rules');
+$checks['ensure loads cursor mcp stability helpers'] = str_contains($guidance, 'project-guidance-cursor-mcp-stability.php');
+$checks['ensure nextAction forbids Reload Window fallback'] = !str_contains($guidance, 'or Developer: Reload Window')
+    && str_contains($guidance, 'Do NOT use Developer: Reload Window');
+$checks['install exposes aoci_cursor_mount single point'] = is_array($install['aoci_cursor_mount'] ?? null)
+    && (($install['aoci_cursor_mount']['single_mount_point'] ?? false) === true)
+    && (($install['aoci_cursor_mount']['forbid_project_mcp_json_aoci'] ?? false) === true);
 
 $gitignore = (string) file_get_contents(($repoRoot ?? getcwd()) . '/.gitignore');
 foreach (['.codex/', 'CLAUDE.md', '.mcp.json', '.cursorrules', '.cursorignore'] as $pattern) {

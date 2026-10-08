@@ -1826,6 +1826,9 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'aoci_rules')
             && str_contains((string) ($rule['summary'] ?? ''), 'not optional')
             && str_contains((string) ($rule['summary'] ?? ''), 'treating AOCI cognition as optional')
+            && str_contains((string) ($rule['summary'] ?? ''), 'SEMANTIC IDEMPOTENT')
+            && str_contains((string) ($rule['summary'] ?? ''), '~/.cursor/mcp.json')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Reload Window')
             && str_contains((string) ($rule['summary'] ?? ''), 'EXEMPT')),
         false,
     ),
