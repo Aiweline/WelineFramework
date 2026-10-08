@@ -219,8 +219,13 @@ class EditorLockService
                 if (!$this->isSameEditorUser((int)$currentLock['user_id'], $userId)) {
                     return false;
                 }
-                if (!$this->cache->delete($this->getLockCacheKey($contextKey))) {
-                    throw new \RuntimeException((string)__('编辑锁释放失败'));
+                $lockKey = $this->getLockCacheKey($contextKey);
+                if (!$this->cache->delete($lockKey)) {
+                    // Idempotent: race / adapter "missing key → false" after a fresh get
+                    // must not block Scope / area switches with a hard release error.
+                    if ($this->getLockInfo($themeId, $pageType, $contextKey) !== null) {
+                        throw new \RuntimeException((string)__('编辑锁释放失败'));
+                    }
                 }
                 $this->cache->delete($this->getTakeoverCacheKey($contextKey));
                 return true;

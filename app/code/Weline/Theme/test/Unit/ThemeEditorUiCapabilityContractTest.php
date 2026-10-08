@@ -229,6 +229,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'data-api-restore-scope-defaults=',
             'data-api-clear-theme-cache=',
             'data-api-reset-draft-resources=',
+            'data-api-solidify-scope-version=',
             'data-api-publish=',
             'data-api-check-lock=',
             'data-api-theme-tokens=',
@@ -807,6 +808,21 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             '/\.w-theme-disk-appearance-token-search\s*\{[^}]*inline-size:\s*100%;[^}]*min-inline-size:\s*0;[^}]*max-inline-size:\s*100%;/s',
             $styles,
         );
+    }
+
+    public function testReleaseEditorLockKeepsBusinessResultLikeAcquireAndHeartbeat(): void
+    {
+        $editor = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
+        $legacy = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
+
+        foreach ([$editor, $legacy] as $source) {
+            $offset = strpos($source, 'async function releaseEditorLockPayload');
+            self::assertNotFalse($offset);
+            $release = substr($source, $offset, 1400);
+            self::assertStringContainsString('keepBusinessResult: true', $release);
+            self::assertStringContainsString('apiReleaseLock', $release);
+            self::assertStringContainsString("method: 'POST'", $release);
+        }
     }
 
     public function testEditorScopeSelectorUsesCanonicalCatalogAndTrustedNavigation(): void

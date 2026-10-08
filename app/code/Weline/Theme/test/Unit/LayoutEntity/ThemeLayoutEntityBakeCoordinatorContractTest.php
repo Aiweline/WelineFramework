@@ -88,6 +88,14 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         self::assertStringContainsString('function bakePublishArtifactsForVersion', $source);
         self::assertStringContainsString("\$options['force_formal'] = true", $source);
         self::assertStringContainsString('theme_scope_version_unresolved', $source);
+        self::assertStringContainsString('ensureCurrent(', $source);
+        $solidifyCurrent = \strpos($source, 'function solidifyCurrentScopeVersion(');
+        self::assertNotFalse($solidifyCurrent);
+        $solidifySlice = \substr($source, $solidifyCurrent, 1200);
+        self::assertStringContainsString('scopeVersions->ensureCurrent(', $solidifySlice);
+        // Missing revision head (e.g. after draft reset) must bootstrap with initial=true.
+        self::assertStringContainsString('$headMissing = $this->snapshotService()->head($version->toVersionIdentity()) === null', $source);
+        self::assertStringContainsString('$initial = $version->getContentRevision() < 1 || $headMissing', $source);
 
         $reset = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/ThemeEditorDraftResetService.php');
         self::assertStringContainsString('solidifyCurrentScopeVersion(', $reset);
@@ -127,7 +135,11 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         self::assertStringContainsString('function hasOwnThemeApplication', $source);
         self::assertStringContainsString('$includeSelectedDraft = true', $source);
         $upgrade = dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityUpgradeSolidifyService.php';
-        self::assertStringContainsString('rebakeAfterInjectionCollect(null, [], $this->progress(...), false)', (string)file_get_contents($upgrade));
+        $upgradeSrc = (string)file_get_contents($upgrade);
+        // setup/theme upgrade without -t: only website-bound themes (not rebake(null) all themes).
+        self::assertStringContainsString('themesForDefaultUpgrade', $upgradeSrc);
+        self::assertStringContainsString('rebakeAfterInjectionCollect(', $upgradeSrc);
+        self::assertStringNotContainsString('rebakeAfterInjectionCollect(null,', $upgradeSrc);
         $coordinator = (new \ReflectionClass(ThemeLayoutEntityBakeCoordinator::class))->newInstanceWithoutConstructor();
         $unique = new \ReflectionMethod($coordinator, 'uniqueLayoutTargets');
         $out = $unique->invoke($coordinator, [

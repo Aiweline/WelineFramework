@@ -178,6 +178,33 @@ class ThemeEditorRequestParamsTest extends TestCore
         self::assertStringNotContainsString('$this->request->getParams()', $method);
     }
 
+    public function testEditorLockMutationsUseSyntheticInnerEditorPayload(): void
+    {
+        $source = file_get_contents(BP . '/app/code/Weline/Theme/Controller/Backend/ThemeEditor.php');
+        self::assertIsString($source);
+
+        foreach ([
+            'public function postReleaseLock()',
+            'public function postUpdateActivity()',
+            'public function postRequestTakeover()',
+            'public function postForceTakeover()',
+        ] as $signature) {
+            $offset = strpos($source, $signature);
+            self::assertNotFalse($offset, $signature);
+            $method = substr($source, $offset, 900);
+            self::assertStringContainsString(
+                '$this->editorLockIdentity($this->getEditorJsonPayload())',
+                $method,
+                $signature . ' must resolve lock identity via getEditorJsonPayload()',
+            );
+            self::assertStringNotContainsString(
+                '$this->request->getBodyParams()',
+                $method,
+                $signature . ' must not read outer QueryBin body for lock identity',
+            );
+        }
+    }
+
     public function testRequestedAreaHonorsExplicitFrontendBeforeBackendFallback(): void
     {
         $controller = (new ReflectionClass(ThemeEditor::class))->newInstanceWithoutConstructor();

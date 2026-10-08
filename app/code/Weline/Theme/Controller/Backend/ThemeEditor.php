@@ -29,6 +29,7 @@ use Weline\Theme\Service\PreviewNavigationResolver;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemeApplicationUsageService;
 use Weline\Theme\Service\ThemePreviewEntryApplication;
+use Weline\Theme\Service\ThemePreviewTypedEditorContextBinder;
 use Weline\Theme\Service\SharedChromeService;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeCacheGenerator;
@@ -7377,6 +7378,224 @@ HTML;
         }
     }
 
+    /**
+     * Theme-switch / inherit gate: solidify current scope version without clearing drafts.
+     * Prefer Accept: text/event-stream for live progress; JSON returns ssh_log for replay.
+     */
+    public function postSolidifyScopeVersion()
+    {
+        $data = $this->getVersionRequestData();
+        if ($this->wantsStandardPublishStream($data)) {
+            $this->streamSolidifyScopeVersion($data);
+
+            return;
+        }
+
+        return $this->fetchJson($this->solidifyScopeVersionPayload($data));
+    }
+
+    /**
+     * @param array<string,mixed>|null $data
+     * @return array<string,mixed>
+     */
+    public function solidifyScopeVersionPayload(?array $data = null): array
+    {
+        $data = \is_array($data) ? $data : $this->getVersionRequestData();
+        $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+        if ($themeId < 1) {
+            return [
+                'success' => false,
+                'message' => (string)__('Missing theme ID'),
+            ];
+        }
+
+        $sshLog = [];
+        try {
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType)
+                ->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+            $sshLog[] = \sprintf(
+                '$ theme-layout solidify --theme=%d --scope=%s --store-mode=%s --layout=%s',
+                $context->themeId,
+                $context->scope->storageScope,
+                $context->scope->storeMode,
+                $context->layoutType,
+            );
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator $bake */
+            $bake = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class
+            );
+            $solidify = $bake->solidifyCurrentScopeVersion($context);
+            $this->clearVersionPreviewCaches($context->themeId);
+            $ok = !empty($solidify['ok']);
+            $fingerprintCount = \is_array($solidify['fingerprints'] ?? null)
+                ? \count($solidify['fingerprints'])
+                : 0;
+            $sshLog[] = $ok
+                ? \sprintf(
+                    'ok solidify theme_version_id=%d content_revision=%d fingerprints=%d',
+                    (int)($solidify['theme_version_id'] ?? 0),
+                    (int)($solidify['content_revision'] ?? 0),
+                    $fingerprintCount,
+                )
+                : \sprintf('fail solidify reason=%s', (string)($solidify['reason'] ?? 'unknown'));
+
+            return [
+                'success' => $ok,
+                'message' => $ok
+                    ? (string)__('固化物重固完成')
+                    : (string)__('固化物重固未完成：%{reason}', [
+                        'reason' => (string)($solidify['reason'] ?? 'unknown'),
+                    ]),
+                'data' => [
+                    'solidify' => $solidify,
+                    'ssh_log' => $sshLog,
+                ],
+                'ssh_log' => $sshLog,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage() !== '' ? $e->getMessage() : (string)__('固化失败'),
+                'ssh_log' => $sshLog,
+                'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException
+                    ? $e->receipt()
+                    : null,
+            ];
+        }
+    }
+
+    /**
+     * Stream theme-switch solidify progress (no draft wipe).
+     *
+     * @param array<string,mixed> $data
+     */
+    private function streamSolidifyScopeVersion(array $data): void
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->setHeartbeatInterval(15)->start();
+        if ($sse->isAlive()) {
+            $sse->sendEvent('start', [
+                'step' => 'start',
+                'message' => (string)__('开始固化当前作用域布局'),
+                'progress' => 1,
+                'ssh' => '$ theme-editor solidify-scope-version --stream=1',
+            ]);
+        }
+
+        try {
+            $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+            $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+            if ($themeId < 1) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('Missing theme ID'),
+                ]);
+                $sse->close();
+
+                return;
+            }
+
+            if ($sse->isAlive()) {
+                $sse->sendEvent('progress', [
+                    'step' => 'context',
+                    'message' => (string)__('正在解析编辑上下文'),
+                    'progress' => 8,
+                    'ssh' => \sprintf('$ resolve-editor-context --theme=%d --layout=%s', $themeId, $pageType),
+                ]);
+            }
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType)
+                ->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+
+            if ($sse->isAlive()) {
+                $sse->sendEvent('progress', [
+                    'step' => 'solidify',
+                    'message' => (string)__('正在重固当前作用域布局固化物（含 Filters 等默认注入）'),
+                    'progress' => 35,
+                    'ssh' => \sprintf(
+                        '$ theme-layout solidify --theme=%d --scope=%s --store-mode=%s --layout=%s',
+                        $context->themeId,
+                        $context->scope->storageScope,
+                        $context->scope->storeMode,
+                        $context->layoutType,
+                    ),
+                ]);
+            }
+
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator $bake */
+            $bake = ObjectManager::getInstance(
+                \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class
+            );
+            $solidify = $bake->solidifyCurrentScopeVersion($context);
+            $this->clearVersionPreviewCaches($context->themeId);
+            $ok = !empty($solidify['ok']);
+            $fingerprintCount = \is_array($solidify['fingerprints'] ?? null)
+                ? \count($solidify['fingerprints'])
+                : 0;
+
+            if ($sse->isAlive()) {
+                $sse->sendEvent('progress', [
+                    'step' => $ok ? 'solidify_done' : 'solidify_failed',
+                    'message' => $ok
+                        ? (string)__('固化物重固完成：version=%{version} fingerprints=%{count}', [
+                            'version' => (int)($solidify['theme_version_id'] ?? 0),
+                            'count' => $fingerprintCount,
+                        ])
+                        : (string)__('固化物重固未完成：%{reason}', [
+                            'reason' => (string)($solidify['reason'] ?? 'unknown'),
+                        ]),
+                    'progress' => $ok ? 92 : 88,
+                    'ssh' => $ok
+                        ? \sprintf(
+                            'ok solidify theme_version_id=%d content_revision=%d fingerprints=%d',
+                            (int)($solidify['theme_version_id'] ?? 0),
+                            (int)($solidify['content_revision'] ?? 0),
+                            $fingerprintCount,
+                        )
+                        : \sprintf('fail solidify reason=%s', (string)($solidify['reason'] ?? 'unknown')),
+                    'solidify' => $solidify,
+                ]);
+            }
+
+            if (!$ok) {
+                if ($sse->isAlive()) {
+                    $sse->sendEvent('error', [
+                        'success' => false,
+                        'message' => (string)__('固化物重固未完成：%{reason}', [
+                            'reason' => (string)($solidify['reason'] ?? 'unknown'),
+                        ]),
+                        'data' => ['solidify' => $solidify],
+                    ]);
+                    $sse->close();
+                }
+
+                return;
+            }
+
+            if ($sse->isAlive()) {
+                $sse->sendEvent('done', [
+                    'success' => true,
+                    'message' => (string)__('固化物重固完成'),
+                    'progress' => 100,
+                    'data' => ['solidify' => $solidify],
+                    'ssh' => 'done solidify-scope-version',
+                ]);
+            }
+            $sse->close();
+        } catch (\Throwable $e) {
+            if ($sse->isAlive()) {
+                $sse->sendError(
+                    $e->getMessage() !== '' ? $e->getMessage() : (string)__('固化失败'),
+                    500,
+                );
+                $sse->close();
+            }
+        }
+    }
+
     private function hasEmptyCurrentRestoreVersion(int $themeId, string $pageType, array $identity = []): bool
     {
         $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType, $identity);
@@ -9883,6 +10102,10 @@ HTML;
                 'editor_context' => $typedEditorContext?->toArray(),
             ], $this->buildThemeLayoutRuntimeParams($identity)));
             $context = $this->getPreviewContextService()->ensureThemeIds($context, true, true);
+            // Bind typed editor_context before mint so the JSON response matches Token
+            // authority (generateToken also binds; this avoids returning editor_context:null).
+            $context = ObjectManager::getInstance(ThemePreviewTypedEditorContextBinder::class)
+                ->bindIntoPreviewContext($frontendThemeId, $pageType, $context);
             $token = $this->previewTokenService->generateToken(
                 $frontendThemeId,
                 $pageType,
@@ -10158,12 +10381,14 @@ HTML;
                 ]);
             }
 
-            $typedClaims = $previewContext['editor_context'] ?? null;
-            if (!is_array($typedClaims)) {
-                throw new \InvalidArgumentException('theme_preview_typed_context_required');
-            }
-            /** @var ThemeEditorContextFactory $factory */
-            $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+            // Prefer request body, then Token context, then reconstruct from Token shell.
+            // Legacy Tokens minted without editor_context must still publish.
+            $typedClaims = $this->resolvePreviewPublishTypedClaims(
+                $data,
+                $previewContext,
+                $themeId,
+                $pageType,
+            );
             // Only typed editor_context is authoritative. Full previewContext also carries
             // PreviewContextService shell target_type=layout|path|page — never feed that
             // blob into resolveVersionLayoutIdentity / assertRawLayoutContextMatches.
@@ -10269,6 +10494,37 @@ HTML;
                 'message' => $e->getMessage() !== '' ? $e->getMessage() : (string)__('发布失败'),
             ]);
         }
+    }
+
+    /**
+     * Resolve typed editor_context for publish-and-exit.
+     *
+     * Priority: request body → Token context → reconstruct from Token shell fields.
+     * Never feed PreviewContext shell target_type into layout identity.
+     *
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $previewContext
+     * @return array<string, mixed>
+     */
+    private function resolvePreviewPublishTypedClaims(
+        array $data,
+        array $previewContext,
+        int $themeId,
+        string $pageType,
+    ): array {
+        /** @var ThemePreviewTypedEditorContextBinder $binder */
+        $binder = ObjectManager::getInstance(ThemePreviewTypedEditorContextBinder::class);
+        foreach ([
+            $data['editor_context'] ?? null,
+            $previewContext['editor_context'] ?? null,
+        ] as $candidate) {
+            $decoded = $binder->decodeClaims($candidate);
+            if ($decoded !== null) {
+                return $decoded;
+            }
+        }
+
+        return $binder->materializeClaims($themeId, $pageType, $previewContext);
     }
 
     /**
@@ -10417,7 +10673,7 @@ HTML;
 
     /**
      * Canvas preview must hit the selected website's mount on the current Host
-     * (e.g. /daocharms on p{hash}.test.weline.com). Host-only / loads the default site.
+     * (e.g. /~site/daocharms on p{hash}.test.weline.com). Bare / loads the default site.
      *
      * @param array<string,mixed>|null $scopeIdentity
      */
@@ -10467,6 +10723,12 @@ HTML;
         } catch (\Throwable) {
         }
 
+        // Host-only website domain (grocery.test.weline.com): site is selected by Host —
+        // never prefix /~site/{code} (that path 404s on the dedicated Host).
+        if ($this->requestHostIsWebsiteLocalDomain($websiteId, $host)) {
+            return '';
+        }
+
         try {
             if (!\class_exists(\Weline\Websites\Model\WebsiteDomain::class)) {
                 return '';
@@ -10506,9 +10768,11 @@ HTML;
     }
 
     /**
-     * When the selected website lives on a different primary Host than the admin
-     * request (e.g. grocery.test.weline.com vs p{hash}.test.weline.com), canvas
-     * must use that absolute origin — mount-path alone cannot reach it.
+     * Canvas Host policy (local edit):
+     * - Standard project Host → same Host + /~site/{code} (never embed grocery.test).
+     * - Already on this website's Host-only local domain (grocery.test…) → same Host
+     *   (never embed p{hash}.test and strip /~site — that drops admin Session across Hosts).
+     * - Absolute storefront_origin only when admin Host is neither of the above.
      *
      * @param array<string,mixed>|null $scopeIdentity
      */
@@ -10532,6 +10796,28 @@ HTML;
             return '';
         }
 
+        $requestHost = \strtolower(\trim((string)($this->request->getServer('HTTP_HOST') ?? '')));
+        if ($requestHost !== '' && \str_contains($requestHost, ':')) {
+            $requestHost = \explode(':', $requestHost, 2)[0];
+        }
+        // 本地编辑：项目 Host 上只走 /~site/{code}，禁止拼 grocery.test / ai-test-*.weline.test。
+        try {
+            if ($requestHost !== ''
+                && \class_exists(\Weline\Server\Api\Domain\LocalDomainPolicy::class)
+                && \Weline\Server\Api\Domain\LocalDomainPolicy::isStandardProjectHost($requestHost)
+            ) {
+                return '';
+            }
+        } catch (\Throwable) {
+        }
+
+        // Already on this website's bound Host-only domain → stay same-origin.
+        // Otherwise resolveForWebsite prefers project-Host /~site and SSR embeds
+        // p{hash}.test with empty mount (cross-Host), and refresh looks like logout.
+        if ($requestHost !== '' && $this->requestHostIsWebsiteLocalDomain($websiteId, $requestHost)) {
+            return '';
+        }
+
         try {
             /** @var \Weline\Theme\Service\InstallLocalStorefrontBaseResolver $resolver */
             $resolver = ObjectManager::getInstance(
@@ -10551,10 +10837,6 @@ HTML;
         }
 
         $originHost = \strtolower((string)$parts['host']);
-        $requestHost = \strtolower(\trim((string)($this->request->getServer('HTTP_HOST') ?? '')));
-        if ($requestHost !== '' && \str_contains($requestHost, ':')) {
-            $requestHost = \explode(':', $requestHost, 2)[0];
-        }
         // Same Host → keep relative origin; mount_path (if any) is enough.
         if ($requestHost !== '' && $originHost === $requestHost) {
             return '';
@@ -10567,6 +10849,47 @@ HTML;
         $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
 
         return $scheme . '://' . $originHost . $port;
+    }
+
+    /**
+     * True when HTTP_HOST is a WebsiteDomain (or Website.URL) host for $websiteId.
+     */
+    private function requestHostIsWebsiteLocalDomain(int $websiteId, string $requestHost): bool
+    {
+        $requestHost = \strtolower(\trim($requestHost));
+        if ($requestHost === '' || $websiteId < 0) {
+            return false;
+        }
+
+        try {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                foreach (\Weline\Websites\Data\WebsiteData::domainsForWebsite($websiteId) as $domainRow) {
+                    if (!\is_array($domainRow)) {
+                        continue;
+                    }
+                    $domain = \strtolower(\trim((string)($domainRow['domain'] ?? '')));
+                    if ($domain !== '' && $domain === $requestHost) {
+                        return true;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (\class_exists(\Weline\Websites\Model\Website::class)) {
+                $raw = \Weline\Websites\Model\Website::resolveStorefrontBaseUrl($websiteId);
+                if (\is_string($raw) && $raw !== '') {
+                    $host = \strtolower((string)(\parse_url($raw, \PHP_URL_HOST) ?: ''));
+                    if ($host !== '' && $host === $requestHost) {
+                        return true;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return false;
     }
 
     private function persistEditorContext(array $overrides = []): array
@@ -10856,20 +11179,14 @@ HTML;
     /**
      * 释放编辑锁定 (Query)
      * 路由: /backend/theme-editor/release-lock (POST)
+     *
+     * Must use getEditorJsonPayload() like check-lock: QueryBin outer body is the
+     * WQB packet; only __theme_editor_request_params carries the inner editor claim.
      */
     public function postReleaseLock()
     {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
         try {
-            $lock = $this->editorLockIdentity($data);
+            $lock = $this->editorLockIdentity($this->getEditorJsonPayload());
         } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
@@ -10895,17 +11212,8 @@ HTML;
      */
     public function postUpdateActivity()
     {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
         try {
-            $lock = $this->editorLockIdentity($data);
+            $lock = $this->editorLockIdentity($this->getEditorJsonPayload());
         } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
@@ -10928,17 +11236,8 @@ HTML;
      */
     public function postRequestTakeover()
     {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
         try {
-            $lock = $this->editorLockIdentity($data);
+            $lock = $this->editorLockIdentity($this->getEditorJsonPayload());
         } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
@@ -10998,17 +11297,8 @@ HTML;
      */
     public function postForceTakeover()
     {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
-
         try {
-            $lock = $this->editorLockIdentity($data);
+            $lock = $this->editorLockIdentity($this->getEditorJsonPayload());
         } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
@@ -11724,14 +12014,32 @@ HTML;
             $scopeValue = $input['scope'];
             if (!is_array($scopeValue)) {
                 $scopeString = trim((string)$scopeValue);
-                if ($scopeString !== ''
-                    && $scopeString !== $this->legacyScopeForEditorContext($context)
-                    && $scopeString !== $context->scope->storageScope
-                ) {
+                if ($scopeString !== '' && !$this->rawScopeClaimMatchesEditorContext($context, $scopeString)) {
                     throw new \InvalidArgumentException('theme_editor_raw_context_mismatch:scope');
                 }
             }
         }
+    }
+
+    /**
+     * Accept storageScope, legacy encoded scope, or bare website_code shorthand
+     * (URL selector for Host-only sites: scope=grocery → grocery.default.default).
+     * Website segment = first dotted part of websites storageScope.
+     */
+    private function rawScopeClaimMatchesEditorContext(ThemeEditorContext $context, string $scopeString): bool
+    {
+        if ($scopeString === $this->legacyScopeForEditorContext($context)
+            || $scopeString === $context->scope->storageScope
+        ) {
+            return true;
+        }
+        if ($context->scope->provider !== 'websites') {
+            return false;
+        }
+        $parts = \explode('.', $context->scope->storageScope);
+        $websiteSegment = \strtolower(\trim((string)($parts[0] ?? '')));
+
+        return $websiteSegment !== '' && \strtolower($scopeString) === $websiteSegment;
     }
 
     /** @return array{layout_option:string,scope:string,store_mode:string,target_type:string,target_id:int,locale_code:string} */

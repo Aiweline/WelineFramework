@@ -389,11 +389,17 @@ final class ThemeLayoutEntityBakeCoordinator
         try {
             $head = $this->snapshotService()->head($identity);
             $descriptor = \json_decode((string)($head['package_default_json'] ?? '{}'), true);
+            // Draft reset / new draft rows can keep content_revision>=1 while the
+            // revision head snapshot was never written. Treat missing head the same
+            // as initial bootstrap (initial=true) so captureCurrent writeHead's at R
+            // without advancing — otherwise storefront/editor canvas fails closed
+            // with historical_revision_head_missing until an unrelated save creates head.
             if ($identity->contentRevision < 1 || $head === null || empty($descriptor['current_package_defaults'])) {
                 $mode = $identity->mode;
                 ThemeLayoutEntityOwnerLock::write($identity, function () use ($version, $context, $mode, &$identity): void {
-                    $initial = $version->getContentRevision() < 1;
-                    if ($initial) {
+                    $headMissing = $this->snapshotService()->head($version->toVersionIdentity()) === null;
+                    $initial = $version->getContentRevision() < 1 || $headMissing;
+                    if ($version->getContentRevision() < 1) {
                         $version->setContentRevision(1)->save();
                     }
                     $this->snapshotService()->captureCurrent($version, $context, $initial);
@@ -453,6 +459,22 @@ final class ThemeLayoutEntityBakeCoordinator
             $context->scope->storeMode,
             $context->area,
         );
+        // Theme / Scope switches land on owners that may not yet have a selection or
+        // is_current row. Align with SolidifyQueue: ensureCurrent before failing closed.
+        if (!$current instanceof ThemeScopeVersion || $current->getVersionId() < 1) {
+            try {
+                $current = $this->scopeVersions->ensureCurrent(
+                    $context->themeId,
+                    $context->scope->storageScope,
+                    'website',
+                    null,
+                    $context->scope->storeMode,
+                    $context->area,
+                );
+            } catch (\Throwable) {
+                return ['ok' => false, 'reason' => 'theme_scope_version_unresolved'];
+            }
+        }
         if (!$current instanceof ThemeScopeVersion || $current->getVersionId() < 1) {
             return ['ok' => false, 'reason' => 'theme_scope_version_unresolved'];
         }
@@ -558,8 +580,11 @@ final class ThemeLayoutEntityBakeCoordinator
                 if ($current?->getVersionId() === $identity->themeVersionId || $published?->getVersionId() === $identity->themeVersionId) {
                     try {
                         ThemeLayoutEntityOwnerLock::write($identity, function () use ($version, &$identity): void {
-                            $initial = $version->getContentRevision() < 1;
-                            if ($initial) { $version->setContentRevision(1)->save(); }
+                            $headMissing = $this->snapshotService()->head($version->toVersionIdentity()) === null;
+                            $initial = $version->getContentRevision() < 1 || $headMissing;
+                            if ($version->getContentRevision() < 1) {
+                                $version->setContentRevision(1)->save();
+                            }
                             $identity = $version->toVersionIdentity();
                             $this->snapshotService()->captureCurrent($version, $this->context($identity, 'homepage', 'default', 'global', null), $initial);
                             $identity = $version->toVersionIdentity();

@@ -31,6 +31,16 @@ final class EditorLockServiceTest extends TestCase
         self::assertStringContainsString('同一管理员（多 Tab / 刷新 / 心跳续期）直接续锁', $source);
     }
 
+    public function testReleaseLockTreatsMissingCacheKeyAsIdempotentSuccess(): void
+    {
+        $source = $this->editorLockServiceSource();
+        $offset = strpos($source, 'public function releaseLock(');
+        self::assertNotFalse($offset);
+        $method = substr($source, $offset, 1600);
+        self::assertStringContainsString('if ($this->getLockInfo($themeId, $pageType, $contextKey) !== null)', $method);
+        self::assertStringContainsString("__('编辑锁释放失败')", $method);
+    }
+
     public function testSingleFlightBusyNoLongerBlocksAcquire(): void
     {
         self::markTestSkipped('已过期：断言源码字符串，实现演进后不再匹配：testSingleFlightBusyNoLongerBlocksAcquire');

@@ -49,6 +49,7 @@
         apiInheritVersion: '',
         apiClearThemeCache: '',
         apiResetDraftResources: '',
+        apiSolidifyScopeVersion: '',
         apiDeleteVersion: '',
         // 前端预览 API
         apiPreviewBases: '',
@@ -2358,6 +2359,23 @@
         return ownsMode && mode !== 'normal' ? scope + '~' + mode : scope;
     }
 
+    /**
+     * Write/read API scope claim must be storage/legacy scope, not URL shorthand
+     * (scope=grocery). Bare website_code false-fails theme_editor_raw_context_mismatch:scope.
+     */
+    function editorCanonicalScopeClaim() {
+        const fromIdentity = String(
+            state.layoutIdentity?.scope
+            || legacyStorageScopeForIdentity(state.scopeIdentity)
+            || storageScopeForIdentity(state.scopeIdentity)
+            || ''
+        ).trim();
+        if (fromIdentity) {
+            return fromIdentity;
+        }
+        return String(getCurrentWindowParam('scope') || 'default').trim() || 'default';
+    }
+
     function restoreScopeSelector(scope) {
         window.WelineScopeSelect?.scopeSelect?.setValue(String(scope || ''), false);
     }
@@ -2388,6 +2406,11 @@
             showToast(window.__('旧 Scope 编辑锁释放失败，已停留在当前 Scope'), 'error');
             return;
         }
+        const scopeBusyMessage = window.__('正在切换作用域并初始化固化物…');
+        const scopeBusyTitle = window.__('正在切换作用域并固化');
+        queueSolidifyGateAfterNavigation(scopeBusyTitle, scopeBusyMessage);
+        openResetProgressLock(scopeBusyMessage, 1, scopeBusyTitle);
+        setEditorBusy(true, scopeBusyMessage);
         showCanvasLoadingImmediate();
         navigateEditorShell({
             scope: nextScope,
@@ -4335,8 +4358,47 @@
     }
 
     /**
+     * Standard project Host only (p{hash}.test.weline.com …). Dedicated website Hosts
+     * (grocery.test.weline.com) already select the site at / — must not synthesize /~site.
+     */
+    function isStandardProjectHostName(hostname) {
+        const host = String(hostname || '').split(':')[0].toLowerCase();
+        return /^p[0-9a-f]{8}\.(?:test\.weline\.com|weline\.test|local\.test|weline\.localhost)$/i.test(host);
+    }
+
+    /**
+     * Derive /~site/{code} from typed scope identity when SSR mount is missing.
+     * Matches ProjectHostSiteMount::editorMountPath (default website stays mount-less).
+     * Only on the standard project Host — never on a website's own Host-only domain.
+     */
+    function deriveStorefrontMountFromScopeIdentity(identity) {
+        if (!identity || typeof identity !== 'object') {
+            return '';
+        }
+        if (!isStandardProjectHostName(window.location.hostname)) {
+            return '';
+        }
+        const kind = String(identity.scope_kind || '').trim().toLowerCase();
+        if (!kind || kind === 'global') {
+            return '';
+        }
+        const websiteId = Number.parseInt(identity.website_id, 10);
+        const code = String(identity.website_code || '').trim().toLowerCase();
+        if (!Number.isSafeInteger(websiteId) || websiteId < 0 || !code) {
+            return '';
+        }
+        if (websiteId === 0 && code === 'default') {
+            return '';
+        }
+        if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(code)) {
+            return '';
+        }
+        return '~site/' + code;
+    }
+
+    /**
      * Prefix a storefront route with the selected website mount on this Host
-     * (e.g. daocharms → /daocharms/…). Locale stays after the mount.
+     * (e.g. daocharms → /~site/daocharms/…). Locale stays after the mount.
      */
     function withStorefrontMountPath(route) {
         const raw = String(route || '').replace(/^\/+/, '');
@@ -4352,10 +4414,15 @@
         const mount = String(
             state.storefrontMountPath
             || config.storefrontMountPath
+            || deriveStorefrontMountFromScopeIdentity(state.scopeIdentity)
             || ''
         ).replace(/^\/+|\/+$/g, '');
         if (!mount) {
             return raw;
+        }
+        // Keep SSR/config mount in sync when derived from scope (scope switch / stale data-*).
+        if (!state.storefrontMountPath) {
+            state.storefrontMountPath = mount;
         }
         const business = raw.replace(/\/+$/g, '');
         const mountLower = mount.toLowerCase();
@@ -4758,6 +4825,185 @@
         navigateSameOriginEditorUrl(targetUrl);
     }
 
+    /**
+     * After canvas iframe navigates, sync outer shell page_type / canvasRoute / URL.
+     * Never writes previewFrame.src (avoids reload loops).
+     */
+    async function syncEditorShellFromCanvasLocation() {
+        const frame = elements.previewFrame;
+        if (!frame) {
+            return false;
+        }
+        let href = '';
+        try {
+            href = String(frame.contentWindow?.location?.href || '');
+        } catch (error) {
+            return false;
+        }
+        if (!href || href === 'about:blank') {
+            return false;
+        }
+        let canvasUrl;
+        try {
+            canvasUrl = new URL(href);
+        } catch (error) {
+            return false;
+        }
+        if (canvasUrl.origin !== window.location.origin
+            && canvasUrl.origin !== getStorefrontCanvasOrigin()) {
+            return false;
+        }
+        let navigation;
+        try {
+            navigation = await resolveEditorNavigationTarget(canvasUrl);
+        } catch (error) {
+            console.warn('[ThemeEditor] canvas→shell sync resolve failed:', error);
+            return false;
+        }
+        if (!navigation || typeof navigation !== 'object') {
+            return false;
+        }
+        const publicRoute = sanitizeStorefrontPublicRoute(
+            navigation.public_route || ''
+        );
+        const pageType = normalizeLayoutOptionValue(
+            navigation.page_type || navigation.target_value || state.pageType || 'homepage'
+        ) || 'homepage';
+        const layoutOption = normalizeLayoutOptionValue(
+            navigation.layout_option || state.layoutOption || 'default'
+        ) || 'default';
+
+        const currentType = getEffectivePageType(state.pageType || 'homepage');
+        const currentOption = getEffectiveLayoutOption(state.layoutOption || 'default');
+        const currentRoute = String(state.canvasRoute || '').replace(/^\/+|\/+$/g, '');
+        if (currentType === pageType
+            && currentOption === layoutOption
+            && currentRoute === String(publicRoute || '').replace(/^\/+|\/+$/g, '')) {
+            return false;
+        }
+
+        setCurrentLayoutSelection(pageType, layoutOption);
+        state.canvasRoute = publicRoute;
+        syncEditorUrlState({
+            page_type: pageType,
+            layout_option: layoutOption === 'default' ? null : layoutOption,
+        });
+        fetchLayoutSlots({
+            layout_type: pageType,
+            page_type: pageType,
+            layout_option: layoutOption,
+        });
+        return true;
+    }
+
+    async function requestSolidifyScopeWithProgress(onProgress) {
+        const payload = buildLayoutVersionIdentityPayload({
+            theme_id: state.themeId || 0,
+            stream: 1,
+        });
+        const requestUrl = resolveSameOriginEditorUrl(config.apiSolidifyScopeVersion);
+        if (!requestUrl) {
+            throw new Error(window.__('固化进度流不可用'));
+        }
+        const headers = normalizeRequestHeaders({
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            Accept: 'text/event-stream',
+        });
+        if (state.scopeIdentity) {
+            headers['X-Weline-Editor-Context'] = JSON.stringify(buildTypedEditorContext('layout'));
+            if (!Object.prototype.hasOwnProperty.call(payload, 'editor_context')) {
+                payload.editor_context = buildTypedEditorContext('layout');
+            }
+        }
+        const response = await fetch(requestUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers,
+            body: JSON.stringify(payload),
+        });
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (contentType.indexOf('text/event-stream') !== -1) {
+            if (!response.ok) {
+                throw new Error(window.__('固化进度流不可用'));
+            }
+            return consumeStandardPublishSse(response, (event) => {
+                if (typeof onProgress === 'function') {
+                    onProgress(event || {});
+                }
+            });
+        }
+        return apiJson(config.apiSolidifyScopeVersion, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildLayoutVersionIdentityPayload({
+                theme_id: state.themeId || 0,
+            })),
+        });
+    }
+
+    async function applyThemeBindingWithSolidifyGate(options = {}) {
+        const previousThemeId = parseInt(String(options.previousThemeId || 0), 10) || 0;
+        const busyMessage = String(options.busyMessage || window.__('正在固化主题…'));
+        const progressTitle = String(options.progressTitle || window.__('正在固化主题'));
+        const bind = typeof options.bind === 'function' ? options.bind : null;
+        if (!bind) {
+            throw new Error(window.__('主题绑定回调缺失'));
+        }
+        if (elements.themeSelect) {
+            elements.themeSelect.disabled = true;
+        }
+        if (elements.themeBindingInherit) {
+            elements.themeBindingInherit.disabled = true;
+        }
+        showCanvasLoadingImmediate();
+        openResetProgressLock(busyMessage, 1, progressTitle);
+        setEditorBusy(true, busyMessage);
+        let solidifyResult = null;
+        try {
+            await bind();
+            solidifyResult = await requestSolidifyScopeWithProgress(bindSolidifyProgressHandler(busyMessage));
+            if (!solidifyResult?.success) {
+                throw new Error(solidifyResult?.message || window.__('固化物重固未完成'));
+            }
+            updateResetProgress(
+                solidifyResult.message || window.__('固化物初始化完成'),
+                100,
+                'done',
+                'done solidify-scope-version',
+            );
+            await refreshLayoutOptions({ layout_option: '', silent: true });
+            syncEditorUrlState({
+                theme_id: state.themeId,
+                page_type: getCurrentPageType(),
+                layout_option: state.layoutOption || 'default',
+                preview_area: state.editorArea || 'frontend',
+            });
+            await loadCanvas();
+            loadLayoutConfig({ silent: true });
+            loadVersions();
+            reloadWidgetLibrary({ silent: true });
+            if (options.successToast) {
+                showToast(String(options.successToast), 'success');
+            }
+        } catch (error) {
+            closeResetProgressLock();
+            state.themeId = previousThemeId;
+            throw error;
+        } finally {
+            setEditorBusy(false);
+            if (elements.themeSelect) {
+                elements.themeSelect.disabled = false;
+            }
+            if (elements.themeBindingInherit) {
+                elements.themeBindingInherit.disabled = false;
+            }
+            setTimeout(() => closeResetProgressLock(), 500);
+        }
+        return solidifyResult;
+    }
+
     // 注意：pageType 和 layoutType 现在是同一个概念
     // 之前的 layoutTypeToPageType / pageTypeToLayoutType 转换函数已移除
     // 页面类型就是布局类型，直接使用 pageType
@@ -4828,6 +5074,8 @@
         config.apiInheritVersion = container.dataset.apiInheritVersion || `${config.apiBase}/inherit-version`;
         config.apiClearThemeCache = container.dataset.apiClearThemeCache || `${config.apiBase}/clear-theme-cache`;
         config.apiResetDraftResources = container.dataset.apiResetDraftResources || `${config.apiBase}/reset-draft-resources`;
+        config.apiSolidifyScopeVersion = container.dataset.apiSolidifyScopeVersion
+            || `${config.apiBase}/solidify-scope-version`;
         config.apiFactoryReset = container.dataset.apiFactoryReset || `${config.apiBase}/factory-reset`;
         config.apiDeleteVersion = container.dataset.apiDeleteVersion || `${config.apiBase}/delete-version`;
 
@@ -4984,9 +5232,14 @@
         initializeEditorLock();
         // 部件库与预览并行：优先发起部件列表请求，不再等待 iframe load
         deferWidgetLibraryLoad();
-        if (state.themeId) {
-            loadCanvas();
-        }
+        // Scope navigation queues a solidify gate; block ops until SSE completes (or errors).
+        Promise.resolve(runQueuedSolidifyGateIfNeeded()).catch((error) => {
+            console.warn('[ThemeEditor] solidify gate failed:', error);
+        }).finally(() => {
+            if (state.themeId) {
+                loadCanvas();
+            }
+        });
 
         // 初始化拖拽
         initDragAndDrop();
@@ -5324,45 +5577,41 @@
             });
         }
 
-        // Theme selection is a scoped draft binding; runtime changes only after publish.
+        // Theme selection is a scoped draft binding; canvas opens only after SSE solidify.
         if (elements.themeSelect) {
             elements.themeSelect.addEventListener('change', async function() {
                 const themeId = this.value;
-                if (themeId) {
-                    const previousThemeId = state.themeId;
-                    try {
-                        await flushPendingEditorMutations();
-                    } catch (error) {
-                        this.value = String(previousThemeId || '');
-                        showToast(error?.message || window.__('当前修改保存失败，已停留在原主题'), 'error');
-                        return;
+                if (!themeId) {
+                    return;
+                }
+                const previousThemeId = state.themeId;
+                try {
+                    await flushPendingEditorMutations();
+                } catch (error) {
+                    this.value = String(previousThemeId || '');
+                    showToast(error?.message || window.__('当前修改保存失败，已停留在原主题'), 'error');
+                    return;
+                }
+                const nextThemeId = parseInt(themeId, 10) || 0;
+                state.themeId = nextThemeId;
+                try {
+                    await applyThemeBindingWithSolidifyGate({
+                        previousThemeId,
+                        bind: async () => {
+                            await queueScopedChanges('theme_binding', [{ op: 'set', path: '/theme_id', value: nextThemeId }], {
+                                summary: 'theme_binding_changed',
+                            });
+                        },
+                        busyMessage: window.__('正在固化主题…'),
+                    });
+                } catch (error) {
+                    console.error('[ThemeEditor] theme switch failed:', error);
+                    state.themeId = previousThemeId;
+                    elements.themeSelect.value = String(previousThemeId || '');
+                    if (elements.previewLoading) {
+                        elements.previewLoading.classList.add('hidden');
                     }
-                    showCanvasLoadingImmediate();
-                    state.themeId = parseInt(themeId, 10) || 0;
-                    try {
-                        await queueScopedChanges('theme_binding', [{ op: 'set', path: '/theme_id', value: state.themeId }], {
-                            summary: 'theme_binding_changed',
-                        });
-                        await refreshLayoutOptions({ layout_option: '', silent: true });
-                        syncEditorUrlState({
-                            theme_id: state.themeId,
-                            page_type: getCurrentPageType(),
-                            layout_option: state.layoutOption || 'default',
-                            preview_area: state.editorArea || 'frontend',
-                        });
-                        await loadCanvas();
-                        loadLayoutConfig({ silent: true });
-                        loadVersions();
-                        reloadWidgetLibrary({ silent: true });
-                    } catch (error) {
-                        console.error('[ThemeEditor] theme switch failed:', error);
-                        state.themeId = previousThemeId;
-                        elements.themeSelect.value = String(previousThemeId || '');
-                        if (elements.previewLoading) {
-                            elements.previewLoading.classList.add('hidden');
-                        }
-                        showToast(error?.message || window.__('主题草稿保存失败'), 'error');
-                    }
+                    showToast(error?.message || window.__('主题切换失败'), 'error');
                 }
             });
         }
@@ -5371,30 +5620,28 @@
                 const previousThemeId = state.themeId;
                 try {
                     await flushPendingEditorMutations();
-                    showCanvasLoadingImmediate();
-                    const workspace = await queueScopedChanges('theme_binding', [{ op: 'inherit', path: '/theme_id' }], {
-                        summary: 'theme_binding_inherit',
+                    await applyThemeBindingWithSolidifyGate({
+                        previousThemeId,
+                        bind: async () => {
+                            const workspace = await queueScopedChanges('theme_binding', [{ op: 'inherit', path: '/theme_id' }], {
+                                summary: 'theme_binding_inherit',
+                            });
+                            const inheritedThemeId = parseInt(workspace?.draft_payload?.theme_id || 0, 10) || 0;
+                            if (inheritedThemeId > 0) {
+                                state.themeId = inheritedThemeId;
+                                if (elements.themeSelect) {
+                                    elements.themeSelect.value = String(inheritedThemeId);
+                                }
+                            }
+                        },
+                        busyMessage: window.__('正在固化继承主题…'),
+                        successToast: window.__('主题已恢复继承（已固化，发布后正式生效）'),
                     });
-                    const inheritedThemeId = parseInt(workspace?.draft_payload?.theme_id || 0, 10) || 0;
-                    if (inheritedThemeId > 0) {
-                        state.themeId = inheritedThemeId;
-                        elements.themeSelect.value = String(inheritedThemeId);
-                    }
-                    await refreshLayoutOptions({ layout_option: '', silent: true });
-                    syncEditorUrlState({
-                        theme_id: state.themeId,
-                        page_type: getCurrentPageType(),
-                        layout_option: state.layoutOption || 'default',
-                        preview_area: state.editorArea || 'frontend',
-                    });
-                    loadCanvas();
-                    loadLayoutConfig({ silent: true });
-                    loadVersions();
-                    reloadWidgetLibrary({ silent: true });
-                    showToast(window.__('主题已恢复继承（发布后生效）'), 'success');
                 } catch (error) {
                     state.themeId = previousThemeId;
-                    elements.themeSelect.value = String(previousThemeId || '');
+                    if (elements.themeSelect) {
+                        elements.themeSelect.value = String(previousThemeId || '');
+                    }
                     if (elements.previewLoading) {
                         elements.previewLoading.classList.add('hidden');
                     }
@@ -5984,6 +6231,10 @@
                     syncUrl: false,
                 });
                 flushPendingPreviewFocus();
+
+                void syncEditorShellFromCanvasLocation().catch((error) => {
+                    console.warn('[ThemeEditor] canvas→shell sync failed:', error);
+                });
             });
 
             // 添加超时机制：如果 5 秒后仍未加载完成，强制隐藏加载状态
@@ -7926,7 +8177,7 @@
         url.searchParams.set('layout_option', getEffectiveLayoutOption());
         url.searchParams.set('editor_area', getEffectiveEditorArea());
         url.searchParams.set('preview_area', getEffectiveEditorArea());
-        url.searchParams.set('scope', getCurrentWindowParam('scope') || 'default');
+        url.searchParams.set('scope', editorCanonicalScopeClaim());
         const lockPayload = getLayoutLockVirtualPayload();
         Object.entries(lockPayload).forEach(([key, value]) => {
             if (value !== undefined && value !== null && value !== '') {
@@ -8138,7 +8389,7 @@
                 layout_option: getEffectiveLayoutOption(),
                 editor_area: editorArea,
                 preview_area: editorArea,
-                scope: getCurrentWindowParam('scope') || 'default',
+                scope: editorCanonicalScopeClaim(),
                 locale: effectiveLocale,
                 config: configData,
                 editor_context: buildTypedEditorContext(resourceType, resourceOptions),
@@ -8191,7 +8442,7 @@
         url.searchParams.set('layout_option', requestedLayoutOption);
         url.searchParams.set('editor_area', editorArea);
         url.searchParams.set('preview_area', editorArea);
-        url.searchParams.set('scope', getCurrentWindowParam('scope') || 'default');
+        url.searchParams.set('scope', editorCanonicalScopeClaim());
         url.searchParams.set('_t', String(Date.now()));
 
         const payload = await apiJson(url.toString(), { silent: options.silent === true });
@@ -8220,7 +8471,7 @@
                 layout_option: state.layoutOption || 'default',
                 editor_area: state.editorArea || 'frontend',
                 preview_area: state.editorArea || 'frontend',
-                scope: getCurrentWindowParam('scope') || 'default',
+                scope: editorCanonicalScopeClaim(),
                 editor_context: buildTypedEditorContext('layout'),
                 expected_content_revision: Number(state.contentRevision || 0) || undefined
             }),
@@ -19116,7 +19367,7 @@
                             layout_type: state.layoutType || getCurrentPageType() || 'homepage',
                             layout_option: state.layoutOption || 'default',
                             editor_area: state.editorArea || 'frontend',
-                            scope: getCurrentWindowParam('scope') || 'default',
+                            scope: editorCanonicalScopeClaim(),
                             config: { [fieldKey]: value },
                             locale: locale,
                             ...getLayoutLockVirtualPayload()
@@ -20166,7 +20417,7 @@
                                 data-preview-base-cancel aria-label="${escapeHtml(window.__('关闭'))}"></button>
                     </header>
                     <div class="w-dialog__body w-theme-editor-preview-base-dialog__body">
-                        <p class="w-theme-editor-preview-base-dialog__notice">${escapeHtml(notice || window.__('本机开发请优先选择「本机项目壳」。'))}</p>
+                        <p class="w-theme-editor-preview-base-dialog__notice">${escapeHtml(notice || window.__('画布固定用本机项目壳 /~site/{站点}，保证随时可可视化编辑。前端预览默认也选本机壳，才能正确看到当前要发布的版本；正式/外部域名可选，但线上可能仍是已发布内容，看不到本机草稿效果。'))}</p>
                         <div class="w-theme-editor-preview-base-dialog__list" role="radiogroup" aria-label="${escapeHtml(window.__('预览地址'))}">
                             ${items.map((item, index) => {
                                 const url = String(item?.url || '');
@@ -21252,6 +21503,311 @@
         return { resources, layout_scope: layoutScope };
     }
 
+
+    function setEditorBusy(busy, message = '') {
+        const host = elements.container || document.getElementById('themeEditor');
+        if (!(host instanceof HTMLElement)) {
+            return false;
+        }
+        const ui = window.Weline && window.Weline.UI;
+        if (ui && typeof ui.setBusy === 'function') {
+            return ui.setBusy(host, !!busy, { message: String(message || '') });
+        }
+        host.dataset.wBusy = busy ? 'true' : 'false';
+        host.setAttribute('aria-busy', busy ? 'true' : 'false');
+        return true;
+    }
+
+    let resetProgressLockEl = null;
+    let resetProgressPrevOverflow = '';
+
+    function closeResetProgressLock() {
+        if (resetProgressLockEl && resetProgressLockEl.parentNode) {
+            resetProgressLockEl.parentNode.removeChild(resetProgressLockEl);
+        }
+        resetProgressLockEl = null;
+        try {
+            document.documentElement.style.overflow = resetProgressPrevOverflow || '';
+        } catch (e) {}
+        resetProgressPrevOverflow = '';
+    }
+
+    function openResetProgressLock(initialMessage, initialProgress, titleText) {
+        if (!resetProgressLockEl) {
+            try {
+                resetProgressPrevOverflow = document.documentElement.style.overflow || '';
+                document.documentElement.style.overflow = 'hidden';
+            } catch (e) {}
+            resetProgressLockEl = document.createElement('div');
+            resetProgressLockEl.setAttribute('data-w-theme-reset-progress-lock', '1');
+            resetProgressLockEl.setAttribute('role', 'alertdialog');
+            resetProgressLockEl.setAttribute('aria-modal', 'true');
+            resetProgressLockEl.setAttribute('aria-busy', 'true');
+            resetProgressLockEl.setAttribute('aria-live', 'polite');
+            resetProgressLockEl.className = 'w-theme-editor-reset-progress-lock';
+            // Inline critical layout so stale CSS caches cannot hide the SSH progress surface.
+            resetProgressLockEl.style.cssText = [
+                'position:fixed',
+                'inset:0',
+                'z-index:2147483601',
+                'display:flex',
+                'align-items:center',
+                'justify-content:center',
+                'background:rgba(15,23,42,0.78)',
+                'padding:24px',
+                'cursor:wait',
+            ].join(';');
+            resetProgressLockEl.addEventListener('click', (event) => {
+                try { event.preventDefault(); event.stopPropagation(); } catch (e) {}
+            }, true);
+
+            const card = document.createElement('div');
+            card.className = 'w-theme-editor-reset-progress-card';
+            card.style.cssText = [
+                'width:min(560px,100%)',
+                'border-radius:12px',
+                'background:#fff',
+                'color:#0f172a',
+                'border:1px solid #e2e8f0',
+                'box-shadow:0 24px 60px rgba(15,23,42,0.35)',
+                'padding:22px 22px 18px',
+                'pointer-events:none',
+            ].join(';');
+            const title = String(titleText || window.__('正在重置并重固'));
+            card.innerHTML = [
+                `<h3 class="w-theme-editor-reset-progress-title" data-w-reset-title="1">${escapeHtml(title)}</h3>`,
+                `<p class="w-theme-editor-reset-progress-message" data-w-reset-message="1"></p>`,
+                '<div class="w-theme-editor-reset-progress-meta">',
+                '  <div data-w-reset-detail="1"></div>',
+                '  <div data-w-reset-pct="1">0%</div>',
+                '</div>',
+                '<div class="w-theme-editor-reset-progress-track"><div data-w-reset-bar="1" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="width:0%"></div></div>',
+                `<div class="w-theme-editor-reset-progress-ssh" data-w-reset-ssh-wrap="1">`,
+                `  <div class="w-theme-editor-reset-progress-ssh-head"><span>${window.__('SSH 进度')}</span><span data-w-reset-ssh-status="1">${window.__('连接中…')}</span></div>`,
+                '  <pre class="w-theme-editor-reset-progress-ssh-body" data-w-reset-ssh="1"></pre>',
+                '</div>',
+            ].join('');
+            resetProgressLockEl.appendChild(card);
+            document.body.appendChild(resetProgressLockEl);
+        } else if (titleText) {
+            const titleEl = resetProgressLockEl.querySelector('[data-w-reset-title]');
+            if (titleEl) {
+                titleEl.textContent = String(titleText);
+            }
+        }
+        // Never call updateResetProgress from here when lock already exists —
+        // updateResetProgress opens the lock, which would recurse forever.
+        paintResetProgress(
+            initialMessage || window.__('正在重置当前编辑草稿...'),
+            initialProgress || 0,
+            'start',
+            '',
+        );
+    }
+
+    function appendResetSshLine(line) {
+        if (!resetProgressLockEl || !line) {
+            return;
+        }
+        const terminal = resetProgressLockEl.querySelector('[data-w-reset-ssh]');
+        if (!(terminal instanceof HTMLElement)) {
+            return;
+        }
+        const next = String(line).trim();
+        if (!next) {
+            return;
+        }
+        const existing = terminal.textContent || '';
+        if (existing.split('\n').includes(next)) {
+            return;
+        }
+        terminal.textContent = existing ? `${existing}\n${next}` : next;
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function paintResetProgress(message, progress, step, sshLine) {
+        if (!resetProgressLockEl) {
+            return;
+        }
+        const msgEl = resetProgressLockEl.querySelector('[data-w-reset-message]');
+        const detailEl = resetProgressLockEl.querySelector('[data-w-reset-detail]');
+        const pctEl = resetProgressLockEl.querySelector('[data-w-reset-pct]');
+        const barEl = resetProgressLockEl.querySelector('[data-w-reset-bar]');
+        const statusEl = resetProgressLockEl.querySelector('[data-w-reset-ssh-status]');
+        const pct = Math.max(0, Math.min(100, Number(progress) || 0));
+        if (msgEl) {
+            msgEl.textContent = String(message || '');
+        }
+        if (detailEl) {
+            detailEl.textContent = step ? String(step) : '';
+        }
+        if (pctEl) {
+            pctEl.textContent = `${Math.round(pct)}%`;
+        }
+        if (barEl instanceof HTMLElement) {
+            barEl.style.width = `${pct}%`;
+            barEl.setAttribute('aria-valuenow', String(Math.round(pct)));
+        }
+        if (statusEl) {
+            statusEl.textContent = pct >= 100
+                ? window.__('完成')
+                : (step === 'solidify' || step === 'solidify_done'
+                    ? window.__('固化物重固中…')
+                    : window.__('执行中…'));
+        }
+        if (sshLine) {
+            appendResetSshLine(sshLine);
+        }
+    }
+
+    function updateResetProgress(message, progress, step, sshLine) {
+        if (!resetProgressLockEl) {
+            openResetProgressLock(message, progress);
+            // openResetProgressLock already painted start state; paint again with
+            // the caller-provided step/ssh without re-entering open.
+            paintResetProgress(message, progress, step, sshLine);
+            return;
+        }
+        paintResetProgress(message, progress, step, sshLine);
+    }
+
+    function bindSolidifyProgressHandler(busyMessage) {
+        return (event) => {
+            const message = String(event?.message || busyMessage);
+            const progress = Number(event?.progress);
+            const step = String(event?.step || '');
+            const ssh = String(event?.ssh || '');
+            updateResetProgress(
+                message,
+                Number.isFinite(progress) ? progress : 0,
+                step,
+                ssh,
+            );
+            if (Array.isArray(event?.ssh_log)) {
+                event.ssh_log.forEach((line) => appendResetSshLine(line));
+            }
+        };
+    }
+
+    const SOLIDIFY_GATE_STORAGE_KEY = 'weline.themeEditor.solidifyGate';
+
+    function queueSolidifyGateAfterNavigation(title, message) {
+        try {
+            sessionStorage.setItem(SOLIDIFY_GATE_STORAGE_KEY, JSON.stringify({
+                title: String(title || window.__('正在固化主题')),
+                message: String(message || window.__('正在初始化固化物…')),
+                queued_at: Date.now(),
+            }));
+        } catch (e) {}
+    }
+
+    async function runQueuedSolidifyGateIfNeeded() {
+        let pending = null;
+        try {
+            const raw = sessionStorage.getItem(SOLIDIFY_GATE_STORAGE_KEY);
+            if (!raw) {
+                return false;
+            }
+            sessionStorage.removeItem(SOLIDIFY_GATE_STORAGE_KEY);
+            pending = JSON.parse(raw);
+        } catch (e) {
+            try { sessionStorage.removeItem(SOLIDIFY_GATE_STORAGE_KEY); } catch (err) {}
+            return false;
+        }
+        if (!pending || !state.themeId) {
+            return false;
+        }
+        const busyMessage = String(pending.message || window.__('正在初始化固化物…'));
+        const title = String(pending.title || window.__('正在固化主题'));
+        openResetProgressLock(busyMessage, 1, title);
+        setEditorBusy(true, busyMessage);
+        try {
+            const solidifyResult = await requestSolidifyScopeWithProgress(bindSolidifyProgressHandler(busyMessage));
+            if (!solidifyResult?.success) {
+                throw new Error(solidifyResult?.message || window.__('固化物重固未完成'));
+            }
+            updateResetProgress(
+                solidifyResult.message || window.__('固化物初始化完成'),
+                100,
+                'done',
+                'done solidify-scope-version',
+            );
+            return true;
+        } catch (error) {
+            closeResetProgressLock();
+            showToast(error?.message || window.__('固化物重固未完成'), 'error');
+            return false;
+        } finally {
+            setEditorBusy(false);
+            setTimeout(() => closeResetProgressLock(), 500);
+        }
+    }
+
+    async function requestResetDraftWithProgress(selection, onProgress) {
+        const payload = buildLayoutVersionIdentityPayload({
+            resources: selection.resources,
+            layout_scope: selection.layout_scope,
+            stream: 1,
+        });
+        const requestUrl = resolveSameOriginEditorUrl(config.apiResetDraftResources);
+        if (!requestUrl) {
+            throw new Error(window.__('重置进度流不可用'));
+        }
+        const headers = normalizeRequestHeaders({
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            Accept: 'text/event-stream',
+        });
+        if (state.scopeIdentity) {
+            headers['X-Weline-Editor-Context'] = JSON.stringify(buildTypedEditorContext('layout'));
+            if (!Object.prototype.hasOwnProperty.call(payload, 'editor_context')) {
+                payload.editor_context = buildTypedEditorContext('layout');
+            }
+        }
+        const response = await fetch(requestUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers,
+            body: JSON.stringify(payload),
+        });
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (contentType.indexOf('text/event-stream') !== -1) {
+            if (!response.ok) {
+                throw new Error(window.__('重置进度流不可用'));
+            }
+            return consumeStandardPublishSse(response, (event) => {
+                if (typeof onProgress === 'function') {
+                    onProgress(event || {});
+                }
+            });
+        }
+        const result = await apiJson(config.apiResetDraftResources, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildLayoutVersionIdentityPayload({
+                resources: selection.resources,
+                layout_scope: selection.layout_scope,
+            })),
+        });
+        const sshLog = Array.isArray(result?.ssh_log)
+            ? result.ssh_log
+            : (Array.isArray(result?.data?.ssh_log) ? result.data.ssh_log : []);
+        sshLog.forEach((line, index) => {
+            const percent = Math.round(((index + 1) / Math.max(1, sshLog.length)) * 100);
+            if (typeof onProgress === 'function') {
+                onProgress({
+                    step: index + 1 >= sshLog.length ? 'done' : 'replay',
+                    message: String(line || ''),
+                    progress: percent,
+                    ssh: String(line || ''),
+                });
+            }
+        });
+        return result;
+    }
+
+
     async function executeResetDraftResources(selectAll = false) {
         const selection = collectResetDraftSelections(selectAll);
         if (!selection.resources.length) {
@@ -21261,7 +21817,7 @@
 
         const confirmed = await showCustomConfirm(
             window.__(selectAll ? '确认重置所有草稿资源？' : '确认重置选中草稿资源？'),
-            window.__('仅清理当前编辑草稿物化，不会删除版本历史或已发布内容。'),
+            window.__('仅清理当前编辑草稿物化，不会删除版本历史或已发布内容。将展示固化物重固进度与 SSH 日志。'),
             window.__('确认重置'),
             window.__('取消'),
         );
@@ -21269,24 +21825,29 @@
             return;
         }
 
-        showToast(window.__('正在重置当前编辑草稿...'), 'info');
-        const result = await apiJson(config.apiResetDraftResources, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(buildLayoutVersionIdentityPayload({
-                resources: selection.resources,
-                layout_scope: selection.layout_scope,
-            })),
-        });
+        const busyMessage = window.__('正在重置当前编辑草稿...');
+        closeResetDraftModal();
+        openResetProgressLock(busyMessage, 1, window.__('正在重置并重固'));
+        setEditorBusy(true, busyMessage);
+        let result = null;
+        try {
+            result = await requestResetDraftWithProgress(selection, bindSolidifyProgressHandler(busyMessage));
+        } catch (error) {
+            closeResetProgressLock();
+            setEditorBusy(false);
+            showToast(error?.message || window.__('重置失败'), 'error');
+            return;
+        } finally {
+            setEditorBusy(false);
+        }
 
         if (!result?.success) {
+            closeResetProgressLock();
             showToast(result?.message || window.__('重置失败'), 'error');
             return;
         }
 
-        closeResetDraftModal();
+        updateResetProgress(result.message || window.__('当前编辑草稿已重置'), 100, 'done', 'done reset-draft');
         for (const resourceType of selection.resources) {
             try {
                 await loadScopedWorkspace(resourceType);
@@ -21306,9 +21867,11 @@
         await fetchLayoutSlots();
         showToast(result.message || window.__('当前编辑草稿已重置'), 'success');
         setTimeout(() => {
+            closeResetProgressLock();
             refreshPreview();
-        }, 300);
+        }, 600);
     }
+
 
     async function executeFactoryReset() {
         const input = document.getElementById('themeEditorFactoryResetConfirm');
@@ -23129,6 +23692,7 @@
             if (keepalive) {
                 apiJson(config.apiReleaseLock, {
                     method: 'POST',
+                    keepBusinessResult: true,
                     headers: {
                         'Content-Type': 'application/json',
                     },
@@ -23138,8 +23702,11 @@
                 return true;
             }
 
+            // Same keepBusinessResult contract as check-lock / update-activity: SDK must
+            // not throw business_error on success:false or Scope switch cannot read the body.
             const result = await apiJson(config.apiReleaseLock, {
                 method: 'POST',
+                keepBusinessResult: true,
                 headers: {
                     'Content-Type': 'application/json',
                 },
