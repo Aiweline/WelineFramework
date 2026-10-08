@@ -63,6 +63,19 @@ final class ProductCardContractTest extends TestCase
         self::assertSame(99.0, (float)$product['original_price']);
         self::assertTrue(!empty($product['is_sale']));
         self::assertSame('今日精选', $product['campaign_label']);
+        // Runtime glyph assertions need full app bootstrap (w_env); source contract below
+        // pins the projection so hydrate cards can reuse CurrencySymbol formatting.
+    }
+
+    public function testNormalizeProductSourceEmitsCurrencyGlyphFields(): void
+    {
+        $renderer = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/ProductCardRenderer.php'
+        );
+        self::assertStringContainsString("CurrencySymbol::forCode", $renderer);
+        self::assertStringContainsString("CurrencySymbol::formatAmount", $renderer);
+        self::assertStringContainsString("\$product['currency_symbol']", $renderer);
+        self::assertStringContainsString("\$product['formatted_price']", $renderer);
     }
 
     public function testNormalizeProductKeepsSeoPathAfterSplitForTaglib(): void

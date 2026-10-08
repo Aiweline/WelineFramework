@@ -155,7 +155,11 @@ $hrefAttr = 'href="' . $esc($resolvedHref !== '' ? $resolvedHref : '#') . '"';
             ?>
             <div class="wpc-rating" aria-label="<?= $esc($ratingAria) ?>">
                 <span class="wpc-stars" data-widget-style="--rating: <?= $esc(number_format($ratingSafe, 2)) ?>"></span>
-                <span class="wpc-reviews">(<?= $reviewCountSafe ?>)</span>
+                <?php if ($reviewCountSafe > 0): ?>
+                    <span class="wpc-reviews">(<?= $reviewCountSafe ?>)</span>
+                <?php else: ?>
+                    <span class="wpc-reviews wpc-reviews--empty" aria-hidden="true"></span>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
 

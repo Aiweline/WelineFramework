@@ -234,26 +234,15 @@ final class StorefrontProductDetailProjector
             }
             $image = trim((string)($offer['image'] ?? ''));
 
+            // Cold card surface: keep offer pricing/identity facts, do not re-attach
+            // description/meta/brand/specification fat used only by listing facets/PDP.
             return array_merge($offer, [
                 'name' => $displayName,
-                'short_description' => (string)($offer['short_description'] ?? ''),
-                'description' => (string)($offer['description'] ?? ''),
-                'meta_name' => (string)($offer['meta_name'] ?? ''),
-                'meta_description' => (string)($offer['meta_description'] ?? ''),
-                'meta_keywords' => (string)($offer['meta_keywords'] ?? ''),
                 'slug' => $this->normalizeSlug((string)($offer['slug'] ?? '')),
-                'brand' => trim((string)($offer['brand'] ?? '')),
-                'brand_code' => trim((string)($offer['brand_code'] ?? '')),
-                'attribute_set' => $offer['attribute_set'] ?? '',
-                'attribute_set_label' => $offer['attribute_set_label'] ?? '',
                 'quote_only' => !empty($offer['quote_only']),
-                'variant_axes' => [],
-                'combination' => $combination,
                 'combination_key' => $combinationKey,
-                'specifications' => [],
-                'images' => $image !== '' ? [$image] : [],
                 'image' => $image,
-                'videos' => [],
+                'images' => $image !== '' ? [$image] : [],
             ]);
         }
 

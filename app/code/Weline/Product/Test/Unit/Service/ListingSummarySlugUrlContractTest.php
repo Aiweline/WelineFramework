@@ -36,7 +36,7 @@ final class ListingSummarySlugUrlContractTest extends TestCase
             dirname(__DIR__, 3) . '/Service/StorefrontCatalogViewService.php',
         );
         self::assertStringContainsString("'slug' => \$this->resolvePublicCatalogSlug(", $source);
-        self::assertStringContainsString("'summary-slug2'", $source);
+        self::assertStringContainsString("'summary-card3'", $source);
         self::assertStringContainsString('publicSlugFromSku', $source);
     }
 

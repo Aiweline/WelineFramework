@@ -36,11 +36,12 @@ final class StorefrontProductWidgetCatalog
      *
      * @return list<array<string, mixed>>
      */
-    public function homepageFeaturedCards(int $limit = 8): array
+    public function homepageFeaturedCards(int $limit = 8, bool $withReviews = true): array
     {
         $limit = max(1, min(24, $limit));
+        $cards = array_slice($this->homepageShelfPlan()['featured'], 0, $limit);
 
-        return array_slice($this->homepageShelfPlan()['featured'], 0, $limit);
+        return $withReviews ? $this->withReviewAggregates($cards) : $cards;
     }
 
     /**
@@ -48,11 +49,12 @@ final class StorefrontProductWidgetCatalog
      *
      * @return list<array<string, mixed>>
      */
-    public function homepageDealsCards(int $limit = 4): array
+    public function homepageDealsCards(int $limit = 4, bool $withReviews = true): array
     {
         $limit = max(1, min(24, $limit));
+        $cards = array_slice($this->homepageShelfPlan()['deals'], 0, $limit);
 
-        return array_slice($this->homepageShelfPlan()['deals'], 0, $limit);
+        return $withReviews ? $this->withReviewAggregates($cards) : $cards;
     }
 
     /**
@@ -60,11 +62,12 @@ final class StorefrontProductWidgetCatalog
      *
      * @return list<array<string, mixed>>
      */
-    public function homepageHotCards(int $limit = 8): array
+    public function homepageHotCards(int $limit = 8, bool $withReviews = true): array
     {
         $limit = max(1, min(24, $limit));
+        $cards = array_slice($this->homepageShelfPlan()['hot'], 0, $limit);
 
-        return array_slice($this->homepageShelfPlan()['hot'], 0, $limit);
+        return $withReviews ? $this->withReviewAggregates($cards) : $cards;
     }
 
     /**
@@ -86,16 +89,17 @@ final class StorefrontProductWidgetCatalog
             return $cached;
         }
 
-        $featuredPool = $this->buildFeaturedCandidateCards(24);
-        $dealsPool = $this->buildDealCandidateCards(48);
-        $hotPool = $this->bestSellerCards(48);
+        // Cold path: candidate pools track shelf take (2×), not fixed 24/48 windows.
+        $featuredPool = $this->buildFeaturedCandidateCards(16);
+        $dealsPool = $this->buildDealCandidateCards(12);
+        $hotPool = $this->bestSellerCards(16, false);
 
         $plan = HomepageShelfStagger::select(
             $featuredPool,
             $dealsPool,
             $hotPool,
             8,
-            8,
+            4,
             8,
         );
         RequestContext::set(self::HOMEPAGE_SHELF_PLAN_KEY, $plan);
@@ -111,11 +115,11 @@ final class StorefrontProductWidgetCatalog
     private function buildFeaturedCandidateCards(int $limit): array
     {
         $limit = max(8, min(48, $limit));
-        // Over-fetch so zero-price / quote-only SKUs can be skipped without emptying Featured.
-        $poolLimit = max($limit * 3, 24);
+        // Fill margin only — catalog methods already skip non-displayable offers.
+        $poolLimit = max($limit * 2, $limit);
         $selected = [];
         $seen = [];
-        foreach ($this->newArrivalCards($poolLimit, 30) as $card) {
+        foreach ($this->newArrivalCards($poolLimit, 30, false) as $card) {
             if (!$this->isDisplayableShelfCard($card)) {
                 continue;
             }
@@ -129,7 +133,7 @@ final class StorefrontProductWidgetCatalog
                 return $selected;
             }
         }
-        foreach ($this->cards($poolLimit) as $card) {
+        foreach ($this->cards($poolLimit, false) as $card) {
             if (!$this->isDisplayableShelfCard($card)) {
                 continue;
             }
@@ -154,8 +158,8 @@ final class StorefrontProductWidgetCatalog
      */
     private function buildDealCandidateCards(int $limit): array
     {
-        $limit = max(8, min(96, $limit));
-        $offers = $this->catalog->publishedOfferSummaries(max($limit * 2, 48));
+        $limit = max(4, min(96, $limit));
+        $offers = $this->catalog->publishedOfferSummaries(max($limit * 2, $limit));
         usort(
             $offers,
             static fn(array $left, array $right): int => (int)($right['product_id'] ?? 0)
@@ -195,7 +199,8 @@ final class StorefrontProductWidgetCatalog
             }
         }
 
-        return $this->withReviewAggregates($cards);
+        // Reviews attach on the final shelf slice (homepage*Cards), not the candidate pool.
+        return $cards;
     }
 
     /**
@@ -213,14 +218,18 @@ final class StorefrontProductWidgetCatalog
      *     sellable:bool
      * }>
      */
-    public function cards(int $limit = 8): array
+    public function cards(int $limit = 8, bool $withReviews = true): array
     {
         $limit = max(1, min(24, $limit));
-        $fetchLimit = max($limit * 3, 24);
+        // Cold path: candidate window tracks widget-configured limit (2× fill margin).
+        // Do not floor at 24 on homepage — that forced every 4-card shelf to hydrate a full page.
+        $fetchLimit = max($limit * 2, $limit);
         // Controllers publish unfiltered candidates before pagination. Reuse
         // those facts and defer media until the recommendation selection is final.
         $listingOffers = StorefrontPageContext::listingOffers();
         if ($listingOffers !== null) {
+            // Listing reuse keeps a stable first-page window for filter-page recommendations.
+            $fetchLimit = max($fetchLimit, 24);
             $offers = array_slice($listingOffers, 0, $fetchLimit);
         } elseif ($this->shouldUseListingProjection()) {
             $offers = $this->catalog->publishedOffers($fetchLimit, true);
@@ -276,7 +285,7 @@ final class StorefrontProductWidgetCatalog
             $cards[] = $this->mapOffer($offer, count($cards));
         }
 
-        return $this->withReviewAggregates($cards);
+        return $withReviews ? $this->withReviewAggregates($cards) : $cards;
     }
 
     /**
@@ -300,7 +309,7 @@ final class StorefrontProductWidgetCatalog
      *     sellable:bool
      * }>
      */
-    public function cardsByIds(array $productIds, int $limit = 12): array
+    public function cardsByIds(array $productIds, int $limit = 12, bool $withReviews = true): array
     {
         $limit = max(1, min(24, $limit));
         $orderedIds = [];
@@ -349,7 +358,7 @@ final class StorefrontProductWidgetCatalog
             }
         }
 
-        return $this->withReviewAggregates($cards);
+        return $withReviews ? $this->withReviewAggregates($cards) : $cards;
     }
 
     /**
@@ -360,14 +369,14 @@ final class StorefrontProductWidgetCatalog
      *
      * @return list<array<string, mixed>>
      */
-    public function bestSellerCards(int $limit = 24): array
+    public function bestSellerCards(int $limit = 24, bool $withReviews = true): array
     {
         $limit = max(1, min(48, $limit));
         // Prefer Hanfu-scoped widget cards; fall back to all published offers so the
         // dedicated /best-sellers page is not empty when HF-* SKUs are absent.
-        $pool = $this->cards(max($limit * 2, 24));
+        $pool = $this->cards(max($limit * 2, $limit), false);
         if ($pool === []) {
-            $offers = $this->catalog->publishedOfferSummaries(max($limit * 3, 48));
+            $offers = $this->catalog->publishedOfferSummaries(max($limit * 2, $limit));
             usort(
                 $offers,
                 static fn(array $left, array $right): int => (int)($right['product_id'] ?? 0)
@@ -385,14 +394,17 @@ final class StorefrontProductWidgetCatalog
                 }
                 $seenProductIds[$productId] = true;
                 $pool[] = $this->mapOffer($offer, count($pool));
-                if (count($pool) >= max($limit * 2, 24)) {
+                if (count($pool) >= max($limit * 2, $limit)) {
                     break;
                 }
             }
         }
 
+        if ($withReviews) {
+            $pool = $this->withReviewAggregates($pool);
+        }
         $pool = array_values(array_filter(
-            $this->withReviewAggregates($pool),
+            $pool,
             fn(array $card): bool => $this->isDisplayableShelfCard($card),
         ));
 
@@ -429,7 +441,7 @@ final class StorefrontProductWidgetCatalog
      *
      * @return list<array<string, mixed>>
      */
-    public function newArrivalCards(int $limit = 8, int $days = 30): array
+    public function newArrivalCards(int $limit = 8, int $days = 30, bool $withReviews = true): array
     {
         $limit = max(1, min(24, $limit));
         $days = max(1, min(365, $days));
@@ -437,7 +449,9 @@ final class StorefrontProductWidgetCatalog
             ->modify('-' . $days . ' days')
             ->format('Y-m-d H:i:s');
         $websiteId = max(0, (int)$this->currentScope()->websiteId);
-        $candidateLimit = max($limit * 3, 48);
+        // Cold path: page by widget limit (2× fill margin). Keep paging until filled;
+        // never start with a hard floor of 48 that ignores configured quantity.
+        $candidateLimit = max($limit * 2, $limit);
 
         $hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
         $cards = [];
@@ -462,7 +476,7 @@ final class StorefrontProductWidgetCatalog
             if ($createdAtByProductId !== []) {
                 $offers = $this->catalog->publishedOffersForProductIds(
                     \array_keys($createdAtByProductId),
-                    \max($limit * 3, 48),
+                    \count($createdAtByProductId),
                     false,
                 );
                 $offerByProductId = [];
@@ -502,19 +516,19 @@ final class StorefrontProductWidgetCatalog
                 }
 
                 if (count($cards) >= $limit) {
-                    return $this->withReviewAggregates($cards);
+                    return $withReviews ? $this->withReviewAggregates($cards) : $cards;
                 }
             }
             $offset += count($createdAtByProductId);
         } while (count($createdAtByProductId) === $candidateLimit);
 
         if ($cards !== []) {
-            return $this->withReviewAggregates($cards);
+            return $withReviews ? $this->withReviewAggregates($cards) : $cards;
         }
 
         // Day-window empty or no sellable offers: stable catalog fallback for widgets/page.
         $fallback = [];
-        foreach ($this->cards($limit) as $card) {
+        foreach ($this->cards($limit, $withReviews) as $card) {
             $card['is_new'] = 1;
             $fallback[] = $card;
         }

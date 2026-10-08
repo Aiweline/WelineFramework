@@ -74,6 +74,26 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         );
     }
 
+    public function testHydrateJsFormatsPriceWithCurrencyGlyph(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/statics/js/widgets/recently-viewed.js';
+        self::assertFileExists($path);
+        $js = (string)file_get_contents($path);
+        self::assertStringContainsString('function formatCardPrice(card)', $js);
+        self::assertStringContainsString('formatted_price', $js);
+        self::assertStringContainsString('Never invent a client currency symbol table', $js);
+        self::assertStringNotContainsString(
+            "esc(price.toFixed(2))",
+            $js,
+            'Hydrate cards must not render bare amounts without a currency glyph.',
+        );
+        self::assertDoesNotMatchRegularExpression(
+            "/code === 'USD'|symbol = '\\$'|symbol = '¥'/",
+            $js,
+            'Hydrate JS must not keep a local currency glyph map.',
+        );
+    }
+
     public function testSectionBackgroundIsTransparent(): void
     {
         $path = dirname(__DIR__, 3) . '/view/statics/css/widgets/recently-viewed.css';

@@ -29,6 +29,14 @@
     return [];
   }
 
+  // Glyph authority is server-side ProductCardRenderer / CurrencySymbol only.
+  // Never invent a client currency symbol table here.
+  function formatCardPrice(card) {
+    return card && card.formatted_price != null
+      ? String(card.formatted_price).trim()
+      : '';
+  }
+
   function cardHtml(card, cardClass) {
     var id = parseInt(card && (card.id || card.product_id), 10) || 0;
     if (id <= 0) {
@@ -37,9 +45,9 @@
     var url = String((card && card.url) || ('/product/' + id));
     var name = String((card && card.name) || '');
     var image = String((card && (card.image || card.thumbnail)) || '');
-    var price = card && card.price != null ? Number(card.price) : null;
-    var priceHtml = price != null && !Number.isNaN(price)
-      ? '<span class="wym-hydrate-price">' + esc(price.toFixed(2)) + '</span>'
+    var priceLabel = formatCardPrice(card);
+    var priceHtml = priceLabel !== ''
+      ? '<span class="wym-hydrate-price">' + esc(priceLabel) + '</span>'
       : '';
     return (
       '<a class="wpc-listing-card ' + cardClass + ' wym-hydrate-card" href="' + esc(url) + '" data-product-id="' + id + '">' +

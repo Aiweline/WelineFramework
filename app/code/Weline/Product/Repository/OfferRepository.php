@@ -14,6 +14,29 @@ use Weline\Product\Service\ProductShardProvisioner;
 
 final class OfferRepository extends AbstractWebsiteShardRepository
 {
+    /**
+     * Storefront card / summary offer columns (cold path).
+     * Omits type_config_json, cas_token, tax/hazard, publish metadata — not needed for shelf cards.
+     *
+     * @return list<string>
+     */
+    public static function storefrontCardOfferFields(): array
+    {
+        return [
+            Offer::schema_fields_ID,
+            Offer::schema_fields_PRODUCT_ID,
+            Offer::schema_fields_GLOBAL_OFFER_UUID,
+            Offer::schema_fields_SKU,
+            Offer::schema_fields_COMBINATION_KEY,
+            Offer::schema_fields_IS_DEFAULT,
+            Offer::schema_fields_REQUIRES_SHIPPING,
+            Offer::schema_fields_SHIPPING_PROFILE_CODE,
+            Offer::schema_fields_IS_FREE_SHIPPING,
+            Offer::schema_fields_FREE_SHIPPING_MIN_AMOUNT,
+            Offer::schema_fields_STATUS,
+        ];
+    }
+
     /** @var (\Closure(int): Offer)|null */
     private readonly mixed $modelFactory;
 
@@ -93,8 +116,8 @@ final class OfferRepository extends AbstractWebsiteShardRepository
      * Storefront listing pages only expose one representative offer per
      * product. Grouping the published shard rows before hydrating the full
      * offer records avoids transferring every variant into PHP for that
-     * path; the second query preserves the existing offer-id ordering and
-     * returns the same complete rows as listPublishedByProductIds().
+     * path; the second query preserves offer-id ordering and returns
+     * storefront card columns only (not full variant payloads).
      *
      * @param list<int> $productIds
      * @return list<array<string, mixed>>
@@ -131,6 +154,7 @@ final class OfferRepository extends AbstractWebsiteShardRepository
 
         return $this->newModel($websiteId)
             ->clear()
+            ->fields(self::storefrontCardOfferFields())
             ->where(Offer::schema_fields_ID, $offerIds, 'IN')
             ->order(Offer::schema_fields_ID, 'ASC')
             ->select()
@@ -163,6 +187,7 @@ final class OfferRepository extends AbstractWebsiteShardRepository
             return [];
         }
         return $this->newModel($websiteId)->clear()
+            ->fields(self::storefrontCardOfferFields())
             ->where(Offer::schema_fields_ID, $ids, 'IN')
             ->order(Offer::schema_fields_ID, 'ASC')
             ->select()->fetchArray();

@@ -103,6 +103,9 @@ final class ProductStorefrontTemplateContractTest extends TestCase
         self::assertStringContainsString('id="list-filters"', $layout);
         self::assertStringContainsString('data-placeholder="list-filters"', $layout);
         self::assertStringContainsString('由 Filters 部件默认注入', $layout);
+        // Storefront solidify fallback must not paint declaration copy for customers.
+        self::assertStringContainsString('$isEditorPreview', $layout);
+        self::assertStringContainsString('if ($isEditorPreview)', $layout);
         self::assertStringNotContainsString(
             "getHook('Weline_Theme::frontend::layouts::products::filters-sidebar'",
             $layout,

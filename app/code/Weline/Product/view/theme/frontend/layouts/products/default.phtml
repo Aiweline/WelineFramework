@@ -53,6 +53,20 @@ $meta['showFilters'] = $showFilters;
 $meta['showToolbar'] = $showToolbar;
 $meta['filterDrawerTitle'] = $filterDrawerTitle;
 $meta['gridColumns'] = $gridColumns;
+
+// Declaration placeholder is editor-canvas only. Storefront solidify fallback must not
+// show 「由 Filters 部件默认注入」 to customers (RequiredFilterSlotFallbackInjector).
+$isEditorPreview = (bool)($this->getData('editor_mode') ?? false);
+if (!$isEditorPreview) {
+    try {
+        $editorModeFlag = trim((string)(\Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Http\Request::class
+        )->getParam('editor_mode', '')));
+        $isEditorPreview = ($editorModeFlag === '1' || strtolower($editorModeFlag) === 'true');
+    } catch (\Throwable) {
+        $isEditorPreview = false;
+    }
+}
 $this->assign('meta', $meta);
 ?>
 <!DOCTYPE html>
@@ -141,11 +155,13 @@ $this->assign('meta', $meta);
                                         multiple="true"
                                         position="sidebar">
                                     <w:hook>Weline_Theme::frontend::layouts::products::filters-before</w:hook>
-                                    <!-- 仅 slot + 预览占位；筛选由 Weline_Filters category-filters 经 default_injections 注入 -->
+                                    <!-- 仅 slot + 编辑器占位；店面由固化 renderResolved / FallbackInjector 注入 Filters -->
+                                    <?php if ($isEditorPreview): ?>
                                     <div class="products-layout__placeholder slot-placeholder"
                                          data-placeholder="list-filters">
                                         <span class="products-layout__placeholder-text"><lang>筛选器区域 - 由 Filters 部件默认注入</lang></span>
                                     </div>
+                                    <?php endif; ?>
                                     <w:hook>Weline_Theme::frontend::layouts::products::filters-after</w:hook>
                                 </w:slot>
                             </div>

@@ -114,7 +114,8 @@ final class StorefrontProductWidgetCatalogTest extends TestCase
         $mediaKey = $key(StorefrontCatalogCacheCoordinator::catalogTargetedOffersPolicy(),
             $coordinator->catalogTargetedOffersLogicalKey(0, $mediaIds, false) . '.media.v1');
         $fullKey = $key(StorefrontCatalogCacheCoordinator::catalogOffersPolicy(), $coordinator->catalogOffersLogicalKey(0));
-        $summaryKey = $key(StorefrontCatalogCacheCoordinator::catalogSummaryOffersPolicy(), $coordinator->catalogSummaryOffersLogicalKey(0, 24));
+        // cards($limit) summary window is 2×limit on non-listing paths (cold shelf).
+        $summaryKey = $key(StorefrontCatalogCacheCoordinator::catalogSummaryOffersPolicy(), $coordinator->catalogSummaryOffersLogicalKey(0, 6));
         $images = [];
         foreach ($mediaIds as $id) {
             $images[$id] = 'https://cdn.example.test/' . $id . '.jpg';

@@ -239,17 +239,13 @@ moduleDescribe(test, MODULE, 'PDP sticky purchase dock', () => {
         path.join(ROOT, 'app/code/Weline/Product/view/templates/frontend/widgets/product-info.phtml'),
         'utf8'
       );
-      const storeMusicCss = fs.readFileSync(
-        path.join(ROOT, 'app/code/Weline/StoreMusic/view/statics/css/store-music.css'),
-        'utf8'
-      );
-      const csCss = fs.readFileSync(
-        path.join(ROOT, 'app/code/Weline/CustomerService/view/statics/css/customer-service.css'),
+      const floatLayerCss = fs.readFileSync(
+        path.join(ROOT, 'app/code/Weline/Theme/view/statics/css/storefront-float-layer.css'),
         'utf8'
       );
       expect(info).toContain('--weline-product-sticky-purchase-clearance');
-      expect(storeMusicCss).toContain('--weline-product-sticky-purchase-clearance');
-      expect(csCss).toContain('--weline-product-sticky-purchase-clearance');
+      expect(floatLayerCss).toContain('--weline-product-sticky-purchase-clearance');
+      expect(floatLayerCss).toContain('w-storefront-float-layer');
 
       await openPdpWithSticky(page);
       await revealStickyDock(page);

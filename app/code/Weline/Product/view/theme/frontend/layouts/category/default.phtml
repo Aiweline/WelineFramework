@@ -45,6 +45,19 @@ $meta['gridColumns'] = $gridColumns;
 $this->assign('meta', $meta);
 
 $this->assign('title', $title);
+
+// Declaration placeholder is editor-canvas only (see products layout / FallbackInjector).
+$isEditorPreview = (bool)($this->getData('editor_mode') ?? false);
+if (!$isEditorPreview) {
+    try {
+        $editorModeFlag = trim((string)(\Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Http\Request::class
+        )->getParam('editor_mode', '')));
+        $isEditorPreview = ($editorModeFlag === '1' || strtolower($editorModeFlag) === 'true');
+    } catch (\Throwable) {
+        $isEditorPreview = false;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend" data-theme-preference="light" data-theme="light">
@@ -121,11 +134,13 @@ $this->assign('title', $title);
                                         multiple="true"
                                         position="sidebar">
                                     <w:hook>Weline_Theme::frontend::layouts::category::filters-before</w:hook>
-                                    <!-- 仅 slot + 预览占位；筛选由 Weline_Filters category-filters 经 default_injections 注入，禁止布局 getHook/内嵌 w:widget 占槽 -->
+                                    <!-- 仅 slot + 编辑器占位；店面由固化 / FallbackInjector 注入 Filters -->
+                                    <?php if ($isEditorPreview): ?>
                                     <div class="category-layout__placeholder slot-placeholder"
                                          data-placeholder="category-filters">
                                         <span class="category-layout__placeholder-text"><lang>分类筛选区域 - 由 Filters 部件默认注入</lang></span>
                                     </div>
+                                    <?php endif; ?>
                                     <w:hook>Weline_Theme::frontend::layouts::category::filters-after</w:hook>
                                 </w:slot>
                             </div>

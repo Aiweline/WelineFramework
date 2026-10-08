@@ -141,7 +141,12 @@ final class StorefrontCatalogViewService
         if (Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
             $rows = RequestContext::get(self::REQUEST_FULL_ROWS_KEY);
             if (is_array($rows)) {
-                return $this->materializeCampaignUrls(array_slice($rows, 0, $limit));
+                $sliced = $this->materializeCampaignUrls(array_slice($rows, 0, $limit));
+
+                return array_map(
+                    fn(array $row): array => $this->toCardSurfaceRow($row),
+                    $sliced,
+                );
             }
         }
         $scope = $this->currentScope();
@@ -415,11 +420,10 @@ final class StorefrontCatalogViewService
 
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
-        // summary-slug2: empty EAV slug falls back to SKU-derived public handle
-        // so cards/affiliate never emit /product/{id} when SKU can form a slug.
+        // summary-card3: slug-from-SKU fallback + card-only payload (no description/meta/EAV facet fat).
         $logicalKey = $this->catalogCache->catalogOffersLogicalKey(
             $websiteId,
-            ($includeMedia ? '' : 'candidates-') . ($includeListingDetails ? 'full' : 'summary-slug2'),
+            ($includeMedia ? '' : 'candidates-') . ($includeListingDetails ? 'full' : 'summary-card3'),
         );
         $requestKey = serialize([
             $websiteId,
@@ -538,6 +542,10 @@ final class StorefrontCatalogViewService
             $peekKeys[] = [
                 StorefrontCatalogCacheCoordinator::catalogSummaryOffersPolicy(),
                 $this->catalogCache->catalogSummaryOffersLogicalKey($websiteId, 48),
+            ];
+            $peekKeys[] = [
+                StorefrontCatalogCacheCoordinator::catalogOffersPolicy(),
+                $this->catalogCache->catalogOffersLogicalKey($websiteId, 'summary-card3'),
             ];
             $peekKeys[] = [
                 StorefrontCatalogCacheCoordinator::catalogOffersPolicy(),
@@ -889,7 +897,8 @@ final class StorefrontCatalogViewService
             $rows = [];
             $afterOfferId = 0;
             do {
-                $pageSize = max(24, min(128, $maxRows - count($rows)));
+                // Cold path: page size tracks remaining need; do not floor at 24.
+                $pageSize = max(1, min(128, $maxRows - count($rows)));
                 $page = $this->offers->listPublishedRepresentativePage($websiteId, $pageSize, $afterOfferId);
                 if ($page === []) {
                     break;
@@ -1184,7 +1193,46 @@ final class StorefrontCatalogViewService
             ['products' => count($rows)],
         );
 
+        if (!$includeListingDetails) {
+            foreach ($rows as $index => $row) {
+                $rows[$index] = $this->toCardSurfaceRow(is_array($row) ? $row : []);
+            }
+        }
+
         return $rows;
+    }
+
+    /**
+     * Bound summary/card bags to fields shelf widgets actually read (cold bandwidth).
+     *
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function toCardSurfaceRow(array $row): array
+    {
+        return [
+            'product_id' => max(0, (int)($row['product_id'] ?? 0)),
+            'offer_id' => max(0, (int)($row['offer_id'] ?? 0)),
+            'global_offer_uuid' => trim((string)($row['global_offer_uuid'] ?? '')),
+            'name' => trim((string)($row['name'] ?? '')),
+            'sku' => trim((string)($row['sku'] ?? '')),
+            'slug' => trim((string)($row['slug'] ?? '')),
+            'image' => trim((string)($row['image'] ?? '')),
+            'currency' => trim((string)($row['currency'] ?? 'CNY')) ?: 'CNY',
+            'unit_price_minor' => max(0, (int)($row['unit_price_minor'] ?? 0)),
+            'catalog_price_minor' => max(0, (int)($row['catalog_price_minor'] ?? $row['unit_price_minor'] ?? 0)),
+            'compare_at_minor' => max(0, (int)($row['compare_at_minor'] ?? 0)),
+            'has_deal' => !empty($row['has_deal']),
+            'campaign_label' => trim((string)($row['campaign_label'] ?? '')),
+            'campaign_url' => trim((string)($row['campaign_url'] ?? '')),
+            '_campaign_frontend_route' => trim((string)($row['_campaign_frontend_route'] ?? '')),
+            'sellable' => !empty($row['sellable']),
+            'currency_unavailable' => !empty($row['currency_unavailable']),
+            'quote_only' => !empty($row['quote_only']),
+            'stock' => max(0, (int)($row['stock'] ?? 0)),
+            'is_free_shipping' => !empty($row['is_free_shipping']),
+            'is_limited_deal' => !empty($row['is_limited_deal']) || !empty($row['limited_deal']),
+        ];
     }
 
     /**

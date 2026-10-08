@@ -523,6 +523,24 @@ final class ProductCardRenderer
         $product['currency_unavailable'] = !empty($product['currency_unavailable']);
         $product['price'] = (float)($product['price'] ?? 0);
         $product['original_price'] = (float)($product['original_price'] ?? 0);
+        // Storefront hydrate cards (recently-viewed / you-may-like) must reuse the
+        // same glyph formatting as SSR product-card.phtml — never bare amounts.
+        if (\class_exists(\Weline\Currency\Helper\CurrencySymbol::class)) {
+            $product['currency_symbol'] = \Weline\Currency\Helper\CurrencySymbol::forCode(
+                (string)$product['currency']
+            );
+            $product['formatted_price'] = !$product['currency_unavailable'] && (float)$product['price'] > 0
+                ? \Weline\Currency\Helper\CurrencySymbol::formatAmount(
+                    (float)$product['price'],
+                    (string)$product['currency']
+                )
+                : '';
+        } else {
+            $product['currency_symbol'] = (string)$product['currency'];
+            $product['formatted_price'] = !$product['currency_unavailable'] && (float)$product['price'] > 0
+                ? ((string)$product['currency'] . ' ' . \number_format((float)$product['price'], 2, '.', ''))
+                : '';
+        }
         $product['rating'] = (float)($product['rating'] ?? 0);
         $product['review_count'] = (int)($product['review_count'] ?? 0);
         $product['is_new'] = !empty($product['is_new']);

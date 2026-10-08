@@ -70,6 +70,8 @@ final class ProductCategoryTemplateContractTest extends TestCase
         self::assertStringContainsString('id="category-filters"', $layout);
         self::assertStringContainsString('data-placeholder="category-filters"', $layout);
         self::assertStringContainsString('由 Filters 部件默认注入', $layout);
+        self::assertStringContainsString('$isEditorPreview', $layout);
+        self::assertStringContainsString('if ($isEditorPreview)', $layout);
         self::assertStringNotContainsString(
             "getHook('Weline_Theme::frontend::layouts::category::filters-sidebar'",
             $layout,

@@ -33,7 +33,7 @@ final class StorefrontHotCacheBagWarmupProviderContractTest extends TestCase
         self::assertStringContainsString('publishedListingCandidates', $source);
         self::assertStringContainsString('product.catalog_offers_summary', $source);
         self::assertStringContainsString('product.catalog_offers.full', $source);
-        self::assertStringContainsString('product.catalog_offers.summary-slug2', $source);
+        self::assertStringContainsString('product.catalog_offers.summary-card3', $source);
         self::assertStringContainsString('peekCatalogOffersProjection', $source);
         self::assertStringContainsString('peekPolicy', $source);
         self::assertStringContainsString('resolveHeavyMode', $source);

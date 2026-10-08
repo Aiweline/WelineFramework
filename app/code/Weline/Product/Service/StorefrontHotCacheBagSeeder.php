@@ -135,13 +135,13 @@ final class StorefrontHotCacheBagSeeder
                 'seed' => static fn() => $catalog->publishedOffers(1000, true),
             ],
             [
-                'bag' => 'product.catalog_offers.summary-slug2',
-                'projection' => 'summary-slug2',
+                'bag' => 'product.catalog_offers.summary-card3',
+                'projection' => 'summary-card3',
                 'seed' => static fn() => $catalog->publishedOffers(1000, false),
             ],
             [
                 'bag' => 'product.catalog_offers.candidates',
-                'projection' => 'candidates-summary-slug2',
+                'projection' => 'candidates-summary-card3',
                 'seed' => static fn() => $catalog->publishedListingCandidates(96, false),
             ],
         ];
