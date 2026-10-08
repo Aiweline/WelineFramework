@@ -48,7 +48,6 @@
 ## doc 目录
 
 - `app/code/Weline/Multipass/doc/README.md`
-- `app/code/Weline/Multipass/doc/identity-bridge-product-development-plan.md`
 - `app/code/Weline/Multipass/doc/功能现状.md`
 - `app/code/Weline/Multipass/doc/开发日志.md`
 - `app/code/Weline/Multipass/doc/需求.md`

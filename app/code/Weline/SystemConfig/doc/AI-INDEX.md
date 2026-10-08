@@ -53,8 +53,6 @@
 
 - `app/code/Weline/SystemConfig/doc/README.md`
 - `app/code/Weline/SystemConfig/doc/config-embed标签使用指南.md`
-- `app/code/Weline/SystemConfig/doc/scope-config-theme-layout-master-plan.md`
-- `app/code/Weline/SystemConfig/doc/scope-config-tree-plan.md`
 - `app/code/Weline/SystemConfig/doc/功能现状.md`
 - `app/code/Weline/SystemConfig/doc/开发日志.md`
 - `app/code/Weline/SystemConfig/doc/需求.md`

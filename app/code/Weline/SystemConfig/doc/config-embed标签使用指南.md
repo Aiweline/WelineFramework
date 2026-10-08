@@ -230,7 +230,7 @@ $embedField = 'payment/method/' . $methodCode . '/enabled';
 ## 16. 相关文档
 
 - [README.md — 配置嵌入摘要](./README.md)
-- [scope-config-tree-plan.md — 标签表](./scope-config-tree-plan.md)
+- Scope 配置树一次性计划已迁 `dev/session/migrated-from-module-doc/`（标签表以本文与 Taglib 索引为准）
 - [需求.md — REQ-SYSTEMCONFIG-0004](./需求.md)
 - [Taglib 场景映射表](../../Taglib/doc/场景映射表.md)
 - [标签全量索引](../../Taglib/doc/标签全量索引.md)（先全量 `php bin/w taglib:collect`，再 `php bin/w taglib:catalog-generate`；仅 `--module` 收集不会刷新注册表 `doc`）

@@ -314,7 +314,6 @@
 - `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/roster.md`
 - `app/code/Weline/Framework/doc/开发/team/wls-perf-regression-20260923/surfaces.md`
 - `app/code/Weline/Framework/doc/开发日志.md`
-- `app/code/Weline/Framework/doc/性能诊断-20260908.md`
 - `app/code/Weline/Framework/doc/模块功能跟随模块禁用或者启用状态变更需求.md`
 - `app/code/Weline/Framework/doc/统一缓存范围与性能优化.md`
 - `app/code/Weline/Framework/doc/缓存环境来源.md`

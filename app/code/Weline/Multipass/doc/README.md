@@ -64,7 +64,6 @@
 
 ## 本模块文档资产
 
-- `app/code/Weline/Multipass/doc/identity-bridge-product-development-plan.md`
 
 ## 维护规则
 

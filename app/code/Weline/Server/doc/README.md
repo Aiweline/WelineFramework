@@ -96,13 +96,12 @@ Windows/MSVC/SCM 与冷重启、macOS system-domain 冷重启、专用 Windows �
 
 ## 历史材料
 
-以下类型仅用于审计和回归取证：
+以下类型仅用于审计和回归取证（一次性排查/FIX/plan 已迁出模块 doc，见本机 `dev/session/migrated-from-module-doc/`）：
 
-- `WLS-ISSUES-*`、`WLS-FIXES-*`、`WLS-FINAL-REPORT-*`
-- `WLS-HA-*`、`WLS-MASTER-*`、`WLS-SUPERVISOR-*`
-- `WLS-default-startup-*`、`WLS-DISPATCHER-*`
+- `WLS-ISSUES-*`、`WLS-FIXES-*`、`WLS-FINAL-REPORT-*`、`WLS-*-FIX-*`、连接超时排查稿
+- `WLS-HA-*` / `WLS-MASTER-SELF-HEAL-*` / `WLS-SUPERVISOR-*` / `WLS-ORCHESTRATOR-BOOTSTRAP-*` 等架构设计稿仍留在 `doc/`
 - `WLS-EventBuffer-SSL-Worker.md`（EventBuffer TLS Worker 已退役；当前纯 WLS 使用 Stream TLS，本文件仍只供历史取证）
-- `wls-panel-plan/` 下的阶段计划和验收证据
+- 原 `wls-panel-plan/` 阶段计划与验收证据（已迁出）
 
 历史材料中的 `DispatcherCore`、旧控制端口公式、旧 add/remove-worker 消息、固定复活延迟或“常驻请求 Fiber 池”等描述，除非已被现行源码和总览再次确认，否则均不视为当前契约。
 

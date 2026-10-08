@@ -415,7 +415,7 @@ time php bin/w server:start
 - [WLS 架构图](WLS架构图.md)
 - [WLS 模式部署指南](WLS模式部署指南.md)
 - [WLS-Worker 动态扩缩容架构设计](WLS-Worker动态扩缩容架构设计.md)
-- [WLS-PORT-CONFLICT-FIX](WLS-PORT-CONFLICT-FIX.md)
+- `WLS-PORT-CONFLICT-FIX`（一次性修复报告，已迁 `dev/session/migrated-from-module-doc/`）
 
 ---
 

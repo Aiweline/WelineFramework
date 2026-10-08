@@ -46,7 +46,6 @@
 
 - `app/code/Weline/UrlManager/doc/README.md`
 - `app/code/Weline/UrlManager/doc/route-import-idempotency.md`
-- `app/code/Weline/UrlManager/doc/url-rewrite-slug-redirect-plan.md`
 - `app/code/Weline/UrlManager/doc/功能现状.md`
 - `app/code/Weline/UrlManager/doc/开发日志.md`
 - `app/code/Weline/UrlManager/doc/需求.md`

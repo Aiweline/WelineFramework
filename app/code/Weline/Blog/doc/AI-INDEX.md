@@ -51,7 +51,6 @@
 
 ## doc 目录
 
-- `app/code/Weline/Blog/doc/2026-09-05-news-locale-plan.md`
 - `app/code/Weline/Blog/doc/ARCHITECTURE.md`
 - `app/code/Weline/Blog/doc/README.md`
 - `app/code/Weline/Blog/doc/ai/skills/weline-blog-article/SKILL.md`

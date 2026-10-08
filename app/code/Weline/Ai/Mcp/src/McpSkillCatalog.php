@@ -907,7 +907,6 @@ final class McpSkillCatalog
                         'dev/ai-command/ai/工程团队.md',
                         'app/code/Weline/Framework/doc/统一缓存范围与性能优化.md',
                         'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
-                        'app/code/Weline/Framework/doc/性能诊断-20260908.md',
                         'app/code/Weline/Framework/doc/3-开发/开发标准与验收.md',
                         'docs/版本计划/v3/PHP8.4+框架优化/12-性能基准与目标.md',
                         'app/code/Weline/Ai/doc/AI工程交付流程.md',
