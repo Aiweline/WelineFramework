@@ -30,6 +30,8 @@
 容量MB,容量MB
 通信,通信
 安装并启动邮局引擎,安装并启动邮局引擎
+"当前仅 fake 测试域：可先冒烟。上线真实域名前在「环境修复 / env:install」装邮局依赖（stalwart-mail-server，Mail 模块已登记安装脚本，系统安装 -y 会自动装），再 mail:env:check。","当前仅 fake 测试域：可先冒烟。上线真实域名前在「环境修复 / env:install」装邮局依赖（stalwart-mail-server，Mail 模块已登记安装脚本，系统安装 -y 会自动装），再 mail:env:check。"
+"邮局引擎未就绪%{1}。点系统「环境修复」或后台执行框架依赖安装（Mail 已登记 stalwart-mail-server 脚本，等同 env:install stalwart-mail-server -y / mail:env:install -y），装完再 mail:service:status。勿手搓二进制。","邮局引擎未就绪%{1}。点系统「环境修复」或后台执行框架依赖安装（Mail 已登记 stalwart-mail-server 脚本，等同 env:install stalwart-mail-server -y / mail:env:install -y），装完再 mail:service:status。勿手搓二进制。"
 开通邮局域名,开通邮局域名
 "已有 %{1} 个 active 域名（例：%{2}）。真实域须从 Websites 候选选择。","已有 %{1} 个 active 域名（例：%{2}）。真实域须从 Websites 候选选择。"
 "已有域名记录但未 active。请在企业邮箱「域名与 DNS」启用域名。","已有域名记录但未 active。请在企业邮箱「域名与 DNS」启用域名。"
@@ -39,14 +41,15 @@
 "真实域 DNS 状态已记录为通过。仍建议抽测外域收发与 SPF/DKIM/DMARC。","真实域 DNS 状态已记录为通过。仍建议抽测外域收发与 SPF/DKIM/DMARC。"
 "域名 %{1} 需完成 DNS：A(mail)/MX/SPF/DKIM/DMARC；mail 主机必须 DNS-only。后台域名页可连 Cloudflare 一键应用，或 mail:dns:check。","域名 %{1} 需完成 DNS：A(mail)/MX/SPF/DKIM/DMARC；mail 主机必须 DNS-only。后台域名页可连 Cloudflare 一键应用，或 mail:dns:check。"
 开通邮局账号,开通邮局账号
-"已有 %{1} 个 active 邮箱账号（例：%{2}）。建议至少保留 noreply@ 供系统发信。","已有 %{1} 个 active 邮箱账号（例：%{2}）。建议至少保留 noreply@ 供系统发信。"
+"已有 %{1} 个 active 邮箱账号（例：%{2}）。默认发信用 contact@（Smtp 一键可自动确保）；分流业务再单独建箱挂渠道。","已有 %{1} 个 active 邮箱账号（例：%{2}）。默认发信用 contact@（Smtp 一键可自动确保）；分流业务再单独建箱挂渠道。"
 请先启用邮局域名，再在「用户与账号」创建并启用邮箱。,请先启用邮局域名，再在「用户与账号」创建并启用邮箱。
-"域名已就绪，但尚无 active 邮箱账号。请创建 noreply@ 或业务邮箱并启用。","域名已就绪，但尚无 active 邮箱账号。请创建 noreply@ 或业务邮箱并启用。"
+"域名已就绪，尚无 active 账号。可跳过手工建箱：下一步「交给 Smtp」一键会自动确保 contact@ 并挂渠道；也可在此先建业务邮箱。","域名已就绪，尚无 active 账号。可跳过手工建箱：下一步「交给 Smtp」一键会自动确保 contact@ 并挂渠道；也可在此先建业务邮箱。"
 "交给 Smtp 自管发信","交给 Smtp 自管发信"
-"Smtp 已挂接自建邮局并完成测试确认。","Smtp 已挂接自建邮局并完成测试确认。"
-"Smtp 已挂接自建邮局传输，请打开 Smtp配置 发送测试邮件完成确认。","Smtp 已挂接自建邮局传输，请打开 Smtp配置 发送测试邮件完成确认。"
-"邮局账号已就绪。请打开 Smtp配置，使用「用自建邮局一键配置」由 Smtp 自动写传输并绑渠道，再测试发信确认。","邮局账号已就绪。请打开 Smtp配置，使用「用自建邮局一键配置」由 Smtp 自动写传输并绑渠道，再测试发信确认。"
-"完成引擎/域名/DNS/账号后，由 Smtp 一键挂接 mail_account 传输；本任务不代替 Smtp 测试确认。","完成引擎/域名/DNS/账号后，由 Smtp 一键挂接 mail_account 传输；本任务不代替 Smtp 测试确认。"
+"Smtp 已挂接自建邮局（默认 contact@）并完成测试确认。需要分流发件身份时，在 Smtp配置「分流」区新建邮箱并挂渠道。","Smtp 已挂接自建邮局（默认 contact@）并完成测试确认。需要分流发件身份时，在 Smtp配置「分流」区新建邮箱并挂渠道。"
+"已挂接自建邮局传输。请打开 Smtp配置，对 mail_default/contact@ 点「测试」发一封确认邮件；真实账号须先填 SMTP 密码。","已挂接自建邮局传输。请打开 Smtp配置，对 mail_default/contact@ 点「测试」发一封确认邮件；真实账号须先填 SMTP 密码。"
+"当前仍是外部 SMTP。生产请点「用自建邮局一键配置」：自动确保 contact@、写 mail_account 传输并绑全渠（旧外部账户保留），再测发确认。","当前仍是外部 SMTP。生产请点「用自建邮局一键配置」：自动确保 contact@、写 mail_account 传输并绑全渠（旧外部账户保留），再测发确认。"
+"邮局域名/账号已可用。请打开 Smtp配置 点「用自建邮局一键配置」：自动确保 contact@、写入传输并绑定全部发信渠道，然后点「测试」跑通发信。","邮局域名/账号已可用。请打开 Smtp配置 点「用自建邮局一键配置」：自动确保 contact@、写入传输并绑定全部发信渠道，然后点「测试」跑通发信。"
+"请先完成：① 安装启动邮局引擎 ② 开通并启用真实域名 ③ 配好 MX/SPF/DKIM。完成后本任务会引导 Smtp 一键确保 contact@ 并测发。","请先完成：① 安装启动邮局引擎 ② 开通并启用真实域名 ③ 配好 MX/SPF/DKIM。完成后本任务会引导 Smtp 一键确保 contact@ 并测发。"
 企业邮箱沟通,企业邮箱沟通
 关闭,关闭
 发送,发送
@@ -357,17 +360,24 @@ STARTTLS（推荐）,STARTTLS（推荐）
 "注册 systemd 服务","注册 systemd 服务"
 "启动服务并检测 SMTP/IMAP/Admin 端口","启动服务并检测 SMTP/IMAP/Admin 端口"
 "Stalwart 可执行文件","Stalwart 可执行文件"
+"未找到（期望 %{1}/bin/stalwart 或 PATH）","未找到（期望 %{1}/bin/stalwart 或 PATH）"
 "SMTP 25 端口","SMTP 25 端口"
 "SMTP Submission 587 端口","SMTP 提交 587 端口"
 "IMAP 143 端口","IMAP 143 端口"
 "IMAPS 993 端口","IMAPS 993 端口"
-"Stalwart Admin/JMAP 18080 端口","Stalwart Admin/JMAP 18080 端口"
 "NSSM Windows 服务包装器","NSSM Windows 服务包装器"
 "systemd 服务管理","systemd 服务管理"
+"Stalwart 已安装：%{1}","Stalwart 已安装：%{1}"
 安装脚本不存在：%{1},安装脚本不存在：%{1}
-"真实安装脚本已准备，但为避免误改系统服务，请先通过 env:install stalwart-mail-server -y 执行框架依赖安装入口。","真实安装脚本已准备，但为避免误改系统服务，请先通过 env:install stalwart-mail-server -y 执行框架依赖安装入口。"
+"Stalwart 安装成功：%{1}","Stalwart 安装成功：%{1}"
+"Stalwart 安装失败：%{1}","Stalwart 安装失败：%{1}"
+脚本退出非零,脚本退出非零
 不支持的服务动作：%{1},不支持的服务动作：%{1}
 邮件已提交发送,邮件已提交发送
+"Stalwart Admin/HTTP %{1} 端口","Stalwart Admin/HTTP %{1} 端口"
+"Stalwart Admin/HTTP（8080 或 18080）","Stalwart Admin/HTTP（8080 或 18080）"
+"127.0.0.1:8080/18080 均不可连接（官方安装默认 bootstrap 为 8080）","127.0.0.1:8080/18080 均不可连接（官方安装默认 bootstrap 为 8080）"
+"systemd 单元 stalwart","systemd 单元 stalwart"
 "127.0.0.1:%{1} 可连接","127.0.0.1:%{1} 可连接"
 "邮箱账号只能使用小写字母、数字、点、下划线和短横线，长度为 2 到 63 位。","邮箱账号只能使用小写字母、数字、点、下划线和短横线，长度为 2 到 63 位。"
 请选择已开启的邮箱域名,请选择已开启的邮箱域名
@@ -421,7 +431,7 @@ STARTTLS（推荐）,STARTTLS（推荐）
 未满足,未满足
 "企业邮箱运行环境已满足 ✔","企业邮箱运行环境已满足 ✔"
 "检测 Stalwart、系统服务、关键端口等企业邮箱环境状态","检测 Stalwart、系统服务、关键端口等企业邮箱环境状态"
-"========== 企业邮箱安装计划 ==========","========== 企业邮箱安装计划 =========="
+"========== 企业邮箱依赖安装 ==========","========== 企业邮箱依赖安装 =========="
 安装完成,安装完成
 安装未执行,安装未执行
 脚本：%{1},脚本：%{1}
@@ -448,6 +458,15 @@ STARTTLS（推荐）,STARTTLS（推荐）
 "检测企业邮箱 DNS 记录","检测企业邮箱 DNS 记录"
 "检测 MX/SPF/DKIM/DMARC 记录是否存在","检测 MX/SPF/DKIM/DMARC 记录是否存在"
 邮件服务主机名,邮件服务主机名
+"Stalwart Admin/JMAP 18080 端口","Stalwart Admin/JMAP 18080 端口"
+"真实安装脚本已准备，但为避免误改系统服务，请先通过 env:install stalwart-mail-server -y 执行框架依赖安装入口。","真实安装脚本已准备，但为避免误改系统服务，请先通过 env:install stalwart-mail-server -y 执行框架依赖安装入口。"
+"========== 企业邮箱安装计划 ==========","========== 企业邮箱安装计划 =========="
+"已有 %{1} 个 active 邮箱账号（例：%{2}）。建议至少保留 noreply@ 供系统发信。","已有 %{1} 个 active 邮箱账号（例：%{2}）。建议至少保留 noreply@ 供系统发信。"
+"域名已就绪，但尚无 active 邮箱账号。请创建 noreply@ 或业务邮箱并启用。","域名已就绪，但尚无 active 邮箱账号。请创建 noreply@ 或业务邮箱并启用。"
+"Smtp 已挂接自建邮局并完成测试确认。","Smtp 已挂接自建邮局并完成测试确认。"
+"Smtp 已挂接自建邮局传输，请打开 Smtp配置 发送测试邮件完成确认。","Smtp 已挂接自建邮局传输，请打开 Smtp配置 发送测试邮件完成确认。"
+"邮局账号已就绪。请打开 Smtp配置，使用「用自建邮局一键配置」由 Smtp 自动写传输并绑渠道，再测试发信确认。","邮局账号已就绪。请打开 Smtp配置，使用「用自建邮局一键配置」由 Smtp 自动写传输并绑渠道，再测试发信确认。"
+"完成引擎/域名/DNS/账号后，由 Smtp 一键挂接 mail_account 传输；本任务不代替 Smtp 测试确认。","完成引擎/域名/DNS/账号后，由 Smtp 一键挂接 mail_account 传输；本任务不代替 Smtp 测试确认。"
 收起写信,收起写信
 展开写信,展开写信
 用户,用户

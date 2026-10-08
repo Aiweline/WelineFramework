@@ -24,11 +24,15 @@ Query：`resolveLocalMailboxByEmail`、`listLocalMailboxes`、`listThreadBySourc
 
 前台：SystemConfig `mail/frontend_register/*`；开启且有域名时，注册页用 Weline UI tabs（账户注册 / 企业邮箱），`account-mail-register` 以 `mail_register_variant=panel` 挂第二 Tab；未开启则单表单。个人中心侧栏用 `card` 变体。站内登录统一走 Customer 普通登录（不提供独立企业邮箱登录入口）。
 
-`mail:env:install` 默认只展示安装计划；真实依赖安装优先走框架入口。Stalwart 在框架环境检测中属于推荐依赖，不阻断 Weline_Mail 模块安装：
+`Mail/env/requirements.php` 已登记推荐依赖 `stalwart-mail-server`，脚本为 `env/script/install_stalwart_linux.sh`（委托官方 `install.sh`，PREFIX=`/opt/stalwart`）。系统安装 / `env:install -y` 会自动装；也可：
 
 ```bash
+php bin/w mail:env:install -y
+# 等同
 php bin/w env:install stalwart-mail-server -y
 ```
+
+Stalwart 为推荐依赖，不阻断 Weline_Mail 模块 schema 安装；生产发信前须装好引擎。
 
 ## 数据表
 

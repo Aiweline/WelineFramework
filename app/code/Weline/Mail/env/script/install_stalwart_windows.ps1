@@ -20,11 +20,9 @@ if ($Action -ne "install") {
     exit 2
 }
 
-Write-Output "Stalwart Windows native install plan:"
-Write-Output "1. Download stalwart-x86_64-pc-windows-msvc.zip from the official release page."
-Write-Output "2. Create $InstallDir\bin, $InstallDir\etc, $InstallDir\data, $InstallDir\logs."
-Write-Output "3. Place stalwart.exe under $InstallDir\bin."
-Write-Output "4. Install NSSM and register a Windows service named Stalwart."
-Write-Output "5. Start the service and open http://127.0.0.1:8080/admin for bootstrap."
-Write-Output "Automatic binary download is intentionally not performed yet to avoid changing Windows services without an operator-reviewed source URL."
+# Linux 生产路径已实现真实安装（install_stalwart_linux.sh → 官方 install.sh）。
+# Windows 仍依赖 NSSM；暂不自动改服务。生产请用 Linux + env:install stalwart-mail-server -y。
+Write-Output "MISSING"
+Write-Output "Windows Stalwart auto-install is not implemented yet. Use Linux host with env:install stalwart-mail-server -y."
+Write-Output "Manual outline: download stalwart-*-windows-msvc.zip, place under $InstallDir\bin, register NSSM service Stalwart, open http://127.0.0.1:8080/admin."
 exit 1

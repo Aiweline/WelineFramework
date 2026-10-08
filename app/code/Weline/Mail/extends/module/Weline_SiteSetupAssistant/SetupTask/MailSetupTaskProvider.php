@@ -67,7 +67,7 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
                 'category' => (string)__('通信'),
                 'module' => 'Weline_Mail',
                 'title' => (string)__('安装并启动邮局引擎'),
-                'tip' => (string)__('当前仅 fake 测试域：可先冒烟。上线真实域名前须安装 Stalwart：php bin/w env:install stalwart-mail-server -y，并检查 php bin/w mail:env:check'),
+                'tip' => (string)__('当前仅 fake 测试域：可先冒烟。上线真实域名前在「环境修复 / env:install」装邮局依赖（stalwart-mail-server，Mail 模块已登记安装脚本，系统安装 -y 会自动装），再 mail:env:check。'),
                 'status' => 'doing',
                 'href' => $href,
                 'meta' => ['env_ok' => false, 'fake_only' => true],
@@ -89,7 +89,7 @@ class MailSetupTaskProvider extends AbstractSetupTaskProvider
             'category' => (string)__('通信'),
             'module' => 'Weline_Mail',
             'title' => (string)__('安装并启动邮局引擎'),
-            'tip' => (string)__('邮局引擎未就绪%{1}。请执行：php bin/w mail:env:check → php bin/w env:install stalwart-mail-server -y → php bin/w mail:service:status', [
+            'tip' => (string)__('邮局引擎未就绪%{1}。点系统「环境修复」或后台执行框架依赖安装（Mail 已登记 stalwart-mail-server 脚本，等同 env:install stalwart-mail-server -y / mail:env:install -y），装完再 mail:service:status。勿手搓二进制。', [
                 $sample !== '' ? '（缺：' . $sample . '）' : '',
             ]),
             'status' => $hasActiveDomain ? 'doing' : 'todo',

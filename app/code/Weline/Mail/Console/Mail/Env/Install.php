@@ -17,7 +17,7 @@ class Install extends CommandAbstract
         $yes = isset($args['y']) || isset($args['yes']) || isset($args['-y']);
         $result = $engine->install($yes);
 
-        $this->printer->note(__('========== 企业邮箱安装计划 =========='));
+        $this->printer->note(__('========== 企业邮箱依赖安装 =========='));
         foreach (($result['plan']['steps'] ?? []) as $index => $step) {
             $this->printer->printing(($index + 1) . '. ' . $step);
         }
@@ -25,16 +25,23 @@ class Install extends CommandAbstract
 
         if ($result['ok'] ?? false) {
             $this->printer->success($result['message'] ?? __('安装完成'));
+            if (!empty($result['output'])) {
+                $this->printer->note($result['output']);
+            }
             return;
         }
 
         if ($result['dry_run'] ?? false) {
             $this->printer->warning($result['message']);
-            $this->printer->note(__('框架依赖入口：php bin/w env:install stalwart-mail-server -y'));
+            $this->printer->note(__('确认安装：php bin/w mail:env:install -y'));
+            $this->printer->note(__('等同框架入口：php bin/w env:install stalwart-mail-server -y（系统安装 -y 也会装此推荐依赖）'));
             return;
         }
 
         $this->printer->warning($result['message'] ?? __('安装未执行'));
+        if (!empty($result['output'])) {
+            $this->printer->note($result['output']);
+        }
         if (!empty($result['script'])) {
             $this->printer->note(__('脚本：%{1}', [$result['script']]));
         }

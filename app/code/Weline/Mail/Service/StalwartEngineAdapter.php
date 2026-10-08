@@ -44,27 +44,39 @@ class StalwartEngineAdapter implements MailEngineInterface
 
     public function checkEnvironment(): array
     {
+        $binaryPath = $this->resolveBinaryPath();
+        $binaryCheck = [
+            'name' => (string)__('Stalwart 可执行文件'),
+            'ok' => $binaryPath !== null,
+            'detail' => $binaryPath !== null
+                ? $binaryPath
+                : (string)__('未找到（期望 %{1}/bin/stalwart 或 PATH）', [self::LINUX_INSTALL_DIR]),
+        ];
+
         $checks = [
-            $this->checkCommand($this->binaryName(), __('Stalwart 可执行文件')),
+            $binaryCheck,
             $this->checkPort(25, __('SMTP 25 端口')),
             $this->checkPort(587, __('SMTP Submission 587 端口')),
             $this->checkPort(143, __('IMAP 143 端口')),
             $this->checkPort(993, __('IMAPS 993 端口')),
-            $this->checkPort(18080, __('Stalwart Admin/JMAP 18080 端口')),
+            $this->checkAdminHttpPort(),
         ];
 
         if (PHP_OS_FAMILY === 'Windows') {
             array_unshift($checks, $this->checkCommand('nssm', __('NSSM Windows 服务包装器')));
         } else {
             array_unshift($checks, $this->checkCommand('systemctl', __('systemd 服务管理')));
+            $checks[] = $this->checkSystemdService();
         }
 
+        // 引擎「已安装」以二进制为准；端口/协议面留给 DNS 与测发任务，避免装完仍永远不绿。
         return [
             'engine' => $this->getName(),
             'platform' => PHP_OS_FAMILY,
-            'ok' => count(array_filter($checks, static fn(array $check): bool => !$check['ok'])) === 0,
+            'ok' => $binaryCheck['ok'],
             'checks' => $checks,
             'plan' => $this->buildInstallPlan(),
+            'binary' => $binaryPath,
         ];
     }
 
@@ -74,8 +86,17 @@ class StalwartEngineAdapter implements MailEngineInterface
             return [
                 'ok' => false,
                 'dry_run' => true,
-                'message' => __('未执行真实安装。确认无误后运行：php bin/w mail:env:install -y'),
+                'message' => __('未执行真实安装。确认后运行：php bin/w mail:env:install -y（或系统安装/环境修复时的 env:install stalwart-mail-server -y）'),
                 'plan' => $this->buildInstallPlan(),
+            ];
+        }
+
+        if ($this->resolveBinaryPath() !== null) {
+            return [
+                'ok' => true,
+                'message' => __('Stalwart 已安装：%{1}', [$this->resolveBinaryPath()]),
+                'plan' => $this->buildInstallPlan(),
+                'binary' => $this->resolveBinaryPath(),
             ];
         }
 
@@ -90,11 +111,29 @@ class StalwartEngineAdapter implements MailEngineInterface
             ];
         }
 
+        if (PHP_OS_FAMILY === 'Windows') {
+            $cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File '
+                . escapeshellarg($script) . ' -Action install';
+        } else {
+            $cmd = 'bash ' . escapeshellarg($script) . ' install';
+        }
+
+        $result = $this->runCommand($cmd);
+        $binary = $this->resolveBinaryPath();
+        $ok = $result['ok'] && $binary !== null;
+
         return [
-            'ok' => false,
-            'message' => __('真实安装脚本已准备，但为避免误改系统服务，请先通过 env:install stalwart-mail-server -y 执行框架依赖安装入口。'),
+            'ok' => $ok,
+            'message' => $ok
+                ? (string)__('Stalwart 安装成功：%{1}', [$binary])
+                : (string)__('Stalwart 安装失败：%{1}', [
+                    $result['error'] !== '' ? $result['error'] : ($result['output'] ?: __('脚本退出非零')),
+                ]),
             'script' => $script,
             'plan' => $this->buildInstallPlan(),
+            'output' => $result['output'],
+            'binary' => $binary,
+            'exit_code' => $result['exit_code'] ?? null,
         ];
     }
 
@@ -844,6 +883,74 @@ class StalwartEngineAdapter implements MailEngineInterface
     private function binaryName(): string
     {
         return PHP_OS_FAMILY === 'Windows' ? 'stalwart.exe' : 'stalwart';
+    }
+
+    private function resolveBinaryPath(): ?string
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $candidates = [
+                self::WINDOWS_INSTALL_DIR . '\\bin\\stalwart.exe',
+                'C:\\Program Files\\Stalwart\\bin\\stalwart.exe',
+            ];
+            foreach ($candidates as $path) {
+                if (is_file($path)) {
+                    return $path;
+                }
+            }
+            $where = $this->runCommand('where stalwart.exe');
+            if ($where['ok'] && $where['output'] !== '') {
+                $first = preg_split('/\r\n|\n/', $where['output'])[0] ?? '';
+                return $first !== '' ? $first : null;
+            }
+            return null;
+        }
+
+        $candidates = [
+            self::LINUX_INSTALL_DIR . '/bin/stalwart',
+            '/usr/local/bin/stalwart',
+            '/usr/bin/stalwart',
+        ];
+        foreach ($candidates as $path) {
+            if (is_executable($path)) {
+                return $path;
+            }
+        }
+        $which = $this->runCommand('command -v stalwart');
+        if ($which['ok'] && $which['output'] !== '') {
+            return trim($which['output']);
+        }
+        return null;
+    }
+
+    private function checkAdminHttpPort(): array
+    {
+        $ports = [8080, 18080];
+        foreach ($ports as $port) {
+            $check = $this->checkPort($port, __('Stalwart Admin/HTTP %{1} 端口', [$port]));
+            if ($check['ok']) {
+                return $check;
+            }
+        }
+
+        return [
+            'name' => (string)__('Stalwart Admin/HTTP（8080 或 18080）'),
+            'ok' => false,
+            'detail' => (string)__('127.0.0.1:8080/18080 均不可连接（官方安装默认 bootstrap 为 8080）'),
+        ];
+    }
+
+    private function checkSystemdService(): array
+    {
+        $active = $this->runCommand('systemctl is-active stalwart.service');
+        if (!$active['ok']) {
+            $active = $this->runCommand('systemctl is-active stalwart');
+        }
+
+        return [
+            'name' => (string)__('systemd 单元 stalwart'),
+            'ok' => $active['ok'] && trim($active['output']) === 'active',
+            'detail' => $active['output'] !== '' ? $active['output'] : ($active['error'] ?: 'inactive'),
+        ];
     }
 
     private function checkCommand(string $command, string $label): array

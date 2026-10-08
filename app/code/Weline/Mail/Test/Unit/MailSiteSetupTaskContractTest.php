@@ -30,6 +30,9 @@ final class MailSiteSetupTaskContractTest extends TestCase
         self::assertStringContainsString('contact@', $provider);
         self::assertStringContainsString('MailSmtpBootstrapService', $provider);
         self::assertStringContainsString('can_bootstrap', $provider);
+        self::assertStringContainsString('stalwart-mail-server', $provider);
+        self::assertStringContainsString('环境修复', $provider);
+        self::assertStringContainsString('勿手搓二进制', $provider);
         self::assertStringContainsString('SetupTaskProviderInterface::class', $extends);
         self::assertStringContainsString('MailSetupTaskProvider::class', $extends);
     }
