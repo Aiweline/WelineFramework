@@ -770,11 +770,18 @@
     };
 
     /**
-     * Prefer same-origin classic Worker URL (allowed by CSP worker-src/'self').
-     * Fall back to Blob Worker when URL construction fails or CSP blocks it —
+     * Hard single-flight: one in-flight boot per worker script URL.
+     * Previous fetch/`new Worker(url)` still pending ⇒ later callers await the same Promise
+     * (never open a second Network request for the same script).
+     */
+    const inflightWorkerScriptBoots = new Map();
+
+    /**
+     * Blob-first (abortable fetch; Worker only after body arrives).
+     * Fall back to same-origin URL Worker when Blob/CSP fails —
      * Blob path requires worker-src blob: (see SecurityHeaderDefaults::CSP).
-     * Historical note: some storefronts left `new Worker(http URL)` Network-pending;
-     * Blob bootstrap remains the recovery path after a short CSP/error probe.
+     * Historical: URL-first + 80ms early-accept left Network `script` pending forever,
+     * and timeout recover re-`new Worker(url)` flooded identical pending rows.
      */
     const createDedicatedWorkerFromScriptUrl = (workerUrl, options = {}) => {
         if (!window.Worker) {
@@ -786,109 +793,126 @@
         if (!scriptUrl) {
             return Promise.reject(new Error('[Weline.Api] workerUrl is not configured.'));
         }
-        const fetchInit = {
-            credentials: 'same-origin',
-            cache: isDevMode() ? 'no-store' : 'force-cache',
-        };
-        const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : 8000;
-        let timeoutId = 0;
-        let localAbort = null;
-        if (options && options.signal) {
-            fetchInit.signal = options.signal;
-        } else if (typeof AbortController === 'function' && timeoutMs > 0) {
-            localAbort = new AbortController();
-            fetchInit.signal = localAbort.signal;
-            timeoutId = window.setTimeout(() => {
-                try {
-                    localAbort.abort();
-                } catch (_error) {
-                    /* ignore */
-                }
-            }, timeoutMs);
+
+        const existingBoot = inflightWorkerScriptBoots.get(scriptUrl);
+        if (existingBoot) {
+            return existingBoot;
         }
 
-        const clearFetchTimeout = () => {
-            if (timeoutId) {
-                window.clearTimeout(timeoutId);
-                timeoutId = 0;
+        const boot = (() => {
+            const fetchInit = {
+                credentials: 'same-origin',
+                cache: isDevMode() ? 'no-store' : 'force-cache',
+            };
+            const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : 8000;
+            let timeoutId = 0;
+            let localAbort = null;
+            if (options && options.signal) {
+                fetchInit.signal = options.signal;
+            } else if (typeof AbortController === 'function' && timeoutMs > 0) {
+                localAbort = new AbortController();
+                fetchInit.signal = localAbort.signal;
+                timeoutId = window.setTimeout(() => {
+                    try {
+                        localAbort.abort();
+                    } catch (_error) {
+                        /* ignore */
+                    }
+                }, timeoutMs);
             }
-        };
 
-        const createBlobWorker = () => fetch(scriptUrl, fetchInit).then((response) => {
-            clearFetchTimeout();
-            if (!response.ok) {
-                throw new Error('[Weline.Api] worker script HTTP ' + response.status);
-            }
-            return response.text();
-        }).then((code) => {
-            if (!code || !String(code).trim()) {
-                throw new Error('[Weline.Api] worker script body is empty.');
-            }
-            const blob = new Blob([code], { type: 'text/javascript' });
-            const blobUrl = URL.createObjectURL(blob);
-            try {
-                const worker = new Worker(blobUrl);
-                // Keep blob URL until the worker has had time to parse (revoke@0 races CSP/load).
-                window.setTimeout(() => {
+            const clearFetchTimeout = () => {
+                if (timeoutId) {
+                    window.clearTimeout(timeoutId);
+                    timeoutId = 0;
+                }
+            };
+
+            const createBlobWorker = () => fetch(scriptUrl, fetchInit).then((response) => {
+                clearFetchTimeout();
+                if (!response.ok) {
+                    throw new Error('[Weline.Api] worker script HTTP ' + response.status);
+                }
+                return response.text();
+            }).then((code) => {
+                if (!code || !String(code).trim()) {
+                    throw new Error('[Weline.Api] worker script body is empty.');
+                }
+                const blob = new Blob([code], { type: 'text/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+                try {
+                    const worker = new Worker(blobUrl);
+                    // Keep blob URL until the worker has had time to parse (revoke@0 races CSP/load).
+                    window.setTimeout(() => {
+                        try {
+                            URL.revokeObjectURL(blobUrl);
+                        } catch (_error) {
+                            /* ignore */
+                        }
+                    }, 5000);
+                    return worker;
+                } catch (error) {
                     try {
                         URL.revokeObjectURL(blobUrl);
                     } catch (_error) {
                         /* ignore */
                     }
-                }, 5000);
-                return worker;
-            } catch (error) {
-                try {
-                    URL.revokeObjectURL(blobUrl);
-                } catch (_error) {
-                    /* ignore */
+                    throw error;
                 }
-                throw error;
-            }
-        }).catch((error) => {
-            clearFetchTimeout();
-            throw error;
-        });
-
-        const createUrlWorker = () => new Promise((resolve, reject) => {
-            let settled = false;
-            let worker = null;
-            try {
-                worker = new Worker(scriptUrl);
-            } catch (error) {
-                reject(error);
-                return;
-            }
-            const finishOk = () => {
-                if (settled) {
-                    return;
-                }
-                settled = true;
-                try {
-                    worker.removeEventListener('error', onError);
-                } catch (_e) { /* ignore */ }
+            }).catch((error) => {
                 clearFetchTimeout();
-                resolve(worker);
-            };
-            const onError = () => {
-                if (settled) {
+                throw error;
+            });
+
+            const createUrlWorker = () => new Promise((resolve, reject) => {
+                let settled = false;
+                let worker = null;
+                try {
+                    worker = new Worker(scriptUrl);
+                } catch (error) {
+                    reject(error);
                     return;
                 }
-                settled = true;
-                try {
-                    worker.removeEventListener('error', onError);
-                } catch (_e) { /* ignore */ }
-                try {
-                    worker.terminate();
-                } catch (_t) { /* ignore */ }
-                reject(new Error('[Weline.Api] same-origin Worker blocked by CSP or failed to boot.'));
-            };
-            worker.addEventListener('error', onError);
-            // CSP violations surface asynchronously; accept URL worker if no error arrives quickly.
-            window.setTimeout(finishOk, 80);
-        });
+                const finishOk = () => {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    try {
+                        worker.removeEventListener('error', onError);
+                    } catch (_e) { /* ignore */ }
+                    clearFetchTimeout();
+                    resolve(worker);
+                };
+                const onError = () => {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    try {
+                        worker.removeEventListener('error', onError);
+                    } catch (_e) { /* ignore */ }
+                    try {
+                        worker.terminate();
+                    } catch (_t) { /* ignore */ }
+                    reject(new Error('[Weline.Api] same-origin Worker blocked by CSP or failed to boot.'));
+                };
+                worker.addEventListener('error', onError);
+                // CSP violations surface asynchronously; accept URL worker if no error arrives quickly.
+                window.setTimeout(finishOk, 80);
+            });
 
-        return createUrlWorker().catch(() => createBlobWorker());
+            // Blob first: one fetch until response; never stack URL Worker script loads on timeout.
+            return createBlobWorker().catch(() => createUrlWorker());
+        })();
+
+        inflightWorkerScriptBoots.set(scriptUrl, boot);
+        boot.finally(() => {
+            if (inflightWorkerScriptBoots.get(scriptUrl) === boot) {
+                inflightWorkerScriptBoots.delete(scriptUrl);
+            }
+        });
+        return boot;
     };
 
     const getDefaultWorkerUrl = () => {
@@ -1958,7 +1982,11 @@
                 return this.workerRecoverPromise;
             }
             this.workerRecoverPromise = Promise.resolve().then(() => {
-                this.resetWorker();
+                // Script still downloading ⇒ await that Promise; do not abort+refetch.
+                if (this.workerStartPromise && !this.worker) {
+                    return this.workerStartPromise;
+                }
+                this.resetWorker({ abortBoot: true });
                 this.scopeWarmupComplete = false;
                 this.scopeWarmupPromise = null;
                 return this.ensureWorker();
@@ -1968,7 +1996,12 @@
             return this.workerRecoverPromise;
         }
 
-        resetWorker() {
+        resetWorker(options = {}) {
+            const abortBoot = !!(options && options.abortBoot);
+            // Boot still in flight + not aborting ⇒ keep workerStartPromise so callers share it.
+            if (!abortBoot && this.workerStartPromise && !this.worker) {
+                return;
+            }
             if (this.workerFetchAbort && typeof this.workerFetchAbort.abort === 'function') {
                 try {
                     this.workerFetchAbort.abort();
@@ -2180,7 +2213,7 @@
                 colno: event && event.colno,
                 error: event && event.error,
             };
-            this.resetWorker();
+            this.resetWorker({ abortBoot: true });
             for (const [id, pending] of this.pending.entries()) {
                 this.pending.delete(id);
                 if (pending.timeoutId) {

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Frontend',
-    "version" => '2.0.90',
+    "version" => '2.0.91',
     "requires" => [
         'Weline_Admin' => '*',
         'Weline_Backend' => '*',

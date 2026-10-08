@@ -45,13 +45,18 @@ final class WelineApiWorkerNonceContractTest extends TestCase
         self::assertStringContainsString('shouldDedupeDefaultErrorToast', $script);
         self::assertStringContainsString('cooling down after capacity', $script);
         self::assertStringContainsString('createDedicatedWorkerFromScriptUrl', $script);
+        self::assertStringContainsString('inflightWorkerScriptBoots', $script);
         self::assertStringContainsString('URL.createObjectURL', $script);
         self::assertStringContainsString('new Worker(blobUrl)', $script);
         self::assertStringContainsString('createUrlWorker', $script);
         self::assertStringContainsString('createBlobWorker', $script);
+        self::assertStringContainsString('createBlobWorker().catch(() => createUrlWorker())', $script);
         self::assertStringContainsString('same-origin Worker blocked', $script);
         self::assertStringContainsString('recoverWorkerAfterTimeout', $script);
         self::assertStringContainsString('workerRecoverPromise', $script);
+        self::assertStringContainsString('Script still downloading', $script);
+        self::assertStringContainsString('abortBoot', $script);
+        self::assertStringContainsString('if (!abortBoot && this.workerStartPromise && !this.worker)', $script);
     }
 
     public function testWorkerWaitsHandshakeCooldownInsteadOfSyntheticThrow(): void
