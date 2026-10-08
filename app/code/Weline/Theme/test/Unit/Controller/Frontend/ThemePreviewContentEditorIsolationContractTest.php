@@ -21,14 +21,30 @@ final class ThemePreviewContentEditorIsolationContractTest extends TestCase
         $source = (string)file_get_contents($js);
 
         self::assertStringContainsString('function buildCanvasStorefrontPreviewUrl', $source);
+        self::assertStringContainsString('function buildCanvasBackendPreviewUrl', $source);
+        self::assertStringContainsString('function buildCanvasPreviewUrl', $source);
         self::assertStringContainsString('function resolveCanvasStorefrontPath', $source);
-        self::assertStringContainsString('buildCanvasStorefrontPreviewUrl(overrides)', $source);
+        self::assertStringContainsString('buildCanvasPreviewUrl(overrides)', $source);
         self::assertStringContainsString("url.searchParams.delete('page_type')", $source);
         self::assertStringContainsString("url.searchParams.delete('layout_type')", $source);
         self::assertStringContainsString("url.searchParams.delete('weline_preview_token')", $source);
+        self::assertStringContainsString("url.searchParams.set('editor_area', 'backend')", $source);
+        self::assertStringContainsString('weline_dashboard/backend/dashboard', $source);
         // Bare /product is Theme Policy shell + R43 mock — canvas must require product/{slug}.
         self::assertStringNotContainsString("product: 'product'", $source);
         self::assertStringNotContainsString('StorefrontSampleCanvasHydrator', $source);
+    }
+
+    public function testUiPagesEditorCanvasAlsoRoutesBackendToDashboard(): void
+    {
+        $js = dirname(__DIR__, 4) . '/view/statics/ui/pages/weline-theme-editor.js';
+        self::assertFileExists($js);
+        $source = (string)file_get_contents($js);
+        self::assertStringContainsString('function buildCanvasBackendPreviewUrl', $source);
+        self::assertStringContainsString('function buildCanvasPreviewUrl', $source);
+        self::assertStringContainsString('buildCanvasPreviewUrl(overrides)', $source);
+        self::assertStringContainsString('weline_dashboard/backend/dashboard', $source);
+        self::assertStringContainsString("url.searchParams.set('editor_area', 'backend')", $source);
     }
 
     public function testLayoutSlotRendererBootstrapsEditorCanvasOnAnyRoute(): void

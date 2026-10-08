@@ -15,6 +15,8 @@ final class FlatStaticRuntimeFilesProviderTest extends TestCase
 
         self::assertSame('Weline_Theme', $provider->moduleName());
         self::assertContains('js/storefront-image-fallback.js', $provider->relativeFiles());
+        self::assertContains('js/storefront-float-layer.js', $provider->relativeFiles());
+        self::assertContains('css/storefront-float-layer.css', $provider->relativeFiles());
         self::assertContains('js/storefront-shopper-toast.js', $provider->relativeFiles());
         self::assertContains('frontend/weline.modules.js', $provider->relativeFiles());
     }

@@ -22,6 +22,8 @@ final class FlatStaticRuntimeFilesProvider implements FlatStaticRuntimeFilesProv
         return [
             'frontend/weline.modules.js',
             'js/storefront-image-fallback.js',
+            'js/storefront-float-layer.js',
+            'css/storefront-float-layer.css',
             'js/storefront-shopper-toast.js',
             'js/widgets/site-blocks.js',
             'js/widgets/video-carousel.js',
@@ -29,6 +31,9 @@ final class FlatStaticRuntimeFilesProvider implements FlatStaticRuntimeFilesProv
             'js/widgets/mini-cart-icon.js',
             'js/widgets/header-search.js',
             'js/widgets/footer-social-float.js',
+            // Theme Editor canvas routing (backend → dashboard; must not stay stale in pub/static).
+            'ui/pages/weline-theme-editor.js',
+            'js/theme-editor.js',
         ];
     }
 }

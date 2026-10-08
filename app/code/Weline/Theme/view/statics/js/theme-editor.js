@@ -95,6 +95,7 @@
         previewStatus: 'draft', // 预览版本状态：draft（草稿）/ published（已发布）
         canvasRoute: '', // current canvas path; homepage stays empty, layout path otherwise
         storefrontMountPath: '', // selected website mount on this Host (e.g. daocharms)
+        storefrontOrigin: '', // absolute storefront Host when bound site is not on admin Host
         saveInProgress: false,   // 防止拖入保存时重复提交导致保存两个部件
         // 版本控制状态
         versions: [], // 版本列表
@@ -830,7 +831,7 @@
             mode: normalizeInteractionMode(mode),
             selection_target: normalizeSelectionTarget(state.selectionTarget),
             link_block: state.linkBlockEnabled === true,
-        }, window.location.origin);
+        }, getStorefrontCanvasOrigin());
     }
 
     function normalizeSelectionTarget(mode) {
@@ -924,7 +925,7 @@
             source: 'weline-theme-editor',
             type: 'selection-target',
             mode: normalizeSelectionTarget(mode),
-        }, window.location.origin);
+        }, getStorefrontCanvasOrigin());
     }
 
     function notifyPreviewLinkBlock(enabled = state.linkBlockEnabled) {
@@ -936,7 +937,7 @@
             source: 'weline-theme-editor',
             type: 'link-block',
             enabled: normalizeLinkBlockEnabled(enabled),
-        }, window.location.origin);
+        }, getStorefrontCanvasOrigin());
     }
 
     function applySelectionTargetUi() {
@@ -2715,10 +2716,29 @@
         return loadScopedWorkspace('layout', { ...options, skipReconcile: true });
     }
 
+    /**
+     * Outer request theme_id for ThemeAssetEditorRequestContext.
+     * theme_binding keeps editor_context.theme_id=0; the selected Theme lives on the
+     * application context (this value). Omit it and producer throws
+     * theme_asset_editor_theme_unavailable — theme switch / binding edits hang.
+     */
+    function outerEditorThemeId() {
+        const fromState = Number(state.themeId || 0);
+        if (fromState > 0) {
+            return fromState;
+        }
+        const fromConfig = Number(config.themeId || 0);
+        return fromConfig > 0 ? fromConfig : 0;
+    }
+
     async function loadScopedWorkspace(resourceType, options = {}) {
         if (!config.apiScopedWorkspace || !state.scopeIdentity) return null;
         const url = new URL(config.apiScopedWorkspace, window.location.origin);
         url.searchParams.set('editor_context', JSON.stringify(buildTypedEditorContext(resourceType, options)));
+        const themeId = outerEditorThemeId();
+        if (themeId > 0) {
+            url.searchParams.set('theme_id', String(themeId));
+        }
         url.searchParams.set('_t', String(Date.now()));
         const result = await apiJson(url.toString());
         if (!result?.success) throw new Error(result?.message || 'Load scoped workspace failed');
@@ -2740,6 +2760,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        theme_id: outerEditorThemeId(),
                         editor_context: buildTypedEditorContext(resourceType, options),
                         expected_revision: Number(workspace.revision || 0),
                         expected_parent_release_id: workspace.expected_parent_release_id ?? null,
@@ -2788,6 +2809,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    theme_id: outerEditorThemeId(),
                     editor_context: buildTypedEditorContext(resourceType, options),
                     expected_revision: Number(workspace.revision || 0),
                     expected_parent_release_id: workspace.expected_parent_release_id ?? null,
@@ -4316,12 +4338,21 @@
      * (e.g. daocharms → /daocharms/…). Locale stays after the mount.
      */
     function withStorefrontMountPath(route) {
+        const raw = String(route || '').replace(/^\/+/, '');
+        // Cross-Host canvas (e.g. grocery.test vs admin p{hash}.test) must not inherit
+        // same-Host sub_path mounts — those belong only to path-mounted sites on this Host.
+        try {
+            if (getStorefrontCanvasOrigin() !== window.location.origin) {
+                return raw;
+            }
+        } catch (error) {
+            // origin helpers may throw during early init; fall through to mount logic.
+        }
         const mount = String(
             state.storefrontMountPath
             || config.storefrontMountPath
             || ''
         ).replace(/^\/+|\/+$/g, '');
-        const raw = String(route || '').replace(/^\/+/, '');
         if (!mount) {
             return raw;
         }
@@ -4332,6 +4363,121 @@
             return business;
         }
         return business ? `${mount}/${business}` : mount;
+    }
+
+    /** Bound website primary origin when it differs from the admin Host. */
+    function getStorefrontCanvasOrigin() {
+        const raw = String(state.storefrontOrigin || config.storefrontOrigin || '').trim();
+        if (!raw) {
+            return window.location.origin;
+        }
+        try {
+            return new URL(raw).origin;
+        } catch (error) {
+            return window.location.origin;
+        }
+    }
+
+    function isAllowedCanvasMessageOrigin(origin) {
+        const value = String(origin || '');
+        if (!value) {
+            return false;
+        }
+        if (value === window.location.origin) {
+            return true;
+        }
+        return value === getStorefrontCanvasOrigin();
+    }
+
+    function resolveCanvasEditorArea(overrides = {}) {
+        if (typeof overrides.editor_area === 'string' && overrides.editor_area) {
+            return overrides.editor_area === 'backend' ? 'backend' : 'frontend';
+        }
+        if (typeof overrides.preview_area === 'string' && overrides.preview_area) {
+            return overrides.preview_area === 'backend' ? 'backend' : 'frontend';
+        }
+        return getEffectiveEditorArea();
+    }
+
+    /**
+     * Backend visual-editor canvas = real admin dashboard (+ editor markers).
+     * Same contract as ThemePreviewEntryApplication backend redirect.
+     * Never open a storefront path when editor_area=backend.
+     */
+    function buildCanvasBackendPreviewUrl(overrides = {}) {
+        const currentUrl = getCurrentWindowUrl();
+        const previewStatus = (typeof overrides.status === 'string' && overrides.status)
+            ? overrides.status
+            : (state.previewStatus || 'draft');
+        const themeId = overrides.theme_id || state.themeId || 0;
+        const base = String(config.backendDashboardUrl || '/weline_dashboard/backend/dashboard').trim()
+            || '/weline_dashboard/backend/dashboard';
+        const url = new URL(base, window.location.origin);
+
+        url.searchParams.set('theme_id', String(themeId));
+        url.searchParams.set('backend_theme_id', String(
+            Object.prototype.hasOwnProperty.call(overrides, 'backend_theme_id')
+                ? overrides.backend_theme_id
+                : (currentUrl.searchParams.get('backend_theme_id') || themeId || '')
+        ));
+        url.searchParams.set('frontend_theme_id', String(
+            Object.prototype.hasOwnProperty.call(overrides, 'frontend_theme_id')
+                ? overrides.frontend_theme_id
+                : (currentUrl.searchParams.get('frontend_theme_id') || themeId || '')
+        ));
+        url.searchParams.set('editor_mode', '1');
+        url.searchParams.set('shell', 'theme-editor');
+        url.searchParams.set('preview_mode', String(overrides.preview_mode || 'live'));
+        url.searchParams.set(
+            'interaction_mode',
+            normalizeInteractionMode(
+                Object.prototype.hasOwnProperty.call(overrides, 'interaction_mode')
+                    ? overrides.interaction_mode
+                    : (state.interactionMode || 'edit')
+            )
+        );
+        url.searchParams.set('status', previewStatus);
+        url.searchParams.set('editor_area', 'backend');
+        url.searchParams.set('preview_area', 'backend');
+        ['version_id'].forEach((key) => {
+            const overrideValue = Object.prototype.hasOwnProperty.call(overrides, key)
+                ? overrides[key]
+                : currentUrl.searchParams.get(key);
+            if (overrideValue !== null && overrideValue !== undefined && overrideValue !== '') {
+                url.searchParams.set(key, String(overrideValue));
+            }
+        });
+        url.searchParams.delete('weline_preview_token');
+        url.searchParams.delete('page_type');
+        url.searchParams.delete('layout_type');
+        url.searchParams.delete('layout_option');
+        appendThemeLayoutRuntimeParams(url, overrides);
+        const previewLocale = getPreviewLocaleForRequest(overrides);
+        url.searchParams.set('editor_context', JSON.stringify(buildTypedEditorContext('layout', {
+            area: 'backend',
+            theme_id: themeId,
+            layout_type: 'dashboard',
+            layout_option: 'default',
+            locale: previewLocale || 'default',
+            target_type: Object.prototype.hasOwnProperty.call(overrides, 'target_type')
+                ? overrides.target_type
+                : (state.layoutIdentity?.target_type || 'global'),
+            target_id: Object.prototype.hasOwnProperty.call(overrides, 'target_id')
+                ? overrides.target_id
+                : (state.layoutIdentity?.target_id || 0),
+        })));
+        url.searchParams.set('_t', String(overrides._t || Date.now()));
+        return url.toString();
+    }
+
+    /**
+     * Area-aware canvas URL: frontend → storefront path; backend → admin dashboard.
+     */
+    function buildCanvasPreviewUrl(overrides = {}) {
+        if (resolveCanvasEditorArea(overrides) === 'backend') {
+            return buildCanvasBackendPreviewUrl(overrides);
+        }
+        return buildCanvasStorefrontPreviewUrl(overrides);
     }
 
     function buildCanvasStorefrontPreviewUrl(overrides = {}) {
@@ -4347,15 +4493,20 @@
         const previewLocale = getPreviewLocaleForRequest(overrides);
         const localizedRoute = buildCanvasLocalizedStorefrontPath(route, previewLocale);
         const mountedRoute = withStorefrontMountPath(localizedRoute);
-        const url = new URL(mountedRoute ? `/${mountedRoute}` : '/', window.location.origin);
+        const canvasOrigin = getStorefrontCanvasOrigin();
+        const url = new URL(mountedRoute ? `/${mountedRoute}` : '/', canvasOrigin);
 
         // Visual-editor canvas: storefront path (+ optional /{locale}/) + editor markers.
         // Visitor language is path-only — never ?locale= / ?lang=.
+        // Frontend-only builder — callers must use buildCanvasPreviewUrl for area routing.
         url.searchParams.set('theme_id', String(themeId));
         url.searchParams.set('frontend_theme_id', String(overrides.theme_id || state.themeId || themeId || ''));
         url.searchParams.set('editor_mode', '1');
         url.searchParams.set('shell', 'theme-editor');
         url.searchParams.set('preview_mode', String(overrides.preview_mode || 'live'));
+        if (canvasOrigin !== window.location.origin) {
+            url.searchParams.set('editor_parent_origin', window.location.origin);
+        }
         url.searchParams.set(
             'interaction_mode',
             normalizeInteractionMode(
@@ -4494,8 +4645,8 @@
      * Only #btnFrontendPreview / openFrontendPreview may do that.
      */
     async function buildAuthorizedCanvasUrl(overrides = {}) {
-        // Canvas / #btnPreview: real storefront path + editor markers (path=layout).
-        const rawUrl = buildCanvasStorefrontPreviewUrl(overrides);
+        // Canvas / #btnPreview: area-aware real route + editor markers (no start-preview).
+        const rawUrl = buildCanvasPreviewUrl(overrides);
         const url = new URL(rawUrl, window.location.origin);
         url.searchParams.delete('weline_preview_token');
         return url.toString();
@@ -4511,8 +4662,8 @@
         }
         const navigationSequence = ++state.canvasNavigationSequence;
         try {
-            // Canvas loads the real storefront path (path = layout; homepage is /).
-            const previewUrl = buildCanvasStorefrontPreviewUrl(overrides);
+            // Frontend → storefront path; backend → admin dashboard. Never mix.
+            const previewUrl = buildCanvasPreviewUrl(overrides);
             if (navigationSequence !== state.canvasNavigationSequence || !elements.previewFrame) {
                 return '';
             }
@@ -4523,7 +4674,7 @@
                 elements.previewLoading?.classList.add('hidden');
                 showToast(error?.message || window.__('预览加载失败'), 'error');
             }
-            console.error('[ThemeEditor] Canvas storefront preview error:', error);
+            console.error('[ThemeEditor] Canvas preview error:', error);
             return '';
         }
     }
@@ -4625,6 +4776,8 @@
         config.storefrontMountPath = String(container.dataset.storefrontMountPath || '')
             .replace(/^\/+|\/+$/g, '');
         state.storefrontMountPath = config.storefrontMountPath;
+        config.storefrontOrigin = String(container.dataset.storefrontOrigin || '').trim();
+        state.storefrontOrigin = config.storefrontOrigin;
         config.apiResolveNavigation = container.dataset.apiResolveNavigation || `${config.apiBase}/resolve-navigation`;
         config.apiResolveFileImagePreviews = container.dataset.apiResolveFileImagePreviews
             || `${config.apiBase}/resolve-file-image-previews`;
@@ -4658,6 +4811,11 @@
         config.apiVirtualThemePublishVersion = container.dataset.apiVirtualThemePublishVersion || '/theme/backend/virtual-theme/publish-version';
         config.apiThemePreviewGateway = container.dataset.apiThemePreviewGateway
             || '/theme/frontend/theme-preview/gateway';
+        config.backendDashboardUrl = String(
+            container.dataset.backendDashboardUrl
+            || container.getAttribute('data-backend-dashboard-url')
+            || '/weline_dashboard/backend/dashboard'
+        ).trim() || '/weline_dashboard/backend/dashboard';
         config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramrender/form';
         config.defaultLocale = container.dataset.defaultLocale || config.defaultLocale || 'zh_Hans_CN';
         // 版本控制 API 端点（Task 6：仅 scope-*）
@@ -5184,23 +5342,25 @@
                             summary: 'theme_binding_changed',
                         });
                         await refreshLayoutOptions({ layout_option: '', silent: true });
+                        syncEditorUrlState({
+                            theme_id: state.themeId,
+                            page_type: getCurrentPageType(),
+                            layout_option: state.layoutOption || 'default',
+                            preview_area: state.editorArea || 'frontend',
+                        });
+                        await loadCanvas();
+                        loadLayoutConfig({ silent: true });
+                        loadVersions();
+                        reloadWidgetLibrary({ silent: true });
                     } catch (error) {
-                        console.error('[ThemeEditor] refresh layout options error:', error);
+                        console.error('[ThemeEditor] theme switch failed:', error);
                         state.themeId = previousThemeId;
                         elements.themeSelect.value = String(previousThemeId || '');
+                        if (elements.previewLoading) {
+                            elements.previewLoading.classList.add('hidden');
+                        }
                         showToast(error?.message || window.__('主题草稿保存失败'), 'error');
-                        return;
                     }
-                    syncEditorUrlState({
-                        theme_id: state.themeId,
-                        page_type: getCurrentPageType(),
-                        layout_option: state.layoutOption || 'default',
-                        preview_area: state.editorArea || 'frontend',
-                    });
-                    loadCanvas();
-                    loadLayoutConfig({ silent: true });
-                    loadVersions();
-                    reloadWidgetLibrary({ silent: true });
                 }
             });
         }
@@ -5233,6 +5393,9 @@
                 } catch (error) {
                     state.themeId = previousThemeId;
                     elements.themeSelect.value = String(previousThemeId || '');
+                    if (elements.previewLoading) {
+                        elements.previewLoading.classList.add('hidden');
+                    }
                     showToast(error?.message || window.__('恢复主题继承失败'), 'error');
                 }
             });
@@ -5262,14 +5425,18 @@
                     return;
                 }
                 showCanvasLoadingImmediate();
+                // Keep the current editing theme — clearing theme_id rebinds to scope
+                // Default and drops editor-area-demo / design themes mid-switch.
+                // Backend shell must land on dashboard (never leftover homepage/storefront).
+                const keepThemeId = parseInt(String(state.themeId || 0), 10) || 0;
                 navigateEditorShell({
                     editor_area: area,
                     preview_area: area,
-                    theme_id: null,
-                    frontend_theme_id: null,
-                    backend_theme_id: null,
-                    page_type: null,
-                    layout_option: null,
+                    theme_id: keepThemeId > 0 ? keepThemeId : null,
+                    frontend_theme_id: keepThemeId > 0 ? keepThemeId : null,
+                    backend_theme_id: keepThemeId > 0 ? keepThemeId : null,
+                    page_type: area === 'backend' ? 'dashboard' : null,
+                    layout_option: area === 'backend' ? 'default' : null,
                     version_id: null,
                 });
             });
@@ -7083,7 +7250,7 @@
     }
 
     function handleIframeMessage(e) {
-        if (e.origin !== window.location.origin || e.source !== elements.previewFrame?.contentWindow) return;
+        if (!isAllowedCanvasMessageOrigin(e.origin) || e.source !== elements.previewFrame?.contentWindow) return;
         const data = e.data;
         if (!data || data.source !== 'weline-theme-preview' || !data.type) return;
 
@@ -13756,7 +13923,7 @@
             widget: widgetData,
             // Prefer the slot whose recommendation filter is active when under the pointer.
             selected_slot_id: state.selectedSlot?.id || '',
-        }, window.location.origin);
+        }, getStorefrontCanvasOrigin());
     }
 
     function handleDragStart(e) {
@@ -21016,6 +21183,37 @@
     }
 
     let resourcePreviewRefresh = Promise.resolve();
+
+    /** Compare canvas vs editor typed identity without dead-ending on field noise. */
+    function resourcePreviewContextsAlign(frameContext, requestedContext) {
+        if (!frameContext || !requestedContext) {
+            return false;
+        }
+        const sameIdentity = ['theme_id', 'area', 'layout_type', 'layout_option', 'target_type', 'target_id']
+            .every((key) => String(frameContext[key] ?? '') === String(requestedContext[key] ?? ''));
+        if (!sameIdentity) {
+            return false;
+        }
+        const expectedScope = requestedContext.scope?.identity || requestedContext.scope || {};
+        const actualScope = frameContext.scope?.identity || frameContext.scope || {};
+        const expectedStorage = String(
+            requestedContext.scope?.storage_scope
+            || legacyStorageScopeForIdentity(expectedScope)
+            || ''
+        );
+        const actualStorage = String(
+            frameContext.scope?.storage_scope
+            || legacyStorageScopeForIdentity(actualScope)
+            || ''
+        );
+        if (expectedStorage !== '' && actualStorage !== '') {
+            return expectedStorage === actualStorage;
+        }
+        return !Object.keys(expectedScope).some(
+            (key) => String(expectedScope[key] ?? '') !== String(actualScope[key] ?? ''),
+        );
+    }
+
     function refreshResourceConfigurationPreview() {
         const requestedContext = buildTypedEditorContext('layout');
         const contextKey = JSON.stringify(requestedContext);
@@ -21023,35 +21221,57 @@
             if (!elements.previewFrame || !state.themeId) return;
             await flushPendingEditorMutations();
             if (JSON.stringify(buildTypedEditorContext('layout')) !== contextKey) return;
-            const current = new URL(elements.previewFrame.src, window.location.origin);
+            const current = new URL(elements.previewFrame.src || 'about:blank', window.location.origin);
             let frameContext = requestedContext;
-            if (current.searchParams.has('editor_context')) {
-                frameContext = JSON.parse(current.searchParams.get('editor_context'));
-                const sameIdentity = ['theme_id', 'area', 'layout_type', 'layout_option', 'target_type', 'target_id']
-                    .every(key => String(frameContext[key] ?? '') === String(requestedContext[key] ?? ''));
-                const expectedScope = requestedContext.scope?.identity || requestedContext.scope || {};
-                const actualScope = frameContext.scope?.identity || frameContext.scope || {};
-                if (!sameIdentity || Object.keys(expectedScope).some(key => String(expectedScope[key] ?? '') !== String(actualScope[key] ?? ''))) {
-                    throw new Error(window.__('预览加载失败'));
+            let realignCanvas = !current.searchParams.has('editor_context');
+            if (!realignCanvas) {
+                try {
+                    const existing = JSON.parse(current.searchParams.get('editor_context'));
+                    if (resourcePreviewContextsAlign(existing, requestedContext)) {
+                        frameContext = existing;
+                    } else {
+                        // Canvas drifted (layout option, area, /~site mount, locale path…).
+                        // Realign to the current editor identity instead of toasting a dead end.
+                        realignCanvas = true;
+                        frameContext = requestedContext;
+                    }
+                } catch (_error) {
+                    realignCanvas = true;
+                    frameContext = requestedContext;
                 }
             }
             const overrides = { resource_refresh: true, editor_context: frameContext,
                 editor_area: frameContext.area, layout_type: frameContext.layout_type, layout_option: frameContext.layout_option,
                 locale: frameContext.locale || getPreviewLocaleForRequest({}), _t: Date.now() };
-            ['preview_mode', 'status', 'version_id', 'scope', 'target_type', 'target_id'].forEach(key => {
-                if (current.searchParams.has(key)) overrides[key] = current.searchParams.get(key);
-            });
+            if (!realignCanvas) {
+                ['preview_mode', 'status', 'version_id', 'scope', 'target_type', 'target_id'].forEach(key => {
+                    if (current.searchParams.has(key)) overrides[key] = current.searchParams.get(key);
+                });
+            }
             // Typed iframe identities may intentionally omit the legacy scope query.
             // Compile must use the same canonical storage scope, not the controller's default.
             overrides.scope = frameContext.scope?.storage_scope
                 || legacyStorageScopeForIdentity(frameContext.scope?.identity || frameContext.scope);
             const result = await fetchLayoutSlots(overrides);
-            if (!result?.success || !result.resource_materialization) throw new Error(window.__('预览加载失败'));
+            if (!result?.success || !result.resource_materialization) {
+                throw new Error(result?.message || window.__('预览加载失败'));
+            }
             if (JSON.stringify(buildTypedEditorContext('layout')) !== contextKey) return;
-            if (elements.previewFrame.src !== current.toString()) return;
-            current.searchParams.set('_t', String(Date.now()));
             if (elements.previewLoading) elements.previewLoading.classList.remove('hidden');
-            elements.previewFrame.src = current.toString();
+            if (realignCanvas) {
+                await setCanvasSource({
+                    layout_type: frameContext.layout_type,
+                    layout_option: frameContext.layout_option,
+                    preview_mode: overrides.preview_mode || current.searchParams.get('preview_mode') || 'live',
+                    status: overrides.status || current.searchParams.get('status') || state.previewStatus || 'draft',
+                    version_id: overrides.version_id || current.searchParams.get('version_id') || undefined,
+                    _t: Date.now(),
+                });
+            } else {
+                if (elements.previewFrame.src !== current.toString()) return;
+                current.searchParams.set('_t', String(Date.now()));
+                elements.previewFrame.src = current.toString();
+            }
             return result.resource_materialization;
         });
         resourcePreviewRefresh = task;

@@ -27,6 +27,8 @@ use Weline\Theme\Service\LayoutValueHydrationRegistry;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewNavigationResolver;
 use Weline\Theme\Service\PreviewTokenService;
+use Weline\Theme\Service\ThemeApplicationUsageService;
+use Weline\Theme\Service\ThemePreviewEntryApplication;
 use Weline\Theme\Service\SharedChromeService;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeCacheGenerator;
@@ -217,7 +219,7 @@ class ThemeEditor extends BackendController
         $scopeCatalog = ObjectManager::getInstance(ScopeSelectorCatalogInterface::class)->build(
             (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE),
             null,
-            $this->themeScopeClaimsFromRequest(),
+            $this->themeScopeClaimsForEditorShell($editingThemeId),
         );
         $scopeLegacyReadonly = !empty($scopeCatalog['legacy_readonly']);
         $selectedScope = $scopeLegacyReadonly
@@ -252,6 +254,31 @@ class ThemeEditor extends BackendController
             return $this->redirect($themeListUrl);
         }
 
+        // Gate on real backend skin dir only — never treat backend_theme_id>0 as
+        // "has backend". Design themes (hanfu/grocery/…) often lack backend/;
+        // showing 后端 would load a fake area or storefront and confuse editors.
+        // Coerce BEFORE prepareAssetEditorInput so a stale ?editor_area=backend
+        // cannot throw theme_asset_editor_theme_unavailable.
+        $frontendHasBackend = $this->themeHasBackendDir($editingTheme);
+        if (!$frontendHasBackend) {
+            $editorArea = PreviewContextService::AREA_FRONTEND;
+        }
+        // Backend shell must not keep a storefront leftover page_type (homepage).
+        // Stale ?page_type=homepage + backend area confuses the toolbar and, with
+        // outdated static JS that always painted storefront canvas, showed 店面
+        // while 编辑区域 still read 后端.
+        if ($editorArea === PreviewContextService::AREA_BACKEND) {
+            $normalizedPageType = strtolower(trim($pageType));
+            if ($normalizedPageType === ''
+                || $normalizedPageType === 'homepage'
+                || $normalizedPageType === 'home'
+                || $normalizedPageType === ThemeLayout::PAGE_TYPE_HOME
+                || $normalizedPageType === 'default'
+            ) {
+                $pageType = ThemeLayout::PAGE_TYPE_DASHBOARD;
+            }
+        }
+
         if ($scopeContext instanceof ScopeContext) {
             $assetInput = $this->prepareAssetEditorInput(['editor_context' => [
                 'theme_id' => $editingThemeId, 'area' => $editorArea, 'scope' => $scopeContext->toArray(),
@@ -261,7 +288,6 @@ class ThemeEditor extends BackendController
 
         $frontendTheme = $editingTheme;
         $backendTheme = $editingTheme;
-        $frontendHasBackend = $this->themeHasBackendDir($editingTheme);
         $context = $previewContextService->buildContext([
             'frontend_theme_id' => $editingThemeId,
             'backend_theme_id' => $editingThemeId,
@@ -290,6 +316,16 @@ class ThemeEditor extends BackendController
         $layoutOptionsByType = $currentTheme?->getId()
             ? $this->getEditorLayoutOptionsByType($currentTheme, $editorArea)
             : [];
+        // Backend catalog is dashboard/login/… — drop any remaining frontend page_type.
+        if ($editorArea === PreviewContextService::AREA_BACKEND
+            && $layoutOptionsByType !== []
+            && !isset($layoutOptionsByType[$pageType])
+        ) {
+            $pageType = isset($layoutOptionsByType[ThemeLayout::PAGE_TYPE_DASHBOARD])
+                ? ThemeLayout::PAGE_TYPE_DASHBOARD
+                : (string)array_key_first($layoutOptionsByType);
+            $context['target_value'] = $pageType;
+        }
         $requestedLayoutOption = (string)$this->request->getParam('layout_option', '');
         $layoutOption = $currentTheme?->getId()
             ? $this->resolveSelectedLayoutOption(
@@ -457,7 +493,7 @@ class ThemeEditor extends BackendController
         $pageTypeOptionsHtml = $this->editorMarkupRenderer->renderPageTypeOptions($pageTypes, $pageType);
         $layoutOptionsHtml = $this->editorMarkupRenderer->renderLayoutOptions($currentLayoutOptions, $layoutOption);
         $editorAreaOptionsHtml = $this->editorMarkupRenderer->renderEditorAreaOptions(
-            $frontendHasBackend || $backendThemeId > 0,
+            $frontendHasBackend,
             $editorArea
         );
         $localeOptionsHtml = $this->editorMarkupRenderer->renderLocaleOptions($installedLocales);
@@ -478,7 +514,7 @@ class ThemeEditor extends BackendController
         $this->assign('storefront_paths_by_layout', $this->getThemePageTypeResolver()->getPreviewPathsByLayoutTypes(array_keys($pageTypes), $layoutOptionsByType));
         $this->assign('areas', ThemeLayout::getAreas());
         $this->assign('editor_area', $editorArea);
-        $this->assign('theme_has_backend', $frontendHasBackend || $backendThemeId > 0);
+        $this->assign('theme_has_backend', $frontendHasBackend);
         $this->assign('preview_context', $context);
         $this->assign('layout_editor_lock', $layoutEditorLock);
         $this->assign('layout', $layout);
@@ -491,13 +527,21 @@ class ThemeEditor extends BackendController
         $this->assign('scope_identity', $scopeLegacyReadonly ? [] : $scopeCatalog['selected_identity']);
         $this->assign('selected_scope', $selectedScope);
         $this->assign('scope_legacy_readonly', $scopeLegacyReadonly);
+        $editorStorefrontScope = $scopeLegacyReadonly ? null : (is_array($scopeCatalog['selected_identity'] ?? null)
+            ? (array)$scopeCatalog['selected_identity']
+            : null);
         $this->assign(
             'storefront_mount_path',
-            $this->resolveStorefrontMountPathForEditorScope(
-                $scopeLegacyReadonly ? null : (is_array($scopeCatalog['selected_identity'] ?? null)
-                    ? (array)$scopeCatalog['selected_identity']
-                    : null)
-            )
+            $this->resolveStorefrontMountPathForEditorScope($editorStorefrontScope)
+        );
+        $this->assign(
+            'storefront_origin',
+            $this->resolveStorefrontOriginForEditorScope($editorStorefrontScope)
+        );
+        // Backend visual-editor canvas = real admin dashboard (not storefront path).
+        $this->assign(
+            'backend_dashboard_url',
+            (string)$this->_url->getBackendUrl('weline_dashboard/backend/dashboard')
         );
         $this->assign('page_type_options_html', $pageTypeOptionsHtml);
         $this->assign('layout_options_html', $layoutOptionsHtml);
@@ -1339,19 +1383,127 @@ class ThemeEditor extends BackendController
     /** @return array<string,mixed> */
     private function themeScopeClaimsFromRequest(): array
     {
-        if (trim((string)$this->request->getParam('scope_kind', '')) === '') {
-            return [];
+        $scopeKind = \trim((string)$this->request->getParam('scope_kind', ''));
+        $websiteId = $this->nullableRequestInt('website_id');
+        $websiteCode = $this->nullableRequestString('website_code');
+        // Theme list「编辑」只带 website_id/code，不带 scope_kind；仍须建成 website claims，
+        // 否则 Scope 回落 default，画布/预览会打在默认站 Host（汉服）上。
+        if ($scopeKind === '') {
+            if ($websiteId === null && ($websiteCode === null || $websiteCode === '')) {
+                return [];
+            }
+            $scopeKind = ScopeIdentity::KIND_WEBSITE;
         }
 
         return [
-            'scope_kind' => (string)$this->request->getParam('scope_kind'),
-            'website_id' => $this->nullableRequestInt('website_id'),
-            'website_code' => $this->nullableRequestString('website_code'),
+            'scope_kind' => $scopeKind,
+            'website_id' => $websiteId,
+            'website_code' => $websiteCode,
             'store_code' => $this->nullableRequestString('store_code'),
             'channel_code' => $this->nullableRequestString('channel_code'),
             'store_mode' => $this->nullableRequestString('store_mode'),
             'context_version' => (string)$this->request->getParam('context_version', 'v1'),
         ];
+    }
+
+    /**
+     * Editor shell claims: URL-explicit website_* first; when the request only
+     * carries theme_id (sticky preview bags often inject website_id=0), fall back
+     * to websites_theme_application so storefront_origin / SSR iframe bind the
+     * theme's website Host instead of the default-site admin Host.
+     *
+     * @return array<string,mixed>
+     */
+    private function themeScopeClaimsForEditorShell(int $editingThemeId): array
+    {
+        $claims = $this->themeScopeClaimsFromRequest();
+        if ($claims !== [] && $this->requestQueryExplicitlyAssertsWebsiteScope()) {
+            return $claims;
+        }
+        if ($editingThemeId <= 0) {
+            return $claims;
+        }
+
+        try {
+            /** @var ThemeApplicationUsageService $usage */
+            $usage = ObjectManager::getInstance(ThemeApplicationUsageService::class);
+            $edit = $usage->resolveEditWebsiteForTheme($editingThemeId);
+        } catch (\Throwable) {
+            return $claims;
+        }
+
+        $websiteId = (int)($edit['website_id'] ?? -1);
+        $websiteCode = \strtolower(\trim((string)($edit['website_code'] ?? '')));
+        if ($websiteId < 0 || $websiteCode === '') {
+            return $claims;
+        }
+        // Default site stays Host-bound on the admin project Host — no cross-Host origin.
+        if ($websiteId === 0 && $websiteCode === 'default') {
+            return $claims;
+        }
+
+        // URL named a different non-default website via scope= — keep that choice.
+        $queryScope = $this->requestQueryScopeWebsiteCode();
+        if ($queryScope !== ''
+            && $queryScope !== 'default'
+            && $queryScope !== $websiteCode
+        ) {
+            return $claims;
+        }
+
+        return [
+            'scope_kind' => ScopeIdentity::KIND_WEBSITE,
+            'website_id' => $websiteId,
+            'website_code' => $websiteCode,
+            'store_code' => null,
+            'channel_code' => null,
+            'store_mode' => null,
+            'context_version' => 'v1',
+        ];
+    }
+
+    /** True when this HTTP query/body explicitly asserts website / scope_kind. */
+    private function requestQueryExplicitlyAssertsWebsiteScope(): bool
+    {
+        $query = $this->currentEditorRequestQueryParams();
+        if (\array_key_exists('website_id', $query)
+            || \array_key_exists('website_code', $query)
+            || \array_key_exists('scope_kind', $query)
+        ) {
+            return true;
+        }
+
+        return $this->requestQueryScopeWebsiteCode() !== '';
+    }
+
+    private function requestQueryScopeWebsiteCode(): string
+    {
+        $query = $this->currentEditorRequestQueryParams();
+        $scope = \strtolower(\trim((string)($query['scope'] ?? '')));
+        if ($scope === '') {
+            return '';
+        }
+
+        return \strtolower(\trim((string)(\explode('.', $scope, 2)[0] ?? '')));
+    }
+
+    /** @return array<string,mixed> */
+    private function currentEditorRequestQueryParams(): array
+    {
+        $queryString = '';
+        try {
+            $uri = (string)($this->request->getServer('REQUEST_URI') ?? '');
+            $queryString = (string)(\parse_url($uri, PHP_URL_QUERY) ?? '');
+        } catch (\Throwable) {
+            $queryString = '';
+        }
+        if ($queryString === '') {
+            return [];
+        }
+        $parsed = [];
+        \parse_str($queryString, $parsed);
+
+        return \is_array($parsed) ? $parsed : [];
     }
 
     private function nullableRequestInt(string $key): ?int
@@ -6664,13 +6816,14 @@ HTML;
         $hasWebsiteScope = $kind !== '' && $kind !== ScopeIdentity::KIND_GLOBAL;
         $websiteId = $this->resolveEditorWebsiteId($scopeIdentity);
         try {
-            if ($hasWebsiteScope && class_exists(\Weline\Websites\Model\Website::class)) {
-                /** @var \Weline\Websites\Model\Website $website */
-                $website = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-                $website->clearData()->load($websiteId);
-                $fromWebsite = trim(str_replace('-', '_', (string)($website->getDefaultLanguage() ?? '')));
-                if ($fromWebsite !== '') {
-                    return $fromWebsite;
+            if ($hasWebsiteScope && class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $fromSnapshot = trim(str_replace(
+                    '-',
+                    '_',
+                    (string)(\Weline\Websites\Data\WebsiteData::defaultLanguageForWebsite($websiteId) ?? '')
+                ));
+                if ($fromSnapshot !== '') {
+                    return $fromSnapshot;
                 }
             }
         } catch (\Throwable) {
@@ -6729,10 +6882,12 @@ HTML;
     {
         $websiteIdParam = $this->request->getParam('website_id');
         if ($websiteIdParam !== null && $websiteIdParam !== '') {
+            $websiteCodeParam = \strtolower(\trim((string)$this->request->getParam('website_code', '')));
+
             return [
                 'scope_kind' => ScopeIdentity::KIND_WEBSITE,
                 'website_id' => max(0, (int)$websiteIdParam),
-                'website_code' => null,
+                'website_code' => $websiteCodeParam !== '' ? $websiteCodeParam : null,
                 'store_code' => null,
                 'channel_code' => null,
                 'store_mode' => null,
@@ -7005,14 +7160,10 @@ HTML;
             \exec('php ' . BP . 'bin/w setup:upgrade -m Weline_Theme 2>&1', $output, $code);
 
             $reseed = [
-                'activate_frontend' => null,
-                'activate_backend' => null,
                 'seeded_page_types' => [],
                 'published' => [],
             ];
             try {
-                /** @var ThemeContextService $themeContext */
-                $themeContext = ObjectManager::getInstance(ThemeContextService::class);
                 /** @var WelineTheme $themeModel */
                 $themeModel = ObjectManager::getInstance(WelineTheme::class);
                 $themes = $themeModel->clearQuery()->clearData()->select()->fetchArray();
@@ -7024,8 +7175,6 @@ HTML;
                     }
                 }
                 if ($themeId > 0) {
-                    $reseed['activate_frontend'] = $themeContext->activateThemeForArea($themeId, 'frontend');
-                    $reseed['activate_backend'] = $themeContext->activateThemeForArea($themeId, 'backend');
                     /** @var DefaultLayoutSeeder $seeder */
                     $seeder = ObjectManager::getInstance(DefaultLayoutSeeder::class);
                     $seeded = $seeder->seedAllDefaultLayouts($themeId, true);
@@ -8128,8 +8277,19 @@ HTML;
             ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class)
                 ->captureCurrent($draft, $context, empty($result['reused_existing_draft']));
             $result['content_revision'] = $draft->getContentRevision();
-            ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class)
-                ->afterResourceWrite($context, ['version_identity' => $draft->toVersionIdentity()->toArray()]);
+            $solidify = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator::class)
+                ->solidifyScopeVersion($context, (int)$result['theme_version_id']);
+            if (empty($solidify['ok'])) {
+                return [
+                    'success' => false,
+                    'code' => 'theme_scope_draft_solidify_failed',
+                    'message' => (string)($solidify['reason'] ?? __('Scope 草稿固化失败')),
+                    'data' => $result + [
+                        'solidify' => $solidify,
+                        'selection' => $this->loadScopeVersionSelectionArray($owner, true),
+                    ],
+                ];
+            }
 
             $this->clearVersionPreviewCaches($context->themeId);
 
@@ -8138,6 +8298,7 @@ HTML;
                 'message' => __('Scope 草稿已创建'),
                 'data' => $result + [
                     'selection' => $this->loadScopeVersionSelectionArray($owner, true),
+                    'solidify' => $solidify,
                     // 基准来源单独暴露，便于验收「无本级覆盖者用祖先 owner」。
                     'base_version_id' => $baseVersionId,
                     'base_source_scope' => (string)($selection['base_source_scope'] ?? ''),
@@ -10064,6 +10225,23 @@ HTML;
             return '';
         }
 
+        // Standard project Host: synthetic /~site/{code} (no WebsiteDomain shell row).
+        try {
+            if (\class_exists(\Weline\Server\Api\Domain\LocalDomainPolicy::class)
+                && \Weline\Server\Api\Domain\LocalDomainPolicy::isStandardProjectHost($host)
+                && \class_exists(\Weline\Websites\Service\ProjectHostSiteMount::class)
+            ) {
+                $synthetic = \Weline\Websites\Service\ProjectHostSiteMount::editorMountPath(
+                    $websiteId,
+                    $websiteCode
+                );
+                if ($synthetic !== '') {
+                    return $synthetic;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
         try {
             if (!\class_exists(\Weline\Websites\Model\WebsiteDomain::class)) {
                 return '';
@@ -10084,6 +10262,11 @@ HTML;
                     continue;
                 }
                 $sub = \rtrim($sub, '/');
+                if (\class_exists(\Weline\Websites\Service\ProjectHostSiteMount::class)
+                    && \Weline\Websites\Service\ProjectHostSiteMount::conflictsWithDomainSubPath($sub)
+                ) {
+                    continue;
+                }
                 if (\strlen($sub) > \strlen($best)) {
                     $best = $sub;
                 }
@@ -10095,6 +10278,70 @@ HTML;
         }
 
         return '';
+    }
+
+    /**
+     * When the selected website lives on a different primary Host than the admin
+     * request (e.g. grocery.test.weline.com vs p{hash}.test.weline.com), canvas
+     * must use that absolute origin — mount-path alone cannot reach it.
+     *
+     * @param array<string,mixed>|null $scopeIdentity
+     */
+    private function resolveStorefrontOriginForEditorScope(?array $scopeIdentity): string
+    {
+        if (!\is_array($scopeIdentity) || $scopeIdentity === []) {
+            return '';
+        }
+
+        $kind = \strtolower(\trim((string)($scopeIdentity['scope_kind'] ?? '')));
+        if ($kind === '' || $kind === ScopeIdentity::KIND_GLOBAL || $kind === 'global') {
+            return '';
+        }
+
+        $websiteId = (int)($scopeIdentity['website_id'] ?? -1);
+        $websiteCode = \strtolower(\trim((string)($scopeIdentity['website_code'] ?? '')));
+        if ($websiteId < 0 || $websiteCode === '') {
+            return '';
+        }
+        if ($websiteId === 0 && $websiteCode === 'default') {
+            return '';
+        }
+
+        try {
+            /** @var \Weline\Theme\Service\InstallLocalStorefrontBaseResolver $resolver */
+            $resolver = ObjectManager::getInstance(
+                \Weline\Theme\Service\InstallLocalStorefrontBaseResolver::class
+            );
+            $origin = \trim((string)($resolver->resolveForWebsite($websiteId, $websiteCode) ?? ''));
+        } catch (\Throwable) {
+            return '';
+        }
+        if ($origin === '') {
+            return '';
+        }
+
+        $parts = \parse_url($origin);
+        if (!\is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return '';
+        }
+
+        $originHost = \strtolower((string)$parts['host']);
+        $requestHost = \strtolower(\trim((string)($this->request->getServer('HTTP_HOST') ?? '')));
+        if ($requestHost !== '' && \str_contains($requestHost, ':')) {
+            $requestHost = \explode(':', $requestHost, 2)[0];
+        }
+        // Same Host → keep relative origin; mount_path (if any) is enough.
+        if ($requestHost !== '' && $originHost === $requestHost) {
+            return '';
+        }
+
+        $scheme = \strtolower((string)$parts['scheme']);
+        if (!\in_array($scheme, ['http', 'https'], true)) {
+            return '';
+        }
+        $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
+
+        return $scheme . '://' . $originHost . $port;
     }
 
     private function persistEditorContext(array $overrides = []): array
@@ -10174,6 +10421,25 @@ HTML;
         $baseUrl = $this->_url->getFrontendUrl(
             $this->getThemePageTypeResolver()->getFrontendUrlPathForPreview($pageType, $layoutOption)
         );
+        $scopePayload = $this->resolveEditorScopeIdentityPayload();
+        $websiteId = null;
+        $websiteCode = null;
+        if (\is_array($scopePayload) && $scopePayload !== []) {
+            $kind = \strtolower(\trim((string)($scopePayload['scope_kind'] ?? '')));
+            if ($kind === ScopeIdentity::KIND_WEBSITE || $kind === 'website'
+                || $kind === ScopeIdentity::KIND_STORE || $kind === 'store'
+                || $kind === ScopeIdentity::KIND_CHANNEL || $kind === 'channel'
+            ) {
+                $websiteId = \max(0, (int)($scopePayload['website_id'] ?? 0));
+                $websiteCode = \strtolower(\trim((string)($scopePayload['website_code'] ?? '')));
+                if ($websiteCode === '') {
+                    $websiteCode = null;
+                }
+            }
+        }
+        /** @var ThemePreviewEntryApplication $previewEntry */
+        $previewEntry = ObjectManager::getInstance(ThemePreviewEntryApplication::class);
+        $baseUrl = $previewEntry->normalizeStorefrontPreviewBaseUrl($baseUrl, $websiteId, $websiteCode);
 
         return $this->previewTokenService->getPreviewUrl($baseUrl, $token);
     }

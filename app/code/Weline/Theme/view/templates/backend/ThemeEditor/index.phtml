@@ -150,10 +150,42 @@ if ($layout_editor_locked) {
     }
 }
 $initialPreviewToken = trim((string)($this->getData('initial_preview_token') ?: ''));
+// Cross-Host canvas origin must be known BEFORE the SSR iframe src is built.
+// A relative first paint on the admin Host DetectWebsite-binds the default site
+// (汉服 chrome) while theme_id still injects the bound theme body — classic bleed.
+$storefront_mount_path = trim((string)$this->getData('storefront_mount_path'));
+$storefront_mount_path = '/' . trim(str_replace('\\', '/', $storefront_mount_path), '/');
+if ($storefront_mount_path === '/') {
+    $storefront_mount_path = '';
+} else {
+    $storefront_mount_path = rtrim($storefront_mount_path, '/');
+}
+$storefront_origin = trim((string)$this->getData('storefront_origin'));
+if ($storefront_origin !== '') {
+    $originParts = parse_url($storefront_origin);
+    if (!is_array($originParts) || empty($originParts['scheme']) || empty($originParts['host'])) {
+        $storefront_origin = '';
+    } else {
+        $originScheme = strtolower((string)$originParts['scheme']);
+        if (!in_array($originScheme, ['http', 'https'], true)) {
+            $storefront_origin = '';
+        } else {
+            $originPort = isset($originParts['port']) ? ':' . (int)$originParts['port'] : '';
+            $storefront_origin = $originScheme . '://' . strtolower((string)$originParts['host']) . $originPort;
+        }
+    }
+}
 // 首屏与后续画布导航使用同一已解析 owner/resource，不能先请求无 scope 的默认草稿。
+// Backend canvas = real admin dashboard (ThemePreviewEntryApplication contract).
+// Frontend canvas = real storefront path. Never mix the two.
 $canvasArea = $editor_area === 'backend' ? 'backend' : 'frontend';
+$backendDashboardUrl = trim((string)$this->getData('backend_dashboard_url'));
 $storefrontPathsByLayout = (array)$this->getData('storefront_paths_by_layout');
-$canvasPath = (string)($storefrontPathsByLayout[$page_type] ?? '/');
+$canvasPath = $canvasArea === 'backend'
+    ? ''
+    : (string)($storefrontPathsByLayout[$page_type] ?? '/');
+$canvasLayoutType = $canvasArea === 'backend' ? 'dashboard' : $page_type;
+$canvasLayoutOption = $canvasArea === 'backend' ? 'default' : $layout_option;
 $previewParams['shell'] = 'theme-editor';
 $previewParams['interaction_mode'] = 'edit';
 $previewParams['editor_area'] = $canvasArea;
@@ -169,16 +201,72 @@ if ($scopeIdentity !== []) {
         'area' => $canvasArea,
         'resource_type' => 'layout',
         'theme_id' => $theme_id,
-        'layout_type' => $page_type,
-        'layout_option' => $layout_option,
+        'layout_type' => $canvasLayoutType,
+        'layout_option' => $canvasLayoutOption,
         'locale' => $layout_identity_locale !== '' ? $layout_identity_locale : 'default',
         'target_type' => $layout_identity_target_type,
         'target_id' => $layout_identity_target_id,
     ], $jsonForScriptFlags) ?: '{}';
 }
-// 店面路由及语言由 path 决定；typed context 保留布局资源身份。
+if ($canvasArea === 'frontend' && $storefront_origin !== '') {
+    $requestHost = strtolower(trim((string)$this->request->getServer('HTTP_HOST')));
+    if ($requestHost !== '' && str_contains($requestHost, ':')) {
+        $requestHost = explode(':', $requestHost, 2)[0];
+    }
+    $requestScheme = strtolower(trim((string)$this->request->getServer('REQUEST_SCHEME')));
+    if ($requestScheme === '') {
+        $httpsFlag = strtolower(trim((string)$this->request->getServer('HTTPS')));
+        $requestScheme = ($httpsFlag !== '' && $httpsFlag !== 'off') ? 'https' : 'http';
+    }
+    if (!in_array($requestScheme, ['http', 'https'], true)) {
+        $requestScheme = 'https';
+    }
+    $requestPortRaw = trim((string)$this->request->getServer('SERVER_PORT'));
+    $requestPort = '';
+    if ($requestPortRaw !== ''
+        && !(($requestScheme === 'https' && $requestPortRaw === '443')
+            || ($requestScheme === 'http' && $requestPortRaw === '80'))
+    ) {
+        $requestPort = ':' . (int)$requestPortRaw;
+    }
+    if ($requestHost !== '') {
+        $adminOrigin = $requestScheme . '://' . $requestHost . $requestPort;
+        if ($adminOrigin !== $storefront_origin) {
+            $previewParams['editor_parent_origin'] = $adminOrigin;
+        }
+    }
+}
+// Path owns route/language for storefront; dashboard owns backend layout.
+// Keep typed editor_context for draft LayoutIdentity — strip redundant query keys.
 unset($previewParams['page_type'], $previewParams['layout_type'], $previewParams['locale'], $previewParams['locale_code']);
-$initialPreviewUrl = $canvasPath . '?' . http_build_query($previewParams, '', '&', PHP_QUERY_RFC3986);
+if ($canvasArea === 'backend') {
+    // Dashboard owns its layout; do not leak frontend layout_option onto the admin URL.
+    unset($previewParams['layout_option']);
+    $canvasBase = $backendDashboardUrl !== ''
+        ? $backendDashboardUrl
+        : '/weline_dashboard/backend/dashboard';
+    $queryString = http_build_query($previewParams, '', '&', PHP_QUERY_RFC3986);
+    $initialPreviewUrl = $canvasBase . ($queryString !== '' ? ('?' . $queryString) : '');
+} else {
+    $canvasPathForUrl = '/' . ltrim(str_replace('\\', '/', (string)$canvasPath), '/');
+    if ($canvasPathForUrl === '/') {
+        $canvasPathForUrl = '/';
+    } else {
+        $canvasPathForUrl = rtrim($canvasPathForUrl, '/');
+    }
+    // Same-Host canvas relies on mount_path; never omit it on first paint
+    // (relative `/` DetectWebsite-binds the default site on the project Host).
+    if ($canvasPathForUrl === '/') {
+        $mountedCanvasPath = $storefront_mount_path !== '' ? $storefront_mount_path : '/';
+    } else {
+        $mountedCanvasPath = $storefront_mount_path . $canvasPathForUrl;
+    }
+    $queryString = http_build_query($previewParams, '', '&', PHP_QUERY_RFC3986);
+    $initialPreviewUrl = ($storefront_origin !== ''
+        ? (rtrim($storefront_origin, '/') . $mountedCanvasPath)
+        : $mountedCanvasPath
+    ) . ($queryString !== '' ? ('?' . $queryString) : '');
+}
 $initialPreviewUrlSafe = htmlspecialchars($initialPreviewUrl, ENT_QUOTES, 'UTF-8');
 
 // Theme 动态图片必须由 MediaManager 返回 file-image/ImageUsage。
@@ -199,14 +287,9 @@ $layoutIdentityTargetTypeSafe = $escape($layout_identity_target_type);
 $layoutIdentityTargetIdSafe = (string)$layout_identity_target_id;
 $layoutIdentityLocaleSafe = $escape($layout_identity_locale);
 $defaultLocaleSafe = $escape($default_locale);
-$storefront_mount_path = trim((string)$this->getData('storefront_mount_path'));
-$storefront_mount_path = '/' . trim(str_replace('\\', '/', $storefront_mount_path), '/');
-if ($storefront_mount_path === '/') {
-    $storefront_mount_path = '';
-} else {
-    $storefront_mount_path = rtrim($storefront_mount_path, '/');
-}
 $storefrontMountPathSafe = $escape($storefront_mount_path);
+$storefrontOriginSafe = $escape($storefront_origin);
+$backendDashboardUrlSafe = $escape($backendDashboardUrl);
 $layoutOptionsJsonSafe = $escape($layout_options_json);
 $storefrontPathsJsonSafe = $escape(json_encode($storefrontPathsByLayout, $jsonForScriptFlags) ?: '{}');
 $installedLocalesJsonSafe = $escape($installed_locales_json);
@@ -279,6 +362,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-theme-layout-source-target-id="<?= $layoutIdentityTargetIdSafe ?>"
      data-default-locale="<?= $defaultLocaleSafe ?>"
      data-storefront-mount-path="<?= $storefrontMountPathSafe ?>"
+     data-storefront-origin="<?= $storefrontOriginSafe ?>"
      data-storefront-paths-by-layout="<?= $storefrontPathsJsonSafe ?>"
      data-layout-options="<?= $layoutOptionsJsonSafe ?>"
      data-installed-locales="<?= $installedLocalesJsonSafe ?>"
@@ -318,6 +402,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-virtual-theme-source="@url{'theme/backend/virtual-theme/source'}"
      data-api-virtual-theme-publish-version="@url{'theme/backend/virtual-theme/publish-version'}"
      data-api-theme-preview-gateway="@frontend-url{'theme/frontend/theme-preview/gateway'}"
+     data-backend-dashboard-url="<?= $backendDashboardUrlSafe ?>"
      data-api-param-render-form="@url{'theme/backend/widget/paramrender/form'}"
      data-api-scope-versions="@url{'theme/backend/theme-editor/scope-versions'}"
      data-api-create-scope-draft="@url{'theme/backend/theme-editor/create-scope-draft'}"
