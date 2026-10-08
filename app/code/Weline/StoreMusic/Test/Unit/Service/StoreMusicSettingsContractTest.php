@@ -57,8 +57,9 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('KEY_AVATAR_SPIN', $settings);
         self::assertStringContainsString('boolean(self::KEY_ENABLED, false)', $settings);
         self::assertStringContainsString('boolean(self::KEY_TRY_AUTOPLAY, true)', $settings);
-        self::assertStringContainsString('"enabled":false', $widget);
-        self::assertStringContainsString('@param enabled {default=false', $widget);
+        self::assertStringContainsString('"enabled":true', $widget);
+        self::assertStringContainsString('@param enabled {default=true', $widget);
+        self::assertStringContainsString('tracksMatchDefaultCatalog', $settings);
         self::assertStringContainsString('avatarSpin', $settings);
         self::assertStringContainsString("'avatar_spin'", $settings);
         self::assertStringContainsString('parsePlaylistJson', $settings);
@@ -108,7 +109,7 @@ final class StoreMusicSettingsContractTest extends TestCase
         );
 
         self::assertStringContainsString('storeMusic', $modulesJs);
-        self::assertStringContainsString('20261008-65waterripple', $modulesJs);
+        self::assertStringContainsString('20261008-72waterdense', $modulesJs);
         self::assertStringNotContainsString('20260924-no-unload1', $modulesJs);
         self::assertStringNotContainsString('20260917-storemusic-speccenter2', $modulesJs);
         self::assertStringContainsString('load: "defer"', $modulesJs);
@@ -209,13 +210,36 @@ final class StoreMusicSettingsContractTest extends TestCase
                 'delay_seconds' => 5,
             ])
         );
-        $withTracks = [
+        $customOff = [
             'enabled' => false,
             'tracks' => [['url' => '/media/a.mp3', 'title' => '甲']],
         ];
-        self::assertSame($withTracks, StoreMusicSettings::hookOwnedWidgetConfig($withTracks));
+        self::assertSame($customOff, StoreMusicSettings::hookOwnedWidgetConfig($customOff));
         $enabledOn = ['enabled' => true, 'tracks' => []];
         self::assertSame($enabledOn, StoreMusicSettings::hookOwnedWidgetConfig($enabledOn));
+
+        $catalog = require dirname(__DIR__, 3) . '/etc/default-tracks.php';
+        self::assertIsArray($catalog);
+        self::assertNotEmpty($catalog);
+        $polluted = [
+            'enabled' => false,
+            'tracks' => $catalog,
+            'delay_seconds' => 3,
+        ];
+        $stripped = StoreMusicSettings::hookOwnedWidgetConfig($polluted);
+        self::assertIsArray($stripped);
+        self::assertArrayNotHasKey('enabled', $stripped);
+        self::assertArrayNotHasKey('tracks', $stripped);
+        self::assertSame(3, $stripped['delay_seconds'] ?? null);
+        self::assertTrue(StoreMusicSettings::tracksMatchDefaultCatalog(
+            StoreMusicSettings::tracksFromWidgetConfig($catalog)
+        ));
+        $catalogRows = StoreMusicSettings::defaultCatalogTracks();
+        self::assertNotEmpty($catalogRows);
+        self::assertSame(
+            StoreMusicSettings::normalizeMediaUrl((string)($catalog[0]['url'] ?? '')),
+            (string)($catalogRows[0]['url'] ?? '')
+        );
     }
 
     public function testDoesNotPatchSystemConfigCoreTemplate(): void

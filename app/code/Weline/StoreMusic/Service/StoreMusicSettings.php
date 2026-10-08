@@ -88,8 +88,15 @@ class StoreMusicSettings
         $locale = $locale !== null && trim($locale) !== ''
             ? trim($locale)
             : self::currentRequestLocale();
+        $source = $this->tracks($scope);
+        if ($source === []) {
+            // New websites / scopes may have no SystemConfig playlist yet.
+            // Required default_injection uses tracks=[] + enabled=true and must
+            // still fall back to module etc/default-tracks.php (not stay inactive).
+            $source = self::defaultCatalogTracks();
+        }
         $out = [];
-        foreach ($this->tracks($scope) as $track) {
+        foreach ($source as $track) {
             $out[] = [
                 'url' => (string)($track['url'] ?? ''),
                 'title' => (string)($track['title'] ?? ''),
@@ -142,7 +149,7 @@ class StoreMusicSettings
 
     public function waveformDefault(): bool
     {
-        return $this->boolean(self::KEY_WAVEFORM_DEFAULT, false);
+        return $this->boolean(self::KEY_WAVEFORM_DEFAULT, true);
     }
 
     public function avatarSpin(): bool
@@ -296,9 +303,18 @@ class StoreMusicSettings
 
     /**
      * Float-slot widget owns the audible float. Theme may stamp annotation /
-     * default_injection defaults (enabled=false, tracks=[]) onto a shared
-     * template bag; that must not override SystemConfig when the layout node
-     * never set real tracks or an explicit enable.
+     * default_injection defaults onto a shared template bag; that must not
+     * override SystemConfig when the layout node never set a real editor enable.
+     *
+     * Pollution shapes (strip enabled+tracks → SystemConfig fallback):
+     * - enabled=false + empty tracks (annotation / clean default_injection)
+     * - enabled=false + tracks that match module etc/default-tracks.php
+     *   (historical default_injection stamped full playlist with enabled=false,
+     *   which otherwise permanently inactive's the float after reset/solidify)
+     *
+     * Keep as-is (editor-owned):
+     * - enabled=true (with or without tracks)
+     * - enabled=false + non-catalog tracks (explicit off while editing a custom list)
      *
      * @param array<string, mixed>|null $fromTemplate
      * @return array<string, mixed>|null
@@ -309,18 +325,117 @@ class StoreMusicSettings
             return null;
         }
         $tracks = self::tracksFromWidgetConfig($fromTemplate['tracks'] ?? null);
-        if ($tracks !== []) {
-            return $fromTemplate;
-        }
         $enabledOn = \array_key_exists('enabled', $fromTemplate)
             && self::coerceBool($fromTemplate['enabled'], false);
         if ($enabledOn) {
+            return $fromTemplate;
+        }
+        if ($tracks !== [] && !self::tracksMatchDefaultCatalog($tracks)) {
             return $fromTemplate;
         }
         $bag = $fromTemplate;
         unset($bag['enabled'], $bag['tracks']);
 
         return $bag === [] ? null : $bag;
+    }
+
+    /**
+     * @param list<array{url:string,title:string,intro:string}> $tracks
+     */
+    public static function tracksMatchDefaultCatalog(array $tracks): bool
+    {
+        if ($tracks === []) {
+            return true;
+        }
+        $catalog = self::defaultCatalogUrls();
+        if ($catalog === []) {
+            return false;
+        }
+        $urls = [];
+        foreach ($tracks as $row) {
+            $url = self::normalizeMediaUrl((string)($row['url'] ?? ''));
+            if ($url !== '') {
+                $urls[$url] = true;
+            }
+        }
+        if ($urls === []) {
+            return true;
+        }
+        foreach (\array_keys($urls) as $url) {
+            if (!isset($catalog[$url])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Module etc/default-tracks.php rows (admin/storage shape with locale intro maps).
+     *
+     * @return list<array{url:string,title:string,intro:array<string,string>}>
+     */
+    public static function defaultCatalogTracks(): array
+    {
+        static $rows = null;
+        if (\is_array($rows)) {
+            return $rows;
+        }
+        $rows = [];
+        $path = \dirname(__DIR__) . '/etc/default-tracks.php';
+        if (!\is_file($path)) {
+            return $rows;
+        }
+        try {
+            /** @var mixed $raw */
+            $raw = include $path;
+        } catch (\Throwable) {
+            return $rows;
+        }
+        if (!\is_array($raw)) {
+            return $rows;
+        }
+        foreach ($raw as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $url = self::normalizeMediaUrl((string)($row['url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $title = trim((string)($row['title'] ?? ''));
+            if ($title === '') {
+                $title = self::titleFromUrl($url);
+            }
+            $intro = self::normalizeIntroMap($row['intro'] ?? []);
+            $rows[] = [
+                'url' => $url,
+                'title' => mb_substr($title, 0, 120),
+                'intro' => $intro,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    public static function defaultCatalogUrls(): array
+    {
+        static $urls = null;
+        if (\is_array($urls)) {
+            return $urls;
+        }
+        $urls = [];
+        foreach (self::defaultCatalogTracks() as $row) {
+            $url = self::normalizeMediaUrl((string)($row['url'] ?? ''));
+            if ($url !== '') {
+                $urls[$url] = true;
+            }
+        }
+
+        return $urls;
     }
 
     public static function mediaUrlFromMixed(mixed $value): string
