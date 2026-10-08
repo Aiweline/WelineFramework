@@ -155,6 +155,23 @@ final class WidgetHtmlHealthInspectorTest extends TestCase
         self::assertTrue($this->hasCode($issues, 'missing_closed_root'), json_encode($issues, JSON_UNESCAPED_UNICODE));
     }
 
+    public function testOwningModuleWidgetRootIsNotBrokenShell(): void
+    {
+        // Checkout storefront-money-summary: BEM + checkout.widget.* — not Theme wc-theme_widget_*.
+        $html = '<div class="w-storefront-money-summary" data-money-summary'
+            . ' weline-code="checkout.widget.storefront-money-summary">'
+            . '<div class="w-storefront-money-summary__row" data-money-summary-row="goods">'
+            . '<span>商品小计</span><strong>—</strong></div></div>';
+        $issues = $this->inspector->inspect($html, [
+            'code' => 'storefront-money-summary',
+            'module' => 'Weline_Checkout',
+            'slot_id' => 'money-summary',
+        ]);
+        self::assertFalse($this->hasCode($issues, 'broken_widget_shell'), json_encode($issues, JSON_UNESCAPED_UNICODE));
+        self::assertFalse($this->hasCode($issues, 'missing_closed_root'), json_encode($issues, JSON_UNESCAPED_UNICODE));
+        self::assertSame('ok', $this->inspector->worstSeverity($issues));
+    }
+
     public function testLibxmlVoidSourceCloseDoesNotBreakPictureOrSection(): void
     {
         // DOMDocument/saveHTML often emits </source> around <img>; source is void.

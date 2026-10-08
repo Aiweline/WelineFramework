@@ -8707,27 +8707,124 @@ HTML;
     /**
      * 发布当前 D 或已有 sealed H。
      * 路由: /theme/backend/theme-editor/publish-scope-version (POST)
+     * Prefer Accept: text/event-stream（或 stream=1）监视固化/编译进度；未就绪不得宣称发布成功。
      */
     public function postPublishScopeVersion()
     {
+        $data = $this->getScopeVersionRequestData();
+        if ($this->wantsStandardPublishStream($data)) {
+            $this->streamPublishScopeVersion($data);
+
+            return;
+        }
+
         return $this->fetchJson($this->publishScopeVersionPayload());
     }
 
     /**
+     * Stream scope-version publish progress (seal → solidify/bake+locale compile → pointer flip).
+     *
+     * @param array<string,mixed> $data
+     */
+    private function streamPublishScopeVersion(array $data): void
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->setHeartbeatInterval(15)->start();
+        if ($sse->isAlive()) {
+            $sse->sendEvent('start', [
+                'step' => 'start',
+                'message' => (string)__('开始发布主题版本'),
+                'progress' => 1,
+                'ssh' => '$ theme-editor publish-scope-version --stream=1',
+            ]);
+        }
+
+        try {
+            $onProgress = static function (
+                string $step,
+                string $message,
+                int $percent,
+                array $extra = [],
+            ) use ($sse): void {
+                if (!$sse->isAlive()) {
+                    return;
+                }
+                $payload = [
+                    'step' => $step,
+                    'message' => $message,
+                    'progress' => \max(0, \min(100, $percent)),
+                ];
+                if (isset($extra['ssh'])) {
+                    $payload['ssh'] = (string)$extra['ssh'];
+                }
+                if (isset($extra['ssh_log']) && \is_array($extra['ssh_log'])) {
+                    $payload['ssh_log'] = $extra['ssh_log'];
+                }
+                $sse->sendEvent('progress', $payload);
+            };
+
+            $result = $this->publishScopeVersionPayload($onProgress);
+            if (empty($result['success'])) {
+                if ($sse->isAlive()) {
+                    $sse->sendEvent('error', [
+                        'success' => false,
+                        'code' => (string)($result['code'] ?? 'theme_scope_publish_failed'),
+                        'message' => (string)($result['message'] ?? __('Publish failed')),
+                        'data' => $result['data'] ?? null,
+                        'conflict' => !empty($result['conflict']),
+                    ]);
+                    $sse->close();
+                }
+
+                return;
+            }
+
+            if ($sse->isAlive()) {
+                $sse->sendEvent('progress', [
+                    'step' => 'done',
+                    'message' => (string)($result['message'] ?? __('Scope 版本已发布')),
+                    'progress' => 100,
+                    'ssh' => 'done publish-scope-version',
+                ]);
+                $sse->sendEvent('done', [
+                    'success' => true,
+                    'message' => (string)($result['message'] ?? __('Scope 版本已发布')),
+                    'code' => (string)($result['code'] ?? 'theme_scope_publish_ok'),
+                    'progress' => 100,
+                    'data' => $result['data'] ?? null,
+                ]);
+                $sse->close();
+            }
+        } catch (\Throwable $e) {
+            if ($sse->isAlive()) {
+                $sse->sendError(
+                    $e->getMessage() !== '' ? $e->getMessage() : (string)__('Publish failed'),
+                    500,
+                );
+                $sse->close();
+            }
+        }
+    }
+
+    /**
+     * @param callable(string,string,int,array):void|null $onProgress step, message, percent, extra
      * @return array{success:bool,message?:string,data?:array<string,mixed>,conflict?:bool,code?:string}
      */
-    public function publishScopeVersionPayload(): array
+    public function publishScopeVersionPayload(?callable $onProgress = null): array
     {
         $response = null;
         try {
             $data = $this->getScopeVersionRequestData();
             $context = $this->requireLayoutWriteContext($data, (int)($data['theme_id'] ?? 0), (string)($data['page_type'] ?? 'homepage'));
             return \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityOwnerLock::write(
-                $this->themeVersionOwnerFromContext($context), function () use (&$response): array {
+                $this->themeVersionOwnerFromContext($context), function () use (&$response, $onProgress): array {
                     $connection = ObjectManager::getInstance(ThemeScopeVersion::class)->getConnection();
                     return ObjectManager::getInstance(\Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface::class)
-                        ->runWrite($connection, function () use (&$response): array {
-                            $response = $this->publishScopeVersionPayloadLocked();
+                        ->runWrite($connection, function () use (&$response, $onProgress): array {
+                            $response = $this->publishScopeVersionPayloadLocked($onProgress);
                             if (empty($response['success'])) { throw new \RuntimeException((string)($response['message'] ?? 'theme_scope_publish_failed')); }
                             return $response;
                         });
@@ -8738,8 +8835,16 @@ HTML;
         }
     }
 
-    private function publishScopeVersionPayloadLocked(): array
+    /**
+     * @param callable(string,string,int,array):void|null $onProgress
+     */
+    private function publishScopeVersionPayloadLocked(?callable $onProgress = null): array
     {
+        $emit = static function (string $step, string $message, int $percent, array $extra = []) use ($onProgress): void {
+            if ($onProgress !== null) {
+                $onProgress($step, $message, $percent, $extra);
+            }
+        };
         $data = $this->getScopeVersionRequestData();
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
@@ -8752,6 +8857,9 @@ HTML;
         }
 
         try {
+            $emit('gate', (string)__('检查发布条件'), 5, [
+                'ssh' => \sprintf('$ publish-scope-version --theme=%d --layout=%s', $themeId, $pageType),
+            ]);
             $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
             $owner = $this->themeVersionOwnerFromContext($context);
             $selection = $this->loadScopeVersionSelectionArray($owner) ?? [
@@ -8776,7 +8884,10 @@ HTML;
             }
             $version = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery()->load($themeVersionId);
             $snapshots = ObjectManager::getInstance(\Weline\Theme\Service\Version\ThemeVersionResourceSnapshotService::class);
-            if (isset($data['content_revision']) && (int)$data['content_revision'] !== (int)$row['content_revision']) {
+            // Client content_revision=0 / absent means "unknown" (editor state not yet synced).
+            // Only enforce CAS when the client asserts a positive revision.
+            $clientContentRevision = isset($data['content_revision']) ? (int)$data['content_revision'] : 0;
+            if ($clientContentRevision > 0 && $clientContentRevision !== (int)$row['content_revision']) {
                 return ['success' => false, 'conflict' => true, 'message' => 'content_revision_cas_failed',
                     'data' => ['content_revision' => (int)$row['content_revision']]];
             }
@@ -8856,9 +8967,12 @@ HTML;
                 $identity = $owner->withVersion($themeVersionId,$mode,$contentRevision);
             }
 
-            // 顺序很关键：先封存 → 再烘焙产物 → 再分配 D' → 再算后代传播 → 再写资源快照 → 最后才翻转发布指针。
+            // 顺序很重要：先封存 → 再烘焙产物 → 再分配 D' → 再算后代传播 → 再写资源快照 → 最后才翻转发布指针。
             // 指针可见即代表该版本的 formal 产物已存在于磁盘，读者不会读到「指向空目录」的版本。
             // 封存必须先做：chrome 目录由 lifecycle 推导，未封存会落到 draft 目录。
+            $emit('seal', (string)__('封存发布版本'), 20, [
+                'ssh' => \sprintf('$ seal-scope-version --version=%d --revision=%d', $themeVersionId, $contentRevision),
+            ]);
             $this->persistScopeVersionSealed(
                 $themeVersionId,
                 $owner,
@@ -8867,11 +8981,24 @@ HTML;
                 isset($data['description']) ? (string)$data['description'] : null,
             );
 
+            // Gate: formal solidify + locale com_* compile must succeed before pointer flip.
+            $emit('solidify', (string)__('正在固化并编译正式布局产物（含默认注入与多语编译）'), 40, [
+                'ssh' => \sprintf(
+                    '$ theme-layout bake-publish --theme=%d --version=%d --scope=%s --store-mode=%s',
+                    $context->themeId,
+                    $themeVersionId,
+                    $context->scope->storageScope,
+                    $context->scope->storeMode,
+                ),
+            ]);
             $bake = $this->bakePublishedScopeArtifacts($context, $themeVersionId, ['draft_prime_identity'=>$draftPrime?->toVersionIdentity()->toArray()]);
             if (empty($bake['ok'])) {
                 // 补偿回滚：封存必须早于烘焙（chrome 目录由 lifecycle 推导），所以烘焙失败时
                 // D 已经被封存。不回滚就等于「失败也把草稿消费掉了」，违反 UC-05 的
                 // 「失败不消费草稿」。回滚后 selection 仍指向 D，用户可原样重试。
+                $emit('solidify_failed', (string)__('固化物初始化未完成，已回滚封存，禁止发布'), 55, [
+                    'ssh' => \sprintf('fail bake reason=%s', (string)($bake['reason'] ?? $bake['message'] ?? 'unknown')),
+                ]);
                 $this->restoreScopeVersionToDraft($themeVersionId, $owner, $contentRevision);
                 return [
                     'success' => false,
@@ -8880,10 +9007,24 @@ HTML;
                     'data' => ['bake' => $bake],
                 ];
             }
+            $fingerprintCount = \is_array($bake['fingerprints'] ?? null) ? \count($bake['fingerprints']) : 0;
+            $emit('solidify_done', (string)__('固化物与编译已就绪：version=%{version} fingerprints=%{count}', [
+                'version' => $themeVersionId,
+                'count' => $fingerprintCount,
+            ]), 70, [
+                'ssh' => \sprintf(
+                    'ok bake theme_version_id=%d fingerprints=%d',
+                    $themeVersionId,
+                    $fingerprintCount,
+                ),
+            ]);
 
             // 后代传播：重选历史（selectHistory）不改父版本内容，因此不做传播。
             $descendants = ['plan' => [], 'updates' => [], 'conflicts' => [], 'fallback' => [], 'prepared' => []];
             if (!$isSelectHistory) {
+                $emit('descendants', (string)__('传播后代作用域版本'), 78, [
+                    'ssh' => '$ propagate-scope-version-descendants',
+                ]);
                 $descendants = $this->propagateScopeVersionDescendants(
                     $context,
                     $owner,
@@ -8894,6 +9035,11 @@ HTML;
                 );
             }
 
+            $emit('publish_pointer', (string)__('翻转已发布版本指针'), 88, [
+                'ssh' => $isSelectHistory
+                    ? \sprintf('$ select-history --version=%d', $themeVersionId)
+                    : \sprintf('$ publish-pointer --version=%d', $themeVersionId),
+            ]);
             if ($isSelectHistory) {
                 $result = $publication->selectHistory($identity, [
                     'expected_selection_revision' => $expectedSelectionRevision,
@@ -8926,6 +9072,9 @@ HTML;
                 ];
             }
 
+            $emit('snapshots', (string)__('落库发布资源快照'), 94, [
+                'ssh' => '$ persist-version-resource-snapshots',
+            ]);
             $snapshots = $this->persistVersionResourceSnapshots(
                 $context,
                 $owner,
@@ -8947,7 +9096,14 @@ HTML;
             // 后代指针最后翻转：此时父与全部 C' 候选都已就绪（先备齐再切）。
             $this->persistDescendantSelections($descendants, $selection);
 
+            $emit('clear_cache', (string)__('清理版本预览缓存'), 97, [
+                'ssh' => \sprintf('$ clear-version-preview-caches --theme=%d', $context->themeId),
+            ]);
             $this->clearVersionPreviewCaches($context->themeId, true);
+
+            $emit('finalize_ok', (string)__('发布固化与编译已完成'), 99, [
+                'ssh' => 'ok publish-scope-version',
+            ]);
 
             return [
                 'success' => true,

@@ -494,8 +494,15 @@ final class WidgetHtmlHealthInspector
         }
 
         // WidgetUiScope::forWidget slugifies '-' to '_' in weline-code.
-        $slug = strtolower(str_replace(['-', '/'], '_', $code));
-        $expectedWelineCode = 'theme.widget.' . $slug;
+        $slugUnder = strtolower(str_replace(['-', '/'], '_', $code));
+        $slugHyphen = strtolower(str_replace('/', '-', $code));
+        // Owning-module widgets (Checkout/Cart/…) use `{module}.widget.{code}` + BEM root,
+        // not Theme `wc-theme_widget_*` — that is intact, not shredded.
+        if ($this->htmlHasOwningModuleWidgetRoot($html, $slugHyphen, $slugUnder)) {
+            return [];
+        }
+
+        $expectedWelineCode = 'theme.widget.' . $slugUnder;
         $hasOwnWidgetCode = stripos($html, 'weline-code="' . $expectedWelineCode . '"') !== false
             || stripos($html, "weline-code='" . $expectedWelineCode . "'") !== false;
 
@@ -517,6 +524,30 @@ final class WidgetHtmlHealthInspector
         }
 
         return [];
+    }
+
+    /**
+     * True when HTML keeps an owning-module widget identity for $code
+     * (e.g. weline-code="checkout.widget.storefront-money-summary").
+     */
+    private function htmlHasOwningModuleWidgetRoot(string $html, string $slugHyphen, string $slugUnder): bool
+    {
+        foreach ([$slugHyphen, $slugUnder] as $slug) {
+            if ($slug === '') {
+                continue;
+            }
+            $quoted = preg_quote($slug, '/');
+            // Foreign owning module: `{module}.widget.{code}` (not Theme `theme.widget.*`).
+            // Theme roots still require `.wc-theme_widget_*` / missing_closed_root path.
+            if (preg_match(
+                '/weline-code=(["\'])(?!theme\.)[a-z][a-z0-9_.-]*\.widget\.' . $quoted . '\1/i',
+                $html
+            ) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isVoidLikeTag(string $name): bool

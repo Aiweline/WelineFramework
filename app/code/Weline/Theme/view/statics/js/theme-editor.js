@@ -1734,15 +1734,20 @@
         const themeVersionId = parseInt(state.currentVersionId || state.themeVersionId || 0, 10) || 0;
         const contentRevision = parseInt(state.contentRevision || 0, 10) || 0;
         const selectionRevision = parseInt(state.selectionRevision || 0, 10) || 0;
-        return {
+        // content_revision=0 means "unknown" — omit so server uses the draft row revision.
+        // Sending 0 trips content_revision_cas_failed against any real R>=1.
+        const payload = {
             ...buildLayoutVersionIdentityPayload(),
             theme_version_id: themeVersionId,
-            content_revision: contentRevision,
-            expected_content_revision: contentRevision,
             expected_selection_revision: selectionRevision,
             mode: state.versionMode || 'draft',
             ...extra,
         };
+        if (contentRevision > 0) {
+            payload.content_revision = contentRevision;
+            payload.expected_content_revision = contentRevision;
+        }
+        return payload;
     }
 
 
@@ -19903,11 +19908,10 @@
             throw new Error(message);
         }
 
+        const busyMessage = window.__('正在发布并固化…');
+        const progressTitle = window.__('正在发布并固化');
+        let lockOpened = false;
         try {
-            if (options.silent !== true) {
-                showToast(window.__('正在发布布局...'), 'info');
-            }
-
             const pending = await detectPendingScopedChanges();
             let createVersion = false;
             let versionName = '';
@@ -19934,11 +19938,19 @@
                 }
             }
 
+            openResetProgressLock(busyMessage, 1, progressTitle);
+            lockOpened = true;
+            setEditorBusy(true, busyMessage);
+            const progressHandler = bindSolidifyProgressHandler(busyMessage);
             let result = await requestStandardLayoutPublish({
                 create_version: createVersion,
                 version_name: versionName || undefined,
+                onProgress: progressHandler,
             });
             if (!result?.success && result?.code === 'theme_publish_requires_new_version' && options.silent !== true) {
+                closeResetProgressLock();
+                lockOpened = false;
+                setEditorBusy(false);
                 const name = await showPromptDialog(
                     window.__('新建版本并发布'),
                     window.__('有未发布改动，请输入版本名称（可选）后发布。'),
@@ -19949,9 +19961,13 @@
                 if (name === null) {
                     throw new Error(window.__('已取消发布'));
                 }
+                openResetProgressLock(busyMessage, 1, progressTitle);
+                lockOpened = true;
+                setEditorBusy(true, busyMessage);
                 result = await requestStandardLayoutPublish({
                     create_version: true,
                     version_name: String(name || '') || undefined,
+                    onProgress: progressHandler,
                 });
             }
 
@@ -19959,6 +19975,12 @@
                 throw new Error((result && result.message) || window.__('发布失败'));
             }
 
+            updateResetProgress(
+                result.message || window.__('发布固化完成'),
+                100,
+                'done',
+                'done publish-scope-version',
+            );
             state.hasChanges = false;
             if (options.silent !== true) {
                 showToast(result.message || window.__('布局已发布'), 'success');
@@ -19967,16 +19989,23 @@
             notifyDashboardLayoutSaved(options.reason || 'embedded-layout-published', {
                 pageType: getEffectivePageType(state.pageType || 'homepage'),
                 layoutOption: getEffectiveLayoutOption(state.layoutOption || 'default'),
-                versionId: result.data?.version_id || null,
+                versionId: result.data?.version_id || result.data?.published_version_id || null,
             });
+            setTimeout(() => closeResetProgressLock(), 500);
+            lockOpened = false;
 
             return result;
         } catch (error) {
             console.error('[ThemeEditor] Publish embedded layout error:', error);
+            if (lockOpened) {
+                closeResetProgressLock();
+            }
             if (options.silent !== true) {
                 showToast(error.message || window.__('发布失败'), 'error');
             }
             throw error;
+        } finally {
+            setEditorBusy(false);
         }
     }
 
@@ -20094,55 +20123,137 @@
                 }
             }
 
-            showToast(currentPageOnly ? window.__('正在只发布本页...') : window.__('正在发布...'), 'info');
-            let result = await requestStandardLayoutPublish({
-                create_version: createVersion,
-                version_name: versionName || undefined,
-                ...publishSetPayload,
-            });
-            if (!result?.success && result?.code === 'theme_publish_requires_new_version') {
-                const name = await showPromptDialog(
-                    window.__('新建版本并发布'),
-                    window.__('有未发布改动，请输入版本名称（可选）后发布。'),
-                    resolveSuggestedVersionName(result.data),
-                    window.__('发布'),
-                    window.__('取消')
-                );
-                if (name === null) {
-                    return;
-                }
+            // Refresh draft content_revision before CAS; stale 0 was failing publish live.
+            await loadVersions().catch(() => null);
+
+            const busyMessage = currentPageOnly
+                ? window.__('正在只发布本页并固化…')
+                : window.__('正在发布并固化…');
+            const progressTitle = window.__('正在发布并固化');
+            openResetProgressLock(busyMessage, 1, progressTitle);
+            setEditorBusy(true, busyMessage);
+            const progressHandler = bindSolidifyProgressHandler(busyMessage);
+            let result = null;
+            try {
                 result = await requestStandardLayoutPublish({
-                    create_version: true,
-                    version_name: String(name || '') || undefined,
+                    create_version: createVersion,
+                    version_name: versionName || undefined,
+                    onProgress: progressHandler,
                     ...publishSetPayload,
                 });
-            }
-
-            if (result?.success) {
-                showToast(result.message || window.__('发布成功'), 'success');
-                state.hasChanges = false;
-                try {
-                    await loadVersions();
-                    await Promise.all(['theme_binding', 'layout', 'meta', 'appearance', 'i18n'].map((resourceType) =>
-                        loadScopedWorkspace(resourceType).catch(() => null)
-                    ));
-                } finally {
-                    notifyDashboardLayoutSaved('version-published', {
-                        versionId: result.data?.version_id || null,
+                if (!result?.success && result?.code === 'theme_publish_requires_new_version') {
+                    closeResetProgressLock();
+                    setEditorBusy(false);
+                    const name = await showPromptDialog(
+                        window.__('新建版本并发布'),
+                        window.__('有未发布改动，请输入版本名称（可选）后发布。'),
+                        resolveSuggestedVersionName(result.data),
+                        window.__('发布'),
+                        window.__('取消')
+                    );
+                    if (name === null) {
+                        return;
+                    }
+                    openResetProgressLock(busyMessage, 1, progressTitle);
+                    setEditorBusy(true, busyMessage);
+                    result = await requestStandardLayoutPublish({
+                        create_version: true,
+                        version_name: String(name || '') || undefined,
+                        onProgress: progressHandler,
+                        ...publishSetPayload,
                     });
                 }
-            } else {
-                showToast(result?.message || window.__('发布失败'), 'error');
+                // One-shot CAS retry: sync actual revision from conflict payload and resubmit.
+                if (!result?.success && String(result?.message || '').includes('content_revision_cas_failed')) {
+                    const actual = Number(result?.data?.content_revision || 0);
+                    if (actual > 0) {
+                        state.contentRevision = actual;
+                    } else {
+                        await loadVersions().catch(() => null);
+                    }
+                    updateResetProgress(
+                        window.__('内容修订已更新，正在重试发布…'),
+                        8,
+                        'gate',
+                        'retry content_revision_cas',
+                    );
+                    result = await requestStandardLayoutPublish({
+                        create_version: createVersion,
+                        version_name: versionName || undefined,
+                        onProgress: progressHandler,
+                        ...publishSetPayload,
+                    });
+                }
+
+                if (result?.success) {
+                    updateResetProgress(
+                        result.message || window.__('发布固化完成'),
+                        100,
+                        'done',
+                        'done publish-scope-version',
+                    );
+                    showToast(result.message || window.__('发布成功'), 'success');
+                    state.hasChanges = false;
+                    try {
+                        await loadVersions();
+                        await Promise.all(['theme_binding', 'layout', 'meta', 'appearance', 'i18n'].map((resourceType) =>
+                            loadScopedWorkspace(resourceType).catch(() => null)
+                        ));
+                    } finally {
+                        notifyDashboardLayoutSaved('version-published', {
+                            versionId: result.data?.version_id || result.data?.published_version_id || null,
+                        });
+                    }
+                    setTimeout(() => closeResetProgressLock(), 500);
+                } else {
+                    const failMessage = resolvePublishFailureMessage(result);
+                    updateResetProgress(failMessage, 100, 'error', 'fail publish-scope-version');
+                    showToast(failMessage, 'error');
+                    setTimeout(() => closeResetProgressLock(), 1200);
+                }
+            } catch (publishErr) {
+                const failMessage = resolvePublishFailureMessage(publishErr);
+                updateResetProgress(failMessage, 100, 'error', 'fail publish-scope-version');
+                setTimeout(() => closeResetProgressLock(), 1200);
+                throw publishErr;
+            } finally {
+                setEditorBusy(false);
             }
         } catch (err) {
             console.error('[ThemeEditor] Publish error:', err);
+            closeResetProgressLock();
+            setEditorBusy(false);
             const message = String(err?.message || err || '');
             if (message.includes('theme_scope_revision_conflict')) {
                 showToast(window.__('草稿版本已更新，请再点一次发布'), 'warning');
+            } else if (message.includes('content_revision_cas_failed')) {
+                showToast(window.__('内容修订冲突，请再点一次发布'), 'warning');
             } else {
-                showToast(window.__('发布主题失败'), 'error');
+                showToast(resolvePublishFailureMessage(err), 'error');
             }
         }
+    }
+
+    function resolvePublishFailureMessage(resultOrError) {
+        const raw = String(
+            (resultOrError && resultOrError.message)
+            || (resultOrError && resultOrError.err && resultOrError.err.message)
+            || resultOrError
+            || ''
+        ).trim();
+        if (!raw || raw === '发布主题失败' || raw === '[object Object]') {
+            return window.__('发布主题失败');
+        }
+        if (raw.includes('content_revision_cas_failed')) {
+            return window.__('内容修订冲突，请再点一次发布');
+        }
+        if (raw.includes('selection_revision_cas_failed')) {
+            return window.__('选择修订冲突，请刷新后再发布');
+        }
+        if (raw.includes('theme_scope_structural_conflict')) {
+            return window.__('作用域结构冲突，请先重置或重新基线化后再发布');
+        }
+        return raw;
     }
 
     async function detectPendingScopedChanges() {
@@ -20248,7 +20359,49 @@
     }
 
     async function requestStandardLayoutPublish(extra = {}) {
-        const { stream, ...rest } = extra || {};
+        const { onProgress, ...rest } = extra || {};
+        const payload = buildScopeVersionPayload({
+            publish_set: 'all',
+            stream: 1,
+            ...rest,
+        });
+        const requestUrl = resolveSameOriginEditorUrl(config.apiPublishScopeVersion);
+        if (!requestUrl) {
+            throw new Error(window.__('发布进度流不可用'));
+        }
+        const headers = normalizeRequestHeaders({
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            Accept: 'text/event-stream',
+        });
+        if (state.scopeIdentity) {
+            headers['X-Weline-Editor-Context'] = JSON.stringify(buildTypedEditorContext('layout'));
+            if (!Object.prototype.hasOwnProperty.call(payload, 'editor_context')) {
+                payload.editor_context = buildTypedEditorContext('layout');
+            }
+        }
+        const response = await fetch(requestUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers,
+            body: JSON.stringify(payload),
+        });
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (contentType.indexOf('text/event-stream') !== -1) {
+            if (!response.ok) {
+                throw new Error(window.__('发布进度流不可用'));
+            }
+            return consumeStandardPublishSse(response, (event) => {
+                if (typeof onProgress === 'function') {
+                    onProgress(event || {});
+                }
+            });
+        }
+        // Fail closed when stream was requested but server returned JSON without progress gate.
+        if (!response.ok) {
+            throw new Error(window.__('发布进度流不可用'));
+        }
         return apiJson(config.apiPublishScopeVersion, {
             method: 'POST',
             headers: {

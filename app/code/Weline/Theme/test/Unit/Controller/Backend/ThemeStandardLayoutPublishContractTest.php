@@ -109,6 +109,9 @@ final class ThemeStandardLayoutPublishContractTest extends TestCase
 
             self::assertStringContainsString('requestStandardLayoutPublish(', $fn, $relative);
             self::assertStringContainsString('theme_publish_requires_new_version', $fn, $relative);
+            self::assertStringContainsString('openResetProgressLock(', $fn, $relative);
+            self::assertStringContainsString('bindSolidifyProgressHandler(', $fn, $relative);
+            self::assertStringContainsString('onProgress: progressHandler', $fn, $relative);
             self::assertStringNotContainsString(
                 "publishLoadedScopedWorkspaces('theme_editor_publish')",
                 $fn,
@@ -116,6 +119,33 @@ final class ThemeStandardLayoutPublishContractTest extends TestCase
             );
             self::assertStringNotContainsString('scoped_release_published: true', $fn, $relative);
         }
+    }
+
+    public function testPublishScopeVersionStreamsSolidifyCompileGate(): void
+    {
+        $source = $this->themeEditorSource();
+        $post = $this->extractMethod($source, 'postPublishScopeVersion');
+        self::assertStringContainsString('wantsStandardPublishStream($data)', $post);
+        self::assertStringContainsString('streamPublishScopeVersion(', $post);
+
+        $stream = $this->extractMethod($source, 'streamPublishScopeVersion');
+        self::assertStringContainsString('SseWriter', $stream);
+        self::assertStringContainsString("sendEvent('progress'", $stream);
+        self::assertStringContainsString("sendEvent('done'", $stream);
+        self::assertStringContainsString('publishScopeVersionPayload($onProgress)', $stream);
+
+        $locked = $this->extractMethod($source, 'publishScopeVersionPayloadLocked');
+        self::assertStringContainsString("emit('solidify'", $locked);
+        self::assertStringContainsString('bakePublishedScopeArtifacts(', $locked);
+        self::assertStringContainsString('theme_scope_publish_bake_failed', $locked);
+        self::assertStringContainsString("emit('solidify_done'", $locked);
+        self::assertStringContainsString('正在固化并编译正式布局产物', $locked);
+        // Pointer flip must not run before bake gate.
+        $bakePos = strpos($locked, 'bakePublishedScopeArtifacts(');
+        $pointerPos = strpos($locked, "emit('publish_pointer'");
+        self::assertNotFalse($bakePos);
+        self::assertNotFalse($pointerPos);
+        self::assertLessThan($pointerPos, $bakePos);
     }
 
     public function testPublishAndExitAppliesPreviewProgressLocale(): void
@@ -231,6 +261,46 @@ final class ThemeStandardLayoutPublishContractTest extends TestCase
             self::assertStringContainsString('apiPublishScopeVersion', $js, $relative);
             self::assertStringContainsString('requestStandardLayoutPublish', $js, $relative);
             self::assertStringNotContainsString('apiPublishVersion', $js, $relative);
+            $reqStart = strpos($js, 'async function requestStandardLayoutPublish(');
+            self::assertNotFalse($reqStart, $relative);
+            $reqEnd = strpos($js, 'async function openPreview()', $reqStart + 1);
+            self::assertNotFalse($reqEnd, $relative);
+            $reqFn = substr($js, $reqStart, $reqEnd - $reqStart);
+            self::assertStringContainsString("Accept: 'text/event-stream'", $reqFn, $relative);
+            self::assertStringContainsString('stream: 1', $reqFn, $relative);
+            self::assertStringContainsString('consumeStandardPublishSse(', $reqFn, $relative);
+            self::assertStringContainsString('onProgress', $reqFn, $relative);
+        }
+    }
+
+    public function testPublishOmitsUnknownContentRevisionAndRetriesCas(): void
+    {
+        $locked = $this->extractMethod($this->themeEditorSource(), 'publishScopeVersionPayloadLocked');
+        self::assertStringContainsString('$clientContentRevision > 0', $locked);
+        self::assertStringContainsString('content_revision_cas_failed', $locked);
+
+        $root = dirname(__DIR__, 4);
+        foreach ([
+            '/view/statics/ui/pages/weline-theme-editor.js',
+            '/view/statics/js/theme-editor.js',
+        ] as $relative) {
+            $js = (string)file_get_contents($root . $relative);
+            $builderPos = strpos($js, 'function buildScopeVersionPayload(');
+            self::assertNotFalse($builderPos, $relative);
+            $builderEnd = strpos($js, "\n    function ", $builderPos + 1);
+            self::assertNotFalse($builderEnd, $relative);
+            $builder = substr($js, $builderPos, $builderEnd - $builderPos);
+            self::assertStringContainsString('if (contentRevision > 0)', $builder, $relative);
+            self::assertStringContainsString('payload.content_revision = contentRevision', $builder, $relative);
+
+            $publishPos = strpos($js, 'async function publishThemeWithScope(');
+            self::assertNotFalse($publishPos, $relative);
+            $publishEnd = strpos($js, 'async function detectPendingScopedChanges()', $publishPos + 1);
+            self::assertNotFalse($publishEnd, $relative);
+            $publishFn = substr($js, $publishPos, $publishEnd - $publishPos);
+            self::assertStringContainsString('content_revision_cas_failed', $publishFn, $relative);
+            self::assertStringContainsString('resolvePublishFailureMessage', $publishFn, $relative);
+            self::assertStringContainsString("await loadVersions().catch(() => null)", $publishFn, $relative);
         }
     }
 }
