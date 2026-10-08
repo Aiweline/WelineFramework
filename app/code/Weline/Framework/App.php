@@ -435,7 +435,11 @@ class App
             ?: WelineEnv::get('request.scheme', Context::current()->get('input.scheme', 'http')));
         $host = \trim((string)($server['HTTP_HOST'] ?? ''));
         // Visitor identity keeps origin (may still carry /~preview/{token}/…).
-        // Site / Scope install MUST use parser routing URI (mounts already peeled).
+        // DetectWebsite::installNavigationScope re-resolves the Website from the
+        // install URL. Peeled routing URI (e.g. "/" after /~site/{code}/) would
+        // match the project-Host default site and bleed Hanfu chrome into grocery.
+        // Pass origin so synthetic mounts stay visible; route remainder is peeled
+        // inside processSite via scopeRequestTargetWithoutLocalization.
         $originFullRequestUri = $host === '' ? '' : $scheme . '://' . $host . $rawRequestUri;
         $routingFullRequestUri = $host === '' ? '' : $scheme . '://' . $host . $currentUri;
         Context::current()->set('input.server.WELINE_ORIGIN_REQUEST_URI', $rawRequestUri);
@@ -447,8 +451,9 @@ class App
             'scheme' => $scheme,
         ]);
 
+        $scopeInstallUri = $originFullRequestUri !== '' ? $originFullRequestUri : $routingFullRequestUri;
         $navigationScope = $this->installStorefrontNavigationScope(
-            $routingFullRequestUri,
+            $scopeInstallUri,
             $currentUri,
             $isBackend
         );
@@ -588,10 +593,29 @@ class App
             ?: ($website['default_currency'] ?? '')
         ));
 
-        $path = (string)(\parse_url($rawRequestUri, \PHP_URL_PATH) ?: '/');
         $query = (string)(\parse_url($rawRequestUri, \PHP_URL_QUERY) ?: '');
         $websiteUrl = \trim((string)WelineEnv::get('website_url', ''));
-        $relative = State::stripWebsitePathPrefix($path, $websiteUrl);
+
+        // Same peel as synchronizeParsedLocalization: analyze routing path, but
+        // rebuild the visitor-facing target under /~preview/{token}/ when origin
+        // was live-preview mounted (visible URLs must not stack /~site).
+        $originPath = (string)(\parse_url($rawRequestUri, \PHP_URL_PATH) ?: '/');
+        $routingPath = $originPath;
+        $livePreviewMount = '';
+        try {
+            $normalized = Url::normalizeVisitorUri($rawRequestUri);
+            $routingCandidate = \trim((string)($normalized['routing_uri'] ?? ''));
+            if ($routingCandidate !== '') {
+                $routingPath = (string)(\parse_url($routingCandidate, \PHP_URL_PATH) ?: $routingPath);
+            }
+            $originCandidate = \trim((string)($normalized['origin_uri'] ?? $rawRequestUri));
+            $originPath = (string)(\parse_url($originCandidate, \PHP_URL_PATH) ?: $originPath);
+            $livePreviewMount = self::extractLivePreviewPathMount($originPath);
+        } catch (\Throwable) {
+            $livePreviewMount = self::extractLivePreviewPathMount($originPath);
+        }
+
+        $relative = State::stripWebsitePathPrefix($routingPath, $websiteUrl);
         $canonicalRelative = State::canonicalizeStorefrontLocalizationPath(
             $relative,
             $defaultLanguage,
@@ -601,26 +625,32 @@ class App
             return;
         }
 
-        $mount = '';
-        if ($websiteUrl !== '') {
-            try {
-                $mount = \trim((string)(\parse_url($websiteUrl, \PHP_URL_PATH) ?: ''), '/');
-            } catch (\ValueError) {
-                $mount = '';
-            }
-        }
-        if ($mount !== '') {
+        if ($livePreviewMount !== '') {
             $targetPath = $canonicalRelative === '/'
-                ? '/' . $mount
-                : '/' . $mount . $canonicalRelative;
+                ? $livePreviewMount
+                : $livePreviewMount . $canonicalRelative;
         } else {
-            $targetPath = $canonicalRelative;
+            $mount = '';
+            if ($websiteUrl !== '') {
+                try {
+                    $mount = \trim((string)(\parse_url($websiteUrl, \PHP_URL_PATH) ?: ''), '/');
+                } catch (\ValueError) {
+                    $mount = '';
+                }
+            }
+            if ($mount !== '') {
+                $targetPath = $canonicalRelative === '/'
+                    ? '/' . $mount
+                    : '/' . $mount . $canonicalRelative;
+            } else {
+                $targetPath = $canonicalRelative;
+            }
         }
         $target = $targetPath . ($query !== '' ? '?' . $query : '');
 
         // Identity guard: never 301 to the same visitor path (duplicate
         // default-currency segments or mount remount bugs must not loop).
-        $currentPath = $path === '' ? '/' : $path;
+        $currentPath = $originPath === '' ? '/' : $originPath;
         if ($targetPath === $currentPath
             || $target === $rawRequestUri
             || \rtrim($targetPath, '/') === \rtrim($currentPath, '/')
@@ -629,6 +659,34 @@ class App
         }
 
         throw new RedirectException($target, 301);
+    }
+
+    /**
+     * Visitor-facing live-preview mount (/~preview/{token}) when present.
+     * Token format is owned by Theme; Framework only recognizes the shared path
+     * namespace already used by FPC bypass rules.
+     */
+    private static function extractLivePreviewPathMount(string $path): string
+    {
+        $path = '/' . \trim(\str_replace('\\', '/', $path), '/');
+        if ($path === '//') {
+            $path = '/';
+        }
+        if ($path !== '/~preview' && !\str_starts_with($path, '/~preview/')) {
+            return '';
+        }
+        $after = $path === '/~preview' ? '' : \substr($path, \strlen('/~preview'));
+        $after = \ltrim((string)$after, '/');
+        if ($after === '') {
+            return '';
+        }
+        $token = \explode('/', $after, 2)[0];
+        $token = \trim((string)$token);
+        if ($token === '' || !\str_starts_with($token, 'pv_')) {
+            return '';
+        }
+
+        return '/~preview/' . $token;
     }
 
     /**
@@ -650,7 +708,23 @@ class App
             $parse['server'] = [];
         }
 
-        $path = (string)(\parse_url($rawRequestUri, \PHP_URL_PATH) ?: '/');
+        // Path currency/language must be read from the routing URI after
+        // normalize_visitor_uri peels mounts (Theme /~preview/{token}/… →
+        // /~site/{code}/…). Origin still carries the preview namespace, so
+        // feeding it here would leave ~preview/token as the first segments and
+        // drop path currency — collapsing EUR onto the website default under
+        // live preview while formal /~site/…/EUR kept working.
+        $localizationUri = $rawRequestUri;
+        try {
+            $normalized = Url::normalizeVisitorUri($rawRequestUri);
+            $routing = \trim((string)($normalized['routing_uri'] ?? ''));
+            if ($routing !== '') {
+                $localizationUri = $routing;
+            }
+        } catch (\Throwable) {
+        }
+
+        $path = (string)(\parse_url($localizationUri, \PHP_URL_PATH) ?: '/');
         $websiteUrl = \trim((string)(
             $parse['server']['WELINE_WEBSITE_URL'] ?? WelineEnv::get('website_url', '')
         ));

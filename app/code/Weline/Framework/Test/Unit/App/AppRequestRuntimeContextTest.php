@@ -185,6 +185,15 @@ final class AppRequestRuntimeContextTest extends TestCase
                 ['/en_US/USD/', '', 'en_US', 'USD'],
                 ['/site/en_US/USD/', 'https://example.test/site', 'en_US', 'USD'],
                 ['/site/USD/en_US/catalog', 'https://example.test/site', 'en_US', 'USD'],
+                // After normalize_visitor_uri peel, live-preview routing looks like
+                // formal /~site/…/EUR (path currency is route identity even when
+                // the Website selector only advertises CNY).
+                [
+                    '/~site/grocery/EUR/en_US/products',
+                    'https://example.test/~site/grocery',
+                    'en_US',
+                    'EUR',
+                ],
             ] as [$uri, $websiteUrl, $expectedLanguage, $expectedCurrency]) {
                 RequestContext::cleanup();
                 Context::leave();

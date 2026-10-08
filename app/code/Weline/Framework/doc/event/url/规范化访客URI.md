@@ -13,9 +13,9 @@
 | `origin_uri` | 访客可见 origin（地址栏 / 链接生成 / 缓存键身份） |
 | `routing_uri` | 路由与网站匹配用的工作 URI（可剥前缀） |
 
-典型消费：Theme 真实预览 `/~preview/{token}/…` —— origin 保留挂载前缀，routing 剥成店面 remainder（可继续 `/~site/{code}/…`）。
+典型消费：Theme 真实预览 `/~preview/{token}/…` —— origin 保留预览挂载前缀（**不叠** `/~site`），routing 剥成店面 remainder；若 Token 带非默认 `website_code` 且 remainder 无 `/~site`，Theme 观察者回灌 `/~site/{code}` 进 `routing_uri` 供选站。旧叠挂 URL（remainder 已含 `/~site`）不二次回灌。
 
-站点探测、Scope 安装、start-page 网站上下文**必须**使用 `routing_uri`（或 `Url::applyVisitorUriNormalizeToUrl`），禁止用仍带挂载前缀的 origin 去选站。
+站点探测、Scope 安装、入口一致性校验、start-page 网站上下文、以及 `App::synchronizeParsedLocalization` / 默认语种货币前缀 301 **必须**使用 `routing_uri`（或 `Url::applyVisitorUriNormalizeToUrl`），禁止用仍带 `/~preview/` 的 origin 去选站、对 `website.url`、或 `resolveLocalizationFromPathSegments`（否则路径货币段被 `~preview/token` 挡住，预览态价签落回站默认货币）。
 
 ## 触发
 
@@ -41,3 +41,5 @@ Framework 读取回写后的 `origin_uri` / `routing_uri`：origin 写入 `WELIN
 
 - 2026-10-08：首版。配合 Theme `/~preview/{token}/` 真实预览命名空间。
 - 2026-10-08：抽出 `Url::normalizeVisitorUri` / `applyVisitorUriNormalizeToUrl`；站点探测强制 routing。
+- 2026-10-08：真实预览可见 URL 去叠 `/~site`；Token 回灌 routing；DetectWebsite `processSite` 冲突校验吃 normalize 后 URL。
+- 2026-10-08：`synchronizeParsedLocalization` / 默认前缀 301 改吃 routing；预览 301 目标保留 `/~preview/{token}`。
