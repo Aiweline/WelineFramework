@@ -8,8 +8,10 @@ use Weline\Backend\Block\ThemeConfig;
 use Weline\Backend\Service\BackendWarmupContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestResetterInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class RequestResetter implements RequestResetterInterface
+
+final class RequestResetter implements ProcessSharedInterface, RequestResetterInterface
 {
     public function resetRequest(): void
     {

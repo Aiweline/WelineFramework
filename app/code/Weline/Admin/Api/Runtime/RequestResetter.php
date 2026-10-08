@@ -8,8 +8,10 @@ use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Admin\Service\MenuRenderService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestResetterInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class RequestResetter implements RequestResetterInterface
+
+final class RequestResetter implements ProcessSharedInterface, RequestResetterInterface
 {
     public function resetRequest(): void
     {

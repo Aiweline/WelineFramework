@@ -7,8 +7,10 @@ namespace Weline\Websites\Api\Runtime;
 use Weline\Framework\Runtime\RequestResetterInterface;
 use Weline\Websites\Data\ScopeData;
 use Weline\Websites\Data\WebsiteData;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class RequestResetter implements RequestResetterInterface
+
+final class RequestResetter implements ProcessSharedInterface, RequestResetterInterface
 {
     public function resetRequest(): void
     {

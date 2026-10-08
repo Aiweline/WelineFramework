@@ -10,9 +10,11 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolution;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\ProcessSharedInterface;
+
 
 /** 请求期通过全局 HotCache 冻结快照，再按显式 Scope 解释策略。 */
-final class ExtraPolicyResolver
+final class ExtraPolicyResolver implements ProcessSharedInterface
 {
     public function __construct(private readonly ExtraCollector $collector)
     {

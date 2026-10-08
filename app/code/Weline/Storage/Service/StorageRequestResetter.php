@@ -7,8 +7,10 @@ namespace Weline\Storage\Service;
 use Weline\Framework\Runtime\RequestResetException;
 use Weline\Framework\Runtime\RequestResetterInterface;
 use Weline\Storage\Api\Runtime\StorageRequestResourceRegistryInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class StorageRequestResetter implements RequestResetterInterface
+
+final class StorageRequestResetter implements ProcessSharedInterface, RequestResetterInterface
 {
     public function __construct(
         private readonly StorageRequestResourceRegistryInterface $resources,

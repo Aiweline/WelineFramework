@@ -134,6 +134,31 @@ final class ObjectManagerProcessSharedInstancesTest extends TestCase
             \Weline\Product\Service\Storefront\StorefrontOfferPriceAssembler::class,
             \Weline\Product\Service\Storefront\StorefrontPriceAdjustmentProviderRegistry::class,
             \Weline\Search\Service\SearchProviderRegistry::class,
+            // Wave-1a Fiber-bag promotion (audit PASS)
+            \Weline\Framework\Plugin\PluginsManager::class,
+            \Weline\Framework\Compilation\ServiceProviderRegistry::class,
+            \Weline\Framework\Runtime\ModuleRequestResetterRegistry::class,
+            \Weline\Framework\App\Localization\LocalizationProviderRegistry::class,
+            \Weline\Framework\Http\Fpc\FpcStoreAdapterRegistry::class,
+            \Weline\Framework\Controller\Extra\ExtraTypeRegistry::class,
+            \Weline\Framework\Controller\Extra\ExtraPolicyResolver::class,
+            \Weline\Framework\Cache\StorefrontCacheKeyContextResolver::class,
+            \Weline\Framework\Http\Security\CspSourceContributionRegistry::class,
+            \Weline\Framework\Service\Query\QueryProviderRegistry::class,
+            \Weline\Social\Service\SocialPlatformRegistry::class,
+            \Weline\Cms\Service\CmsUriInterceptSkipRegistry::class,
+            \Weline\Websites\Api\Runtime\RequestResetter::class,
+            \Weline\DataTable\Api\Runtime\RequestResetter::class,
+            \Weline\Ai\Api\Runtime\RequestResetter::class,
+            \Weline\Theme\Api\Runtime\RequestResetter::class,
+            \Weline\Server\Api\Runtime\RequestResetter::class,
+            \Weline\Backend\Api\Runtime\RequestResetter::class,
+            \Weline\Admin\Api\Runtime\RequestResetter::class,
+            \Weline\Meta\Api\Runtime\RequestResetter::class,
+            \Weline\Widget\Api\Runtime\RequestResetter::class,
+            \Weline\Acl\Api\Runtime\RequestResetter::class,
+            \Weline\Frontend\Api\Runtime\RequestResetter::class,
+            \Weline\Storage\Service\StorageRequestResetter::class,
         ];
         foreach ($classes as $class) {
             self::assertTrue(
@@ -145,6 +170,16 @@ final class ObjectManagerProcessSharedInstancesTest extends TestCase
             \is_a(\Weline\Framework\View\Template::class, \Weline\Framework\Runtime\RequestLocalInterface::class, true),
             'Template must stay request/fiber local',
         );
+        // KEEP_FIBER: must not silently gain ProcessShared
+        foreach ([
+            \Weline\Framework\Event\EventsManager::class,
+            \Weline\Framework\Database\DbManager::class,
+        ] as $keepFiber) {
+            self::assertFalse(
+                \is_a($keepFiber, ProcessSharedInterface::class, true),
+                $keepFiber . ' must stay Fiber-local until dedicated gate passes',
+            );
+        }
     }
 }
 

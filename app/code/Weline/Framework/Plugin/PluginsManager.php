@@ -12,8 +12,10 @@ namespace Weline\Framework\Plugin;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Plugin\Api\Data\InterceptorInterface;
 use Weline\Framework\Plugin\Config\PluginXmlReader;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-class PluginsManager
+
+class PluginsManager implements ProcessSharedInterface
 {
     private $plugin_map = [];
 

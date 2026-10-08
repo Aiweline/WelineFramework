@@ -6,8 +6,10 @@ namespace Weline\Framework\Runtime;
 
 use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class ModuleRequestResetterRegistry implements RequestResetterInterface
+
+final class ModuleRequestResetterRegistry implements ProcessSharedInterface, RequestResetterInterface
 {
     public const CAPABILITY_PREFIX = 'request_resetter.';
 

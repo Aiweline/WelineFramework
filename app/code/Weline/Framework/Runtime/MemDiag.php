@@ -376,6 +376,10 @@ final class MemDiag
             $out['om_method_params'] = (int)($om['metadata_entries']['method_params'] ?? 0);
             $out['om_fiber_instances'] = (int)($om['fiber_instances']['instance_count'] ?? 0);
             $out['om_fiber_bucket_count'] = (int)($om['fiber_instances']['bucket_count'] ?? 0);
+            // Full Fiber-bag class histogram (optimization evidence; not a sample trim).
+            $fiberClassCounts = \Weline\Framework\Manager\ObjectManager::countFiberBagClasses();
+            $out['om_fiber_class_counts'] = $fiberClassCounts;
+            $out['om_fiber_class_unique'] = \count($fiberClassCounts);
         } catch (\Throwable) {
         }
         foreach ([

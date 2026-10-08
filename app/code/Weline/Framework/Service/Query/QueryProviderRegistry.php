@@ -9,8 +9,10 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\DefaultCrudProvider;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-class QueryProviderRegistry
+
+class QueryProviderRegistry implements ProcessSharedInterface
 {
     public const COMPILED_REGISTRY_FILE = BP . 'generated' . DS . 'framework' . DS . 'query_providers.php';
 
@@ -54,17 +56,34 @@ class QueryProviderRegistry
     /** mtime of COMPILED_REGISTRY_FILE when compiled index was last loaded (WLS hot-reload). */
     private ?int $compiledFileMtime = null;
 
+    /**
+     * Process-wide compiled registry payload. ObjectManager may construct multiple
+     * QueryProviderRegistry instances; each must NOT re-include the multi-MB
+     * query_providers.php (c1000 Workers OOM at ~1G on second include).
+     *
+     * @var array{
+     *     providers:array<string, array{class_name:string, source_file:string}>,
+     *     deferred:list<array{class_name:string, source_file:string}>,
+     *     descriptors:array<string, array<string, mixed>>,
+     *     operations:array<string, array<string, array<string, mixed>>>,
+     *     external_areas:array<string, array{providers:array, operations:array, summaries:array}>
+     * }|null
+     */
+    private static ?array $processCompiledRegistry = null;
+
+    private static bool $processCompiledLoaded = false;
+
     private ?BinQueryDescriptorAttributeResolver $binQueryAttributeResolver = null;
 
     private function loadDefinitions(): void
     {
         if ($this->definitionsLoaded) {
-            if (!$this->compiledDescriptorIndexLoaded || !$this->isCompiledRegistryStale()) {
-                return;
-            }
-            // framework:compile updated query_providers.php while this long-lived
-            // WLS worker still held the previous in-memory operation map.
-            $this->resetCompiledRegistryState();
+            // Stale compiled registry (framework:compile while Worker is live):
+            // do NOT reset+re-include the multi-MB query_providers.php in-process.
+            // Under c1000 that path OOMs Workers (SessionProtocol / query_providers
+            // include) and collapses the fleet. Keep the boot-time map; a recycle
+            // or server:reload starts a new Worker that loads the new file once.
+            return;
         }
 
         $compiled = $this->loadCompiledDefinitions();
@@ -129,24 +148,6 @@ class QueryProviderRegistry
         $this->definitionsLoaded = true;
     }
 
-    /**
-     * @return array{
-     *     providers:array<string, array{class_name:string, source_file:string}>,
-     *     deferred:list<array{class_name:string, source_file:string}>,
-     *     descriptors:array<string, array<string, mixed>>,
-     *     operations:array<string, array<string, array<string, mixed>>>,
-     *     external_areas:array<string, array{providers:array, operations:array, summaries:array}>
-     * }|null
-     */
-    private function isCompiledRegistryStale(): bool
-    {
-        if ($this->compiledFileMtime === null) {
-            return true;
-        }
-
-        return $this->compiledRegistryFileMtime() !== $this->compiledFileMtime;
-    }
-
     private function compiledRegistryFileMtime(): int
     {
         \clearstatcache(true, self::COMPILED_REGISTRY_FILE);
@@ -157,37 +158,18 @@ class QueryProviderRegistry
         return (int)(@\filemtime(self::COMPILED_REGISTRY_FILE) ?: 0);
     }
 
-    /**
-     * Drop compiled + static descriptor caches so the next loadDefinitions()
-     * re-reads generated/framework/query_providers.php (post framework:compile).
-     */
-    private function resetCompiledRegistryState(): void
-    {
-        $this->definitionsLoaded = false;
-        $this->compiledDescriptorIndexLoaded = false;
-        $this->compiledFileMtime = null;
-        $this->providers = [];
-        $this->providerDefinitions = [];
-        $this->deferredDefinitions = [];
-        $this->compiledDescriptors = [];
-        $this->compiledDescriptorList = [];
-        $this->compiledOperations = [];
-        $this->compiledExternalAreas = [];
-        $this->compiledExternalDescriptorLists = [];
-        self::$descriptorCache = [];
-        self::$operationDescriptorCache = [];
-        self::$externalAreaCache = [];
-    }
-
     private function loadCompiledDefinitions(): ?array
     {
+        if (self::$processCompiledLoaded) {
+            return self::$processCompiledRegistry;
+        }
+
         if (!is_file(self::COMPILED_REGISTRY_FILE)) {
+            self::$processCompiledLoaded = true;
+            self::$processCompiledRegistry = null;
             return null;
         }
-        // Long-lived WLS workers may keep a prior opcode; invalidate before re-include.
-        if (\function_exists('opcache_invalidate')) {
-            @\opcache_invalidate(self::COMPILED_REGISTRY_FILE, true);
-        }
+        // Once per process — ObjectManager may spin multiple registry instances.
         $registry = include self::COMPILED_REGISTRY_FILE;
         $valid = is_array($registry)
             && ($registry['format'] ?? null) === QueryProviderCompiler::FORMAT_VERSION
@@ -197,6 +179,8 @@ class QueryProviderRegistry
             && is_array($registry['operations'] ?? null)
             && is_array($registry['external_areas'] ?? null);
         if (!$valid) {
+            self::$processCompiledLoaded = true;
+            self::$processCompiledRegistry = null;
             if (!$this->compiledRegistryRequired()) {
                 return null;
             }
@@ -212,6 +196,8 @@ class QueryProviderRegistry
                 || !is_array($areaIndex['operations'] ?? null)
                 || !is_array($areaIndex['summaries'] ?? null)
             ) {
+                self::$processCompiledLoaded = true;
+                self::$processCompiledRegistry = null;
                 if (!$this->compiledRegistryRequired()) {
                     return null;
                 }
@@ -221,13 +207,17 @@ class QueryProviderRegistry
             }
         }
 
-        return [
+        $shaped = [
             'providers' => $registry['providers'],
             'deferred' => array_values($registry['deferred']),
             'descriptors' => $registry['descriptors'],
             'operations' => $registry['operations'],
             'external_areas' => $registry['external_areas'],
         ];
+        self::$processCompiledLoaded = true;
+        self::$processCompiledRegistry = $shaped;
+
+        return $shaped;
     }
 
     private function compiledRegistryRequired(): bool

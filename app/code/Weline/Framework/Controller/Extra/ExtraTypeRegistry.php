@@ -6,8 +6,10 @@ namespace Weline\Framework\Controller\Extra;
 
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class ExtraTypeRegistry
+
+final class ExtraTypeRegistry implements ProcessSharedInterface
 {
     /** @var array<string, ExtraTypeProviderInterface>|null */
     private ?array $byType = null;

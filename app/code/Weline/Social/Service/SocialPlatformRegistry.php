@@ -7,8 +7,10 @@ namespace Weline\Social\Service;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Social\Interface\SocialPlatformProviderInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-class SocialPlatformRegistry
+
+class SocialPlatformRegistry implements ProcessSharedInterface
 {
     private const CORE_PLATFORM_FILE = BP . '/app/code/Weline/Social/etc/social_platforms.php';
     private const EXTENDS_REGISTRY_FILE = 'extends/module/weline_social/platforms.php';

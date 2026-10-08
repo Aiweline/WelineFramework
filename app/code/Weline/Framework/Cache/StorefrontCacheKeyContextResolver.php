@@ -9,9 +9,11 @@ use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\ProcessSharedInterface;
+
 
 /** Resolves and freezes the authoritative storefront generation vector. */
-final class StorefrontCacheKeyContextResolver
+final class StorefrontCacheKeyContextResolver implements ProcessSharedInterface
 {
     public function __construct(
         private readonly NamespaceGenerationInterface $generations,

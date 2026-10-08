@@ -10,8 +10,10 @@ use Weline\Ai\Service\Agent\AgentExecutionContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestResetException;
 use Weline\Framework\Runtime\RequestResetterInterface;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class RequestResetter implements RequestResetterInterface
+
+final class RequestResetter implements ProcessSharedInterface, RequestResetterInterface
 {
     public function resetRequest(): void
     {

@@ -1345,6 +1345,37 @@ class ObjectManager implements ManagerInterface
     }
 
     /**
+     * Aggregate class => occurrence count across all Fiber request scopes.
+     * Used by MemDiag to find ProcessShared promotion candidates.
+     *
+     * @return array<string, int>
+     */
+    public static function countFiberBagClasses(): array
+    {
+        $counts = [];
+        foreach ([self::$fiberInstances, self::$fiberOriginInstances] as $storage) {
+            if (!$storage instanceof \WeakMap) {
+                continue;
+            }
+            foreach ($storage as $instances) {
+                $bag = $instances instanceof RequestScope
+                    ? $instances->all()
+                    : (\is_array($instances) ? $instances : []);
+                foreach (\array_keys($bag) as $class) {
+                    $name = (string)$class;
+                    if ($name === '') {
+                        continue;
+                    }
+                    $counts[$name] = ($counts[$name] ?? 0) + 1;
+                }
+            }
+        }
+        \arsort($counts);
+
+        return $counts;
+    }
+
+    /**
      * @param \WeakMap<\Fiber, RequestScope|array<string, object>>|null $storage
      * @return array{bucket_count:int, instance_count:int, buckets:list<array{fiber_id:int, count:int, sample:list<string>}>}
      */

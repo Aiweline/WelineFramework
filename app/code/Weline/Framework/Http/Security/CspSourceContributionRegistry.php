@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Framework\Http\Security;
 
 use Weline\Framework\Extends\ExtendsData;
+use Weline\Framework\Runtime\ProcessSharedInterface;
+
 
 /**
  * Aggregates Extends CSP providers into an application-default floor.
@@ -12,7 +14,7 @@ use Weline\Framework\Extends\ExtendsData;
  * Path: extends/module/Weline_Framework/Security/Csp/*.php
  * Floor = SecurityHeaderDefaults ∪ Extends contributions (immutable at Scope).
  */
-final class CspSourceContributionRegistry
+final class CspSourceContributionRegistry implements ProcessSharedInterface
 {
     private ?string $extendsPolicy = null;
 

@@ -6,8 +6,10 @@ namespace Weline\Server\Api\Runtime;
 
 use Weline\Framework\Runtime\RequestResetterInterface;
 use Weline\Server\Observer\CacheFlushedObserver;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class RequestResetter implements RequestResetterInterface
+
+final class RequestResetter implements ProcessSharedInterface, RequestResetterInterface
 {
     public function resetRequest(): void
     {

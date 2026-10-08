@@ -7,8 +7,10 @@ namespace Weline\Cms\Service;
 use Weline\Cms\Api\Uri\CmsUriInterceptSkipInterface;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class CmsUriInterceptSkipRegistry
+
+final class CmsUriInterceptSkipRegistry implements ProcessSharedInterface
 {
     /** @var list<CmsUriInterceptSkipInterface>|null */
     private ?array $cached = null;

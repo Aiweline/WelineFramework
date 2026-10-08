@@ -116,7 +116,7 @@ final class QueryProviderRegistryTest extends TestCase
         self::assertSame([], $deferredDefinitions);
     }
 
-    public function testCompiledRegistryReloadsWhenFileMtimeChanges(): void
+    public function testCompiledRegistryKeepsBootMapWhenFileMtimeChanges(): void
     {
         if (!is_file(QueryProviderRegistry::COMPILED_REGISTRY_FILE)) {
             self::markTestSkipped('Compiled query_providers.php is required for this contract.');
@@ -127,21 +127,42 @@ final class QueryProviderRegistryTest extends TestCase
         self::assertIsArray($descriptor);
         self::assertArrayHasKey('guest_token', $descriptor['params'] ?? []);
 
-        // Simulate a stale in-memory map (pre-compile worker) while disk already has guest_token.
+        // Simulate stale mtime after framework:compile. Workers must NOT re-include the
+        // multi-MB query_providers.php in-process (c1000 OOM). Keep boot-time map.
         $operations = $this->getPrivateProperty($registry, 'compiledOperations');
         self::assertIsArray($operations);
         $operations['cart']['issueGuestToken']['params'] = [];
         $this->setPrivateProperty($registry, 'compiledOperations', $operations);
         $this->setPrivateProperty($registry, 'compiledFileMtime', 1);
 
-        $reloaded = $registry->getOperationDescriptor('cart', 'issueGuestToken');
-        self::assertIsArray($reloaded);
-        self::assertArrayHasKey(
-            'guest_token',
-            $reloaded['params'] ?? [],
-            'WLS must hot-reload compiled registry after framework:compile mtime change.',
+        $kept = $registry->getOperationDescriptor('cart', 'issueGuestToken');
+        self::assertIsArray($kept);
+        self::assertSame(
+            [],
+            $kept['params'] ?? null,
+            'WLS must keep boot-time compiled registry; no in-process hot reload.',
         );
-        self::assertGreaterThan(1, (int)$this->getPrivateProperty($registry, 'compiledFileMtime'));
+        self::assertSame(1, (int)$this->getPrivateProperty($registry, 'compiledFileMtime'));
+    }
+
+    public function testSecondRegistryInstanceReusesProcessCompiledPayload(): void
+    {
+        if (!is_file(QueryProviderRegistry::COMPILED_REGISTRY_FILE)) {
+            self::markTestSkipped('Compiled query_providers.php is required for this contract.');
+        }
+
+        $first = new QueryProviderRegistry();
+        self::assertIsArray($first->getOperationDescriptor('cart', 'issueGuestToken'));
+        $before = memory_get_usage(true);
+        $second = new QueryProviderRegistry();
+        self::assertIsArray($second->getOperationDescriptor('cart', 'issueGuestToken'));
+        $delta = memory_get_usage(true) - $before;
+        // A fresh include of query_providers.php is ~14MB; reuse must stay far below that.
+        self::assertLessThan(
+            2 * 1024 * 1024,
+            $delta,
+            'Second QueryProviderRegistry must reuse process-level compiled payload.',
+        );
     }
 
     /**

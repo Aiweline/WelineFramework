@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 namespace Weline\Framework\Compilation;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class ServiceProviderRegistry
+
+final class ServiceProviderRegistry implements ProcessSharedInterface
 {
     private const DEFAULT_REGISTRY_FILE = BP . 'generated' . DS . 'framework' . DS . 'modules.php';
 

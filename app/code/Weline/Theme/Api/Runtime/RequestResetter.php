@@ -11,8 +11,10 @@ use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Taglib\Slot;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class RequestResetter implements RequestResetterInterface
+
+final class RequestResetter implements ProcessSharedInterface, RequestResetterInterface
 {
     public function resetRequest(): void
     {

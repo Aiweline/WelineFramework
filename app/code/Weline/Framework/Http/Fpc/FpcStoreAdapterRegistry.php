@@ -7,8 +7,10 @@ namespace Weline\Framework\Http\Fpc;
 use Weline\Framework\App\Env;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class FpcStoreAdapterRegistry
+
+final class FpcStoreAdapterRegistry implements ProcessSharedInterface
 {
     /** @var array<string, FpcStoreAdapterInterface>|null */
     private ?array $byCode = null;
