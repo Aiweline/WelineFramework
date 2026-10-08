@@ -87,6 +87,11 @@ final class ManagedNginxConfigWriter
         if ($ssl !== null && $sslCertificateSha256 === null) {
             throw new \RuntimeException('Unable to fingerprint managed nginx TLS certificate.');
         }
+        // Hosts whose leaf/SAN is not covered by the primary edge certificate
+        // (e.g. DNS-only mail.*) must get dedicated server{} blocks. Putting them
+        // on the primary server_name list would present the www cert → browser
+        // "Not Secure" while host_guard may already allow the Host.
+        [$names, $distinctHostSsl] = $this->peelDistinctCertificateHosts($names, $ssl);
         $upstreams = \array_map(
             fn(int $port): string => $this->formatUpstreamEndpoint($upstreamHost, $port),
             $upstreamPorts,
@@ -141,6 +146,12 @@ NGINX;
             $http2Enabled,
             false,
         );
+        $distinctHostBlocks = $this->buildDistinctCertificateHostServerBlocks(
+            $distinctHostSsl,
+            $ports,
+            $http2Enabled,
+        );
+        $distinctHostNames = \array_keys($distinctHostSsl);
 
         $cacheDir = $this->nginxQuotedPath($this->paths->cacheDir());
         $edgeCache = $this->paths->edgeCacheEnabled();
@@ -498,7 +509,7 @@ http {
 {$locationProtocolHeaders}{$cacheLocationBlock}
         }
     }
-{$apexRedirectBlock}
+{$apexRedirectBlock}{$distinctHostBlocks}
 }
 NGINX;
 
@@ -532,9 +543,10 @@ NGINX;
             'certificate_cert_sha256' => (string)($ssl['cert_sha256'] ?? ''),
             'certificate_key_sha256' => (string)($ssl['key_sha256'] ?? ''),
             'certificate_chain_sha256' => (string)($ssl['chain_sha256'] ?? ''),
-            'server_names' => \array_values(\array_unique([...$names, ...$apexRedirectNames])),
+            'server_names' => \array_values(\array_unique([...$names, ...$apexRedirectNames, ...$distinctHostNames])),
             'www_canonical_host' => $wwwCanonicalHost,
             'apex_redirect_names' => $apexRedirectNames,
+            'distinct_certificate_hosts' => $distinctHostNames,
             'edge_cache' => $edgeCache,
             'edge_cache_dynamic' => $this->paths->dynamicEdgeCacheEnabled(),
             'edge_cache_ttl_sec' => $ttl,
@@ -840,6 +852,211 @@ NGINX;
             $normalized[$port] = $port;
         }
         return \array_values($normalized);
+    }
+
+    /**
+     * Peel hosts that need a different leaf certificate than the primary edge
+     * cert into a dedicated map for additional server{} blocks.
+     *
+     * @param list<string> $names
+     * @param array{cert:string,key:string}|null $primarySsl
+     * @return array{0:list<string>,1:array<string,array{cert:string,key:string}>}
+     */
+    private function peelDistinctCertificateHosts(array $names, ?array $primarySsl): array
+    {
+        if ($primarySsl === null || $names === []) {
+            return [$names, []];
+        }
+        $primaryCert = (string)($primarySsl['cert'] ?? '');
+        if ($primaryCert === '' || !\is_file($primaryCert)) {
+            return [$names, []];
+        }
+        $kept = [];
+        $distinct = [];
+        foreach ($names as $name) {
+            $host = \strtolower(\trim((string)$name));
+            if ($host === '' || $host === '_') {
+                $kept[] = $host;
+                continue;
+            }
+            if ($this->certificateCoversHostname($primaryCert, $host)) {
+                $kept[] = $host;
+                continue;
+            }
+            $material = $this->resolveHostSslMaterial($host);
+            if ($material === null) {
+                // No exact material — keep on primary (legacy behaviour) so the
+                // host is still routed; TLS may still mismatch until issued.
+                $kept[] = $host;
+                continue;
+            }
+            $distinct[$host] = $material;
+        }
+
+        return [\array_values($kept), $distinct];
+    }
+
+    /**
+     * @return array{cert:string,key:string}|null
+     */
+    private function resolveHostSslMaterial(string $hostname): ?array
+    {
+        $hostname = \strtolower(\trim($hostname));
+        if ($hostname === '' || !$this->isSafeServerName($hostname)) {
+            return null;
+        }
+        try {
+            $active = (new ProjectCertificateGenerationStore($this->paths->projectRoot()))
+                ->active($hostname);
+            if (\is_array($active)
+                && \is_string($active['cert_path'] ?? null)
+                && \is_string($active['key_path'] ?? null)
+                && \is_file((string)$active['cert_path'])
+                && \is_file((string)$active['key_path'])
+            ) {
+                return $this->localizeSslMaterial(
+                    (string)$active['cert_path'],
+                    (string)$active['key_path'],
+                );
+            }
+        } catch (\Throwable) {
+            // Fall through to legacy app/etc/ssl/{host}/.
+        }
+        $segment = SslCertificateService::certificateStorageSegmentForFilesystem($hostname);
+        $dir = $this->paths->projectRoot() . DIRECTORY_SEPARATOR . 'app'
+            . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl'
+            . DIRECTORY_SEPARATOR . $segment;
+        $cert = $dir . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        $key = $dir . DIRECTORY_SEPARATOR . 'privkey.pem';
+        if (!\is_file($cert) || !\is_file($key)) {
+            return null;
+        }
+        if (!$this->certificateCoversHostname($cert, $hostname)) {
+            return null;
+        }
+
+        return $this->localizeSslMaterial($cert, $key);
+    }
+
+    private function certificateCoversHostname(string $certPath, string $hostname): bool
+    {
+        $hostname = \strtolower(\trim($hostname));
+        if ($hostname === '' || !\is_file($certPath)) {
+            return false;
+        }
+        $raw = @\file_get_contents($certPath);
+        if (!\is_string($raw) || $raw === '') {
+            return false;
+        }
+        $parsed = @\openssl_x509_parse($raw);
+        if (!\is_array($parsed)) {
+            return false;
+        }
+        $candidates = [];
+        $cn = \strtolower(\trim((string)($parsed['subject']['CN'] ?? '')));
+        if ($cn !== '') {
+            $candidates[] = $cn;
+        }
+        $san = (string)($parsed['extensions']['subjectAltName'] ?? '');
+        if ($san !== '') {
+            foreach (\explode(',', $san) as $part) {
+                $part = \trim($part);
+                if (\stripos($part, 'DNS:') === 0) {
+                    $candidates[] = \strtolower(\trim(\substr($part, 4)));
+                }
+            }
+        }
+        foreach ($candidates as $name) {
+            if ($name === $hostname) {
+                return true;
+            }
+            if (\str_starts_with($name, '*.')) {
+                $suffix = \substr($name, 1); // ".example.com"
+                if ($suffix !== ''
+                    && \str_ends_with($hostname, $suffix)
+                    && !\str_contains(\substr($hostname, 0, -\strlen($suffix)), '.')
+                ) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,array{cert:string,key:string}> $hostSsl
+     * @param array{http:int,https:int} $ports
+     */
+    private function buildDistinctCertificateHostServerBlocks(
+        array $hostSsl,
+        array $ports,
+        bool $http2Enabled,
+    ): string {
+        if ($hostSsl === []) {
+            return '';
+        }
+        $blocks = [];
+        foreach ($hostSsl as $host => $ssl) {
+            $host = \strtolower(\trim((string)$host));
+            if ($host === '' || !$this->isSafeServerName($host)) {
+                continue;
+            }
+            $cert = $this->nginxQuotedPath((string)$ssl['cert']);
+            $key = $this->nginxQuotedPath((string)$ssl['key']);
+            $http2Line = $http2Enabled ? "\n        http2 on;" : '';
+            $connectTimeout = self::BUSINESS_PROXY_CONNECT_TIMEOUT_SEC;
+            $readTimeout = self::BUSINESS_PROXY_READ_TIMEOUT_SEC;
+            $sendTimeout = self::BUSINESS_PROXY_SEND_TIMEOUT_SEC;
+            $blocks[] = <<<NGINX
+
+    # WLS distinct-certificate host (SNI exact leaf for {$host})
+    server {
+        listen {$ports['http']};
+        listen {$ports['https']} ssl;{$http2Line}
+        ssl_certificate     {$cert};
+        ssl_certificate_key {$key};
+        ssl_protocols       TLSv1.3;
+        ssl_session_cache   shared:WLS_SSL:50m;
+        ssl_session_timeout 1d;
+        ssl_early_data      off;
+        ssl_session_tickets on;
+        ssl_buffer_size     4k;
+        server_name {$host};
+
+        location ^~ /.well-known/acme-challenge/ {
+            proxy_pass http://wls_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header Host \$wls_upstream_authority;
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+
+        location / {
+            proxy_pass http://wls_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$wls_business_upstream_upgrade;
+            proxy_set_header Connection \$wls_business_upstream_connection;
+            proxy_set_header Host \$wls_upstream_authority;
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_connect_timeout {$connectTimeout}s;
+            proxy_read_timeout {$readTimeout}s;
+            proxy_send_timeout {$sendTimeout}s;
+            proxy_buffering on;
+            proxy_cache off;
+        }
+    }
+NGINX;
+        }
+
+        return \implode('', $blocks);
     }
 
     /**
