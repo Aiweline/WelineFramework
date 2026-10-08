@@ -39,8 +39,8 @@
             description: "迷你购物车 extras 页签交互"
         },
         miniCartIcon: {
-            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261007-minicart-sheet-grow-v19"],
-            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261007-minicart-sheet-grow-v19"],
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js?v=20261007-sibling-ssr-i18n1"],
+            paths: ["Weline_Theme::js/widgets/mini-cart-icon.js?v=20261007-sibling-ssr-i18n1"],
             globalVar: "WelineMiniCartIcon",
             description: "迷你购物车图标与抽屉"
         },
@@ -56,6 +56,13 @@
             globalVar: null,
             load: "defer",
             description: "店面图片占位回退"
+        },
+        storefrontFloatLayer: {
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/storefront-float-layer.js"],
+            paths: ["Weline_Theme::js/storefront-float-layer.js"],
+            globalVar: null,
+            load: "defer",
+            description: "店面左右悬浮槽 adopt 兜底与贴边收起"
         },
         storefrontShopperToast: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/storefront-shopper-toast.js"],
