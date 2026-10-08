@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_StoreMusic',
-    'version' => '1.1.80',
+    'version' => '1.1.82',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Backend' => '*',

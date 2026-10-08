@@ -159,6 +159,12 @@
   bottom: max(1.65rem, env(safe-area-inset-bottom, 0px));
 }
 
+/* Theme edge-dock collapsed: flush to viewport edge (do not keep 1.75rem inset). */
+#w-storefront-float-layer
+  .w-storefront-float-layer__slot--start.is-edge-collapsed:has(.w-store-music) {
+  left: max(0px, env(safe-area-inset-left, 0px));
+}
+
 .w-store-music__face {
   /* Fill avatar box only — never keep a separate rem size (homepage may shrink avatar). */
   position: absolute;
@@ -658,12 +664,16 @@
   }
 }
 
-/* Match CustomerService FAB shrink at ≤720px (3.125rem / 50px). */
+/* Mobile shrink: keep FAB below reading-column dominance (align CS 2.5rem). */
 @media (max-width: 720px) {
   .w-store-music__avatar {
-    width: 3.125rem;
-    height: 3.125rem;
-    --w-spectrum-r: 1.5625rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    --w-spectrum-r: 1.25rem;
+  }
+
+  .w-store-music__spectrum-bar {
+    --w-spectrum-len: calc(0.22rem + (var(--w-bar, 0) * 0.75rem));
   }
 
   .w-store-music__panel {

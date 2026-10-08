@@ -105,6 +105,7 @@ $faceUrl = $esc($faceUrl);
 #w-storefront-float-layer .w-store-music-host[data-store-music-host]{width:auto;height:auto;overflow:visible}
 #w-storefront-float-layer .w-store-music[data-store-music]{position:relative!important;left:auto!important;bottom:auto!important}
 #w-storefront-float-layer .w-storefront-float-layer__slot--start:has(.w-store-music){left:max(1.75rem,env(safe-area-inset-left,0px));bottom:max(1.65rem,env(safe-area-inset-bottom,0px))}
+#w-storefront-float-layer .w-storefront-float-layer__slot--start.is-edge-collapsed:has(.w-store-music){left:max(0px,env(safe-area-inset-left,0px))}
 .w-store-music.is-playing .w-store-music__spectrum,.w-store-music.is-remote-playing .w-store-music__spectrum{opacity:1;visibility:visible}
 </style>
 <?php if ($hostCssUrl !== ''): ?>

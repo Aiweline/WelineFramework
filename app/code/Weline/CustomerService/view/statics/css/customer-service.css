@@ -1306,8 +1306,13 @@
         }
 
         .cs-chat-button {
-            width: 3.125rem;
-            height: 3.125rem;
+            width: 2.5rem;
+            height: 2.5rem;
+        }
+
+        .cs-chat-button .cs-icon {
+            width: 1.15rem;
+            height: 1.15rem;
         }
 
         .cs-modal.w-modal {

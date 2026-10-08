@@ -56,7 +56,7 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: null,
         load: "defer",
-        description: "店面左右悬浮槽 adopt 兜底"
+        description: "店面左右悬浮槽 adopt 兜底与贴边收起"
     },
     storefrontShopperToast: {
         paths: [

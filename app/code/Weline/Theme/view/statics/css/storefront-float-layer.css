@@ -1,6 +1,8 @@
 /**
  * Global storefront float band: left/right slots share one bottom inset.
  * Sticky ATC clearance is applied once on the layer (not per float widget).
+ * Edge-dock: slots collapse to the viewport edge with animated transform.
+ * Marker: storefront-float-edge-dock-v1
  */
 .w-storefront-float-layer {
   /* Shrink the layer box from the bottom so absolute slots lift above sticky ATC.
@@ -20,6 +22,14 @@
   position: absolute;
   pointer-events: auto;
   max-width: min(100vw, 28rem);
+  transition:
+    transform var(--weline-theme-duration-normal, 0.28s)
+      var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1)),
+    left var(--weline-theme-duration-normal, 0.28s)
+      var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1)),
+    right var(--weline-theme-duration-normal, 0.28s)
+      var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+  will-change: transform;
 }
 
 .w-storefront-float-layer__slot--start {
@@ -41,7 +51,185 @@ body:has(.weline-social-quick-bar:not([hidden]))
   );
 }
 
+/* Edge dock chrome */
+.w-storefront-float-edge__chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.w-storefront-float-edge__body {
+  position: relative;
+  z-index: 1;
+}
+
+.w-storefront-float-edge__dismiss {
+  pointer-events: auto;
+  position: absolute;
+  top: -0.2rem;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--weline-theme-surface-raised, #fff) 35%,
+    transparent
+  );
+  color: color-mix(
+    in srgb,
+    var(--weline-theme-text, #111) 55%,
+    transparent
+  );
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  appearance: none;
+  opacity: 0.72;
+  transition:
+    opacity var(--weline-theme-duration-fast, 0.16s)
+      var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1)),
+    color var(--weline-theme-duration-fast, 0.16s)
+      var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1)),
+    background-color var(--weline-theme-duration-fast, 0.16s)
+      var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.w-storefront-float-layer__slot--start .w-storefront-float-edge__dismiss {
+  right: -0.15rem;
+}
+
+.w-storefront-float-layer__slot--end .w-storefront-float-edge__dismiss {
+  left: -0.15rem;
+}
+
+.w-storefront-float-edge__dismiss:is(:hover, :focus-visible) {
+  opacity: 1;
+  color: var(--weline-theme-text, #111);
+  background: color-mix(
+    in srgb,
+    var(--weline-theme-surface-raised, #fff) 72%,
+    transparent
+  );
+  outline: none;
+}
+
+.w-storefront-float-edge__dismiss:focus-visible {
+  box-shadow: 0 0 0 var(--weline-theme-focus-ring-width, 2px)
+    color-mix(in srgb, var(--weline-theme-primary, #0f766e) 45%, transparent);
+}
+
+.w-storefront-float-edge__recall {
+  pointer-events: auto;
+  position: absolute;
+  top: 50%;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--weline-space-5, 1.25rem);
+  height: calc(var(--weline-space-8, 2rem) + 0.25rem);
+  margin: 0;
+  padding: 0;
+  transform: translateY(-50%);
+  color: var(--weline-theme-primary, var(--color-primary, #0f766e));
+  background: color-mix(
+    in srgb,
+    var(--weline-theme-surface-raised, #fff) 88%,
+    var(--weline-theme-primary, #0f766e) 12%
+  );
+  border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+    color-mix(
+      in srgb,
+      var(--weline-theme-primary, #0f766e) 32%,
+      var(--weline-theme-border, #e2e8f0)
+    );
+  box-shadow: var(--weline-theme-shadow-xs, var(--weline-theme-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.08)));
+  cursor: pointer;
+  appearance: none;
+  transition:
+    color var(--weline-theme-duration-fast, 0.16s)
+      var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1)),
+    background-color var(--weline-theme-duration-fast, 0.16s)
+      var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.w-storefront-float-layer__slot--start .w-storefront-float-edge__recall {
+  left: 100%;
+  border-radius: 0 var(--weline-radius-md, 8px) var(--weline-radius-md, 8px) 0;
+  border-left: none;
+}
+
+.w-storefront-float-layer__slot--end .w-storefront-float-edge__recall {
+  right: 100%;
+  border-radius: var(--weline-radius-md, 8px) 0 0 var(--weline-radius-md, 8px);
+  border-right: none;
+}
+
+.w-storefront-float-edge__recall:is(:hover, :focus-visible) {
+  color: var(--weline-theme-on-primary, #fff);
+  background: var(--weline-theme-primary, #0f766e);
+  outline: none;
+}
+
+.w-storefront-float-edge__recall-icon {
+  display: inline-flex;
+  line-height: 0;
+  font-size: 1rem;
+}
+
+/*
+ * Collapsed must beat widget critical insets (e.g. StoreMusic left:1.75rem)
+ * and child visibility:visible overrides (music shell/entry force visible).
+ * Marker: storefront-float-edge-flush-v2
+ */
+#w-storefront-float-layer
+  .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot='start'],
+#w-storefront-float-layer
+  .w-storefront-float-layer__slot--start.is-edge-collapsed:has(.w-store-music) {
+  left: max(0px, env(safe-area-inset-left, 0px)) !important;
+  transform: translateX(-100%);
+}
+
+#w-storefront-float-layer
+  .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot='end'] {
+  right: max(0px, env(safe-area-inset-right, 0px)) !important;
+  transform: translateX(100%);
+}
+
+#w-storefront-float-layer
+  .w-storefront-float-layer__slot.is-edge-collapsed
+  .w-storefront-float-edge__body,
+#w-storefront-float-layer
+  .w-storefront-float-layer__slot.is-edge-collapsed
+  .w-storefront-float-edge__body
+  * {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+#w-storefront-float-layer
+  .w-storefront-float-layer__slot.is-edge-collapsed
+  .w-storefront-float-edge__dismiss {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 @media (max-width: 720px) {
+  .w-storefront-float-layer__slot--start {
+    left: max(0.55rem, env(safe-area-inset-left, 0px));
+    bottom: max(0.7rem, env(safe-area-inset-bottom, 0px));
+  }
+
   .w-storefront-float-layer__slot--end {
     right: max(var(--weline-space-3, 0.75rem), env(safe-area-inset-right, 0px));
     bottom: max(var(--weline-space-3, 0.75rem), env(safe-area-inset-bottom, 0px));
@@ -53,6 +241,33 @@ body:has(.weline-social-quick-bar:not([hidden]))
       max(var(--weline-space-3, 0.75rem), env(safe-area-inset-bottom, 0px))
       + 10.5rem
     );
+  }
+
+  /* Mobile scale: shrink FABs so they don't dominate the reading column. */
+  .w-storefront-float-layer .w-store-music__avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    --w-spectrum-r: 1.25rem;
+  }
+
+  .w-storefront-float-layer .w-store-music__spectrum-bar {
+    --w-spectrum-len: calc(0.22rem + (var(--w-bar, 0) * 0.75rem));
+  }
+
+  .w-storefront-float-layer .cs-chat-button {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .w-storefront-float-layer .cs-chat-button .cs-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .w-storefront-float-layer__slot {
+    transition: none;
   }
 }
 

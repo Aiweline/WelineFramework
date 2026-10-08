@@ -63,6 +63,40 @@ final class StorefrontFloatLayerContractTest extends TestCase
         self::assertStringContainsString('__slot--start', $css);
         self::assertStringContainsString('__slot--end', $css);
         self::assertStringContainsString('position: relative !important', $css);
+        self::assertStringContainsString('storefront-float-edge-dock-v1', $css);
+        self::assertStringContainsString('storefront-float-edge-flush-v2', $css);
+        self::assertStringContainsString('is-edge-collapsed', $css);
+        self::assertStringContainsString('.w-storefront-float-edge__dismiss', $css);
+        self::assertStringContainsString('.w-storefront-float-edge__recall', $css);
+        self::assertStringContainsString('visibility: hidden !important', $css);
+        self::assertStringContainsString("left: max(0px, env(safe-area-inset-left, 0px)) !important", $css);
+    }
+
+    public function testFloatLayerJsOwnsEdgeDockLocalStorage(): void
+    {
+        $js = (string)file_get_contents(
+            $this->themeRoot() . '/view/statics/js/storefront-float-layer.js'
+        );
+        self::assertStringContainsString('storefront-float-edge-dock-v1', $js);
+        self::assertStringContainsString('weline.storefrontFloat.edgeCollapsed.', $js);
+        self::assertStringContainsString('localStorage', $js);
+        self::assertStringContainsString('data-float-edge-dismiss', $js);
+        self::assertStringContainsString('data-float-edge-recall', $js);
+        self::assertStringContainsString('is-edge-collapsed', $js);
+        self::assertStringContainsString('translateX(-100%)', $js);
+        self::assertStringContainsString('translateX(100%)', $js);
+    }
+
+    public function testFooterPartialWiresEdgeDockLabels(): void
+    {
+        $footer = (string)file_get_contents(
+            $this->themeRoot() . '/view/theme/frontend/partials/footer/default.phtml'
+        );
+        self::assertStringContainsString('data-edge-dismiss-label', $footer);
+        self::assertStringContainsString('data-edge-recall-label', $footer);
+        self::assertStringContainsString("__('收起悬浮')", $footer);
+        self::assertStringContainsString("__('展开悬浮')", $footer);
+        self::assertStringContainsString('is-edge-collapsed', $footer);
     }
 
     public function testHookRegistryDropsFloatPseudoSlots(): void
