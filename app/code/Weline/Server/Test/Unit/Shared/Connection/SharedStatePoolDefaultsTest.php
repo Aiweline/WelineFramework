@@ -13,13 +13,13 @@ final class SharedStatePoolDefaultsTest extends TestCase
     {
         $options = SharedStatePoolDefaults::memoryClientOptions(true);
 
-        self::assertSame(32, SharedStatePoolDefaults::MEMORY_POOL_SIZE);
-        self::assertSame(2, SharedStatePoolDefaults::MEMORY_MIN_IDLE);
-        self::assertSame(0.15, $options['connect_timeout']);
-        self::assertSame(0.25, $options['timeout']);
-        self::assertSame(32, $options['pool_size']);
-        self::assertSame(2, $options['pool_min_idle']);
-        self::assertSame(0.1, $options['acquire_timeout']);
+        self::assertSame(64, SharedStatePoolDefaults::MEMORY_POOL_SIZE);
+        self::assertSame(4, SharedStatePoolDefaults::MEMORY_MIN_IDLE);
+        self::assertSame(0.3, $options['connect_timeout']);
+        self::assertSame(1.0, $options['timeout']);
+        self::assertSame(64, $options['pool_size']);
+        self::assertSame(4, $options['pool_min_idle']);
+        self::assertSame(0.5, $options['acquire_timeout']);
         self::assertTrue($options['fail_fast_on_cooldown']);
     }
 }

@@ -12481,6 +12481,13 @@ class ServiceOrchestrator
             $awaitingExitClassification = \str_starts_with($detail, 'missing_')
                 || \str_starts_with($detail, Processer::PROCESS_STATE_EXITED . '/');
 
+            // Rolling reload batch fences can observe PID/name index republish
+            // drift as managed_lease_record_missing_or_conflicting while the
+            // exact lease file is still valid. Bounded retry lets the index
+            // settle without aborting the remaining worker batches.
+            $awaitingLeasePublication = $detail === 'managed_lease_record_missing_or_conflicting'
+                || \str_starts_with($detail, 'managed_lease_record_missing_or_conflicting');
+
             $queueKey = ControlMessage::ROLE_WORKER . ':' . $instanceId;
             $worker = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
             $queued = isset($this->resurrectQueue[$queueKey]);
@@ -12500,7 +12507,12 @@ class ServiceOrchestrator
                     )
                 )
             );
-            if (!$awaitingExitClassification && !$queued && !$transitioning && !$plannedRecovery) {
+            if (!$awaitingExitClassification
+                && !$awaitingLeasePublication
+                && !$queued
+                && !$transitioning
+                && !$plannedRecovery
+            ) {
                 return false;
             }
         }

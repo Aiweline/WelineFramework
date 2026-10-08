@@ -134,6 +134,8 @@
 "Only managed local WLS domains may be injected into local hosts","仅受管理的本地 WLS 域可以注入本地主机"
 "The requested .localhost domain resolves to loopback and does not require a hosts entry","请求的 .localhost 域解析为环回并且不需要主机条目"
 "The requested domain is not a valid local hostname",请求的域不是有效的本地主机名
+"The bounded privileged hosts editor is unavailable.","The bounded privileged hosts editor is unavailable."
+"Administrator authorization or privileged hosts publication failed.","Administrator authorization or privileged hosts publication failed."
 "Only managed local wildcard domains are allowed for local wildcard certificate issuance",仅允许托管本地通配符域进行本地通配符证书颁发
 "Failed to ensure the managed local wildcard certificate",无法确保托管本地通配符证书
 维护模式已启用,维护模式已启用
@@ -179,6 +181,13 @@
 请求边界清理失败，请稍后重试。,请求边界清理失败，请稍后重试。
 "静态文件缓存: %{1} %{2}","静态文件缓存: %{1} %{2}"
 "高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成","高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成"
+"WLS 下载临时文件清理失败。","WLS 下载临时文件清理失败。"
+"SSE 会话已失效，请重新登录后重试。","SSE 会话已失效，请重新登录后重试。"
+"当前账号无权限执行该 SSE 操作。","当前账号无权限执行该 SSE 操作。"
+"SSE 请求处理失败，请稍后重试。","SSE 请求处理失败，请稍后重试。"
+站点导航上下文服务暂不可用,站点导航上下文服务暂不可用
+"SSE 请求被终止。","SSE 请求被终止。"
+"SSE 请求失败。","SSE 请求失败。"
 "WLS 通知：%{1}","WLS 通知：%{1}"
 "WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。","WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。"
 "WLS Fiber concurrency probe is disabled.","WLS Fiber 并发探针未启用（需 DEV、ENV_TEST 或环境变量 WLS_FIBER_CONCURRENCY_PROBE=1）。"

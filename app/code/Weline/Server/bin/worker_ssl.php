@@ -12018,7 +12018,7 @@ function wlsWorkerMemoryHealthDiagnostics(bool $includeStaticProperties = false,
 
     if (\class_exists(\Weline\Framework\Manager\ObjectManager::class, false)) {
         try {
-            $diagnostics['object_manager'] = \Weline\Framework\Manager\ObjectManager::getRuntimeMemoryDiagnostics(12, $includeObjectProperties);
+            $diagnostics['object_manager'] = \Weline\Framework\Manager\ObjectManager::getRuntimeMemoryDiagnostics(80, $includeObjectProperties);
         } catch (\Throwable $throwable) {
             $diagnostics['object_manager_error'] = $throwable->getMessage();
         }
