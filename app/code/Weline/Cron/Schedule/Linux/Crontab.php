@@ -177,6 +177,21 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
                 'code' => $listReturnCode,
                 'count' => count($existing_crontab)
             ]);
+
+            // 清掉同名/同脚本的注释行，避免「注释假安装」挡住重装后仍残留脏条目
+            $existing_crontab = array_values(array_filter(
+                $existing_crontab,
+                static function (string $line) use ($name, $cron_shell_file_path): bool {
+                    $trimmed = ltrim($line);
+                    if ($trimmed === '' || !str_starts_with($trimmed, '#')) {
+                        return true;
+                    }
+                    if (!str_contains($line, Schedule::cron_flag)) {
+                        return true;
+                    }
+                    return !str_contains($line, $name) && !str_contains($line, $cron_shell_file_path);
+                }
+            ));
             
             // 添加新的定时任务，包含 cron_flag 标识
             $new_cron_job = "*/1 * * * * sh " . $cron_shell_file_path . " # " . Schedule::cron_flag;
@@ -416,14 +431,28 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
             return [];
         }
         
-        // 过滤出包含 cron_flag 的条目（由本模块创建的任务）
-        $weline_crons = array_filter($crontab, function ($item) {
-            return str_contains($item, Schedule::cron_flag);
-        });
+        // 仅计有效（未注释）且带 cron_flag 的条目；注释行不算已安装
+        $weline_crons = array_values(array_filter(
+            $crontab,
+            static fn(string $item): bool => self::isActiveWelineCronLine($item)
+        ));
         
         $this->logDev('debug', '[Linux/Crontab] 过滤后 Weline Cron 任务数: {count}', ['count' => count($weline_crons)]);
         
         return $weline_crons;
+    }
+
+    /**
+     * 有效（未注释）的 Weline crontab 行。
+     */
+    public static function isActiveWelineCronLine(string $item): bool
+    {
+        $trimmed = ltrim($item);
+        if ($trimmed === '' || str_starts_with($trimmed, '#')) {
+            return false;
+        }
+
+        return str_contains($item, Schedule::cron_flag);
     }
     
     /**

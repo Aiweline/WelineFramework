@@ -46,20 +46,12 @@ abstract class BaseCommand implements \Weline\Framework\Console\CommandInterface
 
     function getCronName(string $module_name = 'Weline_Cron')
     {
-        $scope = $this->getProjectCronScope($module_name);
+        $scope = Schedule::normalizeCronConfigScope($module_name);
         $cron_name = $this->config->getConfig(Schedule::cron_config_key, $scope);
         if (empty($cron_name)) {
             $cron_name = Schedule::cron_flag . '-' . md5($scope) . '-' . Schedule::cron_flag;
             $this->config->setConfig(Schedule::cron_config_key, $cron_name, $scope);
         }
         return $cron_name;
-    }
-
-    private function getProjectCronScope(string $module_name): string
-    {
-        $projectRoot = defined('BP') ? (string)BP : (string)getcwd();
-        $projectRoot = realpath($projectRoot) ?: $projectRoot;
-
-        return $module_name . '@' . $projectRoot;
     }
 }

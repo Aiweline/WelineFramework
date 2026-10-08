@@ -141,8 +141,8 @@ final class CronQueryProvider implements QueryProviderInterface
      */
     private function getInstallationStatus(array $params): array
     {
-        $scope = trim((string)($params['scope'] ?? 'Weline_Cron'));
-        $scope = $scope !== '' ? $scope : 'Weline_Cron';
+        // 与 Console\Cron\BaseCommand::getCronName 同一作用域，禁止裸 module 名查错 md5。
+        $scope = Schedule::normalizeCronConfigScope((string)($params['scope'] ?? 'Weline_Cron'));
         $cronName = trim((string)($this->config->getConfig(Schedule::cron_config_key, $scope) ?? ''));
         if ($cronName === '') {
             $cronName = Schedule::cron_flag . '-' . md5($scope) . '-' . Schedule::cron_flag;

@@ -22,6 +22,38 @@ class Schedule implements ScheduleInterface
     const cron_flag = '[Weline_Cron]';
 
     /**
+     * CLI install/exist 与后台 Query 必须共用同一配置作用域：
+     * `{module}@{projectRoot}`，避免裸 `Weline_Cron` 与项目级 md5 名漂移导致误报未安装。
+     */
+    public static function projectCronScope(string $moduleName = 'Weline_Cron'): string
+    {
+        $moduleName = trim($moduleName);
+        if ($moduleName === '') {
+            $moduleName = 'Weline_Cron';
+        }
+        $projectRoot = defined('BP') ? (string)BP : (string)getcwd();
+        $projectRoot = realpath($projectRoot) ?: $projectRoot;
+
+        return $moduleName . '@' . $projectRoot;
+    }
+
+    /**
+     * 将调用方传入的 module 或已带 `@` 的 scope 规范为项目级 cron 配置作用域。
+     */
+    public static function normalizeCronConfigScope(string $scopeOrModule = 'Weline_Cron'): string
+    {
+        $scopeOrModule = trim($scopeOrModule);
+        if ($scopeOrModule === '') {
+            return self::projectCronScope('Weline_Cron');
+        }
+        if (str_contains($scopeOrModule, '@')) {
+            return $scopeOrModule;
+        }
+
+        return self::projectCronScope($scopeOrModule);
+    }
+
+    /**
      * 日志通道名
      */
     private const LOG_CHANNEL = 'cron';
