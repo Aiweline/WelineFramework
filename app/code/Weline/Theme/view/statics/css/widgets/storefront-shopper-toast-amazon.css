@@ -1,6 +1,207 @@
 /**
- * DEPRECATED as a standalone stylesheet.
- * Amazon storefront shopper notices live in:
- *   app/code/Weline/Theme/view/theme/frontend/assets/css/theme.css
- * (theme global chrome — loaded with frontend head theme.css).
+ * Amazon 店面购物者通知（风格层 CSS，非 theme 架构）。
+ * 由前台 head 单独 @static 加载；禁止并回 theme.css。
  */
+.w-amz-shopper-notice-region,
+.w-amz-cart-added-region {
+    position: fixed;
+    z-index: var(--weline-z-toast, 1200);
+    display: grid;
+    width: min(22rem, calc(100dvw - 2rem));
+    gap: var(--weline-space-3);
+    pointer-events: none;
+}
+
+.w-amz-cart-added,
+.w-amz-shopper-toast {
+    display: grid;
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-3) var(--weline-space-4) var(--weline-space-4);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--weline-theme-radius-lg);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    box-shadow: var(--weline-shadow-md);
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: auto;
+}
+
+.w-amz-shopper-toast {
+    padding-block-end: 14px;
+}
+
+.w-amz-cart-added.is-visible,
+.w-amz-shopper-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.w-amz-cart-added__header,
+.w-amz-shopper-toast__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--weline-space-2);
+}
+
+.w-amz-cart-added__title-wrap,
+.w-amz-shopper-toast__title-wrap {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-2);
+    min-width: 0;
+}
+
+.w-amz-cart-added__check,
+.w-amz-shopper-toast__check {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--color-success);
+    color: #fff;
+    font-size: var(--weline-font-size-sm);
+    font-weight: 700;
+    line-height: 1;
+}
+
+.w-amz-cart-added__title,
+.w-amz-shopper-toast__title {
+    font-size: var(--weline-font-size-base);
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--color-success);
+}
+
+.w-amz-shopper-toast--warning .w-amz-shopper-toast__check {
+    background: var(--color-warning);
+}
+
+.w-amz-shopper-toast--warning .w-amz-shopper-toast__title {
+    color: var(--color-warning);
+}
+
+.w-amz-shopper-toast--danger .w-amz-shopper-toast__check {
+    background: var(--color-error);
+}
+
+.w-amz-shopper-toast--danger .w-amz-shopper-toast__title {
+    color: var(--color-error);
+}
+
+.w-amz-shopper-toast--info .w-amz-shopper-toast__check {
+    background: var(--color-info);
+}
+
+.w-amz-shopper-toast--info .w-amz-shopper-toast__title {
+    color: var(--color-info);
+}
+
+.w-amz-cart-added__close,
+.w-amz-shopper-toast__close {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    margin: calc(var(--weline-space-1) * -1) calc(var(--spacing-1_5) * -1) 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--weline-theme-radius-md);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--weline-font-size-xl);
+    line-height: 1;
+    cursor: pointer;
+}
+
+.w-amz-cart-added__close:hover,
+.w-amz-shopper-toast__close:hover {
+    color: var(--color-text-primary);
+    background: var(--color-surface-hover);
+}
+
+.w-amz-cart-added__subtotal {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--weline-space-3);
+    padding-top: 2px;
+    font-size: var(--weline-font-size-sm);
+    line-height: 1.4;
+}
+
+.w-amz-cart-added__subtotal-label {
+    color: var(--color-text-secondary);
+}
+
+.w-amz-cart-added__subtotal-amount {
+    color: var(--color-text-primary);
+    font-size: var(--weline-font-size-base);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+}
+
+.w-amz-cart-added__actions {
+    display: grid;
+    gap: var(--weline-space-2);
+    margin-top: 2px;
+}
+
+.w-amz-cart-added__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0 var(--weline-space-3);
+    border-radius: var(--weline-theme-radius-full);
+    font-size: var(--weline-font-size-sm);
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    box-sizing: border-box;
+    box-shadow: var(--weline-shadow-sm);
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.w-amz-cart-added__btn--checkout {
+    border: 1px solid var(--color-primary-border);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+}
+
+.w-amz-cart-added__btn--checkout:hover {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-border);
+    color: var(--color-on-primary);
+}
+
+.w-amz-cart-added__btn--cart {
+    border: 1px solid var(--color-border-default);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    box-shadow: none;
+}
+
+.w-amz-cart-added__btn--cart:hover {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-border-emphasis);
+    color: var(--color-text-primary);
+}
+
+.w-amz-compare-added .w-amz-cart-added__subtotal-amount {
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 767px) {
+    .w-amz-shopper-notice-region,
+    .w-amz-cart-added-region {
+        inset-inline: max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-right)) !important;
+        width: auto !important;
+    }
+}

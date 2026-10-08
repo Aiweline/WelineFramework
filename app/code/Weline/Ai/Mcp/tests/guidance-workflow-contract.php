@@ -1333,6 +1333,17 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'theme.js')),
         false,
     ),
+    'hard_constraints include theme_css_architecture_not_style_shell' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_css_architecture_not_style_shell'
+            && str_contains((string) ($rule['summary'] ?? ''), 'ARCHITECTURE')
+            && (str_contains((string) ($rule['summary'] ?? ''), '.amazon-*')
+                || str_contains((string) ($rule['summary'] ?? ''), '.w-amz-*'))
+            && (str_contains((string) ($rule['summary'] ?? ''), 'FORBID')
+                || str_contains((string) ($rule['summary'] ?? ''), '禁止'))),
+        false,
+    ),
     'hard_constraints include theme_mechanism_not_foreign_content' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)

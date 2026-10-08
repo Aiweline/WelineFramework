@@ -59,7 +59,8 @@ theme/
   - 这两类文件都要求有 `@meta.name` / `@meta.description` 注释，扫描后进入 `ThemeData` / `Meta`。
 
 - `assets/`
-  - `assets/css/theme.css`、`assets/js/theme.js` 放 area 级公共资源。
+  - `assets/css/theme.css`、`assets/js/theme.js` 放 area 级**架构**入口（布局/表面机制/全局组件与 Token 侧效应）。
+  - **禁止**在 `theme.css` 写 Amazon/品牌风格壳（`.amazon-*` / `.w-amz-*`、单页英雄皮肤等）——风格落 `view/statics/css/widgets/*`、design 独立 CSS 或布局 `<style>`。细则：`doc/theme-css-architecture-vs-style.md`。
   - `head` partial 会加载这些基础资源，并在运行时拼接生成的布局 CSS。
 
 - `config/modules.json`

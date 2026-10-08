@@ -17,6 +17,7 @@
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
    - **前台 section `weline-code`（强约束）**：[`frontend-section-weline-code.md`](./frontend-section-weline-code.md) — 字面 `<section>` 与 `w:slot wrapper="section"` 必须非空语义 code；改模板后跑 `php bin/w frontend:check-section-code`
    - **CSS/PHTML 变量强约束（`REQ-THEME-0007`）**：[`theme-css-variables-only.md`](./theme-css-variables-only.md) — 禁止硬编码颜色/尺寸，须用主题 Token；待改清单见 [`theme-hardcoded-visual-audit.md`](./theme-hardcoded-visual-audit.md)
+   - **theme.css 架构≠风格（硬）**：[`theme-css-architecture-vs-style.md`](./theme-css-architecture-vs-style.md) — theme.css 只定布局/表面机制/全局组件；Amazon 等风格壳禁止进入
    - **店面 Token 消费约定**：[`theme-storefront-token-consumption.md`](./theme-storefront-token-consumption.md) — 间距/圆角/字号只走 `--weline-space-*` / `--weline-theme-radius-*` / `--weline-font-size-*`
    - **语义色重要程度矩阵**：[`theme-semantic-color-matrix.md`](./theme-semantic-color-matrix.md) — 角色×强度、Foundation 桥接、`data-tone` 用法、外观盘分组
    - **Surface / Text 语义（反色顶栏）**：[`theme-surface-text-roles.md`](./theme-surface-text-roles.md) — `data-surface` + `.w-text*`，禁止裸 span 黑底黑字

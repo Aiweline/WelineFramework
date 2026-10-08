@@ -20,7 +20,7 @@ window.Weline = window.Weline || {};
 window.Weline.Theme = window.Weline.Theme || {};
 window.Weline.Theme.storefrontPlaceholderSrc = <?= $placeholderSrcJson ?: '""' ?>;
 </script>
-<?php // mini-cart-drawer：由 mini-cart-icon 组件自带；shopper-toast CSS 在 theme.css（主题全局） ?>
+<?php // mini-cart-drawer：由 mini-cart-icon 组件自带；shopper-toast CSS：风格层 storefront-shopper-toast-amazon.css（head 加载） ?>
 <div hidden
      data-weline-load="storefrontImageFallback,storefrontFloatLayer"
      aria-hidden="true"></div>

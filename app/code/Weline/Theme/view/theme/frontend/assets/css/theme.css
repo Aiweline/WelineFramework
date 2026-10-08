@@ -2879,225 +2879,18 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 @media (prefers-color-scheme: dark) { html[data-theme-preference="system"]:not([data-theme="light"]) { color-scheme: dark; } :root[data-theme-preference="system"]:not([data-theme="light"]) .form-select { appearance: auto; -webkit-appearance: auto; background-image: none; padding-inline-end: 0.75rem; } :root[data-theme-preference="system"]:not([data-theme="light"]) .accordion-button::after, :root[data-theme-preference="system"]:not([data-theme="light"]) .btn-close { filter: invert(1) grayscale(100%) brightness(200%); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; } }
 
-/* ========== Amazon storefront shopper notices（主题全局 chrome，随 theme.css 加载） ========== */
-.w-amz-shopper-notice-region,
-.w-amz-cart-added-region {
-    position: fixed;
-    z-index: var(--weline-z-toast, 1200);
-    display: grid;
-    width: min(22rem, calc(100dvw - 2rem));
-    gap: var(--weline-space-3);
-    pointer-events: none;
-}
-
-.w-amz-cart-added,
-.w-amz-shopper-toast {
-    display: grid;
-    gap: var(--weline-space-3);
-    padding: var(--weline-space-3) var(--weline-space-4) var(--weline-space-4);
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--weline-theme-radius-lg);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    box-shadow: var(--weline-shadow-md);
-    opacity: 0;
-    transform: translateY(-6px);
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    pointer-events: auto;
-}
-
-.w-amz-shopper-toast {
-    padding-block-end: 14px;
-}
-
-.w-amz-cart-added.is-visible,
-.w-amz-shopper-toast.is-visible {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-.w-amz-cart-added__header,
-.w-amz-shopper-toast__header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--weline-space-2);
-}
-
-.w-amz-cart-added__title-wrap,
-.w-amz-shopper-toast__title-wrap {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-2);
-    min-width: 0;
-}
-
-.w-amz-cart-added__check,
-.w-amz-shopper-toast__check {
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: var(--color-success);
-    color: #fff;
-    font-size: var(--weline-font-size-sm);
-    font-weight: 700;
-    line-height: 1;
-}
-
-.w-amz-cart-added__title,
-.w-amz-shopper-toast__title {
-    font-size: var(--weline-font-size-base);
-    font-weight: 700;
-    line-height: 1.3;
-    color: var(--color-success);
-}
-
-.w-amz-shopper-toast--warning .w-amz-shopper-toast__check {
-    background: var(--color-warning);
-}
-
-.w-amz-shopper-toast--warning .w-amz-shopper-toast__title {
-    color: var(--color-warning);
-}
-
-.w-amz-shopper-toast--danger .w-amz-shopper-toast__check {
-    background: var(--color-error);
-}
-
-.w-amz-shopper-toast--danger .w-amz-shopper-toast__title {
-    color: var(--color-error);
-}
-
-.w-amz-shopper-toast--info .w-amz-shopper-toast__check {
-    background: var(--color-info);
-}
-
-.w-amz-shopper-toast--info .w-amz-shopper-toast__title {
-    color: var(--color-info);
-}
-
-.w-amz-cart-added__close,
-.w-amz-shopper-toast__close {
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    margin: calc(var(--weline-space-1) * -1) calc(var(--spacing-1_5) * -1) 0 0;
-    padding: 0;
-    border: 0;
-    border-radius: var(--weline-theme-radius-md);
-    background: transparent;
-    color: var(--color-text-secondary);
-    font-size: var(--weline-font-size-xl);
-    line-height: 1;
-    cursor: pointer;
-}
-
-.w-amz-cart-added__close:hover,
-.w-amz-shopper-toast__close:hover {
-    color: var(--color-text-primary);
-    background: var(--color-surface-hover);
-}
-
-.w-amz-cart-added__subtotal {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--weline-space-3);
-    padding-top: 2px;
-    font-size: var(--weline-font-size-sm);
-    line-height: 1.4;
-}
-
-.w-amz-cart-added__subtotal-label {
-    color: var(--color-text-secondary);
-}
-
-.w-amz-cart-added__subtotal-amount {
-    color: var(--color-text-primary);
-    font-size: var(--weline-font-size-base);
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    white-space: nowrap;
-}
-
-.w-amz-cart-added__actions {
-    display: grid;
-    gap: var(--weline-space-2);
-    margin-top: 2px;
-}
-
-.w-amz-cart-added__btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 32px;
-    padding: 0 var(--weline-space-3);
-    border-radius: var(--weline-theme-radius-full);
-    font-size: var(--weline-font-size-sm);
-    font-weight: 600;
-    line-height: 1.2;
-    text-align: center;
-    text-decoration: none;
-    box-sizing: border-box;
-    box-shadow: var(--weline-shadow-sm);
-    transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.w-amz-cart-added__btn--checkout {
-    border: 1px solid var(--color-primary-border);
-    background: var(--color-primary);
-    color: var(--color-on-primary);
-}
-
-.w-amz-cart-added__btn--checkout:hover {
-    background: var(--color-primary-hover);
-    border-color: var(--color-primary-border);
-    color: var(--color-on-primary);
-}
-
-.w-amz-cart-added__btn--cart {
-    border: 1px solid var(--color-border-default);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    box-shadow: none;
-}
-
-.w-amz-cart-added__btn--cart:hover {
-    background: var(--color-bg-secondary);
-    border-color: var(--color-border-emphasis);
-    color: var(--color-text-primary);
-}
-
-.w-amz-compare-added .w-amz-cart-added__subtotal-amount {
-    font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 767px) {
-    .w-amz-shopper-notice-region,
-    .w-amz-cart-added-region {
-        inset-inline: max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-right)) !important;
-        width: auto !important;
-    }
-}
-
 /*
- * Inverse / on-dark storefront surfaces (WO-UI-CONTRAST-INVERSE).
- * Global h1/h2/a rules (and design skins like hanfu-ink) bind headings to
- * --color-text / --weline-theme-text (paper ink). Dark heroes must rebind those
- * tokens with non-zero specificity and hard on-dark fallbacks — never chain
- * through --color-text-light (circular once rebound).
+ * Inverse / on-dark storefront surfaces (WO-UI-CONTRAST-INVERSE) — architecture only.
+ * theme.css owns the surface mechanism (`[data-surface=inverse]` / `.w-surface-inverse`).
+ * Style shells (Amazon about/faq/policy heroes, shopper toast, chrome-amazon) live in
+ * their own style CSS or layout <style>; do NOT register .amazon-* here.
+ *
+ * Dark heroes must set data-surface="inverse" (or .w-surface-inverse) and rebind
+ * tokens with non-zero specificity + hard on-dark fallbacks — never chain through
+ * --color-text-light (circular once rebound).
  */
 [data-surface="inverse"],
-.amazon-about__hero,
-.amazon-about__cta,
-.amazon-terms__hero,
-.amazon-faq__hero,
-.amazon-policy__hero,
-.sitemap-page__hero {
+.w-surface-inverse {
     --_inverse-text: var(--color-text-on-dark, #f7f4ef);
     --_inverse-muted: var(--color-text-on-dark-muted, #d4cfc5);
     --weline-theme-text: var(--_inverse-text);
@@ -3121,25 +2914,16 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 }
 
 [data-surface="inverse"] :is(h1, h2, h3, h4, h5, h6),
-.amazon-about__hero :is(h1, h2, h3, h4, h5, h6),
-.amazon-about__cta :is(h1, h2, h3, h4, h5, h6),
-.amazon-terms__hero :is(h1, h2, h3, h4, h5, h6),
-.amazon-faq__hero :is(h1, h2, h3, h4, h5, h6),
-.amazon-policy__hero :is(h1, h2, h3, h4, h5, h6),
-.sitemap-page__hero :is(h1, h2, h3, h4, h5, h6) {
+.w-surface-inverse :is(h1, h2, h3, h4, h5, h6) {
     color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
 }
 
 [data-surface="inverse"] :is(p, li, small, span),
-.amazon-about__hero :is(p, li, small),
-.amazon-about__cta :is(p, li, small),
-.amazon-terms__hero :is(p, li, small),
-.amazon-faq__hero :is(p, li, small),
-.amazon-policy__hero :is(p, li, small) {
+.w-surface-inverse :is(p, li, small, span) {
     color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
 }
 
-/* Light search chip: inverse span rule must not paint category/query labels on-dark. */
+/* Light search chip / raised menus: inverse span rule must not paint labels on-dark. */
 [data-surface="inverse"] .header-search-form :is(p, li, small, span),
 [data-surface="inverse"] .w-search-form :is(p, li, small, span),
 [data-surface="inverse"] .search-suggestions :is(p, li, small, span),
@@ -3157,36 +2941,14 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
     color: inherit;
 }
 
-.amazon-about__hero a.amazon-about__btn--ghost,
-.amazon-about__cta a.amazon-about__btn--ghost,
-[data-surface="inverse"] a.amazon-about__btn--ghost {
-    color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
-    border-color: color-mix(in srgb, var(--_inverse-text, #f7f4ef) 55%, transparent);
-}
-
-.amazon-about__hero a.amazon-about__btn--ghost:hover,
-.amazon-about__cta a.amazon-about__btn--ghost:hover,
-[data-surface="inverse"] a.amazon-about__btn--ghost:hover {
-    color: var(--color-primary-light, #d4786a);
-    border-color: var(--color-primary-light, #d4786a);
-}
-
-.amazon-about__hero a.amazon-about__btn--primary,
-.amazon-about__cta a.amazon-about__btn--primary,
-[data-surface="inverse"] a.amazon-about__btn--primary {
-    color: var(--color-on-primary, #f7f4ef);
-}
-
 /*
- * Raised light panels nested under inverse chrome (WO-UI-CONTRAST-INVERSE side-effect).
- * Header belt remaps --weline-theme-text / --_inverse-* to on-dark; account menu,
- * mini-cart, white search chip, language switcher menu, and language-request dialog
- * sit on surface-raised and must restore paper ink or copy vanishes.
- * Fallbacks match mini-cart --amz-drawer-text / --amz-drawer-muted (no new palette).
+ * Raised light panels nested under inverse chrome (architecture side-effect).
+ * Header belt remaps text tokens to on-dark; account menu, mini-cart, white search
+ * chip, language switcher menu, and language-request dialog sit on surface-raised
+ * and must restore paper ink or copy vanishes.
  */
 [data-surface="inverse"] .account-dropdown,
 [data-surface="inverse"] .mini-cart-drawer,
-[data-surface="inverse"] .mini-cart-drawer--amazon,
 [data-surface="inverse"] .header-search-form,
 [data-surface="inverse"] .w-search-form,
 [data-surface="inverse"] .search-suggestions,
@@ -3196,7 +2958,6 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 [data-surface="inverse"] dialog.w-dialog[data-language-request-modal],
 .w-surface-inverse .account-dropdown,
 .w-surface-inverse .mini-cart-drawer,
-.w-surface-inverse .mini-cart-drawer--amazon,
 .w-surface-inverse .header-search-form,
 .w-surface-inverse .w-search-form,
 .w-surface-inverse .search-suggestions,
@@ -3204,8 +2965,8 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 .w-surface-inverse .w-language-switcher__menu,
 .w-surface-inverse .w-dialog[data-language-request-modal],
 .w-surface-inverse dialog.w-dialog[data-language-request-modal] {
-    --_paper-text: var(--amz-drawer-text, #0f1111);
-    --_paper-muted: var(--amz-drawer-muted, #565959);
+    --_paper-text: #0f1111;
+    --_paper-muted: #565959;
     --_inverse-text: var(--_paper-text);
     --_inverse-muted: var(--_paper-muted);
     --weline-theme-text: var(--_paper-text);

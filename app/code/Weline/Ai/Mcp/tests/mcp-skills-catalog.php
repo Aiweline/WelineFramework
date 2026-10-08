@@ -254,6 +254,11 @@ skillCheck(in_array('dev/ai-command/ai/主题开发.md', is_array($themeEngineer
 skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'Team:主题开发工程师'), '主题开发工程师 prompt states seat identity');
 skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'work_mode'), '主题开发工程师 prompt requires work_mode');
 skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'theme.css'), '主题开发工程师 prompt forbids design theme.css override');
+skillCheck(
+    str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'theme_css_architecture_not_style_shell')
+        && str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), '.amazon-*'),
+    '主题开发工程师 prompt forbids style shells in theme.css'
+);
 skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'theme:active'), '主题开发工程师 prompt mentions theme:active lifecycle');
 skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), '必装永远存在')
     && str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'user_deleted@{versionId}'), '主题开发工程师 prompt mandates required defaults always present');

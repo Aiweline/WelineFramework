@@ -6,6 +6,8 @@
 >
 > **`design_theme` 继承硬禁（`theme_design_must_inherit_not_mutate_source_widgets`）**：已有 `app/design/{Vendor}/{theme}` 时，改部件 CSS/JS/PHTML 外观**只能**在 design 树继承覆盖；**禁止**改 `app/code` 源头部件（一改影响所有使用该部件的主题）。
 >
+> **`theme.css` 架构≠风格（`theme_css_architecture_not_style_shell`）**：`assets/css/theme.css` 只定主题架构（布局、表面机制、全局组件/Token 侧效应）；Amazon/品牌/单页英雄等风格壳**禁止**进 theme.css，落独立风格 CSS 或布局 `<style>`。详见 [theme-css-architecture-vs-style.md](../theme-css-architecture-vs-style.md) 与 [主题开发.md Mode A](../../../../../../dev/ai-command/ai/主题开发.md)。
+>
 > 适用范围：WelineFramework 当前主题开发、布局开发、部件开发、主题覆盖、前端请求链路、Taglib 与可视化编辑器相关开发。
 >
 > MCP / AI 侧将本指南视为 **`frontend_development`（前端开发规范）** 表面；其中「前台 section 身份属性（`weline-code`）」只是规范条目之一，不是独立技能名。
@@ -28,6 +30,7 @@
    - Slot 属性：`app/code/Weline/Theme/doc/widget-slot-attributes.md`
    - **前台 section `weline-code`（强约束）**：`app/code/Weline/Theme/doc/frontend-section-weline-code.md`
    - **CSS/PHTML 变量强约束（`REQ-THEME-0007`）**：`app/code/Weline/Theme/doc/theme-css-variables-only.md`（审计清单：`theme-hardcoded-visual-audit.md`）
+   - **theme.css 架构 vs 风格（硬）**：`app/code/Weline/Theme/doc/theme-css-architecture-vs-style.md`
    - Theme.js：`app/code/Weline/Theme/doc/Theme.js使用指南.md`
    - 浏览器业务请求：`app/code/Weline/Frontend/doc/Weline.Api使用指南.md`
    - Taglib：`app/code/Weline/Taglib/doc/README.md`
