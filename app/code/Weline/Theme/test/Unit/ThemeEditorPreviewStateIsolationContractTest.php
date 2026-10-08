@@ -73,7 +73,7 @@ final class ThemeEditorPreviewStateIsolationContractTest extends TestCase
         );
 
         self::assertStringContainsString('function postStartPreview()', $source);
-        self::assertStringContainsString('setPreviewCookie($token)', $source);
+        self::assertStringNotContainsString('setPreviewCookie(', $source);
         self::assertStringContainsString('SHELL_PREVIEW', $source);
         self::assertStringContainsString('buildFrontendPreviewUrl(', $source);
     }

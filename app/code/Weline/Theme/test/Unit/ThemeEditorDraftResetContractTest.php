@@ -105,6 +105,12 @@ final class ThemeEditorDraftResetContractTest extends TestCase
         self::assertStringContainsString('discardDraft(', $service);
         self::assertStringContainsString('restoreDefaultInjectionsAfterDraftReset(', $service);
         self::assertStringContainsString('default_injections', $service);
+
+        $injectionService = $this->read('app/code/Weline/Theme/Service/WidgetDefaultInjectionService.php');
+        self::assertStringContainsString('function restoreDefaultInjectionsAfterDraftReset(', $injectionService);
+        self::assertStringContainsString('function reapplyRequiredInjectionConfigsForLayout(', $injectionService);
+        self::assertStringContainsString("'repaired_defaults'", $injectionService);
+        self::assertStringContainsString('updateWidgetConfig(', $injectionService);
         self::assertStringContainsString('clearDraftPreviewCaches(', $service);
         self::assertStringContainsString('LAYOUT_SCOPE_ALL', $service);
         self::assertStringContainsString('solidifyCurrentScopeVersion(', $service);

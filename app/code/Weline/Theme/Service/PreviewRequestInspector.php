@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Runtime\RequestContext;
 
 final class PreviewRequestInspector
 {
@@ -99,6 +99,9 @@ final class PreviewRequestInspector
             return true;
         }
 
+        // Canvas / visual-editor isolation is URL-scoped only. syncRequest may inject
+        // shell=theme-editor from a prior editor session; that must NOT block the
+        // live-preview path mount or storefront links inherit canvas query junk.
         $rawShell = $this->getRawQueryValue('shell');
         if ($rawShell !== null) {
             return $rawShell === PreviewContextService::SHELL_THEME_EDITOR;
@@ -108,16 +111,13 @@ final class PreviewRequestInspector
             return false;
         }
 
-        if ($this->request->getParam('editor_mode', '') === '1') {
+        $rawVisualEditor = $this->getRawQueryValue('visual_editor');
+        if ($rawVisualEditor === '1') {
             return true;
         }
 
-        if ($this->request->getParam('visual_editor', '') === '1') {
-            return true;
-        }
-
-        $shell = \trim((string)$this->request->getParam('shell', ''));
-        if (\in_array($shell, [PreviewContextService::SHELL_THEME_EDITOR], true)) {
+        $rawEditorMode = $this->getRawQueryValue('editor_mode');
+        if ($rawEditorMode === '1' || ($rawEditorMode !== null && \strtolower($rawEditorMode) === 'true')) {
             return true;
         }
 
@@ -158,42 +158,18 @@ final class PreviewRequestInspector
 
     public function shouldUseStoredPreviewContext(): bool
     {
-        if ($this->isPreviewShellPath()
+        return $this->isPreviewShellPath()
             || $this->isPreviewStaticPath()
-            || $this->hasExplicitPreviewCarrier()) {
-            return true;
-        }
-
-        return $this->shouldAllowPreviewTokenCookie() && $this->hasPreviewTokenCookie();
-    }
-
-    public function shouldAllowPreviewTokenCookie(): bool
-    {
-        if ($this->hasExplicitPreviewTokenCarrier()) {
-            return true;
-        }
-
-        if ($this->shouldKeepPreviewStateOnlyForCurrentRequest()) {
-            return false;
-        }
-
-        if ($this->isThemeEditorShellPath()) {
-            return false;
-        }
-
-        if ($this->hasPreviewTokenCookie()) {
-            return true;
-        }
-
-        if ($this->isPreviewStaticPath()) {
-            return true;
-        }
-
-        return $this->isPreviewShellPath();
+            || $this->hasExplicitPreviewCarrier()
+            || $this->hasLivePreviewPathMount();
     }
 
     public function hasExplicitPreviewTokenCarrier(): bool
     {
+        if ($this->hasLivePreviewPathMount()) {
+            return true;
+        }
+
         $token = $this->request->getParam(PreviewTokenService::TOKEN_KEY);
         if (\is_scalar($token) && \trim((string)$token) !== '') {
             return true;
@@ -219,6 +195,24 @@ final class PreviewRequestInspector
         }
 
         return \is_scalar($header) && \trim((string)$header) !== '';
+    }
+
+    public function hasLivePreviewPathMount(): bool
+    {
+        try {
+            $fromContext = RequestContext::get(ThemeLivePreviewPathMount::REQUEST_CONTEXT_TOKEN_KEY);
+            if (\is_string($fromContext) && ThemeLivePreviewPathMount::isPreviewToken($fromContext)) {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        $uri = $this->getRawRequestUri();
+        if ($uri === '') {
+            $uri = $this->normalizePath();
+        }
+
+        return ThemeLivePreviewPathMount::parseFromUri($uri) !== null;
     }
 
     private function hasPositiveIntParam(array $keys): bool
@@ -351,35 +345,6 @@ final class PreviewRequestInspector
         }
 
         return '';
-    }
-
-    private function isThemeEditorShellPath(): bool
-    {
-        $path = $this->normalizePath();
-
-        return \str_starts_with($path, '/theme/backend/theme-editor');
-    }
-
-    private function hasPreviewTokenCookie(): bool
-    {
-        try {
-            $token = Cookie::get(PreviewTokenService::TOKEN_KEY);
-            if (!\is_scalar($token)) {
-                return false;
-            }
-
-            $token = \trim((string)$token);
-            if ($token === '') {
-                return false;
-            }
-
-            return \preg_match(
-                '/^pv_(?:[A-Za-z0-9_-]{43}|[1-9][0-9]{0,18}_[0-9]{9,12}_[a-f0-9]{16})$/D',
-                $token,
-            ) === 1;
-        } catch (\Throwable) {
-            return false;
-        }
     }
 
     private function hasNonEmptyParam(array $keys): bool

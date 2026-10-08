@@ -5401,7 +5401,7 @@
      *
      * Canvas = real storefront path + editor markers (path=layout).
      * Must NEVER call start-preview: that API persists shell=preview,
-     * HttpOnly weline_preview_token Cookie, and the storefront exit float.
+     * /~preview/{token}/ path mount, and the storefront exit float.
      * Only #btnFrontendPreview / openFrontendPreview may do that.
      */
     async function buildAuthorizedCanvasUrl(overrides = {}) {
@@ -11612,10 +11612,27 @@
     }
 
     function readWidgetElementLocalConfig(widgetElement) {
+        const tryParse = (raw) => {
+            if (raw === null || raw === undefined || raw === '') {
+                return null;
+            }
+            try {
+                const parsed = JSON.parse(raw);
+                return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : null;
+            } catch (e) {
+                return null;
+            }
+        };
         try {
             const raw = widgetElement?.dataset?.config || widgetElement?.getAttribute?.('data-config') || '{}';
-            const parsed = JSON.parse(raw);
-            return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+            let parsed = tryParse(raw);
+            // Attribute may still carry HTML entities when dataset is empty/unavailable.
+            if (!parsed && typeof raw === 'string' && /&(?:quot|#39|#x27|lt|gt|amp);/i.test(raw)) {
+                const ta = document.createElement('textarea');
+                ta.innerHTML = raw;
+                parsed = tryParse(ta.value);
+            }
+            return parsed || {};
         } catch (e) {
             return {};
         }

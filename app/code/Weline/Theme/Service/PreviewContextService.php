@@ -209,10 +209,13 @@ final class PreviewContextService
     /**
      * 画布态 URL 生成是否应携带主题身份（态 1）。
      * 无画布标记、无正主题 ID、或带预览 Token（态 2）时禁止注入。
+     *
+     * 画布标记只认浏览器 RAW query（editor_mode / shell=theme-editor）。
+     * syncRequest 注入的 GET 不得冒充画布，否则真实预览（Token Cookie）会被误判并污染店面链。
      */
     public function shouldCarryEditorIdentityOnGeneratedUrls(): bool
     {
-        if (!$this->isEditorThemeRequest()) {
+        if (!$this->isRawThemeEditorLiveCanvasRequest()) {
             return false;
         }
 
@@ -222,6 +225,73 @@ final class PreviewContextService
         }
 
         return $this->resolveEditorCarryThemeId() > 0;
+    }
+
+    /**
+     * Keys that belong to visual-editor canvas identity — never keep them on live preview URLs.
+     *
+     * @return list<string>
+     */
+    public static function editorCanvasQueryKeys(): array
+    {
+        return [
+            'editor_mode',
+            'shell',
+            'editor_context',
+            'theme_id',
+            'frontend_theme_id',
+            'backend_theme_id',
+            'editor_area',
+            'preview_area',
+            'interaction_mode',
+            'selection_target',
+            'link_block',
+            'visual_editor',
+            'preview_theme',
+            'preview_mode',
+            'status',
+            'version_id',
+            'layout_type',
+            'layout_option',
+            'page_type',
+        ];
+    }
+
+    /**
+     * Strip visual-editor canvas markers from a storefront URL (live preview entry).
+     */
+    public static function stripEditorCanvasQueryFromStorefrontUrl(string $url): string
+    {
+        $parts = \parse_url($url);
+        if (!\is_array($parts) || empty($parts['query'])) {
+            return $url;
+        }
+
+        $query = [];
+        \parse_str((string)$parts['query'], $query);
+        if ($query === []) {
+            return $url;
+        }
+
+        foreach (self::editorCanvasQueryKeys() as $key) {
+            unset($query[$key]);
+        }
+
+        $scheme = isset($parts['scheme']) ? $parts['scheme'] . '://' : '';
+        $host = (string)($parts['host'] ?? '');
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+        $user = (string)($parts['user'] ?? '');
+        $pass = isset($parts['pass']) ? ':' . $parts['pass'] : '';
+        $auth = $user !== '' ? $user . $pass . '@' : '';
+        $path = (string)($parts['path'] ?? '/');
+        $queryString = $query !== [] ? '?' . \http_build_query($query) : '';
+        $fragment = isset($parts['fragment']) ? '#' . $parts['fragment'] : '';
+
+        if ($host === '') {
+            return $path . $queryString . $fragment;
+        }
+
+        return $scheme . $auth . $host . $port . $path . $queryString . $fragment;
     }
 
     /**
@@ -816,11 +886,32 @@ final class PreviewContextService
 
     private function isThemeEditorLiveCanvasRequest(): bool
     {
+        // Prefer RAW query so session syncRequest cannot fake a live canvas.
+        if ($this->isRawThemeEditorLiveCanvasRequest()) {
+            return true;
+        }
+
         $editorMode = \strtolower(\trim((string)$this->request->getParam('editor_mode', '')));
         if ($editorMode === '1' || $editorMode === 'true') {
             return true;
         }
         $shell = \strtolower(\trim((string)$this->request->getParam('shell', '')));
+        return $shell === self::SHELL_THEME_EDITOR;
+    }
+
+    /**
+     * True only when the browser URL itself carries canvas markers.
+     * Ignores syncRequest / session-injected GET params.
+     */
+    private function isRawThemeEditorLiveCanvasRequest(): bool
+    {
+        $editorMode = \strtolower(\trim((string)($this->getRawQueryString('editor_mode', '') ?? '')));
+        if ($editorMode === '1' || $editorMode === 'true') {
+            return true;
+        }
+
+        $shell = \strtolower(\trim((string)($this->getRawQueryString('shell', '') ?? '')));
+
         return $shell === self::SHELL_THEME_EDITOR;
     }
 

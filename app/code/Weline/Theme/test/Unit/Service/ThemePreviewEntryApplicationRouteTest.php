@@ -48,6 +48,10 @@ final class ThemePreviewEntryApplicationRouteTest extends TestCase
             $source
         );
         self::assertStringContainsString(
+            'PreviewContextService::stripEditorCanvasQueryFromStorefrontUrl(',
+            $source
+        );
+        self::assertStringContainsString(
             'getFrontendUrlPathForPreview($pageType)',
             $source
         );
@@ -67,6 +71,10 @@ final class ThemePreviewEntryApplicationRouteTest extends TestCase
 
         self::assertStringContainsString(
             '$previewTokenService->getPreviewUrl(',
+            $source
+        );
+        self::assertStringContainsString(
+            'PreviewContextService::stripEditorCanvasQueryFromStorefrontUrl(',
             $source
         );
         self::assertStringContainsString(
@@ -221,7 +229,8 @@ final class ThemePreviewEntryApplicationRouteTest extends TestCase
         if ($origin !== '') {
             self::assertStringStartsWith(\rtrim($origin, '/'), $redirect);
         }
-        self::assertStringContainsString('weline_preview_token=', $redirect);
+        self::assertStringContainsString('/~preview/', $redirect);
+        self::assertStringNotContainsString('weline_preview_token=', $redirect);
     }
 
     public function testFrontendUrlPathForPreviewNeverPassesEmptyString(): void

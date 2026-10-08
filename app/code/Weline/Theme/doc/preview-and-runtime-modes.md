@@ -11,7 +11,7 @@
 | 状态 | 称呼 | **身份权威**（theme / scope / mode / V / R / target…） | 典型入口 |
 |------|------|--------------------------------------------------------------|----------|
 | 1 | **可视化编辑预览** | **请求参数为主**（query + typed `editor_context`） | 编辑器 iframe → **真实店面 path** + `editor_mode=1` / `shell=theme-editor` / `editor_context` |
-| 2 | **版本真实预览** | **预览 Token 反解析参数为准**（token 不可被 URL 改写主题身份） | `#btnFrontendPreview` / `start-preview` → 真实店面 URL + `weline_preview_token` |
+| 2 | **版本真实预览** | **预览 Token 反解析参数为准**（token 不可被 URL 改写主题身份） | `#btnFrontendPreview` / `start-preview` → `/~preview/{token}/…`（兼容旧 `?weline_preview_token=`） |
 | 3 | **正式（正常店面）** | **RequestContext / 路径 / Scope 解析为准** | 访客普通 URL；读 selection → ThemeScopeVersion 的正式修订 |
 
 三种状态**业务渲染链路必须同构**；差别只在「这次请求的主题身份从哪来」。
@@ -40,7 +40,7 @@
 ### 正确用法
 
 - iframe / `#btnPreview` → **`buildCanvasStorefrontPreviewUrl`**：真实店面 path + 编辑器标记；**禁止**打开 `theme-preview/content` 或 `layout-preview` 当画布
-- **禁止**在可视化预览里调用 `start-preview` 种 Cookie（会误进「版本真实预览」态）
+- **禁止**在可视化预览里调用 `start-preview` 挂 `/~preview/{token}/`（会误进「版本真实预览」态）
 - 改预览身份：改参数 / 重建 `editor_context` / 换店面 path，不要假设 RequestContext 里已有店面 Scope
 - 调试时以 Network 里 iframe `src`（店面 path + query + `editor_context`）为准
 - 站内 URL 生成：画布请求下经 `Url` 最终输出钩子 `Weline_Framework_Url::url_generate_params` → Theme 追加 `theme_id`（无画布身份则早退；**后台 URL / 编辑器 chrome 如「返回」不注入**）。**禁止**挂 `url_generate_rewrite`。禁止靠 Session 粘主题。
@@ -60,45 +60,48 @@
 
 ### 是什么
 
-从编辑器「真实前端预览」等入口，打开**真实店面页面**，并带短期预览 Token（Cookie / query），用于在正式路由上核对 draft 或指定版本外观与交互。
+从编辑器「真实前端预览」等入口，打开**真实店面页面**，并带短期预览 Token（路径挂载为主），用于在正式路由上核对 draft 或指定版本外观与交互。
 
 ### 权威来源
 
 1. `start-preview`（或等价启动 API）把当时选定的 theme / scope / mode / V / R / target 等**写入 Token 载荷**
-2. 后续店面请求：`PreviewContextService` **反解析 Token** 得到上下文
-3. 代码约定（严重）：**有效 Token 是 Theme/Scope/Store/target 身份的不可变服务端权威**；URL 上的 theme/scope 等**不能覆盖** Token  
+2. 后续店面请求经 **`/~preview/{token}/…` path mount**（`ThemeLivePreviewPathMount`）携带 Token；兼容旧入口 `?weline_preview_token=` 与 Header。**Cookie 不再作为预览身份载体**（`clearPreviewCookie` 仅清历史残留）
+3. `PreviewContextService` **反解析 Token** 得到上下文
+4. 代码约定（严重）：**有效 Token 是 Theme/Scope/Store/target 身份的不可变服务端权威**；URL 上的 theme/scope 等**不能覆盖** Token  
    - 例外：显式 `locale` 覆盖仅影响文案/chrome，不写用户语言 Cookie，也不改 Token 里的主题身份
 
-实现锚点：`PreviewContextService::getCurrentContext()`（token 合并在 request 之后、作为身份终裁）；`PreviewTokenService`。
+实现锚点：`ThemeLivePreviewPathMount` + `NormalizeVisitorUriLivePreviewPath`；`PreviewContextService::getCurrentContext()`（token 合并在 request 之后、作为身份终裁）；`PreviewTokenService`（path > query > header，不读 Cookie）。
 
 ### 正确用法
 
 - 仅 `#btnFrontendPreview`（及文档标明的真实预览入口）调用 `start-preview`
-- **首页预览 URL path 必须是 `/`，禁止把空串交给 `getFrontendUrl('')`**：空串会复用当前 `REQUEST_URI`；经 BinQuery 时会变成 `/framework/query-bin?weline_preview_token=…`。用 `ThemePageTypeResolver::getFrontendUrlPathForPreview()`；path 就是布局 path，拒绝 `framework/query-bin`
+- **交付 URL 必须是 `/~preview/{token}/…`**，禁止只靠 Cookie 粘身份；站内链接生成经 `UrlGenerateParamsCarryLivePreviewPath` 续挂 path
+- **首页预览 remainder path 必须是 `/`，禁止把空串交给 `getFrontendUrl('')`**：空串会复用当前 `REQUEST_URI`；经 BinQuery 时会变成错误路径。用 `ThemePageTypeResolver::getFrontendUrlPathForPreview()`；path 就是布局 path，拒绝 `framework/query-bin`
 - 可视化里改完草稿后点「真实前端预览」：**必须**先落盘脏表单/挂起自动保存，再发 Token；店面应按 Token 的 **draft**（除非顶栏显式切到 published）渲染同一 scoped 工作区，**不是**只能看已发布
 - 验收/排错：先看 Token 反解出的字段，再看页面；**不要**用当前 URL query 覆盖结论
 - 换主题 / 换版本 / 换 Scope：必须**重新 start-preview** 发新 Token，禁止手改 URL 参数指望生效
 - 退出：清客户端 Token + gateway `exit` 路径；失效 Token 不得回种
 - 目标读取：有效 Token 安装完整 owner/V/mode/R；draft 通过修订头 B 选择 `draft/`，指定正式历史 H 选择 `vH/`，不能把所有 Token 都当 draft。Token 固定 R，D 后续保存/封存不改变旧 Token 展示；切换目标需重新签发。
 
-### Cookie / bootstrap 边界（短）
+### Path 命名空间 / bootstrap 边界（短）
 
-- 同标签续命靠 **HttpOnly Cookie**（有退出浮层）；首跳可带 URL `weline_preview_token`，随后可剥地址栏。
-- `preview-bootstrap` **仅**在 URL 显式带 token 时 POST 种 Cookie；**禁止**仅凭 `sessionStorage` 回种（退出后正式店不得被复活为预览）。
-- 退出以 gateway `exit` 清 Cookie 为准；客户端同时清 `weline_live_preview_token` storage。
+- **真实预览主通道**：`/~preview/{token}/…`（与正式店面 path **缓存键隔离**）。`start-preview` / `getPreviewUrl` 只发此前缀，不再以 `?weline_preview_token=` 为主。
+- Url 早钩 `normalize_visitor_uri`（`Url::normalizeVisitorUri`）：路由用 remainder（可继续 `/~site/{code}/…`），访客 origin 保留 `/~preview/{token}/…`；**站点探测 / Scope 安装 / start-page 网站上下文必须吃 routing_uri**，禁止用带 `/~preview/` 的 ORIGIN 去 `DetectWebsite`；生成店面链时 `UrlGenerateParamsCarryLivePreviewPath` 继续挂前缀。
+- Header / 旧 query token 仅兼容（XHR、旧书签）；**Cookie 不读不种**（退出可 drain 残留）。`preview-bootstrap` 认 path mount，**禁止**把地址栏折叠成正式 path。
+- **禁止**仅凭 `sessionStorage` 回种身份。退出：剥 `/~preview/{token}` 前缀 + gateway `exit`（可顺带 `clearPreviewCookie`）。
 
 ### FPC 旁路（严重）
 
-- 态 1（`editor_mode` / `shell=theme-editor` / `visual_editor` 等 query）与态 2（`weline_preview_token` query **或** Cookie）**必须 bypass 公共 FPC**（serve + publish），禁止把编辑器/预览 HTML 写入游客整页缓存。
-- 权威扩展：Theme `ThemeEditorFpcBypassProvider`（`extends/module/Weline_Framework/Fpc/Bypass`）→ 升级收集侧车 `generated/framework/fpc_bypass_rules.php`；热路径只读侧车（`FpcBypassEvaluator`），**禁止**每次编辑操作 `purgeAll` FPC。
+- 态 1（`editor_mode` / `shell=theme-editor` / `visual_editor` 等 query）与态 2（**`/~preview/` path**、旧 `weline_preview_token` query / Header）**必须 bypass 公共 FPC**（serve + publish），禁止把编辑器/预览 HTML 写入游客整页缓存。**仅 Cookie 不再触发 bypass。**
+- 权威扩展：Theme `ThemeEditorFpcBypassProvider`（含 `uri_path_prefixes: /~preview/`）→ 升级收集侧车 `generated/framework/fpc_bypass_rules.php`；热路径只读侧车（`FpcBypassEvaluator`），**禁止**每次编辑操作 `purgeAll` FPC。
 - WLS 传输显式头（`x-wls-fpc-bypass` 等）由 Server `WlsTransportFpcBypassProvider` 声明；登录态 / `Cache-Control: no-store` / 静态 path 等 **serve 策略**仍归 Framework `FullPageCacheCoordinator`，不进 BypassProvider。
 
 ### 与「画布里看版本」的区别
 
 | | 画布内版本 | 版本真实预览 |
 |--|-----------|--------------|
-| 载体 | 店面 path + 参数 / `editor_context` | 店面 URL + Token |
-| 权威 | query / `editor_context` | Token 反解析 |
+| 载体 | 店面 path + 参数 / `editor_context` | `/~preview/{token}/` + 店面 path |
+| 权威 | URL / `editor_context` | Token 反解析（path mount） |
 | 预览浮层 | 否（编辑器壳） | 是（店面预览 chrome） |
 
 ---

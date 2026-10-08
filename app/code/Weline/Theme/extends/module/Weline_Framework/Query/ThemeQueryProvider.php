@@ -204,10 +204,6 @@ class ThemeQueryProvider implements QueryProviderInterface
         );
         $context = $previewContextService->withPreviewToken($context, $token);
 
-        if (!empty($params['set_cookie'])) {
-            $previewTokenService->setPreviewCookie($token);
-        }
-
         return [
             'success' => true,
             'token' => $token,

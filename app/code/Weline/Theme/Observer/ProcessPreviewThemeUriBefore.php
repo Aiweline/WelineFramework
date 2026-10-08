@@ -12,7 +12,6 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Controller\Router as ThemeRouter;
 use Weline\Theme\Service\PreviewContextService;
-use Weline\Theme\Service\PreviewRequestInspector;
 use Weline\Theme\Service\PreviewTokenService;
 
 class ProcessPreviewThemeUriBefore implements ObserverInterface
@@ -116,17 +115,6 @@ class ProcessPreviewThemeUriBefore implements ObserverInterface
         $previewContextService = ObjectManager::getInstance(PreviewContextService::class);
         $context = $previewContextService->persistCurrentRequestContext();
 
-        if ($previewToken !== '') {
-            /** @var PreviewTokenService $previewTokenService */
-            $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
-            /** @var PreviewRequestInspector $previewRequestInspector */
-            $previewRequestInspector = ObjectManager::getInstance(PreviewRequestInspector::class);
-            if (!$previewRequestInspector->shouldKeepPreviewStateOnlyForCurrentRequest()
-                && $previewTokenService->validateToken($previewToken)) {
-                $previewTokenService->setPreviewCookie($previewToken);
-            }
-        }
-
         if ((string)$request->getParam('preview_mode', '') === '') {
             $request->setGet('preview_mode', (string)($context['preview_mode'] ?? PreviewContextService::DEFAULT_PREVIEW_MODE));
         }
@@ -136,7 +124,10 @@ class ProcessPreviewThemeUriBefore implements ObserverInterface
         if ((string)$request->getParam('editor_area', '') === '') {
             $request->setGet('editor_area', (string)($context['editor_area'] ?? PreviewContextService::AREA_FRONTEND));
         }
-        if ((string)$request->getParam('shell', '') === '') {
+        // Live preview bearer wins over a sticky editor-session shell=theme-editor.
+        if ($previewToken !== '') {
+            $request->setGet('shell', PreviewContextService::SHELL_PREVIEW);
+        } elseif ((string)$request->getParam('shell', '') === '') {
             $request->setGet('shell', (string)($context['shell'] ?? PreviewContextService::SHELL_PREVIEW));
         }
         // Visitor language is path-only for live canvas — never backfill ?locale= from session.

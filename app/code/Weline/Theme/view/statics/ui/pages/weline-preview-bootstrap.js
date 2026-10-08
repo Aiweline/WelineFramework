@@ -26,7 +26,7 @@ function storeClientToken(token) {
     try {
         sessionStorage.setItem(STORAGE_KEY, token);
     } catch (error) {
-        // Ignore storage failures; HttpOnly cookie remains authoritative.
+        // Ignore storage failures; path mount is authoritative.
     }
 }
 
@@ -35,6 +35,13 @@ function clearClientToken() {
         sessionStorage.removeItem(STORAGE_KEY);
     } catch (error) {
         // Ignore storage failures.
+    }
+    // Drain leftover historical HttpOnly / document cookies (no longer carriers).
+    try {
+        document.cookie = 'weline_preview_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        document.cookie = 'weline_preview_token=; path=/; max-age=0';
+    } catch (error) {
+        // Ignore.
     }
 }
 
@@ -47,13 +54,47 @@ function isPreviewCaptureDocument() {
     }
 }
 
+/** Canvas markers that must never remain on a live storefront preview URL. */
+const CANVAS_QUERY_KEYS = [
+    'editor_mode',
+    'shell',
+    'editor_context',
+    'theme_id',
+    'frontend_theme_id',
+    'backend_theme_id',
+    'editor_area',
+    'preview_area',
+    'interaction_mode',
+    'selection_target',
+    'link_block',
+    'visual_editor',
+    'preview_theme',
+    'preview_mode',
+    'status',
+    'version_id',
+    'layout_type',
+    'layout_option',
+    'page_type',
+];
+
 function stripTokenFromUrl() {
     try {
         const url = new URL(window.location.href);
-        if (!url.searchParams.has(TOKEN_KEY)) {
+        let changed = false;
+        if (url.searchParams.has(TOKEN_KEY)) {
+            url.searchParams.delete(TOKEN_KEY);
+            changed = true;
+        }
+        // Real preview is path-mount scoped — drop any leaked visual-editor identity.
+        CANVAS_QUERY_KEYS.forEach(function(key) {
+            if (url.searchParams.has(key)) {
+                url.searchParams.delete(key);
+                changed = true;
+            }
+        });
+        if (!changed) {
             return false;
         }
-        url.searchParams.delete(TOKEN_KEY);
         history.replaceState(null, '', url.pathname + url.search + url.hash);
         return true;
     } catch (error) {
@@ -103,10 +144,21 @@ async function persistPreviewToken(token) {
     }
 }
 
+function readPathMountToken() {
+    try {
+        const path = String(window.location.pathname || '');
+        const match = path.match(/^\/~preview\/(pv_[A-Za-z0-9_-]{43}|pv_[1-9][0-9]{0,18}_[0-9]{9,12}_[a-f0-9]{16})(?:\/|$)/);
+        return match && match[1] ? match[1] : '';
+    } catch (error) {
+        return '';
+    }
+}
+
 async function bootstrapLivePreview() {
-    // Persist only from an explicit URL token. sessionStorage must never alone
-    // re-seed the HttpOnly cookie after exit (formal storefront would look "dirty").
-    const urlToken = readUrlToken();
+    // Path mount /~preview/{token}/… is the authoritative live-preview carrier.
+    // Query token remains a one-shot compatibility bootstrap only (no Cookie).
+    const pathToken = readPathMountToken();
+    const urlToken = pathToken || readUrlToken();
     if (!urlToken) {
         if (readStoredToken()) {
             clearClientToken();
@@ -114,13 +166,16 @@ async function bootstrapLivePreview() {
         return;
     }
 
-    const persisted = await persistPreviewToken(urlToken);
-    if (!persisted) {
-        clearClientToken();
+    storeClientToken(urlToken);
+    // Session context hydrate (no Cookie write). Failures do not block path mount.
+    await persistPreviewToken(urlToken);
+
+    // Keep /~preview/{token}/… in the address bar — never collapse to formal paths.
+    // Only strip leaked query canvas markers / legacy ?weline_preview_token=.
+    stripTokenFromUrl();
+    if (pathToken) {
         return;
     }
-
-    stripTokenFromUrl();
     // Capture must stay on the already painted document. A second navigation
     // keeps headless Chrome waiting for load, so the preview file never appears.
     if (!isPreviewCaptureDocument() && !document.getElementById('weline-preview-exit-float')) {

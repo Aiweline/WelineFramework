@@ -17,16 +17,18 @@ use Weline\Framework\Session\SessionCookieNameResolver;
 
 /**
  * 预览 Token 管理服务
- * 
+ *
  * 管理主题预览模式的 token 生成、验证和删除。
- * Token 可通过以下方式传递（优先级从高到低）：
- * 1. URL 参数：?weline_preview_token=xxx
- * 2. Cookie：weline_preview_token=xxx
+ * Token 传递（优先级从高到低）：
+ * 1. Path mount：/~preview/{token}/…（真实预览主通道，唯一身份）
+ * 2. URL 参数：?weline_preview_token=xxx（兼容旧入口）
  * 3. HTTP Header：X-Weline-Preview-Token: xxx
+ *
+ * Cookie 不再作为预览身份载体；clearPreviewCookie 仅用于清掉历史残留。
  */
 class PreviewTokenService
 {
-    /** Token 参数/Cookie/Header 名称 */
+    /** Token 参数/Header 名称（历史 Cookie 名同此，仅用于清残留） */
     public const TOKEN_KEY = 'weline_preview_token';
     
     /** Token Header 名称 */
@@ -40,9 +42,6 @@ class PreviewTokenService
 
     /** Sliding renewal can never extend a bearer capability beyond this lifetime. */
     private const TOKEN_MAX_LIFETIME = 8 * 3600;
-    
-    /** Cookie 有效期（秒）：默认 1 小时 */
-    private const COOKIE_TTL = 3600;
 
     private const MAX_CONTEXT_BYTES = 32768;
     private const MAX_CONTEXT_DEPTH = 8;
@@ -57,10 +56,8 @@ class PreviewTokenService
     private ?CachePoolInterface $fileFallback = null;
     private Request $request;
     
-    public function __construct(
-        Request $request,
-        private readonly PreviewRequestInspector $previewRequestInspector,
-    ) {
+    public function __construct(Request $request)
+    {
         $this->request = $request;
         // 使用框架缓存
         $this->cache = w_cache('theme');
@@ -304,23 +301,7 @@ class PreviewTokenService
     }
 
     /**
-     * 设置预览 Cookie
-     * 
-     * @param string $token Token 字符串
-     * @return void
-     */
-    public function setPreviewCookie(string $token): void
-    {
-        if (!$this->isTokenFormatValid($token)) {
-            throw new \InvalidArgumentException((string)__('Theme 预览 token 无效。'));
-        }
-        Cookie::set(self::TOKEN_KEY, $token, self::COOKIE_TTL, $this->cookieOptions());
-    }
-
-    /**
-     * 清除预览 Cookie
-     * 
-     * @return void
+     * 清除历史预览 Cookie（path mount 已是唯一身份；不再写入 Cookie）。
      */
     public function clearPreviewCookie(): void
     {
@@ -336,15 +317,24 @@ class PreviewTokenService
     }
 
     /**
-     * 从当前请求中获取 Token
-     * 
-     * 优先级：URL 参数 > Cookie > HTTP Header
-     * 
-     * @return string|null
+     * 从当前请求中获取 Token。
+     *
+     * 优先级：path mount > query > header。不读 Cookie。
      */
-    public function getTokenFromRequest(bool $allowCookie = true): ?string
+    public function getTokenFromRequest(bool $allowCookie = false): ?string
     {
-        // 1. URL 参数（优先级最高，便于分享预览链接）
+        unset($allowCookie); // legacy signature; Cookie is never a live-preview carrier.
+
+        // 0. Path mount /~preview/{token}/… (authoritative live-preview carrier)
+        try {
+            $pathToken = RequestContext::get(ThemeLivePreviewPathMount::REQUEST_CONTEXT_TOKEN_KEY);
+            if (\is_string($pathToken) && $this->isTokenFormatValid($pathToken)) {
+                return \trim($pathToken);
+            }
+        } catch (\Throwable) {
+        }
+
+        // 1. URL 参数（兼容旧入口）
         $token = $this->request->getParam(self::TOKEN_KEY);
         if (is_scalar($token) && $this->isTokenFormatValid((string)$token)) {
             return trim((string)$token);
@@ -356,14 +346,6 @@ class PreviewTokenService
             return trim((string)$token);
         }
 
-        // 3. Cookie
-        if ($allowCookie && $this->previewRequestInspector->shouldAllowPreviewTokenCookie()) {
-            $token = Cookie::get(self::TOKEN_KEY);
-            if (is_scalar($token) && $this->isTokenFormatValid((string)$token)) {
-                return trim((string)$token);
-            }
-        }
-        
         return null;
     }
 
@@ -499,16 +481,13 @@ class PreviewTokenService
     }
 
     /**
-     * 获取预览 URL（带 token 参数）
-     * 
-     * @param string $baseUrl 基础 URL
-     * @param string $token Token
-     * @return string
+     * Live preview entry URL under /~preview/{token}/… (formal path stays cache-isolated).
+     *
+     * Legacy query `?weline_preview_token=` is no longer minted here.
      */
     public function getPreviewUrl(string $baseUrl, string $token): string
     {
-        $separator = strpos($baseUrl, '?') !== false ? '&' : '?';
-        return $baseUrl . $separator . self::TOKEN_KEY . '=' . urlencode($token);
+        return ThemeLivePreviewPathMount::joinPreviewPath($baseUrl, $token);
     }
 
     /** @return array{path:string,secure:bool,httponly:bool,samesite:string} */

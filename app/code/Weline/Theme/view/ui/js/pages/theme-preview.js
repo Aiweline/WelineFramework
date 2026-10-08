@@ -117,14 +117,31 @@ function clearPreviewClientState() {
     }
 }
 
+function stripLivePreviewPathMount(pathname) {
+    try {
+        return String(pathname || '').replace(
+            /^\/~preview\/(?:pv_[A-Za-z0-9_-]{43}|pv_[1-9][0-9]{0,18}_[0-9]{9,12}_[a-f0-9]{16})(?=\/|$)/,
+            ''
+        ) || '/';
+    } catch (error) {
+        return pathname || '/';
+    }
+}
+
 function stripPreviewTokenFromUrl() {
     try {
         const url = new URL(window.location.href);
-        if (!url.searchParams.has('weline_preview_token')) {
-            return '';
+        let changed = false;
+        if (url.searchParams.has('weline_preview_token')) {
+            url.searchParams.delete('weline_preview_token');
+            changed = true;
         }
-        url.searchParams.delete('weline_preview_token');
-        return url.toString();
+        const nextPath = stripLivePreviewPathMount(url.pathname);
+        if (nextPath !== url.pathname) {
+            url.pathname = nextPath;
+            changed = true;
+        }
+        return changed ? url.toString() : '';
     } catch (error) {
         return '';
     }
@@ -143,6 +160,7 @@ function buildExitRedirectTarget() {
     try {
         const current = new URL(window.location.href);
         current.searchParams.delete('weline_preview_token');
+        current.pathname = stripLivePreviewPathMount(current.pathname);
         return current.pathname + current.search + current.hash;
     } catch (error) {
         return window.location.pathname + window.location.search + window.location.hash;
@@ -195,9 +213,11 @@ function bindPreviewExitButtons() {
             }
             button.disabled = true;
             const exitUrl = String(button.dataset.wPreviewExitUrl || '').trim();
-            const tokenMatch = document.cookie.match(/(?:^|;\s*)weline_preview_token(?:_w\d+)?=([^;]+)/);
+            const pathToken = (String(window.location.pathname || '').match(
+                /^\/~preview\/(pv_(?:[A-Za-z0-9_-]{43}|[1-9][0-9]{0,18}_[0-9]{9,12}_[a-f0-9]{16}))(?=\/|$)/
+            ) || [])[1] || '';
             const urlToken = new URLSearchParams(window.location.search).get('weline_preview_token') || '';
-            const previewToken = decodeURIComponent(String(urlToken || (tokenMatch ? tokenMatch[1] : '') || '')).trim();
+            const previewToken = decodeURIComponent(String(pathToken || urlToken || '')).trim();
             navigatePreviewExit(exitUrl, previewToken);
         });
     });

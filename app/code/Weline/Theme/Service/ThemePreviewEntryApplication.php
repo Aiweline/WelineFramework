@@ -128,7 +128,6 @@ final class ThemePreviewEntryApplication
                         $resolvedVersionId,
                         $context
                     );
-                    $previewTokenService->setPreviewCookie($previewToken);
                     $context = $previewContextService->withPreviewToken($context, $previewToken);
                 } catch (\Throwable) {
                 }
@@ -176,6 +175,7 @@ final class ThemePreviewEntryApplication
             $websiteCode,
         );
 
+        $frontendBase = PreviewContextService::stripEditorCanvasQueryFromStorefrontUrl($frontendBase);
         $redirect = $previewTokenService->getPreviewUrl($frontendBase, $previewToken);
         $redirect = $this->appendWebsiteQueryParams($redirect, $websiteId, $websiteCode);
 

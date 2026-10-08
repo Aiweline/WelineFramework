@@ -108,32 +108,36 @@ final class PreviewExitFloatNavigateContractTest extends TestCase
         self::assertStringContainsString('closePublishProgressLock()', $tearFn);
     }
 
-    public function testPreviewBootstrapClearsStaleClientTokenOnPersistFailure(): void
+    public function testPreviewBootstrapClearsStaleClientTokenWithoutPathOrQuery(): void
     {
         $path = dirname(__DIR__, 2) . '/view/ui/js/pages/preview-bootstrap.js';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
-        self::assertStringContainsString('if (!persisted) {', $source);
         self::assertStringContainsString('clearClientToken();', $source);
         self::assertStringContainsString('isPreviewCaptureDocument()', $source);
         self::assertStringContainsString("params.get('weline_preview_capture') === '1'", $source);
-        self::assertStringNotContainsString(
-            "if (!persisted) {\n        if (urlToken) {\n            clearClientToken();\n        }",
-            $source
-        );
-        // Storage alone must never re-seed Cookie after exit (formal storefront isolation).
+        // Path mount is authoritative; no Cookie re-seed from sessionStorage alone.
         self::assertStringNotContainsString('urlToken || storedToken', $source);
         self::assertStringNotContainsString('const token = urlToken', $source);
-        self::assertStringContainsString('const urlToken = readUrlToken();', $source);
+        self::assertStringContainsString('const pathToken = readPathMountToken();', $source);
+        self::assertStringContainsString('const urlToken = pathToken || readUrlToken();', $source);
         self::assertStringContainsString('if (!urlToken) {', $source);
+        self::assertStringContainsString('Drain leftover historical', $source);
         self::assertStringContainsString('if (readStoredToken()) {', $source);
         self::assertStringContainsString('persistPreviewToken(urlToken)', $source);
+        self::assertStringContainsString('CANVAS_QUERY_KEYS', $source);
+        self::assertStringContainsString("'editor_mode'", $source);
+        self::assertStringContainsString("'editor_context'", $source);
+        self::assertStringContainsString('readPathMountToken', $source);
+        self::assertStringContainsString('/~preview/', $source);
+        self::assertStringContainsString('if (pathToken) {', $source);
 
         $statics = dirname(__DIR__, 2) . '/view/statics/ui/pages/weline-preview-bootstrap.js';
         self::assertFileExists($statics);
         $staticsSource = (string)file_get_contents($statics);
         self::assertStringNotContainsString('urlToken || storedToken', $staticsSource);
         self::assertStringContainsString('persistPreviewToken(urlToken)', $staticsSource);
+        self::assertStringContainsString('CANVAS_QUERY_KEYS', $staticsSource);
     }
 
     public function testThemePreviewExitClearsLivePreviewStorage(): void
@@ -160,25 +164,25 @@ final class PreviewExitFloatNavigateContractTest extends TestCase
         self::assertStringContainsString('resolveExitRedirectUrl()', $source);
     }
 
-    public function testFrameworkFpcBypassesScopedPreviewCookieAndQuery(): void
+    public function testThemeFpcBypassUsesLivePreviewPathNotCookie(): void
     {
-        self::markTestSkipped('已过期：断言源码字符串，实现演进后不再匹配：testFrameworkFpcBypassesScopedPreviewCookieAndQuery');
-        $path = dirname(__DIR__, 3) . '/Framework/Router/FullPageCacheCoordinator.php';
+        $path = dirname(__DIR__, 2) . '/extends/module/Weline_Framework/Fpc/Bypass/ThemeEditorFpcBypassProvider.php';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
+        self::assertStringContainsString('theme.live_preview_path_prefix', $source);
+        self::assertStringContainsString('/~preview/', $source);
         self::assertStringContainsString("'weline_preview_token'", $source);
-        self::assertStringContainsString('hasPreviewTokenCookieHeader', $source);
-        self::assertStringContainsString('weline_preview_token(?:_w\d+)?=', $source);
+        self::assertStringNotContainsString('preview_token_cookie', $source);
+        self::assertStringNotContainsString('cookie_keys', $source);
     }
 
-    public function testWorkerFpcFastPathBypassesScopedPreviewCookie(): void
+    public function testBuiltinFpcFallbackOmitsPreviewCookieRule(): void
     {
-        self::markTestSkipped('已过期：断言源码字符串，实现演进后不再匹配：testWorkerFpcFastPathBypassesScopedPreviewCookie');
-        $path = dirname(__DIR__, 3) . '/Server/Service/WorkerFullPageCacheFastPath.php';
+        $path = dirname(__DIR__, 3) . '/Framework/Http/Fpc/FpcBypassEvaluator.php';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
-        self::assertStringContainsString('hasPreviewTokenCookie', $source);
-        self::assertStringContainsString('weline_preview_token(?:_w\d+)?=', $source);
+        self::assertStringContainsString('theme.live_preview_path_prefix', $source);
+        self::assertStringNotContainsString('theme.preview_token_cookie', $source);
     }
 
     public function testPreviewTokenResolveForbidsSharedResponseCache(): void

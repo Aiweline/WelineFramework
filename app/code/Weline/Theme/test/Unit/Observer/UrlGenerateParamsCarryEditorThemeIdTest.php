@@ -174,6 +174,19 @@ final class UrlGenerateParamsCarryEditorThemeIdTest extends TestCase
         ?string $token,
         int $frontendThemeId = 0,
     ): PreviewContextService {
+        $query = [];
+        if ($editorMode !== '') {
+            $query['editor_mode'] = $editorMode;
+        }
+        if ($themeId > 0) {
+            $query['theme_id'] = (string)$themeId;
+        }
+        if ($frontendThemeId > 0) {
+            $query['frontend_theme_id'] = (string)$frontendThemeId;
+        }
+        // Carry gate reads RAW query — syncRequest-injected GET alone must not enable it.
+        $_SERVER['REQUEST_URI'] = '/products' . ($query !== [] ? '?' . \http_build_query($query) : '');
+
         $request = $this->createMock(Request::class);
         $request->method('getParam')->willReturnCallback(
             static function (string $key, mixed $default = null) use ($editorMode, $themeId, $frontendThemeId) {
@@ -198,5 +211,49 @@ final class UrlGenerateParamsCarryEditorThemeIdTest extends TestCase
         $ref->getProperty('previewTokenService')->setValue($service, $tokenService);
 
         return $service;
+    }
+
+    public function testGateRejectsSyncRequestInjectedShellWithoutRawCanvasMarkers(): void
+    {
+        $_SERVER['REQUEST_URI'] = '/~site/grocery/about';
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnCallback(
+            static function (string $key, mixed $default = null) {
+                return match ($key) {
+                    'editor_mode' => '',
+                    'shell' => 'theme-editor',
+                    'theme_id' => 7,
+                    'frontend_theme_id' => 7,
+                    'editor_context' => '{"scope":{}}',
+                    default => $default,
+                };
+            }
+        );
+        $tokenService = $this->createMock(PreviewTokenService::class);
+        $tokenService->method('getTokenFromRequest')->willReturn(null);
+
+        $ref = new ReflectionClass(PreviewContextService::class);
+        /** @var PreviewContextService $preview */
+        $preview = $ref->newInstanceWithoutConstructor();
+        $ref->getProperty('request')->setValue($preview, $request);
+        $ref->getProperty('previewTokenService')->setValue($preview, $tokenService);
+
+        self::assertFalse(
+            $preview->shouldCarryEditorIdentityOnGeneratedUrls(),
+            'Live preview must not carry canvas identity when shell=theme-editor is only syncRequest-injected'
+        );
+    }
+
+    public function testStripEditorCanvasQueryFromStorefrontUrl(): void
+    {
+        $dirty = 'https://p05113ef3.test.weline.com/~site/grocery/about'
+            . '?theme_id=7&frontend_theme_id=7&editor_mode=1&shell=theme-editor'
+            . '&editor_context=%7B%22scope%22%3A%7B%7D%7D&keep=1';
+        $clean = PreviewContextService::stripEditorCanvasQueryFromStorefrontUrl($dirty);
+        self::assertStringContainsString('keep=1', $clean);
+        self::assertStringNotContainsString('editor_mode=', $clean);
+        self::assertStringNotContainsString('shell=', $clean);
+        self::assertStringNotContainsString('editor_context=', $clean);
+        self::assertStringNotContainsString('theme_id=', $clean);
     }
 }

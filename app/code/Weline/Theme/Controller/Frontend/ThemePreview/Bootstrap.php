@@ -10,7 +10,10 @@ use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewTokenService;
 
 /**
- * Persist live storefront preview bearer token into HttpOnly cookie + session context.
+ * Validate live-preview bearer and persist session preview context.
+ *
+ * Path mount `/~preview/{token}/…` is the storefront identity — this endpoint
+ * no longer writes HttpOnly cookies.
  *
  * URL: /theme/frontend/theme-preview/bootstrap?weline_preview_token=…
  */
@@ -45,13 +48,8 @@ class Bootstrap extends FrontendController
             return $this->respond(false, (string)__('预览 Token 无效或已过期'));
         }
 
-        try {
-            $previewTokenService->setPreviewCookie($token);
-        } catch (\Throwable $exception) {
-            return $this->respond(false, $exception->getMessage() !== ''
-                ? $exception->getMessage()
-                : (string)__('预览 Token 无法写入 Cookie'));
-        }
+        // Drain any leftover historical preview Cookie; path mount is authoritative.
+        $previewTokenService->clearPreviewCookie();
 
         /** @var PreviewContextService $previewContextService */
         $previewContextService = ObjectManager::getInstance(PreviewContextService::class);

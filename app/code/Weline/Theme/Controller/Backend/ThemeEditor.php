@@ -4104,6 +4104,9 @@ class ThemeEditor extends BackendController
             $locale,
         );
         $config = $this->materializeWidgetConfigPaths($config, []);
+        if ($widgetCode === 'policy-document' && \is_array($config)) {
+            $config = \Weline\Theme\Helper\PolicyDocumentDefaults::hydrateParams($config);
+        }
         $mediaPreviewUrls = $this->resolveTransientMediaPreviewUrls(
             is_array($config) ? $config : [],
         );
@@ -9884,7 +9887,6 @@ HTML;
                 $context['version_id'] ?? null,
                 $context
             );
-            $this->previewTokenService->setPreviewCookie($token);
             $context = $this->getPreviewContextService()->withPreviewToken($context, $token);
             $this->getPreviewContextService()->persistContext($context);
 
@@ -10018,9 +10020,6 @@ HTML;
 
         if (($result['kind'] ?? '') !== 'external') {
             $resolvedContext = $this->getPreviewContextService()->persistContext((array)($result['context'] ?? []));
-            if (!empty($resolvedContext['preview_token'])) {
-                $this->previewTokenService->setPreviewCookie((string)$resolvedContext['preview_token']);
-            }
             $result['context'] = $resolvedContext;
         }
 
@@ -10696,6 +10695,10 @@ HTML;
             $previewEntry = ObjectManager::getInstance(ThemePreviewEntryApplication::class);
             $baseUrl = $previewEntry->normalizeStorefrontPreviewBaseUrl($baseUrl, $websiteId, $websiteCode);
         }
+
+        // Live preview URL must stay storefront-clean: never inherit canvas identity
+        // that Url::getFrontendUrl may have picked up from the editor admin request.
+        $baseUrl = PreviewContextService::stripEditorCanvasQueryFromStorefrontUrl($baseUrl);
 
         return $this->previewTokenService->getPreviewUrl($baseUrl, $token);
     }
