@@ -121,6 +121,11 @@ return [
     'Weline_Theme::theme/frontend/widgets/content/step-list/default.phtml',
     'Weline_Theme::theme/frontend/widgets/content/pricing-table/default.phtml',
     'Weline_Theme::theme/frontend/widgets/content/contact-info/default.phtml',
+    [
+        'template' => 'Weline_Theme::theme/frontend/widgets/content/policy-document/default.phtml',
+        'placement' => 'layout',
+        'default_injections' => [],
+    ],
     'Weline_Theme::theme/frontend/widgets/container/columns/default.phtml',
 
     // --- 内容块 (content) ---

@@ -24,7 +24,9 @@ final class PublishedPolicyContentPreserveContractTest extends TestCase
     }
     public function testPolicyLayoutsLinkCookieNotCookies(): void
     {
-        $base=dirname(__DIR__,3).'/view/theme/frontend/layouts/policy';
-        foreach(['privacy.phtml','term-condition.phtml'] as $file){$src=(string)file_get_contents($base.'/'.$file);self::assertStringNotContainsString("@url{'cookies'}",$src,$file);self::assertStringContainsString("@url{'cookie'}",$src,$file);}
+        // Defaults live in Helper after policy-document extraction (layouts no longer hardcode @url).
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Helper/PolicyDocumentDefaults.php');
+        self::assertStringNotContainsString("'url_key' => 'cookies'", $src);
+        self::assertStringContainsString("'url_key' => 'cookie'", $src);
     }
 }

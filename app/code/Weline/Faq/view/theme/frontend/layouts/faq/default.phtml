@@ -377,6 +377,18 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
+        <?php
+        try {
+            $siteBrandLate = ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
+            if ($siteBrandLate instanceof \Weline\Theme\Helper\SiteBrand) {
+                $lateName = trim($siteBrandLate->resolveFrontendSiteName());
+                if ($lateName !== '') {
+                    $siteName = $lateName;
+                }
+            }
+        } catch (\Throwable) {
+        }
+        ?>
 
         <main class="faq-layout__main amazon-faq__main" id="faq-main" data-layout="faq">
             <div class="amazon-faq__body">

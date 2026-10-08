@@ -47,21 +47,25 @@ final class GuideAndPolicyAmazonShellContractTest extends TestCase
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('weline-page-wrapper', $source);
         self::assertStringContainsString('amazon-policy__stage', $source);
-        self::assertStringContainsString('amazon-policy__hero', $source);
-        self::assertStringContainsString('border-radius: 8px', $source);
-        self::assertStringContainsString('amazon-policy__panel', $source);
-        self::assertStringContainsString('amazon-policy__toc', $source);
         self::assertStringContainsString('amazon-policy__breadcrumb', $source);
         self::assertStringContainsString('type="breadcrumb"', $source);
         self::assertStringContainsString('showBreadcrumb', $source);
+        self::assertStringContainsString('name="policy-document"', $source);
         self::assertStringNotContainsString('amazon-policy__hero-inner', $source);
         self::assertStringNotContainsString('1440px', $source);
         self::assertStringNotContainsString('<lang>', $source);
-        self::assertStringContainsString("WidgetI18n::label('目录')", $source);
-        self::assertMatchesRegularExpression(
-            "/WidgetI18n::label\\('(?:隐私政策|服务条款|Cookie 政策|退款政策|免责声明|网站政策说明|配送政策|无障碍声明)'\\)/u",
-            $source
+
+        $widget = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/theme/frontend/widgets/content/policy-document/default.phtml'
         );
+        $css = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/css/widgets/widget-content-policy-document-default.css'
+        );
+        self::assertStringContainsString('amazon-policy__hero', $widget);
+        self::assertStringContainsString('amazon-policy__panel', $widget);
+        self::assertStringContainsString('amazon-policy__toc', $widget);
+        self::assertStringContainsString('border-radius: 8px', $css);
+        self::assertStringContainsString("\$t('目录', '目录')", $widget);
     }
 
     public static function policyLayoutProvider(): array
@@ -101,37 +105,27 @@ final class GuideAndPolicyAmazonShellContractTest extends TestCase
 
     public function testPolicyAndTermsTocFragmentHrefsSurviveDocumentBase(): void
     {
-        $base = dirname(__DIR__, 3) . '/view/theme/frontend/layouts';
-        $files = [
-            $base . '/policy/shipping.phtml',
-            $base . '/policy/refund.phtml',
-            $base . '/policy/privacy.phtml',
-            $base . '/policy/cookie.phtml',
-            $base . '/policy/disclaimer.phtml',
-            $base . '/policy/term-condition.phtml',
-            $base . '/policy/accessibility.phtml',
-            $base . '/terms/default.phtml',
-        ];
-        foreach ($files as $path) {
-            self::assertFileExists($path);
-            $source = (string)file_get_contents($path);
-            self::assertStringContainsString('StorefrontHref::fragmentHref', $source, $path);
-            self::assertStringContainsString('$tocFallbackPath', $source, $path);
-            self::assertStringNotContainsString('href="#<?= $escape($item[\'id\']) ?>"', $source, $path);
-            self::assertStringContainsString(
-                'scroll-margin-top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem))',
-                $source,
-                $path
-            );
-            // 保留 sticky 悬浮；top 仅避开顶栏，禁止 12rem 过大留白
-            self::assertStringContainsString('position: sticky', $source, $path);
-            self::assertStringContainsString(
-                'top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem))',
-                $source,
-                $path
-            );
-            self::assertStringNotContainsString('top: 12rem', $source, $path);
-        }
+        $widget = dirname(__DIR__, 3) . '/view/theme/frontend/widgets/content/policy-document/default.phtml';
+        $css = dirname(__DIR__, 3) . '/view/statics/css/widgets/widget-content-policy-document-default.css';
+        $source = (string)file_get_contents($widget);
+        $styles = (string)file_get_contents($css);
+        self::assertStringContainsString('StorefrontHref::fragmentHref', $source);
+        self::assertStringContainsString('$tocFallbackPath', $source);
+        self::assertStringNotContainsString('href="#<?= $escape($item[\'id\']) ?>"', $source);
+        self::assertStringContainsString(
+            'scroll-margin-top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem))',
+            $styles
+        );
+        self::assertStringContainsString('position: sticky', $styles);
+        self::assertStringContainsString(
+            'top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem))',
+            $styles
+        );
+        self::assertStringNotContainsString('top: 12rem', $styles);
+
+        $terms = (string)file_get_contents(dirname(__DIR__, 3) . '/view/theme/frontend/layouts/terms/default.phtml');
+        self::assertStringContainsString('StorefrontHref::fragmentHref', $terms);
+        self::assertStringContainsString('$tocFallbackPath', $terms);
     }
 
     public function testEnglishCsvTranslatesPolicyTocHeading(): void

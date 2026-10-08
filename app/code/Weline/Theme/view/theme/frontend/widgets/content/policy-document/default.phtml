@@ -1,0 +1,254 @@
+<?php
+/**
+ * 政策正文部件：可编辑条款数组 + 自动目录（amazon / plain）。
+ *
+ * @widget.layout_source {Weline_Theme::css/widgets/widget-content-policy-document-default.css}
+ * @widget.source {Weline_Theme::css/widgets/widget-content-policy-document-default.css}
+ * @widget.code {policy-document}
+ * @widget.name {政策正文}
+ * @widget.description {政策/条款页可编辑正文：英雄区、相关链接与可排序条款；目录由条款标题自动生成。空配置回落 Theme 默认文案。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["policy","policy.privacy","policy.refund","policy.cookie","policy.shipping","policy.disclaimer","policy.term-condition","policy.accessibility","*"]}
+ * @widget.supports {["layout-policy-content","layout-policy-privacy-content","layout-policy-refund-content","layout-policy-cookie-content","layout-policy-shipping-content","layout-policy-disclaimer-content","layout-policy-term-condition-content","layout-policy-accessibility-content","policy-content","content"]}
+ * @widget.compatible {true}
+ * @widget.exclusive {false}
+ *
+ * @param page {default="privacy",type="string",label="默认文案页键",description="privacy/refund/cookie/shipping/disclaimer/term-condition/accessibility/default；sections 为空时回落"}
+ * @param variant {default="amazon",type="select",label="版式",options={amazon:"左目录右正文",plain:"单栏"}}
+ * @param title {default="",type="string",label="标题"}
+ * @param lead {default="",type="textarea",label="英雄区导语"}
+ * @param intro {default="",type="textarea",label="正文前导"}
+ * @param footer_note {default="",type="textarea",label="文末说明"}
+ * @param updated_at {default="",type="string",label="更新日期",description="留空不显示「最后更新」"}
+ * @param toc_aria {default="",type="string",label="目录无障碍名"}
+ * @param article_aria {default="",type="string",label="正文无障碍名"}
+ * @param show_legal_contact {default=false,type="bool",label="显示经营主体联系块"}
+ * @param related_links {default=[],type="policy_document_links",label="相关链接"}
+ * @param sections {default=[],type="policy_document_sections",label="条款目录"}
+ */
+
+use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\PolicyDocumentDefaults;
+use Weline\Theme\Helper\SiteBlockConfig as Block;
+use Weline\Theme\Helper\SiteBrand;
+use Weline\Theme\Helper\SiteContactInfo;
+use Weline\Theme\Helper\StorefrontHref;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('policy-document');
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$t = static fn (mixed $value, string $fallback = ''): string => WidgetI18n::label(
+    Block::text($value, $fallback),
+    $fallback !== '' ? $fallback : Block::text($value)
+);
+
+$page = Block::text($this->getData('page') ?? 'privacy', 'privacy');
+$defaults = PolicyDocumentDefaults::forPage($page);
+
+$variant = Block::choice($this->getData('variant') ?? ($defaults['variant'] ?? 'amazon'), ['amazon', 'plain'], (string)($defaults['variant'] ?? 'amazon'));
+$title = Block::text($this->getData('title'));
+if ($title === '') {
+    $title = Block::text($defaults['title'] ?? '政策');
+}
+$lead = Block::text($this->getData('lead'));
+if ($lead === '' && isset($defaults['lead'])) {
+    $lead = Block::text($defaults['lead']);
+}
+$intro = Block::text($this->getData('intro'));
+if ($intro === '' && isset($defaults['intro'])) {
+    $intro = Block::text($defaults['intro']);
+}
+$footerNote = Block::text($this->getData('footer_note'));
+if ($footerNote === '' && isset($defaults['footer_note'])) {
+    $footerNote = Block::text($defaults['footer_note']);
+}
+$updatedAt = Block::text($this->getData('updated_at'));
+$tocAria = Block::text($this->getData('toc_aria'));
+if ($tocAria === '') {
+    $tocAria = $title !== '' ? ($title . '目录') : '政策目录';
+}
+$articleAria = Block::text($this->getData('article_aria'));
+if ($articleAria === '') {
+    $articleAria = $title !== '' ? ($title . '正文') : '政策正文';
+}
+$showLegal = Block::boolean(
+    $this->getData('show_legal_contact'),
+    (bool)($defaults['show_legal_contact'] ?? false)
+);
+
+$sections = Block::items($this->getData('sections'));
+if ($sections === [] && !empty($defaults['sections']) && is_array($defaults['sections'])) {
+    $sections = array_values(array_filter($defaults['sections'], 'is_array'));
+}
+$relatedLinks = Block::items($this->getData('related_links'));
+if ($relatedLinks === [] && !empty($defaults['related_links']) && is_array($defaults['related_links'])) {
+    $relatedLinks = array_values(array_filter($defaults['related_links'], 'is_array'));
+}
+
+// Normalize sections + build TOC
+$normalizedSections = [];
+foreach ($sections as $index => $section) {
+    $id = Block::text($section['id'] ?? '');
+    if ($id === '') {
+        $id = 'section-' . ($index + 1);
+    }
+    $secTitle = Block::text($section['title'] ?? '');
+    $body = Block::text($section['body'] ?? '');
+    if ($secTitle === '' && $body === '') {
+        continue;
+    }
+    $normalizedSections[] = [
+        'id' => $id,
+        'title' => $secTitle,
+        'body' => $body,
+    ];
+}
+
+$resolveLinkHref = static function (array $link): string {
+    $urlKey = Block::text($link['url_key'] ?? '');
+    if ($urlKey !== '') {
+        try {
+            /** @var Url $url */
+            $url = ObjectManager::getInstance(Url::class);
+            return (string)$url->getUrl($urlKey);
+        } catch (\Throwable) {
+            return '/' . ltrim($urlKey, '/');
+        }
+    }
+    $raw = Block::text($link['url'] ?? '');
+    if ($raw === '') {
+        return '#';
+    }
+    return Block::link($raw) ?: $raw;
+};
+
+$siteName = 'Weline';
+$contact = ['site_name' => $siteName, 'legal_name' => '', 'registered_address' => '', 'legal_contact_email' => ''];
+try {
+    $resolver = ObjectManager::getInstance(SiteContactInfo::class);
+    if ($resolver instanceof SiteContactInfo) {
+        $contact = array_merge($contact, $resolver->resolve());
+        $contact = array_merge($contact, $resolver->resolveLegalContact(\Weline\Framework\Runtime\RequestContext::scopeIdentity()));
+        $siteName = Block::text($contact['site_name'] ?? $siteName, $siteName);
+    }
+} catch (\Throwable) {
+}
+try {
+    $siteBrand = ObjectManager::getInstance(SiteBrand::class);
+    if ($siteBrand instanceof SiteBrand) {
+        $late = trim($siteBrand->resolveFrontendSiteName());
+        if ($late !== '') {
+            $siteName = $late;
+        }
+    }
+} catch (\Throwable) {
+}
+
+$tocFallbackPath = '/policy/' . ($page === 'default' ? '' : $page);
+$tocFallbackPath = rtrim($tocFallbackPath, '/') ?: '/policy';
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+?>
+<div class="<?= $esc($scope->cssClass) ?> policy-document policy-document-<?= $esc($variant) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+     weline-code="<?= $esc($scope->code) ?>"
+     data-uid="<?= $esc($scope->uid) ?>"
+     data-js-ns="<?= $esc($scope->jsNs) ?>"
+     data-page="<?= $esc($page) ?>"
+     data-variant="<?= $esc($variant) ?>">
+<?php if ($variant === 'amazon'): ?>
+    <div class="amazon-policy__document">
+        <header class="amazon-policy__hero" data-surface="inverse" aria-labelledby="policy-doc-title-<?= $esc($scope->uid) ?>" weline-code="theme.policy.hero">
+            <p class="amazon-policy__eyebrow"><?= $esc($siteName) ?></p>
+            <h1 id="policy-doc-title-<?= $esc($scope->uid) ?>"><?= $esc($t($title)) ?></h1>
+            <?php if ($lead !== ''): ?>
+                <p class="amazon-policy__hero-lead"><?= $esc($t($lead)) ?></p>
+            <?php endif; ?>
+            <div class="amazon-policy__meta">
+                <?php if ($updatedAt !== ''): ?>
+                    <span><?= $esc($t('最后更新：', '最后更新：')) ?><?= $esc($updatedAt) ?></span>
+                <?php endif; ?>
+                <?php foreach ($relatedLinks as $link):
+                    if (!Block::boolean($link['enabled'] ?? true, true)) {
+                        continue;
+                    }
+                    $label = Block::text($link['label'] ?? '');
+                    if ($label === '') {
+                        continue;
+                    }
+                    $href = $resolveLinkHref($link);
+                    ?>
+                    <a href="<?= $esc($href) ?>"><?= $esc($t($label)) ?></a>
+                <?php endforeach; ?>
+            </div>
+        </header>
+
+        <div class="amazon-policy__panel">
+            <aside class="amazon-policy__toc" aria-label="<?= $esc($t($tocAria)) ?>">
+                <h2><?= $esc($t('目录', '目录')) ?></h2>
+                <nav>
+                    <?php foreach ($normalizedSections as $section): ?>
+                        <a href="<?= $esc(StorefrontHref::fragmentHref($section['id'], $tocFallbackPath)) ?>"><?= $esc($t($section['title'])) ?></a>
+                    <?php endforeach; ?>
+                </nav>
+            </aside>
+            <article class="amazon-policy__article" aria-label="<?= $esc($t($articleAria)) ?>">
+                <?php if ($showLegal): ?>
+                    <?php if (Block::text($contact['legal_name'] ?? '') !== ''): ?>
+                        <p><?= $esc($t('经营主体', '经营主体')) ?>：<?= $esc((string)$contact['legal_name']) ?></p>
+                    <?php endif; ?>
+                    <?php if (Block::text($contact['registered_address'] ?? '') !== ''): ?>
+                        <p><?= $esc($t('注册地址', '注册地址')) ?>：<?= $esc((string)$contact['registered_address']) ?></p>
+                        <p><?= $esc($t('注册地址不作为退货地址；退货前请联系客服确认寄回地址。', '注册地址不作为退货地址；退货前请联系客服确认寄回地址。')) ?></p>
+                    <?php endif; ?>
+                    <?php if (Block::text($contact['legal_contact_email'] ?? '') !== ''): ?>
+                        <p><?= $esc($t('公司联系邮箱', '公司联系邮箱')) ?>：<?= $esc((string)$contact['legal_contact_email']) ?></p>
+                    <?php endif; ?>
+                <?php endif; ?>
+                <?php if ($intro !== ''): ?>
+                    <p class="amazon-policy__intro"><?= $esc($t($intro)) ?></p>
+                <?php endif; ?>
+                <?php foreach ($normalizedSections as $index => $section): ?>
+                    <section class="amazon-policy__section" id="<?= $esc($section['id']) ?>" weline-code="theme.policy.section_<?= $esc((string)($index + 2)) ?>">
+                        <?php if ($section['title'] !== ''): ?>
+                            <h2><?= $esc($t($section['title'])) ?></h2>
+                        <?php endif; ?>
+                        <?php
+                        // Trusted editor HTML (admin / Theme defaults). Translate whole field as Chinese source.
+                        $bodyHtml = $t($section['body']);
+                        echo $bodyHtml;
+                        ?>
+                    </section>
+                <?php endforeach; ?>
+                <?php if ($footerNote !== ''): ?>
+                    <div class="amazon-policy__footer-note">
+                        <p><?= $esc($t($footerNote)) ?></p>
+                    </div>
+                <?php endif; ?>
+            </article>
+        </div>
+    </div>
+<?php else: ?>
+    <div class="policy-main policy-document-plain-inner">
+        <header class="policy-header">
+            <h1 class="policy-title"><?= $esc($t($title)) ?></h1>
+            <?php if ($lead !== ''): ?>
+                <p class="policy-description"><?= $esc($t($lead)) ?></p>
+            <?php endif; ?>
+        </header>
+        <?php foreach ($normalizedSections as $index => $section): ?>
+            <section class="policy-section" id="<?= $esc($section['id']) ?>" weline-code="theme.policy.section_<?= $esc((string)($index + 1)) ?>">
+                <?php if ($section['title'] !== ''): ?>
+                    <h2 class="section-title"><?= $esc($t($section['title'])) ?></h2>
+                <?php endif; ?>
+                <?php echo $t($section['body']); ?>
+            </section>
+        <?php endforeach; ?>
+        <?php if ($footerNote !== ''): ?>
+            <p class="section-text"><?= $esc($t($footerNote)) ?></p>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
+</div>

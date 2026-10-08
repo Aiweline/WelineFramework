@@ -338,6 +338,16 @@ class Widget implements TaglibInterface
                 }
             }
 
+            // Theme policy-document: empty sections must hydrate into data-config so the
+            // visual editor ParamSchema array is editable (not preview-only Defaults).
+            $widgetCode = $code !== '' ? $code : $name;
+            if (
+                $widgetCode === 'policy-document'
+                && \class_exists(\Weline\Theme\Helper\PolicyDocumentDefaults::class)
+            ) {
+                $params = \Weline\Theme\Helper\PolicyDocumentDefaults::hydrateParams($params);
+            }
+
             $blockClass = (string)($spec['block_class'] ?? '');
             $template = (string)($spec['template'] ?? '');
             $renderWidget = static function () use ($widget, $params, $blockClass, $template): string {

@@ -31,6 +31,19 @@ class ParamRender extends BackendController
         if (is_string($config)) {
             $config = json_decode($config, true) ?? [];
         }
+        if (!is_array($config)) {
+            $config = [];
+        }
+        // Template-inline policy-document often has only page/variant in DOM config.
+        // getWidgetConfig needs a hex node_uid (tpl:… fails), so form paint must hydrate here
+        // or the ParamSchema array stays 0/40 while preview shows Defaults.
+        if (
+            isset($config['page'])
+            && \is_string($config['page'])
+            && \class_exists(\Weline\Theme\Helper\PolicyDocumentDefaults::class)
+        ) {
+            $config = \Weline\Theme\Helper\PolicyDocumentDefaults::hydrateParams($config);
+        }
 
         // 有 layoutId 时从服务端取完整参数定义（含 array 的 item_schema），避免前端列表中的 params 不完整
         if ($layoutId !== '' && $layoutId !== null) {
