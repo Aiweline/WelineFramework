@@ -201,7 +201,7 @@ final class SecurityHeaderPolicyService
             'X-Content-Type-Options' => 'nosniff',
             'X-XSS-Protection' => '1; mode=block',
         ];
-        if (!$this->allowLocalControlCenterFrame()) {
+        if (!$this->allowLocalControlCenterFrame() && !$this->allowThemeEditorSiblingFrame()) {
             $headers['X-Frame-Options'] = 'SAMEORIGIN';
         }
 
@@ -551,5 +551,77 @@ final class SecurityHeaderPolicyService
         }
 
         return \in_array($host, ['127.0.0.1', 'localhost', 'tauri.localhost'], true);
+    }
+
+    /**
+     * Theme editor canvas may load a Host-only website (e.g. grocery.test.weline.com)
+     * inside an admin shell on another project Host. SAMEORIGIN would blank that iframe.
+     * Only omit XFO when the request is clearly editor canvas and the parent is a
+     * local project sibling (or matches editor_parent_origin).
+     */
+    private function allowThemeEditorSiblingFrame(): bool
+    {
+        $query = (string)WelineEnv::server(
+            'QUERY_STRING',
+            (string)($_SERVER['QUERY_STRING'] ?? ''),
+        );
+        $editorMode = \trim((string)WelineEnv::getGet('editor_mode', ''));
+        $shell = \strtolower(\trim((string)WelineEnv::getGet('shell', '')));
+        $parentOrigin = \trim((string)WelineEnv::getGet('editor_parent_origin', ''));
+        $isEditorCanvas = $editorMode === '1'
+            || $shell === 'theme-editor'
+            || (bool)\preg_match('#(?:^|&)editor_mode=1(?:&|$)#', $query)
+            || (bool)\preg_match('#(?:^|&)shell=theme-editor(?:&|$)#', $query)
+            || $parentOrigin !== '';
+        if (!$isEditorCanvas) {
+            return false;
+        }
+
+        $referer = \trim((string)WelineEnv::server(
+            'HTTP_REFERER',
+            (string)($_SERVER['HTTP_REFERER'] ?? ''),
+        ));
+        if ($parentOrigin !== '') {
+            $parentParts = \parse_url($parentOrigin);
+            $refererParts = $referer !== '' ? \parse_url($referer) : false;
+            $parentHost = \is_array($parentParts)
+                ? \strtolower((string)($parentParts['host'] ?? ''))
+                : '';
+            $refererHost = \is_array($refererParts)
+                ? \strtolower((string)($refererParts['host'] ?? ''))
+                : '';
+            if ($parentHost !== '' && $refererHost !== '' && $parentHost === $refererHost) {
+                return true;
+            }
+            // First paint / no Referer: still allow when parent origin is a local project host.
+            if ($parentHost !== '' && $this->isLocalProjectSiblingHost($parentHost)) {
+                return true;
+            }
+        }
+
+        if ($referer === '') {
+            return false;
+        }
+        $parts = \parse_url($referer);
+        if (!\is_array($parts)) {
+            return false;
+        }
+        $host = \strtolower((string)($parts['host'] ?? ''));
+
+        return $this->isLocalProjectSiblingHost($host);
+    }
+
+    private function isLocalProjectSiblingHost(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+        if ($host === '') {
+            return false;
+        }
+        if (\in_array($host, ['127.0.0.1', 'localhost', 'tauri.localhost'], true)) {
+            return true;
+        }
+
+        return \str_ends_with($host, '.test.weline.com')
+            || \str_ends_with($host, '.weline.test');
     }
 }

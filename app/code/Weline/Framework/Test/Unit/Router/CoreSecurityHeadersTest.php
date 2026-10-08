@@ -278,4 +278,33 @@ final class CoreSecurityHeadersTest extends TestCase
         $collector = HeaderCollector::getInstance();
         self::assertSame('SAMEORIGIN', $collector->getHeader('X-Frame-Options'));
     }
+
+    public function testHeaderXssOmitsFrameOptionsForThemeEditorSiblingCanvas(): void
+    {
+        Env::getInstance()->reload();
+        HeaderCollector::reset();
+        WelineEnv::setServer('REQUEST_URI', '/', 'unit-test');
+        WelineEnv::setServer(
+            'QUERY_STRING',
+            'editor_mode=1&shell=theme-editor'
+                . '&editor_parent_origin=' . \rawurlencode('https://p05113ef3.test.weline.com'),
+            'unit-test',
+        );
+        WelineEnv::replaceGet([
+            'editor_mode' => '1',
+            'shell' => 'theme-editor',
+            'editor_parent_origin' => 'https://p05113ef3.test.weline.com',
+        ]);
+        WelineEnv::setServer(
+            'HTTP_REFERER',
+            'https://p05113ef3.test.weline.com/theme/backend/theme-editor',
+            'unit-test',
+        );
+
+        $router = new Core();
+        $router->header_xss();
+
+        $collector = HeaderCollector::getInstance();
+        self::assertNull($collector->getHeader('X-Frame-Options'));
+    }
 }
