@@ -6,11 +6,18 @@ namespace Weline\Theme\Service\Scoped;
 
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
+use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
+use Weline\Theme\Api\DefaultThemeInterface;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Websites\Api\Theme\ThemeApplicationInterface;
 
 /**
  * Dedicated theme-binding load/project collaborator for scoped Theme workspaces.
+ *
+ * load()/parent fallback MUST resolve via ThemeApplication scope chain (then module
+ * Default). Never use process-active theme id — that leaks another website's theme
+ * (e.g. default/hanfu) into DaoCharms 「恢复继承」.
  */
 final class ThemeScopedBindingProjector
 {
@@ -18,6 +25,9 @@ final class ThemeScopedBindingProjector
         private readonly WelineTheme $themes,
         private readonly ThemeScopedProjectionSupport $support,
         private readonly ScopeHierarchyInterface $scopes,
+        private readonly ScopeIdentityCatalogInterface $catalog,
+        private readonly ThemeApplicationInterface $applications,
+        private readonly DefaultThemeInterface $defaultTheme,
     ) {
     }
 
@@ -25,7 +35,7 @@ final class ThemeScopedBindingProjector
     public function load(ThemeEditorContext $context): array
     {
         return [
-            'theme_id' => $this->support->activeThemeId($context->area),
+            'theme_id' => $this->resolveThemeIdForScope($context),
         ];
     }
 
@@ -53,6 +63,72 @@ final class ThemeScopedBindingProjector
             return;
         }
         $this->projectGlobalThemeBinding($context->area, (int)($payload['theme_id'] ?? 0));
+    }
+
+    private function resolveThemeIdForScope(ThemeEditorContext $context): int
+    {
+        $storeMode = $this->normalizeApplicationStoreMode($context->scope->storeMode);
+        $area = $context->area === 'backend' ? 'backend' : 'frontend';
+        try {
+            $identity = $this->scopes->fromStorageScope($context->scope->storageScope);
+            if ($identity instanceof ScopeIdentity) {
+                $identity = $this->catalog->authoritativeIdentity($identity);
+                $keys = [];
+                $cursor = $identity;
+                do {
+                    $keys[] = $cursor->canonicalKey();
+                    $cursor = $this->scopes->parentIdentity($cursor);
+                } while ($cursor !== null);
+
+                $resolution = $this->applications->resolve($keys, $storeMode, $area);
+                if ($resolution->reference !== null && $resolution->reference->themeId > 0) {
+                    return $resolution->reference->themeId;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return $this->fallbackModuleDefaultThemeId($context, $storeMode, $area);
+    }
+
+    /** ThemeApplication only accepts normal|dev|test; editor legacy "default" → normal. */
+    private function normalizeApplicationStoreMode(string $storeMode): string
+    {
+        $storeMode = strtolower(trim($storeMode));
+        if (in_array($storeMode, [ScopeIdentity::MODE_NORMAL, ScopeIdentity::MODE_DEV, ScopeIdentity::MODE_TEST], true)) {
+            return $storeMode;
+        }
+
+        return ScopeIdentity::MODE_NORMAL;
+    }
+
+    private function fallbackModuleDefaultThemeId(
+        ThemeEditorContext $context,
+        ?string $storeMode = null,
+        ?string $area = null,
+    ): int {
+        $storeMode ??= $this->normalizeApplicationStoreMode($context->scope->storeMode);
+        $area ??= $context->area === 'backend' ? 'backend' : 'frontend';
+        try {
+            $reference = $this->defaultTheme->defaultApplicationReference(
+                $area,
+                $context->scope->storageScope,
+                $storeMode,
+            );
+            $themeId = (int)($reference['theme_id'] ?? 0);
+            if ($themeId > 0) {
+                return $themeId;
+            }
+            $registered = $this->defaultTheme->getRegisteredDefault($context->area);
+            $registeredId = (int)($registered['id'] ?? 0);
+            if ($registeredId > 0) {
+                return $registeredId;
+            }
+        } catch (\Throwable) {
+        }
+
+        // Last resort only — never preferred over ThemeApplication / DefaultTheme.
+        return $this->support->activeThemeId($context->area);
     }
 
     private function projectGlobalThemeBinding(string $area, int $themeId): void

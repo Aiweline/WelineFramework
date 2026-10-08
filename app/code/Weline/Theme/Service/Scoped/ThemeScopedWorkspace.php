@@ -1102,9 +1102,20 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             : null;
     }
 
-    /** @return array{payload:array<string,mixed>,release_id:?int,source_scope:string,release:?ThemeScopeRelease} */
-    private function publishedState(ThemeEditorContext $context, bool $allowRequestCache = true): array
-    {
+    /**
+     * @return array{payload:array<string,mixed>,release_id:?int,source_scope:string,release:?ThemeScopeRelease}
+     *
+     * theme_binding: when no Release exists on the walked Scope chain, loadBase MUST use the
+     * leaf editor Scope (e.g. DaoCharms Website), not the Global root. Otherwise 「恢复继承」
+     * falls through to Global Default / process-active theme and swaps header/footer chrome
+     * into another theme package. Layout/meta inherit is unchanged (still walks parent Releases).
+     */
+    private function publishedState(
+        ThemeEditorContext $context,
+        bool $allowRequestCache = true,
+        ?ThemeEditorContext $bindingLeaf = null,
+    ): array {
+        $bindingLeaf ??= $context;
         $provided = $this->providedResourceState($context);
         if ($provided !== null) { return $provided; }
         $workspace = $this->findWorkspace($context, false, $allowRequestCache);
@@ -1113,6 +1124,20 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
             ));
             if ($release instanceof ThemeScopeRelease) {
+                // theme_binding: Global's published package (often Default/hanfu) must NOT
+                // become the inherit base for Website/Store/Channel leaves — those fall back
+                // to the leaf ThemeApplication (own header/footer). Layout/meta still use
+                // ancestor Releases including Global.
+                if ($context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING
+                    && $this->themeBindingLeafSkipsGlobalRelease($bindingLeaf, $context)
+                ) {
+                    return [
+                        'payload' => $this->adapter->loadBase($bindingLeaf),
+                        'release_id' => null,
+                        'source_scope' => 'theme-package-default',
+                        'release' => null,
+                    ];
+                }
                 // LAYOUT: sparse near-scope Releases must not wipe far-scope slots
                 // (e.g. Website chrome publish dropping Global homepage-hero).
                 // Compose parent_release_id chain with slot-near-priority.
@@ -1159,11 +1184,16 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             return $this->publishedState(
                 $context->withScope($context->scope->parent),
                 $allowRequestCache,
+                $bindingLeaf,
             );
         }
 
+        $baseContext = $context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING
+            ? $bindingLeaf
+            : $context;
+
         return [
-            'payload' => $this->adapter->loadBase($context),
+            'payload' => $this->adapter->loadBase($baseContext),
             'release_id' => null,
             'source_scope' => 'theme-package-default',
             'release' => null,
@@ -1226,8 +1256,12 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     private function parentPublishedState(ThemeEditorContext $context): array
     {
         if ($context->scope->parent !== null) {
+            // Keep the child as theme_binding leaf so empty ancestor Releases fall back to
+            // the child's ThemeApplication (own header/footer), not Global Default/hanfu.
             return $this->publishedState(
                 $context->withScope($context->scope->parent),
+                true,
+                $context,
             );
         }
 
@@ -1237,6 +1271,26 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
             'source_scope' => 'theme-package-default',
             'release' => null,
         ];
+    }
+
+    /**
+     * Website/Store/Channel theme_binding must not inherit Global's published theme package
+     * (Default/hanfu chrome). Global editing still consumes Global Releases normally.
+     */
+    private function themeBindingLeafSkipsGlobalRelease(
+        ThemeEditorContext $leaf,
+        ThemeEditorContext $walked,
+    ): bool {
+        if ($leaf->resourceType !== ThemeEditorContext::RESOURCE_THEME_BINDING
+            || $walked->resourceType !== ThemeEditorContext::RESOURCE_THEME_BINDING
+        ) {
+            return false;
+        }
+        $globalStorage = ObjectManager::getInstance(ScopeHierarchyInterface::class)
+            ->toStorageScope(ScopeIdentity::global());
+
+        return $walked->scope->storageScope === $globalStorage
+            && $leaf->scope->storageScope !== $globalStorage;
     }
 
     /**

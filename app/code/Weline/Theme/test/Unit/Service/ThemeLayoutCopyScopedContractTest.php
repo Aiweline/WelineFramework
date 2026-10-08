@@ -294,7 +294,8 @@ final class ThemeLayoutCopyScopedContractTest extends TestCase
         );
         self::assertStringContainsString('class ThemeScopedBindingProjector', $binding);
         self::assertStringContainsString('theme_binding_theme_id_invalid', $binding);
-        self::assertStringContainsString('IS_ACTIVE_BACKEND', $binding);
+        self::assertStringContainsString('ThemeApplicationInterface', $binding);
+        self::assertStringContainsString('resolveThemeIdForScope', $binding);
     }
 
     public function testServerPreviewHtmlPrefersNodeUidIdentityAttrs(): void
