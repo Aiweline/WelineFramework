@@ -922,7 +922,7 @@ class Data extends AbstractHelper
         $class = (string)($params['class'] ?? '');
         if (
             $class === ''
-            || !is_a($class, \Weline\Framework\Controller\Api\QueryBin::class, true)
+            || !is_a($class, \Weline\Frontend\Controller\Api\QueryBin::class, true)
         ) {
             return;
         }
@@ -985,7 +985,7 @@ class Data extends AbstractHelper
         $class = (string)($params['class'] ?? '');
         if (
             $class === ''
-            || !is_a($class, \Weline\Framework\App\Controller\FrontendRestController::class, true)
+            || !is_a($class, \Weline\Frontend\Controller\FrontendRestController::class, true)
         ) {
             return;
         }

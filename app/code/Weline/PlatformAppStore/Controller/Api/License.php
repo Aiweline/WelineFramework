@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\PlatformAppStore\Controller\Api;
 
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\PlatformAppStore\Service\LicenseService;
 

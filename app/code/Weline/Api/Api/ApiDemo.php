@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Api\Api;
 
 use Weline\Api\Service\ApiDemoPackageService;
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
 

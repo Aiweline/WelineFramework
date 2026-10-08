@@ -13,7 +13,7 @@ namespace Weline\Api\Api\Rest\V1;
 
 use Weline\Api\Model\ApiUser;
 use Weline\Api\Service\TokenService;
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
 
 /**

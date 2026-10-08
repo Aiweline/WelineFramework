@@ -43,7 +43,7 @@ final class QueryUnexpectedFailurePayloadTest extends TestCase
     public function testQueryBinUsesUnexpectedFailurePayloadHelper(): void
     {
         $source = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Controller/Api/QueryBin.php',
+            dirname(__DIR__, 5) . '/Frontend/Controller/Api/QueryBin.php',
         );
 
         self::assertStringContainsString('QueryUnexpectedFailurePayload::build', $source);
@@ -52,7 +52,7 @@ final class QueryUnexpectedFailurePayloadTest extends TestCase
     public function testBinQueryUsesUnexpectedFailurePayloadHelper(): void
     {
         $source = (string)file_get_contents(
-            dirname(__DIR__, 4) . '/Controller/Api/BinQuery.php',
+            dirname(__DIR__, 5) . '/Frontend/Controller/Api/BinQuery.php',
         );
 
         self::assertStringContainsString('QueryUnexpectedFailurePayload::build', $source);

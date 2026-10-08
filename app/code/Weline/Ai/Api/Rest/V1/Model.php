@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Api\Rest\V1;
 
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Ai\Service\AiModelService;
 
 /**

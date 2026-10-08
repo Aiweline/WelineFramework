@@ -8,7 +8,7 @@
 
 namespace Weline\Visitor\Test\Http;
 
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 
 class RunAllTestsScript extends FrontendRestController
 {

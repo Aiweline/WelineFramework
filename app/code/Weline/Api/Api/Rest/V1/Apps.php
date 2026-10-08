@@ -8,7 +8,7 @@ use Weline\Api\Service\ApiAppService;
 use Weline\Api\Service\ApiAppTokenService;
 use Weline\Api\Service\ApiScopeCatalogService;
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
 
 class Apps extends FrontendRestController

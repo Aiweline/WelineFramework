@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Controller\Api;
 
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Security\SecurityHeaderPolicyService;
 

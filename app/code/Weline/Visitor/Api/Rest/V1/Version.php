@@ -2,7 +2,7 @@
 
 namespace Weline\Visitor\Api\Rest\V1;
 
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Visitor\Service\PixelEncryptionService;
 

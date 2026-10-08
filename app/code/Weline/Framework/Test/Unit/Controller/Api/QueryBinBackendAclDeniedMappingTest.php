@@ -12,7 +12,9 @@ final class QueryBinBackendAclDeniedMappingTest extends TestCase
 {
     public function testQueryBinMapsBackendAclDeniedBeforeInternalServerError(): void
     {
-        $source = (string)file_get_contents(BP . 'app/code/Weline/Framework/Controller/Api/QueryBin.php');
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 5) . '/Frontend/Controller/Api/QueryBin.php'
+        );
 
         $deniedPos = strpos($source, 'catch (FrontendWorkerBackendAuthorizationException');
         $throwablePos = strpos($source, 'catch (\\Throwable');
@@ -30,7 +32,9 @@ final class QueryBinBackendAclDeniedMappingTest extends TestCase
 
     public function testBinQueryMapsBackendAclDeniedBeforeInternalServerError(): void
     {
-        $source = (string)file_get_contents(BP . 'app/code/Weline/Framework/Controller/Api/BinQuery.php');
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 5) . '/Frontend/Controller/Api/BinQuery.php'
+        );
 
         $deniedPos = strpos($source, 'catch (FrontendWorkerBackendAuthorizationException');
         $throwablePos = strpos($source, 'catch (\\Throwable');

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Visitor\Api\Rest\V1;
 
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Visitor\Api\Rest\PanelProtectedTrait;
 use Weline\Visitor\Api\Rest\VisitorPanelAnalyticsActionsTrait;
 

@@ -212,8 +212,7 @@ class PublicApiAuthRouteMatcher
             $controllerClass !== ''
             && class_exists($controllerClass)
             && (
-                $controllerClass === \Weline\Framework\Controller\Api\QueryBin::class
-                || is_subclass_of($controllerClass, \Weline\Framework\Controller\Api\QueryBin::class)
+                is_a($controllerClass, \Weline\Frontend\Controller\Api\QueryBin::class, true)
             )
         ) {
             return true;
@@ -340,13 +339,12 @@ class PublicApiAuthRouteMatcher
         }
 
         if (
-            $controllerClass === \Weline\Framework\Controller\Api\QueryBin::class
-            || is_subclass_of($controllerClass, \Weline\Framework\Controller\Api\QueryBin::class)
+            is_a($controllerClass, \Weline\Frontend\Controller\Api\QueryBin::class, true)
         ) {
             return false;
         }
 
-        if (!is_subclass_of($controllerClass, \Weline\Framework\App\Controller\FrontendRestController::class)) {
+        if (!is_subclass_of($controllerClass, \Weline\Frontend\Controller\FrontendRestController::class)) {
             return false;
         }
 

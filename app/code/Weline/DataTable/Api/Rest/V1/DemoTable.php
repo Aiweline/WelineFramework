@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\DataTable\Api\Rest\V1;
 
 use Weline\DataTable\Service\DemoTableService;
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 
 class DemoTable extends FrontendRestController
 {

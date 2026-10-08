@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Geo\Api\Rest\V1\Frontend;
 
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Geo\Service\GeoLocationService;

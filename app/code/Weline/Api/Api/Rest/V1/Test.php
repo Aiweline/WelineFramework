@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Api\Api\Rest\V1;
 
 use Weline\Api\Model\SandboxTest;
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 
 /**
  * API测试控制器

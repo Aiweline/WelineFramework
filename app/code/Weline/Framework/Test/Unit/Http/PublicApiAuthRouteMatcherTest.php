@@ -350,7 +350,7 @@ class PublicApiAuthRouteMatcherTest extends TestCase
 }
 
 #[\Weline\Framework\Acl\Acl('fixture/protected', 'Protected Fixture', 'ri-lock-line')]
-class ProtectedFrontendApiFixture extends \Weline\Framework\App\Controller\FrontendRestController
+class ProtectedFrontendApiFixture extends \Weline\Frontend\Controller\FrontendRestController
 {
     public function getList(): string
     {

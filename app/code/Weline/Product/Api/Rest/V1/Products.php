@@ -6,7 +6,7 @@ namespace Weline\Product\Api\Rest\V1;
 
 use Weline\Api\Data\ApiAppActor;
 use Weline\Framework\Acl\Acl;
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Framework\Http\Response;
 use Weline\Product\Api\Data\ProductAdminCommand;
 use Weline\Product\Api\Data\ProductAdminResult;

@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace Weline\Multipass\Controller\Api;
 
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Multipass\Model\MultipassSite;
 use Weline\Multipass\Service\MultipassService;

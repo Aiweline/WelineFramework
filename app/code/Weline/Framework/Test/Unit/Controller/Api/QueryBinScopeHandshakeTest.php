@@ -147,7 +147,9 @@ final class QueryBinScopeHandshakeTest extends TestCase
 
     public function testBinaryOutputGuardNeverLogsCapturedBytes(): void
     {
-        $source = (string)file_get_contents(BP . 'app/code/Weline/Framework/Controller/Api/QueryBin.php');
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 5) . '/Frontend/Controller/Api/QueryBin.php'
+        );
 
         self::assertStringContainsString("'sha256' => \\hash('sha256', \$preExisting)", $source);
         self::assertStringContainsString("'sha256' => \\hash('sha256', \$captured)", $source);

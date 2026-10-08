@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\TwoFactorAuth\Controller\Api;
 
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 

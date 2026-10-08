@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Deploy\Controller\Api;
 
 use Weline\Deploy\Service\DeployWebhookReleaseService;
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 
 class Webhook extends FrontendRestController
 {

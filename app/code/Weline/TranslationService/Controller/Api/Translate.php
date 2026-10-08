@@ -13,7 +13,7 @@ namespace Weline\TranslationService\Controller\Api;
 
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\State;
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\TranslationService\Api\TranslationServiceInterface;

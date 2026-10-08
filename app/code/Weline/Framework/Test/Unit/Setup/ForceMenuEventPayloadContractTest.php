@@ -26,8 +26,12 @@ final class ForceMenuEventPayloadContractTest extends TestCase
     {
         $alias = dirname(__DIR__, 3) . '/App/Controller/BackendRestController.php';
         self::assertFileDoesNotExist($alias);
-        $query = (string)file_get_contents(
+        $frameworkQueryAlias = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Controller/Backend/Api/Query.php'
+        );
+        self::assertStringContainsString('Weline\\Backend\\Controller\\Api\\Query', $frameworkQueryAlias);
+        $query = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Backend/Controller/Api/Query.php'
         );
         self::assertStringContainsString('Weline\\Backend\\Controller\\BackendRestController', $query);
         self::assertStringNotContainsString('Framework\\App\\Controller\\BackendRestController', $query);

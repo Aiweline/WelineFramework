@@ -1,18 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Weline\Framework\App\Controller;
 
-use Weline\Framework\Controller\AbstractRestController;
-use Weline\Framework\Http\Response;
-use Weline\Framework\Http\ResponseTerminateException;
-
-class FrontendRestController extends AbstractRestController
+/**
+ * @deprecated since 2.5.270 Use {@see \Weline\Frontend\Controller\FrontendRestController}
+ */
+class FrontendRestController extends \Weline\Frontend\Controller\FrontendRestController
 {
-    protected function errorXml(string $msg = '错误', mixed $data = false, int $code = 400): never
-    {
-        $payload = $this->fetch(['msg' => $msg, 'data' => $data, 'code' => $code], self::fetch_XML);
-        throw new ResponseTerminateException(
-            Response::text($payload->getBody(), $code, 'text/xml; charset=UTF-8')
-        );
-    }
 }

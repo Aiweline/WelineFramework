@@ -10,7 +10,7 @@
 namespace Weline\Visitor\Test\Http;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Frontend\Controller\FrontendRestController;
 
 class PixelApiHttpProbe extends FrontendRestController
 {

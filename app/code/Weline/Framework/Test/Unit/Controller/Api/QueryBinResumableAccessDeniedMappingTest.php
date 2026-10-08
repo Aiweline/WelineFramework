@@ -12,7 +12,9 @@ final class QueryBinResumableAccessDeniedMappingTest extends TestCase
 {
     public function testQueryBinMapsResumableAccessDeniedBeforeInternalServerError(): void
     {
-        $source = (string)file_get_contents(BP . 'app/code/Weline/Framework/Controller/Api/QueryBin.php');
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 5) . '/Frontend/Controller/Api/QueryBin.php'
+        );
 
         $deniedPos = strpos($source, 'catch (ResumableTaskAccessDeniedException');
         $throwablePos = strpos($source, 'catch (\\Throwable');

@@ -7,7 +7,7 @@ namespace Weline\Framework\Test\Unit\Controller\Api;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
-use Weline\Framework\Controller\Api\QueryBin;
+use Weline\Frontend\Controller\Api\QueryBin;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Response;
 

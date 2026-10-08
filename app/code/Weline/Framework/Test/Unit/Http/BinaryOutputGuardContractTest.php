@@ -43,10 +43,10 @@ final class BinaryOutputGuardContractTest extends TestCase
     public function testBinQueryAndQueryBinDelegateToBinaryOutputGuard(): void
     {
         $binQuery = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Controller/Api/BinQuery.php'
+            \dirname(__DIR__, 4) . '/Frontend/Controller/Api/BinQuery.php'
         );
         $queryBin = (string)\file_get_contents(
-            \dirname(__DIR__, 3) . '/Controller/Api/QueryBin.php'
+            \dirname(__DIR__, 4) . '/Frontend/Controller/Api/QueryBin.php'
         );
 
         self::assertStringContainsString('BinaryOutputGuard::begin(', $binQuery);

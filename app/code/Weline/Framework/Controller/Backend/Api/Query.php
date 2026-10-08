@@ -3,33 +3,9 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Controller\Backend\Api;
 
-use Weline\Backend\Controller\BackendRestController;
-use Weline\Framework\Service\Query\FrameworkQueryService;
-
-class Query extends BackendRestController
+/**
+ * @deprecated since 2.5.270 Use {@see \Weline\Backend\Controller\Api\Query}
+ */
+class Query extends \Weline\Backend\Controller\Api\Query
 {
-    public function __construct(
-        private readonly FrameworkQueryService $queryService
-    ) {
-        parent::__construct();
-    }
-
-    public function postIndex(): string
-    {
-        try {
-            $body = $this->request->getBodyParams(true);
-            if (!\is_array($body)) {
-                $body = [];
-            }
-            $provider = (string)($body['provider'] ?? '');
-            $operation = (string)($body['operation'] ?? '');
-            $params = (array)($body['params'] ?? []);
-
-            $result = $this->queryService->execute($provider, $operation, $params, 'backend');
-            return $this->success(__('查询成功'), $result);
-        } catch (\Throwable $throwable) {
-            return $this->error(__('查询失败：%{1}', $throwable->getMessage()), '', 400);
-        }
-    }
 }
-

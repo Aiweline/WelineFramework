@@ -879,12 +879,12 @@ class Core
     private function routeBackendFrameworkQueryApi()
     {
         $this->router = [
-            'module' => Env::MODULE_FRAMEWORK,
-            'module_path' => Env::framework_code_path,
+            'module' => 'Weline_Backend',
+            'module_path' => APP_CODE_PATH . 'Weline' . DS . 'Backend' . DS,
             'router' => 'framework',
             'class' => [
                 'area' => \Weline\Framework\Controller\Data\DataInterface::type_api_BACKEND,
-                'name' => \Weline\Framework\Controller\Backend\Api\Query::class,
+                'name' => \Weline\Backend\Controller\Api\Query::class,
                 'controller_name' => 'Query',
                 'method' => 'postIndex',
                 'request_method' => 'POST',
@@ -898,12 +898,12 @@ class Core
     private function routeExternalBinQueryApi()
     {
         $this->router = [
-            'module' => Env::MODULE_FRAMEWORK,
-            'module_path' => Env::framework_code_path,
+            'module' => 'Weline_Frontend',
+            'module_path' => APP_CODE_PATH . 'Weline' . DS . 'Frontend' . DS,
             'router' => 'framework',
             'class' => [
                 'area' => \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND,
-                'name' => \Weline\Framework\Controller\Api\BinQuery::class,
+                'name' => \Weline\Frontend\Controller\Api\BinQuery::class,
                 'controller_name' => 'BinQuery',
                 'method' => 'postIndex',
                 'request_method' => 'POST',
@@ -917,12 +917,12 @@ class Core
     private function routeFrontendQueryBinApi()
     {
         $this->router = [
-            'module' => Env::MODULE_FRAMEWORK,
-            'module_path' => Env::framework_code_path,
+            'module' => 'Weline_Frontend',
+            'module_path' => APP_CODE_PATH . 'Weline' . DS . 'Frontend' . DS,
             'router' => 'framework',
             'class' => [
                 'area' => \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND,
-                'name' => \Weline\Framework\Controller\Api\QueryBin::class,
+                'name' => \Weline\Frontend\Controller\Api\QueryBin::class,
                 'controller_name' => 'QueryBin',
                 'method' => 'postIndex',
                 'request_method' => 'POST',
@@ -936,12 +936,12 @@ class Core
     private function routeFrontendStreamApi()
     {
         $this->router = [
-            'module' => Env::MODULE_FRAMEWORK,
-            'module_path' => Env::framework_code_path,
+            'module' => 'Weline_Frontend',
+            'module_path' => APP_CODE_PATH . 'Weline' . DS . 'Frontend' . DS,
             'router' => 'framework',
             'class' => [
                 'area' => \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND,
-                'name' => \Weline\Framework\Controller\Api\Stream::class,
+                'name' => \Weline\Frontend\Controller\Api\Stream::class,
                 'controller_name' => 'Stream',
                 'method' => 'getIndex',
                 'request_method' => 'GET',
