@@ -146,4 +146,52 @@ final class DetectWebsiteProjectHostSiteCodeTest extends TestCase
             $websiteModel,
         ));
     }
+
+    public function testResolveMatchedSiteAppliesVisitorUriNormalizeBeforeProbe(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $source = (string)file_get_contents($root . '/Observer/DetectWebsite.php');
+        self::assertStringContainsString('Url::applyVisitorUriNormalizeToUrl($requestUrl)', $source);
+        self::assertMatchesRegularExpression(
+            '/private function resolveMatchedSite\\(string \\$requestUrl,[\\s\\S]*?applyVisitorUriNormalizeToUrl\\(\\$requestUrl\\)/',
+            $source
+        );
+    }
+
+    public function testLivePreviewOriginResolvesProjectHostSiteAfterThemeNormalize(): void
+    {
+        if (!\class_exists(\Weline\Theme\Service\ThemeLivePreviewPathMount::class)) {
+            self::markTestSkipped('Weline_Theme not available');
+        }
+
+        RequestContext::set('websites.detect.website_rows', [[
+            Website::schema_fields_ID => 158,
+            Website::schema_fields_CODE => 'daocharms',
+            Website::schema_fields_URL => 'https://daocharms.com',
+            'website_id' => 158,
+            'code' => 'daocharms',
+            'url' => 'https://daocharms.com',
+        ]]);
+
+        $token = 'pv_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG';
+        $observer = (new \ReflectionClass(DetectWebsite::class))->newInstanceWithoutConstructor();
+        $resolve = new \ReflectionMethod($observer, 'resolveMatchedSite');
+        $websiteModel = $this->getMockBuilder(Website::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $matched = $resolve->invoke(
+            $observer,
+            'https://p05113ef3.test.weline.com/~preview/' . $token . '/~site/daocharms/',
+            $websiteModel,
+        );
+
+        self::assertIsArray($matched);
+        self::assertSame(158, (int)($matched[Website::schema_fields_ID] ?? $matched['website_id'] ?? -1));
+        self::assertSame('daocharms', (string)($matched[Website::schema_fields_CODE] ?? $matched['code'] ?? ''));
+        self::assertSame(
+            'https://p05113ef3.test.weline.com/~site/daocharms',
+            (string)($matched[Website::schema_fields_URL] ?? $matched['url'] ?? '')
+        );
+    }
 }

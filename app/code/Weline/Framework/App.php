@@ -434,17 +434,24 @@ class App
         $scheme = (string)(($server['REQUEST_SCHEME'] ?? '')
             ?: WelineEnv::get('request.scheme', Context::current()->get('input.scheme', 'http')));
         $host = \trim((string)($server['HTTP_HOST'] ?? ''));
-        $fullRequestUri = $host === '' ? '' : $scheme . '://' . $host . $rawRequestUri;
+        // Visitor identity keeps origin (may still carry /~preview/{token}/…).
+        // Site / Scope install MUST use parser routing URI (mounts already peeled).
+        $originFullRequestUri = $host === '' ? '' : $scheme . '://' . $host . $rawRequestUri;
+        $routingFullRequestUri = $host === '' ? '' : $scheme . '://' . $host . $currentUri;
         Context::current()->set('input.server.WELINE_ORIGIN_REQUEST_URI', $rawRequestUri);
-        Context::current()->set('input.server.WELINE_FULL_REQUEST_URI', $fullRequestUri);
+        Context::current()->set('input.server.WELINE_FULL_REQUEST_URI', $originFullRequestUri);
         WelineEnv::set('origin_request_uri', $rawRequestUri, 'App applyParsedUrl');
-        WelineEnv::set('full_request_uri', $fullRequestUri, 'App applyParsedUrl');
+        WelineEnv::set('full_request_uri', $originFullRequestUri, 'App applyParsedUrl');
         $markApplyUrlStep('full_request_uri', [
             'host' => $host,
             'scheme' => $scheme,
         ]);
 
-        $navigationScope = $this->installStorefrontNavigationScope($fullRequestUri, $currentUri, $isBackend);
+        $navigationScope = $this->installStorefrontNavigationScope(
+            $routingFullRequestUri,
+            $currentUri,
+            $isBackend
+        );
         if ($navigationScope instanceof StorefrontNavigationScope) {
             $currentUri = $navigationScope->routePath;
             Context::current()->set('input.server.REQUEST_URI', $currentUri);

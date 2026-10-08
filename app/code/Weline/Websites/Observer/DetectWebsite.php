@@ -818,6 +818,9 @@ class DetectWebsite implements
     private function resolveMatchedSite(string $requestUrl, Website $websiteModel): ?array
     {
         $this->syncProcessCacheVersion();
+        // Theme (etc.) peels visitor mounts via normalize_visitor_uri; site match
+        // must use routing remainder (e.g. /~site/{code}), never /~preview/{token}/….
+        $requestUrl = Url::applyVisitorUriNormalizeToUrl($requestUrl);
         $matchContext = $this->parseHttpMatchContext($requestUrl);
         if ($matchContext === null) {
             return null;

@@ -318,6 +318,11 @@ return [
         'description' => __('在 URL 字符串生成完成后始终触发（与是否开启 SEO 重写无关）。用于追加 query 身份参数；禁止在此改写 path。'),
         'doc' => 'url/URL生成参数.md',
     ],
+    'Weline_Framework_Url::normalize_visitor_uri' => [
+        'name' => __('规范化访客URI'),
+        'description' => __('在网站匹配与 SEO 解码之前触发。观察者可保留访客 origin_uri，同时改写 routing_uri（例如剥除 /~preview/{token}/ 命名空间）。'),
+        'doc' => 'url/规范化访客URI.md',
+    ],
     'Weline_Framework_Url::seo_decode' => [
         'name' => __('SEO解码'),
         'description' => __('在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。'),

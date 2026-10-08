@@ -24,6 +24,15 @@
                   sort="0"/>
     </event>
 
+    <!-- Url 解析早钩：/~preview/{token}/… → 路由 remainder，访客 origin 保留预览命名空间 -->
+    <event name="Weline_Framework_Url::normalize_visitor_uri">
+        <observer name="Weline_Theme::normalize_visitor_uri_live_preview_path"
+                  instance="Weline\Theme\Observer\NormalizeVisitorUriLivePreviewPath"
+                  disabled="false"
+                  shared="true"
+                  sort="-20"/>
+    </event>
+
     <!-- 在模块 Router 链（sort=0）之前改写带 preview_theme 的首页路径，进入 Theme 前台预览网关 -->
     <event name="Weline_Framework_Router::process_uri_before">
         <observer name="Weline_Theme::process_preview_theme_uri_before"
@@ -265,6 +274,11 @@
                   disabled="false"
                   shared="true"
                   sort="10"/>
+        <observer name="Weline_Theme::url_generate_params_carry_live_preview_path"
+                  instance="Weline\Theme\Observer\UrlGenerateParamsCarryLivePreviewPath"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
     </event>
 
     <!-- Path↔layout fallback after module observers (sort high). -->

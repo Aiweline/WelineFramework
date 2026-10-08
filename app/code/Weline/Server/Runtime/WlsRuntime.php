@@ -22,7 +22,6 @@ use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Cache\SharedResponseCachePolicy;
 use Weline\Framework\Context;
 use Weline\Framework\Container\ContainerRuntime;
-use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Extends\ExtendsData;
@@ -8370,12 +8369,28 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         $currentUri = (string)(WelineEnv::get('request.uri', $this->requestServer('REQUEST_URI') ?? '/') ?: '/');
+
+        // Start-page runs before Url::parser. Peel visitor mounts first so both
+        // website probe and root detection see routing_uri (Theme owns /~preview/).
+        $normalized = $this->normalizeVisitorUriForStartPage($currentUri);
+        $routingUri = $normalized['routing_uri'];
+        $originUri = $normalized['origin_uri'];
+        $this->putRequestServer('REQUEST_URI', $routingUri);
+        $this->putRequestServer('WELINE_ORIGIN_REQUEST_URI', $originUri);
+        WelineEnv::set('request.uri', $routingUri, 'WlsRuntime start page normalize');
+        WelineEnv::set('origin_request_uri', $originUri, 'WlsRuntime start page normalize');
+        WelineEnv::setServer('REQUEST_URI', $routingUri, 'WlsRuntime start page normalize');
+        WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $originUri, 'WlsRuntime start page normalize');
+        $request->setServer('REQUEST_URI', $routingUri);
+        $request->setServer('WELINE_ORIGIN_REQUEST_URI', $originUri);
+
         $this->ensureWebsiteContextForStartPage($request);
-        if (!$this->isRootRequestUri($currentUri) && !$this->isWebsiteRootRequestUri($request, $currentUri)) {
+
+        if (!$this->isRootRequestUri($routingUri) && !$this->isWebsiteRootRequestUri($request, $routingUri)) {
             return;
         }
 
-        $mappedPath = trim((string)$request->getUrlPath());
+        $mappedPath = \trim((string)$this->parseUriPath($routingUri));
         if ($mappedPath === '' || $this->isRootRequestUri($mappedPath)) {
             $mappedPath = $this->resolveConfiguredStartPageRoute($request);
         }
@@ -8383,8 +8398,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return;
         }
 
-        $canonicalUri = $this->buildStartPageRouteUri($mappedPath, $currentUri, $this->getWebsitePathPrefix($request));
-        if ($canonicalUri === null || $canonicalUri === $currentUri) {
+        $canonicalUri = $this->buildStartPageRouteUri($mappedPath, $routingUri, $this->getWebsitePathPrefix($request));
+        if ($canonicalUri === null || $canonicalUri === $routingUri) {
             return;
         }
 
@@ -8393,6 +8408,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $canonicalPath = '/';
         }
         $canonicalQuery = $this->parseUriQuery($canonicalUri);
+
+        // Token / mount markers were already applied by normalizeVisitorUriForStartPage
+        // (RequestContext + $_GET). Keep historical start-page origin = CMS canonical
+        // so Url::resealVisitorUriFromWire does not reintroduce the mount over the
+        // mapped business path; URL generation still reads the path token.
 
         $this->putRequestServer('REQUEST_URI',  $canonicalUri);
         $this->putRequestServer('PATH_INFO',  $canonicalPath);
@@ -8423,6 +8443,14 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         WelineEnv::setServer('WELINE_FULL_REQUEST_URI', $fullRequestUri, 'WlsRuntime start page route');
     }
 
+    /**
+     * @return array{routing_uri: string, origin_uri: string}
+     */
+    private function normalizeVisitorUriForStartPage(string $uri): array
+    {
+        return \Weline\Framework\Http\Url::normalizeVisitorUri($uri);
+    }
+
     private function resolveConfiguredStartPageRoute(Request $request): string
     {
         $provider = $this->runtimeProvider(StartPageRouteProviderInterface::class);
@@ -8444,7 +8472,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return;
         }
 
-        $url = $this->buildStartPageRequestUrl($request);
+        $url = $this->buildStartPageRequestUrlForSiteProbe($request);
         if ($url === '') {
             return;
         }
@@ -8477,6 +8505,20 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function buildStartPageRequestUrl(Request $request): string
     {
+        return $this->buildStartPageAbsoluteUrl($request, preferRoutingUri: false);
+    }
+
+    /**
+     * Website probe URL after visitor-URI normalize: prefer routing REQUEST_URI
+     * (mounts peeled) over visitor ORIGIN (may still carry /~preview/{token}/…).
+     */
+    private function buildStartPageRequestUrlForSiteProbe(Request $request): string
+    {
+        return $this->buildStartPageAbsoluteUrl($request, preferRoutingUri: true);
+    }
+
+    private function buildStartPageAbsoluteUrl(Request $request, bool $preferRoutingUri): string
+    {
         $host = \trim((string)(
             $request->getServer('HTTP_HOST')
             ?: $request->getServer('HOST')
@@ -8496,14 +8538,23 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $scheme = ($https !== '' && !\in_array($https, ['off', '0', 'false'], true)) ? 'https' : 'http';
         }
 
-        $uri = (string)(
-            $request->getServer('WELINE_ORIGIN_REQUEST_URI')
-            ?: ($this->requestServer('WELINE_ORIGIN_REQUEST_URI') ?? '')
-            ?: ($this->requestServer('ORIGIN_REQUEST_URI') ?? '')
-            ?: WelineEnv::get('origin_request_uri', '')
-            ?: WelineEnv::get('request.uri', $this->requestServer('REQUEST_URI') ?? '/')
-            ?: '/'
-        );
+        if ($preferRoutingUri) {
+            $uri = (string)(
+                $request->getServer('REQUEST_URI')
+                ?: ($this->requestServer('REQUEST_URI') ?? '')
+                ?: WelineEnv::get('request.uri', '/')
+                ?: '/'
+            );
+        } else {
+            $uri = (string)(
+                $request->getServer('WELINE_ORIGIN_REQUEST_URI')
+                ?: ($this->requestServer('WELINE_ORIGIN_REQUEST_URI') ?? '')
+                ?: ($this->requestServer('ORIGIN_REQUEST_URI') ?? '')
+                ?: WelineEnv::get('origin_request_uri', '')
+                ?: WelineEnv::get('request.uri', $this->requestServer('REQUEST_URI') ?? '/')
+                ?: '/'
+            );
+        }
         if ($uri === '') {
             $uri = '/';
         }

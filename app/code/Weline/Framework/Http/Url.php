@@ -1683,7 +1683,38 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         // detectLanguage and SEO rewrite both mutate the working URI; without an
         // early lock, PageBuilder intermittently sees only the controller path.
         if ($isCurrentRequestParse) {
-            self::lockVisitorFacingRequestUri((string)$uri);
+            // Modules may rewrite routing URI while preserving a visitor-facing origin
+            // (e.g. Theme live preview /~preview/{token}/… → remainder for site match).
+            try {
+                $normalized = self::normalizeVisitorUri((string)$uri);
+                $originUri = $normalized['origin_uri'];
+                $routingUri = $normalized['routing_uri'];
+                if ($originUri !== '') {
+                    self::$parserServer['WELINE_ORIGIN_REQUEST_URI'] = $originUri;
+                    self::$parserServer['ORIGIN_REQUEST_URI'] = $originUri;
+                    try {
+                        \Weline\Framework\Env\WelineEnv::setServer(
+                            'WELINE_ORIGIN_REQUEST_URI',
+                            $originUri,
+                            'Url::normalize_visitor_uri'
+                        );
+                    } catch (\Throwable) {
+                    }
+                }
+                if ($routingUri !== '' && $routingUri !== (string)$uri) {
+                    $uri = $routingUri;
+                    $pathOnly = (string)(\parse_url($routingUri, \PHP_URL_PATH) ?: $routingUri);
+                    $queryOnly = (string)(\parse_url($routingUri, \PHP_URL_QUERY) ?: '');
+                    $hostPart = (string)(self::currentServer()['HTTP_HOST'] ?? 'localhost');
+                    $schemePart = (string)(self::currentServer()['REQUEST_SCHEME'] ?? 'http');
+                    $url = $schemePart . '://' . $hostPart . $pathOnly . ($queryOnly !== '' ? '?' . $queryOnly : '');
+                    self::$parserServer['REQUEST_URI'] = $routingUri;
+                }
+            } catch (\Throwable) {
+            }
+            self::lockVisitorFacingRequestUri(
+                (string)(self::$parserServer['WELINE_ORIGIN_REQUEST_URI'] ?? $uri)
+            );
         }
         # 静态文件不用再分析店铺（只读请求入口写入的 WELINE_IS_STATIC_FILE）
         if (!empty(self::currentServer()['WELINE_IS_STATIC_FILE'])) {
@@ -2331,6 +2362,104 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
      * 与 Server AttackDetector 默认规则对齐的子集，供 FPM/Url::parser 使用；
      * 不包含单独匹配 `|`/`;` 等易误伤店面 query 的规则。
      */
+    /**
+     * Dispatch Weline_Framework_Url::normalize_visitor_uri so owning modules
+     * (Theme /~preview/{token}/…) can peel routing mounts while keeping origin.
+     *
+     * Site probing / start-page root detection MUST use routing_uri; visitor
+     * identity / cache keys keep origin_uri.
+     *
+     * @return array{routing_uri: string, origin_uri: string}
+     */
+    public static function normalizeVisitorUri(string $uri): array
+    {
+        $uri = \trim($uri);
+        if ($uri === '') {
+            $uri = '/';
+        }
+        if ($uri[0] !== '/') {
+            $uri = '/' . $uri;
+        }
+
+        try {
+            $payload = new DataObject([
+                'uri' => $uri,
+                'routing_uri' => $uri,
+                'origin_uri' => $uri,
+            ]);
+            w_obj(EventsManager::class)
+                ->dispatch('Weline_Framework_Url::normalize_visitor_uri', $payload);
+            $routing = \trim((string)$payload->getData('routing_uri'));
+            $origin = \trim((string)$payload->getData('origin_uri'));
+            if ($routing === '') {
+                $routing = $uri;
+            }
+            if ($routing[0] !== '/') {
+                $routing = '/' . $routing;
+            }
+            if ($origin === '') {
+                $origin = $uri;
+            }
+            if ($origin[0] !== '/') {
+                $origin = '/' . $origin;
+            }
+
+            return [
+                'routing_uri' => $routing,
+                'origin_uri' => $origin,
+            ];
+        } catch (\Throwable) {
+            return [
+                'routing_uri' => $uri,
+                'origin_uri' => $uri,
+            ];
+        }
+    }
+
+    /**
+     * Rebuild an absolute storefront URL after normalizeVisitorUri peels mounts.
+     * Scheme/host/port stay; path/query/fragment become the routing remainder.
+     */
+    public static function applyVisitorUriNormalizeToUrl(string $requestUrl): string
+    {
+        $requestUrl = \trim($requestUrl);
+        if ($requestUrl === '') {
+            return $requestUrl;
+        }
+
+        $parsed = \parse_url($requestUrl);
+        if (!\is_array($parsed)) {
+            $normalized = self::normalizeVisitorUri($requestUrl);
+
+            return $normalized['routing_uri'];
+        }
+
+        $path = (string)($parsed['path'] ?? '/');
+        if ($path === '') {
+            $path = '/';
+        }
+        $query = isset($parsed['query']) && $parsed['query'] !== '' ? '?' . $parsed['query'] : '';
+        $fragment = isset($parsed['fragment']) && $parsed['fragment'] !== '' ? '#' . $parsed['fragment'] : '';
+        $uri = $path . $query . $fragment;
+        $normalized = self::normalizeVisitorUri($uri);
+        $routing = $normalized['routing_uri'];
+        if ($routing === $uri) {
+            return $requestUrl;
+        }
+
+        $scheme = isset($parsed['scheme']) ? $parsed['scheme'] . '://' : '';
+        $host = (string)($parsed['host'] ?? '');
+        $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+        $user = (string)($parsed['user'] ?? '');
+        $pass = isset($parsed['pass']) ? ':' . $parsed['pass'] : '';
+        $auth = $user !== '' ? $user . $pass . '@' : '';
+        if ($host === '') {
+            return $routing;
+        }
+
+        return $scheme . $auth . $host . $port . $routing;
+    }
+
     public static function looksLikeInjectionProbe(string $value): bool
     {
         if ($value === '') {
