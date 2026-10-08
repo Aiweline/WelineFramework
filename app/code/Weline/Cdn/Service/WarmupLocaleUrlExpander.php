@@ -6,7 +6,7 @@ namespace Weline\Cdn\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Api\Seo\LocalizedUrlBuilderInterface;
-use Weline\Websites\Model\Website;
+use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\WebsiteLanguage;
 
 /**
@@ -62,14 +62,8 @@ final class WarmupLocaleUrlExpander
         $locale = 'zh_Hans_CN';
         $currency = 'CNY';
         try {
-            /** @var Website $website */
-            $website = $this->objectManager->getInstance(Website::class);
-            $website->clear()
-                ->where(Website::schema_fields_ID, $websiteId)
-                ->find()
-                ->fetch();
-            $dl = trim((string)($website->getDefaultLanguage() ?? ''));
-            $dc = strtoupper(trim((string)($website->getDefaultCurrency() ?? '')));
+            $dl = trim((string)(WebsiteData::defaultLanguageForWebsite($websiteId) ?? ''));
+            $dc = strtoupper(trim((string)(WebsiteData::defaultCurrencyForWebsite($websiteId) ?? '')));
             if ($dl !== '') {
                 $locale = $dl;
             }

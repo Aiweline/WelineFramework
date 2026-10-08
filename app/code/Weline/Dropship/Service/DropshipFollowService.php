@@ -9,7 +9,6 @@ use Weline\Dropship\Interface\DropshipCatalogProviderInterface;
 use Weline\Dropship\Model\DropshipListing;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Inventory\Service\InventoryService;
-use Weline\Websites\Model\Website;
 
 class DropshipFollowService
 {
@@ -125,18 +124,15 @@ class DropshipFollowService
     private function resolveWebsiteCurrency(int $websiteId): string
     {
         try {
-            /** @var Website $website */
-            $website = ObjectManager::getInstance(Website::class);
-            $row = $website->clear()->where(Website::schema_fields_ID, $websiteId)->find()->fetch();
-            if ($row && $row->getId()) {
-                $code = strtoupper(trim((string)($row->getDefaultCurrency() ?? '')));
-                if ($code !== '') {
-                    return $code;
-                }
-                $codes = $row->getCurrencyCodes();
-                if ($codes !== []) {
-                    return strtoupper(trim((string)$codes[0]));
-                }
+            $code = strtoupper(trim((string)(
+                \Weline\Websites\Data\WebsiteData::defaultCurrencyForWebsite($websiteId) ?? ''
+            )));
+            if ($code !== '') {
+                return $code;
+            }
+            $codes = \Weline\Websites\Data\WebsiteData::currencyCodesForWebsite($websiteId);
+            if ($codes !== []) {
+                return strtoupper(trim((string)$codes[0]));
             }
         } catch (\Throwable) {
         }

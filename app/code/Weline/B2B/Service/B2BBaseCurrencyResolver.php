@@ -6,7 +6,6 @@ namespace Weline\B2B\Service;
 
 use Weline\Currency\Service\CurrencyRateService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Websites\Model\Website;
 
 /**
  * Resolve the website default (benchmark) currency used for B2B credit / spend targets.
@@ -148,13 +147,9 @@ class B2BBaseCurrencyResolver
             return '';
         }
         try {
-            /** @var Website $website */
-            $website = ObjectManager::getInstance(Website::class);
-            $website->clear()->load(Website::schema_fields_ID, $websiteId);
-            if (!$website->getId() && $websiteId !== Website::ID_DEFAULT) {
-                return '';
-            }
-            return strtoupper(trim((string)($website->getDefaultCurrency() ?? '')));
+            return strtoupper(trim((string)(
+                \Weline\Websites\Data\WebsiteData::defaultCurrencyForWebsite($websiteId) ?? ''
+            )));
         } catch (\Throwable) {
             return '';
         }

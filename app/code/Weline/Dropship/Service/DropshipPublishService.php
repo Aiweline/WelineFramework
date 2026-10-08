@@ -12,7 +12,6 @@ use Weline\Product\Api\Data\ProductAdminCommand;
 use Weline\Product\Api\ProductAdminCommandInterface;
 use Weline\Product\Model\Shard\Offer;
 use Weline\Product\Model\Shard\Product;
-use Weline\Websites\Model\Website;
 
 /**
  * Shell-owned publish: ProductAdminCommand CREATE+PUBLISH + listing row; providers never write catalog.
@@ -752,18 +751,15 @@ class DropshipPublishService
     private function resolveWebsiteCurrency(int $websiteId): string
     {
         try {
-            /** @var Website $website */
-            $website = ObjectManager::getInstance(Website::class);
-            $row = $website->clear()->where(Website::schema_fields_ID, $websiteId)->find()->fetch();
-            if ($row && $row->getId()) {
-                $code = strtoupper(trim((string)($row->getDefaultCurrency() ?? '')));
-                if ($code !== '') {
-                    return $code;
-                }
-                $codes = $row->getCurrencyCodes();
-                if ($codes !== []) {
-                    return strtoupper(trim((string)$codes[0]));
-                }
+            $code = strtoupper(trim((string)(
+                \Weline\Websites\Data\WebsiteData::defaultCurrencyForWebsite($websiteId) ?? ''
+            )));
+            if ($code !== '') {
+                return $code;
+            }
+            $codes = \Weline\Websites\Data\WebsiteData::currencyCodesForWebsite($websiteId);
+            if ($codes !== []) {
+                return strtoupper(trim((string)$codes[0]));
             }
         } catch (\Throwable $e) {
             w_log_error('dropship resolve website currency failed: ' . $e->getMessage());

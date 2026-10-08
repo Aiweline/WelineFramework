@@ -312,7 +312,8 @@ class Currency extends Model
         } catch (\Throwable) {
         }
         try {
-            w_cache('currency')->clear();
+            \Weline\Currency\Data\CurrencyData::clearCache();
+            \Weline\Currency\Helper\CurrencySymbol::clearProcessCache();
             \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
             \Weline\Currency\Service\Repository\CurrencyCatalog::clearProcessCache();
             \Weline\Currency\Taglib\CurrencySelect::clearProcessCaches();

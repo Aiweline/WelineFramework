@@ -16,6 +16,9 @@ final class WarmupLocaleUrlExpanderContractTest extends TestCase
         $src = (string)file_get_contents($path);
         $this->assertStringContainsString('LocalizedUrlBuilderInterface', $src);
         $this->assertStringContainsString('getWebsiteLanguageCodes', $src);
+        $this->assertStringContainsString('WebsiteData::defaultLanguageForWebsite', $src);
+        $this->assertStringContainsString('WebsiteData::defaultCurrencyForWebsite', $src);
+        $this->assertStringNotContainsString('Website::schema_fields_ID', $src);
         $this->assertStringContainsString('expandRoute', $src);
         $this->assertStringContainsString('Visitor', $src); // documents deferred heat ranking
     }
