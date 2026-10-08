@@ -33,8 +33,8 @@
     var PEER_CENSUS_FRESH_MS = 3500;
     // After this long without audible progress, soft resume (focus/peer) must not surprise-play.
     var SOFT_RESUME_IDLE_MS = 90000;
-    // Polar spectrum bars around the avatar (frequency bins → height, not concentric rings).
-    var SPECTRUM_BAR_COUNT = 48;
+    // Polar spectrum filaments around the avatar (dense water-ripple spokes, not sparse bars).
+    var SPECTRUM_BAR_COUNT = 320;
 
     function currentStoreMusicEpoch() {
         return Number(global.__WelineStoreMusicEpoch) || 0;
@@ -5137,20 +5137,33 @@
             var t = (this.audio && this.audio.currentTime) || 0;
             for (i = 0; i < SPECTRUM_BAR_COUNT; i++) {
                 var phase = (i / SPECTRUM_BAR_COUNT) * Math.PI * 2;
-                var contour = 0.72 + (0.28 * Math.sin(phase * 2 + t * 0.45));
-                var pulse = 0.28
-                    + 0.32 * Math.abs(Math.sin(t * 2.4 + phase * 1.7))
-                    + 0.24 * Math.abs(Math.sin(t * 5.7 + phase * 0.8))
-                    + 0.18 * Math.abs(Math.sin(t * 1.05 + phase * 3.1));
+                // Higher spatial frequency + soft envelope → continuous water ripples.
+                var contour = 0.74 + (0.26 * Math.sin(phase * 4 + t * 0.55));
+                var pulse = 0.26
+                    + 0.30 * Math.abs(Math.sin(t * 2.2 + phase * 3.4))
+                    + 0.24 * Math.abs(Math.sin(t * 5.1 + phase * 1.6))
+                    + 0.20 * Math.abs(Math.sin(t * 1.15 + phase * 6.2));
                 levels[i] = Math.min(1, Math.max(0.22, pulse * contour));
             }
         }
+        // Lateral blend so dense filaments undulate as one wave sheet, not discrete spikes.
+        var wave = [];
+        for (i = 0; i < SPECTRUM_BAR_COUNT; i++) {
+            var iPrev = (i + SPECTRUM_BAR_COUNT - 1) % SPECTRUM_BAR_COUNT;
+            var iNext = (i + 1) % SPECTRUM_BAR_COUNT;
+            var iPrev2 = (i + SPECTRUM_BAR_COUNT - 2) % SPECTRUM_BAR_COUNT;
+            var iNext2 = (i + 2) % SPECTRUM_BAR_COUNT;
+            wave[i] = (levels[i] * 0.36)
+                + (levels[iPrev] * 0.22)
+                + (levels[iNext] * 0.22)
+                + (levels[iPrev2] * 0.10)
+                + (levels[iNext2] * 0.10);
+        }
         for (i = 0; i < SPECTRUM_BAR_COUNT; i++) {
             var prev = this._spectrumSmooth[i] || 0;
-            var target = Math.max(0, Math.min(1, Number(levels[i]) || 0));
-            // Quick attack, slower decay: a small envelope feels more like music than
-            // 48 synchronised columns jumping at the same speed.
-            var rate = target > prev ? 0.34 : 0.12;
+            var target = Math.max(0, Math.min(1, Number(wave[i]) || 0));
+            // Quick attack, slower decay: envelope + neighbor blend → water-like motion.
+            var rate = target > prev ? 0.28 : 0.10;
             var next = prev + ((target - prev) * rate);
             this._spectrumSmooth[i] = next;
             this._spectrumBars[i].style.setProperty('--w-bar', next.toFixed(3));
@@ -5345,7 +5358,7 @@
         }
     };
 
-    var SCRIPT_GEN = '20260917-61speccenter2';
+    var SCRIPT_GEN = '20261008-65waterripple';
 
     function boot(root) {
         if (!root) {

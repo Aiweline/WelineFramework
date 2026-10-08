@@ -22,8 +22,8 @@ final class StoreMusicSettingsContractTest extends TestCase
         $widget = (string)file_get_contents(
             $moduleRoot . '/view/templates/frontend/widgets/store-music.phtml'
         );
-        $hook = (string)file_get_contents(
-            $moduleRoot . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml'
+        $widgetRegistry = (string)file_get_contents(
+            $moduleRoot . '/extends/module/Weline_Widget/Weline_StoreMusic/widget.php'
         );
         $js = (string)file_get_contents($moduleRoot . '/view/statics/js/store-music.js');
         $modulesJs = (string)file_get_contents($moduleRoot . '/view/statics/frontend/weline.modules.js');
@@ -101,11 +101,14 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('data-store-music-intro', $widget);
         self::assertStringContainsString("\$t = static fn (string \$word): string => \$esc((string)__(\$word))", $widget);
         self::assertStringNotContainsString('CustomerService', $widget);
-        self::assertStringContainsString('templates/frontend/widgets/store-music.phtml', $hook);
-        self::assertStringContainsString('BP . ', $hook);
+        self::assertStringContainsString('storefront-float-start', $widget);
+        self::assertStringContainsString("'slot' => 'storefront-float-start'", $widgetRegistry);
+        self::assertFileDoesNotExist(
+            $moduleRoot . '/view/hooks/Weline_Theme/frontend/layouts/base/float-slot-start.phtml'
+        );
 
         self::assertStringContainsString('storeMusic', $modulesJs);
-        self::assertStringContainsString('20261006-payquiet1', $modulesJs);
+        self::assertStringContainsString('20261008-65waterripple', $modulesJs);
         self::assertStringNotContainsString('20260924-no-unload1', $modulesJs);
         self::assertStringNotContainsString('20260917-storemusic-speccenter2', $modulesJs);
         self::assertStringContainsString('load: "defer"', $modulesJs);

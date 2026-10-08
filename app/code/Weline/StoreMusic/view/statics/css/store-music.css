@@ -25,25 +25,15 @@
 
 /* Keep portrait player shell visible even if host tooling injects opacity/visibility.
  * Do NOT force children; [hidden] panels must stay display:none. */
+/* Geometry when outside float-layer (legacy / wave host). Inside
+ * #w-storefront-float-layer Theme CSS forces relative + shared bottom inset. */
 .w-store-music {
   position: fixed;
   left: max(0.85rem, env(safe-area-inset-left));
-  /* heading-lift：与货架 H2 等左对齐标题撞层时由脚本抬高，避免挡字 */
-  --w-store-music-heading-lift: 0px;
-  bottom: calc(
-    max(0.95rem, env(safe-area-inset-bottom, 0px))
-    + var(--weline-product-sticky-purchase-clearance, 0px)
-    + var(--w-store-music-heading-lift, 0px)
-  );
+  bottom: max(0.95rem, env(safe-area-inset-bottom, 0px));
   z-index: var(--w-store-music-z-widget);
   font-family: var(--font-body, var(--weline-theme-font-body, system-ui, sans-serif));
   color: var(--w-store-music-ink);
-  transition: bottom var(--weline-motion-normal, 0.2s) ease;
-}
-
-/* 避让抬升中关闭 transition，避免量测低估导致仍挡字 */
-.w-store-music.is-heading-clear {
-  transition: none;
 }
 
 .w-store-music__shell,
@@ -103,6 +93,8 @@
   overflow: visible;
   opacity: 0;
   visibility: hidden;
+  /* Soft optical merge so packed filaments read as one water sheet. */
+  filter: blur(0.55px);
 }
 
 .w-store-music.is-playing .w-store-music__spectrum {
@@ -111,14 +103,16 @@
 }
 
 .w-store-music__spectrum-bar {
-  --w-spectrum-len: calc(0.45rem + (var(--w-bar, 0) * 2.15rem));
+  /* High base length + small undulation → continuous water sheet, not sparse spikes. */
+  --w-spectrum-len: calc(1.35rem + (var(--w-bar, 0) * 0.75rem));
   position: absolute;
   left: 50%;
   bottom: 50%;
-  width: 0.16rem;
+  /* Hairline filaments: packed so adjacent strokes read as continuous water ripples. */
+  width: 0.1rem;
   /* Full spoke from center; inner segment transparent so only the outer ring paints. */
   height: calc(var(--w-spectrum-r) + var(--w-spectrum-len));
-  margin-left: -0.08rem;
+  margin-left: -0.05rem;
   border-radius: 999px;
   transform-origin: center bottom;
   transform: rotate(var(--w-ang, 0deg));
@@ -128,12 +122,12 @@
     transparent var(--w-spectrum-r),
     color-mix(
       in srgb,
-      var(--w-store-music-accent) calc(55% + (var(--w-bar, 0) * 40%)),
+      var(--w-store-music-accent) calc(52% + (var(--w-bar, 0) * 38%)),
       transparent
     ) var(--w-spectrum-r),
     color-mix(
       in srgb,
-      var(--w-store-music-accent) calc(55% + (var(--w-bar, 0) * 40%)),
+      var(--w-store-music-accent) calc(40% + (var(--w-bar, 0) * 35%)),
       transparent
     ) 100%
   );
@@ -143,7 +137,7 @@
 }
 
 .w-store-music.is-playing .w-store-music__spectrum-bar {
-  opacity: calc(0.55 + (var(--w-bar, 0) * 0.4));
+  opacity: calc(0.5 + (var(--w-bar, 0) * 0.42));
 }
 
 .w-store-music:not(.is-playing) .w-store-music__spectrum-bar {

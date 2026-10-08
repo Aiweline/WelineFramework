@@ -134,7 +134,7 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('preferCache (F5 sticky resume)', $js);
         self::assertStringContainsString('flash「点击开启音乐」', $js);
         self::assertStringContainsString('navType === \'reload\'', $js);
-        self::assertStringContainsString('20260917-61speccenter2', $js);
+        self::assertStringContainsString('20261008-65waterripple', $js);
         self::assertStringContainsString('syncSpectrumRadius', $js);
         self::assertStringContainsString('armStickyPlayRetry', $js);
         self::assertStringContainsString('AbortError', $js);
@@ -215,10 +215,10 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         $phtml = (string)\file_get_contents(
             $this->moduleFile('view/templates/frontend/widgets/store-music.phtml')
         );
-        $hook = (string)\file_get_contents(
-            $this->moduleFile('view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml')
+        self::assertFileDoesNotExist(
+            $this->moduleFile('view/hooks/Weline_Theme/frontend/layouts/base/float-slot-start.phtml')
         );
-        self::assertStringContainsString('templates/frontend/widgets/store-music.phtml', $hook);
+        self::assertStringContainsString('storefront-float-start', $phtml);
         self::assertStringContainsString('data-store-music-close', $phtml);
         self::assertStringNotContainsString('data-store-music-dismiss', $phtml);
         self::assertStringContainsString('w-store-music--simple', $phtml);
@@ -240,17 +240,18 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringNotContainsString('data-store-music-stage', $phtml);
         self::assertStringContainsString('data-store-music-spectrum', $phtml);
         self::assertStringContainsString('w-store-music__spectrum', $phtml);
-        // The template is included by a raw Hook as well as the normal view
-        // renderer; static URLs must therefore be resolved before HTML output.
-        // Hook bypasses @widget.source — must emit <link data-store-music-css>
-        // or the float stays position:static while audio still plays.
-        // Critical inline style keeps position:fixed even when the stylesheet 403s.
+        // Emit <link data-store-music-css> even when asset pipeline skips
+        // @widget.source. Critical inline: fixed fallback outside layer;
+        // relative inside float-layer slots.
         self::assertStringContainsString('fetchTagSource', $phtml);
         self::assertStringContainsString('DataInterface::dir_type_STATICS', $phtml);
         self::assertStringContainsString('data-store-music-css', $phtml);
         self::assertStringContainsString('data-store-music-host-css', $phtml);
         self::assertStringContainsString('data-store-music-critical', $phtml);
         self::assertStringContainsString('position:fixed!important', $phtml);
+        self::assertStringContainsString('#w-storefront-float-layer .w-store-music[data-store-music]', $phtml);
+        self::assertStringContainsString('position:relative!important', $phtml);
+        self::assertStringNotContainsString('w-store-music-heading-lift', $phtml);
         self::assertStringContainsString('css/widgets/widget-store-music.css', $phtml);
         self::assertStringContainsString('css/store-music.css', $phtml);
         self::assertStringContainsString('<link rel="stylesheet"', $phtml);
@@ -264,7 +265,7 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('SPECTRUM_BAR_COUNT', $js);
         self::assertStringContainsString('ensureSpectrumBars', $js);
         self::assertStringContainsString('document.body.appendChild(this.waveCanvas)', $js);
-        self::assertStringContainsString('20260917-61speccenter2', $js);
+        self::assertStringContainsString('20261008-65waterripple', $js);
         self::assertStringContainsString('syncSpectrumRadius', $js);
 
         $css = (string)\file_get_contents($this->moduleFile('view/statics/css/store-music.css'));
@@ -298,8 +299,8 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('is-remote-playing', $js);
         self::assertStringContainsString('visible: row.visible === true', $js);
         self::assertStringContainsString('dying: row.dying === true', $js);
-        self::assertStringContainsString('SPECTRUM_BAR_COUNT = 48', $js);
-        self::assertStringContainsString('* 2.15rem', $css);
+        self::assertStringContainsString('SPECTRUM_BAR_COUNT = 320', $js);
+        self::assertStringContainsString('* 0.75rem', $css);
         self::assertStringContainsString('--w-spectrum-r', $css);
         self::assertStringContainsString('bottom: 50%', $css);
         self::assertStringContainsString('transform-origin: center bottom', $css);
