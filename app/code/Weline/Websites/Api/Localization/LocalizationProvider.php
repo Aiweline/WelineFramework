@@ -77,6 +77,11 @@ final class LocalizationProvider implements LocalizationProviderInterface
         return null;
     }
 
+    public function installedLanguageCodes(): ?array
+    {
+        return null;
+    }
+
     public static function clearProcessCache(): void
     {
         WebsiteData::clearProcessCache();

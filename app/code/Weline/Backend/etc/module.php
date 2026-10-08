@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Backend',
-    "version" => '1.4.33',
+    "version" => '1.4.34',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Framework' => '^2.4',
@@ -33,5 +33,6 @@ return [
         \Weline\Framework\Session\Auth\BackendSessionUserProviderInterface::class => \Weline\Backend\Api\Auth\BackendSessionUserProvider::class,
         'request_resetter.Weline_Backend' => \Weline\Backend\Api\Runtime\RequestResetter::class,
         'process_cache_resetter.Weline_Backend' => \Weline\Backend\Api\Runtime\ProcessCacheResetter::class,
+        'localization_provider.Weline_Backend' => \Weline\Backend\Api\Localization\LocalizationProvider::class,
     ],
 ];

@@ -17,23 +17,22 @@ final class LocalizationProvider implements LocalizationProviderInterface
 
     public function languageCodes(): array
     {
-        $rows = $this->model()->clear()
-            ->where(Locals::schema_fields_IS_INSTALL, 1)
-            ->where(Locals::schema_fields_IS_ACTIVE, 1)
-            ->select()
-            ->fetchArray();
-        $codes = [];
-        foreach ((array)$rows as $row) {
-            if (is_array($row) && trim((string)($row[Locals::schema_fields_CODE] ?? '')) !== '') {
-                $codes[] = (string)$row[Locals::schema_fields_CODE];
-            }
-        }
-        return $codes;
+        return $this->codesWhereInstalled(true);
     }
 
     public function currencyCodes(): array
     {
         return [];
+    }
+
+    public function defaultLanguage(): ?string
+    {
+        return null;
+    }
+
+    public function defaultCurrency(): ?string
+    {
+        return null;
     }
 
     public function supportsLanguage(string $code): ?bool
@@ -50,6 +49,29 @@ final class LocalizationProvider implements LocalizationProviderInterface
     public function supportsCurrency(string $code): ?bool
     {
         return null;
+    }
+
+    public function installedLanguageCodes(): ?array
+    {
+        return $this->codesWhereInstalled(false);
+    }
+
+    /** @return list<string> */
+    private function codesWhereInstalled(bool $activeOnly): array
+    {
+        $query = $this->model()->clear()->where(Locals::schema_fields_IS_INSTALL, 1);
+        if ($activeOnly) {
+            $query->where(Locals::schema_fields_IS_ACTIVE, 1);
+        }
+        $rows = $query->select()->fetchArray();
+        $codes = [];
+        foreach ((array)$rows as $row) {
+            if (is_array($row) && trim((string)($row[Locals::schema_fields_CODE] ?? '')) !== '') {
+                $codes[] = (string)$row[Locals::schema_fields_CODE];
+            }
+        }
+
+        return $codes;
     }
 
     private function model(): Locals

@@ -34,6 +34,8 @@ final class LocalizationProviderRegistryTest extends TestCase
 
         self::assertSame(['zh_Hans_CN'], $registry->preferredLanguageCodes());
         self::assertSame(['CNY'], $registry->preferredCurrencyCodes());
+        self::assertSame('zh_Hans_CN', $registry->preferredDefaultLanguage());
+        self::assertSame('CNY', $registry->preferredDefaultCurrency());
         self::assertTrue($registry->supportsLanguage('en_US'));
         self::assertTrue($registry->supportsCurrency('USD'));
         self::assertFalse($registry->supportsCurrency('EUR'));
@@ -47,6 +49,22 @@ final class LocalizationProviderRegistryTest extends TestCase
 
         self::assertSame(['en_US'], $registry->preferredLanguageCodes());
         self::assertSame(['USD'], $registry->preferredCurrencyCodes());
+        self::assertNull($registry->preferredDefaultLanguage());
+        self::assertNull($registry->preferredDefaultCurrency());
+        self::assertSame(['en_US', 'fr_FR'], $registry->preferredInstalledLanguageCodes());
+    }
+
+    public function testPreferredDefaultLanguageRespectsMinPriority(): void
+    {
+        $registry = $this->registry([
+            'localization_provider.global' => GlobalLocalizationProvider::class,
+            'localization_provider.website' => WebsiteLocalizationProvider::class,
+            'localization_provider.backend' => BackendTierLocalizationProvider::class,
+        ]);
+
+        self::assertSame('zh_Hans_CN', $registry->preferredDefaultLanguage());
+        self::assertSame('ja_JP', $registry->preferredDefaultLanguageWithMinPriority(200));
+        self::assertNull($registry->preferredDefaultLanguageWithMinPriority(300));
     }
 
     /** @param array<string, class-string> $provides */
@@ -68,8 +86,11 @@ final class WebsiteLocalizationProvider implements LocalizationProviderInterface
     public function priority(): int { return 100; }
     public function languageCodes(): array { return ['zh-Hans-CN']; }
     public function currencyCodes(): array { return ['cny']; }
+    public function defaultLanguage(): ?string { return 'zh-Hans-CN'; }
+    public function defaultCurrency(): ?string { return 'cny'; }
     public function supportsLanguage(string $code): ?bool { return null; }
     public function supportsCurrency(string $code): ?bool { return null; }
+    public function installedLanguageCodes(): ?array { return null; }
 }
 
 final class GlobalLocalizationProvider implements LocalizationProviderInterface
@@ -77,6 +98,21 @@ final class GlobalLocalizationProvider implements LocalizationProviderInterface
     public function priority(): int { return 10; }
     public function languageCodes(): array { return ['en_US']; }
     public function currencyCodes(): array { return ['USD']; }
+    public function defaultLanguage(): ?string { return null; }
+    public function defaultCurrency(): ?string { return null; }
     public function supportsLanguage(string $code): ?bool { return $code === 'en_US'; }
     public function supportsCurrency(string $code): ?bool { return $code === 'USD'; }
+    public function installedLanguageCodes(): ?array { return ['en_US', 'fr_FR']; }
+}
+
+final class BackendTierLocalizationProvider implements LocalizationProviderInterface
+{
+    public function priority(): int { return 200; }
+    public function languageCodes(): array { return []; }
+    public function currencyCodes(): array { return []; }
+    public function defaultLanguage(): ?string { return 'ja_JP'; }
+    public function defaultCurrency(): ?string { return null; }
+    public function supportsLanguage(string $code): ?bool { return null; }
+    public function supportsCurrency(string $code): ?bool { return null; }
+    public function installedLanguageCodes(): ?array { return null; }
 }

@@ -177,17 +177,16 @@ class State extends DataObject
      */
     public static function resolveBackendEffectiveDefaultLanguage(): string
     {
-        if (\class_exists(\Weline\Backend\Service\BackendPersonalLanguage::class)) {
-            try {
-                $personal = \Weline\Backend\Service\BackendPersonalLanguage::runtimeOverride();
-                if ($personal === '') {
-                    $personal = \Weline\Backend\Service\BackendPersonalLanguage::resolveForCurrentUser();
-                }
-                if ($personal !== '') {
-                    return $personal;
-                }
-            } catch (\Throwable) {
+        // Backend LocalizationProvider (priority >= 200) supplies personal language.
+        // Do not soft-pull BackendPersonalLanguage FQCN from Framework.
+        try {
+            $personal = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\App\Localization\LocalizationProviderRegistry::class
+            )->preferredDefaultLanguageWithMinPriority(200);
+            if (\is_string($personal) && $personal !== '') {
+                return $personal;
             }
+        } catch (\Throwable) {
         }
 
         return self::resolveBackendDefaultLanguage();
@@ -666,7 +665,8 @@ class State extends DataObject
     }
 
     /**
-     * 网站默认语言：website.language / WELINE_WEBSITE_LANGUAGE / WebsiteData，再回落到站点允许列表首项。
+     * 网站默认语言：LocalizationProvider（站点供数）→ env → 允许列表首项。
+     * Framework 不硬编码 WebsiteData；进程袋按 website scope 复用。
      */
     public static function resolveWebsiteDefaultLanguage(): string
     {
@@ -675,16 +675,15 @@ class State extends DataObject
             return self::$websiteDefaultLanguageByScope[$scope];
         }
 
+        $allowedMap = self::resolveAllowedLanguageCodeMap();
         try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                $fromWebsite = self::normalizeLanguageSegment(
-                    \trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultLanguage() ?? '')),
-                );
-                if ($fromWebsite !== '' && self::isLanguageSegmentCandidate($fromWebsite)) {
-                    $allowedMap = self::resolveAllowedLanguageCodeMap();
-                    if ($allowedMap === [] || isset($allowedMap[\strtolower($fromWebsite)])) {
-                        return self::rememberWebsiteDefaultLanguage($scope, $fromWebsite);
-                    }
+            $fromProvider = self::normalizeLanguageSegment(
+                \trim((string)(ObjectManager::getInstance(LocalizationProviderRegistry::class)
+                    ->preferredDefaultLanguage() ?? '')),
+            );
+            if ($fromProvider !== '' && self::isLanguageSegmentCandidate($fromProvider)) {
+                if ($allowedMap === [] || isset($allowedMap[\strtolower($fromProvider)])) {
+                    return self::rememberWebsiteDefaultLanguage($scope, $fromProvider);
                 }
             }
         } catch (\Throwable) {
@@ -704,7 +703,6 @@ class State extends DataObject
         } catch (\Throwable) {
         }
 
-        $allowedMap = self::resolveAllowedLanguageCodeMap();
         foreach ($candidates as $candidate) {
             $code = self::normalizeLanguageSegment((string)$candidate);
             if ($code === '' || !self::isLanguageSegmentCandidate($code)) {
@@ -734,8 +732,8 @@ class State extends DataObject
     }
 
     /**
-     * 网站默认货币：website.currency / WELINE_WEBSITE_CURRENCY / WebsiteData / app env，
-     * 再回落到站点允许货币列表首项。
+     * 网站默认货币：LocalizationProvider（站点供数）→ env → 允许列表首项。
+     * Framework 不硬编码 WebsiteData；进程袋按 website scope 复用。
      */
     public static function resolveWebsiteDefaultCurrency(): string
     {
@@ -744,14 +742,13 @@ class State extends DataObject
             return self::$websiteDefaultCurrencyByScope[$scope];
         }
 
+        $allowedMap = self::resolveAllowedCurrencyCodeMap();
         try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                $fromWebsite = \strtoupper(\trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultCurrency() ?? '')));
-                if (self::isCurrencySegmentCandidate($fromWebsite)) {
-                    $allowedMap = self::resolveAllowedCurrencyCodeMap();
-                    if ($allowedMap === [] || isset($allowedMap[$fromWebsite])) {
-                        return self::rememberWebsiteDefaultCurrency($scope, $fromWebsite);
-                    }
+            $fromProvider = \strtoupper(\trim((string)(ObjectManager::getInstance(LocalizationProviderRegistry::class)
+                ->preferredDefaultCurrency() ?? '')));
+            if (self::isCurrencySegmentCandidate($fromProvider)) {
+                if ($allowedMap === [] || isset($allowedMap[$fromProvider])) {
+                    return self::rememberWebsiteDefaultCurrency($scope, $fromProvider);
                 }
             }
         } catch (\Throwable) {
@@ -771,7 +768,6 @@ class State extends DataObject
         } catch (\Throwable) {
         }
 
-        $allowedMap = self::resolveAllowedCurrencyCodeMap();
         foreach ($candidates as $candidate) {
             $code = strtoupper(trim((string)$candidate));
             if (!self::isCurrencySegmentCandidate($code)) {

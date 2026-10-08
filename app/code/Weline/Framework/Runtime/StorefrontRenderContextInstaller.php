@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
-use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\App\Localization\LocalizationProviderRegistry;
 use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -12,7 +12,9 @@ use Weline\Framework\Manager\ObjectManager;
  * Installs {@see StorefrontRenderContext} once per request after ScopeIdentity freeze.
  *
  * Idempotent: bag present → no-op. Never leaves a half-installed bag (single atomic set).
- * Soft-resolves Websites / Theme / maintenance when those modules are present.
+ * Skeleton only from RequestContext / ScopeIdentity + LocalizationProviderRegistry.
+ * Owning modules fill maintenance / website_table_snapshot / theme_meta via
+ * {@see StorefrontRenderContextReader::mergeFields()}.
  */
 final class StorefrontRenderContextInstaller
 {
@@ -103,9 +105,6 @@ final class StorefrontRenderContextInstaller
 
         $websiteLocal = $this->projectWebsiteLocal((int)$websiteId);
         $localeCatalog = $this->resolveLocaleCatalog();
-        $maintenance = $this->resolveMaintenance($identity);
-        $themeMeta = $this->resolveThemeMeta();
-        $websiteTableSnapshot = $this->resolveWebsiteTableSnapshot((int)$websiteId, $websiteCode);
 
         return new StorefrontRenderContext(
             (int)$websiteId,
@@ -116,9 +115,9 @@ final class StorefrontRenderContextInstaller
             $currency,
             $timezone,
             $localeCatalog,
-            $maintenance,
-            $themeMeta,
-            $websiteTableSnapshot,
+            null,
+            null,
+            null,
             true,
             '',
         );
@@ -153,27 +152,18 @@ final class StorefrontRenderContextInstaller
         $active = [];
         $installed = [];
         try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                $codes = \Weline\Websites\Data\WebsiteData::getLanguageCodes();
-                if (\is_array($codes)) {
-                    $active = \array_values(\array_map('strval', $codes));
-                }
+            /** @var LocalizationProviderRegistry $registry */
+            $registry = ObjectManager::getInstance(LocalizationProviderRegistry::class);
+            $codes = $registry->preferredLanguageCodes();
+            if (\is_array($codes)) {
+                $active = \array_values(\array_map('strval', $codes));
+            }
+            $installedCodes = $registry->preferredInstalledLanguageCodes();
+            if (\is_array($installedCodes)) {
+                $installed = \array_values(\array_map('strval', $installedCodes));
             }
         } catch (\Throwable) {
             $active = [];
-        }
-
-        // Installed catalog: prefer I18n switcher catalog when available; else mirror active.
-        try {
-            if (\class_exists(\Weline\I18n\Taglib\LanguageSwitcher::class)
-                && \method_exists(\Weline\I18n\Taglib\LanguageSwitcher::class, 'installedLocaleCodes')
-            ) {
-                $installed = \array_values(\array_map(
-                    'strval',
-                    (array)\Weline\I18n\Taglib\LanguageSwitcher::installedLocaleCodes()
-                ));
-            }
-        } catch (\Throwable) {
             $installed = [];
         }
         if ($installed === []) {
@@ -181,72 +171,6 @@ final class StorefrontRenderContextInstaller
         }
 
         return ['active' => $active, 'installed' => $installed];
-    }
-
-    /**
-     * Request-memo maintenance snapshot (cross-request cache deferred by contract).
-     *
-     * @return array{scope_key?:string,enabled?:bool,reason?:string,generation?:int,since?:int}|null
-     */
-    private function resolveMaintenance(?ScopeIdentity $identity): ?array
-    {
-        if (!$identity instanceof ScopeIdentity) {
-            return null;
-        }
-        if (!\class_exists(\Weline\Websites\Service\ScopeMaintenanceGate::class)) {
-            return null;
-        }
-        try {
-            /** @var StorefrontScopeHotCache $hot */
-            $hot = ObjectManager::getInstance(StorefrontScopeHotCache::class);
-            /** @var \Weline\Websites\Service\ScopeMaintenanceGate $gate */
-            $gate = ObjectManager::getInstance(\Weline\Websites\Service\ScopeMaintenanceGate::class);
-            $status = $hot->rememberForRequest(
-                'scope_maintenance',
-                $identity->canonicalKey(),
-                static fn (): array => $gate->status($identity),
-            );
-            return \is_array($status) ? $status : null;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    /**
-     * theme_meta stays null at install; Theme consumers merge via
-     * {@see StorefrontRenderContextReader::mergeFields()} after type-scoped getMetaList.
-     *
-     * @return array<string,mixed>|null
-     */
-    private function resolveThemeMeta(): ?array
-    {
-        return null;
-    }
-
-    /** @return array<string,mixed>|null */
-    private function resolveWebsiteTableSnapshot(int $websiteId, string $websiteCode): ?array
-    {
-        try {
-            if (!\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                return null;
-            }
-            $website = \Weline\Websites\Data\WebsiteData::getWebsite();
-            if ($website === null) {
-                return null;
-            }
-            $data = \method_exists($website, 'getData') ? (array)$website->getData() : null;
-            if (!\is_array($data) || $data === []) {
-                return null;
-            }
-
-            return [
-                'website_id' => $websiteId,
-                'website_code' => $websiteCode,
-                'row' => $data,
-            ];
-        } catch (\Throwable) {
-            return null;
-        }
     }
 
     private function incomplete(string $websiteCode, string $websiteUrl, string $failureCode): StorefrontRenderContext

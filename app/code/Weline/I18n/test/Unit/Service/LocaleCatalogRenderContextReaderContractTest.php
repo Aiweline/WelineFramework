@@ -35,10 +35,11 @@ final class LocaleCatalogRenderContextReaderContractTest extends TestCase
         self::assertNotFalse($defaultLang);
         $slice = \substr($src, $defaultLang, 2800);
         $readerPos = \strpos($slice, 'StorefrontRenderContextReader');
-        $websitePos = \strpos($slice, 'WebsiteData::getDefaultLanguage');
+        $statePos = \strpos($slice, 'State::resolveWebsiteDefaultLanguage');
         self::assertNotFalse($readerPos);
-        self::assertNotFalse($websitePos);
-        self::assertLessThan($websitePos, $readerPos);
+        self::assertNotFalse($statePos);
+        self::assertLessThan($statePos, $readerPos);
+        self::assertStringNotContainsString('WebsiteData::getDefaultLanguage', $slice);
 
         $filterPos = \strpos($src, 'function filterFrontendLanguages');
         self::assertNotFalse($filterPos);

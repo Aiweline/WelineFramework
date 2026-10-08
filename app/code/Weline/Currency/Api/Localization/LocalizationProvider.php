@@ -45,6 +45,16 @@ final class LocalizationProvider implements LocalizationProviderInterface
         return $codes;
     }
 
+    public function defaultLanguage(): ?string
+    {
+        return null;
+    }
+
+    public function defaultCurrency(): ?string
+    {
+        return null;
+    }
+
     public function supportsLanguage(string $code): ?bool
     {
         return null;
@@ -53,5 +63,10 @@ final class LocalizationProvider implements LocalizationProviderInterface
     public function supportsCurrency(string $code): ?bool
     {
         return CurrencyData::getCurrency($code) !== null;
+    }
+
+    public function installedLanguageCodes(): ?array
+    {
+        return null;
     }
 }

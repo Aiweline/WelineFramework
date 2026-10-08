@@ -23,21 +23,13 @@ final class Timezone
 
     public static function resolveWebsiteTimezone(?string $explicit = null): string
     {
+        // Website timezone is written into RequestContext by owning module (DetectWebsite).
+        // Framework must not soft-pull WebsiteData.
         $candidates = [
             trim((string)$explicit),
             trim(RequestContext::getWelineTimezone()),
+            self::FALLBACK_TIMEZONE,
         ];
-        if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-            try {
-                $fromWebsite = \Weline\Websites\Data\WebsiteData::getDefaultTimezone();
-                if (\is_string($fromWebsite)) {
-                    $candidates[] = trim($fromWebsite);
-                }
-            } catch (Throwable) {
-                // Website module optional at bootstrap.
-            }
-        }
-        $candidates[] = self::FALLBACK_TIMEZONE;
 
         foreach ($candidates as $candidate) {
             if ($candidate === '') {

@@ -1725,11 +1725,9 @@ class LanguageSwitcher implements TaglibInterface
         } catch (\Throwable) {
         }
         try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                $fromWebsite = \trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultLanguage() ?? ''));
-                if ($fromWebsite !== '') {
-                    return \str_replace('-', '_', $fromWebsite);
-                }
+            $fromState = \trim((string)\Weline\Framework\App\State::resolveWebsiteDefaultLanguage());
+            if ($fromState !== '') {
+                return \str_replace('-', '_', $fromState);
             }
         } catch (\Throwable) {
         }
@@ -1766,11 +1764,9 @@ class LanguageSwitcher implements TaglibInterface
         } catch (\Throwable) {
         }
         try {
-            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
-                $fromWebsite = \strtoupper(\trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultCurrency() ?? '')));
-                if ($fromWebsite !== '') {
-                    return $fromWebsite;
-                }
+            $fromState = \strtoupper(\trim((string)\Weline\Framework\App\State::resolveWebsiteDefaultCurrency()));
+            if ($fromState !== '') {
+                return $fromState;
             }
         } catch (\Throwable) {
         }

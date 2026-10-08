@@ -6,8 +6,10 @@ namespace Weline\Framework\App\Localization;
 
 use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 
-final class LocalizationProviderRegistry
+
+final class LocalizationProviderRegistry implements ProcessSharedInterface
 {
     public const CAPABILITY_PREFIX = 'localization_provider.';
 
@@ -43,6 +45,36 @@ final class LocalizationProviderRegistry
         return [];
     }
 
+    /**
+     * First non-empty default language from providers (narrow scope wins by priority).
+     */
+    public function preferredDefaultLanguage(): ?string
+    {
+        foreach ($this->providers() as $provider) {
+            $codes = $this->normalizeLanguageCodes([(string)($provider->defaultLanguage() ?? '')]);
+            if ($codes !== []) {
+                return $codes[0];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * First non-empty default currency from providers (narrow scope wins by priority).
+     */
+    public function preferredDefaultCurrency(): ?string
+    {
+        foreach ($this->providers() as $provider) {
+            $codes = $this->normalizeCurrencyCodes([(string)($provider->defaultCurrency() ?? '')]);
+            if ($codes !== []) {
+                return $codes[0];
+            }
+        }
+
+        return null;
+    }
+
     public function supportsLanguage(string $code): bool
     {
         foreach ($this->providers() as $provider) {
@@ -63,6 +95,47 @@ final class LocalizationProviderRegistry
             }
         }
         return false;
+    }
+
+    /**
+     * First non-empty installed locale catalog from providers (narrow scope wins).
+     *
+     * @return list<string>
+     */
+    public function preferredInstalledLanguageCodes(): array
+    {
+        foreach ($this->providers() as $provider) {
+            $codes = $provider->installedLanguageCodes();
+            if ($codes === null) {
+                continue;
+            }
+            $normalized = $this->normalizeLanguageCodes($codes);
+            if ($normalized !== []) {
+                return $normalized;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * First non-empty default language among providers with priority >= $minPriority.
+     * Used for backend personal language (Backend LocalizationProvider tier) so
+     * storefront Website providers do not answer as backend default.
+     */
+    public function preferredDefaultLanguageWithMinPriority(int $minPriority): ?string
+    {
+        foreach ($this->providers() as $provider) {
+            if ($provider->priority() < $minPriority) {
+                continue;
+            }
+            $codes = $this->normalizeLanguageCodes([(string)($provider->defaultLanguage() ?? '')]);
+            if ($codes !== []) {
+                return $codes[0];
+            }
+        }
+
+        return null;
     }
 
     /** @return list<LocalizationProviderInterface> */
