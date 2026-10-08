@@ -51,6 +51,7 @@
         apiResetDraftResources: '',
         apiDeleteVersion: '',
         // 前端预览 API
+        apiPreviewBases: '',
         apiStartPreview: '',
         apiCheckLock: '',
         apiReleaseLock: '',
@@ -4831,6 +4832,7 @@
         config.apiDeleteVersion = container.dataset.apiDeleteVersion || `${config.apiBase}/delete-version`;
 
         // 前端预览 API 端点
+        config.apiPreviewBases = container.dataset.apiPreviewBases || `${config.apiBase}/preview-bases`;
         config.apiStartPreview = container.dataset.apiStartPreview || `${config.apiBase}/start-preview`;
         config.apiCheckLock = container.dataset.apiCheckLock || `${config.apiBase}/check-lock`;
         config.apiReleaseLock = container.dataset.apiReleaseLock || `${config.apiBase}/release-lock`;
@@ -20014,7 +20016,7 @@
     /**
      * #btnFrontendPreview — 真实前端店面预览。
      * 唯一允许调用 start-preview 的入口：种 Cookie、persist shell=preview、
-     * 打开真实店面 URL，并显示可拖动的「预览模式」退出浮窗。
+     * 打开真实店面 URL。先弹窗选择预览基址（本机壳默认）。
      */
     async function openFrontendPreview() {
         if (!state.themeId) {
@@ -20023,8 +20025,42 @@
         }
         try {
             await flushPendingEditorMutations();
-            showToast('正在启动预览...', 'info');
 
+            const basesPayload = await apiJson(config.apiPreviewBases, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(buildLayoutVersionIdentityPayload({
+                    frontend_theme_id: state.themeId || getCurrentWindowParam('frontend_theme_id') || '',
+                    website_id: state.scopeIdentity?.website_id
+                        ?? getCurrentWindowParam('website_id')
+                        ?? '',
+                    website_code: state.scopeIdentity?.website_code
+                        ?? getCurrentWindowParam('website_code')
+                        ?? '',
+                    editor_context: buildTypedEditorContext('layout', {
+                        area: 'frontend',
+                        theme_id: state.themeId || parseInt(getCurrentWindowParam('frontend_theme_id') || '0', 10) || 0,
+                        layout_type: getEffectiveLayoutType(),
+                        layout_option: getEffectiveLayoutOption(),
+                        locale: getPreviewLocaleForRequest() || 'default',
+                    }),
+                })),
+            });
+            const items = Array.isArray(basesPayload?.data?.items) ? basesPayload.data.items : [];
+            if (!basesPayload?.success || items.length === 0) {
+                showToast(basesPayload?.message || window.__('没有可用的预览地址'), 'error');
+                return;
+            }
+
+            const chosenBaseUrl = await openFrontendPreviewBaseDialog(
+                items,
+                String(basesPayload?.data?.notice || ''),
+            );
+            if (!chosenBaseUrl) {
+                return;
+            }
+
+            showToast(window.__('正在启动预览...'), 'info');
             const previewStatus = state.previewStatus === 'published' ? 'published' : 'draft';
 
             const result = await apiJson(config.apiStartPreview, {
@@ -20042,6 +20078,7 @@
                     preview_mode: 'live',
                     status: previewStatus,
                     locale: getPreviewLocaleForRequest(),
+                    preview_base_url: chosenBaseUrl,
                     editor_context: buildTypedEditorContext('layout', {
                         area: 'frontend',
                         theme_id: state.themeId || parseInt(getCurrentWindowParam('frontend_theme_id') || '0', 10) || 0,
@@ -20053,16 +20090,93 @@
             });
 
             if (result.success && result.data && result.data.preview_url) {
-                // 打开新窗口预览
                 window.open(result.data.preview_url, '_blank');
-                showToast('预览已在新窗口打开', 'success');
+                showToast(window.__('预览已在新窗口打开'), 'success');
             } else {
-                showToast(result.message || '启动预览失败', 'error');
+                showToast(result.message || window.__('启动预览失败'), 'error');
             }
         } catch (err) {
             console.error('[ThemeEditor] Start preview error:', err);
-            showToast(err?.message || '启动预览失败', 'error');
+            showToast(err?.message || window.__('启动预览失败'), 'error');
         }
+    }
+
+    /**
+     * @param {Array<{id:string,label:string,url:string,is_default?:boolean,badge?:string,hint?:string}>} items
+     * @param {string} notice
+     * @returns {Promise<string|null>}
+     */
+    function openFrontendPreviewBaseDialog(items, notice) {
+        return new Promise((resolve) => {
+            const defaultItem = items.find((item) => item?.is_default) || items[0];
+            const defaultUrl = String(defaultItem?.url || '');
+            const container = document.createElement('dialog');
+            container.className = 'w-dialog w-theme-editor-preview-base-dialog';
+            container.dataset.wComponent = 'dialog';
+            container.dataset.state = 'closed';
+            container.dataset.size = 'md';
+            container.dataset.wClosable = 'true';
+            container.dataset.wBackdrop = 'dismissible';
+            container.innerHTML = `
+                <div class="w-dialog__surface">
+                    <header class="w-dialog__header">
+                        <h2 class="w-dialog__title">${escapeHtml(window.__('选择预览地址'))}</h2>
+                        <button type="button" class="w-button" data-w-close data-tone="quiet" data-size="sm"
+                                data-preview-base-cancel aria-label="${escapeHtml(window.__('关闭'))}"></button>
+                    </header>
+                    <div class="w-dialog__body w-theme-editor-preview-base-dialog__body">
+                        <p class="w-theme-editor-preview-base-dialog__notice">${escapeHtml(notice || window.__('本机开发请优先选择「本机项目壳」。'))}</p>
+                        <div class="w-theme-editor-preview-base-dialog__list" role="radiogroup" aria-label="${escapeHtml(window.__('预览地址'))}">
+                            ${items.map((item, index) => {
+                                const url = String(item?.url || '');
+                                const id = `preview-base-${index}`;
+                                const checked = url === defaultUrl ? ' checked' : '';
+                                const badge = String(item?.badge || '');
+                                const hint = String(item?.hint || '');
+                                return `<label class="w-theme-editor-preview-base-dialog__option" for="${id}">
+                                    <input type="radio" name="preview_base_url" id="${id}" value="${escapeHtml(url)}"${checked}>
+                                    <span class="w-theme-editor-preview-base-dialog__option-main">
+                                        <span class="w-theme-editor-preview-base-dialog__option-title">
+                                            <strong>${escapeHtml(String(item?.label || url))}</strong>
+                                            ${badge ? `<span class="w-badge" data-tone="${item?.is_default ? 'success' : 'neutral'}">${escapeHtml(badge)}</span>` : ''}
+                                        </span>
+                                        <code class="w-theme-editor-preview-base-dialog__option-url">${escapeHtml(url)}</code>
+                                        ${hint ? `<span class="w-theme-editor-preview-base-dialog__option-hint">${escapeHtml(hint)}</span>` : ''}
+                                    </span>
+                                </label>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                    <footer class="w-dialog__footer">
+                        <button type="button" class="w-button" data-tone="neutral" data-preview-base-cancel>${escapeHtml(window.__('取消'))}</button>
+                        <button type="button" class="w-button" data-tone="primary" data-preview-base-confirm>${escapeHtml(window.__('打开预览'))}</button>
+                    </footer>
+                </div>
+            `;
+            document.body.appendChild(container);
+            getEditorUi().mount(container);
+            let result = null;
+            let settled = false;
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                getEditorUi().unmount(container);
+                container.remove();
+                resolve(result);
+            };
+            container.addEventListener('close', finish, { once: true });
+            container.querySelectorAll('[data-preview-base-cancel]').forEach((button) => {
+                button.addEventListener('click', () => getEditorUi().dialog.close(container, 'cancel'));
+            });
+            container.querySelector('[data-preview-base-confirm]')?.addEventListener('click', () => {
+                const selected = container.querySelector('input[name="preview_base_url"]:checked');
+                result = String(selected?.value || '').trim() || null;
+                getEditorUi().dialog.close(container, 'confirm');
+            });
+            if (!getEditorUi().dialog.open(container)) {
+                finish();
+            }
+        });
     }
 
     /**

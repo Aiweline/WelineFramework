@@ -9,6 +9,7 @@ return [
         'Weline_SystemConfig' => '*',
     ],
     "optional" => [
+        'Weline_Websites' => '*',
     ],
     "provides" => [
         \Weline\Backend\Api\Auth\BackendAccountFacadeInterface::class => \Weline\Backend\Service\BackendAccountFacade::class,

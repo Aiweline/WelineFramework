@@ -102,7 +102,12 @@ $tocFallbackPath = '/policy/term-condition';
             background:
                 radial-gradient(ellipse at top right, rgba(255, 153, 0, .14), transparent 46%),
                 linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
-            color: #fff;
+                        --_inverse-text: var(--color-text-on-dark, #ffffff);
+            --_inverse-muted: var(--color-text-on-dark-muted, #dddddd);
+            --weline-theme-text: var(--_inverse-text);
+            --color-text-primary: var(--_inverse-text);
+            --color-text-secondary: var(--_inverse-muted);
+            color: var(--_inverse-text);
             box-sizing: border-box;
         }
         .amazon-policy__eyebrow {
@@ -287,7 +292,7 @@ $tocFallbackPath = '/policy/term-condition';
                             </div>
                         </if>
 
-                        <header class="amazon-policy__hero" aria-labelledby="policy-term-condition-title" weline-code="theme.policy.hero">
+                        <header class="amazon-policy__hero" data-surface="inverse" aria-labelledby="policy-term-condition-title" weline-code="theme.policy.hero">
                             
                                 <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
                                 <h1 id="policy-term-condition-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><?= $escape(WidgetI18n::label('服务条款')) ?><?php endif; ?></h1>

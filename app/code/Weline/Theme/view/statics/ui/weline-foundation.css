@@ -398,6 +398,22 @@
         margin-inline: auto;
         padding-inline: var(--weline-layout-content-padding-inline);
     }
+    /*
+     * terms/policy/contact/about 底部扩展槽（contact-info 等）：布局拥有版心，
+     * 部件本身 width:100%。未约束时白卡片会左右贴边（grocery 继承 Default 政策页同现）。
+     */
+    .terms-bottom-slot,
+    .policy-bottom-slot,
+    .contact-bottom-slot,
+    .about-bottom-slot {
+        box-sizing: border-box;
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        min-width: 0;
+        margin-inline: auto;
+        padding-inline: max(1rem, var(--weline-layout-content-padding-inline, 1rem));
+        padding-block: var(--weline-space-4, 1rem) var(--weline-space-6, 1.5rem);
+    }
     .w-grid { display: grid; grid-template-columns: repeat(var(--w-columns, 12), minmax(0, 1fr)); gap: var(--w-row-gap, var(--w-gap, var(--weline-space-4))) var(--w-column-gap, var(--w-gap, var(--weline-space-4))); }
     .w-grid > * { grid-column: span var(--w-span, 12); min-width: 0; }
     /*
@@ -1558,21 +1574,40 @@
     [data-w-floating-positioned="pending"] { visibility: hidden; }
     .w-menu__item, .w-combobox__option { display: flex; width: 100%; min-width: 0; min-height: var(--weline-control-height-sm); align-items: center; gap: var(--weline-space-2); padding: var(--weline-space-2) var(--weline-space-3); border: 0; border-radius: var(--weline-radius-sm); background: transparent; color: inherit; text-align: start; text-decoration: none; cursor: pointer; }
     .w-menu__item:hover, .w-menu__item:focus-visible, .w-menu__item[data-state="active"], .w-combobox__option:hover, .w-combobox__option[aria-selected="true"] { background: var(--weline-theme-surface-hover); outline: 0; }
-    /* Search type/category dark flyouts (portaled outside header): keep inverse text on dark hover */
-    .search-type-submenu .w-menu__item:hover,
-    .search-type-submenu .w-menu__item:focus-visible,
-    .search-type-submenu .w-menu__item.is-active,
-    .search-type-submenu .w-menu__item[aria-selected="true"],
-    .search-type-submenu .search-type-node.is-open > .search-type-option--branch,
-    .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch {
+    /*
+     * Search category menu nests as a raised light tree — open branch must stay
+     * paper ink. Only non-category dark flyouts keep inverse hover text.
+     */
+    .w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover,
+    .w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:focus-visible,
+    .w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item.is-active,
+    .w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item[aria-selected="true"],
+    .w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch,
+    .w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch {
+        background: var(--weline-theme-surface-hover, rgba(15, 17, 17, 0.06));
+        color: var(--amz-drawer-text, #0f1111);
+        outline: 0;
+    }
+    .w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover .search-type-option-chevron,
+    .w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
+    .w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
+    .w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron {
+        color: var(--amz-drawer-muted, #565959);
+    }
+    .w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item:hover,
+    .w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item:focus-visible,
+    .w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item.is-active,
+    .w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item[aria-selected="true"],
+    .w-menu:not(.search-category-menu) .search-type-submenu .search-type-node.is-open > .search-type-option--branch,
+    .w-menu:not(.search-category-menu) .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch {
         background: rgba(255, 255, 255, 0.14);
         color: var(--weline-chrome-text-on-inverse, var(--weline-theme-text-on-dark, #ffffff));
         outline: 0;
     }
-    .search-type-submenu .w-menu__item:hover .search-type-option-chevron,
-    .search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
-    .search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
-    .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron {
+    .w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item:hover .search-type-option-chevron,
+    .w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
+    .w-menu:not(.search-category-menu) .search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
+    .w-menu:not(.search-category-menu) .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron {
         color: rgba(255, 255, 255, 0.85);
     }
     .search-type-submenu .w-menu__item.is-active .search-type-option-check,
@@ -1635,12 +1670,6 @@
      */
     .w-dialog[data-language-request-modal],
     dialog.w-dialog[data-language-request-modal] {
-        /*
-         * Paper ink on raised switcher panel (WO-UI-CONTRAST-INVERSE).
-         * Header/footer [data-surface=inverse] remaps --weline-theme-text to
-         * on-dark; this menu is surface-raised cream → must restore ink locally
-         * (same contract as account-dropdown / mini-cart-drawer).
-         */
         --_paper-text: var(--amz-drawer-text, #0f1111);
         --_paper-muted: var(--amz-drawer-muted, #565959);
         --_inverse-text: var(--_paper-text);

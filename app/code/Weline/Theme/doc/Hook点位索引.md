@@ -7,7 +7,9 @@
 | `Weline_Theme::frontend::layouts::base::head-before` | [head-before.md](./hook/frontend/layouts/base/head-before.md) | `view/hooks/Weline_Theme/frontend/layouts/base/head-before.phtml` |
 | `Weline_Theme::frontend::layouts::base::head-after` | [head-after.md](./hook/frontend/layouts/base/head-after.md) | `.../head-after.phtml` |
 | `Weline_Theme::frontend::layouts::base::body-start` | [body-start.md](./hook/frontend/layouts/base/body-start.md) | `.../body-start.phtml` |
-| `Weline_Theme::frontend::layouts::base::body-end` | [body-end.md](./hook/frontend/layouts/base/body-end.md) | `.../body-end.phtml` |
+| `Weline_Theme::frontend::layouts::base::body-end` | [body-end.md](./hook/frontend/layouts/base/body-end.md) | `.../body-end.phtml`（含 float-layer） |
+| `Weline_Theme::frontend::layouts::base::float-slot-start` | [float-slot-start.md](./hook/frontend/layouts/base/float-slot-start.md) | `.../float-slot-start.phtml` |
+| `Weline_Theme::frontend::layouts::base::float-slot-end` | [float-slot-end.md](./hook/frontend/layouts/base/float-slot-end.md) | `.../float-slot-end.phtml` |
 | `Weline_Theme::backend::layouts::base::body-end` | [body-end.md](./hook/backend/layouts/base/body-end.md) | `view/hooks/Weline_Theme/backend/layouts/base/body-end.phtml` |
 | `Weline_Theme::frontend::layouts::base::header-before` | [header-before.md](./hook/frontend/layouts/base/header-before.md) | `.../header-before.phtml` |
 | `Weline_Theme::frontend::layouts::base::header-after` | [header-after.md](./hook/frontend/layouts/base/header-after.md) | `.../header-after.phtml` |

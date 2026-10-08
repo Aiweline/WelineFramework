@@ -62,45 +62,37 @@ class WebsiteLanguage extends Model
     }
 
     /**
-     * 获取网站的所有关联语言代码
-     * 
+     * 获取网站的所有关联语言代码（进程/共享快照优先，禁止旁路反复打库）。
+     *
      * @param int $websiteId
      * @return array
      */
     public function getWebsiteLanguageCodes(int $websiteId): array
+    {
+        return \Weline\Websites\Data\WebsiteData::languageCodesForWebsite($websiteId);
+    }
+
+    /**
+     * Raw association read used only by WebsiteData snapshot loaders.
+     * Callers that need memoized codes must use getWebsiteLanguageCodes().
+     *
+     * @return list<string>
+     */
+    public function fetchAssociationCodesFromDatabase(int $websiteId): array
     {
         $languages = $this->clearQuery()
             ->where(self::schema_fields_WEBSITE_ID, $websiteId)
             ->select()
             ->fetch()
             ->getItems();
-        
+
         $codes = [];
         foreach ($languages as $language) {
             $codes[] = $language->getLanguageCode();
         }
 
-        // Bare-path / empty-default fallbacks use preferredLanguageCodes()[0].
-        // Keep website.default_language first so those paths do not stick on en_US.
-        try {
-            $website = ObjectManager::getInstance(Website::class);
-            $website->clear()
-                ->where(Website::schema_fields_ID, $websiteId)
-                ->find()
-                ->fetch();
-            $default = trim((string)($website->getDefaultLanguage() ?? ''));
-            if ($default !== '') {
-                $rest = [];
-                foreach ($codes as $code) {
-                    if (strcasecmp((string)$code, $default) !== 0) {
-                        $rest[] = $code;
-                    }
-                }
-                $codes = array_values(array_merge([$default], $rest));
-            }
-        } catch (\Throwable) {
-        }
-        
+        // Association rows only. WebsiteData prefers website.default_language first
+        // from the already-loaded website / snapshot (no parallel Website::find).
         return $codes;
     }
 

@@ -765,6 +765,53 @@ textarea::-webkit-scrollbar-thumb:hover,
     background-position: center;
 }
 
+/*
+ * Published layout loads this partial (not header-chrome-amazon). Category menu
+ * nests as a raised light tree; foundation dark-flyout open-branch white must not
+ * paint 「女装」「襦裙」on cream (WO-UI-CONTRAST).
+ */
+.w-menu.search-type-menu.search-category-menu,
+.search-type-menu.search-category-menu {
+    --_paper-text: var(--amz-drawer-text, #0f1111);
+    --_paper-muted: var(--amz-drawer-muted, #565959);
+    color: var(--_paper-text);
+}
+
+.w-menu.search-type-menu.search-category-menu .search-type-submenu,
+.search-type-menu.search-category-menu .search-type-submenu {
+    background: transparent;
+    color: inherit;
+    box-shadow: none;
+}
+
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:focus-visible,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item.is-active,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item[aria-selected="true"],
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:focus-visible,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item.is-active,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item[aria-selected="true"],
+.search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch,
+.search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch {
+    background: var(--weline-theme-surface-hover, rgba(15, 17, 17, 0.06)) !important;
+    color: var(--_paper-text, var(--amz-drawer-text, #0f1111)) !important;
+    outline: 0;
+}
+
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover .search-type-option-chevron,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover .search-type-option-chevron,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
+.search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
+.search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron {
+    color: var(--_paper-muted, var(--amz-drawer-muted, #565959)) !important;
+}
+
 /* 搜索建议下拉 */
 .search-suggestions {
     position: absolute;

@@ -275,17 +275,66 @@ class ResponseRedirectBefore implements ObserverInterface
     }
 
     /**
-     * 检查是否是允许的主机
+     * 检查是否是允许的主机。
+     * Theme 列表「预览」会 302 到绑定站店面 Host（如 grocery.test.weline.com）；
+     * 仅放行 localhost 会把合法店面预览误判成开放重定向并打回后台首页。
      */
     protected function isAllowedHost(string $host): bool
     {
-        $allowedHosts = [
-            'localhost',
-            '127.0.0.1',
-            // 可以添加更多允许的域名
-        ];
-        
-        return in_array($host, $allowedHosts);
+        $host = \strtolower(\trim($host));
+        if ($host === '') {
+            return false;
+        }
+        if (\in_array($host, ['localhost', '127.0.0.1'], true)) {
+            return true;
+        }
+
+        return $this->isRegisteredWebsiteStorefrontHost($host);
+    }
+
+    /**
+     * Host is a registered Website primary URL or WebsiteDomain row.
+     */
+    private function isRegisteredWebsiteStorefrontHost(string $host): bool
+    {
+        try {
+            if (\class_exists(\Weline\Websites\Model\WebsiteDomain::class)) {
+                /** @var \Weline\Websites\Model\WebsiteDomain $domains */
+                $domains = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteDomain::class);
+                $rows = $domains->reset()
+                    ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_DOMAIN, $host)
+                    ->limit(1)
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                if ($rows !== []) {
+                    return true;
+                }
+            }
+            if (!\class_exists(\Weline\Websites\Model\Website::class)) {
+                return false;
+            }
+            /** @var \Weline\Websites\Model\Website $websites */
+            $websites = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $items = $websites->reset()->select()->fetch()->getItems();
+            foreach ($items as $item) {
+                $data = \is_object($item) && \method_exists($item, 'getData')
+                    ? $item->getData()
+                    : (\is_array($item) ? $item : []);
+                $url = \trim((string)($data['url'] ?? ''));
+                if ($url === '') {
+                    continue;
+                }
+                $urlHost = \strtolower((string)(\parse_url($url, \PHP_URL_HOST) ?: ''));
+                if ($urlHost !== '' && $urlHost === $host) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
     }
 
     /**

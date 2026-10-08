@@ -413,6 +413,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-reset-draft-resources="@url{'theme/backend/theme-editor/reset-draft-resources'}"
      data-api-factory-reset="@url{'theme/backend/theme-editor/factory-reset'}"
      data-api-delete-version="@url{'theme/backend/theme-editor/delete-version'}"
+     data-api-preview-bases="@url{'theme/backend/theme-editor/preview-bases'}"
      data-api-start-preview="@url{'theme/backend/theme-editor/start-preview'}"
      data-api-check-lock="@url{'theme/backend/theme-editor/check-lock'}"
      data-api-release-lock="@url{'theme/backend/theme-editor/release-lock'}"
@@ -1003,6 +1004,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
     </header>
     <div class="w-dialog__body w-theme-editor-dialog__body">
         <p class="w-theme-editor-reset-draft__hint">@lang{仅清理当前主题、当前作用域与当前编辑草稿上的物化配置，不会删除版本历史或已发布内容。}</p>
+        <p class="w-theme-editor-reset-draft__hint w-theme-editor-reset-draft__hint--progress">@lang{确认后将全屏展示重置与固化物重固进度，并输出 SSH 风格日志。}</p>
         <fieldset class="w-theme-editor-reset-draft__resources">
             <legend>@lang{资源类型}</legend>
             <label><input type="checkbox" name="reset_resource" value="layout" checked> @lang{布局信息}</label>

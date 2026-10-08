@@ -5591,6 +5591,7 @@
         config.apiDeleteVersion = container.dataset.apiDeleteVersion || `${config.apiBase}/delete-version`;
 
         // 前端预览 API 端点
+        config.apiPreviewBases = container.dataset.apiPreviewBases || `${config.apiBase}/preview-bases`;
         config.apiStartPreview = container.dataset.apiStartPreview || `${config.apiBase}/start-preview`;
         config.apiCheckLock = container.dataset.apiCheckLock || `${config.apiBase}/check-lock`;
         config.apiReleaseLock = container.dataset.apiReleaseLock || `${config.apiBase}/release-lock`;
@@ -20774,7 +20775,7 @@
     /**
      * #btnFrontendPreview — 真实前端店面预览。
      * 唯一允许调用 start-preview 的入口：种 Cookie、persist shell=preview、
-     * 打开真实店面 URL，并显示可拖动的「预览模式」退出浮窗。
+     * 打开真实店面 URL。先弹窗选择预览基址（本机壳默认）。
      */
     async function openFrontendPreview() {
         if (!state.themeId) {
@@ -20783,8 +20784,42 @@
         }
         try {
             await flushPendingEditorMutations();
-            showToast('正在启动预览...', 'info');
 
+            const basesPayload = await apiJson(config.apiPreviewBases, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(buildLayoutVersionIdentityPayload({
+                    frontend_theme_id: state.themeId || getCurrentWindowParam('frontend_theme_id') || '',
+                    website_id: state.scopeIdentity?.website_id
+                        ?? getCurrentWindowParam('website_id')
+                        ?? '',
+                    website_code: state.scopeIdentity?.website_code
+                        ?? getCurrentWindowParam('website_code')
+                        ?? '',
+                    editor_context: buildTypedEditorContext('layout', {
+                        area: 'frontend',
+                        theme_id: state.themeId || parseInt(getCurrentWindowParam('frontend_theme_id') || '0', 10) || 0,
+                        layout_type: getEffectiveLayoutType(),
+                        layout_option: getEffectiveLayoutOption(),
+                        locale: getPreviewLocaleForRequest() || 'default',
+                    }),
+                })),
+            });
+            const items = Array.isArray(basesPayload?.data?.items) ? basesPayload.data.items : [];
+            if (!basesPayload?.success || items.length === 0) {
+                showToast(basesPayload?.message || window.__('没有可用的预览地址'), 'error');
+                return;
+            }
+
+            const chosenBaseUrl = await openFrontendPreviewBaseDialog(
+                items,
+                String(basesPayload?.data?.notice || ''),
+            );
+            if (!chosenBaseUrl) {
+                return;
+            }
+
+            showToast(window.__('正在启动预览...'), 'info');
             const previewStatus = state.previewStatus === 'published' ? 'published' : 'draft';
 
             const result = await apiJson(config.apiStartPreview, {
@@ -20802,6 +20837,7 @@
                     preview_mode: 'live',
                     status: previewStatus,
                     locale: getPreviewLocaleForRequest(),
+                    preview_base_url: chosenBaseUrl,
                     editor_context: buildTypedEditorContext('layout', {
                         area: 'frontend',
                         theme_id: state.themeId || parseInt(getCurrentWindowParam('frontend_theme_id') || '0', 10) || 0,
@@ -20813,16 +20849,93 @@
             });
 
             if (result.success && result.data && result.data.preview_url) {
-                // 打开新窗口预览
                 window.open(result.data.preview_url, '_blank');
-                showToast('预览已在新窗口打开', 'success');
+                showToast(window.__('预览已在新窗口打开'), 'success');
             } else {
-                showToast(result.message || '启动预览失败', 'error');
+                showToast(result.message || window.__('启动预览失败'), 'error');
             }
         } catch (err) {
             console.error('[ThemeEditor] Start preview error:', err);
-            showToast(err?.message || '启动预览失败', 'error');
+            showToast(err?.message || window.__('启动预览失败'), 'error');
         }
+    }
+
+    /**
+     * @param {Array<{id:string,label:string,url:string,is_default?:boolean,badge?:string,hint?:string}>} items
+     * @param {string} notice
+     * @returns {Promise<string|null>}
+     */
+    function openFrontendPreviewBaseDialog(items, notice) {
+        return new Promise((resolve) => {
+            const defaultItem = items.find((item) => item?.is_default) || items[0];
+            const defaultUrl = String(defaultItem?.url || '');
+            const container = document.createElement('dialog');
+            container.className = 'w-dialog w-theme-editor-preview-base-dialog';
+            container.dataset.wComponent = 'dialog';
+            container.dataset.state = 'closed';
+            container.dataset.size = 'md';
+            container.dataset.wClosable = 'true';
+            container.dataset.wBackdrop = 'dismissible';
+            container.innerHTML = `
+                <div class="w-dialog__surface">
+                    <header class="w-dialog__header">
+                        <h2 class="w-dialog__title">${escapeHtml(window.__('选择预览地址'))}</h2>
+                        <button type="button" class="w-button" data-w-close data-tone="quiet" data-size="sm"
+                                data-preview-base-cancel aria-label="${escapeHtml(window.__('关闭'))}"></button>
+                    </header>
+                    <div class="w-dialog__body w-theme-editor-preview-base-dialog__body">
+                        <p class="w-theme-editor-preview-base-dialog__notice">${escapeHtml(notice || window.__('本机开发请优先选择「本机项目壳」。'))}</p>
+                        <div class="w-theme-editor-preview-base-dialog__list" role="radiogroup" aria-label="${escapeHtml(window.__('预览地址'))}">
+                            ${items.map((item, index) => {
+                                const url = String(item?.url || '');
+                                const id = `preview-base-${index}`;
+                                const checked = url === defaultUrl ? ' checked' : '';
+                                const badge = String(item?.badge || '');
+                                const hint = String(item?.hint || '');
+                                return `<label class="w-theme-editor-preview-base-dialog__option" for="${id}">
+                                    <input type="radio" name="preview_base_url" id="${id}" value="${escapeHtml(url)}"${checked}>
+                                    <span class="w-theme-editor-preview-base-dialog__option-main">
+                                        <span class="w-theme-editor-preview-base-dialog__option-title">
+                                            <strong>${escapeHtml(String(item?.label || url))}</strong>
+                                            ${badge ? `<span class="w-badge" data-tone="${item?.is_default ? 'success' : 'neutral'}">${escapeHtml(badge)}</span>` : ''}
+                                        </span>
+                                        <code class="w-theme-editor-preview-base-dialog__option-url">${escapeHtml(url)}</code>
+                                        ${hint ? `<span class="w-theme-editor-preview-base-dialog__option-hint">${escapeHtml(hint)}</span>` : ''}
+                                    </span>
+                                </label>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                    <footer class="w-dialog__footer">
+                        <button type="button" class="w-button" data-tone="neutral" data-preview-base-cancel>${escapeHtml(window.__('取消'))}</button>
+                        <button type="button" class="w-button" data-tone="primary" data-preview-base-confirm>${escapeHtml(window.__('打开预览'))}</button>
+                    </footer>
+                </div>
+            `;
+            document.body.appendChild(container);
+            getEditorUi().mount(container);
+            let result = null;
+            let settled = false;
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                getEditorUi().unmount(container);
+                container.remove();
+                resolve(result);
+            };
+            container.addEventListener('close', finish, { once: true });
+            container.querySelectorAll('[data-preview-base-cancel]').forEach((button) => {
+                button.addEventListener('click', () => getEditorUi().dialog.close(container, 'cancel'));
+            });
+            container.querySelector('[data-preview-base-confirm]')?.addEventListener('click', () => {
+                const selected = container.querySelector('input[name="preview_base_url"]:checked');
+                result = String(selected?.value || '').trim() || null;
+                getEditorUi().dialog.close(container, 'confirm');
+            });
+            if (!getEditorUi().dialog.open(container)) {
+                finish();
+            }
+        });
     }
 
     /**
@@ -21851,6 +21964,231 @@
         return { resources, layout_scope: layoutScope };
     }
 
+    function setEditorBusy(busy, message = '') {
+        const host = elements.container || document.getElementById('themeEditor');
+        if (!(host instanceof HTMLElement)) {
+            return false;
+        }
+        const ui = window.Weline && window.Weline.UI;
+        if (ui && typeof ui.setBusy === 'function') {
+            return ui.setBusy(host, !!busy, { message: String(message || '') });
+        }
+        host.dataset.wBusy = busy ? 'true' : 'false';
+        host.setAttribute('aria-busy', busy ? 'true' : 'false');
+        return true;
+    }
+
+    let resetProgressLockEl = null;
+    let resetProgressPrevOverflow = '';
+
+    function closeResetProgressLock() {
+        if (resetProgressLockEl && resetProgressLockEl.parentNode) {
+            resetProgressLockEl.parentNode.removeChild(resetProgressLockEl);
+        }
+        resetProgressLockEl = null;
+        try {
+            document.documentElement.style.overflow = resetProgressPrevOverflow || '';
+        } catch (e) {}
+        resetProgressPrevOverflow = '';
+    }
+
+    function openResetProgressLock(initialMessage, initialProgress) {
+        if (!resetProgressLockEl) {
+            try {
+                resetProgressPrevOverflow = document.documentElement.style.overflow || '';
+                document.documentElement.style.overflow = 'hidden';
+            } catch (e) {}
+            resetProgressLockEl = document.createElement('div');
+            resetProgressLockEl.setAttribute('data-w-theme-reset-progress-lock', '1');
+            resetProgressLockEl.setAttribute('role', 'alertdialog');
+            resetProgressLockEl.setAttribute('aria-modal', 'true');
+            resetProgressLockEl.setAttribute('aria-busy', 'true');
+            resetProgressLockEl.setAttribute('aria-live', 'polite');
+            resetProgressLockEl.className = 'w-theme-editor-reset-progress-lock';
+            // Inline critical layout so stale CSS caches cannot hide the SSH progress surface.
+            resetProgressLockEl.style.cssText = [
+                'position:fixed',
+                'inset:0',
+                'z-index:2147483601',
+                'display:flex',
+                'align-items:center',
+                'justify-content:center',
+                'background:rgba(15,23,42,0.78)',
+                'padding:24px',
+                'cursor:wait',
+            ].join(';');
+            resetProgressLockEl.addEventListener('click', (event) => {
+                try { event.preventDefault(); event.stopPropagation(); } catch (e) {}
+            }, true);
+
+            const card = document.createElement('div');
+            card.className = 'w-theme-editor-reset-progress-card';
+            card.style.cssText = [
+                'width:min(560px,100%)',
+                'border-radius:12px',
+                'background:#fff',
+                'color:#0f172a',
+                'border:1px solid #e2e8f0',
+                'box-shadow:0 24px 60px rgba(15,23,42,0.35)',
+                'padding:22px 22px 18px',
+                'pointer-events:none',
+            ].join(';');
+            card.innerHTML = [
+                `<h3 class="w-theme-editor-reset-progress-title" data-w-reset-title="1">${window.__('正在重置并重固')}</h3>`,
+                `<p class="w-theme-editor-reset-progress-message" data-w-reset-message="1"></p>`,
+                '<div class="w-theme-editor-reset-progress-meta">',
+                '  <div data-w-reset-detail="1"></div>',
+                '  <div data-w-reset-pct="1">0%</div>',
+                '</div>',
+                '<div class="w-theme-editor-reset-progress-track"><div data-w-reset-bar="1" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="width:0%"></div></div>',
+                `<div class="w-theme-editor-reset-progress-ssh" data-w-reset-ssh-wrap="1">`,
+                `  <div class="w-theme-editor-reset-progress-ssh-head"><span>${window.__('SSH 进度')}</span><span data-w-reset-ssh-status="1">${window.__('连接中…')}</span></div>`,
+                '  <pre class="w-theme-editor-reset-progress-ssh-body" data-w-reset-ssh="1"></pre>',
+                '</div>',
+            ].join('');
+            resetProgressLockEl.appendChild(card);
+            document.body.appendChild(resetProgressLockEl);
+        }
+        // Never call updateResetProgress from here when lock already exists —
+        // updateResetProgress opens the lock, which would recurse forever.
+        paintResetProgress(
+            initialMessage || window.__('正在重置当前编辑草稿...'),
+            initialProgress || 0,
+            'start',
+            '',
+        );
+    }
+
+    function appendResetSshLine(line) {
+        if (!resetProgressLockEl || !line) {
+            return;
+        }
+        const terminal = resetProgressLockEl.querySelector('[data-w-reset-ssh]');
+        if (!(terminal instanceof HTMLElement)) {
+            return;
+        }
+        const next = String(line).trim();
+        if (!next) {
+            return;
+        }
+        const existing = terminal.textContent || '';
+        if (existing.split('\n').includes(next)) {
+            return;
+        }
+        terminal.textContent = existing ? `${existing}\n${next}` : next;
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function paintResetProgress(message, progress, step, sshLine) {
+        if (!resetProgressLockEl) {
+            return;
+        }
+        const msgEl = resetProgressLockEl.querySelector('[data-w-reset-message]');
+        const detailEl = resetProgressLockEl.querySelector('[data-w-reset-detail]');
+        const pctEl = resetProgressLockEl.querySelector('[data-w-reset-pct]');
+        const barEl = resetProgressLockEl.querySelector('[data-w-reset-bar]');
+        const statusEl = resetProgressLockEl.querySelector('[data-w-reset-ssh-status]');
+        const pct = Math.max(0, Math.min(100, Number(progress) || 0));
+        if (msgEl) {
+            msgEl.textContent = String(message || '');
+        }
+        if (detailEl) {
+            detailEl.textContent = step ? String(step) : '';
+        }
+        if (pctEl) {
+            pctEl.textContent = `${Math.round(pct)}%`;
+        }
+        if (barEl instanceof HTMLElement) {
+            barEl.style.width = `${pct}%`;
+            barEl.setAttribute('aria-valuenow', String(Math.round(pct)));
+        }
+        if (statusEl) {
+            statusEl.textContent = pct >= 100
+                ? window.__('完成')
+                : (step === 'solidify' || step === 'solidify_done'
+                    ? window.__('固化物重固中…')
+                    : window.__('执行中…'));
+        }
+        if (sshLine) {
+            appendResetSshLine(sshLine);
+        }
+    }
+
+    function updateResetProgress(message, progress, step, sshLine) {
+        if (!resetProgressLockEl) {
+            openResetProgressLock(message, progress);
+            // openResetProgressLock already painted start state; paint again with
+            // the caller-provided step/ssh without re-entering open.
+            paintResetProgress(message, progress, step, sshLine);
+            return;
+        }
+        paintResetProgress(message, progress, step, sshLine);
+    }
+
+    async function requestResetDraftWithProgress(selection, onProgress) {
+        const payload = buildLayoutVersionIdentityPayload({
+            resources: selection.resources,
+            layout_scope: selection.layout_scope,
+            stream: 1,
+        });
+        const requestUrl = resolveSameOriginEditorUrl(config.apiResetDraftResources);
+        if (!requestUrl) {
+            throw new Error(window.__('重置进度流不可用'));
+        }
+        const headers = normalizeRequestHeaders({
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            Accept: 'text/event-stream',
+        });
+        if (state.scopeIdentity) {
+            headers['X-Weline-Editor-Context'] = JSON.stringify(buildTypedEditorContext('layout'));
+            if (!Object.prototype.hasOwnProperty.call(payload, 'editor_context')) {
+                payload.editor_context = buildTypedEditorContext('layout');
+            }
+        }
+        const response = await fetch(requestUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers,
+            body: JSON.stringify(payload),
+        });
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (contentType.indexOf('text/event-stream') !== -1) {
+            if (!response.ok) {
+                throw new Error(window.__('重置进度流不可用'));
+            }
+            return consumeStandardPublishSse(response, (event) => {
+                if (typeof onProgress === 'function') {
+                    onProgress(event || {});
+                }
+            });
+        }
+        const result = await apiJson(config.apiResetDraftResources, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildLayoutVersionIdentityPayload({
+                resources: selection.resources,
+                layout_scope: selection.layout_scope,
+            })),
+        });
+        const sshLog = Array.isArray(result?.ssh_log)
+            ? result.ssh_log
+            : (Array.isArray(result?.data?.ssh_log) ? result.data.ssh_log : []);
+        sshLog.forEach((line, index) => {
+            const percent = Math.round(((index + 1) / Math.max(1, sshLog.length)) * 100);
+            if (typeof onProgress === 'function') {
+                onProgress({
+                    step: index + 1 >= sshLog.length ? 'done' : 'replay',
+                    message: String(line || ''),
+                    progress: percent,
+                    ssh: String(line || ''),
+                });
+            }
+        });
+        return result;
+    }
+
     async function executeResetDraftResources(selectAll = false) {
         const selection = collectResetDraftSelections(selectAll);
         if (!selection.resources.length) {
@@ -21860,7 +22198,7 @@
 
         const confirmed = await showCustomConfirm(
             window.__(selectAll ? '确认重置所有草稿资源？' : '确认重置选中草稿资源？'),
-            window.__('仅清理当前编辑草稿物化，不会删除版本历史或已发布内容。'),
+            window.__('仅清理当前编辑草稿物化，不会删除版本历史或已发布内容。将展示固化物重固进度与 SSH 日志。'),
             window.__('确认重置'),
             window.__('取消'),
         );
@@ -21868,24 +22206,43 @@
             return;
         }
 
-        showToast(window.__('正在重置当前编辑草稿...'), 'info');
-        const result = await apiJson(config.apiResetDraftResources, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(buildLayoutVersionIdentityPayload({
-                resources: selection.resources,
-                layout_scope: selection.layout_scope,
-            })),
-        });
+        const busyMessage = window.__('正在重置当前编辑草稿...');
+        closeResetDraftModal();
+        openResetProgressLock(busyMessage, 1);
+        setEditorBusy(true, busyMessage);
+        let result = null;
+        try {
+            result = await requestResetDraftWithProgress(selection, (event) => {
+                const message = String(event?.message || busyMessage);
+                const progress = Number(event?.progress);
+                const step = String(event?.step || '');
+                const ssh = String(event?.ssh || '');
+                updateResetProgress(
+                    message,
+                    Number.isFinite(progress) ? progress : 0,
+                    step,
+                    ssh,
+                );
+                if (Array.isArray(event?.ssh_log)) {
+                    event.ssh_log.forEach((line) => appendResetSshLine(line));
+                }
+            });
+        } catch (error) {
+            closeResetProgressLock();
+            setEditorBusy(false);
+            showToast(error?.message || window.__('重置失败'), 'error');
+            return;
+        } finally {
+            setEditorBusy(false);
+        }
 
         if (!result?.success) {
+            closeResetProgressLock();
             showToast(result?.message || window.__('重置失败'), 'error');
             return;
         }
 
-        closeResetDraftModal();
+        updateResetProgress(result.message || window.__('当前编辑草稿已重置'), 100, 'done', 'done reset-draft');
         for (const resourceType of selection.resources) {
             try {
                 await loadScopedWorkspace(resourceType);
@@ -21905,8 +22262,9 @@
         await fetchLayoutSlots();
         showToast(result.message || window.__('当前编辑草稿已重置'), 'success');
         setTimeout(() => {
+            closeResetProgressLock();
             refreshPreview();
-        }, 300);
+        }, 600);
     }
 
     async function executeFactoryReset() {

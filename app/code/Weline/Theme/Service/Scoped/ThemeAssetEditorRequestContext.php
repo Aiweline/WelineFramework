@@ -59,7 +59,27 @@ final class ThemeAssetEditorRequestContext
         // The selected Theme comes from the outer request theme_id (or a non-zero context claim).
         $themeId=(int)($raw['theme_id'] ?? 0);
         if ($themeId < 1) {
-            $themeId=(int)($input['theme_id'] ?? 0);
+            $themeId=(int)($input['theme_id']
+                ?? $input['frontend_theme_id']
+                ?? $input['application_theme_id']
+                ?? 0);
+        }
+        // Defensive: theme_binding set/replace carries the target Theme on the change value.
+        // Without an outer theme_id the producer would throw theme_asset_editor_theme_unavailable.
+        if ($themeId < 1 && is_array($input['changes'] ?? null)) {
+            foreach ($input['changes'] as $change) {
+                if (!is_array($change)) {
+                    continue;
+                }
+                $path = (string)($change['path'] ?? '');
+                if ($path === '/theme_id' || $path === 'theme_id') {
+                    $candidate = (int)($change['value'] ?? 0);
+                    if ($candidate > 0) {
+                        $themeId = $candidate;
+                        break;
+                    }
+                }
+            }
         }
         $area=(string)($raw['area'] ?? $raw['editor_area'] ?? $input['editor_area'] ?? 'frontend');
         $version=$this->versions->getCurrent($themeId,$neutral->storageScope,$neutral->storeMode,$area);

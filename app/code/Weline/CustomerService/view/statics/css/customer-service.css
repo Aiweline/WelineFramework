@@ -33,13 +33,13 @@
         flex-shrink: 0;
     }
 
+    /* Outside float-layer (legacy). Inside #w-storefront-float-layer Theme CSS
+     * forces relative; sticky clearance is owned by the layer padding. */
     .customer-service-widget {
         position: fixed;
-        /* Lift above PDP sticky purchase when Product sets --weline-product-sticky-purchase-clearance. */
         bottom: calc(
             var(--weline-space-5)
             + var(--weline-safe-area-bottom)
-            + var(--weline-product-sticky-purchase-clearance, 0px)
         );
         right: calc(var(--weline-space-5) + var(--weline-safe-area-right));
         z-index: var(--weline-z-overlay);
@@ -48,12 +48,11 @@
         transition: opacity var(--weline-motion-normal) ease, visibility var(--weline-motion-normal) ease, transform var(--weline-motion-normal) ease, bottom var(--weline-motion-normal) ease;
     }
 
-    /* 右下角社交快速登录条会盖住浮钮：整体上移，避免未读跳动/角标不可见 */
+    /* Legacy viewport-fixed path. Inside float-layer, Theme end-slot CSS lifts instead. */
     body:has(.weline-social-quick-bar:not([hidden])) .customer-service-widget:not(.is-open) {
         bottom: calc(
             var(--weline-space-5)
             + var(--weline-safe-area-bottom)
-            + var(--weline-product-sticky-purchase-clearance, 0px)
             + 10.5rem
         );
     }
@@ -1263,7 +1262,6 @@
             bottom: calc(
                 var(--weline-space-3, 0.75rem)
                 + var(--weline-safe-area-bottom, env(safe-area-inset-bottom, 0px))
-                + var(--weline-product-sticky-purchase-clearance, 0px)
             );
             right: calc(var(--weline-space-3, 0.75rem) + var(--weline-safe-area-right, env(safe-area-inset-right, 0px)));
         }

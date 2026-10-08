@@ -72,6 +72,7 @@ final class ProcessPreviewThemeUriLiveCanvasLocaleContractTest extends TestCase
         $controllerSrc = (string)file_get_contents($controller);
         $templateSrc = (string)file_get_contents($template);
         self::assertStringContainsString('function resolveEditorWebsiteDefaultLocale', $controllerSrc);
+        self::assertStringContainsString('defaultLanguageForWebsite', $controllerSrc);
         self::assertStringContainsString("assign('website_default_locale'", $controllerSrc);
         self::assertStringContainsString("'is_default'", $controllerSrc);
         // website_id=0 is the system default site — must not gate with >0.
@@ -80,6 +81,11 @@ final class ProcessPreviewThemeUriLiveCanvasLocaleContractTest extends TestCase
         self::assertStringNotContainsString(
             'if ($websiteId > 0 && class_exists(\\Weline\\Websites\\Model\\Website::class))',
             $controllerSrc,
+        );
+        self::assertStringNotContainsString(
+            '->clearData()->load($websiteId)',
+            $controllerSrc,
+            'Editor default locale must use WebsiteData snapshot, not Website::load.',
         );
         self::assertStringContainsString('website_default_locale', $templateSrc);
         self::assertStringContainsString('data-default-locale=', $templateSrc);

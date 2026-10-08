@@ -884,6 +884,12 @@ class SlotRendererService
             ) {
                 continue;
             }
+            // Nested chrome (storefront-float-* / footer-extras): keep baked or already
+            // rendered inners — chrome_payload fill must not append duplicates when the
+            // reactive shell already contains widget-wrappers from entity PHTML.
+            if ($this->htmlSlotInnerHasWidgetCode($html, (string)$slotId)) {
+                continue;
+            }
             $slotWidgets[$slotId] = $widgets;
         }
 
@@ -929,13 +935,79 @@ class SlotRendererService
     }
 
     /**
+     * Shared chrome slot widgets from the published/current chrome_payload.
+     * Storefront reactive shells (module partials without entity pin) still need
+     * nested chrome fills such as storefront-float-*; entity-baked inners are
+     * preserved by mergeSharedChromeSlotWidgets when the slot already has widgets.
+     *
      * @return array<string, list<array<string, mixed>>>
      */
     private function loadSharedChromeSlotWidgetsFromEntity(int $themeId, string $area): array
     {
-        // Derived PHTML owns the shared partial relationships. Legacy slot fill
-        // must not reconstruct them from retired sidecar configuration.
-        return [];
+        try {
+            /** @var \Weline\Theme\Service\ThemeScopeVersionService $scopeVersions */
+            $scopeVersions = ObjectManager::getInstance(\Weline\Theme\Service\ThemeScopeVersionService::class);
+            /** @var \Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder $slotTree */
+            $slotTree = ObjectManager::getInstance(\Weline\Theme\Service\LayoutEntity\ThemeLayoutSlotTreeBuilder::class);
+
+            $scope = $this->resolveStorageScopeForSharedChrome($area);
+            if ($scope === '') {
+                return [];
+            }
+
+            $version = $scopeVersions->getPublished($themeId, $scope)
+                ?? $scopeVersions->getCurrent($themeId, $scope);
+            if ($version === null || $version->getVersionId() < 1) {
+                return [];
+            }
+
+            $nodes = $version->getChromePayload();
+            if ($nodes === []) {
+                return [];
+            }
+
+            // chrome_payload nodes already carry complete config (ConfigStore chrome
+            // sidecar is retired / stubbed). Do not call readChromeConfig here.
+            $layout = $slotTree->nodesToAreaLayout($nodes);
+            $bySlot = $this->organizeWidgetsBySlot($layout);
+            foreach ($bySlot as $slotId => $widgets) {
+                $bySlot[$slotId] = \array_values(\array_filter(
+                    $widgets,
+                    static fn($node): bool => \is_array($node)
+                        && (!\array_key_exists('is_active', $node) || !empty($node['is_active'])),
+                ));
+            }
+
+            return $bySlot;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * True when a slot wrapper already contains rendered widget markup.
+     */
+    private function htmlSlotInnerHasWidgetCode(string $html, string $slotId): bool
+    {
+        $slotId = \trim($slotId);
+        if ($html === '' || $slotId === '') {
+            return false;
+        }
+        try {
+            $bounds = $this->boundaryScanner()->findSlotWrapperBounds($html, $slotId);
+        } catch (\Throwable) {
+            return false;
+        }
+        if ($bounds === null) {
+            return false;
+        }
+        $inner = \substr(
+            $html,
+            (int)$bounds['inner_start'],
+            (int)$bounds['inner_end'] - (int)$bounds['inner_start'],
+        );
+
+        return $inner !== '' && \str_contains($inner, 'data-widget-code=');
     }
 
     /**
@@ -995,6 +1067,9 @@ class SlotRendererService
     private function slotWidgetsBelongToSharedChrome(string $slotId, array $widgets): bool
     {
         $slotId = strtolower(trim($slotId));
+        if (ObjectManager::getInstance(SharedChromeService::class)->isChromeSlot($slotId)) {
+            return true;
+        }
         if ($slotId === 'header' || $slotId === 'footer'
             || str_starts_with($slotId, 'header-')
             || str_starts_with($slotId, 'header_')
@@ -1069,6 +1144,52 @@ class SlotRendererService
     public function processPublishedSlots(string $html, int $themeId, string $pageType): string
     {
         return $this->processSlots($html, $themeId, $pageType, ThemeLayout::STATUS_PUBLISHED);
+    }
+
+    /**
+     * Storefront safety-net: fill empty nested shared-chrome slots (float layer)
+     * from chrome_payload without re-entering full page getLayoutData trees.
+     * No-op when entity bake / prior fill already left widget-wrappers in the slot.
+     */
+    public function fillEmptyNestedChromeSlots(
+        string $html,
+        int $themeId,
+        string $area = 'frontend',
+    ): string {
+        if ($html === '' || $themeId < 1) {
+            return $html;
+        }
+        if (!\str_contains($html, 'storefront-float-')
+            && !\str_contains($html, 'data-wslot="storefront-float')
+            && !\str_contains($html, 'data-slot-id="storefront-float')
+        ) {
+            return $html;
+        }
+
+        $chrome = $this->loadSharedChromeSlotWidgetsFromEntity($themeId, $area);
+        if ($chrome === []) {
+            return $html;
+        }
+
+        $targets = [];
+        foreach (SharedChromeService::FOOTER_NESTED_CHROME_SLOTS as $slotId) {
+            $widgets = $chrome[$slotId] ?? [];
+            if ($widgets === [] || $this->htmlSlotInnerHasWidgetCode($html, $slotId)) {
+                continue;
+            }
+            $targets[$slotId] = $widgets;
+        }
+        if ($targets === []) {
+            return $html;
+        }
+
+        return $this->withRenderPass(
+            fn() => $this->withRenderTheme(
+                $themeId,
+                $area === 'backend' ? 'backend' : 'frontend',
+                fn(): string => $this->processSlotsWithBoundaries($html, $targets, false, ''),
+            ),
+        );
     }
 
     /**

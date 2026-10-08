@@ -158,6 +158,18 @@ class LayoutSlotRenderer implements ObserverInterface
             }
         }
 
+        // Nested float chrome may arrive as empty reactive shells when Partials HotCache
+        // / module footer win over entity-baked renderResolved. Fill from chrome_payload
+        // before outbound strip (storefront hard-cut skips full processSlots).
+        try {
+            $themeId = $this->resolveThemeId('frontend');
+            if ($themeId > 0) {
+                $html = $this->slotRenderer->fillEmptyNestedChromeSlots($html, $themeId, 'frontend');
+            }
+        } catch (\Throwable) {
+            // keep strip path
+        }
+
         $html = SlotBoundaryMarkers::strip($html);
 
         // Design themes (hanfu/daocharms) may omit data-pdp-budget-phase; stamp for armed samples.

@@ -140,10 +140,13 @@ class SiteBrand
                 return $fromTheme;
             }
         }
-        foreach (['logo_light', 'logo_dark'] as $key) {
-            $url = $this->resolveMediaUrl($key, $width, $height);
-            if ($url !== '') {
-                return $url;
+        // Backend media logos are default-website identity — never bleed onto other Hosts/sites.
+        if ($this->shouldUseBackendBrandIdentity()) {
+            foreach (['logo_light', 'logo_dark'] as $key) {
+                $url = $this->resolveMediaUrl($key, $width, $height);
+                if ($url !== '') {
+                    return $url;
+                }
             }
         }
 
@@ -160,18 +163,33 @@ class SiteBrand
     public function resolveFrontendSiteName(string $configured = '', string $themeFallback = ''): string
     {
         $configured = trim($configured);
-        if ($configured !== '' && !$this->isGenericBrandPlaceholder($configured)) {
+        $fromWebsite = $this->resolveWebsiteDisplayName();
+        $fromBackend = trim($this->getRawConfig('site_name'));
+        // SiteContactInfo may pass Backend site_name as "configured" before/after Website bind.
+        // That is global default-site identity, not an explicit layout override — do not let it beat Website.
+        $configuredIsBackendBleed = $configured !== ''
+            && $fromBackend !== ''
+            && $configured === $fromBackend;
+
+        if ($configured !== ''
+            && !$this->isGenericBrandPlaceholder($configured)
+            && !$configuredIsBackendBleed
+        ) {
             return WidgetI18n::label($configured);
         }
 
-        $fromWebsite = $this->resolveWebsiteDisplayName();
         if ($fromWebsite !== '' && !$this->isGenericBrandPlaceholder($fromWebsite)) {
             // Website identity may store Chinese source; resolve for current storefront locale.
             return WidgetI18n::label($fromWebsite);
         }
 
-        $fromBackend = trim($this->getRawConfig('site_name'));
-        if ($fromBackend !== '' && !$this->isGenericBrandPlaceholder($fromBackend)) {
+        // Prefer empty over Backend when Website identity is not yet readable: callers (about layout)
+        // may re-resolve after chrome binds Website. Returning Backend here permanently sticks 默认站品牌.
+        if ($fromBackend !== ''
+            && !$this->isGenericBrandPlaceholder($fromBackend)
+            && !$this->isNonDefaultWebsiteBound()
+            && !$this->requestLooksLikeNonDefaultStorefrontHost()
+        ) {
             return WidgetI18n::label($fromBackend);
         }
 
@@ -214,12 +232,23 @@ class SiteBrand
             return $fromWebsite;
         }
 
+        $fallback = trim($fallback);
         $fromBackend = trim($this->getRawConfig('site_description'));
+        // Backend site_description is default-website identity; never bleed onto other websites
+        // when the current request already bound a non-default Website (even if its description is empty).
+        if ($this->isNonDefaultWebsiteBound()) {
+            if ($fallback !== '' && $fallback !== $fromBackend) {
+                return $fallback;
+            }
+
+            return '';
+        }
+
         if ($fromBackend !== '') {
             return $fromBackend;
         }
 
-        return trim($fallback);
+        return $fallback;
     }
 
     public function isGenericBrandPlaceholder(string $value): bool
@@ -242,7 +271,10 @@ class SiteBrand
 
     private function resolveWebsiteDisplayName(): string
     {
-        return $this->rememberRequest('theme.site_brand.website_name', 'current', static function (): string {
+        // Key by bound website id so an early empty memo (pre-Website bind) cannot stick for the request.
+        $memoKey = 'w:' . $this->currentWebsiteMemoId();
+
+        return $this->rememberRequest('theme.site_brand.website_name', $memoKey, static function (): string {
             // WS1: prefer storefront.render_context.v1 website_local; fallback WebsiteData.
             $fromBag = StorefrontRenderContextBag::websiteLocalName();
             if ($fromBag !== null && $fromBag !== '') {
@@ -262,7 +294,9 @@ class SiteBrand
 
     private function resolveWebsiteDescription(): string
     {
-        return $this->rememberRequest('theme.site_brand.website_description', 'current', static function (): string {
+        $memoKey = 'w:' . $this->currentWebsiteMemoId();
+
+        return $this->rememberRequest('theme.site_brand.website_description', $memoKey, static function (): string {
             $fromBag = StorefrontRenderContextBag::websiteLocalDescription();
             if ($fromBag !== null && $fromBag !== '') {
                 return $fromBag;
@@ -277,6 +311,84 @@ class SiteBrand
                 return '';
             }
         });
+    }
+
+    /** Memo segment for Website-bound brand fields (`none` until WebsiteData is set). */
+    private function currentWebsiteMemoId(): string
+    {
+        try {
+            if (!class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                return 'none';
+            }
+            $website = \Weline\Websites\Data\WebsiteData::getWebsite();
+            if (!$website instanceof \Weline\Websites\Model\Website) {
+                return 'none';
+            }
+            $id = (int)$website->getId();
+
+            return $id >= 0 ? (string)$id : 'none';
+        } catch (\Throwable) {
+            return 'none';
+        }
+    }
+
+    /**
+     * Whether Backend site_name / site_description may fill storefront brand gaps.
+     * False for bound non-default Website, or when HTTP_HOST already differs from default Website URL.
+     */
+    public function shouldUseBackendBrandIdentity(): bool
+    {
+        return !$this->isNonDefaultWebsiteBound() && !$this->requestLooksLikeNonDefaultStorefrontHost();
+    }
+
+    private function isNonDefaultWebsiteBound(): bool
+    {
+        try {
+            if (!class_exists(\Weline\Websites\Data\WebsiteData::class)
+                || !class_exists(\Weline\Websites\Model\Website::class)
+            ) {
+                return false;
+            }
+            $website = \Weline\Websites\Data\WebsiteData::getWebsite();
+            if (!$website instanceof \Weline\Websites\Model\Website) {
+                return false;
+            }
+
+            return (int)$website->getId() !== (int)\Weline\Websites\Model\Website::ID_DEFAULT;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Host already points at a non-default Website URL while WebsiteData may not be bound yet
+     * (about layout PHP runs before chrome). Avoid Backend default-site brand stickiness.
+     */
+    private function requestLooksLikeNonDefaultStorefrontHost(): bool
+    {
+        try {
+            $host = strtolower(trim((string)(\Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '') ?: ($_SERVER['HTTP_HOST'] ?? ''))));
+            $host = preg_replace('/:\\d+$/', '', $host) ?? $host;
+            if ($host === '') {
+                return false;
+            }
+            if (!class_exists(\Weline\Websites\Model\Website::class)) {
+                return false;
+            }
+            $default = ObjectManager::getInstance(\Weline\Websites\Model\Website::class)
+                ->load(\Weline\Websites\Model\Website::ID_DEFAULT);
+            if (!$default || !(int)$default->getId()) {
+                return false;
+            }
+            $defaultHost = strtolower((string)(parse_url((string)$default->getData('url'), PHP_URL_HOST) ?: ''));
+            if ($defaultHost === '') {
+                return false;
+            }
+
+            return $host !== $defaultHost;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function resolveBackendLogoUrl(Template $template, string $configKey, int $width, int $height): string

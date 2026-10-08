@@ -1,17 +1,30 @@
 <?php
 /**
- * 主题管理列表页面（前后端分 Tab，各自选择激活）
+ * 主题管理列表页面（前后端分 Tab；展示网站应用引用，无激活动作）
  * 页头标题与面包屑由后台布局 + PageHeaderResolver 负责，本模板只渲染列表主体。
  *
  * @var \Weline\Framework\View\Template $this
  * @var array $themes
- * @var int|null $active_frontend_id
- * @var int|null $active_backend_id
+ * @var array<int, list<string>> $theme_website_usage
+ * @var array<int, list<array{website_id:int,website_code:string}>> $theme_website_bindings
+ * @var array<int, array{website_id:int,website_code:string}> $theme_edit_websites
+ * @var int $backend_application_theme_id
+ * @var int $registered_default_backend_theme_id
+ * @var int $open_ai_theme_id
  */
 $url = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
 $h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$active_frontend_id = (int)($active_frontend_id ?? $active_frontend_id ?? 0) ?: null;
-$active_backend_id = (int)($active_backend_id ?? $active_backend_id ?? 0) ?: null;
+$theme_website_usage = is_array($theme_website_usage ?? null) ? $theme_website_usage : [];
+$theme_website_bindings = is_array($theme_website_bindings ?? null) ? $theme_website_bindings : [];
+$theme_edit_websites = is_array($theme_edit_websites ?? null) ? $theme_edit_websites : [];
+$defaultEditWebsite = [
+    'website_id' => (int)\Weline\Websites\Model\Website::ID_DEFAULT,
+    'website_code' => (string)\Weline\Websites\Model\Website::CODE_DEFAULT,
+];
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT;
+$backend_application_theme_id = (int)($backend_application_theme_id ?? 0);
+$registered_default_backend_theme_id = (int)($registered_default_backend_theme_id ?? 0);
+$openAiThemeId = (int)($open_ai_theme_id ?? 0);
 $frontendThemeCount = 0;
 $backendThemeCount = 0;
 foreach ($themes as $themeItem) {
@@ -22,11 +35,9 @@ foreach ($themes as $themeItem) {
         $backendThemeCount++;
     }
 }
-$openAiThemeId = (int)($active_frontend_id ?: 0);
-$pageHint = $h(__('前台列表「激活」不再决定店面权威。各网站店面主题请在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default 默认主题。后台主题仍为全局一套。'));
+$pageHint = $h(__('店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。'));
 $tabFrontendLabel = $h(__('前台主题'));
 $tabBackendLabel = $h(__('后台主题'));
-$selectedBadge = $h(__('已选'));
 $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $backendThemeCount]));
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-theme-manage.css)">
@@ -61,9 +72,6 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                     >
                         <w:icon name="store" size="sm"></w:icon>
                         <span><?= $tabFrontendLabel ?></span>
-                        <?php if ($active_frontend_id): ?>
-                            <span class="w-badge" data-tone="success"><?= $selectedBadge ?></span>
-                        <?php endif; ?>
                     </button>
                     <button
                         class="w-tabs__tab"
@@ -75,9 +83,6 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                     >
                         <w:icon name="settings" size="sm"></w:icon>
                         <span><?= $tabBackendLabel ?></span>
-                        <?php if ($active_backend_id): ?>
-                            <span class="w-badge" data-tone="success"><?= $selectedBadge ?></span>
-                        <?php endif; ?>
                     </button>
                 </nav>
                 <div class="weline-theme-manage__toolbar w-cluster">
@@ -94,7 +99,17 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                 <p class="w-text weline-theme-manage__count" data-tone="muted" data-size="sm"><?= $countText ?></p>
 
                 <?php
-                $renderThemeCards = function ($area, $activeId) use ($themes, $url, $h) {
+                $renderThemeCards = function (string $area) use (
+                    $themes,
+                    $h,
+                    $theme_website_usage,
+                    $theme_website_bindings,
+                    $theme_edit_websites,
+                    $defaultEditWebsite,
+                    $backend_application_theme_id,
+                    $registered_default_backend_theme_id,
+                    $jsonFlags
+                ) {
                     $supportField = $area === 'backend' ? 'has_backend' : 'has_frontend';
                     $filteredThemes = array_values(array_filter($themes, static function ($theme) use ($supportField) {
                         return !empty($theme[$supportField]);
@@ -114,28 +129,120 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                         $themeName = (string)($theme['name'] ?? '');
                         $moduleName = (string)($theme['module_name'] ?? '');
                         $parentThemeName = (string)($theme['parent_theme_name'] ?? '');
-                        $isActive = ($activeId && $themeId === $activeId);
-                        $previewImage = $area === 'backend'
-                            ? ($theme['backend_preview_image'] ?? '')
-                            : ($theme['frontend_preview_image'] ?? $theme['preview_image'] ?? '');
-                        $previewImageSrc = $previewImage ? '/' . ltrim((string)$previewImage, '/') : '';
-                        if ($previewImageSrc !== '') {
-                            $previewAbs = PUB . ltrim(str_replace('\\', '/', (string)$previewImage), '/');
-                            if (is_file($previewAbs)) {
-                                $previewImageSrc .= '?v=' . (string)filemtime($previewAbs);
+                        $websiteCodes = $area === 'frontend'
+                            ? array_values(array_filter($theme_website_usage[$themeId] ?? [], static fn($c) => is_string($c) && $c !== ''))
+                            : [];
+                        $bindings = $area === 'frontend'
+                            ? array_values(array_filter(
+                                $theme_website_bindings[$themeId] ?? [],
+                                static fn($row) => is_array($row)
+                                    && isset($row['website_id'], $row['website_code'])
+                                    && (string)$row['website_code'] !== ''
+                            ))
+                            : [];
+                        $editWebsite = $theme_edit_websites[$themeId] ?? $defaultEditWebsite;
+                        $editWebsiteId = max(0, (int)($editWebsite['website_id'] ?? $defaultEditWebsite['website_id']));
+                        $editWebsiteCode = (string)($editWebsite['website_code'] ?? $defaultEditWebsite['website_code']);
+                        if ($editWebsiteCode === '') {
+                            $editWebsiteCode = $defaultEditWebsite['website_code'];
+                        }
+                        $editParams = [
+                            'theme_id' => $themeId,
+                            'editor_area' => $area,
+                            'preview_area' => $area,
+                            'scope_kind' => \Weline\Framework\Runtime\ScopeIdentity::KIND_WEBSITE,
+                            'website_id' => $editWebsiteId,
+                            'website_code' => $editWebsiteCode,
+                        ];
+                        $previewParams = [
+                            'theme_id' => $themeId,
+                            'area' => $area,
+                            // Prefer latest draft/published ThemeLayoutVersion when present;
+                            // no version → live storefront of the bound website (not admin mount).
+                            'preview_mode' => 'version',
+                            'status' => 'draft',
+                            'scope_kind' => \Weline\Framework\Runtime\ScopeIdentity::KIND_WEBSITE,
+                            'website_id' => $editWebsiteId,
+                            'website_code' => $editWebsiteCode,
+                        ];
+                        $bindingsJson = json_encode($bindings, $jsonFlags) ?: '[]';
+                        $websiteSelectOptions = [];
+                        foreach ($bindings as $bindingRow) {
+                            $bindingId = max(0, (int)($bindingRow['website_id'] ?? 0));
+                            $bindingCode = (string)($bindingRow['website_code'] ?? '');
+                            if ($bindingCode === '') {
+                                continue;
+                            }
+                            $websiteSelectOptions[] = [
+                                'value' => (string)$bindingId,
+                                'website_id' => $bindingId,
+                                'id' => $bindingId,
+                                'code' => $bindingCode,
+                                'label' => $bindingCode,
+                                'name' => $bindingCode,
+                            ];
+                        }
+                        $websiteSelectOptionsJson = json_encode($websiteSelectOptions, $jsonFlags) ?: '[]';
+                        $canSwitchWebsite = $area === 'frontend' && count($bindings) >= 2;
+                        $isBackendCurrent = $area === 'backend'
+                            && $backend_application_theme_id > 0
+                            && $themeId === $backend_application_theme_id;
+                        $isBackendSystemDefault = $area === 'backend'
+                            && $backend_application_theme_id < 1
+                            && $registered_default_backend_theme_id > 0
+                            && $themeId === $registered_default_backend_theme_id;
+                        $highlightCurrent = $isBackendCurrent || $isBackendSystemDefault;
+                        $websitePreviewMap = [];
+                        if ($area === 'frontend') {
+                            foreach ($bindings as $bindingRow) {
+                                $boundId = max(0, (int)($bindingRow['website_id'] ?? 0));
+                                $websitePreviewMap[(string)$boundId] = \Weline\Theme\Service\ThemePreviewGenerator::getPreviewImagePublicUrl(
+                                    $themeId,
+                                    'frontend',
+                                    $boundId,
+                                );
+                            }
+                            if ($websitePreviewMap === [] && $editWebsiteId >= 0) {
+                                $websitePreviewMap[(string)$editWebsiteId] = \Weline\Theme\Service\ThemePreviewGenerator::getPreviewImagePublicUrl(
+                                    $themeId,
+                                    'frontend',
+                                    $editWebsiteId,
+                                );
                             }
                         }
+                        $previewImageSrc = $area === 'frontend'
+                            ? (string)($websitePreviewMap[(string)$editWebsiteId] ?? '')
+                            : '';
+                        // Frontend cards with website scope use per-site PNGs only —
+                        // never the legacy shared DB path (wrong Host thumbnail).
+                        if ($previewImageSrc === '' && $area === 'backend') {
+                            $previewImage = $theme['backend_preview_image'] ?? '';
+                            $previewImageSrc = $previewImage ? '/' . ltrim((string)$previewImage, '/') : '';
+                            if ($previewImageSrc !== '') {
+                                $previewAbs = PUB . ltrim(str_replace('\\', '/', (string)$previewImage), '/');
+                                if (is_file($previewAbs)) {
+                                    $previewImageSrc .= '?v=' . (string)filemtime($previewAbs);
+                                }
+                            }
+                        } elseif ($previewImageSrc === '' && $area === 'frontend' && $bindings === []) {
+                            $previewImage = $theme['frontend_preview_image'] ?? $theme['preview_image'] ?? '';
+                            $previewImageSrc = $previewImage ? '/' . ltrim((string)$previewImage, '/') : '';
+                            if ($previewImageSrc !== '') {
+                                $previewAbs = PUB . ltrim(str_replace('\\', '/', (string)$previewImage), '/');
+                                if (is_file($previewAbs)) {
+                                    $previewImageSrc .= '?v=' . (string)filemtime($previewAbs);
+                                }
+                            }
+                        }
+                        $websitePreviewsJson = json_encode($websitePreviewMap, $jsonFlags) ?: '{}';
                         $hasPreview = $previewImageSrc !== '';
-                        $cardClass = 'theme-card w-card' . ($isActive ? ' is-active' : '');
+                        $cardClass = 'theme-card w-card' . ($highlightCurrent ? ' is-active' : '');
                         $previewImageClass = 'theme-preview-image';
                         $placeholderClass = 'theme-preview-placeholder';
                         $previewActionClass = 'w-button preview-action-btn' . ($hasPreview ? ' preview-action-btn--refresh' : ' preview-action-btn--generate');
                         $previewActionTone = $hasPreview ? 'neutral' : 'primary';
                         $previewActionVariant = $hasPreview ? 'outline' : '';
                         $previewActionTitle = $h($hasPreview ? __('刷新预览图') : __('生成预览图'));
-                        $activateTone = 'success';
-                        $activateVariant = $isActive ? 'soft' : 'outline';
-                        $activateLabel = $h($isActive ? __('已激活') : __('激活'));
                         $themeNameAttr = $h($themeName);
                         $moduleNameEsc = $h($moduleName);
                         $parentThemeEsc = $h($parentThemeName);
@@ -148,7 +255,12 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                             data-area="<?= $h($area) ?>"
                             data-has-preview="<?= $hasPreview ? '1' : '0' ?>"
                             data-needs-preview="<?= $hasPreview ? '0' : '1' ?>"
-                            data-edit-href="@backend-url{'theme/backend/theme-editor'|['theme_id' => $themeId, 'editor_area' => $area, 'preview_area' => $area]}"
+                            data-edit-href="@backend-url{'theme/backend/theme-editor'|$editParams}"
+                            data-edit-website-id="<?= $editWebsiteId ?>"
+                            data-edit-website-code="<?= $h($editWebsiteCode) ?>"
+                            data-website-bindings="<?= $h($bindingsJson) ?>"
+                            data-website-previews="<?= $h($websitePreviewsJson) ?>"
+                            data-testid="theme-card"
                             tabindex="0"
                             role="link"
                             aria-label="<?= $h(__('编辑主题')) ?>: <?= $themeNameAttr ?>"
@@ -166,8 +278,36 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                                     <span class="w-text" data-tone="muted" data-size="sm"><?= $h(__('暂无预览图')) ?></span>
                                 </div>
                                 <span class="theme-preview-status-badge" hidden></span>
-                                <?php if ($isActive): ?>
-                                    <span class="w-badge theme-active-badge" data-tone="success"><w:icon name="check" size="sm"></w:icon> <?= $h(__('已激活')) ?></span>
+                                <?php if ($highlightCurrent): ?>
+                                    <span class="w-badge theme-active-badge" data-tone="success"><w:icon name="check" size="sm"></w:icon> <?= $h(__('当前后台')) ?></span>
+                                <?php endif; ?>
+                                <?php if ($canSwitchWebsite): ?>
+                                    <button
+                                        type="button"
+                                        class="w-button theme-preview-nav theme-preview-nav--prev"
+                                        data-theme-preview-nav="prev"
+                                        data-tone="neutral"
+                                        data-variant="outline"
+                                        data-size="sm"
+                                        data-icon-only="true"
+                                        title="<?= $h(__('上一个绑定网站')) ?>"
+                                        aria-label="<?= $h(__('上一个绑定网站')) ?>"
+                                    >
+                                        <w:icon name="chevron-left" size="sm"></w:icon>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="w-button theme-preview-nav theme-preview-nav--next"
+                                        data-theme-preview-nav="next"
+                                        data-tone="neutral"
+                                        data-variant="outline"
+                                        data-size="sm"
+                                        data-icon-only="true"
+                                        title="<?= $h(__('下一个绑定网站')) ?>"
+                                        aria-label="<?= $h(__('下一个绑定网站')) ?>"
+                                    >
+                                        <w:icon name="chevron-right" size="sm"></w:icon>
+                                    </button>
                                 <?php endif; ?>
                                 <button
                                     type="button"
@@ -193,25 +333,53 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                                 <?php if ($parentThemeName !== ''): ?>
                                     <div class="theme-meta"><w:icon name="arrow-up" size="sm"></w:icon> <?= $h(__('继承自')) ?>: <?= $parentThemeEsc ?></div>
                                 <?php endif; ?>
+                                <?php if ($area === 'frontend'): ?>
+                                    <?php if ($canSwitchWebsite): ?>
+                                        <div class="theme-meta theme-meta--website-switch" data-testid="theme-website-usage">
+                                            <w:icon name="globe" size="sm"></w:icon>
+                                            <span class="theme-meta__label"><?= $h(__('网站')) ?></span>
+                                            <div class="theme-card-website-select-wrap" data-theme-card-website-select>
+                                                <w:websites:website:select
+                                                    id="theme_card_website_<?= $themeId ?>"
+                                                    name="theme_card_website_<?= $themeId ?>"
+                                                    value="<?= $editWebsiteId ?>"
+                                                    options="websiteSelectOptionsJson"
+                                                    multiple="false"
+                                                    clearable="false"
+                                                    empty-label="@lang(选择网站)"
+                                                    placeholder="@lang(搜索绑定网站)"
+                                                    class="theme-card-website-select"
+                                                />
+                                            </div>
+                                        </div>
+                                    <?php elseif ($websiteCodes !== []): ?>
+                                        <div class="theme-meta" data-testid="theme-website-usage">
+                                            <w:icon name="globe" size="sm"></w:icon>
+                                            <?= $h(__('网站：%{1}', [$editWebsiteCode !== '' ? $editWebsiteCode : implode(', ', $websiteCodes)])) ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="theme-meta" data-tone="muted" data-testid="theme-website-usage-empty">
+                                            <w:icon name="globe" size="sm"></w:icon>
+                                            <?= $h(__('未绑定网站（回落 Default）')) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php elseif ($highlightCurrent): ?>
+                                    <div class="theme-meta" data-testid="theme-backend-current">
+                                        <w:icon name="settings" size="sm"></w:icon>
+                                        <?= $h($isBackendSystemDefault ? __('系统默认后台皮肤') : __('当前后台皮肤')) ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="theme-meta" data-tone="muted">
+                                        <w:icon name="settings" size="sm"></w:icon>
+                                        <?= $h(__('在系统配置中切换后台皮肤')) ?>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                             <div class="theme-actions w-cluster">
-                                <button
-                                    type="button"
-                                    class="w-button activate-btn"
-                                    data-theme-id="<?= $themeId ?>"
-                                    data-theme-name="<?= $themeNameAttr ?>"
-                                    data-area="<?= $h($area) ?>"
-                                    data-tone="<?= $h($activateTone) ?>"
-                                    data-variant="<?= $h($activateVariant) ?>"
-                                    data-size="sm"
-                                    <?= $isActive ? 'disabled' : '' ?>
-                                >
-                                    <w:icon name="check" size="sm"></w:icon> <?= $activateLabel ?>
-                                </button>
-                                <a href="@backend-url{'theme/backend/index/preview'|['theme_id' => $themeId, 'area' => $area]}" class="w-button" target="_blank" rel="noopener" title="<?= $h(__('预览主题')) ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                <a href="@backend-url{'theme/backend/index/preview'|$previewParams}" class="w-button theme-preview-link" target="_blank" rel="noopener" title="<?= $h(__('预览主题')) ?>" data-tone="primary" data-variant="outline" data-size="sm" data-testid="theme-preview-link">
                                     <w:icon name="eye" size="sm"></w:icon> <?= $h(__('预览')) ?>
                                 </a>
-                                <a href="@backend-url{'theme/backend/theme-editor'|['theme_id' => $themeId, 'editor_area' => $area, 'preview_area' => $area]}" class="w-button theme-edit-link" title="<?= $h(__('可视化编辑')) ?>" data-tone="info" data-variant="outline" data-size="sm">
+                                <a href="@backend-url{'theme/backend/theme-editor'|$editParams}" class="w-button theme-edit-link" title="<?= $h(__('可视化编辑')) ?>" data-tone="info" data-variant="outline" data-size="sm" data-testid="theme-edit-link" data-edit-website-id="<?= $editWebsiteId ?>" data-edit-website-code="<?= $h($editWebsiteCode) ?>">
                                     <w:icon name="palette" size="sm"></w:icon> <?= $h(__('编辑')) ?>
                                 </a>
                             </div>
@@ -224,14 +392,14 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
 
                 <div class="w-tabs__panel" id="weline-theme-tab-frontend" role="tabpanel" aria-labelledby="weline-theme-tab-frontend-trigger">
                     <div class="themes-grid" data-theme-list="frontend">
-                        <p class="w-text themes-grid__hint" data-tone="muted" data-size="sm"><?= $h(__('选择用于网站前台的主题，访客将看到该主题的样式。')) ?></p>
-                        <?php $renderThemeCards('frontend', $active_frontend_id); ?>
+                        <p class="w-text themes-grid__hint" data-tone="muted" data-size="sm"><?= $h(__('各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。')) ?></p>
+                        <?php $renderThemeCards('frontend'); ?>
                     </div>
                 </div>
                 <div class="w-tabs__panel" id="weline-theme-tab-backend" role="tabpanel" aria-labelledby="weline-theme-tab-backend-trigger" hidden>
                     <div class="themes-grid" data-theme-list="backend">
-                        <p class="w-text themes-grid__hint" data-tone="muted" data-size="sm"><?= $h(__('选择用于管理后台的主题，仅影响后台界面样式。')) ?></p>
-                        <?php $renderThemeCards('backend', $active_backend_id); ?>
+                        <p class="w-text themes-grid__hint" data-tone="muted" data-size="sm"><?= $h(__('后台皮肤由系统配置决定；此处仅展示安装主题与当前选用状态。')) ?></p>
+                        <?php $renderThemeCards('backend'); ?>
                     </div>
                 </div>
             </div>
@@ -259,7 +427,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                                 $optionThemeName = (string)($themeOption['name'] ?? '');
                                 $optionModuleName = (string)($themeOption['module_name'] ?? '');
                             ?>
-                                <option value="<?= $optionThemeId ?>" <?= $optionThemeId === (int)($active_frontend_id ?: 0) ? 'selected' : '' ?>>
+                                <option value="<?= $optionThemeId ?>" <?= $optionThemeId === $openAiThemeId ? 'selected' : '' ?>>
                                     <?= htmlspecialchars($optionThemeName . ($optionModuleName ? ' / ' . $optionModuleName : '')) ?>
                                 </option>
                             <?php endforeach; ?>
@@ -615,9 +783,12 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
     async function startThemePreviewTask(input) {
         const api = await getRuntimeApi();
         const taskApi = api.resource('runtime_task');
-        const payload = Object.assign({
-            capture_base_url: window.location.origin,
-        }, input || {});
+        // Do not force admin Host as capture_base_url — frontend shots resolve
+        // bound-website origin server-side (avoids Hanfu paint for grocery etc.).
+        const payload = Object.assign({}, input || {});
+        if (payload.website_id == null && payload.capture_base_url == null) {
+            payload.capture_base_url = null;
+        }
         const task = normalizeRuntimeTaskHandle(await taskApi.start({
             type_code: 'theme.preview_batch',
             input: payload,
@@ -1129,7 +1300,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
         bindThemePreviewImageFallback(image);
     });
 
-    function updateThemeCardPreview(card, imageUrl) {
+    function updateThemeCardPreview(card, imageUrl, websiteId) {
         if (!card || !imageUrl) {
             return;
         }
@@ -1137,6 +1308,10 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
         const preview = card.querySelector('.theme-preview');
         let image = card.querySelector('.theme-preview-image');
         const placeholder = card.querySelector('.theme-preview-placeholder');
+        const bustedUrl = appendPreviewCacheBuster(imageUrl);
+        const resolvedWebsiteId = websiteId != null
+            ? Number(websiteId)
+            : Number.parseInt(String(card.getAttribute('data-edit-website-id') || ''), 10);
 
         if (!image && preview) {
             image = document.createElement('img');
@@ -1149,8 +1324,14 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
             bindThemePreviewImageFallback(image, placeholder);
         }
 
+        if (Number.isFinite(resolvedWebsiteId) && resolvedWebsiteId >= 0) {
+            const previews = parseThemeCardWebsitePreviews(card);
+            previews[String(resolvedWebsiteId)] = bustedUrl;
+            card.setAttribute('data-website-previews', JSON.stringify(previews));
+        }
+
         if (image) {
-            image.src = appendPreviewCacheBuster(imageUrl);
+            image.src = bustedUrl;
             image.hidden = false;
         }
 
@@ -1201,7 +1382,11 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
             }
         }
         if (card && success) {
-            updateThemeCardPreview(card, result.image_url || '');
+            updateThemeCardPreview(
+                card,
+                result.image_url || '',
+                result.website_id != null ? result.website_id : descriptor.website_id,
+            );
             setThemeCardStatus(card, 'success', message);
             window.setTimeout(function() {
                 setThemeCardStatus(card, '', '');
@@ -1351,17 +1536,25 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
             setThemeCardStatus(card, 'info', config.statusMessage || '<?= __('正在生成') ?>');
         }
         try {
-            const started = await startThemePreviewTask({
+            const taskInput = {
                 request_id: createPreviewRequestId('theme-preview'),
                 scope: 'single',
                 theme_id: normalizedThemeId,
                 area: area,
                 force: config.force,
-            });
+            };
+            if (config.website_id != null && Number.isFinite(Number(config.website_id))) {
+                taskInput.website_id = Number(config.website_id);
+            }
+            if (config.website_code) {
+                taskInput.website_code = String(config.website_code);
+            }
+            const started = await startThemePreviewTask(taskInput);
             const descriptor = {
                 kind: 'single',
                 theme_id: normalizedThemeId,
                 area: area,
+                website_id: config.website_id != null ? Number(config.website_id) : null,
                 show_modal: !!config.showModal,
                 status_message: config.statusMessage || '',
                 success_message: config.successMessage || '',
@@ -1696,48 +1889,28 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
         createAiVirtualThemeDraft();
     });
 
-    document.querySelectorAll('.activate-btn').forEach(function(button) {
-        button.addEventListener('click', function() {
-            if (this.disabled) {
-                return;
-            }
-
-            const themeId = this.dataset.themeId;
-            const area = this.dataset.area || 'frontend';
-            const areaLabel = area === 'frontend' ? '<?= __('前台') ?>' : '<?= __('后台') ?>';
-
-            getApi().then(function(api) {
-                return api.resource('theme').activateTheme({
-                    theme_id: Number(themeId),
-                    area: area
-                }, { silent: true });
-            }).then(function(result) {
-                if (isSuccessResponse(result)) {
-                    showToast('success', '<?= __('主题已设置为 %{1} 主题') ?>'.replace('%{1}', areaLabel));
-                    window.location.reload();
-                    return;
-                }
-
-                showToast('error', result?.message || '<?= __('激活失败') ?>');
-            }).catch(function(error) {
-                showToast('error', '<?= __('激活失败') ?>: ' + (error.message || ''));
-            });
-        });
-    });
-
     document.querySelectorAll('.preview-action-btn').forEach(function(button) {
         button.addEventListener('click', function() {
             const themeId = this.dataset.themeId;
             const themeName = this.dataset.themeName;
             const area = this.dataset.area || 'frontend';
             const force = this.dataset.force === '1';
+            const card = findThemeCard(themeId, area);
+            const websiteId = card
+                ? Number.parseInt(String(card.getAttribute('data-edit-website-id') || ''), 10)
+                : NaN;
+            const websiteCode = card
+                ? String(card.getAttribute('data-edit-website-code') || '').trim().toLowerCase()
+                : '';
             const areaLabel = area === 'backend' ? '<?= __('后台') ?>' : '<?= __('前台') ?>';
             const actionText = force ? '<?= __('刷新') ?>' : '<?= __('生成') ?>';
 
             generateSinglePreview(themeId, area, {
                 force: force,
                 showModal: true,
-                card: findThemeCard(themeId, area),
+                card: card,
+                website_id: Number.isFinite(websiteId) && websiteId >= 0 ? websiteId : null,
+                website_code: websiteCode,
                 title: actionText + ' "' + themeName + '" ' + areaLabel + ' <?= __('预览图') ?>',
                 statusMessage: actionText + '<?= __('中...') ?>',
                 successMessage: force ? '<?= __('预览图已刷新') ?>' : '<?= __('预览图生成成功') ?>',
@@ -1746,17 +1919,342 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
         });
     });
 
-    // 整卡进入编辑：预览图/标题区点击等同「编辑」；激活/预览/预览图按钮保持独立。
-    document.querySelectorAll('.theme-card[data-edit-href]').forEach(function(card) {
-        const editHref = String(card.getAttribute('data-edit-href') || '').trim();
-        if (!editHref) {
+    document.querySelectorAll('[data-theme-preview-nav]').forEach(function(button) {
+        button.addEventListener('click', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const card = button.closest('.theme-card');
+            if (!card) {
+                return;
+            }
+            const dir = button.getAttribute('data-theme-preview-nav') === 'prev' ? -1 : 1;
+            stepThemeCardWebsite(card, dir);
+        });
+    });
+
+    const THEME_LIST_WEBSITE_STORAGE_PREFIX = 'weline.theme.list.website.';
+
+    function parseThemeCardWebsiteBindings(card) {
+        try {
+            const raw = card.getAttribute('data-website-bindings') || '[]';
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function defaultThemeCardWebsiteScope() {
+        return { website_id: 0, website_code: 'default' };
+    }
+
+    /**
+     * 预览/编辑共用网站范围：仅 1 个绑定站 → 直接用该站；0 绑定 → Default；
+     * ≥2 → 用卡上当前选中（须 ∈ bindings），否则首个绑定。
+     */
+    function resolveThemeCardWebsiteScope(card) {
+        const bindings = parseThemeCardWebsiteBindings(card);
+        if (bindings.length === 1) {
+            return {
+                website_id: Math.max(0, Number.parseInt(String(bindings[0]?.website_id ?? 0), 10) || 0),
+                website_code: String(bindings[0]?.website_code || '').trim().toLowerCase() || 'default',
+            };
+        }
+        if (bindings.length === 0) {
+            return defaultThemeCardWebsiteScope();
+        }
+        const currentId = Math.max(0, Number.parseInt(String(card.getAttribute('data-edit-website-id') || ''), 10) || 0);
+        const currentCode = String(card.getAttribute('data-edit-website-code') || '').trim().toLowerCase();
+        const match = bindings.find(function(row) {
+            const rowId = Number.parseInt(String(row?.website_id ?? ''), 10);
+            const rowCode = String(row?.website_code || '').trim().toLowerCase();
+            if (Number.isFinite(currentId) && currentId === rowId) {
+                return true;
+            }
+            return currentCode !== '' && currentCode === rowCode;
+        });
+        const picked = match || bindings[0];
+        return {
+            website_id: Math.max(0, Number.parseInt(String(picked?.website_id ?? 0), 10) || 0),
+            website_code: String(picked?.website_code || '').trim().toLowerCase() || 'default',
+        };
+    }
+
+    function ensureThemeCardWebsiteScope(card, persist) {
+        const scope = resolveThemeCardWebsiteScope(card);
+        applyThemeCardWebsite(card, scope.website_id, scope.website_code, !!persist);
+        return scope;
+    }
+
+    function patchThemeUrlWithWebsite(url, websiteId, websiteCode) {
+        const absolute = new URL(String(url || ''), window.location.origin);
+        absolute.searchParams.set('scope_kind', 'website');
+        absolute.searchParams.set('website_id', String(websiteId));
+        absolute.searchParams.set('website_code', String(websiteCode || ''));
+        const original = String(url || '');
+        if (/^https?:\/\//i.test(original)) {
+            return absolute.href;
+        }
+        return absolute.pathname + absolute.search + absolute.hash;
+    }
+
+    function parseThemeCardWebsitePreviews(card) {
+        try {
+            const raw = card.getAttribute('data-website-previews') || '{}';
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function applyThemeCardPreviewImage(card, websiteId) {
+        const previews = parseThemeCardWebsitePreviews(card);
+        const imageUrl = String(previews[String(websiteId)] || '').trim();
+        const image = card.querySelector('.theme-preview-image');
+        const placeholder = card.querySelector('.theme-preview-placeholder');
+        if (!(image instanceof HTMLImageElement)) {
             return;
         }
+        if (imageUrl) {
+            image.src = imageUrl;
+            image.hidden = false;
+            if (placeholder) {
+                placeholder.hidden = true;
+            }
+            card.setAttribute('data-has-preview', '1');
+            card.setAttribute('data-needs-preview', '0');
+            updatePreviewActionButton(card, true);
+        } else {
+            image.removeAttribute('src');
+            image.hidden = true;
+            if (placeholder) {
+                placeholder.hidden = false;
+            }
+            card.setAttribute('data-has-preview', '0');
+            card.setAttribute('data-needs-preview', '1');
+            updatePreviewActionButton(card, false);
+        }
+    }
 
-        const openThemeEditor = function() {
-            window.location.href = editHref;
-        };
+    function applyThemeCardWebsite(card, websiteId, websiteCode, persist) {
+        const id = Math.max(0, Number.parseInt(String(websiteId), 10) || 0);
+        const code = String(websiteCode || '').trim().toLowerCase();
+        card.setAttribute('data-edit-website-id', String(id));
+        card.setAttribute('data-edit-website-code', code);
+        applyThemeCardPreviewImage(card, id);
 
+        const editLink = card.querySelector('.theme-edit-link');
+        const previewLink = card.querySelector('.theme-preview-link');
+        const currentEditHref = String(
+            card.getAttribute('data-edit-href')
+            || (editLink ? editLink.getAttribute('href') : '')
+            || ''
+        ).trim();
+        if (currentEditHref) {
+            const nextEditHref = patchThemeUrlWithWebsite(currentEditHref, id, code);
+            card.setAttribute('data-edit-href', nextEditHref);
+            if (editLink) {
+                editLink.setAttribute('href', nextEditHref);
+                editLink.setAttribute('data-edit-website-id', String(id));
+                editLink.setAttribute('data-edit-website-code', code);
+            }
+        }
+        if (previewLink) {
+            const previewHref = String(previewLink.getAttribute('href') || '').trim();
+            if (previewHref) {
+                previewLink.setAttribute('href', patchThemeUrlWithWebsite(previewHref, id, code));
+            }
+        }
+
+        if (!persist) {
+            return;
+        }
+        const themeId = String(card.getAttribute('data-theme-id') || '').trim();
+        if (!themeId) {
+            return;
+        }
+        try {
+            window.sessionStorage.setItem(
+                THEME_LIST_WEBSITE_STORAGE_PREFIX + themeId,
+                JSON.stringify({ website_id: id, website_code: code })
+            );
+        } catch (error) {
+            // sessionStorage is optional.
+        }
+    }
+
+    function stepThemeCardWebsite(card, direction) {
+        const bindings = parseThemeCardWebsiteBindings(card);
+        if (bindings.length < 2) {
+            return;
+        }
+        const currentId = Number.parseInt(String(card.getAttribute('data-edit-website-id') || ''), 10);
+        let index = bindings.findIndex(function(row) {
+            return Number.parseInt(String(row?.website_id ?? ''), 10) === currentId;
+        });
+        if (index < 0) {
+            index = 0;
+        }
+        const nextIndex = (index + (direction < 0 ? -1 : 1) + bindings.length) % bindings.length;
+        const next = bindings[nextIndex];
+        if (!next) {
+            return;
+        }
+        applyThemeCardWebsite(card, next.website_id, next.website_code, true);
+        const themeId = String(card.getAttribute('data-theme-id') || '').trim();
+        const selectApi = themeId && window.WelineWebsiteSelect
+            ? window.WelineWebsiteSelect['theme_card_website_' + themeId]
+            : null;
+        if (selectApi && typeof selectApi.setValue === 'function') {
+            selectApi.setValue(String(next.website_id));
+        }
+    }
+
+    function rememberThemeCardWebsiteFromStorage(card) {
+        const bindings = parseThemeCardWebsiteBindings(card);
+        if (!bindings.length) {
+            return null;
+        }
+        const themeId = String(card.getAttribute('data-theme-id') || '').trim();
+        if (!themeId) {
+            return null;
+        }
+        try {
+            const raw = window.sessionStorage.getItem(THEME_LIST_WEBSITE_STORAGE_PREFIX + themeId);
+            if (!raw) {
+                return null;
+            }
+            const remembered = JSON.parse(raw);
+            const rememberedId = Number.parseInt(String(remembered?.website_id ?? ''), 10);
+            const rememberedCode = String(remembered?.website_code || '').trim().toLowerCase();
+            return bindings.find(function(row) {
+                const rowId = Number.parseInt(String(row?.website_id ?? ''), 10);
+                const rowCode = String(row?.website_code || '').trim().toLowerCase();
+                if (Number.isFinite(rememberedId) && rememberedId === rowId) {
+                    return true;
+                }
+                return rememberedCode !== '' && rememberedCode === rowCode;
+            }) || null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    document.querySelectorAll('[data-theme-card-website-select]').forEach(function(wrap) {
+        wrap.addEventListener('click', function(event) {
+            event.stopPropagation();
+        });
+        const card = wrap.closest('.theme-card');
+        const hidden = wrap.querySelector('[data-website-select-value]');
+        if (!card || !hidden) {
+            return;
+        }
+        hidden.addEventListener('change', function() {
+            const websiteId = Number.parseInt(String(hidden.value || ''), 10);
+            if (!Number.isFinite(websiteId) || websiteId < 0) {
+                return;
+            }
+            const bindings = parseThemeCardWebsiteBindings(card);
+            const match = bindings.find(function(row) {
+                return Number.parseInt(String(row?.website_id ?? ''), 10) === websiteId;
+            });
+            if (!match) {
+                return;
+            }
+            applyThemeCardWebsite(
+                card,
+                match.website_id,
+                match.website_code,
+                true
+            );
+        });
+    });
+
+    document.querySelectorAll('.theme-card[data-website-bindings]').forEach(function(card) {
+        const remembered = rememberThemeCardWebsiteFromStorage(card);
+        if (remembered) {
+            applyThemeCardWebsite(
+                card,
+                Math.max(0, Number.parseInt(String(remembered.website_id ?? ''), 10) || 0),
+                String(remembered.website_code || '').trim().toLowerCase(),
+                false
+            );
+        } else {
+            // 单范围（或无绑定回落 Default）在加载时就写好预览/编辑 href，点击直接跳转。
+            ensureThemeCardWebsiteScope(card, false);
+        }
+        const scope = resolveThemeCardWebsiteScope(card);
+        const themeId = String(card.getAttribute('data-theme-id') || '').trim();
+        const selectApi = themeId && window.WelineWebsiteSelect
+            ? window.WelineWebsiteSelect['theme_card_website_' + themeId]
+            : null;
+        if (selectApi && typeof selectApi.setValue === 'function') {
+            const currentValue = typeof selectApi.getValue === 'function'
+                ? String(selectApi.getValue() || '')
+                : '';
+            if (currentValue !== String(scope.website_id)) {
+                selectApi.setValue(String(scope.website_id));
+            }
+        }
+    });
+
+    // 预览与编辑同一套网站范围：仅 1 个绑定站 → 直接跳转；多站用当前选中站。
+    function openThemeCardEditor(card) {
+        ensureThemeCardWebsiteScope(card, true);
+        const liveHref = String(card.getAttribute('data-edit-href') || '').trim();
+        if (!liveHref) {
+            return;
+        }
+        window.location.href = liveHref;
+    }
+
+    function openThemeCardPreview(card) {
+        ensureThemeCardWebsiteScope(card, true);
+        const previewLink = card.querySelector('.theme-preview-link');
+        const href = String(previewLink?.getAttribute('href') || '').trim();
+        if (!href) {
+            return;
+        }
+        window.open(href, '_blank', 'noopener');
+    }
+
+    document.querySelectorAll('.theme-card .theme-preview-link').forEach(function(link) {
+        link.addEventListener('click', function(event) {
+            if (event.defaultPrevented || event.button !== 0) {
+                return;
+            }
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+            const card = link.closest('.theme-card');
+            if (!card) {
+                return;
+            }
+            event.preventDefault();
+            openThemeCardPreview(card);
+        });
+    });
+
+    document.querySelectorAll('.theme-card .theme-edit-link').forEach(function(link) {
+        link.addEventListener('click', function(event) {
+            if (event.defaultPrevented || event.button !== 0) {
+                return;
+            }
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+            const card = link.closest('.theme-card');
+            if (!card) {
+                return;
+            }
+            event.preventDefault();
+            openThemeCardEditor(card);
+        });
+    });
+
+    // 整卡进入编辑：预览图/标题区点击等同「编辑」；预览按钮保持独立并用同一范围解析。
+    document.querySelectorAll('.theme-card[data-edit-href]').forEach(function(card) {
         card.addEventListener('click', function(event) {
             if (event.defaultPrevented || event.button !== 0) {
                 return;
@@ -1764,10 +2262,12 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
             if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
                 return;
             }
-            if (event.target.closest('a, button, input, label, select, textarea, .theme-actions')) {
+            if (event.target.closest(
+                'a, button, input, label, select, textarea, .theme-actions, [data-theme-card-website-select], .weline-website-select, .weline-website-dropdown, [data-theme-preview-nav]'
+            )) {
                 return;
             }
-            openThemeEditor();
+            openThemeCardEditor(card);
         });
 
         card.addEventListener('keydown', function(event) {
@@ -1778,7 +2278,7 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                 return;
             }
             event.preventDefault();
-            openThemeEditor();
+            openThemeCardEditor(card);
         });
     });
 

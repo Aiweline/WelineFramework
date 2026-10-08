@@ -314,20 +314,124 @@ final class ThemeLayoutEntityBakeCoordinator
         return ['status' => $status, 'version_id' => $versionId > 0 ? $versionId : null, 'content_revision' => $identity->contentRevision, 'entity_key' => $entityKey, 'artifacts' => $artifacts];
     }
 
+    /**
+     * Sync solidify for an explicit scope version (current theme + current scope owner).
+     *
+     * @param array{force_formal?:bool,draft_prime_identity?:array<string,mixed>} $options
+     * @return array{ok:bool,reason?:string,theme_version_id?:int,content_revision?:int,fingerprints?:array<string,string>}
+     */
+    public function solidifyScopeVersion(ThemeEditorContext $context, int $themeVersionId, array $options = []): array
+    {
+        if ($themeVersionId < 1) {
+            return ['ok' => false, 'reason' => 'theme_scope_version_unresolved'];
+        }
+
+        $version = (clone ObjectManager::getInstance(ThemeScopeVersion::class))->clearData()->clearQuery()->load($themeVersionId);
+        if ($version->getVersionId() < 1) {
+            return ['ok' => false, 'reason' => 'theme_scope_version_not_found'];
+        }
+        if ($version->getThemeId() !== $context->themeId
+            || $version->getScope() !== $context->scope->storageScope
+            || $version->getArea() !== $context->area
+            || $version->getStoreMode() !== $context->scope->storeMode
+        ) {
+            return ['ok' => false, 'reason' => 'theme_scope_version_owner_mismatch'];
+        }
+
+        $forceFormal = !empty($options['force_formal']);
+        $formal = $forceFormal || $version->getLifecycle() === ThemeScopeVersion::LIFECYCLE_SEALED;
+
+        try {
+            $identity = $this->resolveBakeIdentity(
+                $context->themeId,
+                $context->scope->storageScope,
+                $formal,
+                $themeVersionId,
+                $context->area,
+                $context->scope->storeMode,
+            );
+        } catch (\Throwable $error) {
+            return ['ok' => false, 'reason' => $error->getMessage()];
+        }
+
+        try {
+            $head = $this->snapshotService()->head($identity);
+            $descriptor = \json_decode((string)($head['package_default_json'] ?? '{}'), true);
+            if ($identity->contentRevision < 1 || $head === null || empty($descriptor['current_package_defaults'])) {
+                $mode = $identity->mode;
+                ThemeLayoutEntityOwnerLock::write($identity, function () use ($version, $context, $mode, &$identity): void {
+                    $initial = $version->getContentRevision() < 1;
+                    if ($initial) {
+                        $version->setContentRevision(1)->save();
+                    }
+                    $this->snapshotService()->captureCurrent($version, $context, $initial);
+                    $identity = $version->toVersionIdentity()->withVersion(
+                        $version->getVersionId(),
+                        $mode,
+                        max(1, (int)$version->getContentRevision()),
+                    );
+                });
+            }
+        } catch (\Throwable $error) {
+            return ['ok' => false, 'reason' => $error->getMessage()];
+        }
+
+        try {
+            $result = ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $context, $options): array {
+                $candidates = $this->candidateWorkset($identity, $context);
+                if (\is_array($options['draft_prime_identity'] ?? null)) {
+                    $prime = ThemeVersionIdentity::fromArray($options['draft_prime_identity']);
+                    if ($prime->ownerHash() !== $identity->ownerHash()) {
+                        throw new \InvalidArgumentException('theme_publication_remainder_owner_mismatch');
+                    }
+                    $candidates = \array_replace($candidates, $this->candidateWorkset($prime, $context));
+                }
+                $this->publish($identity, $candidates);
+
+                return [
+                    'ok' => true,
+                    'theme_version_id' => $identity->themeVersionId,
+                    'content_revision' => $identity->contentRevision,
+                    'fingerprints' => \array_map(
+                        static fn($bytes): string => \hash('sha256', (string)$bytes),
+                        $candidates,
+                    ),
+                ];
+            });
+        } catch (\Throwable $error) {
+            return ['ok' => false, 'reason' => $error->getMessage()];
+        }
+
+        $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode);
+
+        return $result;
+    }
+
+    /**
+     * Solidify the currently selected draft (else published) version for this editor context.
+     *
+     * @return array{ok:bool,reason?:string,theme_version_id?:int,content_revision?:int,fingerprints?:array<string,string>}
+     */
+    public function solidifyCurrentScopeVersion(ThemeEditorContext $context): array
+    {
+        $current = $this->scopeVersions->getCurrent(
+            $context->themeId,
+            $context->scope->storageScope,
+            $context->scope->storeMode,
+            $context->area,
+        );
+        if (!$current instanceof ThemeScopeVersion || $current->getVersionId() < 1) {
+            return ['ok' => false, 'reason' => 'theme_scope_version_unresolved'];
+        }
+
+        return $this->solidifyScopeVersion($context, $current->getVersionId());
+    }
+
     public function bakePublishArtifactsForVersion(ThemeEditorContext $context, int $themeVersionId, array $options = []): array
     {
-        $identity = $this->resolveBakeIdentity($context->themeId, $context->scope->storageScope, true, $themeVersionId, $context->area, $context->scope->storeMode);
-        return ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $context, $options): array {
-            $candidates = $this->candidateWorkset($identity, $context);
-            if (is_array($options['draft_prime_identity'] ?? null)) {
-                $prime = ThemeVersionIdentity::fromArray($options['draft_prime_identity']);
-                if ($prime->ownerHash() !== $identity->ownerHash()) { throw new \InvalidArgumentException('theme_publication_remainder_owner_mismatch'); }
-                $candidates = array_replace($candidates, $this->candidateWorkset($prime, $context));
-            }
-            $this->publish($identity, $candidates);
-            return ['ok'=>true, 'theme_version_id'=>$identity->themeVersionId, 'content_revision'=>$identity->contentRevision,
-                'fingerprints'=>array_map(static fn($bytes): string => hash('sha256', (string)$bytes), $candidates)];
-        });
+        $options['force_formal'] = true;
+
+        return $this->solidifyScopeVersion($context, $themeVersionId, $options);
     }
 
     private function candidateWorkset(ThemeVersionIdentity $identity, ThemeEditorContext $context, array $changes = []): array

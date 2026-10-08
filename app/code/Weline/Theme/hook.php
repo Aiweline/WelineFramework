@@ -246,7 +246,7 @@ return [
     ],
     'Weline_Theme::frontend::layouts::base::body-end' => [
         'name' => __('基础布局 Body 结束'),
-        'description' => __('在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。'),
+        'description' => __('在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。'),
         'doc' => 'frontend/layouts/base/body-end.md',
     ],
     'Weline_Theme::backend::layouts::base::body-end' => [

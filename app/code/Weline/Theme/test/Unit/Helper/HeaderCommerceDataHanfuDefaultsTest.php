@@ -38,7 +38,7 @@ final class HeaderCommerceDataHanfuDefaultsTest extends TestCase
     public function testFallbackHotWordsDescribeGroceryStorefront(): void
     {
         self::assertSame(
-            ['今日特价', '米面粮油', '日用百货', '休闲零食', '新鲜果蔬'],
+            ['今日特价', '生鲜蔬果', '粮油调味', '零食饮料', '日用清洁'],
             HeaderCommerceData::defaultHotWords('grocery'),
         );
         self::assertSame(

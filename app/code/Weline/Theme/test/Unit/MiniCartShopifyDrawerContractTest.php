@@ -433,6 +433,10 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringNotContainsString('@static(Weline_Theme::css/widgets/mini-cart-drawer.css)', $source);
         self::assertStringNotContainsString('miniCartIcon', $source);
         self::assertStringContainsString('storefrontImageFallback', $source);
+        self::assertStringContainsString('storefrontFloatLayer', $source);
+        self::assertStringNotContainsString('w-storefront-float-layer', $source);
+        self::assertStringNotContainsString('float-slot-start', $source);
+        self::assertStringNotContainsString('float-slot-end', $source);
         self::assertStringNotContainsString('header-account.js', $source);
         self::assertStringNotContainsString('data-w-header-account-loader', $source);
     }

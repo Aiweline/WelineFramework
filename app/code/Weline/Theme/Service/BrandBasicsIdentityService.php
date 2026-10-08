@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
 
 /** Load/save Theme Editor brand-basics identity via registered providers. */
@@ -13,6 +14,7 @@ final class BrandBasicsIdentityService
     public function __construct(
         private readonly BrandBasicsIdentityRegistry $registry,
         private readonly ScopeIdentityCatalogInterface $catalog,
+        private readonly ScopeHierarchyInterface $hierarchy,
     ) {
     }
 
@@ -69,6 +71,14 @@ final class BrandBasicsIdentityService
     }
 
     /**
+     * Resolve ScopeIdentity from editor input.
+     *
+     * ThemeEditor::getEditorJsonPayload() runs ThemeAssetEditorRequestContext::prepare
+     * first, which rewrites editor_context.scope from `{identity:…}` into a
+     * ThemeContentScope bag (`storage_scope` + `store_mode`, no ScopeIdentity keys).
+     * Calling ScopeIdentity::fromArray on that bag throws
+     * 「缺少必填字段：scope_kind, website_id, …」— exactly the brand-basics drawer bug.
+     *
      * @param array<string,mixed> $input
      */
     private function resolveIdentity(array $input): ScopeIdentity
@@ -88,10 +98,42 @@ final class BrandBasicsIdentityService
         if (!\is_array($scope)) {
             throw new \InvalidArgumentException('theme_editor_typed_scope_required');
         }
-        $claims = \is_array($scope['identity'] ?? null) ? $scope['identity'] : $scope;
-        $candidate = ScopeIdentity::fromArray($claims);
+
+        $candidate = $this->candidateFromScopeBag($scope);
+        if (!$candidate instanceof ScopeIdentity) {
+            throw new \InvalidArgumentException('theme_editor_typed_scope_required');
+        }
 
         return $this->catalog->authoritativeIdentity($candidate);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function candidateFromScopeBag(array $scope): ?ScopeIdentity
+    {
+        if (\is_array($scope['identity'] ?? null)) {
+            try {
+                return ScopeIdentity::fromArray($scope['identity']);
+            } catch (\InvalidArgumentException) {
+                // Incomplete client identity — fall through to storage_scope.
+            }
+        }
+
+        $storageScope = \trim((string)($scope['storage_scope'] ?? ''));
+        if ($storageScope !== '') {
+            $fromStorage = $this->hierarchy->fromStorageScope($storageScope, true);
+            if ($fromStorage instanceof ScopeIdentity) {
+                return $fromStorage;
+            }
+        }
+
+        // Pre-prepare payloads may send ScopeIdentity claims at the scope root.
+        try {
+            return ScopeIdentity::fromArray($scope);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**

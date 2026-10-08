@@ -18,6 +18,11 @@ if (!chromePath || !pageUrl || !outPath) {
     process.exit(2);
 }
 
+if (!/^https?:\/\//i.test(pageUrl)) {
+    process.stderr.write('Cannot navigate to invalid URL: ' + pageUrl + '\n');
+    process.exit(1);
+}
+
 const userDataDir = mkdtempSync(join(tmpdir(), 'weline-theme-preview-'));
 const chrome = spawn(chromePath, [
     '--headless=new',
@@ -33,6 +38,21 @@ const chrome = spawn(chromePath, [
     'about:blank',
 ], { stdio: ['ignore', 'ignore', 'pipe'] });
 
+const cleanupUserData = () => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+            rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+            return;
+        } catch {
+            // Chrome may still hold files briefly on macOS / Node 26.
+            const until = Date.now() + 40;
+            while (Date.now() < until) {
+                // spin
+            }
+        }
+    }
+};
+
 let settled = false;
 const fail = (message, code = 1) => {
     if (settled) {
@@ -45,14 +65,14 @@ const fail = (message, code = 1) => {
     } catch {
         // already gone
     }
-    rmSync(userDataDir, { recursive: true, force: true });
+    cleanupUserData();
     process.exit(code);
 };
 
-const killer = setTimeout(() => fail('screenshot deadline exceeded'), timeoutMs + 4000);
+const killer = setTimeout(() => fail('screenshot deadline exceeded: ' + pageUrl), timeoutMs + 4000);
 chrome.on('exit', () => {
     if (!settled) {
-        fail('chrome exited before capture');
+        fail('chrome exited before capture: ' + pageUrl);
     }
 });
 
@@ -137,7 +157,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 400));
     const shot = await send('Page.captureScreenshot', { format: 'png' }, sessionId);
     if (!shot.data) {
-        fail('empty screenshot');
+        fail('empty screenshot: ' + pageUrl);
     }
     writeFileSync(outPath, Buffer.from(shot.data, 'base64'));
     settled = true;
@@ -148,8 +168,9 @@ try {
         // closing the socket is enough
     }
     chrome.kill('SIGKILL');
-    rmSync(userDataDir, { recursive: true, force: true });
+    cleanupUserData();
     process.exit(0);
 } catch (error) {
-    fail(error instanceof Error ? error.message : String(error));
+    const detail = error instanceof Error ? error.message : String(error);
+    fail(detail + (detail.includes(pageUrl) ? '' : ': ' + pageUrl));
 }

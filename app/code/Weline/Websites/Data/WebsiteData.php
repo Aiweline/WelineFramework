@@ -13,6 +13,7 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\Website\LocalDescription as WebsiteLocalDescription;
 use Weline\Websites\Model\WebsiteCurrency;
+use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\WebsiteLanguage;
 
 /**
@@ -27,12 +28,18 @@ class WebsiteData
     private const SHARED_CACHE_TTL = 300;
     private const SHARED_SNAPSHOT_BY_ID_PREFIX = 'websites.snapshot.by_id.v1.';
     private const SHARED_SNAPSHOT_BY_CODE_PREFIX = 'websites.snapshot.by_code.v1.';
+    private const SHARED_DOMAINS_BY_ID_PREFIX = 'websites.domains.by_id.v1.';
+    private const SHARED_LOCAL_ROWS_BY_ID_PREFIX = 'websites.local_rows.by_id.v1.';
     private const MAX_PROCESS_SNAPSHOTS = 256;
 
     /** @var array<string, array{website: array<string, mixed>, currency_codes: list<string>, language_codes: list<string>, currencies: list<array<string, mixed>>}> */
     private static array $processSnapshotsById = [];
     /** @var array<string, array{website: array<string, mixed>, currency_codes: list<string>, language_codes: list<string>, currencies: list<array<string, mixed>>}> */
     private static array $processSnapshotsByCode = [];
+    /** @var array<string, list<array<string, mixed>>> website_id → active domain rows */
+    private static array $processDomainsByWebsiteId = [];
+    /** @var array<string, list<array{local_code: string, name: string, description: string}>> website_id → LocalDescription rows */
+    private static array $processLocalRowsByWebsiteId = [];
     private static string $processSnapshotVersion = '';
 
     /**
@@ -85,7 +92,10 @@ class WebsiteData
                 ? self::loadCurrencyCodesOnce($websiteId)
                 : [];
             $state['language_codes'] = $websiteId >= Website::ID_DEFAULT
-                ? self::loadLanguageCodesOnce($websiteId)
+                ? self::preferDefaultLanguageFirst(
+                    self::loadLanguageCodesOnce($websiteId),
+                    (string)($website->getDefaultLanguage() ?? ''),
+                )
                 : [];
             $state['currencies'] = self::buildCurrenciesFromCodes($state['currency_codes']);
         }
@@ -355,7 +365,8 @@ class WebsiteData
     }
 
     /**
-     * Load all LocalDescription rows for a website once per request (RequestContext bag).
+     * Load all LocalDescription rows for a website: request bag → process bag → DB once.
+     * Process bag is keyed by website_id (immutable rows; Fiber-safe across same-site requests).
      * SeoHead / seo::body / seo::footer previously each hit `WHERE website_id=?` separately.
      *
      * @return list<array{local_code: string, name: string, description: string}>
@@ -378,7 +389,43 @@ class WebsiteData
             return $hit;
         }
 
+        if (isset(self::$processLocalRowsByWebsiteId[$idKey])) {
+            $rows = self::$processLocalRowsByWebsiteId[$idKey];
+            $bag[$idKey] = $rows;
+            RequestContext::set(self::LOCAL_ROWS_BAG_KEY, $bag);
+            if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
+                \Weline\Framework\Runtime\StorefrontRenderContextReader::mergeWebsiteLocal($rows);
+            }
+
+            return $rows;
+        }
+
+        try {
+            $cached = self::sharedCache()->get(self::sharedLocalRowsCacheKey($websiteId));
+            if (\is_array($cached)) {
+                $rows = \array_values($cached);
+                self::rememberProcessLocalRows($idKey, $rows);
+                $bag[$idKey] = $rows;
+                RequestContext::set(self::LOCAL_ROWS_BAG_KEY, $bag);
+                if (\class_exists(\Weline\Framework\Runtime\StorefrontRenderContextReader::class)) {
+                    \Weline\Framework\Runtime\StorefrontRenderContextReader::mergeWebsiteLocal($rows);
+                }
+
+                return $rows;
+            }
+        } catch (\Throwable) {
+        }
+
         $rows = self::fetchLocalRowsFromDb($websiteId);
+        self::rememberProcessLocalRows($idKey, $rows);
+        try {
+            self::sharedCache()->set(
+                self::sharedLocalRowsCacheKey($websiteId),
+                $rows,
+                self::SHARED_CACHE_TTL,
+            );
+        } catch (\Throwable) {
+        }
         $bag[$idKey] = $rows;
         RequestContext::set(self::LOCAL_ROWS_BAG_KEY, $bag);
         // Project into storefront.render_context.v1 when Installer already ran (no parallel bag).
@@ -387,6 +434,22 @@ class WebsiteData
         }
 
         return $rows;
+    }
+
+    /**
+     * @param list<array{local_code: string, name: string, description: string}> $rows
+     */
+    private static function rememberProcessLocalRows(string $idKey, array $rows): void
+    {
+        if (!isset(self::$processLocalRowsByWebsiteId[$idKey])
+            && \count(self::$processLocalRowsByWebsiteId) >= self::MAX_PROCESS_SNAPSHOTS
+        ) {
+            $first = \array_key_first(self::$processLocalRowsByWebsiteId);
+            if ($first !== null) {
+                unset(self::$processLocalRowsByWebsiteId[$first]);
+            }
+        }
+        self::$processLocalRowsByWebsiteId[$idKey] = $rows;
     }
 
     /**
@@ -458,6 +521,40 @@ class WebsiteData
     }
 
     /**
+     * Default language for any website id: current request → process/shared
+     * snapshot → DB once then publish. Prefer over Website::find/load.
+     */
+    public static function defaultLanguageForWebsite(int $websiteId, bool $forceReload = false): ?string
+    {
+        $value = self::scalarDefaultForWebsite(
+            $websiteId,
+            Website::schema_fields_DEFAULT_LANGUAGE,
+            static fn (): ?string => self::getDefaultLanguage(),
+            $forceReload,
+        );
+
+        return $value !== null && $value !== '' ? $value : null;
+    }
+
+    /**
+     * Default currency for any website id (same memo layers as defaultLanguageForWebsite).
+     */
+    public static function defaultCurrencyForWebsite(int $websiteId, bool $forceReload = false): ?string
+    {
+        $value = self::scalarDefaultForWebsite(
+            $websiteId,
+            Website::schema_fields_DEFAULT_CURRENCY,
+            static fn (): ?string => self::getDefaultCurrency(),
+            $forceReload,
+        );
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return \strtoupper($value);
+    }
+
+    /**
      * 获取默认时区
      * 
      * @return string|null
@@ -512,6 +609,91 @@ class WebsiteData
         self::writeCache('language_codes', $languageCodes);
 
         return $languageCodes;
+    }
+
+    /**
+     * Language codes for any website id: current request snapshot → process/shared
+     * snapshot → DB once then publish. Prefer this over WebsiteLanguage model queries.
+     *
+     * @return list<string>
+     */
+    public static function languageCodesForWebsite(int $websiteId, bool $forceReload = false): array
+    {
+        if ($websiteId < Website::ID_DEFAULT) {
+            return [];
+        }
+        if (!$forceReload && self::matchesWebsiteId($websiteId)) {
+            return self::getLanguageCodes();
+        }
+        $snapshot = $forceReload ? null : self::readSharedSnapshotById($websiteId);
+        if ($snapshot !== null) {
+            return \array_values($snapshot['language_codes']);
+        }
+
+        return \array_values(self::loadAndPublishSnapshotById($websiteId)['language_codes']);
+    }
+
+    /**
+     * Currency codes for any website id (same memo layers as languageCodesForWebsite).
+     *
+     * @return list<string>
+     */
+    public static function currencyCodesForWebsite(int $websiteId, bool $forceReload = false): array
+    {
+        if ($websiteId < Website::ID_DEFAULT) {
+            return [];
+        }
+        if (!$forceReload && self::matchesWebsiteId($websiteId)) {
+            return self::getCurrencyCodes();
+        }
+        $snapshot = $forceReload ? null : self::readSharedSnapshotById($websiteId);
+        if ($snapshot !== null) {
+            return \array_values($snapshot['currency_codes']);
+        }
+
+        return \array_values(self::loadAndPublishSnapshotById($websiteId)['currency_codes']);
+    }
+
+    /**
+     * Active domain rows for a website (process → versioned shared → DB once).
+     * Same shape as WebsiteDomain::fetchAssociationDomainsFromDatabase().
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function domainsForWebsite(int $websiteId, bool $forceReload = false): array
+    {
+        if ($websiteId < Website::ID_DEFAULT) {
+            return [];
+        }
+        self::syncProcessSnapshotVersion();
+        $key = (string)$websiteId;
+        if (!$forceReload && isset(self::$processDomainsByWebsiteId[$key])) {
+            return self::$processDomainsByWebsiteId[$key];
+        }
+        if (!$forceReload) {
+            try {
+                $cached = self::sharedCache()->get(self::sharedDomainsCacheKey($websiteId));
+                if (\is_array($cached)) {
+                    $rows = \array_values($cached);
+
+                    return self::$processDomainsByWebsiteId[$key] = $rows;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        $rows = self::loadDomainsOnce($websiteId);
+        self::rememberProcessDomains($key, $rows);
+        try {
+            self::sharedCache()->set(
+                self::sharedDomainsCacheKey($websiteId),
+                $rows,
+                self::SHARED_CACHE_TTL,
+            );
+        } catch (\Throwable) {
+        }
+
+        return $rows;
     }
 
     /** True when the current request already resolved the website language association, including empty. */
@@ -810,6 +992,8 @@ class WebsiteData
     {
         self::$processSnapshotsById = [];
         self::$processSnapshotsByCode = [];
+        self::$processDomainsByWebsiteId = [];
+        self::$processLocalRowsByWebsiteId = [];
         self::$processSnapshotVersion = '';
     }
 
@@ -877,11 +1061,57 @@ class WebsiteData
     {
         try {
             $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
-            $codes = $websiteCurrency->getWebsiteCurrencyCodes($websiteId);
+            // Raw DB path only — never call getWebsiteCurrencyCodes() (delegates here).
+            $codes = $websiteCurrency->fetchAssociationCodesFromDatabase($websiteId);
             return \is_array($codes) ? \array_values($codes) : [];
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private static function loadDomainsOnce(int $websiteId): array
+    {
+        try {
+            $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
+            $rows = $websiteDomain->fetchAssociationDomainsFromDatabase($websiteId);
+
+            return \is_array($rows) ? \array_values($rows) : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    private static function sharedDomainsCacheKey(int $websiteId): string
+    {
+        $version = self::$processSnapshotVersion !== '' ? self::$processSnapshotVersion : '0';
+
+        return self::SHARED_DOMAINS_BY_ID_PREFIX . $version . '.' . $websiteId;
+    }
+
+    private static function sharedLocalRowsCacheKey(int $websiteId): string
+    {
+        $version = self::$processSnapshotVersion !== '' ? self::$processSnapshotVersion : '0';
+
+        return self::SHARED_LOCAL_ROWS_BY_ID_PREFIX . $version . '.' . $websiteId;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     */
+    private static function rememberProcessDomains(string $key, array $rows): void
+    {
+        if (!isset(self::$processDomainsByWebsiteId[$key])
+            && \count(self::$processDomainsByWebsiteId) >= self::MAX_PROCESS_SNAPSHOTS
+        ) {
+            $first = \array_key_first(self::$processDomainsByWebsiteId);
+            if ($first !== null) {
+                unset(self::$processDomainsByWebsiteId[$first]);
+            }
+        }
+        self::$processDomainsByWebsiteId[$key] = $rows;
     }
 
     /** @return list<string> */
@@ -889,11 +1119,128 @@ class WebsiteData
     {
         try {
             $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
-            $codes = $websiteLanguage->getWebsiteLanguageCodes($websiteId);
+            // Raw DB path only — never call getWebsiteLanguageCodes() (delegates here).
+            $codes = $websiteLanguage->fetchAssociationCodesFromDatabase($websiteId);
             return \is_array($codes) ? \array_values($codes) : [];
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * Bare-path / empty-default fallbacks use language_codes[0]. Keep
+     * website.default_language first so those paths do not stick on en_US.
+     *
+     * @param list<string>|array<int, string> $codes
+     * @return list<string>
+     */
+    private static function preferDefaultLanguageFirst(array $codes, string $default): array
+    {
+        $default = \trim($default);
+        $normalized = [];
+        foreach ($codes as $code) {
+            $code = \trim((string)$code);
+            if ($code !== '') {
+                $normalized[] = $code;
+            }
+        }
+        if ($default === '') {
+            return \array_values($normalized);
+        }
+        $rest = [];
+        foreach ($normalized as $code) {
+            if (\strcasecmp($code, $default) !== 0) {
+                $rest[] = $code;
+            }
+        }
+
+        return \array_values(\array_merge([$default], $rest));
+    }
+
+    /**
+     * @param callable():(?string) $fromCurrentRequest
+     */
+    private static function scalarDefaultForWebsite(
+        int $websiteId,
+        string $field,
+        callable $fromCurrentRequest,
+        bool $forceReload,
+    ): ?string {
+        if ($websiteId < Website::ID_DEFAULT) {
+            return null;
+        }
+        if (!$forceReload && self::matchesWebsiteId($websiteId)) {
+            $fromRequest = $fromCurrentRequest();
+            if ($fromRequest !== null && \trim((string)$fromRequest) !== '') {
+                return \trim((string)$fromRequest);
+            }
+        }
+        $snapshot = $forceReload ? null : self::readSharedSnapshotById($websiteId);
+        if ($snapshot !== null) {
+            $fromSnapshot = \trim((string)($snapshot['website'][$field] ?? ''));
+            if ($fromSnapshot !== '') {
+                return $fromSnapshot;
+            }
+        }
+        $payload = self::loadAndPublishSnapshotById($websiteId);
+        $fromPayload = \trim((string)($payload['website'][$field] ?? ''));
+
+        return $fromPayload !== '' ? $fromPayload : null;
+    }
+
+    /**
+     * Cold-load one website's associations, then publish process + shared snapshot.
+     *
+     * @return array{website: array<string, mixed>, currency_codes: list<string>, language_codes: list<string>, currencies: list<array<string, mixed>>}
+     */
+    private static function loadAndPublishSnapshotById(int $websiteId): array
+    {
+        $currencyCodes = self::loadCurrencyCodesOnce($websiteId);
+        $languageCodes = self::loadLanguageCodesOnce($websiteId);
+        $currencies = self::buildCurrenciesFromCodes($currencyCodes);
+        $payload = [
+            'website' => [Website::schema_fields_ID => $websiteId],
+            'currency_codes' => $currencyCodes,
+            'language_codes' => $languageCodes,
+            'currencies' => $currencies,
+        ];
+        try {
+            /** @var Website $website */
+            $website = ObjectManager::getInstance(Website::class);
+            $website->clear()
+                ->where(Website::schema_fields_ID, $websiteId)
+                ->find()
+                ->fetch();
+            if ($website->hasData(Website::schema_fields_ID)) {
+                $languageCodes = self::preferDefaultLanguageFirst(
+                    $languageCodes,
+                    (string)($website->getDefaultLanguage() ?? ''),
+                );
+                $state = [
+                    'website' => clone $website,
+                    'data' => null,
+                    'currency_codes' => $currencyCodes,
+                    'language_codes' => $languageCodes,
+                    'currencies' => $currencies,
+                ];
+                self::publishSharedSnapshot($state);
+                $row = $website->getData();
+                if (\is_array($row)) {
+                    $payload['website'] = $row;
+                }
+                $payload['language_codes'] = $languageCodes;
+
+                return $payload;
+            }
+        } catch (\Throwable) {
+            // Fall through to process-only memo when Website row is unavailable.
+        }
+
+        // Still memoize association lists in-process so repeated reads skip DB.
+        self::syncProcessSnapshotVersion();
+        self::rememberProcessSnapshot(self::$processSnapshotsById, (string)$websiteId, $payload);
+
+        return $payload;
     }
 
     /**
@@ -1068,6 +1415,8 @@ class WebsiteData
         ) {
             self::$processSnapshotsById = [];
             self::$processSnapshotsByCode = [];
+            self::$processDomainsByWebsiteId = [];
+            self::$processLocalRowsByWebsiteId = [];
         }
         self::$processSnapshotVersion = $version;
     }

@@ -32,7 +32,7 @@ use Weline\Theme\Register\Installer;
  *
  * WARNING：历史输出曾落旧 `view/templates` 树，已过时。
  * 现代 design 主题须含 `{frontend|backend}/`（colors/_ / variables/_ / 独立 CSS），
- * 激活用 `theme:active`（不是 theme:activate），细节见 `dev/ai-command/ai/主题开发.md` Mode B
+ * 店面主题在网站信息绑定；细节见 `dev/ai-command/ai/主题开发.md` Mode B
  * 与样例 `app/design/Weline/hanfu/`。生成结构仅作最小骨架，勿当第二权威。
  */
 class Create implements CommandInterface
@@ -499,7 +499,7 @@ class Create implements CommandInterface
             $this->printing->success(__('主题已完整创建！'));
             $this->printing->note(__('您可以：'));
             $this->printing->note(__('1. 运行 php bin/w setup:upgrade 或 theme:install 安装主题'));
-            $this->printing->note(__('2. 运行 php bin/w theme:active %{1} frontend 激活主题', [$themeName]));
+            $this->printing->note(__('2. 在网站信息 → 店面主题 绑定 %{1}（未绑定则回落 Default）', [$themeName]));
         }
         
         // 进入操作菜单
@@ -762,7 +762,7 @@ class Create implements CommandInterface
         $this->createModernSkinSkeleton($themePath, $safeBrand);
 
         $this->printing->warning(__(
-            'WARNING：请按主题开发.md Mode B / hanfu 现代 frontend/ 树继续完善；激活命令为 php bin/w theme:active %{1} frontend（不是 theme:activate）',
+            'WARNING：请按主题开发.md Mode B / hanfu 现代 frontend/ 树继续完善；店面主题在网站信息绑定 %{1}',
             [$themeName]
         ));
 
@@ -965,11 +965,8 @@ MD;
    php bin/w theme:listing
    ```
 
-2. 激活主题（注意命令是 theme:active，不是 theme:activate）：
-   ```bash
-   php bin/w theme:active {$themeName} frontend
-   ```
-   正式店面权威为 websites_theme_application（网站信息→店面主题）；未配置时回落 Theme 注册 Default。
+2. 在「网站信息 → 店面主题」绑定本主题（theme:active / is_active_* 已退役）。
+   正式店面权威为 websites_theme_application；未配置时回落 Theme 注册 Default。
 
 ## 开发说明
 
@@ -1026,7 +1023,7 @@ MD;
         $this->printing->success(__('═══════════════════════════════════════════════════════'));
         $this->printing->warning(__('下一步操作:'));
         $this->printing->note(__('1. 运行 php bin/w setup:upgrade 或 theme:install 安装主题'));
-        $this->printing->note(__('2. 运行 php bin/w theme:active %{1} frontend 激活主题（不是 theme:activate）', [$themeName]));
+        $this->printing->note(__('2. 在网站信息 → 店面主题 绑定 %{1}', [$themeName]));
         $this->printing->note(__('3. 在网站信息中配置 websites_theme_application（店面主题）；未配置时回落 Theme 注册 Default'));
         $this->printing->success(__('═══════════════════════════════════════════════════════'));
     }
@@ -1466,7 +1463,7 @@ USAGE;
         $help .= '  • ' . __('自动生成 register.php 注册文件') . PHP_EOL;
         $help .= '  • ' . __('自动创建现代 frontend/ 最小树（colors/_、variables/_、独立 brand CSS）') . PHP_EOL;
         $help .= '  • ' . __('WARNING：旧 view/templates 脚手架已过时；请按主题开发.md Mode B / hanfu 完善') . PHP_EOL;
-        $help .= '  • ' . __('激活命令：php bin/w theme:active <name> frontend（不是 theme:activate）') . PHP_EOL;
+        $help .= '  • ' . __('店面主题：网站信息 → 店面主题；后台皮肤：系统配置') . PHP_EOL;
         $help .= PHP_EOL . '💡 ' . __('二次操作模式') . ':' . PHP_EOL;
         $help .= '  • ' . __('运行 php bin/w theme:create <主题名> 可进入二次操作模式') . PHP_EOL;
         $help .= '  • ' . __('支持重新创建主题、创建模板文件、查看和修改配置等操作') . PHP_EOL;
@@ -3082,7 +3079,7 @@ USAGE;
                 
                 if ($wasActive && !$this->welineTheme->isActive()) {
                     $this->printing->warning(__('提示：主题已重装，但当前为未激活状态'));
-                    $this->printing->note(__('如需激活主题，请使用命令：php bin/w theme:active %{1} frontend', [$themeName]));
+                    $this->printing->note(__('如需用于店面，请在网站信息绑定主题：%{1}', [$themeName]));
                 }
             } else {
                 $this->printing->error(__('主题重装失败，请检查 register.php 文件'));

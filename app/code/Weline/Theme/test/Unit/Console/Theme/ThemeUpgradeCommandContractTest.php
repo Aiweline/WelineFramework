@@ -37,14 +37,15 @@ final class ThemeUpgradeCommandContractTest extends TestCase
         self::assertStringNotContainsString('WelineTheme::filed_NAME', $source);
     }
 
-    public function testDefaultUpgradeTargetsBothFrontendAndBackendActiveThemes(): void
+    public function testDefaultUpgradeTargetsApplicationReferencedThemes(): void
     {
         $source = file_get_contents(dirname(__DIR__, 4) . '/Console/Theme/Upgrade.php');
 
         self::assertIsString($source);
         self::assertStringContainsString('resolveThemesToUpgrade', $source);
-        self::assertStringContainsString("foreach (['frontend', 'backend'] as \$area)", $source);
-        self::assertStringContainsString('getActiveTheme($area)', $source);
+        self::assertStringContainsString('ThemeApplicationUsageService', $source);
+        self::assertStringContainsString('themesForDefaultUpgrade', $source);
+        self::assertStringNotContainsString('getActiveTheme($area)', $source);
         self::assertStringContainsString('upgradeOneTheme', $source);
     }
 

@@ -52,11 +52,17 @@
 
 本地 WLS 的标准项目入口 `p<8位十六进制>.(test.weline.com|local.test|weline.localhost)` 会绑定系统默认网站 `0/default`，并保留当前 HTTP/HTTPS、Host 与非默认端口。该规则是严格 Host 契约：`www.p...`、错误长度、其他后缀和非 HTTP(S) URL 都不会触发默认站点映射。
 
-请求级命中缓存会忽略不参与站点选择的 query/fragment；标准项目 Host 的所有 path 共用同一站点身份。普通绑定域名仍保留 path 以支持 `sub_path`，但 WLS 进程缓存有固定 256 项上限，随机 URI 不得让常驻内存线性增长。站点保存或域名变更后由 `global/websites-registry` namespace 使共享命中数据失效，提交后再更新 Url parser 版本并清理当前进程快照。漏掉 IPC 时，后续请求仍以 DB generation/@clock 为正确性权威。
+请求级命中缓存会忽略不参与站点选择的 query/fragment。标准项目 Host 上的命中顺序见下节（**不是**「所有 path 同一站」）。普通绑定域名仍保留 path 以支持 `sub_path`，但 WLS 进程缓存有固定 256 项上限，随机 URI 不得让常驻内存线性增长。站点保存或域名变更后由 `global/websites-registry` namespace 使共享命中数据失效，提交后再更新 Url parser 版本并清理当前进程快照。漏掉 IPC 时，后续请求仍以 DB generation/@clock 为正确性权威。
 
 ### 3.1 Website 命中优先级
 
-Website 候选同时来自 `Website.url` 和启用的 `WebsiteDomain` 绑定，按统一规则决定：
+**标准项目 Host**（`p<8hex>.test.weline.com` 等）专用顺序：
+
+1. 合成挂载 `/~site/{Website.code}`（`ProjectHostSiteMount`，**不是** `WebsiteDomain` 行）。未知/非法 code → HTTP `404`，不得回落默认站。
+2. 同 Host 上非空 `WebsiteDomain.sub_path`（最长段边界）。
+3. 裸 Host → 系统默认站 `0/default`。
+
+普通 Host 上 Website 候选同时来自 `Website.url` 和启用的 `WebsiteDomain` 绑定：
 
 1. 精确 Host 高于单层 `www.` 别名；别名只允许在最前面增删一个 `www.`，不做递归或任意子域归一化。标准 `p<8位十六进制>` 项目 Host 不接受 `www.` 别名。
 2. Host 级别相同时，选择最长的规范路径。路径必须命中完整段边界：`/shop` 可命中 `/shop` 和 `/shop/catalog`，不能命中 `/shopping`。

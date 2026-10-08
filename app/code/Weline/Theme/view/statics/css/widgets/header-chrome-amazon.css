@@ -574,39 +574,81 @@
     color: inherit;
 }
 
-/* Dark flyout (portaled outside .weline-header): beat foundation w-menu light hover */
-.search-type-submenu .w-menu__item:hover,
-.search-type-submenu .w-menu__item:focus-visible,
-.search-type-submenu .w-menu__item.is-active,
-.search-type-submenu .w-menu__item[aria-selected="true"],
-.search-type-submenu .search-type-node.is-open > .search-type-option--branch,
-.search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch,
-.weline-header .search-type-submenu .w-menu__item:hover,
-.weline-header .search-type-submenu .w-menu__item:focus-visible,
-.weline-header .search-type-submenu .w-menu__item.is-active,
-.weline-header .search-type-submenu .w-menu__item[aria-selected="true"],
-.weline-header .search-type-submenu .search-type-node.is-open > .search-type-option--branch,
-.weline-header .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch {
+/*
+ * Category search menu nests children in the raised light panel (same column),
+ * not a dark side flyout. Open branch / hover must stay paper ink — the old
+ * on-inverse white !important made 「女装」「襦裙」vanish on cream (WO-UI-CONTRAST).
+ */
+.w-menu.search-type-menu.search-category-menu,
+.search-type-menu.search-category-menu {
+    --_paper-text: var(--amz-drawer-text, #0f1111);
+    --_paper-muted: var(--amz-drawer-muted, #565959);
+    color: var(--_paper-text);
+}
+
+.w-menu.search-type-menu.search-category-menu .search-type-submenu,
+.search-type-menu.search-category-menu .search-type-submenu {
+    background: transparent;
+    color: inherit;
+    box-shadow: none;
+}
+
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:focus-visible,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item.is-active,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item[aria-selected="true"],
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:focus-visible,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item.is-active,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item[aria-selected="true"],
+.search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch,
+.search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch {
+    background: var(--weline-theme-surface-hover, rgba(15, 17, 17, 0.06)) !important;
+    color: var(--_paper-text, var(--amz-drawer-text, #0f1111)) !important;
+    outline: 0;
+}
+
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover .search-type-option-chevron,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover .search-type-option-chevron,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
+.search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
+.search-type-menu.search-category-menu .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron {
+    color: var(--_paper-muted, var(--amz-drawer-muted, #565959)) !important;
+}
+
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item.is-active .search-type-option-check,
+.w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item[aria-selected="true"] .search-type-option-check,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item.is-active .search-type-option-check,
+.search-type-menu.search-category-menu .search-type-submenu .w-menu__item[aria-selected="true"] .search-type-option-check {
+    color: var(--weline-chrome-primary, var(--color-primary)) !important;
+}
+
+/* True dark flyout only outside light .search-category-menu trees */
+.w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item:hover,
+.w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item:focus-visible,
+.w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item.is-active,
+.w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item[aria-selected="true"],
+.w-menu:not(.search-category-menu) .search-type-submenu .search-type-node.is-open > .search-type-option--branch,
+.w-menu:not(.search-category-menu) .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch {
     background: rgba(255, 255, 255, 0.14) !important;
     color: var(--weline-chrome-text-on-inverse, #ffffff) !important;
     outline: 0;
 }
 
-.search-type-submenu .w-menu__item:hover .search-type-option-chevron,
-.search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
-.search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
-.search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron,
-.weline-header .search-type-submenu .w-menu__item:hover .search-type-option-chevron,
-.weline-header .search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
-.weline-header .search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
-.weline-header .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron {
+.w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item:hover .search-type-option-chevron,
+.w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
+.w-menu:not(.search-category-menu) .search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
+.w-menu:not(.search-category-menu) .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron {
     color: rgba(255, 255, 255, 0.85) !important;
 }
 
-.search-type-submenu .w-menu__item.is-active .search-type-option-check,
-.search-type-submenu .w-menu__item[aria-selected="true"] .search-type-option-check,
-.weline-header .search-type-submenu .w-menu__item.is-active .search-type-option-check,
-.weline-header .search-type-submenu .w-menu__item[aria-selected="true"] .search-type-option-check {
+.w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item.is-active .search-type-option-check,
+.w-menu:not(.search-category-menu) .search-type-submenu .w-menu__item[aria-selected="true"] .search-type-option-check {
     color: var(--weline-chrome-primary, var(--color-primary)) !important;
 }
 

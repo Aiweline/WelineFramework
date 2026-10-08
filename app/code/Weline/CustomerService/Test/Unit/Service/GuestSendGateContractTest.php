@@ -34,7 +34,7 @@ final class GuestSendGateContractTest extends TestCase
         $chatController = dirname(__DIR__, 3) . '/Controller/Frontend/Chat.php';
         $widgetJs = dirname(__DIR__, 3) . '/view/statics/js/customer-service.js';
         $bodyEnd = dirname(__DIR__, 3)
-            . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+            . '/view/templates/Frontend/widgets/customer-service-float.phtml';
 
         $service = (string)file_get_contents($serviceFile);
         $provider = (string)file_get_contents($providerFile);

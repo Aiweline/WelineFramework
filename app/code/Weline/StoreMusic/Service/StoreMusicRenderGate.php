@@ -8,7 +8,7 @@ use Weline\Framework\Runtime\RequestContext;
 
 /**
  * Ensure at most one StoreMusic float markup per HTTP request
- * (layout widget + base::body-end Hook must not double-render).
+ * (legacy content-slot placement + storefront-float-start must not double-render).
  */
 final class StoreMusicRenderGate
 {
@@ -36,7 +36,7 @@ final class StoreMusicRenderGate
     /**
      * Drop a prior claim so a discarded SSR pass (e.g. ThemePreview Content
      * build() whose HTML is thrown away in editor_mode) cannot starve the
-     * real LayoutSlotRenderer / body-end Hook pass with empty markup.
+     * real LayoutSlotRenderer / float-slot pass with empty markup.
      */
     public static function reset(): void
     {

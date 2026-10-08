@@ -149,6 +149,16 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
             $headerDefault
         );
 
+        // Open branch parents in light category tree must stay paper ink.
+        self::assertStringContainsString(
+            '.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch',
+            $headerDefault
+        );
+        self::assertStringContainsString(
+            'color: var(--_paper-text, var(--amz-drawer-text, #0f1111)) !important',
+            $headerDefault
+        );
+
         $foundation = $this->read('app/code/Weline/Theme/view/ui/css/foundation.css');
         self::assertStringContainsString('.w-language-switcher__menu', $foundation);
         self::assertStringContainsString(
@@ -169,6 +179,14 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
         );
         self::assertStringContainsString(
             '.w-input:-webkit-autofill',
+            $foundation
+        );
+        self::assertStringContainsString(
+            '.w-menu.search-type-menu.search-category-menu .search-type-submenu .search-type-node.is-open > .search-type-option--branch',
+            $foundation
+        );
+        self::assertStringContainsString(
+            '.w-menu:not(.search-category-menu) .search-type-submenu .search-type-node.is-open > .search-type-option--branch',
             $foundation
         );
     }

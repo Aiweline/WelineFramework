@@ -9,7 +9,6 @@ use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Api\ConfigReader;
 use Weline\SystemConfig\Model\SystemConfig;
-use Weline\Websites\Data\WebsiteData;
 
 /**
  * Scoped customer-service settings from SystemConfig.
@@ -114,9 +113,12 @@ final class CustomerServiceSettings
 
     public function websiteDefaultLocale(): string
     {
-        $website = trim((string)(WebsiteData::getDefaultLanguage() ?? ''));
-        if ($website !== '') {
-            return $website;
+        try {
+            $website = trim((string)State::resolveWebsiteDefaultLanguage());
+            if ($website !== '') {
+                return $website;
+            }
+        } catch (\Throwable) {
         }
         $request = trim((string)(State::getLangLocal() ?: ''));
         if ($request !== '') {

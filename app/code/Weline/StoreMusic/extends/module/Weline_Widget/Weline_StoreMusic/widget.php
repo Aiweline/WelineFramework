@@ -4,44 +4,42 @@ declare(strict_types=1);
 
 /**
  * StoreMusic 前台部件：进店音乐浮层。
- * 店面全站仍可由 base::body-end Hook 兜底；homepage required default_injection
+ * 默认注入 footer chrome 槽 storefront-float-start；homepage required default_injection
  * 保证「恢复原始布局」后应用 Tab / 默认注入回填仍保留。
- * 曲目与播放行为在主题编辑器「部件配置」中编辑（params）；SystemConfig / 后台页作 Hook 兜底与迁移回退。
+ * 曲目与播放行为在主题编辑器「部件配置」中编辑（params）；SystemConfig / 后台页作配置回退。
+ *
+ * HARD: default_injection / params 必须 enabled=false + tracks=[]。
+ * 非空默认歌单会绕过 hookOwnedWidgetConfig 的 annotation 污染剥离，
+ * 导致编辑器草稿「未启用」却带着歌单 → 永远 inactive，左下角不显示。
+ * 默认歌单只放 etc/default-tracks.php / SystemConfig，部件曲目为空时回退。
  */
-
-/** @var list<array{url:string,title:string,intro:array<string,string>}> $defaultTracks */
-$defaultTracksFile = dirname(__DIR__, 4) . '/etc/default-tracks.php';
-$defaultTracks = is_file($defaultTracksFile) ? require $defaultTracksFile : [];
-if (!is_array($defaultTracks)) {
-    $defaultTracks = [];
-}
 
 return [
     'store-music' => [
         'name' => '进店音乐',
-        'description' => '左下角进店氛围音乐浮层；应用默认注入，恢复原始布局后 required 回填。曲目与播放在部件配置中设置。',
+        'description' => '左下角进店氛围音乐浮层；默认注入 storefront-float-start；恢复原始布局后 required 回填。曲目与播放在部件配置中设置。',
         'type' => 'content',
         'code' => 'store-music',
         'area' => 'frontend',
         'template' => 'Weline_StoreMusic::templates/frontend/widgets/store-music.phtml',
         'page_layouts' => ['*'],
-        'position' => ['content'],
-        'slot' => 'content',
+        'position' => ['footer'],
+        'slot' => 'storefront-float-start',
         'supports' => [
             'store-music',
-            'layout-homepage-content',
+            'layout-storefront-float-start',
             'content',
         ],
         'default_injections' => [[
             'layout_type' => 'homepage',
-            'slot' => 'content',
-            'area' => 'content',
-            'sort_order' => 900,
+            'slot' => 'storefront-float-start',
+            'area' => 'footer',
+            'sort_order' => 100,
             'required' => true,
-            'reason' => '店面默认进店音乐浮层；恢复原始布局后 required 回填',
+            'reason' => '店面默认左侧悬浮进店音乐；恢复原始布局后 required 回填',
             'config' => [
                 'enabled' => false,
-                'tracks' => $defaultTracks,
+                'tracks' => [],
                 'delay_seconds' => 3,
                 'try_autoplay' => true,
                 'loop' => true,
@@ -55,12 +53,12 @@ return [
                 'default' => false,
                 'type' => 'bool',
                 'label' => '启用进店音乐',
-                'description' => '关闭后前台不再展示进店音乐浮层；需至少一首曲目才会显示。默认关闭。',
+                'description' => '关闭后前台不再展示进店音乐浮层；需至少一首曲目才会显示。默认关闭；曲目为空时回退系统配置歌单与启用状态。',
                 'group' => 'basic',
                 'i18n' => false,
             ],
             'tracks' => [
-                'default' => $defaultTracks,
+                'default' => [],
                 'type' => 'array',
                 'label' => '进店曲目',
                 'description' => '从媒体库选择曲目（可多选添加）；拖拽排序。部件曲目为空时回退到系统配置歌单。简介可按编辑器语言分别填写。',

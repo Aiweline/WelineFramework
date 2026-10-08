@@ -24,6 +24,7 @@ use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Service\Exception\ScopeResolutionException;
+use Weline\Websites\Service\ProjectHostSiteMount;
 use Weline\Websites\Service\ScopeResolver;
 use Weline\Websites\Service\Value\CanonicalStorefrontUrl;
 
@@ -91,6 +92,7 @@ class DetectWebsite implements
             ObjectManager::getInstance(\Weline\Framework\Http\Response::class)
                 ->noRouter($exception->httpStatus, $exception->getMessage());
         }
+        // noRouter() is never-returning; keep analyzer happy if catch is rewritten.
         if ($matchedSite === null) {
             $banUnmatchedDomain = Env::module_env('Weline_Websites', 'ban_unmatched_domain') ?? false;
             if ($banUnmatchedDomain) {
@@ -124,7 +126,12 @@ class DetectWebsite implements
     {
         /** @var Website $websiteModel */
         $websiteModel = w_obj(Website::class);
-        $matchedSite = $this->resolveMatchedSite($fullUri, $websiteModel);
+        try {
+            $matchedSite = $this->resolveMatchedSite($fullUri, $websiteModel);
+        } catch (ScopeResolutionException $exception) {
+            ObjectManager::getInstance(\Weline\Framework\Http\Response::class)
+                ->noRouter($exception->httpStatus, $exception->getMessage());
+        }
         if ($matchedSite === null) {
             return null;
         }
@@ -136,7 +143,12 @@ class DetectWebsite implements
     {
         /** @var Website $websiteModel */
         $websiteModel = w_obj(Website::class);
-        $matchedSite = $this->resolveMatchedSite($fullUri, $websiteModel);
+        try {
+            $matchedSite = $this->resolveMatchedSite($fullUri, $websiteModel);
+        } catch (ScopeResolutionException $exception) {
+            ObjectManager::getInstance(\Weline\Framework\Http\Response::class)
+                ->noRouter($exception->httpStatus, $exception->getMessage());
+        }
         if ($matchedSite === null) {
             ObjectManager::getInstance(\Weline\Framework\Http\Response::class)
                 ->noRouter(404, (string)__('当前请求没有匹配到可用网站'));
@@ -585,6 +597,8 @@ class DetectWebsite implements
             }
         }
 
+        $projectHosts = $this->collectStandardProjectHosts($domainsByWebsite);
+
         foreach ($sites as $site) {
             $siteUrl = (string)($site['url'] ?? '');
             $this->addExpandedSiteUrls($expanded, $seen, $site, $siteUrl);
@@ -607,6 +621,13 @@ class DetectWebsite implements
                 if ($this->isReservedProjectHost($domain) && $subPath === '') {
                     continue;
                 }
+                // Synthetic /~site/{code} owns that prefix on the project Host —
+                // never publish a colliding WebsiteDomain sub_path into the parser.
+                if ($this->isReservedProjectHost($domain)
+                    && ProjectHostSiteMount::conflictsWithDomainSubPath('/' . $subPath)
+                ) {
+                    continue;
+                }
 
                 $baseUrl = $scheme . '://' . $domain . $port;
                 if ($subPath !== '') {
@@ -615,9 +636,59 @@ class DetectWebsite implements
 
                 $this->addExpandedSiteUrls($expanded, $seen, $site, $baseUrl);
             }
+
+            // Virtual project-Host mounts (no WebsiteDomain row).
+            $code = \strtolower(\trim((string)($site[Website::schema_fields_CODE] ?? '')));
+            $mount = ProjectHostSiteMount::mountPathForCode($code);
+            if ($mount !== '' && $projectHosts !== []) {
+                foreach ($projectHosts as $projectHost) {
+                    $this->addExpandedSiteUrls(
+                        $expanded,
+                        $seen,
+                        $site,
+                        'https://' . $projectHost . $mount,
+                    );
+                }
+            }
         }
 
         return $expanded;
+    }
+
+    /**
+     * @param array<int, list<array<string, mixed>>> $domainsByWebsite
+     * @return list<string>
+     */
+    private function collectStandardProjectHosts(array $domainsByWebsite): array
+    {
+        $hosts = [];
+        try {
+            if (\class_exists(\Weline\Server\Service\MasterProcess::class)) {
+                $hash = \Weline\Server\Service\MasterProcess::getProjectIdentityHash();
+                $short = \strtolower(\preg_replace('/[^a-f0-9]/i', '', (string)$hash) ?? '');
+                if (\strlen($short) >= 8) {
+                    $built = LocalDomainPolicy::buildProjectHost(\substr($short, 0, 8));
+                    $built = LocalDomainPolicy::normalizeDomain($built);
+                    if ($built !== '' && $this->isReservedProjectHost($built)) {
+                        $hosts[$built] = true;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        foreach ($domainsByWebsite as $domainRows) {
+            foreach ($domainRows as $domainRow) {
+                $domain = LocalDomainPolicy::normalizeDomain(
+                    (string)($domainRow[WebsiteDomain::schema_fields_DOMAIN] ?? '')
+                );
+                if ($domain !== '' && $this->isReservedProjectHost($domain)) {
+                    $hosts[$domain] = true;
+                }
+            }
+        }
+
+        return \array_keys($hosts);
     }
 
     /**
@@ -663,6 +734,12 @@ class DetectWebsite implements
             $subPath = $subPathProbe;
             if ($subPath !== '' && !\str_starts_with($subPath, '/')) {
                 $subPath = '/' . $subPath;
+            }
+            // /~site is reserved for ProjectHostSiteMount on the project Host.
+            if ($this->isReservedProjectHost($hostNorm)
+                && ProjectHostSiteMount::conflictsWithDomainSubPath($subPath)
+            ) {
+                continue;
             }
             $configuredPath = $this->canonicalConfiguredPath($subPath === '' ? '/' : $subPath);
             if (!CanonicalStorefrontUrl::matchesPathSegmentBoundary($configuredPath, $path)) {
@@ -787,10 +864,9 @@ class DetectWebsite implements
 
         $currentHost = $matchContext['host'];
         if ($this->isReservedProjectHost($currentHost)) {
-            // Project Host stays the default-site entry, but WebsiteDomain rows on
-            // the same Host with a non-empty sub_path must still win for that prefix
-            // (e.g. https://p{hash}.test.weline.com/e2e-site/sitemap.xml).
-            $matchedSite = $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel)
+            // Order: synthetic /~site/{code} → WebsiteDomain non-empty sub_path → bare default.
+            $matchedSite = $this->findSiteByProjectHostSiteCode($requestUrl, $currentHost, $websiteModel)
+                ?? $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel)
                 ?? $this->findDefaultSiteForProjectHost($requestUrl, $currentHost, $websiteModel);
         } else {
             $matchedSite = $this->chooseWebsiteCandidate([
@@ -855,6 +931,74 @@ class DetectWebsite implements
             'port' => isset($parsed['port']) ? (int)$parsed['port'] : 0,
             'path' => $path,
         ];
+    }
+
+    /**
+     * Synthetic mount on the standard project Host: /~site/{Website.code}.
+     * Paths under /~site that do not resolve to a known mountable code fail closed
+     * (never fall through to the default site).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function findSiteByProjectHostSiteCode(
+        string $requestUrl,
+        string $currentHost,
+        Website $websiteModel,
+    ): ?array {
+        $matchContext = $this->parseHttpMatchContext($requestUrl);
+        if ($matchContext === null || !$this->isReservedProjectHost($currentHost)) {
+            return null;
+        }
+
+        $path = $this->canonicalRequestPath($matchContext['path']);
+        try {
+            $parsed = ProjectHostSiteMount::parseMountFromPath($path);
+        } catch (\InvalidArgumentException $exception) {
+            throw new ScopeResolutionException(
+                'project_host_site_mount_invalid',
+                (string)__('项目壳站点入口路径无效'),
+                404,
+                $exception,
+            );
+        }
+        if ($parsed === null) {
+            return null;
+        }
+
+        $code = $parsed['code'];
+        $mount = $parsed['mount'];
+        $matchedRow = null;
+        foreach ($this->getWebsiteRows($websiteModel) as $site) {
+            $siteCode = \strtolower(\trim((string)($site[Website::schema_fields_CODE] ?? '')));
+            if ($siteCode === '' || !\hash_equals($siteCode, $code)) {
+                continue;
+            }
+            if ($matchedRow !== null) {
+                throw $this->ambiguousWebsiteRoute();
+            }
+            $matchedRow = $site;
+        }
+        if ($matchedRow === null) {
+            throw new ScopeResolutionException(
+                'project_host_site_code_unknown',
+                (string)__('项目壳站点代码不存在：%{1}', [$code]),
+                404,
+            );
+        }
+
+        $host = LocalDomainPolicy::normalizeDomain($currentHost);
+        if ($host === '') {
+            return null;
+        }
+        $port = $matchContext['port'] > 0 ? ':' . $matchContext['port'] : '';
+        $matchedRow[Website::schema_fields_URL] = $matchContext['scheme'] . '://' . $host . $port . $mount;
+        $matchedRow[self::MATCH_META_KEY] = [
+            'source' => 'project_host_site_code',
+            'host_exact' => true,
+            'path' => $mount,
+        ];
+
+        return $matchedRow;
     }
 
     /**

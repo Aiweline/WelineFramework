@@ -8,7 +8,31 @@
 (function() {
     'use strict';
 
-    const EDITOR_ORIGIN = window.location.origin;
+    /**
+     * Admin shell may embed a Host-only website canvas (different origin).
+     * Prefer explicit editor_parent_origin, then referrer, else same-origin.
+     */
+    function resolveEditorParentOrigin() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const fromQuery = String(params.get('editor_parent_origin') || '').trim();
+            if (fromQuery) {
+                return new URL(fromQuery).origin;
+            }
+        } catch (error) {
+            // Ignore malformed URL search params.
+        }
+        try {
+            if (document.referrer) {
+                return new URL(document.referrer).origin;
+            }
+        } catch (error) {
+            // Ignore malformed referrer.
+        }
+        return window.location.origin;
+    }
+
+    const EDITOR_ORIGIN = resolveEditorParentOrigin();
     let activeDragWidget = null;
     let activeDragSessionId = '';
     let activeDropSlot = null;
@@ -921,7 +945,7 @@
     }, true);
 
     window.addEventListener('message', function(event) {
-        if (event.origin !== window.location.origin || event.source !== window.parent) return;
+        if (event.origin !== EDITOR_ORIGIN || event.source !== window.parent) return;
         const data = event.data;
         if (!data || data.source !== 'weline-theme-editor') return;
 
@@ -2785,7 +2809,28 @@
 
 /* Weline UI source: ui/js/pages/theme-preview.js */
 const root = document.documentElement;
-const parentOrigin = window.location.origin;
+
+function resolveEditorParentOrigin() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const fromQuery = String(params.get('editor_parent_origin') || '').trim();
+        if (fromQuery) {
+            return new URL(fromQuery).origin;
+        }
+    } catch (error) {
+        // Ignore malformed URL search params.
+    }
+    try {
+        if (document.referrer) {
+            return new URL(document.referrer).origin;
+        }
+    } catch (error) {
+        // Ignore malformed referrer.
+    }
+    return window.location.origin;
+}
+
+const parentOrigin = resolveEditorParentOrigin();
 const mountedSlots = new WeakSet();
 
 function integer(value, fallback) {

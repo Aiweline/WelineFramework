@@ -7,8 +7,10 @@ namespace Weline\Theme\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\RequestInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Api\Domain\LocalDomainPolicy;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Service\ProjectHostSiteMount;
 use Weline\Websites\Service\Value\CanonicalStorefrontUrl;
 
 /**
@@ -84,8 +86,29 @@ final class InstallLocalStorefrontBaseResolver
                 }
             }
 
+            $rowCode = \strtolower(\trim($row->getCode()));
+            if ($rowCode === '' && $websiteCode !== '') {
+                $rowCode = $websiteCode;
+            }
+
+            // 0) Standard project Host: synthetic /~site/{code} (no WebsiteDomain row).
+            if ($installHost !== ''
+                && \class_exists(LocalDomainPolicy::class)
+                && LocalDomainPolicy::isStandardProjectHost($installHost)
+            ) {
+                $synthetic = ProjectHostSiteMount::editorMountPath($websiteId, $rowCode);
+                if ($synthetic !== '') {
+                    return \rtrim($installOrigin, '/') . $synthetic;
+                }
+                if ($websiteId === Website::ID_DEFAULT
+                    && $rowCode === Website::CODE_DEFAULT
+                ) {
+                    return $installOrigin;
+                }
+            }
+
             $domains = WebsiteData::domainsForWebsite($websiteId);
-            // 1) Path-mount on this install Host (daocharms → /daocharms).
+            // 1) Path-mount on this install Host (legacy WebsiteDomain sub_path).
             if ($installHost !== '') {
                 foreach ($domains as $domainRow) {
                     if (!\is_array($domainRow)) {
@@ -100,6 +123,9 @@ final class InstallLocalStorefrontBaseResolver
                     );
                     if ($subPath === '/' || $subPath === '') {
                         return $installOrigin;
+                    }
+                    if (ProjectHostSiteMount::conflictsWithDomainSubPath($subPath)) {
+                        continue;
                     }
 
                     return \rtrim($installOrigin, '/') . $subPath;

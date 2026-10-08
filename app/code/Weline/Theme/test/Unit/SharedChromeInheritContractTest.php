@@ -22,6 +22,9 @@ final class SharedChromeInheritContractTest extends TestCase
         self::assertStringContainsString("MODE_LOCAL = 'local'", $src);
         self::assertStringContainsString("CHROME_AREAS = ['header', 'footer']", $src);
         self::assertStringContainsString('HEADER_NESTED_CHROME_SLOTS', $src);
+        self::assertStringContainsString('FOOTER_NESTED_CHROME_SLOTS', $src);
+        self::assertStringContainsString("'storefront-float-start'", $src);
+        self::assertStringContainsString("'storefront-float-end'", $src);
         self::assertStringContainsString("'user-area'", $src);
         self::assertStringContainsString("'currency'", $src);
         self::assertStringContainsString("'language'", $src);
@@ -46,7 +49,17 @@ final class SharedChromeInheritContractTest extends TestCase
         $service = new \Weline\Theme\Service\SharedChromeService(
             $this->createMock(\Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface::class),
         );
-        foreach (['user-area', 'currency', 'language', 'top-bar-rights', 'top-bar', 'logo', 'search'] as $slot) {
+        foreach ([
+            'user-area',
+            'currency',
+            'language',
+            'top-bar-rights',
+            'top-bar',
+            'logo',
+            'search',
+            'storefront-float-start',
+            'storefront-float-end',
+        ] as $slot) {
             self::assertTrue(
                 $service->isChromeSlot($slot),
                 $slot . ' must be a global chrome slot',

@@ -295,7 +295,7 @@ class StoreMusicSettings
     }
 
     /**
-     * Hook body-end owns the audible float. Theme may stamp annotation /
+     * Float-slot widget owns the audible float. Theme may stamp annotation /
      * default_injection defaults (enabled=false, tracks=[]) onto a shared
      * template bag; that must not override SystemConfig when the layout node
      * never set real tracks or an explicit enable.

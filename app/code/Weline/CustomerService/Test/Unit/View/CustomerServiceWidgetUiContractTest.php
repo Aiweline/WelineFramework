@@ -10,7 +10,7 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
 {
     public function testBodyEndHookOmitsWidgetTranslationsDuringStaticErrorPublish(): void
     {
-        $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+        $hookFile = dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/customer-service-float.phtml';
         $content = (string) file_get_contents($hookFile);
 
         // P10: dictionaries never SSR into body-end (open-time Query batch instead).
@@ -22,7 +22,7 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
 
     public function testBodyEndKeepsSlimConfigWithoutEmbeddedDictionaries(): void
     {
-        $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+        $hookFile = dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/customer-service-float.phtml';
         $content = (string) file_get_contents($hookFile);
         $js = (string) file_get_contents(dirname(__DIR__, 3) . '/view/statics/js/customer-service.js');
         $provider = (string) file_get_contents(
@@ -43,7 +43,7 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
 
     public function testFrontendWidgetUsesWelineFormControls(): void
     {
-        $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+        $hookFile = dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/customer-service-float.phtml';
         $this->assertFileExists($hookFile);
         $content = (string) file_get_contents($hookFile);
 
@@ -71,7 +71,7 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
 
     public function testBodyEndHookDoesNotSkipOnPreviewOrVisualEditor(): void
     {
-        $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+        $hookFile = dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/customer-service-float.phtml';
         $content = (string) file_get_contents($hookFile);
 
         $this->assertStringContainsString('$isAccountRoute', $content);
@@ -127,7 +127,7 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
 
     public function testFrontendWidgetUsesAmazonChromeSurface(): void
     {
-        $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+        $hookFile = dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/customer-service-float.phtml';
         $this->assertFileExists($hookFile);
         $content = (string) file_get_contents($hookFile);
 
@@ -186,7 +186,7 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $css = (string)file_get_contents(dirname(__DIR__, 3) . '/view/statics/css/customer-service.css');
         $this->assertStringContainsString('cs-shot-crop--ready', $css);
         $this->assertStringContainsString('cs-shot-confirm-pulse', $css);
-        $tpl = (string)file_get_contents(dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml');
+        $tpl = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/widgets/customer-service-float.phtml');
         $this->assertStringContainsString('modernScreenshotUrl', $tpl);
         $this->assertStringContainsString('js/vendor/modern-screenshot.js', $tpl);
         $this->assertFileExists(dirname(__DIR__, 3) . '/view/statics/js/vendor/modern-screenshot.js');

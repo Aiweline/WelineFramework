@@ -398,6 +398,38 @@ class Website extends Model
         return (string)$this->getData(self::schema_fields_URL);
     }
 
+    /**
+     * Absolute storefront base for a website (scheme://host[:port][/mount]).
+     * Includes Website::ID_DEFAULT (0). Null when the row or URL is missing/invalid.
+     */
+    public static function resolveStorefrontBaseUrl(int $websiteId): ?string
+    {
+        if ($websiteId < self::ID_DEFAULT) {
+            return null;
+        }
+
+        try {
+            /** @var self $model */
+            $model = ObjectManager::getInstance(self::class);
+            $row = (clone $model)->clearData()->clearQuery()->load($websiteId);
+            $loadedId = $row->hasData(self::schema_fields_ID)
+                ? (int)$row->getData(self::schema_fields_ID)
+                : -1;
+            if ($loadedId !== $websiteId) {
+                return null;
+            }
+
+            $raw = \trim($row->getUrl());
+            if ($raw === '') {
+                return null;
+            }
+
+            return \Weline\Websites\Service\Value\CanonicalStorefrontUrl::fromStoreUrl($raw)->toString();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     public function setDefaultCurrency(?string $currency): self
     {
         $this->setData(self::schema_fields_DEFAULT_CURRENCY, $currency);

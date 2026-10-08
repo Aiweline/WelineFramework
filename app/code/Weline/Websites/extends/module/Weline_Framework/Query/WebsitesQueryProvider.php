@@ -110,6 +110,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getActiveWebsiteDomains' => $this->getActiveWebsiteDomains($params),
             'getWebsiteDomains' => $this->getWebsiteDomains($params),
             'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
+            'getWebsiteCurrencyCodes' => $this->getWebsiteCurrencyCodes($params),
             'getDomainPoolList'      => $this->getDomainPoolList($params),
             'getDnsRecords'          => $this->getDnsRecords($params),
             'addAcmeTxtRecord'         => $this->addAcmeTxtRecord($params),
@@ -443,6 +444,15 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'description' => __('获取站点关联的语言代码列表'),
                     'params'      => [
                         ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'force_reload', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'getWebsiteCurrencyCodes',
+                    'description' => __('获取站点关联的货币代码列表'),
+                    'params'      => [
+                        ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'force_reload', 'type' => 'bool', 'required' => false],
                     ],
                 ],
                 [
@@ -1433,28 +1443,37 @@ class WebsitesQueryProvider implements QueryProviderInterface
             return [];
         }
 
-        $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
-        $rows = self::fetchRowsInBoundedPages(
-            $limit,
-            static function (int $page, int $pageSize) use (
-                $domainModel,
-                $status,
-                $websiteIdFilter
-            ): array {
-                $pageModel = clone $domainModel;
-                $query = $pageModel->clearQuery()
-                    ->where(WebsiteDomain::schema_fields_STATUS, $status);
-                if ($websiteIdFilter !== null) {
-                    $query->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteIdFilter);
-                }
-                return $query
-                    ->order(WebsiteDomain::schema_fields_IS_PRIMARY, 'DESC')
-                    ->order(WebsiteDomain::schema_fields_DOMAIN, 'ASC')
-                    ->pagination($page, $pageSize)
-                    ->select()
-                    ->fetchArray();
+        $forceReload = (bool)($params['force_reload'] ?? false);
+        // Single-site active domains: reuse WebsiteData process/shared memo.
+        if ($websiteIdFilter !== null && $status === WebsiteDomain::STATUS_ACTIVE) {
+            $rows = WebsiteData::domainsForWebsite($websiteIdFilter, $forceReload);
+            if (\count($rows) > $limit) {
+                $rows = \array_slice($rows, 0, $limit);
             }
-        );
+        } else {
+            $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
+            $rows = self::fetchRowsInBoundedPages(
+                $limit,
+                static function (int $page, int $pageSize) use (
+                    $domainModel,
+                    $status,
+                    $websiteIdFilter
+                ): array {
+                    $pageModel = clone $domainModel;
+                    $query = $pageModel->clearQuery()
+                        ->where(WebsiteDomain::schema_fields_STATUS, $status);
+                    if ($websiteIdFilter !== null) {
+                        $query->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteIdFilter);
+                    }
+                    return $query
+                        ->order(WebsiteDomain::schema_fields_IS_PRIMARY, 'DESC')
+                        ->order(WebsiteDomain::schema_fields_DOMAIN, 'ASC')
+                        ->pagination($page, $pageSize)
+                        ->select()
+                        ->fetchArray();
+                }
+            );
+        }
 
         $domains = [];
         $seen = [];
@@ -1516,16 +1535,19 @@ class WebsitesQueryProvider implements QueryProviderInterface
             return [];
         }
         $forceReload = (bool)($params['force_reload'] ?? false);
-        if (!$forceReload && WebsiteData::matchesWebsiteId($websiteId)) {
-            return WebsiteData::getLanguageCodes();
+
+        return WebsiteData::languageCodesForWebsite($websiteId, $forceReload);
+    }
+
+    private function getWebsiteCurrencyCodes(array $params): array
+    {
+        $websiteId = (int)($params['website_id'] ?? 0);
+        if ($websiteId < self::DEFAULT_WEBSITE_ID) {
+            return [];
         }
-        if (!$forceReload) {
-            $shared = WebsiteData::readSharedSnapshotById($websiteId);
-            if ($shared !== null) {
-                return $shared['language_codes'];
-            }
-        }
-        return $this->websiteLanguageModel->getWebsiteLanguageCodes($websiteId);
+        $forceReload = (bool)($params['force_reload'] ?? false);
+
+        return WebsiteData::currencyCodesForWebsite($websiteId, $forceReload);
     }
 
     private function getDomainPoolList(array $params): array

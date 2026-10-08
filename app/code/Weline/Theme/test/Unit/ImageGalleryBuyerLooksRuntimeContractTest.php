@@ -26,5 +26,10 @@ final class ImageGalleryBuyerLooksRuntimeContractTest extends TestCase
         self::assertStringContainsString('data-looks-source=', $widget);
         self::assertStringContainsString('sb-looks-media-link', $widget);
         self::assertStringContainsString('WO-BUYER-SHOW-03', $widget);
+        self::assertStringContainsString('filterLooksItemsForWebsite', $widget);
+        self::assertStringContainsString('findById($websiteId, $productId)', $widget);
+        self::assertStringContainsString('晒出你的穿搭', $widget);
+        self::assertStringNotContainsString("\$subtitle = '晒出你的汉服穿搭'", $widget);
+        self::assertStringNotContainsString("/product/543#product-reviews", $widget);
     }
 }

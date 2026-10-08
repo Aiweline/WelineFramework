@@ -54,6 +54,17 @@ final class SharedChromeService
         'pixel-bootstrap',
     ];
 
+    /**
+     * Footer nested float slots in partials/footer/default.phtml that omit the footer- prefix
+     * but still belong to global shared chrome (add/remove must bake chrome).
+     *
+     * @var list<string>
+     */
+    public const FOOTER_NESTED_CHROME_SLOTS = [
+        'storefront-float-start',
+        'storefront-float-end',
+    ];
+
     public function __construct(
         private readonly ThemeScopedWorkspaceInterface $workspace,
     ) {
@@ -79,6 +90,9 @@ final class SharedChromeService
             return true;
         }
         if (\in_array($slotId, self::HEADER_NESTED_CHROME_SLOTS, true)) {
+            return true;
+        }
+        if (\in_array($slotId, self::FOOTER_NESTED_CHROME_SLOTS, true)) {
             return true;
         }
         if (\str_starts_with($slotId, 'top-bar-') || \str_starts_with($slotId, 'top_bar_')) {

@@ -11,8 +11,8 @@ use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 
 /**
- * P5：website_local 同请求只加载一次行袋（Fiber 安全 RequestContext），
- * 禁止进程静态 $localizedFieldCache；SeoHead/seo::body/footer 重复读走袋。
+ * P5：website_local 同请求 RequestContext 袋 + 同站进程袋（按 website_id），
+ * 禁止旧式进程静态 $localizedFieldCache；SeoHead/seo::body/footer 重复读走袋。
  */
 final class WebsiteLocalRowsRequestMemoContractTest extends TestCase
 {
@@ -23,11 +23,13 @@ final class WebsiteLocalRowsRequestMemoContractTest extends TestCase
         Context::leave();
         Context::enter(new Context());
         WebsiteData::resetRequestState();
+        WebsiteData::clearProcessCache();
     }
 
     protected function tearDown(): void
     {
         WebsiteData::resetRequestState();
+        WebsiteData::clearProcessCache();
         Context::leave();
         parent::tearDown();
     }
@@ -39,10 +41,12 @@ final class WebsiteLocalRowsRequestMemoContractTest extends TestCase
         );
         self::assertStringContainsString("websites.website_local_rows.v1", $src);
         self::assertStringContainsString('loadLocalRowsOnce', $src);
+        self::assertStringContainsString('$processLocalRowsByWebsiteId', $src);
+        self::assertStringContainsString('rememberProcessLocalRows', $src);
         self::assertStringNotContainsString(
             'private static array $localizedFieldCache',
             $src,
-            'process-static field cache is Fiber-unsafe and misses listConfiguredLocalNames'
+            'per-field process-static cache is Fiber-unsafe and misses listConfiguredLocalNames'
         );
         self::assertMatchesRegularExpression(
             '/function\s+listConfiguredLocalNames[\s\S]*loadLocalRowsOnce\s*\(/',
@@ -54,6 +58,10 @@ final class WebsiteLocalRowsRequestMemoContractTest extends TestCase
         );
         self::assertMatchesRegularExpression(
             '/function\s+resetRequestState[\s\S]*LOCAL_ROWS_BAG_KEY|website_local_rows\.v1/',
+            $src
+        );
+        self::assertMatchesRegularExpression(
+            '/function\s+clearProcessCache[\s\S]*processLocalRowsByWebsiteId/',
             $src
         );
     }

@@ -14,7 +14,7 @@
 
 - 配置契约：SystemConfig Extends（`store_music/*`）；读取仅 `ConfigReader`。
 - 音频选择：本模块后台页 `WelineMedia`（`mp3/wav/ogg/m4a/aac/flac/opus/wma` 等，约 20MB；不改 SystemConfig 核心模板）。
-- 店面挂载：实现 `Weline_Theme::frontend::layouts::base::body-end`。
+- 店面挂载：部件 `store-music` 经 `default_injections` 注入 Theme footer 槽 `storefront-float-start`。
 - Consent：仅 `Weline.Api.resource('consent')` 软探测；无 API 不拦截。
 - **禁止**依赖或修改 `Weline_CustomerService`。
 
@@ -28,7 +28,7 @@
 ## 入口
 
 - 后台：`weline_storemusic/backend/config`（需登录；菜单「进店音乐」）。
-- 前台：启用且曲目非空时，Theme `body-end` 输出左下角进店音乐浮层。
+- 前台：启用且曲目非空时，footer `storefront-float-start` 槽输出左下角进店音乐浮层。
 
 ## 本地 e2e
 

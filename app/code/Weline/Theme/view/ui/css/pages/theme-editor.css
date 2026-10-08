@@ -100,6 +100,95 @@ body:has(.theme-editor-container) .w-backend-main {
     border-color: var(--w-theme-editor-border);
 }
 
+/* Reset + solidify progress lock with SSH-style terminal */
+.w-theme-editor-reset-progress-lock {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483601;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--w-theme-editor-bg-dark, #0f172a) 78%, transparent);
+    padding: 24px;
+    cursor: wait;
+}
+.w-theme-editor-reset-progress-card {
+    width: min(560px, 100%);
+    border-radius: 12px;
+    background: var(--w-theme-editor-bg-card, #fff);
+    color: var(--w-theme-editor-text-primary, #0f172a);
+    border: 1px solid var(--w-theme-editor-border, #e2e8f0);
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+    padding: 22px 22px 18px;
+    pointer-events: none;
+}
+.w-theme-editor-reset-progress-title {
+    margin: 0 0 8px;
+    font-size: 18px;
+    line-height: 1.3;
+}
+.w-theme-editor-reset-progress-message {
+    margin: 0 0 14px;
+    color: var(--w-theme-editor-text-muted, #475569);
+}
+.w-theme-editor-reset-progress-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: var(--w-theme-editor-text-muted, #64748b);
+}
+.w-theme-editor-reset-progress-meta [data-w-reset-pct] {
+    font: 600 13px/1 tabular-nums;
+    color: var(--w-theme-editor-accent, #2563eb);
+}
+.w-theme-editor-reset-progress-track {
+    height: 10px;
+    border-radius: 999px;
+    background: var(--w-theme-editor-border, #e2e8f0);
+    overflow: hidden;
+    margin: 0 0 14px;
+}
+.w-theme-editor-reset-progress-track [data-w-reset-bar] {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--w-theme-editor-accent, #2563eb);
+    transition: width 0.25s ease;
+}
+.w-theme-editor-reset-progress-ssh {
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0b1220;
+    color: #e2e8f0;
+}
+.w-theme-editor-reset-progress-ssh-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    font-size: 12px;
+    background: #111827;
+    border-bottom: 1px solid #1f2937;
+    color: #94a3b8;
+}
+.w-theme-editor-reset-progress-ssh-body {
+    margin: 0;
+    padding: 12px;
+    min-height: 140px;
+    max-height: 220px;
+    overflow: auto;
+    font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.w-theme-editor-reset-draft__hint--progress {
+    margin-top: 0.35rem;
+    color: var(--w-theme-editor-text-muted, #64748b);
+}
+
 .theme-editor-legacy-scope-alert {
     flex: 0 0 auto;
     min-inline-size: 0;

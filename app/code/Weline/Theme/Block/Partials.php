@@ -392,7 +392,7 @@ class Partials extends Block
             $pageHtml = $this->renderCompiledPartial($pagePath, $dictionary);
             $composed = $prefixHtml . $pageHtml . $suffixHtml;
             if (!$this->isEmptyPartialHtml($composed)) {
-                return $composed;
+                return $this->ensureStorefrontHeadCssReadyGate($composed);
             }
         } catch (\Throwable $e) {
             $this->logPartialCacheDiagnostic('storefront_head_compose_fallback', [
@@ -400,7 +400,42 @@ class Partials extends Block
             ]);
         }
 
-        return $this->renderCompiledPartial($fileName, $dictionary);
+        return $this->ensureStorefrontHeadCssReadyGate(
+            $this->renderCompiledPartial($fileName, $dictionary),
+        );
+    }
+
+    /**
+     * FOUC pending without unlock leaves body visibility:hidden forever.
+     * Design themes may override assets-suffix and drop css-ready — Theme owns the gate.
+     */
+    private function ensureStorefrontHeadCssReadyGate(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+        $hasPending = \str_contains($html, 'data-weline-css-gate')
+            || \str_contains($html, "data-weline-css','pending'")
+            || \str_contains($html, 'data-weline-css="pending"');
+        if (!$hasPending) {
+            return $html;
+        }
+        if (\str_contains($html, 'weline-css-ready.js')) {
+            return $html;
+        }
+        try {
+            $ready = $this->renderCompiledPartial(
+                'Weline_Theme::templates/partials/head/css-ready.phtml',
+                [],
+            );
+            if (\is_string($ready) && \trim($ready) !== '') {
+                return $html . $ready;
+            }
+        } catch (\Throwable) {
+            // Fall through to inline fail-open.
+        }
+
+        return $html . "\n<script>document.documentElement.setAttribute('data-weline-css','ready');</script>\n";
     }
 
     /**

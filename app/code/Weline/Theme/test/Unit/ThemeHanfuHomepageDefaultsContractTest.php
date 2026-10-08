@@ -165,9 +165,12 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
         self::assertStringContainsString('<w:widget type="content" name="image-gallery"', $homepage);
         self::assertStringContainsString('"variant":"looks"', $homepage);
         self::assertStringContainsString('"title":"买家秀"', $homepage);
-        self::assertStringContainsString('"cta_link":"/product/543#product-reviews"', $homepage);
-        self::assertStringContainsString('detail-03-c2e91b039ebb.webp', $homepage);
-        self::assertStringNotContainsString('"items":[]', $homepage);
+        self::assertStringContainsString('"subtitle":"晒出你的穿搭"', $homepage);
+        self::assertStringContainsString('"items":[]', $homepage);
+        // website_concept_seed_not_in_modules: Hanfu catalog seed lives in app/design/Weline/hanfu
+        self::assertStringNotContainsString('catalog/hanfu', $homepage);
+        self::assertStringNotContainsString('晒出你的汉服穿搭', $homepage);
+        self::assertStringNotContainsString('"cta_link":"/product/543#product-reviews"', $homepage);
         self::assertStringNotContainsString('穿后感言', $homepage);
         self::assertStringContainsString('<w:widget type="testimonial" name="testimonials"', $homepage);
         self::assertStringContainsString('"title":"买家评价"', $homepage);

@@ -94,13 +94,26 @@ class FontWarmupService
     public function collectWebsiteLanguageCodes(): array
     {
         $codes = [];
+        $defaultId = 0;
+        if (\class_exists(\Weline\Websites\Model\Website::class)) {
+            $defaultId = (int)\Weline\Websites\Model\Website::ID_DEFAULT;
+        }
 
-        if (\function_exists('w_query')) {
+        // Prefer WebsiteData snapshot (request → process → shared → DB once).
+        if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
             try {
-                $defaultId = 0;
-                if (\class_exists(\Weline\Websites\Model\Website::class)) {
-                    $defaultId = (int)\Weline\Websites\Model\Website::ID_DEFAULT;
+                foreach (\Weline\Websites\Data\WebsiteData::languageCodesForWebsite($defaultId) as $code) {
+                    $code = \trim((string)$code);
+                    if ($code !== '') {
+                        $codes[] = $code;
+                    }
                 }
+            } catch (\Throwable) {
+            }
+        }
+
+        if ($codes === [] && \function_exists('w_query')) {
+            try {
                 $row = \w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $defaultId]);
                 if (\is_array($row)) {
                     foreach ($row as $code) {
@@ -108,29 +121,6 @@ class FontWarmupService
                         if ($code !== '') {
                             $codes[] = $code;
                         }
-                    }
-                }
-            } catch (\Throwable) {
-            }
-        }
-
-        if (\class_exists(\Weline\Websites\Model\WebsiteLanguage::class)) {
-            try {
-                /** @var \Weline\Websites\Model\WebsiteLanguage $model */
-                $model = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteLanguage::class);
-                $items = $model->clearQuery()
-                    ->fields(\Weline\Websites\Model\WebsiteLanguage::schema_fields_LANGUAGE_CODE)
-                    ->select()
-                    ->fetch()
-                    ->getItems();
-                foreach ($items as $item) {
-                    $code = \trim((string)(
-                        \is_object($item) && \method_exists($item, 'getLanguageCode')
-                            ? $item->getLanguageCode()
-                            : ($item[\Weline\Websites\Model\WebsiteLanguage::schema_fields_LANGUAGE_CODE] ?? '')
-                    ));
-                    if ($code !== '') {
-                        $codes[] = $code;
                     }
                 }
             } catch (\Throwable) {

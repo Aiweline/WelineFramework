@@ -9,6 +9,7 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Model\ThemeScopeVersion;
+use Weline\Theme\Model\WelineTheme;
 use Weline\Framework\Runtime\ProcessSharedInterface;
 
 /**
@@ -40,27 +41,51 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
 
             /** @var ThemeScopeVersionService $versions */
             $versions = ObjectManager::getInstance(ThemeScopeVersionService::class);
-            foreach ($this->scopeCandidates() as $scope) {
-                $published = $versions->getPublished($themeId, $scope);
-                if (!$published instanceof ThemeScopeVersion || $published->getVersionId() <= 0) {
-                    continue;
-                }
+            foreach ($this->themeIdChain($themeId) as $candidateThemeId) {
+                foreach ($this->scopeCandidates() as $scope) {
+                    $published = $versions->getPublished($candidateThemeId, $scope);
+                    if (!$published instanceof ThemeScopeVersion || $published->getVersionId() <= 0) {
+                        continue;
+                    }
 
-                $name = \trim((string)($published->getVersionName() ?? ''));
-                if ($name === '') {
-                    $name = 'v' . $published->getVersionNumber();
-                }
+                    $name = \trim((string)($published->getVersionName() ?? ''));
+                    if ($name === '') {
+                        $name = 'v' . $published->getVersionNumber();
+                    }
 
-                return [
-                    'themePublishedVersionId' => (string)$published->getVersionId(),
-                    'themePublishedVersion' => $name,
-                ];
+                    return [
+                        'themePublishedVersionId' => (string)$published->getVersionId(),
+                        'themePublishedVersion' => $name,
+                    ];
+                }
             }
         } catch (\Throwable) {
             return $empty;
         }
 
         return $empty;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function themeIdChain(int $themeId): array
+    {
+        $chain = [];
+        $seen = [];
+        $candidateId = $themeId;
+        while ($candidateId > 0 && !isset($seen[$candidateId])) {
+            $seen[$candidateId] = true;
+            $chain[] = $candidateId;
+            $theme = (clone ObjectManager::getInstance(WelineTheme::class))->clearData()->clearQuery()->load($candidateId);
+            $parentId = (int)$theme->getParentId();
+            if ($parentId < 1 || (int)$theme->getId() !== $candidateId) {
+                break;
+            }
+            $candidateId = $parentId;
+        }
+
+        return $chain;
     }
 
     /**

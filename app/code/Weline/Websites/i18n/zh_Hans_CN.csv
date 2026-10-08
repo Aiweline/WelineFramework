@@ -90,6 +90,7 @@ follow_registrar|provider_account|none,follow_registrar|provider_account|无
 "站点 ID；省略则返回全部活跃绑定","站点 ID；省略则返回全部活跃绑定"
 "域名状态，默认 active","域名状态，默认 active"
 获取站点关联的语言代码列表,获取站点关联的语言代码列表
+获取站点关联的货币代码列表,获取站点关联的货币代码列表
 "获取域名池列表（用于 SSL/建站选择）","获取域名池列表（用于 SSL/建站选择）"
 "仅返回 site_ready=1","仅返回 site_ready=1"
 排除已被站点占用的池记录,排除已被站点占用的池记录
@@ -2273,8 +2274,13 @@ language,language
 "无法获取本机公网 IPv4，请在 env 中配置 server.public_ip 或确保网络可访问外网 IP 检测接口","无法获取本机公网 IPv4，请在 env 中配置 server.public_ip 或确保网络可访问外网 IP 检测接口"
 "Not a managed local WLS domain","Not a managed local WLS domain"
 "正在等待 macOS 管理员批准本地域名 hosts 配置。","正在等待 macOS 管理员批准本地域名 hosts 配置。"
-"本地域名 hosts 与通配证书已就绪","本地域名 hosts 与通配证书已就绪"
+"通配证书未就绪，跳过托管 Nginx 本机域同步","通配证书未就绪，跳过托管 Nginx 本机域同步"
+"本地域名 hosts、通配证书与托管 Nginx 边缘已就绪","本地域名 hosts、通配证书与托管 Nginx 边缘已就绪"
 本地域名就绪未完成,本地域名就绪未完成
+"托管 Nginx 本机域同步返回无效结果","托管 Nginx 本机域同步返回无效结果"
+"Weline_Server 未安装，跳过托管 Nginx 同步","Weline_Server 未安装，跳过托管 Nginx 同步"
+"当前未启用托管 Nginx 边缘，跳过 server_names 同步","当前未启用托管 Nginx 边缘，跳过 server_names 同步"
+"托管 Nginx 本机域同步失败：%{1}","托管 Nginx 本机域同步失败：%{1}"
 "店铺代码在同一 Website 下不唯一","店铺代码在同一 Website 下不唯一"
 "店铺 ID","店铺 ID"
 "店铺 ID 不唯一","店铺 ID 不唯一"
@@ -3288,6 +3294,7 @@ download,下载
 "发现 %{1} 条非法域名记录：","发现 %{1} 条非法域名记录："
 "已删除 %{1} 条非法记录","已删除 %{1} 条非法记录"
 "处理完成：%d 条非法记录","处理完成：%d 条非法记录"
+"本地域名 hosts 与通配证书已就绪","本地域名 hosts 与通配证书已就绪"
 点击选择货币（可多选）,点击选择货币（可多选）
 点击选择货币,点击选择货币
 搜索货币代码、名称或符号,搜索货币代码、名称或符号

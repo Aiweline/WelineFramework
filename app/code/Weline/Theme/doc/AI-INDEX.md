@@ -106,6 +106,7 @@
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/account/sidebar-after.md`
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/account/sidebar-before.md`
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/base/body-end.md`
+- `app/code/Weline/Theme/view/theme/frontend/partials/footer/default.phtml`（`storefront-float-start/end` 可编辑 w:slot）
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/base/body-start.md`
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/base/breadcrumb-after.md`
 - `app/code/Weline/Theme/doc/hook/frontend/layouts/base/breadcrumb-before.md`

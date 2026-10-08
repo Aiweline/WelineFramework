@@ -24,7 +24,7 @@ final class CustomerServiceSettingsContractTest extends TestCase
         );
         $chatService = (string)file_get_contents($moduleRoot . '/Service/ChatService.php');
         $widget = (string)file_get_contents(
-            $moduleRoot . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml'
+            $moduleRoot . '/view/templates/Frontend/widgets/customer-service-float.phtml'
         );
 
         self::assertStringContainsString('customer_service/general/enabled', $template);
@@ -35,7 +35,7 @@ final class CustomerServiceSettingsContractTest extends TestCase
         self::assertStringContainsString('scope="global,website,store"', $template);
 
         self::assertStringContainsString('ConfigReader', $settings);
-        self::assertStringContainsString('WebsiteData::getDefaultLanguage', $settings);
+        self::assertStringContainsString('State::resolveWebsiteDefaultLanguage', $settings);
         self::assertStringContainsString('migrateLegacyOnce', $settings);
         self::assertStringContainsString('processLegacySettled', $settings);
         self::assertStringContainsString('getScopedConfigRow', $settings);
@@ -57,5 +57,17 @@ final class CustomerServiceSettingsContractTest extends TestCase
         self::assertStringContainsString('defaultCustomerLocale()', $chatService);
         self::assertStringContainsString('isServiceEnabled()', $widget);
         self::assertStringContainsString('defaultCustomerLocale', $widget);
+        self::assertStringContainsString('@widget.code {customer-service-float}', $widget);
+        self::assertStringContainsString('@widget.slot {storefront-float-end}', $widget);
+        self::assertFileDoesNotExist(
+            $moduleRoot . '/view/hooks/Weline_Theme/frontend/layouts/base/float-slot-end.phtml'
+        );
+
+        $registry = require $moduleRoot . '/extends/module/Weline_Widget/Weline_CustomerService/widget.php';
+        self::assertArrayHasKey('customer-service-float', $registry);
+        $injection = $registry['customer-service-float']['default_injections'][0] ?? [];
+        self::assertSame('storefront-float-end', $injection['slot'] ?? null);
+        self::assertSame('footer', $injection['area'] ?? null);
+        self::assertTrue(!empty($injection['required']));
     }
 }

@@ -107,7 +107,12 @@ $tocFallbackPath = '/terms';
             background:
                 radial-gradient(ellipse at top right, rgba(255, 153, 0, 0.14), transparent 46%),
                 linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
-            color: #ffffff;
+            --_inverse-text: var(--color-text-on-dark, #ffffff);
+            --_inverse-muted: var(--color-text-on-dark-muted, #dddddd);
+            --weline-theme-text: var(--_inverse-text);
+            --color-text-primary: var(--_inverse-text);
+            --color-text-secondary: var(--_inverse-muted);
+            color: var(--_inverse-text);
             box-sizing: border-box;
         }
 
@@ -119,6 +124,17 @@ $tocFallbackPath = '/terms';
             margin-inline: auto;
             padding-inline: var(--weline-layout-content-padding-inline);
             padding-block: var(--weline-space-4, 1rem) clamp(3rem, 6vw, 4.5rem);
+        }
+
+        /* 底部 contact-info 与正文 stage 同版心（foundation 亦有通配；此处钉条款页） */
+        .terms-bottom-slot {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: max(1rem, var(--weline-layout-content-padding-inline, 1rem));
+            padding-block: var(--weline-space-4, 1rem) var(--weline-space-6, 1.5rem);
         }
 
         .amazon-terms__eyebrow {
@@ -135,14 +151,14 @@ $tocFallbackPath = '/terms';
             font-size: clamp(1.65rem, 3.6vw, 2.35rem);
             line-height: 1.2;
             font-weight: 700;
-            color: var(--color-text-light, #ffffff);
+            color: var(--_inverse-text, var(--color-text-on-dark, #ffffff));
         }
 
         .amazon-terms__hero-lead {
             margin: 0.85rem 0 0;
             max-width: 46rem;
             line-height: 1.65;
-            color: var(--color-text-light-secondary, #dddddd);
+            color: var(--_inverse-muted, var(--color-text-on-dark-muted, #dddddd));
         }
 
         .amazon-terms__meta {
@@ -322,6 +338,18 @@ $tocFallbackPath = '/terms';
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
+        <?php
+        try {
+            $siteBrandLate = ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
+            if ($siteBrandLate instanceof \Weline\Theme\Helper\SiteBrand) {
+                $lateName = trim($siteBrandLate->resolveFrontendSiteName());
+                if ($lateName !== '') {
+                    $siteName = $lateName;
+                }
+            }
+        } catch (\Throwable) {
+        }
+        ?>
 <main class="amazon-terms__main" id="main-content" data-layout="terms">
             <w:slot id="content"
                     name="内容区"
@@ -346,7 +374,7 @@ $tocFallbackPath = '/terms';
                                     </div>
                                 </if>
 
-                                <header class="amazon-terms__hero" aria-labelledby="terms-layout-title" weline-code="theme.terms.hero">
+                                <header class="amazon-terms__hero" data-surface="inverse" aria-labelledby="terms-layout-title" weline-code="theme.terms.hero">
                                     <p class="amazon-terms__eyebrow"><?= $escape($siteName) ?></p>
                                     <h1 id="terms-layout-title"><?= $escape($title) ?></h1>
                                     <p class="amazon-terms__hero-lead"><?= $escape($subtitle) ?></p>

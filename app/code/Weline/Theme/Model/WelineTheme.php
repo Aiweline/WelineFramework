@@ -38,11 +38,11 @@ class WelineTheme extends Model
     public const schema_fields_BACKEND_PREVIEW_IMAGE = 'backend_preview_image';
     #[Col('int', 11, comment: '父级主题')]
     public const schema_fields_PARENT_ID = 'parent_id';
-    #[Col('int', 11, comment: '是否激活')]
+    /** @deprecated 已退役；店面/后台权威为应用引用。常量仅兼容旧调用。 */
     public const schema_fields_IS_ACTIVE = 'is_active';
-    #[Col('tinyint', 1, default: 0, comment: '前台是否激活')]
+    /** @deprecated 已退役 */
     public const schema_fields_IS_ACTIVE_FRONTEND = 'is_active_frontend';
-    #[Col('tinyint', 1, default: 0, comment: '后台是否激活')]
+    /** @deprecated 已退役 */
     public const schema_fields_IS_ACTIVE_BACKEND = 'is_active_backend';
     #[Col('text', comment: '主题配置JSON')]
     public const schema_fields_CONFIG = 'config';
@@ -53,51 +53,42 @@ class WelineTheme extends Model
 //    protected $table = Install::table_THEME; # 如果需要设置特殊表名 需要加前缀
     private ?WelineTheme $theme = null;
     /**
-     * 获取激活的主题（支持按区域：前台/后台）
+     * 解析当前区域主题（兼容旧名 getActiveTheme）。
+     * 权威：ThemeContextService::resolveTheme → 注册 Default；不再读 is_active_*。
      *
-     * @param string|null $area 'frontend' 前台 | 'backend' 后台 | null 兼容旧逻辑（is_active）
+     * @param string|null $area 'frontend' 前台 | 'backend' 后台 | null 视为 frontend
      * @return static
      */
     public function getActiveTheme(?string $area = null): static
     {
-        $cacheKey = $area === 'frontend' ? 'theme_frontend' : ($area === 'backend' ? 'theme_backend' : 'theme');
+        $normalized = $area === 'backend' ? 'backend' : 'frontend';
+        $cacheKey = $normalized === 'backend' ? 'theme_backend' : 'theme_frontend';
         if ($area === null && $this->theme) {
             return $this->theme;
         }
         if ($cached = $this->_cache->get($cacheKey)) {
             return $this->setData($cached);
         }
-        $field = $area === 'frontend' ? self::schema_fields_IS_ACTIVE_FRONTEND
-            : ($area === 'backend' ? self::schema_fields_IS_ACTIVE_BACKEND : self::schema_fields_IS_ACTIVE);
         try {
-            $this->load($field, 1);
-        } catch (\Throwable $throwable) {
-            if ($area !== null && $field !== self::schema_fields_IS_ACTIVE && $this->isMissingAreaActivationFieldError($throwable)) {
-                $this->clearData()->clearQuery();
-                $this->load(self::schema_fields_IS_ACTIVE, 1);
-            } else {
-                throw $throwable;
+            /** @var \Weline\Theme\Service\ThemeContextService $ctx */
+            $ctx = ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+            $resolved = $ctx->resolveTheme($normalized, null, false)
+                ?? $ctx->resolveRegisteredDefaultTheme($normalized);
+            if ($resolved !== null) {
+                $data = $resolved->getData();
+                if (\is_array($data) && $data !== []) {
+                    $this->setData($data);
+                    $this->_cache->set($cacheKey, $this->getData(), static::cache_TIME);
+                    Env::getInstance()->setConfig('theme', $this->getData());
+                }
             }
-        }
-        if (!$this->getId() && $area !== null) {
-            $this->clearData()->clearQuery();
-            $this->load(self::schema_fields_IS_ACTIVE, 1);
-        }
-        if ($this->getId()) {
-            $this->_cache->set($cacheKey, $this->getData(), static::cache_TIME);
-            Env::getInstance()->setConfig('theme', $this->getData());
+        } catch (\Throwable) {
+            // leave empty
         }
         if ($area === null) {
             $this->theme = $this;
         }
         return $this;
-    }
-
-    private function isMissingAreaActivationFieldError(\Throwable $throwable): bool
-    {
-        $message = \strtolower($throwable->getMessage());
-        return \str_contains($message, \strtolower(self::schema_fields_IS_ACTIVE_FRONTEND))
-            || \str_contains($message, \strtolower(self::schema_fields_IS_ACTIVE_BACKEND));
     }
 
     public function getName()
@@ -309,13 +300,16 @@ class WelineTheme extends Model
         $this->_cache->set($cacheKey, $chainData, static::cache_TIME);
         return $chain;
     }
+    /** @deprecated 激活标记已退役 */
     public function isActive()
     {
-        return $this->getData(self::schema_fields_IS_ACTIVE);
+        return 0;
     }
+    /** @deprecated 激活标记已退役 */
     public function setIsActive(bool $value): static
     {
-        $this->setData(self::schema_fields_IS_ACTIVE, (int)$value);
+        unset($value);
+
         return $this;
     }
     public function getCreateTime()
@@ -328,45 +322,16 @@ class WelineTheme extends Model
         return $this;
     }
     /**
-     * @DESC         |保存之后如果当前主题处于激活状态则启用当前主题
-     * 启用前清除所有缓存
-     * 启用当前主题则将其他主题设置为不激活
-     *
-     * 参数区：
+     * 保存后清理主题缓存；不再维护 is_active_* 互斥标记。
      */
     public function save_after()
     {
         if (!$this->getId()) {
             return;
         }
-        if ($this->isActive()) {
-            $this->getQuery()
-                 ->clearQuery()
-                 ->where(self::schema_fields_IS_ACTIVE, 1)
-                 ->where(self::schema_fields_ID, $this->getId(), '!=')
-                 ->update([self::schema_fields_IS_ACTIVE => 0])
-                 ->fetch();
-            Env::getInstance()->setConfig('theme', $this->getData());
-        }
-        if ((int)$this->getData(self::schema_fields_IS_ACTIVE_FRONTEND) === 1) {
-            $this->getQuery()
-                 ->clearQuery()
-                 ->where(self::schema_fields_IS_ACTIVE_FRONTEND, 1)
-                 ->where(self::schema_fields_ID, $this->getId(), '!=')
-                 ->update([self::schema_fields_IS_ACTIVE_FRONTEND => 0])
-                 ->fetch();
-            $this->_cache->delete('theme_frontend');
-        }
-        if ((int)$this->getData(self::schema_fields_IS_ACTIVE_BACKEND) === 1) {
-            $this->getQuery()
-                 ->clearQuery()
-                 ->where(self::schema_fields_IS_ACTIVE_BACKEND, 1)
-                 ->where(self::schema_fields_ID, $this->getId(), '!=')
-                 ->update([self::schema_fields_IS_ACTIVE_BACKEND => 0])
-                 ->fetch();
-            $this->_cache->delete('theme_backend');
-        }
         $this->_cache->delete('theme');
+        $this->_cache->delete('theme_frontend');
+        $this->_cache->delete('theme_backend');
     }
 /**
      * 获取主题配置

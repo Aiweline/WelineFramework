@@ -1,8 +1,20 @@
 <?php
 /**
- * @hook-priority 200
- * @hook-sort-order 1
- * @hook-solo false
+ * @widget.source {Weline_CustomerService::css/customer-service.css,Weline_CustomerService::js/customer-service.js}
+ * 店面悬浮客服浮层：默认注入 footer chrome 槽 storefront-float-end。
+ *
+ * @widget.code {customer-service-float}
+ * @widget.name {悬浮客服}
+ * @widget.description {右下角客服聊天浮层；默认注入 storefront-float-end；账号页跳过。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {storefront-float-end}
+ * @widget.supports {["customer-service-float","layout-storefront-float-end","content"]}
+ * @widget.default_injections {[{ "layout_type":"homepage", "slot":"storefront-float-end", "area":"footer", "sort_order":100, "required":true, "reason":"店面默认右侧悬浮客服；恢复原始布局后 required 回填", "config":{} }]}
+ *
+ * @var \Weline\Framework\View\Template $this
  */
 
 use Weline\CustomerService\Service\BindCaptchaGuard;
@@ -21,7 +33,7 @@ $isAccountRoute = $requestPath === '/customer/account'
     || str_contains($requestPath, '/customer/account/');
 // Account routes skip the float on publish AND preview (same business rule).
 // FORBIDDEN: preview-only / visual_editor / workspace-preview early-return
-// (preview_storefront_delivery_parity — preview must run the same Hook path).
+// (preview_storefront_delivery_parity — preview must run the same widget path).
 if ($isAccountRoute) {
     return;
 }

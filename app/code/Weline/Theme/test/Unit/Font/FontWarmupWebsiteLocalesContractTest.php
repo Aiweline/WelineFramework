@@ -29,6 +29,22 @@ final class FontWarmupWebsiteLocalesContractTest extends TestCase
         $this->removeTree($this->cacheDir);
     }
 
+    public function testCollectWebsiteLanguageCodesUsesWebsiteDataSnapshot(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Font/FontWarmupService.php';
+        $src = (string)file_get_contents($path);
+        self::assertStringContainsString('WebsiteData::languageCodesForWebsite', $src);
+        self::assertStringNotContainsString(
+            'WebsiteLanguage::schema_fields_LANGUAGE_CODE',
+            $src,
+            'Font warmup must not full-table select WebsiteLanguage.',
+        );
+        self::assertStringNotContainsString(
+            '->select()' . "\n" . '                    ->fetch()',
+            $src,
+        );
+    }
+
     public function testDefaultLanguagesUnionsCharsetFilesWithWebsiteLocales(): void
     {
         $subset = new FontSubsetService(new LanguageCharsetResolver(), $this->cacheDir);

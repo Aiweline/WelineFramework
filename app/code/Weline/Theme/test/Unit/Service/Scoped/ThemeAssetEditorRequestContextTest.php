@@ -54,6 +54,15 @@ final class ThemeAssetEditorRequestContextTest extends TestCase
         } finally { self::assertNull(ThemeApplicationContext::current('frontend','asset')); }
     }
 
+    public function testThemeBindingChangeValueFallbackIsPresentInRequestContext(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 4) . '/Service/Scoped/ThemeAssetEditorRequestContext.php');
+        self::assertNotFalse($source);
+        self::assertStringContainsString("\$path === '/theme_id' || \$path === 'theme_id'", $source);
+        self::assertStringContainsString('frontend_theme_id', $source);
+        self::assertStringContainsString('theme_asset_editor_theme_unavailable', $source);
+    }
+
     private function adapter(): ThemeAssetEditorRequestContext
     {
         $catalog=$this->createStub(ScopeIdentityCatalogInterface::class);

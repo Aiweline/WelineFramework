@@ -90,7 +90,11 @@ class ThemeQueryProvider implements QueryProviderInterface
             'validatePreviewToken' => $this->validatePreviewToken($params),
             'editorRequest' => $this->editorRequest($params),
             'setBackendThemeMode' => $this->setBackendThemeMode($params),
-            'activateTheme', 'activate_theme' => $this->activateTheme($params),
+            'activateTheme', 'activate_theme' => [
+                'success' => false,
+                'status' => 'error',
+                'message' => (string)__('主题激活已退役。请在网站信息配置店面主题，或在系统配置中配置后台皮肤。'),
+            ],
             default => throw new \InvalidArgumentException(
                 (string)__('Theme 查询器不支持的操作：%{1}', $operation)
             ),
@@ -315,26 +319,14 @@ class ThemeQueryProvider implements QueryProviderInterface
         ];
     }
 
-    /**
-     * @return array{success:bool,status:string,message:string,theme_id?:int,area?:?string}
-     */
-    private function activateTheme(array $params): array
-    {
-        $themeId = (int)($params['theme_id'] ?? $params['themeId'] ?? 0);
-        $area = isset($params['area']) ? (string)$params['area'] : null;
-
-        return $this->themeContext->activateThemeForArea($themeId, $area);
-    }
-
     private function getActiveTheme(array $params): ?array
     {
         $area = $this->normalizeQueryArea($params['area'] ?? null);
-        $resolved = $this->themeContext->resolveTheme($area);
+        $resolved = $this->themeContext->resolveTheme($area, null, false)
+            ?? $this->themeContext->resolveRegisteredDefaultTheme($area);
         if ($resolved === null || !$resolved->getId()) {
             return null;
         }
-
-        $field = $this->themeContext->getActivationField($area);
 
         return [
             'id' => $resolved->getId(),
@@ -342,7 +334,7 @@ class ThemeQueryProvider implements QueryProviderInterface
             'module_name' => $resolved->getData(WelineTheme::schema_fields_MODULE_NAME),
             'path' => $resolved->getData(WelineTheme::schema_fields_PATH),
             'parent_id' => $resolved->getData(WelineTheme::schema_fields_PARENT_ID),
-            'is_active' => (int)$resolved->getData($field) === 1,
+            'is_active' => 1,
             'config' => $resolved->getData(WelineTheme::schema_fields_CONFIG),
             'preview_image' => $resolved->getPreviewImage(),
             'frontend_preview_image' => $resolved->getFrontendPreviewImage(),
@@ -908,6 +900,7 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/publish' => ($themeEditor ??= $this->createDirectThemeEditor())->postPublish(),
                 '/theme/backend/theme-editor/render-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postRenderWidget(),
                 '/theme/backend/theme-editor/save-compiled-layout' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveCompiledLayout(),
+                '/theme/backend/theme-editor/preview-bases' => ($themeEditor ??= $this->createDirectThemeEditor())->postPreviewBases(),
                 '/theme/backend/theme-editor/start-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->postStartPreview(),
                 '/theme/backend/theme-editor/exit-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->postExitPreview(),
                 '/theme/backend/theme-editor/resolve-navigation' => ($themeEditor ??= $this->createDirectThemeEditor())->postResolveNavigation(),

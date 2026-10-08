@@ -17,7 +17,6 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Register\Register;
 use Weline\Theme\Register\Installer;
 use Weline\Theme\Register\TypeInterface;
-use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 
 class Install extends AbstractConsole
 {
@@ -301,60 +300,16 @@ class Install extends AbstractConsole
             if ($this->welineTheme->getId()) {
                 $this->printing->success(__('主题 %{1} 安装成功！', [$themeName]));
 
-                // 如果指定了自动激活
                 if ($autoActivate) {
-                    $this->activateTheme($themeName);
+                    $this->printing->warning(__('theme:install --activate 已退役：不再翻 is_active_*。请在网站信息绑定店面主题，或在系统配置中配置后台皮肤。'));
                 } else {
-                    $this->printing->note(__('提示：使用以下命令激活主题：'));
-                    $this->printing->printing("  php bin/w theme:active {$themeName}\n");
+                    $this->printing->note(__('提示：在「网站信息 → 店面主题」绑定本主题；未绑定则回落 Default。'));
                 }
             } else {
                 $this->printing->warning(__('主题安装可能未完成，请检查 register.php 文件'));
             }
         } catch (\Exception $e) {
             $this->printing->error(__('安装主题时出错：%{1}', [$e->getMessage()]));
-        }
-    }
-
-    /**
-     * 激活主题
-     */
-    private function activateTheme(string $themeName): void
-    {
-        try {
-            $this->welineTheme->clearData();
-            $this->welineTheme->load('name', $themeName);
-
-            if (!$this->welineTheme->getId()) {
-                $this->printing->error(__('主题 %{1} 未安装，无法激活', [$themeName]));
-                return;
-            }
-
-            // 先取消激活所有主题
-            $this->welineTheme->clearQuery();
-            $this->welineTheme->update(['is_active' => 0])->fetch();
-
-            // 激活指定主题
-            $this->welineTheme->clearData();
-            $this->welineTheme->load('name', $themeName);
-            $this->welineTheme->setIsActive(1);
-            $this->welineTheme->save();
-            $this->clearActivationRuntimeCaches((int)$this->welineTheme->getId());
-
-            $this->printing->success(__('主题 %{1} 已激活！', [$themeName]));
-        } catch (\Exception $e) {
-            $this->printing->error(__('激活主题时出错：%{1}', [$e->getMessage()]));
-        }
-    }
-
-    private function clearActivationRuntimeCaches(int $themeId): void
-    {
-        try {
-            ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(
-                $themeId,
-                'theme_install_activate'
-            );
-        } catch (\Throwable) {
         }
     }
 
@@ -409,7 +364,7 @@ class Install extends AbstractConsole
             '安装主题到系统',
             [
                 '-t, --theme <theme>' => '指定要安装的主题名称',
-                '-a, --activate' => '安装后自动激活主题',
+                '-a, --activate' => '已退役：仅打印警告，不再翻 is_active_*',
                 '-h, --help' => '显示帮助信息',
             ],
             [],

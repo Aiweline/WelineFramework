@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemePatchCommand;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\ThemeScopeWorkspace;
+use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityBakeCoordinator;
 
 /**
  * Clears only the current editing draft materialization for selected resources.
@@ -31,38 +33,186 @@ final class ThemeEditorDraftResetService
 
     /**
      * @param list<string> $resources
+     * @param callable|null $onProgress signature: function(string $step, string $message, int $percent, array $extra): void
      * @return array{
      *   resources:list<string>,
      *   layout_scope:string,
      *   cleared:array<string,array{workspaces:int,patches:int,layout_drafts:bool,default_injections:array{cleared_user_deleted:int,applied_defaults:int}}>,
-     *   cache:array<string,mixed>
+     *   cache:array<string,mixed>,
+     *   ssh_log:list<string>,
+     *   solidify?:array{ok:bool,reason?:string,theme_version_id?:int,content_revision?:int,fingerprints?:array<string,string>}
      * }
      */
     public function reset(
         ThemeEditorContext $baseline,
         array $resources,
         string $layoutScope = self::LAYOUT_SCOPE_CURRENT,
+        ?callable $onProgress = null,
     ): array {
         $resources = $this->normalizeResources($resources);
         $layoutScope = $layoutScope === self::LAYOUT_SCOPE_ALL
             ? self::LAYOUT_SCOPE_ALL
             : self::LAYOUT_SCOPE_CURRENT;
 
+        $sshLog = [];
+        $emit = function (
+            string $step,
+            string $message,
+            int $percent,
+            string $sshLine = '',
+            array $extra = [],
+        ) use (&$sshLog, $onProgress): void {
+            if ($sshLine !== '') {
+                $sshLog[] = $sshLine;
+            }
+            if ($onProgress === null) {
+                return;
+            }
+            $payload = $extra;
+            $payload['ssh'] = $sshLine !== '' ? $sshLine : ($extra['ssh'] ?? '');
+            $payload['ssh_log'] = $sshLog;
+            $onProgress($step, $message, \max(0, \min(100, $percent)), $payload);
+        };
+
+        $scope = $baseline->scope->storageScope;
+        $storeMode = $baseline->scope->storeMode;
+        $emit(
+            'start',
+            (string)__('开始重置当前编辑草稿'),
+            2,
+            \sprintf(
+                '$ theme-editor reset-draft --theme=%d --scope=%s --store-mode=%s --layout=%s --layout-scope=%s --resources=%s',
+                $baseline->themeId,
+                $scope,
+                $storeMode,
+                $baseline->layoutType,
+                $layoutScope,
+                \implode(',', $resources),
+            ),
+            [
+                'theme_id' => $baseline->themeId,
+                'scope' => $scope,
+                'layout_type' => $baseline->layoutType,
+                'layout_scope' => $layoutScope,
+                'resources' => $resources,
+            ],
+        );
+
         $cleared = [];
+        $resourceTotal = \count($resources);
+        $resourceIndex = 0;
         foreach ($resources as $resourceType) {
+            $resourceIndex++;
+            $percent = 5 + (int)\floor(($resourceIndex / \max(1, $resourceTotal)) * 45);
+            $emit(
+                'clear_' . $resourceType,
+                (string)__('正在清理草稿资源：%{resource}', ['resource' => $resourceType]),
+                $percent,
+                \sprintf('$ clear-draft-resource --type=%s --layout-scope=%s', $resourceType, $layoutScope),
+                ['resource' => $resourceType],
+            );
             $cleared[$resourceType] = $this->resetResource($baseline, $resourceType, $layoutScope);
+            $summary = $cleared[$resourceType];
+            $emit(
+                'cleared_' . $resourceType,
+                (string)__('已清理 %{resource}：workspaces=%{workspaces} patches=%{patches}', [
+                    'resource' => $resourceType,
+                    'workspaces' => (int)($summary['workspaces'] ?? 0),
+                    'patches' => (int)($summary['patches'] ?? 0),
+                ]),
+                $percent,
+                \sprintf(
+                    'ok clear %s workspaces=%d patches=%d layout_drafts=%s',
+                    $resourceType,
+                    (int)($summary['workspaces'] ?? 0),
+                    (int)($summary['patches'] ?? 0),
+                    !empty($summary['layout_drafts']) ? 'yes' : 'no',
+                ),
+                ['resource' => $resourceType, 'cleared' => $summary],
+            );
         }
 
+        $emit(
+            'cache',
+            (string)__('正在清理草稿预览缓存'),
+            55,
+            \sprintf('$ clear-draft-preview-caches --theme=%d', $baseline->themeId),
+        );
         $cache = $this->cacheCleaner->clearDraftPreviewCaches(
             $baseline->themeId > 0 ? $baseline->themeId : null,
         );
+        $emit(
+            'cache_done',
+            (string)__('草稿预览缓存已清理'),
+            60,
+            'ok cache cleared',
+            ['cache' => $cache],
+        );
 
-        return [
+        $result = [
             'resources' => $resources,
             'layout_scope' => $layoutScope,
             'cleared' => $cleared,
             'cache' => $cache,
+            'ssh_log' => $sshLog,
         ];
+
+        if (\in_array(ThemeEditorContext::RESOURCE_LAYOUT, $resources, true)) {
+            $emit(
+                'solidify',
+                (string)__('正在重固当前作用域布局固化物'),
+                70,
+                \sprintf(
+                    '$ theme-layout solidify --theme=%d --scope=%s --store-mode=%s --layout=%s',
+                    $baseline->themeId,
+                    $scope,
+                    $storeMode,
+                    $baseline->layoutType,
+                ),
+            );
+            /** @var ThemeLayoutEntityBakeCoordinator $bake */
+            $bake = ObjectManager::getInstance(ThemeLayoutEntityBakeCoordinator::class);
+            $solidify = $bake->solidifyCurrentScopeVersion(
+                $baseline->withResource(ThemeEditorContext::RESOURCE_LAYOUT),
+            );
+            $result['solidify'] = $solidify;
+            $ok = !empty($solidify['ok']);
+            $fingerprintCount = \is_array($solidify['fingerprints'] ?? null)
+                ? \count($solidify['fingerprints'])
+                : 0;
+            $emit(
+                $ok ? 'solidify_done' : 'solidify_failed',
+                $ok
+                    ? (string)__('固化物重固完成：version=%{version} fingerprints=%{count}', [
+                        'version' => (int)($solidify['theme_version_id'] ?? 0),
+                        'count' => $fingerprintCount,
+                    ])
+                    : (string)__('固化物重固未完成：%{reason}', [
+                        'reason' => (string)($solidify['reason'] ?? 'unknown'),
+                    ]),
+                $ok ? 92 : 88,
+                $ok
+                    ? \sprintf(
+                        'ok solidify theme_version_id=%d content_revision=%d fingerprints=%d',
+                        (int)($solidify['theme_version_id'] ?? 0),
+                        (int)($solidify['content_revision'] ?? 0),
+                        $fingerprintCount,
+                    )
+                    : \sprintf('fail solidify reason=%s', (string)($solidify['reason'] ?? 'unknown')),
+                ['solidify' => $solidify],
+            );
+        }
+
+        $result['ssh_log'] = $sshLog;
+        $emit(
+            'done',
+            (string)__('当前编辑草稿已重置'),
+            100,
+            'done reset-draft',
+            ['result' => $result],
+        );
+
+        return $result;
     }
 
     /**

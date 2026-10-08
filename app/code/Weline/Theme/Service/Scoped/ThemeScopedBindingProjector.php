@@ -57,17 +57,9 @@ final class ThemeScopedBindingProjector
 
     private function projectGlobalThemeBinding(string $area, int $themeId): void
     {
-        if ($themeId <= 0) {
-            return;
-        }
-        $field = $area === 'backend'
-            ? WelineTheme::schema_fields_IS_ACTIVE_BACKEND
-            : WelineTheme::schema_fields_IS_ACTIVE_FRONTEND;
-        $theme = clone $this->themes;
-        $theme->clearData()->clearQuery()->where($field, 1)->update([$field => 0])->fetch();
-        $theme->clearData()->clearQuery()->where(WelineTheme::schema_fields_ID, $themeId)->update([$field => 1])->fetch();
-        $theme->_cache->delete($area === 'backend' ? 'theme_backend' : 'theme_frontend');
-        $theme->_cache->delete('theme');
+        // is_active_* 已退役；店面/后台权威为 websites_theme_application / backend_theme_application。
+        // 全局 theme_binding 编辑意图不再翻资产激活标记。
+        unset($area, $themeId);
     }
 
     private function themeSupportsArea(WelineTheme $theme, string $area): bool

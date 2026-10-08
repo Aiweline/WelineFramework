@@ -1,6 +1,8 @@
 <?php
 /**
- * Global storefront image placeholder (single static SVG src — never data:image).
+ * Global storefront image placeholder + float-layer JS loader.
+ * Float layer DOM + left/right w:slots live in partials/footer/default.phtml
+ * so Theme Editor can select storefront-float-start/end.
  *
  * @hook-priority 40
  * @hook-sort-order 40
@@ -20,6 +22,6 @@ window.Weline.Theme.storefrontPlaceholderSrc = <?= $placeholderSrcJson ?: '""' ?
 </script>
 <?php // mini-cart-drawer：由 mini-cart-icon 组件自带；shopper-toast CSS 在 theme.css（主题全局） ?>
 <div hidden
-     data-weline-load="storefrontImageFallback"
+     data-weline-load="storefrontImageFallback,storefrontFloatLayer"
      aria-hidden="true"></div>
 <?php // Theme 全局店面 JS：经 modules + data-weline-load，禁止 @static 直引 ?>

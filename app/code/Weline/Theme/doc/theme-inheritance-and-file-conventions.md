@@ -86,7 +86,7 @@ Register::register(
 
 3. **安装 / 列表**：`php bin/w setup:upgrade` 或 `theme:install -t {name}` → `theme:listing`。
 
-4. **激活**：`php bin/w theme:active {name} frontend`（**不是** `theme:activate`）仅翻资产标记。正式店面权威是 **`websites_theme_application` → 缺省 Theme 模块全局 Default（磁盘；不假定库 id）**（不再用 published `theme_binding` / 裸 `is_active`）。
+4. **绑定店面**：在「网站信息 → 店面主题」写入 `websites_theme_application`（`theme:active` / `is_active_*` 已退役）。正式店面权威是 **`websites_theme_application` → 缺省 Theme 模块全局 Default（磁盘；不假定库 id）**。
 
 5. **高压线**：禁止同 key 覆盖 `theme.css` / `theme.js`；模块模板走 `Weline_Module/templates/...`，禁止 `frontend/templates/`。
 

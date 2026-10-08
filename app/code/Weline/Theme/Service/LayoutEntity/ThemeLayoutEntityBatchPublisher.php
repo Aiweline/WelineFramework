@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\LayoutEntity;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 
 /** All candidates are complete before promotion; ordinary failures restore old bytes. */
@@ -11,13 +12,18 @@ class ThemeLayoutEntityBatchPublisher
     /** @param array<string,?string> $candidates Null means the derived file is no longer needed. */
     public function publish(ThemeVersionIdentity $identity, array $candidates): void
     {
-        ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $candidates): void {
-            $candidates = $this->completeSourceSet($candidates, $identity->area);
+        /** @var array<string,?string> $completed */
+        $completed = [];
+        /** @var array<string,?string> $rollbackPlan path => previous file bytes (null = did not exist) */
+        $rollbackPlan = [];
+
+        ThemeLayoutEntityOwnerLock::write($identity, function () use ($identity, $candidates, &$completed, &$rollbackPlan): void {
+            $completed = $this->completeSourceSet($candidates, $identity->area);
             $staged = [];
             $backups = [];
             $promoted = [];
             try {
-                foreach ($candidates as $path => $bytes) {
+                foreach ($completed as $path => $bytes) {
                     if (!is_string($path) || !str_ends_with($path, '.phtml') || ($bytes !== null && !is_string($bytes))) {
                         throw new \InvalidArgumentException('theme_layout_candidate_must_be_phtml');
                     }
@@ -27,6 +33,7 @@ class ThemeLayoutEntityBatchPublisher
                     $old = is_file($path) ? file_get_contents($path) : null;
                     if ($old === false) { throw new \RuntimeException('theme_layout_previous_source_unreadable'); }
                     if ($old === $bytes) { continue; }
+                    $rollbackPlan[$path] = $old;
                     $backups[$path] = $old === null ? null : $this->stage($path, $old);
                     $staged[$path] = $bytes === null ? null : $this->stage($path, $bytes);
                 }
@@ -38,8 +45,6 @@ class ThemeLayoutEntityBatchPublisher
                             $this->replace($temporary, $path);
                         }
                     } catch (\Throwable $error) {
-                        // A failed rename on a read-only directory leaves its
-                        // target untouched. Windows' unlink fallback may not.
                         $before = $backups[$path] === null ? null : file_get_contents($backups[$path]);
                         $after = is_file($path) ? file_get_contents($path) : null;
                         if ($after !== $before) { $promoted[] = $path; }
@@ -52,12 +57,7 @@ class ThemeLayoutEntityBatchPublisher
                 $rollbackErrors = [];
                 foreach (array_reverse($promoted) as $path) {
                     try {
-                        if ($backups[$path] === null) {
-                            if (is_file($path) && !@unlink($path)) { throw new \RuntimeException('theme_layout_rollback_delete_failed'); }
-                        } else {
-                            $this->replace($backups[$path], $path);
-                        }
-                        $this->invalidate($path);
+                        $this->restorePath($path, $rollbackPlan[$path] ?? null);
                     } catch (\Throwable $rollbackError) { $rollbackErrors[] = $rollbackError->getMessage(); }
                 }
                 if ($rollbackErrors !== []) {
@@ -70,6 +70,42 @@ class ThemeLayoutEntityBatchPublisher
                 }
             }
         });
+
+        // Formal publish: compile language com_* outside the owner write lock.
+        // Empty promote still compiles when page candidates exist (com may be missing).
+        if ($identity->mode === ThemeVersionIdentity::MODE_FORMAL && $identity->area === 'frontend') {
+            try {
+                ObjectManager::getInstance(ThemeLayoutEntityFormalLocaleCompileService::class)
+                    ->compileAfterPromote($identity, $completed);
+            } catch (\Throwable $compileError) {
+                if ($rollbackPlan !== []) {
+                    ThemeLayoutEntityOwnerLock::write($identity, function () use ($rollbackPlan): void {
+                        foreach (array_reverse(array_keys($rollbackPlan)) as $path) {
+                            $this->restorePath($path, $rollbackPlan[$path]);
+                        }
+                    });
+                }
+                throw $compileError;
+            }
+        }
+    }
+
+    private function restorePath(string $path, ?string $previousBytes): void
+    {
+        if ($previousBytes === null) {
+            if (is_file($path) && !@unlink($path)) {
+                throw new \RuntimeException('theme_layout_rollback_delete_failed');
+            }
+            $this->invalidate($path);
+            return;
+        }
+        $temporary = $this->stage($path, $previousBytes);
+        try {
+            $this->replace($temporary, $path);
+        } finally {
+            if (is_file($temporary)) { @unlink($temporary); }
+        }
+        $this->invalidate($path);
     }
 
     /** Dependency removals participate in the same staging and compensation as their roots. */
@@ -91,8 +127,6 @@ class ThemeLayoutEntityBatchPublisher
             $partialRoots[substr($path, 0, $position) . '/theme/partials'] = true;
             $metadata = is_string($bytes) ? ThemeLayoutSourceSnapshot::metadata($bytes) : $this->fileMetadata($path);
             if (($metadata['resource_type'] ?? '') === 'partial_dependency') { continue; }
-            // Only selected options replace their siblings. Dependency options
-            // can be shared by a different retained public partial.
             foreach (glob(dirname($path) . '/*.phtml') ?: [] as $oldOption) {
                 if (!array_key_exists($oldOption, $candidates)
                     && ($this->fileMetadata($oldOption)['resource_type'] ?? '') !== 'partial_dependency') {
@@ -178,8 +212,6 @@ class ThemeLayoutEntityBatchPublisher
     protected function replace(string $temporary, string $target): void
     {
         if (@rename($temporary, $target)) { return; }
-        // Windows cannot always replace an open target. The owner lock excludes
-        // participating readers, and the caller already holds a complete backup.
         if (DIRECTORY_SEPARATOR === '\\' && is_file($target) && @unlink($target) && @rename($temporary, $target)) { return; }
         throw new \RuntimeException('theme_layout_candidate_replace_failed');
     }

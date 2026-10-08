@@ -74,6 +74,41 @@ final class RegisteredDefaultTheme implements DefaultThemeInterface
         return $this->lookupCatalogThemeId() === $themeId;
     }
 
+    public function resolveLayoutEntityCatalogThemeId(WelineTheme $theme): int
+    {
+        $themeId = (int)$theme->getId();
+        if ($themeId > 0) {
+            return $themeId;
+        }
+        if ($this->isModuleDefaultThemeId($themeId) || $this->isVirtualModuleDefaultTheme($theme)) {
+            $catalogId = $this->lookupCatalogThemeId();
+
+            return $catalogId >= 1 ? $catalogId : 0;
+        }
+
+        return 0;
+    }
+
+    private function isVirtualModuleDefaultTheme(WelineTheme $theme): bool
+    {
+        $themeId = (int)$theme->getId();
+        if ($themeId === -1 || $themeId === -2) {
+            return true;
+        }
+        try {
+            $modulePath = rtrim(str_replace('\\', '/', $this->moduleThemePath()), '/');
+        } catch (\Throwable) {
+            $modulePath = '';
+        }
+        $themePath = rtrim(str_replace('\\', '/', (string)$theme->getPath()), '/');
+        if ($modulePath !== '' && $themePath !== '' && ($themePath === $modulePath || str_starts_with($themePath, $modulePath . '/'))) {
+            return true;
+        }
+        $origin = method_exists($theme, 'getOriginPath') ? (string)$theme->getOriginPath() : '';
+
+        return $origin !== '' && str_starts_with(str_replace('\\', '/', $origin), DefaultThemeInterface::MODULE_ORIGIN);
+    }
+
     private function moduleThemePath(): string
     {
         $module = Env::getInstance()->getModuleInfo(DefaultThemeInterface::REGISTERED_MODULE);

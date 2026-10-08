@@ -92,9 +92,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * Resolve themes to publish.
      *
      * Named `-t` → that theme only.
-     * No `-t` → unique active themes for both frontend and backend areas
-     * (PROD / local NG gateway need both namespaces, e.g. hanfu storefront +
-     * Default backend `Weline/Theme/view/theme/.../colors/*.css`).
+     * No `-t` → unique themes from websites_theme_application (frontend own)
+     * + backend_theme_application + registered Default.
      *
      * @return list<WelineTheme>
      */
@@ -110,26 +109,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             return [$theme];
         }
 
-        $ids = [];
-        foreach (['frontend', 'backend'] as $area) {
-            $probe = ObjectManager::create(WelineTheme::class, [], false);
-            $probe->clearData()->clearQuery()->getActiveTheme($area);
-            $id = (int)$probe->getId();
-            if ($id > 0) {
-                $ids[$id] = true;
-            }
-        }
+        /** @var \Weline\Theme\Service\ThemeApplicationUsageService $usage */
+        $usage = ObjectManager::getInstance(\Weline\Theme\Service\ThemeApplicationUsageService::class);
 
-        $themes = [];
-        foreach (array_keys($ids) as $id) {
-            $theme = ObjectManager::create(WelineTheme::class, [], false);
-            $theme->clear()->clearQuery()->load((int)$id);
-            if ($theme->getId()) {
-                $themes[] = $theme;
-            }
-        }
-
-        return $themes;
+        return $usage->themesForDefaultUpgrade();
     }
 
     /**

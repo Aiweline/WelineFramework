@@ -453,16 +453,30 @@ class WebsiteDomain extends Model
     // =============== 业务方法 ===============
     
     /**
-     * 获取网站的所有域名
+     * 获取网站的所有启用域名（进程/共享快照优先，禁止旁路反复打库）。
+     *
+     * @return list<array<string, mixed>>
      */
     public function getWebsiteDomains(int $websiteId): array
     {
-        return $this->clearQuery()
+        return \Weline\Websites\Data\WebsiteData::domainsForWebsite($websiteId);
+    }
+
+    /**
+     * Raw active-domain read used only by WebsiteData snapshot loaders.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function fetchAssociationDomainsFromDatabase(int $websiteId): array
+    {
+        $rows = $this->clearQuery()
             ->where(self::schema_fields_WEBSITE_ID, $websiteId)
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->order(self::schema_fields_IS_PRIMARY, 'DESC')
             ->select()
             ->fetchArray();
+
+        return \is_array($rows) ? \array_values($rows) : [];
     }
     
     /**

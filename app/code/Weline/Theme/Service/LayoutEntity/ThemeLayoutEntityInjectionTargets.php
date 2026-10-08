@@ -46,7 +46,9 @@ final class ThemeLayoutEntityInjectionTargets
                 $type = (string)($item['layout_type'] ?? '*');
                 $option = (string)($item['layout_option'] ?? 'default');
                 $slot = (string)($item['slot'] ?? '');
-                $chrome = preg_match('/^(header|footer|delivery)([-_]|$)/', $slot) === 1;
+                // Footer nested float slots omit the footer- prefix but still bake into shared chrome.
+                $chrome = preg_match('/^(header|footer|delivery)([-_]|$)/', $slot) === 1
+                    || preg_match('/^storefront-float([-_]|$)/', $slot) === 1;
                 if ($chrome || (($type === '*' || $type === '' || $type === $layoutType)
                     && ($option === '*' || $option === '' || $option === $layoutOption))) {
                     return true;

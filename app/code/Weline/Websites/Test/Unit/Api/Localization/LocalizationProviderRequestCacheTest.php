@@ -31,7 +31,13 @@ final class LocalizationProviderRequestCacheTest extends TestCase
         Context::enter(new Context());
         RequestContext::init();
         WebsiteData::resetRequestState();
-        WelineEnv::set('website_id', 0, 'localization provider request-cache test');
+        WebsiteData::clearProcessCache();
+        self::dropSharedWebsiteSnapshot(0);
+        try {
+            WelineEnv::set('website_id', 0, 'localization provider request-cache test');
+        } catch (\Throwable) {
+            // Full Env bootstrap is optional for association-memo probes.
+        }
 
         $instances = ObjectManager::getInstances();
         $this->originalWebsiteLanguage = $instances[WebsiteLanguage::class] ?? null;
@@ -50,6 +56,8 @@ final class LocalizationProviderRequestCacheTest extends TestCase
         }
 
         WebsiteData::resetRequestState();
+        WebsiteData::clearProcessCache();
+        self::dropSharedWebsiteSnapshot(0);
         Context::leave();
         parent::tearDown();
     }
@@ -69,24 +77,37 @@ final class LocalizationProviderRequestCacheTest extends TestCase
         self::assertSame([], $provider->languageCodes());
         self::assertSame([], $provider->currencyCodes());
         self::assertSame([], $provider->currencyCodes());
+        // WebsiteData process snapshot: one DB hit per dimension.
         self::assertSame([0], $language->websiteIds);
         self::assertSame([0], $currency->websiteIds);
     }
 
-    public function testFallbackLookupDoesNotCreateAProcessLevelCacheOutsideARequest(): void
+    public function testProcessSnapshotMemoizesAcrossCallsWithoutRequestContext(): void
     {
         RequestContext::cleanup();
-        Context::current()->set('route.website_id', 0);
+        WebsiteData::clearProcessCache();
+        self::dropSharedWebsiteSnapshot(0);
 
         $language = new LocalizationWebsiteLanguageProbe([]);
         ObjectManager::setInstance(WebsiteLanguage::class, $language);
 
-        $provider = new LocalizationProvider();
-
-        self::assertSame([], $provider->languageCodes());
-        self::assertSame([], $provider->languageCodes());
-        self::assertSame([0, 0], $language->websiteIds);
+        self::assertSame([], WebsiteData::languageCodesForWebsite(0));
+        self::assertSame([], WebsiteData::languageCodesForWebsite(0));
+        self::assertSame([0], $language->websiteIds);
         self::assertNull(RequestContext::getId());
+    }
+
+    /** Drop shared L2 snapshot so suite peers cannot poison empty-association probes. */
+    private static function dropSharedWebsiteSnapshot(int $websiteId): void
+    {
+        try {
+            $method = new \ReflectionMethod(WebsiteData::class, 'sharedCache');
+            $cache = $method->invoke(null);
+            if (\is_object($cache) && \method_exists($cache, 'delete')) {
+                $cache->delete('websites.snapshot.by_id.v1.' . $websiteId);
+            }
+        } catch (\Throwable) {
+        }
     }
 }
 
@@ -100,9 +121,10 @@ final class LocalizationWebsiteLanguageProbe extends WebsiteLanguage
     {
     }
 
-    public function getWebsiteLanguageCodes(int $websiteId): array
+    public function fetchAssociationCodesFromDatabase(int $websiteId): array
     {
         $this->websiteIds[] = $websiteId;
+
         return $this->codes;
     }
 }
@@ -117,9 +139,10 @@ final class LocalizationWebsiteCurrencyProbe extends WebsiteCurrency
     {
     }
 
-    public function getWebsiteCurrencyCodes(int $websiteId): array
+    public function fetchAssociationCodesFromDatabase(int $websiteId): array
     {
         $this->websiteIds[] = $websiteId;
+
         return $this->codes;
     }
 }

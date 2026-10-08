@@ -572,6 +572,19 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('editor_context:', $editor);
     }
 
+    public function testScopedWorkspacePostsOuterThemeIdForThemeBinding(): void
+    {
+        $legacy = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
+        $editor = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
+        foreach ([$legacy, $editor] as $js) {
+            self::assertStringContainsString('function outerEditorThemeId()', $js);
+            self::assertStringContainsString("url.searchParams.set('theme_id', String(themeId))", $js);
+            self::assertStringContainsString('theme_id: outerEditorThemeId(),', $js);
+            self::assertStringContainsString('[ThemeEditor] theme switch failed:', $js);
+            self::assertStringContainsString("elements.previewLoading.classList.add('hidden')", $js);
+        }
+    }
+
     public function testWidgetMutationPreviewPrefersSurgicalUpdate(): void
     {
         $legacy = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
@@ -809,6 +822,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('resolveEditorWebsiteId(', $controller);
         self::assertStringContainsString('resolveThemeIdFromScopeBinding(', $controller);
         self::assertStringContainsString('resolveStorefrontMountPathForEditorScope(', $controller);
+        self::assertStringContainsString('ProjectHostSiteMount::editorMountPath', $controller);
         self::assertStringContainsString('RESOURCE_THEME_BINDING', $controller);
         self::assertStringContainsString('withStorefrontMountPath(', $editor);
         self::assertStringContainsString('data-storefront-mount-path=', $template);

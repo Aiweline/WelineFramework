@@ -4,24 +4,29 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../../view/statics/js/theme-editor.js'), 'utf8');
-function refreshHarness(compile, area = 'frontend', locale = 'en_US', identity = { scope_kind: 'website', website_code: 'default' }, canvasPath = '/de_DE/account/') {
+function refreshHarness(compile, area = 'frontend', locale = 'en_US', identity = { scope_kind: 'website', website_code: 'default' }, canvasPath = '/de_DE/account/', frameTyped = null) {
+    const alignStart = source.indexOf('    function resourcePreviewContextsAlign(');
+    assert.ok(alignStart >= 0, 'the editor exposes resourcePreviewContextsAlign');
     const start = source.indexOf('    function refreshResourceConfigurationPreview()');
     assert.ok(start >= 0, 'the editor exposes the resource refresh workflow');
     const end = source.indexOf('\n    /**', start);
     const calls = [];
-    const typed = { theme_id: 3, area, locale, scope: { identity } };
-    let frameSrc = 'https://shop.test' + canvasPath + (canvasPath.includes('?') ? '&' : '?') + 'preview_mode=version&version_id=12&status=draft&editor_context=' + encodeURIComponent(JSON.stringify(typed));
+    const typed = { theme_id: 3, area, locale, layout_type: 'homepage', layout_option: 'default', target_type: 'global', target_id: 0, scope: { identity } };
+    const canvasTyped = frameTyped || typed;
+    let frameSrc = 'https://shop.test' + canvasPath + (canvasPath.includes('?') ? '&' : '?') + 'preview_mode=version&version_id=12&status=draft&editor_context=' + encodeURIComponent(JSON.stringify(canvasTyped));
     const frame = { get src() { return frameSrc; }, set src(value) { frameSrc = value; calls.push(['iframe', new URL(value)]); } };
-    const context = { resourcePreviewRefresh: Promise.resolve(), state: { themeId: 3 }, elements: { previewFrame: frame },
+    const context = { resourcePreviewRefresh: Promise.resolve(), state: { themeId: 3, previewStatus: 'draft' }, elements: { previewFrame: frame },
         buildTypedEditorContext: () => typed,
         flushPendingEditorMutations: async () => calls.push('flush'),
         fetchLayoutSlots: async options => { calls.push(['compile', options]); return compile ? compile() : { success: true, resource_materialization: { template_path: '/layout.phtml' } }; },
-        setCanvasSource: async options => calls.push(['iframe', options]), Date, JSON, URL, window: { location: { origin: 'https://shop.test' } },
+        setCanvasSource: async options => { calls.push(['realign', options]); frameSrc = 'https://shop.test/realigned?editor_context=' + encodeURIComponent(JSON.stringify(typed)); },
+        getPreviewLocaleForRequest: () => locale,
+        Date, JSON, URL, window: { location: { origin: 'https://shop.test' }, __: (m) => m },
     };
     vm.createContext(context);
     vm.runInContext(source.slice(source.indexOf('    function storageScopeForIdentity('), source.indexOf('    function restoreScopeSelector(')), context);
-    vm.runInContext(source.slice(start, end) + '\nthis.refresh = refreshResourceConfigurationPreview;', context);
-    return { calls, refresh: context.refresh };
+    vm.runInContext(source.slice(alignStart, end) + '\nthis.refresh = refreshResourceConfigurationPreview;', context);
+    return { calls, refresh: context.refresh, typed };
 }
 test('resource refresh waits for draft saves, durable compilation, then iframe navigation', async () => {
     const h = refreshHarness(); await h.refresh();
@@ -49,9 +54,22 @@ test('a failed materialization never navigates the iframe and later refresh can 
     let attempt = 0;
     const h = refreshHarness(() => { if (++attempt === 1) throw new Error('compile failed'); return { success: true, resource_materialization: { template_path: '/layout.phtml' } }; });
     await assert.rejects(h.refresh(), /compile failed/);
-    assert.equal(h.calls.some(call => Array.isArray(call) && call[0] === 'iframe'), false);
+    assert.equal(h.calls.some(call => Array.isArray(call) && (call[0] === 'iframe' || call[0] === 'realign')), false);
     await h.refresh();
     assert.equal(h.calls.filter(call => Array.isArray(call) && call[0] === 'iframe').length, 1);
+});
+
+test('drifted canvas identity realigns instead of toasting 预览加载失败', async () => {
+    const drifted = {
+        theme_id: 3, area: 'frontend', locale: 'en_US', layout_type: 'homepage', layout_option: 'ink-hanfu',
+        target_type: 'global', target_id: 0,
+        scope: { identity: { scope_kind: 'website', website_code: 'default' } },
+    };
+    const h = refreshHarness(null, 'frontend', 'en_US', { scope_kind: 'website', website_code: 'default' }, '/?x=1', drifted);
+    await h.refresh();
+    assert.equal(h.calls.some(call => Array.isArray(call) && call[0] === 'realign'), true);
+    assert.equal(h.calls.find(call => Array.isArray(call) && call[0] === 'compile')[1].layout_option, 'default');
+    assert.equal(h.calls.some(call => Array.isArray(call) && call[0] === 'iframe'), false);
 });
 
 test('embedded configuration emits a bubbling success event only after the actual save succeeds', async () => {

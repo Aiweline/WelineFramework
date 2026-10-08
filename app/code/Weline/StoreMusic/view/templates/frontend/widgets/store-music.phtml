@@ -1,18 +1,18 @@
 <?php
 /**
  * @widget.source {Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_StoreMusic::js/widgets/widget-store-music-0.js,Weline_StoreMusic::js/widgets/widget-store-music-1.js,Weline_StoreMusic::css/widgets/widget-store-music.css,Weline_StoreMusic::css/store-music.css}
- * StoreMusic float — required default_injection + Hook share this template.
+ * StoreMusic float — required default_injection into storefront-float-start.
  *
  * @widget.code {store-music}
  * @widget.name {进店音乐}
- * @widget.description {左下角进店氛围音乐浮层；曲目与播放在部件配置中设置；应用默认注入，恢复原始布局后回填。}
+ * @widget.description {左下角进店氛围音乐浮层；默认注入 storefront-float-start；曲目与播放在部件配置中设置。}
  * @widget.type {content}
  * @widget.area {frontend}
- * @widget.position {["content"]}
+ * @widget.position {["footer"]}
  * @widget.page_layouts {["*"]}
- * @widget.slot {content}
- * @widget.supports {["store-music","layout-homepage-content","content"]}
- * @widget.default_injections {[{ "layout_type":"homepage", "slot":"content", "area":"content", "sort_order":900, "required":true, "reason":"店面默认进店音乐浮层；恢复原始布局后 required 回填", "config":{"enabled":false,"tracks":[],"delay_seconds":3,"try_autoplay":true,"loop":true,"default_volume":8,"avatar_spin":false,"waveform_default":false} }]}
+ * @widget.slot {storefront-float-start}
+ * @widget.supports {["store-music","layout-storefront-float-start","content"]}
+ * @widget.default_injections {[{ "layout_type":"homepage", "slot":"storefront-float-start", "area":"footer", "sort_order":100, "required":true, "reason":"店面默认左侧悬浮进店音乐；恢复原始布局后 required 回填", "config":{"enabled":false,"tracks":[],"delay_seconds":3,"try_autoplay":true,"loop":true,"default_volume":8,"avatar_spin":false,"waveform_default":false} }]}
  *
  * @param enabled {default=false,type="bool",label="启用进店音乐",i18n=false}
  * @param tracks {default=[],type="array",label="进店曲目",i18n=false}
@@ -40,14 +40,9 @@ $presenceStub = static function (string $reason): void {
         . ' data-store-music-skipped="' . $escReason . '"'
         . ' aria-hidden="true"></span>';
 };
-// Layout / default_injection placement: emit presence only. Body-end Hook owns
-// the audible float (avoids discarded-SSR gate claims starving the player).
-if (empty($GLOBALS['__weline_store_music_from_hook'])) {
-    $presenceStub('hook-owned');
-    return;
-}
-// Drop annotation-default pollution (enabled=false + empty tracks) so Hook
-// falls back to SystemConfig; keep real layout tracks / explicit enable.
+// Drop annotation-default pollution (enabled=false + empty tracks) so the
+// float-slot widget falls back to SystemConfig; keep real layout tracks /
+// explicit enable from editor config.
 $widgetConfig = StoreMusicSettings::hookOwnedWidgetConfig($widgetConfig);
 if (!$settings->isWidgetActive($widgetConfig)) {
     $presenceStub('inactive');
@@ -71,8 +66,8 @@ try {
 }
 
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-// Hook body-end raw-includes this file (no Taglib pass). Prefer runtime __()
-// over compile-time lang tags so storefront locales translate; keep Chinese source keys.
+// Prefer runtime __() over compile-time lang tags so storefront locales
+// translate; keep Chinese source keys.
 $t = static fn (string $word): string => $esc((string)__($word));
 $configJson = $esc((string)json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 $defaultVol = (int)$payload['default_volume'];
@@ -80,11 +75,8 @@ $hostCssUrl = '';
 $cssUrl = '';
 $faceUrl = '';
 try {
-    // This template is also included directly by the base::body-end Hook. In
-    // that path @widget.source / @static are NOT processed by the widget asset
-    // pipeline — JS still boots via data-weline-load, but CSS would never land
-    // → float stays position:static at page bottom while audio plays.
-    // Resolve + emit <link> here so Hook and layout share the same stylesheet.
+    // Always resolve + emit <link> so float CSS lands even if the widget asset
+    // pipeline skips @widget.source (editor preview / partial compile paths).
     $hostCssUrl = (string)$this->fetchTagSource(
         DataInterface::dir_type_STATICS,
         'Weline_StoreMusic::css/widgets/widget-store-music.css',
@@ -104,11 +96,13 @@ $hostCssUrl = $esc($hostCssUrl);
 $cssUrl = $esc($cssUrl);
 $faceUrl = $esc($faceUrl);
 ?>
-<?php /* Critical float geometry inline: Hook/外链 CSS 未到或 403 时仍须 position:fixed，
- * 否则浮层以 static 落在 body-end（页底版权旁），表现为「没有浮起来」。 */ ?>
+<?php /* Critical float geometry: prefer Theme float-layer slot (relative).
+ * Fallback fixed only when rendered outside #w-storefront-float-layer. */ ?>
 <style data-store-music-critical>
 .w-store-music-host[data-store-music-host]{position:static;display:block;width:0;height:0;margin:0;padding:0;border:0;overflow:visible}
-.w-store-music[data-store-music]{position:fixed!important;left:max(.85rem,env(safe-area-inset-left,0px));bottom:calc(max(.95rem,env(safe-area-inset-bottom,0px)) + var(--weline-product-sticky-purchase-clearance,0px) + var(--w-store-music-heading-lift,0px));z-index:2147483001}
+.w-store-music[data-store-music]{position:fixed!important;left:max(.85rem,env(safe-area-inset-left,0px));bottom:max(.95rem,env(safe-area-inset-bottom,0px));z-index:2147483001}
+#w-storefront-float-layer .w-store-music-host[data-store-music-host]{width:auto;height:auto;overflow:visible}
+#w-storefront-float-layer .w-store-music[data-store-music]{position:relative!important;left:auto!important;bottom:auto!important}
 </style>
 <?php if ($hostCssUrl !== ''): ?>
 <link rel="stylesheet" href="<?= $hostCssUrl ?>" data-store-music-host-css>

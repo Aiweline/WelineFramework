@@ -13,7 +13,7 @@
  * @param subtitle {default="",type="textarea",label="副标题"}
  * @param columns {default="3",type="select",label="每行列数",options={1:"1列",2:"2列",3:"3列",4:"4列",5:"5列",6:"6列"}}
  * @param variant {default="gallery",type="select",label="展示形态",options={gallery:"相册",looks:"买家秀图墙"}}
- * @param cta_link {default="",type="string",label="买家秀 CTA 链接",description="looks 变体底部「晒出你的汉服穿搭」跳转；建议链到代表性 PDP #product-reviews"}
+ * @param cta_link {default="",type="string",label="买家秀 CTA 链接",description="looks 变体底部「晒出你的穿搭」跳转；建议链到本站代表性 PDP #product-reviews"}
  * @param items {default=[],type="site_gallery_items",label="展示项目"}
  */
 
@@ -51,16 +51,72 @@ $translateDefaultCopy = static function (string $source, string $english) use ($
     return $isChineseLocale ? $source : $english;
 };
 
+/**
+ * Drop looks config rows whose /product/{id} is not on the current website.
+ * Prevents Theme-module / other-site seed from bleeding into grocery (etc.).
+ *
+ * @param list<array<string,mixed>> $rows
+ * @return list<array<string,mixed>>
+ */
+$filterLooksItemsForWebsite = static function (array $rows, int $websiteId): array {
+    if ($rows === []) {
+        return [];
+    }
+    if (!\class_exists(\Weline\Product\Repository\ProductRepository::class)) {
+        return $rows;
+    }
+    try {
+        /** @var \Weline\Product\Repository\ProductRepository $products */
+        $products = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Product\Repository\ProductRepository::class
+        );
+    } catch (\Throwable) {
+        return $rows;
+    }
+
+    $out = [];
+    foreach ($rows as $cfg) {
+        if (!\is_array($cfg)) {
+            continue;
+        }
+        $link = trim((string)($cfg['link'] ?? ''));
+        if ($link !== '' && preg_match('#/product/(\d+)#', $link, $m) === 1) {
+            $productId = (int)$m[1];
+            if ($productId <= 0) {
+                continue;
+            }
+            try {
+                if ($products->findById($websiteId, $productId) === null) {
+                    continue;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+        $out[] = $cfg;
+    }
+
+    return $out;
+};
+
 if ($isLooks) {
     if ($title === '' || $title === '图片相册') {
         $title = '买家秀';
     }
-    if ($subtitle === '') {
-        $subtitle = '晒出你的汉服穿搭';
+    // Brand-neutral default; design themes (hanfu) set their own subtitle in layout.
+    if ($subtitle === '' || $subtitle === '晒出你的汉服穿搭') {
+        $subtitle = '晒出你的穿搭';
     }
 
-    // WO-BUYER-SHOW-03：运行时优先已审含图评论；静态 items 仅聚合为空时兜底
-    $configuredItems = $items;
+    $looksWebsiteId = 0;
+    try {
+        $looksWebsiteId = max(0, \Weline\Framework\Runtime\RequestContext::getWelineWebsiteId());
+    } catch (\Throwable) {
+        $looksWebsiteId = 0;
+    }
+
+    // WO-BUYER-SHOW-03：运行时优先已审含图评论；静态 items 仅聚合为空时兜底（且须属本站）
+    $configuredItems = $filterLooksItemsForWebsite($items, $looksWebsiteId);
     $liveItems = [];
     $looksGallery = null;
     if (interface_exists(\Weline\Review\Api\BuyerLooksGalleryInterface::class)) {
@@ -236,12 +292,27 @@ if ($isLooks) {
     <?php if ($items === [] && !$isLooks): ?>
         <p class="sb-empty"><lang>请在部件配置中添加真实内容</lang></p>
     <?php elseif ($isLooks):
-        // WO-BUYER-SHOW-02：有 cta_link 则始终可点；仅空态占位且未配置时回退代表性 PDP 评论锚
+        // WO-BUYER-SHOW-02：有本站 cta_link 则可点；禁止回退到其它站的硬编码 PDP
         $looksCtaHref = $ctaLink;
-        if ($looksCtaHref === '' && $usingLooksPlaceholders) {
-            $looksCtaHref = Block::link('/product/543#product-reviews');
+        if ($looksCtaHref !== '' && preg_match('#/product/(\d+)#', $looksCtaHref, $ctaMatch) === 1) {
+            $ctaProductId = (int)$ctaMatch[1];
+            $ctaOk = false;
+            if ($ctaProductId > 0 && \class_exists(\Weline\Product\Repository\ProductRepository::class)) {
+                try {
+                    /** @var \Weline\Product\Repository\ProductRepository $ctaProducts */
+                    $ctaProducts = \Weline\Framework\Manager\ObjectManager::getInstance(
+                        \Weline\Product\Repository\ProductRepository::class
+                    );
+                    $ctaOk = $ctaProducts->findById($looksWebsiteId ?? 0, $ctaProductId) !== null;
+                } catch (\Throwable) {
+                    $ctaOk = false;
+                }
+            }
+            if (!$ctaOk) {
+                $looksCtaHref = '';
+            }
         }
-        $looksCtaLabel = $subtitle !== '' ? $subtitle : '晒出你的汉服穿搭';
+        $looksCtaLabel = $subtitle !== '' ? $subtitle : '晒出你的穿搭';
         if ($looksCtaHref !== ''): ?>
         <a class="sb-empty sb-looks-cta" href="<?= $esc($looksCtaHref) ?>"><?= $t($looksCtaLabel) ?></a>
         <?php elseif ($usingLooksPlaceholders): ?>

@@ -7,7 +7,12 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Framework\View\Template;
+use Weline\Theme\Api\DefaultThemeInterface;
+use Weline\Theme\Helper\LayoutScanner;
+use Weline\Theme\Model\ThemeScopeVersion;
+use Weline\Theme\Model\WelineTheme;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
@@ -157,19 +162,117 @@ final class SolidifiedControllerTemplateResolver
 
         $scope = 'default.default.default';
         $storeMode = 'normal';
-        if (RequestContext::isInitialized()) {
+        $application = ThemeApplicationContext::current($area, 'runtime');
+        if ($application instanceof ThemeApplicationContext) {
+            if ($application->themeId > 0) {
+                $themeId = $application->themeId;
+            } elseif ($themeId < 1) {
+                $registered = ObjectManager::getInstance(DefaultThemeInterface::class)->getRegisteredDefault($area);
+                $catalogId = (int)($registered[WelineTheme::schema_fields_ID] ?? $registered['id'] ?? 0);
+                if ($catalogId > 0) {
+                    $themeId = $catalogId;
+                }
+            }
+            $scope = $application->versionOwnerScope;
+            $storeMode = $application->versionOwnerStoreMode;
+        } elseif (RequestContext::isInitialized()) {
             $runtimeIdentity = RequestContext::scopeIdentity();
             if ($runtimeIdentity instanceof ScopeIdentity) {
                 $scope = $this->scopes->contextFromIdentity($runtimeIdentity)->storageScope;
                 $storeMode = $runtimeIdentity->storeMode ?? 'normal';
             }
         }
-        $version = $this->scopeVersions->getPublished($themeId, $scope, $storeMode, $area);
+        $version = $this->resolvePublishedVersionAlongThemeChain(
+            $themeId,
+            $scope,
+            $storeMode,
+            $area,
+            $layoutType,
+            $layoutOption,
+        );
         if ($version === null || $version->getVersionId() < 1) { return null; }
         $identity = $version->toVersionIdentity()->withVersion($version->getVersionId(), ThemeVersionIdentity::MODE_FORMAL, max(1, $version->getContentRevision()));
         if ($identity->area !== $area || $identity->storeMode !== $storeMode) {
             throw new \RuntimeException('theme_layout_published_owner_mismatch');
         }
         return [$identity, new LayoutIdentity($layoutOption, $identity->canonicalScope, $targetType, max(0, (int)$targetId)), false];
+    }
+
+    /**
+     * Child design themes may bind package_defaults (theme_version_id=0) while
+     * some layouts still inherit from the parent/module chain (LayoutScanner).
+     * Inherit ancestor published solidification only for layouts the child does
+     * not override in its own design tree — otherwise parent bake would clobber
+     * brand homepage/content (e.g. grocery promo → Hanfu promo-banner).
+     */
+    private function resolvePublishedVersionAlongThemeChain(
+        int $themeId,
+        string $scope,
+        string $storeMode,
+        string $area,
+        string $layoutType,
+        string $layoutOption,
+    ): ?ThemeScopeVersion {
+        $own = $this->scopeVersions->getPublished($themeId, $scope, $storeMode, $area);
+        if ($own instanceof ThemeScopeVersion && $own->getVersionId() > 0) {
+            return $own;
+        }
+        if ($this->themeProvidesLayoutOverride($themeId, $layoutType, $layoutOption, $area)) {
+            return null;
+        }
+        $seen = [$themeId => true];
+        $candidateId = $themeId;
+        while ($candidateId > 0) {
+            $theme = (clone ObjectManager::getInstance(WelineTheme::class))->clearData()->clearQuery()->load($candidateId);
+            $parentId = (int)$theme->getParentId();
+            if ($parentId < 1 || (int)$theme->getId() !== $candidateId || isset($seen[$parentId])) {
+                break;
+            }
+            $seen[$parentId] = true;
+            $candidateId = $parentId;
+            $version = $this->scopeVersions->getPublished($candidateId, $scope, $storeMode, $area);
+            if ($version instanceof ThemeScopeVersion && $version->getVersionId() > 0) {
+                return $version;
+            }
+        }
+
+        return null;
+    }
+
+    /** True when the active theme's design layer supplies this layout option. */
+    private function themeProvidesLayoutOverride(
+        int $themeId,
+        string $layoutType,
+        string $layoutOption,
+        string $area,
+    ): bool {
+        if ($themeId < 1 || trim($layoutType) === '') {
+            return false;
+        }
+        try {
+            $theme = (clone ObjectManager::getInstance(WelineTheme::class))->clearData()->clearQuery()->load($themeId);
+            if ((int)$theme->getId() !== $themeId) {
+                return false;
+            }
+            $themePath = rtrim((string)$theme->getPath(), "/\\");
+            $options = LayoutScanner::scanLayouts($theme, $area)[$layoutType] ?? [];
+            foreach ($options as $option) {
+                if (!\is_array($option) || (string)($option['value'] ?? '') !== $layoutOption) {
+                    continue;
+                }
+                $layerKey = (string)($option['layer_key'] ?? '');
+                if ($layerKey === 'theme:' . $themeId) {
+                    return true;
+                }
+                $path = (string)($option['path'] ?? '');
+                if ($themePath !== '' && $path !== '' && str_starts_with($path, $themePath . DIRECTORY_SEPARATOR)) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
     }
 }

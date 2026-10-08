@@ -27,6 +27,9 @@ final class RegisteredDefaultThemeContractTest extends TestCase
         self::assertStringContainsString('class RegisteredDefaultTheme', $service);
         self::assertStringContainsString('moduleThemePath', $service);
         self::assertStringContainsString('lookupCatalogThemeId', $service);
+        self::assertStringContainsString('resolveLayoutEntityCatalogThemeId', $api);
+        self::assertStringContainsString('resolveLayoutEntityCatalogThemeId', $service);
+        self::assertStringContainsString('isVirtualModuleDefaultTheme', $service);
         self::assertStringContainsString('DefaultThemeInterface::class', $module);
         self::assertStringContainsString(RegisteredDefaultTheme::class, $module);
         self::assertStringNotContainsString('Env::default_theme_DATA', $service);

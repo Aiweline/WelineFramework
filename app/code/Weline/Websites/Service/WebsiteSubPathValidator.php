@@ -20,6 +20,8 @@ final class WebsiteSubPathValidator
         'media' => true,
         'api' => true,
         'admin' => true,
+        // Synthetic project-Host mount prefix (/~site/{code}); not a WebsiteDomain sub_path.
+        '~site' => true,
         'favicon.ico' => true,
         'robots.txt' => true,
         'sitemap.xml' => true,
@@ -81,6 +83,16 @@ final class WebsiteSubPathValidator
                 'message' => '',
                 'matched_code' => '',
                 'matched_kind' => '',
+            ];
+        }
+
+        if (ProjectHostSiteMount::conflictsWithDomainSubPath($normalized)) {
+            return [
+                'valid' => false,
+                'normalized' => $normalized,
+                'message' => (string)\__('子路径首段为保留字，请更换。'),
+                'matched_code' => ProjectHostSiteMount::PREFIX_SEGMENT,
+                'matched_kind' => 'reserved',
             ];
         }
 

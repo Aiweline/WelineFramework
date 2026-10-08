@@ -10,7 +10,7 @@ final class CustomerServiceWidgetAccessibilityContractTest extends TestCase
 {
     public function testSettingsLabelsAreProgrammaticallyAssociatedWithSelects(): void
     {
-        $template = $this->moduleFile('view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml');
+        $template = $this->moduleFile('view/templates/Frontend/widgets/customer-service-float.phtml');
 
         self::assertStringContainsString('<label for="cs-locale-select">', $template);
         self::assertStringContainsString('<select id="cs-locale-select"', $template);
@@ -20,7 +20,7 @@ final class CustomerServiceWidgetAccessibilityContractTest extends TestCase
 
     public function testIconOnlySendButtonKeepsALocalizedAccessibleName(): void
     {
-        $template = $this->moduleFile('view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml');
+        $template = $this->moduleFile('view/templates/Frontend/widgets/customer-service-float.phtml');
         $script = $this->moduleFile('view/statics/js/customer-service.js');
 
         self::assertMatchesRegularExpression(
@@ -46,18 +46,18 @@ final class CustomerServiceWidgetAccessibilityContractTest extends TestCase
         self::assertStringContainsString("updateWidgetLocaleDirection();", $script);
     }
 
-    public function testEverySupportedLocaleDictionaryIsSerializedForInWidgetSwitching(): void
+    public function testFloatWidgetKeepsSlimTranslationsAndLoadsDictionariesOnDemand(): void
     {
-        $template = $this->moduleFile('view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml');
+        // P10: dictionaries never SSR into the float widget (open-time Query batch).
+        $template = $this->moduleFile('view/templates/Frontend/widgets/customer-service-float.phtml');
 
-        self::assertStringContainsString(
+        self::assertStringContainsString('new \\stdClass()', $template);
+        self::assertStringContainsString('dictionaries load on first chat open', $template);
+        self::assertStringNotContainsString(
             '$widgetLocaleCodes = array_column($supportedLocales, \'code\');',
             $template
         );
-        self::assertStringContainsString(
-            'array_values(array_unique($widgetLocaleCodes))',
-            $template
-        );
+        self::assertStringNotContainsString('getWidgetTranslationsForLocales', $template);
     }
 
     public function testEveryJavascriptTranslationLiteralIsIncludedInTheWidgetDictionary(): void

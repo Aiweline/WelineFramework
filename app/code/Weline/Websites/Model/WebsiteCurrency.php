@@ -57,24 +57,34 @@ class WebsiteCurrency extends Model
         return (string)$this->getData(self::schema_fields_CURRENCY_CODE);
     }
     /**
-     * 获取网站的所有关联货币代码
-     * 
+     * 获取网站的所有关联货币代码（进程/共享快照优先，禁止旁路反复打库）。
+     *
      * @param int $websiteId
      * @return array
      */
     public function getWebsiteCurrencyCodes(int $websiteId): array
+    {
+        return \Weline\Websites\Data\WebsiteData::currencyCodesForWebsite($websiteId);
+    }
+
+    /**
+     * Raw association read used only by WebsiteData snapshot loaders.
+     *
+     * @return list<string>
+     */
+    public function fetchAssociationCodesFromDatabase(int $websiteId): array
     {
         $currencies = $this->clearQuery()
             ->where(self::schema_fields_WEBSITE_ID, $websiteId)
             ->select()
             ->fetch()
             ->getItems();
-        
+
         $codes = [];
         foreach ($currencies as $currency) {
             $codes[] = $currency->getCurrencyCode();
         }
-        
+
         return $codes;
     }
     /**

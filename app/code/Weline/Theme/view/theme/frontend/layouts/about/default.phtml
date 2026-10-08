@@ -75,41 +75,41 @@ if ($subtitle === '' || $subtitle === '官方商城帮助与客户服务') {
 $subtitle = WidgetI18n::label($subtitle);
 $mission = trim((string)($meta['mission'] ?? ''));
 if ($mission === '') {
-    $mission = '我们以形制为准绳、以织造为根基，把可穿的传统美学带给全球穿搭者。';
+    $mission = '以清晰规格与可靠履约为准绳，把日常好物送到每一位顾客手中。';
 }
 $mission = WidgetI18n::label($mission);
 
 $stats = [
-    ['value' => WidgetI18n::label('明·宋·唐'), 'label' => WidgetI18n::label('形制谱系')],
-    ['value' => WidgetI18n::label('爆款品类'), 'label' => WidgetI18n::label('高频爆款')],
+    ['value' => WidgetI18n::label('精选货架'), 'label' => WidgetI18n::label('日常品类')],
+    ['value' => WidgetI18n::label('真实可售'), 'label' => WidgetI18n::label('在售商品')],
     ['value' => __('7×24'), 'label' => WidgetI18n::label('客户支持')],
-    ['value' => WidgetI18n::label('全球'), 'label' => WidgetI18n::label('国际直邮')],
+    ['value' => WidgetI18n::label('安心售后'), 'label' => WidgetI18n::label('退换指引')],
 ];
 
 $values = [
     [
-        'title' => WidgetI18n::label('形制为本'),
-        'desc' => WidgetI18n::label('先了解品类与规格，再按场景选购，让决策有据可依。'),
+        'title' => WidgetI18n::label('选品有据'),
+        'desc' => WidgetI18n::label('先看清规格与场景，再下单，让每一次选购都踏实可依。'),
     ],
     [
-        'title' => WidgetI18n::label('织艺可感'),
-        'desc' => WidgetI18n::label('云锦、宋锦、妆花与苏绣不是标签堆砌，而是可看见、可触碰的材质表达。'),
+        'title' => WidgetI18n::label('描述可信'),
+        'desc' => WidgetI18n::label('标题、卖点与详情对齐真实可售商品，不堆砌空洞口号。'),
     ],
     [
-        'title' => WidgetI18n::label('可穿日常'),
-        'desc' => WidgetI18n::label('从入门到进阶：覆盖通勤、礼赠与节日等多种场景。'),
+        'title' => WidgetI18n::label('日常可用'),
+        'desc' => WidgetI18n::label('覆盖居家、礼赠与刚需补给等多种场景，买得到、用得上。'),
     ],
     [
-        'title' => WidgetI18n::label('全球履约'),
-        'desc' => WidgetI18n::label('独立站多语言与跨境履约并行，让海外穿搭者也能安心下单。'),
+        'title' => WidgetI18n::label('履约可靠'),
+        'desc' => WidgetI18n::label('订单可追踪、售后有指引，独立站多语言与本地配送并行。'),
     ],
 ];
 
 $milestones = [
-    ['year' => '2019', 'text' => WidgetI18n::label('从品类科普起步，建立清晰的入门选购标准。')],
-    ['year' => '2021', 'text' => WidgetI18n::label('扩展主力品类与配件矩阵，覆盖更多日常场景。')],
-    ['year' => '2023', 'text' => WidgetI18n::label('完善尺码、养护与退换指引，服务海外独立站顾客。')],
-    ['year' => '2026', 'text' => WidgetI18n::label('上线国际化店面主题，打磨可上线的商城体验。')],
+    ['year' => '2019', 'text' => WidgetI18n::label('从品类整理起步，建立清晰的入门选购标准。')],
+    ['year' => '2021', 'text' => WidgetI18n::label('扩展主力货架与日用矩阵，覆盖更多日常场景。')],
+    ['year' => '2023', 'text' => WidgetI18n::label('完善规格、养护与退换指引，服务独立站顾客。')],
+    ['year' => '2026', 'text' => WidgetI18n::label('打磨可上线的多站店面体验，让品牌故事与货架一致。')],
 ];
 ?>
 <!DOCTYPE html>
@@ -148,7 +148,15 @@ $milestones = [
             background:
                 radial-gradient(ellipse at top right, rgba(184, 74, 60, 0.22), transparent 48%),
                 linear-gradient(135deg, var(--color-bg-dark-secondary, #1a1c1f) 0%, var(--color-bg-dark, #1f2124) 58%, var(--color-bg-dark-tertiary, #2c3036) 100%);
-            color: var(--color-text-light, #f7f4ef);
+            /* Local inverse token rebind — beats global h1/a paper ink on dark heroes. */
+            --_inverse-text: var(--color-text-on-dark, #f7f4ef);
+            --_inverse-muted: var(--color-text-on-dark-muted, #d4cfc5);
+            --weline-theme-text: var(--_inverse-text);
+            --weline-theme-text-secondary: var(--_inverse-muted);
+            --color-text-primary: var(--_inverse-text);
+            --color-text-secondary: var(--_inverse-muted);
+            --color-link: var(--color-primary-light, #d4786a);
+            color: var(--_inverse-text);
         }
 
         .amazon-about__hero-inner {
@@ -178,7 +186,7 @@ $milestones = [
             font-size: clamp(1.75rem, 4vw, 2.65rem);
             line-height: 1.15;
             font-weight: 700;
-            color: var(--color-text-light, #f7f4ef);
+            color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
         }
 
         .amazon-about__hero-lead,
@@ -186,7 +194,7 @@ $milestones = [
             margin: 0.85rem 0 0;
             max-width: 40rem;
             line-height: 1.65;
-            color: var(--color-text-light-secondary, #d4cfc5);
+            color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
         }
 
         .amazon-about__hero-actions {
@@ -223,12 +231,14 @@ $milestones = [
             text-decoration: none;
         }
 
+        .amazon-about__hero a.amazon-about__btn--ghost,
         .amazon-about__btn--ghost {
-            border-color: rgba(247, 244, 239, 0.35);
+            border-color: color-mix(in srgb, var(--_inverse-text, #f7f4ef) 55%, transparent);
             background: transparent;
-            color: var(--color-text-light, #f7f4ef);
+            color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
         }
 
+        .amazon-about__hero a.amazon-about__btn--ghost:hover,
         .amazon-about__btn--ghost:hover {
             border-color: var(--color-primary-light, #d4786a);
             color: var(--color-primary-light, #d4786a);
@@ -246,13 +256,13 @@ $milestones = [
         .amazon-about__hero-card h2 {
             margin: 0 0 0.65rem;
             font-size: 1.05rem;
-            color: var(--color-text-light, #f7f4ef);
+            color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
         }
 
         .amazon-about__hero-card p {
             margin: 0;
             line-height: 1.6;
-            color: var(--color-text-light-secondary, #d4cfc5);
+            color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
             font-size: 0.95rem;
         }
 
@@ -401,7 +411,12 @@ $milestones = [
 
         .amazon-about__cta {
             background: var(--color-bg-dark, #1f2124);
-            color: var(--color-text-light, #f7f4ef);
+            --_inverse-text: var(--color-text-on-dark, #f7f4ef);
+            --_inverse-muted: var(--color-text-on-dark-muted, #d4cfc5);
+            --weline-theme-text: var(--_inverse-text);
+            --color-text-primary: var(--_inverse-text);
+            --color-text-secondary: var(--_inverse-muted);
+            color: var(--_inverse-text);
             padding: clamp(1.75rem, 3.5vw, 2.5rem) 0;
         }
 
@@ -420,12 +435,12 @@ $milestones = [
         .amazon-about__cta h2 {
             margin: 0;
             font-size: clamp(1.2rem, 2.2vw, 1.55rem);
-            color: var(--color-text-light, #fff);
+            color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
         }
 
         .amazon-about__cta p {
             margin: 0.4rem 0 0;
-            color: var(--color-text-light-secondary, #ddd);
+            color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
             line-height: 1.55;
         }
 
@@ -486,6 +501,27 @@ $milestones = [
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
+        <?php
+        // Header chrome binds Website; re-resolve so eyebrow/story never stick Backend 默认站品牌.
+        try {
+            $siteBrandLate = ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
+            if ($siteBrandLate instanceof \Weline\Theme\Helper\SiteBrand) {
+                $lateName = trim($siteBrandLate->resolveFrontendSiteName());
+                if ($lateName !== '') {
+                    $siteName = $lateName;
+                    $contact['site_name'] = $lateName;
+                }
+                $lateDesc = trim($siteBrandLate->resolveFrontendSiteDescription((string)($contact['site_description'] ?? '')));
+                if ($lateDesc !== '') {
+                    $contact['site_description'] = $lateDesc;
+                    if ($subtitle === '' || str_contains($subtitle, '长安汉服')) {
+                        $subtitle = WidgetI18n::label($lateDesc);
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+        ?>
 
         <if condition="meta.showBreadcrumb">
             <div class="amazon-about__breadcrumb">
@@ -514,7 +550,7 @@ $milestones = [
                     <w:hook>
                         Weline_Theme::frontend::layouts::about::hero
                         <else/>
-                        <section class="amazon-about__hero" aria-labelledby="about-layout-title" weline-code="theme.about.hero">
+                        <section class="amazon-about__hero" data-surface="inverse" aria-labelledby="about-layout-title" weline-code="theme.about.hero">
                             <div class="amazon-about__hero-inner">
                                 <div>
                                     <p class="amazon-about__eyebrow"><?= $escape($siteName) ?></p>
@@ -536,7 +572,7 @@ $milestones = [
                                 </div>
                                 <aside class="amazon-about__hero-card">
                                     <h2><?= $escape(WidgetI18n::label('我们的承诺')) ?></h2>
-                                    <p><?= $escape(WidgetI18n::label('规格清晰、尺码可依、售后有指引——让每一次选购都踏实从容。')) ?></p>
+                                    <p><?= $escape(WidgetI18n::label('规格清晰、价格真实、售后有指引——让每一次选购都踏实从容。')) ?></p>
                                 </aside>
                             </div>
                         </section>
@@ -570,7 +606,7 @@ $milestones = [
                     <div class="amazon-about__inner">
                         <div class="amazon-about__section-head">
                             <h2><?= $escape(WidgetI18n::label('我们的故事')) ?></h2>
-                            <p><?= $escape(WidgetI18n::label('从品类科普到日常可用，我们把顾客的疑问沉淀成更清晰的选购路径与更可靠的履约体验。')) ?></p>
+                            <p><?= $escape(WidgetI18n::label('从货架整理到日常可用，我们把顾客的疑问沉淀成更清晰的选购路径与更可靠的履约体验。')) ?></p>
                         </div>
                         <div class="amazon-about__story-grid">
                             <w:slot id="about-story"
@@ -586,7 +622,7 @@ $milestones = [
                                     <article class="amazon-about__panel">
                                         <h3><?= $escape(WidgetI18n::label('为什么选择我们')) ?></h3>
                                         <p><?= $escape(WidgetI18n::label('好的购物体验不靠运气：规格标注清楚、材质说明可信、尺码有据、物流可追踪。')) ?></p>
-                                        <p><?= $escape($siteName) ?> <?= $escape(WidgetI18n::label('团队围绕「可穿的传统美学」打磨每一个关键路径——从首页发现到订单完成。')) ?></p>
+                                        <p><?= $escape($siteName) ?> <?= $escape(WidgetI18n::label('团队围绕「买得到、用得上」打磨每一个关键路径——从首页发现到订单完成。')) ?></p>
                                     </article>
                                 </w:hook>
                             </w:slot>
@@ -618,7 +654,7 @@ $milestones = [
                     <div class="amazon-about__inner">
                         <div class="amazon-about__section-head">
                             <h2><?= $escape(WidgetI18n::label('我们的价值观')) ?></h2>
-                            <p><?= $escape(WidgetI18n::label('这些原则指导我们如何做形制选品、如何服务穿搭者，以及如何持续打磨独立站体验。')) ?></p>
+                            <p><?= $escape(WidgetI18n::label('这些原则指导我们如何选品上架、如何服务顾客，以及如何持续打磨独立站体验。')) ?></p>
                         </div>
                         <w:slot id="about-values"
                                 name="价值观"
@@ -682,8 +718,8 @@ $milestones = [
                             <w:hook>
                                 Weline_Theme::frontend::layouts::about::extras
                                 <else/>
-                                <w:widget type="content" name="team-grid" params='{"title":"团队介绍","subtitle":"选品、质检与履约，陪你买到放心好物","columns":"3","items":[{"title":"选品顾问","role":"风格与搭配","text":"根据场景与偏好给出选品建议，帮你快速找到适合的第一件。","link":"/products","link_label":"去选购"},{"title":"质检与品控","role":"面料 · 做工 · 成衣","text":"把关面料、做工与成衣细节，确保观感与日常穿着体验。","link":"/about","link_label":"了解品牌"},{"title":"履约服务","role":"零售 + 批发","text":"支持一件起订与批发拿货，协调物流、尺码沟通与售后跟进。","link":"/contact","link_label":"联系我们"}]}' />
-                                <w:widget type="faq" name="faq-accordion" params='{"title":"常见问题","subtitle":"购买、配送与售后","expand_first":true,"allow_multiple":false,"search_enabled":false,"faqs":[{"question":"可以批发，也可以只买一件吗？","answer":"可以。本店同时服务一件起订的个人买家与批发客户，商品页可切换零售／批发身份后下单。"},{"question":"尺码如何选择？","answer":"请对照商品页尺码表选号；不确定时可联系客服获取建议。"},{"question":"国际配送大概多久？","answer":"视目的地与清关情况，通常在付款后数个工作日内发出；物流单号可在订单中心跟踪。"},{"question":"如何保养商品？","answer":"请按商品页洗护说明护理；精致刺绣或特殊面料建议轻柔手洗或专业干洗。"},{"question":"退换货怎么处理？","answer":"未穿用且吊牌完整的商品可按退换政策申请；定制款与特殊品类规则以政策页为准。"}]}' />
+                                <w:widget type="content" name="team-grid" params='{"title":"团队介绍","subtitle":"选品、质检与履约，陪你买到放心好物","columns":"3","items":[{"title":"选品顾问","role":"场景与偏好","text":"根据使用场景与预算给出选品建议，帮你快速找到合适的第一件。","link":"/products","link_label":"去选购"},{"title":"质检与品控","role":"规格 · 品质 · 包装","text":"把关规格标注、品质观感与包装完好，确保到货可用。","link":"/about","link_label":"了解品牌"},{"title":"履约服务","role":"配送 + 售后","text":"协调发货、物流跟踪与售后沟通，让下单到收货更省心。","link":"/contact","link_label":"联系我们"}]}' />
+                                <w:widget type="faq" name="faq-accordion" params='{"title":"常见问题","subtitle":"购买、配送与售后","expand_first":true,"allow_multiple":false,"search_enabled":false,"faqs":[{"question":"如何确认商品是否有货？","answer":"商品页展示真实可售库存与价格；缺货时请收藏或联系客服关注补货。"},{"question":"下单后多久发货？","answer":"通常在付款确认后尽快安排发出；具体以订单页物流信息为准。"},{"question":"如何跟踪物流？","answer":"发货后可在订单中心查看物流单号与轨迹。"},{"question":"商品说明以哪里为准？","answer":"请以商品页规格、详情与售后政策为准；有疑问可先联系客服。"},{"question":"退换货怎么处理？","answer":"符合退换条件的商品可按退换政策申请；特殊品类规则以政策页为准。"}]}' />
                             </w:hook>
                         </w:slot>
                     </div>
@@ -699,7 +735,7 @@ $milestones = [
                     <w:hook>
                         Weline_Theme::frontend::layouts::about::cta
                         <else/>
-                        <section class="amazon-about__cta" aria-labelledby="about-cta-title" weline-code="theme.about.cta">
+                        <section class="amazon-about__cta" data-surface="inverse" aria-labelledby="about-cta-title" weline-code="theme.about.cta">
                             <div class="amazon-about__cta-inner">
                                 <div>
                                     <h2 id="about-cta-title"><?= $escape(WidgetI18n::label('准备好挑选第一件心仪商品了吗？')) ?></h2>

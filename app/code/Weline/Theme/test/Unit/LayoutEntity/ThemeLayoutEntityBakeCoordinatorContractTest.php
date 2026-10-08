@@ -79,6 +79,24 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         self::assertArrayHasKey('page', $homepage);
     }
 
+    public function testSolidifyScopeVersionEntryPointsWirePublishAndDraftReset(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php';
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('function solidifyScopeVersion', $source);
+        self::assertStringContainsString('function solidifyCurrentScopeVersion', $source);
+        self::assertStringContainsString('function bakePublishArtifactsForVersion', $source);
+        self::assertStringContainsString("\$options['force_formal'] = true", $source);
+        self::assertStringContainsString('theme_scope_version_unresolved', $source);
+
+        $reset = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/ThemeEditorDraftResetService.php');
+        self::assertStringContainsString('solidifyCurrentScopeVersion(', $reset);
+
+        $editor = (string)file_get_contents(dirname(__DIR__, 3) . '/Controller/Backend/ThemeEditor.php');
+        self::assertStringContainsString('->solidifyScopeVersion($context, (int)$result[\'theme_version_id\']', $editor);
+        self::assertStringContainsString('theme_scope_draft_solidify_failed', $editor);
+    }
+
     public function testRebakeDedupesLayoutTargetsAndSkipsPageDependencies(): void
     {
         $path = dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php';

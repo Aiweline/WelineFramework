@@ -1,0 +1,85 @@
+/**
+ * Global storefront float band: left/right slots share one bottom inset.
+ * Sticky ATC clearance is applied once on the layer (not per float widget).
+ */
+.w-storefront-float-layer {
+  /* Shrink the layer box from the bottom so absolute slots lift above sticky ATC.
+   * padding-bottom does NOT move position:absolute children (CB = padding edge). */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: var(--weline-product-sticky-purchase-clearance, 0px);
+  z-index: 2147482900;
+  box-sizing: border-box;
+  pointer-events: none;
+  transition: bottom var(--weline-motion-normal, 0.2s) ease;
+}
+
+.w-storefront-float-layer__slot {
+  position: absolute;
+  pointer-events: auto;
+  max-width: min(100vw, 28rem);
+}
+
+.w-storefront-float-layer__slot--start {
+  left: max(0.85rem, env(safe-area-inset-left, 0px));
+  bottom: max(0.95rem, env(safe-area-inset-bottom, 0px));
+}
+
+.w-storefront-float-layer__slot--end {
+  right: max(var(--weline-space-5, 1.25rem), env(safe-area-inset-right, 0px));
+  bottom: max(var(--weline-space-5, 1.25rem), env(safe-area-inset-bottom, 0px));
+}
+
+/* Social quick bar stacks above the end float — lift end slot only */
+body:has(.weline-social-quick-bar:not([hidden]))
+  .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)) {
+  bottom: calc(
+    max(var(--weline-space-5, 1.25rem), env(safe-area-inset-bottom, 0px))
+    + 10.5rem
+  );
+}
+
+@media (max-width: 720px) {
+  .w-storefront-float-layer__slot--end {
+    right: max(var(--weline-space-3, 0.75rem), env(safe-area-inset-right, 0px));
+    bottom: max(var(--weline-space-3, 0.75rem), env(safe-area-inset-bottom, 0px));
+  }
+
+  body:has(.weline-social-quick-bar:not([hidden]))
+    .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)) {
+    bottom: calc(
+      max(var(--weline-space-3, 0.75rem), env(safe-area-inset-bottom, 0px))
+      + 10.5rem
+    );
+  }
+}
+
+/* Slot-hosted floats: no viewport-fixed + no per-widget sticky stacking */
+.w-storefront-float-layer .w-store-music-host[data-store-music-host] {
+  position: static;
+  display: block;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+}
+
+.w-storefront-float-layer .w-store-music[data-store-music] {
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  top: auto !important;
+}
+
+.w-storefront-float-layer .customer-service-widget {
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  top: auto !important;
+}

@@ -3,10 +3,36 @@
 declare(strict_types=1);
 
 /**
- * CustomerService 前台部件：页脚帮助「联系客服」+ 页头右侧「客户服务」。
+ * CustomerService 前台部件：悬浮客服 + 页脚帮助「联系客服」+ 页头右侧「客户服务」。
  * Theme layouts/partials 禁止内嵌本模块 <w:widget>；靠 default_injections / 拖入补空槽。
  */
 return [
+    'customer-service-float' => [
+        'name' => '悬浮客服',
+        'description' => '右下角客服聊天浮层；默认注入 storefront-float-end；账号页跳过。',
+        'type' => 'content',
+        'code' => 'customer-service-float',
+        'area' => 'frontend',
+        'template' => 'Weline_CustomerService::templates/Frontend/widgets/customer-service-float.phtml',
+        'page_layouts' => ['*'],
+        'position' => ['footer'],
+        'slot' => 'storefront-float-end',
+        'supports' => [
+            'customer-service-float',
+            'layout-storefront-float-end',
+            'content',
+        ],
+        'default_injections' => [[
+            'layout_type' => 'homepage',
+            'slot' => 'storefront-float-end',
+            'area' => 'footer',
+            'sort_order' => 100,
+            'required' => true,
+            'reason' => '店面默认右侧悬浮客服；恢复原始布局后 required 回填',
+            'config' => [],
+        ]],
+        'params' => [],
+    ],
     'footer-contact-service-link' => [
         'name' => '页脚联系客服链接',
         'description' => '页脚帮助中心扩展槽：联系客服入口；点击打开悬浮客服聊天；默认注入 footer-help-links。',

@@ -7139,7 +7139,104 @@ HTML;
 
     public function postResetDraftResources()
     {
-        return $this->fetchJson($this->resetDraftResourcesPayload());
+        $data = $this->getVersionRequestData();
+        if ($this->wantsStandardPublishStream($data)) {
+            $this->streamDraftResetResources($data);
+
+            return;
+        }
+
+        return $this->fetchJson($this->resetDraftResourcesPayload($data));
+    }
+
+    /**
+     * Stream draft-reset + solidify progress over SSE (SSH-style log lines included).
+     *
+     * @param array<string,mixed> $data
+     */
+    private function streamDraftResetResources(array $data): void
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->setHeartbeatInterval(15)->start();
+        // Emit immediately so the editor SSH terminal is not stuck on heartbeats
+        // while requireLayoutWriteContext / solidify waits on locks.
+        if ($sse->isAlive()) {
+            $sse->sendEvent('start', [
+                'step' => 'start',
+                'message' => (string)__('开始重置当前编辑草稿'),
+                'progress' => 1,
+                'ssh' => '$ theme-editor reset-draft --stream=1',
+            ]);
+        }
+
+        try {
+            $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
+            $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+            $resources = $data['resources'] ?? [];
+            if (!\is_array($resources)) {
+                $resources = [];
+            }
+            $layoutScope = (string)($data['layout_scope'] ?? ThemeEditorDraftResetService::LAYOUT_SCOPE_CURRENT);
+
+            if ($themeId < 1) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('Missing theme ID'),
+                ]);
+                $sse->close();
+
+                return;
+            }
+
+            if ($sse->isAlive()) {
+                $sse->sendEvent('progress', [
+                    'step' => 'context',
+                    'message' => (string)__('正在解析编辑上下文'),
+                    'progress' => 3,
+                    'ssh' => \sprintf('$ resolve-editor-context --theme=%d --layout=%s', $themeId, $pageType),
+                ]);
+            }
+            $context = $this->requireLayoutWriteContext($data, $themeId, $pageType);
+            $onProgress = static function (string $step, string $message, int $percent, array $extra = []) use ($sse): void {
+                if (!$sse->isAlive()) {
+                    return;
+                }
+                $sse->sendEvent('progress', [
+                    'step' => $step,
+                    'message' => $message,
+                    'progress' => \max(0, \min(100, $percent)),
+                    'ssh' => (string)($extra['ssh'] ?? ''),
+                    'ssh_log' => \is_array($extra['ssh_log'] ?? null) ? \array_values($extra['ssh_log']) : [],
+                ]);
+            };
+
+            /** @var ThemeEditorDraftResetService $resetService */
+            $resetService = ObjectManager::getInstance(ThemeEditorDraftResetService::class);
+            $result = $resetService->reset($context, $resources, $layoutScope, $onProgress);
+            $this->clearVersionPreviewCaches($themeId);
+
+            if ($sse->isAlive()) {
+                $sse->sendEvent('done', [
+                    'success' => true,
+                    'message' => (string)__('Current draft resources reset'),
+                    'progress' => 100,
+                    'data' => $result,
+                    'ssh_log' => $result['ssh_log'] ?? [],
+                ]);
+            }
+            $sse->close();
+        } catch (\Throwable $e) {
+            if ($sse->isAlive()) {
+                $sse->sendError(
+                    $e->getMessage() !== '' ? $e->getMessage() : (string)__('重置失败'),
+                    500,
+                );
+                $sse->close();
+            }
+        }
     }
 
     public function postFactoryReset()
@@ -7232,10 +7329,14 @@ HTML;
     /**
      * Reset current editing draft materialization for selected resources.
      * Does not delete version history or call restoreOriginal().
+     * BinQuery / editorRequest always uses this JSON path (includes ssh_log).
+     * Live SSE progress is only available via postResetDraftResources + Accept stream.
+     *
+     * @param array<string,mixed>|null $data
      */
-    public function resetDraftResourcesPayload(): array
+    public function resetDraftResourcesPayload(?array $data = null): array
     {
-        $data = $this->getVersionRequestData();
+        $data = \is_array($data) ? $data : $this->getVersionRequestData();
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
         $resources = $data['resources'] ?? [];
@@ -7262,6 +7363,7 @@ HTML;
                 'success' => true,
                 'message' => __('Current draft resources reset'),
                 'data' => $result,
+                'ssh_log' => $result['ssh_log'] ?? [],
             ];
         } catch (\Throwable $e) {
             return [
@@ -9677,23 +9779,59 @@ HTML;
     // ==================== 前端预览 API ====================
 
     /**
+     * 真实前端预览可选基址（本机壳默认 + WebsiteDomain）。
+     * 路由: /backend/theme-editor/preview-bases (POST|GET)
+     */
+    public function postPreviewBases()
+    {
+        return $this->respondPreviewBases($this->requestBodyOrParams());
+    }
+
+    public function getPreviewBases()
+    {
+        return $this->respondPreviewBases($this->request->getParams());
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function respondPreviewBases(array $data): mixed
+    {
+        [$websiteId, $websiteCode] = $this->resolvePreviewWebsiteFromRequestData($data);
+        if ($websiteId < 0) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少网站作用域，无法列出预览地址'),
+            ]);
+        }
+
+        /** @var \Weline\Theme\Service\ThemeFrontendPreviewBaseCatalog $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Theme\Service\ThemeFrontendPreviewBaseCatalog::class);
+        $items = $catalog->listForWebsite($websiteId, $websiteCode);
+
+        return $this->fetchJson([
+            'success' => true,
+            'data' => [
+                'website_id' => $websiteId,
+                'website_code' => $websiteCode,
+                'items' => $items,
+                'notice' => (string)__('本机开发请优先选择「本机项目壳」。生产域名可能不可达，或打开的是线上站而非本机改动。'),
+            ],
+        ]);
+    }
+
+    /**
      * 启动真实前端店面预览 (Query)
      * 路由: /backend/theme-editor/start-preview (POST)
      *
      * 仅供 #btnFrontendPreview / openFrontendPreview 使用。
      * 生成预览 Token、种 Cookie、persist shell=preview，并返回真实店面 preview_url。
      * 编辑器 iframe 与 #btnPreview 不得调用本接口。
+     * 可选 preview_base_url：须属于 preview-bases 白名单（本机壳或该站域名）。
      */
     public function postStartPreview()
     {
-        $bodyParams = $this->request->getBodyParams();
-        if (is_string($bodyParams)) {
-            $data = json_decode($bodyParams, true) ?: [];
-        } elseif (is_array($bodyParams)) {
-            $data = $bodyParams;
-        } else {
-            $data = $this->request->getParams();
-        }
+        $data = $this->requestBodyOrParams();
 
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
         $layoutOption = (string)($data['layout_option'] ?? $this->request->getParam('layout_option', 'default'));
@@ -9750,12 +9888,19 @@ HTML;
             $context = $this->getPreviewContextService()->withPreviewToken($context, $token);
             $this->getPreviewContextService()->persistContext($context);
 
+            $previewBaseUrl = \trim((string)($data['preview_base_url'] ?? ''));
+
             return $this->fetchJson([
                 'success' => true,
                 'message' => __('Preview started'),
                 'data' => [
                     'token' => $token,
-                    'preview_url' => $this->buildFrontendPreviewUrl($context, $pageType, $layoutOption),
+                    'preview_url' => $this->buildFrontendPreviewUrl(
+                        $context,
+                        $pageType,
+                        $layoutOption,
+                        $previewBaseUrl !== '' ? $previewBaseUrl : null,
+                    ),
                     'context' => $context,
                     'expires_in' => 3600,
                 ],
@@ -9767,6 +9912,54 @@ HTML;
                 'saved_revision' => $e instanceof \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySaveException ? $e->receipt() : null,
             ]);
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function requestBodyOrParams(): array
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (\is_string($bodyParams)) {
+            $decoded = \json_decode($bodyParams, true);
+
+            return \is_array($decoded) ? $decoded : [];
+        }
+        if (\is_array($bodyParams) && $bodyParams !== []) {
+            return $bodyParams;
+        }
+        $params = $this->request->getParams();
+
+        return \is_array($params) ? $params : [];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array{0: int, 1: string}
+     */
+    private function resolvePreviewWebsiteFromRequestData(array $data): array
+    {
+        $scopePayload = $this->resolveEditorScopeIdentityPayload();
+        if (\is_array($scopePayload) && $scopePayload !== []) {
+            $kind = \strtolower(\trim((string)($scopePayload['scope_kind'] ?? '')));
+            if ($kind === ScopeIdentity::KIND_WEBSITE || $kind === 'website'
+                || $kind === ScopeIdentity::KIND_STORE || $kind === 'store'
+                || $kind === ScopeIdentity::KIND_CHANNEL || $kind === 'channel'
+            ) {
+                $websiteId = \max(0, (int)($scopePayload['website_id'] ?? 0));
+                $websiteCode = \strtolower(\trim((string)($scopePayload['website_code'] ?? '')));
+
+                return [$websiteId, $websiteCode];
+            }
+        }
+
+        $websiteId = isset($data['website_id']) ? (int)$data['website_id'] : -1;
+        $websiteCode = \strtolower(\trim((string)($data['website_code'] ?? '')));
+        if ($websiteId < 0 && $websiteCode === '') {
+            return [-1, ''];
+        }
+
+        return [\max(0, $websiteId), $websiteCode];
     }
 
     public function postResolveNavigation()
@@ -10410,7 +10603,8 @@ HTML;
     private function buildFrontendPreviewUrl(
         array $context,
         string $pageType,
-        string $layoutOption = 'default'
+        string $layoutOption = 'default',
+        ?string $previewBaseUrl = null,
     ): string {
         $token = \trim((string)($context['preview_token'] ?? ''));
         if ($token === '') {
@@ -10437,11 +10631,61 @@ HTML;
                 }
             }
         }
-        /** @var ThemePreviewEntryApplication $previewEntry */
-        $previewEntry = ObjectManager::getInstance(ThemePreviewEntryApplication::class);
-        $baseUrl = $previewEntry->normalizeStorefrontPreviewBaseUrl($baseUrl, $websiteId, $websiteCode);
+
+        $chosenBase = \trim((string)$previewBaseUrl);
+        if ($chosenBase !== '' && $websiteId !== null) {
+            /** @var \Weline\Theme\Service\ThemeFrontendPreviewBaseCatalog $catalog */
+            $catalog = ObjectManager::getInstance(\Weline\Theme\Service\ThemeFrontendPreviewBaseCatalog::class);
+            $normalizedChosen = $catalog->normalizeBaseUrl($chosenBase);
+            if ($normalizedChosen === ''
+                || !$catalog->isAllowedBaseUrl($normalizedChosen, $websiteId, (string)$websiteCode)
+            ) {
+                throw new \InvalidArgumentException((string)__('预览地址不在允许列表中'));
+            }
+            /** @var ThemePreviewEntryApplication $previewEntry */
+            $previewEntry = ObjectManager::getInstance(ThemePreviewEntryApplication::class);
+            $routeOnly = $previewEntry->normalizeStorefrontPreviewBaseUrl($baseUrl, null, null);
+            $baseUrl = $this->joinPreviewBaseWithRoute($normalizedChosen, $routeOnly);
+        } else {
+            /** @var ThemePreviewEntryApplication $previewEntry */
+            $previewEntry = ObjectManager::getInstance(ThemePreviewEntryApplication::class);
+            $baseUrl = $previewEntry->normalizeStorefrontPreviewBaseUrl($baseUrl, $websiteId, $websiteCode);
+        }
 
         return $this->previewTokenService->getPreviewUrl($baseUrl, $token);
+    }
+
+    /**
+     * Glue allowlisted origin[/mount] with storefront route path from admin getFrontendUrl.
+     */
+    private function joinPreviewBaseWithRoute(string $previewBase, string $routeUrl): string
+    {
+        $routeParts = \parse_url($routeUrl);
+        $path = \is_array($routeParts) && isset($routeParts['path']) ? (string)$routeParts['path'] : '/';
+        if ($path === '') {
+            $path = '/';
+        }
+        $baseParts = \parse_url($previewBase);
+        $mount = \is_array($baseParts) && isset($baseParts['path'])
+            ? \rtrim((string)$baseParts['path'], '/')
+            : '';
+        if ($mount !== '' && $mount !== '/') {
+            $mountLower = \strtolower($mount);
+            $pathLower = \strtolower($path);
+            if ($pathLower === $mountLower || \str_starts_with($pathLower, $mountLower . '/')) {
+                $path = \substr($path, \strlen($mount));
+                if ($path === false || $path === '') {
+                    $path = '/';
+                }
+                if ($path[0] !== '/') {
+                    $path = '/' . $path;
+                }
+            }
+        }
+        $query = \is_array($routeParts) && !empty($routeParts['query']) ? '?' . (string)$routeParts['query'] : '';
+        $fragment = \is_array($routeParts) && !empty($routeParts['fragment']) ? '#' . (string)$routeParts['fragment'] : '';
+
+        return \rtrim($previewBase, '/') . ($path === '/' ? '/' : $path) . $query . $fragment;
     }
 
     private function buildEditorShellUrl(array $context, string $pageType): string

@@ -51,20 +51,26 @@ class SiteContactInfo
             $siteName = trim($this->siteBrand->resolveFrontendSiteName());
             $siteDescription = trim($this->siteBrand->resolveFrontendSiteDescription());
         }
-        if ($siteName === '') {
+        // Backend brand identity is default-website only. On other Hosts (even before WebsiteData bind),
+        // do not fill 默认站站名/简介 — layouts re-resolve after chrome when needed.
+        $allowBackendBrand = !($this->siteBrand instanceof SiteBrand)
+            || $this->siteBrand->shouldUseBackendBrandIdentity();
+        if ($siteName === '' && $allowBackendBrand) {
             $siteName = $this->firstNonEmpty([
                 $this->backend('site_name'),
                 $this->env('site.name'),
                 $this->env('system.site_name'),
             ]);
         }
-        if ($siteDescription === '') {
+        if ($siteDescription === '' && $allowBackendBrand) {
             $siteDescription = $this->firstNonEmpty([
                 $this->backend('site_description'),
                 $this->env('site.description'),
                 $this->env('system.site_description'),
                 (string)__('官方商城帮助与客户服务'),
             ]);
+        } elseif ($siteDescription === '' && !$allowBackendBrand) {
+            $siteDescription = (string)__('精选优质商品与可靠服务，覆盖日常选购与礼赠场景。');
         }
 
         $email = $this->firstNonEmpty([

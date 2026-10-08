@@ -53,4 +53,10 @@ interface DefaultThemeInterface
 
     /** 是否为 Theme 模块全局默认（theme_id=0 或目录中的 Default 行）。 */
     public function isModuleDefaultThemeId(int $themeId): bool;
+
+    /**
+     * 布局实体（generated/theme-layout-entities）目录使用的 catalog theme_id。
+     * 模块包默认（虚拟 id≤0 或磁盘 path）回落到目录 Default 行；否则返回当前主题 id。
+     */
+    public function resolveLayoutEntityCatalogThemeId(\Weline\Theme\Model\WelineTheme $theme): int;
 }

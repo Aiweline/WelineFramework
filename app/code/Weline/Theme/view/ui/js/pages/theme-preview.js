@@ -1,5 +1,26 @@
 const root = document.documentElement;
-const parentOrigin = window.location.origin;
+
+function resolveEditorParentOrigin() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const fromQuery = String(params.get('editor_parent_origin') || '').trim();
+        if (fromQuery) {
+            return new URL(fromQuery).origin;
+        }
+    } catch (error) {
+        // Ignore malformed URL search params.
+    }
+    try {
+        if (document.referrer) {
+            return new URL(document.referrer).origin;
+        }
+    } catch (error) {
+        // Ignore malformed referrer.
+    }
+    return window.location.origin;
+}
+
+const parentOrigin = resolveEditorParentOrigin();
 const mountedSlots = new WeakSet();
 
 function integer(value, fallback) {

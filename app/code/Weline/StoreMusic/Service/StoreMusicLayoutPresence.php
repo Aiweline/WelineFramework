@@ -113,10 +113,9 @@ final class StoreMusicLayoutPresence
         }
 
         try {
-            /** @var WelineTheme $theme */
-            $theme = ObjectManager::getInstance(WelineTheme::class);
-            $theme->clearData()->clearQuery()->getActiveTheme('frontend');
-            $id = (int)$theme->getId();
+            $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+            $theme = $themeContext->resolveRegisteredDefaultTheme('frontend');
+            $id = (int)($theme?->getId() ?? 0);
             if ($id > 0) {
                 return $id;
             }

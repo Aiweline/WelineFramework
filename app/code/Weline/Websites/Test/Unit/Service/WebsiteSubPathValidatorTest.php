@@ -64,6 +64,16 @@ final class WebsiteSubPathValidatorTest extends TestCase
         self::assertSame('reserved', $result['matched_kind']);
     }
 
+    public function testProjectHostSitePrefixRejectedAsDomainSubPath(): void
+    {
+        $validator = $this->validator();
+        foreach (['/~site', '/~site/daocharms', '~site/foo'] as $path) {
+            $result = $validator->validate($path);
+            self::assertFalse($result['valid'], $path);
+            self::assertSame('reserved', $result['matched_kind'], $path);
+        }
+    }
+
     public function testAssertValidThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);

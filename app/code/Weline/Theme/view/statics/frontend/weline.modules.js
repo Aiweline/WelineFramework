@@ -50,6 +50,14 @@ Object.assign(window.WelineModulesConfig.modules, {
         load: "defer",
         description: "店面图片占位回退"
     },
+    storefrontFloatLayer: {
+        paths: [
+            "Weline_Theme::js/storefront-float-layer.js"
+        ],
+        globalVar: null,
+        load: "defer",
+        description: "店面左右悬浮槽 adopt 兜底"
+    },
     storefrontShopperToast: {
         paths: [
             "Weline_Theme::js/storefront-shopper-toast.js"

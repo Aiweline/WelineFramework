@@ -240,6 +240,8 @@ final class WebsiteCacheInvalidationService
         }
         try {
             \Weline\Websites\Data\WebsiteData::clearProcessCache();
+            WebsiteCatalog::clearProcessCache();
+            ScopeMaintenanceGate::clearProcessCache();
             ScopePathMatchCache::clearProcessCache();
         } catch (\Throwable) {
             $this->logFailure('scope_process_cache_failed');
