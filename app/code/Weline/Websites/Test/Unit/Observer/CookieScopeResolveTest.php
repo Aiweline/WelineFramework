@@ -191,6 +191,97 @@ final class CookieScopeResolveTest extends TestCase
         self::assertSame('/', $cookies[0]['path']);
     }
 
+    public function testBackendIgnoresEditorWebsiteIdQueryParamForCookieJar(): void
+    {
+        if (Context::hasCurrent()) {
+            Context::leave();
+        }
+        RequestContext::cleanup();
+        HeaderCollector::reset();
+        CookieScope::setPolicyResolverOverride(null);
+
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        WelineEnv::set('is_backend', true, 'CookieScopeResolveTest');
+        WelineEnv::set('area', 'backend', 'CookieScopeResolveTest');
+        Context::current()->set('input.server.HTTP_HOST', 'grocery.test.weline.com');
+        Context::current()->set('input.host', 'grocery.test.weline.com');
+        Context::current()->set('route.area', RequestContext::AREA_BACKEND);
+        Context::current()->set('input.get.website_id', '544');
+
+        CookieScope::setPolicyResolverOverride(static function (): array {
+            $data = [
+                'active' => false,
+                'name_suffix' => '',
+                'name_suffix_pattern' => '',
+                'mount_path' => '/',
+                'expire_unscoped_aliases' => false,
+                'revision' => '',
+            ];
+            $event = new Event($data);
+            (new CookieScopeResolve())->execute($event);
+            $modified = $event->getEvenData();
+            if (\is_array($modified)) {
+                foreach ($modified as $key => $value) {
+                    $data[$key] = $value;
+                }
+            }
+
+            return $data;
+        });
+
+        self::assertSame('WELINE_SESSID_w0', CookieScope::qualifyName('WELINE_SESSID'));
+        self::assertSame('WELINE_SESSID_w0', SessionCookieNameResolver::resolve('grocery.test.weline.com'));
+    }
+
+    public function testWebsiteIdCookieValueDoesNotOverrideJarSuffix(): void
+    {
+        if (Context::hasCurrent()) {
+            Context::leave();
+        }
+        RequestContext::cleanup();
+        HeaderCollector::reset();
+        CookieScope::setPolicyResolverOverride(null);
+
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        WelineEnv::set('is_backend', true, 'CookieScopeResolveTest');
+        WelineEnv::set('area', 'backend', 'CookieScopeResolveTest');
+        Context::current()->set('input.server.HTTP_HOST', 'grocery.test.weline.com');
+        Context::current()->set('input.host', 'grocery.test.weline.com');
+        Context::current()->set('route.area', RequestContext::AREA_BACKEND);
+        // Grocery admin jar is _w0 while the Website id *payload* is 544.
+        Context::current()->set('input.cookie', [
+            'WELINE_WEBSITE_ID_w0' => '544',
+            'WELINE_SESSID_w0' => 'admin-sid',
+        ]);
+
+        CookieScope::setPolicyResolverOverride(static function (): array {
+            $data = [
+                'active' => false,
+                'name_suffix' => '',
+                'name_suffix_pattern' => '',
+                'mount_path' => '/',
+                'expire_unscoped_aliases' => false,
+                'revision' => '',
+            ];
+            $event = new Event($data);
+            (new CookieScopeResolve())->execute($event);
+            $modified = $event->getEvenData();
+            if (\is_array($modified)) {
+                foreach ($modified as $key => $value) {
+                    $data[$key] = $value;
+                }
+            }
+
+            return $data;
+        });
+
+        self::assertSame(
+            'WELINE_SESSID_w0',
+            CookieScope::qualifyName('WELINE_SESSID'),
+            'WELINE_WEBSITE_ID_w0=544 must not remap Session onto _w544'
+        );
+    }
+
     private function enterRequest(int $websiteId, string $websiteUrl, bool $backend = false): void
     {
         if (Context::hasCurrent()) {

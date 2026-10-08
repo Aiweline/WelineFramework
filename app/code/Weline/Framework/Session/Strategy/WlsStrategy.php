@@ -301,16 +301,19 @@ final class WlsStrategy implements SessionStrategyInterface
             $sameSite
         );
 
-        // When CookieScope is inactive, also expire sibling scoped/legacy names
-        // still present on the request so logout cannot leave QueryBin logged in.
+        // Also expire sibling scoped/legacy names still present on the request
+        // so logout cannot leave QueryBin logged in. HeaderCollector keeps
+        // foreign _wN names exact (no remap→legacy wipe of the admin jar).
+        $activeWire = \Weline\Framework\Session\SessionCookieNameResolver::resolve(
+            null,
+            $this->sessionArea !== '' ? $this->sessionArea : null,
+        );
         foreach (\Weline\Framework\Session\SessionCookieNameResolver::requestCookieCandidates(
             null,
             $this->sessionArea !== '' ? $this->sessionArea : null,
         ) as $name) {
-            if ($name === \Weline\Framework\Session\SessionCookieNameResolver::resolve(
-                null,
-                $this->sessionArea !== '' ? $this->sessionArea : null,
-            )) {
+            $name = \trim((string)$name);
+            if ($name === '' || $name === $activeWire) {
                 continue;
             }
             $headerCollector->setCookie(

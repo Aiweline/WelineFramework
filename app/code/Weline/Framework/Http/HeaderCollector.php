@@ -160,13 +160,32 @@ class HeaderCollector implements HeaderCollectorInterface
         // Cookie name/Path isolation is contributed by modules via CookieScope
         // event. Protocol cookies keep Path=/ and the exact wire name.
         $protocolCookie = CookieScope::isProtocolCookie($originalName);
+        $crossWebsiteScoped = false;
         if ($protocolCookie) {
             $name = $originalName;
             $path = '/';
             $domain = '';
         } else {
-            $name = CookieScope::qualifyName($originalName);
-            $path = CookieScope::resolvePath($path);
+            // Already-scoped names from another website jar (e.g. expire
+            // WELINE_SESSID_w0 while CookieScope is _w544) must stay exact.
+            // Remapping them onto the active suffix then treating the source
+            // name as a "legacy alias" wipes the admin login cookie.
+            $policy = CookieScope::policy();
+            $activeSuffix = (string)($policy['name_suffix'] ?? '');
+            $suffixPattern = (string)($policy['name_suffix_pattern'] ?? '');
+            if (
+                $activeSuffix !== ''
+                && $suffixPattern !== ''
+                && @\preg_match($suffixPattern, $originalName) === 1
+                && !\str_ends_with($originalName, $activeSuffix)
+            ) {
+                $name = $originalName;
+                $path = '/';
+                $crossWebsiteScoped = true;
+            } else {
+                $name = CookieScope::qualifyName($originalName);
+                $path = CookieScope::resolvePath($path);
+            }
         }
 
         // TASK-P1D-001 / TEST-SEC-08：HTTPS 下强制 Secure，禁止明文 Cookie。
@@ -183,7 +202,8 @@ class HeaderCollector implements HeaderCollectorInterface
         }
 
         // Expire legacy unscoped aliases (Path=/) when a module asks for it.
-        if (!$protocolCookie && CookieScope::shouldExpireUnscopedAliases()) {
+        // Cross-website exact writes must not expire sibling _wN jars.
+        if (!$protocolCookie && !$crossWebsiteScoped && CookieScope::shouldExpireUnscopedAliases()) {
             foreach (self::legacyCookieAliases($originalName, $name) as $legacyName) {
                 $legacyKey = $this->getCookieStorageKey($legacyName, '/', $domain);
                 $this->cookies[$legacyKey] = [
@@ -219,7 +239,11 @@ class HeaderCollector implements HeaderCollectorInterface
     private static function legacyCookieAliases(string $originalName, string $qualifiedName): array
     {
         $aliases = [];
-        if ($originalName !== '' && $originalName !== $qualifiedName) {
+        // Remapping WELINE_SESSID_w0 → WELINE_SESSID_w544 must not list _w0 as a
+        // legacy alias; that is a sibling website jar, not an unscoped leftover.
+        $originalAlreadyWebsiteScoped = $originalName !== ''
+            && \preg_match('/_w\d+$/D', $originalName) === 1;
+        if ($originalName !== '' && $originalName !== $qualifiedName && !$originalAlreadyWebsiteScoped) {
             $aliases[] = $originalName;
         }
 
@@ -237,7 +261,20 @@ class HeaderCollector implements HeaderCollectorInterface
             }
         }
 
-        return \array_values(\array_unique(\array_filter($aliases, static fn(string $alias): bool => $alias !== '' && $alias !== $qualifiedName)));
+        return \array_values(\array_unique(\array_filter(
+            $aliases,
+            static function (string $alias) use ($qualifiedName): bool {
+                if ($alias === '' || $alias === $qualifiedName) {
+                    return false;
+                }
+                // Never expire a different website-scoped jar as "legacy".
+                if (\preg_match('/_w\d+$/D', $alias) === 1 && $alias !== $qualifiedName) {
+                    return false;
+                }
+
+                return true;
+            }
+        )));
     }
 
     private function isHttpsTransport(): bool

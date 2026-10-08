@@ -145,29 +145,38 @@ final class CookieScopeResolve implements ObserverInterface
 
         $context = Context::getCurrent();
         if ($context !== null) {
-            foreach (['input.get.website_id', 'input.post.website_id', 'route.website_id'] as $key) {
-                $raw = $context->get($key, null);
-                if ($raw === null || $raw === '') {
-                    continue;
-                }
-                if (\is_int($raw) || (\is_string($raw) && \ctype_digit($raw))) {
-                    return (int)$raw;
+            // Backend theme-editor (and similar) pass website_id as the *edited*
+            // site target. That must not flip the admin Session cookie jar
+            // (WELINE_SESSID_w0 → _w544), which expires the login cookie and
+            // surfaces as acl_not_logged_in with cookie_present=false.
+            if (!$this->isBackendArea()) {
+                foreach (['input.get.website_id', 'input.post.website_id', 'route.website_id'] as $key) {
+                    $raw = $context->get($key, null);
+                    if ($raw === null || $raw === '') {
+                        continue;
+                    }
+                    if (\is_int($raw) || (\is_string($raw) && \ctype_digit($raw))) {
+                        return (int)$raw;
+                    }
                 }
             }
 
             $cookies = $context->get('input.cookie', []);
             if (\is_array($cookies)) {
                 $direct = $cookies['WELINE_WEBSITE_ID'] ?? null;
-                if ($direct !== null && $direct !== '' && (\is_int($direct) || (\is_string($direct) && \ctype_digit($direct)))) {
+                if ($direct !== null && $direct !== '' && (\is_int($direct) || (\is_string($direct) && \ctype_digit((string)$direct)))) {
                     return (int)$direct;
                 }
                 foreach ($cookies as $name => $value) {
                     if (!\is_string($name) || \preg_match('/^WELINE_WEBSITE_ID_w(\d+)$/D', $name, $m) !== 1) {
                         continue;
                     }
-                    if ($value !== null && $value !== '' && (\is_int($value) || (\is_string($value) && \ctype_digit((string)$value)))) {
-                        return (int)$value;
-                    }
+                    // Jar identity is the name suffix (_w0 / _w544). The cookie
+                    // *value* is the active Website id and often differs on
+                    // grocery hosts (WELINE_WEBSITE_ID_w0=544). Using the value
+                    // as CookieScope suffix remaps Session onto _w544 and
+                    // clears the admin _w0 login jar.
+                    unset($value);
 
                     return (int)$m[1];
                 }
