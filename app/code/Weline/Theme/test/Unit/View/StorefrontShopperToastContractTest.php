@@ -52,6 +52,32 @@ final class StorefrontShopperToastContractTest extends TestCase
         }
     }
 
+    public function testDesignThemeHeadOverridesKeepToastStyleCss(): void
+    {
+        $designRoot = dirname(__DIR__, 6) . '/design';
+        self::assertDirectoryExists($designRoot);
+
+        $heads = [];
+        foreach (['default.phtml', 'minimal.phtml', 'assets-suffix.phtml'] as $name) {
+            // app/design/{Vendor}/{theme}/frontend/partials/head/{name}
+            $matches = glob($designRoot . '/*/*/frontend/partials/head/' . $name) ?: [];
+            $heads = array_merge($heads, $matches);
+        }
+        self::assertNotEmpty($heads, 'expected at least one design theme head override');
+
+        foreach ($heads as $path) {
+            $source = (string)file_get_contents($path);
+            if (!str_contains($source, 'theme/frontend/assets/css/theme.css')) {
+                continue;
+            }
+            self::assertStringContainsString(
+                'Weline_Theme::css/widgets/storefront-shopper-toast-amazon.css',
+                $source,
+                $path . ' overrides theme.css chain but omitted shopper-toast style CSS',
+            );
+        }
+    }
+
     public function testPartialsDoNotEmitToastStylesheet(): void
     {
         $addToCart = (string)file_get_contents(
