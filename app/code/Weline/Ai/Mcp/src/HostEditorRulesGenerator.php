@@ -51,10 +51,11 @@ alwaysApply: true
 4. **强制使用 AOCI（`aoci_complements_weline_mcp` HARD DEFAULT USE）**：prepare 之后、宿主原生编辑之前，必须调用 `aoci_rules`；会话无与当前仓库根/索引版本匹配的可靠完整认知时，必须再普通 `aoci_overview`（压缩恢复按 AOCI `context_compaction`）。受管对象达最终稳定后按合同 `aoci_maintain`。缺 `aoci` 工具须按 `aoci_installation.mcp_registration` 挂载并可见汇报。挂载须**语义幂等**：command/args 已等价则**禁止** rewrite/`touch` MCP 配置，只新开 Agent 回合。Cursor 的 `aoci` **只写** `~/.cursor/mcp.json`，**禁止**同会话再写项目 `.mcp.json` 的 `aoci`。**禁止** Developer: Reload Window（杀光智能体）。**禁止**把 AOCI 当成可选、跳过认知却假装已遵守。**本机无 AOCI 程序时，ensure/`prepare_project` 必须自动安装**。内容运营与闲聊豁免。**禁止**用 AOCI 替代本表工程门禁（Weline 仍管硬规则/技能/`prepare_project`）。
 5. **架构级改动（`architecture_grade_change_only`，严重·上下文携带）**：任何 Write 前须有框架架构级方案（mechanism + owning_module + not_to_do）；**禁止**想怎么写就怎么写、在 `WlsRuntime`/编排层硬编码业务路径/slug（`runtime_orchestrator_no_business_hardcode`）。热修/性能压力不豁免归属。
 6. **站/主题概念禁侵入模块（`website_concept_seed_not_in_modules`，严重·上下文携带·抽象）**：凡绑定某一网站/设计主题/品牌的开站货架、分类树、种子脚本、CatalogSeeder——**禁止**写入 `app/code` 模块（不是点名某几个站）；落点 `app/design/{Vendor}/{theme}/` 或站柜。Tax/Setup 等无站门禁的全局领域种子允许。未来任意新站/新主题同禁。
-7. 读 `agent_guidance.host_codex_delegation`（`host_delegate_explore_plan_review_to_codex_cli`）：**默认不委派 Codex**——用户本回合未提及 Codex/codex/Codex CLI 时，宿主自行探索/计划/审查，禁止因 CLI 存在而自动跑 `codex`。仅当用户显式提及 Codex 且 CLI 可用时，才委派探索 / 三节详细计划 / 编码后审查给 Codex（默认最新模型，禁 `-m`）；**启动任何委派 `codex` 前必须对用户聊天明示「Codex 正在工作：{阶段}…」**，完成后写「Codex 已完成」，回退写「Codex 不可用，已回退宿主：{原因}」——禁止静默委派。Opt-in 时 Plan Mode 只承载 Codex 计划，不另写第二套笼统计划；Cursor 只按该计划编码。Codex 原生宿主禁止嵌套再调 `codex`。Opt-in 但 CLI 不可用则回退宿主自身规划并记原因。内容运营与闲聊豁免。
-8. **上下文丢失自愈（硬携带）**：本回合若已看不到 `hard_constraints` / `architecture_grade_change_only` / MCP 引导被压缩或摘要丢掉，工程任务须**重新** `prepare_project`，**禁止凭记忆继续改码**；AOCI 合同/完整认知不可靠时按第 4 条重跑 `aoci_rules` / `aoci_overview`。
-9. 按需：`resolve_task_context` / `resolve_skill` / `get_skill`（检索仍可按需，**prepare 与强制 AOCI 不可跳**）。
-10. MCP 挂不上：用宿主 Read 打开 `AI硬规则索引.md` 继续；不得编造规则，不得假装已遵守 MCP。
+7. **整机共享态须工作区范围（`machine_shared_side_effects_require_workspace_scope`，严重）**：系统/登录钥匙串 Local CA、`~/.cursor/mcp.json` 的 `LEARNING_MCP_BOUND_REPOSITORY` / `aoci --repo` 只服务**当前打开仓库根**；**禁止**把兄弟仓 `rootCA.pem` 写入钥匙串，**禁止**为兄弟仓把全局 MCP/AOCI 改绑离当前工作区；CN 同名≠同一把钥；冲突须停手问用户。未明示不得 `add-trusted-cert`。
+8. 读 `agent_guidance.host_codex_delegation`（`host_delegate_explore_plan_review_to_codex_cli`）：**默认不委派 Codex**——用户本回合未提及 Codex/codex/Codex CLI 时，宿主自行探索/计划/审查，禁止因 CLI 存在而自动跑 `codex`。仅当用户显式提及 Codex 且 CLI 可用时，才委派探索 / 三节详细计划 / 编码后审查给 Codex（默认最新模型，禁 `-m`）；**启动任何委派 `codex` 前必须对用户聊天明示「Codex 正在工作：{阶段}…」**，完成后写「Codex 已完成」，回退写「Codex 不可用，已回退宿主：{原因}」——禁止静默委派。Opt-in 时 Plan Mode 只承载 Codex 计划，不另写第二套笼统计划；Cursor 只按该计划编码。Codex 原生宿主禁止嵌套再调 `codex`。Opt-in 但 CLI 不可用则回退宿主自身规划并记原因。内容运营与闲聊豁免。
+9. **上下文丢失自愈（硬携带）**：本回合若已看不到 `hard_constraints` / `architecture_grade_change_only` / MCP 引导被压缩或摘要丢掉，工程任务须**重新** `prepare_project`，**禁止凭记忆继续改码**；AOCI 合同/完整认知不可靠时按第 4 条重跑 `aoci_rules` / `aoci_overview`。
+10. 按需：`resolve_task_context` / `resolve_skill` / `get_skill`（检索仍可按需，**prepare 与强制 AOCI 不可跳**）。
+11. MCP 挂不上：用宿主 Read 打开 `AI硬规则索引.md` 继续；不得编造规则，不得假装已遵守 MCP。
 
 ## 非工程
 

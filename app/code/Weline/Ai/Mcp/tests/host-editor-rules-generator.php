@@ -23,6 +23,10 @@ $checks['coldstart mdc carries architecture_grade_change_only'] = str_contains($
     && str_contains($mdc, '架构级改动')
     && str_contains($mdc, 'runtime_orchestrator_no_business_hardcode')
     && str_contains($mdc, '禁止凭记忆继续改码');
+$checks['coldstart mdc carries machine_shared_side_effects_require_workspace_scope'] = str_contains($mdc, 'machine_shared_side_effects_require_workspace_scope')
+    && str_contains($mdc, '整机共享态')
+    && str_contains($mdc, 'LEARNING_MCP_BOUND_REPOSITORY')
+    && str_contains($mdc, 'rootCA.pem');
 $checks['coldstart mdc forbids hand-writing rules to remember guidance'] = str_contains($mdc, '禁止为「记住引导」而手写')
     && str_contains($mdc, '.cursor/rules');
 $checks['coldstart mdc points host_codex_delegation'] = str_contains($mdc, 'host_codex_delegation')

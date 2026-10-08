@@ -39,6 +39,45 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 
 权威：`HardConstraintsCatalog::mcpOperationalRules()` → `aoci_complements_weline_mcp`。
 
+## 1c. 整机共享态须工作区范围（`machine_shared_side_effects_require_workspace_scope`，严重）
+
+本机多仓并存时，**系统钥匙串**与 **宿主 `~/.cursor/mcp.json`** 是整机一份共享态。会话只能服务**当前打开的仓库根**；禁止「做兄弟仓的事」却改坏当前仓的 HTTPS / MCP。
+
+### 共享态范围
+
+| 类 | 典型动作 | 范围门禁 |
+|----|----------|----------|
+| Local CA 信任 | `security add-trusted-cert` / `delete-certificate`；写入 System / login keychain | 仅允许**当前仓** `var/server/_local_ca/rootCA.pem`，且用户**本回合明示**「信任本仓 CA / 修钥匙串」 |
+| MCP / AOCI 绑定 | 改 `LEARNING_MCP_BOUND_REPOSITORY`、learning-mcp 路径、`aoci --repo` | ensure/prepare 仅当目标根 == **当前工作区根**；跨仓改绑须用户本回合明示切换项目/工作区 |
+
+### 允许
+
+| 允许 |
+|------|
+| 读写本仓 `var/server/_local_ca/**`、`app/etc/ssl/**`、本仓 hosts / `*.test.weline.com` 域名 |
+| 兄弟仓在自己目录起服务、用自己域名、维护自己树内证书文件（不碰整机信任） |
+| 用户明示后，仅信任**当前仓** rootCA；或明示「改绑 MCP 到某某仓」后按该仓 ensure |
+
+### 禁止
+
+| 禁止 |
+|------|
+| 把**非本仓**的 `rootCA.pem` / `.trust-*.pem` 装进 System/login keychain |
+| 假定「CN 都叫 Weline Local Development CA」就能共用一把钥——**必须核对指纹**等于当前仓 `rootCA.pem` |
+| 钥匙串已有同名但指纹不同的 CA 时**静默替换**（会破坏其他仓 HTTPS）——须停手说明影响，等用户明示保留哪一把 |
+| 任务在仓 A、IDE 工作区是仓 A，却把全局 Weline/AOCI MCP 改绑到仓 B（「顺手帮兄弟仓绑 MCP」） |
+| 未明示就 `add-trusted-cert`；或为修兄弟仓 HTTPS 而污染当前仓信任链 |
+
+### 与已有规则关系
+
+- 补齐 `aoci_complements_weline_mcp` 的语义幂等：幂等只防「无意义 rewrite」，**不**授权为兄弟仓改绑。
+- 补齐 MCP `RepositoryScope` / `LEARNING_MCP_BOUND_REPOSITORY`：服务端拒越界**拦不住** Agent 先改 host `mcp.json`。
+- **不**替代 `preserve_dirty_workspace`（Git 脏树）——本条只管钥匙串与 MCP 绑定。
+
+**EXEMPT**：纯闲聊；内容运营（`content_ops_skills_skip_mcp`）；用户本回合点名「修系统 CA / 改绑 MCP 到指定仓」。
+
+权威：`HardConstraintsCatalog::mcpOperationalRules()` → `machine_shared_side_effects_require_workspace_scope`。
+
 ## 2. 内容运营技能跳过 MCP（`content_ops_skills_skip_mcp`）
 
 命中下列任一即属此类：产品优化 / 商品优化 / 详情优化 / 商详优化 / 翻译优化 / 商品翻译 / 主图优化 / 规格图优化 / 修主图 / 新建文章 / 写博客 / 审查文章 / 文章可行性 / 精写文章 / blog article / 规格修复（或宿主/仓内技能 `ecommerce-product-optimize`、`ecommerce-detail-suite`、`ecommerce-product-image`、`ecommerce-product-i18n`、`weline-blog-article`）。

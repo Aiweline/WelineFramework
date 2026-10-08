@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use LearningMcp\GuidanceWorkflowCatalog;
 use LearningMcp\HardConstraintsCatalog;
+use LearningMcp\HostEditorRulesGenerator;
 use LearningMcp\McpSkillCatalog;
 use LearningMcp\ToolService;
 
@@ -1871,6 +1872,43 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'dirty-load')
             && str_contains((string) ($rule['summary'] ?? ''), 'other-session')
             && str_contains((string) ($rule['summary'] ?? ''), 'cross-session overwrite')),
+        false,
+    ),
+    'mcp_operational include machine_shared_side_effects_require_workspace_scope' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'machine_shared_side_effects_require_workspace_scope'
+            && str_contains((string) ($rule['summary'] ?? ''), 'SERIOUS')
+            && str_contains((string) ($rule['summary'] ?? ''), 'keychain')
+            && str_contains((string) ($rule['summary'] ?? ''), 'add-trusted-cert')
+            && str_contains((string) ($rule['summary'] ?? ''), 'LEARNING_MCP_BOUND_REPOSITORY')
+            && str_contains((string) ($rule['summary'] ?? ''), 'aoci --repo')
+            && str_contains((string) ($rule['summary'] ?? ''), 'sibling')
+            && str_contains((string) ($rule['summary'] ?? ''), 'fingerprint')),
+        false,
+    ),
+    'mcp instructions mention machine_shared_side_effects_require_workspace_scope' => str_contains(
+        ToolService::instructions(),
+        'machine_shared_side_effects_require_workspace_scope'
+    ),
+    'session_startup_notices mention machine_shared workspace scope' => array_reduce(
+        $contract['session_startup_notices'] ?? [],
+        static fn (bool $ok, mixed $notice): bool => $ok || (is_string($notice)
+            && str_contains($notice, 'machine_shared_side_effects_require_workspace_scope')),
+        false,
+    ),
+    'host coldstart mdc mentions machine_shared_side_effects_require_workspace_scope' => str_contains(
+        HostEditorRulesGenerator::coldStartMdc(),
+        'machine_shared_side_effects_require_workspace_scope'
+    ),
+    'MCP hard constraints require runtime status query local-first' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'runtime_status_query_local_first'
+            && str_contains((string) ($rule['summary'] ?? ''), 'LOCAL')
+            && str_contains((string) ($rule['summary'] ?? ''), 'production')
+            && str_contains((string) ($rule['summary'] ?? ''), 'default profile')
+            && str_contains((string) ($rule['summary'] ?? ''), 'translation')),
         false,
     ),
     'MCP hard constraints require runtime status query local-first' => array_reduce(
