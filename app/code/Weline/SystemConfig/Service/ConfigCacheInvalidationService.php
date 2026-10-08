@@ -297,6 +297,12 @@ final class ConfigCacheInvalidationService
         array $fallbackLocales,
     ): void {
         SystemConfig::clearProcessCache($area, $module);
+        SystemConfigSecurityHeaderPolicyOverrideProvider::clearProcessCache();
+        if ($module === 'Weline_Payment' || $module === 'WeShop_Payment') {
+            if (\class_exists(\Weline\Payment\Service\PaymentMethodManager::class)) {
+                \Weline\Payment\Service\PaymentMethodManager::clearProcessCache();
+            }
+        }
 
         /** @var ScopeConfigCacheInvalidator $impact */
         $impact = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class);
