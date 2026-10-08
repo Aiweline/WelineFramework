@@ -50,10 +50,22 @@ final class FpcBypassFactsBuilder
             $editorMode = '';
         }
 
+        $requestPath = '';
+        if ($requestUriOrFullUrl !== '') {
+            $requestPath = (string)(\parse_url($requestUriOrFullUrl, \PHP_URL_PATH) ?: '');
+            if ($requestPath === '') {
+                $qPos = \strpos($requestUriOrFullUrl, '?');
+                $requestPath = $qPos === false
+                    ? $requestUriOrFullUrl
+                    : \substr($requestUriOrFullUrl, 0, $qPos);
+            }
+        }
+
         return [
             'query' => $query,
             'cookie_header' => $cookieHeader,
             'headers' => $headersLower,
+            'request_path' => $requestPath,
             'env' => [
                 'editor_mode' => $editorMode,
                 'cdn_fpc_dev_mode' => $cdnFlag ? '1' : '',

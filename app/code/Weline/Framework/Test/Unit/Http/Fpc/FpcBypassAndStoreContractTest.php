@@ -20,7 +20,7 @@ final class FpcBypassAndStoreContractTest extends TestCase
         parent::tearDown();
     }
 
-    public function testEvaluatorBypassesEditorQueryAndPreviewCookie(): void
+    public function testEvaluatorBypassesEditorQueryAndLivePreviewPath(): void
     {
         FpcBypassEvaluator::clearCache();
         $rules = FpcBypassEvaluator::builtinFallbackRules();
@@ -31,11 +31,15 @@ final class FpcBypassAndStoreContractTest extends TestCase
         self::assertTrue(FpcBypassEvaluator::shouldBypass([
             'query' => ['nocache' => '1'],
         ], $rules));
-        self::assertTrue(FpcBypassEvaluator::shouldBypass([
+        // Legacy preview cookie alone must NOT bypass — identity is /~preview/{token}/ or query/header.
+        self::assertFalse(FpcBypassEvaluator::shouldBypass([
             'cookie_header' => 'a=1; weline_preview_token_w0=abc; b=2',
         ], $rules));
         self::assertTrue(FpcBypassEvaluator::shouldBypass([
             'headers' => ['x-wls-fpc-bypass' => '1'],
+        ], $rules));
+        self::assertTrue(FpcBypassEvaluator::shouldBypass([
+            'request_path' => '/~preview/pv_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG/~site/grocery/',
         ], $rules));
         self::assertFalse(FpcBypassEvaluator::shouldBypass([
             'query' => ['q' => 'hanfu'],
@@ -55,6 +59,22 @@ final class FpcBypassAndStoreContractTest extends TestCase
         foreach ($wlsIds as $id) {
             self::assertContains($id, $builtinIds);
         }
+        self::assertContains('theme.live_preview_path_prefix', $themeIds);
+    }
+
+    public function testCollectorNormalizesUriPathPrefixes(): void
+    {
+        $collector = new \ReflectionClass(\Weline\Framework\Http\Fpc\FpcBypassCollector::class);
+        $method = $collector->getMethod('normalizeRule');
+        $method->setAccessible(true);
+        $instance = $collector->newInstanceWithoutConstructor();
+        $normalized = $method->invoke($instance, [
+            'id' => 'theme.live_preview_path_prefix',
+            'match' => ['uri_path_prefixes' => ['~preview/', '/~preview/']],
+            'effect' => 'bypass_serve_and_publish',
+        ]);
+        self::assertIsArray($normalized);
+        self::assertSame(['/~preview/'], $normalized['match']['uri_path_prefixes']);
     }
 
     public function testFpcCapabilitySourceDoesNotTouchCacheManagerPools(): void

@@ -48,10 +48,12 @@ final class FpcBypassEvaluator
                 continue;
             }
             $match = \is_array($rule['match'] ?? null) ? $rule['match'] : [];
+            $requestPath = (string)($facts['request_path'] ?? '');
             if (self::matchQueryKeys($match, $query)
                 || self::matchCookieRegex($match, $cookie)
                 || self::matchRequestHeaders($match, $headers)
                 || self::matchEnvFlags($match, $env)
+                || self::matchUriPathPrefixes($match, $requestPath)
             ) {
                 return true;
             }
@@ -111,16 +113,16 @@ final class FpcBypassEvaluator
                 'effect' => 'bypass_serve_and_publish',
             ],
             [
-                'id' => 'theme.preview_token_cookie',
+                'id' => 'theme.editor_mode_env',
                 'match' => [
-                    'cookie_name_regex' => '/(?:^|;\\s*)weline_preview_token(?:_w\\d+)?=/i',
+                    'env_flags' => ['editor_mode'],
                 ],
                 'effect' => 'bypass_serve_and_publish',
             ],
             [
-                'id' => 'theme.editor_mode_env',
+                'id' => 'theme.live_preview_path_prefix',
                 'match' => [
-                    'env_flags' => ['editor_mode'],
+                    'uri_path_prefixes' => ['/~preview/'],
                 ],
                 'effect' => 'bypass_serve_and_publish',
             ],
@@ -228,6 +230,40 @@ final class FpcBypassEvaluator
             }
             $value = \strtolower(\trim((string)$env[$flag]));
             if (\in_array($value, ['1', 'true', 'yes', 'on'], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $match
+     */
+    private static function matchUriPathPrefixes(array $match, string $requestPath): bool
+    {
+        $prefixes = $match['uri_path_prefixes'] ?? null;
+        if (!\is_array($prefixes) || $prefixes === [] || $requestPath === '') {
+            return false;
+        }
+
+        $path = \strtolower((string)(\parse_url($requestPath, \PHP_URL_PATH) ?: $requestPath));
+        if ($path === '') {
+            $path = \strtolower($requestPath);
+        }
+        if ($path !== '' && $path[0] !== '/') {
+            $path = '/' . $path;
+        }
+
+        foreach ($prefixes as $prefix) {
+            $prefix = \strtolower(\trim((string)$prefix));
+            if ($prefix === '') {
+                continue;
+            }
+            if ($prefix[0] !== '/') {
+                $prefix = '/' . $prefix;
+            }
+            if ($path === $prefix || \str_starts_with($path, $prefix)) {
                 return true;
             }
         }

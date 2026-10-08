@@ -127,6 +127,22 @@ final class FpcBypassCollector
                 $match['env_flags'] = \array_values(\array_unique($flags));
             }
         }
+        if (isset($matchIn['uri_path_prefixes']) && \is_array($matchIn['uri_path_prefixes'])) {
+            $prefixes = [];
+            foreach ($matchIn['uri_path_prefixes'] as $prefix) {
+                $prefix = \trim((string)$prefix);
+                if ($prefix === '') {
+                    continue;
+                }
+                if ($prefix[0] !== '/') {
+                    $prefix = '/' . $prefix;
+                }
+                $prefixes[] = $prefix;
+            }
+            if ($prefixes !== []) {
+                $match['uri_path_prefixes'] = \array_values(\array_unique($prefixes));
+            }
+        }
         if ($match === []) {
             return null;
         }

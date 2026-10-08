@@ -7,7 +7,8 @@ namespace Weline\Theme\Extends\Module\Weline_Framework\Fpc\Bypass;
 use Weline\Framework\Http\Fpc\FpcBypassRuleProviderInterface;
 
 /**
- * 主题编辑器 / 真实预览：请求参数与预览 Cookie 命中则 bypass 公共 FPC。
+ * 主题编辑器 / 真实预览：query、env、`/~preview/` path 命中则 bypass 公共 FPC。
+ * Cookie 不再作为预览身份，故不登记 cookie 旁路规则。
  */
 final class ThemeEditorFpcBypassProvider implements FpcBypassRuleProviderInterface
 {
@@ -31,16 +32,16 @@ final class ThemeEditorFpcBypassProvider implements FpcBypassRuleProviderInterfa
                 'effect' => 'bypass_serve_and_publish',
             ],
             [
-                'id' => 'theme.preview_token_cookie',
+                'id' => 'theme.editor_mode_env',
                 'match' => [
-                    'cookie_name_regex' => '/(?:^|;\\s*)weline_preview_token(?:_w\\d+)?=/i',
+                    'env_flags' => ['editor_mode'],
                 ],
                 'effect' => 'bypass_serve_and_publish',
             ],
             [
-                'id' => 'theme.editor_mode_env',
+                'id' => 'theme.live_preview_path_prefix',
                 'match' => [
-                    'env_flags' => ['editor_mode'],
+                    'uri_path_prefixes' => ['/~preview/'],
                 ],
                 'effect' => 'bypass_serve_and_publish',
             ],
