@@ -10,12 +10,12 @@
  * @widget.type {content}
  * @widget.area {frontend}
  * @widget.position {["content"]}
- * @widget.page_layouts {["policy","policy.privacy","policy.refund","policy.cookie","policy.shipping","policy.disclaimer","policy.term-condition","policy.accessibility","*"]}
- * @widget.supports {["layout-policy-content","layout-policy-privacy-content","layout-policy-refund-content","layout-policy-cookie-content","layout-policy-shipping-content","layout-policy-disclaimer-content","layout-policy-term-condition-content","layout-policy-accessibility-content","policy-content","content"]}
+ * @widget.page_layouts {["policy","policy.privacy","policy.refund","policy.cookie","policy.shipping","policy.disclaimer","policy.term-condition","policy.accessibility","terms","*"]}
+ * @widget.supports {["layout-policy-content","layout-policy-privacy-content","layout-policy-refund-content","layout-policy-cookie-content","layout-policy-shipping-content","layout-policy-disclaimer-content","layout-policy-term-condition-content","layout-policy-accessibility-content","layout-terms-content","policy-content","terms","content"]}
  * @widget.compatible {true}
  * @widget.exclusive {false}
  *
- * @param page {default="privacy",type="string",label="默认文案页键",description="privacy/refund/cookie/shipping/disclaimer/term-condition/accessibility/default；sections 为空时回落"}
+ * @param page {default="privacy",type="string",label="默认文案页键",description="privacy/refund/cookie/shipping/disclaimer/term-condition/terms/accessibility/default；sections 为空时回落"}
  * @param variant {default="amazon",type="select",label="版式",options={amazon:"左目录右正文",plain:"单栏"}}
  * @param title {default="",type="string",label="标题"}
  * @param lead {default="",type="textarea",label="英雄区导语"}
@@ -24,6 +24,7 @@
  * @param updated_at {default="",type="string",label="更新日期",description="留空不显示「最后更新」"}
  * @param toc_aria {default="",type="string",label="目录无障碍名"}
  * @param article_aria {default="",type="string",label="正文无障碍名"}
+ * @param show_header {default=true,type="bool",label="显示标题区",description="plain 变体：关闭后仅渲染条款（供设计主题自带英雄区/三栏壳）"}
  * @param show_legal_contact {default=false,type="bool",label="显示经营主体联系块"}
  * @param related_links {default=[],type="policy_document_links",label="相关链接"}
  * @param sections {default=[],type="policy_document_sections",label="条款目录"}
@@ -78,6 +79,10 @@ if ($articleAria === '') {
 $showLegal = Block::boolean(
     $this->getData('show_legal_contact'),
     (bool)($defaults['show_legal_contact'] ?? false)
+);
+$showHeader = Block::boolean(
+    $this->getData('show_header'),
+    true
 );
 
 $sections = Block::items($this->getData('sections'));
@@ -148,8 +153,12 @@ try {
 } catch (\Throwable) {
 }
 
-$tocFallbackPath = '/policy/' . ($page === 'default' ? '' : $page);
-$tocFallbackPath = rtrim($tocFallbackPath, '/') ?: '/policy';
+if ($page === 'terms') {
+    $tocFallbackPath = '/terms';
+} else {
+    $tocFallbackPath = '/policy/' . ($page === 'default' ? '' : $page);
+    $tocFallbackPath = rtrim($tocFallbackPath, '/') ?: '/policy';
+}
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 ?>
 <div class="<?= $esc($scope->cssClass) ?> policy-document policy-document-<?= $esc($variant) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
@@ -232,12 +241,14 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
     </div>
 <?php else: ?>
     <div class="policy-main policy-document-plain-inner">
-        <header class="policy-header">
-            <h1 class="policy-title"><?= $esc($t($title)) ?></h1>
-            <?php if ($lead !== ''): ?>
-                <p class="policy-description"><?= $esc($t($lead)) ?></p>
-            <?php endif; ?>
-        </header>
+        <?php if ($showHeader): ?>
+            <header class="policy-header">
+                <h1 class="policy-title"><?= $esc($t($title)) ?></h1>
+                <?php if ($lead !== ''): ?>
+                    <p class="policy-description"><?= $esc($t($lead)) ?></p>
+                <?php endif; ?>
+            </header>
+        <?php endif; ?>
         <?php foreach ($normalizedSections as $index => $section): ?>
             <section class="policy-section" id="<?= $esc($section['id']) ?>" weline-code="theme.policy.section_<?= $esc((string)($index + 1)) ?>">
                 <?php if ($section['title'] !== ''): ?>

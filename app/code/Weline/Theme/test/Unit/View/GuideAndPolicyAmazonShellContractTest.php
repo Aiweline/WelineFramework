@@ -28,10 +28,13 @@ final class GuideAndPolicyAmazonShellContractTest extends TestCase
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('weline-page-wrapper', $source);
         self::assertStringContainsString('amazon-terms__stage', $source);
-        self::assertStringContainsString('border-radius: 8px', $source);
-        self::assertStringContainsString('amazon-terms__panel', $source);
-        self::assertStringContainsString('amazon-terms__toc', $source);
-        self::assertStringContainsString("WidgetI18n::label('目录')", $source);
+        self::assertStringContainsString('amazon-policy__stage', $source);
+        self::assertStringContainsString('name="policy-document"', $source);
+        self::assertStringContainsString('"page":"terms"', $source);
+        self::assertStringContainsString('type="breadcrumb"', $source);
+        self::assertStringContainsString('showBreadcrumb', $source);
+        self::assertStringNotContainsString('<style>', $source);
+        self::assertStringNotContainsString('1 / 我们提供哪些服务', $source);
         self::assertStringNotContainsString('<lang>', $source);
         self::assertStringNotContainsString('amazon-terms__hero-inner', $source);
         self::assertStringNotContainsString('1440px', $source);
@@ -123,9 +126,12 @@ final class GuideAndPolicyAmazonShellContractTest extends TestCase
         );
         self::assertStringNotContainsString('top: 12rem', $styles);
 
-        $terms = (string)file_get_contents(dirname(__DIR__, 3) . '/view/theme/frontend/layouts/terms/default.phtml');
-        self::assertStringContainsString('StorefrontHref::fragmentHref', $terms);
-        self::assertStringContainsString('$tocFallbackPath', $terms);
+        $widget = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/theme/frontend/widgets/content/policy-document/default.phtml'
+        );
+        self::assertStringContainsString('StorefrontHref::fragmentHref', $widget);
+        self::assertStringContainsString('$tocFallbackPath', $widget);
+        self::assertStringContainsString("\$page === 'terms'", $widget);
     }
 
     public function testEnglishCsvTranslatesPolicyTocHeading(): void

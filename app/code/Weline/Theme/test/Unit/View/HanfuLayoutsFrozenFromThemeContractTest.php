@@ -78,9 +78,16 @@ final class HanfuLayoutsFrozenFromThemeContractTest extends TestCase
             self::assertFileExists($path, $file);
         }
 
-        // Newly frozen named pages keep Theme amazon-policy shell at freeze time.
+        // Frozen policy pages keep Theme amazon-policy shell + policy-document embed.
         $privacy = (string)file_get_contents($hanfuPolicy . '/privacy.phtml');
         self::assertStringContainsString('amazon-policy', $privacy);
-        self::assertStringContainsString('siteBrandLate', $privacy);
+        self::assertStringContainsString('name="policy-document"', $privacy);
+        self::assertStringContainsString('"page":"privacy"', $privacy);
+        self::assertStringNotContainsString('<style>', $privacy);
+
+        $terms = (string)file_get_contents($this->hanfuLayoutsDir() . '/terms/default.phtml');
+        self::assertStringContainsString('name="policy-document"', $terms);
+        self::assertStringContainsString('"page":"terms"', $terms);
+        self::assertStringNotContainsString('<style>', $terms);
     }
 }

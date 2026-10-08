@@ -17,6 +17,10 @@ final class PolicyDocumentDefaults
     public static function forPage(string $page): array
     {
         $page = trim($page);
+        // /terms layout shares the same default copy as policy/term-condition.
+        if ($page === 'terms') {
+            $page = 'term-condition';
+        }
         $all = self::all();
         if (isset($all[$page])) {
             return $all[$page];

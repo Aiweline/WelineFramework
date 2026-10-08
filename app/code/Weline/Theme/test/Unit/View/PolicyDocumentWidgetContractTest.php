@@ -68,6 +68,21 @@ final class PolicyDocumentWidgetContractTest extends TestCase
             self::assertStringNotContainsString('1 / 我们收集哪些信息', $src, $page);
             self::assertStringNotContainsString('<style>', $src, $page);
         }
+
+        $terms = (string)file_get_contents(dirname(__DIR__, 3) . '/view/theme/frontend/layouts/terms/default.phtml');
+        self::assertStringContainsString('name="policy-document"', $terms);
+        self::assertStringContainsString('"page":"terms"', $terms);
+        self::assertStringNotContainsString('1 / 我们提供哪些服务', $terms);
+        self::assertStringNotContainsString('<style>', $terms);
+    }
+
+    public function testTermsPageKeyAliasesTermConditionDefaults(): void
+    {
+        $terms = PolicyDocumentDefaults::forPage('terms');
+        $tc = PolicyDocumentDefaults::forPage('term-condition');
+        self::assertSame($tc['title'] ?? null, $terms['title'] ?? null);
+        self::assertSame(count($tc['sections'] ?? []), count($terms['sections'] ?? []));
+        self::assertGreaterThanOrEqual(8, count($terms['sections'] ?? []));
     }
 
     public function testDefaultsPreservePrivacyComplianceAnchorsAndCookieUrlKey(): void
