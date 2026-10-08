@@ -1,0 +1,11 @@
+{
+    "theme_name": "injectinherit",
+    "version": "1.0.0",
+    "description": "继承探针：无本层布局覆盖，验收子主题继承父布局后应用部件槽注入仍生效",
+    "parent_theme": "injectprobe",
+    "create_template": false,
+    "created_at": "2026-10-08 11:30:00",
+    "updated_at": "2026-10-08 11:30:00",
+    "status": "completed",
+    "theme_path": "/Users/weline/Project/Official/框架/app/design/Weline/injectinherit"
+}

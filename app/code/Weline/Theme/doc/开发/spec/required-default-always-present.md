@@ -34,3 +34,4 @@
 - UC-2：无 `user_deleted@*` 时，任意主题下对应布局固化产物均含该默认注入关系（插件安装后全主题重固化）。
 - UC-3：人工卸载后重固化，该部件不再出现在固化模板中。
 - UC-4：同一份已编译 `com_*.phtml` 在不同商品/请求身份下执行，不得串用首次编译时的 HTML 快照。
+- UC-5（继承布局 · 2026-10-08）：**新主题继承某布局**（本层 `frontend/layouts` 无同 `layout_type/option` 覆盖）时，该布局内插槽上的应用部件 `default_injections`（含 `layout_type=*` / chrome 继承槽）**仍须生效**。机制：`SolidifiedControllerTemplateResolver::resolvePublishedVersionAlongThemeChain` 沿 `parent_id` 取祖先已固化布局；子主题自有覆盖则不得误用父固化盖品牌布局；运行期 `RequiredDefaultInjectionRuntimeSafetyNet` + float 宿主合成兜底。探针主题 `injectinherit`（父=`injectprobe`，须有空 `frontend/`、无 layout 覆盖）。活体以 `/products` 为准：须同时见父 `injectprobe-footer--floatless` 与客服/进店音乐/float。契约：`InheritedLayoutRequiredInjectionContractTest`。禁止要求子主题重声明父布局上的 JSON 注入。
