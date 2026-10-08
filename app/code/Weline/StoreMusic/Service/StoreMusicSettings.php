@@ -45,7 +45,11 @@ class StoreMusicSettings
 
     public function isEnabled(): bool
     {
-        return $this->boolean(self::KEY_ENABLED, false);
+        // Align with widget @param enabled default=true and required float injection.
+        // New websites (e.g. grocery) often have zero store_music SystemConfig rows;
+        // after hookOwned strips pollution (enabled=false + catalog tracks), fallback
+        // must still show the float — not stay inactive until the editor toggles enable.
+        return $this->boolean(self::KEY_ENABLED, true);
     }
 
     public function trackUrl(): string

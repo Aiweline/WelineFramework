@@ -3395,16 +3395,12 @@
             Array.prototype.forEach.call(this.toggleBtns, function (btn) {
                 btn.addEventListener('click', function (ev) {
                     ev.preventDefault();
-                    // Opening the panel = browse playlist only. Do NOT steal the peer's audio yet —
-                    // soft-loaded tabs must stay quiet until ▶ / 选曲 (last explicit op wins).
+                    // HARD: avatar / toggle = open/close panel only. Never start playback here.
+                    // ▶ / 选曲 / page-elsewhere gesture unlock remain the only play intents.
                     var wasOpen = !!self.panelOpen;
                     self.togglePanel();
                     if (!wasOpen && self.panelOpen) {
                         setStatus(self.root, '');
-                        // Gesture unlock only when autoplay was blocked; never auto-takeover on open.
-                        if (self.needGesture && !self.hasActivePeerLeader()) {
-                            self.userPlay();
-                        }
                     }
                 });
             });
@@ -3415,9 +3411,6 @@
                 self.togglePanel();
                 if (!wasOpen && self.panelOpen) {
                     setStatus(self.root, '');
-                    if (self.needGesture && !self.hasActivePeerLeader()) {
-                        self.userPlay();
-                    }
                 }
             });
         }
@@ -3975,6 +3968,16 @@
             }
             var t = ev && ev.target ? ev.target : null;
             if (t && t.closest && t.closest('[data-consent-dismiss]')) {
+                return;
+            }
+            // Avatar / panel chrome is "browse playlist", not a play intent.
+            // Opening the float must not steal the page-gesture unlock (or unmute).
+            if (t && t.closest && (
+                t.closest('[data-store-music]')
+                || t.closest('[data-store-music-host]')
+                || t.closest('[data-testid="store-music-mascot"]')
+                || t.closest('[data-store-music-toggle]')
+            )) {
                 return;
             }
             // Muted soft-autoplay already running: first real gesture opens sound.
@@ -5376,7 +5379,7 @@
         }
     };
 
-    var SCRIPT_GEN = '20261008-72waterdense';
+    var SCRIPT_GEN = '20261008-73openonly';
 
     function boot(root) {
         if (!root) {

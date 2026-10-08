@@ -30,7 +30,7 @@ final class StoreMusicSettingsContractTest extends TestCase
 
         self::assertStringContainsString('store_music/general/enabled', $template);
         self::assertMatchesRegularExpression(
-            '/key="store_music\/general\/enabled"[\s\S]*?default="0"/',
+            '/key="store_music\/general\/enabled"[\s\S]*?default="1"/',
             $template
         );
         self::assertStringContainsString('store_music/music/playlist', $template);
@@ -55,7 +55,7 @@ final class StoreMusicSettingsContractTest extends TestCase
         self::assertStringContainsString('tracksFromWidgetConfig', $settings);
         self::assertStringContainsString('KEY_PLAYLIST', $settings);
         self::assertStringContainsString('KEY_AVATAR_SPIN', $settings);
-        self::assertStringContainsString('boolean(self::KEY_ENABLED, false)', $settings);
+        self::assertStringContainsString('boolean(self::KEY_ENABLED, true)', $settings);
         self::assertStringContainsString('boolean(self::KEY_TRY_AUTOPLAY, true)', $settings);
         self::assertStringContainsString('"enabled":true', $widget);
         self::assertStringContainsString('@param enabled {default=true', $widget);
@@ -109,7 +109,8 @@ final class StoreMusicSettingsContractTest extends TestCase
         );
 
         self::assertStringContainsString('storeMusic', $modulesJs);
-        self::assertStringContainsString('20261008-72waterdense', $modulesJs);
+        self::assertStringContainsString('20261008-73openonly', $modulesJs);
+        self::assertStringNotContainsString('20261008-72waterdense', $modulesJs);
         self::assertStringNotContainsString('20260924-no-unload1', $modulesJs);
         self::assertStringNotContainsString('20260917-storemusic-speccenter2', $modulesJs);
         self::assertStringContainsString('load: "defer"', $modulesJs);

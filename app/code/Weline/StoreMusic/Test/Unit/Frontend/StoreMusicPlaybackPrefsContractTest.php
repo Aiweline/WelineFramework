@@ -99,6 +99,9 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString("broadcastLeaderState('playing', true)", $js);
         self::assertStringContainsString('bindConsentAutoplayRetry', $js);
         self::assertStringContainsString('armPageGestureUnlock', $js);
+        // Expand avatar/panel is browse-only — not a play gesture.
+        self::assertStringContainsString('Never start playback here', $js);
+        self::assertStringContainsString("t.closest('[data-store-music]')", $js);
         self::assertStringContainsString('_autoplayPending', $js);
         self::assertStringContainsString('data-consent-accept', $js);
         self::assertStringContainsString('[data-store-music-i18n-tap-to-play]', $js);
@@ -134,7 +137,7 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('preferCache (F5 sticky resume)', $js);
         self::assertStringContainsString('flash「点击开启音乐」', $js);
         self::assertStringContainsString('navType === \'reload\'', $js);
-        self::assertStringContainsString('20261008-72waterdense', $js);
+        self::assertStringContainsString('20261008-73openonly', $js);
         self::assertStringContainsString('syncSpectrumRadius', $js);
         self::assertStringContainsString('armStickyPlayRetry', $js);
         self::assertStringContainsString('AbortError', $js);
@@ -267,7 +270,7 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('SPECTRUM_BAR_COUNT', $js);
         self::assertStringContainsString('ensureSpectrumBars', $js);
         self::assertStringContainsString('document.body.appendChild(this.waveCanvas)', $js);
-        self::assertStringContainsString('20261008-72waterdense', $js);
+        self::assertStringContainsString('20261008-73openonly', $js);
         self::assertStringContainsString('syncSpectrumRadius', $js);
 
         $css = (string)\file_get_contents($this->moduleFile('view/statics/css/store-music.css'));
@@ -303,7 +306,9 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         );
         self::assertStringNotContainsString('width: 5.5rem', $css);
         self::assertStringContainsString('max-width: 720px', $css);
-        self::assertStringContainsString('width: 3.125rem', $css);
+        // ≤720px aligns CS FAB shrink (2.5rem), not the older 3.125rem gate.
+        self::assertStringContainsString('width: 2.5rem', $css);
+        self::assertStringNotContainsString('width: 3.125rem', $css);
     }
 
     public function testCrossTabPlaybackKeepsOwnershipAndUsesCompactRemoteSpectrum(): void
