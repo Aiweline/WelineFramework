@@ -37,28 +37,28 @@ class SetupUpgradeAfter implements ObserverInterface
 
     /**
      * 推送预览绕过规则到 CDN
-     * 
+     *
      * 规则说明：
-     * 1. 包含 weline_preview_token URL 参数的请求绕过缓存
-     * 2. 包含 weline_preview_token Cookie 的请求绕过缓存
-     * 3. 包含 X-Weline-Preview-Token Header 的请求绕过缓存
+     * 1. 路径 /~preview/{token}/…（真实预览主通道）
+     * 2. 兼容旧入口：?weline_preview_token=
+     * 3. Header X-Weline-Preview-Token
+     * Cookie 不再作为预览身份，不推 Cookie 旁路。
      */
     private function pushPreviewBypassRules(): bool
     {
         $rules = [
-            // URL 参数绕过规则
+            // Path namespace /~preview/{token}/…（真实预览主通道）
+            [
+                'type' => 'bypass',
+                'name' => 'Theme Live Preview Path Bypass',
+                'expression' => 'http.request.uri.path contains "/~preview/"',
+                'action' => 'bypass_cache',
+            ],
+            // URL 参数绕过规则（兼容旧入口）
             [
                 'type' => 'bypass',
                 'name' => 'Theme Preview URL Param Bypass',
                 'expression' => 'http.request.uri.query contains "' . PreviewTokenService::TOKEN_KEY . '="',
-                'action' => 'bypass_cache',
-            ],
-            // Cookie 绕过规则
-            [
-                'type' => 'bypass',
-                'name' => 'Theme Preview Cookie Bypass',
-                // Website isolation may wire Cookie as weline_preview_token_wN=…
-                'expression' => 'http.cookie contains "' . PreviewTokenService::TOKEN_KEY . '"',
                 'action' => 'bypass_cache',
             ],
             // Header 绕过规则

@@ -93,16 +93,7 @@ class LayoutSlotRenderer implements ObserverInterface
         // 鍒ゆ柇鍖哄煙锛堜粠妯℃澘璺緞鎴栧叾浠栦笂涓嬫枃鍒ゆ柇锛?
         $area = $this->detectArea($template);
         
-        // === 绗竴姝ワ細澶勭悊棰勮妯″紡锛堢嫭绔嬩簬鎻掓Ы澶勭悊锛?==
-        // 妫€娴?URL 鍙傛暟涓殑棰勮 token锛屽鏋滄湁鏁堝垯璁剧疆 Cookie锛堝疄鐜伴瑙堢姸鎬佹寔涔呭寲锛?
-        $urlToken = $this->request->getParam(PreviewTokenService::TOKEN_KEY);
-        if ($urlToken
-            && !$this->previewRequestInspector->shouldKeepPreviewStateOnlyForCurrentRequest()
-            && $this->previewRequestInspector->shouldAllowPreviewTokenCookie()
-            && $this->previewTokenService->validateToken($urlToken)) {
-            // 鑷姩璁剧疆 Cookie锛岃繖鏍峰悗缁〉闈㈣烦杞笉闇€瑕佹瘡娆￠兘甯?token 鍙傛暟
-            $this->previewTokenService->setPreviewCookie($urlToken);
-        }
+        // Live preview identity is /~preview/{token}/… (path mount). Do not reseed Cookie.
         
         // 棰勮妯″紡涓嬫敞鍏ラ€€鍑洪瑙堟诞绐楀拰 AJAX 鎷︽埅鍣紙闈炵紪杈戝櫒 iframe 妯″紡锛?
         // 杩欎釜閫昏緫蹇呴』鍦ㄦ彃妲芥鏌ヤ箣鍓嶆墽琛岋紝鍥犱负鍗充娇椤甸潰娌℃湁鎻掓Ы锛屼篃闇€瑕佹樉绀洪€€鍑烘寜閽?

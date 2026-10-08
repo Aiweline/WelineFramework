@@ -3140,6 +3140,14 @@ class SlotRendererService
 
         $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, $this->pass()->renderTheme, $renderArea);
         $config = $this->mergeTranslatedWidgetConfig($widget, $config, $definition);
+        // Empty policy-document sections must match Taglib data-config hydrate so editor
+        // ParamSchema arrays stay editable when this path renders the widget.
+        if (
+            $widgetCode === 'policy-document'
+            && \class_exists(\Weline\Theme\Helper\PolicyDocumentDefaults::class)
+        ) {
+            $config = \Weline\Theme\Helper\PolicyDocumentDefaults::hydrateParams($config);
+        }
         $config = $this->hydrateTypedLayoutValues($config, $renderArea, $widget);
 
         // Placeable definition path (normal template/component render — no widget HTML cache).

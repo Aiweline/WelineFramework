@@ -267,7 +267,14 @@
 "基础布局 Body 结束","Base Layout Body End"
 "在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。","在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。"
 "后台基础布局 Body 结束","Backend base layout body end"
-"在后台通用壳布局 </body> 前触发，允许其他模块注入全局悬浮层或脚本。适用于 default / dashboard / fullscreen 等引用该 hook 的后台布局。","Fires before </body> in the backend shell layout so other modules can inject global overlays or scripts. Applies to backend layouts such as default / dashboard / fullscreen that reference this hook."
+"在后台通用壳布局 </body> 前触发，允许其他模块注入全局悬浮层或脚本。适用于 default / dashboard / fullscreen 等引用该 hook 的后台布局；主题编辑器壳 theme-editor 不引用本 hook。","在后台通用壳布局 </body> 前触发，允许其他模块注入全局悬浮层或脚本。适用于 default / dashboard / fullscreen 等引用该 hook 的后台布局；主题编辑器壳 theme-editor 不引用本 hook。"
+主题编辑器壳头部之前,主题编辑器壳头部之前
+"主题编辑器专用布局 <head> 起始；仅编辑器壳资源，禁止挂后台通用悬浮层。","主题编辑器专用布局 <head> 起始；仅编辑器壳资源，禁止挂后台通用悬浮层。"
+主题编辑器壳头部之后,主题编辑器壳头部之后
+"主题编辑器专用布局 </head> 前；仅编辑器壳资源。","主题编辑器专用布局 </head> 前；仅编辑器壳资源。"
+"主题编辑器壳 Body 开始","主题编辑器壳 Body 开始"
+"主题编辑器专用布局 <body> 起始；无后台 topbar/侧栏。","主题编辑器专用布局 <body> 起始；无后台 topbar/侧栏。"
+"主题编辑器壳 Body 结束","主题编辑器壳 Body 结束"
 基础布局页头之前,"Before Base Layout Page Header"
 "在渲染基础布局的页头之前触发，允许其他模块在页头开始处注入内容。此 hook 适用于所有使用基础布局的页面。","Triggered before the header of the base layout, allowing other modules to inject content at the beginning of the header. This hook applies to all pages using the base layout."
 基础布局页头之后,"After Base Layout Page Header"
@@ -1051,6 +1058,164 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+特价,Sale
+DEMO,DEMO
+热销,Hot
+包邮,"Free shipping"
+NEW,NEW
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
+搜索商品、分类与关键词...,"Search products, categories, and keywords..."
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+件商品,"items of goods"
+查看更多,"View more"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
+官方社交媒体,"Official social media"
+商品,Products
+查看商品图,"View product image"
+查看规格图,"View spec images"
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+购物车是空的,"Shopping cart is empty"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+零售车,零售车
+批发车,批发车
+继续购物,"Continue shopping"
+小计,Subtotal
+去结算,"Proceed to Checkout"
+正在前往结算...,"Proceeding to checkout..."
+查看购物车,"View cart"
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+运费将在结算时计算,"Shipping calculated at checkout"
+税费,Tax
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+"还差 %1 包邮","You're %1 away from free shipping"
+已享包邮,"You've unlocked free shipping"
+收起明细,"Collapse details"
+展开明细,"Expand details"
+零售,Retail
+迷你购物车金额小计,"Mini-cart money summary"
+关闭通知,"Close notification"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
+"WelineFramework Admin","WelineFramework Admin"
+面包屑,"bread crumbs"
+选择作用范围,"Select scope."
+搜索作用范围,"Search scope."
+未找到匹配作用范围,"No matching scope found."
+展开社交媒体,"Expand social media"
+收起社交媒体,"Collapse social media"
+"店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","Configure the storefront theme under Website Info → Storefront Theme; otherwise it falls back to the registered Theme Default. Backend skin is set in System Config."
+前台主题,"Frontend Theme"
+后台主题,"Backend Theme"
+"前端 %{1} 个，后端 %{2} 个","Frontend: %{1}, Backend: %{2}"
+暂无主题,"No Theme"
+系统中还没有安装任何主题,"No themes are installed in the system."
+请使用命令行安装主题：,"Please install the theme using the command line:"
+主题区域,"subject area"
+AI创建虚拟主题,"AI creates virtual themes"
+批量生成预览图,"Batch generate preview images"
+当前没有可用于该区域的主题,"No themes available for this region."
+刷新预览图,"Refresh Preview Image"
+生成预览图,"Generation preview image"
+编辑主题,"Edit theme"
+主题预览,"Theme Preview"
+暂无预览图,"No preview image"
+当前后台,"Current backend"
+上一个绑定网站,上一个绑定网站
+下一个绑定网站,下一个绑定网站
+继承自,"Inherited from"
+网站,网站
+网站：%{1},"Website: %{1}"
+"未绑定网站（回落 Default）","No website bound (falls back to Default)"
+系统默认后台皮肤,"System default backend skin"
+当前后台皮肤,"Current backend skin"
+在系统配置中切换后台皮肤,"Switch backend skin in System Config"
+预览主题,"Preview theme"
+预览,Preview
+编辑,edit
+各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。,"Storefront themes are configured in Website Info; this list only shows installed themes and bindings."
+后台皮肤由系统配置决定；此处仅展示安装主题与当前选用状态。,"Backend skin is set in System Config; this list only shows installed themes and the current selection."
+参照主题,"Reference topic"
+"固定调用 Theme AI 适配器","Always use the Theme AI adapter"
+自动对标参照主题全部默认布局类型生成虚拟主题草稿，不需要选择页面类型。,"Automatically generate virtual theme drafts for all default layout types from the reference theme. No page type selection is needed."
+生成方向,"Generate direction"
+例如：保持默认主题全部结构和插槽，改成更适合节日活动的视觉方向。,"For example: keep all the structure and slots of the default theme and change it to a visual direction more suitable for holiday events."
+技能,Skill
+正在加载...,Loading...
+方向,direction
+自动匹配,"automatic matching"
+"由 Theme AI 根据当前指令选择方向","The theme AI selects the direction based on the current command"
+"AI 会完全参照默认主题全部默认布局源码生成虚拟主题草稿，发布前不会影响前台渲染。","AI will fully refer to the default layout source code of the default theme to generate a virtual theme draft, which will not affect the front-end rendering before release."
+创建虚拟主题,"Create a virtual theme"
+准备生成...,"Preparing to generate..."
+取消任务,"Cancel task"
+正在生成预览图，请稍候...,"Generating preview image, please wait..."
+后台任务启动响应无效。,"The background task startup response is invalid."
+用户明确取消,"User explicitly cancels"
+预览图生成超时，已停止查询,"Preview image generation timed out; polling stopped"
+虚拟主题任务已断开,"Virtual theme task has been disconnected"
+虚拟主题任务失败,"Virtual theme task failed"
+暂无可选技能,"No optional skills yet"
+正在创建,Creating
+AI目录加载失败,"AI directory loading failed"
+请选择参照主题,"Please select a reference topic"
+正在按参照主题全部布局类型创建虚拟主题草稿...,"Creating virtual theme drafts for all layout types in the reference theme..."
+正在创建虚拟主题草稿,"Creating a virtual topic draft"
+正在创建虚拟主题草稿...,"Creating a virtual topic draft..."
+虚拟主题草稿已创建,"Virtual topic draft created"
+已创建虚拟主题草稿,"Created virtual topic draft"
+已覆盖布局类型,"Layout type covered"
+打开可视化编辑,"Open visual editing"
+虚拟主题创建失败,"Virtual topic creation failed"
+预览图已更新,"Preview image updated"
+预览图已刷新,"Preview image refreshed"
+正在生成,Generating
+未找到预览图任务结果,"No preview image task results found"
+预览图生成已取消,"Preview generation has been canceled"
+客户端失联超时，预览图任务已停止,"The client lost connection and timed out, and the preview task has been stopped."
+无法启动预览图任务,"Unable to start preview task"
+自动生成中,Generating
+前台,"front desk"
+自动生成失败,"Generation failed"
+正在批量生成预览图，请稍候...,"Batch generating preview images, please wait..."
+批量生成已完成，但存在失败项,"Batch generation completed, but there are failures"
+批量生成完成,"Batch generation completed"
+自动生成完成,"Generation complete"
+批量预览图生成已取消,"Batch preview generation has been cancelled"
+客户端失联超时，批量预览图任务已停止,"The client lost connection and timed out, and the batch preview task has been stopped."
+批量预览图生成失败,"Batch preview image generation failed"
+无法启动批量预览图任务,"Unable to start batch preview task"
+用户取消批量预览图任务,"User cancels batch preview task"
+取消任务失败,"Failed to cancel task"
+用户取消预览图任务,"User cancels preview task"
+刷新,refresh
+生成,Generate
+预览图,"Preview image"
+中...,middle...
+刷新失败,"Refresh Failed"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1067,11 +1232,6 @@ FAQ/常见问题,FAQ
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
-特价,Sale
-DEMO,DEMO
-热销,Hot
-包邮,"Free shipping"
-NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -1113,10 +1273,6 @@ ERROR,ERROR
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
 联系询价,联系询价
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 展开搜索,"Expand search"
 我的,mine
@@ -1129,16 +1285,12 @@ ERROR,ERROR
 语言,language
 货币,currency
 关闭菜单,"Close menu"
-搜索商品、分类与关键词...,"Search products, categories, and keywords..."
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
 搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
 导航菜单,"Navigation menu"
 我的账户,"My account"
 我的收藏,"My Favorites"
@@ -1148,12 +1300,8 @@ Weline,Weline
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
-购物车是空的,"Shopping cart is empty"
 去购物,"Go Shopping"
 删除,delete
-小计,Subtotal
-查看购物车,"View cart"
-去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1179,8 +1327,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1222,7 +1368,6 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆与雅集,"Festivals & Gatherings"
 日常通勤,"Everyday commute"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1233,10 +1378,6 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1254,15 +1395,7 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-查看更多,"View more"
-距离结束,"Ends in"
 精选轮播,"Featured Carousel"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
-展开社交媒体,"Expand social media"
-收起社交媒体,"Collapse social media"
-官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1284,33 +1417,6 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
-商品,Products
-查看商品图,"View product image"
-查看规格图,"View spec images"
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-零售车,零售车
-批发车,批发车
-继续购物,"Continue shopping"
-正在前往结算...,"Proceeding to checkout..."
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-运费将在结算时计算,"Shipping calculated at checkout"
-税费,Tax
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-"还差 %1 包邮","You're %1 away from free shipping"
-已享包邮,"You've unlocked free shipping"
-收起明细,"Collapse details"
-展开明细,"Expand details"
-零售,Retail
-迷你购物车金额小计,"Mini-cart money summary"
-关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
@@ -1325,10 +1431,6 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1354,7 +1456,6 @@ Logo,Logo
 确认操作,"Confirm action"
 确定,Sure
 输入,Input
-"WelineFramework Admin","WelineFramework Admin"
 "Weline Admin","Weline Admin"
 管理后台,"Admin Panel"
 后台Logo,"Background Logo"
@@ -1371,7 +1472,6 @@ Logo,Logo
 店面主题,"Storefront theme"
 请先保存网站后，再为本站选择店面主题。,"Save the website first, then choose a storefront theme for this site."
 "本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。","本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。"
-前台主题,"Frontend Theme"
 不修改（保持当前）,"Do not change (keep current)"
 "当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。"
 本站已配置专属主题应用引用。,本站已配置专属主题应用引用。
@@ -1485,10 +1585,8 @@ Scope,Scope
 暂无可用色盘,"No color palettes available"
 暂无可用变量文件,"No variable files available"
 展开/收缩预览,"Expand/Collapse preview"
-主题预览,"Theme Preview"
 亮色,"bright color"
 暗色,"dark color"
-刷新,refresh
 全屏,Fullscreen
 正在加载预览...,"Loading preview..."
 请先选择一个主题以开始配置。,"Please select a theme to start configuration."
@@ -1511,7 +1609,6 @@ Scope,Scope
 从图库选择,"Choose from gallery"
 清除图片,"Clear Image"
 选择,Select
-预览,Preview
 JSON格式数组,"JSON format array"
 请使用JSON格式输入,"Please use JSON format"
 请选择一个主题,"Select a theme"
@@ -1551,7 +1648,6 @@ JSON格式数组,"JSON format array"
 交互模式,"Interaction Mode"
 真预览：不显示插槽标记，并关闭编辑面板,"Real Preview: Hides slot markers and closes the editing panel"
 编辑：恢复插槽标记与配置面板,"Edit: Restores slot markers and opens the configuration panel"
-编辑,edit
 重置当前编辑版本的选中草稿配置（不删除版本历史）,"Reset the selected draft configuration for the current editing version (without deleting version history)"
 选中目标,"Selection target"
 默认：按指针混合命中（现行为）,"Default: mixed hit under pointer"
@@ -1653,90 +1749,6 @@ Favicon,Favicon
 保存当前我的盘,"Save current my disk"
 点击配置此部件,"Click to configure this widget"
 无模板,"No template"
-"店面主题在「网站信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","Configure the storefront theme under Website Info → Storefront Theme; otherwise it falls back to the registered Theme Default. Backend skin is set in System Config."
-后台主题,"Backend Theme"
-"前端 %{1} 个，后端 %{2} 个","Frontend: %{1}, Backend: %{2}"
-暂无主题,"No Theme"
-系统中还没有安装任何主题,"No themes are installed in the system."
-请使用命令行安装主题：,"Please install the theme using the command line:"
-主题区域,"subject area"
-AI创建虚拟主题,"AI creates virtual themes"
-批量生成预览图,"Batch generate preview images"
-当前没有可用于该区域的主题,"No themes available for this region."
-刷新预览图,"Refresh Preview Image"
-生成预览图,"Generation preview image"
-编辑主题,"Edit theme"
-暂无预览图,"No preview image"
-当前后台,"Current backend"
-上一个绑定网站,上一个绑定网站
-下一个绑定网站,下一个绑定网站
-继承自,"Inherited from"
-网站,网站
-网站：%{1},"Website: %{1}"
-"未绑定网站（回落 Default）","No website bound (falls back to Default)"
-系统默认后台皮肤,"System default backend skin"
-当前后台皮肤,"Current backend skin"
-在系统配置中切换后台皮肤,"Switch backend skin in System Config"
-预览主题,"Preview theme"
-各网站店面主题在网站信息中配置；此处仅展示安装主题与绑定关系。,"Storefront themes are configured in Website Info; this list only shows installed themes and bindings."
-后台皮肤由系统配置决定；此处仅展示安装主题与当前选用状态。,"Backend skin is set in System Config; this list only shows installed themes and the current selection."
-参照主题,"Reference topic"
-"固定调用 Theme AI 适配器","Always use the Theme AI adapter"
-自动对标参照主题全部默认布局类型生成虚拟主题草稿，不需要选择页面类型。,"Automatically generate virtual theme drafts for all default layout types from the reference theme. No page type selection is needed."
-生成方向,"Generate direction"
-例如：保持默认主题全部结构和插槽，改成更适合节日活动的视觉方向。,"For example: keep all the structure and slots of the default theme and change it to a visual direction more suitable for holiday events."
-技能,Skill
-正在加载...,Loading...
-方向,direction
-自动匹配,"automatic matching"
-"由 Theme AI 根据当前指令选择方向","The theme AI selects the direction based on the current command"
-"AI 会完全参照默认主题全部默认布局源码生成虚拟主题草稿，发布前不会影响前台渲染。","AI will fully refer to the default layout source code of the default theme to generate a virtual theme draft, which will not affect the front-end rendering before release."
-创建虚拟主题,"Create a virtual theme"
-准备生成...,"Preparing to generate..."
-取消任务,"Cancel task"
-正在生成预览图，请稍候...,"Generating preview image, please wait..."
-后台任务启动响应无效。,"The background task startup response is invalid."
-用户明确取消,"User explicitly cancels"
-预览图生成超时，已停止查询,"Preview image generation timed out; polling stopped"
-虚拟主题任务已断开,"Virtual theme task has been disconnected"
-虚拟主题任务失败,"Virtual theme task failed"
-暂无可选技能,"No optional skills yet"
-正在创建,Creating
-AI目录加载失败,"AI directory loading failed"
-请选择参照主题,"Please select a reference topic"
-正在按参照主题全部布局类型创建虚拟主题草稿...,"Creating virtual theme drafts for all layout types in the reference theme..."
-正在创建虚拟主题草稿,"Creating a virtual topic draft"
-正在创建虚拟主题草稿...,"Creating a virtual topic draft..."
-虚拟主题草稿已创建,"Virtual topic draft created"
-已创建虚拟主题草稿,"Created virtual topic draft"
-已覆盖布局类型,"Layout type covered"
-打开可视化编辑,"Open visual editing"
-虚拟主题创建失败,"Virtual topic creation failed"
-预览图已更新,"Preview image updated"
-预览图已刷新,"Preview image refreshed"
-正在生成,Generating
-未找到预览图任务结果,"No preview image task results found"
-预览图生成已取消,"Preview generation has been canceled"
-客户端失联超时，预览图任务已停止,"The client lost connection and timed out, and the preview task has been stopped."
-无法启动预览图任务,"Unable to start preview task"
-自动生成中,Generating
-前台,"front desk"
-自动生成失败,"Generation failed"
-正在批量生成预览图，请稍候...,"Batch generating preview images, please wait..."
-批量生成已完成，但存在失败项,"Batch generation completed, but there are failures"
-批量生成完成,"Batch generation completed"
-自动生成完成,"Generation complete"
-批量预览图生成已取消,"Batch preview generation has been cancelled"
-客户端失联超时，批量预览图任务已停止,"The client lost connection and timed out, and the batch preview task has been stopped."
-批量预览图生成失败,"Batch preview image generation failed"
-无法启动批量预览图任务,"Unable to start batch preview task"
-用户取消批量预览图任务,"User cancels batch preview task"
-取消任务失败,"Failed to cancel task"
-用户取消预览图任务,"User cancels preview task"
-生成,Generate
-预览图,"Preview image"
-中...,middle...
-刷新失败,"Refresh Failed"
 "Theme 布局身份无效。","The Theme layout identity is invalid."
 布局语言代码无效：%{1},"Invalid layout language code: %{1}"
 字体子集预热开始…,"Font subset warm-up begins..."
@@ -2407,9 +2419,11 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
-选择作用范围,"Select scope."
-搜索作用范围,"Search scope."
-未找到匹配作用范围,"No matching scope found."
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
+"在后台通用壳布局 </body> 前触发，允许其他模块注入全局悬浮层或脚本。适用于 default / dashboard / fullscreen 等引用该 hook 的后台布局。","Fires before </body> in the backend shell layout so other modules can inject global overlays or scripts. Applies to backend layouts such as default / dashboard / fullscreen that reference this hook."
 "在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。Theme 实现会输出全局悬浮层，并嵌套 float-slot-start/end。","在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。Theme 实现会输出全局悬浮层，并嵌套 float-slot-start/end。"
 "店面悬浮层 · 左侧槽","店面悬浮层 · 左侧槽"
 "全局 #w-storefront-float-layer 左侧槽。店铺音乐等左侧悬浮应挂此 Hook（SSR 装入槽内），禁止再裸挂 body-end 各自 fixed 同步 bottom。","全局 #w-storefront-float-layer 左侧槽。店铺音乐等左侧悬浮应挂此 Hook（SSR 装入槽内），禁止再裸挂 body-end 各自 fixed 同步 bottom。"
@@ -2452,10 +2466,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 登录,"Log in"
 登录页工具,"Login page tools"
 搜索筛选,"Search and filter"
-Pagination,Pagination
-Previous,Previous
-"Page %{1} of %{2}","Page %{1} of %{2}"
-Next,Next
 "前台 404 静态页输入未变，跳过全量发布（%{count} 个 website×locale）","Storefront 404 static inputs unchanged; skipped full publish (%{count} website×locale)"
 草稿已撤销,"Draft revoked"
 撤销失败,"Undo failed"
