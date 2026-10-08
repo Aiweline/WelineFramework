@@ -200,6 +200,18 @@ class ExtensionInstallStrategyMap
     }
 
     /**
+     * 扩展名 → PECL 包名（与 extension_loaded 名不一致时使用）
+     * 例如：sodium 扩展由 pecl 包 libsodium 提供。
+     */
+    public function getPeclPackageName(string $ext): string
+    {
+        $map = [
+            'sodium' => 'libsodium',
+        ];
+        return $map[$ext] ?? $ext;
+    }
+
+    /**
      * 构建全部策略：每条含 cmd, name, check, platforms, elevated。
      *
      * elevated 只表示系统包管理命令是否需要 root/sudo。Homebrew 和其
@@ -210,7 +222,9 @@ class ExtensionInstallStrategyMap
         $extQ = escapeshellarg($ext);
         $pkg = $this->getDistroPackageName($ext);
         $pkgQ = escapeshellarg($pkg);
-        $peclInstall = 'pecl install ' . $extQ;
+        $peclPkg = $this->getPeclPackageName($ext);
+        $peclPkgQ = escapeshellarg($peclPkg);
+        $peclInstall = 'pecl install ' . $peclPkgQ;
         $eventPeclLinux = 'pecl install -D '
             . escapeshellarg(
                 'enable-event-debug="no" '
@@ -254,6 +268,15 @@ class ExtensionInstallStrategyMap
             $list[] = [
                 'cmd'       => 'brew install libevent pkgconf openssl@3 && ' . $eventPeclDarwin,
                 'name'      => 'brew libevent/pkgconf + pecl',
+                'check'     => 'brew',
+                'platforms' => [self::PLATFORM_DARWIN],
+                'elevated'  => false,
+            ];
+        }
+        if ($ext === 'sodium') {
+            $list[] = [
+                'cmd'       => 'brew install libsodium && ' . $peclInstall,
+                'name'      => 'brew libsodium + pecl libsodium',
                 'check'     => 'brew',
                 'platforms' => [self::PLATFORM_DARWIN],
                 'elevated'  => false,
@@ -366,6 +389,44 @@ class ExtensionInstallStrategyMap
                 ],
             ];
             foreach ($linuxBuildStrategies as $strategy) {
+                $strategy['cmd'] = 'sh -c ' . escapeshellarg($strategy['cmd']);
+                $strategy['elevated'] = true;
+                $list[] = $strategy;
+            }
+        }
+
+        if ($ext === 'sodium') {
+            $sodiumBuildStrategies = [
+                [
+                    'cmd' => 'apt-get install -y php-pear php-dev libsodium-dev pkg-config build-essential && '
+                        . $peclInstall,
+                    'name' => 'apt build deps + pecl libsodium',
+                    'check' => 'apt-get',
+                    'platforms' => [self::PLATFORM_LINUX_APT],
+                ],
+                [
+                    'cmd' => 'dnf install -y php-pear php-devel libsodium-devel gcc make autoconf pkgconf-pkg-config && '
+                        . $peclInstall,
+                    'name' => 'dnf build deps + pecl libsodium',
+                    'check' => 'dnf',
+                    'platforms' => [self::PLATFORM_LINUX_DNF],
+                ],
+                [
+                    'cmd' => 'yum install -y php-pear php-devel libsodium-devel gcc make autoconf pkgconfig && '
+                        . $peclInstall,
+                    'name' => 'yum build deps + pecl libsodium',
+                    'check' => 'yum',
+                    'platforms' => [self::PLATFORM_LINUX_YUM],
+                ],
+                [
+                    'cmd' => 'apk add --no-cache php-dev php-pear libsodium-dev pkgconf build-base && '
+                        . $peclInstall,
+                    'name' => 'apk build deps + pecl libsodium',
+                    'check' => 'apk',
+                    'platforms' => [self::PLATFORM_LINUX_APK],
+                ],
+            ];
+            foreach ($sodiumBuildStrategies as $strategy) {
                 $strategy['cmd'] = 'sh -c ' . escapeshellarg($strategy['cmd']);
                 $strategy['elevated'] = true;
                 $list[] = $strategy;

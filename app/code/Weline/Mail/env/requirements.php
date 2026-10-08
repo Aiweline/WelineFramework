@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 return [
     'php' => '^8.1',
+    // Stalwart 管理/读侧凭据密封硬依赖 sodium_crypto_secretbox；禁止无扩展却声称邮箱可开通。
+    'extensions' => [
+        'sodium',
+    ],
     'functions' => [
         'exec',
         'proc_open',

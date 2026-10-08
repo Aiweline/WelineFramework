@@ -24,7 +24,7 @@ Query：`resolveLocalMailboxByEmail`、`listLocalMailboxes`、`listThreadBySourc
 
 前台：SystemConfig `mail/frontend_register/*`；开启且有域名时，注册页用 Weline UI tabs（账户注册 / 企业邮箱），`account-mail-register` 以 `mail_register_variant=panel` 挂第二 Tab；未开启则单表单。个人中心侧栏用 `card` 变体。站内登录统一走 Customer 普通登录（不提供独立企业邮箱登录入口）。
 
-`Mail/env/requirements.php` 已登记推荐依赖 `stalwart-mail-server`，脚本为 `env/script/install_stalwart_linux.sh`（委托官方 `install.sh`，PREFIX=`/opt/stalwart`）。系统安装 / `env:install -y` 会自动装；也可：
+`Mail/env/requirements.php` 声明必需扩展 `sodium`（Stalwart 管理/读侧凭据密封），并登记推荐依赖 `stalwart-mail-server`，脚本为 `env/script/install_stalwart_linux.sh`（委托官方 `install.sh`，PREFIX=`/opt/stalwart`）。系统安装 / `env:install -y` 会自动装；项目自带 PHP 缺 sodium 时走 `bin/install.sh --rebuild-php php`（configure `--with-sodium`）。也可：
 
 ```bash
 php bin/w mail:env:install -y

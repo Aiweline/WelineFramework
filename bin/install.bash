@@ -433,7 +433,7 @@ install_php_system_deps() {
         build-essential autoconf libtool pkg-config bison re2c \
         libxml2-dev libssl-dev libcurl4-openssl-dev libsqlite3-dev \
         libzip-dev libpng-dev libjpeg-dev libfreetype6-dev libonig-dev \
-        libxslt1-dev libpq-dev libicu-dev zlib1g-dev libgd-dev
+        libxslt1-dev libpq-dev libicu-dev zlib1g-dev libgd-dev libsodium-dev
       return
     fi
     if [[ -f /etc/redhat-release ]]; then
@@ -443,13 +443,13 @@ install_php_system_deps() {
           gcc gcc-c++ make autoconf libtool pkgconfig bison re2c \
           libxml2-devel openssl-devel libcurl-devel sqlite-devel \
           libzip-devel libpng-devel libjpeg-turbo-devel freetype-devel \
-          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel
+          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel libsodium-devel
       elif command -v yum &>/dev/null; then
         run_privileged yum install -y \
           gcc gcc-c++ make autoconf libtool pkgconfig bison re2c \
           libxml2-devel openssl-devel libcurl-devel sqlite-devel \
           libzip-devel libpng-devel libjpeg-turbo-devel freetype-devel \
-          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel
+          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel libsodium-devel
       else
         echo "ERROR: Neither dnf nor yum found. Please install PHP build dependencies manually." >&2
         return 1
@@ -664,12 +664,16 @@ get_required_php_extensions() {
   local req="$ROOT/app/code/Weline/Framework/Env/env/requirements.php"
   if [[ -f "$req" ]]; then
     local fw
-    fw=$(sed -n "/'extensions'/,/],/p" "$req" 2>/dev/null | grep -oE "'[A-Za-z0-9_]+'" | tr -d "'" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')
+    # 只收数组元素，排除键名 'extensions' / 'recommended_extensions' 等被 sed 扫进列表。
+    fw=$(sed -n "/'extensions'[[:space:]]*=>[[:space:]]*\[/,/],/p" "$req" 2>/dev/null \
+      | grep -oE "'[A-Za-z0-9_]+'" | tr -d "'" | tr '[:upper:]' '[:lower:]' \
+      | grep -Ev '^(extensions|recommended_extensions)$' | tr '\n' ' ')
     exts="$exts $fw"
   fi
   # WLS/多进程：即便 requirements 只列了 PDO 等必需项，Linux 编译也必须带上 pcntl（及 opcache）。
   # 否则「有 requirements 就不走下方默认集」会导致 configure 丢掉 --enable-pcntl，server:start 无法 fork。
-  exts="$exts pcntl opcache"
+  # sodium：Mail 管理凭据 / Gateway 包签名硬依赖；漏编会导致线上「扩展不可用」而非可降级提示。
+  exts="$exts pcntl opcache sodium"
   # 去重、排序、每行一个
   echo "$exts" | tr ' ' '\n' | grep -v '^$' | sort -u
 }
@@ -679,7 +683,7 @@ get_php_configure_flags_for_extensions() {
   local exts
   exts=$(get_required_php_extensions)
   # 无 composer/requirements 时使用默认扩展集，保证框架与 composer 可运行
-  [[ -z "$exts" ]] && exts="bcmath curl exif fileinfo gd iconv intl json libxml dom simplexml mbstring opcache pcntl pdo pgsql sockets sqlite3 zip xsl zlib"
+  [[ -z "$exts" ]] && exts="bcmath curl exif fileinfo gd iconv intl json libxml dom simplexml mbstring opcache pcntl pdo pgsql sockets sqlite3 zip xsl zlib sodium"
   local seen_pdo=0 seen_libxml=0
   local ext
   for ext in $exts; do
@@ -698,6 +702,7 @@ get_php_configure_flags_for_extensions() {
       opcache)    echo "--enable-opcache" ;;
       pcntl)      echo "--enable-pcntl" ;;
       sockets)    echo "--enable-sockets" ;;
+      sodium)     echo "--with-sodium" ;;
       pdo)
         [[ $seen_pdo -eq 0 ]] && { echo "--with-pdo-pgsql"; echo "--with-pdo-sqlite"; seen_pdo=1; } ;;
       pgsql)      echo "--with-pgsql" ;;
@@ -751,10 +756,11 @@ install_php_from_source() {
     ensure_brew_installed || { popd >/dev/null; return 1; }
     brew_prefix="$(brew --prefix)"
     export PATH="$brew_prefix/bin:$brew_prefix/opt/libpq/bin:$PATH"
-    # 包含 icu4c、libzip、oniguruma 等 opt 公式的 pkgconfig，便于 configure 一次性找到所有依赖
-    export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:$brew_prefix/opt/icu4c/lib/pkgconfig:$brew_prefix/opt/libzip/lib/pkgconfig:$brew_prefix/opt/oniguruma/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-    export CPPFLAGS="-I$brew_prefix/include -I$brew_prefix/opt/icu4c/include -I$brew_prefix/opt/libpq/include ${CPPFLAGS:-}"
-    export LDFLAGS="-L$brew_prefix/lib -L$brew_prefix/opt/icu4c/lib -L$brew_prefix/opt/libpq/lib ${LDFLAGS:-}"
+    # 包含 icu4c、libzip、oniguruma、libsodium 等 opt 公式的 pkgconfig，便于 configure 一次性找到所有依赖
+    brew list libsodium &>/dev/null || brew install libsodium || true
+    export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:$brew_prefix/opt/icu4c/lib/pkgconfig:$brew_prefix/opt/libzip/lib/pkgconfig:$brew_prefix/opt/oniguruma/lib/pkgconfig:$brew_prefix/opt/libsodium/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+    export CPPFLAGS="-I$brew_prefix/include -I$brew_prefix/opt/icu4c/include -I$brew_prefix/opt/libpq/include -I$brew_prefix/opt/libsodium/include ${CPPFLAGS:-}"
+    export LDFLAGS="-L$brew_prefix/lib -L$brew_prefix/opt/icu4c/lib -L$brew_prefix/opt/libpq/lib -L$brew_prefix/opt/libsodium/lib ${LDFLAGS:-}"
   fi
 
   # 基础选项 + 根据框架与 composer 所需扩展动态生成的 configure 选项
@@ -789,6 +795,7 @@ install_php_from_source() {
       "--with-libzip=$brew_prefix/opt/libzip"
       "--with-onig=$brew_prefix/opt/oniguruma"
       "--with-pgsql=$brew_prefix/opt/libpq"
+      "--with-sodium=$brew_prefix/opt/libsodium"
     )
   fi
 
@@ -812,9 +819,9 @@ install_php_from_source() {
   if [[ "$PLATFORM" == "mac" && -n "$brew_prefix" ]]; then
     (
       export PATH="$brew_prefix/bin:$brew_prefix/opt/libpq/bin:$PATH"
-      export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:$brew_prefix/opt/icu4c/lib/pkgconfig:$brew_prefix/opt/libzip/lib/pkgconfig:$brew_prefix/opt/oniguruma/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-      export CPPFLAGS="-I$brew_prefix/include -I$brew_prefix/opt/icu4c/include -I$brew_prefix/opt/libpq/include ${CPPFLAGS:-}"
-      export LDFLAGS="-L$brew_prefix/lib -L$brew_prefix/opt/icu4c/lib -L$brew_prefix/opt/libpq/lib ${LDFLAGS:-}"
+      export PKG_CONFIG_PATH="$brew_prefix/lib/pkgconfig:$brew_prefix/opt/icu4c/lib/pkgconfig:$brew_prefix/opt/libzip/lib/pkgconfig:$brew_prefix/opt/oniguruma/lib/pkgconfig:$brew_prefix/opt/libsodium/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+      export CPPFLAGS="-I$brew_prefix/include -I$brew_prefix/opt/icu4c/include -I$brew_prefix/opt/libpq/include -I$brew_prefix/opt/libsodium/include ${CPPFLAGS:-}"
+      export LDFLAGS="-L$brew_prefix/lib -L$brew_prefix/opt/icu4c/lib -L$brew_prefix/opt/libpq/lib -L$brew_prefix/opt/libsodium/lib ${LDFLAGS:-}"
       # 显式指定 ICU，避免 configure 报 icu-uc/icu-io/icu-i18n not found
       export ICU_CFLAGS="-I$brew_prefix/opt/icu4c/include"
       export ICU_LIBS="-L$brew_prefix/opt/icu4c/lib -licuuc -licui18n -licudata"

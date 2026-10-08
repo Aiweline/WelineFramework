@@ -37,6 +37,7 @@ return [
         'zip',
         'bcmath',
         'zlib', // gzdecode：公开运价种子 .json.gz、HTTP/备份压缩等
+        'sodium', // Mail 管理凭据密封、Gateway 包签名、配置包 AEAD；缺则 env:install / --rebuild-php 须装入
         // DB PDO 驱动：EnvChecker 按 env.php db.master.type 只把「当前库」对应驱动当必需
         // （pgsql→pdo_pgsql；mysql/mariadb→pdo_mysql；sqlite 不强制二者）。未装的另一侧会降为推荐。
         'pdo_pgsql',
