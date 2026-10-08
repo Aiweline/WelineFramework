@@ -665,6 +665,18 @@ return [
             'keys' => ['type' => 'array', 'required' => true, 'description' => '用于解析真实IP的 $_SERVER keys，按优先级排序。观察者应 array_unshift 追加其 keys。'],
         ],
     ],
+    'Weline_Framework::response::shared_cache_forbidden' => [
+        'name' => __('共享响应缓存已禁止'),
+        'description' => __('SharedResponseCachePolicy::forbid() 已写入浏览器 Cache-Control: no-store 后触发。CDN/WLS 等供应商观察者可据此写各自边缘/旁路头；禁止业务模块直写供应商专用缓存头。'),
+        'doc' => 'http/共享响应缓存已禁止.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'reason' => ['type' => 'string', 'required' => false, 'description' => '本次 forbid 原因码'],
+            'reasons' => ['type' => 'array', 'required' => true, 'description' => '本请求累计 forbid 原因码列表'],
+            'cache_control' => ['type' => 'string', 'required' => true, 'description' => '已写入的 Cache-Control 值（含 no-store）'],
+        ],
+    ],
     'Weline_Framework_Http::cookie_scope_resolve' => [
         'name' => __('HTTP Cookie 作用域解析'),
         'description' => __('在解析 Cookie 名/Path 作用域时触发。Framework 默认不做站点隔离；模块通过中立字段贡献 name_suffix、mount_path、expire_unscoped_aliases 等，禁止在 Framework 内硬编码 Website 业务语义。'),

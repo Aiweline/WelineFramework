@@ -73,10 +73,27 @@ final class ThemeLayoutEntityRequestSolidifyGateContractTest extends TestCase
         $obsSrc = (string)file_get_contents($observer);
         self::assertStringContainsString('use_original_template', $gateSrc);
         self::assertStringContainsString('enqueued_fallback_original', $gateSrc);
+        self::assertStringContainsString('stamp_fresh_source_template', $gateSrc);
+        self::assertStringContainsString('stampFresh', $gateSrc);
+        self::assertStringContainsString('($derivedMissing && !$stampFresh)', $gateSrc);
+        self::assertStringContainsString('isFiltersCritical', $gateSrc);
+        self::assertStringContainsString('filterInventoryBakeBroken', $gateSrc);
+        self::assertStringContainsString('empty_filters_inventory_fallback_original', $gateSrc);
+        self::assertStringContainsString("SharedResponseCachePolicy::forbid('theme_layout_solidify_fallback_original')", $gateSrc);
+        self::assertStringNotContainsString("setHeader('CDN-Cache-Control'", $gateSrc);
+        self::assertStringNotContainsString("setHeader('Cloudflare-CDN-Cache-Control'", $gateSrc);
+        self::assertStringContainsString('ThemeLayoutEntitySolidifyJobStore', $queueSrc);
+        self::assertStringContainsString('drainPendingJobs', $queueSrc);
+        self::assertStringContainsString('Runtime::isPersistent()', $queueSrc);
         self::assertStringContainsString('PostResponseTaskQueue::enqueue', $queueSrc);
         self::assertStringContainsString('runDistinctLayoutJobsConcurrently', $queueSrc);
         self::assertStringContainsString('ThemeLayoutEntityRequestSolidifyGate', $obsSrc);
         self::assertStringContainsString('forceOriginalSolidifyGate', $obsSrc);
+        $cron = dirname(__DIR__, 3) . '/Cron/LayoutSolidifyDrain.php';
+        self::assertFileExists($cron);
+        $cronSrc = (string)file_get_contents($cron);
+        self::assertStringContainsString('theme_layout_solidify_drain', $cronSrc);
+        self::assertStringContainsString('drainPendingJobs', $cronSrc);
     }
 
     private function purge(string $dir): void

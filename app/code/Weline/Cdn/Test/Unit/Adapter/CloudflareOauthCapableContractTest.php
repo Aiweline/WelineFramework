@@ -18,7 +18,10 @@ final class CloudflareOauthCapableContractTest extends TestCase
         );
 
         self::assertStringContainsString('use Weline\\Cdn\\Api\\OauthCapableProviderInterface;', $source);
-        self::assertStringContainsString('implements AdapterInterface, OauthCapableProviderInterface', $source);
+        self::assertStringContainsString(
+            'implements AdapterInterface, OauthCapableProviderInterface, OriginNoStoreEdgeHeaderWriterInterface',
+            $source,
+        );
         self::assertStringContainsString('function supportsOneClickOauth', $source);
         self::assertStringContainsString('function startOauthAuthorization', $source);
         self::assertStringContainsString('function completeOauthAuthorization', $source);

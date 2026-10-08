@@ -98,6 +98,15 @@
                   sort="10"/>
     </event>
 
+    <!-- Origin Cache-Control no-store → 各 CDN 供应商写自己的边缘头（CF: CDN-/Cloudflare-CDN-Cache-Control） -->
+    <event name="Weline_Framework::response::shared_cache_forbidden">
+        <observer name="Weline_Cdn::apply_origin_no_store_edge_headers"
+                  instance="Weline\Cdn\Observer\ApplyOriginNoStoreEdgeHeaders"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
     <!-- WLS 安全规则更新后，触发 CDN 规则同步 -->
     <event name="Weline_Server::integration::security_rules_updated">
         <observer name="Weline_Cdn::sync_security_rules_to_cdn"

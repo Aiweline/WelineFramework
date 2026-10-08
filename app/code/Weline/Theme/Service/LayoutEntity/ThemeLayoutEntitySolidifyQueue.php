@@ -6,10 +6,12 @@ namespace Weline\Theme\Service\LayoutEntity;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Theme\Service\ThemeScopeVersionService;
 
 /**
- * Async solidify queue: same serial_key coalesce; distinct layouts may Fiber-parallel.
+ * Durable solidify queue: gate persists jobs; Cron drains them (FPM-safe).
+ * On WLS, PostResponseTaskQueue remains an optional eager fast-path for the same job file.
  */
 final class ThemeLayoutEntitySolidifyQueue
 {
@@ -19,6 +21,7 @@ final class ThemeLayoutEntitySolidifyQueue
     public function __construct(
         private readonly ThemeLayoutEntitySolidifyLeaseStore $leases,
         private readonly ThemeLayoutEntitySolidifyStampStore $stamps,
+        private readonly ThemeLayoutEntitySolidifyJobStore $jobs,
         private readonly ThemeLayoutEntityBakeCoordinator $bakeCoordinator,
         private readonly ThemeScopeVersionService $scopeVersions,
     ) {
@@ -31,50 +34,104 @@ final class ThemeLayoutEntitySolidifyQueue
     {
         $queueKey = 'theme-layout-solidify:' . $key->hash();
         if (isset(self::$requestEnqueued[$queueKey])) {
-            return ['enqueued' => false, 'coalesced' => true, 'pending' => $this->leases->isPending($key)];
+            return ['enqueued' => false, 'coalesced' => true, 'pending' => $this->isPending($key)];
         }
 
-        if ($this->leases->isPending($key)) {
+        if ($this->leases->isPending($key) || $this->jobs->has($key)) {
             self::$requestEnqueued[$queueKey] = true;
 
             return ['enqueued' => false, 'coalesced' => true, 'pending' => true];
         }
 
-        $acquired = $this->leases->tryAcquire($key);
-        if (!$acquired) {
-            self::$requestEnqueued[$queueKey] = true;
-
-            return ['enqueued' => false, 'coalesced' => true, 'pending' => true];
-        }
-
+        $put = $this->jobs->put($key, $expectedFingerprint);
         self::$requestEnqueued[$queueKey] = true;
-        $payload = [
-            'serial' => $key->toString(),
-            'theme_id' => $key->themeId,
-            'area' => $key->area,
-            'scope' => $key->canonicalScope,
-            'store_mode' => $key->storeMode,
-            'layout_type' => $key->layoutType,
-            'layout_option' => $key->layoutOption,
-            'theme_version_id' => $key->themeVersionId,
-            'content_revision' => $key->contentRevision,
-            'expected_fp' => $expectedFingerprint,
+
+        // WLS only: try to drain this job after the response (same durable job file).
+        // FPM must wait for Cron — in-memory PostResponseTaskQueue is never drained there.
+        if (!empty($put['enqueued']) && Runtime::isPersistent()) {
+            PostResponseTaskQueue::enqueue($queueKey, function () use ($key): void {
+                $this->drainOne($key);
+            });
+        }
+
+        return [
+            'enqueued' => (bool)($put['enqueued'] ?? false),
+            'coalesced' => (bool)($put['coalesced'] ?? false),
+            'pending' => true,
         ];
-
-        PostResponseTaskQueue::enqueue($queueKey, function () use ($key, $payload): void {
-            $this->runJob($key, $payload);
-        });
-
-        return ['enqueued' => true, 'coalesced' => false, 'pending' => true];
     }
 
     public function isPending(ThemeLayoutEntitySolidifySerialKey $key): bool
     {
-        return $this->leases->isPending($key);
+        return $this->leases->isPending($key) || $this->jobs->has($key);
     }
 
     /**
-     * Run one job immediately (tests / forced drain). Same serial rules as async.
+     * Cron / tests: drain up to $limit durable jobs.
+     *
+     * @return array{processed:int,skipped:int,failed:int}
+     */
+    public function drainPendingJobs(int $limit = 16): array
+    {
+        $processed = 0;
+        $skipped = 0;
+        $failed = 0;
+        foreach ($this->jobs->listPending($limit) as $job) {
+            $key = $job['key'];
+            $status = $this->drainOne($key, (string)($job['expected_fp'] ?? ''));
+            if ($status === 'ok') {
+                $processed++;
+            } elseif ($status === 'fail') {
+                $failed++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        return ['processed' => $processed, 'skipped' => $skipped, 'failed' => $failed];
+    }
+
+    /**
+     * Run one job if lease acquired. Removes durable job file only on success (failed jobs retry via Cron).
+     *
+     * @return 'ok'|'skip'|'fail'
+     */
+    public function drainOne(ThemeLayoutEntitySolidifySerialKey $key, string $expectedFp = ''): string
+    {
+        if (!$this->jobs->has($key)) {
+            return 'skip';
+        }
+        if (!$this->leases->tryAcquire($key)) {
+            return 'skip';
+        }
+        $ok = false;
+        $failed = false;
+        try {
+            if ($expectedFp === '') {
+                foreach ($this->jobs->listPending(64) as $job) {
+                    if ($job['key']->hash() === $key->hash()) {
+                        $expectedFp = (string)$job['expected_fp'];
+                        break;
+                    }
+                }
+            }
+            $this->executeBake($key, $expectedFp);
+            $ok = true;
+        } catch (\Throwable $e) {
+            $failed = true;
+            Env::log_error('theme/layout_solidify_queue', $e->getMessage() . ' key=' . $key->toString());
+        } finally {
+            $this->leases->release($key);
+            if ($ok) {
+                $this->jobs->delete($key);
+            }
+        }
+
+        return $ok ? 'ok' : ($failed ? 'fail' : 'skip');
+    }
+
+    /**
+     * Run bake body (tests / forced). Prefer drainOne for lease + durable job lifecycle.
      *
      * @param array<string, mixed> $payload
      */
@@ -85,8 +142,7 @@ final class ThemeLayoutEntitySolidifyQueue
             $this->executeBake($key, $expectedFp);
         } catch (\Throwable $e) {
             Env::log_error('theme/layout_solidify_queue', $e->getMessage() . ' key=' . $key->toString());
-        } finally {
-            $this->leases->release($key);
+            throw $e;
         }
     }
 
@@ -110,7 +166,9 @@ final class ThemeLayoutEntitySolidifyQueue
         }
         if (count($byLayout) === 1) {
             $only = array_values($byLayout)[0];
-            $this->runJob($only['key'], ['expected_fp' => (string)($only['expected_fp'] ?? '')]);
+            // Ensure job file exists for drainOne when called from tests with raw keys.
+            $this->jobs->put($only['key'], (string)($only['expected_fp'] ?? ''));
+            $this->drainOne($only['key'], (string)($only['expected_fp'] ?? ''));
 
             return;
         }
@@ -120,8 +178,9 @@ final class ThemeLayoutEntitySolidifyQueue
             /** @var ThemeLayoutEntitySolidifySerialKey $key */
             $key = $job['key'];
             $fp = (string)($job['expected_fp'] ?? '');
+            $this->jobs->put($key, $fp);
             $fibers[] = new \Fiber(function () use ($key, $fp): void {
-                $this->runJob($key, ['expected_fp' => $fp]);
+                $this->drainOne($key, $fp);
             });
         }
         foreach ($fibers as $fiber) {
@@ -169,6 +228,9 @@ final class ThemeLayoutEntitySolidifyQueue
         $this->scopeVersions->markPublished($version);
 
         $versionId = (int)$version->getVersionId();
+        // rematerialize may return '' when candidate is intentionally null (no entity
+        // intent → keep source template). Still stamp so RequestSolidifyGate stops
+        // re-enqueueing on derived_missing alone.
         $this->bakeCoordinator->rematerializeVersionPageAt(
             $key->themeId,
             $key->canonicalScope,

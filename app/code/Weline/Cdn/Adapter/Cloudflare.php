@@ -13,6 +13,8 @@ namespace Weline\Cdn\Adapter;
 
 use Weline\Cdn\Api\AdapterInterface;
 use Weline\Cdn\Api\OauthCapableProviderInterface;
+use Weline\Cdn\Api\OriginNoStoreEdgeHeaderWriterInterface;
+use Weline\Framework\Http\HeaderCollector;
 use Weline\Cdn\Service\CloudflareOAuthService;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Request;
@@ -25,7 +27,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 实现 Cloudflare v4 API 的缓存清理和规则管理功能；
  * 一键 OAuth 授权逻辑由本 Provider 自行适配（委托 CloudflareOAuthService）。
  */
-class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
+class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, OriginNoStoreEdgeHeaderWriterInterface
 {
     /**
      * Cloudflare API基础URL
@@ -789,6 +791,17 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface
     public function getRealIpHeaderKeys(): array
     {
         return ['HTTP_CF_CONNECTING_IP'];
+    }
+
+    /**
+     * Mirror origin Cache-Control: no-store onto Cloudflare edge cache headers.
+     * Owned by this provider — callers must not hardcode these header names.
+     */
+    public function applyOriginNoStoreEdgeHeaders(): void
+    {
+        HeaderCollector::getInstance()
+            ->setHeader('CDN-Cache-Control', 'no-store')
+            ->setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
     }
     
     /**

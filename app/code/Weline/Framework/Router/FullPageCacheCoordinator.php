@@ -27,6 +27,7 @@ use Weline\Framework\Http\Fpc\FpcBypassEvaluator;
 use Weline\Framework\Http\Fpc\FpcBypassFactsBuilder;
 use Weline\Framework\Http\Fpc\FpcStoreAdapterRegistry;
 use Weline\Framework\Http\GuardHeaders;
+use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\ResponseObservabilityPolicy;
 use Weline\Framework\Http\Security\SecurityHeaderPolicyService;
@@ -880,14 +881,14 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return false;
         }
 
-        if (SharedResponseCachePolicy::isForbidden()) {
+        if ($this->sharedResponseForbidsPublish()) {
             FpcDiag::event('can_publish', [
                 'allowed' => false,
                 'gate' => 'shared_response_cache_forbidden',
                 'reasons' => SharedResponseCachePolicy::reasons(),
+                'header_collector_no_store' => $this->sharedHeaderCollectorHasNoStore(),
             ]);
-            $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
-            $response->setHeader('Pragma', 'no-cache');
+            $this->markLiveResponseUncacheable($response);
 
             return false;
         }
@@ -904,6 +905,51 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         ]);
 
         return $allowed;
+    }
+
+    /**
+     * Shared FPC (WLS process/shared store) must not publish when renderers called
+     * SharedResponseCachePolicy::forbid(), or when the shared HeaderCollector already
+     * carries Cache-Control: no-store (Response may be detached and miss that header).
+     */
+    private function sharedResponseForbidsPublish(): bool
+    {
+        return SharedResponseCachePolicy::isForbidden() || $this->sharedHeaderCollectorHasNoStore();
+    }
+
+    private function sharedHeaderCollectorHasNoStore(): bool
+    {
+        try {
+            $raw = HeaderCollector::getInstance()->getHeader('Cache-Control');
+        } catch (\Throwable) {
+            return false;
+        }
+        if (\is_array($raw)) {
+            $raw = \implode(',', \array_map('strval', $raw));
+        }
+        foreach (\explode(',', \strtolower((string)$raw)) as $directive) {
+            $directive = \trim($directive);
+            if ($directive === 'no-store' || \str_starts_with($directive, 'no-store=')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function markLiveResponseUncacheable(Response $response): void
+    {
+        $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+        $response->setHeader('Pragma', 'no-cache');
+        GuardHeaders::writeCacheStatus($response, GuardHeaders::STATUS_BYPASS);
+        try {
+            HeaderCollector::getInstance()
+                ->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
+                ->setHeader('Pragma', 'no-cache')
+                ->setHeader(GuardHeaders::CACHE_STATUS, GuardHeaders::STATUS_BYPASS);
+        } catch (\Throwable) {
+            // optional
+        }
     }
 
     /** 诊断用：把可能是数组的响应头归一为可读字符串。 */
@@ -2742,7 +2788,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
     private function responseAllowsSharedPageCache(Response $response): bool
     {
-        if (SharedResponseCachePolicy::isForbidden()) {
+        if ($this->sharedResponseForbidsPublish()) {
             return false;
         }
 

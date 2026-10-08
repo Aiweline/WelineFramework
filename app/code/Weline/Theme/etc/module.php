@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Theme',
-    "version" => '2.2.769',
+    "version" => '2.2.784',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '>=2.5.0',
@@ -14,6 +14,7 @@ return [
     "optional" => [
         'Weline_Ai' => '*',
         'Weline_Cdn' => '*',
+        'Weline_Cron' => '*',
         'Weline_Eav' => '*',
         'Weline_FileManager' => '*',
         'Weline_ModuleRouter' => '*',

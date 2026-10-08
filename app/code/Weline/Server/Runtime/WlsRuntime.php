@@ -19,6 +19,7 @@ use Weline\Framework\Cache\Contract\SharedCacheStateHealthInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
 use Weline\Framework\Cache\Namespace\NamespacePath;
+use Weline\Framework\Cache\SharedResponseCachePolicy;
 use Weline\Framework\Context;
 use Weline\Framework\Container\ContainerRuntime;
 use Weline\Framework\DataObject\DataObject;
@@ -26,6 +27,8 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Hook\Config\HookReader;
+use Weline\Framework\Http\GuardHeaders;
+use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\ResponseObservabilityPolicy;
@@ -9379,12 +9382,67 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return 'BYPASS';
         }
 
-        $header = $response->getHeader('X-Weline-FPC');
-        if (\is_scalar($header) && \trim((string)$header) !== '') {
-            return \strtoupper(\trim((string)$header));
+        // Origin shared-cache forbid (e.g. theme solidify safety-net no-store) must stay
+        // BYPASS: applyDynamicFirstRenderHeaders overwrites X-WLS-FPC-Status after
+        // optional listeners wrote BYPASS onto HeaderCollector only.
+        try {
+            if (SharedResponseCachePolicy::isForbidden()) {
+                return 'BYPASS';
+            }
+        } catch (\Throwable) {
+            // Policy lookup must never break observability headers.
+        }
+
+        $explicit = $this->resolveExplicitFpcStatusHeader($response);
+        if ($explicit !== '') {
+            return $explicit;
         }
 
         return 'MISS';
+    }
+
+    /**
+     * Prefer Response, then HeaderCollector (observers may write before Response merge).
+     */
+    private function resolveExplicitFpcStatusHeader(Response $response): string
+    {
+        foreach (['X-Weline-FPC', 'X-WLS-FPC-Status', 'X-Wls-Fpc-Status'] as $headerName) {
+            $header = $response->getHeader($headerName);
+            if (\is_scalar($header) && \trim((string)$header) !== '') {
+                $normalized = \strtoupper(\trim((string)$header));
+                if ($normalized === 'BYPASS' || $headerName === 'X-Weline-FPC') {
+                    return $normalized;
+                }
+            }
+        }
+
+        try {
+            $collector = HeaderCollector::getInstance();
+            foreach (['X-Weline-FPC', 'X-WLS-FPC-Status', 'X-Wls-Fpc-Status'] as $headerName) {
+                $raw = $collector->getHeader($headerName);
+                if (\is_array($raw)) {
+                    $raw = \implode(',', \array_map('strval', $raw));
+                }
+                if (\is_scalar($raw) && \trim((string)$raw) !== '') {
+                    $normalized = \strtoupper(\trim((string)$raw));
+                    if ($normalized === 'BYPASS' || $headerName === 'X-Weline-FPC') {
+                        return $normalized;
+                    }
+                }
+            }
+            $cacheStatus = $collector->getHeader(GuardHeaders::CACHE_STATUS);
+            if (\is_array($cacheStatus)) {
+                $cacheStatus = \implode(',', \array_map('strval', $cacheStatus));
+            }
+            if (\is_scalar($cacheStatus)
+                && \strtolower(\trim((string)$cacheStatus)) === GuardHeaders::STATUS_BYPASS) {
+                return 'BYPASS';
+            }
+        } catch (\Throwable) {
+            // Collector optional during early boot / tests.
+        }
+
+        return '';
     }
 
     private function resolveControllerCacheSource(array $timing, Response $response): string

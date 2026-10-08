@@ -114,4 +114,13 @@
                   shared="true"
                   sort="0"/>
     </event>
+
+    <!-- origin no-store → WLS FPC 出站标 BYPASS（入库仍由 Framework canPublish 硬拦） -->
+    <event name="Weline_Framework::response::shared_cache_forbidden">
+        <observer name="Weline_Server::apply_origin_no_store_wls_fpc_bypass"
+                  instance="Weline\Server\Observer\ApplyOriginNoStoreWlsFpcBypass"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
+    </event>
 </config>

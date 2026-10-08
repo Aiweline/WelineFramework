@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\LayoutEntity;
 
+use Weline\Framework\Cache\SharedResponseCachePolicy;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Service\ThemeScopeVersionService;
@@ -77,10 +78,27 @@ final class ThemeLayoutEntityRequestSolidifyGate
         $pending = $this->queue->isPending($key);
         $actualFp = $this->stamps->read($key);
         $derivedMissing = !$this->hasDerivedPage($themeId, $scope, $storeMode, $area, $layoutType, $layoutOption, $versionId, $revision);
-        $criticalEmpty = $this->chromeFooterExtrasEmpty($themeId, $scope, $storeMode, $area, $versionId, $revision);
+        $criticalEmpty = $this->chromeFooterExtrasEmpty($themeId, $scope, $storeMode, $area, $versionId, $revision)
+            || $this->filterInventoryBakeBroken(
+                $themeId,
+                $scope,
+                $storeMode,
+                $area,
+                $layoutType,
+                $layoutOption,
+                $versionId,
+                $revision,
+            );
         $stale = $actualFp === null || !hash_equals($expectedFp, $actualFp);
-
-        $needsJob = $pending || $stale || $derivedMissing || $criticalEmpty;
+        // Stamp match means async job already finished this fingerprint.
+        // Homepage (and similar) may intentionally bake path=>null (no layout-entity
+        // intent) and keep using the source template — do NOT treat derived_missing
+        // alone as needsJob or the queue re-enqueues forever after every successful job.
+        $stampFresh = $actualFp !== null && hash_equals($expectedFp, $actualFp);
+        $needsJob = $pending
+            || $stale
+            || $criticalEmpty
+            || ($derivedMissing && !$stampFresh);
         $enqueued = false;
         $coalesced = false;
         if ($needsJob) {
@@ -94,12 +112,25 @@ final class ThemeLayoutEntityRequestSolidifyGate
         $reason = 'fresh';
         if ($pending && ($enqueued || $coalesced)) {
             $reason = $enqueued ? 'enqueued_fallback_original' : 'pending_coalesce_fallback_original';
-        } elseif ($derivedMissing) {
-            $reason = 'derived_missing_fallback_original';
         } elseif ($criticalEmpty) {
-            $reason = 'empty_footer_extras_fallback_original';
+            $reason = $this->filterInventoryBakeBroken(
+                $themeId,
+                $scope,
+                $storeMode,
+                $area,
+                $layoutType,
+                $layoutOption,
+                $versionId,
+                $revision,
+            ) ? 'empty_filters_inventory_fallback_original' : 'empty_footer_extras_fallback_original';
         } elseif ($stale) {
             $reason = 'fingerprint_stale_fallback_original';
+        } elseif ($derivedMissing && !$stampFresh) {
+            $reason = 'derived_missing_fallback_original';
+        } elseif ($derivedMissing && $stampFresh) {
+            // Job completed; layout keeps source template by design (null candidate).
+            $reason = 'stamp_fresh_source_template';
+            $useOriginal = false;
         }
 
         $decision = [
@@ -115,6 +146,10 @@ final class ThemeLayoutEntityRequestSolidifyGate
         if ($useOriginal) {
             RequestContext::set(self::CTX_FORCE_ORIGINAL, true);
             ThemeLayoutEntityPublishedSlotHost::markSolidifiedControllerTemplateSelected(false);
+            // Fallback original must not enter shared FPC. Browser Cache-Control
+            // no-store is owned here; vendor edge headers (CDN-Cache-Control / CF)
+            // are written by Weline_Cdn observers on the Framework forbid event.
+            SharedResponseCachePolicy::forbid('theme_layout_solidify_fallback_original');
         } else {
             RequestContext::remove(self::CTX_FORCE_ORIGINAL);
         }
@@ -150,7 +185,15 @@ final class ThemeLayoutEntityRequestSolidifyGate
                 $layout = (string)($injection['layout_type'] ?? '');
                 $code = (string)($injection['widget_code'] ?? $declaration['code'] ?? '');
                 $slot = (string)($injection['slot'] ?? '');
-                if ($layout === 'mini-cart' || $slot === 'footer-extras' || $code === 'mini-cart-coupon' || $code === 'order-notice') {
+                $isMiniCartCritical = $layout === 'mini-cart'
+                    || $slot === 'footer-extras'
+                    || $code === 'mini-cart-coupon'
+                    || $code === 'order-notice';
+                $isFiltersCritical = $code === 'category-filters'
+                    || $slot === 'list-filters'
+                    || $slot === 'category-filters'
+                    || \in_array($layout, ['products', 'category', 'search'], true);
+                if ($isMiniCartCritical || $isFiltersCritical) {
                     $relevant[] = [
                         'layout_type' => $layout,
                         'layout_option' => (string)($injection['layout_option'] ?? 'default'),
@@ -244,6 +287,61 @@ final class ThemeLayoutEntityRequestSolidifyGate
             $hasNotice = str_contains($blob, 'order-notice') || str_contains($blob, "widget_code' => 'order-notice");
             // Critical empty when neither required widget is present in chrome/header bake.
             return !($hasCoupon && $hasNotice);
+        } catch (\Throwable) {
+            return true;
+        }
+    }
+
+    /**
+     * products/category/search derived PHTML must bake Weline_Filters::category-filters
+     * and must not retain declaration placeholders. Broken bake → enqueue + original
+     * (fallback injector covers the customer response until rebake lands).
+     */
+    private function filterInventoryBakeBroken(
+        int $themeId,
+        string $scope,
+        string $storeMode,
+        string $area,
+        string $layoutType,
+        string $layoutOption,
+        int $versionId,
+        int $revision,
+    ): bool {
+        if (!\in_array($layoutType, ['products', 'category', 'search'], true)) {
+            return false;
+        }
+        if ($versionId < 1) {
+            return false;
+        }
+        try {
+            $identity = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+                $themeId,
+                $scope,
+                $storeMode,
+                $area,
+                $versionId,
+                'formal',
+                max(1, $revision),
+            );
+            $path = $this->paths->pageLayoutPhtml($identity, $layoutType, $layoutOption);
+            if (!is_file($path)) {
+                // derived_missing already drives the job; avoid double-count reason noise.
+                return false;
+            }
+            $blob = (string)@file_get_contents($path);
+            if ($blob === '') {
+                return true;
+            }
+            $hasFilters = str_contains($blob, 'Weline_Filters')
+                && str_contains($blob, 'category-filters')
+                && str_contains($blob, 'renderResolved');
+            $hasPlaceholder = str_contains($blob, 'data-placeholder="list-filters"')
+                || str_contains($blob, 'data-placeholder="category-filters"')
+                || str_contains($blob, "data-placeholder='list-filters'")
+                || str_contains($blob, "data-placeholder='category-filters'")
+                || str_contains($blob, '由 Filters 部件默认注入');
+
+            return !$hasFilters || $hasPlaceholder;
         } catch (\Throwable) {
             return true;
         }
