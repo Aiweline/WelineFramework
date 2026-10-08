@@ -32,4 +32,10 @@
         <observer name="Weline_Acl::setup_upgrade_grant_super_admin" instance="Weline\Acl\Observer\SetupUpgradeGrantSuperAdmin" disabled="false" shared="true" sort="0"/>
         <observer name="Weline_Acl::setup_upgrade_grant_super_admin_object_scope" instance="Weline\Acl\Observer\SetupUpgradeGrantSuperAdminObjectScope" disabled="false" shared="true" sort="1"/>
     </event>
+    <!-- 新建/保存网站后为超管补齐该站 Website 级对象写授权（All Sites 只读不够） -->
+    <event name="Weline_Websites::website_save_after">
+        <observer name="Weline_Acl::website_save_after_grant_super_admin_object_scope"
+                  instance="Weline\Acl\Observer\WebsiteSaveAfterGrantSuperAdminObjectScope"
+                  disabled="false" shared="true" sort="40"/>
+    </event>
 </config>
