@@ -18,8 +18,8 @@
   height: 100%;
   pointer-events: none;
   z-index: var(--w-store-music-z-wave);
-  /* Above page chrome: keep readable; multiply on cream made bars nearly invisible. */
-  opacity: 0.55;
+  /* Body-bottom music columns: stay readable on light grocery/cream themes. */
+  opacity: 0.72;
   mix-blend-mode: normal;
 }
 
@@ -72,8 +72,9 @@
   cursor: pointer;
   position: relative;
   flex: 0 0 auto;
-  width: 5.5rem;
-  height: 5.5rem;
+  /* Match CustomerService .cs-chat-button (3.75rem) — all layouts, not only homepage. */
+  width: 3.75rem;
+  height: 3.75rem;
   aspect-ratio: 1;
   border-radius: 50%;
   /* Spectrum spokes paint outside the disc; face is absolutely inset so it cannot stretch the box. */
@@ -81,7 +82,7 @@
   box-shadow: var(--w-store-music-shadow);
   --w-store-music-level: 0;
   /* Half of avatar box; JS overwrites with measured px for pixel-perfect concentricity. */
-  --w-spectrum-r: 2.75rem;
+  --w-spectrum-r: 1.875rem;
 }
 
 /* Polar spectrum: same box as avatar; bars pivot on avatar CENTER (not top:50%+bottom origin). */
@@ -93,26 +94,28 @@
   overflow: visible;
   opacity: 0;
   visibility: hidden;
-  /* Soft optical merge so packed filaments read as one water sheet. */
-  filter: blur(0.55px);
+  filter: none;
 }
 
-.w-store-music.is-playing .w-store-music__spectrum {
+.w-store-music.is-playing .w-store-music__spectrum,
+.w-store-music.is-remote-playing .w-store-music__spectrum {
   opacity: 1;
   visibility: visible;
+  /* Soften ultra-dense spokes into a continuous water rim. */
+  filter: blur(0.45px);
 }
 
 .w-store-music__spectrum-bar {
-  /* High base length + small undulation → continuous water sheet, not sparse spikes. */
-  --w-spectrum-len: calc(1.35rem + (var(--w-bar, 0) * 0.75rem));
+  /* Compact polar water rim around avatar (NOT the body-bottom full-page wave columns).
+   * Hairline width + high bar count → continuous liquid sheet. */
+  --w-spectrum-len: calc(0.32rem + (var(--w-bar, 0) * 1.15rem));
   position: absolute;
   left: 50%;
   bottom: 50%;
-  /* Hairline filaments: packed so adjacent strokes read as continuous water ripples. */
-  width: 0.1rem;
+  width: 0.09rem;
   /* Full spoke from center; inner segment transparent so only the outer ring paints. */
   height: calc(var(--w-spectrum-r) + var(--w-spectrum-len));
-  margin-left: -0.05rem;
+  margin-left: -0.045rem;
   border-radius: 999px;
   transform-origin: center bottom;
   transform: rotate(var(--w-ang, 0deg));
@@ -122,12 +125,12 @@
     transparent var(--w-spectrum-r),
     color-mix(
       in srgb,
-      var(--w-store-music-accent) calc(52% + (var(--w-bar, 0) * 38%)),
+      var(--w-store-music-accent) calc(58% + (var(--w-bar, 0) * 34%)),
       transparent
     ) var(--w-spectrum-r),
     color-mix(
       in srgb,
-      var(--w-store-music-accent) calc(40% + (var(--w-bar, 0) * 35%)),
+      var(--w-store-music-accent) calc(42% + (var(--w-bar, 0) * 46%)),
       transparent
     ) 100%
   );
@@ -136,13 +139,24 @@
   will-change: height, opacity;
 }
 
-.w-store-music.is-playing .w-store-music__spectrum-bar {
-  opacity: calc(0.5 + (var(--w-bar, 0) * 0.42));
+.w-store-music.is-playing .w-store-music__spectrum-bar,
+.w-store-music.is-remote-playing .w-store-music__spectrum-bar {
+  opacity: calc(0.55 + (var(--w-bar, 0) * 0.4));
 }
 
-.w-store-music:not(.is-playing) .w-store-music__spectrum-bar {
+.w-store-music:not(.is-playing):not(.is-remote-playing) .w-store-music__spectrum-bar {
   --w-bar: 0;
   opacity: 0;
+}
+
+/*
+ * html/body overflow-x:clip clips spokes that poke past the left/bottom viewport edge.
+ * Nudge the float-start host inward when this widget is present so the ring stays on-screen.
+ */
+#w-storefront-float-layer .w-storefront-float-layer__slot--start:has(.w-store-music) {
+  /* Inset for shorter polar spokes at 3.75rem FAB (was 2.85/2.5 at 5.5rem). */
+  left: max(1.75rem, env(safe-area-inset-left, 0px));
+  bottom: max(1.65rem, env(safe-area-inset-bottom, 0px));
 }
 
 .w-store-music__face {
@@ -161,7 +175,7 @@
   border-radius: 50%;
   object-fit: cover;
   object-position: center 18%;
-  border: 0.16rem solid color-mix(in srgb, var(--w-store-music-surface) 88%, var(--w-store-music-accent));
+  border: 0.12rem solid color-mix(in srgb, var(--w-store-music-surface) 88%, var(--w-store-music-accent));
   background: color-mix(in srgb, var(--w-store-music-surface) 90%, var(--w-store-music-accent) 10%);
   transform: none;
   transform-origin: center center;
@@ -207,8 +221,8 @@
   color: var(--w-store-music-ink);
   border: 1px solid color-mix(in srgb, var(--w-store-music-accent) 20%, transparent);
   border-radius: 999px;
-  padding: 0.28rem 0.65rem;
-  font-size: 0.75rem;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.68rem;
   line-height: 1.2;
   box-shadow: var(--weline-theme-shadow-sm, 0 6px 14px color-mix(in srgb, var(--w-store-music-ink) 12%, transparent));
   cursor: pointer;
@@ -644,11 +658,12 @@
   }
 }
 
-@media (max-width: 420px) {
+/* Match CustomerService FAB shrink at ≤720px (3.125rem / 50px). */
+@media (max-width: 720px) {
   .w-store-music__avatar {
-    width: 5rem;
-    height: 5rem;
-    --w-spectrum-r: 2.5rem;
+    width: 3.125rem;
+    height: 3.125rem;
+    --w-spectrum-r: 1.5625rem;
   }
 
   .w-store-music__panel {

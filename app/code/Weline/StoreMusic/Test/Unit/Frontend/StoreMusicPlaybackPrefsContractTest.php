@@ -134,7 +134,7 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('preferCache (F5 sticky resume)', $js);
         self::assertStringContainsString('flash「点击开启音乐」', $js);
         self::assertStringContainsString('navType === \'reload\'', $js);
-        self::assertStringContainsString('20261008-65waterripple', $js);
+        self::assertStringContainsString('20261008-72waterdense', $js);
         self::assertStringContainsString('syncSpectrumRadius', $js);
         self::assertStringContainsString('armStickyPlayRetry', $js);
         self::assertStringContainsString('AbortError', $js);
@@ -248,6 +248,8 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('data-store-music-css', $phtml);
         self::assertStringContainsString('data-store-music-host-css', $phtml);
         self::assertStringContainsString('data-store-music-critical', $phtml);
+        self::assertStringContainsString('max(1.75rem', $phtml);
+        self::assertStringContainsString('is-remote-playing .w-store-music__spectrum', $phtml);
         self::assertStringContainsString('position:fixed!important', $phtml);
         self::assertStringContainsString('#w-storefront-float-layer .w-store-music[data-store-music]', $phtml);
         self::assertStringContainsString('position:relative!important', $phtml);
@@ -265,13 +267,18 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('SPECTRUM_BAR_COUNT', $js);
         self::assertStringContainsString('ensureSpectrumBars', $js);
         self::assertStringContainsString('document.body.appendChild(this.waveCanvas)', $js);
-        self::assertStringContainsString('20261008-65waterripple', $js);
+        self::assertStringContainsString('20261008-72waterdense', $js);
         self::assertStringContainsString('syncSpectrumRadius', $js);
 
         $css = (string)\file_get_contents($this->moduleFile('view/statics/css/store-music.css'));
         self::assertStringContainsString('w-store-music-spin', $css);
         self::assertStringContainsString('w-store-music__spectrum-bar', $css);
         self::assertStringContainsString('.w-store-music.is-playing .w-store-music__spectrum', $css);
+        self::assertStringContainsString('.w-store-music.is-remote-playing .w-store-music__spectrum', $css);
+        self::assertStringContainsString(
+            '#w-storefront-float-layer .w-storefront-float-layer__slot--start:has(.w-store-music)',
+            $css,
+        );
         self::assertStringContainsString('.w-store-music.is-playing.is-avatar-spin .w-store-music__face', $css);
         self::assertStringContainsString('--w-store-music-level', $css);
         self::assertStringContainsString('--w-store-music-z-wave: 2147482900', $css);
@@ -284,7 +291,19 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertMatchesRegularExpression('/\.w-store-music__face\s*\{[^}]*height:\s*100%/s', $css);
         self::assertMatchesRegularExpression('/\.w-store-music__face\s*\{[^}]*aspect-ratio:\s*1/s', $css);
         self::assertStringNotContainsString('height="120"', $phtml);
-        self::assertStringContainsString('height="96"', $phtml);
+        self::assertStringContainsString('height="60"', $phtml);
+        // FAB parity with CustomerService .cs-chat-button (all layouts).
+        self::assertMatchesRegularExpression(
+            '/\.w-store-music__avatar\s*\{[^}]*width:\s*3\.75rem/s',
+            $css,
+        );
+        self::assertMatchesRegularExpression(
+            '/\.w-store-music__avatar\s*\{[^}]*height:\s*3\.75rem/s',
+            $css,
+        );
+        self::assertStringNotContainsString('width: 5.5rem', $css);
+        self::assertStringContainsString('max-width: 720px', $css);
+        self::assertStringContainsString('width: 3.125rem', $css);
     }
 
     public function testCrossTabPlaybackKeepsOwnershipAndUsesCompactRemoteSpectrum(): void
@@ -299,12 +318,15 @@ class StoreMusicPlaybackPrefsContractTest extends TestCase
         self::assertStringContainsString('is-remote-playing', $js);
         self::assertStringContainsString('visible: row.visible === true', $js);
         self::assertStringContainsString('dying: row.dying === true', $js);
-        self::assertStringContainsString('SPECTRUM_BAR_COUNT = 320', $js);
-        self::assertStringContainsString('* 0.75rem', $css);
+        self::assertStringContainsString('SPECTRUM_BAR_COUNT = 240', $js);
+        self::assertStringContainsString('width: 0.09rem', $css);
+        self::assertStringContainsString('blur(0.45px)', $css);
+        self::assertStringContainsString('* 1.15rem', $css);
         self::assertStringContainsString('--w-spectrum-r', $css);
         self::assertStringContainsString('bottom: 50%', $css);
         self::assertStringContainsString('transform-origin: center bottom', $css);
+        self::assertStringContainsString('is-remote-playing', $css);
         self::assertStringNotContainsString('translateY(-3.05rem)', $css);
-        self::assertStringNotContainsString('* 0.42rem', $css);
+        self::assertStringNotContainsString('SPECTRUM_BAR_COUNT = 48', $js);
     }
 }

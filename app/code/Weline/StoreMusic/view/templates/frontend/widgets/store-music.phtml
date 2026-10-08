@@ -12,16 +12,16 @@
  * @widget.page_layouts {["*"]}
  * @widget.slot {storefront-float-start}
  * @widget.supports {["store-music","layout-storefront-float-start","content"]}
- * @widget.default_injections {[{ "layout_type":"homepage", "slot":"storefront-float-start", "area":"footer", "sort_order":100, "required":true, "reason":"店面默认左侧悬浮进店音乐；恢复原始布局后 required 回填", "config":{"enabled":false,"tracks":[],"delay_seconds":3,"try_autoplay":true,"loop":true,"default_volume":8,"avatar_spin":false,"waveform_default":false} }]}
+ * @widget.default_injections {[{ "layout_type":"homepage", "slot":"storefront-float-start", "area":"footer", "sort_order":100, "required":true, "reason":"店面默认左侧悬浮进店音乐；恢复原始布局后 required 回填", "config":{"enabled":true,"tracks":[],"delay_seconds":3,"try_autoplay":true,"loop":true,"default_volume":8,"avatar_spin":false,"waveform_default":true} }]}
  *
- * @param enabled {default=false,type="bool",label="启用进店音乐",i18n=false}
+ * @param enabled {default=true,type="bool",label="启用进店音乐",i18n=false}
  * @param tracks {default=[],type="array",label="进店曲目",i18n=false}
  * @param delay_seconds {default=3,type="range",label="延迟秒数",min=1,max=15,i18n=false}
  * @param try_autoplay {default=true,type="bool",label="尝试自动播放",i18n=false}
  * @param loop {default=true,type="bool",label="循环播放",i18n=false}
  * @param default_volume {default=8,type="range",label="默认音量",min=0,max=100,i18n=false}
  * @param avatar_spin {default=false,type="bool",label="播放时旋转头像",i18n=false}
- * @param waveform_default {default=false,type="bool",label="默认开启波形背景",i18n=false}
+ * @param waveform_default {default=true,type="bool",label="默认开启波形背景",i18n=false}
  */
 
 use Weline\Framework\Manager\ObjectManager;
@@ -100,9 +100,12 @@ $faceUrl = $esc($faceUrl);
  * Fallback fixed only when rendered outside #w-storefront-float-layer. */ ?>
 <style data-store-music-critical>
 .w-store-music-host[data-store-music-host]{position:static;display:block;width:0;height:0;margin:0;padding:0;border:0;overflow:visible}
-.w-store-music[data-store-music]{position:fixed!important;left:max(.85rem,env(safe-area-inset-left,0px));bottom:max(.95rem,env(safe-area-inset-bottom,0px));z-index:2147483001}
+/* Keep avatar ring inside html/body overflow-x:clip. */
+.w-store-music[data-store-music]{position:fixed!important;left:max(1.75rem,env(safe-area-inset-left,0px));bottom:max(1.65rem,env(safe-area-inset-bottom,0px));z-index:2147483001}
 #w-storefront-float-layer .w-store-music-host[data-store-music-host]{width:auto;height:auto;overflow:visible}
 #w-storefront-float-layer .w-store-music[data-store-music]{position:relative!important;left:auto!important;bottom:auto!important}
+#w-storefront-float-layer .w-storefront-float-layer__slot--start:has(.w-store-music){left:max(1.75rem,env(safe-area-inset-left,0px));bottom:max(1.65rem,env(safe-area-inset-bottom,0px))}
+.w-store-music.is-playing .w-store-music__spectrum,.w-store-music.is-remote-playing .w-store-music__spectrum{opacity:1;visibility:visible}
 </style>
 <?php if ($hostCssUrl !== ''): ?>
 <link rel="stylesheet" href="<?= $hostCssUrl ?>" data-store-music-host-css>
@@ -160,8 +163,8 @@ $faceUrl = $esc($faceUrl);
                 <img class="w-store-music__face"
                      src="<?= $faceUrl ?>"
                      alt="<?= $t('进店音乐') ?>"
-                     width="96"
-                     height="96"
+                     width="60"
+                     height="60"
                      decoding="async"
                      loading="lazy"/>
             </button>

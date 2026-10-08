@@ -33,8 +33,8 @@
     var PEER_CENSUS_FRESH_MS = 3500;
     // After this long without audible progress, soft resume (focus/peer) must not surprise-play.
     var SOFT_RESUME_IDLE_MS = 90000;
-    // Polar spectrum filaments around the avatar (dense water-ripple spokes, not sparse bars).
-    var SPECTRUM_BAR_COUNT = 320;
+    // Polar spectrum: ultra-dense spokes so the ring reads as a water sheet, not discrete bars.
+    var SPECTRUM_BAR_COUNT = 240;
 
     function currentStoreMusicEpoch() {
         return Number(global.__WelineStoreMusicEpoch) || 0;
@@ -892,8 +892,22 @@
             this.volume.value = String(volPref);
             this.syncVolumePct(volPref);
         }
-        // Default waveform ON for ambient body wave unless user previously turned off.
-        var waveDefault = this.cfg.waveform_default !== false && this.cfg.waveform_default !== 0 && this.cfg.waveform_default !== '0';
+        // Body 底部音乐柱：默认开启。旧固化物常把 waveform_default 烤成 false，
+        // 会把全页柱挡掉；localStorage wave=0 仍表示用户主动关过。
+        var waveDefault = true;
+        if (readPref(root, 'wave_body_v69', null) === null) {
+            writePref(root, 'wave_body_v69', '1');
+            // One-shot: clear a stale "off" that was never an explicit user choice
+            // when the only prior signal was baked waveform_default:false.
+            if (readPref(root, 'wave', null) === '0'
+                && (this.cfg.waveform_default === false
+                    || this.cfg.waveform_default === 0
+                    || this.cfg.waveform_default === '0')) {
+                try {
+                    global.localStorage.removeItem(storageKey(root, 'wave'));
+                } catch (eWaveMig) { /* ignore */ }
+            }
+        }
         var wavePref = readPref(root, 'wave', waveDefault);
         if (this.waveToggle) {
             this.waveToggle.checked = !!wavePref;
@@ -4677,7 +4691,7 @@
             this.root.classList.toggle('is-remote-playing', mirroredPlaying);
             this.root.classList.toggle('is-awaiting-unmute', !!(localPlaying && this._awaitingUnmute));
         }
-        if (!localPlaying) {
+        if (!localPlaying && !mirroredPlaying) {
             this.resetSpectrumBars();
         }
         this.syncTrackMeta(localPlaying || mirroredPlaying);
@@ -5091,7 +5105,7 @@
 
     /**
      * Drive polar spectrum bars from Analyser frequency bins (or soft fake spectrum).
-     * Hidden via CSS when !is-playing — never show idle concentric rings.
+     * Visible while local audio plays OR remote peer is mirrored (soft clock).
      */
     StoreMusic.prototype.updateSpectrumBars = function () {
         this.ensureSpectrumBars();
@@ -5099,19 +5113,20 @@
         if (!this._spectrumBars || !this._spectrumBars.length) {
             return;
         }
-        var playing = !!(this.root && this.root.classList.contains('is-playing')
+        var localPlaying = !!(this.root && this.root.classList.contains('is-playing')
             && this.audio && !this.audio.paused);
-        if (!playing) {
+        var remotePlaying = !!(this.root && this.root.classList.contains('is-remote-playing'));
+        if (!localPlaying && !remotePlaying) {
             this.resetSpectrumBars();
             return;
         }
         var levels = [];
         var i;
-        if (this.waveMode === 'analyser' && this.analyser) {
+        if (localPlaying && this.waveMode === 'analyser' && this.analyser) {
             var bins = this.analyser.frequencyBinCount;
             var data = new Uint8Array(bins);
             this.analyser.getByteFrequencyData(data);
-            // Map thin bars across the low–mid spectrum and remove the analyser noise floor.
+            // Map bars across the low–mid spectrum and remove the analyser noise floor.
             var usable = Math.max(SPECTRUM_BAR_COUNT, Math.floor(bins * 0.5));
             var rawLevels = [];
             var framePeak = 0.0001;
@@ -5134,36 +5149,38 @@
                 levels[i] = Math.min(1, Math.max(0.12, (rawLevels[i] / framePeak) * 0.95));
             }
         } else {
-            var t = (this.audio && this.audio.currentTime) || 0;
+            var t = localPlaying && this.audio
+                ? (this.audio.currentTime || 0)
+                : ((Date.now() % 600000) / 1000);
             for (i = 0; i < SPECTRUM_BAR_COUNT; i++) {
                 var phase = (i / SPECTRUM_BAR_COUNT) * Math.PI * 2;
-                // Higher spatial frequency + soft envelope → continuous water ripples.
-                var contour = 0.74 + (0.26 * Math.sin(phase * 4 + t * 0.55));
-                var pulse = 0.26
-                    + 0.30 * Math.abs(Math.sin(t * 2.2 + phase * 3.4))
-                    + 0.24 * Math.abs(Math.sin(t * 5.1 + phase * 1.6))
-                    + 0.20 * Math.abs(Math.sin(t * 1.15 + phase * 6.2));
-                levels[i] = Math.min(1, Math.max(0.22, pulse * contour));
+                // Discrete bouncing columns: stronger per-bar pulse, light neighbor blend.
+                var contour = 0.62 + (0.38 * Math.sin(phase * 2.2 + t * 0.7));
+                var pulse = 0.22
+                    + 0.38 * Math.abs(Math.sin(t * 2.6 + phase * 2.1))
+                    + 0.28 * Math.abs(Math.sin(t * 4.4 + phase * 1.3))
+                    + 0.18 * Math.abs(Math.sin(t * 1.35 + phase * 3.6));
+                levels[i] = Math.min(1, Math.max(0.18, pulse * contour));
             }
         }
-        // Lateral blend so dense filaments undulate as one wave sheet, not discrete spikes.
         var wave = [];
         for (i = 0; i < SPECTRUM_BAR_COUNT; i++) {
             var iPrev = (i + SPECTRUM_BAR_COUNT - 1) % SPECTRUM_BAR_COUNT;
-            var iNext = (i + 1) % SPECTRUM_BAR_COUNT;
             var iPrev2 = (i + SPECTRUM_BAR_COUNT - 2) % SPECTRUM_BAR_COUNT;
+            var iNext = (i + 1) % SPECTRUM_BAR_COUNT;
             var iNext2 = (i + 2) % SPECTRUM_BAR_COUNT;
-            wave[i] = (levels[i] * 0.36)
+            // Wider neighbor blend → continuous liquid rim instead of discrete spikes.
+            wave[i] = (levels[i] * 0.38)
                 + (levels[iPrev] * 0.22)
                 + (levels[iNext] * 0.22)
-                + (levels[iPrev2] * 0.10)
-                + (levels[iNext2] * 0.10);
+                + (levels[iPrev2] * 0.09)
+                + (levels[iNext2] * 0.09);
         }
         for (i = 0; i < SPECTRUM_BAR_COUNT; i++) {
             var prev = this._spectrumSmooth[i] || 0;
             var target = Math.max(0, Math.min(1, Number(wave[i]) || 0));
-            // Quick attack, slower decay: envelope + neighbor blend → water-like motion.
-            var rate = target > prev ? 0.28 : 0.10;
+            // Softer attack/decay so the dense ring ripples like water.
+            var rate = target > prev ? 0.28 : 0.12;
             var next = prev + ((target - prev) * rate);
             this._spectrumSmooth[i] = next;
             this._spectrumBars[i].style.setProperty('--w-bar', next.toFixed(3));
@@ -5232,7 +5249,8 @@
             }
             return;
         }
-        if (!this.audio || this.audio.paused || document.hidden) {
+        var remotePlaying = !!this.remotePlaying;
+        if (((!this.audio || this.audio.paused) && !remotePlaying) || document.hidden) {
             this.stopWaveLoop();
             this.resetAvatarLevel();
             if (this.waveCanvas && (!this.waveToggle || !this.waveToggle.checked)) {
@@ -5241,8 +5259,10 @@
             return;
         }
         // Avatar edge waves need analyser/soft clock even when full-page waveform is off.
-        this.ensureAnalyser();
-        var waveOn = !!(this.waveToggle && this.waveToggle.checked);
+        if (!remotePlaying) {
+            this.ensureAnalyser();
+        }
+        var waveOn = !!(this.waveToggle && this.waveToggle.checked) && !remotePlaying;
         if (this.waveCanvas) {
             // Escape zero-size host / transform ancestors so fixed + z-index paint above chrome.
             if (waveOn && this.waveCanvas.parentElement !== document.body) {
@@ -5266,16 +5286,22 @@
             return;
         }
         var draw = function () {
-            if (!self.audio || self.audio.paused || document.hidden || prefersReducedMotion()) {
+            var remotePlaying = !!self.remotePlaying;
+            var localAudible = !!(self.audio && !self.audio.paused);
+            if ((!localAudible && !remotePlaying) || document.hidden || prefersReducedMotion()) {
                 self.raf = 0;
                 self.resetAvatarLevel();
                 return;
             }
-            var level = self.readPlaybackLevel();
-            self.setAvatarLevel(level);
+            if (localAudible) {
+                var level = self.readPlaybackLevel();
+                self.setAvatarLevel(level);
+            } else {
+                self.resetAvatarLevel();
+            }
             self.updateSpectrumBars();
 
-            var waveOn = !!(self.waveToggle && self.waveToggle.checked);
+            var waveOn = !!(self.waveToggle && self.waveToggle.checked) && localAudible;
             var canvas = self.waveCanvas;
             if (waveOn && canvas) {
                 var ctx2d = canvas.getContext('2d');
@@ -5293,46 +5319,38 @@
                     ctx2d.strokeStyle = accentRgba(0.32);
                     ctx2d.lineWidth = 1.25;
 
+                    // Always paint bottom-edge columns (body 音乐柱). Soft mode fakes
+                    // analyser bins so the silhouette stays "bars", not a sine sheet.
+                    var barCount;
+                    var barW;
+                    var i;
+                    var v;
+                    var bh;
                     if (self.waveMode === 'analyser' && self.analyser) {
                         var bins = self.analyser.frequencyBinCount;
                         var step = w < 720 ? 4 : 2;
                         var data = new Uint8Array(bins);
                         self.analyser.getByteFrequencyData(data);
-                        var barCount = Math.floor(bins / step);
-                        var barW = w / barCount;
-                        for (var i = 0; i < barCount; i++) {
-                            var v = data[i * step] / 255;
-                            var bh = Math.max(4, v * h * 0.55);
-                            ctx2d.fillRect(i * barW, h - bh, Math.max(1, barW * 0.7), bh);
+                        barCount = Math.floor(bins / step);
+                        barW = w / Math.max(1, barCount);
+                        for (i = 0; i < barCount; i++) {
+                            v = data[i * step] / 255;
+                            bh = Math.max(8, v * h * 0.58);
+                            ctx2d.fillRect(i * barW, h - bh, Math.max(2, barW * 0.72), bh);
                         }
                     } else {
-                        var t = (self.audio.currentTime || 0) * 1.35;
-                        ctx2d.beginPath();
-                        for (var x = 0; x <= w; x += 6) {
-                            var y = h * 0.72
-                                + Math.sin(x * 0.012 + t) * h * 0.06
-                                + Math.sin(x * 0.004 + t * 0.7) * h * 0.04;
-                            if (x === 0) {
-                                ctx2d.moveTo(x, y);
-                            } else {
-                                ctx2d.lineTo(x, y);
-                            }
+                        var t = (self.audio && self.audio.currentTime) || 0;
+                        barCount = Math.max(56, Math.floor(w / 7));
+                        barW = w / barCount;
+                        for (i = 0; i < barCount; i++) {
+                            var phase = (i / barCount) * Math.PI * 2;
+                            v = 0.22
+                                + 0.38 * Math.abs(Math.sin(t * 2.1 + phase))
+                                + 0.22 * Math.abs(Math.sin(t * 5.2 + phase * 1.7))
+                                + 0.12 * Math.abs(Math.sin(t * 0.85 + phase * 0.5));
+                            bh = Math.max(8, Math.min(1, v) * h * 0.5);
+                            ctx2d.fillRect(i * barW, h - bh, Math.max(2, barW * 0.7), bh);
                         }
-                        ctx2d.lineTo(w, h);
-                        ctx2d.lineTo(0, h);
-                        ctx2d.closePath();
-                        ctx2d.fill();
-                        ctx2d.beginPath();
-                        for (var x2 = 0; x2 <= w; x2 += 8) {
-                            var y2 = h * 0.62
-                                + Math.sin(x2 * 0.018 + t * 1.2) * h * 0.035;
-                            if (x2 === 0) {
-                                ctx2d.moveTo(x2, y2);
-                            } else {
-                                ctx2d.lineTo(x2, y2);
-                            }
-                        }
-                        ctx2d.stroke();
                     }
                 }
             }
@@ -5358,7 +5376,7 @@
         }
     };
 
-    var SCRIPT_GEN = '20261008-65waterripple';
+    var SCRIPT_GEN = '20261008-72waterdense';
 
     function boot(root) {
         if (!root) {

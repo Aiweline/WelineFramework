@@ -290,7 +290,7 @@
             letter-spacing: var(--hanfu-label-tracking, 0.04em);
         }
 
-        /* 店音乐悬浮头像勿挡货架标题：略缩小；face 随 avatar 100% 填满，须同步 --w-spectrum-r */
+        /* 店音乐头像与客服 FAB 同高（StoreMusic 默认已 3.75rem；首页明示保留，防漂移） */
         .theme-layout-homepage .w-store-music__avatar {
             width: 3.75rem;
             height: 3.75rem;
