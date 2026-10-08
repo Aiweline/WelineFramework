@@ -520,11 +520,15 @@
     }
 
     function resolveWebsiteMountPath() {
-        const fromDom = (function () {
-            const node = document.querySelector('[data-i18n-switcher][data-website-mount]');
-            return node ? String(node.getAttribute('data-website-mount') || '').trim() : '';
-        })();
-        const raw = String(fromDom || readCookieValue('WELINE_WEBSITE_URL') || '').trim();
+        // data-website-mount present (even empty) is SSR-authoritative — empty
+        // default-site mount must not fall back to sticky WELINE_WEBSITE_URL cookie.
+        const node = document.querySelector('[data-i18n-switcher][data-website-mount]');
+        let raw = '';
+        if (node && node.hasAttribute('data-website-mount')) {
+            raw = String(node.getAttribute('data-website-mount') || '').trim();
+        } else {
+            raw = String(readCookieValue('WELINE_WEBSITE_URL') || '').trim();
+        }
         if (!raw) {
             return '';
         }

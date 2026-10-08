@@ -601,15 +601,20 @@
     }
 
     function resolveWebsiteMountPath(config) {
-        const fromDom = (function () {
-            const node = document.querySelector('[data-website-mount], [data-i18n-switcher][data-website-mount]');
-            return node ? String(node.getAttribute('data-website-mount') || '').trim() : '';
-        })();
+        // data-website-mount present (even empty) is SSR-authoritative for this page.
+        // Empty mount on the default bare-host site must not fall back to a sticky
+        // WELINE_WEBSITE_URL cookie from a prior /~site/{code} visit.
+        const node = document.querySelector('[data-website-mount], [data-i18n-switcher][data-website-mount]');
+        if (node && node.hasAttribute('data-website-mount')) {
+            return normalizeWebsiteMountPath(
+                String(node.getAttribute('data-website-mount') || '').trim(),
+                config || getConfig()
+            );
+        }
         const site = window.site || {};
         const fromSite = site.website_url || site.websiteUrl || site.base_host || '';
         const raw = String(
-            fromDom
-            || getCookie('WELINE_WEBSITE_URL')
+            getCookie('WELINE_WEBSITE_URL')
             || fromSite
             || ''
         ).trim();
@@ -637,11 +642,39 @@
         return path;
     }
 
+    /** Matches Theme /~preview/{token}/ opaque bearer (path mount). */
+    const LIVE_PREVIEW_TOKEN_PATTERN = /^pv_(?:[A-Za-z0-9_-]{43}|[1-9][0-9]{0,18}_[0-9]{9,12}_[a-f0-9]{16})$/;
+
+    /**
+     * Peel /~preview/{token}/… and inverted /~site/…/~preview/{token}/… stacks.
+     * @returns {{token: string, path: string}}
+     */
+    function peelLivePreviewPathMount(pathname) {
+        const parts = String(pathname || '/').split('/').filter(Boolean);
+        if (parts.length === 0) {
+            return { token: '', path: '/' };
+        }
+        const previewIdx = parts.indexOf('~preview');
+        if (previewIdx >= 0
+            && parts[previewIdx + 1]
+            && LIVE_PREVIEW_TOKEN_PATTERN.test(String(parts[previewIdx + 1]))
+        ) {
+            const token = String(parts[previewIdx + 1]);
+            const after = parts.slice(previewIdx + 2);
+            return {
+                token: token,
+                path: after.length === 0 ? '/' : ('/' + after.join('/')),
+            };
+        }
+        return { token: '', path: String(pathname || '/') || '/' };
+    }
+
     /**
      * 路径注入：将 website/area/currency/lang 注入到路径中
      * 参考 Frontend 模块的 inject_path 函数
      * URL 结构：[website_mount]/[area]/[currency]/[lang]/[path]
      * 网站挂载 path 是固定 base：先剥掉再处理站内段，最后拼回。
+     * Live preview：可见 path 只留 /~preview/{token}/…，禁止再叠 /~site/{code}。
      */
     function inject_path(path, code = '', type = '') {
         if (!path) {
@@ -652,8 +685,15 @@
             path = '/' + path;
         }
 
+        const livePreview = peelLivePreviewPathMount(path);
+        path = livePreview.path;
+        if (!path.startsWith('/')) {
+            path = '/' + path;
+        }
+
         const config = getConfig();
-        let prePath = resolveWebsiteMountPath(config);
+        // Under live preview, site identity is Token-authoritative — do not re-stack /~site.
+        let prePath = livePreview.token ? '' : resolveWebsiteMountPath(config);
         const currentLang = resolveCurrentLanguage(config);
         const rawCurrentCurrency = resolveCurrentCurrency(config);
         const currentCurrency = isCurrencySegment(rawCurrentCurrency, config) ? normalizeCurrencyCode(rawCurrentCurrency) : '';
@@ -744,7 +784,14 @@
             prePath += '/' + targetLang;
         }
 
-        return prePath + path;
+        let result = prePath + path;
+        if (livePreview.token) {
+            if (!result.startsWith('/')) {
+                result = '/' + result;
+            }
+            result = '/~preview/' + livePreview.token + (result === '/' ? '' : result);
+        }
+        return result;
     }
 
     /**

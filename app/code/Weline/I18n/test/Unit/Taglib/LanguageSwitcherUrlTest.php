@@ -95,6 +95,110 @@ final class LanguageSwitcherUrlTest extends TestCase
         }
     }
 
+    public function testBuildLanguageHrefUnderLivePreviewOmitsSiteMountAndCarriesPreview(): void
+    {
+        if (!\class_exists(\Weline\Theme\Service\ThemeLivePreviewPathMount::class)) {
+            self::markTestSkipped('Weline_Theme not available');
+        }
+
+        $token = 'pv_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG';
+        $previousUrl = $_SERVER['WELINE_WEBSITE_URL'] ?? null;
+        $previousOrigin = $_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? null;
+        $_SERVER['WELINE_WEBSITE_URL'] = 'https://p05113ef3.test.weline.com/~site/grocery';
+        $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = '/~preview/' . $token . '/CNY/terms';
+        try {
+            \Weline\Framework\Runtime\RequestContext::set(
+                \Weline\Theme\Service\ThemeLivePreviewPathMount::REQUEST_CONTEXT_TOKEN_KEY,
+                $token
+            );
+            $href = $this->buildLanguageHref(
+                '/~preview/' . $token . '/CNY/terms',
+                '',
+                'zh_Hans_CN',
+                'CNY'
+            );
+            self::assertStringContainsString('/~preview/' . $token, $href);
+            self::assertStringContainsString('/terms', $href);
+            self::assertStringNotContainsString('/~site/', $href);
+            self::assertStringNotContainsString('/~site/grocery/~preview/', $href);
+            self::assertMatchesRegularExpression(
+                '#^/~preview/' . \preg_quote($token, '#') . '(/|$)#',
+                \explode('?', $href, 2)[0]
+            );
+        } finally {
+            try {
+                \Weline\Framework\Runtime\RequestContext::remove(
+                    \Weline\Theme\Service\ThemeLivePreviewPathMount::REQUEST_CONTEXT_TOKEN_KEY
+                );
+            } catch (\Throwable) {
+            }
+            if ($previousUrl === null) {
+                unset($_SERVER['WELINE_WEBSITE_URL']);
+            } else {
+                $_SERVER['WELINE_WEBSITE_URL'] = $previousUrl;
+            }
+            if ($previousOrigin === null) {
+                unset($_SERVER['WELINE_ORIGIN_REQUEST_URI']);
+            } else {
+                $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $previousOrigin;
+            }
+        }
+    }
+
+    public function testDefaultSiteMountIgnoresStickyGroceryCookie(): void
+    {
+        $previousUrl = $_SERVER['WELINE_WEBSITE_URL'] ?? null;
+        $previousCookie = null;
+        if (\function_exists('w_env_cookie')) {
+            $previousCookie = \w_env_cookie('WELINE_WEBSITE_URL', null);
+        }
+        $_SERVER['WELINE_WEBSITE_URL'] = 'https://p05113ef3.test.weline.com/';
+        if (\function_exists('w_env_set')) {
+            \w_env_set('cookie.WELINE_WEBSITE_URL', 'https://p05113ef3.test.weline.com/~site/grocery');
+        }
+        try {
+            self::assertSame('', $this->resolveWebsiteMountPath());
+            $href = $this->buildLanguageHref('/', '', 'en_US', 'CNY');
+            self::assertStringNotContainsString('/~site/', $href);
+            self::assertStringNotContainsString('grocery', $href);
+            self::assertStringContainsString('en_US', $href);
+        } finally {
+            if ($previousUrl === null) {
+                unset($_SERVER['WELINE_WEBSITE_URL']);
+            } else {
+                $_SERVER['WELINE_WEBSITE_URL'] = $previousUrl;
+            }
+            if (\function_exists('w_env_set')) {
+                \w_env_set('cookie.WELINE_WEBSITE_URL', $previousCookie);
+            }
+        }
+    }
+
+    public function testGrocerySiteMountStillEmittedFromRequestBoundUrl(): void
+    {
+        $previousUrl = $_SERVER['WELINE_WEBSITE_URL'] ?? null;
+        $_SERVER['WELINE_WEBSITE_URL'] = 'https://p05113ef3.test.weline.com/~site/grocery';
+        try {
+            self::assertSame('~site/grocery', $this->resolveWebsiteMountPath());
+            $href = $this->buildLanguageHref('/', '', 'en_US', 'CNY');
+            self::assertStringContainsString('/~site/grocery', $href);
+        } finally {
+            if ($previousUrl === null) {
+                unset($_SERVER['WELINE_WEBSITE_URL']);
+            } else {
+                $_SERVER['WELINE_WEBSITE_URL'] = $previousUrl;
+            }
+        }
+    }
+
+    private function resolveWebsiteMountPath(): string
+    {
+        $method = new ReflectionMethod(LanguageSwitcher::class, 'resolveWebsiteMountPath');
+        $method->setAccessible(true);
+
+        return (string)$method->invoke(null, null);
+    }
+
     private function buildLanguageHref(
         string $path,
         string $search,

@@ -1412,6 +1412,9 @@ class LanguageSwitcher implements TaglibInterface
             }
 
             $storefrontPath = $remaining === [] ? '/' : '/' . $remainingPath;
+            // Live-preview origin keeps /~preview/{token}/… — peel before mount strip so
+            // language hrefs never treat the token as a storefront route segment.
+            $storefrontPath = self::peelLivePreviewMountFromPath($storefrontPath)['path'];
 
             return self::stripWebsiteMountFromStorefrontPath($storefrontPath, $request);
         }
@@ -1420,6 +1423,8 @@ class LanguageSwitcher implements TaglibInterface
         if ($isInternalPageBuilderPath(trim($fallback, '/'))) {
             return '/';
         }
+
+        $fallback = self::peelLivePreviewMountFromPath($fallback !== '' ? $fallback : '/')['path'];
 
         return self::stripWebsiteMountFromStorefrontPath(
             $fallback !== '' ? $fallback : '/',
@@ -1431,22 +1436,50 @@ class LanguageSwitcher implements TaglibInterface
      * Website mount sub_path (e.g. aisite_accept_ok) must not appear in the
      * storefront-relative path used for language hrefs — otherwise locale
      * builders emit /hi_IN/aisite_accept_ok and mount prefixers double it.
+     *
+     * Request-bound WELINE_WEBSITE_URL / website_url is authoritative, including
+     * an empty mount on the default (bare-host) site. Never let a sticky
+     * WELINE_WEBSITE_URL cookie from a prior /~site/{code} visit win.
      */
     private static function resolveWebsiteMountPath(?Request $request = null): string
     {
-        $candidates = [
+        $requestBound = [
             $request instanceof Request ? (string)($request->getServer('WELINE_WEBSITE_URL') ?? '') : '',
             (string)WelineEnv::server('WELINE_WEBSITE_URL', ''),
             (string)WelineEnv::get('website_url', ''),
             (string)($_SERVER['WELINE_WEBSITE_URL'] ?? ''),
         ];
-        try {
-            $fromUrl = \Weline\Framework\Http\Url::resolveCurrentWebsiteMountPath();
-            if ($fromUrl !== '') {
-                return trim($fromUrl, '/');
+        $hasRequestWebsiteUrl = false;
+        foreach ($requestBound as $boundUrl) {
+            if (trim((string)$boundUrl) !== '') {
+                $hasRequestWebsiteUrl = true;
+                break;
             }
-        } catch (\Throwable) {
         }
+
+        if ($hasRequestWebsiteUrl) {
+            try {
+                $fromUrl = \Weline\Framework\Http\Url::resolveCurrentWebsiteMountPath();
+                if ($fromUrl !== '') {
+                    return trim($fromUrl, '/');
+                }
+            } catch (\Throwable) {
+            }
+            // First non-empty request-bound URL wins — empty path => empty mount.
+            foreach ($requestBound as $websiteUrl) {
+                $websiteUrl = trim((string)$websiteUrl);
+                if ($websiteUrl === '') {
+                    continue;
+                }
+
+                return self::extractMountFromWebsiteUrlCandidate($websiteUrl);
+            }
+
+            return '';
+        }
+
+        // No request-bound website URL: cookie then URI recovery (blog edge).
+        $candidates = [];
         try {
             $cookie = (string)(\Weline\Framework\Http\Cookie::get('WELINE_WEBSITE_URL') ?? '');
             if ($cookie !== '') {
@@ -1459,16 +1492,7 @@ class LanguageSwitcher implements TaglibInterface
             if ($websiteUrl === '') {
                 continue;
             }
-            $path = '';
-            if (str_contains($websiteUrl, '://')) {
-                $parsed = parse_url($websiteUrl, PHP_URL_PATH);
-                $path = is_string($parsed) ? $parsed : '';
-            } elseif (str_starts_with($websiteUrl, '/')) {
-                $path = $websiteUrl;
-            } elseif (preg_match('/^[a-zA-Z0-9_-]{2,64}$/', $websiteUrl) === 1) {
-                return $websiteUrl;
-            }
-            $mount = trim(str_replace('\\', '/', $path), '/');
+            $mount = self::extractMountFromWebsiteUrlCandidate($websiteUrl);
             if ($mount !== '') {
                 return $mount;
             }
@@ -1511,6 +1535,29 @@ class LanguageSwitcher implements TaglibInterface
         return '';
     }
 
+    /**
+     * Extract mount path from a website URL / path / bare code candidate.
+     * Bare host (empty path) returns '' — that is the default-site mount.
+     */
+    private static function extractMountFromWebsiteUrlCandidate(string $websiteUrl): string
+    {
+        $websiteUrl = trim($websiteUrl);
+        if ($websiteUrl === '') {
+            return '';
+        }
+        $path = '';
+        if (str_contains($websiteUrl, '://')) {
+            $parsed = parse_url($websiteUrl, PHP_URL_PATH);
+            $path = is_string($parsed) ? $parsed : '';
+        } elseif (str_starts_with($websiteUrl, '/')) {
+            $path = $websiteUrl;
+        } elseif (preg_match('/^[a-zA-Z0-9_-]{2,64}$/', $websiteUrl) === 1) {
+            return $websiteUrl;
+        }
+
+        return trim(str_replace('\\', '/', $path), '/');
+    }
+
     private static function stripWebsiteMountFromStorefrontPath(string $path, ?Request $request = null): string
     {
         $mount = self::resolveWebsiteMountPath($request);
@@ -1522,11 +1569,114 @@ class LanguageSwitcher implements TaglibInterface
             explode('/', trim(str_replace('\\', '/', $path), '/')),
             static fn(string $segment): bool => $segment !== ''
         ));
-        while ($segments !== [] && strcasecmp((string)$segments[0], $mount) === 0) {
-            array_shift($segments);
+        $mountSegments = array_values(array_filter(
+            explode('/', trim(str_replace('\\', '/', $mount), '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        // Multi-segment project-Host mounts (/~site/{code}) must peel as a prefix, not
+        // only when segments[0] equals the whole "~site/grocery" string.
+        while ($mountSegments !== [] && \count($segments) >= \count($mountSegments)) {
+            $matches = true;
+            foreach ($mountSegments as $index => $mountSegment) {
+                if (\strcasecmp((string)$segments[$index], (string)$mountSegment) !== 0) {
+                    $matches = false;
+                    break;
+                }
+            }
+            if (!$matches) {
+                break;
+            }
+            $segments = \array_slice($segments, \count($mountSegments));
+        }
+        while ($segments !== [] && \strcasecmp((string)$segments[0], $mount) === 0) {
+            \array_shift($segments);
         }
 
-        return $segments === [] ? '/' : '/' . implode('/', $segments);
+        return $segments === [] ? '/' : '/' . \implode('/', $segments);
+    }
+
+    /**
+     * @return array{path: string, token: ?string}
+     */
+    private static function peelLivePreviewMountFromPath(string $path): array
+    {
+        $path = \trim(\str_replace('\\', '/', $path));
+        if ($path === '') {
+            return ['path' => '/', 'token' => null];
+        }
+        if ($path[0] !== '/') {
+            $path = '/' . $path;
+        }
+        if (!\class_exists(\Weline\Theme\Service\ThemeLivePreviewPathMount::class)) {
+            return ['path' => $path, 'token' => null];
+        }
+        try {
+            $parsed = \Weline\Theme\Service\ThemeLivePreviewPathMount::parseFromUri($path);
+        } catch (\Throwable) {
+            return ['path' => $path, 'token' => null];
+        }
+        if ($parsed === null) {
+            return ['path' => $path, 'token' => null];
+        }
+        $remainder = (string)($parsed['remainder'] ?? '/');
+        $remainderPath = (string)(\parse_url($remainder, \PHP_URL_PATH) ?: '/');
+        if ($remainderPath === '') {
+            $remainderPath = '/';
+        }
+
+        return [
+            'path' => $remainderPath,
+            'token' => (string)($parsed['token'] ?? ''),
+        ];
+    }
+
+    private static function resolveActiveLivePreviewToken(): ?string
+    {
+        if (!\class_exists(\Weline\Theme\Service\ThemeLivePreviewPathMount::class)) {
+            return null;
+        }
+        $mountClass = \Weline\Theme\Service\ThemeLivePreviewPathMount::class;
+        try {
+            $fromContext = RequestContext::get($mountClass::REQUEST_CONTEXT_TOKEN_KEY);
+            if (\is_string($fromContext) && $mountClass::isPreviewToken($fromContext)) {
+                return \trim($fromContext);
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            $fromEnv = (string)WelineEnv::get($mountClass::ENV_TOKEN_KEY, '');
+            if ($mountClass::isPreviewToken($fromEnv)) {
+                return \trim($fromEnv);
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            $origin = (string)(WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
+                ?: WelineEnv::server('REQUEST_URI', '')
+                ?: ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? ''));
+            $parsed = $mountClass::parseFromUri($origin);
+            if ($parsed !== null && $mountClass::isPreviewToken((string)$parsed['token'])) {
+                return (string)$parsed['token'];
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    private static function carryLivePreviewPathOnHref(string $href): string
+    {
+        $token = self::resolveActiveLivePreviewToken();
+        if ($token === null || $token === ''
+            || !\class_exists(\Weline\Theme\Service\ThemeLivePreviewPathMount::class)
+        ) {
+            return $href;
+        }
+        try {
+            return \Weline\Theme\Service\ThemeLivePreviewPathMount::prefixStorefrontUrl($href, $token);
+        } catch (\Throwable) {
+            return $href;
+        }
     }
 
     /**
@@ -1548,11 +1698,12 @@ class LanguageSwitcher implements TaglibInterface
     ): string {
         $preferredPrefix = trim($preferredPrefix, '/');
         $websiteMount = self::resolveWebsiteMountPath(null);
+        // Peel live-preview mount before website base — otherwise remain keeps
+        // ~preview/{token} and joinWebsiteMount emits /~site/{code}/~preview/….
+        $path = (string)(parse_url($path, PHP_URL_PATH) ?: $path ?: '/');
+        $path = self::peelLivePreviewMountFromPath($path)['path'];
         // Peel fixed website base before any locale/currency/page splitting.
-        $path = self::stripWebsiteMountFromStorefrontPath(
-            (string)(parse_url($path, PHP_URL_PATH) ?: $path ?: '/'),
-            null
-        );
+        $path = self::stripWebsiteMountFromStorefrontPath($path, null);
         $pathParts = array_values(array_filter(explode('/', $path), static fn($part) => $part !== ''));
         $langPattern = '/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i';
         $prefixIndex = -1;
@@ -1611,6 +1762,14 @@ class LanguageSwitcher implements TaglibInterface
             }
             // Mount must never re-enter relative remain after base peel.
             if ($websiteMount !== '' && strcasecmp((string)$part, $websiteMount) === 0) {
+                continue;
+            }
+            // Defense: never keep live-preview namespace segments in storefront remain.
+            if ((string)$part === '~preview'
+                || (string)$part === '~site'
+                || (\class_exists(\Weline\Theme\Service\ThemeLivePreviewPathMount::class)
+                    && \Weline\Theme\Service\ThemeLivePreviewPathMount::isPreviewToken((string)$part))
+            ) {
                 continue;
             }
             $remain[] = $part;
@@ -1673,6 +1832,9 @@ class LanguageSwitcher implements TaglibInterface
         if ($prefix === '' && $websiteMount !== '') {
             $relativeHref = self::joinWebsiteMountAndRelativePath($websiteMount, $relativeHref);
         }
+
+        // Live preview: visible href = /~preview/{token}/… (strip /~site via Theme mount).
+        $relativeHref = self::carryLivePreviewPathOnHref($relativeHref);
 
         return $relativeHref . ($normalizedSearch !== '' ? '?' . $normalizedSearch : '');
     }
