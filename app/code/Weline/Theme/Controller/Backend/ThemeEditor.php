@@ -9818,7 +9818,9 @@ HTML;
                 'website_id' => $websiteId,
                 'website_code' => $websiteCode,
                 'items' => $items,
-                'notice' => (string)__('本机开发请优先选择「本机项目壳」。生产域名可能不可达，或打开的是线上站而非本机改动。'),
+                'notice' => (string)__(
+                    '画布与默认预览跟当前后台 Host：本站本机域上开编辑器则用当前域；项目 Host 上开则用 /~site/{站点}。真实预览靠 Token，跨 Host 一般不掉后台登录；正式/外部域名可选，线上可能看不到本机草稿。'
+                ),
             ],
         ]);
     }
@@ -10668,13 +10670,21 @@ HTML;
         /** @var \Weline\Theme\Service\ThemeFrontendPreviewBaseCatalog $catalog */
         $catalog = ObjectManager::getInstance(\Weline\Theme\Service\ThemeFrontendPreviewBaseCatalog::class);
         $chosenBase = \trim((string)$previewBaseUrl);
-        // Local theme edit/preview defaults to project-Host /~site/{code} — other
-        // domains are opt-in via the allowlisted preview_base_url picker only.
+        // Default follows catalog is_default: project-Host → /~site/{code};
+        // already on this site's Host-only domain → that domain (same entry Host).
         if ($chosenBase === '' && $websiteId !== null) {
             foreach ($catalog->listForWebsite($websiteId, (string)$websiteCode) as $item) {
-                if (($item['kind'] ?? '') === 'local_shell' && !empty($item['url'])) {
+                if (!empty($item['is_default']) && !empty($item['url'])) {
                     $chosenBase = (string)$item['url'];
                     break;
+                }
+            }
+            if ($chosenBase === '') {
+                foreach ($catalog->listForWebsite($websiteId, (string)$websiteCode) as $item) {
+                    if (!empty($item['url'])) {
+                        $chosenBase = (string)$item['url'];
+                        break;
+                    }
                 }
             }
         }

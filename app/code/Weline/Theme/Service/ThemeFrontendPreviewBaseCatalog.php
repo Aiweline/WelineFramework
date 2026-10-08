@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Http\RequestInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Api\Domain\LocalDomainPolicy;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
@@ -12,7 +14,9 @@ use Weline\Websites\Service\Value\CanonicalStorefrontUrl;
 
 /**
  * Real frontend-preview base URLs for a website scope.
- * Local project-Host /~site/{code} is always first and default.
+ * Default: project-Host /~site/{code}. When the admin request is already on this
+ * website's Host-only local domain, that domain becomes the default instead
+ * (same entry Host as the editor — avoids surprising cross-Host preview URLs).
  */
 final class ThemeFrontendPreviewBaseCatalog
 {
@@ -32,13 +36,14 @@ final class ThemeFrontendPreviewBaseCatalog
      *   hint: string
      * }>
      */
-    public function listForWebsite(int $websiteId, string $websiteCode = ''): array
+    public function listForWebsite(int $websiteId, string $websiteCode = '', ?string $preferHost = null): array
     {
         if ($websiteId < Website::ID_DEFAULT) {
             return [];
         }
 
         $websiteCode = \strtolower(\trim($websiteCode));
+        $preferHost = \strtolower(\trim((string)($preferHost ?? $this->currentRequestHost())));
         $items = [];
         $seen = [];
 
@@ -47,11 +52,11 @@ final class ThemeFrontendPreviewBaseCatalog
             $items[] = [
                 'id' => 'local_shell',
                 'kind' => 'local_shell',
-                'label' => (string)\__('本机项目壳'),
+                'label' => (string)\__('本机项目壳（/~site）'),
                 'url' => $local,
                 'is_default' => true,
-                'badge' => (string)\__('默认'),
-                'hint' => (string)\__('本机开发推荐：可达，且看到的是本机改动，不是线上站。'),
+                'badge' => (string)\__('默认·待发布预览'),
+                'hint' => (string)\__('项目 Host 上默认：/~site/{站点}，保证能正确预览当前要发布的版本。'),
             ];
             $seen[$this->normalizeUrlKey($local)] = true;
         }
@@ -95,12 +100,79 @@ final class ThemeFrontendPreviewBaseCatalog
                 'is_default' => false,
                 'badge' => $isLocalHost ? (string)\__('本机域') : (string)\__('生产域名'),
                 'hint' => $isLocalHost
-                    ? (string)\__('本机绑定域名。')
-                    : (string)\__('生产域名：可能不可达，或打开的是线上内容而非本机开发站。上线验收时再选。'),
+                    ? (string)\__('本站本机域。后台已在此 Host 打开时，默认预览跟当前域（与画布一致）。')
+                    : (string)\__('正式/外部域名可选。线上常见仍是已发布内容，可能看不到本机待发布改动；仅上线验收时选用。'),
             ];
         }
 
-        return $items;
+        return $this->applyPreferHostDefault($items, $preferHost);
+    }
+
+    /**
+     * When admin HTTP_HOST matches a listed local_domain, make that the default.
+     *
+     * @param list<array<string,mixed>> $items
+     * @return list<array<string,mixed>>
+     */
+    private function applyPreferHostDefault(array $items, string $preferHost): array
+    {
+        if ($preferHost === '' || $items === []) {
+            return $items;
+        }
+        if (\class_exists(LocalDomainPolicy::class)
+            && LocalDomainPolicy::isStandardProjectHost($preferHost)
+        ) {
+            return $items;
+        }
+
+        $matchIndex = null;
+        foreach ($items as $i => $item) {
+            if (($item['kind'] ?? '') !== 'local_domain') {
+                continue;
+            }
+            $host = \strtolower((string)(\parse_url((string)($item['url'] ?? ''), \PHP_URL_HOST) ?: ''));
+            if ($host !== '' && $host === $preferHost) {
+                $matchIndex = $i;
+                break;
+            }
+        }
+        if ($matchIndex === null) {
+            return $items;
+        }
+
+        foreach ($items as $i => &$item) {
+            $item['is_default'] = ($i === $matchIndex);
+            if ($i === $matchIndex) {
+                $item['badge'] = (string)\__('默认·当前域');
+                $item['hint'] = (string)\__('与当前后台 Host 一致，默认预览跟编辑入口同源。');
+            } elseif (($item['kind'] ?? '') === 'local_shell') {
+                $item['badge'] = (string)\__('本机项目壳');
+                $item['hint'] = (string)\__('可选：切到项目壳 /~site/{站点} 预览。');
+            }
+        }
+        unset($item);
+
+        // Surface the preferred domain first in the picker.
+        $preferred = $items[$matchIndex];
+        unset($items[$matchIndex]);
+
+        return \array_values(\array_merge([$preferred], $items));
+    }
+
+    private function currentRequestHost(): string
+    {
+        try {
+            /** @var RequestInterface $request */
+            $request = ObjectManager::getInstance(RequestInterface::class);
+            $host = \strtolower(\trim((string)($request->getServer('HTTP_HOST') ?? '')));
+            if ($host !== '' && \str_contains($host, ':')) {
+                $host = \explode(':', $host, 2)[0];
+            }
+
+            return $host;
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     public function isAllowedBaseUrl(string $candidate, int $websiteId, string $websiteCode = ''): bool

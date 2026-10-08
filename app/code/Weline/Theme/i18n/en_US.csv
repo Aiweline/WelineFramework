@@ -4677,3 +4677,12 @@ Chiffon,Chiffon
 启动预览失败,"Failed to start preview"
 本机开发请优先选择「本机项目壳」。,"For local development, prefer the local project shell."
 预览地址,"Preview address"
+本机项目壳（/~site）,Local project shell (/~site)
+默认·待发布预览,Default · pending publish
+项目 Host 上默认：/~site/{站点}，保证能正确预览当前要发布的版本。,"On the project Host, default is /~site/{site} so you preview the version about to publish."
+本站本机域。后台已在此 Host 打开时，默认预览跟当前域（与画布一致）。,"This site's local domain. When admin is already on this Host, default preview follows the current domain (same as the canvas)."
+正式/外部域名可选。线上常见仍是已发布内容，可能看不到本机待发布改动；仅上线验收时选用。,"Optional production/external domain. Live sites often still show published content, so local pending changes may be invisible—use only for production acceptance."
+默认·当前域,Default · current domain
+与当前后台 Host 一致，默认预览跟编辑入口同源。,Matches the current admin Host; default preview stays on the editor entry origin.
+可选：切到项目壳 /~site/{站点} 预览。,Optional: switch to the project shell /~site/{site} for preview.
+画布与默认预览跟当前后台 Host：本站本机域上开编辑器则用当前域；项目 Host 上开则用 /~site/{站点}。真实预览靠 Token，跨 Host 一般不掉后台登录；正式/外部域名可选，线上可能看不到本机草稿。,"Canvas and default preview follow the current admin Host: use the current domain when the editor is already on this site's local domain; use /~site/{site} on the project Host. Live preview relies on the Token, so a cross-Host open usually does not drop admin login; formal/external domains are optional and may not show local drafts."

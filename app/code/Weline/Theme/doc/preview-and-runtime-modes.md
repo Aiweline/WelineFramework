@@ -20,13 +20,23 @@
 
 ---
 
+## 0. Host 与 `/~site`（产品口径·严重）
+
+| 场景 | Host / 路径 | 说明 |
+|------|-------------|------|
+| **主题编辑器画布**（态 1） | **跟当前后台 Host**：项目 Host → `/~site/{code}`；已在本站本机域（如 grocery.test）→ 同域 `/` | 禁止从本机域再默认嵌到另一项目 Host（会拆后台 Session） |
+| **前端预览默认**（态 2） | 与上同口径（catalog `is_default`） | Token 身份权威；跨 Host **一般不掉后台登录**，但默认基址仍跟编辑入口，避免看错站 |
+| **前端预览·外部域名** | 弹窗可选生产/其它本机域 | 正式域名常见仍是线上已发布内容，**可能看不到**本机待发布改动；仅上线验收时选用 |
+
+实现锚点：`resolveStorefrontOriginForEditorScope`（本机域 → origin 空）；`ThemeFrontendPreviewBaseCatalog::applyPreferHostDefault`；`buildFrontendPreviewUrl` 跟 `is_default`；`preview-bases` notice。
+
 ## 1. 可视化编辑预览（参数为主）
 
 ### 是什么
 
 后台主题编辑器画布 / iframe 里的布局预览。只读展示当前编辑态（draft / 指定 version 等），**不**种店面预览 Token，**不**激活前台「预览模式」浮层。
 
-画布加载的是**真实店面路由**（path = layout），由路由自己套布局与控制器内容——与店面一致。禁止用 `theme-preview/content`、`theme-editor/layout-preview` 等自定义壳地址代替店面 path。
+画布加载的是**真实店面路由**（path = layout），由路由自己套布局与控制器内容——与店面一致。禁止用 `theme-preview/content`、`theme-editor/layout-preview` 等自定义壳地址代替店面 path。本地编辑固定走项目壳 `/~site/{code}`（见 §0）。
 
 ### 权威来源
 
