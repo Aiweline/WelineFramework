@@ -62,6 +62,10 @@ return [
             'pool_size' => 16,
             'timeout' => 30,
         ],
+        // 池满等待预算（毫秒）。默认 2000；c1000 FPC miss/滚动重载惊群建议 8000–12000（硬上限 30000）。
+        'pool' => [
+            'acquire_timeout_ms' => 12000,
+        ],
         'slaves' => [],
     ],
     

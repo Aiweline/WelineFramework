@@ -2168,16 +2168,21 @@ class Processer
             $pidEntry = ((array)($pidSnapshot['data'] ?? []))[$pid] ?? null;
             if ($pidEntry !== null) {
                 if (!\is_array($pidEntry)) {
-                    return [];
+                    // Corrupt index row: exact lease remains authority.
+                    return $record;
                 }
                 $indexedPname = \trim((string)($pidEntry['pname'] ?? ''));
                 $indexedPath = \trim((string)($pidEntry['jsonPath'] ?? ''));
-                if ($indexedPname === ''
-                    || self::buildManagedIdentity($indexedPname) !== self::buildManagedIdentity($recordedPname)
-                    || $indexedPath === ''
-                    || !$pathsEquivalent($jsonPath, $indexedPath)) {
+                // True conflict: index claims a different managed identity for this PID.
+                // Path-only mismatch is publication-window cache drift and must not
+                // erase an otherwise valid exact lease (rolling reload batch fences).
+                if ($indexedPname !== ''
+                    && self::buildManagedIdentity($indexedPname)
+                        !== self::buildManagedIdentity($recordedPname)
+                ) {
                     return [];
                 }
+                unset($indexedPath);
             }
         }
 
@@ -2192,11 +2197,10 @@ class Processer
                     if (!\is_array($entry) || (int)($entry['pid'] ?? 0) !== $pid) {
                         continue;
                     }
-                    $indexedPath = \trim((string)($entry['jsonPath'] ?? ''));
+                    // Identity matches: path drift during index republish is non-fatal.
                     if (self::buildManagedIdentity((string)$indexedPname)
-                            !== self::buildManagedIdentity($recordedPname)
-                        || $indexedPath === ''
-                        || !$pathsEquivalent($jsonPath, $indexedPath)) {
+                        !== self::buildManagedIdentity($recordedPname)
+                    ) {
                         return [];
                     }
                 }

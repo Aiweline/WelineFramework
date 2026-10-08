@@ -18,6 +18,7 @@ use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Setup\Lock\SoakExclusiveGate;
 use Weline\Maintenance\Helper\WlsMaintenanceSync;
 use Weline\Maintenance\Service\MaintenanceStaticGenerator;
 use Weline\Maintenance\Service\UpgradeWaveService;
@@ -47,6 +48,8 @@ class Enable implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
+        SoakExclusiveGate::assertClearForMaintenanceFlip('maintenance:enable');
+
         $waves = new UpgradeWaveService();
         $gift = $waves->readGiftConfig();
         if (!empty($gift['enabled'])) {

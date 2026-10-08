@@ -46,6 +46,7 @@ use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\Setup\Lock\SetupDatabaseAccessLock;
+use Weline\Framework\Setup\Lock\SoakExclusiveGate;
 use Weline\Framework\Setup\Operation\SetupOperationContext;
 use Weline\Framework\Setup\Service\SetupScriptContractValidator;
 use Weline\Framework\Setup\Service\SetupSourceFingerprint;
@@ -658,6 +659,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             return;
         }
 
+        // Soak 排他：在 prepare/开维护之前拦截，避免中途污染 TOTAL_ERRORS=0 窗口。
+        SoakExclusiveGate::assertClearForMaintenanceFlip('setup:upgrade');
+
         // setup:upgrade 全程跳过全局 DB 词典整表 hydrate（__() 进度文案仍可用源串/文件层）
         Parser::setSetupUpgradeLightDictionary(true);
         try {
@@ -1177,7 +1181,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function executeUpgradeProcess(array $args, array $data, bool &$maintenanceEnabled): void
     {
-        
+        // Soak / 长稳窗口：禁止 setup:upgrade 翻维护，避免店面 503「网站维护」污染 TOTAL_ERRORS=0。
+        SoakExclusiveGate::assertClearForMaintenanceFlip('setup:upgrade');
+
         // 1. 启用维护模式
         Env::getInstance()->setConfig('system.maintenance', true);
         $this->syncWlsMaintenanceMode(true);
