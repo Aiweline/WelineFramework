@@ -367,8 +367,9 @@ capability 格式固定为 `cache.edge_adapter.<priority>.<code>`：
 | `ensureZone()` | 解析或创建 Zone |
 | `enableAttackMode()/disableAttackMode()/supportsAttackMode()` | 攻击防护模式 |
 | `getRealIpHeaderKeys()` | 发布供 Framework 解析的 CDN 真实 IP Header keys |
+| `resolveClientIpFromHeaders(array $headers): ?string` | WLS `resolve_client_ip` 事件：命中本厂商标头则返回访客 IP，否则 null |
 
-所有方法签名以当前接口源码为准。不支持攻击模式的适配器应返回 `supportsAttackMode() === false`，不应伪造成功结果。
+所有方法签名以当前接口源码为准。不支持攻击模式的适配器应返回 `supportsAttackMode() === false`，不应伪造成功结果。`resolveClientIpFromHeaders` 仅由 Server 在 `trusted_proxy` 下调用；适配器不得在此方法内封禁或访问账户库。
 
 ### 当前注册示例
 

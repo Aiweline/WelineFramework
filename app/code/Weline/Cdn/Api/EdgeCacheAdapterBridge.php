@@ -95,4 +95,9 @@ final readonly class EdgeCacheAdapterBridge implements AdapterInterface
     {
         return $this->adapter->getRealIpHeaderKeys();
     }
+
+    public function resolveClientIpFromHeaders(array $headers): ?string
+    {
+        return null;
+    }
 }

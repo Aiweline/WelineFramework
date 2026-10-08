@@ -424,8 +424,15 @@ final class WorkerPolicyKernel
             $trustedProxyCidrs,
             $forceTrustedProxy,
         );
-        $clientIp = $identity['ip'];
         $trustedProxy = $identity['trusted_proxy'];
+        $refined = ClientIpEventResolver::refine(
+            $identity['ip'],
+            $trustedProxy,
+            $identity['transport_ip'],
+            $parsed['headers'],
+            $trustedProxyCidrs,
+        );
+        $clientIp = $refined['ip'];
         $whitelisted = $this->identityResolver->matchesAny($clientIp, $this->whitelistCidrs);
         $probeMode = SecurityProbeTokenService::headerHasValidToken($parsed['headers']);
         $liveBanMode = SecurityProbeTokenService::headerHasValidLiveBanToken($parsed['headers']);

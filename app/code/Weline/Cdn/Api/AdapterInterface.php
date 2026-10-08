@@ -180,4 +180,14 @@ interface AdapterInterface extends EdgeCacheAdapterInterface
      * @return array<string> $_SERVER 格式的 key 列表，如 ['HTTP_CF_CONNECTING_IP']
      */
     public function getRealIpHeaderKeys(): array;
+
+    /**
+     * WLS 安全早路径：从已解析的小写 HTTP 头 map 解析访客真 IP。
+     *
+     * 仅在命中本供应商头时返回合法 IP；无头返回 null，由 Server 默认 XFF 剥链兜底。
+     * 调用方保证仅在 trusted_proxy 传输下调用。
+     *
+     * @param array<string, string> $headers Lowercase header name => value
+     */
+    public function resolveClientIpFromHeaders(array $headers): ?string;
 }

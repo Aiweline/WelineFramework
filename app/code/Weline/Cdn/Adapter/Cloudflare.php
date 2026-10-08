@@ -794,6 +794,27 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
     }
 
     /**
+     * @param array<string, string> $headers
+     */
+    public function resolveClientIpFromHeaders(array $headers): ?string
+    {
+        foreach (['cf-connecting-ip', 'true-client-ip'] as $name) {
+            $raw = \trim((string)($headers[$name] ?? ''));
+            if ($raw === '') {
+                continue;
+            }
+            if (\str_contains($raw, ',')) {
+                $raw = \trim(\explode(',', $raw, 2)[0]);
+            }
+            if ($raw !== '' && \filter_var($raw, \FILTER_VALIDATE_IP)) {
+                return $raw;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Mirror origin Cache-Control: no-store onto Cloudflare edge cache headers.
      * Owned by this provider — callers must not hardcode these header names.
      */

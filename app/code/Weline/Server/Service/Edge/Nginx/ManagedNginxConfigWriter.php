@@ -329,6 +329,7 @@ NGINX;
             proxy_set_header Host \$wls_upstream_authority;
             proxy_set_header X-Forwarded-Port \$server_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
             proxy_set_header X-Forwarded-Proto \$scheme;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header Cookie "";
@@ -428,6 +429,7 @@ http {
             proxy_set_header Host \$wls_upstream_authority;
             proxy_set_header X-Forwarded-Port \$server_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
             proxy_set_header X-Forwarded-Proto \$scheme;
         }
 
@@ -445,6 +447,7 @@ http {
             proxy_set_header Host \$wls_upstream_authority;
             proxy_set_header X-Forwarded-Port \$server_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
             proxy_set_header X-Forwarded-Proto \$scheme;
             proxy_set_header X-Real-IP \$remote_addr;
         }
@@ -460,6 +463,7 @@ http {
             proxy_set_header Host \$wls_upstream_authority;
             proxy_set_header X-Forwarded-Port \$server_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
             proxy_set_header X-Forwarded-Proto \$scheme;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_buffering off;
@@ -480,6 +484,7 @@ http {
             proxy_set_header Host \$wls_upstream_authority;
             proxy_set_header X-Forwarded-Port \$server_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
             proxy_set_header X-Forwarded-Proto \$scheme;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_connect_timeout {$businessProxyConnectTimeoutSec}s;
@@ -945,6 +950,7 @@ NGINX;
             proxy_set_header Host \$host;
             proxy_set_header X-Forwarded-Port \$server_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
             proxy_set_header X-Forwarded-Proto \$scheme;
         }
 
@@ -957,6 +963,7 @@ NGINX;
             proxy_set_header Host \$host;
             proxy_set_header X-Forwarded-Port \$server_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
             proxy_set_header X-Forwarded-Proto \$scheme;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_buffering on;

@@ -98,6 +98,15 @@
                   sort="10"/>
     </event>
 
+    <!-- WLS 封禁身份：受信传输下用厂商标头覆盖默认 XFF 剥链 -->
+    <event name="Weline_Server::security::resolve_client_ip">
+        <observer name="Weline_Cdn::resolve_client_ip"
+                  instance="Weline\Cdn\Observer\ResolveClientIpObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
     <!-- Origin Cache-Control no-store → 各 CDN 供应商写自己的边缘头（CF: CDN-/Cloudflare-CDN-Cache-Control） -->
     <event name="Weline_Framework::response::shared_cache_forbidden">
         <observer name="Weline_Cdn::apply_origin_no_store_edge_headers"

@@ -20,6 +20,8 @@
 "由 Framework 触发，用于查询 WLS 运行时维护模式状态。","由 Framework 触发，用于查询 WLS 运行时维护模式状态。"
 维护模式状态设置,维护模式状态设置
 "由 Framework 触发，用于在 WLS 运行时设置维护模式状态。","由 Framework 触发，用于在 WLS 运行时设置维护模式状态。"
+"解析客户端 IP","解析客户端 IP"
+"WorkerPolicyKernel 在 CanonicalClientIdentity 默认剥链后、封禁计费前派发；可选 CDN 适配器在命中本厂商标头时写入 client_ip + resolved_by。","WorkerPolicyKernel 在 CanonicalClientIdentity 默认剥链后、封禁计费前派发；可选 CDN 适配器在命中本厂商标头时写入 client_ip + resolved_by。"
 服务器启动后,服务器启动后
 "WLS Master 全部必需服务 READY 且 lifecycle 已标 running 后派发一次；供缓存预热等 Observer。fail-open。","WLS Master 全部必需服务 READY 且 lifecycle 已标 running 后派发一次；供缓存预热等 Observer。fail-open。"
 "Session query provider unsupported operation: %{1}",会话查询提供程序不支持的操作：%{1}

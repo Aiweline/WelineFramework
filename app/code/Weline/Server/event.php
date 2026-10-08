@@ -219,6 +219,26 @@ return [
     ],
 
     /**
+     * 受信传输下，在默认 XFF 剥链之后允许 CDN 等模块用厂商标头细化访客 IP。
+     * 未受信 peer 或观察者未写入 resolved_by 时保持默认 IP。
+     */
+    'Weline_Server::security::resolve_client_ip' => [
+        'name' => __('解析客户端 IP'),
+        'description' => __('WorkerPolicyKernel 在 CanonicalClientIdentity 默认剥链后、封禁计费前派发；可选 CDN 适配器在命中本厂商标头时写入 client_ip + resolved_by。'),
+        'doc' => 'security/解析客户端IP.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'transport_ip' => ['type' => 'string', 'required' => true, 'description' => '传输层 peer IP'],
+            'headers' => ['type' => 'array', 'required' => true, 'description' => '小写 HTTP 头 map'],
+            'trusted_proxy' => ['type' => 'boolean', 'required' => true, 'description' => '是否为受信代理传输'],
+            'trusted_proxy_cidrs' => ['type' => 'array', 'required' => true, 'description' => '受信代理 CIDR 列表'],
+            'client_ip' => ['type' => 'string', 'required' => true, 'description' => '默认可写；观察者可覆盖为访客真 IP'],
+            'resolved_by' => ['type' => 'string', 'required' => false, 'description' => '写入者适配器 code；非空才采信覆盖'],
+        ],
+    ],
+
+    /**
      * WLS 主进程 READY 后（ServiceOrchestrator::checkAndNotifyServerReady）
      * Framework WarmCache / Theme FPC warmer 等订阅此事件。
      */
