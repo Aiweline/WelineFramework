@@ -47,6 +47,7 @@ final class SystemEmbargoResourceChangePublisher
         ?array $after,
         string $entry,
     ): ResourceChange {
+        EmbargoService::invalidateSharedCache();
         /** @var TransactionCoordinatorInterface $transactions */
         $transactions = $this->objectManager->getInstance(TransactionCoordinatorInterface::class);
         if ($transactions->isActive($connection)) {

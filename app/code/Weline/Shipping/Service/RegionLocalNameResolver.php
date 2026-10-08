@@ -18,17 +18,26 @@ use Weline\Shipping\Model\Street\LocalDescription as StreetLocalDescription;
  */
 class RegionLocalNameResolver
 {
-    /** @var array<string, array<int, string>> */
-    private array $regionCache = [];
+    private const PROCESS_BAG_MAX = 256;
+
+    /** @var array<string, array<int, string>> locale → id → name (Worker process) */
+    private static array $processRegionCache = [];
 
     /** @var array<string, array<int, string>> */
-    private array $streetCache = [];
+    private static array $processStreetCache = [];
 
     /** @var array<string, array<int, string>> */
-    private array $postalPlaceCache = [];
+    private static array $processPostalPlaceCache = [];
 
     public function __construct(private readonly ObjectManager $objectManager)
     {
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processRegionCache = [];
+        self::$processStreetCache = [];
+        self::$processPostalPlaceCache = [];
     }
 
     public function currentLocale(): string
@@ -53,8 +62,8 @@ class RegionLocalNameResolver
         $missing = [];
         $out = [];
         foreach ($ids as $id) {
-            if (isset($this->regionCache[$locale][$id])) {
-                $out[$id] = $this->regionCache[$locale][$id];
+            if (isset(self::$processRegionCache[$locale][$id])) {
+                $out[$id] = self::$processRegionCache[$locale][$id];
             } else {
                 $missing[] = $id;
             }
@@ -70,7 +79,7 @@ class RegionLocalNameResolver
             if ($name === '') {
                 $name = trim((string)($defaults[$id] ?? ''));
             }
-            $this->regionCache[$locale][$id] = $name;
+            $this->rememberProcessName(self::$processRegionCache, $locale, $id, $name);
             $out[$id] = $name;
         }
 
@@ -101,8 +110,8 @@ class RegionLocalNameResolver
         $missing = [];
         $out = [];
         foreach ($ids as $id) {
-            if (isset($this->streetCache[$locale][$id])) {
-                $out[$id] = $this->streetCache[$locale][$id];
+            if (isset(self::$processStreetCache[$locale][$id])) {
+                $out[$id] = self::$processStreetCache[$locale][$id];
             } else {
                 $missing[] = $id;
             }
@@ -118,7 +127,7 @@ class RegionLocalNameResolver
             if ($name === '') {
                 $name = trim((string)($defaults[$id] ?? ''));
             }
-            $this->streetCache[$locale][$id] = $name;
+            $this->rememberProcessName(self::$processStreetCache, $locale, $id, $name);
             $out[$id] = $name;
         }
 
@@ -149,8 +158,8 @@ class RegionLocalNameResolver
         $missing = [];
         $out = [];
         foreach ($ids as $id) {
-            if (isset($this->postalPlaceCache[$locale][$id])) {
-                $out[$id] = $this->postalPlaceCache[$locale][$id];
+            if (isset(self::$processPostalPlaceCache[$locale][$id])) {
+                $out[$id] = self::$processPostalPlaceCache[$locale][$id];
             } else {
                 $missing[] = $id;
             }
@@ -166,11 +175,25 @@ class RegionLocalNameResolver
             if ($name === '') {
                 $name = trim((string)($defaults[$id] ?? ''));
             }
-            $this->postalPlaceCache[$locale][$id] = $name;
+            $this->rememberProcessName(self::$processPostalPlaceCache, $locale, $id, $name);
             $out[$id] = $name;
         }
 
         return $out;
+    }
+
+    /**
+     * @param array<string, array<int, string>> $bag
+     */
+    private function rememberProcessName(array &$bag, string $locale, int $id, string $name): void
+    {
+        if (!isset($bag[$locale]) && \count($bag) >= self::PROCESS_BAG_MAX) {
+            $first = \array_key_first($bag);
+            if ($first !== null) {
+                unset($bag[$first]);
+            }
+        }
+        $bag[$locale][$id] = $name;
     }
 
     public function nameByPostalPlaceId(int $postalPlaceId, ?string $locale = null): string
