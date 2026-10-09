@@ -61,7 +61,7 @@ final class ThemeUpgradeCommandContractTest extends TestCase
 
     public function testCliMetadataIsNotTreatedAsAModuleFilter(): void
     {
-        [$themeName, $modules] = ThemeUpgradeCommand::parseArguments([
+        [$themeName, $modules, $allVersions, $scope] = ThemeUpgradeCommand::parseArguments([
             0 => 'theme:upgrade',
             1 => '-t',
             2 => 'weshop-motor',
@@ -71,17 +71,49 @@ final class ThemeUpgradeCommandContractTest extends TestCase
 
         self::assertSame('weshop-motor', $themeName);
         self::assertSame([], $modules);
+        self::assertFalse($allVersions);
+        self::assertSame('', $scope);
     }
 
     public function testNamedThemeFlagFromAssociativeArgs(): void
     {
-        [$themeName, $modules] = ThemeUpgradeCommand::parseArguments([
+        [$themeName, $modules, $allVersions, $scope] = ThemeUpgradeCommand::parseArguments([
             'command' => 'theme:upgrade',
             't' => 'daocharms',
         ]);
 
         self::assertSame('daocharms', $themeName);
         self::assertSame([], $modules);
+        self::assertFalse($allVersions);
+        self::assertSame('', $scope);
+    }
+
+    public function testParseArgumentsRecognizesAllAndScopeFilters(): void
+    {
+        [$themeName, $modules, $allVersions, $scope] = ThemeUpgradeCommand::parseArguments([
+            0 => 'theme:upgrade',
+            1 => '--all',
+            2 => '-t',
+            3 => 'hanfu',
+            4 => '--scope',
+            5 => 'default.default.default',
+        ]);
+
+        self::assertSame('hanfu', $themeName);
+        self::assertSame([], $modules);
+        self::assertTrue($allVersions);
+        self::assertSame('default.default.default', $scope);
+    }
+
+    public function testTipDescribesBoundThemesNotLegacyActiveFlags(): void
+    {
+        $source = (string)file_get_contents(dirname(__DIR__, 4) . '/Console/Theme/Upgrade.php');
+        self::assertStringContainsString('范围已绑定主题', $source);
+        self::assertStringContainsString('当前正式版 + 当前草稿', $source);
+        self::assertStringContainsString('--all', $source);
+        self::assertStringContainsString('--scope', $source);
+        self::assertStringNotContainsString('getActiveTheme($area)', $source);
+        self::assertStringNotContainsString('前台+后台激活主题', $source);
     }
 
     public function testNamespacedModuleThemeRequestPathIncludesThemeIdentity(): void

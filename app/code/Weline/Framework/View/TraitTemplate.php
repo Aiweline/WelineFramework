@@ -125,8 +125,8 @@ trait TraitTemplate
             $module_base_path = $module_lists[$pre_module_name]['base_path'];
             $view_dir = $module_base_path . Data\DataInterface::dir . DS;
             $template_dir = $module_base_path . Data\DataInterface::dir . DS . Data\DataInterface::dir_type_TEMPLATE . DS;
-            if (PROD) {
-                $compile_dir = Env::path_framework_generated_complicate
+            if (PROD || \Weline\Framework\Deploy\DeployStagingSession::isActive()) {
+                $compile_dir = \Weline\Framework\Deploy\DeployStagingSession::complicateRoot()
                     . \rtrim((string)$module_lists[$pre_module_name]['path'], '/\\') . DS
                     . Data\DataInterface::dir . DS;
             } else {
@@ -138,7 +138,7 @@ trait TraitTemplate
             // Empty module_path must never become CWD-relative "view/tpl" (lands under BP).
             $modulePath = rtrim((string)$this->templateSourceModule()[1], '/\\');
             if ($modulePath === '' || !\is_dir($modulePath)) {
-                $unscopedBase = Env::path_framework_generated_complicate
+                $unscopedBase = \Weline\Framework\Deploy\DeployStagingSession::complicateRoot()
                     . '_unscoped' . DS . Data\DataInterface::dir . DS;
                 $view_dir = $unscopedBase;
                 $template_dir = $unscopedBase . Data\DataInterface::dir_type_TEMPLATE . DS;
@@ -146,13 +146,13 @@ trait TraitTemplate
             } else {
                 $view_dir = $modulePath . DS . Data\DataInterface::dir . DS;
                 $template_dir = $view_dir . Data\DataInterface::view_TEMPLATE_DIR . DS;
-                if (PROD) {
+                if (PROD || \Weline\Framework\Deploy\DeployStagingSession::isActive()) {
                     $module_path_arr = explode(DS, trim($modulePath, DS));
                     $module = array_pop($module_path_arr);
                     $vendor = array_pop($module_path_arr);
                     $module_path = (($vendor !== null && $vendor !== '') ? $vendor . DS : '')
                         . (($module !== null && $module !== '') ? $module . DS : '');
-                    $compile_dir = Env::path_framework_generated_complicate
+                    $compile_dir = \Weline\Framework\Deploy\DeployStagingSession::complicateRoot()
                         . ($module_path !== '' ? $module_path : '_unscoped' . DS)
                         . Data\DataInterface::dir . DS;
                 } else {
@@ -640,8 +640,12 @@ trait TraitTemplate
                 $path = $module_view_dir_path . DataInterface::view_TEMPLATE_DIR;
                 break;
             case DataInterface::dir_type_TEMPLATE_COMPILE:
-                if (PROD) {
-                    $path = str_replace(APP_CODE_PATH, Env::path_framework_generated_complicate . DS, $module_view_dir_path) . DS . DataInterface::view_TEMPLATE_DIR . DS;
+                if (PROD || \Weline\Framework\Deploy\DeployStagingSession::isActive()) {
+                    $path = str_replace(
+                        APP_CODE_PATH,
+                        \Weline\Framework\Deploy\DeployStagingSession::complicateRoot(),
+                        $module_view_dir_path,
+                    ) . DS . DataInterface::view_TEMPLATE_DIR . DS;
                 } else {
                     $path = $module_view_dir_path . DataInterface::view_TEMPLATE_COMPILE_DIR;
                 }

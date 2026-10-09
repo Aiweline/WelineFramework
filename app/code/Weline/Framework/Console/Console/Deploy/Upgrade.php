@@ -15,6 +15,7 @@ use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Deploy\DeployFpcInvalidation;
+use Weline\Framework\Deploy\DeployStagingSession;
 use Weline\Framework\Deploy\FlatStaticRuntimeFilesProviderInterface;
 use Weline\Framework\Deploy\StaticPublishExclusion;
 use Weline\Framework\Event\EventsManager;
@@ -28,6 +29,11 @@ class Upgrade extends CommandAbstract
 
     /** execute() $data：Mode\Set 已负责强失效时跳过日常 bump。 */
     public const DATA_SKIP_INVALIDATION = 'skip_invalidation';
+
+    /** Module-level static copy process pool (d:m:se prod / deploy:upgrade). */
+    public const ENV_STATIC_CONCURRENCY = 'WELINE_DEPLOY_STATIC_CONCURRENCY';
+    public const DEFAULT_STATIC_CONCURRENCY = 10;
+    public const MAX_STATIC_CONCURRENCY = 32;
 
     /**
      * @var System
@@ -51,7 +57,7 @@ class Upgrade extends CommandAbstract
 
         $modules    = Env::getInstance()->getActiveModules();
         $theme      = Env::getInstance()->getTheme();
-        $staticRoot = PUB . 'static';
+        $staticRoot = DeployStagingSession::staticRoot();
 
         // 主题命名空间必须与 /static/ URL 前缀同源。`theme.path` 可能是绝对源码路径或
         // `Module::path` 标识；未归一化就把绝对路径当成了目录段，pub/static 下会因此
@@ -106,43 +112,25 @@ class Upgrade extends CommandAbstract
             'xml', 'webmanifest', 'wasm', 'mp4', 'webm', 'mp3', 'ogg', 'wav',
         ];
 
+        $moduleJobs = [];
         foreach ($modules as $module) {
-            $name          = $module['name'];
-            $moduleViewDir = (DEV ? $module['path'] : str_replace('_', DS, $name) . DS) . DataInterface::dir;
-            $staticSource  = $this->resolveModuleStaticsSourceDir((string)$module['base_path']);
-            $themeSource   = $module['base_path'] . DataInterface::dir . DS . 'theme';
-            if ($themeSource !== '' && !is_dir($themeSource)) {
-                $altTheme = rtrim((string)$module['base_path'], '\\/') . DS . 'View' . DS . 'theme';
-                if (is_dir($altTheme)) {
-                    $themeSource = $altTheme;
-                }
+            $name = (string)($module['name'] ?? '');
+            if ($name === '' || empty($module['base_path'])) {
+                continue;
             }
-
-            if (is_dir($staticSource) || is_dir($themeSource)) {
-                $this->printer->note($name . '...');
-            }
-
-            if ($themeOverlayEnabled && is_dir($staticSource)) {
-                // Theme overlay（主题域 / theme-namespaced URL）；保留不回归。
-                $staticTarget = $staticRoot . DS . $themeNamespace . DS . $moduleViewDir
-                    . DS . DataInterface::dir_type_STATICS;
-                if (!is_dir($staticTarget) && !mkdir($staticTarget, 0775, true) && !is_dir($staticTarget)) {
-                    throw new \RuntimeException('Unable to create module static directory: ' . $staticTarget);
-                }
-                $this->recursiveCopy($staticSource, $staticTarget);
-            }
-
-            if (is_dir($staticSource)) {
-                // PROD Module:: / resolveStaticPath 扁平树：整树铺到 pub/static/{Vendor}/{Module}/。
-                // 目标与主题命名空间无关，故主题命名空间异常时仍照常发布。
-                $this->publishModuleFlatStatics((string)$name, $staticSource, $staticRoot);
-            }
-
-            if ($themeOverlayEnabled && is_dir($themeSource)) {
-                $themeTarget = $staticRoot . DS . $themeNamespace . DS . $moduleViewDir . DS . 'theme';
-                $this->publishThemeAssets($themeSource, $themeTarget, $themeAssetExtensions);
-            }
+            $moduleJobs[] = [
+                'name' => $name,
+                'path' => (string)($module['path'] ?? ''),
+                'base_path' => (string)$module['base_path'],
+                'static_root' => $staticRoot,
+                'theme_namespace' => $themeNamespace,
+                'theme_overlay_enabled' => $themeOverlayEnabled,
+                'theme_asset_extensions' => $themeAssetExtensions,
+                'dev' => (bool)DEV,
+            ];
         }
+
+        $this->publishModuleJobs($moduleJobs);
 
         // Provider 白名单降级为补充/兼容路径：与整树幂等双写，不再承担防 404 主路径。
         $this->publishFlatStaticRuntimeFiles($modules);
@@ -170,6 +158,221 @@ class Upgrade extends CommandAbstract
             'data' => $data,
         ];
         $eventsManager->dispatch('Weline_Framework_Deploy::upgrade_after', $afterPayload);
+    }
+
+    public function resolveStaticConcurrency(?int $override = null): int
+    {
+        if ($override !== null) {
+            $n = $override;
+        } else {
+            $env = getenv(self::ENV_STATIC_CONCURRENCY);
+            $n = ($env === false || $env === '') ? self::DEFAULT_STATIC_CONCURRENCY : (int)$env;
+        }
+        if ($n < 1) {
+            return 1;
+        }
+
+        return min(self::MAX_STATIC_CONCURRENCY, $n);
+    }
+
+    /**
+     * @param list<array<string,mixed>> $jobs
+     */
+    private function publishModuleJobs(array $jobs): void
+    {
+        if ($jobs === []) {
+            return;
+        }
+        $concurrency = $this->resolveStaticConcurrency();
+        $wls = trim((string)(getenv('WLS_WORKER_ID') ?: ($_ENV['WLS_WORKER_ID'] ?? '')));
+        if ($concurrency <= 1 || count($jobs) <= 1 || $wls !== '') {
+            foreach ($jobs as $job) {
+                $result = $this->publishOneModuleJob($job);
+                if (!empty($result['tree_changed'])) {
+                    $this->treeChanged = true;
+                }
+                if (!empty($result['noted'])) {
+                    $this->printer->note((string)$result['name'] . '...');
+                }
+            }
+
+            return;
+        }
+
+        $this->printer->note(sprintf(
+            '%s pool=%d modules=%d',
+            (string)__('静态资源部署进程池'),
+            $concurrency,
+            count($jobs),
+        ));
+        // __DIR__ = …/Framework/Console/Console/Deploy → Framework root = dirname×3
+        $script = dirname(__DIR__, 3) . '/Deploy/bin/publish-module-static-job.php';
+        if (!is_file($script)) {
+            throw new \RuntimeException('deploy_static_worker_script_missing:' . $script);
+        }
+        $jobRoot = rtrim(sys_get_temp_dir(), '/\\') . '/weline-deploy-static-' . bin2hex(random_bytes(6));
+        if (!mkdir($jobRoot, 0700, true) && !is_dir($jobRoot)) {
+            throw new \RuntimeException('deploy_static_job_root_failed');
+        }
+        $phpBin = (defined('PHP_BINARY') && PHP_BINARY !== '') ? PHP_BINARY : 'php';
+        $queue = array_values($jobs);
+        /** @var array<string, array{proc:resource,pipes:array<int,resource>,name:string}> $running */
+        $running = [];
+        $errors = [];
+        $done = 0;
+        $total = count($jobs);
+        try {
+            while ($queue !== [] || $running !== []) {
+                while ($queue !== [] && count($running) < $concurrency) {
+                    $job = array_shift($queue);
+                    if ($job === null) {
+                        break;
+                    }
+                    $name = (string)($job['name'] ?? 'module');
+                    $jobFile = $jobRoot . '/job-' . preg_replace('/[^A-Za-z0-9_.-]+/', '_', $name) . '-' . bin2hex(random_bytes(3)) . '.json';
+                    file_put_contents($jobFile, json_encode($job, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+                    $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+                    $proc = proc_open([$phpBin, $script, $jobFile], $descriptors, $pipes, null, null, ['bypass_shell' => true]);
+                    if (!is_resource($proc)) {
+                        $errors[] = 'deploy_static_spawn_failed:' . $name;
+                        break 2;
+                    }
+                    fclose($pipes[0]);
+                    stream_set_blocking($pipes[1], false);
+                    stream_set_blocking($pipes[2], false);
+                    $running[$name . ':' . bin2hex(random_bytes(2))] = [
+                        'proc' => $proc,
+                        'pipes' => $pipes,
+                        'name' => $name,
+                    ];
+                }
+                foreach ($running as $key => $state) {
+                    $status = proc_get_status($state['proc']);
+                    if (!empty($status['running'])) {
+                        continue;
+                    }
+                    $stdout = stream_get_contents($state['pipes'][1]);
+                    $stderr = stream_get_contents($state['pipes'][2]);
+                    foreach ([1, 2] as $fd) {
+                        if (is_resource($state['pipes'][$fd])) {
+                            fclose($state['pipes'][$fd]);
+                        }
+                    }
+                    $exit = proc_close($state['proc']);
+                    unset($running[$key]);
+                    ++$done;
+                    $this->printer->progressBar(
+                        $done,
+                        max(1, $total),
+                        sprintf('%s %s', (string)__('静态资源部署'), $state['name']),
+                        24,
+                    );
+                    if ($exit !== 0) {
+                        $snippet = trim((string)$stderr);
+                        if ($snippet === '') {
+                            $snippet = trim((string)$stdout);
+                        }
+                        $errors[] = 'deploy_static_worker_failed:' . $state['name']
+                            . ':exit=' . $exit
+                            . ($snippet !== '' ? ':' . $snippet : '');
+                        continue;
+                    }
+                    $payload = json_decode(trim((string)$stdout), true);
+                    if (is_array($payload) && !empty($payload['tree_changed'])) {
+                        $this->treeChanged = true;
+                    }
+                }
+                if ($running !== []) {
+                    usleep(5000);
+                }
+            }
+            if ($errors !== []) {
+                $this->printer->finishProgressLine();
+                throw new \RuntimeException(implode(' | ', $errors));
+            }
+        } finally {
+            foreach ($running as $state) {
+                if (is_resource($state['proc'])) {
+                    @proc_terminate($state['proc']);
+                    @proc_close($state['proc']);
+                }
+            }
+            $this->removeJobTree($jobRoot);
+        }
+    }
+
+    /**
+     * One-module static publish (overlay + flat + theme assets). Used by process workers.
+     *
+     * @param array<string,mixed> $job
+     * @return array{name:string,tree_changed:bool,noted:bool}
+     */
+    public function publishOneModuleJob(array $job): array
+    {
+        $name = (string)($job['name'] ?? '');
+        $basePath = (string)($job['base_path'] ?? '');
+        $staticRoot = (string)($job['static_root'] ?? DeployStagingSession::staticRoot());
+        $themeNamespace = (string)($job['theme_namespace'] ?? '');
+        $themeOverlayEnabled = !empty($job['theme_overlay_enabled']) && $themeNamespace !== '';
+        $themeAssetExtensions = is_array($job['theme_asset_extensions'] ?? null)
+            ? $job['theme_asset_extensions']
+            : [];
+        $dev = array_key_exists('dev', $job) ? (bool)$job['dev'] : (bool)DEV;
+        $modulePath = (string)($job['path'] ?? '');
+        $moduleViewDir = ($dev ? $modulePath : str_replace('_', DS, $name) . DS) . DataInterface::dir;
+        $staticSource = $this->resolveModuleStaticsSourceDir($basePath);
+        $themeSource = $basePath . DataInterface::dir . DS . 'theme';
+        if ($themeSource !== '' && !is_dir($themeSource)) {
+            $altTheme = rtrim($basePath, '\\/') . DS . 'View' . DS . 'theme';
+            if (is_dir($altTheme)) {
+                $themeSource = $altTheme;
+            }
+        }
+        $noted = is_dir($staticSource) || is_dir($themeSource);
+        $beforeChanged = $this->treeChanged;
+
+        if ($themeOverlayEnabled && is_dir($staticSource)) {
+            $staticTarget = $staticRoot . DS . $themeNamespace . DS . $moduleViewDir
+                . DS . DataInterface::dir_type_STATICS;
+            if (!is_dir($staticTarget) && !mkdir($staticTarget, 0775, true) && !is_dir($staticTarget)) {
+                throw new \RuntimeException('Unable to create module static directory: ' . $staticTarget);
+            }
+            $this->recursiveCopy($staticSource, $staticTarget);
+        }
+        if (is_dir($staticSource)) {
+            $this->publishModuleFlatStatics($name, $staticSource, $staticRoot);
+        }
+        if ($themeOverlayEnabled && is_dir($themeSource)) {
+            $themeTarget = $staticRoot . DS . $themeNamespace . DS . $moduleViewDir . DS . 'theme';
+            $this->publishThemeAssets($themeSource, $themeTarget, $themeAssetExtensions);
+        }
+
+        return [
+            'name' => $name,
+            // Worker process starts with treeChanged=false; parent serial path already mutated $this->treeChanged.
+            'tree_changed' => $this->treeChanged && !$beforeChanged,
+            'noted' => $noted,
+        ];
+    }
+
+    private function removeJobTree(string $root): void
+    {
+        if ($root === '' || !is_dir($root)) {
+            return;
+        }
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($iterator as $item) {
+            $path = $item->getPathname();
+            if ($item->isDir()) {
+                @rmdir($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        @rmdir($root);
     }
 
     /**
@@ -317,7 +520,7 @@ class Upgrade extends CommandAbstract
             return;
         }
 
-        $flatRoot = $this->resolveFlatStaticModuleRoot($moduleName, PUB . 'static');
+        $flatRoot = $this->resolveFlatStaticModuleRoot($moduleName, DeployStagingSession::staticRoot());
         if ($flatRoot === null) {
             return;
         }

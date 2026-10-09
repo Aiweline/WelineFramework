@@ -134,6 +134,9 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         self::assertStringContainsString('function scopeOwnsSolidify', $source);
         self::assertStringContainsString('function hasOwnThemeApplication', $source);
         self::assertStringContainsString('$includeSelectedDraft = true', $source);
+        self::assertStringContainsString("\$options['all_versions']", $source);
+        self::assertStringContainsString("\$options['scope']", $source);
+        self::assertStringContainsString('!$allVersions && !$this->isCurrentlyEffectiveScopeVersion', $source);
         $upgrade = dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityUpgradeSolidifyService.php';
         $upgradeSrc = (string)file_get_contents($upgrade);
         // setup/theme upgrade without -t: only website-bound themes (not rebake(null) all themes).

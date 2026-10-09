@@ -63,20 +63,36 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        [$theme_name, $modules] = self::parseArguments($args);
+        [$theme_name, $modules, $allVersions, $scopeFilter] = self::parseArguments($args);
         $themes = $this->resolveThemesToUpgrade($theme_name);
         if ($themes === []) {
-            throw new ConsoleException(__('未找到激活主题，请用 -t/--theme 指定主题名。'));
+            throw new ConsoleException(__('未找到范围已绑定主题，请用 -t/--theme 指定主题名。'));
         }
 
         foreach ($themes as $theme) {
             $this->upgradeOneTheme($theme, $modules);
         }
 
-        // C-RP-07：-t 指定主题；无 -t 时 cutover(null)→仅站点已绑定主题当前生效版（见 UpgradeSolidifyService）
+        // C-RP-07：-t 指定主题；无 -t → 仅范围已绑定主题；默认正式+草稿；--all 全历史版本
+        $solidifyOptions = [];
+        if ($allVersions) {
+            $solidifyOptions['all_versions'] = true;
+        }
+        if ($scopeFilter !== '') {
+            $solidifyOptions['scope'] = $scopeFilter;
+        }
         $this->printing->warning(__('开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…'));
+        if ($allVersions) {
+            $this->printing->note(__('版本范围：全部历史版本（--all）'));
+        } else {
+            $this->printing->note(__('版本范围：当前正式版 + 当前草稿'));
+        }
+        if ($scopeFilter !== '') {
+            $this->printing->note(__('范围过滤：') . $scopeFilter);
+        }
         $cutover = $this->layoutSolidifyService->cutoverFromThemeCommand(
-            $theme_name !== '' ? ($themes[0] ?? null) : null
+            $theme_name !== '' ? ($themes[0] ?? null) : null,
+            $solidifyOptions,
         );
         $this->printing->success(__(
             '布局模板切流：purge %{purged}，legacy %{legacy}，固化 %{count}',
@@ -93,7 +109,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      *
      * Named `-t` → that theme only.
      * No `-t` → unique themes from websites_theme_application (frontend own)
-     * + backend_theme_application + registered Default.
+     * + backend_theme_application + registered Default（范围已绑定；未绑定主题跳过）.
      *
      * @return list<WelineTheme>
      */
@@ -169,7 +185,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
-     * @return array{0:string,1:list<string>}
+     * @return array{0:string,1:list<string>,2:bool,3:string} themeName, modules, allVersions, scopeFilter
      */
     public static function parseArguments(array $args): array
     {
@@ -186,6 +202,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
         $themeName = '';
         $modules = [];
+        $allVersions = false;
+        $scopeFilter = '';
         for ($index = 0, $count = count($positionals); $index < $count; $index++) {
             $argument = $positionals[$index];
             if ($argument === '-t' || $argument === '--theme') {
@@ -194,6 +212,18 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     throw new ConsoleException(__('设置了 -t 参数，但却没有-t参数值！'));
                 }
                 $index++;
+                continue;
+            }
+            if ($argument === '-s' || $argument === '--scope') {
+                $scopeFilter = trim((string)($positionals[$index + 1] ?? ''));
+                if ($scopeFilter === '') {
+                    throw new ConsoleException(__('设置了 -s/--scope 参数，但却没有范围值！'));
+                }
+                $index++;
+                continue;
+            }
+            if ($argument === '-a' || $argument === '--all') {
+                $allVersions = true;
                 continue;
             }
             if (!str_starts_with($argument, '-')) {
@@ -207,8 +237,20 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $themeName = $named;
             }
         }
+        if ($scopeFilter === '') {
+            $namedScope = trim((string)($args['s'] ?? $args['scope'] ?? ''));
+            if ($namedScope !== '') {
+                $scopeFilter = $namedScope;
+            }
+        }
+        if (!$allVersions) {
+            $allFlag = $args['a'] ?? $args['all'] ?? null;
+            if ($allFlag === true || $allFlag === 1 || $allFlag === '1' || $allFlag === '') {
+                $allVersions = true;
+            }
+        }
 
-        return [$themeName, array_values(array_unique($modules))];
+        return [$themeName, array_values(array_unique($modules)), $allVersions, $scopeFilter];
     }
 
     private function copyThemeFile(string $source, string $destinationDirectory): void
@@ -407,7 +449,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function tip(): string
     {
-        return __('更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）');
+        return __('更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿）');
     }
 
     public function help(): array|string
@@ -417,14 +459,18 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->tip(),
             [
                 '-h, --help' => '显示帮助信息',
-                '-t, --theme <name>' => '指定主题名（如 daocharms / hanfu）；省略则发布前台+后台各自的激活主题（去重）',
+                '-t, --theme <name>' => '指定主题名（如 daocharms / hanfu）；省略则仅处理范围已绑定主题（未绑定跳过）',
+                '-s, --scope <canonical>' => '仅处理指定规范范围（如 default.default.default）',
+                '-a, --all' => '部署并编译该主题（或全部站绑主题）下全部历史版本；默认仅当前正式版+草稿',
             ],
             [
                 'module...' => '可选：只处理设计主题下指定模块目录（如 Weline_Theme）',
             ],
             [
-                '指定主题全量发布' => 'php bin/w theme:upgrade -t daocharms',
-                '前后台激活主题全量发布' => 'php bin/w theme:upgrade',
+                '范围已绑定主题（正式+草稿）' => 'php bin/w theme:upgrade',
+                '指定主题' => 'php bin/w theme:upgrade -t daocharms',
+                '指定范围' => 'php bin/w theme:upgrade -t hanfu --scope default.default.default',
+                '全部历史版本' => 'php bin/w theme:upgrade --all -t hanfu',
                 '指定主题+模块过滤' => 'php bin/w theme:upgrade -t daocharms Weline_Theme',
             ]
         );

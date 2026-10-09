@@ -2364,6 +2364,7 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 编译运行时索引,编译运行时索引
 "当前部署模式为prod(生产模式)，请谨慎操作！你确认要切换到 %{1} 模式么？","当前部署模式为prod(生产模式)，请谨慎操作！你确认要切换到 %{1} 模式么？"
 已为您取消操作！,已为您取消操作！
+"部署 staging 已打开（stamp=%{stamp}，root=%{root}）","部署 staging 已打开（stamp=%{stamp}，root=%{root}）"
 部署呈现世代已失效（stamp=%{stamp}，purge_fpc_all=1）,部署呈现世代已失效（stamp=%{stamp}，purge_fpc_all=1）
 请指定设置类型:,请指定设置类型:
 请指定设置类型：%{1},请指定设置类型：%{1}

@@ -702,34 +702,93 @@ COMMAND_LIST;
     }
     
     /**
-     * 进度条显示
-     * 
-     * @param int $current 当前进度
+     * 单行刷新进度（TTY：\\r 覆盖同一行；非 TTY：稀疏换行，避免刷屏）。
+     *
+     * @param int $current 当前进度（1-based 完成数亦可）
      * @param int $total 总数
-     * @param string $message 消息
+     * @param string $message 当前条目说明
      * @param int $width 进度条宽度
      */
-    public function progressBar(int $current, int $total, string $message = '', int $width = 50): void
+    public function progressBar(int $current, int $total, string $message = '', int $width = 28): void
     {
+        $total = max(0, $total);
+        $current = max(0, $current);
+        $percentage = $total > 0 ? (int)round(($current / $total) * 100) : 0;
+        $ratio = $total > 0 ? min(1.0, $current / $total) : 0.0;
+        $filled = (int)round($ratio * $width);
+        $bar = str_repeat('█', $filled) . str_repeat('░', max(0, $width - $filled));
+        $plain = trim($message) !== ''
+            ? sprintf('%s [%s] %d%% (%d/%d)', $message, $bar, $percentage, $current, $total)
+            : sprintf('[%s] %d%% (%d/%d)', $bar, $percentage, $current, $total);
+
         if (!$this->isTerminal()) {
+            // CI / 管道：每批只打首条与收尾，禁止按百分比刷屏。
+            if ($current <= 1 || ($total > 0 && $current >= $total)) {
+                echo $plain . PHP_EOL;
+                if (function_exists('flush')) {
+                    flush();
+                }
+            }
+
             return;
         }
-        
-        $percentage = $total > 0 ? round(($current / $total) * 100) : 0;
-        $filled = round(($current / $total) * $width);
-        $bar = str_repeat('█', $filled) . str_repeat('░', $width - $filled);
-        
-        $output = "\r";
-        if ($message) {
-            $output .= $this->colorize($message, self::NOTE) . ' ';
+
+        $termWidth = max(40, $this->getTerminalWidth());
+        // 预留百分比段长度；消息过长则截断，再用空格抹掉上一帧残留。
+        $suffix = sprintf(' [%s] %d%% (%d/%d)', $bar, $percentage, $current, $total);
+        $suffixLen = $this->getStringLength($suffix);
+        $msgBudget = max(8, $termWidth - $suffixLen - 1);
+        $displayMessage = $this->truncateCliText($message, $msgBudget);
+        $line = (trim($displayMessage) !== '' ? $displayMessage . ' ' : '') . ltrim($suffix);
+        $pad = max(0, $termWidth - $this->getStringLength($line));
+        echo "\r" . $line . str_repeat(' ', $pad);
+        if (function_exists('flush')) {
+            flush();
         }
-        $output .= "[{$bar}] {$percentage}% ({$current}/{$total})";
-        
-        echo $output;
-        
-        if ($current >= $total) {
+
+        if ($total > 0 && $current >= $total) {
             echo PHP_EOL;
         }
+    }
+
+    /**
+     * 结束单行进度（异常中断或阶段切换前调用，避免后续日志粘在进度行上）。
+     */
+    public function finishProgressLine(): void
+    {
+        if ($this->isTerminal()) {
+            echo PHP_EOL;
+            if (function_exists('flush')) {
+                flush();
+            }
+        }
+    }
+
+    private function truncateCliText(string $text, int $maxVisible): string
+    {
+        $text = preg_replace('/\s+/u', ' ', trim($text)) ?? trim($text);
+        if ($text === '' || $maxVisible < 1) {
+            return '';
+        }
+        if ($this->getStringLength($text) <= $maxVisible) {
+            return $text;
+        }
+        if ($maxVisible <= 1) {
+            return '…';
+        }
+        $out = '';
+        $len = 0;
+        $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        foreach ($chars as $ch) {
+            $next = $len + $this->getStringLength($ch);
+            if ($next > $maxVisible - 1) {
+                break;
+            }
+            $out .= $ch;
+            $len = $next;
+        }
+
+        return $out . '…';
     }
     
     /**

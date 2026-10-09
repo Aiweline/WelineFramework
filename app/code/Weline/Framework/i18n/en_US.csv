@@ -2364,6 +2364,7 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 编译运行时索引,"Compile runtime index"
 "当前部署模式为prod(生产模式)，请谨慎操作！你确认要切换到 %{1} 模式么？","The current deployment mode is prod (production mode). Please proceed with caution! Are you sure you want to switch to %{1} mode?"
 已为您取消操作！,"Operation has been canceled for you!"
+"部署 staging 已打开（stamp=%{stamp}，root=%{root}）","部署 staging 已打开（stamp=%{stamp}，root=%{root}）"
 部署呈现世代已失效（stamp=%{stamp}，purge_fpc_all=1）,部署呈现世代已失效（stamp=%{stamp}，purge_fpc_all=1）
 请指定设置类型:,"Please specify the setting type:"
 请指定设置类型：%{1},"Please specify the setting type: %{1}"
