@@ -44,8 +44,13 @@ final class PdpRecommendationLazyShellContractTest extends TestCase
         self::assertStringContainsString('data-pdp-budget-phase="pdp.main"', $source);
         self::assertStringContainsString('data-pdp-budget-phase="pdp.related_stack"', $source);
         self::assertStringContainsString('data-pdp-budget-phase="pdp.personalization"', $source);
+        // Same-module Product layout may embed you-may-like; cross-module RecentlyViewed stays hook/injection.
+        self::assertMatchesRegularExpression(
+            '/<w:widget[^>]*name="you-may-like"/i',
+            $source,
+        );
         self::assertDoesNotMatchRegularExpression(
-            '/<w:widget[^>]*(you-may-like|recently-viewed)/i',
+            '/<w:widget[^>]*name="recently-viewed"/i',
             $source,
         );
     }
@@ -58,20 +63,18 @@ final class PdpRecommendationLazyShellContractTest extends TestCase
         self::assertFileExists($rv);
 
         $ymlSource = (string)file_get_contents($yml);
-        self::assertStringContainsString('"required":true', $ymlSource);
-        self::assertStringContainsString('"lazy_load":true', $ymlSource);
         self::assertStringContainsString('data-pdp-lazy-shell="1"', $ymlSource);
         self::assertStringContainsString('data-weline-hydrate="1"', $ymlSource);
         self::assertStringContainsString('data-hydrate-operation="youMayLikeCards"', $ymlSource);
-        self::assertStringContainsString('wym-card--skeleton', $ymlSource);
+        self::assertStringContainsString('w-skeleton', $ymlSource);
+        self::assertStringContainsString('data-size="card"', $ymlSource);
         self::assertStringNotContainsString('fetch(', $ymlSource);
 
         $rvSource = (string)file_get_contents($rv);
-        self::assertStringContainsString('"required":true', $rvSource);
-        self::assertStringContainsString('"lazy_load":true', $rvSource);
         self::assertStringContainsString('data-pdp-lazy-shell="1"', $rvSource);
         self::assertStringContainsString('data-hydrate-operation="recentlyViewedCards"', $rvSource);
-        self::assertStringContainsString('wrv-card--skeleton', $rvSource);
+        self::assertStringContainsString('w-skeleton', $rvSource);
+        self::assertStringContainsString('data-size="card"', $rvSource);
         self::assertStringNotContainsString('fetch(', $rvSource);
     }
 
@@ -85,12 +88,26 @@ final class PdpRecommendationLazyShellContractTest extends TestCase
         $yml = (string)file_get_contents($ymlJs);
         self::assertStringContainsString('Weline.Api', $yml);
         self::assertStringContainsString('data-weline-hydrate', $yml);
+        self::assertStringContainsString('scheduleHydrate', $yml);
+        self::assertStringContainsString('isTransientHydrateError', $yml);
+        self::assertStringContainsString('data-pdp-hydrating', $yml);
+        self::assertStringContainsString('maxAttempts', $yml);
         self::assertStringNotContainsString('XMLHttpRequest', $yml);
         self::assertDoesNotMatchRegularExpression('/\bfetch\s*\(/', $yml);
 
         $rv = (string)file_get_contents($rvJs);
         self::assertStringContainsString('Weline.Api', $rv);
         self::assertStringContainsString('recentlyViewedCards', $rv);
+        self::assertStringContainsString('scheduleHydrate', $rv);
+        self::assertStringContainsString('isTransientHydrateError', $rv);
+        self::assertStringContainsString('data-pdp-hydrating', $rv);
         self::assertDoesNotMatchRegularExpression('/\bfetch\s*\(/', $rv);
+
+        $revealJs = dirname(__DIR__, 4) . '/Product/view/statics/js/widgets/product-detail-reveal.js';
+        self::assertFileExists($revealJs);
+        $reveal = (string)file_get_contents($revealJs);
+        self::assertStringContainsString('observeDescImages', $reveal);
+        self::assertStringContainsString('data-pdp-desc-lazy', $reveal);
+        self::assertStringContainsString('hydrateDescImage', $reveal);
     }
 }

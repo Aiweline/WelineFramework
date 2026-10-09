@@ -16,24 +16,23 @@ try {
     $diskOverrideHtml = '';
 }
 $headPack = null;
-$tokenHtml = null;
-$uiPackHtml = null;
+$storefrontPackHtml = null;
 try {
     $headPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeCssPack::class
     );
-    $tokenHtml = $headPack->tryLinkHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS_MINIMAL, [
-        'include_disk' => true,
-    ]);
-    $uiPackHtml = $headPack->tryLinkHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_UI);
+    $storefrontPackHtml = $headPack->tryLinkHtml(
+        'frontend',
+        \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT,
+        ['include_disk' => true, 'layout_css' => true]
+    );
 } catch (\Throwable $e) {
     $headPack = null;
-    $tokenHtml = null;
-    $uiPackHtml = null;
+    $storefrontPackHtml = null;
 }
 $diskAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPack
-    && $tokenHtml !== null
-    && $headPack->diskIncludedInPack('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS_MINIMAL);
+    && $storefrontPackHtml !== null
+    && $headPack->diskIncludedInPack('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT);
 $earlyJsHtml = null;
 try {
     $earlyJsHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
@@ -49,22 +48,18 @@ try {
 <script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)"></script>
 <?php endif; ?>
 <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
-<?php if ($tokenHtml !== null): ?>
-<?= $tokenHtml ?>
+<?php if ($storefrontPackHtml !== null): ?>
+<?= $storefrontPackHtml ?>
 <?php else: ?>
 <theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_default.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_ink.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/variables/_typography.css</theme:css>
-<?php endif; ?>
 <?php if (!$diskAbsorbed) { echo $diskOverrideHtml; } ?>
-<?php if ($uiPackHtml !== null): ?>
-<?= $uiPackHtml ?>
-<?php else: ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
 <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
-<?php endif; ?>
 <theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
 <link rel="stylesheet" href="@static(Weline_Theme::css/widgets/storefront-shopper-toast-amazon.css)">
+<?php endif; ?>
 <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>

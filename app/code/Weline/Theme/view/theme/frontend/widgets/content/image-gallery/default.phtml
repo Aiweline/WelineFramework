@@ -137,6 +137,21 @@ $filterLooksItemsForWebsite = static function (array $rows, int $websiteId): arr
         } catch (\Throwable) {
             continue;
         }
+        // Catalog visibility (e.g. display_type=b2b wholesale-only): drop retail PDP links.
+        if (\class_exists(\Weline\Product\Service\StorefrontCatalogProductVisibility::class)) {
+            try {
+                /** @var \Weline\Product\Service\StorefrontCatalogProductVisibility $gate */
+                $gate = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Product\Service\StorefrontCatalogProductVisibility::class
+                );
+                if (!$gate->isProductSellable($productId)) {
+                    continue;
+                }
+            } catch (\Throwable) {
+                // Fail closed for looks PDP links when the catalog gate cannot run.
+                continue;
+            }
+        }
         $out[] = $cfg;
     }
 
@@ -305,11 +320,13 @@ if ($isLooks) {
             $itemTitle = Block::text($item['title'] ?? '');
             $mediaInner = $mediaHtml !== ''
                 ? $mediaHtml
-                : '<img src="' . $esc($image) . '" alt="' . $t($itemTitle) . '" loading="lazy" decoding="async" width="400" height="533">';
+                : '<div class="w-frame" data-ratio="3/4" data-fit="cover" style="--weline-frame-ratio:3 / 4;">'
+                    . '<img src="' . $esc($image) . '" alt="' . $t($itemTitle) . '" loading="lazy" decoding="async" width="400" height="533">'
+                    . '</div>';
         ?>
             <article class="w-card sb-card<?= $isLooks ? ' sb-looks-tile' : '' ?>">
                 <?php if ($mediaHtml !== '' || $image !== ''): ?>
-                    <div class="sb-media">
+                    <div class="sb-media<?= str_contains($mediaInner, 'w-frame') ? '' : ' w-frame' ?>"<?= str_contains($mediaInner, 'w-frame') ? '' : ' data-ratio="3/4" data-fit="cover" style="--weline-frame-ratio:3 / 4;"' ?>>
                         <?php if ($isLooks && $url !== ''): ?>
                             <a class="sb-looks-media-link" href="<?= $esc($url) ?>"><?= $mediaInner ?></a>
                         <?php else: ?>
@@ -349,6 +366,17 @@ if ($isLooks) {
                     $ctaOk = $ctaProducts->findById($looksWebsiteId ?? 0, $ctaProductId) !== null;
                 } catch (\Throwable) {
                     $ctaOk = false;
+                }
+            }
+            if ($ctaOk && \class_exists(\Weline\Product\Service\StorefrontCatalogProductVisibility::class)) {
+                try {
+                    /** @var \Weline\Product\Service\StorefrontCatalogProductVisibility $ctaGate */
+                    $ctaGate = \Weline\Framework\Manager\ObjectManager::getInstance(
+                        \Weline\Product\Service\StorefrontCatalogProductVisibility::class
+                    );
+                    $ctaOk = $ctaGate->isProductSellable($ctaProductId);
+                } catch (\Throwable) {
+                    // keep prior $ctaOk
                 }
             }
             if (!$ctaOk) {

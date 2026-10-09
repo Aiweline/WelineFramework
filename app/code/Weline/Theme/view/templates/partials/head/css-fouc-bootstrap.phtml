@@ -1,2 +1,10 @@
-<script>document.documentElement.setAttribute('data-weline-css','pending');</script>
+<script>
+document.documentElement.setAttribute('data-weline-css','pending');
+/* Fail-open even if after-css pack / weline-css-ready.js never runs (blank white forever otherwise). */
+setTimeout(function () {
+  if (document.documentElement.getAttribute('data-weline-css') === 'pending') {
+    document.documentElement.setAttribute('data-weline-css','ready');
+  }
+}, 1800);
+</script>
 <style data-weline-css-gate>html[data-weline-css="pending"] body{visibility:hidden}</style>

@@ -19,10 +19,17 @@ final class ThemeResourceFilesConfigTest extends TestCase
         $backend = str_replace('/frontend/', '/backend/', $path);
         $backendParsed = $parser->invoke(new SystemConfigTemplateService(), (string)file_get_contents($backend));
         self::assertSame($parsed, $backendParsed, 'Both areas must share identical field contracts.');
-        foreach (['css_minify', 'js_minify', 'css_merge', 'js_merge', 'theme_css_merge', 'theme_js_merge'] as $name) {
+        foreach (['css_minify', 'js_minify'] as $name) {
             $field = $fields['resource_files/' . $name];
             self::assertSame('select', $field['type']);
             self::assertSame('auto', $field['default']);
+            self::assertSame(['auto', 'on', 'off'], array_map(static fn ($item) => explode(':', $item)[0], explode(',', $field['options'])));
+            self::assertSame('global,website,store,channel', $field['scope']);
+        }
+        foreach (['css_merge', 'js_merge', 'theme_css_merge', 'theme_js_merge'] as $name) {
+            $field = $fields['resource_files/' . $name];
+            self::assertSame('select', $field['type']);
+            self::assertSame('on', $field['default']);
             self::assertSame(['auto', 'on', 'off'], array_map(static fn ($item) => explode(':', $item)[0], explode(',', $field['options'])));
             self::assertSame('global,website,store,channel', $field['scope']);
         }

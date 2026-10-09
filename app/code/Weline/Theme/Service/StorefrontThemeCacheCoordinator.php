@@ -118,6 +118,9 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
             dependencies: ['catalog', 'config', 'global/i18n', 'theme'],
             freshTtlSeconds: 3600,
             staleTtlSeconds: 86400,
+            // Cold-locale dogpile: wait peer builder (file preflight) instead of
+            // builder_uncontended that rebuilds and skips L2 publish.
+            singleFlightWaitMs: 800,
         );
     }
 
@@ -132,6 +135,7 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
             dependencies: ['catalog', 'config', 'global/i18n'],
             freshTtlSeconds: 3600,
             staleTtlSeconds: 86400,
+            singleFlightWaitMs: 800,
         );
     }
 
@@ -152,6 +156,9 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
             dependencies: ['catalog', 'config', 'global/i18n', 'theme'],
             freshTtlSeconds: max(1, $freshTtlSeconds),
             staleTtlSeconds: max(0, $staleTtlSeconds),
+            // Heavy HTML: file-preflight wait (same pattern as product.filter_panel).
+            // Evidence: cold lang switch → builder_uncontended + singleflight_acquired=false.
+            singleFlightWaitMs: 2000,
         );
     }
 
@@ -176,6 +183,7 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
             dependencies: ['catalog', 'config', 'global/i18n', 'theme'],
             freshTtlSeconds: max(1, $freshTtlSeconds),
             staleTtlSeconds: max(0, $staleTtlSeconds),
+            singleFlightWaitMs: 1500,
         );
     }
 
@@ -198,6 +206,7 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
             dependencies: ['theme', 'config', 'global/i18n'],
             freshTtlSeconds: max(1, $freshTtlSeconds),
             staleTtlSeconds: max(0, $staleTtlSeconds),
+            singleFlightWaitMs: 1000,
         );
     }
 
@@ -215,6 +224,8 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
             dependencies: ['catalog', 'config', 'global/i18n', 'theme'],
             freshTtlSeconds: 1800,
             staleTtlSeconds: 86400,
+            // Many cards per page: wait peer/L2 instead of N× uncontended rebuild.
+            singleFlightWaitMs: 1500,
         );
     }
 

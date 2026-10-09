@@ -1077,13 +1077,20 @@ class Partials extends Block
     private function shouldBypassPartialOutputCache(): bool
     {
         try {
-            $requestPath = \strtolower((string)($this->request->getPathInfo() ?: \w_env_request_uri()));
+            // Path gate via getUri() (same as HeaderNavFragment; no PathInfo accessor on Request).
+            $uri = \trim((string)$this->request->getUri());
+            if ($uri === '' && \function_exists('w_env_request_uri')) {
+                $uri = \trim((string)\w_env_request_uri());
+            }
+            $path = $uri !== '' ? \parse_url($uri, PHP_URL_PATH) : '';
+            $requestPath = \strtolower((string)(\is_string($path) && $path !== '' ? $path : $uri));
             return (string)$this->request->getGet('visual_editor', '') === '1'
                 || (string)$this->request->getGet('preview', '') === '1'
                 || (string)$this->request->getGet('debug_hooks', '') === '1'
                 || \str_contains($requestPath, 'workspace-preview');
         } catch (\Throwable) {
-            return true;
+            // Do not force bypass on every storefront hit when path detection fails.
+            return false;
         }
     }
 

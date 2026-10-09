@@ -94,7 +94,17 @@ final class HeaderCategoryMenuSlotContractTest extends TestCase
             '.header-nav-right-cluster > .nav-more-wrapper[style*="display: none"]',
             $css
         );
-        self::assertStringContainsString('header-default.css', $header);
+        // 布局 partial 裸链兜底 + header-container layout_source（部件路径）双保险。
+        $container = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/container/header/default.phtml';
+        self::assertFileExists($container);
+        self::assertStringContainsString(
+            'Weline_Theme::css/partials/header-default.css',
+            (string)file_get_contents($container)
+        );
+        self::assertMatchesRegularExpression(
+            '/<link\b[^>]*header-default\.css/i',
+            $header
+        );
     }
 
     public function testLeftClusterMoreCapDoesNotUseFlexBoxWidthAsNaturalFloor(): void

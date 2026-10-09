@@ -42,8 +42,8 @@ $items = Block::items($this->getData('items'));
         ?>
             <article class="w-card sb-card">
                 <?php if ($mediaHtml !== '' || $image !== ''): ?>
-                    <div class="sb-media">
-                        <?php if ($mediaHtml !== ''): ?><?= $mediaHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($item['title'] ?? '') ?>" loading="lazy" decoding="async"><?php endif; ?>
+                    <div class="sb-media w-frame" data-ratio="1" data-fit="cover">
+                        <?php if ($mediaHtml !== ''): ?><?= $mediaHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($item['title'] ?? '') ?>" width="400" height="400" loading="lazy" decoding="async"><?php endif; ?>
                     </div>
                 <?php endif; ?>
                 <div class="sb-body">

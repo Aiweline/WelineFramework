@@ -46,22 +46,23 @@ final class SourceDependencyPublicationTest extends TestCase
         $other = $this->paths->pageLayoutPhtml($this->identity, 'cart', 'compact', 'product', 8);
         $otherDependency = $this->paths->pageSourcePhtml($this->identity, 'cart', 'compact', 'Fixture_Module::a.phtml', 'product', 8);
         $publisher = new ThemeLayoutEntityBatchPublisher();
+        // Fixture only asserts entity promote / dependency cleanup — not Taglib com_*.
         $publisher->publish($this->identity, [
             $page => $this->bytes('<main>A</main>', ['layout_type' => 'cart', 'layout_option' => 'default']),
             $a => $this->bytes('<b>SAVED-A</b>', ['resource_type' => 'page_dependency', 'logical_path' => 'Fixture_Module::a.phtml']),
             $other => $this->bytes('<main>OTHER</main>', ['layout_type' => 'cart', 'layout_option' => 'compact']),
             $otherDependency => $this->bytes('<b>KEEP-OTHER</b>', ['resource_type' => 'page_dependency', 'logical_path' => 'Fixture_Module::a.phtml']),
-        ]);
+        ], ['compile' => false]);
         self::assertSame('<b>SAVED-A</b>', $this->render(ThemeLayoutSourceSnapshot::capture($this->paths, $this->identity, 'cart'), 'Fixture_Module::a.phtml'));
         $publisher->publish($this->identity, [
             $page => $this->bytes('<main>B</main>', ['layout_type' => 'cart', 'layout_option' => 'default']),
             $b => $this->bytes('<b>SAVED-B</b>', ['resource_type' => 'page_dependency', 'logical_path' => 'Fixture_Module::b.phtml']),
-        ]);
+        ], ['compile' => false]);
         $snapshot = ThemeLayoutSourceSnapshot::capture($this->paths, $this->identity, 'cart');
         self::assertSame('<b>ORIGINAL</b>', $this->render($snapshot, 'Fixture_Module::a.phtml'));
         self::assertSame('<b>SAVED-B</b>', $this->render($snapshot, 'Fixture_Module::b.phtml'));
         self::assertFileDoesNotExist($a);
-        $publisher->publish($this->identity, [$page => null]);
+        $publisher->publish($this->identity, [$page => null], ['compile' => false]);
         $missing = ThemeLayoutSourceSnapshot::capture($this->paths, $this->identity, 'cart');
         self::assertNull($missing->pagePath());
         self::assertSame('<b>ORIGINAL</b>', $this->render($missing, 'Fixture_Module::b.phtml'));
@@ -81,10 +82,10 @@ final class SourceDependencyPublicationTest extends TestCase
             $header => $this->bytes($fetch, ['resource_type' => 'partial', 'partial_type' => 'header', 'partial_option' => 'default']),
             $footer => $this->bytes($fetch, ['resource_type' => 'partial', 'partial_type' => 'footer', 'partial_option' => 'default']),
             $search => $this->bytes('<b>SHARED</b>', ['resource_type' => 'partial_dependency', 'partial_type' => 'search', 'partial_option' => 'shared']),
-        ]);
-        $publisher->publish($this->identity, [$header => $this->bytes('<header>NO-SEARCH</header>', ['resource_type' => 'partial', 'partial_type' => 'header', 'partial_option' => 'default'])]);
+        ], ['compile' => false]);
+        $publisher->publish($this->identity, [$header => $this->bytes('<header>NO-SEARCH</header>', ['resource_type' => 'partial', 'partial_type' => 'header', 'partial_option' => 'default'])], ['compile' => false]);
         self::assertSame('<b>SHARED</b>', $this->render(ThemeLayoutSourceSnapshot::capture($this->paths, $this->identity, 'cart'), $logical));
-        $publisher->publish($this->identity, [$footer => null]);
+        $publisher->publish($this->identity, [$footer => null], ['compile' => false]);
         self::assertSame('<b>ORIGINAL</b>', $this->render(ThemeLayoutSourceSnapshot::capture($this->paths, $this->identity, 'cart'), $logical));
         self::assertFileDoesNotExist($search);
         self::assertFileExists($header);

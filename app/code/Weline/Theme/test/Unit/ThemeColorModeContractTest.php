@@ -226,6 +226,7 @@ final class ThemeColorModeContractTest extends TestCase
     {
         $backend = $this->read('app/code/Weline/Theme/view/theme/backend/partials/head/default.phtml');
         self::assertStringContainsString('ThemeHeadChromeCssPack', $backend);
+        self::assertStringContainsString('PACK_BACKEND', $backend);
         self::assertStringContainsString('Weline_Theme::ui/weline-foundation.css', $backend);
         self::assertStringContainsString('Weline_Theme::ui/weline-backend.css', $backend);
         self::assertStringContainsString('Weline_Theme::ui/weline-ui.js', $backend);
@@ -275,21 +276,15 @@ final class ThemeColorModeContractTest extends TestCase
             self::assertDoesNotMatchRegularExpression('/<script(?:\s[^>]*)?>\s*\(function/s', $frontend);
             self::assertStringNotContainsString('assets/js/theme.js', $frontend);
             self::assertStringContainsString('Weline_Theme::theme/frontend/assets/css/theme.css', $frontend);
-            // Architecture + style layer stay outside token/UI packs.
+            // Runtime STOREFRONT pack may join theme.css + toast; source files stay independent.
             self::assertStringContainsString('storefront-shopper-toast-amazon.css', $frontend);
-            $packUiPos = strpos($frontend, 'PACK_UI');
+            self::assertStringContainsString('PACK_STOREFRONT', $frontend);
             $themeCssPos = strpos($frontend, 'assets/css/theme.css');
-            self::assertNotFalse($packUiPos);
             self::assertNotFalse($themeCssPos);
-            self::assertLessThan(
-                $packUiPos,
-                $themeCssPos,
-                'UI pack wiring must precede the independent theme.css link.',
-            );
             self::assertLessThan(
                 strpos($frontend, 'weline-foundation.css'),
                 $themeCssPos,
-                'theme.css must load after foundation/UI stack.',
+                'theme.css must load after foundation/UI stack in fragment fallback.',
             );
         }
     }

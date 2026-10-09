@@ -48,7 +48,7 @@ final class StorefrontHref
         try {
             /** @var Request $request */
             $request = ObjectManager::getInstance(Request::class);
-            $raw = (string)($request->getPathInfo() ?: '');
+            $raw = (string)($request->getUri() ?: '');
             if ($raw === '' && \function_exists('w_env_request_uri')) {
                 $raw = (string)\w_env_request_uri();
             }

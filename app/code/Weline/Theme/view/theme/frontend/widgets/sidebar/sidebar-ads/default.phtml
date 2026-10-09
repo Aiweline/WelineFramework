@@ -55,10 +55,13 @@ if (empty($ads)) {
                 <?php if ($adImageHtml !== ''): ?>
                     <div class="ad-image-media"><?= $adImageHtml ?></div>
                 <?php elseif ($adImage !== ''): ?>
-                    <img src="<?= $esc($adImage) ?>"
-                         alt="<?= $esc((string)($ad['alt'] ?? __('广告'))) ?>"
-                         class="ad-image"
-                         loading="lazy">
+                    <div class="ad-image w-frame" data-ratio="16/9" data-fit="cover" style="--weline-frame-ratio:16 / 9;">
+                        <img src="<?= $esc($adImage) ?>"
+                             alt="<?= $esc((string)($ad['alt'] ?? __('广告'))) ?>"
+                             width="640"
+                             height="360"
+                             loading="lazy">
+                    </div>
                 <?php endif; ?>
                 <?php if ($showLabel): ?>
                     <span class="ad-label"><?= __('广告') ?></span>

@@ -24,6 +24,7 @@ final class HeadAndProductCardRememberPolicyContractTest extends TestCase
         self::assertContains('theme', $policy->dependencies);
         self::assertContains('global/i18n', $policy->dependencies);
         self::assertSame(120, $policy->freshTtlSeconds);
+        self::assertSame(1500, $policy->singleFlightWaitMs);
     }
 
     public function testStorefrontHeadAssetsPolicyIsRouteInvariant(): void
@@ -36,6 +37,7 @@ final class HeadAndProductCardRememberPolicyContractTest extends TestCase
         self::assertContains('theme', $policy->dependencies);
         self::assertNotContains('catalog', $policy->dependencies);
         self::assertSame(90, $policy->freshTtlSeconds);
+        self::assertSame(1000, $policy->singleFlightWaitMs);
     }
 
     public function testProductCardHtmlPolicyUsesDedicatedPool(): void
@@ -48,6 +50,14 @@ final class HeadAndProductCardRememberPolicyContractTest extends TestCase
         self::assertContains('catalog', $policy->dependencies);
         self::assertContains('theme', $policy->dependencies);
         self::assertEqualsCanonicalizing(['lang', 'currency'], $policy->vary);
+        self::assertSame(1500, $policy->singleFlightWaitMs);
+    }
+
+    public function testStorefrontChromePolicyWaitsPeerBuilderOnColdDogpile(): void
+    {
+        $policy = StorefrontThemeCacheCoordinator::storefrontChromePolicy();
+        self::assertSame('theme.storefront_chrome', $policy->resource);
+        self::assertSame(2000, $policy->singleFlightWaitMs);
     }
 
     public function testProductCardLogicalKeyPartitionsByProductAndFlags(): void

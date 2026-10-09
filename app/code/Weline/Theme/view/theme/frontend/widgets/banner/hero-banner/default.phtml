@@ -40,8 +40,8 @@ $buttonLink = Block::link($this->getData('button_link'));
          weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-widget-style="--sb-hero-height:<?= $esc($height) ?>">
     <?php if ($imageHtml !== '' || $image !== ''): ?>
-        <div class="sb-hero-media">
-            <?php if ($imageHtml !== ''): ?><?= $imageHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($this->getData('alt_text')) ?>" decoding="async"><?php endif; ?>
+        <div class="sb-hero-media w-frame" data-ratio="16/9" data-fit="cover" style="--weline-frame-ratio:16 / 9;">
+            <?php if ($imageHtml !== ''): ?><?= $imageHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($this->getData('alt_text')) ?>" width="1600" height="900" decoding="async"><?php endif; ?>
         </div>
     <?php endif; ?>
     <div class="sb-hero-content">

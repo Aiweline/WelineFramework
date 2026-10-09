@@ -58,7 +58,7 @@
 
 属性通道对「已加载 / 加载中」的模块跳过；开发日志写「已跳过（已加载/加载中）」。同一模块不会双插 script。
 
-默认 `modulesLoad.deferByDefault=true`：部件 `data-weline-load` 走空闲延后；`data-weline-declare` 在 `loadDeclaredDeferred=true` 时同样调度延后加载。
+默认 `modulesLoad.deferByDefault=true`：部件 `data-weline-load` **默认近屏延后**（宿主元素 `IntersectionObserver`，`rootMargin` 可配 `visibleRootMargin`）；显式 `data-weline-load-when="idle"` 才走旧的 `requestIdleCallback`（Finish 前仍可能拉齐）。`data-weline-declare` 在 `loadDeclaredDeferred=true` 时仍调度空闲延后加载。
 
 ### 1.2 MutationObserver：架构总线 vs DEV 护栏
 

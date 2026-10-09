@@ -554,12 +554,14 @@ if ($productBreadcrumbs === []) {
                                 aria-selected="<?= $index === 0 ? 'true' : 'false' ?>"
                                 aria-label="<?= $escape($itemType === 'video' ? __('查看商品视频 %{1}', [$index + 1]) : __('查看商品图片 %{1}', [$index + 1])) ?>">
                             <?php if ($thumbSrc !== ''): ?>
-                                <img src="<?= $escape($thumbSrc) ?>"
-                                     alt=""
-                                     width="64"
-                                     height="64"
-                                     data-storefront-img="1"
-                                     data-fallback="<?= $escape(StorefrontImagePlaceholder::url($productId + $index)) ?>">
+                                <span class="w-frame" data-ratio="1" data-fit="cover">
+                                    <img src="<?= $escape($thumbSrc) ?>"
+                                         alt=""
+                                         width="64"
+                                         height="64"
+                                         data-storefront-img="1"
+                                         data-fallback="<?= $escape(StorefrontImagePlaceholder::url($productId + $index)) ?>">
+                                </span>
                             <?php else: ?>
                                 <span class="product-native-detail__thumb-video-label" aria-hidden="true">▶</span>
                             <?php endif; ?>
@@ -593,13 +595,16 @@ if ($productBreadcrumbs === []) {
             }
             ?>
             <div class="product-native-detail__stage-wrap" data-image-zoom="1" data-gallery-stage>
-                <div class="product-native-detail__stage">
+                <div class="product-native-detail__stage w-frame" data-ratio="1" data-fit="contain">
                     <img class="product-native-detail__primary-image"
                          src="<?= $escape($primarySrc) ?>"
                          alt="<?= $escape($name) ?>"
                          <?php if ($primaryW > 0 && $primaryH > 0): ?>
                          width="<?= $primaryW ?>"
                          height="<?= $primaryH ?>"
+                         <?php else: ?>
+                         width="800"
+                         height="800"
                          <?php endif; ?>
                          data-storefront-img="1"
                          data-fallback="<?= $escape($imageFallback) ?>"
@@ -853,12 +858,14 @@ if ($productBreadcrumbs === []) {
                                                         aria-label="<?= $escape($optionLabel) ?>"
                                                         aria-current="<?= $isSelected ? 'true' : 'false' ?>">
                                                     <?php if ($swatchImage !== ''): ?>
-                                                        <img class="product-native-detail__variant-swatch-image"
-                                                             src="<?= $escape($swatchImage) ?>"
-                                                             alt="<?= $escape(trim($name . ' · ' . $optionLabel)) ?>"
-                                                             width="48"
-                                                             height="48"
-                                                             loading="lazy">
+                                                        <span class="w-frame" data-ratio="1" data-fit="cover">
+                                                            <img class="product-native-detail__variant-swatch-image"
+                                                                 src="<?= $escape($swatchImage) ?>"
+                                                                 alt="<?= $escape(trim($name . ' · ' . $optionLabel)) ?>"
+                                                                 width="48"
+                                                                 height="48"
+                                                                 loading="lazy">
+                                                        </span>
                                                         <span class="product-native-detail__variant-swatch-label"><?= $escape($optionLabel) ?></span>
                                                     <?php elseif ($swatchColor !== ''): ?>
                                                         <span class="product-native-detail__variant-swatch-color"
@@ -1275,7 +1282,9 @@ if ($productBreadcrumbs === []) {
              aria-hidden="true">
             <div class="product-native-detail__sticky-purchase-inner">
                 <?php /* Identity left (media + title/price); specs + CTA right. */ ?>
-                <div class="product-native-detail__sticky-purchase-media"
+                <div class="product-native-detail__sticky-purchase-media w-frame"
+                     data-ratio="1"
+                     data-fit="cover"
                      data-sticky-media
                      data-testid="product-sticky-media"
                      <?= trim((string)($offer['image'] ?? ($images[0] ?? ''))) === '' ? 'hidden' : '' ?>>

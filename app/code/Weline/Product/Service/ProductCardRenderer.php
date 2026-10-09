@@ -21,6 +21,9 @@ final class ProductCardRenderer
 {
     private const CSS_FLAG = 'product.product_card_css_emitted';
     private const CSS_DISCARD_HOOK = 'product.product_card_css_discard';
+    /** Request-scoped count of eager product-card images already allocated. */
+    private const EAGER_IMAGE_BUDGET_KEY = 'product.card_eager_image_budget_used';
+    private const EAGER_IMAGE_BUDGET_DISCARD_HOOK = 'product.card_eager_image_budget_discard';
     /** Marker consumed by the shared widget asset placement pipeline. */
     public const CSS_LINK_MARKER = 'data-weline-product-card-css';
     private const CSS_VERSION = '20260925-rating-zero';
@@ -385,6 +388,10 @@ final class ProductCardRenderer
      * Collapse card_index into eager/lazy buckets so fragment Policy keys reuse
      * across list positions (same product+flags; loading attrs stay correct).
      *
+     * Eager slots are a **page-level** budget (RequestContext): multiple shelves
+     * that each reset local card_index to 0 must not each claim a full viewport
+     * of high-priority images on first paint.
+     *
      * @param array<string, mixed> $product
      * @return array<string, mixed>
      */
@@ -394,11 +401,37 @@ final class ProductCardRenderer
             return $product;
         }
         $index = max(0, (int)$product['card_index']);
-        $product['card_index'] = $index < self::INITIAL_VIEWPORT_IMAGE_COUNT
-            ? 0
-            : self::INITIAL_VIEWPORT_IMAGE_COUNT;
+        $wantsEager = $index < self::INITIAL_VIEWPORT_IMAGE_COUNT;
+        if ($wantsEager && self::tryAllocateEagerImageSlot()) {
+            $product['card_index'] = 0;
+        } else {
+            $product['card_index'] = self::INITIAL_VIEWPORT_IMAGE_COUNT;
+        }
 
         return $product;
+    }
+
+    /**
+     * Consume one page-level eager image slot when budget remains.
+     */
+    private static function tryAllocateEagerImageSlot(): bool
+    {
+        $used = max(0, (int)RequestContext::get(self::EAGER_IMAGE_BUDGET_KEY, 0));
+        if ($used >= self::INITIAL_VIEWPORT_IMAGE_COUNT) {
+            return false;
+        }
+        RequestContext::set(self::EAGER_IMAGE_BUDGET_KEY, $used + 1);
+        if ($used === 0) {
+            RequestContext::onCaptureDiscard(
+                static function (): void {
+                    RequestContext::remove(self::EAGER_IMAGE_BUDGET_KEY);
+                    RequestContext::removeCaptureDiscard(self::EAGER_IMAGE_BUDGET_DISCARD_HOOK);
+                },
+                self::EAGER_IMAGE_BUDGET_DISCARD_HOOK
+            );
+        }
+
+        return true;
     }
 
     /**

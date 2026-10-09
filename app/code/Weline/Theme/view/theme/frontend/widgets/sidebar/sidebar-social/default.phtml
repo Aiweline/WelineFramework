@@ -127,7 +127,9 @@ if ($socials === [] && $wechatQr === '' && $wechatQrFileHtml === '' && !$isPrevi
             <?php if ($wechatQrFileHtml !== ''): ?>
                 <div class="qr-image qr-image--asset"><?= $wechatQrFileHtml ?></div>
             <?php else: ?>
-                <img src="<?= $esc($wechatQr) ?>" alt="<?= __('微信二维码') ?>" class="qr-image">
+                <div class="qr-image w-frame" data-ratio="1" data-fit="contain">
+                    <img src="<?= $esc($wechatQr) ?>" alt="<?= __('微信二维码') ?>" width="160" height="160">
+                </div>
             <?php endif; ?>
         </div>
     <?php endif; ?>

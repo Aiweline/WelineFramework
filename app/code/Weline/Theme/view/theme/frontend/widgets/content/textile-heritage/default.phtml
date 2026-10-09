@@ -164,10 +164,11 @@ if ($brands === []) {
                             <?php if ($imageHtml !== ''): ?>
                                 <div class="heritage-image heritage-image--asset brand-logo"><?= $imageHtml ?></div>
                             <?php else: ?>
-                                <img class="heritage-image brand-logo"
-                                     src="<?= $esc($image) ?>"
-                                     alt="<?= $esc($objectTitle !== '' ? $objectTitle : $name) ?>"
-                                     width="400" height="400" loading="lazy" decoding="async">
+                                <div class="heritage-image brand-logo w-frame" data-ratio="1" data-fit="contain">
+                                    <img src="<?= $esc($image) ?>"
+                                         alt="<?= $esc($objectTitle !== '' ? $objectTitle : $name) ?>"
+                                         width="400" height="400" loading="lazy" decoding="async">
+                                </div>
                             <?php endif; ?>
                         </span>
                         <span class="heritage-copy brand-copy">

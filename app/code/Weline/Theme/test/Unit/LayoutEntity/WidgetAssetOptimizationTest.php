@@ -51,8 +51,13 @@ final class WidgetAssetOptimizationTest extends TestCase
         $result = (new WidgetAssetOptimizer($publisher))->transform([
             $make('/layout.js', 'js', 'layout'), $make('/a.js'), $make('/a.css', 'css'),
             $make('/b.js'), $make('/b.css', 'css'), $make('/boundary.js'), $make('/c.js'),
-        ], ['js_merge' => true, 'css_merge' => true]);
-        // PROD publishes singletons too; layout/boundary/c stay independent of source merges.
+        ], [
+            'js_merge' => true,
+            'css_merge' => true,
+            'js_merge_start_widget' => 6,
+            'css_merge_start_widget' => 6,
+        ]);
+        // Merge path always publishes (incl. singletons); layout/boundary/c stay independent of source merges.
         self::assertSame([
             ['/layout.js'],
             ['/a.js', '/b.js'],
@@ -67,6 +72,55 @@ final class WidgetAssetOptimizationTest extends TestCase
             '/static/bundle-3.js',
             '/static/bundle-4.js',
         ], \array_column($result, 'url'));
+    }
+
+    public function testLayoutCssMergesIntoSingleBlockingPackIgnoringStart(): void
+    {
+        $publisher = new class extends WidgetAssetArtifactPublisher {
+            public array $batches = [];
+            public function canMerge(array $asset): bool { return true; }
+            public function publish(array $assets, bool $minify): ?string {
+                $this->batches[] = array_column($assets, 'url');
+                return '/static/layout-pack.css';
+            }
+        };
+        $make = static fn(string $url, int $index = 1): array => [
+            'url' => $url,
+            'tag' => '<link rel="stylesheet" href="' . $url . '">',
+            'position' => 'head',
+            'kind' => 'layout',
+            'first_widget_index' => $index,
+        ];
+        $result = (new WidgetAssetOptimizer($publisher))->transform([
+            $make('/layout-a.css', 1),
+            $make('/layout-b.css', 2),
+            $make('/layout-c.css', 40),
+        ], ['css_merge' => true, 'css_merge_start_widget' => 25]);
+        self::assertSame([['/layout-a.css', '/layout-b.css', '/layout-c.css']], $publisher->batches);
+        self::assertCount(1, $result);
+        self::assertStringContainsString('data-weline-layout-pack="1"', $result[0]['tag']);
+        self::assertStringNotContainsString('media="print"', $result[0]['tag']);
+    }
+
+    public function testLateSourceCssGetsDeferredMediaAndNoscript(): void
+    {
+        $publisher = new class extends WidgetAssetArtifactPublisher {
+            public function canMerge(array $asset): bool { return true; }
+            public function publish(array $assets, bool $minify): ?string {
+                return '/static/late-source.css';
+            }
+        };
+        $result = (new WidgetAssetOptimizer($publisher))->transform([[
+            'url' => '/late.css',
+            'tag' => '<link rel="stylesheet" href="/late.css">',
+            'position' => 'head',
+            'kind' => 'source',
+            'first_widget_index' => 25,
+        ]], ['css_merge' => true, 'css_merge_start_widget' => 25]);
+        self::assertCount(1, $result);
+        self::assertStringContainsString('media="print"', $result[0]['tag']);
+        self::assertStringContainsString("onload=\"this.media='all'\"", $result[0]['tag']);
+        self::assertStringContainsString('<noscript>', $result[0]['tag']);
     }
 
     public function testUnwrappedTopLevelDeclarationsKeepTheirFileBoundary(): void

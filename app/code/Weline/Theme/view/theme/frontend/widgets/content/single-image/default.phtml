@@ -30,13 +30,14 @@ $caption = Block::text($this->getData('caption'));
 $link = Block::link($this->getData('link'));
 $ratio = Block::choice($this->getData('ratio'), ['natural','wide','landscape','square'], 'natural');
 $ratios = ['natural'=>'auto','wide'=>'16 / 9','landscape'=>'4 / 3','square'=>'1 / 1'];
+$frameRatio = ['natural' => '', 'wide' => '16/9', 'landscape' => '4/3', 'square' => '1'][$ratio] ?? '';
 $fit = Block::choice($this->getData('fit'), ['cover','contain'], 'cover');
 ?>
 <figure class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>" data-widget-style="--sb-ratio:<?= $esc($ratios[$ratio]) ?>;--sb-fit:<?= $esc($fit) ?>">
     <?php if ($mediaHtml !== '' || $image !== ''): ?>
         <?php if ($link !== ''): ?><a href="<?= $esc($link) ?>"><?php endif; ?>
-        <div class="sb-media<?= $ratio === 'natural' ? ' is-natural' : '' ?>">
-            <?php if ($mediaHtml !== ''): ?><?= $mediaHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($this->getData('alt_text')) ?>" loading="lazy" decoding="async"><?php endif; ?>
+        <div class="sb-media<?= $ratio === 'natural' ? ' is-natural' : ' w-frame' ?>"<?php if ($frameRatio !== ''): ?> data-ratio="<?= $esc($frameRatio) ?>" data-fit="<?= $esc($fit) ?>"<?php endif; ?>>
+            <?php if ($mediaHtml !== ''): ?><?= $mediaHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($this->getData('alt_text')) ?>" loading="lazy" decoding="async"<?= $ratio === 'natural' ? ' data-layout-exempt="1"' : '' ?>><?php endif; ?>
         </div>
         <?php if ($link !== ''): ?></a><?php endif; ?>
     <?php else: ?><p class="sb-empty"><lang>请选择真实图片</lang></p><?php endif; ?>

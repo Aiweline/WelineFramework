@@ -245,11 +245,18 @@ $defaultNavItemsFactory = static function (): array {
 })();
 </script>
 <!-- theme-partial:header option=default -->
-<?php // header chrome/search/default CSS：由 header-container @widget.layout_source bake→head，禁止 @static 直引 ?>
+<?php // 布局 partial 级 CSS（layout 允许 <link>）。header-container layout_source 仅在该部件实际渲染时 bake；槽未填/设计壳覆盖时须本链兜底。 ?>
+<link rel="stylesheet"
+      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)&v=20261009-style-restore">
+<link rel="stylesheet"
+      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)&v=20261009-style-restore">
+<link rel="stylesheet"
+      href="@static(Weline_Theme::css/partials/header-default.css)&v=20261009-style-restore"
+      data-no-extract="true">
 <!-- Skip to content link for accessibility -->
 <a href="#main-content" class="skip-to-content" aria-label="<lang>跳转到主要内容</lang>"><lang>跳转到主要内容</lang></a>
 <div hidden data-weline-load="headerSearch" data-w-header-search-loader="true" aria-hidden="true"></div>
-<?php // headerSearch：布局兜底声明（部件未挂时仍可加载），禁止 @static 直引 ?>
+<?php // headerSearch：布局兜底声明（部件未挂时仍可加载） ?>
 <?php // 像素引导：空槽 + Visitor required default_injections；禁止 Theme 内嵌非 Theme 部件 ?>
 <w:slot id="header-pixel-bootstrap"
         name="店面像素引导"

@@ -19,6 +19,22 @@ final class HeaderNavFragmentBypassTest extends TestCase
         self::assertStringNotContainsString('$isThemePreviewContent', $source);
     }
 
+    public function testShouldBypassUsesGetUriNotMissingGetPathInfo(): void
+    {
+        $source = \file_get_contents(
+            \dirname(__DIR__, 3) . '/Helper/HeaderNavFragment.php'
+        );
+        self::assertIsString($source);
+        self::assertStringNotContainsString('getPathInfo()', $source);
+        self::assertStringContainsString('requestPathForCacheGate', $source);
+        self::assertStringContainsString('getUri()', $source);
+        // Detection failure must allow fragment HotCache (was: catch → bypass forever).
+        self::assertMatchesRegularExpression(
+            '/catch\s*\(\s*\\\\Throwable\s*\)\s*\{\s*\/\/[^\n]*\n\s*return false;/s',
+            $source,
+        );
+    }
+
     public function testNavigationFragmentsExposeCacheAndRenderTimingPhases(): void
     {
         $source = \file_get_contents(

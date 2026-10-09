@@ -102,7 +102,11 @@ if ($deferCards) {
         <h2 class="wpf-title"><?= $esc($widgetTitle) ?></h2>
         <p class="wpf-subtitle"><?= $esc((string)__('Buy these items together')) ?></p>
     </header>
-    <div class="wpf-body is-skeleton" data-wpf-hydrate-root></div>
+    <div class="wpf-body is-skeleton" data-wpf-hydrate-root>
+        <?php for ($i = 0, $n = max(1, min(3, $companionLimit)); $i < $n; $i++): ?>
+            <div class="w-skeleton" data-size="card" aria-hidden="true"></div>
+        <?php endfor; ?>
+    </div>
 </section>
     <?php
     return;
@@ -198,9 +202,11 @@ foreach ($products as $product) {
                             <span class="wpf-check-ui" aria-hidden="true"></span>
                             <span class="wpf-sr"><?= $esc($productName) ?></span>
                         </label>
-                        <a class="wpf-media" href="<?= $esc($productUrl) ?>" aria-label="<?= $esc($productName) ?>">
+                        <a class="wpf-media w-frame" href="<?= $esc($productUrl) ?>" aria-label="<?= $esc($productName) ?>" data-ratio="1" data-fit="cover">
                             <img src="<?= $esc($productImage !== '' ? $productImage : $imageFallback) ?>"
                                  alt=""
+                                 width="400"
+                                 height="400"
                                  data-storefront-img="1"
                                  data-fallback="<?= $esc($imageFallback !== '' ? $imageFallback : $productImage) ?>"
                                  loading="lazy"

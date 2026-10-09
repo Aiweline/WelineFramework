@@ -43,7 +43,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     productDetailReveal: {
         paths: [
-            "Weline_Product::js/widgets/product-detail-reveal.js?v=20260923-detail-reveal4"
+            "Weline_Product::js/widgets/product-detail-reveal.js?v=20261009-detail-reveal5"
         ],
         globalVar: null,
         description: "PDP 详情杂志楼层滚轮入场（§5.4）"

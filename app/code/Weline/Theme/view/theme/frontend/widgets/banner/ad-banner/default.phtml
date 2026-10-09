@@ -52,12 +52,14 @@ $rootStyle = 'border-radius:' . $borderRadius . ';';
     <?php if ($imageFileHtml !== ''): ?>
         <div class="ad-image ad-image--asset"><?= $imageFileHtml ?></div>
     <?php elseif ($image !== ''): ?>
-        <img src="<?= $esc($image) ?>"
-             alt="<?= $esc((string)$altText) ?>"
-             class="ad-image w-file-image"
-             width="1920"
-             height="150"
-             loading="lazy" decoding="async">
+        <div class="ad-image w-frame" data-ratio="64/5" data-fit="cover" style="--weline-frame-ratio:64 / 5;">
+            <img src="<?= $esc($image) ?>"
+                 alt="<?= $esc((string)$altText) ?>"
+                 class="w-file-image"
+                 width="1920"
+                 height="150"
+                 loading="lazy" decoding="async">
+        </div>
     <?php else: ?>
         <p class="sb-empty"><lang>请选择真实图片</lang></p>
     <?php endif; ?>

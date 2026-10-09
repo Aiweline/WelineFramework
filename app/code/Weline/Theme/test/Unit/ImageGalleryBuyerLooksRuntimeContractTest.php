@@ -31,6 +31,8 @@ final class ImageGalleryBuyerLooksRuntimeContractTest extends TestCase
         self::assertStringContainsString('editor_context', $widget);
         self::assertStringContainsString('galleryItems(max(1, (int)$columns), $looksWebsiteId)', $widget);
         self::assertStringContainsString('findById($websiteId, $productId)', $widget);
+        self::assertStringContainsString('StorefrontCatalogProductVisibility', $widget);
+        self::assertStringContainsString('isProductSellable', $widget);
         self::assertStringContainsString('晒出你的穿搭', $widget);
         self::assertStringNotContainsString("\$subtitle = '晒出你的汉服穿搭'", $widget);
         self::assertStringNotContainsString("/product/543#product-reviews", $widget);

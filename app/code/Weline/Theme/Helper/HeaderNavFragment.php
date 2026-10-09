@@ -527,7 +527,9 @@ final class HeaderNavFragment
     private static function shouldBypass(Template $template): bool
     {
         try {
-            $requestPath = \strtolower((string)($template->request->getPathInfo() ?: \w_env_request_uri()));
+            // Request path gate via getUri() (legacy PathInfo accessor is absent on Request;
+            // calling it threw and the catch below used to force bypass on every storefront hit).
+            $requestPath = self::requestPathForCacheGate($template);
 
             if ((string)$template->request->getGet('visual_editor', '') === '1'
                 || (string)$template->request->getGet('preview', '') === '1'
@@ -547,10 +549,35 @@ final class HeaderNavFragment
                 return true;
             }
         } catch (\Throwable) {
-            return true;
+            // Detection failure must not tax every storefront cold render.
+            return false;
         }
 
         return false;
+    }
+
+    /** Path-only gate input (no query); empty when request URI unavailable. */
+    private static function requestPathForCacheGate(Template $template): string
+    {
+        $uri = '';
+        try {
+            $uri = \trim((string)$template->request->getUri());
+        } catch (\Throwable) {
+            $uri = '';
+        }
+        if ($uri === '' && \function_exists('w_env_request_uri')) {
+            try {
+                $uri = \trim((string)\w_env_request_uri());
+            } catch (\Throwable) {
+                $uri = '';
+            }
+        }
+        if ($uri === '') {
+            return '';
+        }
+        $path = \parse_url($uri, PHP_URL_PATH);
+
+        return \strtolower((string)(\is_string($path) && $path !== '' ? $path : $uri));
     }
 
     private static function coerceBool(mixed $value, bool $default = true): bool

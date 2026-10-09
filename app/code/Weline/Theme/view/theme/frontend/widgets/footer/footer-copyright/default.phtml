@@ -61,7 +61,7 @@ $copyrightText = str_replace(['{year}', '{site_name}'], [date('Y'), $siteName], 
             <?php endif; ?>
             <?php if ($policeNumber !== ''): ?>
                 <a href="<?= $esc((string)$policeLink) ?>" target="_blank" rel="noopener noreferrer" class="police-link">
-                    <img src="<?= $esc($placeholder) ?>" alt="" class="police-icon">
+                    <img src="<?= $esc($placeholder) ?>" alt="" class="police-icon" width="16" height="16" data-layout-exempt="1">
                     <?= $esc((string)$policeNumber) ?>
                 </a>
             <?php endif; ?>

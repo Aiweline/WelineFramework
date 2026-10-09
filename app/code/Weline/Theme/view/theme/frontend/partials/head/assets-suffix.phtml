@@ -21,29 +21,23 @@ if ($diskOverrideHtml === '') {
     }
 }
 $headPack = null;
-$tokenPreHtml = null;
-$tokenPostHtml = null;
-$uiPackHtml = null;
+$storefrontPackHtml = null;
 try {
     $headPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeCssPack::class
     );
-    $tokenPreHtml = $headPack->tryLinkHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS_PRE);
-    $tokenPostHtml = $headPack->tryLinkHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS_POST, [
-        'include_disk' => true,
-    ]);
-    $uiPackHtml = $headPack->tryLinkHtml('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_UI, [
-        'layout_css' => true,
-    ]);
+    $storefrontPackHtml = $headPack->tryLinkHtml(
+        'frontend',
+        \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT,
+        ['include_disk' => true, 'layout_css' => true]
+    );
 } catch (\Throwable $e) {
     $headPack = null;
-    $tokenPreHtml = null;
-    $tokenPostHtml = null;
-    $uiPackHtml = null;
+    $storefrontPackHtml = null;
 }
 $diskAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPack
-    && $tokenPostHtml !== null
-    && $headPack->diskIncludedInPack('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS_POST);
+    && $storefrontPackHtml !== null
+    && $headPack->diskIncludedInPack('frontend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT);
 $afterCssJsHtml = null;
 try {
     $afterCssJsHtml = \Weline\Framework\Manager\ObjectManager::getInstance(
@@ -53,30 +47,22 @@ try {
     $afterCssJsHtml = null;
 }
 ?>
-<?php if ($tokenPreHtml !== null): ?>
-<?= $tokenPreHtml ?>
+<?php if ($storefrontPackHtml !== null): ?>
+<?= $storefrontPackHtml ?>
 <?php else: ?>
 <theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_default.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_ink.css</theme:css>
-<?php endif; ?>
-<w:hook>Weline_Theme::frontend::partials::head::styles-after</w:hook>
-<?php if ($tokenPostHtml !== null): ?>
-<?= $tokenPostHtml ?>
-<?php else: ?>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/variables/_spacing.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/variables/_typography.css</theme:css>
-<?php endif; ?>
 <?php if (!$diskAbsorbed) { echo $diskOverrideHtml; } ?>
-<?php if ($uiPackHtml !== null): ?>
-<?= $uiPackHtml ?>
-<?php else: ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)" data-weline-layout-css>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)" data-weline-layout-css>
-<?php endif; ?>
 <theme:css data-weline-layout-css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
 <link rel="stylesheet" href="@static(Weline_Theme::css/widgets/storefront-shopper-toast-amazon.css)" data-weline-layout-css>
+<?php endif; ?>
+<w:hook>Weline_Theme::frontend::partials::head::styles-after</w:hook>
 <?php if ($afterCssJsHtml !== null): ?>
 <?= $afterCssJsHtml ?>
 <?php else: ?>

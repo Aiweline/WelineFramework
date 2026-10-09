@@ -188,4 +188,8 @@
     --weshop-line-height-tight: var(--line-height-tight);
     --weshop-line-height-normal: var(--line-height-normal);
     --weshop-line-height-relaxed: var(--line-height-relaxed);
+
+    /* Layout stability skeleton / line clamp (Theme mechanism; design themes may override) */
+    --weline-skeleton-card-min-h: 14rem;
+    --weline-lines-lh: 1.4;
 }

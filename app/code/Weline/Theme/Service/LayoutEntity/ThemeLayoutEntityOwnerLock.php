@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 
@@ -55,6 +56,7 @@ final class ThemeLayoutEntityOwnerLock
         // Pipeline may serialize same-owner draft/formal across processes; 10s was too tight
         // when a sibling promote is still writing a large identity tree.
         $deadline = hrtime(true) + 120_000_000_000;
+        $waitStarted = hrtime(true);
         try {
             while (!flock($handle, $mode | LOCK_NB)) {
                 if (hrtime(true) >= $deadline) {
@@ -64,6 +66,24 @@ final class ThemeLayoutEntityOwnerLock
                     throw new \RuntimeException('theme_layout_owner_lock_cooperative_wait_unavailable');
                 }
                 SchedulerSystem::yieldDelay(1);
+            }
+            $waitMs = (hrtime(true) - $waitStarted) / 1_000_000;
+            // Timing dig: theme.source.capture often = owner lock wait, not disk I/O.
+            if ($waitMs >= 5.0) {
+                try {
+                    if (RequestLifecycleTrace::isEnabled()) {
+                        RequestLifecycleTrace::recordPhase(
+                            'theme.layout.owner_lock_wait',
+                            $waitMs,
+                            [
+                                'mode' => $mode === LOCK_EX ? 'ex' : 'sh',
+                                'owner_key_hash' => substr($key, 0, 16),
+                            ],
+                        );
+                    }
+                } catch (\Throwable) {
+                    // Tracing must never block lock acquisition.
+                }
             }
             self::$held[$key][$execution] = ['handle' => $handle, 'pid' => $pid, 'mode' => $mode];
             try {

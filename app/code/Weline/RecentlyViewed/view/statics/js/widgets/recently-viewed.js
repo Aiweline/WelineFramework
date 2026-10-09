@@ -170,6 +170,41 @@
     return global.Weline.Api;
   }
 
+  function isTransientHydrateError(error) {
+    if (!error) {
+      return false;
+    }
+    var status = Number(error.status || error.statusCode || error.code || 0) || 0;
+    if (status === 502 || status === 503 || status === 504) {
+      return true;
+    }
+    var msg = String(error.message || error || '');
+    return /service_unavailable|502|503|504|Bad Gateway|temporarily unavailable/i.test(msg);
+  }
+
+  function sleep(ms) {
+    return new Promise(function (resolve) {
+      global.setTimeout(resolve, ms);
+    });
+  }
+
+  async function fetchCards(root) {
+    var provider = root.getAttribute('data-hydrate-provider') || 'product_storefront';
+    var operation = root.getAttribute('data-hydrate-operation') || 'recentlyViewedCards';
+    var excludeId = parseInt(root.getAttribute('data-exclude-product-id') || '0', 10) || 0;
+    var limit = parseInt(root.getAttribute('data-limit') || '6', 10) || 6;
+    var api = await waitForApi();
+    var resource = await api.resource(provider);
+    if (!resource || typeof resource[operation] !== 'function') {
+      throw new Error('hydrate_op_unavailable:' + operation);
+    }
+    var result = await resource[operation]({
+      exclude_product_id: excludeId,
+      limit: limit,
+    }, { silent: true });
+    return unwrapCards(result);
+  }
+
   async function hydrate(root) {
     if (!root || root.getAttribute('data-weline-hydrate') !== '1') {
       return;
@@ -177,43 +212,57 @@
     if (root.getAttribute('data-pdp-hydrated') === '1') {
       return;
     }
-    root.setAttribute('data-pdp-hydrated', '1');
+    if (root.getAttribute('data-pdp-hydrating') === '1') {
+      return;
+    }
 
-    var provider = root.getAttribute('data-hydrate-provider') || 'product_storefront';
-    var operation = root.getAttribute('data-hydrate-operation') || 'recentlyViewedCards';
-    var excludeId = parseInt(root.getAttribute('data-exclude-product-id') || '0', 10) || 0;
-    var limit = parseInt(root.getAttribute('data-limit') || '6', 10) || 6;
     var track = root.querySelector('[data-pdp-lazy-track], [data-wrv-track]');
     if (!track) {
       return;
     }
 
+    root.setAttribute('data-pdp-hydrating', '1');
+    root.classList.remove('is-hydrate-failed');
+    root.setAttribute('aria-busy', 'true');
+
+    var attempt = 0;
+    var maxAttempts = 3;
     try {
-      var api = await waitForApi();
-      var resource = await api.resource(provider);
-      if (!resource || typeof resource[operation] !== 'function') {
-        throw new Error('hydrate_op_unavailable:' + operation);
+      while (attempt < maxAttempts) {
+        attempt += 1;
+        try {
+          var cards = await fetchCards(root);
+          if (!cards.length) {
+            track.innerHTML = '';
+            track.classList.remove('is-skeleton');
+            root.classList.remove('is-deferred');
+            root.classList.add('is-empty');
+            root.setAttribute('hidden', '');
+            root.setAttribute('aria-hidden', 'true');
+            root.setAttribute('data-pdp-hydrated', '1');
+            return;
+          }
+          track.innerHTML = cards.map(cardHtml).join('');
+          track.classList.remove('is-skeleton');
+          root.classList.remove('is-deferred');
+          root.removeAttribute('hidden');
+          root.removeAttribute('aria-hidden');
+          root.setAttribute('data-testid', 'storefront-recently-viewed');
+          root.setAttribute('data-pdp-hydrated', '1');
+          return;
+        } catch (error) {
+          if (!isTransientHydrateError(error) || attempt >= maxAttempts) {
+            throw error;
+          }
+          await sleep(400 * attempt);
+        }
       }
-      var result = await resource[operation]({
-        exclude_product_id: excludeId,
-        limit: limit,
-      }, { silent: true });
-      var cards = unwrapCards(result);
-      if (!cards.length) {
-        root.classList.add('is-empty');
-        root.setAttribute('hidden', '');
-        root.setAttribute('aria-hidden', 'true');
-        root.removeAttribute('aria-busy');
-        return;
-      }
-      track.innerHTML = cards.map(cardHtml).join('');
-      track.classList.remove('is-skeleton');
-      root.classList.remove('is-deferred');
-      root.removeAttribute('aria-busy');
-      root.setAttribute('data-testid', 'storefront-recently-viewed');
     } catch (error) {
-      root.removeAttribute('aria-busy');
       root.classList.add('is-hydrate-failed');
+      root.removeAttribute('data-pdp-hydrate-scheduled');
+    } finally {
+      root.removeAttribute('data-pdp-hydrating');
+      root.removeAttribute('aria-busy');
     }
   }
 
@@ -270,14 +319,74 @@
     root.setAttribute('data-wrv-ready', '1');
   }
 
+  /**
+   * Lazy shell stays skeleton until the widget script loads.
+   * Visible-gated data-weline-load already waited for near-viewport — hydrate
+   * immediately on boot. IO only for data-weline-load-when="idle".
+   */
+  function scheduleHydrate(root) {
+    if (!root) {
+      return;
+    }
+    var run = function () {
+      if (root.getAttribute('data-pdp-hydrate-scheduled') === '1') {
+        return;
+      }
+      if (root.getAttribute('data-pdp-hydrated') === '1') {
+        return;
+      }
+      root.setAttribute('data-pdp-hydrate-scheduled', '1');
+      hydrate(root).finally(function () {
+        init(root);
+        if (root.getAttribute('data-pdp-hydrated') === '1') {
+          return;
+        }
+        var waves = parseInt(root.getAttribute('data-pdp-hydrate-waves') || '0', 10) || 0;
+        if (waves >= 2) {
+          return;
+        }
+        root.setAttribute('data-pdp-hydrate-waves', String(waves + 1));
+        global.setTimeout(function () {
+          if (root.getAttribute('data-pdp-hydrated') === '1') {
+            return;
+          }
+          root.removeAttribute('data-pdp-hydrate-scheduled');
+          scheduleHydrate(root);
+        }, 1600);
+      });
+    };
+
+    if (root.getAttribute('data-weline-hydrate') !== '1') {
+      init(root);
+      return;
+    }
+    var when = String(root.getAttribute('data-weline-load-when') || 'visible').toLowerCase();
+    if (when !== 'idle') {
+      // Stagger after you-may-like so scroll-into-view does not dual-storm query-bin.
+      global.setTimeout(run, 280);
+      return;
+    }
+    if (typeof global.IntersectionObserver !== 'function') {
+      run();
+      return;
+    }
+    var io = new global.IntersectionObserver(function (entries) {
+      for (var i = 0; i < entries.length; i += 1) {
+        if (!entries[i].isIntersecting) {
+          continue;
+        }
+        io.disconnect();
+        run();
+        break;
+      }
+    }, { root: null, rootMargin: '200px 0px', threshold: 0 });
+    io.observe(root);
+  }
+
   function boot(scope) {
     recordFromDocument(scope || document);
     var roots = (scope || document).querySelectorAll('.weline-recently-viewed[data-js-ns]');
-    roots.forEach(function (root) {
-      hydrate(root).finally(function () {
-        init(root);
-      });
-    });
+    roots.forEach(scheduleHydrate);
   }
 
   if (document.readyState === 'loading') {

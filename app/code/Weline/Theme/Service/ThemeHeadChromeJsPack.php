@@ -6,6 +6,7 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
+use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Minify\StaticAssetMinifier;
 use Weline\Theme\Model\WelineTheme;
@@ -36,7 +37,27 @@ final class ThemeHeadChromeJsPack
         try {
             return !empty($this->resourceConfig->resolve(null, $area)['theme_js_merge']);
         } catch (\Throwable) {
-            return defined('PROD') && PROD;
+            return true;
+        }
+    }
+
+    /**
+     * Publish area JS packs so Formal/com warm path does not cold-miss on first request.
+     */
+    public function warmAreaPacks(string $area = 'frontend'): void
+    {
+        $area = $this->themeContext->normalizeArea($area);
+        if (!$this->isEnabled($area)) {
+            return;
+        }
+        foreach ([self::PACK_EARLY, self::PACK_AFTER_CSS] as $pack) {
+            try {
+                $this->publishPack($area, $pack);
+            } catch (\Throwable $e) {
+                if (function_exists('w_log_warning')) {
+                    w_log_warning('Theme head chrome JS warm failed: ' . $e->getMessage());
+                }
+            }
         }
     }
 
@@ -75,15 +96,18 @@ final class ThemeHeadChromeJsPack
             return '';
         }
         $minify = !empty($this->resourceConfig->resolve($theme, $area)['js_minify']);
+        $scopeFp = $this->resolvePackScopeFingerprint($area);
         $key = hash('sha256', json_encode([
-            'theme-head-js-v1',
+            'theme-head-js-v2',
             $area,
             $pack,
             $minify,
             (int)($theme?->getId() ?? 0),
+            $scopeFp,
             array_column($sources, 'hash'),
         ], JSON_THROW_ON_ERROR));
-        $target = $this->gateway->buildHeadChromeArtifact($key, $area, 'js');
+        // Pin artifact namespace to the same theme used for source collection.
+        $target = $this->gateway->buildHeadChromeArtifact($key, $area, 'js', $theme);
         if ($target === null) {
             return '';
         }
@@ -172,5 +196,37 @@ final class ThemeHeadChromeJsPack
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @return array<string, scalar>
+     */
+    private function resolvePackScopeFingerprint(string $area): array
+    {
+        try {
+            $app = ThemeApplicationContext::current($area);
+            if ($app instanceof ThemeApplicationContext) {
+                return [
+                    'scope_key' => $app->scopeKey,
+                    'store_mode' => $app->storeMode,
+                    'theme_id' => $app->themeId,
+                    'provider' => $app->provider,
+                    'version_owner_scope' => $app->versionOwnerScope,
+                    'theme_version_id' => $app->themeVersionId,
+                    'content_revision' => $app->contentRevision,
+                ];
+            }
+        } catch (\Throwable) {
+        }
+
+        return [
+            'scope_key' => 'unbound',
+            'store_mode' => '',
+            'theme_id' => 0,
+            'provider' => '',
+            'version_owner_scope' => '',
+            'theme_version_id' => 0,
+            'content_revision' => 0,
+        ];
     }
 }

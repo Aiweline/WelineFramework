@@ -7,6 +7,7 @@ namespace Weline\Theme\Service;
 use Weline\Framework\Deploy\StaticPublishExclusion;
 use Weline\Framework\Http\Request;
 use Weline\Framework\View\PublicThemeNamespace;
+use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 
 final class ThemeResourceGateway
@@ -34,16 +35,21 @@ final class ThemeResourceGateway
 
     /**
      * Head chrome CSS/JS packs (token / UI / classic scripts). Same public namespace as widget-assets.
+     * Pass the theme used for source collection so artifacts never land under another theme/scope.
      *
      * @return array{path:string,url:string}|null
      */
-    public function buildHeadChromeArtifact(string $hash, string $area = 'frontend', string $extension = 'css'): ?array
-    {
+    public function buildHeadChromeArtifact(
+        string $hash,
+        string $area = 'frontend',
+        string $extension = 'css',
+        ?WelineTheme $theme = null,
+    ): ?array {
         if (!preg_match('/^[a-f0-9]{64}$/', $hash) || !in_array($extension, ['css', 'js'], true)) {
             return null;
         }
         $area = $this->themeContext->normalizeArea($area);
-        $theme = $this->resolveTheme($area, null);
+        $theme = $this->resolveTheme($area, $theme);
         if (!$theme || !$theme->getId()) {
             return null;
         }
@@ -565,6 +571,12 @@ final class ThemeResourceGateway
     {
         if ($theme && $theme->getId()) {
             return $theme;
+        }
+        // Prefer request/compile-pinned ThemeData so head-chrome artifacts land in the
+        // same public namespace as ThemeHeadChromeCssPack source collection (design theme).
+        $current = ThemeData::getCurrentTheme();
+        if ($current instanceof WelineTheme && (int)$current->getId() > 0) {
+            return $current;
         }
 
         return $this->themeContext->resolveTheme($area);

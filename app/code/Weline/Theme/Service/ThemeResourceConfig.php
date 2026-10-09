@@ -33,7 +33,7 @@ final class ThemeResourceConfig
         $identity = RequestContext::scopeIdentity() ?? ScopeIdentity::global();
         $production = defined('PROD') && PROD;
         $result = [];
-        foreach (['css_minify', 'js_minify', 'css_merge', 'js_merge', 'theme_css_merge', 'theme_js_merge'] as $key) {
+        foreach (['css_minify', 'js_minify'] as $key) {
             $mode = $this->config->resolveTypedConfig(
                 'resource_files/' . $key, 'Weline_Theme', $area, $identity, 'default', 'auto'
             )->value;
@@ -43,12 +43,23 @@ final class ThemeResourceConfig
                 default => $production,
             };
         }
+        // Merge switches: auto means always on (DEV and PROD). Field default is on.
+        foreach (['css_merge', 'js_merge', 'theme_css_merge', 'theme_js_merge'] as $key) {
+            $mode = $this->config->resolveTypedConfig(
+                'resource_files/' . $key, 'Weline_Theme', $area, $identity, 'default', 'on'
+            )->value;
+            $result[$key] = match ($mode) {
+                'off' => false,
+                default => true,
+            };
+        }
         foreach (['css_merge_start', 'js_merge_start'] as $key) {
             $value = $this->config->resolveTypedConfig(
                 'resource_files/' . $key, 'Weline_Theme', $area, $identity, 'default', 6
             )->value;
             $result[$key . '_widget'] = max(1, (int)$value);
         }
+
         return $result;
     }
 }

@@ -92,7 +92,6 @@ final class ThemePathResolvePagePrefetch
         }
         $keys = \array_values(\array_unique($keys));
 
-        $t0 = \microtime(true);
         try {
             $primed = $hotCache->prefetchPolicy(
                 StorefrontThemeCacheCoordinator::themePathResolvePolicy(),
@@ -101,34 +100,6 @@ final class ThemePathResolvePagePrefetch
         } catch (\Throwable) {
             $primed = 0;
         }
-        $prefetchMs = \round((\microtime(true) - $t0) * 1000, 2);
-
-        // #region agent log
-        try {
-            $payload = [
-                'sessionId' => '8f7f40',
-                'runId' => 'cold-lag-pre',
-                'hypothesisId' => 'A,E',
-                'location' => 'ThemePathResolvePagePrefetch.php:primeBeforeLayoutFetch',
-                'message' => 'path.resolve prefetch result',
-                'data' => [
-                    'theme_id' => $themeId,
-                    'key_count' => \count($keys),
-                    'primed' => (int)$primed,
-                    'prefetch_ms' => $prefetchMs,
-                    'request_id' => RequestContext::getId(),
-                ],
-                'timestamp' => (int)\round(\microtime(true) * 1000),
-            ];
-            @\file_put_contents(
-                '/Users/weline/Project/Official/框架/.cursor/debug-8f7f40.log',
-                \json_encode($payload, \JSON_UNESCAPED_UNICODE) . "\n",
-                \FILE_APPEND | \LOCK_EX
-            );
-        } catch (\Throwable) {
-        }
-        // #endregion
-
         RequestContext::set(self::LATCH_KEY, true);
 
         return \max(0, (int)$primed);

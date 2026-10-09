@@ -144,10 +144,13 @@ if ($usesCraftDirectory
                         <?php if ($brandImageHtml !== ''): ?>
                             <div class="brand-logo-media"><?= $brandImageHtml ?></div>
                         <?php elseif ($brandImage !== ''): ?>
-                            <img src="<?= $esc($brandImage) ?>"
-                                 alt="<?= $esc($brandName) ?>"
-                                 class="brand-logo"
-                                 loading="lazy">
+                            <div class="brand-logo-media w-frame" data-ratio="1" data-fit="contain">
+                                <img src="<?= $esc($brandImage) ?>"
+                                     alt="<?= $esc($brandName) ?>"
+                                     class="brand-logo"
+                                     width="200" height="200"
+                                     loading="lazy">
+                            </div>
                         <?php endif; ?>
                         <?php if ($brandName !== ''): ?>
                             <?php if ($brandImage !== '' || $brandImageHtml !== ''): ?>

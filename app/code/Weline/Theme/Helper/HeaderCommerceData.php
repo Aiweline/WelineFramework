@@ -675,20 +675,10 @@ final class HeaderCommerceData
     {
         $websiteCode = trim((string)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteCode());
         $websiteId = max(0, (int)(\Weline\Framework\Runtime\RequestContext::websiteId() ?? 0));
-        @file_put_contents(
-            BP . 'dev/tmp/blog-search-scope.log',
-            date('c') . " resolveSearchTypes code={$websiteCode} id={$websiteId}\n",
-            FILE_APPEND
-        );
         return self::rememberRequestMemo(
             'theme.header.search_types',
             'default',
             static function () use ($websiteCode, $websiteId): array {
-                @file_put_contents(
-                    BP . 'dev/tmp/blog-search-scope.log',
-                    date('c') . " builder RUN code={$websiteCode} id={$websiteId}\n",
-                    FILE_APPEND
-                );
                 try {
                     /** @var SearchProviderRegistry $registry */
                     $registry = ObjectManager::getInstance(SearchProviderRegistry::class);

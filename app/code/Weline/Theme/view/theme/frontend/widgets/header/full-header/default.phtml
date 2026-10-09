@@ -107,7 +107,9 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                     <?php if ($logoImageFileHtml !== ''): ?>
                         <span class="logo-image logo-image--asset"><?= $logoImageFileHtml ?></span>
                     <?php elseif ($logoImage !== ''): ?>
-                        <img src="<?= $esc($logoImage) ?>" alt="<?= $esc((string)$logoText) ?>" class="logo-image">
+                        <span class="logo-image w-frame" data-ratio="8/3" data-fit="contain" style="--weline-frame-ratio:8 / 3;">
+                            <img src="<?= $esc($logoImage) ?>" alt="<?= $esc((string)$logoText) ?>" width="420" height="159">
+                        </span>
                     <?php else: ?>
                         <span class="logo-text"><?= $esc((string)$logoText) ?></span>
                     <?php endif; ?>

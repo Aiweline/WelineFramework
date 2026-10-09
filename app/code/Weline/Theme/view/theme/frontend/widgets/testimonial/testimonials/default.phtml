@@ -96,8 +96,8 @@ if ($items === [] && \Weline\Theme\Helper\StorefrontHanfuDemoCatalog::allowed())
                 <p class="sb-copy"><?= $t($item['content'] ?? '') ?></p>
                 <footer>
                     <?php if ($showAvatar && ($avatarHtml !== '' || $avatar !== '')): ?>
-                        <div class="sb-avatar">
-                            <?php if ($avatarHtml !== ''): ?><?= $avatarHtml ?><?php else: ?><img src="<?= $esc($avatar) ?>" alt="<?= $t($item['author'] ?? '') ?>" loading="lazy" decoding="async"><?php endif; ?>
+                        <div class="sb-avatar w-frame" data-ratio="1" data-fit="cover">
+                            <?php if ($avatarHtml !== ''): ?><?= $avatarHtml ?><?php else: ?><img src="<?= $esc($avatar) ?>" alt="<?= $t($item['author'] ?? '') ?>" width="80" height="80" loading="lazy" decoding="async"><?php endif; ?>
                         </div>
                     <?php endif; ?>
                     <strong><?= $t($item['author'] ?? '') ?></strong>

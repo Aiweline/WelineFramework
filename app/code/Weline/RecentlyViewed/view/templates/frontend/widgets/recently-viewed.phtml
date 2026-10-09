@@ -124,7 +124,7 @@ if ($deferCards) {
         <div class="wrv-viewport" data-wrv-viewport>
             <div class="wrv-track columns-<?= $esc($columns) ?> layout-<?= $esc($layout) ?> is-skeleton" data-wrv-track data-pdp-lazy-track>
                 <?php for ($i = 0, $n = \Weline\Theme\Helper\PdpRecommendationLazyShell::skeletonCount($limit, 6); $i < $n; $i++): ?>
-                    <div class="wrv-card wrv-card--skeleton" aria-hidden="true"></div>
+                    <div class="w-skeleton" data-size="card" aria-hidden="true"></div>
                 <?php endfor; ?>
             </div>
         </div>

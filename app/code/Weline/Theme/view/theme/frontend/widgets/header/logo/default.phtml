@@ -81,14 +81,15 @@ if ($logoImage === '' && $logoImageFileHtml === '') {
         <?php if ($logoImageFileHtml !== ''): ?>
             <span class="logo-image logo-image--asset"><?= $logoImageFileHtml ?></span>
         <?php else: ?>
-            <img src="<?= $esc($logoImage) ?>"
-                 alt="<?= $esc((string)$logoText) ?>"
-                 class="logo-image"
-                 width="420"
-                 height="159"
-                 decoding="async"
-                 data-widget-style-class="eef44f2a1b0e4367"
-                 data-widget-logo-image>
+            <span class="logo-image w-frame" data-ratio="8/3" data-fit="contain" style="--weline-frame-ratio:8 / 3;">
+                <img src="<?= $esc($logoImage) ?>"
+                     alt="<?= $esc((string)$logoText) ?>"
+                     width="420"
+                     height="159"
+                     decoding="async"
+                     data-widget-style-class="eef44f2a1b0e4367"
+                     data-widget-logo-image>
+            </span>
             <span class="logo-text" data-widget-style-class="8387420c4b8f095e"><?= $esc((string)$logoText) ?></span>
         <?php endif; ?>
     </a>

@@ -110,7 +110,9 @@ $renderCategoryList = static function (
         echo '<a href="' . $esc(\Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($category['url'] ?? '#'))) . '" class="category-link">';
 
         if ($showImage && !empty($category['image'])) {
-            echo '<img src="' . $esc((string)$category['image']) . '" alt="' . $esc((string)($category['name'] ?? '')) . '" class="category-image" loading="lazy">';
+            echo '<span class="category-image w-frame" data-ratio="1" data-fit="cover">'
+                . '<img src="' . $esc((string)$category['image']) . '" alt="' . $esc((string)($category['name'] ?? '')) . '" width="48" height="48" loading="lazy">'
+                . '</span>';
         }
 
         echo '<span class="category-name">' . $esc((string)($category['name'] ?? '')) . '</span>';
