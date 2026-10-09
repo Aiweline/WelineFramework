@@ -15,7 +15,13 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
 
         self::assertStringContainsString('weline-ui-2-language-switcher-', $taglib);
         self::assertStringContainsString('SWITCHER_MARKUP_VERSION', $taglib);
-        self::assertSame('component-26-trigger-flag-ssr', \Weline\I18n\Taglib\LanguageSwitcher::SWITCHER_MARKUP_VERSION);
+        self::assertSame('component-27-panel-lazy', \Weline\I18n\Taglib\LanguageSwitcher::SWITCHER_MARKUP_VERSION);
+        self::assertStringContainsString('data-i18n-panel-lazy', $taglib);
+        self::assertStringContainsString('renderLazyPanelCatalog', $taglib);
+        self::assertStringContainsString('getLanguageSwitcherCatalog', $runtime);
+        self::assertStringContainsString('fetchLanguageSwitcherCatalogHtml', $runtime);
+        self::assertStringContainsString('panelCatalogPromises', $runtime);
+        self::assertStringContainsString('loadPanelCatalog', $runtime);
         self::assertStringContainsString('data-w-component="menu language-switcher"', $taglib);
         self::assertStringContainsString('data-w-anchor-mode="element"', $taglib);
         self::assertStringContainsString('data-w-language-search', $taglib);

@@ -30,7 +30,8 @@ class LanguageSwitcher implements TaglibInterface
     /** Stable language-directory HotCache resource (no path / DOM id). */
     public const CATALOG_CACHE_RESOURCE = 'i18n.language_switcher.catalog';
     /** Bumped when storefront switcher DOM contract changes (chrome partial cache key). */
-    public const SWITCHER_MARKUP_VERSION = 'component-26-trigger-flag-ssr';
+    /** Storefront: trigger SSR + lazy panel catalog (click / menu:open). */
+    public const SWITCHER_MARKUP_VERSION = 'component-27-panel-lazy';
     public const TAG_NAME = 'i18n:switcher';
 
     /**
@@ -193,6 +194,7 @@ class LanguageSwitcher implements TaglibInterface
                 '切换语言',
                 '没有匹配的语言',
                 '申请支持其他语言',
+                '正在加载语言…',
                 '正在加载语言目录与人机验证...',
                 '申请表加载失败',
                 '重新加载',
@@ -210,17 +212,36 @@ class LanguageSwitcher implements TaglibInterface
             $labelSwitchLanguage = self::translateChrome('切换语言', $displayLocale);
             $labelNoMatch = self::translateChrome('没有匹配的语言', $displayLocale);
             $labelRequest = self::translateChrome('申请支持其他语言', $displayLocale);
+            $labelPanelLoading = self::translateChrome('正在加载语言…', $displayLocale);
             $labelLoading = self::translateChrome('正在加载语言目录与人机验证...', $displayLocale);
             $labelLoadFail = self::translateChrome('申请表加载失败', $displayLocale);
             $labelRetry = self::translateChrome('重新加载', $displayLocale);
             $labelError = self::translateChrome('加载失败，请稍后重试', $displayLocale);
             $labelClose = self::translateChrome('关闭', $displayLocale);
             $labelUngrouped = self::translateChrome('未分组国家', $displayLocale);
-            $welineLanguages = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
-                'i18n.language_switcher.catalog',
-                static fn() => self::buildLanguagesFromScope($scope, $displayLocale),
-            );
-            $languageGroups = self::groupLanguagesByCountry($welineLanguages, $displayLocale, $currentCode);
+            // Storefront: do not SSR the full ~160-option panel into chrome (cold lang tax).
+            // Backend keeps full SSR. Lazy panel HTML comes from QueryBin getLanguageSwitcherCatalog.
+            $lazyPanel = !$isBackendArea;
+            if ($lazyPanel) {
+                $triggerCodes = [];
+                if ($currentCode !== '') {
+                    $triggerCodes[] = $currentCode;
+                }
+                if ($currentOverride !== '' && !\in_array($currentOverride, $triggerCodes, true)) {
+                    $triggerCodes[] = $currentOverride;
+                }
+                if ($triggerCodes === [] && $scope->defaultCode !== '') {
+                    $triggerCodes[] = $scope->defaultCode;
+                }
+                $welineLanguages = self::buildLanguagesFromCodes($triggerCodes, $displayLocale);
+                $languageGroups = [];
+            } else {
+                $welineLanguages = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                    'i18n.language_switcher.catalog',
+                    static fn() => self::buildLanguagesFromScope($scope, $displayLocale),
+                );
+                $languageGroups = self::groupLanguagesByCountry($welineLanguages, $displayLocale, $currentCode);
+            }
 
             $firstCode = (string)(array_key_first($welineLanguages) ?? $scope->defaultCode);
             $firstData = (array)($welineLanguages[$firstCode] ?? []);
@@ -308,6 +329,9 @@ class LanguageSwitcher implements TaglibInterface
                 $currentCurrency = strtoupper(trim($currentCurrency));
             }
             $websiteMount = self::resolveWebsiteMountPath($request instanceof Request ? $request : null);
+            $catalogFingerprintCodes = $lazyPanel
+                ? \array_values(\array_filter(\array_map('strval', $scope->codes)))
+                : \array_keys($welineLanguages);
             $htmlCacheKey = self::buildHtmlCacheKey(
                 $isBackendArea,
                 $websiteId,
@@ -318,11 +342,12 @@ class LanguageSwitcher implements TaglibInterface
                 $currentPath,
                 $currentSearch,
                 $backendRoute,
-                \array_keys($welineLanguages)
+                $catalogFingerprintCodes,
             ) . '|language_request=' . ($showLanguageRequest ? '1' : '0')
                 . '|navigation=' . $navigation
                 . '|show_search=' . ($showSearch ? '1' : '0')
                 . '|label_mode=' . $labelMode
+                . '|lazy_panel=' . ($lazyPanel ? '1' : '0')
                 . '|markup=weline-ui-2-language-switcher-' . self::SWITCHER_MARKUP_VERSION
                 . '|mount=' . $websiteMount
                 . '|inst=' . $switcherId;
@@ -347,7 +372,9 @@ class LanguageSwitcher implements TaglibInterface
             $safePanelId = htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8');
             $safeNavigation = htmlspecialchars($navigation, ENT_QUOTES, 'UTF-8');
             $safeWebsiteMount = htmlspecialchars($websiteMount, ENT_QUOTES, 'UTF-8');
-            $supportedScope = self::buildSupportedScopeAttributes($welineLanguages);
+            $supportedScope = $lazyPanel
+                ? self::buildSupportedScopeAttributesFromCodes($scope->codes)
+                : self::buildSupportedScopeAttributes($welineLanguages);
             $safeSupportedLocales = htmlspecialchars($supportedScope['locales'], ENT_QUOTES, 'UTF-8');
             $safeSupportedCountries = htmlspecialchars($supportedScope['countries'], ENT_QUOTES, 'UTF-8');
             $currentLabel = $renderFor === 'js' ? $currentDisplay : $currentName;
@@ -358,6 +385,14 @@ class LanguageSwitcher implements TaglibInterface
                 . ' data-i18n-navigation="' . $safeNavigation . '"'
                 . ' data-i18n-supported-locales="' . $safeSupportedLocales . '"'
                 . ' data-i18n-supported-countries="' . $safeSupportedCountries . '"'
+                . ' data-i18n-display-locale="' . htmlspecialchars($displayLocale, ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-i18n-current-locale="' . htmlspecialchars($currentCode, ENT_QUOTES, 'UTF-8') . '"'
+                . ($lazyPanel ? ' data-i18n-panel-lazy="1"' : '')
+                . ($lazyPanel
+                    ? ' data-i18n-panel-loading-text="' . htmlspecialchars($labelPanelLoading, ENT_QUOTES, 'UTF-8') . '"'
+                        . ' data-i18n-panel-error-text="' . htmlspecialchars($labelError, ENT_QUOTES, 'UTF-8') . '"'
+                        . ' data-i18n-panel-retry-text="' . htmlspecialchars($labelRetry, ENT_QUOTES, 'UTF-8') . '"'
+                    : '')
                 . ' data-website-id="' . (int)$websiteId . '"'
                 . ($showLanguageRequest ? ' data-language-request="1"' : '')
                 . ' data-website-mount="' . $safeWebsiteMount . '">';
@@ -379,68 +414,30 @@ class LanguageSwitcher implements TaglibInterface
                     . ' autocomplete="off" data-w-language-search'
                     . ' aria-label="' . htmlspecialchars($searchPlaceholder, ENT_QUOTES, 'UTF-8') . '"></div>';
             }
-            $html[] = '        <div class="w-language-switcher__list" data-w-language-list>';
+            $html[] = '        <div class="w-language-switcher__list" data-w-language-list'
+                . ($lazyPanel ? ' data-i18n-panel-pending="1"' : '')
+                . '>';
             if ($showSearch) {
                 $html[] = '            <p class="w-language-switcher__empty" data-w-language-empty hidden>'
                     . htmlspecialchars($labelNoMatch, ENT_QUOTES, 'UTF-8')
                     . '</p>';
             }
-
-            foreach ($languageGroups as $groupIndex => $languageGroup) {
-                $countryNameRaw = (string)($languageGroup['country_name'] ?? $labelUngrouped);
-                $countryCodeRaw = (string)($languageGroup['country_code'] ?? '');
-                $groupId = $switcherId . '-group-' . (int)$groupIndex;
-                $html[] = '            <div class="w-language-switcher__group" role="group" aria-labelledby="'
-                    . htmlspecialchars($groupId, ENT_QUOTES, 'UTF-8') . '">';
-                $html[] = '                <div id="' . htmlspecialchars($groupId, ENT_QUOTES, 'UTF-8')
-                    . '" class="w-menu__header w-language-switcher__group-label"><span>'
-                    . htmlspecialchars($countryNameRaw, ENT_QUOTES, 'UTF-8') . '</span><small>'
-                    . htmlspecialchars($countryCodeRaw, ENT_QUOTES, 'UTF-8') . '</small></div>';
-
-                foreach ((array)($languageGroup['languages'] ?? []) as $code => $language) {
-                    $code = (string)$code;
-                    $nameRaw = (string)($language['display_name'] ?? ($language['name'] ?? $code));
-                    $selfName = \trim((string)($language['self_name'] ?? ''));
-                    $referenceName = \trim((string)($language['reference_name'] ?? ($language['english_name'] ?? '')));
-                    $metaParts = [$code];
-                    $metaSecondary = $selfName !== '' ? $selfName : $referenceName;
-                    if ($metaSecondary !== '' && $metaSecondary !== $nameRaw && !\in_array($metaSecondary, $metaParts, true)) {
-                        $metaParts[] = $metaSecondary;
-                    }
-                    if ($countryNameRaw !== '' && $countryNameRaw !== $nameRaw && !\in_array($countryNameRaw, $metaParts, true)) {
-                        $metaParts[] = $countryNameRaw;
-                    }
-                    $active = $currentCode === $code;
-                    $href = self::buildLanguageHref(
-                        $currentPath,
-                        $currentSearch,
-                        $code,
-                        $currentCurrency,
-                        $backendRoute,
-                    );
-                    $searchBlob = \trim(\implode(' ', \array_filter([
-                        (string)($language['search_terms'] ?? ''),
-                        $nameRaw,
-                        $selfName,
-                        $referenceName,
-                        $code,
-                        $countryNameRaw,
-                        $countryCodeRaw,
-                    ], static fn(string $part): bool => $part !== '')));
-                    $html[] = '                <a class="w-menu__item w-language-switcher__option"'
-                        . ' role="menuitemradio" aria-checked="' . ($active ? 'true' : 'false') . '"'
-                        . ' data-state="' . ($active ? 'active' : 'idle') . '"'
-                        . ' data-i18n-authoritative-href="1" data-language-option="1"'
-                        . ' data-w-search="' . htmlspecialchars(\mb_strtolower($searchBlob), ENT_QUOTES, 'UTF-8') . '"'
-                        . ' data-lang="' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . '"'
-                        . ' href="' . htmlspecialchars($href, ENT_QUOTES, 'UTF-8') . '">'
-                        . CountryFlagMarkup::placeholderHtml(self::resolveLanguageCountryCode($language, $countryCodeRaw))
-                        . '<span class="w-language-switcher__copy"><strong>'
-                        . htmlspecialchars($nameRaw, ENT_QUOTES, 'UTF-8') . '</strong><small>'
-                        . htmlspecialchars(\implode(' | ', $metaParts), ENT_QUOTES, 'UTF-8')
-                        . '</small></span></a>';
-                }
-                $html[] = '            </div>';
+            if ($lazyPanel) {
+                $html[] = '            <p class="w-text w-language-switcher__panel-status" data-tone="muted"'
+                    . ' data-i18n-panel-status role="status">'
+                    . htmlspecialchars($labelPanelLoading, ENT_QUOTES, 'UTF-8')
+                    . '</p>';
+            } else {
+                $html[] = self::buildPanelListGroupsHtml(
+                    $languageGroups,
+                    $switcherId,
+                    $currentCode,
+                    $currentPath,
+                    $currentSearch,
+                    $currentCurrency,
+                    $backendRoute,
+                    $labelUngrouped,
+                );
             }
             $html[] = '        </div>';
 
@@ -1106,15 +1103,21 @@ class LanguageSwitcher implements TaglibInterface
             return $dictionary[$source];
         }
         // 模块 CSV 仅 zh/en；非中英语种 chrome 走全局词典预取（WLS 热路径不读整本 language 包）。
+        // 调用方须先 Parser::prefetchWords($chromeSources) 批量预取；禁止此处单词语 prefetch（N× exact_dictionary_batch）。
         try {
             $prefetched = \trim((string)(Parser::getPrefetchedGlobalWord($locale, $source) ?? ''));
             if ($prefetched !== '') {
                 return $prefetched;
             }
-            Parser::prefetchWords([$source], $locale);
-            $prefetched = \trim((string)(Parser::getPrefetchedGlobalWord($locale, $source) ?? ''));
-            if ($prefetched !== '') {
-                return $prefetched;
+            // locale chain：批量预取可能只命中 en_US 层。
+            foreach (['en_US', 'zh_Hans_CN'] as $fallbackLocale) {
+                if ($fallbackLocale === $locale) {
+                    continue;
+                }
+                $prefetched = \trim((string)(Parser::getPrefetchedGlobalWord($fallbackLocale, $source) ?? ''));
+                if ($prefetched !== '') {
+                    return $prefetched;
+                }
             }
         } catch (\Throwable) {
         }
@@ -1199,6 +1202,181 @@ class LanguageSwitcher implements TaglibInterface
             'locales' => \implode(',', $localeList),
             'countries' => \implode(',', $countryList),
         ];
+    }
+
+    /**
+     * Lazy panel: supported-locale attrs from scope codes without building full language rows.
+     *
+     * @param list<string> $codes
+     * @return array{locales: string, countries: string}
+     */
+    private static function buildSupportedScopeAttributesFromCodes(array $codes): array
+    {
+        $locales = [];
+        foreach ($codes as $code) {
+            $locale = \trim(\str_replace('-', '_', (string)$code));
+            if ($locale !== '') {
+                $locales[$locale] = true;
+            }
+        }
+        $localeList = \array_keys($locales);
+        \sort($localeList, \SORT_STRING);
+
+        return [
+            'locales' => \implode(',', $localeList),
+            'countries' => '',
+        ];
+    }
+
+    /**
+     * Storefront lazy panel: HotCache-backed catalog → option group HTML (no chrome shell).
+     *
+     * @param array<string, mixed> $params
+     * @return array{html: string, current_code: string, display_locale: string, group_count: int, option_count: int}
+     */
+    public static function renderLazyPanelCatalog(array $params = []): array
+    {
+        return \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'i18n.language_switcher.lazy_panel',
+            static function () use ($params): array {
+                $websiteId = self::normalizeOptionalInt($params['website_id'] ?? null);
+                $currentOverride = \trim((string)($params['current'] ?? $params['current_locale'] ?? ''));
+                $displayOverride = \trim((string)($params['display_locale_code'] ?? $params['display_locale'] ?? ''));
+                $isBackendArea = false;
+                try {
+                    $request = ObjectManager::getInstance(Request::class);
+                    $isBackendArea = self::resolveIsBackendArea($request instanceof Request ? $request : null);
+                    if ($websiteId === null) {
+                        $websiteId = (int)($request->getData('website_id') ?? 0);
+                    }
+                } catch (\Throwable) {
+                    $websiteId = $websiteId ?? 0;
+                }
+                try {
+                    $contextWebsiteId = \Weline\Framework\Runtime\RequestContext::getWelineWebsiteId();
+                    if ($contextWebsiteId !== null && ($websiteId === null || (int)$websiteId === 0)) {
+                        $websiteId = (int)$contextWebsiteId;
+                    }
+                } catch (\Throwable) {
+                }
+
+                /** @var LocaleCatalogScopeResolver $scopeResolver */
+                $scopeResolver = ObjectManager::getInstance(LocaleCatalogScopeResolver::class);
+                $scope = $scopeResolver->resolve(
+                    $isBackendArea,
+                    (int)($websiteId ?? 0),
+                    [],
+                    $currentOverride !== '' ? $currentOverride : null,
+                    null,
+                    $websiteId,
+                );
+                $displayLocale = $displayOverride !== '' ? $displayOverride : $scope->displayLocale;
+                $currentCode = $scope->currentCode;
+                $languages = self::buildLanguagesFromScope($scope, $displayLocale);
+                $groups = self::groupLanguagesByCountry($languages, $displayLocale, $currentCode);
+                $labelUngrouped = self::translateChrome('未分组国家', $displayLocale);
+                $switcherId = 'weline-i18n-lazy-' . \substr(\sha1($displayLocale . '|' . $currentCode), 0, 12);
+                $html = self::buildPanelListGroupsHtml(
+                    $groups,
+                    $switcherId,
+                    $currentCode,
+                    '/',
+                    '',
+                    State::getCurrency() ?: self::defaultCurrency(),
+                    '',
+                    $labelUngrouped,
+                );
+                $optionCount = 0;
+                foreach ($groups as $group) {
+                    $optionCount += \count((array)($group['languages'] ?? []));
+                }
+
+                return [
+                    'html' => $html,
+                    'current_code' => $currentCode,
+                    'display_locale' => $displayLocale,
+                    'group_count' => \count($groups),
+                    'option_count' => $optionCount,
+                ];
+            },
+        );
+    }
+
+    /**
+     * @param list<array{country_code?: string, country_name?: string, languages?: array<string, array<string, mixed>>}> $languageGroups
+     */
+    private static function buildPanelListGroupsHtml(
+        array $languageGroups,
+        string $switcherId,
+        string $currentCode,
+        string $currentPath,
+        string $currentSearch,
+        string $currentCurrency,
+        string $backendRoute,
+        string $labelUngrouped,
+    ): string {
+        $chunks = [];
+        foreach ($languageGroups as $groupIndex => $languageGroup) {
+            $countryNameRaw = (string)($languageGroup['country_name'] ?? $labelUngrouped);
+            $countryCodeRaw = (string)($languageGroup['country_code'] ?? '');
+            $groupId = $switcherId . '-group-' . (int)$groupIndex;
+            $chunks[] = '            <div class="w-language-switcher__group" role="group" aria-labelledby="'
+                . htmlspecialchars($groupId, ENT_QUOTES, 'UTF-8') . '">';
+            $chunks[] = '                <div id="' . htmlspecialchars($groupId, ENT_QUOTES, 'UTF-8')
+                . '" class="w-menu__header w-language-switcher__group-label"><span>'
+                . htmlspecialchars($countryNameRaw, ENT_QUOTES, 'UTF-8') . '</span><small>'
+                . htmlspecialchars($countryCodeRaw, ENT_QUOTES, 'UTF-8') . '</small></div>';
+
+            foreach ((array)($languageGroup['languages'] ?? []) as $code => $language) {
+                $code = (string)$code;
+                if (!\is_array($language)) {
+                    $language = [];
+                }
+                $nameRaw = (string)($language['display_name'] ?? ($language['name'] ?? $code));
+                $selfName = \trim((string)($language['self_name'] ?? ''));
+                $referenceName = \trim((string)($language['reference_name'] ?? ($language['english_name'] ?? '')));
+                $metaParts = [$code];
+                $metaSecondary = $selfName !== '' ? $selfName : $referenceName;
+                if ($metaSecondary !== '' && $metaSecondary !== $nameRaw && !\in_array($metaSecondary, $metaParts, true)) {
+                    $metaParts[] = $metaSecondary;
+                }
+                if ($countryNameRaw !== '' && $countryNameRaw !== $nameRaw && !\in_array($countryNameRaw, $metaParts, true)) {
+                    $metaParts[] = $countryNameRaw;
+                }
+                $active = $currentCode === $code;
+                $href = self::buildLanguageHref(
+                    $currentPath,
+                    $currentSearch,
+                    $code,
+                    $currentCurrency,
+                    $backendRoute,
+                );
+                $searchBlob = \trim(\implode(' ', \array_filter([
+                    (string)($language['search_terms'] ?? ''),
+                    $nameRaw,
+                    $selfName,
+                    $referenceName,
+                    $code,
+                    $countryNameRaw,
+                    $countryCodeRaw,
+                ], static fn(string $part): bool => $part !== '')));
+                $chunks[] = '                <a class="w-menu__item w-language-switcher__option"'
+                    . ' role="menuitemradio" aria-checked="' . ($active ? 'true' : 'false') . '"'
+                    . ' data-state="' . ($active ? 'active' : 'idle') . '"'
+                    . ' data-i18n-authoritative-href="1" data-language-option="1"'
+                    . ' data-w-search="' . htmlspecialchars(\mb_strtolower($searchBlob), ENT_QUOTES, 'UTF-8') . '"'
+                    . ' data-lang="' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . '"'
+                    . ' href="' . htmlspecialchars($href, ENT_QUOTES, 'UTF-8') . '">'
+                    . CountryFlagMarkup::placeholderHtml(self::resolveLanguageCountryCode($language, $countryCodeRaw))
+                    . '<span class="w-language-switcher__copy"><strong>'
+                    . htmlspecialchars($nameRaw, ENT_QUOTES, 'UTF-8') . '</strong><small>'
+                    . htmlspecialchars(\implode(' | ', $metaParts), ENT_QUOTES, 'UTF-8')
+                    . '</small></span></a>';
+            }
+            $chunks[] = '            </div>';
+        }
+
+        return \implode("\n", $chunks);
     }
 
     /**

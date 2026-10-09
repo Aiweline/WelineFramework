@@ -38,5 +38,11 @@ final class I18nQueryProviderCacheDescriptorContractTest extends TestCase
             'external' => false,
             'mode' => 'read',
         ]));
+
+        self::assertArrayHasKey('getLanguageSwitcherCatalog', $byName);
+        self::assertTrue(($byName['getLanguageSwitcherCatalog']['external'] ?? false) === true);
+        self::assertTrue($policy->isCacheableOperation($byName['getLanguageSwitcherCatalog']));
+        self::assertSame('1h', $byName['getLanguageSwitcherCatalog']['cache']['ttl'] ?? null);
+        self::assertTrue(($byName['getLanguageSwitcherCatalog']['frontend'] ?? false) === true);
     }
 }

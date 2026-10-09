@@ -235,6 +235,49 @@ function resolveLanguageNavigationHref(locale, optionHref, websiteMount = '') {
  * point at an older page. Rewrite live options from the current location before
  * any click/default navigation can leave the page.
  */
+/** Shared in-flight / resolved panel catalogs keyed by website|display|current. */
+const panelCatalogPromises = new Map();
+
+function panelCatalogCacheKey(root) {
+    const websiteId = String(root?.dataset?.websiteId || '');
+    const display = String(root?.dataset?.i18nDisplayLocale || '');
+    const current = String(root?.dataset?.i18nCurrentLocale || '');
+    return `${websiteId}|${display}|${current}`;
+}
+
+async function fetchLanguageSwitcherCatalogHtml(root) {
+    const key = panelCatalogCacheKey(root);
+    if (panelCatalogPromises.has(key)) {
+        return panelCatalogPromises.get(key);
+    }
+    const promise = (async () => {
+        if (typeof window.Weline?.load === 'function') {
+            await window.Weline.load('api');
+        }
+        const resource = await Promise.resolve(window.Weline?.Api?.resource?.('i18n'));
+        if (!resource?.getLanguageSwitcherCatalog) {
+            throw new Error('Weline.Api i18n catalog unavailable.');
+        }
+        const result = await resource.getLanguageSwitcherCatalog({
+            website_id: Number(root.dataset.websiteId || 0) || 0,
+            display_locale_code: String(root.dataset.i18nDisplayLocale || '').trim(),
+            current: String(root.dataset.i18nCurrentLocale || '').trim(),
+        });
+        const html = String(result?.html || result?.data?.html || '');
+        if (!html.trim()) {
+            throw new Error(root.dataset.i18nPanelErrorText || 'Unable to load languages.');
+        }
+        return html;
+    })();
+    panelCatalogPromises.set(key, promise);
+    try {
+        return await promise;
+    } catch (error) {
+        panelCatalogPromises.delete(key);
+        throw error;
+    }
+}
+
 function refreshLanguageOptionHrefs(root, panel) {
     const mount = root instanceof HTMLElement ? (root.dataset.websiteMount || '') : '';
     const scopes = [];
@@ -1275,6 +1318,91 @@ export function register(UI) {
             });
         };
 
+        let panelCatalogLoaded = root.getAttribute('data-i18n-panel-lazy') !== '1';
+        let panelCatalogLoading = false;
+        let panelCatalogGeneration = 0;
+
+        const renderPanelStatus = (message, tone = 'muted', retry = false) => {
+            panel = resolvePanel() || panel;
+            const list = panel?.querySelector?.('[data-w-language-list]');
+            if (!(list instanceof HTMLElement)) return;
+            const empty = list.querySelector('[data-w-language-empty]');
+            const keepEmpty = empty instanceof HTMLElement ? empty : null;
+            list.replaceChildren();
+            if (keepEmpty) {
+                keepEmpty.hidden = true;
+                list.append(keepEmpty);
+            }
+            const status = document.createElement('p');
+            status.className = 'w-text w-language-switcher__panel-status';
+            status.dataset.tone = tone;
+            status.setAttribute('data-i18n-panel-status', '');
+            status.setAttribute('role', tone === 'danger' ? 'alert' : 'status');
+            status.textContent = message;
+            list.append(status);
+            if (retry) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'w-button';
+                button.dataset.size = 'sm';
+                button.textContent = root.dataset.i18nPanelRetryText || 'Retry';
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    panelCatalogLoaded = false;
+                    void loadPanelCatalog(true);
+                }, { once: true });
+                list.append(button);
+            }
+            list.setAttribute('data-i18n-panel-pending', '1');
+        };
+
+        const loadPanelCatalog = async (force = false) => {
+            if (root.getAttribute('data-i18n-panel-lazy') !== '1') return;
+            if ((panelCatalogLoaded && !force) || panelCatalogLoading) return;
+            panel = resolvePanel() || panel;
+            const list = panel?.querySelector?.('[data-w-language-list]');
+            if (!(list instanceof HTMLElement)) return;
+            const generation = ++panelCatalogGeneration;
+            panelCatalogLoading = true;
+            renderPanelStatus(root.dataset.i18nPanelLoadingText || 'Loading…');
+            try {
+                const html = await fetchLanguageSwitcherCatalogHtml(root);
+                if (generation !== panelCatalogGeneration) return;
+                const empty = list.querySelector('[data-w-language-empty]');
+                const keepEmpty = empty instanceof HTMLElement ? empty : null;
+                list.replaceChildren();
+                if (keepEmpty) {
+                    keepEmpty.hidden = true;
+                    list.append(keepEmpty);
+                }
+                list.append(trustedFragment(html));
+                list.removeAttribute('data-i18n-panel-pending');
+                panelCatalogLoaded = true;
+                refreshLanguageOptionHrefs(root, panel);
+                bindPanelClick();
+                bindSearch();
+                search = panel?.querySelector?.('[data-w-language-search]') || search;
+                applySearchFilter(search instanceof HTMLInputElement ? search.value : '');
+                flagsHydrated = true;
+                void enqueueFlagHydration([root, panel].filter(Boolean), { mode: 'panel' });
+            } catch (error) {
+                if (generation !== panelCatalogGeneration) return;
+                panelCatalogLoaded = false;
+                renderPanelStatus(
+                    error instanceof Error
+                        ? error.message
+                        : (root.dataset.i18nPanelErrorText || 'Unable to load.'),
+                    'danger',
+                    true,
+                );
+            } finally {
+                if (generation === panelCatalogGeneration) {
+                    panelCatalogLoading = false;
+                }
+            }
+        };
+
         bindPanelClick();
         bindSearch();
         bindRequest();
@@ -1285,15 +1413,18 @@ export function register(UI) {
             bindSearch();
             bindRequest();
             panel = resolvePanel() || panel;
+            void loadPanelCatalog();
             refreshLanguageOptionHrefs(root, panel);
             search = panel?.querySelector?.('[data-w-language-search]') || search;
             applySearchFilter(search instanceof HTMLInputElement ? search.value : '');
             focusSearch();
-            if (!flagsHydrated) {
-                flagsHydrated = true;
-                void enqueueFlagHydration([root, panel].filter(Boolean), { mode: 'panel' });
-            } else {
-                scheduleCountryFlagHydration([root, panel].filter(Boolean), { mode: 'panel' });
+            if (panelCatalogLoaded) {
+                if (!flagsHydrated) {
+                    flagsHydrated = true;
+                    void enqueueFlagHydration([root, panel].filter(Boolean), { mode: 'panel' });
+                } else {
+                    scheduleCountryFlagHydration([root, panel].filter(Boolean), { mode: 'panel' });
+                }
             }
         });
         listen(root, 'weline:ui:menu:close', () => {

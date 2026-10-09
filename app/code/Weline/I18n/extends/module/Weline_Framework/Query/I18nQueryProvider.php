@@ -18,6 +18,7 @@ use Weline\I18n\Model\Dictionary;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
 use Weline\I18n\Model\Locals;
+use Weline\I18n\Taglib\LanguageSwitcher;
 
 class I18nQueryProvider implements QueryProviderInterface
 {
@@ -37,6 +38,7 @@ class I18nQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'getInstalledLocales' => $this->getInstalledLocales($params),
+            'getLanguageSwitcherCatalog' => $this->getLanguageSwitcherCatalog($params),
             'getCountryFlags' => $this->getCountryFlags($params),
             'getBackendCountryFlags' => $this->getBackendCountryFlags($params),
             'getLocaleByCode' => $this->getLocaleByCode($params),
@@ -46,6 +48,39 @@ class I18nQueryProvider implements QueryProviderInterface
             'collect' => $this->collect($params),
             default => throw new \InvalidArgumentException((string)__('Unsupported i18n operation: %{1}', $operation)),
         };
+    }
+
+    /**
+     * Lazy language-switcher panel: HotCache catalog → option HTML. Click/open only.
+     *
+     * @param array<string, mixed> $params
+     * @return array{html: string, current_code: string, display_locale: string, group_count: int, option_count: int}
+     */
+    #[BinQueryOperation(
+        name: 'getLanguageSwitcherCatalog',
+        description: 'Storefront language switcher panel catalog HTML (lazy on open)',
+        mode: 'read',
+        external: true,
+        frontend: true,
+        backend: false,
+        auth: 'any',
+        graph: false,
+        cost: 2,
+    )]
+    #[BinQueryCache(
+        ttl: '1h',
+        description: 'Language switcher panel list HTML; path/href rewritten client-side',
+        visibility: 'public',
+        keyParams: ['display_locale_code', 'website_id', 'current'],
+        vary: ['area', 'locale'],
+        cdn: true,
+    )]
+    #[BinQueryParam(name: 'display_locale_code', type: 'string', required: false, maxLength: 32, cacheKey: true)]
+    #[BinQueryParam(name: 'website_id', type: 'int', required: false, min: 0, cacheKey: true)]
+    #[BinQueryParam(name: 'current', type: 'string', required: false, maxLength: 32, cacheKey: true)]
+    private function getLanguageSwitcherCatalog(array $params): array
+    {
+        return LanguageSwitcher::renderLazyPanelCatalog($params);
     }
 
     /**
@@ -431,6 +466,23 @@ class I18nQueryProvider implements QueryProviderInterface
                         ['name' => 'width', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64, 'cache_key' => true],
                         ['name' => 'height', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64, 'cache_key' => true],
                         ['name' => 'installed', 'type' => 'bool', 'required' => false, 'cache_key' => true],
+                    ],
+                    'returns' => ['type' => 'array'],
+                ],
+                [
+                    'name' => 'getLanguageSwitcherCatalog',
+                    'frontend' => true,
+                    'backend' => false,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 2,
+                    'description' => __('Storefront language switcher panel catalog HTML (lazy on open)'),
+                    'params' => [
+                        ['name' => 'display_locale_code', 'type' => 'string', 'required' => false, 'max_length' => 32, 'cache_key' => true],
+                        ['name' => 'website_id', 'type' => 'int', 'required' => false, 'min' => 0, 'cache_key' => true],
+                        ['name' => 'current', 'type' => 'string', 'required' => false, 'max_length' => 32, 'cache_key' => true],
                     ],
                     'returns' => ['type' => 'array'],
                 ],
