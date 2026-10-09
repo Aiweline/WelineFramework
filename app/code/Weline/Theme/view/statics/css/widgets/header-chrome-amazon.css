@@ -536,8 +536,10 @@
 /* Inverse surface must not bleach the search bar.
  * Paper ink on raised search chip (WO-UI-CONTRAST-INVERSE): header-belt remaps
  * --color-text / --_inverse-* / chrome text tokens to on-dark; white category +
- * input still consume those tokens → near-invisible copy when focus-within.
- * Same local rebind as account-dropdown / mini-cart-drawer (unconditional). */
+ * input still consume those tokens → near-invisible copy (All / placeholder).
+ * Same local nail as mini-cart-drawer: pin foundation literals HERE so the chain
+ * cannot recurse into inverse cream (Theme `_colors.css` aliases chrome-body →
+ * color-text-primary → on-dark). */
 .weline-header [data-surface="inverse"] .header-search-form,
 .weline-header .w-surface-inverse .header-search-form,
 .weline-header [data-surface="inverse"] .w-search-form,
@@ -553,8 +555,13 @@
     border-radius: var(--weline-theme-radius-md);
     transition: box-shadow 0.2s ease;
     background: transparent;
-    --_paper-text: var(--amz-drawer-text);
-    --_paper-muted: var(--amz-drawer-muted);
+    --weline-chrome-body-text: #0f1111;
+    --weline-chrome-body-text-secondary: #565959;
+    --weline-chrome-body-text-muted: #666666;
+    --amz-drawer-text: var(--weline-chrome-body-text);
+    --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
+    --_paper-text: var(--amz-drawer-text, #0f1111);
+    --_paper-muted: var(--amz-drawer-muted, #565959);
     --_inverse-text: var(--_paper-text);
     --_inverse-muted: var(--_paper-muted);
     --color-text: var(--_paper-text);
@@ -681,7 +688,8 @@
 
 .weline-header .search-type-submenu {
     position: absolute;
-    left: calc(100% - var(--border-width-medium));
+    /* Avoid undefined --border-width-medium (empty var breaks calc → left:0 overlap). */
+    left: 100%;
     top: 0;
     z-index: 40;
     min-width: var(--size-panel-160);
@@ -713,16 +721,21 @@
  */
 .w-menu.search-type-menu.search-category-menu,
 .search-type-menu.search-category-menu {
-    --_paper-text: var(--amz-drawer-text);
-    --_paper-muted: var(--amz-drawer-muted);
+    --weline-chrome-body-text: #0f1111;
+    --weline-chrome-body-text-secondary: #565959;
+    --amz-drawer-text: var(--weline-chrome-body-text);
+    --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
+    --_paper-text: var(--amz-drawer-text, #0f1111);
+    --_paper-muted: var(--amz-drawer-muted, #565959);
     color: var(--_paper-text);
 }
 
+/* Category tree flies right; opaque paper surface (not transparent inline stack). */
 .w-menu.search-type-menu.search-category-menu .search-type-submenu,
 .search-type-menu.search-category-menu .search-type-submenu {
-    background: transparent;
-    color: inherit;
-    box-shadow: none;
+    background: var(--color-bg-primary, #fff);
+    color: var(--_paper-text, #0f1111);
+    box-shadow: var(--weline-shadow-lg);
 }
 
 .w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover,
@@ -1688,17 +1701,39 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     }
 
     .weline-header .header-search-hot-words,
-    .weline-header .w-search-hot-words,
+    .weline-header .w-search-hot-words {
+        display: none;
+    }
+
+    /* Keep type selector on phone — was display:none → All vanished + only faint placeholder. */
     .weline-header .search-category-dropdown,
     .weline-header .search-type-dropdown {
-        display: none;
+        display: block;
+        flex-shrink: 0;
+        max-width: 38%;
+    }
+
+    .weline-header .search-type-trigger.search-category-facade,
+    .weline-header .search-category-facade,
+    .weline-header .search-type-facade {
+        min-width: 0;
+        padding: 0 var(--spacing-sm);
+    }
+
+    /* Beat floating max-inline-size so right flyout stays on-screen. */
+    .w-menu.search-type-menu[data-w-menu-panel],
+    .search-type-menu[data-w-menu-panel] {
+        --w-floating-max-inline-size: min(12.5rem, 52vw);
+        max-inline-size: min(12.5rem, 52vw) !important;
+        inline-size: max-content !important;
+        width: max-content !important;
     }
 
     .weline-header .header-search-form,
     .weline-header .w-search-form {
         height: var(--size-control-lg);
         border-radius: var(--weline-theme-radius-lg);
-        overflow: hidden;
+        overflow: visible;
         background: var(--weline-chrome-bg-primary);
     }
 

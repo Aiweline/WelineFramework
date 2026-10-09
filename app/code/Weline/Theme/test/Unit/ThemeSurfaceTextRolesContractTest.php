@@ -202,9 +202,34 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
         );
 
         $chrome = $this->read('app/code/Weline/Theme/view/statics/css/widgets/header-chrome-amazon.css');
+        self::assertStringContainsString('--weline-chrome-body-text: #0f1111', $chrome);
         self::assertStringContainsString('--_paper-text: var(--amz-drawer-text, #0f1111)', $chrome);
         self::assertStringContainsString('--weline-chrome-text-primary: var(--_paper-text)', $chrome);
         self::assertStringContainsString('-webkit-text-fill-color: var(--_paper-text', $chrome);
+        // Phone must keep type selector (All / Products / Blog); nest flyouts, do not hide.
+        self::assertStringContainsString('Keep type selector on phone', $chrome);
+        self::assertDoesNotMatchRegularExpression(
+            '/@media\s*\(max-width:\s*768px\)[\s\S]{0,800}?\.weline-header \.search-type-dropdown\s*\{\s*display:\s*none/s',
+            $chrome
+        );
+        // Flyout contract: ≤768 must NOT force static nest (overlap regression).
+        self::assertDoesNotMatchRegularExpression(
+            '/@media\s*\(max-width:\s*768px\)[\s\S]{0,1200}?\.search-type-submenu[\s\S]{0,200}?position:\s*static/s',
+            $chrome
+        );
+        $searchCss = $this->read('app/code/Weline/Theme/view/statics/css/widgets/header-search-amazon.css');
+        self::assertMatchesRegularExpression(
+            '/\.search-type-submenu\s*\{\s*position:\s*absolute/s',
+            $searchCss
+        );
+        self::assertMatchesRegularExpression(
+            '/\.search-type-submenu\s*\{[^}]*left:\s*100%/s',
+            $searchCss
+        );
+        self::assertStringNotContainsString(
+            'left: calc(100% - var(--border-width-medium))',
+            $searchCss
+        );
 
         // Published layout head loads this partial; chrome-amazon may be absent.
         $headerDefault = $this->read('app/code/Weline/Theme/view/statics/css/partials/header-default.css');

@@ -44,7 +44,8 @@ $searchCategoryId = (int)($this->request->getParam('category_id') ?? 0);
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         data-weline-load="headerSearch">
+         data-weline-load="headerSearch"
+         data-weline-load-when="idle">
     <?= $this->fetch('Weline_Theme::theme/frontend/partials/search/header-bar.phtml', [
         'placeholder' => (string)$placeholder,
         'query' => $query,

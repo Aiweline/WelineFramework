@@ -1,3 +1,4 @@
+/* WO-SEARCH-TYPE-PORTAL-v2 */
 (function () {
     'use strict';
 
@@ -204,6 +205,13 @@
         }
         var label = dropdown.querySelector('.search-type-label, .search-category-label');
         var panel = dropdown.querySelector('[data-w-menu-panel]');
+        var trigger = dropdown.querySelector('[data-w-menu-trigger]');
+        var hoverFine = false;
+        try {
+            hoverFine = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+        } catch (e) {
+            hoverFine = true;
+        }
 
         function setNodeOpen(node, open) {
             if (!node) return;
@@ -247,69 +255,130 @@
             });
         }
 
-        dropdown.querySelectorAll('[data-search-type-node].has-children').forEach(function (node) {
-            node.addEventListener('mouseenter', function () {
+        function closeDropdownPanel() {
+            closeAllNodes();
+            if (!panel || panel.hidden) return;
+            panel.hidden = true;
+            panel.dataset.state = 'closed';
+            panel.setAttribute('aria-hidden', 'true');
+            dropdown.dataset.state = 'closed';
+            if (trigger) {
+                trigger.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        function paintSelection(activeEl, value, text, categoryId) {
+            if (hiddenInput) {
+                hiddenInput.value = value;
+            }
+            if (categoryInput) {
+                categoryInput.value = categoryId;
+            }
+            if (label) {
+                label.textContent = text;
+            }
+            dropdown.querySelectorAll('[data-search-type-option]').forEach(function (item) {
+                var active = item === activeEl;
+                item.classList.toggle('is-active', active);
+                item.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+            // Pure type branches (Products/Blog) are not options — still show active.
+            dropdown.querySelectorAll('[data-search-type-branch]').forEach(function (item) {
+                if (item.hasAttribute('data-search-type-option')) return;
+                item.classList.toggle('is-active', item === activeEl);
+            });
+        }
+
+        // Has-children: label text → select; chevron/padding → expand. Leaf: anywhere → select.
+        function clickedOptionLabel(event) {
+            var t = event && event.target;
+            return !!(t && t.closest && t.closest('.search-type-option-label'));
+        }
+
+        // Hover-open only on fine pointers. Touch mouseleave would collapse the
+        // just-opened Products/Blog flyout → "tap has no reaction".
+        if (panel && hoverFine) {
+            panel.addEventListener('mouseover', function (event) {
+                var node = event.target && event.target.closest
+                    ? event.target.closest('[data-search-type-node].has-children')
+                    : null;
+                if (!node || !panel.contains(node)) return;
                 closeSiblingNodes(node);
                 setNodeOpen(node, true);
             });
-
-            var branch = node.querySelector(':scope > [data-search-type-branch]');
-            if (branch) {
-                branch.addEventListener('click', function (event) {
-                    // Type-level branch (no option role): toggle flyout for touch.
-                    if (!branch.hasAttribute('data-search-type-option')) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        var willOpen = node.getAttribute('data-state') !== 'open';
-                        closeSiblingNodes(node);
-                        setNodeOpen(node, willOpen);
-                    }
-                });
-            }
-        });
-
-        if (panel) {
             panel.addEventListener('mouseleave', function () {
                 closeAllNodes();
             });
         }
 
-        dropdown.querySelectorAll('[data-search-type-option]').forEach(function (option) {
-            option.addEventListener('click', function (event) {
-                var node = option.closest('[data-search-type-node]');
-                if (node && node.classList.contains('has-children')) {
-                    var isOpen = node.getAttribute('data-state') === 'open';
-                    if (!isOpen) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        closeSiblingNodes(node);
-                        setNodeOpen(node, true);
-                        return;
-                    }
-                }
+        // Panel may portal to body — dropdown.contains() is false after mount.
+        function inThisMenu(el) {
+            if (!el) return false;
+            if (dropdown.contains(el)) return true;
+            if (panel && panel.contains(el)) return true;
+            return false;
+        }
 
-                var value = option.getAttribute('data-value') || '';
-                var text = option.getAttribute('data-display-label')
-                    || option.getAttribute('data-label')
-                    || (option.textContent || '').trim();
-                var categoryId = option.getAttribute('data-category-id') || '';
-                if (hiddenInput) {
-                    hiddenInput.value = value;
+        function onMenuClick(event) {
+            var option = event.target && event.target.closest
+                ? event.target.closest('[data-search-type-option]')
+                : null;
+            if (option && inThisMenu(option)) {
+                event.preventDefault();
+                event.stopPropagation();
+                var optionNode = option.closest('[data-search-type-node]');
+                var hasChildren = !!(optionNode && optionNode.classList.contains('has-children'));
+                if (hasChildren && !clickedOptionLabel(event)) {
+                    var willOpen = optionNode.getAttribute('data-state') !== 'open';
+                    closeSiblingNodes(optionNode);
+                    setNodeOpen(optionNode, willOpen);
+                    return;
                 }
-                if (categoryInput) {
-                    categoryInput.value = categoryId;
-                }
-                if (label) {
-                    label.textContent = text;
-                }
-                dropdown.querySelectorAll('[data-search-type-option]').forEach(function (item) {
-                    var active = item === option;
-                    item.classList.toggle('is-active', active);
-                    item.setAttribute('aria-selected', active ? 'true' : 'false');
-                });
-                closeAllNodes();
-            });
-        });
+                paintSelection(
+                    option,
+                    option.getAttribute('data-value') || '',
+                    option.getAttribute('data-display-label')
+                        || option.getAttribute('data-label')
+                        || (option.textContent || '').trim(),
+                    option.getAttribute('data-category-id') || ''
+                );
+                closeDropdownPanel();
+                return;
+            }
+
+            var branch = event.target && event.target.closest
+                ? event.target.closest('[data-search-type-branch]')
+                : null;
+            if (!branch || !inThisMenu(branch) || branch.hasAttribute('data-search-type-option')) {
+                return;
+            }
+
+            // Type-level branch (Products / Blog): label → select; else expand.
+            event.preventDefault();
+            event.stopPropagation();
+            var node = branch.closest('[data-search-type-node]');
+            if (clickedOptionLabel(event)) {
+                paintSelection(
+                    branch,
+                    branch.getAttribute('data-value') || '',
+                    branch.getAttribute('data-label') || (branch.textContent || '').trim(),
+                    ''
+                );
+                closeDropdownPanel();
+                return;
+            }
+            if (node) {
+                var openBranch = node.getAttribute('data-state') !== 'open';
+                closeSiblingNodes(node);
+                setNodeOpen(node, openBranch);
+            }
+        }
+
+        // Event delegation: async-hydrated nodes + portaled panel clicks.
+        dropdown.addEventListener('click', onMenuClick);
+        if (panel) {
+            panel.addEventListener('click', onMenuClick);
+        }
 
         mountThemeMenu(dropdown);
     }

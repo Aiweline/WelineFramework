@@ -53,6 +53,19 @@
     border-radius: var(--weline-theme-radius-md);
     transition: box-shadow 0.2s ease;
     font-family: inherit;
+    /* Paper ink nail (WO-UI-CONTRAST): inverse header remaps chrome text → cream.
+     * Pin foundation literals so All / placeholder stay readable on white chip. */
+    --weline-chrome-body-text: #0f1111;
+    --weline-chrome-body-text-secondary: #565959;
+    --amz-drawer-text: var(--weline-chrome-body-text);
+    --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
+    --_paper-text: var(--amz-drawer-text, #0f1111);
+    --_paper-muted: var(--amz-drawer-muted, #565959);
+    --weline-chrome-text-primary: var(--_paper-text);
+    --weline-chrome-text-secondary: var(--_paper-muted);
+    --weline-chrome-text-muted: var(--_paper-muted);
+    --color-text-placeholder: var(--_paper-muted);
+    color: var(--_paper-text);
 }
 
 .header-search-form:focus-within,
@@ -123,7 +136,8 @@
 
 .search-type-submenu {
     position: absolute;
-    left: calc(100% - var(--border-width-medium));
+    /* Token --border-width-medium is undefined here; empty var invalidates calc → left collapses to 0. */
+    left: 100%;
     top: 0;
     z-index: 30;
     min-width: var(--size-panel-160);
@@ -133,6 +147,12 @@
     color: var(--weline-chrome-text-on-inverse);
     box-shadow: var(--weline-shadow-lg);
     box-sizing: border-box;
+}
+
+/* Portaled root must not clip right flyouts. */
+.w-menu.search-type-menu[data-w-menu-panel],
+.search-type-menu[data-w-menu-panel] {
+    overflow: visible;
 }
 
 .search-type-submenu[hidden] {
@@ -154,16 +174,21 @@
  */
 .w-menu.search-type-menu.search-category-menu,
 .search-type-menu.search-category-menu {
-    --_paper-text: var(--amz-drawer-text);
-    --_paper-muted: var(--amz-drawer-muted);
+    --weline-chrome-body-text: #0f1111;
+    --weline-chrome-body-text-secondary: #565959;
+    --amz-drawer-text: var(--weline-chrome-body-text);
+    --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
+    --_paper-text: var(--amz-drawer-text, #0f1111);
+    --_paper-muted: var(--amz-drawer-muted, #565959);
     color: var(--_paper-text);
 }
 
+/* Category tree still flies right (absolute); opaque paper surface, not inline stack. */
 .w-menu.search-type-menu.search-category-menu .search-type-submenu,
 .search-type-menu.search-category-menu .search-type-submenu {
-    background: transparent;
-    color: inherit;
-    box-shadow: none;
+    background: var(--color-bg-primary, #fff);
+    color: var(--_paper-text, #0f1111);
+    box-shadow: var(--weline-shadow-lg);
 }
 
 .w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover,
@@ -388,19 +413,44 @@
     background-color: var(--weline-chrome-bg-secondary);
 }
 
-@media (max-width: var(--breakpoint-md)) {
-    .search-category-dropdown,
-    .search-type-dropdown,
+/* Literal 768px — var() in @media is unreliable across engines. */
+@media (max-width: 768px) {
     .header-search-hot-words,
     .w-search-hot-words {
         display: none;
+    }
+
+    .search-category-dropdown,
+    .search-type-dropdown {
+        display: block;
+        flex-shrink: 0;
+        max-width: 38%;
+    }
+
+    .search-type-trigger.search-category-facade,
+    .search-category-facade,
+    .search-type-facade {
+        min-width: 0;
+        padding: 0 var(--spacing-sm);
+    }
+
+    /*
+     * Floating attach sets --w-floating-max-inline-size ≈ viewport; beat it so
+     * left:100% submenu has room on the right (else flies off-screen).
+     */
+    .w-menu.search-type-menu[data-w-menu-panel],
+    .search-type-menu[data-w-menu-panel] {
+        --w-floating-max-inline-size: min(12.5rem, 52vw);
+        max-inline-size: min(12.5rem, 52vw) !important;
+        inline-size: max-content !important;
+        width: max-content !important;
     }
 
     .header-search-form,
     .w-search-form {
         height: var(--size-control-lg);
         border-radius: var(--weline-theme-radius-lg);
-        overflow: hidden;
+        overflow: visible;
     }
 
     .header-search-form .search-input,
@@ -408,7 +458,6 @@
     .w-search-form .search-input,
     .w-search-form .w-search-input {
         border: none;
-        border-radius: var(--weline-theme-radius-lg) 0 0 var(--weline-theme-radius-lg);
         font-size: var(--font-size-base);
     }
 

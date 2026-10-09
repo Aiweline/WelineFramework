@@ -609,9 +609,13 @@ textarea::-webkit-scrollbar-thumb:hover,
     transition: box-shadow 0.2s ease;
     /*
      * Paper ink on raised search chip (WO-UI-CONTRAST-INVERSE).
-     * header-belt remaps --color-text* to on-dark; this white chip is what the
-     * published layout actually loads (header-chrome-amazon may be absent from head).
+     * header-belt remaps --color-text* to on-dark; pin foundation literals so
+     * All / placeholder cannot inherit inverse cream (same nail as mini-cart).
      */
+    --weline-chrome-body-text: #0f1111;
+    --weline-chrome-body-text-secondary: #565959;
+    --amz-drawer-text: var(--weline-chrome-body-text);
+    --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text, #0f1111);
     --_paper-muted: var(--amz-drawer-muted, #565959);
     --_inverse-text: var(--_paper-text);
@@ -790,16 +794,21 @@ textarea::-webkit-scrollbar-thumb:hover,
  */
 .w-menu.search-type-menu.search-category-menu,
 .search-type-menu.search-category-menu {
+    --weline-chrome-body-text: #0f1111;
+    --weline-chrome-body-text-secondary: #565959;
+    --amz-drawer-text: var(--weline-chrome-body-text);
+    --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text, #0f1111);
     --_paper-muted: var(--amz-drawer-muted, #565959);
     color: var(--_paper-text);
 }
 
+/* Category tree flies right; opaque paper surface (not transparent inline stack). */
 .w-menu.search-type-menu.search-category-menu .search-type-submenu,
 .search-type-menu.search-category-menu .search-type-submenu {
-    background: transparent;
-    color: inherit;
-    box-shadow: none;
+    background: var(--color-bg-primary, #fff);
+    color: var(--_paper-text, #0f1111);
+    box-shadow: var(--weline-shadow-lg, 0 4px 16px rgba(15, 17, 17, 0.12));
 }
 
 .w-menu.search-type-menu.search-category-menu .search-type-submenu .w-menu__item:hover,
@@ -3479,14 +3488,26 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         display: none;
     }
 
-    .search-category-dropdown {
-        display: none;
+    /* Keep type selector on phone; flyout stays absolute right with room beside root. */
+    .search-category-dropdown,
+    .search-type-dropdown {
+        display: block;
+        flex-shrink: 0;
+        max-width: 38%;
+    }
+
+    .w-menu.search-type-menu[data-w-menu-panel],
+    .search-type-menu[data-w-menu-panel] {
+        --w-floating-max-inline-size: min(12.5rem, 52vw);
+        max-inline-size: min(12.5rem, 52vw) !important;
+        inline-size: max-content !important;
+        width: max-content !important;
     }
 
     .header-search-form {
         height: var(--size-control-lg);
         border-radius: var(--border-radius-lg);
-        overflow: hidden;
+        overflow: visible;
         background: var(--color-bg-primary);
     }
 

@@ -23,6 +23,19 @@ final class BackendTopbarSearchNavigateContractTest extends TestCase
         self::assertStringContainsString('appendSuggestionRows', $js);
         self::assertStringContainsString('suggestion-group__label', $js);
         self::assertStringContainsString('suggestion-item__key', $js);
+        // Touch-safe type menu: delegation + portal-aware contains + fine-pointer hover only.
+        self::assertStringContainsString("matchMedia('(hover: hover) and (pointer: fine)')", $js);
+        self::assertStringContainsString('closeDropdownPanel', $js);
+        self::assertStringContainsString('paintSelection', $js);
+        self::assertStringContainsString('inThisMenu', $js);
+        self::assertStringContainsString("closest('[data-search-type-option]')", $js);
+        // Has-children: label text selects; chevron/padding expands.
+        self::assertStringContainsString('clickedOptionLabel', $js);
+        self::assertStringContainsString(".search-type-option-label", $js);
+        self::assertStringContainsString('hasChildren && !clickedOptionLabel', $js);
+        $header = (string)\file_get_contents($root . '/app/code/Weline/Theme/view/theme/frontend/partials/header/default.phtml');
+        self::assertStringContainsString('data-weline-load-when="idle"', $header);
+        self::assertStringContainsString('data-w-header-search-loader', $header);
 
         foreach ([$srcCss, $pubCss] as $css) {
             self::assertStringContainsString('.w-backend-topbar__center', $css);
