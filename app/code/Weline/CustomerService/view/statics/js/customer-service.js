@@ -3,10 +3,16 @@
  */
 
 /* captcha-degrade-ux-20260909 */
-/* message-poll-15s-20261010：店面消息轮询 15s，避免 query-bin 风暴拖垮 DevTools Elements */
+/* cs-lifecycle-standard-poll-20261010：冷访客零连接；开窗/未结束会话才 poll；可见保活+退避；隐藏减速；长静默停 */
 const CustomerServiceWidget = (function() {
-    /** 前台消息轮询间隔（收起盯未读 + 开窗拉新消息共用） */
+    /** 开窗 / 有新消息时的基础轮询间隔 */
     var MESSAGE_POLL_INTERVAL_MS = 15000;
+    /** 关窗安静盯未读时的退避上限 */
+    var MESSAGE_POLL_BACKOFF_MAX_MS = 60000;
+    /** 双方无交流多久后停轮询（保留 localStorage 会话） */
+    var MESSAGE_LONG_IDLE_MS = 600000;
+    /** 标签页隐藏时的轮询间隔（或视为暂停级慢速） */
+    var MESSAGE_HIDDEN_POLL_MS = 120000;
     /**
      * 閸ヤ粙妾崠鏍电窗娴兼ê鍘涙担璺ㄦ暏妞ょ敻娼板▔銊ュ弳閻?__閿涘苯鎯侀崚娆撴缁狙傝礋閸楃姳缍呯粭锔芥禌閹?
      * @param {string} text
@@ -384,6 +390,8 @@ const CustomerServiceWidget = (function() {
         isSending: false,
         pollInterval: null,
         statusPollInterval: null,
+        /** 关窗退避用的当前间隔（有新消息时回到基础 15s） */
+        pollIntervalMs: MESSAGE_POLL_INTERVAL_MS,
         locale: 'zh_Hans_CN',
         displayMode: 'translated', // translated, both, original
         settingsOpen: false,
@@ -394,6 +402,14 @@ const CustomerServiceWidget = (function() {
         /** 与已读水位绑定的会话，防止串会话 */
         savedSessionId: 0,
         messageBaselineReady: false,
+        /**
+         * 未结束会话：客户发过消息后为 true；冷访客 / 只开窗未发言为 false。
+         * 仅当 true 时关窗才允许 QuietWatch 未读轮询。
+         */
+        conversationOpen: false,
+        /** 双方最后一条消息时间戳（ms）；长静默停表用 */
+        lastExchangeAt: 0,
+        visibilityBound: false,
         lastDayKey: '',
         identity: {
             kind: 'guest',
@@ -639,7 +655,7 @@ const CustomerServiceWidget = (function() {
         const defaultLocale = storefrontLocale || String(config.defaultCustomerLocale || 'zh_Hans_CN');
         state.locale = defaultLocale;
         
-        // 从 localStorage 恢复状态
+        // 从 localStorage 恢复状态（身份/水位）；冷访客不自动建连
         const savedState = localStorage.getItem('cs_widget_state');
         if (savedState) {
             try {
@@ -650,6 +666,8 @@ const CustomerServiceWidget = (function() {
                 state.displayMode = parsed.displayMode || 'translated';
                 state.lastReadMessageId = normalizePositiveInt(parsed.lastReadMessageId);
                 state.savedSessionId = normalizePositiveInt(parsed.sessionId);
+                state.conversationOpen = parsed.conversationOpen === true;
+                state.lastExchangeAt = normalizePositiveInt(parsed.lastExchangeAt);
                 // 只有已建立已读水位时才恢复未读数，避免脏计数把「已看过」又堆回来
                 if (state.lastReadMessageId > 0) {
                     state.unreadCount = Math.max(0, parseInt(parsed.unreadCount, 10) || 0);
@@ -667,16 +685,86 @@ const CustomerServiceWidget = (function() {
         updateWidgetLocaleText();
         bindMiniCartLayerState();
         bindEmailBoundSync();
+        bindVisibilityLifecycle();
         // 先按本地未读水位画角标，避免刷新后要等脚本/接口才「突然没了」
         updateUnreadBadge();
         // Warm screenshot engine so confirm is not blocked on first script fetch.
         ensureModernScreenshot().catch(function () { /* optional */ });
         ensureHtml2Canvas().catch(function () { /* optional */ });
 
-        // 有历史会话时，收起态也后台盯消息，客服回复可出现未读跳动/条数
-        if (state.sessionToken) {
-            startBackgroundUnreadWatch();
+        // 仅未结束会话才 QuietWatch；禁止「有 token 就全站密刷」
+        if (state.conversationOpen && state.sessionToken && canPoll()) {
+            startQuietUnreadWatch();
         }
+    }
+
+    function touchExchange() {
+        state.lastExchangeAt = Date.now();
+        state.pollIntervalMs = MESSAGE_POLL_INTERVAL_MS;
+        saveState();
+    }
+
+    function markConversationOpen() {
+        state.conversationOpen = true;
+        touchExchange();
+    }
+
+    function closeConversationLocally() {
+        state.conversationOpen = false;
+        saveState();
+    }
+
+    /**
+     * 是否允许消息轮询：开窗，或未结束会话且未超长静默。
+     */
+    function canPoll() {
+        if (state.isOpen) {
+            return true;
+        }
+        if (!state.conversationOpen) {
+            return false;
+        }
+        if (state.lastExchangeAt > 0 && (Date.now() - state.lastExchangeAt) >= MESSAGE_LONG_IDLE_MS) {
+            closeConversationLocally();
+            return false;
+        }
+        return true;
+    }
+
+    function currentPollDelayMs() {
+        if (typeof document !== 'undefined' && document.hidden) {
+            return MESSAGE_HIDDEN_POLL_MS;
+        }
+        if (state.isOpen) {
+            return MESSAGE_POLL_INTERVAL_MS;
+        }
+        const backoff = normalizePositiveInt(state.pollIntervalMs) || MESSAGE_POLL_INTERVAL_MS;
+        return Math.min(MESSAGE_POLL_BACKOFF_MAX_MS, Math.max(MESSAGE_POLL_INTERVAL_MS, backoff));
+    }
+
+    function bindVisibilityLifecycle() {
+        if (state.visibilityBound || typeof document === 'undefined') {
+            return;
+        }
+        state.visibilityBound = true;
+        document.addEventListener('visibilitychange', function () {
+            if (!canPoll()) {
+                stopMessagePolling();
+                return;
+            }
+            // 隐藏/回到前台都按当前间隔重排一轮
+            if (state.isPolling || state.isOpen || state.conversationOpen) {
+                startPolling();
+            }
+        });
+    }
+
+    function engageAfterCustomerSend() {
+        markConversationOpen();
+        if (state.isOpen) {
+            startStatusPolling();
+        }
+        startPolling();
     }
     
     /**
@@ -1076,10 +1164,12 @@ const CustomerServiceWidget = (function() {
             chatWindow.style.display = 'none';
             chatButton.style.display = 'flex';
             widget?.classList.remove('is-open');
-            // 收起后仍轮询消息，才能弹出未读条数与呼吸动画；仅停状态轮询
+            // 收起：停状态轮询；仅未结束会话才 QuietWatch（退避），冷开窗未发言则停
             stopStatusPolling();
-            if (state.sessionId) {
+            if (canPoll() && state.sessionId) {
                 startPolling();
+            } else {
+                stopMessagePolling();
             }
             updateUnreadBadge();
         } else {
@@ -1091,6 +1181,7 @@ const CustomerServiceWidget = (function() {
             chatWindow.style.display = 'flex';
             chatButton.style.display = 'none';
             widget?.classList.add('is-open');
+            state.pollIntervalMs = MESSAGE_POLL_INTERVAL_MS;
             await ensureWidgetTranslations(false, state.locale);
             await activateChat();
             await markChatReadFromServer();
@@ -1270,6 +1361,7 @@ const CustomerServiceWidget = (function() {
                 });
                 scrollToBottom();
                 maybeShowGuestBindPrompt();
+                engageAfterCustomerSend();
                 const emojiPanel = document.getElementById('cs-frontend-emoji-panel');
                 if (emojiPanel) emojiPanel.hidden = true;
             } else {
@@ -2013,6 +2105,7 @@ const CustomerServiceWidget = (function() {
                 
                 scrollToBottom();
                 maybeShowGuestBindPrompt();
+                engageAfterCustomerSend();
             } else {
                 notify('error', data.message || __('发送失败'));
             }
@@ -2327,36 +2420,57 @@ const CustomerServiceWidget = (function() {
         }
     }
     
+    /** 轮询世代：防止 startPolling 重入后旧 in-flight finally 再排定时器 */
+    var messagePollGeneration = 0;
+
     /**
-     * 瀵偓婵鐤嗙拠銏℃煀濞戝牊浼?
+     * 按当前间隔排下一轮消息轮询（开窗基础间隔 / 关窗退避 / 隐藏慢速）。
      */
     function startPolling() {
-        if (state.isPolling || !state.sessionId) {
+        if (!state.sessionId || !canPoll()) {
+            stopMessagePolling();
             return;
         }
-        
+
+        stopMessagePolling();
         state.isPolling = true;
-        
-        state.pollInterval = setInterval(function () {
-            pollIncomingMessages();
-        }, MESSAGE_POLL_INTERVAL_MS);
-        // 立即跑一轮，避免收起后最多等一个完整间隔才看到未读
-        pollIncomingMessages();
+        const generation = ++messagePollGeneration;
+
+        const run = function () {
+            if (!state.isPolling || generation !== messagePollGeneration) {
+                return;
+            }
+            Promise.resolve(pollIncomingMessages()).finally(function () {
+                if (!state.isPolling || generation !== messagePollGeneration || !canPoll()) {
+                    if (generation === messagePollGeneration) {
+                        stopMessagePolling();
+                    }
+                    return;
+                }
+                state.pollInterval = setTimeout(run, currentPollDelayMs());
+            });
+        };
+
+        // 立即跑一轮，避免开窗/回前台最多等一个完整间隔才看到未读
+        run();
     }
 
     /**
-     * 收起态后台盯未读：同步已读水位差并开轮询。
+     * 未结束会话的安静盯未读（页载入恢复）：须 conversationOpen，禁止仅凭 token。
      */
-    async function startBackgroundUnreadWatch() {
+    async function startQuietUnreadWatch() {
         try {
+            if (!canPoll() || state.isOpen) {
+                return;
+            }
             const ready = await ensureSessionReady();
-            if (!ready || !state.sessionId || state.isOpen) {
+            if (!ready || !state.sessionId || state.isOpen || !canPoll()) {
                 return;
             }
             await syncUnreadFromServer();
             startPolling();
         } catch (error) {
-            console.error('Failed to start background unread watch:', error);
+            console.error('Failed to start quiet unread watch:', error);
         }
     }
 
@@ -2600,7 +2714,8 @@ const CustomerServiceWidget = (function() {
     }
 
     async function pollIncomingMessages() {
-        if (!state.sessionId) {
+        if (!state.sessionId || !canPoll()) {
+            stopMessagePolling();
             return;
         }
         try {
@@ -2619,6 +2734,12 @@ const CustomerServiceWidget = (function() {
                 if (!state.messageBaselineReady) {
                     state.messageBaselineReady = true;
                 }
+                if (!state.isOpen) {
+                    state.pollIntervalMs = Math.min(
+                        MESSAGE_POLL_BACKOFF_MAX_MS,
+                        Math.max(MESSAGE_POLL_INTERVAL_MS, (state.pollIntervalMs || MESSAGE_POLL_INTERVAL_MS) * 2)
+                    );
+                }
                 return;
             }
 
@@ -2635,11 +2756,16 @@ const CustomerServiceWidget = (function() {
                 return normalizePositiveInt(a && a.message_id) - normalizePositiveInt(b && b.message_id);
             });
             const lastRead = normalizePositiveInt(state.lastReadMessageId);
+            const prevMaxId = normalizePositiveInt(state.lastMessageId);
+            let sawNew = false;
 
             ordered.forEach(function (msg) {
                 const messageId = normalizePositiveInt(msg && msg.message_id);
                 if (messageId <= 0) {
                     return;
+                }
+                if (messageId > prevMaxId) {
+                    sawNew = true;
                 }
                 const missingInDom = !existingIds.has(messageId);
                 const senderType = String(msg.sender_type || '');
@@ -2653,6 +2779,14 @@ const CustomerServiceWidget = (function() {
             });
 
             applyUnreadFromMessages(ordered);
+            if (sawNew) {
+                touchExchange();
+            } else if (!state.isOpen) {
+                state.pollIntervalMs = Math.min(
+                    MESSAGE_POLL_BACKOFF_MAX_MS,
+                    Math.max(MESSAGE_POLL_INTERVAL_MS, (state.pollIntervalMs || MESSAGE_POLL_INTERVAL_MS) * 2)
+                );
+            }
         } catch (error) {
             console.error('Polling error:', error);
         }
@@ -2668,6 +2802,7 @@ const CustomerServiceWidget = (function() {
 
     function stopMessagePolling() {
         if (state.pollInterval) {
+            clearTimeout(state.pollInterval);
             clearInterval(state.pollInterval);
             state.pollInterval = null;
         }
@@ -3455,7 +3590,9 @@ const CustomerServiceWidget = (function() {
             locale: state.locale,
             displayMode: state.displayMode,
             lastReadMessageId: normalizePositiveInt(state.lastReadMessageId),
-            unreadCount: Math.max(0, Number(state.unreadCount) || 0)
+            unreadCount: Math.max(0, Number(state.unreadCount) || 0),
+            conversationOpen: state.conversationOpen === true,
+            lastExchangeAt: normalizePositiveInt(state.lastExchangeAt)
         }));
     }
     
@@ -3478,6 +3615,9 @@ const CustomerServiceWidget = (function() {
                 sessionId: state.sessionId,
                 isOpen: state.isOpen,
                 isPolling: state.isPolling,
+                conversationOpen: state.conversationOpen === true,
+                lastExchangeAt: normalizePositiveInt(state.lastExchangeAt),
+                pollIntervalMs: normalizePositiveInt(state.pollIntervalMs) || MESSAGE_POLL_INTERVAL_MS,
                 lastMessageId: state.lastMessageId,
                 lastReadMessageId: state.lastReadMessageId,
                 unreadCount: state.unreadCount,

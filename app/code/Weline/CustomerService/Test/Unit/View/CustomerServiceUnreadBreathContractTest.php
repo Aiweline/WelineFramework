@@ -6,7 +6,7 @@ namespace Weline\CustomerService\Test\Unit\View;
 
 use PHPUnit\Framework\TestCase;
 
-/** 未读浮钮呼吸/绿点与 load 后延迟加载契约。 */
+/** 未读浮钮呼吸/绿点与标准连接生命周期契约。 */
 final class CustomerServiceUnreadBreathContractTest extends TestCase
 {
     public function testUnreadBadgeTogglesBreathClassAndPresenceDot(): void
@@ -31,13 +31,10 @@ final class CustomerServiceUnreadBreathContractTest extends TestCase
         $this->assertStringContainsString('水位已覆盖当前页最大 id', $js);
         $this->assertStringContainsString('禁止先把 unread=0', $js);
         $this->assertStringContainsString('unreadCount', $js);
-        $this->assertStringContainsString('startBackgroundUnreadWatch', $js);
         $this->assertStringContainsString('pollIncomingMessages', $js);
         $this->assertStringContainsString('MESSAGE_POLL_INTERVAL_MS = 15000', $js);
-        $this->assertStringContainsString('message-poll-15s-20261010', $js);
+        $this->assertStringContainsString('cs-lifecycle-standard-poll-20261010', $js);
         $this->assertStringContainsString('stopStatusPolling', $js);
-        $this->assertStringContainsString('收起后仍轮询消息', $js);
-        $this->assertStringNotContainsString('}, 3000);', $js);
         $this->assertStringContainsString('getUnreadDebugState', $js);
 
         $css = (string)file_get_contents(
@@ -48,6 +45,29 @@ final class CustomerServiceUnreadBreathContractTest extends TestCase
         $this->assertStringContainsString('.customer-service-widget.has-unread', $css);
         $this->assertStringContainsString('.cs-badge.is-visible', $css);
         $this->assertStringContainsString('勿把 transform 放进 transition', $css);
+    }
+
+    public function testStandardLifecycleGatesPolling(): void
+    {
+        $js = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/customer-service.js'
+        );
+        $this->assertStringContainsString('function canPoll()', $js);
+        $this->assertStringContainsString('function touchExchange()', $js);
+        $this->assertStringContainsString('function markConversationOpen()', $js);
+        $this->assertStringContainsString('function engageAfterCustomerSend()', $js);
+        $this->assertStringContainsString('function startQuietUnreadWatch()', $js);
+        $this->assertStringContainsString('function bindVisibilityLifecycle()', $js);
+        $this->assertStringContainsString('MESSAGE_LONG_IDLE_MS = 600000', $js);
+        $this->assertStringContainsString('MESSAGE_POLL_BACKOFF_MAX_MS = 60000', $js);
+        $this->assertStringContainsString('MESSAGE_HIDDEN_POLL_MS = 120000', $js);
+        $this->assertStringContainsString('conversationOpen', $js);
+        $this->assertStringContainsString('lastExchangeAt', $js);
+        $this->assertStringContainsString('禁止「有 token 就全站密刷」', $js);
+        $this->assertStringContainsString('仅未结束会话才 QuietWatch', $js);
+        $this->assertStringNotContainsString('startBackgroundUnreadWatch', $js);
+        $this->assertStringNotContainsString('收起后仍轮询消息', $js);
+        $this->assertStringNotContainsString('}, 3000);', $js);
     }
 
     public function testUnreadWidgetStacksAboveSocialQuickBar(): void
