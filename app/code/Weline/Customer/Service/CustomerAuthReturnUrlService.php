@@ -116,7 +116,7 @@ final class CustomerAuthReturnUrlService
 
     private function normalizeCandidate(string $candidate, bool $blockAuthRoutes): string
     {
-        $candidate = $this->decodeTarget($candidate);
+        $candidate = trim($candidate);
         if ($candidate === ''
             || str_starts_with($candidate, '//')
             || str_contains($candidate, '\\')
@@ -125,25 +125,59 @@ final class CustomerAuthReturnUrlService
             return '';
         }
 
-        $parts = parse_url($candidate);
-        if (!is_array($parts)) {
+        // Absolute URL: peel origin with a UTF-8-safe host match. Never run PHP
+        // parse_url() on a fully decoded query — it replaces bytes like 0x8A with
+        // "_" and breaks WQB1 encoding for account.socialQuickPrompt return_url.
+        if (preg_match('#^(https?)://(?:([^/@?#]+)@)?([^/?#]+)(.*)$#i', $candidate, $absolute) === 1) {
+            if (($absolute[2] ?? '') !== '') {
+                return '';
+            }
+            $originParts = [
+                'scheme' => strtolower($absolute[1]),
+                'host' => strtolower($absolute[3]),
+                'path' => '/',
+            ];
+            if (str_contains($originParts['host'], ':') && !str_starts_with($originParts['host'], '[')) {
+                [$hostOnly, $port] = explode(':', $originParts['host'], 2);
+                $originParts['host'] = $hostOnly;
+                if (ctype_digit($port)) {
+                    $originParts['port'] = (int)$port;
+                }
+            }
+            if (!$this->isSameOriginHttpUrl($originParts)) {
+                return '';
+            }
+            $candidate = $absolute[4] !== '' ? $absolute[4] : '/';
+        } elseif (preg_match('#^[a-z][a-z0-9+.-]*:#i', $candidate) === 1) {
+            // Non-http schemes (javascript:, data:, …) are never valid return targets.
             return '';
         }
 
-        if (isset($parts['scheme']) || isset($parts['host'])) {
-            if (!$this->isSameOriginHttpUrl($parts)) {
-                return '';
-            }
+        [$pathRaw, $queryRaw, $fragmentRaw] = $this->splitRelativeUrlParts($candidate);
+        // Decode path only (route segments). Keep query/fragment as sent so
+        // percent-encoded CJK from location.search stays ASCII-safe for WQB1,
+        // and already-decoded UTF-8 query values are not mangled by parse_url.
+        $path = $this->decodeTarget($pathRaw);
+        if ($path === ''
+            || preg_match('/[\x00-\x1F\x7F]/', $path) === 1
+            || ($queryRaw !== '' && preg_match('/[\x00-\x1F\x7F]/', $queryRaw) === 1)
+            || ($fragmentRaw !== '' && preg_match('/[\x00-\x1F\x7F]/', $fragmentRaw) === 1)
+        ) {
+            return '';
         }
-
-        $path = (string)($parts['path'] ?? '');
-        if ($path === '') {
+        if ($path !== '' && preg_match('//u', $path) !== 1) {
+            return '';
+        }
+        if ($queryRaw !== '' && preg_match('//u', $queryRaw) !== 1) {
+            return '';
+        }
+        if ($fragmentRaw !== '' && preg_match('//u', $fragmentRaw) !== 1) {
             return '';
         }
 
         $path = (string)preg_replace('#/+#', '/', '/' . ltrim($path, '/'));
-        $query = isset($parts['query']) && $parts['query'] !== '' ? '?' . $parts['query'] : '';
-        $fragment = isset($parts['fragment']) && $parts['fragment'] !== '' ? '#' . $parts['fragment'] : '';
+        $query = $queryRaw !== '' ? '?' . $queryRaw : '';
+        $fragment = $fragmentRaw !== '' ? '#' . $fragmentRaw : '';
         if ($path === '/') {
             return '/' . $query . $fragment;
         }
@@ -170,6 +204,31 @@ final class CustomerAuthReturnUrlService
         }
 
         return ltrim($path, '/') . $query . $fragment;
+    }
+
+    /**
+     * Split relative URL without parse_url (UTF-8 query safe).
+     *
+     * @return array{0:string,1:string,2:string} path, query (no ?), fragment (no #)
+     */
+    private function splitRelativeUrlParts(string $candidate): array
+    {
+        $fragment = '';
+        $hashPos = strpos($candidate, '#');
+        if ($hashPos !== false) {
+            $fragment = substr($candidate, $hashPos + 1);
+            $candidate = substr($candidate, 0, $hashPos);
+        }
+        $query = '';
+        $qPos = strpos($candidate, '?');
+        if ($qPos !== false) {
+            $query = substr($candidate, $qPos + 1);
+            $path = substr($candidate, 0, $qPos);
+        } else {
+            $path = $candidate;
+        }
+
+        return [$path, $query, $fragment];
     }
 
     public function formatRedirect(string $candidate): string

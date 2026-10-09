@@ -244,6 +244,29 @@ final class CustomerAuthReturnUrlServiceTest extends TestCase
         self::assertSame('products/demo', $service->normalizeTarget('/products/demo'));
     }
 
+    public function testNormalizeTargetPreservesUtf8QueryWithoutParseUrlCorruption(): void
+    {
+        $service = $this->serviceForCurrentUrl('https://p05113ef3.test.weline.com/products');
+        $encoded = '/product/demo?size=s&style_type=' . rawurlencode('上襦加灰蓝裙子');
+        $decoded = '/product/demo?size=s&style_type=上襦加灰蓝裙子';
+
+        $fromEncoded = $service->normalizeTarget($encoded);
+        $fromDecoded = $service->normalizeTarget($decoded);
+
+        self::assertNotSame('', $fromEncoded);
+        self::assertNotSame('', $fromDecoded);
+        self::assertSame(1, preg_match('//u', $fromEncoded));
+        self::assertSame(1, preg_match('//u', $fromDecoded));
+        self::assertStringNotContainsString("\x5f襦", $fromEncoded);
+        self::assertStringNotContainsString("\x5f襦", $fromDecoded);
+        self::assertStringContainsString('style_type=', $fromEncoded);
+        self::assertTrue(
+            str_contains($fromEncoded, rawurlencode('上襦加灰蓝裙子'))
+            || str_contains($fromEncoded, '上襦加灰蓝裙子')
+        );
+        self::assertStringContainsString('上襦加灰蓝裙子', $fromDecoded);
+    }
+
     private function serviceForCurrentUrl(string $currentUrl, string $referer = ''): CustomerAuthReturnUrlService
     {
         $url = $this->createMock(Url::class);
