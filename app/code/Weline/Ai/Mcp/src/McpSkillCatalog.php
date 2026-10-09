@@ -723,7 +723,7 @@ final class McpSkillCatalog
                         . 'HARD（ui_prototype_gate_before_test · UI in_scope）：施工期可落红灯骨架；验收执行（UT/RT/WB/e2e）必须等 acceptance-ui.md + acceptance-prototype.md 双 pass；未过签禁止开跑。测试 pass 后交给项目经理汇审，禁止本席直接向用户宣称完成。\n'
                         . 'HARD（测试必须真 · tester_tests_must_be_real）：禁止「自己造假数据/假响应 → 再对着假数据断言 → 宣称 pass」的自欺闭环。禁止手写假 JSON/假 Model 数组冒充业务结果；禁止桩掉被测系统再断言桩结果；禁止只断言自己旁路 INSERT 的行而从未走冻结主 UC。允许：正式 runner / 真 Browser / 真实注册登录 / 经生产 Service 或正式真实通路 fixture 写入且可独立回查的证据（order_uuid/库/后台/展示单号）。证据不得只存在于测试进程内存。\n'
                         . 'HARD（抹掉自动化标志 · browser_strip_automation_flags）：WB-OP / Playwright 必须像真人浏览器，禁止带着自动化检测标志去点登录/提交/人机验证。每次开验收 Browser（与禁缓存同序）：CDP `Page.addScriptToEvaluateOnNewDocument`（或 Playwright `addInitScript`）在页面脚本前把 `navigator.webdriver` 置为 undefined/false；正式 runner 启动 Chromium 须 `--disable-blink-features=AutomationControlled` 且去掉 `--enable-automation`。禁止把「Human-machine verification failed / reCAPTCHA 拦自动化」当成 WB-OP pass 或甩测借口。\n'
-                        . 'HARD（非抢占后台 · browser_operator_non_preemptive）：WB-OP 默认后台执行，禁止抢占用户 IDE/对话焦点。Cursor：`browser_navigate` 省略 `position`；禁止默认 `position:"active"`。后台≠免测；仅用户明确要求观看时才可前台。\n'
+                        . 'HARD（虚拟操作面 · 非抢占 · browser_operator_non_preemptive）：WB-OP 等在虚拟平面后台执行，禁止与用户抢 IDE/对话焦点、鼠标、键盘。Cursor：`browser_navigate` 省略 `position`；禁止默认 `position:"active"` 与系统级键鼠注入。后台≠免测；仅用户明确要求观看时才可前台。\n'
                         . 'HARD（related_web_urls）：验收 pass 的 closed 回报必须填 related_web_urls 为探活过的前台/后台/API 地址清单（与交付地址同源），交给项目经理汇总；禁止空报 pass/closed。\n'
                         . '被支付开发工程师拉起时（HARD）：必须用宿主真实 Browser（WB-OP、禁缓存、已抹自动化标志）把本波触及的支付方式整条前端流程过一遍（选方式→提交→成功/失败/取消；触及则含退款/Webhook），回报 pass/fail + transaction_no/order_uuid；禁止用单测/curl 代替真浏览器。',
                 ],

@@ -375,9 +375,13 @@ $checks = [
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'browser_operator_non_preemptive'
+            && str_contains((string) ($rule['summary'] ?? ''), 'VIRTUAL')
             && str_contains((string) ($rule['summary'] ?? ''), 'BACKGROUND')
             && str_contains((string) ($rule['summary'] ?? ''), 'position')
-            && str_contains((string) ($rule['summary'] ?? ''), 'active')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'active')
+            && str_contains((string) ($rule['summary'] ?? ''), 'mouse')
+            && str_contains((string) ($rule['summary'] ?? ''), 'keyboard')
+            && str_contains((string) ($rule['summary'] ?? ''), 'browser-operator-non-preemptive.mdc')),
         false,
     ),
     'hard_constraints include ui_feature_requires_e2e' => array_reduce(
@@ -2062,6 +2066,14 @@ $checks = [
             && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
             && str_contains((string) ($rule['summary'] ?? ''), 'user_facing_verdict_last')
             && str_contains((string) ($rule['summary'] ?? ''), 'user-facing-verdict-last.mdc')),
+        false,
+    ),
+    'global_rules_dual_write mentions browser_operator_non_preemptive mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'browser_operator_non_preemptive')
+            && str_contains((string) ($rule['summary'] ?? ''), 'browser-operator-non-preemptive.mdc')),
         false,
     ),
     'MCP hard constraints require skills fetch from MCP' => array_reduce(

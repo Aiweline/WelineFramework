@@ -124,7 +124,7 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 **禁止**：只写 `~/.cursor/rules` 不进 Catalog；或只改 Catalog 不写宿主全局。  
 **仍禁止**：把手写项目内 `.cursor/rules` 当规则源（coldstart 仍只由 MCP 生成）。  
 **冲突裁决**：仓内 `hard_constraints` / 文档 > 宿主全局 `.mdc`。  
-示例：`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`；`user_facing_verdict_last` ↔ `user-facing-verdict-last.mdc`。
+示例：`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`；`user_facing_verdict_last` ↔ `user-facing-verdict-last.mdc`；`browser_operator_non_preemptive` ↔ `browser-operator-non-preemptive.mdc`。
 
 ### 4.2 面向用户结论置尾（`user_facing_verdict_last`，强制）
 
