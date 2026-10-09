@@ -63,6 +63,18 @@ final class ResolveThemeCacheSuffixReuseTest extends TestCase
         self::assertSame(2, $this->request->pathReads);
     }
 
+    public function testEmptyFilenameOmitsFileMd5Suffix(): void
+    {
+        $suffix = $this->suffix('');
+        self::assertSame('theme_id:1|theme_path:/first/', $suffix);
+        self::assertStringNotContainsString('file:', $suffix);
+        self::assertStringNotContainsString(md5(''), $suffix);
+
+        $whitespace = $this->suffix("  \t  ");
+        self::assertSame('theme_id:1|theme_path:/first/', $whitespace);
+        self::assertStringNotContainsString('file:', $whitespace);
+    }
+
     public function testExplicitPreviewInputsAndUriChangesRefreshTheRequestInterpretation(): void
     {
         $this->suffix('page.phtml');

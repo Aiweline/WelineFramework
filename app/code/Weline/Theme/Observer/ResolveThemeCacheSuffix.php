@@ -60,7 +60,12 @@ class ResolveThemeCacheSuffix implements ObserverInterface
             $suffixParts[] = 'preview_token:' . substr($token, 0, 16);
         }
 
-        $suffixParts[] = 'file:' . md5($filename);
+        // Empty / whitespace-only paths must not mint file:md5('') (d41d8cd9…)
+        // compile-scope leaves — those trees are dead weight and never useful.
+        $filename = \trim($filename);
+        if ($filename !== '') {
+            $suffixParts[] = 'file:' . md5($filename);
+        }
 
         $data->setData('suffix', implode('|', $suffixParts));
     }
