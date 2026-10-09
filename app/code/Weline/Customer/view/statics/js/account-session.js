@@ -1972,11 +1972,34 @@
     })();
 
     // Non-personal pages: paint from localStorage; JS near-expiry timer may check once.
+    // Personal center: seed SSR sessionUser into browser snapshot before paintOnly so
+    // header matches the signed-in page even when account-index lost the parallel-load race.
     (function bootstrapHeaderAuthRefresh() {
+        const seedPersonalCenterSessionFromSsr = () => {
+            try {
+                const cfgEl = document.getElementById('weline-account-index-config');
+                if (!cfgEl) {
+                    return false;
+                }
+                const cfg = JSON.parse(cfgEl.textContent || '{}') || {};
+                const pageUser = cfg.sessionUser;
+                if (!pageUser || typeof pageUser !== 'object') {
+                    return false;
+                }
+                if (!accountManager.resolveUserIdentity(pageUser)) {
+                    return false;
+                }
+                accountManager.applyFrontendProfileUpdate(pageUser);
+                return true;
+            } catch (_error) {
+                return false;
+            }
+        };
         const run = () => {
             if (!document.querySelector('[data-w-header-account="1"]')) {
                 return;
             }
+            seedPersonalCenterSessionFromSsr();
             Promise.resolve(accountManager.handleAuthRefreshSignal()).catch(() => {});
         };
         if (document.readyState === 'loading') {

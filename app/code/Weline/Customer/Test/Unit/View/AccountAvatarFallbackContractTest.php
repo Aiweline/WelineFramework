@@ -56,6 +56,9 @@ final class AccountAvatarFallbackContractTest extends TestCase
         self::assertStringContainsString('isBrowserSignedInSnapshot', $js);
         self::assertStringContainsString('syncPersonalCenterBrowserSession', $js);
         self::assertStringContainsString('syncSessionAtPersonalCenter', $js);
+        // Parallel attribute load race: wait for account module before header sync.
+        self::assertStringContainsString("Weline.load('account')", $js);
+        self::assertStringContainsString('ready.__full === true', $js);
     }
 
     public function testAccountIndexConfigEmbedsSessionUserForBrowserSync(): void

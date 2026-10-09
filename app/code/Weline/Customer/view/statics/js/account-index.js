@@ -54,19 +54,47 @@
         /**
          * 个人中心专属：用 SSR 用户信息写入浏览器会话，再 account.current 核对一次。
          * 其它页面不查账户状态，只读 localStorage 画顶栏。
+         *
+         * 硬：data-weline-load="api,account,customerAccount" 走 Promise.all 并行插 script，
+         * customerAccount 可能先于 account 执行；若此时直接 return，顶栏会永久停在 SSR guest「登录」。
          */
         (function syncPersonalCenterBrowserSession() {
-            var mod = window.WelineAccountModule;
-            if (!mod) {
+            function runSync(mod) {
+                if (!mod) {
+                    return;
+                }
+                var pageUser = accountConfig.sessionUser;
+                if (pageUser && typeof pageUser === 'object' && typeof mod.applyFrontendProfileUpdate === 'function') {
+                    mod.applyFrontendProfileUpdate(pageUser);
+                }
+                if (typeof mod.syncSessionAtPersonalCenter === 'function') {
+                    mod.syncSessionAtPersonalCenter().catch(function () {});
+                }
+            }
+
+            var ready = window.WelineAccountModule;
+            if (ready && ready.__full === true) {
+                runSync(ready);
                 return;
             }
-            var pageUser = accountConfig.sessionUser;
-            if (pageUser && typeof pageUser === 'object' && typeof mod.applyFrontendProfileUpdate === 'function') {
-                mod.applyFrontendProfileUpdate(pageUser);
+            if (window.Weline && typeof window.Weline.load === 'function') {
+                window.Weline.load('account').then(function () {
+                    runSync(window.WelineAccountModule);
+                }).catch(function () {});
+                return;
             }
-            if (typeof mod.syncSessionAtPersonalCenter === 'function') {
-                mod.syncSessionAtPersonalCenter().catch(function () {});
-            }
+            var tries = 0;
+            var timer = window.setInterval(function () {
+                tries += 1;
+                if (window.WelineAccountModule && window.WelineAccountModule.__full === true) {
+                    window.clearInterval(timer);
+                    runSync(window.WelineAccountModule);
+                    return;
+                }
+                if (tries >= 40) {
+                    window.clearInterval(timer);
+                }
+            }, 50);
         })();
 
         function welineDecodeHtmlEntities(message) {

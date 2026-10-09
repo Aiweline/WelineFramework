@@ -11,7 +11,7 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     account: {
         paths: [
-            "Weline_Customer::js/account-session.js?v=20261007-near-expiry-js-check-1"
+            "Weline_Customer::js/account-session.js?v=20261009-personal-center-header-race-1"
         ],
         globalVar: "WelineAccountModule",
         load: "defer",
@@ -19,7 +19,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     customerAccount: {
         paths: [
-            "Weline_Customer::js/account-index.js?v=20261007-personal-center-session-sync-1"
+            "Weline_Customer::js/account-index.js?v=20261009-personal-center-header-race-1"
         ],
         globalVar: "WelineCustomerAccount",
         description: "前台用户中心账户页交互"

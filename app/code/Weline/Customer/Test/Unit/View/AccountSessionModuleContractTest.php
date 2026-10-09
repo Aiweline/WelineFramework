@@ -95,6 +95,9 @@ final class AccountSessionModuleContractTest extends TestCase
         self::assertStringContainsString('isBrowserSignedInSnapshot', $js);
         self::assertStringContainsString('syncSessionAtPersonalCenter', $js);
         self::assertStringContainsString('个人中心由 account-index.js 同步会话', $js);
+        // Seed SSR sessionUser on personal center before paintOnly (parallel-load race belt).
+        self::assertStringContainsString('seedPersonalCenterSessionFromSsr', $js);
+        self::assertStringContainsString('weline-account-index-config', $js);
         self::assertStringNotContainsString('isStorefrontAccountArea', $js);
         self::assertStringNotContainsString('onAccountArea', $js);
         self::assertStringNotContainsString('bindAccountChromeInteraction', $js);

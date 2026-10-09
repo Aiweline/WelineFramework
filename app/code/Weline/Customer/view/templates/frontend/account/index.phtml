@@ -14,7 +14,7 @@ $avatarInitial = $username !== '' ? strtoupper(mb_substr($username, 0, 1)) : '?'
 $userId = is_object($user) && method_exists($user, 'getId') ? $user->getId() : '';
 $loginIp = is_object($user) && method_exists($user, 'getLoginIp') ? (string)($user->getLoginIp() ?? '') : '';
 $sessionId = is_object($user) && method_exists($user, 'getSessionId') ? (string)($user->getSessionId() ?? '') : '';
-$accountIndexAssetVersion = '20261007-personal-center-session-sync-1';
+$accountIndexAssetVersion = '20261009-personal-center-header-race-1';
 $sessionUserPayload = [];
 if ($user instanceof \Weline\Customer\Model\Customer && (int)$user->getId() > 0) {
     $sessionUserPayload = [
