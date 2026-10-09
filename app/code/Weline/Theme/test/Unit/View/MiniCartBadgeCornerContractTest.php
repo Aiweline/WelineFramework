@@ -79,6 +79,99 @@ final class MiniCartBadgeCornerContractTest extends TestCase
         );
     }
 
+    public function testHeaderCartInfoTwoLineCopyAndDensityGates(): void
+    {
+        $chrome = $this->read('view/statics/css/widgets/header-chrome-amazon.css');
+        $widget = $this->read('view/statics/css/widgets/widget-header-mini-cart-icon-default.css');
+        // CQ on the same flex item that sizes to content collapses width to 0.
+        self::assertDoesNotMatchRegularExpression(
+            '/^\s*container-type:\s*inline-size\s*;/m',
+            $chrome,
+            'size-container declaration must not live on chrome CSS (zeros .header-actions width)',
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/@container\s+header-actions/s',
+            $chrome,
+            'header-actions CQ removed; use viewport @media density only',
+        );
+        self::assertMatchesRegularExpression(
+            '/\.weline-header\s+\.header-actions\s*\{[^}]*flex:\s*0\s+0\s+auto/s',
+            $chrome,
+        );
+        self::assertMatchesRegularExpression(
+            '/\.weline-header\s+\.header-actions\s*\{[^}]*min-width:\s*min-content/s',
+            $chrome,
+        );
+        // Two-line cart copy (label / meta); width:fit-content avoids label-width collapse.
+        self::assertMatchesRegularExpression(
+            '/\.weline-header\s+\.header-cart\s+\.cart-info\s*\{[^}]*flex-direction:\s*column/s',
+            $chrome,
+        );
+        self::assertMatchesRegularExpression(
+            '/\.weline-header\s+\.header-cart\s+\.cart-info\s*\{[^}]*width:\s*fit-content/s',
+            $chrome,
+        );
+        self::assertMatchesRegularExpression(
+            '/\.weline-header\s+\.header-cart\s+\.cart-info\s*\{[^}]*min-width:\s*0/s',
+            $chrome,
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/\.weline-header\s+\.header-cart\s+\.cart-info\s*\{[^}]*min-width:\s*max-content/s',
+            $chrome,
+            'max-content freezes actions width and forces wrap under logo',
+        );
+        self::assertMatchesRegularExpression(
+            '/\.weline-header\s+\.header-cart\s+\.cart-meta\s*\{[^}]*white-space:\s*nowrap/s',
+            $chrome,
+            'meta must stay one line under the label',
+        );
+        self::assertMatchesRegularExpression(
+            '/\.wc-theme_widget_mini_cart_icon\s+\.cart-info\s*\{[^}]*flex-direction:\s*column/s',
+            $widget,
+        );
+        self::assertMatchesRegularExpression(
+            '/\.wc-theme_widget_mini_cart_icon\s+\.cart-info\s*\{[^}]*width:\s*fit-content/s',
+            $widget,
+        );
+        // Density only ≤1100: search own row + cart money off + signed-in avatar-only.
+        // Wider viewports keep search in the belt mid gap and full tool labels.
+        self::assertMatchesRegularExpression(
+            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]{0,400}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s',
+            $chrome,
+        );
+        self::assertMatchesRegularExpression(
+            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]{0,400}?cart-info[\s\S]{0,120}?display:\s*none/s',
+            $chrome,
+        );
+        self::assertStringContainsString(
+            '[data-w-header-account="1"][data-auth-state="signed-in"]',
+            $chrome,
+        );
+        self::assertMatchesRegularExpression(
+            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]{0,800}?data-auth-state="signed-in"[\s\S]{0,400}?\.register-text/s',
+            $chrome,
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1480px\)[\s\S]{0,200}?header-search-wrapper[\s\S]{0,120}?flex:\s*0\s+0\s+100%/s',
+            $chrome,
+            'search must not drop to own row at 1480 — wastes mid belt width',
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1680px\)[\s\S]{0,200}?cart-info[\s\S]{0,80}?display:\s*none/s',
+            $chrome,
+            'cart/account density must not collapse at 1680 when mid gap is free',
+        );
+        // Language/currency labels must stay visible — orphan flag+chevrons are unreadable.
+        self::assertDoesNotMatchRegularExpression(
+            '/@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*920px\)[\s\S]{0,600}?w-language-switcher__current[\s\S]{0,200}?display:\s*none/s',
+            $chrome,
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/@container\s+header-actions\s*\(max-width:\s*14rem\)[\s\S]{0,400}?w-language-switcher__current[\s\S]{0,200}?display:\s*none/s',
+            $chrome,
+        );
+    }
+
     private function read(string $relative): string
     {
         $path = dirname(__DIR__, 3) . '/' . $relative;

@@ -78,19 +78,44 @@
     transform: scale(1.2);
 }
 
+/* 两行：购物车 / 零售 · $…（宽随 meta；禁 min-width:0 单独塌成短宽） */
 .wc-theme_widget_mini_cart_icon .cart-info {
-    display: flex;
+    display: inline-flex;
     flex-direction: column;
-    font-size: var(--weline-font-size-sm);
+    align-items: flex-start;
+    justify-content: center;
+    flex-wrap: nowrap;
+    gap: 0;
+    width: fit-content;
+    min-width: 0;
+    max-width: 11rem;
+    overflow: hidden;
+    font-size: var(--weline-font-size-xs, 0.75rem);
 }
 
 .wc-theme_widget_mini_cart_icon .cart-label {
     color: var(--weline-chrome-text-light-secondary, var(--token-color-rgba-255-255-255-0-75));
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.wc-theme_widget_mini_cart_icon .cart-meta {
+    display: inline-flex;
+    align-items: baseline;
+    flex-wrap: nowrap;
+    gap: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .wc-theme_widget_mini_cart_icon .cart-subtotal {
     font-weight: 700;
     color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark, #ffffff));
+    white-space: nowrap;
 }
 
 @media (max-width: 768px) {
