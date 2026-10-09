@@ -1052,6 +1052,12 @@
         // non-executable marker. Runtime/global JavaScript config is not a
         // trusted Scope authority.
         config.scopeBootstrapId = readScopeBootstrapId();
+        config.cacheCatalog = (apiConfig.cacheCatalog && typeof apiConfig.cacheCatalog === 'object')
+            ? apiConfig.cacheCatalog
+            : {};
+        config.website_id = Number(apiConfig.website_id || runtimeConfig.website_id || 0) || 0;
+        config.store_id = Number(apiConfig.store_id || runtimeConfig.store_id || 0) || 0;
+        config.channel_id = Number(apiConfig.channel_id || runtimeConfig.channel_id || 0) || 0;
         return config;
     };
 
@@ -2066,6 +2072,10 @@
                         defaultCurrency: this.config.defaultCurrency,
                         availableCurrencies: this.config.availableCurrencies,
                         scopeBootstrapId: this.config.scopeBootstrapId,
+                        cacheCatalog: this.config.cacheCatalog || {},
+                        website_id: this.config.website_id,
+                        store_id: this.config.store_id,
+                        channel_id: this.config.channel_id,
                     },
                 }));
             }));

@@ -663,6 +663,10 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
             ];
         }
 
+        if (isset($cfg['cache_key']) && \is_array($cfg['cache_key'])) {
+            $params['cache_key'] = $cfg['cache_key'];
+        }
+
         return $params;
     }
 

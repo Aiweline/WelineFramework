@@ -6,6 +6,8 @@ namespace Weline\Search\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Service\Query\Attribute\BinQueryCache;
+use Weline\Framework\Service\Query\Attribute\BinQueryOperation;
+use Weline\Framework\Service\Query\Attribute\BinQueryParam;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Search\Service\HotWordsService;
 use Weline\Search\Service\SearchHubService;
@@ -46,6 +48,14 @@ final class SearchQueryProvider implements QueryProviderInterface
      * @param array<string,mixed> $params
      * @return array<string,mixed>
      */
+    #[BinQueryOperation(
+        name: 'search',
+        description: 'Autocomplete/search; area=backend requires an active admin session inside SearchParamGuard',
+        mode: 'read',
+        frontend: true,
+        auth: 'any',
+        cost: 2,
+    )]
     #[BinQueryCache(ttl: '0s', description: 'Search results are never CDN cached', cdn: false)]
     private function search(array $params): array
     {
@@ -79,7 +89,25 @@ final class SearchQueryProvider implements QueryProviderInterface
      * @param array<string,mixed> $params
      * @return array<string,mixed>
      */
-    #[BinQueryCache(ttl: '5m', description: 'Storefront hot words', keyParams: ['limit'])]
+    #[BinQueryOperation(
+        name: 'hotWords',
+        description: 'Channel-scoped hot words',
+        mode: 'read',
+        external: true,
+        frontend: true,
+        auth: 'any',
+        graph: true,
+        cost: 1,
+    )]
+    #[BinQueryCache(
+        ttl: '5m',
+        description: 'Storefront hot words BinQuery CDN cache 5 minutes',
+        visibility: 'public',
+        keyParams: ['limit'],
+        vary: ['area', 'locale', 'website_id', 'store_id', 'channel_id'],
+        cdn: true,
+    )]
+    #[BinQueryParam(name: 'limit', type: 'int', required: false, min: 1, max: 20, cacheKey: true)]
     private function hotWords(array $params): array
     {
         try {
@@ -105,7 +133,25 @@ final class SearchQueryProvider implements QueryProviderInterface
      * @param array<string,mixed> $params
      * @return array<string,mixed>
      */
-    #[BinQueryCache(ttl: '10m', description: 'Registered search types')]
+    #[BinQueryOperation(
+        name: 'types',
+        description: 'Registered search provider types (optional area filter)',
+        mode: 'read',
+        external: true,
+        frontend: true,
+        auth: 'any',
+        graph: true,
+        cost: 1,
+    )]
+    #[BinQueryCache(
+        ttl: '30m',
+        description: 'Registered search types BinQuery CDN cache 30 minutes',
+        visibility: 'public',
+        keyParams: ['area'],
+        vary: ['area'],
+        cdn: true,
+    )]
+    #[BinQueryParam(name: 'area', type: 'string', required: false, maxLength: 16, cacheKey: true)]
     private function types(array $params): array
     {
         try {
@@ -152,12 +198,13 @@ final class SearchQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'hotWords',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'read',
-                    'graph' => false,
+                    'graph' => true,
                     'cost' => 1,
                     'params' => [
-                        ['name' => 'limit', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 20],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 20, 'cache_key' => true],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Channel-scoped hot words',
@@ -165,12 +212,13 @@ final class SearchQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'types',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'read',
-                    'graph' => false,
+                    'graph' => true,
                     'cost' => 1,
                     'params' => [
-                        ['name' => 'area', 'type' => 'string', 'required' => false, 'max_length' => 16],
+                        ['name' => 'area', 'type' => 'string', 'required' => false, 'max_length' => 16, 'cache_key' => true],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Registered search provider types (optional area filter)',

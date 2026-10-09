@@ -130,6 +130,26 @@ if ($modulesJsMtime) {
 // Keep the Worker endpoint on the current Website mount so its trusted binding
 // refines the same Website navigation Scope rather than the host default.
 $queryBinUrl = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Url::class)->getFrontendApiUrl('framework/query-bin', [], false);
+$cacheCatalog = [];
+try {
+    $cacheCatalog = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Framework\Service\Query\BinQueryCacheCatalogExporter::class
+    )->exportFrontendCatalog();
+} catch (\Throwable) {
+    $cacheCatalog = [];
+}
+if (!is_array($cacheCatalog)) {
+    $cacheCatalog = [];
+}
+$scopeMeta = [];
+try {
+    $scopeMeta = \Weline\Framework\Runtime\RequestContext::scopeMetadata() ?? [];
+} catch (\Throwable) {
+    $scopeMeta = [];
+}
+if (!is_array($scopeMeta)) {
+    $scopeMeta = [];
+}
 $runtime = [
     'env' => ['WELINE_ENV' => DEV ? 'DEV' : 'PROD', 'DEV' => DEV, 'PROD' => !DEV],
     'area' => 'frontend',
@@ -158,6 +178,10 @@ $runtime = [
         'currency' => $currentCurrency,
         'availableCurrencies' => $availableCurrencies,
         'defaultCurrency' => $defaultCurrency,
+        'cacheCatalog' => $cacheCatalog,
+        'website_id' => (int)($scopeMeta['website_id'] ?? 0),
+        'store_id' => (int)($scopeMeta['store_id'] ?? 0),
+        'channel_id' => (int)($scopeMeta['channel_id'] ?? 0),
     ],
     'url' => [
         'origin' => $host,

@@ -3,10 +3,21 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Service\Query;
 
+use Weline\Framework\Runtime\RequestContext;
+
 final class BinQueryCachePolicy
 {
     public const MARKER_PARAM = '__wq_cache';
     private const MARKER_PREFIX = 'wq1';
+
+    /** @var list<string> */
+    private const SCOPE_VARY_KEYS = [
+        'website_id',
+        'store_id',
+        'channel_id',
+        'locale',
+        'currency',
+    ];
 
     /**
      * @param array<string, mixed> $operation
@@ -37,12 +48,14 @@ final class BinQueryCachePolicy
         $keyParams = $this->normalizeStringList($cache['key_params'] ?? []);
         $vary = $this->normalizeStringList($cache['vary'] ?? ['area', 'locale', 'currency']);
 
+        // Empty PHP arrays json_encode as [] while JS JSON.stringify({}) is {};
+        // markers must match the worker, so empty maps encode as objects.
         $keyData = [
             'area' => $area,
             'provider' => $provider,
             'operation' => $operationName,
-            'params' => $this->pickParams($params, $keyParams),
-            'vary' => $this->pickVaryValues($area, $params, $vary),
+            'params' => $this->jsonObjectMap($this->pickParams($params, $keyParams)),
+            'vary' => $this->jsonObjectMap($this->pickVaryValues($area, $params, $vary)),
         ];
         $json = \json_encode($keyData, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
         $hash = \substr(\hash('sha256', \is_string($json) ? $json : ''), 0, 24);
@@ -107,6 +120,15 @@ final class BinQueryCachePolicy
     }
 
     /**
+     * @param array<string, mixed> $map
+     * @return array<string, mixed>|\stdClass
+     */
+    private function jsonObjectMap(array $map): array|\stdClass
+    {
+        return $map === [] ? new \stdClass() : $map;
+    }
+
+    /**
      * @param mixed $list
      * @return array<int, string>
      */
@@ -151,9 +173,23 @@ final class BinQueryCachePolicy
      */
     private function pickVaryValues(string $area, array $params, array $vary): array
     {
+        $scope = RequestContext::scopeMetadata();
+        $scopeBag = \is_array($scope) ? $scope : [];
         $values = [];
         foreach ($vary as $name) {
-            $values[$name] = $name === 'area' ? $area : ($params[$name] ?? null);
+            if ($name === 'area') {
+                $values[$name] = $area;
+                continue;
+            }
+            if (\array_key_exists($name, $params)) {
+                $values[$name] = $params[$name];
+                continue;
+            }
+            if (\in_array($name, self::SCOPE_VARY_KEYS, true) && \array_key_exists($name, $scopeBag)) {
+                $values[$name] = $scopeBag[$name];
+                continue;
+            }
+            $values[$name] = null;
         }
         \ksort($values);
 

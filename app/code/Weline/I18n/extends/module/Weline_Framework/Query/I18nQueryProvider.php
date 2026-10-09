@@ -51,6 +51,28 @@ class I18nQueryProvider implements QueryProviderInterface
     /**
      * @return list<array{code: string, name: string, flag: string, country_code: string}>
      */
+    #[BinQueryOperation(
+        name: 'getInstalledLocales',
+        description: 'Get installed locales.',
+        mode: 'read',
+        external: true,
+        frontend: true,
+        auth: 'any',
+        graph: true,
+        cost: 1,
+    )]
+    #[BinQueryCache(
+        ttl: '1h',
+        description: 'Installed locale catalog BinQuery CDN cache 1 hour',
+        visibility: 'public',
+        keyParams: ['display_locale_code', 'installed', 'width', 'height'],
+        vary: ['area', 'locale'],
+        cdn: true,
+    )]
+    #[BinQueryParam(name: 'display_locale_code', type: 'string', required: false, maxLength: 32, cacheKey: true)]
+    #[BinQueryParam(name: 'width', type: 'int', required: false, min: 1, max: 64, cacheKey: true)]
+    #[BinQueryParam(name: 'height', type: 'int', required: false, min: 1, max: 64, cacheKey: true)]
+    #[BinQueryParam(name: 'installed', type: 'bool', required: false, cacheKey: true)]
     private function getInstalledLocales(array $params): array
     {
         $displayLocale = (string)($params['display_locale_code'] ?? Cookie::getLangLocal() ?? 'zh_Hans_CN');
@@ -182,6 +204,26 @@ class I18nQueryProvider implements QueryProviderInterface
         return is_array($rows) ? array_values($rows) : [];
     }
 
+    #[BinQueryOperation(
+        name: 'getLocaleByCode',
+        description: 'Get locale by code.',
+        mode: 'read',
+        external: true,
+        frontend: true,
+        auth: 'any',
+        graph: true,
+        cost: 1,
+    )]
+    #[BinQueryCache(
+        ttl: '1h',
+        description: 'Locale-by-code BinQuery CDN cache 1 hour',
+        visibility: 'public',
+        keyParams: ['code', 'target_code'],
+        vary: ['area'],
+        cdn: true,
+    )]
+    #[BinQueryParam(name: 'code', type: 'string', required: true, maxLength: 32, cacheKey: true)]
+    #[BinQueryParam(name: 'target_code', type: 'string', required: false, maxLength: 32, cacheKey: true)]
     private function getLocaleByCode(array $params): ?array
     {
         $code = (string)($params['code'] ?? '');
@@ -210,6 +252,26 @@ class I18nQueryProvider implements QueryProviderInterface
         ];
     }
 
+    #[BinQueryOperation(
+        name: 'getLocaleName',
+        description: 'Get locale display name.',
+        mode: 'read',
+        external: true,
+        frontend: true,
+        auth: 'any',
+        graph: true,
+        cost: 1,
+    )]
+    #[BinQueryCache(
+        ttl: '1h',
+        description: 'Locale display name BinQuery CDN cache 1 hour',
+        visibility: 'public',
+        keyParams: ['code', 'display_locale_code'],
+        vary: ['area'],
+        cdn: true,
+    )]
+    #[BinQueryParam(name: 'code', type: 'string', required: true, maxLength: 32, cacheKey: true)]
+    #[BinQueryParam(name: 'display_locale_code', type: 'string', required: false, maxLength: 32, cacheKey: true)]
     private function getLocaleName(array $params): string
     {
         $code = (string)($params['code'] ?? '');
@@ -358,16 +420,17 @@ class I18nQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'getInstalledLocales',
                     'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'cache_ttl' => 60,
                     'description' => __('Get installed locales.'),
                     'params' => [
-                        ['name' => 'display_locale_code', 'type' => 'string', 'required' => false, 'max_length' => 32],
-                        ['name' => 'width', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64],
-                        ['name' => 'height', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64],
-                        ['name' => 'installed', 'type' => 'bool', 'required' => false],
+                        ['name' => 'display_locale_code', 'type' => 'string', 'required' => false, 'max_length' => 32, 'cache_key' => true],
+                        ['name' => 'width', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64, 'cache_key' => true],
+                        ['name' => 'height', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64, 'cache_key' => true],
+                        ['name' => 'installed', 'type' => 'bool', 'required' => false, 'cache_key' => true],
                     ],
                     'returns' => ['type' => 'array'],
                 ],
@@ -405,28 +468,30 @@ class I18nQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'getLocaleByCode',
                     'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'cache_ttl' => 60,
                     'description' => __('Get locale by code.'),
                     'params' => [
-                        ['name' => 'code', 'type' => 'string', 'required' => true, 'max_length' => 32],
-                        ['name' => 'target_code', 'type' => 'string', 'required' => false, 'max_length' => 32],
+                        ['name' => 'code', 'type' => 'string', 'required' => true, 'max_length' => 32, 'cache_key' => true],
+                        ['name' => 'target_code', 'type' => 'string', 'required' => false, 'max_length' => 32, 'cache_key' => true],
                     ],
                     'returns' => ['type' => 'array'],
                 ],
                 [
                     'name' => 'getLocaleName',
                     'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'cache_ttl' => 60,
                     'description' => __('Get locale display name.'),
                     'params' => [
-                        ['name' => 'code', 'type' => 'string', 'required' => true, 'max_length' => 32],
-                        ['name' => 'display_locale_code', 'type' => 'string', 'required' => false, 'max_length' => 32],
+                        ['name' => 'code', 'type' => 'string', 'required' => true, 'max_length' => 32, 'cache_key' => true],
+                        ['name' => 'display_locale_code', 'type' => 'string', 'required' => false, 'max_length' => 32, 'cache_key' => true],
                     ],
                     'returns' => ['type' => 'string'],
                 ],

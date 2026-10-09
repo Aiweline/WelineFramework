@@ -586,32 +586,57 @@ class CdnRuleCollector
                         $status = [200];
                     }
                     $markerPrefix = 'wq1.frontend.' . $provider . '.' . $operationName . '.';
-                    $rule = [
-                        'expression' => 'http.request.uri.path eq "/bin/query" and http.request.method eq "POST" and http.request.uri.query contains "__wq_cache=' . $markerPrefix . '"',
-                        'action' => [
-                            'cache' => [
-                                'status_code' => array_values(array_map('intval', $status)),
-                                'ttl' => $ttl,
+                    $description = (string)($cache['description'] ?? ('BinQuery ' . $provider . '.' . $operationName));
+                    $trigger = (string)($cache['trigger'] ?? 'cron');
+                    $cacheAction = [
+                        'status_code' => array_values(array_map('intval', $status)),
+                        'ttl' => $ttl,
+                        'mode' => 'override_origin',
+                        'cache_key' => [
+                            'ignore_query_strings_order' => true,
+                            'custom_key' => [
+                                'query_string' => ['include' => ['__wq_cache']],
+                                'cookie' => ['include' => [], 'check_presence' => []],
+                                'user' => ['device_type' => false, 'geo' => false, 'lang' => false],
                             ],
                         ],
-                        'description' => (string)($cache['description'] ?? ('BinQuery ' . $provider . '.' . $operationName)),
-                        'enabled' => true,
-                        'trigger' => (string)($cache['trigger'] ?? 'cron'),
                     ];
+                    $pathBindings = [
+                        '/bin/query' => [
+                            'class' => 'Weline\\Frontend\\Controller\\Api\\BinQuery::' . $provider,
+                            'method' => $operationName,
+                        ],
+                        '/api/framework/query-bin' => [
+                            'class' => 'Weline\\Frontend\\Controller\\Api\\QueryBin::' . $provider,
+                            'method' => $operationName,
+                        ],
+                    ];
+                    foreach ($pathBindings as $path => $identity) {
+                        $rule = [
+                            'expression' => 'http.request.uri.path eq "' . $path . '" and http.request.method eq "POST" and http.request.uri.query contains "__wq_cache=' . $markerPrefix . '"',
+                            'action' => [
+                                'cache' => $cacheAction,
+                            ],
+                            'description' => $description . ' [' . $path . ']',
+                            'enabled' => true,
+                            'trigger' => $trigger,
+                        ];
 
-                    $apiRule = $this->saveRule(
-                        $rule,
-                        'Weline\\Framework\\Controller\\Api\\BinQuery::' . $provider,
-                        $operationName,
-                        $module !== '' ? $module : 'Weline_Framework'
-                    );
-                    if (($rule['trigger'] ?? 'cron') === 'realtime') {
-                        $this->pushRealtimeRule($apiRule);
+                        $apiRule = $this->saveRule(
+                            $rule,
+                            (string)$identity['class'],
+                            (string)$identity['method'],
+                            $module !== '' ? $module : 'Weline_Framework'
+                        );
+                        if (($rule['trigger'] ?? 'cron') === 'realtime') {
+                            $this->pushRealtimeRule($apiRule);
+                        }
+                        $collected[] = $rule + [
+                            'provider' => $provider,
+                            'operation' => $operationName,
+                            'path' => $path,
+                        ];
                     }
-                    $collected[] = $rule + [
-                        'provider' => $provider,
-                        'operation' => $operationName,
-                    ];
                 }
             }
         } catch (\Throwable $throwable) {

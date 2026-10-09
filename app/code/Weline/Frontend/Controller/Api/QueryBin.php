@@ -23,8 +23,10 @@ use Weline\Framework\Runtime\RequestAuthority;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolution;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Service\Query\BinQueryCachePolicy;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\FrontendQueryGateway;
+use Weline\Framework\Service\Query\QueryProviderRegistry;
 use Weline\Framework\Service\Query\QueryUnexpectedFailurePayload;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
 use Weline\Framework\Service\Query\Value\FrontendWorkerBackendBinding;
@@ -44,6 +46,8 @@ class QueryBin extends FrontendRestController
         private readonly FrontendQueryGateway $gateway,
         private readonly FrontendWorkerSessionService $sessionService,
         private readonly ?RuntimeProviderResolver $runtimeProviderResolver = null,
+        private readonly ?QueryProviderRegistry $queryProviderRegistry = null,
+        private readonly ?BinQueryCachePolicy $binQueryCachePolicy = null,
     ) {
     }
 
@@ -58,6 +62,7 @@ class QueryBin extends FrontendRestController
             'operation' => '',
         ];
         $statusCode = 200;
+        $responseHeaders = ['Cache-Control' => 'no-store'];
         $startedAt = \microtime(true);
         $phaseProfile = [];
         $phaseLast = $startedAt;
@@ -127,6 +132,8 @@ class QueryBin extends FrontendRestController
                     $executionContext,
                 );
                 $markPhase('gateway_execute');
+                $responseHeaders = $this->resolveCacheHeaders($payload);
+                $markPhase('resolve_cache_headers');
                 $payload = [
                     'ok' => true,
                     'data' => $result,
@@ -283,8 +290,12 @@ class QueryBin extends FrontendRestController
             'request_id' => $requestId,
         ];
 
+        $headersForResponse = (($responsePayload['ok'] ?? false) === true && $statusCode === 200)
+            ? $responseHeaders
+            : ['Cache-Control' => 'no-store'];
+
         try {
-            return $this->binaryResponse($responsePayload, $statusCode, $requestSummary, $elapsedMs);
+            return $this->binaryResponse($responsePayload, $statusCode, $requestSummary, $elapsedMs, $headersForResponse);
         } catch (\Throwable $throwable) {
             $this->logUnexpectedFailure($throwable, $requestId, $requestSummary, 'response_encode');
             $emptySummary = ['type' => '', 'provider' => '', 'operation' => ''];
@@ -294,7 +305,7 @@ class QueryBin extends FrontendRestController
                     'data' => null,
                     'error' => QueryUnexpectedFailurePayload::build($throwable),
                     'request_id' => $requestId,
-                ], 500, $emptySummary, $elapsedMs);
+                ], 500, $emptySummary, $elapsedMs, ['Cache-Control' => 'no-store']);
             } catch (\Throwable $fallbackThrowable) {
                 $this->logUnexpectedFailure($fallbackThrowable, $requestId, $requestSummary, 'fallback_encode');
 
@@ -1041,9 +1052,15 @@ class QueryBin extends FrontendRestController
     /**
      * @param array<string, mixed> $payload
      * @param array{type:string,provider:string,operation:string} $summary
+     * @param array<string, string> $cacheHeaders
      */
-    private function binaryResponse(array $payload, int $statusCode, array $summary, float $elapsedMs): Response
-    {
+    private function binaryResponse(
+        array $payload,
+        int $statusCode,
+        array $summary,
+        float $elapsedMs,
+        array $cacheHeaders = ['Cache-Control' => 'no-store'],
+    ): Response {
         $encodeStart = \microtime(true);
         $encodedPayload = $this->codec->encodePacket($payload);
         $encodeMs = \round((\microtime(true) - $encodeStart) * 1000, 2);
@@ -1059,7 +1076,14 @@ class QueryBin extends FrontendRestController
             $statusCode,
             WelineBinaryCodec::CONTENT_TYPE
         );
-        $response->setHeader('Cache-Control', 'no-store');
+        foreach ($cacheHeaders as $headerName => $headerValue) {
+            if (\is_string($headerName) && $headerName !== '' && \is_string($headerValue)) {
+                $response->setHeader($headerName, $headerValue);
+            }
+        }
+        if (!isset($cacheHeaders['Cache-Control'])) {
+            $response->setHeader('Cache-Control', 'no-store');
+        }
         $response->setHeader('X-Content-Type-Options', 'nosniff');
         $response->setHeader('X-Weline-Query-Bin-Time', (string)$elapsedMs);
         if ($summary['type'] !== '') {
@@ -1073,6 +1097,53 @@ class QueryBin extends FrontendRestController
         }
 
         return $this->expireConsumedBootstrapCookie($this->attachPendingCookies($response));
+    }
+
+    /**
+     * @param array<string, mixed> $requestPayload
+     * @return array<string, string>
+     */
+    private function resolveCacheHeaders(array $requestPayload): array
+    {
+        $policy = $this->binQueryCachePolicy ?? ObjectManager::getInstance(BinQueryCachePolicy::class);
+        $type = (string)($requestPayload['type'] ?? 'call');
+        if ($type !== 'call') {
+            return $policy->noStoreHeaders('graph-or-other');
+        }
+
+        $provider = (string)($requestPayload['provider'] ?? '');
+        $operation = (string)($requestPayload['operation'] ?? '');
+        if ($provider === '' || $operation === '') {
+            return $policy->noStoreHeaders('no-operation');
+        }
+
+        try {
+            $registry = $this->queryProviderRegistry ?? ObjectManager::getInstance(QueryProviderRegistry::class);
+            $descriptor = $registry->getOperationDescriptor($provider, $operation);
+        } catch (\Throwable) {
+            return $policy->noStoreHeaders('descriptor-unavailable');
+        }
+        if (!\is_array($descriptor) || !$policy->isCacheableOperation($descriptor)) {
+            return $policy->noStoreHeaders('not-cacheable');
+        }
+
+        $params = \is_array($requestPayload['params'] ?? null) ? $requestPayload['params'] : [];
+        $expected = $policy->buildMarker('frontend', $provider, $operation, $params, $descriptor);
+        $marker = $this->readCacheMarker();
+        if ($marker === '') {
+            return $policy->noStoreHeaders('missing-marker');
+        }
+        if (!\hash_equals($expected, $marker)) {
+            return $policy->noStoreHeaders('invalid-marker');
+        }
+
+        return $policy->cacheHeaders($descriptor, $expected);
+    }
+
+    private function readCacheMarker(): string
+    {
+        $value = $this->request->getParam(BinQueryCachePolicy::MARKER_PARAM, '');
+        return \is_string($value) ? \trim($value) : '';
     }
 
     /**

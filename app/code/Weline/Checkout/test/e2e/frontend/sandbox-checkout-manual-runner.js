@@ -140,7 +140,40 @@ async function main() {
 
     await page.goto(FRONTEND + '/checkout', { waitUntil: 'domcontentloaded' });
     result.steps.push('checkout_opened');
+    // PDP→checkout rotates __Host-Weline-Worker-Scope-Bootstrap-{id}; leftover
+    // cookies from the PDP load can leave QueryBin without a single matching
+    // binding for the checkout meta (missing/duplicated/invalid). Keep only the
+    // cookie that matches the current page marker, then warm Scope before freeze.
+    const checkoutMeta = await page.evaluate(() => {
+      const node = document.querySelector('meta[name="weline-worker-scope-bootstrap"]');
+      return node ? String(node.getAttribute('content') || '').trim() : '';
+    }).catch(() => '');
+    const jar = await context.cookies();
+    const scopeCookies = jar.filter((c) => String(c.name || '').startsWith('__Host-Weline-Worker-Scope-Bootstrap-'));
+    const keepName = checkoutMeta
+      ? ('__Host-Weline-Worker-Scope-Bootstrap-' + checkoutMeta)
+      : '';
+    for (const cookie of scopeCookies) {
+      if (keepName && cookie.name === keepName) {
+        continue;
+      }
+      await context.clearCookies({
+        name: cookie.name,
+        domain: cookie.domain,
+        path: cookie.path || '/',
+      }).catch(() => {});
+    }
+    if (!scopeCookies.some((c) => c.name === keepName)) {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      result.steps.push('checkout_reloaded_for_scope');
+    }
     await page.waitForFunction(() => !!(window.Weline && window.Weline.Api), null, { timeout: 60000 });
+    await page.evaluate(async () => {
+      if (window.Weline && Weline.Api && typeof Weline.Api.bootstrapScope === 'function') {
+        await Weline.Api.bootstrapScope();
+      }
+    }).catch(() => {});
+    result.steps.push('scope_warmed');
     // The payment radios are rendered by JS only after the checkout quote settles.
     // Immediately after a full WLS restart the very first request pays for a cold
     // FPC / layout-entity cache, so a fixed short sleep can expire before the radios

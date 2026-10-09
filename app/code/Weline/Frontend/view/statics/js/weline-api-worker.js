@@ -188,6 +188,10 @@
             ),
             scopeBootstrapId: rawScopeBootstrapId,
             backendBootstrapId: rawBackendBootstrapId,
+            cacheCatalog: (config.cacheCatalog && typeof config.cacheCatalog === 'object') ? config.cacheCatalog : {},
+            website_id: Number(config.website_id || 0) || 0,
+            store_id: Number(config.store_id || 0) || 0,
+            channel_id: Number(config.channel_id || 0) || 0,
         };
         normalized.currency = normalizeCurrency(config.currency || config.currentCurrency || config.current_currency || '', normalized);
 
@@ -918,8 +922,13 @@
                 bodyHash,
             ].join('\n');
             const signature = await hmacSha256Hex(sessionSnapshot.signing_secret, signatureBase);
+            const fetchUrl = await withCacheMarkerUrl(
+                config.endpoint,
+                payload,
+                config
+            );
 
-            const response = await fetch(config.endpoint, {
+            const response = await fetch(fetchUrl, {
                 method: 'POST',
                 credentials: 'same-origin',
                 redirect: 'manual',
@@ -1165,6 +1174,87 @@
             && typeof crypto.subtle.digest === 'function'
             && typeof crypto.subtle.importKey === 'function'
             && typeof crypto.subtle.sign === 'function';
+    }
+
+    async function buildCacheMarker(provider, operation, params, config) {
+        const catalog = config && config.cacheCatalog && typeof config.cacheCatalog === 'object'
+            ? config.cacheCatalog
+            : {};
+        const entry = catalog[String(provider) + '.' + String(operation)];
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        const keyParams = Array.isArray(entry.key_params) ? entry.key_params.slice() : [];
+        const vary = Array.isArray(entry.vary) ? entry.vary.slice() : ['area', 'locale', 'currency'];
+        const sourceParams = params && typeof params === 'object' ? params : {};
+        const pickedParams = {};
+        const paramKeys = (keyParams.length ? keyParams : Object.keys(sourceParams)).slice().sort();
+        paramKeys.forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(sourceParams, key)) {
+                pickedParams[key] = sourceParams[key];
+            }
+        });
+        const varyValues = {};
+        vary.slice().sort().forEach((key) => {
+            if (key === 'area') {
+                varyValues[key] = 'frontend';
+                return;
+            }
+            if (Object.prototype.hasOwnProperty.call(sourceParams, key)) {
+                varyValues[key] = sourceParams[key];
+                return;
+            }
+            if (key === 'locale') {
+                varyValues[key] = config.locale || null;
+                return;
+            }
+            if (key === 'currency') {
+                varyValues[key] = config.currency || null;
+                return;
+            }
+            if (key === 'website_id' || key === 'store_id' || key === 'channel_id') {
+                const n = Number(config[key] || 0);
+                varyValues[key] = Number.isFinite(n) ? n : null;
+                return;
+            }
+            varyValues[key] = null;
+        });
+        const keyData = {
+            area: 'frontend',
+            provider: String(provider || ''),
+            operation: String(operation || ''),
+            params: pickedParams,
+            vary: varyValues,
+        };
+        const hash = await sha256Hex(encoder.encode(JSON.stringify(keyData)));
+        return 'wq1.frontend.' + keyData.provider + '.' + keyData.operation + '.' + String(hash).slice(0, 24);
+    }
+
+    async function withCacheMarkerUrl(endpoint, payload, config) {
+        if (!payload || payload.type !== 'call') {
+            return endpoint;
+        }
+        const marker = await buildCacheMarker(
+            String(payload.provider || ''),
+            String(payload.operation || ''),
+            payload.params && typeof payload.params === 'object' ? payload.params : {},
+            config || {}
+        );
+        if (!marker) {
+            return endpoint;
+        }
+        try {
+            const base = String(self.location && self.location.origin ? self.location.origin : 'https://local.invalid');
+            const url = new URL(String(endpoint || SIGNED_PATH), base);
+            url.searchParams.set('__wq_cache', marker);
+            if (String(endpoint || '').indexOf('://') === -1) {
+                return url.pathname + url.search + (url.hash || '');
+            }
+            return url.toString();
+        } catch (_error) {
+            const join = String(endpoint || '').indexOf('?') >= 0 ? '&' : '?';
+            return String(endpoint || SIGNED_PATH) + join + '__wq_cache=' + encodeURIComponent(marker);
+        }
     }
 
     async function sha256Hex(bytes) {
