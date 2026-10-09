@@ -1072,6 +1072,25 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
 }
 
+/* Raised scope-switcher panel: same chrome-inverse bleach as account-dropdown. */
+.weline-header .header-actions .w-scope-switcher__panel,
+.weline-header .header-user-area .w-scope-switcher__panel,
+.weline-header .header-scope-switcher .w-scope-switcher__panel {
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+}
+
+.weline-header .header-actions .w-scope-switcher__panel a,
+.weline-header .header-actions .w-scope-switcher__panel a:visited,
+.weline-header .header-actions .w-scope-switcher__panel span,
+.weline-header .header-user-area .w-scope-switcher__panel a,
+.weline-header .header-user-area .w-scope-switcher__panel a:visited,
+.weline-header .header-user-area .w-scope-switcher__panel span,
+.weline-header .header-scope-switcher .w-scope-switcher__panel a,
+.weline-header .header-scope-switcher .w-scope-switcher__panel a:visited,
+.weline-header .header-scope-switcher .w-scope-switcher__panel span {
+    color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
+}
+
 .weline-header .header-actions .account-dropdown a.logout-link,
 .weline-header .header-actions .account-dropdown a.logout-link:visited,
 .weline-header .header-user-area .account-dropdown a.logout-link,

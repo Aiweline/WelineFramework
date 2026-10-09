@@ -2929,6 +2929,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 [data-surface="inverse"] .search-suggestions :is(p, li, small, span),
 [data-surface="inverse"] .w-search-suggestions :is(p, li, small, span),
 [data-surface="inverse"] .w-language-switcher__menu :is(p, li, small, span),
+[data-surface="inverse"] .w-scope-switcher__panel :is(p, li, small, span, a, div),
 [data-surface="inverse"] .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
 [data-surface="inverse"] dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
 .w-surface-inverse .header-search-form :is(p, li, small, span),
@@ -2936,6 +2937,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 .w-surface-inverse .search-suggestions :is(p, li, small, span),
 .w-surface-inverse .w-search-suggestions :is(p, li, small, span),
 .w-surface-inverse .w-language-switcher__menu :is(p, li, small, span),
+.w-surface-inverse .w-scope-switcher__panel :is(p, li, small, span, a, div),
 .w-surface-inverse .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
 .w-surface-inverse dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2) {
     color: inherit;
@@ -2944,8 +2946,8 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 /*
  * Raised light panels nested under inverse chrome (architecture side-effect).
  * Header belt remaps text tokens to on-dark; account menu, mini-cart, white search
- * chip, language switcher menu, and language-request dialog sit on surface-raised
- * and must restore paper ink or copy vanishes.
+ * chip, language switcher menu, scope switcher panel, and language-request dialog
+ * sit on surface-raised and must restore paper ink or copy vanishes.
  */
 [data-surface="inverse"] .account-dropdown,
 [data-surface="inverse"] .mini-cart-drawer,
@@ -2954,6 +2956,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 [data-surface="inverse"] .search-suggestions,
 [data-surface="inverse"] .w-search-suggestions,
 [data-surface="inverse"] .w-language-switcher__menu,
+[data-surface="inverse"] .w-scope-switcher__panel,
 [data-surface="inverse"] .w-dialog[data-language-request-modal],
 [data-surface="inverse"] dialog.w-dialog[data-language-request-modal],
 .w-surface-inverse .account-dropdown,
@@ -2963,6 +2966,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 .w-surface-inverse .search-suggestions,
 .w-surface-inverse .w-search-suggestions,
 .w-surface-inverse .w-language-switcher__menu,
+.w-surface-inverse .w-scope-switcher__panel,
 .w-surface-inverse .w-dialog[data-language-request-modal],
 .w-surface-inverse dialog.w-dialog[data-language-request-modal] {
     --_paper-text: #0f1111;

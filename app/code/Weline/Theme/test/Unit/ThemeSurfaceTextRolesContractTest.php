@@ -145,12 +145,17 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
         self::assertStringContainsString('[data-surface="inverse"] .header-search-form', $themeCss);
         self::assertStringContainsString('[data-surface="inverse"] .w-search-form', $themeCss);
         self::assertStringContainsString('[data-surface="inverse"] .w-language-switcher__menu', $themeCss);
+        self::assertStringContainsString('[data-surface="inverse"] .w-scope-switcher__panel', $themeCss);
         self::assertStringContainsString(
             '[data-surface="inverse"] .w-dialog[data-language-request-modal]',
             $themeCss
         );
         self::assertStringContainsString(
             '[data-surface="inverse"] .header-search-form :is(p, li, small, span)',
+            $themeCss
+        );
+        self::assertStringContainsString(
+            '[data-surface="inverse"] .w-scope-switcher__panel :is(p, li, small, span, a, div)',
             $themeCss
         );
         self::assertStringContainsString(
