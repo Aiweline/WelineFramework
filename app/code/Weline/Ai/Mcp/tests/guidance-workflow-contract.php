@@ -667,6 +667,7 @@ $checks = [
         'prepare_project_hard_constraints_when_mcp_attached',
         'optional_resolve_task_context_or_get_skill',
         'acceptance_items_planned',
+        'use_cases_mapped_to_acceptance',
         'tdd_unit_acceptance_planned',
         'shentu_acceptance_planned_when_feature',
         'webui_acceptance_cases_agreed_for_web_surface',

@@ -93,49 +93,53 @@ clarify_status: assumed-defaults
 - **前置**：location-sell 双开；配送国=CN；CN 履约 offer。
 - **步骤**：设配送国 CN → 加购 → 开购物车 → 进结账。
 - **期望**：加购成功；车/结账无地点闸阻断；可报价。
-- **acceptance**：`acc-wb-ls-cn`、`acc-rt-ls-cn`
+- **acceptance（closing）**：`acc-wb-ls-cn`（真机）；辅助 `acc-rt-ls-cn`
 
 ### UC-LS-US-BLOCK（异常）
 
 - **前置**：同上；配送国切 US（或写国 US）。
 - **步骤**：尝试加购 CN-only offer / 或写国 US。
 - **期望**：失败；文案含「请修改收货地址」或「可发货国家」语义。
-- **acceptance**：`acc-wb-ls-us`、`acc-rt-ls-us`
+- **acceptance（closing）**：`acc-wb-ls-us`（真机）；辅助 `acc-rt-ls-us`
 
 ### UC-SPLIT-MULTI-WH（主成功）
 
 - **前置**：两 offer 偏好仓分别为 51 与 96（均授权）；CN 配送。
 - **步骤**：两行加购 → freeze/submit（或等价提交）。
 - **期望**：产生 ≥2 子单，`split_key` 分别为 `wh:51` 与 `wh:96`（或两行不同 wh）。
-- **acceptance**：`acc-rt-split`、`acc-wb-split-cart`（车内可见可结账）
+- **acceptance（closing）**：`acc-wb-split-cart`（真机车→结账）；辅助 `acc-rt-split` / `acc-unit-split-pref`
 
 ### UC-TRACK-SHIPMENTS（主成功）
 
 - **前置**：子单存在；写入 ≥1 OrderShipment（Bridge 或履约）。
 - **步骤**：调 OrderTrackingService / 店面追踪。
 - **期望**：载荷含非空 `shipments`。
-- **acceptance**：`acc-rt-track`
+- **acceptance（closing）**：`acc-wb-track`（真机追踪页）；辅助 `acc-rt-track`
 
 ### UC-EXPRESS-RETURN-MSG（异常）
 
 - **前置**：未付订单；地点闸开启。
 - **步骤**：快捷回跳/amend 将地址改为不可履约国。
 - **期望**：amend/fault 失败 message 含改地址语义；店面提示可见（若可达回跳页）。
-- **acceptance**：`acc-rt-express`、`acc-wb-express`（可达则 WB）
+- **acceptance（closing）**：`acc-wb-express`（真机回跳/故障页可见改地址文案）；辅助 `acc-rt-express`
 
 ---
 
 ## acceptance 映射（计划）
 
-| id | type | covers_use_cases | 说明 |
-|----|------|------------------|------|
-| acc-rt-ls-cn | runtime | UC-LS-CN-OK | CLI/API 闸 + 加购探针 |
-| acc-rt-ls-us | runtime | UC-LS-US-BLOCK | US 拦截探针 |
-| acc-rt-split | runtime | UC-SPLIT-MULTI-WH | 真实 submit 多 split_key |
-| acc-rt-track | runtime | UC-TRACK-SHIPMENTS | shipments 非空 |
-| acc-rt-express | runtime | UC-EXPRESS-RETURN-MSG | amend 失败文案 |
-| acc-wb-ls-cn | browser | UC-LS-CN-OK | WB-OP 车/结账 |
-| acc-wb-ls-us | browser | UC-LS-US-BLOCK | WB-OP 提示 |
-| acc-wb-split-cart | browser | UC-SPLIT-MULTI-WH | 双商品车→结账入口 |
-| acc-wb-express | browser | UC-EXPRESS-RETURN-MSG | 若回跳页可达 |
-| acc-unit-split-pref | unit | UC-SPLIT-MULTI-WH | 分仓偏好契约 |
+> **闭环一定是实际真机测试闭环**：每条 UC 的 **closing** 项必须是 `type=browser` WB-OP（真机点选/截图）和/或正式 Playwright e2e。  
+> `runtime`/`unit` 仅辅助，**不得**单独把 UC 标为 passed。
+
+| id | type | covers_use_cases | closing? | 说明 |
+|----|------|------------------|----------|------|
+| acc-wb-ls-cn | browser | UC-LS-CN-OK | **yes** | 真机：设国 CN→加购→车→结账 |
+| acc-wb-ls-us | browser | UC-LS-US-BLOCK | **yes** | 真机：切 US 或写国可见改地址提示 |
+| acc-wb-split-cart | browser | UC-SPLIT-MULTI-WH | **yes** | 真机：双仓两商品进车→结账入口可见 |
+| acc-wb-track | browser | UC-TRACK-SHIPMENTS | **yes** | 真机：订单跟踪页可见运单/追踪信息 |
+| acc-wb-express | browser | UC-EXPRESS-RETURN-MSG | **yes** | 真机：回跳/故障页可见改地址文案（可达则必测） |
+| acc-rt-ls-cn | runtime | UC-LS-CN-OK | no | 辅助闸探针 |
+| acc-rt-ls-us | runtime | UC-LS-US-BLOCK | no | 辅助 US 拦截探针 |
+| acc-rt-split | runtime | UC-SPLIT-MULTI-WH | no | 辅助 split_key 探针 |
+| acc-rt-track | runtime | UC-TRACK-SHIPMENTS | no | 辅助 shipments 探针 |
+| acc-rt-express | runtime | UC-EXPRESS-RETURN-MSG | no | 辅助 amend 文案探针 |
+| acc-unit-split-pref | unit | UC-SPLIT-MULTI-WH | no | 分仓偏好契约 |

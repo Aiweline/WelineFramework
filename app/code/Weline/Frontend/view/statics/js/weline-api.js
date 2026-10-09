@@ -629,11 +629,18 @@
             401: byCode.auth_error,
         };
         const preset = byCode[code] || byStatus[status] || null;
-        const title = preset
+        // protocol_error 若误携带业务可读文案（如地点售卖「请修改收货地址…」），优先展示服务端原文，勿盖成「协议不匹配」
+        const preferServerMessage = code === 'protocol_error'
+            && rawMessage !== ''
+            && rawMessage !== (byCode.protocol_error && byCode.protocol_error.message)
+            && !/^(Empty binary|Worker request|Missing Weline|Invalid query|Handshake|Request scheme|Request authority|Unsupported)/i.test(rawMessage);
+        const title = (preset && !preferServerMessage)
             ? preset.title
             : i18nText('请求失败');
-        let message = preset ? preset.message : (rawMessage || i18nText('请求失败，请稍后重试。'));
-        if (!preset && status > 0 && !/\bHTTP\s+\d+/i.test(message)) {
+        let message = (preset && !preferServerMessage)
+            ? preset.message
+            : (rawMessage || i18nText('请求失败，请稍后重试。'));
+        if (!preset && !preferServerMessage && status > 0 && !/\bHTTP\s+\d+/i.test(message)) {
             message = `${message} (HTTP ${status})`;
         }
         const displayCode = status > 0 ? `${code}:${status}` : code;

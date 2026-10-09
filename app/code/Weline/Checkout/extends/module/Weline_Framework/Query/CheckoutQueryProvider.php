@@ -1430,10 +1430,26 @@ class CheckoutQueryProvider implements QueryProviderInterface
      */
     private function deliveryCountry(array $params): array
     {
-        return $this->ok(
-            (string)__('配送国家已更新'),
-            $this->deliveryContextForBin($this->deliveryContextService->setCountry($params))
-        );
+        try {
+            return $this->ok(
+                (string)__('配送国家已更新'),
+                $this->deliveryContextForBin($this->deliveryContextService->setCountry($params))
+            );
+        } catch (\InvalidArgumentException $exception) {
+            // LocationSellGate / 写国校验：须 business failure，禁止抛到 QueryBin 被标成 protocol_error
+            $message = trim($exception->getMessage());
+            $errorCode = 'location_address_not_fulfillable';
+            if (class_exists(\Weline\Shipping\Service\LocationSellGate::class)) {
+                $errorCode = \Weline\Shipping\Service\LocationSellGate::ERROR_ADDRESS_NOT_FULFILLABLE;
+            }
+
+            return [
+                'success' => false,
+                'message' => $message !== '' ? $message : (string)__('请修改收货地址'),
+                'error_code' => $errorCode,
+                'code' => $errorCode,
+            ];
+        }
     }
 
     /**
