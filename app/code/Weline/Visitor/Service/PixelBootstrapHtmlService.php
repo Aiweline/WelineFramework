@@ -11,6 +11,7 @@ use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\View\PublicThemeNamespace;
 
 /**
  * 生成前台访客像素引导 HTML（配置 + pixel.js 懒加载）。
@@ -23,7 +24,7 @@ use Weline\Framework\Runtime\RequestContext;
  */
 class PixelBootstrapHtmlService
 {
-    private const PIXEL_SCRIPT_VERSION = '20260923-list-select1';
+    private const PIXEL_SCRIPT_VERSION = '20261009-prod-console1';
     /** Request-scoped: header widget already emitted bootstrap HTML this request. */
     public const EMITTED_REQUEST_KEY = 'visitor.pixel_bootstrap_html.emitted.v1';
 
@@ -169,8 +170,13 @@ class PixelBootstrapHtmlService
         }
     }
 
+    // Console noise follows deploy mode only — PROD on *.test.weline.com must stay quiet.
+    function isDevConsoleEnabled() {
+        return !!(window.DEV || window.WELINE_ENV === 'DEV' || window.__WELINE_DEBUG__);
+    }
+
     function devLog() {
-        if (!isLocalDevHost() || typeof console === 'undefined' || typeof console.log !== 'function') {
+        if (!isDevConsoleEnabled() || typeof console === 'undefined' || typeof console.log !== 'function') {
             return;
         }
         var args = Array.prototype.slice.call(arguments);
@@ -335,7 +341,7 @@ class PixelBootstrapHtmlService
             className: className,
             pixelReady: pixelReady
         };
-        if (isLocalDevHost()) {
+        if (isDevConsoleEnabled()) {
             console.log('[WelineCTA] click', info);
         }
         if (!pixelReady) {
@@ -400,8 +406,11 @@ HTML;
     {
         $url = '/' . \trim($modulePath, '/') . '/view/statics/' . \ltrim($file, '/');
         if (\defined('PROD') && PROD) {
-            $themePath = (Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme');
-            $url = '/static/' . \str_replace('\\', '/', (string)$themePath) . $url;
+            // Env theme.path may be an absolute app/code disk path; never splice that into /static/.
+            $themePath = PublicThemeNamespace::resolve(
+                (string)(Env::getInstance()->getTheme()['path'] ?? 'Weline/Theme/view/theme')
+            );
+            $url = '/static/' . \trim($themePath, '/') . $url;
         }
 
         return $url;

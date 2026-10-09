@@ -337,8 +337,13 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
         }
     }
 
+    // Console noise follows deploy mode only — PROD on *.test.weline.com must stay quiet.
+    function isDevConsoleEnabled() {
+        return !!(window.DEV || window.WELINE_ENV === 'DEV' || window.__WELINE_DEBUG__);
+    }
+
     function devLog() {
-        if (!isLocalDevHost() || typeof console === 'undefined' || typeof console.log !== 'function') {
+        if (!isDevConsoleEnabled() || typeof console === 'undefined' || typeof console.log !== 'function') {
             return;
         }
         var args = Array.prototype.slice.call(arguments);
@@ -492,7 +497,7 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
             className: className,
             pixelReady: pixelReady
         };
-        if (isLocalDevHost()) {
+        if (isDevConsoleEnabled()) {
             console.log('[WelineCTA] click', info);
         }
         if (!pixelReady) {

@@ -21,6 +21,11 @@
         (__visitorTrackingConfig && (__visitorTrackingConfig.configRevision || __visitorTrackingConfig.config_revision)) || 0
     ) || 0;
 
+    // Console noise follows deploy mode only — PROD on *.test.weline.com must stay quiet.
+    function __isDevConsoleEnabled() {
+        return !!(window.DEV || window.WELINE_ENV === 'DEV' || window.__WELINE_DEBUG__);
+    }
+
     function __applyVisitorTrackingConfig(next, opts) {
         opts = opts || {};
         if (!next || typeof next !== 'object') {
@@ -2656,7 +2661,7 @@
         return sessionId;
     }
 
-    var PIXEL_SCRIPT_VERSION = '2026.09.23-list-select1';
+    var PIXEL_SCRIPT_VERSION = '2026.10.09-prod-console1';
     var __pixelStickyStorageKey = 'weline_pixel_sticky_utm';
     var __pixelStickyCookieName = 'WELINE_PIXEL_STICKY_UTM';
 
@@ -5145,6 +5150,10 @@
         function __onWelineApiError(event) {
             try {
                 var detail = (event && event.detail) || {};
+                // Silent QueryBin (shelf hydrate etc.) must not open a site_error cascade.
+                if (detail && detail.silent) {
+                    return;
+                }
                 var nestedError = detail.error && typeof detail.error === 'object' ? detail.error : {};
                 var status = parseInt(detail.status || detail.http_status || nestedError.status || 0, 10) || 0;
                 var errorCode = String(
@@ -5688,14 +5697,7 @@
             var paramGate = __evaluateRequiredParamGate(normalizedEventName, payload, mergedMeta);
             if (paramGate.drop) {
                 try {
-                    var hostGate = String(window.location && window.location.hostname || '');
-                    var isDevGate = !!(window.DEV
-                        || window.WELINE_ENV === 'DEV'
-                        || window.__WELINE_DEBUG__
-                        || hostGate === 'localhost'
-                        || hostGate === '127.0.0.1'
-                        || /\.(?:test\.weline\.com|weline\.test)$/i.test(hostGate));
-                    if (isDevGate && typeof console !== 'undefined' && typeof console.log === 'function') {
+                    if (__isDevConsoleEnabled() && typeof console !== 'undefined' && typeof console.log === 'function') {
                         console.log('[WelinePixel] drop incomplete', {
                             event: normalizedEventName,
                             reason: paramGate.reason,
@@ -5733,14 +5735,7 @@
             }
 
             try {
-                var host = String(window.location && window.location.hostname || '');
-                var isDev = !!(window.DEV
-                    || window.WELINE_ENV === 'DEV'
-                    || window.__WELINE_DEBUG__
-                    || host === 'localhost'
-                    || host === '127.0.0.1'
-                    || /\.(?:test\.weline\.com|weline\.test)$/i.test(host));
-                if (isDev && typeof console !== 'undefined' && typeof console.log === 'function') {
+                if (__isDevConsoleEnabled() && typeof console !== 'undefined' && typeof console.log === 'function') {
                     console.log('[WelinePixel] track', {
                         event: normalizedEventName,
                         ga4: payload.__ga4EventName || '',

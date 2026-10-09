@@ -21,7 +21,7 @@ final class PixelSandboxInitResilienceContractTest extends TestCase
         $bootstrap = (string) \file_get_contents($root . '/Service/PixelBootstrapHtmlService.php');
 
         foreach ([$pixel, $phtml] as $source) {
-            self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.23-r2d-param2'", $source);
+            self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.10.09-prod-console1'", $source);
             self::assertStringContainsString('检测到半截初始化（缺沙盒），重入补建', $source);
             self::assertStringContainsString('function __ensurePixelSandboxBus', $source);
             self::assertStringContainsString('function __seedSandboxFromRecentEvents', $source);
@@ -44,7 +44,7 @@ final class PixelSandboxInitResilienceContractTest extends TestCase
 
         self::assertStringContainsString('__WelinePixelSeedSandboxFromRecent', $monitor);
         self::assertStringContainsString('runtime.recentEvents', $pixel);
-        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20260923-r2d-param2'", $bootstrap);
+        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20261009-prod-console1'", $bootstrap);
 
         $module = (string) \file_get_contents($root . '/etc/module.php');
         self::assertStringContainsString("'1.1.43'", $module);

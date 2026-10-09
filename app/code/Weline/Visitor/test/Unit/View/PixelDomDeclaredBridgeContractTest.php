@@ -32,7 +32,7 @@ final class PixelDomDeclaredBridgeContractTest extends TestCase
             self::assertStringContainsString("if (!normalized && __isGa4CtaElement(element))", $src);
         }
 
-        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.23-r2d-param2'", $pixel);
-        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20260923-r2d-param2'", $bootstrap);
+        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.10.09-prod-console1'", $pixel);
+        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20261009-prod-console1'", $bootstrap);
     }
 }

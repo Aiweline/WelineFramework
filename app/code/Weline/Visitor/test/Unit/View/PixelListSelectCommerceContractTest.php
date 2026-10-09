@@ -15,7 +15,7 @@ final class PixelListSelectCommerceContractTest extends TestCase
         $pixel = (string) \file_get_contents($root . '/view/statics/js/pixel.js');
         $phtml = (string) \file_get_contents($root . '/view/taglib/js/pixel.phtml');
         foreach ([$pixel, $phtml] as $src) {
-            self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.23-list-select1'", $src);
+            self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.10.09-prod-console1'", $src);
             self::assertStringContainsString('function __getProductListMeta', $src);
             self::assertStringContainsString('function __getCtaLinkMeta', $src);
             self::assertStringContainsString('function __getRemoveFromCartMeta', $src);
@@ -25,6 +25,6 @@ final class PixelListSelectCommerceContractTest extends TestCase
             self::assertStringContainsString("return ['link_url', 'link_text']", $src);
         }
         $bootstrap = (string) \file_get_contents($root . '/Service/PixelBootstrapHtmlService.php');
-        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20260923-list-select1'", $bootstrap);
+        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '20261009-prod-console1'", $bootstrap);
     }
 }

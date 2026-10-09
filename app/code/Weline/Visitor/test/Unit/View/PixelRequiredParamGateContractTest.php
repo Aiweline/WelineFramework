@@ -23,7 +23,7 @@ final class PixelRequiredParamGateContractTest extends TestCase
         self::assertStringContainsString("return ['currency', 'value', 'items']", $pixel);
         self::assertStringContainsString('weline-cart-shell__line', $pixel);
         self::assertStringContainsString('[WelinePixel] drop incomplete', $pixel);
-        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.09.23-r2d-param2'", $pixel);
+        self::assertStringContainsString("PIXEL_SCRIPT_VERSION = '2026.10.09-prod-console1'", $pixel);
         self::assertStringContainsString('__isChromeLocaleSearchInput', $pixel);
         self::assertStringContainsString('__isStorefrontSearchResultPath', $pixel);
         self::assertStringContainsString('__isBenignSiteIncident', $pixel);
