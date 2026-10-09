@@ -1010,13 +1010,19 @@ if ($productBreadcrumbs === []) {
 
                 <?php
                     $offerMessage = trim((string)($offer['message'] ?? ''));
-                    $genericStockMessage = (string)__('商品库存不足');
+                    // Align with CartService: snapshot/live may keep Chinese source or English
+                    // while __() returns the active-locale phrase — compare all generics.
+                    $genericStockCandidates = [
+                        (string)__('商品库存不足'),
+                        '商品库存不足',
+                        'Out of stock',
+                    ];
                     $showOfferMessage = !$quoteOnly && !$sellable
                         && $offerMessage !== ''
-                        && $offerMessage !== $genericStockMessage;
+                        && !in_array($offerMessage, $genericStockCandidates, true);
                 ?>
                 <?php if ($showOfferMessage): ?>
-                    <p class="product-native-detail__unavailable"><?= $escape($offerMessage) ?></p>
+                    <p class="product-native-detail__unavailable"><?= $escape((string)__($offerMessage)) ?></p>
                 <?php endif; ?>
 
                 <?php if (!$quoteOnly && !$currencyUnavailable): ?>

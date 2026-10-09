@@ -46,4 +46,20 @@ final class ProductCatalogTemplateContractTest extends TestCase
         self::assertSame(0.0, (float)$product['price']);
         self::assertSame('USD', $product['currency']);
     }
+
+    public function testBuyboxHidesGenericStockMessageAgainstSourceAndTranslatedCandidates(): void
+    {
+        $source = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/view/templates/frontend/widgets/product-info.phtml',
+        );
+
+        self::assertStringContainsString('$genericStockCandidates', $source);
+        self::assertStringContainsString("'商品库存不足'", $source);
+        self::assertStringContainsString("'Out of stock'", $source);
+        self::assertStringContainsString('!in_array($offerMessage, $genericStockCandidates, true)', $source);
+        self::assertStringNotContainsString(
+            '$offerMessage !== $genericStockMessage',
+            $source,
+        );
+    }
 }

@@ -312,7 +312,7 @@ settings,settings
 "%{1} 件 %{2} %{3}/件","%{1} pcs %{2} %{3}/pc"
 "每件低 %{1} %{2}","As low as %{1} %{2} each"
 "省 %{1} %{2}","Save %{1} %{2}"
-批发价按数量档与会员等级计价；当前无适用档位时显示站内参考价。,批发价按数量档与会员等级计价；当前无适用档位时显示站内参考价。
+批发价按数量档与会员等级计价；当前无适用档位时显示站内参考价。,"Wholesale prices follow quantity tiers and membership level; when no tier applies, the storefront reference price is shown."
 收起沟通,"Collapse chat"
 留言,Message
 发送,Send
