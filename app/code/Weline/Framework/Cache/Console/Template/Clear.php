@@ -113,8 +113,9 @@ class Clear implements \Weline\Framework\Console\CommandInterface
      */
     public function clear(string $module_name, string $base_path, bool $silent = false): bool
     {
-        if (is_dir($base_path . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE)) {
-            $this->system->exec("rm -rf $base_path" . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE . DS);
+        $tplDir = $base_path . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE;
+        if (is_dir($tplDir)) {
+            $this->system->exec('rm -rf ' . \escapeshellarg($tplDir));
             if (!$silent) {
                 $this->printing->note(__('清理完成：%{1}', $module_name));
             }

@@ -713,8 +713,8 @@ class Template extends DataObject implements RequestLocalInterface
             'currency' => $dimension('user.currency', 'CNY', '/^[A-Z]{3}$/'),
             'website_url' => \function_exists('w_env') ? (string)\w_env('website_url', '') : '',
             'theme' => $this->resolveThemeCacheKeyForFetchFile($this->view_dir),
-            // Nested w:widget compile bakes <w:hook> output (header-account-links).
-            // New hooks.php → new ctx_ dir → miss → re-bake account dropdown menus.
+            // Nested w:widget compile bakes <w:hook> output. Digest stays in compile_id
+            // (in-place overwrite), not in a new ctx_/__bytes_ directory.
             'hooks_registry' => self::hooksRegistryCompileDigest(),
         ];
     }
@@ -738,8 +738,9 @@ class Template extends DataObject implements RequestLocalInterface
     /**
      * Keep compiled templates partitioned only by stable render dimensions.
      *
-     * Request cookies, headers, Session IDs and tracking values must never
-     * become directory names or cache dimensions.
+     * Plain-text scope directories (no ctx_ hash). Request cookies, headers,
+     * Session IDs and tracking values must never become directory names.
+     * hooks_registry / pipeline changes invalidate via compile_id in-file, not new dirs.
      */
     private function stableTemplateCompileDirectory(string $directory): string
     {
@@ -748,16 +749,22 @@ class Template extends DataObject implements RequestLocalInterface
             return $directory;
         }
 
-        // DEV and PROD supply different compile roots. Append the same stable
-        // scope to either one, stripping only a suffix previously generated
-        // here so repeated calls and scope switches remain idempotent.
+        // Strip a previously appended scope leaf (v6 ctx_hash or v7 plain label)
+        // so repeated calls stay idempotent.
         $base = \preg_replace('#/[A-Za-z0-9_-]+_ctx_[a-f0-9]{32}$#iD', '', $normalized);
+        if (!\is_string($base) || $base === '') {
+            $base = $normalized;
+        }
+        $base = \preg_replace(
+            '#/(?:frontend|backend|admin)_[A-Za-z0-9][A-Za-z0-9_.-]{0,180}$#iD',
+            '',
+            $base
+        );
         if (!\is_string($base) || $base === '') {
             $base = $normalized;
         }
 
         $scope = $this->templateCompileScopeDimensions();
-        $scopeKey = $this->hashTemplateCompileScope($scope);
         $labelParts = [
             $scope['area'],
             'w' . $scope['website_id'],
@@ -765,12 +772,43 @@ class Template extends DataObject implements RequestLocalInterface
             $scope['lang'],
             $scope['currency'],
         ];
+        $theme = $this->sanitizeCompileContextSegment((string)$scope['theme']);
+        if ($theme !== '' && $theme !== 'default' && $theme !== 'area_frontend') {
+            $labelParts[] = 't_' . $theme;
+        }
+        $originLeaf = $this->compileOriginPathLeaf((string)$scope['website_url']);
+        if ($originLeaf !== '') {
+            $labelParts[] = 'o_' . $originLeaf;
+        }
         $label = \implode('_', \array_map(fn(string $value): string => $this->sanitizeCompileContextSegment($value), $labelParts));
-        if (\strlen($label) > 96) {
-            $label = \substr($label, 0, 96);
+        if (\strlen($label) > 160) {
+            $label = \substr($label, 0, 160);
         }
 
-        return \str_replace('/', DS, \rtrim($base, '/')) . DS . $label . '_ctx_' . $scopeKey . DS;
+        return \str_replace('/', DS, \rtrim($base, '/')) . DS . $label . DS;
+    }
+
+    /**
+     * Host[:port] leaf so different origins do not share baked absolute URLs,
+     * without a content-addressed ctx_ hash directory.
+     */
+    private function compileOriginPathLeaf(string $websiteUrl): string
+    {
+        $websiteUrl = \trim($websiteUrl);
+        if ($websiteUrl === '') {
+            return '';
+        }
+        $parts = \parse_url($websiteUrl);
+        if (!\is_array($parts)) {
+            return $this->sanitizeCompileContextSegment($websiteUrl);
+        }
+        $host = (string)($parts['host'] ?? '');
+        $port = isset($parts['port']) ? (string)(int)$parts['port'] : '';
+        if ($host === '') {
+            return $this->sanitizeCompileContextSegment($websiteUrl);
+        }
+
+        return $this->sanitizeCompileContextSegment($port !== '' ? $host . '_' . $port : $host);
     }
 
     /**
@@ -916,7 +954,41 @@ class Template extends DataObject implements RequestLocalInterface
             return '';
         }
 
-        return '__source_' . substr(sha1($resolvedPath), 0, 16) . DS;
+        // Path-identity leaf only (not content digest). Keeps logical≠resolved isolated
+        // without __source_{sha}/ accumulation of version hashes.
+        $base = $this->sanitizeCompileContextSegment(\pathinfo($resolvedPath, \PATHINFO_FILENAME) ?: 'resolved');
+
+        return 'src_' . $base . '_r' . \substr(\sha1($resolvedPath), 0, 8) . DS;
+    }
+
+    /**
+     * Stable compile root for the current render scope (plaintext leaf + lang/currency).
+     * Theme/layout helpers must use this — never invent parallel ctx_/lang-only paths.
+     */
+    public function resolveStableCompileRoot(string $baseCompileDir): string
+    {
+        return $this->stableTemplateCompileDirectory($baseCompileDir)
+            . $this->templateCompileContextDir()
+            . DS;
+    }
+
+    /**
+     * Virtual/pinned source leaf under the stable compile root (plaintext, not __source_{hash24}).
+     */
+    private function virtualSourceCompileLeaf(string $logicalPath, string $originPath, string $contextKey): string
+    {
+        $name = $this->sanitizeCompileContextSegment(\pathinfo($logicalPath, \PATHINFO_FILENAME) ?: 'virtual');
+        $leaf = 'src_' . $name;
+        if ($contextKey !== '') {
+            $leaf .= '_' . $this->sanitizeCompileContextSegment($contextKey);
+        }
+        $normalizedOrigin = $this->normalizeTemplateSourcePath($originPath);
+        $normalizedLogical = $this->normalizeTemplateSourcePath($logicalPath);
+        if ($normalizedOrigin !== '' && $normalizedOrigin !== $normalizedLogical) {
+            $leaf .= '_r' . \substr(\sha1($normalizedOrigin), 0, 8);
+        }
+
+        return $leaf;
     }
 
     private function normalizeTemplateSourcePath(string $path): string
@@ -1036,9 +1108,10 @@ class Template extends DataObject implements RequestLocalInterface
     {
         $originPath = $originPath !== '' ? $originPath : $logicalPath;
         [, , , , $compileDir] = $this->processFileSource($originPath, '');
-        $compileDir = $this->stableTemplateCompileDirectory($compileDir) . $this->templateCompileContextDir()
-            . DS . '__source_' . substr(hash('sha256', $logicalPath . "\0" . $originPath . "\0" . $contextKey), 0, 24) . DS;
-        $filename = 'com_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($logicalPath));
+        $compileDir = $this->resolveStableCompileRoot($compileDir)
+            . $this->virtualSourceCompileLeaf($logicalPath, $originPath, $contextKey)
+            . DS;
+        $filename = 'com_' . preg_replace('/[^a-zA-Z0-9._-]+/', '_', basename($logicalPath));
         if (!str_ends_with($filename, '.phtml')) {
             $filename .= '.phtml';
         }
@@ -1067,15 +1140,17 @@ class Template extends DataObject implements RequestLocalInterface
     private function compileSourceBytes(string $baseCompiledPath, string $sourceBytes, string $originPath, string $contextKey, ?string $sourceHash = null): string
     {
         $sourceHash ??= $this->sourceBytesDigest($sourceBytes);
-        // Event registration changes alter the compiler pipeline as well as source bytes.
+        // Event registration + hooks registry alter baked output; fold into compile_id.
         $pipeline = json_encode($this->eventsManager->getEventObservers('Weline_Framework_Template::before_compile'), JSON_PARTIAL_OUTPUT_ON_ERROR);
-        // A delayed compilation of R1 can never overwrite the file for R2.
-        $digest = substr(hash('sha256', $sourceHash . "\0" . $originPath . "\0" . $contextKey . "\0source-pipeline-v2\0" . $pipeline), 0, 24);
-        $compiledPath = dirname($baseCompiledPath) . DS . '__bytes_' . $digest . DS . basename($baseCompiledPath);
+        $compileId = $this->buildCompileIdentity($sourceHash, $originPath, $contextKey, (string)$pipeline);
+        // Fixed path: overwrite in place (no __bytes_{digest}/ accumulation).
+        $compiledPath = $baseCompiledPath;
         $this->compiledSourceOrigins[$compiledPath] = $originPath;
         $force = Env::getInstance()->getConfig('template.force_recompile_in_dev', false);
         if (is_file($compiledPath) && !(DEV && in_array($force, [true, 1, '1'], true))) {
-            return $compiledPath;
+            if ($this->compiledFileMatchesIdentity($compiledPath, $compileId)) {
+                return $compiledPath;
+            }
         }
 
         $content = '';
@@ -1104,9 +1179,10 @@ class Template extends DataObject implements RequestLocalInterface
         $eventData = new DataObject(['content' => $compiled, 'comFileName' => $compiledPath, 'tplFile' => $originPath, 'template' => $this]);
         $this->eventsManager->dispatch('Weline_Framework_Template::after_compile', $eventData);
         $compiled = (string)$eventData->getData('content');
+        $marker = '/* compile_id:' . $compileId . ' */ /* hash:' . $sourceHash . ' */';
         $compiled = str_starts_with($compiled, '<?php')
-            ? '<?php /* hash:' . $sourceHash . ' */' . substr($compiled, 5)
-            : '<?php /* hash:' . $sourceHash . ' */ ?>' . $compiled;
+            ? '<?php ' . $marker . substr($compiled, 5)
+            : '<?php ' . $marker . ' ?>' . $compiled;
         // Production: collapse HTML whitespace / strip safe PHP comments in com_*.
         $compiled = CompiledTemplateMinifier::minify($compiled);
         $directory = dirname($compiledPath);
@@ -1128,6 +1204,29 @@ class Template extends DataObject implements RequestLocalInterface
         }
 
         return $compiledPath;
+    }
+
+    private function buildCompileIdentity(string $sourceHash, string $originPath, string $contextKey, string $pipeline): string
+    {
+        $hooks = self::hooksRegistryCompileDigest();
+        $pipeDigest = \substr(\hash('sha256', $pipeline), 0, 16);
+        $ctxDigest = \substr(\hash('sha256', $originPath . "\0" . $contextKey), 0, 12);
+
+        // Compact, filesystem-safe token embedded in the compiled file header.
+        return \substr(\hash('sha256', $sourceHash . "\0" . $hooks . "\0" . $pipeDigest . "\0" . $ctxDigest . "\0v7-inplace"), 0, 40);
+    }
+
+    private function compiledFileMatchesIdentity(string $compiledPath, string $compileId): bool
+    {
+        $head = @\file_get_contents($compiledPath, false, null, 0, 512);
+        if (!\is_string($head) || $head === '') {
+            return false;
+        }
+        if (\preg_match('/\/\*\s*compile_id:([a-f0-9]{16,64})\s*\*\//i', $head, $match) !== 1) {
+            return false;
+        }
+
+        return \hash_equals($compileId, (string)$match[1]);
     }
 
     private function templateSourceModule(): array

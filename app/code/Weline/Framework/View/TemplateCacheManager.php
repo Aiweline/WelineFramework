@@ -413,7 +413,7 @@ class TemplateCacheManager
     }
 
     /**
-     * Clear all caches (memory + disk)
+     * Flush template disk bag + L1：整树直接删除后重建空目录（不做 PHP 逐文件掏空再 rmdir）。
      */
     public function clearAll(): void
     {
@@ -421,18 +421,15 @@ class TemplateCacheManager
         self::$memoryCache = [];
         self::$sourceFileKeyCache = [];
 
-        // Clear disk cache
-        $this->ensureCacheDir();
-        $files = glob($this->cacheRoot . DS . '*');
-        foreach ($files as $file) {
-            if (is_file($file)) {
-                @unlink($file);
-            } elseif (is_dir($file) && basename($file) !== '.' && basename($file) !== '..') {
-                // Recursively clean subdirectories
-                $this->removeDirectory($file);
+        if (\is_dir($this->cacheRoot)) {
+            // Disk bag flush = delete the bag once (not recurse-unlink + rmdir).
+            if (\function_exists('exec')) {
+                @\exec('rm -rf ' . \escapeshellarg($this->cacheRoot));
+            } else {
+                $this->removeDirectory($this->cacheRoot);
             }
         }
-        @unlink($this->manifestFile);
+        $this->ensureCacheDir();
 
         // Reset manifest
         $this->manifest = [];

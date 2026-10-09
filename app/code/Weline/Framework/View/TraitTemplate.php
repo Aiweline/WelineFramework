@@ -25,9 +25,9 @@ use Weline\Framework\View\Data\HtmlInterface;
 trait TraitTemplate
 {
     // 路径映射和物理编译目录必须同时迁移格式，避免映射仍指向旧编译产物。
-    // v6：template-file-map 必须跟物理编译目录同一套 w_env 语种/币种维度，
-    // 禁止吃 StorefrontCacheKeyContext 早期栅栏语种导致跨 locale 复用已烘焙 <lang>。
-    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v6-compile-map-lang';
+    // v7：物理目录用明文 scope（站/语/币/origin/theme），去掉 ctx_/__bytes_ 内容寻址；
+    // hooks 变更靠编译文件头 compile_id 原地失效覆盖，不再新开目录堆产物。
+    private const TEMPLATE_COMPILE_SCOPE_SCHEMA = 'context-env-v7-plain-scope-inplace';
 
     /**
      * @DESC          # 读取页头代码

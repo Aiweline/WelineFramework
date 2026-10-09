@@ -15,7 +15,7 @@ use Weline\Framework\View\Template;
 
 final class TemplateCompileOriginScopeTest extends TestCase
 {
-    public function testCompileDirectoryUsesEffectiveOriginAndScopeWithoutQueryOrRequestIdentity(): void
+    public function testCompileDirectoryUsesPlainScopeWithoutCtxHashAndIsolatesOrigin(): void
     {
         require_once BP . 'app/code/Weline/Framework/Common/functions.php';
         $previousContext = Context::getCurrent();
@@ -38,8 +38,13 @@ final class TemplateCompileOriginScopeTest extends TestCase
             $directory = BP . 'var/origin-fixture-compile/';
             $first = $method->invoke($template, $directory);
 
-            // v2 only changed path mappings; its physical directory had no format identity.
+            self::assertStringContainsString('frontend_w27_origin_shop_en_US_USD', $first);
+            self::assertStringContainsString('_o_shop_test_9555', $first);
+            self::assertStringNotContainsString('_ctx_', $first, 'v7 plain scope must not append ctx_ hash directories');
+
+            // Legacy v6 ctx_ leaf must remap to current plain directory (idempotent strip).
             $legacyScope = [
+                'compile_scope_schema' => 'context-env-v6-compile-map-lang',
                 'area' => 'frontend',
                 'website_id' => '27',
                 'website_code' => 'origin_shop',
@@ -51,21 +56,13 @@ final class TemplateCompileOriginScopeTest extends TestCase
             ];
             $legacyScopeKey = substr(hash('sha256', json_encode($legacyScope, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)), 0, 32);
             $legacyDirectory = $directory . 'frontend_w27_origin_shop_en_US_USD_ctx_' . $legacyScopeKey . DS;
-            self::assertNotSame($legacyDirectory, $first, 'The old physical directory may contain baked URLs and must not be reused.');
-            self::assertSame($first, $method->invoke($template, $legacyDirectory), 'A cached v2 directory must resolve to the current format.');
-
-            // v3 编译产物可能固化个人购物车，目录和路径映射都必须迁移。
-            $v3Scope = ['compile_scope_schema' => 'context-env-v3'] + $legacyScope;
-            $v3ScopeKey = substr(hash('sha256', json_encode($v3Scope, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)), 0, 32);
-            $v3Directory = $directory . 'frontend_w27_origin_shop_en_US_USD_ctx_' . $v3ScopeKey . DS;
-            self::assertNotSame($v3Directory, $first, 'Old compiled cart summaries must not be reused.');
-            self::assertSame($first, $method->invoke($template, $v3Directory));
+            self::assertSame($first, $method->invoke($template, $legacyDirectory), 'Cached ctx_ directory must resolve to the current plain format.');
+            self::assertSame($first, $method->invoke($template, $first), 'Existing plain scope leaf stays idempotent.');
 
             WelineEnv::set('website_url', 'https://shop.test:19655/store', 'compile origin fixture');
             $second = $method->invoke($template, $directory);
-            self::assertNotSame($first, $second, 'Compiled output can embed absolute URLs and must use the effective origin.');
-            self::assertStringContainsString('frontend_w27_origin_shop_en_US_USD_ctx_', $first, 'Scope dimensions must come from the real environment, not query defaults.');
-            self::assertSame($second, $method->invoke($template, $second), 'Existing scoped directory suffix stays idempotent.');
+            self::assertNotSame($first, $second, 'Different origins must not share baked absolute URL directories.');
+            self::assertStringContainsString('_o_shop_test_19655', $second);
 
             $context->set('meta.request_id', 'another-request');
             $context->set('input.uri', '/another-path');
@@ -81,15 +78,14 @@ final class TemplateCompileOriginScopeTest extends TestCase
 
             $oldMappingKey = KeyBuilder::environmentHash([
                 'scope' => 'template-file-map',
-                'compile_scope_schema' => 'context-env-v3',
+                'compile_scope_schema' => 'context-env-v6-compile-map-lang',
                 'runtime_os' => PHP_OS_FAMILY,
                 'runtime_root' => str_replace('\\', '/', rtrim(BP, '/\\')),
                 'hooks_registry' => (new ReflectionMethod(Template::class, 'hooksRegistryCompileDigest'))->invoke(null),
             ]);
             $mapping = new ReflectionMethod(Template::class, 'viewEnvironmentCacheSuffix');
-            self::assertNotSame($oldMappingKey, $mapping->invoke($template, 'template-file-map'), 'Old shared path mappings must not point back to directories compiled with the query accessor.');
+            self::assertNotSame($oldMappingKey, $mapping->invoke($template, 'template-file-map'), 'Old path mappings must miss after schema bump.');
 
-            // Fence can freeze the first lang; compile map keys must still follow live w_env.
             $compileMapKey = new ReflectionMethod(Template::class, 'templateCompileScopeMapKey');
             WelineEnv::set('user.lang', 'en_US', 'compile origin fixture');
             $enMap = $compileMapKey->invoke($template);

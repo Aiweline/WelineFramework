@@ -43,8 +43,12 @@ final class CompiledTemplateMinifier
                 }
                 if ($inPhp) {
                     if ($id === T_COMMENT || $id === T_DOC_COMMENT) {
-                        // Keep hash header + baked-hook markers for identity/acceptance.
-                        if (\str_contains($text, 'hash:') || \str_contains($text, 'baked-hook:')) {
+                        // Keep compile_id / hash headers + baked-hook markers for identity/acceptance.
+                        if (
+                            \str_contains($text, 'compile_id:')
+                            || \str_contains($text, 'hash:')
+                            || \str_contains($text, 'baked-hook:')
+                        ) {
                             $out .= $text;
                         }
                         continue;

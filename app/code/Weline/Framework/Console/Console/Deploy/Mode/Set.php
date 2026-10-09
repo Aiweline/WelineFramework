@@ -64,21 +64,30 @@ class Set extends CommandAbstract
      *
      * 参数区：
      */
+    /**
+     * 直接删除各模块 view/tpl 编译目录（一次 rm -rf，不做 PHP 递归掏空）。
+     */
     protected function cleanTplComDir()
     {
         $modules = Env::getInstance()->getModuleList();
         foreach ($modules as $module) {
             $tpl_dir = $module['base_path'] . DS . 'view' . DS . 'tpl';
             if (is_dir($tpl_dir)) {
-                $this->system->exec("rm -rf {$tpl_dir}");
+                $this->system->exec('rm -rf ' . \escapeshellarg($tpl_dir));
             }
         }
     }
 
+    /**
+     * 直接删除 generated/complicate 整树（编译产物用删，不用 flush 逐文件掏空）。
+     */
     public function clearGeneratedComplicateDir()
     {
         $complicate = Env::path_COMPLICATE_GENERATED_DIR;
-        $this->system->exec("rm -rf $complicate");
+        if ($complicate === '' || !\is_dir($complicate)) {
+            return;
+        }
+        $this->system->exec('rm -rf ' . \escapeshellarg($complicate));
     }
 
     /**
@@ -95,7 +104,7 @@ class Set extends CommandAbstract
         $pub_theme_dir = PUB . 'static' . DS . $theme;
         if (is_dir($pub_theme_dir)) {
             $this->printer->warning('系统', $pub_theme_dir);
-            $this->system->exec("rm -rf $pub_theme_dir");
+            $this->system->exec('rm -rf ' . \escapeshellarg($pub_theme_dir));
         }
     }
 
@@ -115,11 +124,12 @@ class Set extends CommandAbstract
                 return;
             }
         }
-        $this->printer->note('清理缓存...');
+        // flush：只刷缓存池 / L1；编译目录下面单独直接删，避免 cache:clear 内再扫 tpl/complicate。
+        $this->printer->note('刷新缓存池（flush）...');
         /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Clear */
         $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Clear::class);
-        $cacheManagerConsole->execute();
-        $this->printer->note('正在清除模组模板编译文件...');
+        $cacheManagerConsole->execute([], ['skip_view_compile' => true]);
+        $this->printer->note('正在删除模组模板编译目录...');
         $this->cleanTplComDir();
         $this->clearGeneratedComplicateDir();
         switch ($type) {
@@ -128,8 +138,6 @@ class Set extends CommandAbstract
                 ObjectManager::getInstance(Compile::class)->execute();
                 $this->printer->note('正在清除pub目录下生成的静态文件...');
                 $this->cleanThemeDir();
-                $this->printer->note('正在执行清理模板缓存...');
-                $this->cleanTplComDir();
                 $this->printer->note('正在执行静态资源部署...');
                 /**@var $deploy_upgrade Upgrade */
                 $deploy_upgrade = ObjectManager::getInstance(Upgrade::class);
@@ -158,8 +166,7 @@ class Set extends CommandAbstract
                 $eventManager->dispatch('Weline_Framework_Deploy_Mode_Set::prod_after', $eventData);
                 break;
             case 'dev':
-                $this->cleanTplComDir();
-                $this->printer->note('正在执行清理模板缓存...');
+                $this->printer->note('开发模式：模板编译目录已删除，将按需重编译。');
                 break;
             default:
                 $this->printer->error(' ╮(๑•́ ₃•̀๑)╭  ：错误的部署模式：' . $type);

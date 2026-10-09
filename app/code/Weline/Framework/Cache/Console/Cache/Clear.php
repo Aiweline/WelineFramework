@@ -63,12 +63,19 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         $isForce = \in_array('-f', $args, true) || \in_array('--force', $args, true);
+        // pools-only / skip_view_compile：只 flush 缓存池（+可选 WLS IPC），不删模板编译目录。
+        // 编译产物（view/tpl、generated/complicate）应由调用方一次 rm -rf，避免与 flush 叠成慢路径。
+        $skipViewCompile = !empty($data['skip_view_compile'])
+            || \in_array('--pools-only', $args, true)
+            || \in_array('--skip-view-compile', $args, true);
         $pools = $this->scanner->getCaches()['pools'] ?? [];
         $totalPools = \count($pools);
 
         if ($totalPools === 0) {
             $this->printing->error(__('没有任何类型的缓存需要清理！'));
-            $this->clearViewCompileCaches();
+            if (!$skipViewCompile) {
+                $this->clearViewCompileCaches();
+            }
 
             return;
         }
@@ -99,7 +106,9 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             }
         }
 
-        $this->clearViewCompileCaches();
+        if (!$skipViewCompile) {
+            $this->clearViewCompileCaches();
+        }
 
         if ($cleared > 0) {
             $this->printing->doneIcon(__('缓存清理完成！'));
@@ -119,7 +128,10 @@ class Clear implements \Weline\Framework\Console\CommandInterface
 
         // 向 WLS 发送缓存清理命令（进程内缓存失效，不重启 Worker）
         if ($this->sendWlsCacheClearCommand()) {
-            $this->warmStorefrontFpcAfterClear();
+            // 即将整树删除编译物时预热无意义，且易与删除竞态。
+            if (!$skipViewCompile) {
+                $this->warmStorefrontFpcAfterClear();
+            }
         }
     }
 
@@ -217,6 +229,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             [
                 '-h, --help' => '显示帮助信息',
                 '-f, --force' => '强制清理（含持久缓存池）',
+                '--pools-only, --skip-view-compile' => '仅 flush 缓存池（不删 view/tpl / generated/complicate）',
             ],
             [],
             []

@@ -155,6 +155,10 @@ class LayoutPathResolver
         return is_file($moduleDefaultPath) ? $moduleDefaultPath : null;
     }
 
+    /**
+     * Must share Template::resolveStableCompileRoot (plaintext scope + lang/currency).
+     * Do not invent lang-only or *_ctx_* parallel trees.
+     */
     public static function getCompiledLayoutPath(string $modulePath, string $lang): string
     {
         if (strpos($modulePath, '::') === false) {
@@ -181,7 +185,18 @@ class LayoutPathResolver
             $basePath = rtrim($themeModule['base_path'], DS);
             $compileDir = $basePath . DS . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE . DS;
         }
-        return $compileDir . $lang . DS . $fileDir . $comFileName;
+
+        try {
+            /** @var \Weline\Framework\View\Template $template */
+            $template = ObjectManager::getInstance(\Weline\Framework\View\Template::class);
+            // $lang is legacy; live State lang/currency already inside resolveStableCompileRoot.
+            unset($lang);
+            $root = $template->resolveStableCompileRoot($compileDir);
+
+            return $root . $fileDir . $comFileName;
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     public static function formatParsedParams(array $parsedParams): array
