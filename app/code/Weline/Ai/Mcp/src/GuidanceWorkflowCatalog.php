@@ -388,10 +388,12 @@ final class GuidanceWorkflowCatalog
                     'feature → status ready-for-plan; non_feature may skip with rationale≥24. get_skill(requirement_clarify_use_case|weline-req-clarify).',
                 ]],
                 ['id' => 'host_plan_mode', 'label' => '宿主计划模式', 'tools' => [], 'notes' => [
-                    'DEFAULT (host_plan_mode_for_planning): enable host Plan Mode before architecture/plan—Cursor SwitchMode target_mode_id=plan.',
+                    'DEFAULT (host_plan_mode_for_planning): Agent itself enables host Plan Mode before architecture/plan—Cursor SwitchMode target_mode_id=plan—FORBID asking the user to click into Plan Mode.',
                     'SIMPLE SKIP: plan_complexity=simple + rationale≥24 (single module, ≤~2h, no new extension invention)—still MUST accept (requirement_acceptance_always); Web touch → Browser WB-OP visual+logic even without e2e.',
-                    'Stay in Plan Mode through architecture_design + chapter plan until user approves implement; then SwitchMode to agent.',
-                    'If host has no Plan Mode: plan read-only in chat; record host_plan_mode=unavailable + rationale≥24; do not edit business code yet (unless simple skip).',
+                    'Complete architecture_design + chapter plan in Plan Mode; forbid production PHP/phtml/CSS while planning.',
+                    'After plan body complete (plan_complete_self_review_then_implement): Agent self-reviews with plan_review_requires_code_evidence; on 通过/有条件通过 SwitchMode→agent and implement—FORBID waiting for user Build/批准计划/点击计划 to start.',
+                    'On 不通过 or conditions needing a user product decision: stop and report; user 先别开发 may still wait. Codex opt-in keeps Plan Mode as approval container.',
+                    'If host has no Plan Mode: plan read-only in chat; record host_plan_mode=unavailable + rationale≥24; then still self-review→implement when eligible (unless simple skip already coding).',
                     'Plan body (plan_content_focus_only): ONLY 背景 + 方案 + 细节; forbid unrelated narrative that drifts the topic.',
                 ]],
                 ['id' => 'engineering_team', 'label' => '工程团队编制与停工门禁', 'tools' => ['get_skill'], 'docs' => [
@@ -1259,7 +1261,7 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'ears_acceptance', 'summary' => '每用户故事 ≥2 条 EARS（WHEN/IF…SHALL）可观察验收句'],
                 ['id' => 'use_cases_feed_e2e', 'summary' => '≥1 用例含主成功步骤；每条 UC 必须映射 acceptance id；计划 acceptance[].covers_use_cases 覆盖全部 UC-*；收口前全 UC 闭环 passed（requirement_use_case_closed_loop_acceptance）'],
                 ['id' => 'ready_for_plan_gate', 'summary' => 'status 升到 ready-for-plan 后才允许 architecture_design / 业务码'],
-                ['id' => 'host_plan_mode_next', 'summary' => 'ready-for-plan 后立即启用宿主 Plan Mode（Cursor SwitchMode→plan）做架构与计划，批准实现后再切 agent'],
+                ['id' => 'host_plan_mode_next', 'summary' => 'ready-for-plan 后 Agent 自行启用宿主 Plan Mode（Cursor SwitchMode→plan）做架构与计划；写完后自审（plan_complete_self_review_then_implement）通过再切 agent 开发——禁止停等用户点 Build/批准'],
                 ['id' => 'non_feature_skip_rationale', 'summary' => 'non_feature 可 clarify_status=skipped 且理由≥24 字'],
             ],
             'verification_commands' => [

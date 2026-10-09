@@ -106,11 +106,25 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 
 | 允许 | 禁止 |
 |------|------|
-| 规则权威维护在 MCP `hard-constraints.v1` 与 `Ai` / `Framework` / 模块 `doc/` | Agent **手写/直接编辑** `.cursor/rules/*.mdc`、`.cursorrules`、`CLAUDE.md`、`.codex/*`、`.github/copilot-instructions.md` 等作为规则源 |
+| 规则权威维护在 MCP `hard-constraints.v1` 与 `Ai` / `Framework` / 模块 `doc/` | Agent **手写/直接编辑** 项目内 `.cursor/rules/*.mdc`、`.cursorrules`、`CLAUDE.md`、`.codex/*`、`.github/copilot-instructions.md` 等作为规则源 |
 | 由 **MCP**（ensure / `HostEditorRulesGenerator`、`HostCursorHooksGenerator`）写出宿主编辑器规则产物（含 `.cursor/rules/weline-mcp-coldstart.mdc`、`.cursor/hooks.json`） | 把编辑器私有规则文件当成高于 `prepare_project.hard_constraints` 的权威 |
 | `AGENTS.md` 仅作 MCP 接通指针 | 换项目后仍依赖本机/他仓残留的 Cursor/Codex 私有规则 |
 
 原因：换项目后编辑器私有规则会丢失或分叉；只有 MCP + 仓库文档可随项目带走。
+
+### 4.1 全局规则双写（`global_rules_dual_write_mcp_and_host`，强制）
+
+用户要求改 **全局规则**（跨会话 alwaysApply / 「全局」口径）时，**必须同时改两侧**，禁止只改一边：
+
+| 侧 | 落点 | 作用 |
+|----|------|------|
+| **AI MCP 权威** | `HardConstraintsCatalog` 规则 id + `AI硬规则索引.md` / 对应 `规则/*.md` + `开发日志.md`（必要时契约断言） | 随仓带走；`prepare_project.hard_constraints` 下发 |
+| **宿主全局常带** | `~/.cursor/rules/{slug}.mdc`（`alwaysApply: true`；可选个人 Agent Store 薄镜像） | 新会话立即常带提醒 |
+
+**禁止**：只写 `~/.cursor/rules` 不进 Catalog；或只改 Catalog 不写宿主全局。  
+**仍禁止**：把手写项目内 `.cursor/rules` 当规则源（coldstart 仍只由 MCP 生成）。  
+**冲突裁决**：仓内 `hard_constraints` / 文档 > 宿主全局 `.mdc`。  
+示例：`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`。
 
 ## 5. Codex CLI 宿主委派（`host_delegate_explore_plan_review_to_codex_cli`，**用户显式 opt-in**）
 

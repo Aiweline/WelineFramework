@@ -22,11 +22,11 @@
 0 会话引导（工程必做） ensure-project-guidance → prepare_project → 遵守 hard_constraints
 1 定位与需求确认   需求.md / 用户确认 / 会话笔记（临时）
 1b 澄清与用例规格  doc/开发/spec/{slug}.md（EARS + UC；feature 硬）
-1c 宿主计划模式    默认 Plan Mode；**简单可 skip**（仍须验收）
+1c 宿主计划模式    Agent 自行 Plan Mode；**简单可 skip**（仍须验收）
 2 扩展点选型       扩展点选型.md → 文档索引 / doc/event / Query / Hook
-3 计划拆解         plan.md + task.md（或任务笔记；仍在 Plan Mode）
+3 计划拆解         会话计划笔记（仍在 Plan Mode）→ 自审通过后切 Agent 开发
 3b 工程团队        非简单：一席一智能体；席间 channel+resume 互聊；SESSION 总控+PM 计划生命周期；框架优先；全专席双轨；对齐冻结(UC+contracts+deps)；依赖唤醒流水线；组件协商；UI+原型先审过签才测→测试→项目经理汇审才汇报；停工等确认
-4 实现             用户批准后切回 Agent；宿主原生编辑 + TDD
+4 实现             计划自审通过后切回 Agent；宿主原生编辑 + TDD
 5 复审             架构/缺陷/安全 + 每触发专席合规复审（fail→返工）
 6 分层测试         单测 → 运行时 → WebUI；涉 UI 须 UI+原型过签后测试执行，再经项目经理汇审才可交出
 7 收口             文档对齐（README/需求/开发日志）+ 门禁表 + 交付证据
@@ -70,8 +70,10 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 ### 3. 计划拆解
 
-- **宿主计划模式（硬门槛，`host_plan_mode_for_planning`）**：进入本阶段（澄清规格 `ready-for-plan` 之后、扩展点选型/架构映射/分章计划期间）**默认必须启用宿主 Plan Mode**。Cursor：立即 `SwitchMode` → `target_mode_id=plan`，在 Plan Mode 内完成 `architecture_design`、扩展点、章节/`dev_tasks`、`acceptance`；**禁止**在仍处于计划阶段时改业务 PHP/phtml/CSS。用户明确批准实现后，再 `SwitchMode` → `agent` 进入 §4。
+- **宿主计划模式（硬门槛，`host_plan_mode_for_planning`）**：进入本阶段（澄清规格 `ready-for-plan` 之后、扩展点选型/架构映射/分章计划期间）**默认必须启用宿主 Plan Mode**。Cursor：**Agent 自行** `SwitchMode` → `target_mode_id=plan`（禁止请用户去点计划模式），在 Plan Mode 内完成 `architecture_design`、扩展点、章节/`dev_tasks`、`acceptance`；**禁止**在仍处于计划阶段时改业务 PHP/phtml/CSS。
+- **计划完成后自审再开发（硬门槛，`plan_complete_self_review_then_implement`）**：计划正文写完后，Agent **立即**按 `plan_review_requires_code_evidence` 自审；`通过`/`有条件通过`（可自行消化）则 `SwitchMode` → `agent` 并开始实现——**禁止**停等用户点 Build/批准计划/「点击计划才开始」。`不通过`或需用户裁决时停手汇报。用户明示「先别开发」或 Codex opt-in 审批容器路径除外。
 - **计划正文聚焦（硬门槛，`plan_content_focus_only`）**：计划正文（Plan Mode / 仓库根 `dev/session/{slug}.md` 会话计划笔记；**禁止**模块 `doc/开发/plan.md`）**只写三块**——**(1) 背景**（本题为何、现状缺口）；**(2) 方案**（要做什么、选定做法，mechanism/owning_module/reuse/not_to_do 用短子弹）；**(3) 细节**（怎么做：步骤、章节/`dev_tasks`、路径、验收怎么验）。**禁止**把主题带偏：流程目录散文、无关模块巡礼、愿景/价值主张、整套 MCP 工作流复述、旁支功能推销、不影响构建的装饰性总览。必填结构化字段仍要有，但压成上述三节下的短子弹，不要另开无关章节。
+- **审查计划须证据（硬门槛，`plan_review_requires_code_evidence`）**：审查/批准/驳回/汇审计划时，必须先读计划正文再探测当前磁盘代码（Read/Grep），先写证据再给结论；**「是否通过」放在全文最后**；禁止空想或开篇先下判。证据不足只写「未探测，暂不结论」。
 - **简单需求可跳过计划**：同时满足时可记 `plan_complexity=simple` + `plan_skip_rationale`≥24 字并跳过 Plan Mode——单模块、无新建扩展点发明、无多章计划、约 ≤2 小时/单表面、前后端架构无歧义。**跳过计划 ≠ 跳过验收**（`requirement_acceptance_always`）。同一条件走**监工**，不叫团队。对外每句以 `监工:` 开头。
 - **前后端范围（硬，`requirement_fe_be_scope_analysis`）**：每条需求须分析并记录 `fe_be_scope=frontend|backend|both|na` 及各侧要点；禁止只做一侧却漏该做的另一侧。
 - **验收不可省（硬，`requirement_acceptance_always`）**：宣称完成前必须有真实验收证据。**先测后报**：禁止在验收未跑通前向用户写「已完成 / 已修好 / 可验收 / PASS」；未测只能「代码已改，验收未完成」。触及 Web/UI 时，即使不做 Playwright e2e（仅 simple 豁免），也必须本机 Browser **WB-OP**：视觉（可截图则 WB-VIS）+ 真机点选逻辑；curl/CDP 不能替代；禁止甩用户测。feature 另须满足上款 **UC 闭环**（`requirement_use_case_closed_loop_acceptance`）。
