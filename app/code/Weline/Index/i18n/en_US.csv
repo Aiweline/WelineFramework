@@ -12,19 +12,19 @@
 保存成功!,"Saved successfully!"
 参数错误,"Parameter error"
 设置不存在,"Setting Does Not Exist"
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
+模块化开发,"Modular development"
+多语言多站点,"Multilingual multi-site"
+常驻运行时,"Persistent runtime"
+"启动框架内置 HTTPS 服务，默认首页可通过 %{url} 访问。","Start the built-in HTTPS service; the default homepage is available at %{url}."
+收起悬浮,收起悬浮
+展开悬浮,展开悬浮
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,小计
 税费与运费将在结算时计算,税费与运费将在结算时计算
 去结算,去结算
 查看购物车,查看购物车
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
-收起悬浮,收起悬浮
-展开悬浮,展开悬浮
-模块化开发,"Modular development"
-多语言多站点,"Multilingual multi-site"
-常驻运行时,"Persistent runtime"
-"启动框架内置 HTTPS 服务，默认首页可通过 %{url} 访问。","Start the built-in HTTPS service; the default homepage is available at %{url}."
 """Unsupported contact operation: %{1}""","Unsupported contact operation: %{1}"
 首页导航,"Home navigation"
 "WelineFramework 首页","WelineFramework home"

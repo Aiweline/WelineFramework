@@ -32,15 +32,12 @@ plus,plus
 编辑帮助页面,"Edit help page"
 edit,edit
 编辑帮助中心页面,"Edit help center page"
-收起悬浮,收起悬浮
-展开悬浮,展开悬浮
-此帮助文章暂无正文，请在帮助中心后台使用可视化编辑器完善。,"This help article has no body yet; refine it with the visual editor in help center admin."
-返回帮助中心,"Back to the Help Center"
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
 站点,Site
 店铺,Store
 渠道,Channel
 本商品,"This product"
+此帮助文章暂无正文，请在帮助中心后台使用可视化编辑器完善。,"This help article has no body yet; refine it with the visual editor in help center admin."
+返回帮助中心,"Back to the Help Center"
 暂无常见问题。,"No FAQs yet."
 草稿,Draft
 已发布,Published
@@ -117,6 +114,9 @@ Slug,Slug
 "FaqItemScopeKeyHealer: updated=%{1}","FaqItemScopeKeyHealer: updated=%{1}"
 "FAQ 类型编码无效。","Invalid FAQ type code."
 "FAQ 类型不存在或尚未注册：%{1}","FAQ type missing or unregistered: %{1}"
+收起悬浮,收起悬浮
+展开悬浮,展开悬浮
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,小计
