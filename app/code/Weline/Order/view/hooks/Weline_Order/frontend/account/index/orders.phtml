@@ -24,15 +24,6 @@ $formatMoney = static fn(string $currency, mixed $minor): string => sprintf(
     $currency,
     number_format(((int) $minor) / 100, 2, '.', ','),
 );
-$statusLabel = static function (string $status): string {
-    return match ($status) {
-        'paid' => (string) __('已支付'),
-        'pending_payment' => (string) __('待支付'),
-        'cancelled' => (string) __('已取消'),
-        'closed' => (string) __('已关闭'),
-        default => $status !== '' ? $status : (string) __('未知状态'),
-    };
-};
 ?>
 <div class="account-orders"
      data-account-orders="true"
@@ -137,10 +128,9 @@ $statusLabel = static function (string $status): string {
                     </p>
                 <?php endif; ?>
             </div>
-            <span class="account-orders__badge" data-order-status="true" data-status="<?= $escape($accountOrderDetail['status'] ?? '') ?>">
-                <?= $escape($statusLabel((string) ($accountOrderDetail['status'] ?? ''))) ?>
-            </span>
             <?php
+            // Detail badges share AccountCheckoutGroupPresenter labels (list already does).
+            // Do not keep a parallel incomplete match() that falls through to raw English codes.
             $detailTypeView = $presenter->present([
                 'group_uuid' => 'account-order-detail',
                 'status' => (string) ($accountOrderDetail['status'] ?? ''),
@@ -153,6 +143,7 @@ $statusLabel = static function (string $status): string {
                     'order_type' => (string) ($accountOrderDetail['order_type'] ?? 'toc'),
                 ]],
             ]);
+            $detailStatusLabel = (string) ($detailTypeView['status_label'] ?? '');
             $detailTypeCode = (string) ($detailTypeView['order_type'] ?? 'toc');
             $detailTypeLabel = (string) ($detailTypeView['order_type_label'] ?? '');
             $detailTypeTone = (string) ($detailTypeView['order_type_tone'] ?? 'info');
@@ -160,6 +151,9 @@ $statusLabel = static function (string $status): string {
                 $detailTypeTone = 'info';
             }
             ?>
+            <span class="account-orders__badge" data-order-status="true"
+                  data-status="<?= $escape($accountOrderDetail['status'] ?? '') ?>"
+                  data-testid="account-order-detail-status-badge"><?= $escape($detailStatusLabel) ?></span>
             <?php if ($detailTypeLabel !== ''): ?>
             <span class="account-orders__badge account-orders__badge--type"
                   data-order-type="true"

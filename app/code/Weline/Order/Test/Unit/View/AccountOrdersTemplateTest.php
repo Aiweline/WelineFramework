@@ -123,6 +123,55 @@ final class AccountOrdersTemplateTest extends TestCase
         self::assertStringContainsString("\$view['order_type_label']", $source);
     }
 
+    public function testOrderDetailStatusBadgeUsesPresenterStatusLabelNotRawCode(): void
+    {
+        $template = dirname(__DIR__, 3) . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';
+        $source = (string) file_get_contents($template);
+        self::assertStringContainsString('data-testid="account-order-detail-status-badge"', $source);
+        self::assertStringContainsString("\$detailTypeView['status_label']", $source);
+        self::assertStringNotContainsString("default => \$status !== '' ? \$status", $source);
+
+        $view = new class {
+            /** @param array<string, scalar> $params */
+            public function getUrl(string $path, array $params = []): string
+            {
+                return '/' . ltrim($path, '/');
+            }
+
+            /** @param array<string, mixed> $data */
+            public function render(string $template, array $data): string
+            {
+                extract($data, EXTR_SKIP);
+                ob_start();
+                include $template;
+                return (string) ob_get_clean();
+            }
+        };
+
+        $html = $view->render($template, [
+            'accountCheckoutGroups' => [],
+            'accountOrderDetail' => [
+                'order_uuid' => '723292f5-07c5-4a2f-a56b-e44e6c2dc229',
+                'display_number' => 'E2E-PKG-903d4f3e',
+                'status' => 'fulfilled',
+                'currency' => 'USD',
+                'order_type' => 'toc',
+                'items' => [],
+                'money' => [
+                    'subtotal_minor' => 0,
+                    'shipping_amount_minor' => 0,
+                    'tax_amount_minor' => 0,
+                    'grand_total_minor' => 0,
+                ],
+                'shipping' => [],
+            ],
+        ]);
+
+        self::assertStringContainsString('data-testid="account-order-detail-status-badge"', $html);
+        self::assertStringContainsString('已发货', $html);
+        self::assertStringNotContainsString('>fulfilled<', $html);
+    }
+
     public function testOwnedV2OrderDetailRendersInsideTheAccountOrdersSection(): void
     {
         $template = dirname(__DIR__, 3) . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';
