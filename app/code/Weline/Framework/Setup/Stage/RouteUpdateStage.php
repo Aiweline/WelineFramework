@@ -249,6 +249,88 @@ class RouteUpdateStage extends AbstractStage
         
         return null;
     }
+
+    /**
+     * 增量 --route：磁盘清理后若重收集失败，会留下整模块空路由（店面 404）。
+     * 清理前有条目的模块，提交前必须已写回至少 1 条；否则回滚备份并失败关闭。
+     *
+     * @param list<string> $moduleNames
+     * @param callable(string):void $note
+     */
+    private function assertPartialClearedModulesRepopulated(array $moduleNames, callable $note): void
+    {
+        $emptyAfter = [];
+        foreach ($moduleNames as $moduleName) {
+            $moduleName = \trim((string)$moduleName);
+            if ($moduleName === '') {
+                continue;
+            }
+            $before = $this->countModuleRoutesInBackupFiles($moduleName);
+            if ($before < 1) {
+                continue;
+            }
+            $after = $this->countModuleRoutesOnDisk($moduleName);
+            if ($after < 1) {
+                $emptyAfter[] = $moduleName . '(before=' . $before . ')';
+            }
+        }
+        if ($emptyAfter === []) {
+            return;
+        }
+
+        $note(__('   - route_update：增量重收集后路由为空，正在回滚：%{1}', [\implode(', ', $emptyAfter)]));
+        $this->rollback();
+        throw new Exception(__(
+            '增量路由更新后模块路由仍为空（已回滚）：%{1}。请重跑 php bin/w setup:upgrade -m <Module> --route',
+            [\implode(', ', $emptyAfter)]
+        ));
+    }
+
+    private function countModuleRoutesOnDisk(string $moduleName): int
+    {
+        $count = 0;
+        foreach ($this->routerFilePaths as $path) {
+            if (!\is_string($path) || $path === '' || !\is_file($path)) {
+                continue;
+            }
+            $count += $this->countModuleRoutesInPhpReturnFile($path, $moduleName);
+        }
+
+        return $count;
+    }
+
+    private function countModuleRoutesInBackupFiles(string $moduleName): int
+    {
+        $count = 0;
+        foreach ($this->originalRouteBackupFiles as $bak) {
+            if (!\is_string($bak) || $bak === '' || !\is_file($bak)) {
+                continue;
+            }
+            $count += $this->countModuleRoutesInPhpReturnFile($bak, $moduleName);
+        }
+
+        return $count;
+    }
+
+    private function countModuleRoutesInPhpReturnFile(string $path, string $moduleName): int
+    {
+        if (\function_exists('opcache_invalidate')) {
+            @\opcache_invalidate($path, true);
+        }
+        \clearstatcache(true, $path);
+        $routers = require $path;
+        if (!\is_array($routers)) {
+            return 0;
+        }
+        $count = 0;
+        foreach ($routers as $router) {
+            if ($this->extractModuleFromRouter($router) === $moduleName) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
     
     /**
      * @inheritDoc
@@ -322,6 +404,8 @@ class RouteUpdateStage extends AbstractStage
 
             // 增量模式：路由在注册过程中已经按文件即时写入，这里不再做全量 flush
             if ($isPartial) {
+                // 门禁：清理前有路由的模块，收集后不得仍为空（否则整模块前台/后台 404）。
+                $this->assertPartialClearedModulesRepopulated($this->modulesToClear, $note);
                 $note(__('   - route_update：增量模式，刷新路由快照…'));
                 \Weline\Framework\Router\Core::snapshotGeneratedRouterFiles();
                 $this->committed = true;

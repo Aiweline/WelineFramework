@@ -16,9 +16,9 @@ use Weline\Visitor\Service\PixelEventVendorManager;
 
 /**
  * 前台事件拾取（与 Analytics/Test 同路由族，便于热更新发现）。
- * POST /visitor/analytics/event-picker/postObserve
- * POST /visitor/analytics/event-picker/postRecord
- * POST /visitor/analytics/event-picker/postMapped
+ * POST /visitor/analytics/event-picker/observe
+ * POST /visitor/analytics/event-picker/record
+ * POST /visitor/analytics/event-picker/mapped
  */
 class EventPicker extends FrontendController
 {

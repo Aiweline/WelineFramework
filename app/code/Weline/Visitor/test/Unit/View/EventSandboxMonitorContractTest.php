@@ -97,6 +97,13 @@ final class EventSandboxMonitorContractTest extends TestCase
         self::assertStringContainsString('relayToAdminSession', $pixel);
         self::assertStringContainsString("sandbox_stream', '1'", $pixel);
         self::assertStringContainsString('/visitor/analytics/event-picker/observe', $pixel);
+        // 生成路由表若缺 observe，事件监视器继电会整页刷 POST 404。
+        $frontendPc = \dirname($root, 4) . '/generated/routers/frontend_pc.php';
+        if (\is_file($frontendPc)) {
+            $routers = require $frontendPc;
+            self::assertIsArray($routers);
+            self::assertArrayHasKey('visitor/analytics/event-picker/observe::POST', $routers);
+        }
         self::assertStringContainsString('__isSandboxMonitorActiveForAutoRegister', $pixel);
         self::assertStringContainsString('__welineSandboxStreamRelayFp', $pixel);
         self::assertStringNotContainsString("websiteId === '0'", $pixel);
@@ -142,7 +149,8 @@ final class EventSandboxMonitorContractTest extends TestCase
         self::assertStringContainsString('WelineEventSandbox', $panel);
 
         self::assertStringContainsString('event-sandbox-monitor.js', $bootstrap);
-        self::assertStringContainsString('20260923-r2d-param2', $bootstrap);
+        self::assertStringContainsString("PANEL_SCRIPT_VERSION = '20260922-ga4-debug1'", $bootstrap);
+        self::assertStringContainsString("PANEL_SCRIPT_VERSION . '-wesm'", $bootstrap);
         self::assertStringContainsString('weline_event_sandbox_monitor_v1', $bootstrap);
 
         self::assertStringContainsString('event-sandbox-monitor.js', $bodyEnd);

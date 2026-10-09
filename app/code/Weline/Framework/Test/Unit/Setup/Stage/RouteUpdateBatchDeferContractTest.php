@@ -29,6 +29,20 @@ final class RouteUpdateBatchDeferContractTest extends TestCase
         self::assertStringNotContainsString('LiveSourceSet::clear()', $src);
     }
 
+    public function testPartialRouteCommitGuardsAgainstEmptyModuleRepopulation(): void
+    {
+        $stageFile = dirname(__DIR__, 4) . '/Setup/Stage/RouteUpdateStage.php';
+        $src = (string)file_get_contents($stageFile);
+        self::assertStringContainsString('assertPartialClearedModulesRepopulated', $src);
+        self::assertStringContainsString('countModuleRoutesInBackupFiles', $src);
+        self::assertStringContainsString('countModuleRoutesOnDisk', $src);
+        self::assertStringContainsString('增量路由更新后模块路由仍为空', $src);
+        self::assertMatchesRegularExpression(
+            '/if \(\$isPartial\) \{\s*\/\/ 门禁：清理前有路由的模块.*?assertPartialClearedModulesRepopulated/s',
+            $src
+        );
+    }
+
     public function testModuleHelperDefersControllerAttributesWhenEnabled(): void
     {
         $helperFile = dirname(__DIR__, 4) . '/Module/Helper/Data.php';
