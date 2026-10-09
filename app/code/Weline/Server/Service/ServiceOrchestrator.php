@@ -169,10 +169,12 @@ class ServiceOrchestrator
 
     private ServiceRegistry $registry;
     private ?ControlPlaneServerInterface $controlServer = null;
-    /** @var array{instance_id:int,pid:int}|null */
+    /** @var array{instance_id:int,pid:int,phase?:string,surge_id?:int,started_at?:float}|null */
     private ?array $activePlannedWorkerRecycle = null;
     /** @var array<int,int> Worker slot => PID awaiting a serialized recycle grant. */
     private array $pendingPlannedWorkerRecycles = [];
+    /** @var int[] Planned-recycle surge ids retained until canonical READY. */
+    private array $plannedRecycleSurgeWorkerIds = [];
     private ?ServiceContext $context = null;
     private ?DirectSharedListener $directSharedListener = null;
     private ?DirectSharedListener $gatewayFallbackListener = null;
@@ -15676,6 +15678,18 @@ class ServiceOrchestrator
                         continue;
                     }
                 }
+                if ($role === ControlMessage::ROLE_WORKER
+                    && $this->isPlannedRecycleSurgeWorker($instance)
+                ) {
+                    $retiringId = (int)$instance->getMeta('planned_recycle_retiring_id', 0);
+                    if ((bool)$instance->getMeta('planned_recycle_surge_retain', false)
+                        || ($retiringId > 0 && !$this->areCanonicalWorkerSlotsReady([$retiringId]))
+                    ) {
+                        // Planned-recycle surge covers admission until the
+                        // retiring canonical slot is READY again.
+                        continue;
+                    }
+                }
                 // D07/D06: during Critical shrink transaction, do not mass-stop
                 // excess slots — MemoryPressureController drains one via sendDrain.
                 if ($role === ControlMessage::ROLE_WORKER
@@ -20252,9 +20266,10 @@ class ServiceOrchestrator
                 "[Master自检] 子进程上报非正常退出: {$instance->role}#{$instance->instanceId} code={$code} reason={$reason}"
             );
         }
-        // A request-count recycle is an intent to drain, not exit proof.
-        // Its IPC message proves this generation is still online; queuing
-        // resurrection here could SIGKILL accepted HTTP/2 streams.
+        // Planned recycle is an intent to drain, not exit proof.
+        // Keep the generation online until Master grants TYPE_DRAIN (after
+        // new-first surge when supported); queuing resurrection here could
+        // SIGKILL accepted HTTP/2 streams.
         if ($code === 0
             && $instance->role === ControlMessage::ROLE_WORKER
             && $instance->ipcClientId === $clientId
@@ -20263,7 +20278,6 @@ class ServiceOrchestrator
                 ServiceInstance::STATE_REGISTERED,
             ], true)
             && $this->isPlannedWorkerRecycleReason($reason)
-            && \str_starts_with($reason, 'max_requests_recycle:')
         ) {
             $this->requestPlannedWorkerRecycle($instance);
             return;
@@ -20313,15 +20327,22 @@ class ServiceOrchestrator
         $reason = \trim($reason);
 
         return \str_starts_with($reason, 'max_requests_recycle:')
-            || \str_starts_with($reason, 'memory_pressure_drain');
+            || \str_starts_with($reason, 'memory_pressure_drain')
+            || \str_starts_with($reason, 'zend_mm_ratchet');
+    }
+
+    private function isPlannedRecycleSurgeWorker(ServiceInstance $instance): bool
+    {
+        return $instance->role === ControlMessage::ROLE_WORKER
+            && (bool)$instance->getMeta('planned_recycle_surge', false);
     }
 
     private function requestPlannedWorkerRecycle(ServiceInstance $instance): void
     {
-        if ($this->activePlannedWorkerRecycle === [
-            'instance_id' => $instance->instanceId,
-            'pid' => $instance->pid,
-        ]) {
+        if ($this->activePlannedWorkerRecycle !== null
+            && (int)$this->activePlannedWorkerRecycle['instance_id'] === $instance->instanceId
+            && (int)$this->activePlannedWorkerRecycle['pid'] === $instance->pid
+        ) {
             return;
         }
 
@@ -20332,12 +20353,322 @@ class ServiceOrchestrator
     private function advancePlannedWorkerRecycleAfterReady(ServiceInstance $instance): void
     {
         if ($this->activePlannedWorkerRecycle !== null
-            && $this->activePlannedWorkerRecycle['instance_id'] === $instance->instanceId
-            && $this->activePlannedWorkerRecycle['pid'] !== $instance->pid
+            && ($this->activePlannedWorkerRecycle['phase'] ?? '') === 'waiting_surge'
+            && (int)($this->activePlannedWorkerRecycle['surge_id'] ?? 0) === $instance->instanceId
+            && $this->isPlannedRecycleSurgeWorker($instance)
+            && $instance->state === ServiceInstance::STATE_READY
         ) {
+            $this->syncDispatcherFullWorkerPoolFromRegistry(true);
+            if ($this->sendDrainForActivePlannedRecycle('surge_ready')) {
+                return;
+            }
+            // Drain send failed — fall through to clear and try next.
             $this->activePlannedWorkerRecycle = null;
         }
+
+        if ($this->activePlannedWorkerRecycle !== null
+            && (int)$this->activePlannedWorkerRecycle['instance_id'] === $instance->instanceId
+            && (int)$this->activePlannedWorkerRecycle['pid'] !== $instance->pid
+        ) {
+            $surgeId = (int)($this->activePlannedWorkerRecycle['surge_id'] ?? 0);
+            $this->activePlannedWorkerRecycle = null;
+            if ($surgeId > 0) {
+                $this->schedulePlannedRecycleSurgeCleanup(
+                    [$surgeId],
+                    [$instance->instanceId],
+                );
+            }
+        }
         $this->grantNextPlannedWorkerRecycle();
+    }
+
+    private function shouldUsePlannedRecycleNewFirst(): bool
+    {
+        if (!$this->supportsDirectNewFirstReload()) {
+            return false;
+        }
+        if ($this->workerReloadCapacityTransitionInProgress) {
+            return false;
+        }
+        if ($this->memoryPressureController?->isShrinkInProgress()) {
+            return false;
+        }
+        if (self::monotonicSeconds() < $this->memoryPressureShrinkFenceUntil) {
+            return false;
+        }
+        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $inst) {
+            if ($this->isPlannedRecycleSurgeWorker($inst)
+                && (bool)$inst->getMeta('planned_recycle_surge_retain', false)
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Start one side-by-side surge Worker for planned recycle (not reload).
+     * READY is observed asynchronously via advancePlannedWorkerRecycleAfterReady.
+     */
+    private function startPlannedRecycleSurgeWorker(int $retiringWorkerId): ?int
+    {
+        if ($this->context === null) {
+            return null;
+        }
+        $provider = $this->registry->getProvider(ControlMessage::ROLE_WORKER);
+        if ($provider === null) {
+            return null;
+        }
+        $surgeIds = $this->allocateDirectReloadSurgeWorkerIds(1);
+        if ($surgeIds === []) {
+            return null;
+        }
+        $surgeId = (int)$surgeIds[0];
+        $startedAt = self::monotonicSeconds();
+        $started = $this->startInstanceIdsBatch(
+            $provider,
+            [$surgeId],
+            $this->context,
+            [
+                $surgeId => [
+                    'planned_recycle_surge' => true,
+                    'planned_recycle_surge_retain' => true,
+                    'planned_recycle_retiring_id' => $retiringWorkerId,
+                    'planned_recycle_surge_started_at' => $startedAt,
+                ],
+            ],
+        );
+        $instance = null;
+        foreach ($started as $row) {
+            if ($row instanceof ServiceInstance && $row->instanceId === $surgeId) {
+                $instance = $row;
+                break;
+            }
+        }
+        $instance ??= $this->registry->getInstance(ControlMessage::ROLE_WORKER, $surgeId);
+        if (!$instance instanceof ServiceInstance) {
+            WlsLogger::warning_(
+                '[Orchestrator][PlannedRecycle] surge start failed retiring='
+                . $retiringWorkerId . ' surge_id=' . $surgeId
+            );
+
+            return null;
+        }
+        $instance->setMeta('planned_recycle_surge', true);
+        $instance->setMeta('planned_recycle_surge_retain', true);
+        $instance->setMeta('planned_recycle_retiring_id', $retiringWorkerId);
+        $instance->setMeta('planned_recycle_surge_started_at', $startedAt);
+        $this->registry->updateInstance($instance);
+        $this->plannedRecycleSurgeWorkerIds[$surgeId] = $surgeId;
+        WlsLogger::warning_(
+            '[Orchestrator][PlannedRecycle] phase=surge_start'
+            . ', retiring=' . $retiringWorkerId
+            . ', surge_id=' . $surgeId
+            . ', old_admission=unchanged'
+        );
+        $this->traceStartup('planned_recycle_surge_start', [
+            'retiring_id' => $retiringWorkerId,
+            'surge_id' => $surgeId,
+        ]);
+
+        return $surgeId;
+    }
+
+    private function sendDrainForActivePlannedRecycle(string $trigger): bool
+    {
+        if ($this->activePlannedWorkerRecycle === null || $this->controlServer === null) {
+            return false;
+        }
+        $workerId = (int)$this->activePlannedWorkerRecycle['instance_id'];
+        $pid = (int)$this->activePlannedWorkerRecycle['pid'];
+        $instance = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $workerId);
+        if ($instance === null
+            || $instance->pid !== $pid
+            || $instance->state !== ServiceInstance::STATE_READY
+            || $instance->ipcClientId === null
+        ) {
+            return false;
+        }
+        if (!$this->controlServer->sendTo(
+            $instance->ipcClientId,
+            ControlMessage::drain([], 120),
+        )) {
+            return false;
+        }
+        $this->activePlannedWorkerRecycle['phase'] = 'draining';
+        $this->traceStartup('planned_recycle_granted', [
+            'role' => ControlMessage::ROLE_WORKER,
+            'instance_id' => $workerId,
+            'pid' => $pid,
+            'trigger' => $trigger,
+            'surge_id' => (int)($this->activePlannedWorkerRecycle['surge_id'] ?? 0),
+        ]);
+        WlsLogger::warning_(
+            '[Orchestrator][PlannedRecycle] phase=drain_granted'
+            . ', worker_id=' . $workerId
+            . ', trigger=' . $trigger
+            . ', surge_id=' . (int)($this->activePlannedWorkerRecycle['surge_id'] ?? 0)
+        );
+
+        return true;
+    }
+
+    private function schedulePlannedRecycleSurgeWatchdog(): void
+    {
+        $taskKey = 'planned_recycle_surge_watchdog';
+        if ($this->hasMainLoopTask($taskKey)) {
+            return;
+        }
+        $this->scheduleMainLoopTask(
+            $taskKey,
+            'planned_recycle_surge_watchdog',
+            function (): void {
+                while ($this->running && !$this->isStopFlowActive()) {
+                    $active = $this->activePlannedWorkerRecycle;
+                    if ($active === null || ($active['phase'] ?? '') !== 'waiting_surge') {
+                        return;
+                    }
+                    $startedAt = (float)($active['started_at'] ?? 0.0);
+                    if ($startedAt > 0.0 && (self::monotonicSeconds() - $startedAt) < 30.0) {
+                        SchedulerSystem::yieldDelay(200);
+                        continue;
+                    }
+                    $surgeId = (int)($active['surge_id'] ?? 0);
+                    WlsLogger::warning_(
+                        '[Orchestrator][PlannedRecycle] phase=surge_timeout'
+                        . ', retiring=' . (int)$active['instance_id']
+                        . ', surge_id=' . $surgeId
+                        . '; falling back to drain-first'
+                    );
+                    if ($surgeId > 0) {
+                        $surge = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $surgeId);
+                        if ($surge instanceof ServiceInstance && $this->isPlannedRecycleSurgeWorker($surge)) {
+                            $surge->setMeta('planned_recycle_surge_retain', false);
+                            $this->registry->updateInstance($surge);
+                            try {
+                                $this->stopInstanceWithProtocol($surge);
+                            } catch (\Throwable) {
+                            }
+                            $this->registry->removeInstance(ControlMessage::ROLE_WORKER, $surgeId);
+                        }
+                        unset($this->plannedRecycleSurgeWorkerIds[$surgeId]);
+                    }
+                    unset($this->activePlannedWorkerRecycle['surge_id'], $this->activePlannedWorkerRecycle['phase']);
+                    if (!$this->sendDrainForActivePlannedRecycle('surge_timeout_fallback')) {
+                        $this->activePlannedWorkerRecycle = null;
+                        $this->grantNextPlannedWorkerRecycle();
+                    }
+
+                    return;
+                }
+            },
+        );
+    }
+
+    /**
+     * @param int[] $surgeWorkerIds
+     * @param int[] $canonicalWorkerIds
+     */
+    private function schedulePlannedRecycleSurgeCleanup(
+        array $surgeWorkerIds,
+        array $canonicalWorkerIds,
+    ): void {
+        $surgeWorkerIds = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $surgeWorkerIds),
+            static fn (int $id): bool => $id > 0
+        )));
+        if ($surgeWorkerIds === []) {
+            return;
+        }
+        $taskKey = 'planned_recycle_surge_cleanup:' . \sha1(\implode(',', $surgeWorkerIds));
+        if ($this->hasMainLoopTask($taskKey)) {
+            return;
+        }
+        $this->scheduleMainLoopTask(
+            $taskKey,
+            'planned_recycle_surge_cleanup',
+            function () use ($surgeWorkerIds, $canonicalWorkerIds): void {
+                $timeout = \max(30.0, \min(180.0, $this->startupTimeout + 60.0));
+                $deadline = self::monotonicSeconds() + $timeout;
+                while ($this->running && !$this->isStopFlowActive() && self::monotonicSeconds() < $deadline) {
+                    if ($this->areCanonicalWorkerSlotsReady($canonicalWorkerIds)) {
+                        foreach ($surgeWorkerIds as $surgeId) {
+                            $inst = $this->registry->getInstance(ControlMessage::ROLE_WORKER, (int)$surgeId);
+                            if ($inst instanceof ServiceInstance && $this->isPlannedRecycleSurgeWorker($inst)) {
+                                $inst->setMeta('planned_recycle_surge_retain', false);
+                                $this->registry->updateInstance($inst);
+                            }
+                        }
+                        if ($this->retirePlannedRecycleSurgeWorkers($surgeWorkerIds)) {
+                            return;
+                        }
+                    }
+                    SchedulerSystem::yieldDelay(100);
+                }
+                WlsLogger::warning_(
+                    '[Orchestrator][PlannedRecycle] phase=surge_cleanup_timeout'
+                    . ', surge_ids=[' . \implode(',', $surgeWorkerIds) . ']'
+                );
+                foreach ($surgeWorkerIds as $surgeId) {
+                    $inst = $this->registry->getInstance(ControlMessage::ROLE_WORKER, (int)$surgeId);
+                    if ($inst instanceof ServiceInstance && $this->isPlannedRecycleSurgeWorker($inst)) {
+                        $inst->setMeta('planned_recycle_surge_retain', false);
+                        $this->registry->updateInstance($inst);
+                    }
+                }
+                $this->retirePlannedRecycleSurgeWorkers($surgeWorkerIds);
+            },
+        );
+    }
+
+    /**
+     * @param int[] $surgeWorkerIds
+     */
+    private function retirePlannedRecycleSurgeWorkers(array $surgeWorkerIds): bool
+    {
+        $allGone = true;
+        foreach ($surgeWorkerIds as $surgeWorkerId) {
+            $instance = $this->registry->getInstance(ControlMessage::ROLE_WORKER, (int)$surgeWorkerId);
+            if ($instance === null || !$this->isPlannedRecycleSurgeWorker($instance)) {
+                unset($this->plannedRecycleSurgeWorkerIds[(int)$surgeWorkerId]);
+                continue;
+            }
+            if ((bool)$instance->getMeta('planned_recycle_surge_retain', false)
+                && !$this->areCanonicalWorkerSlotsReady([(int)$instance->getMeta('planned_recycle_retiring_id', 0)])
+            ) {
+                $allGone = false;
+                continue;
+            }
+            $instance->setMeta('planned_recycle_surge_retain', false);
+            $this->registry->updateInstance($instance);
+            if (\in_array($instance->state, [
+                ServiceInstance::STATE_READY,
+                ServiceInstance::STATE_REGISTERED,
+                ServiceInstance::STATE_STARTING,
+            ], true)) {
+                try {
+                    $this->stopInstanceWithProtocol($instance);
+                } catch (\Throwable $throwable) {
+                    WlsLogger::warning_(
+                        '[Orchestrator][PlannedRecycle] surge stop failed id='
+                        . $surgeWorkerId . ' error=' . $throwable->getMessage()
+                    );
+                    $allGone = false;
+                    continue;
+                }
+            }
+            $current = $this->registry->getInstance(ControlMessage::ROLE_WORKER, (int)$surgeWorkerId);
+            if ($current === $instance || $current !== null) {
+                $this->registry->removeInstance(ControlMessage::ROLE_WORKER, (int)$surgeWorkerId);
+            }
+            unset($this->plannedRecycleSurgeWorkerIds[(int)$surgeWorkerId]);
+            WlsLogger::warning_(
+                '[Orchestrator][PlannedRecycle] phase=surge_retired surge_id=' . $surgeWorkerId
+            );
+        }
+
+        return $allGone;
     }
 
     private function grantNextPlannedWorkerRecycle(): void
@@ -20360,23 +20691,45 @@ class ServiceOrchestrator
                 unset($this->pendingPlannedWorkerRecycles[$workerId]);
                 continue;
             }
-            if (!$this->controlServer->sendTo(
-                $instance->ipcClientId,
-                ControlMessage::drain([], 120),
-            )) {
-                return;
-            }
 
             unset($this->pendingPlannedWorkerRecycles[$workerId]);
+            if ($this->shouldUsePlannedRecycleNewFirst()) {
+                $surgeId = $this->startPlannedRecycleSurgeWorker($workerId);
+                if ($surgeId !== null) {
+                    $this->activePlannedWorkerRecycle = [
+                        'instance_id' => $workerId,
+                        'pid' => $pid,
+                        'phase' => 'waiting_surge',
+                        'surge_id' => $surgeId,
+                        'started_at' => self::monotonicSeconds(),
+                    ];
+                    $this->schedulePlannedRecycleSurgeWatchdog();
+                    $surge = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $surgeId);
+                    if ($surge instanceof ServiceInstance
+                        && $surge->state === ServiceInstance::STATE_READY
+                    ) {
+                        $this->syncDispatcherFullWorkerPoolFromRegistry(true);
+                        $this->sendDrainForActivePlannedRecycle('surge_already_ready');
+                    }
+
+                    return;
+                }
+                WlsLogger::warning_(
+                    '[Orchestrator][PlannedRecycle] new-first unavailable; drain-first worker#'
+                    . $workerId
+                );
+            }
+
             $this->activePlannedWorkerRecycle = [
                 'instance_id' => $workerId,
                 'pid' => $pid,
+                'phase' => 'draining',
             ];
-            $this->traceStartup('planned_recycle_granted', [
-                'role' => ControlMessage::ROLE_WORKER,
-                'instance_id' => $workerId,
-                'pid' => $pid,
-            ]);
+            if (!$this->sendDrainForActivePlannedRecycle('drain_first')) {
+                $this->activePlannedWorkerRecycle = null;
+                return;
+            }
+
             return;
         }
     }
@@ -33458,6 +33811,13 @@ class ServiceOrchestrator
                 ServiceInstance::STATE_REGISTERED,
                 ServiceInstance::STATE_READY,
             ], true)) {
+                // Side-by-side surge capacity must not inflate the desired
+                // gate or canonical slot resurrection stays blocked forever.
+                if ($this->isDirectReloadSurgeWorker($inst)
+                    || $this->isPlannedRecycleSurgeWorker($inst)
+                ) {
+                    continue;
+                }
                 // The slot currently being recovered must not count merely
                 // because its last registry state still looks live. Otherwise
                 // a dead REGISTERED/READY worker keeps live==desired and the

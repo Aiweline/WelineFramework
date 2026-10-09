@@ -1248,6 +1248,8 @@ $ipcClient = $ipcClient ?? null;
 );
 $ipcReceivedShutdown = false;
 $ipcDraining = false; // 是否正在排水
+/** @var float Monotonic deadline while waiting for Master TYPE_DRAIN after planned recycle intent. */
+$plannedRecycleAwaitMasterUntil = 0.0;
 $drainStartTime = 0.0;   // 排水开始的 monotonic 秒
 $maxDrainTime = 10;     // 排水硬期限（秒）；soft 由 ControlMessage 派生
 $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
@@ -1449,7 +1451,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, &$ipcReconnectAttempts, &$ipcReconnectMaxAttempts, $workerId, &$activeFibers, &$ipcClient, $port, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $isMaintenanceWorker, $isGatewayJoinBackend, $wlsRuntimeTopology, $instanceName, &$cacheClearEpoch, $maintenanceDrainState): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, &$ipcReconnectAttempts, &$ipcReconnectMaxAttempts, $workerId, &$activeFibers, &$ipcClient, $port, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $isMaintenanceWorker, $isGatewayJoinBackend, $wlsRuntimeTopology, $instanceName, &$cacheClearEpoch, $maintenanceDrainState, &$plannedRecycleAwaitMasterUntil): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR 等）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -1666,6 +1668,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     // 排水模式：停止接受新连接，完成现有请求后退出
                     $shouldExit = true;
                     $ipcDraining = true;
+                    $plannedRecycleAwaitMasterUntil = 0.0;
                     $drainStartTime = \hrtime(true) / 1_000_000_000;
                     $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
                     if ($dt > 0) {
@@ -2868,7 +2871,8 @@ while (true) {
             if ($memoryPercent >= $memoryDrainThreshold) {
                 WlsLogger::warning_(
                     "Worker memory pressure {$afterMb}MB used ({$afterAllocatedMb}MB allocated) after compact "
-                    . "(before={$beforeMb}MB used, before_allocated={$beforeAllocatedMb}MB), start drain to avoid OOM reset"
+                    . "(before={$beforeMb}MB used, before_allocated={$beforeAllocatedMb}MB), "
+                    . 'request Master planned recycle (keep listen until drain/timeout)'
                 );
                 $plannedExitReason = 'memory_pressure_drain'
                     . ":worker={$workerId}"
@@ -2879,15 +2883,22 @@ while (true) {
                     . ",limit={$wlsMemoryLimit}"
                     . ',threshold=' . \round($memoryDrainThreshold * 100, 1) . '%'
                     . ",requests={$requestCount}";
-                $sendExitReasonToMaster($plannedExitReason);
-                $shouldExit = true;
-                $ipcDraining = true;
-                $drainStartTime = \hrtime(true) / 1_000_000_000;
-                $maxDrainTime = \min($maxDrainTime, 10);
-                if ($socket && \is_resource($socket)) {
-                    @\fclose($socket);
-                    $socket = null;
-                    \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
+                if ($ipcClient && $ipcClient->isConnected()) {
+                    $sendExitReasonToMaster($plannedExitReason);
+                    if ($plannedRecycleAwaitMasterUntil <= 0.0) {
+                        $plannedRecycleAwaitMasterUntil = wlsWorkerMonotonicNow() + 5.0;
+                    }
+                } else {
+                    $sendExitReasonToMaster($plannedExitReason);
+                    $shouldExit = true;
+                    $ipcDraining = true;
+                    $drainStartTime = \hrtime(true) / 1_000_000_000;
+                    $maxDrainTime = \min($maxDrainTime, 10);
+                    if ($socket && \is_resource($socket)) {
+                        @\fclose($socket);
+                        $socket = null;
+                        \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
+                    }
                 }
             } elseif ($memoryPercent >= $memoryWarningThreshold) {
                 WlsLogger::warning_(
@@ -2936,6 +2947,28 @@ while (true) {
         }
     }
     
+    // Planned recycle intent timed out waiting for Master TYPE_DRAIN — self-drain fail-closed.
+    if ($plannedRecycleAwaitMasterUntil > 0.0
+        && !$shouldExit
+        && !$ipcDraining
+        && wlsWorkerMonotonicNow() >= $plannedRecycleAwaitMasterUntil
+    ) {
+        WlsLogger::warning_(
+            'Worker planned recycle await Master drain timed out; self-drain'
+            . ($plannedExitReason !== '' ? " reason={$plannedExitReason}" : '')
+        );
+        $plannedRecycleAwaitMasterUntil = 0.0;
+        $shouldExit = true;
+        $ipcDraining = true;
+        $drainStartTime = \hrtime(true) / 1_000_000_000;
+        $maxDrainTime = \min($maxDrainTime, 10);
+        if ($socket && \is_resource($socket)) {
+            @\fclose($socket);
+            $socket = null;
+            \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
+        }
+    }
+
     // Plan request-count recycling with Master so peer Workers do not all
     // close their listeners before the first replacement becomes READY.
     if ($maxRequests > 0
@@ -3081,6 +3114,8 @@ while (true) {
         $plannedExitReason,
         $workerId,
         $sendExitReasonToMaster,
+        $plannedRecycleAwaitMasterUntil,
+        $ipcClient,
     );
 
     // 更新 Fiber 快照供健康检查 /_wls/health?detail=1&fibers=1 读取
@@ -3126,6 +3161,8 @@ while (true) {
         $plannedExitReason,
         $workerId,
         $sendExitReasonToMaster,
+        $plannedRecycleAwaitMasterUntil,
+        $ipcClient,
     );
     
     if ($changed === false) {
@@ -3369,6 +3406,8 @@ while (true) {
             $plannedExitReason,
             $workerId,
             $sendExitReasonToMaster,
+            $plannedRecycleAwaitMasterUntil,
+            $ipcClient,
         )) {
             break;
         }
@@ -3429,6 +3468,8 @@ function wlsHttpDrainAfterResponseIfRequested(
     string &$plannedExitReason,
     int $workerId,
     callable $sendExitReasonToMaster,
+    float &$plannedRecycleAwaitMasterUntil,
+    mixed $ipcClient = null,
 ): bool {
     $reason = \Weline\Server\Service\WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
     if ($reason === null) {
@@ -3453,12 +3494,29 @@ function wlsHttpDrainAfterResponseIfRequested(
         ? "zend_mm_ratchet:worker={$workerId},used={$usedMb}MB,real={$realMb}MB"
         : 'request_quarantine:worker=' . $workerId . ',reason=' . $safeReason
             . ",used={$usedMb}MB,real={$realMb}MB";
+    $ipcConnected = $ipcClient !== null
+        && \is_object($ipcClient)
+        && \method_exists($ipcClient, 'isConnected')
+        && $ipcClient->isConnected();
+    // zend_mm_ratchet: ask Master for new-first recycle; keep listen until TYPE_DRAIN or timeout.
+    if ($safeReason === 'zend_mm_ratchet' && $ipcConnected) {
+        WlsLogger::warning_(
+            'Worker requested planned recycle after response (await Master drain): ' . $plannedExitReason
+        );
+        $sendExitReasonToMaster($plannedExitReason);
+        if ($plannedRecycleAwaitMasterUntil <= 0.0) {
+            $plannedRecycleAwaitMasterUntil = wlsWorkerMonotonicNow() + 12.0;
+        }
+
+        return true;
+    }
     WlsLogger::warning_(
         'Worker requested drain after response (will retire after in-flight drain): ' . $plannedExitReason
     );
     $sendExitReasonToMaster($plannedExitReason);
     $shouldExit = true;
     $ipcDraining = true;
+    $plannedRecycleAwaitMasterUntil = 0.0;
     $drainStartTime = \hrtime(true) / 1_000_000_000;
     $maxDrainTime = \Weline\Server\Service\WorkerResponseMemoryGuard::drainTimeoutSecondsForReason(
         $safeReason,
@@ -4951,6 +5009,7 @@ function wlsDispatchRequestFiberStep(
         $parsedFrame,
         (bool)($connectionTrustedProxy[$connId] ?? false),
     );
+
     if ($policyDecision->allowed) {
         // Managed Nginx owns browser HTTPS. Direct hits on the plaintext Worker
         // listen port (Host host:workerPort) must bounce to the public origin so
