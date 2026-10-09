@@ -112,7 +112,18 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('color: var(--cs-header-text)', $content);
         $this->assertStringContainsString('.cs-modal.w-modal', $content);
         $this->assertStringContainsString('@media (max-width: 720px)', $content);
-        $this->assertStringContainsString('position: fixed', $content);
+        $this->assertStringContainsString('overflow: visible', $content);
+        // Bind/modal overlay may stay fixed; mobile chat window must be slot-anchored absolute.
+        $this->assertMatchesRegularExpression(
+            '/@media\s*\(\s*max-width:\s*720px\s*\)\s*\{[\s\S]*?\.cs-chat-window(?:[\s\S]*?\.cs-chat-window\.w-panel)?\s*\{[^}]*position:\s*absolute/m',
+            $content,
+            'mobile .cs-chat-window must be position:absolute (in-slot, not viewport-fixed)'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/@media\s*\(\s*max-width:\s*720px\s*\)\s*\{[\s\S]*?\.cs-chat-window[^}]*position:\s*fixed/m',
+            $content,
+            'mobile media must not set .cs-chat-window to position:fixed'
+        );
         $this->assertStringContainsString('.customer-service-widget.is-open .cs-chat-button', $content);
         $this->assertStringContainsString('cs-chat-button-breathe', $content);
         $this->assertStringContainsString('.cs-chat-button.has-unread', $content);

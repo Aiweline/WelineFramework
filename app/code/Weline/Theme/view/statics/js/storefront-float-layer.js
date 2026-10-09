@@ -305,8 +305,8 @@
     }
     var side = sideOf(slotEl);
     var want = readStoredCollapsed(side);
-    // Open CS uses mobile position:fixed panel — never keep end slot collapsed
-    // (transform CB + visibility:hidden body would swallow the panel).
+    // CS chat is slot-anchored absolute; still expand end when open so a
+    // collapsed slot (visibility:hidden body) cannot hide the in-slot panel.
     if (side === 'end' && endHasOpenCustomerService(slotEl)) {
       want = false;
     }
@@ -370,7 +370,7 @@
         if (!end) {
           return;
         }
-        // Expand + clear transform CB before CS toggles to position:fixed panel.
+        // Expand end before CS opens so the slot-anchored panel stays visible.
         setCollapsed(end, false, false);
       },
       true

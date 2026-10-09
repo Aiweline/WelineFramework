@@ -66,7 +66,10 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
         $this->assertFileExists($hookFile);
         $content = (string) file_get_contents($hookFile);
 
-        $this->assertStringContainsString(
+        $this->assertStringContainsString('@widget.source', $content);
+        $this->assertStringContainsString('Weline_CustomerService::css/customer-service.css', $content);
+        $this->assertStringNotContainsString('<link rel="stylesheet"', $content);
+        $this->assertStringNotContainsString(
             "fetchTagSource('statics', 'Weline_CustomerService::css/customer-service.css')",
             $content
         );
@@ -81,7 +84,7 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
             "@static(Weline_CustomerService::js/customer-service.js)",
             $content
         );
-        $this->assertStringContainsString('customerServiceCssVersion', $content);
+        $this->assertStringNotContainsString('customerServiceCssVersion', $content);
         $this->assertStringContainsString('var customerServiceJsVersion =', $content);
         $this->assertStringContainsString(
             "'Weline_CustomerService::js/customer-service.js?v=' + encodeURIComponent(customerServiceJsVersion)",

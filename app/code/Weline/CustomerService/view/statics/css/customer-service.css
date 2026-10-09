@@ -45,6 +45,8 @@
         z-index: var(--weline-z-overlay);
         font-family: var(--weline-font-sans);
         color: var(--cs-text);
+        /* Slot-anchored chat panel must paint outside the FAB box. */
+        overflow: visible;
         transition: opacity var(--weline-motion-normal) ease, visibility var(--weline-motion-normal) ease, transform var(--weline-motion-normal) ease, bottom var(--weline-motion-normal) ease;
     }
 
@@ -1266,17 +1268,19 @@
             right: calc(var(--weline-space-3, 0.75rem) + var(--weline-safe-area-right, env(safe-area-inset-right, 0px)));
         }
 
+        /* In-slot absolute (same model as StoreMusic): never viewport-fixed —
+         * edge-dock transform would otherwise create a fixed containing-block trap. */
         .cs-chat-window,
         .cs-chat-window.w-panel {
-            position: fixed;
-            top: max(0.75rem, env(safe-area-inset-top, 0px));
-            right: max(0.75rem, env(safe-area-inset-right, 0px));
-            bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
-            left: max(0.75rem, env(safe-area-inset-left, 0px));
-            width: auto;
-            height: auto;
-            max-width: none;
-            max-height: none;
+            position: absolute;
+            top: auto;
+            left: auto;
+            right: 0;
+            bottom: calc(100% + 0.5rem);
+            width: min(calc(100vw - 1.5rem), 23.75rem);
+            height: min(calc(100dvh - 5.5rem), 37.5rem);
+            max-width: calc(100vw - 1.5rem);
+            max-height: min(calc(100dvh - 5.5rem), 80vh);
         }
 
         .cs-chat-header.w-panel-header,
