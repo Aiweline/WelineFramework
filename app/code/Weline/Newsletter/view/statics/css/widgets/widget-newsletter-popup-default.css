@@ -29,8 +29,8 @@
     left: 50%;
     transform: translate(-50%, -44%) scale(0.96);
     box-sizing: border-box;
-    width: min(21rem, 90vw);
-    max-width: min(21rem, 90vw);
+    width: min(var(--token-size-21rem), 90vw);
+    max-width: min(var(--token-size-21rem), 90vw);
     background: transparent;
     opacity: 0;
     pointer-events: none;
@@ -47,12 +47,12 @@
 
 .wc-theme_widget_newsletter_popup .popup-close {
     position: absolute;
-    top: -0.15rem;
-    right: -0.15rem;
-    width: var(--size-control-sm, 2rem);
-    height: var(--size-control-sm, 2rem);
+    top: calc(-1 * var(--token-size-0-15rem));
+    right: calc(-1 * var(--token-size-0-15rem));
+    width: var(--size-control-sm);
+    height: var(--size-control-sm);
     background: var(--weline-theme-surface-raised);
-    border: 1px solid color-mix(in srgb, var(--weline-theme-border) 55%, transparent);
+    border: var(--border-width-thin) solid color-mix(in srgb, var(--weline-theme-border) 55%, transparent);
     border-radius: 50%;
     cursor: pointer;
     display: flex;
@@ -78,7 +78,7 @@
     width: 100%;
     line-height: 0;
     background: transparent;
-    filter: drop-shadow(0 12px 28px color-mix(in srgb, var(--weline-theme-overlay) 35%, transparent));
+    filter: drop-shadow(0 var(--spacing-3) var(--control-height-xs) color-mix(in srgb, var(--weline-theme-overlay) 35%, transparent));
 }
 
 .wc-theme_widget_newsletter_popup .letter-shell__art {
@@ -124,7 +124,7 @@
     font-weight: 700;
     margin: var(--weline-space-2) 0 0;
     color: var(--weline-theme-text);
-    letter-spacing: 0.06em;
+    letter-spacing: var(--token-size-0-06em);
     line-height: 1.5;
 }
 
@@ -158,8 +158,8 @@
 
 .wc-theme_widget_newsletter_popup .newsletter-topic input[type="checkbox"] {
     accent-color: var(--weline-theme-primary);
-    width: 1rem;
-    height: 1rem;
+    width: var(--weline-space-4);
+    height: var(--weline-space-4);
     margin: 0;
 }
 
@@ -212,8 +212,8 @@
     left: auto !important;
     transform: none !important;
     opacity: 1 !important;
-    width: min(21rem, 100%) !important;
-    max-width: min(21rem, 100%) !important;
+    width: min(var(--token-size-21rem), 100%) !important;
+    max-width: min(var(--token-size-21rem), 100%) !important;
     margin: 0 auto !important;
 }
 
@@ -233,8 +233,8 @@
 
 @media (max-width: 480px) {
     .wc-theme_widget_newsletter_popup .popup-stage {
-        width: min(19.5rem, 92vw);
-        max-width: min(19.5rem, 92vw);
+        width: min(var(--token-size-19-5rem), 92vw);
+        max-width: min(var(--token-size-19-5rem), 92vw);
     }
 
     .wc-theme_widget_newsletter_popup .letter-shell__form {

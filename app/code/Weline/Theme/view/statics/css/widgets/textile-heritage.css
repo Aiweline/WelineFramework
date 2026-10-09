@@ -147,7 +147,7 @@
 .weline-textile-heritage .heritage-card:hover .heritage-source,
 .weline-textile-heritage .heritage-card:focus-within .heritage-source {
     opacity: 1;
-    max-height: 2.5em;
+    max-height: var(--token-size-2-5em);
 }
 
 .weline-textile-heritage .heritage-source:hover,

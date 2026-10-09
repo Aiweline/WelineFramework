@@ -2,7 +2,7 @@
     display: inline-flex;
     flex-direction: row;
     align-items: center;
-    gap: var(--spacing-sm, 0.5rem);
+    gap: var(--spacing-sm);
     white-space: nowrap;
     text-decoration: none;
     color: inherit;
@@ -20,7 +20,7 @@
 }
 
 .wc-theme_widget_all_menu .hamburger-menu-icon {
-    width: var(--spacing-5_5, 1.375rem);
-    height: var(--spacing-5_5, 1.375rem);
+    width: var(--spacing-5_5);
+    height: var(--spacing-5_5);
     flex-shrink: 0;
 }

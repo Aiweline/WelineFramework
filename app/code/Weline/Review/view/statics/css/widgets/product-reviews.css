@@ -1,19 +1,19 @@
 .weline-review {
-    --wr-bg: var(--color-bg-primary, #fff);
-    --wr-bg-soft: var(--color-bg-secondary, #f8fafc);
-    --wr-ink: var(--color-text-primary, #111827);
-    --wr-muted: var(--color-text-secondary, #6b7280);
-    --wr-border: var(--color-border-light, #e5e7eb);
-    --wr-accent: var(--color-accent, #3b82f6);
-    --wr-accent-hover: var(--color-accent-hover, #2563eb);
-    --wr-accent-soft: var(--color-accent-light, rgba(59, 130, 246, 0.08));
-    --wr-star: var(--color-warning, #f59e0b);
-    --wr-success: var(--color-success, #15803d);
-    --wr-danger: var(--color-error, #b91c1c);
-    --wr-radius: var(--radius-md, 0.5rem);
-    margin: var(--spacing-6, 1.5rem) 0 0;
-    padding: var(--spacing-6, 1.5rem);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    --wr-bg: var(--color-bg-primary);
+    --wr-bg-soft: var(--color-bg-secondary);
+    --wr-ink: var(--color-text-primary);
+    --wr-muted: var(--color-text-secondary);
+    --wr-border: var(--color-border-light);
+    --wr-accent: var(--color-accent);
+    --wr-accent-hover: var(--color-accent-hover);
+    --wr-accent-soft: var(--color-accent-light);
+    --wr-star: var(--color-warning);
+    --wr-success: var(--color-success);
+    --wr-danger: var(--color-error);
+    --wr-radius: var(--radius-md);
+    margin: var(--spacing-6) 0 0;
+    padding: var(--spacing-6);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-border);
     border-radius: var(--wr-radius);
     background: var(--wr-bg);
     color: var(--wr-ink);
@@ -30,94 +30,96 @@
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: var(--spacing-4, 1rem);
-    padding-bottom: var(--spacing-4, 1rem);
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    gap: var(--spacing-4);
+    padding-bottom: var(--spacing-4);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-border);
 }
 
 .weline-review__kicker,
 .weline-review__form-kicker {
     margin: 0;
     color: var(--wr-accent);
-    font-size: var(--font-size-xs, 0.75rem);
-    font-weight: var(--font-weight-bold, 700);
-    letter-spacing: 0.08em;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--token-size-0-08em);
     text-transform: uppercase;
 }
 
 .weline-review__heading h2,
 .weline-review__form-head h3 {
-    margin: var(--spacing-2, 0.5rem) 0 0;
+    margin: var(--spacing-2) 0 0;
     color: var(--wr-ink);
-    font-size: clamp(1.35rem, 2.4vw, 1.85rem);
-    font-weight: var(--font-weight-semibold, 600);
+    font-size: clamp(var(--token-size-1-35rem), 2.4vw, var(--token-size-1-85rem));
+    font-weight: var(--font-weight-semibold);
     line-height: 1.25;
 }
 
 .weline-review__intro {
-    max-width: 42rem;
-    margin: var(--spacing-2, 0.5rem) 0 0;
+    max-width: var(--token-size-42rem);
+    margin: var(--spacing-2) 0 0;
     color: var(--wr-muted);
-    font-size: var(--font-size-sm, 0.875rem);
+    font-size: var(--font-size-sm);
     line-height: 1.65;
 }
 
 .weline-review__summary {
-    min-width: 7.5rem;
+    min-width: var(--token-size-7-5rem);
     text-align: right;
 }
 
 .weline-review__summary strong {
     display: block;
     color: var(--wr-ink);
-    font-size: var(--font-size-2xl, 1.5rem);
+    font-size: var(--font-size-2xl);
     line-height: 1.1;
 }
 
 .weline-review__summary span {
     display: block;
-    margin-top: var(--spacing-1, 0.25rem);
+    margin-top: var(--spacing-1);
     color: var(--wr-muted);
-    font-size: var(--font-size-sm, 0.875rem);
+    font-size: var(--font-size-sm);
 }
 
 .weline-review__media-capabilities {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--spacing-1, 0.25rem) var(--spacing-2, 0.5rem);
-    margin-top: var(--spacing-3, 0.75rem);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--token-size-12rem)), 1fr));
+    gap: var(--spacing-1) var(--spacing-2);
+    margin-top: var(--spacing-3);
 }
 
 .weline-review__media-capabilities span {
     display: flex;
     align-items: center;
-    gap: var(--spacing-2, 0.5rem);
-    min-height: 2rem;
-    padding: var(--spacing-1, 0.25rem) var(--spacing-3, 0.75rem);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    gap: var(--spacing-2);
+    min-width: 0;
+    min-height: var(--weline-space-8);
+    padding: var(--spacing-1) var(--spacing-3);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-border);
     border-radius: var(--wr-radius);
     background: var(--wr-bg-soft);
     color: var(--wr-muted);
-    font-size: var(--font-size-xs, 0.75rem);
+    font-size: var(--font-size-xs);
     line-height: 1.35;
+    writing-mode: horizontal-tb;
 }
 
 .weline-review__media-capabilities b {
     display: inline-grid;
     place-items: center;
-    min-width: 2rem;
-    height: 1.25rem;
-    border-radius: var(--radius-sm, 0.25rem);
+    min-width: var(--weline-space-8);
+    height: var(--weline-space-5);
+    border-radius: var(--radius-sm);
     background: var(--wr-accent);
-    color: var(--color-text-light, #fff);
-    font-size: 0.625rem;
-    letter-spacing: 0.04em;
+    color: var(--color-text-light);
+    font-size: var(--spacing-2_5);
+    letter-spacing: var(--token-size-0-04em);
 }
 
 .weline-review__layout {
     display: grid;
-    gap: var(--spacing-4, 1rem);
-    margin-top: var(--spacing-3, 0.75rem);
+    gap: var(--spacing-4);
+    margin-top: var(--spacing-3);
 }
 
 .weline-review--layout-stack .weline-review__layout {
@@ -125,7 +127,7 @@
 }
 
 .weline-review--layout-split .weline-review__layout {
-    grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+    grid-template-columns: minmax(0, 1.15fr) minmax(var(--token-size-18rem), 0.85fr);
 }
 
 .weline-review--layout-split.weline-review--form-left .weline-review__listing {
@@ -138,20 +140,20 @@
 
 .weline-review__listing {
     display: grid;
-    gap: var(--spacing-3, 0.75rem);
+    gap: var(--spacing-3);
     align-content: start;
 }
 
 .weline-review__write-toggle {
     justify-self: start;
-    min-height: 2.85rem;
-    padding: 0 var(--spacing-5, 1.25rem);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-accent);
+    min-height: var(--token-size-2-85rem);
+    padding: 0 var(--spacing-5);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-accent);
     border-radius: var(--wr-radius);
     background: var(--wr-bg);
     color: var(--wr-accent);
     font: inherit;
-    font-weight: var(--font-weight-semibold, 600);
+    font-weight: var(--font-weight-semibold);
     cursor: pointer;
 }
 
@@ -169,17 +171,17 @@
 
 .weline-review__form-collapse {
     justify-self: start;
-    min-height: 2rem;
+    min-height: var(--weline-space-8);
     margin: 0;
-    padding: 0.15rem 0;
+    padding: var(--token-size-0-15rem) 0;
     border: 0;
     background: transparent;
     color: var(--wr-muted);
     font: inherit;
-    font-size: var(--font-size-sm, 0.875rem);
+    font-size: var(--font-size-sm);
     line-height: 1.5;
     text-decoration: underline;
-    text-underline-offset: 0.18em;
+    text-underline-offset: var(--token-size-0-18em);
     cursor: pointer;
 }
 
@@ -189,15 +191,15 @@
 
 .weline-review__form-head {
     display: grid;
-    gap: var(--spacing-3, 0.75rem);
-    margin-top: var(--spacing-1, 0.25rem);
-    padding-bottom: var(--spacing-4, 1rem);
-    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    gap: var(--spacing-3);
+    margin-top: var(--spacing-1);
+    padding-bottom: var(--spacing-4);
+    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-border);
 }
 
 .weline-review__items {
     display: grid;
-    gap: var(--spacing-3, 0.75rem);
+    gap: var(--spacing-3);
 }
 
 .weline-review__pager {
@@ -205,8 +207,8 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: var(--spacing-3, 0.75rem);
-    margin-top: var(--spacing-3, 0.75rem);
+    gap: var(--spacing-3);
+    margin-top: var(--spacing-3);
 }
 
 .weline-review__pager[hidden] {
@@ -215,19 +217,19 @@
 
 .weline-review__pager-btn {
     appearance: none;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-border);
     border-radius: var(--wr-radius);
-    background: var(--wr-bg, var(--color-bg-primary, #fff));
-    color: var(--wr-fg, var(--color-text-primary, #1a1a1a));
-    padding: 0.4rem 0.9rem;
+    background: var(--wr-bg, var(--color-bg-primary));
+    color: var(--wr-fg, var(--color-text-primary));
+    padding: var(--spacing-0_4) var(--spacing-0_9);
     font: inherit;
-    font-size: var(--font-size-sm, 0.875rem);
+    font-size: var(--font-size-sm);
     cursor: pointer;
 }
 
 .weline-review__pager-btn:hover:not(:disabled) {
-    border-color: var(--color-accent, var(--wr-accent, #c45c26));
-    color: var(--color-accent, var(--wr-accent, #c45c26));
+    border-color: var(--color-accent, var(--wr-accent));
+    color: var(--color-accent, var(--wr-accent));
 }
 
 .weline-review__pager-btn:disabled {
@@ -237,14 +239,14 @@
 
 .weline-review__pager-status {
     color: var(--wr-muted);
-    font-size: var(--font-size-sm, 0.875rem);
+    font-size: var(--font-size-sm);
 }
 
 .weline-review__item,
 .weline-review__empty {
     margin: 0;
-    padding: var(--spacing-3, 0.75rem);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    padding: var(--spacing-3);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-border);
     border-radius: var(--wr-radius);
     background: var(--wr-bg-soft);
 }
@@ -253,25 +255,25 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--spacing-2, 0.5rem);
+    gap: var(--spacing-2);
 }
 
 .weline-review__stars {
     color: var(--wr-star);
-    font-size: var(--font-size-base, 1rem);
-    letter-spacing: 0.04em;
+    font-size: var(--font-size-base);
+    letter-spacing: var(--token-size-0-04em);
     line-height: 1.2;
 }
 
 .weline-review__meta {
     color: var(--wr-muted);
-    font-size: var(--font-size-xs, 0.75rem);
+    font-size: var(--font-size-xs);
 }
 
 .weline-review__item h3 {
-    margin: var(--spacing-2, 0.5rem) 0 var(--spacing-1, 0.25rem);
+    margin: var(--spacing-2) 0 var(--spacing-1);
     color: var(--wr-ink);
-    font-size: var(--font-size-base, 1rem);
+    font-size: var(--font-size-base);
     line-height: 1.35;
 }
 
@@ -279,16 +281,16 @@
 .weline-review__empty {
     margin: 0;
     color: var(--wr-muted);
-    font-size: var(--font-size-sm, 0.875rem);
+    font-size: var(--font-size-sm);
     line-height: 1.5;
     overflow-wrap: anywhere;
 }
 
 .weline-review__media {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(5.5rem, 6.5rem));
-    gap: var(--spacing-2, 0.5rem);
-    margin-top: var(--spacing-3, 0.75rem);
+    grid-template-columns: repeat(auto-fill, minmax(var(--token-size-5-5rem), var(--token-size-6-5rem)));
+    gap: var(--spacing-2);
+    margin-top: var(--spacing-3);
     max-width: 100%;
 }
 
@@ -297,9 +299,9 @@
     position: relative;
     margin: 0;
     overflow: hidden;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
-    border-radius: var(--radius-sm, 0.25rem);
-    background: var(--color-bg-tertiary, #f3f4f6);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-tertiary);
     aspect-ratio: 1;
 }
 
@@ -313,12 +315,12 @@
 
 .weline-review__media-thumb:hover {
     border-color: var(--wr-accent);
-    box-shadow: 0 0 0 2px var(--wr-accent-soft);
+    box-shadow: 0 0 0 var(--border-width-medium) var(--wr-accent-soft);
 }
 
 .weline-review__media-thumb:focus-visible {
-    outline: 2px solid var(--wr-accent);
-    outline-offset: 2px;
+    outline: var(--border-width-medium) solid var(--wr-accent);
+    outline-offset: var(--border-width-medium);
 }
 
 .weline-review__media img,
@@ -334,7 +336,7 @@
 
 .weline-review__media video,
 .weline-review__media-thumb video {
-    background: #000;
+    background: var(--color-text-primary);
 }
 
 .weline-review__media-play {
@@ -342,9 +344,9 @@
     inset: 0;
     display: grid;
     place-items: center;
-    background: rgba(17, 24, 39, 0.28);
-    color: #fff;
-    font-size: 1.35rem;
+    background: var(--color-literal-rgba-17-24-39-0-28);
+    color: var(--color-bg-primary);
+    font-size: var(--token-size-1-35rem);
     line-height: 1;
     pointer-events: none;
 }
@@ -352,28 +354,28 @@
 .weline-review .w-review-media__dialog.w-dialog {
     inline-size: fit-content;
     width: fit-content;
-    max-inline-size: calc(100dvw - 2rem);
-    max-block-size: calc(100dvh - 2rem);
+    max-inline-size: calc(100dvw - var(--weline-space-8));
+    max-block-size: calc(100dvh - var(--weline-space-8));
     overflow: hidden;
 }
 
 .weline-review .w-review-media__dialog .w-dialog__surface {
     inline-size: fit-content;
     width: fit-content;
-    max-inline-size: calc(100dvw - 2rem);
-    max-block-size: calc(100dvh - 2rem);
+    max-inline-size: calc(100dvw - var(--weline-space-8));
+    max-block-size: calc(100dvh - var(--weline-space-8));
     overflow: hidden;
 }
 
 .weline-review .w-review-media__dialog .w-dialog__header {
-    padding-block: var(--spacing-3, 0.75rem);
-    padding-inline: var(--spacing-4, 1rem);
+    padding-block: var(--spacing-3);
+    padding-inline: var(--spacing-4);
 }
 
 .weline-review .w-review-media__dialog .w-dialog__body {
     max-height: none;
     overflow: hidden;
-    padding: var(--spacing-3, 0.75rem);
+    padding: var(--spacing-3);
 }
 
 .w-review-media__dialog-body {
@@ -387,54 +389,54 @@
     display: block;
     width: auto;
     height: auto;
-    max-inline-size: min(calc(100dvw - 4rem), 100%);
-    max-block-size: min(calc(100dvh - 9rem), 85dvh);
+    max-inline-size: min(calc(100dvw - var(--spacing-3xl)), 100%);
+    max-block-size: min(calc(100dvh - var(--token-size-9rem)), 85dvh);
     object-fit: contain;
 }
 
 .w-review-media__dialog-body video {
-    background: #000;
+    background: var(--color-text-primary);
 }
 
 @media (max-width: 47.99rem) {
     .weline-review .w-review-media__dialog.w-dialog,
     .weline-review .w-review-media__dialog .w-dialog__surface {
-        max-inline-size: calc(100dvw - 1rem);
-        max-block-size: calc(100dvh - 1rem);
+        max-inline-size: calc(100dvw - var(--weline-space-4));
+        max-block-size: calc(100dvh - var(--weline-space-4));
     }
 
     .w-review-media__dialog-body img,
     .w-review-media__dialog-body video {
-        max-inline-size: calc(100dvw - 2.5rem);
-        max-block-size: calc(100dvh - 8rem);
+        max-inline-size: calc(100dvw - var(--weline-space-10));
+        max-block-size: calc(100dvh - var(--token-size-8rem));
     }
 }
 
 .weline-review__media-label {
     position: absolute;
-    top: 0.25rem;
-    left: 0.25rem;
-    padding: 0.15rem 0.3rem;
-    border-radius: var(--radius-sm, 0.25rem);
-    background: rgba(17, 24, 39, 0.78);
-    color: #fff;
-    font-size: 0.5rem;
-    font-weight: var(--font-weight-bold, 700);
-    letter-spacing: 0.04em;
+    top: var(--weline-space-1);
+    left: var(--weline-space-1);
+    padding: var(--token-size-0-15rem) var(--token-size-0-3rem);
+    border-radius: var(--radius-sm);
+    background: var(--color-literal-rgba-17-24-39-0-78);
+    color: var(--color-bg-primary);
+    font-size: var(--weline-space-2);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--token-size-0-04em);
 }
 
 .weline-review__score-list {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--spacing-1, 0.25rem) var(--spacing-4, 1rem);
-    margin-top: var(--spacing-2, 0.5rem);
+    gap: var(--spacing-1) var(--spacing-4);
+    margin-top: var(--spacing-2);
 }
 
 .weline-review__score {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-2, 0.5rem);
+    gap: var(--spacing-2);
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -444,7 +446,7 @@
 .weline-review__score-label {
     display: inline;
     color: var(--wr-muted);
-    font-size: var(--font-size-xs, 0.75rem);
+    font-size: var(--font-size-xs);
     line-height: 1.2;
     white-space: nowrap;
 }
@@ -453,18 +455,18 @@
     display: inline;
     margin-top: 0;
     color: var(--wr-star);
-    font-size: var(--font-size-xs, 0.75rem);
-    letter-spacing: 0.03em;
+    font-size: var(--font-size-xs);
+    letter-spacing: var(--token-size-0-03em);
     line-height: 1.2;
 }
 
 .weline-review__form {
     display: grid;
     align-content: start;
-    gap: var(--spacing-4, 1rem);
-    padding: var(--spacing-6, 1.5rem);
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
-    border-top: 3px solid var(--wr-accent);
+    gap: var(--spacing-4);
+    padding: var(--spacing-6);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-border);
+    border-top: var(--border-width-thick) solid var(--wr-accent);
     border-radius: var(--wr-radius);
     background: var(--wr-bg-soft);
 }
@@ -475,18 +477,18 @@
 
 .weline-review__dynamic-fields {
     display: grid;
-    gap: var(--spacing-4, 1rem);
-    margin-top: var(--spacing-1, 0.25rem);
+    gap: var(--spacing-4);
+    margin-top: var(--spacing-1);
 }
 
 .weline-review__field {
     display: grid;
-    gap: var(--spacing-3, 0.75rem);
+    gap: var(--spacing-3);
 }
 
 .weline-review__field > label {
-    font-size: var(--font-size-sm, 0.875rem);
-    font-weight: var(--font-weight-semibold, 600);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
     color: var(--wr-ink);
 }
 
@@ -498,8 +500,8 @@
 .weline-review__field select,
 .weline-review__field textarea {
     width: 100%;
-    min-height: 2.75rem;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    min-height: var(--spacing-11);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-border);
     border-radius: var(--wr-radius);
     background: var(--wr-bg);
     color: var(--wr-ink);
@@ -508,32 +510,32 @@
 
 .weline-review__field input:not([type=checkbox]):not([type=file]):not([type=radio]),
 .weline-review__field select {
-    padding: 0 var(--spacing-3, 0.75rem);
+    padding: 0 var(--spacing-3);
 }
 
 .weline-review__field textarea {
-    min-height: 8rem;
-    padding: var(--spacing-3, 0.75rem);
+    min-height: var(--token-size-8rem);
+    padding: var(--spacing-3);
     resize: vertical;
 }
 
 .weline-review__field input:not([type=radio]):focus,
 .weline-review__field select:focus,
 .weline-review__field textarea:focus {
-    outline: 2px solid var(--wr-accent-soft);
+    outline: var(--border-width-medium) solid var(--wr-accent-soft);
     border-color: var(--wr-accent);
 }
 
 .weline-review__checkbox {
     display: flex;
     align-items: center;
-    gap: var(--spacing-2, 0.5rem);
-    min-height: 2.75rem;
+    gap: var(--spacing-2);
+    min-height: var(--spacing-11);
 }
 
 .weline-review__checkbox input {
-    width: 1.15rem;
-    height: 1.15rem;
+    width: var(--token-size-1-15rem);
+    height: var(--token-size-1-15rem);
     accent-color: var(--wr-accent);
 }
 
@@ -541,31 +543,31 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.35rem;
-    min-height: 2.5rem;
-    padding-top: var(--spacing-1, 0.25rem);
+    gap: var(--token-size-0-35rem);
+    min-height: var(--weline-space-10);
+    padding-top: var(--spacing-1);
 }
 
 .weline-review__rating-choice {
     position: relative;
     display: inline-grid;
     place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border: 1px solid transparent;
+    width: var(--weline-space-10);
+    height: var(--weline-space-10);
+    border: var(--border-width-thin) solid transparent;
     border-radius: var(--wr-radius);
     background: transparent;
-    color: var(--color-text-disabled, #9ca3af);
+    color: var(--color-text-disabled);
     cursor: pointer;
-    font-size: 1.65rem;
+    font-size: var(--token-size-1-65rem);
     line-height: 1;
     transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .weline-review__rating-choice input {
     position: absolute;
-    width: 1px;
-    height: 1px;
+    width: var(--border-width-thin);
+    height: var(--border-width-thin);
     opacity: 0;
 }
 
@@ -580,19 +582,19 @@
     border-color: var(--wr-accent);
     background: var(--wr-bg);
     color: var(--wr-star);
-    outline: 2px solid var(--wr-accent-soft);
-    outline-offset: 1px;
+    outline: var(--border-width-medium) solid var(--wr-accent-soft);
+    outline-offset: var(--border-width-thin);
 }
 
 .weline-review__upload {
     position: relative;
     display: grid;
-    grid-template-columns: 3rem 1fr auto;
+    grid-template-columns: var(--weline-space-12) 1fr auto;
     align-items: center;
-    gap: var(--spacing-3, 0.75rem);
-    min-height: 4.25rem;
-    padding: var(--spacing-3, 0.75rem);
-    border: 1px dashed var(--wr-border);
+    gap: var(--spacing-3);
+    min-height: var(--token-size-4-25rem);
+    padding: var(--spacing-3);
+    border: var(--border-width-thin) dashed var(--wr-border);
     border-radius: var(--wr-radius);
     background: var(--wr-bg);
     cursor: pointer;
@@ -605,8 +607,8 @@
 
 .weline-review__upload input {
     position: absolute;
-    width: 1px;
-    height: 1px;
+    width: var(--border-width-thin);
+    height: var(--border-width-thin);
     opacity: 0;
     pointer-events: none;
 }
@@ -614,12 +616,12 @@
 .weline-review__upload-icon {
     display: grid;
     place-items: center;
-    height: 2.75rem;
-    border-radius: var(--radius-sm, 0.25rem);
+    height: var(--spacing-11);
+    border-radius: var(--radius-sm);
     background: var(--wr-ink);
-    color: var(--color-text-light, #fff);
-    font-size: var(--font-size-xs, 0.75rem);
-    font-weight: var(--font-weight-bold, 700);
+    color: var(--color-text-light);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
 }
 
 .weline-review__upload-copy strong {
@@ -629,23 +631,23 @@
 
 .weline-review__upload-copy small {
     display: block;
-    margin-top: 0.25rem;
+    margin-top: var(--weline-space-1);
     color: var(--wr-muted);
 }
 
 .weline-review__upload-action {
-    padding: 0.4rem 0.65rem;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-accent);
+    padding: var(--spacing-0_4) var(--spacing-0_65);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-accent);
     border-radius: var(--wr-radius);
     color: var(--wr-accent);
-    font-size: var(--font-size-xs, 0.75rem);
-    font-weight: var(--font-weight-bold, 700);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
 }
 
 .weline-review__preview {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--spacing-2, 0.5rem);
+    gap: var(--spacing-2);
 }
 
 .weline-review__preview:empty {
@@ -658,7 +660,7 @@
     width: 100%;
     padding: 0;
     overflow: hidden;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-border);
     border-radius: var(--wr-radius);
     background: var(--wr-ink);
     aspect-ratio: 1;
@@ -677,25 +679,25 @@
 
 .weline-review__preview-kind {
     position: absolute;
-    top: 0.35rem;
-    left: 0.35rem;
-    padding: 0.2rem 0.35rem;
-    border-radius: var(--radius-sm, 0.25rem);
+    top: var(--token-size-0-35rem);
+    left: var(--token-size-0-35rem);
+    padding: var(--spacing-0_2) var(--token-size-0-35rem);
+    border-radius: var(--radius-sm);
     background: var(--wr-accent);
-    color: var(--color-text-light, #fff);
-    font-size: 0.5625rem;
-    font-weight: var(--font-weight-bold, 700);
+    color: var(--color-text-light);
+    font-size: var(--token-size-0-5625rem);
+    font-weight: var(--font-weight-bold);
 }
 
 .weline-review__form > button {
-    min-height: 2.85rem;
-    margin-top: 0.25rem;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-accent);
+    min-height: var(--token-size-2-85rem);
+    margin-top: var(--weline-space-1);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--wr-accent);
     border-radius: var(--wr-radius);
     background: var(--wr-accent);
-    color: var(--color-text-light, #fff);
+    color: var(--color-text-light);
     font: inherit;
-    font-weight: var(--font-weight-semibold, 600);
+    font-weight: var(--font-weight-semibold);
     cursor: pointer;
 }
 
@@ -713,7 +715,7 @@
 .weline-review__message,
 .weline-review__form-loading {
     margin: 0;
-    font-size: var(--font-size-xs, 0.75rem);
+    font-size: var(--font-size-xs);
     line-height: 1.6;
 }
 
@@ -723,9 +725,9 @@
 }
 
 .weline-review__message {
-    min-height: 1.25rem;
+    min-height: var(--weline-space-5);
     color: var(--wr-success);
-    font-weight: var(--font-weight-semibold, 600);
+    font-weight: var(--font-weight-semibold);
 }
 
 .weline-review__message.is-error {
@@ -749,39 +751,77 @@
 
 @media (max-width: 768px) {
     .weline-review {
-        padding: var(--spacing-4, 1rem);
+        margin-top: var(--spacing-3);
+        padding: var(--spacing-3);
     }
 
     .weline-review__heading {
         align-items: flex-start;
         flex-direction: column;
+        gap: var(--spacing-2);
+        padding-bottom: var(--spacing-3);
     }
 
     .weline-review__summary {
+        display: flex;
+        align-items: baseline;
+        gap: var(--spacing-2);
+        min-width: 0;
         text-align: left;
+    }
+
+    .weline-review__summary strong,
+    .weline-review__summary span {
+        display: inline;
+        margin-top: 0;
     }
 
     .weline-review__media-capabilities {
         grid-template-columns: 1fr;
+        gap: var(--spacing-1);
+        margin-top: var(--spacing-2);
+    }
+
+    /* 窄屏能力条改为扁平行，避免「盒中盒」感 */
+    .weline-review__media-capabilities span {
+        min-height: 0;
+        padding: var(--spacing-1) 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .weline-review__empty {
+        padding: var(--spacing-3);
+    }
+
+    .weline-review__write-toggle {
+        justify-self: stretch;
+        width: 100%;
+    }
+
+    .weline-review__layout {
+        margin-top: var(--spacing-2);
+        gap: var(--spacing-3);
     }
 }
 
 @media (max-width: 560px) {
     .weline-review__form {
-        padding: var(--spacing-4, 1rem);
+        padding: var(--spacing-4);
     }
 
     .weline-review__media,
     .weline-review__preview {
-        grid-template-columns: repeat(auto-fill, minmax(5rem, 6rem));
+        grid-template-columns: repeat(auto-fill, minmax(var(--spacing-5rem), var(--token-size-6rem)));
     }
 
     .weline-review__score-list {
-        gap: var(--spacing-1, 0.25rem) var(--spacing-3, 0.75rem);
+        gap: var(--spacing-1) var(--spacing-3);
     }
 
     .weline-review__upload {
-        grid-template-columns: 2.75rem 1fr;
+        grid-template-columns: var(--spacing-11) 1fr;
     }
 
     .weline-review__upload-action {
@@ -790,9 +830,9 @@
     }
 
     .weline-review__rating-choice {
-        width: 2.25rem;
-        height: 2.35rem;
-        font-size: 1.45rem;
+        width: var(--weline-space-9);
+        height: var(--token-size-2-35rem);
+        font-size: var(--token-size-1-45rem);
     }
 }
 

@@ -6,14 +6,14 @@
     padding: 0;
     border: 0;
     background: transparent;
-    color: #0f1111;
+    color: var(--color-text-primary);
 }
 
 .w-marketing-checkout-coupon__label {
     display: block;
-    margin: 0 0 6px;
-    color: #0f1111;
-    font-size: 13px;
+    margin: 0 0 var(--size-scrollbar);
+    color: var(--color-text-primary);
+    font-size: var(--token-size-13px);
     font-weight: 700;
     line-height: 1.35;
 }
@@ -23,7 +23,7 @@
     display: flex;
     align-items: stretch;
     flex-wrap: nowrap;
-    gap: 8px;
+    gap: var(--spacing-2);
     width: 100%;
 }
 
@@ -40,9 +40,9 @@
 .w-marketing-checkout-coupon__tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--spacing-2);
     width: 100%;
-    margin-bottom: 8px;
+    margin-bottom: var(--spacing-2);
 }
 
 .w-marketing-checkout-coupon.is-applied .w-marketing-checkout-coupon__entry {
@@ -52,29 +52,29 @@
 .w-marketing-checkout-coupon__tag {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--spacing-2);
     max-width: 100%;
-    min-height: 34px;
-    padding: 0 10px 0 12px;
-    border: 1px solid #007600;
-    border-radius: 999px;
-    background: #f0faf0;
-    color: #0f1111;
+    min-height: var(--token-size-34px);
+    padding: 0 var(--token-size-10px) 0 var(--spacing-3);
+    border: var(--border-width-thin) solid var(--color-product-label-new-text);
+    border-radius: var(--token-size-999px);
+    background: var(--color-literal-f0faf0);
+    color: var(--color-text-primary);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--token-size-13px);
     line-height: 1.2;
     cursor: pointer;
-    box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
+    box-shadow: 0 var(--border-width-thin) var(--border-width-medium) var(--color-literal-rgba-15-17-17-0-08);
 }
 
 .w-marketing-checkout-coupon__tag:hover {
-    border-color: #b12704;
-    background: #fff5f5;
+    border-color: var(--color-danger);
+    background: var(--color-literal-fff5f5);
 }
 
 .w-marketing-checkout-coupon__tag:focus-visible {
-    outline: 2px solid #ff9900;
-    outline-offset: 1px;
+    outline: var(--border-width-medium) solid var(--color-primary);
+    outline-offset: var(--border-width-thin);
 }
 
 .w-marketing-checkout-coupon__tag:disabled {
@@ -91,68 +91,68 @@
 
 .w-marketing-checkout-coupon__tag-amount {
     flex: 0 0 auto;
-    color: #007600;
+    color: var(--color-product-label-new-text);
     font-weight: 700;
     white-space: nowrap;
 }
 
 .w-marketing-checkout-coupon__tag-close {
     flex: 0 0 auto;
-    color: #565959;
-    font-size: 16px;
+    color: var(--color-text-gray);
+    font-size: var(--spacing-4);
     line-height: 1;
 }
 
 .w-marketing-checkout-coupon__tag:hover .w-marketing-checkout-coupon__tag-close {
-    color: #b12704;
+    color: var(--color-danger);
 }
 
 .w-marketing-checkout-coupon__input {
     min-width: 0;
-    min-height: 42px;
+    min-height: var(--control-height);
     box-sizing: border-box;
-    border: 1px solid #888c8c;
-    border-radius: 8px;
-    padding: 0 11px;
-    background: #fff;
-    color: #0f1111;
+    border: var(--border-width-thin) solid var(--color-literal-888c8c);
+    border-radius: var(--spacing-2);
+    padding: 0 var(--token-size-11px);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
     font: inherit;
-    font-size: 14px;
+    font-size: var(--token-size-14px);
     line-height: 1.35;
-    box-shadow: 0 1px 2px rgba(15, 17, 17, 0.15) inset;
+    box-shadow: 0 var(--border-width-thin) var(--border-width-medium) var(--color-literal-rgba-15-17-17-0-15) inset;
 }
 
 .w-marketing-checkout-coupon__input::placeholder {
-    color: #767676;
+    color: var(--color-text-tertiary);
 }
 
 .w-marketing-checkout-coupon__input:focus {
-    outline: 2px solid #ff9900;
-    outline-offset: 1px;
-    border-color: #ff9900;
+    outline: var(--border-width-medium) solid var(--color-primary);
+    outline-offset: var(--border-width-thin);
+    border-color: var(--color-primary);
 }
 
 .w-marketing-checkout-coupon__apply {
     flex: 0 0 auto;
-    min-height: 42px;
-    min-width: 72px;
-    padding: 0 14px;
-    border: 1px solid #d5d9d9;
-    border-radius: 8px;
-    background: #f0f2f2;
-    background: linear-gradient(to bottom, #f7f8fa, #e7e9ec);
-    color: #0f1111;
+    min-height: var(--control-height);
+    min-width: var(--token-size-72px);
+    padding: 0 var(--token-size-14px);
+    border: var(--border-width-thin) solid var(--color-literal-d5d9d9);
+    border-radius: var(--spacing-2);
+    background: var(--color-bg-secondary);
+    background: linear-gradient(to bottom, var(--color-literal-f7f8fa), var(--color-literal-e7e9ec));
+    color: var(--color-text-primary);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--token-size-13px);
     font-weight: 400;
     line-height: 1.2;
     white-space: nowrap;
     cursor: pointer;
-    box-shadow: 0 2px 5px rgba(213, 217, 217, 0.5);
+    box-shadow: 0 var(--border-width-medium) var(--token-size-5px) var(--color-literal-rgba-213-217-217-0-5);
 }
 
 .w-marketing-checkout-coupon__apply:hover {
-    background: linear-gradient(to bottom, #e7e9ec, #d5d9d9);
+    background: linear-gradient(to bottom, var(--color-literal-e7e9ec), var(--color-literal-d5d9d9));
 }
 
 .w-marketing-checkout-coupon__apply:disabled {
@@ -171,10 +171,10 @@
     position: absolute;
     inset: 0;
     margin: auto;
-    width: 1rem;
-    height: 1rem;
-    border: 2px solid #888c8c;
-    border-top-color: #0f1111;
+    width: var(--weline-space-4);
+    height: var(--weline-space-4);
+    border: var(--border-width-medium) solid var(--color-literal-888c8c);
+    border-top-color: var(--color-text-primary);
     border-radius: 50%;
     animation: w-marketing-coupon-spin 0.8s linear infinite;
 }
@@ -198,30 +198,30 @@
 
 .w-marketing-checkout-coupon__remove {
     display: inline-block;
-    margin-top: 8px;
+    margin-top: var(--spacing-2);
     padding: 0;
     border: 0;
     background: transparent;
-    color: #007185;
+    color: var(--color-info);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--token-size-13px);
     line-height: 1.35;
     cursor: pointer;
     text-decoration: none;
 }
 
 .w-marketing-checkout-coupon__remove:hover {
-    color: #c45500;
+    color: var(--color-primary-text-emphasis);
     text-decoration: underline;
 }
 
 .w-marketing-checkout-coupon__message {
-    margin: 8px 0 0;
-    color: #565959;
-    font-size: 13px;
+    margin: var(--spacing-2) 0 0;
+    color: var(--color-text-gray);
+    font-size: var(--token-size-13px);
     line-height: 1.4;
 }
 
 .w-marketing-checkout-coupon__message.is-error {
-    color: #b12704;
+    color: var(--color-danger);
 }

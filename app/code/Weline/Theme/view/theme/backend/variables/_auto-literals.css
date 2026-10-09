@@ -59,7 +59,8 @@
     --token-size-20px: -20px;
     --token-size-20px: 20px;
     --token-size-22-5rem: 22.5rem;
-    --token-size-22px: -22px;
+    /* Positive leaf: width/height consumers reject negative. */
+    --token-size-22px: 22px;
     --token-size-240px: 240px;
     --token-size-250px: 250px;
     --token-size-25px: 25px;

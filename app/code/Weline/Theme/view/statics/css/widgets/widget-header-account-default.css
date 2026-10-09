@@ -10,14 +10,14 @@
     color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark, inherit));
     padding: var(--weline-space-2) var(--weline-space-3);
     border-radius: var(--weline-radius-md);
-    border: var(--border-width-thin, 1px) solid transparent;
+    border: var(--border-width-thin) solid transparent;
     transition: background-color var(--weline-theme-transition-base), border-color var(--weline-theme-transition-base);
 }
 
 .wc-theme_widget_account .account-link:hover {
     /* Dark chrome ghost hover — never fall back to light surface-muted (white-on-beige). */
-    background-color: var(--color-on-dark-soft, rgba(255, 255, 255, 0.08));
-    border-color: var(--weline-chrome-text-light, transparent);
+    background-color: var(--color-on-dark-soft);
+    border-color: var(--weline-chrome-text-light);
     color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark, inherit));
 }
 
@@ -90,14 +90,14 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 1.1rem;
-    height: 1.1rem;
-    margin-left: 0.35rem;
-    padding: 0 0.3rem;
-    border-radius: 999px;
-    background: #b12704;
-    color: #fff;
-    font-size: 0.7rem;
+    min-width: var(--token-size-1-1rem);
+    height: var(--token-size-1-1rem);
+    margin-left: var(--token-size-0-35rem);
+    padding: 0 var(--token-size-0-3rem);
+    border-radius: var(--token-size-999px);
+    background: var(--color-danger);
+    color: var(--color-bg-primary);
+    font-size: var(--spacing-0_7);
     font-weight: 700;
     line-height: 1;
     vertical-align: middle;
@@ -112,7 +112,7 @@
     font-weight: 400;
     font-size: var(--weline-font-size-xs);
     color: var(--weline-chrome-text-light-secondary, var(--weline-theme-text-muted));
-    max-width: var(--token-size-100px, 7.5rem);
+    max-width: var(--token-size-100px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -151,8 +151,8 @@
      * without local rebind, menu links paint white-on-white.
      * Same ink pair as mini-cart --amz-drawer-text / --amz-drawer-muted.
      */
-    --amz-drawer-text: #0f1111;
-    --amz-drawer-muted: #565959;
+    --amz-drawer-text: var(--color-text-primary);
+    --amz-drawer-muted: var(--color-text-gray);
     --_inverse-text: var(--amz-drawer-text);
     --_inverse-muted: var(--amz-drawer-muted);
     --weline-theme-text: var(--amz-drawer-text);
@@ -197,8 +197,8 @@
 
 .wc-theme_widget_account .dropdown-header .account-avatar--menu {
     flex: 0 0 auto;
-    width: var(--size-control-md, 2.5rem);
-    height: var(--size-control-md, 2.5rem);
+    width: var(--size-control-md);
+    height: var(--size-control-md);
     color: var(--weline-theme-text-muted);
     background: var(--weline-theme-surface-raised);
     border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
@@ -303,7 +303,7 @@
         color: inherit;
         padding: var(--spacing-1_5) var(--spacing-0_4);
         min-height: var(--size-control-lg);
-        gap: var(--spacing-0_4);
+        gap: 0;
     }
 
     .wc-theme_widget_account .account-avatar {
@@ -313,19 +313,11 @@
         color: inherit;
     }
 
-    .wc-theme_widget_account .account-text {
-        flex-direction: row;
-        align-items: center;
-        gap: var(--token-size-0-15rem);
-    }
-
-    .wc-theme_widget_account .register-text {
-        display: none;
-    }
-
-    .wc-theme_widget_account .login-text::after {
-        content: " ›";
-        font-weight: 700;
+    /* Avatar-only — keep logo+cart on one row on phones. */
+    .wc-theme_widget_account .account-text,
+    .wc-theme_widget_account .account-name,
+    .wc-theme_widget_account .account-link > .w-icon:last-of-type {
+        display: none !important;
     }
 
     .wc-theme_widget_account .account-dropdown {

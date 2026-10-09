@@ -3,19 +3,19 @@
  * Scoped under .weline-amz-card-widget to avoid leaking into unrelated cards.
  */
 .weline-amz-card-widget {
-    --amz-card-bg: var(--weline-chrome-bg-primary, #ffffff);
-    --amz-card-border: var(--weline-theme-border-subtle, #e7e7e7);
+    --amz-card-bg: var(--weline-chrome-bg-primary);
+    --amz-card-border: var(--weline-theme-border-subtle);
     --amz-card-text: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
-    --amz-card-text-muted: var(--weline-theme-body-text-muted, #565959);
-    --amz-card-link: #0f1111;
+    --amz-card-text-muted: var(--weline-theme-body-text-muted);
+    --amz-card-link: var(--color-text-primary);
     --amz-card-review: var(--color-link);
     --amz-card-price: var(--color-error);
     --amz-card-cta-bg: var(--color-primary);
     --amz-card-cta-bg-hover: var(--color-primary-hover);
     --amz-card-cta-border: var(--color-primary-border);
     --amz-card-cta-text: var(--color-on-primary);
-    --amz-card-shadow: 0 1px 2px rgba(15, 17, 17, 0.06), 0 8px 24px rgba(15, 17, 17, 0.04);
-    --amz-card-shadow-hover: 0 12px 32px rgba(15, 17, 17, 0.12);
+    --amz-card-shadow: 0 var(--border-width-thin) var(--border-width-medium) var(--color-literal-rgba-15-17-17-0-06), 0 var(--spacing-2) var(--spacing-6) var(--color-literal-rgba-15-17-17-0-04);
+    --amz-card-shadow-hover: 0 var(--spacing-3) var(--spacing-8) var(--color-literal-rgba-15-17-17-0-12);
     color: var(--amz-card-text);
 }
 
@@ -24,7 +24,7 @@
     min-width: 0;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--amz-card-border);
+    border: var(--border-width-thin) solid var(--amz-card-border);
     border-radius: var(--weline-theme-radius-xl);
     background: var(--amz-card-bg);
     color: var(--amz-card-text);
@@ -42,7 +42,7 @@
     position: relative;
     padding-top: 100%;
     overflow: hidden;
-    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+    background: linear-gradient(180deg, var(--color-bg-slate) 0%, var(--color-literal-eef2f7) 100%);
 }
 
 .weline-amz-card-widget .product-image-link {
@@ -88,26 +88,26 @@
     padding-block: var(--weline-space-1);
     padding-inline: var(--weline-space-3);
     border-radius: var(--weline-theme-radius-full);
-    font-size: var(--weline-font-size-xs, 0.75rem);
-    font-weight: var(--weline-font-weight-semibold, 600);
+    font-size: var(--weline-font-size-xs);
+    font-weight: var(--weline-font-weight-semibold);
     line-height: 1.25;
     letter-spacing: 0;
     white-space: nowrap;
 }
 
 .weline-amz-card-widget .w-product-label[data-kind="new"] {
-    background: var(--w-product-label-new-bg, var(--weline-product-label-new-bg, var(--color-product-label-new-bg, #e6f2e6)));
-    color: var(--w-product-label-new-text, var(--weline-product-label-new-text, var(--color-product-label-new-text, #007600)));
+    background: var(--w-product-label-new-bg, var(--weline-product-label-new-bg, var(--color-product-label-new-bg)));
+    color: var(--w-product-label-new-text, var(--weline-product-label-new-text, var(--color-product-label-new-text)));
 }
 
 .weline-amz-card-widget .w-product-label[data-kind="sale"] {
-    background: var(--w-product-label-sale-bg, var(--weline-product-label-sale-bg, var(--color-product-label-sale-bg, #fde8ec)));
-    color: var(--w-product-label-sale-text, var(--weline-product-label-sale-text, var(--color-product-label-sale-text, #9f1239)));
+    background: var(--w-product-label-sale-bg, var(--weline-product-label-sale-bg, var(--color-product-label-sale-bg)));
+    color: var(--w-product-label-sale-text, var(--weline-product-label-sale-text, var(--color-product-label-sale-text)));
 }
 
 .weline-amz-card-widget .w-product-label[data-kind="demo"] {
-    background: var(--w-product-label-demo-bg, var(--weline-product-label-demo-bg, var(--color-product-label-demo-bg, #e8edf2)));
-    color: var(--w-product-label-demo-text, var(--weline-product-label-demo-text, var(--color-product-label-demo-text, #475569)));
+    background: var(--w-product-label-demo-bg, var(--weline-product-label-demo-bg, var(--color-product-label-demo-bg)));
+    color: var(--w-product-label-demo-text, var(--weline-product-label-demo-text, var(--color-product-label-demo-text)));
 }
 
 .weline-amz-card-widget .product-actions {
@@ -137,17 +137,17 @@
     -webkit-appearance: none;
     appearance: none;
     display: inline-flex;
-    width: 2rem;
-    height: 2rem;
-    min-width: 2rem;
-    min-height: 2rem;
+    width: var(--weline-space-8);
+    height: var(--weline-space-8);
+    min-width: var(--weline-space-8);
+    min-height: var(--weline-space-8);
     align-items: center;
     justify-content: center;
     padding: 0;
     margin: 0;
     border: 0 !important;
     border-radius: var(--weline-theme-radius-full);
-    background: rgba(255, 255, 255, 0.92);
+    background: var(--color-literal-rgba-255-255-255-0-92);
     color: var(--amz-card-text);
     line-height: 1;
     cursor: pointer;
@@ -157,7 +157,7 @@
 
 .weline-amz-card-widget .action-btn:hover,
 .weline-amz-card-widget .action-btn:focus-visible {
-    background: #fff;
+    background: var(--color-bg-primary);
     color: var(--color-link-hover);
     box-shadow: var(--weline-shadow-md);
     transform: translateY(-1px);
@@ -183,8 +183,8 @@
 
 .weline-amz-card-widget .product-name {
     margin: 0;
-    min-height: calc(2 * 1.45em);
-    max-height: calc(2 * 1.45em);
+    min-height: calc(2 * var(--token-size-1-45em));
+    max-height: calc(2 * var(--token-size-1-45em));
     overflow: hidden;
     font-size: var(--font-size-sm);
     font-weight: 600;
@@ -238,15 +238,15 @@
 .weline-amz-card-widget .stars {
     display: inline-flex;
     align-items: center;
-    gap: 1px;
+    gap: var(--border-width-thin);
 }
 
 .weline-amz-card-widget .stars :is(i, svg, .w-rating-star[data-state="filled"]) {
-    color: var(--weline-theme-warning, #de7921);
+    color: var(--weline-theme-warning);
 }
 
 .weline-amz-card-widget .stars .w-rating-star[data-state="empty"] {
-    color: #d5d9d9;
+    color: var(--color-literal-d5d9d9);
 }
 
 .weline-amz-card-widget .review-count {
@@ -265,7 +265,7 @@
     color: var(--amz-card-price);
     font-size: var(--font-size-lg);
     font-weight: 800;
-    letter-spacing: -0.02em;
+    letter-spacing: calc(-1 * var(--token-size-0-02em));
 }
 
 .weline-amz-card-widget .price-original {
@@ -299,16 +299,16 @@
     justify-content: center;
     gap: var(--weline-space-2);
     width: 100%;
-    min-height: 2.5rem;
+    min-height: var(--weline-space-10);
     margin-top: var(--weline-space-1);
-    border: 1px solid var(--amz-card-cta-border);
+    border: var(--border-width-thin) solid var(--amz-card-cta-border);
     border-radius: var(--weline-radius-lg);
     background: var(--amz-card-cta-bg);
     color: var(--amz-card-cta-text);
     cursor: pointer;
     font-size: var(--font-size-sm);
     font-weight: 700;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    box-shadow: inset 0 var(--border-width-thin) 0 var(--color-literal-rgba-255-255-255-0-35);
     transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -317,12 +317,12 @@
     background: var(--amz-card-cta-bg-hover);
     border-color: var(--color-primary-border);
     color: var(--amz-card-cta-text);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(15, 17, 17, 0.12);
+    box-shadow: inset 0 var(--border-width-thin) 0 var(--color-literal-rgba-255-255-255-0-28), 0 var(--border-width-thin) var(--border-width-thick) var(--color-literal-rgba-15-17-17-0-12);
 }
 
 .weline-amz-card-widget .btn-add-to-cart:active,
 .weline-amz-card-widget .product-add-to-cart-form .btn-add-to-cart:active {
-    transform: translateY(1px);
+    transform: translateY(var(--border-width-thin));
 }
 
 .weline-amz-card-widget .btn-out-of-stock {
@@ -330,18 +330,18 @@
     align-items: center;
     justify-content: center;
     width: 100%;
-    min-height: 2.5rem;
+    min-height: var(--weline-space-10);
     margin-top: var(--weline-space-1);
-    border: 1px solid var(--amz-card-border);
+    border: var(--border-width-thin) solid var(--amz-card-border);
     border-radius: var(--weline-radius-lg);
-    background: #f7f8f8;
+    background: var(--color-bg-secondary);
     color: var(--amz-card-text-muted);
     cursor: not-allowed;
     font-size: var(--font-size-sm);
     font-weight: 600;
 }
 
-@media (max-width: 768px) {
+@media (max-width: var(--breakpoint-md)) {
     .weline-amz-card-widget .product-actions {
         opacity: 1;
         pointer-events: auto;

@@ -11,7 +11,7 @@
 .wc-theme_widget_category_grid.is-strip {
     /* WO-HP-P3-MALL-03：整段目标高约 160–220px */
     padding-block: var(--weline-space-3) var(--weline-space-4);
-    max-height: 13.75rem;
+    max-height: var(--token-size-13-75rem);
     overflow: hidden;
 }
 
@@ -122,11 +122,11 @@
 }
 
 .wc-theme_widget_category_grid .category-card--tile .category-image-wrapper {
-    width: var(--size-control-64, 4rem);
-    height: var(--size-control-64, 4rem);
+    width: var(--size-control-64);
+    height: var(--size-control-64);
     padding-top: 0;
     border-radius: 50%;
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid) var(--weline-theme-border);
     background: var(--weline-theme-surface-raised, var(--color-bg-primary));
 }
 
@@ -229,7 +229,7 @@
 
     .wc-theme_widget_category_grid .category-grid--strip {
         overflow-x: auto;
-        grid-auto-columns: minmax(4.5rem, 1fr);
+        grid-auto-columns: minmax(var(--token-size-4-5rem), 1fr);
         padding-block-end: var(--weline-space-1);
         -webkit-overflow-scrolling: touch;
     }

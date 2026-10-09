@@ -46,8 +46,8 @@
     margin: 0 auto;
     /* 视口≈版心时 content-padding 归零会贴边；保留 gutter 地板 */
     padding: 0 max(
-        var(--weline-layout-content-padding-inline, 0px),
-        var(--spacing-container-padding, var(--weline-space-5, 1.25rem))
+        var(--weline-layout-content-padding-inline),
+        var(--spacing-container-padding, var(--weline-space-5))
     );
     box-sizing: border-box;
 }
@@ -66,6 +66,18 @@
     font-weight: var(--font-weight-semibold);
     letter-spacing: var(--letter-spacing-wide);
     line-height: var(--line-height-tight);
+}
+
+/* details/summary：桌面常开；手机可折叠，避免四列拍扁成超长链接墙 */
+.weline-footer details.footer-section {
+    min-width: 0;
+}
+.weline-footer details.footer-section > summary.footer-section__title {
+    list-style: none;
+    cursor: default;
+}
+.weline-footer details.footer-section > summary.footer-section__title::-webkit-details-marker {
+    display: none;
 }
 
 .weline-footer .footer-section__links,
@@ -220,13 +232,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--size-control-md, 2.25rem);
-    height: var(--size-control-md, 2.25rem);
+    width: var(--size-control-md);
+    height: var(--size-control-md);
     gap: 0;
     font-size: var(--font-size-xs);
     line-height: 1;
     white-space: nowrap;
-    border-radius: var(--weline-radius-full, 999px);
+    border-radius: var(--weline-radius-full);
     color: inherit;
     text-decoration: none;
     transition: color var(--weline-theme-transition-base, 0.2s ease),
@@ -246,8 +258,8 @@
 .weline-footer .footer-social-media .social-link .footer-social-icon,
 .weline-footer .footer-social-link > i,
 .weline-footer .footer-social-media .social-link > i {
-    width: var(--font-size-xl, 1.25rem);
-    height: var(--font-size-xl, 1.25rem);
+    width: var(--font-size-xl);
+    height: var(--font-size-xl);
     display: block;
     flex: 0 0 auto;
 }
@@ -262,12 +274,12 @@
     position: fixed;
     top: 50%;
     /* Above page sticky chrome (1020); below modal/drawer stack. */
-    z-index: var(--z-index-fixed, 1030);
+    z-index: var(--z-index-fixed);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-xs, 0.25rem);
-    padding: var(--spacing-xs, 0.25rem) var(--spacing-0_5, 0.125rem);
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-0_5);
     transform: translateY(-50%);
     color: var(--color-text-primary, var(--weline-chrome-text-primary));
     background:
@@ -285,11 +297,11 @@
                 var(--color-bg-secondary, var(--weline-chrome-bg-secondary)) 45%
             ) 100%
         );
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid)
         var(--color-border-default, var(--weline-chrome-border-default));
     box-shadow:
         var(--weline-theme-shadow-md),
-        0 0 0 var(--weline-theme-border-width, 1px)
+        0 0 0 var(--weline-theme-border-width)
             color-mix(in srgb, var(--color-primary, var(--weline-chrome-primary)) 18%, transparent);
     transition:
         transform var(--weline-theme-duration-normal, 0.28s)
@@ -302,7 +314,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-xs, 0.25rem);
+    gap: var(--spacing-xs);
 }
 
 .weline-footer .footer-social-float__toggle {
@@ -312,8 +324,8 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    width: var(--weline-space-5, 1.25rem);
-    height: calc(var(--size-icon-sm, 16px) + var(--spacing-sm, 0.5rem));
+    width: var(--weline-space-5);
+    height: calc(var(--size-icon-sm) + var(--spacing-sm));
     margin: 0;
     padding: 0;
     color: var(--color-primary, var(--weline-chrome-primary));
@@ -321,7 +333,7 @@
         --color-primary-bg-subtle,
         color-mix(in srgb, var(--color-primary, var(--weline-chrome-primary)) 12%, var(--color-bg-canvas, var(--weline-chrome-body-bg)))
     );
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid)
         color-mix(
             in srgb,
             var(--color-primary, var(--weline-chrome-primary)) 32%,
@@ -349,7 +361,7 @@
 .weline-footer .footer-social-float__toggle:focus-visible {
     box-shadow:
         var(--weline-theme-shadow-xs, var(--weline-theme-shadow-sm)),
-        0 0 0 var(--weline-theme-focus-ring-width, 2px)
+        0 0 0 var(--weline-theme-focus-ring-width)
             color-mix(in srgb, var(--color-primary, var(--weline-chrome-primary)) 45%, transparent);
 }
 
@@ -364,29 +376,29 @@
 
 .weline-footer .footer-social-float[data-side="left"] {
     left: max(0px, env(safe-area-inset-left, 0px));
-    border-left: var(--spacing-1, 0.25rem) solid
+    border-left: var(--spacing-1) solid
         var(--color-primary, var(--weline-chrome-primary));
-    border-radius: 0 var(--weline-radius-sm, 6px) var(--weline-radius-sm, 6px) 0;
+    border-radius: 0 var(--weline-radius-sm) var(--weline-radius-sm) 0;
 }
 
 .weline-footer .footer-social-float[data-side="left"] .footer-social-float__toggle {
     left: 100%;
     transform: translateY(-50%);
-    border-radius: 0 var(--weline-radius-md, 8px) var(--weline-radius-md, 8px) 0;
+    border-radius: 0 var(--weline-radius-md) var(--weline-radius-md) 0;
     border-left: none;
 }
 
 .weline-footer .footer-social-float[data-side="right"] {
     right: max(0px, env(safe-area-inset-right, 0px));
-    border-right: var(--spacing-1, 0.25rem) solid
+    border-right: var(--spacing-1) solid
         var(--color-primary, var(--weline-chrome-primary));
-    border-radius: var(--weline-radius-sm, 6px) 0 0 var(--weline-radius-sm, 6px);
+    border-radius: var(--weline-radius-sm) 0 0 var(--weline-radius-sm);
 }
 
 .weline-footer .footer-social-float[data-side="right"] .footer-social-float__toggle {
     right: 100%;
     transform: translateY(-50%);
-    border-radius: var(--weline-radius-md, 8px) 0 0 var(--weline-radius-md, 8px);
+    border-radius: var(--weline-radius-md) 0 0 var(--weline-radius-md);
     border-right: none;
 }
 
@@ -417,20 +429,20 @@
 }
 
 .weline-footer .footer-social-float .footer-social-float__link {
-    width: calc(var(--size-icon-sm, 16px) + var(--spacing-sm, 0.5rem));
-    height: calc(var(--size-icon-sm, 16px) + var(--spacing-sm, 0.5rem));
+    width: calc(var(--size-icon-sm) + var(--spacing-sm));
+    height: calc(var(--size-icon-sm) + var(--spacing-sm));
     color: var(--color-text-primary, var(--weline-chrome-text-primary));
     background: var(
         --color-primary-bg-subtle,
         color-mix(in srgb, var(--color-primary, var(--weline-chrome-primary)) 10%, var(--color-bg-canvas, var(--weline-chrome-body-bg)))
     );
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid)
         color-mix(
             in srgb,
             var(--color-primary, var(--weline-chrome-primary)) 28%,
             var(--color-border-default, var(--weline-chrome-border-default))
         );
-    border-radius: var(--weline-radius-sm, 6px);
+    border-radius: var(--weline-radius-sm);
     box-shadow: var(--weline-theme-shadow-xs, var(--weline-theme-shadow-sm));
 }
 
@@ -442,8 +454,8 @@
 }
 
 .weline-footer .footer-social-float .footer-social-float__link .footer-social-icon {
-    width: var(--size-icon-sm, 16px);
-    height: var(--size-icon-sm, 16px);
+    width: var(--size-icon-sm);
+    height: var(--size-icon-sm);
     color: inherit;
     fill: currentColor;
 }
@@ -492,16 +504,74 @@
     }
 }
 
+@media (min-width: 561px) {
+    /* 桌面：默认 open（见模板）+ 禁止点收；CSS  alone 压不开关闭态 details */
+    .weline-footer details.footer-section > summary.footer-section__title {
+        pointer-events: none;
+        cursor: default;
+    }
+    .weline-footer details.footer-section > summary.footer-section__title::after {
+        content: none;
+    }
+    /* Chromium 渐进：即便误关也露出链接列 */
+    .weline-footer details.footer-section::details-content {
+        display: block;
+        content-visibility: visible;
+    }
+    .weline-footer details.footer-section > .footer-section__links {
+        display: flex !important;
+    }
+}
+
 @media (max-width: 560px) {
     .weline-footer .footer-nav {
-        padding: var(--weline-space-8) 0 var(--weline-space-6);
+        padding: var(--weline-space-5) 0 var(--weline-space-4);
     }
 
-    .weline-footer .footer-content {
-        grid-template-columns: 1fr;
+    /* 手机手风琴：分隔线即可，禁止桌面四列的 gap + 标题底边距叠出超高行 */
+    .weline-footer .footer-content,
+    .weline-footer .footer-content--cols-2,
+    .weline-footer .footer-content--cols-3,
+    .weline-footer .footer-content--cols-4 {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
     }
 
     .weline-footer .footer-locale__inner {
         flex-direction: column;
+    }
+
+    .weline-footer details.footer-section {
+        border-block-end: var(--weline-theme-border-width) solid var(--color-on-dark-soft);
+        padding-block: 0;
+    }
+
+    .weline-footer details.footer-section > summary.footer-section__title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-3);
+        margin: 0;
+        min-block-size: var(--size-control-md);
+        padding-block: var(--weline-space-2);
+        cursor: pointer;
+        pointer-events: auto;
+    }
+
+    .weline-footer details.footer-section > summary.footer-section__title::after {
+        content: "+";
+        flex: 0 0 auto;
+        font-size: var(--font-size-lg);
+        line-height: 1;
+        opacity: 0.75;
+    }
+
+    .weline-footer details.footer-section[open] > summary.footer-section__title::after {
+        content: "−";
+    }
+
+    .weline-footer details.footer-section > .footer-section__links {
+        padding-block: 0 var(--weline-space-2);
+        gap: var(--weline-space-2);
     }
 }

@@ -4,7 +4,7 @@
     align-items: center;
     flex: 0 0 auto;
     flex-shrink: 0;
-    gap: var(--spacing-sm, 0.5rem);
+    gap: var(--spacing-sm);
     width: auto;
     max-width: none;
     min-width: 0;
@@ -17,12 +17,12 @@
     display: inline-flex;
     align-items: center;
     box-sizing: border-box;
-    padding: var(--spacing-sm, 0.5rem) var(--weline-space-3, 0.75rem);
+    padding: var(--spacing-sm) var(--weline-space-3);
     color: inherit;
     text-decoration: none;
     font-weight: 500;
     white-space: nowrap;
-    border-radius: var(--border-radius-sm, 0.25rem);
+    border-radius: var(--border-radius-sm);
 }
 .wc-theme_widget_header_policy_links .header-policy-links__inline:hover {
     text-decoration: underline;
@@ -35,14 +35,14 @@
 .wc-theme_widget_header_policy_links .header-policy-links__trigger {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-xs, 0.25rem);
+    gap: var(--spacing-xs);
     box-sizing: border-box;
-    padding: var(--spacing-sm, 0.5rem) var(--weline-space-3, 0.75rem);
+    padding: var(--spacing-sm) var(--weline-space-3);
     margin: 0;
     min-inline-size: 0;
     background: transparent;
     border: none;
-    border-radius: var(--border-radius-sm, 0.25rem);
+    border-radius: var(--border-radius-sm);
     color: inherit;
     font: inherit;
     font-weight: 500;
@@ -53,16 +53,16 @@
     text-decoration: underline;
 }
 .wc-theme_widget_header_policy_links .header-policy-links__trigger i {
-    font-size: 0.7em;
+    font-size: var(--token-size-0-7em);
     opacity: 0.85;
 }
 .wc-theme_widget_header_policy_links .header-policy-links__menu.w-menu {
-    min-width: 12rem;
+    min-width: var(--token-size-12rem);
 }
 .wc-theme_widget_header_policy_links .header-policy-links__section {
-    padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem) var(--weline-space-1, 0.25rem);
-    color: var(--weline-theme-text-muted, var(--color-text-muted, #6b7280));
-    font-size: var(--font-size-xs, 0.75rem);
+    padding: var(--weline-space-2) var(--weline-space-3) var(--weline-space-1);
+    color: var(--weline-theme-text-muted, var(--color-text-muted));
+    font-size: var(--font-size-xs);
     font-weight: 600;
 }
 .wc-theme_widget_header_policy_links .header-policy-links__item {

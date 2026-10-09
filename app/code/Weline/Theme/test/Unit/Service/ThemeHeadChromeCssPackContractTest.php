@@ -31,6 +31,7 @@ final class ThemeHeadChromeCssPackContractTest extends TestCase
         self::assertStringContainsString('colors/_light.css', $src);
         self::assertStringContainsString('colors/_ink.css', $src);
         self::assertStringContainsString('variables/_spacing.css', $src);
+        self::assertStringContainsString('variables/_auto-literals.css', $src);
         self::assertStringContainsString('weline-foundation.css', $src);
         self::assertStringContainsString('assets/css/theme.css', $src);
         self::assertStringContainsString('storefront-shopper-toast-amazon.css', $src);

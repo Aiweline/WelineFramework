@@ -1,10 +1,10 @@
 .widget-header {
-    background-color: #fff;
-    border-bottom: 1px solid #dee2e6;
+    background-color: var(--color-bg-primary);
+    border-bottom: var(--border-width-thin) solid var(--color-border-muted);
 }
 .widget-header .logo--asset img {
     display: block;
-    max-height: 50px;
+    max-height: var(--size-control-50);
     width: auto;
 }
 .widget-header .main-nav .nav {
@@ -12,5 +12,5 @@
 }
 
 [data-widget-style-class="e07ee34edb085290"] {--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);}
-[data-widget-style-class="eb5de580cd4bcc92"] {max-height: 50px;}
+[data-widget-style-class="eb5de580cd4bcc92"] {max-height: var(--size-control-50);}
 [data-widget-style-class="afae7267af8c5154"] {--w-mb:0;}

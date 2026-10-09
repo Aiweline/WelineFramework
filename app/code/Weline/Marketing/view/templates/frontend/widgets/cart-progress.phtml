@@ -26,7 +26,7 @@ $escape = static fn(mixed $v): string => \htmlspecialchars((string)$v, \ENT_QUOT
   <div class="mkt-cart-progress__track" role="progressbar"
        aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= $escape((string)$progress['percent']) ?>"
        data-widget-style-class="6a9bae0e9436c01b">
-    <div class="mkt-cart-progress__bar" data-widget-style="height:100%;width:<?= $escape((string)$progress['percent']) ?>%;background:#16333f;transition:width .25s ease;"></div>
+    <div class="mkt-cart-progress__bar" style="width:<?= $escape((string)$progress['percent']) ?>%;"></div>
   </div>
   <p class="mkt-cart-progress__msg" data-widget-style-class="ab9cc31e817f818d"><?= $escape((string)$progress['message']) ?></p>
 </div>

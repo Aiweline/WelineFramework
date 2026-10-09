@@ -332,6 +332,8 @@ final class ThemeHeadChromeCssPack
                 'theme/' . $area . '/colors/_ink.css',
                 'theme/' . $area . '/colors/_dark.css',
                 'theme/' . $area . '/variables/_spacing.css',
+                // Size/misc leaves for widget token consumption (REQ-THEME-0007); must ship with pack.
+                'theme/' . $area . '/variables/_auto-literals.css',
                 'theme/' . $area . '/variables/_typography.css',
                 'statics:ui/weline-foundation.css',
                 'statics:ui/weline-frontend.css',
@@ -342,6 +344,7 @@ final class ThemeHeadChromeCssPack
                 'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_default.css',
                 'theme/' . $area . '/colors/_dark.css',
+                'theme/' . $area . '/variables/_auto-literals.css',
                 'statics:ui/weline-foundation.css',
                 'statics:ui/weline-backend.css',
             ],
@@ -353,6 +356,7 @@ final class ThemeHeadChromeCssPack
             self::PACK_TOKENS_POST => [
                 'theme/' . $area . '/colors/_dark.css',
                 'theme/' . $area . '/variables/_spacing.css',
+                'theme/' . $area . '/variables/_auto-literals.css',
                 'theme/' . $area . '/variables/_typography.css',
             ],
             self::PACK_TOKENS_MINIMAL => [
@@ -360,12 +364,14 @@ final class ThemeHeadChromeCssPack
                 'theme/' . $area . '/colors/_default.css',
                 'theme/' . $area . '/colors/_ink.css',
                 'theme/' . $area . '/colors/_dark.css',
+                'theme/' . $area . '/variables/_auto-literals.css',
                 'theme/' . $area . '/variables/_typography.css',
             ],
             self::PACK_TOKENS_BACKEND => [
                 'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_default.css',
                 'theme/' . $area . '/colors/_dark.css',
+                'theme/' . $area . '/variables/_auto-literals.css',
             ],
             self::PACK_UI => $area === 'backend'
                 ? ['statics:ui/weline-foundation.css', 'statics:ui/weline-backend.css']

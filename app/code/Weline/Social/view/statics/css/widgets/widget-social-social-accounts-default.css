@@ -4,8 +4,8 @@
 }
 
 .wc-theme_widget_social_accounts .social-title {
-    margin: 0 0 var(--weline-space-3, 12px);
-    font-size: var(--weline-font-size-base, 16px);
+    margin: 0 0 var(--weline-space-3);
+    font-size: var(--weline-font-size-base);
     line-height: 1.3;
     font-weight: 600;
     color: var(--weline-theme-text);
@@ -15,7 +15,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--weline-space-3, 10px);
+    gap: var(--weline-space-3);
 }
 
 .wc-theme_widget_social_accounts.layout-vertical .social-list {
@@ -26,7 +26,7 @@
 .wc-theme_widget_social_accounts .social-link {
     display: inline-flex;
     align-items: center;
-    gap: var(--weline-space-2, 8px);
+    gap: var(--weline-space-2);
     color: inherit;
     text-decoration: none;
     transition: opacity var(--weline-theme-transition-base, 0.2s ease);
@@ -37,11 +37,11 @@
 }
 
 .wc-theme_widget_social_accounts .social-icon {
-    width: var(--wc-social-size, 38px);
-    height: var(--wc-social-size, 38px);
+    width: var(--wc-social-size);
+    height: var(--wc-social-size);
     display: inline-grid;
     place-items: center;
-    border-radius: var(--weline-radius-md, 8px);
+    border-radius: var(--weline-radius-md);
 }
 
 .wc-theme_widget_social_accounts .social-icon svg {
@@ -55,7 +55,7 @@
 }
 
 .wc-theme_widget_social_accounts.style-outline .social-icon {
-    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style, solid)
         color-mix(in srgb, var(--weline-theme-text-muted) 45%, transparent);
     background: transparent;
 }
@@ -69,19 +69,19 @@
 }
 
 .wc-theme_widget_social_accounts .social-label {
-    font-size: var(--weline-font-size-sm, 14px);
+    font-size: var(--weline-font-size-sm);
     line-height: 1.3;
     white-space: nowrap;
     color: var(--weline-theme-text-muted);
 }
 
 .wc-theme_widget_social_accounts .social-placeholder {
-    font-size: var(--weline-font-size-sm, 13px);
+    font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text-muted);
     font-style: italic;
 }
 
 .widget-preview-canvas .wc-theme_widget_social_accounts,
 .wc-theme_widget_social_accounts.is-preview {
-    min-height: 40px;
+    min-height: var(--control-height-md);
 }

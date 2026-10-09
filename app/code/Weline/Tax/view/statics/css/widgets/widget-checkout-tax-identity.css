@@ -2,10 +2,10 @@
 .weline-checkout-tax-identity[hidden] { display: none !important; }
 .weline-checkout-tax-identity__summary {
   cursor: pointer;
-  color: var(--checkout-link, var(--color-link, #007185));
-  font-size: 0.95rem;
+  color: var(--checkout-link, var(--color-link));
+  font-size: var(--spacing-0_95);
 }
-.weline-checkout-tax-identity__body { margin-top: 0.75rem; }
+.weline-checkout-tax-identity__body { margin-top: var(--weline-space-3); }
 [data-tax-identity-host][hidden],
 [data-tax-identity-host]:has([data-tax-identity-root][hidden]) {
   display: none !important;

@@ -4,12 +4,12 @@
     position: absolute;
     left: 0;
     top: calc(100% + var(--weline-space-2));
-    width: min(var(--size-content-640, 42.5rem), 92vw);
-    min-width: min(22.5rem, 92vw);
+    width: min(var(--size-content-640), 92vw);
+    min-width: min(var(--token-size-22-5rem), 92vw);
     box-sizing: border-box;
     border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-body-border, var(--weline-theme-border));
     border-radius: var(--weline-theme-radius-lg);
-    padding: var(--weline-space-4, 1rem);
+    padding: var(--weline-space-4);
     box-shadow: var(--weline-theme-shadow-md);
     z-index: var(--z-index-dropdown);
     overflow: visible;
@@ -19,8 +19,8 @@
      * on-dark; without local rebind, title/address rows paint cream-on-cream.
      * Same ink pair as account-dropdown / mini-cart-drawer.
      */
-    --amz-drawer-text: #0f1111;
-    --amz-drawer-muted: #565959;
+    --amz-drawer-text: var(--color-text-primary);
+    --amz-drawer-muted: var(--color-text-gray);
     --_paper-text: var(--amz-drawer-text);
     --_paper-muted: var(--amz-drawer-muted);
     --_inverse-text: var(--_paper-text);
@@ -68,17 +68,17 @@
 .wc-theme_widget_checkout_delivery_context .delivery-panel-head strong {
     flex: 1 1 auto;
     min-width: 0;
-    font-size: var(--weline-layout-font-size-base, 1rem);
+    font-size: var(--weline-layout-font-size-base);
     line-height: 1.35;
     white-space: nowrap;
 }
 .wc-theme_widget_checkout_delivery_context .country-picker { display: grid; gap: var(--weline-space-2); margin-bottom: var(--weline-space-3); }
 .wc-theme_widget_checkout_delivery_context .country-results {
-    max-height: var(--size-panel-180, 11.25rem);
+    max-height: var(--size-panel-180);
     overflow: auto;
     border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-body-border, var(--weline-theme-border));
     border-radius: var(--weline-theme-radius-md);
-    background: var(--weline-chrome-bg-primary, #ffffff);
+    background: var(--weline-chrome-bg-primary);
 }
 .wc-theme_widget_checkout_delivery_context .country-results button {
     width: 100%;
@@ -97,8 +97,8 @@
     /* 约 5 条地址卡高度；超出后垂直滚动，避免弹层过长 */
     --address-item-pad-y: calc(var(--weline-space-2) * 2);
     --address-item-text: calc(
-        (var(--weline-layout-font-size-sm, 0.875rem) * 1.35)
-        + (var(--weline-layout-font-size-xs, 0.75rem) * 1.35)
+        (var(--weline-layout-font-size-sm) * 1.35)
+        + (var(--weline-layout-font-size-xs) * 1.35)
     );
     --address-item-h: calc(var(--address-item-pad-y) + var(--address-item-text));
     max-height: calc((var(--address-item-h) * 5) + (var(--weline-space-2) * 4));

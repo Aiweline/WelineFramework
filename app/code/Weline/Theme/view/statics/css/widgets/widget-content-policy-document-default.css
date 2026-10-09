@@ -2,8 +2,8 @@
 body.amazon-policy-layout {
             margin: 0;
             min-height: 100vh;
-            color: var(--color-text-primary, #0f1111);
-            background: var(--color-bg-canvas, #ffffff);
+            color: var(--color-text-primary);
+            background: var(--color-bg-canvas);
             font-family: "Amazon Ember", Arial, sans-serif;
         }
         .amazon-policy.weline-page-wrapper {
@@ -14,7 +14,7 @@ body.amazon-policy-layout {
         }
         /* Prototype A: quiet trail inside content column — no full-bleed chrome strip */
         .amazon-policy__breadcrumb {
-            margin: 0 0 var(--weline-space-4, 1rem);
+            margin: 0 0 var(--weline-space-4);
             border: 0;
             background: transparent;
         }
@@ -28,7 +28,7 @@ body.amazon-policy-layout {
         .amazon-policy__main {
             flex: 1 0 auto;
             width: 100%;
-            background: linear-gradient(180deg, #eaeded 0, #f3f3f3 12rem);
+            background: linear-gradient(180deg, var(--color-bg-secondary) 0, var(--color-bg-muted) var(--token-size-12rem));
         }
         .amazon-policy__stage {
             box-sizing: border-box;
@@ -37,17 +37,17 @@ body.amazon-policy-layout {
             min-width: 0;
             margin-inline: auto;
             padding-inline: var(--weline-layout-content-padding-inline);
-            padding-block: var(--weline-space-4, 1rem) clamp(3rem, 6vw, 4.5rem);
+            padding-block: var(--weline-space-4) clamp(var(--weline-space-12), 6vw, var(--token-size-4-5rem));
         }
         .amazon-policy__hero {
-            margin: 0 0 1.25rem;
-            padding: clamp(1.35rem, 3vw, 1.85rem) clamp(1.15rem, 2.5vw, 1.75rem);
-            border-radius: 8px;
+            margin: 0 0 var(--weline-space-5);
+            padding: clamp(var(--token-size-1-35rem), 3vw, var(--token-size-1-85rem)) clamp(var(--token-size-1-15rem), 2.5vw, var(--spacing-7));
+            border-radius: var(--spacing-2);
             background:
-                radial-gradient(ellipse at top right, rgba(255, 153, 0, .14), transparent 46%),
-                linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
-                        --_inverse-text: var(--color-text-on-dark, #ffffff);
-            --_inverse-muted: var(--color-text-on-dark-muted, #dddddd);
+                radial-gradient(ellipse at top right, var(--color-literal-rgba-255-153-0-14), transparent 46%),
+                linear-gradient(135deg, var(--color-bg-dark-secondary) 0%, var(--color-bg-dark) 58%, var(--color-literal-37475a) 100%);
+                        --_inverse-text: var(--color-text-on-dark);
+            --_inverse-muted: var(--color-text-on-dark-muted);
             --weline-theme-text: var(--_inverse-text);
             --color-text-primary: var(--_inverse-text);
             --color-text-secondary: var(--_inverse-muted);
@@ -55,149 +55,149 @@ body.amazon-policy-layout {
             box-sizing: border-box;
         }
         .amazon-policy__eyebrow {
-            margin: 0 0 0.4rem;
-            font-size: 0.82rem;
+            margin: 0 0 var(--spacing-0_4);
+            font-size: var(--token-size-0-82rem);
             font-weight: 700;
-            letter-spacing: 0.06em;
+            letter-spacing: var(--token-size-0-06em);
             text-transform: uppercase;
-            color: #febd69;
+            color: var(--color-primary-light);
         }
         .amazon-policy__hero h1 {
             margin: 0;
-            font-size: clamp(1.55rem, 3.2vw, 2.1rem);
+            font-size: clamp(var(--token-size-1-55rem), 3.2vw, var(--token-size-2-1rem));
             line-height: 1.2;
             font-weight: 700;
-            color: #ffffff;
+            color: var(--color-bg-primary);
         }
         .amazon-policy__hero-lead {
-            margin: 0.75rem 0 0;
-            max-width: 46rem;
+            margin: var(--weline-space-3) 0 0;
+            max-width: var(--token-size-46rem);
             line-height: 1.65;
-            color: #dddddd;
+            color: var(--color-border-default);
         }
         .amazon-policy__meta {
-            margin-top: 1rem;
+            margin-top: var(--weline-space-4);
             display: flex;
             flex-wrap: wrap;
-            gap: 0.75rem 1.25rem;
-            font-size: 0.9rem;
-            color: #febd69;
+            gap: var(--weline-space-3) var(--weline-space-5);
+            font-size: var(--spacing-0_9);
+            color: var(--color-primary-light);
         }
         .amazon-policy__meta a { color: inherit; text-decoration: underline; }
         .amazon-policy__panel {
             display: grid;
-            grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+            grid-template-columns: minmax(var(--size-panel-200), var(--token-size-240px)) minmax(0, 1fr);
             gap: 0;
             align-items: start;
-            background: #ffffff;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
+            background: var(--color-bg-primary);
+            border: var(--border-width-thin) solid var(--color-border-default);
+            border-radius: var(--spacing-2);
+            box-shadow: 0 var(--border-width-thin) var(--border-width-medium) var(--color-literal-rgba-15-17-17-0-08);
             /* no overflow:hidden — with <base href="/"> + sticky header, hash scroll must use document */
         }
         .amazon-policy__toc {
-            border-radius: 8px 0 0 8px;
-            padding: 1.15rem 1rem 1.25rem;
-            border-right: 1px solid #e3e6e6;
-            background: #fafafa;
+            border-radius: var(--spacing-2) 0 0 var(--spacing-2);
+            padding: var(--token-size-1-15rem) var(--weline-space-4) var(--weline-space-5);
+            border-right: var(--border-width-thin) solid var(--color-literal-e3e6e6);
+            background: var(--color-literal-fafafa);
             position: sticky;
-            top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem));
+            top: calc(var(--theme-header-height) + var(--weline-space-3));
             align-self: start;
         }
-        .amazon-policy__toc h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 700; }
-        .amazon-policy__toc nav { display: grid; gap: 0.35rem; }
+        .amazon-policy__toc h2 { margin: 0 0 var(--weline-space-3); font-size: var(--spacing-0_95); font-weight: 700; }
+        .amazon-policy__toc nav { display: grid; gap: var(--token-size-0-35rem); }
         .amazon-policy__toc a {
             display: block;
-            padding: 0.4rem 0.55rem;
-            border-radius: 4px;
-            color: #007185;
+            padding: var(--spacing-0_4) var(--spacing-0_55);
+            border-radius: var(--spacing-1);
+            color: var(--color-info);
             text-decoration: none;
-            font-size: 0.9rem;
+            font-size: var(--spacing-0_9);
             line-height: 1.35;
         }
         .amazon-policy__toc a:hover {
-            background: #f7fafa;
-            color: #c45500;
+            background: var(--color-literal-f7fafa);
+            color: var(--color-primary-text-emphasis);
             text-decoration: underline;
         }
         .amazon-policy__article {
-            border-radius: 0 8px 8px 0;
-            padding: clamp(1.15rem, 2.5vw, 1.75rem) clamp(1.15rem, 2.5vw, 1.85rem) 1.85rem;
+            border-radius: 0 var(--spacing-2) var(--spacing-2) 0;
+            padding: clamp(var(--token-size-1-15rem), 2.5vw, var(--spacing-7)) clamp(var(--token-size-1-15rem), 2.5vw, var(--token-size-1-85rem)) var(--token-size-1-85rem);
         }
         .amazon-policy__intro {
-            margin: 0 0 1.25rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #e3e6e6;
-            color: #565959;
+            margin: 0 0 var(--weline-space-5);
+            padding-bottom: var(--weline-space-4);
+            border-bottom: var(--border-width-thin) solid var(--color-literal-e3e6e6);
+            color: var(--color-text-gray);
             line-height: 1.7;
         }
-        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: calc(var(--theme-header-height, 64px) + var(--weline-space-3, 0.75rem)); }
+        .amazon-policy__section { margin-top: var(--weline-space-6); scroll-margin-top: calc(var(--theme-header-height) + var(--weline-space-3)); }
         .amazon-policy__section h2 {
-            margin: 0 0 0.75rem;
-            font-size: 1.2rem;
+            margin: 0 0 var(--weline-space-3);
+            font-size: var(--spacing-1_2);
             font-weight: 700;
-            border-left: 4px solid #ff9900;
-            padding-left: 0.65rem;
-            color: #0f1111;
+            border-left: var(--spacing-1) solid var(--color-primary);
+            padding-left: var(--spacing-0_65);
+            color: var(--color-text-primary);
         }
         .amazon-policy__section p {
-            margin: 0 0 0.7rem;
+            margin: 0 0 var(--spacing-0_7);
             line-height: 1.7;
-            font-size: 0.98rem;
-            color: #333;
+            font-size: var(--token-size-0-98rem);
+            color: var(--color-literal-333333);
         }
         .amazon-policy__section ul {
-            margin: 0.35rem 0 0.85rem;
-            padding-left: 1.35rem;
+            margin: var(--token-size-0-35rem) 0 var(--spacing-0_85);
+            padding-left: var(--token-size-1-35rem);
         }
         .amazon-policy__section li {
-            margin-bottom: 0.45rem;
+            margin-bottom: var(--spacing-0_45);
             line-height: 1.65;
-            color: #333;
+            color: var(--color-literal-333333);
         }
         .amazon-policy__footer-note {
-            margin-top: 1.75rem;
-            padding-top: 1rem;
-            border-top: 1px solid #e3e6e6;
-            font-size: 0.9rem;
-            color: #565959;
+            margin-top: var(--spacing-7);
+            padding-top: var(--weline-space-4);
+            border-top: var(--border-width-thin) solid var(--color-literal-e3e6e6);
+            font-size: var(--spacing-0_9);
+            color: var(--color-text-gray);
         }
         .amazon-policy__related {
-            margin-top: 1rem;
+            margin-top: var(--weline-space-4);
             display: flex;
             flex-wrap: wrap;
-            gap: 0.65rem 1rem;
+            gap: var(--spacing-0_65) var(--weline-space-4);
         }
         .amazon-policy__related a {
-            color: #007185;
+            color: var(--color-info);
             text-decoration: none;
-            font-size: 0.92rem;
+            font-size: var(--token-size-0-92rem);
         }
         .amazon-policy__related a:hover {
-            color: #c45500;
+            color: var(--color-primary-text-emphasis);
             text-decoration: underline;
         }
-        @media (max-width: 900px) {
+        @media (max-width: var(--size-content-900)) {
             .amazon-policy__panel { grid-template-columns: 1fr; }
             .amazon-policy__toc {
                 position: static;
                 border-right: 0;
-                border-bottom: 1px solid #e3e6e6;
-                border-radius: 8px 8px 0 0;
+                border-bottom: var(--border-width-thin) solid var(--color-literal-e3e6e6);
+                border-radius: var(--spacing-2) var(--spacing-2) 0 0;
             }
-            .amazon-policy__article { border-radius: 0 0 8px 8px; }
+            .amazon-policy__article { border-radius: 0 0 var(--spacing-2) var(--spacing-2); }
             .amazon-policy__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
-        @media (max-width: 560px) {
+        @media (max-width: var(--size-hero-height)) {
             .amazon-policy__toc nav { grid-template-columns: 1fr; }
         }
 
 /* plain (policy/default) */
-.policy-document-plain .policy-header { margin-bottom: 1.25rem; }
-.policy-document-plain .policy-title { margin: 0 0 0.5rem; font-size: clamp(1.5rem, 3vw, 2rem); }
-.policy-document-plain .policy-description { margin: 0; color: var(--color-text-secondary, #565959); line-height: 1.65; }
-.policy-document-plain .policy-section { margin-top: 1.5rem; scroll-margin-top: calc(var(--theme-header-height, 64px) + 0.75rem); }
-.policy-document-plain .section-title { margin: 0 0 0.75rem; font-size: 1.15rem; font-weight: 700; }
-.policy-document-plain .section-text { margin: 0 0 0.7rem; line-height: 1.7; }
-.policy-document-plain .policy-list { margin: 0.35rem 0 0.85rem; padding-left: 1.35rem; }
-.policy-document-plain .policy-list li { margin-bottom: 0.45rem; line-height: 1.65; }
+.policy-document-plain .policy-header { margin-bottom: var(--weline-space-5); }
+.policy-document-plain .policy-title { margin: 0 0 var(--weline-space-2); font-size: clamp(var(--weline-space-6), 3vw, var(--weline-space-8)); }
+.policy-document-plain .policy-description { margin: 0; color: var(--color-text-secondary); line-height: 1.65; }
+.policy-document-plain .policy-section { margin-top: var(--weline-space-6); scroll-margin-top: calc(var(--theme-header-height) + var(--weline-space-3)); }
+.policy-document-plain .section-title { margin: 0 0 var(--weline-space-3); font-size: var(--token-size-1-15rem); font-weight: 700; }
+.policy-document-plain .section-text { margin: 0 0 var(--spacing-0_7); line-height: 1.7; }
+.policy-document-plain .policy-list { margin: var(--token-size-0-35rem) 0 var(--spacing-0_85); padding-left: var(--token-size-1-35rem); }
+.policy-document-plain .policy-list li { margin-bottom: var(--spacing-0_45); line-height: 1.65; }

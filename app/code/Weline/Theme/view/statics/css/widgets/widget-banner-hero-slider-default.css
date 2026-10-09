@@ -181,7 +181,7 @@
     margin: 0 0 var(--weline-space-3);
     font-size: var(--weline-layout-font-size-sm);
     font-weight: 600;
-    letter-spacing: 0.18em;
+    letter-spacing: var(--token-size-0-18em);
     color: var(--weline-theme-primary);
     opacity: 0;
 }
@@ -195,7 +195,7 @@
     font-size: clamp(var(--weline-layout-font-size-2xl), 3.2vw, var(--weline-layout-font-size-4xl));
     font-weight: 600;
     line-height: 1.25;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--token-size-0-04em);
     color: var(--weline-theme-text);
     margin: 0 0 var(--spacing-3_5);
     text-shadow: none;
@@ -211,7 +211,7 @@
     line-height: 1.6;
     color: var(--weline-theme-text-secondary);
     margin: 0 0 var(--weline-space-8);
-    max-width: 28em;
+    max-width: var(--token-size-28em);
     text-shadow: none;
     opacity: 0;
 }
@@ -239,7 +239,7 @@
     border-radius: var(--weline-theme-radius-md);
     font-weight: 600;
     font-size: var(--weline-layout-font-size-base);
-    letter-spacing: 0.06em;
+    letter-spacing: var(--token-size-0-06em);
     transition: background var(--weline-theme-transition-base),
                 transform var(--weline-theme-transition-base),
                 box-shadow var(--weline-theme-transition-base);
@@ -259,11 +259,11 @@
     background: transparent;
     color: var(--weline-theme-text);
     text-decoration: none;
-    border: var(--weline-theme-border-width, 1px) solid var(--weline-theme-primary);
+    border: var(--weline-theme-border-width) solid var(--weline-theme-primary);
     border-radius: var(--weline-theme-radius-md);
     font-weight: 600;
     font-size: var(--weline-layout-font-size-base);
-    letter-spacing: 0.06em;
+    letter-spacing: var(--token-size-0-06em);
     transition: background var(--weline-theme-transition-base),
                 color var(--weline-theme-transition-base),
                 border-color var(--weline-theme-transition-base),

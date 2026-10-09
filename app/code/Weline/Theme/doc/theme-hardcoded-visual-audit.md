@@ -30,3 +30,15 @@
 
 - Theme Editor / 盘编辑优先暴露语义 Token；`_auto-literals.css` 中的 `--token-*` 可逐步合并回语义名。  
 - 新增主题样式时直接写 `var(...)`，禁止再引入字面量。  
+
+## 部件扩展（2026-10-09）
+
+> 范围：`app/code/**/widgets/**` 的 `.css` / `.phtml`（含 `statics/css/widgets`；排除 test/doc/generated）  
+> 工具：`Theme/bin/widget-theme-token-audit.py` · 契约 `test/Unit/Css/WidgetThemeTokenHardcodeContractTest.php`
+
+| 类别 | 命中 |
+|---|---:|
+| `hard_color_*` / `hard_size` / `var_fallback_*` / 真 `inline_style_literal` | **0** |
+
+改造前基线约：`bad_files` 101、`total_hits` ~4666（见会话 `dev/tmp/widget-theme-token-audit.json`，勿提交）。  
+Amazon 风格壳仍落在 `statics/css/widgets/*-amazon.css`（符合 `theme_css_architecture_not_style_shell`）；业务侧只消费语义 Token，叶子在 `variables/_colors.css` / `_auto-literals.css` / `colors/**`。

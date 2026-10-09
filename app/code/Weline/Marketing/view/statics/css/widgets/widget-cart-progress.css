@@ -1,7 +1,8 @@
 
-[data-widget-style-class="6c838c868dae2079"] {margin:12px 0 16px;}
-[data-widget-style-class="bbf02c34c6cafb5b"] {display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px;}
-[data-widget-style-class="b452c8b8256eb282"] {font-size:14px;color:#16333f;}
-[data-widget-style-class="30a97782fdaaa83d"] {font-size:13px;color:#16333f;text-decoration:underline;}
-[data-widget-style-class="6a9bae0e9436c01b"] {height:8px;background:#e6eef1;border-radius:999px;overflow:hidden;}
-[data-widget-style-class="ab9cc31e817f818d"] {margin:8px 0 0;font-size:13px;color:#5c6b74;}
+[data-widget-style-class="6c838c868dae2079"] {margin:var(--spacing-3) 0 var(--spacing-4);}
+[data-widget-style-class="bbf02c34c6cafb5b"] {display:flex;justify-content:space-between;align-items:baseline;gap:var(--spacing-3);margin-bottom:var(--spacing-2);}
+[data-widget-style-class="b452c8b8256eb282"] {font-size:var(--token-size-14px);color:var(--color-literal-16333f);}
+[data-widget-style-class="30a97782fdaaa83d"] {font-size:var(--token-size-13px);color:var(--color-literal-16333f);text-decoration:underline;}
+[data-widget-style-class="6a9bae0e9436c01b"] {height:var(--spacing-2);background:var(--color-literal-e6eef1);border-radius:var(--token-size-999px);overflow:hidden;}
+.mkt-cart-progress__bar {height:100%;background:var(--color-literal-16333f);transition:width .25s ease;}
+[data-widget-style-class="ab9cc31e817f818d"] {margin:var(--spacing-2) 0 0;font-size:var(--token-size-13px);color:var(--color-literal-5c6b74);}

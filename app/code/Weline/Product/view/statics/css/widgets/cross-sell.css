@@ -1,48 +1,48 @@
 .weline-product-fbt {
-  --wpf-ink: #0f1111;
-  --wpf-muted: #565959;
-  --wpf-link: #007185;
-  --wpf-border: #d5d9d9;
-  --wpf-surface: #ffffff;
-  --wpf-cta: #ff8c00;
-  --wpf-cta-hover: #ff6b00;
-  --wpf-cta-glow: rgba(255, 107, 0, 0.42);
-  --wpf-total: #b12704;
-  --wpf-media: 7.25rem;
-  margin: 1.25rem 0 0;
-  padding: 1.15rem 0.85rem 0.85rem;
-  border-top: 1px solid var(--wpf-border);
+  --wpf-ink: var(--color-text-primary);
+  --wpf-muted: var(--color-text-gray);
+  --wpf-link: var(--color-info);
+  --wpf-border: var(--color-literal-d5d9d9);
+  --wpf-surface: var(--color-bg-primary);
+  --wpf-cta: var(--color-literal-ff8c00);
+  --wpf-cta-hover: var(--color-literal-ff6b00);
+  --wpf-cta-glow: var(--color-literal-rgba-255-107-0-0-42);
+  --wpf-total: var(--color-danger);
+  --wpf-media: var(--token-size-7-25rem);
+  margin: var(--weline-space-5) 0 0;
+  padding: var(--token-size-1-15rem) var(--spacing-0_85) var(--spacing-0_85);
+  border-top: var(--border-width-thin) solid var(--wpf-border);
   color: var(--wpf-ink);
   font-family: "Amazon Ember", Arial, sans-serif;
 }
 
 .weline-product-fbt .wpf-header {
-  margin: 0 0 0.75rem;
-  padding-inline: 0.35rem;
+  margin: 0 0 var(--weline-space-3);
+  padding-inline: var(--token-size-0-35rem);
 }
 
 .weline-product-fbt .wpf-title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--weline-space-5);
   line-height: 1.25;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: calc(-1 * var(--token-size-0-01em));
 }
 
 .weline-product-fbt .wpf-subtitle {
-  margin: 0.2rem 0 0;
+  margin: var(--spacing-0_2) 0 0;
   color: var(--wpf-muted);
-  font-size: 0.86rem;
+  font-size: var(--token-size-0-86rem);
 }
 
 .weline-product-fbt .wpf-body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.85rem 1rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--wpf-border);
-  border-radius: 8px;
+  gap: var(--spacing-0_85) var(--weline-space-4);
+  padding: var(--spacing-0_85) var(--weline-space-4);
+  border: var(--border-width-thin) solid var(--wpf-border);
+  border-radius: var(--spacing-2);
   background: var(--wpf-surface);
 }
 
@@ -50,11 +50,11 @@
   display: flex;
   flex-wrap: nowrap;
   align-items: flex-start;
-  gap: 0.35rem 0.4rem;
+  gap: var(--token-size-0-35rem) var(--spacing-0_4);
   flex: 1 1 auto;
   min-width: 0;
   overflow-x: auto;
-  padding-bottom: 0.1rem;
+  padding-bottom: var(--token-size-0-1rem);
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -65,23 +65,23 @@
 
 .weline-product-fbt .wpf-plus {
   flex: 0 0 auto;
-  width: 1.1rem;
+  width: var(--token-size-1-1rem);
   height: var(--wpf-media);
   display: grid;
   place-items: center;
-  margin-top: 0.1rem;
-  font-size: 1.1rem;
+  margin-top: var(--token-size-0-1rem);
+  font-size: var(--token-size-1-1rem);
   font-weight: 700;
-  color: #6b6b6b;
+  color: var(--color-literal-6b6b6b);
   line-height: 1;
   user-select: none;
 }
 
 .weline-product-fbt .wpf-item {
   position: relative;
-  flex: 0 0 8.75rem;
-  width: 8.75rem;
-  max-width: 8.75rem;
+  flex: 0 0 var(--token-size-8-75rem);
+  width: var(--token-size-8-75rem);
+  max-width: var(--token-size-8-75rem);
   padding: 0;
   border: 0;
   background: transparent;
@@ -98,10 +98,10 @@
 
 .weline-product-fbt .wpf-stage .product-actions {
   position: absolute;
-  top: 0.2rem;
-  right: 0.15rem;
+  top: var(--spacing-0_2);
+  right: var(--token-size-0-15rem);
   display: flex;
-  gap: 0.2rem;
+  gap: var(--spacing-0_2);
   z-index: 3;
   opacity: 0;
   transform: translateY(-3px);
@@ -114,7 +114,7 @@
   transform: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: var(--breakpoint-md)) {
   .weline-product-fbt .wpf-stage .product-actions {
     opacity: 1;
     transform: none;
@@ -123,8 +123,8 @@
 
 .weline-product-fbt .wpf-check {
   position: absolute;
-  top: 0.15rem;
-  left: 0.15rem;
+  top: var(--token-size-0-15rem);
+  left: var(--token-size-0-15rem);
   z-index: 2;
   display: inline-flex;
   cursor: pointer;
@@ -137,19 +137,19 @@
 }
 
 .weline-product-fbt .wpf-check-ui {
-  width: 1.05rem;
-  height: 1.05rem;
-  border: 1px solid #888c8c;
-  border-radius: 3px;
-  background: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  width: var(--spacing-1_05);
+  height: var(--spacing-1_05);
+  border: var(--border-width-thin) solid var(--color-literal-888c8c);
+  border-radius: var(--border-width-thick);
+  background: var(--color-bg-primary);
+  box-shadow: inset 0 var(--border-width-thin) 0 var(--color-literal-rgba-255-255-255-0-7);
 }
 
 .weline-product-fbt .wpf-checkbox:checked + .wpf-check-ui {
-  background: #007185;
-  border-color: #007185;
+  background: var(--color-info);
+  border-color: var(--color-info);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%23fff' d='M10.1 2.3 4.6 8.5 1.9 5.7l-.9.9 3.6 3.7 6.4-7.2z'/%3E%3C/svg%3E");
-  background-size: 0.75rem;
+  background-size: var(--weline-space-3);
   background-repeat: no-repeat;
   background-position: center;
 }
@@ -161,8 +161,8 @@
 
 .weline-product-fbt .wpf-sr {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  width: var(--border-width-thin);
+  height: var(--border-width-thin);
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
@@ -172,9 +172,9 @@
   width: var(--wpf-media);
   height: var(--wpf-media);
   margin: 0 auto;
-  border-radius: 4px;
+  border-radius: var(--spacing-1);
   overflow: hidden;
-  background: #f3f3f3;
+  background: var(--color-bg-muted);
 }
 
 .weline-product-fbt .wpf-media img {
@@ -182,7 +182,7 @@
   height: 100%;
   object-fit: contain;
   display: block;
-  background: #f3f3f3;
+  background: var(--color-bg-muted);
 }
 
 .weline-product-fbt .wpf-media img[data-failed="1"] {
@@ -192,17 +192,17 @@
 .weline-product-fbt .wpf-meta {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  padding-top: 0.4rem;
-  min-height: 4.1rem;
+  gap: var(--spacing-0_2);
+  padding-top: var(--spacing-0_4);
+  min-height: var(--token-size-4-1rem);
 }
 
 .weline-product-fbt .wpf-name {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--token-size-0-82rem);
   line-height: 1.3;
   font-weight: 400;
-  min-height: 2.15em;
+  min-height: var(--token-size-2-15em);
 }
 
 .weline-product-fbt .wpf-name a {
@@ -215,7 +215,7 @@
 }
 
 .weline-product-fbt .wpf-name a:hover {
-  color: #c45500;
+  color: var(--color-primary-text-emphasis);
   text-decoration: underline;
 }
 
@@ -223,11 +223,11 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.35rem;
+  gap: var(--weline-space-1) var(--token-size-0-35rem);
 }
 
 .weline-product-fbt .wpf-price {
-  font-size: 0.95rem;
+  font-size: var(--spacing-0_95);
   font-weight: 700;
   color: var(--wpf-ink);
 }
@@ -235,38 +235,38 @@
 .weline-product-fbt .wpf-badge {
   display: inline-flex;
   width: fit-content;
-  padding: 0.05rem 0.35rem;
-  border-radius: 2px;
-  background: #f0f2f2;
-  color: #565959;
-  font-size: 0.68rem;
+  padding: var(--token-size-0-05rem) var(--token-size-0-35rem);
+  border-radius: var(--border-width-medium);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-gray);
+  font-size: var(--token-size-0-68rem);
   font-weight: 600;
 }
 
 .weline-product-fbt .wpf-summary {
-  flex: 0 0 11.25rem;
+  flex: 0 0 var(--token-size-11-25rem);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.45rem;
-  padding: 0.1rem 0 0.1rem 0.85rem;
-  border-left: 1px solid #e7e7e7;
+  gap: var(--spacing-0_45);
+  padding: var(--token-size-0-1rem) 0 var(--token-size-0-1rem) var(--spacing-0_85);
+  border-left: var(--border-width-thin) solid var(--color-bg-tertiary);
   margin-left: auto;
 }
 
 .weline-product-fbt .wpf-total {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: var(--token-size-0-1rem);
 }
 
 .weline-product-fbt .wpf-total-label {
   color: var(--wpf-muted);
-  font-size: 0.8rem;
+  font-size: var(--spacing-0_8);
 }
 
 .weline-product-fbt .wpf-total-value {
-  font-size: 1.2rem;
+  font-size: var(--spacing-1_2);
   font-weight: 700;
   color: var(--wpf-total);
 }
@@ -276,21 +276,21 @@
   isolation: isolate;
   appearance: none;
   overflow: visible;
-  border: 1px solid #e85d04;
-  border-radius: 20px;
+  border: var(--border-width-thin) solid var(--color-literal-e85d04);
+  border-radius: var(--spacing-5);
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M0 8 Q15 2 30 8 T60 8 T90 8 T120 8' fill='none' stroke='rgba(255,255,255,0.28)' stroke-width='1.5'/%3E%3Cpath d='M0 10 Q15 4 30 10 T60 10 T90 10 T120 10' fill='none' stroke='rgba(255,255,255,0.16)' stroke-width='1'/%3E%3C/svg%3E") center 78% / 100% 0.55rem no-repeat,
-    linear-gradient(180deg, #ffb347 0%, var(--wpf-cta) 48%, var(--wpf-cta-hover) 100%);
-  color: #fff;
-  font-size: 0.84rem;
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M0 8 Q15 2 30 8 T60 8 T90 8 T120 8' fill='none' stroke='rgba(255,255,255,0.28)' stroke-width='1.5'/%3E%3Cpath d='M0 10 Q15 4 30 10 T60 10 T90 10 T120 10' fill='none' stroke='var(--color-literal-rgba-255-255-255-0-16)' stroke-width='1'/%3E%3C/svg%3E") center 78% / 100% var(--spacing-0_55) no-repeat,
+    linear-gradient(180deg, var(--color-literal-ffb347) 0%, var(--wpf-cta) 48%, var(--wpf-cta-hover) 100%);
+  color: var(--color-bg-primary);
+  font-size: var(--token-size-0-84rem);
   font-weight: 700;
   line-height: 1.2;
-  padding: 0.52rem 0.95rem;
+  padding: var(--token-size-0-52rem) var(--spacing-0_95);
   cursor: pointer;
   width: 100%;
   box-shadow:
-    0 4px 14px var(--wpf-cta-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    0 var(--spacing-1) var(--token-size-14px) var(--wpf-cta-glow),
+    inset 0 var(--border-width-thin) 0 var(--color-literal-rgba-255-255-255-0-35);
   animation: wpf-cta-wave-bounce 2.6s ease-in-out infinite;
   transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
@@ -310,8 +310,8 @@
 .weline-product-fbt .wpf-cta__ripple {
   position: absolute;
   inset: 0;
-  border: 2px solid rgba(255, 140, 0, 0.62);
-  border-radius: 22px;
+  border: var(--border-width-medium) solid var(--color-literal-rgba-255-140-0-0-62);
+  border-radius: var(--token-size-22px);
   opacity: 0;
   animation: wpf-cta-ripple 2.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
 }
@@ -328,8 +328,8 @@
   position: absolute;
   left: 8%;
   right: 8%;
-  bottom: 0.18rem;
-  height: 0.35rem;
+  bottom: var(--token-size-0-18rem);
+  height: var(--token-size-0-35rem);
   z-index: 1;
   pointer-events: none;
   opacity: 0.55;
@@ -337,12 +337,12 @@
     repeating-linear-gradient(
       90deg,
       transparent 0,
-      transparent 6px,
-      rgba(255, 255, 255, 0.22) 6px,
-      rgba(255, 255, 255, 0.22) 7px
+      transparent var(--size-scrollbar),
+      var(--color-literal-rgba-255-255-255-0-22) var(--size-scrollbar),
+      var(--color-literal-rgba-255-255-255-0-22) var(--token-size-7px)
     );
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 8'%3E%3Cpath d='M0 4 Q12.5 0 25 4 T50 4 T75 4 T100 4' fill='none' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E");
-  mask-size: 2.4rem 100%;
+  mask-size: var(--token-size-2-4rem) 100%;
   mask-repeat: repeat-x;
   animation: wpf-cta-wave-lines 3.2s linear infinite;
 }
@@ -350,8 +350,8 @@
 .weline-product-fbt .wpf-cta:hover {
   filter: brightness(1.04);
   box-shadow:
-    0 6px 18px rgba(255, 107, 0, 0.48),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    0 var(--size-scrollbar) var(--token-size-18px) var(--color-literal-rgba-255-107-0-0-48),
+    inset 0 var(--border-width-thin) 0 var(--color-literal-rgba-255-255-255-0-4);
 }
 
 .weline-product-fbt .wpf-cta[data-state="loading"],
@@ -367,10 +367,10 @@
 }
 
 .weline-product-fbt .wpf-cta[data-state="saved"] {
-  border-color: #067d62;
-  background: linear-gradient(180deg, #12a87a 0%, #067d62 100%);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(6, 125, 98, 0.35);
+  border-color: var(--color-literal-067d62);
+  background: linear-gradient(180deg, var(--color-literal-12a87a) 0%, var(--color-literal-067d62) 100%);
+  color: var(--color-bg-primary);
+  box-shadow: 0 var(--spacing-1) var(--spacing-3) var(--color-literal-rgba-6-125-98-0-35);
 }
 
 @keyframes wpf-cta-wave-bounce {
@@ -408,7 +408,7 @@
     mask-position: 0 0;
   }
   100% {
-    mask-position: 2.4rem 0;
+    mask-position: var(--token-size-2-4rem) 0;
   }
 }
 
@@ -421,8 +421,8 @@
 }
 
 .weline-product-fbt .wpf-status {
-  min-height: 1.1em;
-  font-size: 0.78rem;
+  min-height: var(--token-size-1-1em);
+  font-size: var(--token-size-0-78rem);
   color: var(--wpf-muted);
 }
 
@@ -431,50 +431,50 @@
 }
 
 .weline-product-fbt .wpf-status.is-success {
-  color: #067d62;
+  color: var(--color-literal-067d62);
 }
 
-@media (max-width: 1023px) {
+@media (max-width: var(--token-size-1023px)) {
   .weline-product-fbt .wpf-summary {
     border-left: 0;
-    border-top: 1px solid #e7e7e7;
+    border-top: var(--border-width-thin) solid var(--color-bg-tertiary);
     margin-left: 0;
     flex-basis: 100%;
-    padding: 0.75rem 0 0;
+    padding: var(--weline-space-3) 0 0;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 0.65rem 1rem;
+    gap: var(--spacing-0_65) var(--weline-space-4);
   }
 
   .weline-product-fbt .wpf-cta {
     width: auto;
-    min-width: 10rem;
+    min-width: var(--token-size-10rem);
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: var(--token-bp-767px)) {
   .weline-product-fbt {
-    padding-inline: 0.65rem;
+    padding-inline: var(--spacing-0_65);
   }
 
   .weline-product-fbt .wpf-header {
-    padding-inline: 0.15rem;
+    padding-inline: var(--token-size-0-15rem);
   }
 
   .weline-product-fbt .wpf-body {
-    padding: 0.75rem;
+    padding: var(--weline-space-3);
   }
 
   .weline-product-fbt .wpf-item {
-    flex-basis: 7.4rem;
-    width: 7.4rem;
-    max-width: 7.4rem;
+    flex-basis: var(--token-size-7-4rem);
+    width: var(--token-size-7-4rem);
+    max-width: var(--token-size-7-4rem);
   }
 
   .weline-product-fbt .wpf-title {
-    font-size: 1.1rem;
+    font-size: var(--token-size-1-1rem);
   }
 
   .weline-product-fbt .wpf-summary {

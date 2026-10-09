@@ -2,13 +2,13 @@
 /* Split: 左快捷 / 右账密；≤39.99rem 账密优先再快捷。 */
 
 [data-w-component="account-login"].w-auth-login--amazon.w-auth-login--split{
-    width:min(40rem,calc(100% - 2rem))!important;
-    max-width:40rem;
+    width:min(var(--token-size-40rem),calc(100% - var(--weline-space-8)))!important;
+    max-width:var(--token-size-40rem);
 }
 
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split{
     display:grid;
-    grid-template-columns:minmax(8.75rem,.88fr) auto minmax(16rem,1.4fr);
+    grid-template-columns:minmax(var(--token-size-8-75rem),.88fr) auto minmax(var(--token-size-16rem),1.4fr);
     align-items:stretch;
     column-gap:0;
     width:100%;
@@ -21,11 +21,11 @@
     flex-direction:column;
     align-items:center;
     justify-content:center;
-    gap:.5rem;
+    gap:.var(--spacing-5rem);
     margin:0;
-    padding:.75rem .35rem;
-    color:#565959;
-    font-size:.75rem;
+    padding:.var(--token-size-75rem) .var(--token-size-35rem);
+    color:var(--color-text-gray);
+    font-size:.var(--token-size-75rem);
     line-height:1.2;
     white-space:nowrap;
 }
@@ -34,9 +34,9 @@
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule::after{
     content:"";
     flex:1 1 auto;
-    width:1px;
-    min-height:1.25rem;
-    background:var(--color-border,var(--weline-theme-border-color,#d5d9d9));
+    width:var(--border-width-thin);
+    min-height:var(--weline-space-5);
+    background:var(--color-border,var(--weline-theme-border-color));
 }
 
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule-text--long{display:none;}
@@ -47,9 +47,9 @@
     flex-direction:column;
     align-items:center;
     justify-content:center;
-    gap:.55rem;
+    gap:.var(--token-size-55rem);
     margin:0!important;
-    padding:1rem .85rem 1rem 1.15rem!important;
+    padding:var(--weline-space-4) .var(--token-size-85rem) var(--weline-space-4) var(--token-size-1-15rem)!important;
     min-width:0;
     text-align:center;
 }
@@ -57,15 +57,15 @@
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social-title{
     display:block;
     margin:0;
-    color:#565959;
-    font-size:.8125rem;
+    color:var(--color-text-gray);
+    font-size:.var(--token-size-8125rem);
     text-align:center;
 }
 
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__form{
-    gap:.7rem;
+    gap:.var(--token-size-7rem);
     min-width:0;
-    padding:.35rem 1.25rem 1rem 1rem!important;
+    padding:.var(--token-size-35rem) var(--weline-space-5) var(--weline-space-4) var(--weline-space-4)!important;
 }
 
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta{
@@ -73,31 +73,31 @@
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta-tools{
     display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;
-    align-items:center;justify-content:space-between;gap:.75rem;min-width:0;width:100%;
+    align-items:center;justify-content:space-between;gap:.var(--token-size-75rem);min-width:0;width:100%;
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember{
-    display:grid!important;flex:1 1 auto!important;min-width:0!important;max-width:12.5rem!important;width:auto!important;
+    display:grid!important;flex:1 1 auto!important;min-width:0!important;max-width:var(--token-size-12-5rem)!important;width:auto!important;
     gap:0!important;align-items:stretch!important;align-self:center!important;margin:0!important;
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember .w-field__label{
-    display:inline-flex!important;align-items:center;gap:.25rem;
+    display:inline-flex!important;align-items:center;gap:.var(--token-size-25rem);
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember .w-field__label .w-icon{
-    width:1rem;height:1rem;min-width:1rem;min-height:1rem;flex:0 0 1rem;
+    width:var(--weline-space-4);height:var(--weline-space-4);min-width:var(--weline-space-4);min-height:var(--weline-space-4);flex:0 0 var(--weline-space-4);
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember .w-select{
     width:100%!important;min-width:0!important;max-width:none!important;
-    border:1px solid var(--color-border,var(--weline-theme-border-color,#d5d9d9))!important;
-    border-radius:var(--weline-radius-md,.5rem)!important;
-    background-color:var(--weline-theme-field-label-bg,var(--weline-theme-surface,#fff))!important;
+    border:var(--border-width-thin) solid var(--color-border,var(--weline-theme-border-color))!important;
+    border-radius:var(--weline-radius-md,.var(--spacing-5rem))!important;
+    background-color:var(--weline-theme-field-label-bg,var(--weline-theme-surface))!important;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1.5 1.75 6 6.25 10.5 1.75' stroke='%23565959' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")!important;
     background-repeat:no-repeat!important;
-    background-position:right 1rem center!important;
-    background-size:.75rem .5rem!important;
-    box-shadow:none!important;min-height:var(--weline-control-height,2.5rem)!important;
-    padding-block:.5rem!important;padding-inline-start:.75rem!important;
-    padding-inline-end:calc(1rem + 1.15rem)!important;
-    font-size:var(--weline-font-size-sm,.875rem)!important;
+    background-position:right var(--weline-space-4) center!important;
+    background-size:.var(--token-size-75rem) .var(--spacing-5rem)!important;
+    box-shadow:none!important;min-height:var(--weline-control-height)!important;
+    padding-block:.var(--spacing-5rem)!important;padding-inline-start:.var(--token-size-75rem)!important;
+    padding-inline-end:calc(var(--weline-space-4) + var(--token-size-1-15rem))!important;
+    font-size:var(--weline-font-size-sm,.var(--token-size-875rem))!important;
     appearance:none!important;-webkit-appearance:none!important;
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__forgot{
@@ -105,14 +105,14 @@
     align-items:center;justify-content:flex-end;align-self:center!important;padding-block-end:0!important;
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__forgot-link{
-    color:var(--color-link);font-size:.8125rem;font-weight:650;line-height:1.2;text-decoration:none;white-space:nowrap;
-    display:inline-flex;align-items:center;min-height:var(--weline-control-height,2.5rem);
+    color:var(--color-link);font-size:.var(--token-size-8125rem);font-weight:650;line-height:1.2;text-decoration:none;white-space:nowrap;
+    display:inline-flex;align-items:center;min-height:var(--weline-control-height);
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__forgot-link:hover{color:var(--color-link-hover);text-decoration:underline;}
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__password>.w-button{
     border:0!important;background:transparent!important;box-shadow:none!important;color:var(--color-link)!important;
 }
-[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__header{padding:1.15rem 1.25rem .35rem;gap:.25rem;}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__header{padding:var(--token-size-1-15rem) var(--weline-space-5) .var(--token-size-35rem);gap:.var(--token-size-25rem);}
 
 /* 无社媒入口：收成单栏账密 */
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split:not(:has(.auth-form__provider,.account-social-login__item,.account-social-login__btn--logo)){
@@ -123,24 +123,24 @@
     display:none!important;
 }
 
-@media (max-width:39.99rem){
+@media (max-width:var(--token-size-39-99rem)){
     [data-w-component="account-login"].w-auth-login--amazon.w-auth-login--split{
-        width:min(100% - 1rem,24rem)!important;
+        width:min(100% - var(--weline-space-4),var(--token-size-24rem))!important;
     }
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split{
         grid-template-columns:1fr;
     }
-    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__form{order:1;padding-inline:1rem!important;}
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__form{order:1;padding-inline:var(--weline-space-4)!important;}
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule{
         order:2;
         flex-direction:row;
-        padding:.35rem 1rem;
-        gap:.65rem;
+        padding:.var(--token-size-35rem) var(--weline-space-4);
+        gap:.var(--token-size-65rem);
     }
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule::before,
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule::after{
         width:auto;
-        height:1px;
+        height:var(--border-width-thin);
         min-height:0;
         flex:1 1 auto;
     }
@@ -148,7 +148,7 @@
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split-rule-text--long{display:inline;}
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social{
         order:3;
-        padding:0 1rem 1rem!important;
+        padding:0 var(--weline-space-4) var(--weline-space-4)!important;
     }
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta-tools{flex-wrap:wrap!important;}
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember{max-width:none!important;}

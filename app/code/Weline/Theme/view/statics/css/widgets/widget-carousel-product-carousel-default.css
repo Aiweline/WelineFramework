@@ -82,7 +82,7 @@
     opacity: 0;
     transition: all var(--weline-theme-transition-base);
     z-index: 3;
-    max-width: calc(100% - 1rem);
+    max-width: calc(100% - var(--weline-space-4));
 }
 .wc-theme_widget_product_carousel .product-action-bar--carousel .product-actions {
     position: static;

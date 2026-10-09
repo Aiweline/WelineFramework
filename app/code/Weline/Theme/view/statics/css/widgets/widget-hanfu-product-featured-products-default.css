@@ -79,7 +79,7 @@
 }
 
 .wc-theme_widget_featured_products .weline-product-card.density-shelf .wpc-cta :is(a, button) {
-    min-block-size: 2rem;
+    min-block-size: var(--weline-space-8);
     padding-block: var(--weline-space-1);
 }
 

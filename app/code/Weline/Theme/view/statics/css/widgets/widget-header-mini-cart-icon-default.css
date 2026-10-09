@@ -28,8 +28,8 @@
     justify-content: center;
     flex: 0 0 auto;
     /* Keep badge anchors on the icon box, not the whole cart-link. */
-    inline-size: var(--weline-chrome-action-icon-size, var(--spacing-7, 1.75rem));
-    block-size: var(--weline-chrome-action-icon-size, var(--spacing-7, 1.75rem));
+    inline-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
+    block-size: var(--weline-chrome-action-icon-size, var(--spacing-7));
 }
 
 .wc-theme_widget_mini_cart_icon .header-cart-icon {
@@ -52,24 +52,24 @@
     position: absolute;
     /* Hang outside the icon box (Amazon-style). Physical top/right only —
        never pair logical inset-* with top/right:auto (resets → flex-centered cover). */
-    top: calc(var(--weline-space-2, 0.5rem) * -1);
-    right: calc(var(--weline-space-2, 0.5rem) * -1);
+    top: calc(var(--weline-space-2) * -1);
+    right: calc(var(--weline-space-2) * -1);
     left: auto;
     bottom: auto;
     z-index: 1;
-    min-width: var(--spacing-4_5, 1.125rem);
-    height: var(--spacing-4_5, 1.125rem);
+    min-width: var(--spacing-4_5);
+    height: var(--spacing-4_5);
     background: var(--weline-chrome-primary, var(--weline-theme-primary));
     /* Light ink on primary fill (align search-submit); not chrome-text-primary/paper ink. */
-    color: var(--color-on-primary, #ffffff);
+    color: var(--color-on-primary);
     font-size: var(--weline-font-size-xs);
     font-weight: 700;
     line-height: 1;
-    border-radius: var(--weline-radius-round, 999px);
+    border-radius: var(--weline-radius-round);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0 var(--weline-space-1, 0.25rem);
+    padding: 0 var(--weline-space-1);
     pointer-events: none;
     transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
@@ -88,9 +88,9 @@
     gap: 0;
     width: fit-content;
     min-width: 0;
-    max-width: 11rem;
+    max-width: var(--token-size-11rem);
     overflow: hidden;
-    font-size: var(--weline-font-size-xs, 0.75rem);
+    font-size: var(--weline-font-size-xs);
 }
 
 .wc-theme_widget_mini_cart_icon .cart-label {
@@ -114,7 +114,7 @@
 
 .wc-theme_widget_mini_cart_icon .cart-subtotal {
     font-weight: 700;
-    color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark, #ffffff));
+    color: var(--weline-chrome-text-light, var(--weline-theme-text-on-dark));
     white-space: nowrap;
 }
 

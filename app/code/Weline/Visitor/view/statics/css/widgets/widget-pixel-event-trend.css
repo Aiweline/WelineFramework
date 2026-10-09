@@ -1,11 +1,11 @@
 .dashboard-widget-pixel-trend {
-    min-height: 230px;
+    min-height: var(--token-size-230px);
 }
 .pixel-trend-bars {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(34px, 1fr));
-    gap: 8px;
-    height: 180px;
+    grid-template-columns: repeat(auto-fit, minmax(var(--token-size-34px), 1fr));
+    gap: var(--spacing-2);
+    height: var(--size-panel-180);
     align-items: end;
 }
 .pixel-trend-bars div {
@@ -14,26 +14,26 @@
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    gap: 5px;
+    gap: var(--token-size-5px);
     text-align: center;
 }
 .pixel-trend-bars i {
     display: block;
     width: 100%;
-    min-height: 12px;
-    border-radius: 6px 6px 3px 3px;
-    background: linear-gradient(180deg, #06b6d4 0%, #2563eb 100%);
+    min-height: var(--spacing-3);
+    border-radius: var(--size-scrollbar) var(--size-scrollbar) var(--border-width-thick) var(--border-width-thick);
+    background: linear-gradient(180deg, var(--color-literal-06b6d4) 0%, var(--color-accent-hover) 100%);
 }
 .pixel-trend-bars strong {
-    color: var(--w-dashboard-heading, #1f2937);
-    font-size: 11px;
+    color: var(--w-dashboard-heading);
+    font-size: var(--token-size-11px);
     line-height: 1;
     overflow-wrap: anywhere;
 }
 .pixel-trend-bars span,
 .pixel-empty {
-    color: var(--w-dashboard-muted, #6b7280);
-    font-size: 12px;
+    color: var(--w-dashboard-muted);
+    font-size: var(--spacing-3);
     line-height: 1.2;
 }
 .dashboard-widget-pixel-trend header,
@@ -41,12 +41,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--spacing-2);
 }
 .pixel-widget-detail {
-    color: var(--bs-primary, #2563eb);
+    color: var(--bs-primary);
     text-decoration: none;
-    font-size: 12px;
+    font-size: var(--spacing-3);
     font-weight: 600;
     white-space: nowrap;
 }
@@ -54,9 +54,9 @@
     text-decoration: underline;
 }
 .pixel-empty {
-    min-height: 150px;
+    min-height: var(--size-panel-150);
     display: grid;
     place-items: center;
-    border: 1px dashed var(--w-dashboard-border, #e5e7eb);
-    border-radius: 8px;
+    border: var(--border-width-thin) dashed var(--w-dashboard-border);
+    border-radius: var(--spacing-2);
 }

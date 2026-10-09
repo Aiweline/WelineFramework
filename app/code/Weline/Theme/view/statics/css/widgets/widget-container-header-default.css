@@ -2,11 +2,11 @@
     width: 100%;
     z-index: 100;
     background-color: var(--wc-header-bg);
-    color: var(--weline-theme-header-text, #ffffff);
+    color: var(--weline-theme-header-text);
     font-family: var(--weline-layout-font-family, var(--font-family-base, sans-serif));
-    font-size: var(--font-size-sm, 0.875rem);
+    font-size: var(--font-size-sm);
     line-height: 1.4;
-    box-shadow: var(--wc-header-shadow, 0 2px 4px var(--color-overlay-light, rgba(0, 0, 0, 0.1)));
+    box-shadow: var(--wc-header-shadow, 0 var(--border-width-medium) var(--spacing-1) var(--color-overlay-light));
 }
 
 .wc-theme_widget_header_container.is-sticky {
@@ -33,9 +33,9 @@
 }
 
 .wc-theme_widget_header_container .header-nav {
-    background: var(--weline-theme-header-nav-bg, #232f3e);
-    color: var(--weline-theme-header-text, #ffffff);
-    border-top: var(--border-width-thin, 1px) solid var(--color-on-dark-soft, rgba(255, 255, 255, 0.08));
+    background: var(--weline-theme-header-nav-bg);
+    color: var(--weline-theme-header-text);
+    border-top: var(--border-width-thin) solid var(--color-on-dark-soft);
     padding: var(--weline-space-3) 0;
 }
 
@@ -75,7 +75,7 @@
 
 .wc-theme_widget_header_container .slot-search {
     flex: 1 1 var(--token-size-280px);
-    max-width: var(--size-content-640, 40rem);
+    max-width: var(--size-content-640);
     margin: 0 auto;
     order: 2;
     align-self: flex-start;

@@ -78,12 +78,12 @@
 }
 .wc-theme_widget_cross_sell .product-link-wrap .product-actions {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    top: var(--spacing-1);
+    right: var(--spacing-1);
     z-index: 2;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--spacing-1);
     opacity: 0;
     transition: opacity 0.2s ease;
 }
@@ -92,16 +92,16 @@
     opacity: 1;
 }
 .wc-theme_widget_cross_sell .product-link-wrap .action-btn {
-    width: 1.75rem;
-    height: 1.75rem;
+    width: var(--spacing-7);
+    height: var(--spacing-7);
     border: 0;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.96);
+    border-radius: var(--token-size-999px);
+    background: var(--color-literal-rgba-255-255-255-0-96);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 2px 6px rgba(15, 17, 17, 0.12);
+    box-shadow: 0 var(--border-width-medium) var(--size-scrollbar) var(--color-literal-rgba-15-17-17-0-12);
 }
 
 .wc-theme_widget_cross_sell .product-image {
@@ -205,7 +205,7 @@
     color: var(--weline-theme-success);
 }
 
-@media (max-width: 768px) {
+@media (max-width: var(--breakpoint-md)) {
     .wc-theme_widget_cross_sell .cross-sell-container {
         flex-direction: column;
     }

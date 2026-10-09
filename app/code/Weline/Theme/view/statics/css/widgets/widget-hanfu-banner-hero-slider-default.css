@@ -176,7 +176,7 @@
     margin: 0 0 var(--weline-space-2);
     font-size: var(--weline-layout-font-size-sm);
     font-weight: 600;
-    letter-spacing: 0.18em;
+    letter-spacing: var(--token-size-0-18em);
     color: var(--weline-theme-primary);
 }
 
@@ -189,7 +189,7 @@
     font-size: clamp(var(--weline-layout-font-size-xl), 2.6vw, var(--weline-layout-font-size-3xl));
     font-weight: 600;
     line-height: 1.25;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--token-size-0-04em);
     color: var(--weline-theme-text);
     margin: 0 0 var(--weline-space-2);
     text-shadow: none;
@@ -204,7 +204,7 @@
     line-height: 1.5;
     color: var(--weline-theme-text-secondary);
     margin: 0 0 var(--weline-space-3);
-    max-width: 28em;
+    max-width: var(--token-size-28em);
     text-shadow: none;
 }
 
@@ -246,7 +246,7 @@
     border-radius: var(--weline-theme-radius-md);
     font-weight: 600;
     font-size: var(--weline-layout-font-size-base);
-    letter-spacing: 0.06em;
+    letter-spacing: var(--token-size-0-06em);
     box-shadow: none;
     transition: background var(--weline-theme-transition-base),
                 transform var(--weline-theme-transition-base),
@@ -274,9 +274,9 @@
     color: var(--weline-theme-text);
     font-weight: 600;
     font-size: var(--weline-layout-font-size-base);
-    letter-spacing: 0.04em;
+    letter-spacing: var(--token-size-0-04em);
     text-decoration: underline;
-    text-underline-offset: 0.2em;
+    text-underline-offset: var(--token-size-0-2em);
     text-decoration-thickness: from-font;
     transition: color var(--weline-theme-transition-base),
                 opacity var(--weline-theme-transition-base);
@@ -306,7 +306,7 @@
     color: var(--weline-theme-text) !important;
     font-weight: 600;
     text-decoration: underline;
-    text-underline-offset: 0.2em;
+    text-underline-offset: var(--token-size-0-2em);
     transform: none !important;
 }
 

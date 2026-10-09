@@ -1,8 +1,8 @@
 .weline-product-you-may-like {
-  --wym-ink: var(--weline-theme-text, var(--color-text, #182230));
-  --wym-muted: var(--weline-theme-text-muted, var(--color-text-secondary, #637083));
-  --wym-border: var(--weline-theme-border, var(--color-border, #d5d9d9));
-  --wym-stage: var(--weline-theme-surface-subtle, var(--color-surface-subtle, #f7f8f8));
+  --wym-ink: var(--weline-theme-text, var(--color-text));
+  --wym-muted: var(--weline-theme-text-muted, var(--color-text-secondary));
+  --wym-border: var(--weline-theme-border, var(--color-border));
+  --wym-stage: var(--weline-theme-surface-subtle, var(--color-surface-subtle));
   box-sizing: border-box;
   width: min(100%, var(--weline-layout-content-max-width));
   max-width: 100%;
@@ -13,27 +13,27 @@
 }
 
 .weline-product-you-may-like .wym-header {
-  margin: 0 0 0.85rem;
+  margin: 0 0 var(--spacing-0_85);
   padding-inline: 0;
 }
 
 .weline-product-you-may-like[data-layout="carousel"] .wym-header {
-  padding-inline: calc(2.1rem + 0.35rem);
+  padding-inline: calc(var(--token-size-2-1rem) + var(--token-size-0-35rem));
 }
 
 .weline-product-you-may-like .wym-title {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: var(--token-size-1-35rem);
   line-height: 1.25;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: calc(-1 * var(--token-size-0-01em));
   color: var(--wym-ink);
 }
 
 .weline-product-you-may-like .wym-subtitle {
-  margin: 0.25rem 0 0;
+  margin: var(--weline-space-1) 0 0;
   color: var(--wym-muted);
-  font-size: 0.9rem;
+  font-size: var(--spacing-0_9);
   line-height: 1.35;
   font-weight: 400;
 }
@@ -43,7 +43,7 @@
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: stretch;
-  gap: 0.35rem;
+  gap: var(--token-size-0-35rem);
 }
 
 .weline-product-you-may-like[data-layout="grid"] .wym-stage {
@@ -55,9 +55,9 @@
 }
 
 .weline-product-you-may-like[data-layout="carousel"] .wym-viewport {
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--wym-stage) 0%, #fff 42%);
-  border: 1px solid var(--wym-border);
+  border-radius: var(--token-size-10px);
+  background: linear-gradient(180deg, var(--wym-stage) 0%, var(--color-bg-primary) 42%);
+  border: var(--border-width-thin) solid var(--wym-border);
 }
 
 .weline-product-you-may-like[data-layout="grid"] .wym-viewport {
@@ -68,17 +68,17 @@
 
 .weline-product-you-may-like .wym-track {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--weline-space-3);
   padding: 0;
 }
 
 .weline-product-you-may-like[data-layout="carousel"] .wym-track {
-  padding: 0.85rem;
+  padding: var(--spacing-0_85);
 }
 
 .weline-product-you-may-like .wym-track.layout-carousel {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--weline-space-3);
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
@@ -104,8 +104,8 @@
 }
 
 .weline-product-you-may-like .weline-product-card.wym-card {
-  flex: 0 0 calc((100% - 2.25rem) / 4);
-  min-width: 11.5rem;
+  flex: 0 0 calc((100% - var(--weline-space-9)) / 4);
+  min-width: var(--token-size-11-5rem);
   scroll-snap-align: start;
   width: 100%;
   height: 100%;
@@ -118,20 +118,20 @@
 
 .weline-product-you-may-like .wym-nav {
   align-self: center;
-  width: 2.1rem;
-  height: 2.1rem;
-  border-radius: 999px;
-  border: 1px solid var(--wym-border);
-  background: #fff;
-  color: #0f1111;
-  font-size: 1.35rem;
+  width: var(--token-size-2-1rem);
+  height: var(--token-size-2-1rem);
+  border-radius: var(--token-size-999px);
+  border: var(--border-width-thin) solid var(--wym-border);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--token-size-1-35rem);
   line-height: 1;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(15, 17, 17, 0.12);
+  box-shadow: 0 var(--border-width-thin) var(--border-width-thick) var(--color-literal-rgba-15-17-17-0-12);
 }
 
 .weline-product-you-may-like .wym-nav:hover {
-  background: #f7f8f8;
+  background: var(--color-bg-secondary);
 }
 
 .weline-product-you-may-like .wym-nav[disabled] {
@@ -142,12 +142,13 @@
 /* 分类页推荐槽：与列表页同宽，由布局容器控制 padding */
 .category-layout__recommendations .weline-product-you-may-like {
   margin: 0;
-  padding: var(--spacing-4, 1rem) 0 0;
+  padding: var(--spacing-4) 0 0;
 }
 
+/* 媒体查询条件禁止 var()：多数引擎会整段丢弃，手机断点永不生效。 */
 @media (max-width: 1023px) {
   .weline-product-you-may-like .weline-product-card.wym-card {
-    flex-basis: calc((100% - 1.5rem) / 3);
+    flex-basis: calc((100% - var(--weline-space-6)) / 3);
   }
   .weline-product-you-may-like .wym-track.layout-grid.columns-4,
   .weline-product-you-may-like .wym-track.layout-grid.columns-5 {
@@ -157,7 +158,7 @@
 
 @media (max-width: 767px) {
   .weline-product-you-may-like[data-layout="carousel"] .wym-header {
-    padding-inline: 0.15rem;
+    padding-inline: var(--token-size-0-15rem);
   }
   .weline-product-you-may-like .wym-stage {
     grid-template-columns: 1fr;
@@ -166,8 +167,9 @@
     display: none;
   }
   .weline-product-you-may-like .weline-product-card.wym-card {
-    flex-basis: calc((100% - 0.75rem) / 2);
-    min-width: 9.5rem;
+    flex: 0 0 min(var(--token-size-18rem), calc(100% - var(--token-size-2rem)));
+    min-width: 0;
+    max-width: 100%;
   }
   .weline-product-you-may-like .wym-track.layout-grid.columns-2,
   .weline-product-you-may-like .wym-track.layout-grid.columns-3,
@@ -176,7 +178,20 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .weline-product-you-may-like .wym-title {
-    font-size: 1.15rem;
+    font-size: var(--token-size-1-15rem);
+  }
+}
+
+@media (max-width: 480px) {
+  .weline-product-you-may-like .weline-product-card.wym-card {
+    flex: 0 0 calc(100% - var(--token-size-1-5rem));
+    min-width: 0;
+  }
+  .weline-product-you-may-like .wym-track.layout-grid.columns-2,
+  .weline-product-you-may-like .wym-track.layout-grid.columns-3,
+  .weline-product-you-may-like .wym-track.layout-grid.columns-4,
+  .weline-product-you-may-like .wym-track.layout-grid.columns-5 {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -3,7 +3,7 @@
  */
 .w-scope-switcher {
     position: relative;
-    font-size: var(--weline-font-size-sm, 0.875rem);
+    font-size: var(--weline-font-size-sm);
     font-family: inherit;
 }
 
@@ -13,7 +13,7 @@
  */
 .w-scope-switcher__trigger.w-button[data-tone="quiet"],
 .w-scope-switcher__trigger {
-    max-width: min(12rem, 42vw);
+    max-width: min(var(--token-size-12rem), 42vw);
     background: transparent;
     background-color: transparent;
     border-color: transparent;
@@ -41,20 +41,20 @@
 .w-scope-switcher__menu,
 .w-scope-switcher__panel {
     box-sizing: border-box;
-    min-width: min(12rem, calc(100dvw - 1rem));
-    max-width: min(20rem, calc(100dvw - 1rem));
-    max-height: min(20rem, calc(100dvh - 1rem));
-    max-block-size: min(20rem, var(--w-floating-max-block-size, calc(100dvh - 1rem)));
+    min-width: min(var(--token-size-12rem), calc(100dvw - var(--weline-space-4)));
+    max-width: min(var(--token-size-20rem), calc(100dvw - var(--weline-space-4)));
+    max-height: min(var(--token-size-20rem), calc(100dvh - var(--weline-space-4)));
+    max-block-size: min(var(--token-size-20rem), var(--w-floating-max-block-size, calc(100dvh - var(--weline-space-4))));
     overflow: auto;
     overscroll-behavior: contain;
-    padding: var(--weline-space-2, 0.5rem) 0;
+    padding: var(--weline-space-2) 0;
     font-family: inherit;
 }
 
 .w-scope-switcher__channel {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
 }
 
 .w-scope-switcher__channel-name {
@@ -66,9 +66,9 @@
 
 .w-scope-switcher__badge {
     flex: 0 0 auto;
-    font-size: var(--weline-font-size-xs, 0.75rem);
+    font-size: var(--weline-font-size-xs);
     font-weight: 700;
-    color: var(--weline-theme-text-muted, var(--color-text-secondary, #565959));
+    color: var(--weline-theme-text-muted, var(--color-text-secondary));
 }
 
 .w-scope-switcher__channel.is-current {

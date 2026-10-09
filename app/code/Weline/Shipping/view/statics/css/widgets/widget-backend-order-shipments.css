@@ -4,7 +4,7 @@
 [data-widget-style-class="6f1f72c98234c9a2"] {--w-gap:var(--weline-space-3);}
 [data-widget-style-class="b56c3d4b7dba8cd3"] {--w-gap:var(--weline-space-2);}
 [data-widget-style-class="fe1977536c225e55"] {--w-gap:var(--weline-space-2);}
-[data-widget-style-class="c2dc5f2a875bd6a4"] {width:10rem;}
+[data-widget-style-class="c2dc5f2a875bd6a4"] {width:var(--token-size-10rem);}
 [data-widget-style-class="475cdc0ffbf52fdf"] {--w-mb:0;}
 [data-widget-style-class="37a69135d6bbfeb7"] {--w-gap:var(--weline-space-1);}
 [data-widget-style-class="198fba75ccd75907"] {--w-mb:0;}
