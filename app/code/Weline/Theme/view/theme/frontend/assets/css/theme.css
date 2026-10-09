@@ -2954,6 +2954,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 [data-surface="inverse"] .w-scope-switcher__panel :is(p, li, small, span, a, div),
 [data-surface="inverse"] .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
 [data-surface="inverse"] dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
+[data-surface="inverse"] .delivery-panel :is(p, li, small, span, strong, label, button),
 .w-surface-inverse .header-search-form :is(p, li, small, span),
 .w-surface-inverse .w-search-form :is(p, li, small, span),
 .w-surface-inverse .search-suggestions :is(p, li, small, span),
@@ -2962,15 +2963,17 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 .w-surface-inverse .w-scope-switcher__menu :is(p, li, small, span, a, div),
 .w-surface-inverse .w-scope-switcher__panel :is(p, li, small, span, a, div),
 .w-surface-inverse .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
-.w-surface-inverse dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2) {
+.w-surface-inverse dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
+.w-surface-inverse .delivery-panel :is(p, li, small, span, strong, label, button) {
     color: inherit;
 }
 
 /*
  * Raised light panels nested under inverse chrome (architecture side-effect).
  * Header belt remaps text tokens to on-dark; account menu, mini-cart, white search
- * chip, language switcher menu, scope switcher panel, and language-request dialog
- * sit on surface-raised and must restore paper ink or copy vanishes.
+ * chip, language switcher menu, scope switcher panel, language-request dialog,
+ * and checkout delivery-panel sit on surface-raised and must restore paper ink
+ * or copy vanishes (WO-UI-CONTRAST-INVERSE).
  */
 [data-surface="inverse"] .account-dropdown,
 [data-surface="inverse"] .mini-cart-drawer,
@@ -2983,6 +2986,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 [data-surface="inverse"] .w-scope-switcher__panel,
 [data-surface="inverse"] .w-dialog[data-language-request-modal],
 [data-surface="inverse"] dialog.w-dialog[data-language-request-modal],
+[data-surface="inverse"] .delivery-panel,
 .w-surface-inverse .account-dropdown,
 .w-surface-inverse .mini-cart-drawer,
 .w-surface-inverse .header-search-form,
@@ -2993,7 +2997,8 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 .w-surface-inverse .w-scope-switcher__menu,
 .w-surface-inverse .w-scope-switcher__panel,
 .w-surface-inverse .w-dialog[data-language-request-modal],
-.w-surface-inverse dialog.w-dialog[data-language-request-modal] {
+.w-surface-inverse dialog.w-dialog[data-language-request-modal],
+.w-surface-inverse .delivery-panel {
     --_paper-text: #0f1111;
     --_paper-muted: #565959;
     --_inverse-text: var(--_paper-text);

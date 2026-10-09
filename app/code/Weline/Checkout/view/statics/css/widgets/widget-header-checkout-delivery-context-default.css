@@ -13,6 +13,34 @@
     box-shadow: var(--weline-theme-shadow-md);
     z-index: var(--z-index-dropdown);
     overflow: visible;
+    /*
+     * Paper ink on raised panel (WO-UI-CONTRAST-INVERSE).
+     * Parent header [data-surface=inverse] remaps --color-text / body-text to
+     * on-dark; without local rebind, title/address rows paint cream-on-cream.
+     * Same ink pair as account-dropdown / mini-cart-drawer.
+     */
+    --amz-drawer-text: #0f1111;
+    --amz-drawer-muted: #565959;
+    --_paper-text: var(--amz-drawer-text);
+    --_paper-muted: var(--amz-drawer-muted);
+    --_inverse-text: var(--_paper-text);
+    --_inverse-muted: var(--_paper-muted);
+    --weline-theme-text: var(--_paper-text);
+    --weline-theme-text-secondary: var(--_paper-muted);
+    --weline-theme-text-muted: var(--_paper-muted);
+    --weline-theme-body-text: var(--_paper-text);
+    --weline-theme-body-text-secondary: var(--_paper-muted);
+    --weline-theme-body-text-muted: var(--_paper-muted);
+    --weline-theme-body-text-heading: var(--_paper-text);
+    --color-text: var(--_paper-text);
+    --color-text-primary: var(--_paper-text);
+    --color-text-secondary: var(--_paper-muted);
+    --color-text-muted: var(--_paper-muted);
+    --w-surface-fg: var(--_paper-text);
+    --w-surface-fg-muted: var(--_paper-muted);
+    --w-surface-fg-subtle: var(--_paper-muted);
+    color: var(--_paper-text);
+    color-scheme: light;
 }
 .wc-theme_widget_checkout_delivery_context .delivery-panel-head {
     display: flex;
