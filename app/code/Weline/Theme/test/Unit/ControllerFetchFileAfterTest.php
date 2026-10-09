@@ -183,6 +183,49 @@ class ControllerFetchFileAfterTest extends TestCase
         $this->assertGreaterThanOrEqual(1, count($template->fetchCalls));
     }
 
+    public function testLayoutWrapMetaSkipsHeavyProductBagButKeepsScalarChromeFlags(): void
+    {
+        $template = new ControllerFetchFileAfterTestTemplateStub();
+        $heavy = \array_fill(0, 2000, ['sku' => 'SKU', 'name' => str_repeat('n', 64)]);
+        $template->setData('product', $heavy);
+        $template->setData('offers', $heavy);
+        $template->setData('showRelatedProducts', true);
+        $template->setData('filterDrawerTitle', '筛选');
+        $template->setFetchResponse('theme/frontend/layouts/default/default.phtml', '<html>wrapped</html>');
+
+        $observer = new class($template) extends ControllerFetchFileAfter {
+            public function __construct(private readonly Template $template)
+            {
+            }
+
+            protected function getTemplateInstance(): Template
+            {
+                return $this->template;
+            }
+        };
+
+        $eventData = new DataObject([
+            'layoutType' => 'product',
+            'contentTemplate' => 'Weline_Product::templates/frontend/detail-shell.phtml',
+            'layoutTemplate' => 'theme/frontend/layouts/default/default.phtml',
+            'fileName' => 'Weline_Product::templates/frontend/detail-shell.phtml',
+            'content' => '<section class="detail-shell">ok</section>',
+        ]);
+        $event = new Event(['data' => $eventData]);
+        $event->setName('test');
+
+        $observer->execute($event);
+
+        $meta = $template->getData('meta');
+        $this->assertIsArray($meta);
+        $this->assertArrayNotHasKey('product', $meta);
+        $this->assertArrayNotHasKey('offers', $meta);
+        $this->assertTrue((bool)($meta['showRelatedProducts'] ?? false));
+        $this->assertSame('筛选', $meta['filterDrawerTitle'] ?? null);
+        $this->assertSame('<section class="detail-shell">ok</section>', $meta['content'] ?? null);
+        $this->assertSame($heavy, $template->getData('product'));
+    }
+
     /**
      * 政策壳等直接 fetch 全页 layouts/*.phtml 时，content≡layout，禁止再 wrap 嵌第二份文档。
      */

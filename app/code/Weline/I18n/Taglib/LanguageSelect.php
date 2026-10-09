@@ -18,9 +18,13 @@ class LanguageSelect implements TaglibInterface
 {
     private static array $itemsCache = [];
 
+    /** @var array<string, array<string, string>> displayLocale => UPPER_ISO2 => name */
+    private static array $countryNamesByDisplayLocale = [];
+
     public static function clearProcessCaches(): void
     {
         self::$itemsCache = [];
+        self::$countryNamesByDisplayLocale = [];
     }
 
     public static function name(): string
@@ -418,10 +422,18 @@ DOC;
             }
         }
 
-        $countryNames = [];
-        foreach (Countries::getNames(\extension_loaded('intl') ? $displayLocale : 'en') as $code => $name) {
-            $countryNames[\strtoupper((string)$code)] = (string)$name;
+        $neededCountryCodes = [];
+        foreach (\array_keys($rowsByCode) as $code) {
+            $meta = $localeMeta[$code] ?? [];
+            $countryCode = \strtoupper((string)($meta[Locale::schema_fields_COUNTRY_CODE] ?? self::extractCountryCode((string)$code)));
+            if ($countryCode !== '') {
+                $neededCountryCodes[$countryCode] = true;
+            }
         }
+        $countryNames = self::countryNamesForCodes(
+            \extension_loaded('intl') ? $displayLocale : 'en',
+            \array_keys($neededCountryCodes),
+        );
 
         $items = [];
         foreach ($rowsByCode as $code => $rows) {
@@ -513,10 +525,16 @@ DOC;
             return self::getLanguageItems($displayLocale, $catalog);
         }
 
-        $base = self::getLanguageItems($displayLocale, $catalog === 'installed' ? 'global' : $catalog);
-        $installed = $catalog === 'installed' ? self::getLanguageItems($displayLocale, 'installed') : [];
+        // Storefront switcher passes website language order with catalog=installed.
+        // Never materialize Symfony Locales::getLocales() / Countries full global catalog
+        // just to filter an allowlist — that OOMs WLS workers on cold layout wrap.
+        if ($catalog === 'installed') {
+            $base = self::getLanguageItems($displayLocale, 'installed');
+        } else {
+            $base = self::getLanguageItems($displayLocale, $catalog);
+        }
         $byCode = [];
-        foreach ([...$base, ...$installed] as $item) {
+        foreach ($base as $item) {
             $code = \trim((string)($item['code'] ?? ''));
             if ($code !== '') {
                 $byCode[\strtolower(\str_replace('-', '_', $code))] = $item;
@@ -604,16 +622,71 @@ DOC;
         ];
     }
 
+    /**
+     * Full ISO country name map — only for explicit global catalog builds.
+     * Storefront installed/allowlist paths must use countryNamesForCodes() (per-code getName).
+     *
+     * @return array<string, string> UPPER_ISO2 => name
+     */
+    private static function countryNamesMap(string $displayLocale): array
+    {
+        $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : 'en';
+        if (!isset(self::$countryNamesByDisplayLocale[$displayLocale])
+            || self::$countryNamesByDisplayLocale[$displayLocale] === []
+        ) {
+            try {
+                $all = Countries::getNames($displayLocale);
+            } catch (\Throwable) {
+                $all = [];
+            }
+            $mapped = [];
+            foreach ($all as $code => $name) {
+                $mapped[\strtoupper((string)$code)] = (string)$name;
+            }
+            self::$countryNamesByDisplayLocale[$displayLocale] = $mapped;
+        }
+
+        return self::$countryNamesByDisplayLocale[$displayLocale];
+    }
+
+    /**
+     * On-demand country labels: only codes present on this page (never Countries::getNames full table).
+     *
+     * @param list<string> $countryCodes
+     * @return array<string, string> UPPER_ISO2 => name
+     */
+    private static function countryNamesForCodes(string $displayLocale, array $countryCodes): array
+    {
+        $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : 'en';
+        if (!isset(self::$countryNamesByDisplayLocale[$displayLocale])) {
+            self::$countryNamesByDisplayLocale[$displayLocale] = [];
+        }
+        $pool =& self::$countryNamesByDisplayLocale[$displayLocale];
+        $out = [];
+        foreach ($countryCodes as $code) {
+            $key = \strtoupper(\trim((string)$code));
+            if ($key === '') {
+                continue;
+            }
+            if (!isset($pool[$key])) {
+                try {
+                    $pool[$key] = (string)Countries::getName($key, $displayLocale);
+                } catch (\Throwable) {
+                    $pool[$key] = $key;
+                }
+            }
+            $out[$key] = $pool[$key];
+        }
+
+        return $out;
+    }
+
     /** @return list<array<string, string>> */
     private static function buildGlobalLanguageItems(string $displayLocale): array
     {
         /** @var I18n $i18n */
         $i18n = ObjectManager::getInstance(I18n::class);
-        try {
-            $countryNames = Countries::getNames(\extension_loaded('intl') ? $displayLocale : 'en');
-        } catch (\Throwable) {
-            $countryNames = [];
-        }
+        $countryNames = self::countryNamesMap(\extension_loaded('intl') ? $displayLocale : 'en');
         $items = [];
         foreach (Locales::getLocales() as $rawCode) {
             $code = \str_replace('-', '_', \trim((string)$rawCode));

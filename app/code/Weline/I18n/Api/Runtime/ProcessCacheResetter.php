@@ -17,7 +17,13 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
 {
     public function resetProcessCaches(ProcessCacheResetContext $context): int
     {
-        if (!$context->isExplicitCacheClear()) {
+        // Language catalogs / switcher HTML can pin Symfony Intl bags across requests.
+        // Clear on explicit CACHE_CLEAR, memory_pressure, or aggressive reclaim — not only
+        // operator cache:clear (otherwise cold PDP OOM risk stays elevated on busy workers).
+        $shouldClear = $context->isExplicitCacheClear()
+            || $context->aggressive
+            || $context->reason === ProcessCacheResetContext::REASON_MEMORY_PRESSURE;
+        if (!$shouldClear) {
             return 0;
         }
 

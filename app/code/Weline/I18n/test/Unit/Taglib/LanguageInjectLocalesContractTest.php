@@ -91,6 +91,27 @@ final class LanguageInjectLocalesContractTest extends TestCase
         self::assertSame('zz_QQ', (string)($items[2]['name'] ?? ''));
     }
 
+    public function testInstalledAllowlistResolveDoesNotUpgradeToGlobalCatalogInSource(): void
+    {
+        $src = (string)\file_get_contents(
+            BP . '/app/code/Weline/I18n/Taglib/LanguageSelect.php'
+        );
+        self::assertStringNotContainsString(
+            "\$catalog === 'installed' ? 'global'",
+            $src,
+            'installed+allowlist must not call getLanguageItems(global)'
+        );
+        self::assertStringContainsString(
+            'Never materialize Symfony Locales::getLocales()',
+            $src
+        );
+        self::assertStringContainsString(
+            'Countries::getName($key, $displayLocale)',
+            $src,
+            'installed path must resolve country labels per-code, not Countries::getNames full table'
+        );
+    }
+
     public function testRepeatedLanguageSwitcherRenderKeepsInstanceIdsUniqueAndAriaLinked(): void
     {
         LanguageSwitcher::clearProcessCaches();

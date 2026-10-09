@@ -218,6 +218,9 @@ class ControllerFetchFileAfter implements ObserverInterface
 
     /**
      * 将控制器 assign 到 Template 根上的变量并入 meta，便于布局层 {{meta.xxx}} 与根变量同源。
+     * Only scalars (bool/int/float/string): never copy product/offers/variant bags into meta —
+     * WLS Template singleton + layout wrap already hold those on the root; duplicating arrays
+     * doubles peak RSS on cold PDP without helping {{meta.showHeader}} chrome contracts.
      */
     private function mergeTemplateRootAssignsIntoMeta(Template $template, array $metaData): array
     {
@@ -248,6 +251,12 @@ class ControllerFetchFileAfter implements ObserverInterface
             'template_dir',
             'statics_dir',
             'view_dir',
+            'product',
+            'offers',
+            'variant_catalog',
+            'seo',
+            'cart',
+            'customer',
         ];
         try {
             $all = $template->getData('');
@@ -262,6 +271,9 @@ class ControllerFetchFileAfter implements ObserverInterface
                     continue;
                 }
                 if ($value instanceof Request || $value instanceof PcController) {
+                    continue;
+                }
+                if (!\is_bool($value) && !\is_int($value) && !\is_float($value) && !\is_string($value)) {
                     continue;
                 }
                 $metaData[$key] = $value;

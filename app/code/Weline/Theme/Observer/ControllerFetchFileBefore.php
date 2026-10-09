@@ -1183,6 +1183,13 @@ class ControllerFetchFileBefore implements ObserverInterface
             'req',
             'session',
             'child_html',
+            // WLS Template singleton can leak prior-request commerce bags into next meta merge.
+            'product',
+            'offers',
+            'variant_catalog',
+            'seo',
+            'cart',
+            'customer',
         ] as $key) {
             unset($params[$key]);
         }

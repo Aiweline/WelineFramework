@@ -1780,12 +1780,8 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         // Host:9555 请求 URL 不得带着 Worker 口去最长站匹配，否则 https://host:9555/
         // 对不上注册的 https://host/，bestMatch 失败后会留下污染源。
         if ($listenPort !== '' && \str_contains($url, ':' . $listenPort)) {
-            $url = \preg_replace(
-                '#^(https?://[^/:]+):' . \preg_quote($listenPort, '#') . '(?=/|$|\?|#)#i',
-                '$1',
-                $url,
-                1
-            ) ?? $url;
+            // Delimiter must not be `#`: lookahead includes literal `#` (fragment).
+            $url = self::stripWorkerListenPortFromUrl($url, $listenPort);
         }
         $portSuffix = ($portPart === '' || $portPart === '80' || $portPart === '443') ? '' : ':' . $portPart;
         $data['website_url'] = $requestScheme . '://' . $hostPart . $portSuffix;
@@ -3246,6 +3242,26 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         }
 
         return (string)$port;
+    }
+
+    /**
+     * Strip internal WLS listen port from origin so longest website match uses the public base.
+     * Uses `~` delimiters so a fragment `#` in the lookahead is literal (not end-of-pattern).
+     */
+    private static function stripWorkerListenPortFromUrl(string $url, string $listenPort): string
+    {
+        if ($listenPort === '' || !\str_contains($url, ':' . $listenPort)) {
+            return $url;
+        }
+
+        $stripped = \preg_replace(
+            '~^(https?://[^/:]+):' . \preg_quote($listenPort, '~') . '(?=/|$|\?|#)~i',
+            '$1',
+            $url,
+            1
+        );
+
+        return \is_string($stripped) ? $stripped : $url;
     }
 
     private static function updateCurrentServerVar(string $key, mixed $value): void
