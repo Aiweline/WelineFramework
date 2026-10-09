@@ -294,15 +294,40 @@ class DropshipWebhookInboxService
                 unset($data[DropshipFulfillment::schema_fields_TRACKING_NUMBER]);
             }
             $existing->setData($data)->save();
+            if ($orderUuid === '') {
+                $orderUuid = trim((string)$existing->getData(DropshipFulfillment::schema_fields_ORDER_UUID));
+            }
         } else {
             $data[DropshipFulfillment::schema_fields_ORDER_UUID] = $orderUuid !== '' ? $orderUuid : ('ext:' . $externalOrderId);
             $data[DropshipFulfillment::schema_fields_TRACKING_NUMBER] = $tracking;
             $data[DropshipFulfillment::schema_fields_CARRIER] = $carrier;
             $data[DropshipFulfillment::schema_fields_CREATED_AT] = $now;
             $ff->clear()->setData($data)->save();
+            $orderUuid = (string)$data[DropshipFulfillment::schema_fields_ORDER_UUID];
         }
 
-        return ['projected' => true, 'external_order_id' => $externalOrderId, 'status' => $fulfillStatus];
+        $orderShipment = null;
+        if (trim($tracking) !== '' && $orderUuid !== '' && !str_starts_with($orderUuid, 'ext:')) {
+            try {
+                /** @var DropshipOrderShipmentBridge $bridge */
+                $bridge = ObjectManager::getInstance(DropshipOrderShipmentBridge::class);
+                $orderShipment = $bridge->upsertFromFulfillment(
+                    $orderUuid,
+                    trim($tracking),
+                    $carrier,
+                    $providerCode,
+                );
+            } catch (\Throwable) {
+                $orderShipment = ['ok' => false, 'reason' => 'bridge_failed'];
+            }
+        }
+
+        return [
+            'projected' => true,
+            'external_order_id' => $externalOrderId,
+            'status' => $fulfillStatus,
+            'order_shipment' => $orderShipment,
+        ];
     }
 
     /**

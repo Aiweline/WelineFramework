@@ -123,6 +123,8 @@ final class OrderTrackingService
             $display = array_replace($display, $result->getDisplay());
         }
 
+        $shipments = $this->loadAllShipments((int) $order->getId());
+
         return [
             'ok' => true,
             'order' => [
@@ -134,6 +136,7 @@ final class OrderTrackingService
                 'payment_status' => (string) $order->getData(Order::schema_fields_PAYMENT_STATUS),
             ],
             'shipment' => $shipment?->getData(),
+            'shipments' => $shipments,
             'provider' => [
                 'code' => $provider->getCode(),
                 'provider_code' => $provider->getProviderCode(),
@@ -229,6 +232,40 @@ final class OrderTrackingService
             ->fetch();
 
         return (int) $model->getId() > 0 ? $model : null;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadAllShipments(int $orderId): array
+    {
+        if ($orderId <= 0) {
+            return [];
+        }
+        try {
+            /** @var OrderShipment $model */
+            $model = $this->objectManager->getInstance(OrderShipment::class, [], false);
+            $rows = $model->clear()
+                ->where(OrderShipment::schema_fields_ORDER_ID, $orderId)
+                ->order(OrderShipment::schema_fields_CREATED_AT, 'DESC')
+                ->select()
+                ->fetchArray();
+            if (!is_array($rows)) {
+                return [];
+            }
+            $out = [];
+            foreach ($rows as $row) {
+                if (is_array($row)) {
+                    $out[] = $row;
+                }
+            }
+
+            return $out;
+        } catch (\Throwable) {
+            $latest = $this->loadLatestShipment($orderId);
+
+            return $latest instanceof OrderShipment ? [(array)$latest->getData()] : [];
+        }
     }
 
     private function buildQueryRequest(Order $order, ?OrderShipment $shipment, bool $forceRefresh): TrackingQueryRequest
