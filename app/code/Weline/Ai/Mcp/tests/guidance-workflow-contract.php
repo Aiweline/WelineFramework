@@ -2004,6 +2004,24 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_code_evidence')),
         false,
     ),
+    'mcp_operational include learning_rule_extraction_must_be_abstract' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'learning_rule_extraction_must_be_abstract'
+            && str_contains((string) ($rule['summary'] ?? ''), 'ABSTRACT')
+            && str_contains((string) ($rule['summary'] ?? ''), 'positive_example')
+            && str_contains((string) ($rule['summary'] ?? ''), 'FORBID')
+            && str_contains((string) ($rule['summary'] ?? ''), 'reusable_rule')
+            && str_contains((string) ($rule['summary'] ?? ''), 'learning-rule-extraction-abstract.mdc')),
+        false,
+    ),
+    'session_learning gate references learning_rule_extraction_must_be_abstract' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'session_learning_knowledge_conflict_gate'
+            && str_contains((string) ($rule['summary'] ?? ''), 'learning_rule_extraction_must_be_abstract')),
+        false,
+    ),
     'mcp instructions mention plan_review_requires_code_evidence' => str_contains(
         ToolService::instructions(),
         'plan_review_requires_code_evidence'

@@ -437,6 +437,14 @@ final class LearningNoveltyService
             || $normalizeExample($positiveExample) === $normalizeExample($negativeExample)) {
             return false;
         }
+        if (LearningReusableRuleGate::isConcreteMasquerade(
+            (string) ($experience['reusable_rule'] ?? ''),
+            (string) ($experience['title'] ?? ''),
+            $positiveExample,
+            $negativeExample,
+        )) {
+            return false;
+        }
         if ($knowledgeType === 'global_rule') {
             return false;
         }

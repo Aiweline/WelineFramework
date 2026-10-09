@@ -116,6 +116,20 @@ final class CodexModelAnalyzer implements ModelAnalyzer
             $confidence = min($confidence, 0.77);
             $problems[] = 'A distinct positive example and negative example are both required before automatic validation.';
         }
+        $reusableRule = trim((string) ($draft['reusable_rule'] ?? ''));
+        $title = trim((string) ($draft['title'] ?? ''));
+        $abstraction = LearningReusableRuleGate::judge(
+            $reusableRule,
+            $title,
+            $positiveExample,
+            $negativeExample,
+        );
+        if (!$abstraction['ok'] && in_array($decision, ['supported', 'partially_supported'], true)) {
+            $decision = 'partially_supported';
+            $confidence = min($confidence, 0.55);
+            $problems[] = 'reusable_rule must be abstract (learning_rule_extraction_must_be_abstract); put concrete cases only in positive_example/negative_example'
+                . ' [' . $abstraction['reason'] . '].';
+        }
         if ($knowledgeType === 'operational_observation'
             && ($surface === '' || $environmentConstraints === [])
             && in_array($decision, ['supported', 'partially_supported'], true)) {
@@ -135,12 +149,14 @@ final class CodexModelAnalyzer implements ModelAnalyzer
             'confidence' => round(max(0.0, min(1.0, $confidence)), 3),
             'verified_evidence_ids' => $verifiedIds,
             'problems' => $problems,
-            'narrowed_rule' => trim((string) ($draft['reusable_rule'] ?? '')),
+            'narrowed_rule' => $reusableRule,
             'scope_paths' => Text::uniqueStrings(is_array($draft['paths'] ?? null) ? $draft['paths'] : []),
             'exceptions' => Text::uniqueStrings(is_array($draft['exceptions'] ?? null) ? $draft['exceptions'] : []),
             'knowledge_type' => $knowledgeType,
             'surface' => $surface,
             'examples_complete' => $examplesComplete,
+            'rule_abstraction_ok' => $abstraction['ok'],
+            'rule_abstraction_reason' => $abstraction['reason'],
         ];
     }
 

@@ -31,6 +31,7 @@ require_once __DIR__ . '/ProjectIndexer.php';
 require_once __DIR__ . '/ProjectRetriever.php';
 require_once __DIR__ . '/FrameworkBranchGuard.php';
 require_once __DIR__ . '/ProjectReadinessService.php';
+require_once __DIR__ . '/LearningReusableRuleGate.php';
 require_once __DIR__ . '/CodexInvoker.php';
 require_once __DIR__ . '/LearningNoveltyService.php';
 require_once __DIR__ . '/FrameworkPlanCandidates.php';

@@ -173,7 +173,35 @@ SessionStart / `prepare_project.agent_guidance.learning_conflicts` 出现 `user_
 
 `learning_conflicts` 载荷里已有 `left_title` / `left_rule` / `right_title` / `right_rule`（及 `user_facing_report_schema`），汇报时必须展开给人看，不得原样甩 JSON 给用户。
 
-权威：`HardConstraintsCatalog` → `session_learning_knowledge_conflict_gate`；`prepare_project.agent_guidance.learning_conflicts`。
+### 6.2 规则提取必须抽象（`learning_rule_extraction_must_be_abstract`，强制）
+
+会话学习 / 知识候选 / 升格硬规则时：**`reusable_rule` 必须是抽象机制（通则）**，能约束一类情况；**禁止把特例写成规则正文**。
+
+**「具体当规则」主义（盯死）**：把某个**特例**当成全局规则——例如：
+
+- 某个**部件**的私有 CSS / 布局写法 → 升格成「全站都要这样写」的硬规则  
+- 某一页、某一 Provider、某一站/主题名、某一绝对路径上的一次性修法 → 原样写进 `reusable_rule`
+
+特例只能当**例子**，规则要升到机制层（Token / 归属 / 门禁 / 同类表面共同约束）。
+
+| 字段 | 写什么 |
+|------|--------|
+| **`reusable_rule`** | 抽象机制（可复用于同类部件/页面/模块） |
+| **`positive_example` / `negative_example`** | **仅**特例（某部件 CSS、某站、某路径、某次对话措辞） |
+| **`title`** | 短标签 |
+
+**错误 vs 正确：**
+
+| 错误（特例当规则） | 正确（抽象规则 + 特例例子） |
+|------|------|
+| 「`widgets/foo.css` 必须 `display:flex; gap:8px`」当规则 | 规则：部件外观须走主题 Token/约定布局壳；例子：foo 部件曾私写 gap |
+| 「登录页布局只能由 Theme 内嵌」当规则 | 规则：业务布局归拥有模块，Theme 只提供机制；例子：登录仅为举例（`theme_mechanism_not_foreign_content`） |
+
+另禁：`reusable_rule`=title/example、用户原话/问句整段当规则、「Verify this user-reported…」包装句当规则。
+
+提取器与 `LearningReusableRuleGate` 拒收特例伪装；Agent 手写知识同样遵守。宿主常带：`~/.cursor/rules/learning-rule-extraction-abstract.mdc`。
+
+权威：`HardConstraintsCatalog` → `session_learning_knowledge_conflict_gate` / `learning_rule_extraction_must_be_abstract`。
 
 ## 7. 工作区不可丢弃（`preserve_dirty_workspace`，严重）
 

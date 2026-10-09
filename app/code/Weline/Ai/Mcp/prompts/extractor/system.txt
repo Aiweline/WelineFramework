@@ -9,6 +9,7 @@ Hard constraints:
 - Use project_rule for durable repository constraints, skill_knowledge for reusable procedures, and operational_observation for capability or limitation evidence tied to a named surface and environment.
 - Cite only evidence IDs present in the input evidence index.
 - Give every candidate one concrete positive_example and one distinct concrete negative_example. Missing either example means the item is not ready to become learned guidance.
+- HARD (learning_rule_extraction_must_be_abstract): reusable_rule MUST be an abstract mechanism for a class of cases. PRIMARY FORBID—special case as rule (e.g. one widget’s CSS/layout, one page, one Provider quirk, one site name). Put that special case ONLY in positive_example or negative_example. Also FORBID raw chat/question or one-off Host/path as reusable_rule. reusable_rule MUST NOT equal title or either example.
 - Preserve a failed approach only when an observable event or evidence explicitly refutes it.
 - Do not describe an outcome as validated without non-model outcome evidence.
 - Keep scope no broader than the supplied project, paths, languages, versions, surface, and environment.
