@@ -216,6 +216,31 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'theme_base_components_token_only'),
         false,
     ),
+    'hard_constraints include theme_inverse_raised_paper_ink_pin' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_inverse_raised_paper_ink_pin'
+            && str_contains((string) ($rule['summary'] ?? ''), 'WO-UI-CONTRAST-INVERSE')
+            && str_contains((string) ($rule['summary'] ?? ''), '#0f1111')
+            && (str_contains((string) ($rule['summary'] ?? ''), '--color-text-primary')
+                || str_contains((string) ($rule['summary'] ?? ''), 'color-text-primary'))
+            && (str_contains((string) ($rule['summary'] ?? ''), 'Tokenization')
+                || str_contains((string) ($rule['summary'] ?? ''), 'Token'))
+            && str_contains((string) ($rule['doc'] ?? ''), 'theme-css-variables-only')),
+        false,
+    ),
+    'hard_constraints include theme_frontend_must_obey_tokens_and_surface_roles' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_frontend_must_obey_tokens_and_surface_roles'
+            && str_contains((string) ($rule['summary'] ?? ''), 'Tokenization')
+            && str_contains((string) ($rule['summary'] ?? ''), 'surface')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'color-text-primary')
+                || str_contains((string) ($rule['summary'] ?? ''), '--color-text-primary'))
+            && str_contains((string) ($rule['summary'] ?? ''), 'weline-theme-development')
+            && str_contains((string) ($rule['doc'] ?? ''), 'theme-css-variables-only')),
+        false,
+    ),
     'hard_constraints include ui_skill_requires_theme_skill' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -238,7 +263,11 @@ $checks = [
             && ($rule['id'] ?? '') === 'css_or_theme_requires_ui_prototype_theme_skills'
             && str_contains((string) ($rule['summary'] ?? ''), 'frontend-design')
             && str_contains((string) ($rule['summary'] ?? ''), 'prototype')
-            && str_contains((string) ($rule['summary'] ?? ''), 'weline-theme-development')),
+            && str_contains((string) ($rule['summary'] ?? ''), 'weline-theme-development')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'Tokenization')
+                || str_contains((string) ($rule['summary'] ?? ''), 'Token')
+                || str_contains((string) ($rule['summary'] ?? ''), '去硬编码'))
+            && str_contains((string) ($rule['summary'] ?? ''), 'theme_frontend_must_obey_tokens_and_surface_roles')),
         false,
     ),
     'hard_constraints include user_image_attachment_triggers_shentu' => array_reduce(

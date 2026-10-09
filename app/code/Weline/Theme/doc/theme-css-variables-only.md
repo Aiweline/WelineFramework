@@ -38,9 +38,13 @@
 
 7. **@media 断点例外**：`@media` 条件里**禁止** `var(--breakpoint-*)` / `var(--token-bp-*)`（浏览器会忽略整条规则，布局全乱）。断点须写 `768px` 等字面量；变量盘里的 `--breakpoint-md` 等只供 JS/文档，不进 `@media`。
 
-8. **内容区宽度（layout content width）**：与 `theme-layout-content-width.md` 配套——宽度/gutter **无局部例外**；已包 `.w-container` 的业务页 `padding-inline: 0`；未包容器页用 `--weline-layout-content-max-width` + `--weline-layout-content-padding-inline`，禁止 `1440px` 等 fallback。颜色/特质 Hero 可模块内 scope 自定义。
+8. **WO-UI-CONTRAST-INVERSE 纸面钉例外（硬 · MCP `theme_inverse_raised_paper_ink_pin`）**：暗色 / inverse chrome 会把 `--color-text*` 重绑成 on-dark 浅色。嵌在其下的**浅色 raised 面板**必须在面板根上**先钉** foundation 纸面字面（`#0f1111` / `#565959`，次级可 `#666666`）到 `--weline-chrome-body-text*`，再绑 `--amz-drawer-text` / `--_paper-text`。**禁止**用 `var(--color-text-primary)` 等已被 inverse 染浅的 Token 当纸面种子。**Token 化 / 去硬编码扫除不得剥掉这些钉**——它们是对比度架构机制，不是「私造色板」。例子（仅举例）：迷你车抽屉、顶栏搜索纸面、配送地址弹层、账户下拉。
 
-9. **提取必须绑定组件（写回 + 接线）**：把 `35px` 提成 `--control-height-sm` 时须三步同批完成：
+8b. **Token 化双层清单（硬 · MCP `theme_frontend_must_obey_tokens_and_surface_roles`）**：Token 化 = 把普通视觉字面量收成 CSS 变量，**不等于**「所有字面量都该死」。动手前必须：① 挂主题技能并读本文件例外；② 字面量分类（普通→Token；纸面钉/`@media` 断点→保留）；③ 禁止无表面上下文的「`#hex`→`--color-text-primary`」启发式；④ 契约 + inverse 下 Browser 对比度；⑤ 部件 CSS bake/`theme:upgrade`。缺任一层 = 未按主题规范开发。
+
+9. **内容区宽度（layout content width）**：与 `theme-layout-content-width.md` 配套——宽度/gutter **无局部例外**；已包 `.w-container` 的业务页 `padding-inline: 0`；未包容器页用 `--weline-layout-content-max-width` + `--weline-layout-content-padding-inline`，禁止 `1440px` 等 fallback。颜色/特质 Hero 可模块内 scope 自定义。
+
+10. **提取必须绑定组件（写回 + 接线）**：把 `35px` 提成 `--control-height-sm` 时须三步同批完成：
    - **叶子默认**：`variables/_spacing.css` 写 `--control-height-sm: 35px`（与提取前一致）；
    - **桥接**：`theme.css` 的 `--weline-theme-control-height-sm` → `var(--control-height-sm)`；
    - **组件消费**：`.w-button` / `.btn` / `input` 等用 `min-height: var(--weline-component-control-height-sm)`，禁止在组件 CSS 再留 `35px` 或空变量。
@@ -70,6 +74,8 @@
 - `var(--token-name)` / `var(--w-*)` 等已登记 Token
 - 在 `variables/**`、`colors/**` 内**定义** Token（此处可出现字面量，作为盘的叶子值）
 - `0`、`none`、`transparent`、`currentColor`、`inherit`、`auto`、`100%`（仅流式布局宽高）、`1`/`0` 作为 `opacity`/`flex` 等非主题色盘语义
+- **inverse 下 raised 纸面钉**（见上「WO-UI-CONTRAST-INVERSE 纸面钉例外」）：面板根上的 `#0f1111` / `#565959` / `#666666` 用于钉 `--weline-chrome-body-text*`——**不是**违规硬编码
+- `@media` 断点字面量（见上「@media 断点例外」）
 - 纯结构类名与 Taglib，不含视觉字面量
 
 ## 写法对照

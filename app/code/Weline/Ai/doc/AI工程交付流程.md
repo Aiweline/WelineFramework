@@ -163,7 +163,9 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 **【高压线 · 基础组件只用主题规范变量】** 开发/改主题时，基础组件（`w-button` / `w-input` / `w-select` / `w-textarea` / `w-field` / `w-badge` / `w-alert` / `w-text` / `w-menu` / `w-dialog` / `w-toast` / `w-table` 及 `foundation.css` 同级）**必须**只消费 `--weline-theme-*` / `--color-*` / `--backend-color-*`（及 spacing·radius·shadow）。**禁止**为基础组件私写 hex/rgb 或平行色变量。品牌主题只改 `colors/_*.css` 色盘叶子；默认语义合同继承自 `variables/_colors.css` + `colors/_default.css`。MCP 规则 id：`theme_base_components_token_only`。权威：`theme-semantic-color-matrix.md`。
 
-**【高压线 · CSS/主题必须三技能齐读】** 凡任务/需求提到 **CSS** 或 **主题/theme**，写样式或改主题前**必须**先加载并服从：（1）UI 技能 `frontend-design`；（2）原型技能 `prototype`；（3）主题技能 `weline-theme-development`（MCP `get_skill`）。主题 Token 仍优先；禁止只读其一就动手。MCP 规则 id：`css_or_theme_requires_ui_prototype_theme_skills`。
+**【高压线 · inverse 下 raised 纸面墨钉字面】** 暗顶栏 / `[data-surface=inverse]` 下的浅色 raised 面板须先钉 foundation `#0f1111`/`#565959` 再消费 Token；**禁止** Token 化时把纸面种子改成 `var(--color-text-primary)`（白底浅字）。MCP 规则 id：`theme_inverse_raised_paper_ink_pin`。权威：`theme-css-variables-only.md`「WO-UI-CONTRAST-INVERSE 纸面钉」；`规则/20` §2b。
+**【高压线 · 前端必须守变量+表面角色双层】** Token 化/去硬编码前必须挂主题技能、字面量分类（普通→Token；纸面钉/断点→保留）、禁盲 `#hex`→`--color-text-primary`、契约+Browser+bake。MCP 规则 id：`theme_frontend_must_obey_tokens_and_surface_roles`。权威：`规则/20` §2c；`theme-css-variables-only.md` §8b。
+**【高压线 · CSS/主题/Token 化必须三技能齐读】** 凡任务/需求提到 **CSS** / **主题/theme** / **Token 化** / **去硬编码**，写样式前**必须**先加载：（1）`frontend-design`；（2）`prototype`；（3）`weline-theme-development`（MCP `get_skill`），再跑双层清单。MCP 规则 id：`css_or_theme_requires_ui_prototype_theme_skills`。
 
 **【高压线 · UI 技能必须叠加主题技能】** 凡启用宿主 `frontend-design` / 通用 UI / 审美类技能写本仓前台或后台界面，**必须同时**用 MCP `get_skill(weline-theme-development)`（或 surface `frontend_development`）加载主题技能，并服从主题 Token 文档。主题 CSS Token 与 Weline UI 2.0 **优先于**通用 UI 技能的自造色板；**禁止**按 UI 技能另发明 hex/rgb、px 间距阶梯、圆角阴影套件或平行 design token。UI 技能仅可指导构图、层次与文案。宿主 `SKILL.md` 仅为可选薄壳。MCP 规则 id：`ui_skill_requires_theme_skill` / `mcp_skills_fetch_from_mcp`。
 
