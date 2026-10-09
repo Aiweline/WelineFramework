@@ -53,6 +53,29 @@ if (preg_match('/^(\d+(?:\.\d+)?)\s*[\/:]\s*(\d+(?:\.\d+)?)$/D', $aspectRatioRaw
     $aspectMatch = [1 => '1920', 2 => '600'];
 }
 $aspectRatioCss = $aspectMatch[1] . ' / ' . $aspectMatch[2];
+// data-ratio 用最简整数比（1920/600→16/5），与 --weline-frame-ratio / --wc-hero-aspect 对齐。
+$frameRatioAttr = $aspectMatch[1] . '/' . $aspectMatch[2];
+if (
+    preg_match('/^\d+$/D', (string)$aspectMatch[1]) === 1
+    && preg_match('/^\d+$/D', (string)$aspectMatch[2]) === 1
+) {
+    $ratioW = (int)$aspectMatch[1];
+    $ratioH = (int)$aspectMatch[2];
+    if ($ratioW > 0 && $ratioH > 0) {
+        $gcd = static function (int $a, int $b): int {
+            while ($b !== 0) {
+                $t = $b;
+                $b = $a % $b;
+                $a = $t;
+            }
+
+            return $a > 0 ? $a : 1;
+        };
+        $g = $gcd($ratioW, $ratioH);
+        $frameRatioAttr = (string)(int)($ratioW / $g) . '/' . (string)(int)($ratioH / $g);
+    }
+}
+$frameRatioCss = str_replace('/', ' / ', $frameRatioAttr);
 $configuredHeight = trim((string)($this->getData('height') ?? 'auto'));
 // 旧默认 token / auto / 空 = 自适应；仅显式长度才作为 max-height 上限。
 $useAdaptiveHeight = $configuredHeight === ''
@@ -129,10 +152,10 @@ $translateDefaultCopy = static function (string $source, string $english) use ($
 
     return $isChineseLocale ? $source : $english;
 };
-$heroImage = static function (string $slug, string $alt, bool $priority = false) use ($esc): string {
+$heroImage = static function (string $slug, string $alt, bool $priority = false) use ($esc, $frameRatioAttr, $frameRatioCss): string {
     $desktop = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '.webp';
     $mobile = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '-mobile.webp';
-    return '<div class="w-frame" data-ratio="16/5" data-fit="cover" style="--weline-frame-ratio:16 / 5;">'
+    return '<div class="w-frame" data-ratio="' . $esc($frameRatioAttr) . '" data-fit="cover" style="--weline-frame-ratio:' . $esc($frameRatioCss) . ';">'
         . '<picture>'
         . '<source media="(max-width: 768px)" srcset="' . $esc($mobile) . '" width="900" height="1200" />'
         . '<img src="' . $esc($desktop) . '" alt="' . $esc($alt) . '" '
@@ -144,8 +167,8 @@ $heroImage = static function (string $slug, string $alt, bool $priority = false)
         . '</div>';
 };
 
-// 运营配置里可能烘焙了旧版 image_file_html（缺 width/height）；渲染前补齐，避免 CLS / SEO 尺寸告警。
-$ensureHeroMediaDimensions = static function (string $html): string {
+// 运营配置里可能烘焙了旧版 image_file_html（缺 width/height / 错 data-ratio）；渲染前补齐并对齐 aspect_ratio。
+$ensureHeroMediaDimensions = static function (string $html) use ($esc, $frameRatioAttr, $frameRatioCss): string {
     $html = trim($html);
     if ($html === '') {
         return $html;
@@ -181,8 +204,51 @@ $ensureHeroMediaDimensions = static function (string $html): string {
         $html
     ) ?? $html;
 
-    if ($html !== '' && !str_contains($html, 'w-frame')) {
-        $html = '<div class="w-frame" data-ratio="16/5" data-fit="cover" style="--weline-frame-ratio:16 / 5;">'
+    if ($html !== '' && str_contains($html, 'w-frame')) {
+        $html = preg_replace_callback(
+            '/<div\b([^>]*\bclass=(["\'])([^"\']*\bw-frame\b[^"\']*)\2[^>]*)>/i',
+            static function (array $m) use ($esc, $frameRatioAttr, $frameRatioCss): string {
+                $attrs = $m[1];
+                if (preg_match('/\bdata-ratio\s*=\s*(["\'])[^"\']*\1/i', $attrs) === 1) {
+                    $attrs = preg_replace(
+                        '/\bdata-ratio\s*=\s*(["\'])[^"\']*\1/i',
+                        'data-ratio="' . $esc($frameRatioAttr) . '"',
+                        $attrs
+                    ) ?? $attrs;
+                } else {
+                    $attrs .= ' data-ratio="' . $esc($frameRatioAttr) . '"';
+                }
+                if (preg_match('/\bstyle\s*=\s*(["\'])(.*?)\1/is', $attrs, $styleMatch) === 1) {
+                    $quote = $styleMatch[1];
+                    $style = (string)$styleMatch[2];
+                    if (preg_match('/--weline-frame-ratio\s*:/i', $style) === 1) {
+                        $style = preg_replace(
+                            '/--weline-frame-ratio\s*:\s*[^;]*/i',
+                            '--weline-frame-ratio:' . $frameRatioCss,
+                            $style
+                        ) ?? $style;
+                    } else {
+                        $style = rtrim($style, "; \t\n\r") . ';--weline-frame-ratio:' . $frameRatioCss . ';';
+                    }
+                    $attrs = preg_replace(
+                        '/\bstyle\s*=\s*(["\'])(.*?)\1/is',
+                        'style=' . $quote . $style . $quote,
+                        $attrs,
+                        1
+                    ) ?? $attrs;
+                } else {
+                    $attrs .= ' style="--weline-frame-ratio:' . $esc($frameRatioCss) . ';"';
+                }
+                if (preg_match('/\bdata-fit\s*=/i', $attrs) !== 1) {
+                    $attrs .= ' data-fit="cover"';
+                }
+
+                return '<div' . $attrs . '>';
+            },
+            $html
+        ) ?? $html;
+    } elseif ($html !== '') {
+        $html = '<div class="w-frame" data-ratio="' . $esc($frameRatioAttr) . '" data-fit="cover" style="--weline-frame-ratio:' . $esc($frameRatioCss) . ';">'
             . $html
             . '</div>';
     }

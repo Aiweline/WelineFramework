@@ -21,6 +21,7 @@ final class LayoutStabilityPrimitivesContractTest extends TestCase
         foreach ([$src, $static] as $path) {
             $css = (string)file_get_contents($path);
             self::assertStringContainsString('.w-frame', $css);
+            self::assertStringContainsString('[data-ratio="16/5"]', $css);
             self::assertStringContainsString('[data-ratio="16/9"]', $css);
             self::assertStringContainsString('[data-fit="contain"]', $css);
             self::assertStringContainsString('.w-skeleton[data-size="card"]', $css);

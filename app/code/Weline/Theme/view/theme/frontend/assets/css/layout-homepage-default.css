@@ -71,6 +71,7 @@
         /*
          * WO-BUILD-THEME-01 · work_mode=default_theme（与 hanfu design 壳对齐 · 气质加固）
          * 矮 Hero + 信任下精选；禁 .wpc-media 有限 max-height；气质服从可买。
+         * 视口只锁 container/wrapper（≤60vh）；禁止再压内部 .w-frame 导致图不满露底。
          */
         .theme-layout-homepage .homepage-hero {
             border-block-end: var(--hanfu-rule-width, 1px) solid color-mix(
@@ -82,25 +83,32 @@
 
         .theme-layout-homepage .homepage-hero .wc-theme_widget_hero_slider,
         .theme-layout-homepage .homepage-hero [data-widget-code="hero-slider"],
-        .theme-layout-homepage .homepage-hero .slider-container {
-            max-height: none;
-            overflow: visible;
+        .theme-layout-homepage .homepage-hero .slider-container,
+        .theme-layout-homepage .homepage-hero .slider-wrapper {
+            max-height: min(60vh, 37.5rem);
+            overflow: hidden;
+        }
+
+        .theme-layout-homepage .homepage-hero .slider-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: var(--wc-hero-aspect, 1920 / 600);
         }
 
         .theme-layout-homepage .homepage-hero .slide.active {
-            max-height: min(40vh, 20rem);
+            max-height: none;
             overflow: hidden;
         }
 
         .theme-layout-homepage .homepage-hero .slide-media .w-frame {
-            max-height: min(40vh, 20rem);
             width: 100%;
+            max-height: none;
         }
         .theme-layout-homepage .homepage-hero .slide-media:not(:has(.w-frame)),
         .theme-layout-homepage .homepage-hero .slide-media:not(:has(.w-frame)) :is(picture, img) {
-            max-height: min(40vh, 20rem) !important;
             width: 100%;
-            height: min(40vh, 20rem) !important;
+            max-height: none !important;
+            height: auto !important;
             object-fit: cover !important;
             object-position: center 28%;
         }
@@ -390,16 +398,23 @@
         }
 
         @media (max-width: 768px) {
+            .theme-layout-homepage .homepage-hero .wc-theme_widget_hero_slider,
+            .theme-layout-homepage .homepage-hero [data-widget-code="hero-slider"],
+            .theme-layout-homepage .homepage-hero .slider-container,
+            .theme-layout-homepage .homepage-hero .slider-wrapper {
+                max-height: min(50vh, 28rem);
+            }
+
             .theme-layout-homepage .homepage-hero .slide.active {
-                max-height: min(42vh, 18rem);
+                max-height: none;
             }
 
             .theme-layout-homepage .homepage-hero .slide-media .w-frame {
-                max-height: min(42vh, 18rem);
+                max-height: none;
             }
             .theme-layout-homepage .homepage-hero .slide-media:not(:has(.w-frame)) :is(picture, img) {
-                max-height: min(42vh, 18rem) !important;
-                height: min(42vh, 18rem) !important;
+                max-height: none !important;
+                height: auto !important;
             }
 
             .theme-layout-homepage .homepage-section--featured-lead .products-grid.columns-4 {
