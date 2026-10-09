@@ -39,4 +39,25 @@ final class ScopeResolverChannelUrlContractTest extends TestCase
         self::assertStringContainsString('$navigableCount > 0', $source);
         self::assertStringContainsString('channelUrls->urlsByStore', $source);
     }
+
+    public function testScopeSwitcherLocalizesChannelHrefsViaGetFrontendUrl(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Service/ScopeSwitcherPresenter.php';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+
+        self::assertStringContainsString('localizeStorefrontEntryUrl', $source);
+        self::assertStringContainsString('storefrontRouteFromEntryUrl', $source);
+        self::assertStringContainsString('getFrontendUrl($route)', $source);
+        self::assertStringContainsString('CanonicalStorefrontUrl::fromStoreUrl', $source);
+        self::assertStringContainsString(
+            "'url' => \$clickable ? \$this->localizeStorefrontEntryUrl(trim((string)\$channelEntry)) : ''",
+            $source,
+        );
+        // Must not emit raw absolute entry URLs as clickable hrefs.
+        self::assertStringNotContainsString(
+            "'url' => \$clickable ? trim((string)\$channelEntry) : ''",
+            $source,
+        );
+    }
 }

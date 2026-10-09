@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
+use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Websites\Api\Catalog\SalesChannelCatalogInterface;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 use Weline\Websites\Model\SalesChannel;
 use Weline\Websites\Model\Store;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Service\Value\CanonicalStorefrontUrl;
 
 /**
  * Frontend scope-switcher projection: channels under the current website (trigger shows channel only).
@@ -92,7 +96,9 @@ final class ScopeSwitcherPresenter
                     'name' => $channel->name,
                     'label' => $channelLabel,
                     'is_default' => $channel->isDefault,
-                    'url' => $clickable ? trim((string)$channelEntry) : '',
+                    // Stored channel/store/website entry URLs are absolute and omit
+                    // the active currency/lang segments; rebuild via getFrontendUrl.
+                    'url' => $clickable ? $this->localizeStorefrontEntryUrl(trim((string)$channelEntry)) : '',
                     'clickable' => $clickable,
                     'current' => $current,
                 ];
@@ -183,5 +189,87 @@ final class ScopeSwitcherPresenter
         $url = trim((string)$website->getData(Website::schema_fields_URL));
 
         return $url !== '' ? $url : null;
+    }
+
+    /**
+     * Convert a stored absolute (or root-relative) channel/store entry URL into a
+     * visitor href that carries the current storefront currency/language prefix.
+     *
+     * Absolute http(s) URLs bypass Url::getFrontendUrl prefixing (isLink), so the
+     * path must be extracted first — same contract as menu localizeUrl / getUrl.
+     */
+    private function localizeStorefrontEntryUrl(string $entryUrl): string
+    {
+        $entryUrl = trim($entryUrl);
+        if ($entryUrl === '') {
+            return '';
+        }
+
+        $route = $this->storefrontRouteFromEntryUrl($entryUrl);
+        if ($route === null) {
+            return $entryUrl;
+        }
+
+        try {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+
+            return (string)$request->getUrlBuilder()->getFrontendUrl($route);
+        } catch (\Throwable) {
+            try {
+                /** @var Url $url */
+                $url = ObjectManager::getInstance(Url::class);
+
+                return (string)$url->getFrontendUrl($route);
+            } catch (\Throwable) {
+                return $entryUrl;
+            }
+        }
+    }
+
+    /**
+     * Relative route for getFrontendUrl: '/' for site root, else path without leading slash.
+     */
+    private function storefrontRouteFromEntryUrl(string $entryUrl): ?string
+    {
+        $path = '';
+        if (preg_match('#^https?://#i', $entryUrl) === 1) {
+            try {
+                $path = CanonicalStorefrontUrl::fromStoreUrl($entryUrl)->path;
+            } catch (\InvalidArgumentException) {
+                $parsed = parse_url($entryUrl);
+                $path = is_array($parsed) ? (string)($parsed['path'] ?? '/') : '';
+            }
+        } elseif (str_starts_with($entryUrl, '/')) {
+            $path = $entryUrl;
+        } else {
+            // Bare relative storefront path (rare for channel.url; keep usable).
+            $path = '/' . ltrim(str_replace('\\', '/', $entryUrl), '/');
+        }
+
+        $path = trim(str_replace('\\', '/', $path));
+        if ($path === '') {
+            return null;
+        }
+        if (!str_starts_with($path, '/')) {
+            $path = '/' . $path;
+        }
+
+        // Drop query/fragment if a relative entry ever carries them.
+        $question = strpos($path, '?');
+        if ($question !== false) {
+            $path = substr($path, 0, $question);
+        }
+        $hash = strpos($path, '#');
+        if ($hash !== false) {
+            $path = substr($path, 0, $hash);
+        }
+
+        $path = CanonicalStorefrontUrl::canonicalPath($path);
+        if ($path === '/') {
+            return '/';
+        }
+
+        return ltrim($path, '/');
     }
 }
