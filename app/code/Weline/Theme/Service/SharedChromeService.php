@@ -65,6 +65,17 @@ final class SharedChromeService
         'storefront-float-end',
     ];
 
+    /**
+     * Nested chrome extensions inside header mini-cart (not float-layer hosts).
+     * Pure-PHTML bake + stubbed SlotFiller: outbound fillEmptyNestedChromeSlots must
+     * refill these when the published shell arrives empty.
+     *
+     * @var list<string>
+     */
+    public const MINI_CART_NESTED_CHROME_SLOTS = [
+        'footer-extras',
+    ];
+
     public function __construct(
         private readonly ThemeScopedWorkspaceInterface $workspace,
     ) {
@@ -93,6 +104,9 @@ final class SharedChromeService
             return true;
         }
         if (\in_array($slotId, self::FOOTER_NESTED_CHROME_SLOTS, true)) {
+            return true;
+        }
+        if (\in_array($slotId, self::MINI_CART_NESTED_CHROME_SLOTS, true)) {
             return true;
         }
         if (\str_starts_with($slotId, 'top-bar-') || \str_starts_with($slotId, 'top_bar_')) {

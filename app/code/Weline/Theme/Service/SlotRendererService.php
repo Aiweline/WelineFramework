@@ -1166,7 +1166,11 @@ class SlotRendererService
         }
 
         $targets = [];
-        foreach (SharedChromeService::FOOTER_NESTED_CHROME_SLOTS as $slotId) {
+        $nestedChromeSlots = array_values(array_unique(array_merge(
+            SharedChromeService::FOOTER_NESTED_CHROME_SLOTS,
+            SharedChromeService::MINI_CART_NESTED_CHROME_SLOTS,
+        )));
+        foreach ($nestedChromeSlots as $slotId) {
             $widgets = $chrome[$slotId] ?? [];
             if ($widgets === [] || $this->htmlSlotInnerHasWidgetCode($html, $slotId)) {
                 continue;
@@ -1179,6 +1183,7 @@ class SlotRendererService
 
         // Design themes may have dropped the float layer entirely — synthesize hosts
         // so chrome_payload widgets still have destinations (required unless unloaded).
+        // Only float slots (not mini-cart footer-extras) participate in this check.
         if (!\Weline\Theme\Service\LayoutEntity\StorefrontFloatLayerHost::htmlHasFloatDestinations($html)) {
             $html = \Weline\Theme\Service\LayoutEntity\StorefrontFloatLayerHost::ensureInHtml($html);
         }

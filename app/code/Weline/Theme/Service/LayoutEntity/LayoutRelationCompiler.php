@@ -208,6 +208,107 @@ final class LayoutRelationCompiler
         return array_keys($ids);
     }
 
+    /**
+     * Collect default_injection nodes for an owner's component slots that still need
+     * parenting under $ownerUid.
+     *
+     * Uses the pre-transform $saved snapshot for membership and the live $indexed parent_uid:
+     * - true orphans → hang
+     * - snapshot orphan claimed earlier in this same discover pass → clone for peer native
+     * - parent uid outside this indexed set (other header option) → clone
+     * - parent already another node in this set on re-discover → skip (idempotent, no x2)
+     *
+     * Matching a saved native owner must still hang orphans — nested chrome slots
+     * (mini-cart footer-extras) live only inside the widget template; empty early-return
+     * left published shells blank.
+     *
+     * @param array<string, mixed> $owner
+     * @param array<string, array<string, mixed>> $indexed
+     * @param array<string, array<string, mixed>> $saved
+     * @param array<string, true> $assignedNativeChildren
+     * @return array<string, array<string, mixed>>
+     */
+    private function collectAttachableDefaultInjectionChildren(
+        array $owner,
+        array $indexed,
+        array $saved,
+        string $ownerUid,
+        array &$assignedNativeChildren,
+    ): array {
+        $children = [];
+        foreach ($this->componentSlots($owner) as $childSlot) {
+            foreach ($saved as $uid => $node) {
+                if (!\is_array($node)) {
+                    continue;
+                }
+                if (($node['slot_id'] ?? $node['area'] ?? '') !== $childSlot) {
+                    continue;
+                }
+                if (($node['source'] ?? '') !== 'default_injection') {
+                    continue;
+                }
+                $liveParent = \trim((string)($indexed[$uid]['parent_uid'] ?? ''));
+                if ($liveParent === $ownerUid) {
+                    $assignedNativeChildren[$uid] = true;
+                    continue;
+                }
+                $snapParent = \trim((string)($node['parent_uid'] ?? ''));
+                $live = $indexed[$uid] ?? $node;
+                if ($liveParent === '') {
+                    $children[$uid] = $live;
+                    continue;
+                }
+                // Same discover pass: first native hung the snapshot orphan; peer needs a clone.
+                if ($snapParent === '' && $liveParent !== $ownerUid) {
+                    $children[$uid] = $live;
+                    continue;
+                }
+                // Parent outside this compile's node set (other header option bake).
+                if ($liveParent !== '' && !isset($indexed[$liveParent])) {
+                    $children[$uid] = $live;
+                }
+            }
+        }
+
+        return $children;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $indexed
+     * @param array<string, true> $assignedNativeChildren
+     * @param array<string, array<string, mixed>> $children
+     */
+    private function parentDefaultInjectionChildren(
+        array &$indexed,
+        array &$assignedNativeChildren,
+        string $ownerUid,
+        array $children,
+    ): void {
+        foreach ($children as $childUid => $node) {
+            $existingParent = \trim((string)($indexed[$childUid]['parent_uid'] ?? $node['parent_uid'] ?? ''));
+            if ($existingParent === $ownerUid) {
+                $assignedNativeChildren[$childUid] = true;
+                continue;
+            }
+            if ($existingParent === '') {
+                // Orphan: hang in place (no duplicate under the same owner).
+                $indexed[$childUid]['parent_uid'] = $ownerUid;
+                $assignedNativeChildren[$childUid] = true;
+                continue;
+            }
+            // Parent elsewhere (other header option / prior native instance): clone.
+            $cloneUid = \hash('md5', $ownerUid . '|' . $childUid);
+            if (isset($indexed[$cloneUid])) {
+                $assignedNativeChildren[$childUid] = true;
+                continue;
+            }
+            $node['node_uid'] = $cloneUid;
+            $node['parent_uid'] = $ownerUid;
+            $indexed[$cloneUid] = $node;
+            $assignedNativeChildren[$childUid] = true;
+        }
+    }
+
     /** Native containers are source placements too, even when no editor intent was saved. */
     public function discoverNativeOwners(string $source, array $indexed, bool $freezeDefaults = false): array
     {
@@ -222,14 +323,10 @@ final class LayoutRelationCompiler
         $indexed = $normalized;
         $registry = $this->registry ?? ObjectManager::getInstance(ThemePlaceableRegistry::class);
         $saved = $indexed;
-        $savedOwners = [];
-        foreach ($saved as $uid => $node) {
-            foreach ($this->componentSlots($node) as $slot) { $savedOwners[$slot][] = $uid; }
-        }
         $assignedNativeChildren = [];
         $matchedSaved = [];
         self::transform($source, static fn(array $element, string $inner): string => $inner,
-            function (array $element, string $whole) use (&$indexed, &$assignedNativeChildren, &$matchedSaved, $saved, $savedOwners, $registry, $freezeDefaults): ?string {
+            function (array $element, string $whole) use (&$indexed, &$assignedNativeChildren, &$matchedSaved, $saved, $registry, $freezeDefaults): ?string {
                 if ($element['tag'] !== 'w:widget' || $element['slotAncestors'] === []) { return null; }
                 $attrs = $element['attrs'];
                 $type = (string)($attrs['type'] ?? '');
@@ -249,23 +346,41 @@ final class LayoutRelationCompiler
                         && ($node['widget_type'] ?? '') === $type && ($node['widget_module'] ?? '') === $module
                         && (($node['config']['template_ref'] ?? '') === '' || $node['config']['template_ref'] === $ref)) {
                         $matchedSaved[$savedUid] = true;
+                        $owner = [
+                            'widget_module' => $module,
+                            'widget_type' => $type,
+                            'widget_code' => $code,
+                        ];
+                        $children = $this->collectAttachableDefaultInjectionChildren(
+                            $owner,
+                            $indexed,
+                            $saved,
+                            $savedUid,
+                            $assignedNativeChildren,
+                        );
+                        if ($children !== []) {
+                            $this->parentDefaultInjectionChildren(
+                                $indexed,
+                                $assignedNativeChildren,
+                                $savedUid,
+                                $children,
+                            );
+                        }
                         return null;
                     }
                 }
                 $definition = $registry->find($module, $type, $code, $this->theme);
                 if ($definition === null) { return null; }
                 $owner = ['widget_module' => $module, 'widget_type' => $type, 'widget_code' => $code];
-                $children = [];
-                foreach ($this->componentSlots($owner) as $childSlot) {
-                    foreach ($saved as $uid => $node) {
-                        if (($node['slot_id'] ?? $node['area'] ?? '') === $childSlot
-                            && empty($node['parent_uid']) && ($node['source'] ?? '') === 'default_injection') {
-                            $children[$uid] = $node;
-                        }
-                    }
-                }
-                if ($children === []) { return null; }
                 $uid = hash('md5', $slot . '|' . $ref . '|' . $element['start']);
+                $children = $this->collectAttachableDefaultInjectionChildren(
+                    $owner,
+                    $indexed,
+                    $saved,
+                    $uid,
+                    $assignedNativeChildren,
+                );
+                if ($children === []) { return null; }
                 $defaults = [];
                 foreach ($definition->params as $key => $param) {
                     $name = is_string($key) ? $key : (string)($param['param_name'] ?? $param['key'] ?? $param['name'] ?? '');
@@ -278,18 +393,12 @@ final class LayoutRelationCompiler
                 $indexed[$uid] = $owner + ['node_uid' => $uid, 'slot_id' => $slot, 'source' => $dynamic ? 'template_inline_dynamic' : 'template_inline',
                     'config' => array_replace($freezeDefaults ? array_replace($defaults, $definition->defaultConfig) : [], $params, ['template_ref' => $ref]),
                     '_explicit_config' => $params];
-                foreach ($children as $childUid => $node) {
-                    $childSlot = (string)($node['slot_id'] ?? $node['area'] ?? '');
-                    $cloneUid = !isset($savedOwners[$childSlot]) && !isset($assignedNativeChildren[$childUid])
-                        ? $childUid : hash('md5', $uid . '|' . $childUid);
-                    $node['node_uid'] = $cloneUid;
-                    $node['parent_uid'] = $uid;
-                    $indexed[$cloneUid] = $node;
-                    if (count($savedOwners[$childSlot] ?? []) === 1) {
-                        $indexed[$childUid]['parent_uid'] = $savedOwners[$childSlot][0];
-                    }
-                    $assignedNativeChildren[$childUid] = true;
-                }
+                $this->parentDefaultInjectionChildren(
+                    $indexed,
+                    $assignedNativeChildren,
+                    $uid,
+                    $children,
+                );
                 return null;
             });
         return $indexed;

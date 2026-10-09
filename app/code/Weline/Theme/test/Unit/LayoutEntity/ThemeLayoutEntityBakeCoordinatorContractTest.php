@@ -110,8 +110,9 @@ final class ThemeLayoutEntityBakeCoordinatorContractTest extends TestCase
         $path = dirname(__DIR__, 3) . '/Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php';
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('function resolveChromeNodesForBake', $source);
-        self::assertStringContainsString('function persistChromePayloadIfEmpty', $source);
-        self::assertStringContainsString('$this->persistChromePayloadIfEmpty($identity)', $source);
+        self::assertStringContainsString('function persistChromePayload', $source);
+        self::assertStringContainsString('$this->persistChromePayload($identity)', $source);
+        self::assertStringNotContainsString('persistChromePayloadIfEmpty', $source);
         self::assertMatchesRegularExpression(
             '/function bakeChromeFromNodes.*?scopeVersions->setChromePayload\(\$version,/s',
             $source,

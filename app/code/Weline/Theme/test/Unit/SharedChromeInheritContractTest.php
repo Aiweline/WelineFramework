@@ -25,6 +25,8 @@ final class SharedChromeInheritContractTest extends TestCase
         self::assertStringContainsString('FOOTER_NESTED_CHROME_SLOTS', $src);
         self::assertStringContainsString("'storefront-float-start'", $src);
         self::assertStringContainsString("'storefront-float-end'", $src);
+        self::assertStringContainsString('MINI_CART_NESTED_CHROME_SLOTS', $src);
+        self::assertStringContainsString("'footer-extras'", $src);
         self::assertStringContainsString("'user-area'", $src);
         self::assertStringContainsString("'currency'", $src);
         self::assertStringContainsString("'language'", $src);
@@ -59,6 +61,7 @@ final class SharedChromeInheritContractTest extends TestCase
             'search',
             'storefront-float-start',
             'storefront-float-end',
+            'footer-extras',
         ] as $slot) {
             self::assertTrue(
                 $service->isChromeSlot($slot),

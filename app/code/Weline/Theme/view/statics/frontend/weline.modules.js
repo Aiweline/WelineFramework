@@ -23,9 +23,12 @@ Object.assign(window.WelineModulesConfig.modules, {
 
     miniCartExtras: {
         paths: [
-            "Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20260914-skip-empty-tabs1"
+            "Weline_Theme::js/widgets/mini-cart-extras-tabs.js?v=20261009-eager-tabs1"
         ],
         globalVar: "WelineMiniCartExtras",
+        // Must be eager: storefrontMoneySummary is eager; if extras defer, drawer shows
+        // 收起明细+金额而优惠券/留言 Tab 尚未建壳（部件自身 visibility:hidden）。
+        load: "eager",
         description: "迷你购物车 extras 页签交互"
     },
     miniCartIcon: {
@@ -33,6 +36,7 @@ Object.assign(window.WelineModulesConfig.modules, {
             "Weline_Theme::js/widgets/mini-cart-icon.js?v=20261009-w-frame-line-media"
         ],
         globalVar: "WelineMiniCartIcon",
+        load: "eager",
         description: "迷你购物车图标与抽屉"
     },
     headerSearch: {

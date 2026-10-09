@@ -171,16 +171,14 @@ final class ThemeLayoutEntityBakeCoordinator
     }
 
     /**
-     * Storefront fillEmptyNestedChromeSlots reads chrome_payload_json. Solidify historically
-     * only materialized PHTML from in-memory intent/merge, leaving an empty version row after
-     * stamp clear — float shells stayed empty. Bootstrap when the row payload is empty.
+     * Storefront fillEmptyNestedChromeSlots reads chrome_payload_json. Solidify must always
+     * persist the merged chrome bake nodes (homepage + mini-cart nested footer-extras), not
+     * only when the row is empty — re-solidify otherwise left a stale/empty payload while
+     * PHTML was regenerated, so the safety-net fill could not restore coupon/留言.
      */
-    private function persistChromePayloadIfEmpty(ThemeVersionIdentity $identity): void
+    private function persistChromePayload(ThemeVersionIdentity $identity): void
     {
         $version = $this->loadVersion($identity);
-        if ($version->getChromePayload() !== []) {
-            return;
-        }
         $nodes = $this->resolveChromeNodesForBake($version);
         if ($nodes === []) {
             return;
@@ -425,7 +423,7 @@ final class ThemeLayoutEntityBakeCoordinator
                     $candidates = \array_replace($candidates, $this->candidateWorkset($prime, $context));
                 }
                 $this->publish($identity, $candidates);
-                $this->persistChromePayloadIfEmpty($identity);
+                $this->persistChromePayload($identity);
 
                 return [
                     'ok' => true,

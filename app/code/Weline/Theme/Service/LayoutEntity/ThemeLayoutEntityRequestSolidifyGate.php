@@ -274,7 +274,8 @@ final class ThemeLayoutEntityRequestSolidifyGate
             if (is_file($mini)) {
                 $haystacks[] = (string)@file_get_contents($mini);
             }
-            // Also check common storefront-shell path used by design themes.
+            // Design themes often bake widgets into storefront-shell while header/default
+            // stays empty — do NOT OR-merge with shell or the gate never heals default.
             $shellPath = dirname($header) . '/storefront-shell.phtml';
             if (is_file($shellPath)) {
                 $haystacks[] = (string)@file_get_contents($shellPath);
@@ -282,11 +283,18 @@ final class ThemeLayoutEntityRequestSolidifyGate
             if ($haystacks === []) {
                 return true;
             }
-            $blob = implode("\n", $haystacks);
-            $hasCoupon = str_contains($blob, 'mini-cart-coupon') || str_contains($blob, "widget_code' => 'mini-cart-coupon");
-            $hasNotice = str_contains($blob, 'order-notice') || str_contains($blob, "widget_code' => 'order-notice");
-            // Critical empty when neither required widget is present in chrome/header bake.
-            return !($hasCoupon && $hasNotice);
+            $anyComplete = false;
+            foreach ($haystacks as $blob) {
+                $hasCoupon = str_contains($blob, 'mini-cart-coupon') || str_contains($blob, "widget_code' => 'mini-cart-coupon");
+                $hasNotice = str_contains($blob, 'order-notice') || str_contains($blob, "widget_code' => 'order-notice");
+                if ($hasCoupon && $hasNotice) {
+                    $anyComplete = true;
+                    break;
+                }
+            }
+            // Still critical-empty when *no* baked header/shell/mini-cart carries both widgets.
+            // (Per-file empty default while shell is complete is OK — storefront may use shell.)
+            return !$anyComplete;
         } catch (\Throwable) {
             return true;
         }
