@@ -15,7 +15,7 @@ use Weline\Shipping\Model\ShippingAddress;
 /**
  * PDP 配送徽章用：解析 Offer 履约仓发货国（ISO-2 事实，不算徽章文案）。
  */
-final class StorefrontOfferOriginCountryService
+class StorefrontOfferOriginCountryService
 {
     public function __construct(
         private readonly ObjectManager $objectManager,
@@ -27,6 +27,10 @@ final class StorefrontOfferOriginCountryService
         $offerId = max(0, $offerId);
         $websiteId = $websiteId >= 0 ? $websiteId : max(0, (int)RequestContext::getWelineWebsiteId());
         $storeId = $storeId >= 0 ? $storeId : max(0, (int)RequestContext::getWelineStoreId());
+        // store_id=0 仅表示默认站店；其它站须落到该站默认 Store，否则默认仓解析必然失败。
+        if ($websiteId > 0 && $storeId === 0) {
+            $storeId = $this->defaultStoreIdForWebsite($websiteId);
+        }
         $qty = max(1, $qty);
 
         $warehouseId = $this->resolveWarehouseId($websiteId, $storeId, $offerId, $qty);
@@ -40,6 +44,36 @@ final class StorefrontOfferOriginCountryService
         }
 
         return $this->countryFromWarehouseTree($warehouseId);
+    }
+
+    private function defaultStoreIdForWebsite(int $websiteId): int
+    {
+        if ($websiteId <= 0 || !interface_exists(\Weline\Websites\Api\Catalog\StoreCatalogInterface::class)) {
+            return 0;
+        }
+        try {
+            /** @var \Weline\Websites\Api\Catalog\StoreCatalogInterface $catalog */
+            $catalog = $this->objectManager->getInstance(\Weline\Websites\Api\Catalog\StoreCatalogInterface::class);
+            if (method_exists($catalog, 'defaultStore')) {
+                $store = $catalog->defaultStore($websiteId);
+                if (is_object($store) && isset($store->id)) {
+                    return max(0, (int)$store->id);
+                }
+            }
+            if (method_exists($catalog, 'byWebsite')) {
+                foreach ((array)$catalog->byWebsite($websiteId) as $store) {
+                    if (!is_object($store)) {
+                        continue;
+                    }
+                    if (!empty($store->isDefault) || !empty($store->is_default)) {
+                        return max(0, (int)($store->id ?? 0));
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return 0;
     }
 
     private function resolveWarehouseId(int $websiteId, int $storeId, int $offerId, int $qty): int

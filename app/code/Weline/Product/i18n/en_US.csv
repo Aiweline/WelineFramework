@@ -361,45 +361,7 @@ check,check
 当前属性集没有可填写的商品属性（非规格组）。,"Current attribute set has no fillable product attributes (non-variant groups)."
 联系询价,"Contact for quote"
 查看详情,"View details"
-迷你购物车,迷你购物车
-商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
-小计,小计
-税费与运费将在结算时计算,税费与运费将在结算时计算
-去结算,去结算
-查看购物车,"View cart"
-Pagination,Pagination
-Previous,Previous
-"Page %{1} of %{2}","Page %{1} of %{2}"
-Next,Next
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
-收起悬浮,收起悬浮
-展开悬浮,展开悬浮
-全部商品,"All products"
-浏览当前网站已发布的商品，可按分类与价格筛选。,"You can browse the products currently listed on the website and filter them by category and price."
-"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
-"0 件商品","0 products"
-"（筛选自 %{1} 件）","(filtered from %{1})"
-排序,Sort
-默认排序,Default
-价格从低到高,"Price: Low to High"
-价格从高到低,"Price: High to Low"
-"名称 A-Z","Name: A-Z"
-当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
-当前网站暂无已发布商品。,"There are currently no products published on the website."
-汉服分类,汉服分类
-按形制探索分类，再进入商品列表选购。,按形制探索分类，再进入商品列表选购。
-浏览全部商品,"Browse all products"
-热门部门,"Featured departments"
-暂无可用分类，请先从全部商品浏览。,"No categories yet. Browse all products first."
-子分类,Subcategories
-精选好物，为你推荐,"Curated products, recommended for you."
-上一组,"Previous Group"
-下一组,"Next Group"
-面包屑,Breadcrumb
-"第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
-"0 件结果","0 results"
-“%{1}”,“%{1}”
-该分类下暂无已发布商品。,"No products have been published in this category yet."
 商品信息暂不可用,"Product information is unavailable"
 商品类型,"Product type"
 属性集,"Attribute set"
@@ -451,6 +413,7 @@ DPI,DPI
 "仅剩 %{1} 件","Only %{1} left in stock"
 有货,"In Stock"
 暂时缺货,"Currently unavailable"
+面包屑,Breadcrumb
 返回商品目录,"Back to products"
 商品图片,"Product images"
 选择图片或视频,"Choose image or video"
@@ -504,16 +467,24 @@ DPI,DPI
 下单前请联系客服核实所选款式及目的地的预计发货与运输时间,"Before ordering, contact us to confirm estimated dispatch and transit times for your chosen style and destination"
 请填写邮箱或手机号,"Please provide an email or phone number"
 提交成功，我们会尽快联系您。,"Submitted successfully. We will contact you soon."
+上一组,"Previous Group"
+下一组,"Next Group"
 "筛选器区域 - 由 Filters 部件默认注入","Filter area - injected by default from the Filters component"
 筛选,Filter
 当前网站暂无已发布商品,"No published products on this website yet"
 "分页区域 - 控制器渲染分页组件","Pagination area - the controller renders the pagination component"
 关闭筛选,"Close filter"
 筛选条件,Filters
+全部商品,"All products"
+浏览当前网站已发布的商品，可按分类与价格筛选。,"You can browse the products currently listed on the website and filter them by category and price."
 Category,Category
 "Custom category layout","Custom category layout"
 "分类筛选区域 - 由 Filters 部件默认注入","Category filter area - injected by default from the Filters component"
 "分类产品区域 - 展示该分类下的产品","Product listing area - displays products within this category"
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
 "Scheduled category layout","Scheduled category layout"
 "分类导航 slot，可由分类模块或导航部件接管。","Category navigation slot, which can be taken over by the category module or navigation component."
 "筛选 slot，可由筛选模块或筛选部件接管。","Filter slot, which can be taken over by the filter module or filter component."
@@ -534,6 +505,27 @@ SKU,SKU
 沟通,Communication
 查看沟通,"View chat"
 "询价沟通 #%{1}","Inquiry chat #%{1}"
+"第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
+"0 件结果","0 results"
+“%{1}”,“%{1}”
+"（筛选自 %{1} 件）","(filtered from %{1})"
+排序,Sort
+默认排序,Default
+价格从低到高,"Price: Low to High"
+价格从高到低,"Price: High to Low"
+"名称 A-Z","Name: A-Z"
+当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
+该分类下暂无已发布商品。,"No products have been published in this category yet."
+汉服分类,汉服分类
+按形制探索分类，再进入商品列表选购。,按形制探索分类，再进入商品列表选购。
+浏览全部商品,"Browse all products"
+热门部门,"Featured departments"
+暂无可用分类，请先从全部商品浏览。,"No categories yet. Browse all products first."
+子分类,Subcategories
+"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
+"0 件商品","0 products"
+当前网站暂无已发布商品。,"There are currently no products published on the website."
+查看购物车,"View cart"
 新作入藏,"New to the Collection"
 "订阅 RSS","Subscribe to RSS"
 甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。,"Discover newly listed Hanfu, mamian skirts, and traditional accessories in arrival order."
@@ -552,6 +544,7 @@ SKU,SKU
 全部加入购物车,"Add all to cart"
 当前商品,"Current products."
 总价,"Total Price"
+精选好物，为你推荐,"Curated products, recommended for you."
 "Customers also viewed","Customers also viewed"
 Website,Website
 切换,Switch
@@ -1309,6 +1302,13 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 "必须与当前 env 配置一致的 mig_clone_* 数据库","Databases named `mig_clone_*` that must be consistent with the current environment configuration."
 "cutover/rollback 必填的切换状态版本","Required switchover/rollback version status."
 "rollback 目标：dual_read（默认）或 legacy","Rollback target: dual_read (default) or legacy."
+收起悬浮,收起悬浮
+展开悬浮,展开悬浮
+迷你购物车,迷你购物车
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
+小计,小计
+税费与运费将在结算时计算,税费与运费将在结算时计算
+去结算,去结算
 跨境配送,"International delivery"
 制作或备货时间与国际运输时间分开计算,"Production or preparation time is separate from international transit time"
 新品汉服,"New Hanfu Arrivals"

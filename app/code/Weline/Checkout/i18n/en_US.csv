@@ -98,11 +98,14 @@
 结账地址簿已清空,"Checkout address book cleared"
 客户端折扣金额被拒绝，请使用结账优惠券。,"Client discount amount was rejected. Please use a checkout coupon."
 请补全收货信息并选择配送和支付方式。,"Please complete the delivery information and select the delivery and payment method."
+请修改收货地址,请修改收货地址
 该商品暂不可售。,"This product is currently unavailable for sale."
 当前收货地址暂不可配送，请更换地址后再下单。,"This delivery address cannot be shipped to. Please choose another address before placing the order."
 所选配送方式不可用，请重新选择配送方式。,"The selected shipping method is unavailable. Please choose another shipping method."
 订单创建成功,"Order created successfully"
 免邮,"Free shipping"
+购物车已有其他发货国家的商品，请先结算或清空后再加,购物车已有其他发货国家的商品，请先结算或清空后再加
+"购物车商品发货国家为 %1，请将地址改回该国，或先结算/清空后再换地","购物车商品发货国家为 %1，请将地址改回该国，或先结算/清空后再换地"
 前台结账,"Storefront checkout"
 结账遗弃信号,"Checkout abandonment signal"
 "只读 quoted 结账会话事实，供营销挽回使用（无遗弃 TTL、无触达）。","Read-only quoted checkout session facts for marketing recovery (no abandonment TTL, no outreach)."
@@ -383,6 +386,9 @@ SKU,SKU
 货到付款手续费,"Cash on delivery fee"
 支付方式优惠,"Payment method discount"
 应付,"Amount due"
+正在前往结账...,"Proceeding to checkout..."
+结账准备失败,"Checkout preparation failed"
+立即结账,"Proceed to checkout"
 全部,All
 请输入订单号,"Please enter order number"
 搜索,Search
@@ -405,9 +411,6 @@ SKU,SKU
 配送,Shipping
 合计,Total
 错误代码：,"Error code:"
-正在前往结账...,"Proceeding to checkout..."
-结账准备失败,"Checkout preparation failed"
-立即结账,"Proceed to checkout"
 订单列表,"order list"
 订单号关键词,"Order number keyword"
 全部状态,"All status"

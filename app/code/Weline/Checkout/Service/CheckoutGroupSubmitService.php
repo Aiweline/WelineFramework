@@ -121,6 +121,26 @@ final class CheckoutGroupSubmitService
      * ObjectManager keeps `?CheckoutTaxAdvisorInterface $taxAdvisor = null` as null
      * (nullable class default). Resolve at runtime like discount/inventory when Tax is installed.
      */
+    /** 交易闸开启时用当前配送国作税 origin 回退，否则 CN。 */
+    private function resolveLocationSellOriginCountryFallback(): string
+    {
+        if (class_exists(\Weline\Shipping\Service\LocationSellGate::class)) {
+            try {
+                /** @var \Weline\Shipping\Service\LocationSellGate $gate */
+                $gate = ObjectManager::getInstance(\Weline\Shipping\Service\LocationSellGate::class);
+                if ($gate->isActive()) {
+                    $delivery = $gate->currentDeliveryCountry();
+                    if ($delivery !== '') {
+                        return $delivery;
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return 'CN';
+    }
+
     private function taxAdvisorService(): ?CheckoutTaxAdvisorInterface
     {
         if ($this->taxAdvisor instanceof CheckoutTaxAdvisorInterface) {
@@ -394,8 +414,11 @@ final class CheckoutGroupSubmitService
             $dutyNotice = trim((string)($quoteArray['duty_notice'] ?? ''));
             $destCountry = strtoupper(trim((string)($address['country_code'] ?? $address['country'] ?? '')));
             $originCountry = strtoupper(trim((string)(
-                $scope['origin_country'] ?? $scope['seller_country'] ?? 'CN'
-            ))) ?: 'CN';
+                $scope['origin_country'] ?? $scope['seller_country'] ?? ''
+            )));
+            if ($originCountry === '') {
+                $originCountry = $this->resolveLocationSellOriginCountryFallback();
+            }
             if (
                 $dutyNotice === ''
                 && $destCountry !== ''

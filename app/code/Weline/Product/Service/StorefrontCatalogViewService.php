@@ -221,6 +221,7 @@ final class StorefrontCatalogViewService
                 trim((string)RequestContext::getWelineUserLang()),
                 $requestIds,
                 $includeListingDetails,
+                $this->locationSellDestinationCacheSegment(),
             ]);
             $logicalKey = $this->catalogCache->catalogTargetedOffersLogicalKey(
                 $websiteId,
@@ -250,10 +251,12 @@ final class StorefrontCatalogViewService
                 ),
             );
 
+            $rows = $this->applyLocationSellOfferFilter($rows);
+
             return $this->materializeCampaignUrls(\array_slice($rows, 0, $limit));
         }
 
-        $rows = $this->rememberPublishedOffers($includeListingDetails);
+        $rows = $this->applyLocationSellOfferFilter($this->rememberPublishedOffers($includeListingDetails));
 
         return \array_slice($rows, 0, $limit);
     }
@@ -1870,6 +1873,94 @@ final class StorefrontCatalogViewService
         }
 
         return $fallbacks;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function applyLocationSellOfferFilter(array $rows): array
+    {
+        if ($rows === [] || !class_exists(\Weline\Shipping\Service\LocationSellConfig::class)) {
+            return $rows;
+        }
+        try {
+            /** @var \Weline\Shipping\Service\LocationSellConfig $config */
+            $config = ObjectManager::getInstance(\Weline\Shipping\Service\LocationSellConfig::class);
+            if (!$config->isLocationSellFilterEnabled()) {
+                return $rows;
+            }
+            if (!interface_exists(\Weline\Shipping\Api\StorefrontDestinationOfferFilterInterface::class)
+                || !class_exists(\Weline\Shipping\Service\DestinationCountryReader::class)
+            ) {
+                return $rows;
+            }
+            /** @var \Weline\Shipping\Service\DestinationCountryReader $reader */
+            $reader = ObjectManager::getInstance(\Weline\Shipping\Service\DestinationCountryReader::class);
+            $cc = strtoupper(trim($reader->currentCountryCode()));
+            if ($cc === '') {
+                return [];
+            }
+            /** @var \Weline\Shipping\Api\StorefrontDestinationOfferFilterInterface $filter */
+            try {
+                $filter = ObjectManager::getInstance(
+                    \Weline\Shipping\Api\StorefrontDestinationOfferFilterInterface::class
+                );
+            } catch (\Throwable) {
+                $filter = ObjectManager::getInstance(
+                    \Weline\Shipping\Service\StorefrontDestinationOfferFilter::class
+                );
+            }
+            if (!$filter instanceof \Weline\Shipping\Api\StorefrontDestinationOfferFilterInterface) {
+                return $rows;
+            }
+            $offerIds = [];
+            foreach ($rows as $row) {
+                $oid = (int)($row['offer_id'] ?? 0);
+                if ($oid > 0) {
+                    $offerIds[] = $oid;
+                }
+            }
+            $allowed = array_fill_keys($filter->filterSellableOfferIds($offerIds, $cc), true);
+            $out = [];
+            foreach ($rows as $row) {
+                $oid = (int)($row['offer_id'] ?? 0);
+                if ($oid > 0 && isset($allowed[$oid])) {
+                    $out[] = $row;
+                }
+            }
+
+            return $out;
+        } catch (\Throwable) {
+            return $rows;
+        }
+    }
+
+    /**
+     * 地点售卖过滤开启时，把配送国编入 filtered_offers requestKey，避免错国缓存命中。
+     */
+    private function locationSellDestinationCacheSegment(): string
+    {
+        if (!class_exists(\Weline\Shipping\Service\LocationSellConfig::class)) {
+            return '';
+        }
+        try {
+            /** @var \Weline\Shipping\Service\LocationSellConfig $config */
+            $config = ObjectManager::getInstance(\Weline\Shipping\Service\LocationSellConfig::class);
+            if (!$config->isLocationSellFilterEnabled()) {
+                return '';
+            }
+            if (!class_exists(\Weline\Shipping\Service\DestinationCountryReader::class)) {
+                return 'loc:on';
+            }
+            /** @var \Weline\Shipping\Service\DestinationCountryReader $reader */
+            $reader = ObjectManager::getInstance(\Weline\Shipping\Service\DestinationCountryReader::class);
+            $cc = strtoupper(trim($reader->currentCountryCode()));
+
+            return $cc !== '' ? ('loc:' . $cc) : 'loc:on';
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     private function currentScope(): ScopeIdentity

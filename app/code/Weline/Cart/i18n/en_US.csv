@@ -147,6 +147,8 @@ Scope,Scope
 "游客加购需要 guest_token","Guest add-to-cart requires guest_token"
 购物车售卖类型不匹配,"Cart sale type mismatch"
 购物车数量不符合规则,"Cart quantity does not meet rules"
+该商品暂不可在当前售卖地发货,该商品暂不可在当前售卖地发货
+"已移除与当前配送国家不符的 %{1} 件商品。","Removed %{1} item(s) that do not match the current delivery country."
 购物车中有不可结算的商品，请移除后重试,"Cart has items that cannot be checked out; remove them and retry"
 该商品暂不可售，请从购物车移除或稍后再试,"This product is temporarily unavailable; remove it from the cart or try again later"
 "channel_code 必须与 store_code 同时提供","channel_code must be provided together with store_code"

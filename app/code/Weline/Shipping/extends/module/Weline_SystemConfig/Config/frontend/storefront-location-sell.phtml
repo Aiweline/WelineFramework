@@ -1,0 +1,33 @@
+<?php
+/**
+ * @meta.title {default="地点跟随售卖",description="按履约仓国过滤货架与可选国"}
+ * @meta.description {default="店面：货架硬过滤 + 只销售有产品仓的国家。均按范围继承。"}
+ * @config.area {frontend}
+ * @config.sort {35}
+ * @config.acl {Weline_Shipping::shipping_management}
+ */
+?>
+
+<w:config:group
+    code="storefront_location_sell"
+    label="地点跟随售卖"
+    description="按履约仓国（库存所在国）过滤货架与可选配送国；与可运抵国/运费目的地不同。均按 channel←store←website←global 继承。"
+    sort="35">
+    <w:config:field
+        key="shipping/storefront/location_sell_filter"
+        label="货架按履约仓国过滤"
+        description="开启后，店面货架/搜索/推荐只展示履约仓国等于当前「配送至」国家的可售商品。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store,channel" />
+
+    <w:config:field
+        key="shipping/storefront/sell_only_fulfillment_countries"
+        label="只销售有产品仓的国家"
+        description="开启后，顶栏/结账可选国仅为本范围至少有一个可售 offer 的履约仓国；集合外地址将被拦截并提示修改。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store,channel" />
+</w:config:group>

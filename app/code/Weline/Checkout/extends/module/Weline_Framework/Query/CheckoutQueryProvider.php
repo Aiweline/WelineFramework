@@ -1568,6 +1568,18 @@ class CheckoutQueryProvider implements QueryProviderInterface
             throw new \RuntimeException((string)__('购物车为空，请先加入商品。'));
         }
 
+        $locationSell = $this->assertLocationSellPlaceOrder($shippingAddress, $items);
+        if (($locationSell['ok'] ?? true) === false) {
+            $errorCode = (string)($locationSell['error_code'] ?? 'location_address_not_fulfillable');
+
+            return [
+                'success' => false,
+                'message' => (string)($locationSell['message'] ?? __('请修改收货地址')),
+                'error_code' => $errorCode,
+                'code' => $errorCode,
+            ];
+        }
+
         $currency = (string)($cart['currency'] ?? 'CNY');
         $sellability = $this->assertCartItemsSellable($items, $params + ['currency' => $currency]);
         if (($sellability['ok'] ?? true) === false) {
@@ -2005,7 +2017,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'website_id' => (int)RequestContext::getWelineWebsiteId(),
                 'store_id' => (int)RequestContext::getWelineStoreId(),
                 'channel_id' => (int)RequestContext::getWelineChannelId(),
-                'origin_country' => 'CN',
+                'origin_country' => $this->resolveLocationSellOriginCountry(),
             ],
             $currency !== '' ? $currency : 'CNY',
         );
@@ -2016,6 +2028,103 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'quote_diagnostics' => $quoteDiagnostics,
             'quote_lines' => $lines,
         ];
+    }
+
+    /**
+     * 交易闸开启时用当前配送/车锁国作税履约 origin；否则回退 CN。
+     */
+    private function resolveLocationSellOriginCountry(string $fallback = 'CN'): string
+    {
+        $fallback = strtoupper(substr((string)preg_replace('/[^A-Za-z]/', '', $fallback) ?: 'CN', 0, 2)) ?: 'CN';
+        if (!class_exists(\Weline\Shipping\Service\LocationSellGate::class)) {
+            return $fallback;
+        }
+        try {
+            /** @var \Weline\Shipping\Service\LocationSellGate $gate */
+            $gate = ObjectManager::getInstance(\Weline\Shipping\Service\LocationSellGate::class);
+            if (!$gate->isActive()) {
+                return $fallback;
+            }
+            $delivery = $gate->currentDeliveryCountry();
+            if ($delivery !== '') {
+                return $delivery;
+            }
+        } catch (\Throwable) {
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * legacy placeOrder：地点售卖开时拦截集合外/锁仓冲突地址。
+     *
+     * @param array<string, mixed> $shippingAddress
+     * @param list<array<string, mixed>> $items
+     * @return array{ok:bool,error_code?:string,message?:string}
+     */
+    private function assertLocationSellPlaceOrder(array $shippingAddress, array $items): array
+    {
+        if (!class_exists(\Weline\Shipping\Service\LocationSellGate::class)) {
+            return ['ok' => true];
+        }
+        try {
+            /** @var \Weline\Shipping\Service\LocationSellGate $gate */
+            $gate = ObjectManager::getInstance(\Weline\Shipping\Service\LocationSellGate::class);
+            if (!$gate->isActive()) {
+                return ['ok' => true];
+            }
+            $country = strtoupper(trim((string)($shippingAddress['country_code'] ?? $shippingAddress['country'] ?? '')));
+            if (strlen($country) > 2) {
+                $country = substr($country, 0, 2);
+            }
+            $lock = '';
+            $countries = [];
+            foreach ($items as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $offerId = (int)($item['offer_id'] ?? 0);
+                if ($offerId <= 0) {
+                    continue;
+                }
+                $cc = $gate->resolveOfferFulfillmentCountry($offerId);
+                if ($cc !== '') {
+                    $countries[$cc] = true;
+                }
+            }
+            $list = array_keys($countries);
+            if (count($list) > 1) {
+                return [
+                    'ok' => false,
+                    'error_code' => \Weline\Shipping\Service\LocationSellGate::ERROR_CROSS_FULFILLMENT_COUNTRY,
+                    'message' => (string)__('购物车已有其他发货国家的商品，请先结算或清空后再加'),
+                ];
+            }
+            $lock = count($list) === 1 ? (string)$list[0] : '';
+            $write = $gate->assertCountryWritable($country, $lock !== '' ? $lock : null);
+            if (empty($write['ok'])) {
+                return $write;
+            }
+            if ($lock !== '' && $country !== '' && $lock !== $country
+                && $gate->isActive()
+            ) {
+                // 地址国可写集合内，但仍须与车锁履约国一致（提示改地址）
+                if ($country !== $lock) {
+                    return [
+                        'ok' => false,
+                        'error_code' => \Weline\Shipping\Service\LocationSellGate::ERROR_CHANGE_BLOCKED_CART_LOCK,
+                        'message' => (string)__(
+                            '购物车商品发货国家为 %1，请将地址改回该国，或先结算/清空后再换地',
+                            $lock
+                        ),
+                    ];
+                }
+            }
+
+            return ['ok' => true];
+        } catch (\Throwable) {
+            return ['ok' => true];
+        }
     }
 
     /**
@@ -2163,7 +2272,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 $address,
                 $currency,
                 [
-                    'origin_country' => 'CN',
+                    'origin_country' => $this->resolveLocationSellOriginCountry(),
                     'shipping_amount_minor' => $shippingMinor,
                     'duty_notice' => $dutyNotice,
                 ],
@@ -2243,7 +2352,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
         }
 
         $dest = strtoupper(trim((string)($address['country_code'] ?? $address['country'] ?? '')));
-        $origin = 'CN';
+        $origin = $this->resolveLocationSellOriginCountry();
         // Cross-border with no selectable method: still preview DDU so summary is not blind.
         if ($notice === '' && $dest !== '' && $dest !== $origin) {
             $notice = \Weline\Tax\Service\DutyEstimateService::NOTICE_DDU;

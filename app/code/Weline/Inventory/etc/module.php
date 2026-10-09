@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Inventory',
-    'version' => '2.5.23',
+    'version' => '2.5.24',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Websites' => '*',
@@ -13,6 +13,7 @@ return [
     ],
     'optional' => [
         'Weline_Product' => '*',
+        'Weline_Shipping' => '*',
     ],
     'provides' => [
         \Weline\Inventory\Api\InventoryCapabilityInterface::class

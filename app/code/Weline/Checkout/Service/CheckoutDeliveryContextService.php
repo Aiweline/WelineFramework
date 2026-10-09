@@ -15,6 +15,8 @@ use Weline\Shipping\Service\AddressFormatter;
 use Weline\Shipping\Service\AddressValidationService;
 use Weline\Shipping\Service\DeliveryAddressService;
 use Weline\Shipping\Service\EmbargoService;
+use Weline\Shipping\Service\LocationSellConfig;
+use Weline\Shipping\Service\LocationSellGate;
 use Weline\Framework\Runtime\RequestContext;
 
 /**
@@ -559,10 +561,33 @@ final class CheckoutDeliveryContextService
             ];
         }
 
+        $allowed = null;
+        try {
+            if (class_exists(LocationSellConfig::class)) {
+                /** @var LocationSellConfig $sellConfig */
+                $sellConfig = ObjectManager::getInstance(LocationSellConfig::class);
+                if ($sellConfig->isSellOnlyFulfillmentCountriesEnabled()) {
+                    /** @var LocationSellGate $gate */
+                    $gate = ObjectManager::getInstance(LocationSellGate::class);
+                    $allowed = $gate->allowedFulfillmentCountries();
+                    // 可售国为空 → 空列表（禁止展示全量国家）
+                    if ($allowed === []) {
+                        return [];
+                    }
+                    $allowed = array_fill_keys($allowed, true);
+                }
+            }
+        } catch (\Throwable) {
+            $allowed = null;
+        }
+
         $list = [];
         foreach ($names as $code => $name) {
             $normalized = self::normalizeCountryCode((string)$code);
             if ($normalized === '') {
+                continue;
+            }
+            if (\is_array($allowed) && !isset($allowed[$normalized])) {
                 continue;
             }
             $list[] = [
@@ -1059,9 +1084,56 @@ final class CheckoutDeliveryContextService
 
     private function persistCountry(string $countryCode): void
     {
+        $this->assertLocationSellCountryWritable($countryCode);
         $session = $this->session();
         $session->set(self::SESSION_COUNTRY, $countryCode);
         $session->save();
+        // Bin/Worker 加购与写国可能不共前端 Session：同步 Cookie 供 DestinationCountryReader 回读。
+        try {
+            $name = '';
+            try {
+                /** @var I18n $i18n */
+                $i18n = ObjectManager::getInstance(I18n::class);
+                $locale = Cookie::getLangLocal() ?: 'zh_Hans_CN';
+                $countries = $i18n->getCountries($locale);
+                if (is_array($countries)) {
+                    $name = (string)($countries[$countryCode] ?? $countries[strtolower($countryCode)] ?? '');
+                }
+            } catch (\Throwable) {
+            }
+            Cookie::set(self::COOKIE_LOCATION, json_encode([
+                'country' => $name !== '' ? $name : $countryCode,
+                'countryCode' => $countryCode,
+                'country_code' => $countryCode,
+            ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 86400 * 30);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function assertLocationSellCountryWritable(string $countryCode): void
+    {
+        if (!class_exists(LocationSellGate::class)) {
+            return;
+        }
+        try {
+            /** @var LocationSellGate $gate */
+            $gate = ObjectManager::getInstance(LocationSellGate::class);
+            if (!$gate->isActive()) {
+                return;
+            }
+            $result = $gate->assertCountryWritable($countryCode);
+            if (!empty($result['ok'])) {
+                return;
+            }
+            $message = trim((string)($result['message'] ?? ''));
+            throw new \InvalidArgumentException(
+                $message !== '' ? $message : (string)__('请修改收货地址')
+            );
+        } catch (\InvalidArgumentException $e) {
+            throw $e;
+        } catch (\Throwable) {
+            // 闸门不可用时不阻断写国
+        }
     }
 
     private function ensureRegionCascade(string $countryCode): void

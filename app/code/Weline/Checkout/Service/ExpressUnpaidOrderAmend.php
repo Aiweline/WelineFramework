@@ -40,6 +40,14 @@ final class ExpressUnpaidOrderAmend
         }
 
         $address = $this->mergeAddressReadOnlyCore($existing, $profile);
+        $locationGate = $this->assertLocationSellAddressWritable($order, $address);
+        if (($locationGate['ok'] ?? true) === false) {
+            return [
+                'ok' => false,
+                'message' => (string)($locationGate['message'] ?? __('请修改收货地址')),
+                'error_code' => (string)($locationGate['error_code'] ?? 'location_address_not_fulfillable'),
+            ];
+        }
         $serviceCode = trim((string) ($options['service_code'] ?? $order->getData(OrderModel::schema_fields_SHIPPING_METHOD) ?? ''));
         // 未付改单：订单币种为权威。FE 默认 CNY 不得覆盖 USD 单，否则运费按 CNY 重报、
         // 小计仍是 USD money → 混币假漂移（例 790+5900-79=6611）误杀合法 pending PayPal。
@@ -534,5 +542,70 @@ final class ExpressUnpaidOrderAmend
         }
 
         return $fallback;
+    }
+
+    /**
+     * @param array<string, mixed> $address
+     * @return array{ok:bool,error_code?:string,message?:string}
+     */
+    private function assertLocationSellAddressWritable(OrderModel $order, array $address): array
+    {
+        if (!class_exists(\Weline\Shipping\Service\LocationSellGate::class)) {
+            return ['ok' => true];
+        }
+        try {
+            /** @var \Weline\Shipping\Service\LocationSellGate $gate */
+            $gate = ObjectManager::getInstance(\Weline\Shipping\Service\LocationSellGate::class);
+            if (!$gate->isActive()) {
+                return ['ok' => true];
+            }
+            $country = strtoupper(trim((string)($address['country_code'] ?? $address['country'] ?? '')));
+            if (strlen($country) > 2) {
+                $country = substr($country, 0, 2);
+            }
+            $lock = $this->resolveOrderFulfillmentLockCountry($order);
+
+            return $gate->assertCountryWritable($country, $lock !== '' ? $lock : null);
+        } catch (\Throwable) {
+            return ['ok' => true];
+        }
+    }
+
+    private function resolveOrderFulfillmentLockCountry(OrderModel $order): string
+    {
+        $catalog = $order->getData(OrderModel::schema_fields_CATALOG_SNAPSHOT_JSON);
+        if (is_string($catalog) && $catalog !== '') {
+            $catalog = json_decode($catalog, true);
+        }
+        $lines = [];
+        if (is_array($catalog)) {
+            $lines = is_array($catalog['lines'] ?? null) ? $catalog['lines'] : (array_is_list($catalog) ? $catalog : []);
+        }
+        if (!class_exists(\Weline\Shipping\Service\LocationSellGate::class)) {
+            return '';
+        }
+        try {
+            /** @var \Weline\Shipping\Service\LocationSellGate $gate */
+            $gate = ObjectManager::getInstance(\Weline\Shipping\Service\LocationSellGate::class);
+            $countries = [];
+            foreach ($lines as $line) {
+                if (!is_array($line)) {
+                    continue;
+                }
+                $offerId = (int)($line['offer_id'] ?? $line['local_offer_id'] ?? 0);
+                if ($offerId <= 0) {
+                    continue;
+                }
+                $cc = $gate->resolveOfferFulfillmentCountry($offerId);
+                if ($cc !== '') {
+                    $countries[$cc] = true;
+                }
+            }
+            $list = array_keys($countries);
+
+            return count($list) === 1 ? (string)$list[0] : '';
+        } catch (\Throwable) {
+            return '';
+        }
     }
 }

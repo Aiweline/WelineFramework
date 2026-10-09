@@ -296,6 +296,7 @@ final class CartService
         $cartKey = $this->cartKey($scope, $guestToken, $customerId, $cartType);
         $cart = $this->loadCart($scope, $guestToken, $customerId, $cartType)
             ?? $this->newCart($scope, $guestToken, $customerId, $currency ?? $snapshot->currency, $cartType);
+        $this->assertLocationSellOfferAddable($snapshot->offerId ?? 0, $cart);
         // 跨币种：以最后一次重算币为准（展示币优先且 FX 可用 → 显式 → 快照 → 车头），重算后写入，不再拒绝。
         $targetCurrency = $this->resolvePersistCurrency(
             (string)($cart['currency'] ?? ''),
@@ -529,13 +530,18 @@ final class CartService
 
         $customer ??= $this->newCart($scope, null, $customerId, '', $cartType);
         $customer['cart_type'] = $cartType;
+        $locationNotice = $this->pruneLocationSellMismatchedLines($customer);
         $this->store->set($customerKey, $customer);
+        $mergeMessage = $truncateNotes === []
+            ? (string)__('游客购物车已合并。')
+            : (string)__('游客购物车已合并；部分数量因可售上限被截断。');
+        if ($locationNotice !== '') {
+            $mergeMessage = trim($mergeMessage . ' ' . $locationNotice);
+        }
         $summary = $this->summary(
             $customer,
             true,
-            $truncateNotes === []
-                ? (string)__('游客购物车已合并。')
-                : (string)__('游客购物车已合并；部分数量因可售上限被截断。'),
+            $mergeMessage,
             [],
             $scope,
         );
@@ -1381,6 +1387,117 @@ final class CartService
             (string)($result['message'] ?? __('购物车数量不符合规则')),
             is_array($result['detail'] ?? null) ? $result['detail'] : [],
         );
+    }
+
+    /**
+     * 地点售卖交易闸：加购前校验履约仓国与车锁。
+     *
+     * @param array<string, mixed> $cart
+     */
+    private function assertLocationSellOfferAddable(int $offerId, array $cart): void
+    {
+        if ($offerId <= 0 || !class_exists(\Weline\Shipping\Service\LocationSellGate::class)) {
+            return;
+        }
+        try {
+            /** @var \Weline\Shipping\Service\LocationSellGate $gate */
+            $gate = ObjectManager::getInstance(\Weline\Shipping\Service\LocationSellGate::class);
+            if (!$gate->isActive()) {
+                return;
+            }
+            $lock = $this->resolveCartFulfillmentLockCountry($cart, $gate);
+            $result = $gate->assertOfferAddable($offerId, $lock);
+            if (!empty($result['ok'])) {
+                return;
+            }
+            throw new CartConflictException(
+                (string)($result['error_code'] ?? self::ERROR_NOT_SELLABLE),
+                (string)($result['message'] ?? __('该商品暂不可在当前售卖地发货')),
+                $result,
+            );
+        } catch (CartConflictException $e) {
+            throw $e;
+        } catch (\Throwable) {
+            // 闸门不可用时不阻断加购
+        }
+    }
+
+    /**
+     * 合并后剔除与当前配送国不一致的履约行；返回提示文案（可空）。
+     *
+     * @param array<string, mixed> $cart
+     */
+    private function pruneLocationSellMismatchedLines(array &$cart): string
+    {
+        if (!class_exists(\Weline\Shipping\Service\LocationSellGate::class)) {
+            return '';
+        }
+        try {
+            /** @var \Weline\Shipping\Service\LocationSellGate $gate */
+            $gate = ObjectManager::getInstance(\Weline\Shipping\Service\LocationSellGate::class);
+            if (!$gate->isActive()) {
+                return '';
+            }
+            $delivery = $gate->currentDeliveryCountry();
+            if ($delivery === '') {
+                return '';
+            }
+            $kept = [];
+            $removed = 0;
+            foreach ((array)($cart['items'] ?? []) as $line) {
+                if (!\is_array($line)) {
+                    continue;
+                }
+                $offerId = (int)($line['offer_id'] ?? 0);
+                $origin = $offerId > 0 ? $gate->resolveOfferFulfillmentCountry($offerId) : '';
+                if ($origin !== '' && $origin !== $delivery) {
+                    $removed++;
+                    continue;
+                }
+                $kept[] = $line;
+            }
+            if ($removed <= 0) {
+                return '';
+            }
+            $cart['items'] = $kept;
+
+            return (string)__('已移除与当前配送国家不符的 %{1} 件商品。', [$removed]);
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $cart
+     */
+    private function resolveCartFulfillmentLockCountry(
+        array $cart,
+        \Weline\Shipping\Service\LocationSellGate $gate,
+    ): ?string {
+        $lock = '';
+        foreach ((array)($cart['items'] ?? []) as $line) {
+            if (!\is_array($line)) {
+                continue;
+            }
+            $offerId = (int)($line['offer_id'] ?? 0);
+            if ($offerId <= 0) {
+                continue;
+            }
+            $origin = $gate->resolveOfferFulfillmentCountry($offerId);
+            if ($origin === '') {
+                continue;
+            }
+            if ($lock === '') {
+                $lock = $origin;
+                continue;
+            }
+            if ($lock !== $origin) {
+                // 已有混仓：仍以首个锁国拦截新加购
+                break;
+            }
+        }
+
+        return $lock !== '' ? $lock : null;
     }
 
     /**
