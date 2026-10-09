@@ -642,8 +642,16 @@ if (!$isEditorPreview) {
 
     /* ---- 响应式设计：仅平板及以下收成抽屉，桌面保持侧栏+网格 ---- */
     @media screen and (max-width: 900px) {
-        .category-layout__container {
-            grid-template-columns: 1fr;
+        /*
+         * 特异度必须 ≥ 桌面 `.--with-filters` / `:has(> sidebar)`（0,2,0）。
+         * 否则侧栏已 position:fixed 离轨，网格仍留 220px 空列，主列被挤成窄条，
+         * 商品卡/图溢出后像「满屏碎图」（手机分类页乱版根因）。
+         */
+        .category-layout__container,
+        .category-layout__container--with-filters,
+        .category-layout__container--no-filters,
+        .category-layout__container:has(> .category-layout__sidebar) {
+            grid-template-columns: minmax(0, 1fr);
             padding: 0 var(--spacing-4, 1rem);
         }
 

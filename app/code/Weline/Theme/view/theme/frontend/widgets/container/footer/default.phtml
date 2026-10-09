@@ -138,8 +138,8 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
             <i class="fas fa-arrow-up footer-back-to-top__icon" aria-hidden="true"></i>
             <span class="footer-back-to-top__text"><lang>回到顶部</lang></span>
         </button>
-        <span hidden data-widget-script="theme-container-footer-default-0"></span>
     <?php endif; ?>
+    <span hidden data-widget-script="theme-container-footer-default-0"></span>
 
     <div class="footer-nav">
         <div class="footer-container">
@@ -151,13 +151,19 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
                     $titleHtml = $label($group['title'] ?? '');
                     $items = is_array($group['items'] ?? null) ? $group['items'] : [];
                     ?>
-                    <div class="<?= $esc($sectionClass) ?>" data-footer-group="<?= $esc((string)($group['key'] ?? '')) ?>">
+                    <?php
+                    $groupKey = (string)($group['key'] ?? '');
+                    $hasExtrasSlot = in_array($groupKey, ['about', 'partner', 'payment', 'help'], true);
+                    $sectionTag = $titleHtml !== '' ? 'details' : 'div';
+                    // details 默认 open：桌面四列常显链接；手机由 footer JS 按断点收起。
+                    // 禁止依赖 CSS display:!important 强开关闭态 details（UA 不渲染子树）。
+                    $sectionOpenAttr = $sectionTag === 'details' ? ' open' : '';
+                    ?>
+                    <<?= $sectionTag ?> class="<?= $esc($sectionClass) ?>"<?= $sectionOpenAttr ?> data-footer-group="<?= $esc($groupKey) ?>"<?= $sectionTag === 'details' ? ' data-footer-accordion="1"' : '' ?>>
                         <?php if ($titleHtml !== ''): ?>
-                            <h3 class="footer-section__title"><?= $titleHtml ?></h3>
+                            <summary class="footer-section__title"><?= $titleHtml ?></summary>
                         <?php endif; ?>
                         <?php
-                        $groupKey = (string)($group['key'] ?? '');
-                        $hasExtrasSlot = in_array($groupKey, ['about', 'partner', 'payment', 'help'], true);
                         if ($items !== [] || $hasExtrasSlot):
                             ?>
                             <div class="footer-section__links">
@@ -210,7 +216,7 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
                                 <?php endif; ?>
                             </div>
                         <?php endif; ?>
-                    </div>
+                    </<?= $sectionTag ?>>
                 <?php endforeach; ?>
             </div>
 
