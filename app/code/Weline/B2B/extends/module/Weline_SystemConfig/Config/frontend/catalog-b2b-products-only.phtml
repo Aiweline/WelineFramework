@@ -1,0 +1,27 @@
+<?php
+/**
+ * @meta.title {default="B2B 范围货架过滤",description="展示类型为 b2b 时是否仅展示批发商品"}
+ * @meta.description {default="仅影响店面货架与 PDP 可见性；与拆单、tob 购物车无关。"}
+ * @config.area {frontend}
+ * @config.sort {72}
+ * @config.acl {Weline_B2B::config}
+ */
+?>
+
+<w:config:group
+    code="b2b_catalog_display"
+    label="B2B 范围货架"
+    description="配合网站/店铺/渠道的展示类型 b2b；开启后仅保留具备批发资格的商品。"
+    sort="15"
+>
+    <w:config:field
+        key="catalog_b2b_products_only"
+        label="B2B 范围仅展示批发商品"
+        description="仅当生效展示类型为 b2b 时生效。默认开启：店面货架与 PDP 仅保留具备批发资格的商品；关闭后该 b2b 范围可再展示零售商品。与拆单/tob 购物车无关。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store,channel"
+        data-testid="catalog-b2b-products-only"
+    />
+</w:config:group>

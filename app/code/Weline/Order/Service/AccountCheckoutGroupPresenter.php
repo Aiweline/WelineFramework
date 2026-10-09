@@ -62,6 +62,7 @@ final class AccountCheckoutGroupPresenter
 
         $trackingSummary = $this->trackingSummaryForGroup($orders);
         $orderType = $this->resolveGroupOrderType($orders);
+        $scope = $this->resolveScope($group);
         $shipmentCountInGroup = 0;
         foreach ($orders as $order) {
             $shipmentCountInGroup += max(0, (int)($order['shipment_count'] ?? 0));
@@ -95,6 +96,12 @@ final class AccountCheckoutGroupPresenter
             'order_type' => $orderType['code'],
             'order_type_label' => $orderType['label'],
             'order_type_tone' => $orderType['tone'],
+            'scope_label' => (string)($scope['label'] ?? ''),
+            'scope_store_id' => (int)($scope['store_id'] ?? 0),
+            'scope_store_code' => (string)($scope['store_code'] ?? ''),
+            'scope_channel_id' => (int)($scope['channel_id'] ?? 0),
+            'scope_channel_code' => (string)($scope['channel_code'] ?? ''),
+            'scope_display_type' => (string)($scope['display_type'] ?? ''),
             'hang' => $this->primaryHang($orders),
             'continue_pay_url' => (string)($group['continue_pay_url'] ?? ''),
             'continue_pay_reachable' => !empty($group['continue_pay_reachable'])
@@ -107,6 +114,23 @@ final class AccountCheckoutGroupPresenter
             'content_hook' => 'account.sidebar.content',
             'section' => 'orders',
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $group
+     * @return array<string, mixed>
+     */
+    private function resolveScope(array $group): array
+    {
+        $scope = $group['scope'] ?? null;
+        if (is_array($scope) && trim((string)($scope['label'] ?? '')) !== '') {
+            return $scope;
+        }
+        if (is_array($scope)) {
+            return $scope;
+        }
+
+        return [];
     }
 
     /**

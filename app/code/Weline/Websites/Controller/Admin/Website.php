@@ -1463,6 +1463,7 @@ class Website extends BackendController
             \Weline\Websites\Model\Website::schema_fields_DEFAULT_LANGUAGE,
             \Weline\Websites\Model\Website::schema_fields_DEFAULT_TIMEZONE,
             \Weline\Websites\Model\Website::schema_fields_SCOPE,
+            \Weline\Websites\Model\Website::schema_fields_DISPLAY_TYPE,
         ]));
     }
 

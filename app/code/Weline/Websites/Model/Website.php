@@ -100,6 +100,8 @@ class Website extends Model
     public const schema_fields_DEFAULT_TIMEZONE = 'default_timezone';
     #[Col('varchar', 100, nullable: true, default: '', comment: '业务scope标识，如catalog等')]
     public const schema_fields_SCOPE = 'scope';
+    #[Col('varchar', 64, nullable: true, default: null, comment: '店面展示类型代码（空=无特殊类型；勿与 scope 列混淆）')]
+    public const schema_fields_DISPLAY_TYPE = 'display_type';
 
 
     /**
@@ -149,6 +151,11 @@ class Website extends Model
             if (!preg_match('/^https?:\/\//i', $url)) {
                 $this->setData(self::schema_fields_URL, 'http://' . $url);
             }
+        }
+
+        if ($this->hasData(self::schema_fields_DISPLAY_TYPE)) {
+            $displayType = strtolower(trim((string)$this->getData(self::schema_fields_DISPLAY_TYPE)));
+            $this->setData(self::schema_fields_DISPLAY_TYPE, $displayType !== '' ? $displayType : null);
         }
     }
 

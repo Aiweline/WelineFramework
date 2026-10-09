@@ -45,6 +45,16 @@ $error = (string)($error ?? '');
                     <label class="w-field__label"><lang>渠道名称</lang></label>
                     <input class="w-input" name="name" maxlength="128" required value="<?= $escape($entity['name'] ?? '') ?>">
                 </div>
+                <div style="--w-span-md:5;">
+                    <label class="w-field__label"><lang>独立 URL</lang></label>
+                    <input class="w-input" type="url" name="url" maxlength="255" value="<?= $escape($entity['url'] ?? '') ?>" placeholder="https://example.com/store/channel">
+                    <div class="w-field__hint"><lang>可选；须与父店铺同 Origin，且为店铺入口路径的严格延伸。</lang></div>
+                </div>
+                <?php
+                $this->assign('display_type_value', (string)($entity['display_type'] ?? ''));
+                $this->assign('display_type_inherit_label', __('继承店铺 / 无特殊类型'));
+                echo $this->fetch('Weline_Websites::templates/Backend/partials/display-type-field.phtml');
+                ?>
                 <div class="w-cluster" data-align="end" style="--w-span-md:12;">
                     <button class="w-button" type="submit" data-tone="primary"><lang>保存渠道</lang></button>
                 </div>

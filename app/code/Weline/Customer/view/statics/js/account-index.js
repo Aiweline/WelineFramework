@@ -237,6 +237,7 @@
         }
 
         // Body-injected <link rel="stylesheet"> is unreliable across browsers; hoist to <head>.
+        // Only mark href loaded after the stylesheet actually loads; 404/network fail must retry.
         function loadTrustedSidebarStyles(html) {
             var template = document.createElement('template');
             template.innerHTML = String(html || '');
@@ -252,6 +253,12 @@
                 link.rel = 'stylesheet';
                 link.type = 'text/css';
                 link.href = href;
+                link.addEventListener('error', function() {
+                    delete loadedSidebarStyles[href];
+                    if (link.parentNode) {
+                        link.parentNode.removeChild(link);
+                    }
+                });
                 document.head.appendChild(link);
             });
         }
@@ -493,7 +500,20 @@
             }
 
             var separator = baseUrl.indexOf('?') >= 0 ? '&' : '?';
-            return baseUrl + separator + 'section=' + encodeURIComponent(sectionName);
+            var url = baseUrl + separator + 'section=' + encodeURIComponent(sectionName);
+            // Forward page query (scope_store / order_uuid / …) so lazy sidebar hooks see filters.
+            try {
+                var pageParams = new URLSearchParams(window.location.search || '');
+                pageParams.forEach(function (value, key) {
+                    if (!key || key === 'section') {
+                        return;
+                    }
+                    url += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(value);
+                });
+            } catch (e) {
+                // ignore URLSearchParams gaps
+            }
+            return url;
         }
 
         function revealAccountSection(sectionName) {
@@ -559,12 +579,19 @@
                 return sidebarContentLoading[sectionName];
             }
 
-            // Only forward params declared on account.getSidebarSection (section, order_uuid).
+            // Only forward params declared on account.getSidebarSection
+            // (section, order_uuid, scope_store, scope_channel).
             // Merging location.search wholesale forwards 2FA secrets and trips FrontendQueryGateway 422.
             var sidebarPayload = { section: sectionName };
             var sidebarQuery = parseAccountHash().query;
             if (sidebarQuery.order_uuid) {
                 sidebarPayload.order_uuid = sidebarQuery.order_uuid;
+            }
+            if (sidebarQuery.scope_store) {
+                sidebarPayload.scope_store = sidebarQuery.scope_store;
+            }
+            if (sidebarQuery.scope_channel) {
+                sidebarPayload.scope_channel = sidebarQuery.scope_channel;
             }
             sidebarContentLoading[sectionName] = (window.Weline && window.Weline.load
                 ? window.Weline.load('api')

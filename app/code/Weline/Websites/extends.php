@@ -125,5 +125,33 @@ return [
                 ],
             ],
         ],
+        'ScopeDisplayType' => [
+            'path' => 'extends/module/Weline_Websites/ScopeDisplayType',
+            'type' => ['module'],
+            'description' => __('范围展示类型身份扩展点。仅注册 code/label/module，不声明产品过滤约束。'),
+            'required' => false,
+            'interface' => 'Weline\\Websites\\Api\\ScopeDisplayTypeProviderInterface',
+            'multiple' => true,
+            'details' => [
+                'module_mode' => [
+                    'path' => 'extends/module/Weline_Websites/ScopeDisplayType/{TypeName}.php',
+                    'description' => __('展示类型身份实现类，在模块的 extends/module/Weline_Websites/ScopeDisplayType/ 目录下创建 PHP 文件。'),
+                    'example' => 'extends/module/Weline_Websites/ScopeDisplayType/B2B.php',
+                ],
+                'implementation' => [
+                    'interface' => 'Weline\\Websites\\Api\\ScopeDisplayTypeProviderInterface',
+                    'description' => __('仅注册展示身份；产品可见性过滤由 Product SPI 承接。'),
+                    'required_methods' => [
+                        'getCode' => __('返回类型唯一编码'),
+                        'getLabel' => __('返回类型显示名称'),
+                        'getModule' => __('返回拥有模块名'),
+                        'getSortOrder' => __('返回排序值'),
+                    ],
+                ],
+                'use_case' => [
+                    'description' => __('用于把网站/店铺/渠道标成特殊店面展示身份（如 B2B），供前台过滤与后台下拉使用。'),
+                ],
+            ],
+        ],
     ],
 ];

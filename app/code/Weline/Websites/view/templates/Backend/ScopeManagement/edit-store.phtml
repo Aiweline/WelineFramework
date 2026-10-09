@@ -54,6 +54,11 @@ $error = (string)($error ?? '');
                     <label class="w-field__label"><lang>独立 URL</lang></label>
                     <input class="w-input" type="url" name="url" maxlength="255" value="<?= $escape($entity['url'] ?? '') ?>">
                 </div>
+                <?php
+                $this->assign('display_type_value', (string)($entity['display_type'] ?? ''));
+                $this->assign('display_type_inherit_label', __('继承网站 / 无特殊类型'));
+                echo $this->fetch('Weline_Websites::templates/Backend/partials/display-type-field.phtml');
+                ?>
                 <div class="w-cluster" data-align="end" style="--w-span-md:12;">
                     <button class="w-button" type="submit" data-tone="primary"><lang>保存商店</lang></button>
                 </div>

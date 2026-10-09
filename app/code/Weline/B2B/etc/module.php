@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_B2B',
-    'version' => '2.6.104',
+    'version' => '2.6.107',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -38,5 +38,7 @@ return [
             => \Weline\B2B\Service\B2BCartOfferRouting::class,
         'payment.asset_policy.Weline_B2B'
             => \Weline\B2B\Service\B2BPaymentAssetPolicyProvider::class,
+        \Weline\Product\Api\StorefrontCatalogVisibilityFilterInterface::class
+            => \Weline\B2B\Service\B2BStorefrontCatalogVisibilityFilter::class,
     ],
 ];

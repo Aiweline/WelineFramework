@@ -211,6 +211,11 @@ final class FrontendWorkerScopeBootstrapResponseService
             }
 
             $this->applyNoStore($response);
+            // Each HTML document rotates the opaque Scope bootstrap id. Leftover
+            // sibling __Host-…-Bootstrap-* cookies from prior navigations make
+            // QueryBin reject the current meta as missing/duplicated/invalid
+            // (PayPal return → express-review, PDP→checkout, HelpPay /q/).
+            $this->expireStaleScopeBootstrapCookies($response, $cookieName);
             $response->setCookie($cookieName, $token, $expiresAt, '/', '', true, true, 'Lax');
             RequestContext::set(self::REQUEST_STATE_KEY, [
                 'status' => 'decorated',
@@ -577,6 +582,36 @@ final class FrontendWorkerScopeBootstrapResponseService
     {
         $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
         $response->setHeader('Pragma', 'no-cache');
+    }
+
+    /**
+     * Expire prior Host-scoped Scope bootstrap cookies so the browser jar only
+     * retains the cookie that matches this response's meta bootstrap id.
+     */
+    private function expireStaleScopeBootstrapCookies(Response $response, string $keepCookieName): void
+    {
+        $prefix = FrontendWorkerSessionService::SCOPE_BOOTSTRAP_COOKIE_PREFIX;
+        $rawHeader = (string)($_SERVER['HTTP_COOKIE'] ?? '');
+        if ($rawHeader === '' || \strlen($rawHeader) > 65536) {
+            return;
+        }
+        $seen = [];
+        foreach (\explode(';', $rawHeader) as $part) {
+            $pair = \explode('=', \trim($part), 2);
+            if (\count($pair) < 1) {
+                continue;
+            }
+            $name = \urldecode($pair[0]);
+            if ($name === '' || isset($seen[$name]) || !\str_starts_with($name, $prefix)) {
+                continue;
+            }
+            $seen[$name] = true;
+            if ($name === $keepCookieName) {
+                continue;
+            }
+            // __Host- cookies require Secure + Path=/ + empty Domain.
+            $response->setCookie($name, '', 1, '/', '', true, true, 'Lax');
+        }
     }
 
     private function ensureVaryAcceptEncoding(Response $response): void

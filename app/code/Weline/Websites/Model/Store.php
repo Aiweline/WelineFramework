@@ -69,6 +69,8 @@ class Store extends Model
     public const schema_fields_LIFECYCLE_STATUS = 'lifecycle_status';
     #[Col('datetime', nullable: true, comment: '转为墓碑的 UTC 时间')]
     public const schema_fields_TOMBSTONED_AT = 'tombstoned_at';
+    #[Col('varchar', 64, nullable: true, default: null, comment: '店面展示类型代码（空=继承网站）')]
+    public const schema_fields_DISPLAY_TYPE = 'display_type';
 
     /**
      * 将 save_before() 的生命周期锁定读与保存放在同一个主库事务内。

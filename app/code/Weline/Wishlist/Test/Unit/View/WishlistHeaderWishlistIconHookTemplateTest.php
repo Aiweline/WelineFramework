@@ -35,9 +35,16 @@ final class WishlistHeaderWishlistIconHookTemplateTest extends TestCase
 
         $wishlistPos = strpos($source, '<w:hook>header-wishlist-icon</w:hook>');
         $accountPos = strpos($source, '<w:widget type="header" name="account"');
+        $topBarPos = strpos($source, 'id="top-bar-rights"');
+        $userAreaPos = strpos($source, 'id="user-area"');
         self::assertNotFalse($wishlistPos);
         self::assertNotFalse($accountPos);
-        // 顶栏顺序：货币槽之后 → 收藏 → 账户 → 订单 → 购物车
+        self::assertNotFalse($topBarPos);
+        self::assertNotFalse($userAreaPos);
+        // 收藏在通知条右侧（订单跟踪后），主栏账户之前
+        // PHPUnit assertLessThan($expected, $actual) ⇒ actual < expected
+        self::assertLessThan($wishlistPos, $topBarPos);
+        self::assertLessThan($userAreaPos, $wishlistPos);
         self::assertLessThan($accountPos, $wishlistPos);
     }
 

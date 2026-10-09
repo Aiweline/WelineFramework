@@ -1248,6 +1248,31 @@ textarea::-webkit-scrollbar-thumb:hover,
     color: var(--w-surface-fg, var(--weline-theme-header-text, var(--weline-theme-text-on-dark)));
 }
 
+/* 通知条右侧渠道触发：与帮助/订单同字色幽灵钮，禁止 primary 实心底 */
+.weline-header .header-site-notice .w-scope-switcher__trigger.w-button,
+.weline-header .header-top-bar-rights-cluster .w-scope-switcher__trigger.w-button,
+.weline-header .header-site-notice-links .w-scope-switcher__trigger.w-button {
+    background: transparent;
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    color: inherit;
+}
+
+.weline-header .header-site-notice .w-scope-switcher__trigger.w-button:hover,
+.weline-header .header-top-bar-rights-cluster .w-scope-switcher__trigger.w-button:hover,
+.weline-header .header-site-notice-links .w-scope-switcher__trigger.w-button:hover {
+    background: transparent;
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    color: inherit;
+    opacity: 0.88;
+    text-decoration: underline;
+}
+
 .language-switcher,
 .currency-switcher {
     position: relative;

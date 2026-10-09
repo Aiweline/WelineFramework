@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeContext;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -44,6 +45,8 @@ class ScopeResolver
         private readonly StoreCatalogInterface $storeCatalog,
         private readonly SalesChannelCatalogInterface $channelCatalog,
         private ?ScopePathMatchCache $pathMatchCache = null,
+        private ?ScopeChannelUrlReader $channelUrlReader = null,
+        private ?ScopeDisplayTypeResolver $displayTypeResolver = null,
     ) {
     }
 
@@ -112,7 +115,7 @@ class ScopeResolver
 
         if (!$fromCache) {
             [$store, $routePath] = $this->resolveStore($websiteId, $trustedRequestUrl, $defaultRoutePath);
-            $channel = $this->resolveChannel($websiteId, $store);
+            [$channel, $routePath] = $this->resolveChannel($websiteId, $store, $routePath, $trustedRequestUrl);
         }
 
         $this->assertExplicitScope($store, $channel, $params);
@@ -129,6 +132,7 @@ class ScopeResolver
         RequestContext::setWelineChannelId($channel->id);
         RequestContext::setWelineChannelCode($channelCode);
         RequestContext::installScopeIdentity($identity);
+        $this->displayTypeResolver()->freezeCurrentFromRequestContext();
 
         // 冻结到 ScopeContext（三段字符串，兼容既有 scope 读取方）
         ScopeContext::setStoreCode($storeCode);
@@ -166,9 +170,7 @@ class ScopeResolver
             && $channel->storeId === $store->id
             && $channel->enabled
             && $channel->effectiveEnabled
-            && $channel->parentStoreLifecycleStatus === Store::LIFECYCLE_ACTIVE
-            && $channel->isDefault
-            && $channel->code === SalesChannel::CODE_DEFAULT;
+            && $channel->parentStoreLifecycleStatus === Store::LIFECYCLE_ACTIVE;
     }
 
     /**
@@ -296,9 +298,86 @@ class ScopeResolver
     }
 
     /**
+     * Match channel entry URLs against the trusted request after store is locked.
+     * Longest path wins among same-store channels; no hit → default channel.
+     *
+     * @return array{0: SalesChannelSummary, 1: string}
      */
-    private function resolveChannel(int $websiteId, StoreSummary $store): SalesChannelSummary
-    {
+    private function resolveChannel(
+        int $websiteId,
+        StoreSummary $store,
+        string $routePath,
+        string $trustedRequestUrl,
+    ): array {
+        try {
+            $requestUrl = CanonicalStorefrontUrl::fromRequestUrl($trustedRequestUrl);
+        } catch (\InvalidArgumentException $exception) {
+            throw new ScopeResolutionException(
+                'trusted_request_url_invalid',
+                (string)__('可信请求 URL 无效，已拒绝解析渠道范围'),
+                400,
+                $exception,
+            );
+        }
+
+        $bestMatch = null;
+        $bestMatchUrl = null;
+        $bestSpecificity = -1;
+        $ambiguous = false;
+        foreach ($this->channelUrlReader()->urlsByStore($store->id) as $channelId => $channelUrlRaw) {
+            try {
+                $candidateUrl = CanonicalStorefrontUrl::fromStoreUrl($channelUrlRaw);
+            } catch (\InvalidArgumentException $exception) {
+                throw new ScopeResolutionException(
+                    'channel_url_invalid',
+                    (string)__('渠道入口 URL 配置无效，已拒绝解析渠道范围'),
+                    503,
+                    $exception,
+                );
+            }
+            if (!$candidateUrl->sameOrigin($requestUrl) || !$candidateUrl->matchesRequestPath($requestUrl)) {
+                continue;
+            }
+            $candidate = $this->channelCatalog->byId((int)$channelId);
+            if ($candidate === null
+                || $candidate->websiteId !== $websiteId
+                || $candidate->storeId !== $store->id
+                || !$candidate->enabled
+                || !$candidate->effectiveEnabled
+                || $candidate->parentStoreLifecycleStatus !== Store::LIFECYCLE_ACTIVE
+            ) {
+                continue;
+            }
+
+            $specificity = $candidateUrl->pathSpecificity();
+            if ($specificity > $bestSpecificity) {
+                $bestMatch = $candidate;
+                $bestMatchUrl = $candidateUrl;
+                $bestSpecificity = $specificity;
+                $ambiguous = false;
+            } elseif ($specificity === $bestSpecificity) {
+                $ambiguous = true;
+            }
+        }
+
+        if ($ambiguous) {
+            throw new ScopeResolutionException(
+                'channel_url_ambiguous',
+                (string)__('当前 Origin/URI 匹配到多个同优先级渠道，已拒绝请求'),
+                409,
+            );
+        }
+
+        if ($bestMatch !== null && $bestMatchUrl instanceof CanonicalStorefrontUrl) {
+            $consumed = (string)\substr($requestUrl->path, \strlen($bestMatchUrl->path));
+            if ($bestMatchUrl->path === '/') {
+                $consumed = $requestUrl->path;
+            }
+            $consumed = CanonicalStorefrontUrl::canonicalPath($consumed === '' ? '/' : $consumed);
+
+            return [$bestMatch, $consumed];
+        }
+
         $channel = $this->channelCatalog->defaultChannelForStore($store);
         if ($channel === null || !$channel->enabled || !$channel->effectiveEnabled
             || $channel->parentStoreLifecycleStatus !== Store::LIFECYCLE_ACTIVE
@@ -312,7 +391,18 @@ class ScopeResolver
                 503,
             );
         }
-        return $channel;
+
+        return [$channel, $routePath];
+    }
+
+    private function channelUrlReader(): ScopeChannelUrlReader
+    {
+        return $this->channelUrlReader ??= ObjectManager::getInstance(ScopeChannelUrlReader::class);
+    }
+
+    private function displayTypeResolver(): ScopeDisplayTypeResolver
+    {
+        return $this->displayTypeResolver ??= ObjectManager::getInstance(ScopeDisplayTypeResolver::class);
     }
 
     /** @param array<string, mixed> $params */

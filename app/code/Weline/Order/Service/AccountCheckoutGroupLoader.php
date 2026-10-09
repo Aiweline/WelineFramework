@@ -14,6 +14,7 @@ use Weline\Order\Model\RefundCase;
  * 顾客账户 CheckoutGroup 聚合加载（MOD-P2F-006 / TEST-BROWSER-02）。
  *
  * 从 Order.customer_id + website_id 反查 checkout_group_uuid，再附退款/发票语义。
+ * 可选按 store_id / snapshot.channel_id 过滤；组 DTO 附 scope 快照标签。
  * 不读 Session；调用方必须先用 AccountSidebarProjection 取可信身份。
  */
 final class AccountCheckoutGroupLoader
@@ -24,6 +25,7 @@ final class AccountCheckoutGroupLoader
         private readonly RefundCase $refundCaseModel,
         private readonly OrderInvoice $orderInvoiceModel,
         private readonly ?ContinuePayUrlBuilder $continuePayUrlBuilder = null,
+        private readonly ?AccountOrderScopePresenter $scopePresenter = null,
     ) {
     }
 
@@ -34,11 +36,17 @@ final class AccountCheckoutGroupLoader
      *   status: string,
      *   grand_total_minor: int,
      *   currency: string,
+     *   scope: array<string, mixed>,
      *   orders: list<array<string, mixed>>
      * }>
      */
-    public function loadForCustomer(int $customerId, int $websiteId, int $limit = 20): array
-    {
+    public function loadForCustomer(
+        int $customerId,
+        int $websiteId,
+        int $limit = 20,
+        ?int $storeId = null,
+        ?int $channelId = null,
+    ): array {
         if ($customerId <= 0) {
             return [];
         }
@@ -56,10 +64,24 @@ final class AccountCheckoutGroupLoader
         if ($websiteId >= 0) {
             $query->where(Order::schema_fields_WEBSITE_ID, $websiteId);
         }
+        // store_id=0 是默认店，合法过滤值；仅 null 表示不限店。
+        if ($storeId !== null && $storeId >= 0) {
+            $query->where(Order::schema_fields_STORE_ID, $storeId);
+        }
 
         $orderRows = $query->select()->fetchArray();
         if ($orderRows === []) {
             return [];
+        }
+
+        if ($channelId !== null && $channelId >= 0) {
+            $orderRows = array_values(array_filter(
+                $orderRows,
+                fn (array $row): bool => $this->rowMatchesChannel($row, $channelId),
+            ));
+            if ($orderRows === []) {
+                return [];
+            }
         }
 
         $byGroup = [];
@@ -86,13 +108,29 @@ final class AccountCheckoutGroupLoader
         $refundByOrder = $this->loadLatestRefundStatus($orderUuids);
         $invoiceByOrder = $this->loadLatestInvoiceStatus($orderIds);
         $shipmentCountByOrder = $this->loadShipmentCounts($orderIds);
+        $scopePresenter = $this->scopePresenter();
 
         $result = [];
         foreach ($groupUuids as $groupUuid) {
             $orders = [];
+            $scopeFromFirst = null;
             foreach ($byGroup[$groupUuid] as $row) {
                 $orderId = (int) ($row[Order::schema_fields_ID] ?? 0);
                 $orderUuid = (string)($row[Order::schema_fields_ORDER_UUID] ?? '');
+                if ($scopeFromFirst === null) {
+                    $scopeFromFirst = $scopePresenter->presentFromOrderRow($row);
+                    $groupSnap = is_array($groupMeta[$groupUuid]['scope'] ?? null)
+                        ? $groupMeta[$groupUuid]['scope']
+                        : [];
+                    if ($groupSnap !== [] && trim((string)($scopeFromFirst['store_code'] ?? '')) === '') {
+                        $merged = $row;
+                        $merged[Order::schema_fields_SCOPE_SNAPSHOT_JSON] = json_encode(
+                            $groupSnap,
+                            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                        );
+                        $scopeFromFirst = $scopePresenter->presentFromOrderRow($merged);
+                    }
+                }
                 $orders[] = [
                     'order_id' => $orderId,
                     'order_uuid' => $orderUuid,
@@ -120,6 +158,7 @@ final class AccountCheckoutGroupLoader
                 'status' => $groupStatus,
                 'grand_total_minor' => (int) ($meta['grand_total_minor'] ?? array_sum(array_column($orders, 'amount_minor'))),
                 'currency' => (string) ($meta['currency'] ?? 'CNY'),
+                'scope' => $scopeFromFirst ?? $scopePresenter->presentFromOrderRow([]),
                 'orders' => $orders,
                 'continue_pay_url' => $continuePay['continue_pay_url'],
                 'continue_pay_reachable' => $continuePay['reachable'],
@@ -130,8 +169,69 @@ final class AccountCheckoutGroupLoader
     }
 
     /**
+     * 过滤条：本站该顾客订单上出现过的 Store（+「全部」）。
+     *
+     * @return array{
+     *   current_store_id:int|null,
+     *   current_channel_id:int|null,
+     *   options: list<array{store_id:int|null,label:string,selected:bool}>
+     * }
+     */
+    public function buildScopeFilter(int $customerId, int $websiteId, ?int $currentStoreId, ?int $currentChannelId = null): array
+    {
+        $options = [[
+            'store_id' => null,
+            'label' => (string)\__('全部范围'),
+            'selected' => $currentStoreId === null,
+        ]];
+        if ($customerId <= 0) {
+            return [
+                'current_store_id' => $currentStoreId,
+                'current_channel_id' => $currentChannelId,
+                'options' => $options,
+            ];
+        }
+
+        $orderModel = clone $this->orderModel;
+        $query = $orderModel->reset()
+            ->where(Order::schema_fields_CUSTOMER_ID, $customerId)
+            ->where(Order::schema_fields_CHECKOUT_GROUP_UUID, null, 'is not null')
+            ->where(Order::schema_fields_CHECKOUT_GROUP_UUID, '', '!=')
+            ->order(Order::schema_fields_CREATED_AT, 'DESC')
+            ->limit(200);
+        if ($websiteId >= 0) {
+            $query->where(Order::schema_fields_WEBSITE_ID, $websiteId);
+        }
+        $rows = $query->select()->fetchArray();
+        $seen = [];
+        $scopePresenter = $this->scopePresenter();
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sid = (int)($row[Order::schema_fields_STORE_ID] ?? 0);
+            if (isset($seen[$sid])) {
+                continue;
+            }
+            $seen[$sid] = true;
+            $scope = $scopePresenter->presentFromOrderRow($row);
+            $options[] = [
+                'store_id' => $sid,
+                'label' => (string)($scope['label'] ?? $scope['store_name'] ?? ('#' . $sid)),
+                'selected' => $currentStoreId !== null && $currentStoreId === $sid,
+            ];
+        }
+
+        return [
+            'current_store_id' => $currentStoreId,
+            'current_channel_id' => $currentChannelId,
+            'options' => $options,
+        ];
+    }
+
+    /**
      * @param list<string> $groupUuids
-     * @return array<string, array{display_number:string,status:string,grand_total_minor:int,currency:string}>
+     * @return array<string, array{display_number:string,status:string,grand_total_minor:int,currency:string,scope:array<string,mixed>}>
      */
     private function loadGroupMeta(array $groupUuids): array
     {
@@ -151,15 +251,61 @@ final class AccountCheckoutGroupLoader
             if ($uuid === '') {
                 continue;
             }
+            $scopeJson = (string)($row[CheckoutGroup::schema_fields_SCOPE_SNAPSHOT_JSON] ?? '');
+            $scope = [];
+            if (trim($scopeJson) !== '') {
+                try {
+                    $decoded = json_decode($scopeJson, true, 512, JSON_THROW_ON_ERROR);
+                    $scope = is_array($decoded) ? $decoded : [];
+                } catch (\Throwable) {
+                    $scope = [];
+                }
+            }
             $out[$uuid] = [
                 'display_number' => 'G-' . substr($uuid, 0, 8),
                 'status' => (string) ($row[CheckoutGroup::schema_fields_STATUS] ?? ''),
                 'grand_total_minor' => (int) ($row[CheckoutGroup::schema_fields_GRAND_TOTAL_MINOR] ?? 0),
                 'currency' => (string) ($row[CheckoutGroup::schema_fields_CURRENCY] ?? 'CNY'),
+                'scope' => $scope,
             ];
         }
 
         return $out;
+    }
+
+    /** @param array<string, mixed> $row */
+    private function rowMatchesChannel(array $row, int $channelId): bool
+    {
+        $json = trim((string)($row[Order::schema_fields_SCOPE_SNAPSHOT_JSON] ?? ''));
+        if ($json === '') {
+            return $channelId === 0;
+        }
+        try {
+            $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return $channelId === 0;
+        }
+        if (!is_array($decoded) || !array_key_exists('channel_id', $decoded)) {
+            return $channelId === 0;
+        }
+
+        return (int)$decoded['channel_id'] === $channelId;
+    }
+
+    private function scopePresenter(): AccountOrderScopePresenter
+    {
+        if ($this->scopePresenter instanceof AccountOrderScopePresenter) {
+            return $this->scopePresenter;
+        }
+        try {
+            $resolved = \Weline\Framework\Manager\ObjectManager::getInstance(AccountOrderScopePresenter::class);
+            if ($resolved instanceof AccountOrderScopePresenter) {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+        }
+
+        return new AccountOrderScopePresenter();
     }
 
     /**

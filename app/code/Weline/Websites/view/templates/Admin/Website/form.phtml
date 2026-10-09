@@ -226,6 +226,14 @@ $treeReturnUrl = trim((string)($tree_return_url ?? $this->getData('tree_return_u
                                 </div>
 
                                 <div style="--w-span:4;--w-mb:var(--weline-space-4);">
+                                    <?php
+                                    $this->assign('display_type_value', (string)($website['display_type'] ?? ''));
+                                    $this->assign('display_type_inherit_label', __('无特殊类型'));
+                                    echo $this->fetch('Weline_Websites::templates/Backend/partials/display-type-field.phtml');
+                                    ?>
+                                </div>
+
+                                <div style="--w-span:4;--w-mb:var(--weline-space-4);">
                                     <label for="start_page_path" class="w-field__label"><?= __('首页入口路由') ?></label>
                                     <select class="w-select w-input" name="start_page_path" id="start_page_path">
                                         <option value=""><?= __('继承全局首页配置') ?></option>

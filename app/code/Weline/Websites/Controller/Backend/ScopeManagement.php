@@ -62,6 +62,7 @@ final class ScopeManagement extends BackendController
                 $this->postString('name', 128),
                 $this->postString('store_mode', 16),
                 trim((string)$this->request->getPost('url', '')) ?: null,
+                trim((string)$this->request->getPost('display_type', '')) ?: null,
             );
             $newStoreId = (int)$created->id;
             $this->getMessageManager()->addSuccess(__('商店已创建'));
@@ -91,6 +92,8 @@ final class ScopeManagement extends BackendController
                 $storeId,
                 $this->postString('code', 64),
                 $this->postString('name', 128),
+                trim((string)$this->request->getPost('url', '')) ?: null,
+                trim((string)$this->request->getPost('display_type', '')) ?: null,
             );
             $newChannelId = (int)$created->id;
             $this->getMessageManager()->addSuccess(__('渠道已创建'));
@@ -127,6 +130,7 @@ final class ScopeManagement extends BackendController
                 $this->postString('name', 128),
                 $this->postString('store_mode', 16),
                 trim((string)$this->request->getPost('url', '')) ?: null,
+                trim((string)$this->request->getPost('display_type', '')) ?: null,
             );
             $this->dispatchScopeSaveAfter('store', [
                 'store_id' => $storeId,
@@ -172,6 +176,8 @@ final class ScopeManagement extends BackendController
             $updated = $this->admin->updateChannel(
                 $channelId,
                 $this->postString('name', 128),
+                trim((string)$this->request->getPost('url', '')) ?: null,
+                trim((string)$this->request->getPost('display_type', '')) ?: null,
             );
             $this->dispatchScopeSaveAfter('channel', [
                 'channel_id' => $channelId,

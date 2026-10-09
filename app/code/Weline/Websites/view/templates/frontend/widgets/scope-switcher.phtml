@@ -1,0 +1,118 @@
+<?php
+/**
+ * Frontend header scope switcher: channel list only (current website context).
+ *
+ * Theme chrome: data-w-component="menu" + floating (same as language/currency).
+ *
+ * @widget.source {Weline_Websites::css/widgets/scope-switcher.css}
+ */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Websites\Service\ScopeSwitcherPresenter;
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$i18nChrome = static fn(string $source): string => WidgetI18n::label($source);
+$presentation = [
+    'visible' => false,
+    'stores' => [],
+    'website_name' => '',
+    'current_label' => '',
+    'display_type' => '',
+];
+try {
+    $presentation = ObjectManager::getInstance(ScopeSwitcherPresenter::class)->presentCurrentWebsite();
+} catch (\Throwable) {
+    $presentation['visible'] = false;
+}
+if (empty($presentation['visible'])) {
+    return;
+}
+$stores = is_array($presentation['stores'] ?? null) ? $presentation['stores'] : [];
+$channelItems = [];
+foreach ($stores as $store) {
+    if (!is_array($store)) {
+        continue;
+    }
+    $channels = is_array($store['channels'] ?? null) ? $store['channels'] : [];
+    foreach ($channels as $channel) {
+        if (!is_array($channel)) {
+            continue;
+        }
+        $channelLabel = trim((string)($channel['label'] ?? $channel['name'] ?? $channel['code'] ?? ''));
+        if ($channelLabel === '') {
+            continue;
+        }
+        $channelItems[] = $channel + ['label' => $channelLabel];
+    }
+}
+if ($channelItems === []) {
+    return;
+}
+$currentLabel = trim((string)($presentation['current_label'] ?? ''));
+$triggerText = $currentLabel !== '' ? $currentLabel : $i18nChrome('切换渠道');
+$panelId = 'w-scope-switcher-panel-' . substr(bin2hex(random_bytes(4)), 0, 8);
+$triggerId = 'w-scope-switcher-trigger-' . substr(bin2hex(random_bytes(4)), 0, 8);
+?>
+<div class="w-scope-switcher w-menu-root header-action-item"
+     data-testid="scope-switcher"
+     data-w-component="menu"
+     data-w-placement="bottom-end"
+     data-w-anchor-mode="element"
+     data-display-type="<?= $escape($presentation['display_type'] ?? '') ?>"
+     data-website-id="<?= (int)($presentation['website_id'] ?? -1) ?>">
+    <button type="button"
+            id="<?= $escape($triggerId) ?>"
+            class="w-button w-scope-switcher__trigger"
+            data-tone="quiet"
+            data-size="sm"
+            data-w-menu-trigger
+            data-testid="scope-switcher-trigger"
+            aria-expanded="false"
+            aria-haspopup="menu"
+            aria-controls="<?= $escape($panelId) ?>"
+            aria-label="<?= $escape($i18nChrome('切换渠道') . ($currentLabel !== '' ? ' · ' . $currentLabel : '')) ?>">
+        <span class="w-scope-switcher__current" data-testid="scope-switcher-current-label"><?= $escape($triggerText) ?></span>
+        <w:icon name="chevron-down" size="xs" />
+    </button>
+    <div id="<?= $escape($panelId) ?>"
+         class="w-menu w-scope-switcher__menu w-scope-switcher__panel"
+         data-testid="scope-switcher-panel"
+         data-w-menu-panel
+         role="menu"
+         aria-labelledby="<?= $escape($triggerId) ?>"
+         aria-label="<?= $escape($i18nChrome('切换渠道')) ?>"
+         hidden>
+        <?php foreach ($channelItems as $channel): ?>
+            <?php
+            $channelLabel = (string)$channel['label'];
+            $clickable = !empty($channel['clickable']);
+            $current = !empty($channel['current']);
+            $url = trim((string)($channel['url'] ?? ''));
+            $itemClass = 'w-menu__item w-scope-switcher__channel'
+                . ($current ? ' is-current' : '')
+                . ($clickable ? '' : ' is-disabled');
+            ?>
+            <?php if ($clickable && !$current && $url !== ''): ?>
+                <a class="<?= $escape($itemClass) ?>"
+                   href="<?= $escape($url) ?>"
+                   role="menuitem"
+                   data-testid="scope-switcher-link"
+                   data-channel-id="<?= (int)($channel['channel_id'] ?? 0) ?>">
+                    <span class="w-scope-switcher__channel-name"><?= $escape($channelLabel) ?></span>
+                </a>
+            <?php else: ?>
+                <span class="<?= $escape($itemClass) ?>"
+                      role="menuitem"
+                      <?= $current ? 'aria-current="true"' : '' ?>
+                      <?= $clickable ? '' : 'aria-disabled="true"' ?>
+                      data-testid="<?= $current ? 'scope-switcher-current' : 'scope-switcher-disabled' ?>"
+                      data-channel-id="<?= (int)($channel['channel_id'] ?? 0) ?>">
+                    <span class="w-scope-switcher__channel-name"><?= $escape($channelLabel) ?></span>
+                    <?php if ($current): ?>
+                        <span class="w-scope-switcher__badge"><?= $escape($i18nChrome('当前')) ?></span>
+                    <?php endif; ?>
+                </span>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+</div>

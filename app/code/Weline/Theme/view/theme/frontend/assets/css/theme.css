@@ -504,6 +504,27 @@ input[disabled].btn {
     color: var(--w-surface-fg, var(--weline-theme-header-text, var(--weline-theme-text-on-dark)));
 }
 
+/* Notice-bar scope switcher: text-link ghost on cream notice (not primary chip). */
+.weline-header .header-site-notice .w-scope-switcher__trigger.w-button,
+.weline-header .header-site-notice-links .w-scope-switcher__trigger.w-button,
+.weline-header .header-top-bar-rights-cluster .w-scope-switcher__trigger.w-button {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    color: inherit;
+}
+
+.weline-header .header-site-notice .w-scope-switcher__trigger.w-button:hover,
+.weline-header .header-site-notice-links .w-scope-switcher__trigger.w-button:hover,
+.weline-header .header-top-bar-rights-cluster .w-scope-switcher__trigger.w-button:hover {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    color: inherit;
+}
+
 /* ========== Header delivery / location entry（主题默认 UI，模块勿私写裸按钮） ========== */
 .w-header-delivery-entry,
 .location-link,
@@ -2929,6 +2950,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 [data-surface="inverse"] .search-suggestions :is(p, li, small, span),
 [data-surface="inverse"] .w-search-suggestions :is(p, li, small, span),
 [data-surface="inverse"] .w-language-switcher__menu :is(p, li, small, span),
+[data-surface="inverse"] .w-scope-switcher__menu :is(p, li, small, span, a, div),
 [data-surface="inverse"] .w-scope-switcher__panel :is(p, li, small, span, a, div),
 [data-surface="inverse"] .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
 [data-surface="inverse"] dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
@@ -2937,6 +2959,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 .w-surface-inverse .search-suggestions :is(p, li, small, span),
 .w-surface-inverse .w-search-suggestions :is(p, li, small, span),
 .w-surface-inverse .w-language-switcher__menu :is(p, li, small, span),
+.w-surface-inverse .w-scope-switcher__menu :is(p, li, small, span, a, div),
 .w-surface-inverse .w-scope-switcher__panel :is(p, li, small, span, a, div),
 .w-surface-inverse .w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
 .w-surface-inverse dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2) {
@@ -2956,6 +2979,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 [data-surface="inverse"] .search-suggestions,
 [data-surface="inverse"] .w-search-suggestions,
 [data-surface="inverse"] .w-language-switcher__menu,
+[data-surface="inverse"] .w-scope-switcher__menu,
 [data-surface="inverse"] .w-scope-switcher__panel,
 [data-surface="inverse"] .w-dialog[data-language-request-modal],
 [data-surface="inverse"] dialog.w-dialog[data-language-request-modal],
@@ -2966,6 +2990,7 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 .w-surface-inverse .search-suggestions,
 .w-surface-inverse .w-search-suggestions,
 .w-surface-inverse .w-language-switcher__menu,
+.w-surface-inverse .w-scope-switcher__menu,
 .w-surface-inverse .w-scope-switcher__panel,
 .w-surface-inverse .w-dialog[data-language-request-modal],
 .w-surface-inverse dialog.w-dialog[data-language-request-modal] {

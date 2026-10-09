@@ -245,10 +245,7 @@ $defaultNavItemsFactory = static function (): array {
 })();
 </script>
 <!-- theme-partial:header option=default -->
-<?php // header chrome/search CSS：由 header-container @widget.layout-source bake→head，禁止 @static 直引 ?>
-<link rel="stylesheet"
-      href="@static(Weline_Theme::css/partials/header-default.css)&v=20261006-nav-right-content"
-      data-no-extract="true">
+<?php // header chrome/search/default CSS：由 header-container @widget.layout_source bake→head，禁止 @static 直引 ?>
 <!-- Skip to content link for accessibility -->
 <a href="#main-content" class="skip-to-content" aria-label="<lang>跳转到主要内容</lang>"><lang>跳转到主要内容</lang></a>
 <div hidden data-weline-load="headerSearch" data-w-header-search-loader="true" aria-hidden="true"></div>
@@ -295,19 +292,29 @@ $defaultNavItemsFactory = static function (): array {
                     <?= $this->fetch('Weline_Theme::theme/frontend/widgets/header/top-bar/default.phtml') ?>
                 </w:hook>
             </w:slot>
-            <!-- 右侧：可容纳多个 notice-rights 部件（默认注入帮助中心 / 订单跟踪） -->
-            <w:slot id="top-bar-rights"
-                    name="通知右侧入口"
-                    accept="notice-rights,layout-header-notice-rights,help-center-link,order-tracking-link,notice-right-link"
-                    reject="header,navigation,product,category,footer,container,banner,search,social,content,logo,notice"
-                    multiple="true"
-                    max="12"
-                    position="header"
-                    class="header-site-notice-links header-top-bar-rights-slot">
-                <w:widget type="notice-rights" name="help-center-link" />
-                <w:widget type="notice-rights" name="order-tracking-link" />
-                <w:hook>Weline_Theme::frontend::partials::header::notice-rights</w:hook>
-            </w:slot>
+            <!-- 右侧：帮助/订单 + 渠道范围 + 收藏（减轻主栏拥挤；槽并列，勿嵌进 published 槽默认区） -->
+            <div class="header-site-notice-links header-top-bar-rights-cluster">
+                <w:slot id="top-bar-rights"
+                        name="通知右侧入口"
+                        accept="notice-rights,layout-header-notice-rights,help-center-link,order-tracking-link,notice-right-link"
+                        reject="header,navigation,product,category,footer,container,banner,search,social,content,logo,notice"
+                        multiple="true"
+                        max="12"
+                        position="header"
+                        class="header-top-bar-rights-slot">
+                    <w:widget type="notice-rights" name="help-center-link" />
+                    <w:widget type="notice-rights" name="order-tracking-link" />
+                    <w:hook>Weline_Theme::frontend::partials::header::notice-rights</w:hook>
+                </w:slot>
+                <w:slot id="scope-switcher"
+                        name="范围切换"
+                        accept="layout-header-scope-switcher,scope-switcher"
+                        exclusive="true"
+                        position="header"
+                        class="header-action-item header-scope-switcher header-top-bar-scope">
+                </w:slot>
+                <w:hook>header-wishlist-icon</w:hook>
+            </div>
         </div>
     </div>
 
@@ -489,24 +496,13 @@ $defaultNavItemsFactory = static function (): array {
                     <w:hook>header-currency-switcher</w:hook>
                 </w:slot>
 
-                <w:slot id="scope-switcher"
-                        name="范围切换"
-                        accept="layout-header-scope-switcher,scope-switcher"
-                        exclusive="true"
-                        position="header"
-                        class="header-action-item header-scope-switcher">
-                </w:slot>
-
                 <w:slot id="user-area"
                         name="用户区域"
-                        accept="layout-header-actions,layout-global-header-actions,account,mini-cart-icon,wishlist-icon"
+                        accept="layout-header-actions,layout-global-header-actions,account,mini-cart-icon"
                         multiple="true"
                         position="header"
                         class="header-user-area">
-                <!-- 收藏：模块 Hook 交付（非 Theme 部件不可内嵌）；勿再声明 default_injections，避免应用 Tab 显示未安装却顶栏已有 -->
-                <w:hook>header-wishlist-icon</w:hook>
-
-                <!-- 账户登录 Hook -->
+                <!-- 账户登录 Hook（收藏已迁到通知条右侧，减轻主栏拥挤） -->
                 <!-- 
                     Hook: header-account
                     Hook 类型: 简单格式 Hook

@@ -14,6 +14,8 @@ use Weline\Websites\Model\Store;
 /**
  * Backend workbench facade: reads only through catalogs and writes only through
  * the existing Store/SalesChannel model transaction and lifecycle boundaries.
+ *
+ * display_type / channel.url are private Model fields (not Catalog Summary v1).
  */
 final class StoreChannelAdminService
 {
@@ -22,6 +24,9 @@ final class StoreChannelAdminService
         private readonly SalesChannelCatalogInterface $channels,
         private readonly Store $storeModel,
         private readonly SalesChannel $channelModel,
+        private readonly ScopeDisplayTypeResolver $displayTypes,
+        private readonly ScopeChannelUrlValidator $channelUrlValidator,
+        private readonly ScopeChannelUrlReader $channelUrlReader,
     ) {
     }
 
@@ -50,6 +55,7 @@ final class StoreChannelAdminService
         string $name,
         string $mode,
         ?string $url = null,
+        ?string $displayType = null,
     ): StoreSummary {
         $this->assertWebsiteId($websiteId);
         $code = Store::normalizeCode($code);
@@ -61,6 +67,7 @@ final class StoreChannelAdminService
         if ($this->stores->byCode($websiteId, $code) !== null) {
             throw new \InvalidArgumentException(__('店铺代码已存在：%{1}', [$code]));
         }
+        $normalizedType = $this->displayTypes->normalizeAssignedCode($displayType);
 
         $store = clone $this->storeModel;
         $store->clear()->setData([
@@ -71,6 +78,7 @@ final class StoreChannelAdminService
             Store::schema_fields_IS_DEFAULT => 0,
             Store::schema_fields_STATUS => 1,
             Store::schema_fields_URL => $url !== null && trim($url) !== '' ? trim($url) : null,
+            Store::schema_fields_DISPLAY_TYPE => $normalizedType !== '' ? $normalizedType : null,
             Store::schema_fields_LIFECYCLE_STATUS => Store::LIFECYCLE_ACTIVE,
             Store::schema_fields_TOMBSTONED_AT => null,
         ])->save();
@@ -84,6 +92,8 @@ final class StoreChannelAdminService
         int $storeId,
         string $code,
         string $name,
+        ?string $url = null,
+        ?string $displayType = null,
     ): SalesChannelSummary {
         $this->assertWebsiteId($websiteId);
         $store = $this->stores->byId($storeId);
@@ -98,6 +108,8 @@ final class StoreChannelAdminService
         if ($this->channels->byCode($storeId, $code) !== null) {
             throw new \InvalidArgumentException(__('销售渠道代码已存在：%{1}', [$code]));
         }
+        $normalizedUrl = $this->channelUrlValidator->normalizeAndAssert($url, $storeId);
+        $normalizedType = $this->displayTypes->normalizeAssignedCode($displayType);
 
         $channel = clone $this->channelModel;
         $channel->clear()->setData([
@@ -107,6 +119,8 @@ final class StoreChannelAdminService
             SalesChannel::schema_fields_NAME => $name,
             SalesChannel::schema_fields_IS_DEFAULT => 0,
             SalesChannel::schema_fields_STATUS => 1,
+            SalesChannel::schema_fields_URL => $normalizedUrl,
+            SalesChannel::schema_fields_DISPLAY_TYPE => $normalizedType !== '' ? $normalizedType : null,
         ])->save();
 
         return $this->channels->byCode($storeId, $code)
@@ -120,8 +134,21 @@ final class StoreChannelAdminService
             throw new \InvalidArgumentException(__('store_id 不能为负'));
         }
         $store = $this->stores->byId($storeId);
+        if ($store === null) {
+            return null;
+        }
+        $row = $store->toArray();
+        $model = clone $this->storeModel;
+        $model->clear()->load($storeId);
+        if ((int)$model->getData(Store::schema_fields_ID) === $storeId
+            || ($storeId === Store::ID_DEFAULT && $model->hasData(Store::schema_fields_CODE))
+        ) {
+            $row['display_type'] = (string)$model->getData(Store::schema_fields_DISPLAY_TYPE);
+        } else {
+            $row['display_type'] = '';
+        }
 
-        return $store?->toArray();
+        return $row;
     }
 
     /** @return array<string,mixed>|null */
@@ -131,8 +158,23 @@ final class StoreChannelAdminService
             throw new \InvalidArgumentException(__('channel_id 不能为负'));
         }
         $channel = $this->channels->byId($channelId);
+        if ($channel === null) {
+            return null;
+        }
+        $row = $channel->toArray();
+        $model = clone $this->channelModel;
+        $model->clear()->load($channelId);
+        if ((int)$model->getData(SalesChannel::schema_fields_ID) === $channelId
+            || ($channelId === SalesChannel::ID_DEFAULT && $model->hasData(SalesChannel::schema_fields_CODE))
+        ) {
+            $row['display_type'] = (string)$model->getData(SalesChannel::schema_fields_DISPLAY_TYPE);
+            $row['url'] = (string)$model->getData(SalesChannel::schema_fields_URL);
+        } else {
+            $row['display_type'] = '';
+            $row['url'] = (string)($this->channelUrlReader->urlForChannel($channelId) ?? '');
+        }
 
-        return $channel?->toArray();
+        return $row;
     }
 
     public function updateStore(
@@ -140,6 +182,7 @@ final class StoreChannelAdminService
         string $name,
         string $mode,
         ?string $url = null,
+        ?string $displayType = null,
     ): StoreSummary {
         $existing = $this->stores->byId($storeId);
         if ($existing === null) {
@@ -150,6 +193,7 @@ final class StoreChannelAdminService
         if ($name === '') {
             throw new \InvalidArgumentException(__('店铺名称不能为空'));
         }
+        $normalizedType = $this->displayTypes->normalizeAssignedCode($displayType);
 
         $store = clone $this->storeModel;
         $store->load($storeId);
@@ -163,14 +207,22 @@ final class StoreChannelAdminService
                 Store::schema_fields_URL,
                 $url !== null && trim($url) !== '' ? trim($url) : null
             )
+            ->setData(
+                Store::schema_fields_DISPLAY_TYPE,
+                $normalizedType !== '' ? $normalizedType : null
+            )
             ->save();
 
         return $this->stores->byId($storeId)
             ?? throw new \RuntimeException(__('店铺更新后无法通过目录回读'));
     }
 
-    public function updateChannel(int $channelId, string $name): SalesChannelSummary
-    {
+    public function updateChannel(
+        int $channelId,
+        string $name,
+        ?string $url = null,
+        ?string $displayType = null,
+    ): SalesChannelSummary {
         $existing = $this->channels->byId($channelId);
         if ($existing === null) {
             throw new \InvalidArgumentException(__('销售渠道不存在'));
@@ -179,6 +231,8 @@ final class StoreChannelAdminService
         if ($name === '') {
             throw new \InvalidArgumentException(__('销售渠道名称不能为空'));
         }
+        $normalizedUrl = $this->channelUrlValidator->normalizeAndAssert($url, (int)$existing->storeId);
+        $normalizedType = $this->displayTypes->normalizeAssignedCode($displayType);
 
         $channel = clone $this->channelModel;
         $channel->load($channelId);
@@ -186,7 +240,13 @@ final class StoreChannelAdminService
             || (int)$channel->getData(SalesChannel::schema_fields_ID) !== $channelId) {
             throw new \InvalidArgumentException(__('销售渠道不存在'));
         }
-        $channel->setData(SalesChannel::schema_fields_NAME, $name)->save();
+        $channel->setData(SalesChannel::schema_fields_NAME, $name)
+            ->setData(SalesChannel::schema_fields_URL, $normalizedUrl)
+            ->setData(
+                SalesChannel::schema_fields_DISPLAY_TYPE,
+                $normalizedType !== '' ? $normalizedType : null
+            )
+            ->save();
 
         return $this->channels->byId($channelId)
             ?? throw new \RuntimeException(__('销售渠道更新后无法通过目录回读'));

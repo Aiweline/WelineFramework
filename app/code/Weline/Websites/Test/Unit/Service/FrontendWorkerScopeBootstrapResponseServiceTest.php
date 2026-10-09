@@ -97,8 +97,17 @@ final class FrontendWorkerScopeBootstrapResponseServiceTest extends TestCase
         self::assertSame('private, no-store, max-age=0, must-revalidate', $decorated->getHeader('Cache-Control'));
 
         $cookies = array_values($decorated->getCookies());
-        self::assertCount(1, $cookies);
-        $cookie = $cookies[0];
+        self::assertGreaterThanOrEqual(1, \count($cookies));
+        $cookie = null;
+        foreach ($cookies as $candidate) {
+            if (\preg_match('/^__Host-Weline-Worker-Scope-Bootstrap-[A-Za-z0-9_-]{43}$/D', (string)($candidate['name'] ?? '')) === 1
+                && (string)($candidate['value'] ?? '') === self::TOKEN
+            ) {
+                $cookie = $candidate;
+                break;
+            }
+        }
+        self::assertNotNull($cookie);
         self::assertMatchesRegularExpression(
             '/^__Host-Weline-Worker-Scope-Bootstrap-[A-Za-z0-9_-]{43}$/D',
             $cookie['name'],
@@ -116,6 +125,50 @@ final class FrontendWorkerScopeBootstrapResponseServiceTest extends TestCase
         self::assertStringNotContainsString(self::TOKEN, $requestState);
         self::assertSame(1, TestBootstrapScopeProvider::$issueCalls);
         self::assertGreaterThanOrEqual(1, $store->transactions);
+    }
+
+    public function testDecorateExpiresStaleSiblingScopeBootstrapCookies(): void
+    {
+        $now = time();
+        TestBootstrapScopeProvider::$binding = new FrontendWorkerScopeBinding(
+            $this->scope,
+            'shop.example.test',
+            hash('sha256', self::TOKEN),
+            $now,
+            $now + 1800,
+            true,
+        );
+        $staleName = FrontendWorkerSessionService::SCOPE_BOOTSTRAP_COOKIE_PREFIX
+            . 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+        $_SERVER['HTTP_COOKIE'] = $staleName . '=stale-token; other=1';
+        try {
+            $service = new FrontendWorkerScopeBootstrapResponseService(
+                new TestBootstrapScopeProvider(),
+                new FrontendWorkerSessionService(new BootstrapMemoryStateStore()),
+            );
+            $decorated = $service->decorate(
+                Response::html('<!doctype html><html><head><title>Store</title></head><body>Ready</body></html>')
+            );
+            self::assertInstanceOf(Response::class, $decorated);
+            $cookies = array_values($decorated->getCookies());
+            $expired = null;
+            $fresh = null;
+            foreach ($cookies as $cookie) {
+                $name = (string)($cookie['name'] ?? '');
+                if ($name === $staleName) {
+                    $expired = $cookie;
+                }
+                if (($cookie['value'] ?? '') === self::TOKEN) {
+                    $fresh = $cookie;
+                }
+            }
+            self::assertNotNull($expired);
+            self::assertSame('', (string)($expired['value'] ?? ''));
+            self::assertLessThanOrEqual(1, (int)($expired['expire'] ?? 0));
+            self::assertNotNull($fresh);
+        } finally {
+            unset($_SERVER['HTTP_COOKIE']);
+        }
     }
 
     public function testInternalStorefrontWarmupKeepsAnonymousHtmlCookieFree(): void

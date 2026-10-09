@@ -50,8 +50,12 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $this->assertStringContainsString('listForOrderId', $content);
         $this->assertStringContainsString('OrderTrackingService', $content);
         $this->assertStringContainsString('data-order-tracking-resolved=', $content);
-        $this->assertStringContainsString('<css>Weline_Order::css/account-orders.css?v=20261009-locate-inset-1</css>', $content);
+        $this->assertStringContainsString('<css>Weline_Order::css/account-orders.scope-filter-3.css?v=20261009-scope-filter-3</css>', $content);
         $this->assertStringContainsString('<css>Weline_Order::css/order-tracking.css</css>', $content);
+        $this->assertStringContainsString('scope_store', $content);
+        $this->assertStringContainsString('accountOrderScopeFilter', $content);
+        $this->assertStringContainsString('AccountOrderScopePresenter', $content);
+        $this->assertStringContainsString("assign('accountOrderDetailScope'", $content);
         $trackingCss = $moduleRoot . '/view/statics/css/order-tracking.css';
         $this->assertFileExists($trackingCss);
         $trackingCssBody = (string) file_get_contents($trackingCss);
@@ -78,12 +82,17 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $this->assertStringContainsString('[data-account-orders="true"]', $css);
         $this->assertStringContainsString('.account-orders__groups', $css);
         $this->assertStringContainsString('.account-orders__hang', $css);
+        $this->assertStringContainsString('.account-orders__scope-filter', $css);
+        $this->assertStringContainsString('.account-orders__badge--scope', $css);
         $this->assertStringContainsString('list-style: none', $css);
 
         $ordersPanel = $moduleRoot . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';
         $this->assertFileExists($ordersPanel);
         $orders = (string) file_get_contents($ordersPanel);
         $this->assertStringContainsString('data-account-layout="customer-sidebar"', $orders);
+        $this->assertStringContainsString('data-testid="account-orders-scope-filter"', $orders);
+        $this->assertStringContainsString('data-testid="account-order-scope-badge"', $orders);
+        $this->assertStringContainsString('data-testid="account-order-detail-scope-badge"', $orders);
         $this->assertStringContainsString('data-account-order-locate-miss="true"', $orders);
         $this->assertStringContainsString('data-order-uuid=', $orders);
         $this->assertStringContainsString('data-account-orders-panel-empty="true"', $orders);

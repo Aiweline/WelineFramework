@@ -18,6 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Order\Service\AccountCheckoutGroupLoader;
 use Weline\Order\Service\AccountOrderDetailResolver;
+use Weline\Order\Service\AccountOrderScopePresenter;
 use Weline\Order\Service\Tracking\OrderTrackingService;
 
 if (!AccountSidebarContentGate::accepts('orders')) {
@@ -30,30 +31,87 @@ if (!$projectionProvider instanceof AccountSidebarProjectionProviderInterface) {
     throw new \LogicException('Required Customer account sidebar projection provider is unavailable.');
 }
 
+$request = ObjectManager::getInstance(Request::class);
+$parseOptionalInt = static function (mixed $raw): ?int {
+    if ($raw === null || $raw === '') {
+        return null;
+    }
+    if (is_int($raw)) {
+        return $raw >= 0 ? $raw : null;
+    }
+    $s = trim((string)$raw);
+    if ($s === '' || !preg_match('/^(?:0|[1-9][0-9]*)$/D', $s)) {
+        return null;
+    }
+
+    return (int)$s;
+};
+$scopeStoreFilter = $parseOptionalInt(AccountSidebarContentGate::requestParam(
+    'scope_store',
+    $request->getParam('scope_store', null),
+));
+$scopeChannelFilter = $parseOptionalInt(AccountSidebarContentGate::requestParam(
+    'scope_channel',
+    $request->getParam('scope_channel', null),
+));
+
 $projection = $projectionProvider->forSections('orders');
 $accountCheckoutGroups = [];
+$accountOrderScopeFilter = [
+    'current_store_id' => $scopeStoreFilter,
+    'current_channel_id' => $scopeChannelFilter,
+    'options' => [[
+        'store_id' => null,
+        'label' => (string)__('全部范围'),
+        'selected' => $scopeStoreFilter === null,
+    ]],
+];
+$customerId = 0;
+$websiteId = 0;
+/** @var AccountCheckoutGroupLoader|null $loader */
+$loader = null;
 if ($projection !== null && $projection->getCustomerId() !== null) {
+    $customerId = (int)$projection->getCustomerId();
+    $websiteId = (int)$projection->getWebsiteId();
     /** @var AccountCheckoutGroupLoader $loader */
     $loader = ObjectManager::getInstance(AccountCheckoutGroupLoader::class);
     $accountCheckoutGroups = $loader->loadForCustomer(
-        (int) $projection->getCustomerId(),
-        (int) $projection->getWebsiteId(),
+        $customerId,
+        $websiteId,
+        20,
+        $scopeStoreFilter,
+        $scopeChannelFilter,
+    );
+    $accountOrderScopeFilter = $loader->buildScopeFilter(
+        $customerId,
+        $websiteId,
+        $scopeStoreFilter,
+        $scopeChannelFilter,
     );
 }
 $this->assign('accountCheckoutGroups', $accountCheckoutGroups);
+$this->assign('accountOrderScopeFilter', $accountOrderScopeFilter);
 
-$request = ObjectManager::getInstance(Request::class);
 $requestedOrderUuid = trim((string) AccountSidebarContentGate::requestParam(
     'order_uuid',
     $request->getParam('order_uuid', ''),
 ));
 $accountOrderDetail = null;
 $accountOrderTracking = null;
-if ($requestedOrderUuid !== '' && $accountCheckoutGroups !== []) {
+$accountOrderDetailScope = null;
+if ($requestedOrderUuid !== '' && $loader !== null && $customerId > 0) {
     /** @var AccountOrderDetailResolver $detailResolver */
     $detailResolver = ObjectManager::getInstance(AccountOrderDetailResolver::class);
     $accountOrderDetail = $detailResolver->resolve($accountCheckoutGroups, $requestedOrderUuid);
+    // 范围过滤可能藏起目标单：详情归属回退到未过滤加载。
+    if ($accountOrderDetail === null && ($scopeStoreFilter !== null || $scopeChannelFilter !== null)) {
+        $unfiltered = $loader->loadForCustomer($customerId, $websiteId, 20, null, null);
+        $accountOrderDetail = $detailResolver->resolve($unfiltered, $requestedOrderUuid);
+    }
     if (is_array($accountOrderDetail)) {
+        /** @var AccountOrderScopePresenter $scopePresenter */
+        $scopePresenter = ObjectManager::getInstance(AccountOrderScopePresenter::class);
+        $accountOrderDetailScope = $scopePresenter->presentFromDetail($accountOrderDetail);
         // 有 OrderShipment 行时以账户「发货记录」槽为准；无发货行才回退订单级物流追踪面板。
         $hasShipmentRows = false;
         if (class_exists(\Weline\Shipping\Service\BackendOrderShipmentsService::class)) {
@@ -84,6 +142,7 @@ if ($requestedOrderUuid !== '' && $accountCheckoutGroups !== []) {
     }
 }
 $this->assign('accountOrderDetail', $accountOrderDetail);
+$this->assign('accountOrderDetailScope', $accountOrderDetailScope);
 $this->assign('accountOrderTracking', $accountOrderTracking);
 $this->assign('requestedOrderUuid', $requestedOrderUuid);
 
@@ -91,5 +150,5 @@ $this->assign('requestedOrderUuid', $requestedOrderUuid);
 <section class="account-hook-section account-index__section motor-account-section" id="orders-section" data-account-section="orders" data-requested-order-uuid="<?= htmlspecialchars($requestedOrderUuid, ENT_QUOTES, 'UTF-8') ?>" data-order-detail-resolved="<?= $accountOrderDetail !== null ? '1' : '0' ?>" data-order-tracking-resolved="<?= is_array($accountOrderTracking) ? '1' : '0' ?>" hidden weline-code="order.hook.account_sidebar_content.orders_section">
     <w:hook name="Weline_Order::frontend::account::index::orders"/>
 </section>
-<css>Weline_Order::css/account-orders.css?v=20261009-locate-inset-1</css>
+<css>Weline_Order::css/account-orders.scope-filter-3.css?v=20261009-scope-filter-3</css>
 <css>Weline_Order::css/order-tracking.css</css>

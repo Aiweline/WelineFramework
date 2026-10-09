@@ -1,0 +1,39 @@
+<?php
+/**
+ * Shared display_type select for Website / Store / Channel admin forms.
+ *
+ * @var string|null $display_type_value
+ * @var string $display_type_inherit_label
+ */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\ScopeDisplayTypeRegistry;
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$current = strtolower(trim((string)($display_type_value ?? '')));
+$inheritLabel = (string)($display_type_inherit_label ?? __('继承上级 / 无特殊类型'));
+$options = [];
+try {
+    $options = ObjectManager::getInstance(ScopeDisplayTypeRegistry::class)->listOptions();
+} catch (\Throwable) {
+    $options = [];
+}
+?>
+<div style="--w-span-md:3;" data-testid="scope-display-type-field">
+    <label class="w-field__label"><lang>展示类型</lang></label>
+    <select class="w-select" name="display_type">
+        <option value="" <?= $current === '' ? 'selected' : '' ?>><?= $escape($inheritLabel) ?></option>
+        <?php foreach ($options as $option): ?>
+            <?php
+            $code = (string)($option['code'] ?? '');
+            $label = (string)($option['label'] ?? $code);
+            if ($code === '') {
+                continue;
+            }
+            ?>
+            <option value="<?= $escape($code) ?>" <?= $current === $code ? 'selected' : '' ?>>
+                <?= $escape($label . ' (' . $code . ')') ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+    <div class="w-field__hint"><lang>空表示继承上级；仅影响店面产品展示过滤，与拆单/tob 车无关。</lang></div>
+</div>

@@ -853,6 +853,8 @@ class AccountQueryProvider implements QueryProviderInterface
                     'params' => [
                         'section' => ['type' => 'string', 'max_length' => 64],
                         'order_uuid' => ['type' => 'string', 'max_length' => 64],
+                        'scope_store' => ['type' => 'int', 'min' => 0],
+                        'scope_channel' => ['type' => 'int', 'min' => 0],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Load one account sidebar content section via Hook as JSON',

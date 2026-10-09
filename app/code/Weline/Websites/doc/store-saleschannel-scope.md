@@ -7,7 +7,7 @@
 | 模型 | 表 | 关键约束 |
 |---|---|---|
 | `Weline\Websites\Model\Store` | `weline_websites_store` | `UNIQUE(website_id, code)`；父 Website 必须在同连接存在；`store_mode` 创建后不可变；default 店铺禁删、代码/默认位不可改 |
-| `Weline\Websites\Model\SalesChannel` | `weline_websites_sales_channel` | `UNIQUE(store_id, code)`；父 Store 必须存在且 Website 一致；default 渠道禁删 |
+| `Weline\Websites\Model\SalesChannel` | `weline_websites_sales_channel` | `UNIQUE(store_id, code)`；父 Store 必须存在且 Website 一致；default 渠道禁删；可选 `url` / `display_type`（私有字段，不进 Summary v1） |
 
 - 表中展示的是逻辑名；实际 SQL 必须通过 Model/Connector 解析配置前缀与 PostgreSQL runtime schema（例如 `prefix=w_` 时为 `w_weline_websites_store`），不能把 `getOriginTableName()` 直接拼入 prepared SQL。
 - `website_id=0`（code=default）是合法系统默认站，不是空值。
@@ -50,9 +50,17 @@
 4. 在同 Origin 候选中按完整路径段边界选择最长 Store URL；同等优先级多条命中直接 409。
 5. 命中 Store URL 后会消费它的入口路径前缀，把剩余的规范路径作为真正控制器路由；例如 Store 入口 `/outlet` 命中 `/outlet/catalog/list` 后，Router 只接收 `/catalog/list`。
 6. 可信 URL 无 Store 命中时，才选择站点的 `default/normal` Store，此时保留已移除本地化前缀的站点相对路由；
-7. 只选择该 Store 的 `default` Channel，并复核 Store/Channel 的 enabled、归属和有效生命周期；
+7. 在 Store 锁定后，对同店 Channel 的完整入口 `url` 做同 Origin 最长路径匹配；命中则消费渠路径并把剩余路径作为路由余量；无命中才回落该 Store 的 `default` Channel；L2 可用谓词允许非 default 渠（须 enabled / effective / 父店 active）；
 8. `__store` / `__channel` 仅作一致性断言，不能改变可信解析结果。
 9. 成功后 `ScopeData::install` 粘贴 Store/Channel 摘要；`Store::load` / `SalesChannel::load` / catalog `byId` 对当前 Scope 优先读 L3，其次 L2 实体快照；`forceReload` 才打库。
+10. 冻结后由 `ScopeDisplayTypeResolver` 解析生效 `display_type`（channel←store←website 首个非空、未知 code fail-soft），写入 RequestContext **私有键** `runtime.request_context.display_type`；**不**扩展 `scopeMetadata()`。
+
+### 展示类型与前台范围切换
+
+- Extends SPI：`Weline\Websites\Api\ScopeDisplayTypeProviderInterface`（仅 code/label/module；禁止挂 Product 过滤）。
+- Website / Store / SalesChannel 可空列 `display_type`（勿与 Website.`scope` 业务列混淆）。
+- 前台部件 `scope-switcher`（Websites `default_injections` → Theme header 空槽 `id="scope-switcher"`）；仅存在非 default 店或渠时渲染；点击=整页导航到店/渠入口 URL。
+- 规格：`doc/开发/spec/scope-display-type.md`。
 
 未知、跨站、停用、墓碑、无效配置、路径歧义或显式断言冲突全部 fail-closed；只有“可信 URL 没有匹配 Store”这一种情况才允许使用 default，不会回落到其他站点的店铺。普通页面 Scope 冻结后不可改写；`rest_frontend` QueryBin 因 API 路径不携带 storefront Store 段，允许在 Host、Token、Catalog、rollout 复核完成且 execution binding digest 完全一致时，把 Host 默认 Store 细化为同 Website 的受信 Store/Channel。该受控例外只替换 Scope 投影并清空 storefront route remainder，不改变 authority、method、URI、locale、currency 或 timezone；跨 Website、非 frontend、非权威或 binding 不一致均在改写前返回 409。冻结位置：
 

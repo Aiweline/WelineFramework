@@ -1,0 +1,82 @@
+/**
+ * Scope switcher: channel list only (menu floating placement/shadow).
+ */
+.w-scope-switcher {
+    position: relative;
+    font-size: var(--weline-font-size-sm, 0.875rem);
+    font-family: inherit;
+}
+
+/*
+ * Quiet trigger must not fall through to unlayered `.w-button` primary fill.
+ * Theme notice-bar chrome reinforces with inherit ink; do not invent hex here.
+ */
+.w-scope-switcher__trigger.w-button[data-tone="quiet"],
+.w-scope-switcher__trigger {
+    max-width: min(12rem, 42vw);
+    background: transparent;
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    color: inherit;
+}
+
+.w-scope-switcher__trigger.w-button[data-tone="quiet"]:hover,
+.w-scope-switcher__trigger:hover {
+    background: transparent;
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    color: inherit;
+}
+
+.w-scope-switcher__current {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.w-scope-switcher__menu,
+.w-scope-switcher__panel {
+    box-sizing: border-box;
+    min-width: min(12rem, calc(100dvw - 1rem));
+    max-width: min(20rem, calc(100dvw - 1rem));
+    max-height: min(20rem, calc(100dvh - 1rem));
+    max-block-size: min(20rem, var(--w-floating-max-block-size, calc(100dvh - 1rem)));
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: var(--weline-space-2, 0.5rem) 0;
+    font-family: inherit;
+}
+
+.w-scope-switcher__channel {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-2, 0.5rem);
+}
+
+.w-scope-switcher__channel-name {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+}
+
+.w-scope-switcher__badge {
+    flex: 0 0 auto;
+    font-size: var(--weline-font-size-xs, 0.75rem);
+    font-weight: 700;
+    color: var(--weline-theme-text-muted, var(--color-text-secondary, #565959));
+}
+
+.w-scope-switcher__channel.is-current {
+    font-weight: 700;
+}
+
+.w-scope-switcher__channel.is-disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+}

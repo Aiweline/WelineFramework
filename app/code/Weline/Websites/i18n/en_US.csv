@@ -703,6 +703,14 @@ Weline（本地）,"Weline (local)"
 返回当前来源提供的主题候选列表,"Return to Theme Candidate List from Current Source"
 "用于让 Theme 或其他模块以独立来源方式向 Websites 工作台提供主题选择能力。","Used to allow Theme or other modules to provide theme selection capabilities to the Websites workbench in an independently sourced manner."
 "Weline_Theme 可通过此扩展点输出 layouts 派生的主题候选。","Weline_Theme can output layouts-derived theme candidates through this extension point."
+"范围展示类型身份扩展点。仅注册 code/label/module，不声明产品过滤约束。","范围展示类型身份扩展点。仅注册 code/label/module，不声明产品过滤约束。"
+"展示类型身份实现类，在模块的 extends/module/Weline_Websites/ScopeDisplayType/ 目录下创建 PHP 文件。","展示类型身份实现类，在模块的 extends/module/Weline_Websites/ScopeDisplayType/ 目录下创建 PHP 文件。"
+"仅注册展示身份；产品可见性过滤由 Product SPI 承接。","仅注册展示身份；产品可见性过滤由 Product SPI 承接。"
+返回类型唯一编码,返回类型唯一编码
+返回类型显示名称,返回类型显示名称
+返回拥有模块名,返回拥有模块名
+返回排序值,返回排序值
+"用于把网站/店铺/渠道标成特殊店面展示身份（如 B2B），供前台过滤与后台下拉使用。","用于把网站/店铺/渠道标成特殊店面展示身份（如 B2B），供前台过滤与后台下拉使用。"
 获取域名池列表失败：%{1},"Domain pool list failed: %{1}"
 参数错误,"Parameter error"
 获取详情失败：%{1},获取详情失败：%{1}
@@ -1415,13 +1423,15 @@ lock,lock
 "本组写入当前商店范围；未覆盖时继承 Website → Global。","This group writes to current store scope; when uncovered inherits Website → Global."
 渠道代码,"channel code"
 渠道名称,"Channel name"
+"独立 URL","Standalone URL"
+"继承店铺 / 无特殊类型","继承店铺 / 无特殊类型"
 访问入口,"Access entry"
 "语言 / 货币","Language / Currency"
 "Store / Channel","Store / Channel"
 商店代码,"store code"
 商店名称,"store name"
 模式,model
-"独立 URL","Standalone URL"
+"继承网站 / 无特殊类型","继承网站 / 无特殊类型"
 "按 Website → Store → Channel 树管理站点范围","Manage site scopes by Website → Store → Channel tree"
 过滤站点,"Filter sites"
 过滤,Filter
@@ -1462,6 +1472,7 @@ lock,lock
 "业务范围 (Scope)",Scope
 如：catalog,"For example: catalog"
 用于标识站点的业务来源，留空表示通用站点。由系统自动设置。,"Used to identify the business source of the site; leave blank for a general site. Set automatically by the system."
+无特殊类型,无特殊类型
 首页入口路由,"Homepage entry route"
 继承全局首页配置,"Inherit global homepage configuration"
 选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。,"When selected, this site's root path enters this frontend route; leave empty to inherit the global start route."
@@ -2242,8 +2253,12 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 删除备份失败,"Failed to delete backup"
 后台请求组件不可用，请刷新页面后重试。,"The background request component is unavailable, please refresh the page and try again."
 请选择网站,"Please select a website"
+展示类型,展示类型
+"空表示继承上级；仅影响店面产品展示过滤，与拆单/tob 车无关。","空表示继承上级；仅影响店面产品展示过滤，与拆单/tob 车无关。"
+"继承上级 / 无特殊类型","继承上级 / 无特殊类型"
 返回列表,"Return to list"
 "所属商店 ID","Store ID."
+"可选；须与父店铺同 Origin，且为店铺入口路径的严格延伸。","可选；须与父店铺同 Origin，且为店铺入口路径的严格延伸。"
 "Website Scope 管理工作台","Website Scope Management Workbench"
 所属商店,Store
 请选择商店,"Please select a store"
@@ -2276,6 +2291,12 @@ AI建站域名准备队列,"AI website building domain name preparation queue"
 远程翻译网站列表,"List of websites for remote translation."
 远程翻译网站语种,"Website languages for remote translation."
 language,language
+"渠道入口 URL 无效","渠道入口 URL 无效"
+"父店铺缺少可用入口 URL，无法配置渠道入口","父店铺缺少可用入口 URL，无法配置渠道入口"
+"父店铺入口 URL 无效，无法配置渠道入口","父店铺入口 URL 无效，无法配置渠道入口"
+"渠道入口 URL 必须与父店铺同 Origin","渠道入口 URL 必须与父店铺同 Origin"
+渠道入口路径不能与站点根路径完全相同,渠道入口路径不能与站点根路径完全相同
+渠道入口路径必须是父店铺入口路径的严格延伸,渠道入口路径必须是父店铺入口路径的严格延伸
 "无法获取本机公网 IPv4，请在 env 中配置 server.public_ip 或确保网络可访问外网 IP 检测接口","Cannot detect public IPv4; set server.public_ip or fix outbound network"
 "Not a managed local WLS domain","Not a managed local WLS domain"
 "正在等待 macOS 管理员批准本地域名 hosts 配置。","Waiting for macOS administrator approval of local domain hosts configuration."
@@ -2944,6 +2965,9 @@ download,download
 当前请求命中的店铺已停用,"The store hit by the current request has been deactivated"
 当前站点缺少可用的默认店铺,"The current site lacks an available default store"
 站点路由剩余路径无效,"The remaining path of the site route is invalid"
+"可信请求 URL 无效，已拒绝解析渠道范围","可信请求 URL 无效，已拒绝解析渠道范围"
+"渠道入口 URL 配置无效，已拒绝解析渠道范围","渠道入口 URL 配置无效，已拒绝解析渠道范围"
+"当前 Origin/URI 匹配到多个同优先级渠道，已拒绝请求","当前 Origin/URI 匹配到多个同优先级渠道，已拒绝请求"
 当前店铺缺少可用的默认销售渠道,"The current store lacks an available default sales channel"
 请求的范围断言格式无效,"The requested range assertion format is invalid"
 "请求的范围与可信 Host/URI 不一致","Requested scope is inconsistent with trusted Host/URI"
@@ -2961,6 +2985,7 @@ download,download
 网站缓存失效延迟作用域只能在活动事务中开启,"Deferred website cache invalidation can only begin inside an active transaction"
 待失效的网站不存在：%{1},"The website to invalidate does not exist: %{1}"
 未知网站缓存组件：%{1},"Unknown website cache component: %{1}"
+未知的展示类型：%{1},未知的展示类型：%{1}
 "无法获取服务器公网 IP","Unable to get server public IP"
 "域名商不支持 DNS 管理","Domain registrar does not support DNS management"
 没有可添加的解析记录,"No DNS records to add"
@@ -3312,6 +3337,7 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
+范围,Scope
 "Cloudflare API Token 不能为空","Cloudflare API Token cannot be empty"
 "本地域名 hosts 与通配证书已就绪","本地域名 hosts 与通配证书已就绪"
 点击选择货币（可多选）,"Click to select currencies (multiple selection allowed)"
@@ -3506,3 +3532,10 @@ download,download
 公司联系邮箱,"Business contact email"
 网站经营主体信息,"Website legal entity details"
 仅当前网站使用，不继承全局主体信息。,"Applies only to this website. Global legal entity details are not inherited."
+切换范围,"Switch scope"
+店铺与渠道,"Stores & channels"
+当前网站下的店铺与渠道,"Stores and channels on this website"
+店铺,Store
+当前,Current
+选择要进入的店铺或渠道,"Choose a store or channel"
+切换渠道,"Switch channel"

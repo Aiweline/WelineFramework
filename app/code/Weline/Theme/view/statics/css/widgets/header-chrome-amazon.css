@@ -93,6 +93,7 @@
 }
 
 .weline-header .header-site-notice-links,
+.weline-header .header-top-bar-rights-cluster,
 .weline-header .header-top-bar-rights-slot {
     display: inline-flex;
     align-items: center;
@@ -101,6 +102,10 @@
     white-space: nowrap;
     min-width: 0;
     margin-inline-start: auto;
+}
+
+.weline-header .header-top-bar-rights-cluster .header-top-bar-rights-slot {
+    margin-inline-start: 0;
 }
 
 /* 极窄且放不下才换行；禁止 width:100% 强制两行居中 */
@@ -116,6 +121,7 @@
     .weline-header .header-top-bar-slot,
     .weline-header .header-site-notice-items,
     .weline-header .header-site-notice-links,
+    .weline-header .header-top-bar-rights-cluster,
     .weline-header .header-top-bar-rights-slot {
         flex: 0 1 auto;
         justify-content: center;
@@ -125,12 +131,14 @@
 }
 
 .weline-header .header-site-notice-links > *,
+.weline-header .header-top-bar-rights-cluster > *,
 .weline-header .header-top-bar-rights-slot > * {
     display: inline-flex;
     align-items: center;
 }
 
 .weline-header .header-site-notice-links > * + *::before,
+.weline-header .header-top-bar-rights-cluster > * + *::before,
 .weline-header .header-top-bar-rights-slot > * + *::before {
     content: '|';
     display: inline-block;
@@ -143,6 +151,83 @@
 .weline-header .header-site-notice-right-link,
 .weline-header .header-top-bar-rights-slot a {
     padding-inline: var(--weline-space-1, 0.25rem);
+}
+
+/* 通知条右侧：渠道范围 + 收藏（继承 notice 字色，避免主栏 inverse 漂白） */
+.weline-header .header-site-notice-links .header-scope-switcher,
+.weline-header .header-top-bar-rights-slot .header-scope-switcher,
+.weline-header .header-site-notice-links .header-wishlist,
+.weline-header .header-top-bar-rights-slot .header-wishlist {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+}
+
+/*
+ * Notice-bar scope trigger must stay a text peer of 帮助中心/订单跟踪.
+ * Unlayered theme.css `.w-button` defaults to `--weline-component-primary` fill;
+ * without `.w-button` in the selector + transparent shield it becomes a brand chip
+ * (dark ink on primary — unreadable on cream notice).
+ */
+.weline-header .header-site-notice-links .w-scope-switcher__trigger.w-button,
+.weline-header .header-top-bar-rights-slot .w-scope-switcher__trigger.w-button,
+.weline-header .header-top-bar-rights-cluster .w-scope-switcher__trigger.w-button,
+.weline-header .header-site-notice-links .w-scope-switcher__trigger,
+.weline-header .header-top-bar-rights-slot .w-scope-switcher__trigger,
+.weline-header .header-top-bar-rights-cluster .w-scope-switcher__trigger,
+.weline-header .header-site-notice-links .wishlist-link,
+.weline-header .header-top-bar-rights-slot .wishlist-link,
+.weline-header .header-top-bar-rights-cluster .wishlist-link {
+    color: inherit;
+    background: transparent;
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    gap: var(--weline-space-1, 0.25rem);
+    padding: 0 var(--weline-space-1, 0.25rem);
+    min-height: auto;
+    font-size: inherit;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.weline-header .header-site-notice-links .w-scope-switcher__trigger.w-button:hover,
+.weline-header .header-top-bar-rights-slot .w-scope-switcher__trigger.w-button:hover,
+.weline-header .header-top-bar-rights-cluster .w-scope-switcher__trigger.w-button:hover,
+.weline-header .header-site-notice-links .w-scope-switcher__trigger:hover,
+.weline-header .header-top-bar-rights-slot .w-scope-switcher__trigger:hover,
+.weline-header .header-top-bar-rights-cluster .w-scope-switcher__trigger:hover,
+.weline-header .header-site-notice-links .wishlist-link:hover,
+.weline-header .header-top-bar-rights-slot .wishlist-link:hover,
+.weline-header .header-top-bar-rights-cluster .wishlist-link:hover {
+    color: inherit;
+    background: transparent;
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+    opacity: 0.88;
+    text-decoration: underline;
+}
+
+.weline-header .header-site-notice-links .w-scope-switcher__current,
+.weline-header .header-top-bar-rights-slot .w-scope-switcher__current {
+    max-width: min(9rem, 28vw);
+}
+
+.weline-header .header-site-notice-links .header-wishlist-icon,
+.weline-header .header-top-bar-rights-slot .header-wishlist-icon,
+.weline-header .header-site-notice-links .header-wishlist-icon svg,
+.weline-header .header-top-bar-rights-slot .header-wishlist-icon svg {
+    color: inherit;
+    width: 1rem;
+    height: 1rem;
+}
+
+.weline-header .header-site-notice-links .wishlist-count,
+.weline-header .header-top-bar-rights-slot .wishlist-count {
+    font-size: var(--weline-font-size-xs, 0.75rem);
 }
 
 /* ========== Belt row (logo + search + actions) ========== */
@@ -1072,19 +1157,55 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
 }
 
-/* Raised scope-switcher panel: same chrome-inverse bleach as account-dropdown. */
+/* Scope switcher: densify under chrome until layout bake emits widget source CSS. */
+.weline-header .w-scope-switcher__menu,
+.weline-header .w-scope-switcher__panel {
+    min-width: min(18rem, calc(100dvw - 1rem));
+    max-width: min(28rem, calc(100dvw - 1rem));
+    max-height: min(24rem, calc(100dvh - 1rem));
+    font-family: inherit;
+}
+
+.weline-header .w-scope-switcher__store + .w-scope-switcher__store {
+    margin-top: var(--weline-space-1, 0.25rem);
+    padding-top: var(--weline-space-1, 0.25rem);
+    border-top: 1px solid var(--weline-theme-border, rgba(15, 17, 17, 0.12));
+}
+
+.weline-header .w-scope-switcher__store-name {
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+/* Raised scope-switcher menu: same chrome-inverse bleach as language/currency. */
+.weline-header .header-actions .w-scope-switcher__menu,
 .weline-header .header-actions .w-scope-switcher__panel,
+.weline-header .header-user-area .w-scope-switcher__menu,
 .weline-header .header-user-area .w-scope-switcher__panel,
+.weline-header .header-site-notice-links .w-scope-switcher__menu,
+.weline-header .header-site-notice-links .w-scope-switcher__panel,
+.weline-header .header-top-bar-rights-slot .w-scope-switcher__menu,
+.weline-header .header-top-bar-rights-slot .w-scope-switcher__panel,
+.weline-header .header-scope-switcher .w-scope-switcher__menu,
 .weline-header .header-scope-switcher .w-scope-switcher__panel {
     color: var(--amz-drawer-text, var(--weline-theme-text, #0f1111));
 }
 
+.weline-header .header-actions .w-scope-switcher__menu a,
+.weline-header .header-actions .w-scope-switcher__menu a:visited,
+.weline-header .header-actions .w-scope-switcher__menu span,
 .weline-header .header-actions .w-scope-switcher__panel a,
 .weline-header .header-actions .w-scope-switcher__panel a:visited,
 .weline-header .header-actions .w-scope-switcher__panel span,
+.weline-header .header-user-area .w-scope-switcher__menu a,
+.weline-header .header-user-area .w-scope-switcher__menu a:visited,
+.weline-header .header-user-area .w-scope-switcher__menu span,
 .weline-header .header-user-area .w-scope-switcher__panel a,
 .weline-header .header-user-area .w-scope-switcher__panel a:visited,
 .weline-header .header-user-area .w-scope-switcher__panel span,
+.weline-header .header-scope-switcher .w-scope-switcher__menu a,
+.weline-header .header-scope-switcher .w-scope-switcher__menu a:visited,
+.weline-header .header-scope-switcher .w-scope-switcher__menu span,
 .weline-header .header-scope-switcher .w-scope-switcher__panel a,
 .weline-header .header-scope-switcher .w-scope-switcher__panel a:visited,
 .weline-header .header-scope-switcher .w-scope-switcher__panel span {

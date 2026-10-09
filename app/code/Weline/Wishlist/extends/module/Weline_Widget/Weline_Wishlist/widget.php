@@ -18,8 +18,11 @@ return [
         'template' => 'Weline_Wishlist::theme/frontend/widgets/header/wishlist-icon/default.phtml',
         'page_layouts' => ['*'],
         'position' => ['header'],
-        'slot' => 'user-area',
+        'slot' => 'top-bar-rights',
         'supports' => [
+            'notice-rights',
+            'layout-header-notice-rights',
+            'top-bar-rights',
             'layout-header-actions',
             'layout-global-header-actions',
             'wishlist-icon',

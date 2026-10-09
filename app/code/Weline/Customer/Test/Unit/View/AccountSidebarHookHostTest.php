@@ -30,7 +30,7 @@ final class AccountSidebarHookHostTest extends TestCase
         $modulesFile = $moduleRoot . '/view/statics/frontend/weline.modules.js';
         $this->assertFileExists($modulesFile);
         $modules = (string) file_get_contents($modulesFile);
-        $this->assertStringContainsString('account-index.js?v=20261009-order-uuid-locate-2', $modules);
+        $this->assertStringContainsString('account-index.js?v=20261009-scope-css-hoist-retry', $modules);
         $this->assertStringContainsString('data-account-pending-section', $content);
         $this->assertStringContainsString('sectionLoading', $content);
         $this->assertStringContainsString('hideBuiltinSections', $content);
@@ -59,12 +59,16 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString("nav.classList.remove('account-sidebar__nav-link--active');", $script);
         $this->assertStringContainsString('function buildSidebarContentUrl(sectionName)', $script);
         $this->assertStringContainsString("'section=' + encodeURIComponent(sectionName)", $script);
+        $this->assertStringContainsString('URLSearchParams(window.location.search', $script);
+        $this->assertStringContainsString("key === 'section'", $script);
         $this->assertStringContainsString('loadSidebarContent(targetId, loadingState === \'failed\' ? { force: true } : {})', $script);
         $this->assertStringContainsString('_retriedEmpty', $script);
         $this->assertStringContainsString('Rare race: worker returns success with empty hook HTML', $script);
         $this->assertStringContainsString('function sanitizeSidebarHtml(html)', $script);
         $this->assertStringContainsString('function loadTrustedSidebarStyles(html)', $script);
         $this->assertStringContainsString('loadTrustedSidebarStyles(payload.html)', $script);
+        $this->assertStringContainsString("link.addEventListener('error'", $script);
+        $this->assertStringContainsString('delete loadedSidebarStyles[href]', $script);
         $this->assertStringContainsString("existing.insertAdjacentHTML('afterend', safeHtml)", $script);
         $this->assertStringContainsString("sidebarContentMount.insertAdjacentHTML('beforeend', safeHtml)", $script);
         $this->assertStringContainsString('function loadDeclaredSidebarModules(root)', $script);
@@ -150,7 +154,7 @@ final class AccountSidebarHookHostTest extends TestCase
         $modulesFile = dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js';
         $this->assertFileExists($modulesFile);
         $this->assertStringContainsString(
-            'account-index.js?v=20261009-order-uuid-locate-2',
+            'account-index.js?v=20261009-scope-css-hoist-retry',
             (string) file_get_contents($modulesFile)
         );
         $this->assertStringContainsString('.account-index__user-info', $css);

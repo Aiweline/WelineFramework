@@ -16,6 +16,12 @@ use Weline\Order\Service\AccountCheckoutGroupPresenter;
 /** @var list<array<string, mixed>> $accountCheckoutGroups 由站点 Order 模块注入；缺省演示空态 */
 $accountCheckoutGroups = $accountCheckoutGroups ?? [];
 $accountOrderDetail = is_array($accountOrderDetail ?? null) ? $accountOrderDetail : null;
+$accountOrderDetailScope = is_array($accountOrderDetailScope ?? null) ? $accountOrderDetailScope : null;
+$accountOrderScopeFilter = is_array($accountOrderScopeFilter ?? null) ? $accountOrderScopeFilter : [
+    'current_store_id' => null,
+    'current_channel_id' => null,
+    'options' => [],
+];
 $requestedOrderUuid = trim((string)($requestedOrderUuid ?? ''));
 $presenter = new AccountCheckoutGroupPresenter();
 $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -24,6 +30,10 @@ $formatMoney = static fn(string $currency, mixed $minor): string => sprintf(
     $currency,
     number_format(((int) $minor) / 100, 2, '.', ','),
 );
+$scopeFilterOptions = is_array($accountOrderScopeFilter['options'] ?? null)
+    ? $accountOrderScopeFilter['options']
+    : [];
+$showScopeFilter = count($scopeFilterOptions) > 1;
 ?>
 <div class="account-orders"
      data-account-orders="true"
@@ -32,6 +42,37 @@ $formatMoney = static fn(string $currency, mixed $minor): string => sprintf(
     <header class="account-orders__header">
         <h2 id="account-orders-title"><?= __('我的订单') ?></h2>
         <p class="account-orders__hint" data-testid="account-orders-hint"><?= __('多仓会拆成多个子订单；同一子订单也可分批发货') ?></p>
+<?php if ($showScopeFilter): ?>
+        <nav class="account-orders__scope-filter"
+             data-account-orders-scope-filter="true"
+             data-testid="account-orders-scope-filter"
+             aria-label="<?= __('按下单范围筛选') ?>">
+            <?php foreach ($scopeFilterOptions as $opt): ?>
+                <?php
+                if (!is_array($opt)) {
+                    continue;
+                }
+                $optStoreId = array_key_exists('store_id', $opt) ? $opt['store_id'] : null;
+                $optLabel = trim((string)($opt['label'] ?? ''));
+                $optSelected = !empty($opt['selected']);
+                $filterParams = [];
+                if ($optStoreId !== null && $optStoreId !== '') {
+                    $filterParams['scope_store'] = (int)$optStoreId;
+                }
+                $channelKeep = $accountOrderScopeFilter['current_channel_id'] ?? null;
+                if ($channelKeep !== null && $channelKeep !== '') {
+                    $filterParams['scope_channel'] = (int)$channelKeep;
+                }
+                ?>
+                <a class="account-orders__scope-chip<?= $optSelected ? ' is-selected' : '' ?>"
+                   data-scope-store="<?= $optStoreId === null || $optStoreId === '' ? 'all' : (int)$optStoreId ?>"
+                   data-selected="<?= $optSelected ? '1' : '0' ?>"
+                   data-testid="account-orders-scope-chip"
+                   href="@url{'customer/account/index'|$filterParams}#orders"
+                   <?= $optSelected ? 'aria-current="true"' : '' ?>><?= $escape($optLabel !== '' ? $optLabel : __('全部范围')) ?></a>
+            <?php endforeach; ?>
+        </nav>
+<?php endif; ?>
     </header>
 <?php if ($accountOrderDetail === null && $requestedOrderUuid !== ''): ?>
     <p class="account-orders__locate-miss"
@@ -160,6 +201,18 @@ $formatMoney = static fn(string $currency, mixed $minor): string => sprintf(
                   data-order-type-code="<?= $escape($detailTypeCode) ?>"
                   data-tone="<?= $escape($detailTypeTone) ?>"
                   data-testid="account-order-detail-type-badge"><?= $escape($detailTypeLabel) ?></span>
+            <?php endif; ?>
+            <?php
+            $detailScopeLabel = trim((string)($accountOrderDetailScope['label'] ?? ''));
+            $detailScopeStoreId = (int)($accountOrderDetailScope['store_id'] ?? $accountOrderDetail['store_id'] ?? 0);
+            $detailScopeDisplayType = trim((string)($accountOrderDetailScope['display_type'] ?? ''));
+            ?>
+            <?php if ($detailScopeLabel !== ''): ?>
+            <span class="account-orders__badge account-orders__badge--scope"
+                  data-order-scope="true"
+                  data-scope-store-id="<?= $escape((string)$detailScopeStoreId) ?>"
+                  data-scope-display-type="<?= $escape($detailScopeDisplayType) ?>"
+                  data-testid="account-order-detail-scope-badge"><?= $escape($detailScopeLabel) ?></span>
             <?php endif; ?>
         </header>
 
@@ -385,6 +438,14 @@ $formatMoney = static fn(string $currency, mixed $minor): string => sprintf(
                               data-order-type-code="<?= htmlspecialchars((string) ($view['order_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                               data-tone="<?= htmlspecialchars((string) ($view['order_type_tone'] ?? 'info'), ENT_QUOTES, 'UTF-8') ?>"
                               data-testid="account-order-type-badge"><?= htmlspecialchars((string) $view['order_type_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endif; ?>
+                    <?php if (trim((string) ($view['scope_label'] ?? '')) !== ''): ?>
+                        <span class="account-orders__badge account-orders__badge--scope"
+                              data-order-scope="true"
+                              data-scope-store-id="<?= htmlspecialchars((string) ($view['scope_store_id'] ?? 0), ENT_QUOTES, 'UTF-8') ?>"
+                              data-scope-store-code="<?= htmlspecialchars((string) ($view['scope_store_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                              data-scope-display-type="<?= htmlspecialchars((string) ($view['scope_display_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                              data-testid="account-order-scope-badge"><?= htmlspecialchars((string) $view['scope_label'], ENT_QUOTES, 'UTF-8') ?></span>
                     <?php endif; ?>
                     <span class="account-orders__badge"
                           data-order-status="true"

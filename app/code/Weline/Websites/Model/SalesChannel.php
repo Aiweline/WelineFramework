@@ -56,6 +56,10 @@ class SalesChannel extends Model
     public const schema_fields_IS_DEFAULT = 'is_default';
     #[Col('smallint', 1, nullable: false, default: 1, comment: '状态 1启用 0停用')]
     public const schema_fields_STATUS = 'status';
+    #[Col('varchar', 255, nullable: true, comment: '渠道独立入口URL（可选，须为父店入口路径延伸；不进 Summary v1）')]
+    public const schema_fields_URL = 'url';
+    #[Col('varchar', 64, nullable: true, default: null, comment: '店面展示类型代码（空=继承店铺）')]
+    public const schema_fields_DISPLAY_TYPE = 'display_type';
 
     /** Keep the Channel write and catalog generation in one owner transaction. */
     public function save(string|array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
